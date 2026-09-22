@@ -122,6 +122,27 @@
                      ============================================================ -->
                 <div class="navbar-nav ms-0 mt-3 mt-md-0">
 
+                    <!-- Lien vers le panier, avec son compteur.
+                         #panier-badge-nav est remplacé (hx-swap-oob) par
+                         htmx/components/panier_badge.html après chaque action sur le panier.
+                         / Cart link with its counter, replaced out-of-band after cart actions. -->
+                    <a class="btn bouton-pilule bg-white texte-bleu text-center position-relative me-md-2 mb-2 mb-md-0"
+                       href="/panier/"
+                       hx-get="/panier/" hx-target="body" hx-push-url="true"
+                       title="{% translate 'Your cart' %}"
+                       aria-label="{% blocktrans count n=panier.count %}Cart ({{ n }} item){% plural %}Cart ({{ n }} items){% endblocktrans %}">
+                        <i class="bi bi-bag me-1" aria-hidden="true"></i>
+                        {% translate 'Cart' %}
+                        <span id="panier-badge-nav">
+                            {% if panier.count > 0 %}
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+                                    {{ panier.count }}
+                                    <span class="visually-hidden">{% translate "items" %}</span>
+                                </span>
+                            {% endif %}
+                        </span>
+                    </a>
+
                     {% if user.is_authenticated %}
                         <!-- Utilisateur connecté : affiche son email avec un menu déroulant -->
                         <div class="dropdown">

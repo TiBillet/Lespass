@@ -68,6 +68,7 @@ from AuthBillet.utils import get_or_create_user
 from django.utils import timezone as dj_timezone
 
 from BaseBillet.models import (
+    DUREE_D_UN_PAIEMENT_EN_COURS,
     Configuration,
     Event,
     LigneArticle,
@@ -437,7 +438,7 @@ def _charger_events_billetterie():
                         Ticket.CREATED,
                         Ticket.NOT_ACTIV,
                     ],
-                    reservation__datetime__gt=now - timedelta(minutes=15),
+                    reservation__datetime__gt=now - DUREE_D_UN_PAIEMENT_EN_COURS,
                 ),
                 distinct=True,
             ),

@@ -51,6 +51,13 @@ from root_billet.utils import fernet_decrypt, fernet_encrypt
 
 logger = logging.getLogger(__name__)
 
+# Durée pendant laquelle un achat en cours retient ses places : billets (jauge et stock du
+# tarif), adhésions (stock du tarif), créneaux de ressource, réservation gratuite en attente
+# de confirmation de l'email. C'est aussi la durée de vie d'une session de paiement Stripe
+# (PaiementStripe/views.py) : passé ce délai, la session expire et la place est libérée.
+# / How long a purchase in progress holds its seats; also the Stripe session lifetime.
+DUREE_D_UN_PAIEMENT_EN_COURS = timedelta(minutes=30)
+
 
 # TODO, plus utile, a retirer et utiler un choice
 class Weekday(models.Model):
@@ -1846,19 +1853,47 @@ class Price(models.Model):
         ),
     )
 
-    def out_of_stock(self, event=None):
+    def out_of_stock(self, event=None, quantite_demandee=1):
+        """
+        Vrai si le stock du tarif ne peut pas accueillir `quantite_demandee` de plus.
+        Occupent le stock : ce qui est vendu, ce qui est en train d'être payé (depuis moins de
+        DUREE_D_UN_PAIEMENT_EN_COURS), et la quantité demandée. Avec la valeur par défaut (1),
+        répond à « le tarif est-il épuisé ? » (affichage).
+        - Billet : stock par événement (billets actifs ou scannés + billets en cours de paiement).
+        - Adhésion : adhésions en cours de validité, engagées mais pas encore payées
+          (Membership.STATUTS_EN_COURS : validation manuelle en attente, prélèvement SEPA en
+          cours) et en attente de paiement depuis moins de DUREE_D_UN_PAIEMENT_EN_COURS.
+        / True when the price stock cannot take `quantite_demandee` more: sold + being paid +
+        requested.
+        """
         if self.stock is None or self.stock < 1:
             return False
 
+        debut_des_paiements_en_cours = timezone.localtime() - DUREE_D_UN_PAIEMENT_EN_COURS
+
         if self.product.categorie_article == Product.ADHESION:
-            return self.membership.filter(deadline__gt=timezone.localtime()).count() >= self.stock
+            adhesions_qui_occupent_le_stock = self.membership.filter(
+                Q(deadline__gt=timezone.localtime())
+                | Q(status__in=Membership.STATUTS_EN_COURS)
+                | Q(status=Membership.WAITING_PAYMENT, date_added__gt=debut_des_paiements_en_cours)
+            ).exclude(
+                status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]
+            ).distinct().count()
+            return adhesions_qui_occupent_le_stock + quantite_demandee > self.stock
 
         if self.product.categorie_article in [Product.FREERES, Product.BILLET]:
-            return Ticket.objects.filter(
+            billets_vendus = Ticket.objects.filter(
                 reservation__event__pk=event.pk,
                 pricesold__price__pk=self.pk,
                 status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]
-            ).count() >= self.stock
+            ).count()
+            billets_en_cours_de_paiement = Ticket.objects.filter(
+                reservation__event__pk=event.pk,
+                pricesold__price__pk=self.pk,
+                status__in=[Ticket.CREATED, Ticket.NOT_ACTIV],
+                reservation__datetime__gt=debut_des_paiements_en_cours,
+            ).count()
+            return billets_vendus + billets_en_cours_de_paiement + quantite_demandee > self.stock
 
         return False
 
@@ -2333,16 +2368,17 @@ class Event(models.Model):
             .distinct().count()
 
     def under_purchase(self):
-        # Compte les reservation en cours de paiement ( < 15 min )
+        # Compte les billets en cours de paiement (depuis moins de DUREE_D_UN_PAIEMENT_EN_COURS)
+        # / Counts tickets being paid (for less than DUREE_D_UN_PAIEMENT_EN_COURS)
         return Ticket.objects.filter(reservation__event__pk=self.pk,
                                      status__in=[Ticket.CREATED, Ticket.NOT_ACTIV],
-                                     reservation__datetime__gt=timezone.localtime() - timedelta(minutes=15)
+                                     reservation__datetime__gt=timezone.localtime() - DUREE_D_UN_PAIEMENT_EN_COURS
                                      ).distinct().count()
 
     def complet(self):
         """
         Un booléen pour savoir si l'évènement est complet ou pas.
-        Compte aussi les reservation en cours de paiement ( < 15 min )
+        Compte aussi les billets en cours de paiement (voir under_purchase).
         """
 
         valid_tickets_count = self.valid_tickets_count()
@@ -2352,6 +2388,29 @@ class Event(models.Model):
             return True
         else:
             return False
+
+    def est_termine(self):
+        """
+        Vrai si l'événement est fini. Sans date de fin, il est considéré fini 24 heures après
+        son début (l'agenda l'affiche jusqu'au lendemain). Un événement commencé mais pas
+        terminé (2e jour d'un festival) n'est pas fini.
+        Règle de date de la vente, pour tous les parcours (front, panier, API v2, caisse).
+        / True when the event is over. Without an end date, it ends 24 hours after its start.
+        """
+        fin_de_l_evenement = self.end_datetime
+        if not fin_de_l_evenement:
+            fin_de_l_evenement = self.datetime + timedelta(hours=24)
+        return fin_de_l_evenement < timezone.now()
+
+    def n_est_plus_en_vente(self):
+        """
+        Vrai si on ne peut plus prendre de billet depuis le front ou le panier : événement
+        archivé ou terminé. Un événement non publié reste réservable par lien direct (le champ
+        prévu pour cacher un événement est `private`).
+        / True when no ticket can be taken from the front or the cart: archived or ended.
+        An unpublished event stays bookable through a direct link.
+        """
+        return self.archived or self.est_termine()
 
     def max_per_user_reached_on_this_event(self, user):
         if not self.max_per_user:

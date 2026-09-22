@@ -69,6 +69,7 @@ faker = "^23.2.1"
 pytest = "8.4.2"
 pytest-django = "^4.12.0"
 pytest-asyncio = "^1.3.0"
+pytest-cov = "^7.1.0"
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "TiBillet.settings"
@@ -78,6 +79,31 @@ markers = [
     "onboard: onboard wizard tests (use shared dev DB, no migrations)",
 ]
 filterwarnings = []
+
+# ---------------------------------------------------------------------------
+# coverage — utilise par `make coverage` (logique dans scripts/lancer_tests.sh)
+# / coverage — used by `make coverage` (logic in scripts/lancer_tests.sh)
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+# On mesure tout le code du projet, sauf ce qui n'est pas du code metier :
+# les migrations, les tests eux-memes et l'environnement Python.
+# Seul le code execute DANS le process pytest est compte. Les tests qui appellent
+# le serveur live en HTTP, et les E2E, n'entrent pas dans la mesure.
+# / Measures all project code except migrations, tests and the Python env.
+# / Only code run inside the pytest process counts (not live-server HTTP tests, not E2E).
+source = ["."]
+omit = [
+    "*/migrations/*",
+    "tests/*",
+    "*/tests/*",
+    ".venv/*",
+    "manage.py",
+]
+
+[tool.coverage.report]
+# Les fichiers vides (ex. __init__.py) ne sont pas listes.
+# / Empty files (e.g. __init__.py) are not listed.
+skip_empty = true
 
 # ---------------------------------------------------------------------------
 # ruff

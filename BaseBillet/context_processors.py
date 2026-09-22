@@ -74,7 +74,13 @@ def _build_items_with_details(panier):
     """
     from BaseBillet.models import Event, Price
     result = []
-    for item in panier.items():
+    # `index` = rang de l'item dans le panier en session. Le bouton « retirer » l'envoie à
+    # `/panier/<index>/remove/`. On ne peut PAS utiliser le rang d'affichage : un item dont le
+    # tarif, l'événement ou la ressource a disparu est sauté ci-dessous, et les rangs
+    # d'affichage ne correspondraient plus à ceux de la session.
+    # / `index` = the item's position in the session cart, sent by the remove button. The
+    # display position cannot be used: skipped items would shift it.
+    for index, item in enumerate(panier.items()):
         try:
             price = Price.objects.get(uuid=item['price_uuid'])
             product = price.product
@@ -84,6 +90,7 @@ def _build_items_with_details(panier):
             continue
 
         detail = {
+            'index': index,
             'type': item['type'],
             'price': price,
             'product': product,

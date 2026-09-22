@@ -1419,12 +1419,22 @@ class ReservationCreateSerializer(serializers.Serializer):
             reservation.save(update_fields=["status"])
             reservation.tickets.all().update(status=Ticket.NOT_SCANNED)
 
-        # Ensure LigneArticle exists for free bookings (source API)
+        # Réservation gratuite : chaque tarif doit avoir SA ligne de vente. TicketCreator a
+        # déjà créé (et validé sans Stripe) celles des tarifs « payants » à 0 € ; l'API crée
+        # seulement celles des tarifs qui n'en ont pas encore (réservations gratuites).
+        # En recréer une ferait compter la vente deux fois.
+        # / Free booking: each price gets exactly one sale line. TicketCreator already created
+        # the 0 € paid-category ones; the API only creates the missing ones.
         if not checkout_link:
             for price_uuid, qty, price_value in price_qty_pairs:
                 try:
                     price = Price.objects.get(uuid=price_uuid)
                 except Price.DoesNotExist:
+                    continue
+                ce_tarif_a_deja_sa_ligne = reservation.lignearticles.filter(
+                    pricesold__price=price
+                ).exists()
+                if ce_tarif_a_deja_sa_ligne:
                     continue
                 price_sold = get_or_create_price_sold(price, event=event, custom_amount=price_value)
                 LigneArticle.objects.create(

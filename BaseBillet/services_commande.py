@@ -193,7 +193,7 @@ class CommandeService:
                     status=Membership.WAITING_PAYMENT,
                     first_name=resolved_firstname,
                     last_name=resolved_lastname,
-                    newsletter=False,
+                    newsletter=item.get('newsletter', False),
                     custom_form=item.get('custom_form') or None,
                 )
 
@@ -237,17 +237,28 @@ class CommandeService:
 
             for event_uuid, items_event in tickets_par_event.items():
                 event = Event.objects.get(uuid=event_uuid)
-                # Construction d'un products_dict conforme au format attendu par TicketCreator
-                # / Build a products_dict compatible with TicketCreator's expected format
-                products_dict = {}
-                custom_amounts = {}
+                # Construction des products_dict attendus par TicketCreator, pour les items a
+                # prix fixe. Ils sont regroupes par code promo : TicketCreator n'accepte qu'un
+                # code, et deux ajouts successifs sur le meme evenement peuvent porter deux
+                # codes (lies a deux produits differents). Dans un groupe, les quantites d'un
+                # meme tarif s'additionnent.
+                # Un montant saisi ne vaut que si le tarif est ENCORE a prix libre : sinon
+                # (tarif passe en prix fixe depuis l'ajout), le billet est facture au prix fixe.
+                # / Build TicketCreator products_dicts for fixed-price items, grouped by promo
+                # code (TicketCreator takes one code). A typed amount only counts if the price
+                # is still a free price.
+                products_dict_par_code_promo = {}
+                items_a_prix_libre = []
                 for it in items_event:
                     price = Price.objects.get(uuid=it['price_uuid'])
+                    if it.get('custom_amount') and price.free_price:
+                        items_a_prix_libre.append(it)
+                        continue
                     qty = int(it['qty'])
+                    nom_du_code_promo = it.get('promotional_code_name') or None
+                    products_dict = products_dict_par_code_promo.setdefault(nom_du_code_promo, {})
                     products_dict.setdefault(price.product, {})
                     products_dict[price.product][price] = products_dict[price.product].get(price, 0) + qty
-                    if it.get('custom_amount'):
-                        custom_amounts[price.uuid] = Decimal(str(it['custom_amount']))
 
                 # Tous les items de cet event partagent options + custom_form
                 # (une seule soumission de booking_form.html par event).
@@ -256,19 +267,6 @@ class CommandeService:
                 first_item = items_event[0]
                 custom_form = first_item.get('custom_form') or None
                 options_uuids = first_item.get('options') or []
-
-                # Code promo pour ce batch d'event : premier code trouve parmi les
-                # items. En pratique tous les items d'un meme event ont le meme
-                # code (un seul champ `promotional_code` par submission) mais ce
-                # resolveur est defensif au cas ou. TicketCreator applique ensuite
-                # le code au product matching via get_or_create_price_sold.
-                # / Promo code for this event batch: first found among items.
-                # TicketCreator applies it to matching product via get_or_create_price_sold.
-                event_promo_code = None
-                for it in items_event:
-                    event_promo_code = _resolve_promo(it)
-                    if event_promo_code:
-                        break
 
                 reservation = Reservation.objects.create(
                     user_commande=user,
@@ -283,20 +281,44 @@ class CommandeService:
                     if opts.exists():
                         reservation.options.set(opts)
 
-                # TicketCreator gère Tickets + LigneArticle. On bloque son Stripe.
-                # / TicketCreator handles Tickets + LigneArticle. We disable its Stripe.
+                # TicketCreator gère Tickets + LigneArticle, un appel par code promo. On bloque
+                # son Stripe : CommandeService crée UN paiement pour toute la Commande.
+                # Il n'applique le code qu'aux tarifs de SON produit (method_B).
+                # / TicketCreator handles Tickets + LigneArticle, one call per promo code, with
+                # its Stripe disabled. It applies the code only to its own product's prices.
                 from BaseBillet.validators import TicketCreator
-                creator = TicketCreator(
-                    reservation=reservation,
-                    products_dict=products_dict,
-                    promo_code=event_promo_code,
-                    custom_amounts=custom_amounts,
-                    sale_origin=SaleOrigin.LESPASS,
-                    create_checkout=False,  # <-- clé : pas de Stripe ici
-                )
-                for line in creator.list_line_article_sold:
-                    all_lines.append(line)
-                    total_centimes += int(line.amount * line.qty)
+                for nom_du_code_promo, products_dict in products_dict_par_code_promo.items():
+                    creator = TicketCreator(
+                        reservation=reservation,
+                        products_dict=products_dict,
+                        promo_code=_resolve_promo({'promotional_code_name': nom_du_code_promo}),
+                        sale_origin=SaleOrigin.LESPASS,
+                        create_checkout=False,
+                    )
+                    for line in creator.list_line_article_sold:
+                        all_lines.append(line)
+                        total_centimes += int(line.amount * line.qty)
+
+                # Un item a prix libre garde SON montant : il passe dans son propre
+                # TicketCreator, sur la meme reservation. Additionner ses quantites avec un
+                # autre item du meme tarif facturerait les deux au dernier montant saisi.
+                # / A free-price item keeps ITS amount: it gets its own TicketCreator, on the
+                # same reservation. Merging it with another item of the same price would bill
+                # both at the last amount typed.
+                for item_a_prix_libre in items_a_prix_libre:
+                    price = Price.objects.get(uuid=item_a_prix_libre['price_uuid'])
+                    montant_saisi = Decimal(str(item_a_prix_libre['custom_amount']))
+                    creator = TicketCreator(
+                        reservation=reservation,
+                        products_dict={price.product: {price: int(item_a_prix_libre['qty'])}},
+                        promo_code=_resolve_promo(item_a_prix_libre),
+                        custom_amounts={price.uuid: montant_saisi},
+                        sale_origin=SaleOrigin.LESPASS,
+                        create_checkout=False,
+                    )
+                    for line in creator.list_line_article_sold:
+                        all_lines.append(line)
+                        total_centimes += int(line.amount * line.qty)
 
             # -- Phase 3 : Reservation de resource -- #
             # -- Phase 3 : Reservation de resource -- #
@@ -406,10 +428,11 @@ class CommandeService:
         # Détection : y a-t-il des billets dans la commande ?
         # Si oui → SEPA refusé (billets à utiliser rapidement).
         # Si non (adhésion-only) → SEPA autorisé si config ON.
-        # / Detection: does the order contain tickets?
-        # If yes → deny SEPA (tickets must be usable quickly).
-        # If no (adhesion-only) → allow SEPA if config ON.
-        contains_tickets = any(
+        # Une « réservation gratuite » n'a pas de ligne de vente : on regarde donc aussi les
+        # réservations de la Commande (leurs billets attendent le paiement).
+        # / Detection: does the order contain tickets? If yes → deny SEPA. A free booking has
+        # no sale line, so the Order's reservations are checked too.
+        contains_tickets = commande.reservations.exists() or any(
             line.reservation is not None for line in lignes
         )
 
@@ -452,8 +475,11 @@ class CommandeService:
     @staticmethod
     def _finaliser_gratuit(commande, lignes):
         """
-        Phase 4 — commande gratuite (total 0€) : pas de Stripe, tout VALID direct.
-        / Phase 4 — free order (total 0€): no Stripe, all VALID direct.
+        Phase 4 — commande gratuite (total 0€) : pas de Stripe. Les lignes sont validées en
+        « offert » ; les adhésions passent par le déclencheur de paiement (mail, récompense
+        monnaie) ; les réservations et bookings prennent leur statut gratuit.
+        / Phase 4 — free order (total 0€): no Stripe. Lines valid as "free", memberships go
+        through the payment trigger, reservations and bookings get their free status.
         """
         from django.utils import timezone
         from BaseBillet.models import Commande, LigneArticle, Membership, PaymentMethod, Reservation
@@ -471,8 +497,12 @@ class CommandeService:
             membership.save()
             membership.set_deadline()
 
-        # Reservations de la commande → FREERES/FREERES_USERACTIV selon user.is_active
-        # / Commande's reservations → FREERES/FREERES_USERACTIV per user.is_active
+        # Reservations de la commande → FREERES/FREERES_USERACTIV selon user.is_active.
+        # Au panier, TicketCreator ne pose jamais ce statut (create_checkout=False) : chaque
+        # reservation est encore « creee ». Ce passage unique active et envoie tous ses billets
+        # (machine a etats, signals.py), gratuits comme billets a 0 €.
+        # / Commande's reservations → FREERES/FREERES_USERACTIV per user.is_active. In the
+        # cart, TicketCreator never sets it: this single save activates and mails every ticket.
         for reservation in commande.reservations.all():
             user = reservation.user_commande
             reservation.status = (
@@ -488,11 +518,31 @@ class CommandeService:
             booking.save()
 
 
-        # LigneArticle → VALID + payment_method=FREE
-        # / LigneArticle → VALID + payment_method=FREE
+        # LigneArticle → payment_method=FREE, puis :
+        # - ligne d'adhesion : passage par PAID, comme le parcours direct d'une adhesion
+        #   gratuite. La machine a etats lance alors trigger_A (mail de confirmation,
+        #   recompense monnaie, rattachement de l'adherent au lieu), qui passe la ligne a VALID ;
+        # - ligne de billet : passage par PAID, comme le parcours direct d'un billet a 0 €.
+        #   trigger_B envoie la vente a LaBoutik et passe la ligne a VALID ;
+        # - ligne de booking : VALID directement. Elle ne doit pas passer par PAID :
+        #   trigger_C mettrait le booking gratuit en "paye par l'utilisateur".
+        # / LigneArticle → FREE, then: membership and ticket lines through PAID (trigger_A /
+        # trigger_B run and set them VALID); booking lines straight to VALID.
         for line in lignes:
-            line.status = LigneArticle.VALID
             line.payment_method = PaymentMethod.FREE
+            if line.membership_id:
+                # Recharger l'adhesion AVANT de passer la ligne en PAID. La ligne porte
+                # l'objet cree en phase 1, reste "en attente de paiement" en memoire.
+                # trigger_A (declenche par PAID) sauve cette adhesion (set_deadline) : un
+                # objet perime ecraserait le statut ONCE pose plus haut dans cette methode.
+                # / Reload the membership BEFORE setting the line PAID: trigger_A saves it,
+                # and a stale object would overwrite the ONCE status set above.
+                line.membership.refresh_from_db()
+                line.status = LigneArticle.PAID
+            elif line.reservation_id:
+                line.status = LigneArticle.PAID
+            else:
+                line.status = LigneArticle.VALID
             line.save(update_fields=["status", "payment_method"])
 
         commande.status = Commande.PAID

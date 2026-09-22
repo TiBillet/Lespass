@@ -8,7 +8,8 @@
             {% translate "Please validate your e-mail to confirm this booking." %}
         </div>
         <div style="margin-top: 1rem">
-            {% translate "Your reservation is blocked for 15 minutes. After this time, places will be made available again." %}
+            {# Durée fournie par la vue (DUREE_D_UN_PAIEMENT_EN_COURS). / Duration from the view. #}
+            {% blocktranslate with minutes=minutes_de_reservation %}Votre réservation est bloquée {{ minutes }} minutes. Passé ce délai, les places sont remises en vente.{% endblocktranslate %}
         </div>
         <div style="margin-top: 1rem">
             {% translate "Don't forget to check the spam folder!" %}

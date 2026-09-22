@@ -43,26 +43,29 @@ Cela permettra également de stocker les objets en tant que telle, au lieu de fa
 
 ### Bugs connus
 
-Si un prix adhérent pris grâce à une adhésion dans le panier, manque le fait de reverifier au moment du paiement si l'utilisateur 
-possède l'adhésion ou l'as dans son panier. Actuellement, il est possible d'ajouter une adhésion, 
-ajouter un prix uniquement accessible avec cette adhésion, puis supprimer l'adhésion du panier tout en gardant le prix donné grâce à l'adhésion.
+Mis à jour le 2026-09-21 (chantier de tests, voir `TECH_DOC/SESSIONS/PANIER/SPEC.md` et
+`CHANGELOG/2026-09-21-tests-panier.md`).
+
+- Adhésion ajoutée, tarif adhérent pris, puis adhésion retirée : pour un **billet**, le tarif est
+  refusé au paiement (`revalidate_all()` rejoue les items, prouvé par un test). Le panier affiche
+  encore le tarif adhérent tant qu'on n'a pas payé. Pour une **ressource**, la vérification
+  manquait côté serveur : corrigé (C2).
+- Événement qui porte un produit « réservation gratuite » ET un produit payant (C27) : corrigé
+  le 2026-09-21. Les billets gratuits partent avec les billets payés, en un seul envoi, après
+  le paiement ; si le paiement ne passe pas, rien n'est envoyé.
+- Défauts connus, prouvés par des tests `xfail` et non corrigés : liste dans le SPEC (§1 et §10).
 
 ### Remarque
 
 Le terme "resource" est employé alors que le terme adapté devrait peut-être être "booking". Comme pour `Membership` par exemple où on utilise le nom de
 l'objet final qui sera créé. À voir.
 
-Les codes promo n'ont PAS DU TOUT été téstés. Je ne sais pas si ils sont bien appliqué et fonctionnent correctement.
+Les codes promo sont testés depuis le 2026-09-21 (par item, avec et sans panier) ; un code ne remise plus que son produit (C5).
 
 Quand on crée le paiement stripe avec le panier, ses champs `booking` et `reservation` sont nulles, tout passe par son champ `commande`.
 
 ### À tester
 
-1. Tester si des paiements créés avant le panier peuvent bien être remboursé. (voir "refund_refactor.md" également)
-2. Tester la logique du panier au global
-3. Vérifier si les codes promo fonctionnent
-4. Tester le paiement hors panier pour chaque item
-5. Tester les méthodes d'ajout au panier
-   - `PanierSession`.`add_membership`
-   - `PanierSession`.`add_ticket`
-   - `PanierSession`.`add_booking`
+Fait le 2026-09-21 : logique du panier, codes promo, paiement avec et sans panier pour chaque
+type d'article, méthodes d'ajout (`add_ticket`, `add_membership`, `add_resource`), paiement réel
+en E2E. Remboursement avec et sans panier : chantier `TECH_DOC/SESSIONS/REMBOURSEMENT/`.

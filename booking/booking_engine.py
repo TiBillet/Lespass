@@ -320,11 +320,20 @@ def get_existing_bookings_for_resource(resource, window: Interval = None):
     L'annulation = suppression de ligne, pas de statut cancelled (finding §1).
     / Cancellation = row deletion, no cancelled status (finding §1).
     """
+    from BaseBillet.models import DUREE_D_UN_PAIEMENT_EN_COURS
     from booking.models import Booking
+    from django.db.models import Q
 
-
-    # Récupère seulement les réservations (Booking) qui ont été payé ou validé par l'admin
-    requete_de_base = Booking.objects.filter(resource=resource,status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES_USERACTIV])
+    # Occupent le créneau : les réservations payées, validées par l'admin ou gratuites, et
+    # celles en attente de paiement depuis moins de DUREE_D_UN_PAIEMENT_EN_COURS (la place
+    # est retenue pendant le paiement, puis libérée s'il est abandonné).
+    # / Occupying the slot: paid, admin-validated or free bookings, and bookings waiting for
+    # payment for less than DUREE_D_UN_PAIEMENT_EN_COURS.
+    debut_des_paiements_en_cours = timezone.now() - DUREE_D_UN_PAIEMENT_EN_COURS
+    requete_de_base = Booking.objects.filter(resource=resource).filter(
+        Q(status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES_USERACTIV])
+        | Q(status=Booking.WAITING_PAYMENT, booked_at__gt=debut_des_paiements_en_cours)
+    )
 
     if window is None:
         return requete_de_base
@@ -520,6 +529,36 @@ def validate_new_booking(resource,
     now = reference_now or timezone.now()
     if start_datetime <= now:
         return False, str(_('Cannot book a slot that has already started.')), None
+
+    # Le tarif doit appartenir à la ressource réservée. Sans ce contrôle, on pourrait
+    # réserver une salle au tarif (par exemple gratuit) d'une autre salle.
+    # / The price must belong to the booked resource.
+    if price.product_id != resource.product_id:
+        return False, str(_("Ce tarif n'appartient pas à cette ressource.")), None
+
+    # Un tarif dépublié ou un produit archivé n'est plus en vente.
+    # / An unpublished price or an archived product is no longer for sale.
+    if not price.publish:
+        return False, str(_("This rate is not available.")), None
+    if price.product.archive:
+        return False, str(_("This product is archived.")), None
+
+    # Tarif réservé aux adhérents : il faut une adhésion active, ou une adhésion achetée
+    # dans la même commande (panier : l'adhésion et le créneau sont payés ensemble).
+    # / Members-only price: an active membership, or one bought in the same order, is required.
+    if price.adhesions_obligatoires.exists():
+        from BaseBillet.models import Membership
+        adhesions_qui_ouvrent_ce_tarif = Membership.objects.filter(
+            user=member,
+            price__product__in=price.adhesions_obligatoires.all(),
+        )
+        adhesion_active = adhesions_qui_ouvrent_ce_tarif.filter(deadline__gte=now).exists()
+        adhesion_dans_la_meme_commande = (
+            commande is not None
+            and adhesions_qui_ouvrent_ce_tarif.filter(commande=commande).exists()
+        )
+        if not adhesion_active and not adhesion_dans_la_meme_commande:
+            return False, str(_("Ce tarif est réservé aux adhérents.")), None
 
     last_slot_end_dt = start_datetime + datetime.timedelta(
         minutes=slot_duration_minutes * slot_count

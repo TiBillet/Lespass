@@ -56,13 +56,11 @@ def _blocking_statuses():
 
 
 def _recent_blocking_statuses():
-    """Statuts qui bloquent uniquement si récents (< 15 min).
-    / Statuses that block only if recent (< 15 min)."""
+    """Statuts qui bloquent uniquement si récents (paiement en cours, voir
+    DUREE_D_UN_PAIEMENT_EN_COURS).
+    / Statuses that block only if recent (payment in progress)."""
     from BaseBillet.models import Reservation
     return [Reservation.CREATED, Reservation.UNPAID]
-
-
-RECENT_BLOCKING_WINDOW = timedelta(minutes=15)
 
 
 # --------------------------------------------------------------------------
@@ -179,7 +177,7 @@ def validate_ticket_cart_limits(user, event, product, price, qty_to_add, cart_it
             total_event = db_qty_event + cart_qty_event + qty_to_add
             if total_event > event.max_per_user:
                 raise InvalidItemError(
-                    _("Adding these tickets for %(event) would exceed the per-user limit "
+                    _("Adding these tickets for %(event)s would exceed the per-user limit "
                       "of %(max)s for this event. You already have %(db)s "
                       "confirmed + %(cart)s in cart.")
                     % {"max": event.max_per_user, "db": db_qty_event, "cart": cart_qty_event, "event": event}
@@ -249,13 +247,14 @@ def reservations_bloquantes_pour_user(user, start, end):
 
     Logique (cf. spec section 3.7bis) :
     - Blocage dur : statuts dans BLOCKING_STATUSES, toujours.
-    - Blocage récent : statuts CREATED/UNPAID uniquement si créés < 15 min.
+    - Blocage récent : statuts CREATED/UNPAID uniquement pendant un paiement en cours
+      (depuis moins de DUREE_D_UN_PAIEMENT_EN_COURS).
 
     / Logic (cf. spec section 3.7bis):
     - Hard block: statuses in BLOCKING_STATUSES, always.
-    - Recent block: CREATED/UNPAID only if created < 15 min ago.
+    - Recent block: CREATED/UNPAID only while a payment is in progress.
     """
-    from BaseBillet.models import Reservation
+    from BaseBillet.models import DUREE_D_UN_PAIEMENT_EN_COURS, Reservation
 
     overlap_q = (
         Q(event__datetime__range=(start, end)) |
@@ -268,7 +267,7 @@ def reservations_bloquantes_pour_user(user, start, end):
         status__in=_blocking_statuses(),
     ).filter(overlap_q)
 
-    seuil_recent = timezone.now() - RECENT_BLOCKING_WINDOW
+    seuil_recent = timezone.now() - DUREE_D_UN_PAIEMENT_EN_COURS
     blocage_recent = Reservation.objects.filter(
         user_commande=user,
         status__in=_recent_blocking_statuses(),
@@ -377,6 +376,47 @@ class PanierSession:
         / True if the cart has no items."""
         return len(self._data.get('items', [])) == 0
 
+    # --- Règle commune : adhésion obligatoire ---
+    # --- Shared rule: required membership ---
+
+    def _adhesion_obligatoire_en_base_ou_dans_le_panier(self, price):
+        """
+        Vrai si l'acheteur a une adhésion qui ouvre ce tarif : active en base, OU présente
+        dans le panier courant (elle sera payée avec lui).
+        Utilisé par add_ticket et add_resource, donc aussi par revalidate_all au paiement.
+        / True if the buyer holds a membership opening this price: active in the DB, OR in
+        the current cart. Used by add_ticket and add_resource (hence revalidate_all).
+        """
+        from BaseBillet.models import Membership, Price as PriceModel
+
+        produits_d_adhesion_requis = list(price.adhesions_obligatoires.all())
+
+        # Adhésion active en base ? (seulement pour un utilisateur connecté)
+        # / Active membership in the DB? (logged-in users only)
+        if self.request.user.is_authenticated:
+            adhesion_active_en_base = Membership.objects.filter(
+                user=self.request.user,
+                price__product__in=produits_d_adhesion_requis,
+                deadline__gte=timezone.now(),
+            ).exists()
+            if adhesion_active_en_base:
+                return True
+
+        # Adhésion dans le panier courant ?
+        # / Membership in the current cart?
+        uuids_des_produits_requis = {str(produit.uuid) for produit in produits_d_adhesion_requis}
+        for item_existant in self._data.get('items', []):
+            if item_existant.get('type') != 'membership':
+                continue
+            try:
+                tarif_de_l_adhesion = PriceModel.objects.get(uuid=item_existant['price_uuid'])
+            except PriceModel.DoesNotExist:
+                continue
+            if str(tarif_de_l_adhesion.product.uuid) in uuids_des_produits_requis:
+                return True
+
+        return False
+
     # --- Écritures publiques (squelette — validations dans tâches suivantes) ---
     # --- Public writes (skeleton — validations in later tasks) ---
 
@@ -408,12 +448,16 @@ class PanierSession:
         if qty is None or int(qty) <= 0:
             raise InvalidItemError(_("Quantity must be positive."))
 
-        # Validation 2 : Event existe et pas complet
-        # Validation 2: Event exists and not full
+        # Validation 2 : Event existe, encore en vente (pas archivé, pas terminé) et
+        # pas complet. revalidate_all rejoue ce contrôle au paiement : un billet resté dans
+        # le panier après la fin de l'événement est refusé.
+        # / Validation 2: Event exists, still on sale and not full (replayed at checkout).
         try:
             event = Event.objects.get(uuid=event_uuid)
         except Event.DoesNotExist:
             raise InvalidItemError(_("Event not found."))
+        if event.n_est_plus_en_vente():
+            raise InvalidItemError(_("Cet événement n'est plus en vente."))
         if event.complet():
             raise InvalidItemError(_("This event is full."))
 
@@ -459,9 +503,20 @@ class PanierSession:
             cart_items=self._data.get('items', []),
         )
 
-        # Validation 6 : stock disponible
-        # Validation 6: stock available
-        if price.out_of_stock(event=event):
+        # Validation 6 : le stock du tarif doit accueillir la quantité demandée ET ce que le
+        # panier contient déjà pour ce tarif et cet événement (voir Price.out_of_stock).
+        # / Validation 6: the price stock must fit the requested quantity plus the same
+        # price already in the cart for this event.
+        quantite_deja_au_panier = 0
+        for item_du_panier in self._data.get('items', []):
+            meme_tarif_meme_evenement = (
+                item_du_panier.get('type') == 'ticket'
+                and item_du_panier.get('event_uuid') == str(event.uuid)
+                and item_du_panier.get('price_uuid') == str(price.uuid)
+            )
+            if meme_tarif_meme_evenement:
+                quantite_deja_au_panier += int(item_du_panier.get('qty', 0))
+        if price.out_of_stock(event=event, quantite_demandee=int(qty) + quantite_deja_au_panier):
             raise InvalidItemError(_("This rate is sold out."))
 
         # Validation 7 : free_price → custom_amount >= prix minimum
@@ -487,37 +542,8 @@ class PanierSession:
         # Rate accepted if user already has active membership OR the
         # required membership is in the current cart.
         if price.adhesions_obligatoires.exists():
-            required_products = list(price.adhesions_obligatoires.all())
-
-            # Adhésion active en DB ?
-            # / Active membership in DB?
-            has_active_membership = False
-            if self.request.user.is_authenticated:
-                from BaseBillet.models import Membership
-                has_active_membership = Membership.objects.filter(
-                    user=self.request.user,
-                    price__product__in=required_products,
-                    deadline__gte=timezone.now(),
-                ).exists()
-
-            # Adhésion dans le panier courant ?
-            # / Membership in current cart?
-            has_in_cart = False
-            required_product_uuids = {str(p.uuid) for p in required_products}
-            for existing in self._data.get('items', []):
-                if existing.get('type') != 'membership':
-                    continue
-                try:
-                    from BaseBillet.models import Price as PriceModel
-                    existing_price = PriceModel.objects.get(uuid=existing['price_uuid'])
-                    if str(existing_price.product.uuid) in required_product_uuids:
-                        has_in_cart = True
-                        break
-                except PriceModel.DoesNotExist:
-                    continue
-
-            if not (has_active_membership or has_in_cart):
-                names = ", ".join([p.name for p in required_products])
+            if not self._adhesion_obligatoire_en_base_ou_dans_le_panier(price):
+                names = ", ".join([p.name for p in price.adhesions_obligatoires.all()])
                 raise InvalidItemError(
                     _("This rate requires a membership: %(names)s. "
                       "Please add the required membership to your cart first.")
@@ -565,12 +591,17 @@ class PanierSession:
                             _("You already have a booking that overlaps with this event: %(name)s")
                             % {"name": conflit.event.name}
                         )
-                    # Sinon — blocage récent (<15 min), message spécifique
-                    # / Otherwise — recent block (<15 min), specific message
+                    # Sinon — blocage récent (paiement en cours), message spécifique
+                    # / Otherwise — recent block (payment in progress), specific message
+                    from BaseBillet.models import DUREE_D_UN_PAIEMENT_EN_COURS
                     raise InvalidItemError(
-                        _("You have a payment in progress for an event that overlaps with this one: "
-                          "%(name)s. Please complete it or wait 15 minutes before trying another booking.")
-                        % {"name": conflit.event.name}
+                        _("Vous avez un paiement en cours pour un événement qui chevauche celui-ci : "
+                          "%(name)s. Terminez-le ou attendez %(minutes)s minutes avant une autre "
+                          "réservation.")
+                        % {
+                            "name": conflit.event.name,
+                            "minutes": int(DUREE_D_UN_PAIEMENT_EN_COURS.total_seconds() // 60),
+                        }
                     )
 
         # Validation 9 : code promo (si fourni) — doit etre actif, utilisable,
@@ -613,7 +644,7 @@ class PanierSession:
     def add_membership(self, price_uuid,
                        custom_amount=None, options=None, custom_form=None,
                        firstname=None, lastname=None,
-                       promotional_code_name=None):
+                       promotional_code_name=None, newsletter=False):
         """
         Ajoute un item adhésion au panier après validation.
         / Adds a membership item to the cart after validation.
@@ -671,6 +702,12 @@ class PanierSession:
             if existing.get('type') == 'membership' and existing.get('price_uuid') == str(price_uuid):
                 raise InvalidItemError(_("This membership is already in your cart."))
 
+        # Validation 5bis : stock du tarif d'adhésion (adhésions valides, engagées ou en cours
+        # de paiement, voir Price.out_of_stock). Le panier ne contient qu'une adhésion par tarif.
+        # / Validation 5bis: membership price stock.
+        if price.out_of_stock():
+            raise InvalidItemError(_("This rate is sold out."))
+
         # Validation 6 : free_price → custom_amount >= min
         # Validation 6: free_price → custom_amount >= min
         if price.free_price:
@@ -724,6 +761,9 @@ class PanierSession:
             'firstname': clean_firstname,
             'lastname': clean_lastname,
             'promotional_code_name': validated_promo_name,
+            # Case « recevoir la newsletter » du formulaire d'adhésion.
+            # / "Subscribe to the newsletter" box of the membership form.
+            'newsletter': bool(newsletter),
         }
         self._data['items'].append(item)
         self._save()
@@ -778,6 +818,18 @@ class PanierSession:
         # Validation 2: Product must be RESOURCE category
         if price.product.categorie_article != Product.RESOURCE:
             raise InvalidItemError(_("This rate is not a resource."))
+
+        # Le tarif doit appartenir à cette ressource (sinon : salle réservée au tarif,
+        # par exemple gratuit, d'une autre salle).
+        # / The price must belong to this resource.
+        if price.product_id != resource.product_id:
+            raise InvalidItemError(_("Ce tarif n'appartient pas à cette ressource."))
+
+        # Tarif réservé aux adhérents : adhésion active en base ou présente dans le panier.
+        # / Members-only price: active membership in the DB or in the cart.
+        if price.adhesions_obligatoires.exists():
+            if not self._adhesion_obligatoire_en_base_ou_dans_le_panier(price):
+                raise InvalidItemError(_("Ce tarif est réservé aux adhérents."))
 
         # # Validation 3 : pas de paiement récurrent (exclu du panier en v1)
         # # Validation 3: no recurring payment (excluded from cart in v1)
@@ -1083,10 +1135,10 @@ class PanierSession:
         """
         Re-applique toutes les validations d'add sur les items présents.
         Appelé par CommandeService.materialiser() en Phase 0.
-        Lève InvalidItemError sur le premier item invalide (stock épuisé,
-        price dépublié, adhésion obligatoire plus disponible, etc.).
+        Ne lève rien : renvoie la liste des erreurs (stock épuisé, price dépublié,
+        adhésion obligatoire plus disponible, etc.). Un item invalide sort du panier.
         / Re-apply all add validations on present items. Called by
-        materialiser() in Phase 0. Raises InvalidItemError on first invalid.
+        materialiser() in Phase 0. Returns the list of errors; invalid items are dropped.
         """
         # Copie des items (on va les re-injecter un par un)
         # / Copy items (we'll re-inject one by one)
@@ -1094,9 +1146,23 @@ class PanierSession:
         self._data['items'] = []
         self._save()
 
+        # Les adhésions sont rejouées EN PREMIER : un billet ou un créneau à tarif adhérent
+        # n'est accepté que si l'adhésion est déjà revenue dans le panier. Une adhésion
+        # retirée puis remise se retrouve en fin de panier : rejouer dans l'ordre d'ajout
+        # ferait refuser à tort le tarif adhérent.
+        # / Memberships are replayed FIRST: a members-only item is only accepted once its
+        # membership is back in the cart.
+        items_dans_l_ordre_de_revalidation = []
+        for item in items_snapshot:
+            if item['type'] == 'membership':
+                items_dans_l_ordre_de_revalidation.append(item)
+        for item in items_snapshot:
+            if item['type'] != 'membership':
+                items_dans_l_ordre_de_revalidation.append(item)
+
         validation_errors = []
 
-        for item in items_snapshot:
+        for item in items_dans_l_ordre_de_revalidation:
             try:
                 if item['type'] == 'ticket':
                     self.add_ticket(
@@ -1117,6 +1183,7 @@ class PanierSession:
                         firstname=item.get('firstname'),
                         lastname=item.get('lastname'),
                         promotional_code_name=item.get('promotional_code_name'),
+                        newsletter=item.get('newsletter', False),
                     )
                 elif item['type'] == 'resource':
                     self.add_resource(

@@ -1,16 +1,18 @@
 import json
 import logging
+from datetime import timedelta
 
 import stripe
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.http import HttpResponseRedirect
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from stripe._error import InvalidRequestError
 
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold, \
-    PaymentMethod, SaleOrigin
+    PaymentMethod, SaleOrigin, DUREE_D_UN_PAIEMENT_EN_COURS
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -182,9 +184,17 @@ class CreationPaiementStripe():
         if sepa_authorized and self.config.stripe_accept_sepa:
             payment_method_types.append("sepa_debit")
 
+        # La session expire comme la place retenue : après DUREE_D_UN_PAIEMENT_EN_COURS.
+        # Stripe refuse une expiration à moins de 30 minutes de SA création : on ajoute une
+        # minute de marge pour le temps de la requête.
+        # / The session expires like the held seat. Stripe refuses less than 30 minutes from
+        # its own creation time: one minute of margin covers the request time.
+        expiration_de_la_session = timezone.now() + DUREE_D_UN_PAIEMENT_EN_COURS + timedelta(minutes=1)
+
         data_checkout = {
             'success_url': f'{success_url}',
             'cancel_url': f'{cancel_url}',
+            'expires_at': int(expiration_de_la_session.timestamp()),
             'payment_method_types': payment_method_types,
             'customer_email': f'{self.user.email}',
             'line_items': self.line_items,

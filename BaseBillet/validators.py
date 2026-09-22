@@ -30,6 +30,13 @@ from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
+# Quantité maximum d'un tarif dans une demande de billets (parcours direct et panier).
+# Elle est contrôlée AVANT la conversion en entier : convertir un nombre comme « 1e999999999 »
+# bloquerait le serveur de longues secondes, et le parcours direct est ouvert sans compte.
+# / Maximum quantity of one price in a ticket request, checked BEFORE converting to int:
+# converting "1e999999999" would block the server for a long time.
+QUANTITE_MAXIMUM_PAR_TARIF = 9999
+
 
 def build_custom_form_from_request(req_data, products, prefix: str = 'form__'):
     """
@@ -196,10 +203,10 @@ class TicketCreator():
         # Source de vente (ex: LESPASS, API) / Sale source (e.g., LESPASS, API)
         self.sale_origin = sale_origin
 
-        # Si False, on ne déclenche pas get_checkout_stripe() à la fin de method_B.
-        # Utilisé par CommandeService.materialiser() qui consolide toutes les
+        # Si False, __init__ ne décide pas du paiement (ni checkout Stripe, ni validation
+        # à 0 €). Utilisé par CommandeService.materialiser() qui consolide toutes les
         # LigneArticle puis crée UN SEUL checkout Stripe pour la commande entière.
-        # / If False, skip get_checkout_stripe() at the end of method_B.
+        # / If False, __init__ does not handle payment (no checkout, no 0 € validation).
         # Used by CommandeService.materialiser() which consolidates all
         # LigneArticle then creates ONE Stripe checkout for the entire order.
         self.create_checkout = create_checkout
@@ -239,6 +246,55 @@ class TicketCreator():
         # the correct one (loop) and an empty one without pricesold (method_A).
         if reservation.event.categorie == Event.ACTION and not products_dict:
             self.tickets = self.method_A()
+
+        # Vente payée en caisse avec des billets payés : method_B a validé la réservation.
+        # Les billets des « réservations gratuites » de la même réservation (method_F, créés
+        # non actifs) sont activés avec eux, quel que soit l'ordre des produits.
+        # / Paid at the POS with paid tickets: activate the free-booking tickets too,
+        # whatever the product order.
+        if self.paid_externally and self.list_line_article_sold:
+            reservation.tickets.filter(status=Ticket.NOT_ACTIV).update(status=Ticket.NOT_SCANNED)
+
+        # Paiement de la réservation, décidé une seule fois, après tous les produits :
+        # - des lignes à payer (total > 0) : UN checkout Stripe pour toute la réservation ;
+        # - toutes les lignes à 0 € : pas de Stripe, la réservation est validée comme une
+        #   réservation gratuite (même règle que le panier : un total nul ne passe jamais
+        #   par Stripe).
+        # Si create_checkout=False, l'appelant (CommandeService) crée lui-même un seul
+        # paiement pour toutes les lignes du panier.
+        # / Payment decided once, after all products: one Stripe checkout if the total is
+        # positive, free validation at 0 €. With create_checkout=False, CommandeService pays.
+        if self.create_checkout and not self.paid_externally and self.list_line_article_sold:
+            montant_total_en_centimes = 0
+            for ligne_vendue in self.list_line_article_sold:
+                montant_total_en_centimes += int(ligne_vendue.amount * ligne_vendue.qty)
+            if montant_total_en_centimes > 0:
+                self.checkout_link = self.get_checkout_stripe()
+            else:
+                self.valider_une_reservation_a_zero_euro()
+
+    def valider_une_reservation_a_zero_euro(self):
+        """
+        Réservation dont toutes les lignes valent 0 € : pas de paiement Stripe.
+        Les lignes passent « payées » en « offert », comme une vente payée : la machine à
+        états lance trigger_B (envoi de la vente à LaBoutik), qui les passe « validées ».
+        Puis la réservation passe au statut gratuit : la machine à états active les billets
+        et les envoie par mail (utilisateur actif).
+        / Reservation where every line is 0 €: no Stripe. Lines go "paid" as "free", so
+        trigger_B sends the sale to LaBoutik and sets them valid. Then the free status
+        activates and mails the tickets.
+        """
+        reservation: Reservation = self.reservation
+        for ligne_vendue in self.list_line_article_sold:
+            ligne_vendue.status = LigneArticle.PAID
+            ligne_vendue.payment_method = PaymentMethod.FREE
+            ligne_vendue.save(update_fields=["status", "payment_method"])
+
+        if self.user.is_active:
+            reservation.status = Reservation.FREERES_USERACTIV
+        else:
+            reservation.status = Reservation.FREERES
+        reservation.save()
 
     # Methode ACTION
     def method_A(self, prices_dict=None):
@@ -290,8 +346,29 @@ class TicketCreator():
                 )
                 tickets.append(ticket)
 
-        reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
-        reservation.save()
+        # Le statut gratuit active et envoie TOUS les billets de la réservation (machine à
+        # états, signals.py). On ne le pose donc que dans un seul cas : ce TicketCreator
+        # décide lui-même du paiement (create_checkout=True) ET la réservation ne contient
+        # QUE des réservations gratuites.
+        # - Un autre produit l'accompagne (billet payant, même à 0 €) : c'est le paiement,
+        #   décidé une seule fois à la fin de __init__, qui donne son statut à la réservation.
+        # - Panier (create_checkout=False) : CommandeService décide pour toute la Commande
+        #   (gratuite : _finaliser_gratuit ; payante : au paiement). Le panier peut appeler
+        #   plusieurs TicketCreator sur la même réservation (un par prix libre) : aucun ne
+        #   voit tous les produits.
+        # Les billets gratuits partent donc avec les billets payés, et seulement après le
+        # paiement.
+        # / The free status activates and mails EVERY ticket. Set it only when this
+        # TicketCreator handles payment itself AND the reservation holds free bookings only.
+        # In the cart, CommandeService decides for the whole Order.
+        reservation_ne_contient_que_des_reservations_gratuites = True
+        for produit in self.products_dict:
+            if produit.categorie_article != Product.FREERES:
+                reservation_ne_contient_que_des_reservations_gratuites = False
+
+        if self.create_checkout and reservation_ne_contient_que_des_reservations_gratuites:
+            reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
+            reservation.save()
         return tickets
 
     def method_B(self, prices_dict):
@@ -307,12 +384,21 @@ class TicketCreator():
             #     for customer in price_object.get('customers'):
 
             event = reservation.event
+
+            # Un code promo est lie a UN produit. Une reservation peut contenir plusieurs
+            # produits : le code ne s'applique qu'aux tarifs de son produit. Les autres
+            # tarifs restent au plein prix et leur ligne ne porte aucun code.
+            # / A promo code is linked to ONE product: it only applies to that product's prices.
+            code_promo_de_ce_tarif = None
+            if self.promo_code and self.promo_code.product_id == price_generique.product_id:
+                code_promo_de_ce_tarif = self.promo_code
+
             # Création de l'objet article à vendre, avec la liaison event.
             # On passe de prix générique (ex : Billet a 10€ a l'objet Billet pour evenement a 10€)
             pricesold: PriceSold = get_or_create_price_sold(
                 price_generique,
                 event=event,
-                promo_code=self.promo_code,
+                promo_code=code_promo_de_ce_tarif,
                 custom_amount=self.custom_amounts.get(price_generique.uuid))
 
             # Cas du billet déjà payé ailleurs (ex : en caisse LaBoutik).
@@ -329,7 +415,7 @@ class TicketCreator():
                     amount=dec_to_int(pricesold.prix),
                     payment_method=self.external_payment_method or PaymentMethod.UNKNOWN,
                     qty=qty,
-                    promotional_code=self.promo_code,
+                    promotional_code=code_promo_de_ce_tarif,
                     sale_origin=self.sale_origin,
                     reservation=reservation,
                     status=LigneArticle.VALID,
@@ -354,7 +440,7 @@ class TicketCreator():
                 amount=dec_to_int(pricesold.prix),
                 payment_method=PaymentMethod.STRIPE_NOFED,
                 qty=qty,
-                promotional_code=self.promo_code,
+                promotional_code=code_promo_de_ce_tarif,
                 sale_origin=self.sale_origin,
                 reservation=reservation,
             )
@@ -380,12 +466,10 @@ class TicketCreator():
             reservation.save()
             return tickets
 
-        if self.create_checkout:
-            self.checkout_link = self.get_checkout_stripe()
-        # Si create_checkout=False : le caller (CommandeService) appellera
-        # lui-même CreationPaiementStripe avec toutes les lignes consolidées.
-        # / If create_checkout=False: caller (CommandeService) will call
-        # CreationPaiementStripe itself with all consolidated lines.
+        # Le paiement (checkout Stripe, ou validation à 0 €) est décidé UNE fois pour toute
+        # la réservation, après tous les produits : voir __init__.
+        # / Payment (Stripe checkout, or 0 € validation) is decided ONCE for the whole
+        # reservation, after all products: see __init__.
 
         # Set tickets as not activ, because else they are not mark as "Ticket.NOT_SCANNED" in the signal "reservation_paid"
         reservation.tickets.all().update(status=Ticket.NOT_ACTIV)
@@ -433,8 +517,10 @@ class TicketCreator():
 class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
     # to_mail = serializers.BooleanField(default=True, required=False)
-    event = serializers.PrimaryKeyRelatedField(
-        queryset=Event.objects.filter(datetime__gte=timezone.now() - timedelta(days=1)))
+    # Pas de filtre de date dans le queryset : il serait calculé une seule fois, au chargement
+    # du module. La vente est contrôlée à chaque requête dans validate_event.
+    # / No date filter in the queryset (it would be computed once, at import time).
+    event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True,
                                                  required=False)
     datetime = serializers.DateTimeField(required=False)
@@ -470,8 +556,16 @@ class ReservationValidator(serializers.Serializer):
                     # Certains frontends envoient des nombres comme "15.00" → normaliser en int de manière sûre
                     try:
                         sval = str(raw_val).strip().replace(',', '.')
+                        quantite_decimale = Decimal(sval)
+                        # Infini, NaN ou démesuré (positif ou négatif) : refusé avant int()
+                        # (voir QUANTITE_MAXIMUM_PAR_TARIF).
+                        # / Infinite, NaN or huge (positive or negative): refused before int().
+                        if (not quantite_decimale.is_finite()
+                                or quantite_decimale > QUANTITE_MAXIMUM_PAR_TARIF
+                                or quantite_decimale < -QUANTITE_MAXIMUM_PAR_TARIF):
+                            raise ValueError(sval)
                         # Autoriser les décimales mais caster en entier (quantité)
-                        qty = int(Decimal(sval))
+                        qty = int(quantite_decimale)
                     except Exception:
                         raise serializers.ValidationError({price_key: [_('Invalid quantity.')]})
 
@@ -543,6 +637,19 @@ class ReservationValidator(serializers.Serializer):
     def validate_event(self, value):
         logger.info(f"validate event : {value}")
         self.event: Event = value
+
+        # Front (réservation directe, action bénévole) : même règle que le panier, l'événement
+        # doit encore être en vente (pas archivé, pas terminé).
+        # API v2 et caisse : seulement la règle de date (pas terminé), sans contrôle archivé.
+        # / Front: the event must still be on sale (same rule as the cart). API v2 and POS:
+        # only the date rule (not over).
+        sale_origin = self.context.get('sale_origin', SaleOrigin.LESPASS)
+        if sale_origin == SaleOrigin.LESPASS:
+            if self.event.n_est_plus_en_vente():
+                raise serializers.ValidationError(_("Cet événement n'est plus en vente."))
+        elif self.event.est_termine():
+            raise serializers.ValidationError(_("Cet événement n'est plus en vente."))
+
         if self.event.complet():
             raise serializers.ValidationError(_(f'Max capacity reached: event full.'))
         return value
@@ -652,20 +759,46 @@ class ReservationValidator(serializers.Serializer):
             if product not in event.products.all():
                 raise serializers.ValidationError(_(f'Invalid product.'))
 
+            # Limite par personne du produit : billets déjà pris + billets demandés, comme le
+            # panier (services_panier.validate_ticket_cart_limits).
+            # / Product per-person limit: tickets already held + requested, as in the cart.
+            if product.max_per_user:
+                quantite_demandee_pour_ce_produit = 0
+                for quantite_demandee in price_dict.values():
+                    quantite_demandee_pour_ce_produit += quantite_demandee
+                billets_deja_pris_pour_ce_produit = Ticket.objects.filter(
+                    reservation__user_commande=user,
+                    reservation__event=event,
+                    pricesold__price__product=product,
+                    status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+                ).count()
+                if billets_deja_pris_pour_ce_produit + quantite_demandee_pour_ce_produit > product.max_per_user:
+                    raise serializers.ValidationError(_('Maximum capacity reached for this product.'))
+
             # chaque maximum par user est respecté ?
             for price, qty in price_dict.items():
                 # Si l'user a déja reservé avant :
                 if price.max_per_user_reached(user, event=event):
                     raise serializers.ValidationError(_(f'Maximum capacity reached for this price.'))
 
-                # Si la jauge de ce prix est atteinte
-                if price.out_of_stock(event=event):
+                # Le stock du tarif doit pouvoir accueillir la quantité demandée
+                # (vendus + en cours de paiement + demandés, voir Price.out_of_stock).
+                # / The price stock must fit the requested quantity.
+                if price.out_of_stock(event=event, quantite_demandee=qty):
                     raise serializers.ValidationError(_(f'Maximum capacity reached for this price.'))
 
+                # Limite par personne du tarif : billets déjà pris + billets demandés.
+                # / Price per-person limit: tickets already held + requested.
                 if price.max_per_user:
-                    if qty > price.max_per_user:
+                    billets_deja_pris_pour_ce_tarif = Ticket.objects.filter(
+                        reservation__user_commande=user,
+                        reservation__event=event,
+                        pricesold__price=price,
+                        status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+                    ).count()
+                    if billets_deja_pris_pour_ce_tarif + qty > price.max_per_user:
                         raise serializers.ValidationError(
-                            _(f'Bookings exceed capacity for this rate.'))
+                            _('Bookings exceed capacity for this rate.'))
                 total_ticket_qty += qty
 
                 # Check adhésion
@@ -681,10 +814,16 @@ class ReservationValidator(serializers.Serializer):
         if not total_ticket_qty > 0:
             raise serializers.ValidationError(_(f'No ticket.'))
 
-        # Vérification du max par user sur l'event
+        # Limite par personne de l'événement : billets déjà pris + billets demandés.
+        # / Event per-person limit: tickets already held + requested.
         if event.max_per_user:
-            if total_ticket_qty > event.max_per_user:
-                raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
+            billets_deja_pris_pour_cet_evenement = Ticket.objects.filter(
+                reservation__user_commande=user,
+                reservation__event=event,
+                status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+            ).count()
+            if billets_deja_pris_pour_cet_evenement + total_ticket_qty > event.max_per_user:
+                raise serializers.ValidationError(_('Order quantity surpasses maximum allowed per user.'))
 
 
         # Vérification de la jauge
@@ -900,6 +1039,11 @@ class MembershipValidator(serializers.Serializer):
         if self.price.max_per_user_reached(user=self.user):
             logger.info(f"Max per user reached for {self.user.email} on price {self.price.uuid}")
             raise serializers.ValidationError(_('This product is limited in quantity per person.'))
+
+        # Stock du tarif d'adhésion (adhésions valides, engagées ou en cours de paiement,
+        # voir Price.out_of_stock). / Membership price stock.
+        if self.price.out_of_stock():
+            raise serializers.ValidationError(_("This rate is sold out."))
 
         # Création de la fiche membre / Membership record creation
         # On autorise plusieurs adhésions (ex: famille) / Multiple memberships allowed

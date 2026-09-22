@@ -3341,8 +3341,10 @@ class EventMVT(viewsets.ViewSet):
             messages.success(request, _("Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."))
             return HttpResponseClientRedirect(reverse("my_account-my-reservations"))
 
+        from BaseBillet.models import DUREE_D_UN_PAIEMENT_EN_COURS
         return render(request, "fonctionnel/event/reservation_ok.html", context={
             "user": validator.reservation.user_commande,
+            "minutes_de_reservation": int(DUREE_D_UN_PAIEMENT_EN_COURS.total_seconds() // 60),
         })
 
     @action(detail=True, methods=['GET'])
@@ -5721,6 +5723,10 @@ class PanierMVT(viewsets.ViewSet):
         firstname = request.POST.get('firstname') or None
         lastname = request.POST.get('lastname') or None
 
+        # Case newsletter du formulaire : cochée = "on". Absente = non cochée.
+        # / Newsletter box: ticked = "on". Absent = not ticked.
+        newsletter_cochee = request.POST.get('newsletter') in ['on', 'true', 'True', '1']
+
         # Code promo : lie a un Product specifique (FK). On ne passe que si
         # ce code existe pour le product de l'adhesion cible — sinon None.
         # Validation complete (actif, is_usable, match) dans add_membership.
@@ -5750,6 +5756,7 @@ class PanierMVT(viewsets.ViewSet):
                 firstname=firstname,
                 lastname=lastname,
                 promotional_code_name=item_promo,
+                newsletter=newsletter_cochee,
             )
         except InvalidItemError as exc:
             return self._render_badge_and_toast(request, message=str(exc), level='error')
@@ -5955,7 +5962,8 @@ class PanierMVT(viewsets.ViewSet):
         """
         from BaseBillet.models import Event
         from BaseBillet.services_panier import PanierSession, InvalidItemError
-        from decimal import Decimal
+        from BaseBillet.validators import QUANTITE_MAXIMUM_PAR_TARIF
+        from decimal import Decimal, InvalidOperation
 
         # Accepter soit `slug` (legacy htmx/views/event.html), soit `event` (uuid, booking_form.html prod).
         # / Accept either `slug` (legacy template) or `event` (uuid, prod booking_form.html).
@@ -5990,7 +5998,22 @@ class PanierMVT(viewsets.ViewSet):
         # / Promo code from booking_form. Server-validated in add_ticket.
         promotional_code_name = (request.POST.get('promotional_code') or '').strip() or None
 
+        # Un code saisi qui n'existe pas (ou plus) est refusé avec un message. Sans ce
+        # contrôle, le code serait ignoré en silence et le billet ajouté au plein tarif.
+        # / An unknown or inactive code is refused with a message (never silently ignored).
+        if promotional_code_name:
+            from BaseBillet.models import PromotionalCode
+            code_saisi_existe = PromotionalCode.objects.filter(
+                name=promotional_code_name,
+                is_active=True,
+            ).exists()
+            if not code_saisi_existe:
+                return self._render_badge_and_toast(
+                    request, message=_("Invalid or inactive promotional code."), level='error',
+                )
+
         items_added = 0
+        code_promo_applique_a_un_billet = False
         try:
             for product in event.products.all():
                 for price in product.prices.all():
@@ -5998,9 +6021,20 @@ class PanierMVT(viewsets.ViewSet):
                     raw_qty = request.POST.get(price_key)
                     if not raw_qty:
                         continue
+                    # Une quantité non numérique, infinie ou démesurée, positive ou négative
+                    # (formulaire trafiqué) est ignorée. Le maximum est contrôlé AVANT int() :
+                    # convertir « 1e999999999 » ou « -1e999999999 »
+                    # bloquerait le serveur. `Decimal("abc")` lève InvalidOperation, qui
+                    # n'hérite pas de ValueError.
+                    # / A non-numeric, infinite or huge quantity is ignored, checked before int().
                     try:
-                        qty = int(Decimal(str(raw_qty).replace(',', '.')))
-                    except (TypeError, ValueError):
+                        quantite_decimale = Decimal(str(raw_qty).replace(',', '.'))
+                        if (not quantite_decimale.is_finite()
+                                or quantite_decimale > QUANTITE_MAXIMUM_PAR_TARIF
+                                or quantite_decimale < -QUANTITE_MAXIMUM_PAR_TARIF):
+                            raise ValueError(raw_qty)
+                        qty = int(quantite_decimale)
+                    except (TypeError, ValueError, InvalidOperation):
                         continue
                     if qty <= 0:
                         continue
@@ -6016,13 +6050,13 @@ class PanierMVT(viewsets.ViewSet):
                     # booking_form a un champ global `promotional_code` pour
                     # tout l'event, mais l'event peut avoir plusieurs products.
                     # On ne passe le code que pour les prices dont le product
-                    # correspond — pour les autres, on passe None (silent skip,
-                    # pas d'erreur). Validation complete (actif, is_usable,
-                    # product match) faite dans add_ticket.
-                    # / Promo code is linked to ONE product (FK). The form
-                    # has a global field but events may have multiple products.
-                    # We pass the code only for matching-product prices;
-                    # others get None (silent skip, no error).
+                    # correspond ; les autres billets sont au plein tarif. Si le
+                    # code ne correspond a aucun billet choisi, la demande est
+                    # refusee apres la boucle. Validation complete (actif,
+                    # is_usable, product match) faite dans add_ticket.
+                    # / Promo code is linked to ONE product (FK). We pass the code
+                    # only for matching-product prices. A code matching no chosen
+                    # ticket is refused after the loop.
                     item_promo = None
                     if promotional_code_name:
                         from BaseBillet.models import PromotionalCode
@@ -6031,6 +6065,7 @@ class PanierMVT(viewsets.ViewSet):
                                 product=price.product,
                         ).exists():
                             item_promo = promotional_code_name
+                            code_promo_applique_a_un_billet = True
                     panier.add_ticket(
                         event_uuid=event.uuid,
                         price_uuid=price.uuid,
@@ -6041,6 +6076,14 @@ class PanierMVT(viewsets.ViewSet):
                         promotional_code_name=item_promo,
                     )
                     items_added += 1
+
+            # Un code saisi qui ne vaut pour aucun des billets choisis est refusé, comme
+            # dans le parcours direct : sinon l'acheteur paierait le plein tarif sans le savoir.
+            # / A code valid for none of the chosen tickets is refused, as in the direct flow.
+            if promotional_code_name and items_added > 0 and not code_promo_applique_a_un_billet:
+                raise InvalidItemError(
+                    _('The promotional code is not valid for the selected products.')
+                )
         except InvalidItemError as exc:
             # Rollback : retirer les items ajoutés pendant cette requête
             # / Rollback: remove items added during this request

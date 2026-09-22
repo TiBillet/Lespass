@@ -1,7 +1,7 @@
 {% load i18n %}
 {# Partial d'un item du panier — reutilisable pour refresh HTMX. #}
 {# Cart item partial — reusable for HTMX refresh. #}
-<li id="panier-item-{{ forloop.counter0 }}" class="list-group-item d-flex align-items-center gap-3">
+<li id="panier-item-{{ detail.index }}" class="list-group-item d-flex align-items-center gap-3">
     {% if detail.type == 'ticket' %}
         {# --- Billet : image event ou placeholder ticket --- #}
         {# --- Ticket: event image or ticket placeholder --- #}
@@ -108,8 +108,10 @@
 
     {# --- Bouton retirer --- #}
     {# --- Remove button --- #}
-    <form method="post" action="{% url 'panier-remove' pk=forloop.counter0 %}"
-          hx-post="{% url 'panier-remove' pk=forloop.counter0 %}"
+    {# detail.index = rang de l'item dans le panier en session (voir context_processors.py). #}
+    {# / detail.index = the item's position in the session cart. #}
+    <form method="post" action="{% url 'panier-remove' pk=detail.index %}"
+          hx-post="{% url 'panier-remove' pk=detail.index %}"
           hx-target="#panier-content"
           hx-swap="outerHTML">
         {% csrf_token %}

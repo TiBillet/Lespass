@@ -3506,15 +3506,19 @@ Rencontres en ecrivant les E2E recharge comptoir + recompense au scan (2026-07-2
 
 ### Remboursements et Stripe reel (2026-09-21)
 
-**12.16 — Un prix a 0 € en categorie « Ticket booking » ouvre un paiement Stripe.**
+**12.16 — Un prix a 0 € en categorie « Ticket booking » appelle quand meme le catalogue Stripe.**
 
 La categorie decide du parcours, pas le prix. « Ticket booking » (`BILLET`) passe par
-`method_B` : session Checkout Stripe, reservation `U`, ligne a 0 € `U`, paiement `W` — meme a
-0 €. Un test sans `mock_stripe` appelle alors le **vrai** Stripe, en silence.
+`method_B`. Depuis le 2026-09-21, une reservation dont le total vaut 0 € n'ouvre plus de session
+Checkout (decision C21, `TicketCreator.valider_une_reservation_a_zero_euro`) : lignes `V` en
+« Offert », reservation au statut gratuit. **Mais** `method_B` cree toujours le `PriceSold`,
+qui demande un price id au catalogue Stripe (`stripe.Product` / `stripe.Price`), meme a 0 €.
+Un test sans `catalogue_stripe_simule()` (ou `mock_stripe`) appelle alors le **vrai** Stripe,
+en silence.
 
-Une vraie reservation gratuite exige la categorie « Free booking » (`FREERES`). Par l'API v2,
-elle cree une ligne au statut `FREERES` (0 €, « Offert »), jamais payee. Et l'admin refuse de
-vendre un tarif gratuit autrement qu'en « Offert » (erreur de formulaire).
+Une reservation « Free booking » (`FREERES`) ne touche jamais Stripe. Par l'API v2, elle cree
+une ligne au statut `FREERES` (0 €, « Offert »), jamais payee. Et l'admin refuse de vendre un
+tarif gratuit autrement qu'en « Offert » (erreur de formulaire).
 
 Garde-fou dans un test gratuit : `assert not mock_stripe.mock_create.called`.
 
@@ -3551,6 +3555,133 @@ verifier cote Stripe, lire `stripe.Refund.list(payment_intent=…, stripe_accoun
 c'est ce que fait `montants_rembourses_chez_stripe()`.
 
 Ces tests portent le marqueur `stripe_reel` : ils ne tournent qu'avec `make test-stripe`.
+
+### Panier : tests et parité avec / sans panier (2026-09-21)
+
+Chantier : `TECH_DOC/SESSIONS/PANIER/SPEC.md`. Fabriques : `tests/pytest/fabriques_panier.py`.
+
+**13.1 — `@pytest.mark.django_db` DONNE un rollback, même sur la base de dev.**
+Le conftest neutralise `django_db_setup` (pas de base de test), mais la marque enveloppe
+quand même chaque test dans un `django.test.TestCase` : transaction annulée à la fin. Les
+pièges 9.45, 9.57 et 9.99 (« pas de rollback ») ne valent que pour les tests SANS la marque.
+Sous la marque, `transaction.on_commit` ne part plus : utiliser la fixture
+`django_capture_on_commit_callbacks` si le comportement testé en dépend.
+Preuve : un objet créé par un test marqué n'existe plus après le run.
+
+**13.2 — Créer un `Product` adhésion appelle Fedow en HTTP, hors de la transaction.**
+Le signal `send_membership_and_badge_product_to_fedow` crée l'asset chez Fedow : le rollback
+ne l'annule pas. Dans un test : `patch("BaseBillet.signals.AssetFedow")`, avec
+`get_or_create_membership_asset.return_value = (MagicMock(), True)` pour que le signal ne
+journalise pas d'erreur.
+
+**13.3 — Le catalogue Stripe est appelé même pour une ligne à 0 €.**
+`get_or_create_price_sold` → `PriceSold.get_id_price_stripe()` appelle `stripe.Product.*` et
+`stripe.Price.create` pour toute ligne qui n'est pas une réservation gratuite (`FREERES`).
+`mock_stripe` ne simule que la session de paiement : patcher aussi ces trois appels, et
+asserter « aucun appel Stripe » sur `stripe.Price.create`, pas seulement sur `Session.create`.
+
+**13.4 — Intercepter toutes les tâches Celery d'un test : `Task.apply_async` en autospec.**
+`patch.object(celery.app.task.Task, "apply_async", autospec=True, side_effect=...)` attrape
+tous les `.delay()` (la classe de tâche du projet ne redéfinit que `apply`). `autospec` garde
+`self`, donc le nom de la tâche. Sans ce patch, le worker reçoit des tâches sur des objets
+annulés par le rollback.
+
+**13.5 — `Configuration` en cache : patcher `get_solo()`, jamais `save()` ni `update()`.**
+Un `save()` met la valeur modifiée dans memcached pour le serveur live, et le rollback ne
+l'annule pas ; modifier une instance ne sert à rien (chaque `get_solo()` en recrée une).
+`patch.object(Configuration, "get_solo", return_value=<instance modifiée, jamais sauvée>)`.
+
+**13.6 — Instance périmée : une ligne de vente garde l'objet adhésion de sa création.**
+`_finaliser_gratuit()` passait l'adhésion à `ONCE`, puis la ligne à `PAID` ; `trigger_A`
+sauvait alors l'objet adhésion porté par la ligne, resté « en attente de paiement » en
+mémoire, et écrasait `ONCE`. Recharger (`refresh_from_db()`) avant de relancer la machine à
+états.
+
+**13.7 — Le client de test rend les messages en FRANÇAIS.**
+`LANGUAGE_CODE='fr'` : après `translation.deactivate()`, les msgid anglais sont traduits.
+Asserter le niveau du toast (`HX-Trigger` → `panierToast.level`) et l'état en base, jamais
+le texte ; ou envoyer `HTTP_ACCEPT_LANGUAGE="en"`.
+
+**13.8 — Poster les formulaires du front avec l'en-tête HTMX.**
+Le front poste en `hx-post`. Sans `HTTP_HX_REQUEST="true"`, certaines vues prennent une
+branche que le front n'utilise jamais (ex. `booking/views.py` rend alors
+`booking/views/book.html`, gabarit qui n'existe pas → 500).
+
+**13.9 — Un `xfail` passe dès que le test échoue, pour N'IMPORTE QUELLE raison.**
+Un défaut « prouvé et noté » s'écrit `xfail(strict=True, reason="Cxx …")`, mais une erreur
+dans le test lui-même le ferait aussi passer. Vérifier chaque cause avec `--runxfail` avant
+de livrer, puis préciser l'exception attendue : `raises=AssertionError` (assertion),
+`raises=pytest.fail.Exception` (`pytest.raises` qui n'a rien levé), ou l'exception du défaut
+(ex. `TemplateDoesNotExist`). Une autre erreur fait alors échouer le test.
+
+**13.10 — Les fixtures de session du conftest ne survivent pas au rollback.**
+`admin_client` / `api_client` font `force_login` : la session est écrite en base, puis annulée
+par le premier test marqué `django_db`. Créer un client et faire `force_login` dans chaque test.
+
+**13.11 — Sous `schema_context`, `trigger_A` plante en silence.**
+`user.client_achat.add(connection.tenant)` échoue avec un `FakeTenant`, et l'exception est
+avalée : la ligne reste `P`, le paiement ne passe jamais `V`. Toujours `tenant_context` ou
+le client de test pour un retour de paiement.
+
+**13.12 — E2E, skin V2 : le badge du panier est dans `header[data-testid="user-bar"]`.**
+Pas dans une `.navbar` (sélecteur des anciens E2E). Le toast SweetAlert2 v11 porte son niveau
+sur lui-même : `.swal2-toast.swal2-icon-error`. Le formulaire de ressource ne présélectionne
+pas un tarif unique : le cocher. `login_as` exige un utilisateur existant : le créer par
+`django_shell` avec un email unique.
+
+**13.13 — Mutation d'un E2E : attendre que le serveur live ait rechargé le code.**
+Le serveur de byobu recharge le fichier muté (puis restauré). Lancer l'E2E pendant ce
+rechargement donne des 502 : `lancer_tests.sh` s'arrête tôt et la mutation paraît
+« détectée » alors que rien n'a été testé. Après chaque écriture de fichier, attendre une
+réponse 200 (`curl` en boucle sur `https://lespass.tibillet.localhost/`) avant de lancer.
+
+**13.14 — `trigger_A` et `trigger_B` lancent leurs tâches en `transaction.on_commit` : les capturer en test.**
+La récompense monnaie et l'envoi à LaBoutik d'une adhésion partent après la validation en base
+(sinon le worker peut ne pas trouver la ligne et la tâche échoue sans nouvel essai). Sous
+`django_db`, la transaction n'est jamais validée : entourer l'action de
+`django_capture_on_commit_callbacks(execute=True)` pour voir ces tâches demandées. Pour
+exécuter la vraie tâche de récompense : `time.sleep` simulé (`executer_la_recompense`).
+
+**13.15 — Un événement qui mélange « réservation gratuite » et billet payant : l'ordre compte.**
+`TicketCreator` traite les produits dans l'ordre (celui des produits de l'événement en direct,
+celui des articles au panier). Le statut gratuit d'une réservation active et envoie TOUS ses
+billets : `method_F` ne le pose que si la réservation ne contient que des produits `FREERES`
+(C27). Tout test d'une réservation mixte doit couvrir les DEUX ordres (paramètre
+`produit_cree_en_premier`) : un seul ordre peut passer par chance.
+
+**13.16 — Un filtre de date dans le `queryset` d'un champ de serializer est figé.**
+`PrimaryKeyRelatedField(queryset=Event.objects.filter(datetime__gte=timezone.now() - ...))` :
+`timezone.now()` est évalué UNE fois, au chargement du module. La limite dérive tant que le
+serveur tourne, et un test lancé juste après le démarrage passe par chance. Contrôler les dates
+dans `validate_<champ>()`, à chaque requête.
+
+**13.17 — Quantité de formulaire : borner AVANT `int()`.**
+`int(Decimal("1e999999999"))` calcule un entier géant (plus de 20 s de CPU) et
+`int(Decimal("Infinity"))` lève `OverflowError`, que `except (ValueError, InvalidOperation)`
+n'attrape pas. Vérifier `is_finite()` et un maximum DANS LES DEUX SENS
+(`-QUANTITE_MAXIMUM_PAR_TARIF <= q <= QUANTITE_MAXIMUM_PAR_TARIF`) avant de convertir :
+« -1e999999999 » est inférieur au maximum. Comparer, ne pas utiliser `abs()` : sur un `Decimal`
+géant, `abs()` applique le contexte et lève `decimal.Overflow`. Un test de temps
+(`time.monotonic()`, moins d'1 s) prouve la borne.
+
+**13.18 — Réservation de ressource dans un test : le formulaire lit l'heure dans le fuseau du lieu.**
+`reserver_une_ressource` envoie l'heure sans fuseau ; la vue la lit dans le fuseau du lieu
+(10 h à Paris = 8 h UTC), alors que le test tourne en UTC. Un `Booking` fabriqué à la main sur
+`debut_du_creneau` n'est donc PAS sur le même créneau. Pour un créneau concurrent, le faire
+créer par le vrai formulaire au nom d'un autre utilisateur.
+
+**13.19 — `Reservation.datetime` et `Membership.date_added` : dater par `update()`.**
+`Reservation.datetime` est en `auto_now` (remis à maintenant à chaque `save()`),
+`Membership.date_added` et `Booking.booked_at` en `auto_now_add`. Pour fabriquer un paiement
+« en cours depuis 20 minutes », poser la date par `Model.objects.filter(pk=…).update(…)`
+(voir `creer_un_billet_en_cours_de_paiement`).
+
+**Mises au point sur des pièges plus anciens :**
+- 9.17 (`Referer` requis par `MembershipMVT.create`) est périmé : la vue fait
+  `request.headers.get('Referer', '/')`.
+- 9.26 (`pytest.skip` pour éléments UI optionnels) cède devant la règle du projet « zéro
+  `pytest.skip` silencieux » : préférer `pytest.fail` avec un message clair.
+- 9.41, 9.98 et 9.99 existent chacun en double (numérotation) : les citer par leur titre.
 
 ---
 

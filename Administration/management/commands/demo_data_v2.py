@@ -1029,10 +1029,133 @@ class Command(BaseCommand):
                 },
             )
 
+            # 6 à 9) Fixtures des E2E du panier (tests/e2e/test_panier_flow.py).
+            # Noms et libellés de tarifs = CONTRAT lu par la fixture `e2e_slugs`.
+            # / 6 to 9) Cart E2E fixtures. Names and price labels = CONTRACT read by `e2e_slugs`.
+            self._seed_e2e_fixtures_du_panier(tenant)
+
         self.stdout.write(self.style.SUCCESS(
-            "Fixtures E2E assurees sur 'lespass' : 3 events + 5 produits "
-            "(prefixe 'E2E Test — ' + adhesion a validation selective)."
+            "Fixtures E2E assurees sur 'lespass' : 3 events + 9 produits "
+            "(prefixe 'E2E Test — ' + adhesion a validation selective) + 1 salle."
         ))
+
+    def _seed_e2e_fixtures_du_panier(self, tenant):
+        """
+        Fixtures des E2E du panier : adhésion payante, adhésion récurrente, adhésion qui
+        verse une récompense monnaie, et une salle réservable. Appelé dans le
+        `tenant_context` de `_seed_e2e_fixtures`. Idempotent (get_or_create).
+        / Cart E2E fixtures: paid membership, recurring membership, membership paying a
+        currency reward, and a bookable room. Idempotent.
+
+        LOCALISATION : Administration/management/commands/demo_data_v2.py
+        """
+        import datetime
+
+        from booking.models import Calendar, OpeningEntry, Resource, WeeklyOpening
+
+        # 6) Adhésion payante : achetée avec un billet dans un vrai paiement de panier.
+        # / Paid membership: bought with a ticket in a real cart payment.
+        adhesion_payante, _created = Product.objects.get_or_create(
+            name="E2E Test — Adhesion payante",
+            defaults={
+                'categorie_article': Product.ADHESION,
+                'short_description': "Adhesion payante de test E2E (panier).",
+            },
+        )
+        Price.objects.get_or_create(
+            product=adhesion_payante, name="Annuelle",
+            defaults={
+                'prix': Decimal("15"),
+                'subscription_type': Price.YEAR,
+                'publish': True,
+            },
+        )
+
+        # 7) Adhésion récurrente : le panier doit la refuser proprement (paiement direct seul).
+        # / Recurring membership: the cart must refuse it cleanly (direct payment only).
+        adhesion_recurrente, _created = Product.objects.get_or_create(
+            name="E2E Test — Adhesion recurrente",
+            defaults={
+                'categorie_article': Product.ADHESION,
+                'short_description': "Adhesion recurrente de test E2E (refusee par le panier).",
+            },
+        )
+        Price.objects.get_or_create(
+            product=adhesion_recurrente, name="Mensuelle",
+            defaults={
+                'prix': Decimal("5"),
+                'subscription_type': Price.MONTH,
+                'recurring_payment': True,
+                'publish': True,
+            },
+        )
+
+        # 8) Adhésion qui verse 5 unités de la monnaie locale du lieu à chaque paiement.
+        # Il faut une monnaie encaissable (catégorie TLF) déjà déclarée pour ce lieu : sans
+        # elle, on ne crée pas ce produit et on le signale (l'E2E échouera en le disant).
+        # / Membership paying 5 units of the venue's local currency. Needs an existing TLF
+        # asset for this venue; otherwise the product is not created and a warning is shown.
+        monnaie_locale = AssetFedowPublic.objects.filter(
+            origin=tenant,
+            category=AssetFedowPublic.TOKEN_LOCAL_FIAT,
+            archive=False,
+        ).first()
+        if monnaie_locale is None:
+            self.stderr.write(self.style.WARNING(
+                "Aucune monnaie locale (TLF) pour 'lespass' : fixture "
+                "'E2E Test — Adhesion recompense' non creee."
+            ))
+        else:
+            adhesion_recompense, _created = Product.objects.get_or_create(
+                name="E2E Test — Adhesion recompense",
+                defaults={
+                    'categorie_article': Product.ADHESION,
+                    'short_description': "Adhesion de test E2E qui verse de la monnaie locale.",
+                },
+            )
+            Price.objects.get_or_create(
+                product=adhesion_recompense, name="Annuelle",
+                defaults={
+                    'prix': Decimal("2"),
+                    'subscription_type': Price.YEAR,
+                    'publish': True,
+                    'fedow_reward_enabled': True,
+                    'fedow_reward_asset': monnaie_locale,
+                    'fedow_reward_amount': Decimal("5"),
+                },
+            )
+
+        # 9) Salle réservable tous les jours de 10 h à 18 h, créneaux d'une heure.
+        # / Room bookable every day from 10:00 to 18:00, one-hour slots.
+        produit_de_la_salle, _created = Product.objects.get_or_create(
+            name="E2E Test — Salle",
+            defaults={'categorie_article': Product.RESOURCE},
+        )
+        Price.objects.get_or_create(
+            product=produit_de_la_salle, name="Horaire",
+            defaults={'prix': Decimal("10"), 'publish': True},
+        )
+        calendrier, _created = Calendar.objects.get_or_create(name="E2E Test — Calendrier")
+        ouverture, _created = WeeklyOpening.objects.get_or_create(name="E2E Test — Ouverture")
+        for jour_de_la_semaine in range(7):
+            OpeningEntry.objects.get_or_create(
+                weekly_opening=ouverture,
+                weekday=jour_de_la_semaine,
+                defaults={
+                    'start_time': datetime.time(10, 0),
+                    'slot_duration_minutes': 60,
+                    'slot_count': 8,
+                },
+            )
+        Resource.objects.get_or_create(
+            name="E2E Test — Salle",
+            defaults={
+                'product': produit_de_la_salle,
+                'calendar': calendrier,
+                'weekly_opening': ouverture,
+                'capacity': 1,
+            },
+        )
 
     # Chemin du dump SQL généré par le mode full, utilisé par --quick pour restaurer la base
     DUMP_PATH = '/DjangoFiles/demo_data.sql.gz'

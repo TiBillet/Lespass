@@ -460,7 +460,49 @@ def e2e_slugs(django_db_blocker):
                 "E2E Test — Adhesion", "Gratuite"
             )
 
+            # Fixtures des E2E du panier (demo_data_v2._seed_e2e_fixtures_du_panier).
+            # Si le seed n'a pas été relancé depuis leur ajout, elles manquent : on rend None
+            # au lieu d'échouer ici, pour ne pas bloquer les autres E2E. Les tests du panier
+            # échouent alors en le disant (tests/e2e/test_panier_flow.py, fixture_du_panier).
+            # La récompense exige en plus une monnaie locale du lieu.
+            # / Cart E2E fixtures: None if missing, so other E2E tests are not blocked; the
+            # cart tests fail explicitly.
+            from booking.models import Resource
+
+            def _tarif_ou_none(product_name, price_name):
+                return Price.objects.filter(
+                    product__name=product_name, name=price_name
+                ).select_related("product").first()
+
+            price_adhesion_payante = _tarif_ou_none("E2E Test — Adhesion payante", "Annuelle")
+            price_adhesion_recurrente = _tarif_ou_none("E2E Test — Adhesion recurrente", "Mensuelle")
+            price_adhesion_recompense = _tarif_ou_none("E2E Test — Adhesion recompense", "Annuelle")
+            salle = Resource.objects.filter(name="E2E Test — Salle").first()
+            price_salle = None
+            if salle is not None and salle.product_id:
+                price_salle = salle.product.prices.filter(name="Horaire").first()
+
             return {
+                "adhesion_payante_uuid": (
+                    str(price_adhesion_payante.product.uuid) if price_adhesion_payante else None
+                ),
+                "adhesion_payante_price_uuid": (
+                    str(price_adhesion_payante.uuid) if price_adhesion_payante else None
+                ),
+                "adhesion_recurrente_uuid": (
+                    str(price_adhesion_recurrente.product.uuid) if price_adhesion_recurrente else None
+                ),
+                "adhesion_recurrente_price_uuid": (
+                    str(price_adhesion_recurrente.uuid) if price_adhesion_recurrente else None
+                ),
+                "adhesion_recompense_uuid": (
+                    str(price_adhesion_recompense.product.uuid) if price_adhesion_recompense else None
+                ),
+                "adhesion_recompense_price_uuid": (
+                    str(price_adhesion_recompense.uuid) if price_adhesion_recompense else None
+                ),
+                "salle_resource_pk": str(salle.pk) if price_salle else None,
+                "salle_price_uuid": str(price_salle.uuid) if price_salle else None,
                 "event_gratuit_slug": event_gratuit.slug,
                 "event_gratuit_uuid": str(event_gratuit.uuid),
                 "event_gratuit_price_uuid": str(price_gratuit.uuid),

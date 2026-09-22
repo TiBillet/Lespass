@@ -1,5 +1,4 @@
 import logging
-from datetime import timedelta
 
 import requests
 from django.conf import settings
@@ -13,7 +12,8 @@ from django.utils import timezone
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
-    PaymentMethod, Membership, SaleOrigin, Configuration, Event, PostalAddress, PROXYS_PRODUCT
+    PaymentMethod, Membership, SaleOrigin, Configuration, Event, PostalAddress, PROXYS_PRODUCT, \
+    DUREE_D_UN_PAIEMENT_EN_COURS
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
     trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership, \
     refill_from_lespass_to_user_wallet_from_ticket_scanned
@@ -60,6 +60,17 @@ def set_ligne_article_paid(old_instance: Paiement_stripe, new_instance: Paiement
     for ligne in new_instance.lignearticles.all():
         if ligne.reservation:
             reservations_a_valider.add(ligne.reservation)
+
+    # Panier : une réservation qui ne contient que des « réservations gratuites » n'a aucune
+    # ligne de vente. Elle attend pourtant le paiement de sa Commande (par exemple quand
+    # l'adhésion payée dans le même panier ouvre ce tarif) : on la valide avec les autres.
+    # / Cart: a free-bookings-only reservation has no sale line but waits for its Order's
+    # payment: validate it with the others.
+    from BaseBillet.models import Commande
+    commande_de_ce_paiement = Commande.objects.filter(paiement_stripe=new_instance).first()
+    if commande_de_ce_paiement:
+        for reservation in commande_de_ce_paiement.reservations.all():
+            reservations_a_valider.add(reservation)
 
     if reservations_a_valider:
         logger.info(
@@ -230,9 +241,11 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
         for resa in free_reservation:
             #TODO: Faire un test E2E
             event = resa.event
-            # Si les tickets ont moins de 15 minutes, alors ils sont légitimes :
-            if resa.datetime > (timezone.localtime() - timedelta(minutes=15)):
-                print(f"    {resa} : {resa.datetime} < {timezone.now() - timedelta(minutes=15)}")
+            # Confirmée pendant que sa place était retenue (même durée que la jauge,
+            # Event.under_purchase) : la réservation est légitime. Au-delà, sa place n'est
+            # plus retenue : on vérifie que l'événement n'est pas complet entre-temps.
+            # / Confirmed while its seat was held (same duration as the event gauge).
+            if resa.datetime > (timezone.localtime() - DUREE_D_UN_PAIEMENT_EN_COURS):
                 resa.status = Reservation.FREERES_USERACTIV
                 resa.save()
 
@@ -247,7 +260,9 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
                     # Le ValueError est intercepté dans emailconfirmation() (BaseBillet/views.py)
                     # / Error message shown to user via django.messages
                     # / The ValueError is caught in emailconfirmation() (BaseBillet/views.py)
-                    error_message = _("Your confirmation took more than 15 minutes. ")
+                    error_message = _("Votre confirmation a pris plus de %(minutes)s minutes. ") % {
+                        "minutes": int(DUREE_D_UN_PAIEMENT_EN_COURS.total_seconds() // 60)
+                    }
                     if remains > 0 :
                         error_message += _("The event is almost full, only %(remains)d seat(s) left. Please make a new reservation.") % {"remains": remains}
                     else :

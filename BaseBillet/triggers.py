@@ -1,7 +1,7 @@
 import logging
 
 import stripe
-from django.db import connection
+from django.db import connection, transaction
 from django.utils import timezone
 
 from AuthBillet.models import TibilletUser
@@ -226,9 +226,13 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
 
     # Category BILLET
     def trigger_B(self):
-        # Envoi de la vente à LaBoutik
+        # Envoi de la vente à LaBoutik, APRÈS la validation en base (on_commit) : le worker
+        # Celery relit la ligne avec sa propre connexion (même contrainte que trigger_A).
+        # Hors transaction, on_commit lance la tâche tout de suite.
+        # / Send the sale to LaBoutik AFTER the commit (same constraint as trigger_A).
         logger.info(f"        TRIGGER_B BILLET PAID -> envoi à LaBoutik?")
-        send_sale_to_laboutik.delay(self.ligne_article.pk)
+        pk_de_la_ligne = self.ligne_article.pk
+        transaction.on_commit(lambda: send_sale_to_laboutik.delay(pk_de_la_ligne))
 
         logger.info(f"        TRIGGER_B BILLET PAID -> set ligne_article VALID (no save)")
         self.ligne_article.status = LigneArticle.VALID
@@ -295,13 +299,20 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         #   the source of truth (it holds the deadline, hence validity). The membership
         #   ASSET stays declared to Fedow: a V1 counter still needs it to SELL memberships.
 
-        # Optional Fedow reward to user wallet (price setting)
-        refill_from_lespass_to_user_wallet_from_price_solded.delay(ligne_article.pk)
+        # Récompense monnaie (réglage du tarif) puis envoi de la vente à LaBoutik.
+        # Les deux tâches partent APRÈS la validation en base (on_commit) : le worker Celery a
+        # sa propre connexion et relit la ligne. Lancée avant (panier matérialisé dans une
+        # transaction), la tâche peut ne pas la trouver et échouer sans nouvel essai. Hors
+        # transaction, on_commit lance la tâche tout de suite.
+        # / Reward then LaBoutik sale, sent AFTER the commit: the Celery worker reads the line
+        # with its own connection. Outside a transaction, on_commit runs right away.
+        pk_de_la_ligne = ligne_article.pk
+        transaction.on_commit(
+            lambda: refill_from_lespass_to_user_wallet_from_price_solded.delay(pk_de_la_ligne)
+        )
 
-
-        # Envoi de la vente à LaBoutik
         logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à LaBoutik?")
-        send_sale_to_laboutik.delay(self.ligne_article.pk)
+        transaction.on_commit(lambda: send_sale_to_laboutik.delay(pk_de_la_ligne))
 
         # Si tout est passé plus haut, on VALID La ligne :
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()
