@@ -158,7 +158,12 @@ dire que le défaut existe aussi sans panier.
 - **C26 — Gabarit billet : un code promo tapé peut être perdu** (les deux parcours). Un champ
   `promotional_code` par produit, avec le même `name` et le même `id`
   (`reservation.html:527-535`) : la dernière valeur (souvent vide) l'emporte. Visible en E2E
-  seulement.
+  seulement. **Corrigé (2026-09-22)** : un seul champ « Code promo » par événement
+  (`Event.a_des_codes_promo()`), le serveur lisant un seul code par envoi. Prouvé par sonde :
+  code tapé dans le premier de deux champs → 10 € facturés au lieu de 5 €, dans les deux
+  parcours. En complément, le panier affiche la remise (prix barré, prix remisé, code) et un
+  total égal au montant facturé (`PanierSession.code_promo_du_billet`, `montant_apres_remise`,
+  même calcul que `get_or_create_price_sold` ; billets seulement, comme le paiement).
 - **C27 — Événement avec un produit `FREERES` et un produit `BILLET`** : `method_F` passe la
   réservation au statut gratuit (`FA`) même quand un produit payant l'accompagne. `CREATED → FA`
   appelle `reservation_paid` : webhook « réservation », billets activés, mail des billets, AVANT
@@ -196,6 +201,11 @@ dire que le défaut existe aussi sans panier.
   (`booking/views.py:567, 664, 755`, `BaseBillet/views.py` dans `PanierMVT.add_resource`), il
   n'existe pas : un formulaire de ressource refusé et envoyé sans HTMX (JavaScript désactivé)
   donne une erreur 500. Le front, qui poste en HTMX, prend l'autre branche (partial en 422).
+  **Classé (décision du mainteneur, 2026-09-22)** : inatteignable par un parcours normal (le
+  formulaire s'ouvre par `htmx.ajax`, son adresse n'est jamais affichée ; tous les envois sont
+  en `hx-post`). Seuls une adresse tapée à la main, un robot ou un JavaScript en panne y
+  mènent. Rien n'est modifié ; le test qui le prouvait est retiré. Le gabarit a été supprimé
+  le 2026-07-13 (commit `c687c0ad`).
 - **C30 — `booking/tests/` est cassé.** Sa fixture crée des `Resource` sans produit, alors que
   ce champ est devenu obligatoire : 31 échecs et 1 erreur, tous `NotNullViolation` sur
   `product_id`. Invisible parce que `make test` ne lance que `tests/pytest/`.
@@ -666,7 +676,8 @@ code d'un produit non choisi, newsletter, quantité bornée), `BaseBillet/contex
 
 ### À signaler au mainteneur (hors correction)
 
-- i18n : 6 chaînes neuves en français (`Ce tarif n'appartient pas à cette ressource.`,
+- i18n : 8 chaînes neuves en français (dont, pour la remise au panier, « Prix avant remise :
+  … € » et « code … (−… %) ») (`Ce tarif n'appartient pas à cette ressource.`,
   `Ce tarif est réservé aux adhérents.`, `Cet événement n'est plus en vente.`, et les trois
   messages qui citaient « 15 minutes », réécrits avec `%(minutes)s` : chevauchement avec un
   paiement en cours, confirmation trop tardive, réservation bloquée) ; msgid de C12
@@ -680,8 +691,9 @@ code d'un produit non choisi, newsletter, quantité bornée), `BaseBillet/contex
   tarif unique non présélectionné (vu en E2E).
 - Récompense monnaie : un adhérent sans portefeuille Fedow la reçoit-il ? L'E2E existant et E6
   créent le portefeuille avant (question ouverte, parcours direct compris).
-- Cas non couvert, pré-existant : deux produits `FREERES` dans une même réservation directe
-  (deux envois).
+- Deux produits `FREERES` dans une même réservation directe : billets et webhook envoyés deux
+  fois (`method_F` posait le statut gratuit à chaque produit). **Corrigé (2026-09-22)** : le
+  statut gratuit est posé UNE fois, après tous les produits, dans `TicketCreator.__init__`.
 - C20, à annoncer aux lieux : un événement archivé ou terminé n'est plus vendable (front et
   panier) ; sans date de fin, la vente ferme 24 h après le début ; la caisse et l'API vendent
   jusqu'à la fin de l'événement.

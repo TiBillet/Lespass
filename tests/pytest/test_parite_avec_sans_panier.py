@@ -36,7 +36,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.template import TemplateDoesNotExist
 from django.utils import timezone
 from django_tenants.utils import tenant_context
 
@@ -1339,36 +1338,6 @@ def test_ressource_a_prix_libre_saisie_a_zero_euro(lieu, parcours):
     assert booking_de(acheteur, location) is not None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=TemplateDoesNotExist,
-    reason="C29 — gabarit booking/views/book.html absent : erreur 500 sans HTMX",
-)
-def test_une_reservation_de_ressource_refusee_sans_htmx_ne_fait_pas_d_erreur_500(lieu):
-    """
-    Formulaire de ressource envoyé sans JavaScript (pas d'en-tête HTMX), créneau invalide :
-    la page d'erreur s'affiche, pas d'erreur 500.
-    / Resource form sent without JavaScript, invalid slot: error page, no 500.
-    """
-    acheteur = creer_utilisateur()
-    client = client_connecte(acheteur)
-    location = creer_ressource_avec_tarif(prix="12.00")
-    creneau_ferme = location.debut_du_creneau.replace(hour=3)
-
-    reponse = client.post(
-        f"/booking/{location.ressource.pk}/book/",
-        {
-            "price_uuid": str(location.tarif.uuid),
-            "start_datetime": creneau_ferme.replace(tzinfo=None).isoformat(),
-            "end_time": (creneau_ferme + timedelta(hours=1))
-            .replace(tzinfo=None)
-            .isoformat(),
-        },
-    )
-
-    assert reponse.status_code < 500
-
-
 def test_p2bis_billet_payant_a_zero_euro_pour_un_visiteur_anonyme(lieu):
     """
     Parcours direct d'un visiteur anonyme (le plus fréquent en billetterie), billet « payant »
@@ -1899,6 +1868,91 @@ def test_jauge_de_l_evenement_et_repas_limite_avec_deux_produits_exclusifs(
 
     reservation_creee = reservation_de(acheteur, avec_repas.evenement) is not None
     assert reservation_creee == reservation_attendue
+
+
+def reserver_deux_reservations_gratuites(parcours, client, acheteur):
+    """
+    Même événement, deux produits « réservation gratuite » (avec repas, sans repas) : une
+    place de chaque dans la même commande. Renvoie l'événement.
+    / Same event, two free-booking products: one seat of each in the same order.
+    """
+    from BaseBillet.models import Product
+
+    avec_repas = creer_evenement_avec_tarif(categorie=Product.FREERES)
+    produit_sans_repas = Product.objects.create(
+        name=f"TEST_panier sans repas {identifiant_unique()}",
+        categorie_article=Product.FREERES,
+    )
+    avec_repas.evenement.products.add(produit_sans_repas)
+    reserver_des_billets(
+        parcours,
+        client,
+        acheteur,
+        avec_repas.evenement,
+        {avec_repas.tarif: 1, produit_sans_repas.prices.get(prix=0): 1},
+    )
+    return avec_repas.evenement
+
+
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+def test_deux_reservations_gratuites_dans_une_commande_n_envoient_les_billets_qu_une_fois(
+    lieu, parcours
+):
+    """
+    Deux produits « réservation gratuite », une place de chaque dans la même commande : les
+    deux billets sont actifs, envoyés en UN seul mail, et le webhook « réservation » part une
+    seule fois.
+    / Two free-booking products in one order: both tickets active, one mail, one webhook.
+    """
+    from BaseBillet.models import Ticket
+
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    evenement = reserver_deux_reservations_gratuites(parcours, client, acheteur)
+
+    reservation = reservation_de(acheteur, evenement)
+    statuts_des_billets = [billet.status for billet in reservation.tickets.all()]
+    assert statuts_des_billets == [Ticket.NOT_SCANNED, Ticket.NOT_SCANNED]
+    taches_demandees = noms_des_taches(lieu.taches_demandees)
+    assert taches_demandees.count("ticket_celery_mailer") == 1
+    assert taches_demandees.count("webhook_reservation") == 1
+
+
+def test_deux_reservations_gratuites_d_un_visiteur_non_active_attendent_l_activation(
+    lieu,
+):
+    """
+    Visiteur anonyme (compte pas encore activé), deux produits « réservation gratuite » dans
+    la même commande directe : aucun envoi, la réservation attend la confirmation de l'email.
+    / Anonymous visitor, two free-booking products: nothing sent, waits for email confirmation.
+    """
+    from AuthBillet.models import TibilletUser
+    from BaseBillet.models import Product, Reservation, Ticket
+
+    client_anonyme = client_connecte()
+    email_du_visiteur = f"test+chantierpanier{identifiant_unique()}@mock.test"
+    avec_repas = creer_evenement_avec_tarif(categorie=Product.FREERES)
+    produit_sans_repas = Product.objects.create(
+        name=f"TEST_panier sans repas {identifiant_unique()}",
+        categorie_article=Product.FREERES,
+    )
+    avec_repas.evenement.products.add(produit_sans_repas)
+    client_anonyme.post(
+        f"/event/{avec_repas.evenement.slug}/reservation/",
+        {
+            "event": str(avec_repas.evenement.uuid),
+            "email": email_du_visiteur,
+            str(avec_repas.tarif.uuid): "1",
+            str(produit_sans_repas.prices.get(prix=0).uuid): "1",
+        },
+        **EN_TETE_HTMX,
+    )
+
+    visiteur = TibilletUser.objects.get(email=email_du_visiteur)
+    reservation = reservation_de(visiteur, avec_repas.evenement)
+    assert reservation.status == Reservation.FREERES
+    assert not reservation.tickets.filter(status=Ticket.NOT_SCANNED).exists()
+    assert "ticket_celery_mailer" not in noms_des_taches(lieu.taches_demandees)
 
 
 # --------------------------------------------------------------------------

@@ -19,7 +19,18 @@
             <small class="text-muted">
                 {{ detail.event.datetime|date:"DATETIME_FORMAT" }}
                 &middot; {{ detail.price.name }}
-                {% if detail.price.prix and detail.price.free_price %}
+                {% if detail.code_promo %}
+                    {# Code promo : prix barré, prix remisé et code — ce que Stripe facturera. #}
+                    {# / Promo code: struck price, discounted price and code, as billed. #}
+                    &middot;
+                    <span data-testid="panier-item-remise">
+                        <del aria-hidden="true" data-testid="panier-item-prix-avant-remise">{{ detail.prix_avant_remise }} €</del>
+                        <span class="visually-hidden">{% blocktranslate with prix=detail.prix_avant_remise %}Prix avant remise : {{ prix }} €.{% endblocktranslate %}</span>
+                        {{ detail.prix_remise }} €
+                        &middot;
+                        <span data-testid="panier-item-code-promo">{% blocktranslate with code=detail.code_promo.name taux=detail.code_promo.discount_rate|floatformat:"-2" %}code {{ code }} (−{{ taux }} %){% endblocktranslate %}</span>
+                    </span>
+                {% elif detail.price.prix and detail.price.free_price %}
                     &middot; {{ detail.custom_amount }} €
                 {% elif detail.price.prix and not detail.price.free_price %}
                     &middot; {{ detail.price.prix }} €

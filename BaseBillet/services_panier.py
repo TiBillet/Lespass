@@ -69,6 +69,18 @@ def _recent_blocking_statuses():
 # --------------------------------------------------------------------------
 
 
+def montant_apres_remise(montant, code_promo):
+    """
+    Montant après la remise d'un code promo, arrondi comme au paiement.
+    Même calcul que ApiBillet.serializers.get_or_create_price_sold, qui fixe le prix vendu :
+    le panier affiche ainsi exactement ce que Stripe facturera.
+    / Amount after a promo code discount, rounded as at checkout (same formula).
+    """
+    from fedow_connect.utils import dround
+
+    return dround(montant - (montant * code_promo.discount_rate / 100))
+
+
 def _cart_qty_for_event(cart_items, event_uuid):
     """Somme des qty des items ticket du panier pour cet event.
     / Sum of ticket item qty in cart for this event."""
@@ -1102,13 +1114,28 @@ class PanierSession:
     # --- Total + revalidation (Session 07 — S5 + S6) ---
     # --- Total + revalidation (Session 07 — S5 + S6) ---
 
+    def code_promo_du_billet(self, item, price):
+        """
+        Le code promo que le paiement appliquera à cet article, ou None.
+        Seuls les BILLETS sont remisés au paiement (TicketCreator.method_B) : un code noté sur
+        une adhésion ou une ressource n'est pas déduit. Le code doit être actif (le paiement
+        revalide l'article) et lié au produit du tarif.
+        / The promo code the checkout will apply to this item, or None (tickets only).
+        """
+        from BaseBillet.models import PromotionalCode
+
+        nom_du_code = item.get('promotional_code_name')
+        if item.get('type') != 'ticket' or not nom_du_code:
+            return None
+        return PromotionalCode.objects.filter(
+            name=nom_du_code, is_active=True, product=price.product,
+        ).first()
+
     def calcul_total_centimes(self):
         """
-        Total TTC du panier en centimes (int). Source de vérité unique pour
-        les totaux pré-matérialisation. Utilisé par le context processor et
-        par materialiser() pour la détection "panier gratuit".
-        / Cart TTC total in cents (int). Single source of truth for
-        pre-materialization totals.
+        Total TTC du panier en centimes (int), tel que le paiement le facturera : remise des
+        codes promo comprise (billets). Utilisé par le context processor pour l'affichage.
+        / Cart TTC total in cents, as the checkout will bill it (promo codes included).
         """
         from BaseBillet.models import Price
         total = 0
@@ -1122,6 +1149,12 @@ class PanierSession:
                 amount_eur = Decimal(str(item['custom_amount']))
             else:
                 amount_eur = price.prix or Decimal("0.00")
+
+            # Billet avec code promo : même remise qu'au paiement.
+            # / Ticket with a promo code: same discount as at checkout.
+            code_promo = self.code_promo_du_billet(item, price)
+            if code_promo:
+                amount_eur = montant_apres_remise(amount_eur, code_promo)
 
             if item.get('type') == "resource":
                 # Calcul customisé pour les ressources, comme c'est un taux horaires

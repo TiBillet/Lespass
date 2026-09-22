@@ -866,6 +866,54 @@ def test_un_prix_libre_ajoute_deux_fois_facture_chacun_de_ses_montants(lieu):
     assert commande.reservations.get().tickets.count() == 2
 
 
+@pytest.mark.parametrize(
+    "tarif, montant_saisi, quantite, remise, montant_attendu",
+    [
+        ("fixe", None, 2, "50.00", 1000),
+        ("prix_libre", "12.00", 1, "25.00", 900),
+    ],
+)
+def test_le_total_du_panier_avec_code_promo_est_le_montant_facture(
+    lieu, tarif, montant_saisi, quantite, remise, montant_attendu
+):
+    """
+    Billet avec code promo au panier : le total affiché par le panier est le montant que le
+    paiement facture (tarif fixe 10 € × 2 à -50 % = 10 € ; prix libre saisi 12 € à -25 % = 9 €).
+    / Ticket with a promo code in the cart: the displayed total is the billed amount.
+    """
+    from BaseBillet.models import LigneArticle, PromotionalCode
+    from BaseBillet.services_panier import PanierSession
+    from fabriques_panier import identifiant_unique
+
+    acheteur = creer_utilisateur()
+    if tarif == "fixe":
+        concert = creer_evenement_avec_tarif(prix="10.00")
+    else:
+        concert = creer_evenement_avec_tarif(prix="5.00", prix_libre=True)
+    code_promo = PromotionalCode.objects.create(
+        name=f"TEST_panier_remise_{identifiant_unique()}",
+        discount_rate=Decimal(remise),
+        product=concert.produit,
+    )
+    panier = PanierSession(requete_avec_session(acheteur))
+    panier.add_ticket(
+        concert.evenement.uuid,
+        concert.tarif.uuid,
+        qty=quantite,
+        custom_amount=montant_saisi,
+        promotional_code_name=code_promo.name,
+    )
+    total_affiche_par_le_panier = panier.calcul_total_centimes()
+
+    commande, _succes = materialiser(panier, acheteur)
+
+    montant_facture = 0
+    for ligne in LigneArticle.objects.filter(paiement_stripe=commande.paiement_stripe):
+        montant_facture += int(ligne.amount * ligne.qty)
+    assert montant_facture == montant_attendu
+    assert total_affiche_par_le_panier == montant_attendu
+
+
 def test_la_recompense_et_l_envoi_a_laboutik_partent_apres_la_validation_en_base(
     lieu, django_capture_on_commit_callbacks
 ):

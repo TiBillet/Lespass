@@ -45,6 +45,9 @@ remaining defects are proven by strict xfail tests. `make coverage` measures cod
 | — | API v2 : réservation gratuite + billet à 0 € → ligne de vente de la réservation gratuite manquante | API v2 |
 | C19 | Stocks : la quantité demandée n'était pas comptée (stock de 2, 1 vendu, 2 demandés : accepté) ; les paiements en cours non plus (deux acheteurs pour la dernière place) ; le stock d'une adhésion n'était jamais vérifié ; un créneau en attente de paiement n'était pas retenu | les deux |
 | — | Paiement en cours : les places sont retenues 30 minutes partout (jauge, stocks, créneaux, caisse) ; la session Stripe expire au même moment | les deux |
+| C26 | Formulaire billet : un champ « Code promo » par produit à codes, tous du même nom ; un code tapé dans le premier champ était perdu (plein tarif facturé). Désormais un seul champ par événement | les deux |
+| — | Panier : la remise d'un code promo n'était pas affichée (plein tarif affiché, prix remisé facturé). Le panier affiche le prix barré, le prix remisé, le code, et un total égal au montant facturé | panier |
+| — | Deux produits « réservation gratuite » dans la même commande directe : billets envoyés deux fois, webhook « réservation » envoyé deux fois. Désormais un seul envoi | direct, API v2 |
 | C20 | Événement terminé ou archivé : billets encore vendables (sans date de fin : terminé 24 h après le début ; un événement dépublié reste réservable par lien direct). En direct, un festival commencé il y a plus d'un jour devenait impossible à réserver (filtre de date figé au démarrage du serveur). La caisse et l'API vendent jusqu'à la fin de l'événement | les deux, API v2 |
 | C25 | Skin Faire Festival : aucun lien ni compteur du panier dans le menu | panier |
 | C28 | Limite par personne en direct : « déjà acheté + demandé » n'était pas additionné | direct |
@@ -53,8 +56,9 @@ remaining defects are proven by strict xfail tests. `make coverage` measures cod
 Billets à 0 € : leurs ventes sont désormais envoyées à LaBoutik, comme les autres (décision
 du mainteneur).
 
-Défauts prouvés et notés (non corrigés, voir le SPEC) : C22 prix libre sous 0,50 €, C23 limite par personne des adhésions au panier, C24 ressource à prix libre à 0 €, C29
-gabarit `booking/views/book.html` absent, P16 booking gratuit direct.
+Défauts prouvés et notés (non corrigés, voir le SPEC) : C22 prix libre sous 0,50 €, C23 limite par personne des adhésions au panier, C24 ressource à prix libre à 0 €, P16
+booking gratuit direct. C29 (gabarit `booking/views/book.html` absent, erreur 500 sans HTMX)
+est classé : inatteignable par un parcours normal.
 
 ### Fichiers modifiés / Modified files
 
@@ -134,6 +138,12 @@ Se connecter sur `https://lespass.tibillet.localhost/` (compte de test `admin@ad
 5. Repas limité : événement à jauge 100, deux produits exclusifs « avec repas » (stock 25)
    et « sans repas » (sans stock). Au plus 25 repas, au plus 100 personnes. Ne pas créer un
    produit « Repas » séparé : chaque personne occuperait deux places de la jauge.
+
+### Test 11 — code promo (C26) et remise au panier
+1. Événement avec deux produits billet ayant chacun un code promo : un seul champ « Code
+   promo » s'affiche ; le code tapé est appliqué.
+2. Au panier : le billet montre le prix barré, le prix remisé et le nom du code ; le total
+   est celui que Stripe facture.
 
 ### Test 9 — événement terminé (C20)
 1. Un événement fini hier : un billet laissé dans le panier est refusé au paiement.

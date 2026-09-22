@@ -27,6 +27,7 @@ from fabriques_panier import (
     creer_evenement_avec_tarif,
     creer_ressource_avec_tarif,
     creer_utilisateur,
+    identifiant_unique,
     requete_avec_session,
     taches_celery_enregistrees,
 )
@@ -1061,6 +1062,25 @@ def test_revalidate_all_detecte_une_jauge_saturee_entre_l_ajout_et_le_paiement(l
 
     assert len(erreurs_de_validation) == 1
     assert panier.is_empty()
+
+
+def test_calcul_total_centimes_ne_remise_pas_une_adhesion(lieu):
+    """Adhésion à 15 € avec un code promo -50 % : le paiement ne remise que les billets, le
+    total du panier reste donc 1 500 centimes (il affiche ce qui sera facturé).
+    / Membership with a -50 % code: only tickets are discounted at checkout, total stays 1,500."""
+    from BaseBillet.models import PromotionalCode
+    from BaseBillet.services_panier import PanierSession
+
+    adhesion = creer_adhesion(prix="15.00")
+    code_promo = PromotionalCode.objects.create(
+        name=f"TEST_panier_adhesion_{identifiant_unique()}",
+        discount_rate=Decimal("50.00"),
+        product=adhesion.produit,
+    )
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+    panier.add_membership(adhesion.tarif.uuid, promotional_code_name=code_promo.name)
+
+    assert panier.calcul_total_centimes() == 1500
 
 
 def test_calcul_total_centimes_prend_le_montant_saisi_d_un_prix_libre(lieu):

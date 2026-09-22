@@ -2389,6 +2389,15 @@ class Event(models.Model):
         else:
             return False
 
+    def a_des_codes_promo(self):
+        """
+        Vrai si au moins un produit de l'événement a un code promo. Le formulaire de
+        réservation n'affiche alors qu'UN champ « Code promo » : le serveur lit un seul code
+        par envoi et l'applique au produit auquel il est lié.
+        / True if at least one product of the event has a promo code (one field in the form).
+        """
+        return PromotionalCode.objects.filter(product__in=self.products.all()).exists()
+
     def est_termine(self):
         """
         Vrai si l'événement est fini. Sans date de fin, il est considéré fini 24 heures après

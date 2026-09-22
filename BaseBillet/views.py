@@ -3334,7 +3334,7 @@ class EventMVT(viewsets.ViewSet):
         # On passe l'user resolu par le validator (via l'email saisi),
         # pas request.user qui peut etre AnonymousUser si le visiteur n'est pas connecte.
         # Le template choisit son message selon user.is_active : il doit refleter
-        # l'etat reel utilise par TicketCreator.method_F pour decider d'envoyer
+        # l'etat reel utilise par TicketCreator pour decider d'envoyer
         # les billets immediatement (user actif) ou un mail de validation (user inactif).
 
         if validator.reservation.user_commande.is_active:

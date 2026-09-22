@@ -522,17 +522,15 @@
     {# Footer sticky avec les boutons d'action — border-top pour separer visuellement #}
     {# / Sticky footer with action buttons — border-top for visual separation #}
     <div class="p-3 border-top bg-body flex-shrink-0">
-        {# Promotional code input - show if any product has promotional codes #}
-        {% if event.products.all %}
-            {% for product in event.products.all %}
-                {% if product.promotional_codes.exists %}
-                    <div class="mb-3">
-                        <label for="promotional-code" class="form-label">{% trans "Promotional code" %}</label>
-                        <input type="text" name="promotional_code" class="form-control" id="promotional-code"
-                               placeholder="{% trans 'Enter your promotional code' %}" data-testid="booking-promo-code">
-                    </div>
-                {% endif %}
-            {% endfor %}
+        {# Un seul champ « Code promo » pour tout l'événement : le serveur lit UN code par envoi #}
+        {# et ne l'applique qu'au produit auquel il est lié (BaseBillet/validators.py, method_B). #}
+        {# / One promo field for the whole event: the server reads ONE code and applies it to its product. #}
+        {% if event.a_des_codes_promo %}
+            <div class="mb-3">
+                <label for="promotional-code" class="form-label">{% trans "Promotional code" %}</label>
+                <input type="text" name="promotional_code" class="form-control" id="promotional-code"
+                       placeholder="{% trans 'Enter your promotional code' %}" data-testid="booking-promo-code">
+            </div>
         {% endif %}
 
 

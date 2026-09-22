@@ -73,6 +73,7 @@ def _build_items_with_details(panier):
     can display names, images, prices, etc.
     """
     from BaseBillet.models import Event, Price
+    from BaseBillet.services_panier import montant_apres_remise
     result = []
     # `index` = rang de l'item dans le panier en session. Le bouton « retirer » l'envoie à
     # `/panier/<index>/remove/`. On ne peut PAS utiliser le rang d'affichage : un item dont le
@@ -106,6 +107,20 @@ def _build_items_with_details(panier):
                 detail['event'] = event
             except Event.DoesNotExist:
                 continue
+
+            # Code promo : le panier affiche le prix avant remise, le prix remisé et le code,
+            # calculés comme au paiement (PanierSession.code_promo_du_billet,
+            # montant_apres_remise).
+            # / Promo code: price before discount, discounted price and code, as at checkout.
+            code_promo = panier.code_promo_du_billet(item, price)
+            detail['code_promo'] = code_promo
+            if code_promo:
+                if price.free_price and item.get('custom_amount'):
+                    prix_avant_remise = Decimal(str(item['custom_amount']))
+                else:
+                    prix_avant_remise = price.prix or Decimal("0.00")
+                detail['prix_avant_remise'] = prix_avant_remise
+                detail['prix_remise'] = montant_apres_remise(prix_avant_remise, code_promo)
         if item['type'] == 'resource':
             try:
                 resource = Resource.objects.get(pk=item['resource_uuid'])

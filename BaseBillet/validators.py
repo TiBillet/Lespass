@@ -233,6 +233,26 @@ class TicketCreator():
             trigger = getattr(self, trigger_name)
             self.tickets = trigger(prices_dict)
 
+        # Réservation qui ne contient QUE des « réservations gratuites » : elle passe au statut
+        # gratuit UNE seule fois, après tous ses produits. Ce passage active et envoie tous ses
+        # billets (machine à états, signals.py) : le poser à chaque produit les enverrait une
+        # fois par produit. Seulement si ce TicketCreator décide lui-même du paiement
+        # (create_checkout) : au panier, CommandeService décide pour toute la Commande (le
+        # panier peut appeler plusieurs TicketCreator sur la même réservation). Si un produit
+        # payant accompagne les réservations gratuites, le paiement décide (plus bas) : les
+        # billets gratuits partent avec les billets payés, après le paiement.
+        # / Free-bookings-only reservation: free status set ONCE, after all products.
+        reservation_ne_contient_que_des_reservations_gratuites = bool(products_dict)
+        for produit in products_dict:
+            if produit.categorie_article != Product.FREERES:
+                reservation_ne_contient_que_des_reservations_gratuites = False
+        if self.create_checkout and reservation_ne_contient_que_des_reservations_gratuites:
+            if reservation.user_commande.is_active:
+                reservation.status = Reservation.FREERES_USERACTIV
+            else:
+                reservation.status = Reservation.FREERES
+            reservation.save()
+
         # Methode Action : evenement benevolat SANS produit reservable.
         # On ne cree la "place benevole" via method_A QUE si aucun produit
         # n'a ete traite par la boucle ci-dessus. Sinon, un sous-evenement
@@ -346,29 +366,8 @@ class TicketCreator():
                 )
                 tickets.append(ticket)
 
-        # Le statut gratuit active et envoie TOUS les billets de la réservation (machine à
-        # états, signals.py). On ne le pose donc que dans un seul cas : ce TicketCreator
-        # décide lui-même du paiement (create_checkout=True) ET la réservation ne contient
-        # QUE des réservations gratuites.
-        # - Un autre produit l'accompagne (billet payant, même à 0 €) : c'est le paiement,
-        #   décidé une seule fois à la fin de __init__, qui donne son statut à la réservation.
-        # - Panier (create_checkout=False) : CommandeService décide pour toute la Commande
-        #   (gratuite : _finaliser_gratuit ; payante : au paiement). Le panier peut appeler
-        #   plusieurs TicketCreator sur la même réservation (un par prix libre) : aucun ne
-        #   voit tous les produits.
-        # Les billets gratuits partent donc avec les billets payés, et seulement après le
-        # paiement.
-        # / The free status activates and mails EVERY ticket. Set it only when this
-        # TicketCreator handles payment itself AND the reservation holds free bookings only.
-        # In the cart, CommandeService decides for the whole Order.
-        reservation_ne_contient_que_des_reservations_gratuites = True
-        for produit in self.products_dict:
-            if produit.categorie_article != Product.FREERES:
-                reservation_ne_contient_que_des_reservations_gratuites = False
-
-        if self.create_checkout and reservation_ne_contient_que_des_reservations_gratuites:
-            reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
-            reservation.save()
+        # Le statut gratuit est posé UNE seule fois, après tous les produits, dans __init__.
+        # / The free status is set ONCE, after all products, in __init__.
         return tickets
 
     def method_B(self, prices_dict):

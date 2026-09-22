@@ -288,6 +288,70 @@ def test_une_quantite_trafiquee_affiche_une_erreur_sans_bloquer_le_serveur(
     assert duree_en_secondes < 1
 
 
+@pytest.mark.parametrize(
+    "produits_avec_code_promo, champs_attendus", [(2, 1), (1, 1), (0, 0)]
+)
+def test_le_formulaire_billet_n_affiche_qu_un_champ_code_promo(
+    lieu, produits_avec_code_promo, champs_attendus
+):
+    """
+    Événement à deux produits billet : le formulaire affiche UN seul champ « Code promo »
+    dès qu'au moins un produit a un code (le serveur lit un seul code par envoi), aucun
+    sinon. Deux champs du même nom feraient perdre le code tapé dans le premier.
+    / Two ticket products: ONE promo field as soon as one product has a code, none otherwise.
+    """
+    from BaseBillet.models import Product, PromotionalCode
+
+    client = client_connecte(creer_utilisateur())
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    produit_b = Product.objects.create(
+        name=f"TEST_panier billet B {identifiant_unique()}",
+        categorie_article=Product.BILLET,
+    )
+    concert.evenement.products.add(produit_b)
+    ajouter_un_tarif(produit_b, prix="10.00", nom="Plein tarif B")
+    produits_de_l_evenement = [concert.produit, produit_b]
+    for produit in produits_de_l_evenement[:produits_avec_code_promo]:
+        PromotionalCode.objects.create(
+            name=f"TEST_panier_code_{identifiant_unique()}",
+            discount_rate=Decimal("10.00"),
+            product=produit,
+        )
+
+    reponse = client.get(f"/event/{concert.evenement.slug}/")
+
+    assert reponse.status_code == 200
+    html = reponse.content.decode()
+    assert html.count('name="promotional_code"') == champs_attendus
+
+
+def test_la_page_panier_affiche_la_remise_d_un_billet(lieu):
+    """
+    Billet à 10 € avec un code -50 % : la page du panier affiche le prix avant remise (barré),
+    le nom du code, et un total de 5 €, ce que Stripe facturera.
+    / Page /panier/: price before discount (struck), code name, and a 5 € total.
+    """
+    from BaseBillet.models import PromotionalCode
+
+    client = client_connecte(creer_utilisateur())
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    code_promo = PromotionalCode.objects.create(
+        name=f"TEST_panier_moitie_{identifiant_unique()}",
+        discount_rate=Decimal("50.00"),
+        product=concert.produit,
+    )
+    ajouter_des_billets(
+        client, concert.evenement, {concert.tarif: 1}, promotional_code=code_promo.name
+    )
+
+    reponse = client.get("/panier/")
+
+    html = reponse.content.decode()
+    assert 'data-testid="panier-item-prix-avant-remise"' in html
+    assert code_promo.name in html
+    assert reponse.context["panier"]["total_ttc"] == Decimal("5.00")
+
+
 def test_le_code_promo_n_est_pose_que_sur_les_items_de_son_produit(lieu):
     """
     Un seul champ code promo pour tout l'événement : le code n'est rangé que sur les items
