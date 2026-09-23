@@ -327,11 +327,19 @@ def get_existing_bookings_for_resource(resource, window: Interval = None):
     # Occupent le créneau : les réservations payées, validées par l'admin ou gratuites, et
     # celles en attente de paiement depuis moins de DUREE_D_UN_PAIEMENT_EN_COURS (la place
     # est retenue pendant le paiement, puis libérée s'il est abandonné).
+    # Les DEUX statuts gratuits comptent : une réservation dont la personne n'a pas encore
+    # validé son adresse mail (FREERES) occupe sa place autant qu'une réservation activée.
     # / Occupying the slot: paid, admin-validated or free bookings, and bookings waiting for
-    # payment for less than DUREE_D_UN_PAIEMENT_EN_COURS.
+    # payment for less than DUREE_D_UN_PAIEMENT_EN_COURS. BOTH free statuses count: a booking
+    # whose owner has not verified their email yet holds its slot too.
     debut_des_paiements_en_cours = timezone.now() - DUREE_D_UN_PAIEMENT_EN_COURS
     requete_de_base = Booking.objects.filter(resource=resource).filter(
-        Q(status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES_USERACTIV])
+        Q(status__in=[
+            Booking.PAID_BY_USER,
+            Booking.ADMIN_VALID,
+            Booking.FREERES,
+            Booking.FREERES_USERACTIV,
+        ])
         | Q(status=Booking.WAITING_PAYMENT, booked_at__gt=debut_des_paiements_en_cours)
     )
 
@@ -728,7 +736,12 @@ def validate_new_booking(resource,
             # « payé par l'utilisateur ».
             # / Free booking: no Stripe. The line goes straight to VALID as FREE, like the
             # cart; not through PAID (trigger_C would set the booking PAID_BY_USER).
-            new_booking.status = Booking.FREERES_USERACTIV
+            # Statut gratuit, selon que la personne a validé son adresse mail ou non — même
+            # règle qu'au panier (CommandeService._finaliser_gratuit).
+            # / Free status, depending on email verification — same rule as in the cart.
+            new_booking.status = (
+                Booking.FREERES_USERACTIV if member.is_active else Booking.FREERES
+            )
             ligne_article.payment_method = PaymentMethod.FREE
             ligne_article.status = LigneArticle.VALID
             new_booking.save()

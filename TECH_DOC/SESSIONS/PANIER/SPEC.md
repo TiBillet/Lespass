@@ -682,7 +682,8 @@ Une mutation qui fait rougir une **autre** assertion que celle visée → vérif
 | 19. Session anonyme (2026-09-23) | `PanierSession._load` n'écrit plus rien : un visiteur anonyme ne reçoit plus de `sessionid` (vérifié sur le serveur live) et ne crée plus de ligne `django_session`. Vérifié avant : aucun autre lecteur de la clé `panier`, `created_at` jamais lu, CSRF hors session (`CSRF_USE_SESSIONS` commenté), parcours « connectez-vous » entièrement côté navigateur, chaque modification appelle déjà `_save()`. Test : un GET anonyme ne pose pas de cookie de session |
 | 20. N+1 du panier et de l'API (2026-09-23) | `select_related("parent")` dans la liste des événements (le champ `superEvent` lisait `instance.parent` : une requête par sous-événement — test vu rouge, +5 requêtes pour 5 sous-événements). Context processor : `items_with_details`, `total_ttc` et `adhesions_product_ids` calculés seulement si un gabarit les lit (`SimpleLazyObject`), au lieu de 4 requêtes par article sur CHAQUE page — test vu rouge. Un créneau à la date abîmée est sauté au lieu de casser le rendu |
 | 21. Montant libre d'une ressource sans panier (2026-09-23) | `validate_new_booking` reprend les contrôles de `add_resource` (absent, illisible, sous le minimum, trop élevé) et RENVOIE un refus au lieu de lever : la vue réaffiche le formulaire avec la raison. Avant : 1 €/h sur un tarif à 10 €/h accepté, −20 € donnait une réservation gratuite, « abc » une erreur 500. Test de parité à 3 cas vu rouge (3 échecs sans panier) |
-| 22. Petits points des relectures (2026-09-23) | Panier : montant d'un prix libre à minimum 0 € de nouveau affiché (même piège du « 0 est faux »), durée lisible (0,33h), `custom_amount` rangé à `None` au lieu de la chaîne « None » (lecture tolérante pour les paniers déjà en session), plus de `except Exception: pass` à la matérialisation. Formulaire de ressource : branches mortes retirées (limites par personne et stock absents du contexte, message de conflit sans appelant, boutons réservés aux visiteurs anonymes qui ne voient jamais ce formulaire) et paramètre `race_condition` supprimé. Docstrings d'`add_resource` (service et vue) réécrites : elles décrivaient une adhésion. Plus de code promo posé sur une ligne de ressource (aucune remise n'était déduite, C7) |
+| 22. Petits points des relectures (2026-09-23) | Panier : montant d'un prix libre à minimum 0 € de nouveau affiché (même piège du « 0 est faux »), durée lisible (0,33h), `custom_amount` rangé à `None` au lieu de la chaîne « None » (lecture tolérante pour les paniers déjà en session), plus de `except Exception: pass` à la matérialisation. Formulaire de ressource : branches mortes retirées (limites par personne et stock absents du contexte, message de conflit sans appelant, boutons réservés aux visiteurs anonymes qui ne voient jamais ce formulaire) et paramètre `race_condition` supprimé. Docstrings d'`add_resource` (service et vue) réécrites : elles décrivaient une adhésion. Plus de code promo posé sur une ligne de ressource (aucune remise n'était déduite, C7). `make test` : 1857 passed, 6 skipped, 0 échec ; E2E du panier 4 passed, 2 en Stripe réel |
+| 23. Statut gratuit d'un créneau (2026-09-23) | `get_existing_bookings_for_resource` compte les DEUX statuts gratuits : une réservation dont la personne n'a pas validé son mail (`FREERES`) occupe sa place comme une réservation activée. Le parcours direct pose le statut selon `user.is_active`, comme le panier. Test de parité vu rouge, puis confirmé par mutation (statut retiré → 2 échecs, fichier restauré, empreinte vérifiée) |
 | 8. Clôture (avant C27) | `make test` : 1524 passed, 4 skipped, 19 xfailed, 0 échec ; `make test-stripe` : 1527 passed, 19 xfailed, 1 échec hors sujet (`test_events_list` : `ReadTimeout` du serveur live, passe seul en 9,7 s pour une limite de 10 s) ; `make e2e-stripe` sur `test_panier_flow.py` : 6/6 ; couverture d'arrivée : §6.4 |
 
 Chaque `xfail` a été vérifié avec `--runxfail` : il échoue pour la raison écrite dans sa marque,
@@ -799,5 +800,20 @@ tarif unique en `type="hidden"`), `booking/views/resource.html` + `booking/parti
   tourne sur le Raspberry Pi), `fedow_connect/tests.py` (1 test hérité).
   `BaseBillet/test_error_views.py` n'est pas un fichier de tests mais deux vues d'erreur :
   un `pytest` lancé à la racine les collecterait. Détail dans `tests/README.md`.
+- Restant des relectures du 2026-09-23, non traité (ordre d'impact décroissant) :
+  1. **Corrigé le 2026-09-23** : `FREERES` compte maintenant parmi les statuts qui occupent
+     un créneau, et les deux parcours posent le statut gratuit selon `user.is_active`.
+     `ADMIN_WAITING` et `NO_ADMIN_VALID` ne sont posés nulle part sur un `Booking` : ils
+     restent hors de la liste, faute de parcours qui les crée.
+  2. Page du panier : les tarifs sont relus un par un (`Price.objects.get` par article) dans
+     `calcul_total_centimes`, `_build_items_with_details` et `adhesions_product_ids`. Depuis
+     le calcul paresseux, cela ne coûte plus que sur la page du panier ; une lecture groupée
+     (`filter(uuid__in=…).select_related('product')`) les supprimerait.
+  3. `BaseBillet/views.py`, `checkout()` : `backup_first_name` / `backup_last_name` ne sont
+     définis qu'à l'intérieur du `if`. Le code est juste par accident (court-circuit du `or`),
+     pas par construction.
+  4. `Event.get_img()` met en cache sous la clé `event_get_img_<pk>`, sans préfixe de lieu.
+     Le pk est un UUID, donc pas de collision réelle, mais c'est contraire à la règle
+     multi-tenant.
 - Non relancée après la relecture : la suite E2E complète (`e2e_slugs` a changé : seules les
   clés du panier sont concernées, et les E2E du panier passent).

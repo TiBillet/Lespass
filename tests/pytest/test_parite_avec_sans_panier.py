@@ -2164,6 +2164,33 @@ def test_un_creneau_en_cours_de_paiement_retient_sa_place(
     assert (booking_de(acheteur, location) is not None) == booking_attendu
 
 
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+def test_un_creneau_reserve_gratuitement_reste_pris_avant_activation(lieu, parcours):
+    """Ressource de capacité 1 : le créneau est déjà pris par une réservation gratuite dont la
+    personne n'a pas encore validé son adresse mail. La place est retenue, la demande suivante
+    est refusée — comme pour une réservation gratuite déjà activée.
+    / Capacity-1 resource: the slot is held by a free booking whose owner has not verified
+    their email yet. The slot stays taken."""
+    from booking.models import Booking
+
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    location = creer_ressource_avec_tarif(prix="12.00", capacite=1)
+    # Une autre personne prend le créneau par le vrai formulaire (lui seul lit l'heure dans le
+    # fuseau du lieu), puis sa réservation est mise en « attente de validation du mail ».
+    # / Another person takes the slot through the real form (only it reads the venue timezone),
+    # then their booking is moved to "email verification pending".
+    autre_utilisateur = creer_utilisateur()
+    reserver_une_ressource(SANS_PANIER, client_connecte(autre_utilisateur), location)
+    Booking.objects.filter(
+        user=autre_utilisateur, resource=location.ressource
+    ).update(status=Booking.FREERES)
+
+    reserver_une_ressource(parcours, client, location)
+
+    assert booking_de(acheteur, location) is None
+
+
 def test_la_caisse_compte_les_billets_en_cours_de_paiement_pendant_30_minutes(lieu):
     """Caisse LaBoutik : un billet en cours de paiement depuis 20 minutes compte dans les
     achats en cours de l'événement (affichage « complet »).
