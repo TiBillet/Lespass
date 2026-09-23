@@ -60,6 +60,11 @@ the defects first proven by strict xfail tests (none left). `make coverage` meas
 | C22 | Montant entre 0,01 et 0,49 € (refusé par Stripe) : « Le paiement a échoué » sans explication. Désormais refusé avant Stripe avec le message « 0 € ou au moins 0,50 € » : total du panier, adhésion et ressource sans panier (le formulaire d'adhésion le signale aussi) | les deux |
 | — | Prix libre dont le minimum est 0 € : un montant NÉGATIF était accepté (billet, adhésion, ressource, au panier comme en direct). Le total tombait à 0 et la commande partait en gratuit : billets envoyés sans paiement. Désormais refusé | les deux |
 | — | Le panier créait une session en base et posait un cookie pour CHAQUE visiteur, robots compris, dès la première page (le panier est construit à chaque rendu). Désormais, la session n'est écrite qu'au premier ajout | panier |
+| — | Le panier interrogeait la base 4 fois par article sur CHAQUE page du site, alors que seul l'affichage du panier a besoin du détail. Ces calculs ne sont plus faits que si un gabarit les lit | panier |
+| — | API v2 : le champ `superEvent` de la liste des événements faisait une requête par sous-événement (un festival n'est presque fait que de sous-événements) | API v2 |
+| — | Réservation d'une ressource à prix libre sans panier : le montant n'était pas vérifié. Un montant sous le minimum du tarif était encaissé, un montant négatif offrait la réservation, un texte donnait une erreur 500. Mêmes contrôles qu'au panier, et la raison s'affiche dans le formulaire | direct |
+| — | Panier : le montant d'un tarif à prix libre dont le minimum vaut 0 € n'était pas affiché sur la ligne de l'article ; une réservation de 20 minutes affichait « 0.3333333333333333h » | panier |
+| — | Ligne de vente d'une ressource : le code promo y était enregistré alors qu'aucune remise n'était déduite (et aucun formulaire ne le propose). Il n'est plus posé | panier |
 | C23 | Panier : le maximum d'adhésions par personne n'était pas contrôlé (deuxième adhésion payée : page restée ouverte, ou deux tarifs du même produit limité à 1 dans le même panier). Désormais refusé comme sans panier | panier |
 | — | Ressource sans panier : tout refus (tarif réservé aux adhérents, créneau commencé…) s'affichait « Un créneau a été réservé entre temps ». La vraie raison est affichée | direct |
 | — | Formulaire d'adhésion à un seul tarif libre : le montant n'était jamais vérifié par le navigateur | direct |
@@ -86,11 +91,13 @@ est classé : inatteignable par un parcours normal.
 | `BaseBillet/services_panier.py` | `_load` n'écrit plus en session (plus de cookie ni de ligne `django_session` pour un visiteur anonyme) ; montant libre négatif refusé quand le minimum vaut 0 € ; maximum d'adhésions par personne (C23) ; adhésions rejouées d'abord ; garde tarif/adhésion des ressources ; format du message de limite ; newsletter ; événement plus en vente refusé (C20) |
 | `BaseBillet/views.py` | code promo inconnu ou d'un produit non choisi refusé ; quantité non numérique ou démesurée ignorée ; case newsletter lue |
 | `BaseBillet/context_processors.py`, `htmx/components/panier_item.html` | rang réel de l'article pour le bouton « retirer » |
-| `booking/booking_engine.py` | `validate_new_booking` : tarif de la ressource, publié, produit non archivé, adhésion active ou dans la même commande ; ligne du booking gratuit validée en « offert » (P16) ; 0 € accepté (C24) ; montant calculé avant la transaction, minimum Stripe sans panier (C22) |
+| `booking/booking_engine.py` | `validate_new_booking` : tarif de la ressource, publié, produit non archivé, adhésion active ou dans la même commande ; montant libre contrôlé comme au panier ; ligne du booking gratuit validée en « offert » (P16) ; 0 € accepté (C24) ; montant calculé avant la transaction, minimum Stripe sans panier (C22) |
 | `booking/views.py` | refus d'une ressource sans panier : la vraie raison est affichée |
 | `BaseBillet/services_commande.py` (C22) | total entre 0,01 et 0,49 € refusé avant Stripe |
 | `commun/adhesion/form.html` | minimum Stripe vérifié par le navigateur, zone de message, champ du tarif unique en `type="hidden"` |
 | `api_v2/serializers.py` | réservation gratuite : une ligne de vente par tarif, jamais deux |
+| `api_v2/views.py` | liste des événements : `select_related("postal_address", "parent")` |
+| `BaseBillet/context_processors.py` | détail, total et adhésions du panier calculés seulement s'ils sont lus |
 | `Administration/management/commands/demo_data_v2.py`, `tests/e2e/conftest.py` | fixtures E2E du panier (adhésions payante / récurrente / à récompense, salle) |
 | `Makefile`, `scripts/lancer_tests.sh`, `pyproject.toml`, `poetry.lock` | `make coverage` (`pytest-cov`) |
 | `tests/pytest/fabriques_panier.py` + 5 fichiers `test_panier_*` / `test_commande_*` / `test_parite_*` | tests neufs |

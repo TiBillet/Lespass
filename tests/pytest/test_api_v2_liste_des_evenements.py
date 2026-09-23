@@ -80,3 +80,32 @@ def test_la_liste_des_evenements_ne_fait_pas_plus_de_requetes_avec_plus_d_evenem
         requetes_apres = nombre_de_requetes_de_la_liste(api_client, auth_headers)
 
     assert requetes_apres == requetes_avant
+
+
+def test_la_liste_des_evenements_ne_fait_pas_plus_de_requetes_avec_des_sous_evenements(
+    tenant, api_client, auth_headers
+):
+    """
+    Cinq sous-événements de plus, rattachés à un événement parent : la liste fait le même
+    nombre de requêtes SQL. Le champ `superEvent` du sérialiseur lit `instance.parent` : sans
+    préchargement, chaque sous-événement ajoute sa requête, et un festival n'est presque fait
+    que de sous-événements.
+    / Five more sub-events attached to a parent: the list makes the same number of SQL queries.
+    """
+    from BaseBillet.models import Event
+
+    with tenant_context(tenant), taches_celery_enregistrees():
+        nombre_de_requetes_de_la_liste(api_client, auth_headers)
+        requetes_avant = nombre_de_requetes_de_la_liste(api_client, auth_headers)
+
+        festival = creer_un_evenement_publie_avec_tag_et_options()
+        for _numero in range(5):
+            sous_evenement = creer_un_evenement_publie_avec_tag_et_options()
+            # update() : pas de signal post_save (il vide des caches et relit la configuration).
+            # / update(): no post_save signal (it clears caches and reads the configuration).
+            Event.objects.filter(pk=sous_evenement.pk).update(parent=festival)
+
+        nombre_de_requetes_de_la_liste(api_client, auth_headers)
+        requetes_apres = nombre_de_requetes_de_la_liste(api_client, auth_headers)
+
+    assert requetes_apres == requetes_avant

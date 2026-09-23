@@ -826,23 +826,26 @@ class PanierSession:
                        promotional_code_name=None):
 
         """
-        Ajoute un item adhésion au panier après validation.
-        / Adds a membership item to the cart after validation.
+        Ajoute un créneau de ressource au panier après validation.
+        / Adds a resource slot to the cart after validation.
 
-        `firstname` / `lastname` sont collectés par le formulaire d'adhésion
-        (`membership/form.html`, champs `name="firstname"` et `name="lastname"`).
-        Ils sont stockés sur l'item et priorisés dans `CommandeService.materialiser`
-        sur `user.first_name` / `user.last_name` — ainsi un utilisateur sans profil
-        renseigné obtient quand même une Membership/Commande avec les vrais noms.
+        Le créneau est décrit par son début, la durée d'un créneau et le nombre de créneaux
+        consécutifs. Le montant estimé est calculé à l'ajout et rangé sur l'item ; le montant
+        facturé est recalculé au paiement par `validate_new_booking`.
 
-        / `firstname` / `lastname` collected by the membership form
-        (`name="firstname"` / `name="lastname"` fields). Stored on the item and
-        prioritized in `CommandeService.materialiser` over `user.first_name` /
-        `user.last_name` — users without a filled profile still get proper names.
+        `firstname` / `lastname` sont collectés par le formulaire de réservation
+        (`booking/partials/book_form.html`). Ils sont rangés sur l'item et priorisés dans
+        `CommandeService.materialiser` sur `user.first_name` / `user.last_name` : une personne
+        sans profil renseigné obtient quand même une réservation aux vrais noms.
+
+        / The slot is described by its start, one slot's duration and the number of
+        consecutive slots. `firstname` / `lastname` come from the booking form and take
+        precedence at materialization.
 
         Raises:
-            InvalidItemError: si price invalide, categorie non ADHESION,
-                recurring_payment ou manual_validation (exclus du panier v1).
+            InvalidItemError: tarif inconnu ou dépublié, tarif qui n'appartient pas à la
+                ressource, adhésion obligatoire absente, montant libre invalide, créneau
+                indisponible ou déjà dans le panier.
         """
         from BaseBillet.models import Price, Product
         from booking.models import Resource
@@ -1022,7 +1025,9 @@ class PanierSession:
             'slot_count': str(slot_count),
             'total_estimation' : str(total_estimation),
             'resource_uuid': str(resource_uuid),
-            'custom_amount': str(custom_amount_dec),
+            # Un tarif fixe n'a pas de montant saisi : on range None, pas la chaîne "None".
+            # / A fixed price has no typed amount: store None, not the "None" string.
+            'custom_amount': str(custom_amount_dec) if custom_amount_dec is not None else None,
             'options': [str(o) for o in (options or [])],
             'custom_form': dict(custom_form or {}),
             'firstname': clean_firstname,

@@ -37,20 +37,10 @@ DEPENDENCIES :
     </style>
 
     <!--
-    Message de modification concurrente — un creneau a ete pris pendant la saisie.
-    / Race condition message — a slot was taken while the user was filling the form.
-    -->
-    {% if race_condition %}
-        <div class="alert alert-warning" role="alert" data-testid="booking-race-condition-msg">
-            {% translate "Un créneau a été réservé entre temps. Vérifiez les disponibilités ci-dessous." %}
-        </div>
-    {% endif %}
-
-    <!--
     Message d'erreur generique (validation POST).
     / Generic error message (POST validation).
     -->
-    {% if error and not race_condition %}
+    {% if error %}
         <div class="alert alert-danger" role="alert" data-testid="booking-error-msg">
             {% if error.non_field_errors %}
                 {% for msg in error.non_field_errors %}{{ msg }} {% endfor %}
@@ -116,19 +106,11 @@ DEPENDENCIES :
                                 <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
                             {% endif %}
                         </label>
-                        {% if price.product|in_list:product_max_per_user_reached %}
-                            <div class="alert alert-danger" role="alert">
-                                {% trans "You have reached the maximum number of reservations possible for this event." %}
-                            </div>
-                        {% elif price|in_list:price_max_per_user_reached %}
-                            <div class="alert alert-danger" role="alert">
-                                {% trans "You have reached the maximum number of reservations possible for this price." %}
-                            </div>
-                        {% elif price|price_out_of_stock:event %}
-                            <div class="alert alert-danger" role="alert">
-                                {% trans "This price is no longer available." %}
-                            </div>
-                        {% elif price.adhesions_obligatoires.exists %}
+                        {# Ni limite par personne ni stock ici : ces règles portent sur un #}
+                        {# événement, pas sur une ressource. Le serveur refuse ce qu'il faut #}
+                        {# refuser (booking_engine.validate_new_booking). #}
+                        {# / No per-person limit or stock here: those rules belong to events. #}
+                        {% if price.adhesions_obligatoires.exists %}
                             {% with is_in_cart=price.adhesions_obligatoires.all|in_cart:panier.adhesions_product_ids %}
                                 {% if is_in_cart %}
                                     {# --- Adhesion requise est dans le panier → tarif selectionnable --- #}
@@ -144,7 +126,7 @@ DEPENDENCIES :
                                                type="radio" name="price"
                                                value="{{ price.uuid }}"
                                                required
-                                               {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
+                                               {% if price.out_of_stock %}disabled{% endif %}
                                                {% if forloop.first and forloop.last %}checked{% endif %}
                                                {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
                                                data-testid="membership-price-{{ price.uuid }}">
@@ -156,11 +138,6 @@ DEPENDENCIES :
                                                 {{ price.name }} - {{ price.prix }}€ /h
                                             {% endif %}
                                             {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
-                                            {% if price|in_list:price_max_per_user_reached %}
-                                                <div class="alert alert-danger mt-1" role="alert">
-                                                    {% trans "You have reached the maximum number of subscriptions possible for this rate." %}
-                                                </div>
-                                            {% endif %}
                                         </label>
                                     </div>
                                 {% elif not user.is_authenticated %}
@@ -185,7 +162,7 @@ DEPENDENCIES :
                                                type="radio" name="price"
                                                value="{{ price.uuid }}"
                                                required
-                                               {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
+                                               {% if price.out_of_stock %}disabled{% endif %}
                                                {% if forloop.first and forloop.last %}checked{% endif %}
                                                {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
                                                data-testid="membership-price-{{ price.uuid }}">
@@ -197,11 +174,6 @@ DEPENDENCIES :
                                                 {{ price.name }} - {{ price.prix }}€ /h
                                             {% endif %}
                                             {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
-                                            {% if price|in_list:price_max_per_user_reached %}
-                                                <div class="alert alert-danger mt-1" role="alert">
-                                                    {% trans "You have reached the maximum number of subscriptions possible for this rate." %}
-                                                </div>
-                                            {% endif %}
                                         </label>
                                     </div>
                                 {% endif %}
@@ -213,7 +185,7 @@ DEPENDENCIES :
                                        type="radio" name="price"
                                        value="{{ price.uuid }}"
                                        required
-                                       {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
+                                       {% if price.out_of_stock %}disabled{% endif %}
                                        {% if forloop.first and forloop.last %}checked{% endif %}
                                        {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
                                        data-testid="membership-price-{{ price.uuid }}">
@@ -225,11 +197,6 @@ DEPENDENCIES :
                                         {{ price.name }} - {{ price.prix }}€ {% translate 'par heure' %}
                                     {% endif %}
                                     {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
-                                    {% if price|in_list:price_max_per_user_reached %}
-                                        <div class="alert alert-danger mt-1" role="alert">
-                                            {% trans "You have reached the maximum number of subscriptions possible for this rate." %}
-                                        </div>
-                                    {% endif %}
                                 </label>
                             </div>
                         {% endif %}
@@ -449,6 +416,9 @@ DEPENDENCIES :
         / Action buttons.
         -->
         <div class="">
+            {# Ce formulaire n'est rendu que pour une personne connectée : la vue renvoie les #}
+            {# autres vers l'accueil (BookingViewSet.book). #}
+            {# / This form is only rendered for a logged-in person. #}
             {% if user.is_authenticated %}
                 {% if panier.count > 0 %}
                     {# Panier non vide : 2 boutons qui finissent tous les deux au panier. #}
@@ -499,24 +469,6 @@ DEPENDENCIES :
                         {% translate "Payer maintenant" %}
                     </button>
                 {% endif %}
-            {% else %}
-                <button id="resource-submit" type="submit"
-                        class="btn btn-primary w-100 mb-2"
-                        data-loading-disable
-                        data-testid="resource-submit">
-                    <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
-                    {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
-                        {% translate 'Send my subscription request' %}{% endif %}
-                </button>
-                <button type="button"
-                        class="btn btn-outline-primary w-100 mb-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#loginPanel"
-                        data-testid="resource-add-to-cart-login"
-                        aria-label="{% translate 'Log in to add this resource to your cart' %}">
-                    <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                    {% translate "Log in to add to cart" %}
-                </button>
             {% endif %}
             <button type="button" class="btn btn-link text-muted w-100 d-block test-resource-bt-cancel" data-bs-dismiss="offcanvas" aria-label="Annuler">
                 {% translate "Annuler" %}

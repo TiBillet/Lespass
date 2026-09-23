@@ -577,7 +577,6 @@ class BookingViewSet(viewsets.ViewSet):
         slot_duration_minutes,
         window_end,
         error=None,
-        race_condition=False,
     ):
         """
         Construit le contexte commun pour le formulaire de réservation.
@@ -610,8 +609,6 @@ class BookingViewSet(viewsets.ViewSet):
             'cancellation_possible': cancellation_possible,
             'error': error,
         })
-        if race_condition:
-            context['race_condition'] = True
         return context
 
     def _book_post(self, request, resource):

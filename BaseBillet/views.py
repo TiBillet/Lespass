@@ -6114,9 +6114,17 @@ class PanierMVT(viewsets.ViewSet):
     @action(detail=False, methods=["POST"], url_path="add/resource")
     def add_resource(self, request):
         """
-        Ajoute plusieurs billets au panier à partir du formulaire page event
+        Ajoute un créneau de ressource au panier, depuis le formulaire de réservation.
+        / Adds a resource slot to the cart, from the booking form.
 
-        / Add multiple tickets to the cart from the event page form (legacy
+        LOCALISATION : BaseBillet/views.py
+
+        Le formulaire (`booking/partials/book_form.html`) envoie la ressource, le tarif, le
+        début et la fin du créneau. La validation des créneaux est partagée avec la
+        réservation directe (`booking_engine.validate_resource_booking_form`), puis
+        `PanierSession.add_resource` valide le tarif, l'adhésion obligatoire et le montant.
+        / The form posts resource, price, start and end. Slot validation is shared with the
+        direct booking flow; the cart then validates price, membership and amount.
         """
 
         from booking.models import Resource

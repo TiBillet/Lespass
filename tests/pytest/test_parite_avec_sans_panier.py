@@ -1380,6 +1380,35 @@ def test_ressource_a_prix_libre_saisie_a_zero_euro(lieu, parcours):
     assert ligne.payment_method == PaymentMethod.FREE
 
 
+@pytest.mark.parametrize(
+    "minimum_du_tarif, montant_saisi",
+    [
+        ("10.00", "1.00"),   # sous le minimum du tarif / below the price minimum
+        ("0.00", "-20.00"),  # négatif : la réservation deviendrait gratuite / negative
+        ("0.00", "abc"),     # illisible : ne doit pas donner d'erreur 500 / unreadable
+    ],
+)
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+def test_ressource_a_prix_libre_refuse_un_montant_invalide(
+    lieu, parcours, minimum_du_tarif, montant_saisi
+):
+    """Ressource à prix libre : un montant sous le minimum du tarif, négatif ou illisible est
+    refusé proprement — aucune réservation, aucun paiement, aucune erreur 500.
+    / Free-price resource: an amount below the minimum, negative or unreadable is cleanly
+    refused — no booking, no payment, no server error."""
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    location = creer_ressource_avec_tarif(prix=minimum_du_tarif, prix_libre=True)
+
+    reponse = reserver_une_ressource(
+        parcours, client, location, montant_libre=montant_saisi
+    )
+
+    verifier_un_refus_propre(parcours, reponse)
+    assert booking_de(acheteur, location) is None
+    assert not lieu.stripe.mock_create.called
+
+
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
 def test_ressource_a_prix_libre_sous_le_minimum_stripe_est_refusee(lieu, parcours):
     """Ressource à prix libre (minimum 0 €), 0,30 € pour une heure, sous le minimum Stripe de

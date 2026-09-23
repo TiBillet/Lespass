@@ -130,6 +130,40 @@ def test_une_ressource_est_detaillee_avec_son_creneau_et_son_estimation(lieu):
     assert contexte["panier"]["total_ttc"] == Decimal("24.00")
 
 
+def test_le_detail_du_panier_n_est_calcule_que_s_il_est_lu(lieu):
+    """Le context processor tourne à CHAQUE rendu de page. Tant qu'un gabarit ne lit pas le
+    détail des articles, il ne doit faire aucune requête : seule la page du panier le lit, et
+    le badge de la barre de navigation se contente du nombre d'articles.
+    / The context processor runs on EVERY render: it must not query the database until a
+    template reads the item details, which only the cart page does."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from BaseBillet.context_processors import panier_context
+    from BaseBillet.services_panier import PanierSession
+
+    requete = requete_avec_session(creer_utilisateur())
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    PanierSession(requete).add_ticket(concert.evenement.uuid, concert.tarif.uuid, qty=2)
+
+    with CaptureQueriesContext(connection) as requetes_de_la_page:
+        contexte = panier_context(requete)
+        # Ce que lit le badge de la barre de navigation, sur toutes les pages.
+        # / What the navbar badge reads, on every page.
+        assert contexte["panier"]["count"] == 2
+        assert contexte["panier"]["is_empty"] is False
+
+    assert len(requetes_de_la_page.captured_queries) == 0
+
+    # La page du panier, elle, lit le détail : il est calculé à ce moment-là.
+    # / The cart page reads the details: they are computed then.
+    with CaptureQueriesContext(connection) as requetes_du_detail:
+        assert contexte["panier"]["items_with_details"][0]["event"] == concert.evenement
+        assert contexte["panier"]["total_ttc"] == Decimal("20.00")
+
+    assert len(requetes_du_detail.captured_queries) > 0
+
+
 def test_une_requete_sans_session_rend_un_panier_vide_sans_planter(lieu):
     """Requête sans session (ex. admin public) : panier vide, le rendu ne casse pas.
     / Request without a session (e.g. public admin): empty cart, rendering does not break."""

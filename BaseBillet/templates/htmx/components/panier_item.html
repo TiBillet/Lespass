@@ -30,9 +30,12 @@
                         &middot;
                         <span data-testid="panier-item-code-promo">{% blocktranslate with code=detail.code_promo.name taux=detail.code_promo.discount_rate|floatformat:"-2" %}code {{ code }} (−{{ taux }} %){% endblocktranslate %}</span>
                     </span>
-                {% elif detail.price.prix and detail.price.free_price %}
+                {# Le minimum d'un prix libre peut valoir 0 € : on ne teste pas #}
+                {# `detail.price.prix`, faux à 0, qui cachait le montant saisi. #}
+                {# / A free price minimum can be 0 €: testing it hid the typed amount. #}
+                {% elif detail.price.free_price %}
                     &middot; {{ detail.custom_amount }} €
-                {% elif detail.price.prix and not detail.price.free_price %}
+                {% else %}
                     &middot; {{ detail.price.prix }} €
                 {% endif %}
             </small>
@@ -65,7 +68,7 @@
         <div class="flex-grow-1">
             <div class="fw-semibold">
                 {{ detail.resource.name }} -
-                {{ detail.hours }}h à partir du {{ detail.start_datetime }}
+                {{ detail.hours|floatformat:"-2" }}h à partir du {{ detail.start_datetime }}
             </div>
             <small class="text-muted">
                 {% trans "Resource" %} &middot; {{ detail.price.name }}
@@ -81,9 +84,9 @@
                 {{ detail.slot_count }} slot de {{ detail.slot_duration_minutes }}min
                 &middot;
                 {% if detail.price and detail.price.free_price %}
-                    {{ detail.hours }}h * {{ detail.custom_amount }}€/h = {{ detail.total_estimation }}€
+                    {{ detail.hours|floatformat:"-2" }}h * {{ detail.custom_amount }}€/h = {{ detail.total_estimation }}€
                 {% elif detail.price.prix and not detail.price.free_price %}
-                    {{ detail.hours }}h * {{ detail.price.prix }}€/h = {{ detail.total_estimation }}€
+                    {{ detail.hours|floatformat:"-2" }}h * {{ detail.price.prix }}€/h = {{ detail.total_estimation }}€
                 {% endif %}
 
 
@@ -108,9 +111,11 @@
             <div class="fw-semibold">{{ detail.product.name }}</div>
             <small class="text-muted">
                 {% trans "Membership" %} &middot; {{ detail.price.name }}
-                {% if detail.price.prix and detail.price.free_price %}
+                {# Même règle que pour un billet : un prix libre à 0 € de minimum reste #}
+                {# un prix libre. / Same rule as for a ticket. #}
+                {% if detail.price.free_price %}
                     &middot; {{ detail.custom_amount }} €
-                {% elif detail.price.prix and not detail.price.free_price %}
+                {% else %}
                     &middot; {{ detail.price.prix }} €
                 {% endif %}
             </small>

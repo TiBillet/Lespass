@@ -357,11 +357,14 @@ class EventViewSet(viewsets.ViewSet):
                 Q(long_description__icontains=filter)
             )
 
-        # Adresse, tags et options chargés en une fois pour toute la liste : sans cela, chaque
-        # événement déclenche ses propres requêtes et la liste ralentit à mesure que le lieu
-        # accumule des événements (tests/pytest/test_api_v2_liste_des_evenements.py).
-        # / Address, tags and options loaded once for the whole list (no per-event queries).
-        queryset = queryset.select_related("postal_address").prefetch_related(
+        # Adresse, événement parent, tags et options chargés en une fois pour toute la liste :
+        # sans cela, chaque événement déclenche ses propres requêtes et la liste ralentit à
+        # mesure que le lieu accumule des événements
+        # (tests/pytest/test_api_v2_liste_des_evenements.py). Le parent alimente le champ
+        # `superEvent` du sérialiseur : un festival n'est presque fait que de sous-événements.
+        # / Address, parent event, tags and options loaded once for the whole list (no
+        # per-event queries). The parent feeds the serializer's `superEvent` field.
+        queryset = queryset.select_related("postal_address", "parent").prefetch_related(
             "tag", "options_radio", "options_checkbox"
         )
         serializer = EventSchemaSerializer(queryset, many=True)

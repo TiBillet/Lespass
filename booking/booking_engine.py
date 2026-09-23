@@ -571,14 +571,26 @@ def validate_new_booking(resource,
 
     price_to_compute = price.prix
     if price.free_price:
-        # Seule l'absence de montant est refusée. On ne teste pas « if not
-        # custom_amount » : le panier transmet un Decimal, et Decimal("0") est faux
-        # en Python. Un montant de 0 € est valable quand le minimum du tarif est 0 €.
-        # / Only a missing amount is refused: Decimal("0") is falsy, and 0 € is valid
-        # when the price minimum is 0 €.
+        # Montant libre : mêmes contrôles que l'ajout au panier
+        # (PanierSession.add_resource) — absent, illisible, sous le minimum du tarif, trop
+        # élevé. On RENVOIE un refus au lieu de lever une exception : la vue réaffiche alors
+        # le formulaire avec la raison (booking/views.py, _book_post).
+        # On ne teste pas « if not custom_amount » : le panier transmet un Decimal, et
+        # Decimal("0") est faux en Python, alors qu'un montant de 0 € est valable quand le
+        # minimum du tarif vaut 0 €.
+        # / Free amount: same checks as adding to the cart — missing, unreadable, below the
+        # price minimum, too high. RETURN a refusal instead of raising, so the view re-renders
+        # the form with the reason. Never test `if not custom_amount`: Decimal("0") is falsy.
         if custom_amount is None or custom_amount == "":
-            raise serializers.ValidationError(_("Custom amount is required for free price."))
-        price_to_compute = custom_amount
+            return False, str(_("An amount is required for the free price.")), None
+        try:
+            price_to_compute = Decimal(str(custom_amount))
+        except Exception:
+            return False, str(_("Invalid amount.")), None
+        if price_to_compute < price.prix:
+            return False, str(_("The amount must be greater than or equal to the minimum.")), None
+        if price_to_compute > Decimal("999999.99"):
+            return False, str(_("The amount is too high.")), None
 
     amount = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
 

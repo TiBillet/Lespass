@@ -34,8 +34,10 @@ from fabriques_panier import (
     client_connecte,
     creer_adhesion,
     creer_evenement_avec_tarif,
+    creer_ressource_avec_tarif,
     creer_utilisateur,
     identifiant_unique,
+    requete_avec_session,
     taches_celery_enregistrees,
 )
 
@@ -111,6 +113,57 @@ def test_la_page_panier_est_accessible_sans_etre_connecte(lieu):
 
     assert reponse.status_code == 200
     assert b'id="panier-content"' in reponse.content
+
+
+def test_la_page_du_panier_affiche_le_montant_d_un_prix_libre_a_minimum_zero(lieu):
+    """Billet à prix libre dont le minimum vaut 0 €, payé 12 € : la page du panier affiche le
+    montant saisi. Il était caché, parce que le gabarit testait d'abord le minimum du tarif,
+    et que 0 est faux.
+    / Free-price ticket with a 0 € minimum, paid 12 €: the cart page shows the typed amount."""
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    concert = creer_evenement_avec_tarif(prix="0.00", prix_libre=True)
+    ajouter_des_billets(
+        client,
+        concert.evenement,
+        {concert.tarif: 1},
+        **{f"custom_amount_{concert.tarif.uuid}": "12.00"},
+    )
+
+    page = client.get("/panier/").content.decode()
+
+    # On lit la ligne de l'article, pas la page entière : le total, lui, s'affiche toujours.
+    # / Read the item's line, not the whole page: the total is always displayed.
+    ligne_de_l_article = page.split('id="panier-item-0"')[1].split("</li>")[0]
+    assert "12.00 €" in ligne_de_l_article or "12,00 €" in ligne_de_l_article
+
+
+def test_la_page_du_panier_affiche_une_duree_lisible(lieu):
+    """Créneau de 30 minutes : la page affiche une durée lisible (0,5h), pas le résultat brut
+    d'une division.
+    / A 30-minute slot displays a readable duration, not a raw division result."""
+    from BaseBillet.services_panier import PanierSession
+
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    location = creer_ressource_avec_tarif(prix="12.00", duree_du_creneau_en_minutes=20)
+    panier = PanierSession(requete_avec_session(acheteur))
+    panier.add_resource(
+        price_uuid=location.tarif.uuid,
+        resource_uuid=location.ressource.pk,
+        start_datetime=str(location.debut_du_creneau),
+        slot_duration_minutes="20",
+        slot_count="1",
+    )
+    # Le panier vit en session : on rejoue l'item dans la session du client de test.
+    # / The cart lives in the session: replay the item in the test client's session.
+    session_du_client = client.session
+    session_du_client["panier"] = panier.data
+    session_du_client.save()
+
+    page = client.get("/panier/").content.decode()
+
+    assert "0.3333333333333333" not in page and "0,3333333333333333" not in page
 
 
 def test_le_badge_du_panier_est_accessible_sans_etre_connecte(lieu):

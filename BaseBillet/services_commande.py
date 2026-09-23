@@ -331,16 +331,11 @@ class CommandeService:
 
                 price = Price.objects.get(uuid=item['price_uuid'])
 
-
-                # Code promo de cet item specifiquement (pas du panier global).
-                # / Promo code for this specific item (not cart-global).
-                item_promo_code = _resolve_promo(item)
-
-                # Prenom/nom : priorite aux valeurs de l'item (collectees par
-                # membership/form.html), puis fallback sur les args de la fonction
-                # (issus de user.first_name / user.last_name).
-                # / First/last name: prioritize item values (collected by the
-                # membership form), fallback to function args (user.first_name).
+                # Prénom/nom : priorité aux valeurs de l'item (collectées par le formulaire de
+                # réservation), puis repli sur les arguments de la fonction
+                # (`user.first_name` / `user.last_name`).
+                # / First/last name: item values first (from the booking form), then the
+                # function arguments.
                 item_firstname = (item.get('firstname') or '').strip()
                 item_lastname = (item.get('lastname') or '').strip()
 
@@ -349,11 +344,15 @@ class CommandeService:
 
                 resource = Resource.objects.get(pk=item.get('resource_uuid'))
 
+                # Montant saisi pour un tarif à prix libre. Un tarif fixe n'en a pas.
+                # Les paniers rangés en session avant le 2026-09-23 y mettaient la chaîne
+                # "None" : on la lit comme une absence de montant (une session vit 12 semaines).
+                # / Amount typed for a free price; a fixed price has none. Carts stored before
+                # 2026-09-23 wrote the "None" string: read it as no amount.
+                montant_saisi = item.get('custom_amount')
                 custom_amount = None
-                try:
-                    custom_amount = Decimal(item.get('custom_amount'))
-                except Exception as e:
-                    pass
+                if montant_saisi not in (None, '', 'None'):
+                    custom_amount = Decimal(montant_saisi)
 
                 is_valid, result, checkout_url = validate_new_booking(
                     resource              = resource,
@@ -373,17 +372,12 @@ class CommandeService:
                 if not is_valid:
                     raise CommandeServiceError(_("Booking not valide : ") + result)
 
-                # Le code n'est applique que si lie au product (double-check
-                # redondant avec la validation a l'ajout, mais safe).
-                # / Code applied only if linked to the product (redundant safety check).
-                applicable_promo = item_promo_code if (
-                        item_promo_code and item_promo_code.product_id == price.product_id
-                ) else None
-
+                # Pas de code promo sur une ligne de ressource : aucun formulaire ne le
+                # propose, et `validate_new_booking` ne déduit aucune remise (SPEC §1.6, C7).
+                # La ligne comptable annoncerait sinon une remise qui n'a pas été faite.
+                # / No promo code on a resource line: no form offers one and no discount is
+                # applied, so recording a code would make the sale line lie.
                 for ligne in result.lignearticles.all():
-                    ligne.promotional_code = applicable_promo
-                    ligne.save()
-
                     all_lines.append(ligne)
                     total_centimes += ligne.amount
 

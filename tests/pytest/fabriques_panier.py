@@ -340,10 +340,15 @@ def creer_adhesion(
     return SimpleNamespace(produit=produit, tarif=tarif)
 
 
-def creer_ressource_avec_tarif(prix="12.00", capacite=1, prix_libre=False):
+def creer_ressource_avec_tarif(
+    prix="12.00", capacite=1, prix_libre=False, duree_du_creneau_en_minutes=60
+):
     """
-    Crée une ressource réservable tous les jours de 10 h à 18 h (créneaux d'une heure),
-    avec son produit (catégorie ressource) et un tarif horaire publié.
+    Crée une ressource réservable tous les jours à partir de 10 h, avec son produit (catégorie
+    ressource) et un tarif horaire publié. Les créneaux durent une heure par défaut ;
+    `duree_du_creneau_en_minutes` sert aux tests qui ont besoin d'une durée partielle.
+    / Creates a bookable resource from 10:00 with its product and a published hourly price.
+    Slots last one hour by default; `duree_du_creneau_en_minutes` serves partial durations.
     / Creates a resource bookable every day from 10:00 to 18:00 (one-hour slots), with its
     product (resource category) and a published hourly price.
 
@@ -369,7 +374,7 @@ def creer_ressource_avec_tarif(prix="12.00", capacite=1, prix_libre=False):
             weekly_opening=ouverture_hebdomadaire,
             weekday=jour_de_la_semaine,
             start_time=datetime.time(10, 0),
-            slot_duration_minutes=60,
+            slot_duration_minutes=duree_du_creneau_en_minutes,
             slot_count=8,
         )
 
