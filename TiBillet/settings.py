@@ -316,10 +316,24 @@ AUTH_USER_MODEL = 'AuthBillet.TibilletUser'
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
+        # Backend maison : PyMemcacheCache qui ne ferme pas ses connexions a
+        # chaque fin de requete (cf. TiBillet/cache_memcached.py).
+        # / PyMemcacheCache that does not close its connections per request.
+        'BACKEND': 'TiBillet.cache_memcached.PyMemcacheCacheSansFermeture',
         'LOCATION': 'memcached:11211',
         'KEY_FUNCTION': 'django_tenants.cache.make_key',
         'REVERSE_KEY_FUNCTION': 'django_tenants.cache.reverse_key',
+        # use_pooling : un pool de connexions, une par thread en cours.
+        # Sans lui, pymemcache partage UNE socket entre tous les threads d'un
+        # serveur ASGI (runserver de dev, daphne) : deux requetes simultanees
+        # melangent leurs reponses. Symptome vu : l'apercu admin des pages
+        # prenait parfois le mauvais skin (get_skin_courant() retombant sur
+        # « reunion »). Va de pair avec le backend ci-dessus.
+        # / use_pooling: one connection per running thread. Goes with the
+        # backend above.
+        'OPTIONS': {
+            'use_pooling': True,
+        },
     }
 }
 SOLO_CACHE = 'default'

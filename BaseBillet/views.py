@@ -225,6 +225,18 @@ def get_skin_courant():
         skin = ConfigurationSite.get_solo().skin
         return skin or "reunion"
     except Exception:
+        # Sur le schema public, la table n'existe pas : le repli est normal.
+        # Ailleurs, c'est une vraie panne (ex. cache memcached qui repond de
+        # travers) : on la journalise, sinon le site change de skin sans
+        # aucune trace. / On the public schema the fallback is expected;
+        # elsewhere it is a real failure: log it instead of hiding it.
+        from django.db import connection
+
+        if connection.schema_name != "public":
+            logger.warning(
+                "get_skin_courant : lecture du skin impossible, repli sur 'reunion'",
+                exc_info=True,
+            )
         return "reunion"
 
 
