@@ -3676,6 +3676,34 @@ créer par le vrai formulaire au nom d'un autre utilisateur.
 « en cours depuis 20 minutes », poser la date par `Model.objects.filter(pk=…).update(…)`
 (voir `creer_un_billet_en_cours_de_paiement`).
 
+**13.20 — `values_list()` ignore le `prefetch_related`.**
+`instance.tag.values_list("name", flat=True)` refait une requête SQL même si la liste a
+préchargé les tags : seul `.all()` lit le cache du préchargement. Pour prouver qu'une liste ne
+fait pas de requêtes par élément, compter les requêtes (`CaptureQueriesContext`) avant et
+après l'ajout d'éléments : le nombre doit rester le même
+(`tests/pytest/test_api_v2_liste_des_evenements.py`).
+
+**13.21 — Un test qui écrit sans `django_db` laisse ses données : la base de dev grossit.**
+`test_stripe_refund.py` et `test_event_create.py` créent de vrais événements à chaque
+exécution. 1 347 événements accumulés rendaient la liste de l'API trop lente pour les tests
+qui passent par le serveur live. Nettoyer TOUT ce qu'on crée (événement, produit,
+réservation, paiement), pas seulement les lignes de vente.
+
+**13.22 — Ne jamais enregistrer la vraie `Configuration` dans un test : son cache est partagé avec le serveur live.**
+`SOLO_CACHE = 'default'` : `Configuration.save()` écrit aussi dans memcached. Le rollback
+de `django_db` annule la base, pas le cache. Une « remise en état » dans un `finally` ne
+suffit pas : après une erreur SQL, la transaction refuse toute requête et la remise en
+état échoue ; le serveur live garde alors la valeur du test (ici un fuseau Lagos ou Tokyo)
+pendant la durée du cache. Parades : `configuration_modifiee()` (fabriques_panier.py,
+`get_solo()` patché) ou un objet en mémoire (`Configuration(fuseau_horaire=…).get_tzinfo()`,
+booking/tests/test_timezone_slots.py).
+
+**13.23 — Un dossier de tests hors de `make test` casse sans bruit.**
+`booking/tests/` ne tournait plus : trois changements du code (produit obligatoire sur une
+ressource, signature de `validate_new_booking`, statut par défaut d'un booking) l'avaient
+cassé sans que personne le voie. Tout dossier de tests doit être dans le lancement par
+défaut (`scripts/lancer_tests.sh`).
+
 **Mises au point sur des pièges plus anciens :**
 - 9.17 (`Referer` requis par `MembershipMVT.create`) est périmé : la vue fait
   `request.headers.get('Referer', '/')`.

@@ -110,6 +110,7 @@ def test_resource(tenant, test_calendar, test_weekly_opening):
     LOCALISATION : booking/tests/conftest.py
     """
     from booking.models import Resource
+    from booking.tests.fabriques import creer_produit_de_ressource
 
     with schema_context(TENANT_SCHEMA):
         resource_for_tests, _created = Resource.objects.get_or_create(
@@ -117,6 +118,7 @@ def test_resource(tenant, test_calendar, test_weekly_opening):
             defaults={
                 'calendar': test_calendar,
                 'weekly_opening': test_weekly_opening,
+                'product': creer_produit_de_ressource(f'{TEST_PREFIX} Resource'),
             },
         )
         return resource_for_tests
@@ -179,24 +181,29 @@ def cleanup_test_data(tenant):
     LOCALISATION : booking/tests/conftest.py
 
     Ordre de suppression (on_delete=PROTECT — pas de cascade) :
-    Booking → Resource → OpeningEntry → WeeklyOpening
-             → ClosedPeriod → Calendar → ResourceGroup
+    LigneArticle → Booking → Resource → Price → Product → OpeningEntry
+             → WeeklyOpening → ClosedPeriod → Calendar → ResourceGroup
     / Deletion order (on_delete=PROTECT — no cascade):
-    Booking → Resource → OpeningEntry → WeeklyOpening
-             → ClosedPeriod → Calendar → ResourceGroup
+    LigneArticle → Booking → Resource → Price → Product → OpeningEntry
+             → WeeklyOpening → ClosedPeriod → Calendar → ResourceGroup
     """
     yield
 
     with schema_context(TENANT_SCHEMA):
+        from BaseBillet.models import LigneArticle, Price, Product
         from booking.models import (
             Booking, Resource, OpeningEntry, WeeklyOpening,
             ClosedPeriod, Calendar, ResourceGroup,
         )
 
         # Les bookings n'ont pas de champ 'name' — on filtre via la resource.
-        # / Bookings have no 'name' field — filter via the resource.
+        # Leurs lignes de vente (on_delete=PROTECT) partent d'abord.
+        # / Bookings have no 'name' field — filter via the resource. Their sale lines first.
+        LigneArticle.objects.filter(booking__resource__name__startswith=TEST_PREFIX).delete()
         Booking.objects.filter(resource__name__startswith=TEST_PREFIX).delete()
         Resource.objects.filter(name__startswith=TEST_PREFIX).delete()
+        Price.objects.filter(product__name__startswith=TEST_PREFIX).delete()
+        Product.objects.filter(name__startswith=TEST_PREFIX).delete()
         OpeningEntry.objects.filter(weekly_opening__name__startswith=TEST_PREFIX).delete()
         WeeklyOpening.objects.filter(name__startswith=TEST_PREFIX).delete()
         ClosedPeriod.objects.filter(calendar__name__startswith=TEST_PREFIX).delete()

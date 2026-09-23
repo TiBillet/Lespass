@@ -1015,6 +1015,12 @@ class MembershipValidator(serializers.Serializer):
             if amount < Decimal('0.00'):
                 raise serializers.ValidationError(_('The amount must be a positive number.'))
 
+            # Stripe refuse les montants entre 0,01 € et 0,49 € : seuls 0 € (gratuit) ou au
+            # moins 0,50 € sont acceptés, comme pour les billets.
+            # / Stripe rejects amounts between €0.01 and €0.49: only 0 or >= €0.50 allowed.
+            if Decimal('0') < amount < Decimal('0.50'):
+                raise serializers.ValidationError(_('The amount must be 0 (free) or at least €0.50.'))
+
             # Validation du montant minimum / Minimum amount validation
             if self.price.prix and amount < self.price.prix:
                 logger.info(f"Open price {amount} below minimum {self.price.prix}")

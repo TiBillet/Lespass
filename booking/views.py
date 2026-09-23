@@ -704,10 +704,11 @@ class BookingViewSet(viewsets.ViewSet):
                 return HttpResponseClientRedirect(target_url)
             return redirect(target_url)
 
-        # Échec (modification concurrente, créneau commencé, etc.) — re-render avec
-        # les créneaux recalculés et le message d'erreur.
-        # / Failure (race condition, slot started, etc.) — re-render with
-        # freshly computed slots and the error message.
+        # Échec (modification concurrente, créneau commencé, tarif refusé, montant sous le
+        # minimum Stripe, etc.) — re-render avec les créneaux recalculés et le message
+        # d'erreur renvoyé par validate_new_booking, qui donne la raison exacte.
+        # / Failure (race condition, slot started, refused price, amount below the Stripe
+        # minimum, etc.) — re-render with freshly computed slots and the exact error message.
         tz = timezone.get_current_timezone()
         horizon_end = timezone.make_aware(
             datetime.datetime.combine(
@@ -746,7 +747,6 @@ class BookingViewSet(viewsets.ViewSet):
             slot_duration_minutes=requested_slot.slot_duration_minutes if requested_slot else None,
             window_end=horizon_end,
             error=result,
-            race_condition=True,
         )
         # En requete HTMX, on retourne le partial avec les erreurs en 422.
         # / For HTMX requests, return the partial with errors and 422 status.

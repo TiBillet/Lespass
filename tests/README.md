@@ -42,8 +42,29 @@ fiable par le chargeur de skills. Relancer Claude Code après création du lien.
 
 | Suite | Dossier | Outil | Durée | Rôle |
 |---|---|---|---|---|
-| **Backend DB-only** | `tests/pytest/` | pytest | ~1 min 30 | Modèles, vues, API, validations serveur, **Stripe mocké** |
+| **Backend DB-only** | `tests/pytest/` **et `booking/tests/`** | pytest | ~5 min | Modèles, vues, API, validations serveur, moteur de réservation, **Stripe mocké** |
 | **E2E navigateur** | `tests/e2e/` | Playwright **Python** | ~9 à 12 min | Validations JS, HTMX, admin Unfold, parcours complets, **Stripe réel** et **Fedow réel** |
+
+`make test` lance les deux dossiers de la suite backend. `booking/tests/` (moteur de
+créneaux, fuseaux, validation d'une réservation) y a été ajouté le 2026-09-22 : hors de la
+suite, il avait cassé sans que personne le voie (pièges 13.23).
+
+**Tests du dépôt qui ne sont lancés par AUCUNE cible `make`** — c'est voulu ou à décider,
+mais il faut le savoir :
+
+| Dossier | Contenu | Pourquoi |
+|---|---|---|
+| `onboard/tests/` | ~74 tests du tunnel de création de lieu (conftest propre, base de dev réutilisée) | Ils consomment des lieux du pool `WAITING_CONFIG` : à lancer à la main, base au repos (`make test ARGS="onboard/tests/"`) |
+| `tests/django_test/` | 4 tests en `django.test.TestCase` (commandes de gestion, API de ventes) | Écrits pour `manage.py test` : sous pytest, ils créeraient une base de test complète (migrations rejouées) |
+| `controlvanne/Pi/tests/` | Tests matériels de la tireuse (lecteur NFC, débitmètre) | Tournent sur le Raspberry Pi, pas dans le conteneur |
+| `fedow_connect/tests.py` | 1 test `TestCase` hérité | Même raison que `tests/django_test/` |
+
+`BaseBillet/test_error_views.py` n'est PAS un fichier de tests : ce sont deux vues qui
+lèvent une 404 et une 500 pour voir les gabarits d'erreur. Leurs noms commencent par
+`test_`, donc pytest les collecterait si on lançait `pytest` à la racine du projet. Une
+raison de plus de passer par `make`. Les autres `tests.py` d'applications
+(`api_v2`, `crowds`, `controlvanne`, `MetaBillet`, `fedow_public`, `booking`) sont les
+fichiers vides créés par Django.
 
 > Pas de compteur de tests dans ce document : il change à chaque session et
 > devient faux plus vite qu'on ne le corrige. Pour le nombre du jour :

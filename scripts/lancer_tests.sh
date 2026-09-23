@@ -5,7 +5,7 @@
 # LOCALISATION : scripts/lancer_tests.sh — appelé par le Makefile (make test, make e2e…).
 #
 # Usage : scripts/lancer_tests.sh <python|e2e|couverture> <sans-stripe|stripe> [arguments pytest…]
-#   Sans argument pytest, toute la suite est lancée (tests/pytest/ ou tests/e2e/).
+#   Sans argument pytest, toute la suite est lancée (tests/pytest/ et booking/tests/, ou tests/e2e/).
 #   / Without pytest arguments, the whole suite runs.
 #   `couverture` lance la suite pytest en mesurant la couverture du code (pytest-cov).
 #   Variable optionnelle FICHIERS="a.py,b.py" : détail ligne à ligne de ces fichiers.
@@ -67,12 +67,14 @@ if [ "$MODE" = "stripe" ]; then
     fi
 fi
 
-# 4. Sans argument, toute la suite. / Without arguments, the whole suite.
+# 4. Sans argument, toute la suite. booking/tests/ (moteur de créneaux) en fait partie :
+# hors de la suite, ses tests ne tournaient plus et avaient cassé sans que personne le voie.
+# / Without arguments, the whole suite, booking/tests/ (slot engine) included.
 if [ "$#" -eq 0 ]; then
     if [ "$SUITE" = "e2e" ]; then
         set -- tests/e2e/ -q
     else
-        set -- tests/pytest/ -q
+        set -- tests/pytest/ booking/tests/ -q
     fi
 fi
 

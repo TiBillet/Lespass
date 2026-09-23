@@ -23,7 +23,7 @@ from django.db.models.fields.files import FieldFile
 from PIL import Image, UnidentifiedImageError
 
 
-def _url_absolue_du_media(chemin_du_media):
+def _url_absolue_du_media(chemin_du_media, domaine_primaire=None):
     """
     Transforme un chemin de media en URL ABSOLUE sur le domaine du tenant courant.
     / Turn a media path into an ABSOLUTE URL on the current tenant's domain.
@@ -43,6 +43,8 @@ def _url_absolue_du_media(chemin_du_media):
     context: Celery task, management command, newsletter generation.
 
     :param chemin_du_media: le chemin renvoye par FieldFile.url, ex "/media/images/x.jpg"
+    :param domaine_primaire: le domaine primaire du tenant, s'il est deja connu (une liste
+        le lit une seule fois pour tous ses elements) ; sinon il est lu ici.
     :return: l'URL absolue, ou le chemin d'origine si le tenant n'a pas de domaine
     """
     if not chemin_du_media:
@@ -53,7 +55,8 @@ def _url_absolue_du_media(chemin_du_media):
     if chemin_du_media.startswith("http://") or chemin_du_media.startswith("https://"):
         return chemin_du_media
 
-    domaine_primaire = connection.tenant.get_primary_domain()
+    if domaine_primaire is None:
+        domaine_primaire = connection.tenant.get_primary_domain()
     if not domaine_primaire:
         # Tenant sans domaine primaire : on degrade proprement plutot que de planter.
         # / Tenant with no primary domain: degrade gracefully instead of crashing.
@@ -323,13 +326,14 @@ class EventSchemaSerializer(serializers.ModelSerializer):
         / 2. Return ABSOLUTE URLs: a relative "/media/..." is unusable for an API client.
         """
         urls: List[str] = []
+        domaine_primaire = self._domaine_primaire_du_lieu()
 
         # L'image principale, avec le fallback lieu -> configuration.
         # / The main image, with the venue -> config fallback.
         try:
             image_principale = instance.get_img()
             if image_principale:
-                urls.append(_url_absolue_du_media(image_principale.url))
+                urls.append(_url_absolue_du_media(image_principale.url, domaine_primaire))
         except Exception:
             pass
 
@@ -337,16 +341,30 @@ class EventSchemaSerializer(serializers.ModelSerializer):
         # / The agenda thumbnail: no fallback, it is optional by design.
         try:
             if instance.sticker_img:
-                urls.append(_url_absolue_du_media(instance.sticker_img.url))
+                urls.append(_url_absolue_du_media(instance.sticker_img.url, domaine_primaire))
         except Exception:
             pass
 
         return [url for url in urls if url]
 
+    def _domaine_primaire_du_lieu(self):
+        """
+        Le domaine primaire du tenant, lu UNE fois par sérialisation : le contexte est
+        partagé par tous les événements d'une liste (EventViewSet.list). Sans cela, chaque
+        événement relirait le domaine en base.
+        / The tenant's primary domain, read ONCE per serialization (shared list context).
+        """
+        if "domaine_primaire_du_lieu" not in self.context:
+            self.context["domaine_primaire_du_lieu"] = connection.tenant.get_primary_domain()
+        return self.context["domaine_primaire_du_lieu"]
+
     def _additional_properties(self, instance: Event) -> List[Dict[str, Any]]:
         props: List[Dict[str, Any]] = []
+        # Options et tags lus par .all() : ils profitent du prefetch_related de la liste
+        # (EventViewSet.list). values_list() interrogerait la base pour chaque événement.
+        # / Options and tags read through .all() to use the list's prefetch_related.
         # optionsRadio
-        radio_values = list(instance.options_radio.values_list("name", flat=True)) if hasattr(instance, "options_radio") else []
+        radio_values = [option.name for option in instance.options_radio.all()] if hasattr(instance, "options_radio") else []
         if radio_values:
             props.append({
                 "@type": "PropertyValue",
@@ -354,7 +372,7 @@ class EventSchemaSerializer(serializers.ModelSerializer):
                 "value": radio_values,
             })
         # optionsCheckbox
-        checkbox_values = list(instance.options_checkbox.values_list("name", flat=True)) if hasattr(instance, "options_checkbox") else []
+        checkbox_values = [option.name for option in instance.options_checkbox.all()] if hasattr(instance, "options_checkbox") else []
         if checkbox_values:
             props.append({
                 "@type": "PropertyValue",
@@ -405,7 +423,7 @@ class EventSchemaSerializer(serializers.ModelSerializer):
             "sameAs": data.get("full_url") if getattr(instance, "is_external", False) else None,
             "eventStatus": "https://schema.org/EventScheduled" if getattr(instance, "published", True) else "https://schema.org/EventCancelled",
             "audience": {"@type": "Audience", "audienceType": "private"} if getattr(instance, "private", False) else None,
-            "keywords": list(instance.tag.values_list("name", flat=True)) if hasattr(instance, "tag") else None,
+            "keywords": [tag.name for tag in instance.tag.all()] if hasattr(instance, "tag") else None,
             "offers": {
                 "@type": "Offer",
                 "eligibleQuantity": {

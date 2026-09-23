@@ -116,11 +116,14 @@ header and "← Mon espace". The label is data, so no new msgid.
 
             {# Panier : le compteur est rendu ici, puis mis à jour par #}
             {# htmx/components/panier_badge.html (hx-swap-oob, même id). #}
+            {# Le lien est décrit par ce compteur (aria-describedby) : un lecteur d'écran #}
+            {# annonce « Panier » puis le nombre d'articles à jour. #}
             {# / Cart: counter rendered here, then updated via hx-swap-oob. #}
+            {# The link is described by the counter, so screen readers hear the current count. #}
             <a class="icon-btn icon-btn--panier" href="/panier/"
                hx-get="/panier/" hx-target="body" hx-push-url="true"
                title="{% translate 'Your cart' %}"
-               aria-label="{% blocktrans count n=panier.count %}Cart ({{ n }} item){% plural %}Cart ({{ n }} items){% endblocktrans %}">
+               aria-label="{% translate 'Cart' %}" aria-describedby="panier-badge-nav">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
                 <span id="panier-badge-nav">
                     {% if panier.count > 0 %}
@@ -133,7 +136,7 @@ header and "← Mon espace". The label is data, so no new msgid.
                         {# overridden. `.badge--compteur` carries the brand letchi. #}
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill badge--compteur">
                             {{ panier.count }}
-                            <span class="visually-hidden">{% translate "items" %}</span>
+                            <span class="visually-hidden">{% translate "articles" %}</span>
                         </span>
                     {% endif %}
                 </span>

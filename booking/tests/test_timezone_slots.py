@@ -11,10 +11,11 @@ Deux fuseaux stables sans DST :
   - Africa/Lagos  (UTC+1): stable all year
   - Asia/Tokyo    (UTC+9): stable all year
 
-Le fuseau est activé via Configuration.fuseau_horaire → config.get_tzinfo()
-→ timezone.override(tz) — reproduit le chemin de production (middleware).
-/ The timezone is activated via Configuration.fuseau_horaire → config.get_tzinfo()
-→ timezone.override(tz) — reproduces the production path (middleware).
+Le fuseau est calculé comme en production (Configuration.get_tzinfo(), sur une
+configuration en mémoire, jamais enregistrée) puis activé par timezone.override(tz),
+comme le fait le middleware.
+/ The timezone is computed like in production (Configuration.get_tzinfo(), on an in-memory
+configuration, never saved) then activated with timezone.override(tz), like the middleware.
 
 Points critiques vérifiés :
   1. Un slot créé à 09:00 local est bien à 09:00 dans le fuseau du tenant,
@@ -89,39 +90,24 @@ def _enable_db_access_for_all(django_db_blocker):
 # / Helpers — tenant timezone
 # ===========================================================================
 
-def _set_tenant_timezone(tz_name):
+def _fuseau_du_lieu(tz_name):
     """
-    Met à jour Configuration.fuseau_horaire et retourne le pytz.timezone.
-    / Updates Configuration.fuseau_horaire and returns the pytz timezone.
+    Rend le fuseau d'un lieu réglé sur `tz_name`, calculé comme en production par
+    Configuration.get_tzinfo(), sur une configuration en mémoire.
+    / Returns the timezone of a venue set to `tz_name`, computed like in production by
+    Configuration.get_tzinfo(), on an in-memory configuration.
 
     LOCALISATION : booking/tests/test_timezone_slots.py
 
-    Reproduit le chemin de production : en production, le middleware lit
-    Configuration.fuseau_horaire pour activer le fuseau du tenant.
-    / Reproduces the production path: in production, the middleware reads
-    Configuration.fuseau_horaire to activate the tenant timezone.
-
-    Appeler à l'intérieur d'un schema_context(TENANT_SCHEMA).
-    / Call inside a schema_context(TENANT_SCHEMA).
+    On n'enregistre JAMAIS la vraie Configuration : elle est gardée en cache (memcached,
+    SOLO_CACHE), un cache partagé avec le serveur live. Le moteur ne la lit d'ailleurs pas :
+    il prend le fuseau posé par timezone.override(tz), comme le middleware en production.
+    / NEVER save the real Configuration: it is cached in memcached, shared with the live
+    server. The engine doesn't read it: it uses the timezone set by timezone.override(tz).
     """
     from BaseBillet.models import Configuration
 
-    config = Configuration.get_solo()
-    config.fuseau_horaire = tz_name
-    config.save(update_fields=['fuseau_horaire'])
-    return config.get_tzinfo()
-
-
-def _restore_tenant_timezone(tz_name):
-    """
-    Restaure Configuration.fuseau_horaire à sa valeur d'avant le test.
-    / Restores Configuration.fuseau_horaire to its pre-test value.
-    """
-    from BaseBillet.models import Configuration
-
-    config = Configuration.get_solo()
-    config.fuseau_horaire = tz_name
-    config.save(update_fields=['fuseau_horaire'])
+    return Configuration(fuseau_horaire=tz_name).get_tzinfo()
 
 
 # ===========================================================================
@@ -150,8 +136,9 @@ def _make_weekly_opening(label):
 
 
 def _make_resource(name, calendar, weekly_opening, capacity=1, horizon=28):
-    """Crée une Resource de test. / Creates a test Resource."""
+    """Crée une Resource de test, avec son produit. / Creates a test Resource and its product."""
     from booking.models import Resource
+    from booking.tests.fabriques import creer_produit_de_ressource
 
     resource, _created = Resource.objects.get_or_create(
         name=f'{TEST_PREFIX} {name}',
@@ -160,6 +147,7 @@ def _make_resource(name, calendar, weekly_opening, capacity=1, horizon=28):
             'weekly_opening': weekly_opening,
             'capacity': capacity,
             'booking_horizon_days': horizon,
+            'product': creer_produit_de_ressource(f'{TEST_PREFIX} {name}'),
         },
     )
     return resource
@@ -199,8 +187,8 @@ def _add_closed_period(calendar, start_date, end_date=None, label='Fermeture'):
 
 def _add_booking(resource, user, start_datetime, slot_duration_minutes=60, slot_count=1):
     """
-    Crée une réservation confirmée.
-    / Creates a confirmed booking.
+    Crée une réservation payée : elle occupe son créneau.
+    / Creates a paid booking: it takes its slot.
     """
     from booking.models import Booking
 
@@ -210,7 +198,7 @@ def _add_booking(resource, user, start_datetime, slot_duration_minutes=60, slot_
         start_datetime=start_datetime,
         slot_duration_minutes=slot_duration_minutes,
         slot_count=slot_count,
-        status='confirmed',
+        status=Booking.PAID_BY_USER,
     )
 
 
@@ -238,14 +226,16 @@ def _cleanup():
     Supprime toutes les données de test dans l'ordre FK (on_delete=PROTECT).
     / Deletes all test data in FK order (on_delete=PROTECT).
 
-    Ordre : Booking → Resource → OpeningEntry → WeeklyOpening
+    Ordre : LigneArticle → Booking → Resource → OpeningEntry → WeeklyOpening
                     → ClosedPeriod → Calendar
     """
+    from BaseBillet.models import LigneArticle
     from booking.models import (
         Booking, Resource, OpeningEntry, WeeklyOpening,
         ClosedPeriod, Calendar,
     )
 
+    LigneArticle.objects.filter(booking__resource__name__startswith=TEST_PREFIX).delete()
     Booking.objects.filter(resource__name__startswith=TEST_PREFIX).delete()
     Resource.objects.filter(name__startswith=TEST_PREFIX).delete()
     OpeningEntry.objects.filter(weekly_opening__name__startswith=TEST_PREFIX).delete()
@@ -330,13 +320,10 @@ def test_slot_local_time_is_preserved_utc_plus_1():
     )
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
             # Active le fuseau UTC+1 via Configuration (chemin de production).
             # / Activate UTC+1 via Configuration (production path).
-            tz = _set_tenant_timezone(TZ_NAME_LAGOS)
+            tz = _fuseau_du_lieu(TZ_NAME_LAGOS)
 
             monday = _next_weekday(weekday=0)
             calendar = _make_calendar('slot_time_utc_plus_1')
@@ -384,7 +371,6 @@ def test_slot_local_time_is_preserved_utc_plus_1():
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 @pytest.mark.django_db
@@ -411,11 +397,8 @@ def test_slot_local_time_is_preserved_utc_plus_9():
     )
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_TOKYO)
+            tz = _fuseau_du_lieu(TZ_NAME_TOKYO)
 
             monday = _next_weekday(weekday=0)
             calendar = _make_calendar('slot_time_utc_plus_9')
@@ -459,7 +442,6 @@ def test_slot_local_time_is_preserved_utc_plus_9():
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 @pytest.mark.django_db
@@ -488,11 +470,8 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_1():
     )
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_LAGOS)
+            tz = _fuseau_du_lieu(TZ_NAME_LAGOS)
 
             wednesday = _next_weekday(weekday=2)
             thursday = wednesday + datetime.timedelta(days=1)
@@ -539,7 +518,6 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_1():
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 @pytest.mark.django_db
@@ -565,11 +543,8 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_9():
     )
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_TOKYO)
+            tz = _fuseau_du_lieu(TZ_NAME_TOKYO)
 
             wednesday = _next_weekday(weekday=2)
             thursday = wednesday + datetime.timedelta(days=1)
@@ -604,7 +579,6 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_9():
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 @pytest.mark.django_db
@@ -627,11 +601,8 @@ def test_midnight_crossing_slot_open_second_day_utc_plus_1():
     )
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_LAGOS)
+            tz = _fuseau_du_lieu(TZ_NAME_LAGOS)
 
             wednesday = _next_weekday(weekday=2)
             # Fenêtre étendue au jeudi pour capturer le débordement du slot 23:00−01:00.
@@ -675,7 +646,6 @@ def test_midnight_crossing_slot_open_second_day_utc_plus_1():
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 @pytest.mark.django_db
@@ -701,11 +671,8 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_1():
     )
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_LAGOS)
+            tz = _fuseau_du_lieu(TZ_NAME_LAGOS)
 
             monday = _next_weekday(weekday=0)
             tuesday = monday + datetime.timedelta(days=1)
@@ -742,7 +709,6 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_1():
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 @pytest.mark.django_db
@@ -768,11 +734,8 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_9():
     )
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_TOKYO)
+            tz = _fuseau_du_lieu(TZ_NAME_TOKYO)
 
             monday = _next_weekday(weekday=0)
             tuesday = monday + datetime.timedelta(days=1)
@@ -807,7 +770,6 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_9():
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 @pytest.mark.django_db
@@ -840,11 +802,8 @@ def test_slot_ending_exactly_at_midnight_next_day_closed_utc_plus_1():
     )
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_LAGOS)
+            tz = _fuseau_du_lieu(TZ_NAME_LAGOS)
 
             monday = _next_weekday(weekday=0)
             tuesday = monday + datetime.timedelta(days=1)
@@ -886,7 +845,6 @@ def test_slot_ending_exactly_at_midnight_next_day_closed_utc_plus_1():
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 # ===========================================================================
@@ -908,11 +866,8 @@ def test_booking_validation_accepts_valid_slot_utc_plus_1():
     from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_LAGOS)
+            tz = _fuseau_du_lieu(TZ_NAME_LAGOS)
 
             monday = _next_weekday(weekday=0)
             calendar = _make_calendar('validation_valid_utc1')
@@ -935,8 +890,9 @@ def test_booking_validation_accepts_valid_slot_utc_plus_1():
             )
 
             with timezone.override(tz):
-                is_valid, error = validate_new_booking(
+                is_valid, error, _url_stripe = validate_new_booking(
                     resource=resource_for_test,
+                    price=resource_for_test.product.prices.get(),
                     start_datetime=start_datetime,
                     slot_duration_minutes=60,
                     slot_count=1,
@@ -944,14 +900,13 @@ def test_booking_validation_accepts_valid_slot_utc_plus_1():
                 )
 
             assert is_valid is True, f'Attendu True, erreur obtenue : {error}'
-            # validate_new_booking retourne (True, Booking) en cas de succès.
-            # / validate_new_booking returns (True, Booking) on success.
+            # validate_new_booking retourne (True, Booking, url Stripe ou None) en cas de succès.
+            # / validate_new_booking returns (True, Booking, Stripe url or None) on success.
             from booking.models import Booking
             assert isinstance(error, Booking)
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 @pytest.mark.django_db
@@ -972,11 +927,8 @@ def test_booking_validation_accepts_valid_slot_utc_plus_9():
     from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_TOKYO)
+            tz = _fuseau_du_lieu(TZ_NAME_TOKYO)
 
             monday = _next_weekday(weekday=0)
             calendar = _make_calendar('validation_valid_utc9')
@@ -997,8 +949,9 @@ def test_booking_validation_accepts_valid_slot_utc_plus_9():
             )
 
             with timezone.override(tz):
-                is_valid, error = validate_new_booking(
+                is_valid, error, _url_stripe = validate_new_booking(
                     resource=resource_for_test,
+                    price=resource_for_test.product.prices.get(),
                     start_datetime=start_datetime,
                     slot_duration_minutes=60,
                     slot_count=1,
@@ -1006,14 +959,13 @@ def test_booking_validation_accepts_valid_slot_utc_plus_9():
                 )
 
             assert is_valid is True, f'Attendu True, erreur obtenue : {error}'
-            # validate_new_booking retourne (True, Booking) en cas de succès.
-            # / validate_new_booking returns (True, Booking) on success.
+            # validate_new_booking retourne (True, Booking, url Stripe ou None) en cas de succès.
+            # / validate_new_booking returns (True, Booking, Stripe url or None) on success.
             from booking.models import Booking
             assert isinstance(error, Booking)
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 @pytest.mark.django_db
@@ -1032,11 +984,8 @@ def test_booking_validation_rejects_full_slot_utc_plus_9():
     from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_TOKYO)
+            tz = _fuseau_du_lieu(TZ_NAME_TOKYO)
 
             monday = _next_weekday(weekday=0)
             calendar = _make_calendar('validation_full_utc9')
@@ -1074,8 +1023,9 @@ def test_booking_validation_rejects_full_slot_utc_plus_9():
             # Tente une deuxième réservation sur le même créneau complet.
             # / Attempt a second booking on the same full slot.
             with timezone.override(tz):
-                is_valid, error = validate_new_booking(
+                is_valid, error, _url_stripe = validate_new_booking(
                     resource=resource_for_test,
+                    price=resource_for_test.product.prices.get(),
                     start_datetime=start_datetime,
                     slot_duration_minutes=60,
                     slot_count=1,
@@ -1087,7 +1037,6 @@ def test_booking_validation_rejects_full_slot_utc_plus_9():
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)
 
 
 @pytest.mark.django_db
@@ -1106,11 +1055,8 @@ def test_booking_validation_rejects_slot_on_closed_date_utc_plus_1():
     from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import Configuration
-        original_tz_name = Configuration.get_solo().fuseau_horaire
-
         try:
-            tz = _set_tenant_timezone(TZ_NAME_LAGOS)
+            tz = _fuseau_du_lieu(TZ_NAME_LAGOS)
 
             monday = _next_weekday(weekday=0)
             calendar = _make_calendar('validation_closed_utc1')
@@ -1135,8 +1081,9 @@ def test_booking_validation_rejects_slot_on_closed_date_utc_plus_1():
             )
 
             with timezone.override(tz):
-                is_valid, error = validate_new_booking(
+                is_valid, error, _url_stripe = validate_new_booking(
                     resource=resource_for_test,
+                    price=resource_for_test.product.prices.get(),
                     start_datetime=start_datetime,
                     slot_duration_minutes=60,
                     slot_count=1,
@@ -1148,4 +1095,3 @@ def test_booking_validation_rejects_slot_on_closed_date_utc_plus_1():
 
         finally:
             _cleanup()
-            _restore_tenant_timezone(original_tz_name)

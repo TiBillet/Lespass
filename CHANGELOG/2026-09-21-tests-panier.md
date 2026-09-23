@@ -5,15 +5,16 @@
 
 ## Résumé / Summary
 
-**Quoi / What :** le panier (billets, adhésions, ressources) a maintenant ses tests : 289 tests
-pytest (fonctions du panier, matérialisation en Commande, paiement d'une Commande mixte, vues
-HTMX, et parité : chaque type d'achat donne le même résultat avec et sans panier), 6 E2E
-(dont un vrai paiement Stripe et une vraie récompense monnaie Fedow). Les tests ont révélé des
-bugs, corrigés ; les défauts non corrigés sont prouvés par des tests `xfail(strict=True)`.
+**Quoi / What :** le panier (billets, adhésions, ressources) a maintenant ses tests pytest
+(fonctions du panier, matérialisation en Commande, paiement d'une Commande mixte, vues HTMX, et
+parité : chaque type d'achat donne le même résultat avec et sans panier) et 6 E2E (dont un vrai
+paiement Stripe et une vraie récompense monnaie Fedow). Les tests ont révélé des bugs, tous
+corrigés : les défauts d'abord prouvés par des tests `xfail(strict=True)` le sont aussi, il ne
+reste aucun `xfail` (2026-09-22).
 `make coverage` mesure la couverture du code (couverture de `services_panier.py` : 28 → 78 %,
 `services_commande.py` : 53 → 97 %).
-/ The cart now has 289 pytest tests (9 strict xfail) and 6 E2E tests. Bugs found by the tests are fixed; the
-remaining defects are proven by strict xfail tests. `make coverage` measures code coverage.
+/ The cart now has its pytest tests and 6 E2E tests. Every bug found by the tests is fixed, including
+the defects first proven by strict xfail tests (none left). `make coverage` measures code coverage.
 
 **Pourquoi / Why :** le panier est devenu le moteur d'achat principal et n'avait aucun test.
 / The cart became the main purchase engine and had no test.
@@ -48,16 +49,24 @@ remaining defects are proven by strict xfail tests. `make coverage` measures cod
 | C26 | Formulaire billet : un champ « Code promo » par produit à codes, tous du même nom ; un code tapé dans le premier champ était perdu (plein tarif facturé). Désormais un seul champ par événement | les deux |
 | — | Panier : la remise d'un code promo n'était pas affichée (plein tarif affiché, prix remisé facturé). Le panier affiche le prix barré, le prix remisé, le code, et un total égal au montant facturé | panier |
 | — | Deux produits « réservation gratuite » dans la même commande directe : billets envoyés deux fois, webhook « réservation » envoyé deux fois. Désormais un seul envoi | direct, API v2 |
+| — | API v2 : la liste des événements faisait 5 requêtes SQL par événement (10,5 s pour 1 557 événements). Nombre de requêtes désormais constant | API v2 |
 | C20 | Événement terminé ou archivé : billets encore vendables (sans date de fin : terminé 24 h après le début ; un événement dépublié reste réservable par lien direct). En direct, un festival commencé il y a plus d'un jour devenait impossible à réserver (filtre de date figé au démarrage du serveur). La caisse et l'API vendent jusqu'à la fin de l'événement | les deux, API v2 |
 | C25 | Skin Faire Festival : aucun lien ni compteur du panier dans le menu | panier |
 | C28 | Limite par personne en direct : « déjà acheté + demandé » n'était pas additionné | direct |
 | C31 | Récompense monnaie et envoi à LaBoutik lancés avant la validation en base (récompense perdue au hasard) ; même règle pour l'envoi à LaBoutik des billets | les deux |
+| — | Ressource : panneau de réservation titré « Adhérer » (désormais « Réserver ») ; bouton « Pay now » en anglais sur le site français (désormais « Payer maintenant ») ; tarif unique non coché d'office | les deux |
+| P16 | Ressource gratuite réservée sans panier : la ligne de vente restait « créée » (rouge dans les ventes de l'admin, absente de la clôture comptable). Désormais « validée » en « offert », comme au panier | direct |
+| C24 | Ressource à prix libre (minimum 0 €) saisie à 0 € : le paiement du panier échouait, et bloquait tout le panier. Désormais réservée gratuitement | panier |
+| C22 | Montant entre 0,01 et 0,49 € (refusé par Stripe) : « Le paiement a échoué » sans explication. Désormais refusé avant Stripe avec le message « 0 € ou au moins 0,50 € » : total du panier, adhésion et ressource sans panier (le formulaire d'adhésion le signale aussi) | les deux |
+| C23 | Panier : le maximum d'adhésions par personne n'était pas contrôlé (deuxième adhésion payée : page restée ouverte, ou deux tarifs du même produit limité à 1 dans le même panier). Désormais refusé comme sans panier | panier |
+| — | Ressource sans panier : tout refus (tarif réservé aux adhérents, créneau commencé…) s'affichait « Un créneau a été réservé entre temps ». La vraie raison est affichée | direct |
+| — | Formulaire d'adhésion à un seul tarif libre : le montant n'était jamais vérifié par le navigateur | direct |
+| — | Menu (3 skins) : le lien du panier était annoncé aux lecteurs d'écran en anglais (« Cart (n items) »), avec un nombre figé au chargement de la page. Désormais « Panier », décrit par la pastille mise à jour après chaque ajout | panier |
 
 Billets à 0 € : leurs ventes sont désormais envoyées à LaBoutik, comme les autres (décision
 du mainteneur).
 
-Défauts prouvés et notés (non corrigés, voir le SPEC) : C22 prix libre sous 0,50 €, C23 limite par personne des adhésions au panier, C24 ressource à prix libre à 0 €, P16
-booking gratuit direct. C29 (gabarit `booking/views/book.html` absent, erreur 500 sans HTMX)
+Plus aucun défaut prouvé par un test `xfail` : tous ont été corrigés. C29 (gabarit `booking/views/book.html` absent, erreur 500 sans HTMX)
 est classé : inatteignable par un parcours normal.
 
 ### Fichiers modifiés / Modified files
@@ -65,21 +74,27 @@ est classé : inatteignable par un parcours normal.
 | Fichier / File | Changement / Change |
 |---|---|
 | `BaseBillet/validators.py` | `TicketCreator` : code promo limité à son produit ; paiement décidé une fois par réservation ; réservation à 0 € validée sans Stripe (lignes via « payée ») ; `method_F` ne pose le statut gratuit que s'il décide du paiement et que la réservation est 100 % gratuite (C27) ; caisse mixte. `ReservationValidator` : quantité bornée, C20, C28 |
-| `BaseBillet/models.py` | `Event.n_est_plus_en_vente()` (C20) |
+| `BaseBillet/models.py` | `Event.n_est_plus_en_vente()` (C20) ; `Product.max_per_user_reached` compte aussi les adhésions déjà au panier (C23) |
 | `BaseBillet/signals.py` | au paiement d'une Commande, ses réservations sans ligne de vente sont aussi validées |
 | `BaseBillet/triggers.py` | récompense et envoi LaBoutik en `transaction.on_commit` (C31, `trigger_A` et `trigger_B`) |
-| `pages/templates/pages/faire_festival/partials/navbar.html` | lien et compteur du panier (C25) |
+| `pages/templates/pages/faire_festival/partials/navbar.html` | lien et compteur du panier (C25) ; nom accessible du lien |
+| `pages/templates/pages/classic/partials/navbar.html`, `pages/templates/pages/V2/partials/navbar.html`, `htmx/components/panier_badge.html` | nom accessible du lien du panier (« Panier », décrit par la pastille) ; « articles » |
+| `booking/templates/booking/views/resource.html`, `booking/templates/booking/partials/book_form.html` | titre « Réserver », bouton « Payer maintenant », tarif unique coché d'office |
 | `BaseBillet/services_commande.py` | prix libre par item ; code promo par produit ; montant saisi seulement si le tarif est encore libre ; adhésion gratuite via `trigger_A` ; billets à 0 € via « payée » ; statut gratuit posé une seule fois ; newsletter |
-| `BaseBillet/services_panier.py` | adhésions rejouées d'abord ; garde tarif/adhésion des ressources ; format du message de limite ; newsletter ; événement plus en vente refusé (C20) |
+| `BaseBillet/services_panier.py` | maximum d'adhésions par personne (C23) ; adhésions rejouées d'abord ; garde tarif/adhésion des ressources ; format du message de limite ; newsletter ; événement plus en vente refusé (C20) |
 | `BaseBillet/views.py` | code promo inconnu ou d'un produit non choisi refusé ; quantité non numérique ou démesurée ignorée ; case newsletter lue |
 | `BaseBillet/context_processors.py`, `htmx/components/panier_item.html` | rang réel de l'article pour le bouton « retirer » |
-| `booking/booking_engine.py` | `validate_new_booking` : tarif de la ressource, publié, produit non archivé, adhésion active ou dans la même commande |
+| `booking/booking_engine.py` | `validate_new_booking` : tarif de la ressource, publié, produit non archivé, adhésion active ou dans la même commande ; ligne du booking gratuit validée en « offert » (P16) ; 0 € accepté (C24) ; montant calculé avant la transaction, minimum Stripe sans panier (C22) |
+| `booking/views.py` | refus d'une ressource sans panier : la vraie raison est affichée |
+| `BaseBillet/services_commande.py` (C22) | total entre 0,01 et 0,49 € refusé avant Stripe |
+| `commun/adhesion/form.html` | minimum Stripe vérifié par le navigateur, zone de message, champ du tarif unique en `type="hidden"` |
 | `api_v2/serializers.py` | réservation gratuite : une ligne de vente par tarif, jamais deux |
 | `Administration/management/commands/demo_data_v2.py`, `tests/e2e/conftest.py` | fixtures E2E du panier (adhésions payante / récurrente / à récompense, salle) |
 | `Makefile`, `scripts/lancer_tests.sh`, `pyproject.toml`, `poetry.lock` | `make coverage` (`pytest-cov`) |
 | `tests/pytest/fabriques_panier.py` + 5 fichiers `test_panier_*` / `test_commande_*` / `test_parite_*` | tests neufs |
 | `tests/e2e/test_panier_flow.py` | 6 E2E |
-| `tests/PIEGES.md` | section 13 ; 12.16 mis à jour (billet à 0 € : plus de Checkout, mais le catalogue Stripe reste appelé) |
+| `booking/tests/` (+ `fabriques.py`), `scripts/lancer_tests.sh` | C30 : tests du moteur de réservation réparés (produit obligatoire, signature de `validate_new_booking`, statut par défaut, plus d'enregistrement de la vraie configuration) et lancés par `make test` |
+| `tests/PIEGES.md` | section 13 (jusqu’à 13.23) ; 12.16 mis à jour (billet à 0 € : plus de Checkout, mais le catalogue Stripe reste appelé) |
 
 i18n : 6 chaînes neuves (source française, dont 3 messages qui citaient « 15 minutes »,
 paramétrés par `%(minutes)s`) et un msgid corrigé (`%(event)s`) → workflow de traduction à
@@ -152,8 +167,38 @@ Se connecter sur `https://lespass.tibillet.localhost/` (compte de test `admin@ad
    2 jours : refusé.
 4. Un événement non publié, ouvert par son lien direct : réservable.
 
+### Test 12 — réservation d'une ressource et lien du panier
+1. Site en français, ressource à un seul tarif : cliquer un créneau. Le panneau s'intitule
+   « Réserver », le tarif est déjà coché, le bouton dit « Payer maintenant ».
+2. Lecteur d'écran (ou inspecteur d'accessibilité du navigateur) sur le lien du panier du
+   menu : « Panier », puis le nombre d'articles à jour après un ajout, sans recharger la page.
+
+### Test 13 — ressource gratuite sans panier (P16)
+1. Ressource à tarif 0 € : réserver un créneau par « Payer maintenant » (panier vide).
+2. Admin, ventes : la ligne de la réservation est « validée » (verte), moyen de paiement
+   « offert ».
+
+### Test 14 — ressource à prix libre à 0 € (C24)
+1. Ressource à prix libre, minimum 0 € : saisir 0, « Ajouter au panier », puis payer.
+2. Attendu : pas de page Stripe, réservation confirmée, ligne « validée » en « offert ».
+
+### Test 15 — montant sous 0,50 € (C22)
+1. Billet à prix libre (minimum 0 €) à 0,30 €, seul au panier : « Payer » affiche « Le montant
+   doit être 0 € (gratuit) ou au moins 0,50 €. », rien n'est créé.
+2. Adhésion à prix libre (minimum 0 €) : saisir 0,30 € ; le champ passe en rouge avec le même
+   message, avec un seul tarif comme avec plusieurs.
+3. Ressource à prix libre, 0,30 €/h pour une heure, « Payer maintenant » : le formulaire
+   réaffiché donne le même message.
+
+### Test 16 — maximum d'adhésions par personne au panier (C23)
+1. Admin : produit d'adhésion avec « max par utilisateur » = 1 et deux tarifs (plein, réduit).
+2. Ajouter le tarif plein au panier, puis le tarif réduit : le second est refusé (« Ce produit
+   est disponible en quantité limitée par personne. »).
+3. Avec une adhésion déjà active à ce produit (page du formulaire ouverte avant) : l'ajout au
+   panier est refusé.
+
 ### Vérifications automatiques / Automated checks
-- `make test` (pytest, 1609 passed, 9 xfailed au 2026-09-22), `make test-stripe`, `make e2e`,
+- `make test` (pytest, 1667 passed, 0 xfailed au 2026-09-22 ; E2E du panier : 4 passed, 2 en Stripe réel), `make test-stripe`, `make e2e`,
   `make e2e-stripe` (`stripe listen` dans byobu).
 - `make coverage FICHIERS="BaseBillet/services_panier.py,BaseBillet/services_commande.py"`.
 - Avant les E2E du panier : `docker exec lespass_django poetry run python manage.py demo_data_v2 --e2e-only`.

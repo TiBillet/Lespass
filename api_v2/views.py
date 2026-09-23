@@ -357,6 +357,13 @@ class EventViewSet(viewsets.ViewSet):
                 Q(long_description__icontains=filter)
             )
 
+        # Adresse, tags et options chargés en une fois pour toute la liste : sans cela, chaque
+        # événement déclenche ses propres requêtes et la liste ralentit à mesure que le lieu
+        # accumule des événements (tests/pytest/test_api_v2_liste_des_evenements.py).
+        # / Address, tags and options loaded once for the whole list (no per-event queries).
+        queryset = queryset.select_related("postal_address").prefetch_related(
+            "tag", "options_radio", "options_checkbox"
+        )
         serializer = EventSchemaSerializer(queryset, many=True)
         # Non-paginated wrapper for consistency with tests
         return Response({"results": serializer.data})

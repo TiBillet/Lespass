@@ -714,6 +714,27 @@ class PanierSession:
             if existing.get('type') == 'membership' and existing.get('price_uuid') == str(price_uuid):
                 raise InvalidItemError(_("This membership is already in your cart."))
 
+        # Validation 5ter : maximum d'adhésions par personne, comme MembershipValidator.
+        # Comptent les adhésions en base (valides ou engagées) et, pour la limite du produit,
+        # les adhésions au même produit déjà dans le panier, sur un autre tarif (le même
+        # tarif est déjà refusé par la validation 5). Rejouée au paiement par revalidate_all.
+        # / Validation 5ter: per-person maximum, like MembershipValidator, cart included.
+        if self.request.user.is_authenticated:
+            uuids_des_adhesions_au_panier = []
+            for item_du_panier in self._data.get('items', []):
+                if item_du_panier.get('type') == 'membership':
+                    uuids_des_adhesions_au_panier.append(item_du_panier['price_uuid'])
+            adhesions_du_meme_produit_au_panier = Price.objects.filter(
+                uuid__in=uuids_des_adhesions_au_panier, product=price.product,
+            ).count()
+
+            limite_du_produit_atteinte = price.product.max_per_user_reached(
+                user=self.request.user,
+                adhesions_deja_au_panier=adhesions_du_meme_produit_au_panier,
+            )
+            if limite_du_produit_atteinte or price.max_per_user_reached(user=self.request.user):
+                raise InvalidItemError(_('This product is limited in quantity per person.'))
+
         # Validation 5bis : stock du tarif d'adhésion (adhésions valides, engagées ou en cours
         # de paiement, voir Price.out_of_stock). Le panier ne contient qu'une adhésion par tarif.
         # / Validation 5bis: membership price stock.

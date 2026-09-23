@@ -823,6 +823,27 @@ def test_add_membership_refuse_la_meme_adhesion_deux_fois(lieu):
         panier.add_membership(adhesion.tarif.uuid)
 
 
+def test_add_membership_refuse_un_second_tarif_d_un_produit_limite_a_un_par_personne(lieu):
+    """Produit d'adhésion limité à 1 par personne, avec deux tarifs (plein et réduit) : le
+    premier entre dans le panier, le second est refusé.
+    / Membership product limited to 1 per person, two prices: the second one is refused."""
+    from BaseBillet.models import Price, Product
+    from BaseBillet.services_panier import InvalidItemError, PanierSession
+
+    adhesion = creer_adhesion()
+    # update() : pas de signal post_save du produit (il appellerait Fedow).
+    # / update(): no Product post_save signal (it would call Fedow).
+    Product.objects.filter(pk=adhesion.produit.pk).update(max_per_user=1)
+    tarif_reduit = ajouter_un_tarif(
+        adhesion.produit, prix="10.00", subscription_type=Price.YEAR
+    )
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+    panier.add_membership(adhesion.tarif.uuid)
+
+    with pytest.raises(InvalidItemError):
+        panier.add_membership(tarif_reduit.uuid)
+
+
 def test_add_membership_refuse_un_tarif_qui_n_est_pas_une_adhesion(lieu):
     """Un tarif de billet envoyé comme adhésion : refusé.
     / A ticket price sent as a membership: refused."""

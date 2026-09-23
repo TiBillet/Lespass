@@ -390,6 +390,14 @@ class CommandeService:
 
             # -- Phase 3/4 : Stripe ou gratuit --
             # -- Phase 3/4: Stripe or free --
+            # Stripe refuse un paiement dont le total est entre 0,01 € et 0,49 €. On refuse
+            # avant de l'appeler, avec un message clair ; la transaction est annulée et les
+            # articles restent dans le panier.
+            # / Stripe refuses a payment whose total is between 0.01 € and 0.49 €: refuse
+            # before calling it, with a clear message.
+            if 0 < total_centimes < 50:
+                raise CommandeServiceError(_("The amount must be 0 (free) or at least €0.50."))
+
             if total_centimes > 0:
                 CommandeService._creer_paiement_stripe(commande, user, all_lines)
                 # Status reste PENDING — Stripe webhook basculera en PAID via signaux

@@ -103,6 +103,9 @@ DEPENDENCIES :
         -->
         <div class="mb-3">
             <h4 class="h6">{% translate "Tarifs" %} : </h4>
+                {# « forloop.first and forloop.last » est vrai quand la ressource n'a qu'un tarif publié : #}
+                {# ce tarif est alors coché d'office. #}
+                {# / True when the resource has a single published price: it is pre-checked. #}
                 {% for price in resource.published_prices %}
                     <div class="p-3 js-order" data-testid="booking-price-{{ price.uuid }}">
                         <label for="amount-{{ price.uuid }}" class="form-label">
@@ -142,7 +145,7 @@ DEPENDENCIES :
                                                value="{{ price.uuid }}"
                                                required
                                                {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
-                                               {% if published_prices_count == 1 %}checked{% endif %}
+                                               {% if forloop.first and forloop.last %}checked{% endif %}
                                                {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
                                                data-testid="membership-price-{{ price.uuid }}">
                                         <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
@@ -183,7 +186,7 @@ DEPENDENCIES :
                                                value="{{ price.uuid }}"
                                                required
                                                {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
-                                               {% if published_prices_count == 1 %}checked{% endif %}
+                                               {% if forloop.first and forloop.last %}checked{% endif %}
                                                {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
                                                data-testid="membership-price-{{ price.uuid }}">
                                         <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
@@ -211,7 +214,7 @@ DEPENDENCIES :
                                        value="{{ price.uuid }}"
                                        required
                                        {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
-                                       {% if published_prices_count == 1 %}checked{% endif %}
+                                       {% if forloop.first and forloop.last %}checked{% endif %}
                                        {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
                                        data-testid="membership-price-{{ price.uuid }}">
                                 <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
@@ -493,8 +496,7 @@ DEPENDENCIES :
                             data-testid="resource-submit"
                             aria-label="{% translate 'Pay this resource now' %}">
                         <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
-                        {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
-                            {% translate 'Pay now' %}{% endif %}
+                        {% translate "Payer maintenant" %}
                     </button>
                 {% endif %}
             {% else %}

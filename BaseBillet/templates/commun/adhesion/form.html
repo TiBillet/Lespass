@@ -55,7 +55,7 @@
                                 {% trans "You are already subscribed to this rate." %}
                             </div>
                         {% else %}
-                            <input id="price-{{ price.uuid }}" hidden name="price" value="{{ price.uuid }}" data-testid="membership-price-{{ price.uuid }}">
+                            <input id="price-{{ price.uuid }}" type="hidden" name="price" value="{{ price.uuid }}" data-testid="membership-price-{{ price.uuid }}">
                             <input id="custom_amount-{{ price.uuid }}"
                                    class="form-control form-control-lg custom-amount-input"
                                    type="number"
@@ -67,6 +67,7 @@
                                    aria-describedby="custom-amount-help-{{ price.uuid }}"
                                    data-testid="membership-custom-amount-{{ price.uuid }}"
                                    required>
+                            <div class="invalid-feedback" data-testid="membership-custom-amount-error-{{ price.uuid }}"></div>
                             <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
                                 {% if price.recurring_payment %}
                                     {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
@@ -170,6 +171,7 @@
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
                                    aria-describedby="custom-amount-help-{{ price.uuid }}"
                                    data-testid="membership-custom-amount-{{ price.uuid }}">
+                            <div class="invalid-feedback" data-testid="membership-custom-amount-error-{{ price.uuid }}"></div>
                             <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
                                 {% if price.recurring_payment %}
                                     {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
@@ -512,6 +514,8 @@
 
                         if (container) {
                             const input = container.querySelector('.custom-amount-input');
+                            const zoneDuMessage = input ? input.parentElement.querySelector('.invalid-feedback') : null;
+                            if (zoneDuMessage) zoneDuMessage.textContent = '';
                             if (input && !input.value) {
                                 okFreePrice = false;
                                 input.classList.add('is-invalid');
@@ -520,6 +524,14 @@
                                 // Montant trop élevé / Amount too high
                                 okFreePrice = false;
                                 input.classList.add('is-invalid');
+                                input.focus();
+                            } else if (input && parseFloat(input.value) > 0 && parseFloat(input.value) < 0.50) {
+                                // Stripe refuse les montants entre 0,01 € et 0,49 € : 0 € (gratuit)
+                                // ou au moins 0,50 €. Même règle côté serveur (MembershipValidator).
+                                // / Stripe rejects 0.01-0.49 €: 0 (free) or at least 0.50 €.
+                                okFreePrice = false;
+                                input.classList.add('is-invalid');
+                                if (zoneDuMessage) zoneDuMessage.textContent = "{% translate 'The amount must be 0 (free) or at least €0.50.' %}";
                                 input.focus();
                             } else if (input) {
                                 input.classList.remove('is-invalid');

@@ -13,3 +13,4 @@
 |---|---|---|---|
 | 1 | [`COMPTABILITE-inter-tenants.md`](COMPTABILITE-inter-tenants.md) | Compta — versements et monnaies locales fédérées | Chantier Fedow V2 mature |
 | 2 | [`PANIER-en-base-commande-draft.md`](PANIER-en-base-commande-draft.md) | Panier — en base (`Commande.DRAFT`) au lieu de la session | Aucun |
+| 3 | [`AUTH-connexion-par-code-achat-connecte.md`](AUTH-connexion-par-code-achat-connecte.md) | Auth — connexion par code à 6 chiffres, réservation et adhésion réservées aux connectés | Aucun |

@@ -170,12 +170,15 @@ def adherer(parcours, client, acheteur, tarif, montant_libre=None, newsletter=Fa
     return reponse_de_l_ajout
 
 
-def reserver_une_ressource(parcours, client, location, tarif=None, nombre_d_heures=1):
+def reserver_une_ressource(
+    parcours, client, location, tarif=None, nombre_d_heures=1, montant_libre=None
+):
     """
     Réserve un créneau de ressource par le formulaire de réservation.
     / Books a resource slot through the booking form.
 
     Le formulaire envoie des dates sans fuseau, lues dans le fuseau courant.
+    `montant_libre` : montant par heure saisi pour un tarif à prix libre ("12.00").
     Sans panier : `POST /booking/<ressource>/book/`. Avec panier : ajout puis paiement.
     """
     if tarif is None:
@@ -190,6 +193,8 @@ def reserver_une_ressource(parcours, client, location, tarif=None, nombre_d_heur
         "firstname": "Ada",
         "lastname": "Lovelace",
     }
+    if montant_libre is not None:
+        donnees_du_formulaire[f"custom_amount_{tarif.uuid}"] = montant_libre
 
     if parcours == SANS_PANIER:
         return client.post(
@@ -410,20 +415,7 @@ def test_p3_billet_prix_libre_sous_le_minimum_est_refuse(lieu, parcours):
     assert reservation_de(acheteur, concert.evenement) is None
 
 
-@pytest.mark.parametrize(
-    "parcours",
-    [
-        SANS_PANIER,
-        pytest.param(
-            AVEC_PANIER,
-            marks=pytest.mark.xfail(
-                strict=True,
-                raises=AssertionError,
-                reason="C22 — le panier accepte un prix libre de 0,30 € que Stripe refusera",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
 def test_p3_billet_prix_libre_sous_le_minimum_stripe_est_refuse(lieu, parcours):
     """Prix libre à 0,30 € (sous le minimum Stripe de 0,50 €) : refusé avant le paiement.
     / Free price at 0.30 € (below Stripe's 0.50 € minimum): refused before payment."""
@@ -882,6 +874,22 @@ def test_p10_adhesion_prix_libre(lieu, parcours):
     assert LigneArticle.objects.get(membership=adhesion_creee).amount == 2500
 
 
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+def test_p10_adhesion_prix_libre_sous_le_minimum_stripe_est_refusee(lieu, parcours):
+    """Adhésion à prix libre (minimum 0 €) à 0,30 €, sous le minimum Stripe de 0,50 € :
+    refusée avant le paiement, aucune adhésion créée.
+    / Free-price membership at 0.30 € (below Stripe's 0.50 € minimum): refused before
+    payment, no membership created."""
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    adhesion = creer_adhesion(prix="0.00", prix_libre=True)
+
+    adherer(parcours, client, acheteur, adhesion.tarif, montant_libre="0.30")
+
+    assert adhesion_de(acheteur, adhesion) is None
+    assert not lieu.stripe.mock_create.called
+
+
 def creer_une_monnaie_de_recompense(tenant):
     """Une monnaie Fedow publique, pour la récompense d'adhésion.
     / A public Fedow asset, for the membership reward."""
@@ -1080,20 +1088,7 @@ def test_p15_ressource_payante(lieu, parcours):
     assert ligne.amount == 2400
 
 
-@pytest.mark.parametrize(
-    "parcours",
-    [
-        pytest.param(
-            SANS_PANIER,
-            marks=pytest.mark.xfail(
-                strict=True,
-                raises=AssertionError,
-                reason="P16 — booking gratuit direct : la ligne reste « créée », jamais validée",
-            ),
-        ),
-        AVEC_PANIER,
-    ],
-)
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
 def test_p16_ressource_gratuite(lieu, parcours):
     """Ressource gratuite : booking confirmé sans Stripe, ligne validée en « offert ».
     / Free resource: booking confirmed without Stripe, line valid as "free"."""
@@ -1228,20 +1223,7 @@ def test_p18_revenir_deux_fois_de_stripe_ne_duplique_rien(lieu, parcours):
     )
 
 
-@pytest.mark.parametrize(
-    "parcours",
-    [
-        SANS_PANIER,
-        pytest.param(
-            AVEC_PANIER,
-            marks=pytest.mark.xfail(
-                strict=True,
-                raises=AssertionError,
-                reason="C23 — le panier ne contrôle pas le maximum par personne d'une adhésion",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
 def test_p19_adhesion_limitee_a_une_par_personne(lieu, parcours):
     """Adhésion limitée à 1 par personne, déjà active : une deuxième est refusée.
     / Membership limited to 1 per person, already active: a second one is refused."""
@@ -1255,6 +1237,33 @@ def test_p19_adhesion_limitee_a_une_par_personne(lieu, parcours):
     adherer(parcours, client, acheteur, adhesion.tarif)
 
     assert Membership.objects.filter(user=acheteur, price=adhesion.tarif).count() == 1
+
+
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+def test_p19_adhesion_a_un_produit_limite_refusee_sur_un_autre_tarif(lieu, parcours):
+    """Produit d'adhésion limité à 1 par personne, adhésion active au tarif plein : une
+    adhésion au tarif réduit du même produit est refusée.
+    / Membership product limited to 1 per person, active on the full price: the reduced
+    price of the same product is refused."""
+    from BaseBillet.models import Membership, Price, Product
+
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    adhesion = creer_adhesion(prix="15.00")
+    # update() : pas de signal post_save du produit (il appellerait Fedow).
+    # / update(): no Product post_save signal (it would call Fedow).
+    Product.objects.filter(pk=adhesion.produit.pk).update(max_per_user=1)
+    tarif_reduit = ajouter_un_tarif(
+        adhesion.produit, prix="10.00", subscription_type=Price.YEAR
+    )
+    creer_une_adhesion_active(acheteur, adhesion)
+
+    adherer(parcours, client, acheteur, tarif_reduit)
+
+    assert (
+        Membership.objects.filter(user=acheteur, price__product=adhesion.produit).count()
+        == 1
+    )
 
 
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
@@ -1294,23 +1303,14 @@ def test_p20_la_case_newsletter_est_enregistree_sur_l_adhesion(lieu, parcours):
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "parcours",
-    [
-        SANS_PANIER,
-        pytest.param(
-            AVEC_PANIER,
-            marks=pytest.mark.xfail(
-                strict=True,
-                raises=AssertionError,
-                reason="C24 — ressource à prix libre saisie à 0 € : le panier échoue au paiement",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
 def test_ressource_a_prix_libre_saisie_a_zero_euro(lieu, parcours):
-    """Ressource à prix libre (minimum 0 €), montant saisi 0 € : le créneau est réservé.
-    / Free-price resource (minimum 0 €), 0 € typed: the slot is booked."""
+    """Ressource à prix libre (minimum 0 €), montant saisi 0 € : le créneau est réservé sans
+    Stripe, et sa ligne de vente est validée en « offert ».
+    / Free-price resource (minimum 0 €), 0 € typed: the slot is booked without Stripe, its
+    line valid as "free"."""
+    from BaseBillet.models import LigneArticle, PaymentMethod
+
     acheteur = creer_utilisateur()
     client = client_connecte(acheteur)
     location = creer_ressource_avec_tarif(prix="0.00", prix_libre=True)
@@ -1335,7 +1335,35 @@ def test_ressource_a_prix_libre_saisie_a_zero_euro(lieu, parcours):
         client.post("/panier/add/resource/", donnees_du_formulaire, **EN_TETE_HTMX)
         client.post("/panier/checkout/", **EN_TETE_HTMX)
 
-    assert booking_de(acheteur, location) is not None
+    booking = booking_de(acheteur, location)
+    assert booking is not None
+    assert not lieu.stripe.mock_create.called
+    ligne = LigneArticle.objects.get(booking=booking)
+    assert ligne.status == LigneArticle.VALID
+    assert ligne.payment_method == PaymentMethod.FREE
+
+
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+def test_ressource_a_prix_libre_sous_le_minimum_stripe_est_refusee(lieu, parcours):
+    """Ressource à prix libre (minimum 0 €), 0,30 € pour une heure, sous le minimum Stripe de
+    0,50 € : refusée avant le paiement, aucun booking créé. Sans panier, le formulaire
+    réaffiché donne la raison.
+    / Free-price resource, 0.30 € for one hour (below Stripe's minimum): refused before
+    payment, no booking; the direct form shows the reason."""
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    location = creer_ressource_avec_tarif(prix="0.00", prix_libre=True)
+
+    reponse = reserver_une_ressource(parcours, client, location, montant_libre="0.30")
+
+    assert booking_de(acheteur, location) is None
+    assert not lieu.stripe.mock_create.called
+    if parcours == SANS_PANIER:
+        # La langue de la page dépend du lieu : on cherche 0,50 (fr) ou 0.50 (en).
+        # / The page language depends on the venue: look for 0,50 (fr) or 0.50 (en).
+        page = reponse.content.decode()
+        message_d_erreur = page.split('data-testid="booking-error-msg">')[1].split("</div>")[0]
+        assert "0,50" in message_d_erreur or "0.50" in message_d_erreur
 
 
 def test_p2bis_billet_payant_a_zero_euro_pour_un_visiteur_anonyme(lieu):
@@ -2145,3 +2173,70 @@ def test_la_session_stripe_expire_apres_30_minutes(lieu, parcours):
 
     expiration = lieu.stripe.mock_create.call_args.kwargs["expires_at"]
     assert avant + 30 * 60 <= expiration <= apres + 32 * 60
+
+
+# --------------------------------------------------------------------------
+# Interface de la réservation d'une ressource et lien du panier
+# / Resource booking interface and cart link
+# --------------------------------------------------------------------------
+
+
+def test_le_panneau_de_reservation_d_une_ressource_s_intitule_reserver(lieu):
+    """Page d'une ressource : le panneau qui s'ouvre au clic sur un créneau s'intitule
+    « Réserver ».
+    / Resource page: the panel opened by a slot click is titled "Réserver"."""
+    client = client_connecte(creer_utilisateur())
+    location = creer_ressource_avec_tarif()
+
+    reponse = client.get(
+        f"/booking/{location.ressource.pk}/resource/", HTTP_ACCEPT_LANGUAGE="fr"
+    )
+
+    page = reponse.content.decode()
+    titre_du_panneau = page.split('id="bookingPanelLabel">')[1].split("</h5>")[0]
+    assert titre_du_panneau.strip() == "Réserver"
+
+
+def test_le_formulaire_d_une_ressource_a_un_seul_tarif_le_coche_d_office(lieu):
+    """Formulaire d'une ressource qui n'a qu'un tarif : ce tarif est déjà coché, et le
+    bouton de paiement direct s'intitule « Payer maintenant ».
+    / Form of a single-price resource: the price is pre-checked, the direct payment button
+    reads "Payer maintenant"."""
+    client = client_connecte(creer_utilisateur())
+    location = creer_ressource_avec_tarif()
+
+    reponse = client.get(
+        f"/booking/{location.ressource.pk}/book/",
+        {"start_datetime": location.debut_du_creneau.replace(tzinfo=None).isoformat()},
+        HTTP_ACCEPT_LANGUAGE="fr",
+        **EN_TETE_HTMX,
+    )
+
+    page = reponse.content.decode()
+    bouton_radio_du_tarif = page.split(f'id="price-{location.tarif.uuid}"')[1].split(
+        ">"
+    )[0]
+    assert "checked" in bouton_radio_du_tarif
+    bouton_payer = page.split('data-testid="resource-submit"')[1].split("</button>")[0]
+    assert "Payer maintenant" in bouton_payer
+
+
+@pytest.mark.parametrize("skin", ["reunion", "V2", "faire_festival"])
+def test_le_lien_du_panier_du_menu_est_decrit_par_sa_pastille(lieu, skin):
+    """Menu de chaque skin : le lien du panier s'appelle « Panier » et il est décrit par la
+    pastille #panier-badge-nav, que HTMX remplace après chaque ajout. Un lecteur d'écran
+    annonce donc le nombre d'articles à jour, en français.
+    / Every skin's menu: the cart link is named "Panier" and described by the badge that HTMX
+    replaces after each addition, so screen readers announce an up-to-date count."""
+    client = client_connecte(creer_utilisateur())
+    location = creer_ressource_avec_tarif()
+
+    with patch("BaseBillet.views.get_skin_courant", return_value=skin):
+        reponse = client.get(
+            f"/booking/{location.ressource.pk}/resource/", HTTP_ACCEPT_LANGUAGE="fr"
+        )
+
+    page = reponse.content.decode()
+    lien_du_panier = page.split('href="/panier/"')[1].split(">")[0]
+    assert 'aria-label="Panier"' in lien_du_panier
+    assert 'aria-describedby="panier-badge-nav"' in lien_du_panier

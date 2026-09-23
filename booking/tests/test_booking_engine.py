@@ -62,6 +62,7 @@ WEEK_MINUTES = 7 * 24 * 60   # 10 080 minutes
 
 def _make_resource(name, calendar, weekly_opening, capacity=1, horizon=28):
     from booking.models import Resource
+    from booking.tests.fabriques import creer_produit_de_ressource
 
     resource, _created = Resource.objects.get_or_create(
         name=f'{TEST_PREFIX} {name}',
@@ -70,6 +71,7 @@ def _make_resource(name, calendar, weekly_opening, capacity=1, horizon=28):
             'weekly_opening':       weekly_opening,
             'capacity':             capacity,
             'booking_horizon_days': horizon,
+            'product':              creer_produit_de_ressource(f'{TEST_PREFIX} {name}'),
         },
     )
     return resource
@@ -98,11 +100,15 @@ def _cleanup():
     Supprime toutes les données de test dans l'ordre correct (on_delete=PROTECT).
     / Deletes all test data in the correct order (on_delete=PROTECT).
     """
+    from BaseBillet.models import LigneArticle
     from booking.models import (
         Booking, Resource, OpeningEntry, WeeklyOpening,
         ClosedPeriod, Calendar,
     )
 
+    # Les lignes de vente des bookings (on_delete=PROTECT) partent d'abord.
+    # / Booking sale lines (on_delete=PROTECT) go first.
+    LigneArticle.objects.filter(booking__resource__name__startswith=TEST_PREFIX).delete()
     Booking.objects.filter(resource__name__startswith=TEST_PREFIX).delete()
     Resource.objects.filter(name__startswith=TEST_PREFIX).delete()
     OpeningEntry.objects.filter(
@@ -167,7 +173,7 @@ def _add_booking(resource, user, start_datetime,
         start_datetime=start_datetime,
         slot_duration_minutes=slot_duration_minutes,
         slot_count=slot_count,
-        status='confirmed',
+        status=Booking.PAID_BY_USER,
     )
 
 
@@ -1496,8 +1502,9 @@ def test_validate_booking_accepts_valid_slot():
                                start_time=datetime.time(10, 0),
                                slot_duration_minutes=60, slot_count=1)
 
-            is_valid, result = validate_new_booking(
+            is_valid, result, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
                 slot_duration_minutes=60,
                 slot_count=1,
@@ -1534,8 +1541,9 @@ def test_validate_booking_rejects_slot_beyond_horizon():
                                start_time=datetime.time(10, 0),
                                slot_duration_minutes=60, slot_count=1)
 
-            is_valid, error = validate_new_booking(
+            is_valid, error, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_FAR, datetime.time(10, 0)),
                 slot_duration_minutes=60,
                 slot_count=1,
@@ -1574,8 +1582,9 @@ def test_validate_booking_rejects_slot_in_closed_period():
             _add_closed_period(cal,
                                start_date=MONDAY_NEAR, end_date=MONDAY_NEAR)
 
-            is_valid, error = validate_new_booking(
+            is_valid, error, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
                 slot_duration_minutes=60,
                 slot_count=1,
@@ -1617,8 +1626,9 @@ def test_validate_booking_rejects_full_slot():
             _add_booking(resource, user, start_datetime=start_dt,
                          slot_duration_minutes=60, slot_count=1)
 
-            is_valid, error = validate_new_booking(
+            is_valid, error, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=start_dt,
                 slot_duration_minutes=60,
                 slot_count=1,
@@ -1655,8 +1665,9 @@ def test_validate_booking_slot_count_gt_1_all_slots_must_be_available():
                                start_time=datetime.time(10, 0),
                                slot_duration_minutes=60, slot_count=3)
 
-            is_valid, result = validate_new_booking(
+            is_valid, result, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
                 slot_duration_minutes=60,
                 slot_count=3,
@@ -1699,8 +1710,9 @@ def test_validate_booking_slot_count_gt_1_fails_if_one_slot_full():
                          start_datetime=start_dt + datetime.timedelta(minutes=60),
                          slot_duration_minutes=60, slot_count=1)
 
-            is_valid, error = validate_new_booking(
+            is_valid, error, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=start_dt,
                 slot_duration_minutes=60,
                 slot_count=3,
@@ -1740,8 +1752,9 @@ def test_validate_booking_slot_count_gt_1_fails_if_one_slot_in_closed_period():
                                start_date=MONDAY_NEAR + datetime.timedelta(days=1),
                                end_date=MONDAY_NEAR + datetime.timedelta(days=1))
 
-            is_valid, error = validate_new_booking(
+            is_valid, error, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(0, 0)),
                 slot_duration_minutes=1440,
                 slot_count=3,
@@ -1778,8 +1791,9 @@ def test_validate_booking_rejects_mismatched_slot_duration():
                                start_time=datetime.time(10, 0),
                                slot_duration_minutes=60, slot_count=1)
 
-            is_valid, error = validate_new_booking(
+            is_valid, error, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
                 slot_duration_minutes=30,
                 slot_count=1,
@@ -1816,8 +1830,9 @@ def test_validate_booking_rejects_start_time_not_aligned_to_opening():
                                start_time=datetime.time(10, 0),
                                slot_duration_minutes=60, slot_count=1)
 
-            is_valid, error = validate_new_booking(
+            is_valid, error, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 15)),
                 slot_duration_minutes=60,
                 slot_count=1,
@@ -1855,8 +1870,9 @@ def test_validate_booking_slot_count_gt_1_rejects_if_series_exceeds_opening():
                                start_time=datetime.time(10, 0),
                                slot_duration_minutes=60, slot_count=2)
 
-            is_valid, error = validate_new_booking(
+            is_valid, error, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
                 slot_duration_minutes=60,
                 slot_count=3,
@@ -1894,8 +1910,9 @@ def test_validate_booking_accepts_slot_bleeding_into_next_open_day():
                                start_time=datetime.time(23, 0),
                                slot_duration_minutes=120, slot_count=1)
 
-            is_valid, result = validate_new_booking(
+            is_valid, result, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(23, 0)),
                 slot_duration_minutes=120,
                 slot_count=1,
@@ -1936,8 +1953,9 @@ def test_validate_booking_rejects_slot_bleeding_into_closed_next_day():
             tuesday = MONDAY_NEAR + datetime.timedelta(days=1)
             _add_closed_period(cal, start_date=tuesday, end_date=tuesday)
 
-            is_valid, error = validate_new_booking(
+            is_valid, error, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(23, 0)),
                 slot_duration_minutes=120,
                 slot_count=1,
@@ -1981,8 +1999,9 @@ def test_validate_booking_accepts_slot_starting_in_a_few_minutes():
             # / « now » is 09:55 → the 10:00 slot starts in 5 minutes
             reference_now = _make_aware_dt(MONDAY_NEAR, datetime.time(9, 55))
 
-            is_valid, result = validate_new_booking(
+            is_valid, result, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
                 slot_duration_minutes=60,
                 slot_count=1,
@@ -2024,8 +2043,9 @@ def test_validate_booking_rejects_slot_that_has_already_started():
             # / « now » is 10:05 → the 10:00 slot has already started
             reference_now = _make_aware_dt(MONDAY_NEAR, datetime.time(10, 5))
 
-            is_valid, error = validate_new_booking(
+            is_valid, error, _url_stripe = validate_new_booking(
                 resource=resource,
+                price=resource.product.prices.get(),
                 start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
                 slot_duration_minutes=60,
                 slot_count=1,

@@ -10,7 +10,7 @@
         {% if user.is_authenticated %}
             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
                 {{ panier.count }}
-                <span class="visually-hidden">{% trans "items" %}</span>
+                <span class="visually-hidden">{% trans "articles" %}</span>
             </span>
         {% else %}
             {# Anonyme avec items en session : badge grise + cadenas #}

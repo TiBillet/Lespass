@@ -40,10 +40,11 @@ def creer_evenement_et_produit(
     """Crée un événement + un produit billetterie via l'API v2.
     / Creates an event + a ticketing product via API v2.
 
-    `category` : « Ticket booking » passe par un paiement Stripe, même à 0 €.
-    Une vraie réservation gratuite exige « Free booking » (tests/PIEGES.md, piège 12.16).
-    / "Ticket booking" goes through a Stripe payment, even at 0 €. A real free
-    reservation needs "Free booking".
+    `category` : « Ticket booking » passe par un paiement Stripe ; à 0 €, la réservation est
+    gratuite (pas de paiement) mais le catalogue Stripe est quand même appelé pour le tarif
+    vendu. « Free booking » ne touche jamais Stripe (tests/PIEGES.md, piège 12.16).
+    / "Ticket booking" goes through Stripe; at 0 € it is free (no payment) but the Stripe
+    catalogue is still called. "Free booking" never touches Stripe.
 
     Retourne (event_uuid, price_uuid).
     """

@@ -94,6 +94,9 @@ dire que le défaut existe aussi sans panier.
   finalise en gratuit. L'un des deux est faux.
 - **C22 — Prix libre entre 0,01 et 0,49 € : refusé en direct, accepté au panier**
   (`validators.py:503`), puis refusé par Stripe (minimum 0,50 €) → « Checkout failed ».
+  **Corrigé (2026-09-22)** : `materialiser` refuse un total entre 0,01 et 0,49 € avant Stripe
+  (message « 0 € ou au moins 0,50 € ») ; même règle ajoutée sans panier pour l'adhésion
+  (`MembershipValidator` + formulaire) et la ressource (`validate_new_booking`, sur le total).
 
 ### 1.2 Actions qui ne partent pas, en silence
 
@@ -133,9 +136,13 @@ dire que le défaut existe aussi sans panier.
 - **C20 — `add_ticket` accepte un événement passé, non publié ou archivé**
   (`services_panier.py:413-418`).
 - **C23 — Le panier ne contrôle pas `max_per_user` d'une adhésion**, le direct le fait
-  (`validators.py:894-902`).
+  (`validators.py:894-902`). **Corrigé (2026-09-22)** : `add_membership` (validation 5ter)
+  appelle les deux mêmes méthodes du modèle que `MembershipValidator` ; la limite du produit
+  compte aussi les adhésions au même produit déjà dans le panier
+  (`Product.max_per_user_reached(…, adhesions_deja_au_panier=…)`).
 - **C24 — Ressource à prix libre, montant 0 € : le panier échoue au checkout, le direct passe**
-  (`booking_engine.py:611`).
+  (`booking_engine.py:611`). **Corrigé (2026-09-22)** : seule l'absence de montant est
+  refusée (`Decimal("0")` est faux en Python) ; le créneau à 0 € finit gratuit.
 
 ### 1.5 Ordre, affichage, parcours
 
@@ -209,6 +216,13 @@ dire que le défaut existe aussi sans panier.
 - **C30 — `booking/tests/` est cassé.** Sa fixture crée des `Resource` sans produit, alors que
   ce champ est devenu obligatoire : 31 échecs et 1 erreur, tous `NotNullViolation` sur
   `product_id`. Invisible parce que `make test` ne lance que `tests/pytest/`.
+  **Corrigé (2026-09-22), tests seulement** : produit de ressource + tarif à 0 €
+  (`booking/tests/fabriques.py`) ; 18 appels de `validate_new_booking` au tarif et aux trois
+  valeurs rendues ; statut par défaut `WAITING_PAYMENT` (plus `'confirmed'`, aussi dans les
+  deux `_add_booking`) ; `test_timezone_slots.py` n'enregistre plus la vraie `Configuration`
+  (cache memcached partagé avec le serveur live, PIEGES 13.22) ; lignes de vente supprimées
+  avant les bookings au nettoyage ; `booking/tests/` ajouté au lancement par défaut de
+  `make test`. 99 passed.
 - **C31 — La récompense monnaie d'une adhésion part avant le commit.** `trigger_A` envoie
   `refill_from_lespass_to_user_wallet_from_price_solded` par `.delay()` (pas `on_commit`) ; la
   tâche attend 1 s puis relit la ligne, sans nouvel essai en cas d'échec. Si la transaction
@@ -260,6 +274,13 @@ dire que le défaut existe aussi sans panier.
   chaîne `"None"` dans `custom_amount` ; commentaire faux `services_panier.py:229` (« toutes
   users confondues ») ; un panier de billets seuls d'un utilisateur sans prénom ni nom donne une
   Commande sans nom.
+- Réservation de ressource (vu le 2026-09-22) : `booking/views/resource_day.html` n'est rendu
+  par aucune vue (la fonction `_render_resource_day_page()` citée dans son en-tête n'existe
+  pas) et garde le titre « Adhérer » ; dans `booking/partials/book_form.html`, la branche
+  « visiteur non connecté » (« Envoyer ma demande d'adhésion ») est inatteignable, car
+  `BookingViewSet.book()` renvoie les visiteurs non connectés vers `/`.
+  Le paramètre `race_condition` de `_build_resource_form_context` et le bloc
+  `{% if race_condition %}` de `book_form.html` ne servent plus (aucun appelant ne le passe).
 
 ### 1.7 Pièges pour écrire les tests (découverts à la lecture)
 
@@ -461,10 +482,10 @@ de mail tourne), billets `K`, adhésion `ONCE` + deadline, booking `PAID_BY_USER
 | P13 | adhésion récurrente : direct checkout en mode abonnement ; panier refus propre | vert |
 | P14 | SEPA : proposé pour une adhésion seule, refusé avec billet ou ressource | vert |
 | P15 | ressource payante : `PAID_BY_USER`, ligne `V`, montant = heures × tarif | vert |
-| P16 | ressource gratuite : panier ligne `V` `FREE` ; direct ligne reste `O` | divergent → à noter |
+| P16 | ressource gratuite : panier ligne `V` `FREE` ; direct ligne reste `O` | divergent → **corrigé (2026-09-22)** : ligne `V` `FREE` des deux côtés |
 | P17 | ressource : tarif adhérent sans adhésion ; tarif d'une autre ressource | **rouge des deux côtés** (C2, C15) |
 | P18 | double retour de paiement (retour puis rechargement) : rien en double, `paid_at` inchangé | vert |
-| P19 | adhésion : `max_per_user` ; stock du tarif | panier **rouge** (C23) ; stock **rouge des deux côtés** (C19) |
+| P19 | adhésion : `max_per_user` ; stock du tarif | panier **rouge** (C23) ; stock **rouge des deux côtés** (C19) → **corrigés** (C19, puis C23 le 2026-09-22 : limite du tarif, du produit, et deux tarifs du même produit dans le panier) |
 | P20 | formulaire : newsletter, champs requis, multi-sélection | panier **rouge** (C18) |
 
 La course « webhook et retour navigateur en même temps » n'est pas testable sous le wrapper :
@@ -652,6 +673,11 @@ Une mutation qui fait rougir une **autre** assertion que celle visée → vérif
 | 10. Décisions C25, C20, C28, C31 | Corrigées (§2.2bis) ; `make test` : 1596 passed, 4 skipped, 9 xfailed, 0 échec ; `make test-stripe` : 1601 passed ; mutations pytest 56/56 ; mutation E2E de E1 détectée |
 | 11. Relecture finale Opus + Fable | Corrigés : quantité très négative, SEPA avec réservation gratuite, `trigger_B` en `on_commit` ; C20 révisé selon les réponses du mainteneur (sans fin : + 24 h, dépublié réservable, API/caisse : règle de date seule) |
 | 12. Clôture finale (2026-09-22) | `make test` : 1609 passed, 4 skipped, 9 xfailed, 0 échec ; E2E du panier 6/6 ; mutations pytest 62/62, empreintes vérifiées |
+| 13. Interface (2026-09-22) | Ressource (titre, bouton, tarif unique) et lien du panier des 3 menus ; 3 tests (5 cas) vus rouges étape par étape ; `make test` : 1656 passed, 4 skipped, 4 xfailed, 0 échec ; `make e2e` du panier : 4 passed, 2 ignorés (Stripe réel) |
+| 14. P16 (2026-09-22) | Booking gratuit direct : ligne de vente passée à « validée » en « offert », comme au panier (`booking_engine.validate_new_booking`) ; xfail retiré ; `make test` : 1657 passed, 4 skipped, 3 xfailed, 0 échec |
+| 15. C24, C22 (2026-09-22) | C24 : 0 € accepté au panier ; C22 : total 0,01-0,49 € refusé avant Stripe (panier), adhésion et ressource sans panier aussi (serveur ; formulaire d'adhésion) ; affichage de la vraie raison d'un refus de ressource sans panier ; xfail retirés ; parité + Commande + vues du panier : 261 passed, 1 xfailed (C23) ; E2E adhésion prix libre et validations : 5 passed ; formulaire d'adhésion vérifié dans Chromium (tarif unique et plusieurs tarifs) |
+| 16. C23 (2026-09-22) | Maximum d'adhésions par personne contrôlé au panier (base + panier) ; 2 tests neufs vus rouges ; plus aucun xfail. Fin de B : `make test` 1667 passed, 4 skipped, 0 xfailed, 0 échec ; `make e2e` du panier 4 passed, 2 ignorés (Stripe réel) |
+| 17. C30 (2026-09-22) | `booking/tests/` réparé (tests seulement) et ajouté à `make test` : 99 passed ; aucune donnée laissée, fuseau du lieu intact. `make test` (deux dossiers ensemble) : 1765 passed, 1 échec réseau passager (DNS de `api.stripe.com`, test repassé seul) |
 | 8. Clôture (avant C27) | `make test` : 1524 passed, 4 skipped, 19 xfailed, 0 échec ; `make test-stripe` : 1527 passed, 19 xfailed, 1 échec hors sujet (`test_events_list` : `ReadTimeout` du serveur live, passe seul en 9,7 s pour une limite de 10 s) ; `make e2e-stripe` sur `test_panier_flow.py` : 6/6 ; couverture d'arrivée : §6.4 |
 
 Chaque `xfail` a été vérifié avec `--runxfail` : il échoue pour la raison écrite dans sa marque,
@@ -660,17 +686,24 @@ et `raises=` fixe l'exception attendue.
 ### Fichiers de production modifiés
 
 `BaseBillet/services_panier.py` (C3, C12, C15/C2 dans `add_resource`, newsletter, méthode
-`_adhesion_obligatoire_en_base_ou_dans_le_panier`, C20), `BaseBillet/services_commande.py`
+`_adhesion_obligatoire_en_base_ou_dans_le_panier`, C20, C23 : validation 5ter de
+`add_membership`), `BaseBillet/services_commande.py`
 (C10, C13, newsletter, code promo par produit, prix libre redevenu fixe, `_finaliser_gratuit`
 seul juge du statut gratuit au panier, billets à 0 € via « payée »), `BaseBillet/validators.py`
 (C5, C21 : paiement décidé une fois par réservation, `valider_une_reservation_a_zero_euro` ;
 C27 dans `method_F` ; caisse mixte ; quantité bornée ; C20 ; C28), `BaseBillet/models.py`
-(`Event.n_est_plus_en_vente`), `BaseBillet/signals.py` (réservations de la Commande validées
+(`Event.n_est_plus_en_vente` ; C23 : paramètre `adhesions_deja_au_panier` de
+`Product.max_per_user_reached`), `BaseBillet/signals.py` (réservations de la Commande validées
 au paiement), `BaseBillet/triggers.py` (C31), `BaseBillet/views.py` (C17, C18 code inconnu,
 code d'un produit non choisi, newsletter, quantité bornée), `BaseBillet/context_processors.py`
 + `panier_item.html` (C16), `pages/templates/pages/faire_festival/partials/navbar.html` (C25),
 `booking/booking_engine.py` (C2, C15, tarif dépublié / produit archivé dans
-`validate_new_booking`), `api_v2/serializers.py` (une ligne de vente par tarif),
+`validate_new_booking` ; P16 : ligne du booking gratuit direct validée ; C24 ; montant
+calculé avant la transaction, minimum Stripe sans panier), `booking/views.py` (vraie raison
+d'un refus affichée), `commun/adhesion/form.html` (minimum Stripe, zone de message, champ du
+tarif unique en `type="hidden"`), `booking/views/resource.html` + `booking/partials/book_form.html`
+(titre, bouton, tarif unique), menus classic / V2 / Faire Festival + `panier_badge.html`
+(nom accessible du lien du panier), `api_v2/serializers.py` (une ligne de vente par tarif),
 `Administration/management/commands/demo_data_v2.py`, `tests/e2e/conftest.py`, `Makefile`,
 `scripts/lancer_tests.sh`, `pyproject.toml`, `poetry.lock`.
 
@@ -686,9 +719,24 @@ code d'un produit non choisi, newsletter, quantité bornée), `BaseBillet/contex
   Les autres messages ajoutés réutilisent des msgids existants.
 - 4 utilisateurs `test+panier…@mock.test` créés avant cette session (12 h 15-12 h 59 UTC),
   inactifs : non supprimés.
-- `booking/tests/` cassé (C30) ; gabarit `booking/views/book.html` absent (C29).
+- `booking/tests/` cassé (C30, **corrigé le 2026-09-22** et inclus dans `make test`) ;
+  gabarit `booking/views/book.html` absent (C29, classé).
 - Panneau de réservation de ressource titré « Adhérer », bouton « Pay now » non traduit,
-  tarif unique non présélectionné (vu en E2E).
+  tarif unique non présélectionné (vu en E2E). **Corrigé (2026-09-22)** : « Réserver »,
+  « Payer maintenant » (chaînes déjà traduites), tarif unique coché par
+  `forloop.first and forloop.last` (la variable `published_prices_count` n'était fournie par
+  aucune vue).
+- Réservation de ressource sans panier (corrigé le 2026-09-22) : tout refus de
+  `validate_new_booking` (tarif réservé aux adhérents, tarif d'une autre ressource, créneau
+  commencé…) s'affichait sous le message « Un créneau a été réservé entre temps »
+  (`race_condition=True` passé à chaque échec) ; la vraie raison est maintenant affichée.
+- Formulaire d'adhésion à UN tarif libre (corrigé le 2026-09-22) : le JavaScript cherchait
+  `input[name="price"][type="hidden"]` alors que le champ était `<input hidden …>` : la
+  validation du montant ne tournait jamais. Champ passé en `type="hidden"`.
+- Réservation de ressource (vu le 2026-09-22) : aucun mail de confirmation, payée ou gratuite,
+  avec ou sans panier (`Booking` n'a pas de machine à états, `signals.py` : bloc commenté ;
+  `trigger_C` ne fait que changer les statuts). Seule l'annulation envoie un mail
+  (`send_booking_cancellation_user`, appelé par la vue d'annulation).
 - Récompense monnaie : un adhérent sans portefeuille Fedow la reçoit-il ? L'E2E existant et E6
   créent le portefeuille avant (question ouverte, parcours direct compris).
 - Deux produits `FREERES` dans une même réservation directe : billets et webhook envoyés deux
@@ -705,7 +753,10 @@ code d'un produit non choisi, newsletter, quantité bornée), `BaseBillet/contex
   validation en base quand le panier gratuit est matérialisé (préexistant, même classe que
   C31).
 - Menu : l'`aria-label` pluriel « Cart (n items) » n'a pas de traduction française (classic,
-  V2 et Faire Festival).
+  V2 et Faire Festival), et son nombre restait figé après un ajout HTMX (seule la pastille
+  est remplacée). **Corrigé (2026-09-22)** : `aria-label="Panier"` +
+  `aria-describedby="panier-badge-nav"` (la pastille, remplacée avec le même id, décrit le
+  lien) ; « items » → « articles » (chaîne déjà traduite).
 - Relecture Fable n° 5 (ordre des produits non garanti) écartée : `post_save_Product` donne au
   nouveau produit un poids = nombre de produits + 1. Relecture Opus n° 7 (ordre du panier en
   session après une erreur) : sans conséquence, non traité.
@@ -716,7 +767,31 @@ code d'un produit non choisi, newsletter, quantité bornée), `BaseBillet/contex
   les schémas suivants VIDES (11 réparés à la main, avec l'accord du mainteneur).
   `test_pages_api.test_http_isolation_cross_tenant` choisit « le premier lieu par ordre
   alphabétique » : il peut tomber sur un de ces lieux vides.
+- Liste de l'API v2 (`GET /api/v2/events/`) : 5 requêtes SQL par événement (adresse, tags,
+  2 × options par `values_list`, domaine du lieu relu pour chaque image) → 10,5 s pour
+  1 557 événements, au-delà du délai des tests. **Corrigé (2026-09-22)** : préchargement
+  (`select_related` / `prefetch_related`), lecture par `.all()`, domaine lu une fois par
+  liste → nombre de requêtes constant (28 pour 210 événements, 0,27 s). La liste renvoie
+  toujours TOUS les événements publiés, passés compris, sans pagination.
+- Événements de test accumulés dans `lespass` : `test_stripe_refund.py` (14 par exécution,
+  seules les lignes de vente sont nettoyées) et `test_event_create.py` (1 par exécution,
+  jamais supprimé). 1 347 événements purgés le 2026-09-22 avec l'accord du mainteneur
+  (script à blanc d'abord, garde-fou DEBUG+TEST) ; les deux tests continuent d'en laisser.
+  **Décision du mainteneur (2026-09-23) : ça ne le gêne pas, on ne nettoie pas.** La liste
+  de l'API ne ralentit plus (requêtes constantes), et une purge reste possible au besoin.
+- Serveur ASGI (Daphne) : à la fin d'une requête abandonnée, Django ferme le client
+  memcached ; une autre requête qui l'utilise au même moment plante
+  (`'NoneType' object has no attribute 'recv'` dans `Event.save()` → `cache.delete`). Vu en
+  dev pendant les listes trop longues ; possible en production si le HTTP passe par ASGI.
 - `test_events_list.py` frôle son délai de 10 s (réponse en 9,7 s) : il échoue au hasard
   quand le serveur live est chargé.
+- Inventaire des tests (2026-09-23) : `make test` lance `tests/pytest/` et `booking/tests/`
+  (1765 passed, 1770 avec `make test-stripe`). Ne sont lancés par aucune cible :
+  `onboard/tests/` (~74 tests, consomment des lieux du pool « en attente » ; lançables par
+  `make test ARGS="onboard/tests/"` — à décider), `tests/django_test/` (4 tests
+  `django.test.TestCase`, écrits pour `manage.py test`), `controlvanne/Pi/tests/` (matériel,
+  tourne sur le Raspberry Pi), `fedow_connect/tests.py` (1 test hérité).
+  `BaseBillet/test_error_views.py` n'est pas un fichier de tests mais deux vues d'erreur :
+  un `pytest` lancé à la racine les collecterait. Détail dans `tests/README.md`.
 - Non relancée après la relecture : la suite E2E complète (`e2e_slugs` a changé : seules les
   clés du panier sont concernées, et les E2E du panier passent).

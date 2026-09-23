@@ -62,9 +62,7 @@ DEPENDENCIES :
     <!-- booking panel -->
     <div class="offcanvas-start offcanvas" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="bookingPanelLabel">
-                {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
-                    {% translate 'Subscribe' %}{% endif %}</h5>
+            <h5 class="offcanvas-title" id="bookingPanelLabel">{% translate "Réserver" %}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
                     aria-label="{% translate 'Close' %}"></button>
         </div>

@@ -1309,7 +1309,7 @@ class Product(models.Model):
         help_text=_("Limit the quantity per user. Leave this field blank if the number is unlimited.")
     )
 
-    def max_per_user_reached(self, user, event=None) -> bool:
+    def max_per_user_reached(self, user, event=None, adhesions_deja_au_panier=0) -> bool:
         if not self.max_per_user:
             return False  # Aucune limite
 
@@ -1317,8 +1317,11 @@ class Product(models.Model):
             # Adhésion : comptent les adhésions encore valides pour CE produit ET
             # celles déjà engagées mais pas encore payées, qui n'ont pas de deadline
             # (cf. Membership.STATUTS_EN_COURS). Les annulées ne comptent jamais.
+            # `adhesions_deja_au_panier` : adhésions à ce produit déjà dans le panier de la
+            # personne, pas encore en base (PanierSession.add_membership).
             # / Counts still-valid memberships for THIS product AND committed but
             #   unpaid ones, which have no deadline yet. Canceled never count.
+            #   `adhesions_deja_au_panier`: same-product memberships already in the cart.
             return (
                     user.memberships.filter(price__product__pk=self.pk)
                     .filter(
@@ -1327,6 +1330,7 @@ class Product(models.Model):
                     )
                     .exclude(status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED])
                     .count()
+                    + adhesions_deja_au_panier
                     >= self.max_per_user
             )
 

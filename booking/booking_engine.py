@@ -560,6 +560,35 @@ def validate_new_booking(resource,
         if not adhesion_active and not adhesion_dans_la_meme_commande:
             return False, str(_("Ce tarif est réservé aux adhérents.")), None
 
+    # Montant du créneau : tarif horaire (ou montant libre saisi) × durée réservée.
+    # Il est calculé avant la transaction : un refus ne crée rien en base.
+    # / Slot amount: hourly price (or typed free amount) × booked duration. Computed before
+    # the transaction, so a refusal writes nothing.
+    if price.prix is None:
+        raise serializers.ValidationError(
+            _("Price amount is missing for resource booking.")
+        )
+
+    price_to_compute = price.prix
+    if price.free_price:
+        # Seule l'absence de montant est refusée. On ne teste pas « if not
+        # custom_amount » : le panier transmet un Decimal, et Decimal("0") est faux
+        # en Python. Un montant de 0 € est valable quand le minimum du tarif est 0 €.
+        # / Only a missing amount is refused: Decimal("0") is falsy, and 0 € is valid
+        # when the price minimum is 0 €.
+        if custom_amount is None or custom_amount == "":
+            raise serializers.ValidationError(_("Custom amount is required for free price."))
+        price_to_compute = custom_amount
+
+    amount = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
+
+    # Sans panier, ce créneau est payé seul : Stripe refuse un paiement entre 0,01 € et
+    # 0,49 €. Au panier (create_checkout=False), la Commande contrôle son total.
+    # / Direct flow: this slot is paid alone and Stripe refuses 0.01-0.49 €. In the cart,
+    # the Commande checks its total.
+    if create_checkout and Decimal("0") < amount < Decimal("0.50"):
+        return False, str(_("The amount must be 0 (free) or at least €0.50.")), None
+
     last_slot_end_dt = start_datetime + datetime.timedelta(
         minutes=slot_duration_minutes * slot_count
     )
@@ -639,21 +668,6 @@ def validate_new_booking(resource,
             )
 
 
-            # Verifie que le prix n'est pas vide avant de calculer le montant.
-            # / Verify price is not empty before computing amount.
-            if price.prix is None:
-                raise serializers.ValidationError(
-                    _("Price amount is missing for resource booking.")
-                )
-
-            price_to_compute = price.prix
-            if price.free_price:
-                if not custom_amount:
-                    raise serializers.ValidationError(_("Custom amount is required for free price."))
-                price_to_compute = custom_amount
-
-            amount = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
-
             price_sold = get_or_create_price_sold(price=price, promo_code=promo_code, custom_amount=amount)
 
 
@@ -680,7 +694,7 @@ def validate_new_booking(resource,
         pgcode = getattr(cause, 'pgcode', None) or getattr(cause, 'sqlstate', None)
         if pgcode == '40001':
             return False, str(_(
-                'This slot was just booked by another user. Please try again.'
+                "Un créneau a été réservé entre temps. Vérifiez les disponibilités ci-dessous."
             )), None
         raise
 
@@ -696,8 +710,15 @@ def validate_new_booking(resource,
 
             checkout_url = get_checkout_stripe(new_booking)
         else:
+            # Réservation gratuite : pas de Stripe. La ligne de vente passe directement à
+            # « validée » en « offert », comme au panier (CommandeService._finaliser_gratuit).
+            # Elle ne passe pas par « payée » : trigger_C mettrait le booking gratuit en
+            # « payé par l'utilisateur ».
+            # / Free booking: no Stripe. The line goes straight to VALID as FREE, like the
+            # cart; not through PAID (trigger_C would set the booking PAID_BY_USER).
             new_booking.status = Booking.FREERES_USERACTIV
             ligne_article.payment_method = PaymentMethod.FREE
+            ligne_article.status = LigneArticle.VALID
             new_booking.save()
             ligne_article.save()
 

@@ -125,19 +125,22 @@
                     <!-- Lien vers le panier, avec son compteur.
                          #panier-badge-nav est remplacé (hx-swap-oob) par
                          htmx/components/panier_badge.html après chaque action sur le panier.
-                         / Cart link with its counter, replaced out-of-band after cart actions. -->
+                         Le lien est décrit par ce compteur (aria-describedby) : un lecteur
+                         d'écran annonce « Panier » puis le nombre d'articles à jour.
+                         / Cart link with its counter, replaced out-of-band after cart actions.
+                         The link is described by the counter, so screen readers hear the current count. -->
                     <a class="btn bouton-pilule bg-white texte-bleu text-center position-relative me-md-2 mb-2 mb-md-0"
                        href="/panier/"
                        hx-get="/panier/" hx-target="body" hx-push-url="true"
                        title="{% translate 'Your cart' %}"
-                       aria-label="{% blocktrans count n=panier.count %}Cart ({{ n }} item){% plural %}Cart ({{ n }} items){% endblocktrans %}">
+                       aria-label="{% translate 'Cart' %}" aria-describedby="panier-badge-nav">
                         <i class="bi bi-bag me-1" aria-hidden="true"></i>
                         {% translate 'Cart' %}
                         <span id="panier-badge-nav">
                             {% if panier.count > 0 %}
                                 <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
                                     {{ panier.count }}
-                                    <span class="visually-hidden">{% translate "items" %}</span>
+                                    <span class="visually-hidden">{% translate "articles" %}</span>
                                 </span>
                             {% endif %}
                         </span>

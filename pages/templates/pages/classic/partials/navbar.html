@@ -86,10 +86,13 @@
             </button>
           </div>
             <div class="nav-item">
+                {# Le lien est décrit par le compteur #panier-badge-nav (aria-describedby) : un #}
+                {# lecteur d'écran annonce « Panier » puis le nombre d'articles à jour. #}
+                {# / The link is described by the counter, so screen readers hear the current count. #}
                 <a class="nav-link position-relative" href="/panier/"
                    hx-get="/panier/" hx-target="body" hx-push-url="true"
                    title="{% trans 'Your cart' %}"
-                   aria-label="{% blocktrans count n=panier.count %}Cart ({{ n }} item){% plural %}Cart ({{ n }} items){% endblocktrans %}">
+                   aria-label="{% translate 'Cart' %}" aria-describedby="panier-badge-nav">
                     <i class="bi bi-bag" aria-hidden="true"></i>
                     <span class="d-xl-none">{% trans "Cart" %}</span>
                     {# Badge compteur — rendu direct en Django (pas de OOB ici). #}
@@ -100,7 +103,7 @@
                 {% if panier.count > 0 %}
                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
                     {{ panier.count }}
-                    <span class="visually-hidden">{% trans "items" %}</span>
+                    <span class="visually-hidden">{% trans "articles" %}</span>
                   </span>
                 {% endif %}
               </span>
