@@ -256,12 +256,15 @@ def facturer_tirage(
             restant_centimes -= montant_asset
 
         if restant_centimes > 0:
-            # Solde insuffisant pour couvrir le montant total — ne devrait pas
-            # arriver si authorize() a correctement calculé allowed_ml.
-            # / Insufficient balance to cover total — shouldn't happen if
-            # authorize() correctly computed allowed_ml.
+            # Solde insuffisant pour couvrir le montant total. Arrive des que le
+            # volume envoye depasse allowed_ml : le Pi ne controle le plafond
+            # qu'une fois par seconde et deborde de quelques dizaines de ml.
+            # / Insufficient balance. Happens as soon as the reported volume
+            # exceeds allowed_ml: the Pi only checks the cap once per second.
             raise SoldeInsuffisant(
-                f"Solde insuffisant au pour_end: manque {restant_centimes} centimes"
+                solde_actuel_en_centimes=montant_centimes - restant_centimes,
+                montant_demande_en_centimes=montant_centimes,
+                asset_name="cascade",
             )
         # Volume en centilitres pour weight_quantity (unité stock = cl)
         # / Volume in centiliters for weight_quantity (stock unit = cl)
