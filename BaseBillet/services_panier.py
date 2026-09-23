@@ -326,8 +326,17 @@ class PanierSession:
     # --- Internal: session read/write ---
 
     def _load(self):
-        """Charge ou initialise la structure du panier.
-        / Loads or initializes the cart structure."""
+        """Charge la structure du panier en mémoire, SANS rien écrire en session.
+        / Loads the cart structure in memory, WITHOUT writing to the session.
+
+        Écrire ici, même une structure vide, marquerait la session comme modifiée. Django
+        créerait alors une ligne de session et poserait un cookie pour CHAQUE visiteur, robots
+        compris, dès la première page : le context processor construit le panier à chaque
+        rendu. La session n'est écrite qu'au premier ajout, par `_save()`.
+        / Writing here, even an empty structure, would mark the session modified: Django would
+        create a session row and a cookie for EVERY visitor from the first page. Only `_save()`
+        writes to the session.
+        """
         data = self.session.get(self.SESSION_KEY)
         if not data or not isinstance(data, dict):
             data = {
@@ -335,8 +344,6 @@ class PanierSession:
                 'promo_code_name': None,
                 'created_at': timezone.now().isoformat(),
             }
-            self.session[self.SESSION_KEY] = data
-            self.session.modified = True
         self._data = data
 
     def _save(self):
@@ -540,7 +547,12 @@ class PanierSession:
                 amount_dec = Decimal(str(custom_amount))
             except Exception:
                 raise InvalidItemError(_("Invalid amount."))
-            if price.prix and amount_dec < price.prix:
+            # Le minimum d'un tarif à prix libre peut valoir 0 € : on compare TOUJOURS, sans
+            # tester « if price.prix » d'abord. Decimal("0") est faux en Python : ce test laissait
+            # passer les montants négatifs, qui rendaient la commande gratuite.
+            # / A free price minimum can be 0 €: always compare. Decimal("0") is falsy in Python,
+            # so testing it first let negative amounts through and made the order free.
+            if amount_dec < price.prix:
                 raise InvalidItemError(
                     _("The amount must be greater than or equal to the minimum.")
                 )
@@ -750,7 +762,12 @@ class PanierSession:
                 amount_dec = Decimal(str(custom_amount))
             except Exception:
                 raise InvalidItemError(_("Invalid amount."))
-            if price.prix and amount_dec < price.prix:
+            # Le minimum d'un tarif à prix libre peut valoir 0 € : on compare TOUJOURS, sans
+            # tester « if price.prix » d'abord. Decimal("0") est faux en Python : ce test laissait
+            # passer les montants négatifs, qui rendaient la commande gratuite.
+            # / A free price minimum can be 0 €: always compare. Decimal("0") is falsy in Python,
+            # so testing it first let negative amounts through and made the order free.
+            if amount_dec < price.prix:
                 raise InvalidItemError(
                     _("The amount must be greater than or equal to the minimum.")
                 )
@@ -888,7 +905,12 @@ class PanierSession:
                 custom_amount_dec = Decimal(str(custom_amount))
             except Exception:
                 raise InvalidItemError(_("Invalid amount."))
-            if price.prix and custom_amount_dec < price.prix:
+            # Le minimum d'un tarif à prix libre peut valoir 0 € : on compare TOUJOURS, sans
+            # tester « if price.prix » d'abord. Decimal("0") est faux en Python : ce test laissait
+            # passer les montants négatifs, qui rendaient la commande gratuite.
+            # / A free price minimum can be 0 €: always compare. Decimal("0") is falsy in Python,
+            # so testing it first let negative amounts through and made the order free.
+            if custom_amount_dec < price.prix:
                 raise InvalidItemError(
                     _("The amount must be greater than or equal to the minimum.")
                 )

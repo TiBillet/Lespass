@@ -603,7 +603,12 @@ class ReservationValidator(serializers.Serializer):
                                     })
 
                                 # Validation du montant minimum / Minimum amount validation
-                                if price.prix and amount < price.prix:
+                                # Le minimum d'un tarif à prix libre peut valoir 0 € : on compare TOUJOURS, sans
+                                # tester « if price.prix » d'abord. Decimal("0") est faux en Python : ce test laissait
+                                # passer les montants négatifs, qui rendaient la commande gratuite.
+                                # / A free price minimum can be 0 €: always compare. Decimal("0") is falsy in Python,
+                                # so testing it first let negative amounts through and made the order free.
+                                if amount < price.prix:
                                     raise serializers.ValidationError({
                                         custom_amount_key: [_('The amount must be greater than the minimum amount.')]
                                     })
@@ -1022,7 +1027,12 @@ class MembershipValidator(serializers.Serializer):
                 raise serializers.ValidationError(_('The amount must be 0 (free) or at least €0.50.'))
 
             # Validation du montant minimum / Minimum amount validation
-            if self.price.prix and amount < self.price.prix:
+            # Le minimum d'un tarif à prix libre peut valoir 0 € : on compare TOUJOURS, sans
+            # tester « if price.prix » d'abord. Decimal("0") est faux en Python : ce test laissait
+            # passer les montants négatifs, qui rendaient la commande gratuite.
+            # / A free price minimum can be 0 €: always compare. Decimal("0") is falsy in Python,
+            # so testing it first let negative amounts through and made the order free.
+            if amount < self.price.prix:
                 logger.info(f"Open price {amount} below minimum {self.price.prix}")
                 raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
 

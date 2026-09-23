@@ -416,6 +416,43 @@ def test_p3_billet_prix_libre_sous_le_minimum_est_refuse(lieu, parcours):
 
 
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+def test_p3_billet_prix_libre_negatif_est_refuse(lieu, parcours):
+    """Prix libre dont le minimum est 0 €, montant saisi -20 € : refusé, aucune réservation.
+    Un montant négatif rendrait la commande gratuite (total ≤ 0) et enverrait les billets.
+    / Free price with a 0 € minimum, -20 € typed: refused, no reservation. A negative amount
+    would make the whole order free and send the tickets."""
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    concert = creer_evenement_avec_tarif(prix="0.00", prix_libre=True)
+
+    reponse = reserver_des_billets(
+        parcours,
+        client,
+        acheteur,
+        concert.evenement,
+        {concert.tarif: 1},
+        montants_libres={concert.tarif: "-20.00"},
+    )
+
+    verifier_un_refus_propre(parcours, reponse)
+    assert reservation_de(acheteur, concert.evenement) is None
+
+
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+def test_p10_adhesion_prix_libre_negative_est_refusee(lieu, parcours):
+    """Adhésion à prix libre dont le minimum est 0 €, montant saisi -20 € : refusée, aucune
+    adhésion créée.
+    / Free-price membership with a 0 € minimum, -20 € typed: refused, no membership."""
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    adhesion = creer_adhesion(prix="0.00", prix_libre=True)
+
+    adherer(parcours, client, acheteur, adhesion.tarif, montant_libre="-20.00")
+
+    assert adhesion_de(acheteur, adhesion) is None
+
+
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
 def test_p3_billet_prix_libre_sous_le_minimum_stripe_est_refuse(lieu, parcours):
     """Prix libre à 0,30 € (sous le minimum Stripe de 0,50 €) : refusé avant le paiement.
     / Free price at 0.30 € (below Stripe's 0.50 € minimum): refused before payment."""

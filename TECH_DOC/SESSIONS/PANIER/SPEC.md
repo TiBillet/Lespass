@@ -678,6 +678,8 @@ Une mutation qui fait rougir une **autre** assertion que celle visée → vérif
 | 15. C24, C22 (2026-09-22) | C24 : 0 € accepté au panier ; C22 : total 0,01-0,49 € refusé avant Stripe (panier), adhésion et ressource sans panier aussi (serveur ; formulaire d'adhésion) ; affichage de la vraie raison d'un refus de ressource sans panier ; xfail retirés ; parité + Commande + vues du panier : 261 passed, 1 xfailed (C23) ; E2E adhésion prix libre et validations : 5 passed ; formulaire d'adhésion vérifié dans Chromium (tarif unique et plusieurs tarifs) |
 | 16. C23 (2026-09-22) | Maximum d'adhésions par personne contrôlé au panier (base + panier) ; 2 tests neufs vus rouges ; plus aucun xfail. Fin de B : `make test` 1667 passed, 4 skipped, 0 xfailed, 0 échec ; `make e2e` du panier 4 passed, 2 ignorés (Stripe réel) |
 | 17. C30 (2026-09-22) | `booking/tests/` réparé (tests seulement) et ajouté à `make test` : 99 passed ; aucune donnée laissée, fuseau du lieu intact. `make test` (deux dossiers ensemble) : 1765 passed, 1 échec réseau passager (DNS de `api.stripe.com`, test repassé seul) |
+| 18. Relectures Fable + Opus (2026-09-23) | Montant libre NÉGATIF accepté quand le minimum du tarif vaut 0 € (`if price.prix and …` : `Decimal("0")` est faux) → commande gratuite. Corrigé aux 5 endroits (`add_ticket`, `add_membership`, `add_resource`, `ReservationValidator`, `MembershipValidator`), 2 tests de parité vus rouges. Restent à traiter : session créée pour chaque visiteur anonyme, N+1 du panier sur toutes les pages, `select_related("parent")` de l'API v2, montant libre non validé dans la réservation directe de ressource, points cosmétiques |
+| 19. Session anonyme (2026-09-23) | `PanierSession._load` n'écrit plus rien : un visiteur anonyme ne reçoit plus de `sessionid` (vérifié sur le serveur live) et ne crée plus de ligne `django_session`. Vérifié avant : aucun autre lecteur de la clé `panier`, `created_at` jamais lu, CSRF hors session (`CSRF_USE_SESSIONS` commenté), parcours « connectez-vous » entièrement côté navigateur, chaque modification appelle déjà `_save()`. Test : un GET anonyme ne pose pas de cookie de session |
 | 8. Clôture (avant C27) | `make test` : 1524 passed, 4 skipped, 19 xfailed, 0 échec ; `make test-stripe` : 1527 passed, 19 xfailed, 1 échec hors sujet (`test_events_list` : `ReadTimeout` du serveur live, passe seul en 9,7 s pour une limite de 10 s) ; `make e2e-stripe` sur `test_panier_flow.py` : 6/6 ; couverture d'arrivée : §6.4 |
 
 Chaque `xfail` a été vérifié avec `--runxfail` : il échoue pour la raison écrite dans sa marque,
@@ -785,10 +787,11 @@ tarif unique en `type="hidden"`), `booking/views/resource.html` + `booking/parti
   dev pendant les listes trop longues ; possible en production si le HTTP passe par ASGI.
 - `test_events_list.py` frôle son délai de 10 s (réponse en 9,7 s) : il échoue au hasard
   quand le serveur live est chargé.
-- Inventaire des tests (2026-09-23) : `make test` lance `tests/pytest/` et `booking/tests/`
+- Inventaire des tests (2026-09-23) : `make test` lance `tests/pytest/`, `booking/tests/` et
+  `onboard/tests/` (ajouté le 2026-09-23 : 76 passed, 2 skipped ; il consomme des lieux du
+  pool « en attente », donc suite à lancer base au repos)
   (1765 passed, 1770 avec `make test-stripe`). Ne sont lancés par aucune cible :
-  `onboard/tests/` (~74 tests, consomment des lieux du pool « en attente » ; lançables par
-  `make test ARGS="onboard/tests/"` — à décider), `tests/django_test/` (4 tests
+  `tests/django_test/` (4 tests
   `django.test.TestCase`, écrits pour `manage.py test`), `controlvanne/Pi/tests/` (matériel,
   tourne sur le Raspberry Pi), `fedow_connect/tests.py` (1 test hérité).
   `BaseBillet/test_error_views.py` n'est pas un fichier de tests mais deux vues d'erreur :

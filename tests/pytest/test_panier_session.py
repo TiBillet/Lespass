@@ -22,6 +22,7 @@ from django_tenants.utils import tenant_context
 from fabriques_panier import (
     ajouter_un_tarif,
     catalogue_stripe_simule,
+    client_connecte,
     configuration_modifiee,
     creer_adhesion,
     creer_evenement_avec_tarif,
@@ -808,6 +809,24 @@ def test_add_membership_refuse_les_adhesions_hors_panier(lieu, sorte_d_adhesion)
 
     with pytest.raises(InvalidItemError):
         panier.add_membership(adhesion.tarif.uuid)
+
+
+def test_un_visiteur_anonyme_ne_recoit_pas_de_cookie_de_session(lieu):
+    """Un visiteur anonyme qui ouvre une page n'a pas de panier : le simple affichage ne doit
+    lui créer ni session en base, ni cookie. Le panier n'écrit en session qu'au premier ajout,
+    et les ajouts exigent la connexion.
+    / An anonymous visitor browsing a page gets no session and no cookie: the cart only writes
+    to the session on the first add, and adds require login."""
+    from django.contrib.sessions.models import Session
+
+    client = client_connecte()
+    sessions_avant = Session.objects.count()
+
+    reponse = client.get("/")
+
+    assert reponse.status_code in (200, 301, 302)
+    assert "sessionid" not in reponse.cookies
+    assert Session.objects.count() == sessions_avant
 
 
 def test_add_membership_refuse_la_meme_adhesion_deux_fois(lieu):

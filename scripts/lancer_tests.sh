@@ -5,7 +5,8 @@
 # LOCALISATION : scripts/lancer_tests.sh — appelé par le Makefile (make test, make e2e…).
 #
 # Usage : scripts/lancer_tests.sh <python|e2e|couverture> <sans-stripe|stripe> [arguments pytest…]
-#   Sans argument pytest, toute la suite est lancée (tests/pytest/ et booking/tests/, ou tests/e2e/).
+#   Sans argument pytest, toute la suite est lancée (tests/pytest/, booking/tests/ et
+#   onboard/tests/, ou tests/e2e/).
 #   / Without pytest arguments, the whole suite runs.
 #   `couverture` lance la suite pytest en mesurant la couverture du code (pytest-cov).
 #   Variable optionnelle FICHIERS="a.py,b.py" : détail ligne à ligne de ces fichiers.
@@ -67,14 +68,17 @@ if [ "$MODE" = "stripe" ]; then
     fi
 fi
 
-# 4. Sans argument, toute la suite. booking/tests/ (moteur de créneaux) en fait partie :
-# hors de la suite, ses tests ne tournaient plus et avaient cassé sans que personne le voie.
-# / Without arguments, the whole suite, booking/tests/ (slot engine) included.
+# 4. Sans argument, toute la suite. booking/tests/ (moteur de créneaux) et onboard/tests/
+# (tunnel de création de lieu) en font partie : hors de la suite, des tests cassent sans que
+# personne le voie. onboard/tests/ consomme des lieux du pool « en attente » : lancer la suite
+# quand la base de dev est au repos.
+# / Without arguments, the whole suite: booking/tests/ (slot engine) and onboard/tests/
+# (venue creation funnel) included. onboard/tests/ consumes venues from the waiting pool.
 if [ "$#" -eq 0 ]; then
     if [ "$SUITE" = "e2e" ]; then
         set -- tests/e2e/ -q
     else
-        set -- tests/pytest/ booking/tests/ -q
+        set -- tests/pytest/ booking/tests/ onboard/tests/ -q
     fi
 fi
 

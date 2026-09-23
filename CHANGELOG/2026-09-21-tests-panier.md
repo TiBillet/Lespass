@@ -58,6 +58,8 @@ the defects first proven by strict xfail tests (none left). `make coverage` meas
 | P16 | Ressource gratuite réservée sans panier : la ligne de vente restait « créée » (rouge dans les ventes de l'admin, absente de la clôture comptable). Désormais « validée » en « offert », comme au panier | direct |
 | C24 | Ressource à prix libre (minimum 0 €) saisie à 0 € : le paiement du panier échouait, et bloquait tout le panier. Désormais réservée gratuitement | panier |
 | C22 | Montant entre 0,01 et 0,49 € (refusé par Stripe) : « Le paiement a échoué » sans explication. Désormais refusé avant Stripe avec le message « 0 € ou au moins 0,50 € » : total du panier, adhésion et ressource sans panier (le formulaire d'adhésion le signale aussi) | les deux |
+| — | Prix libre dont le minimum est 0 € : un montant NÉGATIF était accepté (billet, adhésion, ressource, au panier comme en direct). Le total tombait à 0 et la commande partait en gratuit : billets envoyés sans paiement. Désormais refusé | les deux |
+| — | Le panier créait une session en base et posait un cookie pour CHAQUE visiteur, robots compris, dès la première page (le panier est construit à chaque rendu). Désormais, la session n'est écrite qu'au premier ajout | panier |
 | C23 | Panier : le maximum d'adhésions par personne n'était pas contrôlé (deuxième adhésion payée : page restée ouverte, ou deux tarifs du même produit limité à 1 dans le même panier). Désormais refusé comme sans panier | panier |
 | — | Ressource sans panier : tout refus (tarif réservé aux adhérents, créneau commencé…) s'affichait « Un créneau a été réservé entre temps ». La vraie raison est affichée | direct |
 | — | Formulaire d'adhésion à un seul tarif libre : le montant n'était jamais vérifié par le navigateur | direct |
@@ -73,7 +75,7 @@ est classé : inatteignable par un parcours normal.
 
 | Fichier / File | Changement / Change |
 |---|---|
-| `BaseBillet/validators.py` | `TicketCreator` : code promo limité à son produit ; paiement décidé une fois par réservation ; réservation à 0 € validée sans Stripe (lignes via « payée ») ; `method_F` ne pose le statut gratuit que s'il décide du paiement et que la réservation est 100 % gratuite (C27) ; caisse mixte. `ReservationValidator` : quantité bornée, C20, C28 |
+| `BaseBillet/validators.py` | montant libre négatif refusé quand le minimum vaut 0 € ; `TicketCreator` : code promo limité à son produit ; paiement décidé une fois par réservation ; réservation à 0 € validée sans Stripe (lignes via « payée ») ; `method_F` ne pose le statut gratuit que s'il décide du paiement et que la réservation est 100 % gratuite (C27) ; caisse mixte. `ReservationValidator` : quantité bornée, C20, C28 |
 | `BaseBillet/models.py` | `Event.n_est_plus_en_vente()` (C20) ; `Product.max_per_user_reached` compte aussi les adhésions déjà au panier (C23) |
 | `BaseBillet/signals.py` | au paiement d'une Commande, ses réservations sans ligne de vente sont aussi validées |
 | `BaseBillet/triggers.py` | récompense et envoi LaBoutik en `transaction.on_commit` (C31, `trigger_A` et `trigger_B`) |
@@ -81,7 +83,7 @@ est classé : inatteignable par un parcours normal.
 | `pages/templates/pages/classic/partials/navbar.html`, `pages/templates/pages/V2/partials/navbar.html`, `htmx/components/panier_badge.html` | nom accessible du lien du panier (« Panier », décrit par la pastille) ; « articles » |
 | `booking/templates/booking/views/resource.html`, `booking/templates/booking/partials/book_form.html` | titre « Réserver », bouton « Payer maintenant », tarif unique coché d'office |
 | `BaseBillet/services_commande.py` | prix libre par item ; code promo par produit ; montant saisi seulement si le tarif est encore libre ; adhésion gratuite via `trigger_A` ; billets à 0 € via « payée » ; statut gratuit posé une seule fois ; newsletter |
-| `BaseBillet/services_panier.py` | maximum d'adhésions par personne (C23) ; adhésions rejouées d'abord ; garde tarif/adhésion des ressources ; format du message de limite ; newsletter ; événement plus en vente refusé (C20) |
+| `BaseBillet/services_panier.py` | `_load` n'écrit plus en session (plus de cookie ni de ligne `django_session` pour un visiteur anonyme) ; montant libre négatif refusé quand le minimum vaut 0 € ; maximum d'adhésions par personne (C23) ; adhésions rejouées d'abord ; garde tarif/adhésion des ressources ; format du message de limite ; newsletter ; événement plus en vente refusé (C20) |
 | `BaseBillet/views.py` | code promo inconnu ou d'un produit non choisi refusé ; quantité non numérique ou démesurée ignorée ; case newsletter lue |
 | `BaseBillet/context_processors.py`, `htmx/components/panier_item.html` | rang réel de l'article pour le bouton « retirer » |
 | `booking/booking_engine.py` | `validate_new_booking` : tarif de la ressource, publié, produit non archivé, adhésion active ou dans la même commande ; ligne du booking gratuit validée en « offert » (P16) ; 0 € accepté (C24) ; montant calculé avant la transaction, minimum Stripe sans panier (C22) |
