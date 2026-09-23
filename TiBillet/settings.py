@@ -323,16 +323,31 @@ CACHES = {
         'LOCATION': 'memcached:11211',
         'KEY_FUNCTION': 'django_tenants.cache.make_key',
         'REVERSE_KEY_FUNCTION': 'django_tenants.cache.reverse_key',
-        # use_pooling : un pool de connexions, une par thread en cours.
-        # Sans lui, pymemcache partage UNE socket entre tous les threads d'un
-        # serveur ASGI (runserver de dev, daphne) : deux requetes simultanees
-        # melangent leurs reponses. Symptome vu : l'apercu admin des pages
-        # prenait parfois le mauvais skin (get_skin_courant() retombant sur
-        # « reunion »). Va de pair avec le backend ci-dessus.
-        # / use_pooling: one connection per running thread. Goes with the
-        # backend above.
         'OPTIONS': {
+            # use_pooling : un pool de connexions. Chaque operation de cache
+            # emprunte une connexion libre et la rend apres. Sans lui,
+            # pymemcache partage UNE socket entre tous les threads d'un
+            # serveur ASGI (runserver de dev, daphne) : deux requetes
+            # simultanees melangent leurs reponses. Symptome vu : l'apercu
+            # admin des pages prenait parfois le mauvais skin.
+            # / use_pooling: each cache operation borrows a free connection.
+            # Without it, one socket is shared by all threads of an ASGI server.
             'use_pooling': True,
+            # Delais d'attente, en secondes. Les connexions restent ouvertes
+            # toute la vie du processus (backend ci-dessus) : sans delai, une
+            # connexion coupee a moitie (memcached tue, coupure reseau)
+            # bloquerait un worker jusqu'au timeout de gunicorn.
+            # / Timeouts (seconds): connections live for the whole process, so
+            # a half-open one must not block a worker.
+            'connect_timeout': 1,
+            'timeout': 2,
+            # ignore_exc : une panne de memcached devient un simple « cache
+            # vide » (Django relit la base) au lieu d'une erreur 500. Cas typique :
+            # memcached redemarre, et la premiere operation de chaque worker
+            # tombe sur une socket morte.
+            # / ignore_exc: a memcached failure becomes a cache miss instead of
+            # a 500 (e.g. first operation after a memcached restart).
+            'ignore_exc': True,
         },
     }
 }

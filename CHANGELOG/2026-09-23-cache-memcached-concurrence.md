@@ -19,7 +19,7 @@ Symptôme visible : l'aperçu admin des pages prenait **parfois le mauvais skin*
 
 **Correction :**
 - `TiBillet/cache_memcached.py` : `PyMemcacheCacheSansFermeture`, un `PyMemcacheCache` dont `close()` ne fait rien. Les connexions vivent autant que le processus, et pymemcache se reconnecte seul.
-- `CACHES["default"]` : ce backend, plus `OPTIONS = {"use_pooling": True}`, soit une connexion par thread en cours.
+- `CACHES["default"]` : ce backend, plus `OPTIONS = {"use_pooling": True}`. Avec ce pool, chaque opération de cache emprunte une connexion libre et la rend ensuite. Le pool n'a pas de taille maximale : il grandit selon le nombre d'opérations simultanées.
 - `get_skin_courant()` : l'erreur est désormais **journalisée** (`logger.warning`), sauf sur le schéma public où le repli est normal. Avant, le site changeait de skin sans aucune trace.
 
 **Mesure (serveur de dev neuf, skin V2, 30 requêtes dont 10 simultanées) :**
@@ -31,6 +31,16 @@ Symptôme visible : l'aperçu admin des pages prenait **parfois le mauvais skin*
 | Erreurs memcached dans le journal | des dizaines | 0 |
 
 **Production :** gunicorn tourne en workers synchrones à un thread (`-w 18`) : les pages HTTP n'étaient pas exposées. daphne (websockets) l'était, puisqu'il exécute le code synchrone dans des threads. Le changement est sans risque pour gunicorn : il y a une connexion persistante par worker au lieu d'une reconnexion à chaque requête.
+
+## B. Délais d'attente et tolérance aux pannes (suite à l'audit) / Timeouts and failure tolerance
+
+**Quoi / What :** les connexions vivent maintenant aussi longtemps que le processus. Sans délai d'attente (pymemcache met `timeout=None` par défaut), deux problèmes pouvaient survenir :
+- une connexion coupée à moitié (memcached tué, coupure réseau) bloquait un worker jusqu'au timeout de gunicorn, 30 s ;
+- après un redémarrage de memcached, la première opération de chaque worker levait une erreur, soit une 500 ou un mauvais skin.
+
+**Correction :** dans `OPTIONS`, `connect_timeout: 1`, `timeout: 2` et `ignore_exc: True`. Une panne de memcached devient un simple « cache vide » : Django relit la base, la page reste juste un peu plus lente. pymemcache met ensuite le serveur de côté pendant 60 s (`dead_timeout`) s'il reste injoignable. Pendant ce temps, le cache ne sert plus, sans provoquer d'erreur.
+
+**Attention :** avec `ignore_exc`, une panne de memcached ne se voit plus dans les erreurs. Elle se voit dans les temps de réponse. Surveiller memcached à part.
 
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
