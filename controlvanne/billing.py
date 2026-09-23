@@ -259,13 +259,25 @@ def facturer_tirage(
             # Solde insuffisant pour couvrir le montant total. Arrive des que le
             # volume envoye depasse allowed_ml : le Pi ne controle le plafond
             # qu'une fois par seconde et deborde de quelques dizaines de ml.
+            # La biere est deja servie : on facture ce que le solde permet plutot
+            # que d'abandonner toute la facturation (sinon le tirage est offert).
             # / Insufficient balance. Happens as soon as the reported volume
             # exceeds allowed_ml: the Pi only checks the cap once per second.
-            raise SoldeInsuffisant(
-                solde_actuel_en_centimes=montant_centimes - restant_centimes,
-                montant_demande_en_centimes=montant_centimes,
-                asset_name="cascade",
+            # Beer is already poured: bill what the balance allows instead of
+            # dropping the whole billing (otherwise the pour is free).
+            logger.warning(
+                f"Solde insuffisant au pour_end (tireuse={tireuse.nom_tireuse}, "
+                f"carte={carte.tag_id}) : demande {montant_centimes} cts, "
+                f"debite {montant_centimes - restant_centimes} cts, "
+                f"manque {restant_centimes} cts (volume servi > allowed_ml)."
             )
+            montant_centimes -= restant_centimes
+
+        if not debits_par_asset:
+            # Aucun asset debitable : rien a facturer, rien a enregistrer.
+            # / No debitable asset: nothing to bill.
+            return None
+
         # Volume en centilitres pour weight_quantity (unité stock = cl)
         # / Volume in centiliters for weight_quantity (stock unit = cl)
         volume_cl = int(round(float(volume_ml) / 10))
