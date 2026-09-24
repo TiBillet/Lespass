@@ -2161,6 +2161,7 @@ MODULE_FIELDS = {
         "libelle_externe": _("Open kiosk"),
         "testid_externe" : "dashboard-controlvanne-link",
         "externe_nouvel_onglet" : True,
+        "beta": True,
         "link_icon": "fa-display",
         "domaine": "lemachines",  # groupe du tableau de bord / dashboard group
         "icone": "sports_bar",
