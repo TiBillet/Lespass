@@ -41,7 +41,7 @@ Meme pattern que les autres tests d'admin : base de dev vivante.
 """
 
 import pytest
-from django.test import Client as HttpClient
+from django.test import Client as HttpClient, override_settings
 from django.urls import NoReverseMatch, reverse
 from django_tenants.utils import tenant_context
 
@@ -95,8 +95,11 @@ def django_db_setup():
 
 @pytest.fixture
 def lieu_et_superadmin(db):
-    """Le premier lieu qui a un domaine ET un superadmin."""
-    for tenant in Client.objects.exclude(schema_name="public"):
+    """Le lieu `lespass`, avec son domaine et un superadmin."""
+    # Le lieu de reference est `lespass`, un lieu ordinaire du seed. On ne prend
+    # pas le premier lieu venu : c'est `meta` (agenda), un lieu atypique.
+    # / The reference venue is `lespass`, not the first one found (`meta`, atypical).
+    for tenant in Client.objects.filter(schema_name="lespass"):
         domaine = tenant.domains.first()
         if not domaine:
             continue
@@ -104,7 +107,7 @@ def lieu_et_superadmin(db):
             utilisateur = TibilletUser.objects.filter(is_superuser=True).first()
         if utilisateur:
             return tenant, domaine.domain, utilisateur
-    pytest.skip("Aucun lieu avec un domaine et un superadmin.")
+    pytest.fail("Le lieu 'lespass' (seed demo_data_v2) n'a pas : un domaine et un superadmin.")
 
 
 @pytest.fixture
@@ -262,15 +265,24 @@ def test_aucun_onglet_declare_n_est_inatteignable(navigateur, lieu_et_superadmin
                 url = reverse(f"staff_admin:{app_label}_{model_name}_changelist")
             except NoReverseMatch:
                 continue
-            # raise_request_exception=False : une page d'admin qui plante pour
-            # une raison etrangere aux onglets ne doit pas faire echouer CE
-            # test, qui n'a qu'un seul travail. On les recense a part.
-            # Cas connu : AssetAdmin.get_queryset() fait un appel reseau a
-            # Fedow (admin_tenant.py:4264) et peut lever hors ligne.
-            # / An admin failing for unrelated reasons must not fail this test.
+            # raise_request_exception=False : une page qui plante ne coupe pas le
+            # balayage. On recense toutes les pages en erreur, puis on echoue
+            # une seule fois avec la liste complete.
+            # / A crashing page does not stop the sweep: all failing pages are
+            #   collected, then reported together in one failure.
             navigateur.raise_request_exception = False
             try:
-                reponse = navigateur.get(url)
+                # DEBUG=True comme le serveur de dev : la page des assets appelle
+                # Fedow, qui ne verifie le certificat SSL que hors DEBUG
+                # (fedow_connect/fedow_api.py, verify=not DEBUG). pytest-django
+                # force DEBUG=False, et le certificat local de Fedow n'est pas
+                # reconnu dans le conteneur : sans ce reglage, la page repond 500
+                # sous pytest uniquement.
+                # / DEBUG=True like the dev server: Fedow calls only verify SSL
+                #   outside DEBUG, and the local Fedow certificate is untrusted in
+                #   the container. Without it the page is a 500 under pytest only.
+                with override_settings(DEBUG=True):
+                    reponse = navigateur.get(url)
             except Exception:
                 en_erreur.append(nom)
                 continue
@@ -289,14 +301,10 @@ def test_aucun_onglet_declare_n_est_inatteignable(navigateur, lieu_et_superadmin
         'faut une entree {"name": ..., "detail": True} dans le groupe.'
     )
 
-    # On ne fait pas echouer le test la-dessus — ce n'est pas son sujet — mais
-    # on le rend visible plutot que de l'avaler en silence.
-    # / Reported, not asserted: it is not this test's job.
-    if en_erreur:
-        import warnings
-
-        warnings.warn(
-            "Pages d'onglets injoignables pour une raison etrangere aux onglets "
-            f"(a instruire separement) : {sorted(set(en_erreur))}",
-            stacklevel=2,
-        )
+    # Une page d'onglet en erreur est un cul-de-sac pire que l'absence de barre :
+    # le test echoue. Un simple avertissement passait inapercu en fin de run.
+    # / An erroring tab page is a worse dead end: the test fails. A mere warning
+    #   went unnoticed at the end of the run.
+    assert not en_erreur, (
+        f"Ces pages d'onglets ne repondent pas : {sorted(set(en_erreur))}."
+    )

@@ -259,7 +259,7 @@ class TestStripeReservation:
                 option_uuids.append(str(checkbox_opts[0]))
 
         if not option_uuids:
-            pytest.skip("Aucune option creee sur l'evenement")
+            pytest.fail("Aucune option creee sur l'evenement")
 
         resp = _create_reservation(
             api_client, auth_headers,

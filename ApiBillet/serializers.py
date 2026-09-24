@@ -835,7 +835,11 @@ def get_or_create_price_sold(price: Price, event: Event = None,
     pour générer la clé et afficher le bon nom sur stripe
     """
     prix = price.prix
-    if custom_amount:
+    # `is not None` et pas `if custom_amount` : un montant saisi à 0 € est un montant, et
+    # Decimal("0") est faux en Python. Le prix du tarif ne sert que sans montant saisi.
+    # / `is not None`, never `if custom_amount`: a typed 0 € is an amount, and Decimal("0") is
+    # falsy in Python. The price is the fallback only when no amount is given.
+    if custom_amount is not None:
         prix = dround(custom_amount)
     if promo_code:
         prix = dround(prix - (prix * promo_code.discount_rate / 100))

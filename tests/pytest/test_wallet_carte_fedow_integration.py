@@ -21,8 +21,8 @@ uuid returned by Fedow.
 
 PRÉREQUIS / PREREQUISITES :
 - Le serveur Fedow de dev tourne (container fedow_django) et la place Lespass est
-  configurée (`FedowConfig.can_fedow()` vrai). Sinon : SKIP explicite, pas d'échec.
-/ The dev Fedow server runs and the Lespass place is configured. Otherwise: SKIP.
+  configurée (`FedowConfig.can_fedow()` vrai). Sinon : ÉCHEC explicite.
+/ The dev Fedow server runs and the Lespass place is configured. Otherwise: explicit FAILURE.
 
 NOTE DEBUG/SSL : pytest-django force DEBUG=False, ce qui active la vérification
 SSL dans fedow_api (verify=bool(not settings.DEBUG)) — or le certificat Traefik de
@@ -57,9 +57,9 @@ def _tag():
 @pytest.fixture
 def carte_provisionnee_dans_fedow(tenant):
     """Provisionne une carte NFC RÉELLE dans Fedow (wallet éphémère, sans user) puis
-    crée la CarteCashless locale correspondante. Skip explicite si Fedow indisponible.
+    crée la CarteCashless locale correspondante. Échec explicite si Fedow indisponible.
     / Provisions a REAL anonymous NFC card in Fedow (ephemeral wallet) then creates
-    the matching local CarteCashless. Explicit skip if Fedow is unavailable.
+    the matching local CarteCashless. Explicit failure if Fedow is unavailable.
 
     Nettoyage : la CarteCashless locale et le Wallet miroir créé par la résolution.
     Côté Fedow la carte reste (pas d'endpoint de suppression simple) — pollution
@@ -75,8 +75,8 @@ def carte_provisionnee_dans_fedow(tenant):
 
     with override_settings(DEBUG=True), tenant_context(tenant):
         if not FedowConfig.get_solo().can_fedow():
-            pytest.skip(
-                "Fedow indisponible (can_fedow=False) — test d'intégration sauté."
+            pytest.fail(
+                "Fedow indisponible (can_fedow=False) — test d'intégration impossible."
             )
 
         # 1. On essaie de provisionner une carte fraîche dans le VRAI Fedow (sans
@@ -142,9 +142,9 @@ def carte_provisionnee_dans_fedow(tenant):
                     break
 
         if tag is None:
-            pytest.skip(
+            pytest.fail(
                 "Aucune carte réelle disponible dans ce Fedow (création refusée et "
-                "aucune carte de démo provisionnée) — test d'intégration sauté."
+                "aucune carte de démo provisionnée) — test d'intégration impossible."
             )
 
         # La CarteCashless locale (anonyme, sans user) pointant le même tag_id.

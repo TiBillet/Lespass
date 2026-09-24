@@ -46,8 +46,11 @@ def django_db_setup():
 
 @pytest.fixture
 def lieu_et_superadmin(db):
-    """Le premier lieu qui a un domaine ET un superadmin."""
-    for tenant in Client.objects.exclude(schema_name="public"):
+    """Le lieu `lespass`, avec son domaine et un superadmin."""
+    # Le lieu de reference est `lespass`, un lieu ordinaire du seed. On ne prend
+    # pas le premier lieu venu : c'est `meta` (agenda), un lieu atypique.
+    # / The reference venue is `lespass`, not the first one found (`meta`, atypical).
+    for tenant in Client.objects.filter(schema_name="lespass"):
         domaine = tenant.domains.first()
         if not domaine:
             continue
@@ -55,7 +58,7 @@ def lieu_et_superadmin(db):
             utilisateur = TibilletUser.objects.filter(is_superuser=True).first()
         if utilisateur:
             return tenant, domaine.domain, utilisateur
-    pytest.skip("Aucun lieu avec un domaine et un superadmin.")
+    pytest.fail("Le lieu 'lespass' (seed demo_data_v2) n'a pas : un domaine et un superadmin.")
 
 
 @pytest.fixture
@@ -210,10 +213,28 @@ def test_l_encart_des_taches_reste_hors_du_bloc_des_modules(navigateur):
     puisque c'est justement la qu'il sert le plus. Il est donc rendu AVANT
     le bloc des modules.
     / The SEO notice must render before the modules block.
+
+    L'encart n'apparait que s'il manque une information au lieu. Le test en
+    fournit une lui-meme : le lieu de reference est complet, et vider sa
+    Configuration toucherait le site live (cache memcached partage).
+    / The notice only shows when something is missing. The test supplies one
+      itself: emptying the live Configuration would affect the running site.
     """
-    contenu = navigateur.get("/admin/").content.decode()
-    if 'data-testid="dashboard-taches-referencement"' not in contenu:
-        pytest.skip("Ce lieu n'a aucune tâche de référencement en attente.")
+    une_tache = {
+        "taches": [{
+            "testid": "tache-image",
+            "icone": "image",
+            "titre": "Ajouter une image de partage",
+            "explication": "Tache fournie par le test.",
+        }],
+        "lien_configuration": "#",
+    }
+    with patch.object(
+        dashboard, "_build_taches_referencement_context", return_value=une_tache
+    ):
+        contenu = navigateur.get("/admin/").content.decode()
+
+    assert 'data-testid="dashboard-taches-referencement"' in contenu
     assert contenu.index('dashboard-taches-referencement') < contenu.index('id="dashboard-modules"')
 
 
@@ -396,7 +417,7 @@ def test_l_encart_beta_est_sur_sa_propre_ligne(navigateur):
     """
     contenu = navigateur.get("/admin/domaine/lespass/").content.decode()
     if "-beta-notice" not in contenu:
-        pytest.skip("Aucun module en accès anticipé sur ce lieu.")
+        pytest.fail("Aucun module en accès anticipé sur ce lieu.")
     assert 'class="tb-carte-beta"' in contenu
 
 
@@ -775,7 +796,10 @@ def lieu_avec_admin(db):
     lieu recoit un 403 — c'est voulu, pas un bug.
     / A superuser is not enough either: the POS wants a venue admin.
     """
-    for tenant in Client.objects.exclude(schema_name="public"):
+    # Le lieu de reference est `lespass`, un lieu ordinaire du seed. On ne prend
+    # pas le premier lieu venu : c'est `meta` (agenda), un lieu atypique.
+    # / The reference venue is `lespass`, not the first one found (`meta`, atypical).
+    for tenant in Client.objects.filter(schema_name="lespass"):
         domaine = tenant.domains.first()
         if not domaine:
             continue
@@ -789,7 +813,7 @@ def lieu_avec_admin(db):
             client = HttpClient(HTTP_HOST=domaine.domain)
             client.force_login(admins[0])
             return tenant, client
-    pytest.skip("Aucun lieu avec un admin de lieu.")
+    pytest.fail("Le lieu 'lespass' (seed demo_data_v2) n'a pas : un admin de lieu.")
 
 
 def _carte_de_la_caisse(tenant, **forcages):
@@ -829,7 +853,7 @@ def test_la_caisse_active_affiche_son_lien_d_ouverture(lieu_avec_admin):
     tenant, navigateur_admin = lieu_avec_admin
     with tenant_context(tenant):
         if not Configuration.get_solo().module_caisse:
-            pytest.skip("La caisse n'est pas active sur ce lieu.")
+            pytest.fail("La caisse n'est pas active sur ce lieu.")
 
     import re
 
@@ -856,7 +880,7 @@ def test_le_lien_de_la_caisse_est_aussi_sur_la_page_du_domaine(lieu_avec_admin):
     tenant, navigateur_admin = lieu_avec_admin
     with tenant_context(tenant):
         if not Configuration.get_solo().module_caisse:
-            pytest.skip("La caisse n'est pas active sur ce lieu.")
+            pytest.fail("La caisse n'est pas active sur ce lieu.")
 
     contenu = navigateur_admin.get("/admin/domaine/laboutik/").content.decode()
     assert 'data-testid="dashboard-card-pos-open-link"' in contenu
@@ -1058,7 +1082,7 @@ def test_le_delai_de_cascade_repart_a_zero_a_chaque_domaine(lieu_et_superadmin):
         assert [c["delai_ms"] for c in eteintes] == attendus
 
     if not au_moins_un_groupe_avec_des_eteintes:
-        pytest.skip("Tous les modules sont actifs sur ce lieu.")
+        pytest.fail("Tous les modules sont actifs sur ce lieu.")
 
 
 @pytest.mark.django_db

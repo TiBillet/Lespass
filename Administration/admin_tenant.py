@@ -4287,9 +4287,16 @@ class AssetAdmin(ModelAdmin):
     # On affiche que les assets non adhésions + origin + fédéré
     def get_queryset(self, request):
         logger.info(f"get_queryset AssetAdmin : {request.user}")
-        fedowAPI = FedowAPI()
-        fedowAPI.asset.get_accepted_assets()
-        # On va mettre a jour les assets chez Fedow :
+        # Synchronise les assets acceptes depuis Fedow, seulement si le lieu y est
+        # relie. Sinon, instancier FedowAPI lance create_place() (handshake reseau
+        # involontaire) et plante sur un lieu sans admin, comme `meta` : la page
+        # repondait 500. Meme garde que laboutik.views.obtenir_wallet_carte_depuis_fedow.
+        # / Syncs accepted assets from Fedow, only if the venue is linked to it.
+        #   Otherwise FedowAPI() triggers create_place() and crashes on a venue
+        #   with no admin, like `meta`: the page answered 500.
+        if FedowConfig.get_solo().can_fedow():
+            fedowAPI = FedowAPI()
+            fedowAPI.asset.get_accepted_assets()
 
         tenant = connection.tenant
         queryset = (

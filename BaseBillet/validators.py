@@ -1014,7 +1014,14 @@ class MembershipValidator(serializers.Serializer):
         # Si c'est un prix libre, on récupère la valeur personnalisée
         # If it's an open price, retrieve the custom value
         if self.price.free_price:
-            amount = attrs.get('custom_amount') or self.price.prix or Decimal('0.00')
+            # Montant saisi. Pas de « or » ici : Decimal("0") est faux en Python, et un montant
+            # saisi à 0 doit être comparé au minimum du tarif, pas remplacé par lui. Le prix du
+            # tarif ne sert que lorsque aucun montant n'est envoyé.
+            # / The typed amount. No `or` here: Decimal("0") is falsy in Python, and a typed 0
+            # must be compared to the price minimum, not replaced by it. The price is the
+            # fallback only when no amount is sent.
+            montant_saisi = attrs.get('custom_amount')
+            amount = montant_saisi if montant_saisi is not None else self.price.prix
 
             # Validation du montant : jamais négatif / Amount must never be negative
             if amount < Decimal('0.00'):
@@ -1028,10 +1035,11 @@ class MembershipValidator(serializers.Serializer):
 
             # Validation du montant minimum / Minimum amount validation
             # Le minimum d'un tarif à prix libre peut valoir 0 € : on compare TOUJOURS, sans
-            # tester « if price.prix » d'abord. Decimal("0") est faux en Python : ce test laissait
-            # passer les montants négatifs, qui rendaient la commande gratuite.
-            # / A free price minimum can be 0 €: always compare. Decimal("0") is falsy in Python,
-            # so testing it first let negative amounts through and made the order free.
+            # tester « if price.prix » d'abord. Decimal("0") est faux en Python, et sauter la
+            # comparaison accepterait un montant négatif.
+            # / A free price minimum can be 0 €: always compare, never test `price.prix` first.
+            # Decimal("0") is falsy in Python, and skipping the comparison would accept a
+            # negative amount.
             if amount < self.price.prix:
                 logger.info(f"Open price {amount} below minimum {self.price.prix}")
                 raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))

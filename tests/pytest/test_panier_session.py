@@ -829,6 +829,32 @@ def test_un_visiteur_anonyme_ne_recoit_pas_de_cookie_de_session(lieu):
     assert Session.objects.count() == sessions_avant
 
 
+def test_add_resource_arrondit_l_estimation_au_centime(lieu):
+    """Créneaux de 40 minutes pris trois fois, à 10 €/h : l'estimation vaut 20,00 €, arrondie
+    au centime comme le prix vendu à la facturation. Sans arrondi, la division par 60 donne un
+    nombre à 28 décimales, affiché tel quel dans le panier et tronqué dans le total.
+    / Three 40-minute slots at 10 €/h: the estimate is 20.00 €, rounded to the cent like the
+    sold price at checkout."""
+    from decimal import Decimal
+
+    from BaseBillet.services_panier import PanierSession
+
+    location = creer_ressource_avec_tarif(prix="10.00", duree_du_creneau_en_minutes=40)
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+
+    item = panier.add_resource(
+        price_uuid=location.tarif.uuid,
+        resource_uuid=location.ressource.pk,
+        start_datetime=str(location.debut_du_creneau),
+        slot_duration_minutes="40",
+        slot_count="3",
+    )
+
+    assert Decimal(item["total_estimation"]) == Decimal("20.00")
+    assert item["total_estimation"] == "20.00"
+    assert panier.calcul_total_centimes() == 2000
+
+
 def test_add_membership_refuse_la_meme_adhesion_deux_fois(lieu):
     """La même adhésion ne va qu'une fois dans le panier.
     / The same membership only goes once into the cart."""

@@ -41,10 +41,13 @@ def django_db_setup():
 @pytest.fixture
 def lieu_et_superadmin(db):
     """
-    Rend le premier lieu qui a un domaine ET un superadmin.
-    / Returns the first tenant having both a domain and a superadmin.
+    Rend le lieu `lespass`, avec son domaine et un superadmin.
+    / Returns the `lespass` tenant, with its domain and a superadmin.
     """
-    for tenant in Client.objects.exclude(schema_name="public"):
+    # Le lieu de reference est `lespass`, un lieu ordinaire du seed. On ne prend
+    # pas le premier lieu venu : c'est `meta` (agenda), un lieu atypique.
+    # / The reference venue is `lespass`, not the first one found (`meta`, atypical).
+    for tenant in Client.objects.filter(schema_name="lespass"):
         domaine = tenant.domains.first()
         if not domaine:
             continue
@@ -52,7 +55,7 @@ def lieu_et_superadmin(db):
             utilisateur = TibilletUser.objects.filter(is_superuser=True).first()
         if utilisateur:
             return tenant, domaine.domain, utilisateur
-    pytest.skip("Aucun lieu avec un domaine et un superadmin.")
+    pytest.fail("Le lieu 'lespass' (seed demo_data_v2) n'a pas : un domaine et un superadmin.")
 
 
 @pytest.fixture
@@ -71,7 +74,7 @@ def test_la_page_de_module_repond(navigateur, lieu_et_superadmin):
     with tenant_context(tenant):
         module_actif = Configuration.get_solo().module_billetterie
     if not module_actif:
-        pytest.skip("Le module billetterie n'est pas actif sur ce lieu.")
+        pytest.fail("Le module billetterie n'est pas actif sur ce lieu.")
 
     reponse = navigateur.get(reverse("staff_admin:page_de_module", args=["agenda"]))
     assert reponse.status_code == 200
@@ -98,7 +101,7 @@ def test_l_onglet_demande_est_celui_qui_s_ouvre(navigateur, lieu_et_superadmin):
     tenant, _domaine, _utilisateur = lieu_et_superadmin
     with tenant_context(tenant):
         if not Configuration.get_solo().module_billetterie:
-            pytest.skip("Le module billetterie n'est pas actif sur ce lieu.")
+            pytest.fail("Le module billetterie n'est pas actif sur ce lieu.")
 
     adresse = reverse("staff_admin:page_de_module", args=["agenda"])
     contenu = navigateur.get(adresse + "?onglet=configurer").content.decode()
@@ -120,7 +123,7 @@ def test_un_onglet_inconnu_retombe_sur_le_premier(navigateur, lieu_et_superadmin
     tenant, _domaine, _utilisateur = lieu_et_superadmin
     with tenant_context(tenant):
         if not Configuration.get_solo().module_billetterie:
-            pytest.skip("Le module billetterie n'est pas actif sur ce lieu.")
+            pytest.fail("Le module billetterie n'est pas actif sur ce lieu.")
 
     adresse = reverse("staff_admin:page_de_module", args=["agenda"])
     reponse = navigateur.get(adresse + "?onglet=nimportequoi")

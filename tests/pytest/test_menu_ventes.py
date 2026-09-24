@@ -482,7 +482,7 @@ class TestDetailVente:
             # / Load or create vrac fixtures.
             cacahuetes = Product.objects.filter(name="Cacahuetes en vrac").first()
             if cacahuetes is None:
-                pytest.skip("Fixture 'Cacahuetes en vrac' absente — create_test_pos_data ne la cree pas dans ce contexte")
+                pytest.fail("Fixture 'Cacahuetes en vrac' absente — create_test_pos_data ne la cree pas dans ce contexte")
             prix_vrac = Price.objects.filter(
                 product=cacahuetes, poids_mesure=True
             ).first()

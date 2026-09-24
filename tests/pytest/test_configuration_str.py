@@ -44,7 +44,7 @@ def un_lieu(db):
     """Le premier lieu venu. / Any tenant."""
     tenant = Client.objects.exclude(schema_name="public").first()
     if tenant is None:
-        pytest.skip("Aucun lieu en base.")
+        pytest.fail("Aucun lieu en base.")
     return tenant
 
 

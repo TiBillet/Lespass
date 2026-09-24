@@ -267,7 +267,7 @@ def test_le_reglage_leve_la_garde(tenant_lespass, wallet_du_lieu):
     """
     fed_deja_present = Asset.objects.filter(category=Asset.FED).first()
     if fed_deja_present is not None:
-        pytest.skip("Un asset FED existe deja : la contrainte unique_fed_asset en interdit un second.")
+        pytest.fail("Un asset FED existe deja : la contrainte unique_fed_asset en interdit un second.")
 
     nom = _nom_unique('FED autorise')
     with override_settings(FEDOW_AUTORISER_ASSET_FED_LOCAL=True):

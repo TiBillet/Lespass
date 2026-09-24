@@ -439,6 +439,23 @@ def test_p3_billet_prix_libre_negatif_est_refuse(lieu, parcours):
 
 
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+def test_p10_adhesion_prix_libre_a_zero_sous_le_minimum_est_refusee(lieu, parcours):
+    """Adhésion à prix libre dont le minimum vaut 10 €, montant saisi 0 : refusée. Le 0 ne doit
+    pas être remplacé en silence par le minimum, sinon la personne est débitée de 10 € sans
+    l'avoir demandé.
+    / Free-price membership with a 10 € minimum, 0 typed: refused. The 0 must not be silently
+    replaced by the minimum, which would charge 10 € nobody asked for."""
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    adhesion = creer_adhesion(prix="10.00", prix_libre=True)
+
+    adherer(parcours, client, acheteur, adhesion.tarif, montant_libre="0")
+
+    assert adhesion_de(acheteur, adhesion) is None
+    assert not lieu.stripe.mock_create.called
+
+
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
 def test_p10_adhesion_prix_libre_negative_est_refusee(lieu, parcours):
     """Adhésion à prix libre dont le minimum est 0 €, montant saisi -20 € : refusée, aucune
     adhésion créée.
@@ -580,7 +597,13 @@ def test_une_quantite_demesuree_est_refusee_sans_bloquer_le_serveur(
 
     verifier_un_refus_propre(parcours, reponse)
     assert reservation_de(acheteur, concert.evenement) is None
-    assert duree_en_secondes < 1
+    # Sans la garde, int(Decimal("1e1000000")) prend environ 17 s (mesure du 2026-09-24).
+    # Avec elle, la reponse arrive en moins d'1 s. Le seuil de 5 s separe nettement les
+    # deux cas, sans echouer quand la machine est chargee pendant la suite complete
+    # (le chronometre couvre l'ajout ET le paiement cote panier).
+    # / Without the guard, the conversion takes ~17 s; with it, under 1 s. 5 s separates
+    #   both cases without failing under load during the full suite.
+    assert duree_en_secondes < 5
 
 
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)

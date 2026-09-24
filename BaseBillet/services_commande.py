@@ -345,10 +345,10 @@ class CommandeService:
                 resource = Resource.objects.get(pk=item.get('resource_uuid'))
 
                 # Montant saisi pour un tarif à prix libre. Un tarif fixe n'en a pas.
-                # Les paniers rangés en session avant le 2026-09-23 y mettaient la chaîne
-                # "None" : on la lit comme une absence de montant (une session vit 12 semaines).
-                # / Amount typed for a free price; a fixed price has none. Carts stored before
-                # 2026-09-23 wrote the "None" string: read it as no amount.
+                # La chaîne "None" est traitée comme une absence de montant : une session vit
+                # 12 semaines et d'anciens paniers en contiennent encore.
+                # / Amount typed for a free price; a fixed price has none. The "None" string
+                # counts as no amount: sessions live 12 weeks and old carts still hold it.
                 montant_saisi = item.get('custom_amount')
                 custom_amount = None
                 if montant_saisi not in (None, '', 'None'):

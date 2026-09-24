@@ -25,6 +25,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from unittest.mock import patch
 from django.conf import settings
 from django_tenants.utils import tenant_context
 
@@ -164,6 +165,62 @@ def test_la_page_du_panier_affiche_une_duree_lisible(lieu):
     page = client.get("/panier/").content.decode()
 
     assert "0.3333333333333333" not in page and "0,3333333333333333" not in page
+
+
+def test_la_page_du_panier_affiche_le_calcul_d_une_ressource_gratuite(lieu):
+    """Ressource à tarif fixe gratuit (0 €/h) : la ligne du panier montre son tarif horaire et
+    son calcul, comme une ressource payante. Le montant 0 est un montant comme un autre.
+    / Resource with a fixed 0 €/h price: the cart line shows its hourly price and its
+    computation, like a paid one."""
+    from BaseBillet.services_panier import PanierSession
+
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    location = creer_ressource_avec_tarif(prix="0.00")
+    panier = PanierSession(requete_avec_session(acheteur))
+    panier.add_resource(
+        price_uuid=location.tarif.uuid,
+        resource_uuid=location.ressource.pk,
+        start_datetime=str(location.debut_du_creneau),
+        slot_duration_minutes="60",
+        slot_count="1",
+    )
+    session_du_client = client.session
+    session_du_client["panier"] = panier.data
+    session_du_client.save()
+
+    page = client.get("/panier/").content.decode()
+
+    ligne_de_l_article = page.split('id="panier-item-0"')[1].split("</li>")[0]
+    assert "€/h = " in ligne_de_l_article
+
+
+def test_une_reservation_gratuite_en_attente_d_activation_apparait_dans_mes_reservations(lieu):
+    """Réservation gratuite dont la personne n'a pas encore validé son adresse mail : elle
+    apparaît dans « mes réservations ». Sinon elle est invisible et impossible à annuler, alors
+    qu'elle occupe son créneau. Les billets font déjà figurer le statut équivalent.
+    / A free booking whose owner has not verified their email shows up in "my bookings"."""
+    from booking.models import Booking
+
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    location = creer_ressource_avec_tarif(prix="0.00")
+    Booking.objects.create(
+        resource=location.ressource,
+        user=acheteur,
+        start_datetime=location.debut_du_creneau,
+        slot_duration_minutes=60,
+        slot_count=1,
+        status=Booking.FREERES,
+    )
+
+    # La page du compte demande son portefeuille à Fedow : on le simule, comme
+    # tests/pytest/test_balance_soldes_et_recharge.py.
+    # / The account page asks Fedow for the wallet: fake it, like the balance tests do.
+    with patch("BaseBillet.views.FedowAPI"):
+        page = client.get("/my_account/my_bookings/").content.decode()
+
+    assert location.ressource.name in page
 
 
 def test_le_badge_du_panier_est_accessible_sans_etre_connecte(lieu):

@@ -62,7 +62,10 @@ def lieu_avec_agenda(db):
     assertions vides. Un test qui se saute ne protege rien.
     / Skipping on the wrong venue would protect nothing.
     """
-    for tenant in Client.objects.exclude(schema_name="public"):
+    # Le lieu de reference est `lespass`, un lieu ordinaire du seed. On ne prend
+    # pas le premier lieu venu : c'est `meta` (agenda), un lieu atypique.
+    # / The reference venue is `lespass`, not the first one found (`meta`, atypical).
+    for tenant in Client.objects.filter(schema_name="lespass"):
         domaine = tenant.domains.first()
         if not domaine:
             continue
@@ -76,7 +79,7 @@ def lieu_avec_agenda(db):
             slugs = {s.get("_slug") for s in sections}
         if "agenda" in slugs:
             return tenant, domaine.domain, utilisateur
-    pytest.skip("Aucun lieu avec un superadmin et le module Agenda actif.")
+    pytest.fail("Le lieu 'lespass' (seed demo_data_v2) n'a pas : un superadmin et le module Agenda actif.")
 
 
 @pytest.fixture

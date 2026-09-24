@@ -15,3 +15,4 @@
 | 2 | [`PANIER-en-base-commande-draft.md`](PANIER-en-base-commande-draft.md) | Panier — en base (`Commande.DRAFT`) au lieu de la session | Aucun |
 | 3 | [`AUTH-connexion-par-code-achat-connecte.md`](AUTH-connexion-par-code-achat-connecte.md) | Auth — connexion par code à 6 chiffres, réservation et adhésion réservées aux connectés | Aucun |
 | 4 | [`BENEVOLAT-planning-besoins.md`](BENEVOLAT-planning-besoins.md) | Bénévolat — planning de besoins façon Framadate dans `booking`, répétition des besoins en admin | Aucun |
+| 5 | [`USERS-etiquettes.md`](USERS-etiquettes.md) | Étiquettes sur les personnes (par lieu), synchro vers Ghost pour écrire à des groupes (Brevo plus tard) | Aucun |

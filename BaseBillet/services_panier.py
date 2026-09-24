@@ -548,10 +548,11 @@ class PanierSession:
             except Exception:
                 raise InvalidItemError(_("Invalid amount."))
             # Le minimum d'un tarif à prix libre peut valoir 0 € : on compare TOUJOURS, sans
-            # tester « if price.prix » d'abord. Decimal("0") est faux en Python : ce test laissait
-            # passer les montants négatifs, qui rendaient la commande gratuite.
-            # / A free price minimum can be 0 €: always compare. Decimal("0") is falsy in Python,
-            # so testing it first let negative amounts through and made the order free.
+            # tester « if price.prix » d'abord. Decimal("0") est faux en Python, et sauter la
+            # comparaison accepterait un montant négatif.
+            # / A free price minimum can be 0 €: always compare, never test `price.prix` first.
+            # Decimal("0") is falsy in Python, and skipping the comparison would accept a
+            # negative amount.
             if amount_dec < price.prix:
                 raise InvalidItemError(
                     _("The amount must be greater than or equal to the minimum.")
@@ -763,10 +764,11 @@ class PanierSession:
             except Exception:
                 raise InvalidItemError(_("Invalid amount."))
             # Le minimum d'un tarif à prix libre peut valoir 0 € : on compare TOUJOURS, sans
-            # tester « if price.prix » d'abord. Decimal("0") est faux en Python : ce test laissait
-            # passer les montants négatifs, qui rendaient la commande gratuite.
-            # / A free price minimum can be 0 €: always compare. Decimal("0") is falsy in Python,
-            # so testing it first let negative amounts through and made the order free.
+            # tester « if price.prix » d'abord. Decimal("0") est faux en Python, et sauter la
+            # comparaison accepterait un montant négatif.
+            # / A free price minimum can be 0 €: always compare, never test `price.prix` first.
+            # Decimal("0") is falsy in Python, and skipping the comparison would accept a
+            # negative amount.
             if amount_dec < price.prix:
                 raise InvalidItemError(
                     _("The amount must be greater than or equal to the minimum.")
@@ -909,10 +911,11 @@ class PanierSession:
             except Exception:
                 raise InvalidItemError(_("Invalid amount."))
             # Le minimum d'un tarif à prix libre peut valoir 0 € : on compare TOUJOURS, sans
-            # tester « if price.prix » d'abord. Decimal("0") est faux en Python : ce test laissait
-            # passer les montants négatifs, qui rendaient la commande gratuite.
-            # / A free price minimum can be 0 €: always compare. Decimal("0") is falsy in Python,
-            # so testing it first let negative amounts through and made the order free.
+            # tester « if price.prix » d'abord. Decimal("0") est faux en Python, et sauter la
+            # comparaison accepterait un montant négatif.
+            # / A free price minimum can be 0 €: always compare, never test `price.prix` first.
+            # Decimal("0") is falsy in Python, and skipping the comparison would accept a
+            # negative amount.
             if custom_amount_dec < price.prix:
                 raise InvalidItemError(
                     _("The amount must be greater than or equal to the minimum.")
@@ -1014,7 +1017,17 @@ class PanierSession:
         if price.free_price:
             price_to_compute = custom_amount_dec
 
-        total_estimation = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
+        # Arrondi au centime, comme le prix vendu à la facturation (get_or_create_price_sold
+        # applique le même `dround`) : le panier annonce exactement ce qui sera facturé. Sans
+        # lui, une durée qui ne divise pas 60 (40 ou 50 minutes, autorisées par le modèle)
+        # donne un nombre à 28 décimales, affiché tel quel et tronqué dans le total.
+        # / Rounded to the cent like the sold price at checkout (same `dround`): the cart shows
+        # exactly what will be charged.
+        from fedow_connect.utils import dround
+
+        total_estimation = dround(
+            Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
+        )
 
 
         item = {

@@ -57,7 +57,7 @@ def _enable_db_access(django_db_blocker):
 def tenant():
     t = Client.objects.filter(schema_name="lespass").first()
     if not t:
-        pytest.skip("Seed demo_data_v2 absent : pas de tenant 'lespass'.")
+        pytest.fail("Seed demo_data_v2 absent : pas de tenant 'lespass'.")
     return t
 
 
@@ -115,7 +115,7 @@ def _superadmin(tenant):
     with tenant_context(tenant):
         utilisateur = TibilletUser.objects.filter(is_superuser=True).first()
     if not utilisateur:
-        pytest.skip("Aucun superadmin dans la base de dev.")
+        pytest.fail("Aucun superadmin dans la base de dev.")
     return utilisateur
 
 

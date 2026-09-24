@@ -25,10 +25,10 @@ DEPENDANCE AU SEED
 ------------------
 Ces tests sont en LECTURE SEULE et s'appuient sur les donnees de `demo_data_v2` :
 le tenant `lespass` federe `festival` et `la-maison-des-communs`. Ils se
-re-declarent `skip` si le seed n'est pas en place, plutot que d'echouer a tort.
+echouent si le seed n'est pas en place : un test qui se tait ne protege rien.
 On ne cree rien en base : la suite tourne sur la base de DEV, une ecriture
 cross-schema qui ne serait pas annulee corromprait les donnees de demonstration.
-/ Read-only tests, based on the demo_data_v2 seed. They skip (not fail) if the seed
+/ Read-only tests, based on the demo_data_v2 seed. They fail if the seed
 is absent. Nothing is written: the suite runs on the DEV database.
 """
 
@@ -65,7 +65,7 @@ def _enable_db_access(django_db_blocker):
 def tenant_lespass():
     tenant = Client.objects.filter(schema_name="lespass").first()
     if not tenant:
-        pytest.skip("Seed demo_data_v2 absent : pas de tenant 'lespass'.")
+        pytest.fail("Seed demo_data_v2 absent : pas de tenant 'lespass'.")
     return tenant
 
 
@@ -126,7 +126,7 @@ def _lieu_federe(tenant_lespass, schema_du_voisin):
             .first()
         )
     if not lieu:
-        pytest.skip(f"Seed absent : lespass ne federe pas '{schema_du_voisin}'.")
+        pytest.fail(f"Seed absent : lespass ne federe pas '{schema_du_voisin}'.")
     return lieu
 
 
@@ -171,7 +171,7 @@ def test_tag_exclude_retire_bien_les_events_tagues(http_client, tenant_lespass):
     with tenant_context(tenant_lespass):
         slugs_exclus = {tag.slug for tag in lieu.tag_exclude.all()}
     if not slugs_exclus:
-        pytest.skip("Seed absent : aucun tag_exclude sur lespass -> festival.")
+        pytest.fail("Seed absent : aucun tag_exclude sur lespass -> festival.")
 
     noms_affiches, events_du_voisin = _noms_des_events_du_voisin_dans_lagenda(
         http_client, lieu.tenant
@@ -208,7 +208,7 @@ def test_tag_filter_ne_garde_que_les_events_tagues(http_client, tenant_lespass):
     with tenant_context(tenant_lespass):
         slugs_filtres = {tag.slug for tag in lieu.tag_filter.all()}
     if not slugs_filtres:
-        pytest.skip("Seed absent : aucun tag_filter sur lespass -> la-maison-des-communs.")
+        pytest.fail("Seed absent : aucun tag_filter sur lespass -> la-maison-des-communs.")
 
     noms_affiches, events_du_voisin = _noms_des_events_du_voisin_dans_lagenda(
         http_client, lieu.tenant
@@ -244,7 +244,7 @@ def test_le_voisin_filtre_par_tags_reste_visible(http_client, tenant_lespass):
         slugs_filtres = {tag.slug for tag in lieu.tag_filter.all()}
         slugs_exclus = {tag.slug for tag in lieu.tag_exclude.all()}
     if not (slugs_filtres and slugs_exclus):
-        pytest.skip("Seed absent : les deux listes de tags ne sont pas remplies.")
+        pytest.fail("Seed absent : les deux listes de tags ne sont pas remplies.")
 
     noms_affiches, events_du_voisin = _noms_des_events_du_voisin_dans_lagenda(
         http_client, lieu.tenant
@@ -262,7 +262,7 @@ def test_le_voisin_filtre_par_tags_reste_visible(http_client, tenant_lespass):
                 eligibles.append(event.name)
 
     if not eligibles:
-        pytest.skip("Seed : aucun event eligible chez ce voisin, rien a prouver.")
+        pytest.fail("Seed : aucun event eligible chez ce voisin, rien a prouver.")
 
     assert noms_affiches, (
         f"Le lieu federe '{lieu.tenant.schema_name}' a disparu de l'agenda alors "

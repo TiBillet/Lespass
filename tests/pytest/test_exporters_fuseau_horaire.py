@@ -86,7 +86,7 @@ def test_une_vente_apres_minuit_est_datee_du_jour_local(tenant, fuseau_du_lieu):
     if fuseau_du_lieu.utcoffset(datetime.datetime(2026, 7, 15)) == datetime.timedelta(
         0
     ):
-        pytest.skip(
+        pytest.fail(
             f"Le tenant de test est sur {fuseau_du_lieu} (offset nul en juillet) : "
             "ce test ne distinguerait pas l'heure locale de l'UTC."
         )

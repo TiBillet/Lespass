@@ -33,7 +33,7 @@ def _url_des_events():
 def _entetes():
     cle_api = os.getenv("API_KEY")
     if not cle_api:
-        pytest.skip("Pas de cle API dans l'environnement.")
+        pytest.fail("Pas de cle API dans l'environnement.")
     return {"Authorization": f"Api-Key {cle_api}"}
 
 

@@ -352,7 +352,7 @@ class TestStripeMembershipSimple:
 
         Note : ce test verifie que le flow de paiement fonctionne.
         La verification des tokens Fedow depend de la config SSA en base dev.
-        Si le produit SSA n'existe pas, le test est skip.
+        Si le produit SSA n'existe pas, le test echoue.
         """
         from django_tenants.utils import schema_context
         from BaseBillet.models import Product, Membership, Paiement_stripe
@@ -365,7 +365,7 @@ class TestStripeMembershipSimple:
             ).first()
 
         if not ssa_product:
-            pytest.skip("Produit SSA introuvable en base dev")
+            pytest.fail("Produit SSA introuvable en base dev")
 
         rid = _random_id()
         email = f"test+ssa{rid}@mock.test"
@@ -374,7 +374,7 @@ class TestStripeMembershipSimple:
             # Trouver un prix publié pour ce produit
             price = ssa_product.prices.filter(publish=True).first()
             if not price:
-                pytest.skip("Aucun prix publié pour le produit SSA")
+                pytest.fail("Aucun prix publié pour le produit SSA")
 
             price_uuid = str(price.uuid)
 

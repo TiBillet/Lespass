@@ -706,7 +706,7 @@ def test_donnees_test_pos_couleurs_et_icones(tenant):
 
         pdv_bar = PointDeVente.objects.filter(name='Bar').first()
         if pdv_bar is None:
-            pytest.skip("PDV 'Bar' introuvable apres create_test_pos_data")
+            pytest.fail("PDV 'Bar' introuvable apres create_test_pos_data")
 
         articles = _construire_donnees_articles(pdv_bar)
 

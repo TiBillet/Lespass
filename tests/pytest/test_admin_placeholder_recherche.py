@@ -54,7 +54,10 @@ def django_db_setup():
 
 @pytest.fixture
 def lieu_et_superadmin(db):
-    for tenant in Client.objects.exclude(schema_name="public"):
+    # Le lieu de reference est `lespass`, un lieu ordinaire du seed. On ne prend
+    # pas le premier lieu venu : c'est `meta` (agenda), un lieu atypique.
+    # / The reference venue is `lespass`, not the first one found (`meta`, atypical).
+    for tenant in Client.objects.filter(schema_name="lespass"):
         domaine = tenant.domains.first()
         if not domaine:
             continue
@@ -62,7 +65,7 @@ def lieu_et_superadmin(db):
             utilisateur = TibilletUser.objects.filter(is_superuser=True).first()
         if utilisateur:
             return tenant, domaine.domain, utilisateur
-    pytest.skip("Aucun lieu avec un domaine et un superadmin.")
+    pytest.fail("Le lieu 'lespass' (seed demo_data_v2) n'a pas : un domaine et un superadmin.")
 
 
 @pytest.fixture
@@ -77,7 +80,7 @@ def _admin(nom_de_classe):
     for admin in staff_admin_site._registry.values():
         if admin.__class__.__name__ == nom_de_classe:
             return admin
-    pytest.skip(f"{nom_de_classe} n'est pas enregistree sur ce site.")
+    pytest.fail(f"{nom_de_classe} n'est pas enregistree sur ce site.")
 
 
 # --------------------------------------------------------------------------- #

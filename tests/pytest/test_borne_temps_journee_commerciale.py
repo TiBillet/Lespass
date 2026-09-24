@@ -111,7 +111,7 @@ def le_lieu_doit_avoir_un_changement_d_heure(tenant):
     offset_a_midi = midi.replace(tzinfo=fuseau_du_lieu).utcoffset()
 
     if offset_a_minuit == offset_a_midi:
-        pytest.skip(
+        pytest.fail(
             f"Le tenant de test est sur un fuseau sans changement d'heure "
             f"({fuseau_du_lieu}) : les cas DST de ce fichier ne prouveraient rien."
         )

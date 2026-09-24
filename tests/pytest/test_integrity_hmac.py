@@ -91,11 +91,11 @@ def _creer_ligne_article_test(tenant, amount=1200, vat=Decimal('20.00'),
             categorie_pos__isnull=False
         ).first()
         if not product:
-            pytest.skip("Pas de produit POS disponible (lancer create_test_pos_data)")
+            pytest.fail("Pas de produit POS disponible (lancer create_test_pos_data)")
 
         price = Price.objects.filter(product=product).first()
         if not price:
-            pytest.skip("Pas de prix disponible")
+            pytest.fail("Pas de prix disponible")
 
         product_sold, _ = ProductSold.objects.get_or_create(
             product=product,

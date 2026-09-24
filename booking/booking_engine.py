@@ -573,9 +573,7 @@ def validate_new_booking(resource,
     # / Slot amount: hourly price (or typed free amount) × booked duration. Computed before
     # the transaction, so a refusal writes nothing.
     if price.prix is None:
-        raise serializers.ValidationError(
-            _("Price amount is missing for resource booking.")
-        )
+        return False, str(_("Price amount is missing for resource booking.")), None
 
     price_to_compute = price.prix
     if price.free_price:

@@ -30,7 +30,7 @@ class TestCrowdsContributionStripe:
             initiative = Initiative.objects.first()
 
         if not initiative:
-            pytest.skip("Aucune initiative crowds en base dev")
+            pytest.fail("Aucune initiative crowds en base dev")
 
         # POST en anonyme (pas de login)
         resp = api_client.post(
@@ -67,7 +67,7 @@ class TestCrowdsContributionStripe:
             initiative = Initiative.objects.first()
 
         if not initiative:
-            pytest.skip("Aucune initiative crowds en base dev")
+            pytest.fail("Aucune initiative crowds en base dev")
 
         # Activer direct_debit sur l'initiative
         with schema_context("lespass"):

@@ -354,9 +354,9 @@ class TestCalculerTarif:
 # / Gathering the federated network's events
 #
 # Ces tests tournent sur la base de DEV, en LECTURE SEULE, sur le seed demo_data_v2.
-# Ils se mettent en `skip` (et non en echec) si le seed est absent. On ne cree RIEN en
+# Ils echouent si le seed est absent. On ne cree RIEN en
 # base : une ecriture cross-schema non annulee corromprait les donnees de demonstration.
-# / Read-only tests on the DEV database. They skip if the seed is missing.
+# / Read-only tests on the DEV database. They fail if the seed is missing.
 # ---------------------------------------------------------------------------
 
 FENETRE_LARGE_EN_JOURS = 365
@@ -378,7 +378,7 @@ def _enable_db_access(django_db_blocker):
 def tenant_lespass():
     tenant = Client.objects.filter(schema_name="lespass").first()
     if not tenant:
-        pytest.skip("Seed demo_data_v2 absent : pas de tenant 'lespass'.")
+        pytest.fail("Seed demo_data_v2 absent : pas de tenant 'lespass'.")
     return tenant
 
 
@@ -471,7 +471,7 @@ def event_prive_chez_un_voisin(tenant_lespass):
     """
     voisin = _premier_voisin_federe(tenant_lespass)
     if not voisin:
-        pytest.skip("Seed : le tenant courant ne federe aucun voisin.")
+        pytest.fail("Seed : le tenant courant ne federe aucun voisin.")
 
     event = _creer_event_chez_le_voisin(
         voisin, "TEST newsletter — event PRIVE (ne doit pas fuiter)", private=True
@@ -496,7 +496,7 @@ def event_malveillant_chez_un_voisin(tenant_lespass):
     """
     voisin = _premier_voisin_federe(tenant_lespass)
     if not voisin:
-        pytest.skip("Seed : le tenant courant ne federe aucun voisin.")
+        pytest.fail("Seed : le tenant courant ne federe aucun voisin.")
 
     charge_malveillante = (
         "<p>Venez <strong>nombreux</strong> !</p>"
@@ -526,7 +526,7 @@ def event_archive_chez_un_voisin(tenant_lespass):
     """
     voisin = _premier_voisin_federe(tenant_lespass)
     if not voisin:
-        pytest.skip("Seed : le tenant courant ne federe aucun voisin.")
+        pytest.fail("Seed : le tenant courant ne federe aucun voisin.")
 
     event = _creer_event_chez_le_voisin(
         voisin, "TEST newsletter — event ARCHIVE (ne doit pas remonter)", archived=True
@@ -566,7 +566,7 @@ class TestCollecte:
             tenant_lespass, est_un_voisin=False, slugs_filter=[], slugs_exclude=[]
         )
         if not attendus:
-            pytest.skip("Seed : le tenant courant n'a aucun event a venir.")
+            pytest.fail("Seed : le tenant courant n'a aucun event a venir.")
 
         with tenant_context(tenant_lespass):
             fiches = collecter_evenements_du_reseau(FENETRE_LARGE_EN_JOURS)
@@ -584,7 +584,7 @@ class TestCollecte:
         """
         lieux_federes = _lieux_federes_du_tenant(tenant_lespass)
         if not lieux_federes:
-            pytest.skip("Seed : le tenant courant ne federe aucun voisin.")
+            pytest.fail("Seed : le tenant courant ne federe aucun voisin.")
 
         with tenant_context(tenant_lespass):
             fiches = collecter_evenements_du_reseau(FENETRE_LARGE_EN_JOURS)
@@ -610,7 +610,7 @@ class TestCollecte:
             )
 
         if not au_moins_un_voisin_a_des_events:
-            pytest.skip("Seed : aucun voisin n'a d'event eligible a venir.")
+            pytest.fail("Seed : aucun voisin n'a d'event eligible a venir.")
 
     def test_un_tag_exclu_dun_voisin_ne_remonte_pas(self, tenant_lespass):
         """
@@ -623,7 +623,7 @@ class TestCollecte:
             and lieu["tenant"].schema_name != tenant_lespass.schema_name
         ]
         if not lieux_avec_exclusion:
-            pytest.skip("Seed : aucun voisin n'a de tag_exclude configure.")
+            pytest.fail("Seed : aucun voisin n'a de tag_exclude configure.")
 
         with tenant_context(tenant_lespass):
             fiches = collecter_evenements_du_reseau(FENETRE_LARGE_EN_JOURS)
@@ -796,7 +796,7 @@ class TestCollecte:
             fiches = collecter_evenements_du_reseau(FENETRE_LARGE_EN_JOURS)
 
         if not fiches:
-            pytest.skip("Seed : aucun event a venir, rien a verifier.")
+            pytest.fail("Seed : aucun event a venir, rien a verifier.")
 
         cles_attendues = {
             "nom", "date_debut", "date_fin", "organisateur", "description_courte",
@@ -812,7 +812,7 @@ class TestCollecte:
             fiches = collecter_evenements_du_reseau(FENETRE_LARGE_EN_JOURS)
 
         if not fiches:
-            pytest.skip("Seed : aucun event a venir.")
+            pytest.fail("Seed : aucun event a venir.")
 
         for fiche in fiches:
             assert fiche["url_event"].startswith("http"), fiche["url_event"]

@@ -68,7 +68,10 @@ def lieu_avec_evenements(db):
     """
     from BaseBillet.models import Event
 
-    for tenant in Client.objects.exclude(schema_name="public"):
+    # Le lieu de reference est `lespass`, un lieu ordinaire du seed. On ne prend
+    # pas le premier lieu venu : c'est `meta` (agenda), un lieu atypique.
+    # / The reference venue is `lespass`, not the first one found (`meta`, atypical).
+    for tenant in Client.objects.filter(schema_name="lespass"):
         domaine = tenant.domains.first()
         if not domaine:
             continue
@@ -83,7 +86,7 @@ def lieu_avec_evenements(db):
             )
         if nombre >= 2:
             return tenant, domaine.domain, utilisateur
-    pytest.skip("Aucun lieu avec un superadmin et au moins deux evenements.")
+    pytest.fail("Le lieu 'lespass' (seed demo_data_v2) n'a pas : un superadmin et au moins deux evenements.")
 
 
 @pytest.fixture

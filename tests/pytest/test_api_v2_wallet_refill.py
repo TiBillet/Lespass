@@ -186,13 +186,13 @@ def gift_setup():
 @pytest.fixture
 def fedow_real_setup(tenant):
     """Assets RÉELS rechargeables, créés à la fois en base ET sur Fedow, avec une
-    clé API liée pour chacun. Skip explicite si Fedow est indisponible.
+    clé API liée pour chacun. Echec explicite si Fedow est indisponible.
 
     On reproduit ce que fait l'admin (AssetAdmin.save_model) : wallet_origin =
     wallet de la place + get_or_create_token_asset() pour matérialiser l'asset
     côté serveur Fedow. Un objects.create() seul ne crée l'asset qu'en local.
     / Real refillable assets, created both in DB AND on Fedow, each with a bound
-    API key. Explicit skip if Fedow is unavailable. Mirrors AssetAdmin.save_model.
+    API key. Explicit failure if Fedow is unavailable. Mirrors AssetAdmin.save_model.
     """
     from django.db import connection
     from django.test import override_settings
@@ -205,7 +205,7 @@ def fedow_real_setup(tenant):
 
     with override_settings(DEBUG=True), tenant_context(tenant):
         if not FedowConfig.get_solo().can_fedow():
-            pytest.skip("Fedow indisponible (can_fedow=False) — test d'intégration sauté.")
+            pytest.fail("Fedow indisponible (can_fedow=False) — test d'intégration impossible.")
 
         fedow_config = FedowConfig.get_solo()
         api = FedowAPI(fedow_config=fedow_config)
@@ -349,7 +349,7 @@ def test_refill_asset_federe_refuse_422(gift_setup):
     Real money (euro / federated euro) must never be credited via this route.
     """
     if gift_setup["asset_fed"] is None:
-        pytest.skip("Aucun asset fédéré (FED) en base dev pour ce test.")
+        pytest.fail("Aucun asset fédéré (FED) en base dev pour ce test.")
     resp = _post(
         payload={
             "email": "user@example.org",

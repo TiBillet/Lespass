@@ -254,9 +254,9 @@ def test_tenant_sans_place_fedow_pas_de_lecture_fed(carte_liee):
 
 def test_total_additionne_locaux_et_fed(carte_liee):
     """Agrégation : total = monnaies locales (fedow_core) + FED réseau.
-    Réutilise un asset TLF local existant (skip si la base dev n'en a pas).
+    Réutilise un asset TLF local existant (echec si la base dev n'en a pas).
     / Aggregation: total = local currencies (fedow_core) + FED network. Reuses an existing
-    local TLF asset (skip if the dev DB has none).
+    local TLF asset (fails if the dev DB has none).
     """
     from laboutik.views import obtenir_solde_complet_carte
     from fedow_core.models import Asset, Token
@@ -270,7 +270,7 @@ def test_total_additionne_locaux_et_fed(carte_liee):
             .first()
         )
         if asset_tlf is None:
-            pytest.skip(
+            pytest.fail(
                 "Pas d'asset TLF local en base dev — lancer create_test_pos_data --schema=lespass"
             )
         # 1000 centimes (10,00 €) de monnaie locale sur le wallet de la carte.

@@ -66,6 +66,10 @@ the defects first proven by strict xfail tests (none left). `make coverage` meas
 | — | Panier : le montant d'un tarif à prix libre dont le minimum vaut 0 € n'était pas affiché sur la ligne de l'article ; une réservation de 20 minutes affichait « 0.3333333333333333h » | panier |
 | — | Ligne de vente d'une ressource : le code promo y était enregistré alors qu'aucune remise n'était déduite (et aucun formulaire ne le propose). Il n'est plus posé | panier |
 | — | Créneau d'une ressource : une réservation gratuite dont la personne n'avait pas encore validé son adresse mail ne retenait pas sa place — quelqu'un d'autre pouvait réserver le même créneau | les deux |
+| — | Adhésion à prix libre : un montant saisi à 0 était remplacé en silence par le minimum du tarif, au lieu d'être refusé. Une demande à 0 € sur un tarif de minimum 10 € créait une adhésion facturée 10 €. Atteignable par l'API v2 | direct, API v2 |
+| — | Réservation de ressource : l'estimation d'un créneau de 40 ou 50 minutes s'affichait avec 28 décimales et le total du panier annonçait un centime de moins que Stripe. Arrondie au centime, comme le prix facturé | panier |
+| — | Une réservation gratuite en attente de validation du mail n'apparaissait pas dans « mes réservations », alors qu'elle occupait son créneau : invisible et impossible à annuler | les deux |
+| — | Panier : une ressource à tarif horaire de 0 € n'affichait ni son tarif ni son calcul | panier |
 | C23 | Panier : le maximum d'adhésions par personne n'était pas contrôlé (deuxième adhésion payée : page restée ouverte, ou deux tarifs du même produit limité à 1 dans le même panier). Désormais refusé comme sans panier | panier |
 | — | Ressource sans panier : tout refus (tarif réservé aux adhérents, créneau commencé…) s'affichait « Un créneau a été réservé entre temps ». La vraie raison est affichée | direct |
 | — | Formulaire d'adhésion à un seul tarif libre : le montant n'était jamais vérifié par le navigateur | direct |
