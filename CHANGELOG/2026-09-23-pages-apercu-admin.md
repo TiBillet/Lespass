@@ -1,5 +1,38 @@
 # Pages : aperçu en direct des blocs, fin du JSON, blocs rendus dans la fiche Page
 
+## G. Suites de l'audit : scripts tiers, menu « + » à la demande, limites de validation / Audit follow-ups
+
+**Origine :** point 2 de `CHANGELOG/a traiter/pages-apercu-admin-suites.md`, sorti de ce fichier le 2026-09-24.
+
+**Quoi / What :**
+1. **Scripts tiers.** Le document d'aperçu (fiche Bloc et fiche Page) ne charge plus formbricks, même s'il est configuré pour le lieu : `{% if formbricks_api_host and not apercu_admin %}` dans les 3 shells. C'était le seul script tiers. Les autres (htmx, bootstrap, panier…) sont locaux et ne font aucune requête au chargement.
+2. **Menu « + » chargé à la demande.** Chaque barre de bloc embarquait le menu complet des modèles, soit ~25 liens par bloc (~1250 pour une page de 50 blocs). Désormais, la barre ne porte que l'URL de son menu. À la première ouverture, htmx fait un `hx-get` (`hx-trigger="toggle from:closest details once"`) vers la nouvelle vue `vue_menu_ajout` (route `pages_page_menu_ajout`), qui renvoie la liste pour cette position.
+   - Le menu est découpé en deux gabarits : `_menu_modeles.html` (le conteneur) et `_menu_modeles_liens.html` (la liste). Le menu « + Ajouter un bloc en premier » de l'en-tête, seul de son espèce, reste construit tout de suite.
+   - Le menu est réorienté (vers le haut s'il déborde) à l'ouverture, puis de nouveau quand sa liste arrive (`htmx:afterSettle`).
+3. **Une seule source pour les limites.** `ApercuBlocSerializer` lit maintenant ses longueurs maximales et ses bornes sur le modèle `Bloc` (`_longueur_max_du_modele`, `_bornes_du_modele`), au lieu de les recopier. Elles avaient déjà divergé : `nombre_max` était limité à 1–1000 dans l'aperçu, contre 0–32767 à l'enregistrement. Aucune migration : rien n'a changé sur le modèle.
+
+Au passage, les commentaires et le message affiché quand on ajoute un bloc sans page reprennent le libellé du bouton, renommé « + Ajouter un bloc en premier ».
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `pages/templates/pages/{classic,V2,faire_festival}/shell.html` | formbricks absent quand `apercu_admin` |
+| `pages/admin_apercu.py` | `vue_menu_ajout` ; URL du menu dans `_elements_avec_outils` ; limites du serializer lues sur le modèle |
+| `pages/admin.py` | Route `pages_page_menu_ajout` ; libellé du bouton dans le message et les commentaires |
+| `pages/templates/admin/pages/apercu/_menu_modeles.html`, `_menu_modeles_liens.html` (nouveau), `_outils_bloc.html` | Menu à la demande |
+| `pages/static/pages/admin/apercu_page_outils.js` | Réorientation du menu à l'arrivée de sa liste |
+| `tests/pytest/test_pages_admin_apercu.py` | 4 tests (menu à la demande et refus, limites identiques au modèle, pas de formbricks) |
+
+### Tests à réaliser / How to test
+1. Fiche Page avec plusieurs blocs : ouvrir le + d'un bloc. « Chargement des modèles… » apparaît brièvement, puis la liste. Choisir un modèle : la fiche d'ajout s'ouvre, avec le bloc placé juste après.
+2. Même chose sur un bloc en bas de page : le menu s'ouvre vers le haut.
+3. Fiche Bloc, bloc Liste : saisir 0 dans « Nombre d'éléments ». L'aperçu l'accepte, comme l'enregistrement.
+
+### Migration
+- **Migration necessaire / Migration required:** Non
+
+---
+
 ## F. Corrections suite à l'audit djc / Fixes after the djc audit
 
 **Quoi / What :** un agent relecteur (skill djc) a audité l'ensemble. Il n'a trouvé aucun problème bloquant. Corrections appliquées :

@@ -11,7 +11,7 @@ La différence avec le reste de `CHANGELOG/` : ici, rien n'est fait.
 | `plan-admin-restant.md` | Suites de la relecture des 9 commits du restylage de l'admin (2026-09-09) |
 | `v2-da-v1-points-laisses-de-cote.md` | Skin V2 / DA v1 : données Python à fournir, décisions, nettoyage (2026-09-11) |
 | `v2-style-suites-relecture.md` | Skin V2 : suites de la relecture du style — version lourde des modules, couches CSS Bootstrap, libellés longs, restes (2026-09-13) |
-| `pages-apercu-admin-suites.md` | Pages (admin) : suites de l'aperçu en direct — en-tête périmé après une action dans l'iframe, suggestions de l'audit, plan B (2026-09-23) |
+| `pages-apercu-admin-suites.md` | Pages (admin) : suites de l'aperçu en direct — en-tête périmé après une action dans l'iframe, plan B, vidéo dans l'aperçu (2026-09-23) |
 
 **Convention :** quand un point est traité, il sort d'ici et devient une entrée
 normale dans `CHANGELOG/`. Un point qui n'est plus pertinent est supprimé avec

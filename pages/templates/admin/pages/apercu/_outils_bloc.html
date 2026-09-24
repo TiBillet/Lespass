@@ -15,7 +15,7 @@ APPELE PAR — la chaine complete, de la fiche Page a ce gabarit :
 3. Le navigateur charge cette URL -> pages/admin.py:PageAdmin.get_urls
    -> pages/admin_apercu.py:vue_apercu_page.
 4. vue_apercu_page prepare, pour chaque bloc, les donnees de sa barre
-   (_elements_avec_outils : rang, libelles, URL ↑ ↓ ✕ Modifier, menu +),
+   (_elements_avec_outils : rang, libelles, URL ↑ ↓ ✕ Modifier, URL du menu +),
    puis appelle rendre_document_apercu(..., avec_outils=True).
 5. rendre_document_apercu rend pages/<skin>/apercu.html (gabarit_skin,
    repli sur classic), qui inclut admin/pages/apercu/_blocs.html.
@@ -42,7 +42,8 @@ FLUX D'UN CLIC (requete au serveur, ecrit en base TOUT DE SUITE) :
   ✕ demande une confirmation (hx-confirm). Le serveur repond HX-Refresh :
   l'iframe se recharge, avec le nouvel ordre.
 - ✎ Modifier et le menu + : liens target="_top", qui quittent l'iframe pour
-  ouvrir la fiche Bloc dans l'admin.
+  ouvrir la fiche Bloc dans l'admin. La liste du menu + est chargee a sa
+  premiere ouverture (hx-get vers pages/admin_apercu.py:vue_menu_ajout).
 Barre compacte, sur une ligne : rang, modele (libelle court), puis des
 boutons-icones, chacun avec aria-label et title. Styles en ligne, police
 systeme : la barre ne doit pas prendre le look du site.
@@ -82,5 +83,5 @@ but they move a LINE inside a block, with no request until "Save".
             data-testid="page-bloc-{{ element.rang }}-supprimer"
             style="width: 24px; height: 22px; padding: 0; border-radius: 5px; border: 1px solid #fca5a5; background: #fff; color: #dc2626; cursor: pointer; font: inherit;">✕</button>
     {% translate "Ajouter un bloc après" as libelle_ajout %}
-    {% include "admin/pages/apercu/_menu_modeles.html" with groupes=element.menu_ajout cible="_top" libelle="" libelle_accessible=libelle_ajout testid=element.testid_menu position_menu="left: 0;" %}
+    {% include "admin/pages/apercu/_menu_modeles.html" with url_chargement=element.url_menu_ajout cible="_top" libelle="" libelle_accessible=libelle_ajout testid=element.testid_menu position_menu="left: 0;" %}
 </div>

@@ -311,6 +311,34 @@ def appliquer_editeurs_de_lignes(bloc, contenu_lieu, contenu_cartes, points_gps)
 # Validation des donnees de l'apercu en direct
 # / Live preview data validation
 # ---------------------------------------------------------------------------
+def _longueur_max_du_modele(nom_du_champ):
+    """
+    Longueur maximale d'un champ texte du modele Bloc.
+    / Max length of a Bloc text field.
+    """
+    return Bloc._meta.get_field(nom_du_champ).max_length
+
+
+def _bornes_du_modele(nom_du_champ):
+    """
+    Bornes d'un champ entier du modele Bloc, lues dans ses validateurs : ceux
+    declares (ex. hauteur_px : 100 a 4000) et ceux que Django ajoute selon le
+    type (ex. PositiveSmallIntegerField : 0 a 32767).
+    / Bounds of a Bloc integer field, read from its validators.
+
+    :return: dict {"min_value": ..., "max_value": ...}, a passer au champ DRF.
+    """
+    from django.core.validators import MaxValueValidator, MinValueValidator
+
+    bornes = {}
+    for validateur in Bloc._meta.get_field(nom_du_champ).validators:
+        if isinstance(validateur, MinValueValidator):
+            bornes["min_value"] = validateur.limit_value
+        if isinstance(validateur, MaxValueValidator):
+            bornes["max_value"] = validateur.limit_value
+    return bornes
+
+
 class ApercuBlocSerializer(serializers.Serializer):
     """
     Valide le formulaire (non enregistre) de la fiche Bloc pour l'apercu.
@@ -334,35 +362,50 @@ class ApercuBlocSerializer(serializers.Serializer):
         allow_null=True,
         error_messages={"invalid": _("Choisissez la page du bloc.")},
     )
-    titre = serializers.CharField(required=False, allow_blank=True, max_length=200)
-    sous_titre = serializers.CharField(required=False, allow_blank=True, max_length=300)
-    badge = serializers.CharField(required=False, allow_blank=True, max_length=60)
-    texte = serializers.CharField(
-        required=False, allow_blank=True, trim_whitespace=False
+    # Longueurs et bornes LUES SUR LE MODELE (_longueur_max_du_modele,
+    # _bornes_du_modele) : l'apercu et l'enregistrement refusent exactement
+    # les memes valeurs. Les recopier ici a la main les ferait diverger.
+    # / Lengths and bounds READ FROM THE MODEL: preview and save reject exactly
+    # the same values.
+    titre = serializers.CharField(
+        required=False, allow_blank=True, max_length=_longueur_max_du_modele("titre")
     )
+    sous_titre = serializers.CharField(
+        required=False, allow_blank=True, max_length=_longueur_max_du_modele("sous_titre")
+    )
+    badge = serializers.CharField(
+        required=False, allow_blank=True, max_length=_longueur_max_du_modele("badge")
+    )
+    texte = serializers.CharField(required=False, allow_blank=True, trim_whitespace=False)
     texte_markdown = serializers.CharField(
         required=False, allow_blank=True, trim_whitespace=False
     )
     bouton_label = serializers.CharField(
-        required=False, allow_blank=True, max_length=80
+        required=False, allow_blank=True, max_length=_longueur_max_du_modele("bouton_label")
     )
-    bouton_url = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    bouton_url = serializers.CharField(
+        required=False, allow_blank=True, max_length=_longueur_max_du_modele("bouton_url")
+    )
     bouton2_label = serializers.CharField(
-        required=False, allow_blank=True, max_length=80
+        required=False, allow_blank=True, max_length=_longueur_max_du_modele("bouton2_label")
     )
     bouton2_url = serializers.CharField(
-        required=False, allow_blank=True, max_length=500
+        required=False, allow_blank=True, max_length=_longueur_max_du_modele("bouton2_url")
     )
-    auteur_nom = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    auteur_nom = serializers.CharField(
+        required=False, allow_blank=True, max_length=_longueur_max_du_modele("auteur_nom")
+    )
     auteur_role = serializers.CharField(
-        required=False, allow_blank=True, max_length=160
+        required=False, allow_blank=True, max_length=_longueur_max_du_modele("auteur_role")
     )
-    embed_url = serializers.CharField(required=False, allow_blank=True, max_length=500)
-    hauteur_px = serializers.IntegerField(required=False, min_value=100, max_value=4000)
+    embed_url = serializers.CharField(
+        required=False, allow_blank=True, max_length=_longueur_max_du_modele("embed_url")
+    )
+    hauteur_px = serializers.IntegerField(required=False, **_bornes_du_modele("hauteur_px"))
     source = serializers.ChoiceField(
         choices=Bloc.SOURCE_CHOICES, required=False, allow_blank=True
     )
-    nombre_max = serializers.IntegerField(required=False, min_value=1, max_value=1000)
+    nombre_max = serializers.IntegerField(required=False, **_bornes_du_modele("nombre_max"))
     page_source = serializers.UUIDField(required=False, allow_null=True)
     # Lignes deja reassemblees par la vue (lire_lignes_depuis_post).
     # / Lines already reassembled by the view.
@@ -885,9 +928,11 @@ def _elements_avec_outils(page):
     LOCALISATION : pages/admin_apercu.py
 
     Pour chaque bloc : son rang (1, 2, 3...), son modele, les URL de ses
-    actions, et le menu « + Ajouter apres ». `inserer_apres=<rang>` est relu
-    par BlocAdmin.save_model pour placer le nouveau bloc.
-    / Per block: rank, model label, action URLs and the "+ Add after" menu.
+    actions, et l'URL de son menu « + » (charge a la demande par
+    vue_menu_ajout). `inserer_apres=<rang>` est relu par BlocAdmin.save_model
+    pour placer le nouveau bloc.
+    / Per block: rank, model label, action URLs and the "+" menu URL (loaded
+    on demand by vue_menu_ajout).
     """
     blocs_dans_l_ordre = list(page.blocs.order_by("position", "pk").prefetch_related("images_galerie"))
     nombre_de_blocs = len(blocs_dans_l_ordre)
@@ -906,7 +951,13 @@ def _elements_avec_outils(page):
                 "url_monter": reverse("staff_admin:pages_bloc_deplacer", args=[bloc.pk, "monter"]),
                 "url_descendre": reverse("staff_admin:pages_bloc_deplacer", args=[bloc.pk, "descendre"]),
                 "url_retirer": reverse("staff_admin:pages_bloc_retirer", args=[bloc.pk]),
-                "menu_ajout": menu_d_ajout(page, rang),
+                # Le menu « + » n'est pas construit ici : il est charge a la
+                # premiere ouverture (vue_menu_ajout). On ne passe que son URL.
+                # / The "+" menu is not built here: loaded on first open.
+                "url_menu_ajout": (
+                    reverse("staff_admin:pages_page_menu_ajout", args=[page.pk])
+                    + f"?inserer_apres={rang}"
+                ),
                 "testid_menu": f"page-bloc-{rang}-ajouter",
             }
         )
@@ -937,6 +988,46 @@ def vue_apercu_page(request, object_id):
     page = get_object_or_404(Page, pk=_uuid_ou_404(object_id))
     elements = _elements_avec_outils(page)
     return HttpResponse(rendre_document_apercu(request, page, elements, avec_outils=True))
+
+
+@require_GET
+def vue_menu_ajout(request, object_id):
+    """
+    Liste des modeles de bloc pour le menu « + » d'UN bloc (charge a la demande).
+    / Block model list for ONE block's "+" menu (loaded on demand).
+
+    LOCALISATION : pages/admin_apercu.py
+
+    FLUX :
+    1. admin/pages/apercu/_outils_bloc.html inclut _menu_modeles.html avec
+       `url_chargement` (l'URL de cette vue, ?inserer_apres=<rang>).
+    2. A la premiere ouverture du menu (evenement `toggle` du <details>), htmx
+       fait un hx-get ici, une seule fois.
+    3. On renvoie _menu_modeles_liens.html : les modeles groupes par type,
+       chaque lien pre-rempli pour inserer le bloc a cette place.
+    Avant, la barre de chaque bloc embarquait deja le menu complet (~25 liens) :
+    une page de 50 blocs en portait ~1250.
+    / Returns the model links for one position, on the menu's first opening,
+    instead of embedding the full menu in every block bar.
+    """
+    if not TenantAdminPermissionWithRequest(request):
+        return HttpResponseForbidden()
+
+    page = get_object_or_404(Page, pk=_uuid_ou_404(object_id))
+    valeur = request.GET.get("inserer_apres", "")
+    if not valeur.isdigit():
+        raise Http404()
+    inserer_apres = int(valeur)
+
+    return render(
+        request,
+        "admin/pages/apercu/_menu_modeles_liens.html",
+        {
+            "groupes": menu_d_ajout(page, inserer_apres),
+            "cible": "_top",
+            "testid": f"page-bloc-{inserer_apres}-ajouter",
+        },
+    )
 
 
 def _recharger_l_apercu():

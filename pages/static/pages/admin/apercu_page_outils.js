@@ -175,32 +175,45 @@
     }
 
     // Un menu « + Ajouter apres » qui deborderait en bas s'ouvre vers le haut.
-    // / A menu that would overflow at the bottom opens upwards.
-    calque.addEventListener(
+    // Verifie a l'ouverture, puis de nouveau quand sa liste arrive du serveur
+    // (chargement a la demande, htmx:afterSwap) : elle change sa hauteur.
+    // / A menu that would overflow at the bottom opens upwards. Checked on
+    // open, then again when its list arrives from the server.
+    function orienterLeMenu(details) {
+        if (!details || !details.open) {
+            return;
+        }
+        var menu = details.querySelector("[data-menu-liste]");
+        if (!menu) {
+            return;
+        }
+        menu.style.top = "calc(100% + 4px)";
+        menu.style.bottom = "auto";
+        // La fenetre de l'iframe a la hauteur du document (apercu.js) :
+        // tout ce qui depasse innerHeight serait coupe.
+        // / The iframe viewport is as tall as the content.
+        var bas_du_menu = menu.getBoundingClientRect().bottom;
+        if (bas_du_menu > window.innerHeight) {
+            menu.style.top = "auto";
+            menu.style.bottom = "calc(100% + 4px)";
+        }
+    }
+    conteneur.addEventListener(
         "toggle",
         function (evenement) {
-            var details = evenement.target;
-            if (!details.open) {
-                return;
-            }
-            var menu = details.querySelector("[data-menu-liste]");
-            if (!menu) {
-                return;
-            }
-            menu.style.top = "calc(100% + 4px)";
-            menu.style.bottom = "auto";
-            // La fenetre de l'iframe a la hauteur du document (apercu.js) :
-            // tout ce qui depasse innerHeight serait coupe.
-            // / The iframe viewport is as tall as the content: anything past
-            // innerHeight would be cut.
-            var bas_du_menu = menu.getBoundingClientRect().bottom;
-            if (bas_du_menu > window.innerHeight) {
-                menu.style.top = "auto";
-                menu.style.bottom = "calc(100% + 4px)";
-            }
+            orienterLeMenu(evenement.target);
         },
         true
     );
+    // afterSettle et non afterSwap : en outerHTML, la cible d'afterSwap peut
+    // etre l'element remplace, deja sorti du DOM. On reoriente donc tous les
+    // menus ouverts. / afterSettle, not afterSwap: re-orient every open menu.
+    document.body.addEventListener("htmx:afterSettle", function () {
+        var menus_ouverts = document.querySelectorAll("details[data-menu-modeles][open]");
+        for (var n = 0; n < menus_ouverts.length; n++) {
+            orienterLeMenu(menus_ouverts[n]);
+        }
+    });
 
     // Fermer un menu « + » au clic a cote, ou avec Echap (le focus revient
     // sur son bouton). / Close a "+" menu on outside click, or with Escape.

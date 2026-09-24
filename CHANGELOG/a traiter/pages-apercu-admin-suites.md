@@ -24,17 +24,15 @@ correctif envisagé.
 **Piste écartée : `hx-swap-oob`.** Un échange hors-bande ne remplace des éléments que dans le document qui a reçu la réponse, ici celui de l'iframe. L'en-tête est dans un autre document, celui de l'admin : la réponse ne peut pas l'atteindre. De plus, `HX-Refresh` recharge l'iframe, donc le corps de la réponse n'est même pas utilisé.
 
 **Pistes, de la plus simple à la plus lourde :**
-1. **Déplacer l'en-tête dans le document de l'iframe** (recommandé). Le compteur, le menu « + Ajouter en tête » et le message « page vide » seraient rendus par `admin/pages/apercu/_blocs.html` quand `avec_outils` est vrai, en styles en ligne comme les barres d'actions. `HX-Refresh` les recalcule alors avec le reste, sans JavaScript de communication. Dans la page de l'admin, il ne reste que le titre de section et l'iframe, toujours affichée, même vide. Coût : environ 1 h.
+1. **Déplacer l'en-tête dans le document de l'iframe** (recommandé). Le compteur, le menu « + Ajouter un bloc en premier » et le message « page vide » seraient rendus par `admin/pages/apercu/_blocs.html` quand `avec_outils` est vrai, en styles en ligne comme les barres d'actions. `HX-Refresh` les recalcule alors avec le reste, sans JavaScript de communication. Dans la page de l'admin, il ne reste que le titre de section et l'iframe, toujours affichée, même vide. Coût : environ 1 h.
 2. **Retirer le compteur** de l'en-tête et toujours afficher l'iframe, qui dirait elle-même « aucun bloc ». Coût : 15 min, mais on perd l'information « N blocs » en tête de section.
 3. **Faire prévenir la page par l'iframe** (`window.parent.postMessage`), et recharger la section en HTMX côté admin. Plus de JavaScript et deux documents à synchroniser : c'est la moins lisible des trois.
 
 **Dans tous les cas, pour le 404 :** faire répondre `HX-Refresh` par `vue_deplacer_bloc` et `vue_retirer_bloc` même quand le bloc est introuvable. L'aperçu se recharge alors proprement, avec l'ordre réel des blocs. Environ 10 lignes dans `pages/admin_apercu.py`, plus un test.
 
-## 2. Suggestions de l'audit non retenues pour l'instant / Audit suggestions not applied yet
+## 2. Suggestions de l'audit — TRAITÉ le 2026-09-24 / DONE
 
-- **Scripts tiers dans le document d'aperçu.** L'aperçu charge le `shell.html` du skin avec tous ses scripts, dont formbricks s'il est configuré, et le recharge à chaque frappe. Ce n'est pas un nouveau risque : les pages publiques sont déjà sur le même domaine que l'admin. Mais c'est inutile et bruyant. **Correctif :** entourer ces scripts de `{% if not apercu_admin %}` dans les 3 shells.
-- **Menu « + » répété sur chaque bloc.** `_elements_avec_outils` construit le menu complet des modèles (≈ 25 URL) pour chaque bloc. Une page de 50 blocs, c'est ≈ 1250 `reverse()` et des `<template>` lourds. **Correctif :** un seul menu dans le document, avec `inserer_apres` posé au clic, ou les URL calculées une fois par requête.
-- **Deux chemins de validation.** La sauvegarde passe par `ModelForm` + `LignesField`, l'aperçu par `ApercuBlocSerializer`. Ils peuvent diverger : `nombre_max` est limité à 1000 dans l'aperçu, et à rien dans le modèle. **Correctif :** poser les bornes au même endroit (validateurs du modèle), et les relire dans le serializer.
+Les trois suggestions ont été appliquées : scripts tiers retirés de l'aperçu, menu « + » chargé à la demande, limites de validation lues sur le modèle. Voir `CHANGELOG/2026-09-23-pages-apercu-admin.md`, section G.
 
 ## 3. Hors du périmètre de l'audit / Outside the audit scope
 

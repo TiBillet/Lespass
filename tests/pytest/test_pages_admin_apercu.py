@@ -356,7 +356,7 @@ def test_fiche_page_a_une_seule_iframe(tenant, admin_client, nettoyer_pages_aper
 
 
 def test_fiche_page_sans_bloc_invite_a_en_ajouter(tenant, admin_client, nettoyer_pages_apercu):
-    """Une page vide n'affiche pas d'iframe, mais le menu « Ajouter en tete »."""
+    """Une page vide n'affiche pas d'iframe, mais le menu « Ajouter un bloc en premier »."""
     page = _creer_page(tenant, "vide")
 
     contenu = admin_client.get(reverse("staff_admin:pages_page_change", args=[page.pk])).content.decode()
@@ -387,7 +387,10 @@ def test_apercu_de_la_page_rend_tous_les_blocs_avec_leur_barre(tenant, admin_cli
     assert "Premiere question" in contenu and "Une carte" in contenu
     assert contenu.count("data-apercu-outils=") == 2
     assert 'data-testid="page-bloc-2-modifier"' in contenu
-    assert "inserer_apres=2" in contenu
+    # Le menu « + » n'est plus embarque : seule son URL de chargement l'est.
+    # / The "+" menu is no longer embedded: only its loading URL is.
+    assert "menu-ajout/?inserer_apres=2" in contenu
+    assert reverse("staff_admin:pages_bloc_add") not in contenu
     assert "apercu_page_outils.js" in contenu
 
 
@@ -925,6 +928,7 @@ def test_un_non_admin_connecte_n_obtient_rien(tenant, client_connecte_non_admin,
         client.get(reverse("staff_admin:pages_page_apercu", args=[page.pk])),
         client.post(reverse("staff_admin:pages_bloc_apercu"), {"modele": "FAQ:", "page": str(page.pk)}),
         client.get(reverse("staff_admin:pages_bloc_editeur_ligne") + "?editeur=gps&nom=points_gps_editeur"),
+        client.get(reverse("staff_admin:pages_page_menu_ajout", args=[page.pk]) + "?inserer_apres=1"),
         client.post(reverse("staff_admin:pages_bloc_deplacer", args=[bloc.pk, "descendre"])),
         client.post(reverse("staff_admin:pages_bloc_retirer", args=[bloc.pk])),
     ]
@@ -1078,3 +1082,72 @@ def test_le_cache_a_des_delais_d_attente_et_tolere_les_pannes():
     assert client_memcached.ignore_exc is True
     assert client_memcached.default_kwargs["timeout"] == 2
     assert client_memcached.default_kwargs["connect_timeout"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Suites de l'audit (point 2 de « a traiter ») : menu a la demande, bornes,
+# scripts tiers / Audit follow-ups: on-demand menu, bounds, third-party scripts
+# ---------------------------------------------------------------------------
+def test_menu_ajout_rend_les_modeles_pour_une_position(tenant, admin_client, nettoyer_pages_apercu):
+    """Le menu « + » d'un bloc, charge a la demande, pre-remplit la bonne place."""
+    page = _creer_page(tenant, "menu-demande")
+    url = reverse("staff_admin:pages_page_menu_ajout", args=[page.pk]) + "?inserer_apres=3"
+
+    reponse = admin_client.get(url)
+    contenu = reponse.content.decode()
+
+    assert reponse.status_code == 200
+    assert "inserer_apres=3" in contenu
+    assert 'target="_top"' in contenu
+    assert 'data-testid="page-bloc-3-ajouter-sectioncarte"' in contenu
+
+
+def test_menu_ajout_refuse_une_position_ou_une_page_invalide(tenant, admin_client, nettoyer_pages_apercu):
+    """Position absente ou non numerique, page inconnue : 404, jamais 500."""
+    page = _creer_page(tenant, "menu-invalide")
+    url = reverse("staff_admin:pages_page_menu_ajout", args=[page.pk])
+
+    assert admin_client.get(url).status_code == 404
+    assert admin_client.get(url + "?inserer_apres=abc").status_code == 404
+    assert admin_client.get("/admin/pages/page/abc/menu-ajout/?inserer_apres=1").status_code == 404
+
+
+def test_bornes_de_l_apercu_identiques_a_celles_du_modele():
+    """
+    Le serializer de l'apercu lit ses limites sur le modele : l'apercu et
+    l'enregistrement refusent exactement les memes valeurs.
+    """
+    from django.core.validators import MaxValueValidator, MinValueValidator
+
+    from pages.admin_apercu import ApercuBlocSerializer
+    from pages.models import Bloc
+
+    champs = ApercuBlocSerializer().fields
+    for nom in ("titre", "sous_titre", "badge", "bouton_label", "bouton_url",
+                "bouton2_label", "bouton2_url", "auteur_nom", "auteur_role", "embed_url"):
+        assert champs[nom].max_length == Bloc._meta.get_field(nom).max_length, nom
+
+    for nom in ("hauteur_px", "nombre_max"):
+        validateurs = Bloc._meta.get_field(nom).validators
+        minimum = [v.limit_value for v in validateurs if isinstance(v, MinValueValidator)][0]
+        maximum = [v.limit_value for v in validateurs if isinstance(v, MaxValueValidator)][0]
+        assert (champs[nom].min_value, champs[nom].max_value) == (minimum, maximum), nom
+
+
+def test_l_apercu_ne_charge_pas_formbricks(tenant, admin_client, nettoyer_pages_apercu):
+    """Meme configure pour le lieu, formbricks n'est pas charge dans l'apercu."""
+    from types import SimpleNamespace
+    from unittest import mock
+
+    page = _creer_page(tenant, "formbricks")
+    faux_reglage = SimpleNamespace(api_host="https://formbricks.exemple.org")
+
+    with mock.patch("BaseBillet.views.FormbricksConfig.get_solo", return_value=faux_reglage):
+        reponse = admin_client.post(
+            reverse("staff_admin:pages_bloc_apercu"),
+            {"modele": "FAQ:", "page": str(page.pk), "titre": "Q"},
+        )
+
+    contenu = reponse.content.decode()
+    assert "bloc-apercu-iframe" in contenu
+    assert "formbricks.umd.cjs" not in contenu

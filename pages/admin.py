@@ -18,7 +18,7 @@ UX D'EDITION : on part de la PAGE.
 - La fiche d'une page montre, sous son formulaire, la page RENDUE comme sur
   le site, dans UNE iframe. Chaque bloc y porte une barre d'actions
   (↑ ↓ Modifier ✕, et + pour ajouter un bloc juste apres) ; un menu
-  « + Ajouter en tete » est au-dessus (pages/admin_apercu.py).
+  « + Ajouter un bloc en premier » est au-dessus (pages/admin_apercu.py).
 - La fiche d'un bloc porte le contenu, avec un APERCU EN DIRECT a cote du
   formulaire. Premiere action : choisir le MODELE DE BLOC (type + affichage
   en un seul select) -> les champs correspondants se deroulent
@@ -84,6 +84,7 @@ from pages.admin_apercu import (
     vue_apercu_page,
     vue_deplacer_bloc,
     vue_ligne_vide,
+    vue_menu_ajout,
     vue_retirer_bloc,
 )
 from pages.admin_widgets import LignesField
@@ -527,6 +528,11 @@ class PageAdmin(ModelAdmin):
                 "<path:object_id>/apercu/",
                 self.admin_site.admin_view(vue_apercu_page),
                 name="pages_page_apercu",
+            ),
+            path(
+                "<path:object_id>/menu-ajout/",
+                self.admin_site.admin_view(vue_menu_ajout),
+                name="pages_page_menu_ajout",
             ),
         ]
         return routes_des_blocs + super().get_urls()
@@ -1237,7 +1243,7 @@ class BlocAdmin(ModelAdmin):
                 request,
                 _(
                     "Un bloc s'ajoute depuis la fiche de sa page : ouvrez la "
-                    "page, puis « + Ajouter en tête » ou le + d'un bloc."
+                    "page, puis « + Ajouter un bloc en premier » ou le + d'un bloc."
                 ),
             )
             return HttpResponseRedirect(reverse("staff_admin:pages_page_changelist"))
