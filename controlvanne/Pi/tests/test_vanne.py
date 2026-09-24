@@ -33,7 +33,7 @@ else:
         load_dotenv(os.path.join(os.path.dirname(__file__), "../.env"))
     except ImportError:
         pass
-    active_high = os.getenv("VALVE_ACTIVE_HIGH", "False").lower() == "true"
+    active_high = os.getenv("VALVE_ACTIVE_HIGH", "True").lower() == "true"
 
 # Niveau logique selon la polarité du relais
 niveau_ouvert = 1 if active_high else 0

@@ -46,4 +46,8 @@ class Valve:
         logger.info(f"Vanne fermée (GPIO{self.gpio_pin}={self._signal_close()}).")
 
     def cleanup(self):
-        self.close()
+        """Ferme la vanne puis la connexion pigpio. Idempotent.
+        / Close the valve, then the pigpio connection. Idempotent."""
+        if self.pi.connected:
+            self.close()
+            self.pi.stop()

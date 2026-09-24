@@ -58,14 +58,14 @@ fi
 while true; do
   "$CHROMIUM_BIN" \
     --user-data-dir="$PROFILE_DIR" \
-    --force-device-scale-factor=2.0 \
+    --force-device-scale-factor=1.0 \
     --lang=fr --accept-lang=fr-FR,fr \
     --no-first-run --no-default-browser-check \
     --kiosk "$URL" --start-fullscreen \
     --overscroll-history-navigation=0 \
     --autoplay-policy=no-user-gesture-required \
     --disable-gpu --use-gl=swiftshader --disable-dev-shm-usage \
-    --noerrdialogs --disable-session-crashed-bubble --disable-translate \
+    --noerrdialogs --disable-session-crashed-bubble --disable-features=Translate,TranslateUI \
     --enable-features=UseOzonePlatform --ozone-platform=x11
   rc=$?
   echo "[KIOSK] Chromium terminé (rc=$rc), relance dans 2s…"

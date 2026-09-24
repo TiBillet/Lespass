@@ -268,10 +268,26 @@ class TibeerController:
             logger.warning(f"Ping apres maintenance echoue (facteur inchange): {e}")
 
     def cleanup(self):
-        """Nettoyage des ressources GPIO.
-        / Cleanup GPIO resources."""
+        """Arret propre : clore la session en cours cote serveur, puis fermer la vanne.
+        Sans cela, un arret (systemctl stop, reboot) pendant un service laisse la
+        session « en cours » sur le serveur : jamais facturee, et le kiosk reste
+        fige sur la derniere carte.
+        / Clean shutdown: end the current session server-side, then close the valve.
+        Otherwise a stop/reboot during a pour leaves the session open on the server:
+        never billed, and the kiosk stays stuck on the last card."""
         logger.info("Nettoyage des ressources...")
+        if self.current_uid is not None:
+            try:
+                logger.info(f"Session en cours (badge {self.current_uid}) : cloture avant arret.")
+                self._handle_card_removal()
+            except Exception as e:
+                logger.error(f"Cloture de session a l'arret echouee: {e}")
         try:
-            self.valve.close()
+            # ferme la vanne, puis pi.stop()
+            self.valve.cleanup()      
+        except Exception:
+            pass
+        try:
+            self.flow_meter.cleanup()  # cb.cancel(), puis pi.stop()
         except Exception:
             pass

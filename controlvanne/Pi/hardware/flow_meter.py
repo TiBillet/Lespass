@@ -126,6 +126,16 @@ class FlowMeter:
         self.last_time = time.time()
 
     def cleanup(self):
+        """Annule le callback et ferme la connexion pigpio. Idempotent.
+        Sans cela, pigpiod garde un handle de notification orphelin a chaque
+        arret de tibeer — cause probable de son blocage sur SIGTERM (90 s).
+        / Cancel the callback and close the pigpio connection. Idempotent.
+        Otherwise pigpiod keeps an orphan notification handle after each
+        tibeer stop — likely cause of its SIGTERM hang (90 s)."""
         if self.cb:
             self.cb.cancel()
-        # Note: on ne stop pas self.pi ici car partagé avec Valve si besoin,
+            self.cb = None
+        # Chaque classe a SA connexion pigpio (pas de partage avec Valve).
+        # / Each class owns ITS pigpio connection (not shared with Valve).
+        if self.pi.connected:
+            self.pi.stop()
