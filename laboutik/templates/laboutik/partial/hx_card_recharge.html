@@ -21,7 +21,9 @@ ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
 2. COMBIEN : les tarifs du produit choisi (1, 5, 10, Libre...).
 3. LIBRE   : pave numerique (cotton/numpad.html) si le tarif est libre.
 4. CONFIRMER : montant, solde apres recharge, puis
-   - recharge payante (RE) : tuiles de paiement → POST payer()
+   - recharge payante (RE) : tuiles de paiement → popup de confirmation
+     (confirmer, recharge=1 : pave especes, rappel CB) → Valider soumet
+     #card-recharge-form → POST payer()
    - recharge offerte (RC / TM) : « Offrir » → POST identifier_client()
    Ces deux vues existent deja : elles font la recharge, la compta et
    l'ecran de succes. Les champs envoyes sont dans #card-recharge-form.
@@ -182,7 +184,15 @@ ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
 
           {# Les champs lus par payer() / identifier_client() : meme format que #addition-form #}
           {# / Fields read by payer() / identifier_client(): same format as #addition-form     #}
-          <form id="card-recharge-form" hidden>
+          {# Recharge payante : ce formulaire est soumis vers payer() par le bouton     #}
+          {# Valider de la popup de confirmation (hx_confirm_payment.html, est_recharge). #}
+          {# given_sum (somme donnee en especes) vient de #addition-form.                 #}
+          {# / Paid top-up: submitted to payer() by the confirmation popup's Validate.   #}
+          <form id="card-recharge-form" hidden
+                hx-post="{% url 'laboutik-paiement-payer' %}"
+                hx-include="#addition-form [name='tag_id_cm'], #addition-form [name='hostname_client'], #addition-form [name='given_sum']"
+                hx-target="#messages" hx-swap="outerHTML">
+            <input type="hidden" name="moyen_paiement" value="" />
             <input type="hidden" name="tag_id" value="{{ recharge.tag_id }}" />
             <input type="hidden" name="uuid_pv" value="{{ recharge.uuid_pv }}" />
             <input type="hidden" name="total" value="{{ recharge.montant_centimes }}" />
@@ -213,18 +223,33 @@ ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
             <p class="payment-title">{% translate "Payé en" %}</p>
             <div class="payment-methods">
               {% if 'espece' in recharge.moyens_paiement %}
-                <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-post="{% url 'laboutik-paiement-payer' %}" hx-vals='{"moyen_paiement": "espece"}' hx-include="#card-recharge-form, #addition-form [name='tag_id_cm'], #addition-form [name='hostname_client']" hx-target="#messages" hx-swap="outerHTML" data-loading-disable data-testid="recharge-btn-especes" />
+                <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ recharge.montant_centimes|divide_by:100|force_dot }}&recharge=1" hx-target="#confirm" hx-swap="outerHTML" hx-on:htmx:before-request="choisirMoyenRecharge('espece')" data-loading-disable data-testid="recharge-btn-especes" />
               {% endif %}
               {% if 'carte_bancaire' in recharge.moyens_paiement %}
-                <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-post="{% url 'laboutik-paiement-payer' %}" hx-vals='{"moyen_paiement": "carte_bancaire"}' hx-include="#card-recharge-form, #addition-form [name='tag_id_cm'], #addition-form [name='hostname_client']" hx-target="#messages" hx-swap="outerHTML" data-loading-disable data-testid="recharge-btn-cb" />
+                <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&total={{ recharge.montant_centimes|divide_by:100|force_dot }}&recharge=1" hx-target="#confirm" hx-swap="outerHTML" hx-on:htmx:before-request="choisirMoyenRecharge('carte_bancaire')" data-loading-disable data-testid="recharge-btn-cb" />
               {% endif %}
               {% if 'CH' in recharge.moyens_paiement %}
-                <c-V2.bt.paiement name='{% translate "CHÈQUE" %}' icon="cheque" hx-post="{% url 'laboutik-paiement-payer' %}" hx-vals='{"moyen_paiement": "CH"}' hx-include="#card-recharge-form, #addition-form [name='tag_id_cm'], #addition-form [name='hostname_client']" hx-target="#messages" hx-swap="outerHTML" data-loading-disable data-testid="recharge-btn-cheque" />
+                <c-V2.bt.paiement name='{% translate "CHÈQUE" %}' icon="cheque" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=CH&total={{ recharge.montant_centimes|divide_by:100|force_dot }}&recharge=1" hx-target="#confirm" hx-swap="outerHTML" hx-on:htmx:before-request="choisirMoyenRecharge('CH')" data-loading-disable data-testid="recharge-btn-cheque" />
               {% endif %}
             </div>
             {% if not recharge.moyens_paiement %}
               <p class="payment-empty" role="alert">{% translate "Aucun moyen de paiement" %}</p>
             {% endif %}
+            <script>
+              /**
+               * Range le moyen choisi dans #card-recharge-form, avant la popup
+               * de confirmation. Vide aussi la somme donnee de #addition-form :
+               * elle peut rester d'une vente precedente.
+               * / Stores the chosen method in #card-recharge-form before the
+               * confirmation popup, and clears a leftover given sum.
+               *
+               * LOCALISATION : hx_card_recharge.html (inline, etape 4)
+               */
+              function choisirMoyenRecharge(moyenPaiement) {
+                document.querySelector('#card-recharge-form [name="moyen_paiement"]').value = moyenPaiement
+                askAdditionManageForm('updateInput', '#addition-given-sum', '')
+              }
+            </script>
             <button type="button" class="card-confirm-cancel"
                     hx-get="{{ url_recharge }}?tag_id={{ recharge.tag_id|urlencode }}&uuid_pv={{ recharge.uuid_pv }}&produit={{ produit.uuid }}"
                     hx-target="#card-recharge-zone" hx-swap="outerHTML"

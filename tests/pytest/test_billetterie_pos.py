@@ -895,7 +895,7 @@ class TestBilletterieFlowHTTP:
             )
             # Les boutons de paiement doivent etre presents
             # / Payment buttons must be present
-            assert "client-btn-especes" in contenu or "espece" in contenu.lower()
+            assert "paiement-btn-especes" in contenu or "espece" in contenu.lower()
 
     def test_payer_especes_cree_reservation_et_ticket(
         self,
@@ -990,3 +990,186 @@ class TestBilletterieFlowHTTP:
             ).delete()
             tickets.delete()
             reservation.delete()
+
+
+@pytest.fixture(scope="module")
+def tarif_billet_gratuit(tenant, donnees_billetterie):
+    """
+    Un tarif a 0 € sur le produit billet de test.
+    / A 0 € price on the test ticket product.
+    """
+    from BaseBillet.models import Price
+
+    with tenant_context(tenant):
+        tarif_gratuit, _created = Price.objects.get_or_create(
+            product=donnees_billetterie["product_billet"],
+            name=f"{TEST_PREFIX} Gratuit",
+            defaults={"prix": Decimal("0.00"), "publish": True},
+        )
+        return tarif_gratuit
+
+
+class TestBilletGratuit:
+    """
+    Billet a 0 € : apres l'identification, pas de choix du moyen de paiement.
+    Un seul bouton VALIDER envoie moyen_paiement=gift, enregistre « Offert ».
+    / 0 € ticket: after identification, no payment choice. A single VALIDATE
+    button sends moyen_paiement=gift, recorded as "Offered".
+    """
+
+    def test_identifier_client_panier_gratuit_affiche_seulement_valider(
+        self,
+        admin_user_billetterie,
+        tenant,
+        donnees_billetterie,
+        tarif_billet_gratuit,
+    ):
+        with schema_context(TENANT_SCHEMA):
+            client = _make_client_billetterie(admin_user_billetterie, tenant)
+            pv = donnees_billetterie["pv"]
+            event = donnees_billetterie["event"]
+            id_composite = f"{event.uuid}__{tarif_billet_gratuit.uuid}"
+
+            response = client.post(
+                "/laboutik/paiement/identifier_client/",
+                data={
+                    "uuid_pv": str(pv.uuid),
+                    "email_adhesion": "billet-gratuit-test@tibillet.localhost",
+                    "prenom_adhesion": "Gratuit",
+                    "nom_adhesion": "Test",
+                    "panier_a_billets": "True",
+                    "moyens_paiement": "espece,carte_bancaire",
+                    f"repid-{id_composite}": "1",
+                },
+            )
+
+            assert response.status_code == 200
+            contenu = response.content.decode()
+            assert 'data-testid="client-recapitulatif"' in contenu
+            assert 'data-testid="paiement-btn-gratuit"' in contenu
+            assert 'data-testid="paiement-btn-especes"' not in contenu
+            assert 'data-testid="paiement-btn-cb"' not in contenu
+
+    def test_identifier_client_panier_payant_affiche_les_tuiles_avec_le_total(
+        self,
+        admin_user_billetterie,
+        tenant,
+        donnees_billetterie,
+    ):
+        """
+        Panier payant : les tuiles de la vente normale, et la tuile CB
+        envoie le total a la popup de confirmation (plus de « 0 € »).
+        / Paid cart: normal-sale tiles; the card tile passes the total.
+        """
+        with schema_context(TENANT_SCHEMA):
+            client = _make_client_billetterie(admin_user_billetterie, tenant)
+            pv = donnees_billetterie["pv"]
+            event = donnees_billetterie["event"]
+            price = donnees_billetterie["price_billet"]
+            id_composite = f"{event.uuid}__{price.uuid}"
+
+            response = client.post(
+                "/laboutik/paiement/identifier_client/",
+                data={
+                    "uuid_pv": str(pv.uuid),
+                    "email_adhesion": "billet-http-test@tibillet.localhost",
+                    "prenom_adhesion": "Test",
+                    "nom_adhesion": "Billet",
+                    "panier_a_billets": "True",
+                    f"repid-{id_composite}": "1",
+                },
+            )
+
+            contenu = response.content.decode()
+            assert 'data-testid="paiement-btn-cb"' in contenu
+            assert "method=carte_bancaire&total=15" in contenu
+            assert 'data-testid="paiement-btn-gratuit"' not in contenu
+
+    def test_payer_gift_panier_gratuit_cree_billet_offert(
+        self,
+        admin_user_billetterie,
+        tenant,
+        donnees_billetterie,
+        tarif_billet_gratuit,
+    ):
+        from AuthBillet.models import TibilletUser
+        from BaseBillet.models import LigneArticle, PaymentMethod, Reservation, Ticket
+
+        with schema_context(TENANT_SCHEMA):
+            client = _make_client_billetterie(admin_user_billetterie, tenant)
+            pv = donnees_billetterie["pv"]
+            event = donnees_billetterie["event"]
+            id_composite = f"{event.uuid}__{tarif_billet_gratuit.uuid}"
+
+            response = client.post(
+                "/laboutik/paiement/payer/",
+                data={
+                    "uuid_pv": str(pv.uuid),
+                    "moyen_paiement": "gift",
+                    "total": "0",
+                    "email_adhesion": "billet-gratuit-test@tibillet.localhost",
+                    "prenom_adhesion": "Gratuit",
+                    "nom_adhesion": "Test",
+                    f"repid-{id_composite}": "1",
+                },
+            )
+
+            assert response.status_code == 200
+            assert 'data-testid="paiement-succes"' in response.content.decode()
+
+            user_gratuit = TibilletUser.objects.get(
+                email="billet-gratuit-test@tibillet.localhost",
+            )
+            reservation = (
+                Reservation.objects.filter(user_commande=user_gratuit, event=event)
+                .order_by("-datetime")
+                .first()
+            )
+            assert reservation is not None
+            tickets = Ticket.objects.filter(reservation=reservation)
+            assert tickets.count() == 1
+            assert tickets.first().payment_method == PaymentMethod.FREE
+            ligne = LigneArticle.objects.get(reservation=reservation)
+            assert ligne.amount == 0
+            assert ligne.payment_method == PaymentMethod.FREE
+
+            # Nettoyage / Cleanup
+            LigneArticle.objects.filter(reservation=reservation).delete()
+            tickets.delete()
+            reservation.delete()
+
+    def test_payer_gift_panier_payant_est_refuse(
+        self,
+        admin_user_billetterie,
+        tenant,
+        donnees_billetterie,
+    ):
+        """
+        Un POST force « gift » sur un panier payant est refuse (400).
+        / A forged "gift" POST on a paid cart is refused (400).
+        """
+        from BaseBillet.models import Reservation
+
+        with schema_context(TENANT_SCHEMA):
+            client = _make_client_billetterie(admin_user_billetterie, tenant)
+            pv = donnees_billetterie["pv"]
+            event = donnees_billetterie["event"]
+            price = donnees_billetterie["price_billet"]
+            id_composite = f"{event.uuid}__{price.uuid}"
+            nombre_de_reservations_avant = Reservation.objects.filter(event=event).count()
+
+            response = client.post(
+                "/laboutik/paiement/payer/",
+                data={
+                    "uuid_pv": str(pv.uuid),
+                    "moyen_paiement": "gift",
+                    "total": "0",
+                    "email_adhesion": "billet-gift-force@tibillet.localhost",
+                    "prenom_adhesion": "Force",
+                    "nom_adhesion": "Test",
+                    f"repid-{id_composite}": "1",
+                },
+            )
+
+            assert response.status_code == 400
+            assert Reservation.objects.filter(event=event).count() == nombre_de_reservations_avant

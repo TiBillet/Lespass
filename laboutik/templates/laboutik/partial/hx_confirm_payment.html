@@ -25,6 +25,9 @@ FLUX :
    Valider soumet #complement-form vers payer_complementaire(). Ce formulaire
    est dans la popup de #messages, masquee mais toujours dans le DOM.
    / Complement case: Validate submits #complement-form to payer_complementaire().
+   Cas recharge (est_recharge, ouvert depuis hx_card_recharge.html) :
+   Valider soumet #card-recharge-form vers payer().
+   / Top-up case: Validate submits #card-recharge-form to payer().
 5. La croix ou le fond ferme #confirm : on revient au choix du paiement.
 -->
 <div id="confirm"
@@ -178,6 +181,18 @@ FLUX :
         hideAndEmptyElement('#confirm')
       }, { once: true })
       htmx.trigger('#complement-form', 'submit')
+      {% elif est_recharge %}
+      // Recharge depuis le check carte : on soumet #card-recharge-form
+      // (hx_card_recharge.html) vers payer(). Il inclut given_sum de
+      // #addition-form. On ferme cette popup quand la reponse arrive,
+      // avec le meme ecouteur que pour le complement.
+      // / Check-card top-up: submit #card-recharge-form to payer().
+      // Close #confirm when the response arrives (same listener as above).
+      const zoneMessagesRecharge = document.querySelector('#messages')
+      zoneMessagesRecharge.addEventListener('htmx:beforeSwap', function () {
+        hideAndEmptyElement('#confirm')
+      }, { once: true })
+      htmx.trigger('#card-recharge-form', 'submit')
       {% else %}
       // Definit l'URL de soumission du formulaire
       // / Sets the form submission URL

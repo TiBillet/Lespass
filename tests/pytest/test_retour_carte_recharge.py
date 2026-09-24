@@ -452,6 +452,89 @@ def test_recharge_payee_en_especes_credite_la_carte(
     assert solde_local == 500
 
 
+def test_recharge_tuiles_payantes_ouvrent_la_popup_de_confirmation(
+    tenant_lespass, point_de_vente, carte_client, produits_de_recharge
+):
+    """
+    Les tuiles ESPÈCE / CB de la recharge ouvrent la popup de confirmation
+    (confirmer, recharge=1) au lieu de payer tout de suite.
+    / Cash / card top-up tiles open the confirmation popup instead of paying.
+    """
+    produit_local = produits_de_recharge["produit_local"]
+    tarif_5_euros = _tarif(produit_local, montant_en_euros=5)
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.get(
+        URL_RECHARGE_CARTE,
+        {
+            "tag_id": carte_client.tag_id,
+            "uuid_pv": str(point_de_vente.uuid),
+            "produit": str(produit_local.uuid),
+            "prix": str(tarif_5_euros.uuid),
+        },
+    )
+    contenu = reponse.content.decode()
+
+    assert "/laboutik/paiement/confirmer/?method=espece&total=5.00&recharge=1" in contenu
+    assert "/laboutik/paiement/confirmer/?method=carte_bancaire&total=5.00&recharge=1" in contenu or (
+        "carte_bancaire" not in contenu
+    )
+    # Le formulaire de recharge porte le moyen choisi et part vers payer()
+    # / The top-up form carries the chosen method and posts to payer()
+    champs = _champs_du_formulaire_de_recharge(contenu)
+    assert "moyen_paiement" in champs
+    assert 'hx-post="/laboutik/paiement/payer/"' in contenu
+
+
+def test_confirmer_en_mode_recharge_soumet_le_formulaire_de_recharge(
+    tenant_lespass, point_de_vente
+):
+    """
+    confirmer?recharge=1 : le bouton Valider soumet #card-recharge-form.
+    / confirmer?recharge=1: Validate submits #card-recharge-form.
+    """
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.get(
+        "/laboutik/paiement/confirmer/",
+        {"method": "espece", "total": "5.00", "recharge": "1"},
+    )
+    contenu = reponse.content.decode()
+
+    assert reponse.status_code == 200
+    assert "htmx.trigger('#card-recharge-form', 'submit')" in contenu
+    assert "htmx.trigger('#complement-form', 'submit')" not in contenu
+
+
+def test_recharge_especes_avec_somme_donnee_a_virgule_credite_la_carte(
+    tenant_lespass, point_de_vente, carte_caissier, carte_client, produits_de_recharge
+):
+    """
+    Le JS envoie « somme x 100 », parfois un nombre a virgule (999.9999999).
+    payer() doit l'arrondir au lieu de planter.
+    / The JS may send a float given sum: payer() must round it, not crash.
+    """
+    produit_local = produits_de_recharge["produit_local"]
+    tarif_5_euros = _tarif(produit_local, montant_en_euros=5)
+    client_http = _client_connecte_admin(tenant_lespass)
+
+    reponse_confirmation = client_http.get(
+        URL_RECHARGE_CARTE,
+        {
+            "tag_id": carte_client.tag_id,
+            "uuid_pv": str(point_de_vente.uuid),
+            "produit": str(produit_local.uuid),
+            "prix": str(tarif_5_euros.uuid),
+        },
+    )
+    champs = _champs_du_formulaire_de_recharge(reponse_confirmation.content.decode())
+    champs["moyen_paiement"] = "espece"
+    champs["tag_id_cm"] = carte_caissier.tag_id
+    champs["given_sum"] = "999.9999999999999"
+    reponse_paiement = client_http.post(URL_PAYER, champs)
+
+    assert reponse_paiement.status_code == 200
+    assert 'data-testid="paiement-succes"' in reponse_paiement.content.decode()
+
+
 def test_recharge_offerte_credite_la_carte_sans_paiement(
     tenant_lespass, point_de_vente, carte_caissier, carte_client, produits_de_recharge
 ):

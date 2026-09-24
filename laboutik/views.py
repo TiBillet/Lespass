@@ -520,11 +520,21 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
     # Le .filter() dans la boucle utiliserait une nouvelle requête par produit (N+1).
     # Avec Prefetch(queryset=...), Django charge tout en 1 requête et filtre en mémoire.
     # Filtered prefetch: only published EUR prices, sorted by display order.
+    #
+    # On retire aussi les tarifs faits pour le paiement en ligne :
+    # - paiement recurrent (abonnement Stripe, prelevement SEPA) ;
+    # - validation manuelle (un admin valide l'adhesion apres coup).
+    # La caisse ne sait pas faire ces deux parcours.
+    # / Also drop online-only prices (recurring payment, manual validation):
+    # the POS cannot run these flows.
     prix_euros_prefetch = Prefetch(
         "prices",
-        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by(
-            "order"
-        ),
+        queryset=Price.objects.filter(
+            publish=True,
+            asset__isnull=True,
+            recurring_payment=False,
+            manual_validation=False,
+        ).order_by("order"),
         to_attr="prix_euros",
     )
 
@@ -4153,11 +4163,17 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
 
     # Charger tous les produits du PV en une seule requête (avec prix EUR préchargés)
     # Load all PV products in a single query (with EUR prices prefetched)
+    # Memes tarifs que les tuiles : pas de tarif recurrent ni a validation manuelle
+    # (voir _construire_donnees_articles). Un POST force est donc refuse aussi.
+    # / Same prices as the tiles: no recurring or manual-validation price.
     prix_euros_prefetch = Prefetch(
         "prices",
-        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by(
-            "order"
-        ),
+        queryset=Price.objects.filter(
+            publish=True,
+            asset__isnull=True,
+            recurring_payment=False,
+            manual_validation=False,
+        ).order_by("order"),
         to_attr="prix_euros",
     )
     # Produits du PV : ceux avec methode_caisse (articles POS) OU categorie_article=ADHESION
@@ -4400,6 +4416,87 @@ def _construire_recapitulatif_articles(articles_panier, prenom_client, nom_clien
         )
 
     return articles_pour_recapitulatif
+
+
+def _rendre_popup_paiement_client_identifie(
+    request,
+    point_de_vente,
+    articles_panier,
+    total_centimes,
+    moyens_paiement_du_post,
+    client_email,
+    client_prenom,
+    client_nom,
+    client_solde,
+    tag_id,
+    panier_a_recharges,
+    panier_a_adhesions,
+    panier_a_billets,
+):
+    """
+    Affiche la popup de paiement, une fois le client identifie.
+    / Renders the payment popup once the client is identified.
+
+    LOCALISATION : laboutik/views.py
+
+    On reutilise la popup de la vente normale (hx_display_type_payment.html).
+    Le mode « client_identifie » ajoute en haut le nom du client et le detail
+    des articles. Les tuiles de paiement sont les memes que pour une vente
+    normale (partial/_tuiles_paiement.html).
+    / Reuses the normal-sale popup in "client_identifie" mode: client name
+    and article recap on top, the same payment tiles below.
+
+    Deux cas particuliers :
+    - La carte a deja ete scannee (tag_id) : CASHLESS paie tout de suite
+      avec cette carte. Pas de deuxieme scan, pas de popup.
+    - Le panier est gratuit (ex : billet a 0 €) : un seul bouton VALIDER.
+      Il n'y a rien a encaisser.
+    / Two special cases: card already scanned (CASHLESS pays at once),
+    free cart (a single VALIDATE button).
+
+    Appelee par / Called by : PaiementViewSet.identifier_client()
+    """
+    # Les moyens de paiement sont recalcules par le serveur.
+    # Si le point de vente est introuvable, on garde ceux recus du formulaire.
+    # / Payment methods are recomputed server-side; fall back to the POST list.
+    if point_de_vente is not None:
+        moyens_paiement = _determiner_moyens_paiement(point_de_vente, articles_panier)
+    else:
+        moyens_paiement = moyens_paiement_du_post
+
+    # Le panier est gratuit si le total vaut 0 et qu'il contient au moins un article.
+    # Ce calcul est fait par le serveur, jamais lu depuis le formulaire.
+    # / The cart is free when the total is 0 and it holds at least one item.
+    panier_est_gratuit = total_centimes == 0 and len(articles_panier) > 0
+
+    articles_pour_recapitulatif = _construire_recapitulatif_articles(
+        articles_panier,
+        client_prenom,
+        client_nom,
+    )
+
+    context = {
+        "client_identifie": True,
+        "currency_data": CURRENCY_DATA,
+        "total": total_centimes / 100,
+        "moyens_paiement": moyens_paiement,
+        "moyens_paiement_csv": ",".join(moyens_paiement),
+        "mode_gerant": False,
+        "deposit_is_present": False,
+        "comportement": "",
+        "panier_a_recharges": panier_a_recharges,
+        "panier_a_adhesions": panier_a_adhesions,
+        "panier_a_billets": panier_a_billets,
+        "panier_est_gratuit": panier_est_gratuit,
+        "carte_deja_scannee": bool(tag_id),
+        "user_email": client_email,
+        "user_prenom": client_prenom,
+        "user_nom": client_nom,
+        "user_solde": client_solde,
+        "tag_id": tag_id,
+        "articles_pour_recapitulatif": articles_pour_recapitulatif,
+    }
+    return render(request, "laboutik/partial/hx_display_type_payment.html", context)
 
 
 def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
@@ -6133,6 +6230,13 @@ class PaiementViewSet(viewsets.ViewSet):
         # submit #complement-form to payer_complementaire instead of payer.
         est_complement = request.GET.get("complement") == "1"
 
+        # recharge=1 : on vient de l'ecran « Recharger » du check carte
+        # (hx_card_recharge.html). Valider soumettra #card-recharge-form
+        # vers payer, et pas #addition-form.
+        # / recharge=1: coming from the check-card top-up screen. Validate will
+        # submit #card-recharge-form to payer instead of #addition-form.
+        est_recharge = request.GET.get("recharge") == "1"
+
         context = {
             "method": moyen_paiement_choisi,
             "total": total_a_payer,
@@ -6142,6 +6246,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "uuid_transaction": uuid_transaction,
             "currency_data": CURRENCY_DATA,
             "est_complement": est_complement,
+            "est_recharge": est_recharge,
         }
         return render(request, "laboutik/partial/hx_confirm_payment.html", context)
 
@@ -6199,7 +6304,14 @@ class PaiementViewSet(viewsets.ViewSet):
         if somme_donnee_brute == "":
             donnees_paiement["given_sum"] = 0
         else:
-            donnees_paiement["given_sum"] = int(somme_donnee_brute)
+            # Le JS envoie « somme en euros x 100 ». Ce calcul peut donner
+            # un nombre a virgule (ex : 329.99999999999994). int() planterait :
+            # on arrondit d'abord, comme dans payer_complementaire.
+            # / The JS sends "euros x 100", which can be a float: round first.
+            try:
+                donnees_paiement["given_sum"] = int(round(float(somme_donnee_brute)))
+            except (ValueError, TypeError):
+                donnees_paiement["given_sum"] = 0
         donnees_paiement["missing"] = 0
 
         # --- Extraire les articles du panier depuis la DB ---
@@ -6346,6 +6458,44 @@ class PaiementViewSet(viewsets.ViewSet):
                 consigne_dans_panier,
                 moyen_paiement_code,
                 point_de_vente,
+            )
+
+        # --- Panier gratuit (ex : billet a 0 €) ---
+        # Le bouton « Valider » du panier gratuit envoie moyen_paiement=gift.
+        # Il n'y a rien a encaisser : on enregistre la vente comme « Offert ».
+        # Le serveur recalcule le total : si le panier n'est pas a 0, on refuse.
+        # Sans cette garde, un POST force offrirait n'importe quel panier.
+        # / Free cart (e.g. 0 € ticket): recorded as "Offered". The server
+        # recomputes the total and refuses anything that is not 0.
+        if moyen_paiement_code == "gift":
+            panier_est_gratuit = total_centimes == 0 and len(articles_panier) > 0
+            if not panier_est_gratuit:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _("Ce panier n'est pas gratuit."),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
+            # Meme traitement qu'une CB : lignes de vente, billets, adhesions.
+            # Le code "gift" donne PaymentMethod.FREE (MAPPING_CODES_PAIEMENT).
+            # / Same processing as a card payment; "gift" maps to PaymentMethod.FREE.
+            return self._payer_par_carte_ou_cheque(
+                request,
+                state,
+                donnees_paiement,
+                articles_panier,
+                total_en_euros,
+                total_centimes,
+                consigne_dans_panier,
+                transaction_precedente,
+                moyen_paiement_code,
             )
 
         # Moyen de paiement non reconnu → erreur
@@ -7724,18 +7874,19 @@ class PaiementViewSet(viewsets.ViewSet):
         car le formulaire soumis est #addition-form (qui contient tout).
 
         Retourne :
-        - Si user identifie → hx_recapitulatif_client.html (resume articles + boutons paiement)
+        - Si user identifie → hx_display_type_payment.html, mode client_identifie
+          (resume articles + tuiles de paiement)
         - Si carte anonyme → hx_formulaire_identification_client.html (pre-rempli avec tag_id)
-        - Si formulaire soumis avec email → validation puis hx_recapitulatif_client.html
+        - Si formulaire soumis avec email → validation puis meme popup (client_identifie)
 
         Receives tag_id (NFC scan) OR email/name (form).
         POST also contains repid-* (cart articles) and uuid_pv,
         because the submitted form is #addition-form (which contains everything).
 
         Returns:
-        - If user identified → hx_recapitulatif_client.html (article recap + payment buttons)
+        - If user identified → hx_display_type_payment.html in client_identifie mode
         - If anonymous card → hx_formulaire_identification_client.html (pre-filled with tag_id)
-        - If form submitted with email → validation then hx_recapitulatif_client.html
+        - If form submitted with email → validation then the same popup
 
         LOCALISATION : laboutik/views.py
         """
@@ -7762,6 +7913,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # We extract them to display the per-article recap.
         articles_panier = []
         total_en_euros = 0
+        total_centimes = 0
+        point_de_vente = None
         uuid_pv = request.POST.get("uuid_pv")
         if uuid_pv:
             try:
@@ -7928,30 +8081,20 @@ class PaiementViewSet(viewsets.ViewSet):
             user_prenom = user.first_name or prenom
             user_nom = user.last_name or nom
 
-            # Enrichir les articles avec un texte adaptatif par type
-            # / Enrich articles with adaptive text per type
-            articles_pour_recapitulatif = _construire_recapitulatif_articles(
-                articles_panier,
-                user_prenom,
-                user_nom,
-            )
-
-            context = {
-                "action": "initUrlAddition();",
-                "user_email": user.email,
-                "user_prenom": user_prenom,
-                "user_nom": user_nom,
-                "user_solde": solde,
-                "tag_id": tag_id,
-                "moyens_paiement": moyens_paiement,
-                "panier_a_recharges": panier_a_recharges,
-                "panier_a_adhesions": panier_a_adhesions,
-                "panier_a_billets": panier_a_billets,
-                "articles_pour_recapitulatif": articles_pour_recapitulatif,
-                "total_en_euros": total_en_euros,
-            }
-            return render(
-                request, "laboutik/partial/hx_recapitulatif_client.html", context
+            return _rendre_popup_paiement_client_identifie(
+                request,
+                point_de_vente=point_de_vente,
+                articles_panier=articles_panier,
+                total_centimes=total_centimes,
+                moyens_paiement_du_post=moyens_paiement,
+                client_email=user.email,
+                client_prenom=user_prenom,
+                client_nom=user_nom,
+                client_solde=solde,
+                tag_id=tag_id,
+                panier_a_recharges=panier_a_recharges,
+                panier_a_adhesions=panier_a_adhesions,
+                panier_a_billets=panier_a_billets,
             )
 
         # ------------------------------------------------------------------
@@ -8024,28 +8167,22 @@ class PaiementViewSet(viewsets.ViewSet):
                 except Exception:
                     solde_carte = 0
 
-            carte_label = carte.tag_id
-            articles_pour_recapitulatif = _construire_recapitulatif_articles(
-                articles_panier,
-                carte_label,
-                "",
-            )
-
-            context = {
-                "user_email": "",
-                "user_prenom": _("Carte anonyme"),
-                "user_nom": carte.tag_id,
-                "user_solde": solde_carte,
-                "tag_id": tag_id,
-                "moyens_paiement": moyens_paiement,
-                "panier_a_recharges": panier_a_recharges,
-                "panier_a_adhesions": panier_a_adhesions,
-                "panier_a_billets": panier_a_billets,
-                "articles_pour_recapitulatif": articles_pour_recapitulatif,
-                "total_en_euros": total_en_euros,
-            }
-            return render(
-                request, "laboutik/partial/hx_recapitulatif_client.html", context
+            # Le recapitulatif nomme la carte par son tag_id (pas de nom de client).
+            # / The recap names the card by its tag_id (no client name).
+            return _rendre_popup_paiement_client_identifie(
+                request,
+                point_de_vente=point_de_vente,
+                articles_panier=articles_panier,
+                total_centimes=total_centimes,
+                moyens_paiement_du_post=moyens_paiement,
+                client_email="",
+                client_prenom=_("Carte anonyme"),
+                client_nom=carte.tag_id,
+                client_solde=solde_carte,
+                tag_id=tag_id,
+                panier_a_recharges=panier_a_recharges,
+                panier_a_adhesions=panier_a_adhesions,
+                panier_a_billets=panier_a_billets,
             )
 
         # Aucune info → formulaire vierge
@@ -10475,7 +10612,14 @@ class CommandeViewSet(viewsets.ViewSet):
         if somme_donnee_brute == "":
             donnees_paiement["given_sum"] = 0
         else:
-            donnees_paiement["given_sum"] = int(somme_donnee_brute)
+            # Le JS envoie « somme en euros x 100 ». Ce calcul peut donner
+            # un nombre a virgule (ex : 329.99999999999994). int() planterait :
+            # on arrondit d'abord, comme dans payer_complementaire.
+            # / The JS sends "euros x 100", which can be a float: round first.
+            try:
+                donnees_paiement["given_sum"] = int(round(float(somme_donnee_brute)))
+            except (ValueError, TypeError):
+                donnees_paiement["given_sum"] = 0
         donnees_paiement["missing"] = 0
 
         moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")

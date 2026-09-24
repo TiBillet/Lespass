@@ -12,8 +12,12 @@ FLUX :
 1. L'utilisateur clique VALIDER dans l'addition
 2. #addition-form poste vers moyens_paiement() (swap outerHTML sur #messages)
 3. Si comportement "C" (point de vente cashless) : attente carte NFC
-4. Si panier_necessite_client : tuiles d'identification (NFC / email)
-5. Sinon : tuiles de paiement. Un clic charge l'etape suivante dans #confirm.
+4. Si client_identifie (rendu par identifier_client apres scan ou email) :
+   nom du client + detail des articles + tuiles de paiement.
+   CASHLESS paie avec la carte deja scannee. Panier a 0 € : un seul VALIDER.
+5. Si panier_necessite_client : tuiles d'identification (NFC / email)
+6. Sinon : tuiles de paiement. Un clic charge l'etape suivante dans #confirm.
+Les tuiles de paiement sont dans partial/_tuiles_paiement.html (etapes 4 et 6).
 
 STYLE (maquette TEMP-tibillet-laboutik-main, renderPaymentModal) :
 - popup centree .card-modal (overlay.css, bloc « POPUP CENTREE V2 ») ;
@@ -92,9 +96,12 @@ test_pos_retour_consigne.py, test_pos_paiement_cheque.py) : ne pas les renommer.
   <div data-testid="paiement-moyens" aria-live="polite">
     <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="payment-modal-total">
       {# Toucher le fond ferme la popup, comme la croix / Tapping the backdrop closes the popup #}
-      <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages')"></div>
+      {# Fermer remet l'URL du formulaire d'addition sur moyens_paiement :     #}
+      {# le parcours client l'a changee (identifier_client, payer).             #}
+      {# / Closing resets the addition form URL: the client flow changed it.   #}
+      <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages');initUrlAddition();"></div>
       <div class="card-modal-box">
-        <c-V2.bt.return selector="#messages" data-testid="paiement-btn-fermer" />
+        <c-V2.bt.return selector="#messages" action="initUrlAddition();" data-testid="paiement-btn-fermer" />
 
         {# ================================================================== #}
         {# --- MODE CONSIGNE : remboursement ---                             #}
@@ -118,6 +125,79 @@ test_pos_retour_consigne.py, test_pos_paiement_cheque.py) : ne pas les renommer.
               <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" onclick="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece'); askAdditionManageForm('postUrl',null,'{% url 'laboutik-paiement-payer' %}'); askAdditionManageForm('submit')" data-testid="deposit-btn-especes" />
             {% endif %}
           </div>
+
+        {# ================================================================== #}
+        {# --- MODE CLIENT IDENTIFIE : le client est connu, on encaisse ---   #}
+        {# Vient de identifier_client() (scan de carte ou email).            #}
+        {# On montre le client, le detail des articles, puis les memes       #}
+        {# tuiles qu'une vente normale (_tuiles_paiement.html).              #}
+        {# --- CLIENT IDENTIFIED MODE: client known, collect payment ---      #}
+        {# ================================================================== #}
+        {% elif client_identifie %}
+          <div class="payment-total" id="payment-modal-total">
+            <span class="payment-total-lbl">{% translate "Client identifie" %}</span>
+            <span class="payment-total-val">{{ total|floatformat:2 }} {{ currency_data.symbol }}</span>
+          </div>
+          <div class="card-confirm" data-testid="client-recapitulatif">
+            {# --- Qui est le client --- #}
+            {# Carte anonyme : user_prenom vaut « Carte anonyme », user_nom le tag_id. #}
+            {# / Anonymous card: first name is "Anonymous card", last name the tag_id. #}
+            <div class="card-confirm-row" data-testid="client-recapitulatif-user">
+              <span>
+                {{ user_prenom }} {{ user_nom|upper }}
+                {% if user_email %}<br />{{ user_email }}{% endif %}
+              </span>
+              {% if tag_id %}
+                <b>{% translate "Solde" %} : {{ user_solde|floatformat:2 }} {{ currency_data.symbol }}</b>
+              {% endif %}
+            </div>
+            {# --- Detail des articles du panier --- #}
+            {# / Cart articles detail #}
+            {% if articles_pour_recapitulatif %}
+              <div data-testid="client-recapitulatif-articles">
+                {% for article in articles_pour_recapitulatif %}
+                  <div class="card-confirm-row">
+                    <span>{{ article.description }}</span>
+                    <b>{{ article.prix_total_euros|floatformat:2 }} {{ currency_data.symbol }}</b>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          {% if panier_est_gratuit %}
+            <p class="payment-help">{% translate "Rien à encaisser : validez pour enregistrer." %}</p>
+          {% else %}
+            <p class="payment-title">{% translate "Choisir un moyen de paiement" %}</p>
+          {% endif %}
+          {% include "laboutik/partial/_tuiles_paiement.html" %}
+          <script>
+            /**
+             * Range l'identite du client dans #addition-form.
+             * payer() lit ces champs pour creer l'adhesion ou le billet.
+             * Les tuiles de paiement n'ont donc rien de special a faire.
+             * / Stores the client identity in #addition-form. payer() reads
+             * these fields to create the membership or the ticket.
+             *
+             * LOCALISATION : hx_display_type_payment.html (inline, mode client_identifie)
+             *
+             * COMMUNICATION :
+             * Emet : 'additionManageForm' → #event-organizer (createAndPopInput)
+             */
+            askClientDansFormulaire('email_adhesion', '{{ user_email|escapejs }}')
+            askClientDansFormulaire('prenom_adhesion', '{{ user_prenom|escapejs }}')
+            askClientDansFormulaire('nom_adhesion', '{{ user_nom|escapejs }}')
+            {% if tag_id %}
+            askClientDansFormulaire('tag_id', '{{ tag_id|escapejs }}')
+            {% endif %}
+
+            function askClientDansFormulaire(nomDuChamp, valeur) {
+              sendEventOrganizer({
+                src: { file: 'hx_display_type_payment.html', method: 'askClientDansFormulaire' },
+                msg: 'additionManageForm',
+                data: { actionType: 'createAndPopInput', name: nomDuChamp, value: valeur }
+              })
+            }
+          </script>
 
         {# ================================================================== #}
         {# --- MODE CLIENT REQUIS : identification AVANT paiement ---         #}
@@ -180,23 +260,7 @@ test_pos_retour_consigne.py, test_pos_paiement_cheque.py) : ne pas les renommer.
             <span class="payment-total-val">{{ total|floatformat:2 }} {{ currency_data.symbol }}</span>
           </div>
           <p class="payment-title">{% translate "Choisir un moyen de paiement" %}</p>
-          <div class="payment-methods">
-            {% if 'nfc' in moyens_paiement %}
-              <c-V2.bt.paiement name='{% translate "CASHLESS" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" data-loading-disable data-testid="paiement-btn-cashless" />
-            {% endif %}
-            {% if 'espece' in moyens_paiement %}
-              <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')" data-loading-disable data-testid="paiement-btn-especes" />
-            {% endif %}
-            {% if 'carte_bancaire' in moyens_paiement %}
-              <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')" data-loading-disable data-testid="paiement-btn-cb" />
-            {% endif %}
-            {% if 'CH' in moyens_paiement %}
-              <c-V2.bt.paiement name='{% translate "CHÈQUE" %}' icon="cheque" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=CH" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')" data-loading-disable data-testid="paiement-btn-cheque" />
-            {% endif %}
-            {% if mode_gerant %}
-              <c-V2.bt.paiement name='{% translate "OFFRIR" %}' icon="gift" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=gift" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')" data-loading-disable data-testid="paiement-btn-offrir" />
-            {% endif %}
-          </div>
+          {% include "laboutik/partial/_tuiles_paiement.html" %}
         {% endif %}
         {# fin deposit / panier_necessite_client / normal #}
 
