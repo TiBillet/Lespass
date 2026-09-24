@@ -16,6 +16,7 @@ Demarrage :
 """
 
 import os
+import signal
 import sys
 
 from dotenv import load_dotenv
@@ -29,6 +30,12 @@ from hardware.flow_meter import FlowMeter
 from network.backend_client import BackendClient
 from controllers.tibeer_controller import TibeerController
 
+def _on_sigterm(signum, frame):
+    """systemd (systemctl stop, reboot) envoie SIGTERM. On le traite comme Ctrl+C
+    pour passer par le meme chemin d'arret : finally → cleanup() → vanne fermee.
+    / systemd sends SIGTERM on stop/reboot. Treat it like Ctrl+C so the same
+    shutdown path runs: finally → cleanup() → valve closed."""
+    raise KeyboardInterrupt
 
 def main():
     """Point d'entree du programme. / Program entry point."""
@@ -105,10 +112,11 @@ def main():
 
     # 8. Boucle controleur
     controller = TibeerController(rfid, valve, flow_meter, client)
+    signal.signal(signal.SIGTERM, _on_sigterm)
     try:
         controller.run()
     except KeyboardInterrupt:
-        logger.info("Arret signal (CTRL+C).")
+        logger.info("Arret demande (SIGINT/SIGTERM).")
     except Exception as e:
         logger.error(f"Erreur fatale: {e}", exc_info=True)
         sys.exit(1)

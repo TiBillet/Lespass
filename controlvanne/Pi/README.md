@@ -2,7 +2,7 @@
 
 Client pour tireuse à bière connectée au système cashless TiBillet.  
 Gère la lecture NFC, le contrôle de vanne et la communication avec le serveur Lespass.
-
+Aide-mémoire « où régler quoi » : [tireuses-FAQ.md](tireuses-FAQ.md)
 ## Prérequis matériels
 
 - Raspberry Pi (testé sur Bookworm 64-bit)
@@ -37,14 +37,18 @@ Le script pose quelques questions puis délègue à `make`. À la fin, redémarr
 ### Ce que fait `install_pi.sh`
 
 1. Installe les prérequis minimaux (`git`, `make`, `python3`)
-2. Clone le dépôt Lespass (`--depth=1`, sans historique git) dans `/home/sysop/tibeer/`
+2. Clone **sparse** du dépôt Lespass dans `/home/sysop/tibeer/` : seul `controlvanne/Pi/`
+   est téléchargé (`--filter=blob:none` + `sparse-checkout`), sans historique git (`--depth=1`).
+   Le `git pull` au démarrage fonctionne normalement sur ce dépôt.
 3. Lance `make all` (claim → install → deploy → start)
 
 ### Structure sur le Pi après installation
 
 ```
-/home/sysop/tibeer/          ← dépôt git Lespass (clone complet, --depth=1)
+/home/sysop/tibeer/          ← dépôt git Lespass (clone sparse : controlvanne/Pi/ seul, --depth=1)
   .git/
+  logs/                      ← logs de tibeer, créé au premier démarrage (non versionné)
+  manage.py, README.md…      ← fichiers de la racine du dépôt (toujours présents en sparse, sans effet)
   controlvanne/
     Pi/                      ← répertoire de travail des services
       main.py
@@ -66,6 +70,7 @@ make help
 | `make claim PIN=123456 [SERVER=...] [RFID=...]` | Appairage : génère `.env`. `SERVER` repris du `.env` (`CLAIM_SERVER_URL`) s'il existe |
 | `make install [RFID=RC522]` | Dépendances système + virtualenv |
 | `make deploy` | Copie les services systemd et fichiers de config |
+`make deploy` pose aussi une policy Chromium (`config/chromium-kiosk-policy.json` → `/etc/chromium/policies/managed/`) qui coupe les bandeaux inutiles sur un kiosk : traduction automatique (la bulle « French | English »), proposition « navigateur par défaut », ajout de profil. L'ancienne option `--disable-translate` est sans effet sur les Chromium récents.
 | `make start` | Active et démarre `tibeer` + `kiosk` |
 | `make update` | `git pull` + `pip install` + redémarrage |
 | `make logs` | Logs en direct (`journalctl -u tibeer -f`) |
