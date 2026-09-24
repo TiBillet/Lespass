@@ -234,7 +234,9 @@
 {% endif %}
 
 <main class="container">
-    {% if request.path != "/my_account/" %}
+    {# `apercu_admin` : apercu d'un bloc dans l'admin (pages/admin_apercu.py), #}
+    {# sans l'en-tete du lieu. / Admin block preview, without the venue header. #}
+    {% if request.path != "/my_account/" and not apercu_admin %}
         {% include 'pages/V2/tenant_header.html' %}
     {% endif %}
 

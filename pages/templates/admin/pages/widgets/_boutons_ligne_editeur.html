@@ -1,0 +1,49 @@
+{% load i18n %}
+{% comment %}
+BOUTONS ↑ ↓ ✕ D'UNE LIGNE D'EDITEUR (fiche Bloc)
+/ Up / down / remove buttons of an editor line (Bloc form)
+
+LOCALISATION : pages/templates/admin/pages/widgets/_boutons_ligne_editeur.html
+
+CE QU'ILS DEPLACENT : une LIGNE a l'interieur d'un bloc (une info pratique,
+une etape de frise, un point GPS...), pas le bloc lui-meme.
+/ They move a LINE inside a block, not the block itself.
+
+APPELE PAR : inclus a la fin de chaque ligne d'editeur, sur la fiche Bloc :
+- admin/pages/widgets/ligne_lieu.html   (infos pratiques d'un LIEU)
+- admin/pages/widgets/ligne_cartes.html (sous-cartes d'une SECTION)
+- admin/pages/widgets/ligne_gps.html    (points de la carte d'un LIEU)
+
+FLUX D'UN CLIC (AUCUNE requete, RIEN n'est ecrit en base) :
+1. hx-on:click deplace la ligne (↑ ↓) ou la retire (✕) dans le DOM. L'ordre
+   du DOM est l'ordre qui sera enregistre (pages/editeur_items.py:
+   lire_lignes_depuis_post).
+2. Un evenement `input` est emis ; il remonte jusqu'au <form> de la fiche Bloc.
+3. #apercu-bloc (admin/pages/bloc/apercu_panneau.html) l'ecoute et redemande
+   l'apercu en direct.
+4. L'enregistrement n'a lieu qu'au clic sur « Enregistrer » : quitter la
+   fiche sans enregistrer annule le geste.
+/ No request, nothing saved: the line moves in the DOM, an `input` event
+refreshes the live preview; saving happens on "Save" only.
+
+A NE PAS CONFONDRE avec admin/pages/apercu/_outils_bloc.html : memes icones
+↑ ↓ ✕, mais sur la fiche PAGE. Eux deplacent ou suppriment un BLOC ENTIER, par
+une requete au serveur, ecrite en base TOUT DE SUITE. Deux objets, deux
+mecanismes : ne pas fusionner ces gabarits.
+/ NOT TO BE CONFUSED with _outils_bloc.html (Page form): same icons, but they
+move or delete a WHOLE BLOCK through a server request, saved immediately.
+{% endcomment %}
+<div role="group" aria-label="{% translate 'Actions sur la ligne' %}" style="display: flex; gap: 4px; align-self: flex-start;">
+    <button type="button" aria-label="{% translate 'Monter la ligne' %}" title="{% translate 'Monter' %}"
+            data-testid="ligne-monter"
+            hx-on:click="const ligne = this.closest('[data-ligne]'); if (ligne.previousElementSibling) { ligne.parentNode.insertBefore(ligne, ligne.previousElementSibling); ligne.dispatchEvent(new Event('input', {bubbles: true})); }"
+            style="padding: 4px 8px; border-radius: 6px; cursor: pointer; border: 1px solid var(--color-base-200); background: transparent; color: var(--color-font-default-light);">↑</button>
+    <button type="button" aria-label="{% translate 'Descendre la ligne' %}" title="{% translate 'Descendre' %}"
+            data-testid="ligne-descendre"
+            hx-on:click="const ligne = this.closest('[data-ligne]'); if (ligne.nextElementSibling) { ligne.parentNode.insertBefore(ligne.nextElementSibling, ligne); ligne.dispatchEvent(new Event('input', {bubbles: true})); }"
+            style="padding: 4px 8px; border-radius: 6px; cursor: pointer; border: 1px solid var(--color-base-200); background: transparent; color: var(--color-font-default-light);">↓</button>
+    <button type="button" aria-label="{% translate 'Supprimer la ligne' %}" title="{% translate 'Supprimer' %}"
+            data-testid="ligne-supprimer"
+            hx-on:click="const ligne = this.closest('[data-ligne]'); const liste = ligne.parentNode; ligne.remove(); liste.dispatchEvent(new Event('input', {bubbles: true}));"
+            style="padding: 4px 8px; border-radius: 6px; cursor: pointer; border: 1px solid #dc2626; background: transparent; color: #dc2626;">✕</button>
+</div>

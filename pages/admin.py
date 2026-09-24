@@ -15,36 +15,39 @@ UX D'EDITION : on part de la PAGE.
 - La liste des pages n'affiche que les pages PRINCIPALES (sans parent). Le
   chevron de chaque ligne deplie ses sous-pages (list_sections). Le filtre
   « Niveau » permet de revenir a la liste complete.
-- La fiche d'une page porte un onglet « Blocs » : sommaire de ses blocs
-  (type, titre), reordonnables par glisser-deposer, avec un lien « modifier »
-  vers la fiche complete du bloc.
-- La fiche d'un bloc porte le contenu. Premiere action : choisir le TYPE -> les
-  champs correspondants se deroulent (conditional_fields NATIF d'Unfold /
-  Alpine.js, aucun JavaScript maison).
+- La fiche d'une page montre, sous son formulaire, la page RENDUE comme sur
+  le site, dans UNE iframe. Chaque bloc y porte une barre d'actions
+  (↑ ↓ Modifier ✕, et + pour ajouter un bloc juste apres) ; un menu
+  « + Ajouter en tete » est au-dessus (pages/admin_apercu.py).
+- La fiche d'un bloc porte le contenu, avec un APERCU EN DIRECT a cote du
+  formulaire. Premiere action : choisir le MODELE DE BLOC (type + affichage
+  en un seul select) -> les champs correspondants se deroulent
+  (conditional_fields NATIF d'Unfold / Alpine.js). Les listes
+  (infos pratiques, sous-cartes, points GPS) se saisissent ligne par ligne,
+  plus jamais en JSON brut (pages/admin_widgets.py, pages/editeur_items.py).
 / EDITING UX: the PAGE is the entry point.
 - The page list only shows MAIN pages (no parent). Each row's chevron expands
   its sub-pages (list_sections). The "Level" filter brings back the full list.
-- A page form carries a "Blocks" tab: a summary of its blocks (type, title),
-  reorderable by drag-and-drop, with an "edit" link to the full block form.
-- The block form carries the content. First action: choose the TYPE -> matching
-  fields unfold (Unfold's NATIVE conditional_fields / Alpine.js, no custom JS).
+- A page form shows the page RENDERED as on the site, in ONE iframe, each
+  block with an action bar (↑ ↓ edit ✕, + to add a block after it).
+- The block form carries the content, with a LIVE PREVIEW beside the form.
+  First action: choose the BLOCK MODEL (type + affichage in one select) ->
+  matching fields unfold. Lists (practical
+  info, sub-cards, GPS points) are typed line by line, never as raw JSON.
 
-POURQUOI LE SOMMAIRE ET NON LE CONTENU DANS L'INLINE : conditional_fields
-d'Unfold ne s'applique qu'au formulaire principal (le scope Alpine est pose sur
-le <form> du changeform, a partir des champs de `adminform`). Une inline qui
-porterait les ~30 champs du catalogue les afficherait donc TOUS, pour tous les
-types, sur chaque ligne.
-/ WHY A SUMMARY AND NOT THE CONTENT IN THE INLINE: Unfold's conditional_fields
-only applies to the main form (the Alpine scope sits on the changeform <form>,
-built from `adminform` fields). An inline carrying the catalogue's ~30 fields
-would show them ALL, for every type, on every row.
+POURQUOI LE CONTENU SE SAISIT DANS LA FICHE DU BLOC ET PAS DANS LA PAGE :
+conditional_fields d'Unfold ne s'applique qu'au formulaire principal (le scope
+Alpine est pose sur le <form> du changeform). Un formulaire de bloc imbrique
+dans la page afficherait les ~30 champs du catalogue pour tous les types.
+/ WHY CONTENT IS TYPED IN THE BLOCK FORM, NOT THE PAGE: Unfold's
+conditional_fields only applies to the main form.
 """
 
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.db.models import Count, Max
 from django.http import HttpResponseRedirect
-from django.urls import reverse
+from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
@@ -58,19 +61,41 @@ from unfold.contrib.filters.admin import (
     ChoicesDropdownFilter,
 )
 from unfold.contrib.forms.widgets import WysiwygWidget
+from unfold.widgets import UnfoldAdminSelectWidget
 from unfold.decorators import display
 from unfold.sections import TableSection
 
-from Administration.admin.site import sanitize_textfields, staff_admin_site
-from Administration.utils import url_a_schema_dangereux
+from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from pages.models import Bloc, ConfigurationSite, ImageGalerie, Page
+from pages.admin_apercu import (
+    CHAMP_CONTENU_CARTES,
+    CHAMP_CONTENU_LIEU,
+    CHAMP_POINTS_GPS,
+    appliquer_editeurs_de_lignes,
+    nettoyer_bloc,
+    CHAMP_MODELE,
+    decouper_modele,
+    uuid_ou_none,
+    menu_d_ajout,
+    modeles_de_bloc,
+    valeur_du_modele,
+    vue_apercu_bloc_en_direct,
+    vue_apercu_page,
+    vue_deplacer_bloc,
+    vue_ligne_vide,
+    vue_retirer_bloc,
+)
+from pages.admin_widgets import LignesField
 from pages.blocs_catalogue import (
     AFFICHAGES_AVEC_GALERIE,
     AFFICHAGES_PAR_TYPE,
     CHAMPS_PAR_AFFICHAGE,
+    AFFICHAGE_PAR_DEFAUT,
     CHAMPS_PAR_TYPE,
+    SKINS_PAR_CHAMP_DU_TYPE,
 )
+from pages.services import inserer_bloc_apres
 
 
 # Champ de formulaire dedie a la saisie Markdown (editeur EasyMDE) : il double
@@ -78,6 +103,13 @@ from pages.blocs_catalogue import (
 # passer par le WYSIWYG. / Dedicated Markdown form field (EasyMDE editor): it
 # doubles the `texte` model field for the TEXTE type only.
 _CHAMP_MARKDOWN = "texte_markdown"
+
+# Champ de formulaire CACHE qui porte le skin du site. Il n'est jamais
+# enregistre : il sert seulement aux conditions d'affichage (un champ que
+# seul un skin rend, cf. SKINS_PAR_CHAMP_DU_TYPE).
+# / HIDDEN form field carrying the site skin. Never saved: only used by the
+# display conditions.
+_CHAMP_SKIN = "skin_du_site"
 
 
 def _champs_du_catalogue():
@@ -100,7 +132,24 @@ def _champs_du_catalogue():
     if "page_source" not in champs:
         champs.append("page_source")
     champs.append(_CHAMP_MARKDOWN)
-    return tuple(champs)
+
+    # Les deux champs JSON ne sont plus saisis en JSON brut : chacun est
+    # remplace, a la meme place, par son editeur de lignes (champ de
+    # formulaire, cf. BlocAdminForm). `contenu` a deux editeurs, car ses
+    # elements n'ont pas la meme forme pour un LIEU et pour une SECTION.
+    # / Both JSON fields are no longer typed as raw JSON: each is replaced, in
+    # place, by its line editor. `contenu` has two editors, since its items
+    # differ between a LIEU and a SECTION.
+    champs_avec_editeurs = []
+    for champ in champs:
+        if champ == "contenu":
+            champs_avec_editeurs.append(CHAMP_CONTENU_CARTES)
+            champs_avec_editeurs.append(CHAMP_CONTENU_LIEU)
+        elif champ == "points_gps":
+            champs_avec_editeurs.append(CHAMP_POINTS_GPS)
+        else:
+            champs_avec_editeurs.append(champ)
+    return tuple(champs_avec_editeurs)
 
 
 def _test_du_type(type_bloc):
@@ -127,17 +176,6 @@ def _test_du_couple(type_bloc, affichages):
         liste = ",".join(f"'{a}'" for a in affichages)
         test_affichage = f"[{liste}].includes(affichage)"
     return f"({_test_du_type(type_bloc)} && {test_affichage})"
-
-
-def _expression_alpine(types):
-    """
-    Rend l'expression Alpine.js qui n'affiche un champ que pour ces types.
-    / Renders the Alpine.js expression showing a field only for these types.
-    """
-    if len(types) == 1:
-        return _test_du_type(types[0])
-    liste = ",".join(f"'{t}'" for t in types)
-    return f"[{liste}].includes(type_bloc)"
 
 
 def _ou_logique(fragments):
@@ -176,9 +214,17 @@ def _visibilite_des_champs():
             if champs_par_affichage is None:
                 # Type a rendu unique : le champ suit son type.
                 # / Single-rendering type: the field follows its type.
-                fragments_par_champ.setdefault(champ, []).append(
-                    _test_du_type(type_bloc)
-                )
+                fragment = _test_du_type(type_bloc)
+                # Certains champs ne sont rendus que par certains skins (cf.
+                # SKINS_PAR_CHAMP_DU_TYPE) : on ajoute la condition sur le skin
+                # du site, porte par le champ cache `skin_du_site`.
+                # / Some fields are only rendered by some skins: add the
+                # condition on the site skin, carried by the hidden field.
+                skins_qui_rendent = SKINS_PAR_CHAMP_DU_TYPE.get((type_bloc, champ))
+                if skins_qui_rendent:
+                    liste_skins = ",".join(f"'{skin}'" for skin in skins_qui_rendent)
+                    fragment = f"({fragment} && [{liste_skins}].includes({_CHAMP_SKIN}))"
+                fragments_par_champ.setdefault(champ, []).append(fragment)
                 continue
             # Type a rendus multiples : le champ ne suit que les affichages
             # dont le gabarit le consomme.
@@ -212,16 +258,44 @@ def _visibilite_des_champs():
     )
     visibilite[_CHAMP_MARKDOWN] = _test_du_type("TEXTE")
 
-    # L'affichage n'a de sens que pour les types qui en proposent plusieurs.
-    # / The affichage only matters for types offering more than one.
-    types_avec_affichage = [
-        type_bloc for type_bloc, valeurs in AFFICHAGES_PAR_TYPE.items() if valeurs
-    ]
-    visibilite["affichage"] = _expression_alpine(types_avec_affichage)
+    # Type et affichage ne se choisissent plus separement : le select
+    # « Modele de bloc » les porte tous les deux (cf. BlocAdminForm). Ils
+    # restent dans le formulaire, CACHES, parce que toutes les conditions
+    # ci-dessus lisent `type_bloc` et `affichage` dans le scope Alpine.
+    # / Type and affichage are no longer picked separately: the "block model"
+    # select carries both. They stay in the form, HIDDEN, because every
+    # condition above reads them in the Alpine scope.
+    visibilite["type_bloc"] = "false"
+    visibilite["affichage"] = "false"
 
-    # La page a lister ne concerne que le bloc LISTE.
-    # / The page to list only concerns the LISTE block.
-    visibilite["page_source"] = _test_du_type("LISTE")
+    # La page a lister ne concerne que le bloc LISTE, et seulement quand il
+    # liste des sous-pages (l'agenda n'a pas de page source).
+    # / The page to list only concerns a LISTE block listing sub-pages.
+    visibilite["page_source"] = f"({_test_du_type('LISTE')} && source == 'SOUS_PAGES')"
+
+    # Champs caches : presents dans le formulaire (donc dans le scope Alpine,
+    # et postes vers l'apercu), mais jamais affiches. Unfold ne cache pas la
+    # ligne d'un champ cache : l'expression `false` s'en charge.
+    # / Hidden fields: in the form (so in the Alpine scope, and posted to the
+    # preview), never displayed. `false` hides their row.
+    visibilite["page"] = "false"
+    visibilite[_CHAMP_SKIN] = "false"
+
+    # Editeurs de lignes (cf. _champs_du_catalogue) : ils reprennent la
+    # visibilite des champs JSON qu'ils remplacent. `contenu` se partage entre
+    # l'editeur LIEU (infos pratiques) et l'editeur des sous-cartes (les
+    # couples SECTION dont le gabarit lit `contenu`).
+    # / Line editors take over the visibility of the JSON fields they replace.
+    # `contenu` splits between the LIEU editor and the SECTION sub-cards editor.
+    fragments_contenu = fragments_par_champ.pop("contenu", [])
+    visibilite.pop("contenu", None)
+    fragments_cartes = []
+    for fragment in fragments_contenu:
+        if fragment != _test_du_type("LIEU"):
+            fragments_cartes.append(fragment)
+    visibilite[CHAMP_CONTENU_LIEU] = _test_du_type("LIEU")
+    visibilite[CHAMP_CONTENU_CARTES] = _ou_logique(fragments_cartes)
+    visibilite[CHAMP_POINTS_GPS] = visibilite.pop("points_gps")
 
     return visibilite
 
@@ -343,77 +417,6 @@ class SousPagesSection(TableSection):
     nb_blocs.short_description = _("Blocs")
 
 
-class BlocInline(TabularInline):
-    """
-    Sommaire des blocs d'une page, dans un onglet de sa fiche.
-    / Summary of a page's blocks, in a tab of its form.
-
-    Les colonnes se limitent au type et au titre : le contenu se saisit dans la
-    fiche du bloc, ou les champs s'adaptent au type choisi (cf. docstring du
-    module). Le lien « modifier » de chaque ligne y mene.
-    / Columns are limited to type and title: content is typed in the block form,
-    where fields adapt to the chosen type (see the module docstring). Each row's
-    "edit" link goes there.
-    """
-
-    model = Bloc
-    # Bloc porte deux cles etrangeres vers Page : `page` (la page qui affiche le
-    # bloc) et `page_source` (la page dont un bloc LISTE affiche les enfants).
-    # / Bloc carries two foreign keys to Page: `page` (the page displaying the
-    # block) and `page_source` (the page whose children a LISTE block shows).
-    fk_name = "page"
-    extra = 0
-    tab = True
-    show_change_link = True
-    fields = ("type_bloc", "titre", "modifier", "position")
-    readonly_fields = ("modifier",)
-    ordering = ("position",)
-    # Unfold repete le libelle complet du type au-dessus de chaque ligne, alors
-    # que la ligne le porte deja dans son select. On masque ce titre ; le lien
-    # d'edition, qu'Unfold y loge et ne montre qu'au survol, est remplace par la
-    # colonne « modifier » ci-dessous, visible en permanence.
-    # / Unfold repeats the full type label above each row, which the row's own
-    # select already carries. We hide that title; the edit link Unfold puts
-    # there and only reveals on hover is replaced by the always-visible
-    # "modifier" column below.
-    hide_title = True
-    # Tri par glisser-deposer (sortable Unfold) : la poignee remplace la saisie
-    # manuelle du nombre, le champ position est masque.
-    # / Drag-and-drop sorting (Unfold sortable): the handle replaces manual
-    # number input, the position field is hidden.
-    ordering_field = "position"
-    hide_ordering_field = True
-
-    @display(description=_("Contenu"))
-    def modifier(self, obj):
-        """
-        Lien vers la fiche du bloc, ou se saisit son contenu.
-        / Link to the block form, where its content is typed.
-
-        Une ligne pas encore enregistree n'a pas de fiche : on invite alors a
-        enregistrer d'abord. / A row not saved yet has no form: we then invite
-        the user to save first.
-        """
-        if obj is None or obj._state.adding:
-            return _("Enregistrer d'abord")
-        url = reverse("staff_admin:pages_bloc_change", args=[obj.pk])
-        return format_html(
-            '<a href="{}" class="text-primary-600">✎ {}</a>', url, _("modifier")
-        )
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_delete_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-
 @admin.register(ConfigurationSite, site=staff_admin_site)
 class ConfigurationSiteAdmin(SingletonModelAdmin, ModelAdmin):
     """
@@ -461,16 +464,72 @@ class ConfigurationSiteAdmin(SingletonModelAdmin, ModelAdmin):
 @admin.register(Page, site=staff_admin_site)
 class PageAdmin(ModelAdmin):
     """
-    Admin d'une Page : ses metadonnees, et le sommaire de ses blocs en onglet.
-    / Page admin: its metadata, plus the summary of its blocks in a tab.
+    Admin d'une Page : ses metadonnees, et sous le formulaire la page rendue
+    avec ses blocs (section « Contenu de la page »).
+    / Page admin: its metadata, and below the form the rendered page with its
+    blocks ("Page content" section).
     """
 
     compressed_fields = True
     warn_unsaved_form = True
 
-    # Sommaire des blocs de la page, dans un onglet.
-    # / Summary of the page's blocks, in a tab.
-    inlines = [BlocInline]
+    # La page RENDUE comme sur le site, sous le formulaire, dans une seule
+    # iframe : chaque bloc a sa barre (↑ ↓ Modifier ✕ +). Gabarit pose HORS
+    # du <form> (outer) : rien de ce qu'il contient ne soumet la page.
+    # Pas d'inline de blocs : un formset renverrait des positions perimees
+    # apres un deplacement fait depuis l'iframe.
+    # / The page RENDERED as on the site, below the form, in one iframe.
+    # Placed OUTSIDE the <form>. No block inline: a formset would send stale
+    # positions back after a move made from the iframe.
+    change_form_outer_after_template = "admin/pages/page/blocs_de_la_page.html"
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """
+        Ajoute au contexte ce qu'affiche la section « Contenu de la page ».
+        / Adds what the "Page content" section displays.
+
+        LOCALISATION : pages/admin.py — PageAdmin.changeform_view
+
+        - `nombre_de_blocs` : sans bloc, la section invite a en ajouter un au
+          lieu d'afficher une iframe vide ;
+        - `menu_ajout_en_tete` : les modeles de bloc, avec leur lien d'ajout
+          en tete de page (inserer_apres=0).
+        / nombre_de_blocs: an empty page shows an invitation instead of an
+        empty iframe. menu_ajout_en_tete: models with their add-at-top link.
+        """
+        extra_context = extra_context or {}
+        # uuid_ou_none : un identifiant invalide (« abc ») ferait lever une
+        # erreur 500 a la requete. On laisse alors Django admin repondre
+        # (redirection « objet introuvable »).
+        # / An invalid id would raise a 500: let Django admin answer instead.
+        uuid_de_la_page = uuid_ou_none(object_id) if object_id else None
+        if uuid_de_la_page is not None:
+            page = Page.objects.filter(pk=uuid_de_la_page).first()
+            if page is not None:
+                extra_context["nombre_de_blocs"] = page.blocs.count()
+                extra_context["menu_ajout_en_tete"] = menu_d_ajout(page, 0)
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def get_urls(self):
+        """
+        Ajoute la route de l'apercu de la page entiere (une seule iframe).
+        / Adds the route of the whole-page preview (a single iframe).
+
+        La vue est une fonction de module (pages/admin_apercu.py), pas une
+        methode : Unfold enveloppe les methodes d'un ModelAdmin. Les routes
+        custom passent AVANT celles de Django, dont `<path:object_id>/`
+        avalerait tout.
+        / The view is a module-level function. Custom routes go BEFORE
+        Django's, whose `<path:object_id>/` would swallow everything.
+        """
+        routes_des_blocs = [
+            path(
+                "<path:object_id>/apercu/",
+                self.admin_site.admin_view(vue_apercu_page),
+                name="pages_page_apercu",
+            ),
+        ]
+        return routes_des_blocs + super().get_urls()
 
     # Contenu deplie sous chaque ligne de la liste (chevron) : les blocs de la
     # page et ses sous-pages, cote a cote.
@@ -537,44 +596,6 @@ class PageAdmin(ModelAdmin):
                 _nb_sous_pages=Count("enfants", distinct=True),
             )
         )
-
-    def save_formset(self, request, form, formset, change):
-        """
-        Place les blocs AJOUTES depuis l'onglet en fin de page.
-        / Appends blocks ADDED from the tab at the end of the page.
-
-        Le glisser-deposer d'Unfold n'ecrit les positions qu'apres un
-        deplacement : une ligne fraichement ajoutee arriverait sinon en
-        position 0, donc en tete de page.
-        / Unfold's drag-and-drop only writes positions after a move: a freshly
-        added row would otherwise land at position 0, i.e. at the top.
-
-        On ne touche QUE les lignes neuves (`_state.adding`). Le tri d'Unfold
-        renumerote les blocs existants A PARTIR DE ZERO : traiter la position 0
-        comme « non renseignee » renverrait en fin de page le bloc que l'on
-        vient justement de glisser en tete.
-        `_state.adding` et non `pk` : la cle primaire est un UUID avec
-        default=uuid4, donc toujours renseignee, meme sur un objet neuf.
-        / We only touch NEW rows (`_state.adding`). Unfold's sorter renumbers
-        existing blocks FROM ZERO: treating position 0 as "unset" would send the
-        block just dragged to the top back to the bottom. `_state.adding`, not
-        `pk`: the primary key is a UUID with default=uuid4, hence always set.
-        """
-        if formset.model is not Bloc:
-            return super().save_formset(request, form, formset, change)
-
-        blocs = formset.save(commit=False)
-        derniere_position = (
-            Bloc.objects.filter(page=form.instance).aggregate(maxi=Max("position"))["maxi"] or 0
-        )
-        for bloc in blocs:
-            if bloc._state.adding and not bloc.position:
-                derniere_position += 1
-                bloc.position = derniere_position
-            bloc.save()
-        for bloc_supprime in formset.deleted_objects:
-            bloc_supprime.delete()
-        formset.save_m2m()
 
     fieldsets = (
         (
@@ -694,6 +715,60 @@ class ImageGalerieInline(TabularInline):
         return TenantAdminPermissionWithRequest(request)
 
 
+def _choix_du_modele():
+    """
+    Les choix du select « Modele de bloc », groupes par type.
+    / Choices of the "block model" select, grouped by type.
+
+    LOCALISATION : pages/admin.py
+
+    Un type a plusieurs affichages devient un groupe (<optgroup>) ; un type a
+    rendu unique est une option simple. Construit depuis modeles_de_bloc()
+    (pages/admin_apercu.py), donc depuis le catalogue.
+    / A multi-affichage type becomes an <optgroup>; a single-rendering type is
+    a plain option.
+    """
+    choix = [("", _("— Choisir un modèle de bloc —"))]
+    for groupe in modeles_de_bloc():
+        modeles = groupe["modeles"]
+        type_a_rendu_unique = len(modeles) == 1 and not modeles[0]["affichage"]
+        if type_a_rendu_unique:
+            choix.append((modeles[0]["valeur"], groupe["libelle"]))
+            continue
+        options = []
+        for modele in modeles:
+            options.append((modele["valeur"], modele["libelle"]))
+        choix.append((groupe["libelle"], options))
+    return choix
+
+
+def _modele_initial(formulaire):
+    """
+    Valeur de depart du select « Modele de bloc ».
+    / Initial value of the "block model" select.
+
+    - bloc existant : son type et son affichage ;
+    - nouveau bloc : le type et l'affichage passes dans l'URL par les menus
+      « + Ajouter » de la fiche Page (Django les met dans `initial`).
+    Un type a plusieurs rendus sans affichage prend son affichage par defaut.
+    / Existing block: its type and affichage. New block: those passed in the
+    URL by the "+ Add" menus.
+    """
+    if not formulaire.instance._state.adding:
+        type_bloc = formulaire.instance.type_bloc
+        affichage = formulaire.instance.affichage
+    else:
+        type_bloc = formulaire.initial.get("type_bloc", "")
+        affichage = formulaire.initial.get("affichage", "")
+    if not type_bloc:
+        return ""
+    if not affichage and AFFICHAGES_PAR_TYPE.get(type_bloc):
+        affichage = AFFICHAGE_PAR_DEFAUT.get(type_bloc, "")
+    if not AFFICHAGES_PAR_TYPE.get(type_bloc):
+        affichage = ""
+    return valeur_du_modele(type_bloc, affichage)
+
+
 class BlocAdminForm(forms.ModelForm):
     """Formulaire du Bloc : editeur WYSIWYG sur le champ texte, et editeur
     MARKDOWN (EasyMDE, vendorise) sur le champ de formulaire texte_markdown.
@@ -725,6 +800,47 @@ class BlocAdminForm(forms.ModelForm):
         widget=forms.Textarea(attrs={"class": "editeur-markdown", "rows": 16}),
     )
 
+    # Editeurs de lignes : ils remplacent la saisie de JSON brut pour
+    # `contenu` et `points_gps` (meme principe que texte_markdown : un champ
+    # de FORMULAIRE qui alimente un champ modele, dans save_model).
+    # Le rendu et la lecture des lignes : pages/admin_widgets.py.
+    # / Line editors replacing raw JSON input for `contenu` and `points_gps`
+    # (same idea as texte_markdown: a FORM field feeding a model field).
+    contenu_lieu = LignesField(
+        editeur="lieu",
+        label=_("Infos pratiques (à côté de la carte)"),
+    )
+    contenu_cartes = LignesField(
+        editeur="cartes",
+        label=_("Éléments de la section"),
+    )
+    points_gps_editeur = LignesField(
+        editeur="gps",
+        label=_("Points sur la carte"),
+    )
+
+    # « Modele de bloc » : UN select pour le type ET l'affichage, groupe par
+    # type (ex. « Section mise en avant › Carte »). Valeur "SECTION:CARTE",
+    # redecoupee dans clean(). Les choix sont une FONCTION : Django la rappelle
+    # a chaque formulaire, les libelles suivent donc la langue de la requete.
+    # / ONE select for type AND affichage, grouped by type. Value
+    # "SECTION:CARTE", split in clean(). Choices are a callable, re-evaluated
+    # per form so labels follow the request language.
+    modele = forms.ChoiceField(
+        label=_("Modèle de bloc"),
+        help_text=_(
+            "Ce que montre le bloc, et sous quelle forme. Les champs à remplir "
+            "s'adaptent au modèle choisi."
+        ),
+        choices=_choix_du_modele,
+        widget=UnfoldAdminSelectWidget,
+    )
+
+    # Skin du site, pour les conditions d'affichage (cf. _CHAMP_SKIN). Champ
+    # cache, jamais enregistre. / Site skin for display conditions. Hidden,
+    # never saved.
+    skin_du_site = forms.CharField(required=False, widget=forms.HiddenInput())
+
     class Meta:
         model = Bloc
         fields = "__all__"
@@ -736,14 +852,75 @@ class BlocAdminForm(forms.ModelForm):
         css = {"all": (
             "pages/vendor/easymde/easymde.min.css",
             "pages/admin/editeur_markdown.css",
+            # Disposition formulaire | apercu en direct.
+            # / Form | live preview layout.
+            "pages/admin/apercu_bloc.css",
         )}
         js = (
             "pages/vendor/easymde/easymde.min.js",
             "pages/admin/editeur_markdown.js",
         )
 
+    def clean(self):
+        """
+        Redecoupe le « Modele de bloc » en type + affichage.
+        / Splits the "block model" back into type + affichage.
+
+        C'est ICI, et pas dans le navigateur, que type et affichage sont
+        fixes : les valeurs des champs caches ne sont qu'une copie pour
+        l'affichage. Bloc.clean() (appele ensuite par Django) verifie que
+        l'affichage appartient bien au type.
+        / Type and affichage are set HERE, not in the browser. Bloc.clean()
+        then checks the affichage belongs to the type.
+        """
+        donnees = super().clean()
+        modele = donnees.get(CHAMP_MODELE)
+        if modele:
+            type_bloc, affichage = decouper_modele(modele)
+            donnees["type_bloc"] = type_bloc
+            donnees["affichage"] = affichage
+        return donnees
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Import local : BaseBillet.views importe pages (import circulaire).
+        # / Local import: BaseBillet.views imports pages (circular import).
+        from BaseBillet.views import get_skin_courant
+
+        self.fields["skin_du_site"].initial = get_skin_courant()
+
+        # La page d'un bloc ne se choisit pas dans sa fiche : un bloc s'ajoute
+        # depuis la fiche de SA page (menus « + » de la section « Contenu de la
+        # page », qui passent ?page=<uuid> dans l'URL). Le champ reste dans le formulaire, cache :
+        # - a la creation, il porte la page recue dans l'URL ;
+        # - a la modification, il est `disabled` : Django ignore toute valeur
+        #   postee et garde la page d'origine.
+        # / A block's page is not picked in its form: blocks are added from
+        # their page. The field stays, hidden; on edit it is disabled, so Django
+        # ignores any posted value and keeps the original page.
+        if "page" in self.fields:
+            self.fields["page"].widget = forms.HiddenInput()
+            if not self.instance._state.adding:
+                self.fields["page"].disabled = True
+
+        # Type et affichage : caches, pilotes par le select « Modele de bloc ».
+        # A chaque changement du select, Alpine recopie le type et l'affichage
+        # dans ces deux champs : les conditions d'affichage des autres champs
+        # (conditional_fields) les lisent. La valeur ENREGISTREE, elle, vient
+        # de clean(), qui redecoupe le modele : on ne compte pas sur Alpine.
+        # / Hidden, driven by the model select: Alpine copies type and affichage
+        # on change for the display conditions. The SAVED value comes from
+        # clean(), which splits the model: no reliance on Alpine.
+        for nom_du_champ_cache in ("type_bloc", "affichage"):
+            if nom_du_champ_cache in self.fields:
+                self.fields[nom_du_champ_cache].widget = forms.HiddenInput()
+                self.fields[nom_du_champ_cache].required = False
+        self.fields[CHAMP_MODELE].widget.attrs["x-on:change"] = (
+            "type_bloc = $event.target.value.split(':')[0]; "
+            "affichage = $event.target.value.split(':')[1] || ''"
+        )
+        self.fields[CHAMP_MODELE].initial = _modele_initial(self)
+
         # Bloc TEXTE existant : la source Markdown est dans instance.texte.
         # `_state.adding` et non `pk` : la cle primaire est un UUID avec
         # default=uuid4, donc `pk` est TOUJOURS renseigne, meme sur un objet
@@ -752,6 +929,18 @@ class BlocAdminForm(forms.ModelForm):
         # UUID with default=uuid4, so `pk` is ALWAYS set, even on a new object.
         if not self.instance._state.adding and self.instance.type_bloc == Bloc.TEXTE:
             self.fields["texte_markdown"].initial = self.instance.texte
+        # Les editeurs de lignes partent de la valeur en base. `contenu` sert a
+        # deux editeurs : seul celui du type du bloc est pre-rempli, sinon un
+        # bloc LIEU montrerait ses infos pratiques dans l'editeur des
+        # sous-cartes (cache, mais renvoye a l'enregistrement).
+        # / Line editors start from the stored value. Only the editor matching
+        # the block type is pre-filled with `contenu`.
+        if not self.instance._state.adding:
+            if self.instance.type_bloc == Bloc.LIEU:
+                self.fields["contenu_lieu"].initial = self.instance.contenu
+                self.fields["points_gps_editeur"].initial = self.instance.points_gps
+            elif self.instance.type_bloc == Bloc.SECTION:
+                self.fields["contenu_cartes"].initial = self.instance.contenu
         # Table RANG -> URL des images de l'inline, embarquée en data-attribute :
         # l'APERÇU EasyMDE (rendu côté navigateur) peut ainsi résoudre les
         # références ![légende](galerie:N) au lieu d'afficher une image cassée.
@@ -776,20 +965,56 @@ class BlocAdminForm(forms.ModelForm):
             self.fields["texte_markdown"].widget.attrs["data-galerie"] = json.dumps(urls_galerie)
 
 
-# Ancre de l'onglet « Blocs » sur la fiche d'une page. Unfold nomme ses onglets
-# d'inline avec le prefixe du formset passe par slugify (cf. son gabarit
-# unfold/helpers/tab_items.html) ; ce prefixe est l'accesseur inverse de la cle
-# etrangere, soit related_name="blocs" sur Bloc.page.
-# / Anchor of the "Blocs" tab on a page form. Unfold names its inline tabs after
-# the slugified formset prefix, which is the reverse accessor of the foreign
-# key — here related_name="blocs" on Bloc.page.
-_ANCRE_ONGLET_BLOCS = "#blocs"
+# Ancre de la section « Contenu de la page » (blocs rendus) sur la fiche d'une
+# page. Elle est posee par admin/pages/page/blocs_de_la_page.html.
+# / Anchor of the "Page content" section (rendered blocks) on a page form.
+_ANCRE_CONTENU_DE_LA_PAGE = "#blocs-de-la-page"
 
 
-def _url_onglet_blocs_de_la_page(page):
+def _position_d_insertion_demandee(request):
     """
-    URL de la fiche d'une page, onglet « Blocs » deja ouvert.
-    / URL of a page form, with the "Blocs" tab already open.
+    Lit `inserer_apres` dans l'URL du formulaire d'ajout d'un bloc.
+    / Reads `inserer_apres` from the block add form URL.
+
+    LOCALISATION : pages/admin.py
+
+    Le parametre vient des menus « + » de la fiche Page : « + Ajouter en
+    tete » (inserer_apres=0) et le + de la barre de chaque bloc
+    (inserer_apres=<rang du bloc>). Les liens sont construits par
+    pages/admin_apercu.py:url_d_ajout_d_un_bloc, et affiches par
+    admin/pages/apercu/_menu_modeles.html. Le formulaire d'ajout poste vers sa
+    propre URL : le parametre est donc toujours la au POST.
+    Helper de module (pas une methode : Unfold enveloppe celles du ModelAdmin).
+    / Comes from the "+" menus of the Page form (built by url_d_ajout_d_un_bloc).
+    The add form posts to its own URL, so the parameter is still there on POST.
+
+    :return: un entier >= 0, ou None si absent ou invalide
+    """
+    valeur = request.GET.get("inserer_apres", "")
+    if not valeur.isdigit():
+        return None
+    return int(valeur)
+
+
+def _page_de_l_url_existe(request):
+    """
+    Vrai si `?page=<uuid>` designe une page existante.
+    / True if `?page=<uuid>` points to an existing page.
+
+    LOCALISATION : pages/admin.py
+    Une valeur qui n'est pas un UUID ferait lever une erreur a la requete :
+    on la verifie d'abord. / A non-UUID value would make the query fail.
+    """
+    uuid_de_la_page = uuid_ou_none(request.GET.get("page", ""))
+    if uuid_de_la_page is None:
+        return False
+    return Page.objects.filter(pk=uuid_de_la_page).exists()
+
+
+def _url_contenu_de_la_page(page):
+    """
+    URL de la fiche d'une page, positionnee sur ses blocs rendus.
+    / URL of a page form, scrolled to its rendered blocks.
 
     LOCALISATION : pages/admin.py
 
@@ -799,31 +1024,32 @@ def _url_onglet_blocs_de_la_page(page):
     methods with its action system and would break the call.
     """
     url_de_la_page = reverse("staff_admin:pages_page_change", args=[page.pk])
-    return f"{url_de_la_page}{_ANCRE_ONGLET_BLOCS}"
+    return f"{url_de_la_page}{_ANCRE_CONTENU_DE_LA_PAGE}"
 
 
 @admin.register(Bloc, site=staff_admin_site)
 class BlocAdmin(ModelAdmin):
     """
-    Fiche complete d'un Bloc. Les champs visibles dependent de type_bloc, pilotes
-    par conditional_fields NATIF d'Unfold (expressions Alpine.js evaluees cote
-    navigateur). type_bloc est un select : Unfold l'expose dans le scope Alpine,
-    donc les expressions du type "type_bloc == 'SECTION' && affichage == 'CARTE'"
-    fonctionnent sans aucun JavaScript maison.
-    / Full Bloc form. Visible fields depend on type_bloc, driven by Unfold's NATIVE
-    conditional_fields (Alpine.js expressions). type_bloc is a select exposed in the
-    Alpine scope, so "type_bloc == 'SECTION' && affichage == 'CARTE'" works with
-    no custom JS.
+    Fiche complete d'un Bloc, avec son apercu en direct.
+    / Full Bloc form, with its live preview.
 
-    On arrive ici depuis l'onglet « Blocs » de la page (lien « modifier » d'une
-    ligne), ou depuis la liste des blocs. Premiere action a la creation :
-    choisir le TYPE DE BLOC -> les champs correspondants se deroulent. La Page
-    d'appartenance est un simple SELECT. L'ordre d'affichage des blocs sur la
-    page se regle par glisser-deposer, ici ou dans l'onglet de la page.
-    / Reached from the page's "Blocks" tab (a row's "edit" link), or from the
-    block list. First action on creation: choose the BLOCK TYPE -> matching
-    fields unfold. The owning Page is a plain SELECT. The display order is set
-    by drag-and-drop, here or in the page's tab.
+    CHOIX DU MODELE : un seul select, « Modele de bloc » (champ de formulaire
+    `modele`, valeur "TYPE:AFFICHAGE"). type_bloc et affichage restent dans le
+    formulaire, CACHES : Alpine y recopie le modele choisi, et les
+    conditional_fields NATIFS d'Unfold les lisent, ex.
+    "type_bloc == 'SECTION' && affichage == 'CARTE'". Les valeurs enregistrees
+    viennent de BlocAdminForm.clean(), qui redecoupe le modele cote serveur.
+    / A single "block model" select; type_bloc and affichage stay as HIDDEN
+    fields read by Unfold's conditional_fields. Saved values come from clean().
+
+    ACCES : depuis la section « Contenu de la page » de la fiche Page (bouton
+    Modifier d'un bloc, ou un menu « + » pour en ajouter un). La page du bloc
+    est un champ cache, jamais modifiable ici ; sans ?page= dans l'URL, l'ajout
+    renvoie vers la liste des pages (add_view). L'ordre des blocs se regle avec
+    ↑ ↓ sur la fiche Page (ou par glisser-deposer dans la liste des blocs).
+    / Reached from the Page form's "Page content" section. The page is a hidden
+    field, never editable here. Order is set with ↑ ↓ on the Page form (or by
+    drag-and-drop in the block list).
     """
 
     compressed_fields = True
@@ -834,7 +1060,13 @@ class BlocAdmin(ModelAdmin):
     # que conditional_fields.
     # / Help notes shown above the form, each revealed for a given type or
     # (type, affichage) pair — via Alpine, same mechanism as conditional_fields.
-    change_form_before_template = "admin/pages/bloc/hero_aide_before.html"
+    # before.html assemble le panneau d'APERCU EN DIRECT et les notes d'aide.
+    # / before.html gathers the LIVE PREVIEW panel and the help notes.
+    change_form_before_template = "admin/pages/bloc/before.html"
+    # Bouton « Retour a la page », AU-DESSUS du formulaire (hors <form>, sur
+    # toute la largeur, hors de la grille formulaire | apercu).
+    # / "Back to the page" button, ABOVE the form, full width.
+    change_form_outer_before_template = "admin/pages/bloc/retour_page.html"
     # Images du bloc (inline).
     # / Block images (inline).
     inlines = [ImageGalerieInline]
@@ -927,7 +1159,13 @@ class BlocAdmin(ModelAdmin):
     # `affichage` n'est pas repris ici : il vient du catalogue, comme les
     # autres champs. / `affichage` is not repeated here: it comes from the
     # catalogue like every other field.
-    fields = ("type_bloc", "page") + _CHAMPS_DU_CATALOGUE
+    # `page` et `skin_du_site` sont des champs CACHES (cf. BlocAdminForm) :
+    # on ne change pas la page d'un bloc depuis sa fiche.
+    # / `page` and `skin_du_site` are HIDDEN fields: a block's page is not
+    # changed from its form.
+    # « modele » en tete : c'est le premier choix de la fiche.
+    # / "modele" first: it is the form's first choice.
+    fields = (CHAMP_MODELE, "type_bloc", "page", _CHAMP_SKIN) + _CHAMPS_DU_CATALOGUE
 
     # Expressions Alpine.js evaluees cote navigateur par conditional_fields
     # (natif Unfold) : un champ n'apparait que pour les types qui l'utilisent.
@@ -936,45 +1174,110 @@ class BlocAdmin(ModelAdmin):
     conditional_fields = _visibilite_des_champs()
 
     def save_model(self, request, obj, form, change):
-        # Nettoie le HTML du champ texte (WYSIWYG) avant enregistrement.
-        # EXCEPTION bloc TEXTE : `texte` est de la SOURCE Markdown, pas du
-        # HTML — clean_html la mutilerait (autoliens <https://…>, exemples de
-        # code contenant des balises). La sécurité est assurée AU RENDU par le
-        # filtre rendre_markdown (markdown puis nh3.clean sur le HTML produit).
-        # / Sanitize the WYSIWYG text field HTML before saving. EXCEPTION for
-        # the TEXTE block: `texte` is Markdown SOURCE, not HTML — clean_html
-        # would mangle it (<https://…> autolinks, code samples with tags).
-        # Safety is enforced AT RENDER TIME by the rendre_markdown filter.
-        if obj.type_bloc == Bloc.TEXTE:
-            sanitize_textfields(obj)
-            # La source Markdown vient du champ de formulaire dedie (editeur
-            # EasyMDE), posee APRES sanitize pour ne pas etre mutilee.
-            # / The Markdown source comes from the dedicated form field
-            # (EasyMDE editor), set AFTER sanitize so it is not mangled.
-            obj.texte = form.cleaned_data.get("texte_markdown", "")
-        else:
-            sanitize_textfields(obj)
+        """
+        Nettoie le bloc, recopie les editeurs de lignes, puis le place dans sa
+        page avant de l'enregistrer.
+        / Cleans the block, copies the line editors, then places it in its page
+        before saving.
 
-        # Sécurité : neutralise les URLs à schéma dangereux (javascript:, data:,
-        # vbscript:) dans les champs lien, qui pourraient produire un XSS au clic.
-        # / Security: neutralize dangerous-scheme URLs (javascript:, data:, vbscript:)
-        # in link fields, which could trigger an XSS on click.
-        for champ_url in ("bouton_url", "bouton2_url", "embed_url"):
-            valeur = getattr(obj, champ_url, "")
-            if url_a_schema_dangereux(valeur):
-                setattr(obj, champ_url, "")
+        LOCALISATION : pages/admin.py — BlocAdmin.save_model
 
-        # A la creation, si aucune position n'est saisie, on place le bloc en fin
-        # de page (max + 1) pour qu'il s'ajoute naturellement a la suite.
-        # / On creation, if no position is set, append the block at the end of the
-        # page (max + 1) so it naturally adds after the others.
-        if not change and not obj.position and obj.page_id:
-            derniere_position = Bloc.objects.filter(page=obj.page).aggregate(
-                maxi=Max("position")
-            )["maxi"] or 0
-            obj.position = derniere_position + 1
+        1. nettoyer_bloc (pages/admin_apercu.py) : clean_html sur les champs
+           texte, SAUF la source Markdown du bloc TEXTE (posee apres, depuis
+           texte_markdown) ; URL a schema dangereux videes. L'apercu en direct
+           appelle la meme fonction.
+        2. appliquer_editeurs_de_lignes : les lignes saisies deviennent
+           `contenu` / `points_gps`, selon le type choisi.
+        3. A la creation : si on vient d'un menu « + » de la fiche Page,
+           `inserer_apres` (dans l'URL du formulaire d'ajout) dit ou placer le
+           bloc. Sinon, il va en fin de page.
+        / 1. Same cleaning as the live preview. 2. Lines become JSON fields.
+        3. On creation, `inserer_apres` (in the add form URL) places the block;
+        otherwise it goes at the end of the page.
+        """
+        nettoyer_bloc(obj, form.cleaned_data.get("texte_markdown", ""))
+        appliquer_editeurs_de_lignes(
+            obj,
+            contenu_lieu=form.cleaned_data.get(CHAMP_CONTENU_LIEU, []),
+            contenu_cartes=form.cleaned_data.get(CHAMP_CONTENU_CARTES, []),
+            points_gps=form.cleaned_data.get(CHAMP_POINTS_GPS, []),
+        )
+
+        bloc_est_nouveau = not change
+        if bloc_est_nouveau and obj.page_id:
+            inserer_apres = _position_d_insertion_demandee(request)
+            if inserer_apres is not None:
+                inserer_bloc_apres(obj, inserer_apres)
+            elif not obj.position:
+                # En fin de page (max + 1). / At the end of the page.
+                derniere_position = Bloc.objects.filter(page=obj.page).aggregate(
+                    maxi=Max("position")
+                )["maxi"] or 0
+                obj.position = derniere_position + 1
 
         super().save_model(request, obj, form, change)
+
+    def add_view(self, request, form_url="", extra_context=None):
+        """
+        Un bloc s'ajoute toujours depuis la fiche de sa page.
+        / A block is always added from its page form.
+
+        LOCALISATION : pages/admin.py — BlocAdmin.add_view
+
+        La page n'est plus un select dans la fiche du bloc. Sans `?page=` dans
+        l'URL (bouton « Ajouter » de la liste des blocs), on renvoie vers la
+        liste des pages avec une explication, plutot que d'ouvrir un
+        formulaire impossible a enregistrer.
+        / The page is no longer a select. Without `?page=`, redirect to the page
+        list with an explanation instead of an unsavable form.
+        """
+        page_existe = _page_de_l_url_existe(request)
+        if not page_existe:
+            messages.info(
+                request,
+                _(
+                    "Un bloc s'ajoute depuis la fiche de sa page : ouvrez la "
+                    "page, puis « + Ajouter en tête » ou le + d'un bloc."
+                ),
+            )
+            return HttpResponseRedirect(reverse("staff_admin:pages_page_changelist"))
+        return super().add_view(request, form_url, extra_context)
+
+    def get_urls(self):
+        """
+        Routes de l'apercu en direct, des editeurs de lignes et des actions
+        ↑ ↓ 🗑 de la fiche Page.
+        / Routes of the live preview, line editors and Page form ↑ ↓ 🗑 actions.
+
+        Les vues sont des fonctions de module (pages/admin_apercu.py). Les
+        routes custom passent AVANT celles de Django, dont `<path:object_id>/`
+        avalerait tout.
+        / Views are module-level functions. Custom routes go BEFORE Django's.
+        """
+        vue_admin = self.admin_site.admin_view
+        routes_de_l_apercu = [
+            path(
+                "apercu/",
+                vue_admin(vue_apercu_bloc_en_direct),
+                name="pages_bloc_apercu",
+            ),
+            path(
+                "editeur-ligne/",
+                vue_admin(vue_ligne_vide),
+                name="pages_bloc_editeur_ligne",
+            ),
+            path(
+                "<path:object_id>/deplacer/<str:sens>/",
+                vue_admin(vue_deplacer_bloc),
+                name="pages_bloc_deplacer",
+            ),
+            path(
+                "<path:object_id>/retirer/",
+                vue_admin(vue_retirer_bloc),
+                name="pages_bloc_retirer",
+            ),
+        ]
+        return routes_de_l_apercu + super().get_urls()
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         """
@@ -993,17 +1296,33 @@ class BlocAdmin(ModelAdmin):
         where the user was editing, instead of the list of ALL blocks.
         """
         extra_context = extra_context or {}
+        page_du_bloc = None
         if object_id:
-            bloc = Bloc.objects.select_related("page").filter(pk=object_id).first()
+            uuid_du_bloc = uuid_ou_none(object_id)
+            bloc = None
+            if uuid_du_bloc is not None:
+                bloc = Bloc.objects.select_related("page").filter(pk=uuid_du_bloc).first()
             if bloc and bloc.page:
                 extra_context["opts"] = Page._meta
                 extra_context["original"] = bloc.page
+                page_du_bloc = bloc.page
+        elif _page_de_l_url_existe(request):
+            # Ajout depuis la fiche Page : la page vient de ?page=<uuid>.
+            # / Adding from the Page form: the page comes from ?page=<uuid>.
+            page_du_bloc = Page.objects.filter(pk=request.GET["page"]).first()
+
+        # Bouton « Retour a la page » (admin/pages/bloc/retour_page.html).
+        # / "Back to the page" button.
+        if page_du_bloc is not None:
+            extra_context["page_du_bloc"] = page_du_bloc
+            extra_context["url_retour_page"] = _url_contenu_de_la_page(page_du_bloc)
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def response_post_save_change(self, request, obj):
         """
-        Apres « Enregistrer », on retourne a la fiche de la page, onglet Blocs.
-        / After "Save", go back to the page form, Blocs tab.
+        Apres « Enregistrer », on retourne a la section « Contenu de la page »
+        de la fiche de la page.
+        / After "Save", go back to the page form's "Page content" section.
 
         LOCALISATION : pages/admin.py — BlocAdmin.response_post_save_change
 
@@ -1016,15 +1335,50 @@ class BlocAdmin(ModelAdmin):
         editing" keeps its normal behaviour.
         """
         if obj.page_id:
-            return HttpResponseRedirect(_url_onglet_blocs_de_la_page(obj.page))
+            return HttpResponseRedirect(_url_contenu_de_la_page(obj.page))
         return super().response_post_save_change(request, obj)
+
+    def response_add(self, request, obj, post_url_continue=None):
+        """
+        « Enregistrer et ajouter un nouveau » : le bloc suivant va dans la
+        MEME page, juste apres celui qu'on vient de creer.
+        / "Save and add another": the next block goes in the SAME page, right
+        after the one just created.
+
+        Sans ce retour, Django ouvrirait le formulaire d'ajout sans `?page=`,
+        et add_view renverrait vers la liste des pages.
+        / Otherwise Django would open the add form without `?page=`.
+        """
+        if "_addanother" in request.POST and obj.page_id:
+            url_d_ajout = reverse("staff_admin:pages_bloc_add")
+            return HttpResponseRedirect(
+                f"{url_d_ajout}?page={obj.page_id}&inserer_apres={obj.position}"
+            )
+        return super().response_add(request, obj, post_url_continue)
 
     def response_post_save_add(self, request, obj):
         # Meme retour apres la creation d'un bloc.
         # / Same return trip after creating a block.
         if obj.page_id:
-            return HttpResponseRedirect(_url_onglet_blocs_de_la_page(obj.page))
+            return HttpResponseRedirect(_url_contenu_de_la_page(obj.page))
         return super().response_post_save_add(request, obj)
+
+    def delete_model(self, request, obj):
+        # On retient la page AVANT la suppression, pour y revenir ensuite
+        # (response_delete ne recoit plus l'objet).
+        # / Remember the page BEFORE deletion, to go back to it afterwards.
+        request._page_du_bloc_supprime = obj.page
+        super().delete_model(request, obj)
+
+    def response_delete(self, request, obj_display, obj_id):
+        """
+        Apres la suppression d'un bloc, on retourne aux blocs de sa page.
+        / After deleting a block, go back to its page's blocks.
+        """
+        page_du_bloc = getattr(request, "_page_du_bloc_supprime", None)
+        if page_du_bloc is not None:
+            return HttpResponseRedirect(_url_contenu_de_la_page(page_du_bloc))
+        return super().response_delete(request, obj_display, obj_id)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

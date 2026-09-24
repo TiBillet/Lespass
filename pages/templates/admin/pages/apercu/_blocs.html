@@ -1,0 +1,37 @@
+{% load pages_tags static %}
+{% comment %}
+BOUCLE DES BLOCS D'UN APERCU (commune aux 3 skins)
+/ Block loop of a preview (shared by the 3 skins)
+
+LOCALISATION : pages/templates/admin/pages/apercu/_blocs.html
+
+Inclus dans le conteneur .tb-flux de pages/<skin>/apercu.html. Chaque bloc
+est rendu par son gabarit public, exactement comme dans page.html.
+
+FICHE PAGE (`avec_outils`) : apres chaque bloc, un <template> porte sa barre
+d'actions. Un <template> n'est jamais affiche (display: none) : il ne prend
+aucune case de la grille, et les cartes voisines restent cote a cote.
+Il est pose APRES le bloc, pas avant : une regle de tb-blocs.css teste le
+PREMIER enfant de la grille (bandeau d'ouverture colle en haut), qu'un repere
+en tete casserait.
+pages/static/pages/admin/apercu_page_outils.js lit ces <template>, encadre
+chaque bloc et pose sa barre par-dessus.
+/ Page form: after each block, a <template> carries its action bar. A
+<template> is never displayed, so the grid is untouched. Placed AFTER the
+block: a tb-blocs.css rule tests the grid's FIRST child. A script overlays the
+bars.
+{% endcomment %}
+{% for element in elements_apercu %}
+    {% with bloc=element.bloc %}
+        {% templates_bloc bloc as gabarits_bloc %}
+        {% include gabarits_bloc %}
+    {% endwith %}
+    {% if avec_outils %}
+        <template data-apercu-outils="{{ element.rang }}">
+            {% include "admin/pages/apercu/_outils_bloc.html" %}
+        </template>
+    {% endif %}
+{% endfor %}
+{% if avec_outils %}
+    <script src="{% static 'pages/admin/apercu_page_outils.js' %}" defer></script>
+{% endif %}

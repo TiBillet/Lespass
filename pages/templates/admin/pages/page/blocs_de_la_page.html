@@ -1,0 +1,64 @@
+{% load i18n static %}
+{% comment %}
+CONTENU DE LA PAGE — tous les blocs, rendus dans UNE iframe
+/ Page content — all blocks, rendered in ONE iframe
+
+LOCALISATION : pages/templates/admin/pages/page/blocs_de_la_page.html
+
+Pose par PageAdmin.change_form_outer_after_template : HORS du <form> de la
+page. Rien n'est affiche a la creation d'une page (`original` est vide) : il
+faut d'abord l'enregistrer pour lui ajouter des blocs.
+
+UNE SEULE IFRAME pour toute la page (pages/admin_apercu.py:vue_apercu_page) :
+les blocs y sont disposes par la vraie grille du skin, cartes cote a cote
+comme sur le site. Chaque bloc y porte sa barre d'actions (↑ ↓ Modifier
+Supprimer, + Ajouter apres). Les ↑ ↓ et Supprimer rechargent l'iframe seule :
+le formulaire de la page n'est pas touche.
+Ici, hors iframe : l'en-tete, le menu « + Ajouter en tete » et le lien vers la
+page publique. `menu_ajout_en_tete` vient de PageAdmin.changeform_view.
+/ Placed OUTSIDE the page <form>. A single iframe renders the whole page in
+the real skin grid, each block with its action bar. Outside it: header, "add
+at the top" menu and public page link.
+{% endcomment %}
+{% if original %}
+    <section id="blocs-de-la-page"
+             aria-labelledby="titre-blocs-de-la-page"
+             data-testid="page-blocs"
+             style="margin-top: 32px; padding: 20px; border-radius: 10px; border: 1px solid var(--color-base-200);">
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: space-between; margin-bottom: 12px;">
+            <div>
+                <h2 id="titre-blocs-de-la-page"
+                    style="font-size: 1.125rem; font-weight: 600; margin: 0 0 4px; color: var(--color-font-important-light);">
+                    <span class="material-symbols-outlined" aria-hidden="true" style="vertical-align: middle;">view_agenda</span>
+                    {% translate "Contenu de la page" %}
+                </h2>
+                <p style="font-size: 0.8125rem; margin: 0; color: var(--color-base-500);">
+                    {% blocktranslate count nombre=nombre_de_blocs %}{{ nombre }} bloc, affiché comme sur le site. Chaque bloc a sa barre d'actions.{% plural %}{{ nombre }} blocs, affichés comme sur le site. Chaque bloc a sa barre d'actions.{% endblocktranslate %}
+                </p>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                {% translate "Ajouter un bloc en premier" as libelle_ajout %}
+                {% include "admin/pages/apercu/_menu_modeles.html" with groupes=menu_ajout_en_tete libelle=libelle_ajout testid="page-ajouter-en-tete" %}
+                <a href="{{ original.get_absolute_url }}" target="_blank" rel="noopener" data-testid="page-voir-entiere"
+                   style="font-size: 0.8125rem; color: var(--color-primary-600); white-space: nowrap;">
+                    {% translate "Voir la page publique" %} <span aria-hidden="true">↗</span>
+                </a>
+            </div>
+        </div>
+
+        {% if nombre_de_blocs %}
+            <div style="border: 1px solid var(--color-base-200); border-radius: 10px; overflow: hidden; background: white; min-height: 120px;">
+                <iframe src="{% url 'staff_admin:pages_page_apercu' original.pk %}"
+                        data-apercu-iframe
+                        data-testid="page-apercu-iframe"
+                        title="{% translate 'Aperçu de la page et de ses blocs' %}"
+                        style="display: block; width: 100%; min-height: 120px; border: 0;"></iframe>
+            </div>
+        {% else %}
+            <p data-testid="page-blocs-vide" style="font-size: 0.875rem; color: var(--color-base-500); text-align: center; padding: 24px; border: 1px dashed var(--color-base-300); border-radius: 10px;">
+                {% translate "Cette page n'a pas encore de bloc. Utilisez « + Ajouter un bloc en premier » pour commencer." %}
+            </p>
+        {% endif %}
+    </section>
+    <script src="{% static 'pages/admin/apercu.js' %}"></script>
+{% endif %}

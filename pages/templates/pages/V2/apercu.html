@@ -1,0 +1,37 @@
+{% extends "pages/V2/shell.html" %}
+{% comment %}
+APERCU DE BLOCS DANS L'ADMIN
+/ Admin preview of blocks
+
+LOCALISATION : pages/templates/pages/V2/apercu.html
+
+Document complet, affiche dans une iframe de l'admin (fiche Bloc et fiche Page).
+Il reprend le squelette du skin (memes CSS, memes polices) mais pas la navbar
+ni le pied de page : le contexte pose `embed=True` et `apercu_admin=True`.
+Le conteneur .tb-page/.tb-flux est celui de page.html : le bloc s'affiche donc
+exactement comme sur le site public.
+
+FLUX :
+1. pages/admin_apercu.py:rendre_document_apercu() choisit ce gabarit
+   via gabarit_skin("apercu.html") (repli sur classic).
+2. Le document part dans une iframe : srcdoc pour l'apercu en direct d'UN
+   bloc (fiche Bloc), src pour TOUTE la page (fiche Page, avec les barres
+   d'actions). La boucle des blocs est commune : admin/pages/apercu/_blocs.html.
+3. pages/static/pages/admin/apercu.js ajuste la hauteur de l'iframe sur
+   l'element [data-apercu-contenu].
+/ Full document shown in an admin iframe. Same skin skeleton (CSS, fonts),
+without navbar/footer. Same .tb-page/.tb-flux container as page.html.
+{% endcomment %}
+
+{% block extra_meta %}
+    {# Les liens du bloc s'ouvrent dans un nouvel onglet, jamais dans l'iframe. #}
+    {# / Block links open in a new tab, never inside the iframe. #}
+    <base target="_blank">
+    <style>body { min-height: 0 !important; }</style>
+{% endblock %}
+
+{% block main %}
+    <div class="tb-page tb-flux" data-apercu-contenu data-testid="apercu-bloc-document">
+        {% include "admin/pages/apercu/_blocs.html" %}
+    </div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% load i18n %}
+{% comment %}
+UNE INFO PRATIQUE D'UN BLOC LIEU
+/ One practical-info line of a LIEU block
+
+LOCALISATION : pages/templates/admin/pages/widgets/ligne_lieu.html
+
+Les 4 champs (type, texte, titre, lignes) sont TOUJOURS presents, meme caches :
+les valeurs postees doivent rester alignees ligne par ligne
+(pages/editeur_items.py:lire_lignes_depuis_post). Alpine montre « Titre » et
+« Lignes » pour un transport, « Texte » pour les autres types.
+/ The 4 inputs are ALWAYS present, even hidden, so posted values stay aligned.
+Alpine shows Title/Lines for a transport, Text for the other types.
+
+APPELE PAR (deux chemins, meme gabarit) :
+1. Lignes deja enregistrees, a l'ouverture de la fiche Bloc :
+   pages/admin.py:BlocAdminForm (champ contenu_lieu, un LignesField)
+   -> pages/admin_widgets.py:EditeurLignesWidget.render
+   -> admin/pages/widgets/editeur_lignes.html, qui inclut CE gabarit une fois
+      par element (nom tire de GABARIT_LIGNE_PAR_EDITEUR["lieu"]).
+2. Nouvelle ligne vide, au clic sur « + Ajouter une info pratique » :
+   editeur_lignes.html (hx-get, hx-swap="beforeend")
+   -> pages/admin_apercu.py:vue_ligne_vide (route staff_admin:pages_bloc_editeur_ligne)
+   -> CE gabarit, avec une ligne vide (admin_widgets.py:ligne_vide).
+
+A L'ENVOI DU FORMULAIRE :
+Les champs s'appellent `<nom>__<cle>` et se repetent d'une ligne a l'autre.
+pages/editeur_items.py:lire_lignes_depuis_post les reassemble dans l'ordre du
+DOM, puis nettoyer_contenu_lieu les nettoie. BlocAdmin.save_model recopie le resultat
+dans Bloc.contenu (bloc LIEU) (via admin_apercu.py:appliquer_editeurs_de_lignes).
+L'apercu en direct lit les memes champs (admin_apercu.py:vue_apercu_bloc_en_direct).
+
+CONTEXTE RECU : nom, ligne, classes_champ, classes_select, types_item_lieu
+(construit par admin_widgets.py:contexte_d_une_ligne).
+/ CALLED BY: the widget (existing lines, via editeur_lignes.html) and
+vue_ligne_vide ("+ Add" button). Posted fields are reassembled by
+lire_lignes_depuis_post and cleaned by nettoyer_contenu_lieu.
+{% endcomment %}
+<div data-ligne x-data="{ type_item: '{{ ligne.type|escapejs }}' }" data-testid="ligne-lieu"
+     style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; padding: 8px; border-radius: 8px; border: 1px solid var(--color-base-200);">
+    <label style="flex: 0 1 180px; font-size: 0.75rem; font-weight: 600;">
+        {% translate "Type" %}
+        <select name="{{ nom }}__type" x-model="type_item" class="{{ classes_select }}" data-testid="ligne-lieu-type">
+            {# Type inconnu (venu de l'API) : affiche tel quel, jamais remplace #}
+            {# en silence par la premiere option. / Unknown type: shown as is. #}
+            {% if ligne.type_inconnu %}
+                <option value="{{ ligne.type }}" selected>{% blocktranslate with type=ligne.type %}Type inconnu : {{ type }}{% endblocktranslate %}</option>
+            {% endif %}
+            {% for code_type, libelle_type in types_item_lieu %}
+                <option value="{{ code_type }}" {% if code_type == ligne.type %}selected{% endif %}>{{ libelle_type }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label x-show="type_item !== 'transport'" style="flex: 1 1 200px; font-size: 0.75rem; font-weight: 600;">
+        {% translate "Texte" %}
+        <textarea name="{{ nom }}__texte" rows="2" class="{{ classes_champ }}" data-testid="ligne-lieu-texte">{{ ligne.texte }}</textarea>
+    </label>
+    <label x-show="type_item === 'transport'" style="flex: 0 1 160px; font-size: 0.75rem; font-weight: 600;">
+        {% translate "Titre (ex. BUS)" %}
+        <input type="text" name="{{ nom }}__titre" value="{{ ligne.titre }}" class="{{ classes_champ }}" data-testid="ligne-lieu-titre">
+    </label>
+    <label x-show="type_item === 'transport'" style="flex: 1 1 200px; font-size: 0.75rem; font-weight: 600;">
+        {% translate "Lignes (une par ligne)" %}
+        <textarea name="{{ nom }}__lignes" rows="2" class="{{ classes_champ }}" data-testid="ligne-lieu-lignes">{{ ligne.lignes }}</textarea>
+    </label>
+    {% include "admin/pages/widgets/_boutons_ligne_editeur.html" %}
+</div>

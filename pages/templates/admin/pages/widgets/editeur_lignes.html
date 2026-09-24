@@ -1,0 +1,72 @@
+{% load i18n %}
+{% comment %}
+EDITEUR DE LIGNES — remplace la saisie de JSON brut
+/ Line editor — replaces raw JSON input
+
+LOCALISATION : pages/templates/admin/pages/widgets/editeur_lignes.html
+
+Rendu par pages/admin_widgets.py:EditeurLignesWidget. Une ligne par element de
+la liste (contenu d'un LIEU, sous-cartes d'une SECTION, points GPS).
+
+FLUX DU BOUTON « + AJOUTER » :
+1. hx-get vers pages/admin_apercu.py:vue_ligne_vide (editeur + nom du champ)
+2. Le serveur renvoie une ligne vide (ligne_<editeur>.html)
+3. hx-swap="beforeend" l'ajoute a la fin de #lignes-<nom>
+
+Les boutons ↑ ↓ ✕ de chaque ligne deplacent ou retirent la ligne dans la page
+(voir ligne_<editeur>.html). L'ordre des lignes dans la page EST l'ordre
+enregistre : voir pages/editeur_items.py:lire_lignes_depuis_post.
+/ One line per list item. "+ Add" fetches an empty line from the server.
+The DOM order of the lines IS the saved order.
+{% endcomment %}
+<div data-editeur-lignes="{{ editeur }}" data-testid="editeur-lignes-{{ nom }}" style="width: 100%;">
+
+    {% if editeur == "cartes" %}
+        {# Aide selon l'affichage choisi : ce que veut dire chaque champ. #}
+        {# / Help depending on the chosen affichage. #}
+        <p style="font-size: 0.8125rem; margin: 0 0 8px; color: var(--color-base-500);">
+            <span x-show="typeof affichage !== 'undefined' && affichage === 'EQUIPE'">{% translate "Une ligne par personne : Titre = nom, Texte = rôle, Badge = étiquette optionnelle." %}</span>
+            <span x-show="typeof affichage !== 'undefined' && affichage === 'FRISE'">{% translate "Une ligne par étape : Titre = année ou date, Texte = ce qui s'est passé." %}</span>
+            <span x-show="typeof affichage !== 'undefined' && affichage === 'RESSOURCES'">{% translate "Une ligne par ressource : Titre, description, badge et lien (optionnels)." %}</span>
+            <span x-show="typeof affichage !== 'undefined' && affichage === 'MEDIA_ET_CARTES'">{% translate "Une ligne par sous-carte : Titre, texte et badge (optionnel)." %}</span>
+        </p>
+    {% elif editeur == "lieu" %}
+        <p style="font-size: 0.8125rem; margin: 0 0 8px; color: var(--color-base-500);">
+            {% translate "Les infos pratiques affichées à côté de la carte, de haut en bas. Un « Intitulé » ouvre un groupe : les lignes suivantes s'y rangent." %}
+        </p>
+    {% elif editeur == "gps" %}
+        <p style="font-size: 0.8125rem; margin: 0 0 8px; color: var(--color-base-500);">
+            {% translate "Un point par ligne. La carte se centre sur le premier. Pour trouver des coordonnées : clic droit sur openstreetmap.org, puis « Afficher l'adresse »." %}
+        </p>
+    {% endif %}
+
+    {# Ecarts entre le contenu enregistre et l'editeur (cf. lignes_pour_affichage) : #}
+    {# rien ne doit changer en silence a l'enregistrement. #}
+    {# / Mismatches between stored content and the editor: nothing changes silently. #}
+    {% for avertissement in avertissements %}
+        <p role="alert" data-testid="editeur-lignes-avertissement-{{ nom }}"
+           style="font-size: 0.8125rem; margin: 0 0 8px; padding: 8px 12px; border-radius: 6px;
+                  background-color: color-mix(in srgb, #d97706 12%, transparent); color: var(--color-font-default-light);">
+            {{ avertissement }}
+        </p>
+    {% endfor %}
+
+    <div id="lignes-{{ nom }}" data-liste-lignes style="display: flex; flex-direction: column; gap: 8px;">
+        {% for contexte_ligne in lignes %}
+            {# Inclue ligne_cartes, ligne_gps ou ligne_lieu #}
+            {% include gabarit_ligne with nom=contexte_ligne.nom ligne=contexte_ligne.ligne types_item_lieu=contexte_ligne.types_item_lieu classes_champ=contexte_ligne.classes_champ classes_select=contexte_ligne.classes_select expressions_cles=contexte_ligne.expressions_cles %}
+        {% endfor %}
+    </div>
+
+    <button type="button"
+            hx-get="{% url 'staff_admin:pages_bloc_editeur_ligne' %}?editeur={{ editeur }}&nom={{ nom }}"
+            hx-target="#lignes-{{ nom }}"
+            hx-swap="beforeend"
+            data-testid="editeur-lignes-ajouter-{{ nom }}"
+            style="margin-top: 8px; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+                   border: 1px dashed var(--color-primary-500); color: var(--color-primary-600);
+                   background: transparent; font-size: 0.875rem; font-weight: 500;">
+        <span aria-hidden="true">+</span>
+        {% if editeur == "gps" %}{% translate "Ajouter un point" %}{% elif editeur == "lieu" %}{% translate "Ajouter une info pratique" %}{% else %}{% translate "Ajouter une ligne" %}{% endif %}
+    </button>
+</div>

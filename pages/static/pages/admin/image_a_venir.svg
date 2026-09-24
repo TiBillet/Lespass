@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <!-- Image de remplacement de l'apercu admin (pages/admin_apercu.py) : une image
+       est choisie dans le formulaire mais pas encore envoyee. Format 16:9.
+       / Admin preview placeholder: an image is chosen but not uploaded yet. -->
+  <defs>
+    <pattern id="hachures" width="48" height="48" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="48" height="48" fill="#e4e4e7"/>
+      <rect width="24" height="48" fill="#d4d4d8"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="900" fill="url(#hachures)"/>
+  <rect x="8" y="8" width="1584" height="884" fill="none" stroke="#a1a1aa" stroke-width="16" stroke-dasharray="48 32"/>
+  <g transform="translate(800 450)" fill="none" stroke="#52525b" stroke-width="22" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="-150" y="-110" width="300" height="220" rx="24" fill="#fafafa"/>
+    <circle cx="-60" cy="-35" r="28"/>
+    <path d="M-150 80 L-40 -10 L30 50 L80 10 L150 70"/>
+  </g>
+</svg>

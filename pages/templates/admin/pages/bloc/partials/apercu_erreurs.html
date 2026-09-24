@@ -1,0 +1,31 @@
+{% load i18n %}
+{% comment %}
+Apercu impossible : on explique pourquoi (champ mal rempli, page manquante).
+Renvoye en HTTP 200 pour que htmx l'affiche (il ignore les reponses 4xx).
+/ Preview impossible: explain why. Sent as HTTP 200 so htmx swaps it.
+
+LOCALISATION : pages/templates/admin/pages/bloc/partials/apercu_erreurs.html
+
+APPELE PAR : pages/admin_apercu.py:vue_apercu_bloc_en_direct, a la place de
+partials/apercu_iframe.html, quand ApercuBlocSerializer refuse les donnees
+(`erreurs`) ou que la page du bloc manque (`message`). Il remplace le contenu
+de #apercu-bloc (bloc/apercu_panneau.html).
+/ CALLED BY vue_apercu_bloc_en_direct instead of apercu_iframe.html when the
+data is invalid.
+{% endcomment %}
+<div role="status" data-testid="bloc-apercu-erreurs"
+     style="padding: 16px; font-size: 0.875rem; color: #92400e; background-color: color-mix(in srgb, #d97706 10%, transparent);">
+    <strong>{% translate "Aperçu indisponible pour le moment" %}</strong>
+    {% if message %}
+        <p style="margin: 6px 0 0;">{{ message }}</p>
+    {% endif %}
+    {% if erreurs %}
+        <ul style="margin: 6px 0 0; padding-left: 18px; list-style: disc;">
+            {% for nom_du_champ, liste_erreurs in erreurs.items %}
+                {% for erreur in liste_erreurs %}
+                    <li>{{ erreur }}</li>
+                {% endfor %}
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>
