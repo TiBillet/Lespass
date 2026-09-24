@@ -13,6 +13,7 @@ import uuid as uuid_module
 from datetime import timedelta
 from decimal import Decimal
 from json import dumps
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth import login
@@ -3184,7 +3185,8 @@ class CaisseViewSet(viewsets.ViewSet):
         # / Propagate sales params for the back button
         uuid_pv = request.GET.get("uuid_pv", request.POST.get("uuid_pv", ""))
         tag_id_cm = request.GET.get("tag_id_cm", request.POST.get("tag_id_cm", ""))
-        params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
+        type_app = request.GET.get("type_app", request.POST.get("type_app", ""))
+        params_ventes = _construire_params_ventes(uuid_pv, tag_id_cm, type_app)
 
         context = {
             "montant_actuel_euros": f"{montant_actuel_euros:.2f}",
@@ -3217,7 +3219,8 @@ class CaisseViewSet(viewsets.ViewSet):
         # / Get PV from query param (Sales menu passes it)
         uuid_pv = request.GET.get("uuid_pv", "")
         tag_id_cm = request.GET.get("tag_id_cm", "")
-        params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
+        type_app = request.GET.get("type_app", "")
+        params_ventes = _construire_params_ventes(uuid_pv, tag_id_cm, type_app)
 
         # Calculer le solde caisse via le meme service que le Ticket X
         # Evite la duplication de logique (fond + especes - sorties).
@@ -3239,6 +3242,11 @@ class CaisseViewSet(viewsets.ViewSet):
 
         context = {
             "uuid_pv": uuid_pv,
+            # tag_id_cm et type_app sont renvoyes en champs caches par le formulaire,
+            # pour que creer_sortie_de_caisse puisse reconstruire params_ventes.
+            # / Sent back as hidden fields so creer_sortie_de_caisse can rebuild params_ventes.
+            "tag_id_cm": tag_id_cm,
+            "type_app": type_app,
             "coupures": _COUPURES_POUR_TEMPLATE,
             "coupures_paires": _COUPURES_PAIRES_POUR_TEMPLATE,
             "params_ventes": params_ventes,
@@ -3281,10 +3289,9 @@ class CaisseViewSet(viewsets.ViewSet):
         # Computed early to be available in all error renders.
         uuid_pv_brut = request.POST.get("uuid_pv", "")
         tag_id_cm_brut = request.POST.get("tag_id_cm", "")
-        params_ventes = (
-            f"uuid_pv={uuid_pv_brut}&tag_id_cm={tag_id_cm_brut}"
-            if uuid_pv_brut
-            else ""
+        type_app_brut = request.POST.get("type_app", "")
+        params_ventes = _construire_params_ventes(
+            uuid_pv_brut, tag_id_cm_brut, type_app_brut
         )
         back_url_form = reverse("laboutik-caisse-sortie_de_caisse")
         if params_ventes:
@@ -3902,6 +3909,36 @@ def _calculer_datetime_ouverture_service():
     return premiere_vente.datetime
 
 
+def _construire_params_ventes(uuid_pv, tag_id_cm, type_app):
+    """
+    Construit la query string a propager dans toutes les URLs des vues Ventes.
+    / Builds the query string propagated in every Sales view URL.
+
+    LOCALISATION : laboutik/views.py
+
+    Les onglets Ventes font un hx-push-url avec "?vue=...&{{ params_ventes }}".
+    Si un parametre manque ici, il disparait de l'URL du navigateur.
+    C'est pour ca qu'on garde les 3 parametres : uuid_pv, tag_id_cm et type_app.
+    Sans uuid_pv, on renvoie une chaine vide (pas de point de vente a propager).
+    / Sales tabs push "?vue=...&{{ params_ventes }}" to the URL.
+    A missing param here disappears from the browser URL.
+
+    :param uuid_pv: UUID du point de vente courant (str, peut etre vide)
+    :param tag_id_cm: tag de la carte primaire (str, peut etre vide)
+    :param type_app: type d'application cliente (str, peut etre vide)
+    :return: "uuid_pv=...&tag_id_cm=...&type_app=..." ou ""
+    """
+    if not uuid_pv:
+        return ""
+
+    parametres_a_propager = {
+        "uuid_pv": uuid_pv,
+        "tag_id_cm": tag_id_cm,
+        "type_app": type_app,
+    }
+    return urlencode(parametres_a_propager)
+
+
 def _construire_contexte_ventes(request):
     """
     Construit le contexte commun des vues Ventes (header + params retour).
@@ -3952,15 +3989,16 @@ def _construire_contexte_ventes(request):
                 for uuid, name, poid, icon in pvs_list
             ]
 
+    # Params a propager dans toutes les URLs HTMX des vues Ventes
+    # / Params to propagate in all HTMX URLs of Sales views
+    type_app = request.GET.get("type_app", "")
+    params_ventes = _construire_params_ventes(uuid_pv, tag_id_cm, type_app)
+
     # URL de retour vers l'interface POS
     # / Return URL to the POS interface
     url_retour_pv = reverse("laboutik-caisse-point_de_vente")
-    if uuid_pv:
-        url_retour_pv += f"?uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}"
-
-    # Params a propager dans toutes les URLs HTMX des vues Ventes
-    # / Params to propagate in all HTMX URLs of Sales views
-    params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
+    if params_ventes:
+        url_retour_pv += f"?{params_ventes}"
 
     laboutik_config = LaboutikConfiguration.get_solo()
 

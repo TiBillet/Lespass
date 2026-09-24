@@ -535,3 +535,92 @@ class TestDetailVente:
             client = _make_client(admin_user, tenant)
             response = client.get('/laboutik/caisse/detail-vente/pas-un-uuid/')
             assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Tests propagation des parametres GET dans les URLs Ventes
+# ---------------------------------------------------------------------------
+
+# Parametres de test : faux tag de carte primaire et type d'app.
+# / Test params: fake primary card tag and app type.
+TAG_ID_CM_DE_TEST = 'A49E8E2A'
+TYPE_APP_DE_TEST = 'sunmi'
+
+
+@pytest.mark.usefixtures("test_data")
+class TestParamsVentesPropages:
+    """
+    Les onglets Ventes font un hx-push-url. Chaque URL doit garder
+    uuid_pv, tag_id_cm et type_app, sinon ils disparaissent de l'URL du navigateur.
+    / Sales tabs push their URL. Each URL must keep uuid_pv, tag_id_cm and type_app.
+    """
+
+    def test_recap_boutons_fond_et_sortie_de_caisse_gardent_les_params(
+        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
+    ):
+        """
+        Le Ticket X doit passer les 3 params aux boutons Fond de caisse et Sortie de caisse.
+        Avant le correctif, Fond de caisse n'avait aucun param.
+        / Ticket X must pass the 3 params to the Cash float and Cash withdrawal buttons.
+        """
+        with schema_context(TENANT_SCHEMA):
+            produit, prix = premier_produit_et_prix
+            _creer_ligne_article_directe(produit, prix, 500, PaymentMethod.CASH, pv=premier_pv)
+
+            client = _make_client(admin_user, tenant)
+            response = client.get(
+                f'/laboutik/caisse/recap-en-cours/?vue=toutes&uuid_pv={premier_pv.uuid}'
+                f'&tag_id_cm={TAG_ID_CM_DE_TEST}&type_app={TYPE_APP_DE_TEST}'
+            )
+            assert response.status_code == 200
+            contenu = response.content.decode('utf-8')
+
+            # Les params sont HTML-echappes dans les attributs (& devient &amp;)
+            # / Params are HTML-escaped in attributes (& becomes &amp;)
+            params_attendus = (
+                f'uuid_pv={premier_pv.uuid}&amp;tag_id_cm={TAG_ID_CM_DE_TEST}'
+                f'&amp;type_app={TYPE_APP_DE_TEST}'
+            )
+            assert f'/laboutik/caisse/fond-de-caisse/?{params_attendus}' in contenu
+            assert f'/laboutik/caisse/sortie-de-caisse/?{params_attendus}' in contenu
+            # Les onglets (hx-push-url) gardent aussi type_app
+            # / Tabs (hx-push-url) also keep type_app
+            assert f'?vue=par_moyen&{params_attendus}' in contenu
+
+    def test_fond_de_caisse_bouton_retour_garde_les_params(
+        self, admin_user, tenant, premier_pv,
+    ):
+        """
+        Le bouton Retour du Fond de caisse doit renvoyer vers le Ticket X avec les 3 params.
+        / The Cash float Back button must go back to Ticket X with the 3 params.
+        """
+        with schema_context(TENANT_SCHEMA):
+            client = _make_client(admin_user, tenant)
+            response = client.get(
+                f'/laboutik/caisse/fond-de-caisse/?uuid_pv={premier_pv.uuid}'
+                f'&tag_id_cm={TAG_ID_CM_DE_TEST}&type_app={TYPE_APP_DE_TEST}'
+            )
+            assert response.status_code == 200
+            contenu = response.content.decode('utf-8')
+            assert (
+                f'/laboutik/caisse/recap-en-cours/?uuid_pv={premier_pv.uuid}'
+                f'&amp;tag_id_cm={TAG_ID_CM_DE_TEST}&amp;type_app={TYPE_APP_DE_TEST}'
+            ) in contenu
+
+    def test_sortie_de_caisse_formulaire_renvoie_tag_et_type_app(
+        self, admin_user, tenant, premier_pv,
+    ):
+        """
+        Le formulaire de Sortie de caisse doit renvoyer tag_id_cm et type_app en champs caches.
+        / The Cash withdrawal form must send back tag_id_cm and type_app as hidden fields.
+        """
+        with schema_context(TENANT_SCHEMA):
+            client = _make_client(admin_user, tenant)
+            response = client.get(
+                f'/laboutik/caisse/sortie-de-caisse/?uuid_pv={premier_pv.uuid}'
+                f'&tag_id_cm={TAG_ID_CM_DE_TEST}&type_app={TYPE_APP_DE_TEST}'
+            )
+            assert response.status_code == 200
+            contenu = response.content.decode('utf-8')
+            assert f'name="tag_id_cm" value="{TAG_ID_CM_DE_TEST}"' in contenu
+            assert f'name="type_app" value="{TYPE_APP_DE_TEST}"' in contenu

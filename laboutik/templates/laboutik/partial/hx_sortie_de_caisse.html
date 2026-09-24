@@ -46,6 +46,10 @@ Validation JS avant envoi :
           data-especes="{{ entrees_especes_centimes }}">
         {% csrf_token %}
         <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
+        {# tag_id_cm et type_app : renvoyes pour garder les params dans les URLs Ventes #}
+        {# / Sent back to keep params in Sales URLs #}
+        <input type="hidden" name="tag_id_cm" value="{{ tag_id_cm }}">
+        <input type="hidden" name="type_app" value="{{ type_app }}">
 
         <!-- Grille des coupures — 2 colonnes, 6 lignes, stagger animation -->
         <!-- / Denomination grid — 2 columns, 6 rows, stagger animation -->

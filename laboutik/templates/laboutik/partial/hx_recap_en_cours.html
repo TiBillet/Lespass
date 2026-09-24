@@ -210,7 +210,7 @@
             <h3 class="ventes-section-title">{% translate "Gestion caisse" %}</h3>
             <div class="recap-actions-row" data-testid="actions-caisse">
                 <button class="recap-action-btn recap-action-btn--indigo"
-                    hx-get="{% url 'laboutik-caisse-fond_de_caisse' %}"
+                    hx-get="{% url 'laboutik-caisse-fond_de_caisse' %}?{{ params_ventes }}"
                     hx-target="#ventes-zone"
                     hx-swap="innerHTML"
                     data-loading-disable
@@ -219,7 +219,7 @@
                     {% translate "Fond de caisse" %}
                 </button>
                 <button class="recap-action-btn recap-action-btn--rouge"
-                    hx-get="{% url 'laboutik-caisse-sortie_de_caisse' %}?uuid_pv={{ pv.id }}"
+                    hx-get="{% url 'laboutik-caisse-sortie_de_caisse' %}?{{ params_ventes }}"
                     hx-target="#ventes-zone"
                     hx-swap="innerHTML"
                     data-loading-disable
