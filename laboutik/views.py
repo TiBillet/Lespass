@@ -1493,7 +1493,7 @@ METHODES_RECHARGE_PAYANTES = (Product.RECHARGE_EUROS,)
 
 # Recharges gratuites : credit automatique, pas de paiement demande
 # Free top-ups: auto-credit, no payment asked
-METHODES_RECHARGE_GRATUITES = (Product.RECHARGE_CADEAU)#, Product.RECHARGE_TEMPS)
+METHODES_RECHARGE_GRATUITES = (Product.RECHARGE_CADEAU,)  # , Product.RECHARGE_TEMPS) — la virgule garde un tuple / trailing comma keeps a tuple
 
 
 # Pictogramme de la tuile « Recharger » selon le type de recharge.

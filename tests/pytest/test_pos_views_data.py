@@ -406,6 +406,72 @@ def test_prix_en_centimes(tenant):
 
 
 # ---------------------------------------------------------------------------
+# Test 3b : PV Adhesion — un produit adhesion sans methode_caisse
+# Test 3b: Membership POS — a membership product without methode_caisse
+# ---------------------------------------------------------------------------
+
+def test_produit_adhesion_sans_methode_caisse_ne_plante_pas(tenant):
+    """
+    Un produit adhesion n'a pas de methode_caisse (None).
+    La construction des articles ne doit pas planter dessus.
+    / A membership product has no methode_caisse (None).
+    Building the articles must not crash on it.
+
+    Regression : METHODES_RECHARGE_GRATUITES etait devenu la chaine "RC"
+    (virgule oubliee en commentant RECHARGE_TEMPS). Le test
+    « None in "RC" » levait un TypeError : les PV Adhesion et Mix
+    renvoyaient une erreur 500.
+    / Regression: the constant became the string "RC" (missing comma),
+    so "None in 'RC'" raised TypeError and the POS page crashed (500).
+    """
+    with schema_context(TENANT_SCHEMA):
+        from BaseBillet.models import Product, Price
+        from laboutik.views import _construire_donnees_articles
+
+        produit_adhesion = Product.objects.create(
+            name=f'{TEST_PREFIX} Adhesion sans methode',
+            categorie_article=Product.ADHESION,
+            methode_caisse=None,
+        )
+        Price.objects.create(
+            product=produit_adhesion,
+            name=f'{TEST_PREFIX} Tarif Adhesion',
+            prix=Decimal('10.00'),
+        )
+
+        pdv = creer_pdv_avec_produit('Adhesion', produit_adhesion)
+        articles = _construire_donnees_articles(pdv)
+
+        article = next(
+            (a for a in articles if a['name'] == f'{TEST_PREFIX} Adhesion sans methode'),
+            None,
+        )
+        assert article is not None, "L'adhesion doit etre dans la liste des articles"
+        assert article['est_adhesion'] is True
+        assert article['est_recharge_gratuite'] is False
+        assert article['bt_groupement']['groupe'] == 'groupe_AD'
+
+
+def test_methodes_recharge_gratuites_est_un_tuple():
+    """
+    Les constantes de methodes doivent rester des tuples, pas des chaines.
+    Sinon « in » cherche un morceau de texte : None plante, et un code
+    comme "R" ou "C" serait pris pour une recharge gratuite.
+    / Method constants must stay tuples, not strings: otherwise "in"
+    does a substring search.
+    """
+    from laboutik.views import (
+        METHODES_RECHARGE,
+        METHODES_RECHARGE_GRATUITES,
+        METHODES_RECHARGE_PAYANTES,
+    )
+
+    assert isinstance(METHODES_RECHARGE, tuple)
+    assert isinstance(METHODES_RECHARGE_GRATUITES, tuple)
+    assert isinstance(METHODES_RECHARGE_PAYANTES, tuple)
+
+
+# ---------------------------------------------------------------------------
 # Test 4 : bt_groupement — groupement automatique par methode_caisse
 # Test 4: bt_groupement — automatic grouping by methode_caisse
 # ---------------------------------------------------------------------------
