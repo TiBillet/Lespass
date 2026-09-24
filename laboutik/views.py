@@ -3428,9 +3428,6 @@ class CaisseViewSet(viewsets.ViewSet):
         datetime_ouverture = _calculer_datetime_ouverture_service()
         vue = request.GET.get("vue", "toutes")
 
-        # Récupère le point de vente actuelle
-        pv_actuelle = request.GET.get("uuid_pv")
-
         # Si aucune vente depuis la derniere cloture, afficher un message
         # / If no sales since last closure, show a message
         if datetime_ouverture is None:
@@ -3453,23 +3450,29 @@ class CaisseViewSet(viewsets.ViewSet):
             "datetime_ouverture": datetime_ouverture,
             "datetime_fin": datetime_fin,
             "nb_transactions": service.lignes.count(),
-            "pv_actuelle":pv_actuelle,
         }
 
-        if vue == "par_pv":
-            context["ventilation_par_pv"] = service.calculer_ventilation_par_pv()
-            context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
-        elif vue == "par_moyen":
-            context["synthese_operations"] = service.calculer_synthese_operations()
-            context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
-        elif vue == "detail_articles":
-            context["detail_ventes"] = service.calculer_detail_ventes()
-        else:
-            # Vue "toutes" : totaux, TVA, solde
-            # / "toutes" view: totals, VAT, cash balance
+        # L'ecran Ventes affiche toujours les chiffres du haut (total, fond, TVA)
+        # et les deux mini-tableaux (par moyen, par point de vente).
+        # Exception : un historique ouvert en bas de l'ecran (cible HTMX "detail-contenu").
+        # Le template ne rend alors que le tableau demande : inutile de tout recalculer.
+        # / The Sales screen always shows KPIs and both summary tables,
+        # except for a history fragment (HTMX target "detail-contenu").
+        est_un_fragment_historique = (
+            request.htmx and request.htmx.target == "detail-contenu"
+        )
+        if not est_un_fragment_historique:
             context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
             context["tva"] = service.calculer_tva()
             context["solde_caisse"] = service.calculer_solde_caisse()
+            context["ventilation_par_pv"] = service.calculer_ventilation_par_pv()
+
+        # Donnees propres a l'historique demande
+        # / Data specific to the requested history
+        if vue == "par_moyen":
+            context["synthese_operations"] = service.calculer_synthese_operations()
+        elif vue == "detail_articles":
+            context["detail_ventes"] = service.calculer_detail_ventes()
 
         return _rendre_vue_ventes(
             request, "laboutik/partial/hx_recap_en_cours.html", context
@@ -3568,9 +3571,6 @@ class CaisseViewSet(viewsets.ViewSet):
         filtre_pv = request.GET.get("pv")
         filtre_moyen = request.GET.get("moyen")
 
-        # Récupère le point de vente actuelle
-        pv_actuelle = request.GET.get("uuid_pv")
-
         if filtre_pv:
             lignes = lignes.filter(point_de_vente__uuid=filtre_pv)
         if filtre_moyen:
@@ -3653,7 +3653,6 @@ class CaisseViewSet(viewsets.ViewSet):
             "page_courante": page,
             "a_page_suivante": a_page_suivante,
             "page_suivante": page + 1,
-            "pv_actuelle" : pv_actuelle,
             "filtre_pv": filtre_pv or "",
             "filtre_moyen": filtre_moyen or "",
             "points_de_vente": list(points_de_vente),
@@ -9741,7 +9740,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
-                    "msg_content": _("Pas d'imprimante configuree sur ce terminal."),
+                    "msg_content": _("Pas d'imprimante configurée sur ce terminal."),
                 },
             )
 

@@ -1,5 +1,5 @@
 {% load static i18n %}
-<header class="header-background">
+<header class="header-background{% if retour_pv %} header-background--retour{% endif %}">
   {% if mode_ecole %}
     {# Bandeau orange visible en mode ecole (LNE exigence 5) — indique que les ventes sont des simulations #}
     {# / Orange banner visible in training mode (LNE req. 5) — indicates sales are simulations #}
@@ -22,25 +22,19 @@
          onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ card.pvs_list.0.uuid }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}'">
       <img class="pointer" alt="TiBillet" src="{% static 'images/logo.svg' %}" />
     </div>
-    <div id="header-title"
-         class="menu-burger-icon"
-         onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')">
     {% if retour_pv %}
-        <div class="hdr-back">
-        <span class="hdr-back-chevron"></span>
-        <a
-           href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv_actuelle }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}"
-           data-nav-spinner
-           {% if pv_item.uuid == pv.id %}aria-current="true" data-testid="menu-pv-courant"{% endif %}>
-            {% translate 'Retourner au point de ventes' %}
-        </a>
-        </div>
+      {# Zone retour + titre des ecrans Ventes / Sortie (voir le partiel) #}
+      {# / Back + title zone of Sales / Cash withdrawal screens (see partial) #}
+      {% include "laboutik/partial/_hdr_retour_zone.html" with hdr_titre=title %}
     {% else %}
+      <div id="header-title"
+           class="menu-burger-icon"
+           onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')">
         <i class="fas {{ pv.icon }}" aria-hidden="true"></i> &nbsp;
         {% if pv.name and hide_pv_name != True %}{{ pv.name }}{% endif %}
         <span class="pos-chevron"></span>
+      </div>
     {% endif %}
-    </div>
     <!--
         INDICATEUR CONNEXION WEBSOCKET — toujours visible dans le header
         / WebSocket connection indicator — always visible in header
@@ -70,6 +64,8 @@
     {#            <div id="header-status-info2"></div>#}
     {#        </div>#}
   </div>
+  {# Ecrans Ventes / Sortie : pas de nav (maquette) / Sales screens: no nav (mockup) #}
+  {% if not retour_pv %}
   <nav id="menu-large" class="hdr-nav" aria-label="Menu">
     <button class="hdr-nav-btn" data-dest="preparations">
       <i class="fas fa-solid fa-clipboard" aria-hidden="true"></i>Préparations
@@ -99,6 +95,7 @@
        aria-label="{% translate 'Menu' %}"
        data-testid="burger-icon"></i>
   </nav>
+  {% endif %}
 </header>
 <div id="menu-burger-overlay"
      data-testid="menu-burger-overlay"

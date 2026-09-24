@@ -1,454 +1,328 @@
-/*
- * STYLES DU MENU VENTES — Ticket X + liste + detail
- * / SALES MENU STYLES — Ticket X + list + detail
- *
- * LOCALISATION : laboutik/static/css/ventes.css
- *
- * Police Luciole (lisibilite nocturne, dyslexie).
- * Fond sombre, texte clair — coherent avec le theme POS.
- */
+/* ============================================================
+   VENTES.CSS — Ecran Ventes (Ticket X, historiques, detail d'une vente)
+   / SALES SCREEN — Ticket X, histories, sale detail
+
+   LOCALISATION : laboutik/static/css/ventes.css
+   Maquette : TEMP-tibillet-laboutik-main/caisse/Laboutik.css
+              (section « VENTES + SORTIE DE CAISSE », l.858-1110,
+               et popup de cloture, l.756-764).
+
+   Templates :
+   - laboutik/views/ventes.html              (#ventes-zone)
+   - partial/hx_recap_en_cours.html          (ecran Ventes)
+   - partial/_ventes_historique_recap.html   (historique par article, synthese)
+   - partial/hx_liste_ventes.html + _ligne_vente.html (historique de commande)
+   - partial/hx_detail_vente.html            (detail sous une ligne)
+   - partial/hx_fond_de_caisse.html          (popup fond de caisse)
+
+   Formats :
+   - Par defaut : tablette SUNMI D3 Mini (1280 x 800), regles .fmt-d3mini de la maquette.
+   - <= 599 px : terminal de poche SUNMI V2s (360 x 720), regles .fmt-poche.
+   Couleurs : uniquement les tokens de palette.css (aucune couleur en dur).
+   Popups (.card-modal, .card-valider, .payment-title) : overlay.css.
+   ============================================================ */
 
 /* ------------------------------------------------------------------ */
-/*  Container principal                                                */
+/*  Zone qui defile sous le header / Scrolling zone under the header   */
 /* ------------------------------------------------------------------ */
 
-/* Le .ventes-container est injecte dans #products-container qui est
-   display:flex row (pour articles + addition cote a cote).
-   On force la largeur 100% et le scroll vertical pour occuper tout l'espace.
-   / .ventes-container is injected into #products-container which is
-   display:flex row (for articles + addition side by side).
-   We force 100% width and vertical scroll to fill the space. */
-/* Container avec marges laterales pour ne pas coller aux bords.
-   max-width 1100px pour rester lisible sur grand ecran.
-   / Container with side margins, max-width 1100px for readability. */
-/* La zone ventes (#ventes-zone) colle a la navbar et remplit le viewport.
-   Fond gris sans interruption. Pas de bande noire entre le header et le contenu.
-   / The sales zone sticks to the navbar and fills the viewport.
-   Uninterrupted grey background. No black band between header and content. */
+/* body est en flex colonne (views.css) : la zone prend le reste de la hauteur
+   / body is a flex column: the zone takes the remaining height */
 #ventes-zone {
-    min-height: calc(100vh - 66px);
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	background: var(--bg);
+	color: var(--text);
+	font-variant-numeric: tabular-nums;
 }
 
-.ventes-container {
-    width: 100%;
-    height: 100%;
-    overflow-y: auto;
-    padding: 16px 5% 40px;
-    max-width: 1100px;
-    min-height: calc(100vh - 66px);
-    margin: 0 auto;
-    font-family: "Luciole-regular", sans-serif;
-    color: #e0e0e0;
-    background-color: var(--bleu11, #1a1a2e);
+/* Les popups de l'ecran (fond, cloture) couvrent tout l'ecran, header compris
+   / Screen popups cover the whole screen, header included */
+#ventes-zone .card-modal { position: fixed; }
+
+.ventes-body {
+	--pad: 16px;
+	padding: var(--pad);
+	display: grid;
+	align-content: start;
+	gap: 14px;
+}
+.ventes-view { display: grid; align-content: start; gap: 18px; min-width: 0; }
+
+.ventes-page-titre { margin: 0; font-size: 15px; font-weight: 800; color: var(--text); }
+
+.ventes-vide {
+	margin: 0;
+	padding: 30px 18px;
+	border-radius: var(--r-panel);
+	background: var(--surface);
+	box-shadow: inset 0 0 0 1px var(--line);
+	color: var(--text-faint);
+	text-align: center;
+}
+
+/* Ancien conteneur, encore utilise par hx_export_fiscal.html
+   / Legacy container, still used by hx_export_fiscal.html */
+.ventes-container { padding: 16px; color: var(--text); }
+
+/* ------------------------------------------------------------------ */
+/*  Chiffres du haut / Top figures (.kpis)                             */
+/* ------------------------------------------------------------------ */
+
+.kpis { display: flex; flex-direction: row; align-items: stretch; gap: 10px; }
+.kpi-block {
+	padding: 14px 18px;
+	border: 0;
+	border-radius: var(--r-panel);
+	background: var(--surface);
+	box-shadow: inset 0 0 0 1px var(--line);
+	color: var(--text);
+	font: inherit;
+	text-align: left;
+	display: grid;
+	gap: 3px;
+	align-content: center;
+}
+.kpi-lbl { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
+.kpi-val { font-size: 32px; font-weight: 800; letter-spacing: -.02em; }
+.kpi-sub { font-size: 12.5px; color: var(--text-faint); }
+.kpi-sub b { color: var(--text); }
+.kpi-sub-sortie { color: var(--danger); }
+.kpi-tva { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+
+.kpi-total { flex: 1.4; }
+.kpi-fond { flex: 1; position: relative; }
+.kpi-fond-modifier {
+	justify-self: start;
+	margin-top: 2px;
+	padding: 5px 12px;
+	border: 0;
+	border-radius: var(--r-pill);
+	background: var(--surface-3);
+	color: var(--text-dim);
+	font: inherit;
+	font-size: 11.5px;
+	font-weight: 700;
+	cursor: pointer;
+}
+.kpi-fond-modifier:active { background: var(--surface); color: var(--text); }
+
+.kpi-actions-stack { flex: 0 0 210px; display: flex; flex-direction: column; gap: 10px; }
+.kpi-action { flex: 1; min-height: 44px; padding: 0 16px; justify-content: center; cursor: pointer; touch-action: manipulation; }
+.kpi-action .kpi-lbl { font-size: 13px; font-weight: 700; letter-spacing: normal; text-transform: none; }
+.kpi-action:disabled { opacity: .6; cursor: default; }
+.kpi-action-warn { background: color-mix(in oklab, var(--warn), var(--surface) 78%); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warn), transparent 40%); }
+.kpi-action-warn .kpi-lbl { color: var(--warn); }
+.kpi-action-warn:active { background: color-mix(in oklab, var(--warn), var(--surface) 65%); }
+.kpi-action-danger { background: color-mix(in oklab, var(--danger), var(--surface) 78%); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--danger), transparent 40%); }
+.kpi-action-danger .kpi-lbl { color: var(--danger); }
+.kpi-action-danger:active { background: color-mix(in oklab, var(--danger), var(--surface) 65%); }
+/* Imprimer Ticket X : action neutre (absente de la maquette)
+   / Print Ticket X: neutral action (not in the mockup) */
+.kpi-action-neutre .kpi-lbl { color: var(--text-dim); }
+.kpi-action-neutre:active { background: var(--surface-2); }
+.kpi-block:focus-visible,
+.kpi-fond-modifier:focus-visible,
+.voir-detail:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+
+/* Retour de l'impression du Ticket X / Ticket X print feedback */
+.recap-feedback:empty { display: none; }
+
+/* ------------------------------------------------------------------ */
+/*  Mini-tableaux / Summary tables                                     */
+/* ------------------------------------------------------------------ */
+
+.mini-tables { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.mini-table-large { grid-column: 1 / -1; }
+.mini-table-title { margin: 0; padding: 12px 18px 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
+
+/* ------------------------------------------------------------------ */
+/*  Boutons d'historique / History toggles                             */
+/* ------------------------------------------------------------------ */
+
+.detail-toggle { display: flex; flex-wrap: wrap; gap: 8px; }
+.voir-detail {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 40px;
+	padding: 0 16px;
+	border: 0;
+	border-radius: var(--r-ctrl);
+	background: var(--surface);
+	box-shadow: inset 0 0 0 1px var(--line);
+	color: var(--text-dim);
+	font: inherit;
+	font-weight: 700;
+	font-size: 13px;
+	cursor: pointer;
+	touch-action: manipulation;
+}
+.voir-detail:active { background: var(--surface-2); }
+.voir-detail[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
+.voir-detail-chevron {
+	width: 7px; height: 7px;
+	border-right: 2px solid currentColor;
+	border-bottom: 2px solid currentColor;
+	transform: rotate(45deg);
+	transition: transform .16s var(--ease);
+}
+.voir-detail[aria-pressed="true"] .voir-detail-chevron { transform: rotate(225deg); }
+
+.detail-section { display: grid; gap: 10px; }
+.detail-section[hidden] { display: none; }
+.detail-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.detail-head h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--text); }
+.detail-contenu, .liste-ventes { display: grid; gap: 10px; min-width: 0; }
+.detail-filters { display: flex; gap: 8px; }
+.detail-filters select {
+	min-height: 40px;
+	padding: 0 14px;
+	border: 0;
+	border-radius: var(--r-ctrl);
+	background: var(--surface);
+	box-shadow: inset 0 0 0 1px var(--line);
+	color: var(--text);
+	font-size: 13px;
+	font-weight: 650;
+	font-family: inherit;
 }
 
 /* ------------------------------------------------------------------ */
-/*  En-tete (titre + bouton retour)                                    */
+/*  Tableaux / Tables                                                  */
 /* ------------------------------------------------------------------ */
 
-.ventes-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    flex-wrap: wrap;
-    gap: 10px;
+.table-wrap { border-radius: var(--r-panel); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; overflow-x: auto; }
+table.ventes-table, .mini-table table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.ventes-table th, .mini-table th {
+	text-align: left;
+	padding: 12px 18px;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	border-bottom: 1px solid var(--line-soft);
+	white-space: nowrap;
 }
-
-.ventes-header-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.ventes-title {
-    font-size: 1.4rem;
-    margin: 0;
-    color: #ffffff;
-}
-
-.ventes-btn-retour {
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: #ffffff;
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-family: "Luciole-regular", sans-serif;
-    font-size: 1rem;
-    transition: background 0.2s;
-}
-
-.ventes-btn-retour:hover {
-    background: rgba(255, 255, 255, 0.25);
-}
+.ventes-table td, .mini-table td { padding: 11px 18px; border-bottom: 1px solid var(--line-soft); color: var(--text-dim); white-space: nowrap; }
+.ventes-table tr:last-child td, .mini-table tr:last-child td { border-bottom: 0; }
+/* Plusieurs <tbody> (une par categorie) : trait entre elles
+   / Several <tbody> (one per category): rule between them */
+.ventes-table tbody + tbody tr:first-child td { border-top: 1px solid var(--line-soft); }
+.ventes-table .num, .mini-table .num { text-align: right; font-weight: 700; color: var(--text); }
+.ventes-table th.num, .mini-table th.num { text-align: right; }
+.ventes-table .num-fort { font-weight: 800; }
+.ventes-table .muted, .mini-table .muted { color: var(--text-faint); font-style: italic; }
+.ventes-table .empty, .mini-table .empty { text-align: center; padding: 30px; color: var(--text-faint); white-space: normal; }
+.ventes-table .cat-row td { background: var(--surface-2); font-weight: 800; color: var(--text); text-transform: uppercase; font-size: 11px; letter-spacing: .05em; }
+.ventes-table .poids-vol { font-weight: 600; color: var(--text-faint); }
+.mini-table .sous-ligne td { padding-top: 6px; padding-bottom: 6px; font-size: 12.5px; color: var(--text-faint); }
+.mini-table .sous-ligne td:first-child { padding-left: 32px; }
 
 /* ------------------------------------------------------------------ */
-/*  Onglets HTMX                                                      */
+/*  Historique de commande : lignes cliquables + detail                */
+/*  / Order history: clickable rows + detail                           */
 /* ------------------------------------------------------------------ */
 
-.ventes-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 15px;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-    padding-bottom: 8px;
+.ventes-ligne-cliquable { cursor: pointer; }
+.ventes-ligne-cliquable:active td { background: var(--surface-2); }
+.ventes-ligne-active td { background: var(--surface-2); color: var(--text); }
+@media (hover: hover) {
+	.ventes-ligne-cliquable:hover td { background: var(--surface-2); }
 }
 
-.ventes-tab {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #b0b0b0;
-    padding: 8px 14px;
-    border-radius: 6px 6px 0 0;
-    cursor: pointer;
-    font-family: "Luciole-regular", sans-serif;
-    font-size: 0.95rem;
-    transition: background 0.2s, color 0.2s;
-}
-
-.ventes-tab:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #ffffff;
-}
-
-.ventes-tab-active {
-    background: rgba(99, 102, 241, 0.5);
-    color: #ffffff;
-    border-color: rgba(99, 102, 241, 0.7);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Contenu du rapport                                                 */
-/* ------------------------------------------------------------------ */
-
-.ventes-content {
-    /* Pas de max-height ici — le scroll est gere par .ventes-container */
-    /* / No max-height here — scroll is handled by .ventes-container */
-}
-
-.ventes-periode {
-    font-size: 0.9rem;
-    color: #a0a0a0;
-    margin-bottom: 12px;
-    padding: 6px 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 4px;
-}
-
-.ventes-total-general {
-    font-size: 1.2rem;
-    margin-bottom: 15px;
-    padding: 10px;
-    background: rgba(99, 102, 241, 0.15);
-    border-radius: 6px;
-    text-align: center;
-}
-
-.ventes-message-vide {
-    text-align: center;
-    padding: 40px 20px;
-    color: #888;
-    font-size: 1.1rem;
-}
-
-.ventes-section-title {
-    font-size: 1.1rem;
-    margin: 20px 0 8px 0;
-    color: #c0c0c0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 4px;
-}
-
-.ventes-categorie {
-    margin-bottom: 15px;
-}
-
-.ventes-categorie-titre {
-    font-size: 1rem;
-    margin: 0 0 6px 0;
-    color: #d0d0d0;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Tableaux                                                           */
-/* ------------------------------------------------------------------ */
-
-/* table-layout:fixed + colonnes explicites pour aligner les montants proprement.
-   / table-layout:fixed + explicit columns for clean amount alignment. */
-.ventes-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 12px;
-    font-size: 0.95rem;
-    table-layout: fixed;
-}
-
-.ventes-table th {
-    background: rgba(255, 255, 255, 0.08);
-    padding: 8px 10px;
-    text-align: left;
-    font-weight: normal;
-    color: #a0a0a0;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
-
-/* Permettre aux classes utilitaires de surcharger l'alignement par defaut
-   / Allow utility classes to override default alignment */
-.ventes-table th.text-end,
-.ventes-table td.text-end {
-    text-align: right;
-}
-.ventes-table th.text-center,
-.ventes-table td.text-center {
-    text-align: center;
-}
-
-.ventes-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    /* Chiffres tabulaires pour que les colonnes s'alignent parfaitement
-       / Tabular numbers for perfect column alignment */
-    font-variant-numeric: tabular-nums;
-}
-
-.ventes-table tbody tr:nth-child(even) {
-    background: rgba(255, 255, 255, 0.03);
-}
-
-.ventes-table-compact {
-    font-size: 0.9rem;
-}
-
-.ventes-table-compact th,
-.ventes-table-compact td {
-    padding: 5px 8px;
-}
-
-.ventes-total-row {
-    background: rgba(99, 102, 241, 0.1) !important;
-    border-top: 2px solid rgba(99, 102, 241, 0.3);
-}
-
-.ventes-sous-ligne td {
-    color: #888;
-    font-size: 0.85rem;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Blocs PV (vue par_pv)                                              */
-/* ------------------------------------------------------------------ */
-
-.ventes-bloc-pv {
-    padding: 10px;
-    margin-bottom: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
-    border-left: 3px solid rgba(99, 102, 241, 0.5);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Filtres (liste des ventes)                                         */
-/* ------------------------------------------------------------------ */
-
-.ventes-filtres {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-}
-
-.ventes-filtre-select {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #e0e0e0;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-family: "Luciole-regular", sans-serif;
-    font-size: 0.95rem;
-    min-width: 160px;
-}
-
-.ventes-filtre-select option {
-    background: #2a2a3e;
-    color: #e0e0e0;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Liste scrollable                                                   */
-/* ------------------------------------------------------------------ */
-
-.ventes-liste-scroll {
-    /* Pas de max-height — le scroll est gere par .ventes-container parent */
-    /* / No max-height — scroll is handled by parent .ventes-container */
-}
-
-.ventes-ligne-cliquable {
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-.ventes-ligne-cliquable:hover {
-    background: rgba(99, 102, 241, 0.15) !important;
-}
-
-/* Ligne active (surlignee quand son detail est ouvert)
-   / Active row (highlighted when its detail is open) */
-.ventes-ligne-active {
-    background: rgba(99, 102, 241, 0.2) !important;
-    border-left: 3px solid rgba(99, 102, 241, 0.7);
-}
-
-/* Ligne detail collapse — injectee sous la ligne cliquee
-   / Collapse detail row — injected below the clicked row */
-.ventes-detail-row {
-    background: rgba(99, 102, 241, 0.05) !important;
-    border-left: 3px solid rgba(99, 102, 241, 0.4);
-}
-
-.ventes-detail-row td {
-    padding: 12px 10px;
-}
-
-.ventes-detail-collapse {
-    padding: 8px 0;
-}
-
-.ventes-detail-collapse .ventes-table {
-    margin-bottom: 8px;
-}
-
-.ventes-detail-collapse .ventes-detail-info {
-    margin-bottom: 10px;
-}
-
-.ventes-articles-tronque {
-    max-width: 200px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Badges moyen de paiement                                           */
-/* ------------------------------------------------------------------ */
-
-/* Badge moyen de paiement — affiche le label humain (Especes, CB, etc.)
-   centré verticalement et optiquement dans la cellule du tableau.
-   / Payment method badge — displays human label, vertically and optically centered. */
-.ventes-badge-moyen {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    line-height: 1;
-    white-space: nowrap;
-    vertical-align: middle;
-}
-
-.ventes-badge-CA { background: rgba(34, 197, 94, 0.3); color: #4ade80; }
-.ventes-badge-CC { background: rgba(59, 130, 246, 0.3); color: #60a5fa; }
-.ventes-badge-LE { background: rgba(168, 85, 247, 0.3); color: #c084fc; }
-.ventes-badge-LG { background: rgba(251, 146, 60, 0.3); color: #fdba74; }
-.ventes-badge-CH { background: rgba(156, 163, 175, 0.3); color: #d1d5db; }
-
-/* ------------------------------------------------------------------ */
-/*  Detail d'une vente                                                 */
-/* ------------------------------------------------------------------ */
-
-.ventes-detail-info {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-    margin-bottom: 15px;
-    padding: 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
-}
-
-.ventes-detail-info-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 1rem;
-}
-
-.ventes-detail-actions {
-    margin-top: 15px;
-    display: flex;
-    gap: 10px;
-}
-
+.ventes-detail-row > td { padding: 0; background: var(--bg); white-space: normal; }
+.ventes-detail-collapse { display: grid; gap: 10px; padding: 12px 18px 16px; }
+.ventes-detail-info { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12.5px; color: var(--text-dim); }
+.ventes-detail-info-item { display: inline-flex; align-items: center; gap: 6px; }
+.ventes-detail-info-item .fas { color: var(--text-faint); }
+.ventes-table-detail { border-radius: var(--r-ctrl); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); }
+.ventes-table-detail th, .ventes-table-detail td { padding: 8px 14px; }
+.ventes-table-detail .total-row td { color: var(--text); font-weight: 800; }
+.ventes-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .ventes-btn-action {
-    background: rgba(99, 102, 241, 0.4);
-    border: 1px solid rgba(99, 102, 241, 0.6);
-    color: #ffffff;
-    padding: 10px 20px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-family: "Luciole-regular", sans-serif;
-    font-size: 1rem;
-    transition: background 0.2s;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 40px;
+	padding: 0 16px;
+	border: 0;
+	border-radius: var(--r-ctrl);
+	background: var(--surface-2);
+	box-shadow: inset 0 0 0 1px var(--line);
+	color: var(--text-dim);
+	font: inherit;
+	font-weight: 700;
+	font-size: 13px;
+	cursor: pointer;
 }
+.ventes-btn-action:active { background: var(--surface-3); color: var(--text); }
 
-.ventes-btn-action:hover {
-    background: rgba(99, 102, 241, 0.6);
+/* Moyen de paiement : pastille. Especes en vert, CB en bleu, le reste neutre.
+   / Payment method pill. Cash green, card blue, others neutral. */
+.ventes-badge-moyen {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 10px;
+	border-radius: var(--r-pill);
+	background: var(--surface-3);
+	color: var(--text-dim);
+	font-size: 12px;
+	font-weight: 700;
+	white-space: nowrap;
 }
+.ventes-badge-CA { background: var(--valid-wash); color: var(--valid); }
+.ventes-badge-CC { background: var(--info-wash); color: var(--info-ink); }
 
 /* ------------------------------------------------------------------ */
-/*  Utilitaires (Bootstrap n'est pas charge dans le contexte POS)      */
+/*  Popups de l'ecran : cloture, fond de caisse                        */
+/*  / Screen popups: closure, cash float                               */
 /* ------------------------------------------------------------------ */
 
-.text-end {
-    text-align: right;
+/* Cloture : geste definitif, texte + deux boutons (maquette l.756)
+   / Closure: final action, text + two buttons */
+.cloture-box { width: calc(420px * var(--k)); gap: calc(20px * var(--k)); }
+.cloture-text { margin: calc(6px * var(--k)) 0 0; font-size: max(var(--fs-min), calc(14px * var(--k))); line-height: 1.5; color: var(--text-dim); }
+.cloture-acts { display: flex; gap: calc(10px * var(--k)); }
+.cloture-acts button { flex: 1; min-height: calc(48px * var(--k)); border-radius: calc(var(--r-ctrl) * var(--k)); font-weight: 800; font-size: max(var(--fs-min), calc(14px * var(--k))); }
+.cloture-annuler { background: var(--surface-2); color: var(--text-dim); }
+.cloture-annuler:active { background: var(--surface-3); }
+.cloture-confirmer { background: var(--danger); color: var(--danger-ink); }
+.cloture-confirmer:active { filter: brightness(1.1); }
+
+/* Fond de caisse : rappel du montant actuel / Cash float: current amount */
+.fond-actuel { margin: 0; font-size: max(var(--fs-min), calc(12px * var(--k))); color: var(--text-faint); }
+.fond-actuel b { color: var(--text); }
+.fond-form { display: grid; gap: calc(10px * var(--k)); }
+
+/* ------------------------------------------------------------------ */
+/*  Terminal de poche SUNMI V2s (maquette .fmt-poche)                  */
+/*  / Pocket terminal                                                  */
+/* ------------------------------------------------------------------ */
+
+@media only screen and (max-width: 599px) {
+	.ventes-body { --pad: 10px; gap: 10px; }
+	.ventes-view { gap: 12px; }
+	.kpis { flex-direction: column; gap: 8px; }
+	.kpi-block { padding: 10px 14px; }
+	.kpi-val { font-size: 24px; }
+	.kpi-actions-stack { flex: none; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+	.kpi-action { flex: 1 1 40%; min-height: 44px; padding: 0 10px; }
+	.mini-tables { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+	.mini-table-title { padding: 10px 14px 4px; }
+	.ventes-table th, .ventes-table td,
+	.mini-table th, .mini-table td { padding: 9px 14px; font-size: 12.5px; }
+	.detail-toggle { gap: 6px; }
+	.voir-detail { flex: 1 1 30%; padding: 0 10px; font-size: 11.5px; justify-content: center; }
+	.detail-head { flex-direction: column; align-items: stretch; }
+	.detail-filters { flex-direction: column; }
+	.detail-filters select { min-height: 38px; }
+	.ventes-detail-collapse { padding: 10px 12px 14px; }
 }
 
-.ps-4 {
-    padding-left: 1.5rem;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Responsive                                                         */
-/* ------------------------------------------------------------------ */
-
-@media (max-width: 768px) {
-    .ventes-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .ventes-tabs {
-        flex-direction: column;
-    }
-
-    .ventes-tab {
-        border-radius: 4px;
-    }
-
-    .ventes-filtres {
-        flex-direction: column;
-    }
-
-    .ventes-filtre-select {
-        min-width: auto;
-        width: 100%;
-    }
-
-    .ventes-detail-info {
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .ventes-articles-tronque {
-        max-width: 120px;
-    }
+@media (prefers-reduced-motion: reduce) {
+	.voir-detail-chevron { transition: none; }
 }

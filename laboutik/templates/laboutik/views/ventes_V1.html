@@ -6,16 +6,13 @@ PAGE VENTES — conteneur plein ecran pour le menu Ventes
 
 LOCALISATION : laboutik/templates/laboutik/views/ventes.html
 
-Charge uniquement le header (mode retour : bouton retour + titre) et la zone ventes.
-Pas de categories, pas de footer — on est en consultation.
-Maquette : TEMP-tibillet-laboutik-main/caisse (#screenVentes). Style : ventes.css.
+Charge uniquement le header (pour la nav burger) et la zone ventes.
+Pas de categories, pas de footer, pas de WebSocket — on est en consultation.
 
 FLUX :
-1. Nav / burger "VENTES" → hx-target="body" → cette page complete
-2. Ecran Ventes ↔ Sortie de caisse → hx-target="#ventes-zone" → partials seuls
-   (le header est mis a jour en hx-swap-oob : _hdr_retour_zone.html)
-3. Historiques → hx-target="#detail-contenu" → tableaux seuls
-4. Bouton retour « Caisse » du header → point_de_vente (POS complet)
+1. Burger menu "VENTES" → hx-target="body" → cette page complete
+2. Onglets internes → hx-target="#ventes-zone" → partials seuls
+3. Bouton "Retour" → hx-target="body" → point_de_vente (POS complet)
 
 COMMUNICATION :
 Recoit : CaisseViewSet.recap_en_cours / liste_ventes / detail_vente
@@ -23,7 +20,7 @@ Recoit : CaisseViewSet.recap_en_cours / liste_ventes / detail_vente
 
 {% block content %}
 {# Header avec navigation burger (PV, retour) #}
-<c-header :title="title" retour_pv="True" />
+<c-header :title="title" />
 
 {# Zone ventes — remplacee par les partials HTMX via hx-target="#ventes-zone" #}
 {# / Sales zone — replaced by HTMX partials via hx-target="#ventes-zone" #}

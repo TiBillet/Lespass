@@ -1,420 +1,322 @@
 {% load i18n laboutik_filters %}
-<div class="ventes-container" data-testid="ventes-recap">
-    <!--
-    TICKET X — Synthese comptable du service en cours (lecture seule)
-    / Ticket X — Accounting summary of the current shift (read-only)
-    LOCALISATION : laboutik/templates/laboutik/partial/hx_recap_en_cours.html
-    -->
+{% comment %}
+ECRAN VENTES — Ticket X du service en cours (lecture seule)
+/ SALES SCREEN — Ticket X of the current shift (read-only)
 
-    {# --- En-tete avec titre et bouton retour --- #}
-    {# / Header with title and back button #}
-    <div class="ventes-header">
-        <h2 class="ventes-title">
-            <i class="fas fa-receipt" aria-hidden="true"></i>
-            {% translate "Ticket X — Récapitulatif" %}
-        </h2>
-        {# Retour vers le POS : utiliser le burger menu (nav PV) #}
-        {# / Back to POS: use the burger menu (POS nav) #}
-    </div>
+LOCALISATION : laboutik/templates/laboutik/partial/hx_recap_en_cours.html
+Maquette : TEMP-tibillet-laboutik-main/caisse (#viewVentes)
+Style : static/css/ventes.css
 
-    {# --- Onglets de navigation HTMX --- #}
-    {# / HTMX navigation tabs #}
-    <div class="ventes-tabs" role="tablist" aria-label="{% translate 'Vues du rapport' %}">
-        <button class="ventes-tab {% if vue == 'toutes' %}ventes-tab-active{% endif %}"
-                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=toutes&{{ params_ventes }}"
-                hx-target="#ventes-zone"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                role="tab"
-                aria-selected="{% if vue == 'toutes' %}true{% else %}false{% endif %}"
-                data-loading-disable
-                data-testid="tab-toutes">
-            {% translate "Toutes caisses" %}
-        </button>
-        <button class="ventes-tab {% if vue == 'par_pv' %}ventes-tab-active{% endif %}"
-                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=par_pv&{{ params_ventes }}"
-                hx-target="#ventes-zone"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                role="tab"
-                aria-selected="{% if vue == 'par_pv' %}true{% else %}false{% endif %}"
-                data-loading-disable
-                data-testid="tab-par-pv">
-            {% translate "Par point de vente" %}
-        </button>
-        <button class="ventes-tab {% if vue == 'par_moyen' %}ventes-tab-active{% endif %}"
-                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=par_moyen&{{ params_ventes }}"
-                hx-target="#ventes-zone"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                role="tab"
-                aria-selected="{% if vue == 'par_moyen' %}true{% else %}false{% endif %}"
-                data-loading-disable
-                data-testid="tab-par-moyen">
-            {% translate "Par moyen" %}
-        </button>
+Vue : CaisseViewSet.recap_en_cours (laboutik/views.py), via _rendre_vue_ventes.
 
-        <button class="ventes-tab {% if vue == 'detail_articles' %}ventes-tab-active{% endif %}"
-                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=detail_articles&{{ params_ventes }}"
-                hx-target="#ventes-zone"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                role="tab"
-                aria-selected="{% if vue == 'detail_articles' %}true{% else %}false{% endif %}"
-                data-loading-disable
-                data-testid="tab-detail-articles">
-            {% translate "Détail articles" %}
-        </button>
+DEUX RENDUS SELON LA CIBLE HTMX :
+1. Cible "detail-contenu" : un historique est ouvert en bas de l'ecran.
+   On ne rend que le tableau demande (vue=detail_articles ou vue=par_moyen).
+   Voir laboutik/partial/_ventes_historique_recap.html.
+2. Sinon (page complete ou #ventes-zone) : l'ecran Ventes complet.
+   - Chiffres du haut : total, fond de caisse, actions.
+   - Deux mini-tableaux : par moyen de paiement, par point de vente. + TVA.
+   - Trois boutons d'historique (un seul ouvert a la fois).
+   - Popups : fond de caisse (#ventes-modal), cloture (#cloture-modal).
+   Si ?vue=detail_articles ou ?vue=par_moyen : l'historique est deja ouvert.
 
-        {# Lien vers la liste des ventes #}
-        {# / Link to sales list #}
-        <button class="ventes-tab"
-                hx-get="{% url 'laboutik-caisse-liste_ventes' %}?{{ params_ventes }}"
-                hx-target="#ventes-zone"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                role="tab"
-                aria-selected="false"
-                data-loading-disable
-                data-testid="tab-liste-ventes">
-            <i class="fas fa-list" aria-hidden="true"></i>
-            {% translate "Liste ventes" %}
-        </button>
-    </div>
+COMMUNICATION :
+- "Modifier" (fond) → hx-get fond_de_caisse → #ventes-modal (hx_fond_de_caisse.html)
+- "Sortie de caisse" → hx-get sortie_de_caisse → #ventes-zone (hx_sortie_de_caisse.html)
+- Historiques → basculerHistorique() → htmx.ajax GET → #detail-contenu
+- "Confirmer la cloture" → hx-post cloturer → #ventes-zone (hx_cloture_rapport.html)
+- Zone retour du header : renvoyee en hx-swap-oob (_hdr_retour_zone.html)
+{% endcomment %}
 
-    {# --- Contenu du rapport --- #}
-    {# / Report content #}
-    <div id="recap-content" class="ventes-content" aria-live="polite">
+{% if request.htmx.target == "detail-contenu" %}
+  {# --- 1. Fragment : seulement le tableau d'historique / History table only --- #}
+  {% include "laboutik/partial/_ventes_historique_recap.html" %}
+{% else %}
 
-        {% if aucune_vente %}
-            {# Aucune vente depuis la derniere cloture #}
-            {# / No sales since the last closure #}
-            <div class="ventes-message-vide" data-testid="recap-aucune-vente">
-                <i class="fas fa-info-circle" aria-hidden="true"></i>
-                {% translate "Aucune vente depuis la dernière clôture" %}
-            </div>
+  {# Remet le header sur « Ventes », retour vers la caisse (utile en revenant de Sortie) #}
+  {# / Resets the header to "Sales", back to the POS (useful when coming back from Withdrawal) #}
+  {% if request.htmx.target == "ventes-zone" %}
+    {% translate "Ventes" as titre_ecran_ventes %}
+    {% include "laboutik/partial/_hdr_retour_zone.html" with hdr_titre=titre_ecran_ventes hdr_oob=True %}
+  {% endif %}
 
-        {% elif vue == "toutes" %}
-            {# --- VUE TOUTES CAISSES --- #}
+  <div class="ventes-body" data-testid="ventes-recap">
+    <div class="ventes-view">
 
-            {# Periode #}
-            <div class="ventes-periode" data-testid="recap-periode">
-                {% translate "Depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
-                — {{ nb_transactions }} {% translate "transaction(s)" %}
-            </div>
+      {% if aucune_vente %}
+        {# Aucune vente depuis la derniere cloture / No sales since the last closure #}
+        <p class="ventes-vide" data-testid="recap-aucune-vente">
+          {% translate "Aucune vente depuis la dernière clôture" %}
+        </p>
+      {% else %}
 
-            {# Totaux par moyen de paiement #}
-            {# / Totals by payment method #}
-            <table class="ventes-table" data-testid="recap-totaux-moyen">
-                <colgroup>
-                    <col style="width: 60%;">
-                    <col style="width: 40%;">
-                </colgroup>
-                <thead>
-                    <tr>
-                        <th>{% translate "Moyen de paiement" %}</th>
-                        <th class="text-end">{% translate "Montant" %}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><i class="fas fa-coins" aria-hidden="true"></i> {% translate "Espèces" %}</td>
-                        <td class="text-end">{{ totaux_par_moyen.especes|euros }}</td>
-                    </tr>
-                    <tr>
-                        <td><i class="fas fa-credit-card" aria-hidden="true"></i> {% translate "Carte bancaire" %}</td>
-                        <td class="text-end">{{ totaux_par_moyen.carte_bancaire|euros }}</td>
-                    </tr>
-                    <tr>
-                        <td><i class="fas fa-wifi" aria-hidden="true"></i> {% translate "Cashless" %}</td>
-                        <td class="text-end">{{ totaux_par_moyen.cashless|euros }}</td>
-                    </tr>
-                    {% for detail_cashless in totaux_par_moyen.cashless_detail %}
-                    <tr class="ventes-sous-ligne">
-                        <td class="ps-4">↳ {{ detail_cashless.nom }}</td>
-                        <td class="text-end">{{ detail_cashless.montant|euros }}</td>
-                    </tr>
-                    {% endfor %}
-                    <tr>
-                        <td><i class="fas fa-money-check" aria-hidden="true"></i> {% translate "Chèque" %}</td>
-                        <td class="text-end">{{ totaux_par_moyen.cheque|euros }}</td>
-                    </tr>
-                    <tr class="ventes-total-row">
-                        <td><strong>{% translate "TOTAL" %}</strong></td>
-                        <td class="text-end"><strong>{{ totaux_par_moyen.total|euros }}</strong></td>
-                    </tr>
-                </tbody>
-            </table>
+        {# ============ CHIFFRES DU HAUT / TOP FIGURES ============ #}
+        <div class="kpis">
 
-            {# Detail des ventes retire de cette vue — visible dans "Liste ventes" #}
-            {# / Sales detail removed from this view — available in "Liste ventes" #}
-
-            {# TVA par taux #}
-            {# / VAT by rate #}
+          {# Total des ventes du service / Shift sales total #}
+          <div class="kpi-block kpi-total" data-testid="recap-kpi-total">
+            <span class="kpi-lbl">{% translate "Total" %}</span>
+            <span class="kpi-val">{{ totaux_par_moyen.total|euros }}</span>
+            <span class="kpi-sub" data-testid="recap-periode">
+              {{ nb_transactions }} {% translate "ventes" %} · {% translate "depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
+            </span>
             {% if tva %}
-            <h3 class="ventes-section-title">{% translate "TVA" %}</h3>
-            <table class="ventes-table ventes-table-compact" data-testid="recap-tva">
-                <thead>
-                    <tr>
-                        <th>{% translate "Taux" %}</th>
-                        <th class="text-end">{% translate "HT" %}</th>
-                        <th class="text-end">{% translate "TVA" %}</th>
-                        <th class="text-end">{% translate "TTC" %}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for taux_cle, taux_data in tva.items %}
-                    <tr>
-                        <td>{{ taux_cle }}</td>
-                        <td class="text-end">{{ taux_data.total_ht|euros }}</td>
-                        <td class="text-end">{{ taux_data.total_tva|euros }}</td>
-                        <td class="text-end">{{ taux_data.total_ttc|euros }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+              <span class="kpi-tva">
+                {% for taux_cle, taux_data in tva.items %}{% translate "TVA" %} {{ taux_cle }} · {{ taux_data.total_tva|euros }}{% if not forloop.last %} — {% endif %}{% endfor %}
+              </span>
             {% endif %}
+          </div>
 
-            {# Solde de caisse #}
-            {# / Cash drawer balance #}
-            {% if solde_caisse %}
-            <h3 class="ventes-section-title">{% translate "Solde caisse" %}</h3>
-            <table class="ventes-table ventes-table-compact" data-testid="recap-solde">
-                <tbody>
-                    <tr>
-                        <td>{% translate "Fond de caisse" %}</td>
-                        <td class="text-end">{{ solde_caisse.fond_de_caisse|euros }}</td>
-                    </tr>
-                    <tr>
-                        <td>{% translate "Entrées espèces" %}</td>
-                        <td class="text-end">{{ solde_caisse.entrees_especes|euros }}</td>
-                    </tr>
-                    {% if solde_caisse.sorties_especes %}
-                    <tr>
-                        <td>{% translate "Sorties espèces" %}</td>
-                        <td class="text-end recap-cell-rouge" data-testid="recap-sorties-especes">
-                            &minus; {{ solde_caisse.sorties_especes|euros }}
-                        </td>
-                    </tr>
-                    {% endif %}
-                    <tr class="ventes-total-row">
-                        <td><strong>{% translate "Solde" %}</strong></td>
-                        <td class="text-end"><strong>{{ solde_caisse.solde|euros }}</strong></td>
-                    </tr>
-                </tbody>
-            </table>
+          {# Fond de caisse + solde especes / Cash float + cash balance #}
+          <div class="kpi-block kpi-fond" data-testid="recap-solde">
+            <span class="kpi-lbl">{% translate "Fond de caisse" %}</span>
+            <span class="kpi-val">{{ solde_caisse.fond_de_caisse|euros }}</span>
+            <span class="kpi-sub">
+              {% translate "Entrées espèces" %} · {{ solde_caisse.entrees_especes|euros }}
+            </span>
+            {% if solde_caisse.sorties_especes %}
+              <span class="kpi-sub kpi-sub-sortie" data-testid="recap-sorties-especes">
+                {% translate "Sorties espèces" %} · &minus; {{ solde_caisse.sorties_especes|euros }}
+              </span>
             {% endif %}
-
-            {# Actions caisse : fond de caisse + sortie especes #}
-            {# / Cash management actions: cash float + cash withdrawal #}
-            <h3 class="ventes-section-title">{% translate "Gestion caisse" %}</h3>
-            <div class="recap-actions-row" data-testid="actions-caisse">
-                <button class="recap-action-btn recap-action-btn--indigo"
+            <span class="kpi-sub kpi-sub-solde">
+              {% translate "Solde" %} · <b>{{ solde_caisse.solde|euros }}</b>
+            </span>
+            <button type="button" class="kpi-fond-modifier"
                     hx-get="{% url 'laboutik-caisse-fond_de_caisse' %}?{{ params_ventes }}"
-                    hx-target="#ventes-zone"
+                    hx-target="#ventes-modal"
                     hx-swap="innerHTML"
                     data-loading-disable
                     data-testid="btn-fond-de-caisse">
-                    <i class="fas fa-cash-register" aria-hidden="true"></i>
-                    {% translate "Fond de caisse" %}
-                </button>
-                <button class="recap-action-btn recap-action-btn--rouge"
+              {% translate "Modifier" %}
+            </button>
+          </div>
+
+          {# Actions de caisse / Cash register actions #}
+          <div class="kpi-actions-stack" data-testid="actions-caisse">
+            <button type="button" class="kpi-block kpi-action kpi-action-warn"
                     hx-get="{% url 'laboutik-caisse-sortie_de_caisse' %}?{{ params_ventes }}"
                     hx-target="#ventes-zone"
                     hx-swap="innerHTML"
                     data-loading-disable
                     data-testid="btn-sortie-de-caisse">
-                    <i class="fas fa-money-bill-wave" aria-hidden="true"></i>
-                    {% translate "Sortie de caisse" %}
-                </button>
-            </div>
-
-            {# Impression Ticket X + Cloture toutes caisses #}
-            {# / Print Ticket X + Close all registers #}
-            <div class="recap-actions-row" data-testid="actions-cloture">
-
-                {# Bouton Imprimer Ticket X — envoie le recap en cours a l'imprimante #}
-                {# / Print Ticket X button — sends current recap to the printer #}
-                <button class="recap-action-btn recap-action-btn--vert"
+              <span class="kpi-lbl">{% translate "Sortie de caisse" %}</span>
+            </button>
+            <button type="button" class="kpi-block kpi-action kpi-action-neutre"
                     hx-post="{% url 'laboutik-caisse-imprimer_ticket_x' %}"
                     hx-vals='{"uuid_pv": "{{ pv.id }}"}'
                     hx-target="#recap-feedback"
                     hx-swap="innerHTML"
                     data-loading-disable
                     data-testid="btn-imprimer-ticket-x">
-                    <i class="fas fa-print" aria-hidden="true"></i>
-                    {% translate "Imprimer Ticket X" %}
-                </button>
-
-                {# Bouton Cloturer — affiche la confirmation en dessous #}
-                {# / Close button — shows confirmation below #}
-                <button class="recap-action-btn recap-action-btn--orange"
-                    onclick="document.getElementById('cloture-confirmation').style.display='block'; this.style.display='none';"
+              <span class="kpi-lbl">{% translate "Imprimer Ticket X" %}</span>
+            </button>
+            <button type="button" class="kpi-block kpi-action kpi-action-danger"
+                    onclick="document.getElementById('cloture-modal').hidden = false"
                     data-testid="btn-cloture-caisse">
-                    <i class="fas fa-lock" aria-hidden="true"></i>
-                    {% translate "Clôturer toutes les caisses" %}
-                </button>
-            </div>
+              <span class="kpi-lbl">{% translate "Clôturer toutes les caisses" %}</span>
+            </button>
+          </div>
+        </div>
 
-            {# Zone feedback pour les messages d'impression #}
-            {# / Feedback zone for print messages #}
-            <div id="recap-feedback" aria-live="polite" style="margin-top: 0.5rem;"></div>
+        {# Retour de l'impression du Ticket X / Ticket X print feedback #}
+        <div id="recap-feedback" class="recap-feedback" aria-live="polite"></div>
 
-            {# Zone de confirmation cloture — cachee par defaut (display:none inline) #}
-            {# / Closure confirmation zone — hidden by default (inline display:none) #}
-            <div id="cloture-confirmation"
-                 class="cloture-confirmation-box"
-                 data-testid="cloture-confirmation"
-                 style="display: none;"
-                 role="alert" aria-live="assertive">
-                <p class="cloture-text-warning">
-                    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-                    {% translate "Cette action va clôturer TOUTES les caisses. Les tables ouvertes seront fermées et les commandes en cours annulées." %}
-                </p>
-                <p class="cloture-text-discret">
-                    {% translate "La clôture est définitive et ne peut pas être annulée." %}
-                </p>
-                <div class="recap-actions-row">
-                    <button class="recap-action-btn recap-action-btn--rouge-strong"
-                        hx-post="{% url 'laboutik-caisse-cloturer' %}"
-                        hx-vals='{"uuid_pv": "{{ pv.id }}", "tag_id_cm": "{{ card.tag_id }}"}'
-                        hx-target="#ventes-zone"
-                        hx-swap="innerHTML"
-                        data-loading-disable
-                        data-testid="btn-confirmer-cloture">
-                        <i class="fas fa-lock" aria-hidden="true"></i>
-                        {% translate "Confirmer la clôture" %}
-                    </button>
-                    <button type="button"
-                        class="recap-action-btn recap-action-btn--ghost"
-                        onclick="
-                            document.getElementById('cloture-confirmation').style.display='none';
-                            document.querySelector('[data-testid=btn-cloture-caisse]').style.display='';
-                        "
-                        data-testid="btn-annuler-cloture">
-                        {% translate "Annuler" %}
-                    </button>
-                </div>
-            </div>
+        {# ============ MINI-TABLEAUX / SUMMARY TABLES ============ #}
+        <div class="mini-tables">
 
-        {% elif vue == "par_pv" %}
-            {# --- VUE PAR POINT DE VENTE --- #}
+          {# Par moyen de paiement / By payment method #}
+          <div class="table-wrap mini-table">
+            <h3 class="mini-table-title">{% translate "Par moyen de paiement" %}</h3>
+            <table data-testid="recap-totaux-moyen">
+              <thead>
+                <tr><th>{% translate "Moyen" %}</th><th class="num">{% translate "Montant" %}</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>{% translate "Espèces" %}</td><td class="num">{{ totaux_par_moyen.especes|euros }}</td></tr>
+                <tr><td>{% translate "Carte bancaire" %}</td><td class="num">{{ totaux_par_moyen.carte_bancaire|euros }}</td></tr>
+                <tr><td>{% translate "Cashless" %}</td><td class="num">{{ totaux_par_moyen.cashless|euros }}</td></tr>
+                {% for detail_cashless in totaux_par_moyen.cashless_detail %}
+                  <tr class="sous-ligne">
+                    <td>↳ {{ detail_cashless.nom }}</td>
+                    <td class="num">{{ detail_cashless.montant|euros }}</td>
+                  </tr>
+                {% endfor %}
+                <tr><td>{% translate "Chèque" %}</td><td class="num">{{ totaux_par_moyen.cheque|euros }}</td></tr>
+              </tbody>
+            </table>
+          </div>
 
-            <div class="ventes-periode" data-testid="recap-periode">
-                {% translate "Depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
-                — {{ nb_transactions }} {% translate "transaction(s)" %}
-            </div>
+          {# Par point de vente / By point of sale #}
+          <div class="table-wrap mini-table">
+            <h3 class="mini-table-title">{% translate "Par point de vente" %}</h3>
+            <table data-testid="recap-par-pv">
+              <thead>
+                <tr><th>{% translate "Point de vente" %}</th><th class="num">{% translate "Montant" %}</th></tr>
+              </thead>
+              <tbody>
+                {% for ligne_pv in ventilation_par_pv %}
+                  <tr data-testid="recap-pv-{{ forloop.counter }}">
+                    <td{% if not ligne_pv.uuid %} class="muted"{% endif %}>{{ ligne_pv.nom }}</td>
+                    <td class="num">{{ ligne_pv.total_ttc|euros }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="2" class="empty">{% translate "Aucune vente attribuée à un point de vente" %}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
 
-            {# Total general #}
-            <div class="ventes-total-general" data-testid="recap-total-general">
-                {% translate "Total général" %} : <strong>{{ totaux_par_moyen.total|euros }}</strong>
-            </div>
-
-            {% for pv_item in ventilation_par_pv %}
-            <div class="ventes-bloc-pv" data-testid="recap-pv-{{ forloop.counter }}">
-                <h4 class="ventes-categorie-titre">
-                    <i class="fas fa-store" aria-hidden="true"></i>
-                    {{ pv_item.nom }} — {{ pv_item.total_ttc|euros }}
-                </h4>
-            </div>
-            {% empty %}
-            <div class="ventes-message-vide">
-                {% translate "Aucune vente attribuée à un point de vente" %}
-            </div>
-            {% endfor %}
-
-        {% elif vue == "par_moyen" %}
-            {# --- VUE PAR MOYEN DE PAIEMENT --- #}
-
-            <div class="ventes-periode" data-testid="recap-periode">
-                {% translate "Depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
-                — {{ nb_transactions }} {% translate "transaction(s)" %}
-            </div>
-
-            {# Total general #}
-            <div class="ventes-total-general" data-testid="recap-total-general">
-                {% translate "Total général" %} : <strong>{{ totaux_par_moyen.total|euros }}</strong>
-            </div>
-
-            {# Tableau croise type x moyen #}
-            {# / Cross table: type x payment method #}
-            <table class="ventes-table" data-testid="recap-synthese-operations">
-                <colgroup>
-                    <col style="width: 20%;">
-                    <col style="width: 16%;">
-                    <col style="width: 16%;">
-                    <col style="width: 16%;">
-                    <col style="width: 16%;">
-                    <col style="width: 16%;">
-                </colgroup>
+          {# TVA par taux / VAT by rate #}
+          {% if tva %}
+            <div class="table-wrap mini-table mini-table-large">
+              <h3 class="mini-table-title">{% translate "TVA" %}</h3>
+              <table data-testid="recap-tva">
                 <thead>
-                    <tr>
-                        <th>{% translate "Type" %}</th>
-                        <th class="text-end">{% translate "Espèces" %}</th>
-                        <th class="text-end">{% translate "CB" %}</th>
-                        <th class="text-end">{% translate "Cashless" %}</th>
-                        <th class="text-end">{% translate "Chèque" %}</th>
-                        <th class="text-end">{% translate "Total" %}</th>
-                    </tr>
+                  <tr>
+                    <th>{% translate "Taux" %}</th>
+                    <th class="num">{% translate "HT" %}</th>
+                    <th class="num">{% translate "TVA" %}</th>
+                    <th class="num">{% translate "TTC" %}</th>
+                  </tr>
                 </thead>
                 <tbody>
-                    {% for type_nom, type_data in synthese_operations.items %}
+                  {% for taux_cle, taux_data in tva.items %}
                     <tr>
-                        <td>{{ type_nom }}</td>
-                        <td class="text-end">{{ type_data.especes|euros }}</td>
-                        <td class="text-end">{{ type_data.carte_bancaire|euros }}</td>
-                        <td class="text-end">{{ type_data.cashless|euros }}</td>
-                        <td class="text-end">{{ type_data.cheque|euros }}</td>
-                        <td class="text-end"><strong>{{ type_data.total|euros }}</strong></td>
+                      <td>{{ taux_cle }}</td>
+                      <td class="num">{{ taux_data.total_ht|euros }}</td>
+                      <td class="num">{{ taux_data.total_tva|euros }}</td>
+                      <td class="num">{{ taux_data.total_ttc|euros }}</td>
                     </tr>
-                    {% endfor %}
+                  {% endfor %}
                 </tbody>
-            </table>
-
-        {% elif vue == "detail_articles" %}
-            {# --- VUE DETAIL PAR ARTICLE ET CATEGORIE --- #}
-
-            <div class="ventes-periode" data-testid="recap-periode">
-                {% translate "Depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
-                — {{ nb_transactions }} {% translate "transaction(s)" %}
+              </table>
             </div>
+          {% endif %}
+        </div>
 
-            {% for cat_nom, cat_data in detail_ventes.items %}
-            {% with afficher_col_poids=cat_data.articles|has_poids %}
-            <div class="ventes-categorie" data-testid="recap-categorie-{{ forloop.counter }}">
-                <h4 class="ventes-categorie-titre">{{ cat_nom }} — {{ cat_data.total_ttc|euros }}</h4>
-                <table class="ventes-table ventes-table-compact">
-                    <thead>
-                        <tr>
-                            <th>{% translate "Article" %}</th>
-                            <th class="text-end">{% translate "Qty" %}</th>
-                            {% if afficher_col_poids %}
-                            <th class="text-end">{% translate "Poids/Vol" %}</th>
-                            {% endif %}
-                            <th class="text-end">{% translate "TTC" %}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for article in cat_data.articles %}
-                        <tr>
-                            <td>{{ article.nom }}</td>
-                            <td class="text-end">{{ article.qty_total|floatformat:0 }}</td>
-                            {% if afficher_col_poids %}
-                            <td class="text-end" data-testid="recap-poids-vol">{{ article|afficher_poids }}</td>
-                            {% endif %}
-                            <td class="text-end">{{ article.total_ttc|euros }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% endwith %}
-            {% empty %}
-            <div class="ventes-message-vide">
-                {% translate "Aucune vente" %}
-            </div>
-            {% endfor %}
+        {# ============ HISTORIQUES / HISTORIES ============ #}
+        {# Un seul historique ouvert a la fois. Re-cliquer le bouton actif le ferme. #}
+        {# / Only one history open at a time. Clicking the active button closes it. #}
+        <div class="detail-toggle" role="group" aria-label="{% translate 'Historiques' %}">
+          <button type="button" class="voir-detail"
+                  aria-pressed="{% if vue == 'detail_articles' %}true{% else %}false{% endif %}"
+                  aria-controls="detail-section"
+                  data-url="{% url 'laboutik-caisse-recap_en_cours' %}?vue=detail_articles&{{ params_ventes }}"
+                  data-titre="{% translate 'Historique de vente par article' %}"
+                  onclick="basculerHistorique(this)"
+                  data-testid="btn-historique-ventes">
+            <span>{% translate "Historique de vente" %}</span>
+            <span class="voir-detail-chevron" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="voir-detail"
+                  aria-pressed="false"
+                  aria-controls="detail-section"
+                  data-url="{% url 'laboutik-caisse-liste_ventes' %}?{{ params_ventes }}"
+                  data-titre="{% translate 'Historique de commande' %}"
+                  onclick="basculerHistorique(this)"
+                  data-testid="btn-historique-commandes">
+            <span>{% translate "Historique de commande" %}</span>
+            <span class="voir-detail-chevron" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="voir-detail"
+                  aria-pressed="{% if vue == 'par_moyen' %}true{% else %}false{% endif %}"
+                  aria-controls="detail-section"
+                  data-url="{% url 'laboutik-caisse-recap_en_cours' %}?vue=par_moyen&{{ params_ventes }}"
+                  data-titre="{% translate 'Synthèse par moyen de paiement' %}"
+                  onclick="basculerHistorique(this)"
+                  data-testid="btn-historique-synthese">
+            <span>{% translate "Synthèse par moyen" %}</span>
+            <span class="voir-detail-chevron" aria-hidden="true"></span>
+          </button>
+        </div>
 
-        {% endif %}
+        <section class="detail-section" id="detail-section"
+                 aria-labelledby="detail-titre"
+                 {% if vue != 'detail_articles' and vue != 'par_moyen' %}hidden{% endif %}>
+          <div class="detail-head">
+            <h3 id="detail-titre">
+              {% if vue == 'detail_articles' %}{% translate "Historique de vente par article" %}{% elif vue == 'par_moyen' %}{% translate "Synthèse par moyen de paiement" %}{% endif %}
+            </h3>
+          </div>
+          <div id="detail-contenu" class="detail-contenu" aria-live="polite">
+            {% if vue == 'detail_articles' or vue == 'par_moyen' %}
+              {% include "laboutik/partial/_ventes_historique_recap.html" %}
+            {% endif %}
+          </div>
+        </section>
+
+        {# ============ POPUP CLOTURE / CLOSURE POPUP ============ #}
+        <div class="card-modal" id="cloture-modal" hidden data-testid="cloture-confirmation"
+             role="alertdialog" aria-modal="true" aria-labelledby="cloture-modal-texte">
+          <div class="card-modal-backdrop" onclick="document.getElementById('cloture-modal').hidden = true"></div>
+          <div class="card-modal-box cloture-box">
+            <p class="cloture-text" id="cloture-modal-texte">
+              {% translate "Cette action va clôturer toutes les caisses. Les tables ouvertes seront fermées et les commandes en cours annulées. La clôture est définitive et ne peut pas être annulée." %}
+            </p>
+            <div class="cloture-acts">
+              <button type="button" class="cloture-annuler"
+                      onclick="document.getElementById('cloture-modal').hidden = true"
+                      data-testid="btn-annuler-cloture">
+                {% translate "Annuler" %}
+              </button>
+              <button type="button" class="cloture-confirmer"
+                      hx-post="{% url 'laboutik-caisse-cloturer' %}"
+                      hx-vals='{"uuid_pv": "{{ pv.id }}", "tag_id_cm": "{{ card.tag_id }}"}'
+                      hx-target="#ventes-zone"
+                      hx-swap="innerHTML"
+                      data-loading-disable
+                      data-testid="btn-confirmer-cloture">
+                {% translate "Confirmer la clôture" %}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {# Recoit la popup fond de caisse (hx_fond_de_caisse.html) #}
+        {# / Receives the cash float popup #}
+        <div id="ventes-modal"></div>
+
+        <script>
+          /**
+           * Ouvre ou ferme un historique en bas de l'ecran Ventes
+           * / Opens or closes a history at the bottom of the Sales screen
+           *
+           * LOCALISATION : laboutik/templates/laboutik/partial/hx_recap_en_cours.html
+           *
+           * Les trois boutons .voir-detail marchent comme un seul interrupteur :
+           * - clic sur le bouton deja actif → on ferme la section ;
+           * - clic sur un autre bouton → on l'active et on charge son tableau.
+           * Le tableau vient du serveur (HTMX) : data-url du bouton → #detail-contenu.
+           * Le serveur voit la cible "detail-contenu" et ne renvoie que le tableau.
+           *
+           * @param {HTMLButtonElement} boutonClique - le bouton .voir-detail clique
+           */
+          function basculerHistorique(boutonClique) {
+            const sectionHistorique = document.getElementById('detail-section')
+            const titreHistorique = document.getElementById('detail-titre')
+            const historiqueDejaOuvert = boutonClique.getAttribute('aria-pressed') === 'true'
+
+            // On eteint tous les boutons / Turn every button off
+            const tousLesBoutons = document.querySelectorAll('.voir-detail')
+            for (const bouton of tousLesBoutons) {
+              bouton.setAttribute('aria-pressed', 'false')
+            }
+
+            // Deuxieme clic sur le meme bouton : on ferme / Second click on same button: close
+            if (historiqueDejaOuvert) {
+              sectionHistorique.hidden = true
+              return
+            }
+
+            // On allume ce bouton et on charge son tableau / Turn this one on and load its table
+            boutonClique.setAttribute('aria-pressed', 'true')
+            titreHistorique.textContent = boutonClique.dataset.titre
+            sectionHistorique.hidden = false
+            htmx.ajax('GET', boutonClique.dataset.url, { target: '#detail-contenu', swap: 'innerHTML' })
+          }
+        </script>
+      {% endif %}
     </div>
-</div>
+  </div>
+{% endif %}

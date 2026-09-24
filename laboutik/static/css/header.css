@@ -277,18 +277,30 @@ Connection indicator - Indicateur de connection
 .hdr-nav-btn .ico { font-size: 16px; }
 .hdr-nav-btn:active { background: var(--noir03); color: var(--blanc02); }
 
-/* --- Retour / navigation entre écrans (Ventes ↔ Sortie ↔ Caisse) */
-.hdr-back, .hdr-back a {
+/* --- Retour / navigation entre écrans (Ventes ↔ Sortie ↔ Caisse)
+   Maquette : TEMP-tibillet-laboutik-main/caisse/Laboutik.css (.hdr-back, .hdr-title).
+   Zone rendue par laboutik/partial/_hdr_retour_zone.html (mode retour_pv du header).
+   / Back navigation between screens, rendered by _hdr_retour_zone.html */
+.header-background--retour .flex-container { flex: 1; min-width: 0; justify-content: flex-start; }
+.header-background--retour .net { margin-right: 16px; }
+.hdr-retour-zone { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.hdr-spacer { flex: 1; }
+.hdr-back {
 	display: flex;
 	align-items: center;
 	gap: 4px;
 	min-height: 38px;
 	padding: 0 12px;
+	border: 0;
 	border-radius: var(--r-ctrl);
+	background: none;
 	color: var(--text-dim);
+	font: inherit;
 	font-weight: 700;
-	text-decoration : none;
 	font-size: 15px;
+	text-decoration: none;
+	cursor: pointer;
+	touch-action: manipulation;
 }
 .hdr-back-chevron {
 	width: 8px; height: 8px;
@@ -298,6 +310,8 @@ Connection indicator - Indicateur de connection
 	margin-left: 2px;
 }
 .hdr-back:active { background: var(--surface-2); color: var(--text); }
+.hdr-back:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+.hdr-title { font-size: 17px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 
 
@@ -322,6 +336,10 @@ Connection indicator - Indicateur de connection
 	.ws-indicator-text{
 		display: none;
 	}
+	/* Format V2s (maquette .fmt-poche) / V2s format */
+	.hdr-back { font-size: 12px; padding: 0 8px; min-height: 32px; }
+	.hdr-title { font-size: 13px; }
+	.header-background--retour .net { margin-right: 10px; }
 }
 
 /* pour une largeur supérieure 1199 pixels */

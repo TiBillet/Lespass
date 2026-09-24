@@ -14,7 +14,8 @@ Contexte attendu :
 Styles : .alerte-vz-* dans laboutik/static/css/sortie_de_caisse.css
 {% endcomment %}
 
-<div class="ventes-container" data-testid="alerte-ventes-zone">
+<div class="ventes-body" data-testid="alerte-ventes-zone">
+  <div class="ventes-view">
 
     <div class="alerte-vz-card alerte-vz-card-{{ msg_type|default:'warning' }}"
          role="alert"
@@ -50,4 +51,5 @@ Styles : .alerte-vz-* dans laboutik/static/css/sortie_de_caisse.css
         </button>
     </div>
     {% endif %}
+  </div>
 </div>
