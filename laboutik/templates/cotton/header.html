@@ -25,9 +25,21 @@
     <div id="header-title"
          class="menu-burger-icon"
          onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')">
-      <i class="fas {{ pv.icon }}" aria-hidden="true"></i> &nbsp;
-      {% if pv.name and hide_pv_name != True %}{{ pv.name }}{% endif %}
-      <span class="pos-chevron"></span>
+    {% if retour_pv %}
+        <div class="hdr-back">
+        <span class="hdr-back-chevron"></span>
+        <a
+           href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv_actuelle }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}"
+           data-nav-spinner
+           {% if pv_item.uuid == pv.id %}aria-current="true" data-testid="menu-pv-courant"{% endif %}>
+            {% translate 'Retourner au point de ventes' %}
+        </a>
+        </div>
+    {% else %}
+        <i class="fas {{ pv.icon }}" aria-hidden="true"></i> &nbsp;
+        {% if pv.name and hide_pv_name != True %}{{ pv.name }}{% endif %}
+        <span class="pos-chevron"></span>
+    {% endif %}
     </div>
     <!--
         INDICATEUR CONNEXION WEBSOCKET — toujours visible dans le header

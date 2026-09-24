@@ -3421,6 +3421,9 @@ class CaisseViewSet(viewsets.ViewSet):
         datetime_ouverture = _calculer_datetime_ouverture_service()
         vue = request.GET.get("vue", "toutes")
 
+        # Récupère le point de vente actuelle
+        pv_actuelle = request.GET.get("uuid_pv")
+
         # Si aucune vente depuis la derniere cloture, afficher un message
         # / If no sales since last closure, show a message
         if datetime_ouverture is None:
@@ -3443,6 +3446,7 @@ class CaisseViewSet(viewsets.ViewSet):
             "datetime_ouverture": datetime_ouverture,
             "datetime_fin": datetime_fin,
             "nb_transactions": service.lignes.count(),
+            "pv_actuelle":pv_actuelle,
         }
 
         if vue == "par_pv":
@@ -3557,6 +3561,9 @@ class CaisseViewSet(viewsets.ViewSet):
         filtre_pv = request.GET.get("pv")
         filtre_moyen = request.GET.get("moyen")
 
+        # Récupère le point de vente actuelle
+        pv_actuelle = request.GET.get("uuid_pv")
+
         if filtre_pv:
             lignes = lignes.filter(point_de_vente__uuid=filtre_pv)
         if filtre_moyen:
@@ -3639,6 +3646,7 @@ class CaisseViewSet(viewsets.ViewSet):
             "page_courante": page,
             "a_page_suivante": a_page_suivante,
             "page_suivante": page + 1,
+            "pv_actuelle" : pv_actuelle,
             "filtre_pv": filtre_pv or "",
             "filtre_moyen": filtre_moyen or "",
             "points_de_vente": list(points_de_vente),

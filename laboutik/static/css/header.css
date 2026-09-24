@@ -277,6 +277,27 @@ Connection indicator - Indicateur de connection
 .hdr-nav-btn .ico { font-size: 16px; }
 .hdr-nav-btn:active { background: var(--noir03); color: var(--blanc02); }
 
+/* --- Retour / navigation entre écrans (Ventes ↔ Sortie ↔ Caisse) */
+.hdr-back, .hdr-back a {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 38px;
+	padding: 0 12px;
+	border-radius: var(--r-ctrl);
+	color: var(--text-dim);
+	font-weight: 700;
+	text-decoration : none;
+	font-size: 15px;
+}
+.hdr-back-chevron {
+	width: 8px; height: 8px;
+	border-top: 2px solid currentColor;
+	border-left: 2px solid currentColor;
+	transform: rotate(-45deg);
+	margin-left: 2px;
+}
+.hdr-back:active { background: var(--surface-2); color: var(--text); }
 
 
 

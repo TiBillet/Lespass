@@ -20,7 +20,7 @@ Recoit : CaisseViewSet.recap_en_cours / liste_ventes / detail_vente
 
 {% block content %}
 {# Header avec navigation burger (PV, retour) #}
-<c-header :title="title" />
+<c-header :title="title" retour_pv="True" />
 
 {# Zone ventes — remplacee par les partials HTMX via hx-target="#ventes-zone" #}
 {# / Sales zone — replaced by HTMX partials via hx-target="#ventes-zone" #}
