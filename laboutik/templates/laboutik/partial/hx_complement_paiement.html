@@ -18,10 +18,15 @@ FLUX :
 1. _payer_par_nfc() Phase 6 detecte un reste a payer
    (ou payer_complementaire() apres une 2eme carte insuffisante)
 2. Ce partial remplace #messages (outerHTML)
-3. Tuile especes/CB → POST payer_complementaire (moyen_complement=espece/carte_bancaire)
+3. Tuile especes/CB → GET confirmer(complement=1) dans #confirm :
+   pave numerique (especes) ou rappel TPE (CB). Cette popup reste masquee
+   derriere (le #complement-form reste dans le DOM).
+   Valider → soumet #complement-form → POST payer_complementaire
+   (moyen_complement=espece/carte_bancaire, given_sum si especes)
 4. Tuile 2eme carte → GET lire_nfc_complement (attente NFC dans #confirm)
 5. La croix ou le fond ferme la popup et remet l'URL de l'addition (initUrlAddition)
-/ FLOW: cash/card tile → POST payer_complementaire; 2nd card tile → GET
+/ FLOW: cash/card tile → confirmer (keypad / card reminder) → Validate →
+POST payer_complementaire; 2nd card tile → GET
 lire_nfc_complement; cross or backdrop closes and resets the addition URL.
 
 PIEGE 58 : les tuiles sont des boutons autonomes (pas dans le <form>)
@@ -107,10 +112,14 @@ data-testid="complement-reste-a-payer" (regex _extraire_reste).
           <p class="payment-title">{% translate "Payer le reste avec" %}</p>
           <div class="payment-methods">
             {% if accepte_especes %}
-              <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" onclick="askAdditionManageForm('updateInput','#addition-moyen-complement','espece'); htmx.trigger('#complement-form', 'submit')" data-loading-disable data-testid="btn-complement-especes" />
+              {# Ouvre le pave especes (confirmer), comme un paiement classique #}
+              {# / Opens the cash keypad (confirmer), like a regular payment #}
+              <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ reste_euros }}&complement=1" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-complement','espece')" data-loading-disable data-testid="btn-complement-especes" />
             {% endif %}
             {% if accepte_carte_bancaire %}
-              <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" onclick="askAdditionManageForm('updateInput','#addition-moyen-complement','carte_bancaire'); htmx.trigger('#complement-form', 'submit')" data-loading-disable data-testid="btn-complement-cb" />
+              {# Ouvre la confirmation CB (confirmer), comme un paiement classique #}
+              {# / Opens the card confirmation (confirmer), like a regular payment #}
+              <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&total={{ reste_euros }}&complement=1" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-complement','carte_bancaire')" data-loading-disable data-testid="btn-complement-cb" />
             {% endif %}
             {% if autoriser_2eme_carte %}
               <c-V2.bt.paiement name='{% translate "2ᵉ CARTE" %}' icon="nfc" hx-get="{% url 'laboutik-paiement-lire_nfc_complement' %}?tag_id_carte1={{ tag_id_carte1 }}&cascade_carte1={{ cascade_carte1_json|urlencode }}&total_nfc_carte1={{ total_nfc_carte1 }}" hx-target="#confirm" hx-swap="outerHTML" data-loading-disable data-testid="btn-complement-2eme-carte" />

@@ -6126,6 +6126,13 @@ class PaiementViewSet(viewsets.ViewSet):
         except (ValueError, TypeError):
             total_a_payer = 0
 
+        # complement=1 : on vient de la popup « Complément de paiement »
+        # (hx_complement_paiement.html). Valider soumettra #complement-form
+        # vers payer_complementaire, et pas #addition-form vers payer.
+        # / complement=1: coming from the NFC complement popup. Validate will
+        # submit #complement-form to payer_complementaire instead of payer.
+        est_complement = request.GET.get("complement") == "1"
+
         context = {
             "method": moyen_paiement_choisi,
             "total": total_a_payer,
@@ -6134,6 +6141,7 @@ class PaiementViewSet(viewsets.ViewSet):
             ),
             "uuid_transaction": uuid_transaction,
             "currency_data": CURRENCY_DATA,
+            "est_complement": est_complement,
         }
         return render(request, "laboutik/partial/hx_confirm_payment.html", context)
 
@@ -8306,8 +8314,22 @@ class PaiementViewSet(viewsets.ViewSet):
         uuid_transaction = uuid_module.uuid4()
 
         donnees_paiement["total"] = total_centimes
-        donnees_paiement["given_sum"] = 0
         donnees_paiement["missing"] = 0
+        donnees_paiement["give_back"] = 0
+
+        # Somme donnee en centimes : saisie au pave especes (hx_confirm_payment.html).
+        # Vide = compte juste.
+        # / Given sum in cents, typed on the cash keypad. Empty = exact amount.
+        somme_donnee_brute = donnees_paiement.get("given_sum", "")
+        # Le JS envoie « somme x 100 » : ca peut donner 329.99999999999994.
+        # On arrondit au centime au lieu d'un int() qui planterait.
+        # / JS sends "sum x 100", which may be a float: round to the cent.
+        donnees_paiement["given_sum"] = 0
+        if somme_donnee_brute != "" and moyen_complement == "espece":
+            try:
+                donnees_paiement["given_sum"] = round(float(somme_donnee_brute))
+            except ValueError:
+                donnees_paiement["given_sum"] = 0
 
         if moyen_complement in ("espece", "carte_bancaire"):
             # ---------------------------------------------------------- #
@@ -8335,6 +8357,34 @@ class PaiementViewSet(viewsets.ViewSet):
                 depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte1.user)
                 if legacy_disponible and depensable_legacy > 0:
                     montant_legacy = min(depensable_legacy, total_complementaire)
+
+            # Montant reellement regle en especes/CB : le reste moins la part legacy.
+            # / Amount actually settled in cash/CC: remainder minus the legacy part.
+            montant_paye_en_complement = total_complementaire - montant_legacy
+
+            # Especes : la somme donnee doit couvrir ce montant (0 = compte juste).
+            # On verifie AVANT le debit legacy : rien n'est debite si on refuse.
+            # / Cash: the given sum must cover it (0 = exact). Checked BEFORE the legacy debit.
+            somme_donnee_en_centimes = donnees_paiement["given_sum"]
+            somme_donnee_insuffisante = (
+                moyen_complement == "espece"
+                and somme_donnee_en_centimes > 0
+                and somme_donnee_en_centimes < montant_paye_en_complement
+            )
+            if somme_donnee_insuffisante:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _("Somme donnée insuffisante"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
             if montant_legacy > 0:
                 lignes_pour_fed, lignes_reste = _decouper_lignes_complement(
                     lignes_complement_c1, montant_legacy
@@ -8539,6 +8589,16 @@ class PaiementViewSet(viewsets.ViewSet):
             if soldes_apres_paiement:
                 nouveau_solde_euros = soldes_apres_paiement[0]["solde_euros"]
                 nom_monnaie_principal = soldes_apres_paiement[0]["name"]
+
+            # Monnaie a rendre (en euros), meme regle que payer()
+            # / Change to give back (euros), same rule as payer()
+            if (
+                moyen_complement == "espece"
+                and somme_donnee_en_centimes > montant_paye_en_complement
+            ):
+                donnees_paiement["give_back"] = (
+                    somme_donnee_en_centimes - montant_paye_en_complement
+                ) / 100
 
             context_succes = {
                 "currency_data": CURRENCY_DATA,

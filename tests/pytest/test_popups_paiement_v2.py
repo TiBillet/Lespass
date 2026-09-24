@@ -100,6 +100,34 @@ def test_confirmation_cb_affiche_la_consigne_sans_pave(tenant_lespass):
     assert 'data-testid="paiement-btn-valider"' in contenu
 
 
+def test_confirmation_complement_soumet_le_formulaire_complement(tenant_lespass):
+    """complement=1 : Valider soumet #complement-form (payer_complementaire),
+    pas #addition-form vers payer.
+    / complement=1: Validate submits #complement-form, not #addition-form to payer."""
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.get(
+        URL_CONFIRMER, {"method": "espece", "total": "9.00", "complement": "1"}
+    )
+    contenu = reponse.content.decode()
+
+    assert reponse.status_code == 200
+    assert 'id="confirm-numpad"' in contenu
+    assert "htmx.trigger('#complement-form', 'submit')" in contenu
+    assert "/laboutik/paiement/payer/" not in contenu
+    assert "9,00" in contenu
+
+
+def test_confirmation_sans_complement_soumet_vers_payer(tenant_lespass):
+    """Sans complement=1 : comportement classique inchange.
+    / Without complement=1: classic behaviour unchanged."""
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.get(URL_CONFIRMER, {"method": "carte_bancaire", "total": "8"})
+    contenu = reponse.content.decode()
+
+    assert "/laboutik/paiement/payer/" in contenu
+    assert "htmx.trigger('#complement-form', 'submit')" not in contenu
+
+
 # ---------------------------------------------------------------------------
 # 2. Fonds insuffisants
 # ---------------------------------------------------------------------------
@@ -300,6 +328,24 @@ def test_complement_propose_les_trois_tuiles(tenant_lespass):
     debut_formulaire = contenu.index('id="complement-form"')
     fin_formulaire = contenu.index("</form>", debut_formulaire)
     assert "btn-complement" not in contenu[debut_formulaire:fin_formulaire]
+
+
+def test_complement_tuiles_especes_et_cb_ouvrent_la_confirmation(tenant_lespass):
+    """Les tuiles especes/CB ouvrent confirmer() dans #confirm (pave / rappel TPE)
+    au lieu de soumettre directement le paiement.
+    / Cash/card tiles open confirmer() instead of submitting the payment directly."""
+    with tenant_context(tenant_lespass):
+        contenu = render_to_string(
+            "laboutik/partial/hx_complement_paiement.html", _contexte_complement()
+        )
+
+    assert "/laboutik/paiement/confirmer/?method=espece" in contenu
+    assert "/laboutik/paiement/confirmer/?method=carte_bancaire" in contenu
+    assert "total=9.00" in contenu
+    assert "complement=1" in contenu
+    # Plus de soumission directe au clic sur la tuile
+    # / No more direct submit on tile click
+    assert "onclick=\"askAdditionManageForm('updateInput','#addition-moyen-complement'" not in contenu
 
 
 def test_complement_apres_deuxieme_carte_retire_la_tuile_carte(tenant_lespass):

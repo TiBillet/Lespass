@@ -21,6 +21,10 @@ FLUX :
    Le script calcule la monnaie a rendre et range la somme dans #given-sum.
 4. Clic VALIDER → askManageAddition() soumet #addition-form vers payer()
    (comme avant : somme vide = compte juste, somme trop petite = message).
+   Cas complement (est_complement, ouvert depuis hx_complement_paiement.html) :
+   Valider soumet #complement-form vers payer_complementaire(). Ce formulaire
+   est dans la popup de #messages, masquee mais toujours dans le DOM.
+   / Complement case: Validate submits #complement-form to payer_complementaire().
 5. La croix ou le fond ferme #confirm : on revient au choix du paiement.
 -->
 <div id="confirm"
@@ -49,7 +53,7 @@ FLUX :
             </svg>
           </span>
         {% endif %}
-        <span class="payment-total-lbl" id="confirm-titre">{{ payment_translation }}</span>
+        <span class="payment-total-lbl" id="confirm-titre">{{ payment_translation }}{% if est_complement %} · {% translate "Reste à payer" %}{% endif %}</span>
         <span class="payment-total-val confirm-total">{{ total|floatformat:2 }} {{ currency_data.symbol }}</span>
       </div>
 
@@ -157,6 +161,24 @@ FLUX :
         }
       }
 
+      {% if est_complement %}
+      // Complement NFC : on soumet le formulaire de la popup « Complement ».
+      // Il inclut #addition-form (given_sum, moyen_complement, articles).
+      // / NFC complement: submit the complement popup form (includes #addition-form).
+      //
+      // On ferme cette popup (#confirm) quand la reponse arrive.
+      // L'ecouteur va sur #messages, la cible du formulaire : htmx y declenche
+      // htmx:beforeSwap. Un hx-on sur le formulaire ne marche pas : before-swap
+      // part sur la cible (pas sur le formulaire), et after-request part apres
+      // le remplacement de #messages, donc apres la suppression du formulaire.
+      // / Close #confirm when the response arrives. The listener goes on
+      // #messages (the form target, where htmx fires beforeSwap).
+      const zoneMessages = document.querySelector('#messages')
+      zoneMessages.addEventListener('htmx:beforeSwap', function () {
+        hideAndEmptyElement('#confirm')
+      }, { once: true })
+      htmx.trigger('#complement-form', 'submit')
+      {% else %}
       // Definit l'URL de soumission du formulaire
       // / Sets the form submission URL
       sendEvent('organizerMsg', '#event-organizer', {
@@ -172,6 +194,7 @@ FLUX :
         msg: 'additionManageForm',
         data: { actionType: 'submit' }
       })
+      {% endif %}
     }
 
     {% if method == 'espece' %}

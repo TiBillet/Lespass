@@ -278,15 +278,17 @@ class TestPaiementComplementaire(FastTenantTestCase):
     # ------------------------------------------------------------------ #
 
     def _post_complementaire_espece(self, tag_id_carte1, cascade_carte1,
-                                    total_nfc_carte1, quantite):
+                                    total_nfc_carte1, quantite, given_sum=''):
         """POST payer_complementaire moyen_complement=espece.
-        / POST payer_complementaire moyen_complement=espece."""
+        given_sum : somme donnee en centimes (pave especes), vide = compte juste.
+        / POST payer_complementaire moyen_complement=espece (given_sum in cents)."""
         data = {
             'uuid_pv': str(self.pv.uuid),
             'moyen_complement': 'espece',
             'tag_id_carte1': tag_id_carte1,
             'cascade_carte1': cascade_carte1,
             'total_nfc_carte1': total_nfc_carte1,
+            'given_sum': given_sum,
             f'repid-{self.produit.uuid}': str(quantite),
         }
         return self.client_http.post(
@@ -388,6 +390,57 @@ class TestPaiementComplementaire(FastTenantTestCase):
         # Carte1 débitée de ses 6 € TLF (solde 0 après).
         # / Card1 debited its 6 € TLF (balance 0 after).
         assert WalletService.obtenir_solde(self.wallet1, self.asset_tlf) == 0
+
+    def _payer_carte1_puis_especes(self, given_sum):
+        """3 vins (15 €), carte1 TLF 6 €, puis complement especes avec given_sum.
+        / 3 wines (15 €), card1 6 € TLF, then cash complement with given_sum."""
+        with (
+            mock.patch('laboutik.views.FedowConfig') as MockConfig,
+            mock.patch('laboutik.views.FedowAPI'),
+        ):
+            MockConfig.get_solo.return_value.can_fedow.return_value = False
+            reponse1 = self._post_payer_nfc(tag_id=self.carte1.tag_id, quantite=3)
+            contenu1 = reponse1.content.decode()
+            return self._post_complementaire_espece(
+                tag_id_carte1=self.carte1.tag_id,
+                cascade_carte1=_extraire_hidden(contenu1, 'cascade_carte1'),
+                total_nfc_carte1=_extraire_hidden(contenu1, 'total_nfc_carte1'),
+                quantite=3,
+                given_sum=given_sum,
+            )
+
+    def test_nfc1_puis_espece_somme_donnee_affiche_monnaie_a_rendre(self):
+        """Reste 9 € en especes, le client donne 10 € → 1 € a rendre.
+        / 9 € cash remainder, client gives 10 € → 1 € change."""
+        reponse = self._payer_carte1_puis_especes(given_sum='1000')
+        contenu = reponse.content.decode()
+
+        assert reponse.status_code == 200
+        assert 'data-testid="paiement-monnaie-a-rendre"' in contenu
+        assert '1.0' in contenu or '1,0' in contenu
+        lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.LABOUTIK)
+        assert sum(ligne.total() for ligne in lignes) == 1500
+
+    def test_nfc1_puis_espece_somme_donnee_insuffisante_refuse_sans_debit(self):
+        """Reste 9 € en especes, le client donne 5 € → refus 400, rien de debite.
+        / 9 € cash remainder, client gives 5 € → 400, nothing debited."""
+        reponse = self._payer_carte1_puis_especes(given_sum='500')
+
+        assert reponse.status_code == 400
+        assert LigneArticle.objects.filter(
+            sale_origin=SaleOrigin.LABOUTIK,
+        ).count() == 0
+        assert WalletService.obtenir_solde(self.wallet1, self.asset_tlf) == 600
+
+    def test_nfc1_puis_espece_compte_juste_sans_monnaie_a_rendre(self):
+        """Somme donnee vide = compte juste : succes, pas de monnaie a rendre.
+        / Empty given sum = exact amount: success, no change."""
+        reponse = self._payer_carte1_puis_especes(given_sum='')
+        contenu = reponse.content.decode()
+
+        assert reponse.status_code == 200
+        assert 'data-testid="paiement-succes"' in contenu
+        assert 'data-testid="paiement-monnaie-a-rendre"' not in contenu
 
     # ------------------------------------------------------------------ #
     #  Test : NFC1 + CB → succès
