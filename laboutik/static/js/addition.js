@@ -485,6 +485,55 @@ function additionRemoveArticle(lineId) {
 }
 
 /**
+ * Champs du client ranges dans #addition-form pendant un paiement.
+ * Ils sont ajoutes par hx_display_type_payment.html (client identifie) et par
+ * hx_formulaire_identification_client.html (saisie email / nom).
+ * / Client fields stored in #addition-form during a payment.
+ */
+const CHAMPS_DU_CLIENT = ['email_adhesion', 'prenom_adhesion', 'nom_adhesion']
+
+/**
+ * Contexte du panier range dans #addition-form pour identifier_client()
+ * (ajoute par hx_display_type_payment.html et hx_lire_nfc_client.html).
+ * / Cart context stored in #addition-form for identifier_client().
+ */
+const CHAMPS_DU_CONTEXTE_DU_PANIER = ['panier_a_recharges', 'panier_a_adhesions', 'panier_a_billets', 'moyens_paiement']
+
+/**
+ * Oublie le client de la vente precedente
+ * / Forgets the previous sale's client
+ *
+ * LOCALISATION : laboutik/static/js/addition.js
+ *
+ * POURQUOI : l'email, le prenom, le nom et la carte lue restent dans
+ * #addition-form apres une vente. A la vente suivante, avec une carte
+ * ANONYME, le serveur n'a pas de proprietaire de carte : il se rabat sur
+ * l'email du formulaire (identifier_client, _creer_billets...). Avec un email
+ * perime, c'etait le client d'avant qui recevait les billets.
+ * On efface donc ces champs :
+ * - a la remise a zero du panier (additionReset) ;
+ * - au debut de chaque identification (hx_display_type_payment.html).
+ * / WHY: with a stale email, an anonymous card's tickets went to the previous
+ *   client. Cleared on cart reset and at the start of every identification.
+ *
+ * Retire : email_adhesion, prenom_adhesion, nom_adhesion.
+ * Vide : tag_id (#nfc-tag-id, champ permanent du formulaire).
+ */
+function additionOublierLeClient() {
+	const form = document.querySelector('#addition-form')
+	for (const nomDuChamp of CHAMPS_DU_CLIENT) {
+		const champ = form.querySelector(`input[name="${nomDuChamp}"]`)
+		if (champ) {
+			champ.remove()
+		}
+	}
+	const champCarteLue = form.querySelector('#nfc-tag-id')
+	if (champCarteLue) {
+		champCarteLue.value = ''
+	}
+}
+
+/**
  * Réinitialise le panier
  * / Resets cart
  * 
@@ -521,6 +570,17 @@ function additionReset() {
 	document.querySelector('#addition-moyen-paiement').value = ''
 	document.querySelector('#addition-uuid-transaction').value = ''
 	document.querySelector('#addition-given-sum').value = ''
+
+	// Oublier le client et le contexte du panier de la vente qui se termine :
+	// sinon la vente suivante (carte anonyme) reprendrait ce client.
+	// / Forget the finished sale's client and cart context.
+	additionOublierLeClient()
+	for (const nomDuChamp of CHAMPS_DU_CONTEXTE_DU_PANIER) {
+		const champ = document.querySelector(`#addition-form input[name="${nomDuChamp}"]`)
+		if (champ) {
+			champ.remove()
+		}
+	}
 
 	// Réinitialise l'URL et le trigger HTMX du formulaire.
 	// additionDisplayPaymentTypes() change hx-trigger vers 'click',
@@ -652,6 +712,13 @@ function additionManageForm(event) {
 
 		if (data.actionType === 'updateInput') {
 			form.querySelector(data.selector).value = data.value
+		}
+
+		// Debut d'une identification : oublier le client precedent
+		// data {actionType: 'oublierLeClient'}
+		// / Start of an identification: forget the previous client
+		if (data.actionType === 'oublierLeClient') {
+			additionOublierLeClient()
 		}
 
 		if (data.actionType === 'postUrl') {
