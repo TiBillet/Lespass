@@ -250,6 +250,12 @@ html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
 body {
   margin: 0;
   overflow-x: clip;
+  /* Hauteur d'écran minimum (pied de page en bas). dvh suit la barre
+     d'adresse mobile ; vh reste le repli. Remplace .min-vh-100 de
+     Bootstrap, en 100vh et en !important.
+     / Min screen height; dvh follows the mobile address bar. */
+  min-height: 100vh;
+  min-height: 100dvh;
   font-family: var(--font-text);
   color: var(--color-text);
   background: var(--color-bg);
@@ -433,9 +439,9 @@ img { max-width: 100%; display: block; }
   flex-wrap: wrap;
 }
 
-@media (max-width: 900px) {
-  .venue-brief { grid-template-columns: 1fr; }
-  .venue-facts { grid-template-columns: 1fr; gap: var(--space-4); }
+@media (max-width: 62rem) {
+  .venue-brief { grid-template-columns: minmax(0, 1fr); }
+  .venue-facts { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 }
 
 /* =================================================================
@@ -568,16 +574,26 @@ img { max-width: 100%; display: block; }
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-s);
   padding: var(--space-2) var(--space-4);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--color-text-muted); /* et non faint : posé sur le fond du footer, plus sombre que le papier */
   flex-shrink: 0;
 }
 
-@media (max-width: 900px) {
-  .site-footer__inner { grid-template-columns: 1fr; gap: var(--space-6); }
+/* minmax(0, 1fr) et non 1fr : un `1fr` nu vaut minmax(auto, 1fr), la colonne
+   prenait donc la largeur du plus long bouton et le pied de page était coupé à
+   droite sur mobile (104px perdus à 320px).
+   / minmax(0, 1fr), not 1fr: a bare 1fr grew to the longest button's width and
+   the footer was clipped on mobile. */
+@media (max-width: 62rem) {
+  .site-footer__inner { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
 }
+/* Les boutons du pied de page portent aussi .btn, déclaré PLUS BAS dans ce
+   fichier avec `white-space: nowrap` : à spécificité égale, .btn gagnait et
+   leurs libellés ne passaient jamais à la ligne. Double classe pour l'emporter.
+   / Footer buttons also carry .btn (declared later, nowrap): double class wins. */
+.btn.btn--grad { white-space: normal; line-height: 1.3; }
 
 /* -----------------------------------------------------------------
    EN-TÊTE DE LIEU — fait partie du contenu, défile et disparaît.
@@ -763,6 +779,9 @@ img { max-width: 100%; display: block; }
   align-self: auto;
   height: 138px;
   width: auto;
+  /* Jamais plus large que son cadre : à 320px il reste ~190px, la carte en
+     demandait ~219px. / Never wider than its frame (≈190px left at 320px). */
+  max-width: 100%;
   border-radius: var(--radius-m);
   padding: var(--space-3);
 }
@@ -821,8 +840,8 @@ img { max-width: 100%; display: block; }
   text-overflow: ellipsis;
 }
 /* Cinq colonnes ne tiennent pas en mobile : 3 en tablette, 2 en téléphone. */
-@media (max-width: 900px) { .place-shortcuts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 480px) { .place-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 62rem) { .place-shortcuts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 30rem) { .place-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .place-shortcuts__more { margin-top: var(--space-4); font-size: var(--text-md); }
 
 /* -----------------------------------------------------------------
@@ -1338,6 +1357,10 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Prix et bouton passent l'un sous l'autre si la carte est trop étroite. */
+  /* / Price and button wrap when the card is too narrow. */
+  flex-wrap: wrap;
+  gap: var(--space-2);
   padding-top: var(--space-3);
   border-top: 1px solid var(--color-border);
 }
@@ -1519,9 +1542,9 @@ img { max-width: 100%; display: block; }
   padding: 5px 0 6px;
   flex-shrink: 0;
 }
-.event-date-box .dow { font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.03em; color: var(--color-text-muted); text-transform: uppercase; }
+.event-date-box .dow { font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.03em; color: var(--color-text-muted); text-transform: uppercase; }
 .event-date-box .day { font-size: var(--text-lg); font-weight: 700; line-height: 1.1; }
-.event-date-box .mon { font-size: var(--text-2xs); color: var(--color-text-faint); text-transform: uppercase; }
+.event-date-box .mon { font-size: var(--text-xs); color: var(--color-text-faint); text-transform: uppercase; }
 
 /* Page événement : bandeau d'ouverture. Même carte que .event-card,
    en grand format. */
@@ -1547,7 +1570,7 @@ img { max-width: 100%; display: block; }
 .event-card__meta { font-size: var(--text-sm); color: var(--color-text-faint); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
 .event-card__meta strong { color: var(--color-text); font-weight: 700; }
 .event-card__meta a { color: var(--color-link); font-weight: 700; }
-.event-card__footer { display: flex; align-items: center; justify-content: space-between; }
+.event-card__footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }
 /* Traitement signature des chiffres, en discret : un prix est un geste
    de billetterie même niché dans le contenu d'un lieu. */
 .event-card__price { font-size: var(--text-md); font-weight: 700; color: var(--letchi-text); }
@@ -1575,7 +1598,7 @@ img { max-width: 100%; display: block; }
 /* =================================================================
    AUTOUR DU LIEU
    ================================================================= */
-.around-layout { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-6); align-items: start; }
+.around-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
 .search-bar {
   display: flex; align-items: center; gap: var(--space-3);
   background: var(--color-surface); border: 1px solid var(--color-border-strong);
@@ -1647,10 +1670,14 @@ img { max-width: 100%; display: block; }
 /* est charge apres V2.css : on redeclare la grille avec plus de           */
 /* specificite. / The mockup 2-column layout, re-declared with higher      */
 /* specificity to beat explorer.css flex rules.                            */
-@media (min-width: 992px) {
+/* SEUIL 62rem / 61.99rem (et non 62.001rem / 62rem comme ailleurs) :      */
+/* explorer.js bascule en vue bureau à `innerWidth >= 992`. Le CSS doit    */
+/* suivre exactement ce seuil, sinon à 992px pile le JS et le CSS se       */
+/* contredisent. / Must match explorer.js's `innerWidth >= 992` exactly.   */
+@media (min-width: 62rem) {
   #explorer-root .explorer-container {
     display: grid;
-    grid-template-columns: 1.4fr 1fr;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
     gap: var(--space-6);
     align-items: start;
     height: auto;
@@ -1664,11 +1691,14 @@ img { max-width: 100%; display: block; }
 /* Mobile : le panneau carte est masque tant que le FAB n'a pas bascule en */
 /* vue carte (comportement explorer conserve). / Mobile: the map panel is  */
 /* hidden until the FAB toggles to map view (explorer behavior kept).      */
-@media (max-width: 991.98px) {
+@media (max-width: 61.99rem) {
   #explorer-root .map-panel { display: none; }
   #explorer-root .explorer-container.explorer-view-map .map-panel { display: block; min-height: 0; }
   #explorer-root .explorer-container.explorer-view-map .explorer-map {
     display: block; position: relative; height: calc(100vh - 140px);
+    /* dvh : suit la barre d'adresse mobile qui apparaît et disparaît. vh reste le repli. */
+    /* / dvh follows the mobile address bar; vh stays as fallback. */
+    height: calc(100dvh - 140px);
   }
 }
 
@@ -1679,7 +1709,9 @@ img { max-width: 100%; display: block; }
 /* Recherche : l'input vit dans la .search-bar de la maquette, on retire   */
 /* le fond gris + bordure poses par explorer.css. / The input lives inside */
 /* the mockup .search-bar: remove explorer.css grey background + border.   */
-#explorer-root .explorer-search { background: none; border: none; box-shadow: none; padding: 0; font-size: var(--text-ui); color: var(--color-text); width: 100%; }
+/* --text-base (16px) et non --text-ui (15px) : sous 16px, iOS zoome la page
+   au toucher du champ. / 16px: below that, iOS zooms the page on focus. */
+#explorer-root .explorer-search { background: none; border: none; box-shadow: none; padding: 0; font-size: var(--text-base); color: var(--color-text); width: 100%; }
 #explorer-root .explorer-search:focus { border: none; box-shadow: none; }
 
 /* Pills Lieux/Evenements : la classe .tag-pill (maquette) est posee sur   */
@@ -1783,7 +1815,7 @@ img { max-width: 100%; display: block; }
 .progress-label strong { color: var(--color-text); font-weight: 700; }
 .progress-track { height: 6px; border-radius: var(--radius-pill); background: var(--color-border); overflow: hidden; }
 .progress-fill { height: 100%; background: var(--color-text); border-radius: var(--radius-pill); }
-.initiative-card__foot { display: flex; align-items: center; justify-content: space-between; }
+.initiative-card__foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }
 .tasks-open { font-size: var(--text-sm); font-weight: 700; line-height: 1.4; color: var(--cat-gold-solid); background: var(--cat-gold-tint); padding: 4px 12px; border-radius: var(--radius-pill); }
 
 .callout {
@@ -1888,15 +1920,15 @@ img { max-width: 100%; display: block; }
 /* =================================================================
    RESPONSIVE (adaptation raisonnable ; les maquettes sont desktop)
    ================================================================= */
-@media (max-width: 1100px) {
+@media (max-width: 68.75rem) {
   .grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .around-layout { grid-template-columns: 1fr; }
+  .around-layout { grid-template-columns: minmax(0, 1fr); }
   /* .place-nav n'a plus besoin d'être masquée : elle est dans le contenu
      et passe naturellement à la ligne. */
 }
-@media (max-width: 720px) {
-  .grid--4, .grid--3, .grid--2 { grid-template-columns: 1fr; }
+@media (max-width: 47.99rem) {
+  .grid--4, .grid--3, .grid--2 { grid-template-columns: minmax(0, 1fr); }
   .container { padding: 0 var(--space-4); }
 }
 
@@ -1983,20 +2015,105 @@ img { max-width: 100%; display: block; }
 .place-id__name--lien:hover { text-decoration: underline; text-underline-offset: 3px; }
 .place-nav__dropdown .dropdown-menu { font-size: var(--text-md); }
 
-/* Mobile : le menu du lieu défile à l'horizontale plutôt que de
-   s'empiler sur plusieurs lignes. / Mobile: horizontal scrolling menu. */
-@media (max-width: 720px) {
+/* --- Menu du lieu : version mobile (sélecteur dépliant) -------------
+   LOCALISATION : pages/templates/pages/V2/tenant_header.html
+   (.place-nav-mobile, juste après .place-nav)
+
+   Sous 48rem, le menu en ligne ne tient pas (à 375px, le menu de Lespass
+   montrait 2 entrées sur 6). Il est masqué et remplacé par un <details> :
+   une ligne « Menu · page active », qui déplie toutes les entrées dans la
+   carte du lieu. Aucune ligne de JavaScript.
+   Options étudiées (ruban défilant, rangées, liste, « Plus », feuille du
+   bas) : voir CHANGELOG/2026-09-25-lespass-v2-responsive.md.
+   / Under 48rem the inline menu is hidden and replaced by a <details>
+   disclosure: one "Menu · active page" row that expands all entries. */
+.place-nav-mobile { display: none; }
+
+@media (max-width: 47.99rem) {
   .place-header__card { padding: var(--space-5); }
   .place-id__name { font-size: var(--text-xl); }
-  .place-nav {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    gap: var(--space-4);
-    padding-bottom: var(--space-2);
-    -webkit-overflow-scrolling: touch;
+
+  .place-nav { display: none; }
+  .place-nav-mobile {
+    display: block;
+    margin-top: var(--space-5);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-rule);
   }
-  .place-nav > a,
-  .place-nav__dropdown > .dropdown-toggle { white-space: nowrap; }
+}
+
+/* La ligne repliée : un vrai bouton de 48px, blanc sur la teinte du lieu.
+   / The collapsed row: a real 48px button. */
+.place-nav-mobile__bouton {
+  list-style: none;
+  cursor: pointer;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+/* Retire le triangle natif de <summary> (Safari l'affiche via ce pseudo-élément).
+   / Removes the native <summary> marker. */
+.place-nav-mobile__bouton::-webkit-details-marker { display: none; }
+.place-nav-mobile__bouton:hover { border-color: var(--color-text-muted); }
+.place-nav-mobile__bouton:active { background: var(--color-hover); }
+.place-nav-mobile__intitule { font-size: var(--text-sm); color: var(--color-text-muted); flex-shrink: 0; }
+.place-nav-mobile__page-active {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.place-nav-mobile__chevron {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.place-nav-mobile[open] .place-nav-mobile__chevron { transform: rotate(180deg); }
+
+/* La liste dépliée, dans la carte du lieu (elle pousse le contenu).
+   Le reset global `ul { list-style: none; padding: 0 }` suffit aux puces.
+   / The expanded list, inside the venue card (pushes content down). */
+.place-nav-mobile__liste {
+  margin-top: var(--space-2);
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+}
+.place-nav-mobile__liste > li + li { border-top: 1px solid var(--color-border); }
+.place-nav-mobile__liste a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-s);
+  font-size: var(--text-ui);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.place-nav-mobile__liste a:hover { background: var(--color-hover); color: var(--color-text); }
+/* Page active : en gras sur fond papier (pas la couleur seule), et
+   aria-current="page" l'annonce aux lecteurs d'écran.
+   / Active page: bold on paper, announced via aria-current. */
+.place-nav-mobile__liste a.is-active {
+  color: var(--color-text);
+  font-weight: 700;
+  background: var(--color-bg);
+}
+.place-nav-mobile__sous-liste { padding-inline-start: var(--space-4); padding-bottom: var(--space-1); }
+.place-nav-mobile__sous-liste a { font-size: var(--text-md); }
+
+@media (prefers-reduced-motion: reduce) {
+  .place-nav-mobile__chevron { transition: none; }
 }
 
 /* --- Pied de page -------------------------------------------------- */
@@ -2030,7 +2147,8 @@ img { max-width: 100%; display: block; }
   outline: none;
   background: none;
   width: 100%;
-  font-size: var(--text-ui);
+  /* 16px : sous ce seuil, iOS zoome la page au toucher. / 16px avoids iOS zoom. */
+  font-size: var(--text-base);
   color: var(--color-text);
 }
 .search-input:focus-within { outline: 2px solid var(--color-link); outline-offset: 2px; }
@@ -2059,13 +2177,35 @@ img { max-width: 100%; display: block; }
 }
 .event-hero__etat { white-space: normal; }
 .reservation-declencheur { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
-.reservation-declencheur > .btn--primary { font-size: var(--text-2xl); line-height: unset; }
+/* Le libellé traduit est long (« Je veux réserver une ou plusieurs places ») :
+   en 28px sur une seule ligne il faisait ~650px et était coupé net par le
+   bandeau (overflow: hidden) sur mobile ET tablette. Taille fluide, retour à
+   la ligne autorisé, jamais plus large que le bandeau.
+   / Long translated label: fluid size, wrapping allowed, never wider than the hero. */
+.reservation-declencheur > .btn--primary {
+  font-size: clamp(1.125rem, 0.9rem + 1.5vw, var(--text-2xl));
+  line-height: 1.2;
+  white-space: normal;
+  text-align: center;
+  max-width: 100%;
+}
 .reservation-declencheur__note { font-size: var(--text-md); color: var(--color-text-muted); }
 /* Texte long saisi par le lieu (HTML riche) : largeur de lecture. */
 /* / Long rich text from the venue: reading width. */
-.event-prose { max-width: 70ch; color: var(--color-text); line-height: 1.65; margin-top: var(--space-4); }
+.event-prose { max-width: 70ch; color: var(--color-text); line-height: 1.65; margin-top: var(--space-4); overflow-wrap: anywhere; }
 .event-prose p { margin: 0 0 var(--space-3); }
 .event-prose img { border-radius: var(--radius-m); }
+/* Le lieu colle ce qu'il veut dans ce texte riche : vidéo intégrée, tableau,
+   bloc de code. Rien ne doit dépasser la colonne ; un tableau large défile
+   dans sa propre boîte. Les listes retrouvent leurs puces, que le reset
+   global `ul { list-style: none }` retirait.
+   / Venue rich text: embeds, tables and code never exceed the column; wide
+   tables scroll in their own box. Lists get their bullets back. */
+.event-prose :is(iframe, video, table, pre) { max-width: 100%; }
+.event-prose table { display: block; overflow-x: auto; }
+.event-prose pre { overflow-x: auto; }
+.event-prose ul { list-style: disc; padding-inline-start: 1.25rem; margin: 0 0 var(--space-3); }
+.event-prose ol { padding-inline-start: 1.25rem; margin: 0 0 var(--space-3); }
 .event-carrousel, .event-carte { margin-top: var(--space-5); }
 .info-card address { font-style: normal; margin: 0; }
 .event-hote { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin-top: var(--space-4); }
@@ -2081,7 +2221,7 @@ img { max-width: 100%; display: block; }
 .benevoles__mission--complete { color: var(--color-text-muted); }
 .benevoles__rappel { margin-top: var(--space-5); }
 
-@media (max-width: 720px) {
+@media (max-width: 47.99rem) {
   .event-hero__cover { height: 160px; }
   .event-hero__body { padding: var(--space-5); }
 }
@@ -2152,8 +2292,8 @@ details.module + details.module { margin-top: var(--space-4); }
 .compte-adhesion__infos dd { margin: 0; }
 .compte-adhesion__pied { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
 
-@media (max-width: 720px) {
-  .reservation-card { grid-template-columns: 1fr; }
+@media (max-width: 47.99rem) {
+  .reservation-card { grid-template-columns: minmax(0, 1fr); }
   .reservation-card__cover { min-height: 140px; }
 }
 
@@ -2526,4 +2666,135 @@ details.module + details.module { margin-top: var(--space-4); }
   font-size: var(--text-ui);
   padding-bottom: var(--space-4);
   border-bottom: 1px solid var(--color-border);
+}
+
+/* =================================================================
+   MOBILE ÉTROIT — corrections de l'audit responsive (2026-09-25)
+   / Narrow mobile — fixes from the responsive audit
+
+   LOCALISATION : pages/static/V2/css/V2.css (fin du fichier)
+
+   Rappel : html et body sont en `overflow-x: clip`. Un élément trop
+   large ne crée donc JAMAIS de barre de défilement : il est coupé, en
+   silence. Ces règles empêchent les éléments de dépasser l'écran
+   entre 320px et 414px.
+   / Reminder: html/body clip overflow, so anything too wide is silently
+   cut. These rules keep elements inside the screen from 320px to 414px.
+
+   Point de rupture : 30rem (480px), le même que .place-shortcuts.
+   ================================================================= */
+
+/* --- Textes longs saisis par le lieu ou la personne ---------------
+   Un nom de lieu, une adresse web ou un e-mail n'ont pas d'espace où
+   couper : ils poussaient la carte hors de l'écran. On autorise la
+   coupure n'importe où, et on laisse les enfants flex rétrécir.
+   / Long venue/user strings (names, URLs, e-mails) may break anywhere. */
+.place-id { min-width: 0; }
+.place-id > span:not(.place-id__mark) { min-width: 0; }
+.me-id { min-width: 0; max-width: 100%; }
+.place-id__name,
+.place-id__tagline,
+.venue-fact__value,
+.event-card__meta,
+.compte-table th,
+.compte-table td {
+  overflow-wrap: anywhere;
+}
+
+/* --- Double gouttière ----------------------------------------------
+   Le <main> du shell porte déjà .container. Quelques gabarits partagés
+   (panier, 404, 500, paiement par QR code) posent une deuxième
+   .container dedans : la marge latérale était comptée deux fois (32px
+   de chaque côté sur mobile, 64px sur ordinateur). La .container
+   intérieure ne rajoute plus rien.
+   / Nested .container inside main.container no longer doubles the gutter. */
+main.container .container { padding-inline: 0; max-width: none; }
+
+@media (max-width: 30rem) {
+  /* --- Barre du haut ---------------------------------------------
+     À 320px, « Mon espace » + 4 boutons d'icônes de 44px + 32px de
+     marge de chaque côté ne tenaient pas : le bouton panier était
+     coupé. On réduit les marges, et le libellé de l'ancre peut se
+     raccourcir avec des points de suspension (l'avatar reste).
+     / Top bar: smaller gutters; the anchor label may ellipsize. */
+  .user-bar__inner { padding-inline: var(--space-4); gap: var(--space-3); }
+
+  /* --- Pied de page : marges du bureau (64px / 32px) réduites --------
+     / Footer: desktop paddings reduced on narrow screens. */
+  .site-footer__inner { padding: var(--space-7) var(--space-4); }
+  .site-footer__legal-inner { padding-inline: var(--space-4); }
+  .icon-group { gap: var(--space-1); }
+  .me-anchor { min-width: 0; }
+  .me-anchor > span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* --- Boutons : retour à la ligne permis sur écran étroit ----------
+     .btn est en `nowrap` pour tout le skin (Bootstrap, lui, laisse passer
+     à la ligne). Sur un écran étroit, les libellés longs étaient COUPÉS :
+     tunnels de réservation et d'adhésion (« Connectez-vous pour ajouter
+     au panier », icône sortie à gauche), page Contribuer (« Voir plus de
+     détail et les actions en cours », coupé des deux côtés). Un libellé
+     sur deux lignes vaut mieux qu'un libellé tronqué. Les libellés courts
+     tiennent sur une ligne et ne changent pas.
+     / Narrow screens: buttons may wrap; truncation was worse. */
+  .btn {
+    white-space: normal;
+    line-height: 1.25;
+    text-align: center;
+    max-width: 100%;
+  }
+
+  /* Sélecteur de quantité du tunnel de réservation (commun/formulaires/
+     reservation.html) : le composant <bs-counter> ne rétrécissait pas, et
+     le mot « billet(s) » à sa droite était coupé à 320px.
+     / The quantity stepper must be allowed to shrink so "ticket(s)" fits. */
+  bs-counter { min-width: 0; }
+}
+
+/* --- Très petit écran (< 360px) : l'ancre « Connexion / Mon espace » -
+   Mesuré à 320px : il manquait 11px pour « Connexion » et 22px pour
+   « Mon espace » à côté des boutons d'icônes de 44px. On resserre
+   l'ancre (écarts, marge droite, police 14px) pour que le libellé
+   tienne en entier. Les points de suspension restent le filet de
+   sécurité pour une traduction plus longue.
+   / Under 360px: tighten the anchor so its label fits in full. */
+@media (max-width: 22.5rem) {
+  .user-bar__inner { gap: var(--space-2); }
+  .icon-group { gap: 2px; }
+  .me-anchor {
+    gap: var(--space-2);
+    padding-inline-end: var(--space-3);
+    font-size: var(--text-md);
+  }
+}
+
+/* --- Cibles tactiles : 44px minimum sur écran tactile ---------------
+   Même règle que les boutons d'icônes de la barre du haut (WCAG 2.5.5).
+   L'audit mesurait 24 à 34px sur le menu du lieu, le pied de page, les
+   filtres, les petits boutons et la croix des panneaux. À la souris,
+   rien ne change : la densité du bureau est gardée.
+   / Touch screens: 44px minimum targets; mouse layout unchanged. */
+@media (pointer: coarse) {
+  .place-nav > a,
+  .place-nav__dropdown > .dropdown-toggle,
+  .footer-col a,
+  .footer-col__bouton,
+  .tag-pill,
+  .btn,
+  .dropdown-item {
+    min-height: 44px;
+  }
+  .place-nav > a,
+  .place-nav__dropdown > .dropdown-toggle {
+    display: inline-flex;
+    align-items: center;
+  }
+  .dropdown-item { display: flex; align-items: center; }
+  /* .btn-close de Bootstrap est en content-box (1em + marge interne) :
+     on agrandit la marge interne pour atteindre 44px au total.
+     / Bootstrap's close button is content-box: grow its padding to 44px. */
+  .btn-close { padding: calc((44px - 1em) / 2); }
 }

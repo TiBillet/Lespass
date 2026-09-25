@@ -216,7 +216,7 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
             {% endif %}
             {% if event.carrousel.all %}
                 <div class="event-carrousel">
-                    {% include 'pages/V2/partials/carrousel_evenements.html' with carousel=event.carrousel.all max_height='25vh' auto=false %}
+                    {% include 'pages/V2/partials/carrousel_evenements.html' with carousel=event.carrousel.all max_height='max(25vh, 10rem)' auto=false %}
                 </div>
             {% endif %}
         </section>

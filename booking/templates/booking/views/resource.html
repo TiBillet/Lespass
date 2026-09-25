@@ -211,9 +211,14 @@ DEPENDENCIES :
                 color: var(--bs-body-color);
             }
 
+            /* min-width: 0 : un select en flex garde sinon la largeur de son
+               plus long libellé et sortait de la carte à 320px.
+               16px : en dessous, iOS zoome la page au toucher du champ.
+               / min-width 0 lets the flex select shrink; 16px avoids iOS zoom. */
             .mobile-resource-selector select {
                 flex: 1;
-                font-size: 14px;
+                min-width: 0;
+                font-size: 16px;
                 padding: 8px 10px;
                 border-radius: var(--bs-border-radius);
                 border: 1px solid var(--bs-border-color);
@@ -251,7 +256,7 @@ DEPENDENCIES :
                 flex: 1;
                 min-width: 36px;
                 text-align: center;
-                font-size: 11px;
+                font-size: 12px; /* 12px minimum lisible / 12px readable minimum */
                 line-height: 1.25;
                 padding: 6px 2px;
                 border-radius: 8px;
@@ -284,8 +289,10 @@ DEPENDENCIES :
                 overflow-x: auto;
             }
 
+            /* Jamais plus large que l'écran : à 320px, 300px + les marges de la
+               carte dépassaient de 70px. / Never wider than the container. */
             .mobile-day {
-                min-width: 300px;
+                min-width: min(300px, 100%);
             }
 
             .mobile-grid-wrap {
@@ -343,7 +350,7 @@ DEPENDENCIES :
                 padding: 2px 4px;
                 margin: 1px;
                 border-radius: var(--bs-border-radius-sm);
-                font-size: 0.7rem;
+                font-size: 0.75rem; /* 12px minimum lisible / 12px readable minimum */
                 display: flex;
                 flex-direction: column;
                 justify-content: center;

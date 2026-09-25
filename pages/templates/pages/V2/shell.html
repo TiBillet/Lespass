@@ -229,7 +229,7 @@
 
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" class="min-vh-100 d-flex flex-column">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" class="d-flex flex-column">
 
 {% if not embed %} <!-- Pas de navbar si embed -->
     {% include "pages/V2/partials/navbar.html" %}
@@ -238,7 +238,10 @@
 <main class="container">
     {# `apercu_admin` : apercu d'un bloc dans l'admin (pages/admin_apercu.py), #}
     {# sans l'en-tete du lieu. / Admin block preview, without the venue header. #}
-    {% if request.path != "/my_account/" and not apercu_admin %}
+    {# Pas d'en-tete du lieu sur TOUTES les pages /my_account/* (accueil ET sous-pages). #}
+    {# `slice:":12"` garde les 12 premiers caracteres, soit "/my_account/". #}
+    {# / No venue header on any /my_account/* page (prefix test). #}
+    {% if request.path|slice:":12" != "/my_account/" and not apercu_admin %}
         {% include 'pages/V2/tenant_header.html' %}
     {% endif %}
 

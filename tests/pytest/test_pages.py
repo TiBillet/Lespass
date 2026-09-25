@@ -464,6 +464,24 @@ def test_route_event_non_masquee_par_le_catch_all(api_client):
     assert reponse.status_code == 200
 
 
+def test_agenda_embed_rend_le_compteur_sans_erreur(api_client):
+    """
+    L'agenda embarqué (iframe) s'affiche sans erreur et montre le compteur.
+    / The embedded agenda (iframe) renders without error and shows the counter.
+
+    Bug corrigé : la vue embed() ne posait pas `event_count` dans le contexte.
+    Le gabarit V2 fait `{% blocktrans count compteur=event_count %}`, qui exige
+    un nombre : la page renvoyait une erreur 500 (TemplateSyntaxError).
+    / Fixed bug: embed() did not set `event_count`; the V2 template's
+    blocktrans count requires a number, so the page returned a 500.
+    """
+    reponse = api_client.get("/event/embed/")
+    assert reponse.status_code == 200
+
+    contenu = reponse.content.decode()
+    assert "à venir" in contenu or "upcoming" in contenu
+
+
 # ---------------------------------------------------------------------------
 # Admin
 # ---------------------------------------------------------------------------

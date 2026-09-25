@@ -383,19 +383,31 @@ h2.tb-bloc__titre::before {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    white-space: nowrap; /* jamais cliquable sur deux lignes (Hallmark) */
+    white-space: nowrap; /* jamais cliquable sur deux lignes (Hallmark) — sauf écran étroit, voir plus bas */
     min-height: 44px; /* cible tactile mobile (>= 44px, Apple HIG / WCAG) */
     padding: 0.6rem 1.5rem;
     border-radius: var(--tb-rayon-sm);
     border: 1.5px solid var(--tb-accent);
     font-weight: 600;
     letter-spacing: 0.01em;
+    max-width: 100%;
     text-decoration: none;
     cursor: pointer;
     /* Supprime le delai de tap 300ms sur mobile. / Removes the 300ms tap delay. */
     touch-action: manipulation;
     transition: transform var(--tb-transition), box-shadow var(--tb-transition),
                 background-color var(--tb-transition), color var(--tb-transition);
+}
+
+/* Écran étroit : le libellé est saisi dans l'admin, sa longueur n'est pas
+   maîtrisée. En `nowrap` il débordait de l'écran à 320px. Mieux vaut deux
+   lignes qu'un libellé coupé.
+   / Narrow screens: admin-typed labels may wrap rather than be clipped. */
+@media (max-width: 30rem) {
+    .tb-bloc__bouton {
+        white-space: normal;
+        text-align: center;
+    }
 }
 
 /* plein / filled */
@@ -778,7 +790,7 @@ h2.tb-bloc__titre::before {
     letter-spacing: 0.02em;
     color: var(--tb-texte-doux);
 }
-@media (max-width: 768px) {
+@media (max-width: 48rem) {
     .tb-bloc--carte-leaflet .tb-bloc__leaflet-grille { grid-template-columns: 1fr; }
 }
 
@@ -893,7 +905,7 @@ h2.tb-bloc__titre::before {
    rule it had neither colour nor underline of its own, inheriting the
    paragraph's grey — invisible as a link, in every skin. */
 .tb-bloc__faq-reponse a { color: var(--tb-accent-texte); text-underline-offset: 0.15em; }
-@media (max-width: 768px) {
+@media (max-width: 48rem) {
     .tb-faq-colonnes { column-count: 1; }
 }
 
@@ -1026,7 +1038,7 @@ h2.tb-bloc__titre::before {
 }
 .tb-bloc--video-texte .tb-bloc__contenu { margin-inline: 0; }
 .tb-bloc--video-texte .tb-bloc__titre { font-size: clamp(1.6rem, 3.5vw, 2.2rem); }
-@media (max-width: 768px) {
+@media (max-width: 48rem) {
     .tb-bloc--video-texte .tb-bloc__video-grille { grid-template-columns: 1fr; }
 }
 
@@ -1034,7 +1046,7 @@ h2.tb-bloc__titre::before {
  * Responsive : sous 768px on empile image+texte (image au-dessus du texte).
  * / Responsive: below 768px, stack image+text (image above text).
  * ------------------------------------------------------------------------- */
-@media (max-width: 768px) {
+@media (max-width: 48rem) {
     .tb-bloc--image-texte { grid-template-columns: 1fr; }
     .tb-bloc--image-droite .tb-bloc__media { order: 0; }
 }

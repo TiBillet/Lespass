@@ -91,5 +91,65 @@ pour ne pas être coupés par ce défilement.
                 {% endif %}
             {% endfor %}
         </nav>
+
+        {% comment %}
+        MENU DU LIEU — VERSION MOBILE (sélecteur dépliant)
+        / Venue menu — mobile version (disclosure selector)
+
+        LOCALISATION : pages/templates/pages/V2/tenant_header.html
+
+        Sous 48rem, le menu en ligne ci-dessus ne tient pas : il est masqué
+        (V2.css) et remplacé par ce bloc. Une seule ligne affiche « Menu » et
+        la page où l'on se trouve ; un toucher déplie toutes les entrées, les
+        sous-pages en retrait.
+
+        Pourquoi <details> : pas de JavaScript, le clavier (Entrée, Espace) et
+        les lecteurs d'écran le gèrent nativement. Après un clic, HTMX remplace
+        tout le <body> : le bloc revient donc fermé sur la nouvelle page.
+
+        Mêmes données (main_nav) et même règle de page active que le menu en
+        ligne : les deux ne peuvent pas se contredire.
+        Comparatif des options étudiées : CHANGELOG/2026-09-25-lespass-v2-responsive.md
+        / Same data and same active-page rule as the inline menu above.
+        {% endcomment %}
+        <details class="place-nav-mobile" data-testid="tenant-header-menu-mobile">
+            <summary class="place-nav-mobile__bouton">
+                <span class="place-nav-mobile__intitule">{% translate 'Menu' %}</span>
+                {# Nom de la page active. Vide si la page n'est pas dans le menu #}
+                {# (ex. fiche d'un événement) : seul « Menu » s'affiche alors. #}
+                {# / Active page name; empty when the page is not in the menu. #}
+                <span class="place-nav-mobile__page-active">{% if request.path == "/" %}{% translate 'Accueil' %}{% else %}{% for item in main_nav %}{% if url_name == item.name or request.path == item.url %}{% translate item.label %}{% endif %}{% for enfant in item.children %}{% if url_name == enfant.name or request.path == enfant.url %}{{ enfant.label }}{% endif %}{% endfor %}{% endfor %}{% endif %}</span>
+                <svg class="place-nav-mobile__chevron" width="12" height="12" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
+
+            <nav aria-label="{% translate 'Menu principal' %}"
+                 data-loading-target="#tibillet-spinner"
+                 data-loading-delay="{{ loading_delay|default:'400' }}">
+                <ul class="place-nav-mobile__liste">
+                    <li>
+                        <a href="/" hx-get="/" hx-target="body" hx-push-url="true"
+                           {% if request.path == "/" %}class="is-active" aria-current="page"{% endif %}>{% translate 'Accueil' %}</a>
+                    </li>
+                    {% for item in main_nav %}
+                        <li>
+                            <a href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="body" hx-push-url="true"
+                               {% if url_name == item.name or request.path == item.url %}class="is-active" aria-current="page"{% endif %}>{% translate item.label %}</a>
+                            {% if item.children %}
+                                {# Sous-pages : en retrait sous leur parent, sans menu déroulant. #}
+                                {# / Sub-pages: indented under their parent, no dropdown. #}
+                                <ul class="place-nav-mobile__sous-liste">
+                                    {% for enfant in item.children %}
+                                        <li>
+                                            <a href="{{ enfant.url }}" hx-get="{{ enfant.url }}" hx-target="body" hx-push-url="true"
+                                               {% if url_name == enfant.name or request.path == enfant.url %}class="is-active" aria-current="page"{% endif %}>{{ enfant.label }}</a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+        </details>
     </div>
 </div>
