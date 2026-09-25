@@ -37,16 +37,12 @@
 		{% endcomment %}
 		style="{% if article.couleur_backgr %}--legacy:{{ article.couleur_backgr }};{% endif %}{% if article.couleur_texte %}--legacy-ink:{{ article.couleur_texte }};{% endif %}"
 		data-testid="article-{{ article.id }}">
-		<!-- Icône catégorie — petit badge haut-gauche
-		     Deux systèmes : MS (<span>) ou FA (<i>)
-		     / Category icon — small badge top-left
-		     Two systems: MS (<span>) or FA (<i>) -->
+		<!-- Icône catégorie — petit badge haut-gauche, Material Symbols
+		     (nom choisi dans le selecteur de l admin : ICON_POS)
+		     / Category icon — small badge top-left, Material Symbols -->
 		{% if article.categorie.icone_type == "ms" %}
 		<span class="material-symbols-outlined article-cat-icon"
 		      aria-hidden="true">{{ article.categorie.icon }}</span>
-		{% elif article.categorie.icone_type == "fa" %}
-		<i class="fas {{ article.categorie.icon }} article-cat-icon"
-		   aria-hidden="true"></i>
 		{% endif %}
 
 		{% comment %}
@@ -84,9 +80,6 @@
 			{% elif article.icone_type == "ms" %}
 			<span class="material-symbols-outlined article-visual-icon"
 			      aria-hidden="true">{{ article.icone }}</span>
-			{% elif article.icone_type == "fa" %}
-			<i class="fas {{ article.icone }} article-visual-icon"
-			   aria-hidden="true"></i>
 			{% endif %}
 		</div>
 		<!-- Nom de l'article — zone entre le visuel et le footer
@@ -120,7 +113,7 @@
 					{% if tarif.poids_mesure %}
 					<span class="article-tarif-pill article-tarif-pill-poids"
 					      aria-label="{% translate 'au poids' %}">
-						<i class="fas fa-balance-scale" aria-hidden="true"></i>
+						<span class="material-symbols-outlined" aria-hidden="true">scale</span>
 						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{{ tarif.prix_reference_label }}
 					</span>
 					{% elif tarif.free_price %}
@@ -142,7 +135,7 @@
 			<div class="article-tarifs-pills">
 				<span class="article-tarif-pill article-tarif-pill-poids"
 				      aria-label="{% translate 'au poids' %}">
-					<i class="fas fa-balance-scale" aria-hidden="true"></i>
+					<span class="material-symbols-outlined" aria-hidden="true">scale</span>
 					{{ article.prix|divide_by:100|floatformat:"-2" }}{{ article.prix_reference_label }}
 				</span>
 			</div>

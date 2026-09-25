@@ -242,7 +242,7 @@ table.ventes-table, .mini-table table { width: 100%; border-collapse: collapse; 
 .ventes-detail-collapse { display: grid; gap: 10px; padding: 12px 18px 16px; }
 .ventes-detail-info { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12.5px; color: var(--text-dim); }
 .ventes-detail-info-item { display: inline-flex; align-items: center; gap: 6px; }
-.ventes-detail-info-item .fas { color: var(--text-faint); }
+.ventes-detail-info-item .material-symbols-outlined { color: var(--text-faint); }
 .ventes-table-detail { border-radius: var(--r-ctrl); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); }
 .ventes-table-detail th, .ventes-table-detail td { padding: 8px 14px; }
 .ventes-table-detail .total-row td { color: var(--text); font-weight: 800; }

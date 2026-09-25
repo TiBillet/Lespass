@@ -8,17 +8,17 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
 
     <div class="ventes-detail-info" data-testid="detail-info">
         <div class="ventes-detail-info-item">
-            <i class="fas fa-clock" aria-hidden="true"></i>
+            <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
             {{ datetime|date:"d/m/Y H:i" }}
         </div>
         {% if nom_pv %}
         <div class="ventes-detail-info-item">
-            <i class="fas fa-store" aria-hidden="true"></i>
+            <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
             {{ nom_pv }}
         </div>
         {% endif %}
         <div class="ventes-detail-info-item">
-            <i class="fas fa-credit-card" aria-hidden="true"></i>
+            <span class="material-symbols-outlined" aria-hidden="true">credit_card</span>
             <span class="ventes-badge-moyen ventes-badge-{{ moyen_paiement }}">{{ moyen_paiement_label|default:moyen_paiement }}</span>
         </div>
     </div>
@@ -71,7 +71,7 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
                 hx-vals='{"uuid_transaction": "{{ uuid_transaction }}", "uuid_pv": "{{ uuid_pv_vente }}"}'
                 data-loading-disable
                 data-testid="btn-reimprimer">
-            <i class="fas fa-print" aria-hidden="true"></i>
+            <span class="material-symbols-outlined" aria-hidden="true">print</span>
             {% translate "Ré-imprimer" %}
         </button>
         {% if correction_possible %}
@@ -81,7 +81,7 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
                 hx-swap="innerHTML"
                 data-loading-disable
                 data-testid="btn-corriger">
-            <i class="fas fa-edit" aria-hidden="true"></i>
+            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
             {% translate "Corriger moyen" %}
         </button>
         {% endif %}

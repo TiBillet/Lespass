@@ -30,7 +30,7 @@
       <div id="header-title"
            class="menu-burger-icon"
            onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')">
-        <i class="fas {{ pv.icon }}" aria-hidden="true"></i> &nbsp;
+        <span class="material-symbols-outlined" aria-hidden="true">{{ pv.icon }}</span> &nbsp;
         {% if pv.name and hide_pv_name != True %}{{ pv.name }}{% endif %}
         <span class="pos-chevron"></span>
       </div>
@@ -68,11 +68,11 @@
   {% if not retour_pv %}
   <nav id="menu-large" class="hdr-nav" aria-label="Menu">
     <button class="hdr-nav-btn" data-dest="preparations">
-      <i class="fas fa-solid fa-clipboard" aria-hidden="true"></i>Préparations
+      <span class="material-symbols-outlined" aria-hidden="true">assignment</span>Préparations
     </button>
     {% if not pv.service_direct %}
       <button class="hdr-nav-btn{% if not id_table %} is-missing{% endif %}" data-id-table="{{ id_table }}" data-dest="tables">
-        <i class="fas fa-solid fa-chair" aria-hidden="true"></i>
+        <span class="material-symbols-outlined" aria-hidden="true">chair</span>
         Tables
       </button>
     {% endif %}
@@ -82,18 +82,18 @@
             hx-target="body"
             hx-swap="innerHTML"
             hx-push-url="true">
-      <i class="fas fa-solid fa-signal" aria-hidden="true"></i>Ventes
+      <span class="material-symbols-outlined" aria-hidden="true">bar_chart</span>Ventes
     </button>
     <button class="hdr-nav-btn" data-dest="parametres" aria-label="Paramètres">
-      <i class="fas fa-solid fa-cog"></i>
+      <span class="material-symbols-outlined" aria-hidden="true">settings</span>
     </button>
   </nav>
   <nav id="menu-small" class="hdr-nav">
-    <i class="menu-burger-icon fas fa-bars curseur-action"
+    <span class="material-symbols-outlined menu-burger-icon curseur-action" aria-hidden="true"
        onclick="toggleMenuBurger(event)"
        role="button"
        aria-label="{% translate 'Menu' %}"
-       data-testid="burger-icon"></i>
+       data-testid="burger-icon">menu</span>
   </nav>
   {% endif %}
 </header>
@@ -107,16 +107,16 @@
     <span class="menu-panel-title menu-burger-item-content">{% translate "Menu" %}</span>
     <div class="menu-burger-item menu-burger-item-content"
          onclick="showSubMenu(event, '.sub-menu-pvs')">
-      <i class="menu-burger-item-content fas fa-solid fa-clipboard"></i>
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">assignment</span>
       <div class="menu-burger-item-content">{% translate "POINTS DE VENTES" %}</div>
     </div>
     <div class="menu-burger-item menu-burger-item-content">
-      <i class="menu-burger-item-content fas fa-concierge-bell"></i>
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">room_service</span>
       <div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>
     </div>
     {% if not pv.service_direct %}
       <div class="menu-burger-item menu-burger-item-content">
-        <i class="menu-burger-item-content fas fa-solid fa-chair"></i>
+        <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">chair</span>
         <div class="menu-burger-item-content">{% translate "TABLES" %}</div>
       </div>
     {% endif %}
@@ -128,13 +128,13 @@
          onclick="hideMenuBurger()"
          data-loading-disable
          data-testid="menu-ventes">
-      <i class="menu-burger-item-content fas fa-solid fa-signal"
-         aria-hidden="true"></i>
+      <span class="material-symbols-outlined menu-burger-item-content"
+         aria-hidden="true">bar_chart</span>
       <div class="menu-burger-item-content">{% translate "VENTES" %}</div>
     </div>
     <div class="menu-burger-item menu-burger-item-content"
          onclick="showSubMenu(event, '.sub-menu-params')">
-      <i class="menu-burger-item-content fas fa-cog"></i>
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">settings</span>
       <div class="menu-burger-item-content">{% translate "PARAMÈTRES" %}</div>
     </div>
   </div>
@@ -154,12 +154,12 @@
          href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv_item.uuid }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}"
          data-nav-spinner
          {% if pv_item.uuid == pv.id %}aria-current="true" data-testid="menu-pv-courant"{% endif %}>
-        <i class="menu-burger-item-content fas {{ pv_item.icon }}"
-           aria-hidden="true"></i>
+        <span class="material-symbols-outlined menu-burger-item-content"
+           aria-hidden="true">{{ pv_item.icon }}</span>
         <div class="menu-burger-item-content">{{ pv_item.name }}</div>
         {% if pv_item.uuid == pv.id %}
-          <i class="menu-burger-item-content menu-row-check fas fa-check"
-             aria-label="{% translate 'Point de vente actuel' %}"></i>
+          <span class="material-symbols-outlined menu-burger-item-content menu-row-check" aria-hidden="true"
+             aria-label="{% translate 'Point de vente actuel' %}">check</span>
         {% endif %}
       </a>
     {% endfor %}
@@ -168,11 +168,11 @@
   <div class="sub-menu-params sub-menu hide">
     <span class="menu-panel-title menu-burger-item-content">{% translate "Paramètres" %}</span>
     <div class="menu-burger-item menu-burger-item-content">
-      <i class="menu-burger-item-content fas fa-utensils"></i>
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">restaurant</span>
       <div class="menu-burger-item-content">params 1</div>
     </div>
     <div class="menu-burger-item menu-burger-item-content">
-      <i class="menu-burger-item-content fas fa-utensils"></i>
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">restaurant</span>
       <div class="menu-burger-item-content">params 2</div>
     </div>
   </div>

@@ -4,19 +4,26 @@
 
 {# Les noms de champs couleur cibles sont injectés via data-attributes #}
 {# Target color field names are injected via data-attributes #}
+
+{# Les boutons radio sont caches visuellement par un style en ligne : la classe      #}
+{# sr-only venait de la feuille FontAwesome (retiree) et n'existe pas dans le         #}
+{# Tailwind d'Unfold. Ils restent joignables au clavier (fleches, Tab).               #}
+{# / Radios are visually hidden inline: sr-only came from the removed FontAwesome     #}
+{#   stylesheet and is not in Unfold's Tailwind. They stay keyboard reachable.       #}
 <div class="palette-picker-container flex flex-wrap gap-3 py-2"
      data-texte-field="{{ texte_field }}"
      data-fond-field="{{ fond_field }}">
 
   {# Option "aucune palette" #}
   {# "No palette" option #}
-  <label title="{% trans 'Aucune palette' %}" class="cursor-pointer">
+  <label title="{% trans 'Aucune palette' %}" class="cursor-pointer" style="position: relative;">
     <input
       type="radio"
       name="{{ widget_name }}"
       value=""
       {% if not current_value %}checked{% endif %}
       class="sr-only palette-radio"
+      style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;"
     >
     <span class="palette-swatch flex items-center justify-center w-16 h-10 rounded-lg font-bold text-sm select-none border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500">
       ✕
@@ -24,13 +31,14 @@
   </label>
 
   {% for key, label, text_hex, bg_hex in palettes %}
-    <label title="{{ label }}" class="cursor-pointer">
+    <label title="{{ label }}" class="cursor-pointer" style="position: relative;">
       <input
         type="radio"
         name="{{ widget_name }}"
         value="{{ key }}"
         {% if current_value == key %}checked{% endif %}
         class="sr-only palette-radio"
+        style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;"
         data-text-hex="{{ text_hex }}"
         data-bg-hex="{{ bg_hex }}"
       >

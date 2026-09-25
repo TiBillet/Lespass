@@ -5,7 +5,7 @@
   {% endif %}
   <link rel="stylesheet" href="{% static 'css/categories.css' %}" />
   <div id="category-all" class="BF-col category-item category-item-active">
-    <i class="category-icon fas fa-th" aria-hidden="true"></i>
+    <span class="material-symbols-outlined category-icon" aria-hidden="true">apps</span>
     <div class="category-nom">{% translate "Tous" %}</div>
     <div class="category-touch"></div>
   </div>
@@ -16,7 +16,7 @@
       <div class="BF-col category-item active category-event"
            data-sel="cat-{{ cat.id }}"
            data-testid="billetterie-sidebar-event-{{ cat.id }}">
-        <i class="category-icon fas fa-calendar-alt" aria-hidden="true"></i>
+        <span class="material-symbols-outlined category-icon" aria-hidden="true">calendar_month</span>
         <div class="category-nom">{{ cat.name }}</div>
         <div class="category-event-date">{{ cat.date|date:"D d/m" }}</div>
         {% if cat.jauge_max %}
@@ -41,11 +41,7 @@
       {# Catégorie standard — inchangée #}
       {# / Standard category — unchanged #}
       <div class="BF-col category-item active" data-sel="cat-{{ cat.id }}">
-        {% if cat.icone_type == "ms" %}
-          <span class="material-symbols-outlined category-icon" aria-hidden="true">{{ cat.icon }}</span>
-        {% else %}
-          <i class="category-icon fas {{ cat.icon }}" aria-hidden="true"></i>
-        {% endif %}
+        <span class="material-symbols-outlined category-icon" aria-hidden="true">{{ cat.icon }}</span>
         <div class="category-nom">{{ cat.name }}</div>
         <div class="category-touch"></div>
       </div>

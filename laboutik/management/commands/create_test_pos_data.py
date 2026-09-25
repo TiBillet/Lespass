@@ -6,12 +6,11 @@ Categories, products with prices, points of sale, and primary cards (if TEST=1).
 
 LOCALISATION : laboutik/management/commands/create_test_pos_data.py
 
-Icones : FontAwesome 5 Free (solid). Le champ icon contient le nom de l'icone
-sans le prefixe "fas", par exemple "fa-beer".
-Les templates laboutik utilisent <i class="fas {{ icon }}"></i>.
-/ Icons: FontAwesome 5 Free (solid). The icon field contains the icon name
-without the "fas" prefix, e.g. "fa-beer".
-Laboutik templates use <i class="fas {{ icon }}"></i>.
+Icones : Material Symbols (Outlined). Le champ icon contient le nom de l'icone,
+par exemple "sports_bar" (liste proposee dans l'admin : ICON_POS).
+Les templates laboutik utilisent <span class="material-symbols-outlined">{{ icon }}</span>.
+/ Icons: Material Symbols (Outlined). The icon field holds the icon name,
+e.g. "sports_bar". Laboutik templates use a material-symbols-outlined span.
 
 Usage :
     docker exec lespass_django poetry run python manage.py create_test_pos_data
@@ -109,7 +108,7 @@ class Command(BaseCommand):
             categorie_bar, _ = CategorieProduct.objects.update_or_create(
                 name="Bar",
                 defaults={
-                    "icon": "fa-cocktail",
+                    "icon": "local_bar",
                     "couleur_texte": "#FFFFFF",
                     "couleur_fond": "#3B82F6",
                     "poid_liste": 0,
@@ -118,7 +117,7 @@ class Command(BaseCommand):
             categorie_restauration, _ = CategorieProduct.objects.update_or_create(
                 name="Restauration",
                 defaults={
-                    "icon": "fa-utensils",
+                    "icon": "restaurant",
                     "couleur_texte": "#FFFFFF",
                     "couleur_fond": "#EF4444",
                     "poid_liste": 1,
@@ -127,7 +126,7 @@ class Command(BaseCommand):
             categorie_boissons_chaudes, _ = CategorieProduct.objects.update_or_create(
                 name="Boissons chaudes",
                 defaults={
-                    "icon": "fa-coffee",
+                    "icon": "coffee",
                     "couleur_texte": "#FFFFFF",
                     "couleur_fond": "#78350F",
                     "poid_liste": 2,
@@ -136,7 +135,7 @@ class Command(BaseCommand):
             categorie_snacks, _ = CategorieProduct.objects.update_or_create(
                 name="Snacks",
                 defaults={
-                    "icon": "fa-cookie",
+                    "icon": "cookie",
                     "couleur_texte": "#000000",
                     "couleur_fond": "#F59E0B",
                     "poid_liste": 3,
@@ -145,7 +144,7 @@ class Command(BaseCommand):
             categorie_vins, _ = CategorieProduct.objects.update_or_create(
                 name="Vins & Spiritueux",
                 defaults={
-                    "icon": "fa-wine-glass-alt",
+                    "icon": "wine_bar",
                     "couleur_texte": "#FFFFFF",
                     "couleur_fond": "#7C3AED",
                     "poid_liste": 4,
@@ -154,7 +153,7 @@ class Command(BaseCommand):
             categorie_cashless, _ = CategorieProduct.objects.update_or_create(
                 name="Cashless",
                 defaults={
-                    "icon": "fa-wallet",
+                    "icon": "account_balance_wallet",
                     "couleur_texte": "#FFFFFF",
                     "couleur_fond": "#10B981",
                     "poid_liste": 5,
@@ -282,7 +281,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_bar,
                     "couleur_fond_pos": "#F59E0B",
                     "couleur_texte_pos": "#000000",
-                    "icon_pos": "fa-beer",
+                    "icon_pos": "sports_bar",
                     "prix": Decimal("5.00"),
                 },
                 {
@@ -291,7 +290,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_bar,
                     "couleur_fond_pos": "#DC2626",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-glass-whiskey",
+                    "icon_pos": "local_drink",
                     "prix": Decimal("3.00"),
                 },
                 {
@@ -300,7 +299,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_bar,
                     "couleur_fond_pos": "#0EA5E9",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-tint",
+                    "icon_pos": "water_drop",
                     "prix": Decimal("1.50"),
                 },
                 {
@@ -309,7 +308,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_bar,
                     "couleur_fond_pos": "#F97316",
                     "couleur_texte_pos": "#000000",
-                    "icon_pos": "fa-lemon",
+                    "icon_pos": "water_full",
                     "prix": Decimal("3.50"),
                 },
                 {
@@ -318,7 +317,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_bar,
                     "couleur_fond_pos": "#FBBF24",
                     "couleur_texte_pos": "#000000",
-                    "icon_pos": "fa-glass-cheers",
+                    "icon_pos": "celebration",
                     "prix": Decimal("2.50"),
                 },
                 # --- Restauration ---
@@ -328,7 +327,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_restauration,
                     "couleur_fond_pos": "#16A34A",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-pizza-slice",
+                    "icon_pos": "local_pizza",
                     "prix": Decimal("12.00"),
                 },
                 {
@@ -337,7 +336,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_restauration,
                     "couleur_fond_pos": "#B45309",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-utensils",
+                    "icon_pos": "restaurant",
                     "prix": Decimal("11.00"),
                 },
                 {
@@ -346,7 +345,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_restauration,
                     "couleur_fond_pos": "#D97706",
                     "couleur_texte_pos": "#000000",
-                    "icon_pos": "fa-bread-slice",
+                    "icon_pos": "bakery_dining",
                     "prix": Decimal("8.00"),
                 },
                 {
@@ -355,7 +354,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_restauration,
                     "couleur_fond_pos": "#22C55E",
                     "couleur_texte_pos": "#000000",
-                    "icon_pos": "fa-leaf",
+                    "icon_pos": "eco",
                     "prix": Decimal("7.00"),
                 },
                 # --- Boissons chaudes ---
@@ -365,7 +364,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_boissons_chaudes,
                     "couleur_fond_pos": "#78350F",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-coffee",
+                    "icon_pos": "coffee",
                     "prix": Decimal("2.00"),
                 },
                 {
@@ -374,7 +373,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_boissons_chaudes,
                     "couleur_fond_pos": "#15803D",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-mug-hot",
+                    "icon_pos": "emoji_food_beverage",
                     "prix": Decimal("2.50"),
                 },
                 {
@@ -383,7 +382,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_boissons_chaudes,
                     "couleur_fond_pos": "#92400E",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-coffee",
+                    "icon_pos": "coffee",
                     "prix": Decimal("3.50"),
                 },
                 # --- Snacks ---
@@ -393,7 +392,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_snacks,
                     "couleur_fond_pos": "#EAB308",
                     "couleur_texte_pos": "#000000",
-                    "icon_pos": "fa-cookie-bite",
+                    "icon_pos": "donut_small",
                     "prix": Decimal("2.00"),
                 },
                 {
@@ -402,7 +401,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_snacks,
                     "couleur_fond_pos": "#84CC16",
                     "couleur_texte_pos": "#000000",
-                    "icon_pos": "fa-seedling",
+                    "icon_pos": "potted_plant",
                     "prix": Decimal("1.50"),
                 },
                 {
@@ -411,7 +410,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_snacks,
                     "couleur_fond_pos": "#D97706",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-cookie",
+                    "icon_pos": "cookie",
                     "prix": Decimal("2.00"),
                 },
                 # --- Vins & Spiritueux ---
@@ -421,7 +420,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_vins,
                     "couleur_fond_pos": "#7C3AED",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-wine-glass-alt",
+                    "icon_pos": "wine_bar",
                     "prix": Decimal("5.00"),
                 },
                 {
@@ -430,7 +429,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_vins,
                     "couleur_fond_pos": "#D1FAE5",
                     "couleur_texte_pos": "#000000",
-                    "icon_pos": "fa-wine-glass",
+                    "icon_pos": "glass_cup",
                     "prix": Decimal("5.00"),
                 },
                 {
@@ -439,7 +438,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_vins,
                     "couleur_fond_pos": "#FBBF24",
                     "couleur_texte_pos": "#000000",
-                    "icon_pos": "fa-glass-whiskey",
+                    "icon_pos": "local_drink",
                     "prix": Decimal("4.00"),
                 },
                 # --- Cashless : recharges ---
@@ -497,7 +496,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_bar,
                     "couleur_fond_pos": "#D97706",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-beer",
+                    "icon_pos": "sports_bar",
                 },
             )
             if created_blonde:
@@ -544,7 +543,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_snacks,
                     "couleur_fond_pos": "#84CC16",
                     "couleur_texte_pos": "#000000",
-                    "icon_pos": "fa-seedling",
+                    "icon_pos": "potted_plant",
                 },
             )
             if created_caca:
@@ -582,7 +581,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_snacks,
                     "couleur_fond_pos": "#6366F1",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-image",
+                    "icon_pos": "image",
                 },
             )
             if created_affiche:
@@ -617,7 +616,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_vins,
                     "couleur_fond_pos": "#881337",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-wine-bottle",
+                    "icon_pos": "liquor",
                 },
             )
             if created_vin:
@@ -659,7 +658,7 @@ class Command(BaseCommand):
             produit_vider_carte.categorie_pos = categorie_cashless
             produit_vider_carte.couleur_fond_pos = "#F97316"
             produit_vider_carte.couleur_texte_pos = "#FFFFFF"
-            produit_vider_carte.icon_pos = "fa-eraser"
+            produit_vider_carte.icon_pos = "ink_eraser"
             produit_vider_carte.publish = True
             produit_vider_carte.save(
                 update_fields=[
@@ -709,7 +708,7 @@ class Command(BaseCommand):
                     "categorie_pos": categorie_bar,
                     "couleur_fond_pos": "#0EA5E9",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-recycle",
+                    "icon_pos": "recycling",
                 },
             )
             if consigne_creee:
@@ -731,7 +730,7 @@ class Command(BaseCommand):
                     "asset": asset_local,
                     "couleur_fond_pos": "#0284C7",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-rotate-left",
+                    "icon_pos": "undo",
                 },
             )
             if retour_cree:
@@ -889,7 +888,7 @@ class Command(BaseCommand):
             pdv_bar, _ = PointDeVente.objects.update_or_create(
                 name="Bar",
                 defaults={
-                    "icon": "fa-cocktail",
+                    "icon": "local_bar",
                     "comportement": PointDeVente.DIRECT,
                     "service_direct": True,
                     "afficher_les_prix": True,
@@ -903,7 +902,7 @@ class Command(BaseCommand):
             pdv_restaurant, _ = PointDeVente.objects.update_or_create(
                 name="Restaurant",
                 defaults={
-                    "icon": "fa-utensils",
+                    "icon": "restaurant",
                     "comportement": PointDeVente.DIRECT,
                     "service_direct": True,
                     "afficher_les_prix": True,
@@ -917,7 +916,7 @@ class Command(BaseCommand):
             pdv_terrasse, _ = PointDeVente.objects.update_or_create(
                 name="Terrasse",
                 defaults={
-                    "icon": "fa-umbrella-beach",
+                    "icon": "beach_access",
                     "comportement": PointDeVente.DIRECT,
                     "service_direct": False,
                     "afficher_les_prix": True,
@@ -942,7 +941,7 @@ class Command(BaseCommand):
             pdv_cashless, _ = PointDeVente.objects.update_or_create(
                 name="Cashless",
                 defaults={
-                    "icon": "fa-wallet",
+                    "icon": "account_balance_wallet",
                     "comportement": PointDeVente.CASHLESS,
                     "service_direct": True,
                     "afficher_les_prix": True,
@@ -961,7 +960,7 @@ class Command(BaseCommand):
             pdv_adhesion, _ = PointDeVente.objects.update_or_create(
                 name="Adhesions",
                 defaults={
-                    "icon": "fa-id-card",
+                    "icon": "badge",
                     "comportement": PointDeVente.ADHESION,
                     "service_direct": True,
                     "afficher_les_prix": True,
@@ -994,7 +993,7 @@ class Command(BaseCommand):
                     "publish": True,
                     "couleur_fond_pos": "#6366F1",
                     "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-id-card",
+                    "icon_pos": "badge",
                 },
             )
             if created_adh_mix:
@@ -1011,7 +1010,7 @@ class Command(BaseCommand):
             pdv_mix, _ = PointDeVente.objects.update_or_create(
                 name="Mix",
                 defaults={
-                    "icon": "fa-blender",
+                    "icon": "blender",
                     "comportement": PointDeVente.DIRECT,
                     "service_direct": True,
                     "afficher_les_prix": True,
@@ -1064,7 +1063,7 @@ class Command(BaseCommand):
             categorie_billetterie, _ = CategorieProduct.objects.update_or_create(
                 name="Billetterie",
                 defaults={
-                    "icon": "fa-ticket-alt",
+                    "icon": "confirmation_number",
                     "couleur_texte": "#FFFFFF",
                     "couleur_fond": "#7C3AED",
                     "poid_liste": 6,
@@ -1077,7 +1076,7 @@ class Command(BaseCommand):
             pdv_festival, _ = PointDeVente.objects.update_or_create(
                 name="Accueil Festival",
                 defaults={
-                    "icon": "fa-ticket-alt",
+                    "icon": "confirmation_number",
                     "comportement": PointDeVente.BILLETTERIE,
                     "service_direct": True,
                     "afficher_les_prix": True,

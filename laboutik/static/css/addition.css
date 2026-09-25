@@ -133,7 +133,7 @@
 	transition: color .12s var(--ease), background-color .12s var(--ease);
 }
 
-.addition-vider i {
+.addition-vider .material-symbols-outlined {
 	font-size: 18px;
 }
 
@@ -315,7 +315,7 @@
 	color: var(--text-faint);
 }
 
-.addition-placeholder i {
+.addition-placeholder .material-symbols-outlined {
 	font-size: 28px;
 	opacity: .55;
 }
@@ -401,7 +401,7 @@
 	text-align: center;
 }
 
-.addition-act-card i {
+.addition-act-card .material-symbols-outlined {
 	font-size: 22px;
 	color: var(--bleu01);
 }
@@ -436,7 +436,7 @@
 			0 1px 3px oklch(0 0 0 / .4);
 }
 
-.addition-act-valid i {
+.addition-act-valid .material-symbols-outlined {
 	font-size: 20px;
 }
 

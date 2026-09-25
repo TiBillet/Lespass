@@ -24,13 +24,13 @@ Styles : .alerte-vz-* dans laboutik/static/css/sortie_de_caisse.css
         <div class="alerte-vz-header">
             <span class="alerte-vz-icone-bulle">
                 {% if msg_type == "success" %}
-                <i class="fas fa-check-circle" aria-hidden="true"></i>
+                <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
                 {% elif msg_type == "info" %}
-                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                <span class="material-symbols-outlined" aria-hidden="true">info</span>
                 {% elif msg_type == "error" %}
-                <i class="fas fa-times-circle" aria-hidden="true"></i>
+                <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
                 {% else %}
-                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                <span class="material-symbols-outlined" aria-hidden="true">warning</span>
                 {% endif %}
             </span>
             <span class="alerte-vz-titre" data-testid="alerte-vz-titre">{{ msg_content }}</span>
@@ -46,7 +46,7 @@ Styles : .alerte-vz-* dans laboutik/static/css/sortie_de_caisse.css
                 hx-swap="innerHTML"
                 data-loading-disable
                 data-testid="alerte-vz-btn-retour">
-            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
             {% translate "Retour" %}
         </button>
     </div>

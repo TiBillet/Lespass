@@ -40,9 +40,9 @@ TARIFS_DEFAUT = [
 # Couleurs par defaut pour les boutons POS selon la categorie
 # / Default POS button colors by category
 COULEURS_PAR_CATEGORIE = {
-    Asset.TLF: {"fond": "#10B981", "texte": "#FFFFFF", "icon": "fa-coins"},
-    Asset.TNF: {"fond": "#EC4899", "texte": "#FFFFFF", "icon": "fa-gift"},
-    Asset.TIM: {"fond": "#8B5CF6", "texte": "#FFFFFF", "icon": "fa-clock"},
+    Asset.TLF: {"fond": "#10B981", "texte": "#FFFFFF", "icon": "toll"},
+    Asset.TNF: {"fond": "#EC4899", "texte": "#FFFFFF", "icon": "redeem"},
+    Asset.TIM: {"fond": "#8B5CF6", "texte": "#FFFFFF", "icon": "schedule"},
 }
 
 
@@ -93,7 +93,7 @@ def creer_ou_mettre_a_jour_product_recharge(sender, instance, created, **kwargs)
         categorie_cashless, _ = CategorieProduct.objects.get_or_create(
             name="Cashless",
             defaults={
-                "icon": "fa-wallet",
+                "icon": "account_balance_wallet",
                 "couleur_texte": "#FFFFFF",
                 "couleur_fond": "#10B981",
             },
@@ -120,7 +120,7 @@ def creer_ou_mettre_a_jour_product_recharge(sender, instance, created, **kwargs)
                 "categorie_pos": categorie_cashless,
                 "couleur_fond_pos": couleurs.get("fond", "#10B981"),
                 "couleur_texte_pos": couleurs.get("texte", "#FFFFFF"),
-                "icon_pos": couleurs.get("icon", "fa-coins"),
+                "icon_pos": couleurs.get("icon", "toll"),
             },
         )
 

@@ -206,7 +206,7 @@
 	color: var(--text);
 }
 
-.menu-burger-item i {
+.menu-burger-item .material-symbols-outlined {
 	flex: none;
 	width: 19px;
 	font-size: 19px;
@@ -225,7 +225,7 @@
 	color: var(--text);
 }
 
-.menu-burger-item[aria-current="true"] i {
+.menu-burger-item[aria-current="true"] .material-symbols-outlined {
 	color: var(--valid);
 }
 

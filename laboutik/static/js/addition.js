@@ -379,7 +379,7 @@ function additionInsertArticle({ detail }) {
 			<div id="addition-line-${lineId}" data-quantity="${quantity}" data-price="${lineId}" data-unit-price="${prixAffiche}" class="addition-line-grid">
 				<div class="addition-col-bt">
 					<button type="button" class="addition-remove-btn" onclick="additionRemoveArticle('${lineId}');" title="Enlever un article" aria-label="Enlever ${escapeHtml(name)}">
-						<i class="fas fa-minus" aria-hidden="true"></i>
+						<span class="material-symbols-outlined" aria-hidden="true">remove</span>
 					</button>
 				</div>
 				<div class="addition-col-info">
@@ -512,7 +512,7 @@ function additionReset() {
 	const emptyText = additionList.dataset.emptyText || 'Panier vide'
 	additionList.innerHTML = `
 		<div id="addition-empty" class="BF-col addition-placeholder" data-testid="addition-empty-placeholder">
-			<i class="fas fa-shopping-basket" aria-hidden="true"></i>
+			<span class="material-symbols-outlined" aria-hidden="true">shopping_basket</span>
 			<span>${emptyText}</span>
 		</div>
 	`

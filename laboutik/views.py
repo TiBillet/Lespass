@@ -155,7 +155,8 @@ LABELS_MOYENS_PAIEMENT_DB = {
 CATEGORIE_PAR_DEFAUT = {
     "id": "default",
     "name": "Divers",
-    "icon": "fa-angry",
+    "icon": "category",
+    "icone_type": "ms",
     "couleur_backgr": "#FFFFFF",
     "couleur_texte": "#333333",
 }
@@ -576,13 +577,10 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
         # Product POS category (or default category)
         categorie_pos = product.categorie_pos
         if categorie_pos is not None:
+            # Nom d'icone Material Symbols (selecteur de l'admin : ICON_POS)
+            # / Material Symbols icon name (admin picker: ICON_POS)
             icone_cat_brute = categorie_pos.icon or ""
-            if icone_cat_brute.startswith("fa"):
-                icone_type_cat = "fa"
-            elif icone_cat_brute:
-                icone_type_cat = "ms"
-            else:
-                icone_type_cat = ""
+            icone_type_cat = "ms" if icone_cat_brute else ""
             categorie_dict = {
                 "id": str(categorie_pos.uuid),
                 "name": categorie_pos.name,
@@ -688,21 +686,10 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             product.icon_pos or (categorie_pos.icon if categorie_pos else None) or ""
         )
 
-        # Détection du système d'icône selon le nom stocké :
-        #   - FontAwesome : noms préfixés par "fa" (ex: "fa-coffee", "fas-X")
-        #   - Material Symbols : noms avec underscores, sans préfixe "fa" (ex: "local_bar")
-        # Icon system detection based on stored name:
-        #   - FontAwesome : names prefixed with "fa" (e.g. "fa-coffee", "fas-X")
-        #   - Material Symbols : underscore names, no "fa" prefix (e.g. "local_bar")
-        if icone_brute.startswith("fa"):
-            icone_article = icone_brute
-            icone_type = "fa"
-        elif icone_brute:
-            icone_article = icone_brute
-            icone_type = "ms"
-        else:
-            icone_article = ""
-            icone_type = ""
+        # Nom d'icone Material Symbols, affiche tel quel par la caisse
+        # / Material Symbols icon name, shown as-is by the POS
+        icone_article = icone_brute
+        icone_type = "ms" if icone_article else ""
 
         article_dict = {
             "id": str(product.uuid),
@@ -712,7 +699,7 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             "couleur_backgr": couleur_backgr,
             "couleur_texte": couleur_texte_article,
             "icone": icone_article,
-            "icone_type": icone_type,  # "fa" | "ms" | ""
+            "icone_type": icone_type,  # "ms" | ""
             "bt_groupement": {
                 # Groupement automatique par méthode de caisse — plus de champ groupe_pos
                 # Automatic grouping by POS method — no more groupe_pos field
@@ -818,18 +805,13 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
                     or (categorie_pos.couleur_texte if categorie_pos else None)
                     or "#ffffff"
                 )
+                # Icone Material (defaut : un billet) / Material icon (default: a ticket)
                 icone_brute = (
                     product.icon_pos
                     or (categorie_pos.icon if categorie_pos else None)
-                    or "fa-ticket-alt"
+                    or "confirmation_number"
                 )
-                if icone_brute.startswith("fa"):
-                    icone_type = "fa"
-                elif icone_brute:
-                    icone_type = "ms"
-                else:
-                    icone_type = "fa"
-                    icone_brute = "fa-ticket-alt"
+                icone_type = "ms"
 
                 # Image du produit
                 # / Product image
@@ -883,8 +865,8 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
                         "categorie": {
                             "id": str(event.uuid),
                             "name": event.name,
-                            "icon": "fa-calendar-alt",
-                            "icone_type": "fa",
+                            "icon": "calendar_month",
+                            "icone_type": "ms",
                             "couleur_backgr": couleur_fond,
                             "couleur_texte": couleur_texte,
                         },
@@ -936,16 +918,9 @@ def _construire_donnees_categories(point_de_vente_instance, events_billetterie=N
     categories_qs = point_de_vente_instance.categories.order_by("poid_liste", "name")
     categories = []
     for categorie in categories_qs:
-        icone_cat = categorie.icon or ""
-        # Détection du système d'icône (même logique que pour les articles)
-        # Icon system detection (same logic as for articles)
-        if icone_cat.startswith("fa"):
-            icone_type_cat = "fa"
-        elif icone_cat:
-            icone_type_cat = "ms"
-        else:
-            icone_type_cat = "fa"
-            icone_cat = "fa-th"
+        # Icone Material (defaut : grille) / Material icon (default: grid)
+        icone_cat = categorie.icon or "apps"
+        icone_type_cat = "ms"
         categories.append(
             {
                 "id": str(categorie.uuid),
@@ -984,8 +959,8 @@ def _construire_donnees_categories(point_de_vente_instance, events_billetterie=N
                 {
                     "id": str(event.uuid),
                     "name": event.name,
-                    "icon": "fa-calendar-alt",
-                    "icone_type": "fa",
+                    "icon": "calendar_month",
+                    "icone_type": "ms",
                     "is_event": True,
                     "date": event.datetime,
                     "jauge_max": jauge_max,
