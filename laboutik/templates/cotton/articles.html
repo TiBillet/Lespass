@@ -171,6 +171,26 @@
 	{% endif %}{# fin if uuidArticlePaiementFractionne #}
 	{% endfor %}
 </div>
+{% comment %}
+MODELES DU PAVE NUMERIQUE DE LA POPUP DE TARIF (poids / mesure, prix libre)
+/ Keypad templates for the rate popup (weight / measure, free price)
+
+Le pave est le composant serveur cotton/numpad.html. La popup de tarif, elle,
+est construite en JS (tarif.js) : elle clone ces modeles pour chaque tarif au
+poids ou a prix libre. Le <template> est HORS de #products, car la popup remplace le contenu
+de #products pendant qu'elle est ouverte.
+Poids : saisie en nombre entier (grammes, centilitres), pas de touche virgule.
+Prix libre : montant avec virgule. Dans les deux, la derniere touche efface un chiffre.
+/ The keypad is the server component; tarif.js clones this template for each
+weight price. Kept OUTSIDE #products, which the popup replaces while open.
+{% endcomment %}
+<template id="tarif-modele-pave">
+	<c-numpad id="tarif-pave-modele" effacer="retour" virgule="non" />
+</template>
+{# Prix libre : montant en euros, avec virgule / Free price: amount with a comma #}
+<template id="tarif-modele-pave-montant">
+	<c-numpad id="tarif-pave-montant-modele" effacer="retour" />
+</template>
 <script src="{% static 'js/tarif.js' %}"></script>
 <script src="{% static 'js/articles.js' %}"></script>
 <!-- Variable Django — doit rester inline / Must stay inline (Django template variable) -->

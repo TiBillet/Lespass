@@ -39,6 +39,51 @@ function isCordovaApp() {
 }
 
 /**
+ * Applique une touche du pave numerique a un montant en cours de saisie
+ * / Applies a keypad key to an amount being typed
+ *
+ * LOCALISATION : laboutik/static/js/tibilletUtils.js
+ *
+ * Une seule regle de saisie pour tous les montants tapes au pave
+ * (cotton/numpad.html) : recharge en montant libre, fond de caisse,
+ * somme donnee en especes, prix libre de la popup de tarif.
+ * La saisie est gardee en texte avec une virgule (« 12,50 »).
+ *
+ * Touches (event.detail.key de 'keypadSendValue') :
+ * - "0" a "9"   : ajoute un chiffre ; 2 decimales au plus, 7 chiffres au plus.
+ * - "."         : ajoute la virgule (une seule) ; « 0, » si rien n'est tape.
+ * - "Backspace" : efface le dernier caractere.
+ * - "C"         : efface tout.
+ *
+ * UTILISE PAR : hx_card_recharge.html, hx_fond_de_caisse.html,
+ * hx_confirm_payment.html, tarif.js (prix libre).
+ *
+ * @param {String} saisie - montant deja tape (« » si rien)
+ * @param {String} touche - touche pressee
+ * @returns {String|null} la nouvelle saisie, ou null si la touche est refusee
+ */
+function montantAppliquerTouche(saisie, touche) {
+	if (touche === 'Backspace') {
+		return saisie.slice(0, -1)
+	}
+	if (touche === 'C') {
+		return ''
+	}
+	if (touche === '.') {
+		if (saisie.includes(',')) {
+			return saisie
+		}
+		return saisie === '' ? '0,' : saisie + ','
+	}
+	const aDejaDeuxDecimales = saisie.includes(',') && saisie.split(',')[1].length >= 2
+	const aDejaSeptChiffres = saisie.replace(',', '').length >= 7
+	if (aDejaDeuxDecimales || aDejaSeptChiffres) {
+		return null
+	}
+	return saisie === '0' ? touche : saisie + touche
+}
+
+/**
  * Echappe les caractères spéciaux HTML pour éviter les injections XSS.
  * Utilisé pour tout texte dynamique injecté via innerHTML ou insertAdjacentHTML
  * (noms de produits, noms de tarifs, symboles monétaires).

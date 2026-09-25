@@ -21,6 +21,8 @@ PARAMETRES :
 - effacer   : role de la derniere touche.
               "C"      (defaut) → envoie "C" : tout effacer.
               "retour" → touche ⌫, envoie "Backspace" : efface un chiffre.
+- virgule   : "oui" (defaut) → touche « , ». "non" → case vide a la place,
+              pour les saisies en nombre entier (grammes, centilitres).
 
 VALEURS ENVOYEES dans event.detail.key :
 "0" a "9", "." (touche affichee « , »), "C" ou "Backspace".
@@ -28,8 +30,10 @@ VALEURS ENVOYEES dans event.detail.key :
 Utilise par / Used by :
 - laboutik/partial/hx_managed_card.html (effacer="C")
 - laboutik/partial/hx_card_recharge.html, montant libre (effacer="retour")
+- cotton/articles.html, modele clone par tarif.js pour les tarifs au poids
+  (effacer="retour", virgule="non")
 {% endcomment %}
-<c-vars effacer="C" />
+<c-vars effacer="C" virgule="oui" />
 <link rel="stylesheet" href="{% static 'css/numpad.css' %}" />
 <div {{ attrs }} class="numpad-content" role="group" aria-label="{% translate 'Pavé numérique' %}" data-cible="{{ ck_target }}">
   <button type="button" class="numpad-touch" data-key="1">1</button>
@@ -41,7 +45,12 @@ Utilise par / Used by :
   <button type="button" class="numpad-touch" data-key="7">7</button>
   <button type="button" class="numpad-touch" data-key="8">8</button>
   <button type="button" class="numpad-touch" data-key="9">9</button>
-  <button type="button" class="numpad-touch" data-key="." aria-label="{% translate 'virgule' %}">,</button>
+  {% if virgule == "non" %}
+    {# Saisie entiere : pas de virgule, la case reste vide / Integer entry: empty cell #}
+    <span class="numpad-vide" aria-hidden="true"></span>
+  {% else %}
+    <button type="button" class="numpad-touch" data-key="." aria-label="{% translate 'virgule' %}">,</button>
+  {% endif %}
   <button type="button" class="numpad-touch" data-key="0">0</button>
   {% if effacer == "retour" %}
     <button type="button" class="numpad-touch numpad-touch--effacer" data-key="Backspace"

@@ -101,22 +101,12 @@ Erreur (montant invalide, 400) : hx_messages.html remplace la popup.
           const touche = event.detail.key
           let saisie = champMontant.value
 
-          if (touche === 'Backspace') {
-            saisie = saisie.slice(0, -1)
-          } else if (touche === 'C') {
-            saisie = ''
-          } else if (touche === '.') {
-            if (!saisie.includes(',')) {
-              saisie = saisie === '' ? '0,' : saisie + ','
-            }
-          } else {
-            const aDejaDeuxDecimales = saisie.includes(',') && saisie.split(',')[1].length >= 2
-            const aDejaSeptChiffres = saisie.replace(',', '').length >= 7
-            if (aDejaDeuxDecimales || aDejaSeptChiffres) {
-              return
-            }
-            saisie = saisie === '0' ? touche : saisie + touche
+          // Regle de saisie commune (tibilletUtils.js) / Shared typing rule
+          const nouvelleSaisie = montantAppliquerTouche(saisie, touche)
+          if (nouvelleSaisie === null) {
+            return
           }
+          saisie = nouvelleSaisie
 
           champMontant.value = saisie
           formulaire.querySelector('.card-keypad-saisie').textContent = saisie === '' ? '0' : saisie

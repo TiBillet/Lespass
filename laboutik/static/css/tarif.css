@@ -1,373 +1,357 @@
-/* tarif.css — Overlay de selection de tarif (multi-clic + pave numerique)
-   / Rate selection overlay (multi-click + numpad)
-   LOCALISATION : laboutik/static/css/tarif.css */
+/* ============================================================
+   TARIF.CSS — Popup de choix du tarif (multi-tarif, prix libre, poids)
+   / Rate selection popup (multi-rate, free price, weight)
 
-/* #products doit avoir position: relative pour que l'overlay
-   se positionne correctement en absolute par-dessus la grille.
-   / #products needs position: relative for the overlay
-   to position correctly as absolute on top of the grid. */
+   LOCALISATION : laboutik/static/css/tarif.css
+   HTML construit par : laboutik/static/js/tarif.js (tarifSelection)
+
+   Refonte maquette (TEMP-tibillet-laboutik-main) :
+   - meme boite que les popups .card-modal (surface, rayon 16, ombre,
+     apparition « pop »), posee sur la grille voilee ; le ticket reste visible ;
+   - tarifs fixes : une ligne neutre, meme fond pour tous, nom a gauche,
+     prix a droite, relief « touche » de 3 px ;
+   - prix libre et poids : un bloc neutre ; le pave est celui de
+     cotton/numpad.html (numpad.css), le montant libre reprend .card-clavier.
+   / Mockup redesign: popup box on the veiled grid; fixed rates as neutral
+   rows; free price and weight in a neutral block.
+   ============================================================ */
+
+/* #products porte la popup en position absolute
+   / #products hosts the absolutely positioned popup */
 #products {
     position: relative;
     background: var(--bg);
 }
 
-/* L'overlay couvre #products avec position absolute
-   Le parent (#products) a position: relative ci-dessus
-   / Overlay covers #products with position absolute */
+/* --- Voile sur la grille / Veil over the grid --- */
 .tarif-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--overlay-veil);
+    inset: 0;
     z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: var(--modal-veil);
 }
 
+/* --- La boite / The box --- */
 .tarif-overlay-content {
-    background: var(--surface);
-    border-radius: var(--r-panel);
-    box-shadow: 0 0 0 1px var(--line), 0 30px 70px var(--shade-2);
-    padding: 1.5rem;
-    max-width: 500px;
-    width: 100%;
-    max-height: 90%;
+    /* Les blocs repris des popups (.card-clavier, .card-valider,
+       .card-modal-close...) sont dimensionnes par --k, defini seulement
+       dans .card-modal-box : on le fixe ici.
+       / Popup blocks reused here are sized by --k: set it to 1. */
+    --k: 1;
+    position: relative;
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    width: 420px;
+    max-width: 100%;
+    max-height: 100%;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 18px 18px 16px;
+    border-radius: var(--r-panel);
+    background: var(--surface);
+    box-shadow: 0 0 0 1px var(--line), 0 30px 70px oklch(0 0 0 / .6);
+    color: var(--text);
+    animation: pop .16s var(--ease);
 }
 
+/* Remise a zero des boutons de la popup, comme dans .card-modal-box
+   (overlay.css) : sans elle, la croix, « Ajouter » et les autres boutons
+   gardent la bordure par defaut du navigateur. :where() = specificite nulle,
+   donc les classes de chaque bouton l'emportent toujours.
+   / Button reset inside the popup, as in .card-modal-box: removes the
+   browser's default border. Zero specificity: button classes always win. */
+:where(.tarif-overlay-content) :where(button) {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* --- En-tete : le produit en titre, « Choisir un tarif » dessous ---
+   / Header: product as heading, small "choose a rate" line */
 .tarif-overlay-title {
-    color: var(--text);
+    margin: 0;
+    padding: 0 40px;            /* place de la croix / room for the cross */
+    font-size: 20px;
     font-weight: 800;
     letter-spacing: -.01em;
-    font-size: 1.4rem;
+    line-height: 1.2;
     text-align: center;
-    margin: 0 0 0.25rem 0;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
 }
 
 .tarif-overlay-subtitle {
+    margin-top: -8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
     color: var(--text-faint);
     text-align: center;
-    margin-bottom: 1rem;
-    font-size: 0.9rem;
 }
 
 .tarif-list {
+    display: grid;
+    gap: 8px;
+}
+
+/* --- Libelles communs : nom a gauche, reference a droite ---
+   / Shared labels: name left, reference right */
+.tarif-btn-label {
     display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+    font-size: var(--fs-min);
+    font-weight: 800;
 }
 
-/* Bouton tarif commun / Common rate button */
-.tarif-btn {
-    border: 1px solid var(--wash-3);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    background: var(--wash-2);
+.tarif-btn-sublabel {
+    flex: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* --- Tarif fixe : une ligne neutre, nom a gauche, prix a droite ---
+   Meme fond pour tous les tarifs (--surface-2), relief « touche » :
+   tranche de 3 px, descente instantanee a l'appui, remontee en 170 ms.
+   / Fixed rate: a neutral row, same background for all, "key" depth. */
+.tarif-btn-fixed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 52px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: var(--r-ctrl);
+    background: var(--surface-2);
     color: var(--text);
+    font: inherit;
+    font-size: 16px;
+    font-weight: 800;
+    text-align: left;
     cursor: pointer;
-    transition: background 150ms var(--ease-out);
+    touch-action: manipulation;
+    box-shadow:
+        inset 0 1px 0 oklch(1 0 0 / .08),
+        inset 0 0 0 1px var(--line),
+        0 3px 0 var(--bg);
+    transition: transform .17s var(--ease), box-shadow .17s var(--ease);
 }
 
-.tarif-btn:hover, .tarif-btn:active {
-    background: var(--wash-3);
-}
-
-.tarif-btn:focus-visible,
-.tarif-numpad-btn:focus-visible,
-.tarif-free-validate:focus-visible,
-.tarif-free-input:focus-visible,
-.tarif-btn-retour:focus-visible {
-    outline: 3px solid var(--text);
-    outline-offset: 2px;
-}
-
-.tarif-btn:active {
-    transform: translateY(2px);
+.tarif-btn-fixed:active {
+    transform: translateY(3px);
+    background: var(--surface-3);
+    box-shadow: inset 0 0 0 1px var(--line);
     transition-duration: 0s;
 }
 
-.tarif-btn[disabled],
-.tarif-numpad-btn[disabled],
-.tarif-free-validate[disabled] {
-    opacity: .4;
-    pointer-events: none;
-    filter: grayscale(60%);
+.tarif-btn-fixed .tarif-btn-label {
+    font-size: inherit;
+    color: inherit;
 }
 
-.tarif-btn-label {
-    font-size: 1rem;
-    font-weight: 600;
+.tarif-btn-price {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
-.tarif-btn-price, .tarif-btn-sublabel {
-    font-size: 0.85rem;
-    color: var(--text-dim);
-    margin-top: 0.15rem;
+/* --- Prix libre : une tuile neutre qui laisse place au pave ---
+   Le pave reprend le bloc « montant libre » de la recharge cashless
+   (.card-clavier, .card-keypad-val, .card-valider : overlay.css).
+   / Free price: a neutral tile that gives way to the keypad. */
+.tarif-libre {
+    display: grid;
 }
 
-/* Tarif fixe / Fixed rate */
-.tarif-btn-fixed {
-    text-align: left;
+.tarif-btn-free {
+    display: grid;
+    align-content: center;
+    gap: 2px;
     width: 100%;
-}
-
-/* Prix libre / Free price */
-.tarif-free-input-container {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-}
-
-/* Le champ garde la meme epaisseur de filet dans tous ses etats — un
-   border-width qui change decale la mise en page a la frappe. Ce qui bouge,
-   c'est la couleur du filet et la bague de mise au point, jamais la geometrie.
-   Hauteur minimale alignee sur le bouton OK voisin (44 px de plancher tactile).
-   / The field keeps the same border width in every state — a changing
-   border-width shifts the layout mid-typing. Colour and outline move, geometry
-   never does. Min-height matched to the neighbouring OK button. */
-.tarif-free-input {
-    flex: 1;
-    min-height: 44px;
-    padding: 0.5rem;
+    min-height: 52px;
+    padding: 8px 16px;
+    border: 0;
     border-radius: var(--r-ctrl);
-    border: 1px solid var(--wash-4);
-    outline: 2px solid transparent;
-    outline-offset: 1px;
-    background: var(--wash-2);
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--line);
     color: var(--text);
-    font-family: var(--font-ui);
-    font-size: 1.1rem;
-    text-align: right;
-    min-width: 0;
-    transition: border-color var(--dur-fast) var(--ease-out),
-                background-color var(--dur-fast) var(--ease-out);
-}
-
-.tarif-free-currency {
-    color: var(--text-dim);
-    font-size: 1rem;
-}
-
-/* Encre sombre sur le vert plein : le blanc sur --valid tombait a ~2,4:1.
-   / Dark ink on the solid green: white on --valid fell to ~2.4:1. */
-.tarif-free-validate {
-    min-height: 44px;
-    padding: 0.5rem 1rem;
-    border-radius: var(--r-ctrl);
-    border: none;
-    background: var(--valid);
-    color: var(--valid-ink);
-    font-family: var(--font-ui);
-    font-weight: 700;
+    font: inherit;
+    text-align: left;
     cursor: pointer;
-    font-size: 1rem;
-    -webkit-tap-highlight-color: transparent;
-    transition: filter var(--dur-fast) var(--ease-out);
+    touch-action: manipulation;
 }
 
-.tarif-free-validate:hover {
-    filter: brightness(1.06);
+.tarif-btn-free:active {
+    background: var(--surface-3);
 }
 
-.tarif-free-error {
-    color: var(--danger);
-    font-size: 0.8rem;
-    margin-top: 0.25rem;
-    min-height: 1.2em;
+/* Pave replie : l'attribut hidden doit gagner sur le display de .card-clavier
+   / Folded keypad: hidden must win over .card-clavier's display */
+.tarif-libre-clavier[hidden],
+.tarif-btn-free[hidden] {
+    display: none;
 }
 
-.tarif-input-error {
-    border-color: var(--danger) !important;
+/* Dans la liste, le pave est un bloc neutre, sans le filet du haut de .card-clavier
+   / In the list the keypad is a neutral block, without .card-clavier's top rule */
+.tarif-libre-clavier {
+    margin-top: 0;
+    padding: 12px 14px 14px;
+    border-top: 0;
+    border-radius: var(--r-ctrl);
+    background: var(--bg);
+    box-shadow: inset 0 0 0 1px var(--line);
 }
 
-/* Pave numerique / Numpad */
+/* --- Poids / mesure : bloc neutre, quantite en grand, pave, Ajouter ---
+   / Weight / measure: neutral block, large quantity, keypad, Add */
 .tarif-btn-poids {
-    cursor: default;
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px 14px;
+    border-radius: var(--r-ctrl);
+    background: var(--bg);
+    box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .tarif-numpad-zone {
-    margin-top: 0.75rem;
+    display: grid;
+    gap: 8px;
 }
 
 .tarif-numpad-display {
     display: flex;
     align-items: baseline;
     justify-content: center;
-    gap: 0.5rem;
-    background: var(--wash-2);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-bottom: 0.5rem;
+    gap: 6px;
 }
 
 .tarif-numpad-value {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--text);
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -.02em;
     font-variant-numeric: tabular-nums;
 }
 
 .tarif-numpad-unit {
-    font-size: 1rem;
+    font-size: 16px;
+    font-weight: 700;
     color: var(--text-faint);
 }
 
 .tarif-numpad-total {
+    margin-top: -4px;
     text-align: center;
+    font-size: 15px;
+    font-weight: 700;
     color: var(--valid);
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin-bottom: 0.75rem;
     font-variant-numeric: tabular-nums;
 }
 
-.tarif-numpad-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-}
+/* Pave numerique : clone de cotton/numpad.html (style dans numpad.css),
+   insere par tarif.js:tarifInsererPave() dans .tarif-numpad-pave.
+   / Keypad: clone of cotton/numpad.html (styled by numpad.css). */
 
-.tarif-numpad-btn {
-    padding: 0.75rem;
-    border: 1px solid var(--wash-3);
-    border-radius: 8px;
-    background: var(--wash-2);
-    color: var(--text);
-    font-size: 1.3rem;
-    font-weight: 600;
-    cursor: pointer;
-    min-height: 48px;
-    transition: background 100ms var(--ease-out);
-    -webkit-tap-highlight-color: transparent;
-}
-
-.tarif-numpad-btn:active {
-    background: var(--wash-3);
-}
-
-.tarif-numpad-btn-clear {
-    background: var(--danger-edge);
-}
-
+/* « Ajouter · 8,40 € » : valide la pesee, comme « Valider · x € » de la maquette.
+   Desactive tant que la quantite vaut 0.
+   / "Add · €8.40": validates the weighing. Disabled while quantity is 0. */
 .tarif-numpad-btn-ok {
-    background: var(--valid-edge);
-}
-
-.tarif-numpad-btn-ok:active {
+    width: 100%;
+    min-height: 48px;
+    border: 0;
+    border-radius: var(--r-ctrl);
     background: var(--valid);
     color: var(--valid-ink);
-}
-
-.tarif-numpad-btn-clear:active {
-    background: var(--danger);
-    color: var(--danger-ink);
-}
-
-/* Bouton retour / Back button */
-.tarif-btn-retour {
-    display: block;
-    width: 100%;
-    margin-top: 1rem;
-    padding: 0.75rem;
-    border: 1px solid var(--wash-3);
-    border-radius: 8px;
-    background: var(--wash-1);
-    color: var(--text-dim);
-    font-size: 1rem;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
     cursor: pointer;
-    text-align: center;
+    touch-action: manipulation;
 }
 
-.tarif-btn-retour:hover {
-    background: var(--wash-2);
+.tarif-numpad-btn-ok:not(:disabled):active {
+    filter: brightness(1.08);
 }
 
-/* RESPONSIVE MOBILE V2s */
+.tarif-numpad-btn-ok:disabled {
+    background: var(--surface-2);
+    color: var(--text-faint);
+    cursor: default;
+}
+
+/* Stock insuffisant (garde JS de tarif.js, vente hors stock interdite) :
+   bandeau teinte « warn », comme les alertes de l'ecran de succes.
+   / Insufficient stock: warn-tinted strip. */
+.tarif-numpad-alerte-stock {
+    padding: 10px 12px;
+    border-radius: var(--r-ctrl);
+    background: color-mix(in oklab, var(--warn), var(--surface) 82%);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warn), transparent 45%);
+    color: var(--text);
+    font-size: var(--fs-min);
+    font-weight: 650;
+    line-height: 1.35;
+    font-variant-numeric: tabular-nums;
+}
+
+.tarif-numpad-alerte-stock .ico {
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: -2px;
+    color: var(--warn);
+}
+
+/* --- Focus clavier : meme anneau que les popups ---
+   / Keyboard focus: same ring as the popups */
+.tarif-btn-fixed:focus-visible,
+.tarif-btn-free:focus-visible,
+.tarif-numpad-btn-ok:focus-visible,
+.tarif-free-validate:focus-visible,
+.tarif-btn-retour:focus-visible {
+    outline: 2px solid var(--nfc);
+    outline-offset: 2px;
+}
+
+/* --- Terminal de poche SUNMI V2s --- */
 @media (max-width: 599px) {
     .tarif-overlay {
-        padding: 0.5rem;
+        padding: 8px;
     }
     .tarif-overlay-content {
-        padding: 1rem;
-        max-height: 85vh;
-    }
-    .tarif-numpad-btn {
-        padding: 0.6rem;
-        font-size: 1.1rem;
+        padding: 14px 12px 12px;
     }
     .tarif-numpad-value {
-        font-size: 1.6rem;
+        font-size: 26px;
     }
 }
 
-
-/* ============================================================
-   REGLES RECUPEREES DE articles.css:353-529
-   Ce bloc etait une copie complete de l'overlay tarif, chargee AVANT ce
-   fichier. tarif.css gagnait sur les selecteurs communs, mais ces huit-la
-   n'existaient que la : elles etaient donc bien actives. Elles sont reprises
-   ici, portees sur les jetons, avant que la copie ne soit supprimee.
-   / Rules salvaged from articles.css:353-529. That block was a full copy of
-   this overlay, loaded BEFORE this file. tarif.css won on shared selectors,
-   but these eight lived only there and were genuinely active. They are
-   carried over here, on tokens, before the copy is removed.
-   ============================================================ */
-
-/* Prix libre : le bouton se distingue des tarifs fixes
-   / Free price: the button stands apart from fixed rates */
-.tarif-btn-free {
-    background: var(--info-wash);
-    box-shadow: inset 0 0 0 1px var(--info-edge);
-}
-
-/* La mise au point passe par outline, pas par la suppression du filet natif :
-   `outline: none` laissait le champ sans indicateur au clavier.
-   / Focus goes through the outline, not through killing the native ring:
-   `outline: none` left the field with no keyboard indicator. */
-.tarif-free-input:focus-visible {
-    outline: 2px solid var(--valid);
-    outline-offset: 1px;
-}
-
-.tarif-free-input:focus {
-    border-color: var(--valid);
-}
-
-.tarif-free-input::placeholder {
-    color: var(--text-faint);
-}
-
-.tarif-free-validate:active {
-    transform: translateY(2px);
-    transition-duration: 0s;
-}
-
-.tarif-btn-retour:active {
-    background: var(--wash-2);
-}
-
-/* Mouvement reduit — l'ouverture de l'overlay se replie sur un fondu court et
-   rien ne se deplace.
-   / Reduced motion — the overlay's entrance collapses to a short fade. */
+/* Mouvement reduit : pas d'apparition, pas de descente a l'appui
+   / Reduced motion: no entrance, no press drop */
 @media (prefers-reduced-motion: reduce) {
-    .tarif-overlay,
-    .tarif-overlay-content,
-    .tarif-btn,
-    .tarif-numpad-btn,
-    .tarif-free-validate,
-    .tarif-btn-retour {
-        animation-duration: 120ms !important;
-        transition-duration: 120ms !important;
+    .tarif-overlay-content {
+        animation: none;
     }
-
-    .tarif-btn:active,
-    .tarif-free-validate:active,
-    .tarif-numpad-btn:active {
+    .tarif-btn-fixed,
+    .tarif-btn-fixed:active {
         transform: none;
+        transition: none;
     }
 }

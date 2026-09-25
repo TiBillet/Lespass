@@ -72,3 +72,7 @@
 	width: var(--key-width);
 	height: var(--key-height);
 }
+
+/* Case vide a la place de la virgule (virgule="non") : garde la grille 3×4
+   / Empty cell instead of the comma key: keeps the 3×4 grid */
+.numpad-vide { min-height: calc(40px * var(--k, 1)); }

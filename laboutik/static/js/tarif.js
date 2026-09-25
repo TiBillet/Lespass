@@ -17,9 +17,15 @@
  * 2. tibilletUtils.js route vers #products
  * 3. Génère l'overlay HTML avec les boutons tarif
  * 4. Clic tarif fixe → ajoute au panier (overlay reste ouvert)
- * 5. Clic tarif prix libre → validation → ajoute au panier (overlay reste ouvert)
- * 6. Clic tarif poids/mesure → pavé numérique → OK → ajoute au panier
- * 7. Bouton RETOUR → restaure la grille articles
+ * 5. Tuile prix libre → pavé numérique (clone de cotton/numpad.html, modele
+ *    <template id="tarif-modele-pave-montant">) → « Ajouter · x € »
+ *    → ajoute au panier (overlay reste ouvert, le pave se replie)
+ * 6. Tarif poids/mesure → pavé numérique (clone de cotton/numpad.html,
+ *    modele <template id="tarif-modele-pave"> dans cotton/articles.html)
+ *    → bouton « Ajouter » → ajoute au panier
+ * 7. Croix (ou toucher la grille voilee) → restaure la grille articles
+ *
+ * STYLE : laboutik/static/css/tarif.css (popup de la maquette).
  */
 
 // escapeHtml() est défini dans tibilletUtils.js (chargé dans le <head>).
@@ -44,7 +50,8 @@ function tarifSelection(event) {
 	let boutonsHtml = ''
 	for (let i = 0; i < tarifs.length; i++) {
 		const tarif = tarifs[i]
-		const prixAffiche = (tarif.prix_centimes / 100).toFixed(2)
+		// Prix affiche avec une virgule (« 4,00 ») / Price shown with a comma
+		const prixAffiche = (tarif.prix_centimes / 100).toFixed(2).replace('.', ',')
 
 		// Echapper tous les textes dynamiques pour éviter les injections XSS.
 		// Les UUID et nombres ne sont pas échappés (pas de risque HTML).
@@ -74,9 +81,9 @@ function tarifSelection(event) {
 			boutonsHtml += `
 				<div class="tarif-btn tarif-btn-poids" data-testid="tarif-btn-poids-${tarif.price_uuid}">
 					<div class="tarif-btn-label">
-						<i class="fas fa-balance-scale" aria-hidden="true"></i> ${nomTarifSafe}
+						<span>${nomTarifSafe}</span>
+						<span class="tarif-btn-sublabel">${prixAfficheSafe} ${currencySafe}${escapeHtml(prixReference)}</span>
 					</div>
-					<div class="tarif-btn-sublabel">${prixAfficheSafe} ${currencySafe}${escapeHtml(prixReference)}</div>
 					<div class="tarif-numpad-zone" id="tarif-numpad-${tarif.price_uuid}">
 						<div class="tarif-numpad-display">
 							<span class="tarif-numpad-value" id="tarif-numpad-value-${tarif.price_uuid}">0</span>
@@ -85,66 +92,69 @@ function tarifSelection(event) {
 						<div class="tarif-numpad-total" id="tarif-numpad-total-${tarif.price_uuid}">
 							= 0,00 ${currencySafe}
 						</div>
-						<div class="tarif-numpad-grid">
-							<button type="button" class="tarif-numpad-btn" data-digit="7">7</button>
-							<button type="button" class="tarif-numpad-btn" data-digit="8">8</button>
-							<button type="button" class="tarif-numpad-btn" data-digit="9">9</button>
-							<button type="button" class="tarif-numpad-btn" data-digit="4">4</button>
-							<button type="button" class="tarif-numpad-btn" data-digit="5">5</button>
-							<button type="button" class="tarif-numpad-btn" data-digit="6">6</button>
-							<button type="button" class="tarif-numpad-btn" data-digit="1">1</button>
-							<button type="button" class="tarif-numpad-btn" data-digit="2">2</button>
-							<button type="button" class="tarif-numpad-btn" data-digit="3">3</button>
-							<button type="button" class="tarif-numpad-btn tarif-numpad-btn-clear" data-digit="C">C</button>
-							<button type="button" class="tarif-numpad-btn" data-digit="0">0</button>
-							<button type="button" class="tarif-numpad-btn tarif-numpad-btn-ok"
-								data-product-uuid="${uuid}"
-								data-price-uuid="${tarif.price_uuid}"
-								data-prix-centimes="${tarif.prix_centimes}"
-								data-display-name="${nomCompletSafe}"
-								data-currency="${currencySafe}"
-								data-unite-saisie="${escapeHtml(uniteSaisie)}"
-								data-diviseur="${diviseur}"
-								data-stock-disponible="${stockDisponible}"
-								data-autoriser-hors-stock="${autoriserHorsStock}"
-								data-testid="tarif-numpad-ok-${tarif.price_uuid}"
-							>OK</button>
-						</div>
+						<!-- Le pave (cotton/numpad.html) est clone ici apres l'injection -->
+						<!-- / The keypad (cotton/numpad.html) is cloned here after injection -->
+						<div class="tarif-numpad-pave"></div>
+						<button type="button" class="tarif-numpad-btn-ok"
+							data-product-uuid="${uuid}"
+							data-price-uuid="${tarif.price_uuid}"
+							data-prix-centimes="${tarif.prix_centimes}"
+							data-display-name="${nomCompletSafe}"
+							data-currency="${currencySafe}"
+							data-unite-saisie="${escapeHtml(uniteSaisie)}"
+							data-diviseur="${diviseur}"
+							data-stock-disponible="${stockDisponible}"
+							data-autoriser-hors-stock="${autoriserHorsStock}"
+							data-testid="tarif-numpad-ok-${tarif.price_uuid}"
+							disabled
+						>Ajouter</button>
 						<div class="tarif-numpad-alerte-stock" id="tarif-numpad-alerte-${tarif.price_uuid}"
 							role="alert" aria-live="polite" style="display: none;"></div>
 					</div>
 				</div>
 			`
 		} else if (tarif.free_price) {
-			// Tarif prix libre (pas de fermeture apres ajout)
-			// / Free price rate (no close after add)
+			// Tarif prix libre : une tuile. Au toucher, elle laisse place au pave
+			// numerique (meme bloc que le montant libre de la recharge cashless :
+			// .card-clavier, hx_card_recharge.html). Le pave est clone apres l'injection.
+			// / Free price rate: a tile. Tapping it shows the keypad (same block as
+			// the cashless top-up free amount). The keypad is cloned after injection.
 			boutonsHtml += `
-				<div class="tarif-btn tarif-btn-free" data-testid="tarif-btn-free-${tarif.price_uuid}">
-					<div class="tarif-btn-label">${nomTarifSafe}</div>
-					<div class="tarif-btn-sublabel">min ${prixAfficheSafe} ${currencySafe}</div>
-					<div id="tarif-free-input-${tarif.price_uuid}" class="tarif-free-input-container">
-						<input type="number"
-							id="tarif-free-amount-${tarif.price_uuid}"
-							class="tarif-free-input"
-							min="${prixAffiche}"
-							step="0.10"
-							placeholder="${prixAffiche}"
-							inputmode="decimal"
-							aria-label="Montant libre"
-							data-testid="tarif-free-input-${tarif.price_uuid}"
-						/>
-						<span class="tarif-free-currency" aria-hidden="true">${currencySafe}</span>
+				<div class="tarif-libre" data-testid="tarif-btn-free-${tarif.price_uuid}">
+					<button type="button"
+						class="tarif-btn tarif-btn-free tarif-libre-ouvrir"
+						aria-expanded="false"
+						aria-controls="tarif-libre-${tarif.price_uuid}"
+						data-testid="tarif-libre-ouvrir-${tarif.price_uuid}"
+					>
+						<span class="tarif-btn-label">
+							<span>${nomTarifSafe}</span>
+							<span class="tarif-btn-sublabel">Prix libre · min ${prixAfficheSafe} ${currencySafe}</span>
+						</span>
+					</button>
+					<div class="card-clavier tarif-libre-clavier" id="tarif-libre-${tarif.price_uuid}" hidden>
+						<div class="card-clavier-head">
+							<span id="tarif-libre-titre-${tarif.price_uuid}">${nomTarifSafe} · min ${prixAfficheSafe} ${currencySafe}</span>
+							<button type="button" class="card-clavier-close tarif-libre-fermer" aria-label="Fermer le pavé">
+								<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5.6 4.2 12 10.6l6.4-6.4L20.2 6 13.8 12.4l6.4 6.4-1.8 1.8-6.4-6.4-6.4 6.4-1.8-1.8 6.4-6.4-6.4-6.4z"/></svg>
+							</button>
+						</div>
+						<output class="card-keypad-val" aria-live="polite" aria-labelledby="tarif-libre-titre-${tarif.price_uuid}">
+							<span class="card-keypad-saisie">0</span> ${currencySafe}
+						</output>
+						<small id="tarif-free-error-${tarif.price_uuid}" class="card-montant-erreur" role="alert"></small>
+						<div class="tarif-numpad-pave"></div>
 						<button type="button"
-							class="tarif-free-validate"
+							class="card-valider tarif-free-validate"
 							data-product-uuid="${uuid}"
 							data-price-uuid="${tarif.price_uuid}"
 							data-prix-centimes="${tarif.prix_centimes}"
 							data-display-name="${nomCompletSafe}"
 							data-currency="${currencySafe}"
 							data-testid="tarif-free-validate-${tarif.price_uuid}"
-						>OK</button>
+							disabled
+						>Ajouter<span class="card-valider-montant"></span></button>
 					</div>
-					<div id="tarif-free-error-${tarif.price_uuid}" class="tarif-free-error" role="alert"></div>
 				</div>
 			`
 		} else {
@@ -160,8 +170,8 @@ function tarifSelection(event) {
 					data-currency="${currencySafe}"
 					data-testid="tarif-btn-${tarif.price_uuid}"
 				>
-					<div class="tarif-btn-label">${nomTarifSafe}</div>
-					<div class="tarif-btn-price">${prixAfficheSafe} ${currencySafe}</div>
+					<span class="tarif-btn-label">${nomTarifSafe}</span>
+					<span class="tarif-btn-price">${prixAfficheSafe} ${currencySafe}</span>
 				</button>
 			`
 		}
@@ -181,27 +191,39 @@ function tarifSelection(event) {
 
 	articlesZone.innerHTML = `
 		<div id="tarif-overlay" class="tarif-overlay" data-testid="tarif-overlay">
-			<div class="tarif-overlay-content">
-				<h2 class="tarif-overlay-title">${escapeHtml(name)}</h2>
+			<div class="tarif-overlay-content"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="tarif-overlay-titre">
+				<button type="button"
+					class="card-modal-close tarif-btn-retour"
+					aria-label="Fermer"
+					data-testid="tarif-btn-retour"
+				>
+					<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5.6 4.2 12 10.6l6.4-6.4L20.2 6 13.8 12.4l6.4 6.4-1.8 1.8-6.4-6.4-6.4 6.4-1.8-1.8 6.4-6.4-6.4-6.4z"/></svg>
+				</button>
+				<h2 class="tarif-overlay-title" id="tarif-overlay-titre">${escapeHtml(name)}</h2>
 				<div class="tarif-overlay-subtitle">Choisir un tarif</div>
 				<div class="tarif-list">
 					${boutonsHtml}
 				</div>
-				<button type="button"
-					class="tarif-btn-retour"
-					data-testid="tarif-btn-retour"
-				>
-					<i class="fas fa-arrow-left" aria-hidden="true"></i> RETOUR
-				</button>
 			</div>
 		</div>
 	`
 
 	// --- Attacher les handlers ---
 
-	// Bouton RETOUR
-	// / BACK button
+	// Croix : ferme la popup et restaure la grille
+	// / Cross: closes the popup and restores the grid
 	articlesZone.querySelector('.tarif-btn-retour').addEventListener('click', tarifClose)
+
+	// Toucher la grille voilee ferme aussi (seulement le voile, pas la boite)
+	// / Tapping the veiled grid closes too (only the veil, not the box)
+	articlesZone.querySelector('.tarif-overlay').addEventListener('click', (event) => {
+		if (event.target.classList.contains('tarif-overlay')) {
+			tarifClose()
+		}
+	})
 
 	// Tarifs fixes : clic = ajout au panier, PAS de fermeture
 	// / Fixed rates: click = add to cart, NO close
@@ -217,185 +239,340 @@ function tarifSelection(event) {
 		})
 	})
 
-	// Tarifs prix libre
-	// / Free price rates
-	articlesZone.querySelectorAll('.tarif-free-validate').forEach(btn => {
-		btn.addEventListener('click', () => {
-			tarifValidateFreePrix(
-				btn.dataset.productUuid,
-				btn.dataset.priceUuid,
-				Number(btn.dataset.prixCentimes),
-				btn.dataset.displayName,
-				btn.dataset.currency
-			)
+	// Tarifs prix libre : tuile → pave numerique → « Ajouter · x € »
+	// / Free price rates: tile → keypad → "Add · x €"
+	articlesZone.querySelectorAll('.tarif-libre').forEach(blocLibre => {
+		const tuile = blocLibre.querySelector('.tarif-libre-ouvrir')
+		const clavier = blocLibre.querySelector('.tarif-libre-clavier')
+		tarifInsererPave(clavier, '#tarif-modele-pave-montant')
+
+		tuile.addEventListener('click', () => tarifOuvrirPrixLibre(blocLibre))
+		blocLibre.querySelector('.tarif-libre-fermer').addEventListener('click', () => tarifFermerPrixLibre(blocLibre))
+		clavier.addEventListener('keypadSendValue', (event) => {
+			tarifSaisiePrixLibre(clavier, event.detail.key)
+		})
+		const boutonAjouter = clavier.querySelector('.tarif-free-validate')
+		boutonAjouter.addEventListener('click', () => {
+			tarifAjouterPrixLibre(blocLibre, boutonAjouter)
 		})
 	})
 
-	// --- Pavé numérique : handlers sur les boutons ---
-	// / Numpad: handlers on buttons
-	articlesZone.querySelectorAll('.tarif-numpad-grid').forEach(grid => {
-		grid.querySelectorAll('.tarif-numpad-btn').forEach(btn => {
-			btn.addEventListener('click', () => {
-				const digit = btn.dataset.digit
-				// Trouver la zone parent pour lire les data
-				// / Find parent zone to read data
-				const zone = btn.closest('.tarif-numpad-zone')
-				const valueEl = zone.querySelector('.tarif-numpad-value')
-				const totalEl = zone.querySelector('.tarif-numpad-total')
-
-				// Masquer l'alerte stock quand l'utilisateur change la saisie
-				// / Hide stock alert when user changes the input
-				const alerteStockEl = zone.querySelector('.tarif-numpad-alerte-stock')
-				if (alerteStockEl) {
-					alerteStockEl.style.display = 'none'
-				}
-
-				if (digit === 'C') {
-					// Effacer la saisie / Clear input
-					valueEl.textContent = '0'
-					totalEl.textContent = '= 0,00 ' + btn.closest('.tarif-btn-poids').querySelector('.tarif-btn-sublabel').textContent.split(' ').pop()
-					return
-				}
-
-				// OK : valider et ajouter au panier
-				// / OK: validate and add to cart
-				if (btn.classList.contains('tarif-numpad-btn-ok')) {
-					const quantiteSaisie = parseInt(valueEl.textContent, 10) || 0
-					if (quantiteSaisie <= 0) {
-						return
-					}
-
-					// Garde stock cote front (bug 8).
-					// Si vente hors stock interdite ET quantite saisie > stock disponible,
-					// on bloque cote front pour eviter un round-trip serveur.
-					// Le serveur reste autoritaire (validation amont via _valider_stock_panier).
-					// / Front-side stock guard (bug 8). If out-of-stock sale is forbidden and
-					// quantity > available stock, block client-side to avoid a server round-trip.
-					// Server remains authoritative.
-					const autoriserHorsStock = btn.dataset.autoriserHorsStock !== 'false'
-					const stockDisponibleStr = btn.dataset.stockDisponible
-					const stockDisponible = (stockDisponibleStr === '' || stockDisponibleStr === undefined)
-						? null
-						: Number(stockDisponibleStr)
-					if (!autoriserHorsStock && stockDisponible !== null && quantiteSaisie > stockDisponible) {
-						const priceUuid = btn.dataset.priceUuid
-						const alerteEl = document.querySelector(`#tarif-numpad-alerte-${priceUuid}`)
-						if (alerteEl) {
-							const uniteSaisieAlerte = btn.dataset.uniteSaisie || ''
-							alerteEl.innerHTML = `
-								<i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-								Stock insuffisant : ${quantiteSaisie}${uniteSaisieAlerte} demandes,
-								${stockDisponible}${uniteSaisieAlerte} disponibles.
-							`
-							alerteEl.style.display = 'block'
-						}
-						return
-					}
-
-					const prixUnitaireCentimes = Number(btn.dataset.prixCentimes)
-					const diviseur = Number(btn.dataset.diviseur)
-					const prixCalculeCentimes = Math.round(quantiteSaisie / diviseur * prixUnitaireCentimes)
-					const uniteSaisie = btn.dataset.uniteSaisie
-					const displayName = btn.dataset.displayName
-
-					// Nom avec quantite : "Comte 350g"
-					// / Name with quantity: "Comte 350g"
-					const nomAvecQuantite = displayName.replace(/\)$/, '') + ' ' + quantiteSaisie + uniteSaisie + ')'
-					// Si le nom ne contient pas de parenthese, simplifier
-					// / If name has no parenthesis, simplify
-					const nomFinal = displayName.includes('(') ? nomAvecQuantite : displayName + ' ' + quantiteSaisie + uniteSaisie
-
-					addArticleWithPrice(
-						btn.dataset.productUuid,
-						btn.dataset.priceUuid,
-						prixCalculeCentimes,
-						nomFinal,
-						btn.dataset.currency,
-						prixCalculeCentimes,  // customAmount
-						quantiteSaisie,       // weightAmount
-						uniteSaisie           // weightUnit
-					)
-
-					// Reinitialiser le pave pour la prochaine saisie
-					// / Reset numpad for next entry
-					valueEl.textContent = '0'
-					totalEl.textContent = '= 0,00 ' + btn.dataset.currency
-					return
-				}
-
-				// Chiffre : ajouter au nombre
-				// / Digit: append to number
-				let currentValue = valueEl.textContent
-				if (currentValue === '0') {
-					currentValue = digit
-				} else {
-					currentValue += digit
-				}
-				// Limiter a 5 chiffres (99999g = 99.999kg max)
-				// / Limit to 5 digits (99999g = 99.999kg max)
-				if (currentValue.length > 5) {
-					return
-				}
-				valueEl.textContent = currentValue
-
-				// Calculer le prix en temps reel
-				// / Calculate price in real time
-				const okBtn = zone.querySelector('.tarif-numpad-btn-ok')
-				const prixUnit = Number(okBtn.dataset.prixCentimes)
-				const div = Number(okBtn.dataset.diviseur)
-				const currencyLabel = okBtn.dataset.currency
-				const quantite = parseInt(currentValue, 10) || 0
-				const prixCalc = (quantite / div * prixUnit / 100).toFixed(2).replace('.', ',')
-				totalEl.textContent = '= ' + prixCalc + ' ' + currencyLabel
-			})
+	// --- Pavé numérique des tarifs au poids ---
+	// Chaque zone recoit un clone du pave serveur (cotton/numpad.html).
+	// Le pave envoie 'keypadSendValue' a la zone ; la zone met a jour la saisie.
+	// Le bouton « Ajouter » valide et ajoute au panier.
+	// / Each zone gets a clone of the server keypad. The keypad sends
+	// 'keypadSendValue' to the zone; the « Ajouter » button adds to cart.
+	articlesZone.querySelectorAll('.tarif-numpad-zone').forEach(zone => {
+		tarifInsererPave(zone, '#tarif-modele-pave')
+		zone.addEventListener('keypadSendValue', (event) => {
+			tarifSaisiePoids(zone, event.detail.key)
+		})
+		const boutonAjouter = zone.querySelector('.tarif-numpad-btn-ok')
+		boutonAjouter.addEventListener('click', () => {
+			tarifAjouterPoids(zone, boutonAjouter)
 		})
 	})
 }
 
 /**
- * Valide le montant du prix libre et ajoute au panier
- * / Validates free price amount and adds to cart
+ * Clone le pave numerique serveur dans une zone de la popup de tarif
+ * / Clones the server keypad into a zone of the rate popup
  *
- * Vérifie que le montant saisi est >= au minimum (prix_centimes).
- * Si valide, ajoute au panier et reinitialise l'input (pas de fermeture).
- * / Checks amount >= minimum. If valid, adds to cart and resets input (no close).
+ * LOCALISATION : laboutik/static/js/tarif.js
  *
- * @param {String} productUuid - UUID du produit
- * @param {String} priceUuid - UUID du prix
- * @param {Number} minimumCentimes - Prix minimum en centimes
- * @param {String} displayName - Nom affiché
- * @param {String} currency - Symbole monétaire
+ * Les modeles sont rendus une seule fois par le serveur, dans cotton/articles.html
+ * (composant c-numpad) :
+ * - #tarif-modele-pave         : poids / mesure, nombre entier, sans virgule ;
+ * - #tarif-modele-pave-montant : prix libre, avec virgule.
+ * On retire son <script> et son <link> (le CSS est deja dans base.html),
+ * on lui donne un id unique, et on le fait viser la zone (data-cible).
+ * L'ecouteur de clic fait la meme chose que le script du composant :
+ * il envoie 'keypadSendValue' { key } a la cible.
+ * / Removes the component's script and link, gives a unique id, targets the zone.
+ *
+ * @param {HTMLElement} zone - element avec un id, qui contient .tarif-numpad-pave
+ *                             et qui recevra 'keypadSendValue'
+ * @param {String} selecteurModele - '#tarif-modele-pave' ou '#tarif-modele-pave-montant'
  */
-function tarifValidateFreePrix(productUuid, priceUuid, minimumCentimes, displayName, currency) {
-	const inputEl = document.querySelector(`#tarif-free-amount-${priceUuid}`)
-	const errorEl = document.querySelector(`#tarif-free-error-${priceUuid}`)
-	const montantSaisi = parseFloat(inputEl.value)
-
-	// Validation : le montant doit être un nombre >= minimum
-	// / Validation: amount must be a number >= minimum
-	if (isNaN(montantSaisi) || montantSaisi <= 0) {
-		errorEl.textContent = 'Entrez un montant valide'
-		inputEl.classList.add('tarif-input-error')
+function tarifInsererPave(zone, selecteurModele) {
+	const modele = document.querySelector(selecteurModele)
+	const emplacement = zone.querySelector('.tarif-numpad-pave')
+	if (!modele || !emplacement) {
+		console.log('-> tarif.js - tarifInsererPave : modele de pave introuvable')
 		return
 	}
 
-	const minimumEuros = minimumCentimes / 100
-	if (montantSaisi < minimumEuros) {
-		errorEl.textContent = `Minimum : ${minimumEuros.toFixed(2)} ${currency}`
-		inputEl.classList.add('tarif-input-error')
+	const copie = modele.content.cloneNode(true)
+	copie.querySelectorAll('script, link').forEach(element => element.remove())
+
+	const pave = copie.querySelector('.numpad-content')
+	pave.id = 'pave-' + zone.id
+	pave.dataset.cible = '#' + zone.id
+	pave.addEventListener('click', (event) => {
+		const touchePressee = event.target.closest('.numpad-touch')
+		if (!touchePressee) {
+			return
+		}
+		sendEvent('keypadSendValue', pave.dataset.cible, { key: touchePressee.dataset.key })
+	})
+
+	emplacement.appendChild(copie)
+}
+
+/**
+ * Met a jour la saisie d'un tarif au poids apres une touche du pave
+ * / Updates a weight price entry after a keypad key
+ *
+ * LOCALISATION : laboutik/static/js/tarif.js
+ * Recoit : 'keypadSendValue' { key } depuis le pave clone (tarifInsererPave)
+ *
+ * Touches : "0" a "9" ajoutent un chiffre (5 chiffres max, 99999 g),
+ * "Backspace" efface le dernier, "C" efface tout.
+ * La quantite est un nombre entier (grammes, centilitres).
+ *
+ * @param {HTMLElement} zone - .tarif-numpad-zone
+ * @param {String} touche - valeur de la touche (event.detail.key)
+ */
+function tarifSaisiePoids(zone, touche) {
+	const valueEl = zone.querySelector('.tarif-numpad-value')
+	const boutonAjouter = zone.querySelector('.tarif-numpad-btn-ok')
+
+	// Masquer l'alerte stock quand l'utilisateur change la saisie
+	// / Hide stock alert when user changes the input
+	const alerteStockEl = zone.querySelector('.tarif-numpad-alerte-stock')
+	if (alerteStockEl) {
+		alerteStockEl.style.display = 'none'
+	}
+
+	let saisie = valueEl.textContent
+	if (touche === 'C') {
+		saisie = '0'
+	} else if (touche === 'Backspace') {
+		saisie = saisie.length > 1 ? saisie.slice(0, -1) : '0'
+	} else if (/^[0-9]$/.test(touche)) {
+		saisie = (saisie === '0') ? touche : saisie + touche
+		// Limiter a 5 chiffres (99999g = 99.999kg max)
+		// / Limit to 5 digits (99999g = 99.999kg max)
+		if (saisie.length > 5) {
+			return
+		}
+	} else {
+		// Autre touche (virgule absente de ce pave) : rien a faire
+		// / Any other key: nothing to do
+		return
+	}
+	valueEl.textContent = saisie
+	tarifAfficherTotalPoids(zone, boutonAjouter)
+}
+
+/**
+ * Affiche le prix calcule et met a jour le bouton « Ajouter »
+ * / Shows the computed price and updates the « Ajouter » button
+ *
+ * @param {HTMLElement} zone - .tarif-numpad-zone
+ * @param {HTMLElement} boutonAjouter - .tarif-numpad-btn-ok (porte les data-*)
+ */
+function tarifAfficherTotalPoids(zone, boutonAjouter) {
+	const valueEl = zone.querySelector('.tarif-numpad-value')
+	const totalEl = zone.querySelector('.tarif-numpad-total')
+	const quantite = parseInt(valueEl.textContent, 10) || 0
+	const prixUnitaireCentimes = Number(boutonAjouter.dataset.prixCentimes)
+	const diviseur = Number(boutonAjouter.dataset.diviseur)
+	const monnaie = boutonAjouter.dataset.currency
+	const prixAffiche = (quantite / diviseur * prixUnitaireCentimes / 100).toFixed(2).replace('.', ',')
+
+	totalEl.textContent = '= ' + prixAffiche + ' ' + monnaie
+	boutonAjouter.textContent = quantite > 0 ? 'Ajouter · ' + prixAffiche + ' ' + monnaie : 'Ajouter'
+	boutonAjouter.disabled = quantite <= 0
+}
+
+/**
+ * Valide la saisie d'un tarif au poids et ajoute l'article au panier
+ * / Validates a weight price entry and adds the article to the cart
+ *
+ * @param {HTMLElement} zone - .tarif-numpad-zone
+ * @param {HTMLElement} btn - bouton « Ajouter » (.tarif-numpad-btn-ok, porte les data-*)
+ */
+function tarifAjouterPoids(zone, btn) {
+	const valueEl = zone.querySelector('.tarif-numpad-value')
+	const quantiteSaisie = parseInt(valueEl.textContent, 10) || 0
+	if (quantiteSaisie <= 0) {
 		return
 	}
 
-	// Montant valide : convertir en centimes et ajouter au panier
-	// / Valid amount: convert to cents and add to cart
-	const montantCentimes = Math.round(montantSaisi * 100)
-	addArticleWithPrice(productUuid, priceUuid, montantCentimes, displayName, currency, montantCentimes)
+	// Garde stock cote front (bug 8).
+	// Si vente hors stock interdite ET quantite saisie > stock disponible,
+	// on bloque cote front pour eviter un round-trip serveur.
+	// Le serveur reste autoritaire (validation amont via _valider_stock_panier).
+	// / Front-side stock guard (bug 8). Server remains authoritative.
+	const autoriserHorsStock = btn.dataset.autoriserHorsStock !== 'false'
+	const stockDisponibleStr = btn.dataset.stockDisponible
+	const stockDisponible = (stockDisponibleStr === '' || stockDisponibleStr === undefined)
+		? null
+		: Number(stockDisponibleStr)
+	if (!autoriserHorsStock && stockDisponible !== null && quantiteSaisie > stockDisponible) {
+		const priceUuid = btn.dataset.priceUuid
+		const alerteEl = document.querySelector(`#tarif-numpad-alerte-${priceUuid}`)
+		if (alerteEl) {
+			const uniteSaisieAlerte = btn.dataset.uniteSaisie || ''
+			alerteEl.innerHTML = `
+				<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M12 2.6 22.8 21.2H1.2zM10.9 9h2.2v6.2h-2.2zm0 7.6h2.2v2.2h-2.2z"/></svg>
+				Stock insuffisant : ${quantiteSaisie}${uniteSaisieAlerte} demandes,
+				${stockDisponible}${uniteSaisieAlerte} disponibles.
+			`
+			alerteEl.style.display = 'block'
+		}
+		return
+	}
 
-	// Reinitialiser l'input pour la prochaine saisie (pas de fermeture)
-	// / Reset input for next entry (no close)
-	inputEl.value = ''
-	errorEl.textContent = ''
-	inputEl.classList.remove('tarif-input-error')
+	const prixUnitaireCentimes = Number(btn.dataset.prixCentimes)
+	const diviseur = Number(btn.dataset.diviseur)
+	const prixCalculeCentimes = Math.round(quantiteSaisie / diviseur * prixUnitaireCentimes)
+	const uniteSaisie = btn.dataset.uniteSaisie
+	const displayName = btn.dataset.displayName
+
+	// Nom avec quantite : "Comte 350g"
+	// / Name with quantity: "Comte 350g"
+	const nomAvecQuantite = displayName.replace(/\)$/, '') + ' ' + quantiteSaisie + uniteSaisie + ')'
+	// Si le nom ne contient pas de parenthese, simplifier
+	// / If name has no parenthesis, simplify
+	const nomFinal = displayName.includes('(') ? nomAvecQuantite : displayName + ' ' + quantiteSaisie + uniteSaisie
+
+	addArticleWithPrice(
+		btn.dataset.productUuid,
+		btn.dataset.priceUuid,
+		prixCalculeCentimes,
+		nomFinal,
+		btn.dataset.currency,
+		prixCalculeCentimes,  // customAmount
+		quantiteSaisie,       // weightAmount
+		uniteSaisie           // weightUnit
+	)
+
+	// Reinitialiser la saisie pour la prochaine pesee
+	// / Reset the entry for the next weighing
+	valueEl.textContent = '0'
+	tarifAfficherTotalPoids(zone, btn)
+}
+
+/**
+ * Deplie le pave numerique d'un tarif prix libre (la tuile se cache)
+ * / Unfolds a free price keypad (the tile hides)
+ *
+ * @param {HTMLElement} blocLibre - .tarif-libre
+ */
+function tarifOuvrirPrixLibre(blocLibre) {
+	const tuile = blocLibre.querySelector('.tarif-libre-ouvrir')
+	const clavier = blocLibre.querySelector('.tarif-libre-clavier')
+	tuile.hidden = true
+	tuile.setAttribute('aria-expanded', 'true')
+	clavier.hidden = false
+	// Le focus va sur la premiere touche : on peut taper tout de suite
+	// / Focus the first key so typing can start right away
+	const premiereTouche = clavier.querySelector('.numpad-touch')
+	if (premiereTouche) {
+		premiereTouche.focus()
+	}
+}
+
+/**
+ * Replie le pave d'un tarif prix libre, efface la saisie, remontre la tuile
+ * / Folds the free price keypad back, clears the entry, shows the tile
+ *
+ * @param {HTMLElement} blocLibre - .tarif-libre
+ */
+function tarifFermerPrixLibre(blocLibre) {
+	const tuile = blocLibre.querySelector('.tarif-libre-ouvrir')
+	const clavier = blocLibre.querySelector('.tarif-libre-clavier')
+	clavier.dataset.saisie = ''
+	tarifAfficherPrixLibre(clavier)
+	clavier.hidden = true
+	tuile.hidden = false
+	tuile.setAttribute('aria-expanded', 'false')
+	tuile.focus()
+}
+
+/**
+ * Applique une touche du pave au prix libre en cours de saisie
+ * / Applies a keypad key to the free price being typed
+ *
+ * LOCALISATION : laboutik/static/js/tarif.js
+ * Recoit : 'keypadSendValue' { key } depuis le pave clone (tarifInsererPave)
+ * Regle de saisie : montantAppliquerTouche() (tibilletUtils.js), la meme que
+ * pour la recharge en montant libre, le fond de caisse et les especes.
+ *
+ * @param {HTMLElement} clavier - .tarif-libre-clavier (la saisie est dans data-saisie)
+ * @param {String} touche - valeur de la touche
+ */
+function tarifSaisiePrixLibre(clavier, touche) {
+	const saisie = clavier.dataset.saisie || ''
+	const nouvelleSaisie = montantAppliquerTouche(saisie, touche)
+	if (nouvelleSaisie === null) {
+		return
+	}
+	clavier.dataset.saisie = nouvelleSaisie
+	tarifAfficherPrixLibre(clavier)
+}
+
+/**
+ * Affiche le prix libre en grand et met a jour « Ajouter · x € »
+ * / Shows the free price large and updates "Add · x €"
+ *
+ * @param {HTMLElement} clavier - .tarif-libre-clavier
+ */
+function tarifAfficherPrixLibre(clavier) {
+	const saisie = clavier.dataset.saisie || ''
+	const boutonAjouter = clavier.querySelector('.tarif-free-validate')
+	const montantEnEuros = parseFloat(saisie.replace(',', '.')) || 0
+
+	clavier.querySelector('.card-keypad-saisie').textContent = saisie === '' ? '0' : saisie
+	clavier.querySelector('.card-keypad-val').classList.remove('is-invalide')
+	clavier.querySelector('.card-montant-erreur').textContent = ''
+
+	boutonAjouter.disabled = montantEnEuros <= 0
+	boutonAjouter.querySelector('.card-valider-montant').textContent =
+		montantEnEuros > 0 ? ' · ' + saisie + ' ' + boutonAjouter.dataset.currency : ''
+}
+
+/**
+ * Verifie le prix libre (minimum du tarif) et ajoute l'article au panier
+ * / Checks the free price (rate minimum) and adds the article to the cart
+ *
+ * Si le montant est sous le minimum : message sous le montant, rien n'est ajoute.
+ * Sinon : ajout au panier, puis le pave se replie (la popup reste ouverte).
+ * Le serveur revalide le montant a la vente.
+ * / Below minimum: message, nothing added. Otherwise: add, then fold the keypad.
+ *
+ * @param {HTMLElement} blocLibre - .tarif-libre
+ * @param {HTMLElement} btn - bouton « Ajouter » (.tarif-free-validate, porte les data-*)
+ */
+function tarifAjouterPrixLibre(blocLibre, btn) {
+	const clavier = blocLibre.querySelector('.tarif-libre-clavier')
+	const saisie = clavier.dataset.saisie || ''
+	const montantCentimes = Math.round((parseFloat(saisie.replace(',', '.')) || 0) * 100)
+	const minimumCentimes = Number(btn.dataset.prixCentimes)
+
+	if (montantCentimes <= 0) {
+		return
+	}
+	if (montantCentimes < minimumCentimes) {
+		const minimumAffiche = (minimumCentimes / 100).toFixed(2).replace('.', ',')
+		clavier.querySelector('.card-montant-erreur').textContent =
+			`Minimum : ${minimumAffiche} ${btn.dataset.currency}`
+		clavier.querySelector('.card-keypad-val').classList.add('is-invalide')
+		return
+	}
+
+	addArticleWithPrice(
+		btn.dataset.productUuid,
+		btn.dataset.priceUuid,
+		montantCentimes,
+		btn.dataset.displayName,
+		btn.dataset.currency,
+		montantCentimes  // customAmount
+	)
+	tarifFermerPrixLibre(blocLibre)
 }
 
 /**
