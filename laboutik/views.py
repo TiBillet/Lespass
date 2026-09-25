@@ -1387,6 +1387,72 @@ def _categorie_asset_transaction(transaction, fedow_api):
     return asset_info["category"]
 
 
+def _calculer_soldes_apres_paiement(wallet, lignes_debitees):
+    """
+    Construit l'avant / apres de la carte pour l'ecran de succes.
+    / Builds the card's before / after for the success screen.
+
+    LOCALISATION : laboutik/views.py
+
+    Pour chaque monnaie (Asset local) debitee pendant la vente, on donne :
+    - ce qui a ete paye avec cette monnaie ;
+    - le solde apres la vente (lu dans le wallet) ;
+    - le solde avant le paiement = solde apres + montant paye.
+
+    Le solde « avant » est calcule, pas lu avant le debit. Ainsi on a toujours
+    avant - paye = apres a l'ecran, meme si le panier contenait une recharge
+    offerte creditee juste avant les debits.
+    / "Before" is computed (after + paid), so before - paid = after on screen,
+      even when a free top-up was credited just before the debits.
+
+    Les lignes legacy (Fedow) portent un uuid d'asset distant, pas un Asset
+    local : elles sont ignorees, comme avant (leur solde n'etait pas affiche).
+    / Legacy lines carry a remote asset uuid, not a local Asset: skipped, as before.
+
+    APPELE PAR : PaiementViewSet (paiement NFC, paiement complementaire, 2e carte).
+    Les appelants regroupent ensuite le resultat par carte dans cartes_apres_paiement.
+    AFFICHE PAR : laboutik/templates/laboutik/partial/_succes_carte.html
+
+    :param wallet: wallet de la carte debitee
+    :param lignes_debitees: tuples (article, asset, montant_centimes, payment_method)
+    :return: liste de dicts, dans l'ordre de la cascade :
+        name, solde_euros (garde pour nouveau_solde), solde_avant_centimes,
+        debite_centimes, solde_centimes
+    """
+    from collections import OrderedDict
+
+    # Additionne ce qui a ete paye, monnaie par monnaie, dans l'ordre de la cascade
+    # / Sum what was paid, currency by currency, in cascade order
+    montant_paye_par_asset = OrderedDict()
+    for _article, asset_de_la_ligne, montant_de_la_ligne, _moyen in lignes_debitees:
+        ligne_sur_un_asset_local = isinstance(asset_de_la_ligne, Asset)
+        if not ligne_sur_un_asset_local:
+            continue
+        if asset_de_la_ligne not in montant_paye_par_asset:
+            montant_paye_par_asset[asset_de_la_ligne] = 0
+        montant_paye_par_asset[asset_de_la_ligne] += montant_de_la_ligne
+
+    soldes_apres_paiement = []
+    for asset_debite, montant_paye_en_centimes in montant_paye_par_asset.items():
+        solde_apres_en_centimes = WalletService.obtenir_solde(
+            wallet=wallet, asset=asset_debite
+        )
+        # Somme presente sur la carte avant ce paiement
+        # / Balance on the card before this payment
+        solde_avant_en_centimes = solde_apres_en_centimes + montant_paye_en_centimes
+
+        soldes_apres_paiement.append(
+            {
+                "name": asset_debite.name,
+                "solde_euros": solde_apres_en_centimes / 100,
+                "solde_avant_centimes": solde_avant_en_centimes,
+                "debite_centimes": montant_paye_en_centimes,
+                "solde_centimes": solde_apres_en_centimes,
+            }
+        )
+    return soldes_apres_paiement
+
+
 def _debiter_legacy(user, montant_centimes, uuid_transaction):
     """
     Débite le legacy (FED + TLF fédérés) via Fedow et renvoie les transactions, moyen DÉJÀ résolu.
@@ -2610,7 +2676,7 @@ class CaisseViewSet(viewsets.ViewSet):
         except (PointDeVente.DoesNotExist, ValueError):
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _("Point de vente introuvable"),
@@ -2624,11 +2690,11 @@ class CaisseViewSet(viewsets.ViewSet):
         if not printer_de_ce_terminal:
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _(
-                        "Aucune imprimante configuree pour ce terminal"
+                        "Aucune imprimante configurée pour ce terminal"
                     ),
                 },
                 status=400,
@@ -2639,7 +2705,7 @@ class CaisseViewSet(viewsets.ViewSet):
         if datetime_ouverture is None:
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _("Aucune vente en cours — rien a imprimer"),
@@ -2670,7 +2736,7 @@ class CaisseViewSet(viewsets.ViewSet):
 
         return render(
             request,
-            "laboutik/partial/hx_messages.html",
+            "laboutik/partial/hx_print_feedback.html",
             {
                 "msg_type": "success",
                 "msg_content": _("Ticket X envoye a l'imprimante"),
@@ -3839,6 +3905,12 @@ class CaisseViewSet(viewsets.ViewSet):
             "moyen_paiement": moyen_de_la_ligne,
             "moyen_paiement_label": moyen_paiement_label,
             "nom_pv": premiere_ligne.point_de_vente.name
+            if premiere_ligne.point_de_vente
+            else "",
+            # PV de la vente : le bouton Ré-imprimer doit l'envoyer a imprimer_ticket(),
+            # sinon la vue repond « Donnees manquantes pour l'impression ».
+            # / Sale's POS: the Reprint button must send it to imprimer_ticket().
+            "uuid_pv_vente": str(premiere_ligne.point_de_vente.uuid)
             if premiere_ligne.point_de_vente
             else "",
             "articles": articles_detail,
@@ -5698,7 +5770,7 @@ def imprimante_du_terminal(user):
     simplement pas :
     - l'utilisateur n'est pas authentifie (chemin Api-Key : AnonymousUser) ;
     - c'est un humain en session admin, donc pas un terminal (il n'a pas de .terminal) ;
-    - le terminal n'a pas d'imprimante configuree ;
+    - le terminal n'a pas d'imprimante configurée ;
     - son imprimante est desactivee.
 
     :param user: l'utilisateur de la requete (request.user)
@@ -5773,7 +5845,7 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
     4. Pour chaque event : verrouille (select_for_update), verifie la jauge
     5. Cree Reservation + ProductSold + PriceSold + Ticket(status=NOT_SCANNED)
     6. Rattache la LigneArticle a la Reservation
-    7. Appelle imprimer_billet() → Celery async (si imprimante configuree)
+    7. Appelle imprimer_billet() → Celery async (si imprimante configurée)
 
     DEPENDENCIES :
     - _creer_lignes_articles() doit etre appelee AVANT (pour les LigneArticle)
@@ -7785,18 +7857,20 @@ class PaiementViewSet(viewsets.ViewSet):
         #  PHASE 8: Success — multi-asset balances                          #
         # ================================================================ #
 
-        # Lire les soldes de TOUS les assets débités (pas seulement TLF)
-        # / Read balances of ALL debited assets (not just TLF)
-        soldes_apres_paiement = []
-        for asset_debite in assets_debites:
-            solde_apres = WalletService.obtenir_solde(
-                wallet=wallet_client, asset=asset_debite
-            )
-            soldes_apres_paiement.append(
-                {
-                    "name": asset_debite.name,
-                    "solde_euros": solde_apres / 100,
-                }
+        # Avant / apres de TOUS les assets débités (pas seulement TLF) :
+        # non-fiduciaires + cascade locale. Le legacy (Fedow) n'est pas affiché.
+        # / Before / after of ALL debited assets: non-fiduciary + local cascade.
+        soldes_apres_paiement = _calculer_soldes_apres_paiement(
+            wallet=wallet_client,
+            lignes_debitees=lignes_non_fidu + lignes_nfc,
+        )
+
+        # Regroupement par carte pour l'ecran de succes (un cadre par carte)
+        # / Grouped per card for the success screen (one frame per card)
+        cartes_apres_paiement = []
+        if soldes_apres_paiement:
+            cartes_apres_paiement.append(
+                {"tag_id": carte_client.tag_id, "soldes": soldes_apres_paiement}
             )
 
         # Pour la rétro-compatibilité du template, on passe aussi le solde
@@ -7826,6 +7900,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # Multi-asset : liste des soldes après paiement
             # / Multi-asset: list of balances after payment
             "soldes_apres_paiement": soldes_apres_paiement,
+            "cartes_apres_paiement": cartes_apres_paiement,
             "produits_stock_negatif": produits_stock_negatif,
             # Avertissements du rattachement de carte (adhesion) : le caissier doit savoir
             # qu'une carte n'a pas ete rattachee, meme si la vente a abouti.
@@ -8513,6 +8588,27 @@ class PaiementViewSet(viewsets.ViewSet):
             except ValueError:
                 donnees_paiement["given_sum"] = 0
 
+        # Reste apres une 2e carte, regle en especes ou en CB.
+        # L'ecran « reste a payer » du 2e passage (2e carte insuffisante) renvoie
+        # tag_id_carte2. On repart alors dans la branche 2e carte : elle recalcule
+        # et debite les DEUX cartes, puis regle le reste avec le moyen choisi.
+        # Sans ce routage, la branche especes/CB ne voyait que la carte 1 :
+        # le reste attendu etait faux (especes refusees) et la carte 2 n'etait
+        # jamais debitee (CB).
+        # / Remainder after a 2nd card, paid in cash or CC: route to the 2nd-card
+        #   branch, which debits BOTH cards, then settles the rest with this method.
+        tag_id_carte2_du_complement = (
+            request.POST.get("tag_id_carte2", "").upper().strip()
+        )
+        moyen_reste_apres_carte2 = ""
+        reste_apres_carte2_en_especes_ou_cb = (
+            moyen_complement in ("espece", "carte_bancaire")
+            and tag_id_carte2_du_complement != ""
+        )
+        if reste_apres_carte2_en_especes_ou_cb:
+            moyen_reste_apres_carte2 = moyen_complement
+            moyen_complement = "nfc"
+
         if moyen_complement in ("espece", "carte_bancaire"):
             # ---------------------------------------------------------- #
             # 6. Complément espèces ou CB
@@ -8754,16 +8850,19 @@ class PaiementViewSet(viewsets.ViewSet):
             # Succès espèces/CB → affichage
             # / Cash/CC success → display
             # ---------------------------------------------------------- #
-            soldes_apres_paiement = []
-            for asset_debite in assets_debites:
-                solde_apres = WalletService.obtenir_solde(
-                    wallet=wallet_carte1, asset=asset_debite
-                )
-                soldes_apres_paiement.append(
-                    {
-                        "name": asset_debite.name,
-                        "solde_euros": solde_apres / 100,
-                    }
+            # Avant / apres de la carte : non-fiduciaires + cascade locale
+            # / Card before / after: non-fiduciary + local cascade
+            soldes_apres_paiement = _calculer_soldes_apres_paiement(
+                wallet=wallet_carte1,
+                lignes_debitees=lignes_non_fidu + lignes_nfc_carte1,
+            )
+
+            # Regroupement par carte pour l'ecran de succes (un cadre par carte)
+            # / Grouped per card for the success screen (one frame per card)
+            cartes_apres_paiement = []
+            if soldes_apres_paiement:
+                cartes_apres_paiement.append(
+                    {"tag_id": carte1.tag_id, "soldes": soldes_apres_paiement}
                 )
 
             nouveau_solde_euros = None
@@ -8797,6 +8896,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_transaction": str(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "soldes_apres_paiement": soldes_apres_paiement,
+                "cartes_apres_paiement": cartes_apres_paiement,
                 "produits_stock_negatif": produits_stock_negatif,
             }
             return render(
@@ -8810,7 +8910,13 @@ class PaiementViewSet(viewsets.ViewSet):
             # 7. Complément 2ème carte NFC
             # / 7. 2nd NFC card complement
             # ---------------------------------------------------------- #
-            tag_id_carte2 = request.POST.get("tag_id", "").upper().strip()
+            # Carte 2 : lue au NFC (1er passage), ou renvoyee par l'ecran
+            # « reste a payer » quand on regle le reste en especes / CB.
+            # / Card 2: read via NFC, or sent back by the remainder screen.
+            if moyen_reste_apres_carte2:
+                tag_id_carte2 = tag_id_carte2_du_complement
+            else:
+                tag_id_carte2 = request.POST.get("tag_id", "").upper().strip()
 
             if not tag_id_carte2:
                 context_erreur = {
@@ -8991,7 +9097,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 lignes_nfc_carte2 = lignes_couvertes_locales_c2 + lignes_reste_c2
                 total_reste_apres_carte2 = 0
 
-            if total_reste_apres_carte2 > 0:
+            if total_reste_apres_carte2 > 0 and not moyen_reste_apres_carte2:
                 # Encore insuffisant → re-render complémentaire sans bouton 2ème carte
                 # / Still insufficient → re-render complement without 2nd card button
                 debits_affichage_c1 = OrderedDict()
@@ -9034,9 +9140,15 @@ class PaiementViewSet(viewsets.ViewSet):
                 )
 
                 total_nfc_carte1_centimes = sum(debits_affichage_c1.values())
+                total_nfc_carte2_centimes = sum(debits_affichage_c2.values())
                 context_complement = {
                     "action": "initUrlAddition();",
                     "tag_id_carte1": tag_id_carte1,
+                    # Carte 2 : affichee dans l'addition, et renvoyee par le
+                    # formulaire pour regler le reste en especes / CB.
+                    # / Card 2: shown in the bill, and sent back by the form.
+                    "tag_id_carte2": tag_id_carte2,
+                    "total_nfc_carte2_euros": f"{total_nfc_carte2_centimes / 100:.2f}",
                     "detail_cascade": detail_cascade_affichage,
                     "cascade_carte1_json": cascade_json_rerender,
                     "total_nfc_carte1": total_nfc_carte1_centimes,
@@ -9053,7 +9165,54 @@ class PaiementViewSet(viewsets.ViewSet):
                     context_complement,
                 )
 
-            # Carte2 couvre tout le reste → on finalise.
+            # Reste apres la carte 2, regle en especes / CB.
+            # Les parts non couvertes (asset=None) deviennent des lignes especes / CB.
+            # Controle de la somme donnee AVANT tout debit (legacy carte1 compris).
+            # / Remainder after card 2, paid in cash / CC. Given-sum check BEFORE any debit.
+            lignes_reste_apres_carte2 = []
+            if total_reste_apres_carte2 > 0:
+                if moyen_reste_apres_carte2 == "espece":
+                    pm_reste = PaymentMethod.CASH
+                else:
+                    pm_reste = PaymentMethod.CC
+
+                somme_donnee_en_centimes = donnees_paiement["given_sum"]
+                somme_donnee_insuffisante = (
+                    moyen_reste_apres_carte2 == "espece"
+                    and somme_donnee_en_centimes > 0
+                    and somme_donnee_en_centimes < total_reste_apres_carte2
+                )
+                if somme_donnee_insuffisante:
+                    context_erreur = {
+                        "action": "initUrlAddition();",
+                        "msg_type": "warning",
+                        "msg_content": _("Somme donnée insuffisante"),
+                        "selector_bt_retour": "#messages",
+                    }
+                    return render(
+                        request,
+                        "laboutik/partial/hx_messages.html",
+                        context_erreur,
+                        status=400,
+                    )
+
+                for art_r, asset_r, amount_r, _pm_r in lignes_nfc_carte2:
+                    if asset_r is None:
+                        lignes_reste_apres_carte2.append(
+                            (art_r, None, amount_r, pm_reste)
+                        )
+
+                # Monnaie a rendre (en euros), meme regle que payer()
+                # / Change to give back (euros), same rule as payer()
+                if (
+                    moyen_reste_apres_carte2 == "espece"
+                    and somme_donnee_en_centimes > total_reste_apres_carte2
+                ):
+                    donnees_paiement["give_back"] = (
+                        somme_donnee_en_centimes - total_reste_apres_carte2
+                    ) / 100
+
+            # Carte2 couvre tout le reste (ou le reste est regle en especes / CB) → on finalise.
             # Débit DIFFÉRÉ du FED legacy de carte1 (calculé plus haut) : on ne le débite
             # que maintenant, une fois sûr que le paiement se finalise. Hors atomic (appel
             # réseau), fail-fast : si le solde réseau a changé, on rescanne, aucun débit local.
@@ -9189,12 +9348,15 @@ class PaiementViewSet(viewsets.ViewSet):
                     # + lignes_legacy_c2 : parts couvertes par le FED de la carte2 (débit déjà fait
                     # hors atomic), avec leur moyen résolu (STRIPE_FED / LOCAL_EURO) et l'uuid distant.
                     # / + lignes_legacy_c2: card2 FED-covered parts (already debited outside atomic).
+                    # + lignes_reste_apres_carte2 : le reste regle en especes / CB.
+                    # / + remainder paid in cash / CC.
                     toutes_les_lignes = (
                         lignes_non_fidu
                         + lignes_couvertes_c1
                         + lignes_couvertes_c2
                         + lignes_legacy_c1
                         + lignes_legacy_c2
+                        + lignes_reste_apres_carte2
                     )
                     lignes_creees, produits_stock_negatif = (
                         _creer_lignes_articles_cascade(
@@ -9270,29 +9432,33 @@ class PaiementViewSet(viewsets.ViewSet):
                     )
                 raise
 
-            # Succès 2ème carte → affichage multi-soldes
-            # / 2nd card success → multi-balance display
-            soldes_apres_paiement = []
-            for asset_debite in assets_debites:
-                solde_apres = WalletService.obtenir_solde(
-                    wallet=wallet_carte1, asset=asset_debite
+            # Succès 2ème carte → avant / apres, un cadre par carte a l'ecran.
+            # Les non-fiduciaires sont débités sur la carte 1.
+            # / 2nd card success → before / after, one frame per card on screen.
+            soldes_carte1 = _calculer_soldes_apres_paiement(
+                wallet=wallet_carte1,
+                lignes_debitees=lignes_non_fidu + lignes_couvertes_c1,
+            )
+            soldes_carte2 = _calculer_soldes_apres_paiement(
+                wallet=wallet_carte2,
+                lignes_debitees=lignes_couvertes_c2,
+            )
+
+            # Une entree par carte qui a vraiment paye en local
+            # / One entry per card that actually paid locally
+            cartes_apres_paiement = []
+            if soldes_carte1:
+                cartes_apres_paiement.append(
+                    {"tag_id": tag_id_carte1, "soldes": soldes_carte1}
                 )
-                soldes_apres_paiement.append(
-                    {
-                        "name": f"{asset_debite.name} ({tag_id_carte1})",
-                        "solde_euros": solde_apres / 100,
-                    }
+            if soldes_carte2:
+                cartes_apres_paiement.append(
+                    {"tag_id": tag_id_carte2, "soldes": soldes_carte2}
                 )
-            for asset_debite_c2 in assets_debites_carte2:
-                solde_apres_c2 = WalletService.obtenir_solde(
-                    wallet=wallet_carte2, asset=asset_debite_c2
-                )
-                soldes_apres_paiement.append(
-                    {
-                        "name": f"{asset_debite_c2.name} ({tag_id_carte2})",
-                        "solde_euros": solde_apres_c2 / 100,
-                    }
-                )
+
+            # Liste a plat, gardee pour nouveau_solde / monnaie_name
+            # / Flat list, kept for nouveau_solde / monnaie_name
+            soldes_apres_paiement = soldes_carte1 + soldes_carte2
 
             nouveau_solde_euros = None
             nom_monnaie_principal = ""
@@ -9300,12 +9466,23 @@ class PaiementViewSet(viewsets.ViewSet):
                 nouveau_solde_euros = soldes_apres_paiement[0]["solde_euros"]
                 nom_monnaie_principal = soldes_apres_paiement[0]["name"]
 
+            # Moyen affiche : « NFC » si les cartes ont tout paye, sinon
+            # « NFC / especes » ou « NFC / CB » comme la branche especes/CB.
+            # / Shown method: "NFC", or "NFC / cash|CC" when the rest was paid otherwise.
+            if lignes_reste_apres_carte2:
+                moyen_paiement_affiche = moyen_reste_apres_carte2
+                original_payment_affiche = True
+            else:
+                moyen_paiement_affiche = _("NFC")
+                original_payment_affiche = None
+
             context_succes = {
                 "currency_data": CURRENCY_DATA,
                 "payment": donnees_paiement,
                 "monnaie_name": nom_monnaie_principal,
-                "moyen_paiement": _("NFC"),
-                "original_payment": None,
+                "moyen_paiement": moyen_paiement_affiche,
+                "original_payment": original_payment_affiche,
+                "original_moyen_paiement": _("NFC"),
                 "deposit_is_present": False,
                 "total": total_centimes / 100,
                 "state": state,
@@ -9314,6 +9491,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_transaction": str(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "soldes_apres_paiement": soldes_apres_paiement,
+                "cartes_apres_paiement": cartes_apres_paiement,
                 "produits_stock_negatif": produits_stock_negatif,
             }
             return render(
@@ -9833,7 +10011,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 {
                     "msg_type": "warning",
                     "msg_content": _(
-                        "Aucune imprimante configuree pour ce terminal"
+                        "Aucune imprimante configurée pour ce terminal"
                     ),
                 },
             )

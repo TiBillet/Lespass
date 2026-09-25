@@ -58,8 +58,16 @@ data-testid="complement-reste-a-payer" (regex _extraire_reste).
             <span>{% translate "Payé par la carte" %} ·· {{ tag_id_carte1|slice:"-4:" }}</span>
             <b data-testid="complement-carte1-disponible">− {{ total_nfc_carte1_euros|floatformat:2 }} €</b>
           </div>
-          {# Monnaies utilisees par la cascade de la 1ere carte #}
-          {# / Currencies used by the 1st card's cascade #}
+          {# 2e passage : la 2e carte a paye une partie, mais pas tout #}
+          {# / 2nd pass: the 2nd card paid part of it, not all          #}
+          {% if tag_id_carte2 %}
+            <div class="card-ticket-ligne" data-testid="complement-carte2-info">
+              <span>{% translate "Payé par la carte" %} ·· {{ tag_id_carte2|slice:"-4:" }}</span>
+              <b data-testid="complement-carte2-disponible">− {{ total_nfc_carte2_euros|floatformat:2 }} €</b>
+            </div>
+          {% endif %}
+          {# Monnaies utilisees par la cascade (1re carte, et 2e carte au 2e passage) #}
+          {# / Currencies used by the cascade (1st card, and 2nd card on 2nd pass)     #}
           {% if detail_cascade %}
             <ul class="card-pastilles" data-testid="complement-detail-cascade"
                 aria-label="{% translate 'Détail de la carte' %}">
@@ -104,6 +112,15 @@ data-testid="complement-reste-a-payer" (regex _extraire_reste).
                  name="total_nfc_carte1"
                  value="{{ total_nfc_carte1 }}"
                  data-testid="hidden-total-nfc-carte1" />
+          {# 2e passage : la carte 2 est renvoyee pour que le serveur la debite #}
+          {# aussi quand le reste est regle en especes / CB.                    #}
+          {# / 2nd pass: card 2 is sent back so the server debits it too.       #}
+          {% if tag_id_carte2 %}
+            <input type="hidden"
+                   name="tag_id_carte2"
+                   value="{{ tag_id_carte2 }}"
+                   data-testid="hidden-tag-id-carte2" />
+          {% endif %}
         </form>
 
         {# --- PAYER LE RESTE AVEC : tuiles autonomes (piege 58) --- #}

@@ -127,8 +127,12 @@
 .kpi-fond-modifier:focus-visible,
 .voir-detail:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
 
-/* Retour de l'impression du Ticket X / Ticket X print feedback */
-.recap-feedback:empty { display: none; }
+/* Retour d'impression (Ticket X, Ré-imprimer) : le message lui-meme est
+   .retour-impression (overlay.css). Zone vide = invisible.
+   / Print feedback zones (Ticket X, Reprint). Empty zone = hidden. */
+.recap-feedback:empty,
+.ventes-reimpression:empty { display: none; }
+.ventes-reimpression { max-width: 560px; }
 
 /* ------------------------------------------------------------------ */
 /*  Mini-tableaux / Summary tables                                     */
@@ -299,6 +303,122 @@ table.ventes-table, .mini-table table { width: 100%; border-collapse: collapse; 
 .fond-form { display: grid; gap: calc(10px * var(--k)); }
 
 /* ------------------------------------------------------------------ */
+/*  Rapport de cloture (hx_cloture_rapport.html)                       */
+/*  / Closure report                                                   */
+/*                                                                     */
+/*  Meme grammaire que l'ecran Ventes : .kpis, .kpi-action-neutre,     */
+/*  .mini-tables. Ici, seulement ce qui manque.                        */
+/*  / Same grammar as the Sales screen. Only what is missing here.     */
+/* ------------------------------------------------------------------ */
+
+/* Les exports PDF / CSV sont des liens <a download> : on retire le style lien
+   / PDF / CSV exports are <a download> links: remove the link styling */
+a.kpi-action { color: inherit; text-decoration: none; }
+a.kpi-action:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+
+/* Pied de page : un seul geste pour quitter, aligne a droite
+   / Footer: a single exit gesture, right-aligned */
+.cloture-fin { display: flex; justify-content: flex-end; }
+.cloture-fermer {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 48px;
+	padding: 0 22px;
+	border-radius: var(--r-ctrl);
+	background: var(--surface-2);
+	box-shadow: inset 0 0 0 1px var(--line);
+	color: var(--text);
+	font-size: var(--fs-min);
+	font-weight: 800;
+	text-decoration: none;
+	touch-action: manipulation;
+}
+.cloture-fermer:active { background: var(--surface-3); }
+.cloture-fermer:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+
+/* ------------------------------------------------------------------ */
+/*  Correction du moyen de paiement (hx_corriger_moyen_paiement.html)  */
+/*  / Payment method correction                                        */
+/*                                                                     */
+/*  Charge dans le detail d'une vente (#correction-zone-<uuid>).       */
+/*  Reutilise les classes de popup d'overlay.css : .payment-title,     */
+/*  .card-confirm-row, .card-confirm-acts, .card-confirm-cancel,       */
+/*  .card-valider. Ces classes sont dimensionnees par --k, defini      */
+/*  seulement sur .card-modal-box : on le fixe a 1 ici.                */
+/*  Porte depuis la maquette : .seg (Atelier) et .note-preview (Note). */
+/*  / Reuses overlay.css popup classes, sized by --k (set to 1 here).  */
+/* ------------------------------------------------------------------ */
+
+.correction-box {
+	--k: 1;
+	display: grid;
+	gap: 12px;
+	margin-top: 10px;
+	padding: 14px 16px 16px;
+	border-radius: var(--r-panel);
+	background: var(--surface);
+	box-shadow: inset 0 0 0 1px var(--line);
+	animation: pop .14s var(--ease);
+}
+.correction-box .payment-title { text-align: left; }
+.correction-box form { display: grid; gap: 12px; }
+.correction-box .card-confirm-cancel:focus-visible,
+.correction-box .card-valider:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+
+/* Choix du nouveau moyen : controle segmente de la maquette.
+   Le vrai <input type=radio> reste dans le DOM (.sr-only), donc joignable
+   au clavier ; le <span> qui suit porte le rendu.
+   / New method choice: mockup segmented control. The real radio stays in the
+   DOM (.sr-only) so it is keyboard reachable; the next <span> renders it. */
+.seg {
+	display: flex;
+	gap: 3px;
+	margin: 0;
+	padding: 3px;
+	border: 0;
+	border-radius: 10px;
+	background: var(--bg);
+}
+.seg-option { flex: 1; position: relative; display: grid; }
+.seg-option span {
+	display: grid;
+	place-items: center;
+	min-height: 44px;
+	padding: 0 8px;
+	border-radius: 8px;
+	color: var(--text-faint);
+	font-size: var(--fs-min);
+	font-weight: 700;
+	text-align: center;
+	cursor: pointer;
+	touch-action: manipulation;
+}
+.seg-option:active span { background: var(--surface-2); }
+.seg-option input:checked + span { background: var(--surface-3); color: var(--text); }
+.seg-option input:focus-visible + span { outline: 2px solid var(--nfc); outline-offset: 2px; }
+
+/* Raison : meme boite que l'apercu de note de la maquette
+   / Reason: same box as the mockup note preview */
+.note-preview {
+	width: 100%;
+	min-height: 64px;
+	padding: 12px 14px;
+	border: 0;
+	border-radius: var(--r-ctrl);
+	background: var(--surface-2);
+	box-shadow: inset 0 0 0 1px var(--line);
+	color: var(--text);
+	font: inherit;
+	font-size: var(--fs-min);
+	line-height: 1.4;
+	resize: vertical;
+}
+.note-preview::placeholder { color: var(--text-faint); }
+.note-preview:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+
+/* ------------------------------------------------------------------ */
 /*  Terminal de poche SUNMI V2s (maquette .fmt-poche)                  */
 /*  / Pocket terminal                                                  */
 /* ------------------------------------------------------------------ */
@@ -321,8 +441,11 @@ table.ventes-table, .mini-table table { width: 100%; border-collapse: collapse; 
 	.detail-filters { flex-direction: column; }
 	.detail-filters select { min-height: 38px; }
 	.ventes-detail-collapse { padding: 10px 12px 14px; }
+	.cloture-fermer { flex: 1; }
+	.correction-box { padding: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
 	.voir-detail-chevron { transition: none; }
+	.correction-box { animation: none; }
 }

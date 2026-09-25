@@ -61,11 +61,14 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
 
     {% if uuid_transaction %}
     <div class="ventes-detail-actions" data-testid="detail-actions">
+        {# Le message d'impression va dans sa propre zone (sous les boutons) :   #}
+        {# les boutons restent en place, on peut re-essayer ou corriger.        #}
+        {# / Print feedback goes to its own zone below; the buttons stay.        #}
         <button class="ventes-btn-action"
                 hx-post="{% url 'laboutik-paiement-imprimer_ticket' %}"
-                hx-target="closest .ventes-detail-actions"
+                hx-target="#reimpression-{{ uuid_transaction }}"
                 hx-swap="innerHTML"
-                hx-vals='{"uuid_transaction": "{{ uuid_transaction }}"}'
+                hx-vals='{"uuid_transaction": "{{ uuid_transaction }}", "uuid_pv": "{{ uuid_pv_vente }}"}'
                 data-loading-disable
                 data-testid="btn-reimprimer">
             <i class="fas fa-print" aria-hidden="true"></i>
@@ -83,6 +86,8 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
         </button>
         {% endif %}
     </div>
+    <!-- Retour de la re-impression (charge en HTMX) / Reprint feedback (loaded via HTMX) -->
+    <div id="reimpression-{{ uuid_transaction }}" class="ventes-reimpression" aria-live="polite" data-testid="reimpression-feedback"></div>
     <!-- Zone pour le formulaire de correction (chargee en HTMX) -->
     <!-- / Zone for the correction form (loaded via HTMX) -->
     <div id="correction-zone-{{ premiere_ligne_uuid }}" data-testid="correction-zone" aria-live="polite"></div>

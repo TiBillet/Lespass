@@ -406,14 +406,34 @@
 	color: var(--bleu01);
 }
 
-/* VALIDER — l'action principale, seule couleur pleine du panneau
-   / Validate — the primary action, the only solid color in the panel */
+/* VALIDER — l'action principale, seule couleur pleine du panneau.
+   Relief "touche" de la maquette : une tranche verte foncee de 4 px sous le
+   bouton. A l'appui, le bouton descend de 4 px et la tranche disparait.
+   La descente est instantanee (transition 0s sur :active).
+   La remontee prend 170 ms (transition de .addition-act).
+   Meme geste que les tuiles produit (articles.css, .article-container).
+   / Validate — primary action. Mockup "touche" depth: 4px darker edge, the
+   button drops 4px on press (instant), rises back in 170ms. */
 .addition-act-valid {
 	flex: 1;
 	background-color: var(--valid);
-	color: var(--vert04);
+	color: var(--valid-ink);
 	font-size: 18px;
-	box-shadow: 0 4px 16px oklch(0.700 0.170 148 / .22);
+	box-shadow:
+			inset 0 1.5px 0 oklch(1 0 0 / .38),
+			0 4px 0 var(--valid-deep),
+			0 5px 12px oklch(0.700 0.170 148 / .26);
+}
+
+/* Appui : on remplace le scale(.98) generique de .addition-act par la
+   descente de 4 px. La tranche passe a 0, l'ombre se resserre.
+   / Press: replaces the generic scale(.98) with the 4px drop. */
+.addition-act-valid:not(:disabled):active {
+	transform: translateY(4px);
+	filter: brightness(1.05);
+	box-shadow:
+			inset 0 1.5px 0 oklch(1 0 0 / .28),
+			0 1px 3px oklch(0 0 0 / .4);
 }
 
 .addition-act-valid i {

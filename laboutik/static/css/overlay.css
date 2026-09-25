@@ -309,36 +309,10 @@
 
 
 /* ============================================================
-   Styles partages paiement (hx_return_payment_success + hx_cloture_rapport)
-   / Shared payment styles
+   Message discret (hx_vider_carte_success, hx_impression_ok,
+   hx_print_confirmation)
+   / Quiet message
    ============================================================ */
-.payment-title1 {
-	font-size: 2.5rem;
-	font-weight: 800;
-	letter-spacing: -.02em;
-	text-align: center;
-	text-wrap: balance;
-}
-
-.payment-detail {
-	font-size: 1.5rem;
-	font-weight: bold;
-	text-align: center;
-	margin-top: 0.5rem;
-	font-variant-numeric: tabular-nums;
-}
-
-.payment-msg1 {
-	font-size: 1.5rem;
-	font-weight: bold;
-	text-align: center;
-}
-
-.payment-msg2 {
-	font-size: 1.2rem;
-	text-align: center;
-}
-
 .payment-msg-discret {
 	font-size: 1.2rem;
 	text-align: center;
@@ -349,8 +323,9 @@
 
 
 /* ============================================================
-   hx_return_payment_success.html — succes de paiement
-   / Payment success
+   hx_vider_carte_success.html / hx_vider_carte_confirm.html
+   (l'ecran de succes de paiement est une popup : bloc ECRAN DE SUCCES)
+   / Empty-card screens (payment success is now a popup)
    ============================================================ */
 .success-icon {
 	font-size: 4rem;
@@ -378,53 +353,76 @@
 	margin-right: 0.5rem;
 }
 
-/* Bouton "Imprimer le ticket" sur l'ecran de succes
-   / "Print receipt" button on the success screen */
-.bt-imprimer-ticket {
-	background-color: var(--bleu05);
-	margin-top: 1rem;
-}
+/* ============================================================
+   RETOUR D'IMPRESSION (hx_print_feedback.html)
+   / Print feedback
 
-/* Feedback d'impression — visible seulement quand le serveur a injecte du contenu.
-   Box contrastee (fond sombre + bordure doree) pour ressortir sur le fond vert
-   de l'ecran de succes, comme la box "Monnaie a rendre" ressort en rouge.
-   / Print feedback — visible only when server has injected content.
-   Contrasted box (dark bg + gold border) to stand out on the green success
-   background, like the "Change to give back" red box stands out. */
-#print-feedback:not(:empty) {
-	display: inline-block;
-	margin-top: 0.75rem;
-	padding: 0.5rem 1rem;
-	background-color: var(--noir03);
-	color: var(--blanc01);
-	border: 2px solid var(--warning00);
-	border-radius: 8px;
-	font-weight: bold;
-}
+   Message court sous un bouton Imprimer : popup de succes (#print-feedback),
+   recu « vider carte » (#print-feedback), Ré-imprimer et Ticket X de
+   l'ecran Ventes (#reimpression-<uuid>, #recap-feedback).
 
-/* Liste des badges du detail cascade NFC (complement de paiement)
-   / NFC cascade detail badge list (payment complement)
-   Wrap auto pour eviter le debordement quand plusieurs assets sont utilises.
-   / Auto wrap to avoid overflow when multiple assets are used. */
-.cascade-badges-list {
+   Grammaire de la maquette : bandeau teinte de la couleur du message,
+   pastille pleine avec le pictogramme, texte en clair, rien de sature.
+   --teinte change selon le type ; --k vaut 1.4 dans une popup D3,
+   1 ailleurs (repli var(--k, 1) hors popup).
+   / Mockup grammar: tinted strip, solid badge, plain text. --teinte per type.
+   ============================================================ */
+
+/* Zone vide = invisible (pas d'espace fantome dans la grille de la popup)
+   / Empty zone = hidden (no ghost gap in the popup grid) */
+#print-feedback:empty { display: none; }
+
+.retour-impression {
+	--teinte: var(--warn);
 	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-	justify-content: center;
-	max-width: 100%;
-	margin: 0.5rem 0;
-	font-size: 0.95rem;
+	align-items: center;
+	gap: calc(10px * var(--k, 1));
+	padding: calc(10px * var(--k, 1)) calc(14px * var(--k, 1));
+	border-radius: calc(var(--r-ctrl) * var(--k, 1));
+	background: color-mix(in oklab, var(--teinte), var(--surface) 84%);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--teinte), transparent 50%);
+	color: var(--text);
+	text-align: left;
+	animation: rise .14s var(--ease);
+}
+.retour-impression--success { --teinte: var(--valid); }
+.retour-impression--info    { --teinte: var(--nfc); }
+.retour-impression--warning { --teinte: var(--warn); }
+.retour-impression--error   { --teinte: var(--danger); }
+
+/* Pastille pleine avec le pictogramme / Solid badge with the glyph */
+.retour-impression-icone {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: calc(28px * var(--k, 1));
+	height: calc(28px * var(--k, 1));
+	border-radius: 50%;
+	background: var(--teinte);
+	color: var(--bg);
+	font-size: calc(16px * var(--k, 1));
 }
 
-.cascade-badge {
-	max-width: 100%;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	background-color: var(--gris02);
+.retour-impression-corps { display: grid; gap: calc(2px * var(--k, 1)); min-width: 0; }
+.retour-impression-titre {
+	font-size: max(var(--fs-min), calc(13px * var(--k, 1)));
+	font-weight: 800;
+	color: var(--teinte);
+}
+/* Le texte du serveur, en version compacte
+   / Server text, compact version */
+.retour-impression .alerte-messages-texte {
+	max-width: none;
+	margin: 0;
+	font-size: max(var(--fs-min), calc(14px * var(--k, 1)));
+	font-weight: 650;
+	line-height: 1.35;
 	color: var(--text);
-	padding: 4px 8px;
-	border-radius: 4px;
+	text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.retour-impression { animation: none; }
 }
 
 /* Boutons complement de paiement (.bt-basic-container reutilise pour la largeur)
@@ -443,39 +441,6 @@
 
 .bt-complement-2eme-carte {
 	background-color: var(--warning00);
-}
-
-/* Detail de paiement (Total panier, montants) — chiffres alignes
-   / Payment detail (cart total, amounts) — aligned digits */
-.fi-payment-detail {
-	font-variant-numeric: tabular-nums;
-	margin-top: 0.5rem;
-}
-
-
-/* ============================================================
-   hx_cloture_rapport.html — rapport de cloture
-   / Closure report
-   ============================================================ */
-.cloture-section {
-	margin: 1rem 0;
-}
-
-.btn-export {
-	display: inline-block;
-	padding: 0.5rem 1.2rem;
-	background-color: var(--wash-3);
-	color: var(--blanc01);
-	border: 1px solid var(--text-faint);
-	border-radius: 6px;
-	font-size: 1.1rem;
-	text-decoration: none;
-	cursor: pointer;
-	font-family: inherit;
-}
-
-.btn-export:hover {
-	background-color: var(--wash-4);
 }
 
 
@@ -1138,13 +1103,9 @@
 	background-color: color-mix(in oklab, var(--bg), var(--nfc) 6%);
 }
 
-/* hx_return_payment_success.html — succes de paiement
-   Le vert plein est garde : c'est le seul ecran qui dit « c'est vendu ».
-   / The solid green stays: it is the one screen that says "sold". */
-#messages:not(.hide):has([data-testid="paiement-succes"]) {
-	background-color: var(--valid-deep);
-	color: var(--valid-ink);
-}
+/* hx_return_payment_success.html — succes de paiement : plus de plein ecran vert.
+   C'est desormais une popup .card-modal (bloc ECRAN DE SUCCES, plus bas).
+   / Payment success: no more full green screen, it is now a .card-modal popup. */
 
 /* hx_funds_insufficient.html — fonds insuffisants */
 #messages:not(.hide):has([data-testid="paiement-nfc-insuffisant"]) {
@@ -1608,190 +1569,14 @@
 
 
 /* ============================================================
-   FORMULAIRE CORRECTION DE MOYEN DE PAIEMENT
-   / Payment method correction form
+   CORRECTION DE MOYEN DE PAIEMENT — BOITE DE SUCCES
+   / Payment method correction — success box
 
-   Utilise dans hx_corriger_moyen_paiement.html (formulaire) et
-   hx_correction_succes.html (confirmation).
-   Les onmouseover/onmouseout et onchange JS de toggle radio sont
-   remplaces par CSS :hover et :has(input:checked) pour l'a11y clavier.
-   / In hx_corriger_moyen_paiement.html (form) and hx_correction_succes.html
-   (confirmation). Inline JS toggles replaced by CSS for keyboard a11y.
+   Utilise dans hx_correction_succes.html (confirmation).
+   Le formulaire (hx_corriger_moyen_paiement.html) a ete refait avec les
+   composants de la maquette : son style est dans ventes.css (bloc CORRECTION).
+   / Used in hx_correction_succes.html. The form now lives in ventes.css.
    ============================================================ */
-
-.correction-form-box {
-	margin-top: 0.75rem;
-	padding: 1.25rem;
-	border-radius: 10px;
-	background: linear-gradient(135deg, var(--info-wash) 0%, var(--info-wash) 100%);
-	border: 1px solid var(--info-wash);
-	animation: correction-form-in 350ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-	font-family: var(--font-ui);
-}
-
-@keyframes correction-form-in {
-	from { transform: translateY(-6px); opacity: 0; filter: blur(2px); }
-}
-
-/* Entête : icône + titre + sous-titre (article + moyen actuel)
-   / Header: icon + title + subtitle (article + current method) */
-.correction-header {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	margin-bottom: 1rem;
-}
-
-.correction-header-icon {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	border-radius: 8px;
-	background: var(--info-wash);
-	color: var(--info-ink);
-	font-size: 0.95rem;
-}
-
-.correction-header-title {
-	color: var(--text);
-	font-size: 1rem;
-	font-weight: 600;
-	text-wrap: balance;
-}
-
-.correction-header-subtitle {
-	color: var(--info-ink);
-	font-size: 0.8rem;
-	margin-top: 2px;
-}
-
-.correction-header-current-method {
-	display: inline-block;
-	padding: 1px 6px;
-	border-radius: 4px;
-	background: var(--wash-2);
-	margin-left: 4px;
-	font-size: 0.75rem;
-	color: var(--text-faint);
-}
-
-/* Groupe de radio buttons (4 moyens de paiement)
-   / Radio button group (4 payment methods) */
-.correction-radio-group {
-	display: flex;
-	gap: 0.5rem;
-	margin-bottom: 1rem;
-	flex-wrap: wrap;
-}
-
-.correction-radio-label {
-	flex: 1;
-	min-width: 100px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 0.6rem 1rem;
-	border-radius: 8px;
-	cursor: pointer;
-	border: 1.5px solid var(--info-edge);
-	background: var(--info-wash);
-	color: var(--info-ink);
-	font-size: 0.95rem;
-	transition: background 150ms var(--ease-out), border-color 150ms var(--ease-out), color 150ms var(--ease-out);
-}
-
-.correction-radio-label:hover,
-.correction-radio-label:focus-within {
-	border-color: var(--info-edge);
-	background: var(--info-wash);
-}
-
-/* Etat selectionne : detecte automatiquement via :has(input:checked)
-   / Selected state: auto-detected via :has(input:checked) */
-.correction-radio-label:has(input:checked) {
-	border-color: var(--info-ink);
-	background: var(--info-edge);
-	color: var(--text);
-}
-
-/* L'input radio est masque visuellement, le label le represente
-   / Radio input visually hidden, label represents it */
-.correction-radio-label input[type="radio"] {
-	display: none;
-}
-
-.correction-textarea {
-	width: 100%;
-	padding: 0.6rem 0.75rem;
-	font-size: 0.9rem;
-	font-family: var(--font-ui);
-	border-radius: 8px;
-	border: 1px solid var(--info-wash);
-	background: var(--shade-2);
-	color: var(--text);
-	resize: vertical;
-	transition: border-color 150ms var(--ease-out);
-	margin-bottom: 1rem;
-	display: block;
-}
-
-.correction-textarea:focus {
-	outline: none;
-	border-color: var(--info-edge);
-}
-
-/* Ligne d'actions Annuler / Valider (alignee a droite)
-   / Action row Cancel / Submit (right-aligned) */
-.correction-actions-row {
-	display: flex;
-	gap: 0.5rem;
-	justify-content: flex-end;
-}
-
-.correction-btn-annuler {
-	background: transparent;
-	color: var(--info-ink);
-	padding: 0.5rem 1.25rem;
-	border: 1px solid var(--info-wash);
-	border-radius: 8px;
-	font-size: 0.9rem;
-	font-family: var(--font-ui);
-	cursor: pointer;
-	transition: border-color 150ms var(--ease-out), color 150ms var(--ease-out);
-}
-
-.correction-btn-annuler:hover,
-.correction-btn-annuler:focus-visible {
-	border-color: var(--info-edge);
-	color: var(--info-ink);
-}
-
-.correction-btn-valider {
-	background: linear-gradient(135deg, var(--info-ink) 0%, var(--info-ink) 100%);
-	color: white;
-	padding: 0.5rem 1.5rem;
-	border: none;
-	border-radius: 8px;
-	font-size: 0.9rem;
-	font-weight: 600;
-	font-family: var(--font-ui);
-	cursor: pointer;
-	box-shadow: 0 2px 8px var(--info-edge);
-	transition: box-shadow 150ms var(--ease-out), transform 150ms var(--ease-out);
-}
-
-.correction-btn-valider:hover,
-.correction-btn-valider:focus-visible {
-	box-shadow: 0 4px 12px var(--info-edge);
-	transform: translateY(-1px);
-}
-
-.correction-btn-valider i {
-	margin-right: 0.35rem;
-	font-size: 0.8rem;
-}
 
 /* Box de succes apres correction (vert) — animation slide-in commune
    / Success box after correction (green) — shared slide-in animation */
@@ -1866,9 +1651,6 @@
 		font-size: 2rem;
 		padding: 0.75rem 1rem;
 	}
-	.cascade-badge {
-		font-size: 0.85rem;
-	}
 }
 
 /* Sunmi V2s portrait — ecran le plus contraint
@@ -1879,111 +1661,20 @@
 		padding: 0.5rem 0.75rem;
 		margin-top: 0.25rem;
 	}
-	.cascade-badge {
-		font-size: 0.8rem;
-		padding: 2px 6px;
-	}
-	.fi-payment-detail {
-		font-size: 1rem;
-	}
 }
 
 
 /* ==========================================================================
-   Alerte hx_messages.html — generique pour warning / info / success / error
-   Affiche le message renvoye par le serveur (validation, erreur metier, etc.)
-   / Generic alert for warning / info / success / error server messages.
+   Texte d'un message serveur (hx_messages.html, hx_print_feedback.html)
+   Le style vient du conteneur : .alerte-box (popup) ou .retour-impression.
+   Ici, seulement ce qui est commun.
+   / Server message text. Styling comes from the container.
    ========================================================================== */
-
-/* Encre claire et non noire : le fond de cet ecran vient du serveur
-   (var(--{{msg_type}}) dans hx_messages.html, soit --success, --info, --error
-   ou --warning), toutes des couleurs saturees moyennes a sombres. Le noir y
-   tombait a ~2:1 sur --info.
-   / Light ink, not black: the ground is server-provided and always a mid-to-dark
-   saturated colour, where black fell to ~2:1 on --info. */
-.alerte-messages {
-	gap: 1.25rem;
-	padding: 2.5rem 1.5rem;
-	text-align: center;
-	color: var(--text);
-}
-
-.alerte-messages-icone {
-	font-size: 3.5rem;
-	line-height: 1;
-	color: var(--text);
-}
-
 .alerte-messages-texte {
-	font-size: 1.4rem;
-	font-weight: 700;
-	line-height: 1.35;
-	max-width: 32rem;
 	margin: 0;
-	color: var(--noir01);
-	text-wrap: balance;
 	font-variant-numeric: tabular-nums;
 }
 
-
-/* ==========================================================================
-   Zone alerte stock negatif (hx_return_payment_success.html)
-   Affichee uniquement si autoriser_vente_hors_stock=True ET stock devenu < 0.
-   / Negative stock alert zone on the payment success screen.
-   Shown only when autoriser_vente_hors_stock=True AND stock went < 0.
-   ========================================================================== */
-
-.stock-negatif-box {
-	margin-top: 0.85rem;
-	padding: 0.9rem 1.05rem;
-	border-radius: 10px;
-	background-color: var(--warning00);
-	color: var(--noir01);
-	display: flex;
-	flex-direction: column;
-	gap: 0.45rem;
-	max-width: 32rem;
-	border: 2px solid var(--noir01);
-}
-
-.stock-negatif-titre {
-	display: flex;
-	align-items: center;
-	gap: 0.55rem;
-	font-weight: 800;
-	font-size: 1.05rem;
-	line-height: 1.2;
-	color: var(--noir01);
-}
-
-.stock-negatif-icone {
-	font-size: 1.15rem;
-	line-height: 1;
-	color: var(--noir01);
-}
-
-.stock-negatif-liste {
-	margin: 0;
-	padding-left: 1.6rem;
-	font-variant-numeric: tabular-nums;
-	font-size: 1rem;
-	line-height: 1.5;
-	color: var(--noir01);
-	font-weight: 600;
-}
-
-.stock-negatif-liste li {
-	margin: 0.05rem 0;
-}
-
-.stock-negatif-hint {
-	margin: 0;
-	font-size: 0.9rem;
-	line-height: 1.4;
-	color: var(--noir01);
-	font-weight: 500;
-	text-wrap: balance;
-}
 
 /* ==========================================================================
    Alerte cote front : pave numerique vrac, quantite > stock disponible.
@@ -2010,31 +1701,6 @@
 	margin-right: 0.4rem;
 }
 
-/* Sunmi V2s portrait : tasser un peu / Squeeze on V2s portrait */
-@media (max-width: 599px) {
-	.alerte-messages {
-		padding: 2rem 1rem;
-		gap: 1rem;
-	}
-	.alerte-messages-icone {
-		font-size: 2.75rem;
-	}
-	.alerte-messages-texte {
-		font-size: 1.2rem;
-	}
-	.stock-negatif-box {
-		padding: 0.7rem 0.85rem;
-	}
-	.stock-negatif-titre {
-		font-size: 1rem;
-	}
-	.stock-negatif-liste {
-		font-size: 0.95rem;
-	}
-	.stock-negatif-hint {
-		font-size: 0.85rem;
-	}
-}
 
 
 /* ============================================================
@@ -2058,7 +1724,6 @@
 
 	/* Aucun titre ne depasse deux lignes sur un ecran de poche
 	   / No heading spills past two lines on a pocket screen */
-	.payment-title1,
 	.fi-title1 {
 		font-size: 1.5rem;
 	}
@@ -2125,7 +1790,6 @@
    / Headings break inside long words rather than pushing a horizontal
    scrollbar — product names, references, e-mail addresses. */
 .message-title,
-.payment-title1,
 .fi-title1,
 .choose-id-title,
 .cf-section-title,
@@ -2926,6 +2590,277 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 	.card-mode { padding-inline: 2px; }
 }
 
+/* --- Ecran de succes (hx_return_payment_success.html) / Payment success ---
+   Une popup .card-modal comme le choix du paiement : la vente se termine dans
+   la meme boite que celle ou elle a commence. Tailles en calc(* var(--k)),
+   comme le reste du bloc (--k = 1.4 sur D3 Mini, 1 ailleurs).
+   / A .card-modal popup like the payment choice. Sizes scale with --k. */
+
+/* En-tete : pastille verte pleine avec la coche, puis le titre en clair et en gros.
+   C'est la premiere chose a lire : « c'est passe ».
+   / Header: solid green badge with the check, then a large plain title. */
+.succes-entete {
+	display: grid;
+	justify-items: center;
+	gap: calc(8px * var(--k));
+	padding: calc(6px * var(--k)) calc(40px * var(--k)) calc(2px * var(--k));
+}
+.succes-pastille {
+	display: grid;
+	place-items: center;
+	width: calc(48px * var(--k));
+	height: calc(48px * var(--k));
+	border-radius: 50%;
+	background: var(--valid);
+	color: var(--valid-ink);
+	box-shadow: 0 0 0 calc(6px * var(--k)) color-mix(in oklab, var(--valid), transparent 82%);
+	animation: succes-pastille .32s var(--ease) both;
+}
+.succes-pastille .ico { font-size: calc(26px * var(--k)); }
+.succes-titre {
+	margin: 0;
+	font-size: calc(20px * var(--k));
+	font-weight: 800;
+	letter-spacing: -.01em;
+	line-height: 1.2;
+	color: var(--text);
+	text-align: center;
+	text-wrap: balance;
+	overflow-wrap: anywhere;
+}
+@keyframes succes-pastille { from { transform: scale(.6); opacity: 0; } }
+
+/* Montant a rendre / a rembourser : LA donnee que le caissier lit en 1 seconde
+   / Change to give back: THE figure the cashier reads at a glance */
+.succes-rendre {
+	display: grid;
+	justify-items: center;
+	gap: calc(2px * var(--k));
+	padding: calc(12px * var(--k)) calc(10px * var(--k)) calc(14px * var(--k));
+	border-radius: calc(var(--r-ctrl) * var(--k));
+	background: color-mix(in oklab, var(--valid), var(--surface) 84%);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--valid), transparent 45%);
+}
+.succes-rendre-val {
+	font-size: calc(44px * var(--k));
+	font-weight: 800;
+	letter-spacing: -.02em;
+	line-height: 1.1;
+	color: var(--valid);
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+
+.succes-lignes { display: grid; gap: calc(6px * var(--k)); padding: calc(2px * var(--k)) calc(2px * var(--k)) 0; }
+
+/* Carte cashless : avant / apres, dans un cadre teinte NFC (bleu)
+   / Cashless card: before / after, in an NFC-tinted (blue) frame */
+.succes-carte {
+	display: grid;
+	gap: calc(10px * var(--k));
+	padding: calc(12px * var(--k)) calc(14px * var(--k)) calc(14px * var(--k));
+	border-radius: calc(var(--r-ctrl) * var(--k));
+	background: color-mix(in oklab, var(--nfc), var(--surface) 86%);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--nfc), transparent 55%);
+	text-align: left;
+}
+.succes-carte-ref {
+	display: flex;
+	align-items: center;
+	gap: calc(7px * var(--k));
+	font-size: max(var(--fs-min), calc(12px * var(--k)));
+	font-weight: 650;
+	color: var(--text-faint);
+}
+.succes-carte-ref .ico { font-size: calc(16px * var(--k)); color: var(--nfc); }
+.succes-carte-ref b { color: var(--text-dim); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Paiement a deux cartes : un cadre par carte, empiles (_succes_carte.html).
+   L'etiquette « 1re carte / 2e carte » se cale a droite de l'en-tete du cadre.
+   / Two-card payment: one frame per card, stacked; rank label on the right. */
+.succes-cartes { display: grid; gap: calc(8px * var(--k)); }
+.succes-carte-rang {
+	margin-left: auto;
+	padding: calc(1px * var(--k)) calc(9px * var(--k));
+	border-radius: var(--r-pill);
+	background: color-mix(in oklab, var(--nfc), var(--surface) 70%);
+	color: var(--text-dim);
+	font-size: max(var(--fs-min), calc(12px * var(--k)));
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+/* Une seule monnaie : solde avant | fleche + montant paye | solde apres
+   / Single currency: balance before | arrow + amount paid | balance after */
+.succes-avant-apres {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	align-items: end;
+	gap: calc(10px * var(--k));
+}
+.succes-solde-bloc { display: grid; gap: calc(2px * var(--k)); min-width: 0; }
+.succes-solde-bloc span {
+	font-size: max(var(--fs-min), calc(11px * var(--k)));
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	overflow-wrap: anywhere;
+}
+.succes-solde-bloc b {
+	font-weight: 800;
+	letter-spacing: -.02em;
+	line-height: 1.15;
+	font-variant-numeric: tabular-nums;
+}
+/* Avant : plus petit, en retrait / Before: smaller, recessed */
+.succes-solde-avant b { font-size: calc(22px * var(--k)); color: var(--text-dim); }
+/* Apres : le chiffre que le client demande / After: the figure the customer asks for */
+.succes-solde-apres { text-align: right; }
+.succes-solde-apres b { font-size: calc(30px * var(--k)); color: var(--text); }
+
+/* Le passage : montant paye au-dessus d'une fleche / The paid amount above an arrow */
+.succes-passage {
+	display: grid;
+	justify-items: center;
+	gap: calc(3px * var(--k));
+	padding-bottom: calc(6px * var(--k));
+	color: var(--text-faint);
+}
+.succes-passage b {
+	padding: calc(2px * var(--k)) calc(9px * var(--k));
+	border-radius: var(--r-pill);
+	background: var(--surface-2);
+	color: var(--text-dim);
+	font-size: max(var(--fs-min), calc(13px * var(--k)));
+	font-weight: 800;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.succes-fleche { width: calc(34px * var(--k)); height: calc(10px * var(--k)); fill: currentColor; }
+
+/* Plusieurs monnaies (cascade, 2 cartes) : Monnaie | Avant | Paye | Apres
+   / Several currencies: Currency | Before | Paid | After */
+.succes-assets {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: max(var(--fs-min), calc(13px * var(--k)));
+	font-variant-numeric: tabular-nums;
+}
+.succes-assets th {
+	padding: 0 0 calc(6px * var(--k));
+	font-size: max(var(--fs-min), calc(11px * var(--k)));
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	text-align: left;
+}
+.succes-assets td {
+	padding: calc(6px * var(--k)) 0;
+	border-top: 1px solid color-mix(in oklab, var(--nfc), transparent 70%);
+	color: var(--text-dim);
+	overflow-wrap: anywhere;
+}
+.succes-assets .num { text-align: right; padding-left: calc(12px * var(--k)); white-space: nowrap; }
+.succes-assets .succes-paye { color: var(--text-faint); }
+.succes-assets td.num:last-child { color: var(--text); font-weight: 800; }
+
+/* Alertes (stock negatif, carte non rattachee) : teinte warn, jamais plein ecran
+   / Alerts: warn tint, never full screen */
+.succes-alerte {
+	display: grid;
+	gap: calc(4px * var(--k));
+	padding: calc(10px * var(--k)) calc(12px * var(--k));
+	border-radius: calc(var(--r-ctrl) * var(--k));
+	background: color-mix(in oklab, var(--warn), var(--surface) 82%);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warn), transparent 45%);
+	color: var(--text-dim);
+	font-size: max(var(--fs-min), calc(13px * var(--k)));
+	text-align: left;
+}
+.succes-alerte strong { color: var(--warn); font-weight: 800; }
+.succes-alerte ul { margin: 0; padding-left: 1.2em; }
+.succes-alerte p { margin: 0; color: var(--text-faint); }
+
+/* Bouton Imprimer : secondaire, meme gabarit que .card-confirm-cancel
+   / Print button: secondary, same shape as .card-confirm-cancel */
+.succes-imprimer { display: flex; align-items: center; justify-content: center; gap: calc(8px * var(--k)); }
+.succes-imprimer .ico { font-size: calc(18px * var(--k)); }
+.succes-box .card-confirm-cancel:focus-visible,
+.succes-box .card-valider:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+
+/* V2s : chiffres un cran plus petits pour tenir sur 360 px
+   / V2s: figures one step smaller to fit 360px */
+@media only screen and (max-width: 599px) {
+	.succes-rendre-val { font-size: calc(36px * var(--k)); }
+	.succes-solde-apres b { font-size: calc(24px * var(--k)); }
+	.succes-solde-avant b { font-size: calc(18px * var(--k)); }
+}
+
+/* --- Message serveur (hx_messages.html) / Server message ---
+   Meme boite que le paiement et le succes. Pastille teintee selon msg_type,
+   le message du serveur en titre, un seul bouton Retour.
+   / Same box as payment and success: tinted badge, message as heading, Back. */
+.alerte-box {
+	--teinte: var(--warn);
+	justify-items: center;
+	gap: calc(14px * var(--k));
+	padding: calc(26px * var(--k)) calc(20px * var(--k)) calc(18px * var(--k));
+	text-align: center;
+}
+.alerte-box--success { --teinte: var(--valid); }
+.alerte-box--info    { --teinte: var(--nfc); }
+.alerte-box--warning { --teinte: var(--warn); }
+.alerte-box--error   { --teinte: var(--danger); }
+
+/* Pastille : meme gabarit que « Paiement réussi », teinte du message
+   / Badge: same shape as "Payment successful", message tint */
+.alerte-pastille {
+	display: grid;
+	place-items: center;
+	width: calc(48px * var(--k));
+	height: calc(48px * var(--k));
+	border-radius: 50%;
+	background: var(--teinte);
+	color: var(--bg);
+	box-shadow: 0 0 0 calc(6px * var(--k)) color-mix(in oklab, var(--teinte), transparent 82%);
+}
+.alerte-pastille .ico { font-size: calc(26px * var(--k)); }
+
+/* Le message du serveur EST le titre : pas de titre invente au-dessus
+   / The server message IS the heading */
+.alerte-box .alerte-messages-texte {
+	max-width: 24em;
+	font-size: calc(18px * var(--k));
+	font-weight: 750;
+	line-height: 1.35;
+	color: var(--text);
+	text-wrap: balance;
+	overflow-wrap: anywhere;
+}
+
+/* Un seul geste : Retour, pleine largeur, neutre (vert seulement pour une reussite)
+   / One gesture: Back, full width, neutral (green only for success) */
+.alerte-retour {
+	justify-self: stretch;
+	min-height: calc(48px * var(--k));
+	margin-top: calc(4px * var(--k));
+	border: 0;
+	border-radius: calc(var(--r-ctrl) * var(--k));
+	background: var(--surface-2);
+	box-shadow: inset 0 0 0 1px var(--line);
+	color: var(--text);
+	font: inherit;
+	font-size: max(var(--fs-min), calc(15px * var(--k)));
+	font-weight: 800;
+	cursor: pointer;
+	touch-action: manipulation;
+}
+.alerte-retour:active { background: var(--surface-3); }
+.alerte-retour:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+.alerte-box--success .alerte-retour { background: var(--valid); color: var(--valid-ink); box-shadow: none; }
+
 /* --- Animations --- */
 /* Apparition de la boite / Box entrance */
 @keyframes pop { from { transform: scale(.9); opacity: 0; } }
@@ -2947,7 +2882,8 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 @media (prefers-reduced-motion: reduce) {
 	.card-wait-signal::before,
 	.card-wait .ico,
-	.payment-method.htmx-request .ico {
+	.payment-method.htmx-request .ico,
+	.succes-pastille {
 		animation: none;
 	}
 	.card-wait-signal::before { opacity: .5; }

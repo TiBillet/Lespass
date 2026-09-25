@@ -1,33 +1,56 @@
-{% load static i18n %}
+{% load i18n %}
 {% comment %}
-Partial generique de message serveur (warning / info / success / error).
-Affiche une icone contextuelle + le message + bouton retour, sur fond colore
-selon msg_type (var(--{{msg_type}}) doit exister dans palette.css).
-/ Generic server message partial. Shows a contextual icon + message + back button
-on colored background per msg_type.
+MESSAGE SERVEUR GENERIQUE (warning / info / success / error)
+/ Generic server message
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_messages.html
+STYLE : laboutik/static/css/overlay.css (bloc POPUP CENTREE V2, .alerte-box)
 
-Styles : .alerte-messages dans laboutik/static/css/overlay.css
+Une popup .card-modal, comme le paiement et l'ecran de succes : une pastille
+teintee selon msg_type, le message du serveur en titre, un bouton Retour.
+Toucher le fond = Retour. Le bouton prend le focus a l'ouverture (htmx traite
+autofocus apres le swap) : Entree ferme la popup.
+/ A .card-modal popup like payment and success: a tinted badge, the server
+message as heading, one Back button. Tapping the backdrop = Back.
+
+PARAMETRES (fournis par les vues de laboutik/views.py) :
+- msg_type    : "warning" (le plus frequent), "success", "info", "error"
+- msg_content : le message, deja traduit
+- action      : JS execute a la fermeture (souvent initUrlAddition();)
+
+L'id bt-retour-layer1 est garde sur le bouton : les tests E2E le cherchent
+(voir tests/PIEGES.md, piege 9.39).
 {% endcomment %}
 <div id="messages">
-  <div class="BF-col alerte-messages"
-       style="background-color: var(--{{ msg_type }})"
-       role="alert"
-       aria-live="assertive"
+  <div class="card-modal"
+       role="alertdialog"
+       aria-modal="true"
+       aria-labelledby="alerte-messages-texte"
        data-testid="alerte-messages">
-    {% if msg_type == "success" %}
-      <i class="fas fa-check-circle alerte-messages-icone" aria-hidden="true"></i>
-    {% elif msg_type == "info" %}
-      <i class="fas fa-info-circle alerte-messages-icone" aria-hidden="true"></i>
-    {% elif msg_type == "error" %}
-      <i class="fas fa-times-circle alerte-messages-icone" aria-hidden="true"></i>
-    {% else %}
-      <i class="fas fa-exclamation-triangle alerte-messages-icone"
-         aria-hidden="true"></i>
-    {% endif %}
-    <p class="alerte-messages-texte" data-testid="alerte-messages-texte">{{ msg_content }}</p>
-    <!-- action = change post url to laboutik/paiement/moyens_paiement -->
-    <c-bt.return {% if action %} action="{{ action }}" {% endif %}/>
+    <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages');{{ action }}"></div>
+
+    <div class="card-modal-box alerte-box alerte-box--{{ msg_type|default:'warning' }}">
+      {# Pastille : pictogramme selon le type / Badge: glyph per type #}
+      <span class="alerte-pastille" aria-hidden="true">
+        {% if msg_type == "success" %}
+          <svg class="ico" viewBox="0 0 24 24" focusable="false"><path d="M20.6 5.4 9.1 16.9l-5.7-5.7 2.3-2.3 3.4 3.4 9.2-9.2z"/></svg>
+        {% elif msg_type == "info" %}
+          <svg class="ico" viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="6.2" r="2"/><rect x="10.4" y="9.6" width="3.2" height="10.4" rx="1.6"/></svg>
+        {% else %}
+          <svg class="ico" viewBox="0 0 24 24" focusable="false"><rect x="10.4" y="3.6" width="3.2" height="11" rx="1.6"/><circle cx="12" cy="19" r="2"/></svg>
+        {% endif %}
+      </span>
+
+      <p class="alerte-messages-texte" id="alerte-messages-texte" data-testid="alerte-messages-texte">{{ msg_content }}</p>
+
+      <button type="button"
+              id="bt-retour-layer1"
+              class="alerte-retour"
+              onclick="hideAndEmptyElement('#messages');{{ action }}"
+              autofocus
+              data-testid="alerte-messages-retour">
+        {% translate "Retour" %}
+      </button>
+    </div>
   </div>
 </div>
