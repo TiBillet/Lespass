@@ -116,6 +116,7 @@ PlanningBenevole ──< BesoinBenevole >── TacheBenevole
 |---|---|---|
 | `name` | `CharField(200)` | « Tenir le bar » |
 | `description` | `TextField(blank)` | Affichée sous le nom dans la grille, et reprise dans l'email de confirmation (où, quoi apporter, à qui parler) |
+| `etiquette` | FK `Etiquette`, `null`, `blank`, `SET_NULL` | **Seulement si** `TODO/USERS-etiquettes.md` est livré avant (D12). L'inscription pose cette étiquette sur la personne (source `BENEVOLAT`) |
 
 ### `PlanningBenevole`
 
