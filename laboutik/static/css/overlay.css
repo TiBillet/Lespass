@@ -200,25 +200,6 @@
 
 
 /* ============================================================
-   hx_funds_insufficient.html — fonds insuffisants
-   / Insufficient funds
-   ============================================================ */
-.fi-title1 {
-	font-size: clamp(1.5rem, 4vw, 2.5rem);
-	font-weight: 800;
-	letter-spacing: -.02em;
-	text-align: center;
-	text-wrap: balance;
-}
-
-.fi-msg1 {
-	font-size: clamp(1rem, 3vw, 1.5rem);
-	font-weight: bold;
-	text-align: center;
-}
-
-
-/* ============================================================
    hx_check_card.html — attente lecture carte
    / Card check waiting screen
    ============================================================ */
@@ -321,37 +302,6 @@
 	font-variant-numeric: tabular-nums;
 }
 
-
-/* ============================================================
-   hx_vider_carte_success.html / hx_vider_carte_confirm.html
-   (l'ecran de succes de paiement est une popup : bloc ECRAN DE SUCCES)
-   / Empty-card screens (payment success is now a popup)
-   ============================================================ */
-.success-icon {
-	font-size: 4rem;
-	animation: scale-in 300ms var(--ease-out) both;
-}
-
-/* Zone monnaie a rendre — la seule chose que le caissier doit lire sur cet
-   ecran. Boite de la famille (voile + filet ambre), montant en graisse 800.
-   / Change to give back — the one thing the operator must read on this screen:
-   a family box (wash + amber hairline) with an 800-weight amount. */
-.give-back-box {
-	font-size: 2.5rem;
-	font-weight: 800;
-	letter-spacing: -.02em;
-	font-variant-numeric: tabular-nums;
-	text-align: center;
-	padding: 1rem 2rem;
-	margin-top: 0.5rem;
-	background-color: var(--warn-wash);
-	border: 2px solid var(--warn-edge);
-	border-radius: var(--r-panel);
-}
-
-.give-back-box i {
-	margin-right: 0.5rem;
-}
 
 /* ============================================================
    RETOUR D'IMPRESSION (hx_print_feedback.html)
@@ -1125,34 +1075,6 @@
 	background-color: color-mix(in oklab, var(--surface), var(--danger) 20%);
 }
 
-/* hx_vider_carte_confirm.html — confirmation avant remboursement carte
-   / Empty card confirmation before refund (warning, action irréversible) */
-#messages:not(.hide):has([data-testid="vider-carte-confirm"]) {
-	display: flex;
-	flex-direction: column;
-	background-color: var(--surface);
-	background-color: color-mix(in oklab, var(--surface), var(--warn) 32%);
-	color: var(--text);
-}
-
-/* Override .give-back-box pour cet ecran : le fond du parent est desormais
-   sombre, l'encre claire et le filet ambre suffisent.
-   / Override .give-back-box: the parent ground is now dark, so light ink and
-   an amber hairline are enough. */
-#messages:not(.hide):has([data-testid="vider-carte-confirm"]) .give-back-box {
-	color: var(--text);
-	border-color: var(--warn);
-}
-
-/* hx_vider_carte_success.html — remboursement effectué (cohérent paiement-succes)
-   / Refund executed — consistent with paiement-succes */
-#messages:not(.hide):has([data-testid="vider-carte-success"]) {
-	display: flex;
-	flex-direction: column;
-	background-color: var(--valid-deep);
-	color: var(--valid-ink);
-}
-
 /* hx_cloture_rapport.html — rapport de cloture */
 #messages:not(.hide):has([data-testid="cloture-rapport"]) {
 	background-color: var(--surface);
@@ -1173,108 +1095,6 @@
 	align-items: center;
 	background-color: var(--bg);
 	background-color: color-mix(in oklab, var(--bg), var(--nfc) 6%);
-}
-
-
-/* ============================================================
-   ECRANS VIDER LA CARTE — plein ecran cohérent avec les autres
-   écrans de paiement (cascade insuffisante, succès, etc.).
-   / EMPTY CARD SCREENS — full-screen consistent with other
-   payment screens (insufficient cascade, success, etc.).
-   ============================================================ */
-
-/* Détail des soldes utilisés (table légère sur fond sombre transparent)
-   / Token balance details (light table on transparent dark background) */
-.cascade-tokens-table {
-	width: 100%;
-	max-width: 420px;
-	margin: 0.5rem auto;
-	border-collapse: collapse;
-	font-size: 0.95rem;
-	font-variant-numeric: tabular-nums;
-}
-
-.cascade-tokens-table th,
-.cascade-tokens-table td {
-	padding: 0.4rem 0.6rem;
-	border-bottom: 1px solid var(--wash-3);
-}
-
-.cascade-tokens-table th {
-	text-align: left;
-	font-weight: 600;
-	opacity: 0.85;
-}
-
-.cascade-tokens-table th:last-child,
-.cascade-tokens-table td:last-child {
-	text-align: right;
-}
-
-.cascade-tokens-table tbody tr:last-child td {
-	border-bottom: none;
-}
-
-/* Checkbox compact réinitialisation carte (vider_carte_confirm)
-   / Compact card-reset checkbox (vider_carte_confirm) */
-.vider-carte-checkbox {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.5rem;
-	margin: 1rem auto;
-	font-size: 1rem;
-	cursor: pointer;
-}
-
-.vider-carte-checkbox input {
-	width: 1.1rem;
-	height: 1.1rem;
-	cursor: pointer;
-}
-
-/* Bouton de remboursement principal (vert succès) — réutilise .bt-basic-container
-   / Main refund button (green success) — reuses .bt-basic-container */
-.bt-vider-confirm {
-	background-color: var(--success);
-	border: none;
-}
-
-/* Bouton "Rembourser et garder l'user" (bleu calme — choix moins destructif)
-   / "Refund and keep user" button (calm blue — less destructive choice) */
-.bt-vider-keep-user {
-	background-color: var(--bleu07);
-	border: none;
-}
-
-/* Email du user dans le bouton "Garder" — plus petit, italique pour distinguer
-   du label d'action principal.
-   / User email in the "Keep" button — smaller, italic to distinguish from the
-   main action label. */
-.vider-carte-user-email {
-	font-size: 0.85em;
-	font-weight: 500;
-	opacity: 0.75;
-	max-width: 100%;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-/* Bouton imprimer reçu sur l'écran de succès
-   / Print receipt button on success screen */
-.bt-vider-imprimer {
-	background-color: var(--bleu05);
-	border: none;
-}
-
-/* Ligne d'actions horizontales (Imprimer + Retour) sur écran succès
-   / Horizontal action row (Print + Return) on success screen */
-.vider-carte-actions-row {
-	display: flex;
-	gap: 0.75rem;
-	flex-wrap: wrap;
-	justify-content: center;
-	margin-top: 1rem;
 }
 
 
@@ -1632,38 +1452,6 @@
 }
 
 
-/* ============================================================
-   Responsive — ecrans de paiement compacts
-   / Responsive — compact payment screens
-
-   Cibles materiel :
-   - Sunmi D3 mini (10.1" portrait) et tablettes generiques  : <= 768px
-   - Sunmi V2s (5.45" portrait, ~720px largeur)              : <= 540px
-   / Hardware targets:
-   - Sunmi D3 mini (portrait) and generic tablets : <= 768px
-   - Sunmi V2s (portrait, ~720px)                 : <= 540px
-   ============================================================ */
-
-/* Tablettes / Sunmi D3 mini portrait
-   / Tablets / Sunmi D3 mini portrait */
-@media (max-width: 768px) {
-	.give-back-box {
-		font-size: 2rem;
-		padding: 0.75rem 1rem;
-	}
-}
-
-/* Sunmi V2s portrait — ecran le plus contraint
-   / Sunmi V2s portrait — most constrained screen */
-@media (max-width: 599px) {
-	.give-back-box {
-		font-size: 1.6rem;
-		padding: 0.5rem 0.75rem;
-		margin-top: 0.25rem;
-	}
-}
-
-
 /* ==========================================================================
    Texte d'un message serveur (hx_messages.html, hx_print_feedback.html)
    Le style vient du conteneur : .alerte-box (popup) ou .retour-impression.
@@ -1722,19 +1510,8 @@
 		padding: 8px;
 	}
 
-	/* Aucun titre ne depasse deux lignes sur un ecran de poche
-	   / No heading spills past two lines on a pocket screen */
-	.fi-title1 {
-		font-size: 1.5rem;
-	}
-
-	.confirm-total,
-	.give-back-box {
+	.confirm-total {
 		font-size: 1.8rem;
-	}
-
-	.give-back-box {
-		padding: .75rem 1rem;
 	}
 
 	/* Les mots longs (noms de produit, references) cassent au lieu de pousser
@@ -1790,7 +1567,6 @@
    / Headings break inside long words rather than pushing a horizontal
    scrollbar — product names, references, e-mail addresses. */
 .message-title,
-.fi-title1,
 .choose-id-title,
 .cf-section-title,
 .alerte-messages-texte {
@@ -2860,6 +2636,85 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 .alerte-retour:active { background: var(--surface-3); }
 .alerte-retour:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
 .alerte-box--success .alerte-retour { background: var(--valid); color: var(--valid-ink); box-shadow: none; }
+
+/* --- Vider carte (hx_vider_carte_confirm / _success.html) / Empty card ---
+   Confirmation : la pastille et le montant prennent la teinte « warn »
+   (argent qui sort de la caisse, geste qui ne se defait pas). Le succes
+   reprend tel quel le bloc ECRAN DE SUCCES.
+   / Confirmation: warn tint (irreversible). Success reuses the success block. */
+.vider-box .succes-pastille {
+	background: var(--warn);
+	color: var(--warn-ink);
+	box-shadow: 0 0 0 calc(6px * var(--k)) color-mix(in oklab, var(--warn), transparent 82%);
+}
+.vider-rendre {
+	background: color-mix(in oklab, var(--warn), var(--surface) 84%);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warn), transparent 45%);
+}
+.vider-rendre .succes-rendre-val { color: var(--warn); }
+
+/* Les deux choix, empiles, pleine largeur / The two choices, stacked, full width */
+.vider-choix { display: grid; gap: calc(8px * var(--k)); }
+.vider-bouton {
+	display: grid;
+	justify-items: center;
+	gap: calc(2px * var(--k));
+	min-height: calc(52px * var(--k));
+	padding: calc(8px * var(--k)) calc(14px * var(--k));
+	border: 0;
+	border-radius: calc(var(--r-ctrl) * var(--k));
+	font: inherit;
+	font-size: max(var(--fs-min), calc(15px * var(--k)));
+	font-weight: 800;
+	cursor: pointer;
+	touch-action: manipulation;
+}
+/* Principal : rembourser et reinitialiser (le cas courant)
+   / Primary: refund and reset (the usual case) */
+.vider-bouton--principal { background: var(--warn); color: var(--warn-ink); }
+.vider-bouton--principal:active { filter: brightness(1.08); }
+/* Secondaire : rembourser et garder le compte du membre
+   / Secondary: refund and keep the member account */
+.vider-bouton--secondaire {
+	background: var(--surface-2);
+	box-shadow: inset 0 0 0 1px var(--line);
+	color: var(--text);
+}
+.vider-bouton--secondaire:active { background: var(--surface-3); }
+.vider-bouton small {
+	font-size: max(var(--fs-min), calc(12px * var(--k)));
+	font-weight: 600;
+	color: var(--text-dim);
+	overflow-wrap: anywhere;
+}
+.vider-bouton:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+.vider-bouton:disabled { opacity: .6; cursor: progress; }
+
+/* Explication courte sous les choix / Short hint below the choices */
+.vider-note {
+	margin: 0;
+	font-size: max(var(--fs-min), calc(12px * var(--k)));
+	color: var(--text-faint);
+	text-align: center;
+	text-wrap: balance;
+}
+
+/* Succes : « La carte a été réinitialisée. » en pastille discrete
+   / Success: "card was reset" as a quiet pill */
+.vider-etat {
+	justify-self: center;
+	padding: calc(4px * var(--k)) calc(12px * var(--k));
+	border-radius: var(--r-pill);
+	background: var(--surface-2);
+	color: var(--text-dim);
+	font-size: max(var(--fs-min), calc(13px * var(--k)));
+	font-weight: 650;
+}
+
+/* Le formulaire d'impression ne cree pas de boite : son bouton se range
+   dans .card-confirm-acts comme les autres.
+   / The print form creates no box: its button lines up in .card-confirm-acts. */
+.vider-form-imprimer { display: contents; }
 
 /* --- Animations --- */
 /* Apparition de la boite / Box entrance */
