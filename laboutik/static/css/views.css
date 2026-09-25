@@ -136,21 +136,17 @@ footer {
 
 /* ECRAN LARGE (> 1022px) : articles 71% + addition 29%
    / Large screen: articles 71% + addition 29% */
-@media only screen and (width > 1022px) {
+@media only screen and (min-width: 1023px) {
 	#products {
 		width: 71%;
 	}
 }
 
-
-@media only screen and (width > 1022px) {
-	#products {
-		width: 71%;
-	}
-}
+/* ECRAN MOYEN ET PETIT (<= 1022px) : le panier replie occupe le bas
+   / Medium and small screens: the folded cart sits at the bottom */
 @media only screen and (max-width : 1022px) {
 	#products-container {
-		height: calc(100% - 200px);
+		height: calc(100% - var(--addition-collapsed-height));
 	}
 }
 /* Mobile : footer texte plus petit pour gagner de la place
@@ -163,7 +159,7 @@ footer {
 
 /* TRES GRAND ECRAN (> 1199px) : footer plus grand
    / Very large screen: larger footer */
-@media only screen and (width > 1199px) {
+@media only screen and (min-width: 1200px) {
 	:root {
 		--footer-container-height: 120px;
 	}

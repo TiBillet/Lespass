@@ -55,6 +55,8 @@
 	--warning: #b85521;
 
 	--orange01: #ce4d1a;
+	/* Bandeau du mode ecole (cotton/header.html) / Training-mode banner */
+	--mode-ecole: #ff6600;
 
 	--valid: oklch(0.700 0.170 148);
 	--invalid: oklch(0.545 0.157 23.889);

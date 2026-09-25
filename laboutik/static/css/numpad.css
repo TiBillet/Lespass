@@ -66,8 +66,8 @@
 .numpad-touch--effacer .ico { font-size: calc(20px * var(--k, 1)); }
 
 /* Grandes touches de l'ecran « carte geree » (hx_managed_card.html) :
-   on garde ses touches carrees de 80 px (sizes.css).
-   / Managed card screen keeps its 80px square keys. */
+   touches carrees de 56 a 80 px selon l'ecran (sizes.css).
+   / Managed card screen: 56-80px square keys (sizes.css). */
 #mc-container .numpad-touch {
 	width: var(--key-width);
 	height: var(--key-height);

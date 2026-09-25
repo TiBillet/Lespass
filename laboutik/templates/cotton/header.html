@@ -3,14 +3,11 @@
   {% if mode_ecole %}
     {# Bandeau orange visible en mode ecole (LNE exigence 5) — indique que les ventes sont des simulations #}
     {# / Orange banner visible in training mode (LNE req. 5) — indicates sales are simulations #}
-    <div style="background: #ff6600;
-                color: white;
-                text-align: center;
-                padding: 8px;
-                font-weight: bold;
-                font-size: 1.2em;
-                position: relative;
-                z-index: 1000"
+    {# Style dans header.css (.bandeau-mode-ecole) : bande fine posee SOUS l'en-tete, #}
+    {# en position absolue. Elle ne change pas la hauteur de l'en-tete (49 px), #}
+    {# dont dependent la grille et le menu burger. #}
+    {# / Styled in header.css: thin strip below the header, absolute, so the header height is unchanged. #}
+    <div class="bandeau-mode-ecole"
          role="alert"
          aria-label="{% translate 'Mode ecole actif' %}"
          data-testid="banner-mode-ecole">{% translate "MODE ECOLE — SIMULATION" %}</div>
@@ -31,7 +28,7 @@
            class="menu-burger-icon"
            onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')">
         <span class="material-symbols-outlined" aria-hidden="true">{{ pv.icon }}</span> &nbsp;
-        {% if pv.name and hide_pv_name != True %}{{ pv.name }}{% endif %}
+        {% if pv.name and hide_pv_name != True %}<span class="header-title-nom">{{ pv.name }}</span>{% endif %}
         <span class="pos-chevron"></span>
       </div>
     {% endif %}
@@ -203,7 +200,11 @@
 
 	// Ouvrir/fermer le menu burger / Toggle burger menu
 	window.toggleMenuBurger = function (event, location="right") {
-		const ele = event.target
+		// currentTarget = l'element qui porte le onclick (#header-title ou l'icone burger).
+		// event.target serait l'enfant touche (nom du PV, icone, chevron) : la classe
+		// menu-burger-active atterrissait sur cet enfant et le menu se refermait aussitot.
+		// / currentTarget = the element holding the onclick, not the tapped child.
+		const ele = event.currentTarget
 		const classRep = ele.classList
         if(location !== "right" && location !== "left"){
             location = "right"
@@ -225,9 +226,12 @@
 		}
 	}
 
+	// Clic ailleurs : ferme le menu. closest() remonte aux parents : un clic sur un
+	// enfant du declencheur (nom du PV, icone, chevron) ne compte pas comme "ailleurs".
+	// / Click elsewhere closes the menu; closest() also matches the trigger's children.
 	document.addEventListener('click', (event) => {
-		const classRep = event.target.classList
-		if (!classRep.contains('menu-burger-icon') && !classRep.contains('menu-burger-item-content')) {
+		const clicDansLeDeclencheurOuLeMenu = event.target.closest('.menu-burger-icon, .menu-burger-item-content')
+		if (!clicDansLeDeclencheurOuLeMenu) {
 			hideMenuBurger()
 		}
 	})

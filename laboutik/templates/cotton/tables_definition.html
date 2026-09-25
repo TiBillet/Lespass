@@ -7,7 +7,7 @@
   <c-bt.table name="+" title="ajouter une table" onclick="document.querySelector('#add-table').style.display = 'flex';" />
   <!-- modal ajout table -->
   <!-- mode="hide" le modal n'est pas enlever du DOM (mode par défaut) mais caché -->
-  <c-modal id="add-table" style="display:none;" width="50%" height="20%" mode="hide">
+  <c-modal id="add-table" style="display:none;" height="auto" mode="hide">
   <c-slot name="header">Ajouter une table</c-slot>
   <c-slot name="main">
   <div class="s-add-table">

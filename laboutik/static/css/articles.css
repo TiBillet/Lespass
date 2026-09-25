@@ -41,7 +41,7 @@
 }
 
 /* pour une largeur supérieure ou égale à 599 pixels */
-@media only screen and (width > 599px) {
+@media only screen and (min-width: 600px) {
 	:root {
 		--article-per-col: 3;
 		--article-height: 128px;
@@ -52,7 +52,7 @@
 }
 
 /* pour une largeur supérieure ou égale à 1022 pixels — cible SUNMI D3 Mini */
-@media only screen and (width > 1022px) {
+@media only screen and (min-width: 1023px) {
 	:root {
 		--article-per-col: 4;
 		--article-height: 136px;
@@ -67,7 +67,9 @@
    Articles automatically fill the available width. */
 #products {
 	display: grid;
-	grid-template-columns: repeat(var(--article-per-col), 1fr);
+	/* minmax(0, 1fr) : un nom d'article tres long ne peut pas elargir sa colonne
+	   / minmax(0, 1fr): a very long article name cannot widen its column */
+	grid-template-columns: repeat(var(--article-per-col), minmax(0, 1fr));
 	gap: var(--article-gap);
 	padding: var(--article-gap);
 	align-content: start;
@@ -400,8 +402,11 @@
     position: fixed;
     right: 0;
     top: 0;
-    width: 40%;
+    /* 40 % de l'ecran, mais jamais moins de 360 px ni plus que l'ecran.
+       / 40% of the screen, never below 360px nor wider than the screen. */
+    width: min(100%, max(360px, 40%));
     height: 100vh;
+    height: 100dvh;
     z-index: 1001;
     background-color: var(--surface);
     color: var(--text);
@@ -426,10 +431,9 @@
 #article-panel-backdrop {
     display: none;
     position: fixed;
-    left: 0;
-    top: 0;
-    width: 100vw;
-    height: 100vh;
+    /* inset: 0 couvre l'ecran visible, sans le debordement de 100vw/100vh
+       / inset: 0 covers the visible screen, without 100vw/100vh overflow */
+    inset: 0;
     z-index: 1000;
     background: var(--overlay-veil);
 }
@@ -438,7 +442,9 @@
     display: block;
 }
 
-@media (max-width: 768px) {
+/* Mobile : le panneau prend tout l'ecran (breakpoint aligne sur 599 px)
+   / Mobile: full-screen panel (breakpoint aligned on 599px) */
+@media (max-width: 599px) {
     #article-panel { width: 100%; }
 }
 

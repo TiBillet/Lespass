@@ -112,6 +112,9 @@
     justify-content: space-between;
     gap: 10px;
     min-width: 0;
+    /* Un nom de tarif long revient a la ligne au lieu de deborder
+       / A long rate name wraps instead of overflowing */
+    overflow-wrap: anywhere;
     font-size: var(--fs-min);
     font-weight: 800;
 }
@@ -340,6 +343,18 @@
     }
     .tarif-numpad-value {
         font-size: 26px;
+    }
+}
+
+/* Telephone en paysage (ecran bas) : #products ne fait plus que ~170 px de haut,
+   la popup y etait trop serree. Elle passe en plein ecran (comme ventes.css).
+   Au-dessus de 500 px de haut, elle reste sur la grille et le ticket reste visible.
+   / Landscape phone: #products is only ~170px tall, so the popup goes full screen.
+   Taller screens keep it on the grid with the ticket visible. */
+@media only screen and (max-height: 500px) {
+    .tarif-overlay {
+        position: fixed;
+        padding: 8px;
     }
 }
 

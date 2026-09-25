@@ -281,12 +281,17 @@ function additionArmerVider() {
 function toggleAdditionResponsive(force_close=false){
 	let addition = document.querySelector('#addition')
 	let chevron = document.querySelector(".addition-chevron")
+	// Bande cliquable (cotton/addition.html) : son aria-expanded suit l'etat
+	// / Clickable strip: its aria-expanded follows the state
+	let bandeCliquable = document.querySelector(".addition-head-responsive")
 	if (force_close===true || addition.classList.contains("opened")){
 		addition.classList.remove("opened")
 		chevron.classList.remove("reverse")
+		if (bandeCliquable) bandeCliquable.setAttribute("aria-expanded", "false")
 	}else{
 		addition.classList.add("opened")
 		chevron.classList.add("reverse")
+		if (bandeCliquable) bandeCliquable.setAttribute("aria-expanded", "true")
 	}
 }
 

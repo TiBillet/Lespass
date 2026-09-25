@@ -25,7 +25,7 @@
 .sortie-stats { display: flex; gap: 12px; }
 .sortie-stat { flex: 1; padding: 12px 18px; border-radius: var(--r-panel); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 3px; }
 .sortie-stat span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
-.sortie-stat b { font-size: 18px; font-weight: 800; color: var(--text); }
+.sortie-stat b { font-size: 18px; font-weight: 800; color: var(--text); overflow-wrap: anywhere; }
 
 /* ------------------------------------------------------------------ */
 /*  Billets et pieces / Notes and coins                                */
@@ -39,7 +39,9 @@
 .denom-label { font-size: 14px; font-weight: 700; color: var(--text); }
 .denom-stepper { display: flex; align-items: center; gap: 10px; }
 .denom-btn {
-	width: 30px; height: 30px;
+	/* 44 px : taille d'un doigt, ces boutons sont touches en continu
+	   / 44px: finger size, these buttons are pressed constantly */
+	width: 44px; height: 44px;
 	display: grid;
 	place-items: center;
 	border: 0;
@@ -151,6 +153,10 @@
 	font-weight: 700;
 	font-size: 13px;
 	white-space: nowrap;
+	/* Libelle trop long : coupe par "..." au lieu de sortir du bouton
+	   / Label too long: ellipsis instead of spilling out of the button */
+	overflow: hidden;
+	text-overflow: ellipsis;
 	cursor: pointer;
 }
 .sortie-print { flex: 0 0 auto; }
@@ -183,7 +189,7 @@
 .sortie-alerte-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .sortie-alerte-btn-confirm,
 .sortie-alerte-btn-cancel {
-	min-height: 40px;
+	min-height: 44px;
 	padding: 0 16px;
 	border: 0;
 	border-radius: var(--r-ctrl);
@@ -196,6 +202,8 @@
 .sortie-alerte-btn-confirm:active { filter: brightness(1.08); }
 .sortie-alerte-btn-cancel { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-dim); }
 .sortie-alerte-btn-cancel:active { background: var(--surface-3); }
+.sortie-alerte-btn-confirm:focus-visible,
+.sortie-alerte-btn-cancel:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
 
 /* ------------------------------------------------------------------ */
 /*  Sortie enregistree / Withdrawal saved (hx_sortie_succes.html)      */
@@ -260,7 +268,7 @@
 .alerte-vz-card-info .alerte-vz-icone-bulle { color: var(--info-ink); }
 .alerte-vz-card-success .alerte-vz-icone-bulle { color: var(--valid); }
 .alerte-vz-titre { font-size: 15px; font-weight: 700; line-height: 1.4; color: var(--text); }
-.alerte-vz-actions { display: flex; gap: 8px; }
+.alerte-vz-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .alerte-vz-btn-retour {
 	display: inline-flex;
 	align-items: center;
@@ -288,6 +296,9 @@
 	.sortie-stats { flex-direction: column; gap: 8px; }
 	.denom-cols { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 	.denom-row { padding: 7px 14px; }
+	/* Boutons +/- a 44 px : on resserre l'ecart pour garder la ligne sur 320 px
+	   / 44px +/- buttons: tighter gap to keep the row within 320px */
+	.denom-stepper { gap: 6px; }
 	/* Deux rangees : [imprimer][note] puis [total][enregistrer]
 	   / Two rows: print + note, then total + save */
 	.sortie-card { flex-direction: column; gap: 10px; padding: 12px 14px; }

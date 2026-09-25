@@ -33,7 +33,10 @@
 	flex-direction: row;
 	justify-content: space-around;
 	align-items: center;
-	/*width: 100%;*/
+	/* flex: 1 + min-width: 0 : le bloc peut retrecir, le burger reste visible
+	   a droite meme a 320 px. / Can shrink so the burger stays visible at 320px. */
+	flex: 1;
+	min-width: 0;
 }
 
 .header-img {
@@ -62,8 +65,11 @@
 }
 
 #header-title {
-	/*width: calc(100% - var(--header-add-img-status-menu));*/
-	min-width: 200px;
+	/* min-width: 0 (et non 200 px) : a 320 px, logo + titre 200 px + burger
+	   depassaient l'ecran et le burger etait coupe.
+	   / min-width: 0 (not 200px): at 320px the burger used to be cut off. */
+	flex: 1 1 auto;
+	min-width: 0;
 	height: 100%;
 	display: flex;
 	flex-direction: row;
@@ -83,6 +89,36 @@
 	align-items: center;
 	font-size: 2rem;
 	cursor: pointer;
+}
+
+/* Nom du point de vente : une seule ligne, coupe avec "..." si trop long
+   / Point of sale name: single line, ellipsis when too long */
+.header-title-nom {
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Bandeau mode ecole : bande fine sous l'en-tete, en position absolue.
+   pointer-events: none laisse passer les touchers vers la caisse dessous.
+   / Training-mode strip under the header; touches pass through. */
+.bandeau-mode-ecole {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	z-index: 1000;
+	padding: 3px 8px;
+	background: var(--mode-ecole);
+	color: var(--blanc01);
+	font-size: 0.85rem;
+	font-weight: bold;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	pointer-events: none;
 }
 
 /* --- MENU OUVRANT --- */
@@ -289,7 +325,7 @@ Connection indicator - Indicateur de connection
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	min-height: 38px;
+	min-height: 44px;
 	padding: 0 12px;
 	border: 0;
 	border-radius: var(--r-ctrl);
@@ -337,13 +373,15 @@ Connection indicator - Indicateur de connection
 		display: none;
 	}
 	/* Format V2s (maquette .fmt-poche) / V2s format */
-	.hdr-back { font-size: 12px; padding: 0 8px; min-height: 32px; }
+	/* 44 px de haut minimum : taille d'un doigt / 44px minimum: finger size */
+	.hdr-back { font-size: 12px; padding: 0 8px; min-height: 44px; }
+	.header-img { margin: 0 10px; }
 	.hdr-title { font-size: 13px; }
 	.header-background--retour .net { margin-right: 10px; }
 }
 
 /* pour une largeur supérieure 1199 pixels */
-@media only screen and (width > 1199px) {
+@media only screen and (min-width: 1200px) {
 	:root {
 		--header-height: 58px;
 	}

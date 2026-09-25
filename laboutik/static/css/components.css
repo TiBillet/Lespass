@@ -72,9 +72,12 @@
 	align-items: center;
 }
 .nfc-toggle-simu {
+	/* En bas a gauche : en haut a droite, il recouvrait le bouton fermer
+	   des popups (.card-modal-close) sur petit ecran.
+	   / Bottom-left: top-right used to cover the popup close button. */
 	position: absolute;
-	right: 0;
-	top: 0;
+	left: 0;
+	bottom: 0;
 	width: 60px;
 	height: 60px;
 	color: var(--text-dim);
@@ -189,6 +192,10 @@
 	width: 100%;
 	display: flex;
 	flex-direction: row;
+	/* Noms de monnaie longs : passage a la ligne au lieu de deborder a 320 px
+	   / Long wallet names wrap instead of overflowing at 320px */
+	flex-wrap: wrap;
+	overflow-wrap: anywhere;
 	justify-content: center;
 	align-items: center;
 	font-size: 1.5rem;

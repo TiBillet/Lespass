@@ -6,7 +6,18 @@
 	{# acces aux tags de traduction Django.                                     #}
 	{# / Ticket header (mockup: .tk-head) — title + count pill. Singular and    #}
 	{# plural labels travel in data-* since addition.js cannot translate.       #}
-	<div class="addition-head addition-head-responsive">
+	{# Toute la bande ouvre / ferme le ticket en mode responsive (<= 1022 px),   #}
+	{# pas seulement le titre : cible tactile plus grande.                       #}
+	{# aria-expanded est mis a jour par toggleAdditionResponsive() (addition.js). #}
+	{# / The whole strip toggles the ticket in responsive mode (bigger target).  #}
+	<div class="addition-head addition-head-responsive"
+	     role="button"
+	     tabindex="0"
+	     aria-controls="addition-responsive-wrapper"
+	     aria-expanded="false"
+	     onclick="toggleAdditionResponsive()"
+	     onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAdditionResponsive() }"
+	     data-testid="addition-ouvrir-responsive">
 		<div style="display:flex;align-items: center;">
             <span class="addition-count"
                   data-label-un="{% translate 'article' %}"
@@ -15,11 +26,7 @@
 {#            <span class="last-added-item"> {% translate 'Dernier ajout : ' %}</span>#}
         </div>
 
-		<span type="button"
-              class="addition-title"
-		        onclick="toggleAdditionResponsive()"
-		        data-testid="addition-vider"
-		        disabled>
+		<span class="addition-title">
 			{% translate 'Ticket' %}
             <span class="material-symbols-outlined addition-chevron" aria-hidden="true">expand_less</span>
 		</span>

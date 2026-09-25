@@ -213,7 +213,9 @@
 #given-sum-msg-erreur {
 	margin-top: 4px;
 	width: 100%;
-	height: 24px;
+	/* min-height : un message sur deux lignes n'est plus coupe
+	   / min-height: a two-line message is no longer clipped */
+	min-height: 24px;
 	color: var(--warning);
 }
 
@@ -529,6 +531,8 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4rem;
+	/* 44 px : taille d'un doigt / 44px: finger size */
+	min-height: 44px;
 	background: transparent;
 	border: 1px solid var(--wash-2);
 	color: var(--text-faint);
@@ -539,10 +543,17 @@
 	cursor: pointer;
 	transition: color 150ms var(--ease-out), border-color 150ms var(--ease-out);
 }
-.btn-retour-recap:hover,
 .btn-retour-recap:focus-visible {
 	border-color: var(--wash-4);
 	color: var(--text-dim);
+}
+/* Survol reserve aux souris (sur tactile, :hover reste colle)
+   / Hover for mice only (it sticks on touch screens) */
+@media (hover: hover) {
+	.btn-retour-recap:hover {
+		border-color: var(--wash-4);
+		color: var(--text-dim);
+	}
 }
 
 
@@ -553,41 +564,11 @@
 }
 
 
-/* Boutons inline dans la zone d'alerte sortie de caisse
-   / Inline buttons in cash withdrawal alert zone */
-.sortie-alerte-btn-confirm {
-	background: var(--warn-wash);
-	color: var(--warn);
-	border: 2px solid var(--warn-edge);
-	padding: 0.5rem 1.2rem;
-	border-radius: 8px;
-	font-family: var(--font-ui);
-	font-size: 0.9rem;
-	font-weight: 600;
-	cursor: pointer;
-	transition: background 150ms var(--ease-out);
-}
-.sortie-alerte-btn-confirm:hover,
-.sortie-alerte-btn-confirm:focus-visible {
-	background: var(--warn-edge);
-}
-
-.sortie-alerte-btn-cancel {
-	background: transparent;
-	color: var(--text-faint);
-	border: 1px solid var(--wash-2);
-	padding: 0.5rem 1.2rem;
-	border-radius: 8px;
-	font-family: var(--font-ui);
-	font-size: 0.9rem;
-	cursor: pointer;
-	transition: color 150ms var(--ease-out), border-color 150ms var(--ease-out);
-}
-.sortie-alerte-btn-cancel:hover,
-.sortie-alerte-btn-cancel:focus-visible {
-	color: var(--text-dim);
-	border-color: var(--wash-4);
-}
+/* Boutons de l'alerte sortie de caisse (.sortie-alerte-btn-*) : definis
+   uniquement dans sortie_de_caisse.css. Le doublon d'ici (couleurs et
+   padding differents) dependait de l'ordre de chargement ; il est supprime.
+   / Cash withdrawal alert buttons live only in sortie_de_caisse.css;
+   the conflicting duplicate that used to be here was removed. */
 
 
 /* ============================================================
@@ -1275,8 +1256,9 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 	color: var(--text-faint);
 }
 .card-clavier-close {
-	width: max(36px, calc(24px * var(--k)));
-	height: max(36px, calc(24px * var(--k)));
+	/* 44 px minimum : taille d'un doigt / 44px minimum: finger size */
+	width: max(44px, calc(24px * var(--k)));
+	height: max(44px, calc(24px * var(--k)));
 	display: grid;
 	place-items: center;
 	border-radius: 50%;
@@ -1424,6 +1406,7 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 }
 .payment-total-val {
 	font-size: calc(34px * var(--k));
+	overflow-wrap: anywhere;
 	font-weight: 800;
 	letter-spacing: -.02em;
 	line-height: 1.1;
@@ -1696,6 +1679,17 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 .succes-assets .num { text-align: right; padding-left: calc(12px * var(--k)); white-space: nowrap; }
 .succes-assets .succes-paye { color: var(--text-faint); }
 .succes-assets td.num:last-child { color: var(--text); font-weight: 800; }
+
+/* Mobile : colonnes plus serrees pour que les 4 colonnes tiennent a 320 px,
+   sans masquer d'information (Avant / Paye / Apres restent visibles).
+   Le montant total se reduit avec la largeur, sans passer sous le bouton fermer.
+   / Mobile: tighter columns so 4 columns fit at 320px, nothing hidden.
+   The total amount shrinks with the width. */
+@media only screen and (max-width: 599px) {
+	.succes-assets .num { padding-left: 6px; }
+	.succes-assets th { letter-spacing: 0; }
+	.payment-total-val { font-size: clamp(26px, 9vw, calc(34px * var(--k))); }
+}
 
 /* Alertes (stock negatif, carte non rattachee) : teinte warn, jamais plein ecran
    / Alerts: warn tint, never full screen */

@@ -50,7 +50,7 @@
         <div class="stock-info-row" style="margin-top: 4px;">
             <span class="stock-info-label">{% translate "Vente hors stock" %}</span>
             <button class="panel-menu-btn"
-                    style="width: auto; padding: 4px 12px; font-size: 0.85rem; gap: 6px;
+                    style="width: auto; min-height: 44px; padding: 4px 12px; font-size: 0.85rem; gap: 6px;
                            {% if stock.autoriser_vente_hors_stock %}background: var(--vert04);{% else %}background: var(--rouge07);{% endif %}"
                     hx-post="/laboutik/article-panel/{{ product.uuid }}/stock/toggle-bloquant/"
                     hx-target="#article-panel"

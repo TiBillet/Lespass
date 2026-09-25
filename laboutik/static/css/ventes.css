@@ -73,6 +73,9 @@
 
 .kpis { display: flex; flex-direction: row; align-items: stretch; gap: 10px; }
 .kpi-block {
+	/* min-width: 0 : le bloc peut retrecir, le montant ne pousse plus
+	   les boutons hors de l'ecran. / Can shrink; the amount no longer pushes buttons off-screen. */
+	min-width: 0;
 	padding: 14px 18px;
 	border: 0;
 	border-radius: var(--r-panel);
@@ -86,7 +89,7 @@
 	align-content: center;
 }
 .kpi-lbl { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
-.kpi-val { font-size: 32px; font-weight: 800; letter-spacing: -.02em; }
+.kpi-val { font-size: clamp(22px, 3.2vw, 32px); font-weight: 800; letter-spacing: -.02em; overflow-wrap: anywhere; }
 .kpi-sub { font-size: 12.5px; color: var(--text-faint); }
 .kpi-sub b { color: var(--text); }
 .kpi-sub-sortie { color: var(--danger); }
@@ -97,6 +100,7 @@
 .kpi-fond-modifier {
 	justify-self: start;
 	margin-top: 2px;
+	min-height: 44px;
 	padding: 5px 12px;
 	border: 0;
 	border-radius: var(--r-pill);
@@ -151,7 +155,7 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	min-height: 40px;
+	min-height: 44px;
 	padding: 0 16px;
 	border: 0;
 	border-radius: var(--r-ctrl);
@@ -182,7 +186,7 @@
 .detail-contenu, .liste-ventes { display: grid; gap: 10px; min-width: 0; }
 .detail-filters { display: flex; gap: 8px; }
 .detail-filters select {
-	min-height: 40px;
+	min-height: 44px;
 	padding: 0 14px;
 	border: 0;
 	border-radius: var(--r-ctrl);
@@ -251,7 +255,7 @@ table.ventes-table, .mini-table table { width: 100%; border-collapse: collapse; 
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
-	min-height: 40px;
+	min-height: 44px;
 	padding: 0 16px;
 	border: 0;
 	border-radius: var(--r-ctrl);
@@ -381,7 +385,7 @@ a.kpi-action:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px;
 	border-radius: 10px;
 	background: var(--bg);
 }
-.seg-option { flex: 1; position: relative; display: grid; }
+.seg-option { flex: 1; min-width: 0; position: relative; display: grid; }
 .seg-option span {
 	display: grid;
 	place-items: center;
@@ -392,6 +396,7 @@ a.kpi-action:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px;
 	font-size: var(--fs-min);
 	font-weight: 700;
 	text-align: center;
+	overflow-wrap: anywhere;
 	cursor: pointer;
 	touch-action: manipulation;
 }
@@ -418,6 +423,14 @@ a.kpi-action:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px;
 .note-preview::placeholder { color: var(--text-faint); }
 .note-preview:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
 
+/* Ecran moyen (600 a 1022 px) : les KPI passent a la ligne si besoin,
+   la pile de boutons prend toute la largeur en dessous.
+   / Medium screens: KPIs wrap, the button stack goes full width below. */
+@media only screen and (min-width: 600px) and (max-width: 1022px) {
+	.kpis { flex-wrap: wrap; }
+	.kpi-actions-stack { flex: 1 1 100%; flex-direction: row; }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Terminal de poche SUNMI V2s (maquette .fmt-poche)                  */
 /*  / Pocket terminal                                                  */
@@ -439,7 +452,6 @@ a.kpi-action:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px;
 	.voir-detail { flex: 1 1 30%; padding: 0 10px; font-size: 11.5px; justify-content: center; }
 	.detail-head { flex-direction: column; align-items: stretch; }
 	.detail-filters { flex-direction: column; }
-	.detail-filters select { min-height: 38px; }
 	.ventes-detail-collapse { padding: 10px 12px 14px; }
 	.cloture-fermer { flex: 1; }
 	.correction-box { padding: 12px; }
