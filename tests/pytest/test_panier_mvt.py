@@ -395,7 +395,12 @@ def test_une_quantite_trafiquee_affiche_une_erreur_sans_bloquer_le_serveur(
     assert reponse.status_code == 200
     assert niveau_du_toast(reponse) == "error"
     assert items_du_panier(client) == []
-    assert duree_en_secondes < 1
+    # Sans la garde, int(Decimal("1e1000000")) prend environ 17 s (mesure du 2026-09-24).
+    # Avec elle, la reponse arrive en moins d'1 s. Le seuil de 5 s separe nettement les
+    # deux cas, sans echouer quand la machine est chargee pendant la suite complete.
+    # / Without the guard, the conversion takes ~17 s; with it, under 1 s. 5 s separates
+    #   both cases without failing under load during the full suite.
+    assert duree_en_secondes < 5
 
 
 @pytest.mark.parametrize(
