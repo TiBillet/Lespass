@@ -19,6 +19,7 @@ class WsPayload(TypedDict, total=False):
 
     # --- Carte / session normale ---
     uid: str  # UID RFID de la carte
+    prenom: str  # Prénom du titulaire de la carte, vide si carte anonyme
     liquid_label: str  # Nom de la boisson affichée
     balance: str  # Solde de la carte (Decimal sérialisé en str)
     prix_litre: str  # Prix effectif au litre (Decimal sérialisé en str)

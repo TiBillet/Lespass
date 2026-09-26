@@ -1,0 +1,43 @@
+{% load i18n static %}<!doctype html>
+{% comment %}
+BASE DES ÉCRANS TIREUSE
+/ Base template for tap screens
+
+LOCALISATION : controlvanne/templates/controlvanne/base_tireuse.html
+
+Base autonome, sans Bootstrap et sans barre de navigation.
+Elle charge une seule feuille de style : controlvanne/css/tireuse.css.
+Utilisée par kiosk_detail.html (une tireuse) et kiosk_list.html (toutes).
+/ Standalone base, no Bootstrap, no navbar. Loads tireuse.css only.
+
+Note : base.html (Bootstrap) reste en place pour la page de calibration.
+/ Note: base.html (Bootstrap) is kept for the calibration page.
+{% endcomment %}
+<html lang="{{ LANGUAGE_CODE|default:'fr' }}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}{% translate "Tap panel" %}{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'controlvanne/css/tireuse.css' %}?v=1" />
+  {% block head %}{% endblock %}
+</head>
+<body class="tireuse {% block body_class %}{% endblock %}">
+  {# Bandeau de perte de connexion WebSocket. #}
+  {# ecran_tireuse.js enlève ou remet l'attribut hidden. #}
+  {# / WebSocket connection-lost banner, toggled by ecran_tireuse.js #}
+  <div id="ws-status-banner"
+       class="bandeau-connexion"
+       role="status"
+       aria-live="assertive"
+       data-testid="kiosk-ws-banner"
+       hidden>
+    {% translate "Connexion au serveur perdue — reconnexion en cours…" %}
+  </div>
+
+  <main data-testid="kiosk-main">
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

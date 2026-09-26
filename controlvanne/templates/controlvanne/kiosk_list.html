@@ -1,28 +1,36 @@
-{% extends "base.html" %}
+{% extends "controlvanne/base_tireuse.html" %}
 {% load i18n static %}
-{# KIOSK LIST — grille de toutes les tireuses actives #}
-{# / KIOSK LIST — grid of all active taps #}
-{# LOCALISATION : controlvanne/templates/controlvanne/kiosk_list.html #}
-{# WebSocket : /ws/rfid/all/ — mises à jour de toutes les tireuses #}
+{% comment %}
+KIOSK LIST — toutes les tireuses actives, en vignettes
+/ KIOSK LIST — all active taps, as thumbnails
+
+LOCALISATION : controlvanne/templates/controlvanne/kiosk_list.html
+
+Vue : KioskViewSet.list (controlvanne/viewsets.py)
+WebSocket : /ws/rfid/all/ — reçoit les messages de toutes les tireuses.
+Chaque vignette : partial/tireuse_vignette.html
+{% endcomment %}
 
 {% block title %}{{ config.organisation|default:"TiBillet" }} — {% translate "All taps" %}{% endblock %}
 
+{% block body_class %}tireuse--liste{% endblock %}
+
 {% block content %}
-  <div class="row g-3" id="cards-grid" data-slug-focus="all" data-testid="kiosk-cards-grid">
-    {% for bec in becs %}
-      <div class="col-12 col-md-6 col-lg-4" id="card-col-{{ bec.uuid }}">
-        {% include "controlvanne/partial/kiosk_card.html" with bec=bec %}
-      </div>
-    {% empty %}
-      <div class="col-12">
-        <div class="alert alert-warning" data-testid="kiosk-no-tap">
-          {% translate "No tap configured." %}
-        </div>
-      </div>
-    {% endfor %}
+  <div class="tireuses-page">
+    <h1 class="tireuses-page__titre">{{ config.organisation|default:"TiBillet" }}</h1>
+
+    <div id="cards-grid" class="tireuses-grille" data-slug-focus="all" data-testid="kiosk-cards-grid">
+      {% for bec in becs %}
+        {% include "controlvanne/partial/tireuse_vignette.html" with bec=bec %}
+      {% empty %}
+        <p class="tireuses-vide" data-testid="kiosk-no-tap">{% translate "No tap configured." %}</p>
+      {% endfor %}
+    </div>
+
+    {% include "controlvanne/partial/tireuse_pied.html" %}
   </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'controlvanne/js/panel_kiosk.js' %}?v=3"></script>
+<script src="{% static 'controlvanne/js/ecran_tireuse.js' %}?v=3"></script>
 {% endblock %}

@@ -1,0 +1,32 @@
+{% comment %}
+ÉTAPE MAINTENANCE — tireuse hors service ou en rinçage
+/ MAINTENANCE STAGE — tap out of service or being rinsed
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/etapes/maintenance.html
+
+Visible quand data-etat="maintenance" (voir tireuse.css).
+- Au chargement : si la tireuse est désactivée dans l'admin (bec.enabled).
+- En direct : si le payload WebSocket contient maintenance=true.
+Pendant un rinçage (carte maintenance), le volume rincé s'affiche.
+/ Visible when data-etat="maintenance".
+
+Champs écrits par ecran_tireuse.js : message, volume-cl
+{% endcomment %}
+{% load i18n %}
+<section class="stage stage--maintenance" data-testid="tireuse-etape-maintenance">
+  <div class="screen screen--center">
+    <div class="done" aria-live="polite">
+      <div class="done__mark done__mark--maintenance" aria-hidden="true">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+          <path d="M14.5 5.5 a4 4 0 0 0 -5 5 L4 16 l4 4 5.5 -5.5 a4 4 0 0 0 5 -5 l-2.5 2.5 -3 -1 -1 -3 z"
+                stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1 class="screen__title">{% translate "Tireuse en maintenance" %}</h1>
+      <p class="done__line" data-champ="message"></p>
+      {# Caché par le CSS tant que volume-cl est vide (pas de rinçage en cours) #}
+      {# / Hidden by CSS while volume-cl is empty (no rinse in progress) #}
+      <p class="done__balance maintenance__volume">{% translate "Volume rincé" %} : <strong><span data-champ="volume-cl"></span>&nbsp;cl</strong></p>
+    </div>
+  </div>
+</section>

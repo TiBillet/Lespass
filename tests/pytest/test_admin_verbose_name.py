@@ -44,6 +44,12 @@ TOLERES = {
     ("laboutik", "HistoriqueFondDeCaisse", "uuid"),
     ("laboutik", "ImpressionLog", "uuid"),
     ("laboutik", "JournalOperation", "uuid"),
+    # Libellé posé par le formulaire, pas par le modèle :
+    # FutProductForm.__init__ l'affiche « Caractéristiques (style, degré, IBU…) »
+    # (Administration/admin/products.py). Choix fait pour éviter une migration
+    # AlterField sur chaque tenant. Ce test lit seulement le verbose_name du modèle.
+    # / Label set by the form, not the model, to avoid a per-tenant migration.
+    ("BaseBillet", "FutProduct", "tag"),
 }
 
 

@@ -23,12 +23,15 @@ from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
 from django.db import connection
 from django.http import HttpResponse
+from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
 from Administration.admin.base import ModelAdmin
+from unfold.decorators import display
+from solo.admin import SingletonModelAdmin
 
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
@@ -239,36 +242,60 @@ class TireuseBecAdmin(ModelAdmin):
     # Le code PIN n'est PAS dans la liste : il n'a d'interet qu'au moment ou l'on installe
     # le Raspberry Pi de CETTE tireuse. On le lit donc en ouvrant la tireuse.
     # / The PIN is NOT in the list view: it only matters when installing THIS tap's Pi.
+    # Le prix au litre n'est plus dans la liste : il se règle sur le fût
+    # (Admin → Fûts → tarif « Prix au litre »).
+    # / Price per liter is no longer in the list: it is set on the keg.
     list_display = (
         "nom_tireuse",
         "fut_actif",
-        "debimetre",
         "etat_du_raspberry_pi",
-        "prix_effectif_display",
         "volume_restant_cl",
         "enabled",
+        "bouton_kiosk",
     )
-    list_editable = ("fut_actif", "debimetre", "enabled")
+    list_editable = ("fut_actif", "enabled")
     fields = (
         "nom_tireuse",
         "fut_actif",
-        "debimetre",
         "enabled",
         "reservoir_illimite",
         "notes",
     )
 
-    @admin.display(description=_("Raspberry Pi"))
+    @display(description=_("Raspberry Pi appairé"), boolean=True)
     def etat_du_raspberry_pi(self, obj):
         """
-        Ou en est le Pi de cette tireuse. Le code PIN, lui, se lit en ouvrant la tireuse.
-        / Where this tap's Pi stands. The PIN itself is read by opening the tap.
+        Le Pi de cette tireuse est-il appairé ? Unfold affiche une coche ou une croix.
+        Pas encore appairé : ouvrir la tireuse pour lire le code PIN.
+        / Is this tap's Pi paired? Unfold shows a check or a cross.
         """
         if obj.terminal is None:
-            return "—"
-        if obj.terminal.est_appaire():
-            return _("Appairé")
-        return _("En attente — ouvrir pour le code PIN")
+            return False
+        return obj.terminal.est_appaire()
+
+    @display(description=_("Kiosk"))
+    def bouton_kiosk(self, obj):
+        """
+        Bouton qui ouvre l'écran kiosk de cette tireuse dans un nouvel onglet.
+        C'est la page affichée par le Raspberry Pi (kiosk_detail.html).
+        Styles inline : Unfold n'embarque pas les classes Tailwind personnalisées.
+        / Button opening this tap's kiosk screen in a new tab. Inline styles
+        because Unfold does not ship custom Tailwind classes.
+        """
+        adresse_du_kiosk = reverse("controlvanne-kiosk-detail", args=[obj.uuid])
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener" '
+            'data-testid="admin-tireuse-bouton-kiosk-{}" '
+            'style="display: inline-flex; align-items: center; gap: 4px; '
+            "padding: 4px 10px; border-radius: 6px; white-space: nowrap; "
+            "background-color: var(--color-primary-600); color: white; "
+            'font-weight: 600;">'
+            '<span class="material-symbols-outlined" aria-hidden="true" '
+            'style="font-size: 18px;">tv</span>{}</a>',
+            adresse_du_kiosk,
+            obj.uuid,
+            _("Voir le kiosk"),
+        )
 
     def get_readonly_fields(self, request, obj=None):
         """
@@ -348,15 +375,6 @@ class TireuseBecAdmin(ModelAdmin):
             'font-family: monospace;">{}</span>',
             code_lisible,
         )
-
-    @admin.display(description=_("Price/Liter"))
-    def prix_effectif_display(self, obj):
-        """Prix au litre depuis le fut actif.
-        / Per-liter price from the active keg."""
-        prix = obj.prix_litre  # propriete calculee / computed property
-        if prix and prix > 0:
-            return f"{prix}"
-        return "—"
 
     @admin.display(description=_("Remaining (cl)"), ordering="reservoir_ml")
     def volume_restant_cl(self, obj):
@@ -805,13 +823,21 @@ class SessionCalibrationAdmin(ModelAdmin):
 
 
 @admin.register(ConfigurationTireuse, site=staff_admin_site)
-class ConfigurationTireuseAdmin(ModelAdmin):
+class ConfigurationTireuseAdmin(SingletonModelAdmin, ModelAdmin):
     """
     Admin singleton : un seul objet possible (django-solo).
-    La vue liste redirige directement vers le formulaire unique.
-    / Singleton admin: only one object possible (django-solo).
-    The list view redirects directly to the single form.
+    SingletonModelAdmin affiche le formulaire directement à l'URL de liste,
+    comme ConfigurationAdmin (Administration/admin_tenant.py). Avant, la liste
+    redirigeait (302) vers le formulaire : la barre d'onglets du module ne
+    trouvait pas la page (test_admin_configuration_onglets.py).
+    / Singleton admin. SingletonModelAdmin renders the form at the list URL,
+    like ConfigurationAdmin. The former 302 redirect broke the tab bar.
     """
+
+    # Mis à None : sinon SingletonModelAdmin impose son template Django
+    # et le template Unfold n'est pas utilisé (même réglage que ConfigurationAdmin).
+    # / Set to None so the Unfold template is used (same as ConfigurationAdmin).
+    change_form_template = None
 
     def has_add_permission(self, request, obj=None):
         # Bloquer l'ajout si l'objet existe deja
@@ -828,18 +854,3 @@ class ConfigurationTireuseAdmin(ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
-
-    def changelist_view(self, request, extra_context=None):
-        """
-        Redirige la vue liste directement vers le formulaire de configuration unique.
-        / Redirect the list view directly to the single configuration form.
-        """
-        from django.shortcuts import redirect
-        from django.urls import reverse
-
-        obj = ConfigurationTireuse.get_solo()
-        return redirect(
-            reverse(
-                "staff_admin:controlvanne_configurationtireuse_change", args=[obj.pk]
-            )
-        )

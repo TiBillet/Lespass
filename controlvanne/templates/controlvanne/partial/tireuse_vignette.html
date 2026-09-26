@@ -1,0 +1,78 @@
+{% comment %}
+VIGNETTE D'UNE TIREUSE — version réduite pour la liste
+/ TAP THUMBNAIL — compact version for the list
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/tireuse_vignette.html
+
+Incluse en boucle par kiosk_list.html.
+Même principe que tireuse_ecran.html : même data-tireuse-uuid, même
+data-etat, mêmes data-champ. Le même JS (ecran_tireuse.js) pilote
+donc les deux vues.
+/ Same principle as tireuse_ecran.html: same attributes, same JS.
+
+La pastille d'état contient un libellé par état.
+tireuse.css montre seulement celui qui correspond à data-etat.
+/ The state pill has one label per state; CSS shows the matching one.
+
+Niveau du fût : --niveau-fut (un pourcentage). Valeur initiale calculée
+ici avec widthratio, puis mise à jour par le JS.
+/ Keg level: --niveau-fut (a percentage). Initial value from widthratio.
+
+Variable attendue : {{ bec }} — instance de TireuseBec
+{% endcomment %}
+{% load i18n l10n %}
+<article class="vignette"
+         data-tireuse-uuid="{{ bec.uuid }}"
+         data-etat="{% if bec.enabled %}veille{% else %}maintenance{% endif %}"
+         data-prix-litre="{{ bec.prix_litre|unlocalize }}"
+         style="--niveau-fut: {% widthratio bec.reservoir_ml bec.reservoir_max_ml 100 %}%;"
+         data-testid="kiosk-tap-card">
+
+  <div class="vignette__tete">
+    <div>
+      <div class="vignette__nom-tireuse">{{ bec.nom_tireuse }}</div>
+      <h2 class="vignette__biere">{{ bec.liquid_label }}</h2>
+    </div>
+    <span class="vignette__etat" aria-live="polite" data-testid="kiosk-tap-state">
+      <span class="vignette__etat-veille">{% translate "En attente" %}</span>
+      <span class="vignette__etat-service">{% translate "Carte posée" %}</span>
+      <span class="vignette__etat-tirage">{% translate "Service en cours" %}</span>
+      <span class="vignette__etat-fin">{% translate "Terminé" %}</span>
+      <span class="vignette__etat-refus">{% translate "Refusé" %}</span>
+      <span class="vignette__etat-maintenance">{% translate "Maintenance" %}</span>
+    </span>
+  </div>
+
+  {% include "controlvanne/partial/biere_pastilles.html" %}
+
+  {% if bec.prix_litre %}
+    <p class="vignette__prix">
+      {% blocktranslate with prix_verre=bec.prix_verre_25cl|floatformat:2 prix_litre=bec.prix_litre|floatformat:"-2" %}{{ prix_verre }} € / 25 cl (soit {{ prix_litre }} €/L){% endblocktranslate %}
+    </p>
+  {% endif %}
+
+  <div class="card-facts" aria-live="polite">
+    <div class="card-fact card-fact--accent">
+      <span class="card-fact__label">{% translate "Solde" %}</span>
+      <span class="card-fact__value" data-champ="solde">—</span>
+    </div>
+    <div class="card-fact">
+      <span class="card-fact__label">{% translate "Volume" %}</span>
+      <span class="card-fact__value"><span data-champ="volume-cl">0</span>&nbsp;cl</span>
+    </div>
+  </div>
+
+  <p class="vignette__message" data-champ="message" aria-live="polite"></p>
+
+  {% if not bec.reservoir_illimite %}
+    <div class="niveau-fut" data-testid="kiosk-tap-keg-level">
+      <div class="niveau-fut__libelle">
+        <span>{% translate "Fût" %}</span>
+        <span data-champ="niveau-fut">{% widthratio bec.reservoir_ml bec.reservoir_max_ml 100 %}&nbsp;%</span>
+      </div>
+      <div class="niveau-fut__piste" aria-hidden="true">
+        <div class="niveau-fut__barre"></div>
+      </div>
+    </div>
+  {% endif %}
+</article>

@@ -18,7 +18,7 @@ from Administration.admin.base import ModelAdmin
 from unfold.admin import StackedInline, TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.forms.widgets import WysiwygWidget
-from unfold.decorators import action
+from unfold.decorators import action, display
 from unfold.widgets import (
     UnfoldAdminSelectWidget,
     UnfoldAdminTextInputWidget,
@@ -1785,6 +1785,10 @@ class FutProductForm(ProductAdminCustomForm):
 
     class Meta(ProductAdminCustomForm.Meta):
         model = FutProduct
+        # "tag" en plus : les tags deviennent les pastilles de l'écran de la tireuse.
+        # Ajouté ici seulement, pas dans ProductAdminCustomForm.
+        # / "tag" added: tags become the chips on the tap screen. Only here.
+        fields = ProductAdminCustomForm.Meta.fields + ("tag",)
 
     # Categorie forcee a FUT — cachee dans le formulaire
     # / Category forced to FUT — hidden in the form
@@ -1850,6 +1854,39 @@ class FutProductForm(ProductAdminCustomForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Libellés adaptés à l'écran de la tireuse.
+        # On change seulement le formulaire, pas le verbose_name du modèle :
+        # un verbose_name créerait une migration appliquée sur chaque tenant.
+        # / Labels matching the tap screen. Form only, not the model's
+        # verbose_name (that would create a migration on every tenant).
+        libelles_ecran_tireuse = {
+            "name": (
+                _("Nom de la bière"),
+                _("Grand titre de l'écran de la tireuse."),
+            ),
+            "short_description": (
+                _("Brasserie"),
+                _("Exemple : « Brasserie de la Loire (42) ». Affiché sous l'étiquette."),
+            ),
+            "long_description": (
+                _("Description de la bière"),
+                _("Texte affiché sur l'écran de la tireuse, quand personne ne se sert."),
+            ),
+            "tag": (
+                _("Caractéristiques (style, degré, IBU…)"),
+                _("Une pastille par tag, triées par ordre alphabétique. La première est mise en couleur. "
+                  "Exemple : « 4,4° », « Blanche », « IBU 25 »."),
+            ),
+            "img": (
+                _("Étiquette de la bière"),
+                _("Image affichée sur l'écran de la tireuse et en caisse."),
+            ),
+        }
+        for nom_du_champ, (libelle, aide) in libelles_ecran_tireuse.items():
+            if nom_du_champ in self.fields:
+                self.fields[nom_du_champ].label = libelle
+                self.fields[nom_du_champ].help_text = aide
+
         instance = kwargs.get("instance")
 
         # Pre-selection de la palette si les couleurs actuelles correspondent a un preset
@@ -1888,27 +1925,42 @@ class FutProductForm(ProductAdminCustomForm):
         return cleaned
 
 
-class FutPriceInline(BasePriceInline):
-    """Inline tarifs pour les produits fut.
-    Ajoute contenance (volume par vente) et poids_mesure (vente au poids/volume).
-    Champs conditionnels : contenance cache si poids_mesure coche.
-    / Price inline for keg products.
-    Adds contenance (volume per sale) and poids_mesure (weight/volume sales).
-    Conditional fields: contenance hidden if poids_mesure checked.
+class FutPriceInlineForm(BasePriceInlineForm):
+    """Formulaire d'un tarif de fût : le prix saisi est un prix au litre.
+    / Keg price form: the price entered is a price per liter.
     LOCALISATION : Administration/admin/products.py"""
 
-    fields = ("name", "prix", "poids_mesure", "contenance", ("publish", "order"))
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Un fût est toujours vendu au volume : le prix est donc au litre.
+        # / A keg is always sold by volume: the price is per liter.
+        if "prix" in self.fields:
+            self.fields["prix"].label = _("Prix au litre")
+            self.fields["prix"].help_text = _(
+                "Le client paie le volume réellement servi. "
+                "Exemple : 15 € le litre = 3,75 € les 25 cl."
+            )
 
-    # Champs conditionnels : contenance cache si poids_mesure coche
-    # (la quantite est saisie a chaque vente, pas fixe).
-    # / Conditional fields: contenance hidden if poids_mesure checked
-    # (quantity is entered at each sale, not fixed).
-    inline_conditional_fields = {
-        "contenance": "poids_mesure == false",
-    }
 
-    class Media:
-        js = ("admin/js/inline_conditional_fields.js",)
+class FutPriceInline(BasePriceInline):
+    """Inline tarifs pour les produits fut.
+    Un fût est toujours vendu au volume : « vente au poids/volume »
+    (poids_mesure) n'est pas affiché, il est forcé à True par
+    FutProductAdmin.save_related. La contenance ne sert donc pas non plus.
+    / Price inline for keg products. poids_mesure is not shown: it is
+    forced to True by FutProductAdmin.save_related. No contenance either.
+    LOCALISATION : Administration/admin/products.py"""
+
+    form = FutPriceInlineForm
+    fields = ("name", "prix", ("publish", "order"))
+
+
+@display(description=_("Brasserie"))
+def fut_brasserie(obj):
+    """Colonne « Brasserie » de la liste des fûts (champ short_description).
+    Définie au niveau module : Unfold intercepte les méthodes du ModelAdmin.
+    / "Brewery" column of the keg list. Module level: Unfold wraps ModelAdmin methods."""
+    return obj.short_description or "—"
 
 
 @admin.register(FutProduct, site=staff_admin_site)
@@ -1921,6 +1973,9 @@ class FutProductAdmin(ProductAdmin):
     warn_unsaved_form = True
     form = FutProductForm
     inlines = [FutPriceInline]
+    # Recherche des tags (TagAdmin a search_fields = ["name"])
+    # / Tag search (TagAdmin has search_fields = ["name"])
+    autocomplete_fields = ["tag"]
     change_form_after_template = "admin/product/inline_conditional_fields.html"
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
@@ -1948,6 +2003,18 @@ class FutProductAdmin(ProductAdmin):
         If Stock exists but uses UN (pieces), warn."""
         super().save_related(request, form, formsets, change)
         produit = form.instance
+
+        # Un fût est TOUJOURS vendu au volume : on force « vente au
+        # poids/volume » sur tous ses tarifs, y compris les anciens.
+        # (Django ne sauvegarde que les lignes modifiées d'un inline :
+        # on ne peut pas compter sur le formulaire pour les anciens tarifs.)
+        # TireuseBec.prix_litre ne lit que les tarifs poids_mesure=True.
+        # / A keg is ALWAYS sold by volume: force poids_mesure on all its
+        # prices, old ones included. TireuseBec.prix_litre only reads those.
+        produit.prices.filter(poids_mesure=False).update(
+            poids_mesure=True,
+            contenance=None,
+        )
 
         # Verifier si un tarif poids_mesure existe pour ce produit
         # / Check if a weight-based price exists for this product
@@ -1992,13 +2059,18 @@ class FutProductAdmin(ProductAdmin):
 
     fieldsets = (
         (
-            _("General"),
+            # Tout ce qui s'affiche sur l'écran du Pi posé sur la tireuse
+            # (controlvanne/templates/controlvanne/partial/etapes/veille.html)
+            # / Everything shown on the tap's Pi screen
+            _("Écran de la tireuse"),
             {
                 "fields": (
                     "name",
                     "categorie_article",
+                    "tag",
                     "short_description",
                     "long_description",
+                    "img",
                 ),
             },
         ),
@@ -2010,7 +2082,6 @@ class FutProductAdmin(ProductAdmin):
                     "couleur_texte_pos",
                     "couleur_fond_pos",
                     "icon_pos",
-                    "img",
                 ),
             },
         ),
@@ -2027,7 +2098,7 @@ class FutProductAdmin(ProductAdmin):
 
     list_display = (
         "name",
-        "short_description",
+        fut_brasserie,
         "publish",
     )
 

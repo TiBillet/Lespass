@@ -1,0 +1,27 @@
+{% comment %}
+PASTILLES DE LA BIÈRE — style, degré, IBU…
+/ Beer chips — style, ABV, IBU…
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/biere_pastilles.html
+
+Une pastille par tag du fût actif (admin : Fûts → « Caractéristiques »),
+triées par ordre alphabétique (les tags n'ont pas d'ordre en base).
+La première pastille est remplie avec la couleur d'accent (voir tireuse.css).
+Rien n'est affiché si le fût n'a pas de tag.
+/ One chip per tag of the active keg. The first one is filled (tireuse.css).
+
+Inclus par : etapes/veille.html, etapes/service.html, tireuse_vignette.html
+Variable attendue : {{ bec }} — instance de TireuseBec
+{% endcomment %}
+{% load i18n %}
+{% if bec.fut_actif %}
+  {% with caracteristiques_de_la_biere=bec.fut_actif.tag.all|dictsort:"name" %}
+    {% if caracteristiques_de_la_biere %}
+      <ul class="beer-specs" aria-label="{% translate 'Caractéristiques de la bière' %}" data-testid="tireuse-pastilles">
+        {% for caracteristique in caracteristiques_de_la_biere %}
+          <li class="beer-specs__item">{{ caracteristique.name }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+{% endif %}

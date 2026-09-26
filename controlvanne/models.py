@@ -309,6 +309,14 @@ class TireuseBec(models.Model):
         return Decimal("0.00")
 
     @property
+    def prix_verre_25cl(self) -> Decimal:
+        """Prix d'un verre de 25 cl, pour l'écran de la tireuse.
+        Django n'a pas de filtre de multiplication dans les templates.
+        / Price of a 25 cl glass, for the tap screen.
+        Django templates have no multiplication filter."""
+        return self.prix_litre * Decimal("0.25")
+
+    @property
     def reservoir_max_ml(self) -> float:
         """Volume de reference (fut plein) en ml, pour calcul du % jauge.
         Lit la quantite initiale depuis le Stock inventaire du fut actif.

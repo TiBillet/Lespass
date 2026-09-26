@@ -1,0 +1,99 @@
+{% comment %}
+ÉTAPES SERVICE et TIRAGE — carte posée, le client se sert
+/ SERVICE and POURING STAGES — card present, customer serves themselves
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/etapes/service.html
+
+Visible quand data-etat="service" ou data-etat="tirage" (voir tireuse.css).
+- service : carte acceptée, rien versé → étapes 1 et 2 allumées
+- tirage  : la bière coule → étapes 3 et 4 allumées, le verre se remplit,
+            le solde baisse en direct
+Le CSS allume les étapes selon data-etat. Aucun JS pour ça.
+/ Visible for "service" and "tirage". CSS lights the steps from data-etat.
+
+Champs écrits par ecran_tireuse.js (data-champ) :
+- prenom    : prénom du titulaire, vide si carte anonyme (payload "prenom")
+- carte     : 4 derniers caractères de l'UID de la carte
+- solde     : solde de la carte, en euros
+- verres    : nombre de verres de 25 cl que le solde permet
+- volume-cl : volume servi depuis la pose de la carte
+La hauteur de bière vient de la variable CSS --remplissage-verre.
+/ Fields written by ecran_tireuse.js. Beer height from --remplissage-verre.
+
+Variable attendue : {{ bec }} — instance de TireuseBec
+{% endcomment %}
+{% load i18n %}
+<section class="stage stage--service" data-testid="tireuse-etape-service">
+  <div class="screen">
+    <div class="serve2">
+
+      <div class="serve2__head">
+        <div class="serve2__ident">
+          <h1 class="serve2__beer-name">{{ bec.liquid_label }}</h1>
+          {% include "controlvanne/partial/biere_pastilles.html" %}
+        </div>
+        <div class="card-chip" data-testid="tireuse-salutation">
+          <div class="card-chip__line">
+            <span class="card-chip__hello">{% translate "Bonjour" %}</span><span class="card-chip__name" data-champ="prenom"></span>
+          </div>
+          <div class="card-chip__id">{% translate "carte" %} ·· <span data-champ="carte"></span></div>
+        </div>
+      </div>
+
+      <div class="card-facts" aria-live="polite" data-testid="tireuse-infos-carte">
+        <div class="card-fact">
+          <span class="card-fact__label">{% translate "Prix" %}</span>
+          <span class="card-fact__value">{{ bec.prix_verre_25cl|floatformat:2 }}&nbsp;€ / 25&nbsp;cl</span>
+        </div>
+        <div class="card-fact card-fact--accent">
+          <span class="card-fact__label">{% translate "Solde" %}</span>
+          <span class="card-fact__value" data-champ="solde" data-testid="tireuse-solde">—</span>
+        </div>
+        <div class="card-fact">
+          <span class="card-fact__label">{% translate "Soit" %}</span>
+          <span class="card-fact__value"><span data-champ="verres">—</span> {% translate "verres" %}</span>
+        </div>
+      </div>
+
+      <div class="serve2__body">
+
+        {# Mode d'emploi : allumé par le CSS selon data-etat #}
+        {# / Instructions: lit by CSS from data-etat #}
+        <div class="serve-block">
+          <h2 class="serve-block__title">{% translate "Je me sers" %}</h2>
+          <ol class="serve-block__steps">
+            <li class="step-line" data-serve-step="1">
+              <span class="step-line__num" aria-hidden="true">1</span>
+              <span class="step-line__text">{% translate "Rincez votre verre" %}</span>
+            </li>
+            <li class="step-line" data-serve-step="2">
+              <span class="step-line__num" aria-hidden="true">2</span>
+              <span class="step-line__text">{% translate "Placez le verre légèrement incliné sous le bec" %}</span>
+            </li>
+            <li class="step-line" data-serve-step="3">
+              <span class="step-line__num" aria-hidden="true">3</span>
+              <span class="step-line__text">{% translate "Baissez rapidement la manette à fond" %}</span>
+            </li>
+            <li class="step-line" data-serve-step="4">
+              <span class="step-line__num" aria-hidden="true">4</span>
+              <span class="step-line__text">{% translate "Relevez rapidement la manette" %}</span>
+            </li>
+          </ol>
+        </div>
+
+        {# Le verre : hauteur de bière = --remplissage-verre (0 à 1) #}
+        {# / The glass: beer height = --remplissage-verre (0 to 1) #}
+        <div class="glass-block">
+          <div class="serve__glass" aria-hidden="true">
+            <div class="serve__liquid"></div>
+          </div>
+          <div class="serve2__readout" aria-live="polite" data-testid="tireuse-volume">
+            <span class="serve2__readout-value" data-champ="volume-cl">0</span>
+            <span class="serve2__readout-unit">cl</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>

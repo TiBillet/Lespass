@@ -18,9 +18,9 @@ Deux groupes Channels :
 
 COMMUNICATION :
 Reçoit : state_update depuis les signaux TireuseBec (signals.py)
-Envoie : payload JSON vers le client JS (panel_kiosk.js)
+Envoie : payload JSON vers le client JS (ecran_tireuse.js)
 / Receives: state_update from TireuseBec signals (signals.py)
-Sends: JSON payload to JS client (panel_kiosk.js)
+Sends: JSON payload to JS client (ecran_tireuse.js)
 """
 
 import logging
@@ -90,9 +90,9 @@ class PanelConsumer(AsyncJsonWebsocketConsumer):
     async def state_update(self, event):
         """
         Reçoit un event state_update depuis les signaux Django (signals.py).
-        Transmet le payload JSON au client WebSocket (panel_kiosk.js).
+        Transmet le payload JSON au client WebSocket (ecran_tireuse.js).
         / Receives a state_update event from Django signals (signals.py).
-        Forwards the JSON payload to the WebSocket client (panel_kiosk.js).
+        Forwards the JSON payload to the WebSocket client (ecran_tireuse.js).
         """
         logger.debug(f"WS envoi au groupe {self.group}")
         await self.send_json(event["payload"])

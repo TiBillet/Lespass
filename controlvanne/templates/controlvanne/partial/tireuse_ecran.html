@@ -1,0 +1,49 @@
+{% comment %}
+ÉCRAN D'UNE TIREUSE — conteneur des étapes
+/ Single tap screen — container of the stages
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/tireuse_ecran.html
+
+L'écran du Pi n'est pas tactile. Toutes les étapes sont rendues ici
+une seule fois. Une seule est visible à la fois.
+/ The Pi screen is not touch-enabled. All stages are rendered once here.
+Only one is visible at a time.
+
+FLUX :
+1. Le WebSocket /ws/rfid/<uuid>/ reçoit un message JSON.
+2. ecran_tireuse.js choisit l'état et le pose dans data-etat.
+3. tireuse.css montre la section .stage--<état> correspondante.
+4. ecran_tireuse.js écrit les valeurs dans les éléments [data-champ].
+/ FLOW: WS message → JS sets data-etat → CSS shows the matching stage.
+
+ÉTATS (data-etat) :
+- veille      : personne, fiche de la bière          → etapes/veille.html
+- service     : carte posée, rien versé              → etapes/service.html
+- tirage      : la bière coule                       → etapes/service.html
+- fin         : carte retirée, bilan                 → etapes/fin.html
+- refus       : carte refusée (inconnue, solde…)     → etapes/refus.html
+- maintenance : tireuse hors service ou rinçage      → etapes/maintenance.html
+
+Variables CSS posées par le JS sur cette racine :
+- --remplissage-verre : de 0 à 1, hauteur de la bière dans le verre
+
+Variable attendue : {{ bec }} — instance de TireuseBec
+/ Expected variable: {{ bec }} — TireuseBec instance
+{% endcomment %}
+{% load l10n %}
+<div class="tireuse__frame"
+     data-tireuse-uuid="{{ bec.uuid }}"
+     data-etat="{% if bec.enabled %}veille{% else %}maintenance{% endif %}"
+     data-prix-litre="{{ bec.prix_litre|unlocalize }}"
+     data-testid="tireuse-ecran">
+
+  <div class="tireuse__stages">
+    {% include "controlvanne/partial/etapes/veille.html" %}
+    {% include "controlvanne/partial/etapes/service.html" %}
+    {% include "controlvanne/partial/etapes/fin.html" %}
+    {% include "controlvanne/partial/etapes/refus.html" %}
+    {% include "controlvanne/partial/etapes/maintenance.html" %}
+  </div>
+
+  {% include "controlvanne/partial/tireuse_pied.html" %}
+</div>

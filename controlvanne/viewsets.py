@@ -127,6 +127,14 @@ def _construire_payload_session(tireuse, session, **extras):
     :param extras: champs supplémentaires à fusionner (vanne_ouverte, session_done, etc.)
     :return: dict payload
     """
+    # Prénom du client si la carte est liée à un compte. Carte anonyme → chaîne vide.
+    # Affiché sur l'écran de la tireuse : « Bonjour Camille », « Merci Camille ! ».
+    # / Customer first name if the card is linked to an account. Anonymous card → empty string.
+    prenom_du_client = ""
+    carte_de_la_session = session.carte if session else None
+    if carte_de_la_session and carte_de_la_session.user and carte_de_la_session.user.first_name:
+        prenom_du_client = carte_de_la_session.user.first_name
+
     payload = {
         "tireuse_bec": tireuse.nom_tireuse,
         "tireuse_bec_uuid": str(tireuse.uuid),
@@ -139,6 +147,7 @@ def _construire_payload_session(tireuse, session, **extras):
         "vanne_ouverte": False,
         "volume_ml": float(session.dernier_volume_ml if session else 0),
         "uid": session.uid if session else None,
+        "prenom": prenom_du_client,
         "message": "",
     }
     # Carte maintenance → flag maintenance
@@ -150,6 +159,173 @@ def _construire_payload_session(tireuse, session, **extras):
     # / Merge extra fields (vanne_ouverte, balance, message, etc.)
     payload.update(extras)
     return payload
+
+
+def _cloturer_session_et_facturer(tireuse, session, volume_ml, ip="0.0.0.0"):
+    """
+    Ferme une session NFC et facture le volume servi.
+    / Closes an NFC session and bills the served volume.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    Utilisée par :
+    - event() au pour_end / card_removed (fin normale d'un service) ;
+    - authorize() pour les sessions orphelines : une session restée ouverte
+      parce que card_removed n'est jamais arrivé (Pi redémarré, coupure
+      réseau, page du simulateur rechargée).
+    / Used by event() at pour_end / card_removed, and by authorize() for
+    orphan sessions left open because card_removed never arrived.
+
+    ÉTAPES (dans une seule transaction) :
+    1. Verrouille la session et vérifie qu'elle est encore ouverte.
+    2. La ferme avec le volume servi.
+    3. Retire ce volume du réservoir de la tireuse.
+    4. Facture le tirage (sauf maintenance, volume nul ou pas de fût).
+
+    :param tireuse: TireuseBec
+    :param session: RfidSession — la session à fermer
+    :param volume_ml: Decimal — volume total servi pendant la session
+    :param ip: str — adresse IP pour la trace de facturation
+    :return: (session fermée, résultat de facturation ou None).
+             (None, None) si un événement concurrent l'avait déjà fermée.
+    """
+    resultat_facturation = None
+
+    # Verrou anti-double-facturation (fix review 2026-07-06, C1) :
+    # deux événements concurrents (pour_end rejoué par le Pi sur
+    # timeout réseau, ou pour_end + card_removed chevauchés)
+    # lisaient la même session ouverte et facturaient DEUX FOIS le
+    # même tirage. On verrouille la ligne de session et on
+    # re-vérifie qu'elle est toujours ouverte : l'appel concurrent
+    # sort proprement sans re-facturer. Fermeture, réservoir et
+    # facturation partagent désormais la même transaction (fix I1).
+    # / Anti-double-billing lock (2026-07-06 review, C1): two
+    # concurrent events (pour_end retried by the Pi on network
+    # timeout, or overlapping pour_end + card_removed) both read
+    # the same open session and billed the SAME pour TWICE. Lock
+    # the session row and re-check it is still open: the concurrent
+    # call exits cleanly without billing again. Close, reservoir
+    # and billing now share one transaction (I1 fix).
+    from django.db import transaction as db_transaction
+
+    with db_transaction.atomic():
+        session_verrouillee = (
+            RfidSession.objects.select_for_update()
+            .filter(pk=session.pk, ended_at__isnull=True)
+            .first()
+        )
+        if session_verrouillee is None:
+            # Un événement concurrent a déjà fermé (et facturé) la
+            # session : on ne refait rien.
+            # / A concurrent event already closed (and billed) the
+            # session: do nothing again.
+            return None, None
+        session = session_verrouillee
+
+        session.close_with_volume(float(volume_ml))
+
+        # Décrémenter le réservoir / Decrement reservoir
+        if volume_ml > 0 and not session.is_maintenance:
+            tireuse.reservoir_ml = max(
+                Decimal("0"),
+                tireuse.reservoir_ml - Decimal(str(float(volume_ml))),
+            )
+            tireuse.save(update_fields=["reservoir_ml"])
+
+        # --- Facturation (sauf maintenance) ---
+        # / Billing (except maintenance)
+        if not session.is_maintenance and volume_ml > 0 and tireuse.fut_actif:
+            from controlvanne.billing import (
+                obtenir_contexte_cashless,
+                facturer_tirage,
+            )
+            from fedow_core.exceptions import SoldeInsuffisant
+
+            contexte = obtenir_contexte_cashless(session.carte)
+            if contexte:
+                try:
+                    resultat_facturation = facturer_tirage(
+                        session=session,
+                        tireuse=tireuse,
+                        carte=session.carte,
+                        volume_ml=volume_ml,
+                        contexte_cashless=contexte,
+                        ip=ip,
+                    )
+                except SoldeInsuffisant:
+                    # Le solde a changé entre authorize et pour_end (race
+                    # condition). La bière est déjà servie — on log sans
+                    # bloquer. L'atomic interne de facturer_tirage
+                    # (savepoint) a annulé la facturation ; la fermeture
+                    # de session et le réservoir sont conservés (réalité
+                    # physique).
+                    # / Balance changed between authorize and pour_end.
+                    # Beer already served — log without blocking. The
+                    # inner atomic of facturer_tirage (savepoint) rolled
+                    # back the billing; session close and reservoir are
+                    # kept (physical reality).
+                    logger.error(
+                        f"SoldeInsuffisant à la clôture: carte={session.uid} "
+                        f"tireuse={tireuse.nom_tireuse} volume={volume_ml}ml"
+                    )
+
+    return session, resultat_facturation
+
+
+def _cloturer_sessions_orphelines(tireuse, ip="0.0.0.0"):
+    """
+    Ferme et facture les sessions restées ouvertes sur une tireuse.
+    / Closes and bills the sessions left open on a tap.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    Appelée par authorize(), AVANT d'ouvrir une nouvelle session.
+    Un nouveau badge sur une tireuse veut dire que la carte précédente
+    n'est plus là : sa session aurait dû être fermée par card_removed.
+    Ce message peut manquer : Pi redémarré ou coupure réseau pendant un
+    service, page du simulateur rechargée avec une carte posée.
+    / Called by authorize() BEFORE opening a new session. A new badge means
+    the previous card is gone; its card_removed may never have arrived.
+
+    Sans cette fermeture :
+    - le kiosk s'ouvre sur l'écran de service, comme si une carte était posée
+      (le consumer envoie present=true tant qu'une session est ouverte) ;
+    - le volume déjà versé n'est jamais facturé (facturation au pour_end).
+
+    On facture le dernier volume connu (dernier_volume_ml, reçu au dernier
+    pour_update). Le volume versé après ce dernier message est perdu.
+    / We bill the last known volume (last pour_update).
+
+    :param tireuse: TireuseBec
+    :param ip: str — adresse IP pour la trace de facturation
+    :return: int — nombre de sessions fermées
+    """
+    sessions_restees_ouvertes = RfidSession.objects.filter(
+        tireuse_bec=tireuse,
+        ended_at__isnull=True,
+    ).select_related("carte")
+
+    nombre_de_sessions_fermees = 0
+    for session_orpheline in sessions_restees_ouvertes:
+        volume_du_dernier_message_ml = session_orpheline.dernier_volume_ml or Decimal("0")
+        session_fermee, resultat_facturation = _cloturer_session_et_facturer(
+            tireuse,
+            session_orpheline,
+            volume_du_dernier_message_ml,
+            ip=ip,
+        )
+        if session_fermee is None:
+            # Fermée entre-temps par un autre appel : rien à faire
+            # / Closed meanwhile by another call: nothing to do
+            continue
+        nombre_de_sessions_fermees += 1
+        logger.warning(
+            f"Session orpheline fermée au badge suivant : session={session_fermee.pk} "
+            f"tireuse={tireuse.nom_tireuse} carte={session_fermee.uid} "
+            f"volume={float(volume_du_dernier_message_ml):.0f}ml "
+            f"facture={'oui' if resultat_facturation else 'non'}"
+        )
+    return nombre_de_sessions_fermees
 
 
 class TireuseViewSet(viewsets.ViewSet):
@@ -238,10 +414,23 @@ class TireuseViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Fermer (et facturer) les sessions restées ouvertes sur cette tireuse.
+        # Un nouveau badge = la carte précédente n'est plus là. Fait avant tout
+        # refus : même une carte refusée prouve que l'ancienne est partie.
+        # / Close (and bill) sessions left open on this tap. A new badge means
+        # the previous card is gone. Done before any refusal.
+        _cloturer_sessions_orphelines(
+            tireuse,
+            ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+        )
+
         # Chercher la carte NFC / Find the NFC card
         from QrcodeCashless.models import CarteCashless
 
-        carte = CarteCashless.objects.filter(tag_id=uid).first()
+        # select_related("user") : le prénom du titulaire est envoyé au kiosk
+        # (voir _construire_payload_session), sans requête en plus.
+        # / select_related("user"): the holder's first name is sent to the kiosk.
+        carte = CarteCashless.objects.select_related("user").filter(tag_id=uid).first()
         if not carte:
             _push_refus(tireuse, "Carte non reconnue.")
             return Response({"authorized": False, "message": "Unknown card."})
@@ -521,92 +710,28 @@ class TireuseViewSet(viewsets.ViewSet):
             session.save(update_fields=["volume_start_ml"])
 
         elif event_type in ("pour_end", "card_removed"):
-            # Verrou anti-double-facturation (fix review 2026-07-06, C1) :
-            # deux événements concurrents (pour_end rejoué par le Pi sur
-            # timeout réseau, ou pour_end + card_removed chevauchés)
-            # lisaient la même session ouverte et facturaient DEUX FOIS le
-            # même tirage. On verrouille la ligne de session et on
-            # re-vérifie qu'elle est toujours ouverte : l'appel concurrent
-            # sort proprement sans re-facturer. Fermeture, réservoir et
-            # facturation partagent désormais la même transaction (fix I1).
-            # / Anti-double-billing lock (2026-07-06 review, C1): two
-            # concurrent events (pour_end retried by the Pi on network
-            # timeout, or overlapping pour_end + card_removed) both read
-            # the same open session and billed the SAME pour TWICE. Lock
-            # the session row and re-check it is still open: the concurrent
-            # call exits cleanly without billing again. Close, reservoir
-            # and billing now share one transaction (I1 fix).
-            from django.db import transaction as db_transaction
-
-            with db_transaction.atomic():
-                session_verrouillee = (
-                    RfidSession.objects.select_for_update()
-                    .filter(pk=session.pk, ended_at__isnull=True)
-                    .first()
+            session_fermee, resultat_facturation = _cloturer_session_et_facturer(
+                tireuse,
+                session,
+                volume_ml,
+                ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+            )
+            if session_fermee is None:
+                # Un événement concurrent a déjà fermé (et facturé) la
+                # session : on répond OK sans rien refaire.
+                # / A concurrent event already closed (and billed) the
+                # session: answer OK without redoing anything.
+                logger.info(
+                    f"Event {event_type} ignoré : session {session.pk} "
+                    f"déjà fermée par un événement concurrent (uid={uid})"
                 )
-                if session_verrouillee is None:
-                    # Un événement concurrent a déjà fermé (et facturé) la
-                    # session : on répond OK sans rien refaire.
-                    # / A concurrent event already closed (and billed) the
-                    # session: answer OK without redoing anything.
-                    logger.info(
-                        f"Event {event_type} ignoré : session {session.pk} "
-                        f"déjà fermée par un événement concurrent (uid={uid})"
-                    )
-                    return Response(
-                        {
-                            "status": "ok",
-                            "message": "Session already closed by a concurrent event.",
-                        }
-                    )
-                session = session_verrouillee
-
-                session.close_with_volume(float(volume_ml))
-
-                # Décrémenter le réservoir / Decrement reservoir
-                if volume_ml > 0 and not session.is_maintenance:
-                    tireuse.reservoir_ml = max(
-                        Decimal("0"),
-                        tireuse.reservoir_ml - Decimal(str(float(volume_ml))),
-                    )
-                    tireuse.save(update_fields=["reservoir_ml"])
-
-                # --- Facturation (sauf maintenance) ---
-                # / Billing (except maintenance)
-                if not session.is_maintenance and volume_ml > 0 and tireuse.fut_actif:
-                    from controlvanne.billing import (
-                        obtenir_contexte_cashless,
-                        facturer_tirage,
-                    )
-                    from fedow_core.exceptions import SoldeInsuffisant
-
-                    contexte = obtenir_contexte_cashless(session.carte)
-                    if contexte:
-                        try:
-                            resultat_facturation = facturer_tirage(
-                                session=session,
-                                tireuse=tireuse,
-                                carte=session.carte,
-                                volume_ml=volume_ml,
-                                contexte_cashless=contexte,
-                                ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
-                            )
-                        except SoldeInsuffisant:
-                            # Le solde a changé entre authorize et pour_end (race
-                            # condition). La bière est déjà servie — on log sans
-                            # bloquer. L'atomic interne de facturer_tirage
-                            # (savepoint) a annulé la facturation ; la fermeture
-                            # de session et le réservoir sont conservés (réalité
-                            # physique).
-                            # / Balance changed between authorize and pour_end.
-                            # Beer already served — log without blocking. The
-                            # inner atomic of facturer_tirage (savepoint) rolled
-                            # back the billing; session close and reservoir are
-                            # kept (physical reality).
-                            logger.error(
-                                f"SoldeInsuffisant au pour_end: carte={uid} "
-                                f"tireuse={tireuse.nom_tireuse} volume={volume_ml}ml"
-                            )
+                return Response(
+                    {
+                        "status": "ok",
+                        "message": "Session already closed by a concurrent event.",
+                    }
+                )
+            session = session_fermee
 
             logger.info(
                 f"Event {event_type}: carte={uid} tireuse={tireuse.nom_tireuse} "
@@ -971,9 +1096,15 @@ class KioskViewSet(viewsets.ViewSet):
         if not _verifier_authentification_kiosk(request):
             return HttpResponseForbidden("Not authenticated for kiosk.")
 
-        toutes_les_tireuses_actives = TireuseBec.objects.filter(
-            enabled=True,
-        ).order_by("nom_tireuse")
+        # fut_actif et ses tags sont affichés sur chaque vignette :
+        # on les charge en une fois pour éviter une requête par tireuse.
+        # / fut_actif and its tags are shown on each thumbnail: load them at once.
+        toutes_les_tireuses_actives = (
+            TireuseBec.objects.filter(enabled=True)
+            .select_related("fut_actif")
+            .prefetch_related("fut_actif__tag")
+            .order_by("nom_tireuse")
+        )
 
         config = Configuration.get_solo()
 
@@ -988,7 +1119,7 @@ class KioskViewSet(viewsets.ViewSet):
     def retrieve(self, request, pk=None):
         """
         GET /controlvanne/kiosk/<uuid>/
-        Écran dédié à une seule tireuse avec jauge, prix, et état temps réel.
+        Écran du Pi posé sur une seule tireuse (fiche bière, service, bilan).
         Le WebSocket se connecte à /ws/rfid/<uuid>/ pour les mises à jour ciblées.
         En mode DEMO, affiche le panneau simulateur Pi (boutons carte + slider débit).
         / Screen dedicated to a single tap with gauge, prices, and real-time state.
@@ -1006,7 +1137,10 @@ class KioskViewSet(viewsets.ViewSet):
         if not _verifier_authentification_kiosk(request):
             return HttpResponseForbidden("Not authenticated for kiosk.")
 
-        tireuse = get_object_or_404(TireuseBec, uuid=pk)
+        tireuse = get_object_or_404(
+            TireuseBec.objects.select_related("fut_actif").prefetch_related("fut_actif__tag"),
+            uuid=pk,
+        )
         config = Configuration.get_solo()
 
         context = {

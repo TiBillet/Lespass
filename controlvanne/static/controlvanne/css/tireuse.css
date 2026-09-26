@@ -1,0 +1,753 @@
+/* =================================================================
+   ÉCRAN TIREUSE SANS CONTACT — feuille de style unique
+   / Contactless tap screen — single stylesheet
+
+   LOCALISATION : controlvanne/static/controlvanne/css/tireuse.css
+
+   Reprise de la maquette TEMP-tibillet-tireuse-main/tireuses-non-tactile.
+   L'écran du Pi n'est pas tactile. Il fait 1280×800.
+   / Taken from the mockup. The Pi screen is not touch-enabled, 1280×800.
+
+   PRINCIPE :
+   Le JS (ecran_tireuse.js) pose seulement l'attribut data-etat sur la
+   racine d'une tireuse. C'est ce fichier CSS qui décide quoi montrer.
+   Valeurs possibles de data-etat :
+     veille · service · tirage · fin · refus · maintenance
+   / JS only sets data-etat on the tap root. This CSS decides what to show.
+
+   Utilisé par :
+   - controlvanne/templates/controlvanne/kiosk_detail.html (une tireuse)
+   - controlvanne/templates/controlvanne/kiosk_list.html (toutes les tireuses)
+   ================================================================= */
+
+/* ---------- Polices hébergées localement ----------
+   Le Pi peut être hors ligne : pas de Google Fonts.
+   Les chemins sont relatifs à ce fichier (compatibles collectstatic).
+   / Self-hosted fonts: the Pi may be offline. Paths are relative. */
+@font-face { font-family: 'Luciole'; src: url('../fonts/Luciole-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Luciole'; src: url('../fonts/Luciole-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Unbounded'; src: url('../fonts/Unbounded-Variable-latin.woff2') format('woff2'); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Sonder Sans'; src: url('../fonts/SonderSans-BlackRough.otf') format('opentype'); font-weight: 900; font-style: normal; font-display: swap; }
+
+:root {
+  /* --- Couleurs de marque utiles à cet écran / Brand colors used here --- */
+  --letchi: #e93363;
+  --zanana: #e9b322;
+  --chouchou: #259d49;
+
+  /* --- Typo --- */
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-text: 'Luciole', system-ui, sans-serif;
+  /* Sonder Sans n'a AUCUNE lettre accentuée : un « é » est dessiné par la
+     police de secours (Unbounded). On met ces titres en majuscules
+     (classe .titre-sonder) pour que la lettre de secours reste une capitale.
+     / Sonder Sans has no accented glyph: titles are uppercased so the
+     fallback letter stays a capital. */
+  --tireuse-font-title: 'Sonder Sans', var(--font-display);
+
+  /* --- Espacements (échelle 4 pt) / Spacing scale --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --radius-s: 8px;
+  --radius-m: 12px;
+  --radius-pill: 999px;
+
+  /* --- Accent : la SEULE couleur qui change d'un lieu à l'autre ---
+     Fond d'écran, pastille remplie, chiffres importants.
+     / Accent: the ONLY color that changes from one venue to another. */
+  --tireuse-accent: #40b5d0;
+  --tireuse-ink: #2a2d2f;     /* carte sombre / dark card */
+  --tireuse-fg: #ffffff;      /* texte sur la carte / text on card */
+  --beer-liquid: #f5c045;     /* bière dans le verre / beer in the glass */
+  --tireuse-alerte: var(--letchi);
+
+  --tireuse-radius-sm: 4px;
+  --tireuse-shadow-card: 0 4px 4px rgba(0, 0, 0, 0.25);
+
+  /* --- Tailles de texte (lu à distance) / Text sizes (read from afar) --- */
+  --tireuse-fs-title: 80px;
+  --tireuse-fs-screen-title: 56px;
+  --tireuse-fs-lead: 28px;
+  --tireuse-fs-body: 24px;
+  --tireuse-fs-step: 18px;
+  --tireuse-fs-legal: 16px;
+  --tireuse-fs-brand: 14px;
+
+  /* --- Géométrie du cadre (écran 1280×800) / Frame geometry --- */
+  --tireuse-frame-w: 1280px;
+  --tireuse-frame-h: 800px;
+  --tireuse-frame-pad-x: 65px;
+  --tireuse-frame-pad-y: 55px;
+  --tireuse-card-h: 690px;
+  --tireuse-card-pad-y: 33px;
+  --tireuse-card-pad-x: 55px;
+  --tireuse-media-w: 192px;
+  --tireuse-label-h: 219px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Tous les éléments en Sonder Sans / Every Sonder Sans element */
+.beer-card__title,
+.serve2__beer-name,
+.screen__title,
+.serve-block__title,
+.done__cheers,
+.tireuses-page__titre,
+.vignette__biere,
+.tireuse__brand .brand-lieu { text-transform: uppercase; }
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+/* L'attribut hidden gagne toujours / hidden attribute always wins */
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
+body {
+  margin: 0;
+  font-family: var(--font-text);
+  color: var(--tireuse-fg);
+  background: var(--tireuse-accent);
+  line-height: 1.6;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+p { margin: 0; }
+img { max-width: 100%; display: block; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* =================================================================
+   BANDEAU « CONNEXION PERDUE » (piloté par ecran_tireuse.js)
+   / "Connection lost" banner
+   ================================================================= */
+.bandeau-connexion {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 200;
+  padding: var(--space-3) var(--space-4);
+  background: var(--zanana);
+  color: var(--tireuse-ink);
+  font-weight: 700;
+  text-align: center;
+}
+
+/* =================================================================
+   PAGE D'UNE TIREUSE (kiosk_detail)
+   ================================================================= */
+.tireuse {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+}
+
+/* Cadre à taille fixe : la carte puis le bas de page.
+   / Fixed-size frame: the card, then the footer. */
+.tireuse__frame {
+  position: relative;
+  width: var(--tireuse-frame-w);
+  height: var(--tireuse-frame-h);
+  padding: var(--tireuse-frame-pad-y) var(--tireuse-frame-pad-x) 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Affichage des étapes selon l'état ----------
+   Toutes les étapes sont dans la page. Une seule est visible.
+   / All stages are in the page. Only one is visible. */
+.stage { display: none; }
+[data-etat="veille"] .stage--veille,
+[data-etat="service"] .stage--service,
+[data-etat="tirage"] .stage--service,
+[data-etat="fin"] .stage--fin,
+[data-etat="refus"] .stage--refus,
+[data-etat="maintenance"] .stage--maintenance { display: block; }
+
+/* ---------- Carte sombre commune ---------- */
+.beer-card,
+.screen {
+  height: var(--tireuse-card-h);
+  padding: var(--tireuse-card-pad-y) var(--tireuse-card-pad-x);
+  background: var(--tireuse-ink);
+  border-radius: var(--radius-s);
+  box-shadow: var(--tireuse-shadow-card);
+  color: var(--tireuse-fg);
+}
+.screen--center {
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.screen__title {
+  margin: 0;
+  font-family: var(--tireuse-font-title);
+  font-weight: 900;
+  font-size: var(--tireuse-fs-screen-title);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+/* =================================================================
+   ÉTAPE VEILLE — fiche de la bière
+   ================================================================= */
+.beer-card {
+  display: flex;
+  gap: var(--space-7);
+}
+.beer-card__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.beer-card__title,
+.serve2__beer-name {
+  margin: 0;
+  font-family: var(--tireuse-font-title);
+  font-weight: 900;
+  font-size: var(--tireuse-fs-title);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+/* Pastilles : les cases se touchent, la 1re est remplie.
+   / Chips: boxes touch each other, the first one is filled. */
+.beer-specs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.beer-specs__item {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--tireuse-fg);
+  font-weight: 700;
+  font-size: var(--tireuse-fs-body);
+  white-space: nowrap;
+}
+.beer-specs__item + .beer-specs__item { margin-left: -1px; }
+.beer-specs__item:first-child { background: var(--tireuse-accent); }
+
+.beer-card__desc {
+  margin-top: var(--space-6);
+  max-width: 719px;
+  font-size: var(--tireuse-fs-body);
+  line-height: 1.25;
+  overflow: hidden;
+}
+.beer-card__price {
+  margin-top: var(--space-7);
+  font-weight: 700;
+  font-size: var(--tireuse-fs-lead);
+}
+
+/* Indice « Présentez votre carte » (pas de bouton : écran non tactile)
+   / "Present your card" hint (no button: non-touch screen) */
+.present-hint {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--tireuse-accent);
+}
+.present-hint__icon {
+  display: grid;
+  place-items: center;
+  animation: nfc-pulse 1.6s ease-in-out infinite;
+}
+.present-hint__text {
+  font-weight: 700;
+  font-size: var(--tireuse-fs-lead);
+}
+@keyframes nfc-pulse {
+  0%, 100% { opacity: .45; transform: scale(.94); }
+  50%      { opacity: 1;   transform: scale(1); }
+}
+
+/* Colonne de droite : étiquette + brasserie
+   / Right column: label + brewery */
+.beer-card__media {
+  flex: 0 0 var(--tireuse-media-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-7);
+  padding-top: 22px;
+}
+.beer-media__label {
+  width: var(--tireuse-media-w);
+  height: var(--tireuse-label-h);
+  object-fit: cover;
+  border-radius: var(--tireuse-radius-sm);
+}
+.beer-media__brewery {
+  font-weight: 700;
+  font-size: var(--tireuse-fs-body);
+  line-height: 1.25;
+  text-align: center;
+}
+
+/* =================================================================
+   ÉTAPES SERVICE et TIRAGE — même écran
+   ================================================================= */
+.serve2 {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.serve2__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid rgba(255, 255, 255, .12);
+}
+.serve2__ident { display: flex; flex-direction: column; min-width: 0; }
+
+/* Salutation : « Bonjour Camille » ou juste « Bonjour »
+   / Greeting: "Hello Camille" or just "Hello" */
+.card-chip { text-align: right; }
+.card-chip__line { font-size: var(--tireuse-fs-body); }
+.card-chip__hello { opacity: .8; }
+.card-chip__name { font-family: var(--font-display); font-weight: 600; }
+.card-chip__id {
+  margin-top: var(--space-1);
+  font-size: var(--tireuse-fs-legal);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: .55;
+}
+
+/* Carte anonyme : le prénom est vide, on le cache sans laisser d'espace.
+   Sinon on ajoute une espace devant.
+   / Anonymous card: empty first name is hidden. Otherwise add a space before. */
+[data-champ="prenom"]:empty { display: none; }
+[data-champ="prenom"]:not(:empty)::before { content: " "; }
+
+/* Bandeau Prix / Solde / Soit N verres (cases jointives)
+   / Price / Balance / N glasses strip (touching boxes) */
+.card-facts { display: flex; align-items: stretch; }
+.card-fact {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--tireuse-fg);
+  text-align: center;
+}
+.card-fact + .card-fact { margin-left: -1px; }
+.card-fact--accent { background: var(--tireuse-accent); border-color: var(--tireuse-accent); }
+.card-fact__label {
+  font-size: var(--tireuse-fs-legal);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .7;
+}
+.card-fact__value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1.1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bas de l'écran : mode d'emploi + verre (deux boîtes jointives)
+   / Bottom: instructions + glass (two touching boxes) */
+.serve2__body {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+  margin-top: -1px;
+}
+.serve-block,
+.glass-block {
+  flex: 1 1 0;
+  border: 1px solid var(--tireuse-fg);
+  padding: var(--space-5);
+}
+.glass-block { margin-left: -1px; }
+
+.serve-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.serve-block__title {
+  margin: 0;
+  font-family: var(--tireuse-font-title);
+  font-weight: 900;
+  font-size: 34px;
+}
+.serve-block__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.step-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  opacity: .5;
+  transition: opacity .25s var(--ease-out);
+}
+.step-line__num {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--tireuse-fg);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+}
+.step-line__text { font-size: var(--tireuse-fs-step); line-height: 1.25; }
+
+/* Mode d'emploi piloté par l'état, sans JS :
+   - service : carte posée, rien versé → étapes 1 et 2 à faire
+   - tirage  : la bière coule → 1 et 2 faites, 3 et 4 à faire
+   / Instructions driven by state, no JS. */
+[data-etat="service"] .step-line[data-serve-step="1"],
+[data-etat="service"] .step-line[data-serve-step="2"],
+[data-etat="tirage"] .step-line[data-serve-step="3"],
+[data-etat="tirage"] .step-line[data-serve-step="4"] { opacity: 1; }
+
+[data-etat="service"] .step-line[data-serve-step="1"] .step-line__num,
+[data-etat="service"] .step-line[data-serve-step="2"] .step-line__num,
+[data-etat="tirage"] .step-line[data-serve-step="3"] .step-line__num {
+  background: var(--tireuse-accent);
+  border-color: var(--tireuse-accent);
+}
+[data-etat="tirage"] .step-line[data-serve-step="1"],
+[data-etat="tirage"] .step-line[data-serve-step="2"] { opacity: .8; }
+
+/* Le verre : sa hauteur de bière vient de la variable --remplissage-verre
+   (entre 0 et 1), posée par ecran_tireuse.js sur la racine de la tireuse.
+   / Glass: beer height comes from --remplissage-verre (0 to 1). */
+.glass-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+.serve__glass {
+  position: relative;
+  width: 130px;
+  height: 200px;
+  border: 4px solid rgba(255, 255, 255, .85);
+  border-top: 0;
+  border-radius: 6px 6px 22px 22px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .04);
+}
+.serve__liquid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--remplissage-verre, 0) * 100%);
+  background: var(--beer-liquid);
+  transition: height .3s var(--ease-out);
+}
+/* Mousse en haut du liquide / Foam on top */
+.serve__liquid::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background: rgba(255, 255, 255, .55);
+  border-radius: 50%;
+}
+.serve2__readout {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 28px;
+  white-space: nowrap;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.serve2__readout-value { color: var(--tireuse-accent); }
+.serve2__readout-unit { opacity: .7; }
+
+/* =================================================================
+   ÉTAPES FIN, REFUS, MAINTENANCE — écrans centrés
+   ================================================================= */
+.done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 900px;
+}
+.done__mark {
+  width: 88px;
+  height: 88px;
+  display: grid;
+  place-items: center;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--tireuse-accent);
+  color: var(--tireuse-fg);
+}
+.done__mark--alerte { background: var(--tireuse-alerte); }
+.done__mark--maintenance { background: var(--zanana); color: var(--tireuse-ink); }
+.done__line { font-size: var(--tireuse-fs-lead); }
+.done__line strong,
+.done__balance strong { color: var(--tireuse-accent); font-variant-numeric: tabular-nums; }
+.done__balance { font-size: var(--tireuse-fs-body); opacity: .85; }
+/* Volume rincé : caché tant qu'aucun rinçage n'a commencé (champ vide)
+   / Rinsed volume: hidden until a rinse starts (empty field) */
+.maintenance__volume:has([data-champ="volume-cl"]:empty) { display: none; }
+.done__cheers {
+  margin-top: var(--space-3);
+  font-family: var(--tireuse-font-title);
+  font-weight: 900;
+  font-size: 40px;
+}
+
+/* =================================================================
+   BAS DE PAGE — mention légale + signature
+   ================================================================= */
+.tireuse__footer {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+.tireuse__legal { font-size: var(--tireuse-fs-legal); }
+.tireuse__brand {
+  font-size: var(--tireuse-fs-brand);
+  white-space: nowrap;
+}
+.tireuse__brand .brand-lieu { font-family: var(--tireuse-font-title); font-weight: 900; }
+.tireuse__brand .brand-x { font-weight: 700; }
+.tireuse__brand .brand-tibillet { font-family: var(--font-display); font-weight: 600; }
+
+/* =================================================================
+   PAGE LISTE (kiosk_list) — toutes les tireuses en vignettes
+   ================================================================= */
+.tireuse--liste {
+  display: block;
+  padding: var(--space-6) var(--space-4);
+}
+.tireuses-page {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.tireuses-page__titre {
+  margin: 0 0 var(--space-5);
+  font-family: var(--tireuse-font-title);
+  font-weight: 900;
+  font-size: 48px;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+.tireuses-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
+  gap: var(--space-5);
+}
+.tireuses-page .tireuse__footer { margin-top: var(--space-6); flex-wrap: wrap; }
+.tireuses-vide {
+  padding: var(--space-6);
+  background: var(--tireuse-ink);
+  border-radius: var(--radius-s);
+  font-size: var(--tireuse-fs-body);
+}
+
+.vignette {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--tireuse-ink);
+  border-radius: var(--radius-s);
+  box-shadow: var(--tireuse-shadow-card);
+}
+.vignette__tete {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.vignette__nom-tireuse {
+  font-size: var(--tireuse-fs-legal);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .7;
+}
+.vignette__biere {
+  margin: 0;
+  font-family: var(--tireuse-font-title);
+  font-weight: 900;
+  font-size: 36px;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+.vignette .beer-specs { margin-top: 0; }
+.vignette .beer-specs__item { font-size: var(--tireuse-fs-legal); padding: var(--space-1) var(--space-2); }
+.vignette__prix { font-weight: 700; font-size: 18px; }
+
+/* Pastille d'état : un libellé par état, le CSS montre le bon.
+   / State pill: one label per state, CSS shows the right one. */
+.vignette__etat {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .12);
+  font-size: var(--tireuse-fs-brand);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.vignette__etat > span { display: none; }
+[data-etat="veille"] .vignette__etat-veille,
+[data-etat="service"] .vignette__etat-service,
+[data-etat="tirage"] .vignette__etat-tirage,
+[data-etat="fin"] .vignette__etat-fin,
+[data-etat="refus"] .vignette__etat-refus,
+[data-etat="maintenance"] .vignette__etat-maintenance { display: inline; }
+[data-etat="service"] .vignette__etat,
+[data-etat="tirage"] .vignette__etat { background: var(--tireuse-accent); }
+[data-etat="refus"] .vignette__etat { background: var(--tireuse-alerte); }
+[data-etat="maintenance"] .vignette__etat { background: var(--zanana); color: var(--tireuse-ink); }
+
+.vignette .card-fact { padding: var(--space-2) var(--space-3); }
+.vignette .card-fact__label { font-size: 12px; }
+.vignette .card-fact__value { font-size: 20px; }
+
+.vignette__message:empty { display: none; }
+.vignette__message {
+  font-size: var(--tireuse-fs-brand);
+  opacity: .75;
+}
+
+/* Niveau du fût : largeur = --niveau-fut (un pourcentage).
+   / Keg level: width = --niveau-fut (a percentage). */
+.niveau-fut__libelle {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .7;
+}
+.niveau-fut__piste {
+  height: 8px;
+  margin-top: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .12);
+  overflow: hidden;
+}
+.niveau-fut__barre {
+  width: var(--niveau-fut, 0%);
+  height: 100%;
+  background: var(--beer-liquid);
+  transition: width .3s var(--ease-out);
+}
+
+/* =================================================================
+   SIMULATEUR DU PI (mode DEMO uniquement)
+   Les ids simu-* sont lus par simu_pi.js : ne pas les renommer.
+   simu_pi.js pose des classes Bootstrap (badge, bg-*) : on les
+   définit ici, seulement dans le panneau.
+   / Pi simulator (DEMO only). simu-* ids are read by simu_pi.js.
+   ================================================================= */
+.demo-sim {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 100;
+  width: min(380px, calc(100vw - 2 * var(--space-4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: rgba(42, 45, 47, .95);
+  border: 1px dashed var(--zanana);
+  border-radius: var(--radius-m);
+  box-shadow: var(--tireuse-shadow-card);
+  font-size: var(--tireuse-fs-brand);
+}
+.demo-sim__tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.demo-sim__tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+.demo-sim__boutons { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.demo-sim__btn {
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: var(--tireuse-radius-sm);
+  background: var(--tireuse-fg);
+  color: var(--tireuse-ink);
+  font-family: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.demo-sim__btn:hover { background: #e6e6e6; }
+.demo-sim__btn:focus-visible { outline: 2px solid var(--zanana); outline-offset: 2px; }
+.demo-sim__btn:disabled { opacity: .4; cursor: not-allowed; }
+.demo-sim__btn--ghost {
+  background: transparent;
+  color: var(--tireuse-fg);
+  border: 1px solid rgba(255, 255, 255, .35);
+}
+.demo-sim__btn--ghost:hover { background: rgba(255, 255, 255, .1); }
+.demo-sim__debit { display: flex; align-items: center; gap: var(--space-3); }
+.demo-sim__debit input { flex: 1 1 auto; min-width: 0; accent-color: var(--zanana); }
+.demo-sim__debit-valeur { min-width: 70px; text-align: right; font-weight: 700; }
+.demo-sim__indicateurs { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.demo-sim__message { opacity: .8; }
+
+.demo-sim .badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--tireuse-radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+}
+.demo-sim .bg-dark { background: #111; color: var(--tireuse-fg); }
+.demo-sim .bg-success { background: var(--chouchou); color: var(--tireuse-fg); }
+.demo-sim .bg-danger { background: var(--letchi); color: var(--tireuse-fg); }
+.demo-sim .bg-info { background: var(--tireuse-accent); color: var(--tireuse-ink); }
+
+/* =================================================================
+   MOUVEMENT RÉDUIT / Reduced motion
+   ================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .present-hint__icon { animation: none; }
+  .serve__liquid,
+  .niveau-fut__barre,
+  .step-line { transition: none; }
+}
