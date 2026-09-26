@@ -1,40 +1,70 @@
 {% load i18n static %}
-{# Selecteur visuel d'icones FontAwesome 5 pour les boutons POS #}
-{# Visual FontAwesome 5 icon picker for POS product buttons #}
-
-{# Charger FA5 dans l'admin (deja charge dans le POS via laboutik/base.html) #}
-{# Load FA5 in admin (already loaded in POS via laboutik/base.html) #}
-<link rel="stylesheet" href="{% static 'css/all_fontawesome-free-5-11-2.css' %}" />
+{# Selecteur visuel d'icones Material Symbols pour les boutons et points de vente POS #}
+{# / Visual Material Symbols icon picker for POS buttons and points of sale         #}
+{# La police Material est deja chargee par Unfold dans l'admin (meme police locale  #}
+{# que la caisse). Les noms viennent de ICON_POS (Administration/admin/products.py). #}
+{# / The Material font is already loaded by Unfold in the admin (same local font).   #}
+{# Les boutons radio sont caches visuellement par un style en ligne : la classe      #}
+{# sr-only venait de la feuille FontAwesome (retiree) et n'existe pas dans le         #}
+{# Tailwind d'Unfold. Ils restent joignables au clavier (fleches, Tab).               #}
+{# / Radios are visually hidden inline: sr-only came from the removed FontAwesome     #}
+{#   stylesheet and is not in Unfold's Tailwind. They stay keyboard reachable.       #}
 
 <div class="icon-picker-container flex flex-wrap gap-2 py-2">
 
   {# Option "aucune icone" #}
   {# "No icon" option #}
-  <label title="{% trans 'Aucune icône' %}" class="cursor-pointer">
+  <label title="{% trans 'Aucune icône' %}" class="cursor-pointer" style="position: relative;">
     <input
       type="radio"
       name="{{ widget_name }}"
       value=""
       {% if not current_value %}checked{% endif %}
       class="sr-only icon-radio"
+      style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;"
     >
     <span class="icon-swatch flex items-center justify-center w-12 h-12 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 text-xs font-medium select-none">
       ✕
     </span>
   </label>
 
+  {# Icone actuelle absente de ICON_POS (ancienne donnee, import...) : on l'affiche #}
+  {# cochee. Sans cette option, aucun bouton ne serait coche, le navigateur        #}
+  {# n'enverrait rien et l'enregistrement effacerait l'icone sans prevenir.       #}
+  {# Le ChoiceField demande alors a l'admin de choisir une icone de la liste.     #}
+  {# / Current icon missing from ICON_POS: shown checked, so saving never wipes it #}
+  {#   silently (the ChoiceField then asks the admin to pick a listed icon).       #}
+  {% if valeur_hors_liste %}
+    <label title="{% trans 'Icône actuelle (hors liste)' %} : {{ current_value }}" class="cursor-pointer" style="position: relative;">
+      <input
+        type="radio"
+        name="{{ widget_name }}"
+        value="{{ current_value }}"
+        checked
+        class="sr-only icon-radio"
+        data-testid="icon-picker-valeur-hors-liste"
+        style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;"
+      >
+      <span class="icon-swatch flex items-center justify-center w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700 border-2 select-none"
+            style="border-color: transparent;">
+        <span class="material-symbols-outlined text-gray-700 dark:text-gray-200" style="font-size: 24px;" aria-hidden="true">{{ current_value }}</span>
+      </span>
+    </label>
+  {% endif %}
+
   {% for key, label in icons %}
-    <label title="{{ label }}" class="cursor-pointer">
+    <label title="{{ label }}" class="cursor-pointer" style="position: relative;">
       <input
         type="radio"
         name="{{ widget_name }}"
         value="{{ key }}"
         {% if current_value == key %}checked{% endif %}
         class="sr-only icon-radio"
+        style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;"
       >
       <span class="icon-swatch flex items-center justify-center w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700 border-2 select-none"
             style="border-color: transparent;">
-        <i class="fas {{ key }} text-gray-700 dark:text-gray-200" style="font-size: 22px;"></i>
+        <span class="material-symbols-outlined text-gray-700 dark:text-gray-200" style="font-size: 24px;" aria-hidden="true">{{ key }}</span>
       </span>
     </label>
   {% endfor %}

@@ -464,6 +464,24 @@ def test_route_event_non_masquee_par_le_catch_all(api_client):
     assert reponse.status_code == 200
 
 
+def test_agenda_embed_rend_le_compteur_sans_erreur(api_client):
+    """
+    L'agenda embarqué (iframe) s'affiche sans erreur et montre le compteur.
+    / The embedded agenda (iframe) renders without error and shows the counter.
+
+    Bug corrigé : la vue embed() ne posait pas `event_count` dans le contexte.
+    Le gabarit V2 fait `{% blocktrans count compteur=event_count %}`, qui exige
+    un nombre : la page renvoyait une erreur 500 (TemplateSyntaxError).
+    / Fixed bug: embed() did not set `event_count`; the V2 template's
+    blocktrans count requires a number, so the page returned a 500.
+    """
+    reponse = api_client.get("/event/embed/")
+    assert reponse.status_code == 200
+
+    contenu = reponse.content.decode()
+    assert "à venir" in contenu or "upcoming" in contenu
+
+
 # ---------------------------------------------------------------------------
 # Admin
 # ---------------------------------------------------------------------------
@@ -475,7 +493,10 @@ def test_bloc_admin_a_des_conditional_fields():
     # image_position visible uniquement pour le bloc Image + texte
     # La visibilite est DERIVEE du catalogue : un champ n'apparait que pour
     # les types qui le declarent. / Visibility is DERIVED from the catalogue.
-    assert "SECTION" in regles["affichage"]
+    # Type et affichage sont caches : le select « Modele de bloc » les porte.
+    # / Type and affichage are hidden: the "block model" select carries them.
+    assert regles["type_bloc"] == "false"
+    assert regles["affichage"] == "false"
     assert "LISTE" in regles["source"]
     # auteur_nom visible uniquement pour le temoignage
     assert "SECTION" in regles["auteur_nom"]
@@ -810,7 +831,11 @@ def test_conditional_fields_se_resserrent_par_affichage():
     assert "INTEGRATION" in admin.conditional_fields["embed_url"]
     assert "INTEGRATION" in admin.conditional_fields["titre"]
     # Un type a rendu unique reste pilote par son seul type.
-    assert admin.conditional_fields["points_gps"] == "type_bloc == 'LIEU'"
+    # Les champs JSON sont saisis par des editeurs de lignes (plus de JSON).
+    # / JSON fields are typed through line editors (no more JSON).
+    assert admin.conditional_fields["points_gps_editeur"] == "type_bloc == 'LIEU'"
+    assert admin.conditional_fields["contenu_lieu"] == "type_bloc == 'LIEU'"
+    assert "EQUIPE" in admin.conditional_fields["contenu_cartes"]
     assert "hauteur_px" in admin.fields
 
 
@@ -1053,52 +1078,6 @@ def test_fil_ariane_omet_un_ancetre_non_publie(tenant, nettoyer_pages):
         assert titres[-1] == "Fille"
 
 
-def test_save_formset_ne_renvoie_pas_en_fin_un_bloc_glisse_en_tete(tenant, nettoyer_pages):  # noqa: F811
-    """
-    Reordonner les blocs depuis l'onglet respecte le geste de l'utilisateur.
-
-    Le tri d'Unfold renumerote les positions A PARTIR DE ZERO. Si save_formset
-    traitait la position 0 comme « non renseignee », le bloc que l'on vient de
-    glisser en tete se verrait attribuer max+1 : il repartirait en DERNIER,
-    l'exact inverse du geste. Placer un bloc en tete deviendrait impossible.
-    """
-    from django_tenants.utils import tenant_context
-
-    from Administration.admin.site import staff_admin_site
-    from pages.admin import PageAdmin
-    from pages.models import Bloc, Page
-
-    with tenant_context(tenant):
-        page = Page.objects.create(titre="Pytest ordre", slug="pytest-ordre")
-        premier = Bloc.objects.create(page=page, type_bloc=Bloc.TEXTE, position=1, titre="A")
-        deuxieme = Bloc.objects.create(page=page, type_bloc=Bloc.TEXTE, position=2, titre="B")
-        troisieme = Bloc.objects.create(page=page, type_bloc=Bloc.TEXTE, position=3, titre="C")
-
-        # Ce que le JS d'Unfold envoie quand on glisse C en tete : C=0, A=1, B=2.
-        troisieme.position = 0
-        premier.position = 1
-        deuxieme.position = 2
-
-        class FormsetFactice:
-            model = Bloc
-            deleted_objects = []
-
-            def save(self, commit=True):
-                return [troisieme, premier, deuxieme]
-
-            def save_m2m(self):
-                pass
-
-        class FormFactice:
-            instance = page
-
-        admin = PageAdmin(Page, staff_admin_site)
-        admin.save_formset(None, FormFactice(), FormsetFactice(), change=True)
-
-        ordre = list(page.blocs.order_by("position").values_list("titre", flat=True))
-        assert ordre == ["C", "A", "B"], f"ordre obtenu : {ordre}"
-
-
 def test_les_inlines_ne_dependent_pas_des_permissions_modele():
     """
     Les inlines de l'app pages portent leurs 4 permissions.
@@ -1109,9 +1088,9 @@ def test_les_inlines_ne_dependent_pas_des_permissions_modele():
     monde sauf un superuser — donc les galeries et les images d'article
     inutilisables.
     """
-    from pages.admin import BlocInline, ImageGalerieInline
+    from pages.admin import ImageGalerieInline
 
-    for inline in (BlocInline, ImageGalerieInline):
+    for inline in (ImageGalerieInline,):
         for nom in ("has_view_permission", "has_add_permission",
                     "has_change_permission", "has_delete_permission"):
             assert nom in vars(inline), f"{inline.__name__} n'override pas {nom}"

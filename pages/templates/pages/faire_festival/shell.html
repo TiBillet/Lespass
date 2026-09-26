@@ -198,7 +198,9 @@
     <script defer src="{% static 'commun/js/sweetalert2@11.js' %}"></script>
 
     <!-- Formbricks : Système de formulaires et sondages (si configuré) -->
-    {% if formbricks_api_host %}
+    {# Pas de formbricks dans l'apercu admin (pages/admin_apercu.py) : script #}
+    {# tiers inutile la, et recharge a chaque frappe. / No formbricks in the admin preview. #}
+    {% if formbricks_api_host and not apercu_admin %}
         <script src="{{ formbricks_api_host }}/js/formbricks.umd.cjs" async></script>
     {% endif %}
 

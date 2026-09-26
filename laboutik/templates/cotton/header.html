@@ -1,16 +1,13 @@
 {% load static i18n %}
-<header class="header-background">
+<header class="header-background{% if retour_pv %} header-background--retour{% endif %}">
   {% if mode_ecole %}
     {# Bandeau orange visible en mode ecole (LNE exigence 5) — indique que les ventes sont des simulations #}
     {# / Orange banner visible in training mode (LNE req. 5) — indicates sales are simulations #}
-    <div style="background: #ff6600;
-                color: white;
-                text-align: center;
-                padding: 8px;
-                font-weight: bold;
-                font-size: 1.2em;
-                position: relative;
-                z-index: 1000"
+    {# Style dans header.css (.bandeau-mode-ecole) : bande fine posee SOUS l'en-tete, #}
+    {# en position absolue. Elle ne change pas la hauteur de l'en-tete (49 px), #}
+    {# dont dependent la grille et le menu burger. #}
+    {# / Styled in header.css: thin strip below the header, absolute, so the header height is unchanged. #}
+    <div class="bandeau-mode-ecole"
          role="alert"
          aria-label="{% translate 'Mode ecole actif' %}"
          data-testid="banner-mode-ecole">{% translate "MODE ECOLE — SIMULATION" %}</div>
@@ -22,13 +19,25 @@
          onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ card.pvs_list.0.uuid }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}'">
       <img class="pointer" alt="TiBillet" src="{% static 'images/logo.svg' %}" />
     </div>
-    <div id="header-title"
-         class="menu-burger-icon"
-         onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')">
-      <i class="fas {{ pv.icon }}" aria-hidden="true"></i> &nbsp;
-      {% if pv.name and hide_pv_name != True %}{{ pv.name }}{% endif %}
-      <span class="pos-chevron"></span>
-    </div>
+    {% if retour_pv %}
+      {# Zone retour + titre des ecrans Ventes / Sortie (voir le partiel) #}
+      {# / Back + title zone of Sales / Cash withdrawal screens (see partial) #}
+      {% include "laboutik/partial/_hdr_retour_zone.html" with hdr_titre=title %}
+    {% else %}
+      {# Vrai <button> : ouvre la liste des points de vente, au doigt comme au clavier. #}
+      {# / Real button: opens the POS list, by touch or keyboard.                       #}
+      <button type="button"
+              id="header-title"
+              class="menu-burger-icon"
+              onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')"
+              aria-controls="menu-burger-container"
+              aria-expanded="false"
+              data-testid="header-title">
+        <span class="material-symbols-outlined" aria-hidden="true">{{ pv.icon }}</span> &nbsp;
+        {% if pv.name and hide_pv_name != True %}<span class="header-title-nom">{{ pv.name }}</span>{% endif %}
+        <span class="pos-chevron" aria-hidden="true"></span>
+      </button>
+    {% endif %}
     <!--
         INDICATEUR CONNEXION WEBSOCKET — toujours visible dans le header
         / WebSocket connection indicator — always visible in header
@@ -58,13 +67,15 @@
     {#            <div id="header-status-info2"></div>#}
     {#        </div>#}
   </div>
+  {# Ecrans Ventes / Sortie : pas de nav (maquette) / Sales screens: no nav (mockup) #}
+  {% if not retour_pv %}
   <nav id="menu-large" class="hdr-nav" aria-label="Menu">
     <button class="hdr-nav-btn" data-dest="preparations">
-      <i class="fas fa-solid fa-clipboard" aria-hidden="true"></i>Préparations
+      <span class="material-symbols-outlined" aria-hidden="true">assignment</span>Préparations
     </button>
     {% if not pv.service_direct %}
       <button class="hdr-nav-btn{% if not id_table %} is-missing{% endif %}" data-id-table="{{ id_table }}" data-dest="tables">
-        <i class="fas fa-solid fa-chair" aria-hidden="true"></i>
+        <span class="material-symbols-outlined" aria-hidden="true">chair</span>
         Tables
       </button>
     {% endif %}
@@ -74,19 +85,28 @@
             hx-target="body"
             hx-swap="innerHTML"
             hx-push-url="true">
-      <i class="fas fa-solid fa-signal" aria-hidden="true"></i>Ventes
+      <span class="material-symbols-outlined" aria-hidden="true">bar_chart</span>Ventes
     </button>
     <button class="hdr-nav-btn" data-dest="parametres" aria-label="Paramètres">
-      <i class="fas fa-solid fa-cog"></i>
+      <span class="material-symbols-outlined" aria-hidden="true">settings</span>
     </button>
   </nav>
   <nav id="menu-small" class="hdr-nav">
-    <i class="menu-burger-icon fas fa-bars curseur-action"
-       onclick="toggleMenuBurger(event)"
-       role="button"
-       aria-label="{% translate 'Menu' %}"
-       data-testid="burger-icon"></i>
+    {# Vrai <button> : joignable au clavier et annonce par le lecteur d'ecran.     #}
+    {# L'icone seule est cachee (aria-hidden), le nom vient de aria-label.        #}
+    {# aria-expanded est mis a jour par toggleMenuBurger() / hideMenuBurger().     #}
+    {# / Real button: keyboard reachable; only the icon is aria-hidden.           #}
+    <button type="button"
+            class="menu-burger-icon hdr-burger-btn curseur-action"
+            onclick="toggleMenuBurger(event)"
+            aria-label="{% translate 'Menu' %}"
+            aria-controls="menu-burger-container"
+            aria-expanded="false"
+            data-testid="burger-icon">
+      <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+    </button>
   </nav>
+  {% endif %}
 </header>
 <div id="menu-burger-overlay"
      data-testid="menu-burger-overlay"
@@ -98,16 +118,16 @@
     <span class="menu-panel-title menu-burger-item-content">{% translate "Menu" %}</span>
     <div class="menu-burger-item menu-burger-item-content"
          onclick="showSubMenu(event, '.sub-menu-pvs')">
-      <i class="menu-burger-item-content fas fa-solid fa-clipboard"></i>
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">assignment</span>
       <div class="menu-burger-item-content">{% translate "POINTS DE VENTES" %}</div>
     </div>
     <div class="menu-burger-item menu-burger-item-content">
-      <i class="menu-burger-item-content fas fa-concierge-bell"></i>
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">room_service</span>
       <div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>
     </div>
     {% if not pv.service_direct %}
       <div class="menu-burger-item menu-burger-item-content">
-        <i class="menu-burger-item-content fas fa-solid fa-chair"></i>
+        <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">chair</span>
         <div class="menu-burger-item-content">{% translate "TABLES" %}</div>
       </div>
     {% endif %}
@@ -119,13 +139,13 @@
          onclick="hideMenuBurger()"
          data-loading-disable
          data-testid="menu-ventes">
-      <i class="menu-burger-item-content fas fa-solid fa-signal"
-         aria-hidden="true"></i>
+      <span class="material-symbols-outlined menu-burger-item-content"
+         aria-hidden="true">bar_chart</span>
       <div class="menu-burger-item-content">{% translate "VENTES" %}</div>
     </div>
     <div class="menu-burger-item menu-burger-item-content"
          onclick="showSubMenu(event, '.sub-menu-params')">
-      <i class="menu-burger-item-content fas fa-cog"></i>
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">settings</span>
       <div class="menu-burger-item-content">{% translate "PARAMÈTRES" %}</div>
     </div>
   </div>
@@ -145,12 +165,12 @@
          href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv_item.uuid }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}"
          data-nav-spinner
          {% if pv_item.uuid == pv.id %}aria-current="true" data-testid="menu-pv-courant"{% endif %}>
-        <i class="menu-burger-item-content fas {{ pv_item.icon }}"
-           aria-hidden="true"></i>
+        <span class="material-symbols-outlined menu-burger-item-content"
+           aria-hidden="true">{{ pv_item.icon }}</span>
         <div class="menu-burger-item-content">{{ pv_item.name }}</div>
         {% if pv_item.uuid == pv.id %}
-          <i class="menu-burger-item-content menu-row-check fas fa-check"
-             aria-label="{% translate 'Point de vente actuel' %}"></i>
+          <span class="material-symbols-outlined menu-burger-item-content menu-row-check" aria-hidden="true"
+             aria-label="{% translate 'Point de vente actuel' %}">check</span>
         {% endif %}
       </a>
     {% endfor %}
@@ -159,11 +179,11 @@
   <div class="sub-menu-params sub-menu hide">
     <span class="menu-panel-title menu-burger-item-content">{% translate "Paramètres" %}</span>
     <div class="menu-burger-item menu-burger-item-content">
-      <i class="menu-burger-item-content fas fa-utensils"></i>
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">restaurant</span>
       <div class="menu-burger-item-content">params 1</div>
     </div>
     <div class="menu-burger-item menu-burger-item-content">
-      <i class="menu-burger-item-content fas fa-utensils"></i>
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">restaurant</span>
       <div class="menu-burger-item-content">params 2</div>
     </div>
   </div>
@@ -188,13 +208,19 @@
 		var container = document.querySelector('#menu-burger-container')
 		var overlay = document.querySelector('#menu-burger-overlay')
 		if (icons) icons.forEach(i=>i.classList.remove('menu-burger-active'))
+		// Le lecteur d'ecran annonce « replie » / Screen reader announces "collapsed"
+		if (icons) icons.forEach(i=>i.setAttribute('aria-expanded', 'false'))
 		if (container) container.classList.remove('menu-open')
 		if (overlay) overlay.classList.remove('menu-open')
 	}
 
 	// Ouvrir/fermer le menu burger / Toggle burger menu
 	window.toggleMenuBurger = function (event, location="right") {
-		const ele = event.target
+		// currentTarget = l'element qui porte le onclick (#header-title ou l'icone burger).
+		// event.target serait l'enfant touche (nom du PV, icone, chevron) : la classe
+		// menu-burger-active atterrissait sur cet enfant et le menu se refermait aussitot.
+		// / currentTarget = the element holding the onclick, not the tapped child.
+		const ele = event.currentTarget
 		const classRep = ele.classList
         if(location !== "right" && location !== "left"){
             location = "right"
@@ -207,6 +233,8 @@
 			})
 			document.querySelector('#menu-burger-container .main-menu').classList.remove('hide')
 			ele.classList.add('menu-burger-active')
+			// Le lecteur d'ecran annonce « deplie » / Screen reader announces "expanded"
+			ele.setAttribute('aria-expanded', 'true')
 			let menu_container = document.querySelector('#menu-burger-container');
             menu_container.classList.remove('right','left')
             menu_container.classList.add('menu-open',location)
@@ -216,9 +244,12 @@
 		}
 	}
 
+	// Clic ailleurs : ferme le menu. closest() remonte aux parents : un clic sur un
+	// enfant du declencheur (nom du PV, icone, chevron) ne compte pas comme "ailleurs".
+	// / Click elsewhere closes the menu; closest() also matches the trigger's children.
 	document.addEventListener('click', (event) => {
-		const classRep = event.target.classList
-		if (!classRep.contains('menu-burger-icon') && !classRep.contains('menu-burger-item-content')) {
+		const clicDansLeDeclencheurOuLeMenu = event.target.closest('.menu-burger-icon, .menu-burger-item-content')
+		if (!clicDansLeDeclencheurOuLeMenu) {
 			hideMenuBurger()
 		}
 	})

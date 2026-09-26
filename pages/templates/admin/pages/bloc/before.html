@@ -1,0 +1,21 @@
+{% comment %}
+Contenu pose EN TETE du formulaire Bloc (change_form_before_template).
+/ Content placed AT THE TOP of the Bloc form.
+
+LOCALISATION : pages/templates/admin/pages/bloc/before.html
+
+Unfold n'accepte qu'un seul gabarit « before » : celui-ci assemble les notes
+d'aide (hero_aide_before.html) et le panneau d'apercu en direct.
+/ Unfold takes a single "before" template: this one gathers the help notes and
+the live preview panel.
+
+APPELE PAR : pages/admin.py:BlocAdmin.change_form_before_template. Unfold
+l'inclut au debut du <form> de la fiche Bloc
+(unfold/templates/admin/change_form.html). Le CSS
+pages/static/pages/admin/apercu_bloc.css place ensuite le panneau d'apercu
+en colonne de droite.
+/ CALLED BY BlocAdmin.change_form_before_template, included by Unfold at the
+start of the Bloc <form>.
+{% endcomment %}
+{% include "admin/pages/bloc/apercu_panneau.html" %}
+{% include "admin/pages/bloc/hero_aide_before.html" %}

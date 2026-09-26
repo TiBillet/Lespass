@@ -1,0 +1,23 @@
+{% load i18n laboutik_filters %}
+{% comment %}
+UNE LIGNE DE L'HISTORIQUE DE COMMANDE
+/ One row of the order history
+
+LOCALISATION : laboutik/templates/laboutik/partial/_ligne_vente.html
+Inclus par hx_liste_ventes.html (page 1 et scroll infini).
+Clic → toggleDetailVente() (hx_liste_ventes.html) → detail sous la ligne.
+
+Parametres : vente (dict de ventes_groupees), params_ventes,
+numero_ligne (page 1 seulement ; absent en scroll infini → testid "vente-ligne-scroll").
+{% endcomment %}
+<tr class="ventes-ligne-cliquable"
+    {% if vente.cle_vente %}
+    onclick="toggleDetailVente(this, '{% url 'laboutik-caisse-detail_vente' vente.cle_vente %}?{{ params_ventes }}')"
+    {% endif %}
+    data-testid="{% if numero_ligne %}vente-ligne-{{ numero_ligne }}{% else %}vente-ligne-scroll{% endif %}">
+    <td>{{ vente.derniere_datetime|date:"H:i" }}</td>
+    <td>{{ vente.nb_articles }} {% translate "article(s)" %}</td>
+    <td><span class="ventes-badge-moyen ventes-badge-{{ vente.moyen_paiement }}">{{ vente.moyen_paiement_label|default:vente.moyen_paiement }}</span></td>
+    <td{% if not vente.nom_pv %} class="muted"{% endif %}>{{ vente.nom_pv|default:_("Non attribué") }}</td>
+    <td class="num">{{ vente.total|euros }}</td>
+</tr>

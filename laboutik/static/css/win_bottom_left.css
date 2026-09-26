@@ -11,7 +11,12 @@
   flex-direction: row;
   justify-content: flex-start;
   align-items: center;
-  overflow: hidden;
+  /* Defilement horizontal : avant, les categories en trop etaient coupees
+     et impossibles a atteindre. / Horizontal scroll: extra categories were unreachable. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  min-height: var(--cat-height);
   column-gap: 6px;
   row-gap: 6px;
   /*padding: 6px;*/
@@ -26,6 +31,8 @@
   align-items: center;
   overflow: hidden;
   font-family: "Luciole-regular";
+  flex: none;
+  scroll-snap-align: start;
   width: var(--cat-width);
   height: var(--cat-height);
   border-radius: 15px;
@@ -46,6 +53,13 @@
 .wbld-bt {
   width: calc(100% / 4);
   height: 100%;
+  min-height: 56px;
+  /* Un libelle long revient a la ligne au lieu d'etre coupe
+     / A long label wraps instead of being clipped */
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: center;
+  padding: 0 4px;
   display: flex;
   flex-direction: row;
   justify-content: center;

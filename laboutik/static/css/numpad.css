@@ -1,27 +1,78 @@
+/* ============================================================
+   NUMPAD.CSS — Pave numerique (cotton/numpad.html)
+   / Numeric keypad
+
+   LOCALISATION : laboutik/static/css/numpad.css
+
+   Portage de la maquette TEMP-tibillet-laboutik-main/caisse/Laboutik.css
+   (.card-keypad / .card-key) : 3 colonnes, touches pleines sur fond
+   --surface-2, sans bordure.
+   Les tailles suivent l'echelle --k des popups V2 (overlay.css).
+   Hors d'une popup V2, --k n'existe pas : var(--k, 1) retombe sur 1,
+   donc sur les tailles de la maquette.
+   / Port of the mockup keypad. Sizes follow the V2 popups' --k scale;
+   outside a popup, var(--k, 1) falls back to the mockup sizes.
+   ============================================================ */
+
 .numpad-content {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(4, 1fr);
-  column-gap: 6px;
-  row-gap: 6px;
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: calc(6px * var(--k, 1));
 }
 
 .numpad-touch {
-  display: flex;
-  flex-direction: column;
-  text-align: center;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
-  cursor: pointer;
-  border-radius: var(--r-ctrl);
-  background: var(--surface-2);
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 700;
+	display: grid;
+	place-items: center;
+	min-height: calc(40px * var(--k, 1));
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: calc(var(--r-ctrl) * var(--k, 1));
+	background: var(--surface-2);
+	color: var(--text);
+	font: inherit;
+	font-size: calc(16px * var(--k, 1));
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	line-height: 1;
+	cursor: pointer;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
+	/* Remontee douce, descente instantanee (voir :active)
+	   / Eased release, instant press (see :active) */
+	transition: background .17s var(--ease);
 }
 
-.numpad-size {
-  width: var(--key-width);
-  height: var(--key-height);
+.numpad-touch:active {
+	background: var(--surface-3);
+	transition-duration: 0s;
 }
+
+@media (hover: hover) {
+	.numpad-touch:hover { background: var(--surface-3); }
+}
+
+/* Bague de focus visible tout de suite, jamais animee
+   / Focus ring shown instantly, never animated */
+.numpad-touch:focus-visible {
+	outline: 3px solid var(--text);
+	outline-offset: 2px;
+	transition: none;
+}
+
+/* Touche d'effacement : meme forme, encre plus discrete
+   / Erase key: same shape, quieter ink */
+.numpad-touch--effacer { color: var(--text-dim); }
+.numpad-touch--effacer .ico { font-size: calc(20px * var(--k, 1)); }
+
+/* Grandes touches de l'ecran « carte geree » (hx_managed_card.html) :
+   touches carrees de 56 a 80 px selon l'ecran (sizes.css).
+   / Managed card screen: 56-80px square keys (sizes.css). */
+#mc-container .numpad-touch {
+	width: var(--key-width);
+	height: var(--key-height);
+}
+
+/* Case vide a la place de la virgule (virgule="non") : garde la grille 3×4
+   / Empty cell instead of the comma key: keeps the 3×4 grid */
+.numpad-vide { min-height: calc(40px * var(--k, 1)); }

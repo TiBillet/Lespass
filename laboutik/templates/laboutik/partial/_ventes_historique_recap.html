@@ -1,0 +1,86 @@
+{% load i18n laboutik_filters %}
+{% comment %}
+HISTORIQUES DE L'ECRAN VENTES (vue=detail_articles ou vue=par_moyen)
+/ Sales screen histories (vue=detail_articles or vue=par_moyen)
+
+LOCALISATION : laboutik/templates/laboutik/partial/_ventes_historique_recap.html
+Maquette : TEMP-tibillet-laboutik-main/caisse (#detailSection, table.ventes-table)
+
+Inclus par hx_recap_en_cours.html :
+- seul, quand la cible HTMX est #detail-contenu (bouton d'historique) ;
+- dans #detail-contenu, quand la page arrive deja avec ?vue=... (rechargement).
+
+Contexte : vue, detail_ventes (detail_articles), synthese_operations (par_moyen).
+L'historique de commande n'est pas ici : il vient de hx_liste_ventes.html.
+{% endcomment %}
+{% if aucune_vente %}
+  <p class="ventes-vide">{% translate "Aucune vente depuis la dernière clôture" %}</p>
+
+{% elif vue == "detail_articles" %}
+  {# --- Ventes par categorie puis par article / Sales by category then article --- #}
+  <div class="table-wrap">
+    <table class="ventes-table" data-testid="recap-detail-articles">
+      <thead>
+        <tr>
+          <th>{% translate "Catégorie / Article" %}</th>
+          <th class="num">{% translate "Qté" %}</th>
+          <th class="num">{% translate "Total" %}</th>
+        </tr>
+      </thead>
+      {% for cat_nom, cat_data in detail_ventes.items %}
+        {% with afficher_col_poids=cat_data.articles|has_poids %}
+          <tbody data-testid="recap-categorie-{{ forloop.counter }}">
+            <tr class="cat-row">
+              <td colspan="2">{{ cat_nom }}</td>
+              <td class="num">{{ cat_data.total_ttc|euros }}</td>
+            </tr>
+            {% for article in cat_data.articles %}
+              <tr>
+                <td>{{ article.nom }}</td>
+                <td class="num">
+                  {{ article.qty_total|floatformat:0 }}{% if afficher_col_poids %}<span class="poids-vol" data-testid="recap-poids-vol"> · {{ article|afficher_poids }}</span>{% endif %}
+                </td>
+                <td class="num">{{ article.total_ttc|euros }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        {% endwith %}
+      {% empty %}
+        <tbody>
+          <tr><td colspan="3" class="empty">{% translate "Aucune vente" %}</td></tr>
+        </tbody>
+      {% endfor %}
+    </table>
+  </div>
+
+{% elif vue == "par_moyen" %}
+  {# --- Tableau croise type x moyen / Cross table: type x payment method --- #}
+  <div class="table-wrap">
+    <table class="ventes-table" data-testid="recap-synthese-operations">
+      <thead>
+        <tr>
+          <th>{% translate "Type" %}</th>
+          <th class="num">{% translate "Espèces" %}</th>
+          <th class="num">{% translate "CB" %}</th>
+          <th class="num">{% translate "Cashless" %}</th>
+          <th class="num">{% translate "Chèque" %}</th>
+          <th class="num">{% translate "Total" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for type_nom, type_data in synthese_operations.items %}
+          <tr>
+            <td>{{ type_nom }}</td>
+            <td class="num">{{ type_data.especes|euros }}</td>
+            <td class="num">{{ type_data.carte_bancaire|euros }}</td>
+            <td class="num">{{ type_data.cashless|euros }}</td>
+            <td class="num">{{ type_data.cheque|euros }}</td>
+            <td class="num num-fort">{{ type_data.total|euros }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="empty">{% translate "Aucune vente" %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}

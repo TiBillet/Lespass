@@ -63,12 +63,16 @@ def _extraire_hidden(contenu_html, nom_champ):
 
 def _extraire_reste(contenu_html):
     """Extrait le « reste à payer » (en euros, ex. '1.00') de l'écran complément.
-    / Extracts the 'remaining to pay' amount from the complement screen."""
+    L'écran V2 l'affiche avec une virgule (« 1,00 € ») : on accepte les deux
+    séparateurs et on renvoie toujours un point, comme avant.
+    / Extracts the 'remaining to pay' amount from the complement screen.
+    The V2 screen shows a comma ("1,00 €"): both separators are accepted and a
+    dot is always returned, as before."""
     motif = re.compile(
-        r'complement-reste-a-payer.*?<strong>\s*([0-9.]+)\s*€', re.DOTALL
+        r'complement-reste-a-payer.*?<strong>\s*([0-9.,]+)\s*€', re.DOTALL
     )
     correspondance = motif.search(contenu_html)
-    return correspondance.group(1) if correspondance else None
+    return correspondance.group(1).replace(",", ".") if correspondance else None
 
 
 class TestPaiementComplementaire(FastTenantTestCase):
@@ -235,7 +239,7 @@ class TestPaiementComplementaire(FastTenantTestCase):
             # La 2ème carte EST proposée à cette étape.
             assert 'data-testid="btn-complement-2eme-carte"' in contenu1
             # Reste à payer = 9,00 € (15 - 6 couverts par carte1).
-            assert '9.00' in contenu1
+            assert '9,00' in contenu1
 
             cascade_carte1 = _extraire_hidden(contenu1, 'cascade_carte1')
             total_nfc_carte1 = _extraire_hidden(contenu1, 'total_nfc_carte1')
@@ -274,15 +278,17 @@ class TestPaiementComplementaire(FastTenantTestCase):
     # ------------------------------------------------------------------ #
 
     def _post_complementaire_espece(self, tag_id_carte1, cascade_carte1,
-                                    total_nfc_carte1, quantite):
+                                    total_nfc_carte1, quantite, given_sum=''):
         """POST payer_complementaire moyen_complement=espece.
-        / POST payer_complementaire moyen_complement=espece."""
+        given_sum : somme donnee en centimes (pave especes), vide = compte juste.
+        / POST payer_complementaire moyen_complement=espece (given_sum in cents)."""
         data = {
             'uuid_pv': str(self.pv.uuid),
             'moyen_complement': 'espece',
             'tag_id_carte1': tag_id_carte1,
             'cascade_carte1': cascade_carte1,
             'total_nfc_carte1': total_nfc_carte1,
+            'given_sum': given_sum,
             f'repid-{self.produit.uuid}': str(quantite),
         }
         return self.client_http.post(
@@ -384,6 +390,57 @@ class TestPaiementComplementaire(FastTenantTestCase):
         # Carte1 débitée de ses 6 € TLF (solde 0 après).
         # / Card1 debited its 6 € TLF (balance 0 after).
         assert WalletService.obtenir_solde(self.wallet1, self.asset_tlf) == 0
+
+    def _payer_carte1_puis_especes(self, given_sum):
+        """3 vins (15 €), carte1 TLF 6 €, puis complement especes avec given_sum.
+        / 3 wines (15 €), card1 6 € TLF, then cash complement with given_sum."""
+        with (
+            mock.patch('laboutik.views.FedowConfig') as MockConfig,
+            mock.patch('laboutik.views.FedowAPI'),
+        ):
+            MockConfig.get_solo.return_value.can_fedow.return_value = False
+            reponse1 = self._post_payer_nfc(tag_id=self.carte1.tag_id, quantite=3)
+            contenu1 = reponse1.content.decode()
+            return self._post_complementaire_espece(
+                tag_id_carte1=self.carte1.tag_id,
+                cascade_carte1=_extraire_hidden(contenu1, 'cascade_carte1'),
+                total_nfc_carte1=_extraire_hidden(contenu1, 'total_nfc_carte1'),
+                quantite=3,
+                given_sum=given_sum,
+            )
+
+    def test_nfc1_puis_espece_somme_donnee_affiche_monnaie_a_rendre(self):
+        """Reste 9 € en especes, le client donne 10 € → 1 € a rendre.
+        / 9 € cash remainder, client gives 10 € → 1 € change."""
+        reponse = self._payer_carte1_puis_especes(given_sum='1000')
+        contenu = reponse.content.decode()
+
+        assert reponse.status_code == 200
+        assert 'data-testid="paiement-monnaie-a-rendre"' in contenu
+        assert '1.0' in contenu or '1,0' in contenu
+        lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.LABOUTIK)
+        assert sum(ligne.total() for ligne in lignes) == 1500
+
+    def test_nfc1_puis_espece_somme_donnee_insuffisante_refuse_sans_debit(self):
+        """Reste 9 € en especes, le client donne 5 € → refus 400, rien de debite.
+        / 9 € cash remainder, client gives 5 € → 400, nothing debited."""
+        reponse = self._payer_carte1_puis_especes(given_sum='500')
+
+        assert reponse.status_code == 400
+        assert LigneArticle.objects.filter(
+            sale_origin=SaleOrigin.LABOUTIK,
+        ).count() == 0
+        assert WalletService.obtenir_solde(self.wallet1, self.asset_tlf) == 600
+
+    def test_nfc1_puis_espece_compte_juste_sans_monnaie_a_rendre(self):
+        """Somme donnee vide = compte juste : succes, pas de monnaie a rendre.
+        / Empty given sum = exact amount: success, no change."""
+        reponse = self._payer_carte1_puis_especes(given_sum='')
+        contenu = reponse.content.decode()
+
+        assert reponse.status_code == 200
+        assert 'data-testid="paiement-succes"' in contenu
+        assert 'data-testid="paiement-monnaie-a-rendre"' not in contenu
 
     # ------------------------------------------------------------------ #
     #  Test : NFC1 + CB → succès
@@ -554,7 +611,7 @@ class TestPaiementComplementaire(FastTenantTestCase):
             reponse1 = self._post_payer_nfc(tag_id=self.carte1.tag_id, quantite=3)
             contenu1 = reponse1.content.decode()
             # Étape 1 : le FED de carte1 couvre 6 € → reste 9 €.
-            assert '9.00' in contenu1
+            assert '9,00' in contenu1
             cascade_carte1 = _extraire_hidden(contenu1, 'cascade_carte1')
             total_nfc_carte1 = _extraire_hidden(contenu1, 'total_nfc_carte1')
 
@@ -632,3 +689,125 @@ class TestPaiementComplementaire(FastTenantTestCase):
         # Carte2 débitée de ses 9 € locaux.
         # / Card2 debited its 9 € local.
         assert WalletService.obtenir_solde(self.wallet2, self.asset_tlf) == 0
+
+    # ------------------------------------------------------------------ #
+    #  Test : NFC1 + NFC2 insuffisantes, puis le reste en especes / CB
+    #  / Card1 + card2 insufficient, then the remainder in cash / CC
+    # ------------------------------------------------------------------ #
+
+    def _payer_deux_cartes_puis_reste(self, moyen_du_reste, given_sum=''):
+        """3 vins (15 €) : carte1 TLF 6 €, carte2 TLF 8 €, reste 1 € regle en
+        especes ou en CB depuis le 2e ecran « reste a payer ».
+        Renvoie (contenu du 2e ecran, reponse finale).
+        / 3 wines (15 €): card1 6 €, card2 8 €, 1 € remainder paid in cash or CC
+        from the 2nd remainder screen. Returns (2nd screen html, final response).
+        """
+        with (
+            mock.patch('laboutik.views.FedowConfig') as MockConfig,
+            mock.patch('laboutik.views.FedowAPI'),
+        ):
+            MockConfig.get_solo.return_value.can_fedow.return_value = False
+
+            # Etape 1 : carte1 insuffisante → 1er ecran « reste a payer »
+            # / Step 1: card1 insufficient → 1st remainder screen
+            reponse1 = self._post_payer_nfc(tag_id=self.carte1.tag_id, quantite=3)
+            contenu1 = reponse1.content.decode()
+
+            # Etape 2 : carte2 insuffisante → 2e ecran « reste a payer »
+            # / Step 2: card2 insufficient → 2nd remainder screen
+            reponse2 = self._post_complementaire_nfc(
+                tag_id_carte2=self.carte2.tag_id,
+                tag_id_carte1=self.carte1.tag_id,
+                cascade_carte1=_extraire_hidden(contenu1, 'cascade_carte1'),
+                total_nfc_carte1=_extraire_hidden(contenu1, 'total_nfc_carte1'),
+                quantite=3,
+            )
+            contenu2 = reponse2.content.decode()
+
+            # Etape 3 : le 2e ecran soumet son formulaire avec le moyen du reste.
+            # Il renvoie tag_id_carte2 (champ cache).
+            # / Step 3: the 2nd screen submits its form, sending tag_id_carte2 back.
+            data = {
+                'uuid_pv': str(self.pv.uuid),
+                'moyen_complement': moyen_du_reste,
+                'tag_id_carte1': _extraire_hidden(contenu2, 'tag_id_carte1'),
+                'tag_id_carte2': _extraire_hidden(contenu2, 'tag_id_carte2'),
+                'cascade_carte1': _extraire_hidden(contenu2, 'cascade_carte1'),
+                'total_nfc_carte1': _extraire_hidden(contenu2, 'total_nfc_carte1'),
+                'given_sum': given_sum,
+                f'repid-{self.produit.uuid}': '3',
+            }
+            reponse3 = self.client_http.post(
+                '/laboutik/paiement/payer_complementaire/', data=data
+            )
+        return contenu2, reponse3
+
+    def test_2e_ecran_reste_renvoie_la_carte2_et_l_affiche(self):
+        """Le 2e ecran « reste a payer » porte la carte2 : champ cache + ligne payee.
+        / The 2nd remainder screen carries card2: hidden field + paid row."""
+        contenu2, _reponse3 = self._payer_deux_cartes_puis_reste('carte_bancaire')
+
+        assert _extraire_hidden(contenu2, 'tag_id_carte2') == self.carte2.tag_id
+        assert 'data-testid="complement-carte2-info"' in contenu2
+        # Reste 1,00 € = 15 - 6 (carte1) - 8 (carte2)
+        # / Remainder 1.00 € = 15 - 6 - 8
+        assert _extraire_reste(contenu2) in ('1.00', '1,00')
+
+    def test_deux_cartes_insuffisantes_puis_especes_debite_les_deux_cartes(self):
+        """Reste 1 € en especes, le client donne 2 € : succes, 1 € a rendre.
+        Les DEUX cartes sont debitees, la compta fait 15 € dont 1 € en especes.
+        / 1 € cash remainder, client gives 2 €: success, 1 € change, BOTH cards
+          debited, accounting 15 € with 1 € cash."""
+        _contenu2, reponse3 = self._payer_deux_cartes_puis_reste(
+            'espece', given_sum='200'
+        )
+        contenu3 = reponse3.content.decode()
+
+        assert reponse3.status_code == 200, contenu3[:500]
+        assert 'data-testid="paiement-succes"' in contenu3
+        assert 'data-testid="paiement-monnaie-a-rendre"' in contenu3
+
+        lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.LABOUTIK)
+        assert sum(ligne.total() for ligne in lignes) == 1500
+        lignes_especes = lignes.filter(payment_method=PaymentMethod.CASH)
+        assert sum(ligne.total() for ligne in lignes_especes) == 100
+
+        assert WalletService.obtenir_solde(self.wallet1, self.asset_tlf) == 0
+        assert WalletService.obtenir_solde(self.wallet2, self.asset_tlf) == 0
+
+        # L'ecran de succes montre les deux cartes, chacune dans son cadre.
+        # / The success screen shows both cards, each in its own frame.
+        assert 'data-testid="succes-carte-1"' in contenu3
+        assert 'data-testid="succes-carte-2"' in contenu3
+
+    def test_deux_cartes_insuffisantes_puis_cb_debite_les_deux_cartes(self):
+        """Reste 1 € en CB : succes, les DEUX cartes debitees, 1 € en CB (pas 9 €).
+        / 1 € CC remainder: success, BOTH cards debited, 1 € by CC (not 9 €)."""
+        _contenu2, reponse3 = self._payer_deux_cartes_puis_reste('carte_bancaire')
+        contenu3 = reponse3.content.decode()
+
+        assert reponse3.status_code == 200, contenu3[:500]
+        assert 'data-testid="paiement-succes"' in contenu3
+
+        lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.LABOUTIK)
+        assert sum(ligne.total() for ligne in lignes) == 1500
+        lignes_cb = lignes.filter(payment_method=PaymentMethod.CC)
+        assert sum(ligne.total() for ligne in lignes_cb) == 100
+
+        assert WalletService.obtenir_solde(self.wallet1, self.asset_tlf) == 0
+        assert WalletService.obtenir_solde(self.wallet2, self.asset_tlf) == 0
+        assert 'data-testid="succes-carte-2"' in contenu3
+
+    def test_deux_cartes_insuffisantes_puis_especes_somme_insuffisante_refuse(self):
+        """Reste 1 € en especes, le client donne 0,50 € : refus 400, rien de debite.
+        / 1 € cash remainder, client gives 0.50 €: 400, nothing debited."""
+        _contenu2, reponse3 = self._payer_deux_cartes_puis_reste(
+            'espece', given_sum='50'
+        )
+
+        assert reponse3.status_code == 400
+        assert LigneArticle.objects.filter(
+            sale_origin=SaleOrigin.LABOUTIK,
+        ).count() == 0
+        assert WalletService.obtenir_solde(self.wallet1, self.asset_tlf) == 600
+        assert WalletService.obtenir_solde(self.wallet2, self.asset_tlf) == 800

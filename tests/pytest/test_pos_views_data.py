@@ -7,9 +7,9 @@ LOCALISATION : tests/pytest/test_pos_views_data.py
 
 Couvre :
   - _construire_donnees_articles : couleurs (override produit / fallback categorie),
-    icones (FA/MS/vide), icone_type, fallback icone categorie, bt_groupement,
+    icones Material (stockees / vide), icone_type, fallback icone categorie, bt_groupement,
     prix en centimes, categorie_dict avec icone_type
-  - _construire_donnees_categories : detection icone_type FA/MS/vide
+  - _construire_donnees_categories : icones Material (stockees / repli)
   - LaboutikConfiguration.get_solo() : singleton, valeurs par defaut
 
 Prerequis / Prerequisites:
@@ -222,8 +222,9 @@ def test_couleurs_fallback_categorie(tenant):
 
 def test_icone_fontawesome(tenant):
     """
-    Une icone prefixee 'fa' (ex: 'fa-beer') doit donner icone_type='fa'.
-    / A 'fa'-prefixed icon (e.g. 'fa-beer') must give icone_type='fa'.
+    Une icone Material stockee (ex: 'sports_bar', choisie dans le selecteur
+    de l'admin) est passee telle quelle a la caisse, icone_type='ms'.
+    / A stored Material icon is passed as-is to the POS.
     """
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import CategorieProduct, Product, Price
@@ -234,7 +235,7 @@ def test_icone_fontawesome(tenant):
             name=f'{TEST_PREFIX} Icone FA',
             methode_caisse=Product.VENTE,
             categorie_pos=cat,
-            icon_pos='fa-beer',
+            icon_pos='sports_bar',
         )
         Price.objects.create(product=product, name=f'{TEST_PREFIX} Tarif FA', prix=Decimal('4.00'))
 
@@ -244,9 +245,9 @@ def test_icone_fontawesome(tenant):
         article = next((a for a in articles if a['name'] == f'{TEST_PREFIX} Icone FA'), None)
         assert article is not None
 
-        assert article['icone'] == 'fa-beer'
-        assert article['icone_type'] == 'fa', (
-            f"icone_type attendu 'fa', obtenu '{article['icone_type']}'"
+        assert article['icone'] == 'sports_bar'
+        assert article['icone_type'] == 'ms', (
+            f"icone_type attendu 'ms', obtenu '{article['icone_type']}'"
         )
 
 
@@ -403,6 +404,72 @@ def test_prix_en_centimes(tenant):
                 f"Prix EUR {prix_eur_str} → attendu {centimes_attendus} centimes, "
                 f"obtenu {article['prix']}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Test 3b : PV Adhesion — un produit adhesion sans methode_caisse
+# Test 3b: Membership POS — a membership product without methode_caisse
+# ---------------------------------------------------------------------------
+
+def test_produit_adhesion_sans_methode_caisse_ne_plante_pas(tenant):
+    """
+    Un produit adhesion n'a pas de methode_caisse (None).
+    La construction des articles ne doit pas planter dessus.
+    / A membership product has no methode_caisse (None).
+    Building the articles must not crash on it.
+
+    Regression : METHODES_RECHARGE_GRATUITES etait devenu la chaine "RC"
+    (virgule oubliee en commentant RECHARGE_TEMPS). Le test
+    « None in "RC" » levait un TypeError : les PV Adhesion et Mix
+    renvoyaient une erreur 500.
+    / Regression: the constant became the string "RC" (missing comma),
+    so "None in 'RC'" raised TypeError and the POS page crashed (500).
+    """
+    with schema_context(TENANT_SCHEMA):
+        from BaseBillet.models import Product, Price
+        from laboutik.views import _construire_donnees_articles
+
+        produit_adhesion = Product.objects.create(
+            name=f'{TEST_PREFIX} Adhesion sans methode',
+            categorie_article=Product.ADHESION,
+            methode_caisse=None,
+        )
+        Price.objects.create(
+            product=produit_adhesion,
+            name=f'{TEST_PREFIX} Tarif Adhesion',
+            prix=Decimal('10.00'),
+        )
+
+        pdv = creer_pdv_avec_produit('Adhesion', produit_adhesion)
+        articles = _construire_donnees_articles(pdv)
+
+        article = next(
+            (a for a in articles if a['name'] == f'{TEST_PREFIX} Adhesion sans methode'),
+            None,
+        )
+        assert article is not None, "L'adhesion doit etre dans la liste des articles"
+        assert article['est_adhesion'] is True
+        assert article['est_recharge_gratuite'] is False
+        assert article['bt_groupement']['groupe'] == 'groupe_AD'
+
+
+def test_methodes_recharge_gratuites_est_un_tuple():
+    """
+    Les constantes de methodes doivent rester des tuples, pas des chaines.
+    Sinon « in » cherche un morceau de texte : None plante, et un code
+    comme "R" ou "C" serait pris pour une recharge gratuite.
+    / Method constants must stay tuples, not strings: otherwise "in"
+    does a substring search.
+    """
+    from laboutik.views import (
+        METHODES_RECHARGE,
+        METHODES_RECHARGE_GRATUITES,
+        METHODES_RECHARGE_PAYANTES,
+    )
+
+    assert isinstance(METHODES_RECHARGE, tuple)
+    assert isinstance(METHODES_RECHARGE_GRATUITES, tuple)
+    assert isinstance(METHODES_RECHARGE_PAYANTES, tuple)
 
 
 # ---------------------------------------------------------------------------
@@ -569,14 +636,10 @@ def test_categorie_dict_contient_icone_type(tenant):
 
 def test_construire_donnees_categories_icone_type(tenant):
     """
-    _construire_donnees_categories doit ajouter 'icone_type' sur chaque categorie :
-    - Icone FA (prefixe 'fa') → 'fa'
-    - Icone MS (pas de prefixe 'fa') → 'ms'
-    - Pas d'icone → fallback 'fa' avec 'fa-th'
-    / _construire_donnees_categories must add 'icone_type' on each category:
-    - FA icon (prefix 'fa') → 'fa'
-    - MS icon (no 'fa' prefix) → 'ms'
-    - No icon → fallback 'fa' with 'fa-th'
+    _construire_donnees_categories : la caisse n'affiche que du Material Symbols.
+    - Icone Material stockee ('sports_bar', 'local_bar') → inchangee, icone_type 'ms'
+    - Pas d'icone → icone de repli 'apps' (grille), 'ms'
+    / Only Material Symbols: stored names unchanged, empty → 'apps'.
     """
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import CategorieProduct
@@ -584,8 +647,8 @@ def test_construire_donnees_categories_icone_type(tenant):
         from laboutik.views import _construire_donnees_categories
 
         cat_fa = CategorieProduct.objects.create(
-            name=f'{TEST_PREFIX} Cat Liste FA',
-            icon='fa-cocktail',
+            name=f'{TEST_PREFIX} Cat Liste Stockee',
+            icon='sports_bar',
         )
         cat_ms = CategorieProduct.objects.create(
             name=f'{TEST_PREFIX} Cat Liste MS',
@@ -606,20 +669,20 @@ def test_construire_donnees_categories_icone_type(tenant):
 
         # Trouver chaque categorie dans la liste retournee
         # / Find each category in the returned list
-        dict_fa = next((c for c in categories if 'Liste FA' in c['name']), None)
+        dict_fa = next((c for c in categories if 'Liste Stockee' in c['name']), None)
         dict_ms = next((c for c in categories if 'Liste MS' in c['name']), None)
         dict_vide = next((c for c in categories if 'Liste Vide' in c['name']), None)
 
-        assert dict_fa is not None, "Categorie FA introuvable"
+        assert dict_fa is not None, "Categorie stockee introuvable"
         assert dict_ms is not None, "Categorie MS introuvable"
         assert dict_vide is not None, "Categorie Vide introuvable"
 
-        # Icone FontAwesome : prefixe 'fa'
-        # / FontAwesome icon: 'fa' prefix
-        assert dict_fa['icone_type'] == 'fa', (
-            f"'fa-cocktail' → icone_type='fa' attendu, obtenu '{dict_fa['icone_type']}'"
+        # Icone Material stockee : passee telle quelle
+        # / Stored Material icon: passed as-is
+        assert dict_fa['icone_type'] == 'ms', (
+            f"'sports_bar' → icone_type='ms' attendu, obtenu '{dict_fa['icone_type']}'"
         )
-        assert dict_fa['icon'] == 'fa-cocktail'
+        assert dict_fa['icon'] == 'sports_bar'
 
         # Icone Material Symbols : pas de prefixe 'fa'
         # / Material Symbols icon: no 'fa' prefix
@@ -628,13 +691,13 @@ def test_construire_donnees_categories_icone_type(tenant):
         )
         assert dict_ms['icon'] == 'local_bar'
 
-        # Categorie sans icone : fallback FA avec fa-th
-        # / Category without icon: FA fallback with fa-th
-        assert dict_vide['icone_type'] == 'fa', (
-            f"Categorie vide → icone_type='fa' attendu (fallback), obtenu '{dict_vide['icone_type']}'"
+        # Categorie sans icone : repli Material 'apps' (grille)
+        # / Category without icon: Material fallback 'apps' (grid)
+        assert dict_vide['icone_type'] == 'ms', (
+            f"Categorie vide → icone_type='ms' attendu (repli), obtenu '{dict_vide['icone_type']}'"
         )
-        assert dict_vide['icon'] == 'fa-th', (
-            f"Categorie vide → icon='fa-th' attendu (fallback), obtenu '{dict_vide['icon']}'"
+        assert dict_vide['icon'] == 'apps', (
+            f"Categorie vide → icon='apps' attendu (repli), obtenu '{dict_vide['icon']}'"
         )
 
 
@@ -690,8 +753,8 @@ def test_donnees_test_pos_couleurs_et_icones(tenant):
     / After create_test_pos_data, products have known colors and icons.
     This test re-runs the command to ensure data is in the expected state
     (avoids false failures due to manual admin changes).
-    Biere: bg #F59E0B, text #000000, icon fa-beer (FA type).
-    Coca: bg #DC2626, text #FFFFFF, icon fa-glass-whiskey (FA type).
+    Biere: bg #F59E0B, text #000000, icon sports_bar (Material).
+    Coca: bg #DC2626, text #FFFFFF, icon local_drink (Material).
     """
     from django.core.management import call_command
 
@@ -719,8 +782,8 @@ def test_donnees_test_pos_couleurs_et_icones(tenant):
             assert biere['couleur_texte'] == '#000000', (
                 f"Biere : texte attendu '#000000', obtenu '{biere['couleur_texte']}'"
             )
-            assert biere['icone'] == 'fa-beer'
-            assert biere['icone_type'] == 'fa'
+            assert biere['icone'] == 'sports_bar'
+            assert biere['icone_type'] == 'ms'
             # Prix : 5.00 EUR = 500 centimes
             assert biere['prix'] == 500, f"Biere : prix attendu 500 centimes, obtenu {biere['prix']}"
 
@@ -733,7 +796,7 @@ def test_donnees_test_pos_couleurs_et_icones(tenant):
             assert coca['couleur_texte'] == '#FFFFFF', (
                 f"Coca : texte attendu '#FFFFFF', obtenu '{coca['couleur_texte']}'"
             )
-            assert coca['icone'] == 'fa-glass-whiskey'
-            assert coca['icone_type'] == 'fa'
+            assert coca['icone'] == 'local_drink'
+            assert coca['icone_type'] == 'ms'
             # Prix : 3.00 EUR = 300 centimes
             assert coca['prix'] == 300, f"Coca : prix attendu 300 centimes, obtenu {coca['prix']}"

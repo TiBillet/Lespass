@@ -51,6 +51,19 @@
 .addition-head-responsive{
 	display: flex;
 	justify-content: space-between;
+	/* Toute la bande ouvre / ferme le ticket (cotton/addition.html)
+	   / The whole strip toggles the ticket */
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.addition-head-responsive:active{
+	background-color: var(--surface-2);
+}
+
+.addition-head-responsive:focus-visible{
+	outline: 2px solid var(--nfc);
+	outline-offset: -2px;
 }
 
 
@@ -81,14 +94,34 @@
 }
 
 .addition-chevron{
-	transition: 0.2s;
+	transition: transform 0.2s var(--ease);
 }
 
+/* transform: rotate() et non la propriete `rotate` : `rotate` seule n'existe
+   qu'a partir de Chrome 104, les WebView anciennes (SUNMI) l'ignorent.
+   / transform: rotate(), not the standalone `rotate` property (Chrome 104+ only). */
 .addition-chevron.reverse{
-	rotate: 180deg;
+	transform: rotate(180deg);
+}
+
+/* Dans l'en-tete responsive, le titre porte le chevron : il ne doit pas etre
+   coupe par l'ellipse du titre (regle .addition-title plus bas).
+   / In the responsive header the title holds the chevron: no ellipsis clipping. */
+.addition-head-responsive .addition-title{
+	flex: none;
+	overflow: visible;
 }
 
 .addition-title {
+	/* Le titre cede la place en premier quand le panneau est etroit
+	   (29 % de 1024 px = 262 px) : il se coupe par "...", le bouton
+	   Vider reste entier. / The title shrinks first on a narrow panel;
+	   the Empty button stays whole. */
+	flex: 0 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	font-size: var(--fs-min);
 	font-weight: 700;
 	letter-spacing: .06em;
@@ -98,6 +131,8 @@
 }
 
 .addition-count {
+	flex: none;
+	white-space: nowrap;
 	padding: 3px 10px;
 	border-radius: var(--r-pill);
 	background-color: var(--surface-3);
@@ -114,11 +149,12 @@
    armed (two-step confirmation handled by addition.js), faded when the cart is
    empty. */
 .addition-vider {
+	flex: none;
 	margin-left: auto;
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	min-height: 42px;
+	min-height: 44px;
 	padding: 8px 14px;
 	border: none;
 	border-radius: var(--r-ctrl);
@@ -133,7 +169,7 @@
 	transition: color .12s var(--ease), background-color .12s var(--ease);
 }
 
-.addition-vider i {
+.addition-vider .material-symbols-outlined {
 	font-size: 18px;
 }
 
@@ -169,7 +205,9 @@
    / Cart row — `.tk-line`: no grey card any more, just a hairline between rows. */
 .addition-line-grid {
 	display: grid;
-	grid-template-columns: 40px 1fr auto;
+	/* minmax(0, 1fr) : un nom long est coupe par "..." au lieu d'elargir la ligne
+	   / minmax(0, 1fr): a long name gets an ellipsis instead of widening the row */
+	grid-template-columns: 40px minmax(0, 1fr) auto;
 	align-items: center;
 	gap: 10px;
 	padding: 7px 6px 7px 0;
@@ -315,7 +353,7 @@
 	color: var(--text-faint);
 }
 
-.addition-placeholder i {
+.addition-placeholder .material-symbols-outlined {
 	font-size: 28px;
 	opacity: .55;
 }
@@ -401,22 +439,42 @@
 	text-align: center;
 }
 
-.addition-act-card i {
+.addition-act-card .material-symbols-outlined {
 	font-size: 22px;
 	color: var(--bleu01);
 }
 
-/* VALIDER — l'action principale, seule couleur pleine du panneau
-   / Validate — the primary action, the only solid color in the panel */
+/* VALIDER — l'action principale, seule couleur pleine du panneau.
+   Relief "touche" de la maquette : une tranche verte foncee de 4 px sous le
+   bouton. A l'appui, le bouton descend de 4 px et la tranche disparait.
+   La descente est instantanee (transition 0s sur :active).
+   La remontee prend 170 ms (transition de .addition-act).
+   Meme geste que les tuiles produit (articles.css, .article-container).
+   / Validate — primary action. Mockup "touche" depth: 4px darker edge, the
+   button drops 4px on press (instant), rises back in 170ms. */
 .addition-act-valid {
 	flex: 1;
 	background-color: var(--valid);
-	color: var(--vert04);
+	color: var(--valid-ink);
 	font-size: 18px;
-	box-shadow: 0 4px 16px oklch(0.700 0.170 148 / .22);
+	box-shadow:
+			inset 0 1.5px 0 oklch(1 0 0 / .38),
+			0 4px 0 var(--valid-deep),
+			0 5px 12px oklch(0.700 0.170 148 / .26);
 }
 
-.addition-act-valid i {
+/* Appui : on remplace le scale(.98) generique de .addition-act par la
+   descente de 4 px. La tranche passe a 0, l'ombre se resserre.
+   / Press: replaces the generic scale(.98) with the 4px drop. */
+.addition-act-valid:not(:disabled):active {
+	transform: translateY(4px);
+	filter: brightness(1.05);
+	box-shadow:
+			inset 0 1.5px 0 oklch(1 0 0 / .28),
+			0 1px 3px oklch(0 0 0 / .4);
+}
+
+.addition-act-valid .material-symbols-outlined {
 	font-size: 20px;
 }
 
@@ -438,7 +496,7 @@
 }
 
 /* pour une largeur supérieure 1022 pixels */
-@media only screen and (width > 1022px) {
+@media only screen and (min-width: 1023px) {
 	#addition {
 		display: flex;
 		flex-direction: column;
@@ -450,6 +508,15 @@
 	}
 }
 
+/* Panneau etroit (1023 a 1199 px) : en-tete plus serre pour que
+   titre, compteur et bouton Vider tiennent dans ~262 px
+   / Narrow panel (1023-1199px): tighter header so everything fits in ~262px */
+@media only screen and (min-width: 1023px) and (max-width: 1199px) {
+	.addition-head { gap: 6px; padding: 0 8px; }
+	.addition-title { padding: 15px 4px; }
+	.addition-vider { padding: 8px 8px; gap: 4px; }
+}
+
 /* pour une largeur inférieur 1022 pixels */
 @media only screen and (max-width : 1022px) {
 	#addition {
@@ -457,7 +524,12 @@
 		left: 0;
 		bottom: 0;
 		height: auto;
-		min-height: 200px;
+		min-height: var(--addition-collapsed-height);
+		/* Colonne flex : necessaire pour que margin-top: auto sur le total
+		   repousse le total et les boutons en bas du panier replie.
+		   / Flex column: needed for margin-top: auto on the total. */
+		display: flex;
+		flex-direction: column;
 		border-top: 1px solid var(--line);
 	}
 
@@ -468,6 +540,35 @@
 
 	#addition.opened #addition-responsive-wrapper{
 		display: flex;
+		animation: addition-contenu-apparait 220ms var(--ease-out) both;
+	}
+
+	/* Animation d'ouverture, en CSS seul : elle se lance quand toggleAdditionResponsive()
+	   (addition.js) ajoute la classe .opened. Le panneau se deroule du bas vers le haut
+	   (clip-path) : les boutons VALIDER / CHECK CARTE, en bas, ne bougent pas.
+	   La fermeture reste instantanee : le contenu passe en display: none, et une
+	   animation de sortie demanderait du JS ou des proprietes trop recentes pour les
+	   WebView SUNMI (@starting-style, transition-behavior).
+	   / CSS-only opening animation, fired when .opened is added. The panel unrolls
+	   upward (clip-path) so the bottom buttons stay still. Closing stays instant. */
+	#addition.opened{
+		animation: addition-deplier 220ms var(--ease-out);
+	}
+
+	/* L'espace en trop du panier replie (min-height) va AU-DESSUS du total,
+	   pas sous les boutons. Ainsi VALIDER / CHECK CARTE restent a la meme
+	   distance du bas, panier ouvert ou ferme. Avant : 17 px de vide sous les
+	   boutons une fois ferme, 0 une fois ouvert -> ils descendaient.
+	   / The folded cart's spare space goes ABOVE the total, so the buttons stay
+	   at the same distance from the bottom whether the cart is open or closed. */
+	#addition .addition-total{
+		margin-top: auto;
+	}
+
+	/* Marge basse fixe sous les boutons (+ barre systeme / encoche)
+	   / Fixed bottom gap under the buttons (+ system bar / notch) */
+	#addition .addition-actions{
+		padding-bottom: calc(16px + env(safe-area-inset-bottom));
 	}
 
 	#addition.opened #addition-list{
@@ -481,3 +582,55 @@
 	}
 }
 
+/* Telephone en paysage (ecran bas, <= 500 px) : panier replie compact.
+   Doit tenir dans --addition-collapsed-height (144 px, voir sizes.css).
+   / Landscape phone: compact folded cart, fits --addition-collapsed-height. */
+@media only screen and (max-width : 1022px) and (max-height: 500px) {
+	#addition .addition-head {
+		height: 40px;
+	}
+
+	#addition .addition-total {
+		padding: 4px 14px;
+	}
+
+	#addition .addition-total-value {
+		font-size: 22px;
+	}
+
+	#addition .addition-actions {
+		padding: 4px 8px calc(8px + env(safe-area-inset-bottom));
+	}
+
+	#addition .addition-act {
+		height: 48px;
+	}
+
+	#addition.opened #addition-list {
+		max-height: 40vh;
+		max-height: 40dvh;
+		min-height: 0;
+	}
+}
+
+
+/* Keyframes de l'ouverture du ticket responsive (voir #addition.opened plus haut)
+   / Keyframes for the responsive ticket opening */
+@keyframes addition-deplier {
+	from { clip-path: inset(calc(100% - var(--addition-collapsed-height)) 0 0 0); }
+	to   { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes addition-contenu-apparait {
+	from { opacity: 0; transform: translateY(12px); }
+	to   { opacity: 1; transform: none; }
+}
+
+/* Mouvement reduit : pas d'animation d'ouverture
+   / Reduced motion: no opening animation */
+@media (prefers-reduced-motion: reduce) {
+	#addition.opened,
+	#addition.opened #addition-responsive-wrapper {
+		animation: none;
+	}
+}

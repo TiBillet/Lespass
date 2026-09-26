@@ -1,25 +1,71 @@
-{% load static %}
+{% load static i18n %}
+{% comment %}
+ATTENTE DE LA CARTE NFC — composant Cotton V2 (popup centree)
+/ Waiting for the NFC card — V2 Cotton component (centred popup)
+
+LOCALISATION : laboutik/templates/cotton/V2/read_nfc.html
+
+Affiche la popup « Approchez la carte » de la maquette
+(TEMP-tibillet-laboutik-main/caisse/Laboutik.js : renderCardModal en attente,
+renderPaymentWait). Style : .card-modal / .card-wait dans overlay.css.
+Le script en bas demarre le lecteur NFC (nfc.js). C'est le seul lecteur
+NFC de la caisse : l'ancien cotton/read_nfc.html (V1) a ete supprime.
+/ Shows the "Tap the card" popup of the mockup. The script at the bottom
+starts the NFC reader. It is the only NFC reader (the V1 one was removed).
+
+PARAMETRES :
+- selector       : couche a fermer (#messages ou #confirm). Vide = pas de
+                   croix et pas de fermeture par le fond.
+- title          : titre (defaut : « Approchez la carte »).
+- hint           : ligne sous le titre (defaut : « lecture du solde »).
+- input-selector : input ou nfc.js ecrit le tag lu.
+- form-selector  : formulaire que nfc.js soumet.
+- submit-url     : url du hx-post du formulaire.
+- slot           : le formulaire cache (il reste hors de la boite).
+- slot « entete »  (optionnel) : contenu en haut de la boite (ex : logo).
+- slot « contenu » (optionnel) : contenu sous la consigne (ex : message
+                   d'erreur mis a jour par HTMX).
+  Syntaxe : balise c-slot avec name="entete" dans la balise du composant
+  (voir views/ask_primary_card.html). Ne pas ecrire la balise ici : Cotton
+  la compilerait meme dans ce commentaire.
+
+Utilise par / Used by : hx_check_card.html, hx_read_nfc.html, hx_lire_nfc_client.html,
+hx_display_type_payment.html (point de vente cashless),
+hx_lire_nfc_complement.html, views/ask_primary_card.html.
+{% endcomment %}
+<c-vars selector="" title="" hint="" />
 <div {{ attrs }} class="nfc-container">
     {{ slot }}
     <div id="nfc-simu-tag"></div>
-    <div class="card-modal" id="cardModal">
-        <div class="card-modal-backdrop"></div>
+    <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="card-wait-title">
+        {# Toucher le fond ferme la popup, comme la croix / Tapping the backdrop closes the popup, like the cross #}
+        <div class="card-modal-backdrop"
+             {% if selector %}onclick="hideAndEmptyElement('{{ selector }}');state.nfc.stop()"{% endif %}></div>
         <div class="card-modal-box">
-            {% if selector %}<c-V2.bt.return selector="{{ selector }}" action="state.nfc.stop()" />{% endif %}
+            {# layer 2 dans #confirm : evite deux id bt-retour-layer1 dans la page #}
+            {# / layer 2 inside #confirm: avoids two bt-retour-layer1 ids in the page #}
+            {% if selector == "#confirm" %}
+                <c-V2.bt.return selector="{{ selector }}" layer="2" action="state.nfc.stop()" data-testid="nfc-btn-fermer" />
+            {% elif selector %}
+                <c-V2.bt.return selector="{{ selector }}" action="state.nfc.stop()" data-testid="nfc-btn-fermer" />
+            {% endif %}
 
+            {{ entete }}
 
-            <div class="card-wait">
-                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                    <g fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
-                        <path d="M7.6 8.4a5.6 5.6 0 0 1 0 7.2"/>
-                        <path d="M11.7 5.4a10.4 10.4 0 0 1 0 13.2"/>
-                        <path d="M15.8 2.4a15.2 15.2 0 0 1 0 19.2"/>
-                    </g>
-                </svg>
-                <strong>Approchez la carte</strong>
-                <span>lecture du solde</span>
+            <div class="card-wait" aria-live="polite" data-testid="nfc-attente">
+                <span class="card-wait-signal">
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <g fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
+                            <path d="M7.6 8.4a5.6 5.6 0 0 1 0 7.2"/>
+                            <path d="M11.7 5.4a10.4 10.4 0 0 1 0 13.2"/>
+                            <path d="M15.8 2.4a15.2 15.2 0 0 1 0 19.2"/>
+                        </g>
+                    </svg>
+                </span>
+                <strong id="card-wait-title">{% if title %}{{ title }}{% else %}{% translate "Approchez la carte" %}{% endif %}</strong>
+                <span>{% if hint %}{{ hint }}{% else %}{% translate "lecture du solde" %}{% endif %}</span>
+                {{ contenu }}
             </div>
-
         </div>
     </div>
 

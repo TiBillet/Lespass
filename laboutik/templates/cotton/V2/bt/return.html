@@ -1,15 +1,30 @@
 {% load static i18n %}
+{% comment %}
+CROIX DE FERMETURE V2 — composant Cotton
+/ V2 close cross — Cotton component
+
+LOCALISATION : laboutik/templates/cotton/V2/bt/return.html
+
+Bouton rond en haut a droite de la popup (.card-modal-close, overlay.css).
+Remplace le gros bouton RETOUR de cotton/bt/return.html dans les popups V2.
+/ Round button, top right of the popup. Replaces the big RETOUR button.
+
+PARAMETRES :
+- selector  : couche a fermer (defaut #messages).
+- layer     : numero de couche, pour l'id bt-retour-layerN.
+- hide_only : True = cache sans vider.
+- action    : JS supplementaire execute apres la fermeture.
+{% endcomment %}
 <c-vars layer="1" :hide_only="False" selector="#messages" action=""/>
 
 {% if hide_only %}
-    <button type="button" id="bt-retour-layer{{layer}}" class="card-modal-close" aria-label="Fermer"  {{ attrs }}
+    <button type="button" id="bt-retour-layer{{layer}}" class="card-modal-close" aria-label="{% translate 'Fermer' %}" {{ attrs }}
             onclick="document.querySelector('{{ selector }}').classList.add('hide')">
 {% else %}
-    <button type="button" id="bt-retour-layer{{layer}}" class="card-modal-close" aria-label="Fermer"  {{ attrs }}
+    <button type="button" id="bt-retour-layer{{layer}}" class="card-modal-close" aria-label="{% translate 'Fermer' %}" {{ attrs }}
             onclick="hideAndEmptyElement('{{ selector }}');{{action}}">
 {% endif %}
-
-    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path d="M5.6 4.2 12 10.6l6.4-6.4L20.2 6 13.8 12.4l6.4 6.4-1.8 1.8-6.4-6.4-6.4 6.4-1.8-1.8 6.4-6.4-6.4-6.4z"/>
     </svg>
 </button>

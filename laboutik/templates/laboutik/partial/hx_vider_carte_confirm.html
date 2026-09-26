@@ -1,102 +1,92 @@
 {% load i18n billet_filters %}
-{# Ecran plein ecran de confirmation avant remboursement de la carte. #}
-{# Fond orange warning : tension avant action irreversible. #}
-{# Full-screen confirmation before card refund. Orange warning bg: tension. #}
+{% comment %}
+VIDER CARTE — ETAPE 2 : CONFIRMATION AVANT REMBOURSEMENT
+/ Empty card — step 2: confirmation before refund
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_vider_carte_confirm.html
+RENDU PAR : PaiementViewSet.vider_carte_preview() (aucune ecriture en base)
+
+Popup .card-modal, teinte « warn » : de l'argent sort de la caisse et le
+geste ne se defait pas. Lecture de haut en bas :
+1. Pastille + « Vider la carte » + numero de carte
+2. « À rendre en espèces » en tres gros
+3. Les soldes de la carte (tableau Monnaie · Solde)
+4. Le choix : reinitialiser la carte, ou garder le compte du membre
+/ Warn-tinted popup: badge, amount to give back, balances, then the choice.
+{% endcomment %}
 <div id="messages">
-    <div class="BF-col" data-testid="vider-carte-confirm" aria-live="polite">
-        <div class="fi-title1">{% translate "Vider la carte" %} {{ carte.tag_id }}</div>
-        {# Box montant a rendre — fort contraste pour lecture rapide caissier #}
-        {# / Amount-to-refund box — strong contrast for fast cashier reading #}
-        <div class="give-back-box" role="alert" data-testid="vider-carte-amount">
-            <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
-            {% translate "À rendre" %} : <strong>{{ total_centimes|cents_to_euros }}</strong>
+  <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="vider-titre" data-testid="vider-carte-confirm">
+    <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages')"></div>
+
+    <div class="card-modal-box succes-box vider-box">
+      <c-V2.bt.return selector="#messages" data-testid="vider-carte-btn-fermer" />
+
+      <div class="succes-entete">
+        <span class="succes-pastille" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24" focusable="false"><rect x="2" y="5" width="20" height="13" rx="2"/><circle cx="12" cy="11.5" r="3" opacity=".5"/></svg>
+        </span>
+        <h2 class="succes-titre" id="vider-titre">{% translate "Vider la carte" %}</h2>
+      </div>
+
+      <div class="succes-rendre vider-rendre" role="alert" data-testid="vider-carte-amount">
+        <span class="payment-total-lbl">{% translate "À rendre en espèces" %}</span>
+        <span class="succes-rendre-val">{{ total_centimes|cents_to_euros }}</span>
+      </div>
+
+      {# Soldes remboursables de la carte / Refundable balances #}
+      <div class="succes-carte">
+        <div class="succes-carte-ref">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M7.6 8.4a5.6 5.6 0 0 1 0 7.2"/><path d="M11.7 5.4a10.4 10.4 0 0 1 0 13.2"/><path d="M15.8 2.4a15.2 15.2 0 0 1 0 19.2"/></g></svg>
+          {% translate "Carte" %} <b>{{ carte.tag_id }}</b>
         </div>
-        {# Detail des tokens utilises #}
-        {# / Token detail #}
-        <table class="cascade-tokens-table" data-testid="vider-carte-tokens-table">
-            <thead>
-                <tr>
-                    <th>{% translate "Type d'actif" %}</th>
-                    <th>{% translate "Solde" %}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for token in tokens %}
-                    <tr>
-                        <td>{{ token.asset.name }} ({{ token.asset.get_category_display }})</td>
-                        <td>{{ token.value|cents_to_asset:token.asset }}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
+        <table class="succes-assets" data-testid="vider-carte-tokens-table">
+          <thead>
+            <tr>
+              <th scope="col">{% translate "Monnaie" %}</th>
+              <th scope="col" class="num">{% translate "Solde" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for token in tokens %}
+              <tr>
+                <td>{{ token.asset.name }}</td>
+                <td class="num">{{ token.value|cents_to_asset:token.asset }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
         </table>
-        {# Form HTMX : POST -> /vider_carte/ -> renvoie hx_vider_carte_success.html dans #messages #}
-        {# Le bouton submit clique envoie sa propre valeur 'vider_carte' (true|false). #}
-        {# / HTMX form: POST -> /vider_carte/ -> renders hx_vider_carte_success.html into #messages #}
-        {# / The clicked submit button sends its own 'vider_carte' value (true|false). #}
-        <form method="post"
-              action="{% url 'laboutik-paiement-vider_carte' %}"
-              hx-post="{% url 'laboutik-paiement-vider_carte' %}"
-              hx-target="#messages"
-              hx-swap="outerHTML"
-              data-testid="vider-carte-confirm-form">
-            {% csrf_token %}
-            <input type="hidden" name="tag_id" value="{{ tag_id }}">
-            <input type="hidden" name="tag_id_cm" value="{{ tag_id_cm }}">
-            <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
-            {% if carte.user %}
-                {# Carte avec user identifie : 2 choix distincts au caissier. #}
-                {# / Card with identified user: 2 distinct choices for the cashier. #}
-                <div class="vider-carte-actions-row">
-                    <button type="submit"
-                            name="vider_carte"
-                            value="true"
-                            class="bt-basic-container bt-vider-confirm"
-                            data-testid="vider-carte-btn-reinit"
-                            data-loading-disable>
-                        <div class="bt-basic-icon">
-                            <i class="fas fa-eraser" aria-hidden="true"></i>
-                        </div>
-                        <div class="bt-basic-text">
-                            <div>{% translate "Rembourser et" %}</div>
-                            <div>{% translate "réinitialiser" %}</div>
-                        </div>
-                    </button>
-                    <button type="submit"
-                            name="vider_carte"
-                            value="false"
-                            class="bt-basic-container bt-vider-keep-user"
-                            data-testid="vider-carte-btn-keep-user"
-                            data-loading-disable>
-                        <div class="bt-basic-icon">
-                            <i class="fas fa-user-check" aria-hidden="true"></i>
-                        </div>
-                        <div class="bt-basic-text">
-                            <div>{% translate "Rembourser et garder" %}</div>
-                            <div class="vider-carte-user-email">{{ carte.user.email }}</div>
-                        </div>
-                    </button>
-                </div>
-            {% else %}
-                {# Carte anonyme (wallet ephemere) : un seul choix, la reinit fait #}
-                {# disparaitre le wallet ephemere (pas de user a preserver). #}
-                {# / Anonymous card (ephemeral wallet): single choice — reset removes #}
-                {# the ephemeral wallet (no user to preserve). #}
-                <button type="submit"
-                        name="vider_carte"
-                        value="true"
-                        class="bt-basic-container bt-vider-confirm"
-                        data-testid="vider-carte-btn-confirm"
-                        data-loading-disable>
-                    <div class="bt-basic-icon">
-                        <i class="fas fa-check-circle" aria-hidden="true"></i>
-                    </div>
-                    <div class="bt-basic-text">
-                        <div>{% translate "Rembourser et" %}</div>
-                        <div>{% translate "réinitialiser la carte" %}</div>
-                    </div>
-                </button>
-            {% endif %}
-        </form>
-        <c-bt.return />
+      </div>
+
+      {# POST vider_carte : le bouton clique envoie sa valeur vider_carte (true|false) #}
+      <form hx-post="{% url 'laboutik-paiement-vider_carte' %}"
+            hx-target="#messages"
+            hx-swap="outerHTML"
+            class="vider-choix"
+            data-testid="vider-carte-confirm-form">
+        {% csrf_token %}
+        <input type="hidden" name="tag_id" value="{{ tag_id }}">
+        <input type="hidden" name="tag_id_cm" value="{{ tag_id_cm }}">
+        <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
+
+        <button type="submit" name="vider_carte" value="true"
+                class="vider-bouton vider-bouton--principal"
+                data-testid="{% if carte.user %}vider-carte-btn-reinit{% else %}vider-carte-btn-confirm{% endif %}"
+                data-loading-disable>
+          {% translate "Rembourser et réinitialiser la carte" %}
+        </button>
+
+        {% if carte.user %}
+          {# Carte d'un membre : on peut garder le lien carte ↔ compte #}
+          <button type="submit" name="vider_carte" value="false"
+                  class="vider-bouton vider-bouton--secondaire"
+                  data-testid="vider-carte-btn-keep-user"
+                  data-loading-disable>
+            {% translate "Rembourser et garder le compte" %}
+            <small>{{ carte.user.email }}</small>
+          </button>
+          <p class="vider-note">{% translate "Réinitialiser : la carte redevient anonyme et peut être redonnée." %}</p>
+        {% endif %}
+      </form>
     </div>
+  </div>
 </div>

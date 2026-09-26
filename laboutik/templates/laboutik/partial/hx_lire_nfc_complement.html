@@ -11,7 +11,7 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_lire_nfc_complement.html
 
 FLUX :
 1. L'utilisateur clique "2eme CARTE NFC" dans hx_complement_paiement.html
-2. Ce partial affiche le spinner NFC
+2. Ce partial affiche la popup V2 « Approchez la 2ᵉ carte »
 3. Le JS au chargement injecte les donnees cascade carte1 dans #addition-form
 4. Scan NFC → JS met tag_id dans #addition-form → POST payer_complementaire
 / FLOW:
@@ -21,10 +21,10 @@ FLUX :
 4. NFC scan → JS puts tag_id in #addition-form → POST payer_complementaire
 -->
 <div id="confirm" data-testid="lire-nfc-complement">
-  <c-read-nfc selector="#confirm" input-selector="#nfc-tag-id" form-selector="#addition-form" submit-url="{% url 'laboutik-paiement-payer_complementaire' %}">
-  <h1>{% translate "Attente lecture 2ème carte" %}</h1>
-  <p style="opacity: 0.7; font-size: 1rem;">{% translate "Posez la 2ème carte du client sur le lecteur" %}</p>
-  </c-read-nfc>
+  {# Popup V2 (cotton/V2/read_nfc.html). Le complement de #messages s'efface  #}
+  {# pendant l'attente (regle « Rien ne s'empile ») et revient a la fermeture. #}
+  {# / V2 popup; the complement in #messages hides meanwhile.                   #}
+  <c-V2.read-nfc selector="#confirm" title='{% translate "Approchez la 2ᵉ carte" %}' hint='{% translate "Posez la 2ème carte du client sur le lecteur" %}' input-selector="#nfc-tag-id" form-selector="#addition-form" submit-url="{% url 'laboutik-paiement-payer_complementaire' %}" />
   <script>
 		/**
 		 * Injecte les donnees cascade de la carte1 dans #addition-form au chargement.

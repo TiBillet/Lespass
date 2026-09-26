@@ -1,71 +1,125 @@
 {% load i18n %}
-<!--
-FOND DE CAISSE — formulaire de lecture/modification
-/ CASH FLOAT — read/update form
+{% comment %}
+FOND DE CAISSE — popup avec pave numerique
+/ CASH FLOAT — popup with numeric keypad
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_fond_de_caisse.html
+Maquette : TEMP-tibillet-laboutik-main/caisse (#fondModal : « Nouveau fond de caisse »)
+Style : static/css/overlay.css (.card-modal, .card-keypad-val, .card-valider),
+        static/css/numpad.css (pave), static/css/ventes.css (.fond-actuel)
 
-Affiche dans #ventes-zone (meme conteneur que le Ticket X).
-Bouton retour vers le recap "toutes caisses".
--->
-<div class="ventes-container" data-testid="fond-de-caisse">
+Vue : CaisseViewSet.fond_de_caisse (GET et POST).
 
-    <!-- Bouton retour vers Ticket X -->
-    <!-- / Back button to Ticket X -->
-    <div style="margin-bottom: 1rem;">
-        <button class="btn-retour-recap"
+FLUX :
+1. Bouton « Modifier » de l'ecran Ventes (hx_recap_en_cours.html)
+   → hx-get fond_de_caisse → cette popup dans #ventes-modal.
+2. Le pave (cotton/numpad.html) envoie 'keypadSendValue' au formulaire.
+   fondSaisirTouche() assemble le montant dans le champ cache montant_euros.
+3. « Valider » → hx-post fond_de_caisse → la reponse revient dans #ventes-modal.
+4. Succes : un element hx-trigger="load" recharge l'ecran Ventes (#ventes-zone).
+   Les chiffres du haut sont a jour et la popup disparait.
+Fermer (croix ou fond sombre) : recharge l'ecran Ventes, sans rien enregistrer.
+Erreur (montant invalide, 400) : hx_messages.html remplace la popup.
+{% endcomment %}
+<div class="card-modal" data-testid="fond-de-caisse"
+     role="dialog" aria-modal="true" aria-labelledby="fond-titre">
+  <div class="card-modal-backdrop"
+       hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
+       hx-target="#ventes-zone"
+       hx-swap="innerHTML"></div>
+
+  <div class="card-modal-box">
+    <button type="button" class="card-modal-close"
+            aria-label="{% translate 'Fermer' %}"
             hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
             hx-target="#ventes-zone"
             hx-swap="innerHTML"
             data-loading-disable
             data-testid="btn-retour-recap">
-            <i class="fas fa-arrow-left" aria-hidden="true"></i>
-            {% translate "Retour" %}
-        </button>
-    </div>
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5.6 4.2 12 10.6l6.4-6.4L20.2 6 13.8 12.4l6.4 6.4-1.8 1.8-6.4-6.4-6.4 6.4-1.8-1.8 6.4-6.4-6.4-6.4z"/></svg>
+    </button>
 
-    <h3 class="ventes-section-title">
-        <i class="fas fa-cash-register" aria-hidden="true"></i>
-        {% translate "Fond de caisse" %}
-    </h3>
+    <span class="payment-title" id="fond-titre">{% translate "Nouveau fond de caisse" %}</span>
 
     {% if message_succes %}
-    <div class="feedback-message-success"
-        role="status" aria-live="polite" data-testid="fond-message-succes">
-        <i class="fas fa-check" aria-hidden="true"></i>
-        {% translate "Fond de caisse mis a jour" %}
-    </div>
-    {% endif %}
+      {# Enregistre : on recharge l'ecran Ventes (chiffres a jour, popup fermee) #}
+      {# / Saved: reload the Sales screen (fresh figures, popup closed) #}
+      <p class="fond-actuel" role="status" data-testid="fond-message-succes">
+        {% translate "Fond de caisse mis à jour" %}
+      </p>
+      <div hidden
+           hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
+           hx-target="#ventes-zone"
+           hx-swap="innerHTML"
+           hx-trigger="load"></div>
+    {% else %}
+      <p class="fond-actuel">
+        {% translate "Montant actuel" %} · <b>{{ montant_actuel_euros }} €</b>
+      </p>
 
-    <p class="fond-info-text">
-        {% translate "Montant actuel" %} :
-        <strong>{{ montant_actuel_euros }} €</strong>
-    </p>
-
-    <form method="post"
-          action="{% url 'laboutik-caisse-fond_de_caisse' %}{% if params_ventes %}?{{ params_ventes }}{% endif %}"
-          hx-post="{% url 'laboutik-caisse-fond_de_caisse' %}{% if params_ventes %}?{{ params_ventes }}{% endif %}"
-          hx-target="#ventes-zone"
-          hx-swap="innerHTML"
-          aria-label="{% translate 'Fond de caisse' %}">
+      <form id="form-fond" class="fond-form"
+            hx-post="{% url 'laboutik-caisse-fond_de_caisse' %}{% if params_ventes %}?{{ params_ventes }}{% endif %}"
+            hx-target="#ventes-modal"
+            hx-swap="innerHTML"
+            aria-label="{% translate 'Fond de caisse' %}">
         {% csrf_token %}
+        <input type="hidden" name="montant_euros" value="" data-testid="fond-input-montant" />
 
-        <div style="margin-bottom: 1rem;">
-            <label for="montant_euros" class="fond-input-label">
-                {% translate "Nouveau montant (euros)" %}
-            </label>
-            <input type="text" name="montant_euros" id="montant_euros"
-                   class="fond-input"
-                   inputmode="decimal"
-                   value="{{ montant_actuel_euros }}"
-                   data-testid="fond-input-montant">
-        </div>
+        {# Montant en cours de saisie, annonce au lecteur d'ecran #}
+        {# / Amount being typed, announced to screen readers     #}
+        <output class="card-keypad-val" aria-live="polite" aria-labelledby="fond-titre">
+          <span class="card-keypad-saisie">0</span> €
+        </output>
 
-        <button type="submit"
-                class="fond-btn-submit"
+        <c-numpad id="fond-numpad" ck-target="#form-fond" effacer="retour" />
+
+        <button type="submit" class="card-valider" disabled
                 data-loading-disable
                 data-testid="fond-btn-enregistrer">
-            {% translate "Enregistrer" %}
+          {% translate "Valider" %}<span class="card-valider-montant"></span>
         </button>
-    </form>
+      </form>
+
+      <script>
+        /**
+         * Assemble le nouveau fond de caisse a partir des touches du pave.
+         * / Builds the new cash float from the keypad keys.
+         *
+         * LOCALISATION : laboutik/templates/laboutik/partial/hx_fond_de_caisse.html
+         * Calque sur rechargeSaisirTouche (hx_card_recharge.html).
+         *
+         * Recoit : 'keypadSendValue' { key } depuis cotton/numpad.html
+         * Met a jour : le champ cache « montant_euros », le montant en grand,
+         * et le bouton « Valider · montant » (desactive tant que c'est vide).
+         * Regles : une seule virgule, deux chiffres apres, 7 chiffres au plus.
+         * 0 est accepte (fond vide). Le serveur valide a l'envoi (FondDeCaisseSerializer).
+         * / No business validation here: the server validates on submit.
+         */
+        function fondSaisirTouche(event) {
+          const formulaire = event.currentTarget
+          const champMontant = formulaire.querySelector('input[name="montant_euros"]')
+          const touche = event.detail.key
+          let saisie = champMontant.value
+
+          // Regle de saisie commune (tibilletUtils.js) / Shared typing rule
+          const nouvelleSaisie = montantAppliquerTouche(saisie, touche)
+          if (nouvelleSaisie === null) {
+            return
+          }
+          saisie = nouvelleSaisie
+
+          champMontant.value = saisie
+          formulaire.querySelector('.card-keypad-saisie').textContent = saisie === '' ? '0' : saisie
+
+          // Valider reste grise tant que rien n'est tape / Validate stays disabled while empty
+          const boutonValider = formulaire.querySelector('[type="submit"]')
+          const rienNestTape = saisie === ''
+          boutonValider.disabled = rienNestTape
+          boutonValider.querySelector('.card-valider-montant').textContent =
+            rienNestTape ? '' : ' · ' + saisie + ' €'
+        }
+        document.querySelector('#form-fond').addEventListener('keypadSendValue', fondSaisirTouche)
+      </script>
+    {% endif %}
+  </div>
 </div>

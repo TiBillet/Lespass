@@ -1,0 +1,48 @@
+/*
+ * Fiche Bloc : formulaire a gauche, apercu en direct a droite
+ * / Bloc form: fields on the left, live preview on the right
+ *
+ * LOCALISATION : pages/static/pages/admin/apercu_bloc.css
+ * Charge par BlocAdminForm.Media (pages/admin.py).
+ *
+ * CSS SANS @layer : le CSS d'Unfold est du Tailwind range dans des @layer,
+ * une regle hors layer gagne toujours (voir la note sur UNFOLD["STYLES"] dans
+ * TiBillet/settings.py).
+ *
+ * #bloc_form est le <form> du changeform Unfold (id = <model_name>_form).
+ * Le panneau d'apercu (#apercu-bloc-panneau) en est un enfant direct : il est
+ * inclus par change_form_before_template. Sur grand ecran, tous les enfants
+ * vont en colonne 1, sauf le panneau, qui occupe la colonne 2 sur toute la
+ * hauteur et reste colle en haut pendant le defilement.
+ * Sous 1280 px, rien ne change : le panneau reste au-dessus du formulaire.
+ * / On large screens every child goes to column 1 except the preview panel,
+ * which spans column 2 and sticks to the top. Below 1280px nothing changes.
+ */
+@media (min-width: 1280px) {
+    #bloc_form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        column-gap: 24px;
+        align-items: start;
+    }
+
+    /* min-width: 0 : sans lui, un element de grille ne retrecit jamais sous
+       la largeur de son contenu (editeurs de lignes, barre Trix) et deborde
+       sur la colonne de l'apercu.
+       / Without it, a grid item never shrinks below its content width and
+       overflows onto the preview column. */
+    #bloc_form > * {
+        grid-column: 1;
+        min-width: 0;
+    }
+
+    #bloc_form > #apercu-bloc-panneau {
+        grid-column: 2;
+        grid-row: 1 / span 50;
+        position: sticky;
+        top: 16px;
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
+        margin-bottom: 0;
+    }
+}

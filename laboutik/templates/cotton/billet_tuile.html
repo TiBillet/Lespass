@@ -43,18 +43,14 @@ La classe .article-touch couvre toute la tuile pour capter les clics.
 		     loading="lazy"
 		     alt=""
 		     onerror="this.style.display='none'">
-		{% elif article.icone_type == "fa" %}
-		<i class="fas {{ article.icone }} billet-visual-icon"
-		   aria-hidden="true"
-		   style="color:{{ article.couleur_texte }};"></i>
 		{% elif article.icone_type == "ms" %}
 		<span class="material-symbols-outlined billet-visual-icon"
 		      aria-hidden="true"
 		      style="color:{{ article.couleur_texte }};">{{ article.icone }}</span>
 		{% else %}
-		<i class="fas fa-ticket-alt billet-visual-icon"
+		<span class="material-symbols-outlined billet-visual-icon"
 		   aria-hidden="true"
-		   style="color:{{ article.couleur_texte }};"></i>
+		   style="color:{{ article.couleur_texte }};">confirmation_number</span>
 		{% endif %}
 	</div>
 

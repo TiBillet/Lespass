@@ -24,7 +24,7 @@
 <footer>
 	<!-- bouton CHECK CARTE -->
 	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte">
-		<i class="fas fa-money-check-alt md4px"></i>
+		<span class="material-symbols-outlined md4px" aria-hidden="true">contactless</span>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "CHECK" %}</div>
 			<div>{% translate "CARTE" %}</div>
@@ -32,7 +32,7 @@
 	</div>
 	<!-- bouton service direct -->
 	<a class="BF-ligne footer-bt fond-coul1 test-service-direct" data-nav-spinner href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&force_service_direct=true">
-		<i class="fas fa-cash-register md4px"></i>
+		<span class="material-symbols-outlined md4px" aria-hidden="true">point_of_sale</span>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "SERVICE DIRECT" %}</div>
 		</div>

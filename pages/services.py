@@ -396,3 +396,126 @@ def construire_menu_lateral(PageModel, page_courante):
         "precedente": parcours[rang - 1]["page"] if rang > 0 else None,
         "suivante": parcours[rang + 1]["page"] if rang + 1 < len(parcours) else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Ordre des blocs d'une page (fiche Page de l'admin : boutons ↑ ↓ et « + »)
+# / Block order within a page (admin Page form: ↑ ↓ and "+" buttons)
+# ---------------------------------------------------------------------------
+def renumeroter_blocs(page):
+    """
+    Remet les positions des blocs d'une page a 1, 2, 3...
+    / Resets a page's block positions to 1, 2, 3...
+
+    LOCALISATION : pages/services.py
+
+    Des blocs peuvent partager la meme position (plusieurs a 0 apres un
+    import, par exemple). Echanger deux positions egales ne changerait rien :
+    on renumerote donc d'abord, en gardant l'ordre affiche.
+    Pas de modele importe : on passe par la relation `page.blocs`.
+    / Blocks may share a position (several at 0 after an import). Swapping two
+    equal positions would change nothing, so we renumber first, keeping the
+    displayed order. No model import: we go through `page.blocs`.
+
+    VERROU : appelee depuis une transaction (deplacer_bloc, suppression), la
+    lecture pose un verrou sur les blocs de la page (select_for_update). Deux
+    clics simultanes sont alors traites l'un APRES l'autre, jamais melanges.
+    Hors transaction (autocommit), le verrou est inutile : on ne le pose pas.
+    / LOCK: inside a transaction, rows are locked (select_for_update), so two
+    concurrent clicks run one AFTER the other.
+
+    :return: la liste des blocs, dans l'ordre / the blocks, in order
+    """
+    from django.db import transaction
+
+    blocs_de_la_page = page.blocs.order_by("position", "pk")
+    if transaction.get_connection().in_atomic_block:
+        blocs_de_la_page = blocs_de_la_page.select_for_update()
+    blocs_dans_l_ordre = list(blocs_de_la_page)
+    for rang, bloc in enumerate(blocs_dans_l_ordre, start=1):
+        if bloc.position != rang:
+            bloc.position = rang
+            bloc.save(update_fields=["position"])
+    return blocs_dans_l_ordre
+
+
+def deplacer_bloc(bloc, sens):
+    """
+    Monte ou descend un bloc d'un cran dans sa page.
+    / Moves a block one step up or down within its page.
+
+    LOCALISATION : pages/services.py
+
+    :param bloc: le bloc a deplacer
+    :param sens: "monter" ou "descendre"
+    :return: True si le bloc a bouge, False s'il etait deja au bout
+
+    Tout se fait dans UNE transaction, blocs de la page verrouilles : un
+    double-clic sur ↓ ne fait descendre le bloc que de deux crans bien
+    comptes, jamais deux blocs a la meme position.
+    / ONE transaction with the page's blocks locked: a double click never
+    leaves two blocks at the same position.
+    """
+    from django.db import transaction
+
+    with transaction.atomic():
+        return _deplacer_bloc_dans_la_transaction(bloc, sens)
+
+
+def _deplacer_bloc_dans_la_transaction(bloc, sens):
+    """
+    Corps de deplacer_bloc, appele dans sa transaction.
+    / Body of deplacer_bloc, called inside its transaction.
+    """
+    blocs_dans_l_ordre = renumeroter_blocs(bloc.page)
+
+    # On retrouve le bloc dans la liste renumerotee (ses positions sont a jour).
+    # / Find the block in the renumbered list (its positions are up to date).
+    rang_du_bloc = None
+    for rang, bloc_de_la_page in enumerate(blocs_dans_l_ordre):
+        if bloc_de_la_page.pk == bloc.pk:
+            rang_du_bloc = rang
+    if rang_du_bloc is None:
+        return False
+
+    if sens == "monter":
+        rang_du_voisin = rang_du_bloc - 1
+    else:
+        rang_du_voisin = rang_du_bloc + 1
+
+    voisin_existe = 0 <= rang_du_voisin < len(blocs_dans_l_ordre)
+    if not voisin_existe:
+        return False
+
+    bloc_a_deplacer = blocs_dans_l_ordre[rang_du_bloc]
+    voisin = blocs_dans_l_ordre[rang_du_voisin]
+    position_du_bloc = bloc_a_deplacer.position
+    bloc_a_deplacer.position = voisin.position
+    voisin.position = position_du_bloc
+    bloc_a_deplacer.save(update_fields=["position"])
+    voisin.save(update_fields=["position"])
+    return True
+
+
+def inserer_bloc_apres(bloc, position_precedente):
+    """
+    Place un bloc NEUF juste apres la position donnee, et pousse les suivants.
+    / Places a NEW block right after the given position, pushing the next ones.
+
+    LOCALISATION : pages/services.py
+
+    Appele par BlocAdmin.save_model quand on ajoute un bloc depuis un bouton
+    « + Ajouter un bloc ici » de la fiche Page. Le bloc n'est pas encore
+    enregistre : on pose seulement sa position.
+    0 = en tete de page.
+    / Called by BlocAdmin.save_model when a block is added from a "+ Add a
+    block here" button. The block is not saved yet: we only set its position.
+    0 = at the top of the page.
+    """
+    from django.db.models import F
+
+    renumeroter_blocs(bloc.page)
+    bloc.page.blocs.filter(position__gt=position_precedente).update(
+        position=F("position") + 1
+    )
+    bloc.position = position_precedente + 1

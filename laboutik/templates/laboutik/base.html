@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ titrePage }}</title>
     {% load static %}
-    <link rel="stylesheet"
-          href="{% static 'css/all_fontawesome-free-5-11-2.css' %}" />
     <link rel="stylesheet" href="{% static 'css/modele00.css' %}" />
     <link rel="stylesheet" href="{% static 'css/views.css' %}" />
     <link rel="stylesheet" href="{% static 'css/overlay.css' %}" />
@@ -19,9 +17,15 @@
     <link rel="stylesheet" href="{% static 'css/ws_indicator.css' %}" />
     <link rel="stylesheet" href="{% static 'css/sortie_de_caisse.css' %}" />
     <link rel="stylesheet" href="{% static 'css/tarif.css' %}" />
-    <!-- Material Symbols Outlined — icônes de l'interface caisse / POS interface icons -->
-    <link rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" />
+    {# Pave numerique : charge ici car tarif.js clone le pave (cotton/numpad.html) #}
+    {# / Keypad CSS: loaded here since tarif.js clones the keypad component       #}
+    <link rel="stylesheet" href="{% static 'css/numpad.css' %}" />
+    {# Material Symbols Outlined : police LOCALE, fournie par django-unfold      #}
+    {# (static/unfold/fonts/material-symbols). Plus de Google Fonts ni de        #}
+    {# FontAwesome. La classe .material-symbols-outlined est dans components.css. #}
+    {# / Local Material Symbols font (shipped by django-unfold). No Google Fonts, #}
+    {#   no FontAwesome. The class is declared in components.css.                 #}
+    <link rel="stylesheet" href="{% static 'unfold/fonts/material-symbols/styles.css' %}" />
     <link rel="icon" href="{% static 'images/favicon.ico' %}" />
     {% block css %}
     {% endblock css %}

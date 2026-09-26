@@ -1,55 +1,70 @@
 {% load i18n billet_filters %}
-{# Ecran plein ecran de succes apres remboursement carte. #}
-{# Fond vert success : soulagement, coherent avec paiement-succes. #}
-{# Full-screen success after card refund. Green success bg, consistent with paiement-succes. #}
+{% comment %}
+VIDER CARTE — ETAPE 3 : REMBOURSEMENT EFFECTUE
+/ Empty card — step 3: refund done
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_vider_carte_success.html
+RENDU PAR : PaiementViewSet.vider_carte()
+
+Meme popup que « Paiement réussi » : pastille verte, titre, le montant rendu
+en gros, le detail par monnaie, puis Imprimer le reçu + Terminé.
+/ Same popup as "Payment successful".
+{% endcomment %}
 <div id="messages">
-    <div class="BF-col" data-testid="vider-carte-success" aria-live="polite">
-        <i class="fas fa-check-circle success-icon" aria-hidden="true"></i>
-        <div class="fi-title1">{% translate "Remboursement effectué" %}</div>
-        {# Montant rembourse en grand #}
-        {# / Refunded amount, large display #}
-        <div class="give-back-box" data-testid="vider-carte-success-amount">
-            <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
-            <strong>{{ total_centimes|cents_to_euros }}</strong>
-        </div>
-        {# Detail par asset #}
-        {# / Per-asset detail #}
+  <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="vider-succes-titre" data-testid="vider-carte-success">
+    <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages')"></div>
+
+    <div class="card-modal-box succes-box">
+      <div class="succes-entete">
+        <span class="succes-pastille" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24" focusable="false"><path d="M20.6 5.4 9.1 16.9l-5.7-5.7 2.3-2.3 3.4 3.4 9.2-9.2z"/></svg>
+        </span>
+        <h2 class="succes-titre" id="vider-succes-titre">{% translate "Remboursement effectué" %}</h2>
+      </div>
+
+      <div class="succes-rendre" data-testid="vider-carte-success-amount">
+        <span class="payment-total-lbl">{% translate "Rendu en espèces" %}</span>
+        <span class="succes-rendre-val">{{ total_centimes|cents_to_euros }}</span>
+      </div>
+
+      <div class="succes-lignes">
         {% if total_tlf_centimes > 0 %}
-            <div class="payment-msg-discret">{% translate "Monnaie locale" %} : {{ total_tlf_centimes|cents_to_euros }}</div>
+          <div class="card-confirm-row"><span>{% translate "Monnaie locale" %}</span><b>{{ total_tlf_centimes|cents_to_euros }}</b></div>
         {% endif %}
         {% if total_fed_centimes > 0 %}
-            <div class="payment-msg-discret">{% translate "Fiduciaire fédérée" %} : {{ total_fed_centimes|cents_to_euros }}</div>
+          <div class="card-confirm-row"><span>{% translate "Fiduciaire fédérée" %}</span><b>{{ total_fed_centimes|cents_to_euros }}</b></div>
         {% endif %}
-        {% if vider_carte %}
-            <div class="fi-msg1" role="status" aria-live="polite">
-                <i class="fas fa-info-circle" aria-hidden="true"></i>
-                {% translate "La carte a été réinitialisée." %}
-            </div>
-        {% endif %}
-        {# Actions : Imprimer (HTMX) + Retour (c-bt.return) cote a cote #}
-        {# / Actions: Print (HTMX) + Return (c-bt.return) side by side #}
-        <div class="vider-carte-actions-row">
-            <form style="margin: 0"
-                  hx-post="{% url 'laboutik-paiement-vider_carte_imprimer_recu' %}"
-                  hx-target="#print-feedback"
-                  hx-swap="innerHTML">
-                {% csrf_token %}
-                {% for tx_uuid in transaction_uuids %}<input type="hidden" name="transaction_uuids" value="{{ tx_uuid }}">{% endfor %}
-                <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
-                <button type="submit"
-                        class="bt-basic-container bt-vider-imprimer"
-                        data-testid="vider-carte-btn-imprimer"
-                        data-loading-disable>
-                    <div class="bt-basic-icon">
-                        <i class="fas fa-print" aria-hidden="true"></i>
-                    </div>
-                    <div class="bt-basic-text">
-                        <div>{% translate "IMPRIMER" %}</div>
-                    </div>
-                </button>
-            </form>
-            <c-bt.return />
-        </div>
-        <div id="print-feedback" aria-live="polite"></div>
+      </div>
+
+      {% if vider_carte %}
+        <span class="vider-etat" role="status">{% translate "La carte a été réinitialisée." %}</span>
+      {% endif %}
+
+      <div class="card-confirm-acts">
+        <form hx-post="{% url 'laboutik-paiement-vider_carte_imprimer_recu' %}"
+              hx-target="#print-feedback"
+              hx-swap="innerHTML"
+              class="vider-form-imprimer">
+          {% csrf_token %}
+          {% for tx_uuid in transaction_uuids %}<input type="hidden" name="transaction_uuids" value="{{ tx_uuid }}">{% endfor %}
+          <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
+          <button type="submit"
+                  class="card-confirm-cancel succes-imprimer"
+                  data-testid="vider-carte-btn-imprimer"
+                  data-loading-disable>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.6 2.6h10.8v5.2H6.6z"/><path d="M4.2 7.4h15.6a2.6 2.6 0 0 1 2.6 2.6v5.6a2.2 2.2 0 0 1-2.2 2.2h-2.2v-2.2H6v2.2H3.8a2.2 2.2 0 0 1-2.2-2.2v-5.6a2.6 2.6 0 0 1 2.6-2.6z"/><rect x="6" y="13.2" width="12" height="8.2" rx="1"/></svg>
+            {% translate "Imprimer le reçu" %}
+          </button>
+        </form>
+        <button type="button"
+                id="bt-retour-layer1"
+                class="card-valider"
+                onclick="hideAndEmptyElement('#messages')"
+                data-testid="vider-carte-btn-termine">
+          {% translate "Terminé" %}
+        </button>
+      </div>
+      <div id="print-feedback" aria-live="polite"></div>
     </div>
+  </div>
 </div>

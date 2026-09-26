@@ -37,9 +37,13 @@ Page « Accueil »
    > Quelques adresses sont réservées au fonctionnement du site (`admin`, `api`,
    > `event`, `memberships`, `connexion`, `media`…). Si vous en choisissez une,
    > l'enregistrement est refusé avec un message : changez simplement l'adresse.
-4. Ouvrez l'onglet **« Blocs »** : c'est là que vit le contenu.
-5. **Ajouter un bloc** → choisissez son **type** → **Enregistrer**.
-6. Cliquez sur **« ✎ modifier »** sur la ligne du bloc pour saisir son contenu.
+4. Sous le formulaire, la section **« Contenu de la page »** montre la page
+   telle qu'elle apparaîtra sur le site.
+5. Cliquez sur **« + Ajouter un bloc en premier »** (ou sur le **+** de la barre d'un bloc,
+   pour ajouter juste après), puis choisissez un **modèle de bloc** : la fiche
+   du bloc s'ouvre, déjà rattachée à la page.
+6. Remplissez le bloc : l'**aperçu en direct**, à droite, se met à jour pendant
+   que vous tapez. **Enregistrer** vous ramène à la page, le bloc à sa place.
 7. Quand tout vous convient, cochez **Publiée** et cliquez sur **« ↗ ouvrir »**
    pour voir le résultat.
 
@@ -50,12 +54,34 @@ Page « Accueil »
 > tapez son adresse à la main dans le navigateur (`/nos-ateliers/`). Le lien
 > « ↗ ouvrir » de la liste, lui, n'apparaît qu'une fois la page publiée.
 
-### Pourquoi deux étapes pour créer un bloc ?
+### Réorganiser les blocs d'une page
 
-L'onglet « Blocs » est un **sommaire** : il montre le type et le titre de chaque
-bloc, et sert à les réordonner. Le contenu détaillé se saisit dans la fiche du
-bloc, parce que les champs à remplir **dépendent du type choisi** — une citation
-ne demande pas les mêmes informations qu'une carte GPS.
+Dans « Contenu de la page », chaque bloc est encadré, avec une barre d'actions
+posée sur son bord haut :
+
+| Bouton | Effet |
+|---|---|
+| **↑ / ↓** | Monte ou descend le bloc d'un cran, tout de suite |
+| **✎ Modifier** | Ouvre la fiche du bloc, avec son aperçu en direct |
+| **✕** | Supprime le bloc, après confirmation (définitif) |
+| **+** | Ajoute un bloc juste après celui-ci : choisissez son modèle |
+
+La page de l'administration n'est pas rechargée : seul l'aperçu se met à jour.
+Un bloc se crée toujours depuis sa page ; il ne change pas de page ensuite.
+
+Le contenu se saisit dans la fiche du bloc, parce que les champs à remplir
+**dépendent du type choisi** : une citation ne demande pas les mêmes
+informations qu'une carte GPS.
+
+### L'aperçu en direct
+
+À droite de la fiche d'un bloc (au-dessus sur un petit écran), le bloc s'affiche
+avec le thème du site. Il suit votre frappe, et le bouton **Mobile** montre le
+rendu sur un téléphone. Deux limites :
+- une image que vous venez de choisir apparaît d'abord sous forme
+  d'**emplacement hachuré**, à sa place et à son format ; la vraie image
+  s'affiche après l'enregistrement (une vidéo, elle, n'apparaît qu'après) ;
+- l'aperçu n'enregistre rien : pensez à cliquer sur **Enregistrer**.
 
 ---
 
@@ -82,6 +108,11 @@ Pour voir les sous-pages dans la liste, utilisez **Filtres → Niveau**.
 Le catalogue est organisé **par intention**, pas par apparence. Demandez-vous
 « qu'est-ce que je veux dire ? », le type suit. Ensuite, l'**affichage** décide
 de la forme.
+
+Dans l'administration, les deux se choisissent en **un seul geste** : le menu
+**« Modèle de bloc »** range les affichages sous leur type (ex. *Section mise en
+avant › Carte*). Les types sans variante (Texte, Question / réponse, Liste
+automatique) y sont une simple ligne.
 
 ### Texte
 Un article, un paragraphe. S'écrit en **Markdown** (voir §6).
@@ -142,21 +173,14 @@ Du contenu qui vient d'ailleurs, donc toujours une adresse web.
 La carte des points GPS **et** les infos pratiques à côté, dans **un seul bloc**.
 Les deux moitiés forment un ensemble à l'écran.
 
-- **Colonne de gauche** : le champ *Contenu structuré*. Recopiez l'exemple
-  ci-dessous et remplacez seulement les textes. Types d'éléments disponibles : `badge`, `para`, `horaire`, `adresse`,
-  `accessibilite`, `transport`.
-  ```json
-  [
-    {"type": "badge", "texte": "Nous trouver"},
-    {"type": "horaire", "texte": "MARDI → SAMEDI 10h → 19h"},
-    {"type": "adresse", "texte": "La Cité\n55 avenue Louis Breguet\n31400 Toulouse"},
-    {"type": "transport", "titre": "BUS", "lignes": ["Ligne 37 — arrêt Bréguet"]}
-  ]
-  ```
-- **Colonne de droite** : le *Badge* (bandeau d'adresse) et les *Points GPS*.
-  ```json
-  [{"lat": 43.5568, "lng": 1.4835, "label": "La Cité"}]
-  ```
+- **Colonne de gauche** : l'encart *Infos pratiques*. Ajoutez une ligne par
+  information, et choisissez son type : *Intitulé* (ouvre un groupe, ex.
+  « Nous trouver »), *Paragraphe*, *Horaires*, *Adresse* (sur plusieurs lignes),
+  *Accessibilité* ou *Transport* (un titre comme « BUS », puis une ligne de
+  desserte par ligne). Les flèches ↑ ↓ changent l'ordre.
+- **Colonne de droite** : le *Badge* (bandeau d'adresse) et l'encart *Points sur
+  la carte* : une ligne par point, avec la latitude, la longitude (ex. `43,5568`
+  et `1,4835`) et le nom affiché. La carte se centre sur le premier point.
 
 > Ne coupez pas ce bloc en deux (les infos d'un côté, la carte de l'autre) :
 > vous obtiendriez deux sections à moitié vides.
@@ -321,9 +345,9 @@ lisent l'encart « Images de galerie », tandis que *Photo pleine largeur* et *V
 centrée* lisent le champ **Image** du bloc.
 
 **Je ne trouve pas le champ que je cherche dans un bloc.**
-Les champs s'affichent selon le **type** et l'**affichage** choisis : seuls
-apparaissent ceux que ce rendu utilise vraiment. Changez l'affichage, les champs
-suivent. C'est voulu — cela évite de remplir un champ qui ne s'afficherait nulle
+Les champs s'affichent selon le **modèle de bloc** choisi : seuls apparaissent
+ceux que ce rendu utilise vraiment, sur le thème actuel du site. Changez de
+modèle, les champs suivent. C'est voulu — cela évite de remplir un champ qui ne s'afficherait nulle
 part.
 
 **Mon menu déroulant est trop chargé.**

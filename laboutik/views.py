@@ -11,8 +11,9 @@
 import logging
 import uuid as uuid_module
 from datetime import timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from json import dumps
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth import login
@@ -31,6 +32,7 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from django.core.exceptions import PermissionDenied
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connection
 from django.db.models import (
     F,
@@ -103,6 +105,7 @@ from laboutik.serializers import (
     ArticleCommandeSerializer,
     ClotureSerializer,
     EnvoyerRapportSerializer,
+    RechargeMontantLibreSerializer,
 )
 from laboutik.reports import RapportComptableService
 from inventaire.models import Stock, TypeMouvement
@@ -152,7 +155,8 @@ LABELS_MOYENS_PAIEMENT_DB = {
 CATEGORIE_PAR_DEFAUT = {
     "id": "default",
     "name": "Divers",
-    "icon": "fa-angry",
+    "icon": "category",
+    "icone_type": "ms",
     "couleur_backgr": "#FFFFFF",
     "couleur_texte": "#333333",
 }
@@ -518,11 +522,21 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
     # Le .filter() dans la boucle utiliserait une nouvelle requête par produit (N+1).
     # Avec Prefetch(queryset=...), Django charge tout en 1 requête et filtre en mémoire.
     # Filtered prefetch: only published EUR prices, sorted by display order.
+    #
+    # On retire aussi les tarifs faits pour le paiement en ligne :
+    # - paiement recurrent (abonnement Stripe, prelevement SEPA) ;
+    # - validation manuelle (un admin valide l'adhesion apres coup).
+    # La caisse ne sait pas faire ces deux parcours.
+    # / Also drop online-only prices (recurring payment, manual validation):
+    # the POS cannot run these flows.
     prix_euros_prefetch = Prefetch(
         "prices",
-        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by(
-            "order"
-        ),
+        queryset=Price.objects.filter(
+            publish=True,
+            asset__isnull=True,
+            recurring_payment=False,
+            manual_validation=False,
+        ).order_by("order"),
         to_attr="prix_euros",
     )
 
@@ -541,6 +555,14 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
 
     articles = []
     for product in produits:
+        # Recharge temps desactivee : ne jamais afficher un produit TM.
+        # Il n'est plus dans METHODES_RECHARGE, donc sans ce filtre il
+        # s'afficherait comme un article normal, paye en euros.
+        # / Time top-up disabled: never show a TM product (it would look like
+        # a normal paid item since it is no longer in METHODES_RECHARGE).
+        if product.methode_caisse == Product.RECHARGE_TEMPS:
+            continue
+
         # Produits de recharge sans Asset lie, ou Asset archive/inactif → ne pas afficher
         # / Top-up products without linked Asset, or archived/inactive Asset → skip
         if product.methode_caisse in METHODES_RECHARGE:
@@ -563,13 +585,10 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
         # Product POS category (or default category)
         categorie_pos = product.categorie_pos
         if categorie_pos is not None:
+            # Nom d'icone Material Symbols (selecteur de l'admin : ICON_POS)
+            # / Material Symbols icon name (admin picker: ICON_POS)
             icone_cat_brute = categorie_pos.icon or ""
-            if icone_cat_brute.startswith("fa"):
-                icone_type_cat = "fa"
-            elif icone_cat_brute:
-                icone_type_cat = "ms"
-            else:
-                icone_type_cat = ""
+            icone_type_cat = "ms" if icone_cat_brute else ""
             categorie_dict = {
                 "id": str(categorie_pos.uuid),
                 "name": categorie_pos.name,
@@ -675,21 +694,10 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             product.icon_pos or (categorie_pos.icon if categorie_pos else None) or ""
         )
 
-        # Détection du système d'icône selon le nom stocké :
-        #   - FontAwesome : noms préfixés par "fa" (ex: "fa-coffee", "fas-X")
-        #   - Material Symbols : noms avec underscores, sans préfixe "fa" (ex: "local_bar")
-        # Icon system detection based on stored name:
-        #   - FontAwesome : names prefixed with "fa" (e.g. "fa-coffee", "fas-X")
-        #   - Material Symbols : underscore names, no "fa" prefix (e.g. "local_bar")
-        if icone_brute.startswith("fa"):
-            icone_article = icone_brute
-            icone_type = "fa"
-        elif icone_brute:
-            icone_article = icone_brute
-            icone_type = "ms"
-        else:
-            icone_article = ""
-            icone_type = ""
+        # Nom d'icone Material Symbols, affiche tel quel par la caisse
+        # / Material Symbols icon name, shown as-is by the POS
+        icone_article = icone_brute
+        icone_type = "ms" if icone_article else ""
 
         article_dict = {
             "id": str(product.uuid),
@@ -699,7 +707,7 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             "couleur_backgr": couleur_backgr,
             "couleur_texte": couleur_texte_article,
             "icone": icone_article,
-            "icone_type": icone_type,  # "fa" | "ms" | ""
+            "icone_type": icone_type,  # "ms" | ""
             "bt_groupement": {
                 # Groupement automatique par méthode de caisse — plus de champ groupe_pos
                 # Automatic grouping by POS method — no more groupe_pos field
@@ -805,18 +813,13 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
                     or (categorie_pos.couleur_texte if categorie_pos else None)
                     or "#ffffff"
                 )
+                # Icone Material (defaut : un billet) / Material icon (default: a ticket)
                 icone_brute = (
                     product.icon_pos
                     or (categorie_pos.icon if categorie_pos else None)
-                    or "fa-ticket-alt"
+                    or "confirmation_number"
                 )
-                if icone_brute.startswith("fa"):
-                    icone_type = "fa"
-                elif icone_brute:
-                    icone_type = "ms"
-                else:
-                    icone_type = "fa"
-                    icone_brute = "fa-ticket-alt"
+                icone_type = "ms"
 
                 # Image du produit
                 # / Product image
@@ -870,8 +873,8 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
                         "categorie": {
                             "id": str(event.uuid),
                             "name": event.name,
-                            "icon": "fa-calendar-alt",
-                            "icone_type": "fa",
+                            "icon": "calendar_month",
+                            "icone_type": "ms",
                             "couleur_backgr": couleur_fond,
                             "couleur_texte": couleur_texte,
                         },
@@ -923,16 +926,9 @@ def _construire_donnees_categories(point_de_vente_instance, events_billetterie=N
     categories_qs = point_de_vente_instance.categories.order_by("poid_liste", "name")
     categories = []
     for categorie in categories_qs:
-        icone_cat = categorie.icon or ""
-        # Détection du système d'icône (même logique que pour les articles)
-        # Icon system detection (same logic as for articles)
-        if icone_cat.startswith("fa"):
-            icone_type_cat = "fa"
-        elif icone_cat:
-            icone_type_cat = "ms"
-        else:
-            icone_type_cat = "fa"
-            icone_cat = "fa-th"
+        # Icone Material (defaut : grille) / Material icon (default: grid)
+        icone_cat = categorie.icon or "apps"
+        icone_type_cat = "ms"
         categories.append(
             {
                 "id": str(categorie.uuid),
@@ -971,8 +967,8 @@ def _construire_donnees_categories(point_de_vente_instance, events_billetterie=N
                 {
                     "id": str(event.uuid),
                     "name": event.name,
-                    "icon": "fa-calendar-alt",
-                    "icone_type": "fa",
+                    "icon": "calendar_month",
+                    "icone_type": "ms",
                     "is_event": True,
                     "date": event.datetime,
                     "jauge_max": jauge_max,
@@ -1192,6 +1188,10 @@ def obtenir_solde_complet_carte(carte):
     tokens_locaux = []
     locaux_centimes = 0
     for token in WalletService.obtenir_tous_les_soldes(wallet):
+        # Ignore token with 0 value
+        if token.value == 0:
+            continue
+
         tokens_locaux.append(
             {
                 "asset_name": token.asset.name,
@@ -1223,6 +1223,34 @@ def obtenir_solde_complet_carte(carte):
         "fed_disponible": fed_disponible,
         "total_centimes": locaux_centimes + fed_centimes,
     }
+
+
+def _soldes_locaux_pour_affichage(wallet):
+    """
+    Liste les soldes locaux d'un wallet, prets pour l'affichage en pastilles.
+    / Lists a wallet's local balances, ready for pill display.
+
+    LOCALISATION : laboutik/views.py
+
+    Lecture locale seulement (fedow_core), sans appel au Fedow distant :
+    l'ecran « fonds insuffisants » doit s'afficher tout de suite.
+    / Local read only, no remote Fedow call: the screen must show at once.
+
+    Utilise par / Used by : _payer_par_nfc() → hx_funds_insufficient.html
+
+    :param wallet: Wallet de la carte
+    :return: liste de dicts {asset_name, asset_category, value_euros}
+    """
+    soldes_pour_affichage = []
+    for token in WalletService.obtenir_tous_les_soldes(wallet):
+        soldes_pour_affichage.append(
+            {
+                "asset_name": token.asset.name,
+                "asset_category": token.asset.category,
+                "value_euros": token.value / 100,
+            }
+        )
+    return soldes_pour_affichage
 
 
 def _repartir_legacy_sur_articles(lignes_complement, transactions_legacy):
@@ -1342,6 +1370,72 @@ def _categorie_asset_transaction(transaction, fedow_api):
     return asset_info["category"]
 
 
+def _calculer_soldes_apres_paiement(wallet, lignes_debitees):
+    """
+    Construit l'avant / apres de la carte pour l'ecran de succes.
+    / Builds the card's before / after for the success screen.
+
+    LOCALISATION : laboutik/views.py
+
+    Pour chaque monnaie (Asset local) debitee pendant la vente, on donne :
+    - ce qui a ete paye avec cette monnaie ;
+    - le solde apres la vente (lu dans le wallet) ;
+    - le solde avant le paiement = solde apres + montant paye.
+
+    Le solde « avant » est calcule, pas lu avant le debit. Ainsi on a toujours
+    avant - paye = apres a l'ecran, meme si le panier contenait une recharge
+    offerte creditee juste avant les debits.
+    / "Before" is computed (after + paid), so before - paid = after on screen,
+      even when a free top-up was credited just before the debits.
+
+    Les lignes legacy (Fedow) portent un uuid d'asset distant, pas un Asset
+    local : elles sont ignorees, comme avant (leur solde n'etait pas affiche).
+    / Legacy lines carry a remote asset uuid, not a local Asset: skipped, as before.
+
+    APPELE PAR : PaiementViewSet (paiement NFC, paiement complementaire, 2e carte).
+    Les appelants regroupent ensuite le resultat par carte dans cartes_apres_paiement.
+    AFFICHE PAR : laboutik/templates/laboutik/partial/_succes_carte.html
+
+    :param wallet: wallet de la carte debitee
+    :param lignes_debitees: tuples (article, asset, montant_centimes, payment_method)
+    :return: liste de dicts, dans l'ordre de la cascade :
+        name, solde_euros (garde pour nouveau_solde), solde_avant_centimes,
+        debite_centimes, solde_centimes
+    """
+    from collections import OrderedDict
+
+    # Additionne ce qui a ete paye, monnaie par monnaie, dans l'ordre de la cascade
+    # / Sum what was paid, currency by currency, in cascade order
+    montant_paye_par_asset = OrderedDict()
+    for _article, asset_de_la_ligne, montant_de_la_ligne, _moyen in lignes_debitees:
+        ligne_sur_un_asset_local = isinstance(asset_de_la_ligne, Asset)
+        if not ligne_sur_un_asset_local:
+            continue
+        if asset_de_la_ligne not in montant_paye_par_asset:
+            montant_paye_par_asset[asset_de_la_ligne] = 0
+        montant_paye_par_asset[asset_de_la_ligne] += montant_de_la_ligne
+
+    soldes_apres_paiement = []
+    for asset_debite, montant_paye_en_centimes in montant_paye_par_asset.items():
+        solde_apres_en_centimes = WalletService.obtenir_solde(
+            wallet=wallet, asset=asset_debite
+        )
+        # Somme presente sur la carte avant ce paiement
+        # / Balance on the card before this payment
+        solde_avant_en_centimes = solde_apres_en_centimes + montant_paye_en_centimes
+
+        soldes_apres_paiement.append(
+            {
+                "name": asset_debite.name,
+                "solde_euros": solde_apres_en_centimes / 100,
+                "solde_avant_centimes": solde_avant_en_centimes,
+                "debite_centimes": montant_paye_en_centimes,
+                "solde_centimes": solde_apres_en_centimes,
+            }
+        )
+    return soldes_apres_paiement
+
+
 def _debiter_legacy(user, montant_centimes, uuid_transaction):
     """
     Débite le legacy (FED + TLF fédérés) via Fedow et renvoie les transactions, moyen DÉJÀ résolu.
@@ -1450,7 +1544,7 @@ def _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv):
 METHODES_RECHARGE = (
     Product.RECHARGE_EUROS,
     Product.RECHARGE_CADEAU,
-    Product.RECHARGE_TEMPS,
+    # Product.RECHARGE_TEMPS,
 )
 
 # Recharges payantes : le client doit payer (especes, CB, cheque)
@@ -1459,7 +1553,214 @@ METHODES_RECHARGE_PAYANTES = (Product.RECHARGE_EUROS,)
 
 # Recharges gratuites : credit automatique, pas de paiement demande
 # Free top-ups: auto-credit, no payment asked
-METHODES_RECHARGE_GRATUITES = (Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS)
+METHODES_RECHARGE_GRATUITES = (Product.RECHARGE_CADEAU,)  # , Product.RECHARGE_TEMPS) — la virgule garde un tuple / trailing comma keeps a tuple
+
+
+# Pictogramme de la tuile « Recharger » selon le type de recharge.
+# Les noms sont ceux de cotton/V2/bt/paiement.html.
+# / Top-up tile pictogram per top-up type (names from cotton/V2/bt/paiement.html).
+ICONES_RECHARGE = {
+    Product.RECHARGE_EUROS: "coins",
+    Product.RECHARGE_CADEAU: "gift",
+#    Product.RECHARGE_TEMPS: "clock",
+}
+
+
+def _produits_de_recharge_du_lieu():
+    """
+    Les produits de recharge utilisables dans ce lieu, avec leurs tarifs en euros.
+    / The top-up products usable in this venue, with their EUR prices.
+
+    LOCALISATION : laboutik/views.py
+
+    REGLE (decision du 2026-09-18) : la recharge est possible depuis TOUS les
+    points de vente, pas seulement ceux qui contiennent le produit (Cashless).
+    Le check carte la propose partout. La vente reste enregistree sur le point
+    de vente ou elle a lieu.
+    / Top-ups are allowed from EVERY POS, not only those holding the product.
+
+    Un produit est retenu s'il est publie, non archive, et lie a un Asset
+    actif et non archive (meme regle que l'ecran de vente).
+    / Kept if published, not archived, linked to an active non-archived Asset.
+
+    Utilise par / Used by :
+    - _construire_contexte_recharge() : les tuiles « Recharger »
+    - _extraire_articles_du_panier() : accepte ces produits hors M2M du PV
+
+    :return: QuerySet de Product, avec l'attribut prix_euros (liste de Price)
+    """
+    tarifs_en_euros = Prefetch(
+        "prices",
+        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by(
+            "order"
+        ),
+        to_attr="prix_euros",
+    )
+    return (
+        Product.objects.filter(
+            methode_caisse__in=METHODES_RECHARGE,
+            publish=True,
+            archive=False,
+            asset__isnull=False,
+            asset__archive=False,
+            asset__active=True,
+        )
+        .select_related("asset")
+        .prefetch_related(tarifs_en_euros)
+        .order_by("poids", "name")
+    )
+
+
+def _construire_contexte_recharge(
+    carte,
+    point_de_vente,
+    uuid_produit_choisi="",
+    uuid_prix_choisi="",
+    montant_libre_saisi=None,
+):
+    """
+    Prepare les donnees de la zone « Recharger » de la popup check carte.
+    / Builds the data of the "Top up" zone of the card check popup.
+
+    LOCALISATION : laboutik/views.py
+
+    La zone avance par etapes. Chaque clic renvoie la zone entiere,
+    recalculee ici (HTMX, pas d'etat cote JS) :
+    1. Choisir QUOI : une tuile par produit de recharge du lieu
+       (monnaie locale RE, cadeau RC, temps TM), depuis n'importe quel PV.
+    2. Choisir COMBIEN : les tarifs du produit (1, 5, 10, Libre...).
+    3. Montant libre : un champ de saisie (seulement si le tarif est libre).
+    4. Confirmer : le montant, le solde apres recharge, puis
+       - RE (payante) : les tuiles des moyens de paiement du point de vente ;
+       - RC / TM (offertes) : un bouton « Offrir ».
+    La recharge elle-meme n'est PAS faite ici : les boutons de l'etape 4
+    postent vers payer() ou identifier_client(), qui existent deja.
+    / The zone moves step by step (what, how much, free amount, confirm).
+    The top-up itself is done by the existing payer() / identifier_client().
+
+    Utilise par / Used by : PaiementViewSet.retour_carte() et
+    PaiementViewSet.recharge_carte() → laboutik/partial/hx_card_recharge.html
+
+    :param carte: CarteCashless scannee
+    :param point_de_vente: PointDeVente courant, ou None (pas de recharge alors)
+    :param uuid_produit_choisi: uuid (str) du produit choisi a l'etape 1
+    :param uuid_prix_choisi: uuid (str) du tarif choisi a l'etape 2
+    :param montant_libre_saisi: centimes (int) valides par le serializer, ou None
+    :return: dict pour le template (voir les cles en bas)
+    """
+    contexte_recharge = {
+        "tag_id": carte.tag_id,
+        "uuid_pv": str(point_de_vente.uuid) if point_de_vente else "",
+        "produits": [],
+        "produit_choisi": None,
+        "tarifs": [],
+        "tarif_choisi": None,
+        "montant_a_saisir": False,
+        "montant_centimes": None,
+        "solde_apres_centimes": None,
+        "moyens_paiement": [],
+        # Cle d'idempotence du formulaire #card-recharge-form (hx_card_recharge.html).
+        # Un double appui sur « Valider » ne recharge qu'une fois.
+        # Voir _executer_avec_cle_idempotence().
+        # / Idempotency key of #card-recharge-form: a double tap tops up once.
+        "cle_idempotence_paiement": uuid_module.uuid4(),
+    }
+
+    # Sans point de vente connu, on ne propose pas de recharge.
+    # / Without a known POS, no top-up is offered.
+    if point_de_vente is None:
+        return contexte_recharge
+
+    # 1. Les produits de recharge du lieu (utilisables depuis tous les PV).
+    # / 1. The venue top-up products (usable from every POS).
+    produits_de_recharge = _produits_de_recharge_du_lieu()
+
+    produit_choisi_en_base = None
+    for produit in produits_de_recharge:
+        if not produit.prix_euros:
+            continue
+        est_le_produit_choisi = str(produit.uuid) == uuid_produit_choisi
+        if est_le_produit_choisi:
+            produit_choisi_en_base = produit
+        contexte_recharge["produits"].append(
+            {
+                "uuid": str(produit.uuid),
+                # Le nom de la monnaie suffit : le titre de la zone dit deja « Recharger »
+                # / The currency name is enough: the zone title already says "Top up"
+                "nom": produit.asset.name,
+                "icone": ICONES_RECHARGE.get(produit.methode_caisse, "coins"),
+                "est_offert": produit.methode_caisse in METHODES_RECHARGE_GRATUITES,
+                "est_choisi": est_le_produit_choisi,
+            }
+        )
+
+    if produit_choisi_en_base is None:
+        return contexte_recharge
+
+    produit_est_offert = produit_choisi_en_base.methode_caisse in METHODES_RECHARGE_GRATUITES
+    contexte_recharge["produit_choisi"] = {
+        "uuid": str(produit_choisi_en_base.uuid),
+        "nom": produit_choisi_en_base.asset.name,
+        "est_offert": produit_est_offert,
+    }
+
+    # 2. Les tarifs du produit choisi
+    # / 2. The chosen product's prices
+    tarif_choisi_en_base = None
+    for tarif in produit_choisi_en_base.prix_euros:
+        if str(tarif.uuid) == uuid_prix_choisi:
+            tarif_choisi_en_base = tarif
+        contexte_recharge["tarifs"].append(
+            {
+                "uuid": str(tarif.uuid),
+                "prix_euros": tarif.prix,
+                "est_libre": tarif.free_price,
+            }
+        )
+
+    if tarif_choisi_en_base is None:
+        return contexte_recharge
+
+    contexte_recharge["tarif_choisi"] = {
+        "uuid": str(tarif_choisi_en_base.uuid),
+        "est_libre": tarif_choisi_en_base.free_price,
+        "minimum_euros": tarif_choisi_en_base.prix,
+    }
+
+    # 3. Le montant : le prix du tarif, ou le montant libre saisi.
+    # / 3. The amount: the price, or the typed free amount.
+    if tarif_choisi_en_base.free_price:
+        if montant_libre_saisi is None:
+            contexte_recharge["montant_a_saisir"] = True
+            return contexte_recharge
+        montant_centimes = montant_libre_saisi
+    else:
+        montant_centimes = int(round(tarif_choisi_en_base.prix * 100))
+
+    contexte_recharge["montant_centimes"] = montant_centimes
+
+    # 4. Le solde de CETTE monnaie apres la recharge (base locale, pas de Fedow distant)
+    # / 4. The balance of THIS currency after the top-up (local DB, no remote Fedow)
+    wallet_de_la_carte = _obtenir_ou_creer_wallet(carte)
+    solde_actuel_centimes = WalletService.obtenir_solde(
+        wallet_de_la_carte, produit_choisi_en_base.asset
+    )
+    contexte_recharge["solde_apres_centimes"] = solde_actuel_centimes + montant_centimes
+
+    # Les moyens de paiement d'une recharge payante : ceux du point de vente,
+    # sans le cashless (regle de _determiner_moyens_paiement pour RE).
+    # / Payment methods for a paid top-up: the POS ones, without cashless.
+    if not produit_est_offert:
+        article_recharge = {
+            "product": produit_choisi_en_base,
+            "price": tarif_choisi_en_base,
+            "quantite": 1,
+        }
+        contexte_recharge["moyens_paiement"] = _determiner_moyens_paiement(
+            point_de_vente, [article_recharge]
+        )
+
+    return contexte_recharge
 
 
 def _panier_contient_recharges(articles_panier):
@@ -2363,7 +2664,7 @@ class CaisseViewSet(viewsets.ViewSet):
         except (PointDeVente.DoesNotExist, ValueError):
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _("Point de vente introuvable"),
@@ -2377,11 +2678,11 @@ class CaisseViewSet(viewsets.ViewSet):
         if not printer_de_ce_terminal:
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _(
-                        "Aucune imprimante configuree pour ce terminal"
+                        "Aucune imprimante configurée pour ce terminal"
                     ),
                 },
                 status=400,
@@ -2392,7 +2693,7 @@ class CaisseViewSet(viewsets.ViewSet):
         if datetime_ouverture is None:
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _("Aucune vente en cours — rien a imprimer"),
@@ -2423,7 +2724,7 @@ class CaisseViewSet(viewsets.ViewSet):
 
         return render(
             request,
-            "laboutik/partial/hx_messages.html",
+            "laboutik/partial/hx_print_feedback.html",
             {
                 "msg_type": "success",
                 "msg_content": _("Ticket X envoye a l'imprimante"),
@@ -2938,7 +3239,8 @@ class CaisseViewSet(viewsets.ViewSet):
         # / Propagate sales params for the back button
         uuid_pv = request.GET.get("uuid_pv", request.POST.get("uuid_pv", ""))
         tag_id_cm = request.GET.get("tag_id_cm", request.POST.get("tag_id_cm", ""))
-        params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
+        type_app = request.GET.get("type_app", request.POST.get("type_app", ""))
+        params_ventes = _construire_params_ventes(uuid_pv, tag_id_cm, type_app)
 
         context = {
             "montant_actuel_euros": f"{montant_actuel_euros:.2f}",
@@ -2971,7 +3273,8 @@ class CaisseViewSet(viewsets.ViewSet):
         # / Get PV from query param (Sales menu passes it)
         uuid_pv = request.GET.get("uuid_pv", "")
         tag_id_cm = request.GET.get("tag_id_cm", "")
-        params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
+        type_app = request.GET.get("type_app", "")
+        params_ventes = _construire_params_ventes(uuid_pv, tag_id_cm, type_app)
 
         # Calculer le solde caisse via le meme service que le Ticket X
         # Evite la duplication de logique (fond + especes - sorties).
@@ -2993,6 +3296,11 @@ class CaisseViewSet(viewsets.ViewSet):
 
         context = {
             "uuid_pv": uuid_pv,
+            # tag_id_cm et type_app sont renvoyes en champs caches par le formulaire,
+            # pour que creer_sortie_de_caisse puisse reconstruire params_ventes.
+            # / Sent back as hidden fields so creer_sortie_de_caisse can rebuild params_ventes.
+            "tag_id_cm": tag_id_cm,
+            "type_app": type_app,
             "coupures": _COUPURES_POUR_TEMPLATE,
             "coupures_paires": _COUPURES_PAIRES_POUR_TEMPLATE,
             "params_ventes": params_ventes,
@@ -3035,10 +3343,9 @@ class CaisseViewSet(viewsets.ViewSet):
         # Computed early to be available in all error renders.
         uuid_pv_brut = request.POST.get("uuid_pv", "")
         tag_id_cm_brut = request.POST.get("tag_id_cm", "")
-        params_ventes = (
-            f"uuid_pv={uuid_pv_brut}&tag_id_cm={tag_id_cm_brut}"
-            if uuid_pv_brut
-            else ""
+        type_app_brut = request.POST.get("type_app", "")
+        params_ventes = _construire_params_ventes(
+            uuid_pv_brut, tag_id_cm_brut, type_app_brut
         )
         back_url_form = reverse("laboutik-caisse-sortie_de_caisse")
         if params_ventes:
@@ -3199,20 +3506,27 @@ class CaisseViewSet(viewsets.ViewSet):
             "nb_transactions": service.lignes.count(),
         }
 
-        if vue == "par_pv":
-            context["ventilation_par_pv"] = service.calculer_ventilation_par_pv()
-            context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
-        elif vue == "par_moyen":
-            context["synthese_operations"] = service.calculer_synthese_operations()
-            context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
-        elif vue == "detail_articles":
-            context["detail_ventes"] = service.calculer_detail_ventes()
-        else:
-            # Vue "toutes" : totaux, TVA, solde
-            # / "toutes" view: totals, VAT, cash balance
+        # L'ecran Ventes affiche toujours les chiffres du haut (total, fond, TVA)
+        # et les deux mini-tableaux (par moyen, par point de vente).
+        # Exception : un historique ouvert en bas de l'ecran (cible HTMX "detail-contenu").
+        # Le template ne rend alors que le tableau demande : inutile de tout recalculer.
+        # / The Sales screen always shows KPIs and both summary tables,
+        # except for a history fragment (HTMX target "detail-contenu").
+        est_un_fragment_historique = (
+            request.htmx and request.htmx.target == "detail-contenu"
+        )
+        if not est_un_fragment_historique:
             context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
             context["tva"] = service.calculer_tva()
             context["solde_caisse"] = service.calculer_solde_caisse()
+            context["ventilation_par_pv"] = service.calculer_ventilation_par_pv()
+
+        # Donnees propres a l'historique demande
+        # / Data specific to the requested history
+        if vue == "par_moyen":
+            context["synthese_operations"] = service.calculer_synthese_operations()
+        elif vue == "detail_articles":
+            context["detail_ventes"] = service.calculer_detail_ventes()
 
         return _rendre_vue_ventes(
             request, "laboutik/partial/hx_recap_en_cours.html", context
@@ -3581,6 +3895,12 @@ class CaisseViewSet(viewsets.ViewSet):
             "nom_pv": premiere_ligne.point_de_vente.name
             if premiere_ligne.point_de_vente
             else "",
+            # PV de la vente : le bouton Ré-imprimer doit l'envoyer a imprimer_ticket(),
+            # sinon la vue repond « Donnees manquantes pour l'impression ».
+            # / Sale's POS: the Reprint button must send it to imprimer_ticket().
+            "uuid_pv_vente": str(premiere_ligne.point_de_vente.uuid)
+            if premiere_ligne.point_de_vente
+            else "",
             "articles": articles_detail,
             "total": total_transaction,
             "nb_articles": len(articles_detail),
@@ -3648,6 +3968,36 @@ def _calculer_datetime_ouverture_service():
     return premiere_vente.datetime
 
 
+def _construire_params_ventes(uuid_pv, tag_id_cm, type_app):
+    """
+    Construit la query string a propager dans toutes les URLs des vues Ventes.
+    / Builds the query string propagated in every Sales view URL.
+
+    LOCALISATION : laboutik/views.py
+
+    Les onglets Ventes font un hx-push-url avec "?vue=...&{{ params_ventes }}".
+    Si un parametre manque ici, il disparait de l'URL du navigateur.
+    C'est pour ca qu'on garde les 3 parametres : uuid_pv, tag_id_cm et type_app.
+    Sans uuid_pv, on renvoie une chaine vide (pas de point de vente a propager).
+    / Sales tabs push "?vue=...&{{ params_ventes }}" to the URL.
+    A missing param here disappears from the browser URL.
+
+    :param uuid_pv: UUID du point de vente courant (str, peut etre vide)
+    :param tag_id_cm: tag de la carte primaire (str, peut etre vide)
+    :param type_app: type d'application cliente (str, peut etre vide)
+    :return: "uuid_pv=...&tag_id_cm=...&type_app=..." ou ""
+    """
+    if not uuid_pv:
+        return ""
+
+    parametres_a_propager = {
+        "uuid_pv": uuid_pv,
+        "tag_id_cm": tag_id_cm,
+        "type_app": type_app,
+    }
+    return urlencode(parametres_a_propager)
+
+
 def _construire_contexte_ventes(request):
     """
     Construit le contexte commun des vues Ventes (header + params retour).
@@ -3698,15 +4048,16 @@ def _construire_contexte_ventes(request):
                 for uuid, name, poid, icon in pvs_list
             ]
 
+    # Params a propager dans toutes les URLs HTMX des vues Ventes
+    # / Params to propagate in all HTMX URLs of Sales views
+    type_app = request.GET.get("type_app", "")
+    params_ventes = _construire_params_ventes(uuid_pv, tag_id_cm, type_app)
+
     # URL de retour vers l'interface POS
     # / Return URL to the POS interface
     url_retour_pv = reverse("laboutik-caisse-point_de_vente")
-    if uuid_pv:
-        url_retour_pv += f"?uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}"
-
-    # Params a propager dans toutes les URLs HTMX des vues Ventes
-    # / Params to propagate in all HTMX URLs of Sales views
-    params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
+    if params_ventes:
+        url_retour_pv += f"?{params_ventes}"
 
     laboutik_config = LaboutikConfiguration.get_solo()
 
@@ -3811,7 +4162,7 @@ MAPPING_ASSET_CATEGORY_PAYMENT_METHOD = {
     Asset.TNF: PaymentMethod.LOCAL_GIFT,  # LG — cadeau
     Asset.TLF: PaymentMethod.LOCAL_EURO,  # LE — monnaie locale
     Asset.FED: PaymentMethod.STRIPE_FED,  # SF — monnaie fédérée du réseau (PAS de la monnaie locale)
-    Asset.TIM: PaymentMethod.LOCAL_EURO,  # LE — temps
+    # Asset.TIM: PaymentMethod.LOCAL_EURO,  # LE — temps
     Asset.FID: PaymentMethod.LOCAL_EURO,  # LE — fidélité
 }
 
@@ -3891,6 +4242,162 @@ def _calculer_qty_partielles(lignes_avec_amounts, prix_unitaire_centimes, qty_to
     return lignes_avec_amounts
 
 
+def _lire_cle_idempotence_paiement(donnees_post):
+    """
+    Lit la cle d'idempotence du paiement envoyee par le formulaire.
+    / Reads the payment idempotency key sent by the form.
+
+    LOCALISATION : laboutik/views.py
+
+    La cle est creee par le serveur dans moyens_paiement() et posee dans
+    #addition-form (champ cle_idempotence_paiement), ou directement dans
+    #card-recharge-form (hx_card_recharge.html).
+    / The key is created by moyens_paiement() or put in #card-recharge-form.
+
+    :param donnees_post: QueryDict du POST
+    :return: uuid.UUID, ou None si absente ou mal formee (ancien client)
+    """
+    valeur_recue = donnees_post.get("cle_idempotence_paiement", "")
+    if not valeur_recue:
+        return None
+    try:
+        return uuid_module.UUID(str(valeur_recue))
+    except ValueError:
+        return None
+
+
+def _numero_de_verrou_du_paiement(cle_idempotence):
+    """
+    Texte qui identifie le verrou PostgreSQL de ce paiement.
+    On ajoute le schema du lieu : deux lieux n'attendent jamais l'un l'autre.
+    / Text naming the PostgreSQL lock of this payment, prefixed by the tenant schema.
+    """
+    return f"laboutik-paiement:{connection.schema_name}:{cle_idempotence}"
+
+
+def _executer_avec_cle_idempotence(request, fonction_de_paiement):
+    """
+    Execute un paiement une seule fois par cle d'idempotence.
+    / Runs a payment only once per idempotency key.
+
+    LOCALISATION : laboutik/views.py
+
+    Appelee par payer() et payer_complementaire().
+
+    LE PROBLEME : un double appui sur « Valider » (ou un renvoi apres une
+    coupure reseau) envoie deux fois le meme paiement. Sans protection,
+    le client est debite deux fois.
+    / A double tap (or a network retry) sends the same payment twice.
+
+    LA SOLUTION :
+    1. On pose un verrou PostgreSQL sur la cle (pg_advisory_lock).
+       La 2e requete attend que la 1re ait fini.
+    2. On regarde si une LigneArticle porte deja cette cle (uuid_transaction).
+       Si oui : le paiement est deja fait, on ne rejoue rien.
+    3. Sinon, on execute le paiement. La cle devient son uuid_transaction.
+    4. On retire le verrou, meme en cas d'erreur (finally).
+    / 1. PostgreSQL lock on the key. 2. A LigneArticle already carries it →
+    already paid, replay nothing. 3. Otherwise pay, the key becomes the
+    uuid_transaction. 4. Always release the lock.
+
+    Pourquoi un verrou de SESSION et pas un bloc atomic() autour de tout :
+    les fonctions de paiement ont deja leurs propres blocs atomic. Les
+    englober changerait ce qui est annule en cas d'erreur. Le verrou de
+    session ne touche pas aux transactions. ATOMIC_REQUESTS est desactive :
+    la 1re requete a donc tout valide en base avant de rendre le verrou.
+    / Session lock, not an outer atomic(): payment code already has its own
+    atomic blocks. ATOMIC_REQUESTS is off, so the first request has committed
+    before releasing the lock.
+
+    Pourquoi pas cache.add() : si memcached tombe, tous les paiements seraient
+    refuses (voir ignore_exc dans settings.py).
+    / Not cache.add(): a memcached outage would block every payment.
+
+    :param request: requete Django (POST)
+    :param fonction_de_paiement: methode a appeler, avec la signature
+        (request, uuid_transaction_impose=None)
+    :return: la reponse HTML du paiement, ou un message « deja enregistre »
+    """
+    cle_idempotence = _lire_cle_idempotence_paiement(request.POST)
+
+    # Pas de cle : ancien client, ou parcours qui ne passe pas par
+    # moyens_paiement. On paie comme avant.
+    # / No key: old client or path skipping moyens_paiement. Pay as before.
+    if cle_idempotence is None:
+        return fonction_de_paiement(request)
+
+    numero_de_verrou = _numero_de_verrou_du_paiement(cle_idempotence)
+    with connection.cursor() as curseur:
+        curseur.execute("SELECT pg_advisory_lock(hashtext(%s))", [numero_de_verrou])
+    try:
+        paiement_deja_enregistre = LigneArticle.objects.filter(
+            uuid_transaction=cle_idempotence
+        ).exists()
+        if paiement_deja_enregistre:
+            logger.warning(
+                f"Paiement en double ignore (cle {cle_idempotence}) : "
+                f"les lignes existent deja"
+            )
+            contexte_deja_enregistre = {
+                "action": "initUrlAddition();",
+                "msg_type": "success",
+                "msg_content": _(
+                    "Ce paiement est déjà enregistré. Il n'a pas été encaissé une deuxième fois."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", contexte_deja_enregistre
+            )
+
+        return fonction_de_paiement(request, uuid_transaction_impose=cle_idempotence)
+    finally:
+        with connection.cursor() as curseur:
+            curseur.execute(
+                "SELECT pg_advisory_unlock(hashtext(%s))", [numero_de_verrou]
+            )
+
+
+def _montant_poids_mesure_en_centimes(produit, prix_obj, quantite_saisie):
+    """
+    Calcule le prix d'une vente au poids ou au volume, en centimes.
+    / Computes the price of a weight/volume sale, in cents.
+
+    LOCALISATION : laboutik/views.py
+
+    Le tarif porte un prix de reference : prix au kg (stock en grammes)
+    ou prix au litre (stock en centilitres). Le caissier saisit une quantite
+    en g ou en cl. On divise donc par 1000 (g → kg) ou par 100 (cl → L).
+    C'est la meme regle que la tuile (_construire_donnees_articles, unite_saisie_label)
+    et que l'affichage dans tarif.js (data-diviseur).
+    / The price is per kg (stock in grams) or per litre (stock in cl).
+    Same rule as the tile and tarif.js: divide by 1000 (g) or 100 (cl).
+
+    Exemple : 350 g de comte a 20 €/kg → 350 / 1000 x 2000 = 700 centimes.
+
+    :param produit: Product vendu au poids/mesure
+    :param prix_obj: Price avec poids_mesure=True (prix de reference en euros)
+    :param quantite_saisie: int, quantite en g ou en cl (> 0)
+    :return: int, montant en centimes (arrondi au centime le plus proche)
+    """
+    # getattr avec defaut marche sur une relation OneToOne inverse absente
+    # (RelatedObjectDoesNotExist herite d'AttributeError).
+    # Sans stock, on suppose des grammes, comme la tuile.
+    # / getattr default works on a missing reverse OneToOne. No stock → grams.
+    stock_du_produit = getattr(produit, "stock_inventaire", None)
+    unite_en_centilitres = stock_du_produit is not None and stock_du_produit.unite == "CL"
+    if unite_en_centilitres:
+        diviseur = Decimal(100)
+    else:
+        diviseur = Decimal(1000)
+
+    prix_de_reference_en_centimes = Decimal(prix_obj.prix) * 100
+    montant_en_centimes = (
+        Decimal(quantite_saisie) / diviseur * prix_de_reference_en_centimes
+    )
+    return int(montant_en_centimes.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
 def _extraire_articles_du_panier(donnees_post, point_de_vente):
     """
     Extrait les articles du formulaire POST et les charge depuis la DB.
@@ -3917,11 +4424,17 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
 
     # Charger tous les produits du PV en une seule requête (avec prix EUR préchargés)
     # Load all PV products in a single query (with EUR prices prefetched)
+    # Memes tarifs que les tuiles : pas de tarif recurrent ni a validation manuelle
+    # (voir _construire_donnees_articles). Un POST force est donc refuse aussi.
+    # / Same prices as the tiles: no recurring or manual-validation price.
     prix_euros_prefetch = Prefetch(
         "prices",
-        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by(
-            "order"
-        ),
+        queryset=Price.objects.filter(
+            publish=True,
+            asset__isnull=True,
+            recurring_payment=False,
+            manual_validation=False,
+        ).order_by("order"),
         to_attr="prix_euros",
     )
     # Produits du PV : ceux avec methode_caisse (articles POS) OU categorie_article=ADHESION
@@ -3932,7 +4445,9 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         str(p.uuid): p
         for p in point_de_vente.products.filter(
             Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION)
-        ).prefetch_related(prix_euros_prefetch)
+        )
+        .select_related("stock_inventaire")
+        .prefetch_related(prix_euros_prefetch)
     }
 
     articles_panier = []
@@ -3986,9 +4501,32 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         if produit is None:
             produit = produits_du_pv.get(uuid_str)
 
+        # --- Recharges : acceptees depuis TOUS les points de vente ---
+        # Un produit de recharge du lieu est accepte meme s'il n'est pas dans
+        # le M2M du PV (voir _produits_de_recharge_du_lieu). La vente reste
+        # enregistree sur CE point de vente.
+        # / Top-ups: accepted from EVERY POS, even outside the POS M2M.
+        if produit is None:
+            uuid_est_valide = True
+            try:
+                uuid_module.UUID(uuid_str)
+            except ValueError:
+                uuid_est_valide = False
+            if uuid_est_valide:
+                produit = _produits_de_recharge_du_lieu().filter(uuid=uuid_str).first()
+
         if produit is None:
             logger.warning(
                 f"Produit {uuid_str} non trouvé dans le PV {point_de_vente.name}"
+            )
+            continue
+
+        # Recharge temps desactivee : refuser un produit TM, meme dans un POST force.
+        # Sinon il serait encaisse en euros sans crediter de temps.
+        # / Time top-up disabled: reject a TM product, even in a forged POST.
+        if produit.methode_caisse == Product.RECHARGE_TEMPS:
+            logger.warning(
+                f"Produit {produit.name} (recharge temps) refusé : fonction désactivée"
             )
             continue
 
@@ -4013,28 +4551,51 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
             prix_obj = produit.prix_euros[0]
 
         # Valider le prix libre ou poids/mesure (custom_amount_centimes)
-        # Le custom_amount est accepte pour : prix libre (free_price) ET poids/mesure (poids_mesure).
+        # Pour le poids/mesure : le serveur recalcule le montant (quantite x prix de reference).
         # Pour le prix libre : le montant doit etre >= au minimum (prix de base).
-        # Pour le poids/mesure : le montant est calcule cote JS (quantite x prix unitaire), pas de minimum.
-        # Securite : rejeter les montants invalides pour les prix libres.
+        # Pour les autres tarifs : un montant custom est rejete.
         # / Validate free price or weight/volume (custom_amount_centimes)
-        # custom_amount accepted for: free price (free_price) AND weight/volume (poids_mesure).
-        # Free price: amount must be >= minimum (base price).
-        # Weight/volume: amount computed by JS (quantity x unit price), no minimum check.
-        # Security: reject invalid amounts for free prices.
-        if custom_amount_centimes is not None:
-            if prix_obj.poids_mesure:
-                # Poids/mesure : le montant est calcule par le JS, on l'accepte tel quel.
-                # Verification de coherence : le montant doit etre > 0.
-                # / Weight/volume: amount computed by JS, accepted as-is.
-                # Sanity check: amount must be > 0.
-                if custom_amount_centimes <= 0:
-                    logger.warning(
-                        f"Montant poids/mesure invalide ({custom_amount_centimes}) "
-                        f"pour {prix_obj.name}"
-                    )
-                    custom_amount_centimes = None
-            elif prix_obj.free_price:
+        # Weight/volume: server recomputes the amount. Free price: amount >= minimum.
+        # Other prices: a custom amount is rejected.
+        if prix_obj.poids_mesure:
+            # Poids/mesure : le serveur recalcule le montant lui-meme.
+            # On ne fait jamais confiance au montant envoye par le JS :
+            # un client modifie pourrait vendre 1 kg a 1 centime.
+            # On part de la quantite saisie (weight_amount, en g ou en cl)
+            # et du prix de reference du tarif (prix au kg ou au litre).
+            # / Weight/volume: the server recomputes the amount itself and never
+            # trusts the JS amount. Based on the entered quantity and the price per kg/L.
+            quantite_saisie_est_valide = (
+                weight_amount is not None and weight_amount > 0
+            )
+            if not quantite_saisie_est_valide:
+                logger.warning(
+                    f"Quantite poids/mesure absente ou invalide ({weight_amount}) "
+                    f"pour {prix_obj.name} : article ignore"
+                )
+                continue
+
+            montant_recalcule_centimes = _montant_poids_mesure_en_centimes(
+                produit, prix_obj, weight_amount
+            )
+
+            # Un ecart avec le montant du JS n'est pas normal : on le trace.
+            # / A gap with the JS amount is not normal: log it.
+            montant_du_js_est_different = (
+                custom_amount_centimes is not None
+                and abs(custom_amount_centimes - montant_recalcule_centimes) > 1
+            )
+            if montant_du_js_est_different:
+                logger.warning(
+                    f"Montant poids/mesure du client ({custom_amount_centimes}) "
+                    f"different du montant serveur ({montant_recalcule_centimes}) "
+                    f"pour {prix_obj.name} : montant serveur retenu"
+                )
+
+            custom_amount_centimes = montant_recalcule_centimes
+
+        elif custom_amount_centimes is not None:
+            if prix_obj.free_price:
                 # Prix libre : le montant doit etre >= au minimum
                 # / Free price: amount must be >= minimum
                 prix_minimum_centimes = int(round(prix_obj.prix * 100))
@@ -4150,6 +4711,91 @@ def _construire_recapitulatif_articles(articles_panier, prenom_client, nom_clien
         )
 
     return articles_pour_recapitulatif
+
+
+def _rendre_popup_paiement_client_identifie(
+    request,
+    point_de_vente,
+    articles_panier,
+    total_centimes,
+    moyens_paiement_du_post,
+    client_email,
+    client_prenom,
+    client_nom,
+    client_solde,
+    tag_id,
+    panier_a_recharges,
+    panier_a_adhesions,
+    panier_a_billets,
+):
+    """
+    Affiche la popup de paiement, une fois le client identifie.
+    / Renders the payment popup once the client is identified.
+
+    LOCALISATION : laboutik/views.py
+
+    On reutilise la popup de la vente normale (hx_display_type_payment.html).
+    Le mode « client_identifie » ajoute en haut le nom du client et le detail
+    des articles. Les tuiles de paiement sont les memes que pour une vente
+    normale (partial/_tuiles_paiement.html).
+    / Reuses the normal-sale popup in "client_identifie" mode: client name
+    and article recap on top, the same payment tiles below.
+
+    Deux cas particuliers :
+    - La carte a deja ete scannee (tag_id) : CASHLESS paie tout de suite
+      avec cette carte. Pas de deuxieme scan, pas de popup.
+    - Le panier est gratuit (ex : billet a 0 €) : un seul bouton VALIDER.
+      Il n'y a rien a encaisser.
+    / Two special cases: card already scanned (CASHLESS pays at once),
+    free cart (a single VALIDATE button).
+
+    Appelee par / Called by : PaiementViewSet.identifier_client()
+    """
+    # Les moyens de paiement sont recalcules par le serveur.
+    # Si le point de vente est introuvable, on garde ceux recus du formulaire.
+    # / Payment methods are recomputed server-side; fall back to the POST list.
+    if point_de_vente is not None:
+        moyens_paiement = _determiner_moyens_paiement(point_de_vente, articles_panier)
+    else:
+        moyens_paiement = moyens_paiement_du_post
+
+    # Le panier est gratuit si le total vaut 0 et qu'il contient au moins un article.
+    # Ce calcul est fait par le serveur, jamais lu depuis le formulaire.
+    # / The cart is free when the total is 0 and it holds at least one item.
+    panier_est_gratuit = total_centimes == 0 and len(articles_panier) > 0
+
+    articles_pour_recapitulatif = _construire_recapitulatif_articles(
+        articles_panier,
+        client_prenom,
+        client_nom,
+    )
+
+    context = {
+        "client_identifie": True,
+        "currency_data": CURRENCY_DATA,
+        "total": total_centimes / 100,
+        "moyens_paiement": moyens_paiement,
+        "moyens_paiement_csv": ",".join(moyens_paiement),
+        "mode_gerant": False,
+        "deposit_is_present": False,
+        "comportement": "",
+        "panier_a_recharges": panier_a_recharges,
+        "panier_a_adhesions": panier_a_adhesions,
+        "panier_a_billets": panier_a_billets,
+        "panier_est_gratuit": panier_est_gratuit,
+        "carte_deja_scannee": bool(tag_id),
+        "user_email": client_email,
+        "user_prenom": client_prenom,
+        "user_nom": client_nom,
+        "user_solde": client_solde,
+        "tag_id": tag_id,
+        "articles_pour_recapitulatif": articles_pour_recapitulatif,
+        # Nouvelle cle a chaque affichage des moyens de paiement.
+        # Voir _executer_avec_cle_idempotence().
+        # / New key each time payment methods are shown.
+        "cle_idempotence_paiement": uuid_module.uuid4(),
+    }
+    return render(request, "laboutik/partial/hx_display_type_payment.html", context)
 
 
 def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
@@ -5306,7 +5952,7 @@ def imprimante_du_terminal(user):
     simplement pas :
     - l'utilisateur n'est pas authentifie (chemin Api-Key : AnonymousUser) ;
     - c'est un humain en session admin, donc pas un terminal (il n'a pas de .terminal) ;
-    - le terminal n'a pas d'imprimante configuree ;
+    - le terminal n'a pas d'imprimante configurée ;
     - son imprimante est desactivee.
 
     :param user: l'utilisateur de la requete (request.user)
@@ -5381,7 +6027,7 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
     4. Pour chaque event : verrouille (select_for_update), verifie la jauge
     5. Cree Reservation + ProductSold + PriceSold + Ticket(status=NOT_SCANNED)
     6. Rattache la LigneArticle a la Reservation
-    7. Appelle imprimer_billet() → Celery async (si imprimante configuree)
+    7. Appelle imprimer_billet() → Celery async (si imprimante configurée)
 
     DEPENDENCIES :
     - _creer_lignes_articles() doit etre appelee AVANT (pour les LigneArticle)
@@ -5846,6 +6492,10 @@ class PaiementViewSet(viewsets.ViewSet):
             "panier_a_adhesions": panier_a_adhesions,
             "panier_a_billets": panier_a_billets,
             "panier_necessite_client": panier_necessite_client,
+            # Nouvelle cle a chaque affichage des moyens de paiement : un double
+            # envoi de payer() arrive avec la meme cle (_executer_avec_cle_idempotence).
+            # / New key each time payment methods are shown.
+            "cle_idempotence_paiement": uuid_module.uuid4(),
         }
         return render(request, "laboutik/partial/hx_display_type_payment.html", context)
 
@@ -5876,6 +6526,20 @@ class PaiementViewSet(viewsets.ViewSet):
         except (ValueError, TypeError):
             total_a_payer = 0
 
+        # complement=1 : on vient de la popup « Complément de paiement »
+        # (hx_complement_paiement.html). Valider soumettra #complement-form
+        # vers payer_complementaire, et pas #addition-form vers payer.
+        # / complement=1: coming from the NFC complement popup. Validate will
+        # submit #complement-form to payer_complementaire instead of payer.
+        est_complement = request.GET.get("complement") == "1"
+
+        # recharge=1 : on vient de l'ecran « Recharger » du check carte
+        # (hx_card_recharge.html). Valider soumettra #card-recharge-form
+        # vers payer, et pas #addition-form.
+        # / recharge=1: coming from the check-card top-up screen. Validate will
+        # submit #card-recharge-form to payer instead of #addition-form.
+        est_recharge = request.GET.get("recharge") == "1"
+
         context = {
             "method": moyen_paiement_choisi,
             "total": total_a_payer,
@@ -5884,6 +6548,8 @@ class PaiementViewSet(viewsets.ViewSet):
             ),
             "uuid_transaction": uuid_transaction,
             "currency_data": CURRENCY_DATA,
+            "est_complement": est_complement,
+            "est_recharge": est_recharge,
         }
         return render(request, "laboutik/partial/hx_confirm_payment.html", context)
 
@@ -5896,6 +6562,29 @@ class PaiementViewSet(viewsets.ViewSet):
     def payer(self, request):
         """
         POST /laboutik/paiement/payer/
+        Protege le paiement contre un double envoi, puis l'execute.
+        / Guards the payment against a double submit, then runs it.
+
+        LOCALISATION : laboutik/views.py
+
+        Le serveur a pose une cle d'idempotence dans le formulaire au moment
+        d'afficher les moyens de paiement (moyens_paiement, champ
+        cle_idempotence_paiement). Un double appui sur « Valider », ou un
+        renvoi apres une coupure reseau, arrive donc avec la MEME cle.
+        Voir _executer_avec_cle_idempotence().
+        / The server put an idempotency key in the form when showing the payment
+        methods. A double tap or a network retry arrives with the SAME key.
+
+        Sans cle (ancien client) : le paiement s'execute comme avant.
+        / Without a key (old client): the payment runs as before.
+        """
+        return _executer_avec_cle_idempotence(
+            request,
+            self._executer_paiement,
+        )
+
+    def _executer_paiement(self, request, uuid_transaction_impose=None):
+        """
         Exécute le paiement et crée les LigneArticle en base.
         Executes the payment and creates LigneArticle records in DB.
 
@@ -5941,7 +6630,14 @@ class PaiementViewSet(viewsets.ViewSet):
         if somme_donnee_brute == "":
             donnees_paiement["given_sum"] = 0
         else:
-            donnees_paiement["given_sum"] = int(somme_donnee_brute)
+            # Le JS envoie « somme en euros x 100 ». Ce calcul peut donner
+            # un nombre a virgule (ex : 329.99999999999994). int() planterait :
+            # on arrondit d'abord, comme dans payer_complementaire.
+            # / The JS sends "euros x 100", which can be a float: round first.
+            try:
+                donnees_paiement["given_sum"] = int(round(float(somme_donnee_brute)))
+            except (ValueError, TypeError):
+                donnees_paiement["given_sum"] = 0
         donnees_paiement["missing"] = 0
 
         # --- Extraire les articles du panier depuis la DB ---
@@ -6035,6 +6731,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     articles_panier,
                     total_en_euros,
                     point_de_vente,
+                    uuid_transaction_impose=uuid_transaction_impose,
                 )
 
         # --- Transaction précédente (complément après fonds insuffisants) ---
@@ -6062,6 +6759,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 consigne_dans_panier,
                 transaction_precedente,
                 moyen_paiement_code,
+                uuid_transaction_impose=uuid_transaction_impose,
             )
 
         if moyen_paiement_code == "espece":
@@ -6075,6 +6773,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 consigne_dans_panier,
                 transaction_precedente,
                 moyen_paiement_code,
+                uuid_transaction_impose=uuid_transaction_impose,
             )
 
         if moyen_paiement_code == "nfc":
@@ -6088,6 +6787,46 @@ class PaiementViewSet(viewsets.ViewSet):
                 consigne_dans_panier,
                 moyen_paiement_code,
                 point_de_vente,
+                uuid_transaction_impose=uuid_transaction_impose,
+            )
+
+        # --- Panier gratuit (ex : billet a 0 €) ---
+        # Le bouton « Valider » du panier gratuit envoie moyen_paiement=gift.
+        # Il n'y a rien a encaisser : on enregistre la vente comme « Offert ».
+        # Le serveur recalcule le total : si le panier n'est pas a 0, on refuse.
+        # Sans cette garde, un POST force offrirait n'importe quel panier.
+        # / Free cart (e.g. 0 € ticket): recorded as "Offered". The server
+        # recomputes the total and refuses anything that is not 0.
+        if moyen_paiement_code == "gift":
+            panier_est_gratuit = total_centimes == 0 and len(articles_panier) > 0
+            if not panier_est_gratuit:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _("Ce panier n'est pas gratuit."),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
+            # Meme traitement qu'une CB : lignes de vente, billets, adhesions.
+            # Le code "gift" donne PaymentMethod.FREE (MAPPING_CODES_PAIEMENT).
+            # / Same processing as a card payment; "gift" maps to PaymentMethod.FREE.
+            return self._payer_par_carte_ou_cheque(
+                request,
+                state,
+                donnees_paiement,
+                articles_panier,
+                total_en_euros,
+                total_centimes,
+                consigne_dans_panier,
+                transaction_precedente,
+                moyen_paiement_code,
+                uuid_transaction_impose=uuid_transaction_impose,
             )
 
         # Moyen de paiement non reconnu → erreur
@@ -6118,6 +6857,7 @@ class PaiementViewSet(viewsets.ViewSet):
         consigne_dans_panier,
         transaction_precedente,
         moyen_paiement_code,
+        uuid_transaction_impose=None,
     ):
         """
         Paiement par carte bancaire ("carte_bancaire") ou chèque ("CH").
@@ -6141,9 +6881,12 @@ class PaiementViewSet(viewsets.ViewSet):
             uuid=uuid_pv
         )
 
-        # Identifiant unique de ce paiement — regroupe toutes les LigneArticle
-        # / Unique ID for this payment — groups all LigneArticle records
-        uuid_transaction = uuid_module.uuid4()
+        # Identifiant unique de ce paiement — regroupe toutes les LigneArticle.
+        # Si payer() a recu une cle d'idempotence, on la reutilise :
+        # c'est elle qui permet de detecter un double envoi.
+        # / Unique ID for this payment — groups all LigneArticle records.
+        # Reuses the idempotency key from payer() when there is one.
+        uuid_transaction = uuid_transaction_impose or uuid_module.uuid4()
 
         # Séparer articles normaux et recharges
         # Separate normal articles and top-ups
@@ -6328,6 +7071,7 @@ class PaiementViewSet(viewsets.ViewSet):
         consigne_dans_panier,
         transaction_precedente,
         moyen_paiement_code,
+        uuid_transaction_impose=None,
     ):
         """
         Paiement en espèces.
@@ -6365,9 +7109,9 @@ class PaiementViewSet(viewsets.ViewSet):
         if somme_est_suffisante:
             ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
 
-            # Identifiant unique de ce paiement
-            # / Unique ID for this payment
-            uuid_transaction = uuid_module.uuid4()
+            # Identifiant unique de ce paiement (cle d'idempotence si fournie)
+            # / Unique ID for this payment (idempotency key when provided)
+            uuid_transaction = uuid_transaction_impose or uuid_module.uuid4()
 
             # Séparer articles normaux et recharges
             # Separate normal articles and top-ups
@@ -6564,6 +7308,7 @@ class PaiementViewSet(viewsets.ViewSet):
         articles_panier,
         total_en_euros,
         point_de_vente,
+        uuid_transaction_impose=None,
     ):
         """
         Rembourse une consigne sur la carte du client : une RECHARGE, pas un débit.
@@ -6631,7 +7376,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # --- 3. Créditer, puis écrire la ligne — dans la même transaction ---
         # / Credit, then write the line — in the same transaction.
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
-        uuid_transaction = uuid_module.uuid4()
+        # Cle d'idempotence de payer() si fournie / idempotency key when provided
+        uuid_transaction = uuid_transaction_impose or uuid_module.uuid4()
         montant_a_rendre_centimes = abs(_calculer_total_panier_centimes(articles_panier))
 
         with db_transaction.atomic():
@@ -6714,6 +7460,7 @@ class PaiementViewSet(viewsets.ViewSet):
         consigne_dans_panier,
         moyen_paiement_code,
         point_de_vente,
+        uuid_transaction_impose=None,
     ):
         """
         Paiement NFC (cashless) via fedow_core — cascade multi-asset.
@@ -6897,6 +7644,10 @@ class PaiementViewSet(viewsets.ViewSet):
                     "currency_data": CURRENCY_DATA,
                     "payment": donnees_paiement,
                     "card": {"name": carte_client.tag_id},
+                    # Reference courte « ·· 4F2A » et soldes en pastilles
+                    # / Short reference and balances as pills
+                    "carte_ref": carte_client.tag_id[-4:],
+                    "soldes": _soldes_locaux_pour_affichage(wallet_client),
                     "monnaie_name": asset_cible.name,
                     "payments_accepted": {
                         "accepte_especes": False,
@@ -7009,7 +7760,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 # / Otherwise: PARTIAL legacy → complement screen shows the reduced remainder; the
                 # partial FED debit happens in payer_complementaire (which re-reads fresh FED).
 
-        # ================================================================ #
+        # =====================================================Type d'actif=========== #
         #  PHASE 6 : Si complémentaire > 0 → écran fonds insuffisants       #
         #  PHASE 6: If complement > 0 → insufficient funds screen           #
         # ================================================================ #
@@ -7079,7 +7830,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # ================================================================ #
 
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
-        uuid_transaction = uuid_module.uuid4()
+        # Cle d'idempotence de payer() si fournie / idempotency key when provided
+        uuid_transaction = uuid_transaction_impose or uuid_module.uuid4()
 
         # ----- Débit LEGACY (HORS atomic : c'est un appel réseau) -----
         # Si le legacy couvre tout le reste, on le débite MAINTENANT, avant le bloc atomic local.
@@ -7306,6 +8058,10 @@ class PaiementViewSet(viewsets.ViewSet):
                 "currency_data": CURRENCY_DATA,
                 "payment": donnees_paiement,
                 "card": {"name": carte_client.tag_id},
+                # Reference courte « ·· 4F2A » et soldes en pastilles
+                # / Short reference and balances as pills
+                "carte_ref": carte_client.tag_id[-4:],
+                "soldes": _soldes_locaux_pour_affichage(wallet_client),
                 "monnaie_name": nom_monnaie_fallback,
                 "payments_accepted": {
                     "accepte_especes": point_de_vente.accepte_especes,
@@ -7324,18 +8080,20 @@ class PaiementViewSet(viewsets.ViewSet):
         #  PHASE 8: Success — multi-asset balances                          #
         # ================================================================ #
 
-        # Lire les soldes de TOUS les assets débités (pas seulement TLF)
-        # / Read balances of ALL debited assets (not just TLF)
-        soldes_apres_paiement = []
-        for asset_debite in assets_debites:
-            solde_apres = WalletService.obtenir_solde(
-                wallet=wallet_client, asset=asset_debite
-            )
-            soldes_apres_paiement.append(
-                {
-                    "name": asset_debite.name,
-                    "solde_euros": solde_apres / 100,
-                }
+        # Avant / apres de TOUS les assets débités (pas seulement TLF) :
+        # non-fiduciaires + cascade locale. Le legacy (Fedow) n'est pas affiché.
+        # / Before / after of ALL debited assets: non-fiduciary + local cascade.
+        soldes_apres_paiement = _calculer_soldes_apres_paiement(
+            wallet=wallet_client,
+            lignes_debitees=lignes_non_fidu + lignes_nfc,
+        )
+
+        # Regroupement par carte pour l'ecran de succes (un cadre par carte)
+        # / Grouped per card for the success screen (one frame per card)
+        cartes_apres_paiement = []
+        if soldes_apres_paiement:
+            cartes_apres_paiement.append(
+                {"tag_id": carte_client.tag_id, "soldes": soldes_apres_paiement}
             )
 
         # Pour la rétro-compatibilité du template, on passe aussi le solde
@@ -7365,6 +8123,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # Multi-asset : liste des soldes après paiement
             # / Multi-asset: list of balances after payment
             "soldes_apres_paiement": soldes_apres_paiement,
+            "cartes_apres_paiement": cartes_apres_paiement,
             "produits_stock_negatif": produits_stock_negatif,
             # Avertissements du rattachement de carte (adhesion) : le caissier doit savoir
             # qu'une carte n'a pas ete rattachee, meme si la vente a abouti.
@@ -7458,18 +8217,19 @@ class PaiementViewSet(viewsets.ViewSet):
         car le formulaire soumis est #addition-form (qui contient tout).
 
         Retourne :
-        - Si user identifie → hx_recapitulatif_client.html (resume articles + boutons paiement)
+        - Si user identifie → hx_display_type_payment.html, mode client_identifie
+          (resume articles + tuiles de paiement)
         - Si carte anonyme → hx_formulaire_identification_client.html (pre-rempli avec tag_id)
-        - Si formulaire soumis avec email → validation puis hx_recapitulatif_client.html
+        - Si formulaire soumis avec email → validation puis meme popup (client_identifie)
 
         Receives tag_id (NFC scan) OR email/name (form).
         POST also contains repid-* (cart articles) and uuid_pv,
         because the submitted form is #addition-form (which contains everything).
 
         Returns:
-        - If user identified → hx_recapitulatif_client.html (article recap + payment buttons)
+        - If user identified → hx_display_type_payment.html in client_identifie mode
         - If anonymous card → hx_formulaire_identification_client.html (pre-filled with tag_id)
-        - If form submitted with email → validation then hx_recapitulatif_client.html
+        - If form submitted with email → validation then the same popup
 
         LOCALISATION : laboutik/views.py
         """
@@ -7496,6 +8256,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # We extract them to display the per-article recap.
         articles_panier = []
         total_en_euros = 0
+        total_centimes = 0
+        point_de_vente = None
         uuid_pv = request.POST.get("uuid_pv")
         if uuid_pv:
             try:
@@ -7662,30 +8424,20 @@ class PaiementViewSet(viewsets.ViewSet):
             user_prenom = user.first_name or prenom
             user_nom = user.last_name or nom
 
-            # Enrichir les articles avec un texte adaptatif par type
-            # / Enrich articles with adaptive text per type
-            articles_pour_recapitulatif = _construire_recapitulatif_articles(
-                articles_panier,
-                user_prenom,
-                user_nom,
-            )
-
-            context = {
-                "action": "initUrlAddition();",
-                "user_email": user.email,
-                "user_prenom": user_prenom,
-                "user_nom": user_nom,
-                "user_solde": solde,
-                "tag_id": tag_id,
-                "moyens_paiement": moyens_paiement,
-                "panier_a_recharges": panier_a_recharges,
-                "panier_a_adhesions": panier_a_adhesions,
-                "panier_a_billets": panier_a_billets,
-                "articles_pour_recapitulatif": articles_pour_recapitulatif,
-                "total_en_euros": total_en_euros,
-            }
-            return render(
-                request, "laboutik/partial/hx_recapitulatif_client.html", context
+            return _rendre_popup_paiement_client_identifie(
+                request,
+                point_de_vente=point_de_vente,
+                articles_panier=articles_panier,
+                total_centimes=total_centimes,
+                moyens_paiement_du_post=moyens_paiement,
+                client_email=user.email,
+                client_prenom=user_prenom,
+                client_nom=user_nom,
+                client_solde=solde,
+                tag_id=tag_id,
+                panier_a_recharges=panier_a_recharges,
+                panier_a_adhesions=panier_a_adhesions,
+                panier_a_billets=panier_a_billets,
             )
 
         # ------------------------------------------------------------------
@@ -7758,28 +8510,22 @@ class PaiementViewSet(viewsets.ViewSet):
                 except Exception:
                     solde_carte = 0
 
-            carte_label = carte.tag_id
-            articles_pour_recapitulatif = _construire_recapitulatif_articles(
-                articles_panier,
-                carte_label,
-                "",
-            )
-
-            context = {
-                "user_email": "",
-                "user_prenom": _("Carte anonyme"),
-                "user_nom": carte.tag_id,
-                "user_solde": solde_carte,
-                "tag_id": tag_id,
-                "moyens_paiement": moyens_paiement,
-                "panier_a_recharges": panier_a_recharges,
-                "panier_a_adhesions": panier_a_adhesions,
-                "panier_a_billets": panier_a_billets,
-                "articles_pour_recapitulatif": articles_pour_recapitulatif,
-                "total_en_euros": total_en_euros,
-            }
-            return render(
-                request, "laboutik/partial/hx_recapitulatif_client.html", context
+            # Le recapitulatif nomme la carte par son tag_id (pas de nom de client).
+            # / The recap names the card by its tag_id (no client name).
+            return _rendre_popup_paiement_client_identifie(
+                request,
+                point_de_vente=point_de_vente,
+                articles_panier=articles_panier,
+                total_centimes=total_centimes,
+                moyens_paiement_du_post=moyens_paiement,
+                client_email="",
+                client_prenom=_("Carte anonyme"),
+                client_nom=carte.tag_id,
+                client_solde=solde_carte,
+                tag_id=tag_id,
+                panier_a_recharges=panier_a_recharges,
+                panier_a_adhesions=panier_a_adhesions,
+                panier_a_billets=panier_a_billets,
             )
 
         # Aucune info → formulaire vierge
@@ -7855,6 +8601,24 @@ class PaiementViewSet(viewsets.ViewSet):
     def payer_complementaire(self, request):
         """
         POST /laboutik/paiement/payer_complementaire/
+        Protege le paiement complementaire contre un double envoi, puis l'execute.
+        / Guards the complementary payment against a double submit, then runs it.
+
+        LOCALISATION : laboutik/views.py
+
+        Meme cle d'idempotence que payer() : complement-form inclut #addition-form.
+        Le 1er passage « 2e carte insuffisante » n'ecrit rien en base : le 2e
+        passage peut donc reutiliser la meme cle sans etre pris pour un doublon.
+        / Same idempotency key as payer(). The "2nd card insufficient" first pass
+        writes nothing, so the second pass can reuse the key.
+        """
+        return _executer_avec_cle_idempotence(
+            request,
+            self._executer_paiement_complementaire,
+        )
+
+    def _executer_paiement_complementaire(self, request, uuid_transaction_impose=None):
+        """
         Finalise un paiement NFC avec complément (espèces, CB, ou 2ème carte).
         / Finalizes an NFC payment with complement (cash, CC, or 2nd card).
 
@@ -8045,11 +8809,47 @@ class PaiementViewSet(viewsets.ViewSet):
         # ---------------------------------------------------------- #
 
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
-        uuid_transaction = uuid_module.uuid4()
+        # Cle d'idempotence de payer() si fournie / idempotency key when provided
+        uuid_transaction = uuid_transaction_impose or uuid_module.uuid4()
 
         donnees_paiement["total"] = total_centimes
-        donnees_paiement["given_sum"] = 0
         donnees_paiement["missing"] = 0
+        donnees_paiement["give_back"] = 0
+
+        # Somme donnee en centimes : saisie au pave especes (hx_confirm_payment.html).
+        # Vide = compte juste.
+        # / Given sum in cents, typed on the cash keypad. Empty = exact amount.
+        somme_donnee_brute = donnees_paiement.get("given_sum", "")
+        # Le JS envoie « somme x 100 » : ca peut donner 329.99999999999994.
+        # On arrondit au centime au lieu d'un int() qui planterait.
+        # / JS sends "sum x 100", which may be a float: round to the cent.
+        donnees_paiement["given_sum"] = 0
+        if somme_donnee_brute != "" and moyen_complement == "espece":
+            try:
+                donnees_paiement["given_sum"] = round(float(somme_donnee_brute))
+            except ValueError:
+                donnees_paiement["given_sum"] = 0
+
+        # Reste apres une 2e carte, regle en especes ou en CB.
+        # L'ecran « reste a payer » du 2e passage (2e carte insuffisante) renvoie
+        # tag_id_carte2. On repart alors dans la branche 2e carte : elle recalcule
+        # et debite les DEUX cartes, puis regle le reste avec le moyen choisi.
+        # Sans ce routage, la branche especes/CB ne voyait que la carte 1 :
+        # le reste attendu etait faux (especes refusees) et la carte 2 n'etait
+        # jamais debitee (CB).
+        # / Remainder after a 2nd card, paid in cash or CC: route to the 2nd-card
+        #   branch, which debits BOTH cards, then settles the rest with this method.
+        tag_id_carte2_du_complement = (
+            request.POST.get("tag_id_carte2", "").upper().strip()
+        )
+        moyen_reste_apres_carte2 = ""
+        reste_apres_carte2_en_especes_ou_cb = (
+            moyen_complement in ("espece", "carte_bancaire")
+            and tag_id_carte2_du_complement != ""
+        )
+        if reste_apres_carte2_en_especes_ou_cb:
+            moyen_reste_apres_carte2 = moyen_complement
+            moyen_complement = "nfc"
 
         if moyen_complement in ("espece", "carte_bancaire"):
             # ---------------------------------------------------------- #
@@ -8077,6 +8877,34 @@ class PaiementViewSet(viewsets.ViewSet):
                 depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte1.user)
                 if legacy_disponible and depensable_legacy > 0:
                     montant_legacy = min(depensable_legacy, total_complementaire)
+
+            # Montant reellement regle en especes/CB : le reste moins la part legacy.
+            # / Amount actually settled in cash/CC: remainder minus the legacy part.
+            montant_paye_en_complement = total_complementaire - montant_legacy
+
+            # Especes : la somme donnee doit couvrir ce montant (0 = compte juste).
+            # On verifie AVANT le debit legacy : rien n'est debite si on refuse.
+            # / Cash: the given sum must cover it (0 = exact). Checked BEFORE the legacy debit.
+            somme_donnee_en_centimes = donnees_paiement["given_sum"]
+            somme_donnee_insuffisante = (
+                moyen_complement == "espece"
+                and somme_donnee_en_centimes > 0
+                and somme_donnee_en_centimes < montant_paye_en_complement
+            )
+            if somme_donnee_insuffisante:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _("Somme donnée insuffisante"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
             if montant_legacy > 0:
                 lignes_pour_fed, lignes_reste = _decouper_lignes_complement(
                     lignes_complement_c1, montant_legacy
@@ -8264,16 +9092,19 @@ class PaiementViewSet(viewsets.ViewSet):
             # Succès espèces/CB → affichage
             # / Cash/CC success → display
             # ---------------------------------------------------------- #
-            soldes_apres_paiement = []
-            for asset_debite in assets_debites:
-                solde_apres = WalletService.obtenir_solde(
-                    wallet=wallet_carte1, asset=asset_debite
-                )
-                soldes_apres_paiement.append(
-                    {
-                        "name": asset_debite.name,
-                        "solde_euros": solde_apres / 100,
-                    }
+            # Avant / apres de la carte : non-fiduciaires + cascade locale
+            # / Card before / after: non-fiduciary + local cascade
+            soldes_apres_paiement = _calculer_soldes_apres_paiement(
+                wallet=wallet_carte1,
+                lignes_debitees=lignes_non_fidu + lignes_nfc_carte1,
+            )
+
+            # Regroupement par carte pour l'ecran de succes (un cadre par carte)
+            # / Grouped per card for the success screen (one frame per card)
+            cartes_apres_paiement = []
+            if soldes_apres_paiement:
+                cartes_apres_paiement.append(
+                    {"tag_id": carte1.tag_id, "soldes": soldes_apres_paiement}
                 )
 
             nouveau_solde_euros = None
@@ -8281,6 +9112,16 @@ class PaiementViewSet(viewsets.ViewSet):
             if soldes_apres_paiement:
                 nouveau_solde_euros = soldes_apres_paiement[0]["solde_euros"]
                 nom_monnaie_principal = soldes_apres_paiement[0]["name"]
+
+            # Monnaie a rendre (en euros), meme regle que payer()
+            # / Change to give back (euros), same rule as payer()
+            if (
+                moyen_complement == "espece"
+                and somme_donnee_en_centimes > montant_paye_en_complement
+            ):
+                donnees_paiement["give_back"] = (
+                    somme_donnee_en_centimes - montant_paye_en_complement
+                ) / 100
 
             context_succes = {
                 "currency_data": CURRENCY_DATA,
@@ -8297,6 +9138,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_transaction": str(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "soldes_apres_paiement": soldes_apres_paiement,
+                "cartes_apres_paiement": cartes_apres_paiement,
                 "produits_stock_negatif": produits_stock_negatif,
             }
             return render(
@@ -8310,7 +9152,13 @@ class PaiementViewSet(viewsets.ViewSet):
             # 7. Complément 2ème carte NFC
             # / 7. 2nd NFC card complement
             # ---------------------------------------------------------- #
-            tag_id_carte2 = request.POST.get("tag_id", "").upper().strip()
+            # Carte 2 : lue au NFC (1er passage), ou renvoyee par l'ecran
+            # « reste a payer » quand on regle le reste en especes / CB.
+            # / Card 2: read via NFC, or sent back by the remainder screen.
+            if moyen_reste_apres_carte2:
+                tag_id_carte2 = tag_id_carte2_du_complement
+            else:
+                tag_id_carte2 = request.POST.get("tag_id", "").upper().strip()
 
             if not tag_id_carte2:
                 context_erreur = {
@@ -8491,7 +9339,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 lignes_nfc_carte2 = lignes_couvertes_locales_c2 + lignes_reste_c2
                 total_reste_apres_carte2 = 0
 
-            if total_reste_apres_carte2 > 0:
+            if total_reste_apres_carte2 > 0 and not moyen_reste_apres_carte2:
                 # Encore insuffisant → re-render complémentaire sans bouton 2ème carte
                 # / Still insufficient → re-render complement without 2nd card button
                 debits_affichage_c1 = OrderedDict()
@@ -8534,9 +9382,15 @@ class PaiementViewSet(viewsets.ViewSet):
                 )
 
                 total_nfc_carte1_centimes = sum(debits_affichage_c1.values())
+                total_nfc_carte2_centimes = sum(debits_affichage_c2.values())
                 context_complement = {
                     "action": "initUrlAddition();",
                     "tag_id_carte1": tag_id_carte1,
+                    # Carte 2 : affichee dans l'addition, et renvoyee par le
+                    # formulaire pour regler le reste en especes / CB.
+                    # / Card 2: shown in the bill, and sent back by the form.
+                    "tag_id_carte2": tag_id_carte2,
+                    "total_nfc_carte2_euros": f"{total_nfc_carte2_centimes / 100:.2f}",
                     "detail_cascade": detail_cascade_affichage,
                     "cascade_carte1_json": cascade_json_rerender,
                     "total_nfc_carte1": total_nfc_carte1_centimes,
@@ -8553,7 +9407,54 @@ class PaiementViewSet(viewsets.ViewSet):
                     context_complement,
                 )
 
-            # Carte2 couvre tout le reste → on finalise.
+            # Reste apres la carte 2, regle en especes / CB.
+            # Les parts non couvertes (asset=None) deviennent des lignes especes / CB.
+            # Controle de la somme donnee AVANT tout debit (legacy carte1 compris).
+            # / Remainder after card 2, paid in cash / CC. Given-sum check BEFORE any debit.
+            lignes_reste_apres_carte2 = []
+            if total_reste_apres_carte2 > 0:
+                if moyen_reste_apres_carte2 == "espece":
+                    pm_reste = PaymentMethod.CASH
+                else:
+                    pm_reste = PaymentMethod.CC
+
+                somme_donnee_en_centimes = donnees_paiement["given_sum"]
+                somme_donnee_insuffisante = (
+                    moyen_reste_apres_carte2 == "espece"
+                    and somme_donnee_en_centimes > 0
+                    and somme_donnee_en_centimes < total_reste_apres_carte2
+                )
+                if somme_donnee_insuffisante:
+                    context_erreur = {
+                        "action": "initUrlAddition();",
+                        "msg_type": "warning",
+                        "msg_content": _("Somme donnée insuffisante"),
+                        "selector_bt_retour": "#messages",
+                    }
+                    return render(
+                        request,
+                        "laboutik/partial/hx_messages.html",
+                        context_erreur,
+                        status=400,
+                    )
+
+                for art_r, asset_r, amount_r, _pm_r in lignes_nfc_carte2:
+                    if asset_r is None:
+                        lignes_reste_apres_carte2.append(
+                            (art_r, None, amount_r, pm_reste)
+                        )
+
+                # Monnaie a rendre (en euros), meme regle que payer()
+                # / Change to give back (euros), same rule as payer()
+                if (
+                    moyen_reste_apres_carte2 == "espece"
+                    and somme_donnee_en_centimes > total_reste_apres_carte2
+                ):
+                    donnees_paiement["give_back"] = (
+                        somme_donnee_en_centimes - total_reste_apres_carte2
+                    ) / 100
+
+            # Carte2 couvre tout le reste (ou le reste est regle en especes / CB) → on finalise.
             # Débit DIFFÉRÉ du FED legacy de carte1 (calculé plus haut) : on ne le débite
             # que maintenant, une fois sûr que le paiement se finalise. Hors atomic (appel
             # réseau), fail-fast : si le solde réseau a changé, on rescanne, aucun débit local.
@@ -8689,12 +9590,15 @@ class PaiementViewSet(viewsets.ViewSet):
                     # + lignes_legacy_c2 : parts couvertes par le FED de la carte2 (débit déjà fait
                     # hors atomic), avec leur moyen résolu (STRIPE_FED / LOCAL_EURO) et l'uuid distant.
                     # / + lignes_legacy_c2: card2 FED-covered parts (already debited outside atomic).
+                    # + lignes_reste_apres_carte2 : le reste regle en especes / CB.
+                    # / + remainder paid in cash / CC.
                     toutes_les_lignes = (
                         lignes_non_fidu
                         + lignes_couvertes_c1
                         + lignes_couvertes_c2
                         + lignes_legacy_c1
                         + lignes_legacy_c2
+                        + lignes_reste_apres_carte2
                     )
                     lignes_creees, produits_stock_negatif = (
                         _creer_lignes_articles_cascade(
@@ -8770,29 +9674,33 @@ class PaiementViewSet(viewsets.ViewSet):
                     )
                 raise
 
-            # Succès 2ème carte → affichage multi-soldes
-            # / 2nd card success → multi-balance display
-            soldes_apres_paiement = []
-            for asset_debite in assets_debites:
-                solde_apres = WalletService.obtenir_solde(
-                    wallet=wallet_carte1, asset=asset_debite
+            # Succès 2ème carte → avant / apres, un cadre par carte a l'ecran.
+            # Les non-fiduciaires sont débités sur la carte 1.
+            # / 2nd card success → before / after, one frame per card on screen.
+            soldes_carte1 = _calculer_soldes_apres_paiement(
+                wallet=wallet_carte1,
+                lignes_debitees=lignes_non_fidu + lignes_couvertes_c1,
+            )
+            soldes_carte2 = _calculer_soldes_apres_paiement(
+                wallet=wallet_carte2,
+                lignes_debitees=lignes_couvertes_c2,
+            )
+
+            # Une entree par carte qui a vraiment paye en local
+            # / One entry per card that actually paid locally
+            cartes_apres_paiement = []
+            if soldes_carte1:
+                cartes_apres_paiement.append(
+                    {"tag_id": tag_id_carte1, "soldes": soldes_carte1}
                 )
-                soldes_apres_paiement.append(
-                    {
-                        "name": f"{asset_debite.name} ({tag_id_carte1})",
-                        "solde_euros": solde_apres / 100,
-                    }
+            if soldes_carte2:
+                cartes_apres_paiement.append(
+                    {"tag_id": tag_id_carte2, "soldes": soldes_carte2}
                 )
-            for asset_debite_c2 in assets_debites_carte2:
-                solde_apres_c2 = WalletService.obtenir_solde(
-                    wallet=wallet_carte2, asset=asset_debite_c2
-                )
-                soldes_apres_paiement.append(
-                    {
-                        "name": f"{asset_debite_c2.name} ({tag_id_carte2})",
-                        "solde_euros": solde_apres_c2 / 100,
-                    }
-                )
+
+            # Liste a plat, gardee pour nouveau_solde / monnaie_name
+            # / Flat list, kept for nouveau_solde / monnaie_name
+            soldes_apres_paiement = soldes_carte1 + soldes_carte2
 
             nouveau_solde_euros = None
             nom_monnaie_principal = ""
@@ -8800,12 +9708,23 @@ class PaiementViewSet(viewsets.ViewSet):
                 nouveau_solde_euros = soldes_apres_paiement[0]["solde_euros"]
                 nom_monnaie_principal = soldes_apres_paiement[0]["name"]
 
+            # Moyen affiche : « NFC » si les cartes ont tout paye, sinon
+            # « NFC / especes » ou « NFC / CB » comme la branche especes/CB.
+            # / Shown method: "NFC", or "NFC / cash|CC" when the rest was paid otherwise.
+            if lignes_reste_apres_carte2:
+                moyen_paiement_affiche = moyen_reste_apres_carte2
+                original_payment_affiche = True
+            else:
+                moyen_paiement_affiche = _("NFC")
+                original_payment_affiche = None
+
             context_succes = {
                 "currency_data": CURRENCY_DATA,
                 "payment": donnees_paiement,
                 "monnaie_name": nom_monnaie_principal,
-                "moyen_paiement": _("NFC"),
-                "original_payment": None,
+                "moyen_paiement": moyen_paiement_affiche,
+                "original_payment": original_payment_affiche,
+                "original_moyen_paiement": _("NFC"),
                 "deposit_is_present": False,
                 "total": total_centimes / 100,
                 "state": state,
@@ -8814,6 +9733,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_transaction": str(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "soldes_apres_paiement": soldes_apres_paiement,
+                "cartes_apres_paiement": cartes_apres_paiement,
                 "produits_stock_negatif": produits_stock_negatif,
             }
             return render(
@@ -8915,6 +9835,20 @@ class PaiementViewSet(viewsets.ViewSet):
         prenom_carte = carte.user.first_name if carte.user else None
         couleur_fond = "--success" if email_carte else "--warning"
 
+        # 6. Zone « Recharger » : les produits de recharge du point de vente courant.
+        #    uuid_pv vient de #addition-form (hx-include sur #form-check-nfc,
+        #    voir hx_check_card.html). Sans PV valide, la zone ne s'affiche pas.
+        # 6. "Top up" zone: the current POS top-up products. uuid_pv comes from
+        #    #addition-form (hx-include in hx_check_card.html).
+        point_de_vente_courant = None
+        uuid_pv_recu = request.POST.get("uuid_pv", "").strip()
+        if uuid_pv_recu:
+            try:
+                point_de_vente_courant = PointDeVente.objects.get(uuid=uuid_pv_recu)
+            except (PointDeVente.DoesNotExist, ValueError, DjangoValidationError):
+                point_de_vente_courant = None
+        contexte_recharge = _construire_contexte_recharge(carte, point_de_vente_courant)
+
         context = {
             "card": {"email": email_carte, "first_name": prenom_carte},
             "total_monnaie": solde["total_centimes"] / 100,
@@ -8925,8 +9859,85 @@ class PaiementViewSet(viewsets.ViewSet):
             "tag_id": tag_id_scanne,
             "background": couleur_fond,
             "state": state,
+            "recharge": contexte_recharge,
+            "currency_data": CURRENCY_DATA,
         }
         return render(request, "laboutik/partial/hx_card_feedback.html", context)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="recharge_carte",
+        url_name="recharge_carte",
+    )
+    def recharge_carte(self, request):
+        """
+        GET /laboutik/paiement/recharge_carte/
+        Renvoie la zone « Recharger » de la popup check carte, a l'etape demandee.
+        / Returns the "Top up" zone of the card check popup, at the requested step.
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. hx_card_feedback.html inclut hx_card_recharge.html (etape 1 : quoi)
+        2. Chaque tuile / bouton de la zone fait un hx-get ici avec :
+           tag_id, uuid_pv, produit, prix, montant (montant libre en euros)
+        3. On recalcule la zone avec _construire_contexte_recharge()
+        4. Le partial remplace #card-recharge-zone (outerHTML)
+        La recharge elle-meme part ensuite vers payer() (RE) ou
+        identifier_client() (RC / TM) : rien n'est ecrit en base ici.
+        / Each tap re-renders the zone. Nothing is written to the DB here.
+        """
+        tag_id_de_la_carte = request.GET.get("tag_id", "").strip().upper()
+        uuid_pv_recu = request.GET.get("uuid_pv", "").strip()
+        uuid_produit_choisi = request.GET.get("produit", "").strip()
+        uuid_prix_choisi = request.GET.get("prix", "").strip()
+
+        carte = get_object_or_404(CarteCashless, tag_id=tag_id_de_la_carte)
+
+        point_de_vente_courant = None
+        if uuid_pv_recu:
+            try:
+                point_de_vente_courant = PointDeVente.objects.get(uuid=uuid_pv_recu)
+            except (PointDeVente.DoesNotExist, ValueError, DjangoValidationError):
+                point_de_vente_courant = None
+
+        # Premier passage : on construit sans montant libre pour connaitre le tarif choisi
+        # / First pass without free amount, to know the chosen price
+        contexte_recharge = _construire_contexte_recharge(
+            carte,
+            point_de_vente_courant,
+            uuid_produit_choisi=uuid_produit_choisi,
+            uuid_prix_choisi=uuid_prix_choisi,
+        )
+
+        # Montant libre envoye : on le valide (serializer), minimum = prix de base du tarif
+        # / Free amount sent: validate it (serializer), minimum = base price
+        montant_libre_envoye = "montant" in request.GET
+        tarif_choisi = contexte_recharge["tarif_choisi"]
+        if montant_libre_envoye and tarif_choisi and tarif_choisi["est_libre"]:
+            minimum_centimes = int(round(tarif_choisi["minimum_euros"] * 100))
+            serializer_montant = RechargeMontantLibreSerializer(
+                data={"montant": request.GET.get("montant", "")},
+                context={"minimum_centimes": minimum_centimes},
+            )
+            if serializer_montant.is_valid():
+                contexte_recharge = _construire_contexte_recharge(
+                    carte,
+                    point_de_vente_courant,
+                    uuid_produit_choisi=uuid_produit_choisi,
+                    uuid_prix_choisi=uuid_prix_choisi,
+                    montant_libre_saisi=serializer_montant.validated_data["montant"],
+                )
+            else:
+                contexte_recharge["erreur_montant"] = serializer_montant.errors["montant"][0]
+                contexte_recharge["montant_saisi"] = request.GET.get("montant", "")
+
+        return render(
+            request,
+            "laboutik/partial/hx_card_recharge.html",
+            {"recharge": contexte_recharge, "currency_data": CURRENCY_DATA},
+        )
 
     @action(
         detail=False,
@@ -9149,7 +10160,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "laboutik/partial/hx_print_feedback.html",
                 {
                     "msg_type": "warning",
-                    "msg_content": _("Pas d'imprimante configuree sur ce terminal."),
+                    "msg_content": _("Pas d'imprimante configurée sur ce terminal."),
                 },
             )
 
@@ -9242,7 +10253,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 {
                     "msg_type": "warning",
                     "msg_content": _(
-                        "Aucune imprimante configuree pour ce terminal"
+                        "Aucune imprimante configurée pour ce terminal"
                     ),
                 },
             )
@@ -10066,7 +11077,14 @@ class CommandeViewSet(viewsets.ViewSet):
         if somme_donnee_brute == "":
             donnees_paiement["given_sum"] = 0
         else:
-            donnees_paiement["given_sum"] = int(somme_donnee_brute)
+            # Le JS envoie « somme en euros x 100 ». Ce calcul peut donner
+            # un nombre a virgule (ex : 329.99999999999994). int() planterait :
+            # on arrondit d'abord, comme dans payer_complementaire.
+            # / The JS sends "euros x 100", which can be a float: round first.
+            try:
+                donnees_paiement["given_sum"] = int(round(float(somme_donnee_brute)))
+            except (ValueError, TypeError):
+                donnees_paiement["given_sum"] = 0
         donnees_paiement["missing"] = 0
 
         moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")

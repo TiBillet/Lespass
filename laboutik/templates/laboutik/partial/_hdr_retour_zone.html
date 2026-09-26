@@ -1,0 +1,55 @@
+{% load i18n %}
+{% comment %}
+ZONE RETOUR + TITRE DU HEADER (ecrans Ventes et Sortie de caisse)
+/ Header back + title zone (Sales and Cash withdrawal screens)
+
+LOCALISATION : laboutik/templates/laboutik/partial/_hdr_retour_zone.html
+
+Maquette : TEMP-tibillet-laboutik-main (bouton .hdr-back a gauche, .hdr-title au centre).
+Style : static/css/header.css (.hdr-retour-zone, .hdr-back, .hdr-title).
+
+DEUX USAGES :
+1. cotton/header.html (mode retour_pv) : rendu normal dans le header.
+2. hx_recap_en_cours.html et hx_sortie_de_caisse.html : rendu avec hdr_oob=True.
+   La zone arrive alors en hx-swap-oob et remplace celle du header (meme id).
+   On ne le fait que si la cible HTMX est #ventes-zone.
+   Sinon (page complete), la zone serait en double dans la page.
+
+PARAMETRES (via include ... with) :
+- hdr_titre        : texte du titre centre ("Ventes" ou "Sortie de caisse").
+- hdr_retour_ventes : True → le retour ramene a l'ecran Ventes (HTMX, #ventes-zone).
+                      Absent → le retour ramene a la caisse (lien url_retour_pv).
+- hdr_oob          : True → ajoute hx-swap-oob="true".
+
+Contexte utilise : pv.id, url_retour_pv, params_ventes, card, type_app
+(tous fournis par _construire_contexte_ventes ou par la vue sortie_de_caisse).
+{% endcomment %}
+<div id="hdr-retour-zone" class="hdr-retour-zone"{% if hdr_oob %} hx-swap-oob="true"{% endif %}>
+  {% if hdr_retour_ventes %}
+    {# Retour vers l'ecran Ventes / Back to the Sales screen #}
+    <button type="button" class="hdr-back"
+            hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
+            hx-target="#ventes-zone"
+            hx-swap="innerHTML"
+            data-loading-disable
+            data-testid="header-btn-retour">
+      <span class="hdr-back-chevron" aria-hidden="true"></span>{% translate "Ventes" %}
+    </button>
+  {% elif pv.id and url_retour_pv %}
+    {# Retour vers la caisse, avec les 3 params / Back to the POS, with the 3 params #}
+    <a class="hdr-back" href="{{ url_retour_pv }}" data-nav-spinner data-testid="header-btn-retour">
+      <span class="hdr-back-chevron" aria-hidden="true"></span>{% translate "Caisse" %}
+    </a>
+  {% else %}
+    {# Pas de PV connu : premier PV de la carte primaire / No known POS: first POS of the primary card #}
+    <a class="hdr-back"
+       href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ card.pvs_list.0.uuid }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}"
+       data-nav-spinner
+       data-testid="header-btn-retour">
+      <span class="hdr-back-chevron" aria-hidden="true"></span>{% translate "Caisse" %}
+    </a>
+  {% endif %}
+  <span class="hdr-spacer"></span>
+  <span class="hdr-title" data-testid="header-titre">{{ hdr_titre }}</span>
+  <span class="hdr-spacer"></span>
+</div>

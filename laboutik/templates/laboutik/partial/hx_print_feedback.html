@@ -1,18 +1,49 @@
-{% load static i18n %}
-<div class="BF-ligne-deb"
-     style="background-color: var(--{{ msg_type }})"
+{% load i18n %}
+{% comment %}
+RETOUR D'IMPRESSION — message court sous le bouton Imprimer
+/ Print feedback — short message below the Print button
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_print_feedback.html
+STYLE : laboutik/static/css/overlay.css (bloc RETOUR D'IMPRESSION)
+
+UTILISE PAR :
+- hx_return_payment_success.html : bouton Imprimer de la popup de succes (#print-feedback)
+- hx_vider_carte_success.html    : bouton d'impression du recu (#print-feedback)
+- hx_detail_vente.html           : bouton Ré-imprimer de l'ecran Ventes (#reimpression-<uuid>)
+
+RENDU PAR : PaiementViewSet.imprimer_ticket() et vider_carte_imprimer_recu() (views.py)
+
+Style de la maquette : un bandeau teinte de la couleur du message (valid, nfc,
+warn, danger), une pastille pleine avec le pictogramme, le texte en clair.
+Plus de fond sature plein ni de texte noir.
+/ Mockup style: a tinted strip, a solid badge with the glyph, plain text.
+
+PARAMETRES : msg_type ("success" | "info" | "warning" | "error"), msg_content.
+{% endcomment %}
+{% if msg_type == "success" or msg_type == "info" %}
+<div class="retour-impression retour-impression--{{ msg_type }}"
+     role="status"
+     aria-live="polite"
+     data-testid="alerte-messages">
+{% else %}
+<div class="retour-impression retour-impression--{{ msg_type|default:'warning' }}"
      role="alert"
      aria-live="assertive"
      data-testid="alerte-messages">
-  {% if msg_type == "success" %}
-    <i class="fas fa-check-circle alerte-messages-icone" aria-hidden="true"></i>
-  {% elif msg_type == "info" %}
-    <i class="fas fa-info-circle alerte-messages-icone" aria-hidden="true"></i>
-  {% elif msg_type == "error" %}
-    <i class="fas fa-times-circle alerte-messages-icone" aria-hidden="true"></i>
-  {% else %}
-    <i class="fas fa-exclamation-triangle alerte-messages-icone"
-       aria-hidden="true"></i>
-  {% endif %}
-  <p class="alerte-messages-texte" data-testid="alerte-messages-texte">{{ msg_content }}</p>
+{% endif %}
+  <span class="retour-impression-icone" aria-hidden="true">
+    {% if msg_type == "success" %}
+      <svg class="ico" viewBox="0 0 24 24" focusable="false"><path d="M20.6 5.4 9.1 16.9l-5.7-5.7 2.3-2.3 3.4 3.4 9.2-9.2z"/></svg>
+    {% elif msg_type == "info" %}
+      <svg class="ico" viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="6.2" r="2"/><rect x="10.4" y="9.6" width="3.2" height="10.4" rx="1.6"/></svg>
+    {% else %}
+      <svg class="ico" viewBox="0 0 24 24" focusable="false"><rect x="10.4" y="3.6" width="3.2" height="11" rx="1.6"/><circle cx="12" cy="19" r="2"/></svg>
+    {% endif %}
+  </span>
+  <div class="retour-impression-corps">
+    {% if msg_type != "success" and msg_type != "info" %}
+      <strong class="retour-impression-titre">{% translate "Impression impossible" %}</strong>
+    {% endif %}
+    <p class="alerte-messages-texte" data-testid="alerte-messages-texte">{{ msg_content }}</p>
+  </div>
 </div>

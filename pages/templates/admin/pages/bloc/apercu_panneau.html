@@ -1,0 +1,91 @@
+{% load i18n static %}
+{% comment %}
+PANNEAU D'APERCU EN DIRECT DU BLOC
+/ Live block preview panel
+
+LOCALISATION : pages/templates/admin/pages/bloc/apercu_panneau.html
+
+Inclus DANS le <form> de la fiche Bloc (via before.html). Sur grand ecran, le
+CSS pages/static/pages/admin/apercu_bloc.css le place en colonne de droite,
+colle en haut pendant le defilement. Sur petit ecran, il reste au-dessus du
+formulaire et se replie.
+
+FLUX :
+1. Au chargement de la fiche, puis a chaque frappe (600 ms apres la derniere),
+   a chaque changement de select, et a chaque modification de l'editeur riche
+   (evenement trix-change), #apercu-bloc envoie TOUT le formulaire en hx-post.
+   L'editeur Markdown emet un `input` a chaque frappe
+   (pages/static/pages/admin/editeur_markdown.js).
+2. pages/admin_apercu.py:vue_apercu_bloc_en_direct rend le bloc SANS
+   l'enregistrer et renvoie une <iframe srcdoc> (partials/apercu_iframe.html).
+3. pages/static/pages/admin/apercu.js ajuste la hauteur de l'iframe.
+hx-sync="this:replace" abandonne une requete en cours si une frappe plus
+recente arrive : on n'affiche jamais un apercu perime.
+/ The whole form is posted on load, on typing (600 ms debounce), on select
+change and on rich-editor change. The server renders the block WITHOUT saving
+it and returns an <iframe srcdoc>. Stale requests are replaced.
+
+`object_id` et non `original` : BlocAdmin.changeform_view remplace `original`
+par la PAGE du bloc (fil d'Ariane). / `object_id`, not `original`: the admin
+swaps `original` for the block's PAGE (breadcrumb).
+
+Les fichiers (images, video) ne sont pas envoyes. hx-vals ajoute seulement
+`fichiers_choisis` : les noms des champs fichier ou un fichier est choisi. Le
+serveur pose une image de remplacement a leur place
+(pages/admin_apercu.py:poser_les_images_de_remplacement).
+/ Files are not sent: hx-vals adds `fichiers_choisis`, the names of the file
+inputs holding a chosen file; the server shows placeholders.
+{% endcomment %}
+<details open id="apercu-bloc-panneau" data-testid="bloc-apercu-panneau"
+         x-data="{ largeur_apercu: '100%' }"
+         style="border: 1px solid var(--color-base-200); border-radius: 10px; padding: 12px; margin-bottom: 20px;
+                background-color: var(--color-base-50);">
+    <summary style="cursor: pointer; font-weight: 600; font-size: 0.9375rem; color: var(--color-font-important-light);">
+        <span class="material-symbols-outlined" aria-hidden="true" style="vertical-align: middle; font-size: 20px;">visibility</span>
+        {% translate "Aperçu en direct" %}
+    </summary>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 10px 0;">
+        <p style="font-size: 0.75rem; margin: 0; color: var(--color-base-500);">
+            {% translate "Le bloc s'affiche comme sur le site. Une image choisie apparaît d'abord sous forme d'emplacement hachuré : la vraie image s'affiche après l'enregistrement." %}
+        </p>
+        {# x-bind:style en OBJET : Alpine fusionne alors avec le style inline. #}
+        {# Une chaine remplacerait tout l'attribut style (bordure, marges...). #}
+        {# / Object x-bind:style merges with the inline style; a string would replace it. #}
+        <div role="group" aria-label="{% translate 'Largeur de l’aperçu' %}" style="display: flex; gap: 4px;">
+            <button type="button" x-on:click="largeur_apercu = '100%'"
+                    x-bind:aria-pressed="largeur_apercu === '100%'"
+                    x-bind:style="largeur_apercu === '100%' ? { backgroundColor: 'var(--color-primary-600)', color: 'white' } : { backgroundColor: 'transparent', color: 'inherit' }"
+                    data-testid="bloc-apercu-bureau"
+                    style="padding: 4px 10px; border-radius: 6px; border: 1px solid var(--color-base-200); cursor: pointer; font-size: 0.75rem;">
+                {% translate "Ordinateur" %}
+            </button>
+            <button type="button" x-on:click="largeur_apercu = '390px'"
+                    x-bind:aria-pressed="largeur_apercu === '390px'"
+                    x-bind:style="largeur_apercu === '390px' ? { backgroundColor: 'var(--color-primary-600)', color: 'white' } : { backgroundColor: 'transparent', color: 'inherit' }"
+                    data-testid="bloc-apercu-mobile"
+                    style="padding: 4px 10px; border-radius: 6px; border: 1px solid var(--color-base-200); cursor: pointer; font-size: 0.75rem;">
+                {% translate "Mobile" %}
+            </button>
+        </div>
+    </div>
+
+    <div style="max-width: 100%; margin: 0 auto;" x-bind:style="{ width: largeur_apercu }">
+        {# Pas d'aria-live ici : l'apercu change a chaque frappe, un lecteur #}
+        {# d'ecran l'annoncerait sans cesse. Seules les erreurs (role="status" #}
+        {# dans partials/apercu_erreurs.html) sont annoncees. #}
+        {# / No aria-live: the preview changes on every keystroke. Only errors #}
+        {# (role="status") are announced. #}
+        <div id="apercu-bloc"
+             data-testid="bloc-apercu"
+             hx-post="{% url 'staff_admin:pages_bloc_apercu' %}"
+             hx-include="closest form"
+             hx-vals="js:{bloc_uuid: '{{ object_id|default:''|escapejs }}', fichiers_choisis: Array.from(document.querySelectorAll('#bloc_form input[type=file]')).filter(champ => champ.files.length > 0).map(champ => champ.name).join(',')}"
+             hx-trigger="load, input delay:600ms from:closest form, change from:closest form, trix-change delay:600ms from:closest form"
+             hx-sync="this:replace"
+             style="background-color: white; border-radius: 8px; overflow: hidden; min-height: 80px;">
+            <p role="status" style="padding: 16px; font-size: 0.875rem; color: var(--color-base-500);">{% translate "Chargement de l'aperçu…" %}</p>
+        </div>
+    </div>
+</details>
+<script src="{% static 'pages/admin/apercu.js' %}"></script>

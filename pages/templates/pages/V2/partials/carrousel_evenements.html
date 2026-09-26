@@ -2,15 +2,15 @@
 {% load tibitags %}
 
 <div id="eventCarousel" class="carousel slide"{% if auto|default:true %} data-bs-ride="carousel"{% endif %}>
-    <div class="carousel-inner" style="max-height: {{ max_height|default:'33vh' }};">
+    <div class="carousel-inner" style="max-height: {{ max_height|default:'max(33vh, 12rem)' }};">
         {% for slide in carousel %}
             {% if slide.link %}
             <a href="{{ slide.link }}" target="_blank" class="carousel-item{% if forloop.first %} active{% endif %}">
-                {% include 'commun/partials/picture.html' with img=slide.img alt=slide.name style='max-height: 33vh' %}
+                {% include 'commun/partials/picture.html' with img=slide.img alt=slide.name style='max-height: max(33vh, 12rem)' %}
             </a>
             {% else %}
             <div class="carousel-item{% if forloop.first %} active{% endif %}">
-                {% include 'commun/partials/picture.html' with img=slide.img alt=slide.name style='max-height: 33vh' %}
+                {% include 'commun/partials/picture.html' with img=slide.img alt=slide.name style='max-height: max(33vh, 12rem)' %}
             </div>
             {% endif %}
         {% endfor %}

@@ -1,26 +1,87 @@
 {% load static i18n %}
+{% comment %}
+PAVE NUMERIQUE — composant Cotton
+/ Numeric keypad — Cotton component
+
+LOCALISATION : laboutik/templates/cotton/numpad.html
+Style : static/css/numpad.css (maquette TEMP-tibillet-laboutik-main :
+.card-keypad / .card-key). Il suit l'echelle --k des popups V2.
+
+Chaque touche envoie l'evenement 'keypadSendValue' a l'element cible
+(sendEvent, tibilletUtils.js). Le composant ne garde aucun etat :
+c'est la cible qui assemble le montant.
+/ Each key sends 'keypadSendValue' to the target element. The component
+keeps no state: the target builds the amount.
+
+ORDRE DES TOUCHES (maquette) : 1 2 3 / 4 5 6 / 7 8 9 / , 0 effacer
+
+PARAMETRES :
+- id        : id unique du pave (obligatoire, pour attacher l'ecouteur).
+- ck-target : selecteur CSS de la cible qui recoit 'keypadSendValue'.
+- effacer   : role de la derniere touche.
+              "C"      (defaut) → envoie "C" : tout effacer.
+              "retour" → touche ⌫, envoie "Backspace" : efface un chiffre.
+- virgule   : "oui" (defaut) → touche « , ». "non" → case vide a la place,
+              pour les saisies en nombre entier (grammes, centilitres).
+
+VALEURS ENVOYEES dans event.detail.key :
+"0" a "9", "." (touche affichee « , »), "C" ou "Backspace".
+
+Utilise par / Used by :
+- laboutik/partial/hx_managed_card.html (effacer="C")
+- laboutik/partial/hx_card_recharge.html, montant libre (effacer="retour")
+- cotton/articles.html, modele clone par tarif.js pour les tarifs au poids
+  (effacer="retour", virgule="non")
+{% endcomment %}
+<c-vars effacer="C" virgule="oui" />
 <link rel="stylesheet" href="{% static 'css/numpad.css' %}" />
-<div {{ attrs }} class="numpad-content">
-  <div class="numpad-touch numpad-size">7</div>
-  <div class="numpad-touch numpad-size">8</div>
-  <div class="numpad-touch numpad-size">9</div>
-  <div class="numpad-touch numpad-size">4</div>
-  <div class="numpad-touch numpad-size">5</div>
-  <div class="numpad-touch numpad-size">6</div>
-  <div class="numpad-touch numpad-size">1</div>
-  <div class="numpad-touch numpad-size">2</div>
-  <div class="numpad-touch numpad-size">3</div>
-  <div class="numpad-touch numpad-size">0</div>
-  <div class="numpad-touch numpad-size">.</div>
-  <div class="numpad-touch numpad-size">C</div>
+<div {{ attrs }} class="numpad-content" role="group" aria-label="{% translate 'Pavé numérique' %}" data-cible="{{ ck_target }}">
+  <button type="button" class="numpad-touch" data-key="1">1</button>
+  <button type="button" class="numpad-touch" data-key="2">2</button>
+  <button type="button" class="numpad-touch" data-key="3">3</button>
+  <button type="button" class="numpad-touch" data-key="4">4</button>
+  <button type="button" class="numpad-touch" data-key="5">5</button>
+  <button type="button" class="numpad-touch" data-key="6">6</button>
+  <button type="button" class="numpad-touch" data-key="7">7</button>
+  <button type="button" class="numpad-touch" data-key="8">8</button>
+  <button type="button" class="numpad-touch" data-key="9">9</button>
+  {% if virgule == "non" %}
+    {# Saisie entiere : pas de virgule, la case reste vide / Integer entry: empty cell #}
+    <span class="numpad-vide" aria-hidden="true"></span>
+  {% else %}
+    <button type="button" class="numpad-touch" data-key="." aria-label="{% translate 'virgule' %}">,</button>
+  {% endif %}
+  <button type="button" class="numpad-touch" data-key="0">0</button>
+  {% if effacer == "retour" %}
+    <button type="button" class="numpad-touch numpad-touch--effacer" data-key="Backspace"
+            aria-label="{% translate 'Effacer le dernier chiffre' %}">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M8.5 5.5H20a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H8.5L2.5 12z"/>
+          <path d="m11.5 9.5 5 5m0-5-5 5"/>
+        </g>
+      </svg>
+    </button>
+  {% else %}
+    <button type="button" class="numpad-touch numpad-touch--effacer" data-key="C"
+            aria-label="{% translate 'Tout effacer' %}">C</button>
+  {% endif %}
   <script>
-  function manageKeyboard(event) {
-    const element = event.target
-    if(element.className.includes('numpad-touch')) {
-      const key = element.textContent
-      sendEvent('keypadSendValue','{{ ck_target }}', {key})
+    /**
+     * Envoie la touche pressee a la cible du pave (data-cible).
+     * / Sends the pressed key to the keypad target (data-cible).
+     *
+     * LOCALISATION : laboutik/templates/cotton/numpad.html
+     * Emet : 'keypadSendValue' { key } → element de data-cible
+     */
+    function numpadEnvoyerTouche(event) {
+      const touchePressee = event.target.closest('.numpad-touch')
+      if (!touchePressee) {
+        return
+      }
+      const selecteurDeLaCible = event.currentTarget.dataset.cible
+      sendEvent('keypadSendValue', selecteurDeLaCible, { key: touchePressee.dataset.key })
     }
-  }
-  document.querySelector('#{{ id }}').addEventListener('click', manageKeyboard)
+    document.querySelector('#{{ id }}').addEventListener('click', numpadEnvoyerTouche)
   </script>
 </div>

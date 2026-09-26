@@ -122,7 +122,7 @@
 }
 
 /* pour une largeur supérieure 1022 pixels */
-@media only screen and (width > 1022px) {
+@media only screen and (min-width: 1023px) {
 
 	/* effacer le bouton addition */
 	#bt-show-addition {
@@ -131,23 +131,15 @@
 }
 
 /* pour une largeur supérieure 1199 pixels */
-@media only screen and (width > 1199px) {
+@media only screen and (min-width: 1200px) {
 	.category-item {
 		height: 90px;
 	}
 }
 
-/* Mobile : sidebar plus étroite pour maximiser l'espace articles
-   / Mobile: narrower sidebar to maximize articles space */
-@media only screen and (max-width: 599px) {
-	/*.category-item {*/
-	/*	height: 52px;*/
-	/*}*/
-}
-
 @media only screen and (max-width : 1022px) {
 	#categories{
-		height: calc(100% - 200px);
+		height: calc(100% - var(--addition-collapsed-height));
 	}
 	.category-icon {
 		font-size: calc(var(--cat-icon-size) - 5px);
@@ -208,8 +200,9 @@
 	opacity: 1;
 }
 
-/* sunmi d3mini -- pour une largeur supérieure ou égale à 1278 pixels */
-@media only screen and (width > 1278px) {
+/* Grand ecran (sunmi d3mini, 1280 px) : seuil aligne sur 1199 px, comme header.css
+   / Large screen: breakpoint aligned on 1199px, like header.css */
+@media only screen and (min-width: 1200px) {
 	:root {
 		--cat-width: 8%;
 	}

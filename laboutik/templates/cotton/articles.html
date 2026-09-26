@@ -37,16 +37,12 @@
 		{% endcomment %}
 		style="{% if article.couleur_backgr %}--legacy:{{ article.couleur_backgr }};{% endif %}{% if article.couleur_texte %}--legacy-ink:{{ article.couleur_texte }};{% endif %}"
 		data-testid="article-{{ article.id }}">
-		<!-- Icône catégorie — petit badge haut-gauche
-		     Deux systèmes : MS (<span>) ou FA (<i>)
-		     / Category icon — small badge top-left
-		     Two systems: MS (<span>) or FA (<i>) -->
+		<!-- Icône catégorie — petit badge haut-gauche, Material Symbols
+		     (nom choisi dans le selecteur de l admin : ICON_POS)
+		     / Category icon — small badge top-left, Material Symbols -->
 		{% if article.categorie.icone_type == "ms" %}
 		<span class="material-symbols-outlined article-cat-icon"
 		      aria-hidden="true">{{ article.categorie.icon }}</span>
-		{% elif article.categorie.icone_type == "fa" %}
-		<i class="fas {{ article.categorie.icon }} article-cat-icon"
-		   aria-hidden="true"></i>
 		{% endif %}
 
 		{% comment %}
@@ -84,9 +80,6 @@
 			{% elif article.icone_type == "ms" %}
 			<span class="material-symbols-outlined article-visual-icon"
 			      aria-hidden="true">{{ article.icone }}</span>
-			{% elif article.icone_type == "fa" %}
-			<i class="fas {{ article.icone }} article-visual-icon"
-			   aria-hidden="true"></i>
 			{% endif %}
 		</div>
 		<!-- Nom de l'article — zone entre le visuel et le footer
@@ -120,7 +113,7 @@
 					{% if tarif.poids_mesure %}
 					<span class="article-tarif-pill article-tarif-pill-poids"
 					      aria-label="{% translate 'au poids' %}">
-						<i class="fas fa-balance-scale" aria-hidden="true"></i>
+						<span class="material-symbols-outlined" aria-hidden="true">scale</span>
 						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{{ tarif.prix_reference_label }}
 					</span>
 					{% elif tarif.free_price %}
@@ -142,7 +135,7 @@
 			<div class="article-tarifs-pills">
 				<span class="article-tarif-pill article-tarif-pill-poids"
 				      aria-label="{% translate 'au poids' %}">
-					<i class="fas fa-balance-scale" aria-hidden="true"></i>
+					<span class="material-symbols-outlined" aria-hidden="true">scale</span>
 					{{ article.prix|divide_by:100|floatformat:"-2" }}{{ article.prix_reference_label }}
 				</span>
 			</div>
@@ -171,6 +164,26 @@
 	{% endif %}{# fin if uuidArticlePaiementFractionne #}
 	{% endfor %}
 </div>
+{% comment %}
+MODELES DU PAVE NUMERIQUE DE LA POPUP DE TARIF (poids / mesure, prix libre)
+/ Keypad templates for the rate popup (weight / measure, free price)
+
+Le pave est le composant serveur cotton/numpad.html. La popup de tarif, elle,
+est construite en JS (tarif.js) : elle clone ces modeles pour chaque tarif au
+poids ou a prix libre. Le <template> est HORS de #products, car la popup remplace le contenu
+de #products pendant qu'elle est ouverte.
+Poids : saisie en nombre entier (grammes, centilitres), pas de touche virgule.
+Prix libre : montant avec virgule. Dans les deux, la derniere touche efface un chiffre.
+/ The keypad is the server component; tarif.js clones this template for each
+weight price. Kept OUTSIDE #products, which the popup replaces while open.
+{% endcomment %}
+<template id="tarif-modele-pave">
+	<c-numpad id="tarif-pave-modele" effacer="retour" virgule="non" />
+</template>
+{# Prix libre : montant en euros, avec virgule / Free price: amount with a comma #}
+<template id="tarif-modele-pave-montant">
+	<c-numpad id="tarif-pave-montant-modele" effacer="retour" />
+</template>
 <script src="{% static 'js/tarif.js' %}"></script>
 <script src="{% static 'js/articles.js' %}"></script>
 <!-- Variable Django — doit rester inline / Must stay inline (Django template variable) -->

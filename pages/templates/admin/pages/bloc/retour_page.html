@@ -1,0 +1,28 @@
+{% load i18n %}
+{% comment %}
+BOUTON « RETOUR A LA PAGE » — en haut de la fiche d'un bloc
+/ "Back to the page" button — at the top of a block form
+
+LOCALISATION : pages/templates/admin/pages/bloc/retour_page.html
+
+Pose par BlocAdmin.change_form_outer_before_template : AU-DESSUS du <form>,
+sur toute la largeur. `url_retour_page` et `page_du_bloc` viennent de
+BlocAdmin.changeform_view (bloc existant, ou ?page= a l'ajout). Le lien
+ramene a la section « Contenu de la page » de la fiche Page.
+Le formulaire a `warn_unsaved_form` : si des modifications ne sont pas
+enregistrees, le navigateur demande confirmation avant de partir.
+/ Placed ABOVE the form. Leads back to the "Page content" section. Unsaved
+changes trigger the browser's leave confirmation (warn_unsaved_form).
+{% endcomment %}
+{% if url_retour_page %}
+    <div style="margin-bottom: 16px;">
+        <a href="{{ url_retour_page }}"
+           data-testid="bloc-retour-page"
+           style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px;
+                  border: 1px solid var(--color-base-200); background-color: var(--color-base-50);
+                  color: var(--color-font-important-light); font-size: 0.875rem; font-weight: 500; text-decoration: none;">
+            <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 18px;">arrow_back</span>
+            {% blocktranslate with titre=page_du_bloc.titre %}Retour à la page « {{ titre }} »{% endblocktranslate %}
+        </a>
+    </div>
+{% endif %}

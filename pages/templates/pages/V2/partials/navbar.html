@@ -46,24 +46,23 @@ A CONSERVER (utilisés par du JS, du HTMX ou des tests) :
                 </a>
 
                 {% comment %}
-RETOUR VERS LE LIEU — uniquement sur /my_account/, et c'est voulu.
+RETOUR VERS LE LIEU — sur toutes les pages /my_account/*, et c'est voulu.
 
 Ce test est le MIROIR EXACT de celui qui masque l'en-tête du lieu dans
-pages/V2/shell.html et pages/V2/headless.html : cette page est la SEULE où le
-bandeau du lieu — donc son lien « Accueil » — n'existe pas. Sans ce retour, on y
-est en cul-de-sac. Les sous-pages du compte gardent le bandeau ET le
-« ← Mon espace » de account_base.html : rien à ajouter chez elles, un troisième
-chemin de retour n'y serait que du bruit.
+pages/V2/shell.html et pages/V2/headless.html : les pages du compte (accueil ET
+sous-pages) sont les SEULES où le bandeau du lieu — donc son lien « Accueil » —
+n'existe pas. Sans ce retour, on y est en cul-de-sac.
+`slice:":12"` garde les 12 premiers caractères du chemin, soit "/my_account/".
 Écrit à l'identique des deux autres pour que les trois ne divergent pas : si la
 condition change là-bas, elle doit changer ici.
 
 Le libellé est le nom du lieu, donc une DONNÉE : aucune nouvelle chaîne à
 traduire, et le lien dit où il mène plutôt qu'un « retour » abstrait.
 / Mirror of the guard hiding the venue header in shell.html and headless.html:
-this is the only page without the venue's "Accueil" link. Sub-pages keep both the
-header and "← Mon espace". The label is data, so no new msgid.
+account pages (home and sub-pages) are the only ones without the venue's
+"Accueil" link. The label is data, so no new msgid.
 {% endcomment %}
-                {% if request.path == '/my_account/' %}
+                {% if request.path|slice:":12" == '/my_account/' %}
                     <a class="link" href="/"
                        hx-get="/" hx-target="body" hx-push-url="true"
                        data-testid="user-bar-retour-lieu">

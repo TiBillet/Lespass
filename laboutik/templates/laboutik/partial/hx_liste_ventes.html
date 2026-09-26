@@ -1,84 +1,52 @@
 {% load i18n laboutik_filters %}
+{% comment %}
+HISTORIQUE DE COMMANDE — liste des ventes du service en cours
+/ ORDER HISTORY — sales list of the current shift
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_liste_ventes.html
+Maquette : TEMP-tibillet-laboutik-main/caisse (#detailSection, mode « commandes »)
+Style : static/css/ventes.css (.detail-filters, .ventes-table, .ventes-ligne-cliquable)
+
+Vue : CaisseViewSet.liste_ventes (laboutik/views.py), via _rendre_vue_ventes.
+
+TROIS RENDUS :
+1. Page 1, cible #detail-contenu : bouton « Historique de commande » de l'ecran
+   Ventes (hx_recap_en_cours.html), ou changement d'un filtre. Liste seule.
+2. Page 1, page complete (rechargement, lien direct) : la meme liste dans
+   .ventes-body, entouree d'un #detail-contenu pour que les filtres marchent pareil.
+3. Page > 1 : scroll infini, seulement des <tr> (le loader remplace sa ligne).
+
+Pattern collapse (detail d'une vente) :
+- Clic sur une ligne → insere un <tr> detail en dessous (toggleDetailVente)
+- Re-clic sur la meme ligne → retire le <tr> detail
+- Clic sur une autre ligne → retire l'ancien detail, ouvre le nouveau
+{% endcomment %}
 {% if page_courante == 1 %}
-<div class="ventes-container" data-testid="ventes-liste">
-    <!--
-    LISTE DES VENTES — Historique du service en cours avec collapse detail
-    / SALES LIST — Current shift history with collapsible detail
+{% if request.htmx.target != "detail-contenu" %}
+<div class="ventes-body">
+  <div class="ventes-view">
+    <h2 class="ventes-page-titre">{% translate "Historique de commande" %}</h2>
+    <div id="detail-contenu" class="detail-contenu" aria-live="polite">
+{% endif %}
 
-    LOCALISATION : laboutik/templates/laboutik/partial/hx_liste_ventes.html
-
-    Pattern collapse :
-    - Clic sur une ligne → insere un <tr> detail en dessous (hx-get afterend)
-    - Re-clic sur la meme ligne → retire le <tr> detail (toggle JS minimal)
-    - Clic sur une autre ligne → retire l'ancien detail, ouvre le nouveau
-    - Pas de hide/show, pas de perte de scroll, pas de zone separee
-    -->
-
-    <div class="ventes-tabs" role="tablist" aria-label="{% translate 'Vues du rapport' %}">
-        <button class="ventes-tab"
-                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=toutes&{{ params_ventes }}"
-                hx-target="#ventes-zone"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                role="tab" aria-selected="false"
-                data-loading-disable
-                data-testid="tab-toutes">
-            {% translate "Toutes caisses" %}
-        </button>
-        <button class="ventes-tab"
-                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=par_pv&{{ params_ventes }}"
-                hx-target="#ventes-zone"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                role="tab" aria-selected="false"
-                data-loading-disable
-                data-testid="tab-par-pv">
-            {% translate "Par point de vente" %}
-        </button>
-        <button class="ventes-tab"
-                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=par_moyen&{{ params_ventes }}"
-                hx-target="#ventes-zone"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                role="tab" aria-selected="false"
-                data-loading-disable
-                data-testid="tab-par-moyen">
-            {% translate "Par moyen" %}
-        </button>
-        <button class="ventes-tab"
-                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=detail_articles&{{ params_ventes }}"
-                hx-target="#ventes-zone"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                role="tab" aria-selected="false"
-                data-loading-disable
-                data-testid="tab-detail-articles">
-            {% translate "Détail articles" %}
-        </button>
-        <button class="ventes-tab ventes-tab-active"
-                role="tab" aria-selected="true"
-                data-testid="tab-liste-ventes">
-            <i class="fas fa-list" aria-hidden="true"></i>
-            {% translate "Liste ventes" %}
-        </button>
-    </div>
-
+<div class="liste-ventes" data-testid="ventes-liste">
     {% if aucune_vente %}
-    <div class="ventes-message-vide" data-testid="liste-aucune-vente">
-        <i class="fas fa-info-circle" aria-hidden="true"></i>
+    <p class="ventes-vide" data-testid="liste-aucune-vente">
         {% translate "Aucune vente depuis la dernière clôture" %}
-    </div>
+    </p>
     {% else %}
 
-    <div class="ventes-filtres" data-testid="liste-filtres">
+    {# Filtres : la liste revient du serveur dans #detail-contenu #}
+    {# / Filters: the list comes back from the server into #detail-contenu #}
+    <div class="detail-filters" data-testid="liste-filtres">
         <select name="pv"
                 hx-get="{% url 'laboutik-caisse-liste_ventes' %}?{{ params_ventes }}"
-                hx-target="#ventes-zone"
+                hx-target="#detail-contenu"
                 hx-swap="innerHTML"
                 hx-include="[name='moyen']"
-                class="ventes-filtre-select"
-                aria-label="{% translate 'Filtrer par point de vente' %}">
-            <option value="">{% translate "Tous les PV" %}</option>
+                aria-label="{% translate 'Filtrer par point de vente' %}"
+                data-testid="liste-filtre-pv">
+            <option value="">{% translate "Tous les points de vente" %}</option>
             {% for pv_item in points_de_vente %}
             <option value="{{ pv_item.uuid }}" {% if filtre_pv == pv_item.uuid|stringformat:"s" %}selected{% endif %}>
                 {{ pv_item.name }}
@@ -88,11 +56,11 @@
 
         <select name="moyen"
                 hx-get="{% url 'laboutik-caisse-liste_ventes' %}?{{ params_ventes }}"
-                hx-target="#ventes-zone"
+                hx-target="#detail-contenu"
                 hx-swap="innerHTML"
                 hx-include="[name='pv']"
-                class="ventes-filtre-select"
-                aria-label="{% translate 'Filtrer par moyen de paiement' %}">
+                aria-label="{% translate 'Filtrer par moyen de paiement' %}"
+                data-testid="liste-filtre-moyen">
             <option value="">{% translate "Tous les moyens" %}</option>
             {% for moyen_item in moyens_paiement %}
             <option value="{{ moyen_item.code }}" {% if filtre_moyen == moyen_item.code %}selected{% endif %}>
@@ -102,39 +70,22 @@
         </select>
     </div>
 
-    <div class="ventes-liste-scroll" data-testid="liste-tableau">
+    <div class="table-wrap" data-testid="liste-tableau">
         <table class="ventes-table">
-            <!-- Largeurs explicites pour aligner colonnes et valeurs -->
-            <!-- / Explicit widths to align columns and values -->
-            <colgroup>
-                <col style="width: 12%;">
-                <col style="width: 22%;">
-                <col style="width: 18%;">
-                <col style="width: 24%;">
-                <col style="width: 24%;">
-            </colgroup>
             <thead>
                 <tr>
                     <th>{% translate "Heure" %}</th>
                     <th>{% translate "Articles" %}</th>
-                    <th class="text-end">{% translate "Total" %}</th>
-                    <th class="text-center">{% translate "Moyen" %}</th>
-                    <th>{% translate "PV" %}</th>
+                    <th>{% translate "Moyen" %}</th>
+                    <th>{% translate "Point de vente" %}</th>
+                    <th class="num">{% translate "Total" %}</th>
                 </tr>
             </thead>
             <tbody id="ventes-tbody">
                 {% for vente in ventes_groupees %}
-                <tr class="ventes-ligne-cliquable"
-                    {% if vente.cle_vente %}
-                    onclick="toggleDetailVente(this, '{% url 'laboutik-caisse-detail_vente' vente.cle_vente %}?{{ params_ventes }}')"
-                    {% endif %}
-                    data-testid="vente-ligne-{{ forloop.counter }}">
-                    <td>{{ vente.derniere_datetime|date:"H:i" }}</td>
-                    <td>{{ vente.nb_articles }} {% translate "article(s)" %}</td>
-                    <td class="text-end">{{ vente.total|euros }}</td>
-                    <td class="text-center"><span class="ventes-badge-moyen ventes-badge-{{ vente.moyen_paiement }}">{{ vente.moyen_paiement_label|default:vente.moyen_paiement }}</span></td>
-                    <td>{{ vente.nom_pv }}</td>
-                </tr>
+                {% include "laboutik/partial/_ligne_vente.html" with numero_ligne=forloop.counter %}
+                {% empty %}
+                <tr><td colspan="5" class="empty">{% translate "Aucune commande pour ces filtres" %}</td></tr>
                 {% endfor %}
 
                 {% if a_page_suivante %}
@@ -143,7 +94,7 @@
                     hx-swap="outerHTML"
                     hx-trigger="revealed"
                     data-testid="scroll-loader">
-                    <td colspan="5" class="text-center">
+                    <td colspan="5" class="empty">
                         <span class="visually-hidden">{% translate "Chargement..." %}</span>
                     </td>
                 </tr>
@@ -226,19 +177,15 @@ function toggleDetailVente(ligneTr, url) {
 }
 </script>
 
+{% if request.htmx.target != "detail-contenu" %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% else %}
 {% for vente in ventes_groupees %}
-<tr class="ventes-ligne-cliquable"
-    {% if vente.cle_vente %}
-    onclick="toggleDetailVente(this, '{% url 'laboutik-caisse-detail_vente' vente.cle_vente %}?{{ params_ventes }}')"
-    {% endif %}
-    data-testid="vente-ligne-scroll">
-    <td>{{ vente.derniere_datetime|date:"H:i" }}</td>
-    <td>{{ vente.nb_articles }} {% translate "article(s)" %}</td>
-    <td class="text-end">{{ vente.total|euros }}</td>
-    <td class="text-center"><span class="ventes-badge-moyen ventes-badge-{{ vente.moyen_paiement }}">{{ vente.moyen_paiement_label|default:vente.moyen_paiement }}</span></td>
-    <td>{{ vente.nom_pv }}</td>
-</tr>
+{% include "laboutik/partial/_ligne_vente.html" %}
 {% endfor %}
 
 {% if a_page_suivante %}
@@ -247,7 +194,7 @@ function toggleDetailVente(ligneTr, url) {
     hx-swap="outerHTML"
     hx-trigger="revealed"
     data-testid="scroll-loader">
-    <td colspan="5" class="text-center">
+    <td colspan="5" class="empty">
         <span class="visually-hidden">{% translate "Chargement..." %}</span>
     </td>
 </tr>

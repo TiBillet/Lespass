@@ -56,9 +56,14 @@
   --led-size: 14px;
 }
 
+/* #contenu = le <body> (voir base.html)
+   / #contenu is the <body> (see base.html) */
 #contenu {
-  width: 100vw;
+  /* 100% et 100dvh : pas de debordement de 100vw, bas d'ecran visible sur mobile
+     / 100% and 100dvh: no 100vw overflow, bottom visible on mobile */
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   background-color: var(--gris10);
   display: grid;
   grid-template-areas:
@@ -66,7 +71,34 @@
     "products addition"
     "win-bottom-left win-bottom-right";
   grid-template-rows: var(--header-height) var(--main-row2-height) var(--main-row3-height);
-  grid-template-columns: var(--main-grid-col1-width) var(--main-grid-col2-width);
+  /* minmax(0, ...) : une colonne ne peut pas s'elargir a cause de son contenu
+     / minmax(0, ...): a column cannot grow because of its content */
+  grid-template-columns: minmax(0, 56fr) minmax(0, 44fr);
+}
+
+/* ECRAN MOYEN ET PETIT (<= 1022px) : une seule colonne, les zones s'empilent.
+   Sur 2 colonnes, la colonne addition ne faisait que 141 px a 320 px.
+   / Medium and small screens: one column, areas stack. */
+@media only screen and (max-width: 1022px) {
+  #contenu {
+    grid-template-areas:
+      "header"
+      "products"
+      "addition"
+      "win-bottom-left"
+      "win-bottom-right";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--header-height) minmax(0, 1fr) auto auto auto;
+  }
+
+  /* addition.css met le panier en position absolue sous 1022 px (vue caisse).
+     Ici il a sa propre rangee de grille : on le remet dans le flux.
+     / addition.css makes the cart absolute below 1022px; here it has its own grid row. */
+  #addition {
+    position: static;
+    height: auto;
+    min-height: 0;
+  }
 }
 
 .header-background {

@@ -62,7 +62,9 @@
     border: 1px solid #ddd;
     border-radius: 999px;
     padding: 10px 16px;
-    font-size: 14px;
+    /* 16px minimum : en dessous, iOS zoome la page au toucher du champ. */
+    /* / 16px minimum: below that, iOS zooms the page on focus. */
+    font-size: 16px;
     outline: none;
     transition: border-color 150ms, box-shadow 150ms;
 }
@@ -129,6 +131,7 @@
 .explorer-container {
     display: flex;
     height: calc(100vh - 160px);
+    height: calc(100dvh - 160px);
 }
 
 .explorer-list {
@@ -145,6 +148,7 @@
     position: sticky;
     top: 0;
     height: calc(100vh - 160px);
+    height: calc(100dvh - 160px);
     border-left: 1px solid #eee;
 }
 
@@ -240,7 +244,7 @@
 
 /* Badges */
 .explorer-badge {
-    font-size: 11px;
+    font-size: 12px; /* 12px minimum lisible / 12px readable minimum */
     padding: 2px 8px;
     border-radius: 999px;
 }
@@ -473,7 +477,7 @@
 }
 
 .explorer-accordion-date {
-    font-size: 11px;
+    font-size: 12px;
     color: #999;
     flex-shrink: 0;
 }
@@ -647,8 +651,10 @@
 
 /* ============================================================
  * 8. Mobile (< 992px)
+ * 61.99rem = 991.84px : même seuil que explorer.js (innerWidth < 992).
+ * / Same threshold as explorer.js (innerWidth < 992).
  * ============================================================ */
-@media (max-width: 991.98px) {
+@media (max-width: 61.99rem) {
     /* Barre de recherche en colonne / Search bar stacked */
     .explorer-search-row {
         flex-direction: column;
@@ -686,6 +692,7 @@
     .explorer-map {
         width: 100%;
         height: calc(100vh - 140px);
+        height: calc(100dvh - 140px);
         position: relative;
         border-left: none;
         display: none;
@@ -717,6 +724,38 @@
 
     .explorer-card-title {
         font-size: 14px;
+    }
+
+    /* Écran étroit (< 30rem) : logo, titre, badges et distance sur une
+       seule rangée ne tenaient pas. Le titre s'écrivait un mot par ligne,
+       le badge « Vous êtes ici » sur 3 lignes, la distance sortait de la
+       carte. Le logo passe au-dessus, le titre prend toute la largeur,
+       badges et distance passent à la ligne en dessous.
+       / Narrow screens: logo on top, full-width title, badges and
+       distance wrap below. */
+    @media (max-width: 30rem) {
+        .explorer-card-focus {
+            flex-direction: column;
+        }
+
+        .explorer-card-header {
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 8px;
+        }
+
+        .explorer-card-title {
+            flex-basis: 100%;
+            overflow-wrap: anywhere;
+        }
+
+        .explorer-badge {
+            white-space: nowrap;
+        }
+
+        .explorer-badge--current {
+            margin-left: 0;
+        }
     }
 
     /* FAB visible sur mobile (enfant direct de body via block body_extras). */
