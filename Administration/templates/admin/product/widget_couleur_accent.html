@@ -1,0 +1,110 @@
+{% load i18n %}
+{% comment %}
+COULEUR D'ACCENT DE L'ÉCRAN DE LA TIREUSE — pastilles à choisir
+/ Tap screen accent color — swatches to pick from
+
+LOCALISATION : Administration/templates/admin/product/widget_couleur_accent.html
+
+Widget du champ « couleur_fond_pos » d'un fût (CouleurAccentTireuseWidget,
+Administration/admin/products.py : liste des couleurs et contrastes).
+
+Chaque pastille est un bouton radio caché + un label coloré.
+- Le formulaire envoie la couleur du radio coché : aucun JS.
+- La pastille choisie est entourée et cochée (CSS :checked).
+- Clavier : Tab pour entrer dans le groupe, flèches pour changer.
+- « Aucune » : pas de couleur, l'écran garde le cyan par défaut.
+- Si le fût a une couleur hors de la liste, elle est proposée en premier.
+/ Each swatch is a hidden radio + a colored label. No JS; CSS :checked
+shows the selection; arrow keys work; "None" keeps the default cyan.
+
+Variables : widget.name, couleur_actuelle, couleur_actuelle_hors_liste,
+couleurs_maquette, couleurs_variees.
+
+Styles : bloc <style> avec des classes préfixées, car Unfold n'embarque
+pas les classes Tailwind personnalisées.
+/ Prefixed <style> block: Unfold does not ship custom Tailwind classes.
+{% endcomment %}
+<style>
+  .pastilles-accent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  /* Radio caché mais toujours atteignable au clavier
+     / Radio hidden but still keyboard-reachable */
+  .pastilles-accent__radio { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .pastilles-accent__pastille {
+    position: relative; display: grid; place-items: center;
+    width: 32px; height: 32px; cursor: pointer;
+    border: 2px solid rgba(0, 0, 0, .15); border-radius: 8px;
+    color: #fff; font-size: 16px; font-weight: 700;
+    transition: transform .1s ease-out;
+  }
+  .pastilles-accent__pastille:hover { transform: scale(1.1); }
+  /* Pastille choisie : anneau + coche / Selected swatch: ring + check */
+  .pastilles-accent__radio:checked + .pastilles-accent__pastille {
+    outline: 3px solid var(--color-primary-600, #1d9e75); outline-offset: 2px;
+  }
+  .pastilles-accent__radio:checked + .pastilles-accent__pastille::after { content: "✓"; text-shadow: 0 0 3px rgba(0, 0, 0, .6); }
+  .pastilles-accent__radio:focus-visible + .pastilles-accent__pastille {
+    box-shadow: 0 0 0 5px rgba(0, 0, 0, .25);
+  }
+  /* « Aucune » : pastille barrée / "None": crossed swatch */
+  .pastilles-accent__pastille--aucune {
+    background: linear-gradient(135deg, #fff 45%, #d33 45%, #d33 55%, #fff 55%);
+  }
+  .pastilles-accent__radio:checked + .pastilles-accent__pastille--aucune::after { color: #333; text-shadow: none; }
+  /* Nom de la couleur, lu par les lecteurs d'écran seulement
+     / Color name, for screen readers only */
+  .pastilles-accent__texte-cache {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .pastilles-accent__separateur { width: 1px; height: 28px; margin: 0 4px; background: rgba(0, 0, 0, .15); }
+  @media (prefers-reduced-motion: reduce) { .pastilles-accent__pastille { transition: none; } }
+</style>
+
+<div class="pastilles-accent" role="radiogroup" aria-label="{% translate 'Couleur principale' %}" data-testid="fut-pastilles-accent">
+
+  {# Aucune couleur : l'écran garde le cyan par défaut / No color: default cyan #}
+  <input type="radio" class="pastilles-accent__radio" name="{{ widget.name }}" value=""
+         id="{{ widget.attrs.id }}_aucune" {% if not couleur_actuelle %}checked{% endif %}>
+  <label for="{{ widget.attrs.id }}_aucune" class="pastilles-accent__pastille pastilles-accent__pastille--aucune"
+         title="{% translate 'Aucune (cyan par défaut)' %}">
+    <span class="pastilles-accent__texte-cache">{% translate "Aucune (cyan par défaut)" %}</span>
+  </label>
+
+  {# Couleur actuelle hors liste : gardée pour ne rien perdre / Kept current color #}
+  {% if couleur_actuelle_hors_liste %}
+    <input type="radio" class="pastilles-accent__radio" name="{{ widget.name }}" value="{{ couleur_actuelle_hors_liste }}"
+           id="{{ widget.attrs.id }}_actuelle" checked>
+    <label for="{{ widget.attrs.id }}_actuelle" class="pastilles-accent__pastille"
+           style="background-color: {{ couleur_actuelle_hors_liste }};"
+           title="{% translate 'Couleur actuelle' %} ({{ couleur_actuelle_hors_liste }})">
+      <span class="pastilles-accent__texte-cache">{% translate "Couleur actuelle" %} {{ couleur_actuelle_hors_liste }}</span>
+    </label>
+  {% endif %}
+
+  <span class="pastilles-accent__separateur" aria-hidden="true"></span>
+
+  {# Maquette de l'écran de la tireuse / Tap screen mockup #}
+  {% for code_couleur, nom_couleur in couleurs_maquette %}
+    <input type="radio" class="pastilles-accent__radio" name="{{ widget.name }}" value="{{ code_couleur }}"
+           id="{{ widget.attrs.id }}_{{ forloop.counter }}_m" {% if couleur_actuelle == code_couleur %}checked{% endif %}>
+    <label for="{{ widget.attrs.id }}_{{ forloop.counter }}_m" class="pastilles-accent__pastille"
+           style="background-color: {{ code_couleur }};" title="{{ nom_couleur }}"
+           data-testid="fut-pastille-{{ code_couleur|slice:'1:' }}">
+      <span class="pastilles-accent__texte-cache">{{ nom_couleur }}</span>
+    </label>
+  {% endfor %}
+
+  <span class="pastilles-accent__separateur" aria-hidden="true"></span>
+
+  {# Variées, contraste ≥ 3:1 avec le blanc ET avec la carte sombre #}
+  {# / Varied, contrast ≥ 3:1 with white AND with the dark card #}
+  {% for code_couleur, nom_couleur in couleurs_variees %}
+    <input type="radio" class="pastilles-accent__radio" name="{{ widget.name }}" value="{{ code_couleur }}"
+           id="{{ widget.attrs.id }}_{{ forloop.counter }}_v" {% if couleur_actuelle == code_couleur %}checked{% endif %}>
+    <label for="{{ widget.attrs.id }}_{{ forloop.counter }}_v" class="pastilles-accent__pastille"
+           style="background-color: {{ code_couleur }};" title="{{ nom_couleur }}"
+           data-testid="fut-pastille-{{ code_couleur|slice:'1:' }}">
+      <span class="pastilles-accent__texte-cache">{{ nom_couleur }}</span>
+    </label>
+  {% endfor %}
+</div>

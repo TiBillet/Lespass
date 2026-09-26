@@ -223,7 +223,7 @@ class TireuseBec(models.Model):
     )
 
     fut_actif = models.ForeignKey(
-        "BaseBillet.Product",
+        "BaseBillet.FutProduct",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

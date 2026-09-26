@@ -26,7 +26,6 @@ Variable attendue : {{ bec }} — instance de TireuseBec
       <h1 class="beer-card__title">{{ bec.liquid_label }}</h1>
 
       {% include "controlvanne/partial/biere_pastilles.html" %}
-
       {% if bec.fut_actif.long_description %}
         <div class="beer-card__desc" data-testid="tireuse-description">
           {{ bec.fut_actif.long_description|safe }}

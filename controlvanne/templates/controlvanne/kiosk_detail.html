@@ -13,8 +13,18 @@ En mode DEMO : panneau simulateur du Pi (simu_pi.js).
 {% endcomment %}
 
 {% block title %}{{ config.organisation|default:"TiBillet" }} — {{ tireuse.nom_tireuse }}{% endblock %}
-
+{% block head %}
+    {% if tireuse.fut_actif.couleur_fond_pos %}
+        {# "Tireuse accent" est fourni par la couleur de fond du fut lié à la tireuse #}
+        <style>
+            body{
+                --tireuse-accent : {{ tireuse.fut_actif.couleur_fond_pos }}
+            }
+        </style>
+    {% endif %}
+{% endblock %}
 {% block content %}
+
   {# Conteneur lu par ecran_tireuse.js pour choisir le canal WebSocket #}
   {# / Container read by ecran_tireuse.js to pick the WebSocket channel #}
   <div id="cards-grid" data-slug-focus="{{ slug_focus }}" data-testid="kiosk-cards-grid">

@@ -1774,6 +1774,70 @@ class POSProductAdmin(ProductAdmin):
 # ---------------------------------------------------------------------------
 
 
+# Couleurs proposées pour l'accent de l'écran de la tireuse.
+# Sur l'écran, l'accent sert de FOND sous du texte blanc (fond de page,
+# pastille, case « Solde ») et de TEXTE sur la carte sombre #2a2d2f.
+# Les couleurs « variées » ont un contraste d'au moins 3:1 dans les deux cas
+# (seuil WCAG pour le gros texte). Les trois couleurs de la maquette sont
+# lisibles sur la carte sombre, mais faibles en fond sous du texte blanc
+# (cyan 2,4 · ambre 1,7 · corail 2,9).
+# / Tap screen accent colors. Varied ones: ≥ 3:1 as background under white
+# text AND as text on the dark card. Mockup ones are weak as background.
+COULEURS_ACCENT_MAQUETTE = [
+    ("#40b5d0", _("Cyan (maquette)")),
+    ("#ffbc3a", _("Ambre (maquette)")),
+    ("#ef7444", _("Corail (maquette)")),
+]
+COULEURS_ACCENT_VARIEES = [
+    ("#2f7fd8", _("Bleu roi")),
+    ("#6366f1", _("Indigo")),
+    ("#8b5cf6", _("Violet")),
+    ("#e05297", _("Rose")),
+    ("#e0457b", _("Framboise")),
+    ("#d9542c", _("Brique")),
+    ("#e0701e", _("Orange")),
+    ("#b8801a", _("Ocre")),
+    ("#7f8f1a", _("Olive")),
+    ("#2e9e5b", _("Vert")),
+    ("#1e9aa0", _("Sarcelle")),
+]
+
+
+class CouleurAccentTireuseWidget(forms.Widget):
+    """Choix de la couleur d'accent de l'écran de la tireuse, en pastilles.
+    Chaque pastille est un bouton radio : pas de JS, et la pastille choisie
+    est mise en évidence en CSS (:checked). Pas de sélecteur libre.
+    Si le fût a déjà une couleur hors de la liste, elle est gardée et
+    proposée en premier (« Couleur actuelle »), pour ne rien perdre.
+    / Tap screen accent color as radio swatches: no JS, CSS :checked shows
+    the selection. A current color outside the list is kept and offered first.
+    LOCALISATION : Administration/admin/products.py
+    Template : Administration/templates/admin/product/widget_couleur_accent.html"""
+
+    template_name = "admin/product/widget_couleur_accent.html"
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+
+        # Couleur actuelle du fût, en minuscules pour la comparer à la liste
+        # / Current keg color, lowercased to compare with the list
+        couleur_actuelle = (value or "").strip().lower()
+
+        codes_des_couleurs_proposees = []
+        for code_couleur, _nom in COULEURS_ACCENT_MAQUETTE + COULEURS_ACCENT_VARIEES:
+            codes_des_couleurs_proposees.append(code_couleur)
+
+        couleur_actuelle_hors_liste = ""
+        if couleur_actuelle and couleur_actuelle not in codes_des_couleurs_proposees:
+            couleur_actuelle_hors_liste = couleur_actuelle
+
+        context["couleur_actuelle"] = couleur_actuelle
+        context["couleur_actuelle_hors_liste"] = couleur_actuelle_hors_liste
+        context["couleurs_maquette"] = COULEURS_ACCENT_MAQUETTE
+        context["couleurs_variees"] = COULEURS_ACCENT_VARIEES
+        return context
+
+
 class FutProductForm(ProductAdminCustomForm):
     """Formulaire produit pour les futs de tireuse.
     Le champ categorie_article est cache et force a FUT.
@@ -1835,7 +1899,9 @@ class FutProductForm(ProductAdminCustomForm):
         required=False,
         label=_("POS background color"),
         help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
-        widget=UnfoldAdminColorInputWidget(),
+        # Pastilles de couleurs pour l'accent du kiosk (boutons radio)
+        # / Color swatches for the kiosk accent (radio buttons)
+        widget=CouleurAccentTireuseWidget(),
     )
 
     # Icone avec selecteur visuel Material Symbols
@@ -1880,6 +1946,10 @@ class FutProductForm(ProductAdminCustomForm):
             "img": (
                 _("Étiquette de la bière"),
                 _("Image affichée sur l'écran de la tireuse et en caisse."),
+            ),
+            "couleur_fond_pos": (
+                _("Couleur principale lié au fût"),
+                _("Couleur principale sur l'écran kiosk de la tireuse."),
             ),
         }
         for nom_du_champ, (libelle, aide) in libelles_ecran_tireuse.items():
@@ -2071,17 +2141,7 @@ class FutProductAdmin(ProductAdmin):
                     "short_description",
                     "long_description",
                     "img",
-                ),
-            },
-        ),
-        (
-            _("POS display"),
-            {
-                "fields": (
-                    "palette_pos",
-                    "couleur_texte_pos",
                     "couleur_fond_pos",
-                    "icon_pos",
                 ),
             },
         ),
