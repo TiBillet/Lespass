@@ -1775,31 +1775,32 @@ class POSProductAdmin(ProductAdmin):
 
 
 # Couleurs proposées pour l'accent de l'écran de la tireuse.
-# Sur l'écran, l'accent sert de FOND sous du texte blanc (fond de page,
-# pastille, case « Solde ») et de TEXTE sur la carte sombre #2a2d2f.
-# Les couleurs « variées » ont un contraste d'au moins 3:1 dans les deux cas
-# (seuil WCAG pour le gros texte). Les trois couleurs de la maquette sont
-# lisibles sur la carte sombre, mais faibles en fond sous du texte blanc
-# (cyan 2,4 · ambre 1,7 · corail 2,9).
-# / Tap screen accent colors. Varied ones: ≥ 3:1 as background under white
-# text AND as text on the dark card. Mockup ones are weak as background.
-COULEURS_ACCENT_MAQUETTE = [
-    ("#40b5d0", _("Cyan (maquette)")),
-    ("#ffbc3a", _("Ambre (maquette)")),
-    ("#ef7444", _("Corail (maquette)")),
-]
-COULEURS_ACCENT_VARIEES = [
-    ("#2f7fd8", _("Bleu roi")),
-    ("#6366f1", _("Indigo")),
-    ("#8b5cf6", _("Violet")),
-    ("#e05297", _("Rose")),
-    ("#e0457b", _("Framboise")),
-    ("#d9542c", _("Brique")),
-    ("#e0701e", _("Orange")),
-    ("#b8801a", _("Ocre")),
-    ("#7f8f1a", _("Olive")),
-    ("#2e9e5b", _("Vert")),
-    ("#1e9aa0", _("Sarcelle")),
+# Le texte de l'écran est TOUJOURS blanc (comme la maquette). L'accent sert :
+# - de FOND sous du texte blanc (fond de page, mention légale, pastille,
+#   case « Solde ») → contraste avec le blanc ≥ 4,5:1 (WCAG AA, texte normal) ;
+# - de TEXTE sur la carte sombre #2a2d2f (« Présentez votre carte », volume,
+#   bilan, tous en gros caractères) → contraste ≥ 3:1 (WCAG, gros texte).
+# Ces deux seuils ne laissent qu'une plage de luminosité très étroite : chaque
+# couleur ci-dessous a été calculée dans cette plage (≈ 4,55:1 et ≈ 3,05:1).
+# Les couleurs de la maquette (cyan, ambre, corail) ont été retirées : le texte
+# blanc était illisible dessus (2,4:1, 1,7:1, 2,9:1).
+# / Screen text is ALWAYS white. Each accent: ≥ 4.5:1 with white (background)
+# AND ≥ 3:1 on the dark card #2a2d2f (large text). Mockup colors removed.
+COULEURS_ACCENT = [
+    ("#1f75d8", _("Bleu")),
+    ("#127fa6", _("Pétrole")),
+    ("#138383", _("Sarcelle")),
+    ("#228747", _("Vert")),
+    ("#777b16", _("Olive")),
+    ("#a16b0d", _("Ocre")),
+    ("#b95c15", _("Rouille")),
+    ("#d0471e", _("Brique")),
+    ("#de323d", _("Rouge")),
+    ("#da3068", _("Framboise")),
+    ("#d22ca0", _("Magenta")),
+    ("#b345c9", _("Prune")),
+    ("#8b59e2", _("Violet")),
+    ("#6368e4", _("Indigo")),
 ]
 
 
@@ -1824,7 +1825,7 @@ class CouleurAccentTireuseWidget(forms.Widget):
         couleur_actuelle = (value or "").strip().lower()
 
         codes_des_couleurs_proposees = []
-        for code_couleur, _nom in COULEURS_ACCENT_MAQUETTE + COULEURS_ACCENT_VARIEES:
+        for code_couleur, _nom in COULEURS_ACCENT:
             codes_des_couleurs_proposees.append(code_couleur)
 
         couleur_actuelle_hors_liste = ""
@@ -1833,8 +1834,7 @@ class CouleurAccentTireuseWidget(forms.Widget):
 
         context["couleur_actuelle"] = couleur_actuelle
         context["couleur_actuelle_hors_liste"] = couleur_actuelle_hors_liste
-        context["couleurs_maquette"] = COULEURS_ACCENT_MAQUETTE
-        context["couleurs_variees"] = COULEURS_ACCENT_VARIEES
+        context["couleurs_proposees"] = COULEURS_ACCENT
         return context
 
 
@@ -1975,6 +1975,22 @@ class FutProductForm(ProductAdminCustomForm):
         """Pas de validation de categorie pour les futs.
         No category validation for keg products."""
         return self.cleaned_data.get("categorie_article", Product.FUT)
+
+    def clean_couleur_fond_pos(self):
+        """
+        La couleur d'accent est écrite dans le CSS du kiosk : on n'accepte
+        qu'un code hexadécimal #rrggbb (ou vide = cyan par défaut).
+        / The accent color is written into the kiosk CSS: only #rrggbb
+        (or empty = default cyan) is accepted.
+        """
+        couleur = (self.cleaned_data.get("couleur_fond_pos") or "").strip().lower()
+        if not couleur:
+            return couleur
+        if not re.fullmatch(r"#[0-9a-f]{6}", couleur):
+            raise forms.ValidationError(
+                _("Couleur invalide : utilisez le format #rrggbb.")
+            )
+        return couleur
 
     def clean(self):
         """Applique la palette selectionnee sur les champs couleur, puis valide.

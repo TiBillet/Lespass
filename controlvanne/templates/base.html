@@ -1,5 +1,18 @@
-{% load i18n static %}
-<!doctype html>
+{% load i18n static %}<!doctype html>
+{% comment %}
+BASE BOOTSTRAP DES PAGES OUTILS DE CONTROLVANNE
+/ Bootstrap base for controlvanne tool pages
+
+LOCALISATION : controlvanne/templates/base.html
+
+Utilisée par la page de calibration du débitmètre (calibration/page.html).
+Les écrans kiosk, eux, utilisent controlvanne/base_tireuse.html (sans Bootstrap).
+/ Used by the flow meter calibration page. Kiosk screens use base_tireuse.html.
+
+Fond sombre, cartes claires : la règle .card fixe la couleur du texte des
+cartes, pour ne pas répéter style="color:#111" dans chaque template.
+/ Dark background, light cards: .card sets the card text color once.
+{% endcomment %}
 <html lang="{{ LANGUAGE_CODE|default:'fr' }}">
 <head>
   <meta charset="utf-8" />
@@ -9,7 +22,7 @@
         href="{% static 'controlvanne/css/bootstrap.min.css' %}" />
   <style>
     body { background: #0b1116; color: #e6edf3; }
-    .card { background: #fcfcfd; border: 1px solid #213040; }
+    .card { background: #fcfcfd; border: 1px solid #213040; color: #111111; }
     .stat { font-variant-numeric: tabular-nums; }
   </style>
   {% block head %}{% endblock %}
@@ -23,7 +36,7 @@
       {% block nav_right %}{% endblock %}
     </div>
   </nav>
-  <main class="container" role="main" data-testid="kiosk-main">
+  <main class="container" data-testid="kiosk-main">
     {% block content %}{% endblock %}
   </main>
 

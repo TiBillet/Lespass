@@ -268,10 +268,15 @@
     }
     var payload = donnees.payload || donnees;
 
-    // Commandes envoyées par l'admin : changer de page ou recharger
-    // / Admin commands: change page or reload
-    if (payload.kiosk_url) { window.location.href = payload.kiosk_url; return; }
-    if (payload.kiosk_reload) { window.location.reload(); return; }
+    // Le fût a changé (ou a été modifié) dans l'admin : la fiche de la bière
+    // est rendue par le serveur, on recharge donc la page entière.
+    // Envoyé par demander_rechargement_des_kiosks (controlvanne/signals.py).
+    // / The keg changed in the admin: the beer sheet is server-rendered,
+    // so the whole page is reloaded.
+    if (payload.kiosk_reload) {
+      window.location.reload();
+      return;
+    }
 
     // Quelles tireuses sont concernées ? / Which taps are concerned?
     var uuid_cible = payload.tireuse_bec_uuid || "";

@@ -25,13 +25,13 @@ Variable attendue : {{ bec }} — instance de TireuseBec
          data-tireuse-uuid="{{ bec.uuid }}"
          data-etat="{% if bec.enabled %}veille{% else %}maintenance{% endif %}"
          data-prix-litre="{{ bec.prix_litre|unlocalize }}"
-         style="--niveau-fut: {% widthratio bec.reservoir_ml bec.reservoir_max_ml 100 %}%;"
+         style="--niveau-fut: {% widthratio bec.reservoir_ml bec.reservoir_max_ml 100 %}%;{% if bec.fut_actif.couleur_fond_pos %} --tireuse-accent: {{ bec.fut_actif.couleur_fond_pos }};{% endif %}"
          data-testid="kiosk-tap-card">
 
   <div class="vignette__tete">
     <div>
       <div class="vignette__nom-tireuse">{{ bec.nom_tireuse }}</div>
-      <h2 class="vignette__biere">{{ bec.liquid_label }}</h2>
+      <h2 class="vignette__biere">{% if bec.fut_actif %}{{ bec.liquid_label }}{% else %}{% translate "Aucun fût branché" %}{% endif %}</h2>
     </div>
     <span class="vignette__etat" aria-live="polite" data-testid="kiosk-tap-state">
       <span class="vignette__etat-veille">{% translate "En attente" %}</span>
@@ -45,13 +45,9 @@ Variable attendue : {{ bec }} — instance de TireuseBec
 
   {% include "controlvanne/partial/biere_pastilles.html" %}
 
-  {% if bec.prix_litre %}
-    <p class="vignette__prix">
-      {% blocktranslate with prix_verre=bec.prix_verre_25cl|floatformat:2 prix_litre=bec.prix_litre|floatformat:"-2" %}{{ prix_verre }} € / 25 cl (soit {{ prix_litre }} €/L){% endblocktranslate %}
-    </p>
-  {% endif %}
+  {% include "controlvanne/partial/biere_prix.html" with classe="vignette__prix" %}
 
-  <div class="card-facts" aria-live="polite">
+  <div class="card-facts">
     <div class="card-fact card-fact--accent">
       <span class="card-fact__label">{% translate "Solde" %}</span>
       <span class="card-fact__value" data-champ="solde">—</span>
@@ -62,7 +58,7 @@ Variable attendue : {{ bec }} — instance de TireuseBec
     </div>
   </div>
 
-  <p class="vignette__message" data-champ="message" aria-live="polite"></p>
+  <p class="vignette__message" data-champ="message"></p>
 
   {% if not bec.reservoir_illimite %}
     <div class="niveau-fut" data-testid="kiosk-tap-keg-level">

@@ -19,7 +19,7 @@ Admins enregistres sur staff_admin_site :
 import csv
 import datetime
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin import SimpleListFilter
 from django.db import connection
 from django.http import HttpResponse
@@ -325,7 +325,9 @@ class TireuseBecAdmin(ModelAdmin):
     def get_queryset(self, request):
         """Select_related terminal pour eviter une requete par ligne dans la liste.
         / select_related terminal to avoid one query per row in the list view."""
-        return super().get_queryset(request).select_related("terminal")
+        # fut_actif aussi : la colonne « fût » l'affiche sur chaque ligne
+        # / fut_actif too: the keg column shows it on each row
+        return super().get_queryset(request).select_related("terminal", "fut_actif")
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         """
@@ -435,7 +437,28 @@ class RfidSessionAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
+        # Une session facturée (liée à une LigneArticle) ne se supprime pas :
+        # elle fait partie de la trace comptable.
+        # / A billed session (linked to a LigneArticle) cannot be deleted.
+        if obj is not None and obj.ligne_article_id:
+            return False
         return TenantAdminPermissionWithRequest(request)
+
+    def delete_queryset(self, request, queryset):
+        """
+        Suppression groupée depuis la liste : on ne supprime que les sessions
+        non facturées, et on prévient si certaines ont été gardées.
+        / Bulk delete: only non-billed sessions are deleted.
+        """
+        sessions_facturees = queryset.filter(ligne_article__isnull=False)
+        nombre_de_sessions_gardees = sessions_facturees.count()
+        queryset.filter(ligne_article__isnull=True).delete()
+        if nombre_de_sessions_gardees:
+            messages.warning(
+                request,
+                _("%(nombre)s session(s) facturée(s) conservée(s) : elles font partie de la trace comptable.")
+                % {"nombre": nombre_de_sessions_gardees},
+            )
 
     @admin.display(description=_("Volume (cl)"), ordering="volume_delta_ml")
     def volume_servi_cl(self, obj):

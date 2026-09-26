@@ -40,3 +40,6 @@ class WsPayload(TypedDict, total=False):
 
     # --- Contrôle de flux ---
     force_close: bool  # True si Django demande la fermeture immédiate (solde épuisé)
+
+    # --- Rechargement de l'écran ---
+    kiosk_reload: bool  # True : le fût a changé, le kiosk recharge sa page (signals.py)

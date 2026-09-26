@@ -68,6 +68,16 @@
   --beer-liquid: #f5c045;     /* bière dans le verre / beer in the glass */
   --tireuse-alerte: var(--letchi);
 
+  /* Filets et voiles sur la carte sombre / Rules and veils on the dark card */
+  --tireuse-filet: rgba(255, 255, 255, .12);
+  --tireuse-filet-fort: rgba(255, 255, 255, .35);
+  --tireuse-verre-bord: rgba(255, 255, 255, .85);
+  --tireuse-verre-fond: rgba(255, 255, 255, .04);
+  --tireuse-mousse: rgba(255, 255, 255, .55);
+  --tireuse-panneau-demo: rgba(42, 45, 47, .95);
+  --tireuse-noir: #111111;
+  --tireuse-gris-clair: #e6e6e6;
+
   --tireuse-radius-sm: 4px;
   --tireuse-shadow-card: 0 4px 4px rgba(0, 0, 0, 0.25);
 
@@ -79,6 +89,17 @@
   --tireuse-fs-step: 18px;
   --tireuse-fs-legal: 16px;
   --tireuse-fs-brand: 14px;
+  --tireuse-fs-mention: 18px;          /* mention légale obligatoire / legal notice */
+  --tireuse-fs-min: 14px;              /* plus petit texte de la liste / smallest list text */
+  --tireuse-fs-title-long: 60px;       /* nom de bière de 13 à 20 caractères */
+  --tireuse-fs-title-tres-long: 44px;  /* nom de bière de plus de 20 caractères */
+  --tireuse-fs-serve-name: 48px;       /* nom de la bière pendant le service */
+  --tireuse-fs-readout: 56px;          /* volume sous le verre / volume under the glass */
+  --tireuse-fs-card-value: 26px;       /* valeurs Prix / Solde / Verres */
+  --tireuse-fs-serve-heading: 34px;    /* « Je me sers » */
+  --tireuse-fs-cheers: 40px;           /* « Bonne soif ! » */
+  --tireuse-fs-banner: 24px;           /* bandeau « connexion perdue » */
+  --tireuse-fs-list-title: clamp(28px, 8vw, 48px);
 
   /* --- Géométrie du cadre (écran 1280×800) / Frame geometry --- */
   --tireuse-frame-w: 1280px;
@@ -92,6 +113,7 @@
   --tireuse-label-h: 219px;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 /* Tous les éléments en Sonder Sans / Every Sonder Sans element */
@@ -112,6 +134,9 @@ html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
 body {
   margin: 0;
   font-family: var(--font-text);
+  /* Texte toujours blanc, comme la maquette. Les couleurs de fût proposées
+     dans l'admin sont choisies pour que le blanc reste lisible dessus.
+     / Text always white, like the mockup. */
   color: var(--tireuse-fg);
   background: var(--tireuse-accent);
   line-height: 1.6;
@@ -137,9 +162,15 @@ img { max-width: 100%; display: block; }
   padding: var(--space-3) var(--space-4);
   background: var(--zanana);
   color: var(--tireuse-ink);
+  border-bottom: 4px solid var(--tireuse-ink);
+  font-size: var(--tireuse-fs-banner);
   font-weight: 700;
   text-align: center;
 }
+/* Pendant la coupure, l'écran est atténué : les chiffres affichés sont
+   peut-être périmés. CSS pur (:has), le JS ne fait qu'enlever « hidden ».
+   / While disconnected the screen is dimmed: values may be stale. */
+body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 
 /* =================================================================
    PAGE D'UNE TIREUSE (kiosk_detail)
@@ -148,7 +179,7 @@ img { max-width: 100%; display: block; }
   min-height: 100vh;
   display: grid;
   place-items: center;
-  overflow: auto;
+  overflow-y: auto;
 }
 
 /* Cadre à taille fixe : la carte puis le bas de page.
@@ -219,6 +250,35 @@ img { max-width: 100%; display: block; }
   line-height: 1;
   overflow-wrap: anywhere;
 }
+/* Nom long : la taille baisse pour ne pas sortir du cadre de 1280×800.
+   La classe est posée par le template selon la longueur du nom.
+   / Long name: smaller size so it stays inside the frame. */
+.beer-card__title--long { font-size: var(--tireuse-fs-title-long); }
+.beer-card__title--tres-long { font-size: var(--tireuse-fs-title-tres-long); }
+/* Pendant le service, l'info utile est le volume et le solde, pas le nom :
+   nom sur une seule ligne, pastilles sur une seule rangée, pour laisser la
+   place au mode d'emploi et au verre.
+   / While serving, volume and balance matter more than the name: one-line
+   name and one row of chips, to leave room for the instructions and glass. */
+.serve2__beer-name {
+  font-size: var(--tireuse-fs-serve-name);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+}
+.serve2__ident .beer-specs {
+  flex-wrap: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  margin-top: var(--space-4);
+}
+.serve2__ident .beer-specs__item {
+  flex: 0 0 auto;
+  font-size: var(--tireuse-fs-step);
+  white-space: nowrap;
+}
 
 /* Pastilles : les cases se touchent, la 1re est remplie.
    / Chips: boxes touch each other, the first one is filled. */
@@ -237,18 +297,31 @@ img { max-width: 100%; display: block; }
   border: 1px solid var(--tireuse-fg);
   font-weight: 700;
   font-size: var(--tireuse-fs-body);
-  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .beer-specs__item + .beer-specs__item { margin-left: -1px; }
 .beer-specs__item:first-child { background: var(--tireuse-accent); }
 
+/* Description : texte de l'éditeur de l'admin (HTML). Limitée à 7 lignes
+   pour ne jamais pousser le prix et « Présentez votre carte » hors du cadre.
+   / Admin editor HTML, clamped to 7 lines to stay inside the frame. */
 .beer-card__desc {
   margin-top: var(--space-6);
   max-width: 719px;
   font-size: var(--tireuse-fs-body);
   line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 7;
+  line-clamp: 7;
   overflow: hidden;
 }
+/* Titres, listes et paragraphes de l'éditeur : même taille que le texte
+   / Editor headings, lists and paragraphs: same size as the text */
+.beer-card__desc :is(h1, h2, h3, h4, h5, h6) { margin: 0; font: inherit; font-weight: 700; }
+.beer-card__desc :is(ul, ol) { margin: 0; padding-left: 1.2em; }
+.beer-card__desc p { margin: 0; }
 .beer-card__price {
   margin-top: var(--space-7);
   font-weight: 700;
@@ -267,7 +340,7 @@ img { max-width: 100%; display: block; }
 .present-hint__icon {
   display: grid;
   place-items: center;
-  animation: nfc-pulse 1.6s ease-in-out infinite;
+  animation: nfc-pulse 1.6s var(--ease-in-out) infinite;
 }
 .present-hint__text {
   font-weight: 700;
@@ -286,7 +359,7 @@ img { max-width: 100%; display: block; }
   flex-direction: column;
   align-items: center;
   gap: var(--space-7);
-  padding-top: 22px;
+  padding-top: var(--space-5);
 }
 .beer-media__label {
   width: var(--tireuse-media-w);
@@ -316,7 +389,7 @@ img { max-width: 100%; display: block; }
   gap: var(--space-5);
   margin-bottom: var(--space-5);
   padding-bottom: var(--space-5);
-  border-bottom: 1px solid rgba(255, 255, 255, .12);
+  border-bottom: 1px solid var(--tireuse-filet);
 }
 .serve2__ident { display: flex; flex-direction: column; min-width: 0; }
 
@@ -363,7 +436,7 @@ img { max-width: 100%; display: block; }
 .card-fact__value {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 26px;
+  font-size: var(--tireuse-fs-card-value);
   line-height: 1.1;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -376,6 +449,7 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: stretch;
   min-height: 0;
+  overflow: hidden;
   margin-top: -1px;
 }
 .serve-block,
@@ -395,7 +469,7 @@ img { max-width: 100%; display: block; }
   margin: 0;
   font-family: var(--tireuse-font-title);
   font-weight: 900;
-  font-size: 34px;
+  font-size: var(--tireuse-fs-serve-heading);
 }
 .serve-block__steps {
   list-style: none;
@@ -422,7 +496,7 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-pill);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 15px;
+  font-size: var(--tireuse-fs-brand);
 }
 .step-line__text { font-size: var(--tireuse-fs-step); line-height: 1.25; }
 
@@ -444,9 +518,12 @@ img { max-width: 100%; display: block; }
 [data-etat="tirage"] .step-line[data-serve-step="1"],
 [data-etat="tirage"] .step-line[data-serve-step="2"] { opacity: .8; }
 
-/* Le verre : sa hauteur de bière vient de la variable --remplissage-verre
+/* Le verre : le niveau de bière vient de la variable --remplissage-verre
    (entre 0 et 1), posée par ecran_tireuse.js sur la racine de la tireuse.
-   / Glass: beer height comes from --remplissage-verre (0 to 1). */
+   La bière occupe tout le verre et descend avec translateY : on anime
+   transform, pas height (pas de recalcul de mise en page).
+   / Glass: beer level from --remplissage-verre (0 to 1). The beer fills the
+   glass and is moved with translateY: transform, not height, is animated. */
 .glass-block {
   display: flex;
   flex-direction: column;
@@ -458,20 +535,21 @@ img { max-width: 100%; display: block; }
   position: relative;
   width: 130px;
   height: 200px;
-  border: 4px solid rgba(255, 255, 255, .85);
+  border: 4px solid var(--tireuse-verre-bord);
   border-top: 0;
   border-radius: 6px 6px 22px 22px;
   overflow: hidden;
-  background: rgba(255, 255, 255, .04);
+  background: var(--tireuse-verre-fond);
 }
 .serve__liquid {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: calc(var(--remplissage-verre, 0) * 100%);
+  height: 100%;
   background: var(--beer-liquid);
-  transition: height .3s var(--ease-out);
+  transform: translateY(calc((1 - var(--remplissage-verre, 0)) * 100%));
+  transition: transform .3s var(--ease-out);
 }
 /* Mousse en haut du liquide / Foam on top */
 .serve__liquid::before {
@@ -481,18 +559,18 @@ img { max-width: 100%; display: block; }
   left: 0;
   right: 0;
   height: 12px;
-  background: rgba(255, 255, 255, .55);
+  background: var(--tireuse-mousse);
   border-radius: 50%;
 }
 .serve2__readout {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 28px;
+  font-size: var(--tireuse-fs-lead);
   white-space: nowrap;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.serve2__readout-value { color: var(--tireuse-accent); }
+.serve2__readout-value { color: var(--tireuse-accent); font-size: var(--tireuse-fs-readout); }
 .serve2__readout-unit { opacity: .7; }
 
 /* =================================================================
@@ -528,7 +606,14 @@ img { max-width: 100%; display: block; }
   margin-top: var(--space-3);
   font-family: var(--tireuse-font-title);
   font-weight: 900;
-  font-size: 40px;
+  font-size: var(--tireuse-fs-cheers);
+}
+
+/* Refus : un large liseré rouge autour de la carte, pour qu'on le distingue
+   du bilan d'un coup d'œil, même de loin et quelle que soit la couleur du fût.
+   / Refusal: a wide red border around the card, visible from afar. */
+.stage--refus .screen {
+  box-shadow: inset 0 0 0 10px var(--tireuse-alerte), var(--tireuse-shadow-card);
 }
 
 /* =================================================================
@@ -541,7 +626,9 @@ img { max-width: 100%; display: block; }
   justify-content: space-between;
   gap: var(--space-5);
 }
-.tireuse__legal { font-size: var(--tireuse-fs-legal); }
+/* Mention légale obligatoire : blanche sur l'accent, assez grande pour être lue.
+   / Mandatory legal notice: white on the accent, large enough to be read. */
+.tireuse__legal { font-size: var(--tireuse-fs-mention); font-weight: 700; line-height: 1.25; }
 .tireuse__brand {
   font-size: var(--tireuse-fs-brand);
   white-space: nowrap;
@@ -565,7 +652,7 @@ img { max-width: 100%; display: block; }
   margin: 0 0 var(--space-5);
   font-family: var(--tireuse-font-title);
   font-weight: 900;
-  font-size: 48px;
+  font-size: var(--tireuse-fs-list-title);
   line-height: 1.05;
   overflow-wrap: anywhere;
 }
@@ -578,6 +665,7 @@ img { max-width: 100%; display: block; }
 .tireuses-vide {
   padding: var(--space-6);
   background: var(--tireuse-ink);
+  color: var(--tireuse-fg);
   border-radius: var(--radius-s);
   font-size: var(--tireuse-fs-body);
 }
@@ -589,6 +677,7 @@ img { max-width: 100%; display: block; }
   min-width: 0;
   padding: var(--space-5);
   background: var(--tireuse-ink);
+  color: var(--tireuse-fg);
   border-radius: var(--radius-s);
   box-shadow: var(--tireuse-shadow-card);
 }
@@ -598,6 +687,7 @@ img { max-width: 100%; display: block; }
   align-items: flex-start;
   gap: var(--space-3);
 }
+.vignette__tete > div { min-width: 0; }
 .vignette__nom-tireuse {
   font-size: var(--tireuse-fs-legal);
   letter-spacing: .06em;
@@ -608,13 +698,13 @@ img { max-width: 100%; display: block; }
   margin: 0;
   font-family: var(--tireuse-font-title);
   font-weight: 900;
-  font-size: 36px;
+  font-size: clamp(28px, 7vw, 36px);
   line-height: 1.05;
   overflow-wrap: anywhere;
 }
 .vignette .beer-specs { margin-top: 0; }
 .vignette .beer-specs__item { font-size: var(--tireuse-fs-legal); padding: var(--space-1) var(--space-2); }
-.vignette__prix { font-weight: 700; font-size: 18px; }
+.vignette__prix { font-weight: 700; font-size: var(--tireuse-fs-mention); }
 
 /* Pastille d'état : un libellé par état, le CSS montre le bon.
    / State pill: one label per state, CSS shows the right one. */
@@ -622,8 +712,8 @@ img { max-width: 100%; display: block; }
   flex: 0 0 auto;
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .12);
-  font-size: var(--tireuse-fs-brand);
+  background: var(--tireuse-filet);
+  font-size: var(--tireuse-fs-min);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -640,21 +730,24 @@ img { max-width: 100%; display: block; }
 [data-etat="maintenance"] .vignette__etat { background: var(--zanana); color: var(--tireuse-ink); }
 
 .vignette .card-fact { padding: var(--space-2) var(--space-3); }
-.vignette .card-fact__label { font-size: 12px; }
-.vignette .card-fact__value { font-size: 20px; }
+.vignette .card-fact__label { font-size: var(--tireuse-fs-min); }
+/* Valeurs de la liste : peuvent passer à la ligne sur petit écran
+   / List values may wrap on small screens */
+.vignette .card-fact__value { font-size: 20px; white-space: normal; overflow-wrap: anywhere; }
 
 .vignette__message:empty { display: none; }
 .vignette__message {
-  font-size: var(--tireuse-fs-brand);
+  font-size: var(--tireuse-fs-min);
   opacity: .75;
 }
 
-/* Niveau du fût : largeur = --niveau-fut (un pourcentage).
-   / Keg level: width = --niveau-fut (a percentage). */
+/* Niveau du fût : --niveau-fut est un pourcentage (ex. 42%). La barre fait
+   toute la largeur et recule avec translateX : on anime transform, pas width.
+   / Keg level: --niveau-fut is a percentage; the bar is moved with translateX. */
 .niveau-fut__libelle {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: var(--tireuse-fs-min);
   letter-spacing: .06em;
   text-transform: uppercase;
   opacity: .7;
@@ -663,14 +756,15 @@ img { max-width: 100%; display: block; }
   height: 8px;
   margin-top: var(--space-1);
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .12);
+  background: var(--tireuse-filet);
   overflow: hidden;
 }
 .niveau-fut__barre {
-  width: var(--niveau-fut, 0%);
+  width: 100%;
   height: 100%;
   background: var(--beer-liquid);
-  transition: width .3s var(--ease-out);
+  transform: translateX(calc(var(--niveau-fut, 0%) - 100%));
+  transition: transform .3s var(--ease-out);
 }
 
 /* =================================================================
@@ -680,21 +774,35 @@ img { max-width: 100%; display: block; }
    définit ici, seulement dans le panneau.
    / Pi simulator (DEMO only). simu-* ids are read by simu_pi.js.
    ================================================================= */
+/* Le panneau est un <details> : replié, il ne montre qu'un petit bouton
+   « Simulateur » en haut à droite, hors du pied de page. Ouvert, il affiche
+   les contrôles. Aucun JS pour replier ou déplier.
+   / The panel is a <details>: collapsed, only a small "Simulator" button
+   shows at the top right, away from the footer. No JS to toggle. */
 .demo-sim {
   position: fixed;
   right: var(--space-4);
-  bottom: var(--space-4);
+  top: var(--space-4);
   z-index: 100;
-  width: min(380px, calc(100vw - 2 * var(--space-4)));
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  background: rgba(42, 45, 47, .95);
+  max-width: min(380px, calc(100vw - 2 * var(--space-4)));
+  background: var(--tireuse-panneau-demo);
+  color: var(--tireuse-fg);
   border: 1px dashed var(--zanana);
   border-radius: var(--radius-m);
   box-shadow: var(--tireuse-shadow-card);
   font-size: var(--tireuse-fs-brand);
+}
+.demo-sim__resume {
+  padding: var(--space-2) var(--space-4);
+  font-weight: 700;
+  cursor: pointer;
+}
+.demo-sim__resume:focus-visible { outline: 2px solid var(--zanana); outline-offset: 2px; }
+.demo-sim__contenu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-4);
 }
 .demo-sim__tete {
   display: flex;
@@ -715,20 +823,23 @@ img { max-width: 100%; display: block; }
   white-space: nowrap;
   cursor: pointer;
 }
-.demo-sim__btn:hover { background: #e6e6e6; }
+.demo-sim__btn:hover { background: var(--tireuse-gris-clair); }
 .demo-sim__btn:focus-visible { outline: 2px solid var(--zanana); outline-offset: 2px; }
 .demo-sim__btn:disabled { opacity: .4; cursor: not-allowed; }
 .demo-sim__btn--ghost {
   background: transparent;
   color: var(--tireuse-fg);
-  border: 1px solid rgba(255, 255, 255, .35);
+  border: 1px solid var(--tireuse-filet-fort);
 }
-.demo-sim__btn--ghost:hover { background: rgba(255, 255, 255, .1); }
+.demo-sim__btn--ghost:hover { background: var(--tireuse-filet); }
 .demo-sim__debit { display: flex; align-items: center; gap: var(--space-3); }
 .demo-sim__debit input { flex: 1 1 auto; min-width: 0; accent-color: var(--zanana); }
 .demo-sim__debit-valeur { min-width: 70px; text-align: right; font-weight: 700; }
 .demo-sim__indicateurs { display: flex; flex-wrap: wrap; gap: var(--space-3); }
-.demo-sim__message { opacity: .8; }
+/* Message du simulateur : gris clair, ou rouge en cas d'erreur (classe posée
+   par simu_pi.js) / Simulator message: light grey, or red on error */
+.demo-sim__message { color: var(--tireuse-gris-clair); }
+.demo-sim__message--erreur { color: var(--tireuse-alerte); font-weight: 700; }
 
 .demo-sim .badge {
   display: inline-block;
@@ -737,7 +848,7 @@ img { max-width: 100%; display: block; }
   font-size: 12px;
   font-weight: 700;
 }
-.demo-sim .bg-dark { background: #111; color: var(--tireuse-fg); }
+.demo-sim .bg-dark { background: var(--tireuse-noir); color: var(--tireuse-fg); }
 .demo-sim .bg-success { background: var(--chouchou); color: var(--tireuse-fg); }
 .demo-sim .bg-danger { background: var(--letchi); color: var(--tireuse-fg); }
 .demo-sim .bg-info { background: var(--tireuse-accent); color: var(--tireuse-ink); }

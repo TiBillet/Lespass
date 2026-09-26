@@ -15,7 +15,8 @@ Champs écrits par ecran_tireuse.js : message, volume-cl
 {% load i18n %}
 <section class="stage stage--maintenance" data-testid="tireuse-etape-maintenance">
   <div class="screen screen--center">
-    <div class="done" aria-live="polite">
+    {# Pas d'aria-live : le volume rincé change chaque seconde / No aria-live: volume changes every second #}
+    <div class="done">
       <div class="done__mark done__mark--maintenance" aria-hidden="true">
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
           <path d="M14.5 5.5 a4 4 0 0 0 -5 5 L4 16 l4 4 5.5 -5.5 a4 4 0 0 0 5 -5 l-2.5 2.5 -3 -1 -1 -3 z"

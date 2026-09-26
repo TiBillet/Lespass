@@ -18,7 +18,7 @@ Note : base.html (Bootstrap) reste en place pour la page de calibration.
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}{% translate "Tap panel" %}{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'controlvanne/css/tireuse.css' %}?v=1" />
+  <link rel="stylesheet" href="{% static 'controlvanne/css/tireuse.css' %}?v=5" />
   {% block head %}{% endblock %}
 </head>
 <body class="tireuse {% block body_class %}{% endblock %}">
@@ -27,8 +27,7 @@ Note : base.html (Bootstrap) reste en place pour la page de calibration.
   {# / WebSocket connection-lost banner, toggled by ecran_tireuse.js #}
   <div id="ws-status-banner"
        class="bandeau-connexion"
-       role="status"
-       aria-live="assertive"
+       role="alert"
        data-testid="kiosk-ws-banner"
        hidden>
     {% translate "Connexion au serveur perdue — reconnexion en cours…" %}

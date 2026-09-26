@@ -1,149 +1,167 @@
 {% extends "base.html" %}
 {% load i18n static %}
-{% block title %}Calibration — {{ tireuse.nom_tireuse }}{% endblock %}
+{% comment %}
+CALIBRATION DU DÉBITMÈTRE D'UNE TIREUSE
+/ Flow meter calibration for a tap
+
+LOCALISATION : controlvanne/templates/calibration/page.html
+
+Vue : calibration_page (controlvanne/calibration_views.py)
+
+FLUX :
+1. « Nouvelle série » : lien ?nouvelle_serie=1, le serveur redirige vers
+   ?depuis=<heure du serveur>.
+2. #sessions-poll charge les versements toutes les 8 s (HTMX,
+   partial_sessions.html).
+3. L'admin saisit les volumes lus sur le verre, puis envoie le formulaire.
+4. Succès : partial_serie_result.html remplace #sessions-poll (le polling
+   s'arrête). Erreur : statut 422, le formulaire revient avec le message.
+/ FLOW: new series link → polling of pours → volumes form → result or 422.
+
+Le seul JS de la page : jeton CSRF sur les requêtes HTMX, et acceptation
+des réponses 422 (htmx 2 : événement htmx:beforeSwap).
+/ Only JS: CSRF token on HTMX requests, and accepting 422 responses.
+{% endcomment %}
+{% block title %}{% translate "Calibration" %} — {{ tireuse.nom_tireuse }}{% endblock %}
 
 {% block nav_right %}
   <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}"
-     class="btn btn-sm btn-outline-light">
-    ← Admin
+     class="btn btn-sm btn-outline-light"
+     data-testid="calibration-retour-admin">
+    <span aria-hidden="true">←</span> {% translate "Admin" %}
   </a>
 {% endblock %}
 
 {% block head %}
   <script src="{% static 'django_htmx/htmx.min.js' %}"></script>
   <script>
-    /* CSRF global pour toutes les requêtes HTMX */
-    /* / Global CSRF for all HTMX requests */
-    document.addEventListener('htmx:configRequest', function (evt) {
-      evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+    /* Jeton CSRF sur toutes les requêtes HTMX */
+    /* / CSRF token on every HTMX request */
+    document.addEventListener('htmx:configRequest', function (evenement) {
+      evenement.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
     });
 
-    /*
-     * Gestion des lignes ignorées.
-     * window.ignoredSessions persiste entre les rechargements de polling
-     * (le polling remplace seulement le innerHTML de #sessions-poll,
-     *  pas la page entière — donc les variables window.* survivent).
-     * / Ignored rows management.
-     * window.ignoredSessions persists between polling reloads
-     * (polling only replaces innerHTML of #sessions-poll,
-     *  not the whole page — so window.* variables survive).
-     */
-    window.ignoredSessions = window.ignoredSessions || new Set();
-
-    function ignorerLigne(sessionPk) {
-      window.ignoredSessions.add(String(sessionPk));
-      appliquerIgnores();
-    }
-
-    /* Grise et désactive toutes les lignes dans ignoredSessions */
-    /* / Grays out and disables all rows in ignoredSessions */
-    function appliquerIgnores() {
-      window.ignoredSessions.forEach(function (pk) {
-        var row = document.getElementById('row-' + pk);
-        var input = document.querySelector('[name="vol_' + pk + '"]');
-        if (input) { input.value = ''; input.disabled = true; }
-        if (row) { row.style.opacity = '0.3'; row.style.pointerEvents = 'none'; }
-      });
-    }
-
-    /* Re-applique après chaque swap HTMX (polling ou réponse d'erreur) */
-    /* / Re-applies after each HTMX swap (polling or error response) */
-    document.addEventListener('htmx:afterSettle', appliquerIgnores);
+    /* Le serveur renvoie 422 quand la saisie est invalide, avec le formulaire
+       et le message d'erreur. Par défaut htmx n'affiche pas les réponses 4xx :
+       on l'autorise pour le 422.
+       / The server returns 422 with the form and the error message.
+       htmx does not swap 4xx by default: allow it for 422. */
+    document.addEventListener('htmx:beforeSwap', function (evenement) {
+      if (evenement.detail.xhr.status === 422) {
+        evenement.detail.shouldSwap = true;
+        evenement.detail.isError = false;
+      }
+    });
   </script>
+  <style>
+    /* Ligne ignorée (case cochée) : grisée, sans JS / Ignored row: greyed, no JS */
+    .calibration-ligne:has(.calibration-ignorer:checked) { opacity: .35; }
+  </style>
 {% endblock %}
 
 {% block content %}
 <div class="row justify-content-center" data-testid="calibration-page">
   <div class="col-12 col-md-10 col-lg-8">
 
-    {# En-tête #}
+    {# En-tête / Header #}
     <div class="d-flex align-items-center justify-content-between mb-4 gap-3 flex-wrap">
-      <h2 class="mb-0">Calibration — {{ tireuse.nom_tireuse }}</h2>
-      {# Timestamp calculé au moment du CLIC (pas du chargement de la page) #}
-      {# pour que les sessions créées pendant la visite ne soient pas incluses #}
-      {# / Timestamp computed at CLICK time (not page load) #}
-      {# so sessions created during the visit are not included #}
-      <button type="button"
-              class="btn btn-warning"
-              data-testid="btn-nouvelle-serie"
-              onclick="window.ignoredSessions = new Set(); window.location.href='?depuis='+Math.floor(Date.now()/1000);">
-        ↺ Nouvelle série
-      </button>
+      <h1 class="h2 mb-0">{% translate "Calibration" %} — {{ tireuse.nom_tireuse }}</h1>
+      {# L'heure de départ de la série est fixée par le serveur #}
+      {# / The series start time is set by the server #}
+      <a href="{% url 'calibration_page' uuid=tireuse.uuid %}?nouvelle_serie=1"
+         class="btn btn-warning"
+         data-testid="btn-nouvelle-serie">
+        <span aria-hidden="true">↺</span> {% translate "Nouvelle série" %}
+      </a>
     </div>
 
-    {# Bandeau série en cours #}
+    {# Bandeau série en cours / Current series banner #}
     {% if depuis %}
-    <div class="alert alert-info py-2 mb-4">
-      Série en cours — seules les mesures effectuées depuis le début de cette série sont affichées.
-    </div>
+      <div class="alert alert-info py-2 mb-4" data-testid="calibration-serie-en-cours">
+        {% translate "Série en cours : seules les mesures faites depuis le début de cette série sont affichées." %}
+      </div>
     {% else %}
-    <div class="alert alert-secondary py-2 mb-4">
-      Toutes les mesures passées sont affichées. Cliquez <strong>↺ Nouvelle série</strong> pour repartir à zéro.
-    </div>
+      <div class="alert alert-secondary py-2 mb-4" data-testid="calibration-toutes-mesures">
+        {% blocktranslate trimmed %}
+          Toutes les mesures passées sont affichées. Cliquez <strong>Nouvelle série</strong> pour repartir à zéro.
+        {% endblocktranslate %}
+      </div>
     {% endif %}
 
-    {# Info débitmètre + état maintenance #}
-    <div class="card mb-4">
-      <div class="card-body" style="color:#111">
+    {# Débitmètre + état maintenance / Flow meter + maintenance state #}
+    <div class="card mb-4" data-testid="calibration-debitmetre">
+      <div class="card-body">
         {% if tireuse.debimetre %}
-          <p class="mb-1"><strong>Débitmètre :</strong> {{ tireuse.debimetre.name }}</p>
+          <p class="mb-1"><strong>{% translate "Débitmètre :" %}</strong> {{ tireuse.debimetre.name }}</p>
           <p class="mb-0">
-            <strong>Facteur actuel :</strong>
+            <strong>{% translate "Facteur actuel :" %}</strong>
             <span class="badge bg-secondary fs-6">{{ tireuse.debimetre.flow_calibration_factor }}</span>
             <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹</span>
           </p>
         {% else %}
-          <div class="alert alert-warning mb-0">
-            Aucun débitmètre associé. Affectez-en un dans l'admin avant de calibrer.
+          <div class="alert alert-warning mb-0" role="alert">
+            {% translate "Aucun débitmètre associé. Affectez-en un dans l'admin avant de calibrer." %}
           </div>
         {% endif %}
 
         {% if not tireuse.enabled %}
-          <span class="badge bg-warning text-dark mt-2">✓ Mode maintenance actif</span>
+          <span class="badge bg-warning text-dark mt-2">
+            <span aria-hidden="true">✓</span> {% translate "Mode maintenance actif" %}
+          </span>
         {% else %}
-          <div class="alert alert-danger mt-2 mb-0">
-            ⚠️ La tireuse doit être <strong>désactivée</strong> (mode maintenance) pour pouvoir calibrer.
+          <div class="alert alert-danger mt-2 mb-0" role="alert">
+            <span aria-hidden="true">⚠️</span>
+            {% blocktranslate trimmed %}
+              La tireuse doit être <strong>désactivée</strong> (mode maintenance) pour pouvoir calibrer.
+            {% endblocktranslate %}
             <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}"
-               class="alert-link ms-1">Désactiver dans l'admin →</a>
+               class="alert-link ms-1"
+               data-testid="calibration-desactiver">{% translate "Désactiver dans l'admin" %} <span aria-hidden="true">→</span></a>
           </div>
         {% endif %}
       </div>
     </div>
 
-    {# Mode opératoire #}
+    {# Mode opératoire / Operating procedure #}
     <div class="card mb-4" data-testid="calibration-procedure">
-      <div class="card-header" style="color:#111"><strong>{% translate "Operating procedure" %}</strong></div>
-      <div class="card-body" style="color:#111">
+      <div class="card-header"><h2 class="h6 mb-0">{% translate "Operating procedure" %}</h2></div>
+      <div class="card-body">
         <ol class="mb-0">
-          <li>Désactivez la tireuse dans l'admin <em>(si pas déjà fait)</em></li>
-          <li>Cliquez <strong>↺ Nouvelle série</strong> pour repartir à zéro</li>
-          <li>Connectez un tuyau propre sur la tireuse</li>
-          <li>Présentez une <strong>carte maintenance</strong> → la vanne s'ouvre</li>
-          <li>Versez dans un <strong>verre gradué</strong> jusqu'à ~50 cl</li>
-          <li>Retirez la carte → la vanne se ferme</li>
-          <li>Répétez les étapes 4–6 au moins 3 fois — les versements apparaissent automatiquement ci-dessous</li>
-          <li>Saisissez les volumes lus sur le verre pour chaque versement</li>
-          <li>Cliquez <strong>✓ Calculer et appliquer le facteur</strong></li>
-          <li>Présentez à nouveau votre <strong>carte maintenance</strong> sur le lecteur puis retirez-la — le Pi récupère immédiatement le nouveau facteur de calibration</li>
+          <li>{% translate "Désactivez la tireuse dans l'admin (si ce n'est pas déjà fait)." %}</li>
+          <li>{% translate "Cliquez « Nouvelle série » pour repartir à zéro." %}</li>
+          <li>{% translate "Branchez un tuyau propre sur la tireuse." %}</li>
+          <li>{% translate "Présentez une carte maintenance : la vanne s'ouvre." %}</li>
+          <li>{% translate "Versez dans un verre gradué jusqu'à environ 50 cl." %}</li>
+          <li>{% translate "Retirez la carte : la vanne se ferme." %}</li>
+          <li>{% translate "Répétez les étapes 4 à 6 au moins 3 fois. Les versements apparaissent tout seuls ci-dessous." %}</li>
+          <li>{% translate "Saisissez le volume lu sur le verre pour chaque versement." %}</li>
+          <li>{% translate "Cliquez « Calculer et appliquer le facteur »." %}</li>
+          <li>{% translate "Présentez à nouveau la carte maintenance puis retirez-la : le Pi récupère tout de suite le nouveau facteur." %}</li>
         </ol>
       </div>
     </div>
 
-    {# Zone principale : formulaire de saisie (polling HTMX 8s) #}
-    {# La div #sessions-poll porte les attributs de polling. #}
-    {# Quand le formulaire est soumis, hx-swap="outerHTML" remplace cette div #}
-    {# par le résultat — supprimant ainsi le polling automatiquement. #}
-    {# / Main zone: input form (HTMX polling 8s) #}
-    {# The #sessions-poll div carries the polling attributes. #}
-    {# When the form is submitted, hx-swap="outerHTML" replaces this div #}
-    {# with the result — automatically stopping the poll. #}
+    {% comment %}
+    Zone principale : formulaire de saisie, rechargé toutes les 8 s.
+    - hx-sync="this:drop" : pas de nouveau chargement tant qu'une requête de
+      cette zone est en cours (le formulaire partage cette file d'attente,
+      voir partial_sessions.html).
+    - Succès : le résultat remplace cette div entière (outerHTML), donc le
+      polling s'arrête.
+    - Pas d'aria-live : le contenu est rechargé toutes les 8 s. Les erreurs
+      portent role="alert".
+    / Main zone, reloaded every 8 s. hx-sync drops a poll while a request of
+    this zone (including the form) is running. No aria-live (reloaded every 8 s).
+    {% endcomment %}
     <div id="sessions-poll"
          hx-get="{% url 'calibration_sessions_partial' uuid=tireuse.uuid %}?depuis={{ depuis }}"
          hx-trigger="load, every 8s"
-         hx-swap="innerHTML">
-      <p class="text-center text-muted py-4">
-        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-        Chargement des versements...
+         hx-swap="innerHTML"
+         hx-sync="this:drop"
+         data-testid="calibration-zone-versements">
+      <p class="text-center text-muted py-4" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+        {% translate "Chargement des versements…" %}
       </p>
     </div>
 

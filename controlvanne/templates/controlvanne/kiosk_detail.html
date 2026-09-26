@@ -14,14 +14,15 @@ En mode DEMO : panneau simulateur du Pi (simu_pi.js).
 
 {% block title %}{{ config.organisation|default:"TiBillet" }} — {{ tireuse.nom_tireuse }}{% endblock %}
 {% block head %}
-    {% if tireuse.fut_actif.couleur_fond_pos %}
-        {# "Tireuse accent" est fourni par la couleur de fond du fut lié à la tireuse #}
-        <style>
-            body{
-                --tireuse-accent : {{ tireuse.fut_actif.couleur_fond_pos }}
-            }
-        </style>
-    {% endif %}
+  {# Couleur d'accent = couleur du fût branché (texte toujours blanc, comme la #}
+  {# maquette). Sans couleur : cyan du CSS. Les couleurs proposées dans l'admin #}
+  {# sont choisies pour rester lisibles (Administration/admin/products.py). #}
+  {# / Accent = color of the keg on tap (text always white). No color: CSS cyan. #}
+  {% if tireuse.fut_actif.couleur_fond_pos %}
+    <style>
+      body { --tireuse-accent: {{ tireuse.fut_actif.couleur_fond_pos }}; }
+    </style>
+  {% endif %}
 {% endblock %}
 {% block content %}
 
@@ -31,82 +32,15 @@ En mode DEMO : panneau simulateur du Pi (simu_pi.js).
     {% include "controlvanne/partial/tireuse_ecran.html" with bec=tireuse %}
   </div>
 
-  {% comment %}
-  SIMULATEUR DU PI — mode DEMO uniquement
-  / Pi simulator — DEMO mode only
-
-  Les ids simu-* et les attributs data-* du panneau sont lus par
-  controlvanne/static/controlvanne/js/simu_pi.js. Ne pas les renommer.
-  / simu-* ids and data-* attributes are read by simu_pi.js. Do not rename.
-  {% endcomment %}
+  {# Simulateur du Pi, mode DEMO uniquement / Pi simulator, DEMO mode only #}
   {% if demo_tags %}
-    <aside id="simu-pi-panel"
-           class="demo-sim"
-           aria-label="{% translate 'Pi Simulator' %}"
-           data-testid="simu-pi-panel"
-           data-tireuse-uuid="{{ slug_focus }}"
-           data-csrf-token="{{ csrf_token }}">
-
-      <div class="demo-sim__tete">
-        <span class="demo-sim__tag">{% translate "Pi Simulator" %} (DEMO)</span>
-        <span class="badge bg-dark" id="simu-state" data-testid="simu-state">IDLE</span>
-      </div>
-
-      {# Boutons cartes NFC simulées / Simulated NFC card buttons #}
-      <div class="demo-sim__boutons" role="group" aria-label="{% translate 'Badge a card:' %}" data-testid="simu-card-buttons">
-        {% for tag in demo_tags %}
-          <button type="button"
-                  class="demo-sim__btn simu-card-btn"
-                  data-tag-id="{{ tag.tag_id }}"
-                  data-testid="simu-card-{{ tag.tag_id }}">
-            {{ tag.name }}
-          </button>
-        {% endfor %}
-        <button type="button"
-                class="demo-sim__btn demo-sim__btn--ghost"
-                id="simu-remove-card"
-                data-testid="simu-remove-card"
-                disabled>
-          {% translate "Remove card" %}
-        </button>
-      </div>
-
-      {# Débit simulé : affiché par simu_pi.js quand le service est autorisé #}
-      {# / Simulated flow: shown by simu_pi.js once service is authorized #}
-      <div id="simu-flow-section" style="display: none;" data-testid="simu-flow-section">
-        <div class="demo-sim__debit">
-          <label for="simu-flow-slider">{% translate "Flow rate:" %}</label>
-          <input type="range"
-                 id="simu-flow-slider"
-                 data-testid="simu-flow-slider"
-                 min="0" max="100" value="0" step="1">
-          <span id="simu-flow-label" class="demo-sim__debit-valeur">0 ml/s</span>
-        </div>
-        <div class="demo-sim__indicateurs">
-          <span>
-            {% translate "Valve:" %}
-            <span class="badge bg-danger" id="simu-valve-state" data-testid="simu-valve-state">{% translate "Closed" %}</span>
-          </span>
-          <span>
-            {% translate "Volume:" %}
-            <strong id="simu-volume-display" data-testid="simu-volume-display">0 ml</strong>
-          </span>
-          <span>
-            {% translate "Allowed:" %}
-            <strong id="simu-allowed-display" data-testid="simu-allowed-display">&mdash; ml</strong>
-          </span>
-        </div>
-      </div>
-
-      {# Message de retour API / API response message #}
-      <div id="simu-message" class="demo-sim__message" data-testid="simu-message"></div>
-    </aside>
+    {% include "controlvanne/partial/simulateur_pi.html" %}
   {% endif %}
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'controlvanne/js/ecran_tireuse.js' %}?v=3"></script>
+<script src="{% static 'controlvanne/js/ecran_tireuse.js' %}?v=6"></script>
 {% if demo_tags %}
-  <script src="{% static 'controlvanne/js/simu_pi.js' %}"></script>
+  <script src="{% static 'controlvanne/js/simu_pi.js' %}?v=2"></script>
 {% endif %}
 {% endblock %}

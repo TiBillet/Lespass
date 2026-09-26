@@ -1,0 +1,18 @@
+{% comment %}
+PRIX D'UN VERRE DE 25 CL — « 3,75 € / 25 cl (soit 15 €/L) »
+/ Price of a 25 cl glass
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/biere_prix.html
+
+Inclus par : etapes/veille.html, tireuse_vignette.html
+Rien n'est affiché si le fût n'a pas de prix (prix au litre à 0).
+/ Nothing is shown if the keg has no price.
+
+Variables attendues : {{ bec }} — TireuseBec ; {{ classe }} — classe CSS du <p>
+{% endcomment %}
+{% load i18n %}
+{% if bec.prix_litre %}
+  <p class="{{ classe }}" data-testid="tireuse-prix">
+    {% blocktranslate with prix_verre=bec.prix_verre_25cl|floatformat:2 prix_litre=bec.prix_litre|floatformat:"-2" %}{{ prix_verre }} € / 25 cl (soit {{ prix_litre }} €/L){% endblocktranslate %}
+  </p>
+{% endif %}

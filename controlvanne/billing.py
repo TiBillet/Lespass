@@ -286,13 +286,15 @@ def facturer_tirage(
         produit = tireuse.fut_actif
         prix_obj = produit.prices.filter(poids_mesure=True).first()
 
-        product_sold, _ = ProductSold.objects.get_or_create(
+        # _created et pas _ : « _ » masquerait gettext si on l'importe un jour
+        # / _created, not _: "_" would shadow gettext if imported later
+        product_sold, _created = ProductSold.objects.get_or_create(
             product=produit,
             event=None,
             defaults={"categorie_article": produit.categorie_article},
         )
 
-        price_sold, _ = PriceSold.objects.get_or_create(
+        price_sold, _created = PriceSold.objects.get_or_create(
             productsold=product_sold,
             price=prix_obj,
             defaults={"prix": prix_obj.prix},

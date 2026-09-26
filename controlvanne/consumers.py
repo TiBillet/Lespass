@@ -27,6 +27,7 @@ import logging
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.utils.translation import gettext
 
 from controlvanne.models import RfidSession, TireuseBec
 
@@ -138,7 +139,7 @@ class PanelConsumer(AsyncJsonWebsocketConsumer):
         if not tireuse:
             return {
                 "tireuse_bec": slug_tireuse,
-                "liquid_label": "Liquide",
+                "liquid_label": gettext("Liquide"),
                 "present": False,
                 "authorized": False,
                 "vanne_ouverte": False,
@@ -157,7 +158,7 @@ class PanelConsumer(AsyncJsonWebsocketConsumer):
                 "present": False,
                 "authorized": False,
                 "vanne_ouverte": False,
-                "message": "En Maintenance",
+                "message": gettext("En maintenance"),
             }
 
         # Session NFC ouverte la plus récente (ended_at=null → carte posée)

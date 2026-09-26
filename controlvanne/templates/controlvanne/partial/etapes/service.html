@@ -40,10 +40,12 @@ Variable attendue : {{ bec }} — instance de TireuseBec
         </div>
       </div>
 
-      <div class="card-facts" aria-live="polite" data-testid="tireuse-infos-carte">
+      {# Pas d'aria-live ici : ces valeurs changent chaque seconde pendant le tirage #}
+      {# / No aria-live: these values change every second while pouring #}
+      <div class="card-facts" data-testid="tireuse-infos-carte">
         <div class="card-fact">
           <span class="card-fact__label">{% translate "Prix" %}</span>
-          <span class="card-fact__value">{{ bec.prix_verre_25cl|floatformat:2 }}&nbsp;€ / 25&nbsp;cl</span>
+          <span class="card-fact__value">{% if bec.prix_litre %}{{ bec.prix_verre_25cl|floatformat:2 }}&nbsp;€ / 25&nbsp;cl{% else %}—{% endif %}</span>
         </div>
         <div class="card-fact card-fact--accent">
           <span class="card-fact__label">{% translate "Solde" %}</span>
@@ -87,9 +89,11 @@ Variable attendue : {{ bec }} — instance de TireuseBec
           <div class="serve__glass" aria-hidden="true">
             <div class="serve__liquid"></div>
           </div>
-          <div class="serve2__readout" aria-live="polite" data-testid="tireuse-volume">
+          {# « / 50 cl » : le verre dessiné est une pinte (VOLUME_VERRE_PLEIN_ML #}
+          {# dans ecran_tireuse.js) / The drawn glass is a pint #}
+          <div class="serve2__readout" data-testid="tireuse-volume">
             <span class="serve2__readout-value" data-champ="volume-cl">0</span>
-            <span class="serve2__readout-unit">cl</span>
+            <span class="serve2__readout-unit">/ 50 cl</span>
           </div>
         </div>
 

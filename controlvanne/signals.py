@@ -15,6 +15,7 @@ DEPENDANCES :
 - asgiref.sync.async_to_sync : bridge sync/async
 """
 
+import logging
 from decimal import Decimal
 
 from asgiref.sync import async_to_sync
@@ -22,8 +23,63 @@ from channels.layers import get_channel_layer
 from django.db import transaction
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
+from django.utils.translation import gettext
 
 from .models import TireuseBec
+
+logger = logging.getLogger(__name__)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Helper : rechargement des écrans kiosk
+# / Helper: kiosk screens reload
+# ──────────────────────────────────────────────────────────────────────
+
+
+def demander_rechargement_des_kiosks(tireuse):
+    """
+    Demande aux écrans kiosk de cette tireuse de recharger leur page.
+    / Asks this tap's kiosk screens to reload their page.
+
+    LOCALISATION : controlvanne/signals.py
+
+    POURQUOI : la fiche de la bière (nom, description, étiquette, tags, prix,
+    couleur d'accent) est rendue UNE FOIS par le serveur (kiosk_detail.html).
+    Les messages WebSocket ne mettent à jour que l'état (carte posée, volume,
+    solde). Quand le fût change, il faut donc recharger la page entière.
+    / The beer sheet is server-rendered once; WS messages only update the
+    state. When the keg changes, the whole page must be reloaded.
+
+    Le message {"kiosk_reload": true} est lu par ecran_tireuse.js.
+    Il part à la fin de la transaction (on_commit) : l'admin enregistre le fût,
+    ses tags et ses tarifs dans la même transaction, et la page rechargée doit
+    voir la version finale.
+    / Sent on commit so the reloaded page sees the final keg, tags and prices.
+
+    :param tireuse: TireuseBec
+    """
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        return
+
+    payload = {
+        "tireuse_bec_uuid": str(tireuse.uuid),
+        "kiosk_reload": True,
+    }
+
+    def envoyer_apres_commit():
+        # Écran de cette tireuse + liste de toutes les tireuses
+        # / This tap's screen + list of all taps
+        async_to_sync(channel_layer.group_send)(
+            f"rfid_state.{tireuse.uuid}",
+            {"type": "state_update", "payload": payload},
+        )
+        async_to_sync(channel_layer.group_send)(
+            "rfid_state.all",
+            {"type": "state_update", "payload": payload},
+        )
+
+    transaction.on_commit(envoyer_apres_commit)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -42,7 +98,7 @@ def _snapshot_for_bec(tb):
             "present": False,
             "authorized": False,
             "vanne_ouverte": False,
-            "message": "En Maintenance",
+            "message": gettext("En maintenance"),
         }
 
     from .models import RfidSession
@@ -125,7 +181,12 @@ def tireusebec_pre_save(sender, instance, **kwargs):
                 # switches to unlimited reservoir.
                 instance.reservoir_ml = Decimal("0")
         except Exception:
-            pass
+            # On ne bloque pas l'enregistrement de la tireuse, mais on garde une trace
+            # / Do not block the tap save, but keep a trace
+            logger.warning(
+                f"Réservoir non initialisé pour la tireuse {instance.pk} (fût changé)",
+                exc_info=True,
+            )
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -210,6 +271,17 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
     if not channel_layer:
         return
 
+    # Le fût branché a changé (admin, liste modifiable ou fiche de la tireuse) :
+    # la fiche bière affichée est périmée, les kiosks rechargent leur page.
+    # Le rechargement redonne aussi l'état à jour : pas besoin du snapshot.
+    # _old_fut_id est posé par tireusebec_pre_save.
+    # / The keg on tap changed: kiosks reload (fresh state too, no snapshot needed).
+    ancien_fut_id = getattr(instance, "_old_fut_id", None)
+    le_fut_a_change = (not created) and ancien_fut_id != instance.fut_actif_id
+    if le_fut_a_change:
+        demander_rechargement_des_kiosks(instance)
+        return
+
     # Push differe a la fin de la transaction en cours : le save() du
     # reservoir se fait desormais DANS l'atomic de facturation (fix C1) —
     # pousser immediatement enverrait un etat pas encore committe (et un
@@ -239,3 +311,58 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
         )
 
     transaction.on_commit(pousser_snapshot_apres_commit)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Signal 3 : post_save du fût — recharger les kiosks qui l'affichent
+# / Signal 3: keg post_save — reload the kiosks showing it
+# ──────────────────────────────────────────────────────────────────────
+
+
+def recharger_les_kiosks_du_fut(sender, instance, created, **kwargs):
+    """
+    Un fût modifié (nom, couleur, description, étiquette, tags, tarifs) :
+    les kiosks des tireuses qui le servent rechargent leur page.
+    / A modified keg: kiosks of the taps serving it reload their page.
+
+    LOCALISATION : controlvanne/signals.py
+
+    Branché sur Product ET FutProduct : l'admin des fûts enregistre un
+    FutProduct (modèle proxy), et Django envoie alors le signal avec
+    sender=FutProduct, pas Product.
+    Les produits qui ne sont pas des fûts sont ignorés tout de suite, sans
+    requête (le signal Product se déclenche pour tous les produits).
+    / Connected to Product AND FutProduct (proxy: sender is FutProduct).
+    Non-keg products are skipped without any query.
+    """
+    from BaseBillet.models import Product
+
+    if created or instance.categorie_article != Product.FUT:
+        return
+
+    tireuses_qui_servent_ce_fut = TireuseBec.objects.filter(fut_actif_id=instance.pk)
+    for tireuse in tireuses_qui_servent_ce_fut:
+        demander_rechargement_des_kiosks(tireuse)
+
+
+def brancher_les_signaux_du_fut():
+    """
+    Branche recharger_les_kiosks_du_fut sur Product et FutProduct.
+    Appelée à l'import de ce module (chargé par apps.py ready()).
+    / Connects recharger_les_kiosks_du_fut to Product and FutProduct.
+    """
+    from BaseBillet.models import FutProduct, Product
+
+    post_save.connect(
+        recharger_les_kiosks_du_fut,
+        sender=Product,
+        dispatch_uid="controlvanne_recharger_kiosks_product",
+    )
+    post_save.connect(
+        recharger_les_kiosks_du_fut,
+        sender=FutProduct,
+        dispatch_uid="controlvanne_recharger_kiosks_futproduct",
+    )
+
+
+brancher_les_signaux_du_fut()

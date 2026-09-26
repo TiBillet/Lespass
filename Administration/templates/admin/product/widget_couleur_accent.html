@@ -18,7 +18,11 @@ Chaque pastille est un bouton radio caché + un label coloré.
 shows the selection; arrow keys work; "None" keeps the default cyan.
 
 Variables : widget.name, couleur_actuelle, couleur_actuelle_hors_liste,
-couleurs_maquette, couleurs_variees.
+couleurs_proposees.
+
+Toutes les couleurs proposées restent lisibles avec le texte blanc de l'écran
+(≥ 4,5:1) et comme texte sur la carte sombre (≥ 3:1). Détail des contrastes :
+COULEURS_ACCENT dans Administration/admin/products.py.
 
 Styles : bloc <style> avec des classes préfixées, car Unfold n'embarque
 pas les classes Tailwind personnalisées.
@@ -66,7 +70,8 @@ pas les classes Tailwind personnalisées.
   <input type="radio" class="pastilles-accent__radio" name="{{ widget.name }}" value=""
          id="{{ widget.attrs.id }}_aucune" {% if not couleur_actuelle %}checked{% endif %}>
   <label for="{{ widget.attrs.id }}_aucune" class="pastilles-accent__pastille pastilles-accent__pastille--aucune"
-         title="{% translate 'Aucune (cyan par défaut)' %}">
+         title="{% translate 'Aucune (cyan par défaut)' %}"
+         data-testid="fut-pastille-aucune">
     <span class="pastilles-accent__texte-cache">{% translate "Aucune (cyan par défaut)" %}</span>
   </label>
 
@@ -83,25 +88,12 @@ pas les classes Tailwind personnalisées.
 
   <span class="pastilles-accent__separateur" aria-hidden="true"></span>
 
-  {# Maquette de l'écran de la tireuse / Tap screen mockup #}
-  {% for code_couleur, nom_couleur in couleurs_maquette %}
+  {# Couleurs lisibles avec du texte blanc (≥ 4,5:1) et sur la carte sombre (≥ 3:1) #}
+  {# / Readable with white text (≥ 4.5:1) and on the dark card (≥ 3:1) #}
+  {% for code_couleur, nom_couleur in couleurs_proposees %}
     <input type="radio" class="pastilles-accent__radio" name="{{ widget.name }}" value="{{ code_couleur }}"
-           id="{{ widget.attrs.id }}_{{ forloop.counter }}_m" {% if couleur_actuelle == code_couleur %}checked{% endif %}>
-    <label for="{{ widget.attrs.id }}_{{ forloop.counter }}_m" class="pastilles-accent__pastille"
-           style="background-color: {{ code_couleur }};" title="{{ nom_couleur }}"
-           data-testid="fut-pastille-{{ code_couleur|slice:'1:' }}">
-      <span class="pastilles-accent__texte-cache">{{ nom_couleur }}</span>
-    </label>
-  {% endfor %}
-
-  <span class="pastilles-accent__separateur" aria-hidden="true"></span>
-
-  {# Variées, contraste ≥ 3:1 avec le blanc ET avec la carte sombre #}
-  {# / Varied, contrast ≥ 3:1 with white AND with the dark card #}
-  {% for code_couleur, nom_couleur in couleurs_variees %}
-    <input type="radio" class="pastilles-accent__radio" name="{{ widget.name }}" value="{{ code_couleur }}"
-           id="{{ widget.attrs.id }}_{{ forloop.counter }}_v" {% if couleur_actuelle == code_couleur %}checked{% endif %}>
-    <label for="{{ widget.attrs.id }}_{{ forloop.counter }}_v" class="pastilles-accent__pastille"
+           id="{{ widget.attrs.id }}_{{ forloop.counter }}" {% if couleur_actuelle == code_couleur %}checked{% endif %}>
+    <label for="{{ widget.attrs.id }}_{{ forloop.counter }}" class="pastilles-accent__pastille"
            style="background-color: {{ code_couleur }};" title="{{ nom_couleur }}"
            data-testid="fut-pastille-{{ code_couleur|slice:'1:' }}">
       <span class="pastilles-accent__texte-cache">{{ nom_couleur }}</span>

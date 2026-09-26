@@ -37,6 +37,11 @@ from controlvanne.serializers import (
     PingSerializer,
 )
 
+# gettext (et pas gettext_lazy) : les messages partent en JSON sur le WebSocket,
+# et un texte « lazy » ne se sérialise pas en JSON.
+# / gettext (not gettext_lazy): messages are sent as JSON over the WebSocket.
+from django.utils.translation import gettext  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -432,7 +437,7 @@ class TireuseViewSet(viewsets.ViewSet):
         # / select_related("user"): the holder's first name is sent to the kiosk.
         carte = CarteCashless.objects.select_related("user").filter(tag_id=uid).first()
         if not carte:
-            _push_refus(tireuse, "Carte non reconnue.")
+            _push_refus(tireuse, gettext("Carte non reconnue."))
             return Response({"authorized": False, "message": "Unknown card."})
 
         # Vérifier si c'est une carte de maintenance / Check if it's a maintenance card
@@ -461,7 +466,7 @@ class TireuseViewSet(viewsets.ViewSet):
         # / Maintenance: only allowed when the tap is out of service (enabled=False).
         # A maintenance card must not work during normal service — it would bypass billing.
         if is_maintenance and tireuse.enabled:
-            _push_refus(tireuse, "Carte maintenance refusée : tireuse en service.")
+            _push_refus(tireuse, gettext("Carte maintenance refusée : tireuse en service."))
             return Response(
                 {
                     "authorized": False,
@@ -494,7 +499,7 @@ class TireuseViewSet(viewsets.ViewSet):
                     tireuse,
                     session,
                     vanne_ouverte=True,
-                    message="Rinçage autorisé",
+                    message=gettext("Rinçage autorisé"),
                 ),
             )
 
@@ -519,7 +524,7 @@ class TireuseViewSet(viewsets.ViewSet):
 
         contexte = obtenir_contexte_cashless(carte)
         if not contexte:
-            _push_refus(tireuse, "Cashless non configuré pour ce lieu.")
+            _push_refus(tireuse, gettext("Cashless non configuré pour ce lieu."))
             return Response(
                 {
                     "authorized": False,
@@ -535,7 +540,7 @@ class TireuseViewSet(viewsets.ViewSet):
 
         prix_litre = tireuse.prix_litre
         if prix_litre <= 0:
-            _push_refus(tireuse, "Prix non configuré pour ce fût.")
+            _push_refus(tireuse, gettext("Prix non configuré pour ce fût."))
             return Response(
                 {
                     "authorized": False,
@@ -555,7 +560,7 @@ class TireuseViewSet(viewsets.ViewSet):
             reservoir_disponible = float(tireuse.reservoir_ml)
 
         if not tireuse.reservoir_illimite and reservoir_disponible <= 0:
-            _push_refus(tireuse, "Fût vide.")
+            _push_refus(tireuse, gettext("Fût vide."))
             return Response(
                 {
                     "authorized": False,
@@ -568,7 +573,7 @@ class TireuseViewSet(viewsets.ViewSet):
         )
 
         if allowed_ml <= 0:
-            _push_refus(tireuse, "Solde insuffisant.", balance=f"{solde_centimes / 100:.2f}")
+            _push_refus(tireuse, gettext("Solde insuffisant."), balance=f"{solde_centimes / 100:.2f}")
             return Response(
                 {
                     "authorized": False,
@@ -607,7 +612,7 @@ class TireuseViewSet(viewsets.ViewSet):
                 session,
                 vanne_ouverte=True,
                 balance=f"{solde_centimes / 100:.2f}",
-                message=f"Carte {uid} — service autorisé",
+                message=gettext("Carte %(uid)s — service autorisé") % {"uid": uid},
             ),
         )
 
@@ -676,7 +681,7 @@ class TireuseViewSet(viewsets.ViewSet):
                 # rather than returning to the standard "Waiting" state.
                 if not tireuse.enabled:
                     reset_payload["maintenance"] = True
-                    reset_payload["message"] = "En Maintenance"
+                    reset_payload["message"] = gettext("En maintenance")
                 logger.info(
                     f"WS_PUSH card_removed sans session (reset kiosk): uid={uid} "
                     f"maintenance={not tireuse.enabled}"
@@ -748,7 +753,7 @@ class TireuseViewSet(viewsets.ViewSet):
                     tireuse,
                     session,
                     vanne_ouverte=True,
-                    message="Tirage en cours",
+                    message=gettext("Tirage en cours"),
                 ),
             )
         elif event_type == "pour_update":
@@ -770,7 +775,7 @@ class TireuseViewSet(viewsets.ViewSet):
                     cout_volume = Decimal(str(volume_ml)) / 1000 * tireuse.prix_litre * 100
                     solde_estime = max(Decimal("0"), Decimal(str(solde_db)) - cout_volume)
                     balance_estimee = f"{float(solde_estime) / 100:.2f}"
-            extras_update = {"vanne_ouverte": True, "message": "Tirage en cours"}
+            extras_update = {"vanne_ouverte": True, "message": gettext("Tirage en cours")}
             if balance_estimee is not None:
                 extras_update["balance"] = balance_estimee
             _push_ws_kiosk(
@@ -795,7 +800,7 @@ class TireuseViewSet(viewsets.ViewSet):
 
             extras_fin = {
                 "session_done": True,
-                "message": f"Fin de service — {float(volume_ml):.0f} ml",
+                "message": gettext("Fin de service — %(volume)s ml") % {"volume": f"{float(volume_ml):.0f}"},
             }
             if solde_apres is not None:
                 extras_fin["balance"] = f"{solde_apres / 100:.2f}"
