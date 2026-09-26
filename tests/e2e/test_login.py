@@ -85,15 +85,11 @@ class TestLoginFlow:
         page.wait_for_load_state("networkidle")
 
         # --- Étape 2 : Ouvrir le panneau de connexion ---
-        # Le libellé du bouton dépend de la langue active : "Log in" (EN)
-        # ou "Connexion" (FR) — assertion tolérante FR/EN (piège 9.34).
-        # / Step 2: open the login panel. Button label depends on active
-        # language: "Log in" (EN) or "Connexion" (FR) — trap 9.34.
-        login_button = page.locator(
-            '.navbar button:has-text("Log in"), '
-            '.navbar button:has-text("Connexion")'
-        ).first
-        login_button.click()
+        # Bouton « Connexion » de la barre utilisateur du skin V2 (data-testid,
+        # indépendant de la langue et de la mise en page).
+        # / Step 2: open the login panel: V2 user bar button (data-testid,
+        # independent of language and layout).
+        page.locator('[data-testid="user-bar-connexion"]').click()
 
         # --- Étape 3 : Remplir un email incorrect / Fill an incorrect email ---
         email_input = page.locator("#loginEmail")

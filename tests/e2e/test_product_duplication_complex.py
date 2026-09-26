@@ -184,12 +184,12 @@ def _get_form_field_labels(page):
     Retourne une liste de labels non vides.
     / Returns a list of non-empty labels.
     """
-    # Cliquer sur l'onglet Unfold si disponible (Alpine.js activeTab).
-    # / Click Unfold tab if available (Alpine.js activeTab).
-    tab = page.locator('a[href="#form_fields"]').first
-    if tab.count() > 0:
-        tab.click()
-        page.wait_for_timeout(500)
+    # Ouvrir l'onglet Unfold de l'inline (Alpine.js activeTab).
+    # / Open the inline's Unfold tab (Alpine.js activeTab).
+    # Onglet obligatoire : s'il manque, le test echoue (voir test_admin_barre_de_module.py).
+    # / Mandatory tab: if missing, the test fails (see test_admin_barre_de_module.py).
+    page.locator('a[href="#form_fields"]').first.click()
+    page.wait_for_timeout(500)
 
     section = page.locator('#form_fields-group')
     label_inputs = section.locator(
@@ -253,13 +253,11 @@ class TestProductDuplicationComplex:
         page.wait_for_load_state('networkidle')
 
         # --- Étape 3 : Ajouter un champ formulaire ---
-        # L'onglet "form_fields" n'apparaît qu'après le premier enregistrement.
         # / Step 3: Add a form field.
-        # The "form_fields" tab only appears after the first save.
-        tab = page.locator('a[href="#form_fields"]').first
-        if tab.count() > 0:
-            tab.click()
-            page.wait_for_timeout(800)
+        # Onglet obligatoire : s'il manque, le test echoue (voir test_admin_barre_de_module.py).
+        # / Mandatory tab: if missing, the test fails (see test_admin_barre_de_module.py).
+        page.locator('a[href="#form_fields"]').first.click()
+        page.wait_for_timeout(800)
 
         _add_form_field(page, {
             'label': 'Champ Original',
@@ -411,10 +409,10 @@ class TestProductDuplicationComplex:
 
         # Modifier les labels des champs formulaire dans la copie.
         # / Modify form field labels in the copy.
-        tab = page.locator('a[href="#form_fields"]').first
-        if tab.count() > 0:
-            tab.click()
-            page.wait_for_timeout(500)
+        # Onglet obligatoire : s'il manque, le test echoue (voir test_admin_barre_de_module.py).
+        # / Mandatory tab: if missing, the test fails (see test_admin_barre_de_module.py).
+        page.locator('a[href="#form_fields"]').first.click()
+        page.wait_for_timeout(500)
 
         section = page.locator('#form_fields-group')
         label_inputs = section.locator(

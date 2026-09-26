@@ -19,7 +19,6 @@ Un echec d'une etape anterieure peut invalider les suivantes.
 A failure in an earlier step may invalidate later ones.
 """
 
-import re
 import uuid
 
 import pytest
@@ -195,10 +194,10 @@ class TestMembershipDynamicFormFullCycle:
         # / Add 6 dynamic fields
         # Ouvrir l'onglet de l'inline : ancre #form_fields (activeTab Alpine.js)
         # / Open the inline tab: #form_fields anchor (Alpine.js activeTab)
-        tab = page.locator('a[href="#form_fields"]').first
-        if page.locator('a[href="#form_fields"]').count() > 0:
-            tab.click()
-            page.wait_for_timeout(1000)
+        # Onglet obligatoire : s'il manque, le test echoue (voir test_admin_barre_de_module.py).
+        # / Mandatory tab: if missing, the test fails (see test_admin_barre_de_module.py).
+        page.locator('a[href="#form_fields"]').first.click()
+        page.wait_for_timeout(1000)
 
         # 1. Texte court / Short text (ST) — obligatoire
         _add_form_field(page, 'Nom complet', 'ST', required=True, help_text='Votre nom et prenom')
@@ -250,13 +249,13 @@ class TestMembershipDynamicFormFullCycle:
 
         # Trouver la carte du produit et cliquer sur "Adherer"
         # / Find the product card and click "Subscribe"
-        card = page.locator('.card').filter(has_text=self._product_name).first
-        expect(card).to_be_visible(timeout=10_000)
-
-        subscribe_button = card.locator('button').filter(
-            has_text=re.compile(r'Subscribe|Adh[eé]rer', re.IGNORECASE)
+        # data-testid du composant cotton/V2/membership_card.html.
+        # / Data-testids of the V2 membership card component.
+        card = page.locator('[data-testid^="membership-card-"]').filter(
+            has_text=self._product_name
         ).first
-        subscribe_button.click()
+        expect(card).to_be_visible(timeout=10_000)
+        card.locator('[data-testid^="membership-open-"]').click()
 
         # Attendre l'ouverture du panneau offcanvas
         # / Wait for the offcanvas panel to open

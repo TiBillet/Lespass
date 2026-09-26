@@ -117,23 +117,17 @@ class TestAdminConfiguration:
                 page.wait_for_load_state("networkidle")
 
             # --- Etape 6 : Verifier sur la page d'accueil ---
-            # Le navbar-brand affiche soit le nom de l'organisation (texte),
-            # soit un logo (img) quand le texte est vide.
-            # / Step 6: verify on the homepage. The navbar-brand shows either
-            # the organisation name (text) or a logo (img) when text is empty.
+            # L'en-tete du skin V2 affiche toujours le nom du lieu en texte
+            # (le logo, s'il existe, est a cote).
+            # / Step 6: verify on the homepage. The V2 header always shows the
+            # venue name as text (the logo, if any, sits next to it).
             page.goto("/")
             page.wait_for_load_state("networkidle")
 
-            org_name = page.locator(".navbar-brand").first
-            brand_text = org_name.inner_text()
-            if len(brand_text.strip()) == 0:
-                # Pas de texte : un logo doit etre visible a la place.
-                # / No text: a logo must be visible instead.
-                expect(org_name.locator("img")).to_be_visible()
-            else:
-                expect(org_name).to_contain_text(
-                    re.compile(r"Le Tiers-Lustre|Tiers-Lustre|Lespass", re.I)
-                )
+            org_name = page.locator('[data-testid="tenant-header-nom"]')
+            expect(org_name).to_contain_text(
+                re.compile(r"Le Tiers-Lustre|Tiers-Lustre|Lespass", re.I)
+            )
 
         finally:
             # --- Restauration : remettre la configuration d'origine ---

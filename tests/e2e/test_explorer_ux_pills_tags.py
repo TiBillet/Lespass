@@ -36,30 +36,24 @@ pytestmark = pytest.mark.e2e
 
 
 # ============================================================
-# FIXTURE — refresh SEO cache before tests
+# FIXTURE — un event tague, puis le cache SEO rafraichi
+# / FIXTURE — a tagged event, then the SEO cache refreshed
 # ============================================================
 
 
-@pytest.fixture(autouse=True, scope="module")
-def refresh_cache():
+def _rafraichir_le_cache_seo():
     """
-    Rafraichit le cache SEO une fois avant tous les tests du module.
-    Garantit que les events + tags sont a jour dans SEOCache.
-    / Refresh the SEO cache once before all tests in this module.
-    Ensures events + tags are up-to-date in SEOCache.
-
-    Scope "module" : un seul appel au lieu d'un par test.
-    / Scope "module": a single call instead of one per test.
+    Reconstruit le cache SEO, lu par l'explorer (events + tags de tous les lieux).
+    / Rebuilds the SEO cache read by the explorer (events + tags of all venues).
 
     Execution via subprocess docker (meme pattern que les fixtures api_key et
     e2e_slugs dans conftest.py) — fonctionne depuis le host ET depuis le container.
-    / Execution via docker subprocess (same pattern as api_key and e2e_slugs
-    fixtures in conftest.py) — works from host AND from inside the container.
+    / Execution via docker subprocess — works from host AND from inside the container.
 
-    Si le refresh echoue (serveur absent, CI sans docker), on logge et on continue.
-    Les tests utiliseront le cache existant ou afficheront un SKIP adequat.
-    / If refresh fails (server absent, CI without docker), log and continue.
-    Tests will use existing cache or show an adequate SKIP.
+    Un echec fait echouer le test : avec un cache perime, le tag cree par la
+    fixture n'apparaitrait pas, et l'echec serait incomprehensible.
+    / A failure fails the test: with a stale cache the fixture's tag would be
+    missing, and the failure would be unreadable.
     """
     import subprocess
     import shutil
@@ -90,13 +84,63 @@ def refresh_cache():
         env=env, cwd=cwd,
     )
     if result.returncode != 0:
-        import warnings
-        warnings.warn(
-            f"refresh_seo_cache a echoue (rc={result.returncode}). "
-            f"Les tests utiliseront le cache existant. "
-            f"Stderr : {result.stderr[:200]}",
-            stacklevel=2,
+        pytest.fail(
+            f"refresh_seo_cache a echoue (rc={result.returncode}) : {result.stderr[:300]}"
         )
+
+
+@pytest.fixture(autouse=True, scope="module")
+def tag_de_test(django_shell):
+    """
+    Cree un tag et un event PUBLIE et FUTUR qui le porte, sur le lieu `lespass`,
+    puis rafraichit le cache SEO. Rend le slug du tag.
+    / Creates a tag and a PUBLISHED, FUTURE event carrying it on `lespass`,
+    then refreshes the SEO cache. Returns the tag slug.
+
+    Les tests des chips ne dependent donc plus du seed : ils cliquent sur CE tag.
+    Seuls les events publies, non archives et futurs remontent leurs tags
+    (seo/services.py, get_event_tags_for_tenants). L'event doit aussi avoir une
+    adresse postale : l'explorer ignore les events sans adresse, et n'expose que
+    les 5 prochains events de chaque adresse (build_aggregate_points,
+    LIMIT_EVENTS_DANS_POPUP). L'event de test a donc SA PROPRE adresse : sur
+    l'adresse principale du lieu, les events de test plus proches le cachaient.
+    / Chip tests no longer depend on the seed: they click THIS tag. Only
+    published, non-archived, future events with a postal address show up, 5 per
+    address: the test event gets its OWN address.
+
+    Tag, event et adresse sont supprimes a la fin du module (base de DEV), puis le cache
+    est rafraichi de nouveau pour ne pas laisser le tag dans l'explorer.
+    / Tag and event are deleted at the end of the module, then the cache is
+    refreshed again so the tag does not linger in the explorer.
+    """
+    import time
+
+    suffixe = str(int(time.time() * 1000))
+    slug = f"e2e-tag-{suffixe}"
+    django_shell(
+        "from datetime import timedelta; "
+        "from django.utils import timezone; "
+        "from BaseBillet.models import Event, PostalAddress, Tag; "
+        f"adresse = PostalAddress.objects.create(name='E2E adresse {suffixe}', "
+        "street_address='1 rue du test', address_locality='Testville', "
+        "postal_code='00000', address_country='FR', latitude=45.0, longitude=5.0); "
+        f"tag = Tag.objects.create(name='E2E tag {suffixe}', slug='{slug}'); "
+        f"event = Event.objects.create(name='E2E event tague {suffixe}', "
+        "datetime=timezone.now() + timedelta(days=10), published=True, "
+        "postal_address=adresse); "
+        "event.tag.add(tag)"
+    )
+    _rafraichir_le_cache_seo()
+
+    yield slug
+
+    django_shell(
+        "from BaseBillet.models import Event, PostalAddress, Tag; "
+        f"Event.objects.filter(tag__slug='{slug}').delete(); "
+        f"Tag.objects.filter(slug='{slug}').delete(); "
+        f"PostalAddress.objects.filter(name='E2E adresse {suffixe}').delete()"
+    )
+    _rafraichir_le_cache_seo()
 
 
 # ============================================================
@@ -119,6 +163,25 @@ def goto_explorer(page, params=""):
     # / List may be empty (no venue/event in dev); wait for networkidle
     # to let JS fully initialize.
     page.wait_for_load_state("networkidle")
+
+
+def chip_du_tag(page, slug):
+    """
+    Rend le chip du tag `slug`, visible.
+    / Returns the `slug` tag chip, visible.
+
+    Seuls les 10 tags les plus frequents sont affiches d'emblee
+    (seo/static/seo/explorer.js, computeVisibleTagsTop10) ; les autres sont
+    ranges dans le menu « + N tags ». Le tag de test ne porte qu'un event : il
+    peut s'y trouver. On ouvre alors ce menu. Le chip reste OBLIGATOIRE.
+    / Only the 10 most frequent tags show at once; the others sit in the
+    "+ N tags" menu, which we open if needed. The chip remains MANDATORY.
+    """
+    chip = page.locator(f'.explorer-tag-chip[data-tag-slug="{slug}"]')
+    if not chip.is_visible():
+        page.locator('[data-testid="explorer-tag-chip-more"]').click()
+    expect(chip).to_be_visible(timeout=5_000)
+    return chip
 
 
 # ============================================================
@@ -236,30 +299,21 @@ def test_url_v_event_preselectionne_pill_evenements(page):
     )
 
 
-def test_clic_tag_chip_ajoute_tag_dans_url(page):
+def test_clic_tag_chip_ajoute_tag_dans_url(page, tag_de_test):
     """
     Clic sur un tag chip ajoute ?tag=<slug> dans l'URL.
     / Clicking a tag chip adds ?tag=<slug> to the URL.
 
-    Sans chip affiche, le test est ROUGE : il n'y a rien a cliquer, donc
-    rien de prouve. / With no chip displayed the test is RED: nothing to
-    click means nothing proven.
+    Le chip vise est celui du tag cree par la fixture `tag_de_test`.
+    / The targeted chip is the one of the tag created by the fixture.
     """
-    goto_explorer(page)
+    # Les chips n'existent qu'en vue « evenements » (explorer.js, updateChips).
+    # / Chips only exist in the "events" view.
+    goto_explorer(page, "?v=event")
     page.wait_for_timeout(300)  # laisser updateChips() s'executer / let updateChips() run
 
-    chips = page.locator(".explorer-tag-chip")
-    if chips.count() == 0:
-        pytest.fail(
-            "Aucun tag chip affiche : la base n'a aucun event tagge, il n'y a "
-            "rien a cliquer. Reseeder : docker exec lespass_django poetry run "
-            "python manage.py demo_data_v2"
-        )
-
-    chip = chips.first
-    slug = chip.get_attribute("data-tag-slug")
-    assert slug, "Chip sans data-tag-slug"
-
+    slug = tag_de_test
+    chip = chip_du_tag(page, slug)
     chip.click()
     # Attendre le debounce syncURL (300ms) + marge / Wait for syncURL debounce (300ms) + margin
     page.wait_for_timeout(500)
@@ -269,34 +323,30 @@ def test_clic_tag_chip_ajoute_tag_dans_url(page):
     )
 
 
-def test_clic_tag_chip_marque_chip_actif(page):
+def test_clic_tag_chip_marque_chip_actif(page, tag_de_test):
     """
     Clic sur un tag chip applique la classe explorer-tag-chip--active sur ce chip.
     / Clicking a tag chip applies the explorer-tag-chip--active class to that chip.
 
-    Sans chip affiche, le test est ROUGE : il n'y a rien a cliquer.
-    / With no chip displayed the test is RED: nothing to click.
+    Le chip vise est celui du tag cree par la fixture `tag_de_test`.
+    / The targeted chip is the one of the tag created by the fixture.
     """
-    goto_explorer(page)
+    # Les chips n'existent qu'en vue « evenements » (explorer.js, updateChips).
+    # / Chips only exist in the "events" view.
+    goto_explorer(page, "?v=event")
     page.wait_for_timeout(300)
 
-    chips = page.locator(".explorer-tag-chip")
-    if chips.count() == 0:
-        pytest.fail(
-            "Aucun tag chip affiche : la base n'a aucun event tagge. "
-            "Reseeder : docker exec lespass_django poetry run python "
-            "manage.py demo_data_v2"
-        )
-
-    chip = chips.first
+    chip = chip_du_tag(page, tag_de_test)
     chip.click()
     page.wait_for_timeout(500)
 
     # Relire le chip depuis le DOM — updateChips() le rerender.
     # / Re-read the chip from DOM — updateChips() re-renders it.
-    chip_rerendu = page.locator(".explorer-tag-chip--active").first
+    chip_rerendu = page.locator(
+        f'.explorer-tag-chip--active[data-tag-slug="{tag_de_test}"]'
+    )
     assert chip_rerendu.count() > 0, (
-        "Aucun chip n'a la classe explorer-tag-chip--active apres le clic"
+        f"Le chip {tag_de_test} n'a pas la classe explorer-tag-chip--active apres le clic"
     )
 
 

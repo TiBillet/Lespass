@@ -125,12 +125,11 @@ class TestMembershipManualValidation:
         page.goto("/memberships/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Trouver la carte du produit et cliquer sur le bouton "Adhérer" / "Subscribe".
-        # / Find the product card and click the "Adhérer" / "Subscribe" button.
-        card = page.locator(f'.card:has-text("{product_name}")').first
-        card.locator(
-            'button:has-text("Subscribe"), button:has-text("Adhérer")'
-        ).click()
+        # Trouver la carte du produit et cliquer sur « Adhérer » (data-testid du
+        # composant cotton/V2/membership_card.html).
+        # / Find the product card and click "Subscribe" (V2 card data-testids).
+        card = page.locator('[data-testid^="membership-card-"]').filter(has_text=product_name).first
+        card.locator('[data-testid^="membership-open-"]').click()
 
         # Attendre que l'offcanvas soit visible.
         # / Wait for the offcanvas to be visible.
