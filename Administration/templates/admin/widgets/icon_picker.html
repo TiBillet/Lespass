@@ -28,6 +28,30 @@
     </span>
   </label>
 
+  {# Icone actuelle absente de ICON_POS (ancienne donnee, import...) : on l'affiche #}
+  {# cochee. Sans cette option, aucun bouton ne serait coche, le navigateur        #}
+  {# n'enverrait rien et l'enregistrement effacerait l'icone sans prevenir.       #}
+  {# Le ChoiceField demande alors a l'admin de choisir une icone de la liste.     #}
+  {# / Current icon missing from ICON_POS: shown checked, so saving never wipes it #}
+  {#   silently (the ChoiceField then asks the admin to pick a listed icon).       #}
+  {% if valeur_hors_liste %}
+    <label title="{% trans 'Icône actuelle (hors liste)' %} : {{ current_value }}" class="cursor-pointer" style="position: relative;">
+      <input
+        type="radio"
+        name="{{ widget_name }}"
+        value="{{ current_value }}"
+        checked
+        class="sr-only icon-radio"
+        data-testid="icon-picker-valeur-hors-liste"
+        style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;"
+      >
+      <span class="icon-swatch flex items-center justify-center w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700 border-2 select-none"
+            style="border-color: transparent;">
+        <span class="material-symbols-outlined text-gray-700 dark:text-gray-200" style="font-size: 24px;" aria-hidden="true">{{ current_value }}</span>
+      </span>
+    </label>
+  {% endif %}
+
   {% for key, label in icons %}
     <label title="{{ label }}" class="cursor-pointer" style="position: relative;">
       <input

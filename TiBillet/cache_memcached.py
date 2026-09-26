@@ -31,3 +31,19 @@ class PyMemcacheCacheSansFermeture(PyMemcacheCache):
         # Volontairement vide : voir la docstring du module.
         # / Intentionally empty: see the module docstring.
         pass
+
+    def fermer_les_connexions_pour_de_vrai(self):
+        """
+        Ferme vraiment toutes les sockets memcached de ce processus.
+        / Really closes every memcached socket of this process.
+
+        Appelee UNIQUEMENT juste apres un fork (TiBillet/celery.py,
+        signal worker_process_init). Celery lance ses processus enfants par
+        fork : sans cette fermeture, un enfant heriterait des sockets ouvertes
+        par le processus maitre, et plusieurs enfants partageraient la meme
+        socket (reponses melangees). Django faisait ce travail via close(),
+        que l'on a rendu vide ci-dessus.
+        / Called ONLY right after a fork (Celery worker_process_init), so child
+        processes never share the parent's sockets.
+        """
+        super().close()

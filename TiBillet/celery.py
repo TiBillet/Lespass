@@ -4,7 +4,7 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from django.db import connection
-from celery.signals import setup_logging
+from celery.signals import setup_logging, worker_process_init
 logger = logging.getLogger(__name__)
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TiBillet.settings')
@@ -23,6 +23,26 @@ def config_loggers(*args, **kwags):
     from logging.config import dictConfig
     from django.conf import settings
     dictConfig(settings.LOGGING)
+
+
+@worker_process_init.connect
+def fermer_les_sockets_memcached_heritees_du_maitre(**kwargs):
+    """
+    Juste apres le fork d'un processus enfant Celery : ferme les sockets
+    memcached heritees du processus maitre.
+    / Right after a Celery child fork: close memcached sockets inherited from the parent.
+
+    Notre backend (TiBillet/cache_memcached.py) ne ferme jamais ses connexions
+    dans close(). Le nettoyage que Django/Celery faisaient apres le fork ne
+    marche donc plus : on le fait ici, explicitement.
+    / Our backend never closes in close(), so we do the post-fork cleanup here.
+    """
+    from django.core.cache import caches
+
+    for nom_du_cache in settings.CACHES:
+        cache_du_processus = caches[nom_du_cache]
+        if hasattr(cache_du_processus, "fermer_les_connexions_pour_de_vrai"):
+            cache_du_processus.fermer_les_connexions_pour_de_vrai()
 
 @app.task
 def add(x, y):

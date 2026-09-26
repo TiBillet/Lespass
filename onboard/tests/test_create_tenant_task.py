@@ -167,6 +167,40 @@ def test_create_tenant_from_draft_consumes_pool_slot(
 
 
 @pytest.mark.onboard
+def test_create_tenant_from_draft_echoue_visiblement_si_le_cache_des_verrous_est_en_panne(
+    lespass_tenant, cleanup_waiting_configs, cleanup_clients,
+):
+    """
+    Memcached en panne : cache.add() leve une exception (alias "verrous",
+    sans ignore_exc). La task ne doit PAS s'arreter en silence comme si le
+    lieu etait « deja en cours » : elle ecrit l'erreur pour l'ecran de
+    lancement et leve l'exception. create_tenant() n'est jamais appele.
+    / Memcached down: the task must not silently skip. It writes the error
+    for the launch screen and raises. create_tenant() is never called.
+    """
+    from django.core.cache import caches
+    from onboard.tasks import create_tenant_from_draft
+
+    wc = _make_wc(cleanup_waiting_configs)
+    _make_pool_slot(cleanup_clients)
+
+    with patch.object(
+        caches["verrous"], "add",
+        side_effect=ConnectionRefusedError("memcached injoignable"),
+    ), patch.object(
+        WaitingConfiguration, "create_tenant", autospec=True,
+    ) as create_tenant_mocke:
+        with pytest.raises(ConnectionRefusedError):
+            create_tenant_from_draft(wc_uuid=str(wc.uuid))
+
+    assert create_tenant_mocke.call_count == 0
+    with schema_context("meta"):
+        wc.refresh_from_db()
+        assert wc.tenant_id is None
+        assert "verrou" in (wc.error_message or "")
+
+
+@pytest.mark.onboard
 def test_create_tenant_from_draft_is_idempotent(
     lespass_tenant, cleanup_waiting_configs, cleanup_clients,
 ):

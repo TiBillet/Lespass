@@ -181,11 +181,18 @@ ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
           <form id="card-recharge-form" hidden
                 hx-post="{% url 'laboutik-paiement-payer' %}"
                 hx-include="#addition-form [name='tag_id_cm'], #addition-form [name='hostname_client'], #addition-form [name='given_sum']"
-                hx-target="#messages" hx-swap="outerHTML">
+                hx-target="#messages" hx-swap="outerHTML"
+                hx-sync="this:drop"
+                hx-disabled-elt="#bt-valider-layer2">
+            {# hx-sync + hx-disabled-elt : un double appui sur Valider n'envoie qu'une requete #}
+            {# / A double tap on Validate sends a single request                              #}
             <input type="hidden" name="moyen_paiement" value="" />
             <input type="hidden" name="tag_id" value="{{ recharge.tag_id }}" />
             <input type="hidden" name="uuid_pv" value="{{ recharge.uuid_pv }}" />
             <input type="hidden" name="total" value="{{ recharge.montant_centimes }}" />
+            {# Cle d'idempotence : un double envoi ne recharge qu'une fois (payer) #}
+            {# / Idempotency key: a double submit tops up once                    #}
+            <input type="hidden" name="cle_idempotence_paiement" value="{{ recharge.cle_idempotence_paiement }}" />
             <input type="hidden" name="repid-{{ produit.uuid }}--{{ recharge.tarif_choisi.uuid }}" value="1" />
             {% if recharge.tarif_choisi.est_libre %}
               <input type="hidden" name="custom-{{ produit.uuid }}--{{ recharge.tarif_choisi.uuid }}" value="{{ recharge.montant_centimes }}" />

@@ -23,13 +23,18 @@
  * 6. Tarif poids/mesure → pavé numérique (clone de cotton/numpad.html,
  *    modele <template id="tarif-modele-pave"> dans cotton/articles.html)
  *    → bouton « Ajouter » → ajoute au panier
- * 7. Croix (ou toucher la grille voilee) → restaure la grille articles
+ * 7. Croix, toucher la grille voilee ou Echap → retire la popup (tarifClose)
  *
  * STYLE : laboutik/static/css/tarif.css (popup de la maquette).
  */
 
 // escapeHtml() est défini dans tibilletUtils.js (chargé dans le <head>).
 // / escapeHtml() is defined in tibilletUtils.js (loaded in <head>).
+
+// Etat de la popup ouverte, rendu a la fermeture par tarifClose().
+// / Open popup state, given back on close by tarifClose().
+let tarifPositionDeDefilement = 0
+let tarifElementARefocaliser = null
 
 /**
  * Affiche l'overlay de sélection de tarif dans #products
@@ -177,19 +182,44 @@ function tarifSelection(event) {
 		}
 	}
 
-	// CHANGEMENT CLE : injecter dans #products (pas #messages)
-	// L'overlay se superpose a la grille articles, le panier reste visible.
-	// / KEY CHANGE: inject into #products (not #messages)
-	// Overlay covers article grid, cart stays visible.
+	// La popup se pose PAR-DESSUS la grille articles (#products), pas dans #messages :
+	// - #messages couvre tout l'ecran, panier compris. Ici le panier reste visible :
+	//   le caissier voit chaque tarif fixe s'ajouter (la popup ne se ferme pas).
+	// - #messages recoit les reponses HTMX (paiement, alertes) : un swap y
+	//   detruirait la popup.
+	// On AJOUTE la popup a la fin de #products, sans toucher aux tuiles :
+	// elles restent a jour (badge de quantite, stock pousse par WebSocket).
+	// / The popup sits OVER the article grid, not in #messages (which covers the
+	// cart and receives HTMX responses). It is APPENDED: tiles stay live.
 	const articlesZone = document.querySelector('#products')
 
-	// Sauvegarder le contenu actuel pour pouvoir le restaurer a la fermeture
-	// / Save current content to restore on close
-	if (!window._tarifOverlayOriginalContent) {
-		window._tarifOverlayOriginalContent = articlesZone.innerHTML
+	// Une seule popup a la fois / One popup at a time
+	const popupDejaOuverte = articlesZone.querySelector('#tarif-overlay')
+	if (popupDejaOuverte) {
+		popupDejaOuverte.remove()
 	}
 
-	articlesZone.innerHTML = `
+	// Retenir l'element a refocaliser a la fermeture (la tuile touchee)
+	// / Remember the element to refocus on close (the tapped tile)
+	tarifElementARefocaliser = document.activeElement
+
+	// #products defile (overflow-y: auto). Une popup en position absolute y
+	// serait posee en haut du CONTENU, pas de la zone visible. On remonte donc
+	// en haut, on bloque le defilement pendant la popup, et on rendra la
+	// position a la fermeture.
+	// / #products scrolls: go to the top, lock scrolling, restore on close.
+	tarifPositionDeDefilement = articlesZone.scrollTop
+	articlesZone.scrollTop = 0
+	articlesZone.classList.add('tarif-popup-ouverte')
+
+	// Les tuiles sous le voile ne sont plus cliquables ni joignables au
+	// clavier (inert) : aria-modal dit vrai.
+	// / Tiles under the veil become inert, so aria-modal is truthful.
+	for (const tuileSousLeVoile of articlesZone.children) {
+		tuileSousLeVoile.inert = true
+	}
+
+	articlesZone.insertAdjacentHTML('beforeend', `
 		<div id="tarif-overlay" class="tarif-overlay" data-testid="tarif-overlay">
 			<div class="tarif-overlay-content"
 				role="dialog"
@@ -209,7 +239,7 @@ function tarifSelection(event) {
 				</div>
 			</div>
 		</div>
-	`
+	`)
 
 	// --- Attacher les handlers ---
 
@@ -273,6 +303,21 @@ function tarifSelection(event) {
 			tarifAjouterPoids(zone, boutonAjouter)
 		})
 	})
+
+	// Echap ferme la popup (comme la croix) / Escape closes the popup
+	articlesZone.querySelector('#tarif-overlay').addEventListener('keydown', (event) => {
+		if (event.key === 'Escape') {
+			tarifClose()
+		}
+	})
+
+	// Pas sur de l'utilité de ça, a voir
+	// Focus sur le premier tarif : le clavier et le lecteur d'ecran entrent
+	// directement dans la popup. / Focus the first rate.
+	// const premierTarif = articlesZone.querySelector('#tarif-overlay .tarif-list button')
+	// if (premierTarif) {
+	// 	premierTarif.focus()
+	// }
 }
 
 /**
@@ -669,15 +714,43 @@ function addArticleWithPrice(productUuid, priceUuid, prixCentimes, displayName, 
 }
 
 /**
- * Ferme l'overlay de sélection de tarif et restaure la grille articles
- * / Closes rate selection overlay and restores article grid
+ * Ferme l'overlay de sélection de tarif et rend la main à la grille articles
+ * / Closes rate selection overlay and gives the article grid back
+ *
+ * LOCALISATION : laboutik/static/js/tarif.js
+ *
+ * Les tuiles n'ont jamais quitte le DOM : on retire seulement la popup,
+ * on rend les tuiles actives (inert), on remet le defilement et le focus.
+ * / Tiles never left the DOM: remove the popup, un-inert the tiles,
+ * restore scrolling and focus.
+ *
+ * Appelee par : la croix, un toucher sur le voile, Echap,
+ * l'ajout d'un prix libre / poids, et addition.js.
  */
 function tarifClose() {
 	const articlesZone = document.querySelector('#products')
-	if (window._tarifOverlayOriginalContent) {
-		articlesZone.innerHTML = window._tarifOverlayOriginalContent
-		window._tarifOverlayOriginalContent = null
+	if (!articlesZone) {
+		return
 	}
+	const popupOuverte = articlesZone.querySelector('#tarif-overlay')
+	if (!popupOuverte) {
+		return
+	}
+	popupOuverte.remove()
+
+	for (const tuile of articlesZone.children) {
+		tuile.inert = false
+	}
+	articlesZone.classList.remove('tarif-popup-ouverte')
+	articlesZone.scrollTop = tarifPositionDeDefilement
+
+	// Rendre le focus a la tuile touchee, si elle est encore la
+	// / Give focus back to the tapped tile, if still there
+	const elementEncoreDansLaPage = tarifElementARefocaliser && document.contains(tarifElementARefocaliser)
+	if (elementEncoreDansLaPage) {
+		tarifElementARefocaliser.focus()
+	}
+	tarifElementARefocaliser = null
 }
 
 /**

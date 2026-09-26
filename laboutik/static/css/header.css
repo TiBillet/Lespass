@@ -78,6 +78,42 @@
 	overflow-wrap: break-word;
 	font-weight: bold;
 	text-wrap: balance;
+	/* #header-title est un <button> : on retire le style natif du navigateur
+	   pour garder le rendu d'avant (fond, bordure, police, alignement).
+	   / #header-title is a <button>: drop the native styles. */
+	background: none;
+	border: 0;
+	padding: 0;
+	margin: 0;
+	color: inherit;
+	font-family: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+/* Bouton burger (petit ecran) : style natif retire, cible tactile de 44 px.
+   / Burger button (small screens): native style removed, 44px touch target. */
+.hdr-burger-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 44px;
+	min-height: 44px;
+	padding: 0;
+	margin: 0;
+	background: none;
+	border: 0;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+/* Anneau de focus clavier, visible tout de suite (pas d'animation).
+   / Keyboard focus ring, shown instantly. */
+#header-title:focus-visible,
+.hdr-burger-btn:focus-visible {
+	outline: 3px solid var(--text);
+	outline-offset: 2px;
 }
 
 .header-menu {

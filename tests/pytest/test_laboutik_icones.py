@@ -157,6 +157,41 @@ def test_chaque_icone_de_la_migration_existe_dans_la_police(icones_de_la_police_
     assert absentes == [], f"Icones absentes de la police : {absentes}"
 
 
+def test_chaque_icone_de_la_migration_est_proposee_dans_le_selecteur_de_l_admin():
+    """Chaque nom produit par la migration est dans ICON_POS.
+    Sinon le selecteur ne coche rien et un enregistrement dans l'admin
+    efface l'icone sans prevenir.
+    / Every migration output is in ICON_POS, otherwise saving in the admin
+    would silently wipe the icon."""
+    from Administration.admin.products import ICON_POS
+
+    noms_du_selecteur = set()
+    for nom_icone, _libelle in ICON_POS:
+        noms_du_selecteur.add(nom_icone)
+    noms_produits = set(migration_icones.CORRESPONDANCE.values()) | {migration_icones.ICONE_DE_REPLI}
+    absentes = sorted(noms_produits - noms_du_selecteur)
+    assert absentes == [], f"Icones de la migration absentes de ICON_POS : {absentes}"
+
+
+def test_le_selecteur_coche_une_icone_hors_liste_au_lieu_de_l_effacer():
+    """Une icone absente de ICON_POS est rendue comme option cochee.
+    / An icon missing from ICON_POS is rendered as a checked option."""
+    from Administration.admin.products import IconPickerWidget
+
+    html = IconPickerWidget().render("icon_pos", "icone_inconnue_de_la_liste")
+
+    assert 'data-testid="icon-picker-valeur-hors-liste"' in html
+    assert 'value="icone_inconnue_de_la_liste"' in html
+
+
+def test_le_selecteur_n_ajoute_pas_d_option_pour_une_icone_de_la_liste():
+    from Administration.admin.products import IconPickerWidget
+
+    html = IconPickerWidget().render("icon_pos", "sports_bar")
+
+    assert 'data-testid="icon-picker-valeur-hors-liste"' not in html
+
+
 def test_la_migration_convertit_un_nom_fontawesome():
     """« fa-beer » devient « sports_bar », comme dans le selecteur de l'admin.
     / "fa-beer" becomes "sports_bar", as in the admin picker."""

@@ -77,11 +77,17 @@
 	/ NOTE: 'tarifSelection' listener is on #articles-zone (tarif.js),
 	not #messages. HTMX partials still use innerHTML on #messages
 	for other reasons (preserving HTMX listeners). -->
+	{# hx-sync="this:drop" : tant qu'une requete du formulaire est en cours, un 2e envoi   #}
+	{# (double appui sur Valider) est ignore. hx-disabled-elt grise le bouton Valider      #}
+	{# pendant la requete. Le serveur protege aussi (cle_idempotence_paiement).            #}
+	{# / Drop a 2nd submit while one is in flight; disable Validate meanwhile.             #}
 	<form id="addition-form" class="hide"
 		hx-post="{% url 'laboutik-paiement-moyens_paiement' %}"
 		hx-trigger="validerPaiement"
 		hx-target="#messages"
 		hx-swap="outerHTML"
+		hx-sync="this:drop"
+		hx-disabled-elt="#bt-valider-layer2"
 		hx-on::after-request="hideAndEmptyElement('#confirm')"
 		data-url-reset="{% url 'laboutik-paiement-moyens_paiement' %}">
 		<input type="text" name="id_table" value="{{ id_table }}" />
@@ -94,6 +100,10 @@
 		<input type="text" id="addition-moyen-paiement" name="moyen_paiement" value="" />
 		<input type="text" id="addition-hostname-client" name="hostname_client" value="{{ hostname_client }}" />
 		<input type="text" id="addition-uuid-transaction" name="uuid_transaction" value="" />
+		{# Cle d'idempotence : remplie par hx_display_type_payment.html (swap hors bande), #}
+		{# videe par additionReset(). Voir _executer_avec_cle_idempotence (views.py).       #}
+		{# / Idempotency key: filled out-of-band, cleared by additionReset().               #}
+		<input type="hidden" id="addition-cle-idempotence" name="cle_idempotence_paiement" value="" />
 		<input type="number" id="addition-given-sum" name="given_sum" value="" />
 		<input type="text" id="addition-moyen-complement" name="moyen_complement" value="" />
 	</form>

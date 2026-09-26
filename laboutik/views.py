@@ -11,7 +11,7 @@
 import logging
 import uuid as uuid_module
 from datetime import timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from json import dumps
 from urllib.parse import urlencode
 
@@ -555,6 +555,14 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
 
     articles = []
     for product in produits:
+        # Recharge temps desactivee : ne jamais afficher un produit TM.
+        # Il n'est plus dans METHODES_RECHARGE, donc sans ce filtre il
+        # s'afficherait comme un article normal, paye en euros.
+        # / Time top-up disabled: never show a TM product (it would look like
+        # a normal paid item since it is no longer in METHODES_RECHARGE).
+        if product.methode_caisse == Product.RECHARGE_TEMPS:
+            continue
+
         # Produits de recharge sans Asset lie, ou Asset archive/inactif → ne pas afficher
         # / Top-up products without linked Asset, or archived/inactive Asset → skip
         if product.methode_caisse in METHODES_RECHARGE:
@@ -1651,6 +1659,11 @@ def _construire_contexte_recharge(
         "montant_centimes": None,
         "solde_apres_centimes": None,
         "moyens_paiement": [],
+        # Cle d'idempotence du formulaire #card-recharge-form (hx_card_recharge.html).
+        # Un double appui sur « Valider » ne recharge qu'une fois.
+        # Voir _executer_avec_cle_idempotence().
+        # / Idempotency key of #card-recharge-form: a double tap tops up once.
+        "cle_idempotence_paiement": uuid_module.uuid4(),
     }
 
     # Sans point de vente connu, on ne propose pas de recharge.
@@ -4229,6 +4242,162 @@ def _calculer_qty_partielles(lignes_avec_amounts, prix_unitaire_centimes, qty_to
     return lignes_avec_amounts
 
 
+def _lire_cle_idempotence_paiement(donnees_post):
+    """
+    Lit la cle d'idempotence du paiement envoyee par le formulaire.
+    / Reads the payment idempotency key sent by the form.
+
+    LOCALISATION : laboutik/views.py
+
+    La cle est creee par le serveur dans moyens_paiement() et posee dans
+    #addition-form (champ cle_idempotence_paiement), ou directement dans
+    #card-recharge-form (hx_card_recharge.html).
+    / The key is created by moyens_paiement() or put in #card-recharge-form.
+
+    :param donnees_post: QueryDict du POST
+    :return: uuid.UUID, ou None si absente ou mal formee (ancien client)
+    """
+    valeur_recue = donnees_post.get("cle_idempotence_paiement", "")
+    if not valeur_recue:
+        return None
+    try:
+        return uuid_module.UUID(str(valeur_recue))
+    except ValueError:
+        return None
+
+
+def _numero_de_verrou_du_paiement(cle_idempotence):
+    """
+    Texte qui identifie le verrou PostgreSQL de ce paiement.
+    On ajoute le schema du lieu : deux lieux n'attendent jamais l'un l'autre.
+    / Text naming the PostgreSQL lock of this payment, prefixed by the tenant schema.
+    """
+    return f"laboutik-paiement:{connection.schema_name}:{cle_idempotence}"
+
+
+def _executer_avec_cle_idempotence(request, fonction_de_paiement):
+    """
+    Execute un paiement une seule fois par cle d'idempotence.
+    / Runs a payment only once per idempotency key.
+
+    LOCALISATION : laboutik/views.py
+
+    Appelee par payer() et payer_complementaire().
+
+    LE PROBLEME : un double appui sur « Valider » (ou un renvoi apres une
+    coupure reseau) envoie deux fois le meme paiement. Sans protection,
+    le client est debite deux fois.
+    / A double tap (or a network retry) sends the same payment twice.
+
+    LA SOLUTION :
+    1. On pose un verrou PostgreSQL sur la cle (pg_advisory_lock).
+       La 2e requete attend que la 1re ait fini.
+    2. On regarde si une LigneArticle porte deja cette cle (uuid_transaction).
+       Si oui : le paiement est deja fait, on ne rejoue rien.
+    3. Sinon, on execute le paiement. La cle devient son uuid_transaction.
+    4. On retire le verrou, meme en cas d'erreur (finally).
+    / 1. PostgreSQL lock on the key. 2. A LigneArticle already carries it →
+    already paid, replay nothing. 3. Otherwise pay, the key becomes the
+    uuid_transaction. 4. Always release the lock.
+
+    Pourquoi un verrou de SESSION et pas un bloc atomic() autour de tout :
+    les fonctions de paiement ont deja leurs propres blocs atomic. Les
+    englober changerait ce qui est annule en cas d'erreur. Le verrou de
+    session ne touche pas aux transactions. ATOMIC_REQUESTS est desactive :
+    la 1re requete a donc tout valide en base avant de rendre le verrou.
+    / Session lock, not an outer atomic(): payment code already has its own
+    atomic blocks. ATOMIC_REQUESTS is off, so the first request has committed
+    before releasing the lock.
+
+    Pourquoi pas cache.add() : si memcached tombe, tous les paiements seraient
+    refuses (voir ignore_exc dans settings.py).
+    / Not cache.add(): a memcached outage would block every payment.
+
+    :param request: requete Django (POST)
+    :param fonction_de_paiement: methode a appeler, avec la signature
+        (request, uuid_transaction_impose=None)
+    :return: la reponse HTML du paiement, ou un message « deja enregistre »
+    """
+    cle_idempotence = _lire_cle_idempotence_paiement(request.POST)
+
+    # Pas de cle : ancien client, ou parcours qui ne passe pas par
+    # moyens_paiement. On paie comme avant.
+    # / No key: old client or path skipping moyens_paiement. Pay as before.
+    if cle_idempotence is None:
+        return fonction_de_paiement(request)
+
+    numero_de_verrou = _numero_de_verrou_du_paiement(cle_idempotence)
+    with connection.cursor() as curseur:
+        curseur.execute("SELECT pg_advisory_lock(hashtext(%s))", [numero_de_verrou])
+    try:
+        paiement_deja_enregistre = LigneArticle.objects.filter(
+            uuid_transaction=cle_idempotence
+        ).exists()
+        if paiement_deja_enregistre:
+            logger.warning(
+                f"Paiement en double ignore (cle {cle_idempotence}) : "
+                f"les lignes existent deja"
+            )
+            contexte_deja_enregistre = {
+                "action": "initUrlAddition();",
+                "msg_type": "success",
+                "msg_content": _(
+                    "Ce paiement est déjà enregistré. Il n'a pas été encaissé une deuxième fois."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", contexte_deja_enregistre
+            )
+
+        return fonction_de_paiement(request, uuid_transaction_impose=cle_idempotence)
+    finally:
+        with connection.cursor() as curseur:
+            curseur.execute(
+                "SELECT pg_advisory_unlock(hashtext(%s))", [numero_de_verrou]
+            )
+
+
+def _montant_poids_mesure_en_centimes(produit, prix_obj, quantite_saisie):
+    """
+    Calcule le prix d'une vente au poids ou au volume, en centimes.
+    / Computes the price of a weight/volume sale, in cents.
+
+    LOCALISATION : laboutik/views.py
+
+    Le tarif porte un prix de reference : prix au kg (stock en grammes)
+    ou prix au litre (stock en centilitres). Le caissier saisit une quantite
+    en g ou en cl. On divise donc par 1000 (g → kg) ou par 100 (cl → L).
+    C'est la meme regle que la tuile (_construire_donnees_articles, unite_saisie_label)
+    et que l'affichage dans tarif.js (data-diviseur).
+    / The price is per kg (stock in grams) or per litre (stock in cl).
+    Same rule as the tile and tarif.js: divide by 1000 (g) or 100 (cl).
+
+    Exemple : 350 g de comte a 20 €/kg → 350 / 1000 x 2000 = 700 centimes.
+
+    :param produit: Product vendu au poids/mesure
+    :param prix_obj: Price avec poids_mesure=True (prix de reference en euros)
+    :param quantite_saisie: int, quantite en g ou en cl (> 0)
+    :return: int, montant en centimes (arrondi au centime le plus proche)
+    """
+    # getattr avec defaut marche sur une relation OneToOne inverse absente
+    # (RelatedObjectDoesNotExist herite d'AttributeError).
+    # Sans stock, on suppose des grammes, comme la tuile.
+    # / getattr default works on a missing reverse OneToOne. No stock → grams.
+    stock_du_produit = getattr(produit, "stock_inventaire", None)
+    unite_en_centilitres = stock_du_produit is not None and stock_du_produit.unite == "CL"
+    if unite_en_centilitres:
+        diviseur = Decimal(100)
+    else:
+        diviseur = Decimal(1000)
+
+    prix_de_reference_en_centimes = Decimal(prix_obj.prix) * 100
+    montant_en_centimes = (
+        Decimal(quantite_saisie) / diviseur * prix_de_reference_en_centimes
+    )
+    return int(montant_en_centimes.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
 def _extraire_articles_du_panier(donnees_post, point_de_vente):
     """
     Extrait les articles du formulaire POST et les charge depuis la DB.
@@ -4276,7 +4445,9 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         str(p.uuid): p
         for p in point_de_vente.products.filter(
             Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION)
-        ).prefetch_related(prix_euros_prefetch)
+        )
+        .select_related("stock_inventaire")
+        .prefetch_related(prix_euros_prefetch)
     }
 
     articles_panier = []
@@ -4350,6 +4521,15 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
             )
             continue
 
+        # Recharge temps desactivee : refuser un produit TM, meme dans un POST force.
+        # Sinon il serait encaisse en euros sans crediter de temps.
+        # / Time top-up disabled: reject a TM product, even in a forged POST.
+        if produit.methode_caisse == Product.RECHARGE_TEMPS:
+            logger.warning(
+                f"Produit {produit.name} (recharge temps) refusé : fonction désactivée"
+            )
+            continue
+
         if not produit.prix_euros:
             logger.warning(f"Produit {produit.name} n'a pas de prix EUR publié")
             continue
@@ -4371,28 +4551,51 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
             prix_obj = produit.prix_euros[0]
 
         # Valider le prix libre ou poids/mesure (custom_amount_centimes)
-        # Le custom_amount est accepte pour : prix libre (free_price) ET poids/mesure (poids_mesure).
+        # Pour le poids/mesure : le serveur recalcule le montant (quantite x prix de reference).
         # Pour le prix libre : le montant doit etre >= au minimum (prix de base).
-        # Pour le poids/mesure : le montant est calcule cote JS (quantite x prix unitaire), pas de minimum.
-        # Securite : rejeter les montants invalides pour les prix libres.
+        # Pour les autres tarifs : un montant custom est rejete.
         # / Validate free price or weight/volume (custom_amount_centimes)
-        # custom_amount accepted for: free price (free_price) AND weight/volume (poids_mesure).
-        # Free price: amount must be >= minimum (base price).
-        # Weight/volume: amount computed by JS (quantity x unit price), no minimum check.
-        # Security: reject invalid amounts for free prices.
-        if custom_amount_centimes is not None:
-            if prix_obj.poids_mesure:
-                # Poids/mesure : le montant est calcule par le JS, on l'accepte tel quel.
-                # Verification de coherence : le montant doit etre > 0.
-                # / Weight/volume: amount computed by JS, accepted as-is.
-                # Sanity check: amount must be > 0.
-                if custom_amount_centimes <= 0:
-                    logger.warning(
-                        f"Montant poids/mesure invalide ({custom_amount_centimes}) "
-                        f"pour {prix_obj.name}"
-                    )
-                    custom_amount_centimes = None
-            elif prix_obj.free_price:
+        # Weight/volume: server recomputes the amount. Free price: amount >= minimum.
+        # Other prices: a custom amount is rejected.
+        if prix_obj.poids_mesure:
+            # Poids/mesure : le serveur recalcule le montant lui-meme.
+            # On ne fait jamais confiance au montant envoye par le JS :
+            # un client modifie pourrait vendre 1 kg a 1 centime.
+            # On part de la quantite saisie (weight_amount, en g ou en cl)
+            # et du prix de reference du tarif (prix au kg ou au litre).
+            # / Weight/volume: the server recomputes the amount itself and never
+            # trusts the JS amount. Based on the entered quantity and the price per kg/L.
+            quantite_saisie_est_valide = (
+                weight_amount is not None and weight_amount > 0
+            )
+            if not quantite_saisie_est_valide:
+                logger.warning(
+                    f"Quantite poids/mesure absente ou invalide ({weight_amount}) "
+                    f"pour {prix_obj.name} : article ignore"
+                )
+                continue
+
+            montant_recalcule_centimes = _montant_poids_mesure_en_centimes(
+                produit, prix_obj, weight_amount
+            )
+
+            # Un ecart avec le montant du JS n'est pas normal : on le trace.
+            # / A gap with the JS amount is not normal: log it.
+            montant_du_js_est_different = (
+                custom_amount_centimes is not None
+                and abs(custom_amount_centimes - montant_recalcule_centimes) > 1
+            )
+            if montant_du_js_est_different:
+                logger.warning(
+                    f"Montant poids/mesure du client ({custom_amount_centimes}) "
+                    f"different du montant serveur ({montant_recalcule_centimes}) "
+                    f"pour {prix_obj.name} : montant serveur retenu"
+                )
+
+            custom_amount_centimes = montant_recalcule_centimes
+
+        elif custom_amount_centimes is not None:
+            if prix_obj.free_price:
                 # Prix libre : le montant doit etre >= au minimum
                 # / Free price: amount must be >= minimum
                 prix_minimum_centimes = int(round(prix_obj.prix * 100))
@@ -4587,6 +4790,10 @@ def _rendre_popup_paiement_client_identifie(
         "user_solde": client_solde,
         "tag_id": tag_id,
         "articles_pour_recapitulatif": articles_pour_recapitulatif,
+        # Nouvelle cle a chaque affichage des moyens de paiement.
+        # Voir _executer_avec_cle_idempotence().
+        # / New key each time payment methods are shown.
+        "cle_idempotence_paiement": uuid_module.uuid4(),
     }
     return render(request, "laboutik/partial/hx_display_type_payment.html", context)
 
@@ -6285,6 +6492,10 @@ class PaiementViewSet(viewsets.ViewSet):
             "panier_a_adhesions": panier_a_adhesions,
             "panier_a_billets": panier_a_billets,
             "panier_necessite_client": panier_necessite_client,
+            # Nouvelle cle a chaque affichage des moyens de paiement : un double
+            # envoi de payer() arrive avec la meme cle (_executer_avec_cle_idempotence).
+            # / New key each time payment methods are shown.
+            "cle_idempotence_paiement": uuid_module.uuid4(),
         }
         return render(request, "laboutik/partial/hx_display_type_payment.html", context)
 
@@ -6351,6 +6562,29 @@ class PaiementViewSet(viewsets.ViewSet):
     def payer(self, request):
         """
         POST /laboutik/paiement/payer/
+        Protege le paiement contre un double envoi, puis l'execute.
+        / Guards the payment against a double submit, then runs it.
+
+        LOCALISATION : laboutik/views.py
+
+        Le serveur a pose une cle d'idempotence dans le formulaire au moment
+        d'afficher les moyens de paiement (moyens_paiement, champ
+        cle_idempotence_paiement). Un double appui sur « Valider », ou un
+        renvoi apres une coupure reseau, arrive donc avec la MEME cle.
+        Voir _executer_avec_cle_idempotence().
+        / The server put an idempotency key in the form when showing the payment
+        methods. A double tap or a network retry arrives with the SAME key.
+
+        Sans cle (ancien client) : le paiement s'execute comme avant.
+        / Without a key (old client): the payment runs as before.
+        """
+        return _executer_avec_cle_idempotence(
+            request,
+            self._executer_paiement,
+        )
+
+    def _executer_paiement(self, request, uuid_transaction_impose=None):
+        """
         Exécute le paiement et crée les LigneArticle en base.
         Executes the payment and creates LigneArticle records in DB.
 
@@ -6497,6 +6731,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     articles_panier,
                     total_en_euros,
                     point_de_vente,
+                    uuid_transaction_impose=uuid_transaction_impose,
                 )
 
         # --- Transaction précédente (complément après fonds insuffisants) ---
@@ -6524,6 +6759,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 consigne_dans_panier,
                 transaction_precedente,
                 moyen_paiement_code,
+                uuid_transaction_impose=uuid_transaction_impose,
             )
 
         if moyen_paiement_code == "espece":
@@ -6537,6 +6773,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 consigne_dans_panier,
                 transaction_precedente,
                 moyen_paiement_code,
+                uuid_transaction_impose=uuid_transaction_impose,
             )
 
         if moyen_paiement_code == "nfc":
@@ -6550,6 +6787,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 consigne_dans_panier,
                 moyen_paiement_code,
                 point_de_vente,
+                uuid_transaction_impose=uuid_transaction_impose,
             )
 
         # --- Panier gratuit (ex : billet a 0 €) ---
@@ -6588,6 +6826,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 consigne_dans_panier,
                 transaction_precedente,
                 moyen_paiement_code,
+                uuid_transaction_impose=uuid_transaction_impose,
             )
 
         # Moyen de paiement non reconnu → erreur
@@ -6618,6 +6857,7 @@ class PaiementViewSet(viewsets.ViewSet):
         consigne_dans_panier,
         transaction_precedente,
         moyen_paiement_code,
+        uuid_transaction_impose=None,
     ):
         """
         Paiement par carte bancaire ("carte_bancaire") ou chèque ("CH").
@@ -6641,9 +6881,12 @@ class PaiementViewSet(viewsets.ViewSet):
             uuid=uuid_pv
         )
 
-        # Identifiant unique de ce paiement — regroupe toutes les LigneArticle
-        # / Unique ID for this payment — groups all LigneArticle records
-        uuid_transaction = uuid_module.uuid4()
+        # Identifiant unique de ce paiement — regroupe toutes les LigneArticle.
+        # Si payer() a recu une cle d'idempotence, on la reutilise :
+        # c'est elle qui permet de detecter un double envoi.
+        # / Unique ID for this payment — groups all LigneArticle records.
+        # Reuses the idempotency key from payer() when there is one.
+        uuid_transaction = uuid_transaction_impose or uuid_module.uuid4()
 
         # Séparer articles normaux et recharges
         # Separate normal articles and top-ups
@@ -6828,6 +7071,7 @@ class PaiementViewSet(viewsets.ViewSet):
         consigne_dans_panier,
         transaction_precedente,
         moyen_paiement_code,
+        uuid_transaction_impose=None,
     ):
         """
         Paiement en espèces.
@@ -6865,9 +7109,9 @@ class PaiementViewSet(viewsets.ViewSet):
         if somme_est_suffisante:
             ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
 
-            # Identifiant unique de ce paiement
-            # / Unique ID for this payment
-            uuid_transaction = uuid_module.uuid4()
+            # Identifiant unique de ce paiement (cle d'idempotence si fournie)
+            # / Unique ID for this payment (idempotency key when provided)
+            uuid_transaction = uuid_transaction_impose or uuid_module.uuid4()
 
             # Séparer articles normaux et recharges
             # Separate normal articles and top-ups
@@ -7064,6 +7308,7 @@ class PaiementViewSet(viewsets.ViewSet):
         articles_panier,
         total_en_euros,
         point_de_vente,
+        uuid_transaction_impose=None,
     ):
         """
         Rembourse une consigne sur la carte du client : une RECHARGE, pas un débit.
@@ -7131,7 +7376,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # --- 3. Créditer, puis écrire la ligne — dans la même transaction ---
         # / Credit, then write the line — in the same transaction.
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
-        uuid_transaction = uuid_module.uuid4()
+        # Cle d'idempotence de payer() si fournie / idempotency key when provided
+        uuid_transaction = uuid_transaction_impose or uuid_module.uuid4()
         montant_a_rendre_centimes = abs(_calculer_total_panier_centimes(articles_panier))
 
         with db_transaction.atomic():
@@ -7214,6 +7460,7 @@ class PaiementViewSet(viewsets.ViewSet):
         consigne_dans_panier,
         moyen_paiement_code,
         point_de_vente,
+        uuid_transaction_impose=None,
     ):
         """
         Paiement NFC (cashless) via fedow_core — cascade multi-asset.
@@ -7583,7 +7830,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # ================================================================ #
 
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
-        uuid_transaction = uuid_module.uuid4()
+        # Cle d'idempotence de payer() si fournie / idempotency key when provided
+        uuid_transaction = uuid_transaction_impose or uuid_module.uuid4()
 
         # ----- Débit LEGACY (HORS atomic : c'est un appel réseau) -----
         # Si le legacy couvre tout le reste, on le débite MAINTENANT, avant le bloc atomic local.
@@ -8353,6 +8601,24 @@ class PaiementViewSet(viewsets.ViewSet):
     def payer_complementaire(self, request):
         """
         POST /laboutik/paiement/payer_complementaire/
+        Protege le paiement complementaire contre un double envoi, puis l'execute.
+        / Guards the complementary payment against a double submit, then runs it.
+
+        LOCALISATION : laboutik/views.py
+
+        Meme cle d'idempotence que payer() : complement-form inclut #addition-form.
+        Le 1er passage « 2e carte insuffisante » n'ecrit rien en base : le 2e
+        passage peut donc reutiliser la meme cle sans etre pris pour un doublon.
+        / Same idempotency key as payer(). The "2nd card insufficient" first pass
+        writes nothing, so the second pass can reuse the key.
+        """
+        return _executer_avec_cle_idempotence(
+            request,
+            self._executer_paiement_complementaire,
+        )
+
+    def _executer_paiement_complementaire(self, request, uuid_transaction_impose=None):
+        """
         Finalise un paiement NFC avec complément (espèces, CB, ou 2ème carte).
         / Finalizes an NFC payment with complement (cash, CC, or 2nd card).
 
@@ -8543,7 +8809,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # ---------------------------------------------------------- #
 
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
-        uuid_transaction = uuid_module.uuid4()
+        # Cle d'idempotence de payer() si fournie / idempotency key when provided
+        uuid_transaction = uuid_transaction_impose or uuid_module.uuid4()
 
         donnees_paiement["total"] = total_centimes
         donnees_paiement["missing"] = 0

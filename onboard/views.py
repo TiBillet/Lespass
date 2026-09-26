@@ -587,7 +587,7 @@ def _consume_onboard_sso_token(token):
     # Imports locaux : on n'a besoin d'eux que sur le chemin SSO.
     # / Local imports: only needed on the SSO path.
     from django.contrib.auth import get_user_model
-    from django.core.cache import cache
+    from django.core.cache import caches
     from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
     from django.utils.http import urlsafe_base64_decode
 
@@ -634,8 +634,12 @@ def _consume_onboard_sso_token(token):
     # One-shot via cache.add() — atomique entre workers. Si la cle existe
     # deja, c'est un rejeu (replay attack ou refresh trop tardif).
     # / Atomic one-shot via cache.add(). Existing key = replay attempt.
+    # Alias "verrous" (settings.CACHES), sans ignore_exc : si memcached est en
+    # panne, on a une erreur visible au lieu de refuser un jeton valide comme
+    # un « rejeu ». / "verrous" alias: an outage raises instead of looking like a replay.
+    cache_des_verrous = caches["verrous"]
     cache_key = f"onboard:sso:consumed:{_hash_for_cache(token)}"
-    got_lock = cache.add(cache_key, "1", timeout=ONBOARD_SSO_TTL_SECONDS)
+    got_lock = cache_des_verrous.add(cache_key, "1", timeout=ONBOARD_SSO_TTL_SECONDS)
     if not got_lock:
         logger.warning(
             "Onboard SSO: token deja consomme (rejeu user_pk=%s).",

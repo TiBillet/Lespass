@@ -95,11 +95,15 @@ data-testid="complement-reste-a-payer" (regex _extraire_reste).
 
         {# Champs caches pour propager la cascade de la 1ere carte #}
         {# / Hidden fields propagating the 1st card's cascade #}
+        {# hx-sync + hx-disabled-elt : un double appui sur Valider n'envoie qu'une requete #}
+        {# / A double tap on Validate sends a single request                              #}
         <form id="complement-form"
               hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
               hx-include="#addition-form"
               hx-target="#messages"
-              hx-swap="outerHTML">
+              hx-swap="outerHTML"
+              hx-sync="this:drop"
+              hx-disabled-elt="#bt-valider-layer2">
           <input type="hidden"
                  name="tag_id_carte1"
                  value="{{ tag_id_carte1 }}"

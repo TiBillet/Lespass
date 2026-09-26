@@ -316,25 +316,46 @@ def create_tenant_from_draft(self, wc_uuid):
     # / Local import to avoid a circular dependency at app load.
     from django.utils import timezone  # noqa: F401  # used in skipped federation block
 
-    # === 1. Idempotence : claim Redis distribue ===
+    # === 1. Idempotence : claim distribue dans le cache (memcached) ===
     # On utilise `cache.add()` qui retourne True seulement si la cle n'existait
-    # pas. C'est atomique cote Redis, ce qui sert de mutex distribue entre
+    # pas. C'est atomique cote memcached, ce qui sert de mutex distribue entre
     # workers Celery paralleles (un double-clic utilisateur n'enqueue qu'une
     # vraie execution). TTL 5min : si la task crashe entre temps, le claim
     # expire et un retry pourra reprendre. select_for_update n'aurait pas
     # suffi car wc.create_tenant() dure plusieurs minutes ET fait du DDL
     # (CREATE SCHEMA + migrate_schemas) qui ne peut pas tenir dans une
     # transaction PostgreSQL.
-    # / Redis-based distributed claim. `cache.add()` returns True only if
-    # the key didn't exist — atomic on the Redis side, acting as a mutex
+    # / Cache-based (memcached) distributed claim. `cache.add()` returns True only if
+    # the key didn't exist — atomic on the memcached side, acting as a mutex
     # across parallel Celery workers (a double-click only enqueues one real
     # execution). TTL 5min: if the task crashes, the claim expires and a
     # retry can resume. select_for_update would not suffice because
     # wc.create_tenant() takes minutes AND runs DDL (CREATE SCHEMA +
     # migrate_schemas) that cannot live inside a PostgreSQL transaction.
-    from django.core.cache import cache
+    #
+    # On passe par l'alias "verrous" (settings.CACHES), sans ignore_exc :
+    # si memcached est en panne, cache.add() leve une exception, au lieu de
+    # renvoyer False comme si le lieu etait « deja en cours ». On ecrit alors
+    # l'erreur dans wc.error_message (l'ecran l'affiche et l'utilisateur peut
+    # relancer), puis on leve l'exception pour marquer la task FAILURE.
+    # / "verrous" alias (no ignore_exc): a memcached outage raises instead of
+    # looking like "already being processed". Write the error for the launch
+    # screen, then re-raise to mark the task FAILURE.
+    from django.core.cache import caches
+    cache_des_verrous = caches["verrous"]
     claim_key = f"onboard:create_tenant_claim:{wc_uuid}"
-    got_claim = cache.add(claim_key, "1", timeout=300)
+    try:
+        got_claim = cache_des_verrous.add(claim_key, "1", timeout=300)
+    except Exception as exc:
+        with schema_context("meta"):
+            WaitingConfiguration.objects.filter(uuid=wc_uuid).update(
+                error_message=f"Cache (verrou) indisponible, réessayez : {exc}"
+            )
+        logger.exception(
+            "create_tenant_from_draft: cache des verrous indisponible pour WC %s",
+            wc_uuid,
+        )
+        raise
     if not got_claim:
         logger.info(
             "create_tenant_from_draft: WC %s already being processed, skipping",
@@ -353,7 +374,7 @@ def create_tenant_from_draft(self, wc_uuid):
             )
             # On libere le claim avant return (le tenant est deja la).
             # / Release the claim before returning (tenant already exists).
-            cache.delete(claim_key)
+            cache_des_verrous.delete(claim_key)
             return
 
         # === 2. Pool check (sous claim) ===
@@ -377,7 +398,7 @@ def create_tenant_from_draft(self, wc_uuid):
             )
             # On libere le claim, l'admin pourra rejouer apres
             # `create_empty_tenant`. / Release claim, admin will rerun.
-            cache.delete(claim_key)
+            cache_des_verrous.delete(claim_key)
             return
 
     # === 3. Creation du tenant via la chaine existante BaseBillet ===
@@ -403,7 +424,7 @@ def create_tenant_from_draft(self, wc_uuid):
             wc.refresh_from_db()
             wc.error_message = f"create_tenant() raised: {exc}"
             wc.save(update_fields=["error_message"])
-        cache.delete(claim_key)
+        cache_des_verrous.delete(claim_key)
         logger.exception(
             "create_tenant_from_draft: create_tenant() failed for WC %s",
             wc_uuid,
@@ -799,7 +820,7 @@ def create_tenant_from_draft(self, wc_uuid):
     # the `wc.tenant_id is not None` check at task start. Without this
     # release, admin clicking "Retry" within 5min saw "already being
     # processed" and thought their action had no effect.
-    cache.delete(claim_key)
+    cache_des_verrous.delete(claim_key)
 
     logger.info(
         "create_tenant_from_draft: success for WC %s -> %s",

@@ -179,6 +179,7 @@ ICON_POS = [
     ("star", _("Premium / fidelite")),
     # Spectacle / Festival
     ("confirmation_number", _("Billetterie")),
+    ("calendar_month", _("Agenda / evenement")),
     ("music_note", _("Concert / musique")),
     ("queue_music", _("Live / scene")),
     ("mic", _("Spectacle / conference")),
@@ -195,7 +196,10 @@ ICON_POS = [
     ("stylus_fountain_pen", _("Stylo / papeterie")),
     ("inventory_2", _("Coffret / lot")),
     ("sell", _("Article / divers")),
+    ("category", _("Categorie / autre")),
     # Lieux / Points de vente
+    ("point_of_sale", _("Caisse / point de vente")),
+    ("apps", _("Tous les articles")),
     ("beach_access", _("Terrasse / plage")),
     ("store", _("Boutique / stand")),
     ("storefront", _("Echoppe / marche")),
@@ -218,6 +222,8 @@ ICON_POS = [
     ("block", _("Bloquer / desactiver")),
     ("lock", _("Verrouille")),
     ("check_circle", _("Valide / succes")),
+    ("ink_eraser", _("Effacer / vider la carte")),
+    ("image", _("Image / photo")),
 ]
 
 
@@ -289,6 +295,18 @@ class IconPickerWidget(forms.Widget):
         # Current value (can be None or empty string)
         valeur_actuelle = value or ""
 
+        # La valeur actuelle est-elle dans la liste ICON_POS ?
+        # Si non, le template l'affiche comme option cochee en plus.
+        # Ainsi, un enregistrement ne l'efface jamais sans prevenir.
+        # / Is the current value in ICON_POS? If not, the template shows it
+        # as an extra checked option so saving never wipes it silently.
+        noms_des_icones_de_la_liste = []
+        for nom_icone, _libelle in ICON_POS:
+            noms_des_icones_de_la_liste.append(nom_icone)
+        valeur_hors_liste = bool(valeur_actuelle) and (
+            valeur_actuelle not in noms_des_icones_de_la_liste
+        )
+
         # Rendu via template dédié
         # Render via dedicated template
         return mark_safe(
@@ -297,6 +315,7 @@ class IconPickerWidget(forms.Widget):
                 {
                     "widget_name": name,
                     "current_value": valeur_actuelle,
+                    "valeur_hors_liste": valeur_hors_liste,
                     "icons": ICON_POS,
                 },
             )

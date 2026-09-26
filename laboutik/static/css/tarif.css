@@ -23,6 +23,13 @@
     background: var(--bg);
 }
 
+/* Popup ouverte : la grille ne defile plus. tarif.js l'a remontee en haut,
+   donc le voile (inset: 0) couvre exactement la zone visible.
+   / Popup open: the grid stops scrolling (tarif.js scrolled it to the top). */
+#products.tarif-popup-ouverte {
+    overflow: hidden;
+}
+
 /* --- Voile sur la grille / Veil over the grid --- */
 .tarif-overlay {
     position: absolute;

@@ -25,7 +25,13 @@ logger = logging.getLogger(__name__)
 CATEGORY_TO_RECHARGE = {
     Asset.TLF: ("RE", "Recharge"),
     Asset.TNF: ("RC", "Recharge cadeau"),
-    Asset.TIM: ("TM", "Recharge temps"),
+    # La recharge temps (TIM) est desactivee pour l'instant.
+    # Si on creait le produit, la caisse le vendrait comme un article normal,
+    # paye en euros, sans crediter de temps. A reactiver en meme temps que
+    # Product.RECHARGE_TEMPS dans laboutik/views.py (METHODES_RECHARGE).
+    # / Time top-up (TIM) is disabled for now: the POS would sell it as a
+    # normal paid item. Re-enable together with METHODES_RECHARGE.
+    # Asset.TIM: ("TM", "Recharge temps"),
 }
 
 # Tarifs par defaut pour les produits de recharge auto-crees

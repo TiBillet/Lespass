@@ -575,6 +575,13 @@ function additionReset() {
 	document.querySelector('#addition-moyen-paiement').value = ''
 	document.querySelector('#addition-uuid-transaction').value = ''
 	document.querySelector('#addition-given-sum').value = ''
+	// Vente terminee : on oublie sa cle d'idempotence. La vente suivante
+	// recevra une nouvelle cle en passant par moyens_paiement.
+	// / Sale finished: forget its idempotency key (next sale gets a new one).
+	const champCleIdempotence = document.querySelector('#addition-cle-idempotence')
+	if (champCleIdempotence) {
+		champCleIdempotence.value = ''
+	}
 
 	// Oublier le client et le contexte du panier de la vente qui se termine :
 	// sinon la vente suivante (carte anonyme) reprendrait ce client.

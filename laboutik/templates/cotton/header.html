@@ -24,13 +24,19 @@
       {# / Back + title zone of Sales / Cash withdrawal screens (see partial) #}
       {% include "laboutik/partial/_hdr_retour_zone.html" with hdr_titre=title %}
     {% else %}
-      <div id="header-title"
-           class="menu-burger-icon"
-           onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')">
+      {# Vrai <button> : ouvre la liste des points de vente, au doigt comme au clavier. #}
+      {# / Real button: opens the POS list, by touch or keyboard.                       #}
+      <button type="button"
+              id="header-title"
+              class="menu-burger-icon"
+              onclick="toggleMenuBurger(event,'left');showSubMenu(event, '.sub-menu-pvs')"
+              aria-controls="menu-burger-container"
+              aria-expanded="false"
+              data-testid="header-title">
         <span class="material-symbols-outlined" aria-hidden="true">{{ pv.icon }}</span> &nbsp;
         {% if pv.name and hide_pv_name != True %}<span class="header-title-nom">{{ pv.name }}</span>{% endif %}
-        <span class="pos-chevron"></span>
-      </div>
+        <span class="pos-chevron" aria-hidden="true"></span>
+      </button>
     {% endif %}
     <!--
         INDICATEUR CONNEXION WEBSOCKET — toujours visible dans le header
@@ -86,11 +92,19 @@
     </button>
   </nav>
   <nav id="menu-small" class="hdr-nav">
-    <span class="material-symbols-outlined menu-burger-icon curseur-action" aria-hidden="true"
-       onclick="toggleMenuBurger(event)"
-       role="button"
-       aria-label="{% translate 'Menu' %}"
-       data-testid="burger-icon">menu</span>
+    {# Vrai <button> : joignable au clavier et annonce par le lecteur d'ecran.     #}
+    {# L'icone seule est cachee (aria-hidden), le nom vient de aria-label.        #}
+    {# aria-expanded est mis a jour par toggleMenuBurger() / hideMenuBurger().     #}
+    {# / Real button: keyboard reachable; only the icon is aria-hidden.           #}
+    <button type="button"
+            class="menu-burger-icon hdr-burger-btn curseur-action"
+            onclick="toggleMenuBurger(event)"
+            aria-label="{% translate 'Menu' %}"
+            aria-controls="menu-burger-container"
+            aria-expanded="false"
+            data-testid="burger-icon">
+      <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+    </button>
   </nav>
   {% endif %}
 </header>
@@ -194,6 +208,8 @@
 		var container = document.querySelector('#menu-burger-container')
 		var overlay = document.querySelector('#menu-burger-overlay')
 		if (icons) icons.forEach(i=>i.classList.remove('menu-burger-active'))
+		// Le lecteur d'ecran annonce « replie » / Screen reader announces "collapsed"
+		if (icons) icons.forEach(i=>i.setAttribute('aria-expanded', 'false'))
 		if (container) container.classList.remove('menu-open')
 		if (overlay) overlay.classList.remove('menu-open')
 	}
@@ -217,6 +233,8 @@
 			})
 			document.querySelector('#menu-burger-container .main-menu').classList.remove('hide')
 			ele.classList.add('menu-burger-active')
+			// Le lecteur d'ecran annonce « deplie » / Screen reader announces "expanded"
+			ele.setAttribute('aria-expanded', 'true')
 			let menu_container = document.querySelector('#menu-burger-container');
             menu_container.classList.remove('right','left')
             menu_container.classList.add('menu-open',location)

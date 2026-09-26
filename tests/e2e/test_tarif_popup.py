@@ -215,6 +215,72 @@ def test_toucher_la_boite_ne_ferme_pas_la_popup(page, caisse):
     assert page.locator('[data-testid="tarif-overlay"]').count() == 1
 
 
+def test_echap_ferme_la_popup(page, caisse):
+    """La touche Echap ferme la popup, comme la croix. / Escape closes the popup."""
+    caisse([TARIF_DEMI, TARIF_PINTE])
+
+    page.keyboard.press("Escape")
+
+    assert page.locator('[data-testid="tarif-overlay"]').count() == 0
+
+
+def test_le_premier_tarif_recoit_le_focus_a_l_ouverture(page, caisse):
+    """Le clavier entre directement dans la popup. / Keyboard lands in the popup."""
+    caisse([TARIF_DEMI, TARIF_PINTE])
+
+    testid_focalise = page.evaluate("document.activeElement.dataset.testid")
+    assert testid_focalise == "tarif-btn-DEMI"
+
+
+# ------------------------------------------------------------------ #
+#  La grille reste dans la page / The grid stays in the page
+# ------------------------------------------------------------------ #
+
+def test_la_grille_reste_dans_la_page_et_devient_inerte_pendant_la_popup(page, caisse):
+    """
+    La popup s'ajoute par-dessus la grille : les tuiles restent dans le DOM
+    (mises a jour de stock, badges), mais inertes sous le voile.
+    / The popup is appended over the grid: tiles stay in the DOM, but inert.
+    """
+    caisse([TARIF_DEMI, TARIF_PINTE])
+
+    assert page.locator("#grille-articles").count() == 1
+    assert page.evaluate("document.querySelector('#grille-articles').inert") is True
+
+
+def test_la_fermeture_rend_la_grille_active(page, caisse):
+    caisse([TARIF_DEMI, TARIF_PINTE])
+
+    page.click('[data-testid="tarif-btn-retour"]')
+
+    assert page.evaluate("document.querySelector('#grille-articles').inert") is False
+    classes_de_la_grille = page.evaluate("document.querySelector('#products').className")
+    assert "tarif-popup-ouverte" not in classes_de_la_grille
+
+
+def test_le_badge_de_la_tuile_compte_les_ajouts_faits_depuis_la_popup(page, caisse):
+    """
+    Avant, la popup remplacait la grille : la tuile n'existait plus et son
+    badge de quantite restait a 0. Maintenant il compte chaque ajout.
+    / Before, the popup replaced the grid and the tile badge stayed at 0.
+    """
+    page.evaluate("""() => {
+        const badge = document.createElement('span')
+        badge.id = 'article-quantity-number-PRODUIT'
+        badge.innerText = '0'
+        document.querySelector('#grille-articles').appendChild(badge)
+        // afficherBadgeQuantite() vit dans articles.js (non charge ici)
+        // / afficherBadgeQuantite() lives in articles.js (not loaded here)
+        window.afficherBadgeQuantite = () => {}
+    }""")
+    caisse([TARIF_DEMI, TARIF_PINTE])
+
+    page.click('[data-testid="tarif-btn-PINTE"]')
+    page.click('[data-testid="tarif-btn-DEMI"]')
+
+    assert page.inner_text("#article-quantity-number-PRODUIT") == "2"
+
+
 # ------------------------------------------------------------------ #
 #  Prix libre / Free price
 # ------------------------------------------------------------------ #

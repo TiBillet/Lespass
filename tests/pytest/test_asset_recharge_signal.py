@@ -134,9 +134,12 @@ def test_creation_asset_tnf_cree_product_cadeau(tenant, wallet_lieu):
         _nettoyer_product_et_asset(produit, asset_tnf)
 
 
-def test_creation_asset_tim_cree_product_temps(tenant, wallet_lieu):
-    """Creer un Asset TIM → un Product TM doit apparaitre.
-    / Creating a TIM Asset → a TM Product must appear."""
+def test_creation_asset_tim_ne_cree_pas_product_tant_que_temps_desactive(
+    tenant, wallet_lieu
+):
+    """Creer un Asset TIM → aucun Product TM (la recharge temps est desactivee).
+    Sinon la caisse vendrait ce produit comme un article normal, sans crediter de temps.
+    / Creating a TIM Asset → no TM Product (time top-up is disabled)."""
     with schema_context(TENANT_SCHEMA):
         asset_tim = AssetService.creer_asset(
             tenant=tenant,
@@ -147,10 +150,9 @@ def test_creation_asset_tim_cree_product_temps(tenant, wallet_lieu):
         )
 
         produit = Product.objects.filter(asset=asset_tim).first()
-        assert produit is not None
-        assert produit.methode_caisse == Product.RECHARGE_TEMPS
+        assert produit is None
 
-        _nettoyer_product_et_asset(produit, asset_tim)
+        asset_tim.delete()
 
 
 def test_creation_asset_fed_ne_cree_pas_product(tenant, wallet_lieu):

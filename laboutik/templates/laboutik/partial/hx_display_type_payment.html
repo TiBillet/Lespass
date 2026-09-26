@@ -31,6 +31,19 @@ Les data-testid sont lus par les tests (test_billetterie_pos.py,
 test_pos_retour_consigne.py, test_pos_paiement_cheque.py) : ne pas les renommer.
 / data-testid values are read by the tests: do not rename them.
 -->
+{% comment %}
+CLE D'IDEMPOTENCE DU PAIEMENT (hors bande) :
+htmx remplace le champ #addition-cle-idempotence de #addition-form (cotton/addition.html).
+Chaque affichage des moyens de paiement donne une nouvelle cle. Un double appui sur
+« Valider » renvoie la meme cle : payer() ne rejoue pas le paiement
+(voir _executer_avec_cle_idempotence dans laboutik/views.py).
+/ Out-of-band: replaces the idempotency key field inside #addition-form.
+{% endcomment %}
+<input type="hidden"
+       id="addition-cle-idempotence"
+       name="cle_idempotence_paiement"
+       value="{{ cle_idempotence_paiement }}"
+       hx-swap-oob="true" />
 <div id="messages">
   {% if comportement == "C" %}
     <script>
