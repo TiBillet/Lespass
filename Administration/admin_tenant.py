@@ -2174,42 +2174,6 @@ class PostalAddressAdmin(ModelAdmin):
 ##### EVENT ADMIN
 
 
-class EventChildrenInline(TabularInline):
-    model = Event
-    fk_name = 'parent'
-    verbose_name = _("Volunteering")  # Pour l'instant, les enfants sont forcément des Actions.
-    hide_title = True
-    fields = (
-        'name',
-        'datetime',
-        'jauge_max',
-        'valid_tickets_count',
-    )
-
-    # ordering_field = "weight"
-    # max_num = 1
-    extra = 0
-    show_change_link = True
-    tab = True
-
-    readonly_fields = (
-        'valid_tickets_count',
-    )
-
-    # Surcharger la méthode pour désactiver la suppression
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-    def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-
 class EventForm(ModelForm):
     class Meta:
         model = Event
@@ -2441,8 +2405,6 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     export_form_class = ExportForm
     import_form_class = ImportForm
-
-    inlines = [EventChildrenInline, ]
 
     actions_row = ["duplicate_day_plus_one", "duplicate_week_plus_one", "duplicate_week_plus_two",
                    "duplicate_month_plus_one", "archive"]
