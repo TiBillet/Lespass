@@ -8,7 +8,8 @@
  * 1. Scanne le DOM au DOMContentLoaded pour trouver les containers
  *    `[data-widget-initialized="false"][data-identifiant]` non encore initialisés.
  * 2. Pour chaque container :
- *    - Crée la map Leaflet (CartoDB Voyager tiles).
+ *    - Crée la map Leaflet (tuiles MapTiler si `data-maptiler-key`, sinon
+ *      OSM France HOT ; repli automatique sur HOT si MapTiler échoue).
  *    - Ajoute le GeoSearchControl (recherche live Nominatim côté navigateur).
  *    - Si lat/lng initiales, place un marqueur draggable centré dessus.
  *    - Bind les events : suggestion click + dragend.
@@ -40,12 +41,107 @@
     // cache (each user hits Nominatim) — fine for our volume.
     const URL_NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse";
     const URL_NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search";
-    const URL_TUILES_CARTODB = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
-    const ATTRIBUTION_TUILES = "&copy; OpenStreetMap &copy; CARTO";
     const CENTRE_FRANCE = [46.6, 2.5];
     const ZOOM_FRANCE = 5;
     const ZOOM_DETAIL = 15;
-    const SOUS_DOMAINES_CARTODB = "abcd";
+
+    // Fonds de carte : les memes que la page event (geoloc.html) et la carto
+    // federation (explorer.js). MapTiler si une cle est fournie, sinon les
+    // tuiles Humanitarian (HOT) d'OpenStreetMap France (sans cle).
+    // Spec : TECH_DOC/SESSIONS/WIDGET_GEO/04-fonds-de-carte-maptiler-repli-osm.md
+    // / Basemaps: same as the event page and the federation map. MapTiler if a
+    // key is set, otherwise OSM France Humanitarian (HOT) tiles (no key).
+    const URL_TUILES_MAPTILER = "https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png";
+    const ATTRIBUTION_MAPTILER = '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+    const URL_TUILES_OSM_HOT = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
+    const ATTRIBUTION_OSM_HOT = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a> &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>';
+
+    // Nombre total de tuiles MapTiler en erreur au-dela duquel on bascule sur
+    // OSM France HOT (quota epuise en cours de visite). Une ou deux erreurs
+    // isolees ne declenchent rien.
+    // / Total failed MapTiler tiles after which we switch to OSM France HOT.
+    const SEUIL_ERREURS_TUILES = 5;
+
+    /**
+     * Cree la couche OSM France HOT (fond sans cle, et fond de repli).
+     * / Create the OSM France HOT layer (keyless basemap and fallback).
+     */
+    function creer_couche_osm_hot() {
+        return L.tileLayer(URL_TUILES_OSM_HOT, {
+            attribution: ATTRIBUTION_OSM_HOT,
+            maxZoom: 20,
+            subdomains: "abc",
+        });
+    }
+
+    /**
+     * Ajoute le fond de carte a la map : MapTiler si cle, sinon OSM France HOT.
+     * Avec MapTiler, bascule UNE SEULE FOIS sur HOT si les tuiles echouent :
+     *   1. aucune tuile MapTiler n'a jamais reussi et le premier affichage est
+     *      fini (`load`) avec au moins une erreur -> quota / cle / origine refuses ;
+     *   2. ou le total d'erreurs atteint SEUIL_ERREURS_TUILES -> quota epuise
+     *      en cours de visite.
+     * Le retrait de la couche est DIFFERE (setTimeout 0) : juste apres
+     * `fire("load")`, Leaflet 1.9.4 lit `this._map._fadeAnimated`, et un
+     * removeLayer synchrone ferait lever un TypeError.
+     *
+     * / Add the basemap: MapTiler if key, otherwise OSM France HOT. With
+     * MapTiler, switch ONCE to HOT when tiles fail (first display all failed,
+     * or SEUIL_ERREURS_TUILES errors in total). Layer removal is DEFERRED:
+     * right after `fire("load")` Leaflet reads `this._map._fadeAnimated`.
+     */
+    function ajouter_fond_de_carte(map, cle_maptiler) {
+        if (!cle_maptiler) {
+            creer_couche_osm_hot().addTo(map);
+            return;
+        }
+
+        const couche_maptiler = L.tileLayer(
+            URL_TUILES_MAPTILER + "?key=" + encodeURIComponent(cle_maptiler) + "&language=fr",
+            {
+                attribution: ATTRIBUTION_MAPTILER,
+                tileSize: 512,
+                zoomOffset: -1,
+                minZoom: 1,
+                maxZoom: 20,
+                crossOrigin: true,
+            },
+        );
+
+        let bascule_osm_faite = false;
+        let tuiles_maptiler_ok = 0;
+        let tuiles_maptiler_en_erreur = 0;
+
+        function basculer_vers_osm_hot() {
+            if (bascule_osm_faite) {
+                return;
+            }
+            bascule_osm_faite = true;
+            console.warn("widget_carte_adresse: MapTiler indisponible, bascule sur OSM France HOT");
+            setTimeout(function () {
+                map.removeLayer(couche_maptiler);
+                creer_couche_osm_hot().addTo(map);
+            }, 0);
+        }
+
+        couche_maptiler.on("tileload", function () {
+            tuiles_maptiler_ok = tuiles_maptiler_ok + 1;
+        });
+        couche_maptiler.on("tileerror", function () {
+            tuiles_maptiler_en_erreur = tuiles_maptiler_en_erreur + 1;
+            if (tuiles_maptiler_en_erreur >= SEUIL_ERREURS_TUILES) {
+                basculer_vers_osm_hot();
+            }
+        });
+        couche_maptiler.on("load", function () {
+            const aucune_tuile_n_a_jamais_reussi = tuiles_maptiler_ok === 0;
+            if (aucune_tuile_n_a_jamais_reussi && tuiles_maptiler_en_erreur > 0) {
+                basculer_vers_osm_hot();
+            }
+        });
+
+        couche_maptiler.addTo(map);
+    }
 
     /**
      * Initialise un widget pour un container DOM donné.
@@ -100,11 +196,9 @@
             a_des_coords_initiales ? ZOOM_DETAIL : ZOOM_FRANCE,
         );
 
-        L.tileLayer(URL_TUILES_CARTODB, {
-            attribution: ATTRIBUTION_TUILES,
-            subdomains: SOUS_DOMAINES_CARTODB,
-            maxZoom: 20,
-        }).addTo(map);
+        // Fond de carte (cle lue sur le conteneur, posee par le tag
+        // `{% maptiler_key %}` du template). / Basemap (key from the container).
+        ajouter_fond_de_carte(map, container.dataset.maptilerKey || "");
 
         // Déplace le zoom control en haut à droite : par défaut Leaflet le
         // pose en `topleft`, où vit aussi la search bar leaflet-geosearch.
@@ -164,7 +258,16 @@
         // / Draggable marker (created only when valid coords are available).
         let marqueur = null;
 
-        function placer_marqueur_et_remplir_champs(latitude, longitude, adresse_complete, parties_adresse) {
+        // `ne_pas_ecraser_par_du_vide` : passe a true UNIQUEMENT par le chemin
+        // reverse (drag, clic carte, repli apres recherche). Un reverse partiel
+        // (point sans rue, hameau) ne vide alors pas la rue / ville deja saisies.
+        // Les autres appelants ne le passent pas -> comportement historique :
+        // une recherche vers un lieu sans rue VIDE la rue, et la validation
+        // serveur (onboard : rue obligatoire) force l'utilisateur a corriger.
+        // / `ne_pas_ecraser_par_du_vide`: true ONLY from the reverse path. A
+        // partial reverse then does not blank the street / city. Other callers
+        // keep the historical behaviour (a forward search blanks the street).
+        function placer_marqueur_et_remplir_champs(latitude, longitude, adresse_complete, parties_adresse, ne_pas_ecraser_par_du_vide) {
             const lat_lng = L.latLng(latitude, longitude);
 
             if (marqueur === null) {
@@ -189,17 +292,23 @@
                 if (input_rue) {
                     const numero = parties_adresse.house_number || "";
                     const rue = parties_adresse.road || "";
-                    input_rue.value = (numero + " " + rue).trim();
+                    const rue_complete = (numero + " " + rue).trim();
+                    if (rue_complete || !ne_pas_ecraser_par_du_vide) {
+                        input_rue.value = rue_complete;
+                    }
                 }
                 if (input_code_postal && parties_adresse.postcode) {
                     input_code_postal.value = parties_adresse.postcode;
                 }
                 if (input_ville) {
-                    input_ville.value = parties_adresse.city
+                    const ville = parties_adresse.city
                         || parties_adresse.town
                         || parties_adresse.village
                         || parties_adresse.municipality
                         || "";
+                    if (ville || !ne_pas_ecraser_par_du_vide) {
+                        input_ville.value = ville;
+                    }
                 }
                 if (input_pays && parties_adresse.country) {
                     input_pays.value = parties_adresse.country;
@@ -259,11 +368,14 @@
                 }
 
                 const donnees = await reponse.json();
+                // `true` : un reverse partiel n'efface pas rue / ville (cf. plus haut).
+                // / `true`: a partial reverse does not blank street / city.
                 placer_marqueur_et_remplir_champs(
                     latitude,
                     longitude,
                     donnees.display_name || "",
                     donnees.address || {},
+                    true,
                 );
             } catch (erreur) {
                 // Réseau coupé, CORS, ou erreur fetch : on garde le marqueur

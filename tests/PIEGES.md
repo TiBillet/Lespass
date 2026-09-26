@@ -2414,6 +2414,26 @@ sur le bouton search).
 Decouverts session widget onboard, 2026-05-16. Cf. `static/widgets/widget_carte_adresse.js`
 + `static/widgets/widget_carte_adresse.css`.
 
+**P.WIDGET.5 — `map.removeLayer(couche)` dans le handler `load` de cette couche → `TypeError`.**
+
+Dans Leaflet 1.9.4, `GridLayer._tileReady` fait `this.fire("load")` puis lit
+IMMEDIATEMENT `this._map._fadeAnimated`. Si un handler `load` a retire la couche
+(`removeLayer` met `this._map = null`), on obtient un `TypeError` non capture.
+Cas reel : le repli MapTiler → OSM HOT, qui veut changer de fond a la fin du premier
+affichage. Retirer la couche dans `tileerror` ne pose pas de probleme (l'evenement est
+emis en tete de `_tileReady`).
+
+Autres faits utiles : une tuile en erreur est aussi marquee `loaded`, donc `load` part
+meme si TOUTES les tuiles ont echoue. Et `loading` n'est emis qu'au debut d'un lot :
+apres le premier ecran, un petit deplacement peut former un lot d'UNE seule tuile.
+
+**Fix** : lever le flag de bascule tout de suite, puis differer le swap :
+`setTimeout(function () { map.removeLayer(couche); nouvelle.addTo(map); }, 0)`.
+Verification : Playwright avec `page.on("pageerror")`. Une assertion « une seule
+couche dans le DOM » passe meme quand le `TypeError` est leve.
+
+Decouvert 2026-09-26 (relecture Fable de la spec `WIDGET_GEO/04`).
+
 ---
 
 ### Onboarding wizard + cron pool (session 2026-05-17)

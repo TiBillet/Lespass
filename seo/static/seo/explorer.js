@@ -911,11 +911,19 @@
         // / Basemap. If a MapTiler key is provided, use MapTiler (epured "dataviz-v4",
         // HD tiles). Otherwise fall back to Humanitarian (HOT) tiles hosted by OSM
         // France: French labels, no API key, works on localhost.
+        function creerCoucheOsmHot() {
+            return L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a> &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>',
+                maxZoom: 20,
+                subdomains: 'abc',
+            });
+        }
+
         if (config.maptilerKey) {
             // tuiles 512px (HD) -> tileSize 512 + zoomOffset -1 cote Leaflet.
             // language=fr force les labels en francais. crossOrigin pour le retina.
             // / 512px (HD) tiles -> tileSize 512 + zoomOffset -1. language=fr forces French.
-            L.tileLayer(
+            const coucheMaptiler = L.tileLayer(
                 'https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key='
                     + config.maptilerKey + '&language=fr',
                 {
@@ -926,13 +934,50 @@
                     maxZoom: 20,
                     crossOrigin: true,
                 }
-            ).addTo(state.map);
+            );
+
+            // Repli automatique MapTiler -> OSM France HOT (quota epuise, cle ou
+            // origine refusee). Bascule UNE SEULE FOIS si aucune tuile n'a jamais
+            // reussi au premier affichage, ou si le total d'erreurs atteint
+            // SEUIL_ERREURS_TUILES. Retrait DIFFERE (setTimeout 0) : Leaflet 1.9.4
+            // lit this._map juste apres fire("load").
+            // Spec : TECH_DOC/SESSIONS/WIDGET_GEO/04-fonds-de-carte-maptiler-repli-osm.md
+            // / Automatic MapTiler -> OSM France HOT fallback. Switch ONCE.
+            // Layer removal is DEFERRED.
+            const SEUIL_ERREURS_TUILES = 5;
+            let bascule_osm_faite = false;
+            let tuilesMaptilerOk = 0;
+            let tuilesMaptilerEnErreur = 0;
+
+            function basculerVersOsmHot() {
+                if (bascule_osm_faite) return;
+                bascule_osm_faite = true;
+                console.warn('explorer: MapTiler indisponible, bascule sur OSM France HOT');
+                setTimeout(function () {
+                    state.map.removeLayer(coucheMaptiler);
+                    creerCoucheOsmHot().addTo(state.map);
+                }, 0);
+            }
+
+            coucheMaptiler.on('tileload', function () {
+                tuilesMaptilerOk = tuilesMaptilerOk + 1;
+            });
+            coucheMaptiler.on('tileerror', function () {
+                tuilesMaptilerEnErreur = tuilesMaptilerEnErreur + 1;
+                if (tuilesMaptilerEnErreur >= SEUIL_ERREURS_TUILES) {
+                    basculerVersOsmHot();
+                }
+            });
+            coucheMaptiler.on('load', function () {
+                const aucuneTuileNaJamaisReussi = tuilesMaptilerOk === 0;
+                if (aucuneTuileNaJamaisReussi && tuilesMaptilerEnErreur > 0) {
+                    basculerVersOsmHot();
+                }
+            });
+
+            coucheMaptiler.addTo(state.map);
         } else {
-            L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a> &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>',
-                maxZoom: 20,
-                subdomains: 'abc',
-            }).addTo(state.map);
+            creerCoucheOsmHot().addTo(state.map);
         }
 
         state.markerCluster = L.markerClusterGroup();

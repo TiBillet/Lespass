@@ -1,4 +1,4 @@
-{% load i18n static l10n %}
+{% load i18n static l10n tibitags %}
 {% comment %}
 LOCALISATION: templates/widgets/widget_carte_adresse.html
 
@@ -33,11 +33,14 @@ draggable marker. Reverse geocoding via /widgets/geocode-reverse/.
 <div class="widget-carte-adresse" data-testid="widget-carte-adresse-{{ identifiant_widget }}">
 
     {# Container Leaflet (data-* lus par widget_carte_adresse.js au scan DOMContentLoaded). #}
+    {# data-maptiler-key : fond MapTiler si cle, sinon OSM France HOT (cf. WIDGET_GEO/04). #}
     {# / Leaflet container (data-* read by JS at DOMContentLoaded scan). #}
+    {# data-maptiler-key: MapTiler basemap if set, otherwise OSM France HOT. #}
     <div id="{{ identifiant_widget }}-container"
          class="widget-carte-adresse-map"
          data-widget-initialized="false"
          data-identifiant="{{ identifiant_widget }}"
+         data-maptiler-key="{% maptiler_key %}"
          data-lat-initiale="{{ latitude_initiale|default_if_none:''|unlocalize }}"
          data-lng-initiale="{{ longitude_initiale|default_if_none:''|unlocalize }}"
          data-adresse-initiale="{{ adresse_initiale|default_if_none:''|escape }}"

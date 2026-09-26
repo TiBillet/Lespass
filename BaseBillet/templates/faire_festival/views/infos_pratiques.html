@@ -385,12 +385,81 @@ so we load Leaflet on demand and init the map once it's ready.
             zoomControl: true
         }).setView([lat, lng], 13);
 
-        // Tuiles CartoDB Positron (sobre, elegant, gratuit pour usage non-commercial)
-        // / CartoDB Positron tiles (clean, elegant, free for non-commercial use)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-            maxZoom: 19
-        }).addTo(map);
+        // Fond de carte identique aux autres cartes du projet (page event,
+        // carto federation, widget adresse) : MapTiler si une cle est fournie,
+        // sinon tuiles Humanitarian (HOT) d'OpenStreetMap France (sans cle).
+        // CartoDB exige desormais une cle (filigrane "API KEY REQUIRED").
+        // Spec : TECH_DOC/SESSIONS/WIDGET_GEO/04-fonds-de-carte-maptiler-repli-osm.md
+        // / Same basemap as the other maps: MapTiler if a key is set, otherwise
+        // OSM France HOT (no key). CartoDB now requires a key.
+        var cle_maptiler = "{{ maptiler_key|default:''|escapejs }}";
+
+        function creer_couche_osm_hot() {
+            return L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a> &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>',
+                maxZoom: 20,
+                subdomains: 'abc'
+            });
+        }
+
+        if (cle_maptiler) {
+            var couche_maptiler = L.tileLayer(
+                'https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key='
+                    + cle_maptiler + '&language=fr',
+                {
+                    attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    tileSize: 512,
+                    zoomOffset: -1,
+                    minZoom: 1,
+                    maxZoom: 20,
+                    crossOrigin: true
+                }
+            );
+
+            // Repli automatique MapTiler -> OSM France HOT (quota epuise, cle ou
+            // origine refusee). Bascule UNE SEULE FOIS si aucune tuile n'a jamais
+            // reussi au premier affichage, ou si le total d'erreurs atteint
+            // SEUIL_ERREURS_TUILES. Retrait DIFFERE (setTimeout 0) : Leaflet 1.9.4
+            // lit this._map juste apres fire("load").
+            // / Automatic MapTiler -> OSM France HOT fallback. Switch ONCE.
+            // Layer removal is DEFERRED.
+            var SEUIL_ERREURS_TUILES = 5;
+            var bascule_osm_faite = false;
+            var tuiles_maptiler_ok = 0;
+            var tuiles_maptiler_en_erreur = 0;
+
+            var basculer_vers_osm_hot = function () {
+                if (bascule_osm_faite) {
+                    return;
+                }
+                bascule_osm_faite = true;
+                console.warn('faire_festival: MapTiler indisponible, bascule sur OSM France HOT');
+                setTimeout(function () {
+                    map.removeLayer(couche_maptiler);
+                    creer_couche_osm_hot().addTo(map);
+                }, 0);
+            };
+
+            couche_maptiler.on('tileload', function () {
+                tuiles_maptiler_ok = tuiles_maptiler_ok + 1;
+            });
+            couche_maptiler.on('tileerror', function () {
+                tuiles_maptiler_en_erreur = tuiles_maptiler_en_erreur + 1;
+                if (tuiles_maptiler_en_erreur >= SEUIL_ERREURS_TUILES) {
+                    basculer_vers_osm_hot();
+                }
+            });
+            couche_maptiler.on('load', function () {
+                var aucune_tuile_n_a_jamais_reussi = tuiles_maptiler_ok === 0;
+                if (aucune_tuile_n_a_jamais_reussi && tuiles_maptiler_en_erreur > 0) {
+                    basculer_vers_osm_hot();
+                }
+            });
+
+            couche_maptiler.addTo(map);
+        } else {
+            creer_couche_osm_hot().addTo(map);
+        }
 
         // Marqueur custom aux couleurs du Faire Festival (jaune + bleu)
         // / Custom marker with Faire Festival colors (yellow + blue)

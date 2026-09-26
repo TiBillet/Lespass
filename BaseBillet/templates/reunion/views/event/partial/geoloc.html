@@ -154,9 +154,39 @@ from our own static files and use the same basemap as /federation/.
                 // key is set, otherwise OSM France Humanitarian (HOT) tiles: no API key,
                 // works on localhost, and no 403 like tile.openstreetmap.org.
                 const maptilerKey = "{{ maptiler_key|default:''|escapejs }}";
-                let tileLayer;
+
+                // Ecouteurs communs aux deux fonds (MapTiler et OSM HOT).
+                // / Listeners shared by both basemaps.
+                function brancher_ecouteurs_affichage(couche) {
+                    couche.on('loading', function () {
+                        console.log('Tile layer loading started');
+                    });
+                    couche.on('load', function () {
+                        console.log('Tile layer loaded successfully');
+                        // Ensure map is visible after tiles are loaded
+                        mapElement.style.display = 'block';
+                        // Trigger a resize event to ensure the map renders correctly
+                        setTimeout(function() {
+                            window.dispatchEvent(new Event('resize'));
+                        }, 100);
+                    });
+                    couche.on('tileerror', function (error) {
+                        console.error('Tile error:', error);
+                    });
+                }
+
+                function creer_couche_osm_hot() {
+                    const couche_osm_hot = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a> &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>',
+                        maxZoom: 20,
+                        subdomains: 'abc'
+                    });
+                    brancher_ecouteurs_affichage(couche_osm_hot);
+                    return couche_osm_hot;
+                }
+
                 if (maptilerKey) {
-                    tileLayer = L.tileLayer(
+                    const couche_maptiler = L.tileLayer(
                         'https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key='
                             + maptilerKey + '&language=fr',
                         {
@@ -168,34 +198,53 @@ from our own static files and use the same basemap as /federation/.
                             crossOrigin: true
                         }
                     );
-                } else {
-                    tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
-                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a> &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>',
-                        maxZoom: 20,
-                        subdomains: 'abc'
+                    brancher_ecouteurs_affichage(couche_maptiler);
+
+                    // Repli automatique MapTiler -> OSM France HOT (quota epuise,
+                    // cle ou origine refusee). Bascule UNE SEULE FOIS si aucune
+                    // tuile n'a jamais reussi au premier affichage, ou si le total
+                    // d'erreurs atteint SEUIL_ERREURS_TUILES. Retrait DIFFERE
+                    // (setTimeout 0) : Leaflet 1.9.4 lit this._map juste apres
+                    // fire("load"). Spec : TECH_DOC/SESSIONS/WIDGET_GEO/04-*.md
+                    // / Automatic MapTiler -> OSM France HOT fallback (quota, key or
+                    // origin refused). Switch ONCE. Layer removal is DEFERRED.
+                    const SEUIL_ERREURS_TUILES = 5;
+                    let bascule_osm_faite = false;
+                    let tuiles_maptiler_ok = 0;
+                    let tuiles_maptiler_en_erreur = 0;
+
+                    function basculer_vers_osm_hot() {
+                        if (bascule_osm_faite) {
+                            return;
+                        }
+                        bascule_osm_faite = true;
+                        console.warn('geoloc: MapTiler indisponible, bascule sur OSM France HOT');
+                        setTimeout(function () {
+                            mapInstance.removeLayer(couche_maptiler);
+                            creer_couche_osm_hot().addTo(mapInstance);
+                        }, 0);
+                    }
+
+                    couche_maptiler.on('tileload', function () {
+                        tuiles_maptiler_ok = tuiles_maptiler_ok + 1;
                     });
+                    couche_maptiler.on('tileerror', function () {
+                        tuiles_maptiler_en_erreur = tuiles_maptiler_en_erreur + 1;
+                        if (tuiles_maptiler_en_erreur >= SEUIL_ERREURS_TUILES) {
+                            basculer_vers_osm_hot();
+                        }
+                    });
+                    couche_maptiler.on('load', function () {
+                        const aucune_tuile_n_a_jamais_reussi = tuiles_maptiler_ok === 0;
+                        if (aucune_tuile_n_a_jamais_reussi && tuiles_maptiler_en_erreur > 0) {
+                            basculer_vers_osm_hot();
+                        }
+                    });
+
+                    couche_maptiler.addTo(mapInstance);
+                } else {
+                    creer_couche_osm_hot().addTo(mapInstance);
                 }
-
-                // Add event listeners for tile loading
-                tileLayer.on('loading', function () {
-                    console.log('Tile layer loading started');
-                });
-
-                tileLayer.on('load', function () {
-                    console.log('Tile layer loaded successfully');
-                    // Ensure map is visible after tiles are loaded
-                    mapElement.style.display = 'block';
-                    // Trigger a resize event to ensure the map renders correctly
-                    setTimeout(function() {
-                        window.dispatchEvent(new Event('resize'));
-                    }, 100);
-                });
-
-                tileLayer.on('tileerror', function (error) {
-                    console.error('Tile error:', error);
-                });
-
-                tileLayer.addTo(mapInstance);
 
                 // Add a marker at the exact coordinates
                 const marker = L.marker([lat, lng], {

@@ -3,6 +3,7 @@ from random import randint
 
 import requests
 from django import template
+from django.conf import settings
 from django.db import connection
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -11,6 +12,19 @@ from Administration.management.commands.demo_data import logger
 from fedow_connect.utils import dround as utils_dround
 
 register = template.Library()
+
+@register.simple_tag
+def maptiler_key():
+    """
+    Cle MapTiler pour les fonds de carte, vide si non configuree (-> repli OSM
+    France HOT cote JS). Tag plutot que variable de contexte : le widget carte
+    adresse est inclus par des vues (onboard, wizard event) qui ne passent pas
+    `maptiler_key`. Cf. TECH_DOC/SESSIONS/WIDGET_GEO/04-*.md.
+    / MapTiler key for basemaps, empty if not set (-> OSM France HOT fallback in
+    JS). A tag rather than a context variable: the address map widget is
+    included by views that do not pass `maptiler_key`.
+    """
+    return getattr(settings, "MAPTILER_KEY", "")
 
 @register.filter
 def get_item(dictionary, key):

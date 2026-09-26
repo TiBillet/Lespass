@@ -1,5 +1,72 @@
 # Changelog / Journal des modifications
 
+## Fonds de carte unifiés MapTiler + repli automatique OSM France / Unified MapTiler basemaps + automatic OSM France fallback
+
+**Date :** 2026-09-26
+**Migration :** **Non**
+
+### 1. Plus de filigrane « API KEY REQUIRED » sur les cartes
+
+**Quoi / What :** le widget de saisie d'adresse (onboard `/onboard/place/` et wizard
+évènement) et la carte « Infos pratiques » du skin Faire Festival demandaient leurs tuiles
+à **CartoDB**, sans clé. CARTO exige désormais une clé : les cartes affichaient un
+filigrane « API KEY REQUIRED ».
+
+**Pourquoi / Why :** les 4 cartes Leaflet du projet utilisent maintenant **le même fond** :
+**MapTiler** (`dataviz-v4`, en français) si `MAPTILER_KEY` est configurée, sinon les tuiles
+**OpenStreetMap France (HOT)**, sans clé. La clé arrive au widget par un nouveau tag
+`{% maptiler_key %}` (`tibitags`), ce qui évite de toucher aux vues.
+
+### 2. Repli automatique quand le quota MapTiler est épuisé
+
+**Quoi / What :** quand le quota gratuit MapTiler (100 000 requêtes/mois) est dépassé,
+MapTiler renvoie 403/429 et les cartes restaient **grises**. Le repli HOT n'existait que
+si la clé était absente.
+
+**Pourquoi / Why :** chaque carte bascule désormais **une seule fois** sur OSM France HOT
+dans deux cas :
+- **aucune** tuile MapTiler n'a réussi au premier affichage (quota, clé ou origine refusée) ;
+- **5** tuiles en erreur au total (quota épuisé en cours de visite).
+
+Une tuile isolée en erreur, parmi des tuiles réussies, ne déclenche **rien**.
+
+**Piège Leaflet 1.9.4 (P.WIDGET.5) :** retirer la couche dans un handler `load` fait lever
+un `TypeError` (Leaflet lit `this._map` juste après `fire("load")`). Le retrait est donc
+différé par `setTimeout(…, 0)`.
+
+### 3. Widget adresse : un géocodage inverse partiel n'efface plus la rue
+
+**Quoi / What :** quand on déplace le marqueur (ou qu'on clique sur la carte) vers un
+point où Nominatim ne renvoie ni rue ni ville, la rue et la ville déjà saisies étaient
+**effacées**.
+
+**Pourquoi / Why :** sur le **chemin reverse** seulement (drag, clic carte, repli après
+recherche), un champ n'est plus écrasé par une valeur vide. La **recherche** garde son
+comportement : une recherche vers un lieu sans rue vide toujours la rue, et la validation
+serveur de l'onboard (rue obligatoire) force l'utilisateur à la corriger.
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/templatetags/tibitags.py` | + `from django.conf import settings` + `simple_tag` `maptiler_key` |
+| `templates/widgets/widget_carte_adresse.html` | `{% load tibitags %}` + `data-maptiler-key` sur le conteneur |
+| `static/widgets/widget_carte_adresse.js` | CartoDB → MapTiler / HOT + repli ; garde « non vide » rue/ville sur le chemin reverse |
+| `BaseBillet/templates/reunion/views/event/partial/geoloc.html` | Repli dynamique MapTiler → HOT |
+| `seo/static/seo/explorer.js` | Repli dynamique MapTiler → HOT (`/explorer/` et `/federation/`) |
+| `BaseBillet/templates/faire_festival/views/infos_pratiques.html` | CartoDB Positron → MapTiler / HOT + repli |
+| `tests/pytest/test_widget_carte_adresse_tiles.py` | Nouveau — clé passée au widget, repli présent sur les 4 cartes, plus de `cartocdn`, garde-fous P.WIDGET |
+| `tests/pytest/test_event_map_tiles.py` | + le repli est câblé sur la page event |
+| `tests/PIEGES.md` | + P.WIDGET.5 (retrait de couche dans `load`) |
+| `TECH_DOC/SESSIONS/WIDGET_GEO/04-fonds-de-carte-maptiler-repli-osm.md` | Nouveau — spec (relue par Fable + Opus) |
+
+### Migration
+
+- **Migration nécessaire / Migration required :** Non / No.
+- **Clé MapTiler :** aucune nouvelle origine. La clé était déjà servie sur le domaine
+  ROOT (`/explorer/`) et sur les domaines des tenants (page event, `/federation/`). Une
+  origine non autorisée dans le dashboard MapTiler donne des 403 → repli HOT (fonctionnel).
+
 ## Compteur de billets borné aux places restantes / Ticket counter capped to the remaining seats
 
 **Date :** 2026-09-17

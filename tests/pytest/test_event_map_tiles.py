@@ -81,3 +81,11 @@ def test_carte_event_avec_cle_maptiler_utilise_maptiler():
 
     assert "api.maptiler.com" in html
     assert "MAcleDeTest123" in html
+
+    # Repli dynamique vers OSM France HOT si MapTiler echoue (quota epuise).
+    # On cherche des identifiants PROPRES au repli : l'URL HOT et `tileerror`
+    # existaient deja avant, ils ne prouveraient rien.
+    # / Dynamic fallback to OSM France HOT when MapTiler fails. We look for
+    # fallback-SPECIFIC identifiers (HOT URL and `tileerror` already existed).
+    assert "SEUIL_ERREURS_TUILES" in html
+    assert "bascule_osm_faite" in html
