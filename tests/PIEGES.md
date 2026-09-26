@@ -211,12 +211,13 @@ trouver le premier PV (ex: "Bar"). Si un PV de test a un `poid_liste` bas
 Toujours mettre `poid_liste=9999` sur les PV de test pour qu'ils soient en
 fin de liste (`ordering = ('poid_liste', 'name')`).
 
-**9.38 — Le flow paiement via recapitulatif client n'a PAS d'ecran de confirmation.**
-`payerAvecClient('espece')` dans `hx_recapitulatif_client.html` soumet
-directement `#addition-form` vers `payer()`. Il n'y a PAS d'ecran
-`paiement-confirmation` intermediaire (contrairement au flow VT normal).
-En E2E : apres clic `[data-testid="client-btn-especes"]`, attendre
-directement `[data-testid="paiement-succes"]`.
+**9.38 — Apres identification client, c'est la popup de paiement normale.**
+`identifier_client()` rend `hx_display_type_payment.html` en mode
+`client_identifie` (l'ancien `hx_recapitulatif_client.html` n'existe plus).
+Les tuiles sont celles d'une vente normale (`paiement-btn-*`) :
+especes / CB / cheque passent par l'ecran `paiement-confirmation`.
+CASHLESS avec une carte deja scannee et VALIDER (panier a 0 €,
+`paiement-btn-gratuit`) soumettent directement vers `payer()`.
 
 **9.39 — `#bt-retour-layer1` existe en double dans le DOM.**
 Deux elements ont l'ID `bt-retour-layer1` : un dans `#message-no-article`

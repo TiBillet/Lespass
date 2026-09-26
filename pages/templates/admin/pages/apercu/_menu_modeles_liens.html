@@ -1,0 +1,32 @@
+{% comment %}
+LISTE DES MODELES DE BLOC, groupes par type (liens d'ajout pre-remplis)
+/ List of block models, grouped by type (pre-filled add links)
+
+LOCALISATION : pages/templates/admin/pages/apercu/_menu_modeles_liens.html
+
+APPELE PAR :
+- admin/pages/apercu/_menu_modeles.html, en inclusion directe (menu
+  « + Ajouter un bloc en premier » de l'en-tete, dans l'admin) ;
+- pages/admin_apercu.py:vue_menu_ajout, en reponse au hx-get du + de la barre
+  d'un bloc (dans l'iframe). La reponse remplace le texte « Chargement… ».
+
+CONTEXTE RECU : `groupes` (admin_apercu.py:menu_d_ajout : chaque modele a son
+`url`), `cible` (_top dans l'iframe), `testid`.
+Styles en ligne et regle .menu-modeles__lien (dans _menu_modeles.html) : ce
+menu vit aussi dans le document du site.
+/ CALLED BY _menu_modeles.html (inline) and vue_menu_ajout (on-demand hx-get).
+{% endcomment %}
+{% for groupe in groupes %}
+    <section aria-label="{{ groupe.libelle }}">
+        <p aria-hidden="true" style="margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #71717a;">{{ groupe.libelle }}</p>
+        <ul style="list-style: none; margin: 0; padding: 0;">
+            {% for modele in groupe.modeles %}
+                <li>
+                    <a class="menu-modeles__lien" href="{{ modele.url }}" target="{{ cible|default:'_self' }}"
+                       data-testid="{{ testid }}-{{ modele.valeur|slugify }}"
+                       style="display: block; padding: 3px 6px; border-radius: 4px; font-size: 13px; line-height: 1.35; color: #18181b; text-decoration: none;">{{ modele.libelle }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </section>
+{% endfor %}

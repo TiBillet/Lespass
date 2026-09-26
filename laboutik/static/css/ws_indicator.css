@@ -10,6 +10,9 @@
   gap: 5px;
   padding: 0 10px;
   height: 100%;
+  /* Sans son libelle (mobile), la zone tactile garde 44 px de large
+     / Without its label (mobile), the touch area stays 44px wide */
+  min-width: 44px;
   cursor: pointer;
   font-size: 0.75rem;
   font-weight: 500;

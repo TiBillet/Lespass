@@ -1,0 +1,61 @@
+{% load i18n %}
+{% comment %}
+MENU « + AJOUTER UN BLOC » : les modeles de bloc, groupes par type
+/ "+ Add a block" menu: block models grouped by type
+
+LOCALISATION : pages/templates/admin/pages/apercu/_menu_modeles.html
+
+APPELE PAR :
+- admin/pages/page/blocs_de_la_page.html (en-tete « + Ajouter un bloc en premier », dans
+  l'admin) avec `groupes` : la liste est rendue TOUT DE SUITE ;
+- admin/pages/apercu/_outils_bloc.html (le + de la barre d'un bloc, dans
+  l'iframe, `cible="_top"` pour quitter l'iframe) avec `url_chargement` : la
+  liste est chargee A LA PREMIERE OUVERTURE, en hx-get, par
+  pages/admin_apercu.py:vue_menu_ajout.
+Dans les deux cas, la liste elle-meme est _menu_modeles_liens.html, et chaque
+modele porte son URL d'ajout pre-remplie (admin_apercu.py:menu_d_ajout).
+Styles en ligne : ce menu vit aussi dans le document du site, dont le CSS ne
+doit pas le deformer.
+/ Used inside the iframe (target _top) and in the admin. Inline styles: the
+menu also lives in the site document.
+{% endcomment %}
+{# Une liste de LIENS, pas un role="menu" ARIA : ce role promet une navigation #}
+{# aux fleches que nous n'offrons pas. Tab parcourt les liens, Echap et un clic #}
+{# a cote referment le menu (apercu.js et apercu_page_outils.js, attribut #}
+{# data-menu-modeles). Le survol passe par une regle CSS, pas par onmouseover. #}
+{# / A list of LINKS, not an ARIA menu (no arrow-key navigation). Tab walks #}
+{# the links; Escape and outside clicks close it. Hover via CSS. #}
+<style>.menu-modeles__lien:hover, .menu-modeles__lien:focus-visible { background: #f4f4f5; outline: 2px solid #059669; outline-offset: -2px; }</style>
+<details data-menu-modeles data-testid="{{ testid }}" style="position: relative; display: inline-block; font-family: system-ui, sans-serif;">
+    {# Sans `libelle`, le bouton est une simple icone « + » (barre compacte), #}
+    {# nommee pour le lecteur d'ecran par `libelle_accessible`. #}
+    {# / Without `libelle`, the button is a bare "+" icon, named by libelle_accessible. #}
+    <summary {% if libelle_accessible %}aria-label="{{ libelle_accessible }}" title="{{ libelle_accessible }}"{% endif %}
+             style="cursor: pointer; list-style: none; {% if libelle %}padding: 4px 10px; font-size: 13px; line-height: 1.4;{% else %}display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px; font-size: 15px; line-height: 1;{% endif %}
+                    border-radius: 6px; border: 1px dashed #059669; color: #047857; background: #fff; white-space: nowrap;">
+        <span aria-hidden="true">+</span>{% if libelle %} {{ libelle }}{% endif %}
+    </summary>
+    <div data-menu-liste style="position: absolute; {{ position_menu|default:'right: 0;' }} top: calc(100% + 4px); z-index: 2147483001; width: 560px; max-width: 90vw;
+                max-height: 420px; overflow-y: auto; padding: 10px; border-radius: 10px; background: #fff; color: #111;
+                border: 1px solid #d4d4d8; box-shadow: 0 10px 30px rgba(0,0,0,.15);
+                display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; text-align: left;
+                white-space: normal; font-weight: 400;">
+        {% if groupes %}
+            {# Menu construit tout de suite (en-tete « + Ajouter un bloc en premier »). #}
+            {# / Menu built right away (header "+ Add at top"). #}
+            {% include "admin/pages/apercu/_menu_modeles_liens.html" %}
+        {% else %}
+            {# Menu charge A LA DEMANDE (barre d'un bloc) : a la premiere #}
+            {# ouverture du <details>, htmx demande la liste au serveur #}
+            {# (pages/admin_apercu.py:vue_menu_ajout). Une page de 50 blocs #}
+            {# n'embarque donc pas 50 fois les ~25 liens du menu. #}
+            {# / Menu loaded ON DEMAND on first open: a 50-block page no longer #}
+            {# carries the ~25 links 50 times. #}
+            <p hx-get="{{ url_chargement }}"
+               hx-trigger="toggle from:closest details once"
+               hx-swap="outerHTML"
+               role="status"
+               style="margin: 0; font-size: 13px; color: #71717a;">{% translate "Chargement des modèles…" %}</p>
+        {% endif %}
+    </div>
+</details>

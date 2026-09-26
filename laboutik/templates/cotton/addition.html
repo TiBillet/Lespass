@@ -6,7 +6,18 @@
 	{# acces aux tags de traduction Django.                                     #}
 	{# / Ticket header (mockup: .tk-head) — title + count pill. Singular and    #}
 	{# plural labels travel in data-* since addition.js cannot translate.       #}
-	<div class="addition-head addition-head-responsive">
+	{# Toute la bande ouvre / ferme le ticket en mode responsive (<= 1022 px),   #}
+	{# pas seulement le titre : cible tactile plus grande.                       #}
+	{# aria-expanded est mis a jour par toggleAdditionResponsive() (addition.js). #}
+	{# / The whole strip toggles the ticket in responsive mode (bigger target).  #}
+	<div class="addition-head addition-head-responsive"
+	     role="button"
+	     tabindex="0"
+	     aria-controls="addition-responsive-wrapper"
+	     aria-expanded="false"
+	     onclick="toggleAdditionResponsive()"
+	     onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAdditionResponsive() }"
+	     data-testid="addition-ouvrir-responsive">
 		<div style="display:flex;align-items: center;">
             <span class="addition-count"
                   data-label-un="{% translate 'article' %}"
@@ -15,13 +26,9 @@
 {#            <span class="last-added-item"> {% translate 'Dernier ajout : ' %}</span>#}
         </div>
 
-		<span type="button"
-              class="addition-title"
-		        onclick="toggleAdditionResponsive()"
-		        data-testid="addition-vider"
-		        disabled>
+		<span class="addition-title">
 			{% translate 'Ticket' %}
-            <i class="fas fa-chevron-up addition-chevron"></i>
+            <span class="material-symbols-outlined addition-chevron" aria-hidden="true">expand_less</span>
 		</span>
 	</div>
     <div id="addition-responsive-wrapper">
@@ -44,7 +51,7 @@
                     data-label-confirmer="{% translate 'Confirmer' %}"
                     data-testid="addition-vider"
                     disabled>
-                <i class="fas fa-trash" aria-hidden="true"></i>
+                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                 <span class="addition-vider-label">{% translate "Vider" %}</span>
             </button>
         </div>
@@ -52,7 +59,7 @@
         <div id="addition-list" data-empty-text="{% translate 'Panier vide' %}" aria-live="polite">
 
         <div id="addition-empty" class="BF-col addition-placeholder" data-testid="addition-empty-placeholder">
-			<i class="fas fa-shopping-basket" aria-hidden="true"></i>
+			<span class="material-symbols-outlined" aria-hidden="true">shopping_basket</span>
 			<span>{% translate "Panier vide" %}</span>
 		</div>
 	</div>
@@ -60,7 +67,7 @@
 	{# Bas du ticket : total + CHECK CARTE + VALIDER (maquette : .tk-total et .acts) #}
 	{# / Ticket bottom: total + card check + validate (mockup: .tk-total, .acts)      #}
 	{# Tag en tirets, fichier en underscores : convention django-cotton, comme  #}
-	{# le tag c-read-nfc qui pointe sur cotton/read_nfc.html.                    #}
+	{# le tag c-V2.read-nfc qui pointe sur cotton/V2/read_nfc.html.              #}
 	{# / Hyphenated tag, underscored file name: django-cotton's convention.      #}
 	<c-addition-footer />
 
@@ -70,11 +77,17 @@
 	/ NOTE: 'tarifSelection' listener is on #articles-zone (tarif.js),
 	not #messages. HTMX partials still use innerHTML on #messages
 	for other reasons (preserving HTMX listeners). -->
+	{# hx-sync="this:drop" : tant qu'une requete du formulaire est en cours, un 2e envoi   #}
+	{# (double appui sur Valider) est ignore. hx-disabled-elt grise le bouton Valider      #}
+	{# pendant la requete. Le serveur protege aussi (cle_idempotence_paiement).            #}
+	{# / Drop a 2nd submit while one is in flight; disable Validate meanwhile.             #}
 	<form id="addition-form" class="hide"
 		hx-post="{% url 'laboutik-paiement-moyens_paiement' %}"
 		hx-trigger="validerPaiement"
 		hx-target="#messages"
 		hx-swap="outerHTML"
+		hx-sync="this:drop"
+		hx-disabled-elt="#bt-valider-layer2"
 		hx-on::after-request="hideAndEmptyElement('#confirm')"
 		data-url-reset="{% url 'laboutik-paiement-moyens_paiement' %}">
 		<input type="text" name="id_table" value="{{ id_table }}" />
@@ -87,61 +100,14 @@
 		<input type="text" id="addition-moyen-paiement" name="moyen_paiement" value="" />
 		<input type="text" id="addition-hostname-client" name="hostname_client" value="{{ hostname_client }}" />
 		<input type="text" id="addition-uuid-transaction" name="uuid_transaction" value="" />
+		{# Cle d'idempotence : remplie par hx_display_type_payment.html (swap hors bande), #}
+		{# videe par additionReset(). Voir _executer_avec_cle_idempotence (views.py).       #}
+		{# / Idempotency key: filled out-of-band, cleared by additionReset().               #}
+		<input type="hidden" id="addition-cle-idempotence" name="cle_idempotence_paiement" value="" />
 		<input type="number" id="addition-given-sum" name="given_sum" value="" />
 		<input type="text" id="addition-moyen-complement" name="moyen_complement" value="" />
 	</form>
 </div>
-
-{#<div id="addition-small">#}
-{#    <section class="sheet" id="sheet" data-open="false">#}
-{#        <button class="sheet-bar" id="sheetBar">#}
-{#            <span class="sheet-count" id="sheetCount">0</span>#}
-{#            <span class="sheet-last" id="sheetLast">Ticket vide</span>#}
-{#            <span class="sheet-chev">Ticket</span>#}
-{#        </button>#}
-{##}
-{#        <div class="sheet-body">#}
-{#            <div class="addition-head">#}
-{#                <span class="addition-title">{% translate "Ticket" %}</span>#}
-{#                <span id="addition-count"#}
-{#                      class="addition-count"#}
-{#                      data-label-un="{% translate 'article' %}"#}
-{#                      data-label-plusieurs="{% translate 'articles' %}"#}
-{#                      data-testid="addition-count">&mdash;</span>#}
-                {# Bouton VIDER (maquette : .tk-reset) — confirmation en deux temps,      #}
-                {# gere par additionArmerVider() dans addition.js. Desactive panier vide. #}
-                {# / EMPTY button (mockup: .tk-reset) — two-step confirmation handled by  #}
-                {# additionArmerVider() in addition.js. Disabled while the cart is empty. #}
-{#                <button type="button"#}
-{#                        id="addition-vider"#}
-{#                        class="addition-vider"#}
-{#                        onclick="additionArmerVider()"#}
-{#                        data-label-vider="{% translate 'Vider' %}"#}
-{#                        data-label-confirmer="{% translate 'Confirmer' %}"#}
-{#                        data-testid="addition-vider"#}
-{#                        disabled>#}
-{#                    <i class="fas fa-trash" aria-hidden="true"></i>#}
-{#                    <span class="addition-vider-label">{% translate "Vider" %}</span>#}
-{#                </button>#}
-{#            </div>#}
-{#            <div id="addition-list" data-empty-text="{% translate 'Panier vide' %}" aria-live="polite">#}
-{#                <div id="addition-empty" class="BF-col addition-placeholder" data-testid="addition-empty-placeholder">#}
-{#                    <i class="fas fa-shopping-basket" aria-hidden="true"></i>#}
-{#                    <span>{% translate "Panier vide" %}</span>#}
-{#                </div>#}
-{#            </div>#}
-{#            ##tkLines #}
-{##}
-{#        </div>#}
-{##}
-{#        <div class="tk-total">#}
-{#            <span class="tk-total-lbl">Total</span>#}
-{#            <span class="tk-total-val" id="tkTotal">0,00 €</span>#}
-{#        </div>#}
-{#    </section>#}
-{##}
-{#</div>#}
-
 
 <script src="{% static 'js/addition.js' %}"></script>
 

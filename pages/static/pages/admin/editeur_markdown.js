@@ -75,9 +75,21 @@ document.addEventListener("DOMContentLoaded", function () {
             editeur.codemirror.refresh();
         }, 100);
     }
-    var select_type = document.getElementById("id_type_bloc");
-    if (select_type) {
-        select_type.addEventListener("change", rafraichir);
+    // CodeMirror n'emet pas d'evenement `input` sur le <textarea> : on le
+    // fait a sa place, pour que l'apercu en direct suive la frappe
+    // (admin/pages/bloc/apercu_panneau.html ecoute `input` sur le formulaire).
+    // / CodeMirror fires no `input` on the textarea: dispatch one so the live
+    // preview follows typing.
+    editeur.codemirror.on("change", function () {
+        zone_texte.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    // Le type se choisit dans le select « Modele de bloc » (id_modele) : le
+    // champ id_type_bloc est cache et ne declenche plus d'evenement.
+    // / The type is picked in the "block model" select (id_modele).
+    var select_modele = document.getElementById("id_modele");
+    if (select_modele) {
+        select_modele.addEventListener("change", rafraichir);
     }
     rafraichir();
 });

@@ -1,0 +1,28 @@
+{% load i18n %}
+{% comment %}
+Reponse de l'apercu en direct : le document rendu dans une <iframe srcdoc>.
+/ Live preview response: the rendered document in an <iframe srcdoc>.
+
+LOCALISATION : pages/templates/admin/pages/bloc/partials/apercu_iframe.html
+
+`force_escape` est OBLIGATOIRE : render_to_string renvoie une chaine marquee
+« sure », que l'echappement automatique laisserait telle quelle. Le premier
+guillemet du document fermerait alors l'attribut srcdoc. L'iframe isole le CSS
+du site de celui de l'admin.
+/ force_escape is REQUIRED: render_to_string returns a "safe" string that
+autoescape would leave untouched, and the first quote would close srcdoc.
+
+APPELE PAR : pages/admin_apercu.py:vue_apercu_bloc_en_direct, quand le
+formulaire est valide.
+FLUX : #apercu-bloc (bloc/apercu_panneau.html) poste le formulaire en hx-post
+-> la vue rend le bloc NON enregistre (rendre_document_apercu)
+-> CE gabarit remplace le contenu de #apercu-bloc
+-> pages/static/pages/admin/apercu.js ajuste la hauteur de l'iframe.
+/ CALLED BY vue_apercu_bloc_en_direct when the form is valid; replaces the
+content of #apercu-bloc.
+{% endcomment %}
+<iframe srcdoc="{{ document_html|force_escape }}"
+        data-apercu-iframe
+        data-testid="bloc-apercu-iframe"
+        title="{% translate 'Aperçu du bloc' %}"
+        style="display: block; width: 100%; min-height: 80px; border: 0;"></iframe>

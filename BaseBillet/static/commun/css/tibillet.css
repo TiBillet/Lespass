@@ -166,8 +166,13 @@ figure[data-trix-attachment] img {
    Plein écran sur mobile, 800px à partir du breakpoint lg.
    / Full width on mobile, 800px from the lg breakpoint up.
    ========================================================================== */
+/* 100% et non 100vw : sur ordinateur, 100vw compte aussi la barre de
+   défilement verticale et fait dépasser le panneau. Le panneau est en
+   position fixe, 100% vaut donc la largeur visible de l'écran.
+   / 100%, not 100vw: 100vw includes the scrollbar. Fixed panel, so 100% is
+   the visible viewport width. */
 .offcanvas-tunnel {
-    --bs-offcanvas-width: 100vw;
+    --bs-offcanvas-width: 100%;
 }
 
 @media (min-width: 992px) {

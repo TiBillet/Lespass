@@ -225,6 +225,18 @@ def get_skin_courant():
         skin = ConfigurationSite.get_solo().skin
         return skin or "reunion"
     except Exception:
+        # Sur le schema public, la table n'existe pas : le repli est normal.
+        # Ailleurs, c'est une vraie panne (ex. cache memcached qui repond de
+        # travers) : on la journalise, sinon le site change de skin sans
+        # aucune trace. / On the public schema the fallback is expected;
+        # elsewhere it is a real failure: log it instead of hiding it.
+        from django.db import connection
+
+        if connection.schema_name != "public":
+            logger.warning(
+                "get_skin_courant : lecture du skin impossible, repli sur 'reunion'",
+                exc_info=True,
+            )
         return "reunion"
 
 
@@ -3125,8 +3137,18 @@ class EventMVT(viewsets.ViewSet):
     @action(detail=False, methods=['GET'])
     def embed(self, request):
         template_context = get_context(request)
-        template_context['dated_events'], template_context['paginated_info'], _dates, _tags, _thematiques = self.federated_events_filter()
+        template_context['dated_events'], template_context['paginated_info'], all_dates_list, all_tags_list, all_thematiques_list = self.federated_events_filter()
         template_context['embed'] = True
+
+        # Même contexte que list() pour ce que le gabarit lit.
+        # Sans event_count, le gabarit V2 plantait en 500 :
+        # `{% blocktrans count compteur=event_count %}` exige un nombre.
+        # / Same context as list() for what the template reads. Without
+        # event_count, the V2 template raised a 500 (blocktrans count needs a number).
+        template_context['event_count'] = sum([len(events) for events in template_context['dated_events'].values()])
+        template_context['all_dates'] = all_dates_list
+        template_context['all_tags'] = all_tags_list
+        template_context['all_thematiques'] = all_thematiques_list
         # CHANTIER-03 : l'embed suivait TOUJOURS le look reunion (chemin en dur).
         # Il suit désormais le skin du tenant, comme la page agenda normale
         # (les guards {% if not embed %} des squelettes masquent navbar/footer).

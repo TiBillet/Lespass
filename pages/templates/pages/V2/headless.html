@@ -6,7 +6,9 @@
 {% include "pages/V2/partials/navbar.html" %}
 
 <main class="container">
-    {% if request.path != "/my_account/" %}
+    {# Meme test que shell.html : aucune page /my_account/* n'a l'en-tete du lieu. #}
+    {# / Same test as shell.html: no venue header on any /my_account/* page. #}
+    {% if request.path|slice:":12" != "/my_account/" %}
         {% include 'pages/V2/tenant_header.html' %}
     {% endif %}
     {% block main %}{% endblock main %}

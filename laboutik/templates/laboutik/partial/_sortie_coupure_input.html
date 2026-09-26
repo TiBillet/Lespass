@@ -1,45 +1,48 @@
 {% load i18n %}
-<!--
-GROUPE +/- POUR UNE COUPURE — partial inclus dans hx_sortie_de_caisse.html
-/ +/- GROUP FOR ONE DENOMINATION — partial included in hx_sortie_de_caisse.html
+{% comment %}
+UNE LIGNE BILLET / PIECE DE LA SORTIE DE CAISSE
+/ One note / coin row of the cash withdrawal
 
 LOCALISATION : laboutik/templates/laboutik/partial/_sortie_coupure_input.html
+Maquette : TEMP-tibillet-laboutik-main/caisse (.denom-row + .denom-stepper)
+Inclus par hx_sortie_de_caisse.html, une fois par coupure.
 
-Recu par contexte : coupure (dict avec centimes, label, cle_post)
-/ Received via context: coupure (dict with centimes, label, cle_post)
--->
-<div class="sortie-pm-groupe">
+Parametre : coupure = {"centimes", "label", "cle_post": "coupure_<centimes>"}
+Le champ nombre reste modifiable au clavier. − et + le changent d'une unite.
+Apres chaque changement : recalculerTotalSortie() (hx_sortie_de_caisse.html).
+{% endcomment %}
+<div class="denom-row">
+  <label class="denom-label" for="inp-{{ coupure.centimes }}">{{ coupure.label }}</label>
+  <div class="denom-stepper">
     <button type="button"
-            class="sortie-btn-pm sortie-btn-moins"
+            class="denom-btn denom-minus"
             onclick="
                 var inp = document.getElementById('inp-{{ coupure.centimes }}');
                 var val = parseInt(inp.value) || 0;
                 if (val > 0) { inp.value = val - 1; }
                 recalculerTotalSortie();
             "
-            aria-label="{% translate 'Diminuer' %}"
-            data-testid="sortie-btn-moins-{{ coupure.centimes }}">
-        &minus;
-    </button>
+            aria-label="{% blocktranslate with coupure=coupure.label %}Retirer un {{ coupure }}{% endblocktranslate %}"
+            data-testid="sortie-btn-moins-{{ coupure.centimes }}">&minus;</button>
 
     <input type="number" name="{{ coupure.cle_post }}"
            id="inp-{{ coupure.centimes }}"
+           class="denom-count"
            min="0" value="0"
+           inputmode="numeric"
            data-centimes="{{ coupure.centimes }}"
            oninput="recalculerTotalSortie()"
-           class="sortie-pm-input"
            data-testid="sortie-input-{{ coupure.centimes }}">
 
     <button type="button"
-            class="sortie-btn-pm sortie-btn-plus"
+            class="denom-btn denom-plus"
             onclick="
                 var inp = document.getElementById('inp-{{ coupure.centimes }}');
                 var val = parseInt(inp.value) || 0;
                 inp.value = val + 1;
                 recalculerTotalSortie();
             "
-            aria-label="{% translate 'Augmenter' %}"
-            data-testid="sortie-btn-plus-{{ coupure.centimes }}">
-        &plus;
-    </button>
+            aria-label="{% blocktranslate with coupure=coupure.label %}Ajouter un {{ coupure }}{% endblocktranslate %}"
+            data-testid="sortie-btn-plus-{{ coupure.centimes }}">+</button>
+  </div>
 </div>

@@ -224,6 +224,32 @@ CHAMPS_PAR_AFFICHAGE = {
     },
 }
 
+# Pour les affichages qui lisent `contenu` en liste d'elements : les cles
+# qu'un element peut porter ET que le gabarit rend reellement. Meme logique que
+# CHAMPS_PAR_AFFICHAGE, un cran plus bas : l'editeur de lignes de l'admin ne
+# montre que ces cles (une frise n'affiche pas de badge, seules les ressources
+# ont un lien).
+# / For affichages reading `contenu` as a list of items: the keys an item may
+# carry AND that the template actually renders. The admin line editor only
+# shows these keys.
+CLES_ELEMENT_PAR_AFFICHAGE = {
+    "MEDIA_ET_CARTES": ("titre", "texte", "badge"),
+    "EQUIPE": ("titre", "texte", "badge"),
+    "FRISE": ("titre", "texte"),
+    "RESSOURCES": ("titre", "texte", "badge", "url"),
+}
+
+# Champs que seuls CERTAINS skins rendent, pour un type donne. Hors de ces
+# skins, l'admin cache le champ : le remplir ne changerait rien au site.
+# Exemple : le logo et le badge de dates d'un LIEU ne sont dessines que par le
+# skin faire_festival (cf. pages/faire_festival/partials/bloc_lieu.html).
+# / Fields only SOME skins render, for a given type. Outside these skins the
+# admin hides the field: filling it would not change the site.
+SKINS_PAR_CHAMP_DU_TYPE = {
+    ("LIEU", "image"): ("faire_festival",),
+    ("LIEU", "image_secondaire"): ("faire_festival",),
+}
+
 # Couples (type, affichage) dont les images vivent dans l'inline ImageGalerie.
 # Sert a n'afficher cet inline que la ou il sera lu.
 # / (type, affichage) pairs whose images live in the ImageGalerie inline. Used

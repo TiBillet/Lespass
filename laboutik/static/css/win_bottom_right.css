@@ -3,11 +3,23 @@
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: repeat(6, var(--key-width));
-  grid-template-rows: var(--key-height);
+  /* auto-fill : autant de touches par rangee que la largeur le permet.
+     Avant : 6 touches de 80 px fixes, soit 512 px minimum, qui debordaient
+     sous environ 1160 px d'ecran.
+     / auto-fill: as many keys per row as fit. It used to be 6 fixed 80px keys. */
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--key-width), 100%), 1fr));
+  grid-auto-rows: minmax(56px, auto);
   gap: 4px;
   padding: 6px;
   background-color: var(--gris10);
+}
+
+/* Mobile : touches un peu plus petites pour en mettre 4 par rangee a 320 px
+   / Mobile: slightly smaller keys to fit 4 per row at 320px */
+@media only screen and (max-width: 599px) {
+  #win-bottom-right {
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  }
 }
 
 .win-bottom-right-g1 {
@@ -16,8 +28,9 @@
 }
 
 .win-bottom-right-valider{
-  grid-column: 3;
-  grid-row: 2;
+  /* Plus de colonne fixe : VALIDER occupe 2 cases, ou qu'il tombe
+     / No fixed column: VALIDER spans 2 cells wherever it lands */
+  grid-column: span 2;
 }
 
 .win-bottom-right-touch {
@@ -26,8 +39,6 @@
 }
 
 .win-bottom-right-status {
-  grid-column: 6;
-  grid-row: 2;
   color: var(--blanc01);
   display: flex;
   flex-direction: column;

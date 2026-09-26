@@ -90,10 +90,8 @@ const NfcReader = class {
     // pas dans la liste. Persistance du dernier tag saisi via localStorage.
     // Manual input zone: allows testing a tag_id not in the list.
     // Persists last entered tag via localStorage.
-    // Le parent .nfc-container-slot est flex-column avec text blanc :
-    // on force color/background et une largeur fixe sur l'input.
-    // Parent .nfc-container-slot is flex-column with white text:
-    // force color/background and a fixed width on the input.
+    // On force color/background et une largeur fixe sur l'input.
+    // Force color/background and a fixed width on the input.
     const dernierTagSaisi = localStorage.getItem('nfcSimuManualTag') || ''
     uiSimu += `
         <div class="nfc-reader-simu-manual" style="margin-top:1rem;display:flex;gap:8px;align-items:center;justify-content:center;">

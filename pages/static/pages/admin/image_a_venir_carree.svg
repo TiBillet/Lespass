@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid slice">
+  <!-- Image de remplacement carree (photo d'auteur) de l'apercu admin.
+       / Square admin preview placeholder (author photo). -->
+  <defs>
+    <pattern id="hachures" width="36" height="36" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="36" height="36" fill="#e4e4e7"/>
+      <rect width="18" height="36" fill="#d4d4d8"/>
+    </pattern>
+  </defs>
+  <rect width="600" height="600" fill="url(#hachures)"/>
+  <g transform="translate(300 300)" fill="#fafafa" stroke="#52525b" stroke-width="20" stroke-linejoin="round">
+    <circle cx="0" cy="-60" r="80"/>
+    <path d="M-150 170 C-150 60 -80 30 0 30 C80 30 150 60 150 170 Z"/>
+  </g>
+</svg>

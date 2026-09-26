@@ -1,0 +1,87 @@
+{% load i18n %}
+{% comment %}
+BARRE D'ACTIONS D'UN BLOC (fiche Page, dans l'iframe d'apercu)
+/ A block's action bar (Page form, inside the preview iframe)
+
+LOCALISATION : pages/templates/admin/pages/apercu/_outils_bloc.html
+
+CE QU'ELLE DEPLACE OU SUPPRIME : un BLOC ENTIER de la page.
+/ It moves or deletes a WHOLE BLOCK of the page.
+
+APPELE PAR — la chaine complete, de la fiche Page a ce gabarit :
+1. pages/admin.py:PageAdmin.change_form_outer_after_template
+   -> admin/pages/page/blocs_de_la_page.html, sous le formulaire de la page.
+2. blocs_de_la_page.html contient <iframe src="{% url 'staff_admin:pages_page_apercu' ... %}">.
+3. Le navigateur charge cette URL -> pages/admin.py:PageAdmin.get_urls
+   -> pages/admin_apercu.py:vue_apercu_page.
+4. vue_apercu_page prepare, pour chaque bloc, les donnees de sa barre
+   (_elements_avec_outils : rang, libelles, URL ↑ ↓ ✕ Modifier, URL du menu +),
+   puis appelle rendre_document_apercu(..., avec_outils=True).
+5. rendre_document_apercu rend pages/<skin>/apercu.html (gabarit_skin,
+   repli sur classic), qui inclut admin/pages/apercu/_blocs.html.
+6. _blocs.html boucle sur les blocs. Apres chaque bloc, SI `avec_outils` :
+   <template data-apercu-outils> {% include CE gabarit %} </template>.
+   La variable `element` est l'element de la boucle (etape 4).
+7. Dans le navigateur, pages/static/pages/admin/apercu_page_outils.js copie
+   le contenu de chaque <template> JUSTE APRES son bloc (position absolue,
+   a cheval sur son bord haut), puis appelle htmx.process() pour activer les
+   boutons.
+Jamais utilise par l'apercu en direct de la fiche Bloc : il y appelle
+rendre_document_apercu sans `avec_outils`.
+/ CALLED BY: PageAdmin (outer_after template) -> blocs_de_la_page.html iframe
+-> vue_apercu_page -> rendre_document_apercu(avec_outils=True) ->
+pages/<skin>/apercu.html -> _blocs.html (<template> after each block) ->
+apercu_page_outils.js inserts it after its block. Never used by the Bloc form
+live preview.
+
+FLUX D'UN CLIC (requete au serveur, ecrit en base TOUT DE SUITE) :
+- ↑ ↓ ✕ : hx-post (htmx du skin, jeton CSRF porte par le <body> du shell)
+  vers pages/admin_apercu.py:vue_deplacer_bloc ou vue_retirer_bloc.
+  hx-disabled-elt="this" desactive le bouton pendant la requete, et le
+  serveur verrouille les blocs de la page (pages/services.py:deplacer_bloc).
+  ✕ demande une confirmation (hx-confirm). Le serveur repond HX-Refresh :
+  l'iframe se recharge, avec le nouvel ordre.
+- ✎ Modifier et le menu + : liens target="_top", qui quittent l'iframe pour
+  ouvrir la fiche Bloc dans l'admin. La liste du menu + est chargee a sa
+  premiere ouverture (hx-get vers pages/admin_apercu.py:vue_menu_ajout).
+Barre compacte, sur une ligne : rang, modele (libelle court), puis des
+boutons-icones, chacun avec aria-label et title. Styles en ligne, police
+systeme : la barre ne doit pas prendre le look du site.
+
+A NE PAS CONFONDRE avec admin/pages/widgets/_boutons_ligne_editeur.html :
+memes icones ↑ ↓ ✕, mais sur la fiche BLOC. Eux deplacent une LIGNE a
+l'interieur d'un bloc (un point GPS, une etape de frise), sans requete :
+rien n'est ecrit avant « Enregistrer ». Ne pas fusionner ces gabarits.
+/ NOT TO BE CONFUSED with _boutons_ligne_editeur.html (Bloc form): same icons,
+but they move a LINE inside a block, with no request until "Save".
+{% endcomment %}
+<div data-outils-bloc data-testid="page-bloc-{{ element.rang }}-outils"
+     role="group" aria-label="{% blocktranslate with rang=element.rang modele=element.libelle_modele %}Bloc {{ rang }} : {{ modele }}{% endblocktranslate %}"
+     title="{{ element.libelle_modele }}"
+     style="display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 2px; padding: 2px; border-radius: 7px;
+            background: #fff; border: 1px solid #a1a1aa; box-shadow: 0 1px 4px rgba(0,0,0,.15);
+            font-family: system-ui, sans-serif; font-size: 12px; line-height: 1; color: #18181b; white-space: nowrap;">
+    <span style="padding: 0 6px; font-weight: 700; color: #52525b;">{{ element.rang }}</span>
+    <span style="padding-right: 6px; font-weight: 600; max-width: 170px; overflow: hidden; text-overflow: ellipsis;">{{ element.libelle_court }}</span>
+    <button type="button" hx-disabled-elt="this" hx-post="{{ element.url_monter }}" {% if element.est_le_premier %}disabled{% endif %}
+            aria-label="{% translate 'Monter le bloc' %}" title="{% translate 'Monter' %}"
+            data-testid="page-bloc-{{ element.rang }}-monter"
+            style="width: 24px; height: 22px; padding: 0; border-radius: 5px; border: 1px solid #e4e4e7; background: #fff; color: #18181b; cursor: pointer; font: inherit; {% if element.est_le_premier %}opacity: .35; cursor: default;{% endif %}">↑</button>
+    <button type="button" hx-disabled-elt="this" hx-post="{{ element.url_descendre }}" {% if element.est_le_dernier %}disabled{% endif %}
+            aria-label="{% translate 'Descendre le bloc' %}" title="{% translate 'Descendre' %}"
+            data-testid="page-bloc-{{ element.rang }}-descendre"
+            style="width: 24px; height: 22px; padding: 0; border-radius: 5px; border: 1px solid #e4e4e7; background: #fff; color: #18181b; cursor: pointer; font: inherit; {% if element.est_le_dernier %}opacity: .35; cursor: default;{% endif %}">↓</button>
+    <a href="{{ element.url_modifier }}" target="_top"
+       aria-label="{% translate 'Modifier le bloc' %}" title="{% translate 'Modifier' %}"
+       data-testid="page-bloc-{{ element.rang }}-modifier"
+       style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 5px; background: #059669; color: #fff; text-decoration: none; font-weight: 600;">
+        <span aria-hidden="true">✎</span>&nbsp;{% translate "Modifier" %}
+    </a>
+    <button type="button" hx-disabled-elt="this" hx-post="{{ element.url_retirer }}"
+            hx-confirm="{% translate 'Supprimer ce bloc ? Cette action est définitive.' %}"
+            aria-label="{% translate 'Supprimer le bloc' %}" title="{% translate 'Supprimer' %}"
+            data-testid="page-bloc-{{ element.rang }}-supprimer"
+            style="width: 24px; height: 22px; padding: 0; border-radius: 5px; border: 1px solid #fca5a5; background: #fff; color: #dc2626; cursor: pointer; font: inherit;">✕</button>
+    {% translate "Ajouter un bloc après" as libelle_ajout %}
+    {% include "admin/pages/apercu/_menu_modeles.html" with url_chargement=element.url_menu_ajout cible="_top" libelle="" libelle_accessible=libelle_ajout testid=element.testid_menu position_menu="left: 0;" %}
+</div>

@@ -1,0 +1,26 @@
+{% extends "pages/faire_festival/shell.html" %}
+{% comment %}
+APERCU DE BLOCS DANS L'ADMIN (skin faire_festival)
+/ Admin preview of blocks (faire_festival skin)
+
+LOCALISATION : pages/templates/pages/faire_festival/apercu.html
+
+Meme role que pages/classic/apercu.html. Le conteneur reprend celui de
+pages/faire_festival/page.html (tb-jetons + tb-flux), sans la classe
+`plein-ecran` : l'iframe doit prendre la hauteur du bloc, pas celle de l'ecran.
+/ Same role as the classic version. Container copied from this skin's
+page.html, without `plein-ecran`: the iframe must fit the block, not the screen.
+{% endcomment %}
+
+{% block extra_meta %}
+    {# Les liens du bloc s'ouvrent dans un nouvel onglet, jamais dans l'iframe. #}
+    {# / Block links open in a new tab, never inside the iframe. #}
+    <base target="_blank">
+    <style>body { min-height: 0 !important; }</style>
+{% endblock %}
+
+{% block main %}
+    <div class="container-fluid conteneur-principal tb-jetons tb-flux" data-apercu-contenu data-testid="apercu-bloc-document">
+        {% include "admin/pages/apercu/_blocs.html" %}
+    </div>
+{% endblock %}

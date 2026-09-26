@@ -263,7 +263,7 @@ Paiement reussi → bouton RETOUR → manageReset() → retour layer 0
 ```
 clic CASHLESS → hx-get /paiement/lire_nfc/ → swap #confirm (layer 2)
     ↓
-Composant <c-read-nfc> demarre NfcReader
+Composant <c-V2.read-nfc> demarre NfcReader
     ↓
 Lecture carte → JS injecte tag_id dans le formulaire addition
     ↓

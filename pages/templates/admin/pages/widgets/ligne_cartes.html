@@ -1,0 +1,59 @@
+{% load i18n %}
+{% comment %}
+UNE SOUS-CARTE D'UNE SECTION (equipe, frise, ressources, media et cartes)
+/ One sub-card of a SECTION
+
+LOCALISATION : pages/templates/admin/pages/widgets/ligne_cartes.html
+
+Les 4 champs sont toujours presents (alignement des valeurs postees). Chacun
+n'est MONTRE que pour les affichages dont le gabarit le rend : `expressions_cles`
+vient de CLES_ELEMENT_PAR_AFFICHAGE (pages/blocs_catalogue.py). Une frise n'a
+donc pas de badge, et seules les ressources ont un lien.
+/ The 4 inputs are always present. Each is SHOWN only for the affichages whose
+template renders it (catalogue table CLES_ELEMENT_PAR_AFFICHAGE).
+
+APPELE PAR (deux chemins, meme gabarit) :
+1. Lignes deja enregistrees, a l'ouverture de la fiche Bloc :
+   pages/admin.py:BlocAdminForm (champ contenu_cartes, un LignesField)
+   -> pages/admin_widgets.py:EditeurLignesWidget.render
+   -> admin/pages/widgets/editeur_lignes.html, qui inclut CE gabarit une fois
+      par element (nom tire de GABARIT_LIGNE_PAR_EDITEUR["cartes"]).
+2. Nouvelle ligne vide, au clic sur « + Ajouter une ligne » :
+   editeur_lignes.html (hx-get, hx-swap="beforeend")
+   -> pages/admin_apercu.py:vue_ligne_vide (route staff_admin:pages_bloc_editeur_ligne)
+   -> CE gabarit, avec une ligne vide (admin_widgets.py:ligne_vide).
+
+A L'ENVOI DU FORMULAIRE :
+Les champs s'appellent `<nom>__<cle>` et se repetent d'une ligne a l'autre.
+pages/editeur_items.py:lire_lignes_depuis_post les reassemble dans l'ordre du
+DOM, puis nettoyer_contenu_cartes les nettoie. BlocAdmin.save_model recopie le resultat
+dans Bloc.contenu (SECTION Equipe, Frise, Ressources, Media + sous-cartes) (via admin_apercu.py:appliquer_editeurs_de_lignes).
+L'apercu en direct lit les memes champs (admin_apercu.py:vue_apercu_bloc_en_direct).
+
+CONTEXTE RECU : nom, ligne, classes_champ, classes_select, expressions_cles
+(construit par admin_widgets.py:contexte_d_une_ligne).
+/ CALLED BY: the widget (existing lines, via editeur_lignes.html) and
+vue_ligne_vide ("+ Add" button). Posted fields are reassembled by
+lire_lignes_depuis_post and cleaned by nettoyer_contenu_cartes.
+{% endcomment %}
+<div data-ligne data-testid="ligne-cartes"
+     style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; padding: 8px; border-radius: 8px; border: 1px solid var(--color-base-200);">
+    <label x-show="{{ expressions_cles.titre }}" style="flex: 1 1 200px; font-size: 0.75rem; font-weight: 600;">
+        {% translate "Titre" %}
+        <input type="text" name="{{ nom }}__titre" value="{{ ligne.titre }}" class="{{ classes_champ }}" data-testid="ligne-cartes-titre">
+    </label>
+    <label x-show="{{ expressions_cles.texte }}" style="flex: 2 1 260px; font-size: 0.75rem; font-weight: 600;">
+        {% translate "Texte" %}
+        <textarea name="{{ nom }}__texte" rows="2" class="{{ classes_champ }}" data-testid="ligne-cartes-texte">{{ ligne.texte }}</textarea>
+    </label>
+    <label x-show="{{ expressions_cles.badge }}" style="flex: 0 1 140px; font-size: 0.75rem; font-weight: 600;">
+        {% translate "Badge" %}
+        <input type="text" name="{{ nom }}__badge" value="{{ ligne.badge }}" class="{{ classes_champ }}" data-testid="ligne-cartes-badge">
+    </label>
+    {% translate "https://… ou /page/" as exemple_de_lien %}
+    <label x-show="{{ expressions_cles.url }}" style="flex: 1 1 200px; font-size: 0.75rem; font-weight: 600;">
+        {% translate "Lien" %}
+        <input type="text" name="{{ nom }}__url" value="{{ ligne.url }}" placeholder="{{ exemple_de_lien }}" class="{{ classes_champ }}" data-testid="ligne-cartes-url">
+    </label>
+    {% include "admin/pages/widgets/_boutons_ligne_editeur.html" %}
+</div>

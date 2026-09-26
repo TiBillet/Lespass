@@ -33,7 +33,10 @@
 	flex-direction: row;
 	justify-content: space-around;
 	align-items: center;
-	/*width: 100%;*/
+	/* flex: 1 + min-width: 0 : le bloc peut retrecir, le burger reste visible
+	   a droite meme a 320 px. / Can shrink so the burger stays visible at 320px. */
+	flex: 1;
+	min-width: 0;
 }
 
 .header-img {
@@ -62,8 +65,11 @@
 }
 
 #header-title {
-	/*width: calc(100% - var(--header-add-img-status-menu));*/
-	min-width: 200px;
+	/* min-width: 0 (et non 200 px) : a 320 px, logo + titre 200 px + burger
+	   depassaient l'ecran et le burger etait coupe.
+	   / min-width: 0 (not 200px): at 320px the burger used to be cut off. */
+	flex: 1 1 auto;
+	min-width: 0;
 	height: 100%;
 	display: flex;
 	flex-direction: row;
@@ -72,6 +78,42 @@
 	overflow-wrap: break-word;
 	font-weight: bold;
 	text-wrap: balance;
+	/* #header-title est un <button> : on retire le style natif du navigateur
+	   pour garder le rendu d'avant (fond, bordure, police, alignement).
+	   / #header-title is a <button>: drop the native styles. */
+	background: none;
+	border: 0;
+	padding: 0;
+	margin: 0;
+	color: inherit;
+	font-family: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+/* Bouton burger (petit ecran) : style natif retire, cible tactile de 44 px.
+   / Burger button (small screens): native style removed, 44px touch target. */
+.hdr-burger-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 44px;
+	min-height: 44px;
+	padding: 0;
+	margin: 0;
+	background: none;
+	border: 0;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+/* Anneau de focus clavier, visible tout de suite (pas d'animation).
+   / Keyboard focus ring, shown instantly. */
+#header-title:focus-visible,
+.hdr-burger-btn:focus-visible {
+	outline: 3px solid var(--text);
+	outline-offset: 2px;
 }
 
 .header-menu {
@@ -83,6 +125,36 @@
 	align-items: center;
 	font-size: 2rem;
 	cursor: pointer;
+}
+
+/* Nom du point de vente : une seule ligne, coupe avec "..." si trop long
+   / Point of sale name: single line, ellipsis when too long */
+.header-title-nom {
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Bandeau mode ecole : bande fine sous l'en-tete, en position absolue.
+   pointer-events: none laisse passer les touchers vers la caisse dessous.
+   / Training-mode strip under the header; touches pass through. */
+.bandeau-mode-ecole {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	z-index: 1000;
+	padding: 3px 8px;
+	background: var(--mode-ecole);
+	color: var(--blanc01);
+	font-size: 0.85rem;
+	font-weight: bold;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	pointer-events: none;
 }
 
 /* --- MENU OUVRANT --- */
@@ -206,7 +278,7 @@
 	color: var(--text);
 }
 
-.menu-burger-item i {
+.menu-burger-item .material-symbols-outlined {
 	flex: none;
 	width: 19px;
 	font-size: 19px;
@@ -225,7 +297,7 @@
 	color: var(--text);
 }
 
-.menu-burger-item[aria-current="true"] i {
+.menu-burger-item[aria-current="true"] .material-symbols-outlined {
 	color: var(--valid);
 }
 
@@ -277,6 +349,41 @@ Connection indicator - Indicateur de connection
 .hdr-nav-btn .ico { font-size: 16px; }
 .hdr-nav-btn:active { background: var(--noir03); color: var(--blanc02); }
 
+/* --- Retour / navigation entre écrans (Ventes ↔ Sortie ↔ Caisse)
+   Maquette : TEMP-tibillet-laboutik-main/caisse/Laboutik.css (.hdr-back, .hdr-title).
+   Zone rendue par laboutik/partial/_hdr_retour_zone.html (mode retour_pv du header).
+   / Back navigation between screens, rendered by _hdr_retour_zone.html */
+.header-background--retour .flex-container { flex: 1; min-width: 0; justify-content: flex-start; }
+.header-background--retour .net { margin-right: 16px; }
+.hdr-retour-zone { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.hdr-spacer { flex: 1; }
+.hdr-back {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 44px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: var(--r-ctrl);
+	background: none;
+	color: var(--text-dim);
+	font: inherit;
+	font-weight: 700;
+	font-size: 15px;
+	text-decoration: none;
+	cursor: pointer;
+	touch-action: manipulation;
+}
+.hdr-back-chevron {
+	width: 8px; height: 8px;
+	border-top: 2px solid currentColor;
+	border-left: 2px solid currentColor;
+	transform: rotate(-45deg);
+	margin-left: 2px;
+}
+.hdr-back:active { background: var(--surface-2); color: var(--text); }
+.hdr-back:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+.hdr-title { font-size: 17px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 
 
@@ -301,10 +408,16 @@ Connection indicator - Indicateur de connection
 	.ws-indicator-text{
 		display: none;
 	}
+	/* Format V2s (maquette .fmt-poche) / V2s format */
+	/* 44 px de haut minimum : taille d'un doigt / 44px minimum: finger size */
+	.hdr-back { font-size: 12px; padding: 0 8px; min-height: 44px; }
+	.header-img { margin: 0 10px; }
+	.hdr-title { font-size: 13px; }
+	.header-background--retour .net { margin-right: 10px; }
 }
 
 /* pour une largeur supérieure 1199 pixels */
-@media only screen and (width > 1199px) {
+@media only screen and (min-width: 1200px) {
 	:root {
 		--header-height: 58px;
 	}

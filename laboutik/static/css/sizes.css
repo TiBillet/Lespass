@@ -15,6 +15,12 @@
 	/* footer */
 	--footer-container-height: 90px;
 
+	/* Hauteur du panier replie en bas d'ecran (ecrans <= 1022 px).
+	   Utilisee par views.css, categories.css et addition.css : une seule
+	   valeur a changer. / Folded cart height at the bottom (<= 1022px),
+	   shared by views.css, categories.css and addition.css. */
+	--addition-collapsed-height: 200px;
+
 	/* main */
 	--no-main-container-height: calc(var(--header-height) + var(--footer-container-height));
 	--main-container-height: calc(100% - var(--no-main-container-height));
@@ -42,9 +48,11 @@
 	--bt-basic-icon-width: 28%;
 	--bt-basic-text-width: 72%;
 	
-	/* keys */
-  --key-width: 80px;
-  --key-height: 80px;
+	/* keys — 80 px sur grand ecran, jamais moins de 56 px (taille d'un doigt).
+	   Se reduit sur ecran etroit (vw) ou bas (vh, telephone en paysage).
+	   / 80px on large screens, never below 56px; shrinks on narrow or short screens. */
+  --key-width: clamp(56px, min(18vw, 14vh), 80px);
+  --key-height: clamp(56px, min(18vw, 14vh), 80px);
 }
 
 /* Mobile : sidebar et footer plus compacts
@@ -55,5 +63,14 @@
 		--cat-icon-size: 1.8rem;
 		--cat-name-size: 0.7rem;
 		--footer-container-height: 64px;
+	}
+}
+
+/* Telephone en paysage (ecran bas) : panier replie plus compact.
+   Sinon il ne restait qu'environ 110 px pour les articles.
+   / Landscape phone (short screen): more compact folded cart. */
+@media only screen and (max-width: 1022px) and (max-height: 500px) {
+	:root {
+		--addition-collapsed-height: 144px;
 	}
 }

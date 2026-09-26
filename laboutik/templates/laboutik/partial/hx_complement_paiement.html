@@ -1,141 +1,153 @@
 {% load static i18n l10n %}
 {% load laboutik_process %}
 <!--
-ECRAN COMPLEMENT DE PAIEMENT NFC
-Affiche quand la cascade NFC de la 1ere carte ne couvre pas le total.
-Le caissier choisit : especes, CB, ou 2eme carte NFC.
-/ NFC PAYMENT COMPLEMENT SCREEN
-Displayed when the 1st card's NFC cascade doesn't cover the total.
-The cashier chooses: cash, CC, or 2nd NFC card.
+POPUP COMPLEMENT DE PAIEMENT NFC (V2 · « ticket de repartition »)
+Affichee quand la cascade NFC de la 1ere carte ne couvre pas le total.
+Le caissier lit l'addition (total, paye par la carte, reste) puis choisit
+comment payer le reste : especes, CB, ou 2eme carte NFC.
+/ NFC PAYMENT COMPLEMENT POPUP (V2 · "split receipt")
+Shown when the 1st card's NFC cascade doesn't cover the total.
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_complement_paiement.html
 
+Maquette : artefact « Complement de paiement », design A (valide).
+Style : overlay.css, bloc « POPUP CENTREE V2 » (.card-titre, .card-ticket,
+.card-encart-reste, .card-pastilles, .payment-methods).
+
 FLUX :
 1. _payer_par_nfc() Phase 6 detecte un reste a payer
-2. Ce partial affiche le detail cascade + boutons complement
-3. Bouton especes/CB → POST payer_complementaire (moyen_complement=espece/carte_bancaire)
-4. Bouton 2eme carte → GET lire_nfc_complement (scan NFC)
-/ FLOW:
-1. _payer_par_nfc() Phase 6 detects a remaining amount
-2. This partial shows cascade detail + complement buttons
-3. Cash/CC button → POST payer_complementaire (moyen_complement=espece/carte_bancaire)
-4. 2nd card button → GET lire_nfc_complement (NFC scan)
+   (ou payer_complementaire() apres une 2eme carte insuffisante)
+2. Ce partial remplace #messages (outerHTML)
+3. Tuile especes/CB → GET confirmer(complement=1) dans #confirm :
+   pave numerique (especes) ou rappel TPE (CB). Cette popup reste masquee
+   derriere (le #complement-form reste dans le DOM).
+   Valider → soumet #complement-form → POST payer_complementaire
+   (moyen_complement=espece/carte_bancaire, given_sum si especes)
+4. Tuile 2eme carte → GET lire_nfc_complement (attente NFC dans #confirm)
+5. La croix ou le fond ferme la popup et remet l'URL de l'addition (initUrlAddition)
+/ FLOW: cash/card tile → confirmer (keypad / card reminder) → Validate →
+POST payer_complementaire; 2nd card tile → GET
+lire_nfc_complement; cross or backdrop closes and resets the addition URL.
 
-PIEGE 58 : les boutons sont type="button" autonomes (pas dans un <form>)
+PIEGE 58 : les tuiles sont des boutons autonomes (pas dans le <form>)
 pour eviter le double submit HTMX.
-/ TRAP 58: buttons are standalone type="button" (not in a <form>)
-to avoid HTMX double submit.
+/ TRAP 58: tiles are standalone buttons (not inside the <form>).
+
+Les data-testid sont lus par tests/pytest/test_paiement_complementaire.py :
+ne pas les renommer. Le reste a payer doit rester dans un <strong> apres
+data-testid="complement-reste-a-payer" (regex _extraire_reste).
+/ data-testid values are read by the tests: do not rename them.
 -->
 <div id="messages">
-  <div class="BF-col" data-testid="complement-paiement" aria-live="polite">
-    <div class="fi-title1" data-testid="complement-titre">{% translate "Complément de paiement" %}</div>
-    {# Detail de la carte 1 et de ce qu'elle a couvert #}
-    {# / Card 1 detail and what it covered #}
-    <div class="fi-msg1" data-testid="complement-carte1-info">
-      {% translate "Carte" %} : <strong>{{ tag_id_carte1 }}</strong>
-    </div>
-    {# Somme totale qui etait disponible sur la carte au moment du scan #}
-    {# / Total amount available on the card at scan time #}
-    <div class="fi-msg1" data-testid="complement-carte1-disponible">
-      {% translate "Disponible sur la carte" %} : <strong>{{ total_nfc_carte1_euros }}€</strong>
-    </div>
-    {# Soldes utilises par la cascade de la 1ere carte #}
-    {# / Balances used by the 1st card's cascade #}
-    {% if detail_cascade %}
-      <div class="cascade-badges-list" data-testid="complement-detail-cascade">
-        {% for solde_utilise in detail_cascade %}
-          <span class="cascade-badge">{{ solde_utilise.name }} : {{ solde_utilise.montant_euros }}€</span>
-        {% endfor %}
-      </div>
-    {% endif %}
-    {# Total du panier et reste a payer #}
-    {# / Cart total and remaining amount #}
-    <div class="payment-detail fi-payment-detail"
-         data-testid="complement-total-panier">{% translate "Total panier" %} : {{ total_panier_euros }}€</div>
-    <div class="give-back-box"
-         style="margin: 0.75rem 0"
-         data-testid="complement-reste-a-payer"
-         role="alert">
-      <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-      {% translate "Reste à payer" %} : <strong>{{ reste_euros }}€</strong>
-    </div>
-    <form id="complement-form"
-          hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
-          hx-include="#addition-form"
-          hx-target="#messages"
-          hx-swap="outerHTML">
-      {# Hidden inputs pour propager les donnees cascade de la 1ere carte #}
-      {# / Hidden inputs to propagate 1st card's cascade data #}
-      <input type="hidden"
-             name="tag_id_carte1"
-             value="{{ tag_id_carte1 }}"
-             data-testid="hidden-tag-id-carte1" />
-      <input type="hidden"
-             name="cascade_carte1"
-             value="{{ cascade_carte1_json }}"
-             data-testid="hidden-cascade-carte1" />
-      <input type="hidden"
-             name="total_nfc_carte1"
-             value="{{ total_nfc_carte1 }}"
-             data-testid="hidden-total-nfc-carte1" />
-    </form>
-    {# Boutons complement — type="button" autonomes (piege 58) #}
-    {# / Complement buttons — standalone type="button" (trap 58) #}
-    {% comment %}
-  ESPECES et CB ciblent #messages (innerHTML) car le retour est soit
-  hx_return_payment_success soit un re-render de hx_complement_paiement —
-  aucun des deux n'a de div id confirm en racine, donc un swap outerHTML
-  ferait disparaitre l'overlay. Le complement_paiement lui-meme s'affiche
-  dans #messages, on remplace son contenu par le resultat.
-  / Cash and Card target #messages (innerHTML).
-    {% endcomment %}
-    {% if accepte_especes %}
-      <button type="text"
-              class="bt-basic-container bt-complement-base bt-complement-especes"
-              data-testid="btn-complement-especes"
-              onclick="askAdditionManageForm('updateInput','#addition-moyen-complement','espece'); htmx.trigger('#complement-form', 'submit')" 
-              data-loading-disable>
-        <div class="bt-basic-icon">
-          <i class="fas fa-coins" aria-hidden="true"></i>
+  <div data-testid="complement-paiement" aria-live="polite">
+    <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="complement-titre">
+      {# Toucher le fond ferme la popup, comme la croix / Tapping the backdrop closes the popup #}
+      <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages');{{ action }}"></div>
+      <div class="card-modal-box">
+        <c-V2.bt.return selector="#messages" action="{{ action }}" data-testid="complement-btn-fermer" />
+
+        <div class="card-titre" id="complement-titre" data-testid="complement-titre">{% translate "Complément de paiement" %}</div>
+
+        {# --- L'ADDITION : total, paye par la carte, detail / THE BILL --- #}
+        <div class="card-ticket">
+          <div class="card-ticket-ligne" data-testid="complement-total-panier">
+            <span>{% translate "Total panier" %}</span>
+            <b>{{ total_panier_euros|floatformat:2 }} €</b>
+          </div>
+          <div class="card-ticket-ligne" data-testid="complement-carte1-info">
+            <span>{% translate "Payé par la carte" %} ·· {{ tag_id_carte1|slice:"-4:" }}</span>
+            <b data-testid="complement-carte1-disponible">− {{ total_nfc_carte1_euros|floatformat:2 }} €</b>
+          </div>
+          {# 2e passage : la 2e carte a paye une partie, mais pas tout #}
+          {# / 2nd pass: the 2nd card paid part of it, not all          #}
+          {% if tag_id_carte2 %}
+            <div class="card-ticket-ligne" data-testid="complement-carte2-info">
+              <span>{% translate "Payé par la carte" %} ·· {{ tag_id_carte2|slice:"-4:" }}</span>
+              <b data-testid="complement-carte2-disponible">− {{ total_nfc_carte2_euros|floatformat:2 }} €</b>
+            </div>
+          {% endif %}
+          {# Monnaies utilisees par la cascade (1re carte, et 2e carte au 2e passage) #}
+          {# / Currencies used by the cascade (1st card, and 2nd card on 2nd pass)     #}
+          {% if detail_cascade %}
+            <ul class="card-pastilles" data-testid="complement-detail-cascade"
+                aria-label="{% translate 'Détail de la carte' %}">
+              {% for solde_utilise in detail_cascade %}
+                <li class="card-pastille">
+                  <span class="card-pastille-nom">{{ solde_utilise.name }}</span>
+                  <b>{{ solde_utilise.montant_euros|floatformat:2 }} €</b>
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
         </div>
-        <div class="bt-basic-text">
-          <div>{% translate "ESPÈCES" %} — {{ reste_euros }}€</div>
+
+        {# --- RESTE A PAYER : le seul bloc teinte, il ressort seul --- #}
+        {# --- REMAINING: the only tinted block, it stands out alone --- #}
+        <div class="card-encart-reste" data-testid="complement-reste-a-payer" role="alert">
+          <span class="card-encart-reste-lbl">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path fill-rule="evenodd" d="M12 2.6 22.8 21.2H1.2zM10.9 9h2.2v6.2h-2.2zm0 7.6h2.2v2.2h-2.2z"/>
+            </svg>
+            {% translate "Reste à payer" %}
+          </span>
+          <strong>{{ reste_euros|floatformat:2 }} €</strong>
         </div>
-      </button>
-    {% endif %}
-    {% if accepte_carte_bancaire %}
-      <button type="text"
-              class="bt-basic-container bt-complement-base bt-complement-cb"
-              data-testid="btn-complement-cb"
-              hx-trigger="click"
-              onclick="askAdditionManageForm('updateInput','#addition-moyen-complement','carte_bancaire'); htmx.trigger('#complement-form', 'submit')" 
-              data-loading-disable>
-        <div class="bt-basic-icon">
-          <i class="fas fa-credit-card" aria-hidden="true"></i>
-        </div>
-        <div class="bt-basic-text">
-          <div>{% translate "CB" %} — {{ reste_euros }}€</div>
-        </div>
-      </button>
-    {% endif %}
-    {% if autoriser_2eme_carte %}
-      <button type="button"
-              class="bt-basic-container bt-complement-base bt-complement-2eme-carte"
-              data-testid="btn-complement-2eme-carte"
-              hx-get="{% url 'laboutik-paiement-lire_nfc_complement' %}?tag_id_carte1={{ tag_id_carte1 }}&cascade_carte1={{ cascade_carte1_json|urlencode }}&total_nfc_carte1={{ total_nfc_carte1 }}"
-              hx-target="#confirm"
+
+        {# Champs caches pour propager la cascade de la 1ere carte #}
+        {# / Hidden fields propagating the 1st card's cascade #}
+        {# hx-sync + hx-disabled-elt : un double appui sur Valider n'envoie qu'une requete #}
+        {# / A double tap on Validate sends a single request                              #}
+        <form id="complement-form"
+              hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
+              hx-include="#addition-form"
+              hx-target="#messages"
               hx-swap="outerHTML"
-              data-loading-disable>
-        <div class="bt-basic-icon">
-          <i class="fas fa-address-card" aria-hidden="true"></i>
-        </div>
-        <div class="bt-basic-text">
-          <div>{% translate "2ème CARTE NFC" %} — {{ reste_euros }}€</div>
-        </div>
-      </button>
-    {% endif %}
-    <!-- <c-bt.return /> -->
-    <!-- action = change post url to laboutik/paiement/moyens_paiement -->
-    <c-bt.return {% if action %} action="{{ action }}" {% endif %}/>
+              hx-sync="this:drop"
+              hx-disabled-elt="#bt-valider-layer2">
+          <input type="hidden"
+                 name="tag_id_carte1"
+                 value="{{ tag_id_carte1 }}"
+                 data-testid="hidden-tag-id-carte1" />
+          <input type="hidden"
+                 name="cascade_carte1"
+                 value="{{ cascade_carte1_json }}"
+                 data-testid="hidden-cascade-carte1" />
+          <input type="hidden"
+                 name="total_nfc_carte1"
+                 value="{{ total_nfc_carte1 }}"
+                 data-testid="hidden-total-nfc-carte1" />
+          {# 2e passage : la carte 2 est renvoyee pour que le serveur la debite #}
+          {# aussi quand le reste est regle en especes / CB.                    #}
+          {# / 2nd pass: card 2 is sent back so the server debits it too.       #}
+          {% if tag_id_carte2 %}
+            <input type="hidden"
+                   name="tag_id_carte2"
+                   value="{{ tag_id_carte2 }}"
+                   data-testid="hidden-tag-id-carte2" />
+          {% endif %}
+        </form>
+
+        {# --- PAYER LE RESTE AVEC : tuiles autonomes (piege 58) --- #}
+        {# --- PAY THE REST WITH: standalone tiles (trap 58) ---     #}
+        {% if accepte_especes or accepte_carte_bancaire or autoriser_2eme_carte %}
+          <p class="payment-title">{% translate "Payer le reste avec" %}</p>
+          <div class="payment-methods">
+            {% if accepte_especes %}
+              {# Ouvre le pave especes (confirmer), comme un paiement classique #}
+              {# / Opens the cash keypad (confirmer), like a regular payment #}
+              <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ reste_euros }}&complement=1" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-complement','espece')" data-loading-disable data-testid="btn-complement-especes" />
+            {% endif %}
+            {% if accepte_carte_bancaire %}
+              {# Ouvre la confirmation CB (confirmer), comme un paiement classique #}
+              {# / Opens the card confirmation (confirmer), like a regular payment #}
+              <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&total={{ reste_euros }}&complement=1" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-complement','carte_bancaire')" data-loading-disable data-testid="btn-complement-cb" />
+            {% endif %}
+            {% if autoriser_2eme_carte %}
+              <c-V2.bt.paiement name='{% translate "2ᵉ CARTE" %}' icon="nfc" hx-get="{% url 'laboutik-paiement-lire_nfc_complement' %}?tag_id_carte1={{ tag_id_carte1 }}&cascade_carte1={{ cascade_carte1_json|urlencode }}&total_nfc_carte1={{ total_nfc_carte1 }}" hx-target="#confirm" hx-swap="outerHTML" data-loading-disable data-testid="btn-complement-2eme-carte" />
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
   </div>
 </div>

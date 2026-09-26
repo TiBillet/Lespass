@@ -316,11 +316,65 @@ AUTH_USER_MODEL = 'AuthBillet.TibilletUser'
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
+        # Backend maison : PyMemcacheCache qui ne ferme pas ses connexions a
+        # chaque fin de requete (cf. TiBillet/cache_memcached.py).
+        # / PyMemcacheCache that does not close its connections per request.
+        'BACKEND': 'TiBillet.cache_memcached.PyMemcacheCacheSansFermeture',
         'LOCATION': 'memcached:11211',
         'KEY_FUNCTION': 'django_tenants.cache.make_key',
         'REVERSE_KEY_FUNCTION': 'django_tenants.cache.reverse_key',
-    }
+        'OPTIONS': {
+            # use_pooling : un pool de connexions. Chaque operation de cache
+            # emprunte une connexion libre et la rend apres. Sans lui,
+            # pymemcache partage UNE socket entre tous les threads d'un
+            # serveur ASGI (runserver de dev, daphne) : deux requetes
+            # simultanees melangent leurs reponses. Symptome vu : l'apercu
+            # admin des pages prenait parfois le mauvais skin.
+            # / use_pooling: each cache operation borrows a free connection.
+            # Without it, one socket is shared by all threads of an ASGI server.
+            'use_pooling': True,
+            # Delais d'attente, en secondes. Les connexions restent ouvertes
+            # toute la vie du processus (backend ci-dessus) : sans delai, une
+            # connexion coupee a moitie (memcached tue, coupure reseau)
+            # bloquerait un worker jusqu'au timeout de gunicorn.
+            # / Timeouts (seconds): connections live for the whole process, so
+            # a half-open one must not block a worker.
+            'connect_timeout': 1,
+            'timeout': 2,
+            # ignore_exc : une panne de memcached devient un simple « cache
+            # vide » (Django relit la base) au lieu d'une erreur 500. Cas typique :
+            # memcached redemarre, et la premiere operation de chaque worker
+            # tombe sur une socket morte.
+            # / ignore_exc: a memcached failure becomes a cache miss instead of
+            # a 500 (e.g. first operation after a memcached restart).
+            # ATTENTION : avec ignore_exc, cache.add() renvoie False en cas de
+            # panne, comme si la cle etait deja prise. Les verrous passent donc
+            # par l'alias "verrous" ci-dessous.
+            # / With ignore_exc, cache.add() returns False on failure, like a
+            # taken key: locks use the "verrous" alias below.
+            'ignore_exc': True,
+        },
+    },
+    # Alias pour les VERROUS (cache.add utilise comme mutex entre workers).
+    # Meme serveur memcached et memes cles (KEY_FUNCTION par tenant), mais SANS
+    # ignore_exc : si memcached tombe, cache.add() leve une exception.
+    # Sinon une panne ressemble a « deja en cours » : la tache d'onboarding
+    # s'arrete sans erreur et le lieu n'est jamais cree, un jeton SSO valide
+    # est refuse comme un rejeu.
+    # Utilise par : onboard/tasks.py (claim create_tenant), onboard/views.py (SSO).
+    # / Alias for LOCKS: same server and keys, but WITHOUT ignore_exc, so a
+    # memcached outage raises instead of looking like "already taken".
+    'verrous': {
+        'BACKEND': 'TiBillet.cache_memcached.PyMemcacheCacheSansFermeture',
+        'LOCATION': 'memcached:11211',
+        'KEY_FUNCTION': 'django_tenants.cache.make_key',
+        'REVERSE_KEY_FUNCTION': 'django_tenants.cache.reverse_key',
+        'OPTIONS': {
+            'use_pooling': True,
+            'connect_timeout': 1,
+            'timeout': 2,
+        },
+    },
 }
 SOLO_CACHE = 'default'
 TENANT_LIMIT_SET_CALLS = True
