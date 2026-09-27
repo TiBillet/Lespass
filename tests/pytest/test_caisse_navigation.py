@@ -56,12 +56,9 @@ def test_data(tenant):
     """Lance create_test_pos_data pour s'assurer que les donnees existent.
     / Runs create_test_pos_data to ensure test data exists."""
     from django.core.management import call_command
-    # Forcer le schema lespass pour que la commande cree les donnees
-    # dans le bon tenant (sinon elle prend le premier non-public = UUID).
-    # / Force lespass schema so the command creates data in the right
-    # tenant (otherwise it picks the first non-public = UUID).
-    with schema_context(TENANT_SCHEMA):
-        call_command('create_test_pos_data')
+    # La commande remplit le lieu de son option --schema, jamais le schema
+    # courant de la connexion. / The command fills its --schema venue.
+    call_command('create_test_pos_data', schema=TENANT_SCHEMA)
     return True
 
 

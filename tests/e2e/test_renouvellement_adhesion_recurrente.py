@@ -61,14 +61,13 @@ subscription with it); the Lespass-side objects remain.
 PREREQUIS / PREREQUISITES
 --------------------------
 - **`stripe listen` doit tourner** : sans lui, l'echeance est bien prelevee chez
-  Stripe mais Lespass n'en sait rien. Ce test ne tourne qu'avec `make e2e-stripe`
-  (STRIPE_REEL=1) — sinon il est ignore, et l'oubli est signale bruyamment en fin
-  de run (voir `tests/stripe_reel.py`).
+  Stripe mais Lespass n'en sait rien. Si `stripe listen` ne tourne pas, ce test
+  echoue des sa preparation (voir `tests/e2e/conftest.py`).
 - Celery tourne : la recompense part par `.delay()`.
 - le Fedow est joignable.
 
 Lancement / Run (`stripe listen` doit tourner dans byobu) :
-    make e2e-stripe ARGS="tests/e2e/test_renouvellement_adhesion_recurrente.py -v"
+    make e2e ARGS="tests/e2e/test_renouvellement_adhesion_recurrente.py -v"
 """
 
 import json

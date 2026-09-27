@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Lance une suite de tests Lespass dans le conteneur, avec ou sans Stripe réel.
-# / Runs a Lespass test suite in the container, with or without real Stripe.
+# Lance une suite de tests Lespass dans le conteneur, tests Stripe réel compris.
+# / Runs a Lespass test suite in the container, real-Stripe tests included.
 #
 # LOCALISATION : scripts/lancer_tests.sh — appelé par le Makefile (make test, make e2e…).
 #
-# Usage : scripts/lancer_tests.sh <python|e2e|couverture> <sans-stripe|stripe> [arguments pytest…]
+# Usage : scripts/lancer_tests.sh <python|e2e|e2e-visible|couverture> [arguments pytest…]
+#   e2e-visible : les E2E dans une fenetre Chromium VISIBLE sur l'hote, ralentie
+#   (variable LENTEUR en millisecondes, 800 par defaut), avec un journal lisible.
+#   / e2e-visible: E2E in a VISIBLE, slowed-down Chromium window on the host, with a log.
 #   Sans argument pytest, toute la suite est lancée (tests/pytest/, booking/tests/ et
 #   onboard/tests/, ou tests/e2e/).
 #   / Without pytest arguments, the whole suite runs.
@@ -16,23 +19,20 @@
 # FLUX :
 # 1. Vérifie que le serveur live répond (les tests API et E2E l'appellent).
 # 2. Récupère une clé API de test (la fixture ne sait pas la créer dans le conteneur).
-# 3. Avec Stripe réel : pose STRIPE_REEL=1 ; en E2E, vérifie que `stripe listen` tourne.
+# 3. En E2E : regarde si `stripe listen` tourne et le dit aux tests (STRIPE_LISTEN=1/0).
+#    Les tests qui en ont besoin ÉCHOUENT sans lui : aucun n'est ignoré.
 # 4. Lance pytest dans le conteneur. poetry ne tourne JAMAIS sur l'hôte : le .venv est partagé.
 # 5. En mode couverture : affiche le total, écrit le rapport HTML dans htmlcov/.
 
 set -euo pipefail
 
 SUITE="${1:-}"
-MODE="${2:-}"
-if [ "$SUITE" != "python" ] && [ "$SUITE" != "e2e" ] && [ "$SUITE" != "couverture" ]; then
-    echo "Usage : $0 <python|e2e|couverture> <sans-stripe|stripe> [arguments pytest…]" >&2
+if [ "$SUITE" != "python" ] && [ "$SUITE" != "e2e" ] && [ "$SUITE" != "e2e-visible" ] \
+    && [ "$SUITE" != "couverture" ]; then
+    echo "Usage : $0 <python|e2e|e2e-visible|couverture> [arguments pytest…]" >&2
     exit 2
 fi
-if [ "$MODE" != "sans-stripe" ] && [ "$MODE" != "stripe" ]; then
-    echo "Usage : $0 <python|e2e|couverture> <sans-stripe|stripe> [arguments pytest…]" >&2
-    exit 2
-fi
-shift 2
+shift 1
 
 CONTENEUR="lespass_django"
 URL_DU_SERVEUR="https://lespass.tibillet.localhost/"
@@ -50,22 +50,77 @@ fi
 cle_api=$(docker exec -e TEST=1 "$CONTENEUR" poetry run python /DjangoFiles/manage.py test_api_key 2>/dev/null | tail -1)
 variables_du_conteneur=(-e "API_KEY=$cle_api")
 
-# 3. Stripe réel : une seule variable pour les deux suites.
-# / Real Stripe: a single variable for both suites.
-if [ "$MODE" = "stripe" ]; then
-    variables_du_conteneur+=(-e "STRIPE_REEL=1")
-
-    # Les parcours E2E à webhook attendent `stripe listen`, qui tourne sur l'hôte (byobu).
-    # Le conteneur ne voit pas les processus de l'hôte : on vérifie ici, avant de lancer.
-    # On cherche le processus, pas le nom du panneau : installé par npm, le CLI s'affiche « node ».
-    # / E2E webhook journeys need `stripe listen`, running on the host (byobu). We look for the
-    # process, not the pane name: installed through npm, the CLI shows up as "node".
-    if [ "$SUITE" = "e2e" ]; then
-        if ! pgrep -f "stripe listen.*/api/webhook_stripe/" > /dev/null; then
-            echo "\`stripe listen\` ne tourne pas : le lancer dans byobu avant make e2e-stripe." >&2
-            exit 1
-        fi
+# 3. `stripe listen` : les parcours E2E à webhook l'attendent. Il tourne sur l'hôte (byobu),
+# et le conteneur ne voit pas les processus de l'hôte : on regarde ici, et on le dit aux
+# tests par STRIPE_LISTEN. On ne s'arrête PAS : les autres tests tournent, et ceux qui en
+# ont besoin échouent (tests/e2e/conftest.py). On cherche le processus, pas le nom du
+# panneau : installé par npm, le CLI s'affiche « node ».
+# / 3. `stripe listen`: E2E webhook journeys need it. It runs on the host; the container
+# cannot see host processes, so we check here and tell the tests through STRIPE_LISTEN.
+# We do NOT stop: the tests that need it fail instead.
+if [ "$SUITE" = "e2e" ] || [ "$SUITE" = "e2e-visible" ]; then
+    if pgrep -f "stripe listen.*/api/webhook_stripe/" > /dev/null; then
+        variables_du_conteneur+=(-e "STRIPE_LISTEN=1")
+    else
+        variables_du_conteneur+=(-e "STRIPE_LISTEN=0")
+        echo "\`stripe listen\` ne tourne pas : les parcours à webhook Stripe vont échouer." >&2
     fi
+fi
+
+# 3 bis. Supervision humaine : un serveur de navigateur Playwright tourne sur l'HOTE, et
+# les tests du conteneur s'y connectent (tests/e2e/conftest.py, E2E_NAVIGATEUR_DISTANT).
+# Meme version que le Playwright du conteneur, sinon la connexion est refusee. Il ecoute
+# sur l'adresse Docker de l'hote seulement, pas sur le reseau local. `setsid` le met dans
+# son propre groupe de processus : tuer `npx` seul laisserait tourner le `node` qu'il lance.
+# / 3 bis. Human supervision: a Playwright browser server runs on the HOST; container
+# tests connect to it. Same version as in the container. Own process group via setsid.
+if [ "$SUITE" = "e2e-visible" ]; then
+    VERSION_DE_PLAYWRIGHT="1.60.0"
+    ADRESSE_DU_SERVEUR_DE_NAVIGATEUR="172.17.0.1"
+    PORT_DU_SERVEUR_DE_NAVIGATEUR="3999"
+    JOURNAL_DU_SERVEUR_DE_NAVIGATEUR="tests/e2e/artefacts/serveur_navigateur.log"
+
+    if ! command -v npx > /dev/null; then
+        echo "npx est introuvable sur l'hôte : installer Node.js pour make e2e-visible." >&2
+        exit 1
+    fi
+
+    # Ubuntu 26.04 n'est pas encore reconnu par Playwright : on lui fait prendre la
+    # version Ubuntu 24.04, compatible. / Ubuntu 26.04 is not yet known to Playwright.
+    if grep -q 'VERSION_ID="26' /etc/os-release 2>/dev/null; then
+        export PLAYWRIGHT_HOST_PLATFORM_OVERRIDE="ubuntu24.04-x64"
+    fi
+
+    mkdir -p tests/e2e/artefacts
+    setsid npx -y "playwright@${VERSION_DE_PLAYWRIGHT}" run-server \
+        --port "$PORT_DU_SERVEUR_DE_NAVIGATEUR" --host "$ADRESSE_DU_SERVEUR_DE_NAVIGATEUR" \
+        > "$JOURNAL_DU_SERVEUR_DE_NAVIGATEUR" 2>&1 &
+    PID_DU_SERVEUR_DE_NAVIGATEUR=$!
+    # Arret du serveur (et de tout son groupe) a la sortie du script, succes ou echec.
+    # / Stop the server and its whole group when the script exits, success or failure.
+    trap 'kill -- "-$PID_DU_SERVEUR_DE_NAVIGATEUR" 2> /dev/null || true' EXIT
+
+    # Attendre que le serveur ecoute (le premier lancement de npx peut telecharger).
+    # / Wait until the server listens (npx may download on first run).
+    for _tentative in $(seq 1 60); do
+        if (echo > "/dev/tcp/${ADRESSE_DU_SERVEUR_DE_NAVIGATEUR}/${PORT_DU_SERVEUR_DE_NAVIGATEUR}") 2> /dev/null; then
+            break
+        fi
+        sleep 1
+    done
+    if ! (echo > "/dev/tcp/${ADRESSE_DU_SERVEUR_DE_NAVIGATEUR}/${PORT_DU_SERVEUR_DE_NAVIGATEUR}") 2> /dev/null; then
+        echo "Le serveur de navigateur ne démarre pas : voir $JOURNAL_DU_SERVEUR_DE_NAVIGATEUR." >&2
+        echo "Premier lancement : npx -y playwright@${VERSION_DE_PLAYWRIGHT} install chromium" >&2
+        exit 1
+    fi
+
+    variables_du_conteneur+=(
+        -e "E2E_NAVIGATEUR_DISTANT=ws://${ADRESSE_DU_SERVEUR_DE_NAVIGATEUR}:${PORT_DU_SERVEUR_DE_NAVIGATEUR}/"
+        -e "E2E_LENTEUR=${LENTEUR:-800}"
+        -e "E2E_JOURNAL=1"
+    )
+    echo "Supervision : fenêtre Chromium sur l'écran, ${LENTEUR:-800} ms par action." >&2
+    echo "Journal : tests/e2e/artefacts/supervision.log" >&2
 fi
 
 # 4. Sans argument, toute la suite. booking/tests/ (moteur de créneaux) et onboard/tests/
@@ -77,14 +132,24 @@ fi
 if [ "$#" -eq 0 ]; then
     if [ "$SUITE" = "e2e" ]; then
         set -- tests/e2e/ -q
+    elif [ "$SUITE" = "e2e-visible" ]; then
+        set -- tests/e2e/
     else
         set -- tests/pytest/ booking/tests/ onboard/tests/ -q
     fi
 fi
 
+# En supervision, -v nomme chaque test et -s laisse passer le journal en direct.
+# / In supervision, -v names each test and -s lets the log through live.
+if [ "$SUITE" = "e2e-visible" ]; then
+    set -- -v -s "$@"
+fi
+
 if [ "$SUITE" != "couverture" ]; then
-    docker exec "${variables_du_conteneur[@]}" "$CONTENEUR" poetry run pytest "$@"
-    exit $?
+    code_de_sortie_pytest=0
+    docker exec "${variables_du_conteneur[@]}" "$CONTENEUR" poetry run pytest "$@" \
+        || code_de_sortie_pytest=$?
+    exit "$code_de_sortie_pytest"
 fi
 
 # 5. Couverture. Le fichier de mesure `.coverage` et le rapport `htmlcov/` sont écrits à la

@@ -1,7 +1,7 @@
 """
-Cree des donnees de test POS pour le tenant courant.
+Cree des donnees de test POS pour un lieu (par defaut : lespass).
 Categories, produits avec tarifs, points de vente, et cartes primaires (si TEST=1).
-/ Creates test POS data for the current tenant.
+/ Creates test POS data for a venue (default: lespass).
 Categories, products with prices, points of sale, and primary cards (if TEST=1).
 
 LOCALISATION : laboutik/management/commands/create_test_pos_data.py
@@ -14,13 +14,19 @@ e.g. "sports_bar". Laboutik templates use a material-symbols-outlined span.
 
 Usage :
     docker exec lespass_django poetry run python manage.py create_test_pos_data
+    docker exec lespass_django poetry run python manage.py create_test_pos_data --schema=festival
+
+Le lieu est TOUJOURS celui de --schema, jamais le schema courant de la connexion : un
+test peut laisser la connexion sur un schema de test, et Client n'ayant pas d'ordre par
+defaut, « le premier lieu » tombait sur un schema test_* au hasard des UUID.
+/ The venue is ALWAYS the --schema one, never the connection's current schema.
 """
 
 import uuid as uuid_module
 from decimal import Decimal
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 from django_tenants.utils import schema_context
 
@@ -64,7 +70,16 @@ def _qrcode_uuid_depuis_tag(tag_id):
 
 
 class Command(BaseCommand):
-    help = "Cree des donnees de test POS (categories, produits, prix, points de vente) pour le tenant courant."
+    help = "Cree des donnees de test POS (categories, produits, prix, points de vente) pour un lieu."
+
+    def add_arguments(self, parser):
+        # Meme convention que pages/management/commands/charger_site_lespass.py.
+        # / Same convention as charger_site_lespass.
+        parser.add_argument(
+            "--schema",
+            default="lespass",
+            help="Schema du lieu a remplir (defaut : lespass). / Venue schema (default: lespass).",
+        )
 
     def handle(self, *args, **options):
         # Bootstrap de l'infrastructure FED V2 (tenant federation_fed + Asset FED + Product de recharge).
@@ -80,24 +95,19 @@ class Command(BaseCommand):
         # from django.core.management import call_command
         # call_command('bootstrap_fed_asset')
 
-        # Si on est deja dans un tenant_context (schema != "public"), on l'utilise.
-        # Sinon (lancement standalone via docker exec), on prend le premier tenant non-public.
-        # ATTENTION : "relation does not exist" = on est sur le schema public,
-        # les tables TENANT_APPS (BaseBillet, laboutik…) n'y existent pas.
-        # / If already inside a tenant_context (schema != "public"), use it.
-        # Otherwise (standalone launch via docker exec), pick the first non-public tenant.
-        # WARNING: "relation does not exist" = running on the public schema,
-        # TENANT_APPS tables (BaseBillet, laboutik…) don't exist there.
-        schema = connection.schema_name
-        if schema == "public":
-            first_tenant = Client.objects.exclude(schema_name="public").first()
-            if not first_tenant:
-                self.stderr.write(self.style.ERROR("Aucun tenant non-public trouve."))
-                return
-            schema = first_tenant.schema_name
-            self.stdout.write(
-                f"Schema public detecte, bascule vers le tenant : {schema}"
-            )
+        # Le lieu vient de --schema, et de lui seul. On ignore VOLONTAIREMENT le schema
+        # courant de la connexion : un FastTenantTestCase peut l'avoir laisse sur son
+        # schema de test, et le « premier lieu non-public » (.first(), trie par UUID)
+        # tombait sur un schema test_* au hasard. Les donnees y etaient ecrites pour de bon.
+        # / The venue comes from --schema only. The connection's current schema is
+        # deliberately ignored: it may be a leftover test schema, and ".first()" (sorted
+        # by UUID) landed on a random test_* schema.
+        schema = options["schema"]
+        if not Client.objects.filter(schema_name=schema).exists():
+            # CommandError et non un simple message : appelee par call_command dans un
+            # test, la commande doit echouer bruyamment, pas rendre la main en silence.
+            # / CommandError, not a message: under call_command it must fail loudly.
+            raise CommandError(f"Aucun lieu avec le schema « {schema} ».")
 
         with schema_context(schema):
             self.stdout.write(f"Tenant : {schema}")
