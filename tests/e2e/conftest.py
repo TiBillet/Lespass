@@ -229,9 +229,10 @@ def pytest_runtest_logreport(report):
     """Donne l'issue de chaque test dans le journal. / Gives each test's outcome."""
     if not JOURNAL_ACTIF:
         return
-    # Le resultat qui compte est celui de l'appel ; un echec en preparation est aussi dit.
-    # / The call phase outcome matters; a setup failure is reported too.
-    if report.when == "call" or (report.when == "setup" and report.failed):
+    # Le resultat qui compte est celui de l'appel ; un echec en preparation OU en
+    # nettoyage (fixture qui verifie apres coup) est aussi dit : pytest le compte en ERROR.
+    # / The call outcome matters; a setup or teardown failure is reported too.
+    if report.when == "call" or (report.when in ("setup", "teardown") and report.failed):
         if report.passed:
             _journaliser(f"✔ PASSED ({report.duration:.0f} s)", saut_de_ligne_a_l_ecran=True)
         elif report.skipped:
@@ -1328,16 +1329,15 @@ def fill_stripe_card():
             ).first
             if number_input.count() > 0:
                 number_input.fill("4242424242424242")
-                exp_input = frame.locator(
-                    'input[name="exp-date"], input[placeholder*="MM"]'
-                ).first
-                if exp_input.count() > 0:
-                    exp_input.fill("12/42")
-                cvc_input = frame.locator(
-                    'input[name="cvc"], input[placeholder*="CVC"]'
-                ).first
-                if cvc_input.count() > 0:
-                    cvc_input.fill("424")
+                frame.locator('input[name="exp-date"], input[placeholder*="MM"]').first.fill("12/42")
+                frame.locator('input[name="cvc"], input[placeholder*="CVC"]').first.fill("424")
+                return
+
+        # Aucune des strategies n'a trouve de champ de carte : Stripe a change son
+        # formulaire. On echoue ICI, plutot que de laisser le test cliquer « Payer »
+        # dans le vide pendant des minutes et accuser le mauvais endroit.
+        # / No strategy found a card field: fail HERE rather than click "Pay" in vain.
+        pytest.fail(f"Aucun champ de carte bancaire trouve sur la page Stripe ({page.url}).")
 
     return _fill
 
@@ -1451,7 +1451,13 @@ def soumettre_paiement_stripe():
             bouton.dispatch_event("click")
             if _attendre_la_sortie_du_checkout(page, 8_000):
                 return True
-        return False
+        # Le paiement n'est jamais parti : on echoue ICI, avec la vraie cause, plutot
+        # que de laisser le test attendre un retour qui ne viendra pas.
+        # / The payment never left: fail HERE with the real cause.
+        pytest.fail(
+            f"Le paiement Stripe ne part pas : {tentatives} tentatives de clic sur "
+            f"« {selecteur} » sans quitter checkout.stripe.com ({page.url})."
+        )
 
     return _soumettre
 

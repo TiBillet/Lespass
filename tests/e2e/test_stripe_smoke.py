@@ -81,7 +81,7 @@ class TestStripeSmokeCheckout:
         page.set_default_timeout(120_000)
 
         rid = _random_id()
-        user_email = f"test+smoke{rid}@pm.me"
+        user_email = f"test+smoke{rid}@example.com"
 
         # 1. Créer un produit adhésion via API / Create membership product via API
         result = create_product(
@@ -122,36 +122,16 @@ class TestStripeSmokeCheckout:
         page.locator('input[name="firstname"]').fill("Smoke")
         page.locator('input[name="lastname"]').fill("Test")
 
-        # Sélectionner le tarif si radio visible / Select price if radio visible
-        price_radio = page.locator('input[name="price"][type="radio"]').first
-        if price_radio.count() > 0 and price_radio.is_visible():
-            price_radio.check()
+        # Tarif unique : le formulaire le porte en champ cache, deja choisi
+        # (commun/adhesion/form.html). / Single price: carried as a hidden input.
+        expect(page.locator('#membership-form input[name="price"]')).to_have_count(1)
 
-        # 6. Soumettre et attendre Stripe ou confirmation
-        # Pattern race : Stripe redirect OU message de confirmation (gratuit/validation manuelle)
-        # / Submit and wait for Stripe or confirmation
-        # Race pattern: Stripe redirect OR confirmation message (free/manual validation)
+        # 6. Soumettre : le produit est PAYANT (1,00 €), la redirection vers Stripe est
+        # OBLIGATOIRE. Aucune echappatoire : un smoke test Stripe qui passerait sans
+        # Stripe ne prouverait rien.
+        # / Submit: the product is PAID, the Stripe redirect is MANDATORY.
         page.locator("#membership-submit").click()
-
-        try:
-            page.wait_for_url(re.compile(r"checkout\.stripe\.com"), timeout=30_000)
-        except Exception:
-            # Pas de redirect Stripe — chercher un message de confirmation
-            # / No Stripe redirect — look for confirmation message
-            confirmation = page.locator(
-                "text=/demande|reçue|attente|waiting|received/i"
-            )
-            if confirmation.is_visible(timeout=5_000):
-                # Produit gratuit ou validation manuelle — pas de Stripe
-                return
-            # Erreur réelle : ni Stripe ni confirmation
-            errors = page.locator(
-                ".alert-danger, .invalid-feedback:visible"
-            ).all_text_contents()
-            body = page.locator("body").inner_text()[:500]
-            pytest.fail(
-                f"Ni redirect Stripe ni confirmation. Errors: {errors}. Body: {body}"
-            )
+        page.wait_for_url(re.compile(r"checkout\.stripe\.com"), timeout=30_000)
 
         # 7. Remplir la carte Stripe / Fill Stripe card
         # domcontentloaded au lieu de networkidle : Stripe maintient des connexions
@@ -238,7 +218,7 @@ class TestStripeSmokeCheckout:
         page.set_default_timeout(120_000)
 
         rid = _random_id()
-        user_email = f"test+smokebook{rid}@pm.me"
+        user_email = f"test+smokebook{rid}@example.com"
         start_date = (datetime.now(tz.utc) + timedelta(days=2)).isoformat()
 
         # 1. Créer événement + produit / Create event + product
@@ -274,11 +254,11 @@ class TestStripeSmokeCheckout:
         ).first
         email_input.fill(user_email)
 
-        confirm_input = page.locator(
-            '#bookingPanel input[name="email-confirm"], #booking-confirm'
-        ).first
-        if confirm_input.is_visible():
-            confirm_input.fill(user_email)
+        # Visiteur anonyme : la confirmation d'e-mail est toujours affichee
+        # (commun/formulaires/reservation.html). / Anonymous: always shown.
+        confirm_input = page.locator('[data-testid="booking-email-confirm"]')
+        expect(confirm_input).to_be_visible()
+        confirm_input.fill(user_email)
 
         # Incrémenter bs-counter / Increment bs-counter
         counter_plus = page.locator(

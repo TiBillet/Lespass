@@ -177,6 +177,10 @@ def chip_du_tag(page, slug):
     / Only the 10 most frequent tags show at once; the others sit in the
     "+ N tags" menu, which we open if needed. The chip remains MANDATORY.
     """
+    # Attendre que les chips soient dessines (updateChips) avant de chercher le notre :
+    # sinon « pas encore visible » serait pris pour « range dans le menu ».
+    # / Wait for the chips to be drawn before looking for ours.
+    expect(page.locator(".explorer-tag-chip").first).to_be_visible()
     chip = page.locator(f'.explorer-tag-chip[data-tag-slug="{slug}"]')
     if not chip.is_visible():
         page.locator('[data-testid="explorer-tag-chip-more"]').click()

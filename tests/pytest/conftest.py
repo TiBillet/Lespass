@@ -213,17 +213,20 @@ def auth_headers(_inject_cli_env):
 
     if needs_regen:
         import subprocess
-        try:
-            result = subprocess.run(
-                ["python", "manage.py", "test_api_key"],
-                capture_output=True, text=True, cwd="/DjangoFiles",
-                env={**os.environ, "TEST": "1"},
+        result = subprocess.run(
+            ["python", "manage.py", "test_api_key"],
+            capture_output=True, text=True, cwd="/DjangoFiles",
+            env={**os.environ, "TEST": "1"},
+        )
+        # Une regeneration ratee echoue ICI : rendre l'ancienne cle ferait echouer le
+        # test plus loin, en 403, sans lien apparent avec la vraie cause.
+        # / A failed regeneration fails HERE, not later as an unrelated 403.
+        if result.returncode != 0:
+            pytest.fail(
+                f"manage.py test_api_key a echoue (rc={result.returncode}) : {result.stderr[-500:]}"
             )
-            if result.returncode == 0:
-                api_key = result.stdout.strip()
-                os.environ["API_KEY"] = api_key
-        except Exception:
-            pass
+        api_key = result.stdout.strip()
+        os.environ["API_KEY"] = api_key
 
     return {"HTTP_AUTHORIZATION": f"Api-Key {api_key}"}
 

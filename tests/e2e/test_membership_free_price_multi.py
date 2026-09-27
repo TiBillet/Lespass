@@ -138,31 +138,19 @@ def _create_free_price_product(api_key, product_name):
     }
 
 
-def _ouvrir_offcanvas_adhesion(page, product_name, product_uuid=None):
-    """Navigue vers /memberships/ et ouvre l'offcanvas pour le produit donné.
-    Si product_uuid est fourni, utilise data-testid ; sinon cherche la carte par texte.
-    / Navigates to /memberships/ and opens the offcanvas for the given product.
-    If product_uuid is provided, uses data-testid; otherwise finds card by text.
+def _ouvrir_offcanvas_adhesion(page, product_name, product_uuid):
+    """Navigue vers /memberships/ et ouvre l'offcanvas pour le produit donné, par le
+    data-testid du bouton (cotton/V2/membership_card.html). Pas de repli sur les
+    sélecteurs de l'ancien thème : un bouton absent doit faire échouer.
+    / Navigates to /memberships/ and opens the product offcanvas through the button's
+    data-testid. No fallback to old-theme selectors: a missing button must fail.
     """
     page.goto("/memberships/")
     page.wait_for_load_state("domcontentloaded")
 
-    if product_uuid:
-        # Bouton avec data-testid="membership-open-<uuid>" (voir test_stripe_smoke.py).
-        # / Button with data-testid="membership-open-<uuid>" (see test_stripe_smoke.py).
-        subscribe_btn = page.locator(f'[data-testid="membership-open-{product_uuid}"]')
-        if subscribe_btn.is_visible(timeout=5_000):
-            subscribe_btn.click()
-        else:
-            # Fallback : chercher la carte par texte du produit.
-            # / Fallback: find card by product name text.
-            card = page.locator(f'.card:has-text("{product_name}")').first
-            card.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click()
-    else:
-        # Chercher la carte par le nom du produit.
-        # / Find card by product name.
-        card = page.locator(f'.card:has-text("{product_name}")').first
-        card.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click()
+    subscribe_btn = page.locator(f'[data-testid="membership-open-{product_uuid}"]')
+    expect(subscribe_btn).to_be_visible()
+    subscribe_btn.click()
 
     # Attendre que l'offcanvas s'ouvre et que le formulaire HTMX charge.
     # / Wait for offcanvas to open and HTMX form to load.

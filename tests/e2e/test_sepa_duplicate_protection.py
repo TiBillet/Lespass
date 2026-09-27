@@ -4,15 +4,15 @@ Tests E2E : protection doublon paiement SEPA pour adhésions.
 
 Conversion de tests/playwright/tests/36-sepa-duplicate-protection.spec.ts
 
-Couvre :
-1. Le template "payment_already_pending" est bien rendu
-2. Le template contient les data-testid attendus
-3. Une adhésion déjà payée n'a plus de lien de paiement actif (404)
+Couvre, sur le lien de paiement envoyé par e-mail (get_checkout_for_membership) :
+1. Un paiement déjà en cours (SEPA soumis) : la page « paiement en cours » s'affiche, et
+   AUCUN nouveau paiement n'est créé — sinon, deuxième prélèvement.
+2. Une adhésion déjà payée : la page « adhésion déjà active » s'affiche, jamais Stripe.
 
-/ Covers:
-1. The "payment_already_pending" template is rendered correctly
-2. The template contains the expected data-testid attributes
-3. An already-paid membership has no active payment link (404)
+/ Covers, on the emailed payment link:
+1. A payment already in progress: the "payment pending" page shows, and NO new payment
+   is created — otherwise, a second debit.
+2. An already-paid membership: the "already active" page shows, never Stripe.
 """
 
 import os
@@ -194,27 +194,23 @@ class TestSepaDuplicateProtection:
         TestSepaDuplicateProtection._price_uuid = price_uuid
 
     # ─────────────────────────────────────────────────────────────
-    # Test 1 : page "paiement en cours" + template présent
-    # Scénario : adhésion AW → acceptée par admin (AV) → faux paiement PENDING injecté
-    # → vérification que le template payment_already_pending.html existe
+    # Test 1 : un paiement déjà en cours ne déclenche pas de second paiement
+    # / Test 1: a payment already in progress does not trigger a second one
     # ─────────────────────────────────────────────────────────────
-    def test_payment_pending_template_exists(
+    def test_un_paiement_en_cours_ne_relance_pas_de_paiement(
         self, page, login_as_admin, django_shell, api_key
     ):
-        """Vérifie l'existence du template payment_already_pending.html.
-        / Verifies that the payment_already_pending.html template exists.
+        """Le lien de paiement d'une adhésion dont le prélèvement est déjà en cours
+        affiche la page « paiement en cours » et ne crée AUCUN nouveau paiement.
+        / The payment link of a membership whose debit is already in progress shows
+        the "payment pending" page and creates NO new payment.
 
         Flux :
-        1. Créer une adhésion (status AW via manualValidation=True) via API
-        2. Accepter l'adhésion via l'interface admin (AW → AV = ADMIN_VALID)
-        3. Injecter un faux Paiement_stripe PENDING via django_shell
-        4. Vérifier que le template existe sur le filesystem
-
-        / Flow:
-        1. Create membership (AW status via manualValidation=True) via API
-        2. Accept the membership via admin interface (AW → AV = ADMIN_VALID)
-        3. Inject a fake PENDING Paiement_stripe via django_shell
-        4. Verify that the template exists on the filesystem
+        1. Créer une adhésion en attente de validation (AW) via l'API
+        2. L'accepter dans l'admin (AW → AV), vérifié en base
+        3. Lui rattacher un faux paiement Stripe PENDING (SEPA « soumis »)
+        4. Ouvrir le lien de paiement : page « paiement en cours », pas Stripe,
+           et toujours UN seul paiement en base
         """
         sepa_email = f"jturbeaux+sepa{self._random_id}@pm.me"
 
@@ -258,103 +254,58 @@ class TestSepaDuplicateProtection:
         first_link.click()
         page.wait_for_load_state("networkidle")
 
-        # Chercher le lien "Accept" ou "Accepter" pour déclencher AW → AV.
-        # Ce lien peut être absent si l'adhésion est déjà en AV (relance de test).
-        # / Look for "Accept" / "Accepter" link to trigger AW → AV.
-        # This link may be absent if the membership is already AV (test re-run).
-        accept_link = page.locator('a:has-text("Accept"), a:has-text("Accepter")').first
-        if accept_link.is_visible(timeout=3_000):
-            accept_link.click()
-            page.wait_for_load_state("networkidle")
+        # Le bouton « Accepter » du panneau d'actions (admin/membership/actions_panel.html) :
+        # un <button> en hx-post vers admin_accept. L'adhesion est neuve a chaque run
+        # (identifiant aleatoire), il est donc TOUJOURS la.
+        # / The panel's "Accept" button: a <button> posting to admin_accept. Always there.
+        bouton_accepter = page.locator('[data-testid="membership-action-accept"]')
+        expect(bouton_accepter).to_be_visible()
+        bouton_accepter.click()
+        page.wait_for_load_state("networkidle")
 
-        # --- Étape 3 : Injecter un faux Paiement_stripe PENDING ---
-        # Simule un SEPA "soumis" : l'utilisateur a validé mais le débit n'est pas encore effectué.
-        # stripe_paiement est un M2M sur Membership → utiliser m.stripe_paiement.add(p).
-        # Paiement_stripe.total est une méthode (pas un champ) → ne pas l'inclure dans defaults.
-        # / Step 3: Inject a fake PENDING Paiement_stripe
-        # Simulates a "submitted" SEPA: user validated but debit not yet processed.
-        # stripe_paiement is M2M on Membership → use m.stripe_paiement.add(p).
-        # Paiement_stripe.total is a method (not a field) → do not include in defaults.
+        statut = django_shell(
+            "from BaseBillet.models import Membership\n"
+            f"print('STATUT=' + Membership.objects.get(user__email='{sepa_email}').status)"
+        )
+        assert "STATUT=AV" in statut, f"L'adhesion n'a pas ete acceptee (AW → AV) : {statut[-200:]}"
+
+        # --- Étape 3 : Rattacher un faux Paiement_stripe PENDING ---
+        # Simule un SEPA « soumis » : l'adherent a valide, le debit n'est pas encore fait.
+        # stripe_paiement est un M2M sur Membership. La session Stripe est fausse : la
+        # vue ne peut pas la relire, et doit alors afficher « paiement en cours » plutot
+        # que creer un nouveau paiement.
+        # / Step 3: attach a fake PENDING Paiement_stripe (a "submitted" SEPA).
         fake_session_id = f"cs_test_fake_sepa_{self._random_id}"
         shell_result = django_shell(
             "from BaseBillet.models import Membership, Paiement_stripe\n"
-            f"m = Membership.objects.filter(user__email='{sepa_email}').first()\n"
-            "if m:\n"
-            "    p = Paiement_stripe.objects.create(\n"
-            "        status=Paiement_stripe.PENDING,\n"
-            f"        checkout_session_id_stripe='{fake_session_id}',\n"
-            "    )\n"
-            "    m.stripe_paiement.add(p)\n"
-            "    print(f'membership_uuid={m.uuid}')\n"
-            "    print(f'paiement_uuid={p.uuid}')\n"
-            "else:\n"
-            "    print('NOT_FOUND')\n"
+            f"m = Membership.objects.get(user__email='{sepa_email}')\n"
+            "p = Paiement_stripe.objects.create(\n"
+            "    status=Paiement_stripe.PENDING,\n"
+            f"    checkout_session_id_stripe='{fake_session_id}',\n"
+            ")\n"
+            "m.stripe_paiement.add(p)\n"
+            "print(f'membership_uuid={m.uuid}')"
         )
-        assert "NOT_FOUND" not in shell_result, (
-            f"Adhésion {sepa_email} introuvable en base : {shell_result}"
-        )
-        assert "membership_uuid=" in shell_result, (
-            f"UUID adhésion non retourné : {shell_result}"
-        )
+        uuid_match = re.search(r"membership_uuid=([a-f0-9-]+)", shell_result)
+        assert uuid_match is not None, f"Paiement non rattache : {shell_result[-300:]}"
+        membership_uuid = uuid_match.group(1)
 
-        # --- Étape 4 : Vérifier que le template existe sur le filesystem ---
-        # / Step 4: Verify that the template file exists on the filesystem
-        template_check = django_shell(
-            "import os\n"
-            "path = '/DjangoFiles/BaseBillet/templates/fonctionnel/adhesion/payment_already_pending.html'\n"
-            "exists = os.path.isfile(path)\n"
-            "print(f'TEMPLATE_EXISTS={exists}')\n"
+        # --- Étape 4 : Le lien de paiement ne relance PAS de paiement ---
+        # / Step 4: the payment link does NOT start a new payment
+        page.goto(f"/memberships/{membership_uuid}/get_checkout_for_membership/")
+        page.wait_for_load_state("domcontentloaded")
+        assert "checkout.stripe.com" not in page.url, (
+            f"Deuxieme paiement lance alors qu'un prelevement est en cours : {page.url}"
         )
-        assert "TEMPLATE_EXISTS=True" in template_check, (
-            f"Template payment_already_pending.html introuvable : {template_check}"
-        )
+        expect(page.locator('[data-testid="membership-payment-already-pending"]')).to_be_visible()
 
-    # ─────────────────────────────────────────────────────────────
-    # Test 2 : le template contient les data-testid attendus
-    # Vérifie la structure HTML du template payment_already_pending.html
-    # ─────────────────────────────────────────────────────────────
-    def test_payment_pending_template_has_correct_data_testids(
-        self, page, django_shell
-    ):
-        """Vérifie que le template payment_already_pending.html contient les data-testid attendus.
-        / Verifies that payment_already_pending.html contains the expected data-testid attributes.
-
-        Ces attributs sont requis pour les tests automatisés qui testent le rendu de la page.
-        / These attributes are required for automated tests verifying page rendering.
-        """
-        # Lire le template via django_shell et chercher les data-testid.
-        # / Read the template via django_shell and look for data-testid attributes.
-        template_result = django_shell(
-            "with open('/DjangoFiles/BaseBillet/templates/fonctionnel/adhesion/payment_already_pending.html') as f:\n"
-            "    content = f.read()\n"
-            "testids = [\n"
-            "    'membership-payment-already-pending',\n"
-            "    'membership-payment-pending-summary',\n"
-            "    'membership-payment-pending-link-memberships',\n"
-            "    'membership-payment-pending-link-home',\n"
-            "]\n"
-            "for tid in testids:\n"
-            "    found = tid in content\n"
-            "    print(f'{tid}={found}')\n"
+        nombre = django_shell(
+            "from BaseBillet.models import Membership\n"
+            f"m = Membership.objects.get(uuid='{membership_uuid}')\n"
+            "print('PAIEMENTS=' + str(m.stripe_paiement.count()))"
         )
-
-        # Vérifier la présence de chaque data-testid dans le template.
-        # / Verify the presence of each data-testid in the template.
-        assert "membership-payment-already-pending=True" in template_result, (
-            f"data-testid 'membership-payment-already-pending' absent du template.\n"
-            f"Résultat django_shell : {template_result}"
-        )
-        assert "membership-payment-pending-summary=True" in template_result, (
-            f"data-testid 'membership-payment-pending-summary' absent du template.\n"
-            f"Résultat django_shell : {template_result}"
-        )
-        assert "membership-payment-pending-link-memberships=True" in template_result, (
-            f"data-testid 'membership-payment-pending-link-memberships' absent du template.\n"
-            f"Résultat django_shell : {template_result}"
-        )
-        assert "membership-payment-pending-link-home=True" in template_result, (
-            f"data-testid 'membership-payment-pending-link-home' absent du template.\n"
-            f"Résultat django_shell : {template_result}"
+        assert "PAIEMENTS=1" in nombre, (
+            f"Un nouveau paiement a ete cree alors qu'un prelevement est en cours : {nombre[-200:]}"
         )
 
     # ─────────────────────────────────────────────────────────────
@@ -368,10 +319,10 @@ class TestSepaDuplicateProtection:
         """Vérifie qu'une adhésion déjà payée ne permet pas de relancer un paiement.
         / Verifies that an already-paid membership does not allow a new payment.
 
-        La vue get_checkout_for_membership utilise get_object_or_404 avec
-        status=Membership.ADMIN_VALID. Une adhésion en statut ONCE (payée) retourne 404.
-        / The get_checkout_for_membership view uses get_object_or_404 with
-        status=Membership.ADMIN_VALID. A ONCE (paid) membership returns 404.
+        La vue get_checkout_for_membership affiche, pour une adhésion ONCE (payée), la
+        page « adhésion déjà active » (HTTP 200), sans jamais ouvrir de paiement.
+        / For a ONCE (paid) membership, the view renders the "already active" page
+        (HTTP 200), never opening a payment.
         """
         paid_email = f"jturbeaux+sepapd{self._random_id}@pm.me"
 
@@ -433,21 +384,14 @@ class TestSepaDuplicateProtection:
         )
         status_code = response.status
 
-        # On ne doit jamais partir vers Stripe pour une adhésion déjà payée.
-        # / We must never go to Stripe for an already-paid membership.
-        if status_code in (301, 302, 303, 307, 308):
-            location = response.headers.get("location", "")
-            assert "checkout.stripe.com" not in location, (
-                f"La redirection ne doit pas aller vers Stripe pour une adhésion déjà payée : {location}"
-            )
-        else:
-            # Réponse rendue (200) : on vérifie la page "adhésion déjà active".
-            # / Rendered response (200): check the "membership already active" page.
-            assert status_code == 200, (
-                f"Attendu 200 (page d'info) ou redirection non-Stripe, obtenu : {status_code}"
-            )
-            body = response.text()
-            assert "membership-payment-already-done" in body, (
-                "La page 'adhésion déjà active' attendue n'a pas été rendue."
-            )
-            assert "checkout.stripe.com" not in body
+        # La page « adhesion deja active », rendue directement : ni Stripe, ni aucune
+        # autre redirection. / The "already active" page, rendered: no redirect at all.
+        assert status_code == 200, (
+            f"Attendu 200 (page « adhesion deja active »), obtenu : {status_code} "
+            f"(location : {response.headers.get('location', '')})"
+        )
+        body = response.text()
+        assert "membership-payment-already-done" in body, (
+            "La page 'adhésion déjà active' attendue n'a pas été rendue."
+        )
+        assert "checkout.stripe.com" not in body

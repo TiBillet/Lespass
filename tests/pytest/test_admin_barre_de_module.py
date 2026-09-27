@@ -18,19 +18,17 @@ CE QUE CES TESTS PROTEGENT
 2. UN ONGLET D'INLINE A TOUJOURS UN LIEN POUR L'OUVRIR. Unfold ne dessine qu'une
    barre d'onglets par page (unfold/templatetags/unfold.py, tab_list) : quand la
    barre du module etait posee sur les fiches, les inlines `tab = True` (champs de
-   formulaire des produits, blocs des pages) restaient caches par
-   `x-show="activeTab == '...'"`, sans aucun bouton pour les ouvrir.
+   formulaire des produits) restaient caches par `x-show="activeTab == '...'"`, sans
+   aucun bouton pour les ouvrir.
    / An inline tab always has a link to open it.
 
-La barre du module se reconnait a ses liens `?onglet=` : aucune autre partie de
-l'admin n'en porte.
+La barre du module se reconnait a ses liens `?onglet=` : sur les listes et fiches
+chargees ici, rien d'autre n'en porte (seule la page du module elle-meme en a).
 / The module bar is recognised by its `?onglet=` links.
 
 Lancement / Run:
     make test ARGS="tests/pytest/test_admin_barre_de_module.py"
 """
-
-import re
 
 import pytest
 from django.test import Client as HttpClient, override_settings
@@ -62,6 +60,15 @@ def lieu_et_navigateur(db):
     return lieu, navigateur
 
 
+def _contenu_de_la_page(navigateur, adresse):
+    """Le HTML d'une page d'admin, apres avoir exige un 200 : une 302 (session perdue),
+    une 403 ou une 404 rendraient un contenu sans barre, et le test serait vert a tort.
+    / The page HTML, after requiring a 200: a redirect or an error page has no bar."""
+    reponse = navigateur.get(adresse)
+    assert reponse.status_code == 200, f"{adresse} repond {reponse.status_code}"
+    return reponse.content.decode()
+
+
 def _premier_produit_d_adhesion(lieu):
     from BaseBillet.models import Product
 
@@ -77,7 +84,7 @@ def test_une_liste_n_a_pas_la_barre_du_module(lieu_et_navigateur):
     """La liste des produits d'adhesion ne porte pas la barre du module.
     / The membership product list has no module bar."""
     _lieu, navigateur = lieu_et_navigateur
-    contenu = navigateur.get("/admin/BaseBillet/membershipproduct/").content.decode()
+    contenu = _contenu_de_la_page(navigateur, "/admin/BaseBillet/membershipproduct/")
     assert "?onglet=" not in contenu
 
 
@@ -88,10 +95,11 @@ def test_une_fiche_n_a_pas_la_barre_du_module_et_rend_ses_onglets(lieu_et_naviga
     / A membership product form has no module bar, and its form-fields tab is back."""
     lieu, navigateur = lieu_et_navigateur
     produit = _premier_produit_d_adhesion(lieu)
-    contenu = navigateur.get(
-        f"/admin/BaseBillet/membershipproduct/{produit.pk}/change/"
-    ).content.decode()
+    contenu = _contenu_de_la_page(
+        navigateur, f"/admin/BaseBillet/membershipproduct/{produit.pk}/change/"
+    )
     assert "?onglet=" not in contenu
+    assert 'x-show="activeTab == \'form_fields\'"' in contenu
     assert 'href="#form_fields"' in contenu
 
 
@@ -101,7 +109,7 @@ def test_un_singleton_garde_la_barre_du_module(lieu_et_navigateur):
     vers les autres pages du module.
     / The site settings singleton keeps the bar: its only way to sibling pages."""
     _lieu, navigateur = lieu_et_navigateur
-    contenu = navigateur.get("/admin/pages/configurationsite/").content.decode()
+    contenu = _contenu_de_la_page(navigateur, "/admin/pages/configurationsite/")
     assert "?onglet=" in contenu
 
 
@@ -109,9 +117,12 @@ def test_un_singleton_garde_la_barre_du_module(lieu_et_navigateur):
 def test_chaque_onglet_d_inline_a_un_lien_pour_l_ouvrir(lieu_et_navigateur):
     """
     Garde-fou generique : pour chaque admin qui declare un inline `tab = True`, la
-    fiche du premier objet porte un lien `#<prefixe>` pour ouvrir cet onglet.
-    Attrape la classe entiere du bug, y compris sur un inline ajoute demain.
-    / Generic guard: every `tab = True` inline has a link to open it.
+    fiche du premier objet porte le bloc de l'onglet (`x-show`) ET le lien qui l'ouvre
+    (`href="#<prefixe>"`). Le prefixe est calcule par Django (formset de l'inline), pas
+    devine dans le HTML : si Unfold change son gabarit, le test echoue au lieu de ne
+    plus rien trouver a verifier.
+    / Generic guard: every `tab = True` inline renders its block AND its opening link.
+    The prefix comes from Django's formset, not from the HTML.
     """
     from django.test import RequestFactory
 
@@ -123,12 +134,12 @@ def test_chaque_onglet_d_inline_a_un_lien_pour_l_ouvrir(lieu_et_navigateur):
     requete = RequestFactory().get("/admin/")
     requete.user = superadmin
 
-    admins_verifiees = 0
+    onglets_verifies = []
     onglets_sans_lien = []
 
     for modele, admin_du_modele in staff_admin_site._registry.items():
         inlines_en_onglet = [
-            inline for inline in admin_du_modele.inlines if getattr(inline, "tab", False)
+            classe for classe in admin_du_modele.inlines if getattr(classe, "tab", False)
         ]
         if not inlines_en_onglet:
             continue
@@ -149,17 +160,22 @@ def test_chaque_onglet_d_inline_a_un_lien_pour_l_ouvrir(lieu_et_navigateur):
         # test_admin_configuration_onglets.py).
         # / DEBUG=True like the dev server (Fedow calls).
         with override_settings(DEBUG=True):
-            reponse = navigateur.get(adresse)
-        assert reponse.status_code == 200, f"{adresse} repond {reponse.status_code}"
-        contenu = reponse.content.decode()
-        admins_verifiees += 1
+            contenu = _contenu_de_la_page(navigateur, adresse)
 
-        groupes_caches = set(re.findall(r'x-show="activeTab == \'([\w-]+)\'"', contenu))
-        liens = set(re.findall(r'href="#([\w-]+)"', contenu))
-        for groupe in sorted(groupes_caches - liens - {"general"}):
-            onglets_sans_lien.append(f"{adresse} : #{groupe}")
+        for classe_de_l_inline in inlines_en_onglet:
+            inline = classe_de_l_inline(admin_du_modele.model, staff_admin_site)
+            with tenant_context(lieu):
+                prefixe = inline.get_formset(requete, objet).get_default_prefix()
+            onglets_verifies.append(f"{modele._meta.label} #{prefixe}")
+            bloc_present = f'x-show="activeTab == \'{prefixe}\'"' in contenu
+            lien_present = f'href="#{prefixe}"' in contenu
+            if not (bloc_present and lien_present):
+                onglets_sans_lien.append(
+                    f"{adresse} : #{prefixe} (bloc={bloc_present}, lien={lien_present})"
+                )
 
-    assert admins_verifiees, "Aucune admin avec un inline en onglet : le test ne prouverait rien."
+    assert onglets_verifies, "Aucun inline en onglet dans l'admin : le test ne prouverait rien."
     assert not onglets_sans_lien, (
-        f"Ces onglets d'inline n'ont aucun lien pour les ouvrir : {onglets_sans_lien}"
+        f"Ces onglets d'inline ne sont pas atteignables : {onglets_sans_lien}. "
+        f"Verifies : {onglets_verifies}"
     )

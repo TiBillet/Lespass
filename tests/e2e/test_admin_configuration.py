@@ -16,7 +16,7 @@ name + short description). Original values are saved before the change and
 restored in a try/finally block — shared dev DB, no rollback.
 """
 
-import re
+import uuid
 
 import pytest
 from playwright.sync_api import expect
@@ -72,62 +72,58 @@ class TestAdminConfiguration:
             )
 
             # --- Etape 3 : Ouvrir la page Configuration ---
-            # Configuration est un singleton (django-solo) : l'admin redirige
-            # directement la changelist vers le formulaire de modification.
+            # Configuration est un singleton (django-solo) : son formulaire de
+            # modification est servi directement a l'URL de liste.
             # / Step 3: open the Configuration page. Configuration is a
-            # singleton (django-solo): the changelist redirects straight to
-            # the change form.
+            # singleton (django-solo): its change form is served at the list URL.
             page.goto("/admin/BaseBillet/configuration/")
             page.wait_for_load_state("networkidle")
-            assert "configuration" in page.url, (
-                f"L'URL devrait contenir 'configuration', url actuelle : {page.url}"
-            )
 
-            # --- Etape 4 : Remplir les champs de configuration ---
-            # Comme dans le spec TS, on ne remplit que si le champ existe
-            # (la config Unfold peut masquer certains champs).
-            # / Step 4: fill the configuration fields. Like the TS spec, we
-            # only fill when the field exists (Unfold may hide some fields).
+            # --- Etape 4 : Remplir les champs, OBLIGATOIRES ---
+            # Un nom unique par run : si l'enregistrement echoue, l'accueil ne
+            # peut pas afficher par hasard une valeur laissee par un run precedent.
+            # / Step 4: fill the fields, MANDATORY. A unique name per run, so the
+            # homepage cannot show a value left over by an earlier run.
+            nom_attendu = f"Le Tiers-Lustre {uuid.uuid4().hex[:6]}"
+            description_attendue = (
+                "Instance de démonstration du collectif imaginaire « Le Tiers-Lustre »."
+            )
             organisation_input = page.locator('input[name="organisation"]')
-            if organisation_input.count() > 0:
-                organisation_input.fill("Le Tiers-Lustre")
+            expect(organisation_input).to_be_visible()
+            organisation_input.fill(nom_attendu)
 
             short_desc_input = page.locator(
-                'input[name="short_description"], '
-                'textarea[name="short_description"]'
+                'input[name="short_description"], textarea[name="short_description"]'
             )
-            if short_desc_input.count() > 0:
-                short_desc_input.fill(
-                    "Instance de démonstration du collectif imaginaire "
-                    "« Le Tiers-Lustre »."
-                )
+            expect(short_desc_input).to_be_visible()
+            short_desc_input.fill(description_attendue)
 
-            # --- Etape 5 : Enregistrer la configuration ---
-            # Selecteur tolerant FR/EN sur le bouton submit (piege 9.34 :
-            # le texte depend de la langue active).
-            # / Step 5: save the configuration. FR/EN tolerant selector on
-            # the submit button (trap 9.34: text depends on active language).
-            save_button = page.locator(
-                'button[type="submit"]:has-text("Save"), '
-                'button[type="submit"]:has-text("Enregistrer"), '
-                'input[type="submit"]'
-            ).first
-            if save_button.count() > 0:
-                save_button.click()
-                page.wait_for_load_state("networkidle")
-
-            # --- Etape 6 : Verifier sur la page d'accueil ---
-            # L'en-tete du skin V2 affiche toujours le nom du lieu en texte
-            # (le logo, s'il existe, est a cote).
-            # / Step 6: verify on the homepage. The V2 header always shows the
-            # venue name as text (the logo, if any, sits next to it).
-            page.goto("/")
+            # --- Etape 5 : Enregistrer, OBLIGATOIRE ---
+            # Le bouton « Enregistrer » d'Unfold porte name="_save" (submit_line.html).
+            # / Step 5: save, MANDATORY. Unfold's save button has name="_save".
+            page.locator('button[name="_save"]').click()
             page.wait_for_load_state("networkidle")
 
-            org_name = page.locator('[data-testid="tenant-header-nom"]')
-            expect(org_name).to_contain_text(
-                re.compile(r"Le Tiers-Lustre|Tiers-Lustre|Lespass", re.I)
+            # --- Etape 6 : La base a bien enregistre les deux valeurs ---
+            # / Step 6: the database really stored both values.
+            valeurs_en_base = django_shell(
+                "from BaseBillet.models import Configuration\n"
+                "config = Configuration.get_solo()\n"
+                "print('ORGANISATION=' + str(config.organisation))\n"
+                "print('DESCRIPTION=' + str(config.short_description))"
             )
+            assert f"ORGANISATION={nom_attendu}" in valeurs_en_base, (
+                f"Le nom saisi n'a pas ete enregistre : {valeurs_en_base[-300:]}"
+            )
+            assert f"DESCRIPTION={description_attendue}" in valeurs_en_base, (
+                f"La description saisie n'a pas ete enregistree : {valeurs_en_base[-300:]}"
+            )
+
+            # --- Etape 7 : Le site public affiche le NOUVEAU nom ---
+            # / Step 7: the public site shows the NEW name.
+            page.goto("/")
+            page.wait_for_load_state("networkidle")
+            expect(page.locator('[data-testid="tenant-header-nom"]')).to_have_text(nom_attendu)
 
         finally:
             # --- Restauration : remettre la configuration d'origine ---

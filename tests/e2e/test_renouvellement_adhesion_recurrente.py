@@ -304,11 +304,10 @@ def abonnement_stripe_sur_horloge_de_test(django_shell, tarif_recurrent_recompen
         "import stripe\n"
         "from tests.stripe_reel import preparer_stripe_mode_test\n"
         "compte = preparer_stripe_mode_test()\n"
-        "try:\n"
-        f"    stripe.test_helpers.TestClock.delete('{donnees['horloge']}',\n"
-        "                                          stripe_account=compte)\n"
-        "except Exception as erreur:\n"
-        "    print('NETTOYAGE_IMPOSSIBLE=' + str(erreur))"
+        # Pas de try/except : une suppression ratee doit ECHOUER visiblement, sinon
+        # les horloges de test s'accumulent sur le compte Stripe (quota limite).
+        # / No try/except: a failed deletion must FAIL visibly (Stripe test clock quota).
+        f"stripe.test_helpers.TestClock.delete('{donnees['horloge']}', stripe_account=compte)"
     )
 
 
@@ -378,6 +377,15 @@ def test_chaque_echeance_reverse_la_recompense_et_entre_en_comptabilite(
 
     # --- 2. Lespass a enregistre l'echeance comme une vente ---
     etat = _attendre_le_renouvellement(django_shell, email, adhesion_pk)
+
+    # On relit apres un temps de stabilite : un webhook `invoice.paid` rejoue ou en
+    # double peut arriver quelques secondes apres le premier. Compter trop tot
+    # laisserait passer une double facturation.
+    # / Re-read after a settling delay: a replayed or duplicate `invoice.paid` may
+    # arrive seconds later. Counting too early would miss a double charge.
+    if etat["lignes"]:
+        time.sleep(10)
+        etat = _etat_de_l_adhesion(django_shell, email, adhesion_pk)
 
     assert etat["lignes"], (
         "L'echeance a ete prelevee chez Stripe, mais Lespass n'a enregistre "

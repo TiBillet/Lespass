@@ -210,7 +210,7 @@ class TestAdhesionObligatoireCheck:
         membership_product_name = f"Adhesion Event Test {random_id}"
         ticket_product_name = f"Billet Adh Required {random_id}"
         event_name = f"Event Adh Test {random_id}"
-        user_email = f"testadh+{random_id}@pm.me"
+        user_email = f"testadh+{random_id}@example.com"
 
         # --- Etape 1 : Creer le produit adhesion ---
         # subscriptionType=Y (annuelle), prix 0.00 (gratuit).

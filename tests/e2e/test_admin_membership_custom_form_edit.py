@@ -126,10 +126,11 @@ class TestAdminMembershipCustomFormEdit:
         # Y = 365 jours (annee) / Y = 365 days (year)
         page.select_option('select[name="prices-0-subscription_type"]', 'Y')
 
-        # Cocher "Publier" / Check "Publish"
+        # Cocher "Publier" : obligatoire, la case fait partie du formulaire produit
+        # / Check "Publish": mandatory, the checkbox is part of the product form
         publish_checkbox = page.locator('input[name="publish"]')
-        if publish_checkbox.count() > 0:
-            publish_checkbox.check()
+        expect(publish_checkbox).to_have_count(1)
+        publish_checkbox.check()
 
         # "Save and continue editing" pour rester sur la page d'edition
         # / "Save and continue editing" to stay on the edit page

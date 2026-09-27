@@ -51,10 +51,10 @@ def refresh_cache():
     Scope "module" : un seul appel.
     / Scope "module": a single call.
 
-    Si le refresh echoue (serveur absent, CI sans docker), on logge et on
-    continue. Les tests utiliseront le cache existant ou afficheront un SKIP.
-    / If refresh fails (server absent, CI without docker), log and continue.
-    Tests will use the existing cache or display an adequate SKIP.
+    Si le refresh echoue, le module ECHOUE : avec un cache perime, les tests
+    verifieraient d'anciens points, et leurs echecs seraient incomprehensibles.
+    / If the refresh fails, the module FAILS: a stale cache would make the tests
+    check old points, with unreadable failures.
     """
     import shutil
     import subprocess
@@ -85,12 +85,8 @@ def refresh_cache():
         env=env, cwd=cwd,
     )
     if result.returncode != 0:
-        import warnings
-        warnings.warn(
-            f"refresh_seo_cache a echoue (rc={result.returncode}). "
-            f"Les tests utiliseront le cache existant. "
-            f"Stderr : {result.stderr[:200]}",
-            stacklevel=2,
+        pytest.fail(
+            f"refresh_seo_cache a echoue (rc={result.returncode}) : {result.stderr[:300]}"
         )
 
 

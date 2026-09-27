@@ -96,24 +96,33 @@ class TestLoginFlow:
         expect(email_input).to_be_visible()
         email_input.fill("not-an-email")
 
-        # --- Étape 4 : Soumettre / Submit ---
+        # La validité se lit AVANT l'envoi : si l'envoi part, HTMX remplace la page, et
+        # un nouveau champ vide (donc invalide) rendrait la lecture vraie par accident.
+        # / Validity is read BEFORE submitting: a swapped page would show a new, empty field.
+        is_html_valid = email_input.evaluate("(el) => el.validity.valid")
+
+        # --- Étape 4 : Soumettre, en notant tout envoi vers /connexion/ ---
+        # Le formulaire part en hx-post vers /connexion/ (commun/formulaires/login.html).
+        # / Step 4: submit, recording any request sent to /connexion/.
+        envois_vers_la_connexion = []
+        page.on(
+            "request",
+            lambda requete: envois_vers_la_connexion.append(requete.url)
+            if "/connexion/" in requete.url else None,
+        )
         submit_button = page.locator('#loginForm button[type="submit"]')
         submit_button.click()
-
-        # --- Étape 5 : La validation HTML5 doit bloquer l'envoi ---
-        # Le spec TS se contentait d'attendre 500ms sans assertion ; ici on
-        # vérifie explicitement que le champ email est invalide (type=email)
-        # OU, à défaut, qu'aucune connexion n'a eu lieu (pas de /my_account).
-        # / Step 5: HTML5 validation must block submission. The TS spec only
-        # waited 500ms with no assertion; here we explicitly check the email
-        # field validity (type=email) OR, failing that, that no login
-        # happened (no /my_account in URL).
         page.wait_for_timeout(500)
 
-        is_html_valid = email_input.evaluate("(el) => el.validity.valid")
-        no_login_happened = "/my_account" not in page.url
-
-        assert (is_html_valid is False) or no_login_happened, (
-            "Un email mal formé ne devrait pas permettre la connexion "
-            f"(htmlValid={is_html_valid}, url={page.url})"
+        # --- Étape 5 : La validation du navigateur bloque l'envoi ---
+        # Deux preuves, toutes deux exigées : le champ est invalide (type=email), ET
+        # aucune requête n'est partie vers /connexion/. L'URL, elle, ne prouverait rien :
+        # la connexion se fait par un lien envoyé par e-mail, elle ne change jamais.
+        # / Step 5: browser validation blocks the submission. Both proofs are required:
+        # the field is invalid AND no request reached /connexion/.
+        assert is_html_valid is False, (
+            "Le champ e-mail accepte « not-an-email » : il a perdu type=email."
+        )
+        assert envois_vers_la_connexion == [], (
+            f"Un e-mail mal formé est parti vers /connexion/ : {envois_vers_la_connexion}"
         )

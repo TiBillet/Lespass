@@ -8,8 +8,8 @@
 #   e2e-visible : les E2E dans une fenetre Chromium VISIBLE sur l'hote, ralentie
 #   (variable LENTEUR en millisecondes, 800 par defaut), avec un journal lisible.
 #   / e2e-visible: E2E in a VISIBLE, slowed-down Chromium window on the host, with a log.
-#   Sans argument pytest, toute la suite est lancée (tests/pytest/, booking/tests/ et
-#   onboard/tests/, ou tests/e2e/).
+#   Sans argument pytest, toute la suite est lancée (tests/pytest/ et booking/tests/,
+#   ou tests/e2e/). onboard/tests/ se lance à la main : make test ARGS="onboard/tests/".
 #   / Without pytest arguments, the whole suite runs.
 #   `couverture` lance la suite pytest en mesurant la couverture du code (pytest-cov).
 #   Variable optionnelle FICHIERS="a.py,b.py" : détail ligne à ligne de ces fichiers.
@@ -123,19 +123,19 @@ if [ "$SUITE" = "e2e-visible" ]; then
     echo "Journal : tests/e2e/artefacts/supervision.log" >&2
 fi
 
-# 4. Sans argument, toute la suite. booking/tests/ (moteur de créneaux) et onboard/tests/
-# (tunnel de création de lieu) en font partie : hors de la suite, des tests cassent sans que
-# personne le voie. onboard/tests/ consomme des lieux du pool « en attente » : lancer la suite
-# quand la base de dev est au repos.
-# / Without arguments, the whole suite: booking/tests/ (slot engine) and onboard/tests/
-# (venue creation funnel) included. onboard/tests/ consumes venues from the waiting pool.
+# 4. Sans argument, toute la suite : tests/pytest/ et booking/tests/ (moteur de créneaux ;
+# hors de la suite, il avait cassé sans que personne le voie). onboard/tests/ (tunnel de
+# création de lieu) n'en fait PAS partie : il consomme des lieux du pool « en attente » et se
+# lance à la main, base au repos (make test ARGS="onboard/tests/").
+# / Without arguments, the whole suite: tests/pytest/ and booking/tests/. onboard/tests/ is
+# NOT included: it consumes waiting-pool venues and is run by hand.
 if [ "$#" -eq 0 ]; then
     if [ "$SUITE" = "e2e" ]; then
         set -- tests/e2e/ -q
     elif [ "$SUITE" = "e2e-visible" ]; then
         set -- tests/e2e/
     else
-        set -- tests/pytest/ booking/tests/ onboard/tests/ -q
+        set -- tests/pytest/ booking/tests/ -q
     fi
 fi
 

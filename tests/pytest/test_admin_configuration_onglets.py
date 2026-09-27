@@ -257,13 +257,18 @@ def test_aucun_onglet_declare_n_est_inatteignable(navigateur, lieu_et_superadmin
 
     culs_de_sac = []
     en_erreur = []
+    sans_page_de_liste = []
     for groupe in groupes:
         for modele in groupe.get("models", []):
             nom = modele["name"] if isinstance(modele, dict) else modele
             app_label, model_name = nom.split(".")
+            # Un modele cite dans une barre d'onglets sans page de liste (faute de
+            # frappe, admin retire) est un onglet mort : on le compte, on n'y passe pas.
+            # / A tab model without a list page is a dead tab: counted, not skipped.
             try:
                 url = reverse(f"staff_admin:{app_label}_{model_name}_changelist")
             except NoReverseMatch:
+                sans_page_de_liste.append(nom)
                 continue
             # raise_request_exception=False : une page qui plante ne coupe pas le
             # balayage. On recense toutes les pages en erreur, puis on echoue
@@ -295,6 +300,9 @@ def test_aucun_onglet_declare_n_est_inatteignable(navigateur, lieu_et_superadmin
             if "tabs-wrapper" not in reponse.content.decode():
                 culs_de_sac.append(nom)
 
+    assert not sans_page_de_liste, (
+        f"Ces modeles d'une barre d'onglets n'ont pas de page d'admin : {sorted(set(sans_page_de_liste))}."
+    )
     assert not culs_de_sac, (
         f"Ces pages ne rendent pas leur barre d'onglets : {sorted(set(culs_de_sac))}. "
         "Un singleton django-solo rend un FORMULAIRE a l'URL de liste : il lui "
