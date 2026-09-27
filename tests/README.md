@@ -197,14 +197,14 @@ Deux choses à savoir :
 
 `test_renouvellement_adhesion_recurrente.py` vérifie qu'une adhésion mensuelle
 reverse bien sa récompense **à chaque échéance**. Pour ne pas attendre un mois,
-le client Stripe est rattaché à une `TestClock` que le test avance de 32 jours :
+le client Stripe est rattaché à une `TestClock` que le test avance de 35 jours (la facture de renouvellement reste 72 h en brouillon) :
 
 ```python
 horloge = stripe.test_helpers.TestClock.create(frozen_time=int(time.time()), ...)
 client  = stripe.Customer.create(email=..., test_clock=horloge.id, ...)
 # ... puis, plus tard :
 stripe.test_helpers.TestClock.advance(horloge.id,
-                                      frozen_time=h.frozen_time + 32 * 24 * 3600, ...)
+                                      frozen_time=h.frozen_time + 35 * 24 * 3600, ...)
 ```
 
 Stripe émet alors une **vraie** facture, prélève **vraiment** la carte de test et

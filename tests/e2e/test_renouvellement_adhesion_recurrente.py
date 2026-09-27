@@ -26,7 +26,7 @@ receives once. Nothing anywhere would report it.
 COMMENT ON FAIT PASSER UN MOIS / HOW A MONTH IS MADE TO PASS
 --------------------------------------------------------------
 Par une **horloge de test Stripe** (`stripe.test_helpers.TestClock`). Le client
-Stripe est rattache a une horloge que le test avance de 32 jours ; Stripe emet
+Stripe est rattache a une horloge que le test avance de 35 jours ; Stripe emet
 alors reellement l'echeance suivante, avec `billing_reason='subscription_cycle'`
 — exactement l'evenement que `Webhook_stripe` attend (`ApiBillet/views.py`).
 
@@ -34,7 +34,7 @@ C'est la seule facon d'observer un renouvellement sans attendre un mois, et sans
 fabriquer un faux webhook : la facture, le prelevement et l'evenement sont ceux
 de Stripe.
 
-/ A Stripe TEST CLOCK is advanced by 32 days, so Stripe really issues the next
+/ A Stripe TEST CLOCK is advanced by 35 days, so Stripe really issues the next
 invoice with billing_reason='subscription_cycle'. The invoice, the charge and the
 event are Stripe's own — no hand-crafted webhook.
 
@@ -81,10 +81,15 @@ import pytest
 NOM_DU_PRODUIT = "Caisse de sécurité sociale alimentaire"
 NOM_DU_TARIF = "Souscription mensuelle"
 
-# De combien on avance l'horloge pour provoquer l'echeance suivante. 32 jours
-# depassent surement un cycle mensuel, quel que soit le mois de depart.
-# / How far the clock is advanced: 32 days clears a monthly cycle in any month.
-JOURS_JUSQU_A_L_ECHEANCE = 32
+# De combien on avance l'horloge pour que l'echeance suivante soit PAYEE. Stripe cree
+# la facture de renouvellement en fin de cycle (30 ou 31 jours), puis la laisse en
+# brouillon avant de la finaliser et de la prelever : 72 h sur le compte Connect de dev
+# (champ `automatically_finalizes_at` de la facture, verifie le 2026-09-26). Avec 32 jours,
+# la facture restait en brouillon et `invoice.paid` n'arrivait jamais.
+# 35 = 31 jours + 3 jours de brouillon + 1 jour de marge, loin de l'echeance d'apres (~61).
+# / How far the clock is advanced so the next renewal is PAID: the renewal invoice stays
+# a 72 h draft before being finalized and charged. 35 = 31 + 3 + 1 day of margin.
+JOURS_JUSQU_A_L_ECHEANCE = 35
 
 
 # ---------------------------------------------------------------------------
