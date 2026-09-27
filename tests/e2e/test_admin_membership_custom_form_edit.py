@@ -234,9 +234,7 @@ class TestAdminMembershipCustomFormEdit:
         membership_pk = pk_match.group(1)
 
         # Injecter le custom_form via le shell Django
-        # ATTENTION : django_shell echappe les guillemets doubles → code Python avec quotes simples UNIQUEMENT
         # / Inject custom_form via the Django shell
-        # WARNING: django_shell escapes double quotes → Python code with single quotes ONLY
         result = django_shell(
             'import json\n'
             'from BaseBillet.models import Membership\n'

@@ -217,10 +217,8 @@ class TestAdminCancelMembership:
 
         # --- Étape 4 : Récupérer la PK en base via django_shell ---
         # Permet de construire l'URL d'admin change sans connaître la PK à l'avance.
-        # Code shell avec quotes simples uniquement (conftest échappe les doubles).
         # / Step 4: Get PK from DB via django_shell.
         # Allows constructing the admin change URL without knowing PK in advance.
-        # Shell code uses single quotes only (conftest escapes double quotes).
         result = django_shell(
             "from BaseBillet.models import Membership\n"
             f"m = Membership.objects.filter(user__email='{user_email}').first()\n"
@@ -268,11 +266,12 @@ class TestAdminCancelMembership:
         confirm_button.wait_for(state="visible", timeout=5000)
         confirm_button.click()
 
-        # Après HX-Redirect, on doit atterrir sur la changelist.
-        # wait_for_url reçoit une STRING en Python (piège PIEGES.md).
-        # / After HX-Redirect, we must land on the changelist.
-        # wait_for_url receives a STRING in Python (trap PIEGES.md).
-        page.wait_for_url("**/BaseBillet/membership/**", timeout=10000)
+        # Après HX-Redirect, on doit atterrir sur la changelist. La fiche
+        # (/membership/<pk>/change/) correspond aussi à "**/membership/**" :
+        # on attend donc l'URL EXACTE de la liste.
+        # / After HX-Redirect we land on the changelist. The change page also matches
+        # "**/membership/**": wait for the EXACT list URL.
+        page.wait_for_url(re.compile(r".*/admin/BaseBillet/membership/(\?.*)?$"), timeout=10000)
 
         # La page doit contenir un mot relatif à l'annulation (FR ou EN).
         # / Page must contain a word related to cancellation (FR or EN).
@@ -430,9 +429,12 @@ class TestAdminCancelMembership:
         with_cn_button.wait_for(state="visible", timeout=5000)
         with_cn_button.click()
 
-        # Après HX-Redirect, on doit atterrir sur la changelist.
-        # / After HX-Redirect, we must land on the changelist.
-        page.wait_for_url("**/BaseBillet/membership/**", timeout=10000)
+        # Après HX-Redirect, on doit atterrir sur la changelist. La fiche
+        # (/membership/<pk>/change/) correspond aussi à "**/membership/**" :
+        # on attend donc l'URL EXACTE de la liste, sinon on lit la base avant l'avoir.
+        # / After HX-Redirect we land on the changelist. The change page also matches
+        # "**/membership/**": wait for the EXACT list URL, or the DB is read too early.
+        page.wait_for_url(re.compile(r".*/admin/BaseBillet/membership/(\?.*)?$"), timeout=10000)
 
         # --- Étape 9 : Vérifier en base qu'un avoir (LigneArticle status='N') existe ---
         # LigneArticle.CREDIT_NOTE = 'N'

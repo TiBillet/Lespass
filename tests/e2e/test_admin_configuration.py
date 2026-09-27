@@ -37,12 +37,9 @@ class TestAdminConfiguration:
         # --- Etape 0 : Sauvegarder la configuration d'origine ---
         # On lit organisation + short_description via le shell Django et on
         # encode en base64 pour transporter les valeurs sans probleme
-        # d'echappement (quotes, accents). Le code shell n'utilise QUE des
-        # quotes simples : django_shell echappe les doubles quotes (cf.
-        # conftest), ce qui casserait la syntaxe Python.
+        # d'echappement (quotes, accents).
         # / Step 0: save the original configuration. Values are base64-encoded
-        # to avoid any quoting issue. Shell code uses single quotes ONLY
-        # (django_shell escapes double quotes, breaking Python syntax).
+        # to avoid any quoting issue.
         valeurs_origine_b64 = django_shell(
             "import json, base64\n"
             "from BaseBillet.models import Configuration\n"

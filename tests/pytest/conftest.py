@@ -288,6 +288,23 @@ def _enable_db_access_for_all(django_db_blocker):
     django_db_blocker.restore()
 
 
+@pytest.fixture(autouse=True)
+def _nettoyer_les_evenements_de_la_fabrique():
+    """Après chaque test, supprime les événements et produits créés par
+    `fabriques_reservation.creer_evenement_et_produit` (base de dev partagée, sans rollback).
+    / After each test, deletes the events and products created by the factory.
+    """
+    yield
+    import fabriques_reservation
+
+    if fabriques_reservation.EVENEMENTS_A_NETTOYER:
+        from Customers.models import Client
+
+        fabriques_reservation.nettoyer_evenements_crees(
+            Client.objects.get(schema_name="lespass")
+        )
+
+
 @pytest.fixture(autouse=True, scope="class")
 def _connexion_sur_le_schema_public_avant_chaque_classe(request):
     """

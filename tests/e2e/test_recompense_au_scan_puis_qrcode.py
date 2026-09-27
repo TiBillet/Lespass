@@ -412,18 +412,27 @@ def test_le_scan_du_billet_credite_puis_la_monnaie_se_depense_par_qrcode(
     # C'est cette trace qui interdit un second versement. Un versement qui
     # crediterait sans l'ecrire serait rejouable a chaque re-scan.
     # / This trace is what forbids a second transfer.
-    sortie = django_shell(
-        "import json\n"
-        "from BaseBillet.models import Ticket\n"
-        f"billet = Ticket.objects.get(pk='{billet_pk}')\n"
-        "trace = (billet.metadata or {}).get('rewarded_from_ticket_scanned') or {}\n"
-        "print('TRACE_JSON=' + json.dumps({\n"
-        "    'montant': trace.get('amount'),\n"
-        "    'asset': trace.get('asset'),\n"
-        "    'transaction': trace.get('transaction_uuid'),\n"
-        "}))"
-    )
-    trace = _lire_json_marque(sortie, "TRACE_JSON=")
+    #
+    # La tache credite le Fedow PUIS enregistre la trace (BaseBillet/tasks.py,
+    # refill_from_lespass_to_user_wallet_from_ticket_scanned) : on relit donc en
+    # boucle, 10 s au plus, apres avoir vu le solde bouger.
+    # / The task credits Fedow THEN saves the trace: poll for up to 10 s.
+    for _tentative in range(10):
+        sortie = django_shell(
+            "import json\n"
+            "from BaseBillet.models import Ticket\n"
+            f"billet = Ticket.objects.get(pk='{billet_pk}')\n"
+            "trace = (billet.metadata or {}).get('rewarded_from_ticket_scanned') or {}\n"
+            "print('TRACE_JSON=' + json.dumps({\n"
+            "    'montant': trace.get('amount'),\n"
+            "    'asset': trace.get('asset'),\n"
+            "    'transaction': trace.get('transaction_uuid'),\n"
+            "}))"
+        )
+        trace = _lire_json_marque(sortie, "TRACE_JSON=")
+        if trace["transaction"]:
+            break
+        time.sleep(1)
 
     assert trace["transaction"], (
         f"Le billet ne porte aucune trace de versement : {trace}. Sans elle, un "

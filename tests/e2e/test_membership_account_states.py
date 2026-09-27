@@ -160,7 +160,6 @@ class TestMembershipAccountStates:
         # La fixture create_product n'expose pas productMaxPerUser (le spec TS
         # l'envoyait dans additionalProperty). On pose max_per_user=1 en DB via
         # django_shell — c'est ce qui déclenche le message "déjà active".
-        # NB : pas de guillemets doubles dans le code shell (échappement conftest).
         # / The create_product fixture has no productMaxPerUser option (TS spec
         # sent it via additionalProperty). We set max_per_user=1 in DB through
         # django_shell — that is what triggers the "already active" message.

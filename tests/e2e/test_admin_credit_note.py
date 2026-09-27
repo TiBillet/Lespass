@@ -161,11 +161,9 @@ class TestAdminCreditNote:
         # --- Etape 2 : Recuperer le PK de la LigneArticle VALID en base ---
         # On force le status a 'V' (VALID) si seule une ligne 'P' existe,
         # pour s'assurer que l'action emettre_avoir peut s'executer.
-        # La fixture django_shell echappe les guillemets DOUBLES → quotes simples uniquement.
         # / Step 2: Get the PK of the VALID LigneArticle from DB.
         # We force status to 'V' (VALID) if only a 'P' line exists,
         # to ensure emettre_avoir can run.
-        # django_shell escapes DOUBLE quotes → single quotes only.
         db_result = django_shell(
             "from BaseBillet.models import LigneArticle\n"
             f"ligne = LigneArticle.objects.filter(membership__user__email='{user_email}', status__in=['V', 'P']).first()\n"

@@ -167,10 +167,8 @@ class TestMembershipManualValidation:
 
         # --- Étape 2 : Vérifier en base que l'adhésion est en statut AW ---
         # Récupérer l'UUID de l'adhésion en base via django_shell.
-        # Code shell avec quotes simples uniquement (conftest échappe les doubles).
         # / Step 2: Verify in DB that the membership is in AW status.
         # Get the membership UUID from DB via django_shell.
-        # Shell code uses single quotes only (conftest escapes double quotes).
         result_pre = django_shell(
             "from BaseBillet.models import Membership\n"
             f"m = Membership.objects.filter(user__email='{user_email}').order_by('-pk').first()\n"

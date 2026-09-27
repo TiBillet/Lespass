@@ -54,10 +54,9 @@ def _lire_la_vente_en_base(django_shell, extrait_python):
       may never have happened.
 
     L'ATTENTE EST FAITE DANS LE SHELL, pas autour : le credit arrive par le webhook, donc
-    de facon asynchrone, et chaque appel a `django_shell` coute un demarrage complet de
-    Django (~5 s). Boucler ici couterait une minute par tentative.
+    de facon asynchrone ; un seul appel a `django_shell` attend et relit.
     / THE POLLING HAPPENS INSIDE THE SHELL: the credit arrives asynchronously via the
-      webhook, and each django_shell call costs a full Django boot (~5 s).
+      webhook; a single django_shell call waits and re-reads.
     """
     sortie = django_shell(extrait_python)
     for ligne in sortie.splitlines():

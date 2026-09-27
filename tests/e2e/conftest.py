@@ -6,11 +6,14 @@ Prérequis : le serveur Django doit tourner (via Traefik).
 / Prerequisite: Django server must be running (via Traefik).
 """
 
+import contextlib
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
+import traceback
 
 import pytest
 import requests as http_requests
@@ -667,9 +670,14 @@ def _run_command(cmd_docker, cmd_local, timeout=30):
 
 @pytest.fixture(scope="session")
 def api_key():
-    """Récupère la clé API via manage.py test_api_key.
-    / Fetches the API key via manage.py test_api_key.
+    """Récupère la clé API : celle que scripts/lancer_tests.sh passe dans API_KEY,
+    sinon via manage.py test_api_key (lancement de pytest à la main).
+    / Fetches the API key: the one scripts/lancer_tests.sh passes in API_KEY,
+    otherwise through manage.py test_api_key (pytest launched by hand).
     """
+    cle_du_script = os.environ.get("API_KEY", "").strip()
+    if cle_du_script:
+        return cle_du_script
     result = _run_command(
         cmd_docker=[
             "docker", "exec", "-e", "TEST=1",
@@ -687,33 +695,48 @@ def api_key():
 
 
 @pytest.fixture(scope="session")
-def django_shell():
-    """Factory : exécute du Python dans le shell Django du tenant lespass.
-    / Factory: executes Python code in the Django shell for the lespass tenant.
+def django_shell(django_db_blocker):
+    """Factory : exécute du Python DANS le processus pytest, dans le contexte d'un lieu.
+    Renvoie ce que le code a imprimé (print), et lève RuntimeError si le code lève.
+    / Factory: runs Python IN the pytest process, inside a tenant's context.
+    Returns what the code printed, raises RuntimeError if the code raises.
 
     Usage : result = django_shell("from laboutik.models import PointDeVente; print(PointDeVente.objects.count())")
     Usage : result = django_shell("...", schema="festival")
+
+    Avant, chaque appel lançait `manage.py tenant_command shell` : environ 4,7 s de
+    démarrage de Django par appel. Ici, le code tourne tout de suite. Les écritures
+    sont validées aussitôt (autocommit), donc le serveur les voit.
+    / Previously each call spawned `manage.py tenant_command shell` (~4.7 s of Django
+    boot). Writes are committed at once (autocommit), so the server sees them.
     """
+    from django.test.utils import override_settings
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client as TenantClient
+
+    # pytest-django force DEBUG=False dans ce processus. Le serveur, lui, tourne avec
+    # le DEBUG du .env. Sans ce réglage, FedowAPI passe en verify=True (erreur SSL sur
+    # le certificat de dev) et reset_carte refuse sans rien dire.
+    # / pytest-django forces DEBUG=False here; mirror the server's DEBUG from .env,
+    # otherwise FedowAPI verifies the dev certificate (SSLError) and reset_carte refuses.
+    debug_du_serveur = os.environ.get("DEBUG") == "1"
 
     def _run(python_code, schema="lespass"):
-        escaped = python_code.replace('"', '\\"')
-        result = _run_command(
-            cmd_docker=[
-                "docker", "exec", "lespass_django",
-                "poetry", "run", "python",
-                "/DjangoFiles/manage.py", "tenant_command",
-                "shell", "-s", schema, "-c", escaped,
-            ],
-            cmd_local=[
-                "python", "manage.py", "tenant_command",
-                "shell", "-s", schema, "-c", escaped,
-            ],
-        )
-        if result.returncode != 0:
+        sortie = io.StringIO()
+        try:
+            with django_db_blocker.unblock(), override_settings(DEBUG=debug_du_serveur):
+                # Le vrai lieu, pas schema_context : celui-ci pose un faux lieu
+                # (FakeTenant) sans uuid ni name, que certains codes lisent.
+                # / The real tenant: schema_context sets a FakeTenant without uuid/name.
+                tenant = TenantClient.objects.get(schema_name=schema)
+                with tenant_context(tenant), contextlib.redirect_stdout(sortie):
+                    exec(python_code, {"__name__": "__main__"})
+        except Exception as erreur:
             raise RuntimeError(
-                f"django_shell failed (rc={result.returncode}): {result.stderr}"
-            )
-        return result.stdout.strip()
+                f"django_shell failed: {erreur!r}\n{traceback.format_exc()}\n"
+                f"stdout: {sortie.getvalue()[-2000:]}"
+            ) from erreur
+        return sortie.getvalue().strip()
 
     return _run
 

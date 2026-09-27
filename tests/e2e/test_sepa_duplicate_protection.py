@@ -260,8 +260,16 @@ class TestSepaDuplicateProtection:
         # / The panel's "Accept" button: a <button> posting to admin_accept. Always there.
         bouton_accepter = page.locator('[data-testid="membership-action-accept"]')
         expect(bouton_accepter).to_be_visible()
-        bouton_accepter.click()
-        page.wait_for_load_state("networkidle")
+        # On attend la réponse du POST HTMX : networkidle rend la main tout de suite,
+        # la page ayant déjà atteint cet état, et la base serait lue trop tôt.
+        # / Wait for the HTMX POST response: networkidle returns at once (state already reached).
+        with page.expect_response(
+            lambda reponse: "/admin_accept/" in reponse.url and reponse.request.method == "POST"
+        ) as reponse_acceptation:
+            bouton_accepter.click()
+        assert reponse_acceptation.value.ok, (
+            f"admin_accept a répondu {reponse_acceptation.value.status}"
+        )
 
         statut = django_shell(
             "from BaseBillet.models import Membership\n"
