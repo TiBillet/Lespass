@@ -3185,6 +3185,14 @@ class ReservationAdmin(ModelAdmin):
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
 
+    def get_readonly_fields(self, request, obj=None):
+        # Le statut est piloté par la machine à états (BaseBillet/signals.py).
+        # Le modifier à la main la contourne : billets jamais activés, régressions V -> FA.
+        # / Status is driven by the state machine. Editing it by hand bypasses it.
+        if obj:
+            return ("status",)
+        return ()
+
     list_display = (
         'datetime',
         'user_commande',
@@ -3254,12 +3262,14 @@ class ReservationAdmin(ModelAdmin):
     # def options_str(self, instance: Reservation):
     #     return " - ".join([option.name for option in instance.options.all()])
 
-    actions_detail = ["send_ticket_to_mail", ]
+    # Un seul des deux boutons est affiché, selon le statut de la réservation.
+    # / Only one of the two buttons is shown, depending on the booking status.
+    actions_detail = ["send_ticket_to_mail", "validate_and_send_ticket_to_mail", ]
 
     @action(
         description=_("Send tickets through email again"),
         url_path="send_ticket_to_mail",
-        permissions=["custom_actions_detail"],
+        permissions=["send_ticket_to_mail"],
     )
     def send_ticket_to_mail(self, request, object_id):
         reservation = Reservation.objects.get(pk=object_id)
@@ -3270,8 +3280,40 @@ class ReservationAdmin(ModelAdmin):
         )
         return redirect(request.META["HTTP_REFERER"])
 
-    def has_custom_actions_detail_permission(self, request, object_id):
-        return TenantAdminPermissionWithRequest(request)
+    @action(
+        description=_("Valider et envoyer par mail"),
+        url_path="validate_and_send_ticket_to_mail",
+        permissions=["validate_and_send_ticket_to_mail"],
+    )
+    def validate_and_send_ticket_to_mail(self, request, object_id):
+        # Réservation gratuite en attente de validation du mail (F).
+        # On passe par la transition F -> FA de la machine à états :
+        # reservation_paid active les billets puis envoie le mail (qui passe la résa en VALID).
+        # / Free booking waiting for email validation (F).
+        # The F -> FA transition activates the tickets then sends the email.
+        reservation = Reservation.objects.get(pk=object_id)
+        reservation.status = Reservation.FREERES_USERACTIV
+        reservation.save()
+        messages.success(
+            request,
+            _(f"Tickets sent to {reservation.user_commande.email}"),
+        )
+        return redirect(request.META["HTTP_REFERER"])
+
+    def has_send_ticket_to_mail_permission(self, request, object_id):
+        if not TenantAdminPermissionWithRequest(request):
+            return False
+        reservation_en_attente_du_mail = Reservation.objects.filter(
+            pk=object_id, status=Reservation.FREERES,
+        ).exists()
+        return not reservation_en_attente_du_mail
+
+    def has_validate_and_send_ticket_to_mail_permission(self, request, object_id):
+        if not TenantAdminPermissionWithRequest(request):
+            return False
+        return Reservation.objects.filter(
+            pk=object_id, status=Reservation.FREERES,
+        ).exists()
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
