@@ -563,7 +563,18 @@ class TerminalConsumer(AsyncWebsocketConsumer):
     async def template(self, event):
         logger.info(f"template event: {event}")
         template_name = event["template"]
-        html = get_template(f"kiosk/{template_name}").render(context={"event": event})
+
+        # Le contexte de l'ecran final (montant, nouveau solde, statut certain)
+        # est RELU en base ici, plutot que pris tel quel dans l'evenement : un
+        # worker Celery pas encore redemarre enverrait un evenement incomplet,
+        # et l'ecran de refus deviendrait « incertain » a tort.
+        # / The final screen context is RE-READ from the DB here, so an outdated
+        # Celery worker sending an incomplete event cannot degrade the screen.
+        _nom_du_template_en_base, contexte_depuis_la_base = await self.get_finished_template_name()
+        contexte_de_l_ecran = dict(event)
+        contexte_de_l_ecran.update(contexte_depuis_la_base)
+
+        html = get_template(f"kiosk/{template_name}").render(context={"event": contexte_de_l_ecran})
         await self.send(text_data=html)
 
     async def message(self, event):

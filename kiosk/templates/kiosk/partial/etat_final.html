@@ -18,17 +18,23 @@ hx-headers du <body> (base.html), pas par un {% csrf_token %}.
 its CSRF token from <body hx-headers>.
 
 SWAP :
-hx-swap-oob="true" sur #tb-kiosque : le websocket remplace l'ecran entier.
+hx-swap-oob="innerHTML:#tb-kiosque" : le websocket remplace le CONTENU de
+#tb-kiosque, pas l'element. Le <main aria-live> reste en place, donc le lecteur
+d'ecran annonce le nouvel ecran. / Replaces the CONTENT of #tb-kiosque, so the
+live region survives and screen readers announce the change.
+
+REFUS INCERTAIN : event.statut_certain est faux quand Stripe n'a pas confirme
+l'annulation (erreur de suivi, delai depasse). On ne dit alors PAS que l'argent
+n'est pas parti, et on ne propose pas de reessayer.
+/ Uncertain refusal: no "no money taken" claim, no retry.
 
 FLUX DU SUCCES : ecran 6 (montant + nouveau solde) -> 6 s -> ecran 9 (merci)
 -> 6 s -> retour a /kiosk/. FLUX DU REFUS : retour auto apres 30 s.
 {% endcomment %}
-<main id="tb-kiosque" class="kiosk-page__stages" aria-live="polite"
-      hx-swap-oob="true"
-      data-testid="{% if est_succes %}kiosk-success-page{% else %}kiosk-cancel-page{% endif %}">
+<div hx-swap-oob="innerHTML:#tb-kiosque">
 
 {% if est_succes %}
-    <div class="kiosk-etapes" data-etape="succes">
+    <div class="kiosk-etapes" data-etape="succes" data-testid="kiosk-success-page">
 
         {# ---------------- Etape 6 : accepte ---------------- #}
         <section class="stage" data-bloc="succes">
@@ -88,25 +94,27 @@ FLUX DU SUCCES : ecran 6 (montant + nouveau solde) -> 6 s -> ecran 9 (merci)
                 </div>
                 <h1 class="merci__title">{% translate "Merci !" %}</h1>
                 <p class="merci__text">{% translate "On ne vous retient plus, la fête vous attend." %}</p>
-                <a href="/kiosk/" class="visually-hidden" data-testid="kiosk-return-home">
-                    {% translate "Retour à l'accueil" %}
-                </a>
             </div>
         </section>
     </div>
 
 {% else %}
     {# ---------------- Etape 7 : refuse ---------------- #}
-    <section class="stage" data-etape="refus">
+    <section class="stage" data-etape="refus" data-testid="kiosk-cancel-page">
         <div class="rcard">
-            <h1 class="rcard__q rcard__q--lg">{% translate "La connexion avec votre banque n'a pas fonctionné." %}</h1>
-            <p class="stage__lede">{% translate "L'argent n'est pas parti de votre compte. Vous pouvez trouver de l'aide au bar si vous le souhaitez." %}</p>
+            {% if event.statut_certain %}
+                <h1 class="rcard__q rcard__q--lg">{% translate "La connexion avec votre banque n'a pas fonctionné." %}</h1>
+                <p class="stage__lede">{% translate "L'argent n'est pas parti de votre compte. Vous pouvez trouver de l'aide au bar si vous le souhaitez." %}</p>
+            {% else %}
+                <h1 class="rcard__q rcard__q--lg" data-testid="kiosk-refus-incertain">{% translate "Nous n'avons pas pu confirmer le paiement." %}</h1>
+                <p class="stage__lede">{% translate "Avant de recommencer, adressez-vous au bar : l'équipe vérifiera si votre paiement est passé." %}</p>
+            {% endif %}
             <div class="rcard__actions">
-                {% if event.tag_id and event.montant_pour_formulaire %}
+                {% if event.statut_certain and event.tag_id and event.montant_pour_formulaire %}
                     {# Relance le MEME paiement : carte et montant revalides cote serveur. #}
                     {# / Replays the SAME payment: card and amount revalidated. #}
                     <button type="button" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
-                            hx-post="/kiosk/refill_with_wisepos/"
+                            hx-post="{% url 'kiosk-refill-with-wisepos' %}"
                             hx-vals='{"tag_id": "{{ event.tag_id }}", "totalAmount": "{{ event.montant_pour_formulaire }}"}'
                             hx-target="#tb-kiosque"
                             hx-swap="innerHTML"
@@ -114,7 +122,7 @@ FLUX DU SUCCES : ecran 6 (montant + nouveau solde) -> 6 s -> ecran 9 (merci)
                         {% translate "Réessayer" %}
                     </button>
                 {% endif %}
-                <a href="/kiosk/" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg"
+                <a href="{% url 'kiosk-list' %}" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg"
                    data-testid="kiosk-return-home">
                     {% translate "Retour à l'accueil" %}
                 </a>
@@ -138,7 +146,7 @@ FLUX DU SUCCES : ecran 6 (montant + nouveau solde) -> 6 s -> ecran 9 (merci)
             const blocSucces = document.querySelector('#tb-kiosque [data-bloc="succes"]');
 
             function retournerAlAccueil() {
-                window.location.href = "/kiosk/";
+                window.location.href = "{% url 'kiosk-list' %}";
             }
 
             // Refus : on laisse le temps de lire et de reessayer.
@@ -157,4 +165,4 @@ FLUX DU SUCCES : ecran 6 (montant + nouveau solde) -> 6 s -> ecran 9 (merci)
             }, 6000);
         })();
     </script>
-</main>
+</div>

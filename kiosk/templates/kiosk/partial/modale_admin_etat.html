@@ -51,7 +51,8 @@ Les trois etats sont toujours presents ; `etat` decide lequel est visible.
         <input type="hidden" name="tag_id" value="">
     </form>
     <div class="kiosk-modal__actions kiosk-modal__actions--stack">
-        <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg" data-modal-close>
+        <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg" data-modal-close
+                data-testid="kiosk-admin-annuler-detection">
             {% translate "Annuler" %}
         </button>
     </div>
@@ -59,7 +60,9 @@ Les trois etats sont toujours presents ; `etat` decide lequel est visible.
 
 {# ---------------- Erreur : pas une carte administrateur ---------------- #}
 <div data-admin-etat="erreur" {% if etat != "erreur" %}hidden{% endif %} data-testid="kiosk-admin-erreur">
-    <h2 class="kiosk-modal__title" role="alert">{% translate "Ce n'est pas une carte administrateur." %}</h2>
+    {# Pas de role="alert" : #modale-admin-contenu est deja une region aria-live. #}
+    {# / No role="alert": the parent is already an aria-live region. #}
+    <h2 class="kiosk-modal__title">{% translate "Ce n'est pas une carte administrateur." %}</h2>
     <p class="kiosk-modal__text">
         {% translate "Présentez une carte administrateur pour accéder à la configuration, ou annulez." %}
     </p>
@@ -68,7 +71,8 @@ Les trois etats sont toujours presents ; `etat` decide lequel est visible.
                 data-afficher-etat-admin="detection" data-testid="kiosk-admin-reessayer">
             {% translate "Réessayer" %}
         </button>
-        <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg" data-modal-close>
+        <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg" data-modal-close
+                data-testid="kiosk-admin-annuler-erreur">
             {% translate "Annuler" %}
         </button>
     </div>

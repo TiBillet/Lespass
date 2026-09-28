@@ -67,14 +67,13 @@ let NfcReader = class {
     // Simulateur de cartes : un panneau discret, replie en bas de l'ecran.
     // On clique sur son en-tete pour deplier la liste des cartes.
     //
-    // Il ne masque PAS le modal SweetAlert : le lecteur physique tourne en
-    // parallele (cf. startLecture), et le message « scannez votre carte » doit
-    // rester lisible. C'est le meme principe que le bouton .nfc-toggle-simu de
-    // la caisse LaBoutik (laboutik/static/js/nfc.js).
+    // Il ne masque PAS le message « posez votre carte » : le lecteur physique
+    // tourne en parallele (cf. startLecture). C'est le meme principe que le
+    // bouton .nfc-toggle-simu de la caisse LaBoutik (laboutik/static/js/nfc.js).
     //
     // / Card simulator: a discreet panel, collapsed at the bottom of the screen.
-    // It does NOT cover the SweetAlert modal: the physical reader runs in
-    // parallel and the "tap your card" message must stay readable.
+    // It does NOT cover the "tap your card" message: the physical reader runs
+    // in parallel.
 
     // Un seul panneau a la fois (startLecture peut etre rappele).
     // / Only one panel at a time (startLecture may be called again).
@@ -110,12 +109,13 @@ let NfcReader = class {
         left: 50%;
         bottom: 0;
         transform: translateX(-50%);
-        /* au-dessus du modal SweetAlert2 (.swal2-container : z-index 1060),
-           sinon les clics sont captes par le backdrop
-           / above the SweetAlert2 modal, otherwise clicks are swallowed */
+        /* au-dessus des modales de la borne (z-index 300)
+           / above the kiosk modals */
         z-index: 2000;
-        background: #ffffff;
-        color: #111111;
+        /* Jetons de la borne (kiosk/static/kiosk/css/tokens.css), avec repli.
+           / Kiosk tokens, with fallback. */
+        background: var(--color-surface, #ffffff);
+        color: var(--color-text, #111111);
         border-radius: 12px 12px 0 0;
         box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.35);
         max-width: 96vw;
@@ -150,8 +150,8 @@ let NfcReader = class {
       .nfc-reader-simu-bt {
         min-width: 120px;
         padding: 18px 12px;
-        background-color: #0000ff;
-        color: #ffffff;
+        background-color: var(--color-text, #17141a);
+        color: var(--color-on-dark, #ffffff);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -161,7 +161,14 @@ let NfcReader = class {
         cursor: pointer;
       }
     </style>`
-    document.body.insertAdjacentHTML('beforeend', uiSimu)
+    // Une modale ouverte avec showModal() rend INERTE tout ce qui est hors
+    // d'elle : on pose donc le panneau A L'INTERIEUR de la modale ouverte
+    // (modale admin), sinon ses cartes ne seraient pas cliquables.
+    // / A showModal() dialog makes everything outside it inert: put the panel
+    // INSIDE the open dialog, or its cards would not be clickable.
+    const modaleOuverte = document.querySelector('dialog[open]')
+    const conteneurDuPanneau = modaleOuverte || document.body
+    conteneurDuPanneau.insertAdjacentHTML('beforeend', uiSimu)
 
     // Deplie / replie la liste des cartes.
     // / Expand / collapse the card list.
@@ -255,12 +262,12 @@ let NfcReader = class {
     // En mode DEMO, le simulateur s'affiche EN PLUS du lecteur physique, comme
     // sur l'app Android : on peut cliquer une carte simulee OU poser une vraie
     // carte sur le lecteur. Le premier des deux qui repond gagne.
-    // C'est 'nfcResult' qui tranche : il ferme le modal SweetAlert, dont le
-    // willClose appelle stopLecture() -> l'overlay est retire et le lecteur
-    // arrete. Le nettoyage est donc commun aux deux chemins.
+    // C'est 'nfcResult' qui tranche : kiosk/static/kiosk/js/main.js recoit
+    // l'evenement et appelle stopLecture() -> le panneau est retire et le
+    // lecteur arrete. Le nettoyage est donc commun aux deux chemins.
     // / In DEMO mode the simulator is shown ALONGSIDE the physical reader, like
     // the Android app: click a simulated card OR tap a real one. First one wins;
-    // 'nfcResult' closes the modal, whose willClose calls stopLecture().
+    // main.js receives 'nfcResult' and calls stopLecture().
     const modeDemoActif = (window.DEMO !== undefined)
     const simulationSeuleDemandee = (options?.simulation === true)
 
@@ -288,10 +295,10 @@ let NfcReader = class {
     console.log('1 -> stopLecture')
     let modeNfc = this.modeNfc
 
-    // simulateur DEMO : retirer le panneau s'il est encore affiché (fermeture
-    // de la popup par timer/annulation, ou scan d'une vraie carte)
-    // / DEMO simulator: remove the panel if still shown (popup closed by
-    // timer/cancel, or a real card was tapped)
+    // simulateur DEMO : retirer le panneau s'il est encore affiché (écran
+    // changé, modale fermée, ou scan d'une vraie carte)
+    // / DEMO simulator: remove the panel if still shown (screen changed,
+    // modal closed, or a real card was tapped)
     const panneauSimu = document.querySelector('#nfc-reader-simu-panel')
     if (panneauSimu) {
       panneauSimu.remove()

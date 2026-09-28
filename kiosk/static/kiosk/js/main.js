@@ -24,6 +24,9 @@
  * - dialog[data-ouvrir-au-chargement] : ouvert des son insertion
  * - [data-afficher-etat-admin="x"]    : etat de la modale admin
  * - form[data-saisie-montant]         : pave numerique + montants rapides
+ * - [data-focus-a-l-affichage]        : recoit le focus quand son bloc s'affiche
+ * - body[data-delai-inactivite]       : delai (s) avant retour a l'accueil
+ * - body[data-url-accueil]            : adresse de l'accueil (/kiosk/)
  */
 
 // Lecteur NFC unique de la page (nfc.js).
@@ -35,6 +38,47 @@ const rfid = new NfcReader();
 // / The ongoing read. One at a time, or one scan would fire two POSTs.
 let formulaireEnAttenteDeCarte = null;
 let ecouteurDeCarte = null;
+
+// Etapes ou une carte est affichee (son tag_id est dans la page). Sans geste
+// pendant le delai d'inactivite, on revient a l'accueil : sinon la personne
+// suivante rechargerait la carte de la precedente.
+// / Steps where a card is shown. Idle -> back home, or the next person would
+// top up the previous person's card.
+const ETAPES_AVEC_UNE_CARTE_AFFICHEE = ["solde", "recapitulatif", "erreur"];
+let minuteurDInactivite = null;
+
+
+/* ------------------------------------------------------------------------- */
+/* Retour a l'accueil                                                         */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Recharge l'accueil de la borne (etape 1, tout remis a zero).
+ * / Reloads the kiosk home (step 1, everything reset).
+ */
+function retournerALAccueil() {
+    window.location.href = document.body.dataset.urlAccueil || "/kiosk/";
+}
+
+/**
+ * Relance le minuteur d'inactivite si l'ecran affiche une carte ; l'arrete
+ * sinon (paiement en cours, ecran final, accueil, configuration).
+ * Appele a chaque changement d'ecran et a chaque geste.
+ * / Restarts the idle timer while a card is shown; stops it otherwise.
+ */
+function relancerLeMinuteurDInactivite() {
+    clearTimeout(minuteurDInactivite);
+    minuteurDInactivite = null;
+
+    const etapeAffichee = document.body.dataset.etape;
+    const uneCarteEstAffichee = ETAPES_AVEC_UNE_CARTE_AFFICHEE.indexOf(etapeAffichee) !== -1;
+    if (!uneCarteEstAffichee) {
+        return;
+    }
+
+    const delaiEnSecondes = parseInt(document.body.dataset.delaiInactivite || "60", 10);
+    minuteurDInactivite = setTimeout(retournerALAccueil, delaiEnSecondes * 1000);
+}
 
 
 /* ------------------------------------------------------------------------- */
@@ -98,18 +142,21 @@ function lancerLaLectureNfcPour(formulaire) {
 /* ------------------------------------------------------------------------- */
 
 /**
- * Ouvre un <dialog> et met le focus sur son premier bouton.
- * / Opens a <dialog> and focuses its first button.
+ * Ouvre un <dialog> en mode modal et met le focus sur son premier bouton.
+ * / Opens a <dialog> as modal and focuses its first button.
  *
- * show() et non showModal() : la modale reste dans la pile z-index normale,
- * donc le simulateur de cartes DEMO de nfc.js reste cliquable au-dessus.
- * / show(), not showModal(): the DEMO card simulator stays clickable on top.
+ * showModal() : le navigateur piege le focus dans la modale, rend le fond
+ * inerte (Tab ne sort plus vers « Admin » ou « Recharger ») et ferme la
+ * modale avec Echap. Le simulateur DEMO de nfc.js se pose DANS la modale
+ * ouverte pour rester cliquable.
+ * / showModal(): focus trap, inert background, Escape closes. The DEMO
+ * simulator is inserted INSIDE the open dialog to stay clickable.
  *
  * @param {HTMLDialogElement} modale
  */
 function ouvrirLaModale(modale) {
     if (!modale.open) {
-        modale.show();
+        modale.showModal();
     }
     const premierBouton = modale.querySelector("button:not([hidden]):not(:disabled)");
     if (premierBouton) {
@@ -161,9 +208,9 @@ function quandUneModaleSeFerme(evenement) {
 /* ------------------------------------------------------------------------- */
 
 /**
- * Convertit la saisie (« 12,5 ») en centimes (1250). Sert seulement a savoir
- * si Valider doit etre actif : le serveur revalide le montant.
- * / Converts the input into cents. Only used to enable Validate.
+ * Convertit la saisie (« 12 », en euros entiers) en centimes (1200). Sert
+ * seulement a savoir si Valider doit etre actif : le serveur revalide le montant.
+ * / Converts the input (whole euros) into cents. Only used to enable Validate.
  *
  * @param {string} saisie
  * @returns {number}
@@ -172,17 +219,8 @@ function saisieEnCentimes(saisie) {
     if (!saisie) {
         return 0;
     }
-    const morceaux = saisie.split(",");
-    const euros = parseInt(morceaux[0] || "0", 10) || 0;
-    let centimes = 0;
-    if (morceaux[1]) {
-        let decimales = morceaux[1];
-        if (decimales.length === 1) {
-            decimales = decimales + "0";
-        }
-        centimes = parseInt(decimales.substring(0, 2), 10) || 0;
-    }
-    return (euros * 100) + centimes;
+    const euros = parseInt(saisie, 10) || 0;
+    return euros * 100;
 }
 
 /**
@@ -198,20 +236,27 @@ function saisieEnCentimes(saisie) {
 function ecrireLaSaisie(formulaire, saisie) {
     formulaire.dataset.saisie = saisie;
 
+    // L'afficheur montre la frappe telle quelle (« 12 € »)...
+    // / The readout echoes the typing as-is...
     const texteAffiche = (saisie === "") ? "0 €" : saisie + " €";
 
     const afficheur = formulaire.querySelector("[data-amount]");
     afficheur.textContent = texteAffiche;
     afficheur.classList.toggle("is-empty", saisie === "");
 
-    const montantDuBouton = formulaire.querySelector("[data-validate-amount]");
-    montantDuBouton.textContent = texteAffiche;
-
+    // ... le bouton Valider annonce le montant qui sera paye, avec deux
+    // decimales, comme le recapitulatif (« 12,00 € »).
+    // / ... the Validate button states the amount to pay, like the summary.
     const centimes = saisieEnCentimes(saisie);
-    const champMontant = formulaire.querySelector("[data-montant-champ]");
     const euros = Math.floor(centimes / 100);
     const resteEnCentimes = centimes % 100;
-    champMontant.value = euros + "." + (resteEnCentimes < 10 ? "0" : "") + resteEnCentimes;
+    const deuxChiffresDeCentimes = (resteEnCentimes < 10 ? "0" : "") + resteEnCentimes;
+
+    const montantDuBouton = formulaire.querySelector("[data-validate-amount]");
+    montantDuBouton.textContent = (centimes === 0) ? "0 €" : euros + "," + deuxChiffresDeCentimes + " €";
+
+    const champMontant = formulaire.querySelector("[data-montant-champ]");
+    champMontant.value = euros + "." + deuxChiffresDeCentimes;
 
     const boutonValider = formulaire.querySelector("[data-validate]");
     boutonValider.disabled = (centimes === 0);
@@ -241,17 +286,21 @@ function choisirUnMontantRapide(formulaire, bouton) {
 }
 
 /**
- * Touche du pave : chiffre, virgule ou retour arriere.
- * Bornes : 5 chiffres avant la virgule, 2 apres.
- * / Keypad key: digit, comma or backspace. 5 digits before, 2 after.
+ * Touche du pave : chiffre ou retour arriere. Euros entiers, 5 chiffres au plus
+ * (99 999 €, la meme limite que le serveur).
+ * / Keypad key: digit or backspace. Whole euros, 5 digits max.
  */
 function appuyerSurUneTouche(formulaire, touche) {
     deselectionnerLesMontantsRapides(formulaire);
 
     let saisie = formulaire.dataset.saisie || "";
     if (formulaire.dataset.depuisRapide === "oui") {
+        // La premiere touche apres un montant rapide repart de zero. On l'ecrit
+        // tout de suite : meme une touche ignoree (0 en tete) doit effacer le
+        // montant rapide. / The first key after a quick amount starts from zero.
         saisie = "";
         formulaire.dataset.depuisRapide = "non";
+        ecrireLaSaisie(formulaire, "");
     }
 
     if (touche === "back") {
@@ -259,27 +308,15 @@ function appuyerSurUneTouche(formulaire, touche) {
         return;
     }
 
-    if (touche === ",") {
-        const virguleDejaTapee = saisie.indexOf(",") !== -1;
-        if (virguleDejaTapee) {
-            return;
-        }
-        ecrireLaSaisie(formulaire, (saisie === "" ? "0" : saisie) + ",");
-        return;
-    }
-
-    // Un chiffre. « 0 » seul est remplace par le chiffre suivant.
-    // / A digit. A lone "0" is replaced by the next digit.
+    // Un chiffre. « 0 » seul est remplace par le chiffre suivant, et on ne
+    // commence pas un montant par 0. / A lone "0" is replaced by the next digit.
     if (saisie === "0") {
         saisie = "";
     }
-    const aDesDecimales = saisie.indexOf(",") !== -1;
-    if (aDesDecimales) {
-        const decimales = saisie.split(",")[1] || "";
-        if (decimales.length >= 2) {
-            return;
-        }
-    } else if (saisie.length >= 5) {
+    if (saisie === "" && touche === "0") {
+        return;
+    }
+    if (saisie.length >= 5) {
         return;
     }
     ecrireLaSaisie(formulaire, saisie + touche);
@@ -298,6 +335,10 @@ function appuyerSurUneTouche(formulaire, touche) {
 function quandOnTouche(evenement) {
     const cible = evenement.target;
 
+    // Tout geste repousse le retour automatique a l'accueil.
+    // / Any gesture postpones the automatic return home.
+    relancerLeMinuteurDInactivite();
+
     const boutonBloc = cible.closest("[data-afficher-bloc]");
     if (boutonBloc) {
         const etape = boutonBloc.closest("[data-etape]");
@@ -305,6 +346,14 @@ function quandOnTouche(evenement) {
         etape.querySelectorAll("[data-bloc]").forEach(function (bloc) {
             bloc.hidden = (bloc.dataset.bloc !== nomDuBloc);
         });
+
+        // Le bouton clique vient de disparaitre : sans cela le focus tomberait
+        // sur <body>. / The clicked button vanished: move focus to the new block.
+        const blocAffiche = etape.querySelector('[data-bloc="' + nomDuBloc + '"]');
+        const cibleDuFocus = blocAffiche ? blocAffiche.querySelector("[data-focus-a-l-affichage]") : null;
+        if (cibleDuFocus) {
+            cibleDuFocus.focus();
+        }
         return;
     }
 
@@ -400,6 +449,17 @@ function preparerLEcran() {
         document.body.dataset.etape = etapeAffichee.dataset.etape;
     }
 
+    // Le minuteur de l'ecran final (etat_final.html) ne doit pas survivre a un
+    // changement d'ecran : apres « Reessayer », il rechargerait la page en plein
+    // paiement. / The final screen's timer must not survive a screen change.
+    const ecranFinalAffiche = ["succes", "refus"].indexOf(document.body.dataset.etape) !== -1;
+    if (!ecranFinalAffiche && window.minuteurEcranFinal) {
+        clearTimeout(window.minuteurEcranFinal);
+        window.minuteurEcranFinal = null;
+    }
+
+    relancerLeMinuteurDInactivite();
+
     // Les modales rendues ouvertes par le serveur (carte non enregistree).
     // / Modals the server wants open (unregistered card).
     document.querySelectorAll("dialog[data-ouvrir-au-chargement]").forEach(function (modale) {
@@ -434,6 +494,16 @@ htmx.onLoad(function () {
 });
 
 document.addEventListener("click", quandOnTouche);
+
+// Pendant une requete HTMX, l'element qui l'a lancee s'annonce occupe
+// (aria-busy) : le lecteur d'ecran sait qu'il faut attendre.
+// / During an HTMX request, the triggering element announces itself busy.
+document.addEventListener("htmx:beforeRequest", function (evenement) {
+    evenement.detail.elt.setAttribute("aria-busy", "true");
+});
+document.addEventListener("htmx:afterRequest", function (evenement) {
+    evenement.detail.elt.removeAttribute("aria-busy");
+});
 
 // L'evenement 'close' d'un <dialog> ne remonte pas : on l'ecoute en capture.
 // / A <dialog>'s 'close' event does not bubble: listen in capture phase.

@@ -18,7 +18,7 @@ echoue (pas de lecteur, broker injoignable, carte refusee...). Toujours en
         </div>
         <p class="stage__lede">{% translate "Aucun argent n'a été prélevé. Vous pouvez trouver de l'aide au bar." %}</p>
         <div class="rcard__actions">
-            <a href="/kiosk/" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
+            <a href="{% url 'kiosk-list' %}" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
                data-testid="kiosk-return-home">
                 {% translate "Retour à l'accueil" %}
             </a>

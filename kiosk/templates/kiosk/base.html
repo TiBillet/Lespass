@@ -26,7 +26,12 @@
     <script src="{% static 'js/ext/ws.js' %}"></script>
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-indicator="#spinner">
+{# data-delai-inactivite : main.js ramene la borne a l'accueil apres ce delai sans #}
+{# geste, quand une carte est affichee (valeur fixee dans kiosk/views.py). #}
+{# / main.js returns home after this idle delay while a card is shown. #}
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-indicator="#spinner"
+      data-delai-inactivite="{{ delai_inactivite_secondes|default:60 }}"
+      data-url-accueil="{% url 'kiosk-list' %}">
 
 {% block main %}
 {% endblock %}
@@ -53,7 +58,8 @@
 {# type_app picks the hardware NFC mode. #}
 <script>
     window.KIOSK = {
-        type_app: "{{ type_app }}",
+        {# escapejs : type_app vient de l'URL puis de la session. / from URL then session. #}
+        type_app: "{{ type_app|escapejs }}",
         demo: {{ demo|yesno:"true,false" }}
     };
 </script>

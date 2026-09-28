@@ -112,7 +112,14 @@ class PaymentsIntent(models.Model):
         tag_id_de_la_carte = self.card.tag_id if self.card_id else ""
         montant_pour_formulaire = f"{self.amount // 100}.{self.amount % 100:02d}"
 
+        # « L'argent n'est pas parti » ne s'ecrit que si Stripe a CONFIRME
+        # l'annulation. Sinon (erreur de suivi, delai depasse sans reponse),
+        # l'ecran reste prudent et ne propose pas de reessayer.
+        # / "No money was taken" only when Stripe CONFIRMED the cancellation.
+        statut_certain = self.status in (PaymentsIntent.SUCCEEDED, PaymentsIntent.CANCELED)
+
         return {
+            "statut_certain": statut_certain,
             "montant_ajoute_centimes": self.amount,
             "nouveau_solde_centimes": nouveau_solde_centimes,
             "tag_id": tag_id_de_la_carte,

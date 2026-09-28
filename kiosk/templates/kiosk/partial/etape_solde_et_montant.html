@@ -24,6 +24,7 @@ FLUX DU MONTANT :
 
     {# ---------------- Etape 2 : le solde ---------------- #}
     <section class="stage" data-bloc="solde">
+        <h1 class="visually-hidden">{% translate "Solde de votre carte" %}</h1>
         <div class="rcard">
             <div class="rcard__head">
                 <div class="rcard__id" data-testid="kiosk-carte-numero">
@@ -59,7 +60,9 @@ FLUX DU MONTANT :
                     <span class="step3__solde-label">{% translate "Solde actuel" %}</span>
                     <span class="step3__solde-val">{{ carte.solde_centimes|euros }} €</span>
                 </div>
-                <h1 class="rcard__q">{% translate "Combien voulez-vous ajouter ?" %}</h1>
+                {# tabindex=-1 : main.js y place le focus quand le bloc s'affiche. #}
+                {# / main.js moves focus here when the block shows. #}
+                <h1 class="rcard__q" tabindex="-1" data-focus-a-l-affichage>{% translate "Combien voulez-vous ajouter ?" %}</h1>
                 {# Le montant en cours, partage par les montants rapides ET le pave. #}
                 {# / The current amount, shared by quick amounts AND keypad. #}
                 <output class="step3__amount is-empty" data-amount aria-live="polite"
@@ -80,20 +83,26 @@ FLUX DU MONTANT :
                 <div class="step3__right">
                     <p class="rlabel" id="label-pave">{% translate "Saisissez un montant" %}</p>
                     <div class="rpad" role="group" aria-labelledby="label-pave">
-                        <button type="button" class="rpad__key" data-key="1">1</button>
-                        <button type="button" class="rpad__key" data-key="2">2</button>
-                        <button type="button" class="rpad__key" data-key="3">3</button>
-                        <button type="button" class="rpad__key" data-key="4">4</button>
-                        <button type="button" class="rpad__key" data-key="5">5</button>
-                        <button type="button" class="rpad__key" data-key="6">6</button>
-                        <button type="button" class="rpad__key" data-key="7">7</button>
-                        <button type="button" class="rpad__key" data-key="8">8</button>
-                        <button type="button" class="rpad__key" data-key="9">9</button>
-                        <button type="button" class="rpad__key rpad__key--util" data-key=","
-                                aria-label="{% translate 'Virgule' %}">,</button>
-                        <button type="button" class="rpad__key" data-key="0">0</button>
+                        <button type="button" class="rpad__key" data-key="1" data-testid="kiosk-pave-1">1</button>
+                        <button type="button" class="rpad__key" data-key="2" data-testid="kiosk-pave-2">2</button>
+                        <button type="button" class="rpad__key" data-key="3" data-testid="kiosk-pave-3">3</button>
+                        <button type="button" class="rpad__key" data-key="4" data-testid="kiosk-pave-4">4</button>
+                        <button type="button" class="rpad__key" data-key="5" data-testid="kiosk-pave-5">5</button>
+                        <button type="button" class="rpad__key" data-key="6" data-testid="kiosk-pave-6">6</button>
+                        <button type="button" class="rpad__key" data-key="7" data-testid="kiosk-pave-7">7</button>
+                        <button type="button" class="rpad__key" data-key="8" data-testid="kiosk-pave-8">8</button>
+                        <button type="button" class="rpad__key" data-key="9" data-testid="kiosk-pave-9">9</button>
+                        {# Pas de virgule : la recharge se fait en euros entiers. Le 0 prend #}
+                        {# deux colonnes pour garder la grille pleine. #}
+                        {# / No comma: whole euros only. The 0 spans two columns. #}
+                        <button type="button" class="rpad__key rpad__key--large" data-key="0" data-testid="kiosk-pave-0">0</button>
                         <button type="button" class="rpad__key rpad__key--util" data-key="back"
-                                aria-label="{% translate 'Effacer un chiffre' %}">⌫</button>
+                                aria-label="{% translate 'Effacer un chiffre' %}" data-testid="kiosk-pave-retour">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M9 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                                <path d="M11 9.5l5 5M16 9.5l-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>

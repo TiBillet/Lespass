@@ -22,6 +22,7 @@ FLUX :
         <input type="hidden" name="tag_id" value="{{ carte.tag_id }}">
         <input type="hidden" name="totalAmount" value="{{ montant_pour_formulaire }}">
 
+        <h1 class="visually-hidden">{% translate "Récapitulatif avant paiement" %}</h1>
         <div class="rcard__head">
             <div class="rcard__id">{% translate "carte" %} ·· {{ carte.numero_court }}</div>
             <div class="rcard__solde-label">{% translate "Solde actuel" %}</div>
@@ -46,7 +47,7 @@ FLUX :
         <div class="rcard__actions">
             <button type="submit" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
                     data-testid="kiosk-bouton-payer">
-                {% translate "Valider" %}
+                {% blocktrans with montant=montant_centimes|euros %}Payer {{ montant }} €{% endblocktrans %}
             </button>
             <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg"
                     hx-post="{% url 'kiosk-check-request-card' %}"
@@ -54,7 +55,7 @@ FLUX :
                     hx-target="#tb-kiosque"
                     hx-swap="innerHTML"
                     data-testid="kiosk-bouton-retour-montant">
-                <span aria-hidden="true">←</span> {% translate "Retour" %}
+                <svg class="icone-ligne" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> {% translate "Retour" %}
             </button>
         </div>
     </form>

@@ -26,7 +26,7 @@
  *  9. Remerciement
  * 10. Alertes
  * 11. Chargement
- * 12. Petits ecrans (Pi 7" 1024x600)
+ * 12. Tailles d'ecran (Pi 7", telephones, 1080p)
  * 13. Mouvement reduit
  */
 
@@ -163,11 +163,14 @@ img {
 .kiosk-btn--signature {
     background: var(--grad-nuit);
     color: var(--color-on-dark);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    text-shadow: var(--shadow-text-on-brand);
 }
 
+/* Presse : on FONCE (0.92) plutot que d'eclaircir. Le blanc sur l'arret bleu */
+/* est a 3,25:1 : eclaircir le ferait passer sous 3:1.                        */
+/* / Pressed: DARKEN, not lighten, to keep white text above 3:1.              */
 .kiosk-btn--signature:active:not(:disabled) {
-    filter: brightness(1.08);
+    filter: brightness(0.92);
 }
 
 .kiosk-btn--outline {
@@ -307,6 +310,7 @@ form.htmx-request .kiosk-btn[type="submit"] {
     line-height: 1.1;
     letter-spacing: -0.01em;
     overflow-wrap: anywhere;
+    text-wrap: balance;
 }
 
 .kiosk__lede {
@@ -384,7 +388,9 @@ form.htmx-request .kiosk-btn[type="submit"] {
     color: var(--color-text-muted);
 }
 
-.kiosk-module.is-coming .kiosk-module__title {
+.kiosk-module.is-coming .kiosk-module__title,
+.kiosk-module.is-coming .kiosk-module__label,
+.kiosk-module.is-coming .kiosk-module__coming {
     color: var(--color-text-muted);
 }
 
@@ -421,8 +427,25 @@ form.htmx-request .kiosk-btn[type="submit"] {
     height: 28px;
     border-radius: 50%;
     background: var(--color-surface);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-knob);
     transition: transform var(--dur-switch) var(--ease-out);
+}
+
+/* Eteint mais activable : un contour fonce, sinon le rail (1,35:1 sur la     */
+/* carte blanche) se lit a peine. / Off but enabled: a dark outline.          */
+.kiosk-switch[aria-checked="false"]:not(:disabled) {
+    box-shadow: inset 0 0 0 1.5px var(--color-text-muted);
+}
+
+.kiosk-switch:active:not(:disabled)::before {
+    width: 32px;
+}
+
+/* Pendant l'enregistrement (hx-post), l'interrupteur s'annonce occupe. */
+/* / While saving, the switch announces itself busy.                    */
+.kiosk-switch[aria-busy="true"] {
+    opacity: 0.6;
+    pointer-events: none;
 }
 
 .kiosk-switch[aria-checked="true"] {
@@ -568,14 +591,27 @@ form.htmx-request .kiosk-btn[type="submit"] {
     border: none;
 }
 
-.kiosk-page__admin svg {
+.kiosk-page__admin svg,
+.icone-ligne {
     flex-shrink: 0;
+}
+
+.kiosk-page__admin:active {
+    background: var(--color-text-muted);
 }
 
 /* « Recommencer » n'a pas de sens la ou le parcours commence (main.js pose   */
 /* data-etape sur <body>). / "Start over" is pointless where the flow starts. */
 body[data-etape="poser-carte"] .kiosk-page__home,
 body[data-etape="pause"] .kiosk-page__home {
+    visibility: hidden;
+}
+
+/* Pendant le paiement au TPE, on ne quitte pas l'ecran : le lecteur resterait */
+/* arme sans suivi. Seul le bouton « Annuler » de l'ecran permet d'en sortir.  */
+/* / During payment, leaving would keep the reader armed: only "Cancel" exits. */
+body[data-etape="paiement"] .kiosk-page__home,
+body[data-etape="paiement"] .kiosk-page__admin {
     visibility: hidden;
 }
 
@@ -614,6 +650,7 @@ body[data-etape="pause"] .kiosk-page__home {
     line-height: 1.15;
     letter-spacing: -0.01em;
     overflow-wrap: anywhere;
+    text-wrap: balance;
 }
 
 .stage__title .break {
@@ -625,6 +662,17 @@ body[data-etape="pause"] .kiosk-page__home {
     font-size: 22px;
     line-height: 1.5;
     color: var(--color-text-muted);
+}
+
+/* Ecran de paiement : six elements empiles (titre, deux phrases, picto,    */
+/* spinner, Annuler). Un espacement plus serre pour tenir en 1280x800.       */
+/* / Payment screen: six stacked items, tighter gap to fit 1280x800.         */
+.stage[data-etape="paiement"] {
+    gap: var(--space-5);
+}
+
+.stage[data-etape="paiement"] .stage__lede + .stage__lede {
+    margin-top: calc(-1 * var(--space-3));
 }
 
 /* Cercle pointille qui respire : « posez la carte ici ». */
@@ -695,7 +743,9 @@ body[data-etape="pause"] .kiosk-page__home {
     font-size: 60px;
     line-height: 1;
     font-variant-numeric: tabular-nums;
-    background: var(--grad-chaud);
+    /* Version TEXTE du degrade (contraste >= 4,8:1 sur tout le trace). */
+    /* / TEXT version of the gradient (>= 4.8:1 everywhere).            */
+    background: var(--grad-chaud-texte);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -872,9 +922,12 @@ body[data-etape="pause"] .kiosk-page__home {
     background: var(--color-bg);
 }
 
+/* Choisi : meme epaisseur de bordure (le libelle ne bouge pas), liseré et   */
+/* fond aux couleurs du lieu. / Selected: same border width, place colours.   */
 .rquick__btn[aria-pressed="true"] {
-    border: 2px solid var(--place);
-    background: var(--color-surface);
+    border-color: var(--place);
+    box-shadow: inset 0 0 0 1px var(--place);
+    background: var(--place-tint);
 }
 
 /* Pave numerique : 4 rangees qui s'equilibrent avec les montants rapides. */
@@ -895,6 +948,12 @@ body[data-etape="pause"] .kiosk-page__home {
 
 .rpad__key--util {
     color: var(--color-text-muted);
+}
+
+/* Le 0 occupe la place de l'ancienne virgule : deux colonnes. */
+/* / The 0 takes the former comma's slot: two columns.         */
+.rpad__key--large {
+    grid-column: span 2;
 }
 
 .rquick__btn:active,
@@ -971,7 +1030,7 @@ body[data-etape="pause"] .kiosk-page__home {
 
 .rrecap__row--total .rrecap__val {
     font-size: 30px;
-    background: var(--grad-chaud);
+    background: var(--grad-chaud-texte);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -981,11 +1040,9 @@ body[data-etape="pause"] .kiosk-page__home {
 /* 8. Modales                                                                */
 /* ========================================================================= */
 
-/* <dialog> ouvert avec show() (pas showModal) : il reste dans la pile        */
-/* z-index normale, donc le simulateur de cartes DEMO (nfc.js, z-index 2000)  */
-/* passe au-dessus et reste cliquable. Le voile est le dialog lui-meme.       */
-/* / <dialog> opened with show() (not showModal): it stays in the normal     */
-/* z-index stack, so the DEMO card simulator (z-index 2000) stays on top.    */
+/* <dialog> ouvert avec showModal() (main.js) : focus piege, fond inerte,    */
+/* Echap ferme. Le simulateur DEMO de nfc.js se pose DANS la modale ouverte. */
+/* / <dialog> opened with showModal(): focus trap, inert background.         */
 .kiosk-modal {
     position: fixed;
     inset: 0;
@@ -1005,6 +1062,12 @@ body[data-etape="pause"] .kiosk-page__home {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Le voile est le <dialog> lui-meme : le fond propre au navigateur s'efface. */
+/* / The veil is the <dialog> itself: hide the browser's own backdrop.        */
+.kiosk-modal::backdrop {
+    background: transparent;
 }
 
 .kiosk-modal__card {
@@ -1132,7 +1195,7 @@ body[data-etape="pause"] .kiosk-page__home {
     padding: var(--space-3) var(--space-5);
     border-radius: var(--radius-m);
     background: var(--color-primary-soft);
-    color: var(--color-primary-text);
+    color: var(--color-danger-text);
     font-size: 18px;
     font-weight: 700;
     line-height: 1.4;
@@ -1193,22 +1256,33 @@ body[data-etape="pause"] .kiosk-page__home {
 }
 
 /* ========================================================================= */
-/* 12. Petits ecrans (Pi 7" 1024x600, telephone)                             */
+/* 12. Tailles d'ecran : Pi 7" (1024x600), telephones, 1920x1080             */
 /* ========================================================================= */
 
-/* On garde toutes les cibles tactiles >= 44px, on serre les marges. */
-/* / Touch targets stay >= 44px; margins tighten.                     */
+/* --- Ecrans bas (Pi 7" 1024x600) ------------------------------------------ */
+/* On garde toutes les cibles tactiles >= 44px et on serre les marges. Le but : */
+/* aucun ecran du parcours ne defile. / Touch targets stay >= 44px; no scroll. */
 @media (max-height: 700px) {
+    .kiosk-page__top {
+        padding: var(--space-2) var(--space-4);
+    }
+
+    .kiosk-page__home,
+    .kiosk-page__admin {
+        min-height: 48px;
+        padding: var(--space-2) var(--space-4);
+    }
+
     .kiosk-page__stages {
-        padding: var(--space-4);
+        padding: var(--space-3) var(--space-4);
     }
 
     .stage {
-        gap: var(--space-4);
+        gap: var(--space-3);
     }
 
     .stage__title {
-        font-size: 36px;
+        font-size: 34px;
     }
 
     .stage__lede {
@@ -1216,13 +1290,23 @@ body[data-etape="pause"] .kiosk-page__home {
     }
 
     .stage__nfc {
-        width: 140px;
-        height: 140px;
+        width: 120px;
+        height: 120px;
     }
 
     .rcard {
         padding: var(--space-5);
         gap: var(--space-4);
+    }
+
+    .rcard__balance {
+        font-size: 50px;
+    }
+
+    /* Etape montant : le numero de carte est deja rappele au solde. */
+    /* / Amount step: the card number was already shown.            */
+    .rcard--step3 .step3__top .rcard__id {
+        display: none;
     }
 
     .rcard--step3 {
@@ -1239,7 +1323,7 @@ body[data-etape="pause"] .kiosk-page__home {
     }
 
     .rquick__btn {
-        min-height: 52px;
+        min-height: 48px;
         font-size: 22px;
     }
 
@@ -1257,21 +1341,92 @@ body[data-etape="pause"] .kiosk-page__home {
     .rcard--merci {
         padding: var(--space-6);
     }
+
+    /* Configuration : en-tete et intro plus courts. */
+    /* / Configuration: shorter header and intro.   */
+    .kiosk__head {
+        padding: var(--space-2) var(--space-6);
+    }
+
+    .kiosk__intro {
+        margin: var(--space-3) 0 var(--space-2);
+    }
+
+    .kiosk-module {
+        min-height: 0;
+    }
+
+    .kiosk-launch {
+        margin-top: var(--space-3);
+    }
 }
 
-/* Portrait etroit : les deux colonnes du montant s'empilent, l'en-tete passe */
-/* sur deux lignes. / Narrow portrait: amount columns stack.                   */
-@media (max-width: 720px) {
-    .step3__cols {
+/* Configuration sur ecran bas ET assez large : les 4 tuiles sur une rangee, */
+/* separees par un filet vertical, pour garder « Demarrer » a l'ecran.       */
+/* / Short but wide: 4 tiles on one row so "Start" stays on screen.          */
+@media (max-height: 700px) and (min-width: 1000px) {
+    .kiosk-rangee-modules {
+        display: grid;
+        grid-template-columns: minmax(0, 3fr) auto minmax(0, 1fr);
+        gap: var(--space-4);
+    }
+
+    .kiosk-rangee-modules .kiosk-modules {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-4);
+    }
+
+    .kiosk-rangee-modules .kiosk-caisse-block {
         grid-template-columns: minmax(0, 1fr);
     }
 
+    .kiosk-rangee-modules .kiosk-separator {
+        width: 1px;
+        height: auto;
+        margin: 0;
+    }
+}
+
+/* --- Portrait etroit (telephones 320-414px) ------------------------------ */
+/* Les colonnes s'empilent, les marges fondent, les boutons passent a la      */
+/* ligne plutot que de deborder. / Columns stack, margins shrink, buttons wrap. */
+@media (max-width: 720px) {
     .kiosk-page__top {
         flex-wrap: wrap;
+        padding: var(--space-2) var(--space-4);
+    }
+
+    .kiosk-page__stages {
+        padding: var(--space-4);
     }
 
     .stage__title {
-        font-size: 32px;
+        font-size: 30px;
+    }
+
+    .stage__lede {
+        font-size: 18px;
+    }
+
+    .rcard,
+    .rcard--step3,
+    .rcard--merci {
+        padding: var(--space-5);
+    }
+
+    .rcard__balance {
+        font-size: 44px;
+    }
+
+    .kiosk-btn,
+    .kiosk-btn--lg {
+        padding: 0 var(--space-5);
+        white-space: normal;
+        text-align: center;
+    }
+
+    .step3__cols {
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .step3__foot {
@@ -1280,6 +1435,89 @@ body[data-etape="pause"] .kiosk-page__home {
 
     .step3__clear {
         min-width: 0;
+    }
+
+    .merci__title {
+        font-size: 36px;
+    }
+
+    .kiosk-modal {
+        padding: var(--space-3);
+    }
+
+    .kiosk-modal__card {
+        padding: var(--space-5);
+    }
+
+    .kiosk__head,
+    .kiosk__main,
+    .kiosk__foot {
+        padding-left: var(--space-4);
+        padding-right: var(--space-4);
+    }
+
+    .kiosk__foot {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* Les titres longs coupent dans les mots plutot que de deborder. */
+/* / Long titles break inside words rather than overflow.         */
+.merci__title,
+.rcard__q,
+.kiosk-modal__title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* --- Grand ecran (1920x1080) : on monte l'echelle ------------------------ */
+/* / Large screen: scale up.                                                 */
+@media (min-width: 1600px) and (min-height: 1000px) {
+    .kiosk-page__place {
+        font-size: 18px;
+    }
+
+    .kiosk-page__place .kiosk__mark {
+        width: 44px;
+        height: 44px;
+        font-size: 20px;
+    }
+
+    .rcard {
+        max-width: 620px;
+    }
+
+    .rcard--step3 {
+        max-width: 1080px;
+    }
+
+    .step3__amount {
+        font-size: 64px;
+    }
+
+    .rquick__btn {
+        min-height: 96px;
+        font-size: 32px;
+    }
+
+    .rpad__key {
+        min-height: 72px;
+        font-size: 30px;
+    }
+
+    .step3__clear,
+    .step3__validate {
+        min-height: 76px;
+        font-size: 26px;
+    }
+
+    .stage__title {
+        font-size: 60px;
+    }
+
+    .stage__lede {
+        font-size: 26px;
     }
 }
 

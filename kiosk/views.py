@@ -26,11 +26,13 @@ Rebranchings:
 """
 
 import logging
+import time
 
 from django.conf import settings
 from django.db import connection
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
 # Levee par Celery quand le broker (Redis) est injoignable.
 # / Raised by Celery when the broker (Redis) is unreachable.
 from kombu.exceptions import OperationalError
@@ -118,8 +120,17 @@ def utilisateur_peut_acceder_au_paiement(payment_intent_db, user):
 
 
 # Cle de session posee quand une carte primaire a ouvert la configuration.
-# / Session key set when a primary card has unlocked the configuration.
+# On y range l'HEURE d'ouverture, pas un simple True : la configuration se
+# referme seule apres DUREE_OUVERTURE_CONFIGURATION_SECONDES.
+# / Session key set when a primary card unlocks the configuration. It stores
+# the opening TIME, so the configuration closes by itself.
 CLE_SESSION_ADMIN_BORNE = "kiosk_admin"
+DUREE_OUVERTURE_CONFIGURATION_SECONDES = 10 * 60
+
+# Sans geste pendant ce delai, une borne qui affiche une carte revient a
+# l'accueil (main.js). Sinon la personne suivante rechargerait la carte de la
+# precedente. / Idle delay before going back home while a card is shown.
+DELAI_INACTIVITE_SECONDES = 60
 
 
 def contexte_du_lieu(request):
@@ -164,6 +175,7 @@ def contexte_du_lieu(request):
         "adresse_du_logo": adresse_du_logo,
         "initiale_du_lieu": initiale_du_lieu,
         "terminal": getattr(request.user, "terminal", None),
+        "delai_inactivite_secondes": DELAI_INACTIVITE_SECONDES,
         "test": settings.TEST,
         "demo": settings.DEMO,
         # Toutes les cartes du simulateur NFC (base.html/nfc.js les attendent toutes).
@@ -182,26 +194,69 @@ def premier_message_d_erreur(erreurs_du_serializer):
     """
     Renvoie le premier message d'erreur d'un serializer DRF, en texte.
     / Returns the first error message of a DRF serializer, as text.
+
+    LOCALISATION : kiosk/views.py
     """
     premiere_liste_erreurs = next(iter(erreurs_du_serializer.values()))
     return premiere_liste_erreurs[0]
 
 
+def la_recharge_est_active(request):
+    """
+    La borne propose-t-elle la recharge en ce moment ?
+    / Does the kiosk currently offer the refill?
+
+    LOCALISATION : kiosk/views.py
+
+    Verifie cote SERVEUR, au debut de chaque etape du parcours : un ecran
+    reste ouvert, ou un POST rejoue, ne doit pas permettre de payer sur une
+    borne mise en pause.
+    Sans borne appairee (admin en DEMO), la recharge est consideree active.
+    / Checked SERVER-side at each step: a stale screen or replayed POST must
+    not allow paying on a paused kiosk. No paired kiosk: refill counts as on.
+    """
+    terminal = getattr(request.user, "terminal", None)
+    reglages = obtenir_reglages_de_la_borne(terminal)
+    if reglages is None:
+        return True
+    return reglages.recharge_active
+
+
 def la_configuration_est_ouverte(request):
     """
-    Une carte primaire a-t-elle ouvert la configuration sur cette session ?
-    / Has a primary card unlocked the configuration in this session?
+    Une carte primaire a-t-elle ouvert la configuration, il y a moins de
+    DUREE_OUVERTURE_CONFIGURATION_SECONDES ?
+    / Has a primary card unlocked the configuration recently enough?
+
+    LOCALISATION : kiosk/views.py
     """
-    return request.session.get(CLE_SESSION_ADMIN_BORNE) is True
+    heure_d_ouverture = request.session.get(CLE_SESSION_ADMIN_BORNE)
+
+    # Seul un horodatage est accepte (les anciennes sessions portaient True).
+    # / Only a timestamp is accepted (old sessions stored True).
+    heure_d_ouverture_valide = isinstance(heure_d_ouverture, (int, float)) and not isinstance(
+        heure_d_ouverture, bool
+    )
+    if not heure_d_ouverture_valide:
+        return False
+
+    secondes_ecoulees = time.time() - heure_d_ouverture
+    if secondes_ecoulees > DUREE_OUVERTURE_CONFIGURATION_SECONDES:
+        request.session.pop(CLE_SESSION_ADMIN_BORNE, None)
+        return False
+    return True
 
 
-def rendre_les_modules(request, terminal, message_erreur=None):
+def contexte_des_modules(terminal):
     """
-    Rend la grille des modules de l'ecran de configuration.
-    / Renders the module grid of the configuration screen.
+    L'etat des modules de la borne : une seule source de verite pour la page
+    de configuration ET la grille rendue apres chaque interrupteur.
+    / Module state: single source of truth for the page and the grid.
+
+    LOCALISATION : kiosk/views.py
 
     Le nombre de services actifs et la phrase sous « Demarrer » sont calcules
-    ICI, pas en JavaScript. / Active count and launch note are computed HERE.
+    ICI, pas en JavaScript. / Active count computed HERE, not in JavaScript.
     """
     reglages = obtenir_reglages_de_la_borne(terminal)
     # Sans borne appairee (admin en DEMO), la recharge est consideree active,
@@ -212,13 +267,23 @@ def rendre_les_modules(request, terminal, message_erreur=None):
     if recharge_active:
         nombre_de_services_actifs += 1
 
-    context = {
+    return {
         "terminal": terminal,
         "reglages": reglages,
         "recharge_active": recharge_active,
         "nombre_de_services_actifs": nombre_de_services_actifs,
-        "error_message": message_erreur,
     }
+
+
+def rendre_les_modules(request, terminal, message_erreur=None):
+    """
+    Rend la grille des modules de l'ecran de configuration.
+    / Renders the module grid of the configuration screen.
+
+    LOCALISATION : kiosk/views.py
+    """
+    context = contexte_des_modules(terminal)
+    context["error_message"] = message_erreur
     return render(request, "kiosk/partial/modules_borne.html", context)
 
 
@@ -244,13 +309,11 @@ class KioskViewSet(viewsets.ViewSet):
         GET /kiosk/ — ecran 1 : posez votre carte. Si la recharge est coupee,
         la borne affiche « en pause ».
         / GET /kiosk/ — screen 1: tap your card. If refill is off, "paused".
+
+        LOCALISATION : kiosk/views.py
         """
         context = contexte_du_lieu(request)
-
-        # Admin en DEMO sans borne appairee : pas de reglages, recharge active.
-        # / DEMO admin with no paired kiosk: no settings, refill on.
-        reglages = obtenir_reglages_de_la_borne(context["terminal"])
-        context["recharge_active"] = reglages.recharge_active if reglages else True
+        context["recharge_active"] = la_recharge_est_active(request)
 
         return render(request, "kiosk/recharge.html", context)
 
@@ -262,7 +325,14 @@ class KioskViewSet(viewsets.ViewSet):
         Reponse HTML (partial) en 200 meme en erreur : HTMX ne swap pas les 4xx.
         / POST /kiosk/check_request_card/ — reads the tapped card (remote Fedow)
         and shows its balance, then the amount choice. Always 200 HTML.
+
+        LOCALISATION : kiosk/views.py
         """
+        # Borne en pause : on n'avance pas dans le parcours (garde serveur).
+        # / Paused kiosk: the flow does not move on (server guard).
+        if not la_recharge_est_active(request):
+            return render(request, "kiosk/partial/borne_en_pause.html")
+
         # str() : request.data peut venir d'un POST JSON (valeur non-string).
         # / str(): request.data can come from a JSON POST (non-string value).
         tag_id = str(request.data.get('tag_id') or '').strip().upper()
@@ -292,7 +362,12 @@ class KioskViewSet(viewsets.ViewSet):
         nouveau solde. Le calcul est fait ICI, pas dans le navigateur.
         / POST /kiosk/recapitulatif/ — screen 4: added amount and new balance,
         computed HERE, not in the browser.
+
+        LOCALISATION : kiosk/views.py
         """
+        if not la_recharge_est_active(request):
+            return render(request, "kiosk/partial/borne_en_pause.html")
+
         validateur = RecapitulatifSerializer(data=request.data)
         if not validateur.is_valid():
             logger.error(f"recapitulatif : {validateur.errors}")
@@ -320,7 +395,14 @@ class KioskViewSet(viewsets.ViewSet):
         et le suivi Celery/WebSocket du paiement.
         / POST /kiosk/refill_with_wisepos/ — starts the refill on the Stripe
         terminal and the Celery/WebSocket payment tracking.
+
+        LOCALISATION : kiosk/views.py
         """
+        # Garde serveur : aussi valable pour le bouton « Reessayer » de l'ecran
+        # de refus, qui rejoue ce POST. / Server guard, also for the retry button.
+        if not la_recharge_est_active(request):
+            return render(request, "kiosk/partial/borne_en_pause.html")
+
         user = request.user
 
         # Garde : un TermUser Kiosque sans Terminal appaire ne doit pas faire un 500.
@@ -406,14 +488,14 @@ class KioskViewSet(viewsets.ViewSet):
             payment_intent = payment_intent.send_to_terminal(terminal)
         except Exception as e:
             logger.error(f"refill_with_wisepos : send_to_terminal a echoue : {e}")
-            # Partial (pas la page complete) : la reponse est swappee par HTMX
-            # dans #tb-kiosque (innerHTML). / Partial (not the full page): the
-            # response is swapped by HTMX into #tb-kiosque (innerHTML).
+            # Le texte brut de l'erreur (Stripe, en anglais, avec des identifiants)
+            # reste dans le journal. Le public lit un message simple et traduit.
+            # / The raw error stays in the log; the public reads a plain message.
             context = {
                 "card": carte,
                 "terminal": terminal,
                 "user": user,
-                "error_message": f"{e}",
+                "error_message": _("Le terminal de paiement n'a pas répondu. Merci de réessayer ou de demander de l'aide au bar."),
             }
             return render(request, "kiosk/partial/etape_erreur.html", context)
 
@@ -471,6 +553,8 @@ class KioskViewSet(viewsets.ViewSet):
         """
         GET /kiosk/{pk}/status/ — filet de secours du websocket.
         / GET /kiosk/{pk}/status/ — websocket safety net.
+
+        LOCALISATION : kiosk/views.py
 
         Le template d'attente sonde cette route toutes les 10 secondes. Elle ne
         renvoie quelque chose QUE si le paiement est termine : l'ecran final
@@ -535,6 +619,8 @@ class KioskViewSet(viewsets.ViewSet):
         paiement Stripe correspondant.
         / GET /kiosk/{pk}/cancel/ — cancels the ongoing reader action and the
         matching Stripe payment.
+
+        LOCALISATION : kiosk/views.py
         """
         payment_intent_db = get_object_or_404(PaymentsIntent, pk=pk)
 
@@ -559,7 +645,7 @@ class KioskViewSet(viewsets.ViewSet):
             return HttpResponse(status=205)
         except Exception as e:
             logger.error(f"cancel : echec inattendu pour {pk} : {e}")
-            return HttpResponseClientRedirect('/kiosk/')
+            return HttpResponseClientRedirect(reverse("kiosk-list"))
 
     # ------------------------------------------------------------------------
     # Configuration de la borne (equipe du lieu, carte primaire)
@@ -577,6 +663,8 @@ class KioskViewSet(viewsets.ViewSet):
         2. Si c'est une carte primaire (laboutik.CartePrimaire), on ouvre la
            configuration pour cette session et on redirige (HX-Redirect).
         3. Sinon on renvoie l'etat « erreur » de la modale.
+
+        LOCALISATION : kiosk/views.py
         """
         tag_id = str(request.data.get('tag_id') or '').strip().upper()
 
@@ -594,8 +682,10 @@ class KioskViewSet(viewsets.ViewSet):
             logger.info(f"acces_admin : refus pour la carte {tag_id}")
             return render(request, "kiosk/partial/modale_admin_etat.html", {"etat": "erreur"})
 
-        request.session[CLE_SESSION_ADMIN_BORNE] = True
-        return HttpResponseClientRedirect("/kiosk/configuration/")
+        # On range l'heure d'ouverture : la configuration expire seule.
+        # / Store the opening time: the configuration expires by itself.
+        request.session[CLE_SESSION_ADMIN_BORNE] = time.time()
+        return HttpResponseClientRedirect(reverse("kiosk-configuration"))
 
     @action(detail=False, methods=['GET'])
     def configuration(self, request, *args, **kwargs):
@@ -604,17 +694,16 @@ class KioskViewSet(viewsets.ViewSet):
         Refusee tant qu'une carte primaire n'a pas ete posee (acces_admin).
         / GET /kiosk/configuration/ — which services the kiosk offers.
         Refused until a primary card has been tapped.
+
+        LOCALISATION : kiosk/views.py
         """
         if not la_configuration_est_ouverte(request):
-            return HttpResponseRedirect("/kiosk/")
+            return HttpResponseRedirect(reverse("kiosk-list"))
 
         context = contexte_du_lieu(request)
-        reglages = obtenir_reglages_de_la_borne(context["terminal"])
-        # Sans borne appairee (admin en DEMO), la recharge est consideree active,
-        # comme sur l'ecran public (list). / No paired kiosk: refill counts as on.
-        recharge_active = reglages.recharge_active if reglages else True
-        context["recharge_active"] = recharge_active
-        context["nombre_de_services_actifs"] = 1 if recharge_active else 0
+        # Meme calcul que la grille rendue apres chaque interrupteur.
+        # / Same computation as the grid rendered after each switch.
+        context.update(contexte_des_modules(context["terminal"]))
         return render(request, "kiosk/configuration.html", context)
 
     @action(detail=False, methods=['POST'])
@@ -623,9 +712,15 @@ class KioskViewSet(viewsets.ViewSet):
         POST /kiosk/basculer_module/ — allume ou coupe la recharge.
         Renvoie la grille des modules, recalculee cote serveur.
         / POST /kiosk/basculer_module/ — turns the refill on or off.
+
+        LOCALISATION : kiosk/views.py
+
+        Le formulaire envoie l'etat VOULU (« activer » : true/false), pas un
+        « inverse ». Un double clic ou un POST rejoue ne change donc pas le
+        resultat. / The form sends the WANTED state, so a replay is harmless.
         """
         if not la_configuration_est_ouverte(request):
-            return HttpResponseClientRedirect("/kiosk/")
+            return HttpResponseClientRedirect(reverse("kiosk-list"))
 
         terminal = getattr(request.user, "terminal", None)
         reglages = obtenir_reglages_de_la_borne(terminal)
@@ -638,8 +733,9 @@ class KioskViewSet(viewsets.ViewSet):
         # Seul module existant aujourd'hui : la recharge.
         # / Only module today: the refill.
         module_demande = request.data.get("module")
+        etat_voulu = str(request.data.get("activer") or "").lower() == "true"
         if module_demande == "recharge":
-            reglages.recharge_active = not reglages.recharge_active
+            reglages.recharge_active = etat_voulu
             reglages.save(update_fields=["recharge_active"])
 
         return rendre_les_modules(request, terminal)
@@ -649,9 +745,11 @@ class KioskViewSet(viewsets.ViewSet):
         """
         POST /kiosk/demarrer/ — ferme la configuration et remet la borne au public.
         / POST /kiosk/demarrer/ — closes the configuration, back to the public.
+
+        LOCALISATION : kiosk/views.py
         """
         if not la_configuration_est_ouverte(request):
-            return HttpResponseClientRedirect("/kiosk/")
+            return HttpResponseClientRedirect(reverse("kiosk-list"))
 
         terminal = getattr(request.user, "terminal", None)
         reglages = obtenir_reglages_de_la_borne(terminal)
@@ -663,4 +761,4 @@ class KioskViewSet(viewsets.ViewSet):
             )
 
         request.session.pop(CLE_SESSION_ADMIN_BORNE, None)
-        return HttpResponseClientRedirect("/kiosk/")
+        return HttpResponseClientRedirect(reverse("kiosk-list"))

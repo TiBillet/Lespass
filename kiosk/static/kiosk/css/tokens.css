@@ -75,6 +75,7 @@
     --color-success-text: var(--chouchou-text);
     --color-primary-soft: #fce4eb;
     --color-primary-text: var(--letchi-text);
+    --color-danger-text: #b3244b;  /* 5,3:1 sur --color-primary-soft (erreurs) */
 
     /* --- Neutres -------------------------------------------------------- */
     --color-bg: #faf8f5;           /* papier : jamais de blanc pur en fond */
@@ -83,7 +84,9 @@
     --color-surface-pressed: #e9e5dd;
     --color-text: #17141a;         /* encre */
     --color-text-muted: #63515e;
-    --color-text-faint: #737373;   /* 4,6:1 sur papier (le #808080 de la maquette faisait 3,9:1) */
+    /* Gris teinte comme les autres neutres. 5,0:1 sur papier, 4,6:1 sur        */
+    /* --color-surface-tint (le #808080 de la maquette faisait 3,9:1).          */
+    --color-text-faint: #6f6a65;
     --color-on-dark: #ffffff;
     --color-border: #ece7e1;
     --color-border-strong: #ded7cd;
@@ -97,8 +100,13 @@
     --place-tint: #ebefec;
 
     /* --- Degrades (couleurs voisines uniquement) ------------------------ */
-    --grad-chaud: linear-gradient(135deg, #e93363 0%, #e9b322 100%);
-    --grad-nuit: linear-gradient(160deg, #4296cc 0%, #8b5fb0 50%, #e93363 100%);
+    /* Construits sur les jetons de marque. / Built on the brand tokens.       */
+    --grad-chaud: linear-gradient(135deg, var(--letchi) 0%, var(--zanana) 100%);
+    --grad-nuit: linear-gradient(160deg, var(--loseyan) 0%, var(--violet) 50%, var(--letchi) 100%);
+    /* Version TEXTE du degrade chaud (solde, nouveau solde). Le jaune zanana   */
+    /* tombait a 1,9:1 sur blanc : chaque arret fait ici au moins 4,8:1.        */
+    /* / TEXT version of the warm gradient: each stop >= 4.8:1 on white.        */
+    --grad-chaud-texte: linear-gradient(135deg, var(--letchi-text) 0%, #b8541a 100%);
 
     /* --- Polices -------------------------------------------------------- */
     --font-display: 'Unbounded', system-ui, sans-serif;
@@ -122,8 +130,14 @@
     --shadow-card: 0 1px 2px rgba(32, 31, 28, 0.04), 0 1px 1px rgba(32, 31, 28, 0.03);
     --shadow-panel: 0 4px 16px rgba(32, 31, 28, 0.06);
     --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.35);
+    --shadow-text-on-brand: 0 1px 2px rgba(0, 0, 0, 0.35);  /* texte blanc sur --grad-nuit */
+    --shadow-knob: 0 1px 3px rgba(0, 0, 0, 0.2);           /* pastille de l'interrupteur */
 
     /* --- Cibles tactiles ------------------------------------------------ */
+    /* Exception assumee : les touches du pave numerique descendent a 50px    */
+    /* (44px sur le Pi 7") pour que les 4 rangees tiennent en 1280x800 a cote */
+    /* des montants rapides. Elles restent au-dessus du minimum WCAG (44px).  */
+    /* / Accepted exception: keypad keys go down to 50px (44px on Pi 7").     */
     --touch-min: 56px;
 
     /* --- Mouvement ------------------------------------------------------ */

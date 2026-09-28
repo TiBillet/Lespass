@@ -14,6 +14,11 @@ visibles, mais leur interrupteur est desactive.
 / Only the refill exists. The others are "coming soon", switch disabled.
 {% endcomment %}
 
+{# Conteneur des tuiles : sur un ecran bas (Pi 7"), la Caisse passe sur la meme #}
+{# rangee pour que « Demarrer » reste visible sans defiler (kiosk.css, section 12). #}
+{# / Tile container: on short screens the cash register joins the same row. #}
+<div class="kiosk-rangee-modules">
+
 {# Trois modules pour le public. Ils peuvent cohabiter. #}
 {# / Three public modules. They can coexist. #}
 <div class="kiosk-modules">
@@ -28,7 +33,9 @@ visibles, mais leur interrupteur est desactive.
                     aria-checked="{% if recharge_active %}true{% else %}false{% endif %}"
                     aria-labelledby="module-recharge-titre"
                     hx-post="{% url 'kiosk-basculer-module' %}"
-                    hx-vals='{"module": "recharge"}'
+                    {# L'etat VOULU est envoye (pas « inverser ») : un rejeu ne change rien. #}
+                    {# / The WANTED state is sent: a replay changes nothing. #}
+                    hx-vals='{"module": "recharge", "activer": "{% if recharge_active %}false{% else %}true{% endif %}"}'
                     hx-target="#kiosk-modules"
                     hx-swap="innerHTML"
                     data-testid="kiosk-switch-recharge">
@@ -97,6 +104,8 @@ visibles, mais leur interrupteur est desactive.
         <p class="kiosk-module__coming">{% translate "Bientôt disponible" %}</p>
     </article>
 </div>
+
+</div>{# /.kiosk-rangee-modules #}
 
 <div class="kiosk-launch">
     <div role="alert" aria-live="assertive">

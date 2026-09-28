@@ -67,7 +67,7 @@ FLUX :
     <div id="cancelButton">
         <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg"
                 data-testid="kiosk-cancel-button"
-                hx-get="/kiosk/{{ payment_intent.pk }}/cancel/"
+                hx-get="{% url 'kiosk-cancel' pk=payment_intent.pk %}"
                 hx-trigger="click"
                 hx-target="#cancelButton"
                 hx-swap="outerHTML">
