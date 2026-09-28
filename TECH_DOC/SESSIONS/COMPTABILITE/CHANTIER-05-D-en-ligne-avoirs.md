@@ -150,12 +150,13 @@ Pas de vente : `BankTransferService.enregistrer_virement` (`fedow_core/services.
 
 | Producteur | Fichier | Règlement négatif |
 |---|---|---|
-| Annulation d'adhésion | `BaseBillet/views.py` `cancel` ~l.4593 | moyen choisi (D27) |
-| Avoir de réservation hors Stripe | `BaseBillet/models.py` `Reservation._creer_avoir` ~l.2971 | moyen choisi (D27) |
-| Avoir de booking | `booking/models.py` `_creer_avoir` ~l.626 (poser aussi la FK `booking`, manquante) | moyen choisi (D27) |
+| Annulation d'adhésion | `BaseBillet/views.py` `cancel` ~l.4593 | **un seul avoir, pour le dernier paiement** de l'adhésion (la période en cours), **pas** pour les renouvellements passés (D30 : change le comportement actuel, qui fait un avoir par ligne payée ~l.4595-4602). Règlement : ligne hors Stripe → moyen choisi (D27) ; ligne Stripe → comme l'avoir admin Stripe ci-dessous |
+| Avoir de réservation hors Stripe, **fait par l'admin** | `BaseBillet/models.py` `Reservation._creer_avoir` ~l.2971 | moyen choisi (D27) |
+| Annulation **par l'utilisateur** d'une réservation / d'un booking payé **hors Stripe** (`BaseBillet/views.py` ~l.1413, ~l.1434 ; `booking/views.py` ~l.839) | idem | **aucun avoir, aucun remboursement** (D31) : la réservation est annulée comme aujourd'hui, l'argent reste acquis ; si le lieu rembourse, l'admin fait un avoir. Change le comportement actuel (qui crée un avoir) |
+| Avoir de booking fait par l'admin | `booking/models.py` `_creer_avoir` ~l.626 (poser aussi la FK `booking`, manquante) | moyen choisi (D27) |
 | Remboursement Stripe (total ou partiel) | `PaiementStripe/utils.py` `partial_refund_payment` ~l.78 | Stripe, montant = **montant du refund renvoyé par Stripe**, `reference_externe` = id du refund |
 | Avoir émis dans l'admin, ligne **hors Stripe** | `Administration/admin_tenant.py` `emettre_avoir` ~l.2059-2105 | moyen choisi (D27) |
-| Avoir émis dans l'admin, ligne **payée par Stripe** (`ligne.paiement_stripe` non vide) | idem | **(défaut, à confirmer par le mainteneur)** : vrai remboursement Stripe, en appelant `partial_refund_payment` (`PaiementStripe/utils.py`) ; règlement = montant du refund renvoyé par Stripe, `reference_externe` = id du refund. Pas de champ « Remboursé par » dans ce cas. Aujourd'hui `emettre_avoir` n'appelle pas Stripe (~l.2082-2099) : c'est un **nouveau mouvement d'argent** |
+| Avoir émis dans l'admin, ligne **payée par Stripe** (`ligne.paiement_stripe` non vide) | idem | **comportement actuel gardé (D27)** : **aucun appel à Stripe**. Règlement négatif au moyen Stripe d'origine (`Paiement_stripe.moyen`), et un message prévient l'admin : « Remboursez cette somme depuis votre tableau de bord Stripe. » Pas de champ « Remboursé par » dans ce cas |
 
 Règles :
 
@@ -184,7 +185,7 @@ Règles :
   même règle qu'à l'encaissement (écart d'encaissement, D26).
 - `emettre_avoir` ne sait faire aujourd'hui qu'un avoir de **ligne entière** et refuse
   un second avoir : inchangé ici. L'avoir **sur un article** (quantité partielle) est
-  l'action nouvelle de la fiche G.
+  l'action nouvelle de la fiche H.
 
 ## 5. Tests
 
@@ -214,20 +215,20 @@ Fichiers : `tests/pytest/test_en_ligne_ecrit_la_vente.py`,
 | 16 | `test_recharge_api_v2_echec_puis_nouvel_essai_une_vente` | `ANNULEE` puis rouverte, `REGLEE` ; idempotence par `Vente.idempotency_key` |
 | 17 | `test_remboursement_stripe_partiel_avoir_montant_du_refund` | `AVOIR` liée, qty négative, règlement = refund, `reference_externe` |
 | 18 | `test_avoir_admin_rembourse_par_especes_un_seul_reglement` | moyen choisi ≠ moyen d'origine accepté |
-| 18b | `test_avoir_admin_ligne_stripe_rembourse_chez_stripe` | (défaut à confirmer) `stripe.Refund.create` mocké appelé une fois, règlement = montant du refund |
+| 18b | `test_avoir_admin_ligne_stripe_n_appelle_pas_stripe_et_previent_l_admin` | `stripe.Refund.create` **jamais** appelé ; règlement négatif au moyen Stripe d'origine ; message « Remboursez… depuis Stripe » |
 | 19 | `test_avoir_article_en_partie_en_jetons` | −300 offert, CB −200, FREE −300 ; égalités tenues |
 | 19b | `test_avoirs_partiels_successifs_offert_jamais_depasse` | offert 500 sur 3 unités, trois avoirs d'une unité → 167, 167, 166 |
 | 20 | `test_annulation_adhesion_avoir_lie` | |
 | 21 | `test_avoir_booking_pose_la_fk_booking` | |
 
 Vus rouges : tous (aucune vente) sauf 15 (comportement actuel à observer). Le 18b est
-rouge sur le code actuel (`emettre_avoir` n'appelle pas Stripe).
+rouge sur le code actuel pour le règlement et le message (pas pour l'absence d'appel Stripe, déjà vraie).
 
 Mutations : encaisser à la création du checkout (1) ; montant = Σ articles au lieu de
 `montant_encaisse` (8) ; retirer l'idempotence (3, 4) ; test « déjà `REGLEE` » déplacé
 après `ajouter_reglement` (3) ; règlement de 0 écrit (4b) ; ligne d'écart avec
 `paiement_stripe` et statut `PAID` (4c) ; prorata sans plafond « offert restant » (19b) ;
-`emettre_avoir` qui n'appelle pas Stripe (18b) ; une vente par producteur (5) ;
+`emettre_avoir` qui appelle Stripe (18b) ; une vente par producteur (5) ;
 ne pas rouvrir une vente annulée (7) ; `amount` = total de la ligne Stripe (10) ;
 encaisser avant le déclencheur Fedow (12) ; règlement de l'avoir au moyen d'origine
 forcé (18) ; part offerte non recopiée (19).
@@ -245,9 +246,9 @@ caractérisation de la fiche A′ doivent rester verts pendant cette fiche.
 | T4 | **Aucune exception ne sort du `pre_save`** de `Paiement_stripe` : `encaisser_vente_stripe` est enveloppée dans `try / except`, `logger.error` (Sentry), vente laissée `EN_ATTENTE`. Sinon le client est payé, ses billets partent, mais le paiement reste `PENDING` et Stripe rejoue tout. Une commande `manage.py encaisser_ventes_stripe_en_attente` (et l'action admin « À vérifier », fiche G) rejoue l'encaissement. | `test_erreur_d_encaissement_ne_bloque_pas_le_paiement`, `test_commande_rejoue_l_encaissement_en_attente` |
 | T5 | SEPA refusé (`async_payment_failed`, `ApiBillet/views.py` ~l.1312) : aucune transition n'est appelée → `annuler_vente(paiement.vente)` **explicite** dans cette branche. | `test_sepa_refuse_vente_annulee` |
 | T6 | D16 précisé : `EN_ATTENTE` = paiement pas encore constaté, **abandon compris** ; `ANNULEE` seulement quand Stripe l'a dit (session relue après expiration, SEPA refusé). Un panier abandonné reste `EN_ATTENTE` sans numéro : aucun effet comptable. Traiter `checkout.session.expired` = nouveau comportement, hors chantier. | `test_panier_abandonne_reste_en_attente_sans_numero` |
-| T7 | **Une vente `AVOIR` par vente d'origine**, par action (une annulation d'adhésion avec achat + 2 renouvellements → 3 ventes `AVOIR`). | `test_annulation_adhesion_deux_renouvellements_trois_ventes_avoir` |
-| T8 | La règle de remboursement Stripe (D27, décision (a) du SUIVI §5) vaut **aussi** pour l'annulation d'adhésion d'une ligne Stripe (`BaseBillet/views.py` ~l.4593), pas seulement pour `emettre_avoir`. Même règle pour les deux écrans. Tant que le mainteneur n'a pas tranché, les tests de caractérisation « n'appelle pas Stripe » (A′) restent la référence. | 2 tests A′ marqués « Peut changer en D » |
-| T9 | Annulation **par l'utilisateur** d'une réservation / d'un booking payé hors Stripe (`BaseBillet/views.py` ~l.1413, ~l.1434 ; `booking/views.py` ~l.839) : pas d'écran « Remboursé par ». Défaut (à confirmer, SUIVI §5) : moyen d'origine s'il vaut `CA` / `CC` / `CH` / `TR`, sinon `UNKNOWN` (compte d'attente 471) + alerte. | `test_annulation_par_l_utilisateur_vente_admin_especes_avoir_especes` |
-| T12 | Billet **offert** vendu dans l'admin : le code écrit `amount = 0` (`Administration/admin_tenant.py` ~l.3092-3095). D le garde (vente gratuite, pas de trace d'offert) ; passer au prix + part offerte se décide pour H (SUIVI §5). | `test_billets_vendus_dans_l_admin_offert_montant_zero` (A′) |
+| T7 | **Tranché (D30)** : l'annulation d'adhésion fait **un seul avoir, pour le dernier paiement** (la période en cours), pas pour les renouvellements passés. Le test de caractérisation `…avoirs_de_tous_les_renouvellements` (A′) est modifié **ici**. | `test_annulation_adhesion_avoir_seulement_sur_le_dernier_paiement` |
+| T8 | **Tranché (D27)** : comportement actuel gardé pour les deux écrans (avoir admin, annulation d'adhésion) : aucun appel à Stripe, l'admin est prévenu. Les 2 tests A′ « n'appelle pas Stripe » restent verts **sans modification**. | A′ |
+| T9 | **Tranché (D31)** : annulation par l'utilisateur d'un achat hors Stripe → **aucun avoir, aucun remboursement**. Le test A′ `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` est modifié **ici**. | `test_annulation_utilisateur_hors_stripe_aucun_avoir_aucune_vente` |
+| T12 | **Tranché (D32)** : billet **offert** vendu dans l'admin (`Administration/admin_tenant.py` ~l.3092-3095, aujourd'hui `amount = 0`) → écrit **comme un offert de la caisse** : `amount` = prix, part offerte = total, `source_offert = OFFRIR`, vente d'origine `ADMIN`, règlement `FREE`. Les anciens lecteurs excluent déjà `FREE` de l'argent (chantier 04). Le test A′ `…offert_montant_zero` est modifié **ici**. | `test_billet_offert_admin_part_offerte_totale` |
 | T15 | Le test « adhésion admin encaissée après le trigger Fedow » ne détecte rien (`trigger_A` n'appelle plus Fedow en HTTP) : remplacé par un test d'ordre. | `test_ajouter_paiement_vente_reglee_et_ligne_valide_en_sortie` |
 | T16 | Réservation gratuite : vente numérotée à la création, même si la réservation reste `FREERES` ou passe `CANCELED` faute de place (`signals.py` ~l.252-272). Accepté (montant 0, aucun effet comptable). | — |

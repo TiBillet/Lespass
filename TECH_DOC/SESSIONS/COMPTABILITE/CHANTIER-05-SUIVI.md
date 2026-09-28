@@ -51,7 +51,7 @@ Statuts : `à faire` · `brief écrit` · `rouge prouvé` · `vert` · `mutation
 
 | Session | Sujet | Statut | Rouge (preuve) | Vert | Mutations | CHANGELOG | Commit |
 |---|---|---|---|---|---|---|---|
-| 04-F-1 | Anti-rejeu QR (autre session) | livré, non commité (vérifier le commit avant 05-C) | | | | | |
+| 04-F-1 | Anti-rejeu QR (autre session) | commité | | | | | |
 | 05-0 | Menu des rapports | à faire | | | | | |
 | 05-A | Vente, Reglement, service, empreinte | à faire | | | | | |
 | 05-A-relu | Relecture Fable de A | à faire | | | | | |
@@ -87,14 +87,14 @@ une décision D ou un choix R, la fiche et le tronc sont corrigés dans la même
 | Date | Question | Contexte (fichier:ligne, sortie) | Réponse |
 |---|---|---|---|
 | 2026-09-28 | Valider D8 (règlement « offert » de trace) et R1-R6 | tronc §4.2, §4.4 | |
-| 2026-09-28 | Avoir émis dans l'admin sur un achat payé par Stripe : **vrai remboursement Stripe** (nouveau mouvement d'argent) ou seulement l'enregistrement « Remboursé par » ? Défaut écrit : vrai remboursement par `partial_refund_payment`, test mocké | fiche D §4 (ligne « Avoir émis dans l'admin, ligne payée par Stripe », test 18b) ; aujourd'hui `emettre_avoir` n'appelle pas Stripe (`Administration/admin_tenant.py` ~l.2082-2099) | |
-| 2026-09-28 | **T8** : la règle de la ligne précédente (remboursement Stripe automatique ou non) vaut-elle aussi pour l'**annulation d'adhésion** payée par Stripe ? Défaut écrit : même règle pour les deux écrans | annexe machine à états T8 ; `BaseBillet/views.py` ~l.4593 | |
-| 2026-09-28 | **T7** (question métier) : annuler une adhésion crée aujourd'hui un avoir pour l'achat **et tous les renouvellements** passés. Est-ce voulu ? Défaut écrit : comportement gardé, une vente `AVOIR` par vente d'origine | annexe T7 ; `BaseBillet/views.py` ~l.4595-4602 | |
-| 2026-09-28 | **T9** : annulation par l'utilisateur d'une réservation / booking payé hors Stripe (pas d'écran « Remboursé par ») : quel moyen ? Défaut écrit : moyen d'origine si espèces / CB / chèque / virement, sinon « inconnu » (compte d'attente 471) + alerte | annexe T9 ; fiche D | |
-| 2026-09-28 | **T11** : le Z automatique de 4 h doit-il, comme le bouton, annuler les commandes de table ouvertes et libérer les tables ? Défaut écrit : non (comme l'auto-clôture actuelle) | annexe T11 ; `laboutik/views.py` ~l.2727-2737 ; fiche G | |
-| 2026-09-28 | **T12** : billet offert vendu dans l'admin écrit `amount = 0` (pas de trace de l'offert). Garder, ou passer au prix + part offerte en H ? Défaut écrit : garder | annexe T12 ; `Administration/admin_tenant.py` ~l.3092 | |
-| 2026-09-28 | **T13** (bug actuel, hors chantier) : un rejeu `PAID → PAID` repasse les avoirs en `PAID`. Figé par un test A′. Corriger dans un autre chantier ? | annexe T13 ; `BaseBillet/signals.py` ~l.42 | |
-| 2026-09-28 | J de fin de service à cheval sur minuit ou sur deux mois : à quelle date / quel mois va son écriture FEC ? Défaut écrit : datée du jour de début de service ; le rapport M compte chaque vente à sa date d'encaissement ; l'écart aux bords de mois est écrit dans le rapport M ; le FEC fait foi par J. Filet de 4 h en heure locale du lieu (tâche horaire, `TiBillet/celery.py`) | fiche F §3.1 et §4, tests 15b et 25b | |
+| 2026-09-28 | Avoir émis dans l'admin sur un achat payé par Stripe : **vrai remboursement Stripe** (nouveau mouvement d'argent) ou seulement l'enregistrement « Remboursé par » ? Défaut écrit : vrai remboursement par `partial_refund_payment`, test mocké | fiche D §4 (ligne « Avoir émis dans l'admin, ligne payée par Stripe », test 18b) ; aujourd'hui `emettre_avoir` n'appelle pas Stripe (`Administration/admin_tenant.py` ~l.2082-2099) | **Tranché (D27)** : comportement actuel gardé, aucun appel Stripe, l'admin est prévenu. |
+| 2026-09-28 | **T8** : la règle de la ligne précédente (remboursement Stripe automatique ou non) vaut-elle aussi pour l'**annulation d'adhésion** payée par Stripe ? Défaut écrit : même règle pour les deux écrans | annexe machine à états T8 ; `BaseBillet/views.py` ~l.4593 | **Tranché (D27)** : même règle (pas d'appel Stripe) pour l'annulation d'adhésion. |
+| 2026-09-28 | **T7** (question métier) : annuler une adhésion crée aujourd'hui un avoir pour l'achat **et tous les renouvellements** passés. Est-ce voulu ? Défaut écrit : comportement gardé, une vente `AVOIR` par vente d'origine | annexe T7 ; `BaseBillet/views.py` ~l.4595-4602 | **Tranché (D30)** : un seul avoir, pour le dernier paiement, pas pour les renouvellements. |
+| 2026-09-28 | **T9** : annulation par l'utilisateur d'une réservation / booking payé hors Stripe (pas d'écran « Remboursé par ») : quel moyen ? Défaut écrit : moyen d'origine si espèces / CB / chèque / virement, sinon « inconnu » (compte d'attente 471) + alerte | annexe T9 ; fiche D | **Tranché (D31)** : pas de remboursement hors Stripe, donc aucun avoir. |
+| 2026-09-28 | **T11** : le Z automatique de 4 h doit-il, comme le bouton, annuler les commandes de table ouvertes et libérer les tables ? Défaut écrit : non (comme l'auto-clôture actuelle) | annexe T11 ; `laboutik/views.py` ~l.2727-2737 ; fiche G | **Tranché (D29)** : non. |
+| 2026-09-28 | **T12** : billet offert vendu dans l'admin écrit `amount = 0` (pas de trace de l'offert). Garder, ou passer au prix + part offerte en H ? Défaut écrit : garder | annexe T12 ; `Administration/admin_tenant.py` ~l.3092 | **Tranché (D32)** : billet gardé, écrit comme un offert de la caisse (origine admin). |
+| 2026-09-28 | **T13** (bug actuel, hors chantier) : un rejeu `PAID → PAID` repasse les avoirs en `PAID`. Figé par un test A′. Corriger dans un autre chantier ? | annexe T13 ; `BaseBillet/signals.py` ~l.42 | **Tranché (D33)** : bug à corriger dans un autre chantier. |
+| 2026-09-28 | J de fin de service à cheval sur minuit ou sur deux mois : à quelle date / quel mois va son écriture FEC ? Défaut écrit : datée du jour de début de service ; le rapport M compte chaque vente à sa date d'encaissement ; l'écart aux bords de mois est écrit dans le rapport M ; le FEC fait foi par J. Filet de 4 h en heure locale du lieu (tâche horaire, `TiBillet/celery.py`) | fiche F §3.1 et §4, tests 15b et 25b | Filet : **tranché (D28)** : heure de fermeture du lieu + 2 h (nouveau champ, défaut 02:00 → 4 h). Date de l'écriture FEC d'une J à cheval sur minuit : **défaut gardé** (jour de début de service), à confirmer. |
 
 ## 6. Journal
 
@@ -102,6 +102,7 @@ Une ligne par événement, la plus récente en haut. Format :
 `AAAA-MM-JJ HH:MM — session — ce qui s'est passé (preuve : commande / fichier)`.
 
 - 2026-09-28 — spec — relecture finale Opus (5 bloquants, 23 importants, 11 mineurs) appliquée.
+- 2026-09-28 — spec — décisions du mainteneur D27 (gardé), D28 (fermeture + 2 h), D29-D33 appliquées dans le tronc, D, F, G, A′.
 - 2026-09-28 — spec — audit de la machine à états (annexe, trous T1-T22 dont 3 bloquants) reporté dans A, B, C, D, G, H ; fiche A′ (caractérisation) créée ; décisions T7-T9, T11-T13 en attente (§5).
 - 2026-09-28 — spec — spec rédigée, relue Fable + Opus, corrigée ; décisions D26-D28 ; relecture finale Opus lancée.
 

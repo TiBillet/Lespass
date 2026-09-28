@@ -64,15 +64,18 @@ Le rapport X (temps réel) = ce même calcul, non stocké.
 ### 3.1 La journée (D28)
 
 - **Clôture J** = `[fin de la J précédente, moment de la clôture]` : bouton de la caisse
-  en fin de service (branché en fiche G), et **filet automatique à 4 h du matin, heure
-  locale du lieu** (`Configuration.fuseau_horaire`, `BaseBillet/models.py` ~l.544) s'il y
-  a des ventes encaissées depuis la dernière J. Une seule J à la fois (verrou du lieu,
+  en fin de service (branché en fiche G), et **filet automatique à l'heure de fermeture du
+  lieu + 2 h, heure locale** (`Configuration.fuseau_horaire`, `BaseBillet/models.py`
+  ~l.544) s'il y a des ventes encaissées depuis la dernière J. L'heure de fermeture
+  n'existe pas encore : un seul champ ajouté, `Configuration.heure_de_fermeture`
+  (`TimeField`, défaut **02:00** → Z automatique à **4 h**), réglable dans l'admin
+  (migration dans cette fiche). Une seule J à la fois (verrou du lieu,
   le même que les ventes).
 - **Planification** (`TiBillet/celery.py` ~l.108-128, à modifier dans cette fiche) :
   aujourd'hui `cron_cloture_quotidienne` tourne à 6:00 UTC pour tous les lieux
   (`CELERY_TIMEZONE` = variable d'environnement `TIME_ZONE`, `TiBillet/settings.py`
   ~l.656). Elle devient une tâche **horaire** (`crontab(minute=0)`) qui ne clôture que
-  les lieux où il est 4 h en heure locale. Les tâches H / M / A gardent leur heure ;
+  les lieux où il est « heure de fermeture + 2 h » en heure locale. Les tâches H / M / A gardent leur heure ;
   leurs bornes calendaires sont calculées en heure locale du lieu.
 - **H, M, A** : **calendaires** (semaine du lundi au dimanche, mois, année), calculées
   **directement sur les ventes** de la période. Une J de soirée à cheval sur deux mois
@@ -185,6 +188,7 @@ Fichiers : `tests/pytest/test_rapport_unique.py`, `tests/pytest/test_cloture_uni
 | 13 | `test_vente_en_attente_hors_rapport` | |
 | 14 | `test_cloture_j_fin_de_service_plage_et_perpetuel` | plage, perpétuel = précédent + CA |
 | 15 | `test_filet_4h_cree_la_j_seulement_s_il_y_a_des_ventes` | |
+| 15c | `test_filet_suit_l_heure_de_fermeture_plus_deux_heures` | fermeture 23:00 → Z à 1 h ; défaut 02:00 → Z à 4 h |
 | 15b | `test_filet_4h_heure_locale_du_lieu` | lieu en `Europe/Paris` et lieu en `America/Martinique` : la tâche horaire ne clôture que celui où il est 4 h |
 | 16 | `test_mois_calendaire_egal_ventes_du_mois` | une J à cheval sur deux mois : chaque vente dans son mois |
 | 17 | `test_cloture_hebdomadaire_calendaire_non_vide` | |

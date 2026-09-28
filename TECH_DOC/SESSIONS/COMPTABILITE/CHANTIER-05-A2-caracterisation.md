@@ -54,11 +54,10 @@ comportement**, dans la même session, avec la raison au CHANGELOG :
 
 | Test | Fiche | Pourquoi |
 |---|---|---|
-| `test_annulation_adhesion_payee_stripe_n_appelle_pas_stripe` | D | décision T8 / D27 (vrai remboursement Stripe ?) |
-| `test_avoir_admin_sur_ligne_stripe_n_appelle_pas_stripe` | D | idem |
+| `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` | D | D30 : un seul avoir, pour le dernier paiement |
+| `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` | D | D31 : plus d'avoir ni de remboursement hors Stripe |
+| `test_billets_vendus_dans_l_admin_offert_montant_zero` | D | D32 : offert écrit comme à la caisse |
 | `test_annuler_booking_hors_stripe_avoir_sans_fk_booking` | D | la FK `booking` est posée |
-| `test_cloture_annule_les_commandes_ouvertes_et_libere_les_tables` | G | seulement si le mainteneur change T11 |
-| `test_billets_vendus_dans_l_admin_offert_montant_zero` | H | seulement si le mainteneur tranche T12 ainsi |
 | `test_annuler_reservation_caisse_payee_en_cascade_avoir_sur_la_part_rattachee` | H | une ligne par article |
 
 Tableau « qui garde quoi vert » : annexe §6.3.

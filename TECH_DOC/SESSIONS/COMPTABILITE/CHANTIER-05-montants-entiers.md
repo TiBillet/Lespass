@@ -1,6 +1,6 @@
 # Chantier 05 — Montants entiers : Vente, articles, règlements (tronc commun)
 
-> **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue par Fable et Opus, corrigée, décisions D26-D28 prises le même jour
+> **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue par Fable et Opus, corrigée, décisions D26-D33 prises le même jour
 > **Branche** : `main-fedow-import`
 > **Contexte** : environnement de **dev uniquement**. Aucune donnée historique à
 > rattraper, aucune ligne existante à migrer. Le format HMAC peut être redéfini.
@@ -218,8 +218,13 @@ Le montant n'est jamais calculé : il est copié.
 | D24 | Envoi vers **l'ancien serveur LaBoutik** (`send_sale_to_laboutik`) : **gardé**, adapté au minimum (il lit le moyen dans la vente). Sa suppression est un autre chantier. |
 | D25 | Menu : les deux rapports actuels rangés sous « Ventes & comptabilité » dès la fiche 0. |
 | D26 | **Stripe encaisse un montant différent des articles** (prorata, remise, arrondi) : la vente est **encaissée quand même, au montant Stripe**. L'écart devient automatiquement un article « **Écart d'encaissement** » (TVA 0, hors chiffre d'affaires, compte 758 si reçu en plus, 658 si reçu en moins) + alerte (Sentry et badge dans l'admin). |
-| D27 | **Avoir fait dans l'admin** : l'admin choisit **« Remboursé par : espèces / CB / chèque / virement »**, pré-rempli avec le moyen d'origine. Achat payé par Stripe : remboursement Stripe automatique (montant du refund). Le recrédit d'une carte cashless depuis l'admin reste hors chantier. |
-| D28 | **La journée du Z** = depuis le Z précédent jusqu'au moment de la clôture : bouton de la caisse en fin de service, et **filet automatique à 4 h du matin** si personne ne l'a fait (comme LaBoutik V1). Semaine, mois et année restent **calendaires**, calculés directement sur les ventes. |
+| D27 | **Avoir fait dans l'admin** : achat **hors Stripe** → l'admin choisit **« Remboursé par : espèces / CB / chèque / virement »**, pré-rempli avec le moyen d'origine. Achat **payé par Stripe** → **comportement actuel gardé** : aucun appel à Stripe ; règlement négatif au moyen Stripe d'origine, et un message prévient l'admin de rembourser depuis son tableau de bord Stripe. Même règle pour l'annulation d'adhésion. |
+| D28 | **La journée du Z** = depuis le Z précédent jusqu'au moment de la clôture : bouton de la caisse en fin de service, et **Z automatique à l'heure de fermeture du lieu + 2 h** si personne ne l'a fait (nouveau champ `Configuration.heure_de_fermeture`, défaut 02:00 → Z à 4 h, heure locale du lieu). Semaine, mois et année restent **calendaires**, calculés directement sur les ventes. |
+| D29 | Le Z automatique **n'annule pas** les commandes de table ouvertes et ne libère pas les tables ; seul le bouton de clôture le fait (comme aujourd'hui). |
+| D30 | **Annulation d'adhésion** : un seul avoir, pour le **dernier paiement** (la période en cours), pas pour les renouvellements passés. |
+| D31 | **Annulation par l'utilisateur** d'un achat payé **hors Stripe** : aucun avoir, aucun remboursement (l'argent reste acquis ; si le lieu rembourse, l'admin fait un avoir). |
+| D32 | **Billet offert dans l'admin** : écrit comme un offert de la caisse (prix catalogue, part offerte totale, `OFFRIR`, vente d'origine `ADMIN`, règlement `FREE`). |
+| D33 | Bug actuel T13 (le rejeu `PAID → PAID` repasse les avoirs en `PAID`) : **corrigé dans un autre chantier**, figé par un test de caractérisation ici. |
 
 ### 4.4 Choix de rédaction (en attente de validation du mainteneur, SUIVI §5)
 
