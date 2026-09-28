@@ -26,8 +26,9 @@ ce qui a été réellement débité, comme la tireuse.
 
 **Base de dev** : les lancements de `test_08` d'avant son nettoyage ont laissé 8 wallets
 « Wallet test tirage reparti » et 16 lignes TIREUSE (dont 3 paires à l'ancienne
-convention). Purge à décider par le mainteneur. `test_08` nettoie désormais tout ce
-qu'il crée (`try/finally`).
+convention). Purgés le 2026-09-28 avec l'accord du mainteneur (garde `DEBUG and TEST`,
+une transaction, passage à blanc d'abord) : 8 wallets, 8 cartes, 16 lignes TIREUSE,
+16 transactions, 16 tokens. `test_08` nettoie désormais tout ce qu'il crée (`try/finally`).
 
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
