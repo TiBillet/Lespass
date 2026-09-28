@@ -1929,6 +1929,22 @@ class QrCodeScanPay(viewsets.ViewSet):
         tag_id = nfc_validator.tag_id
         wallet = nfc_validator.wallet
 
+        # Le validateur a lu la ligne en CREATED, mais sans rien bloquer : deux
+        # lectures de carte simultanees passent toutes les deux. On reserve la
+        # ligne (CREATED -> UNPAID, une seule requete gagne) avant de debiter.
+        # / The validator read the line as CREATED without locking it: two
+        #   simultaneous card reads both pass. Reserve it before debiting.
+        nombre_de_lignes_reservees = LigneArticle.objects.filter(
+            uuid=ligne_article.uuid,
+            status=LigneArticle.CREATED,
+            payment_method=PaymentMethod.QRCODE_MA,
+        ).update(status=LigneArticle.UNPAID)
+        if nombre_de_lignes_reservees == 0:
+            return Response(
+                {'detail': _("This payment has already been processed")},
+                status=status.HTTP_409_CONFLICT,
+            )
+
         # Attache les infos NFC et la carte sur la ligne article
         # metadata peut être déjà un dict (JSONField) ou une chaîne JSON
         if isinstance(ligne_article.metadata, dict):
@@ -1946,14 +1962,31 @@ class QrCodeScanPay(viewsets.ViewSet):
         ligne_article.save(update_fields=['metadata'])
 
         # lancement de la transaction via Fedow api
+        fedowAPI = nfc_validator.fedowAPI
         try:
-            fedowAPI = nfc_validator.fedowAPI
             transactions = fedowAPI.transaction.to_place_from_qrcode(
                 metadata=metadata,
                 amount=ligne_article.amount,
                 asset_type="EURO",
                 user=wallet.user,
             )
+        except Exception as erreur_fedow:
+            # On ne sait pas si Fedow a debite : la ligne passe en echec et n'est
+            # plus jamais payable. Le lieu verifie dans Fedow.
+            # / We do not know whether Fedow debited: the line fails for good.
+            logger.error(
+                f"Paiement NFC : debit Fedow incertain, ligne {ligne_article.uuid} en echec "
+                f"(montant {ligne_article.amount}, payeur {wallet.user.email}) : {erreur_fedow}"
+            )
+            LigneArticle.objects.filter(uuid=ligne_article.uuid).update(status=LigneArticle.FAILED)
+            return Response(
+                {'detail': _(
+                    "Le paiement n'a pas pu être confirmé. Demandez au lieu de vérifier votre portefeuille avant de réessayer."
+                )},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        try:
             assert transactions is not None
             assert type(transactions) is list
             # on supprime la ligne article pour la recréer en fonction de la ou des transactions
@@ -2030,8 +2063,15 @@ class QrCodeScanPay(viewsets.ViewSet):
                 logger.error(f"Error sending payment confirmation emails: {e_mail}")
 
         except Exception as e:
+            # Le debit est fait mais l'enregistrement de la vente a echoue :
+            # on le journalise et on repond au caissier au lieu d'une erreur 500 brute.
+            # / The debit went through but recording the sale failed: log it and
+            #   answer the cashier instead of a raw 500 error.
             logger.error(f"Error validating payment: {str(e)}")
-            raise f"Error validating payment: {str(e)}"
+            return Response(
+                {'detail': _("Error validating payment")},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         # C'est un retour vers une swal alert -> on fait pas de HTML pour une fois
         return Response({
@@ -2073,13 +2113,6 @@ class QrCodeScanPay(viewsets.ViewSet):
             amount = ligne_article.amount
             asset_type = "EURO"  # Default to EURO
 
-            # Update metadata with user email and uuid hex for Fedow
-            metadata = json.loads(ligne_article.metadata) if ligne_article.metadata else {}
-            metadata["scanner_email"] = user.email
-            metadata["ligne_article_uuid_hex"] = ligne_article_uuid_hex
-            ligne_article.metadata = json.dumps(metadata, cls=DjangoJSONEncoder)
-            ligne_article.save()
-
             # Set the payment details in the template context
             tenant = connection.tenant
             template_context['payment_location'] = tenant.name
@@ -2087,10 +2120,21 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context['asset_type'] = asset_type
             template_context['ligne_article_uuid_hex'] = ligne_article_uuid_hex
 
-            # Check if the LigneArticle is already validated
-            if ligne_article.status == LigneArticle.VALID:
+            # Seule une ligne en attente (CREATED) se paie : en cours de paiement,
+            # payee ou en echec, on s'arrete AVANT d'ecrire quoi que ce soit.
+            # / Only a pending line can be paid; stop BEFORE writing anything.
+            if ligne_article.status != LigneArticle.CREATED:
                 template_context['error_message'] = _("This payment has already been processed")
                 return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
+
+            # Update metadata with user email and uuid hex for Fedow.
+            # update_fields : on n'ecrit que les metadonnees, jamais le statut.
+            # / update_fields: only the metadata is written, never the status.
+            metadata = json.loads(ligne_article.metadata) if ligne_article.metadata else {}
+            metadata["scanner_email"] = user.email
+            metadata["ligne_article_uuid_hex"] = ligne_article_uuid_hex
+            ligne_article.metadata = json.dumps(metadata, cls=DjangoJSONEncoder)
+            ligne_article.save(update_fields=['metadata'])
 
             logger.info(f"Processed LigneArticle: {ligne_article_uuid}")
 
@@ -2172,6 +2216,23 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context['user_balance'] = user_balance  # Example balance
             return render(request, "fonctionnel/qrcode_scan_pay/insufficient_funds.html", context=template_context)
 
+        # On reserve la ligne AVANT de debiter : une seule requete passe de
+        # CREATED a UNPAID (« paiement en cours »). Fedow debite a chaque appel :
+        # un second ecran de validation ou un rejeu trouve 0 ligne a reserver
+        # et s'arrete sans appeler Fedow. Le filtre sur le moyen de paiement
+        # refuse tout uuid qui n'est pas une demande de paiement QR.
+        # / Reserve the line BEFORE debiting: only one request moves it from
+        #   CREATED to UNPAID. Fedow debits on every call: a replay finds
+        #   nothing to reserve and stops. Only QR payment requests qualify.
+        nombre_de_lignes_reservees = LigneArticle.objects.filter(
+            uuid=ligne_article.uuid,
+            status=LigneArticle.CREATED,
+            payment_method=PaymentMethod.QRCODE_MA,
+        ).update(status=LigneArticle.UNPAID)
+        if nombre_de_lignes_reservees == 0:
+            template_context['error_message'] = _("This payment has already been processed")
+            return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
+
         # lancement de la transaction via Fedow api
         try:
             transactions = fedow_api.transaction.to_place_from_qrcode(
@@ -2180,6 +2241,23 @@ class QrCodeScanPay(viewsets.ViewSet):
                 asset_type=asset_type,
                 user=user,
             )
+        except Exception as erreur_fedow:
+            # On ne sait pas si Fedow a debite (reseau, delai, refus) : la ligne
+            # passe en echec et n'est plus jamais payable. Le lieu verifie dans
+            # Fedow et genere un nouveau QR code si besoin.
+            # / We do not know whether Fedow debited: the line fails for good.
+            #   The venue checks Fedow and generates a new QR code if needed.
+            logger.error(
+                f"Paiement QR : debit Fedow incertain, ligne {ligne_article.uuid} en echec "
+                f"(montant {amount}, payeur {user.email}) : {erreur_fedow}"
+            )
+            LigneArticle.objects.filter(uuid=ligne_article.uuid).update(status=LigneArticle.FAILED)
+            template_context['error_message'] = _(
+                "Le paiement n'a pas pu être confirmé. Demandez au lieu de vérifier votre portefeuille avant de réessayer."
+            )
+            return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
+
+        try:
             assert transactions is not None
             assert type(transactions) is list
             # on supprime la ligne article pour la recréer en fonction de la ou des transactions
