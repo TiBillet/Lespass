@@ -29,14 +29,13 @@ from django_tenants.utils import schema_context
 
 
 @pytest.fixture(scope="module")
-def rf_api_key(tenant):
-    """TireuseAPIKey pour ces tests / TireuseAPIKey for these tests."""
-    with schema_context(tenant.schema_name):
-        from controlvanne.models import TireuseAPIKey
+def rf_api_key(tenant, rf_tireuse):
+    """Clé API du terminal de rf_tireuse (appairé comme par discovery).
+    Une clé doit appartenir au terminal de la tireuse visée (audit, point 1.4).
+    / API key of rf_tireuse's terminal (paired like discovery does)."""
+    from fabriques_controlvanne import cle_api_de_la_tireuse
 
-        _obj, key_string = TireuseAPIKey.objects.create_key(name="test-review-fixes")
-        yield key_string
-        TireuseAPIKey.objects.filter(name="test-review-fixes").delete()
+    return cle_api_de_la_tireuse(tenant, rf_tireuse)
 
 
 @pytest.fixture(scope="module")

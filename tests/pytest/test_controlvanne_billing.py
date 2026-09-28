@@ -23,32 +23,13 @@ from django_tenants.utils import schema_context
 
 
 @pytest.fixture(scope="session")
-def tireuse_api_key_billing(tenant):
-    """Cree une TireuseAPIKey pour les tests billing. Nettoie apres.
-    / Creates a TireuseAPIKey for billing tests. Cleans up after.
+def tireuse_api_key_billing(tenant, tireuse_billing):
+    """Clé API du terminal de tireuse_billing (appairé comme par discovery).
+    Une clé doit appartenir au terminal de la tireuse visée (audit, point 1.4).
+    / API key of tireuse_billing's terminal (paired like discovery does)."""
+    from fabriques_controlvanne import cle_api_de_la_tireuse
 
-    PIEGE : le yield sort du schema_context. Le teardown (delete)
-    s'execute en schema public → UndefinedTable. Il faut re-ouvrir
-    un schema_context pour le cleanup.
-    / TRAP: yield exits schema_context. Teardown (delete) runs in
-    public schema → UndefinedTable. Must re-open schema_context for cleanup.
-    """
-    with schema_context(tenant.schema_name):
-        from controlvanne.models import TireuseAPIKey
-
-        api_key_obj, key_string = TireuseAPIKey.objects.create_key(
-            name="test-billing-key"
-        )
-
-    yield key_string
-
-    # Cleanup dans le bon schema (pas en public)
-    # / Cleanup in the correct schema (not public)
-    with schema_context(tenant.schema_name):
-        try:
-            api_key_obj.delete()
-        except Exception:
-            pass  # Déjà supprimé ou schema indisponible
+    return cle_api_de_la_tireuse(tenant, tireuse_billing)
 
 
 @pytest.fixture(scope="session")
@@ -458,7 +439,7 @@ class TestSessionOrpheline:
                 origin=tenant,
                 name=f"Wallet orpheline {tag_id_de_la_carte}",
             )
-            carte = CarteCashless.objects.create(
+            CarteCashless.objects.create(
                 tag_id=tag_id_de_la_carte,
                 number=uuid.uuid4().hex[:8].upper(),
                 wallet_ephemere=wallet_de_la_carte,

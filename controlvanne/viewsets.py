@@ -19,11 +19,12 @@ Conformité djc : ViewSet (pas ModelViewSet), serializers DRF, pas de @csrf_exem
 import logging
 from decimal import Decimal
 
+from django.db import connection
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
 
 from controlvanne.models import (
     CarteMaintenance,
@@ -333,6 +334,91 @@ def _cloturer_sessions_orphelines(tireuse, ip="0.0.0.0"):
     return nombre_de_sessions_fermees
 
 
+def _la_cle_appartient_a_la_tireuse(request, tireuse):
+    """
+    Vérifie que la clé API de la requête est celle du terminal de CETTE tireuse.
+    / Checks that the request's API key is THIS tap's terminal key.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    Sans ce contrôle, n'importe quelle clé de tireuse du lieu pouvait agir sur
+    n'importe quelle tireuse, en envoyant un autre tireuse_uuid (audit
+    2026-09-26, point 1.4).
+    / Without it, any tap key of the venue could act on any tap.
+
+    - Admin du lieu connecté (simulateur DEMO, debug) : pas de clé, accès permis
+      (HasTireuseAccess a déjà vérifié qu'il est admin du lieu).
+    - Clé API : son compte doit être le compte du terminal de la tireuse
+      (Terminal.term_user, posé par l'appairage dans discovery/views.py).
+    / Logged-in admin: allowed. API key: its account must be the tap terminal's.
+
+    :param request: Request DRF (request.tireuse_api_key posé par HasTireuseAccess)
+    :param tireuse: TireuseBec
+    :return: bool
+    """
+    cle_de_la_requete = getattr(request, "tireuse_api_key", None)
+    if cle_de_la_requete is None:
+        return True
+
+    terminal_de_la_tireuse = tireuse.terminal
+    if terminal_de_la_tireuse is None or terminal_de_la_tireuse.term_user_id is None:
+        return False
+    return terminal_de_la_tireuse.term_user_id == cle_de_la_requete.user_id
+
+
+def _refus_cle_d_une_autre_tireuse(tireuse):
+    """
+    Réponse 403 quand la clé n'est pas celle de la tireuse visée.
+    / 403 response when the key is not the target tap's key.
+    """
+    logger.warning(
+        f"Clé API refusée : elle n'appartient pas au terminal de la tireuse "
+        f"{tireuse.nom_tireuse} ({tireuse.uuid})"
+    )
+    return Response(
+        {"authorized": False, "message": "This API key does not belong to this tap."},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+class AuthorizeTireuseThrottle(SimpleRateThrottle):
+    """
+    Limite les appels à authorize : 30 par minute et par clé API.
+    / Limits authorize calls: 30 per minute per API key.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    Pourquoi : authorize renvoie le solde d'une carte. Sans limite, une clé
+    volée permettrait d'essayer des UID de carte en masse (audit 2026-09-26,
+    point 1.6). Une vraie tireuse ne voit jamais 30 badges par minute.
+    / authorize returns a card balance: without a limit, a stolen key could
+    try card UIDs in bulk. A real tap never sees 30 badges per minute.
+
+    Compté PAR CLÉ (et pas par IP) : dans un bar, tous les Pi sortent souvent
+    par la même IP. Admin connecté (simulateur) : compté par compte. Sinon par IP.
+    Le lieu fait partie de la clé de cache (règle multi-tenant).
+    / Counted per key (not per IP: Pis often share the venue IP).
+    The venue is part of the cache key (multi-tenant rule).
+    """
+
+    scope = "controlvanne_authorize"
+    rate = "30/min"
+
+    def get_cache_key(self, request, view):
+        cle_de_la_requete = getattr(request, "tireuse_api_key", None)
+        if cle_de_la_requete is not None:
+            identifiant = f"cle-{cle_de_la_requete.prefix}"
+        elif request.user and request.user.is_authenticated:
+            identifiant = f"compte-{request.user.pk}"
+        else:
+            identifiant = f"ip-{self.get_ident(request)}"
+        identifiant_du_lieu = connection.tenant.pk
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": f"{identifiant_du_lieu}-{identifiant}",
+        }
+
+
 class TireuseViewSet(viewsets.ViewSet):
     """
     API du Raspberry Pi pour les tireuses connectées.
@@ -363,12 +449,16 @@ class TireuseViewSet(viewsets.ViewSet):
 
         # Chercher la tireuse sur ce tenant / Find the tap on this tenant
         try:
-            tireuse = TireuseBec.objects.get(uuid=tireuse_uuid)
+            tireuse = TireuseBec.objects.select_related("terminal").get(uuid=tireuse_uuid)
         except TireuseBec.DoesNotExist:
             return Response(
                 {"status": "error", "message": "Tap not found on this tenant."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # La clé doit être celle de cette tireuse / The key must be this tap's key
+        if not _la_cle_appartient_a_la_tireuse(request, tireuse):
+            return _refus_cle_d_une_autre_tireuse(tireuse)
 
         return Response(
             {
@@ -392,7 +482,15 @@ class TireuseViewSet(viewsets.ViewSet):
 
     # ─── authorize ────────────────────────────────────────────────────
 
-    @action(detail=False, methods=["post"], url_path="authorize", url_name="authorize")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="authorize",
+        url_name="authorize",
+        # Limite anti-devinette des UID de carte (voir AuthorizeTireuseThrottle)
+        # / Anti card-UID guessing limit
+        throttle_classes=[AuthorizeTireuseThrottle],
+    )
     def authorize(self, request):
         """
         POST /controlvanne/api/tireuse/authorize/
@@ -412,12 +510,18 @@ class TireuseViewSet(viewsets.ViewSet):
 
         # Chercher la tireuse / Find the tap
         try:
-            tireuse = TireuseBec.objects.get(uuid=tireuse_uuid)
+            tireuse = TireuseBec.objects.select_related("terminal").get(uuid=tireuse_uuid)
         except TireuseBec.DoesNotExist:
             return Response(
                 {"authorized": False, "message": "Tap not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # La clé doit être celle de cette tireuse (avant toute action : les
+        # sessions orphelines ne doivent pas être fermées par une autre clé)
+        # / The key must be this tap's key (before anything else)
+        if not _la_cle_appartient_a_la_tireuse(request, tireuse):
+            return _refus_cle_d_une_autre_tireuse(tireuse)
 
         # Fermer (et facturer) les sessions restées ouvertes sur cette tireuse.
         # Un nouveau badge = la carte précédente n'est plus là. Fait avant tout
@@ -652,12 +756,16 @@ class TireuseViewSet(viewsets.ViewSet):
 
         # Chercher la tireuse / Find the tap
         try:
-            tireuse = TireuseBec.objects.get(uuid=tireuse_uuid)
+            tireuse = TireuseBec.objects.select_related("terminal").get(uuid=tireuse_uuid)
         except TireuseBec.DoesNotExist:
             return Response(
                 {"status": "error", "message": "Tap not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # La clé doit être celle de cette tireuse / The key must be this tap's key
+        if not _la_cle_appartient_a_la_tireuse(request, tireuse):
+            return _refus_cle_d_une_autre_tireuse(tireuse)
 
         # Chercher la session ouverte pour cette carte sur cette tireuse
         # / Find the open session for this card on this tap

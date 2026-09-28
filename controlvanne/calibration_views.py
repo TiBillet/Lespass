@@ -25,16 +25,18 @@ Flux :
 « Nouvelle série » : lien ?nouvelle_serie=1 → le serveur redirige vers
 ?depuis=<maintenant>. C'est l'heure du serveur qui compte, pas celle du PC.
 
-Acces : staff uniquement (@staff_member_required).
-TODO : restreindre aux admins du lieu (voir
-CHANGELOG/a traiter/controlvanne-audit-securite-facturation.md, point 1.5).
+Acces : admins du lieu uniquement (_refuser_si_pas_admin_du_lieu).
+Avant, @staff_member_required laissait passer le staff de N'IMPORTE QUEL lieu :
+is_staff est un drapeau global (audit 2026-09-26, point 1.5).
+/ Access: venue admins only. is_staff used to let any venue's staff in.
 """
 
 from decimal import Decimal
 from datetime import timezone as dt_timezone, datetime
 
-from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.views import redirect_to_login
 from django.db import transaction
+from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -42,6 +44,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 from rest_framework import serializers
 
+from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from controlvanne.models import RfidSession, TireuseBec
 
 
@@ -136,10 +139,34 @@ def _formulaire_avec_erreurs(request, tireuse, depuis_str, sessions_en_attente, 
     return response
 
 
+def _refuser_si_pas_admin_du_lieu(request):
+    """
+    Contrôle d'accès des pages de calibration : admin du lieu uniquement.
+    / Calibration access check: venue admin only.
+
+    - Pas connecté → page de connexion de l'admin.
+    - Connecté mais pas admin de CE lieu → 403.
+    - Admin du lieu → None (la vue continue).
+    Écrit en fonction appelée en tête de chaque vue, et pas en décorateur,
+    pour que le contrôle se lise directement dans la vue (règle FALC).
+    / Not logged in → admin login. Not admin of THIS venue → 403.
+    A plain function called first in each view, readable in place.
+
+    :return: une réponse de refus, ou None si l'accès est permis
+    """
+    utilisateur_connecte = request.user and request.user.is_authenticated
+    if not utilisateur_connecte:
+        return redirect_to_login(
+            request.get_full_path(), login_url=reverse("staff_admin:login")
+        )
+    if not TenantAdminPermissionWithRequest(request):
+        return HttpResponseForbidden(_("Réservé aux administrateurs de ce lieu."))
+    return None
+
+
 # ── Vues ──────────────────────────────────────────────────────────────
 
 
-@staff_member_required
 def calibration_page(request, uuid):
     """
     GET /controlvanne/calibration/<uuid>/
@@ -150,6 +177,10 @@ def calibration_page(request, uuid):
     The ?depuis=<timestamp> parameter defines the start of the current series.
     ?nouvelle_serie=1 redirects to ?depuis=<server time>.
     """
+    refus = _refuser_si_pas_admin_du_lieu(request)
+    if refus:
+        return refus
+
     tireuse = get_object_or_404(TireuseBec, uuid=uuid)
 
     # Nouvelle série : l'heure de départ est celle du serveur (pas du PC)
@@ -161,14 +192,27 @@ def calibration_page(request, uuid):
         return redirect(f"{adresse_de_la_page}?depuis={heure_de_depart}")
 
     depuis_str = request.GET.get("depuis", "")
+
+    # Le débitmètre peut être partagé par plusieurs tireuses (clé étrangère) :
+    # le nouveau facteur s'appliquera à toutes. On les liste pour prévenir.
+    # / The flow meter may be shared by several taps: the new factor applies
+    # to all of them. List them to warn the admin.
+    autres_tireuses_du_debimetre = []
+    if tireuse.debimetre:
+        autres_tireuses_du_debimetre = list(
+            TireuseBec.objects.filter(debimetre=tireuse.debimetre)
+            .exclude(pk=tireuse.pk)
+            .order_by("nom_tireuse")
+        )
+
     ctx = {
         "tireuse": tireuse,
         "depuis": depuis_str,
+        "autres_tireuses_du_debimetre": autres_tireuses_du_debimetre,
     }
     return render(request, "calibration/page.html", ctx)
 
 
-@staff_member_required
 def calibration_sessions_partial(request, uuid):
     """
     GET /controlvanne/calibration/<uuid>/sessions/?depuis=<ts>
@@ -177,6 +221,10 @@ def calibration_sessions_partial(request, uuid):
     / HTMX partial called every 8s by the page.
     Returns the input form with one row per pending session.
     """
+    refus = _refuser_si_pas_admin_du_lieu(request)
+    if refus:
+        return refus
+
     tireuse = get_object_or_404(TireuseBec, uuid=uuid)
     depuis_str = request.GET.get("depuis", "")
     depuis = _parse_depuis_str(depuis_str)
@@ -190,7 +238,6 @@ def calibration_sessions_partial(request, uuid):
     return render(request, "calibration/partial_sessions.html", ctx)
 
 
-@staff_member_required
 @require_POST
 def calibration_serie(request, uuid):
     """
@@ -206,6 +253,10 @@ def calibration_serie(request, uuid):
     Calculates the average factor and applies it to the flow meter.
     Returns partial_serie_result.html (replaces #sessions-poll as outerHTML).
     """
+    refus = _refuser_si_pas_admin_du_lieu(request)
+    if refus:
+        return refus
+
     tireuse = get_object_or_404(TireuseBec, uuid=uuid)
     depuis_str = request.POST.get("depuis", "")
     depuis = _parse_depuis_str(depuis_str)

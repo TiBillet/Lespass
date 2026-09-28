@@ -296,6 +296,90 @@ class TestCalibration:
             assert versement.volume_reel_ml == Decimal("480.00")
 
 
+class TestAccesCalibration:
+    """
+    La calibration est réservée aux admins du lieu (audit, point 1.5).
+    is_staff est un drapeau global : il ne suffit plus.
+    / Calibration is for venue admins only; is_staff alone no longer works.
+    """
+
+    def test_19_visiteur_non_connecte_va_a_la_connexion(self, tireuse_calibration):
+        """Pas connecté → redirection vers la page de connexion."""
+        from django.test import Client as DjangoClient
+
+        visiteur = DjangoClient(HTTP_HOST="lespass.tibillet.localhost")
+        reponse = visiteur.get(
+            f"/controlvanne/calibration/{tireuse_calibration.tireuse.uuid}/"
+        )
+        assert reponse.status_code == 302
+
+    def test_20_staff_qui_n_est_pas_admin_du_lieu_est_refuse(self, tireuse_calibration):
+        """Un compte is_staff qui n'administre pas ce lieu → 403, lecture et écriture."""
+        from django.test import Client as DjangoClient
+
+        from AuthBillet.models import TibilletUser
+
+        email = "test-calibration-staff-autre-lieu@example.org"
+        staff_d_un_autre_lieu, _created = TibilletUser.objects.get_or_create(
+            email=email, defaults={"username": email}
+        )
+        staff_d_un_autre_lieu.is_staff = True
+        staff_d_un_autre_lieu.is_active = True
+        staff_d_un_autre_lieu.save()
+        staff_d_un_autre_lieu.client_admin.clear()
+
+        navigateur = DjangoClient(HTTP_HOST="lespass.tibillet.localhost")
+        navigateur.force_login(staff_d_un_autre_lieu)
+        uuid_tireuse = tireuse_calibration.tireuse.uuid
+        assert (
+            navigateur.get(f"/controlvanne/calibration/{uuid_tireuse}/").status_code
+            == 403
+        )
+        assert (
+            navigateur.get(
+                f"/controlvanne/calibration/{uuid_tireuse}/sessions/"
+            ).status_code
+            == 403
+        )
+        versement = tireuse_calibration.versement
+        reponse_envoi = navigateur.post(
+            f"/controlvanne/calibration/{uuid_tireuse}/serie/",
+            data={f"vol_{versement.pk}": "480", "depuis": ""},
+        )
+        assert reponse_envoi.status_code == 403
+
+    def test_21_debitmetre_partage_est_signale(
+        self, admin_client, tireuse_calibration, tenant
+    ):
+        """Si une autre tireuse utilise le même débitmètre, la page le signale."""
+        from laboutik.models import PointDeVente, Terminal
+
+        from controlvanne.models import TireuseBec
+
+        nom_autre_tireuse = "Tireuse meme debitmetre test"
+        with tenant_context(tenant):
+            TireuseBec.objects.filter(nom_tireuse=nom_autre_tireuse).delete()
+            PointDeVente.objects.filter(name=nom_autre_tireuse).delete()
+            Terminal.objects.filter(name=nom_autre_tireuse).delete()
+            autre_tireuse = TireuseBec.objects.create(
+                nom_tireuse=nom_autre_tireuse,
+                enabled=False,
+                debimetre=tireuse_calibration.debimetre,
+            )
+        try:
+            reponse = admin_client.get(
+                f"/controlvanne/calibration/{tireuse_calibration.tireuse.uuid}/"
+            )
+            contenu = reponse.content.decode()
+            assert 'data-testid="calibration-debitmetre-partage"' in contenu
+            assert nom_autre_tireuse in contenu
+        finally:
+            with tenant_context(tenant):
+                TireuseBec.objects.filter(pk=autre_tireuse.pk).delete()
+                PointDeVente.objects.filter(name=nom_autre_tireuse).delete()
+                Terminal.objects.filter(name=nom_autre_tireuse).delete()
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Formulaire des fûts / Keg form
 # ─────────────────────────────────────────────────────────────────────

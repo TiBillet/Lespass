@@ -98,6 +98,23 @@ des réponses 422 (htmx 2 : événement htmx:beforeSwap).
             <span class="badge bg-secondary fs-6">{{ tireuse.debimetre.flow_calibration_factor }}</span>
             <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹</span>
           </p>
+          {# Débitmètre partagé : le facteur changera pour toutes ces tireuses #}
+          {# / Shared flow meter: the factor will change for all these taps #}
+          {% if autres_tireuses_du_debimetre %}
+            <div class="alert alert-warning mt-2 mb-0" data-testid="calibration-debitmetre-partage">
+              <span aria-hidden="true">⚠️</span>
+              {% blocktranslate count nombre=autres_tireuses_du_debimetre|length trimmed %}
+                Ce débitmètre est aussi utilisé par une autre tireuse : le nouveau facteur s'appliquera aussi à elle.
+              {% plural %}
+                Ce débitmètre est aussi utilisé par {{ nombre }} autres tireuses : le nouveau facteur s'appliquera aussi à elles.
+              {% endblocktranslate %}
+              <ul class="mb-0 mt-1">
+                {% for autre_tireuse in autres_tireuses_du_debimetre %}
+                  <li>{{ autre_tireuse.nom_tireuse }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
         {% else %}
           <div class="alert alert-warning mb-0" role="alert">
             {% translate "Aucun débitmètre associé. Affectez-en un dans l'admin avant de calibrer." %}
