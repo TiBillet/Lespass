@@ -126,10 +126,11 @@ class TestAdminMembershipCustomFormEdit:
         # Y = 365 jours (annee) / Y = 365 days (year)
         page.select_option('select[name="prices-0-subscription_type"]', 'Y')
 
-        # Cocher "Publier" / Check "Publish"
+        # Cocher "Publier" : obligatoire, la case fait partie du formulaire produit
+        # / Check "Publish": mandatory, the checkbox is part of the product form
         publish_checkbox = page.locator('input[name="publish"]')
-        if publish_checkbox.count() > 0:
-            publish_checkbox.check()
+        expect(publish_checkbox).to_have_count(1)
+        publish_checkbox.check()
 
         # "Save and continue editing" pour rester sur la page d'edition
         # / "Save and continue editing" to stay on the edit page
@@ -149,10 +150,10 @@ class TestAdminMembershipCustomFormEdit:
         # =====================================================================
         # Ouvrir l'onglet de l'inline : ancre #form_fields (activeTab Alpine.js).
         # / Open the inline tab: #form_fields anchor (Alpine.js activeTab).
-        tab = page.locator('a[href="#form_fields"]').first
-        if page.locator('a[href="#form_fields"]').count() > 0:
-            tab.click()
-            page.wait_for_timeout(1000)
+        # Onglet obligatoire : s'il manque, le test echoue (voir test_admin_barre_de_module.py).
+        # / Mandatory tab: if missing, the test fails (see test_admin_barre_de_module.py).
+        page.locator('a[href="#form_fields"]').first.click()
+        page.wait_for_timeout(1000)
 
         # Champ 1 : Texte court (nom) — obligatoire
         # Field 1: Short text (name) — required
@@ -233,9 +234,7 @@ class TestAdminMembershipCustomFormEdit:
         membership_pk = pk_match.group(1)
 
         # Injecter le custom_form via le shell Django
-        # ATTENTION : django_shell echappe les guillemets doubles → code Python avec quotes simples UNIQUEMENT
         # / Inject custom_form via the Django shell
-        # WARNING: django_shell escapes double quotes → Python code with single quotes ONLY
         result = django_shell(
             'import json\n'
             'from BaseBillet.models import Membership\n'

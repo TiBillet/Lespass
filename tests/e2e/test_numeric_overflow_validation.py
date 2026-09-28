@@ -85,9 +85,9 @@ class TestNumericOverflowValidation:
         page.locator('input[name="firstname"]').fill("Overflow")
         page.locator('input[name="lastname"]').fill("Test")
 
-        acknowledge_input = page.locator("#acknowledge")
-        if acknowledge_input.count() > 0 and acknowledge_input.is_visible():
-            acknowledge_input.check()
+        # La case « acknowledge » n'existe que si le produit a un lien vers des mentions
+        # legales : le produit de ce test n'en a pas.
+        # / The acknowledge box only exists with a legal link: not the case here.
 
         page.locator("#membership-submit").click()
 

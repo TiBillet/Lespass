@@ -79,9 +79,9 @@ class TestMembershipValidations:
         expect(first_name_input).to_have_attribute("required", "")
         expect(last_name_input).to_have_attribute("required", "")
 
-        acknowledge_input = page.locator("#acknowledge")
-        if acknowledge_input.count() > 0 and acknowledge_input.is_visible():
-            expect(acknowledge_input).to_have_attribute("required", "")
+        # La case « acknowledge » n'existe que si le produit a un lien vers des mentions
+        # legales : le produit de ce test n'en a pas, elle n'est donc pas concernee.
+        # / The acknowledge box only exists with a legal link: not the case here.
 
         # --- Étape 4 : Email mismatch ---
         submit_button = page.locator("#membership-submit")
@@ -93,16 +93,16 @@ class TestMembershipValidations:
         ).first
         custom_amount_input = page.locator('input[name^="custom_amount_"]').first
 
+        # Le produit cree a l'etape 1 porte un prix libre et deux champs obligatoires :
+        # ils sont TOUS attendus. / The product has a free price and two required fields.
         first_name_input.fill("Test")
         last_name_input.fill("User")
-        if acknowledge_input.count() > 0 and acknowledge_input.is_visible():
-            acknowledge_input.check()
-        if custom_amount_input.is_visible():
-            custom_amount_input.fill("12")
-        if boolean_input.is_visible():
-            boolean_input.check()
-        if multi_select_input.is_visible():
-            multi_select_input.check()
+        expect(custom_amount_input).to_be_visible()
+        custom_amount_input.fill("12")
+        expect(boolean_input).to_be_visible()
+        boolean_input.check()
+        expect(multi_select_input).to_be_visible()
+        multi_select_input.check()
 
         email_input.fill(user_email)
         confirm_input.fill(f"{user_email}.bad")
@@ -138,10 +138,8 @@ class TestMembershipValidations:
         custom_amount_input.fill("12")
 
         # --- Étape 6 : Champs dynamiques requis ---
-        if boolean_input.is_visible():
-            boolean_input.uncheck()
-        if multi_select_input.is_visible():
-            multi_select_input.uncheck()
+        boolean_input.uncheck()
+        multi_select_input.uncheck()
         submit_button.click()
 
         # Les erreurs data-bl-error et data-ms-error deviennent visibles

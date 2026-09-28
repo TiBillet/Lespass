@@ -1,6 +1,7 @@
 import logging
 from datetime import timedelta
 
+from django.apps import apps
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
@@ -20,6 +21,7 @@ def _safe_rev_inner(*args, **kwargs):
 _safe_rev = _lazy(_safe_rev_inner, str)
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from solo.models import SingletonModel
 
 from BaseBillet.models import Configuration, Membership
 
@@ -1829,36 +1831,40 @@ def get_tabs(request):
         if len(pages) < 2:
             continue
 
-        # Les modeles sur lesquels la barre doit apparaitre.
-        # / The models the tab bar should show up on.
+        # Les modeles sur lesquels la barre doit apparaitre : les SINGLETONS
+        # django-solo du module, et eux seuls.
+        # / The models the tab bar shows up on: the module's django-solo
+        #   SINGLETONS, and only them.
         #
-        # CHAQUE MODELE EST CITE DEUX FOIS, et ce n'est pas une coquille.
-        # _get_tabs_list (unfold/templatetags/unfold.py) ne fait correspondre une
-        # entree ECRITE EN CHAINE que si la page est une changelist :
+        # Un singleton (ConfigurationSite, CrowdConfig, LaboutikConfiguration...)
+        # rend un formulaire A L'URL DE LISTE : sans la barre, on ne pourrait pas
+        # revenir vers les autres pages du module autrement que par le rail.
+        # / A singleton renders a form at its list URL: the bar is its only way
+        #   back to the module's other pages.
         #
-        #     if isinstance(tab_model, str):
-        #         if str(opts) == tab_model and page == "changelist":
+        # Sur les listes et les fiches ordinaires, la barre n'est PAS posee :
+        # - ses onglets ne changent pas la page, ils ramenent a la page du module,
+        #   ce qui pretait a confusion ;
+        # - sur une fiche, elle masquait les onglets des inlines (tab = True) :
+        #   Unfold ne dessine qu'une barre par page (unfold/templatetags/unfold.py,
+        #   tab_list), les inlines restaient caches sans bouton pour les ouvrir.
+        # / Not on lists and regular forms: the bar was confusing there, and on
+        #   forms it hid the inline tabs (Unfold draws a single bar per page).
         #
-        # Pour qu'une barre s'affiche sur un FORMULAIRE, il faut une entree dict
-        # portant « detail »: True. Or les singletons django-solo
-        # (ConfigurationSite, CrowdConfig, LaboutikConfiguration...) rendent un
-        # formulaire A L'URL DE LISTE : sans le dict, leur barre disparaissait et
-        # on ne pouvait plus revenir vers les autres pages du module autrement
-        # que par le rail. Le meme correctif est applique dans
-        # _onglets_hors_modules().
-        # / A string entry only matches changelists; django-solo singletons render
-        #   a form at their list URL, so they need the dict form too.
+        # Seule la forme dict « detail »: True est utilisee : _get_tabs_list
+        # (unfold/templatetags/unfold.py) ne rapproche une entree ecrite en chaine
+        # que d'une changelist, et le singleton est un FORMULAIRE.
+        # / Only the dict "detail": True form: the singleton is a FORM.
         modeles = []
         for page in pages:
-            modele = lien_vers_modele.get(str(page.get("link", "")))
-            if modele and modele not in modeles:
-                modeles.append(modele)
-
-        # On double la liste APRES coup : le dedoublonnage ci-dessus travaille sur
-        # des chaines, et melanger les deux formes dans la meme boucle le
-        # casserait. / Doubled afterwards: the de-duplication above works on
-        # strings and would break if both forms were mixed in.
-        modeles = [{"name": nom, "detail": True} for nom in modeles] + modeles
+            nom_du_modele = lien_vers_modele.get(str(page.get("link", "")))
+            if not nom_du_modele:
+                continue
+            if not issubclass(apps.get_model(nom_du_modele), SingletonModel):
+                continue
+            entree = {"name": nom_du_modele, "detail": True}
+            if entree not in modeles:
+                modeles.append(entree)
 
         if not modeles:
             continue

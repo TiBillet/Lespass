@@ -145,6 +145,27 @@ def generer_excel_cloture(cloture: ClotureCaisse) -> bytes:
             append_row([taux, e(data.get("total_ht", 0)), e(data.get("total_tva", 0)), e(data.get("total_ttc", 0))])
         append_blank()
 
+    # --- Articles offerts (hors argent, jamais dans un total) ---
+    # / Gifted items (not money, never in a total)
+    section = rapport.get("offerts", {})
+    if section.get("par_produit"):
+        append_title(str(_("Offerts (hors argent)")))
+        append_header([str(_("Article")), str(_("Quantité")), str(_("Valeur offerte")), str(_("Coût d'achat"))])
+        for offert in section["par_produit"]:
+            append_row([offert["nom"], offert["qty"], e(offert["valeur"]), e(offert["cout_achat"])])
+        append_blank()
+
+    # --- Ventes en points ou en temps (hors argent, jamais dans un total) ---
+    # Le total est dans l'unite de la monnaie (centiemes / 100, comme les euros).
+    # / Points or time sales (not money), total in the currency's own unit.
+    section = rapport.get("non_monetaire", {})
+    if section.get("par_monnaie"):
+        append_title(str(_("Non monétaire (hors argent)")))
+        append_header([str(_("Monnaie")), str(_("Quantité")), str(_("Total"))])
+        for monnaie in section["par_monnaie"]:
+            append_row([monnaie["nom"], monnaie["qty_articles"], e(monnaie["unites"])])
+        append_blank()
+
     # Auto-largeur des colonnes / Auto-width columns
     for col_idx in range(1, max_cols_used[0] + 1):
         max_length = 0

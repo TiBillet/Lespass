@@ -19,7 +19,6 @@ Un echec d'une etape anterieure peut invalider les suivantes.
 A failure in an earlier step may invalidate later ones.
 """
 
-import re
 import uuid
 
 import pytest
@@ -41,13 +40,10 @@ def _ouvrir_changelist_admin(page, url):
     page.goto(url)
     page.wait_for_load_state('networkidle')
     search_input = page.locator('input[name="q"]').first
-    try:
-        search_input.wait_for(state='visible', timeout=10_000)
-    except Exception:
-        page.wait_for_timeout(2_000)
-        page.goto(url)
-        page.wait_for_load_state('networkidle')
-        search_input.wait_for(state='visible', timeout=30_000)
+    # Pas de rechargement « au cas ou » : une page d'erreur, meme passagere, est un
+    # defaut a voir, pas a masquer. / No "just in case" reload: an error page, even
+    # a transient one, is a defect to see, not to hide.
+    search_input.wait_for(state='visible', timeout=10_000)
     return search_input
 
 
@@ -156,10 +152,11 @@ class TestMembershipDynamicFormFullCycle:
         page.fill('input[name="name"]', self._product_name)
         page.fill('input[name="short_description"]', 'Test E2E formulaire dynamique complet')
 
-        # Cocher "Publier" si present / Check "Publish" if present
+        # Cocher "Publier" : obligatoire, sinon l'adhesion n'apparait pas au public
+        # / Check "Publish": mandatory, otherwise the membership is not public
         publish_cb = page.locator('input[name="publish"]')
-        if publish_cb.count() > 0:
-            publish_cb.check()
+        expect(publish_cb).to_be_attached()
+        publish_cb.check()
 
         # --- Ajouter un tarif gratuit (requis pour sauvegarder) ---
         # / Add a free price (required to save)
@@ -195,10 +192,10 @@ class TestMembershipDynamicFormFullCycle:
         # / Add 6 dynamic fields
         # Ouvrir l'onglet de l'inline : ancre #form_fields (activeTab Alpine.js)
         # / Open the inline tab: #form_fields anchor (Alpine.js activeTab)
-        tab = page.locator('a[href="#form_fields"]').first
-        if page.locator('a[href="#form_fields"]').count() > 0:
-            tab.click()
-            page.wait_for_timeout(1000)
+        # Onglet obligatoire : s'il manque, le test echoue (voir test_admin_barre_de_module.py).
+        # / Mandatory tab: if missing, the test fails (see test_admin_barre_de_module.py).
+        page.locator('a[href="#form_fields"]').first.click()
+        page.wait_for_timeout(1000)
 
         # 1. Texte court / Short text (ST) — obligatoire
         _add_form_field(page, 'Nom complet', 'ST', required=True, help_text='Votre nom et prenom')
@@ -250,13 +247,13 @@ class TestMembershipDynamicFormFullCycle:
 
         # Trouver la carte du produit et cliquer sur "Adherer"
         # / Find the product card and click "Subscribe"
-        card = page.locator('.card').filter(has_text=self._product_name).first
-        expect(card).to_be_visible(timeout=10_000)
-
-        subscribe_button = card.locator('button').filter(
-            has_text=re.compile(r'Subscribe|Adh[eé]rer', re.IGNORECASE)
+        # data-testid du composant cotton/V2/membership_card.html.
+        # / Data-testids of the V2 membership card component.
+        card = page.locator('[data-testid^="membership-card-"]').filter(
+            has_text=self._product_name
         ).first
-        subscribe_button.click()
+        expect(card).to_be_visible(timeout=10_000)
+        card.locator('[data-testid^="membership-open-"]').click()
 
         # Attendre l'ouverture du panneau offcanvas
         # / Wait for the offcanvas panel to open
@@ -276,42 +273,46 @@ class TestMembershipDynamicFormFullCycle:
         # --- Remplir les champs dynamiques du formulaire ---
         # / Fill dynamic form fields
 
+        # Les six champs crees a l'etape 1 sont TOUS obligatoires ici : s'il en manque
+        # un (nommage `form__<slug>` casse, champ non rendu), le test echoue sur lui.
+        # / The six fields created in step 1 are ALL mandatory here.
+
         # ST — Texte court / Short text : "Nom complet"
         # Le nom du champ HTML est base sur le label, slugifie
         # / HTML field name is based on the label, slugified
         short_text_input = page.locator('input[name="form__nom-complet"]')
-        if short_text_input.count() > 0:
-            short_text_input.fill(self.FORM_ANSWERS['shortText'])
+        expect(short_text_input).to_be_visible()
+        short_text_input.fill(self.FORM_ANSWERS['shortText'])
 
         # LT — Texte long / Long text : "Presentation"
         long_text_input = page.locator('textarea[name="form__presentation"]')
-        if long_text_input.count() > 0:
-            long_text_input.fill(self.FORM_ANSWERS['longText'])
+        expect(long_text_input).to_be_visible()
+        long_text_input.fill(self.FORM_ANSWERS['longText'])
 
         # SS — Select simple / Single select : "Ville preferee"
         single_select = page.locator('select[name="form__ville-preferee"]')
-        if single_select.count() > 0:
-            single_select.select_option(self.FORM_ANSWERS['singleSelect'])
+        expect(single_select).to_be_visible()
+        single_select.select_option(self.FORM_ANSWERS['singleSelect'])
 
         # SR — Radio : "Frequence souhaitee"
         radio_input = page.locator(
             f'input[name="form__frequence-souhaitee"][value="{self.FORM_ANSWERS["radioSelect"]}"]'
         )
-        if radio_input.count() > 0:
-            radio_input.check()
+        expect(radio_input).to_be_attached()
+        radio_input.check()
 
         # MS — Multi-select (checkboxes) : "Centres d interet"
         for choice in self.FORM_ANSWERS['multiSelect']:
             checkbox = page.locator(
                 f'input[name="form__centres-d-interet"][value="{choice}"]'
             )
-            if checkbox.count() > 0:
-                checkbox.check()
+            expect(checkbox).to_be_attached()
+            checkbox.check()
 
         # BL — Booleen / Boolean : "Accepter les conditions"
         bool_input = page.locator('input[name="form__accepter-les-conditions"]')
-        if bool_input.count() > 0:
-            bool_input.check()
+        expect(bool_input).to_be_attached()
+        bool_input.check()
 
         # Soumettre le formulaire / Submit the form
         submit_button = page.locator('#membership-submit')
@@ -322,7 +323,10 @@ class TestMembershipDynamicFormFullCycle:
         # Le template free_confirmed.html retourne un message de confirmation
         # / Wait for confirmation (free price = no Stripe)
         # The free_confirmed.html template returns a confirmation message
-        success_message = page.locator('text=/confirm[eé]e|confirmed|succ[eè]s|success/i').first
+        # data-testid du gabarit commun/adhesion/free_confirmed.html : un texte comme
+        # « succès » pourrait venir de n'importe quel message de la page.
+        # / data-testid of free_confirmed.html: a word like "success" could come from anywhere.
+        success_message = page.locator('[data-testid="adhesion-gratuite-confirmee"]')
         expect(success_message).to_be_visible(timeout=15_000)
 
     # ===================================================================
@@ -330,7 +334,7 @@ class TestMembershipDynamicFormFullCycle:
     # STEP 3 — Admin: verify membership in the list
     # ===================================================================
 
-    def test_step3_admin_verifies_membership_in_list(self, page, login_as_admin):
+    def test_step3_admin_verifies_membership_in_list(self, page, login_as_admin, django_shell):
         """Admin verifie que l'adhesion apparait dans la liste avec le bon statut.
         / Admin verifies that the membership appears in the list with the correct status.
         """
@@ -345,11 +349,18 @@ class TestMembershipDynamicFormFullCycle:
         row = page.locator('#result_list tbody tr').filter(has_text=self._user_email)
         expect(row).to_be_visible(timeout=10_000)
 
-        # Verifier que l'adhesion est validee (icone check_small ou statut confirme)
-        # / Check membership is validated (check_small icon or confirmed status)
-        check_icon = row.locator('span.material-symbols-outlined').filter(has_text='check_small')
-        if check_icon.count() > 0:
-            expect(check_icon).to_be_visible(timeout=5_000)
+        # L'adhesion est VALIDE : lu en base (Membership.is_valid), pas devine d'une
+        # icone. Une seule adhesion pour cet adherent sur ce produit.
+        # / The membership is VALID: read from the database, not guessed from an icon.
+        etat = django_shell(
+            "from BaseBillet.models import Membership\n"
+            f"adhesions = Membership.objects.filter(user__email='{self._user_email}', "
+            f"price__product__name='{self._product_name}')\n"
+            "print('NOMBRE=' + str(adhesions.count()))\n"
+            "print('VALIDE=' + str(adhesions.first().is_valid() if adhesions else None))"
+        )
+        assert "NOMBRE=1" in etat, f"Il faut exactement une adhesion : {etat[-300:]}"
+        assert "VALIDE=True" in etat, f"L'adhesion gratuite n'est pas valide : {etat[-300:]}"
 
     # ===================================================================
     # ETAPE 4 — Admin : verifier les reponses dans la page change
@@ -472,10 +483,10 @@ class TestMembershipDynamicFormFullCycle:
         # Modifier le champ texte / Edit the text field
         nom_input.fill('Arthur Dent')
 
-        # Modifier le select / Edit the select
+        # Modifier le select : obligatoire / Edit the select: mandatory
         ville_select = page.locator('select[name="Ville preferee"]')
-        if ville_select.count() > 0:
-            ville_select.select_option('Option C')
+        expect(ville_select).to_be_visible()
+        ville_select.select_option('Option C')
 
         # Enregistrer / Save
         save_button = page.locator('[data-testid="custom-form-save-btn"]')
@@ -486,9 +497,10 @@ class TestMembershipDynamicFormFullCycle:
         success_msg = page.locator('[data-testid="custom-form-success-msg"]')
         expect(success_msg).to_be_visible(timeout=5_000)
 
-        # Verifier les nouvelles valeurs dans le tableau
-        # / Check new values in table
+        # Verifier les DEUX nouvelles valeurs dans le tableau
+        # / Check BOTH new values in table
         expect(page.locator('td:has-text("Arthur Dent")')).to_be_visible()
+        expect(page.locator('td:has-text("Option C")')).to_be_visible()
 
     # ===================================================================
     # ETAPE 7 — Admin : tester l'annulation
@@ -529,6 +541,8 @@ class TestMembershipDynamicFormFullCycle:
         cancel_button.click()
         page.wait_for_timeout(1000)
 
-        # Verifier que la valeur est toujours "Arthur Dent" (modifiee a l'etape 6)
-        # / Check the value is still "Arthur Dent" (modified in step 6)
+        # Verifier que la valeur est toujours "Arthur Dent" (modifiee a l'etape 6), et que
+        # la saisie annulee n'a laisse aucune trace.
+        # / Check the value is still "Arthur Dent" and the cancelled entry left no trace.
         expect(page.locator('td:has-text("Arthur Dent")')).to_be_visible()
+        expect(page.locator('td:has-text("Test Annulation")')).to_have_count(0)

@@ -84,7 +84,13 @@ cliquent '[data-testid="paiement-succes"] #bt-retour-layer1'.
             {% else %}
               <div class="card-confirm-row test-return-total-achats">
                 <span>{% translate "Payé en" %} {{ moyen_paiement }}</span>
-                <b>{{ payment.total|euros }}</b>
+                {# En euros, ou dans la monnaie d'un panier en points / temps #}
+                {# / In euros, or in a points/time cart's currency #}
+                {% if nom_monnaie_du_panier_en_points %}
+                  <b>{{ total_du_panier_centimes|montant_dans_la_monnaie:nom_monnaie_du_panier_en_points }}</b>
+                {% else %}
+                  <b>{{ payment.total|euros }}</b>
+                {% endif %}
               </div>
             {% endif %}
             {% if payment.give_back > 0 %}

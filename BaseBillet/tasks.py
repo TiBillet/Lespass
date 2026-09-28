@@ -1744,22 +1744,54 @@ def membership_renewal_reminder():
 
 @app.task
 def trigger_product_update_tasks(product_pk):
-    time.sleep(1)
-    # Le produit peut avoir ete supprime entre le post_save et l'execution de
-    # la tache (cleanup des tests, suppression rapide dans l'admin) : il n'y a
-    # alors simplement rien a notifier a LaBoutik — log info, pas une ERROR.
-    # / The product may have been deleted between post_save and the task run
-    # (test cleanup, quick admin deletion): nothing to notify LaBoutik about
-    # then — info log, not an ERROR.
-    try:
-        product = Product.objects.get(pk=product_pk)
-    except Product.DoesNotExist:
-        logger.info(
-            f"trigger_product_update_tasks : produit {product_pk} deja supprime, rien a notifier")
+    """
+    Previent LaBoutik V1 qu'un produit adhesion a change.
+    / Tells LaBoutik V1 that a membership product changed.
+
+    LOCALISATION : BaseBillet/tasks.py
+
+    Lancee par le signal post_save de CHAQUE produit (BaseBillet/signals.py,
+    trigger_product_update). Elle ne sert que si LaBoutik V1 est configure, et
+    seulement pour une adhesion. Les verifications vont donc de la moins chere a
+    la plus chere, et la tache sort des la premiere qui echoue :
+    1. LaBoutik V1 configure ? (lecture de la configuration, sans reseau)
+    2. le produit existe ? (boucle courte, voir plus bas)
+    3. c'est une adhesion ?
+    4. LaBoutik V1 repond ? (check_serveur_cashless : appel reseau)
+    / Checks go from cheapest to most expensive; the task exits at the first failure.
+    """
+    # 1. LaBoutik V1 configure ? Sans adresse ni cle, il n'y a personne a
+    # prevenir : on sort tout de suite, sans occuper le processus Celery.
+    # / 1. LaBoutik V1 set up? Otherwise there is nobody to tell: exit at once.
+    config = Configuration.get_solo()
+    laboutik_v1_est_configure = bool(config.server_cashless and config.key_cashless)
+    if not laboutik_v1_est_configure:
         return
-    # On prévient LaBoutik qu'un produit adhésion et/ou badge a changé
+
+    # 2. Le produit. La tache part au post_save : le save() qui l'a lancee peut ne
+    # pas etre encore visible (transaction pas encore validee). On le cherche
+    # plusieurs fois, avec une courte pause entre deux essais (au plus 1 s).
+    # Toujours introuvable : il a ete supprime (tests, suppression rapide dans
+    # l'admin), il n'y a rien a notifier — log info, pas une ERROR.
+    # / 2. The product may not be visible yet: short retry loop (1 s max).
+    #   Still missing: deleted, nothing to notify.
+    nombre_d_essais = 10
+    pause_entre_deux_essais_en_secondes = 0.1
+    product = None
+    for numero_de_l_essai in range(nombre_d_essais):
+        product = Product.objects.filter(pk=product_pk).first()
+        if product is not None:
+            break
+        if numero_de_l_essai < nombre_d_essais - 1:
+            time.sleep(pause_entre_deux_essais_en_secondes)
+    if product is None:
+        logger.info(
+            f"trigger_product_update_tasks : produit {product_pk} introuvable, rien a notifier")
+        return
+
+    # 3. et 4. On prévient LaBoutik qu'un produit adhésion a changé, s'il répond.
+    # / 3. and 4. Tell LaBoutik a membership product changed, if it answers.
     if product.categorie_article in [Product.ADHESION]:
-        config = Configuration.get_solo()
         if config.check_serveur_cashless():
             send_to_laboutik = requests.post(
                 f'{config.server_cashless}/api/trigger_product_update',

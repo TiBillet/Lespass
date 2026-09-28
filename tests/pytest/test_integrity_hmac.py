@@ -71,7 +71,7 @@ class TestCleHMAC:
             assert cle_1 == cle_2
 
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from BaseBillet.models import SaleOrigin, PaymentMethod
 
 
@@ -175,7 +175,10 @@ class TestChainageHMAC:
             for i in range(3):
                 ligne = _creer_ligne_article_test(tenant, amount=1000 + i * 100)
                 ligne.uuid_transaction = test_uuid
-                ligne.total_ht = calculer_total_ht(ligne.amount, ligne.vat)
+                ligne.total_ht = calculer_total_ht(
+                    int(Decimal(ligne.amount * ligne.qty).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
+                    ligne.vat,
+                )
                 ligne.previous_hmac = previous
                 ligne.hmac_hash = calculer_hmac(ligne, cle, previous)
                 ligne.save(update_fields=['uuid_transaction', 'total_ht', 'hmac_hash', 'previous_hmac'])
@@ -212,7 +215,10 @@ class TestChainageHMAC:
             for i in range(2):
                 ligne = _creer_ligne_article_test(tenant, amount=1000)
                 ligne.uuid_transaction = test_uuid
-                ligne.total_ht = calculer_total_ht(ligne.amount, ligne.vat)
+                ligne.total_ht = calculer_total_ht(
+                    int(Decimal(ligne.amount * ligne.qty).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
+                    ligne.vat,
+                )
                 ligne.previous_hmac = previous
                 ligne.hmac_hash = calculer_hmac(ligne, cle, previous)
                 ligne.save(update_fields=['uuid_transaction', 'total_ht', 'hmac_hash', 'previous_hmac'])

@@ -3,11 +3,6 @@ import subprocess
 import sys
 import pytest
 
-from tests.stripe_reel import (
-    afficher_les_tests_stripe_reel_non_joues,
-    ignorer_les_tests_stripe_reel_non_demandes,
-)
-
 try:
     import urllib3
 except Exception:  # pragma: no cover - optional dependency for warnings
@@ -173,17 +168,6 @@ def pytest_collection_modifyitems(config, items):
 
     items.sort(key=sort_key)
 
-    # Tests qui appellent le vrai Stripe (mode test) : sur demande seulement (STRIPE_REEL=1,
-    # make test-stripe). Sinon ignorés et nommés en rouge en fin de run (tests/stripe_reel.py).
-    # / Real-Stripe tests: on demand only. Otherwise skipped and named in red at the end.
-    ignorer_les_tests_stripe_reel_non_demandes(items, "stripe_reel")
-
-
-def pytest_terminal_summary(terminalreporter, exitstatus, config):
-    """Nomme en rouge les tests Stripe réel qui n'ont PAS été joués.
-    / Names in red the real-Stripe tests that were NOT run."""
-    afficher_les_tests_stripe_reel_non_joues(terminalreporter)
-
 
 # --- Fixtures partagees portees depuis la V2 (lespass-main) ---
 # Avant : chaque fichier de test redeclarait django_db_setup et
@@ -229,17 +213,20 @@ def auth_headers(_inject_cli_env):
 
     if needs_regen:
         import subprocess
-        try:
-            result = subprocess.run(
-                ["python", "manage.py", "test_api_key"],
-                capture_output=True, text=True, cwd="/DjangoFiles",
-                env={**os.environ, "TEST": "1"},
+        result = subprocess.run(
+            ["python", "manage.py", "test_api_key"],
+            capture_output=True, text=True, cwd="/DjangoFiles",
+            env={**os.environ, "TEST": "1"},
+        )
+        # Une regeneration ratee echoue ICI : rendre l'ancienne cle ferait echouer le
+        # test plus loin, en 403, sans lien apparent avec la vraie cause.
+        # / A failed regeneration fails HERE, not later as an unrelated 403.
+        if result.returncode != 0:
+            pytest.fail(
+                f"manage.py test_api_key a echoue (rc={result.returncode}) : {result.stderr[-500:]}"
             )
-            if result.returncode == 0:
-                api_key = result.stdout.strip()
-                os.environ["API_KEY"] = api_key
-        except Exception:
-            pass
+        api_key = result.stdout.strip()
+        os.environ["API_KEY"] = api_key
 
     return {"HTTP_AUTHORIZATION": f"Api-Key {api_key}"}
 
@@ -299,6 +286,23 @@ def _enable_db_access_for_all(django_db_blocker):
     django_db_blocker.unblock()
     yield
     django_db_blocker.restore()
+
+
+@pytest.fixture(autouse=True)
+def _nettoyer_les_evenements_de_la_fabrique():
+    """Après chaque test, supprime les événements et produits créés par
+    `fabriques_reservation.creer_evenement_et_produit` (base de dev partagée, sans rollback).
+    / After each test, deletes the events and products created by the factory.
+    """
+    yield
+    import fabriques_reservation
+
+    if fabriques_reservation.EVENEMENTS_A_NETTOYER:
+        from Customers.models import Client
+
+        fabriques_reservation.nettoyer_evenements_crees(
+            Client.objects.get(schema_name="lespass")
+        )
 
 
 @pytest.fixture(autouse=True, scope="class")

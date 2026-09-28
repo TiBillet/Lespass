@@ -115,6 +115,26 @@ function additionMajEntete() {
 }
 
 /**
+ * Ecrit un montant avec son unite : « 5.00€ » ou « 300.00 Points fidélité ».
+ * / Writes an amount with its unit.
+ *
+ * LOCALISATION : laboutik/static/js/addition.js
+ *
+ * Un symbole d'un caractere (€) reste colle au nombre. Un nom de monnaie
+ * (points, temps) est separe par une espace.
+ * / A one-character symbol stays glued; a currency name gets a space.
+ *
+ * @param {Number} centimes - Montant en centimes (ou centiemes de points)
+ * @param {String} unite - Symbole ou nom de la monnaie
+ * @returns {String}
+ */
+function montantAvecUnite(centimes, unite) {
+	const uniteDuMontant = unite || ''
+	const separateur = uniteDuMontant.length > 1 ? ' ' : ''
+	return `${(centimes / 100).toFixed(2)}${separateur}${uniteDuMontant}`
+}
+
+/**
  * Met a jour une ligne du ticket : quantite affichee et total de la ligne
  * / Updates a ticket row: displayed quantity and row total
  *
@@ -139,7 +159,7 @@ function additionMajLigne(lineId, quantity) {
 	if (eleTotalLigne) {
 		const prixUnitaire = Number(ligne.dataset.unitPrice) || 0
 		const monnaie = eleTotalLigne.dataset.currency || ''
-		eleTotalLigne.textContent = `${(prixUnitaire * quantity / 100).toFixed(2)}${monnaie}`
+		eleTotalLigne.textContent = montantAvecUnite(prixUnitaire * quantity, monnaie)
 	}
 }
 
@@ -161,7 +181,18 @@ function additionMajTotal(event) {
 	if (!eleTotal) { return }
 
 	const totalCentimes = Number(event.detail.totalAddition) || 0
-	const monnaie = eleTotal.dataset.currency || ''
+	// L'unite du total suit la 1re ligne du panier : un panier ne contient qu'une
+	// monnaie (le serveur refuse un panier melange). Panier vide : le symbole €.
+	// / The total's unit follows the first cart line (one currency per cart).
+	// Une ligne retiree reste 600 ms dans le DOM (animation, classe is-removing) :
+	// elle ne compte pas. / A line being removed (is-removing) does not count.
+	const premiereLigne = document.querySelector(
+		'#addition-list .addition-line-grid:not(.is-removing) .addition-col-price[data-currency]'
+	)
+	let monnaie = eleTotal.dataset.currency || ''
+	if (premiereLigne) {
+		monnaie = premiereLigne.dataset.currency
+	}
 	eleTotal.textContent = `${(totalCentimes / 100).toFixed(2)} ${monnaie}`.trim()
 }
 
@@ -389,11 +420,11 @@ function additionInsertArticle({ detail }) {
 				</div>
 				<div class="addition-col-info">
 					<div class="addition-col-name">${escapeHtml(name)}</div>
-					<div class="addition-col-unit">${(prixAffiche / 100).toFixed(2)}${currency}</div>
+					<div class="addition-col-unit">${escapeHtml(montantAvecUnite(prixAffiche, currency))}</div>
 				</div>
 				<div class="addition-col-right">
 					<span id="addition-quantity-${lineId}" class="addition-col-quantity">&times; ${quantity}</span>
-					<span id="addition-price-${lineId}" class="addition-col-price" data-currency="${currency}">${(prixAffiche * quantity / 100).toFixed(2)}${currency}</span>
+					<span id="addition-price-${lineId}" class="addition-col-price" data-currency="${escapeHtml(currency)}">${escapeHtml(montantAvecUnite(prixAffiche * quantity, currency))}</span>
 				</div>
 			</div>
 		`

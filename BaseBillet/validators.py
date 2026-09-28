@@ -903,8 +903,15 @@ class MembershipValidator(serializers.Serializer):
     Validator reclamé lors de la réclamation d'une adhésion depuis le front Lespass
     """
     acknowledge = serializers.BooleanField()
+    # Tarifs en euros seulement : un tarif en points ou en temps se vend a la
+    # caisse, jamais en ligne (il serait paye en euros par Stripe).
+    # / Euro prices only: a points or time price is POS-only.
     price = serializers.PrimaryKeyRelatedField(
-        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
+        queryset=Price.objects.filter(
+            product__categorie_article=Product.ADHESION,
+            asset__isnull=True,
+            non_fiduciaire=False,
+        )
     )
     custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, min_value=Decimal('0.00'))
     firstname = serializers.CharField(max_length=200)

@@ -284,7 +284,10 @@ def facturer_tirage(
         # 2. Snapshots ProductSold / PriceSold
         # / ProductSold / PriceSold snapshots
         produit = tireuse.fut_actif
-        prix_obj = produit.prices.filter(poids_mesure=True).first()
+        # La tireuse facture en euros : un tarif « au litre » en points ou en
+        # temps (asset non vide) n'est jamais pris.
+        # / The tap bills in euros: a per-litre points/time price is never used.
+        prix_obj = produit.prices.filter(poids_mesure=True, asset__isnull=True).first()
 
         # _created et pas _ : « _ » masquerait gettext si on l'importe un jour
         # / _created, not _: "_" would shadow gettext if imported later
@@ -301,10 +304,14 @@ def facturer_tirage(
         )
 
         # 3. Créer N LigneArticle (1 par asset débité) — conformité LNE rapports clôture.
-        # Pinte mixte 1€ TNF + 3€ TLF → 2 lignes : qty 0.25 LOCAL_GIFT + qty 0.75 LOCAL_EURO.
+        # Chaque ligne porte le prix UNITAIRE du tirage dans amount, et la part de sa
+        # monnaie dans qty : total = amount x qty.
+        # Pinte à 4 € payée 1 € TNF + 3 € TLF → 2 lignes à amount 400 :
+        # qty 0.25 LOCAL_GIFT + qty 0.75 LOCAL_EURO (1 € + 3 €).
         # qty proportionnelle via _calculer_qty_partielles (laboutik) sur qty_totale=1 tirage.
         # weight_quantity identique sur toutes les lignes — stock décrémenté 1 seule fois.
-        # / Create N LigneArticle (1 per debited asset) — LNE closing report compliance.
+        # / Create N LigneArticle (1 per debited asset): unit price of the pour in
+        #   amount, share of the currency in qty.
 
         from laboutik.views import MAPPING_ASSET_CATEGORY_PAYMENT_METHOD, _calculer_qty_partielles
         
@@ -319,15 +326,15 @@ def facturer_tirage(
         premiere_ligne = None
 
         for i, (asset, montant_a) in enumerate(debits_par_asset):
-            payment_method = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
-                asset.category, PaymentMethod.LOCAL_EURO
-            )
+            payment_method = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                asset.category
+            ]
             qty_partielle = lignes_avec_qty[i]["qty"]
 
             ligne = LigneArticle.objects.create(
                 pricesold=price_sold,
                 qty=qty_partielle,
-                amount=montant_a,
+                amount=montant_centimes,
                 sale_origin=SaleOrigin.TIREUSE,
                 payment_method=payment_method,
                 status=LigneArticle.VALID,

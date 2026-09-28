@@ -236,8 +236,6 @@ class TestMembershipManualValidationStripe:
         # Étape 2 : Récupérer l'UUID de l'adhésion en base via django_shell
         # Step 2: Get membership UUID from DB via django_shell
         # ──────────────────────────────────────────────────────────────────────
-        # Code shell avec quotes simples uniquement (conftest échappe les doubles).
-        # / Shell code uses single quotes only (conftest escapes double quotes).
         db_result = django_shell(
             "from BaseBillet.models import Membership\n"
             f"m = Membership.objects.filter(user__email='{user_email}').order_by('-pk').first()\n"

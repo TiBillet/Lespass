@@ -44,6 +44,13 @@ def ticket_data_to_json_commands(ticket_data):
     """
     commands = []
 
+    # Unite des montants : "EUR" (defaut), ou le nom de la monnaie d'un ticket en
+    # points ou en temps. « EUR » reste colle au nombre (« 5.00EUR ») ; un nom de
+    # monnaie en est separe (« 300.00 Points fidélité »).
+    # / Amount unit: "EUR" (default) or a points/time currency name.
+    unite_du_ticket = ticket_data.get("unite", "EUR")
+    suffixe_de_l_unite = unite_du_ticket if unite_du_ticket == "EUR" else f" {unite_du_ticket}"
+
     # --- En-tete ---
     # / Header
     header = ticket_data.get("header", {})
@@ -93,7 +100,7 @@ def ticket_data_to_json_commands(ticket_data):
 
         if article_a_un_prix:
             total_euros = f"{article_total / 100:.2f}"
-            line = f"{article_name} x{article_qty}  {total_euros}EUR"
+            line = f"{article_name} x{article_qty}  {total_euros}{suffixe_de_l_unite}"
         else:
             line = f"{article_qty} x {article_name}"
 
@@ -120,7 +127,7 @@ def ticket_data_to_json_commands(ticket_data):
         total_euros = f"{total_amount / 100:.2f}"
         commands.append({
             "type": "text",
-            "value": f"TOTAL: {total_euros} EUR",
+            "value": f"TOTAL: {total_euros} {unite_du_ticket}",
             "bold": True,
             "align": "left",
         })
@@ -131,6 +138,19 @@ def ticket_data_to_json_commands(ticket_data):
             "value": total_label,
             "align": "left",
         })
+
+    # --- Detail des moyens de paiement ---
+    # Meme regle que escpos_builder : seulement si au moins deux moyens ont servi.
+    # / Same rule as escpos_builder: only when two methods or more were used.
+    cascade_detail = ticket_data.get("cascade_detail", [])
+    if len(cascade_detail) >= 2:
+        for moyen in cascade_detail:
+            montant_euros = f"{moyen.get('total', 0) / 100:.2f}"
+            commands.append({
+                "type": "text",
+                "value": f"{moyen.get('name', '')}  {montant_euros}{suffixe_de_l_unite}",
+                "align": "left",
+            })
 
     # --- QR code ---
     qrcode_text = ticket_data.get("qrcode")

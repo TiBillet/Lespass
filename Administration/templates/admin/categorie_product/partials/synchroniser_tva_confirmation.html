@@ -1,0 +1,67 @@
+{% load i18n %}
+<!--
+CONFIRMATION « SYNCHRONISER LA TVA » D'UNE CATÉGORIE
+/ "Synchronize VAT" confirmation for a category
+
+LOCALISATION : Administration/templates/admin/categorie_product/partials/synchroniser_tva_confirmation.html
+
+Partial HTMX (GET CategorieProductAdmin.confirmer_synchronisation_tva), chargé dans
+#zone-synchronisation-tva. Explique l'effet et liste les articles dont la TVA change.
+« Confirmer » : hx-post vers synchroniser_tva (réponse HX-Refresh).
+« Annuler » : vide la zone.
+
+CONTEXTE : categorie, nombre_d_articles, articles_qui_changent (Product, tva préchargée)
+-->
+<div role="dialog" aria-labelledby="synchronisation-tva-titre"
+     data-testid="categorie-synchroniser-tva-confirmation"
+     style="padding:1rem;border-radius:.375rem;border:1px solid var(--color-base-300, #d1d5db);font-size:.875rem">
+
+    <p id="synchronisation-tva-titre" style="font-weight:600;margin-bottom:.5rem">
+        {% blocktranslate with taux=categorie.tva.tva_rate nom=categorie.name %}Êtes-vous sûr ? Tous les articles de « {{ nom }} » vont prendre la TVA de {{ taux }} %.{% endblocktranslate %}
+    </p>
+
+    <ul style="margin:0 0 .75rem 1.25rem;list-style:disc">
+        <li>{% blocktranslate count nombre=nombre_d_articles %}{{ nombre }} article dans la catégorie.{% plural %}{{ nombre }} articles dans la catégorie.{% endblocktranslate %}</li>
+        <li>{% translate "Une TVA choisie exprès sur un article est remplacée par celle de la catégorie." %}</li>
+        <li>{% translate "Les ventes déjà enregistrées gardent leur TVA : seules les prochaines ventes utilisent la nouvelle." %}</li>
+    </ul>
+
+    {% if articles_qui_changent %}
+    <table style="width:100%;border-collapse:collapse;margin-bottom:.75rem" data-testid="categorie-synchroniser-tva-articles">
+        <thead>
+            <tr>
+                <th style="text-align:left;padding:.25rem .5rem;border-bottom:1px solid var(--color-base-300, #d1d5db)">{% translate "Article" %}</th>
+                <th style="text-align:right;padding:.25rem .5rem;border-bottom:1px solid var(--color-base-300, #d1d5db)">{% translate "TVA actuelle" %}</th>
+                <th style="text-align:right;padding:.25rem .5rem;border-bottom:1px solid var(--color-base-300, #d1d5db)">{% translate "Nouvelle TVA" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for article in articles_qui_changent %}
+            <tr>
+                <td style="padding:.25rem .5rem">{{ article.name }}</td>
+                <td style="padding:.25rem .5rem;text-align:right">{% if article.tva %}{{ article.tva.tva_rate }} %{% else %}{% translate "aucune (TVA du lieu)" %}{% endif %}</td>
+                <td style="padding:.25rem .5rem;text-align:right">{{ categorie.tva.tva_rate }} %</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="margin-bottom:.75rem">{% translate "Tous les articles ont déjà cette TVA." %}</p>
+    {% endif %}
+
+    <div style="display:flex;gap:.5rem">
+        <button type="button"
+                data-testid="categorie-synchroniser-tva-confirmer"
+                hx-post="{% url 'staff_admin:BaseBillet_categorieproduct_synchroniser_tva' categorie.pk %}"
+                data-loading-disable
+                style="padding:.5rem .875rem;border-radius:.375rem;border:none;background:var(--color-primary-600);color:#fff;font-weight:600;cursor:pointer">
+            {% translate "Confirmer" %}
+        </button>
+        <button type="button"
+                data-testid="categorie-synchroniser-tva-annuler"
+                onclick="document.getElementById('zone-synchronisation-tva').innerHTML = ''"
+                style="padding:.5rem .875rem;border-radius:.375rem;border:1px solid var(--color-base-300, #d1d5db);background:transparent;cursor:pointer">
+            {% translate "Annuler" %}
+        </button>
+    </div>
+</div>

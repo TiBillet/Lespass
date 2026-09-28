@@ -16,7 +16,15 @@
     }
     // Add the event listener to the main content (#content-main)
     function add_click_listener() {
-        document.querySelector("#content-main").addEventListener("click",add_focus2,true);
+        // Seules les listes et les fiches d'Unfold ont #content-main ; le tableau de bord,
+        // les pages de module et de domaine n'en ont pas : rien a ecouter.
+        // / Only Unfold lists and forms have #content-main; the dashboard, module and
+        // domain pages don't: nothing to listen to.
+        const contenu_principal = document.querySelector("#content-main");
+        if (!contenu_principal) {
+            return;
+        }
+        contenu_principal.addEventListener("click", add_focus2, true);
     }
 
     // Add an event lister to listen for click

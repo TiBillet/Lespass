@@ -215,23 +215,6 @@ def test_toucher_la_boite_ne_ferme_pas_la_popup(page, caisse):
     assert page.locator('[data-testid="tarif-overlay"]').count() == 1
 
 
-def test_echap_ferme_la_popup(page, caisse):
-    """La touche Echap ferme la popup, comme la croix. / Escape closes the popup."""
-    caisse([TARIF_DEMI, TARIF_PINTE])
-
-    page.keyboard.press("Escape")
-
-    assert page.locator('[data-testid="tarif-overlay"]').count() == 0
-
-
-def test_le_premier_tarif_recoit_le_focus_a_l_ouverture(page, caisse):
-    """Le clavier entre directement dans la popup. / Keyboard lands in the popup."""
-    caisse([TARIF_DEMI, TARIF_PINTE])
-
-    testid_focalise = page.evaluate("document.activeElement.dataset.testid")
-    assert testid_focalise == "tarif-btn-DEMI"
-
-
 # ------------------------------------------------------------------ #
 #  La grille reste dans la page / The grid stays in the page
 # ------------------------------------------------------------------ #

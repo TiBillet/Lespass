@@ -160,11 +160,8 @@ class TestAdminReservationCancel:
 
         # --- Etape 3 : Verifier la FK reservation sur LigneArticle ---
         # Au moins une LigneArticle doit avoir reservation_id renseigne.
-        # On utilise des quotes simples UNIQUEMENT dans le code shell
-        # (django_shell echappe les guillemets doubles).
         # / Step 3: Verify LigneArticle.reservation FK is set.
         # At least one LigneArticle should have reservation_id set.
-        # Single quotes ONLY in shell code (django_shell escapes double quotes).
         fk_result = django_shell(
             "from BaseBillet.models import LigneArticle\n"
             f"lignes = LigneArticle.objects.filter(pricesold__productsold__product__name__contains='{product_name}').order_by('-datetime')[:5]\n"

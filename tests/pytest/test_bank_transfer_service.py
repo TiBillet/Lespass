@@ -303,16 +303,29 @@ def test_enregistrer_virement_rejette_si_montant_superieur_dette(
 
 @pytest.fixture(scope="module", autouse=True)
 def cleanup_bt_test_data():
-    """Nettoyage en fin de module."""
+    """Nettoyage en fin de module.
+
+    Tokens, transactions et lignes sont supprimes par ASSET et par WALLET : si
+    l'asset FED existait deja (non prefixe), les transactions des tests pointent
+    quand meme vers les wallets de test. Les virements creditent
+    aussi le wallet du lieu, qui ne porte pas le prefixe de test. Token.asset est
+    en PROTECT : un seul token oublie bloque la suppression de l'asset FED, qui
+    reste alors en base et fait echouer les tests suivants (contrainte
+    unique_fed_asset). Un echec de nettoyage doit donc se voir : pas de
+    try/except qui l'avale.
+    / Tokens are deleted by ASSET and by WALLET. A leftover token blocks the FED
+      asset deletion (PROTECT) and breaks later tests: a cleanup failure must show.
+    """
     yield
-    try:
-        with schema_context('lespass'):
-            wallets_test = Wallet.objects.filter(name__startswith=BT_TEST_PREFIX)
-            assets_test = Asset.objects.filter(name__startswith=BT_TEST_PREFIX)
-            LigneArticle.objects.filter(asset__in=[a.uuid for a in assets_test]).delete()
-            Transaction.objects.filter(asset__in=assets_test).delete()
-            Token.objects.filter(wallet__in=wallets_test).delete()
-            assets_test.delete()
-            wallets_test.delete()
-    except Exception:
-        pass
+    with schema_context('lespass'):
+        wallets_test = Wallet.objects.filter(name__startswith=BT_TEST_PREFIX)
+        assets_test = Asset.objects.filter(name__startswith=BT_TEST_PREFIX)
+        LigneArticle.objects.filter(asset__in=[a.uuid for a in assets_test]).delete()
+        LigneArticle.objects.filter(wallet__in=wallets_test).delete()
+        Transaction.objects.filter(asset__in=assets_test).delete()
+        Transaction.objects.filter(sender__in=wallets_test).delete()
+        Transaction.objects.filter(receiver__in=wallets_test).delete()
+        Token.objects.filter(asset__in=assets_test).delete()
+        Token.objects.filter(wallet__in=wallets_test).delete()
+        assets_test.delete()
+        wallets_test.delete()

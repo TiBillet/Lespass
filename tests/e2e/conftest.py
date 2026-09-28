@@ -6,11 +6,14 @@ Prérequis : le serveur Django doit tourner (via Traefik).
 / Prerequisite: Django server must be running (via Traefik).
 """
 
+import contextlib
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
+import traceback
 
 import pytest
 import requests as http_requests
@@ -48,6 +51,21 @@ API_BASE_URL = f"https://{DOCKER_GATEWAY}" if INSIDE_CONTAINER else BASE_URL
 API_HOST_HEADER = f"{SUB}.{DOMAIN}" if INSIDE_CONTAINER else None
 
 
+# --- Mode supervision humaine (make e2e-visible) ---
+#
+# `make e2e-visible` lance, sur l'HOTE, un serveur de navigateur Playwright
+# (`playwright run-server`) et donne son adresse par E2E_NAVIGATEUR_DISTANT. Les tests
+# tournent toujours dans le conteneur, mais pilotent une fenetre Chromium VISIBLE sur
+# l'ecran de l'hote, ralentie de E2E_LENTEUR millisecondes par action. E2E_JOURNAL=1
+# ecrit un journal lisible : debut et fin de chaque test, pages, envois, erreurs.
+# Sans ces variables (make e2e), rien ne change : Chromium headless dans le conteneur.
+# / `make e2e-visible` starts a Playwright browser server on the HOST. Tests still run in
+# the container but drive a VISIBLE, slowed-down Chromium window, with a readable log.
+NAVIGATEUR_DISTANT = os.environ.get("E2E_NAVIGATEUR_DISTANT", "")
+LENTEUR_EN_MS = int(os.environ.get("E2E_LENTEUR") or 0)
+JOURNAL_ACTIF = os.environ.get("E2E_JOURNAL") == "1"
+
+
 # --- Fixtures Playwright / Playwright fixtures ---
 
 
@@ -62,13 +80,26 @@ def playwright_instance():
 
 @pytest.fixture(scope="session")
 def browser(playwright_instance):
-    """Lance Chromium headless une seule fois par session.
-    / Launch headless Chromium once per session.
+    """Lance Chromium une seule fois par session : headless dans le conteneur, ou
+    visible sur l'hote en mode supervision (make e2e-visible).
+    / Launch Chromium once per session: headless in the container, or visible on the
+    host in supervision mode.
     """
-    browser = playwright_instance.chromium.launch(
-        headless=True,
-        args=[f"--host-resolver-rules={CHROMIUM_HOST_RULES}"],
-    )
+    if NAVIGATEUR_DISTANT:
+        # Le navigateur tourne sur l'hote, qui resout lui-meme *.tibillet.localhost :
+        # pas de --host-resolver-rules. Les options de lancement passent par l'en-tete
+        # que lit `playwright run-server`.
+        # / The browser runs on the host, which resolves *.tibillet.localhost itself.
+        browser = playwright_instance.chromium.connect(
+            NAVIGATEUR_DISTANT,
+            slow_mo=LENTEUR_EN_MS,
+            headers={"x-playwright-launch-options": json.dumps({"headless": False})},
+        )
+    else:
+        browser = playwright_instance.chromium.launch(
+            headless=True,
+            args=[f"--host-resolver-rules={CHROMIUM_HOST_RULES}"],
+        )
     yield browser
     browser.close()
 
@@ -92,6 +123,8 @@ def page(browser, request):
         ignore_https_errors=True,
     )
     page = context.new_page()
+    if JOURNAL_ACTIF:
+        _brancher_le_journal(page)
 
     yield page
 
@@ -110,6 +143,108 @@ def page(browser, request):
 # Dossier des artefacts d'echec. Volontairement dans l'arborescence des tests pour qu'on le
 # trouve sans le chercher. / Failure artifacts directory, kept next to the tests.
 DOSSIER_ARTEFACTS = os.path.join(os.path.dirname(__file__), "artefacts")
+
+
+# --- Journal de supervision (make e2e-visible) / Supervision log ---
+
+FICHIER_DU_JOURNAL = os.path.join(DOSSIER_ARTEFACTS, "supervision.log")
+
+
+def _vider_le_journal():
+    """Repart d'un journal vide a chaque session. / Start each session with an empty log."""
+    os.makedirs(DOSSIER_ARTEFACTS, exist_ok=True)
+    with open(FICHIER_DU_JOURNAL, "w", encoding="utf-8"):
+        pass
+
+
+def _journaliser(ligne, saut_de_ligne_a_l_ecran=False):
+    """Ecrit une ligne a l'ecran et dans tests/e2e/artefacts/supervision.log.
+    `saut_de_ligne_a_l_ecran` : pytest -v vient d'ecrire « PASSED » sans aller a la ligne.
+    / Writes a line to the screen and to the supervision log."""
+    if saut_de_ligne_a_l_ecran:
+        print(flush=True)
+    print(ligne, flush=True)
+    with open(FICHIER_DU_JOURNAL, "a", encoding="utf-8") as journal:
+        journal.write(ligne + "\n")
+
+
+def _chemin_lisible(adresse):
+    """L'adresse sans le domaine, pour un journal lisible. / URL without the domain."""
+    from urllib.parse import urlsplit
+
+    morceaux = urlsplit(adresse)
+    chemin = morceaux.path + (f"?{morceaux.query}" if morceaux.query else "")
+    return chemin[:120]
+
+
+def _brancher_le_journal(page):
+    """
+    Journalise ce qui aide un humain a suivre : les pages visitees, les envois (POST,
+    requetes HTMX), les reponses en erreur et les erreurs JavaScript. Les chargements de
+    fichiers statiques et les GET reussis sont tus : le journal resterait illisible.
+    / Logs what helps a human follow along: pages, submissions (POST, HTMX), error
+    responses and JavaScript errors. Static files and successful GETs are left out.
+    """
+
+    def page_visitee(cadre):
+        if cadre == page.main_frame:
+            _journaliser(f"  → page     {_chemin_lisible(cadre.url)}")
+
+    def requete_envoyee(requete):
+        est_htmx = requete.headers.get("hx-request") == "true"
+        if requete.method != "GET" or est_htmx:
+            etiquette = " (htmx)" if est_htmx else ""
+            _journaliser(f"  → {requete.method:<8} {_chemin_lisible(requete.url)}{etiquette}")
+
+    def reponse_recue(reponse):
+        if reponse.status >= 400:
+            _journaliser(f"  ✗ {reponse.status}      {_chemin_lisible(reponse.url)}")
+
+    def message_de_console(message):
+        if message.type == "error":
+            _journaliser(f"  ⚠ console  {message.text[:200]}")
+
+    def erreur_javascript(erreur):
+        _journaliser(f"  ⚠ erreur JS  {str(erreur)[:200]}")
+
+    page.on("framenavigated", page_visitee)
+    page.on("request", requete_envoyee)
+    page.on("response", reponse_recue)
+    page.on("console", message_de_console)
+    page.on("pageerror", erreur_javascript)
+
+
+def pytest_sessionstart(session):
+    """Repart d'un journal vide, AVANT l'annonce du premier test.
+    / Starts from an empty log, BEFORE the first test is announced."""
+    if JOURNAL_ACTIF:
+        _vider_le_journal()
+
+
+def pytest_runtest_logstart(nodeid, location):
+    """Annonce chaque test dans le journal. / Announces each test in the log."""
+    if JOURNAL_ACTIF:
+        _journaliser("")
+        _journaliser(f"▶ {nodeid}")
+
+
+def pytest_runtest_logreport(report):
+    """Donne l'issue de chaque test dans le journal. / Gives each test's outcome."""
+    if not JOURNAL_ACTIF:
+        return
+    # Le resultat qui compte est celui de l'appel ; un echec en preparation OU en
+    # nettoyage (fixture qui verifie apres coup) est aussi dit : pytest le compte en ERROR.
+    # / The call outcome matters; a setup or teardown failure is reported too.
+    if report.when == "call" or (report.when in ("setup", "teardown") and report.failed):
+        if report.passed:
+            _journaliser(f"✔ PASSED ({report.duration:.0f} s)", saut_de_ligne_a_l_ecran=True)
+        elif report.skipped:
+            _journaliser("… SKIPPED", saut_de_ligne_a_l_ecran=True)
+        else:
+            _journaliser(
+                f"✗ FAILED pendant « {report.when} » ({report.duration:.0f} s)",
+                saut_de_ligne_a_l_ecran=True,
+            )
 
 
 def _nom_de_fichier_sur(nodeid):
@@ -535,9 +670,14 @@ def _run_command(cmd_docker, cmd_local, timeout=30):
 
 @pytest.fixture(scope="session")
 def api_key():
-    """Récupère la clé API via manage.py test_api_key.
-    / Fetches the API key via manage.py test_api_key.
+    """Récupère la clé API : celle que scripts/lancer_tests.sh passe dans API_KEY,
+    sinon via manage.py test_api_key (lancement de pytest à la main).
+    / Fetches the API key: the one scripts/lancer_tests.sh passes in API_KEY,
+    otherwise through manage.py test_api_key (pytest launched by hand).
     """
+    cle_du_script = os.environ.get("API_KEY", "").strip()
+    if cle_du_script:
+        return cle_du_script
     result = _run_command(
         cmd_docker=[
             "docker", "exec", "-e", "TEST=1",
@@ -555,33 +695,48 @@ def api_key():
 
 
 @pytest.fixture(scope="session")
-def django_shell():
-    """Factory : exécute du Python dans le shell Django du tenant lespass.
-    / Factory: executes Python code in the Django shell for the lespass tenant.
+def django_shell(django_db_blocker):
+    """Factory : exécute du Python DANS le processus pytest, dans le contexte d'un lieu.
+    Renvoie ce que le code a imprimé (print), et lève RuntimeError si le code lève.
+    / Factory: runs Python IN the pytest process, inside a tenant's context.
+    Returns what the code printed, raises RuntimeError if the code raises.
 
     Usage : result = django_shell("from laboutik.models import PointDeVente; print(PointDeVente.objects.count())")
     Usage : result = django_shell("...", schema="festival")
+
+    Avant, chaque appel lançait `manage.py tenant_command shell` : environ 4,7 s de
+    démarrage de Django par appel. Ici, le code tourne tout de suite. Les écritures
+    sont validées aussitôt (autocommit), donc le serveur les voit.
+    / Previously each call spawned `manage.py tenant_command shell` (~4.7 s of Django
+    boot). Writes are committed at once (autocommit), so the server sees them.
     """
+    from django.test.utils import override_settings
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client as TenantClient
+
+    # pytest-django force DEBUG=False dans ce processus. Le serveur, lui, tourne avec
+    # le DEBUG du .env. Sans ce réglage, FedowAPI passe en verify=True (erreur SSL sur
+    # le certificat de dev) et reset_carte refuse sans rien dire.
+    # / pytest-django forces DEBUG=False here; mirror the server's DEBUG from .env,
+    # otherwise FedowAPI verifies the dev certificate (SSLError) and reset_carte refuses.
+    debug_du_serveur = os.environ.get("DEBUG") == "1"
 
     def _run(python_code, schema="lespass"):
-        escaped = python_code.replace('"', '\\"')
-        result = _run_command(
-            cmd_docker=[
-                "docker", "exec", "lespass_django",
-                "poetry", "run", "python",
-                "/DjangoFiles/manage.py", "tenant_command",
-                "shell", "-s", schema, "-c", escaped,
-            ],
-            cmd_local=[
-                "python", "manage.py", "tenant_command",
-                "shell", "-s", schema, "-c", escaped,
-            ],
-        )
-        if result.returncode != 0:
+        sortie = io.StringIO()
+        try:
+            with django_db_blocker.unblock(), override_settings(DEBUG=debug_du_serveur):
+                # Le vrai lieu, pas schema_context : celui-ci pose un faux lieu
+                # (FakeTenant) sans uuid ni name, que certains codes lisent.
+                # / The real tenant: schema_context sets a FakeTenant without uuid/name.
+                tenant = TenantClient.objects.get(schema_name=schema)
+                with tenant_context(tenant), contextlib.redirect_stdout(sortie):
+                    exec(python_code, {"__name__": "__main__"})
+        except Exception as erreur:
             raise RuntimeError(
-                f"django_shell failed (rc={result.returncode}): {result.stderr}"
-            )
-        return result.stdout.strip()
+                f"django_shell failed: {erreur!r}\n{traceback.format_exc()}\n"
+                f"stdout: {sortie.getvalue()[-2000:]}"
+            ) from erreur
+        return sortie.getvalue().strip()
 
     return _run
 
@@ -1197,16 +1352,15 @@ def fill_stripe_card():
             ).first
             if number_input.count() > 0:
                 number_input.fill("4242424242424242")
-                exp_input = frame.locator(
-                    'input[name="exp-date"], input[placeholder*="MM"]'
-                ).first
-                if exp_input.count() > 0:
-                    exp_input.fill("12/42")
-                cvc_input = frame.locator(
-                    'input[name="cvc"], input[placeholder*="CVC"]'
-                ).first
-                if cvc_input.count() > 0:
-                    cvc_input.fill("424")
+                frame.locator('input[name="exp-date"], input[placeholder*="MM"]').first.fill("12/42")
+                frame.locator('input[name="cvc"], input[placeholder*="CVC"]').first.fill("424")
+                return
+
+        # Aucune des strategies n'a trouve de champ de carte : Stripe a change son
+        # formulaire. On echoue ICI, plutot que de laisser le test cliquer « Payer »
+        # dans le vide pendant des minutes et accuser le mauvais endroit.
+        # / No strategy found a card field: fail HERE rather than click "Pay" in vain.
+        pytest.fail(f"Aucun champ de carte bancaire trouve sur la page Stripe ({page.url}).")
 
     return _fill
 
@@ -1320,7 +1474,13 @@ def soumettre_paiement_stripe():
             bouton.dispatch_event("click")
             if _attendre_la_sortie_du_checkout(page, 8_000):
                 return True
-        return False
+        # Le paiement n'est jamais parti : on echoue ICI, avec la vraie cause, plutot
+        # que de laisser le test attendre un retour qui ne viendra pas.
+        # / The payment never left: fail HERE with the real cause.
+        pytest.fail(
+            f"Le paiement Stripe ne part pas : {tentatives} tentatives de clic sur "
+            f"« {selecteur} » sans quitter checkout.stripe.com ({page.url})."
+        )
 
     return _soumettre
 
@@ -1331,32 +1491,25 @@ def soumettre_paiement_stripe():
 #
 # Certains parcours ne s'achevent que lorsque Stripe rappelle le webhook de
 # confirmation : la recharge en monnaie federee, la validation d'une adhesion
-# payee en ligne. Sans `stripe listen`, ce rappel n'arrive jamais et le test
-# echoue au bout de son delai d'attente, pour une raison qui n'a rien a voir
-# avec le code.
+# payee en ligne. Sans `stripe listen`, ce rappel n'arrive jamais.
 #
-# Ils ne tournent donc que sur demande (STRIPE_REEL=1, pose par `make e2e-stripe`,
-# qui verifie aussi que `stripe listen` tourne). Sinon ils sont ignores — mais
-# JAMAIS en silence : le mecanisme est partage avec les tests pytest, dans
-# tests/stripe_reel.py.
+# Ils tournent a chaque `make e2e` : aucun n'est ignore. scripts/lancer_tests.sh
+# regarde si `stripe listen` tourne sur l'hote et le dit par STRIPE_LISTEN. S'il
+# manque, ces tests ECHOUENT tout de suite, avec la vraie raison, au lieu
+# d'attendre leur delai pour un echec incomprehensible.
 #
 # / Some journeys only complete when Stripe calls the confirmation webhook back.
-# They only run on demand (STRIPE_REEL=1, set by `make e2e-stripe`). Otherwise they
-# are skipped — NEVER silently. The mechanism is shared with pytest (tests/stripe_reel.py).
-
-from tests.stripe_reel import (
-    afficher_les_tests_stripe_reel_non_joues,
-    ignorer_les_tests_stripe_reel_non_demandes,
-)
+# They run on every `make e2e`: none is skipped. Without `stripe listen` they FAIL
+# at once with the real reason (STRIPE_LISTEN is set by scripts/lancer_tests.sh).
 
 
-def pytest_collection_modifyitems(config, items):
-    """Ignore les tests marques `stripe_listen` sans STRIPE_REEL=1.
-    / Skips tests marked `stripe_listen` without STRIPE_REEL=1."""
-    ignorer_les_tests_stripe_reel_non_demandes(items, "stripe_listen")
-
-
-def pytest_terminal_summary(terminalreporter, exitstatus, config):
-    """Nomme en rouge les parcours de paiement qui n'ont PAS ete joues.
-    / Names in red the payment journeys that were NOT run."""
-    afficher_les_tests_stripe_reel_non_joues(terminalreporter)
+def pytest_runtest_setup(item):
+    """Fait echouer un test `stripe_listen` quand `stripe listen` ne tourne pas.
+    / Fails a `stripe_listen` test when `stripe listen` is not running."""
+    if not item.get_closest_marker("stripe_listen"):
+        return
+    if os.environ.get("STRIPE_LISTEN") != "1":
+        pytest.fail(
+            "`stripe listen` ne tourne pas : le lancer dans byobu, puis relancer make e2e. "
+            "Ce parcours attend le webhook de confirmation de Stripe."
+        )

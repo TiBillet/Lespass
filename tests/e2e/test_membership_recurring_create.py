@@ -6,24 +6,23 @@ Conversion de tests/playwright/tests/04-membership-recurring.spec.ts
 
 Ce test vérifie que :
 / This test verifies that:
-- Un admin peut créer (ou éditer) un produit d'adhésion récurrente via le proxy
-  MembershipProduct
-  / An admin can create (or edit) a recurring membership product via the
-  MembershipProduct proxy
-- Deux tarifs récurrents peuvent être ajoutés en inline : "Journalière" (2€, D)
-  et "Mensuelle" (20€, M)
-  / Two recurring prices can be added inline: "Journalière" (2€, D) and
-  "Mensuelle" (20€, M)
+- Un admin peut créer un produit d'adhésion récurrente via le proxy MembershipProduct
+  / An admin can create a recurring membership product via the MembershipProduct proxy
+- Deux tarifs à PAIEMENT RÉCURRENT (case « Paiement récurrent » cochée) peuvent être
+  ajoutés en inline : "Journalière" (2€, D) et "Mensuelle" (20€, M), et la base les
+  enregistre bien comme récurrents
+  / Two RECURRING-PAYMENT prices can be added inline and are stored as recurring
 - Le produit est visible sur la page publique /memberships/
   / The product is visible on the public /memberships/ page
 
-ATTENTION : ce test peut modifier un produit existant ou en créer un nouveau dans
-la DB partagée (sans rollback). Le produit "Adhésion récurrente (Le Tiers-Lustre)"
-est une donnée de référence de l'environnement de dev.
-/ WARNING: this test may modify an existing product or create a new one in the
-shared DB (no rollback). "Adhésion récurrente (Le Tiers-Lustre)" is a reference
-data item in the dev environment.
+Le produit porte un nom UNIQUE par run, et il est supprimé en fin de test (base de dev
+partagée, sans rollback). Avant, le test éditait un produit de référence s'il existait
+(2 tarifs de plus à chaque run), ne cochait jamais « Paiement récurrent », et ne
+vérifiait qu'un nom sur la page publique.
+/ The product has a UNIQUE name per run and is deleted at the end (shared dev DB).
 """
+
+import uuid
 
 import pytest
 from playwright.sync_api import expect
@@ -45,6 +44,8 @@ def _add_inline_price(page, price_data):
     - name (str)              : libellé du tarif
     - prix (int)              : montant entier (pas de virgule — locale FR)
     - subscription_type (str) : 'D' | 'M' | 'Y' | ...
+    Le paiement récurrent est TOUJOURS coché : c'est l'objet de ce fichier.
+    / Recurring payment is ALWAYS checked: it is what this file is about.
     """
     prices_section = page.locator('#prices-group')
 
@@ -81,105 +82,79 @@ def _add_inline_price(page, price_data):
         f'select[name="prices-{form_index}-subscription_type"]'
     ).select_option(price_data['subscription_type'])
 
+    # Cocher « Paiement récurrent » (prélèvement Stripe à chaque échéance).
+    # / Check "Recurring payment" (Stripe charge at every due date).
+    case_recurrente = prices_section.locator(f'input[name="prices-{form_index}-recurring_payment"]')
+    expect(case_recurrente).to_have_count(1)
+    case_recurrente.check()
+
 
 class TestMembershipRecurringCreate:
     """Création du produit d'adhésion récurrente via le proxy admin MembershipProduct.
     / Creation of recurring membership product via the MembershipProduct admin proxy.
     """
 
-    def test_create_adhesion_recurrente_le_tiers_lustre(self, page, login_as_admin):
-        """Crée ou édite "Adhésion récurrente (Le Tiers-Lustre)" avec 2 tarifs récurrents,
-        vérifie la visibilité sur /memberships/.
-        / Creates or edits "Adhésion récurrente (Le Tiers-Lustre)" with 2 recurring prices,
-        verifies visibility on /memberships/.
+    def test_create_adhesion_recurrente_le_tiers_lustre(self, page, login_as_admin, django_shell):
+        """Crée "Adhésion récurrente (Le Tiers-Lustre) <suffixe>" avec 2 tarifs récurrents,
+        vérifie la base et /memberships/.
+        / Creates the product with 2 recurring prices, checks the database and /memberships/.
         """
-        # --- Étape 1 : Connexion admin ---
-        # / Step 1: Admin login
-        login_as_admin(page)
-
-        # --- Étape 2 : Naviguer vers le proxy MembershipProduct ---
-        # Le proxy fixe la catégorie ADHESION automatiquement (champ caché).
-        # / Step 2: Navigate to the MembershipProduct proxy
-        # The proxy sets the ADHESION category automatically (hidden field).
-        page.goto('/admin/BaseBillet/membershipproduct/')
-        page.wait_for_load_state('networkidle')
-
-        # Chercher si le produit existe déjà dans la changelist.
-        # Si oui, on l'édite ; sinon, on crée un nouveau.
-        # / Check if the product already exists in the changelist.
-        # If yes, edit it; if no, create a new one.
-        product_link = page.locator('#result_list a, .result-list a').filter(
-            has_text='Adhésion récurrente (Le Tiers-Lustre)'
-        ).first
-
-        if product_link.count() > 0:
-            # Produit existant → éditer.
-            # / Existing product → edit.
-            product_link.click()
-        else:
-            # Produit inexistant → créer.
-            # / Product doesn't exist → create.
+        nom_du_produit = f"Adhésion récurrente (Le Tiers-Lustre) {uuid.uuid4().hex[:6]}"
+        try:
+            # --- Étape 1 : Connexion admin, formulaire de création ---
+            # Le proxy MembershipProduct fixe la catégorie ADHESION (champ caché).
+            # / Step 1: admin login, creation form. The proxy sets the ADHESION category.
+            login_as_admin(page)
             page.goto('/admin/BaseBillet/membershipproduct/add/')
+            page.wait_for_load_state('networkidle')
 
-        page.wait_for_load_state('networkidle')
+            # --- Étape 2 : Informations de base ---
+            # / Step 2: basic info
+            page.locator('input[name="name"]').fill(nom_du_produit)
+            page.locator('input[name="short_description"]').first.fill(
+                'Adhésion avec paiements récurrents'
+            )
 
-        # --- Étape 3 : Remplir les informations de base du produit ---
-        # / Step 3: Fill in the basic product info
-        page.locator('input[name="name"]').fill('Adhésion récurrente (Le Tiers-Lustre)')
+            # --- Étape 3 : Deux tarifs à paiement récurrent ---
+            # / Step 3: two recurring-payment prices
+            _add_inline_price(page, {'name': 'Journalière', 'prix': 2, 'subscription_type': 'D'})
+            _add_inline_price(page, {'name': 'Mensuelle', 'prix': 20, 'subscription_type': 'M'})
 
-        # Pas de sélection de catégorie : le proxy MembershipProduct la fixe (champ caché).
-        # / No category selection: the MembershipProduct proxy sets it (hidden field).
+            # --- Étape 4 : Enregistrer ---
+            # / Step 4: save
+            page.locator('[name="_save"]').first.click()
+            page.wait_for_load_state('networkidle')
 
-        # Remplir la description courte si le champ est présent.
-        # / Fill the short description if the field is present.
-        short_desc = page.locator('input[name="short_description"]').first
-        if short_desc.count() > 0:
-            short_desc.fill('Adhésion avec paiements récurrents')
+            # --- Étape 5 : La base porte exactement ce qu'on a saisi ---
+            # Un produit d'adhesion, deux tarifs, TOUS DEUX a paiement recurrent.
+            # / Step 5: one membership product, two prices, BOTH with recurring payment.
+            sortie = django_shell(
+                "from BaseBillet.models import Product\n"
+                f"produits = Product.objects.filter(name='{nom_du_produit}')\n"
+                "print('NOMBRE=' + str(produits.count()))\n"
+                "p = produits.first()\n"
+                "print('CATEGORIE=' + str(p.categorie_article if p else None))\n"
+                "tarifs = sorted((t.name, int(t.prix), t.subscription_type, t.recurring_payment) "
+                "for t in p.prices.all()) if p else []\n"
+                "print('TARIFS=' + repr(tarifs))"
+            )
+            assert "NOMBRE=1" in sortie, f"Produit non enregistre (ou en double) : {sortie[-300:]}"
+            assert "CATEGORIE=A" in sortie, f"Le produit n'est pas une adhesion : {sortie[-300:]}"
+            assert (
+                "TARIFS=[('Journalière', 2, 'D', True), ('Mensuelle', 20, 'M', True)]" in sortie
+            ), f"Les tarifs enregistres ne sont pas ceux saisis (recurrence comprise) : {sortie[-300:]}"
 
-        # --- Étape 4 : Ajouter les tarifs inline récurrents ---
-        # Tarif 1 : Journalière, 2€, abonnement quotidien (D).
-        # / Step 4: Add inline recurring prices
-        # Price 1: Journalière, 2€, daily subscription (D).
-        _add_inline_price(page, {
-            'name': 'Journalière',
-            'prix': 2,
-            'subscription_type': 'D',
-        })
-
-        # Tarif 2 : Mensuelle, 20€, abonnement mensuel (M).
-        # / Price 2: Mensuelle, 20€, monthly subscription (M).
-        _add_inline_price(page, {
-            'name': 'Mensuelle',
-            'prix': 20,
-            'subscription_type': 'M',
-        })
-
-        # --- Étape 5 : Sauvegarder le formulaire ---
-        # Django admin Unfold : le bouton Save a l'attribut name="_save".
-        # / Step 5: Save the form
-        # Django admin Unfold: the Save button has name="_save" attribute.
-        save_button = page.locator('[name="_save"]').first
-        save_button.click()
-        page.wait_for_load_state('networkidle')
-
-        # Vérifier l'absence d'erreur de validation.
-        # Unfold affiche les erreurs dans .errorlist ou .errornote.
-        # / Verify no validation errors.
-        # Unfold displays errors in .errorlist or .errornote.
-        content = page.content()
-        assert (
-            'errorlist' not in content
-            or 'was saved successfully' in content
-            or '/admin/BaseBillet/membershipproduct/' in page.url
-        ), f"Erreur probable lors de la sauvegarde. URL: {page.url}"
-
-        # --- Étape 6 : Vérifier la visibilité sur /memberships/ ---
-        # / Step 6: Verify visibility on /memberships/
-        page.goto('/memberships/')
-        page.wait_for_load_state('networkidle')
-
-        page_content = page.content()
-        assert 'Adhésion récurrente' in page_content, (
-            f"Le produit 'Adhésion récurrente (Le Tiers-Lustre)' n'est pas visible "
-            f"sur /memberships/. URL: {page.url}"
-        )
+            # --- Étape 6 : Le produit est proposé sur /memberships/ ---
+            # / Step 6: the product is offered on /memberships/
+            page.goto('/memberships/')
+            page.wait_for_load_state('networkidle')
+            carte = page.locator('[data-testid^="membership-card-"]').filter(has_text=nom_du_produit)
+            expect(carte).to_be_visible()
+        finally:
+            # Nettoyage : les tarifs d'abord (Price.product est PROTECT), puis le produit.
+            # / Cleanup: prices first (Price.product is PROTECT), then the product.
+            django_shell(
+                "from BaseBillet.models import Price, Product\n"
+                f"Price.objects.filter(product__name='{nom_du_produit}').delete()\n"
+                f"Product.objects.filter(name='{nom_du_produit}').delete()"
+            )

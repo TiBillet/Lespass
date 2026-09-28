@@ -34,7 +34,8 @@ pour ne pas être coupés par ce défilement.
                 {% endif %}
                 <span>
                     <a class="place-id__name place-id__name--lien" href="/"
-                       hx-get="/" hx-target="body" hx-push-url="true">{{ config.organisation }}</a>
+                       hx-get="/" hx-target="body" hx-push-url="true"
+                       data-testid="tenant-header-nom">{{ config.organisation }}</a>
                     <span class="place-id__tagline">
                         {% if config.postal_address %}
                             {{ config.postal_address }}

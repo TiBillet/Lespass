@@ -418,6 +418,119 @@ class TestBillingIntegration:
             Token.objects.filter(wallet=wallet_zero).delete()
             wallet_zero.delete()
 
+    def test_08_pour_end_reparti_sur_deux_monnaies_enregistre_le_montant_entier(
+        self, billing_client, billing_headers, tireuse_billing, tenant,
+    ):
+        """Un tirage paye avec deux monnaies enregistre le prix entier du tirage.
+
+        La carte porte 1,00 € de monnaie cadeau (TNF) et 10,00 € de monnaie
+        locale (TLF). Un tirage de 500 ml a 5 €/L coute 2,50 € : la cascade prend
+        1,00 € en cadeau puis 1,50 € en monnaie locale. Deux lignes, chacune au
+        prix unitaire du tirage (250), la part de chaque monnaie dans qty. La
+        somme des montants (amount x qty) vaut 250.
+        / A pour paid with two currencies records the full pour price: two lines
+        at the unit price, shares in qty, amounts summing to 250.
+
+        Les monnaies sont celles que la facturation choisit elle-meme : la
+        premiere de chaque categorie parmi les assets accessibles du lieu.
+        / The currencies are those billing picks itself.
+        """
+        with schema_context(tenant.schema_name):
+            from AuthBillet.models import Wallet
+            from BaseBillet.models import LigneArticle, SaleOrigin
+            from QrcodeCashless.models import CarteCashless
+            from fedow_core.models import Asset, Token
+            from fedow_core.services import AssetService
+
+            assets_accessibles = AssetService.obtenir_assets_accessibles(tenant)
+            asset_cadeau = assets_accessibles.filter(category=Asset.TNF).first()
+            asset_local = assets_accessibles.filter(category=Asset.TLF).first()
+            assert asset_cadeau is not None, "Aucun asset TNF accessible pour ce lieu."
+            assert asset_local is not None, "Aucun asset TLF accessible pour ce lieu."
+
+            tag_id = uuid.uuid4().hex[:8].upper()
+            wallet_client = Wallet.objects.create(
+                origin=tenant,
+                name=f"Wallet test tirage reparti {tag_id}",
+            )
+            carte_deux_monnaies = CarteCashless.objects.create(
+                tag_id=tag_id,
+                number=uuid.uuid4().hex[:8].upper(),
+                wallet_ephemere=wallet_client,
+            )
+            Token.objects.create(wallet=wallet_client, asset=asset_cadeau, value=100)
+            Token.objects.create(wallet=wallet_client, asset=asset_local, value=1000)
+
+        # La base de dev est partagee et ce test n'a pas de rollback : tout ce
+        # qu'il cree (carte, wallet, tokens, transactions, lignes de vente) est
+        # supprime a la fin, meme en cas d'echec. Ordre impose par les PROTECT :
+        # lignes, transactions, tokens, carte, wallet.
+        # / Shared dev DB, no rollback: everything created is deleted at the end,
+        #   in the order imposed by PROTECT foreign keys.
+        try:
+            reponse_autorisation = billing_client.post(
+                "/controlvanne/api/tireuse/authorize/",
+                data={
+                    "tireuse_uuid": str(tireuse_billing.uuid),
+                    "uid": carte_deux_monnaies.tag_id,
+                },
+                content_type="application/json",
+                **billing_headers,
+            )
+            assert reponse_autorisation.status_code == 200
+            assert reponse_autorisation.json()["authorized"] is True
+
+            reponse_fin = billing_client.post(
+                "/controlvanne/api/tireuse/event/",
+                data={
+                    "tireuse_uuid": str(tireuse_billing.uuid),
+                    "uid": carte_deux_monnaies.tag_id,
+                    "event_type": "pour_end",
+                    "volume_ml": "500.00",
+                },
+                content_type="application/json",
+                **billing_headers,
+            )
+            assert reponse_fin.status_code == 200, reponse_fin.content.decode()[:400]
+            assert reponse_fin.json().get("montant_centimes") == 250
+
+            with schema_context(tenant.schema_name):
+                lignes_du_tirage = list(
+                    LigneArticle.objects.filter(
+                        carte=carte_deux_monnaies,
+                        sale_origin=SaleOrigin.TIREUSE,
+                    )
+                )
+
+                assert len(lignes_du_tirage) == 2, (
+                    f"Attendu 2 lignes (une par monnaie), obtenu {len(lignes_du_tirage)}"
+                )
+                for une_ligne in lignes_du_tirage:
+                    assert une_ligne.amount == 250, (
+                        f"amount doit etre le prix du tirage (250), obtenu {une_ligne.amount}"
+                    )
+
+                somme_des_qty = sum(Decimal(une_ligne.qty) for une_ligne in lignes_du_tirage)
+                assert somme_des_qty == Decimal("1"), f"Somme des qty : {somme_des_qty}"
+
+                somme_des_montants = sum(
+                    Decimal(une_ligne.amount) * Decimal(une_ligne.qty)
+                    for une_ligne in lignes_du_tirage
+                )
+                assert somme_des_montants == Decimal("250"), (
+                    f"Montant enregistre {somme_des_montants}, attendu 250"
+                )
+        finally:
+            with schema_context(tenant.schema_name):
+                from fedow_core.models import Transaction
+
+                LigneArticle.objects.filter(carte=carte_deux_monnaies).delete()
+                Transaction.objects.filter(card=carte_deux_monnaies).delete()
+                Transaction.objects.filter(sender=wallet_client).delete()
+                Token.objects.filter(wallet=wallet_client).delete()
+                carte_deux_monnaies.delete()
+                wallet_client.delete()
+
 
 # ─────────────────────────────────────────────────────────────────────
 # TestSessionOrpheline — session restée ouverte (card_removed perdu)

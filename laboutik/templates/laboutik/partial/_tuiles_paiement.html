@@ -58,7 +58,7 @@ Les data-testid sont lus par les tests : ne pas les renommer.
       <c-V2.bt.paiement name='{% translate "CHÈQUE" %}' icon="cheque" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=CH&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')" data-loading-disable data-testid="paiement-btn-cheque" />
     {% endif %}
     {% if mode_gerant %}
-      <c-V2.bt.paiement name='{% translate "OFFRIR" %}' icon="gift" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=gift" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')" data-loading-disable data-testid="paiement-btn-offrir" />
+      <c-V2.bt.paiement name='{% translate "OFFRIR" %}' icon="gift" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=gift&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')" data-loading-disable data-testid="paiement-btn-offrir" />
     {% endif %}
   {% endif %}
 </div>

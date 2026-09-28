@@ -70,10 +70,14 @@ def admin_user(tenant):
 
 @pytest.fixture(scope="module")
 def premier_pv(test_data):
-    """Le premier point de vente (Bar).
-    / The first point of sale (Bar)."""
+    """Le point de vente « Bar », cree par create_test_pos_data.
+    / The "Bar" point of sale, created by create_test_pos_data.
+
+    Vise par son nom : trier par poid_liste ne suffit pas, d'autres tests laissent
+    des points de vente a poid_liste 0 dans lespass, et l'ex aequo tombait au hasard.
+    / Targeted by name: other tests leave poid_liste 0 points of sale behind."""
     with schema_context(TENANT_SCHEMA):
-        return PointDeVente.objects.filter(hidden=False).order_by('poid_liste').first()
+        return PointDeVente.objects.get(name="Bar")
 
 
 @pytest.fixture(scope="module")
@@ -405,11 +409,11 @@ class TestGardeCorrectionPostCloture:
 
 
 @pytest.mark.usefixtures("test_data")
-class TestRapportJson13Cles:
-    """Le rapport JSON a 13 sections.
-    / The JSON report has 13 sections."""
+class TestRapportJson14Cles:
+    """Le rapport JSON a 14 sections.
+    / The JSON report has 14 sections."""
 
-    def test_rapport_json_13_cles(
+    def test_rapport_json_14_cles(
         self, admin_user, tenant, premier_pv, premier_produit_et_prix,
     ):
         with schema_context(TENANT_SCHEMA):
@@ -426,14 +430,15 @@ class TestRapportJson13Cles:
             ).order_by('-numero_sequentiel').first()
             rapport = cloture.rapport_json
 
-            # 13 cles attendues du RapportComptableService
-            # / 13 expected keys from RapportComptableService
+            # 15 cles attendues du RapportComptableService
+            # / 15 expected keys from RapportComptableService
             cles_attendues = [
-                'totaux_par_moyen', 'detail_ventes', 'tva', 'solde_caisse',
+                'totaux_par_moyen', 'detail_ventes', 'offerts', 'non_monetaire',
+                'tva', 'solde_caisse',
                 'recharges', 'adhesions', 'remboursements', 'habitus',
                 'billets', 'synthese_operations', 'operateurs',
                 'ventilation_par_pv', 'infos_legales',
             ]
             for cle in cles_attendues:
                 assert cle in rapport, f"Cle manquante: {cle}"
-            assert len(rapport) == 13
+            assert len(rapport) == 15

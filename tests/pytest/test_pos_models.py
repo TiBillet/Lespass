@@ -464,13 +464,9 @@ def test_create_test_pos_data_command(tenant):
     / Verify that create_test_pos_data command creates expected data.
     Includes Adhesion POS and multi-rate membership products verification.
     """
-    # Lancer la commande en forcant le schema du test via schema_context.
-    # La commande detecte qu'elle est deja dans un tenant (schema != "public")
-    # et utilise ce schema. Sans ca, elle prendrait le premier tenant non-public
-    # qui pourrait etre different de TENANT_SCHEMA.
-    # / Run the command inside schema_context so it uses our test tenant.
-    # The command detects it's already in a tenant (schema != "public")
-    # and uses that schema. Without this, it would pick the first non-public tenant.
+    # La commande remplit le lieu de son option --schema (defaut : lespass), jamais le
+    # schema courant de la connexion. Le schema_context sert aux lectures qui suivent.
+    # / The command fills its --schema venue (default lespass), never the current schema.
     #
     # On MOCKE FedowAPI : depuis que la resolution du wallet d'une carte passe par
     # Fedow (source de verite), tout chemin de la commande qui resoudrait un wallet

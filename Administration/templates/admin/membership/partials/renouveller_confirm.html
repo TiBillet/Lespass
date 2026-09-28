@@ -32,7 +32,7 @@ Le bouton "Annuler" vide la zone via renouveller_reset.
         {% if membership.contribution_value %}
         <p>
             <strong>{% translate "Contribution actuelle" %} :</strong>
-            {{ membership.contribution_value }} €
+            {{ membership.contribution_value }} {{ membership.unite_de_la_contribution }}
         </p>
         {% endif %}
     </div>

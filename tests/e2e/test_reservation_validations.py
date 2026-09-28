@@ -132,11 +132,14 @@ class TestReservationValidations:
         option_radio = page.locator('[data-testid^="booking-option-radio-"]').first
         option_checkbox = page.locator('[data-testid^="booking-option-checkbox-"]').first
 
+        # L'evenement (options radio et case) et le produit (prix libre, deux champs
+        # obligatoires) sont crees par ce test : tous leurs champs sont ATTENDUS.
+        # / The event and product are created by this test: all their fields are EXPECTED.
         email_input.fill(user_email)
         confirm_input.fill(f"{user_email}.bad")
 
-        if boolean_input.is_visible():
-            boolean_input.check()
+        expect(boolean_input).to_be_visible()
+        boolean_input.check()
 
         # Incrémenter le bs-counter à 1 via evaluate / Set bs-counter to 1
         price_block.evaluate(
@@ -150,14 +153,14 @@ class TestReservationValidations:
         )
 
         custom_amount_input = price_block.locator('input[name^="custom_amount_"]').first
-        if custom_amount_input.is_visible():
-            custom_amount_input.fill("7")
-        if option_radio.is_visible():
-            option_radio.check()
-        if option_checkbox.is_visible():
-            option_checkbox.check()
-        if multi_select_input.is_visible():
-            multi_select_input.check()
+        expect(custom_amount_input).to_be_visible()
+        custom_amount_input.fill("7")
+        expect(option_radio).to_be_visible()
+        option_radio.check()
+        expect(option_checkbox).to_be_visible()
+        option_checkbox.check()
+        expect(multi_select_input).to_be_visible()
+        multi_select_input.check()
 
         submit_button.click()
 
@@ -169,8 +172,8 @@ class TestReservationValidations:
             f"Le message devrait contenir 'emails', got: {validation_message}"
         )
 
-        if boolean_input.is_visible():
-            boolean_input.uncheck()
+        expect(boolean_input).to_be_visible()
+        boolean_input.uncheck()
 
         # --- Étape 6 : Aucun billet sélectionné ---
         # Remettre tous les bs-counter à 0 / Reset all bs-counters to 0
@@ -184,14 +187,14 @@ class TestReservationValidations:
         )
 
         confirm_input.fill(user_email)
-        if boolean_input.is_visible():
-            boolean_input.check()
-        if option_radio.is_visible():
-            option_radio.check()
-        if option_checkbox.is_visible():
-            option_checkbox.check()
-        if multi_select_input.is_visible():
-            multi_select_input.check()
+        expect(boolean_input).to_be_visible()
+        boolean_input.check()
+        expect(option_radio).to_be_visible()
+        option_radio.check()
+        expect(option_checkbox).to_be_visible()
+        option_checkbox.check()
+        expect(multi_select_input).to_be_visible()
+        multi_select_input.check()
 
         submit_button.click()
 
@@ -216,10 +219,10 @@ class TestReservationValidations:
         custom_amount_input.fill("7")
 
         # --- Étape 8 : Champs dynamiques requis ---
-        if boolean_input.is_visible():
-            boolean_input.uncheck()
-        if multi_select_input.is_visible():
-            multi_select_input.uncheck()
+        expect(boolean_input).to_be_visible()
+        boolean_input.uncheck()
+        expect(multi_select_input).to_be_visible()
+        multi_select_input.uncheck()
 
         submit_button.click()
 

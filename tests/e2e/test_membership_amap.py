@@ -6,12 +6,14 @@ Conversion de tests/playwright/tests/06-membership-amap.spec.ts
 
 Ce test vérifie que :
 / This test verifies that:
-- Un admin peut créer (ou éditer) le produit d'adhésion "Panier AMAP (Le Tiers-Lustre)"
+- Un admin peut créer un produit d'adhésion "Panier AMAP (Le Tiers-Lustre) <suffixe>"
   via le proxy MembershipProduct (catégorie fixée par le proxy, pas de select visible).
-  / An admin can create (or edit) "Panier AMAP (Le Tiers-Lustre)" via the
-  MembershipProduct proxy (category set by the proxy, no visible select).
-- Une courte description et des options de livraison (cases à cocher) peuvent être remplies.
-  / A short description and delivery options (checkboxes) can be filled.
+  / An admin can create an AMAP membership product via the MembershipProduct proxy.
+- Une courte description peut être remplie.
+  / A short description can be filled.
+  Les options de livraison (OptionGenerale) ne sont PAS testées : leurs champs sont
+  commentés dans l'admin des produits (Administration/admin/products.py), on ne peut
+  pas les choisir. / Delivery options are NOT tested: not exposed in the product admin.
 - Deux tarifs peuvent être ajoutés en inline :
     - "Annuelle" (400€, Y)
     - "Mensuelle" (40€, M)
@@ -21,14 +23,17 @@ Ce test vérifie que :
 - Le produit est visible sur la page publique /memberships/.
   / The product is visible on the public /memberships/ page.
 
-ATTENTION : ce test peut modifier un produit existant ou en créer un nouveau dans la DB
-partagée (sans rollback). "Panier AMAP (Le Tiers-Lustre)" est une donnée de référence
-de l'environnement de dev.
-/ WARNING: this test may modify an existing product or create a new one in the shared DB
-(no rollback). "Panier AMAP (Le Tiers-Lustre)" is reference data in the dev environment.
+Le produit porte un nom UNIQUE par run, et il est supprimé en fin de test (base de dev
+partagée, sans rollback). Avant, le test éditait un produit de référence s'il existait
+(2 tarifs de plus à chaque run), et sa vérification finale (« AMAP » OU « Panier » dans
+la page) était vraie dès qu'un autre produit portait l'un de ces mots.
+/ The product has a UNIQUE name per run and is deleted at the end (shared dev DB).
 """
 
+import uuid
+
 import pytest
+from playwright.sync_api import expect
 
 
 pytestmark = pytest.mark.e2e
@@ -92,107 +97,63 @@ class TestMembershipAmap:
     / Creation of AMAP membership product via the MembershipProduct admin proxy.
     """
 
-    def test_create_product_panier_amap(self, page, login_as_admin):
-        """Crée ou édite "Panier AMAP (Le Tiers-Lustre)" avec 2 tarifs, vérifie /memberships/.
-        / Creates or edits "Panier AMAP (Le Tiers-Lustre)" with 2 prices, verifies /memberships/.
+    def test_create_product_panier_amap(self, page, login_as_admin, django_shell):
+        """Crée "Panier AMAP (Le Tiers-Lustre) <suffixe>" avec 2 tarifs, vérifie la base et /memberships/.
+        / Creates the product with 2 prices, checks the database and /memberships/.
         """
-        # --- Étape 1 : Connexion admin ---
-        # / Step 1: Admin login
-        login_as_admin(page)
-
-        # --- Étape 2 : Naviguer vers la liste et éditer ou créer le produit ---
-        # L'admin produit a été refondu en proxys : les adhésions se créent via
-        # /admin/BaseBillet/membershipproduct/ (la catégorie est fixée par le proxy).
-        # / Product admin was split into proxies: memberships are created via
-        # the membershipproduct proxy (category is set by the proxy itself).
-        page.goto('/admin/BaseBillet/membershipproduct/')
-        page.wait_for_load_state('networkidle')
-
-        # Chercher si le produit existe déjà dans la changelist.
-        # Si oui, on l'édite ; sinon, on crée un nouveau.
-        # / Check if the product already exists in the changelist.
-        # If yes, edit it; if no, create a new one.
-        product_link = page.locator('#result_list a, .result-list a').filter(
-            has_text='Panier AMAP (Le Tiers-Lustre)'
-        ).first
-
-        if product_link.count() > 0:
-            # Produit existant → éditer.
-            # / Existing product → edit.
-            product_link.click()
-        else:
-            # Produit inexistant → créer.
-            # / Product doesn't exist → create.
+        nom_du_produit = f"Panier AMAP (Le Tiers-Lustre) {uuid.uuid4().hex[:6]}"
+        try:
+            # --- Étape 1 : Connexion admin, formulaire de création ---
+            # / Step 1: admin login, creation form
+            login_as_admin(page)
             page.goto('/admin/BaseBillet/membershipproduct/add/')
+            page.wait_for_load_state('networkidle')
 
-        page.wait_for_load_state('networkidle')
+            # --- Étape 2 : Informations de base ---
+            # / Step 2: basic info
+            page.locator('input[name="name"]').fill(nom_du_produit)
+            page.locator('input[name="short_description"]').first.fill(
+                "Adhésion au panier de l'AMAP partenaire Le Tiers-Lustre"
+            )
 
-        # --- Étape 3 : Remplir les informations de base du produit ---
-        # / Step 3: Fill in the basic product info
-        page.locator('input[name="name"]').fill('Panier AMAP (Le Tiers-Lustre)')
+            # --- Étape 3 : Deux tarifs en inline ---
+            # / Step 3: two inline prices
+            _add_inline_price(page, {'name': 'Annuelle', 'prix': 400, 'subscription_type': 'Y'})
+            _add_inline_price(page, {'name': 'Mensuelle', 'prix': 40, 'subscription_type': 'M'})
 
-        # Pas de sélection de catégorie : le proxy MembershipProduct la fixe (champ caché).
-        # / No category selection: the MembershipProduct proxy sets it (hidden field).
+            # --- Étape 4 : Enregistrer ---
+            # / Step 4: save
+            page.locator('[name="_save"]').first.click()
+            page.wait_for_load_state('networkidle')
 
-        # Remplir la description courte.
-        # / Fill the short description.
-        short_desc = page.locator('input[name="short_description"]').first
-        short_desc.fill("Adhésion au panier de l'AMAP partenaire Le Tiers-Lustre")
+            # --- Étape 5 : La base porte exactement ce qu'on a saisi ---
+            # / Step 5: the database holds exactly what was typed
+            sortie = django_shell(
+                "from BaseBillet.models import Product\n"
+                f"produits = Product.objects.filter(name='{nom_du_produit}')\n"
+                "print('NOMBRE=' + str(produits.count()))\n"
+                "p = produits.first()\n"
+                "print('CATEGORIE=' + str(p.categorie_article if p else None))\n"
+                "tarifs = sorted((t.name, int(t.prix), t.subscription_type) for t in p.prices.all()) if p else []\n"
+                "print('TARIFS=' + repr(tarifs))"
+            )
+            assert "NOMBRE=1" in sortie, f"Produit non enregistre (ou en double) : {sortie[-300:]}"
+            assert "CATEGORIE=A" in sortie, f"Le produit n'est pas une adhesion : {sortie[-300:]}"
+            assert "TARIFS=[('Annuelle', 400, 'Y'), ('Mensuelle', 40, 'M')]" in sortie, (
+                f"Les tarifs enregistres ne sont pas ceux saisis : {sortie[-300:]}"
+            )
 
-        # Cocher les options de livraison si elles existent dans le formulaire.
-        # Ces champs dépendent de la configuration du formulaire d'adhésion AMAP.
-        # / Check the delivery options if they exist in the form.
-        # These fields depend on the AMAP membership form configuration.
-        for option_value in ('livraison_asso', 'livraison_maison'):
-            checkbox = page.locator(
-                f'input[value="{option_value}"]'
-            ).first
-            if checkbox.count() > 0:
-                checkbox.check()
-
-        # --- Étape 4 : Ajouter les tarifs inline ---
-        # Tarif 1 : Annuelle, 400€, abonnement annuel (Y).
-        # / Step 4: Add inline prices
-        # Price 1: Annuelle, 400€, annual subscription (Y).
-        _add_inline_price(page, {
-            'name': 'Annuelle',
-            'prix': 400,
-            'subscription_type': 'Y',
-        })
-
-        # Tarif 2 : Mensuelle, 40€, abonnement mensuel (M).
-        # / Price 2: Mensuelle, 40€, monthly subscription (M).
-        _add_inline_price(page, {
-            'name': 'Mensuelle',
-            'prix': 40,
-            'subscription_type': 'M',
-        })
-
-        # --- Étape 5 : Sauvegarder le formulaire ---
-        # Django admin Unfold : le bouton Save a l'attribut name="_save".
-        # / Step 5: Save the form
-        # Django admin Unfold: the Save button has name="_save" attribute.
-        save_button = page.locator('[name="_save"]').first
-        save_button.click()
-        page.wait_for_load_state('networkidle')
-
-        # Vérifier qu'il n'y a pas d'erreur de validation dans la page.
-        # Unfold et Django admin affichent les erreurs dans .errorlist ou .errornote.
-        # / Verify there are no validation errors on the page.
-        # Unfold and Django admin display errors in .errorlist or .errornote.
-        content = page.content()
-        assert 'errorlist' not in content or 'was saved successfully' in content or \
-               '/admin/BaseBillet/membershipproduct/' in page.url, (
-            f"Erreur probable lors de la sauvegarde. URL: {page.url}"
-        )
-
-        # --- Étape 6 : Vérifier la visibilité sur /memberships/ ---
-        # / Step 6: Verify visibility on /memberships/
-        page.goto('/memberships/')
-        page.wait_for_load_state('networkidle')
-
-        page_content = page.content()
-        assert 'AMAP' in page_content or 'Panier' in page_content, (
-            f"Le produit 'Panier AMAP (Le Tiers-Lustre)' n'est pas visible sur /memberships/. "
-            f"URL: {page.url}"
-        )
+            # --- Étape 6 : Le produit est proposé sur /memberships/ ---
+            # / Step 6: the product is offered on /memberships/
+            page.goto('/memberships/')
+            page.wait_for_load_state('networkidle')
+            carte = page.locator('[data-testid^="membership-card-"]').filter(has_text=nom_du_produit)
+            expect(carte).to_be_visible()
+        finally:
+            # Nettoyage : les tarifs d'abord (Price.product est PROTECT), puis le produit.
+            # / Cleanup: prices first (Price.product is PROTECT), then the product.
+            django_shell(
+                "from BaseBillet.models import Price, Product\n"
+                f"Price.objects.filter(product__name='{nom_du_produit}').delete()\n"
+                f"Product.objects.filter(name='{nom_du_produit}').delete()"
+            )

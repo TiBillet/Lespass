@@ -14,15 +14,14 @@ session payée en production.
 / What REALLY goes through Stripe: the payment, every refund (Refund.create is NOT mocked),
 and the check (refunds read back from Stripe). Only the Checkout session stays simulated.
 
-Sur demande seulement : marqueur `stripe_reel`, lancé par `make test-stripe` (STRIPE_REEL=1).
-Sans la variable, ces tests sont ignorés et nommés en rouge en fin de run.
-/ On demand only: `stripe_reel` marker, run by `make test-stripe`.
+Marqueur `stripe_reel` : ces tests tournent à chaque `make test`. Sans Stripe, ils échouent.
+/ `stripe_reel` marker: these tests run on every `make test`. Without Stripe, they fail.
 
 Prérequis : réseau, clé racine Stripe de TEST (sk_test_…), compte Connect du lieu.
 / Requirements: network, Stripe TEST root key, the place's Connect account.
 
 Lancer / Run :
-    make test-stripe ARGS="tests/pytest/test_stripe_reel_remboursement.py -q"
+    make test ARGS="tests/pytest/test_stripe_reel_remboursement.py -q"
 """
 
 import pytest

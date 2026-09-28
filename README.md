@@ -141,20 +141,18 @@ Pour les détails d'installation, de configuration et de déploiement en product
 
 ## Tests
 
-Quatre facons de lancer la suite, via `make` (logique : `scripts/lancer_tests.sh`).
-Les tests qui appellent le vrai Stripe (mode test) ne tournent que sur demande ;
-sans elle, ils sont IGNORES et nommes en rouge en fin de run.
+Deux facons de lancer la suite, via `make` (logique : `scripts/lancer_tests.sh`).
+Les tests qui appellent le vrai Stripe (mode test) tournent a chaque fois : aucun
+test n'est ignore, ce qui ne peut pas tourner ECHOUE.
 
 ```bash
-make test          # 1. Python (~3 min) — modeles, vues, API. Stripe mocke.
-make test-stripe   # 2. Python + vrais paiements et remboursements Stripe (mode test)
-make e2e           # 3. E2E navigateur (~9 min) — Playwright, sans Stripe reel
-make e2e-stripe    # 4. E2E complets (~12 min) — exige `stripe listen` dans byobu
+make test          # Python (~11 min) — modeles, vues, API, paiements Stripe reels compris
+make e2e           # E2E navigateur (~14 min) — Playwright, exige `stripe listen` dans byobu
 
 make test ARGS="tests/pytest/test_stripe_refund.py -k panier"   # cibler
 ```
 
-Tous les modes exigent le serveur live (le script le verifie) : une partie des
+Les deux suites exigent le serveur live (le script le verifie) : une partie des
 tests l'appelle en HTTP.
 
 **Prerequis des modes E2E (3 et 4)** : le serveur Django tourne derriere Traefik
