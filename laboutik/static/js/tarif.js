@@ -311,13 +311,12 @@ function tarifSelection(event) {
 		}
 	})
 
-	// Pas sur de l'utilité de ça, a voir
 	// Focus sur le premier tarif : le clavier et le lecteur d'ecran entrent
 	// directement dans la popup. / Focus the first rate.
-	// const premierTarif = articlesZone.querySelector('#tarif-overlay .tarif-list button')
-	// if (premierTarif) {
-	// 	premierTarif.focus()
-	// }
+	const premierTarif = articlesZone.querySelector('#tarif-overlay .tarif-list button')
+	if (premierTarif) {
+		premierTarif.focus()
+	}
 }
 
 /**

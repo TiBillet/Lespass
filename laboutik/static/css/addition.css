@@ -178,6 +178,10 @@
 	cursor: default;
 }
 
+.addition-vider:not(:disabled) {
+	border: var(--invalid) 1px solid;
+}
+
 .addition-vider:not(:disabled):active {
 	background-color: var(--surface-2);
 }

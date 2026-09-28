@@ -90,6 +90,15 @@ function addArticle(uuid, price, name, currency) {
 function manageKey(event) {
 	const ele = event.target.parentNode
 
+	// Le clic peut venir d'un element deja retire de la page.
+	// Exemple : toucher le voile de la popup tarif (tarif.js) la supprime,
+	// puis le clic remonte jusqu'ici. Son parent vaut alors null.
+	// / The click may come from an element already removed from the page
+	// (e.g. the rate popup veil): its parent is then null.
+	if (!ele) {
+		return
+	}
+
 	if (ele.classList.contains('article-container')) {
 		const methodeCaisse = ele?.dataset?.methodeCaisse
 		// RE = recharge monnaie / RC = recharge cadeau / TM = recharge temps / VT = vente (service direct)
