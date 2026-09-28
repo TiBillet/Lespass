@@ -1696,10 +1696,18 @@ class MappingMoyenDePaiementAdmin(ModelAdmin):
         """
         form = super().get_form(request, obj, **kwargs)
         from BaseBillet.models import PaymentMethod
+        from laboutik.reports import MOYENS_HORS_ARGENT
         if 'moyen_de_paiement' in form.base_fields:
             from unfold.widgets import UnfoldAdminSelectWidget
+            # Un moyen hors argent (offert) n'encaisse rien : il n'a pas de
+            # compte de tresorerie a mapper.
+            # / A non-money method collects nothing: no cash account to map.
+            choix_des_moyens = [('', '---')]
+            for code, libelle in PaymentMethod.choices:
+                if code not in MOYENS_HORS_ARGENT:
+                    choix_des_moyens.append((code, libelle))
             form.base_fields['moyen_de_paiement'].widget = UnfoldAdminSelectWidget(
-                choices=[('', '---')] + list(PaymentMethod.choices),
+                choices=choix_des_moyens,
             )
         return form
 

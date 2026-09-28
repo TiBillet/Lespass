@@ -3852,6 +3852,15 @@ class LigneArticle(models.Model):
         Determine default VAT for this line from related Product TVA if available,
         otherwise fallback to global configuration, else 0.00.
         """
+        # Une ligne offerte n'est pas une vente en argent : pas de TVA. Sans
+        # cette regle, save() pose la TVA du produit sur une ligne creee sans
+        # TVA, et l'archive fiscale exporterait une TVA inventee.
+        # Limite : la regle joue a la CREATION seulement, et pas si l'appelant
+        # passe lui-meme une TVA non nulle.
+        # / A gifted line is not a money sale: no VAT (on creation only).
+        if self.payment_method == PaymentMethod.FREE:
+            return Decimal("0.00")
+
         # 1) Product TVA via PriceSold -> ProductSold -> Product
         try:
             if self.pricesold and self.pricesold.productsold and self.pricesold.productsold.product:

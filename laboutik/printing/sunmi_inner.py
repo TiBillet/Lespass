@@ -132,6 +132,19 @@ def ticket_data_to_json_commands(ticket_data):
             "align": "left",
         })
 
+    # --- Detail des moyens de paiement ---
+    # Meme regle que escpos_builder : seulement si au moins deux moyens ont servi.
+    # / Same rule as escpos_builder: only when two methods or more were used.
+    cascade_detail = ticket_data.get("cascade_detail", [])
+    if len(cascade_detail) >= 2:
+        for moyen in cascade_detail:
+            montant_euros = f"{moyen.get('total', 0) / 100:.2f}"
+            commands.append({
+                "type": "text",
+                "value": f"{moyen.get('name', '')}  {montant_euros}EUR",
+                "align": "left",
+            })
+
     # --- QR code ---
     qrcode_text = ticket_data.get("qrcode")
     if qrcode_text:

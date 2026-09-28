@@ -315,10 +315,11 @@ class TestClotureRapportJSON:
             assert cloture is not None
             rapport = cloture.rapport_json
 
-            # Les 13 cles du RapportComptableService
-            # / The 13 keys from RapportComptableService
+            # Les 14 cles du RapportComptableService
+            # / The 14 keys from RapportComptableService
             assert 'totaux_par_moyen' in rapport
             assert 'detail_ventes' in rapport
+            assert 'offerts' in rapport
             assert 'tva' in rapport
             assert 'solde_caisse' in rapport
             assert 'recharges' in rapport

@@ -107,7 +107,7 @@ from laboutik.serializers import (
     EnvoyerRapportSerializer,
     RechargeMontantLibreSerializer,
 )
-from laboutik.reports import RapportComptableService
+from laboutik.reports import MOYENS_HORS_ARGENT, RapportComptableService
 from inventaire.models import Stock, TypeMouvement
 from inventaire.serializers import MouvementRapideSerializer
 from inventaire.services import StockService
@@ -148,6 +148,7 @@ LABELS_MOYENS_PAIEMENT_DB = {
     PaymentMethod.LOCAL_EURO: _("Cashless"),
     PaymentMethod.LOCAL_GIFT: _("Cadeau"),
     PaymentMethod.FREE: _("Offert"),
+    PaymentMethod.STRIPE_FED: _("Monnaie fédérée"),
 }
 
 # Catégorie par défaut quand un produit n'a pas de categorie_pos
@@ -1797,6 +1798,40 @@ def _panier_contient_recharges_payantes(articles_panier):
     return False
 
 
+def _panier_peut_etre_offert(articles_panier, tag_id_carte_manager):
+    """
+    Le panier peut-il etre offert (tuile et paiement OFFRIR) ?
+    / Can the cart be gifted (GIFT tile and payment)?
+
+    LOCALISATION : laboutik/views.py
+
+    Oui si la carte primaire du caissier est en mode gerant, LU EN BASE
+    (CartePrimaire.edit_mode), jamais une valeur envoyee par le navigateur.
+    Non, meme en mode gerant, pour :
+    - un retour de consigne : c'est un remboursement, pas une vente ;
+    - une recharge en euros : offrir creerait de la monnaie locale remboursable.
+    / Yes when the cashier's primary card is in manager mode (read from the
+    database). Never for a deposit return or a euro top-up.
+
+    Appelee par / Called by : moyens_paiement(), _rendre_popup_paiement_client_identifie(),
+    _executer_paiement() (garde serveur / server guard).
+
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :param tag_id_carte_manager: tag de la carte primaire (POST « tag_id_cm »)
+    :return: bool
+    """
+    if not tag_id_carte_manager:
+        return False
+    carte_primaire_obj, erreur = _charger_carte_primaire(tag_id_carte_manager)
+    if erreur is not None or not carte_primaire_obj.edit_mode:
+        return False
+    if _panier_contient_retour_consigne(articles_panier):
+        return False
+    if _panier_contient_recharges_payantes(articles_panier):
+        return False
+    return True
+
+
 def _panier_contient_retour_consigne(articles_panier):
     """
     Vérifie si le panier contient au moins un retour de consigne (CR).
@@ -2706,13 +2741,18 @@ class CaisseViewSet(viewsets.ViewSet):
         totaux_par_moyen = service.calculer_totaux_par_moyen()
         solde_caisse = service.calculer_solde_caisse()
         nb_transactions = service.lignes.count()
+        offerts = service.calculer_offerts()
 
         # Formater et imprimer / Format and print
         from laboutik.printing.formatters import formatter_ticket_x
         from laboutik.printing.tasks import imprimer_async
 
         ticket_data = formatter_ticket_x(
-            totaux_par_moyen, solde_caisse, datetime_ouverture, nb_transactions
+            totaux_par_moyen,
+            solde_caisse,
+            datetime_ouverture,
+            nb_transactions,
+            offerts=offerts,
         )
 
         schema_name = connection.schema_name
@@ -3517,6 +3557,7 @@ class CaisseViewSet(viewsets.ViewSet):
         )
         if not est_un_fragment_historique:
             context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
+            context["offerts"] = service.calculer_offerts()
             context["tva"] = service.calculer_tva()
             context["solde_caisse"] = service.calculer_solde_caisse()
             context["ventilation_par_pv"] = service.calculer_ventilation_par_pv()
@@ -4776,7 +4817,11 @@ def _rendre_popup_paiement_client_identifie(
         "total": total_centimes / 100,
         "moyens_paiement": moyens_paiement,
         "moyens_paiement_csv": ",".join(moyens_paiement),
-        "mode_gerant": False,
+        # Tuile OFFRIR pour le gerant (adhesion, billet offerts).
+        # / GIFT tile for the manager (gifted membership, ticket).
+        "mode_gerant": _panier_peut_etre_offert(
+            articles_panier, request.POST.get("tag_id_cm", "")
+        ),
         "deposit_is_present": False,
         "comportement": "",
         "panier_a_recharges": panier_a_recharges,
@@ -5140,8 +5185,17 @@ def _creer_lignes_articles(
     for ligne_a_chainer in lignes_creees:
         # Calculer le HT (donnee elementaire LNE exigence 3)
         # / Compute HT (LNE req. 3 elementary data)
+        # Le HT porte sur le TTC de la LIGNE (prix unitaire x quantite), pas sur
+        # un seul article. Arrondi comme montant_ttc_centimes() des rapports
+        # (0,5 -> 1, comme Round() de PostgreSQL).
+        # / HT is computed on the LINE total (unit price x qty), not one item.
+        ttc_de_la_ligne_centimes = int(
+            Decimal(ligne_a_chainer.amount * ligne_a_chainer.qty).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
         ligne_a_chainer.total_ht = calculer_total_ht(
-            ligne_a_chainer.amount, ligne_a_chainer.vat
+            ttc_de_la_ligne_centimes, ligne_a_chainer.vat
         )
 
         # Chainer le HMAC avec la ligne precedente
@@ -5445,8 +5499,17 @@ def _creer_lignes_articles_cascade(
     for ligne_a_chainer in toutes_les_lignes_creees:
         # Calculer le HT (donnée élémentaire LNE exigence 3)
         # / Compute HT (LNE req. 3 elementary data)
+        # Le HT porte sur le TTC de la LIGNE (prix unitaire x quantite), pas sur
+        # un seul article. Arrondi comme montant_ttc_centimes() des rapports
+        # (0,5 -> 1, comme Round() de PostgreSQL).
+        # / HT is computed on the LINE total (unit price x qty), not one item.
+        ttc_de_la_ligne_centimes = int(
+            Decimal(ligne_a_chainer.amount * ligne_a_chainer.qty).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
         ligne_a_chainer.total_ht = calculer_total_ht(
-            ligne_a_chainer.amount, ligne_a_chainer.vat
+            ttc_de_la_ligne_centimes, ligne_a_chainer.vat
         )
 
         # Chaîner le HMAC avec la ligne précédente
@@ -6464,9 +6527,9 @@ class PaiementViewSet(viewsets.ViewSet):
         # / Payment methods as CSV for propagation through HTMX templates
         moyens_paiement_csv = ",".join(moyens_paiement_disponibles)
 
-        # Mode gérant : activé si la carte primaire est en mode édition
-        # Manager mode: enabled if primary card is in edit mode
-        est_mode_gerant = False
+        # Tuile OFFRIR : carte primaire en mode gerant et panier offrable.
+        # / GIFT tile: manager-mode primary card and giftable cart.
+        est_mode_gerant = _panier_peut_etre_offert(articles_panier, tag_id_carte_manager)
 
         # Le flux de remboursement ne s'affiche que si le panier est ENTIEREMENT
         # composé de retours. Sur un panier mélangé, le total passé en valeur absolue
@@ -6790,16 +6853,20 @@ class PaiementViewSet(viewsets.ViewSet):
                 uuid_transaction_impose=uuid_transaction_impose,
             )
 
-        # --- Panier gratuit (ex : billet a 0 €) ---
-        # Le bouton « Valider » du panier gratuit envoie moyen_paiement=gift.
-        # Il n'y a rien a encaisser : on enregistre la vente comme « Offert ».
-        # Le serveur recalcule le total : si le panier n'est pas a 0, on refuse.
-        # Sans cette garde, un POST force offrirait n'importe quel panier.
-        # / Free cart (e.g. 0 € ticket): recorded as "Offered". The server
-        # recomputes the total and refuses anything that is not 0.
+        # --- Panier offert : gratuit (billet a 0 €) ou OFFRIR du gerant ---
+        # Le bouton « Valider » d'un panier gratuit et la tuile OFFRIR envoient
+        # moyen_paiement=gift : la vente est enregistree « Offert » (FREE).
+        # Le serveur decide seul : le total recalcule vaut 0, ou la carte primaire
+        # est en mode gerant (lu en base) et le panier est offrable. Sans cette
+        # garde, un POST force offrirait n'importe quel panier.
+        # / Gifted cart: free (0 € ticket) or the manager's GIFT. The server alone
+        #   decides: recomputed total is 0, or manager mode (from the database).
         if moyen_paiement_code == "gift":
             panier_est_gratuit = total_centimes == 0 and len(articles_panier) > 0
-            if not panier_est_gratuit:
+            panier_offert_par_le_gerant = _panier_peut_etre_offert(
+                articles_panier, donnees_paiement.get("tag_id_cm", "")
+            )
+            if not panier_est_gratuit and not panier_offert_par_le_gerant:
                 context_erreur = {
                     "action": "initUrlAddition();",
                     "msg_type": "warning",
@@ -10260,9 +10327,12 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # Recuperer les lignes de cette transaction
         # / Get the lines for this transaction
+        # select_related : le ticket lit le tarif (nom de l'article) et le produit
+        # (detail d'une vente au poids) de chaque article, sans requete par article.
+        # / The receipt reads each item's price and product: no query per item.
         lignes_du_paiement = LigneArticle.objects.filter(
             uuid_transaction=uuid_transaction_str,
-        ).select_related("pricesold__productsold")
+        ).select_related("pricesold__productsold__product", "pricesold__price")
 
         if not lignes_du_paiement.exists():
             return render(
@@ -10484,6 +10554,24 @@ class PaiementViewSet(viewsets.ViewSet):
                     "msg_type": "warning",
                     "msg_content": _(
                         "Les paiements cashless ne peuvent pas etre modifies"
+                    ),
+                },
+                status=400,
+            )
+
+        # --- GARDE 1 bis : une ligne hors argent (offerte, recharge cadeau) ---
+        # Elle n'a rien encaisse. La « corriger » en especes ou CB ferait
+        # apparaitre dans le Z de l'argent jamais recu.
+        # / A non-money line collected nothing: correcting it into cash or card
+        #   would add money that was never received.
+        if ligne.payment_method in MOYENS_HORS_ARGENT:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Une vente offerte ne peut pas etre corrigee en paiement"
                     ),
                 },
                 status=400,
@@ -11092,6 +11180,25 @@ class CommandeViewSet(viewsets.ViewSet):
             f"payer_commande: commande={commande_uuid}, moyen={moyen_paiement_code}, "
             f"total={total_centimes}cts, articles={len(articles_panier)}"
         )
+
+        # Liste blanche des moyens d'une commande de table. Le moyen poste est
+        # transmis tel quel aux fonctions de paiement : sans cette garde, un POST
+        # « gift » enregistrerait la commande comme offerte, sans mode gerant.
+        # / Allowed methods for a table order: the posted method is passed as-is
+        #   to the payment functions; without this guard a "gift" POST would
+        #   record the order as gifted.
+        moyens_autorises_pour_une_commande = ("nfc", "espece", "carte_bancaire", "CH")
+        if moyen_paiement_code not in moyens_autorises_pour_une_commande:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Moyen de paiement non accepte pour une commande"),
+                    "selector_bt_retour": "#messages",
+                },
+                status=400,
+            )
 
         # --- Aiguillage NFC / non-NFC ---
         # --- NFC / non-NFC routing ---

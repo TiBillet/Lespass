@@ -118,6 +118,32 @@ pv / url_retour_pv, dont _hdr_retour_zone.html a besoin pour son bouton retour.
           </table>
         </div>
       {% endif %}
+
+      <!-- Articles offerts : hors argent, jamais additionnes au total -->
+      <!-- / Gifted items: not money, never added to the total -->
+      {% if rapport.offerts.par_produit %}
+        <div class="table-wrap mini-table" data-testid="cloture-offerts">
+          <h3 class="mini-table-title">{% translate "Offerts (hors argent)" %}</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>{% translate "Article" %}</th>
+                <th class="num">{% translate "Quantité" %}</th>
+                <th class="num">{% translate "Valeur offerte" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for offert in rapport.offerts.par_produit %}
+                <tr>
+                  <td>{{ offert.nom }}</td>
+                  <td class="num">{{ offert.qty|floatformat:"-2" }}</td>
+                  <td class="num">{{ offert.valeur|euros }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
     </div>
 
     <!-- Retour a l'ecran de selection du point de vente (ferme la caisse) -->

@@ -632,8 +632,25 @@ EMAIL_PORT = os.environ.get('EMAIL_PORT')
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL')
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', False)
-EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', True)
+
+# Les variables d'environnement sont des CHAINES : « False » est une chaine non
+# vide, donc vraie pour Python. On compare la valeur a une liste explicite.
+# Sans variable : TLS non, SSL oui (port 465). Un serveur sans chiffrement
+# (Mailpit en dev) demande EMAIL_USE_SSL=False.
+# / Env vars are STRINGS ("False" is truthy): compare to an explicit list.
+#   Unset: TLS off, SSL on. Mailpit in dev needs EMAIL_USE_SSL=False.
+valeurs_vraies = ('1', 'true', 'yes', 'on')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'False').strip().lower() in valeurs_vraies
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'True').strip().lower() in valeurs_vraies
+
+# Attente maximale (secondes) de CHAQUE echange avec le serveur SMTP : connexion,
+# poignee de main SSL, reponse a chaque commande. Sans elle, un serveur qui ne
+# repond plus bloque un worker Celery jusqu'a la limite de la tache (30 min),
+# et les envois suivants attendent derriere. 30 s laisse passer un gros envoi
+# legitime (rapport de cloture avec pieces jointes). Une valeur vide = 30.
+# / Max seconds for EACH exchange with the SMTP server. Without it a silent
+#   server blocks a Celery worker up to the task limit. Empty value = 30.
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT') or 30)
 
 # Celery Configuration Options
 CELERY_TIMEZONE = os.environ.get('TIME_ZONE', 'UTC')

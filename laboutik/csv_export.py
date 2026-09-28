@@ -99,6 +99,20 @@ def generer_csv_cloture(cloture: ClotureCaisse) -> str:
             ])
         writer.writerow([])
 
+    # --- Articles offerts (hors argent, jamais dans un total) ---
+    # / Gifted items (not money, never in a total)
+    offerts = rapport.get("offerts", {})
+    if offerts.get("par_produit"):
+        writer.writerow([_("Offerts (hors argent)")])
+        writer.writerow([_("Article"), _("Quantité"), _("Valeur offerte (EUR)")])
+        for offert in offerts["par_produit"]:
+            writer.writerow([
+                offert["nom"],
+                offert["qty"],
+                f"{offert['valeur'] / 100:.2f}",
+            ])
+        writer.writerow([])
+
     # --- Commandes / Orders ---
     commandes = rapport.get("commandes", {})
     if commandes:

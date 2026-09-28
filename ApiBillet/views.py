@@ -1339,9 +1339,25 @@ class Webhook_stripe(APIView):
             # Vérification de la requete chez Stripe
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
             transfer = stripe.Transfer.retrieve(transfer_id)
+            # Un refus renvoie une reponse 400 explicite et une ligne de journal,
+            # plutot qu'une exception qui finit en erreur 500 avec une trace serveur.
+            # / A refusal returns an explicit 400 and a log line, not a 500 crash.
             if stripe_connect_account != transfer.destination:
-                raise ValueError("Transfert stripe illegal")
-            amount = transfer.amount
+                logger.error(f"transfer.created : destinataire contredit par Stripe ({transfer_id})")
+                return Response("Transfert stripe illegal", status=status.HTTP_400_BAD_REQUEST)
+
+            # Le montant du payload doit etre celui que Stripe confirme. Le Fedow
+            # relit Stripe, mais l'ancien LaBoutik (amount / 100) et
+            # Paiement_stripe.total() lisent le payload : un montant qui contredit
+            # Stripe afficherait une somme fausse en caisse et dans l'admin.
+            # / The payload amount must match what Stripe confirms: legacy LaBoutik
+            #   and Paiement_stripe.total() read the payload.
+            if payload["data"]["object"]["amount"] != transfer.amount:
+                logger.error(f"transfer.created : montant contredit par Stripe ({transfer_id})")
+                return Response(
+                    "Montant du transfert stripe contredit par Stripe",
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             # On est sur le tenant root. Il faut chercher le tenant correspondant.
 

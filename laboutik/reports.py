@@ -86,6 +86,17 @@ ORIGINES_ENCAISSEES_PAR_LE_LIEU = [
     SaleOrigin.TIREUSE,
 ]
 
+# Moyens de paiement qui ne sont PAS de l'argent encaisse : un article offert ou
+# une recharge cadeau (FREE, la valeur offerte reste sur la ligne). Ces lignes
+# restent dans le perimetre de la cloture (hash, compteurs) mais n'entrent dans
+# AUCUN calcul d'argent : total, TVA, CA, FEC, panier moyen. Elles sont montrees
+# a part (section « Offerts », ligne « Cadeau emis »).
+# / Payment methods that are NOT collected money (FREE: gifted item or gift
+#   top-up). They stay in the closure scope but never in a money computation.
+MOYENS_HORS_ARGENT = [
+    PaymentMethod.FREE,
+]
+
 
 def sections_de_detail_pour_export(rapport_json):
     """
@@ -186,6 +197,11 @@ class RapportComptableService:
             "pricesold__productsold__product__categorie_pos",
             "carte",
         )
+
+        # Les lignes qui representent de l'argent. Tout calcul de montant part
+        # d'ici ; self.lignes (toutes les lignes) sert aux compteurs et au hash.
+        # / Lines that represent money. Every amount computation starts here.
+        self.lignes_argent = self.lignes.exclude(payment_method__in=MOYENS_HORS_ARGENT)
 
     # ------------------------------------------------------------------
     # 1. Totaux par moyen de paiement / Totals by payment method
@@ -322,7 +338,7 @@ class RapportComptableService:
         Grouped by category.
         """
         produits_agreg = (
-            self.lignes.values(
+            self.lignes_argent.values(
                 "pricesold__productsold__product__name",
                 "pricesold__productsold__product__categorie_pos__name",
                 "pricesold__productsold__product__prix_achat",
@@ -406,7 +422,7 @@ class RapportComptableService:
             # / Total weight/volume sold for this article (sum of weight_quantity)
             # + unit (GR / CL) read from product Stock in a single query.
             # Null if the article is not sold by weight.
-            poids_total_agreg = self.lignes.filter(
+            poids_total_agreg = self.lignes_argent.filter(
                 pricesold__productsold__product__name=article["nom"],
                 vat=taux_tva,
                 weight_quantity__isnull=False,
@@ -465,7 +481,7 @@ class RapportComptableService:
         / By VAT rate: total incl., excl., VAT amount.
         """
         tva_agreg = (
-            self.lignes.values("vat")
+            self.lignes_argent.values("vat")
             .annotate(
                 total_ttc=montant_ttc_centimes(),
             )
@@ -542,6 +558,67 @@ class RapportComptableService:
         }
 
     # ------------------------------------------------------------------
+    # 4 bis. Articles offerts / Gifted items
+    # ------------------------------------------------------------------
+    def calculer_offerts(self):
+        """
+        Articles offerts (bouton OFFRIR) : quantite, valeur offerte, cout d'achat,
+        par produit. Ce n'est pas de l'argent encaisse : jamais additionne a un
+        total. Les recharges cadeau n'y sont pas : elles sont dans
+        calculer_recharges (« cadeau emis »).
+        / Gifted items: quantity, gifted value, purchase cost, per product.
+        Never money. Gift top-ups are in calculer_recharges.
+        """
+        methodes_recharge = [
+            Product.RECHARGE_EUROS,
+            Product.RECHARGE_CADEAU,
+            Product.RECHARGE_TEMPS,
+        ]
+        offerts_par_produit = (
+            self.lignes.filter(payment_method__in=MOYENS_HORS_ARGENT)
+            .exclude(
+                pricesold__productsold__product__methode_caisse__in=methodes_recharge,
+            )
+            .values(
+                "pricesold__productsold__product__name",
+                "pricesold__productsold__product__prix_achat",
+            )
+            .annotate(
+                # Nom different du champ « qty » : montant_ttc_centimes() lit ce
+                # champ, une annotation homonyme le masquerait.
+                # / Name differs from the qty field, which montant_ttc_centimes reads.
+                quantite_offerte=Sum("qty"),
+                valeur=montant_ttc_centimes(),
+            )
+            .order_by("pricesold__productsold__product__name")
+        )
+
+        par_produit = []
+        qty_totale = 0.0
+        valeur_totale = 0
+        for offert in offerts_par_produit:
+            quantite_offerte = float(offert["quantite_offerte"] or 0)
+            # prix_achat est en centimes / prix_achat is in cents
+            prix_achat_unitaire = offert["pricesold__productsold__product__prix_achat"] or 0
+            par_produit.append(
+                {
+                    "nom": offert["pricesold__productsold__product__name"]
+                    or str(_("Inconnu")),
+                    "qty": quantite_offerte,
+                    "valeur": offert["valeur"] or 0,
+                    "cout_achat": int(round(prix_achat_unitaire * quantite_offerte)),
+                }
+            )
+            qty_totale += quantite_offerte
+            valeur_totale += offert["valeur"] or 0
+
+        return {
+            "par_produit": par_produit,
+            "qty_totale": qty_totale,
+            "valeur_totale": valeur_totale,
+        }
+
+    # ------------------------------------------------------------------
     # 5. Recharges cashless / Cashless top-ups
     # ------------------------------------------------------------------
     def calculer_recharges(self):
@@ -605,13 +682,23 @@ class RapportComptableService:
                 "moyen_paiement": moyen,
                 "total": ligne["total"] or 0,
                 "nb": ligne["nb"] or 0,
+                "hors_argent": moyen in MOYENS_HORS_ARGENT,
             }
 
-        # Total general des recharges / Overall top-up total
-        total_recharges = sum(v["total"] for v in resultat.values())
+        # Le total ne compte que l'argent encaisse. Une recharge cadeau (FREE)
+        # n'encaisse rien : sa valeur est donnee a part, « cadeau emis ».
+        # / The total only counts collected money; gift top-ups are given apart.
+        total_recharges = 0
+        total_cadeau_emis = 0
+        for recharge in resultat.values():
+            if recharge["hors_argent"]:
+                total_cadeau_emis += recharge["total"]
+            else:
+                total_recharges += recharge["total"]
         return {
             "detail": resultat,
             "total": total_recharges,
+            "cadeau_emis": total_cadeau_emis,
         }
 
     # ------------------------------------------------------------------
@@ -656,9 +743,16 @@ class RapportComptableService:
                 "moyen_paiement": moyen,
                 "total": ligne["total"] or 0,
                 "nb": ligne["nb"] or 0,
+                "hors_argent": moyen in MOYENS_HORS_ARGENT,
             }
 
-        total_adhesions = sum(v["total"] for v in detail.values())
+        # Le nombre compte toutes les adhesions (offertes comprises) ; le total
+        # ne compte que l'argent encaisse.
+        # / The count includes gifted memberships; the total only counts money.
+        total_adhesions = 0
+        for adhesion in detail.values():
+            if not adhesion["hors_argent"]:
+                total_adhesions += adhesion["total"]
         nb_adhesions = sum(v["nb"] for v in detail.values())
         return {
             "detail": detail,
@@ -712,7 +806,7 @@ class RapportComptableService:
 
         # Depenses par carte dans la periode / Spending per card in period
         depenses_par_carte = list(
-            self.lignes.filter(
+            self.lignes_argent.filter(
                 carte__isnull=False,
             )
             .values("carte")
@@ -732,7 +826,7 @@ class RapportComptableService:
 
         # Recharges par carte dans la periode / Top-ups per card in period
         recharges_par_carte = list(
-            self.lignes.filter(
+            self.lignes_argent.filter(
                 carte__isnull=False,
                 pricesold__productsold__product__methode_caisse__in=[
                     Product.RECHARGE_EUROS,
@@ -830,6 +924,7 @@ class RapportComptableService:
                 "reservation__event__datetime",
                 "pricesold__productsold__product__name",
                 "pricesold__price__name",
+                "payment_method",
             )
             .annotate(
                 nb=Count("uuid"),
@@ -859,14 +954,23 @@ class RapportComptableService:
             label_tarif = f"{nom_produit} / {nom_tarif}" if nom_tarif else nom_produit
             cle = f"{label_event}__{label_tarif}"
 
-            detail[cle] = {
-                "nom_event": nom_event,
-                "date_event": date_str,
-                "nom_produit": nom_produit,
-                "nom_tarif": nom_tarif,
-                "nb": ligne["nb"] or 0,
-                "total": ligne["total"] or 0,
-            }
+            # Un meme tarif peut arriver en plusieurs moyens de paiement : on
+            # additionne. Le nombre compte tous les billets (gratuits et offerts
+            # compris), le montant seulement l'argent encaisse.
+            # / Same price tier may come with several methods: summed. Count
+            #   includes free/gifted tickets, amount only collected money.
+            if cle not in detail:
+                detail[cle] = {
+                    "nom_event": nom_event,
+                    "date_event": date_str,
+                    "nom_produit": nom_produit,
+                    "nom_tarif": nom_tarif,
+                    "nb": 0,
+                    "total": 0,
+                }
+            detail[cle]["nb"] += ligne["nb"] or 0
+            if ligne["payment_method"] not in MOYENS_HORS_ARGENT:
+                detail[cle]["total"] += ligne["total"] or 0
 
         nb_total = sum(v["nb"] for v in detail.values())
         total_montant = sum(v["total"] for v in detail.values())
@@ -950,7 +1054,7 @@ class RapportComptableService:
         LOCALISATION : laboutik/reports.py
         """
         resultats = (
-            self.lignes.filter(
+            self.lignes_argent.filter(
                 point_de_vente__isnull=False,
             )
             .values(
@@ -976,7 +1080,7 @@ class RapportComptableService:
         # Lignes sans PV (anciennes donnees avant la FK)
         # / Lines without PV (old data before FK was added)
         total_sans_pv = (
-            self.lignes.filter(
+            self.lignes_argent.filter(
                 point_de_vente__isnull=True,
             ).aggregate(total=montant_ttc_centimes())["total"]
             or 0
@@ -1017,12 +1121,13 @@ class RapportComptableService:
     # ------------------------------------------------------------------
     def generer_rapport_complet(self):
         """
-        Appelle les 13 methodes et retourne un dict avec 13 cles.
-        / Calls all 13 methods and returns a dict with 13 keys.
+        Appelle les 14 methodes et retourne un dict avec 14 cles.
+        / Calls all 14 methods and returns a dict with 14 keys.
         """
         return {
             "totaux_par_moyen": self.calculer_totaux_par_moyen(),
             "detail_ventes": self.calculer_detail_ventes(),
+            "offerts": self.calculer_offerts(),
             "tva": self.calculer_tva(),
             "solde_caisse": self.calculer_solde_caisse(),
             "recharges": self.calculer_recharges(),

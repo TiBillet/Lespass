@@ -187,6 +187,17 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
     if total_label:
         builder.appendText(f"{total_label}\n")
 
+    # --- Detail des moyens de paiement ---
+    # Imprime seulement si au moins deux moyens ont servi (ex. cadeau + monnaie
+    # locale + especes). Un ticket paye d'un seul moyen n'en a pas besoin.
+    # / Payment methods detail, printed only when two methods or more were used.
+    cascade_detail = ticket_data.get("cascade_detail", [])
+    if len(cascade_detail) >= 2:
+        builder.setAlignment(ALIGN_LEFT)
+        for moyen in cascade_detail:
+            montant_euros = f"{moyen.get('total', 0) / 100:.2f}"
+            builder.appendText(f"{moyen.get('name', '')}  {montant_euros}EUR\n")
+
     # --- Ventilation TVA par taux ---
     # / VAT breakdown by rate
     tva_breakdown = ticket_data.get("tva_breakdown", [])

@@ -268,7 +268,61 @@ services:
       - backend
       - frontend
 
-
+  #########
+  # MAILPIT — boite aux lettres de dev
+  #########
+  # Recoit TOUS les e-mails de Lespass en dev et dans les tests, sans les envoyer
+  # sur Internet. Les messages se lisent sur https://mailpit.tibillet.localhost
+  # (API : /api/v1/messages).
+  # Pourquoi : envoyer les e-mails de test par un vrai serveur SMTP est lent
+  # (adresses de test refusees, relais qui coupe la connexion) et bloque les
+  # workers Celery ; cela expose aussi le compte d'envoi a une limitation.
+  #
+  # A mettre dans le .env de dev (cf. env_example) :
+  #   EMAIL_HOST="mailpit"
+  #   EMAIL_PORT="1025"
+  #   EMAIL_USE_SSL="False"
+  #   EMAIL_USE_TLS="False"
+  # EMAIL_HOST_USER doit rester rempli, ou DEFAULT_FROM_EMAIL etre defini :
+  # l'un des deux sert d'adresse d'expedition (BaseBillet/tasks.py,
+  # CeleryMailerClass). Vide sans DEFAULT_FROM_EMAIL, AUCUN mail ne part.
+  # Mailpit accepte n'importe quel identifiant (MP_SMTP_AUTH_ACCEPT_ANY).
+  #
+  # Le .env est lu a la CREATION d'un conteneur, pas a son redemarrage. Apres
+  # modification, recreer les deux conteneurs (un simple restart garde l'ancien
+  # environnement), puis relancer runserver dans lespass_django :
+  #   docker compose up -d --no-deps --force-recreate lespass_django lespass_celery
+  #
+  # Les messages sont perdus quand le conteneur mailpit est recree (base en /tmp).
+  # / Dev mailbox: catches every e-mail without sending it (sending test mail
+  #   through a real SMTP is slow and blocks Celery workers). Keep EMAIL_HOST_USER
+  #   or set DEFAULT_FROM_EMAIL. Recreate (not restart) containers to reload .env.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: lespass_mailpit
+    hostname: mailpit
+    restart: unless-stopped
+    environment:
+      # Accepte l'authentification SMTP sans la verifier : Lespass peut garder
+      # un utilisateur/mot de passe dans le .env sans que l'envoi echoue.
+      # / Accepts any SMTP auth without checking it.
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+      # Garde les 5000 derniers messages, puis supprime les plus anciens.
+      # / Keeps the last 5000 messages.
+      MP_MAX_MESSAGES: "5000"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=frontend
+      - traefik.http.routers.mailpit.tls=true
+      - traefik.http.routers.mailpit.rule=Host(`mailpit.$DOMAIN`)
+      - traefik.http.services.mailpit.loadbalancer.server.port=8025
+      # Priorite haute : DOMAIN_REGEX de lespass_nginx capte aussi ce sous-domaine.
+      # / High priority: lespass_nginx's DOMAIN_REGEX also matches this subdomain.
+      - traefik.http.routers.mailpit.priority=100
+    networks:
+      - backend
+      - frontend
 
 
 

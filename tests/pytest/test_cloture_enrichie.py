@@ -409,11 +409,11 @@ class TestGardeCorrectionPostCloture:
 
 
 @pytest.mark.usefixtures("test_data")
-class TestRapportJson13Cles:
-    """Le rapport JSON a 13 sections.
-    / The JSON report has 13 sections."""
+class TestRapportJson14Cles:
+    """Le rapport JSON a 14 sections.
+    / The JSON report has 14 sections."""
 
-    def test_rapport_json_13_cles(
+    def test_rapport_json_14_cles(
         self, admin_user, tenant, premier_pv, premier_produit_et_prix,
     ):
         with schema_context(TENANT_SCHEMA):
@@ -430,14 +430,14 @@ class TestRapportJson13Cles:
             ).order_by('-numero_sequentiel').first()
             rapport = cloture.rapport_json
 
-            # 13 cles attendues du RapportComptableService
-            # / 13 expected keys from RapportComptableService
+            # 14 cles attendues du RapportComptableService
+            # / 14 expected keys from RapportComptableService
             cles_attendues = [
-                'totaux_par_moyen', 'detail_ventes', 'tva', 'solde_caisse',
+                'totaux_par_moyen', 'detail_ventes', 'offerts', 'tva', 'solde_caisse',
                 'recharges', 'adhesions', 'remboursements', 'habitus',
                 'billets', 'synthese_operations', 'operateurs',
                 'ventilation_par_pv', 'infos_legales',
             ]
             for cle in cles_attendues:
                 assert cle in rapport, f"Cle manquante: {cle}"
-            assert len(rapport) == 13
+            assert len(rapport) == 14

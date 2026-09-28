@@ -193,6 +193,32 @@ COMMUNICATION :
               </table>
             </div>
           {% endif %}
+
+          {# Articles offerts : hors argent, jamais additionnes au total #}
+          {# / Gifted items: not money, never added to the total #}
+          {% if offerts.par_produit %}
+            <div class="table-wrap mini-table">
+              <h3 class="mini-table-title">{% translate "Offerts (hors argent)" %}</h3>
+              <table data-testid="recap-offerts">
+                <thead>
+                  <tr>
+                    <th>{% translate "Article" %}</th>
+                    <th class="num">{% translate "Quantité" %}</th>
+                    <th class="num">{% translate "Valeur offerte" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for offert in offerts.par_produit %}
+                    <tr>
+                      <td>{{ offert.nom }}</td>
+                      <td class="num">{{ offert.qty|floatformat:"-2" }}</td>
+                      <td class="num">{{ offert.valeur|euros }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
         </div>
 
         {# ============ HISTORIQUES / HISTORIES ============ #}

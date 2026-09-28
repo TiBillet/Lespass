@@ -201,7 +201,7 @@ def test_A_virement_vers_un_autre_compte_ne_vide_pas_le_portefeuille_du_lieu(
     )
     reponse = _poster_le_webhook(payload)
 
-    assert reponse.status_code >= 400
+    assert reponse.status_code == 400
     assert simulacres.fedow.payloads_recus == []
     assert simulacres.laboutik.call_count == 0
     assert _paiements_du_virement(lieu, identifiant_du_virement) == []
@@ -273,7 +273,7 @@ def test_C_un_montant_falsifie_dans_le_payload_est_refuse(
     )
     reponse = _poster_le_webhook(payload)
 
-    assert reponse.status_code >= 400
+    assert reponse.status_code == 400
     assert simulacres.fedow.payloads_recus == []
     assert simulacres.laboutik.call_count == 0
     assert _paiements_du_virement(lieu, identifiant_du_virement) == []
