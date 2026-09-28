@@ -1,5 +1,10 @@
 # Chantier 04-F — Anti-rejeu QR, chaînage HMAC (tireuse, QR/NFC, vider carte), verrou, archive
 
+> ⚠ **2026-09-28 — sessions F-2 et F-3 ARRÊTÉES**, remplacées par le chantier 05
+> ([`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md), D18) : on chaîne
+> la `Vente`, plus les lignes. **Seule la session F-1 (anti-rejeu QR, §3) reste à
+> livrer**, avant la fiche 05-C.
+
 > **Statut** : 📋 SPEC RÉDIGÉE — relue par Fable (×2) et Opus, corrigée (2026-09-27)
 > Tronc commun : [`CHANTIER-04-melanges-argent.md`](CHANTIER-04-melanges-argent.md)
 > Décisions : D21 à D26, D28 — Dépend de : A (montants justes), B (`total_ht` juste)

@@ -1217,6 +1217,14 @@ class HumanUserAdmin(ModelAdmin):
                         'produit': adhesion.product_name() or "—",
                         'tarif': adhesion.price_name() or "",
                         'montant': adhesion.contribution_value,
+                        # Unite du montant : vide pour de l'argent (devise du lieu),
+                        # nom de la monnaie pour une adhesion payee en points
+                        # / Amount unit: empty for money, currency name for points
+                        'unite': (
+                            adhesion.unite_de_la_contribution()
+                            if adhesion.payment_method == PaymentMethod.NON_MONETAIRE
+                            else ""
+                        ),
                         'moyen': adhesion.get_payment_method_display() if adhesion.payment_method else "",
                         'deadline': adhesion.deadline,
                         'statut': _("En cours") if est_valide else adhesion.get_status_display(),
@@ -1841,25 +1849,6 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
                 extra_context['membership'] = membership
                 if membership.status == Membership.ADMIN_WAITING:
                     extra_context["show_validation_buttons"] = True
-
-                # URL de renouvellement avec les données pré-remplies
-                # / Renewal URL with pre-filled data
-                opts = self.model._meta
-                url_formulaire_ajout = reverse(f"{self.admin_site.name}:{opts.app_label}_{opts.model_name}_add")
-                params_renouvellement = {}
-                if getattr(membership, 'user', None) and getattr(membership.user, 'email', None):
-                    params_renouvellement['email'] = membership.user.email
-                if membership.price_id:
-                    params_renouvellement['price'] = membership.price_id
-                if membership.contribution_value is not None:
-                    params_renouvellement['contribution'] = str(membership.contribution_value)
-                if membership.payment_method:
-                    params_renouvellement['payment_method'] = membership.payment_method
-                if membership.first_name:
-                    params_renouvellement['first_name'] = membership.first_name
-                if membership.last_name:
-                    params_renouvellement['last_name'] = membership.last_name
-                extra_context['renouveller_url'] = f"{url_formulaire_ajout}?{urlencode(params_renouvellement, doseq=True)}"
 
                 # Lien de paiement copiable pour les adhésions validées manuellement (état AV)
                 # Même URL que celle envoyée par email — la vue gère l'idempotence (pas de double paiement)

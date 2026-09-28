@@ -303,7 +303,11 @@ class TireuseBec(models.Model):
         / Per-liter price from the first poids_mesure Price of the active keg.
         Returns Decimal('0.00') if no price found."""
         if self.fut_actif:
-            price = self.fut_actif.prices.filter(poids_mesure=True).first()
+            # Tarif en euros seulement : la tireuse ne facture pas en points.
+            # / Euro price only: the tap never bills in points.
+            price = self.fut_actif.prices.filter(
+                poids_mesure=True, asset__isnull=True
+            ).first()
             if price and price.prix:
                 return price.prix
         return Decimal("0.00")

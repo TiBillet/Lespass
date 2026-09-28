@@ -83,6 +83,11 @@ def generer_pdf_cloture(cloture: ClotureCaisse) -> bytes:
         # / The report no longer produces a "commandes" section; the template
         # guards it, so it simply disappears.
         "commandes": rapport.get("commandes", {}),
+        # Sections hors argent, jamais additionnees au total : articles offerts
+        # et ventes en points ou en temps (une ligne par monnaie).
+        # / Non-money sections, never added to the total.
+        "offerts": rapport.get("offerts", {}),
+        "non_monetaire": rapport.get("non_monetaire", {}),
     }
 
     template = get_template("laboutik/pdf/cloture_rapport_pdf.html")

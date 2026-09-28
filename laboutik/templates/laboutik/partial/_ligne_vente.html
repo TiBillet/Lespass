@@ -19,5 +19,5 @@ numero_ligne (page 1 seulement ; absent en scroll infini → testid "vente-ligne
     <td>{{ vente.nb_articles }} {% translate "article(s)" %}</td>
     <td><span class="ventes-badge-moyen ventes-badge-{{ vente.moyen_paiement }}">{{ vente.moyen_paiement_label|default:vente.moyen_paiement }}</span></td>
     <td{% if not vente.nom_pv %} class="muted"{% endif %}>{{ vente.nom_pv|default:_("Non attribué") }}</td>
-    <td class="num">{{ vente.total|euros }}</td>
+    <td class="num">{{ vente.total|montant_dans_la_monnaie:vente.unite }}</td>
 </tr>

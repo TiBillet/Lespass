@@ -284,7 +284,10 @@ def facturer_tirage(
         # 2. Snapshots ProductSold / PriceSold
         # / ProductSold / PriceSold snapshots
         produit = tireuse.fut_actif
-        prix_obj = produit.prices.filter(poids_mesure=True).first()
+        # La tireuse facture en euros : un tarif « au litre » en points ou en
+        # temps (asset non vide) n'est jamais pris.
+        # / The tap bills in euros: a per-litre points/time price is never used.
+        prix_obj = produit.prices.filter(poids_mesure=True, asset__isnull=True).first()
 
         product_sold, _ = ProductSold.objects.get_or_create(
             product=produit,
@@ -321,9 +324,9 @@ def facturer_tirage(
         premiere_ligne = None
 
         for i, (asset, montant_a) in enumerate(debits_par_asset):
-            payment_method = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
-                asset.category, PaymentMethod.LOCAL_EURO
-            )
+            payment_method = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                asset.category
+            ]
             qty_partielle = lignes_avec_qty[i]["qty"]
 
             ligne = LigneArticle.objects.create(

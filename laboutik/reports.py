@@ -86,15 +86,21 @@ ORIGINES_ENCAISSEES_PAR_LE_LIEU = [
     SaleOrigin.TIREUSE,
 ]
 
-# Moyens de paiement qui ne sont PAS de l'argent encaisse : un article offert ou
-# une recharge cadeau (FREE, la valeur offerte reste sur la ligne). Ces lignes
-# restent dans le perimetre de la cloture (hash, compteurs) mais n'entrent dans
-# AUCUN calcul d'argent : total, TVA, CA, FEC, panier moyen. Elles sont montrees
-# a part (section « Offerts », ligne « Cadeau emis »).
+# Moyens de paiement qui ne sont PAS de l'argent encaisse :
+# - FREE : un article offert ou une recharge cadeau (la valeur offerte reste sur
+#   la ligne) ;
+# - NON_MONETAIRE : une vente payee en points ou en temps (la ligne garde le prix
+#   en unites de la monnaie).
+# Ces lignes restent dans le perimetre de la cloture (hash, compteurs) mais
+# n'entrent dans AUCUN calcul d'argent : total, TVA, CA, FEC, panier moyen.
+# Elles sont montrees a part (section « Offerts », ligne « Cadeau emis »,
+# section « Non monetaire »).
 # / Payment methods that are NOT collected money (FREE: gifted item or gift
-#   top-up). They stay in the closure scope but never in a money computation.
+#   top-up; NON_MONETAIRE: points or time sale). They stay in the closure scope
+#   but never in a money computation.
 MOYENS_HORS_ARGENT = [
     PaymentMethod.FREE,
+    PaymentMethod.NON_MONETAIRE,
 ]
 
 
@@ -574,8 +580,11 @@ class RapportComptableService:
             Product.RECHARGE_CADEAU,
             Product.RECHARGE_TEMPS,
         ]
+        # FREE seulement : une vente en points (NON_MONETAIRE) est hors argent
+        # mais n'est pas un cadeau, elle a sa propre section.
+        # / FREE only: a points sale is not money, but not a gift either.
         offerts_par_produit = (
-            self.lignes.filter(payment_method__in=MOYENS_HORS_ARGENT)
+            self.lignes.filter(payment_method=PaymentMethod.FREE)
             .exclude(
                 pricesold__productsold__product__methode_caisse__in=methodes_recharge,
             )
@@ -617,6 +626,68 @@ class RapportComptableService:
             "qty_totale": qty_totale,
             "valeur_totale": valeur_totale,
         }
+
+    # ------------------------------------------------------------------
+    # 4 ter. Ventes en points ou en temps / Points or time sales
+    # ------------------------------------------------------------------
+    def calculer_non_monetaire(self):
+        """
+        Ventes payees en points de fidelite ou en temps (moyen NON_MONETAIRE),
+        une ligne par nom de monnaie. Ce n'est pas de l'argent : jamais
+        additionne a un total.
+        `unites` est en centiemes de la monnaie (300 points = 30000), comme les
+        centimes des euros. L'affichage divise par 100.
+        / Sales paid in loyalty points or time, one line per currency name.
+        Never money. `unites` is in hundredths of the currency.
+        """
+        lignes_par_asset = (
+            self.lignes.filter(payment_method=PaymentMethod.NON_MONETAIRE)
+            .values("asset")
+            .annotate(
+                # Nom different du champ « qty » : montant_ttc_centimes() lit ce
+                # champ, une annotation homonyme le masquerait.
+                # / Name differs from the qty field, which montant_ttc_centimes reads.
+                quantite_vendue=Sum("qty"),
+                unites=montant_ttc_centimes(),
+            )
+            # order_by explicite : un tri par defaut du modele entrerait dans
+            # le GROUP BY et casserait le regroupement par asset.
+            # / Explicit order_by: a default model ordering would break grouping.
+            .order_by("asset")
+        )
+
+        # Tous les assets en une seule requete (evite N+1).
+        # / All assets in a single query (avoids N+1).
+        from fedow_core.models import Asset as FedowAsset
+
+        uuids_des_assets = [ligne["asset"] for ligne in lignes_par_asset]
+        assets_par_uuid = {
+            asset.uuid: asset
+            for asset in FedowAsset.objects.filter(uuid__in=uuids_des_assets)
+        }
+
+        # Regroupement par NOM de monnaie : un lieu peut avoir plusieurs assets
+        # du meme nom (en test, des dizaines).
+        # / Grouped by currency NAME: several assets may share a name.
+        totaux_par_nom_de_monnaie = {}
+        for ligne in lignes_par_asset:
+            asset = assets_par_uuid.get(ligne["asset"])
+            nom_de_la_monnaie = asset.name if asset else str(_("Inconnu"))
+            if nom_de_la_monnaie not in totaux_par_nom_de_monnaie:
+                totaux_par_nom_de_monnaie[nom_de_la_monnaie] = {
+                    "nom": nom_de_la_monnaie,
+                    "qty_articles": 0.0,
+                    "unites": 0,
+                }
+            totaux_de_la_monnaie = totaux_par_nom_de_monnaie[nom_de_la_monnaie]
+            totaux_de_la_monnaie["qty_articles"] += float(ligne["quantite_vendue"] or 0)
+            totaux_de_la_monnaie["unites"] += ligne["unites"] or 0
+
+        par_monnaie = []
+        for nom_de_la_monnaie in sorted(totaux_par_nom_de_monnaie):
+            par_monnaie.append(totaux_par_nom_de_monnaie[nom_de_la_monnaie])
+
+        return {"par_monnaie": par_monnaie}
 
     # ------------------------------------------------------------------
     # 5. Recharges cashless / Cashless top-ups
@@ -716,6 +787,7 @@ class RapportComptableService:
             .values(
                 "pricesold__productsold__product__name",
                 "pricesold__price__name",
+                "pricesold__price__asset__name",
                 "payment_method",
             )
             .annotate(
@@ -735,6 +807,13 @@ class RapportComptableService:
 
             # Cle : "Produit — Tarif (moyen)" pour regroupement unique
             # / Key: "Product — Price tier (method)" for unique grouping
+            # Unite du total : le nom de la monnaie d'une adhesion payee en points
+            # ou en temps (montant en centiemes de points), vide pour de l'argent.
+            # / Total unit: currency name of a points/time membership, empty for money.
+            unite = ""
+            if moyen == PaymentMethod.NON_MONETAIRE:
+                unite = ligne["pricesold__price__asset__name"] or str(_("Points ou temps"))
+
             label_tarif = f"{nom_produit} — {nom_tarif}" if nom_tarif else nom_produit
             cle = f"{label_tarif}_{moyen}"
             detail[cle] = {
@@ -742,6 +821,7 @@ class RapportComptableService:
                 "nom_tarif": nom_tarif,
                 "moyen_paiement": moyen,
                 "total": ligne["total"] or 0,
+                "unite": unite,
                 "nb": ligne["nb"] or 0,
                 "hors_argent": moyen in MOYENS_HORS_ARGENT,
             }
@@ -1121,13 +1201,14 @@ class RapportComptableService:
     # ------------------------------------------------------------------
     def generer_rapport_complet(self):
         """
-        Appelle les 14 methodes et retourne un dict avec 14 cles.
-        / Calls all 14 methods and returns a dict with 14 keys.
+        Appelle les 15 methodes et retourne un dict avec 15 cles.
+        / Calls all 15 methods and returns a dict with 15 keys.
         """
         return {
             "totaux_par_moyen": self.calculer_totaux_par_moyen(),
             "detail_ventes": self.calculer_detail_ventes(),
             "offerts": self.calculer_offerts(),
+            "non_monetaire": self.calculer_non_monetaire(),
             "tva": self.calculer_tva(),
             "solde_caisse": self.calculer_solde_caisse(),
             "recharges": self.calculer_recharges(),

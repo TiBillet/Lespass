@@ -1018,6 +1018,30 @@ def _ecrire_rapport_csv_excel(writer, cloture, rapport):
             writer.append_row([taux, e(data.get("total_ht", 0)), e(data.get("total_tva", 0)), e(data.get("total_ttc", 0))])
         writer.append_blank()
 
+    # --- Section 3 bis : Articles offerts (hors argent, jamais dans un total) ---
+    # / Gifted items (not money, never in a total)
+    section = rapport.get("offerts", {})
+    if section and section.get("par_produit"):
+        writer.append_title(str(_("Offerts (hors argent)")))
+        writer.append_header([str(_("Article")), str(_("Quantité")), str(_("Valeur offerte")), str(_("Coût d'achat"))])
+        for offert in section["par_produit"]:
+            writer.append_row([offert.get("nom", "—"), offert.get("qty", 0), e(offert.get("valeur", 0)), e(offert.get("cout_achat", 0))])
+        writer.append_blank()
+
+    # --- Section 3 ter : Ventes en points ou en temps (hors argent) ---
+    # Une ligne par monnaie ; le total est dans l'unite de la monnaie.
+    # / Points or time sales (not money): one row per currency, in its own unit.
+    section = rapport.get("non_monetaire", {})
+    if section and section.get("par_monnaie"):
+        writer.append_title(str(_("Non monétaire (hors argent)")))
+        writer.append_header([str(_("Monnaie")), str(_("Quantité")), str(_("Total"))])
+        for monnaie in section["par_monnaie"]:
+            # Total ecrit avec le nom de la monnaie : jamais un nombre lu en euros
+            # / Total written with the currency name: never read as euros
+            total_dans_la_monnaie = f"{monnaie.get('unites', 0) / 100:.2f} {monnaie.get('nom', '')}"
+            writer.append_row([monnaie.get("nom", "—"), monnaie.get("qty_articles", 0), total_dans_la_monnaie])
+        writer.append_blank()
+
     # --- Section 4 : Solde caisse ---
     section = rapport.get("solde_caisse", {})
     if section:
@@ -1043,7 +1067,13 @@ def _ecrire_rapport_csv_excel(writer, cloture, rapport):
         writer.append_title(str(_("Memberships")))
         writer.append_header([str(_("Product")), str(_("Price tier")), str(_("Payment method")), str(_("Count")), str(_("Amount"))])
         for cle, adh in section["detail"].items():
-            writer.append_row([adh.get("nom_produit", "—"), adh.get("nom_tarif", "—"), adh.get("moyen_paiement", "—"), adh.get("nb", 0), e(adh.get("total", 0))])
+            # Adhesion payee en points ou en temps : le montant est dans sa monnaie,
+            # ecrit avec son nom (jamais un nombre lu comme des euros).
+            # / Points/time membership: amount written with its currency name.
+            montant_de_l_adhesion = e(adh.get("total", 0))
+            if adh.get("unite"):
+                montant_de_l_adhesion = f"{adh.get('total', 0) / 100:.2f} {adh['unite']}"
+            writer.append_row([adh.get("nom_produit", "—"), adh.get("nom_tarif", "—"), adh.get("moyen_paiement", "—"), adh.get("nb", 0), montant_de_l_adhesion])
         writer.append_row([str(_("Total")), "", "", section.get("nb", 0), e(section.get("total", 0))])
         writer.append_blank()
 
@@ -1699,8 +1729,8 @@ class MappingMoyenDePaiementAdmin(ModelAdmin):
         from laboutik.reports import MOYENS_HORS_ARGENT
         if 'moyen_de_paiement' in form.base_fields:
             from unfold.widgets import UnfoldAdminSelectWidget
-            # Un moyen hors argent (offert) n'encaisse rien : il n'a pas de
-            # compte de tresorerie a mapper.
+            # Un moyen hors argent (offert, points ou temps) n'encaisse rien :
+            # il n'a pas de compte de tresorerie a mapper.
             # / A non-money method collects nothing: no cash account to map.
             choix_des_moyens = [('', '---')]
             for code, libelle in PaymentMethod.choices:

@@ -1,6 +1,6 @@
 # Chantier 04-E — Vente en points / temps à la caisse (`NM`)
 
-> **Statut** : 📋 SPEC RÉDIGÉE — relue par Fable (×2) et Opus, corrigée (2026-09-27)
+> **Statut** : ✅ LIVRÉE (2026-09-28) — voir `CHANGELOG/2026-09-28-melanges-argent-E-vente-en-points.md` (décisions et écarts)
 > Tronc commun : [`CHANTIER-04-melanges-argent.md`](CHANTIER-04-melanges-argent.md)
 > Décisions : D1 à D5, D7, D8, D11 à D17, D28 — Dépend de : D (`MOYENS_HORS_ARGENT`)
 > Effort estimé : 5 à 6 j (4 sessions, §8)

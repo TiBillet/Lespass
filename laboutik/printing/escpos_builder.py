@@ -59,6 +59,13 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
     builder.setUtf8Mode(1)
     builder.restoreDefaultSettings()
 
+    # Unite des montants : "EUR" (defaut), ou le nom de la monnaie d'un ticket en
+    # points ou en temps. « EUR » reste colle au nombre (« 5.00EUR ») ; un nom de
+    # monnaie en est separe (« 300.00 Points fidélité »).
+    # / Amount unit: "EUR" (default) or a points/time currency name.
+    unite_du_ticket = ticket_data.get("unite", "EUR")
+    suffixe_de_l_unite = unite_du_ticket if unite_du_ticket == "EUR" else f" {unite_du_ticket}"
+
     # --- En-tete du ticket ---
     # / Ticket header
     header = ticket_data.get("header", {})
@@ -151,9 +158,9 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
                 # Pour les ventes au poids, ne pas afficher qty; pour les autres, l'afficher
                 # / For weight sales, don't show qty; for others, show it
                 if weight_detail:
-                    line = f"{article_name}  {total_euros}EUR\n"
+                    line = f"{article_name}  {total_euros}{suffixe_de_l_unite}\n"
                 else:
-                    line = f"{article_name} x{article_qty}  {total_euros}EUR\n"
+                    line = f"{article_name} x{article_qty}  {total_euros}{suffixe_de_l_unite}\n"
             else:
                 # Ticket commande cuisine : juste qty x nom, pas de prix
                 # / Kitchen order ticket: just qty x name, no price
@@ -181,7 +188,7 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
         builder.setAlignment(ALIGN_LEFT)
         builder.setPrintModes(bold=True, double_h=False, double_w=False)
         total_euros = f"{total_amount / 100:.2f}"
-        builder.appendText(f"TOTAL: {total_euros} EUR\n")
+        builder.appendText(f"TOTAL: {total_euros} {unite_du_ticket}\n")
         builder.setPrintModes(bold=False, double_h=False, double_w=False)
 
     if total_label:
@@ -196,7 +203,7 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
         builder.setAlignment(ALIGN_LEFT)
         for moyen in cascade_detail:
             montant_euros = f"{moyen.get('total', 0) / 100:.2f}"
-            builder.appendText(f"{moyen.get('name', '')}  {montant_euros}EUR\n")
+            builder.appendText(f"{moyen.get('name', '')}  {montant_euros}{suffixe_de_l_unite}\n")
 
     # --- Ventilation TVA par taux ---
     # / VAT breakdown by rate

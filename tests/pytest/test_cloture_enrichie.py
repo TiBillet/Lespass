@@ -430,14 +430,15 @@ class TestRapportJson14Cles:
             ).order_by('-numero_sequentiel').first()
             rapport = cloture.rapport_json
 
-            # 14 cles attendues du RapportComptableService
-            # / 14 expected keys from RapportComptableService
+            # 15 cles attendues du RapportComptableService
+            # / 15 expected keys from RapportComptableService
             cles_attendues = [
-                'totaux_par_moyen', 'detail_ventes', 'offerts', 'tva', 'solde_caisse',
+                'totaux_par_moyen', 'detail_ventes', 'offerts', 'non_monetaire',
+                'tva', 'solde_caisse',
                 'recharges', 'adhesions', 'remboursements', 'habitus',
                 'billets', 'synthese_operations', 'operateurs',
                 'ventilation_par_pv', 'infos_legales',
             ]
             for cle in cles_attendues:
                 assert cle in rapport, f"Cle manquante: {cle}"
-            assert len(rapport) == 14
+            assert len(rapport) == 15

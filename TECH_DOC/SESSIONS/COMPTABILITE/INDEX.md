@@ -16,6 +16,7 @@
 | 02 | Démo data — ventes comptables (Option A, 13 cas créables) | ✅ **TERMINÉ** (2026-05-18) | [`CHANTIER-02-demo-data-ventes.md`](CHANTIER-02-demo-data-ventes.md) |
 | 03 | Exports admin (remplacer `django-import-export` par Tableur + PDF custom sur 4 ModelAdmin) | 📋 **SPEC RÉDIGÉE** (2026-05-19) | [`CHANTIER-03-exports-admin.md`](CHANTIER-03-exports-admin.md) |
 | 04 | Mélanges de caisses d'argent (tronc commun + fiches A à F : paiement réparti, HT × qty, ticket imprimé, hors argent et OFFRIR, vente en points, anti-rejeu QR et chaînage HMAC) | 📋 **SPEC RÉDIGÉE, relue Fable ×2 + Opus** (2026-09-27, ~13-14 j) | [`CHANTIER-04-melanges-argent.md`](CHANTIER-04-melanges-argent.md) |
+| 05 | Montants entiers : Vente / articles / règlements, clôture unique, plan comptable unique, FEC équilibré (tronc + fiches 0, A à H ; remplace 04-F-2/F-3) | 📋 **SPEC RÉDIGÉE** (2026-09-28, ~18-19 j) | [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) |
 | — | (futur) Versements bancaires inter-tenants + monnaies locales | 📋 SPEC EN ATTENTE Fedow V2 | [`../TODO/COMPTABILITE-inter-tenants.md`](../TODO/COMPTABILITE-inter-tenants.md) |
 
 ---

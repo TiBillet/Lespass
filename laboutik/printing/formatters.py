@@ -39,7 +39,8 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
     :param moyen_paiement: str (ex: "Especes", "CB", "NFC")
     :return: dict ticket_data
     """
-    from BaseBillet.models import Configuration
+    from BaseBillet.models import Configuration, PaymentMethod
+    from fedow_core.models import Asset as FedowAsset
     from laboutik.models import LaboutikConfiguration
     from django.db.models import F
 
@@ -225,6 +226,30 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
             }
         )
 
+    # --- Unite des montants du ticket ---
+    # Un panier ne contient qu'une monnaie. S'il est paye en points ou en temps
+    # (moyen NON_MONETAIRE), les montants sont dans cette monnaie (centiemes) et le
+    # ticket n'a pas de TVA : ce n'est pas une vente en argent.
+    # / One currency per cart. A points/time ticket shows that currency, no VAT.
+    unite_du_ticket = "EUR"
+    premiere_ligne_du_ticket = next(iter(lignes_articles), None)
+    ticket_en_points = (
+        premiere_ligne_du_ticket is not None
+        and premiere_ligne_du_ticket.payment_method == PaymentMethod.NON_MONETAIRE
+    )
+    if ticket_en_points:
+        # Monnaie introuvable : « Points ou temps », jamais « EUR »
+        # / Currency not found: "Points or time", never "EUR"
+        unite_du_ticket = str(_("Points ou temps"))
+        monnaie_du_ticket = FedowAsset.objects.filter(
+            uuid=premiere_ligne_du_ticket.asset
+        ).first()
+        if monnaie_du_ticket is not None:
+            unite_du_ticket = monnaie_du_ticket.name
+        tva_breakdown = []
+        total_ht_global = 0
+        total_tva_global = 0
+
     # Nom de l'operateur
     # / Operator name
     operateur_name = ""
@@ -258,8 +283,7 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
             break
 
     if uuid_tx:
-        from BaseBillet.models import LigneArticle, PaymentMethod
-        from fedow_core.models import Asset as FedowAsset
+        from BaseBillet.models import LigneArticle
         from laboutik.reports import montant_ttc_centimes
         from laboutik.views import LABELS_MOYENS_PAIEMENT_DB
 
@@ -331,6 +355,9 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
         "tva_breakdown": tva_breakdown,
         "total_ht": total_ht_global,
         "total_tva": total_tva_global,
+        # Unite des montants : "EUR", ou le nom de la monnaie de points / temps
+        # / Amount unit: "EUR", or the points/time currency name
+        "unite": unite_du_ticket,
         "cascade_detail": cascade_detail,
         "is_duplicata": False,
         "is_simulation": is_simulation,
@@ -466,8 +493,39 @@ def _ligne_des_offerts(offerts):
     return f"{_('Offerts')}: {quantite_affichee} {_('articles')}, {_('valeur')} {valeur_euros} EUR"
 
 
+def _lignes_du_non_monetaire(non_monetaire):
+    """
+    Lignes de pied des ventes en points ou en temps, une par monnaie :
+    « Points fidélité (hors argent): 3 articles, 900.00 ». Liste vide sinon.
+    Hors argent : ces montants n'entrent jamais dans le TOTAL du ticket.
+    / Footer lines of points/time sales, one per currency. Never in the TOTAL.
+
+    LOCALISATION : laboutik/printing/formatters.py
+
+    :param non_monetaire: dict de RapportComptableService.calculer_non_monetaire()
+        (ou None). `unites` est en centiemes de la monnaie.
+    """
+    lignes = []
+    if not non_monetaire:
+        return lignes
+    for monnaie in non_monetaire.get("par_monnaie", []):
+        quantite = monnaie.get("qty_articles", 0)
+        quantite_affichee = int(quantite) if quantite == int(quantite) else f"{quantite:.2f}"
+        montant_affiche = f"{monnaie.get('unites', 0) / 100:.2f}"
+        lignes.append(
+            f"{monnaie.get('nom', '')} ({_('hors argent')}): "
+            f"{quantite_affichee} {_('articles')}, {montant_affiche}"
+        )
+    return lignes
+
+
 def formatter_ticket_x(
-    totaux_par_moyen, solde_caisse, datetime_ouverture, nb_transactions, offerts=None
+    totaux_par_moyen,
+    solde_caisse,
+    datetime_ouverture,
+    nb_transactions,
+    offerts=None,
+    non_monetaire=None,
 ):
     """
     Formate un Ticket X temporaire (consultation du service en cours, pas de cloture).
@@ -482,6 +540,7 @@ def formatter_ticket_x(
     :param datetime_ouverture: datetime de la 1ere vente apres derniere cloture
     :param nb_transactions: nombre de transactions dans la periode
     :param offerts: dict de RapportComptableService.calculer_offerts() (optionnel)
+    :param non_monetaire: dict de RapportComptableService.calculer_non_monetaire() (optionnel)
     :return: dict ticket_data
     """
     now = timezone.localtime(timezone.now())
@@ -550,6 +609,7 @@ def formatter_ticket_x(
     ligne_des_offerts = _ligne_des_offerts(offerts)
     if ligne_des_offerts:
         footer.append(ligne_des_offerts)
+    footer.extend(_lignes_du_non_monetaire(non_monetaire))
 
     return {
         "header": {
@@ -645,6 +705,7 @@ def formatter_ticket_cloture(cloture):
     ligne_des_offerts = _ligne_des_offerts(rapport.get("offerts"))
     if ligne_des_offerts:
         footer.append(ligne_des_offerts)
+    footer.extend(_lignes_du_non_monetaire(rapport.get("non_monetaire")))
 
     return {
         "header": {

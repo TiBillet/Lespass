@@ -6,8 +6,11 @@ from django import forms
 from django.contrib import admin, messages
 from django.db import models
 from django.forms import ModelForm
-from django.http import HttpRequest
-from django.shortcuts import redirect, get_object_or_404
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
+from django.shortcuts import redirect, get_object_or_404, render
+from django.urls import path
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
 from django.template.loader import render_to_string
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
@@ -19,6 +22,7 @@ from unfold.admin import StackedInline, TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import action
+from unfold.forms import PaginationInlineFormSet
 from unfold.widgets import (
     UnfoldAdminSelectWidget,
     UnfoldAdminTextInputWidget,
@@ -616,12 +620,109 @@ class MembershipPriceInline(BasePriceInline):
         js = ("admin/js/inline_conditional_fields.js",)
 
 
+class POSPriceInlineForm(BasePriceInlineForm):
+    """Formulaire d'un tarif de caisse : euros, ou points / temps.
+    / POS price form: euros, or points / time.
+
+    LOCALISATION : Administration/admin/products.py
+
+    Un tarif « non fiduciaire » (en points ou en temps) :
+    - a obligatoirement une monnaie (sinon il n'est ni en euros ni en points) ;
+    - n'est ni a prix libre ni au poids ;
+    - peut valoir moins de 1 (0,50 heure).
+    Un tarif en euros n'a pas de monnaie : si la case est decochee, la monnaie
+    est videe (le champ cache par l'admin envoie encore sa valeur).
+    / A points price needs a currency, is neither free nor by weight, and may be
+      below 1. A euro price has no currency: unchecking the box clears it.
+    """
+
+    def clean_prix(self):
+        # La regle « pas entre 0 et 1 » ne vaut que pour les euros : elle est
+        # jugee dans clean(), qui connait la case « non fiduciaire ».
+        # / The "not between 0 and 1" rule only applies to euros: see clean().
+        return self.cleaned_data.get("prix")
+
+    def clean(self):
+        cleaned = super().clean()
+        tarif_en_points = cleaned.get("non_fiduciaire", False)
+        prix = cleaned.get("prix")
+
+        if not tarif_en_points:
+            cleaned["asset"] = None
+            if prix is not None and 0 < prix < 1:
+                self.add_error("prix", _("A rate cannot be between 0€ and 1€"))
+            return cleaned
+
+        if cleaned.get("asset") is None:
+            self.add_error(
+                "asset", _("Choisissez la monnaie d'un tarif en points ou en temps.")
+            )
+        # Un panier a 0 point serait « gratuit » : la caisse proposerait VALIDER
+        # (paiement « offert »), refuse pour un panier en points.
+        # / A 0-point cart would be "free", which a points cart refuses.
+        if prix is not None and prix <= 0:
+            self.add_error(
+                "prix", _("Un tarif en points ou en temps vaut plus de 0.")
+            )
+        if cleaned.get("free_price"):
+            self.add_error(
+                "free_price", _("Un tarif en points ou en temps n'est pas à prix libre.")
+            )
+        if cleaned.get("poids_mesure"):
+            self.add_error(
+                "poids_mesure", _("Un tarif en points ou en temps n'est pas vendu au poids.")
+            )
+        return cleaned
+
+
+class POSPriceInlineFormSet(PaginationInlineFormSet):
+    """Formset des tarifs de caisse : ou un tarif en points est permis.
+    / POS prices formset: where a points price is allowed.
+
+    LOCALISATION : Administration/admin/products.py
+
+    La caisse vend un tarif en points ou en temps (case « non_fiduciaire »)
+    seulement sur un article de vente ou une adhesion. Sur une recharge, un
+    billet ou un retour de consigne, le tarif ne serait jamais vendable.
+
+    `self.instance` est le produit avec les valeurs du formulaire parent (l'admin
+    construit les formsets apres avoir lu ce formulaire) : on juge donc la
+    methode de caisse choisie dans le meme envoi, pas celle en base.
+    / self.instance holds the parent form's values: we check the submitted method.
+    """
+
+    def clean(self):
+        super().clean()
+
+        produit = self.instance
+        produit_est_une_vente = produit.methode_caisse == Product.VENTE
+        produit_est_une_adhesion = produit.categorie_article == Product.ADHESION
+        if produit_est_une_vente or produit_est_une_adhesion:
+            return
+
+        for formulaire_du_tarif in self.forms:
+            if not hasattr(formulaire_du_tarif, "cleaned_data"):
+                continue
+            if formulaire_du_tarif.cleaned_data.get("DELETE"):
+                continue
+            if formulaire_du_tarif.cleaned_data.get("non_fiduciaire"):
+                formulaire_du_tarif.add_error(
+                    "non_fiduciaire",
+                    _(
+                        "Un tarif en points n'est possible que sur un article "
+                        "de vente ou une adhésion."
+                    ),
+                )
+
+
 class POSPriceInline(BasePriceInline):
     """Inline tarifs pour les produits de caisse (POS).
     Ajoute contenance, poids_mesure, et non_fiduciaire (tarif en tokens).
     / POS product price inline.
     Adds contenance, weight/measure, and non-fiduciary (token pricing)."""
 
+    form = POSPriceInlineForm
+    formset = POSPriceInlineFormSet
     fields = (
         "name",
         ("prix", "free_price"),
@@ -1576,22 +1677,16 @@ class POSProductForm(ProductAdminCustomForm):
                     self.fields["palette_pos"].initial = key
                     break
 
-        # Help_text TVA dynamique : affiche le taux de la catégorie si disponible
-        # Dynamic VAT help_text: shows category rate if available
-        if (
-            instance
-            and getattr(instance, "categorie_pos", None)
-            and getattr(instance.categorie_pos, "tva", None)
-        ):
-            taux = instance.categorie_pos.tva.tva_rate
-            self.fields["tva"].help_text = _(
-                f"Même TVA que la catégorie ({taux}%) si laissé vide. Surchargeable ici. "
-                f"/ Same VAT as category ({taux}%) if left empty. Can be overridden here."
-            )
-        else:
-            self.fields["tva"].help_text = _(
-                "Même TVA que la catégorie si laissé vide. / Same VAT as category if left empty."
-            )
+        # Aide du champ TVA : la vente prend la TVA de l'ARTICLE, sinon celle du
+        # lieu ; jamais celle de la categorie (LigneArticle._compute_default_vat).
+        # Le bouton « Synchroniser la TVA » de la categorie la copie sur ses articles.
+        # / VAT help text: a sale uses the item's VAT, else the venue's; never the
+        #   category's. The category's "Synchronize VAT" button copies it.
+        self.fields["tva"].help_text = _(
+            "TVA appliquée à la vente de cet article. Vide : TVA par défaut du lieu "
+            "(pas celle de la catégorie). Pour donner à tous les articles la TVA de "
+            "leur catégorie : bouton « Synchroniser la TVA » de la catégorie."
+        )
 
     def clean_categorie_article(self):
         """Pas de validation de categorie pour les produits POS.
@@ -2161,15 +2256,42 @@ class CategorieProductForm(forms.ModelForm):
         return cleaned
 
 
+def _articles_dont_la_tva_va_changer(categorie):
+    """
+    Les articles de la categorie dont la TVA n'est pas deja celle de la categorie
+    (TVA differente ou vide).
+    / The category's items whose VAT differs from the category's (or is empty).
+
+    LOCALISATION : Administration/admin/products.py
+    Hors de la classe admin : Unfold enveloppe les methodes d'un ModelAdmin.
+    / Outside the admin class: Unfold wraps ModelAdmin methods.
+    """
+    return (
+        Product.objects.filter(categorie_pos=categorie)
+        .exclude(tva=categorie.tva)
+        .select_related("tva")
+        .order_by("name")
+    )
+
+
 @admin.register(CategorieProduct, site=staff_admin_site)
 class CategorieProductAdmin(ModelAdmin):
     """Admin pour les categories de produits POS.
     Admin for POS product categories.
-    LOCALISATION : Administration/admin/products.py"""
+    LOCALISATION : Administration/admin/products.py
+
+    Bouton « Synchroniser la TVA » (fiche d'une categorie qui a une TVA) :
+    1. le bouton (gabarit categorie_product/synchroniser_tva_bouton.html) charge
+       en HTMX la confirmation (confirmer_synchronisation_tva) ;
+    2. « Confirmer » envoie un POST (synchroniser_tva) : tous les articles de la
+       categorie prennent sa TVA, puis la page se recharge avec un message.
+    / "Synchronize VAT" button: HTMX confirmation, then a POST updates all items.
+    """
 
     compressed_fields = True
     warn_unsaved_form = True
     form = CategorieProductForm
+    change_form_before_template = "admin/categorie_product/synchroniser_tva_bouton.html"
 
     list_display = ("name", "icon", "tva", "poid_liste", "cashless")
     search_fields = ["name"]
@@ -2206,6 +2328,67 @@ class CategorieProductAdmin(ModelAdmin):
         ),
     )
     autocomplete_fields = ["compte_comptable"]
+
+    def get_urls(self):
+        urls = super().get_urls()
+        urls_de_la_synchronisation_tva = [
+            path(
+                "<path:object_id>/synchroniser-tva/confirmer/",
+                self.admin_site.admin_view(self.confirmer_synchronisation_tva),
+                name="BaseBillet_categorieproduct_synchroniser_tva_confirmer",
+            ),
+            path(
+                "<path:object_id>/synchroniser-tva/",
+                self.admin_site.admin_view(
+                    csrf_protect(require_POST(self.synchroniser_tva))
+                ),
+                name="BaseBillet_categorieproduct_synchroniser_tva",
+            ),
+        ]
+        return urls_de_la_synchronisation_tva + urls
+
+    def confirmer_synchronisation_tva(self, request, object_id):
+        """
+        GET : la confirmation, avec l'effet explique et les articles qui changent.
+        / GET: the confirmation, explaining the effect and listing changing items.
+        """
+        if not TenantAdminPermissionWithRequest(request):
+            return HttpResponseForbidden()
+        categorie = get_object_or_404(CategorieProduct.objects.select_related("tva"), pk=object_id)
+        contexte = {
+            "categorie": categorie,
+            "nombre_d_articles": Product.objects.filter(categorie_pos=categorie).count(),
+            "articles_qui_changent": list(_articles_dont_la_tva_va_changer(categorie)),
+        }
+        return render(
+            request,
+            "admin/categorie_product/partials/synchroniser_tva_confirmation.html",
+            contexte,
+        )
+
+    def synchroniser_tva(self, request, object_id):
+        """
+        POST : tous les articles de la categorie prennent sa TVA. Les ventes deja
+        enregistrees gardent la leur (chaque ligne de vente stocke sa TVA).
+        / POST: every item of the category takes its VAT; past sales keep theirs.
+        """
+        if not TenantAdminPermissionWithRequest(request):
+            return HttpResponseForbidden()
+        categorie = get_object_or_404(CategorieProduct.objects.select_related("tva"), pk=object_id)
+        if categorie.tva is None:
+            messages.warning(request, _("Cette catégorie n'a pas de TVA à synchroniser."))
+        else:
+            nombre_d_articles_mis_a_jour = Product.objects.filter(
+                categorie_pos=categorie
+            ).update(tva=categorie.tva)
+            messages.success(
+                request,
+                _("TVA de %(taux)s %% appliquée aux %(nombre)s articles de la catégorie.")
+                % {"taux": categorie.tva.tva_rate, "nombre": nombre_d_articles_mis_a_jour},
+            )
+        reponse = HttpResponse("")
+        reponse["HX-Refresh"] = "true"
+        return reponse
 
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)

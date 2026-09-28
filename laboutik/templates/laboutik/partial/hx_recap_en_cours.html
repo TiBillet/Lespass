@@ -219,6 +219,31 @@ COMMUNICATION :
               </table>
             </div>
           {% endif %}
+          {# Ventes en points ou en temps : hors argent, jamais additionnees au total #}
+          {# / Points or time sales: not money, never added to the total #}
+          {% if non_monetaire.par_monnaie %}
+            <div class="table-wrap mini-table">
+              <h3 class="mini-table-title">{% translate "Non monétaire (hors argent)" %}</h3>
+              <table data-testid="recap-non-monetaire">
+                <thead>
+                  <tr>
+                    <th>{% translate "Monnaie" %}</th>
+                    <th class="num">{% translate "Quantité" %}</th>
+                    <th class="num">{% translate "Total" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for monnaie in non_monetaire.par_monnaie %}
+                    <tr>
+                      <td>{{ monnaie.nom }}</td>
+                      <td class="num">{{ monnaie.qty_articles|floatformat:"-2" }}</td>
+                      <td class="num">{{ monnaie.unites|montant_dans_la_monnaie:monnaie.nom }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
         </div>
 
         {# ============ HISTORIQUES / HISTORIES ============ #}

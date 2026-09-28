@@ -144,6 +144,32 @@ pv / url_retour_pv, dont _hdr_retour_zone.html a besoin pour son bouton retour.
           </table>
         </div>
       {% endif %}
+
+      <!-- Ventes en points ou en temps : hors argent, jamais additionnees au total -->
+      <!-- / Points or time sales: not money, never added to the total -->
+      {% if rapport.non_monetaire.par_monnaie %}
+        <div class="table-wrap mini-table" data-testid="cloture-non-monetaire">
+          <h3 class="mini-table-title">{% translate "Non monétaire (hors argent)" %}</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>{% translate "Monnaie" %}</th>
+                <th class="num">{% translate "Quantité" %}</th>
+                <th class="num">{% translate "Total" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for monnaie in rapport.non_monetaire.par_monnaie %}
+                <tr>
+                  <td>{{ monnaie.nom }}</td>
+                  <td class="num">{{ monnaie.qty_articles|floatformat:"-2" }}</td>
+                  <td class="num">{{ monnaie.unites|montant_dans_la_monnaie:monnaie.nom }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
     </div>
 
     <!-- Retour a l'ecran de selection du point de vente (ferme la caisse) -->

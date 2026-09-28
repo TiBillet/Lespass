@@ -113,6 +113,21 @@ def generer_csv_cloture(cloture: ClotureCaisse) -> str:
             ])
         writer.writerow([])
 
+    # --- Ventes en points ou en temps (hors argent, jamais dans un total) ---
+    # Une ligne par monnaie ; le total est dans l'unite de la monnaie (centiemes / 100).
+    # / Points or time sales (not money): one row per currency, in its own unit.
+    non_monetaire = rapport.get("non_monetaire", {})
+    if non_monetaire.get("par_monnaie"):
+        writer.writerow([_("Non monétaire (hors argent)")])
+        writer.writerow([_("Monnaie"), _("Quantité"), _("Total")])
+        for monnaie in non_monetaire["par_monnaie"]:
+            writer.writerow([
+                monnaie["nom"],
+                monnaie["qty_articles"],
+                f"{monnaie['unites'] / 100:.2f}",
+            ])
+        writer.writerow([])
+
     # --- Commandes / Orders ---
     commandes = rapport.get("commandes", {})
     if commandes:

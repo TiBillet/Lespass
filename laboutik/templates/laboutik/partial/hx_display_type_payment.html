@@ -175,7 +175,7 @@ Chaque affichage des moyens de paiement donne une nouvelle cle. Un double appui 
                 {% if user_email %}<br />{{ user_email }}{% endif %}
               </span>
               {% if tag_id %}
-                <b>{% translate "Solde" %} : {{ user_solde|floatformat:2 }} {{ currency_data.symbol }}</b>
+                <b>{% translate "Solde" %} : {{ user_solde|floatformat:2 }} {{ symbole_du_solde_client|default:currency_data.symbol }}</b>
               {% endif %}
             </div>
             {# --- Detail des articles du panier --- #}

@@ -155,6 +155,17 @@ def generer_excel_cloture(cloture: ClotureCaisse) -> bytes:
             append_row([offert["nom"], offert["qty"], e(offert["valeur"]), e(offert["cout_achat"])])
         append_blank()
 
+    # --- Ventes en points ou en temps (hors argent, jamais dans un total) ---
+    # Le total est dans l'unite de la monnaie (centiemes / 100, comme les euros).
+    # / Points or time sales (not money), total in the currency's own unit.
+    section = rapport.get("non_monetaire", {})
+    if section.get("par_monnaie"):
+        append_title(str(_("Non monétaire (hors argent)")))
+        append_header([str(_("Monnaie")), str(_("Quantité")), str(_("Total"))])
+        for monnaie in section["par_monnaie"]:
+            append_row([monnaie["nom"], monnaie["qty_articles"], e(monnaie["unites"])])
+        append_blank()
+
     # Auto-largeur des colonnes / Auto-width columns
     for col_idx in range(1, max_cols_used[0] + 1):
         max_length = 0

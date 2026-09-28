@@ -4,7 +4,7 @@ import json
 import logging
 import uuid
 from datetime import timedelta, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
 
 import zoneinfo
@@ -102,6 +102,10 @@ class PaymentMethod(models.TextChoices):
     STRIPE_RECURENT = "SR", _("Recurring: Stripe")
     LOCAL_EURO = 'LE', _("Asset local fiat")
     LOCAL_GIFT = 'LG', _("Asset local gift")
+    # Points de fidelite (FID) ou heures (TIM) : ce n'est pas de l'argent.
+    # La ligne garde le prix en unites de la monnaie, avec une TVA a 0.
+    # / Loyalty points or time: not money. The line keeps the price in units.
+    NON_MONETAIRE = "NM", _("Points ou temps (non monétaire)")
 
 
     @classmethod
@@ -3852,13 +3856,14 @@ class LigneArticle(models.Model):
         Determine default VAT for this line from related Product TVA if available,
         otherwise fallback to global configuration, else 0.00.
         """
-        # Une ligne offerte n'est pas une vente en argent : pas de TVA. Sans
-        # cette regle, save() pose la TVA du produit sur une ligne creee sans
-        # TVA, et l'archive fiscale exporterait une TVA inventee.
+        # Une ligne offerte (FREE) ou payee en points / temps (NON_MONETAIRE)
+        # n'est pas une vente en argent : pas de TVA. Sans cette regle, save()
+        # pose la TVA du produit sur une ligne creee sans TVA, et l'archive
+        # fiscale exporterait une TVA inventee.
         # Limite : la regle joue a la CREATION seulement, et pas si l'appelant
         # passe lui-meme une TVA non nulle.
-        # / A gifted line is not a money sale: no VAT (on creation only).
-        if self.payment_method == PaymentMethod.FREE:
+        # / A gifted or points/time line is not a money sale: no VAT (on creation only).
+        if self.payment_method in (PaymentMethod.FREE, PaymentMethod.NON_MONETAIRE):
             return Decimal("0.00")
 
         # 1) Product TVA via PriceSold -> ProductSold -> Product
@@ -3890,7 +3895,15 @@ class LigneArticle(models.Model):
         super().save(*args, **kwargs)
 
     def total(self) -> int:
-        return int(self.amount * self.qty)
+        """
+        Montant de la ligne en centimes : prix unitaire x quantite, ARRONDI au
+        centime le plus proche (0,5 → 1, comme Round() de PostgreSQL dans les
+        rapports). Jamais tronque : une quantite repartie sur deux moyens de
+        paiement (6 decimales) donne 499,99985 centimes, qui valent 500.
+        / Line amount in cents: unit price x qty, ROUNDED half-up, never truncated.
+        """
+        montant_exact = Decimal(self.amount) * Decimal(self.qty)
+        return int(montant_exact.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
     def total_decimal(self):
         return dround(self.total())
@@ -4291,6 +4304,21 @@ class Membership(models.Model):
         if self.price:
             return self.price.name
         return None
+
+    def unite_de_la_contribution(self):
+        """
+        L'unite de `contribution_value` : « € » pour une cotisation en argent, le
+        nom de la monnaie pour une adhesion payee en points ou en temps a la caisse
+        (moyen NON_MONETAIRE : `contribution_value` est alors en unites de la
+        monnaie, 300 = 300 points).
+        / Unit of contribution_value: "€" for money, the currency name for a
+          membership paid in points or time.
+        """
+        if self.payment_method != PaymentMethod.NON_MONETAIRE:
+            return "€"
+        if self.price and self.price.asset:
+            return self.price.asset.name
+        return str(_("Points ou temps"))
 
     def product_name(self):
         if self.price:

@@ -3588,10 +3588,17 @@ class MembershipMVT(viewsets.ViewSet):
                                                               publish=True).prefetch_related('tag')
 
         for product in products:
-            prices = product.prices.all()
+            # Les tarifs en points ou en temps se vendent a la caisse seulement :
+            # ils ne comptent pas dans le prix affiche en euros.
+            # / Points or time prices are sold at the POS only: not an euro price.
+            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False)
             tarifs = [price.prix for price in prices]
-            # Calcul des prix min et max
-            product.price_min = f"{min(tarifs)} €"
+            # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
+            # la caisse seulement), la carte n'affiche pas de prix.
+            # / Min price. Without a euro price, the card shows no price.
+            product.price_min = None
+            if tarifs:
+                product.price_min = f"{min(tarifs)} €"
 
         template_context['products'] = products
 
@@ -3653,8 +3660,13 @@ class MembershipMVT(viewsets.ViewSet):
             context = get_context(request)
             context['product'] = product
 
-            # On prépare les prix publiés pour le template
-            published_prices = product.prices.filter(publish=True).order_by('order', 'prix')
+            # On prépare les prix publiés pour le template.
+            # Un tarif en points ou en temps se vend a la caisse seulement : le
+            # site ne le propose pas (il serait paye en euros par Stripe).
+            # / Published prices. A points or time price is POS-only: never online.
+            published_prices = product.prices.filter(
+                publish=True, asset__isnull=True, non_fiduciaire=False
+            ).order_by('order', 'prix')
             context['published_prices'] = published_prices
             context['published_prices_count'] = published_prices.count()
 
@@ -4668,11 +4680,17 @@ class MembershipMVT(viewsets.ViewSet):
         params_renouvellement = {}
         if getattr(membership, 'user', None) and getattr(membership.user, 'email', None):
             params_renouvellement['email'] = membership.user.email
-        if membership.price_id:
+        # Adhesion payee en points ou en temps a la caisse : le formulaire de
+        # l'admin n'encaisse que de l'argent. On ne pre-remplit ni le tarif, ni le
+        # montant (en points), ni le moyen : sinon le renouvellement enregistrerait
+        # « 300 € » pour 300 points.
+        # / Points membership: no pre-filled price, amount or method.
+        adhesion_en_points = membership.payment_method == PaymentMethod.NON_MONETAIRE
+        if membership.price_id and not adhesion_en_points:
             params_renouvellement['price'] = membership.price_id
-        if membership.contribution_value is not None:
+        if membership.contribution_value is not None and not adhesion_en_points:
             params_renouvellement['contribution'] = str(membership.contribution_value)
-        if membership.payment_method:
+        if membership.payment_method and not adhesion_en_points:
             params_renouvellement['payment_method'] = membership.payment_method
         if membership.first_name:
             params_renouvellement['first_name'] = membership.first_name

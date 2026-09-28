@@ -65,6 +65,31 @@ def euros(centimes):
 
 
 @register.filter
+def montant_dans_la_monnaie(centimes, nom_de_la_monnaie):
+    """
+    Ecrit un montant dans sa monnaie : euros, ou points / temps.
+    / Writes an amount in its currency: euros, or points / time.
+
+    - Sans nom de monnaie (vide ou None) : comme le filtre `euros`.
+    - Avec un nom : les centiemes divises par 100, deux decimales, puis le nom.
+      Les points et les heures sont comptes en centiemes, comme les centimes
+      (300 points = 30000).
+    30000, "Points fidélité" → "300,00 Points fidélité"
+    500, ""                  → "5,00 €"
+
+    Usage : {{ montant_centimes|montant_dans_la_monnaie:nom_de_la_monnaie }}
+    """
+    if not nom_de_la_monnaie:
+        return euros(centimes)
+
+    montant_en_euros_formate = euros(centimes)
+    # euros() finit par « <espace> <symbole> » : on garde le nombre seul.
+    # / euros() ends with " <symbol>": keep the number only.
+    nombre_formate = montant_en_euros_formate.rsplit(" ", 1)[0]
+    return f"{nombre_formate} {nom_de_la_monnaie}"
+
+
+@register.filter
 def afficher_poids(article):
     """
     Convertit (poids_total + unite_poids) en chaine compacte collee.

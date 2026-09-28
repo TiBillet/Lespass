@@ -44,6 +44,13 @@ def ticket_data_to_json_commands(ticket_data):
     """
     commands = []
 
+    # Unite des montants : "EUR" (defaut), ou le nom de la monnaie d'un ticket en
+    # points ou en temps. « EUR » reste colle au nombre (« 5.00EUR ») ; un nom de
+    # monnaie en est separe (« 300.00 Points fidélité »).
+    # / Amount unit: "EUR" (default) or a points/time currency name.
+    unite_du_ticket = ticket_data.get("unite", "EUR")
+    suffixe_de_l_unite = unite_du_ticket if unite_du_ticket == "EUR" else f" {unite_du_ticket}"
+
     # --- En-tete ---
     # / Header
     header = ticket_data.get("header", {})
@@ -93,7 +100,7 @@ def ticket_data_to_json_commands(ticket_data):
 
         if article_a_un_prix:
             total_euros = f"{article_total / 100:.2f}"
-            line = f"{article_name} x{article_qty}  {total_euros}EUR"
+            line = f"{article_name} x{article_qty}  {total_euros}{suffixe_de_l_unite}"
         else:
             line = f"{article_qty} x {article_name}"
 
@@ -120,7 +127,7 @@ def ticket_data_to_json_commands(ticket_data):
         total_euros = f"{total_amount / 100:.2f}"
         commands.append({
             "type": "text",
-            "value": f"TOTAL: {total_euros} EUR",
+            "value": f"TOTAL: {total_euros} {unite_du_ticket}",
             "bold": True,
             "align": "left",
         })
@@ -141,7 +148,7 @@ def ticket_data_to_json_commands(ticket_data):
             montant_euros = f"{moyen.get('total', 0) / 100:.2f}"
             commands.append({
                 "type": "text",
-                "value": f"{moyen.get('name', '')}  {montant_euros}EUR",
+                "value": f"{moyen.get('name', '')}  {montant_euros}{suffixe_de_l_unite}",
                 "align": "left",
             })
 
