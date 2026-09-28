@@ -1,0 +1,61 @@
+{% load i18n kiosk_tags %}
+{% comment %}
+ETAPE 4 — RECAPITULATIF AVANT PAIEMENT
+/ Step 4 — Summary before payment
+
+LOCALISATION : kiosk/templates/kiosk/partial/etape_recapitulatif.html
+
+Rendu par KioskViewSet.recapitulatif. Contexte :
+- carte (kiosk/carte.py), montant_centimes, nouveau_solde_centimes (calcule
+  par la vue), montant_pour_formulaire (« 20.00 », renvoye au paiement).
+
+FLUX :
+- Valider -> hx-post refill_with_wisepos (tag_id + totalAmount revalides
+  cote serveur) -> waiting_credit_card_terminal.html.
+- Retour -> hx-post check_request_card -> retour au choix du montant.
+{% endcomment %}
+<section class="stage" data-etape="recapitulatif" data-testid="kiosk-etape-recapitulatif">
+    <form class="rcard"
+          hx-post="{% url 'kiosk-refill-with-wisepos' %}"
+          hx-target="#tb-kiosque"
+          hx-swap="innerHTML">
+        <input type="hidden" name="tag_id" value="{{ carte.tag_id }}">
+        <input type="hidden" name="totalAmount" value="{{ montant_pour_formulaire }}">
+
+        <div class="rcard__head">
+            <div class="rcard__id">{% translate "carte" %} ·· {{ carte.numero_court }}</div>
+            <div class="rcard__solde-label">{% translate "Solde actuel" %}</div>
+            <div class="rcard__balance">{{ carte.solde_centimes|euros }}<span class="eur"> €</span></div>
+        </div>
+
+        <div class="rrecap">
+            <div class="rrecap__row">
+                <span class="rrecap__key">{% translate "Vous ajoutez" %}</span>
+                <span class="rrecap__val rrecap__val--add" data-testid="kiosk-recap-ajout">
+                    + {{ montant_centimes|euros }} €
+                </span>
+            </div>
+            <div class="rrecap__row rrecap__row--total">
+                <span class="rrecap__key">{% translate "Nouveau solde" %}</span>
+                <span class="rrecap__val" data-testid="kiosk-recap-nouveau-solde">
+                    {{ nouveau_solde_centimes|euros }} €
+                </span>
+            </div>
+        </div>
+
+        <div class="rcard__actions">
+            <button type="submit" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
+                    data-testid="kiosk-bouton-payer">
+                {% translate "Valider" %}
+            </button>
+            <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg"
+                    hx-post="{% url 'kiosk-check-request-card' %}"
+                    hx-vals='{"tag_id": "{{ carte.tag_id }}"}'
+                    hx-target="#tb-kiosque"
+                    hx-swap="innerHTML"
+                    data-testid="kiosk-bouton-retour-montant">
+                <span aria-hidden="true">←</span> {% translate "Retour" %}
+            </button>
+        </div>
+    </form>
+</section>

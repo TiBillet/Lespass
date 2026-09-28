@@ -765,6 +765,14 @@ def _construire_sections_modules(request):
                         ),
                         "permission": admin_permission,
                     },
+                    {
+                        "title": _("Réglages des bornes"),
+                        "icon": "tune",
+                        "link": _safe_rev(
+                            "staff_admin:kiosk_reglagesborne_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
                 ],
             }
         )
@@ -1312,6 +1320,7 @@ DESCRIPTION_DES_PAGES = {
     "/controlvanne/kiosk/": _("L'écran public des tireuses."),
     # --- Kiosk : borne libre-service ---
     "kiosk.paymentsintent": _("Les paiements passés en autonomie."),
+    "kiosk.reglagesborne": _("Les services proposés par chaque borne."),
     # --- Ressources ---
     "booking.booking": _("Les réservations de salles et de matériel."),
     "BaseBillet.resourceproduct": _("Les ressources mises à la réservation."),
@@ -1383,6 +1392,7 @@ CATEGORIE_DES_PAGES = {
     "/controlvanne/kiosk/": "analyser",
     # --- Kiosk : borne libre-service ---
     "kiosk.paymentsintent": "gerer",
+    "kiosk.reglagesborne": "configurer",
     # --- Ressources ---
     "booking.booking": "gerer",
     "BaseBillet.resourceproduct": "configurer",

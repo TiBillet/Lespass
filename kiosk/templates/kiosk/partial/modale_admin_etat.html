@@ -1,0 +1,75 @@
+{% load i18n %}
+{% comment %}
+CONTENU DE LA MODALE ADMIN — trois etats : intro, detection, erreur
+/ Admin modal content — three states: intro, detect, error
+
+LOCALISATION : kiosk/templates/kiosk/partial/modale_admin_etat.html
+
+Les trois etats sont toujours presents ; `etat` decide lequel est visible.
+- intro -> detection : sans serveur (main.js, data-admin-etat), qui lance aussi
+  la lecture NFC sur le formulaire de detection.
+- detection -> POST acces_admin (views.py) :
+    carte primaire  -> HX-Redirect vers /kiosk/configuration/
+    autre carte     -> ce partial rendu avec etat="erreur", swappe dans
+                       #modale-admin-contenu.
+/ All three states are always present; `etat` picks the visible one.
+{% endcomment %}
+
+{# ---------------- Intro ---------------- #}
+<div data-admin-etat="intro" {% if etat != "intro" %}hidden{% endif %}>
+    <h2 class="kiosk-modal__title" id="modale-admin-titre">{% translate "Accès administrateur" %}</h2>
+    <p class="kiosk-modal__text">
+        {% translate "Cet espace est réservé à l'équipe du lieu. Il permet de changer les services proposés par la borne. Une carte administrateur est nécessaire." %}
+    </p>
+    <div class="kiosk-modal__actions kiosk-modal__actions--stack">
+        <button type="button" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
+                data-afficher-etat-admin="detection" data-testid="kiosk-admin-acceder">
+            {% translate "Accéder à la configuration" %}
+        </button>
+        <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg"
+                data-modal-close data-testid="kiosk-admin-annuler">
+            {% translate "Annuler" %}
+        </button>
+    </div>
+</div>
+
+{# ---------------- Detection de la carte ---------------- #}
+<div data-admin-etat="detection" hidden>
+    <h2 class="kiosk-modal__title">{% translate "Carte administrateur" %}</h2>
+    <p class="kiosk-modal__text">{% translate "Posez la carte administrateur sur le lecteur." %}</p>
+    <div class="admin-nfc" aria-hidden="true">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none">
+            <path d="M6 4 C 4 6, 4 18, 6 20 M9 6 C 7 8, 7 16, 9 18 M12 8 C 11 10, 11 14, 12 16 M15 10 L 15 14"
+                  stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+    </div>
+    <form hx-post="{% url 'kiosk-acces-admin' %}"
+          hx-target="#modale-admin-contenu"
+          hx-swap="innerHTML"
+          data-nfc-lecture="manuelle"
+          data-testid="kiosk-form-carte-admin">
+        <input type="hidden" name="tag_id" value="">
+    </form>
+    <div class="kiosk-modal__actions kiosk-modal__actions--stack">
+        <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg" data-modal-close>
+            {% translate "Annuler" %}
+        </button>
+    </div>
+</div>
+
+{# ---------------- Erreur : pas une carte administrateur ---------------- #}
+<div data-admin-etat="erreur" {% if etat != "erreur" %}hidden{% endif %} data-testid="kiosk-admin-erreur">
+    <h2 class="kiosk-modal__title" role="alert">{% translate "Ce n'est pas une carte administrateur." %}</h2>
+    <p class="kiosk-modal__text">
+        {% translate "Présentez une carte administrateur pour accéder à la configuration, ou annulez." %}
+    </p>
+    <div class="kiosk-modal__actions kiosk-modal__actions--stack">
+        <button type="button" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
+                data-afficher-etat-admin="detection" data-testid="kiosk-admin-reessayer">
+            {% translate "Réessayer" %}
+        </button>
+        <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg" data-modal-close>
+            {% translate "Annuler" %}
+        </button>
+    </div>
+</div>

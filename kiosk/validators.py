@@ -17,7 +17,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from fedow_connect.fedow_api import FedowAPI
+from kiosk.carte import lire_la_carte_pour_la_borne
 from QrcodeCashless.models import CarteCashless
 
 logger = logging.getLogger(__name__)
@@ -40,14 +40,13 @@ class RefillWisePoseValidator(serializers.Serializer):
     tag_id = serializers.CharField(max_length=8, min_length=8, required=True)
 
     def validate_tag_id(self, value):
+        # On lit la carte en entier (solde compris) plutot que de jeter la reponse
+        # de Fedow : le solde avant recharge sert a l'ecran de succes.
+        # / Read the whole card (balance included) instead of discarding Fedow's
+        # answer: the balance before refill feeds the success screen.
         try:
-            tag_id = value.upper()
-            logger.info(f"--> tag_id = {tag_id}")
-
-            # Verifie que la carte existe cote Fedow avant de chercher la copie locale.
-            # / Check the card exists on Fedow before looking up the local copy.
-            FedowAPI().NFCcard.retrieve(tag_id)
-            self.card = CarteCashless.objects.get(tag_id=tag_id)
+            self.carte_lue = lire_la_carte_pour_la_borne(value)
+            self.card = self.carte_lue["carte_locale"]
             return self.card
         except CarteCashless.DoesNotExist:
             raise ValidationError(_("Card not found with tag %(tag_id)s") % {"tag_id": value})
@@ -63,3 +62,14 @@ class RefillWisePoseValidator(serializers.Serializer):
             raise serializers.ValidationError(_("Amount must be positive"))
 
         return int(value * 100)
+
+
+class RecapitulatifSerializer(RefillWisePoseValidator):
+    """
+    Valide le montant et la carte avant d'afficher le recapitulatif.
+    / Validates amount and card before showing the summary.
+
+    Memes regles que la recharge : on ne montre jamais un recapitulatif
+    qu'on refuserait ensuite au paiement.
+    / Same rules as the refill: never show a summary the payment would refuse.
+    """

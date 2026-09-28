@@ -1,0 +1,14 @@
+{% load i18n %}
+{% comment %}
+BORNE EN PAUSE — aucun service public n'est actif
+/ Kiosk paused — no public service is on
+
+LOCALISATION : kiosk/templates/kiosk/partial/borne_en_pause.html
+
+Rendu par recharge.html quand ReglagesBorne.recharge_active est faux.
+L'equipe rallume la recharge via le bouton Admin (carte primaire).
+{% endcomment %}
+<section class="stage" data-etape="pause" data-testid="kiosk-etape-pause">
+    <h1 class="stage__title">{% translate "La borne est en pause." %}</h1>
+    <p class="stage__lede">{% translate "Vous pouvez trouver de l'aide au bar." %}</p>
+</section>

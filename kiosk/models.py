@@ -74,6 +74,51 @@ class PaymentsIntent(models.Model):
     status = models.CharField(max_length=2, choices=STATUS_CHOICES,
                               default=REQUIRES_PAYMENT_METHOD, verbose_name=_("Status"))
 
+    # Solde de la carte AVANT la recharge, lu chez Fedow au moment du paiement.
+    # Il sert seulement a l'affichage : l'ecran de succes est rendu hors requete
+    # (websocket), il ne peut pas relire la carte. Le vrai credit reste chez Fedow.
+    # / Card balance BEFORE the refill, read from Fedow at payment time. Display
+    # only: the success screen is rendered outside a request (websocket).
+    solde_avant_centimes = models.PositiveIntegerField(
+        blank=True, null=True,
+        verbose_name=_("Solde avant recharge (centimes)"),
+    )
+
+    def contexte_ecran_final(self):
+        """
+        Les montants affiches sur l'ecran de succes, en centimes.
+        / Amounts shown on the success screen, in cents.
+
+        LOCALISATION : kiosk/models.py
+
+        Utilise par kiosk/tasks.py (evenement websocket), wsocket/consumers.py
+        (rejeu a la reconnexion) et kiosk/views.py (payment_status). Les valeurs
+        sont des entiers : elles traversent le channel layer Redis, qui ne sait
+        pas serialiser un Decimal. Le filtre `euros` (kiosk_tags) les formate.
+        / Integers only: they go through the Redis channel layer. The `euros`
+        template filter formats them.
+
+        Le nouveau solde est ANNONCE (solde avant + montant) : Fedow credite par
+        webhook, parfois quelques secondes apres l'ecran de succes.
+        / The new balance is ANNOUNCED: Fedow credits via webhook, sometimes a
+        few seconds after the success screen.
+        """
+        nouveau_solde_centimes = None
+        if self.solde_avant_centimes is not None:
+            nouveau_solde_centimes = self.solde_avant_centimes + self.amount
+        # Le bouton « Reessayer » de l'ecran de refus relance le meme paiement :
+        # il lui faut la carte et le montant (avec un point decimal).
+        # / The refusal screen's "Retry" button replays the same payment.
+        tag_id_de_la_carte = self.card.tag_id if self.card_id else ""
+        montant_pour_formulaire = f"{self.amount // 100}.{self.amount % 100:02d}"
+
+        return {
+            "montant_ajoute_centimes": self.amount,
+            "nouveau_solde_centimes": nouveau_solde_centimes,
+            "tag_id": tag_id_de_la_carte,
+            "montant_pour_formulaire": montant_pour_formulaire,
+        }
+
     def get_from_stripe(self):
         """Rafraîchit le statut depuis Stripe.
         / Refresh status from Stripe."""
@@ -224,3 +269,49 @@ class PaymentsIntent(models.Model):
         except Exception as erreur_refresh:
             logger.error(f"annuler_sur_le_terminal : get_from_stripe a echoue : {erreur_refresh}")
             return self.status
+
+
+class ReglagesBorne(models.Model):
+    """
+    Les services proposes au public par UNE borne.
+    / The services one kiosk offers to the public.
+
+    LOCALISATION : kiosk/models.py
+
+    Une ligne par borne (laboutik.Terminal). L'equipe du lieu les change depuis
+    l'ecran de configuration de la borne, debloque par une carte primaire
+    (kiosk/views.py : acces_admin, configuration, basculer_module).
+
+    Seule la recharge existe aujourd'hui. Adhesion, reservation et caisse sont
+    affichees « bientot » : elles auront leur champ quand elles existeront.
+    / Only the refill exists today. Membership, booking and cash register are
+    shown as "coming soon": they will get a field when they exist.
+    """
+    terminal = models.OneToOneField(
+        "laboutik.Terminal", on_delete=models.CASCADE,
+        related_name="reglages_borne", verbose_name=_("Borne"),
+    )
+    recharge_active = models.BooleanField(
+        default=True, verbose_name=_("Recharge de carte active"),
+    )
+
+    class Meta:
+        verbose_name = _("Réglages de la borne")
+        verbose_name_plural = _("Réglages des bornes")
+
+    def __str__(self):
+        return f"{self.terminal}"
+
+
+def obtenir_reglages_de_la_borne(terminal):
+    """
+    Renvoie les reglages de la borne, et les cree la premiere fois.
+    / Returns the kiosk settings, creating them the first time.
+
+    :param terminal: laboutik.Terminal, ou None (admin en DEMO sans borne appairee)
+    :return: ReglagesBorne, ou None si aucune borne
+    """
+    if terminal is None:
+        return None
+    reglages, _created = ReglagesBorne.objects.get_or_create(terminal=terminal)
+    return reglages

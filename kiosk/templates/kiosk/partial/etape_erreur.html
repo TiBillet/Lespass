@@ -1,0 +1,27 @@
+{% load i18n %}
+{% comment %}
+ERREUR DU PARCOURS — le paiement n'a pas pu commencer
+/ Flow error — the payment could not start
+
+LOCALISATION : kiosk/templates/kiosk/partial/etape_erreur.html
+
+Rendu par recapitulatif et refill_with_wisepos quand la validation ou le TPE
+echoue (pas de lecteur, broker injoignable, carte refusee...). Toujours en
+200 : HTMX ne swappe pas les 4xx/5xx par defaut.
+/ Always 200: HTMX does not swap 4xx/5xx by default.
+{% endcomment %}
+<section class="stage" data-etape="erreur" data-testid="kiosk-etape-erreur">
+    <div class="rcard">
+        <h1 class="rcard__q rcard__q--lg">{% translate "Le paiement n'a pas pu commencer." %}</h1>
+        <div role="alert" aria-live="assertive">
+            <p class="kiosk-alert" data-testid="kiosk-error-message">{{ error_message }}</p>
+        </div>
+        <p class="stage__lede">{% translate "Aucun argent n'a été prélevé. Vous pouvez trouver de l'aide au bar." %}</p>
+        <div class="rcard__actions">
+            <a href="/kiosk/" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
+               data-testid="kiosk-return-home">
+                {% translate "Retour à l'accueil" %}
+            </a>
+        </div>
+    </div>
+</section>

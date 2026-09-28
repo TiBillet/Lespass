@@ -1,0 +1,124 @@
+{% load i18n %}
+{% comment %}
+GRILLE DES MODULES + BOUTON DEMARRER
+/ Module grid + Start button
+
+LOCALISATION : kiosk/templates/kiosk/partial/modules_borne.html
+
+Rendu dans #kiosk-modules par configuration.html, ou seul par
+basculer_module / demarrer (views.py : rendre_les_modules).
+Contexte : recharge_active, nombre_de_services_actifs, error_message.
+
+Seule la recharge existe. Adhesion, reservation et caisse sont « bientot » :
+visibles, mais leur interrupteur est desactive.
+/ Only the refill exists. The others are "coming soon", switch disabled.
+{% endcomment %}
+
+{# Trois modules pour le public. Ils peuvent cohabiter. #}
+{# / Three public modules. They can coexist. #}
+<div class="kiosk-modules">
+
+    <article class="kiosk-module {% if recharge_active %}is-active{% endif %}" data-testid="kiosk-module-recharge">
+        <div class="kiosk-module__head">
+            <div class="kiosk-module__id">
+                <div class="kiosk-module__label">{% translate "Carte" %}</div>
+                <h2 class="kiosk-module__title" id="module-recharge-titre">{% translate "Recharger ma carte" %}</h2>
+            </div>
+            <button type="button" class="kiosk-switch" role="switch"
+                    aria-checked="{% if recharge_active %}true{% else %}false{% endif %}"
+                    aria-labelledby="module-recharge-titre"
+                    hx-post="{% url 'kiosk-basculer-module' %}"
+                    hx-vals='{"module": "recharge"}'
+                    hx-target="#kiosk-modules"
+                    hx-swap="innerHTML"
+                    data-testid="kiosk-switch-recharge">
+                <span class="kiosk-switch__tap"></span>
+            </button>
+        </div>
+        <p class="kiosk-module__desc">
+            {% translate "Une personne pose sa carte, ajoute un montant, paie sans contact. Elle repart avec un solde à jour." %}
+        </p>
+    </article>
+
+    <article class="kiosk-module is-coming" data-testid="kiosk-module-adhesion">
+        <div class="kiosk-module__head">
+            <div class="kiosk-module__id">
+                <div class="kiosk-module__label">{% translate "Adhésion" %}</div>
+                <h2 class="kiosk-module__title" id="module-adhesion-titre">{% translate "Prendre l'adhésion" %}</h2>
+            </div>
+            <button type="button" class="kiosk-switch" role="switch" aria-checked="false"
+                    aria-labelledby="module-adhesion-titre" disabled>
+                <span class="kiosk-switch__tap"></span>
+            </button>
+        </div>
+        <p class="kiosk-module__desc">
+            {% translate "Une personne rejoint le lieu, laisse son prénom, sa carte porte son statut." %}
+        </p>
+        <p class="kiosk-module__coming">{% translate "Bientôt disponible" %}</p>
+    </article>
+
+    <article class="kiosk-module is-coming" data-testid="kiosk-module-reservation">
+        <div class="kiosk-module__head">
+            <div class="kiosk-module__id">
+                <div class="kiosk-module__label">{% translate "Réservation" %}</div>
+                <h2 class="kiosk-module__title" id="module-reservation-titre">{% translate "Prendre une place" %}</h2>
+            </div>
+            <button type="button" class="kiosk-switch" role="switch" aria-checked="false"
+                    aria-labelledby="module-reservation-titre" disabled>
+                <span class="kiosk-switch__tap"></span>
+            </button>
+        </div>
+        <p class="kiosk-module__desc">
+            {% translate "Une personne choisit un événement du soir, paie, garde sa place sur sa carte." %}
+        </p>
+        <p class="kiosk-module__coming">{% translate "Bientôt disponible" %}</p>
+    </article>
+</div>
+
+<hr class="kiosk-separator" aria-hidden="true">
+
+{# La caisse est a part : active, elle remplacerait la borne cote equipe. #}
+{# / The cash register stands apart: it would replace the public kiosk.    #}
+<div class="kiosk-caisse-block">
+    <article class="kiosk-module is-coming" data-testid="kiosk-module-caisse">
+        <div class="kiosk-module__head">
+            <div class="kiosk-module__id">
+                <div class="kiosk-module__label">{% translate "Caisse" %}</div>
+                <h2 class="kiosk-module__title" id="module-caisse-titre">{% translate "Activer la caisse" %}</h2>
+            </div>
+            <button type="button" class="kiosk-switch" role="switch" aria-checked="false"
+                    aria-labelledby="module-caisse-titre" disabled>
+                <span class="kiosk-switch__tap"></span>
+            </button>
+        </div>
+        <p class="kiosk-module__desc">
+            {% translate "Une caisse en plus, le temps qu'il faut. La borne prend le relais quand la file s'allonge au bar." %}
+        </p>
+        <p class="kiosk-module__coming">{% translate "Bientôt disponible" %}</p>
+    </article>
+</div>
+
+<div class="kiosk-launch">
+    <div role="alert" aria-live="assertive">
+        {% if error_message %}
+            <p class="kiosk-alert" data-testid="kiosk-error-message">{{ error_message }}</p>
+        {% endif %}
+    </div>
+    <button type="button" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
+            hx-post="{% url 'kiosk-demarrer' %}"
+            hx-target="#kiosk-modules"
+            hx-swap="innerHTML"
+            {% if nombre_de_services_actifs == 0 %}disabled{% endif %}
+            data-testid="kiosk-bouton-demarrer">
+        {% translate "Démarrer la borne" %}
+    </button>
+    <p class="kiosk-launch__note" data-testid="kiosk-note-demarrage">
+        {% if nombre_de_services_actifs == 0 %}
+            {% translate "Aucun service mis en route." %}
+        {% elif nombre_de_services_actifs == 1 %}
+            {% translate "Un service est prêt à démarrer." %}
+        {% else %}
+            {% blocktrans with nombre=nombre_de_services_actifs %}{{ nombre }} services sont prêts à démarrer.{% endblocktrans %}
+        {% endif %}
+    </p>
+</div>

@@ -1,0 +1,18 @@
+{% comment %}
+MARQUE DU LIEU — logo, sinon initiale sur la couleur du lieu
+/ Place mark — logo, else the initial on the place colour
+
+LOCALISATION : kiosk/templates/kiosk/partial/marque_du_lieu.html
+
+Inclus par partial/entete_parcours.html et configuration.html.
+Attend : adresse_du_logo, initiale_du_lieu, nom_du_lieu (contexte_du_lieu, views.py).
+Decoratif : le nom du lieu est ecrit juste a cote, en texte.
+/ Decorative: the place name is written right next to it.
+{% endcomment %}
+{% if adresse_du_logo %}
+    <span class="kiosk__mark kiosk__mark--logo" aria-hidden="true">
+        <img src="{{ adresse_du_logo }}" alt="">
+    </span>
+{% else %}
+    <span class="kiosk__mark" aria-hidden="true">{{ initiale_du_lieu }}</span>
+{% endif %}

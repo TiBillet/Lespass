@@ -5,19 +5,23 @@ ou Raspberry Pi (Chromium). Paiement par carte bancaire sur un **TPE Stripe Wise
 la carte assuré **côté Fedow distant** (coexistence V1, via webhook Stripe).
 
 > Spec de conception complète : `TECH_DOC/SESSIONS/KIOSK/SPEC.md`
-> Recette manuelle : `A TESTER et DOCUMENTER/kiosk-tpe-borne.md`
+> Recette manuelle : `A TESTER et DOCUMENTER/kiosk-tpe-borne.md` et `A TESTER et DOCUMENTER/kiosk-refonte-ecrans.md`
 
 ---
 
 ## 1. Ce que fait l'application
 
-Parcours client sur la borne :
+Parcours client sur la borne (écrans d'après la maquette `TEMP-tibillet-kiosk-main/`) :
 
-1. **Choix du montant** — boutons additifs `+1 / +5 / +10 / +20 / +50 €`.
-2. **Scan de la carte** NFC TiBillet.
-3. **Paiement CB** sur le TPE Stripe physique.
-4. **Fedow crédite** la carte (webhook Stripe → crédit).
-5. Écran **succès / annulation**, retour accueil.
+1. **Posez votre carte** NFC TiBillet (lecture automatique).
+2. **Solde** de la carte, lu chez Fedow. Modale si la carte n'est pas enregistrée.
+3. **Choix du montant** — montants rapides `5 / 10 / 20 / 50 €` ou pavé numérique.
+4. **Récapitulatif** — montant ajouté et nouveau solde (calculé par le serveur).
+5. **Paiement CB** sur le TPE Stripe physique ; **Fedow crédite** la carte (webhook).
+6. Écran **succès** (montant + nouveau solde) puis **« Merci ! »**, ou **refus** avec « Réessayer ».
+
+L'équipe du lieu ouvre la **configuration** (bouton Admin + carte primaire LaBoutik) pour
+couper ou rallumer la recharge (`ReglagesBorne`, une ligne par borne).
 
 Un mode **DEMO** simule la carte NFC (aucun lecteur requis). Le TPE, lui, parle toujours à Stripe.
 
@@ -50,13 +54,14 @@ sont pilotés côté serveur ; le client (Android ou Pi) n'est qu'un **écran + 
 
 | Fichier | Rôle |
 |---|---|
-| `models.py` | `StripeLocation`, `Terminal` (`term_user` OneToOne = 1 borne = 1 TPE), `PaymentsIntent` |
+| `models.py` | `PaymentsIntent`, `ReglagesBorne` (services proposés par chaque borne) |
 | `admin.py` | Admin Unfold : appairage du TPE Stripe, historique des paiements |
-| `views.py` | `KioskViewSet` — `list`, `check_request_card`, `refill_with_wisepos`, `cancel` (garde `terminal_role == KI`) |
+| `views.py` | `KioskViewSet` — `list`, `check_request_card`, `recapitulatif`, `refill_with_wisepos`, `payment_status`, `cancel`, `acces_admin`, `configuration`, `basculer_module`, `demarrer` (garde `terminal_role == KI`) |
+| `carte.py` | `lire_la_carte_pour_la_borne` : solde et statut de la carte (Fedow distant) |
 | `validators.py` | `RefillWisePoseValidator` (vérifie la carte via Fedow) |
 | `tasks.py` | `poll_payment_intent_status` — tâche Celery qui suit le statut Stripe et pousse le résultat par WebSocket |
 | `urls.py` | Montée sous `/kiosk/` (dans `TiBillet/urls_tenants.py`) |
-| `templates/kiosk/`, `static/kiosk/` | Front HTMX + Bootstrap + SweetAlert |
+| `templates/kiosk/`, `static/kiosk/` | Front HTMX (sans Bootstrap ni SweetAlert), DA de la maquette |
 
 ### Hors de `kiosk/` (branchements)
 
