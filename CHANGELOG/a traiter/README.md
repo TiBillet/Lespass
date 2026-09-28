@@ -12,7 +12,7 @@ La différence avec le reste de `CHANGELOG/` : ici, rien n'est fait.
 | `v2-da-v1-points-laisses-de-cote.md` | Skin V2 / DA v1 : données Python à fournir, décisions, nettoyage (2026-09-11) |
 | `v2-style-suites-relecture.md` | Skin V2 : suites de la relecture du style — version lourde des modules, couches CSS Bootstrap, libellés longs, restes (2026-09-13) |
 | `pages-apercu-admin-suites.md` | Pages (admin) : suites de l'aperçu en direct — en-tête périmé après une action dans l'iframe, plan B, vidéo dans l'aperçu (2026-09-23) |
-| `controlvanne-audit-securite-facturation.md` | Tireuses : facturation (erreur de stock dans la facture, réservoir, montants calculés en JS, requêtes par `pour_update`, cartes maintenance). Lot sécurité traité le 2026-09-28 (2026-09-26) |
+| `controlvanne-audit-securite-facturation.md` | Tireuses : restes non instruits de l'audit (code mort, fonctions privées de laboutik importées, IP derrière Traefik). Lots sécurité et facturation traités le 2026-09-28 (2026-09-26) |
 
 **Convention :** quand un point est traité, il sort d'ici et devient une entrée
 normale dans `CHANGELOG/`. Un point qui n'est plus pertinent est supprimé avec

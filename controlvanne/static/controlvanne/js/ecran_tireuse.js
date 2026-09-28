@@ -30,10 +30,6 @@
   // / Full glass volume for the glass drawing (50 cl = a pint)
   var VOLUME_VERRE_PLEIN_ML = 500;
 
-  // Volume d'un « verre » pour le calcul « soit N verres » (25 cl)
-  // / Glass volume for the "N glasses" count (25 cl)
-  var VOLUME_VERRE_REFERENCE_L = 0.25;
-
   // Temps d'affichage avant le retour en veille (millisecondes)
   // / Display time before going back to idle (milliseconds)
   // Pas de délai pour un refus : l'écran reste affiché tant que la carte
@@ -59,15 +55,6 @@
     for (var i = 0; i < elements.length; i++) {
       elements[i].textContent = texte;
     }
-  }
-
-  // 12.5 → « 12,50 € » (format de la langue de la page)
-  // / 12.5 → "12,50 €" (page locale format)
-  function formaterEuros(montant) {
-    return Number(montant).toLocaleString(langue_de_la_page, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }) + " €";
   }
 
   // 125 ml → « 12,5 » (en centilitres, une décimale)
@@ -130,7 +117,6 @@
     var racine = racines[i];
     tireuses_de_la_page[racine.dataset.tireuseUuid] = {
       racine: racine,
-      prix_litre: parseFloat(racine.dataset.prixLitre) || 0,
       en_maintenance: racine.dataset.etat === "maintenance",
       minuteur_retour: null,
     };
@@ -195,11 +181,6 @@
       racine.dataset.etat = etat;
     }
 
-    // --- Prix au litre (peut changer si l'admin change le fût) ---
-    if (payload.prix_litre !== undefined) {
-      tireuse.prix_litre = parseFloat(payload.prix_litre) || 0;
-    }
-
     // --- Carte : prénom et 4 derniers caractères de l'UID ---
     if (payload.prenom !== undefined) {
       ecrireChamp(racine, "prenom", payload.prenom || "");
@@ -209,13 +190,13 @@
     }
 
     // --- Solde et « soit N verres » ---
-    var solde_est_connu = payload.balance !== undefined && payload.balance !== null && payload.balance !== "";
-    if (solde_est_connu) {
-      var solde = parseFloat(payload.balance) || 0;
-      ecrireChamp(racine, "solde", formaterEuros(solde));
-      var prix_du_verre = tireuse.prix_litre * VOLUME_VERRE_REFERENCE_L;
-      var nombre_de_verres = prix_du_verre > 0 ? Math.floor(solde / prix_du_verre) : "—";
-      ecrireChamp(racine, "verres", String(nombre_de_verres));
+    // Calculés et formatés par le serveur (_champs_du_solde, viewsets.py), avec
+    // les mêmes formules que la facture : le JS ne fait qu'écrire.
+    // / Computed and formatted server-side, with the bill's formulas.
+    if (payload.solde_affiche) {
+      ecrireChamp(racine, "solde", payload.solde_affiche);
+      var nombre_de_verres_connu = payload.nombre_verres !== undefined && payload.nombre_verres !== null;
+      ecrireChamp(racine, "verres", nombre_de_verres_connu ? String(payload.nombre_verres) : "—");
     }
 
     // --- Volume servi, verre qui se remplit, prix servi ---
@@ -226,7 +207,13 @@
       ecrireChamp(racine, "volume-cl", formaterCentilitres(volume_ml));
       var remplissage = Math.min(volume_ml / VOLUME_VERRE_PLEIN_ML, 1);
       racine.style.setProperty("--remplissage-verre", String(remplissage));
-      ecrireChamp(racine, "prix-servi", formaterEuros(volume_ml / 1000 * tireuse.prix_litre));
+    }
+
+    // --- Prix du volume servi : calculé par le serveur (même formule que la
+    // facture ; en fin de service, c'est le montant réellement débité)
+    // / Price of the served volume: server-computed (actual billed amount at the end)
+    if (payload.prix_servi_affiche) {
+      ecrireChamp(racine, "prix-servi", payload.prix_servi_affiche);
     }
 
     // --- Niveau du fût (vignettes de la liste) ---

@@ -21,7 +21,11 @@ class WsPayload(TypedDict, total=False):
     uid: str  # UID RFID de la carte
     prenom: str  # Prénom du titulaire de la carte, vide si carte anonyme
     liquid_label: str  # Nom de la boisson affichée
-    balance: str  # Solde de la carte (Decimal sérialisé en str)
+    balance: str  # Solde de la carte en euros, « 14.10 » (compatibilité)
+    solde_affiche: str  # Solde prêt à afficher, « 14,10 € » (calculé par le serveur)
+    nombre_verres: int  # Verres de 25 cl que le solde permet (None si pas de prix)
+    prix_servi_centimes: int  # Prix du volume servi (fin : montant réellement facturé)
+    prix_servi_affiche: str  # Même prix, prêt à afficher, « 3,75 € »
     prix_litre: str  # Prix effectif au litre (Decimal sérialisé en str)
     currency: (
         str  # Symbole monétaire, toujours "€" (ex-champ monnaie, supprimé en Phase 1)

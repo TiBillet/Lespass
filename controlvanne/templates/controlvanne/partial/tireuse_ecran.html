@@ -30,11 +30,9 @@ Variables CSS posées par le JS sur cette racine :
 Variable attendue : {{ bec }} — instance de TireuseBec
 / Expected variable: {{ bec }} — TireuseBec instance
 {% endcomment %}
-{% load l10n %}
 <div class="tireuse__frame"
      data-tireuse-uuid="{{ bec.uuid }}"
      data-etat="{% if bec.enabled %}veille{% else %}maintenance{% endif %}"
-     data-prix-litre="{{ bec.prix_litre|unlocalize }}"
      data-testid="tireuse-ecran">
 
   <div class="tireuse__stages">

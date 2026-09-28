@@ -79,47 +79,130 @@ def _push_ws_kiosk(tireuse, payload):
     """
     pousser_aux_kiosks(tireuse.uuid, payload, uuid_du_lieu_courant())
 
-def _push_refus(tireuse, message: str, **extra):
-      """
-      Pousse un payload minimal de refus vers le kiosk via WebSocket.
-      Utilisé pour tous les cas où authorize() refuse une carte connue.
+def _push_refus(tireuse, message, solde_centimes=None):
+    """
+    Pousse un message de refus minimal vers le kiosk via WebSocket.
+    / Pushes a minimal refusal message to the kiosk via WebSocket.
 
-      Payload intentionnellement minimaliste : le kiosk a déjà l'état complet
-      de la tireuse depuis le payload initial — inutile de reconstruire via
-      3 requêtes SQL (pas d'appel à _construire_payload_session).
-      / Pushes a minimal refusal payload to the kiosk via WebSocket.
-      Used for all cases where authorize() refuses a known card.
+    LOCALISATION : controlvanne/viewsets.py
 
-      Intentionally minimal payload: the kiosk already has the full tap state
-      from the initial payload — no need to rebuild via 3 SQL queries
-      (no call to _construire_payload_session).
+    Utilisé pour tous les cas où authorize() refuse une carte.
+    present=True + authorized=False : ecran_tireuse.js affiche l'écran « Carte
+    refusée », tant que la carte est posée (retour en veille au retrait).
+    Message minimal : le kiosk a déjà l'état complet de la tireuse (pas d'appel
+    à _construire_payload_session, pas de requête SQL en plus).
+    / present=True + authorized=False: the kiosk shows the refusal screen while
+    the card is present. Minimal message, no extra SQL query.
 
-      :param tireuse: TireuseBec — la tireuse concernée
-      :param message: str — message d'erreur lisible par l'utilisateur
-      """
-      _push_ws_kiosk(
-        tireuse,
-        {
-            "tireuse_bec_uuid": str(tireuse.uuid),
-            "authorized": False,
-            "vanne_ouverte": False,
-            "present": True,   # ← déclenche CAS 1 dans le JS → affiche le message 4s
-            "message": message,
-            **extra,
-        },
+    :param tireuse: TireuseBec — la tireuse concernée
+    :param message: str — message lisible par le client (déjà traduit)
+    :param solde_centimes: int ou None — solde de la carte, affiché s'il est connu
+    """
+    payload = {
+        "tireuse_bec_uuid": str(tireuse.uuid),
+        "authorized": False,
+        "vanne_ouverte": False,
+        "present": True,
+        "message": message,
+    }
+    if solde_centimes is not None:
+        payload.update(_champs_du_solde(solde_centimes, tireuse.prix_litre))
+    _push_ws_kiosk(tireuse, payload)
+
+
+def _champs_du_solde(solde_centimes, prix_litre):
+    """
+    Champs « solde » du message WebSocket, calculés et formatés par le serveur.
+    / "Balance" fields of the WebSocket message, computed and formatted server-side.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    - balance       : solde en euros, texte « 14.10 » (gardé pour compatibilité)
+    - solde_affiche : solde prêt à afficher, « 14,10 € » (langue active)
+    - nombre_verres : verres de 25 cl que le solde permet (None si pas de prix)
+    Le JS du kiosk écrit ces valeurs telles quelles (audit 2026-09-26, point 2.3).
+    / The kiosk JS writes these values as they are.
+
+    :param solde_centimes: int
+    :param prix_litre: Decimal
+    :return: dict
+    """
+    from controlvanne.billing import calculer_nombre_de_verres, formater_euros
+
+    return {
+        "balance": f"{int(solde_centimes) / 100:.2f}",
+        "solde_affiche": formater_euros(solde_centimes),
+        "nombre_verres": calculer_nombre_de_verres(solde_centimes, prix_litre),
+    }
+
+
+def _cle_de_cache_du_solde(session):
+    """
+    Clé de cache du solde lu à l'authorize, pour une session.
+    Le lieu fait partie de la clé (règle multi-tenant).
+    / Cache key of the balance read at authorize; includes the venue.
+    """
+    return f"controlvanne:solde_authorize:{connection.tenant.pk}:{session.pk}"
+
+
+def _lire_le_solde_de_la_carte(carte):
+    """
+    Solde total de la carte (cascade TNF → TLF → FED), en centimes.
+    / Card total balance (TNF → TLF → FED cascade), in cents.
+
+    :param carte: CarteCashless
+    :return: int, ou None si la carte n'a pas de contexte cashless
+    """
+    from controlvanne.billing import calculer_solde_total_cascade, obtenir_contexte_cashless
+
+    contexte = obtenir_contexte_cashless(carte)
+    if not contexte:
+        return None
+    return calculer_solde_total_cascade(
+        contexte["wallet_client"], contexte["cascade_assets"]
     )
-def _construire_payload_session(tireuse, session, **extras):
+
+
+# Durée de vie du solde gardé en cache : largement plus qu'un service
+# / Lifetime of the cached balance: far longer than one pour
+DUREE_CACHE_SOLDE_SECONDES = 60 * 60 * 6
+
+
+def _construire_payload_session(
+    tireuse,
+    session,
+    prix_litre=None,
+    solde_centimes=None,
+    montant_servi_centimes=None,
+    **extras,
+):
     """
     Construit le payload WebSocket pour un événement de session NFC.
     / Builds the WebSocket payload for an NFC session event.
 
     LOCALISATION : controlvanne/viewsets.py
 
+    Les montants d'argent sont calculés ICI, avec les mêmes fonctions que la
+    facture (controlvanne/billing.py) : l'écran ne calcule plus rien.
+    - prix_servi_centimes / prix_servi_affiche : prix du volume servi ;
+    - balance / solde_affiche / nombre_verres : si solde_centimes est donné.
+    / Money amounts are computed HERE with the bill's functions.
+
     :param tireuse: TireuseBec
     :param session: RfidSession (ou None)
+    :param prix_litre: Decimal — passé par l'appelant s'il l'a déjà lu (évite
+                       deux requêtes SQL de plus), sinon lu sur la tireuse
+    :param solde_centimes: int ou None — solde de la carte à afficher
+    :param montant_servi_centimes: int ou None — montant réellement facturé
+                       (fin de service) ; sinon calculé depuis le volume
     :param extras: champs supplémentaires à fusionner (vanne_ouverte, session_done, etc.)
     :return: dict payload
     """
+    from controlvanne.billing import calculer_montant_centimes, formater_euros
+
+    if prix_litre is None:
+        prix_litre = tireuse.prix_litre
+
     # Prénom du client si la carte est liée à un compte. Carte anonyme → chaîne vide.
     # Affiché sur l'écran de la tireuse : « Bonjour Camille », « Merci Camille ! ».
     # / Customer first name if the card is linked to an account. Anonymous card → empty string.
@@ -134,7 +217,7 @@ def _construire_payload_session(tireuse, session, **extras):
         "liquid_label": tireuse.liquid_label,
         "reservoir_ml": float(tireuse.reservoir_ml),
         "reservoir_max_ml": tireuse.reservoir_max_ml,
-        "prix_litre": str(tireuse.prix_litre),
+        "prix_litre": str(prix_litre),
         "present": bool(session and session.ended_at is None),
         "authorized": bool(session and session.authorized),
         "vanne_ouverte": False,
@@ -147,6 +230,20 @@ def _construire_payload_session(tireuse, session, **extras):
     # / Maintenance card → maintenance flag
     if session and session.is_maintenance:
         payload["maintenance"] = True
+
+    # Prix du volume servi (pas pour un rinçage de maintenance)
+    # / Price of the served volume (not for a maintenance rinse)
+    if session and not session.is_maintenance:
+        if montant_servi_centimes is None:
+            montant_servi_centimes = calculer_montant_centimes(
+                payload["volume_ml"], prix_litre
+            )
+        payload["prix_servi_centimes"] = montant_servi_centimes
+        payload["prix_servi_affiche"] = formater_euros(montant_servi_centimes)
+
+    # Solde de la carte, s'il est connu / Card balance, if known
+    if solde_centimes is not None:
+        payload.update(_champs_du_solde(solde_centimes, prix_litre))
 
     # Fusionner les champs supplémentaires (vanne_ouverte, balance, message, etc.)
     # / Merge extra fields (vanne_ouverte, balance, message, etc.)
@@ -217,13 +314,32 @@ def _cloturer_session_et_facturer(tireuse, session, volume_ml, ip="0.0.0.0"):
 
         session.close_with_volume(float(volume_ml))
 
-        # Décrémenter le réservoir / Decrement reservoir
+        # Décrémenter le réservoir, directement en SQL :
+        #   reservoir_ml = GREATEST(reservoir_ml - volume, 0)
+        # La soustraction se fait dans la base, sur la valeur À JOUR. Avant, on
+        # lisait tireuse.reservoir_ml (sans verrou) puis on réécrivait le
+        # résultat : deux fermetures simultanées (session orpheline + pour_end)
+        # perdaient une décrémentation (audit 2026-09-26, point 2.2).
+        # update() ne déclenche pas post_save : on envoie donc l'état de la
+        # tireuse aux kiosks nous-mêmes (à la fin de la transaction).
+        # / Decrement the reservoir in SQL, on the CURRENT value (no stale read).
+        # update() skips post_save: push the tap state ourselves (on commit).
         if volume_ml > 0 and not session.is_maintenance:
-            tireuse.reservoir_ml = max(
-                Decimal("0"),
-                tireuse.reservoir_ml - Decimal(str(float(volume_ml))),
+            from django.db.models import DecimalField, F, Value
+            from django.db.models.functions import Greatest
+
+            from controlvanne.signals import pousser_etat_de_la_tireuse
+
+            volume_a_retirer_ml = Decimal(str(float(volume_ml)))
+            zero_ml = Value(
+                Decimal("0.00"),
+                output_field=DecimalField(max_digits=10, decimal_places=2),
             )
-            tireuse.save(update_fields=["reservoir_ml"])
+            TireuseBec.objects.filter(pk=tireuse.pk).update(
+                reservoir_ml=Greatest(F("reservoir_ml") - volume_a_retirer_ml, zero_ml)
+            )
+            tireuse.refresh_from_db(fields=["reservoir_ml"])
+            pousser_etat_de_la_tireuse(tireuse)
 
         # --- Facturation (sauf maintenance) ---
         # / Billing (except maintenance)
@@ -497,7 +613,9 @@ class TireuseViewSet(viewsets.ViewSet):
 
         # Chercher la tireuse / Find the tap
         try:
-            tireuse = TireuseBec.objects.select_related("terminal").get(uuid=tireuse_uuid)
+            tireuse = TireuseBec.objects.select_related("terminal", "fut_actif").get(
+                uuid=tireuse_uuid
+            )
         except TireuseBec.DoesNotExist:
             return Response(
                 {"authorized": False, "message": "Tap not found."},
@@ -546,10 +664,33 @@ class TireuseViewSet(viewsets.ViewSet):
         except CarteMaintenance.DoesNotExist:
             pass
 
-        # Carte normale + tireuse hors service → refus
-        # / Normal card + tap out of service → refuse
+        # Carte normale + tireuse hors service → refus, AFFICHÉ sur le kiosk.
+        # Avant, seul le Pi recevait le refus : l'écran ne montrait rien
+        # (audit 2026-09-26, point 2.6).
+        # / Normal card + tap out of service → refusal, SHOWN on the kiosk.
         if not tireuse.enabled and not is_maintenance:
+            _push_refus(tireuse, gettext("Tireuse hors service."))
             return Response({"authorized": False, "message": "Tap is disabled."})
+
+        # Carte maintenance limitée à certaines tireuses (CarteMaintenance.tireuses,
+        # « vide = toutes les tireuses »). Ce réglage de l'admin n'était jamais
+        # vérifié (audit 2026-09-26, point 2.5).
+        # / Maintenance card limited to some taps (empty = all taps).
+        if is_maintenance:
+            tireuses_autorisees = carte_maintenance.tireuses.all()
+            carte_limitee_a_certaines_tireuses = tireuses_autorisees.exists()
+            cette_tireuse_est_autorisee = tireuses_autorisees.filter(pk=tireuse.pk).exists()
+            if carte_limitee_a_certaines_tireuses and not cette_tireuse_est_autorisee:
+                _push_refus(
+                    tireuse,
+                    gettext("Carte maintenance non autorisée sur cette tireuse."),
+                )
+                return Response(
+                    {
+                        "authorized": False,
+                        "message": "Maintenance card not allowed on this tap.",
+                    }
+                )
 
         # --- Maintenance : uniquement si la tireuse est hors service (enabled=False) ---
         # Une carte maintenance ne peut rincer que quand la tireuse est déclarée
@@ -664,7 +805,7 @@ class TireuseViewSet(viewsets.ViewSet):
         )
 
         if allowed_ml <= 0:
-            _push_refus(tireuse, gettext("Solde insuffisant."), balance=f"{solde_centimes / 100:.2f}")
+            _push_refus(tireuse, gettext("Solde insuffisant."), solde_centimes=solde_centimes)
             return Response(
                 {
                     "authorized": False,
@@ -690,6 +831,18 @@ class TireuseViewSet(viewsets.ViewSet):
             f"solde={solde_centimes}cts allowed={float(allowed_ml):.0f}ml"
         )
 
+        # Garder le solde lu ici pour les pour_update : ils l'utilisent pour
+        # estimer le solde restant sans relire la cascade à chaque seconde
+        # (audit 2026-09-26, point 2.4). Rien n'est débité avant le pour_end.
+        # / Keep this balance for pour_update: no cascade re-read every second.
+        from django.core.cache import cache
+
+        cache.set(
+            _cle_de_cache_du_solde(session),
+            solde_centimes,
+            timeout=DUREE_CACHE_SOLDE_SECONDES,
+        )
+
         # Informer le kiosk : carte posee, autorisee, vanne ouverte.
         # Sur le vrai Pi, valve.open() est appelé immédiatement après authorize.
         # Le pour_start est envoyé APRÈS l'ouverture — la vanne est déjà ouverte ici.
@@ -701,8 +854,9 @@ class TireuseViewSet(viewsets.ViewSet):
             _construire_payload_session(
                 tireuse,
                 session,
+                prix_litre=prix_litre,
+                solde_centimes=solde_centimes,
                 vanne_ouverte=True,
-                balance=f"{solde_centimes / 100:.2f}",
                 message=gettext("Carte %(uid)s — service autorisé") % {"uid": uid},
             ),
         )
@@ -741,9 +895,13 @@ class TireuseViewSet(viewsets.ViewSet):
         event_type = serializer.validated_data["event_type"]
         volume_ml = serializer.validated_data.get("volume_ml", Decimal("0"))
 
-        # Chercher la tireuse / Find the tap
+        # Chercher la tireuse, avec son terminal et son fût en une requête
+        # (event arrive environ une fois par seconde pendant un tirage)
+        # / Find the tap with its terminal and keg in one query
         try:
-            tireuse = TireuseBec.objects.select_related("terminal").get(uuid=tireuse_uuid)
+            tireuse = TireuseBec.objects.select_related("terminal", "fut_actif").get(
+                uuid=tireuse_uuid
+            )
         except TireuseBec.DoesNotExist:
             return Response(
                 {"status": "error", "message": "Tap not found."},
@@ -756,10 +914,13 @@ class TireuseViewSet(viewsets.ViewSet):
 
         # Chercher la session ouverte pour cette carte sur cette tireuse
         # / Find the open session for this card on this tap
+        # carte + titulaire chargés avec la session (prénom affiché sur l'écran)
+        # / card + holder loaded with the session (first name on screen)
         session = (
             RfidSession.objects.filter(
                 tireuse_bec=tireuse, uid=uid, ended_at__isnull=True
             )
+            .select_related("carte__user")
             .order_by("-started_at")
             .first()
         )
@@ -841,66 +1002,76 @@ class TireuseViewSet(viewsets.ViewSet):
 
         # Push WebSocket vers le kiosk selon le type d'événement
         # / WebSocket push to kiosk based on event type
+        # Prix au litre lu UNE fois pour tout le message (propriété qui fait une
+        # requête à chaque lecture) / Price per liter read ONCE (the property queries)
+        prix_litre = tireuse.prix_litre
+
         if event_type == "pour_start":
             _push_ws_kiosk(
                 tireuse,
                 _construire_payload_session(
                     tireuse,
                     session,
+                    prix_litre=prix_litre,
                     vanne_ouverte=True,
                     message=gettext("Tirage en cours"),
                 ),
             )
         elif event_type == "pour_update":
-            # Estimer le solde restant : solde_cascade_total - coût_du_volume_déjà_servi
-            # Le débit réel se fait au pour_end — ici on affiche une estimation visuelle.
-            # / Estimate remaining balance: total_cascade_balance - cost_of_volume_served
-            # The actual debit happens at pour_end — here we show a visual estimate.
-            balance_estimee = None
-            if not session.is_maintenance and tireuse.prix_litre > 0:
-                from controlvanne.billing import (
-                    obtenir_contexte_cashless as _ctx,
-                    calculer_solde_total_cascade,
-                )
-                ctx = _ctx(session.carte)
-                if ctx:
-                    solde_db = calculer_solde_total_cascade(
-                        ctx["wallet_client"], ctx["cascade_assets"]
-                    )
-                    cout_volume = Decimal(str(volume_ml)) / 1000 * tireuse.prix_litre * 100
-                    solde_estime = max(Decimal("0"), Decimal(str(solde_db)) - cout_volume)
-                    balance_estimee = f"{float(solde_estime) / 100:.2f}"
-            extras_update = {"vanne_ouverte": True, "message": gettext("Tirage en cours")}
-            if balance_estimee is not None:
-                extras_update["balance"] = balance_estimee
+            # Solde restant ESTIMÉ = solde lu à l'authorize − prix du volume déjà
+            # servi. Le vrai débit se fait au pour_end. Le solde de l'authorize
+            # vient du cache : pas de relecture de la cascade à chaque seconde
+            # (audit 2026-09-26, point 2.4). Cache vide (redémarrage…) : on relit.
+            # / Estimated balance = authorize balance − price of volume served.
+            solde_estime_centimes = None
+            if not session.is_maintenance and prix_litre > 0:
+                from django.core.cache import cache
+
+                from controlvanne.billing import calculer_montant_centimes
+
+                solde_a_l_authorize = cache.get(_cle_de_cache_du_solde(session))
+                if solde_a_l_authorize is None:
+                    solde_a_l_authorize = _lire_le_solde_de_la_carte(session.carte)
+                if solde_a_l_authorize is not None:
+                    prix_deja_servi = calculer_montant_centimes(volume_ml, prix_litre)
+                    solde_estime_centimes = max(0, solde_a_l_authorize - prix_deja_servi)
             _push_ws_kiosk(
                 tireuse,
-                _construire_payload_session(tireuse, session, **extras_update),
+                _construire_payload_session(
+                    tireuse,
+                    session,
+                    prix_litre=prix_litre,
+                    solde_centimes=solde_estime_centimes,
+                    vanne_ouverte=True,
+                    message=gettext("Tirage en cours"),
+                ),
             )
         elif event_type in ("pour_end", "card_removed"):
-            # Calculer le solde restant apres facturation (si disponible)
-            # / Compute remaining balance after billing (if available)
+            # Solde restant après facturation, et montant RÉELLEMENT facturé
+            # (il peut être inférieur au prix du volume si le solde manquait)
+            # / Balance after billing, and the amount ACTUALLY billed
             solde_apres = None
+            montant_facture_centimes = None
             if resultat_facturation:
-                from controlvanne.billing import (
-                    obtenir_contexte_cashless as _ctx,
-                    calculer_solde_total_cascade,
-                )
+                solde_apres = _lire_le_solde_de_la_carte(session.carte)
+                montant_facture_centimes = resultat_facturation["montant_centimes"]
 
-                ctx = _ctx(session.carte)
-                if ctx:
-                    solde_apres = calculer_solde_total_cascade(
-                        ctx["wallet_client"], ctx["cascade_assets"]
-                    )
+            # Le solde gardé pour les pour_update ne sert plus
+            # / The balance kept for pour_update is no longer needed
+            from django.core.cache import cache
 
-            extras_fin = {
-                "session_done": True,
-                "message": gettext("Fin de service — %(volume)s ml") % {"volume": f"{float(volume_ml):.0f}"},
-            }
-            if solde_apres is not None:
-                extras_fin["balance"] = f"{solde_apres / 100:.2f}"
+            cache.delete(_cle_de_cache_du_solde(session))
 
-            payload_fin = _construire_payload_session(tireuse, session, **extras_fin)
+            payload_fin = _construire_payload_session(
+                tireuse,
+                session,
+                prix_litre=prix_litre,
+                solde_centimes=solde_apres,
+                montant_servi_centimes=montant_facture_centimes,
+                session_done=True,
+                message=gettext("Fin de service — %(volume)s ml")
+                % {"volume": f"{float(volume_ml):.0f}"},
+            )
             logger.info(
                 f"WS_PUSH pour_end/card_removed: event={event_type} "
                 f"present={payload_fin.get('present')} "

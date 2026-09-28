@@ -20,11 +20,10 @@ ici avec widthratio, puis mise à jour par le JS.
 
 Variable attendue : {{ bec }} — instance de TireuseBec
 {% endcomment %}
-{% load i18n l10n %}
+{% load i18n %}
 <article class="vignette"
          data-tireuse-uuid="{{ bec.uuid }}"
          data-etat="{% if bec.enabled %}veille{% else %}maintenance{% endif %}"
-         data-prix-litre="{{ bec.prix_litre|unlocalize }}"
          style="--niveau-fut: {% widthratio bec.reservoir_ml bec.reservoir_max_ml 100 %}%;{% if bec.fut_actif.couleur_fond_pos %} --tireuse-accent: {{ bec.fut_actif.couleur_fond_pos }};{% endif %}"
          data-testid="kiosk-tap-card">
 

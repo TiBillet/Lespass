@@ -72,6 +72,40 @@ def demander_rechargement_des_kiosks(tireuse):
     transaction.on_commit(envoyer_apres_commit)
 
 
+def pousser_etat_de_la_tireuse(tireuse):
+    """
+    Envoie l'état complet de la tireuse aux kiosks, à la fin de la transaction.
+    / Sends the tap's full state to the kiosks, at the end of the transaction.
+
+    LOCALISATION : controlvanne/signals.py
+
+    Appelée par :
+    - tireusebec_post_save (après un save() de la tireuse) ;
+    - _cloturer_session_et_facturer (controlvanne/viewsets.py) : le réservoir y
+      est décrémenté par un update() SQL, qui ne déclenche pas post_save.
+    / Called by the post_save signal, and by _cloturer_session_et_facturer
+    (whose SQL update() does not fire post_save).
+
+    on_commit : l'état est lu APRÈS la fin de la transaction (le réservoir se
+    met à jour DANS l'atomic de facturation) ; en cas d'annulation, rien ne
+    part. Hors transaction, on_commit s'exécute tout de suite.
+    / on_commit: the state is read AFTER the transaction; nothing is sent on rollback.
+
+    :param tireuse: TireuseBec
+    """
+    # Le lieu est fixé maintenant, au moment de l'événement (groupes par lieu)
+    # / The venue is fixed now, when the event happens (per-venue groups)
+    uuid_du_lieu = uuid_du_lieu_courant()
+
+    def pousser_snapshot_apres_commit():
+        payload = _snapshot_for_bec(tireuse)
+        # Écran de cette tireuse + liste des tireuses du lieu
+        # / This tap's screen + the venue's tap list
+        pousser_aux_kiosks(tireuse.uuid, payload, uuid_du_lieu)
+
+    transaction.on_commit(pousser_snapshot_apres_commit)
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Helper : snapshot WebSocket
 # ──────────────────────────────────────────────────────────────────────
@@ -279,17 +313,7 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
     # immediately would send a not-yet-committed state (and a wrong state
     # on rollback). Outside a transaction, on_commit runs immediately:
     # unchanged behavior. Documented project trap (broadcast inside atomic).
-    # Le lieu est fixé maintenant, au moment de l'événement (groupes par lieu)
-    # / The venue is fixed now, when the event happens (per-venue groups)
-    uuid_du_lieu = uuid_du_lieu_courant()
-
-    def pousser_snapshot_apres_commit():
-        payload = _snapshot_for_bec(instance)
-        # Écran de cette tireuse + liste des tireuses du lieu
-        # / This tap's screen + the venue's tap list
-        pousser_aux_kiosks(instance.uuid, payload, uuid_du_lieu)
-
-    transaction.on_commit(pousser_snapshot_apres_commit)
+    pousser_etat_de_la_tireuse(instance)
 
 
 # ──────────────────────────────────────────────────────────────────────
