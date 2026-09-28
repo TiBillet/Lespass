@@ -69,8 +69,6 @@ from django_tenants.utils import tenant_context
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 from import_export import resources, fields
 from import_export.widgets import ForeignKeyWidget
-from rest_framework import status
-from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
@@ -3186,9 +3184,12 @@ class ReservationAdmin(ModelAdmin):
         return super().get_form(request, obj, **defaults)
 
     def get_readonly_fields(self, request, obj=None):
-        # Le statut est piloté par la machine à états (BaseBillet/signals.py).
-        # Le modifier à la main la contourne : billets jamais activés, régressions V -> FA.
-        # / Status is driven by the state machine. Editing it by hand bypasses it.
+        # Le statut est en lecture seule sur la page de modification.
+        # Il est piloté par la machine à états (BaseBillet/signals.py).
+        # Un statut changé à la main ne déclenche pas les bonnes transitions :
+        # les billets peuvent rester inactifs.
+        # La page d'ajout n'est pas concernée : ReservationAddAdmin n'affiche pas le statut.
+        # / Status is read-only on the change page: the state machine drives it.
         if obj:
             return ("status",)
         return ()
@@ -3262,8 +3263,10 @@ class ReservationAdmin(ModelAdmin):
     # def options_str(self, instance: Reservation):
     #     return " - ".join([option.name for option in instance.options.all()])
 
-    # Un seul des deux boutons est affiché, selon le statut de la réservation.
-    # / Only one of the two buttons is shown, depending on the booking status.
+    # Deux boutons d'envoi, jamais affichés en même temps :
+    # - « renvoyer les billets » : la réservation a au moins un billet valide ;
+    # - « valider et envoyer » : la réservation attend la validation du mail (FREERES).
+    # / Two sending buttons, never shown together.
     actions_detail = ["send_ticket_to_mail", "validate_and_send_ticket_to_mail", ]
 
     @action(
@@ -3278,7 +3281,11 @@ class ReservationAdmin(ModelAdmin):
             request,
             _(f"Tickets sent to {reservation.user_commande.email}"),
         )
-        return redirect(request.META["HTTP_REFERER"])
+        page_precedente = request.META.get(
+            "HTTP_REFERER",
+            reverse("staff_admin:BaseBillet_reservation_change", args=[object_id]),
+        )
+        return redirect(page_precedente)
 
     @action(
         description=_("Valider et envoyer par mail"),
@@ -3286,34 +3293,64 @@ class ReservationAdmin(ModelAdmin):
         permissions=["validate_and_send_ticket_to_mail"],
     )
     def validate_and_send_ticket_to_mail(self, request, object_id):
-        # Réservation gratuite en attente de validation du mail (F).
-        # On passe par la transition F -> FA de la machine à états :
-        # reservation_paid active les billets puis envoie le mail (qui passe la résa en VALID).
-        # / Free booking waiting for email validation (F).
-        # The F -> FA transition activates the tickets then sends the email.
+        """
+        Valide une réservation gratuite en attente du mail, puis envoie les billets.
+        / Validates a free booking waiting for email validation, then sends the tickets.
+
+        LOCALISATION : Administration/admin_tenant.py
+
+        Le bouton n'apparaît que si la réservation est en FREERES (F).
+        Voir has_validate_and_send_ticket_to_mail_permission.
+
+        Pas de contrôle de jauge ici : l'admin valide en connaissance de cause.
+        Le compte de l'utilisateur reste non activé : seule la réservation est validée.
+        / No capacity check: the admin validates on purpose. The user account stays inactive.
+
+        FLUX :
+        1. Le statut passe de FREERES (F) à FREERES_USERACTIV (FA), puis save().
+        2. Le signal pre_save_signal_status (BaseBillet/signals.py) appelle reservation_paid.
+        3. reservation_paid passe les billets NOT_ACTIV en NOT_SCANNED.
+        4. Si mail_send vaut False et que l'utilisateur a un email,
+           reservation_paid lance ticket_celery_mailer (Celery, asynchrone), qui envoie les PDF.
+        5. Si le mail part, ticket_celery_mailer passe la réservation en VALID.
+        """
         reservation = Reservation.objects.get(pk=object_id)
         reservation.status = Reservation.FREERES_USERACTIV
         reservation.save()
         messages.success(
             request,
-            _(f"Tickets sent to {reservation.user_commande.email}"),
+            _("Réservation validée. Envoi des billets demandé à %(email)s") % {"email": reservation.user_commande.email},
         )
-        return redirect(request.META["HTTP_REFERER"])
+        page_precedente = request.META.get(
+            "HTTP_REFERER",
+            reverse("staff_admin:BaseBillet_reservation_change", args=[object_id]),
+        )
+        return redirect(page_precedente)
 
     def has_send_ticket_to_mail_permission(self, request, object_id):
+        # Bouton « renvoyer les billets » : affiché seulement s'il y a au moins un billet valide.
+        # Sans billet valide (attente du mail, annulée, non payée), le mail partirait sans PDF,
+        # et ticket_celery_mailer forcerait quand même la réservation en VALID.
+        # Unfold appelle cette méthode pour afficher le bouton ET à l'appel de l'URL.
+        # / "Resend tickets" button: shown only if the booking has at least one valid ticket.
         if not TenantAdminPermissionWithRequest(request):
             return False
-        reservation_en_attente_du_mail = Reservation.objects.filter(
-            pk=object_id, status=Reservation.FREERES,
+        reservation_a_au_moins_un_billet_valide = Ticket.objects.filter(
+            reservation_id=object_id,
+            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
         ).exists()
-        return not reservation_en_attente_du_mail
+        return reservation_a_au_moins_un_billet_valide
 
     def has_validate_and_send_ticket_to_mail_permission(self, request, object_id):
+        # Bouton « valider et envoyer » : affiché seulement si la réservation attend
+        # la validation du mail (FREERES).
+        # / "Validate and send" button: shown only for bookings waiting for email validation.
         if not TenantAdminPermissionWithRequest(request):
             return False
-        return Reservation.objects.filter(
+        reservation_attend_la_validation_du_mail = Reservation.objects.filter(
             pk=object_id, status=Reservation.FREERES,
         ).exists()
+        return reservation_attend_la_validation_du_mail
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -3593,9 +3630,21 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
     def get_pdf(self, request, object_id):
         ticket = get_object_or_404(Ticket, uuid=object_id)
 
+        # Pas de PDF pour un billet non valide (inactif, créé, annulé).
+        # On affiche un message d'erreur et on revient sur la page précédente.
+        # C'est une vue admin Django : un Response DRF n'a pas de renderer ici et plante.
+        # / No PDF for an invalid ticket: error message, then back to the previous page.
         VALID_TICKET_FOR_PDF = [Ticket.NOT_SCANNED, Ticket.SCANNED]
         if ticket.status not in VALID_TICKET_FOR_PDF:
-            return Response('Invalid ticket', status=status.HTTP_403_FORBIDDEN)
+            messages.error(
+                request,
+                _("Billet non valide (%(statut)s) : pas de PDF disponible.") % {"statut": ticket.get_status_display()},
+            )
+            page_precedente = request.META.get(
+                "HTTP_REFERER",
+                reverse("staff_admin:BaseBillet_ticket_changelist"),
+            )
+            return redirect(page_precedente)
 
         pdf_binary = create_ticket_pdf(ticket)
         response = HttpResponse(pdf_binary, content_type='application/pdf')

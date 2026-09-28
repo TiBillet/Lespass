@@ -88,15 +88,14 @@ def _rendu(tarifs, places_restantes=None, show_gauge=False, max_per_user=None):
     )
 
 
-def _attribut_max(html, uuid):
+def _balise_compteur(html, uuid):
     """
-    Renvoie la valeur de l'attribut `max` du compteur d'un tarif, ou None si
-    l'attribut est absent. Leve une AssertionError si le compteur lui-meme
-    manque : cela signifierait qu'une garde du gabarit a bloque l'affichage et
-    que le test ne mesure plus ce qu'il croit mesurer.
-    / Return the counter's `max` attribute for a price, or None when absent.
-    Raises if the counter itself is missing, which would mean the test no longer
-    measures what it thinks it measures.
+    Renvoie la balise ouvrante `<bs-counter ...>` du compteur d'un tarif.
+    Leve une AssertionError si le compteur manque : cela signifierait qu'une
+    garde du gabarit a bloque l'affichage et que le test ne mesure plus ce
+    qu'il croit mesurer.
+    / Return the opening `<bs-counter ...>` tag of a price's counter.
+    Raises if the counter is missing.
     """
     balise = re.search(
         r"<bs-counter\b[^>]*booking-amount-" + re.escape(uuid) + r"[^>]*>",
@@ -104,7 +103,16 @@ def _attribut_max(html, uuid):
         re.S,
     )
     assert balise, f"compteur introuvable pour le tarif {uuid}"
-    attribut = re.search(r'\bmax="([^"]*)"', balise.group(0))
+    return balise.group(0)
+
+
+def _attribut_max(html, uuid):
+    """
+    Renvoie la valeur de l'attribut `max` du compteur d'un tarif, ou None si
+    l'attribut est absent.
+    / Return the counter's `max` attribute for a price, or None when absent.
+    """
+    attribut = re.search(r'\bmax="([^"]*)"', _balise_compteur(html, uuid))
     return attribut.group(1) if attribut else None
 
 
@@ -150,10 +158,14 @@ def test_jamais_de_plafond_none_ni_nan():
     """
     html = _rendu([_faux_tarif("dddd4444", max_billets=None)], places_restantes=None)
 
+    # On regarde la balise du compteur, pas toute la page : le JS du formulaire
+    # contient legitimement le mot « NaN » dans ses commentaires.
+    # / Check the counter tag only: the form's JS legitimately mentions "NaN" in comments.
+    balise_du_compteur = _balise_compteur(html, "dddd4444")
+
     assert _attribut_max(html, "dddd4444") is None
-    assert 'max="None"' not in html
-    assert "None" not in html
-    assert "NaN" not in html
+    assert "None" not in balise_du_compteur
+    assert "NaN" not in balise_du_compteur
 
 
 def test_plafond_zero_est_bien_ecrit():
