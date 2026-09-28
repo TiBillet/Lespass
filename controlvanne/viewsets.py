@@ -26,6 +26,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
 
+from controlvanne.acces import peut_voir_les_kiosks
+from controlvanne.groupes_ws import pousser_aux_kiosks, uuid_du_lieu_courant
 from controlvanne.models import (
     CarteMaintenance,
     RfidSession,
@@ -68,29 +70,14 @@ def _push_ws_kiosk(tireuse, payload):
     The TireuseBec post_save signal only covers reservoir changes.
     NFC session changes (badge, volume, end) require this explicit push.
 
+    Les groupes sont nommés par lieu (controlvanne/groupes_ws.py) : un message
+    ne sort jamais du lieu de la requête.
+    / Groups are named per venue: a message never leaves the request's venue.
+
     :param tireuse: TireuseBec — la tireuse concernée
     :param payload: dict — données à envoyer au kiosk (format ws_payloads)
     """
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
-
-    channel_layer = get_channel_layer()
-    if not channel_layer:
-        return
-
-    # Canal spécifique à cette tireuse (kiosk detail)
-    # / Channel specific to this tap (kiosk detail)
-    async_to_sync(channel_layer.group_send)(
-        f"rfid_state.{tireuse.uuid}",
-        {"type": "state_update", "payload": payload},
-    )
-
-    # Canal global (kiosk list / dashboard admin)
-    # / Global channel (kiosk list / admin dashboard)
-    async_to_sync(channel_layer.group_send)(
-        "rfid_state.all",
-        {"type": "state_update", "payload": payload},
-    )
+    pousser_aux_kiosks(tireuse.uuid, payload, uuid_du_lieu_courant())
 
 def _push_refus(tireuse, message: str, **extra):
       """
@@ -949,17 +936,30 @@ class KioskBridgeThrottle(AnonRateThrottle):
 class AuthKioskView(APIView):
     """
     POST /controlvanne/auth-kiosk/
-    Le Pi envoie sa clé API dans le header Authorization.
-    Django vérifie la clé, crée une session, renvoie Set-Cookie.
-    Le Pi récupère le cookie et lance Chromium avec ce cookie.
-    / The Pi sends its API key in the Authorization header.
-    Django verifies the key, creates a session, returns Set-Cookie.
-    The Pi retrieves the cookie and launches Chromium with it.
+    Le Pi envoie sa clé API dans le header Authorization. Django renvoie un
+    jeton à usage unique (kiosk_token), valable 5 minutes.
+    / The Pi sends its API key in the Authorization header. Django returns a
+    one-time token (kiosk_token), valid for 5 minutes.
 
     LOCALISATION : controlvanne/viewsets.py
 
-    Le token ne doit pas fuiter en query string (logs, referer, historique navigateur).
-    / The token must not leak in query string (logs, referer, browser history).
+    FLUX RÉEL (controlvanne/Pi/main.py) :
+    1. Le Pi appelle cette vue et reçoit kiosk_token.
+    2. Il écrit l'URL kiosk/<uuid>/?kiosk_token=<jeton> dans
+       /tmp/tibeer_kiosk_url ; config/xinitrc.bash ouvre Chromium dessus.
+    3. La page du kiosk consomme le jeton (_verifier_authentification_kiosk) :
+       elle le supprime du cache et marque la session de CHROMIUM comme kiosk.
+       Les rechargements suivants utilisent le cookie de session.
+    / REAL FLOW: the Pi gets kiosk_token, Chromium opens
+    kiosk/<uuid>/?kiosk_token=<token>, the kiosk page consumes it.
+
+    Le jeton passe donc en query string. Le risque est limité : il ne sert
+    qu'une fois (supprimé dès la première lecture) et expire en 5 minutes.
+    / The token travels in the query string: single use, 5-minute lifetime.
+
+    La session créée ici appartient au client HTTP du Pi (requests), pas à
+    Chromium : le Pi ne s'en sert pas (session_key est renvoyé mais ignoré).
+    / The session created here belongs to the Pi's HTTP client, not Chromium.
     """
 
     permission_classes = [HasTireuseAccess]
@@ -984,26 +984,24 @@ class AuthKioskView(APIView):
         request.session["controlvanne_authenticated"] = True
         request.session.save()
 
-        # Générer un token à usage unique pour l'auth kiosk sans injection de cookie
-        # Le Pi lance Chromium sur l'URL /controlvanne/kiosk-token/<token>/
-        # Django valide le token, pose le cookie de session via HTTP, redirige vers le kiosk
-        # / Generate a one-time token for kiosk auth without cookie injection
-        # The Pi opens Chromium on /controlvanne/kiosk-token/<token>/
-        # Django validates the token, sets session cookie via HTTP, redirects to kiosk
+        # Générer un jeton à usage unique pour l'auth kiosk, sans injection de cookie.
+        # Le Pi ouvre Chromium sur kiosk/<uuid>/?kiosk_token=<jeton> (Pi/main.py) ;
+        # la page du kiosk valide le jeton et pose le cookie de session via HTTP.
+        # / Generate a one-time token for kiosk auth, without cookie injection.
+        # The Pi opens Chromium on kiosk/<uuid>/?kiosk_token=<token> (Pi/main.py);
+        # the kiosk page validates it and sets the session cookie over HTTP.
         import uuid as uuid_module
         from django.core.cache import cache
 
         kiosk_token = str(uuid_module.uuid4())
-        # Stocker le token dans le cache comme autorisation valide (TTL 5 minutes)
-        # La valeur True indique simplement que le token est valide.
-        # Le token est consommé soit par KioskTokenView (échange /kiosk-token/<token>/),
-        # soit par _verifier_authentification_kiosk (query string ?kiosk_token=<token>
-        # sur la page kiosk — c'est le path utilisé par le Pi en main.py:81).
-        # / Store the token in cache as a valid authorization (TTL 5 minutes)
-        # The True value simply ind
-        # icates the token is valid.
-        # The token is consumed either by KioskTokenView or by _verifier_authentification_kiosk
-        # (?kiosk_token=<token> query string — actual path used by the Pi).
+        # Stocker le jeton dans le cache comme autorisation valide (TTL 5 minutes).
+        # La valeur True indique simplement que le jeton est valide.
+        # Il est consommé par _verifier_authentification_kiosk, quand Chromium
+        # ouvre la page kiosk avec ?kiosk_token=<jeton> (Pi/main.py).
+        # / Store the token in cache as a valid authorization (TTL 5 minutes).
+        # The True value simply indicates the token is valid.
+        # It is consumed by _verifier_authentification_kiosk, when Chromium opens
+        # the kiosk page with ?kiosk_token=<token> (Pi/main.py).
         #
         # IMPORTANT : ce cache doit être partagé entre tous les workers (Redis ou PgCache).
         # Avec LocMemCache (default Django sans config), le token créé par un worker
@@ -1022,86 +1020,6 @@ class AuthKioskView(APIView):
                 "kiosk_token": kiosk_token,
             }
         )
-
-
-# ──────────────────────────────────────────────────────────────────────
-# KioskTokenView — échange token à usage unique → cookie session HTTP
-# / KioskTokenView — exchange one-time token → HTTP session cookie
-# ──────────────────────────────────────────────────────────────────────
-
-
-class KioskTokenView(APIView):
-    """
-    GET /controlvanne/kiosk-token/<token>/?next=<kiosk_url>
-    Échange un token à usage unique contre un cookie de session Django.
-    Django pose le cookie via Set-Cookie dans la réponse HTTP → Chromium le stocke nativement.
-    Redirige ensuite vers l'URL kiosk réelle.
-    / Exchanges a one-time token for a Django session cookie.
-    Django sets the cookie via Set-Cookie in the HTTP response → Chromium stores it natively.
-    Then redirects to the actual kiosk URL.
-
-    LOCALISATION : controlvanne/viewsets.py
-
-    Pas de permission DRF — le token est la preuve d'authenticité.
-    / No DRF permission — the token is the proof of authenticity.
-    """
-
-    permission_classes = []
-    authentication_classes = []
-
-    def get(self, request, token):
-        from django.core.cache import cache
-        from django.http import HttpResponseRedirect, HttpResponseForbidden
-
-        # Valider et consommer le token (usage unique)
-        # / Validate and consume the token (one-time use)
-        cache_key = f"kiosk_token:{token}"
-        token_valide = cache.get(cache_key)
-
-        if not token_valide:
-            return HttpResponseForbidden("Token invalide ou expiré. / Invalid or expired token.")
-
-        # Consommer le token immédiatement (usage unique)
-        # / Consume the token immediately (one-time use)
-        cache.delete(cache_key)
-
-        # Marquer la session de CE navigateur (Chromium) comme authentifiée pour le kiosk
-        # Django's SessionMiddleware enverra Set-Cookie: sessionid=... dans la réponse HTTP
-        # Chromium stocke ce cookie nativement — plus besoin d'injection SQLite
-        # / Mark THIS browser's (Chromium's) session as authenticated for kiosk
-        # Django's SessionMiddleware will send Set-Cookie: sessionid=... in the HTTP response
-        # Chromium stores this cookie natively — no more SQLite injection needed
-        request.session["controlvanne_authenticated"] = True
-        request.session.set_expiry(60 * 60 * 12)   # 12h — aligné avec laboutik
-        request.session.save()
-
-        # Retourner une page HTML avec meta-refresh plutôt qu'un 302
-        # Avec un 302, certaines versions de Chromium ne transmettent pas le Set-Cookie
-        # dans la requête suivante. Avec un 200 + meta-refresh, le cookie est d'abord
-        # stocké, puis la navigation vers next_url l'envoie correctement.
-        # / Return an HTML page with meta-refresh instead of a 302
-        # With a 302, some Chromium versions don't transmit the Set-Cookie
-        # in the next request. With 200 + meta-refresh, the cookie is stored first,
-        # then the navigation to next_url sends it correctly.
-        from django.http import HttpResponse
-        from django.utils.encoding import iri_to_uri
-        from django.utils.html import escape
-
-        next_url = request.GET.get("next", "/controlvanne/kiosk/")
-        safe_url = escape(iri_to_uri(next_url))
-        html = f"""<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0; url={safe_url}">
-  <title>Authentification kiosk…</title>
-</head>
-<body>
-  <script>window.location.replace('{safe_url}');</script>
-  <p>Redirection en cours… <a href="{safe_url}">Cliquez ici si la page ne se charge pas.</a></p>
-</body>
-</html>"""
-        return HttpResponse(html, content_type="text/html")
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -1125,15 +1043,17 @@ def _verifier_authentification_kiosk(request):
 
     LOCALISATION : controlvanne/viewsets.py
 
+    Les moyens 1 et 3 sont la règle commune avec le WebSocket
+    (peut_voir_les_kiosks, controlvanne/acces.py) : la page et son WebSocket
+    laissent passer les mêmes personnes. Le moyen 2 (jeton) n'existe qu'en HTTP.
+    / Methods 1 and 3 are the rule shared with the WebSocket. Method 2 is HTTP only.
+
     :param request: HttpRequest
     :return: True si autorisé, False sinon
     """
-    from django.db import connection
-
-    # Moyen 1 : session kiosk (cookie sessionid déjà présent dans le navigateur)
-    # / Method 1: kiosk session (sessionid cookie already present in browser)
-    est_kiosk = request.session.get("controlvanne_authenticated")
-    if est_kiosk:
+    # Moyens 1 et 3 : session kiosk ou admin du lieu (règle commune)
+    # / Methods 1 and 3: kiosk session or venue admin (shared rule)
+    if peut_voir_les_kiosks(request.session, request.user, connection.tenant):
         return True
 
     # Moyen 2 : token à usage unique dans le query string (premier lancement Chromium)
@@ -1153,14 +1073,6 @@ def _verifier_authentification_kiosk(request):
             cache.delete(cache_key)
             request.session["controlvanne_authenticated"] = True
             request.session.save()
-            return True
-
-    # Moyen 3 : admin du tenant connecté
-    # / Method 3: logged-in tenant admin
-    utilisateur = request.user
-    if utilisateur and utilisateur.is_authenticated:
-        est_admin = utilisateur.is_tenant_admin(connection.tenant)
-        if est_admin:
             return True
 
     return False

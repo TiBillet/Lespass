@@ -9,12 +9,17 @@ et les écrans kiosk des tireuses (page web sur le Pi).
 / This consumer handles the WebSocket connection between the Django server
 and the tap kiosk screens (web page on the Pi).
 
-Deux groupes Channels :
-- rfid_state.all    → toutes les tireuses (vue liste)
-- rfid_state.<uuid> → une seule tireuse (vue detail)
-/ Two Channels groups:
-- rfid_state.all    → all taps (list view)
-- rfid_state.<uuid> → a single tap (detail view)
+Deux groupes Channels, nommés PAR LIEU (controlvanne/groupes_ws.py) :
+- rfid_state.<uuid lieu>.all            → toutes les tireuses du lieu (vue liste)
+- rfid_state.<uuid lieu>.<uuid tireuse> → une seule tireuse (vue detail)
+/ Two Channels groups, named PER VENUE:
+- rfid_state.<venue uuid>.all           → all taps of the venue (list view)
+- rfid_state.<venue uuid>.<tap uuid>    → a single tap (detail view)
+
+ACCÈS (audit 2026-09-26, point 1.1) : même règle que la page du kiosk
+(controlvanne/acces.py) — session kiosk ou admin du lieu. Sinon la connexion
+est refusée avant d'être acceptée.
+/ ACCESS: same rule as the kiosk page; otherwise refused before accept.
 
 COMMUNICATION :
 Reçoit : state_update depuis les signaux TireuseBec (signals.py)
@@ -24,11 +29,15 @@ Sends: JSON payload to JS client (ecran_tireuse.js)
 """
 
 import logging
+import uuid
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.db import connection
 from django.utils.translation import gettext
 
+from controlvanne.acces import peut_voir_les_kiosks
+from controlvanne.groupes_ws import groupe_de_la_tireuse, groupe_de_tout_le_lieu
 from controlvanne.models import RfidSession, TireuseBec
 
 logger = logging.getLogger(__name__)
@@ -41,35 +50,56 @@ class PanelConsumer(AsyncJsonWebsocketConsumer):
 
     LOCALISATION : controlvanne/consumers.py
 
-    À la connexion, le client s'abonne à un groupe Channels :
-    - /ws/rfid/all/    → groupe rfid_state.all (toutes les tireuses)
-    - /ws/rfid/<uuid>/ → groupe rfid_state.<uuid> (une seule tireuse)
-    / On connection, the client subscribes to a Channels group:
-    - /ws/rfid/all/    → group rfid_state.all (all taps)
-    - /ws/rfid/<uuid>/ → group rfid_state.<uuid> (a single tap)
+    À la connexion, le client s'abonne à un groupe Channels de SON lieu :
+    - /ws/rfid/all/    → rfid_state.<uuid lieu>.all (toutes les tireuses du lieu)
+    - /ws/rfid/<uuid>/ → rfid_state.<uuid lieu>.<uuid> (une tireuse de ce lieu)
+    / On connection, the client subscribes to a group of ITS venue.
     """
+
+    # Pas encore abonné : disconnect() ne doit rien retirer si connect() a refusé
+    # / Not subscribed yet: disconnect() must not discard if connect() refused
+    group = None
 
     async def connect(self):
         """
-        Connexion WebSocket : détermine le groupe et envoie l'état initial.
-        / WebSocket connection: determine group and send initial state.
+        Connexion WebSocket : contrôle d'accès, abonnement, état initial.
+        / WebSocket connection: access check, subscription, initial state.
+
+        FLUX :
+        1. Lieu connu ? (scope["tenant"], posé par WebSocketTenantMiddleware
+           à partir du nom de domaine). Sinon refus.
+        2. Accès permis ? Session kiosk ou admin du lieu (même règle que la
+           page, controlvanne/acces.py). Sinon refus.
+        3. Slug valide ? « all » ou l'UUID d'une tireuse DE CE LIEU. Sinon refus.
+        4. Abonnement au groupe du lieu, acceptation, envoi de l'état initial.
+        Refus = close() AVANT accept() : le navigateur reçoit un refus de
+        connexion, et ecran_tireuse.js affiche le bandeau « connexion perdue ».
+        / Refusal = close() BEFORE accept(): the handshake is rejected.
         """
-        # Récupérer le slug depuis l'URL (/ws/rfid/<slug>/)
-        # / Get slug from URL (/ws/rfid/<slug>/)
-        slug = self.scope.get("url_route", {}).get("kwargs", {}).get("slug")
-        logger.debug(f"WS connexion — slug reçu : '{slug}'")
+        # Slug de l'URL (/ws/rfid/<slug>/) / URL slug
+        slug = self.scope.get("url_route", {}).get("kwargs", {}).get("slug") or "all"
+        slug = slug.lower()
 
-        # Déterminer le groupe Channels
-        # Si pas de slug ou slug = "all" → groupe global
-        # Sinon → groupe spécifique à la tireuse (slug = uuid)
-        # / Determine Channels group
-        # No slug or slug = "all" → global group
-        # Otherwise → tap-specific group (slug = uuid)
-        if slug and slug.lower() != "all":
-            self.group = f"rfid_state.{slug.lower()}"
+        # 1. Lieu / Venue
+        lieu = self.scope.get("tenant")
+        if lieu is None:
+            logger.warning(f"WS refusé : lieu inconnu (slug={slug})")
+            await self.close(code=4003)
+            return
+
+        # 2 et 3. Accès et slug (requêtes en base : hors de la boucle async)
+        # / 2 and 3. Access and slug (DB queries: outside the async loop)
+        refus = await self._raison_du_refus(lieu, slug)
+        if refus:
+            logger.warning(f"WS refusé : {refus} (lieu={lieu.schema_name}, slug={slug})")
+            await self.close(code=4003)
+            return
+
+        # 4. Groupe du lieu / Venue group
+        if slug == "all":
+            self.group = groupe_de_tout_le_lieu(lieu.uuid)
         else:
-            self.group = "rfid_state.all"
-
+            self.group = groupe_de_la_tireuse(lieu.uuid, slug)
         logger.debug(f"WS connexion — abonnement au groupe : '{self.group}'")
 
         await self.channel_layer.group_add(self.group, self.channel_name)
@@ -83,10 +113,60 @@ class PanelConsumer(AsyncJsonWebsocketConsumer):
 
     async def disconnect(self, code):
         """
-        Déconnexion WebSocket : quitte le groupe Channels.
-        / WebSocket disconnection: leave the Channels group.
+        Déconnexion WebSocket : quitte le groupe Channels (s'il y en a un :
+        une connexion refusée n'a jamais été abonnée).
+        / WebSocket disconnection: leave the group (if any).
         """
-        await self.channel_layer.group_discard(self.group, self.channel_name)
+        if self.group:
+            await self.channel_layer.group_discard(self.group, self.channel_name)
+
+    @database_sync_to_async
+    def _raison_du_refus(self, lieu, slug):
+        """
+        Dit pourquoi refuser la connexion, ou None si elle est permise.
+        / Says why the connection is refused, or None if allowed.
+
+        LOCALISATION : controlvanne/consumers.py
+
+        PIÈGE django-tenants : ce thread (database_sync_to_async) n'hérite pas
+        du lieu. On le rétablit avant toute requête sur une TENANT_APP.
+        / This worker thread does not inherit the venue: restore it first.
+
+        Session kiosk acceptée : on l'enregistre pour prolonger sa durée de vie.
+        Un kiosk reste des semaines sur la même page sans requête HTTP, et
+        seul le HTTP prolongeait la session (SESSION_SAVE_EVERY_REQUEST) :
+        sans cela, sa reconnexion WebSocket finirait par être refusée.
+        / Kiosk session accepted: save it to extend its lifetime (only HTTP
+        requests extended it before).
+
+        :param lieu: Client — le lieu du WebSocket
+        :param slug: str — « all » ou UUID de tireuse, en minuscules
+        :return: str (raison du refus, pour les logs) ou None
+        """
+        connection.set_tenant(lieu)
+
+        session = self.scope.get("session")
+        utilisateur = self.scope.get("user")
+        if not peut_voir_les_kiosks(session, utilisateur, lieu):
+            return "ni session kiosk, ni admin du lieu"
+
+        if slug != "all":
+            # La route accepte n'importe quelle chaîne (<str:slug>) : on vérifie
+            # d'abord que c'est un UUID, sinon la requête lèverait une erreur.
+            # / The route accepts any string: check it is a UUID first.
+            try:
+                uuid_de_la_tireuse = uuid.UUID(slug)
+            except ValueError:
+                return "slug qui n'est pas un UUID"
+            tireuse_du_lieu = TireuseBec.objects.filter(uuid=uuid_de_la_tireuse).exists()
+            if not tireuse_du_lieu:
+                return "tireuse inconnue dans ce lieu"
+
+        session_kiosk = session is not None and session.get("controlvanne_authenticated")
+        if session_kiosk:
+            session.save()
+
+        return None
 
     async def state_update(self, event):
         """

@@ -484,14 +484,21 @@ class TestRechargementDuKiosk:
         tireuse = tireuse_et_deux_futs.tireuse
         with (
             tenant_context(tenant),
-            mock.patch("controlvanne.signals.get_channel_layer", return_value=canal),
+            mock.patch("controlvanne.groupes_ws.get_channel_layer", return_value=canal),
         ):
             tireuse.fut_actif = tireuse_et_deux_futs.fut_b
             tireuse.save()
 
+        # Groupes nommés PAR LIEU (controlvanne/groupes_ws.py, audit point 1.2)
+        # / Groups named PER VENUE
+        from controlvanne.groupes_ws import groupe_de_la_tireuse, groupe_de_tout_le_lieu
+
         groupes = canal.demandes_de_rechargement(tireuse)
-        assert f"rfid_state.{tireuse.uuid}" in groupes
-        assert "rfid_state.all" in groupes
+        assert groupe_de_la_tireuse(tenant.uuid, tireuse.uuid) in groupes
+        assert groupe_de_tout_le_lieu(tenant.uuid) in groupes
+        # Plus aucun envoi vers l'ancien groupe commun à tous les lieux
+        # / No more sends to the old group shared by all venues
+        assert "rfid_state.all" not in groupes
 
     def test_17_modifier_le_fut_branche_recharge_les_kiosks(
         self, tireuse_et_deux_futs, tenant
@@ -504,7 +511,7 @@ class TestRechargementDuKiosk:
         canal = _CanalFictif()
         with (
             tenant_context(tenant),
-            mock.patch("controlvanne.signals.get_channel_layer", return_value=canal),
+            mock.patch("controlvanne.groupes_ws.get_channel_layer", return_value=canal),
         ):
             # Comme l'admin des fûts : on enregistre le modèle proxy FutProduct
             # / Like the keg admin: the FutProduct proxy is saved
@@ -526,7 +533,7 @@ class TestRechargementDuKiosk:
         tireuse = tireuse_et_deux_futs.tireuse
         with (
             tenant_context(tenant),
-            mock.patch("controlvanne.signals.get_channel_layer", return_value=canal),
+            mock.patch("controlvanne.groupes_ws.get_channel_layer", return_value=canal),
         ):
             tireuse.reservoir_ml = Decimal("1234.00")
             tireuse.save(update_fields=["reservoir_ml"])

@@ -503,6 +503,15 @@ class TestAuthKiosk:
     """Tests de l'auth kiosk (POST token → session cookie).
     / Tests for kiosk auth (POST token → session cookie)."""
 
+    def test_12b_route_kiosk_token_supprimee(self, tireuse_client):
+        """L'ancienne route /controlvanne/kiosk-token/<token>/ n'existe plus (404).
+        Le Pi passe le jeton à la page du kiosk (?kiosk_token=). Audit, point 1.3.
+        / The old kiosk-token route no longer exists (404)."""
+        response = tireuse_client.get(
+            "/controlvanne/kiosk-token/nimporte-quoi/?next=https://evil.example"
+        )
+        assert response.status_code == 404
+
     def test_12_auth_kiosk_sans_auth(self, tireuse_client):
         """Auth kiosk sans clé → 403.
         / Auth kiosk without key → 403."""

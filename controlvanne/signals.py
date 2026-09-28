@@ -11,20 +11,18 @@ DEPENDANCES :
 - controlvanne.TireuseBec : modele tireuse physique
 - controlvanne.RfidSession : session NFC en cours
 - inventaire.models.Stock : stock du produit (centilitres)
-- channels.layers.get_channel_layer : WebSocket
-- asgiref.sync.async_to_sync : bridge sync/async
+- controlvanne.groupes_ws : groupes WebSocket par lieu et envoi (pousser_aux_kiosks)
 """
 
 import logging
 from decimal import Decimal
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.db import transaction
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils.translation import gettext
 
+from .groupes_ws import pousser_aux_kiosks, uuid_du_lieu_courant
 from .models import TireuseBec
 
 logger = logging.getLogger(__name__)
@@ -58,26 +56,18 @@ def demander_rechargement_des_kiosks(tireuse):
 
     :param tireuse: TireuseBec
     """
-    channel_layer = get_channel_layer()
-    if not channel_layer:
-        return
-
     payload = {
         "tireuse_bec_uuid": str(tireuse.uuid),
         "kiosk_reload": True,
     }
+    # Le lieu est fixé maintenant, au moment de l'événement (groupes par lieu)
+    # / The venue is fixed now, when the event happens (per-venue groups)
+    uuid_du_lieu = uuid_du_lieu_courant()
 
     def envoyer_apres_commit():
-        # Écran de cette tireuse + liste de toutes les tireuses
-        # / This tap's screen + list of all taps
-        async_to_sync(channel_layer.group_send)(
-            f"rfid_state.{tireuse.uuid}",
-            {"type": "state_update", "payload": payload},
-        )
-        async_to_sync(channel_layer.group_send)(
-            "rfid_state.all",
-            {"type": "state_update", "payload": payload},
-        )
+        # Écran de cette tireuse + liste des tireuses du lieu
+        # / This tap's screen + the venue's tap list
+        pousser_aux_kiosks(tireuse.uuid, payload, uuid_du_lieu)
 
     transaction.on_commit(envoyer_apres_commit)
 
@@ -267,10 +257,6 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
         if champs_a_mettre_a_jour:
             TireuseBec.objects.filter(pk=instance.pk).update(**champs_a_mettre_a_jour)
 
-    channel_layer = get_channel_layer()
-    if not channel_layer:
-        return
-
     # Le fût branché a changé (admin, liste modifiable ou fiche de la tireuse) :
     # la fiche bière affichée est périmée, les kiosks rechargent leur page.
     # Le rechargement redonne aussi l'état à jour : pas besoin du snapshot.
@@ -293,22 +279,15 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
     # immediately would send a not-yet-committed state (and a wrong state
     # on rollback). Outside a transaction, on_commit runs immediately:
     # unchanged behavior. Documented project trap (broadcast inside atomic).
+    # Le lieu est fixé maintenant, au moment de l'événement (groupes par lieu)
+    # / The venue is fixed now, when the event happens (per-venue groups)
+    uuid_du_lieu = uuid_du_lieu_courant()
+
     def pousser_snapshot_apres_commit():
         payload = _snapshot_for_bec(instance)
-
-        # Canal specifique a cette tireuse (kiosk individuel)
-        # / Channel specific to this tap (individual kiosk)
-        async_to_sync(channel_layer.group_send)(
-            f"rfid_state.{instance.uuid}",
-            {"type": "state_update", "payload": payload},
-        )
-
-        # Canal global (tous les kiosks)
-        # / Global channel (all kiosks)
-        async_to_sync(channel_layer.group_send)(
-            "rfid_state.all",
-            {"type": "state_update", "payload": payload},
-        )
+        # Écran de cette tireuse + liste des tireuses du lieu
+        # / This tap's screen + the venue's tap list
+        pousser_aux_kiosks(instance.uuid, payload, uuid_du_lieu)
 
     transaction.on_commit(pousser_snapshot_apres_commit)
 

@@ -40,7 +40,7 @@ Le module reutilise les modeles existants de Lespass :
 ```
 controlvanne/
   models.py           Modeles (voir tableau ci-dessus)
-  viewsets.py          TireuseViewSet (ping, authorize, event) + AuthKioskView/KioskTokenView + KioskBridgeThrottle
+  viewsets.py          TireuseViewSet (ping, authorize, event) + AuthKioskView + KioskBridgeThrottle
   permissions.py       HasTireuseAccess (cle API tireuse OU session admin)
   serializers.py       PingSerializer, AuthorizeSerializer, EventSerializer
   billing.py           Facturation : wallet check, Transaction, LigneArticle, Stock
@@ -744,13 +744,17 @@ Les cles sont tenant-isolees par `django-tenants` : une cle creee sur le tenant 
 
 Le kiosk (Chromium sur le Pi) recoit les mises a jour en temps reel via WebSocket, sans polling.
 
-**Cote serveur** : le signal `post_save` sur `TireuseBec` (dans `signals.py`) construit un payload JSON avec l'etat complet de la tireuse (nom, volume, prix, session en cours, solde) et le pousse vers le groupe WebSocket `rfid_state.<uuid>` via Django Channels (`channel_layer.group_send`).
+**Cote serveur** : tous les envois passent par une seule fonction, `pousser_aux_kiosks` (`controlvanne/groupes_ws.py`) :
+- `viewsets.py` (`_push_ws_kiosk`) : badge, versement, fin de service, refus ;
+- `signals.py` : etat de la tireuse apres `post_save` (niveau du fut, activation), et `kiosk_reload` quand le fut change.
 
-**Cote kiosk** : le JS (`ecran_tireuse.js`) ouvre une connexion WebSocket sur `ws://<serveur>/ws/rfid/<uuid>/`. A chaque message recu, il choisit l'etape a afficher (`data-etat`) et met a jour le volume servi, le solde et le verre.
+**Cote kiosk** : le JS (`ecran_tireuse.js`) ouvre une connexion WebSocket sur `wss://<serveur>/ws/rfid/<uuid>/` (ou `/ws/rfid/all/` pour la liste). A chaque message recu, il choisit l'etape a afficher (`data-etat`) et met a jour le volume servi, le solde et le verre.
 
-Le consumer `PanelConsumer` gere deux groupes :
-- `rfid_state.<uuid>` — un kiosk dedie a une tireuse specifique
-- `rfid_state.all` — le dashboard admin qui voit toutes les tireuses
+**Groupes nommes PAR LIEU** (`controlvanne/groupes_ws.py`) — Redis est partage par tous les lieux, un groupe sans le lieu fuiterait d'un lieu a l'autre :
+- `rfid_state.<uuid lieu>.<uuid tireuse>` — l'ecran du Pi d'une tireuse
+- `rfid_state.<uuid lieu>.all` — la liste des tireuses du lieu
+
+**Acces** (`controlvanne/acces.py`, `peut_voir_les_kiosks`) : meme regle pour la page et le WebSocket — session kiosk (`controlvanne_authenticated`, posee apres `AuthKioskView` / `?kiosk_token=`) ou admin du lieu. Sinon `PanelConsumer.connect()` refuse la connexion avant de l'accepter (handshake 403). Le slug doit etre `all` ou l'UUID d'une tireuse de ce lieu. Une session kiosk acceptee est re-enregistree a chaque connexion, pour prolonger sa duree de vie.
 
 ---
 
