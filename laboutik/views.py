@@ -6417,6 +6417,29 @@ class PaiementViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
+        # --- Vérifier le stock AVANT de proposer les moyens de paiement ---
+        # Sans ce contrôle, le caissier choisissait espèces ou CB,
+        # et l'erreur "stock insuffisant" n'arrivait qu'au moment de payer.
+        # Le contrôle reste aussi dans payer() : un autre poste a pu vendre
+        # le dernier article entre les deux clics.
+        # Les recharges ne sont pas concernées (même filtre que dans payer()).
+        # / Check stock BEFORE showing payment methods, so the error shows on VALIDER
+        # instead of after the payment method choice. payer() keeps its own check.
+        articles_hors_recharges = []
+        for article_du_panier in articles_panier:
+            if article_du_panier["product"].methode_caisse not in METHODES_RECHARGE:
+                articles_hors_recharges.append(article_du_panier)
+        erreurs_stock = _valider_stock_panier(articles_hors_recharges)
+        if erreurs_stock:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _formater_erreurs_stock(erreurs_stock),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         # --- Calculer le total en centimes puis convertir en euros ---
         # --- Calculate total in centimes then convert to euros ---
         total_centimes = _calculer_total_panier_centimes(articles_panier)
@@ -7496,6 +7519,29 @@ class PaiementViewSet(viewsets.ViewSet):
                 "msg_content": _(
                     "Les recharges ne peuvent pas être payées en cashless"
                 ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        # GARDE STOCK : même contrôle que pour espèces / CB / chèque.
+        # Avant, le paiement NFC ne vérifiait pas le stock du tout :
+        # un article épuisé et bloquant était vendu quand même.
+        # On vérifie ici, avant tout débit (le débit legacy plus bas n'est pas remboursable).
+        # Les recharges gratuites n'ont pas de stock : même filtre que dans payer().
+        # / STOCK GUARD: same check as cash/card/cheque. NFC skipped it entirely before.
+        # Done before any debit.
+        articles_hors_recharges = []
+        for article_du_panier in articles_panier:
+            if article_du_panier["product"].methode_caisse not in METHODES_RECHARGE:
+                articles_hors_recharges.append(article_du_panier)
+        erreurs_stock = _valider_stock_panier(articles_hors_recharges)
+        if erreurs_stock:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": _formater_erreurs_stock(erreurs_stock),
                 "selector_bt_retour": "#messages",
             }
             return render(

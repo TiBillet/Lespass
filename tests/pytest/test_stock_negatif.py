@@ -455,3 +455,78 @@ class TestFlowPaiementStock(FastTenantTestCase):
         stock = self.produit.stock_inventaire
         stock.refresh_from_db()
         assert stock.quantite == -49800
+
+    def _post_moyens_paiement_vrac(self, weight_amount):
+        """POST sur moyens_paiement (clic VALIDER) pour weight_amount grammes.
+        / POST to moyens_paiement (VALIDER click) for weight_amount grams."""
+        prix_centimes = int(weight_amount / 1000 * 1200)
+        line_id = f"{self.produit.uuid}--{self.prix.uuid}--1"
+        data = {
+            "uuid_pv": str(self.pv.uuid),
+            f"repid-{line_id}": "1",
+            f"weight-{line_id}": str(weight_amount),
+            f"custom-{line_id}": str(prix_centimes),
+        }
+        return self.c.post("/laboutik/paiement/moyens_paiement/", data=data)
+
+    def test_valider_refuse_400_avant_choix_du_moyen_de_paiement(self):
+        """Stock bloquant + insuffisant : le refus arrive au clic VALIDER,
+        pas apres le choix especes / CB.
+        / Blocking + insufficient stock: refused on VALIDER, before payment choice."""
+        Stock.objects.create(
+            product=self.produit,
+            quantite=200,
+            unite=UniteStock.GR,
+            autoriser_vente_hors_stock=False,
+        )
+
+        response = self._post_moyens_paiement_vrac(weight_amount=50000)
+
+        assert response.status_code == 400
+        contenu = response.content.decode("utf-8")
+        assert "Cacahuetes flow" in contenu
+
+    def test_valider_passe_200_si_vente_hors_stock_autorisee(self):
+        """Vente hors stock autorisee : VALIDER affiche les moyens de paiement.
+        / Out-of-stock allowed: VALIDER shows payment methods."""
+        Stock.objects.create(
+            product=self.produit,
+            quantite=200,
+            unite=UniteStock.GR,
+            autoriser_vente_hors_stock=True,
+        )
+
+        response = self._post_moyens_paiement_vrac(weight_amount=50000)
+
+        assert response.status_code == 200
+
+    def test_paiement_nfc_bloque_400_si_hors_stock_interdit_et_insuffisant(self):
+        """Le paiement cashless (NFC) verifie aussi le stock.
+        Avant, il vendait l'article epuise sans controle.
+        La garde passe avant la recherche de la carte : un tag inconnu suffit.
+        / NFC payment also checks stock. The guard runs before the card lookup."""
+        Stock.objects.create(
+            product=self.produit,
+            quantite=200,
+            unite=UniteStock.GR,
+            autoriser_vente_hors_stock=False,
+        )
+        nb_lignes_avant = LigneArticle.objects.count()
+
+        prix_centimes = int(50000 / 1000 * 1200)
+        line_id = f"{self.produit.uuid}--{self.prix.uuid}--1"
+        data = {
+            "uuid_pv": str(self.pv.uuid),
+            "moyen_paiement": "nfc",
+            "tag_id": "AAAAAAAA",
+            "total": str(prix_centimes),
+            "given_sum": "0",
+            f"repid-{line_id}": "1",
+            f"weight-{line_id}": str(50000),
+            f"custom-{line_id}": str(prix_centimes),
+        }
+        response = self.c.post("/laboutik/paiement/payer/", data=data)
+
+        assert response.status_code == 400
+        assert "Cacahuetes flow" in response.content.decode("utf-8")
+        assert LigneArticle.objects.count() == nb_lignes_avant

@@ -451,7 +451,18 @@ function tarifAjouterPoids(zone, btn) {
 	// Le serveur reste autoritaire (validation amont via _valider_stock_panier).
 	// / Front-side stock guard (bug 8). Server remains authoritative.
 	const autoriserHorsStock = btn.dataset.autoriserHorsStock !== 'false'
-	const stockDisponibleStr = btn.dataset.stockDisponible
+
+	// Le stock de data-tarifs est fige au chargement de la page.
+	// Apres une vente, il est faux. On prefere donc la quantite du badge stock
+	// de la tuile (#stock-badge-<uuid>), que le WebSocket remplace apres chaque vente
+	// (hx_stock_badge.html). Si le badge n'existe pas, on garde l'ancienne valeur.
+	// / data-tarifs stock is frozen at page load. Prefer the live quantity from the
+	// tile stock badge (updated by WebSocket), fall back to the frozen value.
+	let stockDisponibleStr = btn.dataset.stockDisponible
+	const badgeStockDeLaTuile = document.querySelector(`#stock-badge-${btn.dataset.productUuid}`)
+	if (badgeStockDeLaTuile && badgeStockDeLaTuile.dataset.stockQuantite !== undefined) {
+		stockDisponibleStr = badgeStockDeLaTuile.dataset.stockQuantite
+	}
 	const stockDisponible = (stockDisponibleStr === '' || stockDisponibleStr === undefined)
 		? null
 		: Number(stockDisponibleStr)

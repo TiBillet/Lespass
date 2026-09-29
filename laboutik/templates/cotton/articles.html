@@ -1,5 +1,6 @@
 {% load static %}
 {% load i18n %}
+{% load l10n %}
 {% load laboutik_process %}
 
 <!-- les data articles sont prises dans le container #products -->
@@ -56,7 +57,16 @@
 		<div id="stock-badge-{{ article.id }}"
 		     aria-live="polite"
 		     data-testid="stock-badge-{{ article.id }}"
-            {% if article.stock_en_rupture %}data-stock_bloquant="true"{% endif %}>
+		     {% comment %}
+		     Mêmes attributs que hx_stock_badge.html (remplacé par le WebSocket après chaque vente).
+		     - data-stock-bloquant : rupture ET vente hors stock interdite.
+		       En JS il se lit dataset.stockBloquant (articles.js).
+		     - data-stock-quantite : quantité à jour, lue par tarif.js (garde du pavé numérique).
+		       unlocalize : pas d'espace des milliers, sinon Number() échoue.
+		     / Same attributes as hx_stock_badge.html (replaced by WebSocket after each sale).
+		     {% endcomment %}
+		     {% if article.stock_quantite is not None %}data-stock-quantite="{{ article.stock_quantite|unlocalize }}"{% endif %}
+		     {% if article.stock_bloquant %}data-stock-bloquant="true"{% endif %}>
 			{% if article.stock_en_alerte %}
 			<span class="article-stock-badge article-stock-badge-alerte"
 			      data-testid="stock-badge-alerte">{{ article.stock_quantite_lisible }}</span>

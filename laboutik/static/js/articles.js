@@ -109,7 +109,11 @@ function manageKey(event) {
 			// on ignore le clic — l'article est grisé visuellement.
 			// / If stock is blocking (out of stock + sales not allowed),
 			// ignore the click — the article is visually greyed out.
-			if (ele.dataset.stock_bloquant === 'true') {
+			// L'attribut HTML est data-stock-bloquant : le navigateur le range
+			// dans dataset.stockBloquant (tirets -> camelCase).
+			// Ne pas ecrire dataset.stock_bloquant : ca lit data-stock_bloquant, qui n'existe pas.
+			// / HTML attribute data-stock-bloquant maps to dataset.stockBloquant.
+			if (ele.dataset.stockBloquant === 'true') {
 				return
 			}
 
@@ -301,12 +305,14 @@ function syncStockBloquantApresWebSocket() {
 
 			// Propager l'état bloquant du badge vers le container
 			// / Propagate blocking state from badge to container
-			if (badgeDiv.dataset.stock_bloquant === 'true') {
+			// data-stock-bloquant (HTML) = dataset.stockBloquant (JS)
+			// / data-stock-bloquant (HTML) = dataset.stockBloquant (JS)
+			if (badgeDiv.dataset.stockBloquant === 'true') {
 				articleContainer.classList.add('article-bloquant')
-				articleContainer.dataset.stock_bloquant = 'true'
+				articleContainer.dataset.stockBloquant = 'true'
 			} else {
 				articleContainer.classList.remove('article-bloquant')
-				delete articleContainer.dataset.stock_bloquant
+				delete articleContainer.dataset.stockBloquant
 			}
 		}
 	} catch (error) {
