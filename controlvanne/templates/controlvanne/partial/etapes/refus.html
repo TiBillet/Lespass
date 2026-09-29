@@ -1,0 +1,30 @@
+{% comment %}
+ÉTAPE REFUS — la carte n'est pas acceptée
+/ REFUSAL STAGE — the card is not accepted
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/etapes/refus.html
+
+Visible quand data-etat="refus" (voir tireuse.css).
+Cas : carte inconnue, solde insuffisant, tireuse hors service…
+Le message vient du serveur (_push_refus dans controlvanne/viewsets.py).
+L'écran reste affiché tant que la carte est posée. Au retrait, le Pi envoie
+card_removed et le serveur pousse present=false : retour en veille.
+/ Visible when data-etat="refus". Message comes from the server.
+
+Champ écrit par ecran_tireuse.js : message
+{% endcomment %}
+{% load i18n %}
+<section class="stage stage--refus" data-testid="tireuse-etape-refus">
+  <div class="screen screen--center">
+    <div class="done" role="alert">
+      <div class="done__mark done__mark--alerte" aria-hidden="true">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+          <path d="M6 6 L18 18 M18 6 L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h1 class="screen__title">{% translate "Carte refusée" %}</h1>
+      <p class="done__line" data-champ="message" data-testid="tireuse-message-refus"></p>
+      <p class="done__balance">{% translate "Retirez votre carte." %}</p>
+    </div>
+  </div>
+</section>

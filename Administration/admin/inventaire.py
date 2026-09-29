@@ -21,7 +21,6 @@ from django.utils.translation import gettext_lazy as _
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
 from Administration.admin.base import ModelAdmin
-from unfold.admin import TabularInline
 from unfold.decorators import display
 
 from Administration.admin.site import staff_admin_site
@@ -71,49 +70,6 @@ LABELS_TYPE_MOUVEMENT = {
     TypeMouvement.PE: "danger",
     TypeMouvement.DM: "primary",
 }
-
-
-# ---------------------------------------------------------------------------
-# Inline Stock pour POSProductAdmin
-# / Stock inline for POSProductAdmin
-# ---------------------------------------------------------------------------
-
-
-class StockInline(TabularInline):
-    model = Stock
-    extra = 0
-    max_num = 1
-    fields = ("quantite", "unite", "seuil_alerte", "autoriser_vente_hors_stock")
-
-    def get_readonly_fields(self, request, obj=None):
-        # En mode add (obj=None) : quantite editable pour saisir le stock initial
-        # En mode change : quantite readonly (modifiable via mouvements de stock)
-        # / In add mode: quantite editable for initial stock entry
-        # In change mode: quantite read-only (modified via stock movements)
-        if obj is None:
-            return []
-        return ("quantite",)
-
-    def formfield_for_dbfield(self, db_field, request, **kwargs):
-        field = super().formfield_for_dbfield(db_field, request, **kwargs)
-        if db_field.name == "quantite" and field is not None:
-            field.help_text = _(
-                "Initial stock quantity (in stock unit). "
-                "After creation, modify via Inventory > Stock movements."
-            )
-        return field
-
-    def has_view_permission(self, request: HttpRequest, obj=None) -> bool:
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_add_permission(self, request: HttpRequest, obj=None) -> bool:
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_change_permission(self, request: HttpRequest, obj=None) -> bool:
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_delete_permission(self, request: HttpRequest, obj=None) -> bool:
-        return TenantAdminPermissionWithRequest(request)
 
 
 # ---------------------------------------------------------------------------
@@ -203,16 +159,26 @@ class StockAdmin(ModelAdmin):
 
     def lien_vers_pos_product(self, obj):
         """
-        Affiche le nom du produit comme lien cliquable vers POSProductAdmin.
-        / Displays product name as a clickable link to POSProductAdmin.
+        Affiche le nom du produit comme lien vers la section Stock de sa fiche.
+        Un fût ouvre la fiche fût, les autres la fiche produit de caisse.
+        / Displays product name as a link to its page's Stock section.
         """
         if not obj or not obj.product:
             return "-"
         from django.urls import reverse
         from django.utils.html import format_html
 
-        url = reverse("staff_admin:BaseBillet_posproduct_change", args=[obj.product.pk])
-        return format_html('<a href="{}">{}</a>', url, obj.product.name)
+        from Administration.admin.stock_fiche_produit import ANCRE_SECTION_STOCK
+        from BaseBillet.models import Product
+
+        if obj.product.categorie_article == Product.FUT:
+            nom_url_fiche = "staff_admin:BaseBillet_futproduct_change"
+        else:
+            nom_url_fiche = "staff_admin:BaseBillet_posproduct_change"
+        url = reverse(nom_url_fiche, args=[obj.product.pk])
+        return format_html(
+            '<a href="{}#{}">{}</a>', url, ANCRE_SECTION_STOCK, obj.product.name
+        )
 
     lien_vers_pos_product.short_description = _("Article")
 
@@ -257,21 +223,43 @@ class StockAdmin(ModelAdmin):
         réception pour tracer l'entrée initiale dans le journal.
         / On stock creation, automatically creates a reception movement
         to trace the initial entry in the movement log.
+
+        Dans les deux cas, les caisses ouvertes sont prévenues par WebSocket
+        (badge stock de la tuile) :
+        - création : via StockService.creer_mouvement ;
+        - modification (vente hors stock, seuil, unité) : directement ici.
+        / In both cases open POS terminals are notified by WebSocket.
         """
-        super().save_model(request, obj, form, change)
+        from django.db import transaction
 
-        # Uniquement à la création (pas à la modification)
-        # / Only on creation (not on change)
-        if not change and obj.quantite > 0:
-            from inventaire.services import StockService
+        from inventaire.services import StockService
+        from wsocket.broadcast import broadcast_etat_stock
 
-            StockService.creer_mouvement(
-                stock=obj,
-                type_mouvement=TypeMouvement.RE,
-                quantite=obj.quantite,
-                motif=_("Stock initial"),
+        # --- Création : même logique que la section Stock de la fiche produit ---
+        # StockService.creer_stock_initial crée le stock à 0,
+        # puis un mouvement "Stock initial" apporte la quantité saisie.
+        # / Creation: same logic as the product page Stock section.
+        if not change:
+            stock_cree = StockService.creer_stock_initial(
+                product=obj.product,
+                unite=obj.unite,
+                quantite_initiale=obj.quantite,
+                seuil_alerte=obj.seuil_alerte,
+                autoriser_vente_hors_stock=obj.autoriser_vente_hors_stock,
                 utilisateur=request.user,
             )
+            # L'admin redirige avec obj.pk : on reprend celui du stock créé
+            # / The admin redirects using obj.pk: reuse the created stock's
+            obj.pk = stock_cree.pk
+            obj.quantite = stock_cree.quantite
+            obj._state.adding = False
+            return
+
+        # --- Modification : pas de mouvement, mais l'état peut changer ---
+        # Ex : "vente hors stock" autorisée → la tuile épuisée redevient cliquable.
+        # / Change: no movement, but the blocking state may change.
+        super().save_model(request, obj, form, change)
+        transaction.on_commit(lambda: broadcast_etat_stock(obj))
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         """

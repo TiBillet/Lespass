@@ -124,12 +124,12 @@ class BackendClient:
     def auth_kiosk(self):
         """
         POST /controlvanne/auth-kiosk/
-        Obtient un token à usage unique pour l'auth kiosk.
-        Le Pi ouvre Chromium sur /controlvanne/kiosk-token/<token>/?next=<kiosk_url>
-        Django pose le cookie de session via HTTP et redirige vers le kiosk.
-        / Gets a one-time token for kiosk auth.
-        The Pi opens Chromium on /controlvanne/kiosk-token/<token>/?next=<kiosk_url>
-        Django sets the session cookie via HTTP and redirects to the kiosk.
+        Obtient un jeton à usage unique (5 minutes) pour l'auth kiosk.
+        main.py ouvre ensuite Chromium sur kiosk/<uuid>/?kiosk_token=<jeton> ;
+        la page du kiosk consomme le jeton et pose le cookie de session.
+        / Gets a one-time token (5 minutes) for kiosk auth.
+        main.py then opens Chromium on kiosk/<uuid>/?kiosk_token=<token>;
+        the kiosk page consumes it and sets the session cookie.
 
         :return: tuple (session_key, kiosk_token)
         :raises BackendError: si le serveur est injoignable

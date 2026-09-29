@@ -1,0 +1,99 @@
+{% load i18n %}
+{% comment %}
+SIMULATEUR DU PI — mode DEMO uniquement
+/ Pi simulator — DEMO mode only
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/simulateur_pi.html
+
+Inclus par kiosk_detail.html quand la vue fournit demo_tags (settings.DEMO).
+Simule le Raspberry Pi : badge d'une carte, débit, retrait de la carte.
+Envoie les mêmes appels API que le vrai Pi (authorize, event).
+/ Included by kiosk_detail.html when demo_tags is set (settings.DEMO).
+
+JS : controlvanne/static/controlvanne/js/simu_pi.js
+- Les ids simu-* et les attributs data-* du panneau sont lus par simu_pi.js.
+  Ne pas les renommer.
+- Les attributs data-libelle-* portent les textes traduits (fonction libelle()).
+Le panneau est un <details> : replié par défaut, il ne montre qu'un petit
+bouton en haut à droite et ne cache pas le pied de page (sans JS).
+/ simu-* ids and data-* attributes are read by simu_pi.js. Do not rename.
+
+Variables attendues : demo_tags (liste de {tag_id, name}), slug_focus, csrf_token
+{% endcomment %}
+  <details id="simu-pi-panel"
+           class="demo-sim"
+           data-testid="simu-pi-panel"
+           data-tireuse-uuid="{{ slug_focus }}"
+           data-csrf-token="{{ csrf_token }}"
+           data-libelle-etat-attente="{% translate 'En attente' %}"
+           data-libelle-etat-service="{% translate 'Service en cours' %}"
+           data-libelle-etat-carte-posee="{% translate 'Carte posée' %}"
+           data-libelle-vanne-ouverte="{% translate 'Ouverte' %}"
+           data-libelle-vanne-fermee="{% translate 'Fermée' %}"
+           data-libelle-autorisation-en-cours="{% translate 'Autorisation en cours…' %}"
+           data-libelle-vanne-ouverte-solde="{% translate 'Vanne ouverte — solde :' %}"
+           data-libelle-ouvrez-le-robinet="{% translate 'ouvrez le robinet (curseur de débit)' %}"
+           data-libelle-refuse="{% translate 'Refusé :' %}"
+           data-libelle-non-autorise="{% translate 'Non autorisé' %}"
+           data-libelle-erreur="{% translate 'Erreur :' %}"
+           data-libelle-volume-max-atteint="{% translate 'Volume maximum atteint — retirez la carte' %}"
+           data-libelle-retrait-en-cours="{% translate 'Carte retirée — fermeture en cours…' %}"
+           data-libelle-carte-retiree="{% translate 'Carte retirée' %}">
+    <summary class="demo-sim__resume" data-testid="simu-pi-ouvrir">{% translate "Pi Simulator" %} (DEMO)</summary>
+
+    <div class="demo-sim__contenu">
+    <div class="demo-sim__tete">
+      <span class="demo-sim__tag">{% translate "Pi Simulator" %} (DEMO)</span>
+      <span class="badge bg-dark" id="simu-state" data-testid="simu-state">{% translate "En attente" %}</span>
+    </div>
+
+    {# Boutons cartes NFC simulées / Simulated NFC card buttons #}
+    <div class="demo-sim__boutons" role="group" aria-label="{% translate 'Badge a card:' %}" data-testid="simu-card-buttons">
+      {% for tag in demo_tags %}
+        <button type="button"
+                class="demo-sim__btn simu-card-btn"
+                data-tag-id="{{ tag.tag_id }}"
+                data-testid="simu-card-{{ tag.tag_id }}">
+          {{ tag.name }}
+        </button>
+      {% endfor %}
+      <button type="button"
+              class="demo-sim__btn demo-sim__btn--ghost"
+              id="simu-remove-card"
+              data-testid="simu-remove-card"
+              disabled>
+        {% translate "Remove card" %}
+      </button>
+    </div>
+
+    {# Débit simulé : affiché par simu_pi.js quand le service est autorisé #}
+    {# / Simulated flow: shown by simu_pi.js once service is authorized #}
+    <div id="simu-flow-section" style="display: none;" data-testid="simu-flow-section">
+      <div class="demo-sim__debit">
+        <label for="simu-flow-slider">{% translate "Flow rate:" %}</label>
+        <input type="range"
+               id="simu-flow-slider"
+               data-testid="simu-flow-slider"
+               min="0" max="100" value="0" step="1">
+        <span id="simu-flow-label" class="demo-sim__debit-valeur">0 ml/s</span>
+      </div>
+      <div class="demo-sim__indicateurs">
+        <span>
+          {% translate "Valve:" %}
+          <span class="badge bg-danger" id="simu-valve-state" data-testid="simu-valve-state">{% translate "Fermée" %}</span>
+        </span>
+        <span>
+          {% translate "Volume:" %}
+          <strong id="simu-volume-display" data-testid="simu-volume-display">0 ml</strong>
+        </span>
+        <span>
+          {% translate "Allowed:" %}
+          <strong id="simu-allowed-display" data-testid="simu-allowed-display">&mdash; ml</strong>
+        </span>
+      </div>
+    </div>
+
+    {# Message de retour API / API response message #}
+    <div id="simu-message" class="demo-sim__message" role="status" data-testid="simu-message"></div>
+    </div>
+  </details>

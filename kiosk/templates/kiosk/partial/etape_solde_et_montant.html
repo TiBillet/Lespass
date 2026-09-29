@@ -1,0 +1,149 @@
+{% load i18n kiosk_tags %}
+{% comment %}
+ETAPES 2 ET 3 — SOLDE DE LA CARTE, PUIS CHOIX DU MONTANT
+/ Steps 2 and 3 — card balance, then amount choice
+
+LOCALISATION : kiosk/templates/kiosk/partial/etape_solde_et_montant.html
+
+Rendu par KioskViewSet.check_request_card, swappe dans #tb-kiosque.
+Contexte : carte = {tag_id, numero_court, solde_centimes, est_enregistree}
+(kiosk/carte.py : lire_la_carte_pour_la_borne).
+
+Les deux etapes arrivent ensemble : passer de l'une a l'autre ne demande
+aucune donnee nouvelle, donc pas d'aller-retour serveur. « Recharger »
+affiche simplement le bloc montant (main.js : data-afficher-bloc).
+/ Both steps arrive together: no new data needed, so no server round-trip.
+
+FLUX DU MONTANT :
+1. Montants rapides et pave -> main.js met a jour l'afficheur [data-amount],
+   l'input cache totalAmount et active Valider.
+2. Valider -> hx-post recapitulatif -> etape_recapitulatif.html.
+   Le nouveau solde est calcule par le SERVEUR, pas ici.
+{% endcomment %}
+<div class="kiosk-etapes" data-etape="solde" data-testid="kiosk-etape-solde">
+
+    {# ---------------- Etape 2 : le solde ---------------- #}
+    <section class="stage" data-bloc="solde">
+        <h1 class="visually-hidden">{% translate "Solde de votre carte" %}</h1>
+        <div class="rcard">
+            <div class="rcard__head">
+                <div class="rcard__id" data-testid="kiosk-carte-numero">
+                    {% translate "carte" %} ·· {{ carte.numero_court }}
+                </div>
+                <div class="rcard__solde-label">{% translate "Vous avez sur votre carte" %}</div>
+                <div class="rcard__balance" data-testid="kiosk-solde">
+                    {{ carte.solde_centimes|euros }}<span class="eur"> €</span>
+                </div>
+            </div>
+            <button type="button" class="kiosk-btn kiosk-btn--signature rcard__validate"
+                    data-afficher-bloc="montant"
+                    data-testid="kiosk-bouton-recharger">
+                {% translate "Recharger" %}
+            </button>
+        </div>
+    </section>
+
+    {# ---------------- Etape 3 : le montant ---------------- #}
+    <section class="stage" data-bloc="montant" hidden>
+        <form class="rcard rcard--step3"
+              hx-post="{% url 'kiosk-recapitulatif' %}"
+              hx-target="#tb-kiosque"
+              hx-swap="innerHTML"
+              data-saisie-montant
+              data-testid="kiosk-form-montant">
+            <input type="hidden" name="tag_id" value="{{ carte.tag_id }}">
+            <input type="hidden" name="totalAmount" value="" data-montant-champ>
+
+            <div class="step3__top">
+                <div class="rcard__id">{% translate "carte" %} ·· {{ carte.numero_court }}</div>
+                <div class="step3__solde">
+                    <span class="step3__solde-label">{% translate "Solde actuel" %}</span>
+                    <span class="step3__solde-val">{{ carte.solde_centimes|euros }} €</span>
+                </div>
+                {# tabindex=-1 : main.js y place le focus quand le bloc s'affiche. #}
+                {# / main.js moves focus here when the block shows. #}
+                <h1 class="rcard__q" tabindex="-1" data-focus-a-l-affichage>{% translate "Combien voulez-vous ajouter ?" %}</h1>
+                {# Le montant en cours, partage par les montants rapides ET le pave. #}
+                {# / The current amount, shared by quick amounts AND keypad. #}
+                <output class="step3__amount is-empty" data-amount aria-live="polite"
+                        data-testid="kiosk-montant-saisi">0 €</output>
+            </div>
+
+            <div class="step3__cols">
+                <div class="step3__left">
+                    <p class="rlabel" id="label-montants-rapides">{% translate "Montants rapides" %}</p>
+                    <div class="rquick" role="group" aria-labelledby="label-montants-rapides">
+                        <button type="button" class="rquick__btn" data-quick="5" aria-pressed="false" data-testid="kiosk-rapide-5">5 €</button>
+                        <button type="button" class="rquick__btn" data-quick="10" aria-pressed="false" data-testid="kiosk-rapide-10">10 €</button>
+                        <button type="button" class="rquick__btn" data-quick="20" aria-pressed="false" data-testid="kiosk-rapide-20">20 €</button>
+                        <button type="button" class="rquick__btn" data-quick="50" aria-pressed="false" data-testid="kiosk-rapide-50">50 €</button>
+                    </div>
+                </div>
+
+                <div class="step3__right">
+                    <p class="rlabel" id="label-pave">{% translate "Saisissez un montant" %}</p>
+                    <div class="rpad" role="group" aria-labelledby="label-pave">
+                        <button type="button" class="rpad__key" data-key="1" data-testid="kiosk-pave-1">1</button>
+                        <button type="button" class="rpad__key" data-key="2" data-testid="kiosk-pave-2">2</button>
+                        <button type="button" class="rpad__key" data-key="3" data-testid="kiosk-pave-3">3</button>
+                        <button type="button" class="rpad__key" data-key="4" data-testid="kiosk-pave-4">4</button>
+                        <button type="button" class="rpad__key" data-key="5" data-testid="kiosk-pave-5">5</button>
+                        <button type="button" class="rpad__key" data-key="6" data-testid="kiosk-pave-6">6</button>
+                        <button type="button" class="rpad__key" data-key="7" data-testid="kiosk-pave-7">7</button>
+                        <button type="button" class="rpad__key" data-key="8" data-testid="kiosk-pave-8">8</button>
+                        <button type="button" class="rpad__key" data-key="9" data-testid="kiosk-pave-9">9</button>
+                        {# Pas de virgule : la recharge se fait en euros entiers. Le 0 prend #}
+                        {# deux colonnes pour garder la grille pleine. #}
+                        {# / No comma: whole euros only. The 0 spans two columns. #}
+                        <button type="button" class="rpad__key rpad__key--large" data-key="0" data-testid="kiosk-pave-0">0</button>
+                        <button type="button" class="rpad__key rpad__key--util" data-key="back"
+                                aria-label="{% translate 'Effacer un chiffre' %}" data-testid="kiosk-pave-retour">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M9 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                                <path d="M11 9.5l5 5M16 9.5l-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step3__foot">
+                <button type="button" class="kiosk-btn kiosk-btn--neutral step3__clear"
+                        data-clear data-testid="kiosk-bouton-effacer">
+                    {% translate "Effacer" %}
+                </button>
+                <button type="submit" class="kiosk-btn kiosk-btn--signature step3__validate"
+                        data-validate disabled data-testid="kiosk-bouton-valider-montant">
+                    {% translate "Valider" %} · <span data-validate-amount>0 €</span>
+                </button>
+            </div>
+        </form>
+    </section>
+
+    {# ---------------- Modale : carte non enregistree ---------------- #}
+    {# Appel du pied, non bloquant : le « pourquoi » d'abord, le conseil ensuite. #}
+    {# / A nudge, not a block: the "why" first, the advice next. #}
+    {% if not carte.est_enregistree %}
+        <dialog class="kiosk-modal" data-ouvrir-au-chargement
+                aria-labelledby="modale-non-enregistree-titre"
+                data-testid="kiosk-modale-non-enregistree">
+            <div class="kiosk-modal__card">
+                <h2 class="kiosk-modal__title" id="modale-non-enregistree-titre">
+                    {% translate "Votre carte n'est pas enregistrée." %}
+                </h2>
+                <p class="kiosk-modal__text">
+                    {% translate "Si vous perdez une carte qui n'est pas enregistrée, l'argent qui est dessus est perdu avec elle. Une fois enregistrée, cela n'arrive jamais." %}
+                </p>
+                <p class="kiosk-modal__text">
+                    {% translate "Nous vous conseillons donc de l'enregistrer, grâce au QR code présent sur la carte, ou directement en caisse." %}
+                </p>
+                <div class="kiosk-modal__actions">
+                    <button type="button" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
+                            data-modal-close data-testid="kiosk-modale-continuer">
+                        {% translate "Continuer" %}
+                    </button>
+                </div>
+            </div>
+        </dialog>
+    {% endif %}
+</div>

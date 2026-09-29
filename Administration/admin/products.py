@@ -21,7 +21,7 @@ from Administration.admin.base import ModelAdmin
 from unfold.admin import StackedInline, TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.forms.widgets import WysiwygWidget
-from unfold.decorators import action
+from unfold.decorators import action, display
 from unfold.forms import PaginationInlineFormSet
 from unfold.widgets import (
     UnfoldAdminSelectWidget,
@@ -32,6 +32,19 @@ from unfold.widgets import (
 from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
 from Administration.admin.mixins import HelpDisplayMixin
 from Administration.admin.site import staff_admin_site, sanitize_textfields
+from inventaire.models import UniteStock
+from Administration.admin.stock_fiche_produit import (
+    CLE_REGLES_FORMULAIRE_PRINCIPAL,
+    REGLES_CONDITIONNELLES_SECTION_STOCK,
+    ChampsStockFicheProduitMixin,
+    EtatStockFilter,
+    display_stock_fut,
+    display_stock_produit_caisse,
+    enregistrer_section_stock,
+    fieldset_section_stock,
+    panneau_operations_stock,
+    stock_du_produit_ou_none,
+)
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from BaseBillet.models import (
     Configuration,
@@ -1349,7 +1362,11 @@ class ProductAdmin(ModelAdmin):
                 # / Key = inline formset prefix
                 prefixe = inline_class.model._meta.model_name + "s"
                 regles_conditionnelles[prefixe] = regles_inline
-        if regles_conditionnelles:
+        # Une sous-classe (POSProductAdmin, FutProductAdmin) a pu préparer ses
+        # propres règles avant d'appeler super() : on ne les écrase pas.
+        # / A subclass may have prepared its own rules before super(): keep them.
+        regles_deja_fournies = "inline_conditional_rules" in extra_context
+        if regles_conditionnelles and not regles_deja_fournies:
             extra_context["inline_conditional_rules"] = json.dumps(
                 regles_conditionnelles
             )
@@ -1580,10 +1597,12 @@ class ResourceProductAdmin(ProductAdmin):
 
 # FROM V2 : TO ADD WHEN POS AND LABOUTIK
 #
-class POSProductForm(ProductAdminCustomForm):
+class POSProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
     """Formulaire produit pour les articles de caisse.
     Product form for POS items.
     Le champ categorie_article est cache (pas pertinent en caisse).
+    Les champs stock_* de la section Stock viennent de ChampsStockFicheProduitMixin
+    (Administration/admin/stock_fiche_produit.py).
     LOCALISATION : Administration/admin/products.py"""
 
     class Meta(ProductAdminCustomForm.Meta):
@@ -1722,6 +1741,11 @@ class POSProductAdmin(ProductAdmin):
     inlines = [POSPriceInline]
     change_form_after_template = "admin/product/inline_conditional_fields.html"
 
+    class Media:
+        # Champs conditionnels de la section Stock (formulaire principal)
+        # / Stock section conditional fields (main form)
+        js = ("admin/js/inline_conditional_fields.js",)
+
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         # Collecte les regles conditionnelles de chaque inline qui en declare
         # / Collect conditional rules from each inline that declares them
@@ -1732,10 +1756,13 @@ class POSProductAdmin(ProductAdmin):
             if regles_inline:
                 prefixe = inline_class.model._meta.model_name + "s"
                 regles_conditionnelles[prefixe] = regles_inline
-        if regles_conditionnelles:
-            extra_context["inline_conditional_rules"] = json.dumps(
-                regles_conditionnelles
-            )
+        # Section Stock : champs cachés tant que « Suivre le stock » n'est pas coché
+        # (formulaire principal, pas un inline)
+        # / Stock section: fields hidden until "Track stock" is checked (main form)
+        regles_conditionnelles[CLE_REGLES_FORMULAIRE_PRINCIPAL] = (
+            REGLES_CONDITIONNELLES_SECTION_STOCK
+        )
+        extra_context["inline_conditional_rules"] = json.dumps(regles_conditionnelles)
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def save_related(self, request, form, formsets, change):
@@ -1833,33 +1860,48 @@ class POSProductAdmin(ProductAdmin):
         ),
     )
 
+    # Colonne Stock : badge coloré, clic = section Stock de la fiche
+    # (Administration/admin/stock_fiche_produit.py)
+    # / Stock column: colored badge, click = product Stock section
     list_display = (
         "name",
         "methode_caisse",
         "categorie_pos",
+        display_stock_produit_caisse,
         "publish",
         "poids",
     )
 
-    list_filter = ["publish", "methode_caisse", "categorie_pos"]
+    list_filter = ["publish", "methode_caisse", "categorie_pos", EtatStockFilter]
     search_fields = ["name"]
 
-    def get_inlines(self, request, obj):
-        # En mode add (pas d'obj) : StockInline pour créer le stock initial
-        # En mode change : pas de StockInline (le stock se gère via admin/inventaire/stock/)
-        # / In add mode: StockInline for initial stock creation
-        # In change mode: no StockInline (stock managed via admin/inventaire/stock/)
-        if obj is None:
-            from Administration.admin.inventaire import StockInline
+    def get_fieldsets(self, request, obj=None):
+        # Ajoute la section Stock à la fin (réglages + opérations)
+        # / Appends the Stock section (settings + operations)
+        return self.fieldsets + (fieldset_section_stock(obj),)
 
-            return [StockInline, POSPriceInline]
-        return [POSPriceInline]
+    def get_readonly_fields(self, request, obj=None):
+        # Le panneau d'opérations n'existe que si le produit a déjà un stock
+        # / The operations panel only exists when the product already has a stock
+        champs_lecture_seule = list(super().get_readonly_fields(request, obj))
+        if stock_du_produit_ou_none(obj) is not None:
+            champs_lecture_seule.append(panneau_operations_stock)
+        return champs_lecture_seule
+
+    def save_model(self, request, obj, form, change):
+        # 1. Enregistre le produit  2. Applique la section Stock
+        # / 1. Save the product  2. Apply the Stock section
+        super().save_model(request, obj, form, change)
+        enregistrer_section_stock(request, obj, form.cleaned_data)
 
     def get_queryset(self, request):
-        # Uniquement les produits avec une methode de caisse definie
-        # / Only products with a POS method set
+        # Uniquement les produits avec une methode de caisse definie.
+        # select_related : la colonne Stock ne fait pas une requête par ligne.
+        # / Only products with a POS method set. select_related avoids N+1.
         qs = super().get_queryset(request)
-        return qs.filter(methode_caisse__isnull=False)
+        return qs.filter(methode_caisse__isnull=False).select_related(
+            "stock_inventaire"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1869,17 +1911,89 @@ class POSProductAdmin(ProductAdmin):
 # ---------------------------------------------------------------------------
 
 
-class FutProductForm(ProductAdminCustomForm):
+# Couleurs proposées pour l'accent de l'écran de la tireuse.
+# Le texte de l'écran est TOUJOURS blanc (comme la maquette). L'accent sert :
+# - de FOND sous du texte blanc (fond de page, mention légale, pastille,
+#   case « Solde ») → contraste avec le blanc ≥ 4,5:1 (WCAG AA, texte normal) ;
+# - de TEXTE sur la carte sombre #2a2d2f (« Présentez votre carte », volume,
+#   bilan, tous en gros caractères) → contraste ≥ 3:1 (WCAG, gros texte).
+# Ces deux seuils ne laissent qu'une plage de luminosité très étroite : chaque
+# couleur ci-dessous a été calculée dans cette plage (≈ 4,55:1 et ≈ 3,05:1).
+# Les couleurs de la maquette (cyan, ambre, corail) ont été retirées : le texte
+# blanc était illisible dessus (2,4:1, 1,7:1, 2,9:1).
+# / Screen text is ALWAYS white. Each accent: ≥ 4.5:1 with white (background)
+# AND ≥ 3:1 on the dark card #2a2d2f (large text). Mockup colors removed.
+COULEURS_ACCENT = [
+    ("#1f75d8", _("Bleu")),
+    ("#127fa6", _("Pétrole")),
+    ("#138383", _("Sarcelle")),
+    ("#228747", _("Vert")),
+    ("#777b16", _("Olive")),
+    ("#a16b0d", _("Ocre")),
+    ("#b95c15", _("Rouille")),
+    ("#d0471e", _("Brique")),
+    ("#de323d", _("Rouge")),
+    ("#da3068", _("Framboise")),
+    ("#d22ca0", _("Magenta")),
+    ("#b345c9", _("Prune")),
+    ("#8b59e2", _("Violet")),
+    ("#6368e4", _("Indigo")),
+]
+
+
+class CouleurAccentTireuseWidget(forms.Widget):
+    """Choix de la couleur d'accent de l'écran de la tireuse, en pastilles.
+    Chaque pastille est un bouton radio : pas de JS, et la pastille choisie
+    est mise en évidence en CSS (:checked). Pas de sélecteur libre.
+    Si le fût a déjà une couleur hors de la liste, elle est gardée et
+    proposée en premier (« Couleur actuelle »), pour ne rien perdre.
+    / Tap screen accent color as radio swatches: no JS, CSS :checked shows
+    the selection. A current color outside the list is kept and offered first.
+    LOCALISATION : Administration/admin/products.py
+    Template : Administration/templates/admin/product/widget_couleur_accent.html"""
+
+    template_name = "admin/product/widget_couleur_accent.html"
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+
+        # Couleur actuelle du fût, en minuscules pour la comparer à la liste
+        # / Current keg color, lowercased to compare with the list
+        couleur_actuelle = (value or "").strip().lower()
+
+        codes_des_couleurs_proposees = []
+        for code_couleur, _nom in COULEURS_ACCENT:
+            codes_des_couleurs_proposees.append(code_couleur)
+
+        couleur_actuelle_hors_liste = ""
+        if couleur_actuelle and couleur_actuelle not in codes_des_couleurs_proposees:
+            couleur_actuelle_hors_liste = couleur_actuelle
+
+        context["couleur_actuelle"] = couleur_actuelle
+        context["couleur_actuelle_hors_liste"] = couleur_actuelle_hors_liste
+        context["couleurs_proposees"] = COULEURS_ACCENT
+        return context
+
+
+class FutProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
     """Formulaire produit pour les futs de tireuse.
     Le champ categorie_article est cache et force a FUT.
     Memes champs visuels que POSProductForm (palette, couleurs, icone).
     / Product form for beer kegs.
     categorie_article is hidden and forced to FUT.
     Same visual fields as POSProductForm (palette, colors, icon).
+    Section Stock : voir ChampsStockFicheProduitMixin. Un fût se compte en centilitres.
     LOCALISATION : Administration/admin/products.py"""
+
+    # Un fût se compte en centilitres / A keg is counted in centiliters
+    unite_stock_par_defaut = UniteStock.CL
 
     class Meta(ProductAdminCustomForm.Meta):
         model = FutProduct
+        # "tag" en plus : les tags deviennent les pastilles de l'écran de la tireuse.
+        # Ajouté ici seulement, pas dans ProductAdminCustomForm.
+        # / "tag" added: tags become the chips on the tap screen. Only here.
+        fields = ProductAdminCustomForm.Meta.fields + ("tag",)
 
     # Categorie forcee a FUT — cachee dans le formulaire
     # / Category forced to FUT — hidden in the form
@@ -1926,7 +2040,9 @@ class FutProductForm(ProductAdminCustomForm):
         required=False,
         label=_("POS background color"),
         help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
-        widget=UnfoldAdminColorInputWidget(),
+        # Pastilles de couleurs pour l'accent du kiosk (boutons radio)
+        # / Color swatches for the kiosk accent (radio buttons)
+        widget=CouleurAccentTireuseWidget(),
     )
 
     # Icone avec selecteur visuel Material Symbols
@@ -1944,6 +2060,43 @@ class FutProductForm(ProductAdminCustomForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Libellés adaptés à l'écran de la tireuse.
+        # On change seulement le formulaire, pas le verbose_name du modèle :
+        # un verbose_name créerait une migration appliquée sur chaque tenant.
+        # / Labels matching the tap screen. Form only, not the model's
+        # verbose_name (that would create a migration on every tenant).
+        libelles_ecran_tireuse = {
+            "name": (
+                _("Nom de la bière"),
+                _("Grand titre de l'écran de la tireuse."),
+            ),
+            "short_description": (
+                _("Brasserie"),
+                _("Exemple : « Brasserie de la Loire (42) ». Affiché sous l'étiquette."),
+            ),
+            "long_description": (
+                _("Description de la bière"),
+                _("Texte affiché sur l'écran de la tireuse, quand personne ne se sert."),
+            ),
+            "tag": (
+                _("Caractéristiques (style, degré, IBU…)"),
+                _("Une pastille par tag, triées par ordre alphabétique. La première est mise en couleur. "
+                  "Exemple : « 4,4° », « Blanche », « IBU 25 »."),
+            ),
+            "img": (
+                _("Étiquette de la bière"),
+                _("Image affichée sur l'écran de la tireuse et en caisse."),
+            ),
+            "couleur_fond_pos": (
+                _("Couleur principale lié au fût"),
+                _("Couleur principale sur l'écran kiosk de la tireuse."),
+            ),
+        }
+        for nom_du_champ, (libelle, aide) in libelles_ecran_tireuse.items():
+            if nom_du_champ in self.fields:
+                self.fields[nom_du_champ].label = libelle
+                self.fields[nom_du_champ].help_text = aide
 
         instance = kwargs.get("instance")
 
@@ -1964,6 +2117,22 @@ class FutProductForm(ProductAdminCustomForm):
         No category validation for keg products."""
         return self.cleaned_data.get("categorie_article", Product.FUT)
 
+    def clean_couleur_fond_pos(self):
+        """
+        La couleur d'accent est écrite dans le CSS du kiosk : on n'accepte
+        qu'un code hexadécimal #rrggbb (ou vide = cyan par défaut).
+        / The accent color is written into the kiosk CSS: only #rrggbb
+        (or empty = default cyan) is accepted.
+        """
+        couleur = (self.cleaned_data.get("couleur_fond_pos") or "").strip().lower()
+        if not couleur:
+            return couleur
+        if not re.fullmatch(r"#[0-9a-f]{6}", couleur):
+            raise forms.ValidationError(
+                _("Couleur invalide : utilisez le format #rrggbb.")
+            )
+        return couleur
+
     def clean(self):
         """Applique la palette selectionnee sur les champs couleur, puis valide.
         Applies the selected palette to the color fields, then validates."""
@@ -1983,27 +2152,42 @@ class FutProductForm(ProductAdminCustomForm):
         return cleaned
 
 
-class FutPriceInline(BasePriceInline):
-    """Inline tarifs pour les produits fut.
-    Ajoute contenance (volume par vente) et poids_mesure (vente au poids/volume).
-    Champs conditionnels : contenance cache si poids_mesure coche.
-    / Price inline for keg products.
-    Adds contenance (volume per sale) and poids_mesure (weight/volume sales).
-    Conditional fields: contenance hidden if poids_mesure checked.
+class FutPriceInlineForm(BasePriceInlineForm):
+    """Formulaire d'un tarif de fût : le prix saisi est un prix au litre.
+    / Keg price form: the price entered is a price per liter.
     LOCALISATION : Administration/admin/products.py"""
 
-    fields = ("name", "prix", "poids_mesure", "contenance", ("publish", "order"))
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Un fût est toujours vendu au volume : le prix est donc au litre.
+        # / A keg is always sold by volume: the price is per liter.
+        if "prix" in self.fields:
+            self.fields["prix"].label = _("Prix au litre")
+            self.fields["prix"].help_text = _(
+                "Le client paie le volume réellement servi. "
+                "Exemple : 15 € le litre = 3,75 € les 25 cl."
+            )
 
-    # Champs conditionnels : contenance cache si poids_mesure coche
-    # (la quantite est saisie a chaque vente, pas fixe).
-    # / Conditional fields: contenance hidden if poids_mesure checked
-    # (quantity is entered at each sale, not fixed).
-    inline_conditional_fields = {
-        "contenance": "poids_mesure == false",
-    }
 
-    class Media:
-        js = ("admin/js/inline_conditional_fields.js",)
+class FutPriceInline(BasePriceInline):
+    """Inline tarifs pour les produits fut.
+    Un fût est toujours vendu au volume : « vente au poids/volume »
+    (poids_mesure) n'est pas affiché, il est forcé à True par
+    FutProductAdmin.save_related. La contenance ne sert donc pas non plus.
+    / Price inline for keg products. poids_mesure is not shown: it is
+    forced to True by FutProductAdmin.save_related. No contenance either.
+    LOCALISATION : Administration/admin/products.py"""
+
+    form = FutPriceInlineForm
+    fields = ("name", "prix", ("publish", "order"))
+
+
+@display(description=_("Brasserie"))
+def fut_brasserie(obj):
+    """Colonne « Brasserie » de la liste des fûts (champ short_description).
+    Définie au niveau module : Unfold intercepte les méthodes du ModelAdmin.
+    / "Brewery" column of the keg list. Module level: Unfold wraps ModelAdmin methods."""
+    return obj.short_description or "—"
 
 
 @admin.register(FutProduct, site=staff_admin_site)
@@ -2016,7 +2200,15 @@ class FutProductAdmin(ProductAdmin):
     warn_unsaved_form = True
     form = FutProductForm
     inlines = [FutPriceInline]
+    # Recherche des tags (TagAdmin a search_fields = ["name"])
+    # / Tag search (TagAdmin has search_fields = ["name"])
+    autocomplete_fields = ["tag"]
     change_form_after_template = "admin/product/inline_conditional_fields.html"
+
+    class Media:
+        # Champs conditionnels de la section Stock (formulaire principal)
+        # / Stock section conditional fields (main form)
+        js = ("admin/js/inline_conditional_fields.js",)
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         # Collecte les regles conditionnelles de chaque inline qui en declare
@@ -2028,10 +2220,13 @@ class FutProductAdmin(ProductAdmin):
             if regles_inline:
                 prefixe = inline_class.model._meta.model_name + "s"
                 regles_conditionnelles[prefixe] = regles_inline
-        if regles_conditionnelles:
-            extra_context["inline_conditional_rules"] = json.dumps(
-                regles_conditionnelles
-            )
+        # Section Stock : champs cachés tant que « Suivre le stock » n'est pas coché
+        # (formulaire principal, pas un inline)
+        # / Stock section: fields hidden until "Track stock" is checked (main form)
+        regles_conditionnelles[CLE_REGLES_FORMULAIRE_PRINCIPAL] = (
+            REGLES_CONDITIONNELLES_SECTION_STOCK
+        )
+        extra_context["inline_conditional_rules"] = json.dumps(regles_conditionnelles)
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def save_related(self, request, form, formsets, change):
@@ -2043,6 +2238,18 @@ class FutProductAdmin(ProductAdmin):
         If Stock exists but uses UN (pieces), warn."""
         super().save_related(request, form, formsets, change)
         produit = form.instance
+
+        # Un fût est TOUJOURS vendu au volume : on force « vente au
+        # poids/volume » sur tous ses tarifs, y compris les anciens.
+        # (Django ne sauvegarde que les lignes modifiées d'un inline :
+        # on ne peut pas compter sur le formulaire pour les anciens tarifs.)
+        # TireuseBec.prix_litre ne lit que les tarifs poids_mesure=True.
+        # / A keg is ALWAYS sold by volume: force poids_mesure on all its
+        # prices, old ones included. TireuseBec.prix_litre only reads those.
+        produit.prices.filter(poids_mesure=False).update(
+            poids_mesure=True,
+            contenance=None,
+        )
 
         # Verifier si un tarif poids_mesure existe pour ce produit
         # / Check if a weight-based price exists for this product
@@ -2087,25 +2294,19 @@ class FutProductAdmin(ProductAdmin):
 
     fieldsets = (
         (
-            _("General"),
+            # Tout ce qui s'affiche sur l'écran du Pi posé sur la tireuse
+            # (controlvanne/templates/controlvanne/partial/etapes/veille.html)
+            # / Everything shown on the tap's Pi screen
+            _("Écran de la tireuse"),
             {
                 "fields": (
                     "name",
                     "categorie_article",
+                    "tag",
                     "short_description",
                     "long_description",
-                ),
-            },
-        ),
-        (
-            _("POS display"),
-            {
-                "fields": (
-                    "palette_pos",
-                    "couleur_texte_pos",
-                    "couleur_fond_pos",
-                    "icon_pos",
                     "img",
+                    "couleur_fond_pos",
                 ),
             },
         ),
@@ -2122,29 +2323,41 @@ class FutProductAdmin(ProductAdmin):
 
     list_display = (
         "name",
-        "short_description",
+        fut_brasserie,
+        display_stock_fut,
         "publish",
     )
 
-    list_filter = ["publish"]
+    list_filter = ["publish", EtatStockFilter]
     search_fields = ["name"]
 
-    def get_inlines(self, request, obj):
-        # En mode add (pas d'obj) : StockInline pour creer le stock initial
-        # En mode change : pas de StockInline (le stock se gere via admin/inventaire/stock/)
-        # / In add mode: StockInline for initial stock creation
-        # In change mode: no StockInline (stock managed via admin/inventaire/stock/)
-        if obj is None:
-            from Administration.admin.inventaire import StockInline
+    def get_fieldsets(self, request, obj=None):
+        # Ajoute la section Stock à la fin (réglages + opérations)
+        # / Appends the Stock section (settings + operations)
+        return self.fieldsets + (fieldset_section_stock(obj),)
 
-            return [StockInline, FutPriceInline]
-        return [FutPriceInline]
+    def get_readonly_fields(self, request, obj=None):
+        # Le panneau d'opérations n'existe que si le fût a déjà un stock
+        # / The operations panel only exists when the keg already has a stock
+        champs_lecture_seule = list(super().get_readonly_fields(request, obj))
+        if stock_du_produit_ou_none(obj) is not None:
+            champs_lecture_seule.append(panneau_operations_stock)
+        return champs_lecture_seule
+
+    def save_model(self, request, obj, form, change):
+        # 1. Enregistre le fût  2. Applique la section Stock
+        # / 1. Save the keg  2. Apply the Stock section
+        super().save_model(request, obj, form, change)
+        enregistrer_section_stock(request, obj, form.cleaned_data)
 
     def get_queryset(self, request):
-        # Uniquement les produits de type FUT
-        # / Only keg products
+        # Uniquement les produits de type FUT.
+        # select_related : la colonne Stock ne fait pas une requête par ligne.
+        # / Only keg products. select_related avoids N+1.
         qs = super().get_queryset(request)
-        return qs.filter(categorie_article=Product.FUT)
+        return qs.filter(categorie_article=Product.FUT).select_related(
+            "stock_inventaire"
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -26,11 +26,13 @@ Rebranchings:
 """
 
 import logging
+import time
 
 from django.conf import settings
 from django.db import connection
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
 # Levee par Celery quand le broker (Redis) est injoignable.
 # / Raised by Celery when the broker (Redis) is unreachable.
 from kombu.exceptions import OperationalError
@@ -41,11 +43,13 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 
 from AuthBillet.models import TibilletUser
-from fedow_connect.fedow_api import FedowAPI
-from kiosk.models import PaymentsIntent
+from BaseBillet.models import Configuration
+from fedow_connect.fedow_api import CarteInconnueDeFedow
+from kiosk.carte import lire_la_carte_pour_la_borne
+from kiosk.models import PaymentsIntent, obtenir_reglages_de_la_borne
 from laboutik.models import Terminal
 from kiosk.tasks import poll_payment_intent_status
-from kiosk.validators import RefillWisePoseValidator
+from kiosk.validators import RecapitulatifSerializer, RefillWisePoseValidator
 from QrcodeCashless.models import CarteCashless
 
 logger = logging.getLogger(__name__)
@@ -114,101 +118,275 @@ def utilisateur_peut_acceder_au_paiement(payment_intent_db, user):
     return user.is_tenant_admin(connection.tenant)
 
 
+
+# Cle de session posee quand une carte primaire a ouvert la configuration.
+# On y range l'HEURE d'ouverture, pas un simple True : la configuration se
+# referme seule apres DUREE_OUVERTURE_CONFIGURATION_SECONDES.
+# / Session key set when a primary card unlocks the configuration. It stores
+# the opening TIME, so the configuration closes by itself.
+CLE_SESSION_ADMIN_BORNE = "kiosk_admin"
+DUREE_OUVERTURE_CONFIGURATION_SECONDES = 10 * 60
+
+# Sans geste pendant ce delai, une borne qui affiche une carte revient a
+# l'accueil (main.js). Sinon la personne suivante rechargerait la carte de la
+# precedente. / Idle delay before going back home while a card is shown.
+DELAI_INACTIVITE_SECONDES = 60
+
+
+def contexte_du_lieu(request):
+    """
+    Ce que toutes les pages completes de la borne affichent : l'identite du lieu,
+    le simulateur NFC (DEMO) et le type d'appareil.
+    / What every full kiosk page shows: place identity, NFC simulator (DEMO),
+    device type.
+
+    LOCALISATION : kiosk/views.py
+
+    Le kiosque porte les couleurs du lieu, pas celles de Tibillet : son logo
+    (Configuration.logo), sinon l'initiale de son nom.
+    / The kiosk wears the place's identity: its logo, else its initial.
+    """
+    configuration_du_lieu = Configuration.get_solo()
+    nom_du_lieu = configuration_du_lieu.organisation or ""
+
+    adresse_du_logo = None
+    if configuration_du_lieu.logo:
+        try:
+            adresse_du_logo = configuration_du_lieu.logo.med.url
+        except Exception:
+            # Variation absente (vieux fichier) : on prend l'original.
+            # / Missing variation (old file): use the original.
+            adresse_du_logo = configuration_du_lieu.logo.url
+
+    initiale_du_lieu = nom_du_lieu.strip()[:1].upper() if nom_du_lieu.strip() else "T"
+
+    # type_app arrive une seule fois via le bridge (/kiosk/?type_app=cordova).
+    # Les retours accueil perdent le query param : on le memorise en session pour
+    # reinjecter cordova.js. / type_app arrives once via the bridge redirect:
+    # keep it in session so cordova.js is still injected.
+    type_app = request.GET.get("type_app")
+    if type_app:
+        request.session["type_app"] = type_app
+    else:
+        type_app = request.session.get("type_app", "unknown")
+
+    return {
+        "nom_du_lieu": nom_du_lieu,
+        "adresse_du_logo": adresse_du_logo,
+        "initiale_du_lieu": initiale_du_lieu,
+        "terminal": getattr(request.user, "terminal", None),
+        "delai_inactivite_secondes": DELAI_INACTIVITE_SECONDES,
+        "test": settings.TEST,
+        "demo": settings.DEMO,
+        # Toutes les cartes du simulateur NFC (base.html/nfc.js les attendent toutes).
+        # / All the NFC simulator cards (base.html/nfc.js expect them all).
+        "demoTagIdCm": settings.DEMO_TAGID_CM,
+        "demoTagIdClient1": settings.DEMO_TAGID_CLIENT1,
+        "demoTagIdClient2": settings.DEMO_TAGID_CLIENT2,
+        "demoTagIdClient3": settings.DEMO_TAGID_CLIENT3,
+        # base.html s'en sert pour injecter cordova.js (plugin NFC de la borne
+        # Android). / base.html uses it to inject cordova.js.
+        "type_app": type_app,
+    }
+
+
+def premier_message_d_erreur(erreurs_du_serializer):
+    """
+    Renvoie le premier message d'erreur d'un serializer DRF, en texte.
+    / Returns the first error message of a DRF serializer, as text.
+
+    LOCALISATION : kiosk/views.py
+    """
+    premiere_liste_erreurs = next(iter(erreurs_du_serializer.values()))
+    return premiere_liste_erreurs[0]
+
+
+def la_recharge_est_active(request):
+    """
+    La borne propose-t-elle la recharge en ce moment ?
+    / Does the kiosk currently offer the refill?
+
+    LOCALISATION : kiosk/views.py
+
+    Verifie cote SERVEUR, au debut de chaque etape du parcours : un ecran
+    reste ouvert, ou un POST rejoue, ne doit pas permettre de payer sur une
+    borne mise en pause.
+    Sans borne appairee (admin en DEMO), la recharge est consideree active.
+    / Checked SERVER-side at each step: a stale screen or replayed POST must
+    not allow paying on a paused kiosk. No paired kiosk: refill counts as on.
+    """
+    terminal = getattr(request.user, "terminal", None)
+    reglages = obtenir_reglages_de_la_borne(terminal)
+    if reglages is None:
+        return True
+    return reglages.recharge_active
+
+
+def la_configuration_est_ouverte(request):
+    """
+    Une carte primaire a-t-elle ouvert la configuration, il y a moins de
+    DUREE_OUVERTURE_CONFIGURATION_SECONDES ?
+    / Has a primary card unlocked the configuration recently enough?
+
+    LOCALISATION : kiosk/views.py
+    """
+    heure_d_ouverture = request.session.get(CLE_SESSION_ADMIN_BORNE)
+
+    # Seul un horodatage est accepte (les anciennes sessions portaient True).
+    # / Only a timestamp is accepted (old sessions stored True).
+    heure_d_ouverture_valide = isinstance(heure_d_ouverture, (int, float)) and not isinstance(
+        heure_d_ouverture, bool
+    )
+    if not heure_d_ouverture_valide:
+        return False
+
+    secondes_ecoulees = time.time() - heure_d_ouverture
+    if secondes_ecoulees > DUREE_OUVERTURE_CONFIGURATION_SECONDES:
+        request.session.pop(CLE_SESSION_ADMIN_BORNE, None)
+        return False
+    return True
+
+
+def contexte_des_modules(terminal):
+    """
+    L'etat des modules de la borne : une seule source de verite pour la page
+    de configuration ET la grille rendue apres chaque interrupteur.
+    / Module state: single source of truth for the page and the grid.
+
+    LOCALISATION : kiosk/views.py
+
+    Le nombre de services actifs et la phrase sous « Demarrer » sont calcules
+    ICI, pas en JavaScript. / Active count computed HERE, not in JavaScript.
+    """
+    reglages = obtenir_reglages_de_la_borne(terminal)
+    # Sans borne appairee (admin en DEMO), la recharge est consideree active,
+    # comme sur l'ecran public (list). / No paired kiosk: refill counts as on.
+    recharge_active = reglages.recharge_active if reglages else True
+
+    nombre_de_services_actifs = 0
+    if recharge_active:
+        nombre_de_services_actifs += 1
+
+    return {
+        "terminal": terminal,
+        "reglages": reglages,
+        "recharge_active": recharge_active,
+        "nombre_de_services_actifs": nombre_de_services_actifs,
+    }
+
+
+def rendre_les_modules(request, terminal, message_erreur=None):
+    """
+    Rend la grille des modules de l'ecran de configuration.
+    / Renders the module grid of the configuration screen.
+
+    LOCALISATION : kiosk/views.py
+    """
+    context = contexte_des_modules(terminal)
+    context["error_message"] = message_erreur
+    return render(request, "kiosk/partial/modules_borne.html", context)
+
+
 class KioskViewSet(viewsets.ViewSet):
     """
-    Parcours de recharge en libre-service (borne kiosque + TPE Stripe).
-    / Self-service refill flow (kiosk terminal + Stripe card reader).
+    Parcours de recharge en libre-service (borne kiosque + TPE Stripe),
+    et ecran de configuration de la borne (debloque par une carte primaire).
+    / Self-service refill flow (kiosk terminal + Stripe card reader), and the
+    kiosk configuration screen (unlocked by a primary card).
+
+    ECRANS DU PARCOURS (tous swappes dans #tb-kiosque) :
+    1. Posez votre carte          -> partial/etape_poser_carte.html (list)
+    2. Solde + 3. choix du montant -> partial/etape_solde_et_montant.html (check_request_card)
+    4. Recapitulatif              -> partial/etape_recapitulatif.html (recapitulatif)
+    5. Paiement au TPE            -> waiting_credit_card_terminal.html (refill_with_wisepos)
+    6/9. Succes puis merci, 7. refus -> success.html / cancel.html (websocket)
     """
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated, IsKioskTerminal]
 
     def list(self, request):
         """
-        GET /kiosk/ — page d'accueil : choix du montant.
-        / GET /kiosk/ — home page: amount selection.
-        """
-        # type_app arrive une seule fois via le bridge (/kiosk/?type_app=cordova).
-        # Les retours accueil (success/cancel -> window.location = "/kiosk/") perdent
-        # le query param : on le memorise en session pour reinjecter cordova.js.
-        # / type_app arrives once via the bridge redirect. Home returns
-        # (success/cancel -> window.location = "/kiosk/") lose the query param:
-        # keep it in session so cordova.js is still injected.
-        type_app = request.GET.get("type_app")
-        if type_app:
-            request.session["type_app"] = type_app
-        else:
-            type_app = request.session.get("type_app", "unknown")
+        GET /kiosk/ — ecran 1 : posez votre carte. Si la recharge est coupee,
+        la borne affiche « en pause ».
+        / GET /kiosk/ — screen 1: tap your card. If refill is off, "paused".
 
-        context = {
-            "test": settings.TEST,
-            "demo": settings.DEMO,
-            # Toutes les cartes du simulateur NFC (base.html/nfc.js les attendent toutes).
-            # / All the NFC simulator cards (base.html/nfc.js expect them all).
-            "demoTagIdCm": settings.DEMO_TAGID_CM,
-            "demoTagIdClient1": settings.DEMO_TAGID_CLIENT1,
-            "demoTagIdClient2": settings.DEMO_TAGID_CLIENT2,
-            "demoTagIdClient3": settings.DEMO_TAGID_CLIENT3,
-            # base.html s'en sert pour injecter cordova.js (plugin NFC de la borne
-            # Android). / base.html uses it to inject cordova.js (Android NFC plugin).
-            "type_app": type_app,
-        }
-        return render(request, "kiosk/select_amount.html", context)
+        LOCALISATION : kiosk/views.py
+        """
+        context = contexte_du_lieu(request)
+        context["recharge_active"] = la_recharge_est_active(request)
+
+        return render(request, "kiosk/recharge.html", context)
 
     @action(detail=False, methods=['POST'])
     def check_request_card(self, request, *args, **kwargs):
         """
-        POST /kiosk/check_request_card/ — verifie qu'une carte NFC existe
-        (cote Fedow puis en base locale) avant de proposer la recharge.
-        Reponse HTML (partial) : HTMX ne swap pas les 4xx/5xx par defaut,
-        donc les erreurs metier sont rendues en 200 avec un message.
-        / POST /kiosk/check_request_card/ — checks an NFC card exists (on
-        Fedow, then locally) before offering the refill. HTML (partial)
-        response: HTMX does not swap 4xx/5xx by default, so business errors
-        are rendered as 200 with a message.
+        POST /kiosk/check_request_card/ — lit la carte posee (Fedow distant) et
+        affiche son solde, puis le choix du montant.
+        Reponse HTML (partial) en 200 meme en erreur : HTMX ne swap pas les 4xx.
+        / POST /kiosk/check_request_card/ — reads the tapped card (remote Fedow)
+        and shows its balance, then the amount choice. Always 200 HTML.
+
+        LOCALISATION : kiosk/views.py
         """
-        # L'accessor inverse OneToOne leve RelatedObjectDoesNotExist (sous-classe
-        # d'AttributeError) si aucun Terminal n'est appaire : getattr -> None.
-        # / The reverse OneToOne accessor raises RelatedObjectDoesNotExist
-        # (an AttributeError subclass) when no Terminal is paired: getattr -> None.
-        terminal = getattr(request.user, "terminal", None)
+        # Borne en pause : on n'avance pas dans le parcours (garde serveur).
+        # / Paused kiosk: the flow does not move on (server guard).
+        if not la_recharge_est_active(request):
+            return render(request, "kiosk/partial/borne_en_pause.html")
 
         # str() : request.data peut venir d'un POST JSON (valeur non-string).
         # / str(): request.data can come from a JSON POST (non-string value).
         tag_id = str(request.data.get('tag_id') or '').strip().upper()
         logger.info(f"--> tag_id = {tag_id}")
+
         if not tag_id:
-            context = {
-                "terminal": terminal,
-                "user": request.user,
-                "error_message": _("Aucune carte reçue. Merci de scanner à nouveau."),
-            }
-            return render(request, "kiosk/select_amount_content.html", context)
+            context = {"error_message": _("Aucune carte reçue. Merci de scanner à nouveau.")}
+            return render(request, "kiosk/partial/etape_poser_carte.html", context)
 
         try:
-            FedowAPI().NFCcard.retrieve(tag_id)
-            carte = CarteCashless.objects.get(tag_id=tag_id)
-        except CarteCashless.DoesNotExist:
-            context = {
-                "terminal": terminal,
-                "user": request.user,
-                "error_message": _("Carte inconnue : %(tag_id)s") % {"tag_id": tag_id},
-            }
-            return render(request, "kiosk/select_amount_content.html", context)
+            carte_lue = lire_la_carte_pour_la_borne(tag_id)
+        except (CarteCashless.DoesNotExist, CarteInconnueDeFedow):
+            context = {"error_message": _("Carte inconnue : %(tag_id)s") % {"tag_id": tag_id}}
+            return render(request, "kiosk/partial/etape_poser_carte.html", context)
         except Exception as e:
             logger.error(f"check_request_card : erreur Fedow pour {tag_id} : {e}")
-            context = {
-                "terminal": terminal,
-                "user": request.user,
-                "error_message": f"{e}",
-            }
-            return render(request, "kiosk/select_amount_content.html", context)
+            context = {"error_message": _("La carte n'a pas pu être lue. Merci de réessayer.")}
+            return render(request, "kiosk/partial/etape_poser_carte.html", context)
+
+        context = {"carte": carte_lue}
+        return render(request, "kiosk/partial/etape_solde_et_montant.html", context)
+
+    @action(detail=False, methods=['POST'])
+    def recapitulatif(self, request, *args, **kwargs):
+        """
+        POST /kiosk/recapitulatif/ — ecran 4 : ce que la personne ajoute, et son
+        nouveau solde. Le calcul est fait ICI, pas dans le navigateur.
+        / POST /kiosk/recapitulatif/ — screen 4: added amount and new balance,
+        computed HERE, not in the browser.
+
+        LOCALISATION : kiosk/views.py
+        """
+        if not la_recharge_est_active(request):
+            return render(request, "kiosk/partial/borne_en_pause.html")
+
+        validateur = RecapitulatifSerializer(data=request.data)
+        if not validateur.is_valid():
+            logger.error(f"recapitulatif : {validateur.errors}")
+            context = {"error_message": premier_message_d_erreur(validateur.errors)}
+            return render(request, "kiosk/partial/etape_erreur.html", context)
+
+        carte_lue = validateur.carte_lue
+        montant_en_centimes = validateur.validated_data["totalAmount"]
 
         context = {
-            "card": carte,
-            "terminal": terminal,
-            "user": request.user,
+            "carte": carte_lue,
+            "montant_centimes": montant_en_centimes,
+            # Renvoye tel quel au POST de paiement (valeur avec un point).
+            # / Sent back as-is to the payment POST (dot decimal).
+            "montant_pour_formulaire": f"{montant_en_centimes // 100}.{montant_en_centimes % 100:02d}",
+            "nouveau_solde_centimes": carte_lue["solde_centimes"] + montant_en_centimes,
         }
-        return render(request, "kiosk/select_amount_content.html", context)
+        return render(request, "kiosk/partial/etape_recapitulatif.html", context)
+
 
     @action(detail=False, methods=['POST'])
     def refill_with_wisepos(self, request, *args, **kwargs):
@@ -217,7 +395,14 @@ class KioskViewSet(viewsets.ViewSet):
         et le suivi Celery/WebSocket du paiement.
         / POST /kiosk/refill_with_wisepos/ — starts the refill on the Stripe
         terminal and the Celery/WebSocket payment tracking.
+
+        LOCALISATION : kiosk/views.py
         """
+        # Garde serveur : aussi valable pour le bouton « Reessayer » de l'ecran
+        # de refus, qui rejoue ce POST. / Server guard, also for the retry button.
+        if not la_recharge_est_active(request):
+            return render(request, "kiosk/partial/borne_en_pause.html")
+
         user = request.user
 
         # Garde : un TermUser Kiosque sans Terminal appaire ne doit pas faire un 500.
@@ -253,7 +438,7 @@ class KioskViewSet(viewsets.ViewSet):
                 "user": user,
                 "error_message": _("Aucun terminal de paiement n'est appairé à cette borne."),
             }
-            return render(request, "kiosk/select_amount_content.html", context)
+            return render(request, "kiosk/partial/etape_erreur.html", context)
 
         # La borne existe, mais aucun lecteur n'y est branche : on le dit clairement plutot
         # que de laisser l'envoi echouer avec une erreur Stripe cryptique.
@@ -267,7 +452,7 @@ class KioskViewSet(viewsets.ViewSet):
                     "Aucun lecteur de carte bancaire n'est branché sur cette borne."
                 ),
             }
-            return render(request, "kiosk/select_amount_content.html", context)
+            return render(request, "kiosk/partial/etape_erreur.html", context)
 
         logger.info(f"request.data = {request.data}")
         validator = RefillWisePoseValidator(data=request.data)
@@ -277,23 +462,25 @@ class KioskViewSet(viewsets.ViewSet):
             # dans le partial, sinon la borne ne montre rien a l'utilisateur.
             # / HTMX does not swap 4xx by default: render the error as HTML (200)
             # in the partial, otherwise the kiosk shows nothing to the user.
-            premiere_liste_erreurs = next(iter(validator.errors.values()))
             context = {
                 "user": user,
                 "terminal": terminal,
-                "error_message": premiere_liste_erreurs[0],
+                "error_message": premier_message_d_erreur(validator.errors),
             }
-            return render(request, "kiosk/select_amount_content.html", context)
+            return render(request, "kiosk/partial/etape_erreur.html", context)
 
         validated_data = validator.validated_data
         amount = validated_data['totalAmount']
         carte = validator.card
 
         # Creation de l'intention de paiement / Create the payment intent
+        # Le solde avant recharge sert seulement a l'ecran de succes (rendu hors
+        # requete, par le websocket). / Balance before refill: success screen only.
         payment_intent = PaymentsIntent.objects.create(
             terminal=terminal,
             amount=amount,
             card=carte,
+            solde_avant_centimes=validator.carte_lue["solde_centimes"],
         )
 
         # Envoi de l'intention de paiement au terminal / Send the payment intent to the terminal
@@ -301,16 +488,16 @@ class KioskViewSet(viewsets.ViewSet):
             payment_intent = payment_intent.send_to_terminal(terminal)
         except Exception as e:
             logger.error(f"refill_with_wisepos : send_to_terminal a echoue : {e}")
-            # Partial (pas la page complete) : la reponse est swappee par HTMX
-            # dans #tb-kiosque (innerHTML). / Partial (not the full page): the
-            # response is swapped by HTMX into #tb-kiosque (innerHTML).
+            # Le texte brut de l'erreur (Stripe, en anglais, avec des identifiants)
+            # reste dans le journal. Le public lit un message simple et traduit.
+            # / The raw error stays in the log; the public reads a plain message.
             context = {
                 "card": carte,
                 "terminal": terminal,
                 "user": user,
-                "error_message": f"{e}",
+                "error_message": _("Le terminal de paiement n'a pas répondu. Merci de réessayer ou de demander de l'aide au bar."),
             }
-            return render(request, "kiosk/select_amount_content.html", context)
+            return render(request, "kiosk/partial/etape_erreur.html", context)
 
         # Lancement de la tache Celery de suivi du statut.
         #
@@ -350,13 +537,13 @@ class KioskViewSet(viewsets.ViewSet):
                 "terminal": terminal,
                 "error_message": _("Le suivi du paiement n'a pas pu démarrer. Merci de contacter le personnel."),
             }
-            return render(request, "kiosk/select_amount_content.html", context)
+            return render(request, "kiosk/partial/etape_erreur.html", context)
 
         # Renvoie la partie websocket pour le suivi de l'intention de paiement
         # / Return the websocket part to track the payment intent
         return render(request, 'kiosk/waiting_credit_card_terminal.html', context={
             'user': user,
-            'amount': (amount / 100),
+            'montant_centimes': amount,
             'terminal': terminal,
             'payment_intent': payment_intent,
         })
@@ -366,6 +553,8 @@ class KioskViewSet(viewsets.ViewSet):
         """
         GET /kiosk/{pk}/status/ — filet de secours du websocket.
         / GET /kiosk/{pk}/status/ — websocket safety net.
+
+        LOCALISATION : kiosk/views.py
 
         Le template d'attente sonde cette route toutes les 10 secondes. Elle ne
         renvoie quelque chose QUE si le paiement est termine : l'ecran final
@@ -411,10 +600,13 @@ class KioskViewSet(viewsets.ViewSet):
                 # / Stripe unreachable: don't block, the next poll retries.
                 logger.error(f"payment_status : get_from_stripe a echoue pour {pk} : {erreur_stripe}")
 
+        # Meme contexte que l'evenement websocket (kiosk/tasks.py).
+        # / Same context as the websocket event.
+        context = {"event": payment_intent_db.contexte_ecran_final()}
         if payment_intent_db.status == PaymentsIntent.SUCCEEDED:
-            return render(request, "kiosk/success.html")
+            return render(request, "kiosk/success.html", context)
         if payment_intent_db.status == PaymentsIntent.CANCELED:
-            return render(request, "kiosk/cancel.html")
+            return render(request, "kiosk/cancel.html", context)
 
         # Paiement toujours en cours : 204, HTMX ne swappe rien.
         # / Still in progress: 204, HTMX swaps nothing.
@@ -427,6 +619,8 @@ class KioskViewSet(viewsets.ViewSet):
         paiement Stripe correspondant.
         / GET /kiosk/{pk}/cancel/ — cancels the ongoing reader action and the
         matching Stripe payment.
+
+        LOCALISATION : kiosk/views.py
         """
         payment_intent_db = get_object_or_404(PaymentsIntent, pk=pk)
 
@@ -451,4 +645,120 @@ class KioskViewSet(viewsets.ViewSet):
             return HttpResponse(status=205)
         except Exception as e:
             logger.error(f"cancel : echec inattendu pour {pk} : {e}")
-            return HttpResponseClientRedirect('/kiosk/')
+            return HttpResponseClientRedirect(reverse("kiosk-list"))
+
+    # ------------------------------------------------------------------------
+    # Configuration de la borne (equipe du lieu, carte primaire)
+    # / Kiosk configuration (venue staff, primary card)
+    # ------------------------------------------------------------------------
+
+    @action(detail=False, methods=['POST'])
+    def acces_admin(self, request, *args, **kwargs):
+        """
+        POST /kiosk/acces_admin/ — une carte a ete posee dans la modale admin.
+        / POST /kiosk/acces_admin/ — a card was tapped in the admin modal.
+
+        FLUX :
+        1. main.js lit la carte (lecteur NFC) et poste son tag_id ici.
+        2. Si c'est une carte primaire (laboutik.CartePrimaire), on ouvre la
+           configuration pour cette session et on redirige (HX-Redirect).
+        3. Sinon on renvoie l'etat « erreur » de la modale.
+
+        LOCALISATION : kiosk/views.py
+        """
+        tag_id = str(request.data.get('tag_id') or '').strip().upper()
+
+        # La carte primaire est celle des operateurs de caisse LaBoutik.
+        # related_name 'carte_primaire' : cf. laboutik/models.py, CartePrimaire.
+        # / Primary card = the LaBoutik operators' card.
+        c_est_une_carte_primaire = False
+        if tag_id:
+            c_est_une_carte_primaire = CarteCashless.objects.filter(
+                tag_id=tag_id,
+                carte_primaire__isnull=False,
+            ).exists()
+
+        if not c_est_une_carte_primaire:
+            logger.info(f"acces_admin : refus pour la carte {tag_id}")
+            return render(request, "kiosk/partial/modale_admin_etat.html", {"etat": "erreur"})
+
+        # On range l'heure d'ouverture : la configuration expire seule.
+        # / Store the opening time: the configuration expires by itself.
+        request.session[CLE_SESSION_ADMIN_BORNE] = time.time()
+        return HttpResponseClientRedirect(reverse("kiosk-configuration"))
+
+    @action(detail=False, methods=['GET'])
+    def configuration(self, request, *args, **kwargs):
+        """
+        GET /kiosk/configuration/ — choix des services proposes par la borne.
+        Refusee tant qu'une carte primaire n'a pas ete posee (acces_admin).
+        / GET /kiosk/configuration/ — which services the kiosk offers.
+        Refused until a primary card has been tapped.
+
+        LOCALISATION : kiosk/views.py
+        """
+        if not la_configuration_est_ouverte(request):
+            return HttpResponseRedirect(reverse("kiosk-list"))
+
+        context = contexte_du_lieu(request)
+        # Meme calcul que la grille rendue apres chaque interrupteur.
+        # / Same computation as the grid rendered after each switch.
+        context.update(contexte_des_modules(context["terminal"]))
+        return render(request, "kiosk/configuration.html", context)
+
+    @action(detail=False, methods=['POST'])
+    def basculer_module(self, request, *args, **kwargs):
+        """
+        POST /kiosk/basculer_module/ — allume ou coupe la recharge.
+        Renvoie la grille des modules, recalculee cote serveur.
+        / POST /kiosk/basculer_module/ — turns the refill on or off.
+
+        LOCALISATION : kiosk/views.py
+
+        Le formulaire envoie l'etat VOULU (« activer » : true/false), pas un
+        « inverse ». Un double clic ou un POST rejoue ne change donc pas le
+        resultat. / The form sends the WANTED state, so a replay is harmless.
+        """
+        if not la_configuration_est_ouverte(request):
+            return HttpResponseClientRedirect(reverse("kiosk-list"))
+
+        terminal = getattr(request.user, "terminal", None)
+        reglages = obtenir_reglages_de_la_borne(terminal)
+        if reglages is None:
+            return rendre_les_modules(
+                request, terminal,
+                message_erreur=_("Aucune borne n'est appairée : les réglages ne peuvent pas être enregistrés."),
+            )
+
+        # Seul module existant aujourd'hui : la recharge.
+        # / Only module today: the refill.
+        module_demande = request.data.get("module")
+        etat_voulu = str(request.data.get("activer") or "").lower() == "true"
+        if module_demande == "recharge":
+            reglages.recharge_active = etat_voulu
+            reglages.save(update_fields=["recharge_active"])
+
+        return rendre_les_modules(request, terminal)
+
+    @action(detail=False, methods=['POST'])
+    def demarrer(self, request, *args, **kwargs):
+        """
+        POST /kiosk/demarrer/ — ferme la configuration et remet la borne au public.
+        / POST /kiosk/demarrer/ — closes the configuration, back to the public.
+
+        LOCALISATION : kiosk/views.py
+        """
+        if not la_configuration_est_ouverte(request):
+            return HttpResponseClientRedirect(reverse("kiosk-list"))
+
+        terminal = getattr(request.user, "terminal", None)
+        reglages = obtenir_reglages_de_la_borne(terminal)
+        aucun_service_actif = reglages is not None and not reglages.recharge_active
+        if aucun_service_actif:
+            return rendre_les_modules(
+                request, terminal,
+                message_erreur=_("Activez au moins un service avant de démarrer la borne."),
+            )
+
+        request.session.pop(CLE_SESSION_ADMIN_BORNE, None)
+        return HttpResponseClientRedirect(reverse("kiosk-list"))

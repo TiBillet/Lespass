@@ -40,7 +40,7 @@ Le module reutilise les modeles existants de Lespass :
 ```
 controlvanne/
   models.py           Modeles (voir tableau ci-dessus)
-  viewsets.py          TireuseViewSet (ping, authorize, event) + AuthKioskView/KioskTokenView + KioskBridgeThrottle
+  viewsets.py          TireuseViewSet (ping, authorize, event) + AuthKioskView + KioskBridgeThrottle
   permissions.py       HasTireuseAccess (cle API tireuse OU session admin)
   serializers.py       PingSerializer, AuthorizeSerializer, EventSerializer
   billing.py           Facturation : wallet check, Transaction, LigneArticle, Stock
@@ -53,18 +53,25 @@ controlvanne/
   ws_payloads.py       TypedDict du payload WebSocket
 
   templates/
-    base.html                       Base kiosk (Bootstrap local, nom tenant)
-    controlvanne/kiosk_list.html       Kiosk : toutes les tireuses (jauges, prix, WS)
+    base.html                       Base Bootstrap (page de calibration)
+    controlvanne/base_tireuse.html     Base des ecrans kiosk (sans Bootstrap)
+    controlvanne/kiosk_list.html       Kiosk : toutes les tireuses (vignettes, WS)
     controlvanne/kiosk_detail.html     Kiosk : une tireuse (+ simulateur si DEMO=1)
-    controlvanne/partial/kiosk_card.html  Carte tireuse (partagee list/detail)
+    controlvanne/partial/tireuse_ecran.html     Ecran d'une tireuse (conteneur des etapes)
+    controlvanne/partial/etapes/*.html          Etapes : veille, service, fin, refus, maintenance
+    controlvanne/partial/tireuse_vignette.html  Vignette d'une tireuse (liste)
+    controlvanne/partial/biere_pastilles.html   Pastilles de la biere (tags du fut)
+    controlvanne/partial/tireuse_pied.html      Mention legale + signature
     calibration/page.html           Calibration (herite admin Unfold)
     calibration/partial_*.html      Fragments HTMX calibration
     admin/date_range_filter.html    Filtre plage de dates admin
 
   static/controlvanne/
-    css/bootstrap.min.css           Bootstrap 5.3 (local, Pi hors-ligne)
+    css/bootstrap.min.css           Bootstrap 5.3 (local, page de calibration)
     js/bootstrap.bundle.min.js      Bootstrap 5.3 JS
-    js/panel_kiosk.js               JS du kiosk (WS + reconnexion auto)
+    css/tireuse.css                 Style des ecrans kiosk (maquette sans contact)
+    fonts/                          Luciole, Unbounded, Sonder Sans (locales, Pi hors-ligne)
+    js/ecran_tireuse.js             JS du kiosk (WS + reconnexion auto, pose data-etat)
     js/simu_pi.js                   Simulateur Pi (panneau debug DEMO=1)
 
   Pi/                               Code embarque Raspberry Pi (chantier separe)
@@ -263,19 +270,19 @@ Les ventes apparaissent dans les historiques admin et dans la cloture de caisse.
 
 ## Kiosk (ecran du Pi)
 
-L'ecran du Pi affiche le template `kiosk_detail.html` (une tireuse) ou `kiosk_list.html` (toutes) :
-- Jauge SVG du fut (niveau en %)
-- Grille de prix (25cl, 33cl, 50cl)
-- Etat vanne (ouverte/fermee)
-- Volume servi en temps reel
-- Solde de la carte
-- Popup "Bonne degustation" a la fin du service
+L'ecran du Pi affiche le template `kiosk_detail.html` (une tireuse) ou `kiosk_list.html` (toutes).
+L'ecran n'est pas tactile. Il enchaine des etapes (`partial/etapes/`) :
+- veille : fiche de la biere (nom, pastilles, description, etiquette, prix) + « Presentez votre carte »
+- service / tirage : prenom du client, solde, « soit N verres », mode d'emploi, verre qui se remplit
+- fin : bilan (volume, prix, solde restant), retour en veille apres 6 s
+- refus : message du serveur, affiche tant que la carte est posee
+- maintenance : tireuse hors service ou rincage
 
 Le kiosk se connecte via WebSocket (`ws/rfid/<uuid>/`) et recoit les mises a jour en push.
 
-Bootstrap 5.3 est charge depuis les statics locaux (le Pi peut etre hors-ligne).
-
-Le JS est dans `controlvanne/static/controlvanne/js/panel_kiosk.js`.
+Le JS (`controlvanne/static/controlvanne/js/ecran_tireuse.js`) pose seulement l'attribut
+`data-etat` et quelques textes ; c'est `tireuse.css` qui montre la bonne etape.
+Les polices sont locales (le Pi peut etre hors-ligne).
 
 ### Auth kiosk
 
@@ -737,13 +744,17 @@ Les cles sont tenant-isolees par `django-tenants` : une cle creee sur le tenant 
 
 Le kiosk (Chromium sur le Pi) recoit les mises a jour en temps reel via WebSocket, sans polling.
 
-**Cote serveur** : le signal `post_save` sur `TireuseBec` (dans `signals.py`) construit un payload JSON avec l'etat complet de la tireuse (nom, volume, prix, session en cours, solde) et le pousse vers le groupe WebSocket `rfid_state.<uuid>` via Django Channels (`channel_layer.group_send`).
+**Cote serveur** : tous les envois passent par une seule fonction, `pousser_aux_kiosks` (`controlvanne/groupes_ws.py`) :
+- `viewsets.py` (`_push_ws_kiosk`) : badge, versement, fin de service, refus ;
+- `signals.py` : etat de la tireuse apres `post_save` (niveau du fut, activation), et `kiosk_reload` quand le fut change.
 
-**Cote kiosk** : le JS (`panel_kiosk.js`) ouvre une connexion WebSocket sur `ws://<serveur>/ws/rfid/<uuid>/`. A chaque message recu, il met a jour l'interface : jauge SVG du fut, volume servi, solde de la carte, etat de la vanne, popup de fin de service.
+**Cote kiosk** : le JS (`ecran_tireuse.js`) ouvre une connexion WebSocket sur `wss://<serveur>/ws/rfid/<uuid>/` (ou `/ws/rfid/all/` pour la liste). A chaque message recu, il choisit l'etape a afficher (`data-etat`) et met a jour le volume servi, le solde et le verre.
 
-Le consumer `PanelConsumer` gere deux groupes :
-- `rfid_state.<uuid>` — un kiosk dedie a une tireuse specifique
-- `rfid_state.all` — le dashboard admin qui voit toutes les tireuses
+**Groupes nommes PAR LIEU** (`controlvanne/groupes_ws.py`) — Redis est partage par tous les lieux, un groupe sans le lieu fuiterait d'un lieu a l'autre :
+- `rfid_state.<uuid lieu>.<uuid tireuse>` — l'ecran du Pi d'une tireuse
+- `rfid_state.<uuid lieu>.all` — la liste des tireuses du lieu
+
+**Acces** (`controlvanne/acces.py`, `peut_voir_les_kiosks`) : meme regle pour la page et le WebSocket — session kiosk (`controlvanne_authenticated`, posee apres `AuthKioskView` / `?kiosk_token=`) ou admin du lieu. Sinon `PanelConsumer.connect()` refuse la connexion avant de l'accepter (handshake 403). Le slug doit etre `all` ou l'UUID d'une tireuse de ce lieu. Une session kiosk acceptee est re-enregistree a chaque connexion, pour prolonger sa duree de vie.
 
 ---
 

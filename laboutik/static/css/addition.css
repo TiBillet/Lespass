@@ -142,40 +142,60 @@
 	font-variant-numeric: tabular-nums;
 }
 
-/* Bouton VIDER — `.tk-reset` : discret a droite de l'en-tete, rouge une fois
-   arme (confirmation en deux temps geree par addition.js), efface quand le
-   panier est vide.
-   / EMPTY button — `.tk-reset`: quiet on the right of the header, red once
-   armed (two-step confirmation handled by addition.js), faded when the cart is
-   empty. */
+/* Bouton VIDER — dans la rangee d'actions, a gauche de CHECK CARTE.
+   Tuile en colonne de largeur fixe, comme CHECK CARTE : icone en haut,
+   libelle en dessous. La largeur ne bouge pas quand le libelle passe
+   de "Vider" a "Confirmer" (arme par addition.js:additionArmerVider()).
+   Ainsi VALIDER garde toujours la meme place, meme sur un panneau etroit.
+   Rouge une fois arme (confirmation en deux temps), efface quand le panier est vide.
+   / EMPTY button — fixed-width column tile in the actions row, so arming it
+   ("Confirmer") never widens the row nor squeezes VALIDER. */
 .addition-vider {
 	flex: none;
-	margin-left: auto;
+	width: 76px;
+	height: 62px;
 	display: flex;
+	flex-direction: column;
 	align-items: center;
-	gap: 8px;
-	min-height: 44px;
-	padding: 8px 14px;
-	border: none;
+	justify-content: center;
+	gap: 3px;
+	padding: 0 2px;
+	/* Bordure transparente des le depart : quand le panier se remplit,
+	   seule sa couleur change. La taille du bouton ne bouge pas.
+	   / Transparent border from the start: only its color changes, no 2px shift. */
+	border: 1px solid transparent;
 	border-radius: var(--r-ctrl);
 	background-color: transparent;
 	color: var(--text-faint);
 	font-family: var(--font-ui);
-	font-size: var(--fs-min);
+	font-size: 10.5px;
 	font-weight: 700;
+	letter-spacing: .04em;
 	cursor: pointer;
-	white-space: nowrap;
 	-webkit-tap-highlight-color: transparent;
 	transition: color .12s var(--ease), background-color .12s var(--ease);
 }
 
 .addition-vider .material-symbols-outlined {
-	font-size: 18px;
+	font-size: 22px;
+}
+
+/* Le libelle ne passe jamais sur deux lignes et ne sort pas de la tuile
+   / The label never wraps nor overflows the tile */
+.addition-vider-label {
+	max-width: 100%;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .addition-vider:disabled {
 	opacity: .3;
 	cursor: default;
+}
+
+.addition-vider:not(:disabled) {
+	border-color: var(--invalid);
 }
 
 .addition-vider:not(:disabled):active {
@@ -185,6 +205,15 @@
 .addition-vider.is-armed {
 	background-color: var(--invalid);
 	color: var(--blanc01);
+}
+
+/* Anneau de focus clavier, le meme que dans les popups (tarif.css).
+   Il n'apparait pas au toucher, seulement au clavier ou au lecteur.
+   / Keyboard focus ring, same as the popups; not shown on touch. */
+.addition-vider:focus-visible,
+.addition-act:focus-visible {
+	outline: 2px solid var(--nfc);
+	outline-offset: 2px;
 }
 
 /* Liste des lignes — `.tk-lines` : prend toute la hauteur restante
@@ -454,6 +483,9 @@
    button drops 4px on press (instant), rises back in 170ms. */
 .addition-act-valid {
 	flex: 1;
+	/* Peut retrecir sous la largeur de son texte : jamais de debordement
+	   hors du panneau. / May shrink below its content: never overflows. */
+	min-width: 0;
 	background-color: var(--valid);
 	color: var(--valid-ink);
 	font-size: 18px;
@@ -508,13 +540,17 @@
 	}
 }
 
-/* Panneau etroit (1023 a 1199 px) : en-tete plus serre pour que
-   titre, compteur et bouton Vider tiennent dans ~262 px
-   / Narrow panel (1023-1199px): tighter header so everything fits in ~262px */
+/* Panneau etroit (1023 a 1199 px, ~297 a 348 px de large) :
+   - en-tete plus serre pour que titre et compteur tiennent ;
+   - tuiles VIDER et CHECK CARTE a 68 px, pour laisser a VALIDER
+     assez de place pour son icone et son texte (~114 px).
+   / Narrow panel (1023-1199px): tighter header, 68px side tiles so VALIDER
+   keeps room for its icon and label. */
 @media only screen and (min-width: 1023px) and (max-width: 1199px) {
 	.addition-head { gap: 6px; padding: 0 8px; }
 	.addition-title { padding: 15px 4px; }
-	.addition-vider { padding: 8px 8px; gap: 4px; }
+	.addition-vider,
+	.addition-act-card { width: 68px; }
 }
 
 /* pour une largeur inférieur 1022 pixels */

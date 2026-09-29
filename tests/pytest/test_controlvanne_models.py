@@ -20,19 +20,24 @@ from django_tenants.utils import schema_context
 
 
 @pytest.fixture(scope="session")
-def cv_api_key(tenant):
-    """TireuseAPIKey pour ces tests."""
-    with schema_context(tenant.schema_name):
-        from controlvanne.models import TireuseAPIKey
+def cv_headers(tenant, cv_tireuse_avec_fut):
+    """En-têtes avec la clé du terminal de cv_tireuse_avec_fut.
+    Une clé doit appartenir au terminal de la tireuse visée (audit, point 1.4).
+    / Headers with cv_tireuse_avec_fut's terminal key."""
+    from fabriques_controlvanne import cle_api_de_la_tireuse
 
-        _obj, key = TireuseAPIKey.objects.create_key(name="test-cv-models")
-        yield key
-        TireuseAPIKey.objects.filter(name="test-cv-models").delete()
+    cle = cle_api_de_la_tireuse(tenant, cv_tireuse_avec_fut)
+    return {"HTTP_AUTHORIZATION": f"Api-Key {cle}"}
 
 
 @pytest.fixture(scope="session")
-def cv_headers(cv_api_key):
-    return {"HTTP_AUTHORIZATION": f"Api-Key {cv_api_key}"}
+def cv_headers_sans_fut(tenant, cv_tireuse_sans_fut):
+    """En-têtes avec la clé du terminal de cv_tireuse_sans_fut.
+    / Headers with cv_tireuse_sans_fut's terminal key."""
+    from fabriques_controlvanne import cle_api_de_la_tireuse
+
+    cle = cle_api_de_la_tireuse(tenant, cv_tireuse_sans_fut)
+    return {"HTTP_AUTHORIZATION": f"Api-Key {cle}"}
 
 
 @pytest.fixture(scope="session")
@@ -468,7 +473,7 @@ class TestEventsComplementaires:
         assert response.status_code == 404
 
     def test_12_authorize_tireuse_disabled(
-        self, cv_client, cv_headers, cv_tireuse_sans_fut, cv_carte_client
+        self, cv_client, cv_headers_sans_fut, cv_tireuse_sans_fut, cv_carte_client
     ):
         """Tireuse désactivée → authorized=False."""
         with schema_context("lespass"):
@@ -484,7 +489,7 @@ class TestEventsComplementaires:
                     "uid": cv_carte_client.tag_id,
                 }
             ),
-            **cv_headers,
+            **cv_headers_sans_fut,
         )
         data = response.json()
         assert data["authorized"] is False

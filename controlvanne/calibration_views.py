@@ -18,19 +18,57 @@ Flux :
    Valide, marque les sessions, calcule le facteur moyen, l'applique.
    Retourne partial_serie_result.html qui remplace #sessions-poll (outerHTML).
    Le remplacement outerHTML supprime le polling.
+   En cas d'erreur (aucun volume, volume invalide, pas de débitmètre) :
+   statut 422 + formulaire avec le message. La page accepte le 422 grâce
+   au listener htmx:beforeSwap (calibration/page.html).
 
-Acces : staff uniquement (@staff_member_required).
+« Nouvelle série » : lien ?nouvelle_serie=1 → le serveur redirige vers
+?depuis=<maintenant>. C'est l'heure du serveur qui compte, pas celle du PC.
+
+Acces : admins du lieu uniquement (_refuser_si_pas_admin_du_lieu).
+Avant, @staff_member_required laissait passer le staff de N'IMPORTE QUEL lieu :
+is_staff est un drapeau global (audit 2026-09-26, point 1.5).
+/ Access: venue admins only. is_staff used to let any venue's staff in.
 """
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from datetime import timezone as dt_timezone, datetime
 
-from django.contrib.admin.views.decorators import staff_member_required
-from django.shortcuts import get_object_or_404, render
+from django.contrib.auth.views import redirect_to_login
+from django.db import transaction
+from django.http import HttpResponseForbidden
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
+from rest_framework import serializers
 
+from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from controlvanne.models import RfidSession, TireuseBec
+
+
+class VolumeReelSerializer(serializers.Serializer):
+    """
+    Valide un volume lu sur le verre gradué, en millilitres.
+    / Validates a volume read on the graduated glass, in milliliters.
+
+    LOCALISATION : controlvanne/calibration_views.py
+    """
+
+    volume_reel_ml = serializers.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        min_value=Decimal("1"),
+        max_value=Decimal("2000"),
+        error_messages={
+            "invalid": _("Le volume doit être un nombre."),
+            "min_value": _("Le volume doit être d'au moins 1 ml."),
+            "max_value": _("Le volume ne peut pas dépasser 2000 ml."),
+            "max_decimal_places": _("Deux décimales au maximum."),
+            "max_digits": _("Le volume doit être un nombre."),
+        },
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -81,31 +119,100 @@ def _calculer_facteur_corrige(facteur_actuel, volume_delta_ml, volume_reel_ml):
     return round(float(facteur_actuel) * (float(volume_delta_ml) / float(volume_reel_ml)), 4)
 
 
+def _formulaire_avec_erreurs(request, tireuse, depuis_str, sessions_en_attente, erreurs):
+    """
+    Renvoie le formulaire de saisie avec les messages d'erreur, en statut 422.
+    HX-Reswap: innerHTML garde #sessions-poll (et son polling) dans la page :
+    sans cela, le prochain envoi ne trouverait plus sa cible.
+    La page accepte le 422 grâce au listener htmx:beforeSwap (page.html).
+    / Returns the form with error messages, status 422. HX-Reswap: innerHTML
+    keeps #sessions-poll in the page. page.html accepts 422 via htmx:beforeSwap.
+    """
+    ctx = {
+        "tireuse": tireuse,
+        "depuis": depuis_str,
+        "sessions_en_attente": sessions_en_attente,
+        "erreurs": erreurs,
+    }
+    response = render(request, "calibration/partial_sessions.html", ctx, status=422)
+    response["HX-Reswap"] = "innerHTML"
+    return response
+
+
+def _refuser_si_pas_admin_du_lieu(request):
+    """
+    Contrôle d'accès des pages de calibration : admin du lieu uniquement.
+    / Calibration access check: venue admin only.
+
+    - Pas connecté → page de connexion de l'admin.
+    - Connecté mais pas admin de CE lieu → 403.
+    - Admin du lieu → None (la vue continue).
+    Écrit en fonction appelée en tête de chaque vue, et pas en décorateur,
+    pour que le contrôle se lise directement dans la vue (règle FALC).
+    / Not logged in → admin login. Not admin of THIS venue → 403.
+    A plain function called first in each view, readable in place.
+
+    :return: une réponse de refus, ou None si l'accès est permis
+    """
+    utilisateur_connecte = request.user and request.user.is_authenticated
+    if not utilisateur_connecte:
+        return redirect_to_login(
+            request.get_full_path(), login_url=reverse("staff_admin:login")
+        )
+    if not TenantAdminPermissionWithRequest(request):
+        return HttpResponseForbidden(_("Réservé aux administrateurs de ce lieu."))
+    return None
+
+
 # ── Vues ──────────────────────────────────────────────────────────────
 
 
-@staff_member_required
 def calibration_page(request, uuid):
     """
     GET /controlvanne/calibration/<uuid>/
     Squelette de la page. Les sessions sont chargees par HTMX (polling toutes les 8s).
     Le parametre ?depuis=<timestamp> definit le debut de la serie en cours.
+    ?nouvelle_serie=1 : redirige vers ?depuis=<heure du serveur>.
     / Page skeleton. Sessions are loaded by HTMX (polling every 8s).
     The ?depuis=<timestamp> parameter defines the start of the current series.
+    ?nouvelle_serie=1 redirects to ?depuis=<server time>.
     """
+    refus = _refuser_si_pas_admin_du_lieu(request)
+    if refus:
+        return refus
+
     tireuse = get_object_or_404(TireuseBec, uuid=uuid)
+
+    # Nouvelle série : l'heure de départ est celle du serveur (pas du PC)
+    # / New series: the start time is the server's (not the PC's)
+    demande_de_nouvelle_serie = request.GET.get("nouvelle_serie")
+    if demande_de_nouvelle_serie:
+        heure_de_depart = int(timezone.now().timestamp())
+        adresse_de_la_page = reverse("calibration_page", kwargs={"uuid": uuid})
+        return redirect(f"{adresse_de_la_page}?depuis={heure_de_depart}")
+
     depuis_str = request.GET.get("depuis", "")
+
+    # Le débitmètre peut être partagé par plusieurs tireuses (clé étrangère) :
+    # le nouveau facteur s'appliquera à toutes. On les liste pour prévenir.
+    # / The flow meter may be shared by several taps: the new factor applies
+    # to all of them. List them to warn the admin.
+    autres_tireuses_du_debimetre = []
+    if tireuse.debimetre:
+        autres_tireuses_du_debimetre = list(
+            TireuseBec.objects.filter(debimetre=tireuse.debimetre)
+            .exclude(pk=tireuse.pk)
+            .order_by("nom_tireuse")
+        )
+
     ctx = {
         "tireuse": tireuse,
         "depuis": depuis_str,
-        # maintenant : pour le lien "Nouvelle serie" (timestamp courant)
-        # / maintenant: for the "New series" link (current timestamp)
-        "maintenant": timezone.now().timestamp(),
+        "autres_tireuses_du_debimetre": autres_tireuses_du_debimetre,
     }
     return render(request, "calibration/page.html", ctx)
 
 
-@staff_member_required
 def calibration_sessions_partial(request, uuid):
     """
     GET /controlvanne/calibration/<uuid>/sessions/?depuis=<ts>
@@ -114,6 +221,10 @@ def calibration_sessions_partial(request, uuid):
     / HTMX partial called every 8s by the page.
     Returns the input form with one row per pending session.
     """
+    refus = _refuser_si_pas_admin_du_lieu(request)
+    if refus:
+        return refus
+
     tireuse = get_object_or_404(TireuseBec, uuid=uuid)
     depuis_str = request.GET.get("depuis", "")
     depuis = _parse_depuis_str(depuis_str)
@@ -122,12 +233,11 @@ def calibration_sessions_partial(request, uuid):
         "tireuse": tireuse,
         "depuis": depuis_str,
         "sessions_en_attente": sessions_en_attente,
-        "erreur": None,
+        "erreurs": [],
     }
     return render(request, "calibration/partial_sessions.html", ctx)
 
 
-@staff_member_required
 @require_POST
 def calibration_serie(request, uuid):
     """
@@ -143,95 +253,110 @@ def calibration_serie(request, uuid):
     Calculates the average factor and applies it to the flow meter.
     Returns partial_serie_result.html (replaces #sessions-poll as outerHTML).
     """
+    refus = _refuser_si_pas_admin_du_lieu(request)
+    if refus:
+        return refus
+
     tireuse = get_object_or_404(TireuseBec, uuid=uuid)
     depuis_str = request.POST.get("depuis", "")
     depuis = _parse_depuis_str(depuis_str)
     sessions_en_attente = list(_sessions_en_attente(tireuse, depuis))
 
-    # Aucun debitmetre → erreur immediate (innerHTML pour garder #sessions-poll dans le DOM)
-    # / No flow meter → immediate error (innerHTML to keep #sessions-poll in the DOM)
+    # Aucun debitmetre → erreur immediate
+    # / No flow meter → immediate error
     if not tireuse.debimetre:
-        ctx = {
-            "tireuse": tireuse,
-            "depuis": depuis_str,
-            "sessions_en_attente": sessions_en_attente,
-            "erreur": "Aucun débitmètre associé à cette tireuse.",
-        }
-        response = render(request, "calibration/partial_sessions.html", ctx)
-        response["HX-Reswap"] = "innerHTML"
-        return response
+        return _formulaire_avec_erreurs(
+            request,
+            tireuse,
+            depuis_str,
+            sessions_en_attente,
+            [_("Aucun débitmètre associé à cette tireuse.")],
+        )
 
     facteur_actuel = float(tireuse.debimetre.flow_calibration_factor)
 
-    # Collecter les volumes saisis et traiter chaque session
-    # / Collect entered volumes and process each session
-    mesures = []
-    facteurs = []
-
+    # 1. Lire et valider chaque volume saisi
+    # / 1. Read and validate each entered volume
+    volumes_valides_par_session = []
+    erreurs = []
     for session in sessions_en_attente:
-        valeur_brute = request.POST.get(f"vol_{session.pk}", "").strip()
+        # Case « ignorer » cochée → on ne compte pas ce versement
+        # / "Ignore" box checked → this pour is not counted
+        session_ignoree = request.POST.get(f"ignorer_{session.pk}")
+        if session_ignoree:
+            continue
 
-        # Champ laisse vide → on ignore cette session
-        # / Blank field → skip this session
+        valeur_brute = request.POST.get(f"vol_{session.pk}", "").strip()
+        # Champ vide → versement non mesuré, on le laisse de côté
+        # / Blank field → pour not measured, left aside
         if not valeur_brute:
             continue
 
-        try:
-            volume_reel = Decimal(valeur_brute.replace(",", "."))
-            if volume_reel <= 0:
-                raise ValueError("Volume nul ou negatif")
-        except (InvalidOperation, ValueError):
-            # Volume invalide → on ignore cette session mais on continue
-            # / Invalid volume → skip this session but continue
+        validation = VolumeReelSerializer(
+            data={"volume_reel_ml": valeur_brute.replace(",", ".")}
+        )
+        if not validation.is_valid():
+            heure_du_versement = timezone.localtime(session.started_at).strftime("%d/%m %H:%M")
+            for message in validation.errors["volume_reel_ml"]:
+                erreurs.append(f"{heure_du_versement} : {message}")
             continue
 
-        # Sauvegarder le volume reel dans la session
-        # / Save the real volume in the session
-        session.volume_reel_ml = volume_reel
-        session.is_calibration = True
-        session.save(update_fields=["volume_reel_ml", "is_calibration"])
-
-        facteur_corrige = _calculer_facteur_corrige(
-            facteur_actuel,
-            session.volume_delta_ml,
-            volume_reel,
+        volumes_valides_par_session.append(
+            (session, validation.validated_data["volume_reel_ml"])
         )
-        ecart_pct = round(
-            (float(session.volume_delta_ml) - float(volume_reel))
-            / float(volume_reel) * 100,
-            1,
+
+    if erreurs:
+        return _formulaire_avec_erreurs(
+            request, tireuse, depuis_str, sessions_en_attente, erreurs
         )
-        mesures.append({
-            "session": session,
-            "facteur_corrige": facteur_corrige,
-            "ecart_pct": ecart_pct,
-        })
-        facteurs.append(facteur_corrige)
 
-    # Aucun volume valide saisi → retourner le formulaire avec message d'erreur.
-    # HX-Reswap: innerHTML pour que #sessions-poll reste dans le DOM avec
-    # ses attributs de polling — sans cela le prochain submit ne trouverait
-    # plus la cible et ne ferait rien.
-    # / No valid volume entered → return form with error message.
-    # HX-Reswap: innerHTML so #sessions-poll stays in the DOM with its
-    # polling attributes — without this the next submit can't find the target.
-    if not mesures:
-        ctx = {
-            "tireuse": tireuse,
-            "depuis": depuis_str,
-            "sessions_en_attente": sessions_en_attente,
-            "erreur": "Saisissez au moins un volume avant d'appliquer.",
-        }
-        response = render(request, "calibration/partial_sessions.html", ctx)
-        response["HX-Reswap"] = "innerHTML"
-        return response
+    # Aucun volume saisi → message d'erreur
+    # / No volume entered → error message
+    if not volumes_valides_par_session:
+        return _formulaire_avec_erreurs(
+            request,
+            tireuse,
+            depuis_str,
+            sessions_en_attente,
+            [_("Saisissez au moins un volume avant d'appliquer.")],
+        )
 
-    # Calculer et appliquer le facteur moyen
-    # / Calculate and apply the average factor
-    facteur_moyen = round(sum(facteurs) / len(facteurs), 4)
-    facteur_ancien = tireuse.debimetre.flow_calibration_factor
-    tireuse.debimetre.flow_calibration_factor = facteur_moyen
-    tireuse.debimetre.save(update_fields=["flow_calibration_factor"])
+    # 2. Enregistrer les volumes et le nouveau facteur, tout ou rien
+    # / 2. Save the volumes and the new factor, all or nothing
+    mesures = []
+    facteurs = []
+    with transaction.atomic():
+        for session, volume_reel in volumes_valides_par_session:
+            session.volume_reel_ml = volume_reel
+            session.is_calibration = True
+            session.save(update_fields=["volume_reel_ml", "is_calibration"])
+
+            facteur_corrige = _calculer_facteur_corrige(
+                facteur_actuel,
+                session.volume_delta_ml,
+                volume_reel,
+            )
+            ecart_pct = round(
+                (float(session.volume_delta_ml) - float(volume_reel))
+                / float(volume_reel)
+                * 100,
+                1,
+            )
+            mesures.append(
+                {
+                    "session": session,
+                    "facteur_corrige": facteur_corrige,
+                    "ecart_pct": ecart_pct,
+                }
+            )
+            facteurs.append(facteur_corrige)
+
+        # Facteur moyen appliqué au débitmètre
+        # / Average factor applied to the flow meter
+        facteur_moyen = round(sum(facteurs) / len(facteurs), 4)
+        facteur_ancien = tireuse.debimetre.flow_calibration_factor
+        tireuse.debimetre.flow_calibration_factor = facteur_moyen
+        tireuse.debimetre.save(update_fields=["flow_calibration_factor"])
 
     ctx = {
         "tireuse": tireuse,
@@ -239,8 +364,5 @@ def calibration_serie(request, uuid):
         "mesures": mesures,
         "facteur_ancien": facteur_ancien,
         "facteur_applique": facteur_moyen,
-        # maintenant : timestamp pour le lien "Nouvelle serie de verification"
-        # / maintenant: timestamp for the "New verification series" link
-        "maintenant": timezone.now().timestamp(),
     }
     return render(request, "calibration/partial_serie_result.html", ctx)

@@ -9,6 +9,9 @@ Chaque bouton envoie un hx-post vers StockAdmin._stock_action_view()
 qui appelle StockService. Le partial stock_actions_partial.html est renvoyé
 et remplace le contenu du conteneur #stock-actions-container.
 
+Aussi rendu dans la section Stock de la fiche produit
+(Administration/admin/stock_fiche_produit.py : panneau_operations_stock).
+
 CONTEXT :
 - stock : instance Stock (via original dans Unfold)
 - product_name : nom du produit
@@ -24,4 +27,28 @@ CONTEXT :
      data-testid="stock-actions-container">
     {% include "admin/inventaire/stock_actions_partial.html" %}
 </div>
+
+{% comment %}
+ISOLATION DE L'ALERTE « MODIFICATIONS NON ENREGISTRÉES »
+/ Isolation from Unfold's "unsaved changes" warning
+
+Unfold (warn_unsaved_form) écoute l'événement "input" sur chaque champ du formulaire.
+Taper une quantité ici n'est pas une modification de la fiche :
+l'opération part tout de suite en HTMX.
+On arrête donc l'événement "input" sur le conteneur, en phase de capture.
+Il n'atteint plus les écouteurs posés par Unfold sur les champs.
+Le conteneur n'est jamais remplacé (hx-swap="innerHTML") : un seul écouteur suffit.
+/ Stop "input" events at capture phase so Unfold's per-field listeners never fire.
+{% endcomment %}
+<script>
+    (function () {
+        const conteneur_operations_stock = document.getElementById("stock-actions-container");
+        if (!conteneur_operations_stock) {
+            return;
+        }
+        conteneur_operations_stock.addEventListener("input", function (evenement) {
+            evenement.stopPropagation();
+        }, true);
+    })();
+</script>
 {% endif %}

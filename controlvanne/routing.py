@@ -4,12 +4,13 @@ Routes WebSocket du module tireuse connectée (controlvanne).
 
 LOCALISATION : controlvanne/routing.py
 
-Deux routes :
-- /ws/rfid/all/    → PanelConsumer, groupe rfid_state.all (toutes les tireuses)
-- /ws/rfid/<uuid>/ → PanelConsumer, groupe rfid_state.<uuid> (une seule tireuse)
-/ Two routes:
-- /ws/rfid/all/    → PanelConsumer, group rfid_state.all (all taps)
-- /ws/rfid/<uuid>/ → PanelConsumer, group rfid_state.<uuid> (a single tap)
+Deux routes (groupes nommés par lieu, voir controlvanne/groupes_ws.py) :
+- /ws/rfid/all/    → PanelConsumer, groupe rfid_state.<uuid lieu>.all
+                     (toutes les tireuses du lieu)
+- /ws/rfid/<uuid>/ → PanelConsumer, groupe rfid_state.<uuid lieu>.<uuid>
+                     (une seule tireuse du lieu)
+Accès : session kiosk ou admin du lieu (controlvanne/acces.py), sinon refus.
+/ Two routes (per-venue groups). Access: kiosk session or venue admin.
 
 Câblé dans TiBillet/asgi.py via URLRouter.
 / Wired in TiBillet/asgi.py via URLRouter.

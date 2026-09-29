@@ -29,16 +29,13 @@ from django_tenants.utils import schema_context
 
 
 @pytest.fixture(scope="session")
-def tireuse_api_key(tenant):
-    """Crée une TireuseAPIKey pour les tests.
-    / Creates a TireuseAPIKey for tests."""
-    with schema_context(tenant.schema_name):
-        from controlvanne.models import TireuseAPIKey
+def tireuse_api_key(tenant, test_tireuse):
+    """Clé API du terminal de test_tireuse (appairé comme par discovery).
+    Une clé doit appartenir au terminal de la tireuse visée (audit, point 1.4).
+    / API key of test_tireuse's terminal (paired like discovery does)."""
+    from fabriques_controlvanne import cle_api_de_la_tireuse
 
-        _key_obj, key_string = TireuseAPIKey.objects.create_key(name="test-tireuse-key")
-        yield key_string
-        # Nettoyage / Cleanup
-        TireuseAPIKey.objects.filter(name="test-tireuse-key").delete()
+    return cle_api_de_la_tireuse(tenant, test_tireuse)
 
 
 @pytest.fixture(scope="session")
@@ -249,6 +246,100 @@ class TestPermission:
         )
         assert response.status_code == 403
 
+    def test_04b_cle_sans_compte_refusee(self, tireuse_client, tenant):
+        """Ancienne clé sans compte de terminal → 403 (audit, point 1.4).
+        / Legacy key without terminal account → 403."""
+        with schema_context(tenant.schema_name):
+            from controlvanne.models import TireuseAPIKey
+
+            _obj, cle_sans_compte = TireuseAPIKey.objects.create_key(
+                name="test-cle-sans-compte"
+            )
+        try:
+            response = tireuse_client.post(
+                "/controlvanne/api/tireuse/ping/",
+                content_type="application/json",
+                data="{}",
+                HTTP_AUTHORIZATION=f"Api-Key {cle_sans_compte}",
+            )
+            assert response.status_code == 403
+        finally:
+            with schema_context(tenant.schema_name):
+                TireuseAPIKey.objects.filter(name="test-cle-sans-compte").delete()
+
+    def test_04c_cle_d_une_autre_tireuse_refusee(
+        self, tireuse_client, tenant, test_tireuse
+    ):
+        """La clé du terminal d'une autre tireuse ne peut pas agir sur test_tireuse → 403.
+        / Another tap's terminal key cannot act on test_tireuse → 403."""
+        from django_tenants.utils import tenant_context
+
+        from fabriques_controlvanne import cle_api_de_la_tireuse
+
+        nom_autre_tireuse = "Tireuse autre terminal test"
+        with tenant_context(tenant):
+            from controlvanne.models import TireuseBec
+            from laboutik.models import PointDeVente, Terminal
+
+            TireuseBec.objects.filter(nom_tireuse=nom_autre_tireuse).delete()
+            PointDeVente.objects.filter(name=nom_autre_tireuse).delete()
+            Terminal.objects.filter(name=nom_autre_tireuse).delete()
+            autre_tireuse = TireuseBec.objects.create(
+                nom_tireuse=nom_autre_tireuse, enabled=True
+            )
+        cle_de_l_autre_tireuse = cle_api_de_la_tireuse(tenant, autre_tireuse)
+        try:
+            for chemin, donnees in [
+                ("ping", {"tireuse_uuid": str(test_tireuse.uuid)}),
+                ("authorize", {"tireuse_uuid": str(test_tireuse.uuid), "uid": "AAAAAAAA"}),
+            ]:
+                response = tireuse_client.post(
+                    f"/controlvanne/api/tireuse/{chemin}/",
+                    content_type="application/json",
+                    data=json.dumps(donnees),
+                    HTTP_AUTHORIZATION=f"Api-Key {cle_de_l_autre_tireuse}",
+                )
+                assert response.status_code == 403, chemin
+
+            # Sa propre tireuse reste accessible / Its own tap stays reachable
+            response = tireuse_client.post(
+                "/controlvanne/api/tireuse/ping/",
+                content_type="application/json",
+                data=json.dumps({"tireuse_uuid": str(autre_tireuse.uuid)}),
+                HTTP_AUTHORIZATION=f"Api-Key {cle_de_l_autre_tireuse}",
+            )
+            assert response.status_code == 200
+        finally:
+            with tenant_context(tenant):
+                TireuseBec.objects.filter(pk=autre_tireuse.pk).delete()
+                PointDeVente.objects.filter(name=nom_autre_tireuse).delete()
+                Terminal.objects.filter(name=nom_autre_tireuse).delete()
+
+    def test_04d_authorize_limite_par_cle(self, tireuse_client, tenant, test_tireuse):
+        """Au-delà de la limite de authorize, la clé reçoit 429 (audit, point 1.6).
+        Limite abaissée à 2/min pour le test ; clé neuve = compteur neuf.
+        / Beyond the authorize limit the key gets 429. Limit lowered to 2/min."""
+        from unittest import mock
+
+        from controlvanne.viewsets import AuthorizeTireuseThrottle
+        from fabriques_controlvanne import cle_api_de_la_tireuse
+
+        cle_neuve = cle_api_de_la_tireuse(tenant, test_tireuse)
+        codes_de_reponse = []
+        with mock.patch.object(AuthorizeTireuseThrottle, "rate", "2/min"):
+            for _numero_d_essai in range(3):
+                response = tireuse_client.post(
+                    "/controlvanne/api/tireuse/authorize/",
+                    content_type="application/json",
+                    data=json.dumps(
+                        {"tireuse_uuid": str(test_tireuse.uuid), "uid": "ZZZZZZZZ"}
+                    ),
+                    HTTP_AUTHORIZATION=f"Api-Key {cle_neuve}",
+                )
+                codes_de_reponse.append(response.status_code)
+        assert codes_de_reponse[:2] == [200, 200]
+        assert codes_de_reponse[2] == 429
+
     def test_05_ping_avec_admin_session(self, admin_client):
         """Admin tenant connecté via session → 200.
         / Tenant admin logged in via session → 200."""
@@ -411,6 +502,15 @@ class TestTireuseViewSet:
 class TestAuthKiosk:
     """Tests de l'auth kiosk (POST token → session cookie).
     / Tests for kiosk auth (POST token → session cookie)."""
+
+    def test_12b_route_kiosk_token_supprimee(self, tireuse_client):
+        """L'ancienne route /controlvanne/kiosk-token/<token>/ n'existe plus (404).
+        Le Pi passe le jeton à la page du kiosk (?kiosk_token=). Audit, point 1.3.
+        / The old kiosk-token route no longer exists (404)."""
+        response = tireuse_client.get(
+            "/controlvanne/kiosk-token/nimporte-quoi/?next=https://evil.example"
+        )
+        assert response.status_code == 404
 
     def test_12_auth_kiosk_sans_auth(self, tireuse_client):
         """Auth kiosk sans clé → 403.

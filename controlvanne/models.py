@@ -25,6 +25,7 @@ Dependances externes :
 - solo.SingletonModel : singleton propre (pas de hack pk=1)
 """
 
+import logging
 from uuid import uuid4
 from decimal import Decimal
 
@@ -35,6 +36,8 @@ from django.utils.translation import gettext_lazy as _
 
 from solo.models import SingletonModel
 from rest_framework_api_key.models import AbstractAPIKey
+
+logger = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -223,7 +226,7 @@ class TireuseBec(models.Model):
     )
 
     fut_actif = models.ForeignKey(
-        "BaseBillet.Product",
+        "BaseBillet.FutProduct",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -294,7 +297,11 @@ class TireuseBec(models.Model):
         Derived from the active keg; returns 'Liquide' if none assigned."""
         if self.fut_actif:
             return self.fut_actif.name
-        return "Liquide"
+        # gettext (pas gettext_lazy) : ce texte part en JSON sur le WebSocket
+        # / gettext (not lazy): this text is sent as JSON over the WebSocket
+        from django.utils.translation import gettext
+
+        return gettext("Liquide")
 
     @property
     def prix_litre(self) -> Decimal:
@@ -313,6 +320,14 @@ class TireuseBec(models.Model):
         return Decimal("0.00")
 
     @property
+    def prix_verre_25cl(self) -> Decimal:
+        """Prix d'un verre de 25 cl, pour l'écran de la tireuse.
+        Django n'a pas de filtre de multiplication dans les templates.
+        / Price of a 25 cl glass, for the tap screen.
+        Django templates have no multiplication filter."""
+        return self.prix_litre * Decimal("0.25")
+
+    @property
     def reservoir_max_ml(self) -> float:
         """Volume de reference (fut plein) en ml, pour calcul du % jauge.
         Lit la quantite initiale depuis le Stock inventaire du fut actif.
@@ -328,7 +343,12 @@ class TireuseBec(models.Model):
                     # / Stock in centiliters → convert to ml
                     return float(stock.quantite) * 10
             except Exception:
-                pass
+                # Jauge approximative plutôt qu'une erreur sur l'écran, mais tracée
+                # / Approximate gauge rather than a screen error, but logged
+                logger.warning(
+                    f"Volume max du fût illisible pour la tireuse {self.pk}",
+                    exc_info=True,
+                )
         return float(self.reservoir_ml) if self.reservoir_ml else 1.0
 
     class Meta:
@@ -525,7 +545,9 @@ class RfidSession(models.Model):
 
     def __str__(self):
         status = "OPEN" if not self.ended_at else "CLOSED"
-        return f"{self.tireuse_bec.nom_tireuse}:{self.uid} [{status}] {self.started_at:%Y-%m-%d %H:%M:%S}"
+        # La tireuse peut avoir été supprimée (FK à null) / The tap may have been deleted
+        nom_de_la_tireuse = self.tireuse_bec.nom_tireuse if self.tireuse_bec else "—"
+        return f"{nom_de_la_tireuse}:{self.uid} [{status}] {self.started_at:%Y-%m-%d %H:%M:%S}"
 
 
 # ──────────────────────────────────────────────────────────────────────

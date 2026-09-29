@@ -1,42 +1,39 @@
-/* Hallmark · app-scope: kiosk-terminal · theme: custom « Signalétique »
- * accent-hue: warm (ambre) · enrichment: Tier B (SVG dessinés à la main)
- * états: repos · pressé · focus · désactivé · chargement · erreur · succès
- * contraste: AA vérifié sur les deux thèmes
+/* Hallmark · app-scope: kiosk-terminal · theme: studied-DNA (maquette DA Tibillet v1)
+ * etats: repos · presse · focus · desactive · chargement · erreur · succes
+ * cibles: 1280x800 sans scroll, jusqu'a 1920x1080 ; 1024x600 compacte
  *
  * LOCALISATION : kiosk/static/kiosk/css/kiosk.css
  *
- * Mise en page de la borne. Toutes les couleurs, polices, tailles et durees
- * viennent de tokens.css : aucune valeur brute ici.
- * / Kiosk layout. Every colour, font, size and duration comes from tokens.css.
+ * Mise en page de la borne. Couleurs, polices et espacements viennent de
+ * tokens.css : aucune couleur en dur ici.
+ * / Kiosk layout. Colours, fonts and spacing come from tokens.css.
  *
- * PARTI PRIS : une borne de recharge n'est pas une page web, c'est un
- * distributeur. Pas d'ombre portee, pas de carte flottante, pas d'effet de
- * survol (l'ecran est tactile : le survol n'existe pas). La profondeur vient
- * des aplats de couleur et des filets, l'interaction vient de l'enfoncement.
- * / STANCE: a refill kiosk is a vending machine, not a web page. No drop
- * shadows, no floating cards, no hover effects (touch screen: hover does not
- * exist). Depth comes from colour fields and hairlines; feedback comes from
- * the key press.
+ * ORIGINE : partie « KIOSQUE » de TEMP-tibillet-kiosk-main/style.css. La
+ * maquette empilait 8 couches « AJUSTEMENTS » qui se surchargeaient. Ici chaque
+ * selecteur n'apparait qu'une fois, avec sa valeur finale.
+ * / Origin: the mock-up's KIOSK section. Its 8 stacked "AJUSTEMENTS" layers
+ * are merged: one rule per selector, final value.
  *
- * ORIENTATIONS SUPPORTEES / SUPPORTED ORIENTATIONS :
- *   - telephone portrait  (375x667 et plus)  -> colonne unique, action collee au pouce
- *   - kiosque paysage     (1024x600, 1280x720, 1920x1080) -> deux colonnes
- * Les tailles suivent vmin (cf. tokens.css) : aucune media query de taille.
- * Une seule media query, sur le RATIO, decide de la bascule une/deux colonnes.
+ * SOMMAIRE :
+ *  1. Socle
+ *  2. Boutons
+ *  3. Accueil operateur (configuration.html)
+ *  4. Ossature du parcours (recharge.html)
+ *  5. Carte de recharge (solde, succes, refus)
+ *  6. Choix du montant
+ *  7. Recapitulatif
+ *  8. Modales
+ *  9. Remerciement
+ * 10. Alertes
+ * 11. Chargement
+ * 12. Tailles d'ecran (Pi 7", telephones, 1080p)
+ * 13. Mouvement reduit
  */
 
 /* ========================================================================= */
 /* 1. Socle                                                                  */
 /* ========================================================================= */
 
-/* La borne ne charge plus Bootstrap : ce reset n'est donc plus fourni par lui. */
-/* Sans lui, un `width: 100%` + `padding` deborde de son parent — et comme     */
-/* html/body sont en overflow-x: clip, le debordement est invisible a la        */
-/* mesure (scrollWidth == clientWidth) tout en coupant le contenu a l'ecran.    */
-/* / The kiosk no longer loads Bootstrap, which used to provide this reset.     */
-/* Without it, `width: 100%` + `padding` overflows its parent — and since       */
-/* html/body are overflow-x: clip, the overflow is invisible to measurement     */
-/* while still cutting content off screen.                                      */
 *,
 *::before,
 *::after {
@@ -45,44 +42,73 @@
 
 html,
 body {
-    height: 100%;
-    /* clip et non hidden : hidden sur <html> casse position:sticky.          */
-    /* / clip, not hidden: hidden on <html> breaks position:sticky.           */
+    min-height: 100%;
+    /* clip et non hidden : hidden casse position:sticky. */
+    /* / clip, not hidden: hidden breaks position:sticky. */
     overflow-x: clip;
 }
 
 body {
     margin: 0;
-    background-color: var(--color-bg);
+    background: var(--color-bg);
     color: var(--color-text);
-    font-family: var(--font-ui);
-    font-size: var(--text-body);
-    line-height: 1.45;
+    font-family: var(--font-text);
+    font-size: 16px;
+    /* Luciole veut de l'interligne : lisibilite, pas esthetique. */
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
 
-    /* Durcissement borne : pas de surlignage bleu au tap, pas de delai de    */
-    /* 300 ms, pas de zoom au double-tap, pas de rebond elastique au scroll,  */
-    /* pas de selection de texte accidentelle par un doigt qui traine.        */
-    /* / Kiosk hardening: no blue tap highlight, no 300ms delay, no           */
-    /* double-tap zoom, no rubber-band overscroll, no accidental text         */
-    /* selection from a resting finger.                                       */
+    /* Durcissement borne : pas de surlignage au tap, pas de zoom au double-tap, */
+    /* pas de rebond, pas de selection de texte par un doigt qui traine.        */
+    /* / Kiosk hardening: no tap highlight, no double-tap zoom, no bounce,      */
+    /* no accidental text selection.                                            */
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
     overscroll-behavior: none;
     -webkit-user-select: none;
     user-select: none;
+
+    /* Bornes Sunmi et telephones a encoche : marges systeme. */
+    /* / Sunmi kiosks and notched phones: system insets. */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+             env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* Le montant reste selectionnable : un agent d'accueil peut vouloir le lire   */
-/* ou le copier. / The amount stays selectable for a staff member.             */
-.readout-value {
-    -webkit-user-select: text;
-    user-select: text;
+h1, h2, h3 {
+    margin: 0;
+    font-family: var(--font-text);
+    font-weight: 700;
+    color: var(--color-text);
 }
 
-/* Remplace la classe Bootstrap du meme nom : la borne ne charge plus         */
-/* Bootstrap (elle n'utilisait aucun de ses composants JS).                   */
-/* / Replaces the Bootstrap class of the same name: the kiosk no longer       */
-/* loads Bootstrap (it used none of its JS components).                       */
+p {
+    margin: 0;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+button {
+    font-family: inherit;
+}
+
+ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+img {
+    max-width: 100%;
+    display: block;
+}
+
+[hidden] {
+    display: none !important;
+}
+
 .visually-hidden {
     position: absolute;
     width: 1px;
@@ -95,777 +121,1413 @@ body {
     border: 0;
 }
 
-/* Un seul anneau de focus pour toute la borne. Il ne s'anime jamais : il doit */
-/* apparaitre instantanement. / One focus ring for the whole kiosk. It never   */
-/* animates: it must appear instantly.                                        */
-:where(button, a):focus-visible {
-    outline: var(--rule-thick) solid var(--color-focus);
+/* Un seul anneau de focus, jamais anime : il apparait instantanement. */
+/* / One focus ring, never animated. */
+:where(button, a, [tabindex]):focus-visible {
+    outline: 3px solid var(--color-focus);
     outline-offset: 2px;
 }
 
 /* ========================================================================= */
-/* 2. Ossature d'un ecran                                                    */
+/* 2. Boutons                                                                */
 /* ========================================================================= */
 
-.kiosk-screen {
-    min-height: 100vh;
-    /* svh : sur WebView Android (Cordova) 100vh deborde sous la barre        */
-    /* systeme. / svh: on Android WebView 100vh overflows under the system bar. */
-    min-height: 100svh;
-    display: grid;
-    grid-template-rows: auto 1fr;
-}
-
-.kiosk-topbar {
-    display: flex;
+/* Cible tactile large (min 56px). Pas d'information portee par le survol :  */
+/* au doigt, il n'existe pas. Le retour vient de l'enfoncement (:active).     */
+/* / Big touch target. No hover-only info: fingers don't hover.              */
+.kiosk-btn {
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: var(--space-4) var(--pad-ecran);
-    padding-top: calc(var(--space-4) + env(safe-area-inset-top));
-    border-bottom: var(--rule-hair) solid var(--color-rule);
-}
-
-/* Le seul intitule en majuscules de la borne. Il nomme l'ecran, il ne le     */
-/* numerote pas. / The only uppercase label on the kiosk. It names the        */
-/* screen, it does not number it.                                             */
-.kiosk-eyebrow {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: var(--text-label);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--color-text-soft);
-}
-
-/* La bascule une colonne / deux colonnes tient a une seule media query, sur   */
-/* le RATIO de l'ecran et pas sur sa largeur. Un kiosque 1024x600 et un        */
-/* 1920x1080 ont le meme ratio : ils recoivent la meme mise en page, a des     */
-/* tailles differentes (vmin s'en charge).                                     */
-/* / The one-column / two-column switch hangs on a single media query, keyed   */
-/* on the screen RATIO rather than its width. A 1024x600 and a 1920x1080 have  */
-/* the same ratio: same layout, different sizes (vmin handles that).           */
-.kiosk-split {
-    display: flex;
-    flex-direction: column;
-    gap: var(--gap-blocs);
-    width: 100%;
-    max-width: 1600px;
-    margin-inline: auto;
-    /* Pas de marge basse en colonne : la barre d'action est collante et porte */
-    /* sa propre marge (plus la safe-area). / No bottom padding in one column: */
-    /* the action bar is sticky and carries its own padding (plus safe-area).  */
-    padding: var(--gap-blocs) var(--pad-ecran) 0;
-}
-
-@media (min-aspect-ratio: 5 / 4) and (min-width: 700px) {
-    .kiosk-split {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        align-items: center;
-        gap: var(--gap-colonnes);
-        padding-bottom: var(--gap-blocs);
-    }
-}
-
-/* ========================================================================= */
-/* 3. Afficheur du montant                                                   */
-/* ========================================================================= */
-
-.kiosk-readout {
-    min-width: 0;
-}
-
-.readout-label {
-    margin: 0 0 var(--space-2);
-    font-size: var(--text-label);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--color-text-soft);
-}
-
-.readout-value {
-    margin: 0;
-    font-family: var(--font-ui);
-    font-weight: 700;
-    font-size: var(--text-readout);
-    line-height: 0.95;
-    letter-spacing: -0.02em;
-
-    /* Chiffres tabulaires : le total ne tressaute pas quand on passe de 48 a  */
-    /* 53. C'est la raison d'etre de Luciole.                                  */
-    /* / Tabular figures: the total does not jitter from 48 to 53.             */
-    font-variant-numeric: tabular-nums;
-
-    /* Un total a quatre chiffres ne doit jamais pousser la mise en page.      */
-    /* / A four-digit total must never push the layout.                        */
-    overflow-wrap: anywhere;
-    min-width: 0;
-}
-
-/* La marge doit compenser le letter-spacing negatif de l'afficheur, sinon le  */
-/* € vient toucher le dernier chiffre aux grandes tailles.                     */
-/* / The margin must offset the readout's negative letter-spacing, otherwise   */
-/* the € touches the last digit at large sizes.                                */
-.readout-unit {
-    font-size: 0.45em;
-    font-weight: 400;
-    margin-left: 0.22em;
-    letter-spacing: 0;
-    color: var(--color-text-soft);
-}
-
-/* Etat « rien de selectionne » : le zero s'efface au lieu de crier.          */
-/* / Empty state: the zero recedes instead of shouting.                       */
-.kiosk-readout[data-total-empty="true"] .readout-value {
-    color: var(--color-text-soft);
-}
-
-.kiosk-rule {
-    height: var(--rule-thick);
-    width: clamp(64px, 12vmin, 140px);
-    margin: var(--gap-blocs) 0;
-    background-color: var(--color-accent);
-    border: 0;
-}
-
-.readout-hint {
-    margin: 0;
-    max-width: 34ch;
-    color: var(--color-text-soft);
-}
-
-.kiosk-alert {
-    margin-top: var(--space-5);
-    padding: var(--space-4);
-    border-left: var(--rule-thick) solid var(--color-stop);
-    background-color: var(--color-surface);
-    color: var(--color-text);
-    border-radius: var(--radius-field);
-    font-weight: 700;
-}
-
-/* ========================================================================= */
-/* 4. Pave de touches                                                        */
-/* ========================================================================= */
-
-.kiosk-console {
-    display: flex;
-    flex-direction: column;
-    gap: var(--gap-blocs);
-    min-width: 0;
-}
-
-/* Six cellules : cinq montants + la touche Effacer. Le pave est complet, il   */
-/* n'y a plus de sixieme bouton orphelin flottant en dessous.                  */
-/* / Six cells: five denominations + the clear key. The keypad is complete;    */
-/* no orphan sixth button floating underneath.                                 */
-.keypad {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--gap-touches);
-}
-
-.key {
-    min-height: max(var(--touch-min), clamp(64px, 13vmin, 132px));
-    display: grid;
-    place-items: center;
-    padding: var(--space-2);
-
-    background-color: var(--color-key-face);
-    color: var(--color-text);
-    border: var(--rule-hair) solid var(--color-rule);
-    border-radius: var(--radius-key);
-
-    font-family: var(--font-ui);
-    font-weight: 700;
-    font-size: var(--text-key);
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-    cursor: pointer;
-
-    /* Un libelle de touche ne se coupe jamais sur deux lignes : « + 20 € » sur */
-    /* deux lignes se lit « + 20 » puis « € », et la touche perd sa hauteur.    */
-    /* / A key label never wraps onto two lines.                                */
-    white-space: nowrap;
-
-    transition:
-        background-color var(--dur-press) var(--ease-out),
-        border-color var(--dur-press) var(--ease-out),
-        transform var(--dur-press) var(--ease-out);
-}
-
-/* L'enfoncement est le seul retour visuel. C'est le geste reel sur un ecran   */
-/* tactile — contrairement au survol, qui n'arrive jamais.                     */
-/* / The press is the only visual feedback. It is the real gesture on a touch  */
-/* screen — unlike hover, which never happens.                                 */
-.key:active {
-    background-color: var(--color-key-press);
-    transform: scale(0.97);
-}
-
-/* Le survol n'existe que pour le mainteneur qui teste au navigateur.          */
-/* / Hover only exists for the maintainer testing in a browser.                */
-@media (hover: hover) {
-    .key:hover {
-        border-color: var(--color-accent);
-    }
-}
-
-/* La touche Effacer est une touche de fonction, pas un bouton dangereux.      */
-/* Elle ne merite pas le rouge : elle n'efface qu'une saisie en cours.         */
-/* / Clear is a function key, not a danger button. It does not deserve red:    */
-/* it only clears an in-progress entry.                                        */
-.key--clear {
-    font-size: var(--text-label);
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--color-text-soft);
-    background-color: transparent;
-    border-style: dashed;
-}
-
-.key--clear:active {
-    background-color: var(--color-key-press);
-    color: var(--color-text);
-}
-
-/* ========================================================================= */
-/* 5. Barre d'action                                                         */
-/* ========================================================================= */
-
-/* En colonne unique (telephone portrait), la barre colle au bas de l'ecran :  */
-/* c'est la zone du pouce. En deux colonnes (kiosque), elle suit simplement le */
-/* pave. / In one column (phone portrait) the bar sticks to the bottom: the    */
-/* thumb zone. In two columns (kiosk) it simply follows the keypad.            */
-.actionbar {
-    position: sticky;
-    bottom: 0;
-    padding: var(--space-4) 0;
-    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
-    background-color: var(--color-bg);
-    border-top: var(--rule-hair) solid var(--color-rule);
-}
-
-@media (min-aspect-ratio: 5 / 4) and (min-width: 700px) {
-    /* En deux colonnes, c'est le `gap` de .kiosk-console qui separe le pave de */
-    /* la barre. Garder en plus le padding de la barre doublerait l'ecart.      */
-    /* / In two columns, .kiosk-console's `gap` separates the keypad from the   */
-    /* bar. Keeping the bar's padding too would double the gap.                 */
-    .actionbar {
-        position: static;
-        border-top: 0;
-        padding: 0;
-    }
-}
-
-.btn-validate {
-    width: 100%;
-    min-height: max(var(--touch-min), clamp(72px, 12vmin, 120px));
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding-inline: var(--space-5);
-
-    background-color: var(--color-accent);
-    color: var(--color-on-accent);
-    border: var(--rule-hair) solid transparent;
-    border-radius: var(--radius-key);
-
-    font-family: var(--font-ui);
-    font-weight: 700;
-    font-size: var(--text-action);
-    line-height: 1;
-    cursor: pointer;
-
-    transition:
-        background-color var(--dur-press) var(--ease-out),
-        transform var(--dur-press) var(--ease-out);
-}
-
-.btn-validate:active {
-    background-color: var(--color-accent-press);
-    transform: scale(0.99);
-}
-
-.btn-validate__label {
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    /* Un libelle de bouton ne passe jamais sur deux lignes.                   */
-    /* / A button label never wraps onto two lines.                            */
-    white-space: nowrap;
-}
-
-.btn-validate__amount {
-    margin-left: auto;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-
-.btn-validate__arrow {
-    flex: none;
-    width: 1.1em;
-    height: 1.1em;
-    transition: transform var(--dur-fade) var(--ease-out);
-}
-
-.btn-validate:active .btn-validate__arrow {
-    transform: translateX(3px);
-}
-
-/* Etat desactive : le bouton reste cliquable pour HTMX (hx-trigger vit        */
-/* dessus), mais il s'annonce inerte. La garde reelle est dans readNfc().      */
-/* / Disabled state: the button stays clickable for HTMX (hx-trigger lives on  */
-/* it) but announces itself inert. The real guard is in readNfc().             */
-.btn-validate[aria-disabled="true"] {
-    background-color: var(--color-key-face);
-    color: var(--color-text-soft);
-    border-color: var(--color-rule);
-    cursor: not-allowed;
-}
-
-.btn-validate[aria-disabled="true"]:active {
-    background-color: var(--color-key-face);
-    transform: none;
-}
-
-.btn-validate[aria-disabled="true"] .btn-validate__arrow {
-    opacity: 0.35;
-}
-
-/* ========================================================================= */
-/* 6. Bascule jour / nuit                                                    */
-/* ========================================================================= */
-
-/* Le libelle n'est PAS ecrit par le JS (cela contournait la traduction).      */
-/* Les deux libelles sont dans le HTML, traduits ; le CSS montre le bon selon  */
-/* le theme actif. / The label is NOT written by JS (that bypassed the         */
-/* translation tag). Both labels sit in the HTML, translated; the CSS shows    */
-/* the right one for the active theme.                                         */
-.btn-theme {
+    justify-content: center;
+    gap: var(--space-2);
     min-height: var(--touch-min);
+    padding: 0 var(--space-6);
+    border-radius: var(--radius-m);
+    border: 1px solid transparent;
+    font-family: var(--font-text);
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: filter var(--dur-press) var(--ease-out),
+                transform var(--dur-press) var(--ease-out);
+}
+
+.kiosk-btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+/* Signature Tibillet : le seul endroit ou la marque parle en couleur. */
+/* / Tibillet signature: the only place the brand speaks in colour.     */
+.kiosk-btn--signature {
+    background: var(--grad-nuit);
+    color: var(--color-on-dark);
+    text-shadow: var(--shadow-text-on-brand);
+}
+
+/* Presse : on FONCE (0.92) plutot que d'eclaircir. Le blanc sur l'arret bleu */
+/* est a 3,25:1 : eclaircir le ferait passer sous 3:1.                        */
+/* / Pressed: DARKEN, not lighten, to keep white text above 3:1.              */
+.kiosk-btn--signature:active:not(:disabled) {
+    filter: brightness(0.92);
+}
+
+.kiosk-btn--outline {
+    background: transparent;
+    color: var(--color-text);
+    border: 1.5px solid var(--color-border-strong);
+}
+
+.kiosk-btn--outline:active:not(:disabled) {
+    background: var(--color-surface-tint);
+}
+
+.kiosk-btn--neutral {
+    background: var(--color-surface-tint);
+    color: var(--color-text);
+    border: 1.5px solid var(--color-border-strong);
+}
+
+.kiosk-btn--neutral:active:not(:disabled) {
+    background: var(--color-surface-pressed);
+}
+
+.kiosk-btn--lg {
+    min-height: var(--touch-min);
+    padding: 0 var(--space-8);
+    font-size: 20px;
+    border-radius: var(--radius-l);
+}
+
+.kiosk-btn:disabled {
+    background: var(--color-surface-tint);
+    color: var(--color-text-faint);
+    border-color: var(--color-border);
+    text-shadow: none;
+    cursor: default;
+}
+
+/* Pendant une requete HTMX, le bouton qui l'a lancee s'eteint. */
+/* / During an HTMX request, the triggering button dims.        */
+.kiosk-btn.htmx-request,
+form.htmx-request .kiosk-btn[type="submit"] {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* ========================================================================= */
+/* 3. Accueil operateur (configuration.html)                                 */
+/* ========================================================================= */
+
+/* Le kiosque porte les couleurs du lieu (--place). Tibillet ne signe qu'au  */
+/* pied. / The kiosk wears the place's colour; Tibillet only signs the foot. */
+.kiosk {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg);
+}
+
+.kiosk__head {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-3) var(--space-6);
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.kiosk__mark {
+    width: 46px;
+    height: 46px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: var(--radius-m);
+    background: var(--place);
+    color: var(--color-on-dark);
+    font-weight: 700;
+    font-size: 22px;
+    line-height: 1;
+}
+
+/* Avec un logo : fond blanc, l'image garde ses proportions. */
+/* / With a logo: white ground, image keeps its ratio.       */
+.kiosk__mark--logo {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+}
+
+.kiosk__mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.kiosk__place-name {
+    font-weight: 700;
+    font-size: 24px;
+    line-height: 1.1;
+}
+
+.kiosk__terminal-name {
+    margin-top: var(--space-1);
+    font-size: 14px;
+    color: var(--color-text-muted);
+}
+
+.kiosk__main {
+    flex: 1;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--space-6) var(--space-4);
+}
+
+.kiosk__intro {
+    margin: var(--space-4) 0 var(--space-3);
+}
+
+.kiosk__eyebrow {
+    margin-bottom: var(--space-2);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.kiosk__title {
+    margin-bottom: var(--space-2);
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 28px;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+}
+
+.kiosk__lede {
+    max-width: 62ch;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--color-text-muted);
+}
+
+/* auto-fit : 3 tuiles sur 1280px, puis 2, puis 1. minmax(0, ...) : jamais  */
+/* de debordement. / auto-fit: 3 tiles on 1280px, then 2, then 1.           */
+.kiosk-modules,
+.kiosk-caisse-block {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: var(--space-5);
+}
+
+/* La tuile Caisse garde la taille d'une tuile du haut. */
+/* / The cash-register tile keeps a top tile's size.    */
+.kiosk-caisse-block {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+}
+
+.kiosk-module {
+    min-height: 158px;
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    background: var(--color-surface);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-l);
+    transition: border-color var(--dur-fade) var(--ease-out);
+}
+
+.kiosk-module.is-active {
+    border-color: var(--place);
+}
+
+.kiosk-module.is-coming {
+    background: var(--color-surface-tint);
+}
+
+.kiosk-module__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+.kiosk-module__id {
+    min-width: 0;
+}
+
+.kiosk-module__label {
+    margin-bottom: var(--space-2);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-faint);
+}
+
+.kiosk-module__title {
+    font-size: 19px;
+    line-height: 1.2;
+}
+
+.kiosk-module__desc {
+    flex-grow: 1;
+    max-width: 48ch;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--color-text-muted);
+}
+
+.kiosk-module.is-coming .kiosk-module__title,
+.kiosk-module.is-coming .kiosk-module__label,
+.kiosk-module.is-coming .kiosk-module__coming {
+    color: var(--color-text-muted);
+}
+
+.kiosk-module__coming {
+    margin-top: var(--space-1);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-faint);
+}
+
+/* Interrupteur : 60x34 visible, zone tactile elargie par .kiosk-switch__tap. */
+/* / Switch: 60x34 visible, touch area widened by .kiosk-switch__tap.         */
+.kiosk-switch {
+    position: relative;
+    flex-shrink: 0;
+    width: 60px;
+    height: 34px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: var(--color-border-strong);
+    cursor: pointer;
+    transition: background var(--dur-switch) var(--ease-out);
+}
+
+.kiosk-switch::before {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-knob);
+    transition: transform var(--dur-switch) var(--ease-out);
+}
+
+/* Eteint mais activable : un contour fonce, sinon le rail (1,35:1 sur la     */
+/* carte blanche) se lit a peine. / Off but enabled: a dark outline.          */
+.kiosk-switch[aria-checked="false"]:not(:disabled) {
+    box-shadow: inset 0 0 0 1.5px var(--color-text-muted);
+}
+
+.kiosk-switch:active:not(:disabled)::before {
+    width: 32px;
+}
+
+/* Pendant l'enregistrement (hx-post), l'interrupteur s'annonce occupe. */
+/* / While saving, the switch announces itself busy.                    */
+.kiosk-switch[aria-busy="true"] {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.kiosk-switch[aria-checked="true"] {
+    background: var(--place);
+}
+
+.kiosk-switch[aria-checked="true"]::before {
+    transform: translateX(26px);
+}
+
+.kiosk-switch__tap {
+    position: absolute;
+    inset: -12px;
+}
+
+.kiosk-switch:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Separateur seul : la ligne dit « ceci ou cela », sans mot. */
+/* / Rule only: the line says "this or that", wordless.        */
+.kiosk-separator {
+    height: 1px;
+    margin: var(--space-4) 0;
+    border: none;
+    background: var(--color-border-strong);
+}
+
+.kiosk-launch {
+    margin-top: var(--space-4);
+    padding: var(--space-2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.kiosk-launch__note {
+    font-size: 14px;
+    color: var(--color-text-muted);
+}
+
+/* Pied : Tibillet en signature, sans lien ni appel a l'action. */
+/* / Foot: Tibillet signs, no link, no call to action.          */
+.kiosk__foot {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-3) var(--space-6);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    border-top: 1px solid var(--color-border);
+    font-size: 13px;
+    color: var(--color-text-faint);
+}
+
+.kiosk__foot-mark {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--color-text-muted);
+}
+
+/* ========================================================================= */
+/* 4. Ossature du parcours (recharge.html)                                   */
+/* ========================================================================= */
+
+.kiosk-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg);
+}
+
+/* En-tete : le lieu a gauche, les actions a droite. */
+/* / Header: the place on the left, actions on the right. */
+.kiosk-page__top {
+    padding: var(--space-3) var(--space-5);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.kiosk-page__place {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: 14px;
+    color: var(--color-text-muted);
+}
+
+.kiosk-page__place .kiosk__mark {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-s);
+    font-size: 16px;
+}
+
+.kiosk-page__right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.kiosk-page__home,
+.kiosk-page__admin {
+    min-height: 54px;
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-4);
-
-    background-color: transparent;
-    color: var(--color-text-soft);
-    border: var(--rule-hair) solid var(--color-rule);
-    border-radius: var(--radius-key);
-
-    font-family: var(--font-ui);
-    font-size: var(--text-label);
-    cursor: pointer;
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-m);
+    font-family: var(--font-text);
+    font-size: 16px;
+    font-weight: 700;
     white-space: nowrap;
-
-    transition:
-        background-color var(--dur-press) var(--ease-out),
-        color var(--dur-press) var(--ease-out);
+    cursor: pointer;
 }
 
-.btn-theme:active {
-    background-color: var(--color-key-press);
+.kiosk-page__home {
+    background: var(--color-surface);
     color: var(--color-text);
+    border: 1.5px solid var(--color-border-strong);
 }
 
-.btn-theme__icon {
-    flex: none;
-    width: 1.2em;
-    height: 1.2em;
+.kiosk-page__home:active {
+    background: var(--color-surface-tint);
 }
 
-.btn-theme__to-light,
-:root[data-theme="dark"] .btn-theme__to-dark {
-    display: none;
+/* Acces admin : bouton encre, il tranche. Ce n'est pas un geste du public. */
+/* / Admin access: ink button, it stands apart. Not a public gesture.       */
+.kiosk-page__admin {
+    padding: var(--space-3) var(--space-4);
+    font-size: 15px;
+    background: var(--color-text);
+    color: var(--color-on-dark);
+    border: none;
 }
 
-:root[data-theme="dark"] .btn-theme__to-light {
-    display: inline;
+.kiosk-page__admin svg,
+.icone-ligne {
+    flex-shrink: 0;
 }
 
-/* ========================================================================= */
-/* 7. Ecran « paiement sur le terminal »                                     */
-/* ========================================================================= */
+.kiosk-page__admin:active {
+    background: var(--color-text-muted);
+}
 
-/* Cet ecran n'a qu'un seul message : il reste centre dans les deux            */
-/* orientations, il ne se scinde pas en colonnes.                              */
-/* / This screen carries a single message: it stays centred in both            */
-/* orientations, it does not split into columns.                               */
-.payment {
+/* « Recommencer » n'a pas de sens la ou le parcours commence (main.js pose   */
+/* data-etape sur <body>). / "Start over" is pointless where the flow starts. */
+body[data-etape="poser-carte"] .kiosk-page__home,
+body[data-etape="pause"] .kiosk-page__home {
+    visibility: hidden;
+}
+
+/* Pendant le paiement au TPE, on ne quitte pas l'ecran : le lecteur resterait */
+/* arme sans suivi. Seul le bouton « Annuler » de l'ecran permet d'en sortir.  */
+/* / During payment, leaving would keep the reader armed: only "Cancel" exits. */
+body[data-etape="paiement"] .kiosk-page__home,
+body[data-etape="paiement"] .kiosk-page__admin {
+    visibility: hidden;
+}
+
+/* La scene : on centre quand ca tient, on defile quand ca deborde. */
+/* / The stage: centred when it fits, scrolls when it overflows.    */
+.kiosk-page__stages {
+    flex: 1;
+    padding: var(--space-6);
     display: flex;
-    flex-direction: column;
-    align-items: center;
+    align-items: safe center;
     justify-content: center;
-    gap: var(--gap-blocs);
-    text-align: center;
-    padding: var(--gap-blocs) var(--pad-ecran);
-    padding-bottom: calc(var(--gap-blocs) + env(safe-area-inset-bottom));
-
-    /* Cet ecran empile six blocs. Sur un kiosque bas de plafond (1024x600), la  */
-    /* somme peut depasser la rangee : sans ces deux lignes le bouton ANNULER    */
-    /* sort de l'ecran et devient inatteignable. min-height:0 est indispensable  */
-    /* pour qu'un enfant de grille accepte de retrecir.                          */
-    /* / This screen stacks six blocks. On a short kiosk (1024x600) the sum can  */
-    /* exceed the row: without these two lines the CANCEL button leaves the      */
-    /* screen and becomes unreachable. min-height:0 is required for a grid child */
-    /* to agree to shrink.                                                       */
-    min-height: 0;
     overflow-y: auto;
 }
 
-/* Volontairement plus petit que l'afficheur de l'ecran 1 : ici le montant est  */
-/* un rappel, pas la commande. Il doit laisser la place au bouton ANNULER.      */
-/* / Deliberately smaller than screen 1's readout: here the amount is a         */
-/* reminder, not the control. It must leave room for the CANCEL button.         */
-.payment-amount {
-    font-weight: 700;
-    font-size: clamp(2.25rem, 8vmin, 4.5rem);
-    line-height: 0.95;
-    font-variant-numeric: tabular-nums;
-    margin: 0;
-    overflow-wrap: anywhere;
-    min-width: 0;
+.kiosk-etapes {
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 
-.payment-text {
-    margin: 0;
-    max-width: 40ch;
-    color: var(--color-text-soft);
-}
-
-/* Illustration dessinee a la main, en remplacement des emoji carte-fleche :   */
-/* un emoji change de dessin sur chaque appareil et ne s'echelonne pas.        */
-/* / Hand-drawn illustration replacing the card/arrow emoji: an emoji renders  */
-/* differently on every device and does not scale.                             */
-.payment-figure {
-    width: clamp(150px, 22vmin, 300px);
-    height: auto;
-    flex: none;
-    color: var(--color-accent);
-}
-
-.payment-figure__travel {
-    animation: card-travel 2.4s var(--ease-in-out) infinite;
-}
-
-@keyframes card-travel {
-    0%,
-    100% {
-        transform: translateX(0);
-        opacity: 1;
-    }
-    45% {
-        transform: translateX(26px);
-        opacity: 1;
-    }
-    60% {
-        transform: translateX(30px);
-        opacity: 0;
-    }
-    61% {
-        transform: translateX(0);
-        opacity: 0;
-    }
-    75% {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-.btn-cancel {
-    min-height: max(var(--touch-min), clamp(64px, 10vmin, 96px));
-    padding: var(--space-4) var(--space-7);
-
-    background-color: transparent;
-    color: var(--color-stop);
-    border: var(--rule-thick) solid var(--color-stop);
-    border-radius: var(--radius-key);
-
-    font-family: var(--font-ui);
-    font-weight: 700;
-    font-size: var(--text-action);
-    line-height: 1;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    cursor: pointer;
-
-    transition:
-        background-color var(--dur-press) var(--ease-out),
-        color var(--dur-press) var(--ease-out),
-        transform var(--dur-press) var(--ease-out);
-}
-
-.btn-cancel:active {
-    background-color: var(--color-stop);
-    color: var(--color-on-stop);
-    transform: scale(0.98);
-}
-
-/* En mode sombre, l'aplat brique est trop sombre pour servir de texte : on    */
-/* remonte le bouton d'annulation sur la teinte claire.                        */
-/* / In dark mode the brick field is too dark for text: lift the cancel button */
-/* onto the lighter tint.                                                      */
-:root[data-theme="dark"] .btn-cancel {
-    color: var(--brick-500);
-    border-color: var(--brick-500);
-}
-
-:root[data-theme="dark"] .btn-cancel:active {
-    background-color: var(--brick-500);
-    color: var(--color-on-stop);
-}
-
-/* ========================================================================= */
-/* 8. Ecrans d'etat pleine page (succes / annulation)                        */
-/* ========================================================================= */
-
-/* Un aplat de couleur plein ecran se lit a cinq metres. C'est le seul endroit */
-/* de la borne ou la couleur porte le message toute seule — d'ou le titre en   */
-/* Staatliches, la seule police d'affichage du projet.                          */
-/* / A full-bleed colour field reads from five metres. The only place on the    */
-/* kiosk where colour carries the message alone.                                */
-.state-screen {
-    min-height: 100vh;
-    min-height: 100svh;
-    display: grid;
-    place-items: center;
-    text-align: center;
-    padding: var(--pad-ecran);
-    padding-bottom: calc(var(--pad-ecran) + env(safe-area-inset-bottom));
-}
-
-.state-screen--go {
-    background-color: var(--color-go);
-    color: var(--color-on-go);
-}
-
-.state-screen--stop {
-    background-color: var(--color-stop);
-    color: var(--color-on-stop);
-}
-
-.state-title {
-    margin: 0 0 var(--space-5);
-    font-family: var(--font-display);
-    /* Toujours romain : un titre en italique est le tell le plus fiable.       */
-    /* / Always roman: an italic heading is the most reliable tell.             */
-    font-style: normal;
-    font-weight: 400;
-    font-size: var(--text-state);
-    line-height: 0.92;
-    letter-spacing: 0.02em;
-    overflow-wrap: anywhere;
-    min-width: 0;
-}
-
-.state-mark {
-    width: clamp(64px, 14vmin, 128px);
-    height: auto;
-    margin-bottom: var(--space-5);
-}
-
-.state-timer {
-    margin: 0 0 var(--space-7);
-    font-size: var(--text-body);
-    font-variant-numeric: tabular-nums;
-    opacity: 0.85;
-}
-
-.btn-return {
-    display: inline-flex;
+.stage {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    min-height: max(var(--touch-min), clamp(64px, 10vmin, 96px));
-    padding: var(--space-4) var(--space-7);
-
-    background-color: var(--color-on-go);
-    color: var(--ink-900);
-    border: 0;
-    border-radius: var(--radius-key);
-
-    font-family: var(--font-ui);
-    font-weight: 700;
-    font-size: var(--text-action);
-    line-height: 1;
-    text-decoration: none;
-    white-space: nowrap;
-    cursor: pointer;
-
-    transition: transform var(--dur-press) var(--ease-out);
+    gap: var(--space-6);
+    text-align: center;
 }
 
-.btn-return:active {
-    transform: scale(0.98);
+.stage__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 48px;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+}
+
+.stage__title .break {
+    display: block;
+}
+
+.stage__lede {
+    max-width: 42ch;
+    font-size: 22px;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+}
+
+/* Ecran de paiement : six elements empiles (titre, deux phrases, picto,    */
+/* spinner, Annuler). Un espacement plus serre pour tenir en 1280x800.       */
+/* / Payment screen: six stacked items, tighter gap to fit 1280x800.         */
+.stage[data-etape="paiement"] {
+    gap: var(--space-5);
+}
+
+.stage[data-etape="paiement"] .stage__lede + .stage__lede {
+    margin-top: calc(-1 * var(--space-3));
+}
+
+/* Cercle pointille qui respire : « posez la carte ici ». */
+/* / Breathing dashed circle: "tap the card here".        */
+.stage__nfc {
+    width: 200px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--color-border-strong);
+    border-radius: 50%;
+    color: var(--color-text-faint);
+    animation: nfc-pulse 2s var(--ease-in-out) infinite;
+}
+
+@keyframes nfc-pulse {
+    0%, 100% { border-color: var(--color-border-strong); }
+    50% { border-color: var(--color-text); }
 }
 
 /* ========================================================================= */
-/* 9. Chargement                                                             */
+/* 5. Carte de recharge (solde, succes, refus)                               */
+/* ========================================================================= */
+
+.rcard {
+    width: 100%;
+    max-width: 500px;
+    padding: var(--space-7);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    text-align: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    box-shadow: var(--shadow-panel);
+}
+
+.rcard__head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.rcard__id {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
+}
+
+.rcard__solde-label {
+    margin-top: var(--space-3);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-faint);
+}
+
+/* Le solde : geste Tibillet, donc degrade chaud. */
+/* / The balance: a Tibillet gesture, warm gradient. */
+.rcard__balance {
+    margin-top: var(--space-1);
+    font-weight: 700;
+    font-size: 60px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    /* Version TEXTE du degrade (contraste >= 4,8:1 sur tout le trace). */
+    /* / TEXT version of the gradient (>= 4.8:1 everywhere).            */
+    background: var(--grad-chaud-texte);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* Symbole euro discret : le nombre porte le centrage. */
+/* / Discreet euro sign: the number carries the centre. */
+.eur {
+    font-size: 0.5em;
+    font-weight: 700;
+}
+
+.rcard__q {
+    font-size: 22px;
+    line-height: 1.25;
+}
+
+.rcard__q--lg {
+    font-size: 26px;
+    line-height: 1.3;
+}
+
+.rcard__validate {
+    width: 100%;
+    min-height: 64px;
+    font-size: 26px;
+}
+
+.rcard__actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.rcard__actions .kiosk-btn {
+    width: 100%;
+    min-height: 60px;
+    font-size: 19px;
+}
+
+.rcard__done-mark {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--color-success);
+    color: var(--color-on-dark);
+}
+
+.rcard__done-line {
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+}
+
+.rcard__done-line strong {
+    color: var(--color-text);
+}
+
+/* ========================================================================= */
+/* 6. Choix du montant                                                       */
+/* ========================================================================= */
+
+/* En haut : carte, solde, question et LE montant en cours (partage par les  */
+/* montants rapides ET le pave). En bas : Effacer + Valider.                 */
+/* / Top: card, balance, question and THE current amount. Bottom: actions.   */
+.rcard--step3 {
+    max-width: 820px;
+    padding: var(--space-6) var(--space-7);
+    gap: var(--space-4);
+}
+
+.step3__top {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.step3__solde {
+    font-size: 17px;
+    color: var(--color-text-muted);
+}
+
+.step3__solde-label {
+    margin-right: var(--space-2);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-faint);
+}
+
+.step3__solde-val {
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text);
+}
+
+.rcard--step3 .rcard__q {
+    margin-top: var(--space-1);
+    font-size: 23px;
+}
+
+.step3__amount {
+    margin-top: var(--space-1);
+    font-weight: 700;
+    font-size: 50px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text);
+    /* Le montant reste lisible et copiable par l'equipe. */
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.step3__amount.is-empty {
+    color: var(--color-text-faint);
+}
+
+.step3__cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-6);
+    align-items: stretch;
+}
+
+.step3__left,
+.step3__right {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.rlabel {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: left;
+    color: var(--color-text-muted);
+}
+
+/* Montants rapides : 2x2, ils remplissent la colonne de gauche. */
+/* / Quick amounts: 2x2, filling the left column.                */
+.rquick {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: 1fr;
+    gap: var(--space-3);
+}
+
+.rquick__btn,
+.rpad__key {
+    border: 1.5px solid var(--color-border-strong);
+    border-radius: var(--radius-m);
+    font-family: var(--font-text);
+    font-weight: 700;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background var(--dur-press) var(--ease-out),
+                border-color var(--dur-press) var(--ease-out);
+}
+
+.rquick__btn {
+    min-height: 74px;
+    font-size: 26px;
+    background: var(--color-bg);
+}
+
+/* Choisi : meme epaisseur de bordure (le libelle ne bouge pas), liseré et   */
+/* fond aux couleurs du lieu. / Selected: same border width, place colours.   */
+.rquick__btn[aria-pressed="true"] {
+    border-color: var(--place);
+    box-shadow: inset 0 0 0 1px var(--place);
+    background: var(--place-tint);
+}
+
+/* Pave numerique : 4 rangees qui s'equilibrent avec les montants rapides. */
+/* / Keypad: 4 rows balanced with the quick amounts.                      */
+.rpad {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-auto-rows: 1fr;
+    gap: var(--space-2);
+}
+
+.rpad__key {
+    min-height: 50px;
+    font-size: 23px;
+    background: var(--color-surface);
+}
+
+.rpad__key--util {
+    color: var(--color-text-muted);
+}
+
+/* Le 0 occupe la place de l'ancienne virgule : deux colonnes. */
+/* / The 0 takes the former comma's slot: two columns.         */
+.rpad__key--large {
+    grid-column: span 2;
+}
+
+.rquick__btn:active,
+.rpad__key:active {
+    background: var(--color-surface-tint);
+}
+
+.step3__foot {
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-3);
+}
+
+.step3__clear {
+    flex: 0 0 auto;
+    min-width: 150px;
+    min-height: 64px;
+    font-size: 18px;
+}
+
+.step3__validate {
+    flex: 1;
+    min-height: 64px;
+    font-size: 24px;
+}
+
+/* ========================================================================= */
+/* 7. Recapitulatif                                                          */
+/* ========================================================================= */
+
+.rrecap {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+.rrecap__row {
+    padding: var(--space-4) 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-4);
+}
+
+.rrecap__row + .rrecap__row {
+    border-top: 1px solid var(--color-border);
+}
+
+.rrecap__row--total,
+.rrecap__row + .rrecap__row--total {
+    border-top: 1.5px solid var(--color-text);
+}
+
+.rrecap__key {
+    font-size: 16px;
+    color: var(--color-text-muted);
+}
+
+.rrecap__row--total .rrecap__key {
+    color: var(--color-text);
+    font-weight: 700;
+}
+
+.rrecap__val {
+    font-weight: 700;
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.rrecap__val--add {
+    color: var(--color-success-text);
+}
+
+.rrecap__row--total .rrecap__val {
+    font-size: 30px;
+    background: var(--grad-chaud-texte);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* ========================================================================= */
+/* 8. Modales                                                                */
+/* ========================================================================= */
+
+/* <dialog> ouvert avec showModal() (main.js) : focus piege, fond inerte,    */
+/* Echap ferme. Le simulateur DEMO de nfc.js se pose DANS la modale ouverte. */
+/* / <dialog> opened with showModal(): focus trap, inert background.         */
+.kiosk-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: var(--space-6);
+    border: none;
+    background: var(--color-veil);
+    color: var(--color-text);
+}
+
+.kiosk-modal[open] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Le voile est le <dialog> lui-meme : le fond propre au navigateur s'efface. */
+/* / The veil is the <dialog> itself: hide the browser's own backdrop.        */
+.kiosk-modal::backdrop {
+    background: transparent;
+}
+
+.kiosk-modal__card {
+    width: 100%;
+    max-width: 560px;
+    max-height: 100%;
+    overflow-y: auto;
+    padding: var(--space-6) var(--space-7);
+    text-align: left;
+    background: var(--color-surface);
+    border-radius: var(--radius-l);
+    box-shadow: var(--shadow-modal);
+}
+
+.kiosk-modal__card--wide {
+    max-width: 680px;
+}
+
+.kiosk-modal__title {
+    margin: 0 0 var(--space-4);
+    font-size: 28px;
+    line-height: 1.2;
+}
+
+.kiosk-modal__text {
+    margin: 0 0 var(--space-4);
+    font-size: 17.5px;
+    line-height: 1.6;
+}
+
+.kiosk-modal__text:last-of-type {
+    margin-bottom: 0;
+}
+
+.kiosk-modal__actions {
+    margin-top: var(--space-6);
+    display: flex;
+    justify-content: center;
+    gap: var(--space-3);
+}
+
+.kiosk-modal__actions--stack {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.kiosk-modal__actions--stack .kiosk-btn {
+    width: 100%;
+}
+
+.admin-nfc {
+    margin: var(--space-5) 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-faint);
+}
+
+/* ========================================================================= */
+/* 9. Remerciement                                                           */
+/* ========================================================================= */
+
+.rcard--merci {
+    max-width: 620px;
+    padding: var(--space-8) var(--space-8) calc(var(--space-8) + var(--space-2));
+    align-items: center;
+    gap: var(--space-5);
+}
+
+/* Pastille coeur, et de petites etoiles aux couleurs de Tibillet autour. */
+/* / Heart badge with small Tibillet-coloured stars around it.            */
+.merci__badge {
+    position: relative;
+    width: 220px;
+    height: 150px;
+    margin: 0 auto;
+}
+
+.merci__mark {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 68px;
+    height: 68px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--color-primary-soft);
+    color: var(--color-primary-text);
+}
+
+.merci__star {
+    position: absolute;
+    display: block;
+}
+
+.merci__star--a { width: 26px; top: 12px; left: 20px; transform: rotate(-18deg); }
+.merci__star--b { width: 20px; top: 4px; right: 28px; transform: rotate(16deg); }
+.merci__star--c { width: 16px; bottom: 18px; right: 18px; transform: rotate(-24deg); }
+.merci__star--d { width: 18px; bottom: 10px; left: 30px; transform: rotate(22deg); }
+
+.merci__title {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 54px;
+    line-height: 1;
+}
+
+.merci__text {
+    max-width: 34ch;
+    font-size: 21px;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+}
+
+/* ========================================================================= */
+/* 10. Alertes                                                               */
+/* ========================================================================= */
+
+.kiosk-alert {
+    max-width: 42ch;
+    margin: 0 auto;
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-m);
+    background: var(--color-primary-soft);
+    color: var(--color-danger-text);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+/* ========================================================================= */
+/* 11. Chargement                                                            */
 /* ========================================================================= */
 
 #spinner {
     display: none;
 }
 
-/* fixed et non absolute : sur une page scrollee, absolute cale le voile en    */
-/* haut du DOCUMENT et non du viewport — le voile rate l'ecran.                */
-/* / fixed, not absolute: on a scrolled page, absolute pins the veil to the    */
-/* top of the DOCUMENT, not the viewport — the veil misses the screen.         */
+/* Voile global pose par hx-indicator="#spinner" sur <body>. */
+/* / Global veil set by hx-indicator on <body>.              */
 .htmx-request #spinner,
 #spinner.htmx-request {
-    display: grid;
-    place-items: center;
     position: fixed;
     inset: 0;
-    background-color: var(--color-veil);
-    /* Au-dessus du modal SweetAlert2 (1060) et de l'overlay du simulateur     */
-    /* NFC (2000, cf. nfc.js). / Above the SweetAlert2 modal (1060) and the    */
-    /* NFC simulator overlay (2000, see nfc.js).                               */
     z-index: 9999;
+    display: grid;
+    place-items: center;
+    background: var(--color-veil);
 }
 
 .spinner-ring {
     width: clamp(72px, 16vmin, 160px);
     aspect-ratio: 1;
     border-radius: 50%;
-    border: var(--rule-thick) solid var(--color-ring-track);
-    border-top-color: var(--color-accent);
+    border: 4px solid var(--color-border);
+    border-top-color: var(--letchi);
     animation: spin 900ms linear infinite;
 }
 
-/* Spinner en ligne de l'ecran « paiement sur le terminal » : il vit sur le    */
-/* fond de la page, pas sur le voile — sa piste est donc le filet courant.     */
-/* Sans cette regle, il n'avait AUCUN style de base : il etait invisible en    */
-/* mode jour. / Inline spinner of the terminal-payment screen: it sits on the  */
-/* page background, so its track is the regular hairline. Without this rule it */
-/* had NO base style at all: invisible in light mode.                          */
+/* Spinner en ligne de l'ecran de paiement : il PULSE a chaque sondage. */
+/* / Inline spinner of the payment screen: pulses on each poll.         */
 .spinner-inline {
-    width: clamp(40px, 8vmin, 72px);
+    width: 48px;
     flex: none;
     aspect-ratio: 1;
     border-radius: 50%;
-    border: var(--rule-thick) solid var(--color-rule);
-    border-top-color: var(--color-accent);
+    border: 4px solid var(--color-border);
+    border-top-color: var(--letchi);
     animation: spin 900ms linear infinite;
 }
 
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+#kiosk-waiting-spinner.htmx-request {
+    animation: spin 900ms linear infinite, pulse-sondage 700ms var(--ease-in-out);
 }
 
-/* Pendant le sondage du filet (hx-indicator), le spinner PULSE une fois : */
-/* feedback discret « je verifie l'etat du paiement », sans overlay opaque. */
-/* Il continue de tourner (spin) ; la pulse d'opacite s'ajoute le temps de   */
-/* la requete. / While the safety-net poll runs, the spinner pulses once:    */
-/* a discreet "checking" feedback, no opaque overlay. It keeps spinning.      */
-#kiosk-waiting-spinner.htmx-request {
-    animation: spin 900ms linear infinite, pulse-sondage 700ms ease-in-out;
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 @keyframes pulse-sondage {
-    0%, 100% {
-        opacity: 1;
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* ========================================================================= */
+/* 12. Tailles d'ecran : Pi 7" (1024x600), telephones, 1920x1080             */
+/* ========================================================================= */
+
+/* --- Ecrans bas (Pi 7" 1024x600) ------------------------------------------ */
+/* On garde toutes les cibles tactiles >= 44px et on serre les marges. Le but : */
+/* aucun ecran du parcours ne defile. / Touch targets stay >= 44px; no scroll. */
+@media (max-height: 700px) {
+    .kiosk-page__top {
+        padding: var(--space-2) var(--space-4);
     }
-    50% {
-        opacity: 0.3;
+
+    .kiosk-page__home,
+    .kiosk-page__admin {
+        min-height: 48px;
+        padding: var(--space-2) var(--space-4);
+    }
+
+    .kiosk-page__stages {
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .stage {
+        gap: var(--space-3);
+    }
+
+    .stage__title {
+        font-size: 34px;
+    }
+
+    .stage__lede {
+        font-size: 19px;
+    }
+
+    .stage__nfc {
+        width: 120px;
+        height: 120px;
+    }
+
+    .rcard {
+        padding: var(--space-5);
+        gap: var(--space-4);
+    }
+
+    .rcard__balance {
+        font-size: 50px;
+    }
+
+    /* Etape montant : le numero de carte est deja rappele au solde. */
+    /* / Amount step: the card number was already shown.            */
+    .rcard--step3 .step3__top .rcard__id {
+        display: none;
+    }
+
+    .rcard--step3 {
+        padding: var(--space-4) var(--space-5);
+        gap: var(--space-3);
+    }
+
+    .step3__amount {
+        font-size: 38px;
+    }
+
+    .rcard--step3 .rcard__q {
+        font-size: 19px;
+    }
+
+    .rquick__btn {
+        min-height: 48px;
+        font-size: 22px;
+    }
+
+    .rpad__key {
+        min-height: 44px;
+        font-size: 20px;
+    }
+
+    .step3__clear,
+    .step3__validate,
+    .rcard__validate {
+        min-height: 56px;
+    }
+
+    .rcard--merci {
+        padding: var(--space-6);
+    }
+
+    /* Configuration : en-tete et intro plus courts. */
+    /* / Configuration: shorter header and intro.   */
+    .kiosk__head {
+        padding: var(--space-2) var(--space-6);
+    }
+
+    .kiosk__intro {
+        margin: var(--space-3) 0 var(--space-2);
+    }
+
+    .kiosk-module {
+        min-height: 0;
+    }
+
+    .kiosk-launch {
+        margin-top: var(--space-3);
+    }
+}
+
+/* Configuration sur ecran bas ET assez large : les 4 tuiles sur une rangee, */
+/* separees par un filet vertical, pour garder « Demarrer » a l'ecran.       */
+/* / Short but wide: 4 tiles on one row so "Start" stays on screen.          */
+@media (max-height: 700px) and (min-width: 1000px) {
+    .kiosk-rangee-modules {
+        display: grid;
+        grid-template-columns: minmax(0, 3fr) auto minmax(0, 1fr);
+        gap: var(--space-4);
+    }
+
+    .kiosk-rangee-modules .kiosk-modules {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-4);
+    }
+
+    .kiosk-rangee-modules .kiosk-caisse-block {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .kiosk-rangee-modules .kiosk-separator {
+        width: 1px;
+        height: auto;
+        margin: 0;
+    }
+}
+
+/* --- Portrait etroit (telephones 320-414px) ------------------------------ */
+/* Les colonnes s'empilent, les marges fondent, les boutons passent a la      */
+/* ligne plutot que de deborder. / Columns stack, margins shrink, buttons wrap. */
+@media (max-width: 720px) {
+    .kiosk-page__top {
+        flex-wrap: wrap;
+        padding: var(--space-2) var(--space-4);
+    }
+
+    .kiosk-page__stages {
+        padding: var(--space-4);
+    }
+
+    .stage__title {
+        font-size: 30px;
+    }
+
+    .stage__lede {
+        font-size: 18px;
+    }
+
+    .rcard,
+    .rcard--step3,
+    .rcard--merci {
+        padding: var(--space-5);
+    }
+
+    .rcard__balance {
+        font-size: 44px;
+    }
+
+    .kiosk-btn,
+    .kiosk-btn--lg {
+        padding: 0 var(--space-5);
+        white-space: normal;
+        text-align: center;
+    }
+
+    .step3__cols {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .step3__foot {
+        flex-direction: column;
+    }
+
+    .step3__clear {
+        min-width: 0;
+    }
+
+    .merci__title {
+        font-size: 36px;
+    }
+
+    .kiosk-modal {
+        padding: var(--space-3);
+    }
+
+    .kiosk-modal__card {
+        padding: var(--space-5);
+    }
+
+    .kiosk__head,
+    .kiosk__main,
+    .kiosk__foot {
+        padding-left: var(--space-4);
+        padding-right: var(--space-4);
+    }
+
+    .kiosk__foot {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* Les titres longs coupent dans les mots plutot que de deborder. */
+/* / Long titles break inside words rather than overflow.         */
+.merci__title,
+.rcard__q,
+.kiosk-modal__title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* --- Grand ecran (1920x1080) : on monte l'echelle ------------------------ */
+/* / Large screen: scale up.                                                 */
+@media (min-width: 1600px) and (min-height: 1000px) {
+    .kiosk-page__place {
+        font-size: 18px;
+    }
+
+    .kiosk-page__place .kiosk__mark {
+        width: 44px;
+        height: 44px;
+        font-size: 20px;
+    }
+
+    .rcard {
+        max-width: 620px;
+    }
+
+    .rcard--step3 {
+        max-width: 1080px;
+    }
+
+    .step3__amount {
+        font-size: 64px;
+    }
+
+    .rquick__btn {
+        min-height: 96px;
+        font-size: 32px;
+    }
+
+    .rpad__key {
+        min-height: 72px;
+        font-size: 30px;
+    }
+
+    .step3__clear,
+    .step3__validate {
+        min-height: 76px;
+        font-size: 26px;
+    }
+
+    .stage__title {
+        font-size: 60px;
+    }
+
+    .stage__lede {
+        font-size: 26px;
     }
 }
 
 /* ========================================================================= */
-/* 10. Chevrons « posez la carte au-dessus » (modal SweetAlert2)             */
+/* 13. Mouvement reduit                                                      */
 /* ========================================================================= */
 
-/* Remplace les emoji fleche-haut. Trois chevrons qui montent tour a tour,     */
-/* vers le lecteur NFC, physiquement situe au-dessus de l'ecran.               */
-/* / Replaces the up-arrow emoji. Three chevrons rising in turn, toward the    */
-/* NFC reader physically located above the screen.                             */
-.scan-arrows {
-    width: clamp(48px, 10vmin, 88px);
-    height: auto;
-    margin: var(--space-4) auto;
-    display: block;
-    color: var(--color-accent);
-}
-
-.scan-arrows__chevron {
-    animation: scan-rise 1.5s var(--ease-in-out) infinite;
-}
-
-.scan-arrows__chevron:nth-of-type(2) {
-    animation-delay: 0.18s;
-}
-
-.scan-arrows__chevron:nth-of-type(3) {
-    animation-delay: 0.36s;
-}
-
-@keyframes scan-rise {
-    0%,
-    70%,
-    100% {
-        opacity: 0.25;
-    }
-    35% {
-        opacity: 1;
-    }
-}
-
-/* ========================================================================= */
-/* 11. SweetAlert2 — habillage aux jetons de la borne                        */
-/* ========================================================================= */
-
-/* SweetAlert2 injecte sa feuille de style a l'execution, donc APRES nos       */
-/* <link>. On remonte la specificite avec `body` pour reprendre la main.       */
-/* / SweetAlert2 injects its stylesheet at runtime, so AFTER our <link>.       */
-/* We raise specificity with `body` to win the cascade back.                   */
-body .swal2-popup {
-    background-color: var(--color-surface);
-    color: var(--color-text);
-    border-radius: var(--radius-key);
-    font-family: var(--font-ui);
-}
-
-body .swal2-title {
-    color: var(--color-text);
-    font-weight: 700;
-    font-size: var(--text-action);
-}
-
-body .swal2-html-container {
-    color: var(--color-text-soft);
-    font-size: var(--text-body);
-}
-
-body .swal2-cancel.swal2-styled {
-    min-height: var(--touch-min);
-    background-color: transparent;
-    color: var(--color-stop);
-    border: var(--rule-thick) solid var(--color-stop);
-    border-radius: var(--radius-key);
-    font-weight: 700;
-    font-size: var(--text-action);
-}
-
-body .swal2-timer-progress-bar {
-    background-color: var(--color-accent);
-}
-
-body .swal2-loader {
-    border-color: var(--color-accent) transparent var(--color-accent) transparent;
-}
-
-/* ========================================================================= */
-/* 12. Mouvement reduit                                                      */
-/* ========================================================================= */
-
-/* Les animations spatiales tombent. Les spinners gardent leur rotation :      */
-/* sans elle, plus aucun signal ne dit que la borne travaille — on ralentit    */
-/* simplement la vitesse. / Spatial motion is cut. Spinners keep spinning:     */
-/* without it nothing tells the user the kiosk is working — we just slow them. */
+/* Les animations spatiales tombent. Les spinners tournent encore (plus      */
+/* lentement) : sans eux, rien ne dit que la borne travaille.                */
+/* / Spatial motion is cut. Spinners still spin (slower).                    */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -882,11 +1544,5 @@ body .swal2-loader {
         animation-duration: 1.4s !important;
         animation-timing-function: linear !important;
         animation-iteration-count: infinite !important;
-    }
-
-    .payment-figure__travel,
-    .scan-arrows__chevron {
-        animation: none !important;
-        opacity: 1;
     }
 }

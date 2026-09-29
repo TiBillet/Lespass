@@ -23,7 +23,7 @@ from Administration.admin.base import ModelAdmin
 
 from Administration.admin_tenant import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
-from kiosk.models import PaymentsIntent
+from kiosk.models import PaymentsIntent, ReglagesBorne
 
 
 @admin.register(PaymentsIntent, site=staff_admin_site)
@@ -44,6 +44,34 @@ class PaymentsIntentAdmin(ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ReglagesBorne, site=staff_admin_site)
+class ReglagesBorneAdmin(ModelAdmin):
+    """Services proposes par chaque borne. Normalement changes depuis la borne
+    elle-meme (carte primaire -> configuration), mais corrigeables ici.
+    / Services offered by each kiosk. Normally changed on the kiosk itself
+    (primary card -> configuration), but editable here."""
+
+    compressed_fields = True
+    warn_unsaved_form = True
+    list_display = ("terminal", "recharge_active")
+    list_select_related = ("terminal",)
+    readonly_fields = ("terminal",)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    # Les reglages naissent a la premiere ouverture de la borne (get_or_create).
+    # / Settings are created on the kiosk's first opening.
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
         return False

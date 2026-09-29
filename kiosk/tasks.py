@@ -92,6 +92,9 @@ def poll_payment_intent_status(payment_intent_pk, max_duration_seconds=120):
                 'timestamp': timezone.now().isoformat(),
                 'retry_count': retry_count,
             }
+            # Montant ajoute + nouveau solde, pour l'ecran de succes.
+            # / Added amount + new balance, for the success screen.
+            event.update(payment_intent.contexte_ecran_final())
             async_to_sync(channel_layer.group_send)(
                 room_name,
                 event
@@ -125,6 +128,7 @@ def poll_payment_intent_status(payment_intent_pk, max_duration_seconds=120):
             'timestamp': timezone.now().isoformat(),
             'retry_count': retry_count,
         }
+        event.update(payment_intent.contexte_ecran_final())
         async_to_sync(channel_layer.group_send)(
             room_name,
             event

@@ -74,6 +74,134 @@ function addArticle(uuid, price, name, currency) {
 }
 
 /**
+ * Contenance d'un tarif : quantite de stock retiree par unite vendue.
+ * / Price contenance: stock quantity removed per unit sold.
+ *
+ * LOCALISATION : laboutik/static/js/articles.js
+ *
+ * Lue sur la tuile article (#products [data-uuid]) :
+ * - avec priceUuid : dans data-tarifs (tarifs[].contenance) ;
+ * - sans priceUuid (mono-tarif) : dans data-contenance.
+ * Valeur par defaut : 1 (une piece).
+ *
+ * @param {String} productUuid - UUID du produit
+ * @param {String|null} priceUuid - UUID du tarif, ou null pour le tarif principal
+ * @returns {Number}
+ */
+function contenanceDuTarif(productUuid, priceUuid) {
+	const tuile = document.querySelector(`#products [data-uuid="${productUuid}"]`)
+	if (!tuile) {
+		return 1
+	}
+	if (priceUuid) {
+		const tarifsDeLaTuile = JSON.parse(tuile.dataset.tarifs || '[]')
+		for (const tarif of tarifsDeLaTuile) {
+			if (tarif.price_uuid === priceUuid) {
+				return Number(tarif.contenance) || 1
+			}
+		}
+	}
+	return Number(tuile.dataset.contenance) || 1
+}
+
+/**
+ * Quantite de stock deja demandee par le panier pour un produit.
+ * / Stock quantity already requested by the cart for a product.
+ *
+ * LOCALISATION : laboutik/static/js/articles.js
+ *
+ * Meme calcul que le serveur (laboutik/views.py:_valider_stock_panier) :
+ * - ligne au poids : la quantite pesee (input weight-<ligne>) ;
+ * - autre ligne : quantite x contenance du tarif.
+ * Les lignes du produit sont les inputs repid-<uuid> et repid-<uuid>--<tarif>[--N]
+ * du formulaire #addition-form (crees par addition.js).
+ *
+ * @param {String} productUuid - UUID du produit
+ * @returns {Number} quantite en unite de stock (pieces, g ou cl)
+ */
+function quantiteDuProduitDejaAuPanier(productUuid) {
+	let quantiteTotale = 0
+	const inputsDuPanier = document.querySelectorAll('#addition-form input[name^="repid-"]')
+
+	for (const inputLigne of inputsDuPanier) {
+		const lineId = inputLigne.name.replace('repid-', '')
+		const morceauxDeLaLigne = lineId.split('--')
+		// Le debut de la ligne doit etre exactement l'uuid du produit
+		// / The line must start with exactly this product uuid
+		if (morceauxDeLaLigne[0] !== productUuid) {
+			continue
+		}
+
+		const inputPoids = document.querySelector(`#addition-form [name="weight-${lineId}"]`)
+		if (inputPoids) {
+			quantiteTotale += Number(inputPoids.value) || 0
+			continue
+		}
+
+		const priceUuid = morceauxDeLaLigne[1] || null
+		const quantiteDeLaLigne = Number(inputLigne.value) || 0
+		quantiteTotale += quantiteDeLaLigne * contenanceDuTarif(productUuid, priceUuid)
+	}
+	return quantiteTotale
+}
+
+/**
+ * Garde stock au clic : refuse un ajout qui depasserait le stock.
+ * / Click stock guard: refuses an addition that would exceed the stock.
+ *
+ * LOCALISATION : laboutik/static/js/articles.js
+ *
+ * Ne bloque QUE si le produit gere un stock ET interdit la vente hors stock.
+ * Les infos sont lues sur le badge de la tuile (#stock-badge-<uuid>),
+ * que le WebSocket remplace apres chaque changement de stock (hx_stock_badge.html).
+ * Le serveur refait le controle au clic VALIDER : il reste autoritaire.
+ *
+ * Si l'ajout est refuse : le clic est bloque TOUT DE SUITE (pas d'attente reseau),
+ * puis on demande le message au serveur, qui relit le stock en base :
+ * GET /laboutik/paiement/stock_insuffisant/ → popup standard hx_messages.html
+ * dans #messages (meme swap que le formulaire du panier : outerHTML).
+ *
+ * Appelee par : manageKey() (tuile mono-tarif) et tarif.js:addArticleWithPrice().
+ *
+ * @param {String} productUuid - UUID du produit
+ * @param {Number} quantiteAAjouter - quantite de stock que l'ajout va demander
+ * @returns {Boolean} true si l'ajout est autorise
+ */
+function verifierStockAvantAjout(productUuid, quantiteAAjouter) {
+	const badgeStock = document.querySelector(`#stock-badge-${productUuid}`)
+	// Pas de badge ou pas de stock gere : rien a verifier
+	// / No badge or no managed stock: nothing to check
+	if (!badgeStock || badgeStock.dataset.stockQuantite === undefined) {
+		return true
+	}
+	// Vente hors stock autorisee : on laisse passer
+	// / Out-of-stock sale allowed: let it through
+	if (badgeStock.dataset.autoriserHorsStock !== 'false') {
+		return true
+	}
+
+	const stockDisponible = Number(badgeStock.dataset.stockQuantite)
+	const quantiteDejaAuPanier = quantiteDuProduitDejaAuPanier(productUuid)
+	const quantiteTotaleDemandee = quantiteDejaAuPanier + quantiteAAjouter
+	if (quantiteTotaleDemandee <= stockDisponible) {
+		return true
+	}
+
+	// Refus : le texte (traduit, quantites lisibles) est ecrit par le serveur.
+	// / Refused: the (translated, readable) text is written by the server.
+	const parametres = new URLSearchParams({
+		product_uuid: productUuid,
+		quantite_au_panier: quantiteDejaAuPanier,
+		quantite_a_ajouter: quantiteAAjouter,
+	})
+	htmx.ajax('GET', '/laboutik/paiement/stock_insuffisant/?' + parametres.toString(), {
+		target: '#messages',
+		swap: 'outerHTML'
+	})
+	return false
+}
+
+/**
  * Gere la selection d'un article (clic)
  * / Manages article selection (click)
  *
@@ -90,6 +218,15 @@ function addArticle(uuid, price, name, currency) {
 function manageKey(event) {
 	const ele = event.target.parentNode
 
+	// Le clic peut venir d'un element deja retire de la page.
+	// Exemple : toucher le voile de la popup tarif (tarif.js) la supprime,
+	// puis le clic remonte jusqu'ici. Son parent vaut alors null.
+	// / The click may come from an element already removed from the page
+	// (e.g. the rate popup veil): its parent is then null.
+	if (!ele) {
+		return
+	}
+
 	if (ele.classList.contains('article-container')) {
 		const methodeCaisse = ele?.dataset?.methodeCaisse
 		// RE = recharge monnaie / RC = recharge cadeau / TM = recharge temps / VT = vente (service direct)
@@ -100,7 +237,11 @@ function manageKey(event) {
 			// on ignore le clic — l'article est grisé visuellement.
 			// / If stock is blocking (out of stock + sales not allowed),
 			// ignore the click — the article is visually greyed out.
-			if (ele.dataset.stock_bloquant === 'true') {
+			// L'attribut HTML est data-stock-bloquant : le navigateur le range
+			// dans dataset.stockBloquant (tirets -> camelCase).
+			// Ne pas ecrire dataset.stock_bloquant : ca lit data-stock_bloquant, qui n'existe pas.
+			// / HTML attribute data-stock-bloquant maps to dataset.stockBloquant.
+			if (ele.dataset.stockBloquant === 'true') {
 				return
 			}
 
@@ -125,6 +266,12 @@ function manageKey(event) {
 						currency: articleCurrency,
 					}
 				})
+				return
+			}
+
+			// Garde stock : ce clic ajoute "contenance" au panier (1 piece, 50 cl...)
+			// / Stock guard: this click adds "contenance" to the cart
+			if (!verifierStockAvantAjout(articleUuid, contenanceDuTarif(articleUuid, null))) {
 				return
 			}
 
@@ -292,12 +439,14 @@ function syncStockBloquantApresWebSocket() {
 
 			// Propager l'état bloquant du badge vers le container
 			// / Propagate blocking state from badge to container
-			if (badgeDiv.dataset.stock_bloquant === 'true') {
+			// data-stock-bloquant (HTML) = dataset.stockBloquant (JS)
+			// / data-stock-bloquant (HTML) = dataset.stockBloquant (JS)
+			if (badgeDiv.dataset.stockBloquant === 'true') {
 				articleContainer.classList.add('article-bloquant')
-				articleContainer.dataset.stock_bloquant = 'true'
+				articleContainer.dataset.stockBloquant = 'true'
 			} else {
 				articleContainer.classList.remove('article-bloquant')
-				delete articleContainer.dataset.stock_bloquant
+				delete articleContainer.dataset.stockBloquant
 			}
 		}
 	} catch (error) {

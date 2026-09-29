@@ -23,32 +23,13 @@ from django_tenants.utils import schema_context
 
 
 @pytest.fixture(scope="session")
-def tireuse_api_key_billing(tenant):
-    """Cree une TireuseAPIKey pour les tests billing. Nettoie apres.
-    / Creates a TireuseAPIKey for billing tests. Cleans up after.
+def tireuse_api_key_billing(tenant, tireuse_billing):
+    """Clé API du terminal de tireuse_billing (appairé comme par discovery).
+    Une clé doit appartenir au terminal de la tireuse visée (audit, point 1.4).
+    / API key of tireuse_billing's terminal (paired like discovery does)."""
+    from fabriques_controlvanne import cle_api_de_la_tireuse
 
-    PIEGE : le yield sort du schema_context. Le teardown (delete)
-    s'execute en schema public → UndefinedTable. Il faut re-ouvrir
-    un schema_context pour le cleanup.
-    / TRAP: yield exits schema_context. Teardown (delete) runs in
-    public schema → UndefinedTable. Must re-open schema_context for cleanup.
-    """
-    with schema_context(tenant.schema_name):
-        from controlvanne.models import TireuseAPIKey
-
-        api_key_obj, key_string = TireuseAPIKey.objects.create_key(
-            name="test-billing-key"
-        )
-
-    yield key_string
-
-    # Cleanup dans le bon schema (pas en public)
-    # / Cleanup in the correct schema (not public)
-    with schema_context(tenant.schema_name):
-        try:
-            api_key_obj.delete()
-        except Exception:
-            pass  # Déjà supprimé ou schema indisponible
+    return cle_api_de_la_tireuse(tenant, tireuse_billing)
 
 
 @pytest.fixture(scope="session")
@@ -530,3 +511,108 @@ class TestBillingIntegration:
                 Token.objects.filter(wallet=wallet_client).delete()
                 carte_deux_monnaies.delete()
                 wallet_client.delete()
+
+
+# ─────────────────────────────────────────────────────────────────────
+# TestSessionOrpheline — session restée ouverte (card_removed perdu)
+# / Orphan session — left open (card_removed lost)
+# ─────────────────────────────────────────────────────────────────────
+
+
+class TestSessionOrpheline:
+    """
+    Une session reste ouverte si card_removed n'arrive jamais (Pi redémarré,
+    coupure réseau, page du simulateur rechargée). Le badge suivant sur la
+    même tireuse doit la fermer et facturer le dernier volume connu.
+    / A session stays open if card_removed never arrives. The next badge on
+    the same tap must close it and bill the last known volume.
+
+    Code testé : _cloturer_sessions_orphelines (controlvanne/viewsets.py),
+    appelée au début de authorize().
+    """
+
+    def test_08_badge_suivant_ferme_et_facture_la_session_orpheline(
+        self, billing_client, billing_headers, tireuse_billing, tenant, asset_tlf
+    ):
+        """
+        Scénario :
+        1. Carte à 10,00 € badgée → session ouverte.
+        2. pour_update à 200 ml, puis plus rien (ni pour_end, ni card_removed).
+        3. Nouveau badge sur la même tireuse.
+        Attendu : l'ancienne session est fermée avec 200 ml, 200 ml à 5 €/L
+        = 1,00 € sont facturés, et le nouveau badge voit un solde de 9,00 €.
+        """
+        with schema_context(tenant.schema_name):
+            from QrcodeCashless.models import CarteCashless
+            from AuthBillet.models import Wallet
+            from fedow_core.models import Token
+
+            tag_id_de_la_carte = uuid.uuid4().hex[:8].upper()
+            wallet_de_la_carte = Wallet.objects.create(
+                origin=tenant,
+                name=f"Wallet orpheline {tag_id_de_la_carte}",
+            )
+            CarteCashless.objects.create(
+                tag_id=tag_id_de_la_carte,
+                number=uuid.uuid4().hex[:8].upper(),
+                wallet_ephemere=wallet_de_la_carte,
+            )
+            Token.objects.create(wallet=wallet_de_la_carte, asset=asset_tlf, value=1000)
+
+        donnees_du_badge = {
+            "tireuse_uuid": str(tireuse_billing.uuid),
+            "uid": tag_id_de_la_carte,
+        }
+
+        # 1. Premier badge / First badge
+        reponse_premier_badge = billing_client.post(
+            "/controlvanne/api/tireuse/authorize/",
+            data=donnees_du_badge,
+            content_type="application/json",
+            **billing_headers,
+        )
+        assert reponse_premier_badge.json()["authorized"] is True
+        id_session_orpheline = reponse_premier_badge.json()["session_id"]
+
+        # 2. 200 ml versés, puis le Pi « disparaît »
+        # / 200 ml poured, then the Pi "disappears"
+        reponse_versement = billing_client.post(
+            "/controlvanne/api/tireuse/event/",
+            data={**donnees_du_badge, "event_type": "pour_update", "volume_ml": "200.00"},
+            content_type="application/json",
+            **billing_headers,
+        )
+        assert reponse_versement.status_code == 200
+
+        # 3. Nouveau badge sur la même tireuse / New badge on the same tap
+        reponse_second_badge = billing_client.post(
+            "/controlvanne/api/tireuse/authorize/",
+            data=donnees_du_badge,
+            content_type="application/json",
+            **billing_headers,
+        )
+        donnees_second_badge = reponse_second_badge.json()
+        assert donnees_second_badge["authorized"] is True
+
+        with schema_context(tenant.schema_name):
+            from controlvanne.models import RfidSession
+            from fedow_core.services import WalletService
+
+            session_orpheline = RfidSession.objects.get(pk=id_session_orpheline)
+            assert session_orpheline.ended_at is not None, "La session orpheline doit être fermée"
+            assert session_orpheline.volume_delta_ml == Decimal("200.00")
+
+            # 200 ml à 5 €/L = 100 centimes débités / 100 cents debited
+            solde_apres = WalletService.obtenir_solde(wallet_de_la_carte, asset_tlf)
+            assert solde_apres == 900, f"Solde attendu 900, obtenu {solde_apres}"
+
+        # Le nouveau badge voit le solde déjà débité / New badge sees the debited balance
+        assert donnees_second_badge["solde_centimes"] == 900
+
+        # Nettoyage : fermer la nouvelle session / Cleanup: close the new session
+        billing_client.post(
+            "/controlvanne/api/tireuse/event/",
+            data={**donnees_du_badge, "event_type": "card_removed", "volume_ml": "0.00"},
+            content_type="application/json",
+            **billing_headers,
+        )

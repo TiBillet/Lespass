@@ -1,0 +1,78 @@
+{% comment %}
+ÉTAPE VEILLE — fiche de la bière, en attente d'une carte
+/ IDLE STAGE — beer sheet, waiting for a card
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/etapes/veille.html
+
+Visible quand data-etat="veille" (voir tireuse.css).
+Pas de bouton : l'écran n'est pas tactile. On invite à poser la carte.
+/ Visible when data-etat="veille". No button: non-touch screen.
+
+Sources des données (fût actif = Product, admin : Fûts) :
+- titre       : fut_actif.name (via bec.liquid_label)
+- pastilles   : fut_actif.tag  (partial biere_pastilles.html)
+- description : fut_actif.long_description (HTML de l'éditeur de l'admin,
+                nettoyé par sanitize_textfields à l'enregistrement → |safe)
+- étiquette   : fut_actif.img
+- brasserie   : fut_actif.short_description
+- prix        : bec.prix_verre_25cl et bec.prix_litre (partial biere_prix.html)
+Sans fût actif : écran « Aucun fût branché » à la place de la fiche.
+
+Variable attendue : {{ bec }} — instance de TireuseBec
+{% endcomment %}
+{% load i18n %}
+<section class="stage stage--veille" data-testid="tireuse-etape-veille">
+  {% if not bec.fut_actif %}
+    {# Aucun fût branché : pas de fiche bière, pas d'invitation à badger #}
+    {# / No keg on tap: no beer sheet, no invitation to badge #}
+    <div class="screen screen--center" data-testid="tireuse-sans-fut">
+      <div class="done">
+        <h1 class="screen__title">{% translate "Aucun fût branché" %}</h1>
+        <p class="done__balance">{% translate "Cette tireuse est indisponible pour le moment." %}</p>
+      </div>
+    </div>
+  {% else %}
+  <article class="beer-card">
+    <div class="beer-card__body">
+      {# Nom long : taille réduite pour rester dans le cadre (tireuse.css) #}
+      {# / Long name: smaller size to stay inside the frame #}
+      {% with longueur_du_nom=bec.liquid_label|length %}
+        <h1 class="beer-card__title{% if longueur_du_nom > 20 %} beer-card__title--tres-long{% elif longueur_du_nom > 12 %} beer-card__title--long{% endif %}">{{ bec.liquid_label }}</h1>
+      {% endwith %}
+
+      {% include "controlvanne/partial/biere_pastilles.html" %}
+      {% if bec.fut_actif.long_description %}
+        <div class="beer-card__desc" data-testid="tireuse-description">
+          {{ bec.fut_actif.long_description|safe }}
+        </div>
+      {% endif %}
+
+      {% include "controlvanne/partial/biere_prix.html" with classe="beer-card__price" %}
+
+      <div class="present-hint">
+        <span class="present-hint__icon" aria-hidden="true">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+            <path d="M6 4 C 4 6, 4 18, 6 20 M9 6 C 7 8, 7 16, 9 18 M12 8 C 11 10, 11 14, 12 16 M15 10 L 15 14"
+                  stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="present-hint__text">{% translate "Présentez votre carte" %}</span>
+      </div>
+    </div>
+
+    {% if bec.fut_actif.img or bec.fut_actif.short_description %}
+      <aside class="beer-card__media">
+        {% if bec.fut_actif.img %}
+          <img class="beer-media__label"
+               src="{{ bec.fut_actif.img.med.url }}"
+               alt="{% blocktranslate with nom=bec.liquid_label %}Étiquette de la bière {{ nom }}{% endblocktranslate %}"
+               data-testid="tireuse-etiquette">
+        {% endif %}
+        {% if bec.fut_actif.short_description %}
+          <p class="beer-media__brewery" data-testid="tireuse-brasserie">{{ bec.fut_actif.short_description }}</p>
+        {% endif %}
+      </aside>
+    {% endif %}
+  </article>
+  {% endif %}
+</section>
