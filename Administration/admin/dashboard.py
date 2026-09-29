@@ -470,14 +470,10 @@ def _construire_sections_modules(request):
                     #     "link": _safe_rev("staff_admin:laboutik_commandesauvegarde_changelist"),
                     #     "permission": admin_permission,
                     # },
-                    {
-                        "title": _("Closures"),
-                        "icon": "summarize",
-                        "link": _safe_rev(
-                            "staff_admin:laboutik_cloturecaisse_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
+                    # Les clotures de caisse ne sont PAS ici : elles vivent dans
+                    # « Ventes & comptabilite », sous le rapport des ventes en ligne.
+                    # / POS closures are NOT here: they live in "Sales & accounting",
+                    # under the online sales report.
                     {
                         "title": _("Cash float history"),
                         "icon": "account_balance_wallet",
@@ -826,6 +822,31 @@ def _construire_sections_modules(request):
 
     # --- Toujours visible : Ventes & comptabilite ---
     # / --- Always visible: Sales & accounting ---
+    # Les deux rapports sont ranges l'un sous l'autre : ventes en ligne, puis
+    # ventes caisse. Le rapport caisse n'apparait que si le module caisse est actif.
+    # / Both reports sit one under the other: online sales, then POS sales.
+    # The POS report only shows when the POS module is on.
+    items_ventes_et_comptabilite = [
+        {
+            "title": _("Rapport ventes en ligne"),
+            "icon": "lock",
+            "link": _safe_rev(
+                "staff_admin:comptabilite_cloturecaisse_changelist"
+            ),
+            "permission": admin_permission,
+        },
+    ]
+    if configuration.module_caisse:
+        items_ventes_et_comptabilite.append(
+            {
+                "title": _("Rapport ventes caisse"),
+                "icon": "point_of_sale",
+                "link": _safe_rev(
+                    "staff_admin:laboutik_cloturecaisse_changelist"
+                ),
+                "permission": admin_permission,
+            }
+        )
     navigation.append(
         {
             "title": _("Sales & accounting"),
@@ -833,15 +854,7 @@ def _construire_sections_modules(request):
             "_domaine": None,  # entree autonome / standalone entry
             "separator": True,
             "collapsible": True,
-            "items": [
-                {
-                    "title": _("Rapports"),
-                    "icon": "lock",
-                    "link": _safe_rev(
-                        "staff_admin:comptabilite_cloturecaisse_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
+            "items": items_ventes_et_comptabilite + [
                 {
                     "title": _("Entries"),
                     "icon": "receipt_long",
@@ -1286,7 +1299,6 @@ DESCRIPTION_DES_PAGES = {
     "BaseBillet.posproduct": _("Ce que vous vendez au comptoir."),
     "BaseBillet.categorieproduct": _("Le rangement des produits à l'écran."),
     "laboutik.laboutikconfiguration": _("Les réglages du point de vente."),
-    "laboutik.cloturecaisse": _("Le bilan de chaque journée."),
     "laboutik.historiquefonddecaisse": _("Les mouvements du fond de caisse."),
     # --- Terminaux materiels ---
     "laboutik.terminal": _("Les appareils appairés au lieu."),
@@ -1321,6 +1333,8 @@ DESCRIPTION_DES_PAGES = {
     "booking.resourcegroup": _("Le rangement des ressources."),
     "booking.calendar": _("Les calendriers de disponibilité."),
     "booking.weeklyopening": _("Les horaires d'ouverture habituels."),
+    # --- Ventes & comptabilite ---
+    "laboutik.cloturecaisse": _("Le bilan de chaque journée."),
     # --- Financement participatif ---
     "crowds.initiative": _("Les projets soumis au financement."),
     "crowds.crowdconfig": _("Les mots et les règles de vos campagnes."),
@@ -1357,7 +1371,6 @@ CATEGORIE_DES_PAGES = {
     "BaseBillet.posproduct": "configurer",
     "BaseBillet.categorieproduct": "configurer",
     "laboutik.laboutikconfiguration": "configurer",
-    "laboutik.cloturecaisse": "analyser",
     "laboutik.historiquefonddecaisse": "analyser",
     # --- Terminaux materiels ---
     "laboutik.terminal": "gerer",
@@ -1392,6 +1405,8 @@ CATEGORIE_DES_PAGES = {
     "booking.resourcegroup": "configurer",
     "booking.calendar": "configurer",
     "booking.weeklyopening": "configurer",
+    # --- Ventes & comptabilite ---
+    "laboutik.cloturecaisse": "analyser",
     # --- Financement participatif ---
     "crowds.initiative": "gerer",
     "crowds.crowdconfig": "configurer",

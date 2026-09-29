@@ -55,7 +55,7 @@ Statuts : `à faire` · `brief écrit` · `rouge prouvé` · `vert` · `mutation
 | Session | Sujet | Statut | Rouge (preuve) | Vert | Mutations | CHANGELOG | Commit |
 |---|---|---|---|---|---|---|---|
 | 04-F-1 | Anti-rejeu QR (autre session) | commité | | | | | |
-| 05-0 | Menu des rapports (1 test) | à faire | | | | | |
+| 05-0 | Menu des rapports (1 test) | prêt à committer | `FAILED tests/pytest/test_menu_rapports.py::test_menu_ventes_comptabilite_range_les_deux_rapports` — `AssertionError: La section Ventes & comptabilité doit lister le rapport en ligne puis le rapport caisse. Liens trouvés : ['/admin/comptabilite/cloturecaisse/', '/admin/BaseBillet/lignearticle/']` (1 failed) | 1 passed (+ 74 voisins) | 3/3 tuées, sha256 identique | `CHANGELOG/2026-09-29-montants-entiers-0-menu-rapports.md` | |
 | 05-A′ | Tests de caractérisation (5 fichiers, 23 tests, 11 mutations) — **avant A** | à faire | vert attendu (pas de rouge) | | | | |
 | 05-A | Vente, Reglement, contraintes, service, empreinte | à faire | | | | | |
 | 05-A-relu | Relecture Fable de A | à faire | | | | | |
@@ -106,6 +106,11 @@ une décision D ou un choix R, la fiche et le tronc sont corrigés dans la même
 Une ligne par événement, la plus récente en haut. Format :
 `AAAA-MM-JJ HH:MM — session — ce qui s'est passé (preuve : commande / fichier)`.
 
+- 2026-09-29 — 05-0 — relu par Fable : 0 bloquant, 0 important, 5 mineurs. Corrigés par l'orchestrateur dans le CHANGELOG : libellé affiché « Ventes et comptabilité », fil d'Ariane de la liste des clôtures caisse (retombe sur le défaut Unfold, comme les autres entrées autonomes). Laissés : lignes `laboutik.cloturecaisse` des dictionnaires d'aide devenues sans effet (question au mainteneur), docstring du test au passé (style toléré), `db` + `django_db` redondants (sans effet). Commit proposé au mainteneur.
+- 2026-09-29 — 05-0 — `make test` complet : 2091 passed, 0 FAILED/ERROR. Vérification visuelle Chrome non faite (extension non connectée) : laissée au mainteneur (CHANGELOG « Comment tester »). Relecture Fable lancée.
+- 2026-09-29 — 05-0 — vert : `make test ARGS="tests/pytest/test_menu_rapports.py + 4 voisins navigation"` 75 passed. Mutations à la main sur `Administration/admin/dashboard.py` (append→insert(0) ; « Closures » remise dans la section caisse ; `if True:`) : 3/3 tuées, sha256 `718a27ab…` identique. `git diff --stat` : seuls `dashboard.py` + test + CHANGELOG + SUIVI/brief. Caractérisation : aucun fichier encore (A′ pas faite). Suite complète lancée.
+- 2026-09-29 — 05-0 — rouge prouvé par l'orchestrateur (`make test ARGS="tests/pytest/test_menu_rapports.py"` : 1 failed). Constat ouvrier : `DESCRIPTION_DES_PAGES` / `CATEGORIE_DES_PAGES` ne servent qu'aux pages de module (sections à `_slug`) ; « Ventes & comptabilité » n'en a pas → « Le bilan de chaque journée. » ne s'affichera plus nulle part. Pas un écart : la fiche dit « suit l'entrée », on déplace les deux lignes, textes inchangés. Feu vert étape 2.
+- 2026-09-29 — 05-0 — fiche vérifiée face au code (`Administration/admin/dashboard.py` l.419, l.473-480, l.827-852, l.1289, l.1360 : concorde) ; brief `CHANTIER-05-briefs/05-0.md` écrit ; ouvrier Opus lancé (étape 1 : test seul).
 - 2026-09-29 — spec — toutes les questions du §5 tranchées avec le mainteneur (D8, R1-R6, T7 précisé, billet offert annulé, date FEC, D10/D16). Spec prête ; plus aucune question ouverte.
 - 2026-09-28 — spec — relecture finale Fable appliquée (coupes §A, constats 1-24) : ordre 0, A′, A ; mutations à la main ; suite complète par fiche ; ~30 j.
 - 2026-09-28 — spec — relecture finale Opus (5 bloquants, 23 importants, 11 mineurs) appliquée.
@@ -117,6 +122,7 @@ Une ligne par événement, la plus récente en haut. Format :
 
 | Date | `make test` | `make e2e` | Remarque |
 |---|---|---|---|
+| 2026-09-29 | 2091 passed (0 FAILED / ERROR) | — | fin de fiche 05-0 (e2e pas exigé en 0) |
 | 2026-09-28 | 2082 passed | 116 passed | départ (après chantier 04 A-E) |
 
 ## 8. Pièges rencontrés pendant le chantier
