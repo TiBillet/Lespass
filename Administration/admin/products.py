@@ -28,6 +28,17 @@ from unfold.widgets import (
 from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
 from Administration.admin.mixins import HelpDisplayMixin
 from Administration.admin.site import staff_admin_site, sanitize_textfields
+from inventaire.models import UniteStock
+from Administration.admin.stock_fiche_produit import (
+    ChampsStockFicheProduitMixin,
+    EtatStockFilter,
+    display_stock_fut,
+    display_stock_produit_caisse,
+    enregistrer_section_stock,
+    fieldset_section_stock,
+    panneau_operations_stock,
+    stock_du_produit_ou_none,
+)
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from BaseBillet.models import (
     Configuration,
@@ -1479,10 +1490,12 @@ class ResourceProductAdmin(ProductAdmin):
 
 # FROM V2 : TO ADD WHEN POS AND LABOUTIK
 #
-class POSProductForm(ProductAdminCustomForm):
+class POSProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
     """Formulaire produit pour les articles de caisse.
     Product form for POS items.
     Le champ categorie_article est cache (pas pertinent en caisse).
+    Les champs stock_* de la section Stock viennent de ChampsStockFicheProduitMixin
+    (Administration/admin/stock_fiche_produit.py).
     LOCALISATION : Administration/admin/products.py"""
 
     class Meta(ProductAdminCustomForm.Meta):
@@ -1738,33 +1751,48 @@ class POSProductAdmin(ProductAdmin):
         ),
     )
 
+    # Colonne Stock : badge coloré, clic = section Stock de la fiche
+    # (Administration/admin/stock_fiche_produit.py)
+    # / Stock column: colored badge, click = product Stock section
     list_display = (
         "name",
         "methode_caisse",
         "categorie_pos",
+        display_stock_produit_caisse,
         "publish",
         "poids",
     )
 
-    list_filter = ["publish", "methode_caisse", "categorie_pos"]
+    list_filter = ["publish", "methode_caisse", "categorie_pos", EtatStockFilter]
     search_fields = ["name"]
 
-    def get_inlines(self, request, obj):
-        # En mode add (pas d'obj) : StockInline pour créer le stock initial
-        # En mode change : pas de StockInline (le stock se gère via admin/inventaire/stock/)
-        # / In add mode: StockInline for initial stock creation
-        # In change mode: no StockInline (stock managed via admin/inventaire/stock/)
-        if obj is None:
-            from Administration.admin.inventaire import StockInline
+    def get_fieldsets(self, request, obj=None):
+        # Ajoute la section Stock à la fin (réglages + opérations)
+        # / Appends the Stock section (settings + operations)
+        return self.fieldsets + (fieldset_section_stock(obj),)
 
-            return [StockInline, POSPriceInline]
-        return [POSPriceInline]
+    def get_readonly_fields(self, request, obj=None):
+        # Le panneau d'opérations n'existe que si le produit a déjà un stock
+        # / The operations panel only exists when the product already has a stock
+        champs_lecture_seule = list(super().get_readonly_fields(request, obj))
+        if stock_du_produit_ou_none(obj) is not None:
+            champs_lecture_seule.append(panneau_operations_stock)
+        return champs_lecture_seule
+
+    def save_model(self, request, obj, form, change):
+        # 1. Enregistre le produit  2. Applique la section Stock
+        # / 1. Save the product  2. Apply the Stock section
+        super().save_model(request, obj, form, change)
+        enregistrer_section_stock(request, obj, form.cleaned_data)
 
     def get_queryset(self, request):
-        # Uniquement les produits avec une methode de caisse definie
-        # / Only products with a POS method set
+        # Uniquement les produits avec une methode de caisse definie.
+        # select_related : la colonne Stock ne fait pas une requête par ligne.
+        # / Only products with a POS method set. select_related avoids N+1.
         qs = super().get_queryset(request)
-        return qs.filter(methode_caisse__isnull=False)
+        return qs.filter(methode_caisse__isnull=False).select_related(
+            "stock_inventaire"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1838,14 +1866,18 @@ class CouleurAccentTireuseWidget(forms.Widget):
         return context
 
 
-class FutProductForm(ProductAdminCustomForm):
+class FutProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
     """Formulaire produit pour les futs de tireuse.
     Le champ categorie_article est cache et force a FUT.
     Memes champs visuels que POSProductForm (palette, couleurs, icone).
     / Product form for beer kegs.
     categorie_article is hidden and forced to FUT.
     Same visual fields as POSProductForm (palette, colors, icon).
+    Section Stock : voir ChampsStockFicheProduitMixin. Un fût se compte en centilitres.
     LOCALISATION : Administration/admin/products.py"""
+
+    # Un fût se compte en centilitres / A keg is counted in centiliters
+    unite_stock_par_defaut = UniteStock.CL
 
     class Meta(ProductAdminCustomForm.Meta):
         model = FutProduct
@@ -2175,28 +2207,40 @@ class FutProductAdmin(ProductAdmin):
     list_display = (
         "name",
         fut_brasserie,
+        display_stock_fut,
         "publish",
     )
 
-    list_filter = ["publish"]
+    list_filter = ["publish", EtatStockFilter]
     search_fields = ["name"]
 
-    def get_inlines(self, request, obj):
-        # En mode add (pas d'obj) : StockInline pour creer le stock initial
-        # En mode change : pas de StockInline (le stock se gere via admin/inventaire/stock/)
-        # / In add mode: StockInline for initial stock creation
-        # In change mode: no StockInline (stock managed via admin/inventaire/stock/)
-        if obj is None:
-            from Administration.admin.inventaire import StockInline
+    def get_fieldsets(self, request, obj=None):
+        # Ajoute la section Stock à la fin (réglages + opérations)
+        # / Appends the Stock section (settings + operations)
+        return self.fieldsets + (fieldset_section_stock(obj),)
 
-            return [StockInline, FutPriceInline]
-        return [FutPriceInline]
+    def get_readonly_fields(self, request, obj=None):
+        # Le panneau d'opérations n'existe que si le fût a déjà un stock
+        # / The operations panel only exists when the keg already has a stock
+        champs_lecture_seule = list(super().get_readonly_fields(request, obj))
+        if stock_du_produit_ou_none(obj) is not None:
+            champs_lecture_seule.append(panneau_operations_stock)
+        return champs_lecture_seule
+
+    def save_model(self, request, obj, form, change):
+        # 1. Enregistre le fût  2. Applique la section Stock
+        # / 1. Save the keg  2. Apply the Stock section
+        super().save_model(request, obj, form, change)
+        enregistrer_section_stock(request, obj, form.cleaned_data)
 
     def get_queryset(self, request):
-        # Uniquement les produits de type FUT
-        # / Only keg products
+        # Uniquement les produits de type FUT.
+        # select_related : la colonne Stock ne fait pas une requête par ligne.
+        # / Only keg products. select_related avoids N+1.
         qs = super().get_queryset(request)
-        return qs.filter(categorie_article=Product.FUT)
+        return qs.filter(categorie_article=Product.FUT).select_related(
+            "stock_inventaire"
+        )
 
 
 # ---------------------------------------------------------------------------
