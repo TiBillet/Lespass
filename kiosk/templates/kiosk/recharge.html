@@ -33,10 +33,14 @@ ETAPES :
 
     <main id="tb-kiosque" class="kiosk-page__stages" aria-live="polite"
           itemscope itemtype="https://schema.org/WebPage">
-        {% if recharge_active %}
-            {% include "kiosk/partial/etape_poser_carte.html" %}
-        {% else %}
+        {% if not recharge_active %}
             {% include "kiosk/partial/borne_en_pause.html" %}
+        {% elif message_sans_tpe %}
+            {# Aucun TPE actif lie : erreur des l'accueil (views.py : trouver_la_borne_et_son_tpe). #}
+            {# / No active reader linked: error right on the home screen. #}
+            {% include "kiosk/partial/borne_sans_tpe.html" %}
+        {% else %}
+            {% include "kiosk/partial/etape_poser_carte.html" %}
         {% endif %}
     </main>
 

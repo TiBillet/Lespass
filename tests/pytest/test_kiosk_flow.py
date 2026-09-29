@@ -214,13 +214,11 @@ def test_kiosk_list_renders_recharge_page_for_real(tenant, kiosk_user_and_termin
 
 @pytest.mark.django_db
 @override_settings(DEMO=True)
-def test_kiosk_demo_page_loads_nfc_and_socket_io_and_exposes_kiosk_context(tenant, kiosk_user_and_terminal):
-    """CHANTIER-05 : en DEMO, le rendu de recharge.html charge nfc.js ET
-    socket.io (avant nfc.js), et expose window.DEMO + window.KIOSK (avec
-    type_app) au JS.
-    / CHANTIER-05: in DEMO, the recharge.html render loads nfc.js AND
-    socket.io (before nfc.js), and exposes window.DEMO + window.KIOSK (with
-    type_app) to the JS."""
+def test_kiosk_demo_page_loads_nfc_and_exposes_kiosk_context(tenant, kiosk_user_and_terminal):
+    """CHANTIER-05 : en DEMO, le rendu de recharge.html charge nfc.js, et
+    expose window.DEMO + window.KIOSK (avec type_app) au JS.
+    / CHANTIER-05: in DEMO, the recharge.html render loads nfc.js, and exposes
+    window.DEMO + window.KIOSK (with type_app) to the JS."""
     user, terminal = kiosk_user_and_terminal
     with tenant_context(tenant):
         client = _authenticated_client(user, tenant)
@@ -229,11 +227,11 @@ def test_kiosk_demo_page_loads_nfc_and_socket_io_and_exposes_kiosk_context(tenan
     assert response.status_code == 200
     content = response.content.decode()
 
-    # socket.io charge avant nfc.js (necessaire au mode NFCLO)
-    # / socket.io loaded before nfc.js (required for NFCLO mode)
-    index_socket_io = content.index("js/socket.io.min.js")
-    index_nfc_js = content.index("kiosk/js/nfc.js")
-    assert index_socket_io < index_nfc_js
+    # nfc.js est charge. socket.io NE l'est PAS : une borne cordova lit la carte
+    # avec le plugin natif, elle n'a pas de serveur NFC local sur le port 3000.
+    # / nfc.js is loaded. socket.io is NOT: a cordova kiosk has no local NFC server.
+    assert "kiosk/js/nfc.js" in content
+    assert "js/socket.io.min.js" not in content
 
     # window.DEMO pose par base.html en DEMO, avec les 5 cartes du simulateur.
     # Ce sont les memes cartes que la caisse et la tireuse (settings.DEMO_TAGID_*).
@@ -278,3 +276,181 @@ def test_kiosk_demo_page_exposes_non_cordova_type_app_for_pi_mode(tenant, kiosk_
     assert 'type_app: "pi"' in content
     # Pas de cordova.js injecte pour une cible Pi / no cordova.js injected for a Pi target
     assert "cordova.js" not in content
+
+    # socket.io charge avant nfc.js (necessaire au mode NFCLO)
+    # / socket.io loaded before nfc.js (required for NFCLO mode)
+    index_socket_io = content.index("js/socket.io.min.js")
+    index_nfc_js = content.index("kiosk/js/nfc.js")
+    assert index_socket_io < index_nfc_js
+
+
+@pytest.mark.django_db
+def test_kiosk_navigateur_simple_ne_charge_pas_socket_io(tenant, kiosk_user_and_terminal):
+    """Sans type_app (simple navigateur), socket.io n'est pas charge.
+    Avant, la page tentait http://localhost:3000 et affichait une erreur
+    « xhr poll error / CORS » dans la console, meme en prod.
+    / Without type_app (plain browser), socket.io is not loaded."""
+    user, terminal = kiosk_user_and_terminal
+    with tenant_context(tenant):
+        client = _authenticated_client(user, tenant)
+        response = client.get("/kiosk/")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "js/socket.io.min.js" not in content
+    assert 'type_app: "unknown"' in content
+
+
+@pytest.mark.django_db
+@override_settings(DEMO=False)
+def test_kiosk_accueil_affiche_une_erreur_sans_tpe(tenant, kiosk_user_and_terminal):
+    """Une borne sans lecteur de carte bancaire affiche l'erreur DES l'accueil,
+    au lieu de la laisser decouvrir a l'etape « Payer ».
+    / A kiosk without a card reader shows the error on the home screen."""
+    user, terminal = kiosk_user_and_terminal
+    with tenant_context(tenant):
+        # On debranche le lecteur de la borne / Unplug the reader from the kiosk
+        from laboutik.models import TPEBancaire
+        TPEBancaire.objects.filter(terminal=terminal).delete()
+
+        # On relit l'utilisateur en base : l'objet de la fixture garde en memoire
+        # sa borne ET l'ancien lecteur (cache des relations OneToOne).
+        # / Reload the user: the fixture object caches its kiosk AND the old reader.
+        user = TermUser.objects.get(pk=user.pk)
+        client = _authenticated_client(user, tenant)
+        response = client.get("/kiosk/")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert 'data-testid="kiosk-etape-sans-tpe"' in content
+    assert 'data-testid="kiosk-etape-poser-carte"' not in content
+
+
+@pytest.mark.django_db
+@override_settings(DEMO=False)
+def test_kiosk_accueil_normal_avec_un_tpe(tenant, kiosk_user_and_terminal):
+    """Une borne avec son lecteur affiche « posez votre carte », sans erreur.
+    / A kiosk with its reader shows "tap your card", no error."""
+    user, terminal = kiosk_user_and_terminal
+    with tenant_context(tenant):
+        client = _authenticated_client(user, tenant)
+        response = client.get("/kiosk/")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert 'data-testid="kiosk-etape-poser-carte"' in content
+    assert 'data-testid="kiosk-etape-sans-tpe"' not in content
+
+
+# --------------------------------------------------------------------------- #
+# Bouton « Simuler le paiement » (DEMO) / "Simulate payment" button (DEMO)    #
+# --------------------------------------------------------------------------- #
+
+def _paiement_en_attente(terminal):
+    """Un PaymentsIntent parti sur le lecteur de la borne de test.
+    / A PaymentsIntent sent to the test kiosk's reader."""
+    return PaymentsIntent.objects.create(
+        terminal=terminal,
+        amount=1000,
+        reader_stripe_id="tmr_test_kiosk",
+    )
+
+
+@pytest.mark.django_db
+@override_settings(DEMO=False)
+def test_simuler_paiement_introuvable_hors_demo(tenant, kiosk_user_and_terminal):
+    """Hors DEMO, la route de simulation renvoie 404 et n'appelle pas Stripe.
+    / Outside DEMO, the simulation route returns 404 and does not call Stripe."""
+    user, terminal = kiosk_user_and_terminal
+    with tenant_context(tenant):
+        paiement = _paiement_en_attente(terminal)
+        client = _authenticated_client(user, tenant)
+        with patch("stripe.terminal.Reader.TestHelpers.present_payment_method") as mock_presenter:
+            response = client.post(f"/kiosk/{paiement.pk}/simuler_paiement/")
+
+    assert response.status_code == 404
+    mock_presenter.assert_not_called()
+
+
+@pytest.mark.django_db
+@override_settings(DEMO=True)
+def test_simuler_paiement_presente_une_carte_sur_le_lecteur_du_paiement(tenant, kiosk_user_and_terminal):
+    """En DEMO, le bouton presente une carte de test sur le lecteur du paiement.
+    / In DEMO, the button presents a test card on the payment's reader."""
+    user, terminal = kiosk_user_and_terminal
+    with tenant_context(tenant):
+        paiement = _paiement_en_attente(terminal)
+        client = _authenticated_client(user, tenant)
+        with patch("root_billet.models.RootConfiguration.get_stripe_api", return_value="sk_test_fake"), \
+             patch("stripe.terminal.Reader.TestHelpers.present_payment_method") as mock_presenter:
+            response = client.post(f"/kiosk/{paiement.pk}/simuler_paiement/")
+
+    assert response.status_code == 200
+    # Sans « issue », c'est la carte de test acceptee (4242...).
+    # / Without "issue", the accepted test card is used.
+    mock_presenter.assert_called_once_with(
+        "tmr_test_kiosk", card_present={"number": "4242424242424242"},
+    )
+    assert 'data-testid="kiosk-simulation-envoyee"' in response.content.decode()
+
+
+@pytest.mark.django_db
+@override_settings(DEMO=True)
+def test_simuler_un_refus_presente_la_carte_de_test_refusee(tenant, kiosk_user_and_terminal):
+    """Le bouton « Simuler un refus » presente la carte de test refusee (4000...0002).
+    / The "Simulate decline" button presents the declined test card."""
+    user, terminal = kiosk_user_and_terminal
+    with tenant_context(tenant):
+        paiement = _paiement_en_attente(terminal)
+        client = _authenticated_client(user, tenant)
+        with patch("root_billet.models.RootConfiguration.get_stripe_api", return_value="sk_test_fake"), \
+             patch("stripe.terminal.Reader.TestHelpers.present_payment_method") as mock_presenter:
+            response = client.post(
+                f"/kiosk/{paiement.pk}/simuler_paiement/", data={"issue": "refuse"},
+            )
+
+    assert response.status_code == 200
+    mock_presenter.assert_called_once_with(
+        "tmr_test_kiosk", card_present={"number": "4000000000000002"},
+    )
+    assert 'data-testid="kiosk-simulation-refus-envoye"' in response.content.decode()
+
+
+@pytest.mark.django_db
+@override_settings(DEMO=True)
+def test_simuler_paiement_refuse_une_issue_inconnue(tenant, kiosk_user_and_terminal):
+    """Une valeur d'« issue » inconnue renvoie 404, sans appeler Stripe.
+    / An unknown "issue" value returns 404 without calling Stripe."""
+    user, terminal = kiosk_user_and_terminal
+    with tenant_context(tenant):
+        paiement = _paiement_en_attente(terminal)
+        client = _authenticated_client(user, tenant)
+        with patch("stripe.terminal.Reader.TestHelpers.present_payment_method") as mock_presenter:
+            response = client.post(
+                f"/kiosk/{paiement.pk}/simuler_paiement/", data={"issue": "n_importe_quoi"},
+            )
+
+    assert response.status_code == 404
+    mock_presenter.assert_not_called()
+
+
+@pytest.mark.django_db
+@override_settings(DEMO=True)
+def test_simuler_paiement_affiche_une_erreur_si_stripe_refuse(tenant, kiosk_user_and_terminal):
+    """Si Stripe refuse (vrai lecteur, pas simule), le bouton reste avec un message.
+    / If Stripe refuses (real reader), the button stays with a message."""
+    user, terminal = kiosk_user_and_terminal
+    with tenant_context(tenant):
+        paiement = _paiement_en_attente(terminal)
+        client = _authenticated_client(user, tenant)
+        with patch("root_billet.models.RootConfiguration.get_stripe_api", return_value="sk_test_fake"), \
+             patch("stripe.terminal.Reader.TestHelpers.present_payment_method",
+                   side_effect=Exception("reader is not simulated")):
+            response = client.post(f"/kiosk/{paiement.pk}/simuler_paiement/")
+
+    contenu = response.content.decode()
+    assert response.status_code == 200
+    assert 'data-testid="kiosk-error-message"' in contenu
+    assert 'data-testid="kiosk-simuler-paiement"' in contenu
+    # Le texte brut de Stripe n'est pas montre / Raw Stripe text is not shown
+    assert "reader is not simulated" not in contenu

@@ -66,9 +66,12 @@
         demo: {{ demo|yesno:"true,false" }}
     };
 </script>
-{# socket.io charge avant nfc.js : necessaire au mode NFCLO (Pi/desktop). #}
-{# / socket.io loaded before nfc.js: required for NFCLO mode (Pi/desktop). #}
-<script src="{% static 'js/socket.io.min.js' %}"></script>
+{# socket.io charge avant nfc.js : necessaire au mode NFCLO (Pi/desktop) SEULEMENT. #}
+{# Un simple navigateur n'a pas de serveur NFC local sur le port 3000. #}
+{# / socket.io loaded before nfc.js, ONLY for NFCLO mode (Pi/desktop). #}
+{% if type_app == "pi" or type_app == "desktop" %}
+    <script src="{% static 'js/socket.io.min.js' %}"></script>
+{% endif %}
 <script src="{% static 'kiosk/js/nfc.js' %}"></script>
 <script src="{% static 'kiosk/js/main.js' %}"></script>
 
