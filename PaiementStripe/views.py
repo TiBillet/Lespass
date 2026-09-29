@@ -114,6 +114,11 @@ class CreationPaiementStripe():
             dict_paiement['invoice_stripe'] = self.invoice.id
             if bool(self.invoice.parent.subscription_details.subscription):
                 dict_paiement['subscription'] = self.invoice.parent.subscription_details.subscription
+            # Une facture n'arrive ici que par new_entry_from_stripe_subscription_invoice :
+            # c'est une échéance d'abonnement. Le moyen est posé dès la création, dans le
+            # même INSERT : un save() plus tard relancerait la machine à états du paiement.
+            # / A subscription instalment: the method is set in the creation INSERT.
+            dict_paiement['moyen'] = PaymentMethod.STRIPE_RECURENT
 
         paiementStripeDb = Paiement_stripe.objects.create(**dict_paiement)
 

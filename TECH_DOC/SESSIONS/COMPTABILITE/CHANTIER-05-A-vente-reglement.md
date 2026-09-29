@@ -39,7 +39,9 @@ vers `Paiement_stripe`, `laboutik.PointDeVente`, `CarteCashless` sont écrites e
 - **Contraintes de base** (`Meta.constraints`) : sur `LigneArticle`,
   `total_ttc = total_catalogue − part_offerte` et `total_ht + total_tva = total_ttc` ;
   sur `Reglement`, `montant <> 0`. Un producteur qui contourne le service est refusé
-  par Postgres.
+  par Postgres. **La 2ᵉ contrainte ne vaut que pour une ligne rattachée à une vente**
+  (`vente IS NULL OR …`) jusqu'à la fiche H, qui rend `vente` obligatoire : des lignes
+  existantes portent un `total_ht` écrit par le chantier 04-B (SUIVI §4).
 - **Garde d'immutabilité** : une fois la vente `REGLEE`, `Vente.save()` refuse toute
   modification ; `Reglement.save()` refuse toute modification ; `LigneArticle.save()`
   refuse un changement de `amount`, `qty`, `vat`, `total_*`, `part_offerte`,
@@ -53,8 +55,9 @@ vers `Paiement_stripe`, `laboutik.PointDeVente`, `CarteCashless` sont écrites e
   temps} **ou** `categorie_article = RECHARGE_CASHLESS` (recharge API v2,
   `api_v2/views.py` ~l.964, sans `methode_caisse`), **ou** un des deux produits système
   « Écart d'encaissement » (D26, fiche D). Relire `BaseBillet/models.py` ~l.1363-1398
-  au démarrage ; vérifier aussi `VR` (virement reçu) et `FD` (fidélité), probablement
-  hors chiffre d'affaires eux aussi.
+  au démarrage. **`VR` (« Virement pot central ») et `FD` (« Fidélité ») sont aussi hors
+  chiffre d'affaires** (mainteneur, 2026-09-29) : hors CA ne veut pas dire invisible, ils
+  restent dans le Z et le FEC avec leur compte (fiche E).
 - `Reglement.vente` : `related_name="reglements"`, `on_delete=PROTECT`.
 - `Reglement.fedow_transaction_uuid` : `UUIDField(null=True)` — pas de FK
   (`fedow_core` en SHARED_APPS, `Reglement` en TENANT_APPS).
@@ -128,9 +131,10 @@ with transaction.atomic():          # savepoint si le producteur a déjà une tr
      Sinon : lever EgaliteDeVenteRompue (message FR avec les deux sommes).
   4. numero = (plus grand numero du lieu) + 1 ; datetime_encaissement = now()
      totaux de la vente = sommes des articles (5 champs)
+     statut = REGLEE    # AVANT le calcul : le statut fait partie du message
      previous_hmac = hmac_hash de la vente numero − 1 ("" pour la première)
      hmac_hash = calculer_hmac_vente(vente, cle, previous_hmac)
-     statut = REGLEE ; save()
+     save()
 ```
 
 - Le verrou `pg_advisory_xact_lock` est tenu jusqu'au **COMMIT le plus extérieur**. Les
@@ -201,8 +205,19 @@ parts (±1 c, §5 du tronc).
 ## 7. Tests
 
 Fichiers : `tests/pytest/test_montants_article.py` (formule seule, sans base) ;
+`tests/pytest/test_vente_modeles.py` (modèles, base partagée : TVA, contraintes, `Paiement_stripe`) ;
 `tests/pytest/test_vente_service.py` (**schéma dédié** : numérotation, chaîne,
 altérations ; créer `LaboutikConfiguration` à la main).
+
+Tests ajoutés pendant la fiche (SUIVI §4, sinon une règle n'était vue par aucun test) :
+`test_paiement_stripe_moyen_sr_pose_a_la_creation_d_une_echeance`,
+`test_hors_chiffre_affaires_calcule_depuis_le_produit_ou_force`,
+`test_vente_sans_article_refusee_sauf_vidage_et_correction`,
+`test_ouvrir_vente_meme_cle_rend_la_meme_vente`, `test_ajouter_a_une_vente_reglee_refuse`,
+`test_ajouter_article_recopie_l_origine_de_la_vente`,
+`test_annuler_vente_reglee_refusee_et_annulee_rendue_telle_quelle`,
+`test_encaisser_refuse_un_offert_sans_reglement_de_trace`,
+`test_empreinte_precedente_modifiee_signale_un_maillon_casse`.
 
 | Test | Donnée → attendu |
 |---|---|
@@ -233,9 +248,9 @@ altérations ; créer `LaboutikConfiguration` à la main).
 | `test_numeros_consecutifs_sans_trou` | 1, 2, 3 |
 | `test_vente_annulee_ou_en_attente_ne_prend_pas_de_numero` | la réglée a le n° 1 |
 | `test_premiere_vente_chainee_sur_vide_puis_suivante_sur_la_precedente` | |
-| `test_alterer_une_vente_reglee_casse_la_chaine` (**paramétré**) | par `.update()` : `total_ttc` d'un article ; `montant` d'un règlement ; `vente_liee` ; `point_de_vente` → « empreinte fausse » à chaque fois |
-| `test_supprimer_une_vente_laisse_un_trou_signale` | suppression par SQL brut (les FK `PROTECT` bloquent l'ORM) |
-| `test_supprimer_un_reglement_signale_egalite_rompue` | SQL brut |
+| `test_alterer_une_vente_reglee_casse_la_chaine` (**10 cas** dans une boucle, chaque cas dans un point de sauvegarde annulé : `FastTenantTestCase` ne prend pas `parametrize`) | par `.update()` : `total_ttc` d'un article ; `montant` d'un règlement ; `vente_liee` ; `point_de_vente` → « empreinte fausse » à chaque fois |
+| `test_supprimer_une_vente_laisse_un_trou_signale` | suppression par SQL brut (les FK `PROTECT` des articles et règlements bloquent la suppression d'une vente par l'ORM) |
+| `test_supprimer_un_reglement_signale_egalite_rompue` | SQL brut (un `reglement.delete()` passerait aussi : `delete()` n'est pas gardé, seule l'empreinte et l'égalité le voient) |
 | `test_vidage_de_carte_sans_article_encaisse` | +500 LE, −500 CA |
 | `test_vente_gratuite_sans_reglement_encaissee` | article 0, aucun règlement |
 | `test_vente_payante_sans_reglement_refusee` | article 500, aucun règlement → refus |
@@ -255,7 +270,7 @@ Mutations :
 
 | Mutation | Test qui doit tomber |
 |---|---|
-| `ROUND_HALF_UP` → `ROUND_HALF_EVEN` | fromage 451,5 ; net 111 |
+| `ROUND_HALF_UP` → `ROUND_HALF_EVEN` | net 111 (le fromage 451,5 → 452 est pair : il ne voit que la troncature) |
 | TVA calculée à part (`arrondi(net × taux / (100 + taux))`) | net 105 |
 | retirer la 2ᵉ égalité | argent ≠ net |
 | `numero = max + 1` → `count() + 1` | trou de numéro après suppression |
@@ -279,6 +294,6 @@ caractérisation de la fiche A′ doivent rester verts pendant cette fiche.
 
 | Trou | À faire dans cette fiche | Test |
 |---|---|---|
-| T1 | Ajouter `Paiement_stripe.moyen` (`SN` / `SP` / `SR`), posé par `update_checkout_status` (`BaseBillet/models.py` ~l.3557, ~l.3577) et `new_entry_from_stripe_subscription_invoice`. C'est la **seule** source du moyen d'un règlement Stripe (fiche D) et du courriel « SEPA en attente » (`ApiBillet/views.py` ~l.1230, fiche H). Champ posé **en plus** de `LigneArticle.payment_method` jusqu'à H. | `test_paiement_stripe_moyen_sepa_pose_a_la_mise_a_jour` |
+| T1 | Ajouter `Paiement_stripe.moyen` (`SN` / `SP` / `SR`) : `SP` et `SN` posés par `update_checkout_status` (`BaseBillet/models.py` ~l.3557, ~l.3577), `SR` à la création du paiement d'une échéance (`PaiementStripe/views.py` `CreationPaiementStripe`, bloc facture, appelé par `new_entry_from_stripe_subscription_invoice`). C'est la **seule** source du moyen d'un règlement Stripe (fiche D) et du courriel « SEPA en attente » (`ApiBillet/views.py` ~l.1230, fiche H). Champ posé **en plus** de `LigneArticle.payment_method` jusqu'à H. | `test_paiement_stripe_moyen_sepa_pose_a_la_mise_a_jour` |
 | T15 | `trigger_A` ne fait plus d'appel HTTP à Fedow (`BaseBillet/triggers.py` ~l.289-300 : récompense en Celery `on_commit`). Règle de §4 reformulée : « encaisser **après** la transition de statut de la ligne, dans la même `atomic` ». | — |
 | T22 | Numéros de ligne décalés (`_executer_avec_cle_idempotence` ~l.4611, `_payer_par_nfc` ~l.7902, `_executer_paiement_complementaire` ~l.9139) : relire au démarrage. | — |

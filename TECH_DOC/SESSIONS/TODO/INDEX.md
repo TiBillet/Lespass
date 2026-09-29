@@ -18,3 +18,4 @@
 | 5 | [`USERS-etiquettes.md`](USERS-etiquettes.md) | Étiquettes sur les personnes (par lieu), synchro vers Ghost pour écrire à des groupes (Brevo plus tard) | Aucun |
 | 6 | [`CAISSE-mode-gerant-et-tag-nfc-en-post.md`](CAISSE-mode-gerant-et-tag-nfc-en-post.md) | Caisse — mode gérant à deux niveaux (OFFRIR), tag NFC jamais dans une URL (session / POST) — **idée, spec à écrire** | Aucun |
 | 7 | [`BUGS-constats-chantier-05.md`](BUGS-constats-chantier-05.md) | Bugs constatés par les tests de caractérisation du chantier 05 (mail de connexion à l'adhésion admin, double webhook, T13, annulation d'un billet caisse, « payée ailleurs » sans mail, billet caisse NFC) | Aucun |
+| 8 | [`COMPTABILITE-certification-NF525.md`](COMPTABILITE-certification-NF525.md) | Compta — sécuriser la chaîne des ventes (ancre de fin de chaîne, début de chaîne, clé) et certification NF525 — **idée, spec à écrire** | Chantier 05 terminé |

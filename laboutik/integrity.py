@@ -20,6 +20,7 @@ L'utilisateur final (le lieu/association) n'a jamais acces a la cle.
 The end user (venue/association) never has access to the key.
 """
 
+import datetime
 import hmac
 import hashlib
 import json
@@ -203,3 +204,252 @@ def ligne_couverte_par_cloture(ligne):
         datetime_ouverture__lte=ligne.datetime,
         datetime_cloture__gte=ligne.datetime,
     ).first()
+
+
+def calculer_hmac_vente(vente, cle, previous_hmac):
+    """
+    Calcule l'empreinte HMAC-SHA256 d'une vente, chaînée avec la vente précédente.
+    / Computes the chained HMAC-SHA256 fingerprint of a sale.
+
+    LOCALISATION : laboutik/integrity.py
+
+    Le message couvre la vente, ses articles et ses règlements. C'est un JSON
+    canonique : clés triées, sans espace, accents gardés. Les articles et les
+    règlements sont triés par uuid, les dates sont écrites en UTC. Le numéro de format
+    (1) permet de changer un jour le message sans casser les anciennes empreintes.
+    / The message covers the sale, its items and its payments, as canonical JSON.
+
+    Articles et règlements sont RELUS EN BASE : l'empreinte porte sur ce qui est
+    écrit, pas sur des objets gardés en mémoire. Les champs de la vente, eux, sont lus
+    sur l'objet reçu : `encaisser_vente` les pose juste avant l'enregistrement.
+    / Items and payments are read from the database; sale fields come from the object.
+
+    FLUX :
+    - `BaseBillet/services_vente.py` `encaisser_vente` l'appelle sous le verrou du lieu,
+      avec l'empreinte de la vente numéro − 1 ;
+    - `verifier_chaine_ventes` (ci-dessous) la recalcule pour chaque vente réglée.
+
+    Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-A-vente-reglement.md §5.
+
+    :param vente: la `Vente` (numéro, heure d'encaissement, totaux et statut posés)
+    :param cle: str — la clé HMAC du lieu, en clair
+    :param previous_hmac: str — l'empreinte de la vente précédente ("" pour la première)
+    :return: str — empreinte HMAC-SHA256 de 64 caractères hexadécimaux
+    """
+    # Imports locaux, comme dans tout ce module : `laboutik.integrity` se charge sans
+    # charger les modèles de BaseBillet. `BaseBillet/services_vente.py` importe ce
+    # module à son propre chargement : ce module ne l'importe donc jamais en tête de
+    # fichier (voir `verifier_chaine_ventes`).
+    # / Local imports, as in this whole module: it loads without BaseBillet's models.
+    from BaseBillet.models import LigneArticle
+    from BaseBillet.models_vente import Reglement
+
+    # Les articles, triés par uuid. qty et vat sont écrits avec un nombre fixe de
+    # décimales : le texte ne change pas entre la mémoire et la base (PIEGES 9.56).
+    # / Items sorted by uuid. qty and vat get fixed decimals, stable across reads.
+    articles_du_message = []
+    articles_tries = LigneArticle.objects.filter(vente_id=vente.pk).order_by("uuid")
+    for article in articles_tries:
+        articles_du_message.append(
+            [
+                str(article.uuid),
+                str(article.pricesold_id),
+                f"{article.qty:.6f}",
+                article.amount,
+                f"{article.vat:.2f}",
+                article.total_catalogue,
+                article.part_offerte,
+                article.source_offert,
+                article.total_ttc,
+                article.total_ht,
+                article.total_tva,
+                article.hors_chiffre_affaires,
+            ]
+        )
+
+    # Les règlements, triés par uuid. Un champ vide s'écrit "".
+    # / Payments sorted by uuid. An empty field is written "".
+    reglements_du_message = []
+    reglements_tries = Reglement.objects.filter(vente_id=vente.pk).order_by("uuid")
+    for reglement in reglements_tries:
+        reglements_du_message.append(
+            [
+                str(reglement.uuid),
+                reglement.moyen,
+                reglement.montant,
+                str(reglement.asset or ""),
+                str(reglement.carte_id or ""),
+                str(reglement.fedow_transaction_uuid or ""),
+                reglement.reference_externe,
+            ]
+        )
+
+    heure_d_encaissement_en_utc = vente.datetime_encaissement.astimezone(
+        datetime.timezone.utc
+    )
+    donnees = {
+        "format": 1,
+        "uuid": str(vente.uuid),
+        "numero": vente.numero,
+        "datetime_encaissement": heure_d_encaissement_en_utc.isoformat(),
+        "nature": vente.nature,
+        "origine": vente.origine,
+        "unite": vente.unite,
+        "statut": vente.statut,
+        # Le point de vente décide du journal du FEC : il est dans l'empreinte.
+        # / The point of sale decides the FEC journal: it is fingerprinted.
+        "point_de_vente": str(vente.point_de_vente_id or ""),
+        "vente_liee": str(vente.vente_liee_id or ""),
+        "totaux": [
+            vente.total_catalogue,
+            vente.total_offert,
+            vente.total_ttc,
+            vente.total_ht,
+            vente.total_tva,
+        ],
+        "articles": articles_du_message,
+        "reglements": reglements_du_message,
+        "previous_hmac": previous_hmac,
+    }
+    message = json.dumps(
+        donnees, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return hmac.new(
+        cle.encode("utf-8"),
+        message.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def verifier_chaine_ventes(cle):
+    """
+    Vérifie la chaîne des ventes réglées du lieu, et renvoie la liste des anomalies.
+    / Checks the chain of settled sales of the venue, returns the list of anomalies.
+
+    LOCALISATION : laboutik/integrity.py
+
+    Les ventes REGLEE sont parcourues par numéro croissant. Pour chaque vente :
+    1. trou de numéro : son numéro n'est pas le numéro de la vente d'avant + 1 ;
+    2. maillon cassé : son `previous_hmac` n'est pas l'empreinte de la vente d'avant
+       ("" pour la première) ;
+    3. empreinte fausse : l'empreinte recalculée (avec son `previous_hmac`) n'est pas
+       celle enregistrée — un article, un règlement ou la vente a été modifié ;
+    4. égalité rompue : relues en base, les deux égalités de la vente ne tiennent plus
+       (Σ règlements = Σ totaux catalogue ; Σ règlements hors offert = Σ nets vendus).
+    Aucune exception n'est tolérée : une correction est une nouvelle vente, jamais une
+    modification.
+    / Walks settled sales by number: gap, broken link, wrong fingerprint, broken
+    equality. No exception is tolerated.
+
+    Une anomalie est un dictionnaire : "numero", "uuid" (texte) et "raison" (phrase en
+    français). Une vente peut avoir plusieurs anomalies.
+    / An anomaly is a dict: "numero", "uuid" (text), "raison" (French sentence).
+
+    FLUX : appelée par les tests et, plus tard, par les contrôles de la clôture.
+
+    :param cle: str — la clé HMAC du lieu, en clair
+    :return: list — les anomalies ; vide si la chaîne est saine
+    """
+    # Imports locaux, comme dans tout ce module. Pour `services_vente`, c'est
+    # obligatoire : il importe ce module à son chargement (`calculer_hmac_vente`).
+    # Importés l'un l'autre en tête de fichier, chacun trouverait l'autre à moitié
+    # chargé : ImportError (cycle d'import).
+    # / Local imports. Required for services_vente: it imports this module at load
+    # time, so a top-level import here would be an import cycle.
+    from BaseBillet.models import LigneArticle
+    from BaseBillet.models_vente import Reglement, Vente
+    from BaseBillet.services_vente import MOYENS_OFFERTS
+
+    anomalies = []
+    empreinte_de_la_vente_precedente = ""
+    # Vide tant qu'aucune vente n'a été vue : la première vente n'a pas de précédente.
+    # / Empty until a sale is seen: the first sale has no previous one.
+    numero_precedent = None
+
+    ventes_reglees = Vente.objects.filter(statut=Vente.Statut.REGLEE).order_by(
+        "numero"
+    )
+    for vente in ventes_reglees:
+        # 1. Trou de numéro : le numéro ne suit pas celui de la vente d'avant.
+        # / 1. Number gap: the number does not follow the previous sale's one.
+        premiere_vente_de_la_chaine = numero_precedent is None
+        if not premiere_vente_de_la_chaine and vente.numero != numero_precedent + 1:
+            anomalies.append(
+                {
+                    "numero": vente.numero,
+                    "uuid": str(vente.uuid),
+                    "raison": (
+                        f"Trou de numéro : la vente n° {vente.numero} suit la vente "
+                        f"n° {numero_precedent}."
+                    ),
+                }
+            )
+
+        # 2. Maillon cassé : le lien vers la vente d'avant.
+        # / 2. Broken link to the previous sale.
+        if vente.previous_hmac != empreinte_de_la_vente_precedente:
+            anomalies.append(
+                {
+                    "numero": vente.numero,
+                    "uuid": str(vente.uuid),
+                    "raison": (
+                        f"Maillon cassé : l'empreinte précédente de la vente "
+                        f"n° {vente.numero} n'est pas l'empreinte de la vente d'avant."
+                    ),
+                }
+            )
+
+        # 3. Empreinte fausse : la vente, ses articles ou ses règlements ont changé.
+        # / 3. Wrong fingerprint: the sale, its items or its payments changed.
+        empreinte_recalculee = calculer_hmac_vente(vente, cle, vente.previous_hmac)
+        if empreinte_recalculee != vente.hmac_hash:
+            anomalies.append(
+                {
+                    "numero": vente.numero,
+                    "uuid": str(vente.uuid),
+                    "raison": (
+                        f"Empreinte fausse : la vente n° {vente.numero}, ses articles "
+                        f"ou ses règlements ont été modifiés après l'encaissement."
+                    ),
+                }
+            )
+
+        # 4. Les deux égalités, relues en base.
+        # / 4. The two equalities, read back from the database.
+        somme_des_totaux_catalogue = 0
+        somme_des_nets_vendus = 0
+        for article in LigneArticle.objects.filter(vente_id=vente.pk):
+            somme_des_totaux_catalogue += article.total_catalogue
+            somme_des_nets_vendus += article.total_ttc
+
+        somme_de_tous_les_reglements = 0
+        somme_des_reglements_hors_offert = 0
+        for reglement in Reglement.objects.filter(vente_id=vente.pk):
+            somme_de_tous_les_reglements += reglement.montant
+            reglement_offert = reglement.moyen in MOYENS_OFFERTS
+            if not reglement_offert:
+                somme_des_reglements_hors_offert += reglement.montant
+
+        egalites_tenues = (
+            somme_de_tous_les_reglements == somme_des_totaux_catalogue
+            and somme_des_reglements_hors_offert == somme_des_nets_vendus
+        )
+        if not egalites_tenues:
+            anomalies.append(
+                {
+                    "numero": vente.numero,
+                    "uuid": str(vente.uuid),
+                    "raison": (
+                        f"Égalité rompue : vente n° {vente.numero}, règlements "
+                        f"{somme_de_tous_les_reglements} pour {somme_des_totaux_catalogue} "
+                        f"de totaux catalogue ; règlements hors offert "
+                        f"{somme_des_reglements_hors_offert} pour "
+                        f"{somme_des_nets_vendus} de nets vendus (centimes)."
+                    ),
+                }
+            )
+
+        empreinte_de_la_vente_precedente = vente.hmac_hash
+        numero_precedent = vente.numero
+
+    return anomalies

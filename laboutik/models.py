@@ -1135,6 +1135,20 @@ class CommandeSauvegarde(models.Model):
         verbose_name=_("Archived"),
     )
 
+    # La vente créée au paiement de la table (BaseBillet/models_vente.py).
+    # Vide tant que la table n'est pas payée.
+    # Écrit en chaîne : `BaseBillet` pointe déjà vers `laboutik` (point de vente) ; la
+    # migration de ce champ dépend de celle qui crée `Vente`, sans cycle.
+    # / The sale created when the table is paid. Empty until then.
+    vente = models.ForeignKey(
+        "BaseBillet.Vente",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="commandes_de_table",
+        verbose_name=_("Vente"),
+    )
+
     def __str__(self):
         table_name = self.table.name if self.table else _("No table")
         return f"{table_name} — {self.get_statut_display()} ({self.datetime:%H:%M})"

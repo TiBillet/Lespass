@@ -15,6 +15,7 @@
 | 4 | **Annuler UN seul billet vendu en caisse échoue toujours** (« Aucun paiement remboursable… »). La ligne de caisse porte un tarif vendu **sans** événement, le billet un tarif vendu **avec** événement : `_lignes_hors_stripe(pricesold_ids=…)` ne trouve rien. Seule l'annulation de toute la réservation marche. | `laboutik/views.py` ~l.5384, ~l.6554 ; `Reservation._lignes_hors_stripe` (`BaseBillet/models.py` ~l.3168) | non figé (constaté par sonde, A′-2) |
 | 5 | **Réservation API v2 « payée ailleurs » : aucun mail de billet.** `paymentMethod` cash / card → la réservation passe `CREATED → VALID`, transition absente de `PRE_SAVE_TRANSITIONS` ; le commentaire du code dit le contraire. | `BaseBillet/validators.py` ~l.458 ; `api_v2/serializers.py` ~l.1363 | à figer si un test l'atteint |
 | 6 | **À vérifier à l'écran : billet vendu en caisse et payé en NFC / cascade** → lignes de vente créées, mais ni réservation ni billet (`_creer_billets_depuis_panier` n'est appelé que par les chemins à un seul moyen). Une garde de l'interface l'empêche peut-être. | `laboutik/views.py` ~l.7453, ~l.7678 (appels) ; chemins cascade ~l.8457, ~l.9562, ~l.10147 | non figé |
+| 7 | **`Product.delete()` plante sur un produit sans image** : le signal `post_delete` de stdimage appelle `splitext(None)`. Vu pendant le nettoyage du script de concurrence (A-3). | signal `post_delete` de `django-stdimage` sur `Product.img` | non figé |
 
 Le détail et le contexte de chaque constat : `TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-SUIVI.md`
 §5 et `CHANTIER-05-montants-entiers.md` §9.

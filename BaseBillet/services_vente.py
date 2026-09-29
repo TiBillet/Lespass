@@ -1,0 +1,785 @@
+"""
+Service de vente : le seul point d'entrée pour écrire l'argent d'une vente.
+/ Sale service: the only entry point to write the money of a sale.
+
+LOCALISATION : BaseBillet/services_vente.py
+
+Ce module porte LA formule d'argent du projet : `calculer_montants_article`. Toute ligne
+d'article vendu reçoit ses montants de cette fonction, et de nulle part ailleurs.
+/ This module holds THE money formula of the project.
+
+LA RÈGLE D'OR
+L'argent n'est jamais recalculé. Il est écrit une seule fois, en centimes entiers, au
+moment de la vente, puis il est seulement additionné. Jamais `amount × qty` dans un
+rapport, jamais `round()` (arrondi au pair), jamais `int()` (troncature).
+/ Money is never recomputed: written once in whole cents, then only summed.
+
+FLUX D'UNE VENTE / FLOW OF A SALE :
+1. `ouvrir_vente(...)` : la vente naît EN_ATTENTE, sans numéro ;
+2. `ajouter_article(vente, ...)` pour chaque article : appelle
+   `calculer_montants_article`, puis crée la `LigneArticle` en un seul INSERT ;
+3. `ajouter_reglement(vente, ...)` pour chaque règlement (montant copié de sa source) ;
+4. `encaisser_vente(vente)` : sous verrou, vérifie les deux égalités, pose le numéro,
+   les totaux et l'empreinte chaînée, passe la vente à REGLEE. Ou
+   `annuler_vente(vente)` : ANNULEE.
+/ open, add items, add payments, then settle (or cancel).
+
+Les modèles sont dans BaseBillet/models_vente.py (`Vente`, `Reglement`) et
+BaseBillet/models.py (`LigneArticle`). Une fois la vente REGLEE, leurs `save()`
+refusent toute modification de l'argent (garde d'immutabilité).
+/ Models live in models_vente.py and models.py; their save() guard a settled sale.
+
+Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-montants-entiers.md (§2)
+et CHANTIER-05-A-vente-reglement.md (§3).
+"""
+
+from decimal import ROUND_HALF_UP, Decimal
+
+from django.db import connection, transaction
+from django.db.models import Max
+from django.utils import timezone
+
+from BaseBillet.models import LigneArticle, PaymentMethod, Product, SaleOrigin
+from BaseBillet.models_vente import Reglement, Vente
+from laboutik.integrity import calculer_hmac_vente
+from laboutik.models import LaboutikConfiguration
+
+# Les moyens « offerts » : ils gardent la trace d'un cadeau (jetons des bénévoles,
+# bouton OFFRIR), mais ce n'est pas de l'argent encaissé. Un règlement « offert » compte
+# dans « Σ règlements = Σ totaux catalogue », pas dans « Σ règlements = Σ nets vendus ».
+# FREE vaut "NA" en base.
+# / "Offered" payment methods: a trace of a gift, not collected money.
+MOYENS_OFFERTS = [PaymentMethod.LOCAL_GIFT, PaymentMethod.FREE]
+
+# Les moyens qui ne sont pas des encaissements, pour les rapports : les moyens offerts,
+# et les points ou le temps (NM), qui ne sont pas de l'argent.
+# / Payment methods that are not collections, for the reports: offered, and points (NM).
+MOYENS_HORS_ENCAISSEMENT = MOYENS_OFFERTS + [PaymentMethod.NON_MONETAIRE]
+
+# Les méthodes de caisse d'un produit dont la vente est hors chiffre d'affaires :
+# recharges (euros, cadeau, temps), virement du pot central, fidélité. Hors chiffre
+# d'affaires ne veut pas dire invisible : ces articles restent dans le Z et le FEC.
+# La catégorie RECHARGE_CASHLESS (recharge par l'API v2, sans méthode de caisse) est
+# aussi hors chiffre d'affaires : voir `ajouter_article`.
+# / POS methods whose sale is off revenue (still visible in the Z report and the FEC).
+METHODES_CAISSE_HORS_CHIFFRE_AFFAIRES = [
+    Product.RECHARGE_EUROS,
+    Product.RECHARGE_CADEAU,
+    Product.RECHARGE_TEMPS,
+    Product.VIREMENT_RECU,
+    Product.FIDELITE,
+]
+
+# Les natures de vente qui peuvent n'avoir aucun article : leurs règlements s'annulent.
+# / Sale natures that may have no item: their payments cancel each other out.
+NATURES_SANS_ARTICLE_ACCEPTEES = [Vente.Nature.VIDAGE_CARTE, Vente.Nature.CORRECTION]
+
+
+class EgaliteDeVenteRompue(Exception):
+    """
+    Les règlements d'une vente ne couvrent pas exactement ses articles : la vente ne
+    peut pas être encaissée. Le message donne les deux sommes comparées.
+    / The payments of a sale do not exactly match its items: it cannot be settled.
+
+    LOCALISATION : BaseBillet/services_vente.py (levée par `encaisser_vente`)
+    """
+
+
+def arrondir_au_centime_demi_haut(montant_exact):
+    """
+    Arrondit un montant exact (Decimal) au centime entier, 0,5 vers le haut.
+    / Rounds an exact amount to a whole cent, 0.5 going up.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    451,5 → 452 ; 92,5 → 93 ; −833,3 → −833. Sur un nombre négatif, 0,5 s'éloigne de
+    zéro (−0,5 → −1) : un avoir est l'exact opposé de la vente.
+    / On negatives, 0.5 goes away from zero: a credit note mirrors the sale.
+    """
+    montant_arrondi = montant_exact.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    # Ce `int()` ne tronque rien : le `Decimal` est déjà arrondi au centime entier.
+    # / This int() truncates nothing: the Decimal is already rounded to a whole cent.
+    return int(montant_arrondi)
+
+
+def calculer_montants_article(
+    prix_unitaire,
+    quantite,
+    taux_tva,
+    part_offerte=0,
+    prix_achat=0,
+    total_catalogue_impose=None,
+    quantite_pour_cout=None,
+):
+    """
+    Calcule les montants d'un article vendu, en centimes entiers.
+    C'est la SEULE formule d'argent du projet.
+    / Computes the amounts of a sold item, in whole cents. The ONLY money formula.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    LA FORMULE :
+        total_catalogue = arrondi_demi_haut(prix_unitaire × quantite)
+        net_vendu       = total_catalogue − part_offerte
+        total_ht        = arrondi_demi_haut(net_vendu × 100 / (100 + taux_tva))
+        total_tva       = net_vendu − total_ht
+        cout_achat      = arrondi_demi_haut(quantité réelle × prix_achat), vide si prix_achat = 0
+
+    La TVA est la DIFFÉRENCE entre le net et le HT : HT + TVA = net, toujours.
+    / VAT is the DIFFERENCE between net and excl. tax: HT + VAT = net, always.
+
+    LES TYPES REÇUS (sinon ValueError, avant tout calcul) :
+    - les centimes (`prix_unitaire`, `part_offerte`, `prix_achat`,
+      `total_catalogue_impose`) sont des `int`, et rien d'autre ;
+    - `quantite`, `quantite_pour_cout` et `taux_tva` sont des `Decimal` ou des `int`,
+      jamais des `float`.
+    / Cents are int only; quantities and VAT rate are Decimal or int, never float.
+
+    :param prix_unitaire: prix unitaire TTC en centimes (int), comme `LigneArticle.amount`
+    :param quantite: la quantité vendue (Decimal ou int) ; négative pour un avoir
+    :param taux_tva: le taux de TVA en pour cent (Decimal ou int, ex. Decimal("5.5"))
+    :param part_offerte: les centimes offerts (int), entre 0 et le total catalogue (même
+        signe que lui pour un avoir) ; sinon ValueError
+    :param prix_achat: prix d'achat du produit en centimes (int), dans l'unité de vente
+        (pièce, kg, L) ; 0 veut dire « inconnu »
+    :param total_catalogue_impose: pendant la transition (fiches B, C), l'argent réel
+        d'une « part » d'article payée avec plusieurs moyens (int) ; repris tel quel au
+        lieu de prix × quantité. Retiré en fiche H.
+    :param quantite_pour_cout: la quantité réellement servie (Decimal ou int), dans
+        l'unité du prix d'achat, quand `quantite` ne l'est pas (vente au poids avec
+        qty = 1, part) ; None → `quantite`
+    :return: dict d'entiers : total_catalogue, part_offerte, total_ttc, total_ht,
+        total_tva, cout_achat (None si le prix d'achat est inconnu)
+    """
+    # 0. Les centimes reçus sont des `int`. Un `Decimal` ou un `float` serait un montant
+    # recalculé ailleurs, qu'on refuse au lieu de l'arrondir ici en silence.
+    # `type(...) is int` et non `isinstance` : un booléen est aussi un `int` en Python.
+    # / 0. Received cents are int only (a bool is also an int in Python: refused).
+    centimes_recus = {
+        "prix_unitaire": prix_unitaire,
+        "part_offerte": part_offerte,
+        "prix_achat": prix_achat,
+    }
+    for nom_du_montant, montant_recu in centimes_recus.items():
+        if type(montant_recu) is not int:
+            raise ValueError(
+                f"Le montant « {nom_du_montant} » doit être un entier en centimes, "
+                f"reçu : {montant_recu!r}"
+            )
+
+    # 0 bis. La quantité, la quantité pour le coût et le taux de TVA sont exacts : des
+    # `Decimal` ou des `int`. Un `float` n'est pas exact : `Decimal(0.35)` vaut
+    # 0,34999…, et 1290 × 0,35 donnerait 451 au lieu de 452. Le refus vaut toujours,
+    # même quand la valeur ne sert pas au calcul (quantité pour le coût sans prix
+    # d'achat) : une seule règle.
+    # / 0 bis. Quantities and VAT rate must be exact (Decimal or int), never float.
+    valeurs_exactes_recues = {
+        "quantite": quantite,
+        "taux_tva": taux_tva,
+        "quantite_pour_cout": quantite_pour_cout,
+    }
+    for nom_de_la_valeur, valeur_recue in valeurs_exactes_recues.items():
+        quantite_pour_cout_absente = (
+            nom_de_la_valeur == "quantite_pour_cout" and valeur_recue is None
+        )
+        if quantite_pour_cout_absente:
+            continue
+        valeur_exacte = type(valeur_recue) is int or type(valeur_recue) is Decimal
+        if not valeur_exacte:
+            raise ValueError(
+                f"« {nom_de_la_valeur} » doit être un Decimal ou un int, reçu : "
+                f"{valeur_recue!r}. Un float n'est pas exact : passer par exemple "
+                f'Decimal("0.35").'
+            )
+
+    # 1. Total catalogue : imposé par le producteur (part), sinon prix × quantité.
+    # / 1. Catalogue total: imposed by the producer (a part), otherwise price × quantity.
+    if total_catalogue_impose is None:
+        montant_exact_du_catalogue = Decimal(prix_unitaire) * Decimal(quantite)
+        total_catalogue = arrondir_au_centime_demi_haut(montant_exact_du_catalogue)
+    else:
+        # L'argent réel est déjà en centimes entiers : un autre type serait un
+        # montant recalculé, qu'on refuse au lieu de l'arrondir en silence.
+        # / Real money is already whole cents: any other type is refused.
+        if type(total_catalogue_impose) is not int:
+            raise ValueError(
+                f"Le total catalogue imposé doit être un entier en centimes, "
+                f"reçu : {total_catalogue_impose!r}"
+            )
+        total_catalogue = total_catalogue_impose
+
+    # 2. La part offerte reste entre 0 et le total catalogue (même signe pour un avoir).
+    # / 2. The offered part stays between 0 and the catalogue total (same sign).
+    if total_catalogue >= 0:
+        part_offerte_minimum = 0
+        part_offerte_maximum = total_catalogue
+    else:
+        part_offerte_minimum = total_catalogue
+        part_offerte_maximum = 0
+    part_offerte_hors_bornes = (
+        part_offerte < part_offerte_minimum or part_offerte > part_offerte_maximum
+    )
+    if part_offerte_hors_bornes:
+        raise ValueError(
+            f"La part offerte ({part_offerte}) doit être comprise entre "
+            f"{part_offerte_minimum} et {part_offerte_maximum} centimes."
+        )
+
+    # 3. Net vendu, puis HT arrondi une fois, puis TVA par différence.
+    # / 3. Net sold, then excl. tax rounded once, then VAT by difference.
+    net_vendu = total_catalogue - part_offerte
+    montant_exact_hors_taxes = (
+        Decimal(net_vendu) * Decimal("100") / (Decimal("100") + Decimal(taux_tva))
+    )
+    total_ht = arrondir_au_centime_demi_haut(montant_exact_hors_taxes)
+    total_tva = net_vendu - total_ht
+
+    # 4. Coût d'achat, sur la quantité réellement servie. Prix d'achat 0 = inconnu.
+    # / 4. Purchase cost, on the quantity really served. Purchase price 0 = unknown.
+    prix_d_achat_inconnu = prix_achat == 0
+    if prix_d_achat_inconnu:
+        cout_achat = None
+    else:
+        if quantite_pour_cout is None:
+            quantite_reellement_servie = quantite
+        else:
+            quantite_reellement_servie = quantite_pour_cout
+        montant_exact_du_cout = Decimal(quantite_reellement_servie) * Decimal(
+            prix_achat
+        )
+        cout_achat = arrondir_au_centime_demi_haut(montant_exact_du_cout)
+
+    return {
+        "total_catalogue": total_catalogue,
+        "part_offerte": part_offerte,
+        "total_ttc": net_vendu,
+        "total_ht": total_ht,
+        "total_tva": total_tva,
+        "cout_achat": cout_achat,
+    }
+
+
+def ouvrir_vente(
+    origine,
+    nature,
+    unite="EUR",
+    point_de_vente=None,
+    operateur=None,
+    client=None,
+    carte=None,
+    vente_liee=None,
+    idempotency_key=None,
+):
+    """
+    Ouvre une vente EN_ATTENTE, sans numéro. Première étape de toute vente.
+    / Opens a PENDING sale, without number. First step of every sale.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    Anti double clic : si une vente porte déjà la même clé d'idempotence, c'est elle
+    qui est rendue, et aucune vente n'est créée.
+    / Anti double-click: a known idempotency key returns the existing sale.
+
+    Refuse (ValueError) une origine hors de `SaleOrigin` et une nature hors de
+    `Vente.Nature`.
+    / Refuses an origin or a nature outside their choices.
+
+    :param origine: `SaleOrigin` (caisse, tireuse, en ligne, admin, API…)
+    :param nature: `Vente.Nature` (VENTE, AVOIR, VIDAGE_CARTE, CORRECTION)
+    :param unite: "EUR", ou l'uuid (texte) de la monnaie de points de la vente
+    :param point_de_vente: `laboutik.PointDeVente`, ou None
+    :param operateur: l'utilisateur de la carte primaire, ou None
+    :param client: l'utilisateur acheteur, ou None
+    :param carte: la `CarteCashless` de la vente, ou None
+    :param vente_liee: la vente d'origine d'un avoir ou d'une correction, ou None
+    :param idempotency_key: clé anti double clic, ou None
+    :return: la `Vente` ouverte (ou déjà ouverte avec cette clé)
+    """
+    # La base ne vérifie pas les choix d'un champ texte : sans ce refus, une valeur
+    # inconnue serait écrite telle quelle, puis scellée dans l'empreinte de la vente.
+    # / The database does not check a text field's choices: refused here.
+    if origine not in SaleOrigin.values:
+        raise ValueError(
+            f"Origine de vente inconnue : {origine!r}. Attendu : une valeur de "
+            f"SaleOrigin ({', '.join(SaleOrigin.values)})."
+        )
+    if nature not in Vente.Nature.values:
+        raise ValueError(
+            f"Nature de vente inconnue : {nature!r}. Attendu : une valeur de "
+            f"Vente.Nature ({', '.join(Vente.Nature.values)})."
+        )
+
+    champs_de_la_vente = {
+        "origine": origine,
+        "nature": nature,
+        "unite": unite,
+        "point_de_vente": point_de_vente,
+        "operateur": operateur,
+        "client": client,
+        "carte": carte,
+        "vente_liee": vente_liee,
+    }
+
+    if idempotency_key is None:
+        vente = Vente.objects.create(**champs_de_la_vente)
+        return vente
+
+    # `get_or_create` relit la vente si un autre clic l'a créée au même instant
+    # (contrainte d'unicité sur la clé) : deux clics simultanés rendent la même vente.
+    # / get_or_create reads the sale back if another click created it at the same time.
+    vente, _vente_creee = Vente.objects.get_or_create(
+        idempotency_key=idempotency_key,
+        defaults=champs_de_la_vente,
+    )
+    return vente
+
+
+def ajouter_article(
+    vente,
+    pricesold,
+    quantite,
+    prix_unitaire,
+    taux_tva,
+    part_offerte=0,
+    source_offert="",
+    prix_achat=0,
+    offert_en_totalite=False,
+    total_catalogue_impose=None,
+    quantite_pour_cout=None,
+    hors_chiffre_affaires=False,
+    **champs_de_la_ligne,
+):
+    """
+    Ajoute un article vendu à la vente : une `LigneArticle` écrite en UN SEUL INSERT,
+    avec tous ses montants entiers et sa TVA.
+    / Adds a sold item to the sale: one LigneArticle, written in ONE INSERT.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    FLUX :
+    0. La vente, relue en base, doit être EN_ATTENTE : une vente réglée ou annulée ne
+       reçoit plus rien (ValueError).
+    1. Vente en points (`unite` ≠ "EUR") : la TVA doit valoir 0, sinon refus.
+    2. Montants par `calculer_montants_article` (la seule formule d'argent).
+    3. Règle « offert à montant non nul » : si l'article est entièrement offert et que
+       son total catalogue n'est pas 0, alors part offerte = total catalogue,
+       source OFFRIR, et un règlement FREE du même montant est ajouté.
+    4. `hors_chiffre_affaires` calculé depuis le produit, ou forcé par l'appelant.
+    5. Création de la ligne, avec le marqueur `_tva_explicite` : `LigneArticle.save()`
+       garde alors la TVA passée, même 0. La ligne porte l'origine de la vente
+       (`sale_origin`), sauf si le producteur en passe une.
+
+    La ligne est CRÉÉE, jamais modifiée ensuite par le service. Les déclencheurs
+    (Fedow, e-mails, ancien LaBoutik) partent sur une TRANSITION de statut faite par
+    un `save()` (BaseBillet/signals.py) : le producteur garde la sienne. Un `save()` de
+    plus ici relancerait ces déclencheurs.
+    / The line is created, never saved again by the service: a second save() would
+    run the status machine triggers again.
+
+    :param vente: la `Vente` EN_ATTENTE (sinon ValueError)
+    :param pricesold: le `PriceSold` vendu
+    :param quantite: la quantité (Decimal), négative pour un avoir
+    :param prix_unitaire: prix unitaire TTC en centimes (int), écrit dans `amount`
+    :param taux_tva: taux de TVA en pour cent (Decimal), écrit dans `vat`
+    :param part_offerte: centimes offerts sur l'article (voir `calculer_montants_article`)
+    :param source_offert: `LigneArticle.SourceOffert` (OFFRIR, JETONS), vide sinon
+    :param prix_achat: prix d'achat du produit en centimes ; 0 = inconnu
+    :param offert_en_totalite: True pour un article entièrement offert (règle ci-dessus)
+    :param total_catalogue_impose: l'argent réel d'une « part » (transition, retiré en H)
+    :param quantite_pour_cout: la quantité réellement servie, pour le coût d'achat
+    :param hors_chiffre_affaires: True pour forcer l'article hors chiffre d'affaires
+        (écart d'encaissement) ; sinon calculé depuis le produit
+    :param champs_de_la_ligne: champs historiques de la ligne posés pendant la
+        transition (`payment_method`, `asset`, `status`, `reservation`…)
+    :return: la `LigneArticle` créée
+    """
+    # 0. Une vente encaissée ne se modifie plus (D14), une vente annulée non plus.
+    # On lit le statut EN BASE : l'objet reçu peut être ancien.
+    # / 0. A settled or cancelled sale takes nothing more. Status read in the database.
+    statut_de_la_vente_en_base = (
+        Vente.objects.filter(pk=vente.pk).values_list("statut", flat=True).first()
+    )
+    if statut_de_la_vente_en_base != Vente.Statut.EN_ATTENTE:
+        raise ValueError(
+            f"La vente {vente.uuid} n'est plus en attente (statut "
+            f"{statut_de_la_vente_en_base}) : on ne peut plus lui ajouter d'article."
+        )
+
+    # 1. Une vente en points n'est pas de l'argent : pas de TVA (D9).
+    # / 1. A points sale is not money: no VAT.
+    vente_en_points = vente.unite != "EUR"
+    if vente_en_points and Decimal(taux_tva) != Decimal("0"):
+        raise ValueError(
+            f"Une vente en points n'a pas de TVA : taux reçu {taux_tva} %, attendu 0."
+        )
+
+    # 2. Les montants, par la seule formule d'argent du projet.
+    # / 2. The amounts, by the only money formula of the project.
+    montants = calculer_montants_article(
+        prix_unitaire=prix_unitaire,
+        quantite=quantite,
+        taux_tva=taux_tva,
+        part_offerte=part_offerte,
+        prix_achat=prix_achat,
+        total_catalogue_impose=total_catalogue_impose,
+        quantite_pour_cout=quantite_pour_cout,
+    )
+
+    # 3. Règle « offert à montant non nul ». Pendant la transition, le moyen historique
+    # FREE sur la ligne la déclenche aussi (retiré en fiche H).
+    # / 3. "Offered at a non-zero price" rule. FREE on the line also triggers it (until H).
+    moyen_historique_de_la_ligne = champs_de_la_ligne.get("payment_method")
+    ligne_offerte_par_le_moyen_historique = (
+        moyen_historique_de_la_ligne == PaymentMethod.FREE
+    )
+    article_entierement_offert = (
+        offert_en_totalite or ligne_offerte_par_le_moyen_historique
+    )
+    reglement_offert_a_ajouter = (
+        article_entierement_offert and montants["total_catalogue"] != 0
+    )
+    if reglement_offert_a_ajouter:
+        montants = calculer_montants_article(
+            prix_unitaire=prix_unitaire,
+            quantite=quantite,
+            taux_tva=taux_tva,
+            part_offerte=montants["total_catalogue"],
+            prix_achat=prix_achat,
+            total_catalogue_impose=total_catalogue_impose,
+            quantite_pour_cout=quantite_pour_cout,
+        )
+        source_offert = LigneArticle.SourceOffert.OFFRIR
+
+    # 4. Hors chiffre d'affaires : figé ici, depuis le produit tel qu'il est
+    # maintenant. Un changement ultérieur du produit ne change pas la ligne.
+    # / 4. Off revenue: frozen now, from the product as it is today.
+    produit_vendu = pricesold.productsold.product
+    produit_hors_chiffre_affaires = (
+        produit_vendu.methode_caisse in METHODES_CAISSE_HORS_CHIFFRE_AFFAIRES
+        or produit_vendu.categorie_article == Product.RECHARGE_CASHLESS
+    )
+    ligne_hors_chiffre_affaires = hors_chiffre_affaires or produit_hors_chiffre_affaires
+
+    # La ligne porte l'origine de sa vente, sauf si le producteur en passe une : sans
+    # cela, le défaut du champ (« en ligne ») marquerait à tort une vente de caisse.
+    # / The line carries its sale's origin unless the producer passes one.
+    origine_passee_par_le_producteur = "sale_origin" in champs_de_la_ligne
+    if not origine_passee_par_le_producteur:
+        champs_de_la_ligne["sale_origin"] = vente.origine
+
+    # 5. La ligne et son éventuel règlement FREE sont écrits ensemble, ou pas du tout.
+    # / 5. The line and its possible FREE payment are written together, or not at all.
+    with transaction.atomic():
+        ligne = LigneArticle(
+            vente=vente,
+            pricesold=pricesold,
+            qty=quantite,
+            amount=prix_unitaire,
+            vat=taux_tva,
+            total_catalogue=montants["total_catalogue"],
+            part_offerte=montants["part_offerte"],
+            source_offert=source_offert,
+            total_ttc=montants["total_ttc"],
+            total_ht=montants["total_ht"],
+            total_tva=montants["total_tva"],
+            cout_achat=montants["cout_achat"],
+            hors_chiffre_affaires=ligne_hors_chiffre_affaires,
+            **champs_de_la_ligne,
+        )
+        # La TVA passée ici est voulue, même 0 : `LigneArticle.save()` la garde.
+        # / The VAT given here is intended, even 0: LigneArticle.save() keeps it.
+        ligne._tva_explicite = True
+        ligne.save()
+
+        if reglement_offert_a_ajouter:
+            ajouter_reglement(
+                vente,
+                moyen=PaymentMethod.FREE,
+                montant=montants["total_catalogue"],
+            )
+
+    return ligne
+
+
+def ajouter_reglement(
+    vente,
+    moyen,
+    montant,
+    asset=None,
+    carte=None,
+    wallet=None,
+    fedow_transaction_uuid=None,
+    paiement_stripe=None,
+    reference_externe="",
+):
+    """
+    Ajoute un règlement à la vente. Le montant est COPIÉ de sa source (transaction
+    Fedow, paiement Stripe, somme encaissée) : jamais calculé.
+    / Adds a payment to the sale. The amount is COPIED from its source, never computed.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    Refuse (ValueError) :
+    - une vente qui n'est plus EN_ATTENTE (réglée ou annulée, statut relu en base) ;
+    - un montant qui n'est pas un entier (`Decimal`, `float`) ou qui vaut 0 : une
+      vente gratuite n'a aucun règlement ;
+    - un moyen hors de `PaymentMethod`.
+    / Refuses a sale no longer pending, a non-int amount, 0, or an unknown method.
+
+    :param vente: la `Vente` EN_ATTENTE (sinon ValueError)
+    :param moyen: `PaymentMethod` (CA, CC, LE, LG, FREE, NM, SN…)
+    :param montant: centimes entiers, signés, non nuls (int)
+    :param asset: uuid de la monnaie (cashless), ou None
+    :param carte: `CarteCashless` (cashless), ou None
+    :param wallet: `Wallet` (cashless), ou None
+    :param fedow_transaction_uuid: uuid de la transaction Fedow, ou None
+    :param paiement_stripe: `Paiement_stripe`, ou None
+    :param reference_externe: id de remboursement Stripe, numéro de chèque… ou ""
+    :return: le `Reglement` créé
+    """
+    # Une vente encaissée ne se modifie plus (D14), une vente annulée non plus.
+    # On lit le statut EN BASE : l'objet reçu peut être ancien.
+    # / A settled or cancelled sale takes nothing more. Status read in the database.
+    statut_de_la_vente_en_base = (
+        Vente.objects.filter(pk=vente.pk).values_list("statut", flat=True).first()
+    )
+    if statut_de_la_vente_en_base != Vente.Statut.EN_ATTENTE:
+        raise ValueError(
+            f"La vente {vente.uuid} n'est plus en attente (statut "
+            f"{statut_de_la_vente_en_base}) : on ne peut plus lui ajouter de règlement."
+        )
+
+    # `type(...) is int` et non `isinstance` : un booléen est aussi un `int` en Python.
+    # / `type(...) is int`, not isinstance: a bool is also an int in Python.
+    montant_est_un_entier = type(montant) is int
+    if not montant_est_un_entier:
+        raise ValueError(
+            f"Le montant d'un règlement doit être un entier en centimes, "
+            f"reçu : {montant!r}"
+        )
+    if montant == 0:
+        raise ValueError(
+            "Un règlement de 0 n'existe pas : une vente gratuite n'a aucun règlement."
+        )
+
+    # La base ne vérifie pas les choix d'un champ texte : sans ce refus, un moyen
+    # inconnu serait écrit tel quel, puis scellé dans l'empreinte de la vente.
+    # / The database does not check a text field's choices: refused here.
+    if moyen not in PaymentMethod.values:
+        raise ValueError(
+            f"Moyen de règlement inconnu : {moyen!r}. Attendu : une valeur de "
+            f"PaymentMethod ({', '.join(PaymentMethod.values)})."
+        )
+
+    reglement = Reglement.objects.create(
+        vente=vente,
+        moyen=moyen,
+        montant=montant,
+        asset=asset,
+        carte=carte,
+        wallet=wallet,
+        fedow_transaction_uuid=fedow_transaction_uuid,
+        paiement_stripe=paiement_stripe,
+        reference_externe=reference_externe,
+    )
+    return reglement
+
+
+def encaisser_vente(vente):
+    """
+    Encaisse la vente : vérifie les deux égalités, pose le numéro, l'heure et les
+    totaux, et passe la vente à REGLEE. Tout ou rien.
+    / Settles the sale: checks both equalities, sets number, time and totals. All or nothing.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    FLUX (dans une transaction ; un point de sauvegarde si l'appelant en a déjà une) :
+    1. Verrou du lieu : `pg_advisory_xact_lock`. Deux encaissements du même lieu
+       passent l'un après l'autre : deux ventes n'ont jamais le même numéro.
+    2. Relecture de la vente sous verrou (`select_for_update`) :
+       - déjà REGLEE → rendue telle quelle (webhook Stripe + retour de l'acheteur) ;
+       - ANNULEE → refus (ValueError) : pas de retour arrière.
+    3. Une vente sans article est refusée (ValueError), sauf VIDAGE_CARTE et
+       CORRECTION.
+    4. Les deux égalités, relues en base (sinon `EgaliteDeVenteRompue`) :
+          Σ règlements                    = Σ totaux catalogue des articles
+          Σ règlements hors « offert »    = Σ nets vendus des articles
+    5. Numéro = plus grand numéro du lieu + 1 ; heure d'encaissement ; totaux de la
+       vente = sommes des articles ; statut REGLEE.
+    6. Empreinte chaînée (`laboutik/integrity.py` `calculer_hmac_vente`) :
+       `previous_hmac` = empreinte de la vente numéro − 1 ("" pour la première),
+       clé du lieu dans `LaboutikConfiguration`. Puis l'enregistrement.
+
+    Le verrou est tenu jusqu'à la fin de la transaction la plus extérieure. L'appelant
+    encaisse donc EN DERNIER, après tout appel réseau : sinon toute la caisse du lieu
+    attend.
+    / The lock is held until the outermost commit: settle LAST, after any network call.
+
+    :param vente: la `Vente` à encaisser
+    :return: la vente relue en base, REGLEE
+    """
+    # Le `atomic()` est indispensable même si l'appelant n'a pas de transaction : le
+    # verrou du lieu ne dure que jusqu'à la fin de la transaction. Sans lui, deux
+    # encaissements simultanés liraient le même plus grand numéro.
+    # / atomic() is required: the venue lock only lasts until the end of the transaction.
+    with transaction.atomic():
+        # 1. Verrou du lieu, relâché à la fin de la transaction.
+        # / 1. Venue lock, released at the end of the transaction.
+        nom_du_verrou_du_lieu = f"vente-{connection.schema_name}"
+        with connection.cursor() as curseur:
+            curseur.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                [nom_du_verrou_du_lieu],
+            )
+
+        # 2. Relecture sous verrou : l'état en base fait foi, pas l'objet reçu.
+        # / 2. Read back under lock: the database state rules, not the given object.
+        vente_verrouillee = Vente.objects.select_for_update().get(pk=vente.pk)
+
+        vente_deja_reglee = vente_verrouillee.statut == Vente.Statut.REGLEE
+        if vente_deja_reglee:
+            return vente_verrouillee
+
+        vente_annulee = vente_verrouillee.statut == Vente.Statut.ANNULEE
+        if vente_annulee:
+            raise ValueError(
+                f"La vente {vente_verrouillee.uuid} est annulée : elle ne peut plus "
+                f"être encaissée."
+            )
+
+        articles_de_la_vente = list(
+            LigneArticle.objects.filter(vente=vente_verrouillee)
+        )
+        reglements_de_la_vente = list(Reglement.objects.filter(vente=vente_verrouillee))
+
+        # 3. Sans article : seulement un vidage de carte ou une correction.
+        # / 3. No item: only a card emptying or a correction.
+        vente_sans_article = len(articles_de_la_vente) == 0
+        nature_sans_article_acceptee = (
+            vente_verrouillee.nature in NATURES_SANS_ARTICLE_ACCEPTEES
+        )
+        if vente_sans_article and not nature_sans_article_acceptee:
+            raise ValueError(
+                f"Une vente de nature {vente_verrouillee.nature} doit avoir au moins "
+                f"un article."
+            )
+
+        # Sommes des articles.
+        # / Sums of the items.
+        somme_des_totaux_catalogue = 0
+        somme_des_parts_offertes = 0
+        somme_des_nets_vendus = 0
+        somme_des_totaux_ht = 0
+        somme_des_totaux_tva = 0
+        for article in articles_de_la_vente:
+            somme_des_totaux_catalogue += article.total_catalogue
+            somme_des_parts_offertes += article.part_offerte
+            somme_des_nets_vendus += article.total_ttc
+            somme_des_totaux_ht += article.total_ht
+            somme_des_totaux_tva += article.total_tva
+
+        # Sommes des règlements : tous, puis hors « offert ».
+        # / Sums of the payments: all, then without "offered" ones.
+        somme_de_tous_les_reglements = 0
+        somme_des_reglements_hors_offert = 0
+        for reglement in reglements_de_la_vente:
+            somme_de_tous_les_reglements += reglement.montant
+            reglement_offert = reglement.moyen in MOYENS_OFFERTS
+            if not reglement_offert:
+                somme_des_reglements_hors_offert += reglement.montant
+
+        # 4. Les deux égalités.
+        # / 4. The two equalities.
+        if somme_de_tous_les_reglements != somme_des_totaux_catalogue:
+            raise EgaliteDeVenteRompue(
+                f"Vente {vente_verrouillee.uuid} : la somme des règlements "
+                f"({somme_de_tous_les_reglements} centimes) ne vaut pas la somme des "
+                f"totaux catalogue des articles ({somme_des_totaux_catalogue} centimes)."
+            )
+        if somme_des_reglements_hors_offert != somme_des_nets_vendus:
+            raise EgaliteDeVenteRompue(
+                f"Vente {vente_verrouillee.uuid} : la somme des règlements hors "
+                f"offert ({somme_des_reglements_hors_offert} centimes) ne vaut pas la "
+                f"somme des nets vendus des articles ({somme_des_nets_vendus} centimes)."
+            )
+
+        # 5. Numéro sans trou : le plus grand numéro du lieu + 1. Le verrou garantit
+        # qu'aucun autre encaissement ne lit le même plus grand numéro en même temps.
+        # / 5. Gapless number: highest number of the venue + 1, safe under the lock.
+        plus_grand_numero_du_lieu = Vente.objects.aggregate(
+            plus_grand_numero=Max("numero")
+        )["plus_grand_numero"]
+        if plus_grand_numero_du_lieu is None:
+            numero_de_la_vente = 1
+        else:
+            numero_de_la_vente = plus_grand_numero_du_lieu + 1
+
+        vente_verrouillee.numero = numero_de_la_vente
+        vente_verrouillee.datetime_encaissement = timezone.now()
+        vente_verrouillee.total_catalogue = somme_des_totaux_catalogue
+        vente_verrouillee.total_offert = somme_des_parts_offertes
+        vente_verrouillee.total_ttc = somme_des_nets_vendus
+        vente_verrouillee.total_ht = somme_des_totaux_ht
+        vente_verrouillee.total_tva = somme_des_totaux_tva
+
+        vente_verrouillee.statut = Vente.Statut.REGLEE
+
+        # 6. Empreinte chaînée, toujours sous le verrou : la vente numéro − 1 est la
+        # dernière réglée du lieu. Le statut REGLEE est posé AVANT le calcul : il fait
+        # partie du message, et `verifier_chaine_ventes` le relit REGLEE en base.
+        # / 6. Chained fingerprint, under the lock. REGLEE is set BEFORE the computation:
+        # the status is part of the message and is read back as REGLEE by the check.
+        if numero_de_la_vente == 1:
+            empreinte_de_la_vente_precedente = ""
+        else:
+            empreinte_de_la_vente_precedente = Vente.objects.get(
+                numero=numero_de_la_vente - 1
+            ).hmac_hash
+        cle_de_l_empreinte = LaboutikConfiguration.get_solo().get_or_create_hmac_key()
+        vente_verrouillee.previous_hmac = empreinte_de_la_vente_precedente
+        vente_verrouillee.hmac_hash = calculer_hmac_vente(
+            vente_verrouillee,
+            cle_de_l_empreinte,
+            empreinte_de_la_vente_precedente,
+        )
+
+        vente_verrouillee.save()
+
+    return vente_verrouillee
+
+
+def annuler_vente(vente):
+    """
+    Annule une vente EN_ATTENTE : elle passe à ANNULEE, sans numéro, sans retour
+    arrière. Seuls un paiement Stripe annulé (CANCELED) et un prélèvement SEPA refusé
+    l'appellent (fiche D) ; une session expirée reste EN_ATTENTE.
+    / Cancels a PENDING sale, for good. Only Stripe CANCELED and a refused SEPA call it.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    - Vente déjà ANNULEE → rendue telle quelle (même message Stripe reçu deux fois).
+    - Vente REGLEE → refus (ValueError) : une vente encaissée ne s'annule pas, on fait
+      un avoir.
+    / Already cancelled: returned as is. Settled: refused (make a credit note).
+
+    :param vente: la `Vente` à annuler
+    :return: la vente relue en base, ANNULEE
+    """
+    with transaction.atomic():
+        vente_verrouillee = Vente.objects.select_for_update().get(pk=vente.pk)
+
+        vente_deja_annulee = vente_verrouillee.statut == Vente.Statut.ANNULEE
+        if vente_deja_annulee:
+            return vente_verrouillee
+
+        vente_reglee = vente_verrouillee.statut == Vente.Statut.REGLEE
+        if vente_reglee:
+            raise ValueError(
+                f"La vente {vente_verrouillee.uuid} est réglée : elle ne s'annule "
+                f"pas, il faut faire un avoir."
+            )
+
+        vente_verrouillee.statut = Vente.Statut.ANNULEE
+        vente_verrouillee.save()
+
+    return vente_verrouillee

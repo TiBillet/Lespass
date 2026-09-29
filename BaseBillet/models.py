@@ -21,7 +21,7 @@ from django.db import connection
 from django.db import models
 from django.db.models import JSONField, SET_NULL
 # Create your models here.
-from django.db.models import Q
+from django.db.models import F, Q
 from django.db.models.query import QuerySet
 from django.db.models.signals import post_save
 from django.db.transaction import atomic
@@ -1696,6 +1696,18 @@ class Commande(models.Model):
         blank=True,
         related_name="commande_obj",
         verbose_name=_("Stripe payment"),
+    )
+
+    # La vente créée quand l'achat est encaissé (BaseBillet/models_vente.py).
+    # Vide tant que le panier n'est pas payé.
+    # / The sale created when the purchase is settled. Empty until the cart is paid.
+    vente = models.ForeignKey(
+        "BaseBillet.Vente",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="commandes",
+        verbose_name=_("Vente"),
     )
 
     # Code promo appliqué au panier (au plus un par commande en v1).
@@ -3477,6 +3489,47 @@ class Paiement_stripe(models.Model):
 
     fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="paiement_stripe")
 
+    # La vente d'origine de ce paiement (BaseBillet/models_vente.py), posée à l'ouverture
+    # du checkout. Un paiement Stripe = une vente d'origine, plus ses avoirs éventuels.
+    # Les ventes AVOIR d'un remboursement ne sont PAS rangées ici : elles pointent vers
+    # la vente d'origine par `vente_liee`.
+    # / The original sale of this payment. Credit-note sales are NOT stored here.
+    vente = models.ForeignKey(
+        "BaseBillet.Vente",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="paiements_stripe",
+        verbose_name=_("Vente d'origine"),
+    )
+
+    # Le montant réellement encaissé, en centimes, tel que Stripe le renvoie.
+    # C'est la source du montant du règlement Stripe.
+    # / The amount really collected, in cents, as returned by Stripe.
+    montant_encaisse = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Montant encaissé (centimes)"),
+    )
+
+    # Le moyen de ce paiement : carte (SN), prélèvement SEPA (SP), abonnement (SR).
+    # C'est la seule source du moyen d'un règlement Stripe et du courriel « SEPA en
+    # attente ». Posé par update_checkout_status() (SN, SP) et par la création du
+    # paiement d'une facture d'abonnement (SR, PaiementStripe/views.py).
+    # / The method of this payment. Set by update_checkout_status() and by the
+    # subscription invoice payment creation.
+    moyen = models.CharField(
+        max_length=2,
+        choices=[
+            (PaymentMethod.STRIPE_NOFED.value, PaymentMethod.STRIPE_NOFED.label),
+            (PaymentMethod.STRIPE_SEPA_NOFED.value, PaymentMethod.STRIPE_SEPA_NOFED.label),
+            (PaymentMethod.STRIPE_RECURENT.value, PaymentMethod.STRIPE_RECURENT.label),
+        ],
+        null=True,
+        blank=True,
+        verbose_name=_("Moyen de paiement Stripe"),
+    )
+
     def is_fully_refunded(self):
         # If total is 0, the paiement is totally refunded
         if self.total() == 0:
@@ -3556,6 +3609,9 @@ class Paiement_stripe(models.Model):
                             'payment_method_options') and 'sepa_debit' in payment_intent.get('payment_method_types'):
                         self.lignearticles.update(payment_method=PaymentMethod.STRIPE_SEPA_NOFED)
                         logger.info(f"lignearticles set to PaymentMethod.STRIPE_SEPA_NOFED : {self.lignearticles}")
+                        # Le moyen est aussi posé sur le paiement, enregistré par le save() final.
+                        # / The method is also set on the payment, saved by the final save().
+                        self.moyen = PaymentMethod.STRIPE_SEPA_NOFED
 
                 # Pour subscription :
                 # On ne lit l'abonnement que s'il existe deja cote Stripe.
@@ -3575,6 +3631,9 @@ class Paiement_stripe(models.Model):
                     )
                     if paiement_method.type == 'sepa_debit':
                         self.lignearticles.update(payment_method=PaymentMethod.STRIPE_SEPA_NOFED)
+                        # Le moyen est aussi posé sur le paiement, enregistré par le save() final.
+                        # / The method is also set on the payment, saved by the final save().
+                        self.moyen = PaymentMethod.STRIPE_SEPA_NOFED
 
 
 
@@ -3614,6 +3673,13 @@ class Paiement_stripe(models.Model):
                 self.status = Paiement_stripe.PAID
                 self.last_action = timezone.now()
                 self.traitement_en_cours = True
+
+                # Paiement constaté payé : s'il n'a pas été reconnu comme un SEPA plus
+                # haut (ni à un passage précédent), c'est un paiement par carte.
+                # / Payment seen as paid: card, unless it was recognised as SEPA.
+                paiement_reconnu_comme_sepa = self.moyen == PaymentMethod.STRIPE_SEPA_NOFED
+                if not paiement_reconnu_comme_sepa:
+                    self.moyen = PaymentMethod.STRIPE_NOFED
 
                 # Dans le cas d'un nouvel abonnement, on enregistre le numero
                 # d'abonnement stripe et sa facture. On est ici certain que la
@@ -3830,6 +3896,80 @@ class LigneArticle(models.Model):
         ),
     )
 
+    # --- Montants de l'article, en centimes entiers, et sa vente ---
+    # L'argent est écrit une seule fois, en centimes entiers, par la formule unique
+    # `calculer_montants_article` (BaseBillet/services_vente.py), puis additionné.
+    # Deux contraintes de base (Meta ci-dessous) refusent des montants qui ne se
+    # tiennent pas, même écrits hors du service.
+    # / Integer amounts of the item, written once by the single formula, then summed.
+
+    # La vente de cet article (BaseBillet/models_vente.py). Vide pour une ligne qui n'a
+    # pas été écrite par le service de vente (BaseBillet/services_vente.py).
+    # / The sale of this item. Empty for a line not written by the sale service.
+    vente = models.ForeignKey(
+        "BaseBillet.Vente",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="articles",
+        verbose_name=_("Vente"),
+    )
+    # Prix unitaire × quantité, arrondi une fois (demi-haut).
+    # / Unit price × quantity, rounded once (half-up).
+    total_catalogue = models.IntegerField(
+        default=0,
+        verbose_name=_("Total catalogue (centimes)"),
+    )
+    # Les centimes offerts sur cet article (bouton OFFRIR, jetons cadeau).
+    # / The cents offered on this item.
+    part_offerte = models.IntegerField(
+        default=0,
+        verbose_name=_("Part offerte (centimes)"),
+    )
+
+    class SourceOffert(models.TextChoices):
+        # OFFRIR : bouton du gérant, ou recharge cadeau émise.
+        # JETONS : monnaie cadeau des bénévoles (LG).
+        # / OFFRIR: manager button or gift top-up. JETONS: volunteers' gift currency.
+        OFFRIR = "OFFRIR", _("Offert par le lieu")
+        JETONS = "JETONS", _("Jetons cadeau")
+
+    source_offert = models.CharField(
+        max_length=10,
+        choices=SourceOffert.choices,
+        blank=True,
+        default="",
+        verbose_name=_("Source de l'offert"),
+    )
+    # Net vendu = total catalogue − part offerte.
+    # / Net sold = catalogue total − offered part.
+    total_ttc = models.IntegerField(
+        default=0,
+        verbose_name=_("Net vendu TTC (centimes)"),
+    )
+    # TVA de la ligne = net vendu − HT (jamais calculée à part).
+    # / Line VAT = net − excl. tax (never computed on its own).
+    total_tva = models.IntegerField(
+        default=0,
+        verbose_name=_("Total TVA (centimes)"),
+    )
+    # Coût d'achat figé à la vente : quantité réelle × prix d'achat du produit.
+    # Vide quand le prix d'achat est inconnu (0) : ce n'est pas un coût nul.
+    # / Purchase cost frozen at sale time. Empty when the purchase price is unknown.
+    cout_achat = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Coût d'achat (centimes)"),
+    )
+    # Figé à la vente : vrai pour une recharge cashless (et les autres opérations hors
+    # chiffre d'affaires). Le rapport lit ce champ, il ne recalcule pas la règle depuis
+    # le produit.
+    # / Frozen at sale time: true for a cashless top-up. Reports read this field.
+    hors_chiffre_affaires = models.BooleanField(
+        default=False,
+        verbose_name=_("Hors chiffre d'affaires"),
+    )
+
     class Meta:
         ordering = ('-datetime',)
         constraints = [
@@ -3841,6 +3981,21 @@ class LigneArticle(models.Model):
                 fields=['idempotency_key'],
                 condition=Q(idempotency_key__isnull=False),
                 name='unique_lignearticle_idempotency_key',
+            ),
+            # Le net vendu vaut toujours « catalogue − offert », pour toutes les lignes.
+            # / Net sold always equals catalogue − offered, for every line.
+            models.CheckConstraint(
+                check=Q(total_ttc=F('total_catalogue') - F('part_offerte')),
+                name='lignearticle_ttc_egal_catalogue_moins_offert',
+            ),
+            # « HT + TVA = net vendu », seulement pour une ligne rattachée à une vente.
+            # Des lignes plus anciennes portent un `total_ht` sans `total_ttc` : la
+            # condition sur `vente` les laisse passer tant que `vente` peut être vide.
+            # / HT + VAT = net, only for a line attached to a sale: older lines carry a
+            # total_ht without total_ttc.
+            models.CheckConstraint(
+                check=Q(vente__isnull=True) | Q(total_ttc=F('total_ht') + F('total_tva')),
+                name='lignearticle_ht_plus_tva_egal_ttc_si_vente',
             ),
         ]
 
@@ -3882,8 +4037,79 @@ class LigneArticle(models.Model):
             return Decimal('0.00')
 
     def save(self, *args, **kwargs):
+        # Garde d'immutabilité : une ligne d'une vente REGLEE (en base) refuse tout
+        # changement de son argent, de son tarif vendu et de sa vente. Les autres champs
+        # restent libres : la machine à statuts (`status`) et les tâches Celery
+        # (`sended_to_laboutik`, `metadata`, liens `reservation` / `membership` /
+        # `booking`) les écrivent encore après la vente.
+        # `.update()` ne passe pas par `save()` : l'empreinte de la vente couvre ce cas.
+        # / Immutability guard: a line of a SETTLED sale refuses money changes. Status
+        # and task fields stay free. .update() is covered by the sale fingerprint.
+        ligne_deja_en_base = not self._state.adding
+        if ligne_deja_en_base:
+            # Import local : `models_vente` importe ce fichier à son chargement.
+            # / Local import: models_vente imports this file when it loads.
+            from BaseBillet.models_vente import Vente
+
+            champs_figes_d_une_ligne_reglee = [
+                'amount', 'qty', 'vat',
+                'total_catalogue', 'part_offerte', 'total_ttc', 'total_ht', 'total_tva',
+                'pricesold_id', 'vente_id',
+            ]
+            # On relit la ligne EN BASE : sa vente d'aujourd'hui et ses valeurs figées.
+            # / Read the line back from the database: its current sale and frozen values.
+            ligne_en_base = LigneArticle.objects.filter(pk=self.pk).values(
+                'vente__statut', *champs_figes_d_une_ligne_reglee
+            ).first()
+            ligne_d_une_vente_reglee = (
+                ligne_en_base is not None
+                and ligne_en_base['vente__statut'] == Vente.Statut.REGLEE
+            )
+            if ligne_d_une_vente_reglee:
+                champs_modifies = []
+                for nom_du_champ in champs_figes_d_une_ligne_reglee:
+                    valeur_en_base = ligne_en_base[nom_du_champ]
+                    valeur_en_memoire = getattr(self, nom_du_champ)
+
+                    # Un champ décimal se compare tel que la base le stocke. En mémoire,
+                    # `qty` peut porter 28 décimales (Decimal(500) / Decimal(350)) ; la
+                    # colonne n'en garde que `decimal_places` (6). Django passe la valeur
+                    # brute à PostgreSQL, qui l'arrondit à ses décimales, 0,5 s'éloignant
+                    # de zéro. On fait le même arrondi : `to_python()` (Django) rend un
+                    # Decimal, puis `quantize` à `decimal_places` en ROUND_HALF_UP (en
+                    # Python, 0,5 s'éloigne aussi de zéro). Sans cet arrondi, un `save()`
+                    # du statut sur l'instance rendue par le service est refusé à tort.
+                    # Les champs entiers et les clés étrangères se comparent tels quels.
+                    # / A decimal field is compared as the database stores it: rounded
+                    # to its decimal_places, half away from zero, like PostgreSQL.
+                    champ_du_modele = LigneArticle._meta.get_field(nom_du_champ)
+                    champ_decimal = isinstance(champ_du_modele, models.DecimalField)
+                    if champ_decimal and valeur_en_memoire is not None:
+                        pas_de_la_colonne = Decimal(1).scaleb(
+                            -champ_du_modele.decimal_places
+                        )
+                        valeur_en_memoire = champ_du_modele.to_python(
+                            valeur_en_memoire
+                        ).quantize(pas_de_la_colonne, rounding=ROUND_HALF_UP)
+
+                    if valeur_en_memoire != valeur_en_base:
+                        champs_modifies.append(nom_du_champ)
+                if champs_modifies:
+                    raise ValueError(
+                        f"La ligne {self.uuid} appartient à une vente réglée : ces "
+                        f"champs ne peuvent plus changer : {', '.join(champs_modifies)}."
+                    )
+
+        # Le service de vente (BaseBillet/services_vente.py) pose `_tva_explicite = True`
+        # avant de créer la ligne : sa TVA, même 0 (recharge), est alors gardée telle
+        # quelle. Les autres producteurs ne passent souvent pas `vat` : ils gardent la
+        # TVA par défaut ci-dessous. Le champ `vat` vaut 0 par défaut, jamais None : on ne
+        # peut donc pas distinguer « 0 voulu » de « non fourni » sans ce marqueur.
+        # / The sale service sets `_tva_explicite = True`: its VAT, even 0, is kept.
+        tva_posee_par_le_service_de_vente = getattr(self, '_tva_explicite', False)
+
         # Run only on creation; do not impact updates
-        if getattr(self._state, 'adding', False):
+        if getattr(self._state, 'adding', False) and not tva_posee_par_le_service_de_vente:
             try:
                 current_vat = Decimal(self.vat) if self.vat is not None else None
             except Exception:
@@ -4805,3 +5031,11 @@ class ProductFormField(models.Model):
                 candidate = f"{base}-{uuid_short}"
             self.name = candidate
         super().save(*args, **kwargs)
+
+
+# Les modèles `Vente` et `Reglement` vivent dans BaseBillet/models_vente.py (ce fichier
+# dépasse 4 000 lignes). Cet import les fait connaître à Django. Il reste à la TOUTE FIN
+# du fichier : `models_vente` importe `SaleOrigin` et `PaymentMethod` d'ici, qui doivent
+# déjà être définis. Le nom importé n'est utilisé nulle part ici : ne pas le supprimer.
+# / Registers Vente and Reglement with Django. Must stay at the very end of this file.
+from BaseBillet.models_vente import Reglement, Vente  # noqa: E402, F401
