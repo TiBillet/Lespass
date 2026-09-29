@@ -1,100 +1,170 @@
 # Chantier 05-H — Une ligne par article, et on retire l'ancien
 
-> **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28)
-> Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D13, D14, D15, R3, R4
-> Effort : 3 j (2 sessions : §2, §3) — Dépend de : G. **Migration : oui** (retrait de
-> champs et de modèles, dev uniquement).
-> Mesure au 2026-09-28 : `payment_method` = 263 occurrences dans 36 fichiers hors
-> tests (tous modèles confondus), 157 dans les tests ; `uuid_transaction` = 121
-> occurrences dans 9 fichiers. Relire le décompte au démarrage.
+> **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue Fable + Opus, corrigée
+> Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D13, D14, D15, R3, R4, R6
+> Effort : 5,75 j (3 sessions : §2, §3, §4) — Dépend de : G. **Migrations : oui**
+> (retrait de champs et de modèles, dev uniquement ; une migration par nature
+> d'opération, jamais DDL et DML dans la même, PIEGES 9.113). `ImpressionLog.cloture`
+> est déjà déplacée en G ; la FK morte `MouvementStock.cloture` est retirée ici (§3).
+> Mesure au 2026-09-28 (hors tests, py + html + js) : `payment_method` ≈ 270
+> occurrences dans 39 fichiers (tous modèles confondus), 157 dans les tests ;
+> `uuid_transaction` ≈ 138 dans 14 fichiers ; 18 fichiers de tests créent des lignes
+> (31 créations) ; `laboutik.ClotureCaisse` citée dans 24 fichiers. Relire au démarrage.
 
 ## 1. Le but
 
 Après cette fiche, il n'existe **qu'une** façon d'écrire et de lire de l'argent :
 `Vente` → articles (entiers figés) + règlements (entiers copiés).
 
-## 2. Session H-1 — une ligne par article
+## 2. Session H-1 — une ligne par article, forme poids / tireuse
 
 - `_creer_lignes_articles_cascade` (caisse), `facturer_tirage` (tireuse), QR/NFC
   (`BaseBillet/views.py`) écrivent **une ligne par article** : `qty` = vraie quantité,
   `amount` = prix unitaire, `part_offerte` = Σ des débits offerts (jetons, OFFRIR) de
-  cet article, `source_offert`. Les règlements ne changent pas (déjà un par transaction).
+  cet article, `source_offert`. Les règlements ne changent pas.
 - `_calculer_qty_partielles` (`laboutik/views.py` ~l.4507) et le regroupement par
   `id(article_dict)` sont **supprimés**.
-- `total_catalogue_impose` est retiré de `calculer_montants_article`, **sauf pour la
-  tireuse** : le total d'un tirage est ce qui a réellement été débité (solde
-  insuffisant, D27 du chantier 04), qui peut différer de `prix au litre × volume`.
-  Seule exception, documentée dans la docstring.
-- Retour de consigne : `qty` négative, `amount` positif (D13) — fin de l'exception de
-  la fiche B.
-- Les avoirs ne recopient plus de fraction (il n'y en a plus).
+- **D15** : poids et mesure (caisse) → `qty` = kg / L, `amount` = prix au kg / au litre ;
+  tireuse → `qty` = litres, `amount` = prix au litre. Vérifier avant : décrément de
+  stock (`qty` ou `weight_quantity` ?), ticket, détail des ventes, gabarits
+  `floatformat:0`.
+- `total_catalogue_impose` est **retiré** (il ne servait qu'aux parts de la transition).
+  Les deux cas où le total débité différait du catalogue passent par la règle commune :
+  - la tireuse (solde insuffisant, D27 du chantier 04) : `qty` = litres **réellement
+    servis** (D15), donc total = `qty × prix` ; si le volume n'est pas réduit avec le
+    solde (à vérifier, fiche C §1), l'écart devient un article « Écart d'encaissement
+    reçu en moins » (D26) ;
+  - le paiement QR / NFC en ligne : si Fedow débite moins que demandé
+    (`BaseBillet/views.py` ~l.2007-2022), l'article garde son prix et un article « Écart
+    d'encaissement reçu en moins » porte la différence (D26, même mécanique que Stripe).
+    Les égalités tiennent **après** un débit réseau qu'on ne peut pas annuler.
+- FK `membership` : une seule ligne par adhésion (plus de parts).
+- Retour de consigne : `qty` négative, `amount` positif (D13).
 - `corriger_moyen_paiement` ne modifie **plus** les lignes : seule la vente
   `CORRECTION` reste (D14).
+- **« Avoir sur un article »** (quantité partielle) dans la fiche « Vente » de l'admin
+  (reporté de G) : l'article n'est plus coupé en parts ; même prix unitaire, quantité
+  négative, champ « Remboursé par ». **Refusé** si l'article a une `part_offerte > 0`
+  (message « rembourser l'article entier ») : aucun prorata d'offert dans le projet
+  (fiche D §4).
 
-## 3. Session H-2 — retraits
+## 3. Session H-2 — retrait des champs et de l'ancienne clôture
 
-**Champs retirés de `LigneArticle`** (ils vivent sur `Vente` / `Reglement`) :
-`payment_method`, `asset`, `carte`, `wallet`, `uuid_transaction`, `hmac_hash`,
-`previous_hmac`, `idempotency_key`, `point_de_vente`. `vente` devient **obligatoire**.
+**Champs retirés de `LigneArticle`** : `payment_method`, `asset`, `carte`, `wallet`,
+`uuid_transaction`, `hmac_hash`, `previous_hmac`, `idempotency_key`, `point_de_vente`.
+`vente` devient **obligatoire**. Gardés (R4) : `paiement_stripe`, `sale_origin`.
 
-**Gardés sur `LigneArticle`** (R4) : `paiement_stripe` (lien technique vers le checkout,
-utilisé par la machine à statuts : `.lignearticles.update(status=…)` dans
-`PaiementStripe/views.py`, `validators.py`, `booking_engine.py`, `crowds/views.py`…) et
-`sale_origin` (filtres et déclencheurs existants). Ce ne sont pas des montants ; ils
-restent cohérents avec la vente (un test le vérifie).
+**Lignes sans vente dans la base de dev** (démo, e2e, lignes antérieures à B) : la
+contrainte NOT NULL échouerait. Procédure, en migrations séparées :
+
+1. le mainteneur régénère la base de dev (données de démo par le service de vente,
+   §4) **avant** d'appliquer les migrations de H ;
+2. une migration `RunPython` de **vérification seule** (aucune écriture) échoue avec un
+   message clair s'il reste des lignes sans vente, schéma par schéma ;
+3. puis l'`AlterField` NOT NULL, puis les `RemoveField`.
+
+Aucune suppression automatique de lignes par une migration.
+
+À adapter avant le retrait :
+
+- `_executer_avec_cle_idempotence` (`laboutik/views.py` ~l.4666) cherche par
+  `uuid_transaction` → `Vente.idempotency_key`.
+- Recharge API v2 : idempotence déjà sur `Vente.idempotency_key` (fiche D).
+- `LigneArticle.total()` reste une **méthode** (appels `.total()` dans `laboutik/views.py`
+  ~l.4141, `Administration/admin_tenant.py` ~l.2034, `total_decimal()`,
+  `PaiementStripe/utils.py` ~l.44) et renvoie `total_ttc`.
+- Envoi vers l'ancien LaBoutik : le sérialiseur (`ApiBillet/serializers.py` ~l.1296)
+  lit déjà `payment_method`, `asset`, `wallet` dans le règlement depuis G (T10) ; rien à
+  faire ici sauf retirer les colonnes.
+- `ajouter_article` : le sucre de transition `payment_method == FREE` qui déclenchait la
+  règle « offert à montant non nul » est retiré ; seul `offert_en_totalite=True` reste
+  (fiche A §3). Vérifier que chaque producteur OFFRIR le passe.
 
 **Modèles et code retirés :**
 
 | Retrait | Où |
 |---|---|
 | `laboutik.ClotureCaisse` + admin + gabarits + `LaboutikConfiguration.total_perpetuel` | `laboutik/models.py` ~l.1226, ~l.134 ; `Administration/admin/laboutik.py` |
+| FK morte `MouvementStock.cloture` + `rattacher_a_cloture` + son test | `inventaire/models.py` ~l.195, `inventaire/services.py` ~l.209, `tests/pytest/test_inventaire.py` ~l.753-770 (aucun appelant en production) |
 | Ancien moteur caisse | `laboutik/reports.py` (`RapportComptableService`, `montant_ttc_centimes`, `calculer_hash_lignes`) |
-| Ancien moteur en ligne | `comptabilite/services.py` `RapportComptableService` |
-| Anciens FEC / ventilation / profils CSV en doublon | `comptabilite/fec.py` (ancien), `laboutik/ventilation.py`, `laboutik/fec.py`, le jeu de profils CSV non retenu en F |
-| Exports de clôture en doublon | le jeu non retenu en G |
+| Ancien moteur en ligne | `comptabilite/services.py` `RapportComptableService` (et sa comparaison dans `tests/e2e/conftest.py`) |
+| Anciens FEC / ventilation / profils CSV en doublon | `comptabilite/fec.py` (ancien), `laboutik/ventilation.py`, `laboutik/fec.py`, le jeu de profils non retenu (fiche F) |
+| Exports de clôture en doublon | le jeu non retenu (fiche G) |
 | `CorrectionPaiement` + admin | `laboutik/models.py` ~l.1585 |
 | HMAC par ligne | `calculer_hmac`, `obtenir_previous_hmac`, `verifier_chaine`, `calculer_total_ht` (`laboutik/integrity.py`) |
-| `LigneArticle.total()` | remplacé par une propriété qui renvoie `total_ttc` (gabarits existants) |
-| Constantes `MOYENS_HORS_ARGENT`, `lignes_argent` (chantier 04) | remplacées par `MOYENS_OFFERTS` + `NM` (fiche A) |
-| « Entries » (admin `LigneArticle`) | retiré du menu ; l'URL reste pour le support |
+| Constantes `MOYENS_HORS_ARGENT`, `lignes_argent` (chantier 04) | remplacées par `MOYENS_OFFERTS` + `NM` |
+| « Entries » et « Ancien rapport caisse » | retirés du menu (l'URL « Entries » reste pour le support) |
 
-**Données de démo et fixtures** (passent par le service de vente) :
-`laboutik/management/commands/create_test_pos_data.py` (~l.1546 : double compte),
-`Administration/management/commands/launch_payment.py` (~l.160 : ancienne convention),
-`Administration/management/commands/_demo_data_v2_ventes.py`, `demo_data_v2.py`.
+## 4. Session H-3 — démo, fixtures, tests existants
 
-**Tests existants** : ceux qui créent des `LigneArticle` directement passent par
-`tests/pytest/fabriques_vente.py` ; ceux qui lisent `payment_method` d'une ligne lisent
-les règlements. Les tests des fiches 04-A / 04-B (fractions, HT × qty) sont réécrits
-sur les champs entiers ou supprimés s'ils ne testent plus que la mécanique retirée
-(lister chaque suppression dans le CHANGELOG, avec sa raison).
+- Démo : `create_test_pos_data.py` (~l.1546 double compte, ~l.1703-1752),
+  `launch_payment.py` (~l.160), `_demo_data_v2_ventes.py`, `demo_data_v2.py` → par le
+  service de vente.
+- Tests existants : voir §6.
 
-## 4. Tests
+## 5. Tests
 
 | # | Test | Attendu |
 |---|---|---|
 | 1 | `test_nfc_trois_jus_une_seule_ligne_qty_3` | 1 ligne `qty` 3, 1050 ; règlements LE 500 + CB 550 |
-| 2 | `test_jetons_une_ligne_part_offerte_300` | bière : 1 ligne, offert 300, net 200 |
-| 3 | `test_tireuse_une_ligne_litres_total_debite` | 1 ligne `qty` 0,50 L |
-| 4 | `test_retour_consigne_quantite_negative_prix_positif` | |
-| 5 | `test_correction_ne_modifie_plus_la_ligne` | empreinte de la vente d'origine valide |
-| 6 | `test_vente_obligatoire_sur_chaque_ligne` | contrainte base |
-| 7 | `test_sale_origin_et_paiement_stripe_coherents_avec_la_vente` | |
-| 8 | `test_garde_aucune_multiplication_amount_qty_dans_le_projet` | recherche dans tout le code hors migrations et tests : ni `F("amount") * F("qty")`, ni `amount * qty`, ni `amount*qty`, ni `int(` autour d'un montant de ligne |
-| 9 | `test_montants_entiers_egalites` (transversal) | tous les scénarios B-D rejoués sur le modèle final |
+| 2 | `test_jetons_une_ligne_part_offerte_300` | 1 ligne, offert 300, net 200 |
+| 3 | `test_fromage_une_ligne_0_350_kg_prix_au_kilo` | `qty` 0,350, `amount` 1290, total 452 |
+| 4 | `test_tireuse_une_ligne_litres_prix_au_litre` | `qty` = litres servis, `amount` = prix au litre, total = `qty × prix` = débit réel ; solde insuffisant : selon la vérification de C §1 (litres réduits, ou article d'écart) |
+| 5 | `test_retour_consigne_quantite_negative_prix_positif` | |
+| 5b | `test_qr_debit_partiel_ecart_d_encaissement` | Fedow débite 800 sur 1000 demandés → article 1000 + article « reçu en moins » −200, règlement 800, égalités tenues |
+| 5c | `test_admin_avoir_sur_un_article_quantite_partielle` | 1 jus sur 3, remboursé en espèces → vente `AVOIR` −350, un règlement espèces −350 ; 1 bière sur 3 d'un article payé en partie en jetons → **refus** |
+| 6 | `test_correction_ne_modifie_plus_la_ligne` | |
+| 7 | `test_vente_obligatoire_sur_chaque_ligne` | contrainte base |
+| 7b | `test_migration_de_verification_refuse_les_lignes_sans_vente` | schéma dédié avec une ligne sans vente → la migration de vérification échoue avec le message |
+| 8 | `test_idempotence_caisse_par_la_vente` | rejeu → une vente |
+| 9 | `test_sale_origin_et_paiement_stripe_coherents_avec_la_vente` | **vert dès G** (noté : garde de cohérence, pas rouge) |
+| 10 | `test_garde_aucune_multiplication_amount_qty_dans_le_projet` | tout le code hors migrations et tests : ni `F("amount") * F("qty")`, ni `amount * qty` / `amount*qty` / `qty * amount`, ni `F("pricesold__prix") * F("qty")`, ni `int(` autour d'un montant de ligne |
+| 11 | `verifier_egalites(vente)` (fiche A) | appelé à la fin de chaque test ci-dessus, sur le modèle final |
 
-Vus rouges : 1-7 sur le code de la fiche G ; 8 liste les occurrences restantes (noter
-le nombre).
+Vus rouges : 1-8, 5b, 5c, 7b sur le code de la fiche G ; 10 liste les occurrences
+restantes (noter le nombre).
 
 Mutations : réintroduire le découpage en parts (1) ; oublier la part offerte à la
-fusion (2) ; recalculer le total de la tireuse depuis le volume (3) ; réintroduire
-`amount * qty` dans un lecteur (8).
+fusion (2) ; `qty = 1` pour le poids (3) ; `qty` = litres demandés au lieu de servis
+(4) ; écart QR non écrit (5b) ; avoir partiel accepté avec `part_offerte > 0` (5c) ;
+réintroduire `amount * qty` dans un lecteur (10).
 
-`make test` + `make e2e` complets. Après la migration : purger les schémas `test_*`
+`make test` + `make e2e` complets. Après les migrations : purger les schémas `test_*`
 (skill `tibillet-test`). CHANGELOG : `CHANGELOG/2026-MM-JJ-montants-entiers-H-retrait.md`.
 
-## 5. Après la fiche
+## 6. Tests existants à réécrire
 
-- Mettre à jour `GUIDELINES.md` / `tests/PIEGES.md` : la règle d'or du tronc (§2)
-  remplace « `total = amount × qty` ».
-- Signaler au mainteneur les fichiers `.md` à pousser dans Atomic (`push-md.sh`).
+Ceux qui créent des lignes passent par `fabriques_vente.py` ; ceux qui lisent
+`payment_method` d'une ligne lisent les règlements ; ceux des fiches 04-A / 04-B
+(fractions, HT × qty) sont réécrits sur les champs entiers ou supprimés s'ils ne testent
+plus que la mécanique retirée. Chaque suppression est listée dans le CHANGELOG, avec sa
+raison. Vérifiés au 2026-09-28 :
+
+| Cause | Fichiers |
+|---|---|
+| créent des `LigneArticle` à la main (`rg -l "LigneArticle.objects.create\(" tests/`) | `tests/django_test/test_sales_api.py`, `tests/e2e/test_admin_cancel_membership.py`, `tests/e2e/test_parcours_fedow_reel.py`, `tests/pytest/test_api_v2_wallet_refill.py`, `test_cloture_caisse.py`, `test_cloture_enrichie.py`, `test_cloture_export.py`, `test_comptabilite_service.py`, `test_corrections_fond_sortie.py`, `test_export_comptable.py`, `test_integrity_hmac.py`, `test_mail_annulation_booking.py`, `test_menu_ventes.py`, `test_rapports_cheque.py`, `test_stripe_refund.py`, `test_ticket_client_imprime.py`, `test_vente_en_points.py`, `test_ventes_remontent_au_ticket_z.py` |
+| testent la mécanique retirée (`_calculer_qty_partielles`, `calculer_hmac`, `verifier_chaine`, `CorrectionPaiement`, `calculer_total_ht`) | `test_c2_legacy_repartition.py`, `test_corrections_fond_sortie.py`, `test_integrity_hmac.py`, `test_poids_mesure.py`, `test_pos_retour_consigne.py`, `test_total_ht_ligne.py` |
+| lisent l'ancien moteur, retiré ici | `test_comptabilite_service.py`, `tests/e2e/conftest.py` (~l.785-920) |
+| FK morte `MouvementStock.cloture` retirée | `test_inventaire.py` (~l.753-770) : test de `rattacher_a_cloture` supprimé |
+
+Relire au démarrage : `rg -l "payment_method|uuid_transaction|laboutik\.reports|comptabilite\.services" tests/`.
+
+## 7. Après la fiche
+
+- `GUIDELINES.md`, `tests/PIEGES.md` : la règle d'or du tronc (§2) remplace
+  « `total = amount × qty` ».
+- Signaler au mainteneur les `.md` à pousser dans Atomic (`push-md.sh`).
+
+## Machine à états — compléments obligatoires
+
+Source : [`CHANTIER-05-machine-a-etats.md`](CHANTIER-05-machine-a-etats.md) §5 (trous T…). Les tests de
+caractérisation de la fiche A′ doivent rester verts pendant cette fiche.
+
+| Trou | À faire dans cette fiche | Test |
+|---|---|---|
+| T1 | Le courriel « SEPA en attente » (`ApiBillet/views.py` ~l.1230) et le moyen du règlement Stripe lisent `Paiement_stripe.moyen` (fiche A), plus `LigneArticle.payment_method`. | `test_sepa_en_attente_envoie_le_mail_sans_payment_method_sur_la_ligne` |
+| T2 | Vérifier que l'anti-rejeu QR ne lit plus `payment_method` (fait en C). | `test_qr_echec_fedow_ligne_en_echec_rejeu_refuse` (A′) |
+| T18 | Rejeu 208 de la recharge API v2 (`api_v2/views.py` ~l.931) lit `ligne_article.asset` → lire `Vente.unite`. | test A′ P13 reste vert |
+| T19 | `_compute_default_vat` (`BaseBillet/models.py` ~l.3860) lit `payment_method` : la règle est retirée (tous les producteurs passent par `ajouter_article`, qui pose la TVA). | `test_tva_zero_explicite_respectee_par_save` (A) reste vert |
+| T20 | Copies de `payment_method` / `asset` / `wallet` dans les producteurs d'avoirs et de remboursements, **à retirer nommément** : `PaiementStripe/utils.py` ~l.93-95, `BaseBillet/models.py` ~l.2986-2988, `booking/models.py` ~l.633-635, `BaseBillet/views.py` ~l.4678-4680, `Administration/admin_tenant.py` ~l.2091-2093. Sinon `TypeError` sur les annulations. | `test_caracterisation_annulations.py` (A′) reste vert |
+| T14 | Après fusion, la facture d'adhésion caisse et l'avoir d'un billet caisse portent sur l'article entier : l'écrire au CHANGELOG. | test A′ « …cascade…part_rattachee » modifié ici |

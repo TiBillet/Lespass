@@ -1053,3 +1053,227 @@ class TestPayerParQrCode(FastTenantTestCase):
             )
 
         assert reponse.status_code == 403
+
+    # ------------------------------------------------------------------
+    # 7. Anti-rejeu : un QR code ne se paie qu'une fois
+    # ------------------------------------------------------------------
+    #
+    # Fedow n'a pas de cle d'idempotence : chaque appel a
+    # `to_place_from_qrcode` debite. La vue « reserve » donc la ligne
+    # (CREATED -> UNPAID, en une requete atomique) juste avant le debit :
+    # une seconde demande trouve 0 ligne a reserver et s'arrete.
+    # / Fedow has no idempotency key: every call debits. The view reserves the
+    # line (CREATED -> UNPAID, atomically) right before the debit.
+
+    def _gabarits_de(self, reponse):
+        """Les noms des gabarits rendus. / Names of the rendered templates."""
+        return [gabarit.name or '' for gabarit in reponse.templates]
+
+    def test_un_qrcode_deja_paye_ne_debite_pas_une_seconde_fois(self):
+        """Deux confirmations du meme QR code : un seul debit.
+
+        Deux ecrans de validation ouverts sur le meme QR code (deux onglets,
+        ou deux adherents qui ont scanne avant le paiement) envoient chacun
+        leur confirmation.
+        / Two validation screens open on the same QR code each send a confirmation.
+        """
+        ligne = self._generer_un_qrcode()
+        payeur = self._creer_utilisateur('rejeu-qr', avec_wallet=True)
+        navigateur = self._navigateur_de(payeur)
+
+        faux_fedow = self._fedow_qui_repond(
+            solde_centimes=99999,
+            transactions=[{
+                'asset': str(uuid_module.uuid4()),
+                'amount': MONTANT_DEMANDE_CENTIMES,
+            }],
+        )
+        with mock.patch('fedow_connect.fedow_api.FedowAPI') as fedow:
+            fedow.return_value = faux_fedow
+            premiere_reponse = navigateur.post(
+                CHEMIN_VALIDATION, data={'ligne_article_uuid_hex': ligne.uuid.hex},
+            )
+            seconde_reponse = navigateur.post(
+                CHEMIN_VALIDATION, data={'ligne_article_uuid_hex': ligne.uuid.hex},
+            )
+
+        assert any('payment_confirmation' in nom for nom in self._gabarits_de(premiere_reponse))
+        assert faux_fedow.transaction.to_place_from_qrcode.call_count == 1
+        assert any('payment_error' in nom for nom in self._gabarits_de(seconde_reponse))
+
+    def test_une_ligne_qui_n_est_pas_un_qrcode_ne_peut_pas_etre_payee(self):
+        """Seule une demande de paiement QR se paie par cette route.
+
+        Sans ce filtre, un uuid de billet ou d'adhesion poste ici serait
+        debite, supprime puis recree en vente QR.
+        / Without this filter, a ticket or membership uuid posted here would be
+        debited, deleted and recreated as a QR sale.
+        """
+        ligne = self._generer_un_qrcode()
+        LigneArticle.objects.filter(pk=ligne.pk).update(
+            payment_method=PaymentMethod.STRIPE_NOFED,
+        )
+        payeur = self._creer_utilisateur('pas-un-qr', avec_wallet=True)
+
+        faux_fedow = self._fedow_qui_repond(solde_centimes=99999)
+        with mock.patch('fedow_connect.fedow_api.FedowAPI') as fedow:
+            fedow.return_value = faux_fedow
+            self._navigateur_de(payeur).post(
+                CHEMIN_VALIDATION, data={'ligne_article_uuid_hex': ligne.uuid.hex},
+            )
+
+        faux_fedow.transaction.to_place_from_qrcode.assert_not_called()
+        ligne.refresh_from_db()
+        assert ligne.status == LigneArticle.CREATED
+
+    def test_une_erreur_fedow_pendant_le_debit_bloque_le_qrcode(self):
+        """Erreur reseau pendant le debit : le QR code n'est plus payable.
+
+        On ne sait pas si Fedow a debite. Rendre la ligne payable risquerait un
+        second debit : elle passe en echec, le lieu verifie a la main.
+        / We do not know whether Fedow debited: the line fails, the venue checks.
+        """
+        ligne = self._generer_un_qrcode()
+        payeur = self._creer_utilisateur('erreur-debit', avec_wallet=True)
+        navigateur = self._navigateur_de(payeur)
+
+        faux_fedow = self._fedow_qui_repond(solde_centimes=99999)
+        faux_fedow.transaction.to_place_from_qrcode.side_effect = ConnectionError('Fedow injoignable')
+        with mock.patch('fedow_connect.fedow_api.FedowAPI') as fedow:
+            fedow.return_value = faux_fedow
+            navigateur.post(CHEMIN_VALIDATION, data={'ligne_article_uuid_hex': ligne.uuid.hex})
+
+            ligne.refresh_from_db()
+            assert ligne.status == LigneArticle.FAILED
+
+            navigateur.post(CHEMIN_VALIDATION, data={'ligne_article_uuid_hex': ligne.uuid.hex})
+
+        assert faux_fedow.transaction.to_place_from_qrcode.call_count == 1
+
+    def _reserver_la_ligne_pendant_la_lecture_du_solde(self, ligne):
+        """Un faux « lire le solde » qui laisse une autre requete reserver la ligne.
+
+        La lecture du solde a lieu APRES le chargement de la ligne et AVANT la
+        reservation : c'est la fenetre ou une seconde requete (seconde lecture
+        de carte, second ecran de validation) passe la ligne en UNPAID. Seule
+        une reservation atomique en base, et non un test du statut deja lu en
+        memoire, arrete alors le debit.
+        / The balance read happens AFTER loading the line and BEFORE the
+        reservation: another request reserves the line in between. Only an
+        atomic reservation in the database stops the debit.
+        """
+        def solde_lu_pendant_qu_une_autre_requete_reserve(*args, **kwargs):
+            LigneArticle.objects.filter(pk=ligne.pk).update(status=LigneArticle.UNPAID)
+            return 99999
+        return solde_lu_pendant_qu_une_autre_requete_reserve
+
+    def test_une_lecture_de_carte_concurrente_ne_debite_pas(self):
+        """Deux lectures NFC en meme temps : la seconde ne debite pas.
+
+        Chaque clic sur « Lire la carte » ajoute un lecteur : un passage de
+        carte peut envoyer deux requetes simultanees.
+        / Each click adds a reader: one tap may send two simultaneous requests.
+        """
+        ligne = self._generer_un_qrcode()
+        payeur = self._creer_utilisateur('nfc-concurrente', avec_wallet=True)
+
+        with mock.patch('BaseBillet.validators.FedowAPI') as fedow:
+            faux_fedow = fedow.return_value
+            faux_fedow.NFCcard.card_tag_id_retrieve.return_value = (
+                self._carte_fedow(payeur.wallet.uuid)
+            )
+            faux_fedow.wallet.get_total_fiducial_and_all_federated_token.side_effect = (
+                self._reserver_la_ligne_pendant_la_lecture_du_solde(ligne)
+            )
+            reponse = self._poster_une_lecture_nfc('62FE1601', ligne)
+
+        assert reponse.status_code == 409
+        faux_fedow.transaction.to_place_from_qrcode.assert_not_called()
+
+    def test_une_confirmation_concurrente_du_qrcode_ne_debite_pas(self):
+        """Deux confirmations du meme QR code en meme temps : la seconde ne debite pas.
+        / Two simultaneous confirmations of the same QR code: the second one does not debit.
+        """
+        ligne = self._generer_un_qrcode()
+        payeur = self._creer_utilisateur('qr-concurrent', avec_wallet=True)
+
+        faux_fedow = self._fedow_qui_repond(solde_centimes=99999)
+        faux_fedow.wallet.get_total_fiducial_and_all_federated_token.side_effect = (
+            self._reserver_la_ligne_pendant_la_lecture_du_solde(ligne)
+        )
+        with mock.patch('fedow_connect.fedow_api.FedowAPI') as fedow:
+            fedow.return_value = faux_fedow
+            reponse = self._navigateur_de(payeur).post(
+                CHEMIN_VALIDATION, data={'ligne_article_uuid_hex': ligne.uuid.hex},
+            )
+
+        assert any('payment_error' in nom for nom in self._gabarits_de(reponse))
+        faux_fedow.transaction.to_place_from_qrcode.assert_not_called()
+
+    def test_une_erreur_fedow_pendant_un_paiement_par_carte_repond_proprement(self):
+        """Erreur Fedow au debit par carte : une reponse lisible, ligne en echec.
+
+        Le caissier voit un message dans sa fenetre, pas une erreur serveur.
+        / The cashier sees a message in the popup, not a server error.
+        """
+        ligne = self._generer_un_qrcode()
+        payeur = self._creer_utilisateur('nfc-erreur', avec_wallet=True)
+
+        with mock.patch('BaseBillet.validators.FedowAPI') as fedow:
+            faux_fedow = fedow.return_value
+            faux_fedow.NFCcard.card_tag_id_retrieve.return_value = (
+                self._carte_fedow(payeur.wallet.uuid)
+            )
+            faux_fedow.wallet.get_total_fiducial_and_all_federated_token.return_value = 99999
+            faux_fedow.transaction.to_place_from_qrcode.side_effect = ConnectionError('Fedow injoignable')
+            reponse = self._poster_une_lecture_nfc('62FE1601', ligne)
+
+        assert reponse.status_code == 500
+        assert reponse.json()['detail']
+        ligne.refresh_from_db()
+        assert ligne.status == LigneArticle.FAILED
+
+    def test_un_qrcode_en_cours_de_paiement_n_affiche_pas_l_ecran_de_validation(self):
+        """Scanner un QR code deja reserve : message « deja traite », ligne intacte.
+
+        La garde passe AVANT l'ecriture des metadonnees : un scan tardif ne
+        reecrit pas la ligne d'un paiement en cours ou deja fait.
+        / The guard runs BEFORE the metadata write: a late scan leaves the line alone.
+        """
+        ligne = self._generer_un_qrcode()
+        LigneArticle.objects.filter(pk=ligne.pk).update(status=LigneArticle.UNPAID)
+        payeur = self._creer_utilisateur('scan-reserve')
+
+        with mock.patch('fedow_connect.fedow_api.FedowAPI') as fedow:
+            fedow.return_value = self._fedow_qui_repond(solde_centimes=99999)
+            reponse = self._navigateur_de(payeur).get(_chemin_de_scan(ligne.uuid.hex))
+
+        assert any('payment_error' in nom for nom in self._gabarits_de(reponse))
+        ligne.refresh_from_db()
+        assert ligne.status == LigneArticle.UNPAID
+        assert 'scanner_email' not in (ligne.metadata or '')
+
+    def test_une_erreur_apres_le_debit_par_carte_repond_proprement(self):
+        """Debit fait, enregistrement rate : une reponse lisible, pas une erreur 500 brute.
+
+        Ici, la lecture de la monnaie debitee echoue apres le debit.
+        / Here, reading the debited currency fails after the debit.
+        """
+        ligne = self._generer_un_qrcode()
+        payeur = self._creer_utilisateur('nfc-apres-debit', avec_wallet=True)
+
+        with mock.patch('BaseBillet.validators.FedowAPI') as fedow:
+            faux_fedow = fedow.return_value
+            faux_fedow.NFCcard.card_tag_id_retrieve.return_value = (
+                self._carte_fedow(payeur.wallet.uuid)
+            )
+            faux_fedow.wallet.get_total_fiducial_and_all_federated_token.return_value = 99999
+            faux_fedow.transaction.to_place_from_qrcode.return_value = [{
+                'asset': str(uuid_module.uuid4()),
+                'amount': MONTANT_DEMANDE_CENTIMES,
+            }]
+            faux_fedow.asset.retrieve.side_effect = Exception('Fedow injoignable')
+            reponse = self._poster_une_lecture_nfc('62FE1601', ligne)
+
+        assert reponse.status_code == 500
+        assert reponse.json()['detail']

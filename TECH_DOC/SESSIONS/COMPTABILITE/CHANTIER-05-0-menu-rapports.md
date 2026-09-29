@@ -38,14 +38,13 @@ navigation construite pour une requête admin).
 
 | Test | Vérifie |
 |---|---|
-| `test_menu_ventes_comptabilite_contient_les_deux_rapports_dans_l_ordre` | les liens « en ligne » puis « caisse » sont présents, dans l'ordre, dans la section « Ventes & comptabilité » |
-| `test_le_rapport_caisse_n_apparait_plus_dans_son_ancienne_section` | aucune autre section ne pointe vers `laboutik_cloturecaisse_changelist` |
-| `test_le_rapport_caisse_est_cache_si_le_module_caisse_est_inactif` | même condition qu'avant |
+| `test_menu_ventes_comptabilite_range_les_deux_rapports` | un seul test, trois assertions : les liens « en ligne » puis « caisse » sont présents, dans l'ordre, dans la section « Ventes & comptabilité » ; aucune autre section ne pointe vers `laboutik_cloturecaisse_changelist` ; module caisse inactif → l'entrée caisse est absente |
 
-Vus rouges sur le code actuel (les deux premiers).
+Vu rouge sur le code actuel.
 
 Mutations : inverser l'ordre des deux entrées ; remettre l'entrée caisse dans
-l'ancienne section ; retirer la condition « module caisse actif ».
+l'ancienne section ; retirer la condition « module caisse actif » — chacune fait tomber
+le test.
 
 Vérification visuelle dans Chrome : `https://lespass.tibillet.localhost/admin/`.
 

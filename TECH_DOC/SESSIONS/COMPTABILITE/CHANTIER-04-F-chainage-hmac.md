@@ -87,10 +87,16 @@ jamais une ligne QR (vérifié).
 
 | Ce qui arrive ensuite | Statut de la ligne d'origine |
 |---|---|
-| Fedow **refuse** explicitement (réponse ≠ 201 : solde, validation) | remise à `CREATED` : le QR reste payable |
-| **Erreur réseau ou délai dépassé** sur `to_place_from_qrcode` (on ne sait pas si Fedow a débité) | `FAILED` + contexte journalisé : plus jamais payable, vérification manuelle dans Fedow |
-| Débit fait, puis échec d'une étape suivante (§5.3) | `FAILED`, `metadata["transactions"]` conservé (même format chaîne JSON que l'existant) |
+| **Toute exception** de `to_place_from_qrcode` (refus, réseau, délai) | `FAILED` + contexte journalisé : plus jamais payable, vérification manuelle dans Fedow, nouveau QR code |
+| Débit fait, puis échec d'une étape suivante | reste `UNPAID` (plus payable) ; traitement fin en fiche 05-C (§5.3) |
 | Tout réussit | supprimée et remplacée par les lignes de paiement (§5.3) |
+
+**Livré en F-1 (2026-09-28), version simplifiée validée par le mainteneur** : pas de
+distinction refus / erreur réseau (le solde est vérifié avant le débit, un refus est rare),
+ni de lecture des assets avant le `delete()` (fiche 05-C). Réservation filtrée aussi sur
+`payment_method=QRCODE_MA` : un uuid de billet ou d'adhésion n'est plus débitable ici.
+La garde GET est placée avant l'écriture des métadonnées (`save(update_fields=["metadata"])`).
+CHANGELOG : `CHANGELOG/2026-09-28-melanges-argent-F1-anti-rejeu-qr.md`.
 
 - `process_with_nfc` passe par le même mécanisme.
 - La garde GET de l'écran de scan (~l.2062) passe de `== VALID` à `!= CREATED` : une
