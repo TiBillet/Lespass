@@ -2003,8 +2003,14 @@ class Price(models.Model):
     #                                                 verbose_name=_("Maximum all user"),
     #                                                 help_text=_("Limit the maximum number of memberships for all users. Leave blank for unlimited."))
 
+    # Reste vers Product, pas vers le proxy MembershipProduct : pour un M2M, le proxy
+    # renommerait la colonne product_id de la table de liaison dans chaque tenant.
+    # limit_choices_to fait le filtre (formulaires, autocomplete admin, full_clean).
+    # / Stays on Product: a proxy target would rename the M2M column in every tenant.
+    # limit_choices_to does the filtering (forms, admin autocomplete, full_clean).
     adhesions_obligatoires = models.ManyToManyField(
         Product,
+        limit_choices_to={"categorie_article": Product.ADHESION},
         related_name="adhesions_obligatoires",
         verbose_name=_("Subscriptions required"),
         help_text=_(
@@ -2152,7 +2158,16 @@ class Event(models.Model):
     private = models.BooleanField(default=False, verbose_name=_("Non-federable event"),
                                   help_text=_("Will not be displayed on shared calendars."))
 
-    products = models.ManyToManyField(Product, blank=True, verbose_name=_("Products"))
+    # Reste vers Product, pas vers le proxy TicketProduct : pour un M2M, le proxy
+    # renommerait la colonne product_id de la table de liaison dans chaque tenant.
+    # limit_choices_to fait le filtre (formulaires, autocomplete admin, full_clean).
+    # / Stays on Product: a proxy target would rename the M2M column in every tenant.
+    products = models.ManyToManyField(
+        Product,
+        blank=True,
+        verbose_name=_("Products"),
+        limit_choices_to={"categorie_article__in": [Product.BILLET, Product.FREERES]},
+    )
 
     tag = models.ManyToManyField(Tag, blank=True, related_name="events", verbose_name=_("Tags"))
 

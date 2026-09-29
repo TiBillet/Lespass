@@ -1382,44 +1382,40 @@ class ProductAdmin(ModelAdmin):
 
     def get_search_results(self, request, queryset, search_term):
         """
-        Pour la recherche de produit dans la page Event.
-        On est sur un Many2Many, il faut bidouiller la réponde de ce coté
-        Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
+        Recherche de produit pour les champs autocomplete de l'admin.
+        / Product search for admin autocomplete fields.
+
+        La categorie ne se filtre PLUS ici. Django le fait tout seul avant cette
+        methode (AutocompleteJsonView applique le limit_choices_to du champ) :
+        - Event.products -> limit_choices_to BILLET / FREERES ;
+        - Price.adhesions_obligatoires -> limit_choices_to ADHESION ;
+        - booking.Resource.product -> FK vers le proxy ResourceProduct
+          (autocomplete servi par ResourceProductAdmin, deja filtre).
+        / Category is no longer filtered here: Django applies the field's
+        limit_choices_to (or the proxy admin) before this method.
+
+        Il reste ici :
+        - les produits archives ne sont jamais proposes ;
+        - Stock : uniquement les articles de vente (VT). Pas de limit_choices_to
+          sur Stock.product, car les futs (categorie U) ont aussi un stock.
+        / Remaining: archived products are never offered; Stock autocomplete
+        offers sale articles only (no limit_choices_to: kegs have stock too).
         """
         queryset, use_distinct = super().get_search_results(
             request, queryset, search_term
         )
-        if request.headers.get("Referer") and "admin/autocomplete" in request.path:
-            referer = request.headers["Referer"]
-            logger.info(referer)
-            if "event" in referer:
-                # Autocomplete depuis EventAdmin : uniquement billets
-                queryset = queryset.filter(
-                    categorie_article__in=[
-                        Product.BILLET,
-                        Product.FREERES,
-                    ]
-                ).exclude(archive=True)
-            elif "price" in referer:
-                # Autocomplete depuis PriceAdmin (adhesions_obligatoires) : uniquement adhesions
-                queryset = queryset.filter(
-                    categorie_article=Product.ADHESION,
-                    archive=False,
-                )
-            elif "inventaire/stock" in referer:
-                # Autocomplete depuis StockAdmin : uniquement articles de vente (VT)
-                # Pas les recharges, adhésions, consignes, etc.
-                # / Autocomplete from StockAdmin: only sale articles (VT)
-                queryset = queryset.filter(
-                    methode_caisse=Product.VENTE,
-                    archive=False,
-                )
-            elif "resource/" in referer:
-                # Autocomplete depuis ResourceAdmin : uniquement produit ressource
-                queryset = queryset.filter(
-                    categorie_article=Product.RESOURCE,
-                    archive=False,
-                )
+        requete_autocomplete = "admin/autocomplete" in request.path
+        if not requete_autocomplete:
+            return queryset, use_distinct
+
+        queryset = queryset.exclude(archive=True)
+
+        referer = request.headers.get("Referer", "")
+        if "inventaire/stock" in referer:
+            # Autocomplete depuis StockAdmin : uniquement articles de vente (VT)
+            # Pas les recharges, adhésions, consignes, etc.
+            # / Autocomplete from StockAdmin: only sale articles (VT)
+            queryset = queryset.filter(methode_caisse=Product.VENTE)
 
         return queryset, use_distinct
 
