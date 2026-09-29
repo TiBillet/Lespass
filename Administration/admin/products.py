@@ -1892,7 +1892,7 @@ class POSProductAdmin(ProductAdmin):
         # select_related : la colonne Stock ne fait pas une requête par ligne.
         # / Only products with a POS method set. select_related avoids N+1.
         qs = super().get_queryset(request)
-        return qs.filter(methode_caisse__isnull=False).select_related(
+        return qs.select_related(
             "stock_inventaire"
         )
 
@@ -2348,9 +2348,7 @@ class FutProductAdmin(ProductAdmin):
         # select_related : la colonne Stock ne fait pas une requête par ligne.
         # / Only keg products. select_related avoids N+1.
         qs = super().get_queryset(request)
-        return qs.filter(categorie_article=Product.FUT).select_related(
-            "stock_inventaire"
-        )
+        return qs.select_related("stock_inventaire")
 
 
 # ---------------------------------------------------------------------------

@@ -1541,10 +1541,22 @@ class MembershipProduct(Product):
         verbose_name = _("Membership product")
         verbose_name_plural = _("Membership products")
 
+
+class ResourceProductManager(models.Manager):
+    """
+    Manager for ResourceProduct.
+    With it, when using 'ResourceProduct.objects.all()' only product with categorie_article=Product.RESOURCE will be returned
+    """
+    def get_queryset(self):
+        return super().get_queryset().filter(categorie_article=Product.RESOURCE)
+
+
 class ResourceProduct(Product):
     """Proxy pour afficher uniquement les produits ressources (réservation de salle/machine) dans l'admin.
     Proxy to display only resource products in admin.
     Meme table, zero migration."""
+
+    objects = ResourceProductManager()
 
     class Meta:
         proxy = True
@@ -1552,7 +1564,15 @@ class ResourceProduct(Product):
         verbose_name_plural = _("Resources products")
 
 
-# FROM V2 : TODO
+class POSProductManager(models.Manager):
+    """
+    Manager for POSProduct.
+    With it, when using 'POSProduct.objects.all()' only product with methode_caisse__isnull=False will be returned
+    """
+    def get_queryset(self):
+        return super().get_queryset().filter(methode_caisse__isnull=False)
+
+
 class POSProduct(Product):
     """Proxy pour afficher uniquement les produits de caisse dans l'admin.
     Filtre : methode_caisse IS NOT NULL (= disponible au point de vente).
@@ -1560,10 +1580,21 @@ class POSProduct(Product):
     Filter: methode_caisse IS NOT NULL (= available at point of sale).
     Meme table, zero migration."""
 
+    objects = POSProductManager()
+
     class Meta:
         proxy = True
         verbose_name = _("POS product")
         verbose_name_plural = _("POS products")
+
+
+class FutProductManager(models.Manager):
+    """
+    Manager for FutProduct.
+    With it, when using 'FutProduct.objects.all()' only product with categorie_article=Product.FUT will be returned
+    """
+    def get_queryset(self):
+        return super().get_queryset().filter(categorie_article=Product.FUT)
 
 
 class FutProduct(Product):
@@ -1572,6 +1603,8 @@ class FutProduct(Product):
     Les infos biere (brasseur, type, degre) vont dans long_description.
     Beer info (brewer, type, ABV) goes in long_description.
     Meme table, zero migration."""
+
+    objects = FutProductManager()
 
     class Meta:
         proxy = True
