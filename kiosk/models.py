@@ -322,3 +322,52 @@ def obtenir_reglages_de_la_borne(terminal):
         return None
     reglages, _created = ReglagesBorne.objects.get_or_create(terminal=terminal)
     return reglages
+
+
+# --- Borne : un terminal vu depuis le module Kiosk ---
+# / Kiosk: a terminal seen from the Kiosk module
+
+# Import ici, et pas en tete : ce modele est le seul a avoir besoin de la classe
+# Terminal elle-meme (les autres la designent par une chaine "laboutik.Terminal").
+# / Imported here: only this proxy needs the Terminal class itself.
+from laboutik.models import Terminal  # noqa: E402
+
+
+class BorneManager(models.Manager):
+    """
+    Ne renvoie que les terminaux de role « Kiosk ».
+    / Returns only kiosk-role terminals.
+    """
+
+    def get_queryset(self):
+        from AuthBillet.models import TibilletUser
+
+        return super().get_queryset().filter(
+            terminal_role=TibilletUser.ROLE_KIOSQUE,
+        )
+
+
+class Borne(Terminal):
+    """
+    Une borne libre-service. C'est un laboutik.Terminal de role « Kiosk ».
+    / A self-service kiosk: a laboutik.Terminal with the "Kiosk" role.
+
+    LOCALISATION : kiosk/models.py
+
+    POURQUOI UN PROXY :
+    Avant, on creait une borne dans « Terminaux matériels », en choisissant le
+    type « Kiosk ». Le module Kiosk ne montrait que ses paiements et ses reglages.
+    Pour trouver ses bornes, il fallait aller dans un autre module.
+    Ce proxy donne au module Kiosk sa propre liste de bornes, avec sa propre URL
+    (/admin/kiosk/borne/). Meme table que Terminal : aucune donnee n'est copiee.
+
+    Admin : kiosk/admin.py, BorneAdmin.
+    / Same table as Terminal, no data copied. Gives the Kiosk module its own list.
+    """
+
+    objects = BorneManager()
+
+    class Meta:
+        proxy = True
+        verbose_name = _("Borne")
+        verbose_name_plural = _("Bornes")
