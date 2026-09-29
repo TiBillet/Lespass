@@ -57,9 +57,14 @@ Nouveau flux (après la réservation de 04-F-1) :
           reçu en moins », D26, comme pour Stripe)
        un règlement par transaction (montant et uuid copiés)
        encaisser_vente(vente)            # en dernier
-       on_commit(send_sale_to_laboutik.delay(...))   pour chaque ligne
+       (plus d'envoi à l'ancien LaBoutik : voir ci-dessous)
 ```
 
+- **Envoi à l'ancien LaBoutik débranché** pour le paiement QR / NFC (décision du
+  mainteneur, 2026-09-29 : personne ne s'en sert) : `process_with_nfc` et
+  `valid_payment` ne demandent plus `send_sale_to_laboutik`. Les deux mails (lieu,
+  adhérent) restent. Ne concerne **que** le QR / NFC : la vente en ligne (`trigger_A/B`)
+  envoie toujours ; la caisse V2 n'envoyait déjà rien.
 - La **vente naît au paiement**, pas à la génération du QR : une demande jamais payée
   ne laisse pas de vente.
 - `point_de_vente` : celui qui a généré le QR s'il est connu (le passer dans la
@@ -89,15 +94,15 @@ partagée ; le 6 en schéma dédié).
 | 8 | `test_qr_non_paye_aucune_vente` | |
 | 9 | `test_nfc_ma_une_vente_origine_nfc` | |
 | 10 | `test_qr_echec_reseau_apres_debit_aucune_vente_ligne_failed` | `asset.retrieve` en erreur → aucune ligne recréée, aucune vente, ligne d'origine `FAILED` |
-| 11 | `test_qr_envoi_ancien_laboutik_apres_commit` | `send_sale_to_laboutik` appelé seulement au COMMIT : fixture `django_capture_on_commit_callbacks` (sous la marque `django_db`, `on_commit` ne part pas, PIEGES 13.1) ; aucun appel avant la fin du bloc |
+| 11 | `test_qr_aucun_envoi_ancien_laboutik` | paiement QR sur deux monnaies : **aucune** tâche `send_sale_to_laboutik` demandée, même au commit (`django_capture_on_commit_callbacks(execute=True)`) ; les deux mails sont demandés |
 | 13 | `test_tirage_cout_sur_les_litres_reels` | 0,50 L, prix d'achat 300 / L, deux parts → Σ `cout_achat` = 150 |
 | 12 | `test_qr_refus_fedow_aucune_vente` | ligne redevenue payable (04-F-1) |
 
-Vus rouges : 1-3, 5-11, 13 (aucune vente, pas d'`atomic`, `delay` immédiat) ; 4 (86).
+Vus rouges : 1-3, 5-11, 13 (aucune vente, pas d'`atomic`, envoi legacy encore présent) ; 4 (86).
 
 Mutations : `round()` au lieu de `arrondi_demi_haut` (4) ; part calculée depuis la
 fraction (3) ; vente créée à la génération du QR (8) ; `asset.retrieve` remis dans la
-boucle, sous l'`atomic` (10) ; `delay()` hors `on_commit` (11) ; règlement jetons en
+boucle, sous l'`atomic` (10) ; envoi `send_sale_to_laboutik` remis dans `valid_payment` (11) ; règlement jetons en
 argent (2) ; coût calculé sur la fraction au lieu des litres (13).
 
 CHANGELOG : `CHANGELOG/2026-MM-JJ-montants-entiers-C-tireuse-qr.md`.
@@ -106,7 +111,7 @@ CHANGELOG : `CHANGELOG/2026-MM-JJ-montants-entiers-C-tireuse-qr.md`.
 
 | Cause | Fichiers |
 |---|---|
-| Envoi à l'ancien LaBoutik désormais en `on_commit` (QR/NFC) | `tests/pytest/test_qrcodescanpay_flux_complet.py` : capturer par `django_capture_on_commit_callbacks(execute=True)` là où `send_sale_to_laboutik` est attendu |
+| Envoi à l'ancien LaBoutik débranché (QR/NFC) | `tests/pytest/test_qrcodescanpay_flux_complet.py` : retirer les attentes de `send_sale_to_laboutik` ; test A′ `test_qr_deux_monnaies_deux_envois_laboutik_et_deux_mails` → renommé `test_qr_deux_monnaies_aucun_envoi_laboutik_et_deux_mails` (fiche A′ §4) |
 | Total d'un tirage arrondi demi-haut au lieu d'au pair | tests de `controlvanne` qui assertent un total sur un demi-centime (`rg -ln "facturer_tirage" tests/`) |
 
 Chaque réécriture est listée dans le CHANGELOG avec sa raison.

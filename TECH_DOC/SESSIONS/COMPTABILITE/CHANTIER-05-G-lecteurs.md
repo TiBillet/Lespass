@@ -95,7 +95,7 @@ DML dans la même) :
 | API v2 | `api_v2/serializers.py` ~l.798 | montants depuis les champs entiers |
 | Crowds (fonds disponibles) | `crowds/views.py` `allocate` ~l.345-357 | seul le calcul de montant change : Σ `total_ttc` (la logique reste, tronc §9) |
 | Données de démo | `laboutik/management/commands/create_test_pos_data.py` ~l.1752 | rapport unique |
-| Envoi vers l'ancien LaBoutik | `ApiBillet/serializers.py` `LigneArticleSerializer` ~l.1296 via `BaseBillet/tasks.py` `send_sale_to_laboutik` ~l.1029 (appelé ~l.2053, ~l.2324 de `BaseBillet/views.py`, `triggers.py` ~l.235, ~l.315, `admin_tenant.py` ~l.3107) | **un envoi par ligne, comme aujourd'hui** (`trigger_A/B`, anti-doublon `sended_to_laboutik`, D24) : la tâche reçoit toujours l'uuid de la ligne ; le sérialiseur lit `payment_method`, `asset`, `wallet` dans **le** règlement de la vente quand il n'y en a qu'un ; une vente à plusieurs règlements (QR/NFC seulement) envoie un message par règlement, comme les parts d'aujourd'hui. Mêmes champs, **mêmes charges utiles** qu'aujourd'hui. Cette forme survit à H (retrait de `payment_method`, `asset`, `wallet` de la ligne) — détail T10 ci-dessous |
+| Envoi vers l'ancien LaBoutik | `ApiBillet/serializers.py` `LigneArticleSerializer` ~l.1296 via `BaseBillet/tasks.py` `send_sale_to_laboutik` ~l.1029 (appelé ~l.2053, ~l.2324 de `BaseBillet/views.py`, `triggers.py` ~l.235, ~l.315, `admin_tenant.py` ~l.3107) | **un envoi par ligne, comme aujourd'hui** (`trigger_A/B`, anti-doublon `sended_to_laboutik`, D24) : la tâche reçoit toujours l'uuid de la ligne ; le sérialiseur lit `payment_method`, `asset`, `wallet` dans **le** règlement de la vente (les ventes envoyées n'en ont qu'un : le QR / NFC, seul à plusieurs règlements, n'envoie plus rien depuis C). Mêmes champs, **mêmes charges utiles** qu'aujourd'hui. Cette forme survit à H (retrait de `payment_method`, `asset`, `wallet` de la ligne) — détail T10 ci-dessous |
 
 ## 5. Tests
 
@@ -126,12 +126,11 @@ vérification d'intégrité sur une vente altérée) ; les autres en base partag
 | 16b | `test_admin_rejouer_l_encaissement` | vente Stripe `EN_ATTENTE` (paiement `PAID`) → action → `REGLEE`, un règlement |
 | 17 | `test_export_lignes_colonnes_entieres` | |
 | 18 | `test_envoi_ancien_laboutik_charge_utile_inchangee` | **non-régression** : vente à un règlement → même charge utile avant et après ; panier 2 billets + adhésion payé Stripe → **3 messages**, identiques à aujourd'hui |
-| 18b | `test_envoi_ancien_laboutik_vente_qr_deux_monnaies_deux_messages` | vente QR TLF 300 + FED 200 → deux messages, `asset` et `amount` de chaque règlement, comme les parts d'aujourd'hui |
 | 19 | `test_aucun_lecteur_ne_multiplie_amount_par_qty` | garde sur les fichiers des §2-4 |
 | E2E | `test_caisse_liste_et_detail_d_une_vente_nfc_plus_cb` | liste, détail, ticket |
 
 Vus rouges : 2 (garde muette après bascule du bouton), 3 (FK vers l'ancienne table),
-4, 7-9, 11, 11b, 12, 14-17, 16b, 19 sur le code actuel ; 1, 5, 6, 13, 18b une fois le
+4, 7-9, 11, 11b, 12, 14-17, 16b, 19 sur le code actuel ; 1, 5, 6, 13 une fois le
 nouveau lecteur branché à vide ; 10 : rouge pour le numéro de vente (la mention
 DUPLICATA existe déjà). 18 : vert avant et après (noté).
 
@@ -139,7 +138,7 @@ Mutations : la garde relit l'ancienne clôture (2) ; la tâche d'impression cher
 clôture dans `laboutik` (3) ; l'archive recalcule la TVA (4) ; `liste_ventes` groupe
 par `uuid_transaction` (7) ; `total_paid` repasse par `int(amount×qty)` (11) ; compte
 des impressions par `uuid_transaction` de la ligne (10) ; moyen lu dans la ligne au
-lieu du règlement (18b).
+lieu du règlement (18).
 
 ## 6. Tests existants à réécrire
 
@@ -170,6 +169,6 @@ caractérisation de la fiche A′ doivent rester verts pendant cette fiche.
 | Trou | À faire dans cette fiche | Test |
 |---|---|---|
 | T3 | **Remboursements vers l'ancien LaBoutik** : `send_refund_to_laboutik` (déclenché par chaque avoir, `BaseBillet/signals.py` ~l.144-160) utilise `LigneArticleSerializer` (`payment_method`, `asset`, `wallet`). Même traitement que l'envoi des ventes : moyen, `asset`, `wallet` lus dans le règlement de la vente `AVOIR`. | `test_envoi_remboursement_ancien_laboutik_charge_utile_inchangee` |
-| T10 | Ancien LaBoutik : **un envoi par ligne** (comme aujourd'hui, `trigger_A/B`, anti-doublon `sended_to_laboutik`) ; moyen / `asset` / `wallet` lus dans **le** règlement de la vente quand il n'y en a qu'un ; une vente à plusieurs règlements (QR/NFC seulement) envoie un message par règlement, comme les parts d'aujourd'hui. Appliqué dans le tableau §4. | tests 18 (panier 2 billets + adhésion → 3 messages identiques) et 18b |
+| T10 | Ancien LaBoutik : **un envoi par ligne** (comme aujourd'hui, `trigger_A/B`, anti-doublon `sended_to_laboutik`) ; moyen / `asset` / `wallet` lus dans **le** règlement de la vente (un seul pour toute vente envoyée : l'envoi QR / NFC est débranché en C, décision du mainteneur 2026-09-29). Appliqué dans le tableau §4. | test 18 (panier 2 billets + adhésion → 3 messages identiques) |
 | T11 | **Tranché (D29)** : le nouveau bouton « Clôturer » **garde** ses deux effets actuels (commandes de table `OPEN` → `CANCEL`, tables libérées, `laboutik/views.py` ~l.2727-2737) ; le Z automatique ne les fait **pas** (comme l'auto-clôture actuelle). | `test_cloture_annule_les_commandes_ouvertes_et_libere_les_tables` (A′) reste vert |
 | T21 | Décisions prises sur `amount × qty` hors du tableau : `Booking.to_pay` (`booking/booking_engine.py` ~l.722), `TicketCreator` (~l.289), montant envoyé à `stripe.Refund` (`PaiementStripe/utils.py` ~l.39-44). Réécrites sur `total_ttc` en gardant **la même décision**. | `test_decision_stripe_ou_gratuit_billets_et_booking` (A′) |

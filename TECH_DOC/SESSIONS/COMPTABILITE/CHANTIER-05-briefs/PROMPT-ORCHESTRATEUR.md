@@ -20,6 +20,13 @@ fabrique pas plus que ce que la spec demande.
   indésirable : ne rien annuler toi-même, prévenir le mainteneur.
 - Chaque brief d'ouvrier **commence** par la règle git (modèle :
   `CHANTIER-05-briefs/MODELE.md`).
+- **Lisibilité = exigence du projet** (commun numérique : le code doit être lisible et
+  compris par un humain non expert). Les règles du skill **`djc`** et de
+  **`GUIDELINES.md`** s'appliquent à **tout** code et test du chantier. Toi : charge
+  `/djc` au démarrage. Chaque brief place la règle de lisibilité **juste après** la règle
+  git (modèle), et **chaque prompt d'agent** (ouvrier et relecteur) le rappelle en tête :
+  charger le skill `djc` (outil Skill) et lire `GUIDELINES.md` **avant** d'écrire ou de
+  relire. Un code qui ne respecte pas djc n'est pas « vert » : il retourne à l'ouvrier.
 - `poetry` / `pytest` / `manage.py` **dans le conteneur** `lespass_django` ; tests par
   `make test ARGS="..."` ; **jamais deux pytest en parallèle** (`docker exec
   lespass_django pgrep -af pytest`). Pas de `runserver` (byobu). Pas de `makemessages` /
@@ -36,6 +43,7 @@ fabrique pas plus que ce que la spec demande.
 3. `CHANTIER-05-machine-a-etats.md` §0 — la logique métier qui ne doit pas changer.
 4. La fiche de la prochaine session du tableau de bord.
 5. Mémoire : `project_chantier_montants_entiers`, `project_chantier_melanges_argent`.
+6. Skill `djc` (à charger) et `GUIDELINES.md` (racine) : les règles d'écriture du code.
 
 ## RÔLES
 - **Ouvrier** : sous-agent `Agent` avec `model: "opus"` (Sonnet pour le mécanique :
@@ -46,7 +54,10 @@ fabrique pas plus que ce que la spec demande.
 - **Relecteur** : sous-agent `model: "fable"`, lecture seule, à la **fin de chaque fiche**
   et à la **fin de la fiche A** : il lit `git diff` de la fiche, le CHANGELOG, les sorties
   de tests et la fiche, et rapporte [BLOQUANT / IMPORTANT / MINEUR] ; il ne corrige
-  rien. Ses constats deviennent une nouvelle session.
+  rien. Ses constats deviennent une nouvelle session. Il charge le skill `djc` et lit
+  `GUIDELINES.md` : la **conformité djc** (FALC, noms verbeux, commentaires FR/EN au
+  présent adressés au prochain lecteur, `_()` en français, pas de magie) est un critère
+  de relecture à part entière, au même rang que la conformité à la fiche.
 
 ## LA BOUCLE (détail : SUIVI §2)
 1. **LIRE** la fiche et le SUIVI (§4 écarts, §5 questions).
@@ -61,7 +72,9 @@ fabrique pas plus que ce que la spec demande.
    `FAILED ` / `ERROR tests/`) → Edit inverse → `sha256sum` identique. Prévenir le
    mainteneur avant la première mutation d'une session.
 6. **OBSERVER** : `git diff --stat` — chaque fichier touché est annoncé par la fiche.
-   Sinon : arrêt, question au mainteneur.
+   Sinon : arrêt, question au mainteneur. Puis **lire le `git diff`** avec les règles
+   djc en tête : un écart (nom obscur, compréhension imbriquée, commentaire qui raconte
+   la session, commentaire absent sur une contrainte) retourne à l'ouvrier.
 7. **CARACTÉRISATION** : `make test ARGS="tests/pytest/test_caracterisation_*.py"` à la
    fin de **chaque** session. Verts **sans modification**, sauf la liste fermée de la
    fiche A′ §4, dans la fiche prévue. Un test qui tombe = logique métier changée sans le

@@ -2,7 +2,7 @@
 
 > **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue Fable + Opus, corrigée
 > Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D13, D14, D15, R3, R4, R6
-> Effort : 5,75 j (3 sessions : §2, §3, §4) — Dépend de : G. **Migrations : oui**
+> Effort : 6,5 j (4 sessions : §2, §3, §4, §4 bis) — Dépend de : G. **Migrations : oui**
 > (retrait de champs et de modèles, dev uniquement ; une migration par nature
 > d'opération, jamais DDL et DML dans la même, PIEGES 9.113). `ImpressionLog.cloture`
 > est déjà déplacée en G ; la FK morte `MouvementStock.cloture` est retirée ici (§3).
@@ -102,6 +102,31 @@ Aucune suppression automatique de lignes par une migration.
   service de vente.
 - Tests existants : voir §6.
 
+## 4 bis. Session H-4 — les mails vérifiés de bout en bout (Mailpit, E2E)
+
+Décision du mainteneur (2026-09-29), dernière session du chantier. Aucun test ne
+vérifie aujourd'hui qu'un mail **arrive** : les tests pytest voient seulement la tâche
+demandée. Mailpit (`lespass_mailpit`) reçoit tous les mails du worker Celery en dev ;
+son API répond sur `http://mailpit:8025/api/v1/` (depuis les conteneurs) et
+`https://mailpit.tibillet.localhost/api/v1/` (depuis l'hôte).
+
+- Un assistant E2E dans `tests/e2e/conftest.py` : `attendre_le_mail(destinataire,
+  sujet_contient=None, delai_max_secondes=30)` — interroge `GET /api/v1/search?query=to:…`
+  en réessayant, rend le message (sujet, texte, pièces jointes), échoue clairement au
+  délai dépassé. Aucun `pytest.skip` si Mailpit ne répond pas : le test échoue.
+- Chaque test utilise une **adresse unique** (la boîte est partagée) ; rien n'est vidé.
+- Parcours (`tests/e2e/test_mails_recus.py`) :
+
+| Test | Vérifie |
+|---|---|
+| `test_adhesion_vendue_en_caisse_facture_recue` | caisse → adhésion payée en espèces → mail de facture reçu, PDF joint (effet de B-0) |
+| `test_billet_paye_en_ligne_billet_recu` | billet payé par Stripe (test) → mail des billets reçu |
+
+Pièges : le worker `lespass_celery` doit tourner (et être redémarré après une
+modification de tâche) ; la file Redis peut contenir des tâches laissées par pytest
+(`redis-cli LLEN celery` avant `make e2e`) ; les messages sont perdus si le conteneur
+Mailpit est recréé.
+
 ## 5. Tests
 
 | # | Test | Attendu |
@@ -167,4 +192,4 @@ caractérisation de la fiche A′ doivent rester verts pendant cette fiche.
 | T18 | Rejeu 208 de la recharge API v2 (`api_v2/views.py` ~l.931) lit `ligne_article.asset` → lire `Vente.unite`. | test A′ P13 reste vert |
 | T19 | `_compute_default_vat` (`BaseBillet/models.py` ~l.3860) lit `payment_method` : la règle est retirée (tous les producteurs passent par `ajouter_article`, qui pose la TVA). | `test_tva_zero_explicite_respectee_par_save` (A) reste vert |
 | T20 | Copies de `payment_method` / `asset` / `wallet` dans les producteurs d'avoirs et de remboursements, **à retirer nommément** : `PaiementStripe/utils.py` ~l.93-95, `BaseBillet/models.py` ~l.2986-2988, `booking/models.py` ~l.633-635, `BaseBillet/views.py` ~l.4678-4680, `Administration/admin_tenant.py` ~l.2091-2093. Sinon `TypeError` sur les annulations. | `test_caracterisation_annulations.py` (A′) reste vert |
-| T14 | Après fusion, la facture d'adhésion caisse et l'avoir d'un billet caisse portent sur l'article entier : l'écrire au CHANGELOG. | test A′ « …cascade…part_rattachee » modifié ici |
+| T14 | Après fusion, la facture d'adhésion caisse et l'avoir d'un billet caisse portent sur l'article entier : l'écrire au CHANGELOG. | aucun test A′ (le test « cascade / part rattachée » a été retiré le 2026-09-29 : en caisse, la cascade ne crée ni réservation ni billet) |

@@ -21,7 +21,7 @@ une fiche = une logique métier changée sans le vouloir.
 ## 2. Règles d'écriture
 
 - Un test de caractérisation est **vert** sur le code actuel : pas de « vu rouge ». Sa
-  force se prouve par **mutation** (annexe §6.4 : 11 mutations, chacune doit faire
+  force se prouve par **mutation** (annexe §6.4 : 11 mutations — 12 jeux, la mutation `trigger_A` est rejouée pour A′-1 et A′-3 —, chacune doit faire
   tomber au moins un test).
 - Il n'asserte **que des effets observables** : statuts finaux, objets créés, **noms et
   arguments des tâches Celery demandées**, appels Stripe / Fedow simulés, **charge utile**
@@ -41,12 +41,12 @@ une fiche = une logique métier changée sans le vouloir.
 | Fichier | Parcours | Nombre de tests |
 |---|---|---|
 | `tests/pytest/test_caracterisation_en_ligne.py` | P1-P3, P15 | 7 |
-| `tests/pytest/test_caracterisation_annulations.py` | P5-P8 | 6 |
+| `tests/pytest/test_caracterisation_annulations.py` | P5-P8 | 5 |
 | `tests/pytest/test_caracterisation_admin_api.py` | P13, P16, décision Stripe / gratuit | 4 |
 | `tests/pytest/test_caracterisation_caisse.py` | P9, P12, clôture | 4 |
 | `tests/pytest/test_caracterisation_qr.py` | P10 (en complément de `test_qrcodescanpay_flux_complet.py`, après 04-F-1) | 2 |
 
-**23 tests** : ceux qui portent une des 11 mutations (annexe §6.4), ceux qui doivent
+**22 tests** : ceux qui portent une des 11 mutations (annexe §6.4), ceux qui doivent
 changer volontairement (§4), et les parcours Stripe P1, P3, P5, P15. Les autres
 parcours sont déjà couverts par `test_commande_service.py`,
 `test_qrcodescanpay_flux_complet.py` et les tests de `controlvanne`. Liste nominative
@@ -59,11 +59,12 @@ comportement**, dans la même session, avec la raison au CHANGELOG :
 
 | Test | Fiche | Pourquoi |
 |---|---|---|
+| `test_vente_caisse_adhesion_sans_facture_ni_envoi_laboutik` | B (session B-0) | effets d'adhésion communs : facture et récompense en caisse, toujours pas d'envoi legacy ; renommé `…_facture_et_recompense_sans_envoi_laboutik` (mainteneur, 2026-09-29) |
+| `test_qr_deux_monnaies_deux_envois_laboutik_et_deux_mails` | C | envoi à l'ancien LaBoutik débranché pour le QR / NFC (mainteneur, 2026-09-29) : plus aucun `send_sale_to_laboutik`, les deux mails restent ; renommé `…_aucun_envoi_laboutik_et_deux_mails` |
 | `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` | D | D30 : un seul avoir, pour le dernier paiement |
 | `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` | D | D31 : plus d'avoir ni de remboursement hors Stripe |
 | `test_billets_vendus_dans_l_admin_offert_montant_zero` | D | D32 : offert écrit comme à la caisse |
 | `test_annuler_un_billet_caisse_offert_cree_un_avoir` | G | `total_paid()` lit `total_ttc` : un billet **entièrement offert** n'a rien à rembourser → plus d'avoir d'argent, seule la trace `FREE −X` (validé le 2026-09-29) |
-| `test_annuler_reservation_caisse_payee_en_cascade_avoir_sur_la_part_rattachee` | H | une ligne par article |
 
 Tableau « qui garde quoi vert » : annexe §6.3.
 
@@ -75,5 +76,6 @@ Tableau « qui garde quoi vert » : annexe §6.3.
   test.
 - CHANGELOG `CHANGELOG/2026-MM-JJ-montants-entiers-A2-caracterisation.md` (« Refactoring
   interne / tests seulement ») avec la liste des comportements actuels surprenants figés
-  (annexe : réservation « payée ailleurs » sans e-mail, adhésion vendue en caisse sans
-  facture ni envoi LaBoutik ni récompense, T13…).
+  (adhésion vendue en caisse sans facture ni envoi LaBoutik ni récompense, T13…). La
+  réservation API v2 « payée ailleurs » sans e-mail n'est atteinte par aucun test A′ :
+  elle est notée dans `TODO/BUGS-constats-chantier-05.md`.

@@ -2,7 +2,7 @@
 
 > **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue Fable + Opus, corrigée
 > Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D7 à D14, D17, R3, R6
-> Effort : 4 j (3 sessions : §3, §4, §5) — Dépend de : A. **Migration : oui** (lien
+> Effort : 4,5 j (4 sessions : §2 bis B-0, §3, §4, §5) — Dépend de : A. **Migration : oui** (lien
 > `consigne_remboursee` sur `Product`).
 > Les lignes sont écrites comme aujourd'hui (même `amount`, même `qty`), avec en plus
 > leur vente, leurs règlements et leurs montants entiers. **Une seule valeur change
@@ -83,6 +83,55 @@ la caisse. Un test le vérifie.
 Idempotence : `_executer_avec_cle_idempotence` (~l.4611) cherche des lignes par
 `uuid_transaction` ; `Vente.idempotency_key` reçoit la même clé. Un rejeu retrouve la
 vente et ne crée rien.
+
+## 2 bis. Session B-0 — effets d'adhésion communs (décision du mainteneur, 2026-09-29)
+
+**Changement voulu de la logique métier**, séparé des montants : une adhésion payée a
+**les mêmes effets en ligne et en caisse**, par **un seul code**.
+
+Aujourd'hui : en ligne, `trigger_A` (`BaseBillet/triggers.py` ~l.255) pose l'échéance,
+rattache l'utilisateur au lieu (`client_achat`), complète son nom, envoie la facture par
+mail, gère la newsletter, puis (on_commit) la récompense en monnaie et l'envoi à l'ancien
+LaBoutik. En caisse, `_creer_ou_renouveler_adhesion` (`laboutik/views.py` ~l.5869) ne
+fait que créer / renouveler et poser l'échéance (ligne créée `VALID`, aucun
+déclencheur).
+
+Le changement :
+
+- Une **fonction explicite** (pas de passage de la caisse par la machine à états) :
+  `appliquer_les_effets_d_une_adhesion_payee(adhesion, ligne_article)` dans
+  `BaseBillet/triggers.py`. Elle fait : échéance, `client_achat`, nom / prénom, facture
+  par mail, newsletter, récompense en monnaie (on_commit).
+- `trigger_A` l'appelle, et garde **seulement** ce qui est propre au web :
+  `update_membership_state_after_stripe_paiement` (avant) et l'envoi à l'ancien LaBoutik
+  (on_commit, après). Même ordre des tâches qu'aujourd'hui : les tests A′-1 et A′-3
+  restent verts **sans modification**.
+- La caisse l'appelle après chaque `_creer_ou_renouveler_adhesion` (4 appels :
+  ~l.6301, ~l.8516, ~l.9583, ~l.10169). **Pas d'envoi à l'ancien LaBoutik** : la caisse
+  V2 ne parle pas à la caisse legacy (mainteneur, 2026-09-29).
+- L'échéance n'est posée **qu'une fois** : `_creer_ou_renouveler_adhesion` ne la pose
+  plus (deux enregistrements = deux `webhook_membership`, voir P15). À vérifier au
+  démarrage.
+- Cascade (plusieurs lignes pour une adhésion, T14) : la fonction est appelée **une
+  fois**, avec la ligne qui porte la FK `membership`.
+- Adhésion sans utilisateur (carte anonyme) : `_creer_ou_renouveler_adhesion` rend
+  `None`, rien n'est appelé (comme aujourd'hui).
+
+Tests (`tests/pytest/test_caisse_effets_adhesion.py`, vus rouges) :
+
+| Test | Vérifie |
+|---|---|
+| `test_adhesion_caisse_especes_demande_facture_et_recompense` | tâches `send_membership_invoice_to_email` et `refill_from_lespass_to_user_wallet_from_price_solded` demandées, **pas** `send_sale_to_laboutik` ; utilisateur rattaché au lieu |
+| `test_adhesion_caisse_nfc_demande_facture_et_recompense_une_fois` | chemin cascade : une seule facture, une seule récompense |
+| `test_adhesion_caisse_renouvelee_echeance_posee_une_fois` | un seul `webhook_membership` au renouvellement |
+| `test_facture_de_l_adhesion_caisse_part_au_bon_destinataire` | la tâche de facture, **exécutée** (appel direct, pas `.delay`), dépose un mail dans `mailoutbox` (pytest-django) : destinataire = e-mail de l'adhérent, pièce jointe PDF |
+
+Mutations : retirer l'appel dans la caisse (le test espèces tombe) ; retirer l'appel dans
+`trigger_A` (les tests A′-1 d'adhésion tombent) ; remettre `set_deadline` dans
+`_creer_ou_renouveler_adhesion` (le test de renouvellement tombe).
+
+Test A′ qui change ici (fiche A′ §4) : `test_vente_caisse_adhesion_sans_facture_ni_envoi_laboutik`
+→ renommé `test_vente_caisse_adhesion_facture_et_recompense_sans_envoi_laboutik`.
 
 ## 3. Session B-1 — un moyen de paiement (espèces, CB, chèque, OFFRIR, recharges, consigne)
 

@@ -14,7 +14,12 @@
 |---|---|---|---|
 | **Orchestrateur** | Opus (session principale) | écrit les briefs, prouve le rouge, délègue, relance tests et mutations lui-même, lit `git diff`, tient ce fichier, prépare le commit | écrire du code de production ou de test |
 | **Ouvrier** | Opus (sous-agent), Sonnet pour le mécanique | exécute **un** brief, s'arrête à la fin du brief, rapporte | git (sauf lecture), toucher hors du périmètre du brief, décider un écart à la spec |
-| **Relecteur** | Fable (sous-agent) | relit le diff d'une fiche entière + CHANGELOG + sorties de tests ; aussi à la fin de la fiche A | corriger |
+| **Relecteur** | Fable (sous-agent) | relit le diff d'une fiche entière + CHANGELOG + sorties de tests ; aussi à la fin de la fiche A ; vérifie la **conformité djc / `GUIDELINES.md`** au même rang que la conformité à la fiche | corriger |
+
+**Lisibilité** : le skill `djc` et `GUIDELINES.md` s'appliquent à tout code et test du
+chantier (commun numérique). Chaque agent qui écrit ou relit du code les charge **avant**
+de commencer ; l'orchestrateur relit le `git diff` avec ces règles avant de déclarer une
+session verte.
 | **Mainteneur** | humain | tranche les écarts, valide, **commite** (jamais de Co-Authored-By) | — |
 
 Git : lecture seule autorisée (`status`, `diff`, `log`, `show`). Interdit sans accord
@@ -55,10 +60,15 @@ Statuts : `à faire` · `brief écrit` · `rouge prouvé` · `vert` · `mutation
 | Session | Sujet | Statut | Rouge (preuve) | Vert | Mutations | CHANGELOG | Commit |
 |---|---|---|---|---|---|---|---|
 | 04-F-1 | Anti-rejeu QR (autre session) | commité | | | | | |
-| 05-0 | Menu des rapports (1 test) | prêt à committer | `FAILED tests/pytest/test_menu_rapports.py::test_menu_ventes_comptabilite_range_les_deux_rapports` — `AssertionError: La section Ventes & comptabilité doit lister le rapport en ligne puis le rapport caisse. Liens trouvés : ['/admin/comptabilite/cloturecaisse/', '/admin/BaseBillet/lignearticle/']` (1 failed) | 1 passed (+ 74 voisins) | 3/3 tuées, sha256 identique | `CHANGELOG/2026-09-29-montants-entiers-0-menu-rapports.md` | |
-| 05-A′ | Tests de caractérisation (5 fichiers, 23 tests, 11 mutations) — **avant A** | à faire | vert attendu (pas de rouge) | | | | |
+| 05-0 | Menu des rapports (1 test) | commité | `FAILED tests/pytest/test_menu_rapports.py::test_menu_ventes_comptabilite_range_les_deux_rapports` — `AssertionError: La section Ventes & comptabilité doit lister le rapport en ligne puis le rapport caisse. Liens trouvés : ['/admin/comptabilite/cloturecaisse/', '/admin/BaseBillet/lignearticle/']` (1 failed) | 1 passed (+ 74 voisins) | 3/3 tuées, sha256 identique | `CHANGELOG/2026-09-29-montants-entiers-0-menu-rapports.md` | `d36c0c1e` |
+| 05-A′-1 | Caractérisation en ligne (7 tests + `etat_metier`, 5 mutations) | prêt à committer | vert attendu (pas de rouge) | 7 passed (×3) | 5/5 tuées, sha256 identiques | `CHANGELOG/2026-09-29-montants-entiers-A2-caracterisation.md` | |
+| 05-A′-2 | Caractérisation annulations (5 tests, 2 mutations) | prêt à committer | vert attendu | 5 passed (12 avec A′-1, ×3) | 2/2 tuées, sha256 identiques | idem A′-1 | |
+| 05-A′-3 | Caractérisation admin / API (4 tests, 2 mutations) | prêt à committer | vert attendu | 4 passed (16 avec A′-1/2, ×3) | 2/2 tuées, sha256 identiques | idem A′-1 | |
+| 05-A′-4 | Caractérisation caisse + QR (4 + 2 tests, 3 mutations) | prêt à committer | vert attendu | 6 passed (22 au total, ×3) | 3/3 tuées, sha256 identiques | idem A′-1 | |
+| 05-A′-5 | Corrections relecture Fable (billet offert caisse par la vraie route ; docstrings) | prêt à committer | vert attendu | 22 passed (×3) | aucune mutation de production (mutation côté test `edit_mode=False` → 400, test tombe) | idem A′-1 | |
 | 05-A | Vente, Reglement, contraintes, service, empreinte | à faire | | | | | |
 | 05-A-relu | Relecture Fable de A | à faire | | | | | |
+| 05-B-0 | Caisse : effets d'adhésion communs (fonction partagée avec `trigger_A`) | à faire |
 | 05-B-1 | Caisse : un moyen, recharges, consigne reliée | à faire | | | | | |
 | 05-B-2 | Caisse : cascade, jetons, legacy | à faire | | | | | |
 | 05-B-3 | Caisse : tables, vider carte, correction | à faire | | | | | |
@@ -75,7 +85,8 @@ Statuts : `à faire` · `brief écrit` · `rouge prouvé` · `vert` · `mutation
 | 05-G-3 | Admin Vente, totaux, exports, API | à faire | | | | | |
 | 05-H-1 | Une ligne par article, D15 | à faire | | | | | |
 | 05-H-2 | Retrait champs et ancienne clôture | à faire | | | | | |
-| 05-H-3 | Démo, fixtures, tests existants | à faire | | | | | |
+| 05-H-3 | Démo, fixtures, tests existants | à faire |
+| 05-H-4 | Mails vérifiés de bout en bout (Mailpit, E2E) — dernière session | à faire | | | | | |
 
 ## 4. Écarts à la spec décidés en cours de route
 
@@ -84,6 +95,10 @@ une décision D ou un choix R, la fiche et le tronc sont corrigés dans la même
 
 | Date | Session | Écart | Raison | Décidé par |
 |---|---|---|---|---|
+| 2026-09-29 | B-0 (nouvelle) | Adhésion caisse V2 : facture par mail et récompense en monnaie, par une fonction commune avec `trigger_A` (pas via la machine à états) ; pas d'envoi legacy. Session séparée en tête de B. Test A′-4 `…sans_facture…` ajouté à la liste fermée A′ §4 (change en B-0). Fiches B, A′, annexe §6.3 corrigées. | Même logique métier en ligne et en caisse, un seul code. | mainteneur |
+| 2026-09-29 | C (nouveau) | **Envoi à l'ancien LaBoutik débranché pour le paiement QR / NFC** (personne ne s'en sert). Fiche C §2-§4 (test 11 réécrit), fiche G (T10, test 18b retiré), fiche A′ §4 (test QR change en C), annexe §6.3-§6.4 corrigées. Résout la contradiction G / H sur la charge utile QR (relecture Fable A′, constat 2). | Simplification ; plus de charge utile « en parts » à préserver. | mainteneur |
+| 2026-09-29 | A′-1, A′-3 | Adaptations au code (pas de changement de sens) : P2 ajoute une réservation gratuite au panier (seule une réservation sans ligne passe par la `Commande` : sinon la mutation `set_ligne_article_paid` est invisible) ; T13 posé par `update()` (don et `error_in_mail` n'y mènent plus) ; P16 passe par le vrai POST admin au lieu de `vente_admin_especes` (qui simule elle-même les tâches). | Rendre les tests atteignables et les mutations visibles. | orchestrateur (adaptation, pas de décision D/R) |
+| 2026-09-29 | A′-2 | Test `test_annuler_reservation_caisse_payee_en_cascade_avoir_sur_la_part_rattachee` retiré : A′ = 22 tests. | Parcours inexistant : la cascade caisse ne crée ni réservation ni billet. | mainteneur |
 
 ## 5. En attente du mainteneur
 
@@ -100,12 +115,38 @@ une décision D ou un choix R, la fiche et le tronc sont corrigés dans la même
 | 2026-09-28 | J de fin de service à cheval sur minuit ou sur deux mois : à quelle date / quel mois va son écriture FEC ? Défaut écrit : datée du jour de début de service ; le rapport M compte chaque vente à sa date d'encaissement ; l'écart aux bords de mois est écrit dans le rapport M ; le FEC fait foi par J. Filet de 4 h en heure locale du lieu (tâche horaire, `TiBillet/celery.py`) | fiche F §3.1 et §4, tests 15b et 25b | **Tranché** : filet = heure de fermeture + 2 h (D28). **Validé (2026-09-29)** : écriture FEC datée du jour de début du service. |
 | 2026-09-28 | `Reservation.total_paid()` lit `total_ttc` (fiche G) : un billet **entièrement offert** (FREE à prix non nul, caisse ou admin D32) n'a plus rien à rembourser → son annulation ne crée plus d'avoir d'argent, seule la trace `FREE −X` (fiche D). Le test A′ `test_annuler_un_billet_caisse_offert_cree_un_avoir` change en G. **Défaut écrit : oui** (plus d'avoir d'argent) | fiche G §4, A′ §4, machine à états §0.4 | **Validé (2026-09-29)** : pas d'avoir d'argent pour un billet offert, seulement la trace de l'offert annulé. |
 | 2026-09-28 | Traductions ajustées à la relecture finale, sans changer le fond des décisions : D10 (pas de nature `RECHARGE` : le rapport lit `hors_chiffre_affaires` ; recharge cadeau en `source_offert = OFFRIR`, plus de valeur `CADEAU`) ; D16 (`EXPIRE` laisse la vente `EN_ATTENTE`, plus de réouverture ; `ANNULEE` seulement sur `CANCELED` / SEPA refusé). **Défaut écrit : oui** | tronc D10, D16 ; fiche D §2.2, §3 ; fiche A §3 | **Validé (2026-09-29)** : D10 et D16 tels qu'écrits. |
+| 2026-09-29 | Adhésion vendue en caisse V2 : pas d'envoi à l'ancien LaBoutik (figé par A′-4 `test_vente_caisse_adhesion_sans_facture_ni_envoi_laboutik`) — voulu ? | annexe P9 ; `laboutik/views.py` `_creer_ou_renouveler_adhesion` | **Voulu (mainteneur, 2026-09-29)** : la caisse V2 ne parle pas à la caisse legacy. Facture par mail et récompense en monnaie : **« doivent fonctionner »** (2026-09-29) → aujourd'hui absentes = bug. **Tranché : session B-0** (fonction commune avec `trigger_A`). A′-4 fige l'actuel, B-0 le change. |
+| 2026-09-29 | **A′-2, 6ᵉ test** `test_annuler_reservation_caisse_payee_en_cascade_avoir_sur_la_part_rattachee` : son parcours n'existe pas. Seuls les chemins caisse à un seul moyen créent réservation et billets (`_creer_billets_depuis_panier`, appelé l.7453 et l.7678) ; les chemins en cascade (`_payer_par_nfc` l.8457, complément l.9562, l.10147) ne rattachent que les adhésions. Le retirer (A′ = 22 tests ; fiche A′ §4 et fiche H à corriger), ou le remplacer ? | ouvrier A′-2 §4 A, vérifié par l'orchestrateur | **Retiré (mainteneur, 2026-09-29).** Fiche A′ §3-§4, annexe §6.2-§6.3, fiche H §T14 corrigées. |
+| 2026-09-29 | **Billet vendu en caisse et payé en NFC / cascade** : d'après l'ouvrier, lignes créées mais **ni réservation ni billet**. Non vérifié à l'écran (une garde de l'interface peut l'empêcher). Bug à vérifier hors chantier ? | `laboutik/views.py` chemins cascade | **Hors chantier** (tronc §9). |
+| 2026-09-29 | **Bug constaté (non figé)** : annuler **un seul** billet vendu en caisse échoue toujours (« Aucun paiement remboursable… ») : la ligne caisse porte un tarif vendu sans événement, le billet un tarif vendu avec événement ; `_lignes_hors_stripe(pricesold_ids=…)` ne trouve rien. Seule l'annulation de toute la réservation marche. Corriger hors chantier ? | `laboutik/views.py` l.5384, l.6554 ; `BaseBillet/models.py` l.3168 | **Hors chantier** (tronc §9). |
+| 2026-09-29 | **Fiche G fausse** : dans `cancel_and_refund_resa`, la boucle des avoirs hors Stripe tourne quel que soit `total_paid()` : passer `total_paid` sur `total_ttc` ne suffira pas à supprimer l'avoir d'un billet offert. À corriger dans la fiche G avant de l'ouvrir (pas bloquant pour A′). | ouvrier A′-2 §4 C | |
+| 2026-09-29 | « Payée ailleurs » (API v2, `paymentMethod` cash/card) : la réservation passe `CREATED → VALID`, transition absente de `PRE_SAVE_TRANSITIONS` → **aucun mail de billet**, alors que le commentaire `validators.py` ~l.458 dit le contraire. Bug hors chantier ? | `BaseBillet/validators.py` ~l.458 ; `BaseBillet/signals.py` | **Hors chantier** (tronc §9). |
+| 2026-09-29 | P15 : un renouvellement d'abonnement envoie deux fois `webhook_membership`. Bug hors chantier ? | `triggers.py` l.137 puis `set_deadline` l.267 | **Hors chantier** (tronc §9). |
+| 2026-09-29 | **Adhésion créée dans l'admin** : un mail de connexion (`connexion_celery_mailer`) part à l'adhérente si son adresse n'est pas confirmée — `MembershipAddForm.save()` appelle `get_or_create_user(email)` avec `send_mail=True` par défaut, alors que `clean_email` le fait avec `send_mail=False`. Voulu ou bug (hors chantier) ? Figé par A′-3. Même cause que P15 : deux `webhook_membership` à la création aussi. | `Administration/admin_tenant.py` l.1381, l.1438 | **Bug, hors chantier** (2026-09-29) → `TODO/BUGS-constats-chantier-05.md` (avec les autres bugs hors chantier). |
+| 2026-09-29 | **Pour la fiche F (comptabilité légale)** : la clôture caisse actuelle est globale au lieu (numéro, tables, commandes de tous les points de vente), mais le **début de période** est cherché depuis la dernière clôture du **seul point de vente qui clôture**. Un point de vente qui n'a jamais clôturé repart de la première vente caisse du lieu. La clôture unique de F doit prendre le Z précédent **du lieu** (D28) : à vérifier explicitement dans F, pas de décision ici. | `laboutik/views.py` l.2601-2632 ; constat ouvrier A′-4 | à traiter à l'ouverture de F |
 
 ## 6. Journal
 
 Une ligne par événement, la plus récente en haut. Format :
 `AAAA-MM-JJ HH:MM — session — ce qui s'est passé (preuve : commande / fichier)`.
 
+- 2026-09-29 — 05-A′ — `make test` complet après A′-5 : 2113 passed, 0 FAILED/ERROR. Fiche A′ prête à committer ; commit proposé au mainteneur.
+- 2026-09-29 — 05-A′-5 — vert (22 passed, relancé). Billet offert caisse par `POST /laboutik/paiement/payer/` (`gift`, carte primaire mode gérant, PV billetterie caché, config en mémoire) : relu conforme djc. Docstrings corrigées (date retirée ; QR « change en C »). Puce CHANGELOG A′-2 corrigée par l'orchestrateur. Suite complète relancée.
+- 2026-09-29 — 05-A′ — relecture Fable : 0 bloquant, 4 importants, 10 mineurs. Doc corrigée par l'orchestrateur : fiche D (réécriture T7 sans `payment_method=`, n°4), fiche A′ §5 (« payée ailleurs », n°12), SUIVI §4 (adaptations, n°13), 11 mutations / 12 jeux (n°14). n°2 → décision mainteneur : envoi legacy QR débranché en C (couvre aussi n°1). n°3 et n°9 → session A′-5 (tests). Mineurs 5-8, 10, 11 acceptés.
+- 2026-09-29 — 05-A′ — `make test` complet : 2113 passed, 0 FAILED/ERROR. Relecture Fable lancée.
+- 2026-09-29 — 05-A′-4 — vert (22 passed, relancé). Relecture djc des deux fichiers : conforme (mineur : P12 suppose une monnaie locale dans `lespass` en base de dev, sinon erreur, jamais faux vert). Mutations 3/3 tuées (`laboutik/views.py` ×2, `ApiBillet/serializers.py`), sha256 identiques (interruption : classifieur d'autorisation en panne, reprise après redémarrage de Claude Code). Constats : table servie non payée libérée à la clôture (figé) ; début de période de clôture par point de vente (→ §5, fiche F). **Fiche A′ : 22 tests, 12 mutations jouées, toutes tuées.** Suite complète lancée.
+- 2026-09-29 — TODO — `TECH_DOC/SESSIONS/TODO/BUGS-constats-chantier-05.md` créé (6 bugs hors chantier, mail de connexion admin compris) + ligne dans `TODO/INDEX.md`.
+- 2026-09-29 — 05-A′-4 — brief `05-A2-4.md` écrit ; ouvrier Opus lancé.
+- 2026-09-29 — 05-A′-3 — vert (16 passed, relancé). Relecture djc conforme (mineurs acceptés : T21 enchaîne 4 parcours sous un nom de contrat ; 2 assistants de lecture recopiés d'A′-2). Écarts figés depuis le code : mail de connexion à l'adhésion admin, 2 webhooks, réservation payante `U`. Mutations 2/2 tuées (`triggers.py`, `api_v2/views.py`), sha256 identiques.
+- 2026-09-29 — H-4 — ajoutée (mainteneur) : mails vérifiés par Mailpit en E2E, dernière session du chantier ; test `mailoutbox` validé en B-0.
+- 2026-09-29 — B-0 — validée par le mainteneur : effets d'adhésion communs caisse / en ligne par une fonction explicite ; session écrite dans la fiche B §2 bis. A′-4 débloquée.
+- 2026-09-29 — 05-A′-3 — brief `05-A2-3.md` écrit ; ouvrier Opus lancé.
+- 2026-09-29 — 05-A′-2 — décisions mainteneur : 6ᵉ test retiré (écart §4, spec corrigée) ; 4 bugs hors chantier (tronc §9) ; adhésion caisse V2 : facture et récompense « doivent fonctionner » → question ouverte, bloque A′-4. A′-2 : mutations OK.
+- 2026-09-29 — 05-A′-2 — 5 tests sur 6 (12 passed avec A′-1). Relecture djc : conforme. Mutations 2/2 tuées (`PaiementStripe/utils.py` l.38, `BaseBillet/views.py` `break` après l.4687), sha256 identiques. 6ᵉ test non écrit : parcours inexistant (vérifié) → question §5, **A′-2 bloquée**. Autres constats ajoutés au §5.
+- 2026-09-29 — 05-A′-2 — brief `05-A2-2.md` écrit (imite A′-1, importe `etat_metier`, ne modifie pas le fichier A′-1) ; ouvrier Opus lancé.
+- 2026-09-29 — 05-A′-1 — vert (7 passed, relancé par l'orchestrateur). Relecture djc ligne à ligne : conforme (noms verbeux, docstrings FR/EN au présent, `for` simples, attendus en clair, aucun champ retiré en H lu sur la ligne). Écarts ouvrier acceptés (adaptation au code, rien d'inventé) : réservation gratuite ajoutée au panier P2 pour que la mutation `set_ligne_article_paid` soit visible ; état de départ T13 posé par `update()` (don et `error_in_mail` n'y mènent plus) ; `etat_metier(reservations=[...])`. Surprenants figés : T13, P15 double `webhook_membership`, T1, T5. Mutations 5/5 tuées (`triggers.py`, `signals.py`, `ApiBillet/views.py`), sha256 identiques. Aucun fichier de production modifié.
+- 2026-09-29 — 05-A′ — 05-0 commité (`d36c0c1e`). A′ découpée en 4 sessions (fiche : une par fichier, QR avec caisse). Outillage et points de mutation de l'annexe §6 vérifiés présents dans le code. Brief `05-A2-1.md` écrit (règle de lisibilité djc en 2ᵉ position) ; ouvrier Opus lancé.
+- 2026-09-29 — méthode — à la demande du mainteneur : djc + `GUIDELINES.md` rendus obligatoires pour tout agent qui écrit ou relit du code (PROMPT-ORCHESTRATEUR : règle non négociable, lecture au démarrage, critère du relecteur, étape OBSERVER ; MODELE : « Règle de lisibilité » juste après la règle git + auto-contrôle djc dans le rapport ; SUIVI §1). 05-0 : conformité djc vérifiée par le relecteur Fable (critère 5 de son prompt) ; l'ouvrier ne l'avait que par une ligne du brief.
 - 2026-09-29 — 05-0 — relu par Fable : 0 bloquant, 0 important, 5 mineurs. Corrigés par l'orchestrateur dans le CHANGELOG : libellé affiché « Ventes et comptabilité », fil d'Ariane de la liste des clôtures caisse (retombe sur le défaut Unfold, comme les autres entrées autonomes). Laissés : lignes `laboutik.cloturecaisse` des dictionnaires d'aide devenues sans effet (question au mainteneur), docstring du test au passé (style toléré), `db` + `django_db` redondants (sans effet). Commit proposé au mainteneur.
 - 2026-09-29 — 05-0 — `make test` complet : 2091 passed, 0 FAILED/ERROR. Vérification visuelle Chrome non faite (extension non connectée) : laissée au mainteneur (CHANGELOG « Comment tester »). Relecture Fable lancée.
 - 2026-09-29 — 05-0 — vert : `make test ARGS="tests/pytest/test_menu_rapports.py + 4 voisins navigation"` 75 passed. Mutations à la main sur `Administration/admin/dashboard.py` (append→insert(0) ; « Closures » remise dans la section caisse ; `if True:`) : 3/3 tuées, sha256 `718a27ab…` identique. `git diff --stat` : seuls `dashboard.py` + test + CHANGELOG + SUIVI/brief. Caractérisation : aucun fichier encore (A′ pas faite). Suite complète lancée.
@@ -122,9 +163,13 @@ Une ligne par événement, la plus récente en haut. Format :
 
 | Date | `make test` | `make e2e` | Remarque |
 |---|---|---|---|
+| 2026-09-29 | 2113 passed (0 FAILED / ERROR) | — | fin de fiche 05-A′ après A′-5 (relancé) |
+| 2026-09-29 | 2113 passed (0 FAILED / ERROR) | — | fin de fiche 05-A′ (+22 tests de caractérisation) |
 | 2026-09-29 | 2091 passed (0 FAILED / ERROR) | — | fin de fiche 05-0 (e2e pas exigé en 0) |
 | 2026-09-28 | 2082 passed | 116 passed | départ (après chantier 04 A-E) |
 
 ## 8. Pièges rencontrés pendant le chantier
 
 (à reporter ensuite dans `tests/PIEGES.md` par le mainteneur)
+
+- 2026-09-29 (A′-1) — Mutation : un seul `curl` 200 juste après l'Edit ne suffit pas, le serveur byobu n'a pas encore commencé à recharger → `make test` sort en 502 sans lancer pytest (sortie vide, faux « survit »). Attendre **3 réponses 200 d'affilée** (1 s d'écart) avant `make test`, et vérifier qu'une ligne `passed`/`failed` sort.

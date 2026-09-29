@@ -279,15 +279,15 @@ On ne casse rien d'un coup. Trois temps :
 | [0](CHANTIER-05-0-menu-rapports.md) | Ranger les deux rapports sous « Ventes & comptabilité » | 0,25 j | — |
 | [A′](CHANTIER-05-A2-caracterisation.md) | Tests de caractérisation : figer la logique métier actuelle (statuts, e-mails, billets, adhésions, appels Stripe / Fedow, envois LaBoutik) **avant tout changement de code métier** | 1,5 j | — |
 | [A](CHANTIER-05-A-vente-reglement.md) | Tables `Vente`, `Reglement`, champs entiers de l'article, `Paiement_stripe.vente` / `montant_encaisse` / `moyen` ; contraintes de base et garde d'immutabilité ; service de vente (égalités, numéro sous verrou, empreinte) ; fabrique de test et `verifier_egalites` | 3 j | — |
-| [B](CHANTIER-05-B-caisse.md) | La caisse écrit aussi le nouveau modèle (cascade, complément, 2ᵉ carte, recharges, consigne, vider carte, offert et jetons, points, adhésion, commandes de table, correction de moyen, consigne reliée) | 4 j | A, A′ |
+| [B](CHANTIER-05-B-caisse.md) | La caisse écrit aussi le nouveau modèle (cascade, complément, 2ᵉ carte, recharges, consigne, vider carte, offert et jetons, points, adhésion, commandes de table, correction de moyen, consigne reliée) ; **B-0 : effets d'adhésion communs caisse / en ligne** (facture, récompense) | 4,5 j | A, A′ |
 | [C](CHANTIER-05-C-tireuse-qr.md) | Tireuse et paiement QR/NFC écrivent aussi le nouveau modèle ; QR/NFC restructuré « réseau d'abord, puis une transaction » (repris de 04-F §5.3) | 2 j | A, 04-F-1 |
 | [D](CHANTIER-05-D-en-ligne-avoirs.md) | En ligne, admin, API, crowds, booking : une vente d'origine par paiement Stripe, en attente puis encaissée au montant Stripe (écart d'encaissement) ; avoirs et remboursements = ventes `AVOIR` | 4 j | A |
 | [E](CHANTIER-05-E-plan-comptable.md) | Plan comptable unique : compte par catégorie de caisse, sinon compte par défaut du type de produit ; par moyen et par monnaie ; journal par point de vente | 1,5 j | — |
 | [F](CHANTIER-05-F-rapport-unique.md) | Moteur de rapport unique, clôture unique J/H/M/A, Z chaîné, marge brute, FEC équilibré ; comparaison avec les anciens rapports sur trois scénarios ; tests existants réécrits | 3,5 j | B, C, D, E |
 | [G](CHANTIER-05-G-lecteurs.md) | Bascule des lecteurs : archive LNE, exports, tickets imprimés, fiche « Vente » dans l'admin, totaux client, vérification d'intégrité, garde « correction après clôture », FK de clôture (impressions), API, ancien LaBoutik | 4,75 j | F |
-| [H](CHANTIER-05-H-retrait.md) | Une ligne par article, forme poids / tireuse (D15), avoir sur un article ; retrait de l'ancien modèle et des doublons ; test de garde « pas de `amount × qty` » | 5,75 j | G |
+| [H](CHANTIER-05-H-retrait.md) | Une ligne par article, forme poids / tireuse (D15), avoir sur un article ; retrait de l'ancien modèle et des doublons ; test de garde « pas de `amount × qty` » ; **H-4 : mails vérifiés par Mailpit (E2E)** | 6,5 j | G |
 
-**Total estimé : 30 à 32 jours** (somme des fiches : 30,25 j). B, C et D touchent des fichiers différents mais
+**Total estimé : 31 à 33 jours** (somme des fiches : 31,5 j). B, C et D touchent des fichiers différents mais
 tous passent par le service de la fiche A : pas en parallèle tant que A n'est pas
 stable. B et C touchent la cascade et `controlvanne/billing.py` que le chantier 04
 (E, F-1) a modifiés : vérifier l'état du working tree avant de commencer.
@@ -358,6 +358,12 @@ fin. Pas de fichier qui rejoue les scénarios.
 | Recrédit d'une carte cashless depuis un avoir admin (D27) | chantier futur |
 | Crowds « marquer payée » (`admin_paid`) : n'écrit ni ligne ni vente (argent reçu ailleurs, non enregistré) | hors chantier, comportement inchangé (T17) |
 | Bug actuel T13 : un rejeu `PAID → PAID` repasse les lignes d'avoir en `PAID` (`BaseBillet/signals.py` ~l.42) | hors chantier ; figé par un test de caractérisation (A′), signalé au mainteneur |
+| Bug : annuler **un seul** billet vendu en caisse échoue toujours (« Aucun paiement remboursable ») : tarif vendu sans événement sur la ligne, avec événement sur le billet (`laboutik/views.py` ~l.5384, ~l.6554 ; `Reservation._lignes_hors_stripe`) | hors chantier (décision du mainteneur, 2026-09-29) ; seule l'annulation de toute la réservation marche |
+| Bug : réservation API v2 « payée ailleurs » (`paymentMethod` cash/card) : `CREATED → VALID` n'a pas de transition → aucun mail de billet (`BaseBillet/validators.py` ~l.458) | hors chantier (2026-09-29) ; figé par A′ |
+| Bug : un renouvellement d'abonnement envoie deux fois `webhook_membership` (`BaseBillet/triggers.py` l.137 puis `set_deadline`) | hors chantier (2026-09-29) ; figé par A′-1 |
+| À vérifier : billet vendu en caisse et payé en NFC / cascade → lignes créées, ni réservation ni billet (constat de code, pas vu à l'écran) | hors chantier (2026-09-29) |
+| Bug : adhésion créée dans l'admin → mail de connexion non voulu (`MembershipAddForm.save()` sans `send_mail=False`) | hors chantier (2026-09-29) ; figé par A′-3 |
+| Tous les bugs ci-dessus, réunis pour plus tard | `TODO/BUGS-constats-chantier-05.md` |
 
 ## 10. Vérifications communes
 

@@ -486,7 +486,7 @@ compare à un dictionnaire attendu écrit en clair.
 
 **`tests/pytest/test_caracterisation_en_ligne.py`** (Stripe simulé)
 
-**23 tests** : ceux qui portent une des 11 mutations (§6.4), ceux qui doivent changer
+**22 tests** : ceux qui portent une des 11 mutations (§6.4), ceux qui doivent changer
 volontairement (fiche A′ §4), et les parcours Stripe P1, P3, P5, P15. Les autres parcours
 sont déjà couverts par `test_commande_service.py`, `test_qrcodescanpay_flux_complet.py`
 et les tests de `controlvanne`.
@@ -508,7 +508,6 @@ et les tests de `controlvanne`.
 | `test_annuler_un_billet_stripe_rembourse_un_billet` | P5 : `Refund.create(amount=…)` appelé une fois avec le prix d'**un** billet, `Pmt H`, ligne `R` de qty −1, tâche `send_refund_to_laboutik` et sa charge utile |
 | `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` | P6 : avoir `N`, moyen `CA` dans la charge utile `send_refund_to_laboutik` ; **change en D** (D31) |
 | `test_annuler_un_billet_caisse_offert_cree_un_avoir` | P6 : billet `FREE` à prix non nul → avoir créé (garde `total_paid`) ; **change en G** (`total_paid` sur `total_ttc`, validé le 2026-09-29) |
-| `test_annuler_reservation_caisse_payee_en_cascade_avoir_sur_la_part_rattachee` | P6/T14 : **change en H** (article entier) |
 | `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` | P7 : 1 achat + 2 renouvellements → 3 avoirs, `Adh AC` ; **change en D** (D30) |
 | `test_avoirs_admin_et_annulation_adhesion_n_appellent_pas_stripe` | P7/P8 (T8, D27) : `Refund.create` jamais appelé par `emettre_avoir` ni par `cancel` ; reste vert |
 
@@ -541,10 +540,10 @@ et `amount` par part) et `test_qr_echec_fedow_ligne_en_echec_rejeu_refuse` (P10,
 | Fichier | B | C | D | E | F | G | H |
 |---|---|---|---|---|---|---|---|
 | `test_caracterisation_en_ligne.py` | vert, **sans modification** | idem | idem (seule la vente s'ajoute) | idem | idem | idem (charges LaBoutik identiques, T10) | idem (T1 corrigé) |
-| `test_caracterisation_annulations.py` | idem | idem | idem **sauf** `…utilisateur…especes…` (D31) et `…tous_les_renouvellements` (D30) | idem | idem | idem **sauf** `…billet_caisse_offert…` (validé) | idem **sauf** `…cascade…part_rattachee` |
+| `test_caracterisation_annulations.py` | idem | idem | idem **sauf** `…utilisateur…especes…` (D31) et `…tous_les_renouvellements` (D30) | idem | idem | idem **sauf** `…billet_caisse_offert…` (validé) | idem |
 | `test_caracterisation_admin_api.py` | idem | idem | idem **sauf** `…offert_montant_zero` (D32) | idem | idem | idem | idem |
-| `test_caracterisation_caisse.py` | idem | idem | idem | idem | idem | idem (D29 : le bouton garde ses effets) | idem |
-| `test_caracterisation_qr.py` | idem | idem (restructuration « réseau d'abord ») | idem | idem | idem | idem (moyen lu dans le règlement = mêmes charges, T10) | idem (T2 corrigé) |
+| `test_caracterisation_caisse.py` | idem **sauf** `…adhesion_sans_facture…` (B-0 : facture et récompense) | idem | idem | idem | idem | idem (D29 : le bouton garde ses effets) | idem |
+| `test_caracterisation_qr.py` | idem | idem **sauf** `…deux_envois_laboutik…` (C : envoi legacy QR débranché) ; restructuration « réseau d'abord » | idem | idem | idem | idem | idem (T2 corrigé) |
 
 ### 6.4 Mutations (preuve que les tests voient quelque chose)
 
@@ -560,7 +559,7 @@ et `amount` par part) et `test_qr_echec_fedow_ligne_en_echec_rejeu_refuse` (P10,
 | `_creer_ou_renouveler_adhesion` : `status = ONCE` | `test_vente_caisse_adhesion_sans_facture_ni_envoi_laboutik` |
 | clôture : retirer l'annulation des commandes ouvertes | `test_cloture_annule_les_commandes_ouvertes_et_libere_les_tables` |
 | recharge API v2 : créer une nouvelle ligne au lieu de réutiliser la `FAILED` | `test_recharge_api_v2_echec_puis_nouvel_essai_meme_ligne` |
-| `LigneArticleSerializer` : retirer `asset` | `test_qr_deux_monnaies_deux_envois_laboutik_et_deux_mails` |
+| `LigneArticleSerializer` : retirer `asset` | `test_qr_deux_monnaies_deux_envois_laboutik_et_deux_mails` (jusqu'à C, qui débranche l'envoi QR ; ensuite le test 18 de la fiche G) |
 
 Effort estimé : **1,5 j** (une session par fichier, sauf QR). Fiche « 05-A′ », livrée
 **avant A** ; chaque test est rejoué en fin de chaque session.

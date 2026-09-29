@@ -10,6 +10,20 @@ pytest en parallèle (`docker exec lespass_django pgrep -af pytest` avant de lan
 Pas de `makemessages` / `compilemessages`. Pas de `runserver` (le serveur tourne dans
 byobu).
 
+## RÈGLE DE LISIBILITÉ — À LIRE EN DEUXIÈME
+Lespass est un **commun numérique** : le code doit être lisible et compris par un humain
+non expert. **Avant d'écrire la moindre ligne** (code ou test) :
+1. charge le skill **`djc`** (outil Skill) ;
+2. lis **`GUIDELINES.md`** (racine du projet), au moins « FALC », « Architecture »,
+   « Anti-patterns ».
+
+L'essentiel : noms verbeux, explicite plutôt qu'implicite, boucles `for` simples
+plutôt que compréhensions imbriquées, pas de magie ; commentaires **FR puis EN**, FALC,
+**au présent**, adressés au prochain lecteur (jamais le récit de ta session) ; `_()` en
+français ; `viewsets.ViewSet` et `serializers.Serializer` (jamais `ModelViewSet`, jamais
+de Django Forms hors admin). Un code qui passe les tests mais ne respecte pas ces règles
+n'est pas terminé.
+
 ## Ce que tu fais
 - Fiche : `TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-<X>-*.md`, sections **§… à §…**
   (ne pas recopier la fiche ici : la lire).
@@ -49,4 +63,6 @@ constat (fichier:ligne, ce que dit la spec, ce que fait le code) et STOP.
 2. Sortie des tests (rouge à l'étape 1, vert à l'étape 2), sans résumé.
 3. Mutations : fichier:ligne à muter, test attendu en échec.
 4. Constats hors périmètre ou écarts à la spec.
-5. Message de commit proposé (sans Co-Authored-By).
+5. Auto-contrôle djc : skill chargé (oui / non), et pour chaque fichier touché, les
+   règles vérifiées (noms, commentaires FR/EN au présent, FALC, `_()` en français).
+6. Message de commit proposé (sans Co-Authored-By).
