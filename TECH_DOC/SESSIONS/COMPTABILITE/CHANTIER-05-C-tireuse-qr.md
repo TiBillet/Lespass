@@ -26,8 +26,12 @@ Changement, dans l'`atomic` existant (~l.223) :
 - `prix_achat` : celui du produit, **au litre** (unité de vente, D21) ; le coût de la
   part = litres de la part × prix au litre, figé : `quantite_pour_cout` = volume servi
   en litres × fraction de la part (fiche A) ;
-- solde insuffisant : comportement actuel gardé (D27 du chantier 04) ; le total est ce
-  qui a **réellement** été débité ;
+- solde insuffisant : comportement actuel gardé (D27 du chantier 04) ; pendant la
+  transition, le total imposé est ce qui a **réellement** été débité. Vérifier au
+  démarrage si le **volume servi** est réduit avec le solde (~l.274-283) : si oui, en H
+  `qty` = litres réellement servis et le total redevient `qty × prix` sans exception ;
+  sinon, l'écart devient un article « Écart d'encaissement reçu en moins » (D26). Dans
+  les deux cas `total_catalogue_impose` disparaît en H ;
 - la tireuse est désormais chaînée (via la vente).
 
 ## 2. Paiement QR / NFC en ligne (`BaseBillet/views.py`)
@@ -49,7 +53,8 @@ Nouveau flux (après la réservation de 04-F-1) :
        supprimer la ligne CREATED (la demande)
        vente = ouvrir_vente(origine=QRCODE_MA ou NFC_MA, client=…, point_de_vente=…)
        une ligne par transaction Fedow (forme actuelle), total_catalogue_impose = transaction['amount']
-         (le total réellement débité : exception durable, gardée en H)
+         (transition ; en H, un débit partiel devient un article « Écart d'encaissement
+          reçu en moins », D26, comme pour Stripe)
        un règlement par transaction (montant et uuid copiés)
        encaisser_vente(vente)            # en dernier
        on_commit(send_sale_to_laboutik.delay(...))   pour chaque ligne
@@ -69,7 +74,8 @@ Nouveau flux (après la réservation de 04-F-1) :
 
 Fichiers : `tests/pytest/test_tireuse_ecrit_la_vente.py`,
 `tests/pytest/test_qrcode_ecrit_la_vente.py` (Fedow distant mocké comme dans les tests
-QR actuels ; chaque test lit sa vente, base partagée ; le 6 en schéma dédié).
+QR actuels ; chaque test lit sa vente et finit par `verifier_egalites(vente)`, base
+partagée ; le 6 en schéma dédié).
 
 | # | Test | Attendu |
 |---|---|---|
@@ -95,6 +101,15 @@ boucle, sous l'`atomic` (10) ; `delay()` hors `on_commit` (11) ; règlement jeto
 argent (2) ; coût calculé sur la fraction au lieu des litres (13).
 
 CHANGELOG : `CHANGELOG/2026-MM-JJ-montants-entiers-C-tireuse-qr.md`.
+
+## 4. Tests existants à réécrire
+
+| Cause | Fichiers |
+|---|---|
+| Envoi à l'ancien LaBoutik désormais en `on_commit` (QR/NFC) | `tests/pytest/test_qrcodescanpay_flux_complet.py` : capturer par `django_capture_on_commit_callbacks(execute=True)` là où `send_sale_to_laboutik` est attendu |
+| Total d'un tirage arrondi demi-haut au lieu d'au pair | tests de `controlvanne` qui assertent un total sur un demi-centime (`rg -ln "facturer_tirage" tests/`) |
+
+Chaque réécriture est listée dans le CHANGELOG avec sa raison.
 
 ## Machine à états — compléments obligatoires
 

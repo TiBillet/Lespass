@@ -2,8 +2,8 @@
 
 > **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue Fable + Opus, corrigée
 > Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D1, D4, D13, D16, D26, D27, R5
-> Effort : 4,5 j (3 sessions : §2, §3, §4) — Dépend de : A. **Pas de migration** :
-> `Paiement_stripe.montant_encaisse` et `Paiement_stripe.vente` sont créés en A ; les
+> Effort : 4 j (3 sessions : §2, §3, §4) — Dépend de : A. **Pas de migration** :
+> `Paiement_stripe.montant_encaisse`, `moyen` et `vente` sont créés en A ; les
 > produits et catégories « Écart d'encaissement » sont des **lignes** créées à la
 > demande (pas un nouveau choix de `categorie_article`). Aucun ancien lecteur ne change.
 
@@ -44,13 +44,16 @@ chemin qui constate le paiement** :
 Chaque chemin pose `montant_encaisse` **avant** le `save()` qui passe le statut à `PAID`
 (le `pre_save` le lit).
 
-Fixture `mock_stripe` (`tests/pytest/conftest.py` ~l.374-415, utilisée par 17 fichiers
-de tests) : **pas de montant fixe** (il ferait apparaître un écart dans tous ces
-tests, et 0 simulerait une facture payée par le solde client). `amount_total` /
-`amount_paid` sont calculés par la fixture au moment du `retrieve` : Σ `total_catalogue`
-des articles de la vente d'origine du `Paiement_stripe` le plus récent qui porte l'id de
-session du mock (fixe : `cs_test_mock_session`, ~l.389). Un test d'écart impose sa
-propre valeur (`mock_stripe.session.amount_total = …`).
+**Étape 0 de D-1 — la fixture `mock_stripe`** (`tests/pytest/conftest.py` ~l.374-415,
+utilisée par 17 fichiers de tests), **avant tout code de production**. Aujourd'hui
+`fake_session.amount_total` est un attribut `MagicMock` créé à la volée : `int(MagicMock())`
+vaut **1**, sans erreur → `montant_encaisse = 1` et un écart silencieux dans les 17
+fichiers. La fixture ne pose **pas de montant fixe** non plus (il ferait apparaître un
+écart partout, et 0 simulerait une facture payée par le solde client) : `amount_total`
+/ `amount_paid` sont calculés au moment du `retrieve` : Σ `total_catalogue` des articles
+de la vente d'origine du `Paiement_stripe` le plus récent qui porte l'id de session du
+mock (fixe : `cs_test_mock_session`, ~l.389). Un test d'écart impose sa propre valeur
+(`mock_stripe.session.amount_total = …`).
 
 ### 2.2 Le point d'encaissement unique
 
@@ -74,7 +77,7 @@ with transaction.atomic():
   verrou du lieu (pg_advisory_xact_lock, le même que encaisser_vente)
   vente = Vente.objects.select_for_update().get(pk=paiement_stripe.vente_id)   # R5
   si vente.statut == REGLEE : renvoyer vente                 # rejeu : RIEN n'est écrit
-  si vente.statut == ANNULEE : rouvrir_vente_annulee(vente)  # paiement après expiration
+  si vente.statut == ANNULEE : lever une erreur explicite    # Stripe a dit non, puis « payé » : à regarder à la main
   montant = paiement_stripe.montant_encaisse
   si montant is None : lever une erreur explicite (chemin qui n'a pas posé le montant)
   ecart = montant − Σ articles.total_catalogue
@@ -95,16 +98,18 @@ with transaction.atomic():
   `paiement_stripe` : elle ne bloque pas le passage du paiement à `VALID`
   (`set_paiement_stripe_valid`, `signals.py` ~l.98-120), ne déclenche aucune transition
   (création) et n'est jamais envoyée à l'ancien LaBoutik. Jamais saisie à la main.
-- **Moyen du règlement** : le code Stripe porté par les lignes de la vente :
-  `STRIPE_NOFED` (`SN`), `STRIPE_SEPA_NOFED` (`SP`, posé par `update_checkout_status`
-  ~l.3557), `STRIPE_RECURENT` (`SR`). **Pas `STRIPE_FED` (`SF`)** : malgré son nom, ce
-  code désigne la **monnaie fédérée** dépensée en cashless (`laboutik/views.py` ~l.1619,
-  ~l.4497), pas un paiement Stripe en ligne. La liste est reportée dans la fiche E
-  (compte 5171).
-- **Expiration** : la vente passe `ANNULEE` dans `expire_paiement_stripe`
-  (`signals.py` ~l.84, qui ne fait rien aujourd'hui ; transitions `PENDING → EXPIRE` et
-  `PENDING → CANCELED`). Le code accepte `EXPIRE → PAID` (~l.315-316) : un paiement
-  tardif **rouvre** la vente puis l'encaisse (elle n'a jamais eu de numéro).
+- **Moyen du règlement** : `Paiement_stripe.moyen` (fiche A, T1), **jamais les lignes**
+  (leur `payment_method` disparaît en H). Valeurs : `STRIPE_NOFED` (`SN`),
+  `STRIPE_SEPA_NOFED` (`SP`, posé par `update_checkout_status` ~l.3557 — qui pose aussi
+  `Paiement_stripe.moyen`), `STRIPE_RECURENT` (`SR`). **Pas `STRIPE_FED` (`SF`)** :
+  malgré son nom, ce code désigne la **monnaie fédérée** dépensée en cashless
+  (`laboutik/views.py` ~l.1619, ~l.4497), pas un paiement Stripe en ligne. La liste est
+  reportée dans la fiche E (compte 5171).
+- **Expiration** : `EXPIRE` ne change **rien** à la vente : elle reste `EN_ATTENTE`, sans
+  numéro. Le code accepte `EXPIRE → PAID` (~l.315-316) : un paiement tardif l'encaisse
+  telle quelle. `ANNULEE` seulement quand Stripe a dit non : `PENDING → CANCELED`
+  (`expire_paiement_stripe`, `signals.py` ~l.84, qui ne fait rien aujourd'hui, appelle
+  `annuler_vente` **dans ce cas seulement**, pas sur `EXPIRE`) et SEPA refusé (T5).
 - SEPA : la vente reste `EN_ATTENTE` jusqu'au paiement confirmé (jusqu'à 14 jours).
 
 ### 2.3 Les producteurs
@@ -122,7 +127,7 @@ with transaction.atomic():
 
 | Producteur | Fichier | Règlement |
 |---|---|---|
-| Billets vendus dans l'admin | `Administration/admin_tenant.py` `ReservationAddAdmin.save` ~l.3116 | moyen choisi (espèces, CB, chèque) ; « offert » → part offerte totale + FREE |
+| Billets vendus dans l'admin | `Administration/admin_tenant.py` `ReservationAddAdmin.save` ~l.3116 | moyen choisi (espèces, CB, chèque) ; « offert » → `ajouter_article(..., offert_en_totalite=True)` : part offerte totale + FREE (D32) |
 | Paiement d'adhésion dans l'admin | `BaseBillet/views.py` `ajouter_paiement` ~l.4477 | moyen choisi |
 | Adhésion créée / renouvelée dans l'admin | `BaseBillet/signals.py` ~l.494 | moyen de l'adhésion ; **encaisser après** les déclencheurs Fedow (`trigger_A`, HTTP) |
 | Adhésion gratuite (API) | `BaseBillet/validators.py` ~l.1128-1153 | `amount` = `contribution_value`, qui peut être **non nul** avec FREE → règle « offert à montant non nul » du service (fiche A) : part offerte totale + règlement FREE. La transition `CREATED`/`PAID → PAID` du producteur (~l.1153, e-mails) est gardée |
@@ -136,10 +141,13 @@ with transaction.atomic():
 (~l.843), puis passée `VALID` ou `FAILED` par `.update()` (~l.871, ~l.884), et un échec
 est retenté sur la **même** ligne (~l.825). Donc : vente `EN_ATTENTE` créée avec la
 ligne ; `REGLEE` au succès (article recharge `hors_chiffre_affaires`, offert en
-totalité `CADEAU`, règlement FREE), `ANNULEE` à l'échec, **rouverte** au nouvel essai.
-`Vente.unite` = la monnaie créditée (unités brutes, D16 du chantier 04). L'idempotence
-passe de `LigneArticle.idempotency_key` à `Vente.idempotency_key` (retrait du premier
-en H).
+totalité `OFFRIR`, règlement FREE) ; à l'échec elle **reste `EN_ATTENTE`** (ligne
+`FAILED`, sans numéro, sans effet comptable) et le nouvel essai l'encaisse.
+`Vente.unite` : la monnaie créditée **seulement si c'est des points ou du temps**
+(FID / TIM, unités brutes, D16 du chantier 04) ; une monnaie libellée en euros (locale,
+cadeau, fédérée) garde `unite = EUR` — sinon le rapport (fiche F) la classerait « points »
+et l'exclurait de tout. L'idempotence passe de `LigneArticle.idempotency_key` à
+`Vente.idempotency_key` (retrait du premier en H).
 
 Gratuit : total 0, aucun règlement, vente numérotée (c'est une opération enregistrée).
 
@@ -152,11 +160,11 @@ Pas de vente : `BankTransferService.enregistrer_virement` (`fedow_core/services.
 |---|---|---|
 | Annulation d'adhésion | `BaseBillet/views.py` `cancel` ~l.4593 | **un seul avoir, pour le dernier paiement** de l'adhésion (la période en cours), **pas** pour les renouvellements passés (D30 : change le comportement actuel, qui fait un avoir par ligne payée ~l.4595-4602). Règlement : ligne hors Stripe → moyen choisi (D27) ; ligne Stripe → comme l'avoir admin Stripe ci-dessous |
 | Avoir de réservation hors Stripe, **fait par l'admin** | `BaseBillet/models.py` `Reservation._creer_avoir` ~l.2971 | moyen choisi (D27) |
-| Annulation **par l'utilisateur** d'une réservation / d'un booking payé **hors Stripe** (`BaseBillet/views.py` ~l.1413, ~l.1434 ; `booking/views.py` ~l.839) | idem | **aucun avoir, aucun remboursement** (D31) : la réservation est annulée comme aujourd'hui, l'argent reste acquis ; si le lieu rembourse, l'admin fait un avoir. Change le comportement actuel (qui crée un avoir) |
+| Annulation **par l'utilisateur** d'une réservation / d'un booking payé **hors Stripe** (`BaseBillet/views.py` ~l.1413, ~l.1434 ; `booking/views.py` ~l.839) | `cancel_and_refund_resa` (`BaseBillet/models.py` ~l.2999-3087), **partagée** avec l'admin (`admin_tenant.py` ~l.3236, ~l.3426, ~l.3436) : elle reçoit `moyen_rembourse=None` ; `None` = utilisateur | **aucun avoir, aucun remboursement** (D31) : réservation et billets passent `CANCELED`, l'argent reste acquis ; la garde actuelle « refus si payé et rien de remboursable » ne s'applique plus à ce cas. Si le lieu rembourse, l'admin fait un avoir (il passe un moyen). Change le comportement actuel (qui crée un avoir) |
 | Avoir de booking fait par l'admin | `booking/models.py` `_creer_avoir` ~l.626 (poser aussi la FK `booking`, manquante) | moyen choisi (D27) |
 | Remboursement Stripe (total ou partiel) | `PaiementStripe/utils.py` `partial_refund_payment` ~l.78 | Stripe, montant = **montant du refund renvoyé par Stripe**, `reference_externe` = id du refund |
 | Avoir émis dans l'admin, ligne **hors Stripe** | `Administration/admin_tenant.py` `emettre_avoir` ~l.2059-2105 | moyen choisi (D27) |
-| Avoir émis dans l'admin, ligne **payée par Stripe** (`ligne.paiement_stripe` non vide) | idem | **comportement actuel gardé (D27)** : **aucun appel à Stripe**. Règlement négatif au moyen Stripe d'origine (`Paiement_stripe.moyen`), et un message prévient l'admin : « Remboursez cette somme depuis votre tableau de bord Stripe. » Pas de champ « Remboursé par » dans ce cas |
+| Avoir émis dans l'admin, ligne **payée par Stripe** (`ligne.paiement_stripe` non vide) | idem | **comportement actuel gardé (D27)** : **aucun appel à Stripe**. Règlement négatif au moyen Stripe d'origine (`Paiement_stripe.moyen`), **`reference_externe` vide** (le Z le compte « remboursement Stripe à faire à la main », fiche F), et un message prévient l'admin : « Remboursez cette somme depuis votre tableau de bord Stripe. » Pas de champ « Remboursé par » dans ce cas |
 
 Règles :
 
@@ -169,6 +177,10 @@ Règles :
   jetons, points, inconnu), le champ est vide et l'admin doit choisir : le recrédit
   d'une carte reste hors chantier. **Un seul règlement d'argent**, du montant rendu :
   il correspond à un vrai mouvement. Plus de répartition calculée entre plusieurs moyens.
+- **Article entièrement offert** (`part_offerte == total_catalogue` : billet offert en
+  caisse ou dans l'admin, D32) : **pas** de champ « Remboursé par », l'avoir n'écrit qu'un
+  règlement `FREE −X` (trace de l'offert annulé). Sans cette règle, l'admin pourrait
+  écrire « espèces −1500 » pour un billet jamais payé.
 - **Article payé en partie en jetons** (bière 500 = 300 jetons + 200 CB, rendue) :
   l'avoir recopie la **part offerte** en négatif (−300), net −200 ; règlements : CB
   −200 (argent rendu) + FREE −300 (trace de l'offert annulé). Le moyen de trace est
@@ -176,11 +188,9 @@ Règles :
   mouvement de monnaie cadeau à tracer. Les deux égalités tiennent. Pendant la
   transition, l'article est coupé en parts : l'avoir d'une part « jetons » donne
   catalogue −300, offert −300, net 0, un seul règlement FREE −300.
-- **Part offerte d'un avoir partiel** : offert rendu = min(arrondi demi-haut de
-  `part_offerte × quantité rendue / quantité`, offert **restant** de l'article, c'est-à-dire
-  offert d'origine − offert déjà rendu par les avoirs précédents). Le dernier avoir
-  (quantité restante = 0 après lui) prend exactement le reste. Ainsi Σ offert rendu ne
-  dépasse jamais l'offert d'origine (500 = 167 + 167 + 166).
+- Avoir **partiel** (une partie de la quantité) d'un article avec `part_offerte > 0` :
+  **refusé** avec un message clair (« rembourser l'article entier ») — cas de la fiche H,
+  où l'avoir partiel apparaît. Aucun prorata d'offert dans le projet.
 - Remboursement Stripe différent de la somme des articles de l'avoir (frais, arrondi) :
   même règle qu'à l'encaissement (écart d'encaissement, D26).
 - `emettre_avoir` ne sait faire aujourd'hui qu'un avoir de **ligne entière** et refuse
@@ -202,8 +212,8 @@ Fichiers : `tests/pytest/test_en_ligne_ecrit_la_vente.py`,
 | 4b | `test_facture_payee_par_le_solde_client_montant_zero` | `amount_paid = 0` → aucun règlement, écart −catalogue, vente `REGLEE` |
 | 4c | `test_ligne_d_ecart_valid_sans_paiement_stripe` | le paiement passe `VALID` quand ses lignes le sont ; la ligne d'écart n'a pas de `paiement_stripe` |
 | 5 | `test_panier_billets_booking_adhesion_une_seule_vente` | 1 vente, 1 règlement, `Commande.vente` |
-| 6 | `test_session_expiree_vente_annulee_sans_numero` | la vente passe `ANNULEE` par `expire_paiement_stripe` |
-| 7 | `test_paiement_apres_expiration_rouvre_et_encaisse` | `EXPIRE → PAID` → `REGLEE`, numéroté |
+| 6 | `test_stripe_canceled_vente_annulee_sans_numero` | `PENDING → CANCELED` → `ANNULEE` par `expire_paiement_stripe` |
+| 7 | `test_session_expiree_reste_en_attente_puis_encaissee` | `PENDING → EXPIRE` : vente toujours `EN_ATTENTE`, sans numéro ; `EXPIRE → PAID` → `REGLEE`, numérotée |
 | 8 | `test_montant_stripe_superieur_ecart_d_encaissement_758` | article « reçu en plus » +x, hors CA, alerte journalisée, vente `REGLEE` |
 | 9 | `test_montant_stripe_inferieur_ecart_negatif_658` | article « reçu en moins », quantité −1 |
 | 10 | `test_abonnement_quantite_2_prix_unitaire` | `amount` unitaire, total = facture ; encaissée par la branche `INVOICE` |
@@ -212,29 +222,44 @@ Fichiers : `tests/pytest/test_en_ligne_ecrit_la_vente.py`,
 | 13 | `test_adhesion_gratuite_api_montant_non_nul_offerte` | part offerte totale + FREE |
 | 14 | `test_reservation_gratuite_api_v2_meme_vente_que_ticket_creator` | |
 | 15 | `test_api_v2_quantite_texte_castee_en_entier` | `"2"` → 2 ; `"2.5"` → refus |
-| 16 | `test_recharge_api_v2_echec_puis_nouvel_essai_une_vente` | `ANNULEE` puis rouverte, `REGLEE` ; idempotence par `Vente.idempotency_key` |
+| 16 | `test_recharge_api_v2_echec_puis_nouvel_essai_une_vente` | reste `EN_ATTENTE` à l'échec, `REGLEE` au nouvel essai, une seule vente ; idempotence par `Vente.idempotency_key` |
 | 17 | `test_remboursement_stripe_partiel_avoir_montant_du_refund` | `AVOIR` liée, qty négative, règlement = refund, `reference_externe` |
 | 18 | `test_avoir_admin_rembourse_par_especes_un_seul_reglement` | moyen choisi ≠ moyen d'origine accepté |
-| 18b | `test_avoir_admin_ligne_stripe_n_appelle_pas_stripe_et_previent_l_admin` | `stripe.Refund.create` **jamais** appelé ; règlement négatif au moyen Stripe d'origine ; message « Remboursez… depuis Stripe » |
+| 18b | `test_avoir_admin_ligne_stripe_n_appelle_pas_stripe_et_previent_l_admin` | `stripe.Refund.create` **jamais** appelé ; règlement négatif au moyen Stripe d'origine, `reference_externe` vide ; message « Remboursez… depuis Stripe » |
+| 18c | `test_avoir_billet_entierement_offert_un_seul_reglement_free` | billet offert 1500 (admin, D32) annulé par l'admin → un règlement `FREE −1500`, pas de champ « Remboursé par », aucun règlement d'argent |
 | 19 | `test_avoir_article_en_partie_en_jetons` | −300 offert, CB −200, FREE −300 ; égalités tenues |
-| 19b | `test_avoirs_partiels_successifs_offert_jamais_depasse` | offert 500 sur 3 unités, trois avoirs d'une unité → 167, 167, 166 |
 | 20 | `test_annulation_adhesion_avoir_lie` | |
 | 21 | `test_avoir_booking_pose_la_fk_booking` | |
 
-Vus rouges : tous (aucune vente) sauf 15 (comportement actuel à observer). Le 18b est
-rouge sur le code actuel pour le règlement et le message (pas pour l'absence d'appel Stripe, déjà vraie).
+Chaque test qui encaisse finit par `verifier_egalites(vente)` (fiche A). Vus rouges :
+tous (aucune vente) sauf 15 (comportement actuel à observer). Le 18b est rouge sur le
+code actuel pour le règlement et le message (pas pour l'absence d'appel Stripe, déjà
+vraie).
 
 Mutations : encaisser à la création du checkout (1) ; montant = Σ articles au lieu de
 `montant_encaisse` (8) ; retirer l'idempotence (3, 4) ; test « déjà `REGLEE` » déplacé
 après `ajouter_reglement` (3) ; règlement de 0 écrit (4b) ; ligne d'écart avec
-`paiement_stripe` et statut `PAID` (4c) ; prorata sans plafond « offert restant » (19b) ;
-`emettre_avoir` qui appelle Stripe (18b) ; une vente par producteur (5) ;
-ne pas rouvrir une vente annulée (7) ; `amount` = total de la ligne Stripe (10) ;
-encaisser avant le déclencheur Fedow (12) ; règlement de l'avoir au moyen d'origine
-forcé (18) ; part offerte non recopiée (19).
+`paiement_stripe` et statut `PAID` (4c) ; `emettre_avoir` qui appelle Stripe (18b) ;
+champ « Remboursé par » offert pour un article entièrement offert (18c) ; une vente par
+producteur (5) ; annuler la vente sur `EXPIRE` (7) ; `amount` = total de la ligne Stripe
+(10) ; encaisser avant le déclencheur Fedow (12) ; règlement de l'avoir au moyen
+d'origine forcé (18) ; part offerte non recopiée (19).
 
 CHANGELOG : `CHANGELOG/2026-MM-JJ-montants-entiers-D-en-ligne-avoirs.md` (chaînes i18n :
 « Remboursé par », « Écart d'encaissement », messages d'alerte).
+
+## 6. Tests existants à réécrire
+
+D30, D31 et D32 changent trois comportements ; leurs tests actuels changent dans la
+même session, raison au CHANGELOG. Vérifier au démarrage :
+`rg -ln "with_credit_note|cancel_and_refund|_creer_avoir|emettre_avoir|offert" tests/`.
+
+| Cause | Fichiers |
+|---|---|
+| D30 : un seul avoir à l'annulation d'adhésion | `tests/e2e/test_admin_cancel_membership.py` et tout test qui compte les avoirs d'une adhésion renouvelée |
+| D31 : annulation utilisateur hors Stripe sans avoir | tests d'annulation de réservation / booking par l'utilisateur qui attendent une ligne `CREDIT_NOTE` |
+| D32 : billet offert admin écrit au prix, part offerte totale | tests qui assertent `amount == 0` sur un billet offert dans l'admin |
+| Tests A′ « peut changer en D » (A′ §4) | modifiés ici |
 
 ## Machine à états — compléments obligatoires
 
@@ -243,9 +268,9 @@ caractérisation de la fiche A′ doivent rester verts pendant cette fiche.
 
 | Trou | À faire dans cette fiche | Test |
 |---|---|---|
-| T4 | **Aucune exception ne sort du `pre_save`** de `Paiement_stripe` : `encaisser_vente_stripe` est enveloppée dans `try / except`, `logger.error` (Sentry), vente laissée `EN_ATTENTE`. Sinon le client est payé, ses billets partent, mais le paiement reste `PENDING` et Stripe rejoue tout. Une commande `manage.py encaisser_ventes_stripe_en_attente` (et l'action admin « À vérifier », fiche G) rejoue l'encaissement. | `test_erreur_d_encaissement_ne_bloque_pas_le_paiement`, `test_commande_rejoue_l_encaissement_en_attente` |
+| T4 | **Aucune exception ne sort du `pre_save`** de `Paiement_stripe` : `encaisser_vente_stripe` est enveloppée dans `try / except`, `logger.error` (Sentry), vente laissée `EN_ATTENTE`. Sinon le client est payé, ses billets partent, mais le paiement reste `PENDING` et Stripe rejoue tout. **Rejeu** = `paiement_stripe.save()` : la transition `PAID → PAID` rappelle `set_ligne_article_paid`, donc l'encaissement. L'action admin « Rejouer l'encaissement » du filtre « À vérifier » (fiche G) ne fait que ça ; aucune commande. | `test_erreur_d_encaissement_ne_bloque_pas_le_paiement`, `test_save_du_paiement_rejoue_l_encaissement` |
 | T5 | SEPA refusé (`async_payment_failed`, `ApiBillet/views.py` ~l.1312) : aucune transition n'est appelée → `annuler_vente(paiement.vente)` **explicite** dans cette branche. | `test_sepa_refuse_vente_annulee` |
-| T6 | D16 précisé : `EN_ATTENTE` = paiement pas encore constaté, **abandon compris** ; `ANNULEE` seulement quand Stripe l'a dit (session relue après expiration, SEPA refusé). Un panier abandonné reste `EN_ATTENTE` sans numéro : aucun effet comptable. Traiter `checkout.session.expired` = nouveau comportement, hors chantier. | `test_panier_abandonne_reste_en_attente_sans_numero` |
+| T6 | D16 précisé : `EN_ATTENTE` = paiement pas encore constaté, **abandon et `EXPIRE` compris** ; `ANNULEE` seulement quand Stripe a dit non (`CANCELED`, SEPA refusé), sans retour arrière. Un panier abandonné reste `EN_ATTENTE` sans numéro : aucun effet comptable. Traiter `checkout.session.expired` = nouveau comportement, hors chantier. | `test_panier_abandonne_reste_en_attente_sans_numero` |
 | T7 | **Tranché (D30)** : l'annulation d'adhésion fait **un seul avoir, pour le dernier paiement** (la période en cours), pas pour les renouvellements passés. Le test de caractérisation `…avoirs_de_tous_les_renouvellements` (A′) est modifié **ici**. | `test_annulation_adhesion_avoir_seulement_sur_le_dernier_paiement` |
 | T8 | **Tranché (D27)** : comportement actuel gardé pour les deux écrans (avoir admin, annulation d'adhésion) : aucun appel à Stripe, l'admin est prévenu. Les 2 tests A′ « n'appelle pas Stripe » restent verts **sans modification**. | A′ |
 | T9 | **Tranché (D31)** : annulation par l'utilisateur d'un achat hors Stripe → **aucun avoir, aucun remboursement**. Le test A′ `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` est modifié **ici**. | `test_annulation_utilisateur_hors_stripe_aucun_avoir_aucune_vente` |

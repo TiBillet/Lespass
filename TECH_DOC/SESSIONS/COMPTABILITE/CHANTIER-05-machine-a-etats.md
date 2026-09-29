@@ -32,9 +32,15 @@ Les numéros de ligne sont ceux du code au 2026-09-28 (`~l.` = à ±5 lignes pr�
    statut. **Mais six effets les lisent** (SEPA, anti-rejeu QR, envoi et remboursement
    vers l'ancien LaBoutik, TVA par défaut, idempotence caisse et API v2, copies dans les
    avoirs) : c'est là que la fiche H casse quelque chose (§3, §5).
-4. **Une seule vraie modification de la logique métier est prévue** : D27 (un avoir
-   fait dans l'admin sur un achat Stripe déclenche un vrai remboursement Stripe).
-   Aujourd'hui, aucun avoir de l'admin n'appelle Stripe (§5, T8).
+4. **Quatre changements voulus de la logique métier**, tous en fiche D : D30
+   (annulation d'adhésion : un seul avoir, pour le dernier paiement), D31 (annulation
+   par l'utilisateur d'un achat hors Stripe : aucun avoir), D32 (billet offert dans
+   l'admin écrit au prix, part offerte totale), et la FK `booking` posée sur l'avoir
+   d'un booking. **Aucun appel Stripe nouveau** : D27 garde le comportement actuel
+   (aucun avoir de l'admin n'appelle Stripe, §5 T8) ; le règlement Stripe négatif est
+   écrit sans `reference_externe` et le Z le compte « à faire à la main ». En G,
+   `total_paid()` sur `total_ttc` retire l'avoir d'argent d'un billet entièrement
+   offert (décidé le 2026-09-29).
 5. Les fiches B, C, D **ajoutent** des écritures (Vente, Reglement) sans toucher aux
    statuts : c'est vrai **si** le point d'encaissement Stripe ne lève jamais d'exception
    dans le `pre_save` (§5, T4).
@@ -221,7 +227,7 @@ Légende impact : **=** rien ne change ; **✎** à adapter (prévu par la fiche
 | E3 | aiguillage des déclencheurs | `triggers.py` l.169-193 | `pricesold.productsold.categorie_article` | = | = | = |
 | E4 | `trigger_A` + `update_membership_state…` | `triggers.py` l.20-140, l.255-325 | `membership`, `paiement_stripe`, **`pricesold.prix`** (devient `contribution_value`), `pk` | = | = | = (une ligne par adhésion : déjà le cas en ligne) |
 | E5 | `trigger_B` / `trigger_C` | l.203-240 | `booking`, `pk` | = | = | = |
-| E6 | `send_sale_to_laboutik` + `LigneArticleSerializer` | `tasks.py` l.1029-1127 ; `ApiBillet/serializers.py` l.1296-1315 | `uuid`, `pricesold`, `qty`, `vat`, `datetime`, **`payment_method`**, `amount`, `metadata`, **`asset`**, **`wallet`**, `status`, `sended_to_laboutik` | = | ✎ « un envoi par règlement » **⚠ T10** | champs retirés : ✎ via G |
+| E6 | `send_sale_to_laboutik` + `LigneArticleSerializer` | `tasks.py` l.1029-1127 ; `ApiBillet/serializers.py` l.1296-1315 | `uuid`, `pricesold`, `qty`, `vat`, `datetime`, **`payment_method`**, `amount`, `metadata`, **`asset`**, **`wallet`**, `status`, `sended_to_laboutik` | = | ✎ moyen, `asset`, `wallet` lus dans le règlement, un envoi par ligne (T10) | champs retirés : ✎ via G |
 | E7 | `send_refund_to_laboutik` (même sérialiseur) | `tasks.py` l.945-1025 ; déclenché par `O → R` et `O → N` | idem E6 | = | **⚠ non traité** | **⚠ T3** : le sérialiseur plante (champ absent) dans la tâche Celery, en silence |
 | E8 | récompense Fedow d'adhésion | `tasks.py` l.1867-1943 | `pricesold.price`, `membership`, `paiement_stripe`, **`metadata.fedow_reward`** (anti-doublon **par ligne**) | = | = | = (caisse : jamais déclenché) |
 | E9 | remboursement Stripe | `PaiementStripe/utils.py` l.9-114 | `amount`, `qty`, `to_refund_qty`, `total()`, `status`, `pricesold`, `vat`, `reservation`, `booking`, `membership`, **`payment_method`, `asset`, `wallet`** (copiés), `metadata` | D : + vente `AVOIR` | = | **⚠ T20** : copies à retirer ; `amount × qty` (montant envoyé à Stripe) visé par le test de garde H#10 **⚠ T22** |
@@ -232,7 +238,7 @@ Légende impact : **=** rien ne change ; **✎** à adapter (prévu par la fiche
 | E14 | `_lignes_hors_stripe` + `_creer_avoir` (réservation) | `models.py` l.2937-2997 | `paiement_stripe`, `status`, `pricesold`, `qty`, `credit_notes`, `amount`, `vat`, `reservation`, `membership`, **`payment_method`, `asset`, `wallet`**, `metadata` | D : + vente `AVOIR` | = | une ligne au lieu de N parts : avoir d'un billet caisse = **article entier** (aujourd'hui : la part qui porte la FK) — changement voulu, à écrire au CHANGELOG ; copies **⚠ T20** |
 | E15 | avoir booking | `booking/models.py` l.592-643 | idem + garde **`amount > 0`** | D ✎ (+ FK booking) | = | **⚠ T20** |
 | E16 | annulation d'adhésion | `views.py` l.4595-4687 | `membership`, `status`, `credit_notes`, `qty`, `amount`, `vat`, `paiement_stripe`, **`payment_method`, `asset`, `wallet`** | D ✎ **⚠ T7, T8** | = | **⚠ T20** ; caisse : la FK n'est que sur une part, H corrige (avoir de l'article entier) |
-| E17 | `emettre_avoir` | `admin_tenant.py` l.2059-2105 | `status`, `credit_notes`, `qty`, `amount`, `vat`, `paiement_stripe`, `membership`, **`payment_method`, `asset`, `wallet`** | D ✎ (Stripe : « à confirmer ») **⚠ T8** | G : avoir partiel | **⚠ T20** |
+| E17 | `emettre_avoir` | `admin_tenant.py` l.2059-2105 | `status`, `credit_notes`, `qty`, `amount`, `vat`, `paiement_stripe`, `membership`, **`payment_method`, `asset`, `wallet`** | D ✎ (Stripe : pas d’appel, D27) | G : avoir partiel | **⚠ T20** |
 | E18 | SEPA : pose du moyen | `models.py` l.3557, l.3577 | **écrit** `payment_method = SP` | D lit ce moyen pour `Reglement.moyen` | = | **⚠ T1** : champ retiré |
 | E19 | SEPA : e-mail « en attente » | `ApiBillet/views.py` l.1228-1244 | **`première ligne.payment_method`**, `membership` | = | = | **⚠ T1** : l'e-mail ne part plus |
 | E20 | SEPA refusé | `ApiBillet/views.py` l.1311-1313 | `.update(status=FAILED)` | **⚠ T5** : vente jamais annulée | = | = |
@@ -250,8 +256,8 @@ Légende impact : **=** rien ne change ; **✎** à adapter (prévu par la fiche
 Tous les déclencheurs (E4-E8) ne concernent que des lignes **en ligne ou admin**, qui ne
 sont jamais coupées en parts. Les lignes coupées (caisse, tireuse, QR/NFC) sont créées
 `VALID` et ne déclenchent rien, **sauf** l'envoi QR/NFC à l'ancien LaBoutik (un envoi par
-part aujourd'hui, `views.py` l.2053, l.2324) : G le remplace par un envoi par règlement,
-ce qui garde deux envois pour deux monnaies. La fusion de H change donc **uniquement**
+part aujourd'hui, `views.py` l.2053, l.2324) : G lit le moyen dans le règlement (T10),
+toujours un envoi par ligne, donc deux envois pour deux monnaies. La fusion de H change donc **uniquement**
 des montants d'avoirs et de factures caisse (E14, E16, E25 : aujourd'hui calculés sur la
 part qui porte la FK — c'est un bug actuel que H corrige).
 
@@ -285,8 +291,8 @@ la vente est pourtant `REGLEE` (l'argent est reçu). Écart normal, à documente
 | Étape | Objets existants | Vente attendue |
 |---|---|---|
 | Checkout `complete`, `unpaid` | `Pmt → W` ; `Ligne.payment_method → SP` (update) ; `Adh AV → PP` (si validation manuelle) ; webhook : e-mail « SEPA en attente » (lu sur `payment_method` de la 1ʳᵉ ligne) | `EN_ATT` |
-| Relecture après `expires_at` (24 h) mais avant le prélèvement | `Pmt W → E` (`update_checkout_status` l.3582-3586) | `ANNUL` (par `expire_paiement_stripe`) — **alors que le prélèvement est toujours en cours** |
-| `async_payment_succeeded` | `Pmt W → P` (ou `E → P`) → comme P2 | `REGLEE` (rouverte si `ANNUL`), règlement **`SP`** |
+| Relecture après `expires_at` (24 h) mais avant le prélèvement | `Pmt W → E` (`update_checkout_status` l.3582-3586) | `EN_ATT`, inchangée (`EXPIRE` n'annule pas la vente : le prélèvement est toujours en cours) |
+| `async_payment_succeeded` | `Pmt W → P` (ou `E → P`) → comme P2 | `REGLEE`, règlement **`SP`** (moyen lu dans `Paiement_stripe.moyen`) |
 | `async_payment_failed` | `Pmt → F` (**aucune transition**) ; `Ligne → D` (update) ; `Adh PP → AV` ; e-mail « paiement refusé » | **non décrit** (T5) : doit être `ANNUL`. Sinon `EN_ATT` pour toujours |
 
 ### P4 — Session expirée, puis paiement tardif
@@ -294,8 +300,9 @@ la vente est pourtant `REGLEE` (l'argent est reçu). Écart normal, à documente
 `EXPIRE` n'est posé **que** si quelqu'un relit la session après `expires_at` (retour
 navigateur, rejeu). Aucun webhook `checkout.session.expired` n'est traité. Un panier
 abandonné garde donc `Pmt W` et sa vente `EN_ATT` **indéfiniment** (T6).
-Si `Pmt W → E` : vente `ANNUL`. `E → P` (cas réel : SEPA de P3) : vente rouverte puis
-`REGLEE`, numéro pris **à ce moment** (plus grand que des ventes faites entre-temps : normal).
+Si `Pmt W → E` : vente inchangée, `EN_ATT`. `E → P` (cas réel : SEPA de P3) : `REGLEE`,
+numéro pris **à ce moment** (plus grand que des ventes faites entre-temps : normal).
+`ANNUL` seulement sur `Pmt W → C` (`CANCELED`) et SEPA refusé, sans retour arrière.
 
 ### P5 — Remboursement Stripe total ou partiel (annulation par l'utilisateur ou l'admin)
 
@@ -307,23 +314,27 @@ Si `Pmt W → E` : vente `ANNUL`. `E → P` (cas réel : SEPA de P3) : vente rou
 ### P6 — Annulation de réservation payée hors Stripe (admin espèces, caisse, API « ailleurs »)
 
 `_creer_avoir` : `Ligne O → N` [`send_refund_to_laboutik`] ; billets `R` ; `Resa → C`.
-Vente : `AVOIR` liée, règlement « Remboursé par » (D27). **Trous** : parcours lancé par
-l'utilisateur lui-même (aucun écran pour choisir le moyen, T9) ; réservation dont les
-lignes viennent de plusieurs ventes (T7). Réservation vendue en caisse et payée en
-cascade : aujourd'hui l'avoir porte sur la **part** qui a la FK (quantité fractionnaire) ;
-après H, sur l'article entier.
+**Par l'admin** : vente `AVOIR` liée, règlement « Remboursé par » (D27) ; billet
+entièrement offert (D32) : un seul règlement `FREE −X`, pas de champ. **Par
+l'utilisateur** (D31) : réservation et billets `CANCELED`, **aucun avoir, aucune vente**
+(`cancel_and_refund_resa` reçoit `moyen_rembourse=None`). Réservation vendue en caisse
+et payée en cascade : aujourd'hui l'avoir porte sur la **part** qui a la FK (quantité
+fractionnaire) ; après H, sur l'article entier.
 
 ### P7 — Annulation d'adhésion (admin)
 
-`Adh → AC` ; résiliation Stripe éventuelle ; avoirs **de toutes les lignes payées** de
-l'adhésion (achat initial + chaque renouvellement) `O → N`. Vente : une `AVOIR` **par
-vente d'origine** (T7). Ligne payée par Stripe : aujourd'hui aucun remboursement (T8).
+`Adh → AC` ; résiliation Stripe éventuelle ; **aujourd'hui** avoirs de toutes les lignes
+payées (achat + renouvellements) `O → N` ; **après D (D30)** : un seul avoir, pour le
+**dernier paiement**. Vente : une `AVOIR` liée à la vente d'origine de ce paiement. Ligne
+hors Stripe : « Remboursé par » ; ligne Stripe (D27) : aucun appel Stripe, règlement
+Stripe négatif sans `reference_externe`, message à l'admin.
 
 ### P8 — Avoir émis dans l'admin
 
 `Ligne O → N` [`send_refund_to_laboutik`] ; aucun autre statut ne bouge (le paiement
-Stripe non plus). Vente `AVOIR` liée ; hors Stripe : « Remboursé par » ; payée par Stripe :
-décision en attente (D §4, T8).
+Stripe non plus). Vente `AVOIR` liée ; hors Stripe : « Remboursé par » ; payée par Stripe
+(D27) : aucun appel Stripe, règlement Stripe négatif sans `reference_externe` (Z : « à
+faire à la main »), message à l'admin ; article entièrement offert : `FREE −X` seul.
 
 ### P9 — Vente en caisse (espèces, CB, NFC, complément, 2ᵉ carte, recharge, consigne)
 
@@ -358,9 +369,9 @@ de clôture actuel** (T11). Une commande annulée n'a jamais eu de vente : rien 
 | Étape | Ligne | Vente |
 |---|---|---|
 | 1ʳᵉ requête | `O` (409 pour une requête concurrente) | `EN_ATT` |
-| Fedow en erreur | `O → D` (update) | `ANNUL` |
-| Nouvel essai, même clé | `D → O` (update), Fedow | rouverte `EN_ATT` (fiche A autorise ce cas) |
-| Succès | `O → V` (update) | `REGLEE`, règlement `FREE`, article offert `CADEAU` |
+| Fedow en erreur | `O → D` (update) | `EN_ATT`, inchangée (sans numéro, sans effet) |
+| Nouvel essai, même clé | `D → O` (update), Fedow | `EN_ATT`, inchangée |
+| Succès | `O → V` (update) | `REGLEE`, règlement `FREE`, article offert `OFFRIR` |
 | Rejeu après succès | 208 rebâti depuis la ligne (`metadata`, `asset`) | inchangée |
 | Processus tué entre `O` et Fedow | `O` pour toujours (409 à chaque rejeu) | `EN_ATT` pour toujours (comportement actuel conservé) |
 
@@ -399,24 +410,28 @@ webhook : contribution `paid`, `Ligne P → V`, `Pmt → V`, e-mail. Vente `REGL
 
 ## 5. Trous de la spec (état des fiches au 2026-09-28)
 
+> **Décisions du mainteneur (2026-09-28)** : T7 → D30, T8 → D27 (pas d'appel Stripe), T9 → D31,
+> T11 → D29, T12 → D32, T13 → D33 (autre chantier). Elles priment sur les « corrections
+> proposées » ci-dessous. Les fiches font foi.
+
 Déjà traités par les fiches au moment de la lecture (non repris ici) : rejeu `PAID → PAID`
 qui doublerait le règlement (D §2.2 : garde `REGLEE` d'abord) ; ligne d'écart sans
 `paiement_stripe` ; réouverture de la recharge API v2 (A §3) ; producteurs qui gardent leur
 transition (A §3) ; envoi QR à deux monnaies (G) ; avoir admin d'une ligne Stripe
-signalé « à confirmer » (D §4).
+tranché : D27, pas d’appel Stripe (D §4).
 
 | # | Gravité | Trou | Correction proposée |
 |---|---|---|---|
 | T1 | **BLOQUANT** (H) | **SEPA** : le moyen `SP` n'existe **que** sur `LigneArticle.payment_method` (écrit `models.py` l.3557, l.3577 ; lu par le webhook l.1230 pour l'e-mail « SEPA en attente » ; lu par D §2.2 pour `Reglement.moyen`). H retire le champ sans le déplacer : e-mail SEPA plus jamais envoyé, règlement classé `SN` au lieu de `SP` (mauvais compte en E). | Ajouter en A un champ `Paiement_stripe.moyen` (`SN`/`SP`/`SR`), posé par `update_checkout_status` et `new_entry_from_stripe_subscription_invoice` ; le webhook et `encaisser_vente_stripe` le lisent. Test : `test_sepa_en_attente_envoie_le_mail_sans_payment_method_sur_la_ligne`. |
 | T2 | **BLOQUANT** (H) | **Anti-rejeu QR/NFC** : trois requêtes filtrent sur `payment_method = QRCODE_MA` (`validators.py` l.1381, `views.py` l.1940, l.2230). H ne les liste pas dans « À adapter » : `FieldError`, plus aucun paiement QR/NFC. | Filtrer sur `sale_origin = QRCODE_MA` (posé à la demande, `views.py` l.1884, et gardé en H par R4) ou sur la catégorie produit `Q`. À écrire dans H §3 et C. |
 | T3 | **BLOQUANT** (H) | **Remboursements vers l'ancien LaBoutik** : `send_refund_to_laboutik` (déclenché par chaque avoir et remboursement, `signals.py` l.144-160) utilise `LigneArticleSerializer`, qui liste `payment_method`, `asset`, `wallet`. G ne réécrit que l'envoi des ventes. Après H : exception dans la tâche Celery, ancien LaBoutik jamais prévenu, sans erreur visible. | G : même forme que l'envoi des ventes (moyen lu dans le règlement de la vente `AVOIR`). Test : `test_envoi_remboursement_ancien_laboutik_charge_utile_inchangee`. |
-| T4 | IMPORTANT (D) | **Erreur dans le point d'encaissement Stripe** : `encaisser_vente_stripe` tourne **dans le `pre_save`** de `Paiement_stripe`, en autocommit, **après** que les lignes, réservations, billets, e-mails (`.delay` immédiats) et parfois `Commande PAID` (sauvegarde imbriquée, §2.2) sont déjà écrits. D §2.2 prévoit « lever une erreur explicite » si le montant manque ; une `EgaliteDeVenteRompue` ou une erreur de verrou ferait pareil. Résultat : le client a payé, ses billets partent, mais le paiement reste `PENDING` ; le webhook reçoit une 500, Stripe rejoue, `reservation_paid` et les tâches repartent. | Ne **jamais** laisser sortir une exception du `pre_save` : `try/except` autour de `encaisser_vente_stripe`, `logger.error` (Sentry), vente laissée `EN_ATTENTE` ; une commande `encaisser_ventes_stripe_en_attente` (ou action admin) rejoue l'encaissement. Test : `test_erreur_d_encaissement_ne_bloque_pas_le_paiement`. |
+| T4 | IMPORTANT (D) | **Erreur dans le point d'encaissement Stripe** : `encaisser_vente_stripe` tourne **dans le `pre_save`** de `Paiement_stripe`, en autocommit, **après** que les lignes, réservations, billets, e-mails (`.delay` immédiats) et parfois `Commande PAID` (sauvegarde imbriquée, §2.2) sont déjà écrits. D §2.2 prévoit « lever une erreur explicite » si le montant manque ; une `EgaliteDeVenteRompue` ou une erreur de verrou ferait pareil. Résultat : le client a payé, ses billets partent, mais le paiement reste `PENDING` ; le webhook reçoit une 500, Stripe rejoue, `reservation_paid` et les tâches repartent. | Ne **jamais** laisser sortir une exception du `pre_save` : `try/except` autour de `encaisser_vente_stripe`, `logger.error` (Sentry), vente laissée `EN_ATTENTE` ; le rejeu = `paiement_stripe.save()` (`P → P`), action admin « Rejouer l'encaissement » en fiche G. Test : `test_erreur_d_encaissement_ne_bloque_pas_le_paiement`. |
 | T5 | IMPORTANT (D) | **SEPA refusé** : `async_payment_failed` passe le paiement `FAILED` (aucune transition dans la table, `expire_paiement_stripe` n'est pas appelé) et les lignes `FAILED` par `.update()`. La vente n'est jamais annulée. | Dans la branche `async_payment_failed` (`ApiBillet/views.py` ~l.1312) : `annuler_vente(paiement.vente)` explicite. Test D : `test_sepa_refuse_vente_annulee`. |
-| T6 | IMPORTANT (D) | **Expiration** : D16 promet `ANNULEE` à l'expiration, mais `EXPIRE` n'est posé que si la session est **relue** après `expires_at`. Les paniers abandonnés restent `EN_ATTENTE` pour toujours. Inversement, un SEPA soumis puis relu après 24 h passe `EXPIRE` → vente `ANNULEE` alors que le prélèvement est en cours (elle sera rouverte). | Écrire dans D16 : « `EN_ATTENTE` = paiement pas encore constaté, abandon compris ; `ANNULEE` seulement si Stripe l'a dit ». Aucun numéro n'est consommé, donc pas de conséquence comptable. Option (nouveau comportement, à décider) : traiter `checkout.session.expired`. |
+| T6 | IMPORTANT (D) | **Expiration** : D16 promet `ANNULEE` à l'expiration, mais `EXPIRE` n'est posé que si la session est **relue** après `expires_at`. Les paniers abandonnés restent `EN_ATTENTE` pour toujours. Inversement, un SEPA soumis puis relu après 24 h passe `EXPIRE` → vente `ANNULEE` alors que le prélèvement est en cours (elle sera rouverte). | Écrit dans D16 : « `EN_ATTENTE` = paiement pas encore constaté, abandon et `EXPIRE` compris ; `ANNULEE` seulement sur `CANCELED` / SEPA refusé, sans retour arrière ». Plus de réouverture. Aucun numéro n'est consommé, donc pas de conséquence comptable. Option (nouveau comportement, hors chantier) : traiter `checkout.session.expired`. |
 | T7 | IMPORTANT (D) | **Avoirs sur plusieurs ventes d'origine** : l'annulation d'adhésion crée un avoir pour **chaque** ligne payée (achat + tous les renouvellements, `views.py` l.4595-4602) ; une réservation peut avoir des lignes Stripe et des lignes admin ; `vente_liee` est une seule FK. La spec ne dit pas combien de ventes `AVOIR` écrire. | Règle : **une vente `AVOIR` par vente d'origine**, par action. Test : `test_annulation_adhesion_deux_renouvellements_deux_ventes_avoir`. (Question métier à poser au passage : annuler une adhésion doit-il vraiment « rembourser » les années passées ?) |
 | T8 | IMPORTANT (tronc D27, D) | **Seul vrai changement de logique métier** : aujourd'hui **aucun** avoir de l'admin n'appelle Stripe (`emettre_avoir`, annulation d'adhésion) ; l'avoir recopie le moyen `SN`. D27 prévoit un remboursement Stripe automatique. D §4 le signale pour `emettre_avoir` mais **pas** pour l'annulation d'adhésion (ligne 1 du tableau : « moyen choisi » : on écrirait un remboursement en espèces qui n'a pas eu lieu). | Décision du mainteneur, la même pour les deux écrans : (a) garder le comportement actuel (avoir comptable, pas d'appel Stripe, règlement `SN` négatif marqué « à rembourser à la main ») ou (b) vrai remboursement. Tant que ce n'est pas tranché, le test de caractérisation §6 `test_avoir_admin_sur_ligne_stripe_n_appelle_pas_stripe` fige (a). |
 | T9 | IMPORTANT (D) | **Annulation par l'utilisateur** d'une réservation ou d'un booking payé hors Stripe (`views.py` ~l.1413, ~l.1434 ; `booking/views.py` ~l.839) : aucun écran, donc pas de « Remboursé par » (D27). | Règle par défaut : le moyen d'origine s'il est `CA/CC/CH/TR`, sinon `UNKNOWN` (compte d'attente 471, fiche E) + alerte. Test : `test_annulation_par_l_utilisateur_vente_admin_especes_avoir_especes`. |
-| T10 | IMPORTANT (G) | **Ancien LaBoutik, « un envoi par règlement »** : aujourd'hui une vente en ligne envoie **un message par ligne** billet / adhésion (`trigger_A/B`), avec son `pricesold`, son `amount`, sa `qty` ; les lignes booking et la caisse n'envoient rien ; l'anti-doublon est `LigneArticle.sended_to_laboutik`. Un panier « 2 billets + 1 adhésion » payé par un seul règlement Stripe deviendrait **un** message (quel `pricesold` ?), et les déclencheurs, qui restent par ligne, l'enverraient N fois. | Garder « un envoi par ligne » ; le moyen, l'`asset` et le `wallet` se lisent dans **le** règlement de la vente quand il n'y en a qu'un ; une vente à plusieurs règlements (QR/NFC seulement) envoie un message par règlement, comme les parts d'aujourd'hui. Test G#18 à étendre : panier 2 billets + adhésion → 2 messages, charges identiques à aujourd'hui. |
+| T10 | IMPORTANT (G) | **Ancien LaBoutik, « un envoi par règlement »** : aujourd'hui une vente en ligne envoie **un message par ligne** billet / adhésion (`trigger_A/B`), avec son `pricesold`, son `amount`, sa `qty` ; les lignes booking et la caisse n'envoient rien ; l'anti-doublon est `LigneArticle.sended_to_laboutik`. Un panier « 2 billets + 1 adhésion » payé par un seul règlement Stripe deviendrait **un** message (quel `pricesold` ?), et les déclencheurs, qui restent par ligne, l'enverraient N fois. | Garder « un envoi par ligne » ; le moyen, l'`asset` et le `wallet` se lisent dans **le** règlement de la vente quand il n'y en a qu'un ; une vente à plusieurs règlements (QR/NFC seulement) envoie un message par règlement, comme les parts d'aujourd'hui. Test G#18 étendu : panier 2 billets + adhésion → 3 messages, charges identiques à aujourd'hui. |
 | T11 | IMPORTANT (F/G) | **Clôture et commandes de table** : le bouton de clôture actuel libère les tables et passe les commandes `OPEN` en `CANCEL` (`laboutik/views.py` ~l.2727-2737). G remplace le bouton (« crée la J unique ») et D28 ajoute un filet à 4 h, sans rien dire de cet effet. | Écrire en G : le nouveau bouton garde ces deux effets ; décider si le filet de 4 h les fait aussi (aujourd'hui l'auto-clôture de `laboutik/tasks.py` ne les fait pas). Test de caractérisation §6. |
 | T12 | MINEUR (tronc §2, D) | **Billet offert dans l'admin** : le code écrit `amount = 0` (`admin_tenant.py` ~l.3092-3095). La règle « offert à montant non nul » ne s'applique donc jamais ici ; pour tracer l'offert, il faudrait écrire `amount = prix`, ce qui change les anciens lecteurs (contraire à « aucun ancien lecteur ne change » de D). | Décider : garder 0 (vente gratuite, pas de trace d'offert) ou passer au prix **en H seulement**. |
 | T13 | MINEUR (existant) | **Rejeu `PAID → PAID`** : `set_ligne_article_paid` repasse `PAID` **toute** ligne du paiement non `VALID` (`signals.py` l.42), y compris les lignes négatives `REFUNDED` / `CREDIT_NOTE` qui gardent le même `paiement_stripe` (R5). Arrive si le paiement est resté `PAID` (panier avec don, ou `error_in_mail`) et qu'un avoir admin a été fait. Leur vente `AVOIR` resterait `REGLEE`, leurs statuts diraient `PAID`. | Hors chantier (bug actuel) ; le figer par un test de caractérisation, et le signaler au mainteneur. Correctif simple possible plus tard : `exclude(status__in=[VALID, REFUNDED, CREDIT_NOTE, FAILED])`. |
@@ -471,56 +486,39 @@ compare à un dictionnaire attendu écrit en clair.
 
 **`tests/pytest/test_caracterisation_en_ligne.py`** (Stripe simulé)
 
+**23 tests** : ceux qui portent une des 11 mutations (§6.4), ceux qui doivent changer
+volontairement (fiche A′ §4), et les parcours Stripe P1, P3, P5, P15. Les autres parcours
+sont déjà couverts par `test_commande_service.py`, `test_qrcodescanpay_flux_complet.py`
+et les tests de `controlvanne`.
+
 | Test | Fige |
 |---|---|
 | `test_billets_directs_payes_statuts_et_taches` | P1 : `Pmt V`, lignes `V`, `Resa P`, billets `K`, tâches `send_sale_to_laboutik` ×N lignes, `webhook_reservation`, `ticket_celery_mailer` |
 | `test_panier_mixte_paye_une_seule_fois` | P2 (reprend `test_commande_service.py` l.439) + charges utiles `LigneArticleSerializer` des lignes billet et adhésion (moyen `SN`, `amount`, `qty`) |
-| `test_panier_avec_un_don_reste_paye_et_commande_en_attente` | §2.2 : ligne sans déclencheur → `Pmt P`, `Cmd PENDING` |
-| `test_rejeu_retour_puis_webhook_rien_en_double` | tâches et lignes non doublées (P1, rejeu) |
 | `test_paiement_reste_paye_puis_rejeu_repasse_les_avoirs_en_paye` | T13 : figer le bug actuel (ligne `CREDIT_NOTE` → `P` après `P → P`) |
 | `test_adhesion_en_ligne_payee` | P2 adhésion seule : `Adh A`, `deadline`, `contribution_value = pricesold.prix`, tâches `send_membership_invoice_to_email`, récompense et envoi LaBoutik **on_commit** |
 | `test_sepa_soumis_statuts_et_mail_en_attente` | P3 : `Pmt W`, `Adh PP`, tâche `send_membership_sepa_pending_user` (T1) |
-| `test_sepa_accepte_apres_attente` | P3 : `W → P`, `Adh A`, moyen `SP` dans la charge utile LaBoutik |
 | `test_sepa_refuse_lignes_en_echec_adhesion_rearmee` | P3 : `Pmt F`, lignes `D`, `Adh AV`, tâche `send_payment_refused_user` (T5) |
-| `test_session_relue_apres_expiration_passe_expire` | P4 : `Pmt E`, rien d'autre ne bouge |
-| `test_paiement_apres_expiration_valide_tout` | P4 : `E → P` = même état final que P1 |
-| `test_retour_sans_payer_ne_change_rien` | P4 : `Pmt W`, `Cmd PENDING` |
 | `test_renouvellement_abonnement_iteration_et_statut_auto` | P15 : nouvelle ligne `V`, `Adh O`, `current_iteration + 1`, `last_stripe_invoice` |
-| `test_renouvellement_sur_adhesion_annulee_par_admin_ne_la_reactive_pas` | P15 : garde `ADMIN_CANCELED`, ligne `V` quand même |
-| `test_contribution_crowds_payee` | P17 : contribution `paid`, ligne `V`, `Pmt V`, tâche `email_contribution_paid_user` |
-| `test_booking_paye_passe_paid_by_user` | `trigger_C` |
 
 **`tests/pytest/test_caracterisation_annulations.py`**
 
 | Test | Fige |
 |---|---|
 | `test_annuler_un_billet_stripe_rembourse_un_billet` | P5 : `Refund.create(amount=…)` appelé une fois avec le prix d'**un** billet, `Pmt H`, ligne `R` de qty −1, tâche `send_refund_to_laboutik` et sa charge utile |
-| `test_annuler_toute_la_reservation_stripe_passe_refunded` | P5 : `Pmt R`, `Resa C`, billets `R` |
-| `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` | P6 + T9 : avoir `N`, moyen `CA` dans la charge utile `send_refund_to_laboutik` |
-| `test_annuler_un_billet_caisse_offert_cree_un_avoir` | P6 : billet `FREE` à prix non nul → avoir créé (garde `total_paid`) |
-| `test_annuler_reservation_caisse_payee_en_cascade_avoir_sur_la_part_rattachee` | P6/T14 : **Peut changer en H** (article entier) |
-| `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` | P7/T7 : 1 achat + 2 renouvellements → 3 avoirs, `Adh AC` |
-| `test_annulation_adhesion_payee_stripe_n_appelle_pas_stripe` | P7/T8 : `Refund.create` jamais appelé ; **Peut changer en D** (décision T8) |
-| `test_avoir_admin_sur_ligne_stripe_n_appelle_pas_stripe` | P8/T8 : idem ; **Peut changer en D** |
-| `test_avoir_admin_refuse_un_second_avoir` | garde `credit_notes` |
-| `test_annuler_booking_hors_stripe_avoir_sans_fk_booking` | E15 : avoir créé, `booking` vide ; **Peut changer en D** (FK posée) |
-| `test_annuler_booking_gratuit_ne_cree_pas_d_avoir` | garde `amount > 0` |
+| `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` | P6 : avoir `N`, moyen `CA` dans la charge utile `send_refund_to_laboutik` ; **change en D** (D31) |
+| `test_annuler_un_billet_caisse_offert_cree_un_avoir` | P6 : billet `FREE` à prix non nul → avoir créé (garde `total_paid`) ; **change en G** (`total_paid` sur `total_ttc`, validé le 2026-09-29) |
+| `test_annuler_reservation_caisse_payee_en_cascade_avoir_sur_la_part_rattachee` | P6/T14 : **change en H** (article entier) |
+| `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` | P7 : 1 achat + 2 renouvellements → 3 avoirs, `Adh AC` ; **change en D** (D30) |
+| `test_avoirs_admin_et_annulation_adhesion_n_appellent_pas_stripe` | P7/P8 (T8, D27) : `Refund.create` jamais appelé par `emettre_avoir` ni par `cancel` ; reste vert |
 
 **`tests/pytest/test_caracterisation_admin_api.py`**
 
 | Test | Fige |
 |---|---|
 | `test_adhesion_creee_dans_l_admin_passe_par_trigger_a` | P16 : ligne `V`, `deadline`, tâches (facture, récompense, LaBoutik on_commit, `webhook_membership`) |
-| `test_ajouter_paiement_adhesion_admin` | P16 |
-| `test_adhesion_gratuite_api_montant_non_nul_trigger_a_une_fois` | P16 : `P → P`, facture envoyée **une** fois |
-| `test_billets_vendus_dans_l_admin_offert_montant_zero` | T12 : `amount = 0`, tâches `send_sale_to_laboutik` + `ticket_celery_mailer` ; **Peut changer en H** si T12 tranché ainsi |
-| `test_reservation_api_v2_payee_ailleurs_valide_sans_mail` | §2.3 : `Resa V`, billets `K`, **aucune** tâche de mail |
-| `test_reservation_gratuite_api_v2_lignes_freeres` | P14 |
-| `test_activation_email_evenement_complet_annule_la_reservation_gratuite` | P14/T16 |
-| `test_panier_gratuit_lignes_valides_et_commande_payee` | P14 (reprend `test_commande_service.py` l.351) |
-| `test_booking_gratuit_ligne_valide_sans_trigger_c` | P14 |
+| `test_billets_vendus_dans_l_admin_offert_montant_zero` | P16/T12 : `amount = 0`, tâches `send_sale_to_laboutik` + `ticket_celery_mailer` ; **change en D** (D32) |
 | `test_recharge_api_v2_echec_puis_nouvel_essai_meme_ligne` | P13 : `O → D → O → V`, une seule ligne, rejeu 208 identique |
-| `test_recharge_api_v2_rejeu_en_cours_repond_409` | P13 |
 | `test_decision_stripe_ou_gratuit_billets_et_booking` | T21 : total > 0 → checkout ; total 0 → validation gratuite (TicketCreator et `Booking.to_pay`) |
 
 **`tests/pytest/test_caracterisation_caisse.py`**
@@ -528,11 +526,9 @@ compare à un dictionnaire attendu écrit en clair.
 | Test | Fige |
 |---|---|
 | `test_vente_caisse_adhesion_sans_facture_ni_envoi_laboutik` | P9 : `Adh L`, `deadline`, **aucune** tâche `send_membership_invoice_to_email` / `send_sale_to_laboutik` / récompense |
-| `test_vente_caisse_billets_mail_apres_atomic` | P9 : `Resa V`, billets `K`, `ticket_celery_mailer` + `webhook_reservation` |
-| `test_vente_caisse_stock_decremente_une_fois_par_article` | E27 : cascade 2 parts → un seul `MouvementStock` |
 | `test_rejeu_meme_cle_caisse_rien_en_double` | E23 |
-| `test_paiement_table_libere_la_table` | P12 : `PA`, articles `SERVI`, table `LIBRE` |
-| `test_cloture_annule_les_commandes_ouvertes_et_libere_les_tables` | T11 : `OP → AN`, tables `LIBRE`, `SV` intact ; **Peut changer en G** si le mainteneur le décide |
+| `test_paiement_table_nfc_libere_la_table` | P12, chemin NFC (`_payer_par_nfc` puis `payer_commande` lit le HTML) : `PA`, articles `SERVI`, table `LIBRE` |
+| `test_cloture_annule_les_commandes_ouvertes_et_libere_les_tables` | T11 (D29) : `OP → AN`, tables `LIBRE`, `SV` intact ; reste vert en G |
 
 **QR / NFC et tireuse** : déjà couverts par `tests/pytest/test_qrcodescanpay_flux_complet.py`
 (en cours de modification : chantier 04-F-1) et les tests de `controlvanne`. À compléter,
@@ -545,10 +541,10 @@ et `amount` par part) et `test_qr_echec_fedow_ligne_en_echec_rejeu_refuse` (P10,
 | Fichier | B | C | D | E | F | G | H |
 |---|---|---|---|---|---|---|---|
 | `test_caracterisation_en_ligne.py` | vert, **sans modification** | idem | idem (seule la vente s'ajoute) | idem | idem | idem (charges LaBoutik identiques, T10) | idem (T1 corrigé) |
-| `test_caracterisation_annulations.py` | idem | idem | idem **sauf** les 3 tests « Peut changer en D » | idem | idem | idem | idem **sauf** `…cascade…part_rattachee` |
-| `test_caracterisation_admin_api.py` | idem | idem | idem | idem | idem | idem | idem **sauf** T12 si tranché |
-| `test_caracterisation_caisse.py` | idem | idem | idem | idem | idem | idem **sauf** T11 si tranché | idem |
-| `test_caracterisation_qr.py` | idem | idem (restructuration « réseau d'abord ») | idem | idem | idem | idem (un envoi par règlement = mêmes charges) | idem (T2 corrigé) |
+| `test_caracterisation_annulations.py` | idem | idem | idem **sauf** `…utilisateur…especes…` (D31) et `…tous_les_renouvellements` (D30) | idem | idem | idem **sauf** `…billet_caisse_offert…` (validé) | idem **sauf** `…cascade…part_rattachee` |
+| `test_caracterisation_admin_api.py` | idem | idem | idem **sauf** `…offert_montant_zero` (D32) | idem | idem | idem | idem |
+| `test_caracterisation_caisse.py` | idem | idem | idem | idem | idem | idem (D29 : le bouton garde ses effets) | idem |
+| `test_caracterisation_qr.py` | idem | idem (restructuration « réseau d'abord ») | idem | idem | idem | idem (moyen lu dans le règlement = mêmes charges, T10) | idem (T2 corrigé) |
 
 ### 6.4 Mutations (preuve que les tests voient quelque chose)
 
@@ -560,11 +556,11 @@ et `amount` par part) et `test_qr_echec_fedow_ligne_en_echec_rejeu_refuse` (P10,
 | webhook SEPA : condition `payment_method == SP` inversée | `test_sepa_soumis_statuts_et_mail_en_attente` |
 | `async_payment_failed` : ne plus réarmer les adhésions | `test_sepa_refuse_lignes_en_echec_adhesion_rearmee` |
 | `partial_refund_payment` : `specified_quantity` ignoré | `test_annuler_un_billet_stripe_rembourse_un_billet` |
-| annulation d'adhésion : ne créer que le premier avoir | `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` |
+| annulation d'adhésion : ne créer que le premier avoir | `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` (jusqu'à D ; ensuite le test D30 de la fiche D) |
 | `_creer_ou_renouveler_adhesion` : `status = ONCE` | `test_vente_caisse_adhesion_sans_facture_ni_envoi_laboutik` |
 | clôture : retirer l'annulation des commandes ouvertes | `test_cloture_annule_les_commandes_ouvertes_et_libere_les_tables` |
 | recharge API v2 : créer une nouvelle ligne au lieu de réutiliser la `FAILED` | `test_recharge_api_v2_echec_puis_nouvel_essai_meme_ligne` |
 | `LigneArticleSerializer` : retirer `asset` | `test_qr_deux_monnaies_deux_envois_laboutik_et_deux_mails` |
 
-Effort estimé : **1,5 j** (une session par fichier, sauf QR). À placer dans le SUIVI comme
-fiche « 05-A′ » entre A et B ; chaque test est rejoué en fin de B, C, D, G et H.
+Effort estimé : **1,5 j** (une session par fichier, sauf QR). Fiche « 05-A′ », livrée
+**avant A** ; chaque test est rejoué en fin de chaque session.

@@ -3,8 +3,9 @@
 > **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28)
 > Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — §8
 > Détail complet : [`CHANTIER-05-machine-a-etats.md`](CHANTIER-05-machine-a-etats.md) §6
-> Effort : 1,5 j (une session par fichier, sauf QR) — Dépend de : rien (peut même
-> précéder A). **À livrer avant la fiche B.** Aucun code de production modifié.
+> Effort : 1,5 j (une session par fichier, sauf QR) — Dépend de : rien. **Livrée avant
+> A** (ordre du §6 du tronc), donc avant tout changement de code métier. Aucun code de
+> production modifié.
 
 ## 1. Pourquoi
 
@@ -39,13 +40,17 @@ une fiche = une logique métier changée sans le vouloir.
 
 | Fichier | Parcours | Nombre de tests |
 |---|---|---|
-| `tests/pytest/test_caracterisation_en_ligne.py` | P1-P4, P15, P17, booking payé | 16 |
-| `tests/pytest/test_caracterisation_annulations.py` | P5-P8, booking | 11 |
-| `tests/pytest/test_caracterisation_admin_api.py` | P13, P14, P16, décision Stripe / gratuit | 12 |
-| `tests/pytest/test_caracterisation_caisse.py` | P9, P12, clôture | 6 |
+| `tests/pytest/test_caracterisation_en_ligne.py` | P1-P3, P15 | 7 |
+| `tests/pytest/test_caracterisation_annulations.py` | P5-P8 | 6 |
+| `tests/pytest/test_caracterisation_admin_api.py` | P13, P16, décision Stripe / gratuit | 4 |
+| `tests/pytest/test_caracterisation_caisse.py` | P9, P12, clôture | 4 |
 | `tests/pytest/test_caracterisation_qr.py` | P10 (en complément de `test_qrcodescanpay_flux_complet.py`, après 04-F-1) | 2 |
 
-Liste nominative des tests et ce que chacun fige : annexe §6.2.
+**23 tests** : ceux qui portent une des 11 mutations (annexe §6.4), ceux qui doivent
+changer volontairement (§4), et les parcours Stripe P1, P3, P5, P15. Les autres
+parcours sont déjà couverts par `test_commande_service.py`,
+`test_qrcodescanpay_flux_complet.py` et les tests de `controlvanne`. Liste nominative
+et ce que chacun fige : annexe §6.2.
 
 ## 4. Ceux qui ont le droit de changer
 
@@ -57,7 +62,7 @@ comportement**, dans la même session, avec la raison au CHANGELOG :
 | `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` | D | D30 : un seul avoir, pour le dernier paiement |
 | `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` | D | D31 : plus d'avoir ni de remboursement hors Stripe |
 | `test_billets_vendus_dans_l_admin_offert_montant_zero` | D | D32 : offert écrit comme à la caisse |
-| `test_annuler_booking_hors_stripe_avoir_sans_fk_booking` | D | la FK `booking` est posée |
+| `test_annuler_un_billet_caisse_offert_cree_un_avoir` | G | `total_paid()` lit `total_ttc` : un billet **entièrement offert** n'a rien à rembourser → plus d'avoir d'argent, seule la trace `FREE −X` (validé le 2026-09-29) |
 | `test_annuler_reservation_caisse_payee_en_cascade_avoir_sur_la_part_rattachee` | H | une ligne par article |
 
 Tableau « qui garde quoi vert » : annexe §6.3.

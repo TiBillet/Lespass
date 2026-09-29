@@ -2,8 +2,8 @@
 
 > **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue Fable + Opus, corrigée
 > Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D14, D18 à D20, D24, D27, D28
-> Effort : 5 j (3 sessions : §2, §3, §4, plus les tests existants du §6) — Dépend de : F.
-> **Migrations : oui** (deux FK de clôture déplacées, §2.1, en fichiers séparés).
+> Effort : 4,75 j (3 sessions : §2, §3, §4, plus les tests existants du §6) — Dépend de : F.
+> **Migrations : oui** (`ImpressionLog.cloture` déplacée, §2.1, deux fichiers).
 > À la fin de la fiche, **plus aucun lecteur** ne calcule d'argent depuis `amount`,
 > `qty` ou `payment_method` d'une ligne, et plus aucun code de production n'écrit ni ne
 > lit `laboutik.ClotureCaisse` (seul son admin reste, en lecture, jusqu'à H).
@@ -27,23 +27,23 @@
 | Sortie de caisse (solde) | ~l.3569 | section « caisse espèces » du rapport |
 | Auto-clôture et tâches H/M/A de la caisse | `laboutik/tasks.py` ~l.441-505, ~l.669-800 | retirées au profit de `comptabilite/tasks.py` (filet à l'heure de fermeture + 2 h, D28) |
 | **Garde « correction interdite après clôture »** | `ligne_couverte_par_cloture` (`laboutik/integrity.py` ~l.187), utilisée ~l.4198 et ~l.11061 | une vente est couverte si son `numero` ≤ `numero_derniere_vente` de la dernière J (sinon, après G, plus rien n'alimente la garde et les corrections redeviennent possibles après un Z) |
-| Stock | FK `MouvementStock.cloture` (`inventaire/models.py` ~l.195) | FK déplacée vers `comptabilite.ClotureCaisse` (§2.1). `rattacher_a_cloture` (`inventaire/services.py` ~l.209) n'a **aucun appelant en production** (seul `tests/pytest/test_inventaire.py` ~l.765) : il reste non branché (hors chantier), son test suit la nouvelle FK |
+| Stock | FK `MouvementStock.cloture` (`inventaire/models.py` ~l.195) | **FK morte** : `rattacher_a_cloture` (`inventaire/services.py` ~l.209) n'a **aucun appelant en production** (seul `tests/pytest/test_inventaire.py` ~l.765). **Rien en G** ; la FK, la fonction et son test sont retirés en H avec l'ancienne clôture |
 | Journal d'impression | `ImpressionLog.cloture` (`laboutik/models.py` ~l.1462), lu et écrit par `laboutik/printing/tasks.py` ~l.86-125 (détection du DUPLICATA d'un Z par `cloture__uuid`) | FK déplacée vers `comptabilite.ClotureCaisse` (§2.1) ; la tâche cherche la clôture dans `comptabilite.ClotureCaisse` (sinon `DoesNotExist` avalé : trace LNE perdue en silence) |
 | Tickets X et Z imprimés | `laboutik/printing/formatters.py` (~l.522-620), `escpos_builder.py`, `sunmi_inner.py` | sections « essentiel » du rapport unique |
 | **Archive fiscale LNE** | `laboutik/archivage.py` (~l.135-179) | exporte les **ventes** (en-tête, articles avec `total_ht` / `total_tva` **stockés**, règlements, empreintes) et les clôtures, **toutes origines** |
 | Vérification d'intégrité | `laboutik/management/commands/verify_integrity.py`, `comptabilite/management/commands/verify_clotures.py` (~l.110) | `verifier_chaine_ventes` + chaîne des clôtures ; code de sortie ≠ 0 si anomalie |
 | Admin des clôtures | `Administration/admin/laboutik.py` ~l.1140, `comptabilite/admin.py` ~l.277 | la fiche de clôture unique affiche les sections ; l'ancienne reste consultable jusqu'à H |
 
-### 2.1 Les deux FK de clôture (migrations)
+### 2.1 La FK de clôture des impressions (migrations)
 
-`MouvementStock.cloture` et `ImpressionLog.cloture` pointent vers `laboutik.ClotureCaisse`.
-Après G, plus aucune clôture n'y est créée : elles passent vers
-`comptabilite.ClotureCaisse`. Les valeurs existantes pointent vers d'anciennes clôtures
-(dev uniquement) : on les remet à vide, puis on change la cible. Deux migrations
-**séparées** (PIEGES 9.113 : jamais DDL et DML dans la même) :
+`ImpressionLog.cloture` pointe vers `laboutik.ClotureCaisse`. Après G, plus aucune
+clôture n'y est créée : elle passe vers `comptabilite.ClotureCaisse`. Les valeurs
+existantes pointent vers d'anciennes clôtures (dev uniquement) : on les remet à vide,
+puis on change la cible. Deux migrations **séparées** (PIEGES 9.113 : jamais DDL et
+DML dans la même) :
 
-1. `RunPython` : `cloture = NULL` sur les deux tables (les impressions de Z anciennes
-   perdent leur lien : dev, accepté) ;
+1. `RunPython` : `cloture = NULL` (les impressions de Z anciennes perdent leur lien :
+   dev, accepté) ;
 2. `AlterField` : nouvelle cible `comptabilite.ClotureCaisse` (même `null`, même
    `on_delete`).
 
@@ -69,7 +69,10 @@ Après G, plus aucune clôture n'y est créée : elles passent vers
   **Règlements** (moyen, monnaie, montant, référence), badge « Intégrité OK ».
 - Action : **« Avoir total »** de la vente (reprend `emettre_avoir` de
   `Administration/admin_tenant.py` ~l.2059-2105), avec le champ **« Remboursé par »**
-  (D27, fiche D) ; liens vers la vente liée et vers Stripe. **« Avoir sur un article »**
+  (D27, fiche D ; absent si l'article est entièrement offert) ; liens vers la vente liée
+  et vers Stripe. Action **« Rejouer l'encaissement »** sur une vente Stripe
+  `EN_ATTENTE` du filtre « À vérifier » : un simple `paiement_stripe.save()` (T4, fiche
+  D). **« Avoir sur un article »**
   (quantité partielle) arrive en **H** : avant H, un article payé avec deux moyens est
   coupé en parts à quantité fractionnaire, et « 1 jus sur 3 » n'y a pas de sens.
 - Menu « Ventes & comptabilité » : **Ventes**, puis rapport / clôtures, puis plan
@@ -80,7 +83,7 @@ Après G, plus aucune clôture n'y est créée : elles passent vers
 
 | Lecteur | Fichier | Changement |
 |---|---|---|
-| `Reservation.total_paid()` | `BaseBillet/models.py` ~l.2921 | Σ `total_ttc` |
+| `Reservation.total_paid()` | `BaseBillet/models.py` ~l.2921 | Σ `total_ttc`. Conséquence : un billet **entièrement offert** (FREE à prix non nul, caisse ou admin) n'a plus rien à rembourser → son annulation ne crée plus d'avoir d'argent ; seule la trace `FREE −X` (fiche D) reste. Le test A′ `test_annuler_un_billet_caisse_offert_cree_un_avoir` change **ici** (A′ §4 ; validé le 2026-09-29) |
 | `Paiement_stripe.total()` / `articles()` | ~l.3489, ~l.3509 | Σ `total_ttc` des lignes du paiement (avoirs compris) ; cas `TRANSFERT` gardé. La ligne d'écart d'encaissement n'a pas de `paiement_stripe` (fiche D) : le montant réellement encaissé se lit dans `montant_encaisse` |
 | Fiche utilisateur admin | `Administration/admin_tenant.py` ~l.1176 | Σ `total_ttc` |
 | Totaux booking / panier / gratuit-payant | `booking/models.py` ~l.578-590, `booking/tasks.py` ~l.51, `services_commande.py` ~l.300/321, `validators.py` ~l.290 | Σ `total_ttc` |
@@ -92,7 +95,7 @@ Après G, plus aucune clôture n'y est créée : elles passent vers
 | API v2 | `api_v2/serializers.py` ~l.798 | montants depuis les champs entiers |
 | Crowds (fonds disponibles) | `crowds/views.py` `allocate` ~l.345-357 | seul le calcul de montant change : Σ `total_ttc` (la logique reste, tronc §9) |
 | Données de démo | `laboutik/management/commands/create_test_pos_data.py` ~l.1752 | rapport unique |
-| Envoi vers l'ancien LaBoutik | `ApiBillet/serializers.py` `LigneArticleSerializer` ~l.1296 via `BaseBillet/tasks.py` `send_sale_to_laboutik` ~l.1029 (appelé ~l.2053, ~l.2324 de `BaseBillet/views.py`, `triggers.py` ~l.235, ~l.315, `admin_tenant.py` ~l.3107) | **un envoi par règlement** de la vente (D24) : la tâche reçoit l'uuid du règlement ; `payment_method`, `asset`, `wallet` sont lus dans le règlement, `amount` = montant du règlement, `qty` = 1, `pricesold` et `vat` de l'article. Mêmes champs qu'aujourd'hui. Une vente QR à deux monnaies donne deux envois, comme aujourd'hui (une ligne par monnaie). Cette forme survit à H (retrait de `payment_method`, `asset`, `wallet` de la ligne) |
+| Envoi vers l'ancien LaBoutik | `ApiBillet/serializers.py` `LigneArticleSerializer` ~l.1296 via `BaseBillet/tasks.py` `send_sale_to_laboutik` ~l.1029 (appelé ~l.2053, ~l.2324 de `BaseBillet/views.py`, `triggers.py` ~l.235, ~l.315, `admin_tenant.py` ~l.3107) | **un envoi par ligne, comme aujourd'hui** (`trigger_A/B`, anti-doublon `sended_to_laboutik`, D24) : la tâche reçoit toujours l'uuid de la ligne ; le sérialiseur lit `payment_method`, `asset`, `wallet` dans **le** règlement de la vente quand il n'y en a qu'un ; une vente à plusieurs règlements (QR/NFC seulement) envoie un message par règlement, comme les parts d'aujourd'hui. Mêmes champs, **mêmes charges utiles** qu'aujourd'hui. Cette forme survit à H (retrait de `payment_method`, `asset`, `wallet` de la ligne) — détail T10 ci-dessous |
 
 ## 5. Tests
 
@@ -105,7 +108,7 @@ vérification d'intégrité sur une vente altérée) ; les autres en base partag
 |---|---|---|
 | 1 | `test_bouton_cloturer_cree_la_cloture_unique` | plus de `laboutik.ClotureCaisse` créée |
 | 2 | `test_correction_refusee_apres_la_j_unique` | la garde lit la J unique |
-| 3 | `test_fk_de_cloture_vers_la_cloture_unique` | un `MouvementStock` et un `ImpressionLog` acceptent une `comptabilite.ClotureCaisse` ; le ticket Z réimprimé est marqué DUPLICATA |
+| 3 | `test_fk_de_cloture_vers_la_cloture_unique` | un `ImpressionLog` accepte une `comptabilite.ClotureCaisse` ; le ticket Z réimprimé est marqué DUPLICATA |
 | 4 | `test_archive_lne_tva_stockee_175` | aujourd'hui 174 |
 | 5 | `test_archive_lne_contient_tireuse_et_en_ligne` | |
 | 6 | `test_verify_integrity_detecte_article_modifie` | sortie ≠ 0 |
@@ -114,26 +117,29 @@ vérification d'intégrité sur une vente altérée) ; les autres en base partag
 | 9 | `test_ecran_corriger_moyen_affiche_le_montant_du_reglement` | 5,50 € |
 | 10 | `test_ticket_vente_numero_et_duplicata` | n° de vente imprimé ; réimpression de la **vente** « DUPLICATA » |
 | 11 | `test_reservation_total_paid_1050` | aujourd'hui 1049 |
+| 11b | `test_billet_entierement_offert_total_paid_zero_avoir_free_seul` | billet FREE à 1500 : `total_paid()` = 0 ; annulation → aucun règlement d'argent, un règlement `FREE −1500` |
 | 12 | `test_facture_adhesion_multi_moyens_35_euros` | aujourd'hui 20,00 |
 | 13 | `test_remboursement_stripe_montant_depuis_total_ttc` | |
 | 14 | `test_admin_fiche_vente_articles_et_reglements` | lecture seule |
 | 15 | `test_admin_avoir_total_rembourse_par_especes` | vente CB 1050 → vente `AVOIR` −1050, un règlement espèces −1050 |
 | 16 | `test_admin_filtre_ventes_a_verifier` | |
+| 16b | `test_admin_rejouer_l_encaissement` | vente Stripe `EN_ATTENTE` (paiement `PAID`) → action → `REGLEE`, un règlement |
 | 17 | `test_export_lignes_colonnes_entieres` | |
-| 18 | `test_envoi_ancien_laboutik_charge_utile_inchangee` | **non-régression** : vente à un règlement → même charge utile avant et après |
-| 18b | `test_envoi_ancien_laboutik_un_envoi_par_reglement` | vente QR TLF 300 + FED 200 → deux envois, `asset` et `amount` de chaque règlement |
+| 18 | `test_envoi_ancien_laboutik_charge_utile_inchangee` | **non-régression** : vente à un règlement → même charge utile avant et après ; panier 2 billets + adhésion payé Stripe → **3 messages**, identiques à aujourd'hui |
+| 18b | `test_envoi_ancien_laboutik_vente_qr_deux_monnaies_deux_messages` | vente QR TLF 300 + FED 200 → deux messages, `asset` et `amount` de chaque règlement, comme les parts d'aujourd'hui |
 | 19 | `test_aucun_lecteur_ne_multiplie_amount_par_qty` | garde sur les fichiers des §2-4 |
 | E2E | `test_caisse_liste_et_detail_d_une_vente_nfc_plus_cb` | liste, détail, ticket |
 
 Vus rouges : 2 (garde muette après bascule du bouton), 3 (FK vers l'ancienne table),
-4, 7-9, 11, 12, 14-17, 19 sur le code actuel ; 1, 5, 6, 13, 18b une fois le nouveau
-lecteur branché à vide ; 10 : rouge pour le numéro de vente (la mention DUPLICATA
-existe déjà). 18 : vert avant et après (noté).
+4, 7-9, 11, 11b, 12, 14-17, 16b, 19 sur le code actuel ; 1, 5, 6, 13, 18b une fois le
+nouveau lecteur branché à vide ; 10 : rouge pour le numéro de vente (la mention
+DUPLICATA existe déjà). 18 : vert avant et après (noté).
 
 Mutations : la garde relit l'ancienne clôture (2) ; la tâche d'impression cherche la
 clôture dans `laboutik` (3) ; l'archive recalcule la TVA (4) ; `liste_ventes` groupe
 par `uuid_transaction` (7) ; `total_paid` repasse par `int(amount×qty)` (11) ; compte
-des impressions par `uuid_transaction` de la ligne (10) ; un seul envoi par ligne (18b).
+des impressions par `uuid_transaction` de la ligne (10) ; moyen lu dans la ligne au
+lieu du règlement (18b).
 
 ## 6. Tests existants à réécrire
 
@@ -148,8 +154,8 @@ réécrits. Vérifiés au 2026-09-28 par `rg -l "laboutik\.(reports|tasks|archiv
 | `tests/pytest/test_archivage_fiscal_lne.py`, `test_total_ht_ligne.py` (~l.245) | archive LNE par ventes |
 | `tests/pytest/test_integrity_hmac.py` | `verify_integrity` passe par `verifier_chaine_ventes` ; les tests du HMAC par ligne restent jusqu'à H |
 | `tests/pytest/test_menu_ventes.py` | liste et détail par `Vente` |
-| `tests/pytest/test_inventaire.py` (~l.753-770) | `rattacher_a_cloture` avec une `comptabilite.ClotureCaisse` |
 | `tests/pytest/test_stripe_refund.py`, `test_mail_annulation_booking.py` | `total_paid()` sur `total_ttc` : valeurs attendues à relire (normalement inchangées) |
+| `tests/pytest/test_caracterisation_annulations.py` (A′) | `test_annuler_un_billet_caisse_offert_cree_un_avoir` : plus d'avoir d'argent (A′ §4) |
 
 Chaque réécriture est listée dans le CHANGELOG avec sa raison.
 
@@ -164,6 +170,6 @@ caractérisation de la fiche A′ doivent rester verts pendant cette fiche.
 | Trou | À faire dans cette fiche | Test |
 |---|---|---|
 | T3 | **Remboursements vers l'ancien LaBoutik** : `send_refund_to_laboutik` (déclenché par chaque avoir, `BaseBillet/signals.py` ~l.144-160) utilise `LigneArticleSerializer` (`payment_method`, `asset`, `wallet`). Même traitement que l'envoi des ventes : moyen, `asset`, `wallet` lus dans le règlement de la vente `AVOIR`. | `test_envoi_remboursement_ancien_laboutik_charge_utile_inchangee` |
-| T10 | Ancien LaBoutik : **un envoi par ligne** (comme aujourd'hui, `trigger_A/B`, anti-doublon `sended_to_laboutik`) ; moyen / `asset` / `wallet` lus dans **le** règlement de la vente quand il n'y en a qu'un ; une vente à plusieurs règlements (QR/NFC seulement) envoie un message par règlement, comme les parts d'aujourd'hui. Remplace « un envoi par règlement » partout dans la fiche. | test 18 étendu : panier 2 billets + adhésion → mêmes messages qu'aujourd'hui |
+| T10 | Ancien LaBoutik : **un envoi par ligne** (comme aujourd'hui, `trigger_A/B`, anti-doublon `sended_to_laboutik`) ; moyen / `asset` / `wallet` lus dans **le** règlement de la vente quand il n'y en a qu'un ; une vente à plusieurs règlements (QR/NFC seulement) envoie un message par règlement, comme les parts d'aujourd'hui. Appliqué dans le tableau §4. | tests 18 (panier 2 billets + adhésion → 3 messages identiques) et 18b |
 | T11 | **Tranché (D29)** : le nouveau bouton « Clôturer » **garde** ses deux effets actuels (commandes de table `OPEN` → `CANCEL`, tables libérées, `laboutik/views.py` ~l.2727-2737) ; le Z automatique ne les fait **pas** (comme l'auto-clôture actuelle). | `test_cloture_annule_les_commandes_ouvertes_et_libere_les_tables` (A′) reste vert |
 | T21 | Décisions prises sur `amount × qty` hors du tableau : `Booking.to_pay` (`booking/booking_engine.py` ~l.722), `TicketCreator` (~l.289), montant envoyé à `stripe.Refund` (`PaiementStripe/utils.py` ~l.39-44). Réécrites sur `total_ttc` en gardant **la même décision**. | `test_decision_stripe_ou_gratuit_billets_et_booking` (A′) |

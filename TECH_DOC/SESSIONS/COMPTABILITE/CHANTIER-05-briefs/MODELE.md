@@ -18,6 +18,11 @@ byobu).
 - Skills : `djc` (code FALC, commentaires FR/EN au présent) ; `unfold` si admin ;
   `tibillet-test` pour lancer / diagnostiquer les tests. Lire `tests/PIEGES.md` avant
   d'écrire un test.
+- Les numéros de ligne de la fiche (`~l.`) sont indicatifs : relire le code au
+  démarrage.
+- Avant de rapporter : relancer
+  `make test ARGS="tests/pytest/test_caracterisation_*.py"` — ils doivent rester verts,
+  sauf la liste fermée de la fiche A′ §4 pour la fiche prévue.
 
 ## Périmètre
 - Fichiers que tu as le droit de modifier : <liste exacte>

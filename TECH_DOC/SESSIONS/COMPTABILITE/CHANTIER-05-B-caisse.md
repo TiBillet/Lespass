@@ -4,9 +4,11 @@
 > Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D7 à D14, D17, R3, R6
 > Effort : 4 j (3 sessions : §3, §4, §5) — Dépend de : A. **Migration : oui** (lien
 > `consigne_remboursee` sur `Product`).
-> **Aucun ancien lecteur ne change** : les lignes sont écrites comme aujourd'hui (même
-> `amount`, même `qty`), avec en plus leur vente, leurs règlements et leurs montants
-> entiers. La nouvelle forme poids / tireuse (D15) attend la fiche H (R6).
+> Les lignes sont écrites comme aujourd'hui (même `amount`, même `qty`), avec en plus
+> leur vente, leurs règlements et leurs montants entiers. **Une seule valeur change
+> pour les anciens lecteurs** : la TVA d'une ligne de recharge passe de 20 % (défaut du
+> produit, `_compute_default_vat`) à **0** (§7). La nouvelle forme poids / tireuse (D15)
+> attend la fiche H (R6).
 
 ## 1. Le principe
 
@@ -31,16 +33,16 @@ produit **une `Vente` encaissée**, dans la même transaction de base que les li
 | Débit legacy Fedow (`_debiter_legacy`, `_repartir_legacy_sur_articles` ~l.1385-1430) | **un règlement par transaction legacy** (élément de `transactions_legacy`), montant = `transaction["amount"]`, référence = `transaction["uuid"]`. `_debiter_legacy` ne renvoie aujourd'hui que `(asset, amount, pm)` (~l.1625) : étendre le tuple avec l'uuid |
 | Espèces / CB / chèque (paiement direct ou complément) | un règlement, montant **encaissé** (somme du panier ou `reste_complement`) |
 | Monnaie cadeau (TNF / LG) | un règlement `LG` (offert, D8) + sur la part : `part_offerte` = montant de la part, `source_offert = JETONS` |
-| OFFRIR (FREE, mode gérant) | un règlement `FREE` du total + sur chaque ligne : `part_offerte = total_catalogue`, `source_offert = OFFRIR` |
-| Recharge cadeau (`RC`) | article recharge `hors_chiffre_affaires`, offert en totalité (`CADEAU`, net 0) + règlement `FREE` du total |
+| OFFRIR (FREE, mode gérant) | `ajouter_article(..., offert_en_totalite=True)` : un règlement `FREE` du total + sur chaque ligne : `part_offerte = total_catalogue`, `source_offert = OFFRIR` |
+| Recharge cadeau (`RC`) | article recharge `hors_chiffre_affaires`, offert en totalité (`offert_en_totalite=True`, `OFFRIR`, net 0) + règlement `FREE` du total |
 | Recharge temps (`TM`) | aujourd'hui hors caisse (commentée, ~l.1685) ; si réactivée, même règle que la recharge cadeau |
 | Points (NM) | `Vente.unite` = uuid de la monnaie ; un règlement `NM` par transaction (une par article : ~l.8409-8427) ; TVA 0 |
 
 - `Vente.origine = LABOUTIK`, `point_de_vente`, `operateur` (carte primaire / user),
   `client` et `carte` quand ils sont connus.
-- `Vente.nature` : `RECHARGE` si **tous** les articles sont des recharges, `VENTE` sinon.
-  Les rapports ne lisent jamais `nature` pour savoir si un article est dans le chiffre
-  d'affaires : ils lisent `hors_chiffre_affaires`.
+- `Vente.nature = VENTE`, recharges comprises : une recharge est un article
+  `hors_chiffre_affaires` d'une vente ordinaire. Les rapports lisent ce champ, jamais
+  la nature.
 - `prix_achat` = `Product.prix_achat` (`BaseBillet/models.py` ~l.1452) lu à la vente.
   **Coût sur la quantité réelle** (`quantite_pour_cout`, fiche A) : pour une vente au
   poids / à la mesure, la ligne garde `qty = 1` et le poids dans `weight_quantity`
@@ -70,7 +72,7 @@ la caisse. Un test le vérifie.
 | Recharges (RE, RC) | `_executer_recharges` ~l.6621 (appelée ~l.7433, 7658, 8397, 8875, 9486, 10040) | articles `hors_chiffre_affaires` dans **la même vente** que le reste du panier ; `uuid_transaction` passé (manquait) |
 | Retour de consigne **par carte** | `_rembourser_consigne_par_nfc` ~l.7753 | vente `AVOIR` sans vente liée ; règlement négatif = transaction de recrédit |
 | Retour de consigne **en espèces** | `_payer_en_especes` ~l.7513 (moyens proposés pour un retour : espèces ou carte, `moyens_paiement` ~l.5211-5220 ; panier mélangé refusé, `_panier_est_uniquement_retour_consigne` ~l.2099) | vente `AVOIR` ; règlement espèces négatif |
-| Paiement NFC seul | `_payer_par_nfc` ~l.7902 (appel de la cascade ~l.8457) → `_creer_lignes_articles_cascade` ~l.5559 | règlements par transaction (points, cascade, legacy) ; **la fonction renvoie la vente** (utile aux commandes de table) |
+| Paiement NFC seul | `_payer_par_nfc` ~l.7902 (appel de la cascade ~l.8457) → `_creer_lignes_articles_cascade` ~l.5559 | règlements par transaction (points, cascade, legacy) ; la fonction expose **en plus** la vente (attribut sur la réponse ou tuple) : elle renvoie toujours le HTML que `payer_commande` inspecte (~l.11773) |
 | Complément espèces/CB | `_executer_paiement_complementaire` ~l.9139 (part espèces/CB ~l.9546) | règlements carte 1 + FED partiel + règlement espèces/CB du reste |
 | 2ᵉ carte | ~l.10147 | chaque règlement porte **sa** carte (les lignes gardent `carte=carte1` jusqu'à H) |
 | Adhésion payée à la caisse | ~l.8515-8535 | la FK `membership` **reste sur une seule part** jusqu'à H (la poser sur chaque part relancerait les déclencheurs d'adhésion une fois par ligne) ; la facture lit la vente (fiche G) |
@@ -110,17 +112,18 @@ Tests : §6, lignes 18 à 22.
 Fichier : `tests/pytest/test_caisse_ecrit_la_vente.py` (réutiliser les helpers de
 `tests/pytest/test_paiement_complementaire.py` et des tests de cascade). Chaque test ne
 lit **que sa vente** (retrouvée par `idempotency_key` / `uuid_transaction`) → base
-partagée ; le 23 (anciens rapports) en schéma dédié. Le test transversal rejoue chaque
-scénario et n'asserte que les **totaux de la Vente** et les égalités (§5 du tronc).
+partagée ; le 23 (anciens rapports) en schéma dédié. Chaque test finit par
+`verifier_egalites(vente)` (fiche A) ; pendant la transition, aucun test n'asserte le HT
+d'une part (±1 c, §5 du tronc).
 
 | # | Test | Attendu |
 |---|---|---|
 | 1 | `test_vente_especes_trois_jus_une_vente_un_reglement` | vente numérotée `REGLEE`, 1 règlement espèces 1050, article 1050 / 875 / 175 |
 | 2 | `test_vente_cb_prix_libre` | total catalogue = saisie |
 | 3 | `test_offrir_en_mode_gerant_part_offerte_totale` | net 0, TVA 0, règlement FREE = catalogue |
-| 4 | `test_recharge_seule_nature_recharge_hors_ca_tva_zero` | nature `RECHARGE`, `hors_chiffre_affaires`, `vat` **0** en base |
-| 5 | `test_biere_et_recharge_meme_panier_une_seule_vente` | nature `VENTE`, 2 articles (1 hors CA), 1 règlement ; lignes de recharge avec `uuid_transaction` |
-| 6 | `test_recharge_cadeau_offerte_source_cadeau` | net 0, règlement FREE |
+| 4 | `test_recharge_seule_hors_ca_tva_zero` | nature `VENTE`, article `hors_chiffre_affaires`, `vat` **0** en base |
+| 5 | `test_biere_et_recharge_meme_panier_une_seule_vente` | 2 articles (1 hors CA), 1 règlement ; lignes de recharge avec `uuid_transaction` |
+| 6 | `test_recharge_cadeau_offerte_en_totalite` | net 0, `OFFRIR`, règlement FREE |
 | 7 | `test_retour_consigne_reprend_prix_et_tva_du_gobelet` | gobelet 100 à 20 %, produit retour réglé à 5,5 % → article du retour à 20 %, −100 |
 | 8 | `test_retour_consigne_especes_vente_avoir` | règlement espèces négatif |
 | 9 | `test_nfc_trois_jus_500_le_550_cb_parts_entieres` | l'exemple fil rouge : parts 500 / 550, règlements LE 500 (`fedow_transaction_uuid`) + CB 550 |
@@ -162,9 +165,18 @@ Mutations :
 | correction qui modifie la vente d'origine | 21 |
 | `idempotency_key` non posée | 22 |
 
-E2E : `make e2e` complet (l'écran de la caisse ne change pas). CHANGELOG :
+E2E : `make e2e` complet en fin de fiche (l'écran de la caisse ne change pas). CHANGELOG :
 `CHANGELOG/2026-MM-JJ-montants-entiers-B-caisse.md` (chaînes i18n : champ « Rembourse
 la consigne », message de refus).
+
+## 7. Tests existants à réécrire
+
+| Cause | Fichiers |
+|---|---|
+| TVA des lignes de recharge : 20 % → 0 (ancien Z, archive LNE, FEC caisse) | `rg -ln "RECHARGE_EUROS|RECHARGE_CADEAU|recharge" tests/pytest/` au démarrage de B-1 ; en particulier `test_ventes_remontent_au_ticket_z.py`, `test_archivage_fiscal_lne.py`, `test_hors_argent_offerts.py`, `test_cloture_*.py` : valeurs de TVA attendues à relire |
+| Rejeu d'idempotence : les lignes de recharge portent désormais `uuid_transaction` | tests du rejeu caisse (`rg -ln "_executer_avec_cle_idempotence|uuid_transaction" tests/pytest/`) : la réponse rejouée peut contenir plus de lignes |
+
+Chaque réécriture est listée dans le CHANGELOG avec sa raison.
 
 ## Machine à états — compléments obligatoires
 

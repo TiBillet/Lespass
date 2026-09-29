@@ -2,10 +2,10 @@
 
 > **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue Fable + Opus, corrigée
 > Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D22, D23, D26, R2
-> Effort : 2 j — Dépend de : rien (indépendante de A-D : ses fonctions prennent un point
+> Effort : 1,5 j — Dépend de : rien (indépendante de A-D : ses fonctions prennent un point
 > de vente, une origine, un moyen, une monnaie, une ligne — pas une `Vente`).
-> **Migrations : oui**, en fichiers séparés (§3.2 : trois migrations pour `code_journal`,
-> PIEGES 9.113).
+> **Migrations : oui** (`MappingMonnaie`, `PointDeVente.code_journal` nullable, retrait des
+> deux modèles `comptabilite`), sans `RunPython`.
 
 ## 1. Le besoin (mainteneur)
 
@@ -41,8 +41,7 @@ Trois outils classiques de la comptabilité française suffisent :
 
 | Champ | Sens |
 |---|---|
-| `asset_uuid` | uuid de la monnaie (`fedow_core.Asset`, SHARED_APPS : pas de FK), unique |
-| `nom_de_la_monnaie` | copie lisible |
+| `asset_uuid` | uuid de la monnaie (`fedow_core.Asset`, SHARED_APPS : pas de FK), unique ; le nom se lit dans `Asset` |
 | `compte_de_tresorerie` | FK `CompteComptable` |
 
 `compte_pour_reglement(moyen, asset_uuid)` :
@@ -65,18 +64,14 @@ moment-là.
 
 ### 3.2 Un journal par point de vente
 
-- `PointDeVente.code_journal` : `CharField(max_length=10, unique=True)`, dérivé du nom
-  (majuscules, sans accent, 10 caractères) **avec suffixe numérique en cas de
-  collision** (« BARTERRASS », « BARTERRAS2 ») ; modifiable, validé (lettres, chiffres).
-  Un `AddField` unique avec défaut donnerait la **même** valeur à tous les points de
-  vente existants (collision dès deux PV). Donc trois migrations **séparées**
-  (PIEGES 9.113 : jamais DDL et DML dans la même) :
-  1. ajout du champ `null=True`, sans contrainte ;
-  2. `RunPython` qui remplit chaque PV (nom dérivé + suffixe) ;
-  3. passage à `unique=True`, non nul.
-  Un nouveau PV reçoit son code au `save()`.
-- `journal_pour(point_de_vente, origine)` : le code du point de vente s'il existe,
-  sinon selon l'origine (`SaleOrigin`, `BaseBillet/models.py` ~l.79-88) :
+- `PointDeVente.code_journal` : `CharField(max_length=10, blank=True)`, **une seule
+  migration**, aucune valeur remplie. `journal_pour` prend le code s'il est renseigné,
+  sinon le **dérive du nom** (majuscules, sans accent, 10 caractères). Deux PV qui
+  donnent le même code : signalé par « Plan complet ? » et refus d'export (D23) ;
+  l'admin renseigne alors un code à la main (validé : lettres, chiffres).
+- `journal_pour(point_de_vente, origine)` : le code du point de vente (renseigné ou
+  dérivé) s'il y a un point de vente, sinon selon l'origine (`SaleOrigin`,
+  `BaseBillet/models.py` ~l.79-88) :
 
 | Origine | Journal par défaut |
 |---|---|
@@ -97,15 +92,18 @@ billets, adhésions, crowds, booking et la recharge API v2 n'ont **pas** de
 `categorie_pos`. Règle unique :
 
 1. la catégorie de caisse du produit a un compte → ce compte ;
-2. sinon, le compte du **type de produit** (`Product.categorie_article`), lu dans une
-   nouvelle table `laboutik.MappingTypeDeProduit` (`categorie_article` unique, FK
-   `CompteComptable`), remplie par le chargeur (§3.4) :
+2. sinon, le compte **par défaut du type de produit** (`Product.categorie_article`),
+   donné par une **constante** `COMPTE_PAR_TYPE_DE_PRODUIT` (module du plan comptable,
+   `laboutik/ventilation.py`) : un numéro de compte par type, résolu dans le plan du
+   lieu par `CompteComptable.objects.get(numero=…)`. Pas de table, pas d'admin : un lieu
+   qui veut un autre compte pose une catégorie de caisse sur le produit (mécanisme
+   existant). Numéro absent du plan → erreur D23, signalée par « Plan complet ? » :
 
-| Type de produit (`categorie_article`) | Compte par défaut |
+| Type de produit (`categorie_article`) | Compte par défaut (numéro du chargeur) |
 |---|---|
 | `BILLET` (B), `FREERES` (F), `BADGE` (G), `QRCODE_MA` (Q), `RESOURCE` (C, booking) | 706 prestations |
 | `ADHESION` (A) | 756 cotisations |
-| `DON` (D, prix libre en ligne) | 754 dons (selon le profil) |
+| `DON` (D, prix libre en ligne) | 754 dons |
 | `RECHARGE_CASHLESS` (R), `RECHARGE_CASHLESS_FED` (E) | 4191 avances clients |
 | `FUT` (U), `NONE` (N) | pas de défaut : la catégorie de caisse est exigée |
 
@@ -132,8 +130,10 @@ Le seul chargeur existant est `laboutik/management/commands/charger_plan_comptab
 restent ceux du chargeur. En revanche, des **correspondances changent** :
 `SN` (Stripe carte), `SP` (SEPA) et `SR` (abonnement) pointent aujourd'hui vers le compte
 CB (`51120001`) ou banque (`512000`) (~l.104-105, ~l.127-128) ; ils pointent désormais
-vers **5171 Stripe**. `SF` (monnaie fédérée, aujourd'hui `None`) → 467. Le profil
-`association` reçoit ce qui lui manque : 758, 658, 471, 467, 5171. Natures à couvrir
+vers **5171 Stripe**. `SF` (monnaie fédérée, aujourd'hui `None`) → 467. `QR` est
+**retiré** de la table des moyens : aucun règlement ne porte ce code (un paiement QR/NFC
+règle en `LE` / `SF`). Le profil `association` reçoit ce qui lui manque : 758, 658,
+471, 467, 5171. Natures à couvrir
 pour qu'un lieu neuf exporte sans rien saisir :
 
 | Nature | Comptes |
@@ -160,9 +160,8 @@ Consommation en monnaie locale du lieu → débit 4191.
 - Composant « Plan complet ? » en tête de page : ce qui manque pour exporter
   (produit vendu sans compte par sa catégorie ni par son type, moyen utilisé sans
   compte, monnaie sans compte, taux de TVA sans compte).
-- « Comptes des types de produit » : une ligne par type (billet, adhésion…).
-- Champ « prix d'achat » du produit : l'**unité** est affichée à côté (« par kg », « par
-  litre », « par pièce ») selon le tarif (D21). 0 = inconnu.
+- Champ « prix d'achat » du produit : `help_text` « en centimes, par unité de vente
+  (kg, litre, pièce) ; 0 = inconnu » (D21). Rien d'autre.
 
 ## 5. Tests
 
@@ -175,11 +174,10 @@ Fichier : `tests/pytest/test_plan_comptable_unique.py`.
 | 2b | `test_monnaie_d_un_autre_lieu_sans_mapping_refus` | TLF d'un autre lieu (moyen `LE`) sans mapping → exception, pas de repli sur 4191 |
 | 3 | `test_ni_monnaie_ni_moyen_erreur_explicite` | exception avec le nom du moyen |
 | 4 | `test_moyens_hors_argent_sans_compte` | NA / LG / NM |
-| 5 | `test_journal_du_point_de_vente` | PV « Bar » → `BAR` |
+| 5 | `test_journal_du_point_de_vente` | PV « Bar » sans code → `BAR` (dérivé) ; code renseigné → utilisé tel quel |
 | 6 | `test_journal_par_defaut_selon_origine` | les neuf `SaleOrigin` du tableau §3.2 ; une origine inconnue → erreur |
-| 7 | `test_code_journal_collision_suffixe` | deux PV de même préfixe → codes distincts |
-| 7b | `test_migration_code_journal_plusieurs_pv_existants` | schéma dédié avec trois PV existants : après les trois migrations, codes uniques et non vides |
-| 7c | `test_compte_article_par_categorie_de_caisse_puis_par_type` | produit bar avec catégorie → son compte ; billet sans catégorie → 706 ; adhésion → 756 ; recharge API v2 → 4191 ; contribution crowds → compte des dons |
+| 7 | `test_code_journal_collision_signalee` | deux PV de même préfixe sans code → « Plan complet ? » le signale, export refusé |
+| 7c | `test_compte_article_par_categorie_de_caisse_puis_par_type` | produit bar avec catégorie → son compte ; billet sans catégorie → 706 ; adhésion → 756 ; recharge API v2 → 4191 ; contribution crowds → compte des dons ; numéro absent du plan → erreur |
 | 7d | `test_compte_article_sans_categorie_ni_type_refus` | produit `NONE` sans catégorie → exception |
 | 7e | `test_ecarts_758_et_658` | les deux catégories d'écart → 758 et 658 |
 | 8 | `test_seed_lieu_neuf_plan_complet` | « Plan complet ? » ne signale rien pour les moyens et taux standard |
@@ -192,9 +190,9 @@ Vus rouges : tous (fonctions, modèles et champ absents ; 10 lit l'ancien plan) 
 (non-régression).
 
 Mutations : ordre monnaie / moyen inversé (1) ; repli silencieux au lieu de l'erreur
-(3) ; repli sur le moyen pour toute monnaie (2b) ; journal toujours `WEB` (5, 6) ; pas
-de suffixe (7) ; migration en une seule étape (7b) ; type de produit ignoré (7c) ;
-un seul compte pour les deux écarts (7e).
+(3) ; repli sur le moyen pour toute monnaie (2b) ; journal toujours `WEB` (5, 6) ;
+collision non signalée (7) ; type de produit ignoré (7c) ; un seul compte pour les
+deux écarts (7e).
 
 ## 6. Tests existants à réécrire
 

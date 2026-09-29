@@ -2,7 +2,7 @@
 
 > **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue Fable + Opus, corrigée
 > Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D2 à D6, D18, D21, R1
-> Effort : 2,25 j — Dépend de : rien. **Migration : oui.**
+> Effort : 3 j — Dépend de : rien (livrée après A′, ordre du §6 du tronc). **Migration : oui.**
 > Personne n'appelle encore ce code à la fin de la fiche : aucun comportement ne change.
 > Les producteurs actuels qui ne passent pas `vat` gardent la TVA par défaut (§2).
 
@@ -12,12 +12,16 @@
    et la FK `Paiement_stripe.vente`.
 2. **Un seul point d'entrée** pour écrire une vente : `BaseBillet/services_vente.py`.
 3. L'empreinte chaînée de la vente et sa vérification.
-4. Une fabrique de test `tests/pytest/fabriques_vente.py`.
+4. Une fabrique de test `tests/pytest/fabriques_vente.py`, avec l'assistant
+   `verifier_egalites(vente)` (§6).
+5. Les contraintes de base et la garde d'immutabilité d'une vente `REGLEE` (§2).
 
 ## 2. Modèles
 
 `Vente` et `Reglement` dans un module `BaseBillet/models_vente.py`, importé par
-`BaseBillet/models.py` (qui dépasse 4 000 lignes). Champs exacts : §3 du tronc.
+`BaseBillet/models.py` (qui dépasse 4 000 lignes). Champs exacts : §3 du tronc. Les FK
+vers `Paiement_stripe`, `laboutik.PointDeVente`, `CarteCashless` sont écrites en
+**chaînes** (`"BaseBillet.Paiement_stripe"`…) : sinon import circulaire.
 
 - `Vente.numero` : `PositiveIntegerField(null=True, blank=True, unique=True)` (Postgres
   accepte plusieurs NULL sous `unique`).
@@ -29,16 +33,28 @@
 - `LigneArticle.vente` : `ForeignKey(Vente, null=True, blank=True, on_delete=PROTECT,
   related_name="articles")`.
 - `LigneArticle.total_catalogue`, `part_offerte`, `total_ttc`, `total_tva` :
-  `IntegerField(default=0)`. `source_offert` : `CharField` à choix (`OFFRIR`, `JETONS`,
-  `CADEAU`), vide par défaut. `prix_achat_unitaire` : `IntegerField(default=0)`
-  (0 = inconnu, D21). `cout_achat` : `IntegerField(null=True)`.
+  `IntegerField(default=0)`. `source_offert` : `CharField` à choix (`OFFRIR`, `JETONS`),
+  vide par défaut. `cout_achat` : `IntegerField(null=True)` (vide = prix d'achat
+  inconnu, D21).
+- **Contraintes de base** (`Meta.constraints`) : sur `LigneArticle`,
+  `total_ttc = total_catalogue − part_offerte` et `total_ht + total_tva = total_ttc` ;
+  sur `Reglement`, `montant <> 0`. Un producteur qui contourne le service est refusé
+  par Postgres.
+- **Garde d'immutabilité** : une fois la vente `REGLEE`, `Vente.save()` refuse toute
+  modification ; `Reglement.save()` refuse toute modification ; `LigneArticle.save()`
+  refuse un changement de `amount`, `qty`, `vat`, `total_*`, `part_offerte`,
+  `pricesold`, `vente` (les statuts, `sended_to_laboutik`, `metadata` et les FK
+  `reservation` / `membership` / `booking` restent libres : la machine à statuts et les
+  tâches Celery écrivent encore ces champs). Exception explicite en français.
+  `.update()` contourne `save()` : c'est l'empreinte qui couvre ce cas (§5).
 - `LigneArticle.hors_chiffre_affaires` : `BooleanField(default=False)`. Liste exacte des
   cas vrais (figée à la vente, un changement ultérieur du produit ne change rien) :
   `Product.methode_caisse` ∈ {`RE` recharge euros, `RC` recharge cadeau, `TM` recharge
   temps} **ou** `categorie_article = RECHARGE_CASHLESS` (recharge API v2,
   `api_v2/views.py` ~l.964, sans `methode_caisse`), **ou** un des deux produits système
   « Écart d'encaissement » (D26, fiche D). Relire `BaseBillet/models.py` ~l.1363-1398
-  au démarrage.
+  au démarrage ; vérifier aussi `VR` (virement reçu) et `FD` (fidélité), probablement
+  hors chiffre d'affaires eux aussi.
 - `Reglement.vente` : `related_name="reglements"`, `on_delete=PROTECT`.
 - `Reglement.fedow_transaction_uuid` : `UUIDField(null=True)` — pas de FK
   (`fedow_core` en SHARED_APPS, `Reglement` en TENANT_APPS).
@@ -49,6 +65,8 @@
   à part**, qui dépend de la migration `BaseBillet` de `Vente`. Chaque fichier de
   migration ne dépend que dans un sens : pas de cycle.
 - `Paiement_stripe.montant_encaisse` : `IntegerField(null=True)` — rempli en fiche D.
+- `Paiement_stripe.moyen` : `CharField` à choix (`SN`, `SP`, `SR`), nullable — voir T1
+  (« Machine à états », fin de fiche). La fiche D le lit dès D-1.
 - `Paiement_stripe.vente` : `ForeignKey(Vente, null=True, blank=True, on_delete=PROTECT,
   related_name="paiements_stripe")` — la **vente d'origine** du paiement (R5), posée en
   fiche D à l'ouverture du checkout. Les ventes `AVOIR` d'un remboursement Stripe ne
@@ -75,13 +93,12 @@ Fonctions explicites, pas de classe à état caché, docstrings FALC (LOCALISATI
 
 | Fonction | Rôle |
 |---|---|
-| `calculer_montants_article(prix_unitaire, quantite, taux_tva, part_offerte=0, prix_achat=0, total_catalogue_impose=None, quantite_pour_cout=None)` | **La seule formule d'argent du projet** (§2 du tronc). Renvoie un dict d'entiers : `total_catalogue`, `part_offerte`, `total_ttc`, `total_ht`, `total_tva`, `cout_achat` (None si `prix_achat == 0`). `total_catalogue_impose` : l'argent réel d'une « part » pendant la transition, et le total réellement débité d'un tirage ou d'un paiement QR/NFC (exceptions durables, fiche H). `quantite_pour_cout` : la quantité réelle servie, dans l'unité du prix d'achat (kg, L, pièces), quand `quantite` ne l'est pas (vente au poids avec `qty = 1`, part de cascade ou de tirage) ; `None` → `quantite`. Refuse `part_offerte` hors de `[0, total_catalogue]` (même signe pour un avoir). |
+| `calculer_montants_article(prix_unitaire, quantite, taux_tva, part_offerte=0, prix_achat=0, total_catalogue_impose=None, quantite_pour_cout=None)` | **La seule formule d'argent du projet** (§2 du tronc). Renvoie un dict d'entiers : `total_catalogue`, `part_offerte`, `total_ttc`, `total_ht`, `total_tva`, `cout_achat` (None si `prix_achat == 0`). `total_catalogue_impose` : l'argent réel d'une « part » pendant la **transition** (fiches B, C) ; **retiré en fiche H**. `quantite_pour_cout` : la quantité réelle servie, dans l'unité du prix d'achat (kg, L, pièces), quand `quantite` ne l'est pas (vente au poids avec `qty = 1`, part de cascade ou de tirage) ; `None` → `quantite`. Refuse `part_offerte` hors de `[0, total_catalogue]` (même signe pour un avoir). |
 | `ouvrir_vente(origine, nature, unite="EUR", point_de_vente=None, operateur=None, client=None, carte=None, vente_liee=None, idempotency_key=None)` | crée la vente `EN_ATTENTE` ; une clé déjà connue renvoie la vente existante |
-| `ajouter_article(vente, pricesold, quantite, prix_unitaire, taux_tva, part_offerte=0, source_offert="", prix_achat=0, total_catalogue_impose=None, quantite_pour_cout=None, hors_chiffre_affaires=False, **champs_de_la_ligne)` | crée la `LigneArticle` en **un seul INSERT** avec tous ses montants et `vat` (marqueur `_tva_explicite`, §2) ; `champs_de_la_ligne` = champs historiques (`payment_method`, `asset`, `status`, `reservation`…) posés pendant la transition. **Règle « offert à montant non nul »** (§2 du tronc) : si `payment_method == FREE` et le total catalogue ≠ 0, pose `part_offerte = total_catalogue`, `source_offert = OFFRIR`, et ajoute le règlement `FREE` du même montant |
+| `ajouter_article(vente, pricesold, quantite, prix_unitaire, taux_tva, part_offerte=0, source_offert="", prix_achat=0, offert_en_totalite=False, total_catalogue_impose=None, quantite_pour_cout=None, hors_chiffre_affaires=False, **champs_de_la_ligne)` | crée la `LigneArticle` en **un seul INSERT** avec tous ses montants et `vat` (marqueur `_tva_explicite`, §2) ; `champs_de_la_ligne` = champs historiques (`payment_method`, `asset`, `status`, `reservation`…) posés pendant la transition. **Règle « offert à montant non nul »** (§2 du tronc) : si `offert_en_totalite=True` (ou, pendant la transition seulement, si `payment_method == FREE` — sucre retiré en H) et le total catalogue ≠ 0, pose `part_offerte = total_catalogue`, `source_offert = OFFRIR`, et ajoute le règlement `FREE` du même montant |
 | `ajouter_reglement(vente, moyen, montant, asset=None, carte=None, wallet=None, fedow_transaction_uuid=None, paiement_stripe=None, reference_externe="")` | `montant` doit être un `int` non nul (refus d'un `Decimal`, d'un `float`, de 0) |
 | `encaisser_vente(vente)` | §4 |
-| `annuler_vente(vente)` | `EN_ATTENTE` → `ANNULEE`, sans numéro |
-| `rouvrir_vente_annulee(vente)` | `ANNULEE` → `EN_ATTENTE`, pour deux cas seulement (fiche D) : un paiement Stripe arrivé après expiration, et le nouvel essai d'une recharge API v2 échouée. La vente n'a jamais eu de numéro |
+| `annuler_vente(vente)` | `EN_ATTENTE` → `ANNULEE`, sans numéro, **sans retour arrière**. Seuls Stripe `CANCELED` et SEPA refusé l'appellent (fiche D) ; une session expirée ou une recharge échouée restent `EN_ATTENTE` |
 
 **Le service n'ajoute aucun `save()` sur une ligne.** Les déclencheurs (Fedow, e-mails,
 envoi à l'ancien LaBoutik) partent sur une **transition de statut** faite par un
@@ -176,12 +193,16 @@ cassé, trou de numéro, égalité rompue (relue en base). **Aucune exception to
 passe **par le service** : une fabrique qui contourne le service rendrait les tests
 aveugles aux égalités.
 
+`verifier_egalites(vente)` : relit la vente en base et asserte les deux égalités du §2
+du tronc et `Vente.total_* = Σ articles`. **Chaque test de fiche qui encaisse une
+vente l'appelle à la fin** (B à H). Pendant la transition, il n'asserte pas le HT des
+parts (±1 c, §5 du tronc).
+
 ## 7. Tests
 
 Fichiers : `tests/pytest/test_montants_article.py` (formule seule, sans base) ;
 `tests/pytest/test_vente_service.py` (**schéma dédié** : numérotation, chaîne,
-altérations ; créer `LaboutikConfiguration` à la main) ;
-`tests/pytest/test_montants_entiers_egalites.py` (transversal, §8 du tronc).
+altérations ; créer `LaboutikConfiguration` à la main).
 
 | Test | Donnée → attendu |
 |---|---|
@@ -199,7 +220,9 @@ altérations ; créer `LaboutikConfiguration` à la main) ;
 | `test_tva_zero_explicite_respectee_par_save` | recharge par `ajouter_article`, `vat=0` → relue 0 (aujourd'hui 20) |
 | `test_create_sans_vat_garde_la_tva_du_produit` | `LigneArticle.objects.create(...)` sans `vat` → TVA du produit (comportement actuel inchangé) |
 | `test_ajouter_article_ne_declenche_aucune_transition` | `ajouter_article(status=PAID)` : la fonction de transition de statut n'est **pas** appelée (création) ; le producteur qui fait ensuite `CREATED → PAID` la déclenche une fois |
-| `test_offert_a_montant_non_nul_part_offerte_et_reglement_free` | ligne `FREE` à 1500 → part offerte 1500, `OFFRIR`, règlement FREE 1500, égalités tenues |
+| `test_offert_a_montant_non_nul_part_offerte_et_reglement_free` | `offert_en_totalite=True` sur 1500 → part offerte 1500, `OFFRIR`, règlement FREE 1500, égalités tenues ; même résultat avec `payment_method=FREE` (transition) |
+| `test_contrainte_base_refuse_une_ligne_incoherente` | `LigneArticle.objects.create(total_catalogue=500, part_offerte=0, total_ttc=499)` → `IntegrityError` ; `Reglement(montant=0)` → `IntegrityError` |
+| `test_vente_reglee_refuse_toute_modification_par_save` | sur une vente `REGLEE` : `reglement.montant = …; save()` → refus ; `ligne.amount = …; save()` → refus ; `ligne.status = VALID; save()` accepté |
 | `test_cout_achat_sur_la_quantite_reelle` | vente au poids `qty = 1`, `quantite_pour_cout = 0,350`, prix d'achat 800 / kg → 280 |
 | `test_paiement_stripe_vente_d_origine` | FK `Paiement_stripe.vente` posée, nullable |
 | `test_hors_chiffre_affaires_fige` | changer `methode_caisse` du produit après la vente → la ligne ne change pas |
@@ -210,15 +233,12 @@ altérations ; créer `LaboutikConfiguration` à la main) ;
 | `test_numeros_consecutifs_sans_trou` | 1, 2, 3 |
 | `test_vente_annulee_ou_en_attente_ne_prend_pas_de_numero` | la réglée a le n° 1 |
 | `test_premiere_vente_chainee_sur_vide_puis_suivante_sur_la_precedente` | |
-| `test_modifier_un_article_apres_encaissement_casse_la_chaine` | `update(total_ttc=…)` → « empreinte fausse » |
-| `test_modifier_un_reglement_apres_encaissement_casse_la_chaine` | |
-| `test_changer_la_vente_liee_casse_la_chaine` | |
+| `test_alterer_une_vente_reglee_casse_la_chaine` (**paramétré**) | par `.update()` : `total_ttc` d'un article ; `montant` d'un règlement ; `vente_liee` ; `point_de_vente` → « empreinte fausse » à chaque fois |
 | `test_supprimer_une_vente_laisse_un_trou_signale` | suppression par SQL brut (les FK `PROTECT` bloquent l'ORM) |
 | `test_supprimer_un_reglement_signale_egalite_rompue` | SQL brut |
 | `test_vidage_de_carte_sans_article_encaisse` | +500 LE, −500 CA |
 | `test_vente_gratuite_sans_reglement_encaissee` | article 0, aucun règlement |
 | `test_vente_payante_sans_reglement_refusee` | article 500, aucun règlement → refus |
-| `test_changer_le_point_de_vente_casse_la_chaine` | `update(point_de_vente=…)` → « empreinte fausse » |
 | `test_vente_en_points_refuse_une_tva` | |
 
 Vus rouges : tous (module absent → `ImportError` noté), puis chacun contre un service
@@ -240,13 +260,14 @@ Mutations :
 | retirer la 2ᵉ égalité | argent ≠ net |
 | `numero = max + 1` → `count() + 1` | trou de numéro après suppression |
 | retirer le `atomic()` interne ou le `select_for_update` | encaisser deux fois (script manuel) |
-| retirer `"reglements"` ou `"vente_liee"` du message HMAC | modifier un règlement ; changer la vente liée |
+| retirer `"reglements"`, `"vente_liee"` ou `"point_de_vente"` du message HMAC | altérer une vente réglée (cas correspondant) |
 | `previous_hmac` = "" toujours | chaînage |
 | `save()` réapplique la TVA par défaut sur un 0 (marqueur ignoré) | TVA 0 explicite |
 | défaut appliqué seulement si `vat is None` (sans marqueur) | create sans `vat` |
 | règle « offert à montant non nul » retirée | offert à montant non nul |
 | coût calculé sur `quantite` au lieu de `quantite_pour_cout` | coût sur la quantité réelle |
-| retirer `"point_de_vente"` du message HMAC | changer le point de vente |
+| retirer une `CheckConstraint` | contrainte de base |
+| garde d'immutabilité retirée | modification par `save()` |
 
 CHANGELOG : `CHANGELOG/2026-MM-JJ-montants-entiers-A-vente-reglement.md` (migration :
 oui ; chaînes i18n : natures, statuts, sources d'offert).

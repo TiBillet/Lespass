@@ -2,7 +2,7 @@
 
 > **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue Fable + Opus, corrigée
 > Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D19 à D23, D26, D28, R2
-> Effort : 4 j (3 sessions : §2, §3, §4, plus les tests existants du §7) — Dépend de :
+> Effort : 3,5 j (3 sessions : §2, §3, §4, plus les tests existants du §7) — Dépend de :
 > B, C, D (toutes les ventes ont leur `Vente`), E (plan comptable). **Migration : oui**
 > (champs de clôture).
 
@@ -41,23 +41,21 @@ Définitions (une seule fois, dans le module) :
 
 | # | Section | Contenu (entiers, sommes) |
 |---|---|---|
-| 1 | En-tête | lieu, période, niveau, n° de clôture, **plage de ventes [premier n°, dernier n°]**, nombre de ventes, total perpétuel |
+| 1 | En-tête | lieu, période, niveau, n° de clôture, **plage de ventes [premier n°, dernier n°]**, nombre de ventes (dont ventes gratuites, numérotées elles aussi), total perpétuel |
 | 2 | **Chiffre d'affaires** | TTC / HT / TVA ; **par taux** ; par catégorie ; **par origine** ; **par journal** (fiche E) |
-| 3 | **Règlements** | par moyen **et par monnaie**, en trois blocs : argent (espèces, CB, chèque, Stripe, virement, inconnu) ; cashless (monnaie locale par nom, fédérée) ; hors argent (offert, jetons, points par monnaie). Les règlements d'une vente `CORRECTION` sont comptés dans la **J où la correction est faite**. Une correction n'est possible que tant que la vente d'origine n'est couverte par aucune J (garde, fiche G) : les deux sont donc presque toujours dans la même J |
+| 3 | **Règlements** | natures `VENTE`, `AVOIR`, `CORRECTION` (le `VIDAGE_CARTE` est en 7) ; par moyen **et par monnaie**, en trois blocs : argent (espèces, CB, chèque, Stripe, virement, inconnu) ; cashless (monnaie locale par nom, fédérée) ; hors argent (offert, jetons, points par monnaie). Les règlements d'une vente `CORRECTION` sont comptés dans la **J où la correction est faite**. Une correction n'est possible que tant que la vente d'origine n'est couverte par aucune J (garde, fiche G) : les deux sont donc presque toujours dans la même J |
 | 4 | Caisse espèces | fond, espèces reçues, sorties (`SortieCaisse`), espèces rendues, solde théorique |
 | 5 | Réconciliation | une phrase : « Argent reçu = ventes payées en argent + recharges − remboursements − cartes vidées ± écarts d'encaissement », avec les chiffres |
 | 6 | Offerts | par source (OFFRIR, jetons) : quantités, valeur catalogue, coût d'achat — **articles du chiffre d'affaires seulement** (la recharge cadeau n'y est pas : pas de double compte avec les jetons consommés) |
 | *Annexe* | | |
-| 7 | Avoirs et remboursements | nombre, total, par moyen ; dont **retours consigne** (D11) |
-| 8 | Recharges et cartes | recharges encaissées par moyen ; cadeau émis ; cartes vidées (espèces rendues) |
-| 9 | Écarts d'encaissement | nombre, total (D26) — en rouge s'il y en a |
-| 10 | Points | par monnaie |
-| 11 | **Marge brute** (D21) | CA HT − `Sum("cout_achat")` des **articles servis** (vendus, offerts, points ; retours de consigne en négatif) ; nombre d'articles au coût inconnu (prix d'achat 0) : « marge incomplète : 12 articles sans prix d'achat » |
-| 12 | Corrections | ventes `CORRECTION` (moyen avant → après, opérateur) |
-| 13 | Détail | billets (par événement, tarif), adhésions, ventes par produit (qté, TTC, HT, offert, coût), habitus cartes, opérateurs — **reprises** des sections actuelles de `laboutik/reports.py`, réécrites sur les champs entiers |
-| 14 | Intégrité | `verifier_chaine_ventes` sur la plage : « OK » ou les anomalies |
+| 7 | Avoirs, recharges, écarts, corrections | quatre sous-listes, même code : **avoirs** (nombre, total, par moyen ; dont **retours consigne**, D11 ; dont **remboursements Stripe à faire à la main : n / X €** = règlements Stripe négatifs sans `reference_externe`, D27) ; **recharges et cartes** (recharges encaissées par moyen ; cadeau émis ; cartes vidées, espèces rendues) ; **écarts d'encaissement** (nombre, total, D26 — en rouge s'il y en a) ; **corrections** (moyen avant → après, opérateur) |
+| 8 | Points | par monnaie |
+| 9 | **Marge brute** (D21) | CA HT − `Sum("cout_achat")` des **articles servis** (vendus, offerts, points ; retours de consigne en négatif) ; nombre d'articles au coût inconnu (prix d'achat 0) : « marge incomplète : 12 articles sans prix d'achat » |
+| 10 | Détail | billets (par événement, tarif), adhésions, ventes par produit (qté, TTC, HT, offert, coût) — **ce qui est imprimé sur le Z aujourd'hui**, réécrit sur les champs entiers. « Habitus cartes » et « opérateurs » restent au rapport X, hors du Z stocké |
+| 11 | Intégrité | `verifier_chaine_ventes` sur la plage : « OK » ou les anomalies |
 
-Le rapport X (temps réel) = ce même calcul, non stocké.
+Le rapport X (temps réel) = ce même calcul, non stocké, plus « habitus cartes » et
+« opérateurs » (sections actuelles de `laboutik/reports.py`, réécrites sur les entiers).
 
 ## 3. Session F-2 — la clôture unique (`comptabilite.ClotureCaisse`)
 
@@ -66,16 +64,19 @@ Le rapport X (temps réel) = ce même calcul, non stocké.
 - **Clôture J** = `[fin de la J précédente, moment de la clôture]` : bouton de la caisse
   en fin de service (branché en fiche G), et **filet automatique à l'heure de fermeture du
   lieu + 2 h, heure locale** (`Configuration.fuseau_horaire`, `BaseBillet/models.py`
-  ~l.544) s'il y a des ventes encaissées depuis la dernière J. L'heure de fermeture
-  n'existe pas encore : un seul champ ajouté, `Configuration.heure_de_fermeture`
-  (`TimeField`, défaut **02:00** → Z automatique à **4 h**), réglable dans l'admin
-  (migration dans cette fiche). Une seule J à la fois (verrou du lieu,
-  le même que les ventes).
+  ~l.544). L'heure de fermeture n'existe pas encore : un seul champ ajouté,
+  `Configuration.heure_de_fermeture` (`TimeField`, défaut **02:00** → Z automatique à
+  **4 h**), réglable dans l'admin (migration dans cette fiche). **Condition du filet** :
+  en heure locale, il est **au moins** l'heure de fermeture + 2 h, **et** il y a des
+  ventes encaissées depuis la dernière J. Jamais une égalité d'heure : elle raterait
+  l'heure sautée au changement d'heure, et la condition « ≥ et ventes depuis la dernière
+  J » est idempotente (rejouée une heure plus tard, elle ne crée rien). Une seule J à la
+  fois (verrou du lieu, le même que les ventes).
 - **Planification** (`TiBillet/celery.py` ~l.108-128, à modifier dans cette fiche) :
   aujourd'hui `cron_cloture_quotidienne` tourne à 6:00 UTC pour tous les lieux
   (`CELERY_TIMEZONE` = variable d'environnement `TIME_ZONE`, `TiBillet/settings.py`
   ~l.656). Elle devient une tâche **horaire** (`crontab(minute=0)`) qui ne clôture que
-  les lieux où il est « heure de fermeture + 2 h » en heure locale. Les tâches H / M / A gardent leur heure ;
+  les lieux où la condition ci-dessus est vraie. Les tâches H / M / A gardent leur heure ;
   leurs bornes calendaires sont calculées en heure locale du lieu.
 - **H, M, A** : **calendaires** (semaine du lundi au dimanche, mois, année), calculées
   **directement sur les ventes** de la période. Une J de soirée à cheval sur deux mois
@@ -134,8 +135,8 @@ par journal** et par clôture **J** :
 - **Le FEC n'est produit que par les J.** Une période (mois, année) s'exporte en
   concaténant les écritures des J qu'elle contient. Les clôtures H / M / A sont des
   **rapports**, sans écriture propre (plus d'écriture vide).
-- **J à cheval sur minuit ou sur deux mois** **(défaut, à confirmer par le
-  mainteneur)** : l'écriture FEC d'une J est **datée du jour de début de service**
+- **J à cheval sur minuit ou sur deux mois** **(décidé par le mainteneur le
+  2026-09-29)** : l'écriture FEC d'une J est **datée du jour de début de service**
   (date locale de la première vente de la J) ; elle va dans le mois de cette date. Le
   rapport M, lui, compte chaque vente à sa date d'encaissement (calendaire, D28). Aux
   bords de mois, le FEC du mois et le rapport M peuvent donc différer des ventes faites
@@ -151,20 +152,13 @@ par journal** et par clôture **J** :
 
 ## 5. Test de comparaison avec les anciens rapports
 
-`tests/pytest/test_rapport_unique_comparaison.py` (**schéma dédié**) : un scénario
-toutes origines (espèces, CB, NFC multi-monnaie, jetons, OFFRIR, points, recharge,
-consigne + retour, vider carte, tireuse, QR, billet Stripe, adhésion admin, avoir
-Stripe partiel, correction).
-
-- Mêmes chiffres que l'ancien moteur caisse + l'ancien moteur en ligne **sur ce qu'ils
-  calculaient juste**.
-- **Écarts attendus, listés un par un dans le test**, chacun avec sa raison :
-  troncatures corrigées (1049 → 1050) ; recharges sorties du CA ; jetons sortis des
-  encaissements et du CA ; tireuse comptée une seule fois ; adhésion multi-moyens
-  comptée entière ; avoirs admin visibles ; moyens hors des 5 seaux visibles ; HT par
-  part ±1 centime (tronc §5).
-
-Un écart **non listé** fait échouer le test.
+`tests/pytest/test_rapport_unique_comparaison.py` (**schéma dédié**) : **trois
+scénarios** que les anciens moteurs calculaient juste — espèces, CB, NFC mono-monnaie
+— avec, pour chacun, les mêmes totaux TTC / HT / TVA et les mêmes règlements dans
+l'ancien moteur caisse et dans `RapportDesVentes`. Pas de liste d'écarts : les valeurs
+exactes des tests du §6 tiennent ce rôle pour tout ce que les anciens moteurs
+calculaient faux (troncatures, recharges dans le CA, jetons comptés en argent, tireuse
+comptée deux fois, adhésion multi-moyens, avoirs admin invisibles).
 
 ## 6. Tests
 
@@ -180,7 +174,8 @@ Fichiers : `tests/pytest/test_rapport_unique.py`, `tests/pytest/test_cloture_uni
 | 5 | `test_recharge_encaissee_hors_ca_puis_consommation_dans_ca` | recharge 2000 CB, bière 500 LE → CA 500, argent 2000 |
 | 6 | `test_panier_biere_et_recharge_section_recharges` | la recharge est vue alors que la vente est `VENTE` |
 | 7 | `test_consigne_dans_ca_retour_en_avoir` | vente 100, retour −100 → CA 0, « retours consigne » 1 |
-| 8 | `test_vider_carte_especes_rendues` | |
+| 7b | `test_remboursements_stripe_a_faire_a_la_main_dans_le_z` | avoir admin d'une ligne Stripe (D27, sans `reference_externe`) → section 7 « à faire à la main : 1 / 35,00 € » ; un avoir Stripe avec référence n'y est pas |
+| 8 | `test_vider_carte_especes_rendues` | espèces rendues en section 7 ; **rien** en section 3 (règlements) |
 | 9 | `test_ecart_d_encaissement_section_et_reconciliation` | |
 | 10 | `test_ventilation_par_origine_et_par_journal` | caisse BAR + web → deux lignes |
 | 11 | `test_marge_brute_somme_des_couts_et_compte_inconnus` | valeurs + compteur |
@@ -189,7 +184,7 @@ Fichiers : `tests/pytest/test_rapport_unique.py`, `tests/pytest/test_cloture_uni
 | 14 | `test_cloture_j_fin_de_service_plage_et_perpetuel` | plage, perpétuel = précédent + CA |
 | 15 | `test_filet_4h_cree_la_j_seulement_s_il_y_a_des_ventes` | |
 | 15c | `test_filet_suit_l_heure_de_fermeture_plus_deux_heures` | fermeture 23:00 → Z à 1 h ; défaut 02:00 → Z à 4 h |
-| 15b | `test_filet_4h_heure_locale_du_lieu` | lieu en `Europe/Paris` et lieu en `America/Martinique` : la tâche horaire ne clôture que celui où il est 4 h |
+| 15b | `test_filet_4h_heure_locale_du_lieu` | lieu en `Europe/Paris` et lieu en `America/Martinique` : la tâche horaire ne clôture que celui où il est **au moins** 4 h avec des ventes depuis la dernière J ; rejouée une heure plus tard, elle ne crée pas de seconde J |
 | 16 | `test_mois_calendaire_egal_ventes_du_mois` | une J à cheval sur deux mois : chaque vente dans son mois |
 | 17 | `test_cloture_hebdomadaire_calendaire_non_vide` | |
 | 18 | `test_cloture_chainee_et_alteration_detectee` | modifier `rapport_json` → vérification KO |
@@ -200,7 +195,7 @@ Fichiers : `tests/pytest/test_rapport_unique.py`, `tests/pytest/test_cloture_uni
 | 23 | `test_fec_un_journal_par_point_de_vente` | |
 | 24 | `test_fec_aucune_ecriture_pour_offerts_et_points` | |
 | 25 | `test_fec_mois_concatene_les_journees` | |
-| 25b | `test_fec_j_a_cheval_sur_deux_mois_datee_du_debut_de_service` | J du 31 à 22 h au 1ᵉʳ à 2 h → écriture datée du 31 (défaut à confirmer) |
+| 25b | `test_fec_j_a_cheval_sur_deux_mois_datee_du_debut_de_service` | J du 31 à 22 h au 1ᵉʳ à 2 h → écriture datée du 31 |
 | 25c | `test_marge_brute_compte_les_points` | vente en points avec prix d'achat → coût compté dans la marge |
 | 26 | `test_aucun_amount_fois_qty_dans_le_rapport` | garde sur `comptabilite/rapport.py` et `ventilation.py` |
 
@@ -212,7 +207,9 @@ Mutations : lire `LigneArticle` hors vente (13) ; inclure LG dans l'argent (3) ;
 la recharge cadeau dans les offerts (4) ; filtrer les recharges par `nature` (6) ;
 marge recalculée par `qty × prix` (11) ; marge limitée aux articles du CA (25c) ; M = Σ
 des J (16) ; supprimer le refus d'export (19, 22) ; écrire un avoir en négatif (21) ;
-filet à 4 h UTC (15b) ; écriture datée de la clôture (25b).
+filet à 4 h UTC (15b) ; filet sur l'égalité d'heure au lieu de « ≥ et ventes depuis la
+dernière J » (15b rejouée) ; remboursements Stripe sans référence comptés comme faits
+(7b) ; vidage de carte compté en section 3 (8) ; écriture datée de la clôture (25b).
 
 ## 7. Tests existants à réécrire
 
