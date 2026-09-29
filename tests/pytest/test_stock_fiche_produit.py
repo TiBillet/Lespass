@@ -46,7 +46,14 @@ def produit_caisse_sans_stock(tenant):
         Product.objects.filter(pk=produit.pk).delete()
 
 
-def _creer_stock(tenant, produit, quantite, seuil_alerte=None, unite="UN"):
+def _creer_stock(
+    tenant,
+    produit,
+    quantite,
+    seuil_alerte=None,
+    unite="UN",
+    autoriser_vente_hors_stock=True,
+):
     """Crée un stock directement, sans mouvement. / Creates a stock, no movement."""
     with tenant_context(tenant):
         from inventaire.models import Stock
@@ -56,6 +63,7 @@ def _creer_stock(tenant, produit, quantite, seuil_alerte=None, unite="UN"):
             quantite=quantite,
             unite=unite,
             seuil_alerte=seuil_alerte,
+            autoriser_vente_hors_stock=autoriser_vente_hors_stock,
         )
 
 
@@ -297,7 +305,10 @@ class TestFicheProduitSectionStock:
 
 class TestColonneEtFiltreStock:
     def test_10_badge_selon_l_etat_du_stock(self, tenant, produit_caisse_sans_stock):
-        """— sans stock ; « Épuisé » à 0 ; quantité + lien vers #section-stock sinon."""
+        """
+        — sans stock ; « Épuisé » à 0 si la vente est bloquée ;
+        quantité + lien vers #section-stock sinon.
+        """
         from Administration.admin.stock_fiche_produit import (
             display_stock_produit_caisse,
         )
@@ -305,12 +316,18 @@ class TestColonneEtFiltreStock:
         with tenant_context(tenant):
             assert display_stock_produit_caisse(produit_caisse_sans_stock) == "—"
 
-        stock = _creer_stock(tenant, produit_caisse_sans_stock, quantite=0)
+        stock = _creer_stock(
+            tenant,
+            produit_caisse_sans_stock,
+            quantite=0,
+            autoriser_vente_hors_stock=False,
+        )
         with tenant_context(tenant):
             produit_caisse_sans_stock.refresh_from_db()
             html_du_badge = str(display_stock_produit_caisse(produit_caisse_sans_stock))
             assert "#section-stock" in html_du_badge
             assert "#991b1b" in html_du_badge  # rouge / red
+            assert "Épuisé" in html_du_badge or "Out of stock" in html_du_badge
 
             from inventaire.models import Stock
 
@@ -319,6 +336,53 @@ class TestColonneEtFiltreStock:
             html_du_badge = str(display_stock_produit_caisse(produit_caisse_sans_stock))
             assert ">42<" in html_du_badge
             assert "#166534" in html_du_badge  # vert / green
+
+    def test_15_badge_negatif_si_vente_hors_stock_autorisee(
+        self, tenant, produit_caisse_sans_stock
+    ):
+        """
+        Vente hors stock autorisée et stock à -12 : la pastille montre « -12 »
+        (rouge), pas « Épuisé ». Même règle en centilitres : -150 → « -1.5 L ».
+        / Out-of-stock sales allowed: badge shows the negative quantity.
+        """
+        from Administration.admin.stock_fiche_produit import (
+            display_stock_produit_caisse,
+        )
+
+        stock = _creer_stock(
+            tenant,
+            produit_caisse_sans_stock,
+            quantite=-12,
+            autoriser_vente_hors_stock=True,
+        )
+        with tenant_context(tenant):
+            produit_caisse_sans_stock.refresh_from_db()
+            html_du_badge = str(display_stock_produit_caisse(produit_caisse_sans_stock))
+            assert ">-12<" in html_du_badge
+            assert "Épuisé" not in html_du_badge
+            assert "#991b1b" in html_du_badge  # rouge / red
+
+            from inventaire.models import Stock
+
+            Stock.objects.filter(pk=stock.pk).update(quantite=-150, unite="CL")
+            produit_caisse_sans_stock.refresh_from_db()
+            html_du_badge = str(display_stock_produit_caisse(produit_caisse_sans_stock))
+            assert ">-1.5 L<" in html_du_badge
+
+    def test_16_regles_conditionnelles_de_la_section_stock_injectees(
+        self, admin_client
+    ):
+        """
+        La page d'ajout injecte les règles « stock_suivi == true » pour le JS
+        inline_conditional_fields.js, et charge ce JS.
+        / The add page injects the stock_suivi rules and loads the JS.
+        """
+        reponse = admin_client.get("/admin/BaseBillet/posproduct/add/")
+        contenu = reponse.content.decode()
+        assert 'id="inline-conditional-rules"' in contenu
+        assert "__formulaire_principal__" in contenu
+        assert "stock_suivi == true" in contenu
+        assert "admin/js/inline_conditional_fields.js" in contenu
 
     def test_11_filtre_etat_du_stock(self, tenant, produit_caisse_sans_stock):
         """Chaque valeur du filtre ne garde que les produits dans cet état."""

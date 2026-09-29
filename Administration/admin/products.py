@@ -30,6 +30,8 @@ from Administration.admin.mixins import HelpDisplayMixin
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 from inventaire.models import UniteStock
 from Administration.admin.stock_fiche_produit import (
+    CLE_REGLES_FORMULAIRE_PRINCIPAL,
+    REGLES_CONDITIONNELLES_SECTION_STOCK,
     ChampsStockFicheProduitMixin,
     EtatStockFilter,
     display_stock_fut,
@@ -1259,7 +1261,11 @@ class ProductAdmin(ModelAdmin):
                 # / Key = inline formset prefix
                 prefixe = inline_class.model._meta.model_name + "s"
                 regles_conditionnelles[prefixe] = regles_inline
-        if regles_conditionnelles:
+        # Une sous-classe (POSProductAdmin, FutProductAdmin) a pu préparer ses
+        # propres règles avant d'appeler super() : on ne les écrase pas.
+        # / A subclass may have prepared its own rules before super(): keep them.
+        regles_deja_fournies = "inline_conditional_rules" in extra_context
+        if regles_conditionnelles and not regles_deja_fournies:
             extra_context["inline_conditional_rules"] = json.dumps(
                 regles_conditionnelles
             )
@@ -1640,6 +1646,11 @@ class POSProductAdmin(ProductAdmin):
     inlines = [POSPriceInline]
     change_form_after_template = "admin/product/inline_conditional_fields.html"
 
+    class Media:
+        # Champs conditionnels de la section Stock (formulaire principal)
+        # / Stock section conditional fields (main form)
+        js = ("admin/js/inline_conditional_fields.js",)
+
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         # Collecte les regles conditionnelles de chaque inline qui en declare
         # / Collect conditional rules from each inline that declares them
@@ -1650,10 +1661,13 @@ class POSProductAdmin(ProductAdmin):
             if regles_inline:
                 prefixe = inline_class.model._meta.model_name + "s"
                 regles_conditionnelles[prefixe] = regles_inline
-        if regles_conditionnelles:
-            extra_context["inline_conditional_rules"] = json.dumps(
-                regles_conditionnelles
-            )
+        # Section Stock : champs cachés tant que « Suivre le stock » n'est pas coché
+        # (formulaire principal, pas un inline)
+        # / Stock section: fields hidden until "Track stock" is checked (main form)
+        regles_conditionnelles[CLE_REGLES_FORMULAIRE_PRINCIPAL] = (
+            REGLES_CONDITIONNELLES_SECTION_STOCK
+        )
+        extra_context["inline_conditional_rules"] = json.dumps(regles_conditionnelles)
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def save_related(self, request, form, formsets, change):
@@ -2096,6 +2110,11 @@ class FutProductAdmin(ProductAdmin):
     autocomplete_fields = ["tag"]
     change_form_after_template = "admin/product/inline_conditional_fields.html"
 
+    class Media:
+        # Champs conditionnels de la section Stock (formulaire principal)
+        # / Stock section conditional fields (main form)
+        js = ("admin/js/inline_conditional_fields.js",)
+
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         # Collecte les regles conditionnelles de chaque inline qui en declare
         # / Collect conditional rules from each inline that declares them
@@ -2106,10 +2125,13 @@ class FutProductAdmin(ProductAdmin):
             if regles_inline:
                 prefixe = inline_class.model._meta.model_name + "s"
                 regles_conditionnelles[prefixe] = regles_inline
-        if regles_conditionnelles:
-            extra_context["inline_conditional_rules"] = json.dumps(
-                regles_conditionnelles
-            )
+        # Section Stock : champs cachés tant que « Suivre le stock » n'est pas coché
+        # (formulaire principal, pas un inline)
+        # / Stock section: fields hidden until "Track stock" is checked (main form)
+        regles_conditionnelles[CLE_REGLES_FORMULAIRE_PRINCIPAL] = (
+            REGLES_CONDITIONNELLES_SECTION_STOCK
+        )
+        extra_context["inline_conditional_rules"] = json.dumps(regles_conditionnelles)
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def save_related(self, request, form, formsets, change):

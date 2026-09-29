@@ -12,8 +12,16 @@
  *   "prices": {                                    // prefixe du formset
  *     "iteration": "recurring_payment == true",    // champ_cible: expression
  *     "commitment": "iteration > 0"
+ *   },
+ *   "__formulaire_principal__": {                  // champs du formulaire principal
+ *     "stock_unite": "stock_suivi == true"         // (ids "id_<champ>", pas de formset)
  *   }
  * }
+ *
+ * La cle "__formulaire_principal__" vise les champs de la fiche elle-meme,
+ * pas un inline. Utilisee par la section Stock des fiches produit
+ * (Administration/admin/stock_fiche_produit.py).
+ * / The "__formulaire_principal__" key targets the main form fields, not an inline.
  *
  * Expressions supportees (meme syntaxe que Unfold conditional_fields) :
  *   - "champ == true"   : visible si la checkbox est cochee
@@ -38,6 +46,10 @@
 
     // Duree de l'animation en millisecondes / Animation duration in ms
     var DUREE_ANIMATION_MS = 200;
+
+    // Cle des regles du formulaire principal (voir le format du JSON en haut)
+    // / Key of the main form rules (see JSON format above)
+    var CLE_FORMULAIRE_PRINCIPAL = "__formulaire_principal__";
 
     // --- Chargement des regles ---
 
@@ -197,6 +209,16 @@
      */
     function configurer_regles_pour_ligne(prefixe_formset, numero_ligne, regles) {
         var prefixe_id = "id_" + prefixe_formset + "-" + numero_ligne + "-";
+        configurer_regles(prefixe_id, regles);
+    }
+
+    /**
+     * Configure les regles pour un groupe de champs qui partagent un prefixe d'id.
+     * - ligne inline : "id_prices-0-"
+     * - formulaire principal : "id_"
+     * / Sets up rules for fields sharing an id prefix (inline row or main form).
+     */
+    function configurer_regles(prefixe_id, regles) {
 
         // Collecter les regles actives et les rangees parentes a styler
         // / Collect active rules and parent rows to style
@@ -383,6 +405,14 @@
                 continue;
             }
             var regles = toutes_les_regles[prefixe_formset];
+
+            // Formulaire principal : ids "id_<champ>", pas de lignes a observer
+            // / Main form: "id_<field>" ids, no rows to observe
+            if (prefixe_formset === CLE_FORMULAIRE_PRINCIPAL) {
+                configurer_regles("id_", regles);
+                continue;
+            }
+
             initialiser_formset(prefixe_formset, regles);
 
             // Observer les nouvelles lignes ajoutees dynamiquement

@@ -11,6 +11,9 @@ perte) immédiates en HTMX. Code : `Administration/admin/stock_fiche_produit.py`
 
 ### Test 1 : créer un produit avec son stock
 1. Admin > Caisse & Restaurant > Produits de caisse > Ajouter.
+   Section Stock : seule la case « Suivre le stock » est visible.
+   La cocher : quantité de départ, unité, seuil et vente hors stock apparaissent
+   (avec une bordure à gauche). La décocher : ils disparaissent.
 2. Nom, méthode Vente, prix d'achat. Section Stock : cocher « Suivre le stock »,
    quantité de départ 24, seuil 6. Enregistrer.
 3. Rouvrir le produit : section Stock avec « Stock actuel : 24 pièces · OK ».

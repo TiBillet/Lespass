@@ -43,6 +43,23 @@ from inventaire.models import MouvementStock, Stock, TypeMouvement, UniteStock
 ANCRE_SECTION_STOCK = "section-stock"
 
 
+# Champs conditionnels de la section Stock, appliqués par le JS générique
+# Administration/static/admin/js/inline_conditional_fields.js.
+# Tant que « Suivre le stock » n'est pas coché, les autres champs sont cachés.
+# Quand le produit a déjà un stock, la case n'est pas affichée :
+# le JS ne trouve pas le champ source et laisse tout visible.
+# / Stock section conditional fields, applied by the generic JS.
+# Hidden until "Track stock" is checked. With an existing stock, the switch
+# is not rendered: the JS finds no source field and keeps everything visible.
+CLE_REGLES_FORMULAIRE_PRINCIPAL = "__formulaire_principal__"
+REGLES_CONDITIONNELLES_SECTION_STOCK = {
+    "stock_quantite_initiale": "stock_suivi == true",
+    "stock_unite": "stock_suivi == true",
+    "stock_seuil_alerte": "stock_suivi == true",
+    "stock_vente_hors_stock": "stock_suivi == true",
+}
+
+
 # ---------------------------------------------------------------------------
 # Lecture du stock d'un produit
 # / Reading a product's stock
@@ -366,6 +383,8 @@ def html_badge_stock_avec_lien(produit, nom_url_fiche_produit):
     - Pas de stock suivi : « — », pas de lien.
     - Sinon : quantité lisible (ex : « 1.5 L ») dans un badge coloré.
       Rouge = épuisé, orange = sous le seuil, vert = ok.
+    - Épuisé mais vente hors stock autorisée : badge rouge avec le chiffre
+      réel (ex : « -12 »), car la caisse continue de vendre.
       Le clic ouvre la fiche produit, sur l'ancre #section-stock.
 
     La liste ne modifie jamais la quantité : chaque changement doit rester
@@ -382,7 +401,14 @@ def html_badge_stock_avec_lien(produit, nom_url_fiche_produit):
         return "—"
 
     etat = etat_du_stock(stock)
-    if etat == "rupture":
+    vente_encore_possible = stock.autoriser_vente_hors_stock
+    if etat == "rupture" and vente_encore_possible:
+        # Vente hors stock autorisée : la caisse continue de vendre sous 0.
+        # La pastille montre le chiffre réel (ex : « -12 ») plutôt que « Épuisé ».
+        # / Out-of-stock sales allowed: show the real (negative) quantity.
+        texte_du_badge = _formater_quantite_lisible(stock.quantite, stock.unite)
+        texte_pour_lecteur_ecran = _("Stock négatif, vente hors stock autorisée")
+    elif etat == "rupture":
         texte_du_badge = _("Épuisé")
         texte_pour_lecteur_ecran = _("Stock épuisé")
     else:

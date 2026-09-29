@@ -131,3 +131,49 @@ def test_badge_de_la_liste_ouvre_la_section_stock(
     badge.click()
     page.wait_for_url("**#section-stock")
     assert page.locator('[data-testid="product-section-stock"]').is_visible()
+
+
+def test_champs_stock_caches_tant_que_suivre_le_stock_n_est_pas_coche(
+    page, login_as_admin
+):
+    """
+    Page d'ajout : quantité de départ, unité, seuil et vente hors stock sont cachés.
+    Cocher « Suivre le stock » les affiche, décocher les cache à nouveau.
+    Règles injectées par POSProductAdmin.changeform_view, appliquées par
+    Administration/static/admin/js/inline_conditional_fields.js.
+    / Add page: stock fields hidden until "Track stock" is checked.
+    """
+    login_as_admin(page)
+    page.goto("/admin/BaseBillet/posproduct/add/")
+
+    champs_dependants = [
+        "#id_stock_quantite_initiale",
+        "#id_stock_unite",
+        "#id_stock_seuil_alerte",
+        "#id_stock_vente_hors_stock",
+    ]
+    for selecteur in champs_dependants:
+        assert not page.locator(selecteur).is_visible(), selecteur
+
+    # force=True : le switch Unfold stylise l'input / Unfold styles the switch input
+    case_suivre_le_stock = page.locator("#id_stock_suivi")
+    case_suivre_le_stock.check(force=True)
+    for selecteur in champs_dependants:
+        page.locator(selecteur).wait_for(state="visible", timeout=3000)
+
+    case_suivre_le_stock.uncheck(force=True)
+    page.wait_for_timeout(400)
+    for selecteur in champs_dependants:
+        assert not page.locator(selecteur).is_visible(), selecteur
+
+
+def test_champs_stock_visibles_quand_le_produit_a_deja_un_stock(
+    page, login_as_admin, produit_caisse_avec_stock
+):
+    """Produit avec stock : pas de case, les réglages restent visibles."""
+    login_as_admin(page)
+    page.goto(f"/admin/BaseBillet/posproduct/{produit_caisse_avec_stock.pk}/change/")
+
+    assert page.locator("#id_stock_suivi").count() == 0
+    assert page.locator("#id_stock_unite").is_visible()
+    assert page.locator("#id_stock_seuil_alerte").is_visible()

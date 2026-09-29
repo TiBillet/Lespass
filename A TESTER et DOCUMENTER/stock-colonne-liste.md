@@ -14,6 +14,8 @@ Code : `html_badge_stock_avec_lien` et `EtatStockFilter` dans
 Préparer 4 produits : stock 0, stock 3 avec seuil 5, stock 50, sans stock.
 1. Produits de caisse : badge rouge « Épuisé », orange « 3 », vert « 50 », « — ».
 2. Un stock en centilitres de 150 s'affiche « 1.5 L ».
+3. Vente hors stock **autorisée** et stock à -12 : badge rouge « -12 » (pas « Épuisé »).
+   Vente hors stock **bloquée** et stock à 0 : badge rouge « Épuisé ».
 
 ### Test 2 : clic sur le badge
 1. Cliquer un badge : la fiche produit s'ouvre et défile jusqu'à la section Stock.
