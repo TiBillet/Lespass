@@ -40,9 +40,28 @@ en grammes, bloqué lui aussi. Ouvrir le même PV sur **deux onglets** (poste A 
 1. Passer le stock en « Autorisée », stock 0.
 2. La tuile n'est pas grisée. La vente passe, avec l'alerte « Stock négatif ».
 
+### Test 7 : réception depuis l'admin
+1. Stock à 0, bloqué. La caisse est ouverte : tuile grisée « Épuisé ».
+2. Admin → Inventaire → Stock → fiche du produit → bouton « Réception » +5.
+3. Sur la caisse, sans recharger : le badge disparaît, la tuile redevient cliquable.
+4. Refaire avec « Ajustement » à 0 : la tuile redevient grisée.
+
+### Test 8 : modification de la fiche stock dans l'admin
+1. Stock à 0, bloqué, caisse ouverte (tuile grisée).
+2. Admin : cocher « vente hors stock autorisée » (fiche ou liste) et enregistrer.
+3. Sur la caisse, sans recharger : la tuile n'est plus grisée (badge « Épuisé » conservé).
+
+### Test 9 : création d'un stock dans l'admin
+1. Admin → Stock → Ajouter, quantité 10.
+2. Vérifier : quantité 10 (et pas 20), un mouvement « Stock initial » +10.
+
+### Test 10 : tirage à une tireuse
+1. Produit fût avec stock, caisse ouverte sur un PV qui montre ce produit.
+2. Faire un tirage : le badge de stock de la tuile suit (alerte / épuisé).
+
 ## Tests automatiques
 ```bash
-docker exec lespass_django poetry run pytest tests/pytest/test_stock_negatif.py tests/pytest/test_stock_visuel_pos.py -v
+docker exec lespass_django poetry run pytest tests/pytest/test_stock_negatif.py tests/pytest/test_stock_visuel_pos.py tests/pytest/test_stock_broadcast_hors_vente.py -v
 ```
 
 ## Compatibilité

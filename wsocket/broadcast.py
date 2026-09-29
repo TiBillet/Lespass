@@ -197,3 +197,51 @@ def broadcast_stock_update(produits_stock_data):
         context={"produits_stock": produits_stock_data},
         message_type="stock_update",
     )
+
+
+def broadcast_etat_stock(stock):
+    """
+    Envoie l'état à jour d'UN stock à toutes les caisses du lieu.
+    / Sends the up-to-date state of ONE stock to all POS terminals of the venue.
+
+    LOCALISATION : wsocket/broadcast.py
+
+    Utilisée pour les changements de stock faits HORS vente :
+    réception, perte, offert, ajustement, débit mètre (via StockService),
+    et modification de la fiche stock dans l'admin (StockAdmin.save_model).
+    Les ventes, elles, passent par _creer_lignes_articles (laboutik/views.py).
+
+    FLUX :
+    1. Relit le stock en base (la quantité a été modifiée par un update() F()).
+    2. Construit le dict attendu par hx_stock_badge.html.
+    3. Appelle broadcast_stock_update() → OOB swap de #stock-badge-<uuid>.
+
+    A appeler dans transaction.on_commit() : on ne prévient les caisses
+    qu'une fois le changement enregistré pour de bon.
+
+    Une erreur ici (Redis absent, par exemple) est journalisée mais ne remonte pas :
+    le stock est déjà enregistré, l'admin ne doit pas afficher une erreur 500.
+    / Errors are logged, not raised: the stock change is already committed.
+
+    :param stock: instance inventaire.models.Stock
+    """
+    # Import local : laboutik.views importe ce module (évite l'import circulaire)
+    # / Local import: laboutik.views imports this module (avoids circular import)
+    from laboutik.views import _formater_stock_lisible
+
+    try:
+        stock.refresh_from_db()
+        donnees_du_badge = {
+            "product_uuid": str(stock.product_id),
+            "quantite": stock.quantite,
+            "unite": stock.unite,
+            "en_alerte": stock.est_en_alerte(),
+            "en_rupture": stock.est_en_rupture(),
+            "bloquant": (
+                stock.est_en_rupture() and not stock.autoriser_vente_hors_stock
+            ),
+            "quantite_lisible": _formater_stock_lisible(stock.quantite, stock.unite),
+        }
+        broadcast_stock_update([donnees_du_badge])
+    except Exception as erreur:
+        logger.exception(f"[WS] Broadcast etat stock impossible : {erreur}")

@@ -11470,23 +11470,9 @@ class ArticlePanelViewSet(viewsets.ViewSet):
 
         stock.refresh_from_db()
 
-        # Broadcast WebSocket pour synchroniser les autres caisses
-        # / WebSocket broadcast to sync other POS terminals
-        donnees_broadcast = [
-            {
-                "product_uuid": str(product.uuid),
-                "quantite": stock.quantite,
-                "unite": stock.unite,
-                "en_alerte": stock.est_en_alerte(),
-                "en_rupture": stock.est_en_rupture(),
-                "bloquant": stock.est_en_rupture()
-                and not stock.autoriser_vente_hors_stock,
-                "quantite_lisible": _formater_stock_lisible(
-                    stock.quantite, stock.unite
-                ),
-            }
-        ]
-        broadcast_stock_update(donnees_broadcast)
+        # Pas de broadcast ici : StockService.creer_mouvement / ajuster_inventaire
+        # préviennent déjà toutes les caisses (inventaire/services.py).
+        # / No broadcast here: StockService already notifies all POS terminals.
 
         # Message de feedback / Feedback message
         label_action = {

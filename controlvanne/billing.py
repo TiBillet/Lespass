@@ -439,6 +439,13 @@ def facturer_tirage(
                         qty=1,
                         ligne_article=premiere_ligne,  # 1 seul mouvement de stock quel que soit le nb d'assets
                     )
+
+                # Prévenir les caisses LaBoutik du nouveau stock (badge de la tuile),
+                # après le commit de la facture. / Notify POS terminals after commit.
+                from wsocket.broadcast import broadcast_etat_stock
+
+                stock_du_fut = produit.stock_inventaire
+                transaction.on_commit(lambda: broadcast_etat_stock(stock_du_fut))
             except Exception:
                 logger.exception(
                     f"Stock non décrémenté pour le tirage (tireuse={tireuse.nom_tireuse}, "

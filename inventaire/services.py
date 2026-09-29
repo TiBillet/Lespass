@@ -7,6 +7,7 @@ LOCALISATION : inventaire/services.py
 
 import logging
 
+from django.db import transaction
 from django.db.models import F
 
 from inventaire.models import (
@@ -16,6 +17,28 @@ from inventaire.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _prevenir_les_caisses_apres_commit(stock):
+    """
+    Prévient les caisses du nouvel état du stock, une fois la transaction validée.
+    / Notifies POS terminals of the new stock state, once the transaction commits.
+
+    LOCALISATION : inventaire/services.py
+
+    Appelée par creer_mouvement() et ajuster_inventaire().
+    Ces deux méthodes servent à TOUS les changements manuels :
+    admin (boutons de la fiche stock), panel stock de la caisse, API, débit mètre.
+    Sans cet appel, une réception faite depuis l'admin ne changeait rien
+    sur les caisses ouvertes : la tuile restait "Épuisé" et bloquée.
+
+    on_commit : si la transaction est annulée, aucun message n'est envoyé.
+    Hors transaction (autocommit), on_commit exécute tout de suite.
+    / on_commit: nothing is sent on rollback. In autocommit, runs immediately.
+    """
+    from wsocket.broadcast import broadcast_etat_stock
+
+    transaction.on_commit(lambda: broadcast_etat_stock(stock))
 
 
 class StockService:
@@ -108,6 +131,8 @@ class StockService:
             f"motif='{motif}'"
         )
 
+        _prevenir_les_caisses_apres_commit(stock)
+
     @staticmethod
     def ajuster_inventaire(stock, stock_reel, motif="", utilisateur=None):
         """
@@ -138,6 +163,8 @@ class StockService:
             f"Ajustement inventaire : {stock.product.name} "
             f"{stock_avant} → {stock_reel} (delta={delta:+d})"
         )
+
+        _prevenir_les_caisses_apres_commit(stock)
 
 
 class ResumeStockService:

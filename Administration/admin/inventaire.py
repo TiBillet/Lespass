@@ -257,21 +257,46 @@ class StockAdmin(ModelAdmin):
         réception pour tracer l'entrée initiale dans le journal.
         / On stock creation, automatically creates a reception movement
         to trace the initial entry in the movement log.
+
+        Dans les deux cas, les caisses ouvertes sont prévenues par WebSocket
+        (badge stock de la tuile) :
+        - création : via StockService.creer_mouvement ;
+        - modification (vente hors stock, seuil, unité) : directement ici.
+        / In both cases open POS terminals are notified by WebSocket.
         """
+        from django.db import transaction
+
+        from inventaire.services import StockService
+        from wsocket.broadcast import broadcast_etat_stock
+
+        # --- Création : la quantité saisie arrive par le mouvement "Stock initial" ---
+        # creer_mouvement AJOUTE la quantité au stock en base (F() + delta).
+        # Si on enregistrait d'abord le stock avec la quantité saisie,
+        # elle serait comptée deux fois (10 saisis → 20 en stock).
+        # On enregistre donc le stock à 0, puis le mouvement apporte la quantité.
+        # / Creation: save the stock at 0, then the movement adds the typed quantity.
+        # Otherwise creer_mouvement would count it twice (10 typed → 20 in stock).
+        if not change:
+            quantite_saisie = obj.quantite
+            obj.quantite = 0
+            super().save_model(request, obj, form, change)
+
+            if quantite_saisie > 0:
+                StockService.creer_mouvement(
+                    stock=obj,
+                    type_mouvement=TypeMouvement.RE,
+                    quantite=quantite_saisie,
+                    motif=_("Stock initial"),
+                    utilisateur=request.user,
+                )
+            obj.refresh_from_db()
+            return
+
+        # --- Modification : pas de mouvement, mais l'état peut changer ---
+        # Ex : "vente hors stock" autorisée → la tuile épuisée redevient cliquable.
+        # / Change: no movement, but the blocking state may change.
         super().save_model(request, obj, form, change)
-
-        # Uniquement à la création (pas à la modification)
-        # / Only on creation (not on change)
-        if not change and obj.quantite > 0:
-            from inventaire.services import StockService
-
-            StockService.creer_mouvement(
-                stock=obj,
-                type_mouvement=TypeMouvement.RE,
-                quantite=obj.quantite,
-                motif=_("Stock initial"),
-                utilisateur=request.user,
-            )
+        transaction.on_commit(lambda: broadcast_etat_stock(obj))
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         """
