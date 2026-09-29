@@ -64,6 +64,12 @@ FLUX :
          hx-indicator="#kiosk-waiting-spinner"
          data-testid="kiosk-status-fallback"></div>
 
+    {# DEMO : « tape » une carte de test sur le TPE Stripe simule (simulated-wpe). #}
+    {# / DEMO: "taps" a test card on the simulated Stripe reader. #}
+    {% if demo %}
+        {% include "kiosk/partial/simulation_paiement.html" %}
+    {% endif %}
+
     <div id="cancelButton">
         <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg"
                 data-testid="kiosk-cancel-button"

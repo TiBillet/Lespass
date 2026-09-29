@@ -405,6 +405,51 @@ class TireuseBecAdmin(ModelAdmin):
 # ──────────────────────────────────────────────────────────────────────
 
 
+def _session_peut_etre_supprimee(request, session):
+    """
+    Une session facturee (liee a une LigneArticle) ne se supprime pas :
+    elle fait partie de la trace comptable.
+    / A billed session (linked to a LigneArticle) cannot be deleted.
+
+    LOCALISATION : controlvanne/admin.py
+
+    Partagee par RfidSessionAdmin, HistoriqueTireuseAdmin et HistoriqueCarteAdmin :
+    les trois affichent le meme modele RfidSession. Definie au niveau module,
+    car Unfold intercepte les methodes helper d'un ModelAdmin.
+    / Shared by the three admins showing RfidSession. Module-level: Unfold
+    intercepts helper methods defined inside a ModelAdmin.
+
+    :param request: objet Request Django
+    :param session: la session, ou None (liste)
+    :return: True si l'utilisateur peut supprimer
+    """
+    if session is not None and session.ligne_article_id:
+        return False
+    return TenantAdminPermissionWithRequest(request)
+
+
+def _supprimer_les_sessions_non_facturees(request, queryset):
+    """
+    Suppression groupee depuis une liste : on ne supprime que les sessions
+    non facturees, et on previent si certaines ont ete gardees.
+    / Bulk delete: only non-billed sessions are deleted.
+
+    LOCALISATION : controlvanne/admin.py
+
+    :param request: objet Request Django
+    :param queryset: les sessions cochees
+    """
+    sessions_facturees = queryset.filter(ligne_article__isnull=False)
+    nombre_de_sessions_gardees = sessions_facturees.count()
+    queryset.filter(ligne_article__isnull=True).delete()
+    if nombre_de_sessions_gardees:
+        messages.warning(
+            request,
+            _("%(nombre)s session(s) facturée(s) conservée(s) : elles font partie de la trace comptable.")
+            % {"nombre": nombre_de_sessions_gardees},
+        )
+
+
 @admin.register(RfidSession, site=staff_admin_site)
 class RfidSessionAdmin(ModelAdmin):
     """
@@ -437,28 +482,10 @@ class RfidSessionAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
-        # Une session facturée (liée à une LigneArticle) ne se supprime pas :
-        # elle fait partie de la trace comptable.
-        # / A billed session (linked to a LigneArticle) cannot be deleted.
-        if obj is not None and obj.ligne_article_id:
-            return False
-        return TenantAdminPermissionWithRequest(request)
+        return _session_peut_etre_supprimee(request, obj)
 
     def delete_queryset(self, request, queryset):
-        """
-        Suppression groupée depuis la liste : on ne supprime que les sessions
-        non facturées, et on prévient si certaines ont été gardées.
-        / Bulk delete: only non-billed sessions are deleted.
-        """
-        sessions_facturees = queryset.filter(ligne_article__isnull=False)
-        nombre_de_sessions_gardees = sessions_facturees.count()
-        queryset.filter(ligne_article__isnull=True).delete()
-        if nombre_de_sessions_gardees:
-            messages.warning(
-                request,
-                _("%(nombre)s session(s) facturée(s) conservée(s) : elles font partie de la trace comptable.")
-                % {"nombre": nombre_de_sessions_gardees},
-            )
+        _supprimer_les_sessions_non_facturees(request, queryset)
 
     @admin.display(description=_("Volume (cl)"), ordering="volume_delta_ml")
     def volume_servi_cl(self, obj):
@@ -560,18 +587,22 @@ _export_cartes_csv.short_description = _("Export CSV")
 @admin.register(HistoriqueTireuse, site=staff_admin_site)
 class HistoriqueTireuseAdmin(ModelAdmin):
     """
-    Historique des sessions de service normales (ni maintenance ni calibration).
-    Inclut un filtre plage de dates et un export CSV.
-    / History of normal service sessions (not maintenance or calibration).
-    Includes date range filter and CSV export.
+    Historique des tirages : les sessions de service normales
+    (ni maintenance ni calibration). Filtre plage de dates et export CSV.
+    / Pour history: normal service sessions. Date range filter and CSV export.
+
+    C'est le SEUL historique de service dans la sidebar. Il remplace
+    « Sessions » et « Historique cartes », qui montraient le meme modele.
+    Pour suivre une carte : taper son UID ou son nom dans la recherche.
+    / The ONLY service history in the sidebar. To follow a card, search it.
     """
 
     list_display = (
         "started_at",
         "tireuse_bec",
         "liquid_label_snapshot",
-        "uid",
         "label_snapshot",
+        "uid",
         "authorized",
         "volume_servi_cl",
     )
@@ -599,7 +630,10 @@ class HistoriqueTireuseAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return _session_peut_etre_supprimee(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        _supprimer_les_sessions_non_facturees(request, queryset)
 
     @admin.display(description=_("Volume (cl)"), ordering="volume_delta_ml")
     def volume_servi_cl(self, obj):
@@ -647,7 +681,10 @@ class HistoriqueCarteAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return _session_peut_etre_supprimee(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        _supprimer_les_sessions_non_facturees(request, queryset)
 
     @admin.display(description=_("Volume (cl)"), ordering="volume_delta_ml")
     def volume_servi_cl(self, obj):

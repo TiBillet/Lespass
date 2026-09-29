@@ -1527,10 +1527,6 @@ class TicketProductAdmin(ProductAdmin):
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
 
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.filter(categorie_article__in=[Product.BILLET, Product.FREERES])
-
 
 @admin.register(MembershipProduct, site=staff_admin_site)
 class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
@@ -1550,9 +1546,6 @@ class MembershipProductAdmin(HelpDisplayMixin, ProductAdmin):
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
 
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.filter(categorie_article=Product.ADHESION)
 
 class ResourceProductForm(ProductAdminCustomForm):
     """Formulaire produit force en mode Ressource.
@@ -1583,10 +1576,8 @@ class ResourceProductAdmin(ProductAdmin):
     # / change_form_after_template + changeform_view: inherited from ProductAdmin (base)
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
-
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.filter(categorie_article=Product.RESOURCE)
+    # Pas de get_queryset : ResourceProduct.objects (ResourceProductManager) filtre deja.
+    # / No get_queryset: ResourceProduct.objects (ResourceProductManager) already filters.
 
 
 # ---------------------------------------------------------------------------
@@ -1899,7 +1890,7 @@ class POSProductAdmin(ProductAdmin):
         # select_related : la colonne Stock ne fait pas une requête par ligne.
         # / Only products with a POS method set. select_related avoids N+1.
         qs = super().get_queryset(request)
-        return qs.filter(methode_caisse__isnull=False).select_related(
+        return qs.select_related(
             "stock_inventaire"
         )
 
@@ -2355,9 +2346,7 @@ class FutProductAdmin(ProductAdmin):
         # select_related : la colonne Stock ne fait pas une requête par ligne.
         # / Only keg products. select_related avoids N+1.
         qs = super().get_queryset(request)
-        return qs.filter(categorie_article=Product.FUT).select_related(
-            "stock_inventaire"
-        )
+        return qs.select_related("stock_inventaire")
 
 
 # ---------------------------------------------------------------------------

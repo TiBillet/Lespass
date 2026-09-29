@@ -283,8 +283,27 @@ let NfcReader = class {
     // serveur du kiosque. / hardware: the mode is picked from type_app
     // (window.KIOSK, exposed by base.html), not a 'laboutik' localStorage
     // absent on the kiosk's server origin.
-    const mode = (window.KIOSK && window.KIOSK.type_app === "cordova") ? "NFCMC" : "NFCLO"
+    //
+    // - cordova         -> NFCMC : plugin NFC natif (borne Android / Sunmi)
+    // - pi ou desktop   -> NFCLO : serveur socket.io local (nfcServer.js, port 3000)
+    // - autre (unknown) -> aucun lecteur : simple navigateur, sans serveur local.
+    //   Avant, ce cas partait en NFCLO et chaque page affichait l'erreur
+    //   « xhr poll error / CORS » sur http://localhost:3000.
+    // / cordova -> NFCMC, pi/desktop -> NFCLO, anything else -> no hardware
+    // reader (plain browser: no local socket.io server to reach).
+    const typeApp = window.KIOSK ? window.KIOSK.type_app : ''
+    let mode = ''
+    if (typeApp === 'cordova') {
+      mode = 'NFCMC'
+    } else if (typeApp === 'pi' || typeApp === 'desktop') {
+      mode = 'NFCLO'
+    }
+
     this.modeNfc = mode
+    if (mode === '') {
+      console.warn(`Aucun lecteur NFC materiel pour type_app = "${typeApp}"`)
+      return
+    }
     this.gestionModeLectureNfc(mode)
   }
 

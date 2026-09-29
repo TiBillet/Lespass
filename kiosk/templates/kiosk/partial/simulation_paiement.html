@@ -1,0 +1,71 @@
+{% load i18n %}
+{% comment %}
+BOUTONS « SIMULER LE PAIEMENT » / « SIMULER UN REFUS » — mode DEMO uniquement
+/ "Simulate payment" / "Simulate decline" buttons — DEMO mode only
+
+LOCALISATION : kiosk/templates/kiosk/partial/simulation_paiement.html
+
+Inclus par waiting_credit_card_terminal.html (si demo), et rendu seul par
+KioskViewSet.simuler_paiement (kiosk/views.py) apres le clic.
+
+FLUX DU CLIC :
+1. hx-post vers /kiosk/{pk}/simuler_paiement/ avec issue = accepte ou refuse
+2. La vue demande a Stripe de « presenter » une carte de test sur le lecteur
+   simule (present_payment_method). La carte de test decide de l'issue.
+3. Ce bloc se remplace par un message (envoye / erreur).
+4. Le suivi habituel (Celery + websocket, ou le sondage de secours) affiche
+   l'ecran final. Ces boutons ne changent PAS l'ecran eux-memes.
+   Refus : comme avec une vraie carte, le paiement reste ouvert. L'ecran de
+   refus vient avec « Annuler » ou a la fin du delai de suivi.
+
+Contexte : payment_intent, simulation_envoyee (bool), issue_simulee, error_message,
+erreur_stripe_brute (texte brut de l'erreur Stripe, DEMO uniquement).
+/ The usual tracking shows the final screen. A decline keeps the payment open
+until Cancel or the tracking timeout, like a real declined card.
+{% endcomment %}
+<div id="kiosk-simulation-paiement" data-testid="kiosk-simulation-paiement" aria-live="polite">
+    {% if simulation_envoyee %}
+        {% if issue_simulee == "refuse" %}
+            <p class="stage__lede" data-testid="kiosk-simulation-refus-envoye">
+                {% translate "Carte refusée présentée au TPE simulé. Touchez « Annuler » pour afficher l'écran de refus." %}
+            </p>
+        {% else %}
+            <p class="stage__lede" data-testid="kiosk-simulation-envoyee">
+                {% translate "Carte de test présentée au TPE simulé. Le paiement va se terminer." %}
+            </p>
+        {% endif %}
+    {% else %}
+        {% if error_message %}
+            <p class="kiosk-alert" role="alert" data-testid="kiosk-error-message">{{ error_message }}</p>
+        {% endif %}
+        {% if erreur_stripe_brute %}
+            {% comment %}
+            Texte brut renvoye par Stripe. Cette vue n'existe qu'en DEMO : rien ne fuit en production.
+            / Raw Stripe text. This view only exists in DEMO: nothing leaks in production.
+            {% endcomment %}
+            <p class="stage__lede" data-testid="kiosk-erreur-stripe-brute">
+                <small>{% translate "Réponse de Stripe :" %} <code>{{ erreur_stripe_brute }}</code></small>
+            </p>
+        {% endif %}
+        <div class="rcard__actions" role="group" aria-label="{% translate 'Simulation du TPE' %}">
+            <button type="button" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
+                    data-testid="kiosk-simuler-paiement"
+                    hx-post="{% url 'kiosk-simuler-paiement' pk=payment_intent.pk %}"
+                    hx-vals='{"issue": "accepte"}'
+                    hx-target="#kiosk-simulation-paiement"
+                    hx-swap="outerHTML"
+                    hx-disabled-elt="#kiosk-simulation-paiement button">
+                {% translate "Simuler le paiement" %}
+            </button>
+            <button type="button" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg"
+                    data-testid="kiosk-simuler-refus"
+                    hx-post="{% url 'kiosk-simuler-paiement' pk=payment_intent.pk %}"
+                    hx-vals='{"issue": "refuse"}'
+                    hx-target="#kiosk-simulation-paiement"
+                    hx-swap="outerHTML"
+                    hx-disabled-elt="#kiosk-simulation-paiement button">
+                {% translate "Simuler un refus" %}
+            </button>
+        </div>
+    {% endif %}
+</div>

@@ -127,6 +127,16 @@ def utilisateur_peut_acceder_au_paiement(payment_intent_db, user):
 CLE_SESSION_ADMIN_BORNE = "kiosk_admin"
 DUREE_OUVERTURE_CONFIGURATION_SECONDES = 10 * 60
 
+# Cartes de test Stripe pour le bouton « Simuler » du TPE simule (DEMO).
+# Voir KioskViewSet.simuler_paiement. / Stripe test cards for the DEMO
+# simulate buttons.
+ISSUE_SIMULATION_ACCEPTEE = "accepte"
+ISSUE_SIMULATION_REFUSEE = "refuse"
+CARTES_DE_TEST_PAR_ISSUE = {
+    ISSUE_SIMULATION_ACCEPTEE: "4242424242424242",
+    ISSUE_SIMULATION_REFUSEE: "4000000000000002",
+}
+
 # Sans geste pendant ce delai, une borne qui affiche une carte revient a
 # l'accueil (main.js). Sinon la personne suivante rechargerait la carte de la
 # precedente. / Idle delay before going back home while a card is shown.
@@ -194,6 +204,73 @@ def contexte_du_lieu(request):
         # Android). / base.html uses it to inject cordova.js.
         "type_app": type_app,
     }
+
+
+def trouver_la_borne_et_son_tpe(user):
+    """
+    Trouve la borne (Terminal) de l'utilisateur connecte et verifie qu'un TPE
+    actif y est branche.
+    / Finds the logged-in user's kiosk (Terminal) and checks that an active
+    card reader is plugged into it.
+
+    LOCALISATION : kiosk/views.py
+
+    Utilise par :
+    - list : l'ecran d'accueil affiche l'erreur DES l'arrivee sur la borne,
+      au lieu de la laisser decouvrir a l'etape « Payer ».
+    - refill_with_wisepos : garde serveur avant l'envoi au TPE.
+
+    En DEMO, l'admin (ou une borne sans TPE propre) utilise le TPE de
+    demonstration : le reader Stripe simule cree par la fixture demo_data_v2.
+    Hors DEMO, ce repli n'existe pas — seule la borne appairee a son TPE.
+    / In DEMO, the admin (or a device without its own reader) uses the demo
+    terminal. Outside DEMO there is no fallback.
+
+    :param user: TibilletUser connecte (borne ou admin)
+    :return: (terminal, message_erreur). message_erreur vaut None si tout va bien.
+    """
+    # L'accessor inverse OneToOne leve RelatedObjectDoesNotExist (sous-classe
+    # d'AttributeError) : getattr -> None.
+    # / The reverse OneToOne accessor raises an AttributeError subclass: getattr -> None.
+    terminal = getattr(user, "terminal", None)
+
+    # Le repli DEMO ne sert qu'a un utilisateur SANS borne (l'admin dans son
+    # navigateur). Une vraie borne appairee sans lecteur n'emprunte PAS le
+    # lecteur d'une autre : elle affiche l'erreur.
+    # Le repli ne prend qu'une borne QUI A UN LECTEUR : sans ce filtre, on
+    # retomberait sur la premiere borne venue, sans TPE.
+    # / The DEMO fallback is only for a user WITHOUT a kiosk (admin in a browser).
+    # A paired kiosk without a reader does NOT borrow another one's reader.
+    if terminal is None and settings.DEMO:
+        terminal = (
+            Terminal.objects.filter(
+                archived=False, tpe__isnull=False, tpe__active=True,
+            )
+            .order_by("name")
+            .first()
+        )
+
+    if terminal is None:
+        return None, _("Aucun terminal de paiement n'est appairé à cette borne.")
+
+    # La borne existe, mais aucun lecteur n'y est branche : on le dit clairement
+    # plutot que de laisser l'envoi echouer avec une erreur Stripe cryptique.
+    # / The kiosk exists but has no active reader: say so clearly.
+    if not terminal_a_un_tpe_actif(terminal):
+        return terminal, _("Aucun lecteur de carte bancaire n'est branché sur cette borne.")
+
+    return terminal, None
+
+
+def terminal_a_un_tpe_actif(terminal):
+    """
+    Le terminal a-t-il un TPE (lecteur de carte bancaire) actif ?
+    / Does the terminal have an active card reader?
+
+    LOCALISATION : kiosk/views.py
+    """
+    lecteur_de_carte = getattr(terminal, "tpe", None)
+    return lecteur_de_carte is not None and lecteur_de_carte.active
 
 
 def premier_message_d_erreur(erreurs_du_serializer):
@@ -321,6 +398,13 @@ class KioskViewSet(viewsets.ViewSet):
         context = contexte_du_lieu(request)
         context["recharge_active"] = la_recharge_est_active(request)
 
+        # Sans TPE actif, on previent DES l'accueil, pas a l'etape « Payer ».
+        # / Without an active reader, warn on the home screen, not at "Pay".
+        _terminal, message_sans_tpe = trouver_la_borne_et_son_tpe(request.user)
+        if message_sans_tpe:
+            logger.warning(f"kiosk list : {message_sans_tpe} (user {request.user})")
+        context["message_sans_tpe"] = message_sans_tpe
+
         return render(request, "kiosk/recharge.html", context)
 
     @action(detail=False, methods=['POST'])
@@ -411,53 +495,12 @@ class KioskViewSet(viewsets.ViewSet):
 
         user = request.user
 
-        # Garde : un TermUser Kiosque sans Terminal appaire ne doit pas faire un 500.
-        # L'accessor inverse OneToOne leve RelatedObjectDoesNotExist (sous-classe
-        # d'AttributeError) : getattr -> None.
-        # / Guard: a Kiosk TermUser without a paired Terminal must not 500.
-        # The reverse OneToOne accessor raises RelatedObjectDoesNotExist
-        # (an AttributeError subclass): getattr -> None.
-        terminal = getattr(user, "terminal", None)
-
-        # En DEMO, l'admin (ou une borne sans TPE propre) utilise le TPE de
-        # demonstration : le reader Stripe simule cree par la fixture demo_data_v2.
-        # Hors DEMO, ce repli n'existe pas — seule la borne appairee a son TPE.
-        # / In DEMO, the admin (or a device without its own reader) uses the demo
-        # terminal (the simulated Stripe reader seeded by demo_data_v2). Outside
-        # DEMO there is no fallback; only the paired device has its terminal.
-        # Le repli DEMO ne prend qu'une borne QUI A UN LECTEUR : sans ce filtre, on
-        # retomberait sur la premiere borne venue, sans TPE, et l'envoi echouerait plus loin
-        # avec une erreur incomprehensible.
-        # / The DEMO fallback only picks a device THAT HAS A READER.
-        if terminal is None and settings.DEMO:
-            terminal = (
-                Terminal.objects.filter(
-                    archived=False, tpe__isnull=False, tpe__active=True,
-                )
-                .order_by("name")
-                .first()
-            )
-
-        if terminal is None:
-            logger.error(f"refill_with_wisepos : aucun Terminal appaire au user {user}")
-            context = {
-                "user": user,
-                "error_message": _("Aucun terminal de paiement n'est appairé à cette borne."),
-            }
-            return render(request, "kiosk/partial/etape_erreur.html", context)
-
-        # La borne existe, mais aucun lecteur n'y est branche : on le dit clairement plutot
-        # que de laisser l'envoi echouer avec une erreur Stripe cryptique.
-        # / The kiosk exists but has no reader plugged in: say so clearly.
-        lecteur_de_carte = getattr(terminal, "tpe", None)
-        if lecteur_de_carte is None or not lecteur_de_carte.active:
-            logger.error(f"refill_with_wisepos : aucun TPE actif sur la borne {terminal}")
-            context = {
-                "user": user,
-                "error_message": _(
-                    "Aucun lecteur de carte bancaire n'est branché sur cette borne."
-                ),
-            }
+        # La borne et son TPE : meme verification que l'ecran d'accueil (list).
+        # / The kiosk and its reader: same check as the home screen (list).
+        terminal, message_sans_tpe = trouver_la_borne_et_son_tpe(user)
+        if message_sans_tpe:
+            logger.error(f"refill_with_wisepos : {message_sans_tpe} (user {user})")
+            context = {"user": user, "error_message": message_sans_tpe}
             return render(request, "kiosk/partial/etape_erreur.html", context)
 
         logger.info(f"request.data = {request.data}")
@@ -552,6 +595,9 @@ class KioskViewSet(viewsets.ViewSet):
             'montant_centimes': amount,
             'terminal': terminal,
             'payment_intent': payment_intent,
+            # Affiche le bouton « Simuler le paiement » (TPE simule).
+            # / Shows the "Simulate payment" button (simulated reader).
+            'demo': settings.DEMO,
         })
 
     @action(detail=True, methods=['GET'], url_path='status')
@@ -652,6 +698,100 @@ class KioskViewSet(viewsets.ViewSet):
         except Exception as e:
             logger.error(f"cancel : echec inattendu pour {pk} : {e}")
             return HttpResponseClientRedirect(reverse("kiosk-list"))
+
+    @action(detail=True, methods=['POST'])
+    def simuler_paiement(self, request, pk):
+        """
+        POST /kiosk/{pk}/simuler_paiement/ — DEMO uniquement : presente une carte
+        de test sur le TPE Stripe simule, comme si un client payait.
+        / POST /kiosk/{pk}/simuler_paiement/ — DEMO only: presents a test card
+        on the simulated Stripe reader, as if a customer paid.
+
+        Parametre POST « issue » :
+        - « accepte » (defaut) : carte de test acceptee -> paiement reussi.
+        - « refuse » : carte de test refusee (4000 0000 0000 0002).
+          Comme avec une vraie carte refusee, Stripe NE termine PAS le paiement :
+          le TPE attend une autre carte. La borne affiche le refus quand on
+          touche « Annuler », ou a la fin du delai de suivi (kiosk/tasks.py).
+        / "issue": "accepte" (default) or "refuse" (declined test card; like a
+        real decline, the payment stays open until Cancel or the timeout).
+
+        LOCALISATION : kiosk/views.py
+
+        Un lecteur simule (registration_code 'simulated-wpe') attend une carte
+        pour toujours : personne ne peut en poser une. Stripe fournit une route
+        de test pour ca : Reader.TestHelpers.present_payment_method.
+
+        Cette vue ne change PAS l'ecran de la borne. Le suivi habituel s'en
+        charge : la tache Celery (ou le sondage payment_status) voit le paiement
+        reussi et affiche success.html.
+        / This view does NOT change the kiosk screen: the usual tracking does.
+
+        Template : kiosk/partial/simulation_paiement.html
+        """
+        # Hors DEMO, la route n'existe pas. / Outside DEMO, the route does not exist.
+        if not settings.DEMO:
+            raise Http404
+
+        payment_intent_db = get_object_or_404(PaymentsIntent, pk=pk)
+
+        # Garde d'appartenance, comme cancel et payment_status.
+        # / Ownership guard, like cancel and payment_status.
+        if not utilisateur_peut_acceder_au_paiement(payment_intent_db, request.user):
+            logger.error(f"simuler_paiement : {request.user} n'est pas proprietaire du paiement {pk}")
+            raise Http404
+
+        # Quelle issue simuler ? Toute autre valeur est refusee.
+        # / Which outcome to simulate? Any other value is rejected.
+        issue_demandee = str(request.data.get("issue") or ISSUE_SIMULATION_ACCEPTEE)
+        if issue_demandee not in CARTES_DE_TEST_PAR_ISSUE:
+            raise Http404
+
+        context = {
+            "payment_intent": payment_intent_db,
+            "simulation_envoyee": False,
+            "issue_simulee": issue_demandee,
+        }
+
+        # Le lecteur sur lequel le paiement est REELLEMENT parti (fige a l'envoi).
+        # / The reader the payment was actually sent to (frozen at send time).
+        identifiant_du_lecteur = payment_intent_db.reader_stripe_id
+        if not identifiant_du_lecteur:
+            context["error_message"] = _("Ce paiement n'a pas été envoyé à un TPE.")
+            return render(request, "kiosk/partial/simulation_paiement.html", context)
+
+        import stripe
+        from root_billet.models import RootConfiguration
+
+        try:
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+            # La carte de test decide de l'issue : acceptee ou refusee.
+            # / The test card decides the outcome: accepted or declined.
+            numero_de_carte_de_test = CARTES_DE_TEST_PAR_ISSUE[issue_demandee]
+            # Stripe exige « type » des qu'on donne un numero de carte.
+            # Sans lui : « You have entered a card_present number but no type ».
+            # / Stripe requires "type" as soon as a card number is given.
+            stripe.terminal.Reader.TestHelpers.present_payment_method(
+                identifiant_du_lecteur,
+                type="card_present",
+                card_present={"number": numero_de_carte_de_test},
+            )
+        except Exception as erreur_stripe:
+            # Ex : vrai lecteur (pas simule), ou lecteur sans action en cours.
+            # / E.g. real reader (not simulated), or reader with no action in progress.
+            logger.error(f"simuler_paiement : present_payment_method a echoue pour {pk} : {erreur_stripe}")
+            context["error_message"] = _("La simulation a échoué. Le TPE est-il bien un lecteur simulé ?")
+            # On montre aussi le texte brut de Stripe, pour trouver la cause sans lire le journal.
+            # Pas de risque en production : cette route n'existe qu'en DEMO (404 plus haut).
+            # / Also show the raw Stripe text. Safe: this route only exists in DEMO.
+            context["erreur_stripe_brute"] = str(erreur_stripe)
+            return render(request, "kiosk/partial/simulation_paiement.html", context)
+
+        logger.info(
+            f"simuler_paiement : carte de test ({issue_demandee}) presentee sur {identifiant_du_lecteur} pour {pk}"
+        )
+        context["simulation_envoyee"] = True
+        return render(request, "kiosk/partial/simulation_paiement.html", context)
 
     # ------------------------------------------------------------------------
     # Configuration de la borne (equipe du lieu, carte primaire)

@@ -1,0 +1,22 @@
+{% load i18n %}
+{% comment %}
+BORNE SANS TPE — aucun lecteur de carte bancaire n'est lie a la borne
+/ Kiosk without card reader — no payment terminal is linked
+
+LOCALISATION : kiosk/templates/kiosk/partial/borne_sans_tpe.html
+
+Rendu par recharge.html (KioskViewSet.list) quand trouver_la_borne_et_son_tpe
+(kiosk/views.py) renvoie un message d'erreur. Le public voit l'erreur DES
+l'arrivee, au lieu de la decouvrir a l'etape « Payer ».
+Le bouton Admin (carte primaire) reste disponible dans l'en-tete.
+Contexte : message_sans_tpe.
+/ Shown on the home screen when no active reader is linked, instead of
+failing at the "Pay" step.
+{% endcomment %}
+<section class="stage" data-etape="sans-tpe" data-testid="kiosk-etape-sans-tpe">
+    <h1 class="stage__title">{% translate "La borne ne peut pas encaisser pour le moment." %}</h1>
+    <div role="alert" aria-live="assertive">
+        <p class="kiosk-alert" data-testid="kiosk-error-message">{{ message_sans_tpe }}</p>
+    </div>
+    <p class="stage__lede">{% translate "Vous pouvez trouver de l'aide au bar." %}</p>
+</section>

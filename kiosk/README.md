@@ -1,8 +1,9 @@
 # App `kiosk` — Borne de recharge cashless (TPE Stripe)
 
 Borne **libre-service** de rechargement de carte cashless NFC, sur terminal Android (Cordova)
-ou Raspberry Pi (Chromium). Paiement par carte bancaire sur un **TPE Stripe WisePOS**, crédit de
-la carte assuré **côté Fedow distant** (coexistence V1, via webhook Stripe).
+ou Raspberry Pi (Chromium). Paiement par carte bancaire sur un **TPE Stripe WisePOS**. Quand Stripe confirme le paiement,
+Lespass **crédite la carte dans sa base locale** (`fedow_core`), exactement comme la caisse V2
+(voir `kiosk/credit.py`). Plus de webhook Stripe vers le Fedow distant.
 
 > Spec de conception complète : `TECH_DOC/SESSIONS/KIOSK/SPEC.md`
 > Recette manuelle : `A TESTER et DOCUMENTER/kiosk-tpe-borne.md` et `A TESTER et DOCUMENTER/kiosk-refonte-ecrans.md`
@@ -14,10 +15,10 @@ la carte assuré **côté Fedow distant** (coexistence V1, via webhook Stripe).
 Parcours client sur la borne (écrans d'après la maquette `TEMP-tibillet-kiosk-main/`) :
 
 1. **Posez votre carte** NFC TiBillet (lecture automatique).
-2. **Solde** de la carte, lu chez Fedow. Modale si la carte n'est pas enregistrée.
+2. **Solde** de la carte : Fedow distant (FED, anciennes monnaies) + base locale (monnaie du lieu). Modale si la carte n'est pas enregistrée.
 3. **Choix du montant** — montants rapides `5 / 10 / 20 / 50 €` ou pavé numérique.
 4. **Récapitulatif** — montant ajouté et nouveau solde (calculé par le serveur).
-5. **Paiement CB** sur le TPE Stripe physique ; **Fedow crédite** la carte (webhook).
+5. **Paiement CB** sur le TPE Stripe ; dès que Stripe dit « réussi », **Lespass crédite** la carte (`kiosk/credit.py`, une seule fois par paiement).
 6. Écran **succès** (montant + nouveau solde) puis **« Merci ! »**, ou **refus** avec « Réessayer ».
 
 L'équipe du lieu ouvre la **configuration** (bouton Admin + carte primaire LaBoutik) pour
@@ -50,6 +51,10 @@ sont pilotés côté serveur ; le client (Android ou Pi) n'est qu'un **écran + 
                                └───────────────────────┘                    └────────────────┘
 ```
 
+> ⚠️ **Schéma d'origine (V1).** Depuis le 2026-09-29, il n'y a plus de webhook vers le Fedow distant :
+> c'est Lespass qui crédite la carte dans `fedow_core` quand `PaymentsIntent.get_from_stripe()` voit le
+> statut « succeeded » (`kiosk/credit.py`). Voir `CHANGELOG/2026-09-29-kiosk-credit-local.md`.
+
 ### Composants (dans `kiosk/`)
 
 | Fichier | Rôle |
@@ -57,7 +62,8 @@ sont pilotés côté serveur ; le client (Android ou Pi) n'est qu'un **écran + 
 | `models.py` | `PaymentsIntent`, `ReglagesBorne` (services proposés par chaque borne) |
 | `admin.py` | Admin Unfold : appairage du TPE Stripe, historique des paiements |
 | `views.py` | `KioskViewSet` — `list`, `check_request_card`, `recapitulatif`, `refill_with_wisepos`, `payment_status`, `cancel`, `acces_admin`, `configuration`, `basculer_module`, `demarrer` (garde `terminal_role == KI`) |
-| `carte.py` | `lire_la_carte_pour_la_borne` : solde et statut de la carte (Fedow distant) |
+| `carte.py` | `lire_la_carte_pour_la_borne` : solde et statut de la carte (Fedow distant + base locale) |
+| `credit.py` | `crediter_la_carte_du_paiement` : crédit local (produit « Recharge euros », tarif libre), via `_obtenir_ou_creer_wallet` et `_executer_recharges` de la caisse. Verrou + `PaymentsIntent.carte_creditee_le` : un seul crédit par paiement |
 | `validators.py` | `RefillWisePoseValidator` (vérifie la carte via Fedow) |
 | `tasks.py` | `poll_payment_intent_status` — tâche Celery qui suit le statut Stripe et pousse le résultat par WebSocket |
 | `urls.py` | Montée sous `/kiosk/` (dans `TiBillet/urls_tenants.py`) |
@@ -69,7 +75,8 @@ sont pilotés côté serveur ; le client (Android ou Pi) n'est qu'un **écran + 
 - `wsocket/consumers.py` + `routing.py` → `TerminalConsumer` sur `ws/terminal/<payment_intent_id>/`.
 - `laboutik/views.py` → le **bridge d'auth** route les terminaux `KI` vers `/kiosk/`.
 - `BaseBillet/models.py` (`module_kiosk`) + `Administration/admin/dashboard.py` (module + sidebar).
-- **Fedow** (`../Fedow`) → route webhook TPE étendue pour accepter une place Lespass **sans signature**.
+- `laboutik/views.py` → `_obtenir_ou_creer_wallet`, `_executer_recharges` (crédit, comme la caisse).
+- ~~**Fedow** (`../Fedow`) → route webhook TPE étendue~~ : plus nécessaire depuis le crédit local (2026-09-29).
 
 
 ---
@@ -379,7 +386,8 @@ docker exec lespass_django poetry run pytest \
 
 `DEMO=1` ne simule **que la carte NFC** (simulateur de tags côté front). Le TPE, lui, parle toujours
 à Stripe : `send_to_terminal` crée un vrai `PaymentIntent` et `get_from_stripe` lit le vrai statut.
-En mode test Stripe, utiliser le lecteur simulé (`registration_code = simulated-wpe`).
+En mode test Stripe, utiliser le lecteur simulé (`registration_code = simulated-wpe`) et les boutons
+« Simuler le paiement » / « Simuler un refus » de l'écran d'attente. Le crédit est réel (base locale).
 
 ---
 
