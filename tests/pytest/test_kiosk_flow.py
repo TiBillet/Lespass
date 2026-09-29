@@ -18,6 +18,7 @@ Lancement / Run:
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.conf import settings
 from django.http import HttpResponse
 from django.test import override_settings
 from django_tenants.utils import tenant_context
@@ -234,13 +235,18 @@ def test_kiosk_demo_page_loads_nfc_and_socket_io_and_exposes_kiosk_context(tenan
     index_nfc_js = content.index("kiosk/js/nfc.js")
     assert index_socket_io < index_nfc_js
 
-    # window.DEMO pose par base.html en DEMO, avec les 4 tags simulateur
-    # / window.DEMO set by base.html in DEMO, with the 4 simulator tags
+    # window.DEMO pose par base.html en DEMO, avec les 5 cartes du simulateur.
+    # Ce sont les memes cartes que la caisse et la tireuse (settings.DEMO_TAGID_*).
+    # / window.DEMO set by base.html in DEMO, with the 5 simulator cards
+    # (same cards as the POS and the tap).
     assert "window.DEMO" in content
-    assert "demoTagIdCm" in content
-    assert "demoTagIdClient1" in content
-    assert "demoTagIdClient2" in content
-    assert "demoTagIdClient3" in content
+    assert "cartesDuSimulateur" in content
+    assert settings.DEMO_TAGID_CM in content
+    assert settings.DEMO_TAGID_CLIENT1 in content
+    assert settings.DEMO_TAGID_CLIENT2 in content
+    assert settings.DEMO_TAGID_CLIENT3 in content
+    assert settings.DEMO_TAGID_CLIENT4 in content
+    assert "XXXXXXXX" not in content
 
     # window.KIOSK expose le type_app pour que nfc.js choisisse le mode hardware
     # (ici non utilise car DEMO force le simulateur, mais doit rester correct).
