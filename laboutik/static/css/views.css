@@ -103,6 +103,16 @@ footer {
 	}
 }
 
+/* VALIDER pendant l'envoi : htmx pose l'attribut disabled (hx-disabled-elt de
+   #addition-form, cotton/addition.html). Sur un <div>, disabled ne bloque rien
+   tout seul : on grise et on coupe le toucher le temps de la requete.
+   / VALIDER while submitting: htmx sets disabled; on a <div> we grey it out
+   and block touches for the duration of the request. */
+#bt-valider[disabled] {
+	opacity: 0.6;
+	pointer-events: none;
+}
+
 .footer-bt-text {
 	font-size: 1rem;
 	font-weight: bold;

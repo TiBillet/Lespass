@@ -97,6 +97,15 @@
   « Le stock vient de changer. Touchez à nouveau l'article. ».
   / Clearer stock wording everywhere; new strings to translate.
 
+- **Erreur console au clic VALIDER** : `The selector "#bt-valider-layer2" on
+  hx-disabled-elt returned no matches!`. `#addition-form` sert à toutes les étapes ;
+  au clic VALIDER du pied de page, la popup de confirmation (qui porte
+  `#bt-valider-layer2`) n'existe pas encore. `hx-disabled-elt` vaut maintenant
+  `#bt-valider-layer2, #bt-valider` : htmx ne signale une erreur que si aucun n'est
+  trouvé. Bonus : le VALIDER du pied de page est grisé et intouchable pendant la
+  requête (`#bt-valider[disabled]` dans `views.css`).
+  / Missing hx-disabled-elt target on the first payment step.
+
 ### Fichiers modifiés / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
@@ -118,6 +127,10 @@
 | `laboutik/static/css/overlay.css` | `.alerte-messages-texte` : `white-space: pre-line` (messages sur plusieurs lignes) |
 | `laboutik/static/js/articles.js` | `contenanceDuTarif`, `quantiteDuProduitDejaAuPanier`, `verifierStockAvantAjout` + appel au clic |
 | `tests/e2e/test_garde_stock_au_clic.py` | 5 tests : refus au 3e clic (paramètres envoyés au serveur), autorisé, mise à jour WS, contenance, tarifs additionnés |
+
+| `laboutik/templates/cotton/addition.html` | `hx-disabled-elt="#bt-valider-layer2, #bt-valider"` |
+| `laboutik/static/css/views.css` | `#bt-valider[disabled]` grisé pendant la requête |
+| `tests/e2e/test_addition_bouton_valider_grise.py` | 2 tests : pas d'erreur de sélecteur, VALIDER grisé puis réactivé |
 
 ### Migration
 - **Migration nécessaire / Migration required :** Non / No

@@ -80,14 +80,20 @@
 	{# hx-sync="this:drop" : tant qu'une requete du formulaire est en cours, un 2e envoi   #}
 	{# (double appui sur Valider) est ignore. hx-disabled-elt grise le bouton Valider      #}
 	{# pendant la requete. Le serveur protege aussi (cle_idempotence_paiement).            #}
+	{# Ce formulaire sert a TOUTES les etapes :                                            #}
+	{# - clic VALIDER du pied de page (moyens_paiement) : seul #bt-valider existe ;        #}
+	{# - Valider de la popup de confirmation (payer) : #bt-valider-layer2 existe aussi.    #}
+	{# On liste les deux : htmx ne signale une erreur que si AUCUN n'est trouve            #}
+	{# ("The selector ... returned no matches!").                                          #}
 	{# / Drop a 2nd submit while one is in flight; disable Validate meanwhile.             #}
+	{# Both buttons are listed: htmx only errors when NONE of them matches.                #}
 	<form id="addition-form" class="hide"
 		hx-post="{% url 'laboutik-paiement-moyens_paiement' %}"
 		hx-trigger="validerPaiement"
 		hx-target="#messages"
 		hx-swap="outerHTML"
 		hx-sync="this:drop"
-		hx-disabled-elt="#bt-valider-layer2"
+		hx-disabled-elt="#bt-valider-layer2, #bt-valider"
 		hx-on::after-request="hideAndEmptyElement('#confirm')"
 		data-url-reset="{% url 'laboutik-paiement-moyens_paiement' %}">
 		<input type="text" name="id_table" value="{{ id_table }}" />

@@ -84,10 +84,15 @@ en grammes, bloqué lui aussi. Ouvrir le même PV sur **deux onglets** (poste A 
 1. Stock 1, bloqué : 2e clic refusé.
 2. Réception +5 depuis l'admin (sans recharger la caisse) : le clic passe.
 
+### Test 15 : clic VALIDER
+1. Console ouverte. Ajouter un article, cliquer VALIDER.
+2. Aucune erreur « #bt-valider-layer2 … returned no matches ».
+3. Pendant le chargement des moyens de paiement, VALIDER est grisé (double appui impossible).
+
 ## Tests automatiques
 ```bash
 docker exec lespass_django poetry run pytest tests/pytest/test_stock_negatif.py tests/pytest/test_stock_visuel_pos.py tests/pytest/test_stock_broadcast_hors_vente.py -v
-docker exec lespass_django poetry run pytest tests/e2e/test_garde_stock_au_clic.py tests/e2e/test_tarif_popup.py -v
+docker exec lespass_django poetry run pytest tests/e2e/test_garde_stock_au_clic.py tests/e2e/test_tarif_popup.py tests/e2e/test_addition_bouton_valider_grise.py -v
 ```
 
 ## Compatibilité
