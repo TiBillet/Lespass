@@ -17,6 +17,8 @@ re-rendered. No JS state.
 
 ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
 1. QUOI    : une tuile par produit de recharge du lieu (tous les PV).
+             La zone n'existe que si la carte primaire a un PV cashless
+             (voir retour_carte dans laboutik/views.py).
              Toucher la tuile deja choisie la deselectionne.
 2. COMBIEN : les tarifs du produit choisi (1, 5, 10, Libre...).
 3. LIBRE   : pave numerique (cotton/numpad.html) si le tarif est libre.

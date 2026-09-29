@@ -99,13 +99,28 @@ hx_lire_nfc_complement.html, views/ask_primary_card.html.
       }
     }
 
+    /**
+     * Demarre le lecteur NFC quand le swap htmx qui contient le lecteur est fini.
+     * / Starts the NFC reader once the htmx swap holding the reader is done.
+     *
+     * PIEGE : une reponse peut aussi contenir un element hors bande
+     * (hx-swap-oob, ex : la cle d'idempotence de hx_display_type_payment.html).
+     * htmx declenche alors 'htmx:afterSwap' d'abord sur cet element.
+     * Avant, l'ecouteur se retirait a ce premier evenement, sans lecteur dedans :
+     * initNfc() n'etait jamais appele (pas de simulateur, pas de lecture).
+     * On ignore donc les swaps sans .nfc-container, et on ne se retire qu'apres.
+     * / TRAP: an out-of-band element fires 'htmx:afterSwap' first. Ignore swaps
+     *   without .nfc-container; only remove the listener once the reader is found.
+     */
     function nfcAfterSwap(event) {
       const nfcElement = event.target.querySelector('.nfc-container')
+      if (nfcElement === null) {
+        return
+      }
       // stop l'écoute de l'évènement 'htmx:afterSwap' pour ne pas en accumuler.
       document.removeEventListener('htmx:afterSwap', nfcAfterSwap)
-      if (nfcElement) {
-        initNfc()
-      }
+      window.nfcEcouteurAfterSwap = null
+      initNfc()
     }
 
     if (state.typeApp === 'cordova') {
@@ -123,7 +138,15 @@ hx_lire_nfc_complement.html, views/ask_primary_card.html.
         initNfc(state.typeApp)
       })
 
-      // lancé après un swap
+      // lancé après un swap.
+      // Un seul écouteur à la fois : l'écouteur d'un lecteur précédent, jamais
+      // déclenché (popup fermée avant le swap), est retiré avant d'ajouter le nouveau.
+      // Sinon initNfc() serait appelé deux fois.
+      // / One listener at a time: drop a previous reader's stale listener first.
+      if (window.nfcEcouteurAfterSwap) {
+        document.removeEventListener('htmx:afterSwap', window.nfcEcouteurAfterSwap)
+      }
+      window.nfcEcouteurAfterSwap = nfcAfterSwap
       document.addEventListener('htmx:afterSwap', nfcAfterSwap)
     }
   </script>

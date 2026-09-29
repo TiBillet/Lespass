@@ -178,12 +178,18 @@ def contexte_du_lieu(request):
         "delai_inactivite_secondes": DELAI_INACTIVITE_SECONDES,
         "test": settings.TEST,
         "demo": settings.DEMO,
-        # Toutes les cartes du simulateur NFC (base.html/nfc.js les attendent toutes).
-        # / All the NFC simulator cards (base.html/nfc.js expect them all).
-        "demoTagIdCm": settings.DEMO_TAGID_CM,
-        "demoTagIdClient1": settings.DEMO_TAGID_CLIENT1,
-        "demoTagIdClient2": settings.DEMO_TAGID_CLIENT2,
-        "demoTagIdClient3": settings.DEMO_TAGID_CLIENT3,
+        # Les cartes du simulateur NFC (mode DEMO).
+        # Ce sont les memes cartes que dans la caisse (laboutik/views.py)
+        # et la tireuse (controlvanne/viewsets.py) : memes tag_id, memes noms.
+        # base.html les donne a nfc.js, qui affiche un bouton par carte.
+        # / NFC simulator cards (DEMO): same cards as the POS and the tap.
+        "cartes_du_simulateur_nfc": [
+            {"tag_id": settings.DEMO_TAGID_CM, "name": _("Carte primaire")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT1, "name": _("Carte client 1")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT2, "name": _("Carte client 2")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT3, "name": _("Carte client 3")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT4, "name": _("Carte inconnue")},
+        ],
         # base.html s'en sert pour injecter cordova.js (plugin NFC de la borne
         # Android). / base.html uses it to inject cordova.js.
         "type_app": type_app,

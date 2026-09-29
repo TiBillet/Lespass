@@ -41,11 +41,14 @@
     <script>
         window.DEMO = {
             demoVirtualKeyboardActive: true,
-            demoTagIdCm: '{{ demoTagIdCm }}',
-            demoTagIdClient1: '{{ demoTagIdClient1 }}',
-            demoTagIdClient2: '{{ demoTagIdClient2 }}',
-            demoTagIdClient3: '{{ demoTagIdClient3 }}',
-            demoTagIdUnknown: 'XXXXXXXX',
+            {# Cartes du simulateur : les memes que la caisse et la tireuse #}
+            {# (liste construite dans kiosk/views.py:contexte_du_lieu). #}
+            {# / Simulator cards: same as the POS and the tap. #}
+            cartesDuSimulateur: [
+                {% for carte in cartes_du_simulateur_nfc %}
+                { name: '{{ carte.name|escapejs }}', tagId: '{{ carte.tag_id|escapejs }}' },
+                {% endfor %}
+            ],
             demoTagIdTempsReponse: {{ demoTagIdTempsReponse | default:1 }}
         }
     </script>

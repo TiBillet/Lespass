@@ -20,11 +20,13 @@ Infos c-read-nfc :
 - submit-url = url à poussée dans hx-post
 - not touch hx-triger="" and hx-post="", they are handled by the script below and nfc.js
 
-hx-include : envoie aussi uuid_pv (lu dans #addition-form) a retour_carte().
-Le serveur en a besoin pour la zone « Recharger » de hx_card_feedback.html :
-la recharge est enregistree sur le point de vente courant.
-/ hx-include also sends uuid_pv (from #addition-form): the top-up is recorded
-on the current POS.
+hx-include : envoie aussi uuid_pv et tag_id_cm (lus dans #addition-form) a
+retour_carte(). Le serveur en a besoin pour la zone « Recharger » de
+hx_card_feedback.html :
+- uuid_pv : la recharge est enregistree sur le point de vente courant ;
+- tag_id_cm : la zone ne s'affiche que si la carte primaire a un PV cashless.
+/ hx-include also sends uuid_pv (top-up recorded on the current POS) and
+tag_id_cm (zone shown only if the primary card has a cashless POS).
 -->
 <c-V2.read-nfc selector="#messages" input-selector="#nfc-tag-id" form-selector="#form-check-nfc" submit-url="{% url 'laboutik-paiement-retour_carte' %}">
 <form id="form-check-nfc"
@@ -33,7 +35,7 @@ on the current POS.
       hx-trigger=""
       hx-target="#messages"
       hx-swap="innerHTML"
-      hx-include="#addition-form [name='uuid_pv']">
+      hx-include="#addition-form [name='uuid_pv'], #addition-form [name='tag_id_cm']">
   {% csrf_token %}
   <input id="nfc-tag-id" name="tag_id" />
 </form>

@@ -1140,6 +1140,37 @@ def _charger_carte_primaire(tag_id):
     return carte_primaire_obj, None
 
 
+def _carte_primaire_a_un_point_de_vente_cashless(tag_id_carte_primaire):
+    """
+    La carte primaire du caissier donne-t-elle acces a un point de vente cashless ?
+    / Does the cashier's primary card give access to a cashless POS?
+
+    LOCALISATION : laboutik/views.py
+
+    Regle metier : la zone « Recharger » de la popup check carte ne s'affiche
+    que si la carte primaire a au moins un point de vente CASHLESS.
+    Un caissier de bar sans PV cashless ne voit donc pas la recharge.
+    Sans carte primaire (acces admin par session), pas de recharge non plus.
+    / Business rule: the check card "Top up" zone only shows when the primary
+    card has at least one CASHLESS POS. No primary card: no top-up either.
+
+    Utilise par / Used by : PaiementViewSet.retour_carte()
+
+    :param tag_id_carte_primaire: tag_id de la carte primaire (str, peut etre vide)
+    :return: bool
+    """
+    if not tag_id_carte_primaire:
+        return False
+
+    carte_primaire_obj, erreur = _charger_carte_primaire(tag_id_carte_primaire)
+    if erreur is not None:
+        return False
+
+    return carte_primaire_obj.points_de_vente.filter(
+        comportement=PointDeVente.CASHLESS,
+    ).exists()
+
+
 def obtenir_wallet_carte_depuis_fedow(carte):
     """
     Demande a Fedow (source de verite) le wallet de la carte et le miroir en
@@ -1724,9 +1755,13 @@ def _produits_de_recharge_du_lieu():
 
     REGLE (decision du 2026-09-18) : la recharge est possible depuis TOUS les
     points de vente, pas seulement ceux qui contiennent le produit (Cashless).
-    Le check carte la propose partout. La vente reste enregistree sur le point
-    de vente ou elle a lieu.
+    La vente reste enregistree sur le point de vente ou elle a lieu.
+    MAIS (decision du 2026-09-29) : le check carte ne propose la zone
+    « Recharger » que si la carte primaire du caissier a au moins un point
+    de vente cashless (voir _carte_primaire_a_un_point_de_vente_cashless).
     / Top-ups are allowed from EVERY POS, not only those holding the product.
+    BUT the check card only shows the "Top up" zone when the primary card
+    has a cashless POS.
 
     Un produit est retenu s'il est publie, non archive, et lie a un Asset
     actif et non archive (meme regle que l'ecran de vente).
@@ -1776,7 +1811,8 @@ def _construire_contexte_recharge(
     La zone avance par etapes. Chaque clic renvoie la zone entiere,
     recalculee ici (HTMX, pas d'etat cote JS) :
     1. Choisir QUOI : une tuile par produit de recharge du lieu
-       (monnaie locale RE, cadeau RC, temps TM), depuis n'importe quel PV.
+       (monnaie locale RE, cadeau RC, temps TM), depuis n'importe quel PV,
+       si la carte primaire a un PV cashless (sinon retour_carte passe None).
     2. Choisir COMBIEN : les tarifs du produit (1, 5, 10, Libre...).
     3. Montant libre : un champ de saisie (seulement si le tarif est libre).
     4. Confirmer : le montant, le solde apres recharge, puis
@@ -1791,7 +1827,9 @@ def _construire_contexte_recharge(
     PaiementViewSet.recharge_carte() → laboutik/partial/hx_card_recharge.html
 
     :param carte: CarteCashless scannee
-    :param point_de_vente: PointDeVente courant, ou None (pas de recharge alors)
+    :param point_de_vente: PointDeVente courant, ou None (pas de recharge alors).
+        retour_carte() passe None si la carte primaire n'a aucun PV cashless
+        (voir _carte_primaire_a_un_point_de_vente_cashless).
     :param uuid_produit_choisi: uuid (str) du produit choisi a l'etape 1
     :param uuid_prix_choisi: uuid (str) du tarif choisi a l'etape 2
     :param montant_libre_saisi: centimes (int) valides par le serializer, ou None
@@ -7901,7 +7939,11 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # Somme insuffisante → ne rien faire (le JS gère la validation côté client)
         # Insufficient amount → do nothing (JS handles client-side validation)
+        # « action » remet l'URL du formulaire sur moyens_paiement a la fermeture.
+        # Sans elle, le prochain VALIDER repostait direct vers /payer/.
+        # / "action" resets the form URL on close, or the next VALIDATE re-posts to /payer/.
         context_erreur = {
+            "action": "initUrlAddition();",
             "msg_type": "warning",
             "msg_content": _("Il y a une erreur !"),
             "selector_bt_retour": "#messages",
@@ -10565,13 +10607,21 @@ class PaiementViewSet(viewsets.ViewSet):
         couleur_fond = "--success" if email_carte else "--warning"
 
         # 6. Zone « Recharger » : les produits de recharge du point de vente courant.
-        #    uuid_pv vient de #addition-form (hx-include sur #form-check-nfc,
-        #    voir hx_check_card.html). Sans PV valide, la zone ne s'affiche pas.
-        # 6. "Top up" zone: the current POS top-up products. uuid_pv comes from
-        #    #addition-form (hx-include in hx_check_card.html).
+        #    uuid_pv et tag_id_cm viennent de #addition-form (hx-include sur
+        #    #form-check-nfc, voir hx_check_card.html).
+        #    La zone ne s'affiche que si la carte primaire a un PV cashless,
+        #    et seulement avec un PV valide.
+        # 6. "Top up" zone: the current POS top-up products. uuid_pv and tag_id_cm
+        #    come from #addition-form. Shown only if the primary card has a
+        #    cashless POS, and only with a valid POS.
+        tag_id_carte_primaire = request.POST.get("tag_id_cm", "").strip().upper()
+        la_recharge_est_permise = _carte_primaire_a_un_point_de_vente_cashless(
+            tag_id_carte_primaire
+        )
+
         point_de_vente_courant = None
         uuid_pv_recu = request.POST.get("uuid_pv", "").strip()
-        if uuid_pv_recu:
+        if uuid_pv_recu and la_recharge_est_permise:
             try:
                 point_de_vente_courant = PointDeVente.objects.get(uuid=uuid_pv_recu)
             except (PointDeVente.DoesNotExist, ValueError, DjangoValidationError):

@@ -8,13 +8,10 @@ let NfcReader = class {
     this.socketPort = 3000
     this.intervalIDVerifApiCordova = null
     this.cordovaLecture = false
-    this.simuData = [
-      { name: 'primary', tagId: window?.DEMO?.demoTagIdCm },
-      { name: 'client1', tagId: window?.DEMO?.demoTagIdClient1 },
-      { name: 'client2', tagId: window?.DEMO?.demoTagIdClient2 },
-      { name: 'client3', tagId: window?.DEMO?.demoTagIdClient3 },
-      { name: 'unknown', tagId: 'XXXXXXXX' }
-    ]
+    // Cartes du simulateur (mode DEMO), posees par kiosk/templates/kiosk/base.html.
+    // Ce sont les memes que la caisse et la tireuse.
+    // / Simulator cards (DEMO), set by base.html. Same as the POS and the tap.
+    this.simuData = window?.DEMO?.cartesDuSimulateur || []
   }
 
   verificationTagId(tagId, uuidConnexion) {
