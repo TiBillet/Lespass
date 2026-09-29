@@ -179,6 +179,9 @@ def test_modification_de_la_fiche_stock_dans_l_admin_previent_les_caisses(tenant
         assert donnees[0]["product_uuid"] == str(produit.uuid)
         assert donnees[0]["en_rupture"] is True
         assert donnees[0]["bloquant"] is False
+        # La garde au clic (articles.js) lit cette valeur sur le badge
+        # / The click guard (articles.js) reads this value on the badge
+        assert donnees[0]["autoriser_vente_hors_stock"] is True
 
 
 def test_creation_du_stock_dans_l_admin_ne_double_pas_la_quantite(tenant):
@@ -212,3 +215,21 @@ def test_creation_du_stock_dans_l_admin_ne_double_pas_la_quantite(tenant):
         mouvement_initial = MouvementStock.objects.get(stock=nouveau_stock)
         assert mouvement_initial.quantite == 10
         assert mouvement_initial.quantite_avant == 0
+
+
+def test_le_badge_websocket_porte_quantite_et_autorisation(tenant):
+    """Le HTML envoye aux caisses porte data-stock-quantite et data-autoriser-hors-stock.
+    / The HTML sent to POS terminals carries the quantity and the allow flag."""
+    from django.template.loader import render_to_string
+
+    with schema_context(TENANT_SCHEMA):
+        from wsocket.broadcast import donnees_badge_stock
+
+        _produit, stock = _creer_produit_avec_stock("Biere badge", quantite=1500)
+        html = render_to_string(
+            "laboutik/partial/hx_stock_badge.html",
+            {"produits_stock": [donnees_badge_stock(stock)]},
+        )
+
+    assert 'data-stock-quantite="1500"' in html
+    assert 'data-autoriser-hors-stock="false"' in html

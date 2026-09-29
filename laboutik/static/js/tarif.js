@@ -466,15 +466,49 @@ function tarifAjouterPoids(zone, btn) {
 	const stockDisponible = (stockDisponibleStr === '' || stockDisponibleStr === undefined)
 		? null
 		: Number(stockDisponibleStr)
-	if (!autoriserHorsStock && stockDisponible !== null && quantiteSaisie > stockDisponible) {
+	// Ce produit est peut-etre deja dans le panier (ex : 100g, puis encore 100g).
+	// Chaque pesee cree un input cache weight-<produit>--<tarif>--<n> (addition.js).
+	// On additionne ces quantites : c'est le TOTAL du panier qui doit tenir dans le stock.
+	// Le serveur fait le meme calcul (_valider_stock_panier) et reste autoritaire.
+	// / This product may already be in the cart. Sum its weight-* inputs:
+	// the cart TOTAL must fit in the stock. The server does the same check.
+	// Sur la vraie caisse, articles.js compte TOUT le panier du produit
+	// (pesees + tarifs fixes x contenance). Sinon, on compte les pesees seules.
+	// / On the real POS, articles.js counts the whole cart for the product.
+	let quantiteDejaAuPanier = 0
+	if (typeof quantiteDuProduitDejaAuPanier === 'function') {
+		quantiteDejaAuPanier = quantiteDuProduitDejaAuPanier(btn.dataset.productUuid)
+	} else {
+		const inputsPoidsDuProduit = document.querySelectorAll(
+			`#addition-form input[name^="weight-${btn.dataset.productUuid}--"]`
+		)
+		for (const inputPoids of inputsPoidsDuProduit) {
+			quantiteDejaAuPanier += Number(inputPoids.value) || 0
+		}
+	}
+	const quantiteTotaleDemandee = quantiteDejaAuPanier + quantiteSaisie
+
+	if (!autoriserHorsStock && stockDisponible !== null && quantiteTotaleDemandee > stockDisponible) {
 		const priceUuid = btn.dataset.priceUuid
 		const alerteEl = document.querySelector(`#tarif-numpad-alerte-${priceUuid}`)
 		if (alerteEl) {
 			const uniteSaisieAlerte = btn.dataset.uniteSaisie || ''
+			// Reste encore vendable pour ce panier (jamais negatif a l'affichage)
+			// / Still sellable for this cart (never shown negative)
+			const resteVendable = Math.max(stockDisponible - quantiteDejaAuPanier, 0)
+			// Memes mots que la popup serveur (PaiementViewSet.stock_insuffisant) :
+			// deja dans le panier / en stock / encore possible. Pas de total "demande",
+			// qui melangeait le panier et la saisie en cours.
+			// / Same wording as the server popup; no confusing "requested" total.
+			const phraseEncorePossible = resteVendable > 0
+				? `Vous pouvez encore en ajouter : ${resteVendable}${uniteSaisieAlerte}`
+				: 'Vous ne pouvez plus en ajouter.'
 			alerteEl.innerHTML = `
 				<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M12 2.6 22.8 21.2H1.2zM10.9 9h2.2v6.2h-2.2zm0 7.6h2.2v2.2h-2.2z"/></svg>
-				Stock insuffisant : ${quantiteSaisie}${uniteSaisieAlerte} demandes,
-				${stockDisponible}${uniteSaisieAlerte} disponibles.
+				Stock insuffisant.<br>
+				Déjà dans le panier : ${quantiteDejaAuPanier}${uniteSaisieAlerte}<br>
+				En stock : ${stockDisponible}${uniteSaisieAlerte}<br>
+				${phraseEncorePossible}
 			`
 			alerteEl.style.display = 'block'
 		}
@@ -664,6 +698,17 @@ function addArticleWithPrice(productUuid, priceUuid, prixCentimes, displayName, 
 	// / Variable amount (free or weight): each entry = new line.
 	// Fixed amount: same line, increment quantity.
 	const estMontantVariable = !!(customAmount || weightAmount)
+
+	// Garde stock au clic (tarif fixe ou prix libre) : chaque ajout retire
+	// "contenance" du stock. Les pesees ont leur propre garde (tarifAjouterPoids).
+	// verifierStockAvantAjout() vit dans articles.js (absent de certaines pages de test).
+	// / Click stock guard (fixed or free price). Weighings have their own guard.
+	if (!weightAmount && typeof verifierStockAvantAjout === 'function') {
+		const contenanceDeCeTarif = contenanceDuTarif(productUuid, priceUuid)
+		if (!verifierStockAvantAjout(productUuid, contenanceDeCeTarif)) {
+			return
+		}
+	}
 
 	let lineId
 	let quantity

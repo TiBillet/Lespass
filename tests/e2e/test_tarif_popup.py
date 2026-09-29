@@ -131,6 +131,15 @@ def caisse(page):
                 formulaire.appendChild(champ)
             }
             champ.value = ajout.quantity
+            // Vente au poids : addition.js ajoute aussi weight-<ligne>.
+            // La garde stock de tarif.js additionne ces champs.
+            // / Weight sale: addition.js also adds weight-<line>, summed by the stock guard.
+            if (ajout.weightAmount) {
+                const champPoids = document.createElement('input')
+                champPoids.name = 'weight-' + ajout.lineId
+                champPoids.value = ajout.weightAmount
+                formulaire.appendChild(champPoids)
+            }
         })
     }""")
 
@@ -462,6 +471,28 @@ def test_poids_bloque_si_le_stock_est_insuffisant(page, caisse):
     assert page.is_visible("#tarif-numpad-alerte-POIDS")
     assert "Stock insuffisant" in page.inner_text("#tarif-numpad-alerte-POIDS")
     assert _ajouts(page) == []
+
+
+def test_poids_la_garde_compte_ce_qui_est_deja_au_panier(page, caisse):
+    """100 g en stock, vente hors stock interdite : 100 g passent, les 100 g suivants
+    sont refuses (200 g au total). Avant, chaque pesee etait comparee seule au stock.
+    / 100 g stock: first 100 g accepted, next 100 g refused (200 g total)."""
+    tarif_avec_stock = dict(TARIF_POIDS, stock_disponible=100, autoriser_hors_stock=False)
+    caisse([tarif_avec_stock])
+
+    _toucher(page, ["1", "0", "0"], ZONE_POIDS)
+    page.click('[data-testid="tarif-numpad-ok-POIDS"]')
+    assert len(_ajouts(page)) == 1
+
+    _toucher(page, ["1", "0", "0"], ZONE_POIDS)
+    page.click('[data-testid="tarif-numpad-ok-POIDS"]')
+
+    assert len(_ajouts(page)) == 1
+    texte_alerte = page.inner_text("#tarif-numpad-alerte-POIDS")
+    assert "Stock insuffisant" in texte_alerte
+    assert "Déjà dans le panier : 100g" in texte_alerte
+    assert "En stock : 100g" in texte_alerte
+    assert "Vous ne pouvez plus en ajouter" in texte_alerte
 
 
 # ------------------------------------------------------------------ #

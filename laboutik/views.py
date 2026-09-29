@@ -111,7 +111,7 @@ from laboutik.reports import RapportComptableService
 from inventaire.models import Stock, TypeMouvement
 from inventaire.serializers import MouvementRapideSerializer
 from inventaire.services import StockService
-from wsocket.broadcast import broadcast_stock_update
+from wsocket.broadcast import broadcast_stock_update, donnees_badge_stock
 from laboutik.integrity import (
     calculer_hmac,
     obtenir_previous_hmac,
@@ -632,6 +632,10 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
                         "prix_centimes": int(round(p.prix * 100)),
                         "free_price": p.free_price,
                         "poids_mesure": p.poids_mesure,
+                        # Quantite de stock retiree par unite vendue (ex : 50 cl).
+                        # Lue par la garde stock au clic (articles.js).
+                        # / Stock quantity removed per unit sold. Read by the click stock guard.
+                        "contenance": p.contenance or 1,
                         "unite_saisie_label": "",  # sera enrichi ci-dessous / will be enriched below
                         "prix_reference_label": "",  # sera enrichi ci-dessous / will be enriched below
                         "subscription_label": p.get_subscription_type_display()
@@ -703,6 +707,10 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             "id": str(product.uuid),
             "name": product.name,
             "prix": prix_en_centimes,
+            # Contenance du tarif principal : stock retire par clic sur la tuile
+            # (articles mono-tarif). Lue par la garde stock (articles.js).
+            # / Main price contenance: stock removed per tile click. Read by the stock guard.
+            "contenance": prix_obj.contenance or 1,
             "categorie": categorie_dict,
             "couleur_backgr": couleur_backgr,
             "couleur_texte": couleur_texte_article,
@@ -745,6 +753,9 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             article_dict["stock_en_rupture"] = est_en_rupture
             article_dict["stock_bloquant"] = (
                 est_en_rupture and not stock_du_produit.autoriser_vente_hors_stock
+            )
+            article_dict["stock_autoriser_hors_stock"] = (
+                stock_du_produit.autoriser_vente_hors_stock
             )
             article_dict["stock_quantite_lisible"] = _formater_stock_lisible(
                 stock_du_produit.quantite, stock_du_produit.unite
@@ -4860,19 +4871,35 @@ def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
 
 def _valider_stock_panier(articles_panier):
     """
-    Verifie que chaque article du panier a un stock suffisant si son Stock
+    Verifie que chaque produit du panier a un stock suffisant si son Stock
     interdit la vente hors stock (autoriser_vente_hors_stock=False).
     A appeler AVANT le transaction.atomic() de _creer_lignes_articles.
-    / Checks that each cart item has enough stock if Stock blocks out-of-stock sale.
+    / Checks that each cart product has enough stock if Stock blocks out-of-stock sale.
     Must be called BEFORE _creer_lignes_articles' transaction.atomic().
 
     LOCALISATION : laboutik/views.py
 
+    IMPORTANT : on additionne TOUTES les lignes d'un meme produit.
+    Un produit peut apparaitre sur plusieurs lignes du panier :
+    - vrac : chaque saisie au pave cree une ligne (100g, puis encore 100g) ;
+    - plusieurs tarifs du meme produit (ex : 25cl et 50cl sur le meme fut).
+    Avant, chaque ligne etait comparee seule au stock : 100g + 100g passaient
+    sur un stock de 100g, meme quand la vente hors stock etait interdite.
+    / IMPORTANT: all lines of the same product are summed before comparing.
+
+    FLUX :
+    1. Pour chaque ligne, calcule la quantite demandee et l'ajoute au total du produit.
+    2. Pour chaque produit, compare le total au stock.
+
     :param articles_panier: liste de dicts retournee par _extraire_articles_du_panier()
-    :return: liste de dicts {name, demande, disponible, unite}.
+    :return: liste de dicts {name, demande, disponible, unite}, un par produit en defaut.
              Liste vide = panier OK.
     """
-    erreurs = []
+    # --- 1. Total demande par produit ---
+    # Cle : uuid du produit. Valeur : {"stock": Stock, "name": str, "demande": int}
+    # / Key: product uuid. Value: stock, name and total requested quantity.
+    total_demande_par_produit = {}
+
     for article in articles_panier:
         produit = article["product"]
 
@@ -4896,19 +4923,33 @@ def _valider_stock_panier(articles_panier):
             continue
 
         # Calcule la quantite reellement demandee : poids/mesure ou contenance fixe
+        # (meme regle que la decrementation dans _creer_lignes_articles)
         # / Compute actually requested quantity: weight/measure or fixed contenance
         weight_amount = article.get("weight_amount")
         if weight_amount:
-            quantite_demandee = weight_amount  # ex : 50000g pour les cacahuetes
+            quantite_demandee = weight_amount  # ex : 350g pour les cacahuetes
         else:
             contenance = article["price"].contenance or 1
             quantite_demandee = article["quantite"] * contenance
 
-        if quantite_demandee > stock.quantite:
+        if produit.uuid not in total_demande_par_produit:
+            total_demande_par_produit[produit.uuid] = {
+                "stock": stock,
+                "name": produit.name,
+                "demande": 0,
+            }
+        total_demande_par_produit[produit.uuid]["demande"] += quantite_demandee
+
+    # --- 2. Comparer chaque total au stock ---
+    # / Compare each total to the stock
+    erreurs = []
+    for total_du_produit in total_demande_par_produit.values():
+        stock = total_du_produit["stock"]
+        if total_du_produit["demande"] > stock.quantite:
             erreurs.append(
                 {
-                    "name": produit.name,
-                    "demande": quantite_demandee,
+                    "name": total_du_produit["name"],
+                    "demande": total_du_produit["demande"],
                     "disponible": stock.quantite,
                     "unite": stock.unite,
                 }
@@ -4925,17 +4966,29 @@ def _formater_erreurs_stock(erreurs):
 
     LOCALISATION : laboutik/views.py
 
+    Une ligne par produit : "Biere : 3 dans le panier, 2 en stock".
+    On ecrit "dans le panier" (et pas "demande") : c'est le TOTAL du panier
+    pour ce produit, toutes lignes confondues. Les quantites sont lisibles
+    (1.5 L, 800 g) grace a _formater_stock_lisible.
+    Le retour a la ligne est affiche par .alerte-messages-texte (white-space: pre-line).
+    / One line per product: "Beer: 3 in the cart, 2 in stock".
+
     :param erreurs: liste de dicts {name, demande, disponible, unite}
     :return: str formatee, prete pour msg_content de hx_messages.html
     """
-    parts = []
-    for e in erreurs:
-        parts.append(
-            f"{e['name']} : "
-            f"{_('demande')} {e['demande']} {e['unite']}, "
-            f"{_('reste')} {e['disponible']} {e['unite']}"
+    lignes_du_message = [str(_("Stock insuffisant — vente refusée."))]
+    for erreur in erreurs:
+        lignes_du_message.append(
+            _("%(nom)s : %(au_panier)s dans le panier, %(en_stock)s en stock")
+            % {
+                "nom": erreur["name"],
+                "au_panier": _formater_stock_lisible(erreur["demande"], erreur["unite"]),
+                "en_stock": _formater_stock_lisible(
+                    erreur["disponible"], erreur["unite"]
+                ),
+            }
         )
-    return f"{_('Stock insuffisant — vente refusée.')} {' ; '.join(parts)}"
+    return "\n".join(lignes_du_message)
 
 
 def _creer_lignes_articles(
@@ -5102,22 +5155,9 @@ def _creer_lignes_articles(
                     }
                 )
 
-            produits_stock_mis_a_jour.append(
-                {
-                    "product_uuid": str(produit.uuid),
-                    "quantite": stock_du_produit.quantite,
-                    "unite": stock_du_produit.unite,
-                    "en_alerte": stock_du_produit.est_en_alerte(),
-                    "en_rupture": stock_du_produit.est_en_rupture(),
-                    "bloquant": (
-                        stock_du_produit.est_en_rupture()
-                        and not stock_du_produit.autoriser_vente_hors_stock
-                    ),
-                    "quantite_lisible": _formater_stock_lisible(
-                        stock_du_produit.quantite, stock_du_produit.unite
-                    ),
-                }
-            )
+            # Données du badge : même fonction pour tous les chemins (wsocket/broadcast.py)
+            # / Badge data: same function for every path
+            produits_stock_mis_a_jour.append(donnees_badge_stock(stock_du_produit))
 
         lignes_creees.append(ligne)
 
@@ -5410,22 +5450,9 @@ def _creer_lignes_articles_cascade(
                     }
                 )
 
-            produits_stock_mis_a_jour.append(
-                {
-                    "product_uuid": str(produit.uuid),
-                    "quantite": stock_du_produit.quantite,
-                    "unite": stock_du_produit.unite,
-                    "en_alerte": stock_du_produit.est_en_alerte(),
-                    "en_rupture": stock_du_produit.est_en_rupture(),
-                    "bloquant": (
-                        stock_du_produit.est_en_rupture()
-                        and not stock_du_produit.autoriser_vente_hors_stock
-                    ),
-                    "quantite_lisible": _formater_stock_lisible(
-                        stock_du_produit.quantite, stock_du_produit.unite
-                    ),
-                }
-            )
+            # Données du badge : même fonction pour tous les chemins (wsocket/broadcast.py)
+            # / Badge data: same function for every path
+            produits_stock_mis_a_jour.append(donnees_badge_stock(stock_du_produit))
 
     # ------------------------------------------------------------------ #
     # Étape 3 : Chaînage HMAC (conformité LNE exigence 8)
@@ -6361,6 +6388,119 @@ class PaiementViewSet(viewsets.ViewSet):
     """
 
     permission_classes = [HasLaBoutikTerminalAccess]
+
+    # ----------------------------------------------------------------------- #
+    #  Garde stock au clic : texte du refus                                    #
+    #  Click stock guard: refusal message                                      #
+    # ----------------------------------------------------------------------- #
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="stock_insuffisant",
+        url_name="stock_insuffisant",
+    )
+    def stock_insuffisant(self, request):
+        """
+        GET /laboutik/paiement/stock_insuffisant/
+        Rend la popup standard (hx_messages.html) qui explique un ajout refuse.
+        / Renders the standard popup explaining a refused cart addition.
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. Clic sur une tuile (ou un tarif de la popup).
+        2. articles.js:verifierStockAvantAjout() refuse l'ajout tout de suite
+           (pas d'attente reseau pour bloquer).
+        3. Elle appelle cette vue en htmx.ajax → cible #messages (outerHTML).
+        4. On relit le stock EN BASE et on ecrit un message clair :
+           deja dans le panier / en stock / encore possible.
+
+        Si le stock en base permet finalement l'ajout (le badge de la tuile
+        etait en retard), on le dit : le caissier retouche l'article.
+        / If the DB stock actually allows it (stale tile badge), say so.
+
+        Parametres GET (StockInsuffisantSerializer) :
+        - product_uuid, quantite_au_panier, quantite_a_ajouter
+        """
+        from laboutik.serializers import StockInsuffisantSerializer
+
+        serializer = StockInsuffisantSerializer(data=request.GET)
+        if not serializer.is_valid():
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Stock insuffisant — vente refusée."),
+                },
+                status=400,
+            )
+
+        produit = get_object_or_404(
+            Product, uuid=serializer.validated_data["product_uuid"]
+        )
+        try:
+            stock = produit.stock_inventaire
+        except Stock.DoesNotExist:
+            stock = None
+
+        # Pas de stock gere, ou vente hors stock autorisee : l'ajout etait permis.
+        # Le badge de la tuile etait en retard sur la base.
+        # / No managed stock, or out-of-stock sale allowed: the tile badge was stale.
+        if stock is None or stock.autoriser_vente_hors_stock:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "info",
+                    "msg_content": _(
+                        "Le stock vient de changer. Touchez à nouveau l'article."
+                    ),
+                },
+            )
+
+        quantite_au_panier = serializer.validated_data["quantite_au_panier"]
+        quantite_a_ajouter = serializer.validated_data["quantite_a_ajouter"]
+        encore_possible = max(stock.quantite - quantite_au_panier, 0)
+
+        if encore_possible >= quantite_a_ajouter:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "info",
+                    "msg_content": _(
+                        "Le stock vient de changer. Touchez à nouveau l'article."
+                    ),
+                },
+            )
+
+        # Message en lignes courtes (FALC). Quantites lisibles : 2, 50 cl, 1.5 L, 800 g.
+        # / Short lines. Readable quantities.
+        lignes_du_message = [
+            _("%(nom)s : stock insuffisant.") % {"nom": produit.name},
+            _("Déjà dans le panier : %(quantite)s")
+            % {"quantite": _formater_stock_lisible(quantite_au_panier, stock.unite)},
+            _("En stock : %(quantite)s")
+            % {"quantite": _formater_stock_lisible(stock.quantite, stock.unite)},
+        ]
+        if encore_possible > 0:
+            lignes_du_message.append(
+                _("Vous pouvez encore en ajouter : %(quantite)s")
+                % {"quantite": _formater_stock_lisible(encore_possible, stock.unite)}
+            )
+        else:
+            lignes_du_message.append(_("Vous ne pouvez plus en ajouter."))
+
+        return render(
+            request,
+            "laboutik/partial/hx_messages.html",
+            {
+                "msg_type": "warning",
+                "msg_content": "\n".join(str(ligne) for ligne in lignes_du_message),
+            },
+        )
 
     # ----------------------------------------------------------------------- #
     #  Étape 1 : afficher les moyens de paiement disponibles                   #
@@ -11501,21 +11641,7 @@ class ArticlePanelViewSet(viewsets.ViewSet):
 
         # Broadcast pour mettre à jour l'état bloquant sur les autres caisses
         # / Broadcast to update blocking state on other POS terminals
-        donnees_broadcast = [
-            {
-                "product_uuid": str(product.uuid),
-                "quantite": stock.quantite,
-                "unite": stock.unite,
-                "en_alerte": stock.est_en_alerte(),
-                "en_rupture": stock.est_en_rupture(),
-                "bloquant": stock.est_en_rupture()
-                and not stock.autoriser_vente_hors_stock,
-                "quantite_lisible": _formater_stock_lisible(
-                    stock.quantite, stock.unite
-                ),
-            }
-        ]
-        broadcast_stock_update(donnees_broadcast)
+        broadcast_stock_update([donnees_badge_stock(stock)])
 
         etat_label = (
             _("autorisée") if stock.autoriser_vente_hors_stock else _("bloquée")

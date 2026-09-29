@@ -53,20 +53,71 @@
   **Contre-épreuve faite :** le test échouait (`assert 20 == 10`) avant la correction.
   / Admin stock creation doubled the typed quantity.
 
+- **Plusieurs lignes du même produit contournaient le blocage.** Stock 100 g bloquant,
+  panier 100 g + 100 g : la vente passait et le stock tombait à -100 g.
+  `_valider_stock_panier` comparait chaque ligne seule au stock. Elle additionne
+  maintenant toutes les lignes d'un même produit (pesées successives, plusieurs
+  tarifs), puis compare le total. Une seule erreur par produit.
+  Côté pavé numérique, `tarif.js` additionne les champs `weight-<produit>--*` déjà
+  dans le panier avant de comparer au stock, et affiche le reste possible.
+  `addition.js` ne supprimait jamais les champs `weight-*` (ni au retrait d'une ligne,
+  ni au RESET) : c'est corrigé, sinon la garde aurait compté des pesées retirées.
+  **Contre-épreuve faite :** le test « 100 g + 100 g » échouait avant la correction.
+  / Several lines of the same product bypassed the stock block; now summed per product.
+
+- **Garde au clic pour les articles à l'unité (et les tarifs fixes / prix libre).**
+  Stock de 2, vente hors stock interdite : le 3e clic sur la tuile est refusé tout de
+  suite. Le message est ensuite demandé au serveur
+  (`GET /laboutik/paiement/stock_insuffisant/`, `PaiementViewSet.stock_insuffisant`) :
+  popup standard `hx_messages.html` (même style que les autres messages), texte en
+  lignes courtes, quantités lisibles, stock relu en base :
+  « Biere : stock insuffisant. / Déjà dans le panier : 2 / En stock : 2 /
+  Vous ne pouvez plus en ajouter. ». Si le stock en base permet finalement l'ajout
+  (badge en retard), popup info « Le stock vient de changer. Touchez à nouveau l'article. »
+  `articles.js:verifierStockAvantAjout()` compte ce que le panier demande déjà pour
+  le produit, comme le serveur : quantité × contenance du tarif, et pesées. Elle lit
+  le stock et l'autorisation sur le badge de la tuile (mis à jour par WebSocket).
+  Appelée au clic sur une tuile mono-tarif et dans `tarif.js:addArticleWithPrice()`.
+  La garde du pavé (vrac) utilise le même comptage : un tarif fixe du même produit
+  déjà au panier est maintenant compté.
+  Données ajoutées : `contenance` (tuile et chaque tarif de `data-tarifs`),
+  `data-autoriser-hors-stock` sur le badge. Les 4 constructions du dict du badge
+  sont remplacées par `wsocket/broadcast.py:donnees_badge_stock(stock)`.
+  Le serveur reste autoritaire (`_valider_stock_panier` au clic VALIDER).
+  / Click guard for unit, fixed and free-price items; server stays authoritative.
+- **Messages de stock plus clairs.** « demande X, reste Y » mélangeait le total du
+  panier et la saisie en cours. Partout, les mots sont maintenant « dans le panier »,
+  « en stock », « encore possible » : popup de la garde au clic, alerte du pavé vrac
+  (`tarif.js`) et message du clic VALIDER (`_formater_erreurs_stock`, une ligne par
+  produit : « Cacahuètes : 50 kg dans le panier, 200 g en stock »).
+  **Nouvelles chaînes à traduire** (`.po` non modifiés) : « %(nom)s : %(au_panier)s dans
+  le panier, %(en_stock)s en stock », « %(nom)s : stock insuffisant. »,
+  « Déjà dans le panier : %(quantite)s », « En stock : %(quantite)s »,
+  « Vous pouvez encore en ajouter : %(quantite)s », « Vous ne pouvez plus en ajouter. »,
+  « Le stock vient de changer. Touchez à nouveau l'article. ».
+  / Clearer stock wording everywhere; new strings to translate.
+
 ### Fichiers modifiés / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
 | `laboutik/templates/cotton/articles.html` | Badge : `data-stock-bloquant` (sur `stock_bloquant`) + `data-stock-quantite` |
 | `laboutik/templates/laboutik/partial/hx_stock_badge.html` | Ajout de `data-stock-quantite` |
 | `laboutik/static/js/articles.js` | Lecture / écriture de `dataset.stockBloquant` |
-| `laboutik/static/js/tarif.js` | Garde du pavé : quantité lue sur le badge de la tuile |
-| `laboutik/views.py` | Contrôle du stock dans `moyens_paiement()` et `_payer_par_nfc()` |
+| `laboutik/static/js/tarif.js` | Garde du pavé : quantité lue sur le badge de la tuile, et ajout de ce qui est déjà au panier |
+| `laboutik/static/js/addition.js` | Suppression des champs `weight-*` au retrait d'une ligne et au RESET |
+| `tests/e2e/test_tarif_popup.py` | Test : la garde compte ce qui est déjà au panier |
+| `laboutik/views.py` | Contrôle du stock dans `moyens_paiement()` et `_payer_par_nfc()` ; `_valider_stock_panier` additionne les lignes d'un même produit |
 | `wsocket/broadcast.py` | Nouveau `broadcast_etat_stock(stock)` |
 | `inventaire/services.py` | `creer_mouvement` / `ajuster_inventaire` préviennent les caisses (on_commit) |
 | `Administration/admin/inventaire.py` | `StockAdmin.save_model` : broadcast à la modification, plus de doublement à la création |
 | `controlvanne/billing.py` | Broadcast du stock après un tirage |
 | `tests/pytest/test_stock_broadcast_hors_vente.py` | 4 tests : réception, ajustement, modif admin, création admin |
 | `tests/pytest/test_stock_negatif.py` | 3 tests : refus à VALIDER, passage si hors stock autorisé, refus NFC |
+
+| `laboutik/serializers.py` | `StockInsuffisantSerializer` (paramètres de la popup de refus) |
+| `laboutik/static/css/overlay.css` | `.alerte-messages-texte` : `white-space: pre-line` (messages sur plusieurs lignes) |
+| `laboutik/static/js/articles.js` | `contenanceDuTarif`, `quantiteDuProduitDejaAuPanier`, `verifierStockAvantAjout` + appel au clic |
+| `tests/e2e/test_garde_stock_au_clic.py` | 5 tests : refus au 3e clic (paramètres envoyés au serveur), autorisé, mise à jour WS, contenance, tarifs additionnés |
 
 ### Migration
 - **Migration nécessaire / Migration required :** Non / No

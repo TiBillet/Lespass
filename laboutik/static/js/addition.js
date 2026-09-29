@@ -463,6 +463,13 @@ function additionRemoveArticle(lineId) {
 		// / Also remove custom input if present (free price)
 		const customInput = document.querySelector(`#addition-form [name="custom-${lineId}"]`)
 		if (customInput) { customInput.remove() }
+		// Supprimer aussi l'input weight si present (vente au poids).
+		// Sinon il reste dans le formulaire : la garde stock de tarif.js
+		// compterait encore cette pesee retiree du panier.
+		// / Also remove weight input (weight sale), otherwise the tarif.js
+		// stock guard would still count this removed weighing.
+		const weightInput = document.querySelector(`#addition-form [name="weight-${lineId}"]`)
+		if (weightInput) { weightInput.remove() }
 	} else {
 		// Flash rouge sur la ligne décrémentée
 		// / Red flash on the decremented line
@@ -553,9 +560,9 @@ function additionReset() {
 	const allInputs = document.querySelectorAll('#addition-form input')
 	allInputs.forEach((input) => {
 		const inputName = input.getAttribute('name')
-		// Supprime les inputs repid-* et custom-* (prix libre)
-		// / Removes repid-* and custom-* (free price) inputs
-		if (inputName.startsWith('repid-') || inputName.startsWith('custom-')) {
+		// Supprime les inputs repid-*, custom-* (prix libre) et weight-* (vente au poids)
+		// / Removes repid-*, custom-* (free price) and weight-* (weight sale) inputs
+		if (inputName.startsWith('repid-') || inputName.startsWith('custom-') || inputName.startsWith('weight-')) {
 			input.remove()
 		}
 	})

@@ -199,6 +199,44 @@ def broadcast_stock_update(produits_stock_data):
     )
 
 
+def donnees_badge_stock(stock):
+    """
+    Construit les données du badge stock d'une tuile, pour hx_stock_badge.html.
+    / Builds the tile stock badge data, for hx_stock_badge.html.
+
+    LOCALISATION : wsocket/broadcast.py
+
+    Une seule fonction pour toutes les mises à jour (ventes, admin, panel, tireuses) :
+    le badge a toujours les mêmes informations, quel que soit le chemin.
+    Le stock doit être à jour (refresh_from_db) AVANT l'appel.
+    / One function for every update path, so the badge always carries the same data.
+    The stock must be fresh (refresh_from_db) BEFORE calling.
+
+    Le JS de la caisse lit sur le badge (articles.js, tarif.js) :
+    - data-stock-quantite : quantité disponible ;
+    - data-autoriser-hors-stock : "false" si la vente hors stock est interdite ;
+    - data-stock-bloquant : rupture ET vente hors stock interdite.
+
+    :param stock: instance inventaire.models.Stock
+    :return: dict {product_uuid, quantite, unite, en_alerte, en_rupture, bloquant,
+             autoriser_vente_hors_stock, quantite_lisible}
+    """
+    # Import local : laboutik.views importe ce module (évite l'import circulaire)
+    # / Local import: laboutik.views imports this module (avoids circular import)
+    from laboutik.views import _formater_stock_lisible
+
+    return {
+        "product_uuid": str(stock.product_id),
+        "quantite": stock.quantite,
+        "unite": stock.unite,
+        "en_alerte": stock.est_en_alerte(),
+        "en_rupture": stock.est_en_rupture(),
+        "bloquant": stock.est_en_rupture() and not stock.autoriser_vente_hors_stock,
+        "autoriser_vente_hors_stock": stock.autoriser_vente_hors_stock,
+        "quantite_lisible": _formater_stock_lisible(stock.quantite, stock.unite),
+    }
+
+
 def broadcast_etat_stock(stock):
     """
     Envoie l'état à jour d'UN stock à toutes les caisses du lieu.
@@ -213,7 +251,7 @@ def broadcast_etat_stock(stock):
 
     FLUX :
     1. Relit le stock en base (la quantité a été modifiée par un update() F()).
-    2. Construit le dict attendu par hx_stock_badge.html.
+    2. Construit le dict attendu par hx_stock_badge.html (donnees_badge_stock).
     3. Appelle broadcast_stock_update() → OOB swap de #stock-badge-<uuid>.
 
     A appeler dans transaction.on_commit() : on ne prévient les caisses
@@ -225,23 +263,9 @@ def broadcast_etat_stock(stock):
 
     :param stock: instance inventaire.models.Stock
     """
-    # Import local : laboutik.views importe ce module (évite l'import circulaire)
-    # / Local import: laboutik.views imports this module (avoids circular import)
-    from laboutik.views import _formater_stock_lisible
-
     try:
         stock.refresh_from_db()
-        donnees_du_badge = {
-            "product_uuid": str(stock.product_id),
-            "quantite": stock.quantite,
-            "unite": stock.unite,
-            "en_alerte": stock.est_en_alerte(),
-            "en_rupture": stock.est_en_rupture(),
-            "bloquant": (
-                stock.est_en_rupture() and not stock.autoriser_vente_hors_stock
-            ),
-            "quantite_lisible": _formater_stock_lisible(stock.quantite, stock.unite),
-        }
+        donnees_du_badge = donnees_badge_stock(stock)
         broadcast_stock_update([donnees_du_badge])
     except Exception as erreur:
         logger.exception(f"[WS] Broadcast etat stock impossible : {erreur}")

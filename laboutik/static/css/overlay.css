@@ -644,6 +644,9 @@
 .alerte-messages-texte {
 	margin: 0;
 	font-variant-numeric: tabular-nums;
+	/* Un message serveur peut tenir sur plusieurs lignes ("\n"), ex : stock insuffisant.
+	   / A server message may span several lines, e.g. insufficient stock. */
+	white-space: pre-line;
 }
 
 

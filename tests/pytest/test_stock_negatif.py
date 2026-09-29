@@ -169,6 +169,50 @@ class TestValiderStockPanier(FastTenantTestCase):
         assert erreur["disponible"] == 200
         assert erreur["unite"] == UniteStock.GR
 
+    def test_deux_lignes_du_meme_produit_sont_additionnees(self):
+        """Stock 100g bloquant, panier 100g + 100g : refuse (200g demandes).
+        Chaque ligne seule tient dans le stock, mais pas leur somme.
+        / 100g blocking stock, cart 100g + 100g: refused (200g requested)."""
+        from laboutik.views import _valider_stock_panier
+
+        Stock.objects.create(
+            product=self.produit_cacahuetes,
+            quantite=100,
+            unite=UniteStock.GR,
+            autoriser_vente_hors_stock=False,
+        )
+
+        articles = [
+            self._construire_article_panier(weight_amount=100),
+            self._construire_article_panier(weight_amount=100),
+        ]
+        erreurs = _valider_stock_panier(articles)
+
+        assert len(erreurs) == 1
+        assert erreurs[0]["name"] == "Cacahuetes en vrac"
+        assert erreurs[0]["demande"] == 200
+        assert erreurs[0]["disponible"] == 100
+
+    def test_deux_lignes_qui_tiennent_ensemble_dans_le_stock_passent(self):
+        """Stock 100g bloquant, panier 40g + 60g : accepte (pile 100g).
+        / 100g blocking stock, cart 40g + 60g: accepted (exactly 100g)."""
+        from laboutik.views import _valider_stock_panier
+
+        Stock.objects.create(
+            product=self.produit_cacahuetes,
+            quantite=100,
+            unite=UniteStock.GR,
+            autoriser_vente_hors_stock=False,
+        )
+
+        articles = [
+            self._construire_article_panier(weight_amount=40),
+            self._construire_article_panier(weight_amount=60),
+        ]
+        erreurs = _valider_stock_panier(articles)
+
+        assert erreurs == []
+
     def test_format_erreurs_stock_message_lisible(self):
         """_formater_erreurs_stock produit un message contenant nom + quantites.
         / _formater_erreurs_stock produces a message with name + quantities."""
@@ -184,9 +228,9 @@ class TestValiderStockPanier(FastTenantTestCase):
         ]
         message = _formater_erreurs_stock(erreurs)
 
-        assert "Cacahuetes en vrac" in message
-        assert "50000" in message
-        assert "200" in message
+        # Quantites lisibles, et "dans le panier" / "en stock" (pas "demande" / "reste")
+        # / Readable quantities, "in the cart" / "in stock" wording
+        assert "Cacahuetes en vrac : 50 kg dans le panier, 200 g en stock" in message
         # Le mot "insuffisant" ou la phrase signal doit apparaitre
         # / The word "insuffisant" or signal phrase must appear
         assert "insuffisant" in message.lower() or "refusée" in message.lower()
@@ -530,3 +574,103 @@ class TestFlowPaiementStock(FastTenantTestCase):
         assert response.status_code == 400
         assert "Cacahuetes flow" in response.content.decode("utf-8")
         assert LigneArticle.objects.count() == nb_lignes_avant
+
+    def test_paiement_refuse_si_deux_pesees_depassent_le_stock_ensemble(self):
+        """Stock 100g bloquant, panier 100g + 100g (2 lignes) : 400, rien de vendu.
+        / 100g blocking stock, cart 100g + 100g (2 lines): 400, nothing sold."""
+        Stock.objects.create(
+            product=self.produit,
+            quantite=100,
+            unite=UniteStock.GR,
+            autoriser_vente_hors_stock=False,
+        )
+        nb_lignes_avant = LigneArticle.objects.count()
+
+        # Deux pesees = deux lignes --1 et --2 (comme le pave de tarif.js)
+        # / Two weighings = two lines --1 and --2 (like the tarif.js keypad)
+        data = {
+            "uuid_pv": str(self.pv.uuid),
+            "moyen_paiement": "espece",
+            "total": "240",
+            "given_sum": "0",
+        }
+        for numero_de_pesee in (1, 2):
+            line_id = f"{self.produit.uuid}--{self.prix.uuid}--{numero_de_pesee}"
+            data[f"repid-{line_id}"] = "1"
+            data[f"weight-{line_id}"] = "100"
+            data[f"custom-{line_id}"] = "120"
+
+        response = self.c.post("/laboutik/paiement/payer/", data=data)
+
+        assert response.status_code == 400
+        assert "Cacahuetes flow" in response.content.decode("utf-8")
+        assert LigneArticle.objects.count() == nb_lignes_avant
+        stock = self.produit.stock_inventaire
+        stock.refresh_from_db()
+        assert stock.quantite == 100
+
+
+    # --- Popup de la garde au clic (GET stock_insuffisant) ---
+    # / Click guard popup (GET stock_insuffisant)
+
+    def _get_message_stock(self, quantite_au_panier, quantite_a_ajouter):
+        return self.c.get(
+            "/laboutik/paiement/stock_insuffisant/",
+            {
+                "product_uuid": str(self.produit.uuid),
+                "quantite_au_panier": quantite_au_panier,
+                "quantite_a_ajouter": quantite_a_ajouter,
+            },
+        )
+
+    def test_message_stock_insuffisant_dit_panier_stock_et_reste(self):
+        """Stock 100 g, 60 g au panier, on veut 50 g : popup warning claire.
+        / 100 g stock, 60 g in cart, 50 g wanted: clear warning popup."""
+        Stock.objects.create(
+            product=self.produit,
+            quantite=100,
+            unite=UniteStock.GR,
+            autoriser_vente_hors_stock=False,
+        )
+
+        response = self._get_message_stock(quantite_au_panier=60, quantite_a_ajouter=50)
+
+        assert response.status_code == 200
+        contenu = response.content.decode("utf-8")
+        assert 'data-testid="alerte-messages"' in contenu
+        assert "alerte-box--warning" in contenu
+        assert "Cacahuetes flow : stock insuffisant." in contenu
+        assert "Déjà dans le panier : 60 g" in contenu
+        assert "En stock : 100 g" in contenu
+        assert "Vous pouvez encore en ajouter : 40 g" in contenu
+
+    def test_message_stock_insuffisant_quand_plus_rien_n_est_possible(self):
+        """Stock 100 g, 100 g au panier : "Vous ne pouvez plus en ajouter."
+        / 100 g stock, 100 g in cart: nothing more can be added."""
+        Stock.objects.create(
+            product=self.produit,
+            quantite=100,
+            unite=UniteStock.GR,
+            autoriser_vente_hors_stock=False,
+        )
+
+        response = self._get_message_stock(quantite_au_panier=100, quantite_a_ajouter=1)
+
+        contenu = response.content.decode("utf-8")
+        assert "Vous ne pouvez plus en ajouter." in contenu
+
+    def test_message_stock_change_si_le_stock_en_base_permet_l_ajout(self):
+        """Le badge etait en retard : en base, l'ajout passe. Popup info "retouchez".
+        / Stale badge: the DB stock allows it. Info popup "tap again"."""
+        Stock.objects.create(
+            product=self.produit,
+            quantite=1000,
+            unite=UniteStock.GR,
+            autoriser_vente_hors_stock=False,
+        )
+
+        response = self._get_message_stock(quantite_au_panier=100, quantite_a_ajouter=50)
+
+        contenu = response.content.decode("utf-8")
+        assert "alerte-box--info" in contenu
+        assert "Le stock vient de changer" in contenu

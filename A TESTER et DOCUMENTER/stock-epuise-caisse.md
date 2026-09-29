@@ -59,9 +59,35 @@ en grammes, bloqué lui aussi. Ouvrir le même PV sur **deux onglets** (poste A 
 1. Produit fût avec stock, caisse ouverte sur un PV qui montre ce produit.
 2. Faire un tirage : le badge de stock de la tuile suit (alerte / épuisé).
 
+### Test 11 : plusieurs pesées du même produit
+1. Produit vrac, stock 100 g, vente hors stock **bloquée**.
+2. Pavé : 100 g → Ajouter (accepté). Encore 100 g → Ajouter :
+   alerte « Stock insuffisant. / Déjà dans le panier : 100g / En stock : 100g /
+   Vous ne pouvez plus en ajouter. ».
+3. Retirer la ligne de 100 g du panier, puis ressaisir 100 g : accepté.
+4. Contournement serveur : même avec 2 lignes au panier (ex : saisies avant une
+   vente sur un autre poste), VALIDER affiche « Stock insuffisant — vente refusée ».
+
+### Test 12 : garde au clic, article à l'unité
+1. Produit à la pièce, stock 2, vente hors stock **bloquée**.
+2. Cliquer 2 fois : 2 au panier. 3e clic : popup standard (comme les autres messages
+   de la caisse) « Biere : stock insuffisant. / Déjà dans le panier : 2 / En stock : 2 /
+   Vous ne pouvez plus en ajouter. ». Le panier reste à 2. Bouton Retour ou toucher le fond.
+3. Retour, retirer 1 article du panier, recliquer : accepté.
+4. Passer en « vente hors stock autorisée » : les clics ne sont plus bloqués.
+
+### Test 13 : garde au clic, tarifs avec contenance (fût)
+1. Fût : stock 100 cl, tarifs Demi (25 cl) et Pinte (50 cl), bloqué.
+2. Popup : 1 Pinte + 2 Demis passent (100 cl). Un 3e Demi est refusé.
+
+### Test 14 : garde à jour après une réception
+1. Stock 1, bloqué : 2e clic refusé.
+2. Réception +5 depuis l'admin (sans recharger la caisse) : le clic passe.
+
 ## Tests automatiques
 ```bash
 docker exec lespass_django poetry run pytest tests/pytest/test_stock_negatif.py tests/pytest/test_stock_visuel_pos.py tests/pytest/test_stock_broadcast_hors_vente.py -v
+docker exec lespass_django poetry run pytest tests/e2e/test_garde_stock_au_clic.py tests/e2e/test_tarif_popup.py -v
 ```
 
 ## Compatibilité
