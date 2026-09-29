@@ -768,15 +768,23 @@ class KioskViewSet(viewsets.ViewSet):
             # La carte de test decide de l'issue : acceptee ou refusee.
             # / The test card decides the outcome: accepted or declined.
             numero_de_carte_de_test = CARTES_DE_TEST_PAR_ISSUE[issue_demandee]
+            # Stripe exige « type » des qu'on donne un numero de carte.
+            # Sans lui : « You have entered a card_present number but no type ».
+            # / Stripe requires "type" as soon as a card number is given.
             stripe.terminal.Reader.TestHelpers.present_payment_method(
                 identifiant_du_lecteur,
+                type="card_present",
                 card_present={"number": numero_de_carte_de_test},
             )
         except Exception as erreur_stripe:
             # Ex : vrai lecteur (pas simule), ou lecteur sans action en cours.
-            # Le texte brut reste dans le journal. / Raw error stays in the log.
+            # / E.g. real reader (not simulated), or reader with no action in progress.
             logger.error(f"simuler_paiement : present_payment_method a echoue pour {pk} : {erreur_stripe}")
             context["error_message"] = _("La simulation a échoué. Le TPE est-il bien un lecteur simulé ?")
+            # On montre aussi le texte brut de Stripe, pour trouver la cause sans lire le journal.
+            # Pas de risque en production : cette route n'existe qu'en DEMO (404 plus haut).
+            # / Also show the raw Stripe text. Safe: this route only exists in DEMO.
+            context["erreur_stripe_brute"] = str(erreur_stripe)
             return render(request, "kiosk/partial/simulation_paiement.html", context)
 
         logger.info(

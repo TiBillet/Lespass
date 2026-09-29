@@ -39,3 +39,17 @@
 
 ### Traductions / Translations
 Nouvelles chaînes à traduire : « La borne ne peut pas encaisser pour le moment. », « Simuler le paiement », « Simuler un refus » et les messages de simulation (`makemessages` non lancé, à faire par le mainteneur).
+
+### Correctif / Fix — simulation de paiement
+`stripe.terminal.Reader.TestHelpers.present_payment_method` était appelé sans `type="card_present"`.
+Stripe refusait l'appel (« You have entered a card_present number but no type ») et la borne
+affichait « La simulation a échoué ». / The call lacked `type="card_present"`, so Stripe rejected it.
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `kiosk/views.py` | `simuler_paiement` : ajout de `type="card_present"`. |
+| `kiosk/views.py` (bis) | En cas d'échec, le texte brut de l'erreur Stripe est passé au template (`erreur_stripe_brute`). Route DEMO uniquement. |
+| `kiosk/templates/kiosk/partial/simulation_paiement.html` | Affiche « Réponse de Stripe : … » sous le message d'erreur. |
+| `tests/pytest/test_kiosk_flow.py` | Les assertions du mock vérifient aussi `type="card_present"` ; le test d'erreur vérifie que le texte Stripe est affiché. |
+
+Nouvelle chaîne à traduire / New string : « Réponse de Stripe : ».

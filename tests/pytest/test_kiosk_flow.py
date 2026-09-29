@@ -389,7 +389,7 @@ def test_simuler_paiement_presente_une_carte_sur_le_lecteur_du_paiement(tenant, 
     # Sans « issue », c'est la carte de test acceptee (4242...).
     # / Without "issue", the accepted test card is used.
     mock_presenter.assert_called_once_with(
-        "tmr_test_kiosk", card_present={"number": "4242424242424242"},
+        "tmr_test_kiosk", type="card_present", card_present={"number": "4242424242424242"},
     )
     assert 'data-testid="kiosk-simulation-envoyee"' in response.content.decode()
 
@@ -411,7 +411,7 @@ def test_simuler_un_refus_presente_la_carte_de_test_refusee(tenant, kiosk_user_a
 
     assert response.status_code == 200
     mock_presenter.assert_called_once_with(
-        "tmr_test_kiosk", card_present={"number": "4000000000000002"},
+        "tmr_test_kiosk", type="card_present", card_present={"number": "4000000000000002"},
     )
     assert 'data-testid="kiosk-simulation-refus-envoye"' in response.content.decode()
 
@@ -452,5 +452,7 @@ def test_simuler_paiement_affiche_une_erreur_si_stripe_refuse(tenant, kiosk_user
     assert response.status_code == 200
     assert 'data-testid="kiosk-error-message"' in contenu
     assert 'data-testid="kiosk-simuler-paiement"' in contenu
-    # Le texte brut de Stripe n'est pas montre / Raw Stripe text is not shown
-    assert "reader is not simulated" not in contenu
+    # En DEMO, le texte brut de Stripe est montre pour aider au diagnostic.
+    # / In DEMO, the raw Stripe text is shown to help debugging.
+    assert 'data-testid="kiosk-erreur-stripe-brute"' in contenu
+    assert "reader is not simulated" in contenu

@@ -21,8 +21,11 @@ class PaymentsIntent(models.Model):
     Pilotage d'un paiement TPE + affichage. Copié de LaBoutik APIcashless.PaymentsIntent.
     / Card-terminal payment driver + display state. Copied from LaBoutik.
 
-    Objet TECHNIQUE local : ce n'est PAS le crédit (le crédit = Fedow via webhook).
-    Le champ `pos` de LaBoutik est supprimé (inutile au flux Fedow, cf. SPEC).
+    Suit le paiement Stripe. Quand il reussit, la carte est creditee dans la base
+    locale (fedow_core), comme a la caisse V2 : voir kiosk/credit.py.
+    Le champ `pos` de LaBoutik est supprimé.
+    / Tracks the Stripe payment. On success the card is credited locally
+    (fedow_core), like the V2 POS: see kiosk/credit.py.
     """
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     amount = models.PositiveIntegerField(verbose_name=_("Montant"))  # centimes / cents
@@ -74,14 +77,24 @@ class PaymentsIntent(models.Model):
     status = models.CharField(max_length=2, choices=STATUS_CHOICES,
                               default=REQUIRES_PAYMENT_METHOD, verbose_name=_("Status"))
 
-    # Solde de la carte AVANT la recharge, lu chez Fedow au moment du paiement.
+    # Solde de la carte AVANT la recharge, lu au moment du paiement.
     # Il sert seulement a l'affichage : l'ecran de succes est rendu hors requete
-    # (websocket), il ne peut pas relire la carte. Le vrai credit reste chez Fedow.
-    # / Card balance BEFORE the refill, read from Fedow at payment time. Display
-    # only: the success screen is rendered outside a request (websocket).
+    # (websocket), il ne peut pas relire la carte.
+    # / Card balance BEFORE the refill, read at payment time. Display only: the
+    # success screen is rendered outside a request (websocket).
     solde_avant_centimes = models.PositiveIntegerField(
         blank=True, null=True,
         verbose_name=_("Solde avant recharge (centimes)"),
+    )
+
+    # Date du credit de la carte. Vide = pas encore credite.
+    # Pose dans la MEME transaction que le credit (kiosk/credit.py) : c'est ce
+    # qui empeche de crediter deux fois le meme paiement.
+    # / Card credit date. Empty = not credited yet. Set in the SAME transaction
+    # as the credit: this prevents a double credit.
+    carte_creditee_le = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name=_("Carte créditée le"),
     )
 
     def contexte_ecran_final(self):
@@ -98,10 +111,10 @@ class PaymentsIntent(models.Model):
         / Integers only: they go through the Redis channel layer. The `euros`
         template filter formats them.
 
-        Le nouveau solde est ANNONCE (solde avant + montant) : Fedow credite par
-        webhook, parfois quelques secondes apres l'ecran de succes.
-        / The new balance is ANNOUNCED: Fedow credits via webhook, sometimes a
-        few seconds after the success screen.
+        Le nouveau solde = solde avant + montant. La carte est creditee dans la
+        base locale au moment ou le paiement passe a « reussi » (kiosk/credit.py).
+        / New balance = balance before + amount. The card is credited locally
+        when the payment turns "succeeded".
         """
         nouveau_solde_centimes = None
         if self.solde_avant_centimes is not None:
@@ -127,9 +140,16 @@ class PaymentsIntent(models.Model):
         }
 
     def get_from_stripe(self):
-        """Rafraîchit le statut depuis Stripe.
-        / Refresh status from Stripe."""
-        if self.status in [PaymentsIntent.CANCELED, PaymentsIntent.SUCCEEDED]:
+        """Rafraîchit le statut depuis Stripe, et credite la carte des que le
+        paiement a reussi (kiosk/credit.py, une seule fois).
+        / Refresh status from Stripe, and credit the card once the payment
+        succeeded (kiosk/credit.py, once only)."""
+        if self.status == PaymentsIntent.SUCCEEDED:
+            # Deja reussi : on rattrape un credit qui aurait echoue avant.
+            # / Already succeeded: catch up a credit that failed before.
+            self.crediter_la_carte_si_besoin()
+            return self.status
+        if self.status == PaymentsIntent.CANCELED:
             return self.status
 
         import stripe
@@ -146,8 +166,30 @@ class PaymentsIntent(models.Model):
             self.status = PaymentsIntent.CANCELED
         elif stripe_payment.status == "succeeded":
             self.status = PaymentsIntent.SUCCEEDED
-        self.save()
+        # update_fields : SEULEMENT le statut. Une copie en memoire perimee (celle
+        # de la tache Celery, chargee avant le credit) ne doit jamais remettre
+        # carte_creditee_le a vide : ce serait un double credit.
+        # / Status ONLY: a stale in-memory copy must never reset carte_creditee_le.
+        self.save(update_fields=["status"])
+
+        if self.status == PaymentsIntent.SUCCEEDED:
+            self.crediter_la_carte_si_besoin()
         return self.status
+
+    def crediter_la_carte_si_besoin(self):
+        """
+        Credite la carte si ce n'est pas deja fait (voir kiosk/credit.py).
+        / Credits the card unless already done.
+
+        LOCALISATION : kiosk/models.py
+        """
+        if self.carte_creditee_le is not None:
+            return
+        from kiosk.credit import crediter_la_carte_du_paiement
+
+        crediter_la_carte_du_paiement(self.pk)
+        # Relit la date posee par le credit. / Re-read the date set by the credit.
+        self.refresh_from_db(fields=["carte_creditee_le"])
 
     def send_to_terminal(self, terminal):
         """Crée le PaymentIntent Stripe (card_present) et l'envoie au lecteur de carte.

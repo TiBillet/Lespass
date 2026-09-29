@@ -35,7 +35,10 @@ class PaymentsIntentAdmin(ModelAdmin):
 
     compressed_fields = True
     warn_unsaved_form = True
-    list_display = ("datetime", "amount", "terminal", "card", "status")
+    # carte_creditee_le vide sur un paiement « Succes » = carte PAS creditee
+    # (voir le journal : kiosk/credit.py). / Empty on a "Success" payment = card
+    # NOT credited (see the log).
+    list_display = ("datetime", "amount", "terminal", "card", "status", "carte_creditee_le")
     list_select_related = ("terminal", "card")
 
     def has_view_permission(self, request, obj=None):

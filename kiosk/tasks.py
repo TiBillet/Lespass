@@ -108,7 +108,7 @@ def poll_payment_intent_status(payment_intent_pk, max_duration_seconds=120):
         # capturee juste avant, l'annulation echoue, get_from_stripe (dans
         # annuler_sur_le_terminal) renvoie SUCCEEDED, et on affiche le succes.
         # Sinon le paiement passe CANCELED et l'ecran, la base et Stripe sont
-        # coherents (plus de webhook Fedow qui crediterait apres un « annule »).
+        # coherents (la carte n'est creditee que si Stripe dit « reussi », cf. kiosk/credit.py).
         # / Timeout: never leave the spinner, but do not show a lying "cancelled".
         # We really cancel on Stripe (release the reader), then show the screen for
         # the REAL status. If the card was captured just before, the cancel fails,
@@ -145,10 +145,13 @@ def poll_payment_intent_status(payment_intent_pk, max_duration_seconds=120):
 
         # Meme regle que le timeout (CAS 2) : ne JAMAIS laisser l'ecran bloque sur
         # le spinner. Best effort : on pousse l'ecran d'annulation si le canal est
-        # connu. Le credit reel reste gere cote Fedow via le webhook Stripe.
+        # connu. Le credit, lui, est fait par get_from_stripe des que Stripe dit
+        # « reussi » (kiosk/credit.py) ; le sondage de secours payment_status le
+        # rattrape si cette tache a plante avant.
         # / Same rule as the timeout (CASE 2): NEVER leave the screen stuck on the
         # spinner. Best effort: push the cancel screen if the room is known.
-        # The real credit is still handled on Fedow's side via the Stripe webhook.
+        # The credit is done by get_from_stripe once Stripe says "succeeded"
+        # (kiosk/credit.py); the payment_status safety net catches up.
         if room_name:
             try:
                 async_to_sync(channel_layer.group_send)(

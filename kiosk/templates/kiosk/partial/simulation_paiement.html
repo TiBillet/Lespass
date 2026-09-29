@@ -18,7 +18,8 @@ FLUX DU CLIC :
    Refus : comme avec une vraie carte, le paiement reste ouvert. L'ecran de
    refus vient avec « Annuler » ou a la fin du delai de suivi.
 
-Contexte : payment_intent, simulation_envoyee (bool), issue_simulee, error_message.
+Contexte : payment_intent, simulation_envoyee (bool), issue_simulee, error_message,
+erreur_stripe_brute (texte brut de l'erreur Stripe, DEMO uniquement).
 / The usual tracking shows the final screen. A decline keeps the payment open
 until Cancel or the tracking timeout, like a real declined card.
 {% endcomment %}
@@ -36,6 +37,15 @@ until Cancel or the tracking timeout, like a real declined card.
     {% else %}
         {% if error_message %}
             <p class="kiosk-alert" role="alert" data-testid="kiosk-error-message">{{ error_message }}</p>
+        {% endif %}
+        {% if erreur_stripe_brute %}
+            {% comment %}
+            Texte brut renvoye par Stripe. Cette vue n'existe qu'en DEMO : rien ne fuit en production.
+            / Raw Stripe text. This view only exists in DEMO: nothing leaks in production.
+            {% endcomment %}
+            <p class="stage__lede" data-testid="kiosk-erreur-stripe-brute">
+                <small>{% translate "Réponse de Stripe :" %} <code>{{ erreur_stripe_brute }}</code></small>
+            </p>
         {% endif %}
         <div class="rcard__actions" role="group" aria-label="{% translate 'Simulation du TPE' %}">
             <button type="button" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"

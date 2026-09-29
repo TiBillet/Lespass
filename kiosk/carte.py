@@ -4,18 +4,26 @@ kiosk/carte.py — Lecture d'une carte NFC pour l'affichage de la borne.
 
 LOCALISATION : kiosk/carte.py
 
-La borne parle au Fedow DISTANT (coexistence V1), jamais a fedow_core.
-Ce fichier transforme la reponse de Fedow en un petit dictionnaire simple,
-que les templates affichent tel quel.
-/ The kiosk talks to the REMOTE Fedow (V1 coexistence), never to fedow_core.
-This file turns Fedow's answer into a small plain dict for the templates.
+Le solde d'une carte vit a DEUX endroits, comme a la caisse V2 :
+- le Fedow DISTANT : la monnaie federee (FED) et les anciennes monnaies
+  locales (V1). On les lit dans la reponse de FedowAPI().NFCcard.retrieve().
+- la base LOCALE (fedow_core) : la monnaie locale du lieu. C'est la que la
+  caisse V2 ET la borne creditent (kiosk/credit.py).
+Les deux stocks sont separes : on additionne, sans rien compter deux fois.
+Ce fichier renvoie un petit dictionnaire simple, que les templates affichent.
+/ A card's balance lives in TWO places, like at the V2 POS: remote Fedow
+(FED + legacy currencies) and the local fedow_core database (the venue's
+local currency, credited by the POS and the kiosk). Disjoint stores: we add.
 
 UTILISE PAR :
 - kiosk/views.py : check_request_card, recapitulatif
 - kiosk/validators.py : RefillWisePoseValidator (solde avant recharge)
 """
 
+from AuthBillet.models import Wallet
 from fedow_connect.fedow_api import FedowAPI
+from fedow_core.models import Asset
+from fedow_core.services import WalletService
 from fedow_public.models import AssetFedowPublic
 from QrcodeCashless.models import CarteCashless
 
@@ -48,6 +56,57 @@ def calculer_le_solde_en_centimes(carte_fedow):
     return solde_en_centimes
 
 
+# Les categories de jetons LOCAUX (fedow_core) qui valent des euros.
+# / LOCAL (fedow_core) token categories worth euros.
+CATEGORIES_DE_JETONS_LOCAUX_EN_EUROS = [Asset.TLF, Asset.FED]
+
+
+def trouver_le_portefeuille_local(carte_locale, uuid_du_portefeuille_fedow):
+    """
+    Le portefeuille local (fedow_core) de la carte, SANS appel reseau.
+    / The card's local wallet, WITHOUT any network call.
+
+    LOCALISATION : kiosk/carte.py
+
+    kiosk/credit.py utilise la version caisse
+    (_obtenir_ou_creer_wallet) ; ici on suit le MEME ordre de priorite, pour
+    lire le MEME portefeuille que celui qui sera credite.
+    / Same priority order as the POS helper, so we read the wallet that gets
+    credited.
+
+    Ordre : 1. le portefeuille de l'utilisateur de la carte,
+            2. le portefeuille « ephemere » de la carte anonyme,
+            3. la copie locale du portefeuille Fedow (meme uuid).
+
+    :return: Wallet, ou None
+    """
+    if carte_locale.user and carte_locale.user.wallet:
+        return carte_locale.user.wallet
+    if carte_locale.wallet_ephemere:
+        return carte_locale.wallet_ephemere
+    if uuid_du_portefeuille_fedow:
+        return Wallet.objects.filter(uuid=uuid_du_portefeuille_fedow).first()
+    return None
+
+
+def calculer_le_solde_local_en_centimes(portefeuille_local):
+    """
+    Additionne les jetons en euros de la base locale (fedow_core).
+    / Adds up the euro tokens from the local database.
+
+    :param portefeuille_local: Wallet, ou None
+    :return: int, le solde en centimes
+    """
+    if portefeuille_local is None:
+        return 0
+
+    solde_local_en_centimes = 0
+    for jeton in WalletService.obtenir_tous_les_soldes(portefeuille_local):
+        if jeton.asset.category in CATEGORIES_DE_JETONS_LOCAUX_EN_EUROS:
+            solde_local_en_centimes += jeton.value
+    return solde_local_en_centimes
+
+
 def lire_la_carte_pour_la_borne(tag_id):
     """
     Lit une carte chez Fedow et renvoie ce que la borne affiche.
@@ -56,7 +115,8 @@ def lire_la_carte_pour_la_borne(tag_id):
     FLUX :
     1. Fedow connait-il la carte ? (leve CarteInconnueDeFedow sinon)
     2. La copie locale existe-t-elle ? (leve CarteCashless.DoesNotExist sinon)
-    3. On calcule le solde en euros et on regarde si la carte est enregistree.
+    3. On calcule le solde en euros (Fedow distant + base locale) et on
+       regarde si la carte est enregistree.
 
     :param tag_id: str, 8 caracteres hexadecimaux
     :return: dict {tag_id, numero_court, solde_centimes, est_enregistree,
@@ -67,7 +127,13 @@ def lire_la_carte_pour_la_borne(tag_id):
     carte_fedow = FedowAPI().NFCcard.retrieve(tag_id_propre)
     carte_locale = CarteCashless.objects.get(tag_id=tag_id_propre)
 
-    solde_en_centimes = calculer_le_solde_en_centimes(carte_fedow)
+    # Solde = Fedow distant + base locale (deux stocks separes).
+    # / Balance = remote Fedow + local database (two disjoint stores).
+    solde_distant_en_centimes = calculer_le_solde_en_centimes(carte_fedow)
+    uuid_du_portefeuille_fedow = (carte_fedow.get("wallet") or {}).get("uuid")
+    portefeuille_local = trouver_le_portefeuille_local(carte_locale, uuid_du_portefeuille_fedow)
+    solde_local_en_centimes = calculer_le_solde_local_en_centimes(portefeuille_local)
+    solde_en_centimes = solde_distant_en_centimes + solde_local_en_centimes
 
     # Une carte « ephemere » n'est liee a personne : si elle est perdue,
     # l'argent est perdu. On le signale avec une modale.
