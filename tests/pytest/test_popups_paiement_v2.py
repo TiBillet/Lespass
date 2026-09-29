@@ -193,6 +193,35 @@ def test_fonds_insuffisants_sans_especes_ni_cb_propose_seulement_le_cashless(
     assert "card-pastilles" not in contenu
 
 
+def test_fermer_fonds_insuffisants_en_temps_oublie_la_carte_lue(tenant_lespass):
+    """
+    Panier en temps refuse : la croix et le fond appellent
+    abandonnerLePaiementRefuse(). Sinon la carte lue reste dans le formulaire
+    et le prochain VALIDER paie sans nouveau scan.
+    / Time cart refused: closing forgets the card, so no payment without a rescan.
+    """
+    contexte = {
+        "currency_data": {"symbol": "€"},
+        "payment": {"missing": 2},
+        "carte_ref": "8E2A",
+        "soldes": [],
+        "nom_monnaie_du_panier_en_points": "Temps",
+        "payments_accepted": {
+            "accepte_especes": False,
+            "accepte_carte_bancaire": False,
+        },
+        "uuid_transaction": "",
+    }
+    with tenant_context(tenant_lespass):
+        contenu = render_to_string(
+            "laboutik/partial/hx_funds_insufficient.html", contexte
+        )
+
+    # Une fois sur le fond, une fois sur la croix / Once on the backdrop, once on the cross
+    assert contenu.count("abandonnerLePaiementRefuse();") == 2
+    assert 'data-testid="paiement-insuffisant-btn-fermer"' in contenu
+
+
 # ---------------------------------------------------------------------------
 # 3. Helper des soldes
 # ---------------------------------------------------------------------------

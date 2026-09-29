@@ -7901,7 +7901,11 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # Somme insuffisante → ne rien faire (le JS gère la validation côté client)
         # Insufficient amount → do nothing (JS handles client-side validation)
+        # « action » remet l'URL du formulaire sur moyens_paiement a la fermeture.
+        # Sans elle, le prochain VALIDER repostait direct vers /payer/.
+        # / "action" resets the form URL on close, or the next VALIDATE re-posts to /payer/.
         context_erreur = {
+            "action": "initUrlAddition();",
             "msg_type": "warning",
             "msg_content": _("Il y a une erreur !"),
             "selector_bt_retour": "#messages",
