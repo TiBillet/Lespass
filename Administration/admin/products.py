@@ -1576,10 +1576,8 @@ class ResourceProductAdmin(ProductAdmin):
     # / change_form_after_template + changeform_view: inherited from ProductAdmin (base)
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
-
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.filter(categorie_article=Product.RESOURCE)
+    # Pas de get_queryset : ResourceProduct.objects (ResourceProductManager) filtre deja.
+    # / No get_queryset: ResourceProduct.objects (ResourceProductManager) already filters.
 
 
 # ---------------------------------------------------------------------------
