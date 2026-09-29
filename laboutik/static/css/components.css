@@ -8,16 +8,26 @@
 
 
 /* --- Icones Material Symbols / Material Symbols icons ---
-   La police est locale : static/unfold/fonts/material-symbols/styles.css
-   (fournie par django-unfold, chargee dans base.html). Ce fichier ne declare
-   que le @font-face : la classe est donc declaree ici, comme le fait Google.
+   La police est locale : laboutik/static/fonts/material-symbols/.
+   C'est la police VARIABLE de Google (axes FILL, wght, GRAD, opsz).
+   La police fournie par django-unfold est statique : elle n'a pas d'axe FILL.
+   Avec elle, font-variation-settings: 'FILL' 1 ne fait rien.
+   On donne un nom de famille propre a LaBoutik.
+   Ainsi, pas de conflit avec le @font-face d'Unfold (l'admin garde sa police).
    <span class="material-symbols-outlined" aria-hidden="true">local_bar</span>
    Les noms viennent du selecteur de l admin (ICON_POS) ; les anciens noms
    FontAwesome ont ete convertis par la migration laboutik 0006.
-   / The font is local (django-unfold). Its CSS only has the @font-face, so the
-     class is declared here, like Google's stylesheet does. */
+   / Local variable font (FILL axis); Unfold's static font cannot be filled. */
+@font-face {
+	font-family: "Material Symbols Laboutik";
+	font-style: normal;
+	font-weight: 100 700;
+	font-display: block;
+	src: url("../fonts/material-symbols/MaterialSymbolsOutlined-variable.woff2") format("woff2");
+}
+
 .material-symbols-outlined {
-	font-family: "Material Symbols Outlined";
+	font-family: "Material Symbols Laboutik";
 	font-weight: normal;
 	font-style: normal;
 	line-height: 1;
@@ -32,6 +42,7 @@
 	-webkit-font-feature-settings: "liga";
 	-webkit-font-smoothing: antialiased;
 	user-select: none;
+	font-variation-settings: 'FILL' 1;
 }
 
 /* Taille par defaut : un peu plus grande que le texte autour, car un glyphe
