@@ -84,10 +84,14 @@ def admin_user(tenant):
 
 @pytest.fixture(scope="module")
 def premier_pv(test_data):
-    """Le premier point de vente (Bar).
-    / The first point of sale (Bar)."""
+    """Le point de vente « Bar », cree par create_test_pos_data.
+    / The "Bar" point of sale, created by create_test_pos_data.
+
+    Vise par son nom : trier par poid_liste ne suffit pas, d'autres tests laissent
+    des points de vente a poid_liste 0 dans lespass, et l'ex aequo tombait au hasard.
+    / Targeted by name: other tests leave poid_liste 0 points of sale behind."""
     with schema_context(TENANT_SCHEMA):
-        return PointDeVente.objects.filter(hidden=False).order_by('poid_liste').first()
+        return PointDeVente.objects.get(name="Bar")
 
 
 @pytest.fixture(scope="module")
@@ -311,10 +315,12 @@ class TestClotureRapportJSON:
             assert cloture is not None
             rapport = cloture.rapport_json
 
-            # Les 13 cles du RapportComptableService
-            # / The 13 keys from RapportComptableService
+            # Les 15 cles du RapportComptableService
+            # / The 15 keys from RapportComptableService
             assert 'totaux_par_moyen' in rapport
             assert 'detail_ventes' in rapport
+            assert 'offerts' in rapport
+            assert 'non_monetaire' in rapport
             assert 'tva' in rapport
             assert 'solde_caisse' in rapport
             assert 'recharges' in rapport

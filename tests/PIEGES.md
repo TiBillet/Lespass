@@ -3400,11 +3400,11 @@ lire une fenetre vide sans qu'aucune assertion ne le signale.
 **12.13.quinquies — `stripe listen` peut mourir en cours de session, et tout devient
 ininterpretable.**
 
-`STRIPE_REEL=1` est **declaratif** : il dit « je promets que Stripe est joignable », il ne le
-verifie pas (le conteneur ne voit pas les process de l'hote). `make e2e-stripe` controle que
-`stripe listen` tourne **au lancement** (`scripts/lancer_tests.sh`), mais si le CLI meurt en
-cours de session, les tests marques `stripe_listen` s'executent quand meme et echouent — pour
-une raison qui n'a rien a voir avec le code.
+Le conteneur ne voit pas les process de l'hote. `make e2e` controle que `stripe listen`
+tourne **au lancement** (`scripts/lancer_tests.sh`, variable `STRIPE_LISTEN`), mais si le CLI
+meurt en cours de session — ou tourne sans plus rien transmettre, vu le 2026-09-26 apres une
+relance —, les tests marques `stripe_listen` s'executent quand meme et echouent, pour une
+raison qui n'a rien a voir avec le code.
 
 **Le cas vicieux** : cela invalide silencieusement une **verification par mutation**. Une
 mutation censee casser la recompense a fait echouer le test sur « aucune vente enregistree »
@@ -3555,7 +3555,7 @@ Piege dans le piege : `mock_stripe` patche aussi `stripe.PaymentIntent.retrieve`
 verifier cote Stripe, lire `stripe.Refund.list(payment_intent=…, stripe_account=compte)` —
 c'est ce que fait `montants_rembourses_chez_stripe()`.
 
-Ces tests portent le marqueur `stripe_reel` : ils ne tournent qu'avec `make test-stripe`.
+Ces tests portent le marqueur `stripe_reel` : ils tournent à chaque `make test`.
 
 ### Panier : tests et parité avec / sans panier (2026-09-21)
 

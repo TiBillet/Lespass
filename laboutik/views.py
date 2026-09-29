@@ -35,8 +35,13 @@ from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connection
 from django.db.models import (
+    Case,
+    CharField,
     F,
+    IntegerField,
     Max,
+    Value,
+    When,
     Prefetch,
     Sum,
     Count,
@@ -44,7 +49,7 @@ from django.db.models import (
     ExpressionWrapper,
     DecimalField,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Cast, Coalesce
 
 from fedow_core.exceptions import (
     CarteDejaLiee,
@@ -107,7 +112,7 @@ from laboutik.serializers import (
     EnvoyerRapportSerializer,
     RechargeMontantLibreSerializer,
 )
-from laboutik.reports import RapportComptableService
+from laboutik.reports import MOYENS_HORS_ARGENT, RapportComptableService
 from inventaire.models import Stock, TypeMouvement
 from inventaire.serializers import MouvementRapideSerializer
 from inventaire.services import StockService
@@ -148,6 +153,8 @@ LABELS_MOYENS_PAIEMENT_DB = {
     PaymentMethod.LOCAL_EURO: _("Cashless"),
     PaymentMethod.LOCAL_GIFT: _("Cadeau"),
     PaymentMethod.FREE: _("Offert"),
+    PaymentMethod.STRIPE_FED: _("Monnaie fédérée"),
+    PaymentMethod.NON_MONETAIRE: _("Points ou temps"),
 }
 
 # Catégorie par défaut quand un produit n'a pas de categorie_pos
@@ -505,6 +512,123 @@ def _charger_events_billetterie():
     return events_list, compteur_tickets_par_price
 
 
+def _tarifs_vendables_a_la_caisse():
+    """
+    Les tarifs que la caisse sait vendre, les euros d'abord.
+    / The prices the POS can sell, euros first.
+
+    LOCALISATION : laboutik/views.py
+
+    - un tarif en euros (sans monnaie) ;
+    - OU un tarif en points ou en temps (monnaie FID ou TIM, active, non
+      archivee). Les monnaies fiduciaires (TLF, TNF, FED) ne sont jamais un
+      prix : elles servent a payer, par la cascade.
+    Sans les tarifs faits pour le paiement en ligne (paiement recurrent,
+    validation manuelle) : la caisse ne sait pas faire ces parcours.
+
+    Un tarif « en euros » n'a pas de monnaie ET n'est pas coche « non
+    fiduciaire » : un tarif coche sans monnaie choisie n'est ni en euros ni en
+    points, il n'est pas vendu.
+
+    Les euros d'abord, puis l'ordre d'affichage (entre euros, et entre tarifs en
+    points) : le premier tarif sert de tarif par defaut (prix de la tuile,
+    ancien format de panier sans price_uuid).
+
+    Appelee par / Called by : _construire_donnees_articles(),
+    _extraire_articles_du_panier().
+    """
+    tarif_en_euros = Q(asset__isnull=True, non_fiduciaire=False)
+    tarif_en_points_ou_en_temps = Q(
+        non_fiduciaire=True,
+        asset__category__in=[Asset.TIM, Asset.FID],
+        asset__active=True,
+        asset__archive=False,
+    )
+    return (
+        Price.objects.filter(
+            tarif_en_euros | tarif_en_points_ou_en_temps,
+            publish=True,
+            recurring_payment=False,
+            manual_validation=False,
+        )
+        .select_related("asset")
+        .annotate(
+            # 0 pour un tarif en euros, 1 pour un tarif en points : les euros
+            # passent devant, puis `order` departage, quelle que soit la monnaie.
+            # / 0 for euros, 1 for points: euros first, then `order`.
+            rang_de_la_monnaie=Case(
+                When(asset__isnull=True, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("rang_de_la_monnaie", "order")
+    )
+
+
+def _unite_du_tarif(tarif):
+    """
+    L'unite a afficher a cote du prix d'un tarif : le nom de sa monnaie
+    (« Points fidélité », « Temps ») pour un tarif en points ou en temps, le
+    symbole € sinon.
+    / The unit shown next to a price: currency name for points/time, € otherwise.
+
+    LOCALISATION : laboutik/views.py
+
+    :param tarif: Price (avec son asset charge par select_related)
+    :return: str
+    """
+    if not _tarif_est_en_points(tarif):
+        return CURRENCY_DATA["symbol"]
+    if tarif.asset_id is None:
+        return str(_("Points ou temps"))
+    return tarif.asset.name
+
+
+def _initiales_de_la_monnaie(nom_de_la_monnaie):
+    """
+    Les initiales d'un nom de monnaie, pour la place reduite d'une tuile :
+    « Points fidélité » → « PF », « Temps » → « T ».
+    Deux monnaies peuvent avoir les memes initiales (« Points fidélité »,
+    « Points festival ») : la tuile porte le nom complet en infobulle (<abbr>).
+    / Initials of a currency name, for the small space of a tile. The full name
+      is the tile tooltip.
+
+    LOCALISATION : laboutik/views.py
+
+    :param nom_de_la_monnaie: str
+    :return: str
+    """
+    initiales = ""
+    for mot in nom_de_la_monnaie.split():
+        initiales += mot[0].upper()
+    return initiales
+
+
+def _retirer_les_tarifs_en_points_non_vendables(produit):
+    """
+    Un tarif en points ne se vend que sur un article de vente ou une adhesion :
+    sur tout autre produit (recharge, consigne...), on le retire de
+    `produit.prix_euros`. L'admin refuse ce cas ; la caisse le refuse aussi,
+    pour un tarif ecrit en base par un autre chemin (API, script).
+    / A points price only sells on a sale item or a membership: removed otherwise.
+
+    LOCALISATION : laboutik/views.py
+
+    :param produit: Product dont `prix_euros` vient de _tarifs_vendables_a_la_caisse()
+    """
+    produit_est_une_vente = produit.methode_caisse == Product.VENTE
+    produit_est_une_adhesion = produit.categorie_article == Product.ADHESION
+    if produit_est_une_vente or produit_est_une_adhesion:
+        return
+
+    tarifs_en_euros_seulement = []
+    for tarif in produit.prix_euros:
+        if not _tarif_est_en_points(tarif):
+            tarifs_en_euros_seulement.append(tarif)
+    produit.prix_euros = tarifs_en_euros_seulement
+
+
 def _construire_donnees_articles(point_de_vente_instance, events_billetterie=None):
     """
     Construit la liste de dicts articles au format attendu par les templates.
@@ -512,31 +636,22 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
 
     LOCALISATION : laboutik/views.py
 
-    Chaque produit doit avoir au moins un prix publié en euros (asset=null).
-    Les produits sans prix sont ignorés.
-    Each product must have at least one published EUR price (asset=null).
-    Products without a price are skipped.
+    Chaque produit doit avoir au moins un tarif vendable a la caisse (voir
+    _tarifs_vendables_a_la_caisse). Les produits sans tarif sont ignorés.
+    Each product must have at least one POS-sellable price. Products without a
+    price are skipped.
 
     """
-    # Prefetch filtré : seuls les prix publiés en euros, triés par ordre d'affichage.
+    # Prefetch filtré : les tarifs vendables a la caisse, les euros d'abord.
     # Le .filter() dans la boucle utiliserait une nouvelle requête par produit (N+1).
     # Avec Prefetch(queryset=...), Django charge tout en 1 requête et filtre en mémoire.
-    # Filtered prefetch: only published EUR prices, sorted by display order.
-    #
-    # On retire aussi les tarifs faits pour le paiement en ligne :
-    # - paiement recurrent (abonnement Stripe, prelevement SEPA) ;
-    # - validation manuelle (un admin valide l'adhesion apres coup).
-    # La caisse ne sait pas faire ces deux parcours.
-    # / Also drop online-only prices (recurring payment, manual validation):
-    # the POS cannot run these flows.
+    # L'attribut garde le nom « prix_euros » : il contient aussi les tarifs en
+    # points ou en temps, mais toujours APRES les tarifs en euros.
+    # / Filtered prefetch: POS-sellable prices, euros first. The attribute keeps
+    #   the name "prix_euros": it also holds points/time prices, after the euros.
     prix_euros_prefetch = Prefetch(
         "prices",
-        queryset=Price.objects.filter(
-            publish=True,
-            asset__isnull=True,
-            recurring_payment=False,
-            manual_validation=False,
-        ).order_by("order"),
+        queryset=_tarifs_vendables_a_la_caisse(),
         to_attr="prix_euros",
     )
 
@@ -573,8 +688,10 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             ):
                 continue
 
-        # Premier prix publié en euros (déjà filtré par le Prefetch)
-        # First published EUR price (already filtered by Prefetch)
+        _retirer_les_tarifs_en_points_non_vendables(product)
+
+        # Premier tarif : un tarif en euros s'il y en a un (tri du Prefetch)
+        # / First price: a euro price if there is one (Prefetch ordering)
         if not product.prix_euros:
             continue
         prix_obj = product.prix_euros[0]
@@ -630,6 +747,13 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
                         "price_uuid": str(p.uuid),
                         "name": p.name,
                         "prix_centimes": int(round(p.prix * 100)),
+                        # Unite du prix (tuile, popup des tarifs, panier)
+                        # / Price unit (tile, rate popup, cart)
+                        "unite_label": _unite_du_tarif(p),
+                        # Tuile : les initiales de la monnaie (place reduite)
+                        # / Tile: the currency initials (small space)
+                        "unite_courte": _initiales_de_la_monnaie(_unite_du_tarif(p)),
+                        "est_en_points": _tarif_est_en_points(p),
                         "free_price": p.free_price,
                         "poids_mesure": p.poids_mesure,
                         # Quantite de stock retiree par unite vendue (ex : 50 cl).
@@ -707,11 +831,16 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             "id": str(product.uuid),
             "name": product.name,
             "prix": prix_en_centimes,
+            "categorie": categorie_dict,
             # Contenance du tarif principal : stock retire par clic sur la tuile
             # (articles mono-tarif). Lue par la garde stock (articles.js).
             # / Main price contenance: stock removed per tile click. Read by the stock guard.
             "contenance": prix_obj.contenance or 1,
-            "categorie": categorie_dict,
+            # Unite du prix de la tuile : celle du premier tarif (les euros d'abord)
+            # / Tile price unit: the first price's (euros first)
+            "unite_label": _unite_du_tarif(prix_obj),
+            "unite_courte": _initiales_de_la_monnaie(_unite_du_tarif(prix_obj)),
+            "est_en_points": _tarif_est_en_points(prix_obj),
             "couleur_backgr": couleur_backgr,
             "couleur_texte": couleur_texte_article,
             "icone": icone_article,
@@ -1410,7 +1539,8 @@ def _calculer_soldes_apres_paiement(wallet, lignes_debitees):
     :param wallet: wallet de la carte debitee
     :param lignes_debitees: tuples (article, asset, montant_centimes, payment_method)
     :return: liste de dicts, dans l'ordre de la cascade :
-        name, solde_euros (garde pour nouveau_solde), solde_avant_centimes,
+        name, unite (nom de la monnaie pour des points ou du temps, sinon vide),
+        solde_euros (garde pour nouveau_solde), solde_avant_centimes,
         debite_centimes, solde_centimes
     """
     from collections import OrderedDict
@@ -1435,9 +1565,17 @@ def _calculer_soldes_apres_paiement(wallet, lignes_debitees):
         # / Balance on the card before this payment
         solde_avant_en_centimes = solde_apres_en_centimes + montant_paye_en_centimes
 
+        # Unite des montants de cette monnaie : son nom pour des points ou du
+        # temps (filtre montant_dans_la_monnaie), vide pour de l'argent (euros).
+        # / Unit of this currency's amounts: its name for points/time, empty for money.
+        unite_de_la_monnaie = ""
+        if asset_debite.category in (Asset.TIM, Asset.FID):
+            unite_de_la_monnaie = asset_debite.name
+
         soldes_apres_paiement.append(
             {
                 "name": asset_debite.name,
+                "unite": unite_de_la_monnaie,
                 "solde_euros": solde_apres_en_centimes / 100,
                 "solde_avant_centimes": solde_avant_en_centimes,
                 "debite_centimes": montant_paye_en_centimes,
@@ -1806,6 +1944,144 @@ def _panier_contient_recharges_payantes(articles_panier):
         if article["product"].methode_caisse in METHODES_RECHARGE_PAYANTES:
             return True
     return False
+
+
+def _tarif_est_en_points(tarif):
+    """
+    Le tarif est-il en points ou en temps ?
+    / Is the price in points or time?
+
+    LOCALISATION : laboutik/views.py
+
+    Oui s'il porte une monnaie (`asset`, FID ou TIM) OU s'il est coche « non
+    fiduciaire ». Un tarif coche sans monnaie n'est donc jamais pris pour un
+    tarif en euros.
+    / Yes if it carries a currency OR is marked non-fiduciary.
+
+    :param tarif: Price
+    :return: bool
+    """
+    return tarif.asset_id is not None or tarif.non_fiduciaire
+
+
+def _panier_est_en_points(articles_panier):
+    """
+    Le panier contient-il au moins un tarif en points ou en temps ?
+    / Does the cart hold at least one points or time price?
+
+    LOCALISATION : laboutik/views.py
+
+    Un tarif en points porte sa monnaie (`price.asset`, FID ou TIM). Un tarif en
+    euros n'en porte pas.
+    Ne leve jamais d'erreur : le melange de monnaies est refuse par
+    _monnaie_du_panier(), appelee par les gardes de paiement.
+    / Never raises: mixed currencies are refused by _monnaie_du_panier().
+
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :return: bool
+    """
+    for article in articles_panier:
+        if _tarif_est_en_points(article["price"]):
+            return True
+    return False
+
+
+def _monnaie_du_panier(articles_panier):
+    """
+    La monnaie non monetaire du panier, ou None pour un panier en euros.
+    / The cart's non-monetary currency, or None for a euro cart.
+
+    LOCALISATION : laboutik/views.py
+
+    Un panier ne contient qu'une monnaie : uniquement des euros, OU uniquement
+    UNE monnaie de points ou de temps. Additionner des points et des euros (ou
+    des points et des heures) n'aurait pas de sens.
+
+    Appelee par / Called by : moyens_paiement(), _executer_paiement().
+
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :return: Asset (FID ou TIM), ou None
+    :raises ValueError: le panier melange plusieurs monnaies (message pour le caissier)
+    """
+    monnaies_du_panier = set()
+    for article in articles_panier:
+        monnaies_du_panier.add(article["price"].asset)
+
+    if len(monnaies_du_panier) > 1:
+        raise ValueError(
+            _(
+                "Un panier ne mélange pas plusieurs monnaies : "
+                "encaissez-les séparément."
+            )
+        )
+    if not monnaies_du_panier:
+        return None
+    return monnaies_du_panier.pop()
+
+
+def _currency_data_du_panier(articles_panier):
+    """
+    L'unite des montants d'un ecran de paiement : l'euro, ou la monnaie de points
+    ou de temps du panier (« 300,00 Points fidélité »).
+    / The amount unit of a payment screen: euro, or the cart's points currency.
+
+    LOCALISATION : laboutik/views.py
+
+    Meme forme que CURRENCY_DATA : les gabarits lisent `currency_data.symbol`.
+    Un panier melange (refuse par les gardes de paiement) garde l'euro.
+    / Same shape as CURRENCY_DATA. A mixed cart (refused by the guards) keeps euro.
+
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :return: dict {"cc", "symbol", "name"}
+    """
+    try:
+        monnaie_du_panier = _monnaie_du_panier(articles_panier)
+    except ValueError:
+        return CURRENCY_DATA
+    if monnaie_du_panier is None:
+        return CURRENCY_DATA
+    return {
+        "cc": monnaie_du_panier.currency_code,
+        "symbol": monnaie_du_panier.name,
+        "name": monnaie_du_panier.name,
+    }
+
+
+def _panier_peut_etre_offert(articles_panier, tag_id_carte_manager):
+    """
+    Le panier peut-il etre offert (tuile et paiement OFFRIR) ?
+    / Can the cart be gifted (GIFT tile and payment)?
+
+    LOCALISATION : laboutik/views.py
+
+    Oui si la carte primaire du caissier est en mode gerant, LU EN BASE
+    (CartePrimaire.edit_mode), jamais une valeur envoyee par le navigateur.
+    Non, meme en mode gerant, pour :
+    - un retour de consigne : c'est un remboursement, pas une vente ;
+    - une recharge en euros : offrir creerait de la monnaie locale remboursable ;
+    - un panier en points ou en temps : il se paie uniquement par carte NFC.
+    / Yes when the cashier's primary card is in manager mode (read from the
+    database). Never for a deposit return, a euro top-up or a points cart.
+
+    Appelee par / Called by : moyens_paiement(), _rendre_popup_paiement_client_identifie(),
+    _executer_paiement() (garde serveur / server guard).
+
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :param tag_id_carte_manager: tag de la carte primaire (POST « tag_id_cm »)
+    :return: bool
+    """
+    if not tag_id_carte_manager:
+        return False
+    carte_primaire_obj, erreur = _charger_carte_primaire(tag_id_carte_manager)
+    if erreur is not None or not carte_primaire_obj.edit_mode:
+        return False
+    if _panier_contient_retour_consigne(articles_panier):
+        return False
+    if _panier_contient_recharges_payantes(articles_panier):
+        return False
+    if _panier_est_en_points(articles_panier):
+        return False
+    return True
 
 
 def _panier_contient_retour_consigne(articles_panier):
@@ -2717,13 +2993,20 @@ class CaisseViewSet(viewsets.ViewSet):
         totaux_par_moyen = service.calculer_totaux_par_moyen()
         solde_caisse = service.calculer_solde_caisse()
         nb_transactions = service.lignes.count()
+        offerts = service.calculer_offerts()
+        non_monetaire = service.calculer_non_monetaire()
 
         # Formater et imprimer / Format and print
         from laboutik.printing.formatters import formatter_ticket_x
         from laboutik.printing.tasks import imprimer_async
 
         ticket_data = formatter_ticket_x(
-            totaux_par_moyen, solde_caisse, datetime_ouverture, nb_transactions
+            totaux_par_moyen,
+            solde_caisse,
+            datetime_ouverture,
+            nb_transactions,
+            offerts=offerts,
+            non_monetaire=non_monetaire,
         )
 
         schema_name = connection.schema_name
@@ -3528,6 +3811,8 @@ class CaisseViewSet(viewsets.ViewSet):
         )
         if not est_un_fragment_historique:
             context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
+            context["offerts"] = service.calculer_offerts()
+            context["non_monetaire"] = service.calculer_non_monetaire()
             context["tva"] = service.calculer_tva()
             context["solde_caisse"] = service.calculer_solde_caisse()
             context["ventilation_par_pv"] = service.calculer_ventilation_par_pv()
@@ -3564,7 +3849,7 @@ class CaisseViewSet(viewsets.ViewSet):
         FLUX :
         1. Calcule datetime_ouverture via _calculer_datetime_ouverture_service()
         2. Instancie RapportComptableService(pv=None, debut, fin=now())
-        3. Appelle generer_rapport_complet() (13 sections)
+        3. Appelle generer_rapport_complet() (15 sections)
         4. Rend rapport_temps_reel.html (page complete, pas un partial)
         """
         datetime_ouverture = _calculer_datetime_ouverture_service()
@@ -3670,6 +3955,11 @@ class CaisseViewSet(viewsets.ViewSet):
                 nb_articles=Count("uuid"),
                 moyen_paiement=Max("payment_method"),
                 nom_pv=Max("point_de_vente__name"),
+                # Monnaie d'une vente en points : toutes ses lignes ont la meme
+                # (une seule monnaie par panier). PostgreSQL n'a pas de Max sur un
+                # uuid : on passe par le texte.
+                # / Currency of a points sale (one per cart). No Max on uuid in PG.
+                asset_de_la_vente=Max(Cast("asset", output_field=CharField())),
             )
             .order_by("-derniere_datetime")
         )
@@ -3694,13 +3984,40 @@ class CaisseViewSet(viewsets.ViewSet):
         # Caster aussi le total Decimal → int : on reste en centimes pour le filtre |euros.
         # / Add human-readable payment method label to each sale.
         # Cast total Decimal → int: stay in cents for the |euros template filter.
+        # Nom des monnaies des ventes en points, en une seule requete.
+        # / Currency names of points sales, in a single query.
+        uuids_des_monnaies_en_points = []
+        for vente in ventes_page:
+            if vente.get("moyen_paiement") == PaymentMethod.NON_MONETAIRE:
+                uuids_des_monnaies_en_points.append(vente["asset_de_la_vente"])
+        nom_par_uuid_de_monnaie = {}
+        for monnaie in Asset.objects.filter(uuid__in=uuids_des_monnaies_en_points):
+            nom_par_uuid_de_monnaie[str(monnaie.uuid)] = monnaie.name
+
         for vente in ventes_page:
             code_moyen = vente.get("moyen_paiement", "")
             vente["moyen_paiement_label"] = LABELS_MOYENS_PAIEMENT_DB.get(
                 code_moyen, code_moyen
             )
+            # Somme des amount x qty, arrondie au centime (jamais tronquee :
+            # 499,99985 vaut 500), comme LigneArticle.total().
+            # / Sum of amount x qty, rounded to the cent, never truncated.
             total_brut = vente.get("total")
-            vente["total"] = int(total_brut) if total_brut is not None else 0
+            vente["total"] = 0
+            if total_brut is not None:
+                vente["total"] = int(
+                    Decimal(total_brut).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+                )
+            # Unite du total : nom de la monnaie pour une vente en points, vide
+            # pour une vente en euros (filtre montant_dans_la_monnaie).
+            # / Total unit: currency name for a points sale, empty for euros.
+            vente["unite"] = ""
+            if code_moyen == PaymentMethod.NON_MONETAIRE:
+                # Monnaie introuvable : « Points ou temps », jamais « € »
+                # / Currency not found: "Points or time", never "€"
+                vente["unite"] = nom_par_uuid_de_monnaie.get(
+                    vente.get("asset_de_la_vente"), str(_("Points ou temps"))
+                )
 
         # Liste des PV pour le filtre (select)
         # / POS list for the filter (select)
@@ -3727,6 +4044,7 @@ class CaisseViewSet(viewsets.ViewSet):
                 {"code": PaymentMethod.LOCAL_EURO, "label": _("Cashless")},
                 {"code": PaymentMethod.LOCAL_GIFT, "label": _("Cadeau")},
                 {"code": PaymentMethod.CHEQUE, "label": _("Chèque")},
+                {"code": PaymentMethod.NON_MONETAIRE, "label": _("Points ou temps")},
             ],
         }
         return _rendre_vue_ventes(
@@ -3827,16 +4145,11 @@ class CaisseViewSet(viewsets.ViewSet):
                     nom_tarif = ligne.pricesold.price.name
                     prix_decimal_ref = ligne.pricesold.price.prix
 
-            # Total ligne = prix unitaire * qty (cf. LigneArticle.total()).
-            # ligne.amount = prix unitaire en centimes ; ligne.qty = quantite.
-            # Cast int : le total reste en centimes pour le filtre |euros.
-            # / Line total = unit price * qty (see LigneArticle.total()).
+            # Total ligne = prix unitaire * qty, arrondi au centime
+            # (LigneArticle.total()). Le total reste en centimes pour |euros.
+            # / Line total = unit price * qty, rounded (LigneArticle.total()).
             prix_unitaire_centimes = ligne.amount or 0
-            total_ligne_centimes = (
-                int(prix_unitaire_centimes * ligne.qty)
-                if prix_unitaire_centimes
-                else 0
-            )
+            total_ligne_centimes = ligne.total() if prix_unitaire_centimes else 0
 
             # Detection ligne vrac : weight_quantity non-null et > 0.
             # Pour vrac : qty=1, weight_quantity=350(g) ou 175(cl), amount=420c (350*0.012),
@@ -3887,10 +4200,26 @@ class CaisseViewSet(viewsets.ViewSet):
         # and line is not covered by a closure
         moyen_de_la_ligne = premiere_ligne.payment_method or ""
         moyens_nfc = (PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT)
+        # Une vente hors argent (offerte, en points) ne se corrige pas :
+        # corriger_moyen_paiement la refuse, le bouton n'est pas propose.
+        # / A non-money sale cannot be corrected: no button.
         correction_est_possible = (
             moyen_de_la_ligne not in moyens_nfc
+            and moyen_de_la_ligne not in MOYENS_HORS_ARGENT
             and not ligne_couverte_par_cloture(premiere_ligne)
         )
+
+        # Unite des montants : nom de la monnaie pour une vente en points (une
+        # seule monnaie par panier), vide pour une vente en euros.
+        # / Amount unit: currency name for a points sale, empty for euros.
+        unite_de_la_vente = ""
+        if moyen_de_la_ligne == PaymentMethod.NON_MONETAIRE:
+            # Monnaie introuvable : « Points ou temps », jamais « € »
+            # / Currency not found: "Points or time", never "€"
+            unite_de_la_vente = str(_("Points ou temps"))
+            monnaie_de_la_vente = Asset.objects.filter(uuid=premiere_ligne.asset).first()
+            if monnaie_de_la_vente is not None:
+                unite_de_la_vente = monnaie_de_la_vente.name
 
         # Label humain du moyen de paiement (ex: "Espèces" au lieu de "CA")
         # / Human-readable payment method label (e.g. "Cash" instead of "CA")
@@ -3914,6 +4243,7 @@ class CaisseViewSet(viewsets.ViewSet):
             else "",
             "articles": articles_detail,
             "total": total_transaction,
+            "unite": unite_de_la_vente,
             "nb_articles": len(articles_detail),
             "correction_possible": correction_est_possible,
             "premiere_ligne_uuid": str(premiere_ligne.uuid),
@@ -4168,13 +4498,16 @@ ORDRE_CASCADE_FIDUCIAIRE = [Asset.TNF, Asset.TLF, Asset.FED]
 # Mapping catégorie d'Asset → PaymentMethod pour les LigneArticle.
 # Permet aux rapports de distinguer les paiements cadeau (LG) des paiements
 # monnaie locale (LE) dans le Ticket X et la clôture.
-# / Asset category → PaymentMethod mapping for LigneArticle.
+# On le lit par accès direct [categorie], jamais avec un repli : une catégorie
+# absente du mapping ne doit pas être enregistrée en euros.
+# / Asset category → PaymentMethod mapping for LigneArticle. Read with direct
+#   access, never with a fallback: an unknown category must not become euros.
 MAPPING_ASSET_CATEGORY_PAYMENT_METHOD = {
     Asset.TNF: PaymentMethod.LOCAL_GIFT,  # LG — cadeau
     Asset.TLF: PaymentMethod.LOCAL_EURO,  # LE — monnaie locale
     Asset.FED: PaymentMethod.STRIPE_FED,  # SF — monnaie fédérée du réseau (PAS de la monnaie locale)
-    # Asset.TIM: PaymentMethod.LOCAL_EURO,  # LE — temps
-    Asset.FID: PaymentMethod.LOCAL_EURO,  # LE — fidélité
+    Asset.TIM: PaymentMethod.NON_MONETAIRE,  # NM — temps, pas de l'argent
+    Asset.FID: PaymentMethod.NON_MONETAIRE,  # NM — fidélité, pas de l'argent
 }
 
 # Constante Decimal pour arrondir les qty partielles à 6 décimales.
@@ -4433,19 +4766,13 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
     if not articles_extraits:
         return []
 
-    # Charger tous les produits du PV en une seule requête (avec prix EUR préchargés)
-    # Load all PV products in a single query (with EUR prices prefetched)
-    # Memes tarifs que les tuiles : pas de tarif recurrent ni a validation manuelle
-    # (voir _construire_donnees_articles). Un POST force est donc refuse aussi.
-    # / Same prices as the tiles: no recurring or manual-validation price.
+    # Charger tous les produits du PV en une seule requête (avec tarifs préchargés)
+    # Memes tarifs que les tuiles (voir _tarifs_vendables_a_la_caisse) : un POST
+    # force avec un autre tarif est donc refuse aussi.
+    # / Load all POS products in one query. Same prices as the tiles.
     prix_euros_prefetch = Prefetch(
         "prices",
-        queryset=Price.objects.filter(
-            publish=True,
-            asset__isnull=True,
-            recurring_payment=False,
-            manual_validation=False,
-        ).order_by("order"),
+        queryset=_tarifs_vendables_a_la_caisse(),
         to_attr="prix_euros",
     )
     # Produits du PV : ceux avec methode_caisse (articles POS) OU categorie_article=ADHESION
@@ -4541,8 +4868,10 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
             )
             continue
 
+        _retirer_les_tarifs_en_points_non_vendables(produit)
+
         if not produit.prix_euros:
-            logger.warning(f"Produit {produit.name} n'a pas de prix EUR publié")
+            logger.warning(f"Produit {produit.name} n'a pas de tarif publié")
             continue
 
         # Si un price_uuid est fourni (multi-tarif), charger ce Prix spécifique
@@ -4781,13 +5110,45 @@ def _rendre_popup_paiement_client_identifie(
         client_nom,
     )
 
+    # Solde affiche du client : en euros ; pour un panier en points, le solde de
+    # la carte dans la monnaie du panier (ce qui dira si la carte peut payer).
+    # / Shown client balance: euros; for a points cart, the card balance in
+    #   the cart's currency.
+    symbole_du_solde_client = CURRENCY_DATA["symbol"]
+    try:
+        monnaie_du_panier = _monnaie_du_panier(articles_panier)
+    except ValueError:
+        monnaie_du_panier = None
+    if monnaie_du_panier is not None and tag_id:
+        symbole_du_solde_client = monnaie_du_panier.name
+        client_solde = 0
+        carte_du_client = CarteCashless.objects.filter(tag_id=tag_id).first()
+        wallet_de_la_carte = None
+        if carte_du_client is not None:
+            if carte_du_client.user is not None and carte_du_client.user.wallet is not None:
+                wallet_de_la_carte = carte_du_client.user.wallet
+            else:
+                wallet_de_la_carte = carte_du_client.wallet_ephemere
+        if wallet_de_la_carte is not None:
+            client_solde = (
+                WalletService.obtenir_solde(
+                    wallet=wallet_de_la_carte, asset=monnaie_du_panier
+                )
+                / 100
+            )
+
     context = {
         "client_identifie": True,
-        "currency_data": CURRENCY_DATA,
+        "currency_data": _currency_data_du_panier(articles_panier),
+        "symbole_du_solde_client": symbole_du_solde_client,
         "total": total_centimes / 100,
         "moyens_paiement": moyens_paiement,
         "moyens_paiement_csv": ",".join(moyens_paiement),
-        "mode_gerant": False,
+        # Tuile OFFRIR pour le gerant (adhesion, billet offerts).
+        # / GIFT tile for the manager (gifted membership, ticket).
+        "mode_gerant": _panier_peut_etre_offert(
+            articles_panier, request.POST.get("tag_id_cm", "")
+        ),
         "deposit_is_present": False,
         "comportement": "",
         "panier_a_recharges": panier_a_recharges,
@@ -4823,10 +5184,19 @@ def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
     A local currency top-up cannot be paid with cashless.
     Gift (RC) and time (TM) top-ups are free — they don't block NFC.
 
+    RÈGLE MÉTIER : un panier en points ou en temps se paie uniquement par NFC.
+    BUSINESS RULE: a points or time cart is paid only by NFC.
+
     :param point_de_vente: instance PointDeVente
     :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier() (optionnel)
     :return: liste de codes moyens de paiement (ex: ["nfc", "espece", "carte_bancaire"])
     """
+    # Un panier en points ou en temps se paie uniquement avec la carte du client :
+    # c'est elle qui porte les points.
+    # / A points or time cart is paid only with the customer's card.
+    if articles_panier and _panier_est_en_points(articles_panier):
+        return ["nfc"]
+
     moyens = []
 
     # NFC interdit uniquement si le panier contient des recharges PAYANTES (RE).
@@ -5180,8 +5550,17 @@ def _creer_lignes_articles(
     for ligne_a_chainer in lignes_creees:
         # Calculer le HT (donnee elementaire LNE exigence 3)
         # / Compute HT (LNE req. 3 elementary data)
+        # Le HT porte sur le TTC de la LIGNE (prix unitaire x quantite), pas sur
+        # un seul article. Arrondi comme montant_ttc_centimes() des rapports
+        # (0,5 -> 1, comme Round() de PostgreSQL).
+        # / HT is computed on the LINE total (unit price x qty), not one item.
+        ttc_de_la_ligne_centimes = int(
+            Decimal(ligne_a_chainer.amount * ligne_a_chainer.qty).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
         ligne_a_chainer.total_ht = calculer_total_ht(
-            ligne_a_chainer.amount, ligne_a_chainer.vat
+            ttc_de_la_ligne_centimes, ligne_a_chainer.vat
         )
 
         # Chainer le HMAC avec la ligne precedente
@@ -5472,8 +5851,17 @@ def _creer_lignes_articles_cascade(
     for ligne_a_chainer in toutes_les_lignes_creees:
         # Calculer le HT (donnée élémentaire LNE exigence 3)
         # / Compute HT (LNE req. 3 elementary data)
+        # Le HT porte sur le TTC de la LIGNE (prix unitaire x quantite), pas sur
+        # un seul article. Arrondi comme montant_ttc_centimes() des rapports
+        # (0,5 -> 1, comme Round() de PostgreSQL).
+        # / HT is computed on the LINE total (unit price x qty), not one item.
+        ttc_de_la_ligne_centimes = int(
+            Decimal(ligne_a_chainer.amount * ligne_a_chainer.qty).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
         ligne_a_chainer.total_ht = calculer_total_ht(
-            ligne_a_chainer.amount, ligne_a_chainer.vat
+            ttc_de_la_ligne_centimes, ligne_a_chainer.vat
         )
 
         # Chaîner le HMAC avec la ligne précédente
@@ -6557,6 +6945,22 @@ class PaiementViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
+        # --- Une seule monnaie par panier : refus des le clic sur VALIDER ---
+        # La garde reelle est dans _executer_paiement ; ici, le caissier est
+        # prevenu avant de choisir un moyen de paiement.
+        # / One currency per cart: the cashier is told as soon as they validate.
+        try:
+            _monnaie_du_panier(articles_panier)
+        except ValueError as erreur_de_monnaie:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": str(erreur_de_monnaie),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         # --- Vérifier le stock AVANT de proposer les moyens de paiement ---
         # Sans ce contrôle, le caissier choisissait espèces ou CB,
         # et l'erreur "stock insuffisant" n'arrivait qu'au moment de payer.
@@ -6627,9 +7031,9 @@ class PaiementViewSet(viewsets.ViewSet):
         # / Payment methods as CSV for propagation through HTMX templates
         moyens_paiement_csv = ",".join(moyens_paiement_disponibles)
 
-        # Mode gérant : activé si la carte primaire est en mode édition
-        # Manager mode: enabled if primary card is in edit mode
-        est_mode_gerant = False
+        # Tuile OFFRIR : carte primaire en mode gerant et panier offrable.
+        # / GIFT tile: manager-mode primary card and giftable cart.
+        est_mode_gerant = _panier_peut_etre_offert(articles_panier, tag_id_carte_manager)
 
         # Le flux de remboursement ne s'affiche que si le panier est ENTIEREMENT
         # composé de retours. Sur un panier mélangé, le total passé en valeur absolue
@@ -6646,7 +7050,9 @@ class PaiementViewSet(viewsets.ViewSet):
             "state": state,
             "moyens_paiement": moyens_paiement_disponibles,
             "moyens_paiement_csv": moyens_paiement_csv,
-            "currency_data": CURRENCY_DATA,
+            # Total en euros, ou dans la monnaie d'un panier en points
+            # / Total in euros, or in a points cart's currency
+            "currency_data": _currency_data_du_panier(articles_panier),
             "total": total_en_euros,
             "mode_gerant": est_mode_gerant,
             "deposit_is_present": consigne_dans_panier,
@@ -6827,10 +7233,50 @@ class PaiementViewSet(viewsets.ViewSet):
             total_en_euros = abs(total_en_euros)
             total_centimes = abs(total_centimes)
 
+        moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
+
+        # --- Les deux gardes de la monnaie du panier ---
+        # Elles tombent AVANT l'aiguillage, donc avant toute écriture en base.
+        # `payer()` ne confronte jamais le moyen reçu à la liste proposée : sans
+        # ces gardes, un POST forgé « espece » passerait par _creer_lignes_articles(),
+        # qui ne lit pas la monnaie du tarif et ne débite aucune carte. La vente de
+        # 300 points serait enregistrée comme 300 € en espèces.
+        # / The two cart-currency guards, before any routing and any DB write.
+        #   A forged cash POST would otherwise record 300 points as 300 € cash.
+        # 1. Une seule monnaie par panier. / One currency per cart.
+        try:
+            monnaie_du_panier = _monnaie_du_panier(articles_panier)
+        except ValueError as erreur_de_monnaie:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": str(erreur_de_monnaie),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        # 2. Un panier en points ou en temps se paie uniquement par carte NFC.
+        # / A points or time cart is paid only by NFC card.
+        panier_en_points = monnaie_du_panier is not None
+        if panier_en_points and moyen_paiement_code != "nfc":
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Un panier en points ou en temps se paie uniquement avec la "
+                    "carte du client."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         # --- Les deux gardes du retour de consigne ---
         # Elles tombent AVANT l'aiguillage, donc avant toute écriture en base.
         # / The two deposit-return guards, before any routing and any DB write.
-        moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
 
         if consigne_dans_panier:
             # 1. Le panier mélangé est refusé.
@@ -6953,16 +7399,20 @@ class PaiementViewSet(viewsets.ViewSet):
                 uuid_transaction_impose=uuid_transaction_impose,
             )
 
-        # --- Panier gratuit (ex : billet a 0 €) ---
-        # Le bouton « Valider » du panier gratuit envoie moyen_paiement=gift.
-        # Il n'y a rien a encaisser : on enregistre la vente comme « Offert ».
-        # Le serveur recalcule le total : si le panier n'est pas a 0, on refuse.
-        # Sans cette garde, un POST force offrirait n'importe quel panier.
-        # / Free cart (e.g. 0 € ticket): recorded as "Offered". The server
-        # recomputes the total and refuses anything that is not 0.
+        # --- Panier offert : gratuit (billet a 0 €) ou OFFRIR du gerant ---
+        # Le bouton « Valider » d'un panier gratuit et la tuile OFFRIR envoient
+        # moyen_paiement=gift : la vente est enregistree « Offert » (FREE).
+        # Le serveur decide seul : le total recalcule vaut 0, ou la carte primaire
+        # est en mode gerant (lu en base) et le panier est offrable. Sans cette
+        # garde, un POST force offrirait n'importe quel panier.
+        # / Gifted cart: free (0 € ticket) or the manager's GIFT. The server alone
+        #   decides: recomputed total is 0, or manager mode (from the database).
         if moyen_paiement_code == "gift":
             panier_est_gratuit = total_centimes == 0 and len(articles_panier) > 0
-            if not panier_est_gratuit:
+            panier_offert_par_le_gerant = _panier_peut_etre_offert(
+                articles_panier, donnees_paiement.get("tag_id_cm", "")
+            )
+            if not panier_est_gratuit and not panier_offert_par_le_gerant:
                 context_erreur = {
                     "action": "initUrlAddition();",
                     "msg_type": "warning",
@@ -7771,27 +8221,54 @@ class PaiementViewSet(viewsets.ViewSet):
         articles_non_fiduciaires = []
         articles_adhesion = []
         articles_recharge_gratuite = []
+        # Adhesions payees en points : debitees avec les articles non fiduciaires,
+        # et creees avec les autres adhesions (phase 7e).
+        # / Memberships paid in points: debited as non-fiduciary, created in 7e.
+        adhesions_payees_en_points = []
 
         for article in articles_panier:
             produit = article["product"]
             prix_obj = article["price"]
             methode = produit.methode_caisse
 
-            if produit.categorie_article == Product.ADHESION:
-                # Les adhésions utilisent la cascade fiduciaire (pas de non-fidu)
-                # / Memberships use fiduciary cascade (no non-fidu)
+            # Le tarif en points passe en PREMIER : une adhesion a 300 points ne
+            # doit jamais partir dans la cascade des euros.
+            # / Points price FIRST: a points membership must never reach the euro cascade.
+            if _tarif_est_en_points(prix_obj):
+                # La monnaie doit exister et avoir un moyen de paiement connu,
+                # AVANT tout debit : un tarif en points sans monnaie, ou d'une
+                # categorie absente du mapping, n'est jamais enregistre en euros.
+                # / The currency must exist and map to a payment method, before any debit.
+                monnaie_du_tarif_est_acceptee = (
+                    prix_obj.asset is not None
+                    and prix_obj.asset.category in MAPPING_ASSET_CATEGORY_PAYMENT_METHOD
+                )
+                if not monnaie_du_tarif_est_acceptee:
+                    context_erreur = {
+                        "action": "initUrlAddition();",
+                        "msg_type": "warning",
+                        "msg_content": _("Cette monnaie n'est pas acceptée à la caisse."),
+                        "selector_bt_retour": "#messages",
+                    }
+                    return render(
+                        request,
+                        "laboutik/partial/hx_messages.html",
+                        context_erreur,
+                        status=400,
+                    )
+                # Prix non-fiduciaire (TIM, FID) : débit direct sur l'asset du prix
+                # / Non-fiduciary price (TIM, FID): direct debit on the price's asset
+                articles_non_fiduciaires.append(article)
+                if produit.categorie_article == Product.ADHESION:
+                    adhesions_payees_en_points.append(article)
+            elif produit.categorie_article == Product.ADHESION:
+                # Adhésion en euros : cascade fiduciaire
+                # / Euro membership: fiduciary cascade
                 articles_adhesion.append(article)
             elif methode in METHODES_RECHARGE_GRATUITES:
                 # RC (cadeau) ou TM (temps) : crédit gratuit, pas de débit
                 # / RC (gift) or TM (time): free credit, no debit
                 articles_recharge_gratuite.append(article)
-            elif (
-                getattr(prix_obj, "non_fiduciaire", False)
-                and prix_obj.asset is not None
-            ):
-                # Prix non-fiduciaire (TIM, FID) : débit direct sur l'asset du prix
-                # / Non-fiduciary price (TIM, FID): direct debit on the price's asset
-                articles_non_fiduciaires.append(article)
             else:
                 # Vente classique fiduciaire (VT ou tout autre type)
                 # / Standard fiduciary sale (VT or any other type)
@@ -7817,9 +8294,18 @@ class PaiementViewSet(viewsets.ViewSet):
         #  PHASE 3: Check non-fiduciary balances (all or nothing)           #
         # ================================================================ #
 
+        # Le solde est compare a la SOMME du panier, monnaie par monnaie : deux
+        # articles a 300 points demandent 600 points, meme si chacun passe seul.
+        # / The balance is compared to the cart SUM, currency by currency.
+        montant_necessaire_par_asset = OrderedDict()
         for article_nf in articles_non_fiduciaires:
             asset_cible = article_nf["price"].asset
-            montant_necessaire = article_nf["prix_centimes"] * article_nf["quantite"]
+            montant_de_l_article = article_nf["prix_centimes"] * article_nf["quantite"]
+            if asset_cible not in montant_necessaire_par_asset:
+                montant_necessaire_par_asset[asset_cible] = 0
+            montant_necessaire_par_asset[asset_cible] += montant_de_l_article
+
+        for asset_cible, montant_necessaire in montant_necessaire_par_asset.items():
             solde_nf = WalletService.obtenir_solde(
                 wallet=wallet_client, asset=asset_cible
             )
@@ -7835,6 +8321,10 @@ class PaiementViewSet(viewsets.ViewSet):
                     "carte_ref": carte_client.tag_id[-4:],
                     "soldes": _soldes_locaux_pour_affichage(wallet_client),
                     "monnaie_name": asset_cible.name,
+                    # Il manque des points : le popup affiche leur nom, et ne
+                    # propose aucun complement (ni especes, ni CB, ni 2e carte).
+                    # / Missing points: the popup shows their name, no complement.
+                    "nom_monnaie_du_panier_en_points": asset_cible.name,
                     "payments_accepted": {
                         "accepte_especes": False,
                         "accepte_carte_bancaire": False,
@@ -7882,9 +8372,9 @@ class PaiementViewSet(viewsets.ViewSet):
                     continue
 
                 debit_sur_cet_asset = min(solde_courant, reste_article)
-                payment_method_pour_asset = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
-                    asset_courant.category, PaymentMethod.LOCAL_EURO
-                )
+                payment_method_pour_asset = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                    asset_courant.category
+                ]
                 lignes_nfc.append(
                     (
                         article_cascade,
@@ -8114,9 +8604,9 @@ class PaiementViewSet(viewsets.ViewSet):
                         card=carte_client,
                         ip=ip_client,
                     )
-                    pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
-                        asset_nf_cible.category, PaymentMethod.LOCAL_EURO
-                    )
+                    pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                        asset_nf_cible.category
+                    ]
                     lignes_non_fidu.append(
                         (article_nf, asset_nf_cible, montant_nf, pm_nf)
                     )
@@ -8159,8 +8649,10 @@ class PaiementViewSet(viewsets.ViewSet):
                 )
 
                 # ----- 7e) Adhésions : créer Membership, rattacher à la 1ère LigneArticle -----
+                # Adhesions payees en euros (cascade) et en points (non fiduciaires).
                 # / Memberships: create Membership, link to first LigneArticle
-                if articles_adhesion:
+                adhesions_a_creer = articles_adhesion + adhesions_payees_en_points
+                if adhesions_a_creer:
                     # Construire index LigneArticle par product_uuid
                     # / Build LigneArticle index by product_uuid
                     lignes_par_product = {}
@@ -8206,12 +8698,19 @@ class PaiementViewSet(viewsets.ViewSet):
                                 "est bien enregistree, le solde de la carte est intact."
                             ))
 
-                    for article_ad in articles_adhesion:
+                    for article_ad in adhesions_a_creer:
                         membership = _creer_ou_renouveler_adhesion(
                             membre_adhesion,
                             article_ad["product"],
                             article_ad["price"],
                         )
+                        # Payee en points : l'adhesion garde le moyen NON_MONETAIRE,
+                        # et `contribution_value` le prix du tarif, en unites de la
+                        # monnaie (voir Membership.unite_de_la_contribution).
+                        # / Paid in points: the membership says so; the value is in units.
+                        if membership and _tarif_est_en_points(article_ad["price"]):
+                            membership.payment_method = PaymentMethod.NON_MONETAIRE
+                            membership.save(update_fields=["payment_method"])
                         if membership:
                             product_uuid_ad = str(article_ad["product"].uuid)
                             ligne_ad = lignes_par_product.get(product_uuid_ad)
@@ -8255,6 +8754,14 @@ class PaiementViewSet(viewsets.ViewSet):
                 },
                 "uuid_transaction": "",
             }
+            # Panier en points (une seule monnaie, voir _monnaie_du_panier) : le
+            # manque est dans cette monnaie, et aucun complement n'est propose.
+            # / Points cart: shortfall in that currency, no complement offered.
+            if articles_non_fiduciaires:
+                monnaie_du_panier_en_points = articles_non_fiduciaires[0]["price"].asset
+                context_insuffisant["nom_monnaie_du_panier_en_points"] = (
+                    monnaie_du_panier_en_points.name
+                )
             return render(
                 request,
                 "laboutik/partial/hx_funds_insufficient.html",
@@ -8292,6 +8799,13 @@ class PaiementViewSet(viewsets.ViewSet):
             nouveau_solde_euros = soldes_apres_paiement[0]["solde_euros"]
             nom_monnaie_principal = soldes_apres_paiement[0]["name"]
 
+        # Panier en points (une seule monnaie) : le total paye s'ecrit dans cette
+        # monnaie. Vide pour un panier en euros.
+        # / Points cart: the paid total is written in that currency.
+        nom_monnaie_du_panier_en_points = ""
+        if articles_non_fiduciaires:
+            nom_monnaie_du_panier_en_points = articles_non_fiduciaires[0]["price"].asset.name
+
         context = {
             "currency_data": CURRENCY_DATA,
             "payment": donnees_paiement,
@@ -8299,6 +8813,11 @@ class PaiementViewSet(viewsets.ViewSet):
             "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_code, ""),
             "deposit_is_present": consigne_dans_panier,
             "total": total_en_euros,
+            "nom_monnaie_du_panier_en_points": nom_monnaie_du_panier_en_points,
+            # Total du panier recalcule par le serveur, en centimes (ou centiemes
+            # de points) : l'ecran l'affiche pour un panier en points.
+            # / Server-computed cart total, in cents (or hundredths of points).
+            "total_du_panier_centimes": total_centimes,
             "state": state,
             "original_payment": None,
             # Données spécifiques NFC / NFC-specific data
@@ -8856,6 +9375,24 @@ class PaiementViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
+        # Un panier en points ou en temps ne se complete jamais : il se paie avec
+        # une seule carte (le popup « solde insuffisant » ne propose pas de
+        # complement). Cette garde refuse un POST direct.
+        # / A points or time cart is never completed: refuses a direct POST.
+        if _panier_est_en_points(articles_panier):
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Un panier en points ou en temps se paie uniquement avec la "
+                    "carte du client."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         total_centimes = _calculer_total_panier_centimes(articles_panier)
         state = _construire_state(point_de_vente, user=request.user)
 
@@ -8914,6 +9451,12 @@ class PaiementViewSet(viewsets.ViewSet):
             prix_obj = article["price"]
             methode = produit.methode_caisse
 
+            # Aucun tarif en points n'arrive ici : la garde en tete de cette
+            # fonction refuse un panier en points. Si elle etait retiree, ce
+            # classement (adhesion d'abord) debiterait en euros une adhesion en
+            # points : reprendre alors celui de _payer_par_nfc (phase 2).
+            # / No points price reaches this point (guard at the top). Without
+            #   that guard, this order would debit a points membership in euros.
             if produit.categorie_article == Product.ADHESION:
                 articles_adhesion.append(article)
             elif methode in METHODES_RECHARGE_GRATUITES:
@@ -8950,9 +9493,9 @@ class PaiementViewSet(viewsets.ViewSet):
                     continue
 
                 debit_sur_cet_asset = min(solde_courant, reste_article)
-                payment_method_pour_asset = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
-                    asset_courant.category, PaymentMethod.LOCAL_EURO
-                )
+                payment_method_pour_asset = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                    asset_courant.category
+                ]
                 lignes_nfc_carte1.append(
                     (
                         article_cascade,
@@ -9152,9 +9695,9 @@ class PaiementViewSet(viewsets.ViewSet):
                             card=carte1,
                             ip=ip_client,
                         )
-                        pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
-                            asset_nf_cible.category, PaymentMethod.LOCAL_EURO
-                        )
+                        pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                            asset_nf_cible.category
+                        ]
                         lignes_non_fidu.append(
                             (article_nf, asset_nf_cible, montant_nf, pm_nf)
                         )
@@ -9458,9 +10001,9 @@ class PaiementViewSet(viewsets.ViewSet):
                         continue
 
                     debit_c2 = min(solde_c2, reste_complement)
-                    pm_c2 = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
-                        asset_c2.category, PaymentMethod.LOCAL_EURO
-                    )
+                    pm_c2 = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                        asset_c2.category
+                    ]
                     lignes_nfc_carte2.append((art_c, asset_c2, debit_c2, pm_c2))
                     soldes_restants_c2[asset_c2] -= debit_c2
                     reste_complement -= debit_c2
@@ -9706,9 +10249,9 @@ class PaiementViewSet(viewsets.ViewSet):
                             card=carte1,
                             ip=ip_client,
                         )
-                        pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
-                            asset_nf_cible.category, PaymentMethod.LOCAL_EURO
-                        )
+                        pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                            asset_nf_cible.category
+                        ]
                         lignes_non_fidu.append(
                             (article_nf, asset_nf_cible, montant_nf, pm_nf)
                         )
@@ -10446,9 +10989,12 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # Recuperer les lignes de cette transaction
         # / Get the lines for this transaction
+        # select_related : le ticket lit le tarif (nom de l'article) et le produit
+        # (detail d'une vente au poids) de chaque article, sans requete par article.
+        # / The receipt reads each item's price and product: no query per item.
         lignes_du_paiement = LigneArticle.objects.filter(
             uuid_transaction=uuid_transaction_str,
-        ).select_related("pricesold__productsold")
+        ).select_related("pricesold__productsold__product", "pricesold__price")
 
         if not lignes_du_paiement.exists():
             return render(
@@ -10670,6 +11216,26 @@ class PaiementViewSet(viewsets.ViewSet):
                     "msg_type": "warning",
                     "msg_content": _(
                         "Les paiements cashless ne peuvent pas etre modifies"
+                    ),
+                },
+                status=400,
+            )
+
+        # --- GARDE 1 bis : une ligne hors argent (offerte, recharge cadeau,
+        # vente en points ou en temps) ---
+        # Elle n'a rien encaisse. La « corriger » en especes ou CB ferait
+        # apparaitre dans le Z de l'argent jamais recu.
+        # / A non-money line collected nothing: correcting it into cash or card
+        #   would add money that was never received.
+        if ligne.payment_method in MOYENS_HORS_ARGENT:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Une vente hors argent (offerte, en points ou en temps) "
+                        "ne peut pas être corrigée en paiement"
                     ),
                 },
                 status=400,
@@ -10902,6 +11468,25 @@ class CommandeViewSet(viewsets.ViewSet):
                 )
                 continue
 
+            # Un tarif en points se paie par la carte du client, au comptoir :
+            # une commande de table ne sait pas l'encaisser.
+            # / A points price is paid by card at the counter, never via an order.
+            if _tarif_est_en_points(prix):
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Un tarif en points ou en temps ne passe pas par une "
+                        "commande de table : encaissez-le au comptoir."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
             articles_valides.append(
                 {
                     "product": produit,
@@ -11022,6 +11607,29 @@ class CommandeViewSet(viewsets.ViewSet):
             context_erreur = {
                 "msg_type": "warning",
                 "msg_content": _("Aucun article fourni"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        # Un tarif en points se paie par la carte du client, au comptoir : une
+        # commande de table ne sait pas l'encaisser. Refus AVANT toute ecriture.
+        # / A points price is never added to an order: refused before any write.
+        uuids_des_tarifs_demandes = []
+        for article_data in articles_data:
+            uuids_des_tarifs_demandes.append(article_data["price_uuid"])
+        un_tarif_est_en_points = Price.objects.filter(
+            Q(asset__isnull=False) | Q(non_fiduciaire=True),
+            uuid__in=uuids_des_tarifs_demandes,
+        ).exists()
+        if un_tarif_est_en_points:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Un tarif en points ou en temps ne passe pas par une "
+                    "commande de table : encaissez-le au comptoir."
+                ),
                 "selector_bt_retour": "#messages",
             }
             return render(
@@ -11242,6 +11850,27 @@ class CommandeViewSet(viewsets.ViewSet):
                 status=400,
             )
 
+        # Filet de securite : une commande ne contient jamais de tarif en points
+        # (ouvrir_commande et ajouter_articles les refusent). Si une commande en
+        # contient quand meme, elle ne se paie pas : ce chemin appelle les flux
+        # de paiement sans passer par les gardes de `payer()`.
+        # / Safety net: an order never holds a points price; if it does, refused.
+        if _panier_est_en_points(articles_panier):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Un tarif en points ou en temps ne passe pas par une "
+                    "commande de table : encaissez-le au comptoir."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                context_erreur,
+                status=400,
+            )
+
         if not articles_panier:
             context_erreur = {
                 "msg_type": "warning",
@@ -11278,6 +11907,25 @@ class CommandeViewSet(viewsets.ViewSet):
             f"payer_commande: commande={commande_uuid}, moyen={moyen_paiement_code}, "
             f"total={total_centimes}cts, articles={len(articles_panier)}"
         )
+
+        # Liste blanche des moyens d'une commande de table. Le moyen poste est
+        # transmis tel quel aux fonctions de paiement : sans cette garde, un POST
+        # « gift » enregistrerait la commande comme offerte, sans mode gerant.
+        # / Allowed methods for a table order: the posted method is passed as-is
+        #   to the payment functions; without this guard a "gift" POST would
+        #   record the order as gifted.
+        moyens_autorises_pour_une_commande = ("nfc", "espece", "carte_bancaire", "CH")
+        if moyen_paiement_code not in moyens_autorises_pour_une_commande:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Moyen de paiement non accepte pour une commande"),
+                    "selector_bt_retour": "#messages",
+                },
+                status=400,
+            )
 
         # --- Aiguillage NFC / non-NFC ---
         # --- NFC / non-NFC routing ---

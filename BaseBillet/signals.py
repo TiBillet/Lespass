@@ -463,10 +463,18 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
 
 @receiver(post_save, sender=Product) # Attention, les post_save depuis l'admin sont atomic
 def trigger_product_update(sender, instance: Product, created, **kwargs):
-    # Pour LaBoutik, on envoie l'info de création pour qu'il fasse un get_accepted_assets() depuis Fedow
-    # On le lance en async pour bien que le produit soit en DB avant que LaBoutik ne réclame les info par une requete
+    # Previent LaBoutik V1 qu'une ADHESION a change (il refait alors un
+    # get_accepted_assets() depuis Fedow). Les autres produits ne le concernent
+    # pas : aucune tache.
+    # La tache part a la validation de la transaction (on_commit) : le produit est
+    # alors en base quand LaBoutik le reclame. Un save() annule (test, erreur dans
+    # l'admin) n'envoie rien.
+    # / Tells LaBoutik V1 a MEMBERSHIP changed; other products: no task. Sent on
+    #   commit, so the product is saved when LaBoutik asks; a rolled-back save sends nothing.
+    if instance.categorie_article != Product.ADHESION:
+        return
     product_pk = instance.pk
-    trigger_product_update_tasks.delay(product_pk)
+    transaction.on_commit(lambda: trigger_product_update_tasks.delay(product_pk))
 
 
 # Les signaux ne sont pas emis pour sender=Product quand le save passe par un

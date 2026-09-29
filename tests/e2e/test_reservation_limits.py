@@ -368,7 +368,6 @@ class TestReservationLimits:
         # le message de stock épuisé. Le flow TS `loginAs` passait par le lien
         # email TEST MODE qui activait le compte — on reproduit l'activation
         # en DB avant le login (même pattern que test_user_account_summary).
-        # NB : pas de guillemets doubles dans le code shell (échappement conftest).
         # / Step 4: Logged user sees max per price reached.
         # The reservation API creates the user with is_active=False. force_login
         # + ModelBackend rejects inactive users on subsequent requests (see

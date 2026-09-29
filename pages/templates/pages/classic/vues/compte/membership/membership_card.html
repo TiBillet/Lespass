@@ -51,7 +51,7 @@
           {% trans 'Issued by' %} <strong>{{ membership.origin }}</strong>
         </li>
           <li class="list-group-item px-0">
-          {% trans 'Contribution' %} : <strong>{{ membership.contribution_value }}</strong> €
+          {% trans 'Contribution' %} : <strong>{{ membership.contribution_value }}</strong> {{ membership.unite_de_la_contribution }}
         </li>
         <li class="list-group-item px-0">
           {% for option in membership.option_generale.all %}

@@ -1,0 +1,33 @@
+{% load i18n static %}
+<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+<!--
+BOUTON « SYNCHRONISER LA TVA » — FICHE D'UNE CATÉGORIE DE CAISSE
+/ "Synchronize VAT" button — POS category page
+
+LOCALISATION : Administration/templates/admin/categorie_product/synchroniser_tva_bouton.html
+
+Affiché AVANT le formulaire (CategorieProductAdmin.change_form_before_template),
+seulement pour une catégorie existante qui a une TVA.
+
+FLUX :
+1. Clic → hx-get .../synchroniser-tva/confirmer/ → la confirmation remplit
+   #zone-synchronisation-tva (partials/synchroniser_tva_confirmation.html).
+2. « Confirmer » (dans la confirmation) → hx-post .../synchroniser-tva/ →
+   la réponse « HX-Refresh » recharge la page, avec le message de succès.
+/ Click loads the confirmation; "Confirm" posts, then the page reloads.
+-->
+{% if original and original.tva %}
+<div style="padding:1rem 1rem 0 1rem"
+     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <button type="button"
+            data-testid="categorie-synchroniser-tva"
+            hx-get="{% url 'staff_admin:BaseBillet_categorieproduct_synchroniser_tva_confirmer' original.pk %}"
+            hx-target="#zone-synchronisation-tva"
+            hx-swap="innerHTML"
+            style="display:inline-flex;align-items:center;gap:.375rem;padding:.5rem .875rem;border-radius:.375rem;border:1px solid var(--color-primary-600);color:var(--color-primary-600);background:transparent;font-size:.875rem;font-weight:600;cursor:pointer">
+        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem">sync</span>
+        {% blocktranslate with taux=original.tva.tva_rate %}Synchroniser la TVA ({{ taux }} %) sur tous les articles{% endblocktranslate %}
+    </button>
+    <div id="zone-synchronisation-tva" aria-live="polite" style="margin-top:.75rem"></div>
+</div>
+{% endif %}

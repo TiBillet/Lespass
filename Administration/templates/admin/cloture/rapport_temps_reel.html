@@ -210,7 +210,7 @@
                 <tr>
                     <th>{% translate "Product" %}</th>
                     <th class="text-right">{% translate "Sold" %}</th>
-                    <th class="text-right">{% translate "Free" %}</th>
+                    <th class="text-right">{% translate "Payé en cadeau" %}</th>
                     <th class="text-right">{% translate "Total qty" %}</th>
                     <th class="text-right">{% translate "HT" %}</th>
                     <th class="text-right">{% translate "VAT" %}</th>
@@ -241,6 +241,62 @@
             </tbody>
         </table>
         {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Articles offerts, hors argent / Gifted items, not money ── #}
+    {% with section=rapport.offerts %}
+    {% if section.par_produit %}
+    <div class="section" data-testid="section-offerts">
+        <h3>{% translate "Offerts (hors argent)" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Article" %}</th>
+                    <th class="text-right">{% translate "Quantité" %}</th>
+                    <th class="text-right">{% translate "Valeur offerte" %}</th>
+                    <th class="text-right">{% translate "Coût d'achat" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for offert in section.par_produit %}
+                <tr>
+                    <td>{{ offert.nom }}</td>
+                    <td class="text-right">{{ offert.qty|floatformat:"-2" }}</td>
+                    <td class="text-right">{{ offert.valeur|euros }}</td>
+                    <td class="text-right">{{ offert.cout_achat|euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Ventes en points ou en temps, hors argent / Points or time sales, not money ── #}
+    {% with section=rapport.non_monetaire %}
+    {% if section.par_monnaie %}
+    <div class="section" data-testid="section-non-monetaire">
+        <h3>{% translate "Non monétaire (hors argent)" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Monnaie" %}</th>
+                    <th class="text-right">{% translate "Quantité" %}</th>
+                    <th class="text-right">{% translate "Total" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for monnaie in section.par_monnaie %}
+                <tr>
+                    <td>{{ monnaie.nom }}</td>
+                    <td class="text-right">{{ monnaie.qty_articles|floatformat:"-2" }}</td>
+                    <td class="text-right">{{ monnaie.unites|montant_dans_la_monnaie:monnaie.nom }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
     {% endif %}
     {% endwith %}
@@ -337,6 +393,13 @@
                     <td class="text-right">{{ section.total|euros }}</td>
                     <td></td>
                 </tr>
+                {% if section.cadeau_emis %}
+                <tr data-testid="recharges-cadeau-emis">
+                    <td colspan="3"><em>{% translate "Cadeau émis (hors argent)" %}</em></td>
+                    <td class="text-right"><em>{{ section.cadeau_emis|euros }}</em></td>
+                    <td></td>
+                </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>
@@ -365,7 +428,7 @@
                     <td>{{ adh.nom_tarif|default:"—" }}</td>
                     <td>{{ adh.moyen_paiement }}</td>
                     <td class="text-right">{{ adh.nb }}</td>
-                    <td class="text-right">{{ adh.total|euros }}</td>
+                    <td class="text-right">{% if adh.unite %}{{ adh.total|montant_dans_la_monnaie:adh.unite }}{% else %}{{ adh.total|euros }}{% endif %}</td>
                 </tr>
                 {% endfor %}
                 <tr class="total-row">

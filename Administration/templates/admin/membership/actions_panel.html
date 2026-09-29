@@ -25,13 +25,13 @@ FLUX PAR ACTION :
 - Envoyer reçu  : hx-post → send_invoice      → response-send-invoice ← send_invoice_success.html
 - Reçu PDF      : lien direct → invoice (PDF inline)
 - Renouveller   : hx-get  → renouveller       → response-renouveller ← renouveller_confirm.html
+                  (la vue construit le lien du formulaire d'ajout pré-rempli)
 - Valider       : hx-post → admin_accept       → response-accept     ← admin_accept_success.html  [si status AW ou AV]
 - Paiement      : hx-get  → ajouter_paiement  → response-paiement   ← ajouter_paiement_form.html [si status WP/AW/AV]
 - Annuler       : hx-get  → cancel            → response-cancel     ← cancel_form.html
 
 CONTEXTE REQUIS (injecté par MembershipAdmin.changeform_view) :
 - membership              : instance Membership
-- renouveller_url         : URL du formulaire d'ajout pré-rempli (injecté dans le partial de confirmation)
 - statuts_attente_paiement : liste des statuts qui affichent le bouton paiement
 -->
 {% if membership %}

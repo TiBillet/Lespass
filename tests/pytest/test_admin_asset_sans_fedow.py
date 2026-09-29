@@ -44,6 +44,8 @@ def test_la_liste_des_assets_repond_sur_un_lieu_sans_fedow():
     / On `meta` (no Fedow place), the asset list answers 200, not 500."""
     lieu_meta = Client.objects.get(schema_name="meta")
     domaine = lieu_meta.domains.first()
+    if domaine is None:
+        pytest.fail("Le lieu 'meta' n'a aucun domaine : impossible d'ouvrir son admin.")
 
     with tenant_context(lieu_meta):
         # Le test ne prouve quelque chose que si le lieu n'est PAS relie a Fedow.

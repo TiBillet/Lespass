@@ -83,15 +83,14 @@ Règle de décision / Decision rule:
 
 ## 🚀 Lancer les tests / Running the tests
 
-Quatre modes, via `make` : **Python ou E2E, avec ou sans Stripe réel**. Le choix se
-fait sur **ce qu'on accepte de ne pas vérifier**, pas seulement sur la durée. La logique
-(serveur live, clé API de test, `stripe listen`) vit dans `scripts/lancer_tests.sh`.
+Deux suites, via `make` : **Python et E2E, toujours avec Stripe réel**. Aucun test
+n'est ignoré : ce qui ne peut pas tourner **échoue**. La logique (serveur live, clé API
+de test, `stripe listen`) vit dans `scripts/lancer_tests.sh`.
 
 ```bash
-make test          # 1. PYTHON (~3 min) — Stripe mocké
-make test-stripe   # 2. PYTHON + STRIPE RÉEL — vrais paiements et remboursements, mode test
-make e2e           # 3. E2E SANS STRIPE RÉEL (~9 min)
-make e2e-stripe    # 4. E2E COMPLETS (~12 min) — `stripe listen` doit tourner dans byobu
+make test          # PYTHON (~11 min), paiements et remboursements Stripe réels compris
+make e2e           # E2E (~14 min), parcours à webhook Stripe compris — `stripe listen` dans byobu
+make e2e-visible   # E2E à SUIVRE DES YEUX : Chromium visible sur l'écran, ralenti, journal lisible
 
 # Cibler un fichier, un test, un marqueur (tout ARGS est passé à pytest) :
 make test ARGS="tests/pytest/test_stripe_refund.py -k panier"
@@ -99,26 +98,54 @@ make test ARGS="tests/ --last-failed"          # seuls les échecs précédents
 make test ARGS="tests/pytest/ -m integration"  # API v2 seulement
 ```
 
-**Sans Stripe réel, les tests qui en ont besoin sont IGNORÉS — et nommés en rouge
-en fin de run**, impossible de les rater. Deux marqueurs, une seule variable
-(`STRIPE_REEL=1`, posée par les cibles `-stripe`) :
+**Les tests Stripe tournent à chaque lancement.** Deux marqueurs :
 
-| Marqueur | Suite | Ce qu'il exige |
-|---|---|---|
-| `stripe_reel` | `tests/pytest/` | l'API Stripe en mode test (réseau, clé `sk_test_`) |
-| `stripe_listen` | `tests/e2e/` | en plus, `stripe listen` pour le webhook de confirmation |
-
-Le mécanisme (ignorer + encadré rouge) est partagé : `tests/stripe_reel.py`.
+| Marqueur | Suite | Ce qu'il exige | Sans lui |
+|---|---|---|---|
+| `stripe_reel` | `tests/pytest/` | l'API Stripe en mode test (réseau, clé `sk_test_`) | échec (clé refusée, réseau) |
+| `stripe_listen` | `tests/e2e/` | en plus, `stripe listen` pour le webhook de confirmation | échec immédiat, qui nomme la cause |
 
 **Tous les modes exigent le serveur live** : une partie des tests pytest l'appelle en
 HTTP. Le script le vérifie avant de lancer (un `502` = runserver mort dans byobu).
 
-**Dès qu'on touche au paiement, au Fedow ou aux adhésions, ce sont les modes `-stripe`
-qui font foi.**
-
 **Ordre conseillé : les E2E AVANT pytest.** Les E2E créent de vraies ventes dans
 le tenant de développement ; un test pytest qui compte largement peut en être
 pollué. C'est déjà arrivé.
+
+### Suivre les E2E des yeux : `make e2e-visible`
+
+Les tests tournent toujours dans le conteneur, mais pilotent une fenêtre Chromium
+**visible sur l'écran de l'hôte**, ralentie pour qu'un humain suive. Le journal donne,
+pour chaque test, les pages visitées, les envois (POST, HTMX), les réponses en erreur
+et les erreurs JavaScript ; il est aussi écrit dans `tests/e2e/artefacts/supervision.log`.
+
+```bash
+make e2e-visible ARGS="tests/e2e/test_panier_flow.py"   # un fichier
+make e2e-visible LENTEUR=1500 ARGS="-k adhesion"        # plus lent (ms par action, 800 par défaut)
+```
+
+```
+▶ tests/e2e/test_membership_manual_validation.py::…::test_request_and_approve_membership
+  → page     /memberships/
+  → GET      /memberships/<uuid>/ (htmx)
+  → POST     /memberships/ (htmx)
+  ⚠ erreur JS  Cannot read properties of null (reading 'addEventListener')
+✔ PASSED (30 s)
+```
+
+Comment : le script lance sur l'hôte `npx playwright@1.60.0 run-server` (même version que le
+conteneur), à l'écoute de l'adresse Docker de l'hôte seulement (`172.17.0.1:3999`), et
+l'arrête à la fin. La fixture `browser` (`tests/e2e/conftest.py`) s'y connecte au lieu de
+lancer un Chromium headless. Premier lancement, sur l'hôte :
+
+```bash
+npx -y playwright@1.60.0 install chromium
+# Ubuntu 26.04, pas encore reconnu par Playwright (le script pose la même variable) :
+PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 npx -y playwright@1.60.0 install chromium
+```
+
+Seule la page de la fixture `page` est journalisée : un test qui ouvre lui-même un autre
+contexte navigateur s'affiche à l'écran, mais n'écrit rien dans le journal.
 
 ### Prérequis E2E / E2E prerequisites
 
@@ -138,7 +165,7 @@ pollué. C'est déjà arrivé.
 4. Celery tourne (`lespass_celery`) : les récompenses en monnaie partent par
    `.delay()`. Sans worker, elles ne sont **jamais** versées — et rien ne le dit.
 
-### Les modes `-stripe` en détail
+### Les tests Stripe réel en détail
 
 Les marqueurs `stripe_reel` et `stripe_listen` sont déclarés dans `pytest.ini`
 (**pas** dans `pyproject.toml` — un marqueur déclaré là y est inerte).
@@ -153,30 +180,31 @@ Les marqueurs `stripe_reel` et `stripe_listen` sont déclarés dans `pytest.ini`
 
 Deux choses à savoir :
 
-- **`STRIPE_REEL=1` est déclaratif.** `make e2e-stripe` vérifie que `stripe listen`
-  tourne **au lancement**, mais le conteneur ne voit pas les processus de l'hôte : si
-  le CLI meurt en cours de session, les tests s'exécutent quand même et échouent pour
-  une raison sans rapport avec le code. Vérification :
+- **`make e2e` regarde si `stripe listen` tourne, au lancement.** Le conteneur ne voit
+  pas les processus de l'hôte : le script le vérifie, et le dit aux tests par
+  `STRIPE_LISTEN=1` ou `0`. S'il manque, le run continue, mais chaque test
+  `stripe_listen` **échoue** dès sa préparation avec la vraie cause
+  (`pytest_runtest_setup`, `tests/e2e/conftest.py`). Vérification :
   ```bash
   pgrep -af "stripe listen.*/api/webhook_stripe/"   # rien = CLI mort
   ```
-- **Sans la variable, le skip est bruyant.** Un encadré rouge en fin de run nomme
-  chaque test non joué (hook `pytest_terminal_summary`, `tests/stripe_reel.py`).
-  C'est délibéré : un run vert qui cache des parcours de paiement non vérifiés
-  donne une confiance qu'on n'a pas.
+- **Un processus vivant ne prouve pas qu'il écoute.** Un `stripe listen` relancé peut
+  tourner sans plus rien transmettre (vu le 2026-09-26 : aucun événement reçu après sa
+  relance). Le volet byobu doit afficher des lignes `-->` / `<--` pendant les tests ;
+  sinon, relancer le CLI, voire `stripe login` (ses clés expirent).
 
 ### Faire passer un mois : les horloges de test Stripe
 
 `test_renouvellement_adhesion_recurrente.py` vérifie qu'une adhésion mensuelle
 reverse bien sa récompense **à chaque échéance**. Pour ne pas attendre un mois,
-le client Stripe est rattaché à une `TestClock` que le test avance de 32 jours :
+le client Stripe est rattaché à une `TestClock` que le test avance de 35 jours (la facture de renouvellement reste 72 h en brouillon) :
 
 ```python
 horloge = stripe.test_helpers.TestClock.create(frozen_time=int(time.time()), ...)
 client  = stripe.Customer.create(email=..., test_clock=horloge.id, ...)
 # ... puis, plus tard :
 stripe.test_helpers.TestClock.advance(horloge.id,
-                                      frozen_time=h.frozen_time + 32 * 24 * 3600, ...)
+                                      frozen_time=h.frozen_time + 35 * 24 * 3600, ...)
 ```
 
 Stripe émet alors une **vraie** facture, prélève **vraiment** la carte de test et

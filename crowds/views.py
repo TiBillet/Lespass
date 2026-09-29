@@ -616,31 +616,37 @@ class InitiativeViewSet(viewsets.ViewSet):
             state__in=[Participation.State.COMPLETED_USER, Participation.State.VALIDATED_ADMIN]
         ).count()
 
-        # FR: Calcul du pool de financement global à répartir
-        # EN: Calculation of the global funding pool to allocate
-        total_stripe_recharges_eur = LigneArticle.objects.filter(
-            carte__isnull=False,
-            paiement_stripe__isnull=False,
-            paiement_stripe__status__in=[Paiement_stripe.PAID, Paiement_stripe.VALID],
-            payment_method__in=[PaymentMethod.STRIPE_FED, PaymentMethod.STRIPE_NOFED, PaymentMethod.STRIPE_SEPA_NOFED],
-        ).aggregate(
-            total=Sum(
-                ExpressionWrapper(
-                    F("pricesold__prix") * F("qty"),
-                    output_field=DecimalField(max_digits=12, decimal_places=2),
-                )
-            )
-        ).get("total") or Decimal("0.00")
+        # REPARTITION DU FINANCEMENT GLOBAL : debranchee (2026-09-27, decision du mainteneur :
+        # plus utilisee, l'app crowds sera repensee). Ce calcul comptait les RECHARGES CASHLESS
+        # en ligne (argent des porteurs de carte) comme argent « a repartir » vers les projets :
+        # deux caisses de nature differente. Garde en commentaire pour memoire.
+        # / Global funding allocation: disconnected. This computation counted online CASHLESS
+        # top-ups (card holders' money) as money "to allocate" to projects. Kept for reference.
+        # # FR: Calcul du pool de financement global à répartir
+        # # EN: Calculation of the global funding pool to allocate
+        # total_stripe_recharges_eur = LigneArticle.objects.filter(
+        #     carte__isnull=False,
+        #     paiement_stripe__isnull=False,
+        #     paiement_stripe__status__in=[Paiement_stripe.PAID, Paiement_stripe.VALID],
+        #     payment_method__in=[PaymentMethod.STRIPE_FED, PaymentMethod.STRIPE_NOFED, PaymentMethod.STRIPE_SEPA_NOFED],
+        # ).aggregate(
+        #     total=Sum(
+        #         ExpressionWrapper(
+        #             F("pricesold__prix") * F("qty"),
+        #             output_field=DecimalField(max_digits=12, decimal_places=2),
+        #         )
+        #     )
+        # ).get("total") or Decimal("0.00")
         
-        total_stripe_recharges_cents = int(total_stripe_recharges_eur * 100)
-        total_direct_global_funding = GlobalFunding.objects.aggregate(total=Sum("amount_funded")).get("total") or 0
-        total_already_allocated = Contribution.objects.filter(
-            contributor_name=GLOBAL_FUNDING_ALLOC_NAME
-        ).aggregate(total=Sum("amount")).get("total") or 0
+        # total_stripe_recharges_cents = int(total_stripe_recharges_eur * 100)
+        # total_direct_global_funding = GlobalFunding.objects.aggregate(total=Sum("amount_funded")).get("total") or 0
+        # total_already_allocated = Contribution.objects.filter(
+        #     contributor_name=GLOBAL_FUNDING_ALLOC_NAME
+        # ).aggregate(total=Sum("amount")).get("total") or 0
         
-        funding_to_allocate = total_stripe_recharges_cents + total_direct_global_funding - total_already_allocated
-        if funding_to_allocate < 0:
-            funding_to_allocate = 0
+        # funding_to_allocate = total_stripe_recharges_cents + total_direct_global_funding - total_already_allocated
+        # if funding_to_allocate < 0:
+        #     funding_to_allocate = 0
 
         # FR: Agrégation par devise pour le détail des monnaies
         # EN: Aggregation by currency for currency details
@@ -728,7 +734,7 @@ class InitiativeViewSet(viewsets.ViewSet):
             "summary_has_multiple_sources": has_multiple_sources,
             "summary_active_participations": formatted_active_participations,
             "summary_active_participations_count": total_active_participations_count,
-            "summary_funding_to_allocate": funding_to_allocate,
+            # "summary_funding_to_allocate": funding_to_allocate,  # debranche, voir plus haut
             "summary_initiatives_for_alloc": initiatives_for_allocation,
             # FR: Textes d'aide pour le formulaire de financement global
             # EN: Help texts for Global Funding form

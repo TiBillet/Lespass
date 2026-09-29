@@ -25,6 +25,9 @@ CONTEXTE (_payer_par_nfc) :
 - soldes            : soldes locaux de la carte (_soldes_locaux_pour_affichage)
 - payments_accepted : especes / CB acceptees par le point de vente
 - uuid_transaction  : transaction a completer (vide si aucune)
+- nom_monnaie_du_panier_en_points : nom de la monnaie d'un panier en points ou en
+  temps (sinon absent). Le manque s'affiche dans cette monnaie, et le bloc
+  « Compléter avec » n'est pas rendu : un tel panier se paie avec une seule carte.
 -->
 <div id="messages">
   <div data-testid="paiement-nfc-insuffisant" aria-live="polite">
@@ -45,7 +48,11 @@ CONTEXTE (_payer_par_nfc) :
           <strong id="fonds-insuffisants-titre" class="test-return-title">{% translate "Fonds insuffisants" %}</strong>
           <span id="fonds-insuffisants-manque" class="card-manque test-return-missing-cash" role="alert">
             {% translate "Il manque" %}
-            <b id="test-manque-monnaie">{{ payment.missing|floatformat:2 }} {{ currency_data.symbol }}</b>
+            {% if nom_monnaie_du_panier_en_points %}
+              <b id="test-manque-monnaie">{{ payment.missing|floatformat:2 }} {{ nom_monnaie_du_panier_en_points }}</b>
+            {% else %}
+              <b id="test-manque-monnaie">{{ payment.missing|floatformat:2 }} {{ currency_data.symbol }}</b>
+            {% endif %}
           </span>
           {% if carte_ref %}
             <span class="card-ref">{% translate "carte" %} ·· {{ carte_ref }}</span>
@@ -67,6 +74,9 @@ CONTEXTE (_payer_par_nfc) :
         {# --- COMPLETER LE PAIEMENT / COMPLETE THE PAYMENT --- #}
         {# Memes requetes qu'avant : seule l'apparence des boutons change. #}
         {# / Same requests as before: only the button look changes.       #}
+        {# Un panier en points ne se complete pas : ni especes, ni CB, ni 2e carte. #}
+        {# / A points cart is never completed: no cash, card or 2nd card.            #}
+        {% if not nom_monnaie_du_panier_en_points %}
         <p class="payment-title test-returm-possible-purchase">{% translate "Compléter avec" %}</p>
         <div class="payment-methods">
           {% if payments_accepted.accepte_especes %}
@@ -89,6 +99,7 @@ CONTEXTE (_payer_par_nfc) :
           {% endif %}
           " />
         </div>
+        {% endif %}
       </div>
     </div>
   </div>

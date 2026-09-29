@@ -56,6 +56,7 @@ django.setup()
 
 import json  # noqa: E402
 import uuid as uuid_module  # noqa: E402
+from decimal import Decimal  # noqa: E402
 from unittest import mock  # noqa: E402
 
 from django_tenants.test.cases import FastTenantTestCase  # noqa: E402
@@ -503,7 +504,90 @@ class TestPayerParQrCode(FastTenantTestCase):
 
         lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.QRCODE_MA)
         assert lignes.count() == 2
-        assert sum(une_ligne.amount for une_ligne in lignes) == MONTANT_DEMANDE_CENTIMES
+        self._verifier_les_parts_d_un_paiement(lignes, MONTANT_DEMANDE_CENTIMES)
+
+    def _verifier_les_parts_d_un_paiement(self, lignes, montant_total_centimes):
+        """Verifie qu'un paiement reparti suit la regle total = amount x qty.
+
+        Chaque ligne porte le prix UNITAIRE du paiement (le montant total), et sa
+        part est portee par qty. La somme des qty vaut exactement 1, et la somme
+        des montants (amount x qty) vaut le montant demande.
+        / Each line carries the UNIT price; its share is carried by qty.
+        """
+        for une_ligne in lignes:
+            assert une_ligne.amount == montant_total_centimes, (
+                f"amount doit etre le prix unitaire {montant_total_centimes}, "
+                f"obtenu {une_ligne.amount}"
+            )
+
+        somme_des_qty = sum(Decimal(une_ligne.qty) for une_ligne in lignes)
+        assert somme_des_qty == Decimal("1"), f"Somme des qty : {somme_des_qty}"
+
+        somme_des_montants = sum(
+            Decimal(une_ligne.amount) * Decimal(une_ligne.qty) for une_ligne in lignes
+        )
+        assert somme_des_montants == Decimal(montant_total_centimes), (
+            f"Montant enregistre {somme_des_montants}, attendu {montant_total_centimes}"
+        )
+
+    def test_un_debit_partiel_enregistre_ce_qui_a_ete_paye(self):
+        """Fedow debite moins que demande : la vente enregistre ce qui a ete paye.
+
+        12,50 € demandes, 5,00 + 7,00 € debites. La vente vaut 12,00 € : jamais
+        un montant que personne n'a paye.
+        / Fedow debits less than requested: the sale records what was paid.
+        """
+        ligne = self._generer_un_qrcode()
+        payeur = self._creer_utilisateur('paiement-partiel', avec_wallet=True)
+
+        with mock.patch('fedow_connect.fedow_api.FedowAPI') as fedow:
+            fedow.return_value = self._fedow_qui_repond(
+                solde_centimes=MONTANT_DEMANDE_CENTIMES,
+                transactions=[
+                    {'asset': str(uuid_module.uuid4()), 'amount': 500},
+                    {'asset': str(uuid_module.uuid4()), 'amount': 700},
+                ],
+                categorie_asset='FED',
+            )
+            self._navigateur_de(payeur).post(
+                CHEMIN_VALIDATION,
+                data={'ligne_article_uuid_hex': ligne.uuid.hex},
+            )
+
+        lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.QRCODE_MA)
+        assert lignes.count() == 2
+        self._verifier_les_parts_d_un_paiement(lignes, 1200)
+
+    def test_un_paiement_reparti_en_trois_parts_garde_toute_la_quantite(self):
+        """Trois parts inegales : la somme des qty vaut exactement 1.
+
+        10 € payes 3,33 + 3,33 + 3,34. Une qty arrondie a deux decimales
+        donnerait 0,33 + 0,33 + 0,33 = 0,99 : un centime par part disparaitrait.
+        La derniere part prend le reste.
+        / Three unequal parts: the qty sum is exactly 1, the last part takes
+        the remainder.
+        """
+        ligne = self._generer_un_qrcode(montant_centimes=1000)
+        payeur = self._creer_utilisateur('paiement-trois-parts', avec_wallet=True)
+
+        with mock.patch('fedow_connect.fedow_api.FedowAPI') as fedow:
+            fedow.return_value = self._fedow_qui_repond(
+                solde_centimes=1000,
+                transactions=[
+                    {'asset': str(uuid_module.uuid4()), 'amount': 333},
+                    {'asset': str(uuid_module.uuid4()), 'amount': 333},
+                    {'asset': str(uuid_module.uuid4()), 'amount': 334},
+                ],
+                categorie_asset='FED',
+            )
+            self._navigateur_de(payeur).post(
+                CHEMIN_VALIDATION,
+                data={'ligne_article_uuid_hex': ligne.uuid.hex},
+            )
+
+        lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.QRCODE_MA)
+        assert lignes.count() == 3
+        self._verifier_les_parts_d_un_paiement(lignes, 1000)
 
     def test_un_solde_insuffisant_ne_consomme_pas_la_ligne(self):
         """Refuse pour fonds insuffisants : rien n'est encaisse, rien n'est perdu.
@@ -876,6 +960,43 @@ class TestPayerParQrCode(FastTenantTestCase):
         )
         assert ventes.count() == 1
         assert ventes.first().payment_method == PaymentMethod.LOCAL_EURO
+
+    def test_un_paiement_par_carte_reparti_enregistre_le_montant_entier(self):
+        """La carte paie 12,50 € avec deux monnaies : 12,50 € sont enregistres.
+
+        Une ligne par monnaie, chacune au prix unitaire du paiement, la part de
+        chaque monnaie dans qty. L'ecran du caissier annonce le montant paye en
+        entier, pas la part de la derniere monnaie.
+        / The card pays with two currencies: the full amount is recorded and
+        announced to the cashier.
+        """
+        ligne = self._generer_un_qrcode()
+        payeur = self._creer_utilisateur('nfc-reparti', avec_wallet=True)
+
+        with mock.patch('BaseBillet.validators.FedowAPI') as fedow:
+            faux_fedow = fedow.return_value
+            faux_fedow.NFCcard.card_tag_id_retrieve.return_value = (
+                self._carte_fedow(payeur.wallet.uuid)
+            )
+            faux_fedow.wallet.get_total_fiducial_and_all_federated_token.return_value = (
+                MONTANT_DEMANDE_CENTIMES
+            )
+            faux_fedow.transaction.to_place_from_qrcode.return_value = [
+                {'asset': str(uuid_module.uuid4()), 'amount': 500},
+                {'asset': str(uuid_module.uuid4()), 'amount': 750},
+            ]
+            faux_fedow.asset.retrieve.return_value = {'category': 'TLF'}
+            reponse = self._poster_une_lecture_nfc('62FE1601', ligne)
+
+        assert reponse.status_code == 202, reponse.content.decode()[:400]
+        assert float(reponse.json()['amount_paid']) == 12.50
+
+        ventes = LigneArticle.objects.filter(
+            sale_origin=SaleOrigin.NFC_MA,
+            status=LigneArticle.VALID,
+        )
+        assert ventes.count() == 2
+        self._verifier_les_parts_d_un_paiement(ventes, MONTANT_DEMANDE_CENTIMES)
 
     def test_le_paiement_par_carte_retient_qui_a_presente_la_carte(self):
         """La lecture NFC laisse une trace : le tag, le lecteur, le porteur.

@@ -102,7 +102,7 @@
                         {% for ligne in adhesions_en_cours %}
                             <tr class="border-b border-base-200 dark:border-base-800">
                                 <td class="py-2 pr-3">{% if ligne.url %}<a href="{{ ligne.url }}" class="text-primary-600 hover:underline cursor-pointer">{{ ligne.produit }}{% if ligne.tarif %} — {{ ligne.tarif }}{% endif %}</a>{% else %}{{ ligne.produit }}{% if ligne.tarif %} — {{ ligne.tarif }}{% endif %}{% endif %}</td>
-                                <td class="py-2 pr-3 text-right whitespace-nowrap" style="font-variant-numeric: tabular-nums;">{% if ligne.montant != None %}{{ ligne.montant }}&nbsp;{{ devise }}{% else %}—{% endif %}</td>
+                                <td class="py-2 pr-3 text-right whitespace-nowrap" style="font-variant-numeric: tabular-nums;">{% if ligne.montant != None %}{{ ligne.montant }}&nbsp;{{ ligne.unite|default:devise }}{% else %}—{% endif %}</td>
                                 <td class="py-2 pr-3">{{ ligne.moyen|default:"—" }}</td>
                                 <td class="py-2 pr-3 whitespace-nowrap">{{ ligne.deadline|date:"DATE_FORMAT"|default:"—" }}</td>
                                 <td class="py-2"><span style="background-color: {{ ligne.badge_fond }}; color: {{ ligne.badge_texte }}; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block;">{{ ligne.statut }}</span></td>
@@ -132,7 +132,7 @@
                         {% for ligne in adhesions_passees %}
                             <tr class="border-b border-base-200 dark:border-base-800">
                                 <td class="py-2 pr-3">{% if ligne.url %}<a href="{{ ligne.url }}" class="text-primary-600 hover:underline cursor-pointer">{{ ligne.produit }}{% if ligne.tarif %} — {{ ligne.tarif }}{% endif %}</a>{% else %}{{ ligne.produit }}{% if ligne.tarif %} — {{ ligne.tarif }}{% endif %}{% endif %}</td>
-                                <td class="py-2 pr-3 text-right whitespace-nowrap" style="font-variant-numeric: tabular-nums;">{% if ligne.montant != None %}{{ ligne.montant }}&nbsp;{{ devise }}{% else %}—{% endif %}</td>
+                                <td class="py-2 pr-3 text-right whitespace-nowrap" style="font-variant-numeric: tabular-nums;">{% if ligne.montant != None %}{{ ligne.montant }}&nbsp;{{ ligne.unite|default:devise }}{% else %}—{% endif %}</td>
                                 <td class="py-2 pr-3">{{ ligne.moyen|default:"—" }}</td>
                                 <td class="py-2 pr-3 whitespace-nowrap">{{ ligne.deadline|date:"DATE_FORMAT"|default:"—" }}</td>
                                 <td class="py-2"><span style="background-color: {{ ligne.badge_fond }}; color: {{ ligne.badge_texte }}; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block;">{{ ligne.statut }}</span></td>

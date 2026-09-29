@@ -216,7 +216,6 @@ class TestUserAccountSummary:
         # inactifs sur les requêtes suivantes (cf. PIEGES.md 9.88). Le flow TS
         # `loginAs` passait par le lien email TEST MODE, qui activait le compte.
         # On reproduit cette activation en DB avant le login.
-        # NB : pas de guillemets doubles dans le code shell (échappement conftest).
         # / Step 2: Login as this user.
         # The reservation API creates the user with is_active=False (unlike the
         # membership API). force_login + ModelBackend rejects inactive users on

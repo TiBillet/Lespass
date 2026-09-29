@@ -125,12 +125,11 @@ class TestMembershipManualValidation:
         page.goto("/memberships/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Trouver la carte du produit et cliquer sur le bouton "Adhérer" / "Subscribe".
-        # / Find the product card and click the "Adhérer" / "Subscribe" button.
-        card = page.locator(f'.card:has-text("{product_name}")').first
-        card.locator(
-            'button:has-text("Subscribe"), button:has-text("Adhérer")'
-        ).click()
+        # Trouver la carte du produit et cliquer sur « Adhérer » (data-testid du
+        # composant cotton/V2/membership_card.html).
+        # / Find the product card and click "Subscribe" (V2 card data-testids).
+        card = page.locator('[data-testid^="membership-card-"]').filter(has_text=product_name).first
+        card.locator('[data-testid^="membership-open-"]').click()
 
         # Attendre que l'offcanvas soit visible.
         # / Wait for the offcanvas to be visible.
@@ -154,32 +153,22 @@ class TestMembershipManualValidation:
         # / Submit the form.
         page.locator("#membership-submit").click()
 
-        # Avec manualValidation=True, la soumission devrait afficher un message
-        # de confirmation (pas de redirection Stripe immédiate).
-        # On attend soit un message "en attente" soit un retour sur /memberships/.
-        # / With manualValidation=True, submission should show a confirmation message
-        # (no immediate Stripe redirect).
-        # We wait for either a "pending" message or return to /memberships/.
-        try:
-            page.wait_for_url(
-                lambda url: "checkout.stripe.com" in url,
-                timeout=8_000,
-            )
-            # Si Stripe apparaît (comportement inattendu mais possible), on note
-            # et on continue — le statut AW peut être créé avant la redirection.
-            # / If Stripe appears (unexpected but possible), note it and continue —
-            # AW status may be created before the redirect.
-        except Exception:
-            # Pas de redirection Stripe — comportement attendu pour manualValidation.
-            # / No Stripe redirect — expected behavior for manualValidation.
-            pass
+        # Validation manuelle : la demande est enregistree SANS paiement. Le message
+        # « en attente de validation » s'affiche (commun/adhesion/pending_manual_validation.html),
+        # et on ne part PAS vers Stripe : un paiement avant la validation serait une faute.
+        # / Manual validation: the request is recorded WITHOUT payment. The pending message
+        # shows, and we do NOT go to Stripe: paying before validation would be a fault.
+        expect(
+            page.locator('[data-testid="adhesion-en-attente-de-validation"]')
+        ).to_be_visible(timeout=15_000)
+        assert "checkout.stripe.com" not in page.url, (
+            f"Une adhesion a validation manuelle a envoye vers Stripe : {page.url}"
+        )
 
         # --- Étape 2 : Vérifier en base que l'adhésion est en statut AW ---
         # Récupérer l'UUID de l'adhésion en base via django_shell.
-        # Code shell avec quotes simples uniquement (conftest échappe les doubles).
         # / Step 2: Verify in DB that the membership is in AW status.
         # Get the membership UUID from DB via django_shell.
-        # Shell code uses single quotes only (conftest escapes double quotes).
         result_pre = django_shell(
             "from BaseBillet.models import Membership\n"
             f"m = Membership.objects.filter(user__email='{user_email}').order_by('-pk').first()\n"

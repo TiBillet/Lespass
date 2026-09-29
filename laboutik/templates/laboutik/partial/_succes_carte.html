@@ -11,7 +11,9 @@ STYLE : laboutik/static/css/overlay.css (bloc ECRAN DE SUCCES)
 PARAMETRES :
 - carte            : {"tag_id": str, "soldes": [...]}. Les soldes viennent de
                      views.py:_calculer_soldes_apres_paiement() : une entree par
-                     monnaie debitee, montants en centimes.
+                     monnaie debitee, montants en centimes. `unite` : nom de la
+                     monnaie pour des points ou du temps (montants ecrits dans
+                     cette monnaie), vide pour de l'argent (euros).
 - rang             : 1 ou 2 (position de la carte dans le paiement)
 - nombre_de_cartes : 1 ou 2. L'etiquette « 1re carte / 2e carte » n'apparait
                      que quand deux cartes ont paye.
@@ -35,15 +37,15 @@ AFFICHAGE :
       <div class="succes-avant-apres" data-testid="solde-carte{{ rang }}-asset-1">
         <div class="succes-solde-bloc succes-solde-avant">
           <span>{% translate "Avant" %}</span>
-          <b data-testid="paiement-carte{{ rang }}-solde-avant">{{ solde.solde_avant_centimes|euros }}</b>
+          <b data-testid="paiement-carte{{ rang }}-solde-avant">{{ solde.solde_avant_centimes|montant_dans_la_monnaie:solde.unite }}</b>
         </div>
         <div class="succes-passage">
-          <b data-testid="paiement-carte{{ rang }}-debite"><span class="sr-only">{% translate "Payé" %}</span>− {{ solde.debite_centimes|euros }}</b>
+          <b data-testid="paiement-carte{{ rang }}-debite"><span class="sr-only">{% translate "Payé" %}</span>− {{ solde.debite_centimes|montant_dans_la_monnaie:solde.unite }}</b>
           <svg class="succes-fleche" viewBox="0 0 34 10" aria-hidden="true" focusable="false"><path d="M0 4h28V0l6 5-6 5V6H0z"/></svg>
         </div>
         <div class="succes-solde-bloc succes-solde-apres">
           <span>{% translate "Sur la carte" %} · {{ solde.name }}</span>
-          <b data-testid="paiement-carte{{ rang }}-solde-apres">{{ solde.solde_centimes|euros }}</b>
+          <b data-testid="paiement-carte{{ rang }}-solde-apres">{{ solde.solde_centimes|montant_dans_la_monnaie:solde.unite }}</b>
         </div>
       </div>
     {% endwith %}
@@ -61,9 +63,9 @@ AFFICHAGE :
         {% for solde in carte.soldes %}
           <tr data-testid="solde-carte{{ rang }}-asset-{{ forloop.counter }}">
             <td>{{ solde.name }}</td>
-            <td class="num">{{ solde.solde_avant_centimes|euros }}</td>
-            <td class="num succes-paye">− {{ solde.debite_centimes|euros }}</td>
-            <td class="num">{{ solde.solde_centimes|euros }}</td>
+            <td class="num">{{ solde.solde_avant_centimes|montant_dans_la_monnaie:solde.unite }}</td>
+            <td class="num succes-paye">− {{ solde.debite_centimes|montant_dans_la_monnaie:solde.unite }}</td>
+            <td class="num">{{ solde.solde_centimes|montant_dans_la_monnaie:solde.unite }}</td>
           </tr>
         {% endfor %}
       </tbody>

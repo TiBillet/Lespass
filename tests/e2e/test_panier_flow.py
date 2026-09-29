@@ -24,8 +24,7 @@ SKIN V2 : le badge du panier est dans `header[data-testid="user-bar"]`, pas dans
 / V2 skin: the cart badge lives in the user bar header, not in a `.navbar`.
 
 Lancer / Run :
-    make e2e ARGS="tests/e2e/test_panier_flow.py"          (E1 à E4)
-    make e2e-stripe ARGS="tests/e2e/test_panier_flow.py"   (E1 à E6, vrai paiement Stripe)
+    make e2e ARGS="tests/e2e/test_panier_flow.py"   (E1 à E6, E5-E6 : vrai paiement Stripe)
 """
 
 import re
@@ -304,8 +303,8 @@ def test_e4_un_creneau_de_ressource_ajoute_au_panier_puis_envoye_au_paiement(
 
 
 # --------------------------------------------------------------------------
-# E5 et E6 : vrai paiement Stripe (make e2e-stripe, `stripe listen` dans byobu)
-# / E5 and E6: real Stripe payment (make e2e-stripe)
+# E5 et E6 : vrai paiement Stripe (`stripe listen` dans byobu)
+# / E5 and E6: real Stripe payment (`stripe listen` in byobu)
 # --------------------------------------------------------------------------
 
 

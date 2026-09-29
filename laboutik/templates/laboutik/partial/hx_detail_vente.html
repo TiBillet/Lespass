@@ -47,14 +47,14 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
                 {# Pour les lignes vrac : prix au kg / L (12,00 €/kg) au lieu du prix de la ligne. #}
                 {# / For vrac lines: price per kg / L (12,00 €/kg) instead of line amount.        #}
                 <td class="num" data-testid="detail-prix-unit">
-                    {% if article.est_vrac and article.prix_par_unite %}{{ article.prix_par_unite }}{% else %}{{ article.prix_unitaire|euros }}{% endif %}
+                    {% if article.est_vrac and article.prix_par_unite %}{{ article.prix_par_unite }}{% else %}{{ article.prix_unitaire|montant_dans_la_monnaie:unite }}{% endif %}
                 </td>
-                <td class="num" data-testid="detail-total-ligne">{{ article.total_ligne|euros }}</td>
+                <td class="num" data-testid="detail-total-ligne">{{ article.total_ligne|montant_dans_la_monnaie:unite }}</td>
             </tr>
             {% endfor %}
             <tr class="total-row">
                 <td colspan="4"><strong>{% translate "Total" %}</strong></td>
-                <td class="num"><strong data-testid="detail-total-transaction">{{ total|euros }}</strong></td>
+                <td class="num"><strong data-testid="detail-total-transaction">{{ total|montant_dans_la_monnaie:unite }}</strong></td>
             </tr>
         </tbody>
     </table>

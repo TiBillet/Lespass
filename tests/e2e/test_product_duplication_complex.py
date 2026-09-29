@@ -89,8 +89,8 @@ def _add_inline_price(page, price_data):
         checkbox = prices_section.locator(
             f'input[name="prices-{form_index}-free_price"]'
         )
-        if checkbox.count() > 0:
-            checkbox.check()
+        expect(checkbox).to_have_count(1)
+        checkbox.check()
 
 
 def _add_form_field(page, field_data):
@@ -141,8 +141,8 @@ def _add_form_field(page, field_data):
         f'input[name="form_fields-{form_index}-help_text"], '
         f'textarea[name="form_fields-{form_index}-help_text"]'
     )
-    if help_locator.count() > 0:
-        help_locator.first.fill(field_data['help_text'])
+    expect(help_locator).to_have_count(1)
+    help_locator.fill(field_data['help_text'])
 
     # Remplir les options CSV si présentes.
     # / Fill CSV options if present.
@@ -151,8 +151,8 @@ def _add_form_field(page, field_data):
             f'input[name="form_fields-{form_index}-options_csv"], '
             f'textarea[name="form_fields-{form_index}-options_csv"]'
         )
-        if options_locator.count() > 0:
-            options_locator.first.fill(field_data['options'])
+        expect(options_locator).to_have_count(1)
+        options_locator.fill(field_data['options'])
 
 
 def _get_price_names(page):
@@ -178,18 +178,18 @@ def _get_form_field_labels(page):
     """Lit les labels de tous les champs formulaire dans l'inline #form_fields-group.
     / Reads labels of all form fields in #form_fields-group inline.
 
-    Clique d'abord sur l'onglet Unfold (ancre #form_fields) si présent.
-    / First clicks the Unfold tab (#form_fields anchor) if present.
+    Clique d'abord sur l'onglet Unfold (ancre #form_fields), obligatoire.
+    / First clicks the Unfold tab (#form_fields anchor), mandatory.
 
     Retourne une liste de labels non vides.
     / Returns a list of non-empty labels.
     """
-    # Cliquer sur l'onglet Unfold si disponible (Alpine.js activeTab).
-    # / Click Unfold tab if available (Alpine.js activeTab).
-    tab = page.locator('a[href="#form_fields"]').first
-    if tab.count() > 0:
-        tab.click()
-        page.wait_for_timeout(500)
+    # Ouvrir l'onglet Unfold de l'inline (Alpine.js activeTab).
+    # / Open the inline's Unfold tab (Alpine.js activeTab).
+    # Onglet obligatoire : s'il manque, le test echoue (voir test_admin_barre_de_module.py).
+    # / Mandatory tab: if missing, the test fails (see test_admin_barre_de_module.py).
+    page.locator('a[href="#form_fields"]').first.click()
+    page.wait_for_timeout(500)
 
     section = page.locator('#form_fields-group')
     label_inputs = section.locator(
@@ -253,13 +253,11 @@ class TestProductDuplicationComplex:
         page.wait_for_load_state('networkidle')
 
         # --- Étape 3 : Ajouter un champ formulaire ---
-        # L'onglet "form_fields" n'apparaît qu'après le premier enregistrement.
         # / Step 3: Add a form field.
-        # The "form_fields" tab only appears after the first save.
-        tab = page.locator('a[href="#form_fields"]').first
-        if tab.count() > 0:
-            tab.click()
-            page.wait_for_timeout(800)
+        # Onglet obligatoire : s'il manque, le test echoue (voir test_admin_barre_de_module.py).
+        # / Mandatory tab: if missing, the test fails (see test_admin_barre_de_module.py).
+        page.locator('a[href="#form_fields"]').first.click()
+        page.wait_for_timeout(800)
 
         _add_form_field(page, {
             'label': 'Champ Original',
@@ -300,13 +298,12 @@ class TestProductDuplicationComplex:
             f"Tarif Original 3 absent. Prix trouvés: {original_prices}"
         )
 
-        # Vérifier les labels de champs formulaire si présents.
-        # / Check form field labels if present.
+        # Le champ de formulaire ajoute a l'etape 3 est OBLIGATOIREMENT la.
+        # / The form field added in step 3 MUST be there.
         original_form_labels = _get_form_field_labels(page)
-        if original_form_labels:
-            assert 'Champ Original' in original_form_labels, (
-                f"Champ Original absent. Labels: {original_form_labels}"
-            )
+        assert 'Champ Original' in original_form_labels, (
+            f"Champ Original absent. Labels: {original_form_labels}"
+        )
 
         # --- Étape 5 : Dupliquer le produit ---
         # La vue duplicate_product redirige vers le referrer (la changelist).
@@ -411,10 +408,10 @@ class TestProductDuplicationComplex:
 
         # Modifier les labels des champs formulaire dans la copie.
         # / Modify form field labels in the copy.
-        tab = page.locator('a[href="#form_fields"]').first
-        if tab.count() > 0:
-            tab.click()
-            page.wait_for_timeout(500)
+        # Onglet obligatoire : s'il manque, le test echoue (voir test_admin_barre_de_module.py).
+        # / Mandatory tab: if missing, the test fails (see test_admin_barre_de_module.py).
+        page.locator('a[href="#form_fields"]').first.click()
+        page.wait_for_timeout(500)
 
         section = page.locator('#form_fields-group')
         label_inputs = section.locator(
@@ -473,17 +470,16 @@ class TestProductDuplicationComplex:
             f"Un tarif de l'original a été modifié : {non_auto_prices}"
         )
 
+        # L'original garde son champ, intact : sans condition, une liste vide
+        # (champ perdu) doit faire echouer.
+        # / The original keeps its field, untouched: an empty list must fail.
         original_form_labels_after = _get_form_field_labels(page)
-        if original_form_labels_after:
-            assert 'Champ Original' in original_form_labels_after, (
-                f"Champ Original modifié dans l'original ! Labels: {original_form_labels_after}"
-            )
-            non_auto_labels = [
-                lbl for lbl in original_form_labels_after if lbl
-            ]
-            assert all('Original' in lbl for lbl in non_auto_labels), (
-                f"Un label de l'original a été modifié : {non_auto_labels}"
-            )
+        assert 'Champ Original' in original_form_labels_after, (
+            f"Champ Original modifié ou perdu dans l'original ! Labels: {original_form_labels_after}"
+        )
+        assert all('Original' in lbl for lbl in original_form_labels_after), (
+            f"Un label de l'original a été modifié : {original_form_labels_after}"
+        )
 
         # --- Étape 8 : Vérifier que la copie contient bien les modifications ---
         # / Step 8: Verify the copy contains the modifications.
@@ -518,12 +514,14 @@ class TestProductDuplicationComplex:
             f"Un tarif de la copie n'a pas été modifié : {non_auto_copy_prices}"
         )
 
+        # La copie a HERITE du champ de formulaire, puis on l'a renomme : c'est
+        # precisement ce que ce test protege. Une copie sans champ doit echouer.
+        # / The copy INHERITED the form field, then it was renamed: exactly what
+        # this test protects. A copy without the field must fail.
         duplicated_form_labels = _get_form_field_labels(page)
-        if duplicated_form_labels:
-            assert 'Champ Dupliqué' in duplicated_form_labels, (
-                f"Champ Dupliqué absent de la copie ! Labels: {duplicated_form_labels}"
-            )
-            non_auto_copy_labels = [lbl for lbl in duplicated_form_labels if lbl]
-            assert all('Dupliqué' in lbl for lbl in non_auto_copy_labels), (
-                f"Un label de la copie n'a pas été modifié : {non_auto_copy_labels}"
-            )
+        assert 'Champ Dupliqué' in duplicated_form_labels, (
+            f"Champ Dupliqué absent de la copie ! Labels: {duplicated_form_labels}"
+        )
+        assert all('Dupliqué' in lbl for lbl in duplicated_form_labels), (
+            f"Un label de la copie n'a pas été modifié : {duplicated_form_labels}"
+        )

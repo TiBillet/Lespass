@@ -63,7 +63,11 @@ function tarifSelection(event) {
 		// / Escape all dynamic text to prevent XSS injection.
 		// UUIDs and numbers are not escaped (no HTML risk).
 		const nomTarifSafe = escapeHtml(tarif.name)
-		const currencySafe = escapeHtml(currency)
+		// Unite du tarif : le nom de sa monnaie pour un tarif en points ou en temps,
+		// sinon le symbole de la tuile (currency). Elle suit l'article jusqu'au panier
+		// (data-currency des boutons).
+		// / Price unit: its currency name for points/time, else the tile's symbol.
+		const currencySafe = escapeHtml(tarif.unite_label || currency)
 		const prixAfficheSafe = escapeHtml(prixAffiche)
 		const nomCompletSafe = escapeHtml(name + ' (' + tarif.name + ')')
 

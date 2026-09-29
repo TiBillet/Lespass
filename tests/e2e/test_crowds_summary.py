@@ -19,12 +19,37 @@ pytestmark = pytest.mark.e2e
 class TestCrowdsSummaryToggle:
     """Toggle du résumé crowds / Crowds summary toggle."""
 
-    def test_summary_details_expand_and_admin_popups(self, page, login_as_admin):
+    def test_summary_details_expand_and_admin_popups(self, page, login_as_admin, django_shell):
         """Ouvre la page liste /crowd/, vérifie la barre de résumé, les popups
         admin (allocation + financement global), puis le toggle des détails.
         / Opens /crowd/ list page, checks summary bar, admin popups, then the
         details toggle.
         """
+        # --- Étape 0 : Activer le bouton de financement global, le temps du test ---
+        # La section admin et le bouton de financement global ne s'affichent que si
+        # CrowdConfig.global_funding_button est vrai (crowds/partial/summary.html). Le
+        # test POSE ce reglage au lieu de dependre de l'etat de la base, puis le rend.
+        # / Step 0: enable the global funding button for the test, then restore it.
+        valeur_d_origine = django_shell(
+            "from crowds.models import CrowdConfig\n"
+            "config = CrowdConfig.get_solo()\n"
+            "print('ORIGINE=' + str(config.global_funding_button))\n"
+            "config.global_funding_button = True\n"
+            "config.save()"
+        ).split("ORIGINE=")[1].split()[0]
+        try:
+            self._parcours_du_resume(page, login_as_admin)
+        finally:
+            django_shell(
+                "from crowds.models import CrowdConfig\n"
+                "config = CrowdConfig.get_solo()\n"
+                f"config.global_funding_button = {valeur_d_origine}\n"
+                "config.save()"
+            )
+
+    def _parcours_du_resume(self, page, login_as_admin):
+        """Le parcours, avec le bouton de financement global actif.
+        / The journey, with the global funding button enabled."""
         # --- Étape 1 : Connexion admin ---
         # Le spec TS passait par le flow UI (navbar + formulaire + lien
         # TEST MODE). En Python, la fixture login_as_admin injecte
@@ -54,65 +79,68 @@ class TestCrowdsSummaryToggle:
         expect(page.locator('[data-testid="crowds-summary-time"]')).to_be_visible()
         expect(page.locator('[data-testid="crowds-summary-funding"]')).to_be_visible()
 
-        # La carte "sources" est conditionnelle (selon les données du tenant)
-        # / The "sources" card is conditional (depends on tenant data)
-        sources_card = page.locator('[data-testid="crowds-summary-sources"]')
-        if sources_card.count() > 0:
-            expect(sources_card).to_be_visible()
+        # La carte « sources » (plusieurs sources de financement) depend des donnees
+        # du lieu, pas du sujet de ce test : elle n'est pas verifiee ici.
+        # / The "sources" card depends on the venue data: not checked here.
 
-        # Section admin (staff/superuser uniquement) — conditionnelle.
-        # / Admin section (staff/superuser only) — conditional.
-        admin_section = page.locator('[data-testid="crowds-summary-admin"]')
-        if admin_section.count() > 0:
-            expect(admin_section).to_be_visible()
+        # La section admin « Répartir le financement » est DÉBRANCHÉE (2026-09-27,
+        # décision du mainteneur : plus utilisée ; voir crowds/partial/summary.html).
+        # Son test est gardé en commentaire, pour mémoire.
+        # / The admin "allocate funding" section is DISCONNECTED; its test is kept commented.
+        expect(page.locator('[data-testid="crowds-summary-admin"]')).to_have_count(0)
+        # # Section admin : OBLIGATOIRE (connecte en admin, bouton de financement actif).
+        # # / Admin section: MANDATORY (logged in as admin, funding button enabled).
+        # admin_section = page.locator('[data-testid="crowds-summary-admin"]')
+        # expect(admin_section).to_be_visible()
 
-            # Bouton d'allocation des fonds → popup SweetAlert2
-            # / Funding allocation button → SweetAlert2 popup
-            alloc_button = page.locator(
-                '[data-testid="crowds-summary-funding-allocate-button"]'
-            )
-            expect(alloc_button).to_be_visible()
-            alloc_button.click()
+        # # Bouton d'allocation des fonds → popup SweetAlert2
+        # # / Funding allocation button → SweetAlert2 popup
+        # alloc_button = page.locator(
+        #     '[data-testid="crowds-summary-funding-allocate-button"]'
+        # )
+        # expect(alloc_button).to_be_visible()
+        # alloc_button.click()
 
-            popup = page.locator(".swal2-popup")
-            expect(popup).to_be_visible()
-            expect(popup.locator("#alloc-amount")).to_be_visible()
+        # popup = page.locator(".swal2-popup")
+        # expect(popup).to_be_visible()
+        # expect(popup.locator("#alloc-amount")).to_be_visible()
 
-            # Soit des boutons projet, soit un message "aucun projet".
-            # Assertion tolérante FR/EN — piège 9.34 de tests/PIEGES.md.
-            # / Either project buttons, or a "no project" message.
-            # FR/EN tolerant assertion — trap 9.34 in tests/PIEGES.md.
-            project_buttons = popup.locator("button[data-uuid]")
-            if project_buttons.count() > 0:
-                expect(project_buttons.first).to_be_visible()
-            else:
-                expect(popup).to_contain_text(
-                    re.compile(r"Aucun projet disponible|No project available")
-                )
+        # # Soit des boutons projet, soit un message "aucun projet".
+        # # Assertion tolérante FR/EN — piège 9.34 de tests/PIEGES.md.
+        # # / Either project buttons, or a "no project" message.
+        # # FR/EN tolerant assertion — trap 9.34 in tests/PIEGES.md.
+        # project_buttons = popup.locator("button[data-uuid]")
+        # if project_buttons.count() > 0:
+        #     expect(project_buttons.first).to_be_visible()
+        # else:
+        #     expect(popup).to_contain_text(
+        #         re.compile(r"Aucun projet disponible|No project available")
+        #     )
 
-            # Fermer la popup (croix si dispo, sinon touche Échap)
-            # / Close the popup (close button if any, else Escape key)
-            close_button = popup.locator(".swal2-close")
-            if close_button.count() > 0:
-                close_button.click()
-            else:
-                page.keyboard.press("Escape")
+        # # Fermer la popup (croix si dispo, sinon touche Échap)
+        # # / Close the popup (close button if any, else Escape key)
+        # close_button = popup.locator(".swal2-close")
+        # if close_button.count() > 0:
+        #     close_button.click()
+        # else:
+        #     page.keyboard.press("Escape")
+        # expect(popup).to_be_hidden()
 
-        # Bouton de contribution au financement global — conditionnel.
-        # / Global funding contribution button — conditional.
+        # Bouton de contribution au financement global : OBLIGATOIRE (reglage actif).
+        # / Global funding contribution button: MANDATORY (setting enabled).
         global_funding_button = page.locator(
             '[data-testid="crowds-summary-global-funding-button"]'
         )
-        if global_funding_button.count() > 0:
-            global_funding_button.click()
-            popup = page.locator(".swal2-popup")
-            expect(popup).to_be_visible()
-            expect(popup.locator("#contrib-name")).to_be_visible()
-            expect(popup.locator("#contrib-amt")).to_be_visible()
-            # FR : "Annuler" / EN : "Cancel"
-            popup.locator(
-                'button:has-text("Annuler"), button:has-text("Cancel")'
-            ).first.click()
+        expect(global_funding_button).to_be_visible()
+        global_funding_button.click()
+        popup = page.locator(".swal2-popup")
+        expect(popup).to_be_visible()
+        expect(popup.locator("#contrib-name")).to_be_visible()
+        expect(popup.locator("#contrib-amt")).to_be_visible()
+        # FR : "Annuler" / EN : "Cancel"
+        popup.locator(
+            'button:has-text("Annuler"), button:has-text("Cancel")'
+        ).first.click()
 
         # --- Étape 4 : Vérifier le bouton toggle ---
         # / Step 4: check toggle button
@@ -139,13 +167,9 @@ class TestCrowdsSummaryToggle:
         # FR : "Voir moins" / EN : "View less"
         expect(toggle).to_have_text(re.compile(r"Voir moins|View less"))
 
-        # --- Étape 6 : Vérifier un bloc monnaie (conditionnel) ---
-        # / Step 6: check a currency block (conditional)
-        currency_cards = details.locator(
-            '[data-testid="crowds-summary-currency-card"]'
-        )
-        if currency_cards.count() > 0:
-            expect(currency_cards.first).to_be_visible()
+        # Les cartes « monnaie » dependent des donnees du lieu, pas du sujet de ce
+        # test : elles ne sont pas verifiees ici.
+        # / Currency cards depend on the venue data: not checked here.
 
         # --- Étape 7 : Vérifier les actions en cours ---
         # Soit la grille d'actions, soit le message vide (bilingue FR/EN).

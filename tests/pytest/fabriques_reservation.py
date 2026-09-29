@@ -28,6 +28,16 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 
+# Événements et produits créés par `creer_evenement_et_produit`, en attente de nettoyage.
+# La fixture automatique `_nettoyer_les_evenements_de_la_fabrique` (tests/pytest/conftest.py)
+# les supprime après chaque test. Sans ça, chaque `make test` laisse une dizaine
+# d'événements à J+1 dans l'agenda du lieu lespass : au-delà de 200 à venir, la page 1
+# de l'agenda est pleine, et le test E2E de l'assistant d'événement ne trouve plus le sien.
+# / Events and products created by `creer_evenement_et_produit`, awaiting cleanup
+# by the autouse fixture in tests/pytest/conftest.py.
+EVENEMENTS_A_NETTOYER = []
+
+
 def identifiant_aleatoire():
     """8 caractères pour rendre uniques les noms et les emails de test.
     / 8 characters to make test names and emails unique."""
@@ -95,7 +105,59 @@ def creer_evenement_et_produit(
         f"Création produit échouée ({resp_product.status_code}): {resp_product.content[:300]}"
     )
     price_uuid = resp_product.json()["offers"][0]["identifier"]
+    EVENEMENTS_A_NETTOYER.append((event_uuid, resp_product.json()["identifier"]))
     return event_uuid, price_uuid
+
+
+def nettoyer_evenements_crees(tenant):
+    """Supprime les événements et produits créés par `creer_evenement_et_produit`,
+    avec tout ce qui les protège (PROTECT) : ventes, paiements, réservations.
+    / Deletes the events and products created by `creer_evenement_et_produit`, with
+    everything that PROTECTs them: sales, payments, reservations.
+
+    L'ordre suit les PROTECT : les avoirs avant les lignes qu'ils annulent, les lignes
+    avant les paiements et les réservations, les réservations avant l'événement,
+    les tarifs vendus avant le tarif, le tarif avant le produit.
+    / The order follows the PROTECTs.
+    """
+    from django.db import transaction
+    from django.db.models import Q
+    from django_tenants.utils import tenant_context
+    from BaseBillet.models import (
+        Commande, Event, LigneArticle, Paiement_stripe, Price, PriceSold, Product,
+        ProductSold, Reservation,
+    )
+
+    with tenant_context(tenant), transaction.atomic():
+        while EVENEMENTS_A_NETTOYER:
+            event_uuid, product_uuid = EVENEMENTS_A_NETTOYER.pop()
+            reservations = Reservation.objects.filter(event_id=event_uuid)
+            commandes_ids = list(
+                reservations.exclude(commande=None).values_list("commande_id", flat=True)
+            )
+            paiements = Paiement_stripe.objects.filter(
+                Q(reservation__in=reservations) | Q(commande_obj__in=commandes_ids)
+            )
+            lignes = LigneArticle.objects.filter(
+                Q(reservation__in=reservations)
+                | Q(paiement_stripe__in=paiements)
+                | Q(pricesold__productsold__event_id=event_uuid)
+                | Q(pricesold__price__product_id=product_uuid)
+            )
+            LigneArticle.objects.filter(credit_note_for__in=lignes).delete()
+            lignes.delete()
+            paiements.delete()
+            reservations.delete()
+            Commande.objects.filter(pk__in=commandes_ids).delete()
+            PriceSold.objects.filter(
+                Q(productsold__event_id=event_uuid) | Q(price__product_id=product_uuid)
+            ).delete()
+            ProductSold.objects.filter(
+                Q(event_id=event_uuid) | Q(product_id=product_uuid)
+            ).delete()
+            Event.objects.filter(pk=event_uuid).delete()
+            Price.objects.filter(product_id=product_uuid).delete()
+            Product.objects.filter(pk=product_uuid).delete()
 
 
 def creer_reservation_api(

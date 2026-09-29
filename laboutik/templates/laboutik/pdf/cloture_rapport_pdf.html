@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n laboutik_filters %}
 <!--
 TEMPLATE PDF — Rapport de cloture de caisse
 / PDF TEMPLATE — Cash register closure report
@@ -184,6 +184,54 @@ Inline styles (WeasyPrint does not reliably load external CSS).
         <td class="text-right">{{ tva_data.total_ht_euros|floatformat:2 }} €</td>
         <td class="text-right">{{ tva_data.total_tva_euros|floatformat:2 }} €</td>
         <td class="text-right">{{ tva_data.total_ttc_euros|floatformat:2 }} €</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- Articles offerts : hors argent, jamais additionnes au total -->
+  <!-- / Gifted items: not money, never added to the total -->
+  {% if offerts.par_produit %}
+  <h2>{% translate "Offerts (hors argent)" %}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>{% translate "Article" %}</th>
+        <th class="text-right">{% translate "Quantité" %}</th>
+        <th class="text-right">{% translate "Valeur offerte" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for offert in offerts.par_produit %}
+      <tr>
+        <td>{{ offert.nom }}</td>
+        <td class="text-right">{{ offert.qty|floatformat:"-2" }}</td>
+        <td class="text-right">{{ offert.valeur|euros }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- Ventes en points ou en temps : hors argent, jamais additionnees au total -->
+  <!-- / Points or time sales: not money, never added to the total -->
+  {% if non_monetaire.par_monnaie %}
+  <h2>{% translate "Non monétaire (hors argent)" %}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>{% translate "Monnaie" %}</th>
+        <th class="text-right">{% translate "Quantité" %}</th>
+        <th class="text-right">{% translate "Total" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for monnaie in non_monetaire.par_monnaie %}
+      <tr>
+        <td>{{ monnaie.nom }}</td>
+        <td class="text-right">{{ monnaie.qty_articles|floatformat:"-2" }}</td>
+        <td class="text-right">{{ monnaie.unites|montant_dans_la_monnaie:monnaie.nom }}</td>
       </tr>
       {% endfor %}
     </tbody>

@@ -1962,7 +1962,36 @@ class QrCodeScanPay(viewsets.ViewSet):
             pricesold = ligne_article.pricesold
             ex_ligne_article_uuid = ligne_article.uuid
             ligne_article.delete()
-            for transaction in transactions:
+
+            # Une ligne par monnaie debitee. Chaque ligne porte le prix UNITAIRE du
+            # paiement (le montant total) et sa part dans qty : total = amount x qty.
+            # qty a 6 decimales, la derniere part prend le reste pour que la somme
+            # des qty vaille exactement 1.
+            # Import local, comme controlvanne/billing.py.
+            # / One line per debited currency: unit price in amount, share in qty.
+            from laboutik.views import _calculer_qty_partielles
+
+            parts_par_transaction = [
+                {"amount_centimes": transaction['amount']} for transaction in transactions
+            ]
+            somme_des_parts = sum(part["amount_centimes"] for part in parts_par_transaction)
+            if somme_des_parts != total_amount:
+                # Fedow repartit le montant entier sur les monnaies. Une somme
+                # differente signale un debit partiel : on le trace.
+                # / Fedow allocates the full amount; a different sum means a partial debit.
+                logger.error(
+                    f"Paiement QR/NFC : parts debitees {somme_des_parts} "
+                    f"!= montant demande {total_amount} (ligne {ex_ligne_article_uuid})"
+                )
+                # La vente enregistre ce que Fedow a reellement debite, comme la
+                # tireuse : jamais un montant qui n'a pas ete paye.
+                # / The sale records what Fedow actually debited, like the tap.
+                total_amount = somme_des_parts
+            parts_avec_qty = _calculer_qty_partielles(
+                parts_par_transaction, total_amount, Decimal("1")
+            )
+
+            for index_transaction, transaction in enumerate(transactions):
                 # On récupère les infos de l'asset :
                 asset_used = fedowAPI.asset.retrieve(str(transaction['asset']))
                 if asset_used['category'] == 'FED':
@@ -1974,10 +2003,10 @@ class QrCodeScanPay(viewsets.ViewSet):
 
                 # Create LigneArticle with metadata containing admin email
                 ligne_article = LigneArticle.objects.create(
-                    uuid=ex_ligne_article_uuid if transactions.index(transaction) == 0 else uuid.uuid4(),
+                    uuid=ex_ligne_article_uuid if index_transaction == 0 else uuid.uuid4(),
                     pricesold=pricesold,
-                    qty=dround(Decimal(transaction['amount'] / total_amount)),
-                    amount=transaction['amount'],
+                    qty=parts_avec_qty[index_transaction]["qty"],
+                    amount=total_amount,
                     payment_method=mp,
                     status=LigneArticle.VALID,
                     metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
@@ -2159,7 +2188,36 @@ class QrCodeScanPay(viewsets.ViewSet):
             pricesold = ligne_article.pricesold
             ex_ligne_article_uuid = ligne_article.uuid
             ligne_article.delete()
-            for transaction in transactions:
+
+            # Une ligne par monnaie debitee. Chaque ligne porte le prix UNITAIRE du
+            # paiement (le montant total) et sa part dans qty : total = amount x qty.
+            # qty a 6 decimales, la derniere part prend le reste pour que la somme
+            # des qty vaille exactement 1.
+            # Import local, comme controlvanne/billing.py.
+            # / One line per debited currency: unit price in amount, share in qty.
+            from laboutik.views import _calculer_qty_partielles
+
+            parts_par_transaction = [
+                {"amount_centimes": transaction['amount']} for transaction in transactions
+            ]
+            somme_des_parts = sum(part["amount_centimes"] for part in parts_par_transaction)
+            if somme_des_parts != total_amount:
+                # Fedow repartit le montant entier sur les monnaies. Une somme
+                # differente signale un debit partiel : on le trace.
+                # / Fedow allocates the full amount; a different sum means a partial debit.
+                logger.error(
+                    f"Paiement QR/NFC : parts debitees {somme_des_parts} "
+                    f"!= montant demande {total_amount} (ligne {ex_ligne_article_uuid})"
+                )
+                # La vente enregistre ce que Fedow a reellement debite, comme la
+                # tireuse : jamais un montant qui n'a pas ete paye.
+                # / The sale records what Fedow actually debited, like the tap.
+                total_amount = somme_des_parts
+            parts_avec_qty = _calculer_qty_partielles(
+                parts_par_transaction, total_amount, Decimal("1")
+            )
+
+            for index_transaction, transaction in enumerate(transactions):
                 # On récupère les infos de l'asset :
                 asset_used = fedow_api.asset.retrieve(str(transaction['asset']))
                 if asset_used['category'] == 'FED':
@@ -2171,10 +2229,10 @@ class QrCodeScanPay(viewsets.ViewSet):
 
                 # Create LigneArticle with metadata containing admin email
                 ligne_article = LigneArticle.objects.create(
-                    uuid=ex_ligne_article_uuid if transactions.index(transaction) == 0 else uuid.uuid4(),
+                    uuid=ex_ligne_article_uuid if index_transaction == 0 else uuid.uuid4(),
                     pricesold=pricesold,
-                    qty=dround(Decimal(transaction['amount'] / total_amount)),
-                    amount=transaction['amount'],
+                    qty=parts_avec_qty[index_transaction]["qty"],
+                    amount=total_amount,
                     payment_method=mp,
                     status=LigneArticle.VALID,
                     metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
@@ -3530,10 +3588,17 @@ class MembershipMVT(viewsets.ViewSet):
                                                               publish=True).prefetch_related('tag')
 
         for product in products:
-            prices = product.prices.all()
+            # Les tarifs en points ou en temps se vendent a la caisse seulement :
+            # ils ne comptent pas dans le prix affiche en euros.
+            # / Points or time prices are sold at the POS only: not an euro price.
+            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False)
             tarifs = [price.prix for price in prices]
-            # Calcul des prix min et max
-            product.price_min = f"{min(tarifs)} €"
+            # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
+            # la caisse seulement), la carte n'affiche pas de prix.
+            # / Min price. Without a euro price, the card shows no price.
+            product.price_min = None
+            if tarifs:
+                product.price_min = f"{min(tarifs)} €"
 
         template_context['products'] = products
 
@@ -3595,8 +3660,13 @@ class MembershipMVT(viewsets.ViewSet):
             context = get_context(request)
             context['product'] = product
 
-            # On prépare les prix publiés pour le template
-            published_prices = product.prices.filter(publish=True).order_by('order', 'prix')
+            # On prépare les prix publiés pour le template.
+            # Un tarif en points ou en temps se vend a la caisse seulement : le
+            # site ne le propose pas (il serait paye en euros par Stripe).
+            # / Published prices. A points or time price is POS-only: never online.
+            published_prices = product.prices.filter(
+                publish=True, asset__isnull=True, non_fiduciaire=False
+            ).order_by('order', 'prix')
             context['published_prices'] = published_prices
             context['published_prices_count'] = published_prices.count()
 
@@ -4610,11 +4680,17 @@ class MembershipMVT(viewsets.ViewSet):
         params_renouvellement = {}
         if getattr(membership, 'user', None) and getattr(membership.user, 'email', None):
             params_renouvellement['email'] = membership.user.email
-        if membership.price_id:
+        # Adhesion payee en points ou en temps a la caisse : le formulaire de
+        # l'admin n'encaisse que de l'argent. On ne pre-remplit ni le tarif, ni le
+        # montant (en points), ni le moyen : sinon le renouvellement enregistrerait
+        # « 300 € » pour 300 points.
+        # / Points membership: no pre-filled price, amount or method.
+        adhesion_en_points = membership.payment_method == PaymentMethod.NON_MONETAIRE
+        if membership.price_id and not adhesion_en_points:
             params_renouvellement['price'] = membership.price_id
-        if membership.contribution_value is not None:
+        if membership.contribution_value is not None and not adhesion_en_points:
             params_renouvellement['contribution'] = str(membership.contribution_value)
-        if membership.payment_method:
+        if membership.payment_method and not adhesion_en_points:
             params_renouvellement['payment_method'] = membership.payment_method
         if membership.first_name:
             params_renouvellement['first_name'] = membership.first_name

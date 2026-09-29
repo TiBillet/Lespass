@@ -895,13 +895,18 @@ class ProductSchemaSerializer(serializers.Serializer):
         category = instance.get_categorie_article_display() if hasattr(instance, "get_categorie_article_display") else None
 
         offers: List[Dict[str, Any]] = []
-        for price in instance.prices.all().order_by("order"):
+        for price in instance.prices.all().select_related("asset").order_by("order"):
+            # Un tarif en points ou en temps porte le code de sa monnaie, pas EUR.
+            # / A points or time price carries its currency code, not EUR.
+            code_de_la_monnaie = "EUR"
+            if price.asset is not None:
+                code_de_la_monnaie = price.asset.currency_code
             offer: Dict[str, Any] = {
                 "@type": "Offer",
                 "identifier": str(price.uuid),
                 "name": price.name,
                 "price": str(price.prix),
-                "priceCurrency": "EUR",
+                "priceCurrency": code_de_la_monnaie,
                 "freePrice": bool(price.free_price),
             }
 

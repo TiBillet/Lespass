@@ -142,7 +142,7 @@
                 <tr style="background: var(--tb-tableau-entete);">
                     <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: left;">{% translate "Product" %}</th>
                     <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% translate "Sold" %}</th>
-                    <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% translate "Free" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% translate "Payé en cadeau" %}</th>
                     <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% translate "Total qty" %}</th>
                     {% if afficher_col_poids %}
                     <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% translate "Poids/Vol" %}</th>
@@ -181,6 +181,62 @@
         </table>
         {% endwith %}
         {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 2 bis : Articles offerts, hors argent / Gifted items, not money ── #}
+    {% with section=rapport.offerts %}
+    {% if section.par_produit %}
+    <div style="margin-bottom: 20px;" data-testid="section-offerts">
+        <h3 style="border-bottom: 2px solid var(--tb-texte-fort); padding-bottom: 4px;">{% translate "Offerts (hors argent)" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: var(--tb-tableau-entete);">
+                    <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: left;">{% translate "Article" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% translate "Quantité" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% translate "Valeur offerte" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% translate "Coût d'achat" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for offert in section.par_produit %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure);">{{ offert.nom }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{{ offert.qty|floatformat:"-2" }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{{ offert.valeur|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{{ offert.cout_achat|euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 2 ter : Ventes en points ou en temps, hors argent / Points or time sales, not money ── #}
+    {% with section=rapport.non_monetaire %}
+    {% if section.par_monnaie %}
+    <div style="margin-bottom: 20px;" data-testid="section-non-monetaire">
+        <h3 style="border-bottom: 2px solid var(--tb-texte-fort); padding-bottom: 4px;">{% translate "Non monétaire (hors argent)" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: var(--tb-tableau-entete);">
+                    <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: left;">{% translate "Monnaie" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% translate "Quantité" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% translate "Total" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for monnaie in section.par_monnaie %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure);">{{ monnaie.nom }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{{ monnaie.qty_articles|floatformat:"-2" }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{{ monnaie.unites|montant_dans_la_monnaie:monnaie.nom }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
     {% endif %}
     {% endwith %}
@@ -277,6 +333,13 @@
                     <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{{ section.total|euros }}</td>
                     <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure);"></td>
                 </tr>
+                {% if section.cadeau_emis %}
+                <tr data-testid="recharges-cadeau-emis">
+                    <td colspan="3" style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); font-style: italic;">{% translate "Cadeau émis (hors argent)" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right; font-style: italic;">{{ section.cadeau_emis|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure);"></td>
+                </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>
@@ -305,7 +368,7 @@
                     <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure);">{{ adh.nom_tarif|default:"—" }}</td>
                     <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure);">{{ adh.moyen_paiement }}</td>
                     <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{{ adh.nb }}</td>
-                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{{ adh.total|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid var(--tb-tableau-bordure); text-align: right;">{% if adh.unite %}{{ adh.total|montant_dans_la_monnaie:adh.unite }}{% else %}{{ adh.total|euros }}{% endif %}</td>
                 </tr>
                 {% endfor %}
                 <tr style="background: #e8f5e9; font-weight: bold;">

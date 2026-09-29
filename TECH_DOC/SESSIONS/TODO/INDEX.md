@@ -16,3 +16,4 @@
 | 3 | [`AUTH-connexion-par-code-achat-connecte.md`](AUTH-connexion-par-code-achat-connecte.md) | Auth — connexion par code à 6 chiffres, réservation et adhésion réservées aux connectés | Aucun |
 | 4 | [`BENEVOLAT-planning-besoins.md`](BENEVOLAT-planning-besoins.md) | Bénévolat — planning de besoins façon Framadate dans `booking`, répétition des besoins en admin | Aucun |
 | 5 | [`USERS-etiquettes.md`](USERS-etiquettes.md) | Étiquettes sur les personnes (par lieu), synchro vers Ghost pour écrire à des groupes (Brevo plus tard) | Aucun |
+| 6 | [`CAISSE-mode-gerant-et-tag-nfc-en-post.md`](CAISSE-mode-gerant-et-tag-nfc-en-post.md) | Caisse — mode gérant à deux niveaux (OFFRIR), tag NFC jamais dans une URL (session / POST) — **idée, spec à écrire** | Aucun |

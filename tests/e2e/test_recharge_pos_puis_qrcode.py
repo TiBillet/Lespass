@@ -219,7 +219,7 @@ def comptoir(django_shell, ensure_pos_data):
         pytest.fail(
             f"Point de vente '{NOM_DU_POINT_DE_VENTE}' introuvable. Reseeder : "
             "docker exec lespass_django poetry run python manage.py "
-            "tenant_command create_test_pos_data --schema=lespass"
+            "create_test_pos_data --schema=lespass"
         )
     if not donnees["produit_uuid"] or not donnees["tarif_uuid"]:
         pytest.fail(

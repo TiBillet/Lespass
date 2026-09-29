@@ -6,19 +6,21 @@ Conversion de tests/playwright/tests/03-memberships.spec.ts
 
 Ce test vérifie que :
 / This test verifies that:
-- Un admin peut créer (ou éditer) un produit d'adhésion via le proxy MembershipProduct
-  / An admin can create (or edit) a membership product via the MembershipProduct proxy
+- Un admin peut créer un produit d'adhésion via le proxy MembershipProduct
+  / An admin can create a membership product via the MembershipProduct proxy
 - Deux tarifs peuvent être ajoutés en inline : "Annuelle" (20€, Y) et "Mensuelle" (2€, M)
   / Two prices can be added inline: "Annuelle" (20€, Y) and "Mensuelle" (2€, M)
 - Le produit est visible sur la page publique /memberships/
   / The product is visible on the public /memberships/ page
 
-ATTENTION : ce test peut modifier un produit existant ou en créer un nouveau dans la DB
-partagée (sans rollback). Le produit "Adhésion (Le Tiers-Lustre)" est une donnée de référence
-de l'environnement de dev.
-/ WARNING: this test may modify an existing product or create a new one in the shared DB
-(no rollback). "Adhésion (Le Tiers-Lustre)" is a reference data item in the dev environment.
+Le produit porte un nom UNIQUE par run, et il est supprimé en fin de test (base de dev
+partagée, sans rollback). Avant, le test éditait un produit de référence s'il existait :
+chaque run lui ajoutait 2 tarifs (8 au 2026-09-27), et la vérification ne portait que sur
+un nom présent dans d'autres produits.
+/ The product has a UNIQUE name per run and is deleted at the end (shared dev DB).
 """
+
+import uuid
 
 import pytest
 from playwright.sync_api import expect
@@ -95,93 +97,66 @@ class TestMembershipsAdminCreate:
     / Creation of membership product via the MembershipProduct admin proxy.
     """
 
-    def test_create_product_adhesion_le_tiers_lustre(self, page, login_as_admin):
-        """Crée ou édite "Adhésion (Le Tiers-Lustre)" avec 2 tarifs, vérifie /memberships/.
-        / Creates or edits "Adhésion (Le Tiers-Lustre)" with 2 prices, verifies /memberships/.
+    def test_create_product_adhesion_le_tiers_lustre(self, page, login_as_admin, django_shell):
+        """Crée "Adhésion (Le Tiers-Lustre) <suffixe>" avec 2 tarifs, vérifie la base et /memberships/.
+        / Creates the product with 2 prices, checks the database and /memberships/.
         """
-        # --- Étape 1 : Connexion admin ---
-        # / Step 1: Admin login
-        login_as_admin(page)
-
-        # --- Étape 2 : Naviguer ou éditer le produit d'adhésion existant ---
-        # L'admin produit a été refondu en proxys : les adhésions se créent via
-        # /admin/BaseBillet/membershipproduct/ (la catégorie est fixée par le proxy).
-        # / Product admin was split into proxies: memberships are created via
-        # the membershipproduct proxy (category is set by the proxy itself).
-        page.goto('/admin/BaseBillet/membershipproduct/')
-        page.wait_for_load_state('networkidle')
-
-        # Chercher si le produit existe déjà dans la changelist.
-        # Si oui, on l'édite ; sinon, on crée un nouveau.
-        # / Check if the product already exists in the changelist.
-        # If yes, edit it; if no, create a new one.
-        product_link = page.locator('#result_list a, .result-list a').filter(
-            has_text='Adhésion (Le Tiers-Lustre)'
-        ).first
-
-        if product_link.count() > 0:
-            # Produit existant → éditer.
-            # / Existing product → edit.
-            product_link.click()
-        else:
-            # Produit inexistant → créer.
-            # / Product doesn't exist → create.
+        nom_du_produit = f"Adhésion (Le Tiers-Lustre) {uuid.uuid4().hex[:6]}"
+        try:
+            # --- Étape 1 : Connexion admin, formulaire de création ---
+            # Le proxy MembershipProduct fixe la catégorie ADHESION (champ caché).
+            # / Step 1: admin login, creation form. The proxy sets the ADHESION category.
+            login_as_admin(page)
             page.goto('/admin/BaseBillet/membershipproduct/add/')
+            page.wait_for_load_state('networkidle')
 
-        page.wait_for_load_state('networkidle')
+            # --- Étape 2 : Informations de base ---
+            # / Step 2: basic info
+            page.locator('input[name="name"]').fill(nom_du_produit)
+            page.locator('input[name="short_description"]').first.fill(
+                'Adhérez au collectif Le Tiers-Lustre'
+            )
 
-        # --- Étape 3 : Remplir les informations de base du produit ---
-        # / Step 3: Fill in the basic product info
-        page.locator('input[name="name"]').fill('Adhésion (Le Tiers-Lustre)')
-        page.locator('input[name="short_description"]').first.fill(
-            'Adhérez au collectif Le Tiers-Lustre'
-        )
-        # Pas de sélection de catégorie : le proxy MembershipProduct la fixe (champ caché).
-        # / No category selection: the MembershipProduct proxy sets it (hidden field).
+            # --- Étape 3 : Deux tarifs en inline ---
+            # / Step 3: two inline prices
+            _add_inline_price(page, {'name': 'Annuelle', 'prix': 20, 'subscription_type': 'Y'})
+            _add_inline_price(page, {'name': 'Mensuelle', 'prix': 2, 'subscription_type': 'M'})
 
-        # --- Étape 4 : Ajouter les tarifs inline ---
-        # Tarif 1 : Annuelle, 20€, abonnement annuel (Y).
-        # / Step 4: Add inline prices
-        # Price 1: Annuelle, 20€, annual subscription (Y).
-        _add_inline_price(page, {
-            'name': 'Annuelle',
-            'prix': 20,
-            'subscription_type': 'Y',
-        })
+            # --- Étape 4 : Enregistrer ---
+            # / Step 4: save
+            page.locator('[name="_save"]').first.click()
+            page.wait_for_load_state('networkidle')
 
-        # Tarif 2 : Mensuelle, 2€, abonnement mensuel (M).
-        # / Price 2: Mensuelle, 2€, monthly subscription (M).
-        _add_inline_price(page, {
-            'name': 'Mensuelle',
-            'prix': 2,
-            'subscription_type': 'M',
-        })
+            # --- Étape 5 : La base porte exactement ce qu'on a saisi ---
+            # Un produit, de categorie adhesion, avec EXACTEMENT ces deux tarifs.
+            # / Step 5: the database holds exactly what was typed.
+            sortie = django_shell(
+                "from BaseBillet.models import Product\n"
+                f"produits = Product.objects.filter(name='{nom_du_produit}')\n"
+                "print('NOMBRE=' + str(produits.count()))\n"
+                "p = produits.first()\n"
+                "print('CATEGORIE=' + str(p.categorie_article if p else None))\n"
+                "tarifs = sorted((t.name, int(t.prix), t.subscription_type) for t in p.prices.all()) if p else []\n"
+                "print('TARIFS=' + repr(tarifs))"
+            )
+            assert "NOMBRE=1" in sortie, f"Produit non enregistre (ou en double) : {sortie[-300:]}"
+            assert "CATEGORIE=A" in sortie, f"Le produit n'est pas une adhesion : {sortie[-300:]}"
+            assert "TARIFS=[('Annuelle', 20, 'Y'), ('Mensuelle', 2, 'M')]" in sortie, (
+                f"Les tarifs enregistres ne sont pas ceux saisis : {sortie[-300:]}"
+            )
 
-        # --- Étape 5 : Sauvegarder le formulaire ---
-        # Django admin Unfold : le bouton Save a l'attribut name="_save".
-        # / Step 5: Save the form
-        # Django admin Unfold: the Save button has name="_save" attribute.
-        save_button = page.locator('[name="_save"]').first
-        save_button.click()
-        page.wait_for_load_state('networkidle')
-
-        # Vérifier qu'il n'y a pas d'erreur de validation dans la page.
-        # Unfold et Django admin affichent les erreurs dans .errorlist ou .errornote.
-        # / Verify there are no validation errors on the page.
-        # Unfold and Django admin display errors in .errorlist or .errornote.
-        content = page.content()
-        assert 'errorlist' not in content or 'was saved successfully' in content or \
-               '/admin/BaseBillet/membershipproduct/' in page.url, (
-            f"Erreur probable lors de la sauvegarde. URL: {page.url}"
-        )
-
-        # --- Étape 6 : Vérifier la visibilité sur /memberships/ ---
-        # / Step 6: Verify visibility on /memberships/
-        page.goto('/memberships/')
-        page.wait_for_load_state('networkidle')
-
-        page_content = page.content()
-        assert 'Adhésion' in page_content and 'Tiers-Lustre' in page_content, (
-            f"Le produit 'Adhésion (Le Tiers-Lustre)' n'est pas visible sur /memberships/. "
-            f"URL: {page.url}"
-        )
+            # --- Étape 6 : Le produit est proposé sur /memberships/ ---
+            # La carte du composant cotton/V2/membership_card.html, filtrée sur CE nom.
+            # / Step 6: the product is offered on /memberships/ (V2 card, THIS name).
+            page.goto('/memberships/')
+            page.wait_for_load_state('networkidle')
+            carte = page.locator('[data-testid^="membership-card-"]').filter(has_text=nom_du_produit)
+            expect(carte).to_be_visible()
+        finally:
+            # Nettoyage : les tarifs d'abord (Price.product est PROTECT), puis le produit.
+            # / Cleanup: prices first (Price.product is PROTECT), then the product.
+            django_shell(
+                "from BaseBillet.models import Price, Product\n"
+                f"Price.objects.filter(product__name='{nom_du_produit}').delete()\n"
+                f"Product.objects.filter(name='{nom_du_produit}').delete()"
+            )

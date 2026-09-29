@@ -707,6 +707,13 @@ class PanierSession:
         if price.product.categorie_article != Product.ADHESION:
             raise InvalidItemError(_("This rate is not a membership."))
 
+        # Validation 2bis : un tarif en points ou en temps se vend a la caisse,
+        # jamais en ligne (il serait paye en euros).
+        # / Validation 2bis: a points or time price is POS-only.
+        tarif_en_points = price.asset_id is not None or price.non_fiduciaire
+        if tarif_en_points:
+            raise InvalidItemError(_("Ce tarif se règle à la caisse, en points ou en temps."))
+
         # Validation 3 : pas de paiement récurrent (exclu du panier en v1)
         # Validation 3: no recurring payment (excluded from cart in v1)
         if price.recurring_payment:

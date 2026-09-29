@@ -6,21 +6,25 @@ Conversion de tests/playwright/tests/05-membership-validation.spec.ts
 
 Ce test vérifie que :
 / This test verifies that:
-- Un admin peut créer (ou éditer) un produit d'adhésion "Adhésion à validation sélective
-  (Le Tiers-Lustre)" via le proxy MembershipProduct.
-  / An admin can create (or edit) a membership product "Adhésion à validation sélective
-  (Le Tiers-Lustre)" via the MembershipProduct proxy.
-- Deux tarifs peuvent être ajoutés en inline : "Solidaire" (2€, Y) et "Plein tarif" (30€, Y).
-  / Two prices can be added inline: "Solidaire" (2€, Y) and "Plein tarif" (30€, Y).
+- Un admin peut créer un produit d'adhésion "Adhésion à validation sélective
+  (Le Tiers-Lustre) <suffixe>" via le proxy MembershipProduct.
+  / An admin can create a selective-validation membership product via the proxy.
+- Deux tarifs peuvent être ajoutés en inline : "Solidaire" (2€, Y, validation manuelle
+  COCHÉE) et "Plein tarif" (30€, Y, sans validation), et la base les enregistre ainsi.
+  / Two prices: "Solidaire" (manual validation CHECKED) and "Plein tarif" (without).
 - Le produit est visible sur la page publique /memberships/.
   / The product is visible on the public /memberships/ page.
 
-ATTENTION : ce test peut modifier un produit existant ou en créer un nouveau dans la DB
-partagée (sans rollback). Le produit "Adhésion à validation sélective (Le Tiers-Lustre)"
-est une donnée de référence de l'environnement de dev.
-/ WARNING: this test may modify an existing product or create a new one in the shared DB
-(no rollback). "Adhésion à validation sélective (Le Tiers-Lustre)" is a reference data item.
+Le produit porte un nom UNIQUE par run, et il est supprimé en fin de test (base de dev
+partagée, sans rollback). Le produit de référence "Adhésion à validation sélective
+(Le Tiers-Lustre)", créé par demo_data_v2 et utilisé par test_membership_fix_solidaire.py,
+n'est plus touché. Avant, le test l'éditait (2 tarifs de plus à chaque run), ne cochait
+jamais la validation manuelle, et ne vérifiait qu'un nom sur la page publique.
+/ The product has a UNIQUE name per run and is deleted at the end; the seeded
+reference product is no longer touched.
 """
+
+import uuid
 
 import pytest
 from playwright.sync_api import expect
@@ -28,7 +32,7 @@ from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
-PRODUCT_NAME = "Adhésion à validation sélective (Le Tiers-Lustre)"
+PREFIXE_DU_PRODUIT = "Adhésion à validation sélective (Le Tiers-Lustre)"
 
 
 def _add_inline_price(page, price_data):
@@ -44,6 +48,7 @@ def _add_inline_price(page, price_data):
     - name (str)              : libellé du tarif
     - prix (int)              : montant (entier pour éviter problèmes de locale FR)
     - subscription_type (str) : 'Y' | 'M' | ...
+    - manual_validation (bool, optionnel) : cocher « Validation manuelle requise »
     """
     prices_section = page.locator('#prices-group')
 
@@ -84,6 +89,16 @@ def _add_inline_price(page, price_data):
         f'select[name="prices-{form_index}-subscription_type"]'
     ).select_option(price_data['subscription_type'])
 
+    # Cocher « Validation manuelle requise » quand le tarif l'exige : l'adhesion
+    # attend alors l'accord d'un admin avant tout paiement.
+    # / Check "Manual validation required" when the price needs it.
+    if price_data.get('manual_validation'):
+        case_validation = prices_section.locator(
+            f'input[name="prices-{form_index}-manual_validation"]'
+        )
+        expect(case_validation).to_have_count(1)
+        case_validation.check()
+
 
 class TestMembershipValidationProduct:
     """Création du produit d'adhésion à validation sélective via le proxy admin.
@@ -91,102 +106,71 @@ class TestMembershipValidationProduct:
     """
 
     def test_create_adhesion_validation_selective_with_2_prices(
-        self, page, login_as_admin
+        self, page, login_as_admin, django_shell
     ):
-        """Crée ou édite "Adhésion à validation sélective (Le Tiers-Lustre)" avec 2 tarifs,
-        vérifie /memberships/.
-        / Creates or edits "Adhésion à validation sélective (Le Tiers-Lustre)" with 2 prices,
-        verifies /memberships/.
+        """Crée le produit avec 2 tarifs (dont un à validation manuelle), vérifie la base
+        et /memberships/.
+        / Creates the product with 2 prices (one with manual validation), checks the
+        database and /memberships/.
         """
-        # --- Étape 1 : Connexion admin ---
-        # / Step 1: Admin login
-        login_as_admin(page)
-
-        # --- Étape 2 : Naviguer vers la liste des produits adhésion ---
-        # L'admin produit a été refondu en proxys : les adhésions se créent via
-        # /admin/BaseBillet/membershipproduct/ (la catégorie est fixée par le proxy).
-        # / Product admin was split into proxies: memberships are created via
-        # the membershipproduct proxy (category is set by the proxy itself).
-        page.goto('/admin/BaseBillet/membershipproduct/')
-        page.wait_for_load_state('networkidle')
-
-        # Chercher si le produit existe déjà dans la changelist.
-        # Si oui, on l'édite ; sinon, on crée un nouveau.
-        # / Check if the product already exists in the changelist.
-        # If yes, edit it; if no, create a new one.
-        product_link = page.locator('#result_list a, .result-list a').filter(
-            has_text=PRODUCT_NAME
-        ).first
-
-        if product_link.count() > 0:
-            # Produit existant → éditer.
-            # / Existing product → edit.
-            product_link.click()
-        else:
-            # Produit inexistant → créer.
-            # / Product doesn't exist → create.
+        nom_du_produit = f"{PREFIXE_DU_PRODUIT} {uuid.uuid4().hex[:6]}"
+        try:
+            # --- Étape 1 : Connexion admin, formulaire de création ---
+            # / Step 1: admin login, creation form
+            login_as_admin(page)
             page.goto('/admin/BaseBillet/membershipproduct/add/')
+            page.wait_for_load_state('networkidle')
 
-        page.wait_for_load_state('networkidle')
+            # --- Étape 2 : Informations de base ---
+            # / Step 2: basic info
+            page.locator('input[name="name"]').fill(nom_du_produit)
+            page.locator('input[name="short_description"]').first.fill(
+                'Tarif solidaire soumis à validation manuelle'
+            )
 
-        # --- Étape 3 : Remplir les informations de base du produit ---
-        # Pas de sélection de catégorie : le proxy MembershipProduct la fixe (champ caché).
-        # / Step 3: Fill in the basic product info
-        # No category selection: the MembershipProduct proxy sets it (hidden field).
-        page.locator('input[name="name"]').fill(PRODUCT_NAME)
-        page.locator('input[name="short_description"]').first.fill(
-            'Tarif solidaire soumis à validation manuelle'
-        )
+            # --- Étape 3 : Deux tarifs, le solidaire à validation manuelle ---
+            # / Step 3: two prices, the solidarity one with manual validation
+            _add_inline_price(page, {
+                'name': 'Solidaire', 'prix': 2, 'subscription_type': 'Y',
+                'manual_validation': True,
+            })
+            _add_inline_price(page, {'name': 'Plein tarif', 'prix': 30, 'subscription_type': 'Y'})
 
-        # --- Étape 4 : Ajouter les tarifs inline ---
-        # Tarif 1 : Solidaire, 2€, abonnement annuel (Y).
-        # / Step 4: Add inline prices
-        # Price 1: Solidaire, 2€, annual subscription (Y).
-        _add_inline_price(page, {
-            'name': 'Solidaire',
-            'prix': 2,
-            'subscription_type': 'Y',
-        })
+            # --- Étape 4 : Enregistrer ---
+            # / Step 4: save
+            page.locator('[name="_save"]').first.click()
+            page.wait_for_load_state('networkidle')
 
-        # Tarif 2 : Plein tarif, 30€, abonnement annuel (Y).
-        # / Price 2: Plein tarif, 30€, annual subscription (Y).
-        _add_inline_price(page, {
-            'name': 'Plein tarif',
-            'prix': 30,
-            'subscription_type': 'Y',
-        })
+            # --- Étape 5 : La base porte exactement ce qu'on a saisi ---
+            # Validation manuelle sur « Solidaire » seulement.
+            # / Step 5: manual validation on "Solidaire" only.
+            sortie = django_shell(
+                "from BaseBillet.models import Product\n"
+                f"produits = Product.objects.filter(name='{nom_du_produit}')\n"
+                "print('NOMBRE=' + str(produits.count()))\n"
+                "p = produits.first()\n"
+                "print('CATEGORIE=' + str(p.categorie_article if p else None))\n"
+                "tarifs = sorted((t.name, int(t.prix), t.subscription_type, t.manual_validation) "
+                "for t in p.prices.all()) if p else []\n"
+                "print('TARIFS=' + repr(tarifs))"
+            )
+            assert "NOMBRE=1" in sortie, f"Produit non enregistre (ou en double) : {sortie[-300:]}"
+            assert "CATEGORIE=A" in sortie, f"Le produit n'est pas une adhesion : {sortie[-300:]}"
+            assert (
+                "TARIFS=[('Plein tarif', 30, 'Y', False), ('Solidaire', 2, 'Y', True)]" in sortie
+            ), f"Les tarifs enregistres ne sont pas ceux saisis (validation comprise) : {sortie[-300:]}"
 
-        # --- Étape 5 : Sauvegarder le formulaire ---
-        # Django admin Unfold : le bouton Save a l'attribut name="_save".
-        # / Step 5: Save the form
-        # Django admin Unfold: the Save button has name="_save" attribute.
-        save_button = page.locator('[name="_save"]').first
-        save_button.click()
-        page.wait_for_load_state('networkidle')
-
-        # Vérifier qu'il n'y a pas d'erreur de validation dans la page.
-        # Unfold et Django admin affichent les erreurs dans .errorlist ou .errornote.
-        # / Verify there are no validation errors on the page.
-        # Unfold and Django admin display errors in .errorlist or .errornote.
-        content = page.content()
-        assert (
-            'errorlist' not in content
-            or 'was saved successfully' in content
-            or '/admin/BaseBillet/membershipproduct/' in page.url
-        ), f"Erreur probable lors de la sauvegarde. URL: {page.url}"
-
-        # --- Étape 6 : Vérifier la visibilité sur /memberships/ ---
-        # Le produit doit apparaître sur la page publique des adhésions.
-        # / Step 6: Verify visibility on /memberships/
-        # The product must appear on the public memberships page.
-        page.goto('/memberships/')
-        page.wait_for_load_state('networkidle')
-
-        page_content = page.content()
-        assert (
-            'validation sélective' in page_content
-            or 'validation selective' in page_content
-        ), (
-            f"Le produit '{PRODUCT_NAME}' n'est pas visible sur /memberships/. "
-            f"URL: {page.url}"
-        )
+            # --- Étape 6 : Le produit est proposé sur /memberships/ ---
+            # / Step 6: the product is offered on /memberships/
+            page.goto('/memberships/')
+            page.wait_for_load_state('networkidle')
+            carte = page.locator('[data-testid^="membership-card-"]').filter(has_text=nom_du_produit)
+            expect(carte).to_be_visible()
+        finally:
+            # Nettoyage : les tarifs d'abord (Price.product est PROTECT), puis le produit.
+            # / Cleanup: prices first (Price.product is PROTECT), then the product.
+            django_shell(
+                "from BaseBillet.models import Price, Product\n"
+                f"Price.objects.filter(product__name='{nom_du_produit}').delete()\n"
+                f"Product.objects.filter(name='{nom_du_produit}').delete()"
+            )

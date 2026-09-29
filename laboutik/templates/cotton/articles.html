@@ -16,7 +16,7 @@
 	{% else %}
 	{# Tuile standard carrée — articles VT, RE, AD, etc. #}
 	{# / Standard square tile — VT, RE, AD articles, etc. #}
-	<div data-uuid="{{article.id}}" data-name="{{article.name}}" data-price="{{article.prix}}" data-currency="{{ currency_data.symbol }}" data-group="{{article.bt_groupement.groupe}}"
+	<div data-uuid="{{article.id}}" data-name="{{article.name}}" data-price="{{article.prix}}" data-currency="{{ article.unite_label|default:currency_data.symbol }}" data-group="{{article.bt_groupement.groupe}}"
 		data-methode-caisse="{{ article.methode_caisse }}"
 		data-multi-tarif="{{ article.multi_tarif|yesno:'true,false' }}"
 		data-est-adhesion="{{ article.est_adhesion|yesno:'true,false' }}"
@@ -134,9 +134,16 @@
 					      aria-label="{% translate 'prix libre' %}">? {{ currency_data.symbol }}</span>
 					{% else %}
 					<span class="article-tarif-pill">
+						{# Un tarif en points ou en temps affiche le nom de sa monnaie. #}
 						{# Pas de symbole € pour les recharges gratuites (RC/TM) : ce ne sont pas des euros #}
-						{# / No € symbol for free top-ups (RC/TM): they are not euros #}
+						{# / Points/time price: its currency name. No € for free top-ups (RC/TM) #}
+						{% if tarif.est_en_points %}
+						{# Initiales de la monnaie (« PF ») : la place est reduite sur la tuile #}
+						{# / Currency initials: the tile has little space #}
+						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }} <abbr title="{{ tarif.unite_label }}">{{ tarif.unite_courte }}</abbr>
+						{% else %}
 						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{% if not article.est_recharge_gratuite %}{{ currency_data.symbol }}{% endif %}
+						{% endif %}
 					</span>
 					{% endif %}
 				{% endfor %}
@@ -158,9 +165,16 @@
 			     / single price as pill: same design as multi-rate pills -->
 			<div class="article-tarifs-pills">
 				<span class="article-tarif-pill">
+					{# Un article en points ou en temps affiche le nom de sa monnaie. #}
 					{# Pas de symbole € pour les recharges gratuites (RC/TM) #}
-					{# / No € symbol for free top-ups (RC/TM) #}
+					{# / Points/time item: its currency name. No € for free top-ups (RC/TM) #}
+					{% if article.est_en_points %}
+					{# Initiales de la monnaie (« PF ») : la place est reduite sur la tuile #}
+					{# / Currency initials: the tile has little space #}
+					{{ article.prix|divide_by:100|floatformat:"-2" }} <abbr title="{{ article.unite_label }}">{{ article.unite_courte }}</abbr>
+					{% else %}
 					{{ article.prix|divide_by:100|floatformat:"-2" }}{% if not article.est_recharge_gratuite %}{{ currency_data.symbol }}{% endif %}
+					{% endif %}
 				</span>
 			</div>
 			{% endif %}
