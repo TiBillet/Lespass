@@ -10,6 +10,8 @@ CE QUI EST TESTE / WHAT IS TESTED
 1. retour_carte() propose les produits de recharge du LIEU, depuis n'importe
    quel point de vente (uuid_pv envoye par hx_check_card.html) — meme un PV
    qui ne contient aucun produit de recharge, comme le Bar. Rien sans PV.
+   Regle : la zone ne s'affiche que si la carte primaire (tag_id_cm) a au
+   moins un point de vente CASHLESS.
 2. recharge_carte() renvoie la zone a chaque etape : QUOI, COMBIEN,
    MONTANT LIBRE (valide ou non), CONFIRMER.
 3. Les champs de l'etape CONFIRMER, postes tels quels vers les vues
@@ -158,7 +160,9 @@ def point_de_vente(carte_caissier, produits_de_recharge):
     """
     Un point de vente comme le Bar : il accepte les especes mais ne contient
     AUCUN produit de recharge. La recharge doit quand meme etre proposee et
-    acceptee (regle : recharge depuis tous les PV). La carte du caissier y a acces.
+    acceptee (regle : recharge depuis tous les PV), a condition que la carte du
+    caissier ait aussi un PV cashless (fixture point_de_vente_cashless_du_caissier).
+    La carte du caissier y a acces.
     / A POS like the Bar: accepts cash but holds NO top-up product. Top-ups
     must still be offered and accepted (rule: top-up from every POS).
     """
@@ -179,6 +183,33 @@ def point_de_vente(carte_caissier, produits_de_recharge):
         )
         carte_primaire.points_de_vente.add(pv)
         yield pv
+
+
+@pytest.fixture
+def point_de_vente_cashless_du_caissier(carte_caissier, point_de_vente):
+    """
+    Un point de vente CASHLESS donne a la carte du caissier.
+    Sans lui, la zone « Recharger » ne s'affiche pas.
+    Cache (hidden) pour ne pas apparaitre dans la vraie caisse.
+    / A CASHLESS POS given to the cashier card. Without it, no "Top up" zone.
+    Hidden so it does not show up in the real POS.
+    """
+    from laboutik.models import CartePrimaire, PointDeVente
+
+    with schema_context("lespass"):
+        pv_cashless, _created = PointDeVente.objects.get_or_create(
+            name=f"{PREFIXE} PV Cashless",
+            defaults={"comportement": PointDeVente.CASHLESS, "hidden": True},
+        )
+        carte_primaire = CartePrimaire.objects.get(carte=carte_caissier)
+        carte_primaire.points_de_vente.add(pv_cashless)
+        yield pv_cashless
+        # Retire le PV de la carte : les autres tests partent d'une carte sans PV cashless
+        # / Remove the POS from the card: other tests start without a cashless POS
+        carte_primaire.points_de_vente.remove(pv_cashless)
+        # Le signal y a rattache les produits de recharge : on les retire
+        # / The signal attached top-up products to it: remove them
+        pv_cashless.products.clear()
 
 
 @pytest.fixture
@@ -270,12 +301,21 @@ def _champs_du_formulaire_de_recharge(contenu_html):
 
 
 def test_retour_carte_avec_point_de_vente_affiche_les_tuiles_de_recharge(
-    tenant_lespass, point_de_vente, carte_client, produits_de_recharge
+    tenant_lespass,
+    point_de_vente,
+    point_de_vente_cashless_du_caissier,
+    carte_caissier,
+    carte_client,
+    produits_de_recharge,
 ):
     client_http = _client_connecte_admin(tenant_lespass)
     reponse = client_http.post(
         URL_RETOUR_CARTE,
-        {"tag_id": carte_client.tag_id, "uuid_pv": str(point_de_vente.uuid)},
+        {
+            "tag_id": carte_client.tag_id,
+            "uuid_pv": str(point_de_vente.uuid),
+            "tag_id_cm": carte_caissier.tag_id,
+        },
     )
     contenu = reponse.content.decode()
 
@@ -303,6 +343,51 @@ def test_retour_carte_sans_point_de_vente_ne_propose_pas_de_recharge(
 
     assert reponse.status_code == 200
     assert 'data-testid="retour-carte-anonyme"' in contenu
+    assert 'data-testid="recharge-produit-1"' not in contenu
+
+
+def test_retour_carte_sans_pv_cashless_sur_la_carte_primaire_masque_la_recharge(
+    tenant_lespass, point_de_vente, carte_caissier, carte_client, produits_de_recharge
+):
+    """
+    La carte du caissier n'a que le PV de test (pas cashless) : pas de zone
+    « Recharger », meme avec un PV valide.
+    / The cashier card only has a non-cashless POS: no "Top up" zone.
+    """
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.post(
+        URL_RETOUR_CARTE,
+        {
+            "tag_id": carte_client.tag_id,
+            "uuid_pv": str(point_de_vente.uuid),
+            "tag_id_cm": carte_caissier.tag_id,
+        },
+    )
+    contenu = reponse.content.decode()
+
+    assert reponse.status_code == 200
+    assert 'data-testid="recharge-produit-1"' not in contenu
+
+
+def test_retour_carte_sans_carte_primaire_masque_la_recharge(
+    tenant_lespass,
+    point_de_vente,
+    point_de_vente_cashless_du_caissier,
+    carte_client,
+    produits_de_recharge,
+):
+    """
+    Pas de tag_id_cm envoye (acces admin par session) : pas de recharge.
+    / No tag_id_cm sent (admin session access): no top-up.
+    """
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.post(
+        URL_RETOUR_CARTE,
+        {"tag_id": carte_client.tag_id, "uuid_pv": str(point_de_vente.uuid)},
+    )
+    contenu = reponse.content.decode()
+
+    assert reponse.status_code == 200
     assert 'data-testid="recharge-produit-1"' not in contenu
 
 
