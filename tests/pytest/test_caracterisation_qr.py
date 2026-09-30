@@ -22,29 +22,24 @@ LE PARCOURS
    créée « en attente » (`O`).
 2. L'adhérent confirme le paiement : la ligne est réservée (`U`), Fedow débite son
    portefeuille, puis la ligne est SUPPRIMÉE et recréée validée (`V`), une fois par
-   monnaie débitée. Chaque ligne recréée est envoyée à l'ancien LaBoutik, et deux mails
-   partent (au lieu, à l'adhérent).
+   monnaie débitée. Rien n'est envoyé à l'ancien LaBoutik ; deux mails partent (au
+   lieu, à l'adhérent).
 3. Si Fedow répond par une erreur, la ligne passe « échouée » (`D`) et ne se paie plus.
 / 1. A collector generates a QR code: a pending line. 2. The member confirms: the line
-is reserved, Fedow debits, the line is recreated VALID once per currency, each sent to
-legacy LaBoutik, two mails. 3. A Fedow error fails the line for good.
+is reserved, Fedow debits, the line is recreated VALID once per currency, nothing is
+sent to legacy LaBoutik, two mails. 3. A Fedow error fails the line for good.
 
 CE QUE CES TESTS REGARDENT (et rien d'autre)
 - les statuts des lignes de vente, relus en base ;
 - les appels au débit Fedow (simulé) : leur nombre ;
-- les tâches Celery demandées : leur nom et leurs arguments ;
-- la charge utile envoyée à l'ancien LaBoutik (`LigneArticleSerializer`), dont la
-  monnaie (`asset`) de chaque part.
+- les tâches Celery demandées : leur nom et leurs arguments.
 Ils ne lisent JAMAIS directement sur la ligne un champ que le chantier retire
-(`payment_method`, `asset`, `wallet`…) : c'est la charge utile qui fait contrat.
-/ They only read line statuses, Fedow debit calls, requested Celery tasks and the legacy
-LaBoutik payload (including each part's currency).
+(`payment_method`, `asset`, `wallet`…).
+/ They only read line statuses, Fedow debit calls and requested Celery tasks.
 
 CODE PARCOURU / CODE EXERCISED
 - BaseBillet/views.py — QrCodeScanPay.generate_qrcode (la demande),
-  QrCodeScanPay.valid_payment (la confirmation, l'anti-rejeu, la recréation) ;
-- laboutik/views.py — _calculer_qty_partielles (la part de chaque monnaie) ;
-- ApiBillet/serializers.py — LigneArticleSerializer (la charge utile).
+  QrCodeScanPay.valid_payment (la confirmation, l'anti-rejeu, la recréation).
 
 SIMULATIONS
 Chaque test est marqué `django_db` : la transaction est annulée à la fin, rien ne reste
@@ -68,9 +63,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django_tenants.utils import tenant_context
 
-from ApiBillet.serializers import LigneArticleSerializer
 from AuthBillet.models import TibilletUser, Wallet
-from BaseBillet.models import LigneArticle, PaymentMethod
+from BaseBillet.models import LigneArticle
 from fabriques_panier import (
     client_connecte,
     creer_utilisateur,
@@ -114,63 +108,6 @@ def lieu(tenant):
     with tenant_context(tenant):
         with taches_celery_enregistrees() as taches_demandees:
             yield SimpleNamespace(tenant=tenant, taches_demandees=taches_demandees)
-
-
-# --------------------------------------------------------------------------
-# Assistants de lecture
-# / Reading helpers
-# --------------------------------------------------------------------------
-
-
-def quantite_de_la_charge_utile(charge_utile):
-    """Clé de tri des charges utiles : la quantité (la part de la monnaie).
-    / Sort key for payloads: the quantity (the currency's share)."""
-    return charge_utile["qty"]
-
-
-def charges_utiles_des_parts_envoyees_a_laboutik(taches_demandees):
-    """
-    Ce que chaque tâche `send_sale_to_laboutik` demandée enverrait à l'ancien LaBoutik.
-    / What each requested `send_sale_to_laboutik` task would send to legacy LaBoutik.
-
-    La tâche est interceptée : elle ne tourne pas. On refait ici la même sérialisation
-    qu'elle (`LigneArticleSerializer`, BaseBillet/tasks.py `send_sale_to_laboutik`), sur
-    la ligne qu'elle a reçue en argument. On garde cinq champs du contrat : le moyen de
-    paiement, la monnaie débitée (`asset`), le montant, la quantité, le statut. La
-    monnaie est ce qui distingue deux parts du même paiement. La liste est triée par
-    quantité.
-    / We replay the task's serialization, keep five contract fields (method, currency,
-    amount, quantity, status) and sort by quantity.
-    """
-    charges_utiles = []
-    for arguments in arguments_des_taches(taches_demandees, "send_sale_to_laboutik"):
-        pk_de_la_ligne = arguments[0]
-        ligne = LigneArticle.objects.get(pk=pk_de_la_ligne)
-        charge_complete = LigneArticleSerializer(ligne).data
-        charges_utiles.append(
-            {
-                "payment_method": charge_complete["payment_method"],
-                "asset": charge_complete["asset"],
-                "amount": charge_complete["amount"],
-                "qty": charge_complete["qty"],
-                "status": charge_complete["status"],
-            }
-        )
-    charges_utiles.sort(key=quantite_de_la_charge_utile)
-    return charges_utiles
-
-
-def statuts_des_lignes_envoyees_a_laboutik(taches_demandees):
-    """
-    Les statuts des lignes que les tâches `send_sale_to_laboutik` désignent, triés.
-    Ce sont les lignes recréées après le débit : une par monnaie.
-    / Sorted statuses of the lines designated by the LaBoutik sale tasks.
-    """
-    statuts_des_lignes = []
-    for arguments in arguments_des_taches(taches_demandees, "send_sale_to_laboutik"):
-        ligne = LigneArticle.objects.get(pk=arguments[0])
-        statuts_des_lignes.append(ligne.status)
-    return sorted(statuts_des_lignes)
 
 
 # --------------------------------------------------------------------------
@@ -235,7 +172,7 @@ def fedow_simule(transactions_du_debit, monnaies_du_fedow):
     / A faked remote Fedow, whose balance largely covers the payment.
 
     `transactions_du_debit` : ce que Fedow rend quand il débite, une transaction par
-    monnaie (`{"asset": uuid, "amount": centimes}`).
+    monnaie (`{"uuid": uuid, "asset": uuid, "amount": centimes}`).
     `monnaies_du_fedow` : la fiche de chaque monnaie, par uuid (`{"category": "TLF"}`).
     / `transactions_du_debit`: one transaction per currency. `monnaies_du_fedow`: each
     currency's record, by uuid.
@@ -264,24 +201,17 @@ def fedow_simule(transactions_du_debit, monnaies_du_fedow):
 # --------------------------------------------------------------------------
 
 
-def test_qr_deux_monnaies_deux_envois_laboutik_et_deux_mails(
+def test_qr_deux_monnaies_aucun_envoi_laboutik_et_deux_mails(
     lieu, django_capture_on_commit_callbacks
 ):
     """
     P10 : l'adhérent confirme un QR code de 12,50 €. Fedow débite 5 € de monnaie locale
     et 7,50 € de monnaie fédérée. La demande est remplacée par DEUX lignes validées
-    (`V`), une par monnaie. Chaque ligne porte le montant ENTIER (1250 centimes) et sa
-    part dans la quantité (0,4 et 0,6).
-    Tâches, tout de suite (pas en `on_commit`) : un envoi à l'ancien LaBoutik PAR LIGNE,
-    puis le mail au lieu et le mail à l'adhérent. Charges utiles : monnaie locale en
-    « monnaie locale » (`LE`), monnaie fédérée en « Stripe fédéré » (`SF`), chacune
-    avec l'uuid de sa monnaie (`asset`).
-    Change en C : l'envoi à l'ancien LaBoutik est débranché pour le QR. Plus aucune tâche
-    `send_sale_to_laboutik` ; les deux mails restent. Le test est alors renommé
-    `test_qr_deux_monnaies_aucun_envoi_laboutik_et_deux_mails` (fiche A′ §4).
+    (`V`), une par monnaie.
+    Tâches : AUCUN envoi à l'ancien LaBoutik (débranché pour le QR code), puis le mail
+    au lieu et le mail à l'adhérent, avec le montant demandé en centimes.
     / P10: a 12.50 € QR code paid with 5 € local + 7.50 € federated currency. Two VALID
-    lines, full amount, shares 0.4 / 0.6. One LaBoutik sale per line, then two mails.
-    Changes in C: no more LaBoutik sale, the two mails remain; renamed accordingly.
+    lines. Tasks: nothing sent to legacy LaBoutik, then the two mails.
     """
     client_de_l_encaisseur = creer_un_encaisseur(lieu)
     payeur = creer_un_payeur()
@@ -290,8 +220,8 @@ def test_qr_deux_monnaies_deux_envois_laboutik_et_deux_mails(
     uuid_de_la_monnaie_federee = str(uuid.uuid4())
     faux_fedow = fedow_simule(
         transactions_du_debit=[
-            {"asset": uuid_de_la_monnaie_locale, "amount": 500},
-            {"asset": uuid_de_la_monnaie_federee, "amount": 750},
+            {"uuid": uuid.uuid4(), "asset": uuid_de_la_monnaie_locale, "amount": 500},
+            {"uuid": uuid.uuid4(), "asset": uuid_de_la_monnaie_federee, "amount": 750},
         ],
         monnaies_du_fedow={
             uuid_de_la_monnaie_locale: {"category": "TLF"},
@@ -311,36 +241,24 @@ def test_qr_deux_monnaies_deux_envois_laboutik_et_deux_mails(
     taches_de_la_confirmation = lieu.taches_demandees
     etat_attendu = {
         "taches": [
-            "send_sale_to_laboutik",
-            "send_sale_to_laboutik",
             "send_payment_success_admin",
             "send_payment_success_user",
         ],
     }
     assert etat_metier(taches_demandees=taches_de_la_confirmation) == etat_attendu
-    assert statuts_des_lignes_envoyees_a_laboutik(taches_de_la_confirmation) == [
-        LigneArticle.VALID,
-        LigneArticle.VALID,
-    ]
     assert faux_fedow.transaction.to_place_from_qrcode.call_count == 1
 
-    # Charges utiles envoyées à l'ancien LaBoutik, triées par quantité (la part).
-    # / Payloads sent to legacy LaBoutik, sorted by quantity (the share).
-    assert charges_utiles_des_parts_envoyees_a_laboutik(taches_de_la_confirmation) == [
-        {
-            "payment_method": PaymentMethod.LOCAL_EURO,
-            "asset": uuid_de_la_monnaie_locale,
-            "amount": 1250,
-            "qty": "0.400000",
-            "status": LigneArticle.VALID,
-        },
-        {
-            "payment_method": PaymentMethod.STRIPE_FED,
-            "asset": uuid_de_la_monnaie_federee,
-            "amount": 1250,
-            "qty": "0.600000",
-            "status": LigneArticle.VALID,
-        },
+    # Les deux lignes recréées, une par monnaie, toutes deux validées. La première garde
+    # l'uuid de la demande ; les deux sont les articles de la même vente.
+    # / The two recreated lines, both VALID. The first keeps the request uuid; both are
+    # the items of the same sale.
+    premiere_ligne_recreee = LigneArticle.objects.get(uuid=demande_de_paiement.uuid)
+    statuts_des_lignes_recreees = []
+    for ligne in premiere_ligne_recreee.vente.articles.all():
+        statuts_des_lignes_recreees.append(ligne.status)
+    assert sorted(statuts_des_lignes_recreees) == [
+        LigneArticle.VALID,
+        LigneArticle.VALID,
     ]
 
     # Les deux mails : au lieu, puis à l'adhérent, avec le montant en centimes.

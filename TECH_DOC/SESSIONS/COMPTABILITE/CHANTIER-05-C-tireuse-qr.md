@@ -8,7 +8,7 @@
 > Cette fiche **reprend** la restructuration QR/NFC de 04-F §5.3 (session 04-F-3
 > arrêtée) : réseau d'abord, puis une seule transaction de base, puis `on_commit`.
 
-## 1. Tireuse (`controlvanne/billing.py` `facturer_tirage` ~l.250-395)
+## 1. Tireuse (`controlvanne/billing.py` `facturer_tirage` ~l.220-484 ; écarts de relecture : SUIVI §4, 2026-09-30)
 
 Aujourd'hui : `amount` = **total du tirage** (`int(round(vol_ml × prix_litre / 1000 × 100))`,
 arrondi au pair, réduit si le solde est insuffisant ~l.274-283), `qty` = fraction de 1
@@ -27,12 +27,49 @@ Changement, dans l'`atomic` existant (~l.223) :
   part = litres de la part × prix au litre, figé : `quantite_pour_cout` = volume servi
   en litres × fraction de la part (fiche A) ;
 - solde insuffisant : comportement actuel gardé (D27 du chantier 04) ; pendant la
-  transition, le total imposé est ce qui a **réellement** été débité. Vérifier au
-  démarrage si le **volume servi** est réduit avec le solde (~l.274-283) : si oui, en H
-  `qty` = litres réellement servis et le total redevient `qty × prix` sans exception ;
-  sinon, l'écart devient un article « Écart d'encaissement reçu en moins » (D26). Dans
-  les deux cas `total_catalogue_impose` disparaît en H ;
+  transition, le total imposé est ce qui a **réellement** été débité. Le **volume
+  servi n'est pas réduit** avec le solde (vérifié le 2026-09-30 : `volume_cl` = volume
+  entier) : en H, l'écart devient un article « Écart d'encaissement reçu en moins »
+  (D26), et `total_catalogue_impose` disparaît ;
 - la tireuse est désormais chaînée (via la vente).
+
+## 1 bis. La tireuse paie comme la caisse — VALIDÉ (mainteneur, 2026-09-30)
+
+Décision du mainteneur (2026-09-30) : la tireuse utilise **le même mécanisme que le
+cashless de la caisse**. Une bière peut être payée par un mélange de jetons cadeau
+locaux, de monnaie locale V2 (Fedow local) et de monnaie de l'**ancien Fedow** (TLF
+fédérés + FED). Temps et fidélité : jamais à la tireuse. Le FED V2 (Fedow local) n'est
+branché nulle part : aucune recharge possible, donc solde toujours nul.
+
+Aujourd'hui la tireuse ne lit et ne débite que le Fedow local (`billing.py` l.80). Règle
+proposée, calquée sur `_payer_par_nfc` de la caisse (`laboutik/views.py` ~l.9394) :
+
+1. **Ordre de paiement** : d'abord les monnaies locales, dans l'ordre de la caisse
+   (`ORDRE_CASCADE_FIDUCIAIRE` : jetons cadeau TNF → TLF → FED local, ce dernier toujours
+   à 0) ; puis, pour le reste, l'**ancien Fedow** (`_debiter_legacy` : il fait lui-même
+   TLF fédérés puis FED). Temps (TIM) et fidélité (FID) : jamais (c'est déjà le cas :
+   ils ne sont pas dans la cascade, et un tarif au litre en points est ignoré).
+2. **Carte anonyme** (sans utilisateur) : monnaies locales seulement, comme la caisse
+   (l'ancien Fedow ne débite que le portefeuille d'un utilisateur).
+3. **Au badge (`authorize`)** : le volume autorisé et le solde affiché comptent aussi le
+   solde de l'ancien Fedow, lu frais (`lire_depensable_fed_frais`). Ancien Fedow
+   injoignable → on continue avec les monnaies locales seules (jamais de blocage, comme
+   l'affichage de la caisse).
+4. **À la fin du service (`pour_end`)** : la bière est déjà servie.
+   - part locale : débitée dans la transaction de la base, comme aujourd'hui ;
+   - reste : débité sur l'ancien Fedow **avant** l'écriture de la vente (appel réseau),
+     sous le verrou de la **session** de la tireuse (qui empêche de facturer deux fois
+     la même session) ;
+   - ancien Fedow en échec à ce moment (réseau, solde baissé entre le badge et la fin) :
+     on facture ce que les monnaies locales couvrent, et on journalise ce qui n'a pas pu
+     être facturé (comme le solde insuffisant d'aujourd'hui) ;
+   - écriture de la vente en échec (égalité rompue : inatteignable) : rien de dédié,
+     l'exception remonte en 500 et Sentry la capte (mainteneur, 2026-09-30).
+5. **Vente** : une vente `TIREUSE` ; une part par monnaie débitée ; règlements : locaux
+   avec `fedow_transaction_uuid`, ancien Fedow avec `reference_externe` (comme la caisse).
+
+Découpage envisagé : C-1a (vente écrite, monnaies locales seulement : §1 tel quel), puis
+C-1b (cran de l'ancien Fedow : points 2 à 5).
 
 ## 2. Paiement QR / NFC en ligne (`BaseBillet/views.py`)
 
@@ -96,7 +133,7 @@ partagée ; le 6 en schéma dédié).
 | 10 | `test_qr_echec_reseau_apres_debit_aucune_vente_ligne_failed` | `asset.retrieve` en erreur → aucune ligne recréée, aucune vente, ligne d'origine `FAILED` |
 | 11 | `test_qr_aucun_envoi_ancien_laboutik` | paiement QR sur deux monnaies : **aucune** tâche `send_sale_to_laboutik` demandée, même au commit (`django_capture_on_commit_callbacks(execute=True)`) ; les deux mails sont demandés |
 | 13 | `test_tirage_cout_sur_les_litres_reels` | 0,50 L, prix d'achat 300 / L, deux parts → Σ `cout_achat` = 150 |
-| 12 | `test_qr_refus_fedow_aucune_vente` | ligne redevenue payable (04-F-1) |
+| 12 | `test_qr_refus_fedow_aucune_vente` | ligne d'origine `FAILED`, jamais repayable (04-F-1 telle que codée ; SUIVI §4, 2026-09-30) |
 
 Vus rouges : 1-3, 5-11, 13 (aucune vente, pas d'`atomic`, envoi legacy encore présent) ; 4 (86).
 

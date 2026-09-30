@@ -51,7 +51,7 @@ from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paieme
     Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField, GhostConfig, BrevoConfig, \
     FederationConfiguration, MembershipProduct
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, \
-    contact_mailer, send_to_ghost_email, send_sale_to_laboutik, \
+    contact_mailer, send_to_ghost_email, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
     send_membership_payment_link_user
@@ -1787,7 +1787,194 @@ TYPES_DE_MONNAIE_ENCAISSABLES_PAR_QRCODE = ['EURO', 'EUR']
 
 
 class QrCodeScanPay(viewsets.ViewSet):
+    """
+    Paiement d'une demande (QR code) avec la monnaie de l'ancien Fedow.
+    / Paying a request (QR code) with the old Fedow's currency.
+
+    LOCALISATION : BaseBillet/views.py
+
+    FLUX D'UN PAIEMENT (`valid_payment` par QR code, `process_with_nfc` par carte) :
+    1. La demande (ligne CREATED, née à `generate_qrcode`) est réservée : CREATED →
+       UNPAID. Une seule requête gagne : c'est l'anti-rejeu.
+    2. Débit sur l'ancien Fedow (`to_place_from_qrcode`). Erreur → demande FAILED.
+    3. Les autres appels réseau, AVANT la base : la catégorie de chaque monnaie débitée
+       (`_moyens_des_monnaies_debitees`). Erreur → demande FAILED, aucune vente.
+    4. Une seule transaction de base (`_ecrire_la_vente_payee`) : la demande est
+       remplacée par une vente encaissée, une part et un règlement par transaction.
+       Erreur → demande FAILED (le débit est fait : on ne le rejoue jamais).
+    5. Après la validation en base : les deux mails (lieu, payeur).
+    / Reserve, debit, every other network call, one database transaction, then mails.
+    """
     authentication_classes = [SessionAuthentication, ]
+
+    @staticmethod
+    def _moyens_des_monnaies_debitees(fedow_api, transactions):
+        """
+        Lit sur l'ancien Fedow la catégorie de chaque monnaie débitée, et la traduit en
+        moyen de paiement. Un seul appel par monnaie, même si elle revient plusieurs
+        fois dans les transactions.
+        / Reads each debited currency's category on the old Fedow and maps it to a
+        payment method. One call per currency.
+
+        LOCALISATION : BaseBillet/views.py (QrCodeScanPay)
+
+        Appel réseau : il se fait AVANT la transaction de base, jamais dedans.
+        Seules deux catégories s'encaissent ici :
+        - FED (monnaie fédérée, gérée par la coopérative) → STRIPE_FED ;
+        - TLF (monnaie locale d'un lieu, fiduciaire) → LOCAL_EURO.
+        Toute autre catégorie lève une exception : la vue ne sait pas l'encaisser.
+        / Network call, BEFORE the database transaction. Only FED and TLF; anything
+        else raises.
+
+        APPELÉ PAR : process_with_nfc, valid_payment
+
+        :param fedow_api: le client de l'ancien Fedow (`FedowAPI`)
+        :param transactions: les transactions rendues par le débit
+        :return: dict {uuid de la monnaie (texte): PaymentMethod}
+        """
+        moyens_par_monnaie = {}
+        for transaction_fedow in transactions:
+            uuid_texte_de_la_monnaie = str(transaction_fedow['asset'])
+            monnaie_deja_lue = uuid_texte_de_la_monnaie in moyens_par_monnaie
+            if monnaie_deja_lue:
+                continue
+
+            fiche_de_la_monnaie = fedow_api.asset.retrieve(uuid_texte_de_la_monnaie)
+            categorie_de_la_monnaie = fiche_de_la_monnaie['category']
+            if categorie_de_la_monnaie == 'FED':
+                moyen_de_paiement = PaymentMethod.STRIPE_FED
+            elif categorie_de_la_monnaie == 'TLF':
+                moyen_de_paiement = PaymentMethod.LOCAL_EURO
+            else:
+                raise Exception(f"Unknown asset category : {categorie_de_la_monnaie}")
+            moyens_par_monnaie[uuid_texte_de_la_monnaie] = moyen_de_paiement
+        return moyens_par_monnaie
+
+    @staticmethod
+    def _ecrire_la_vente_payee(
+            demande,
+            transactions,
+            moyens_par_monnaie,
+            total_paye,
+            parts_avec_qty,
+            metadata,
+            origine,
+            client,
+            carte,
+            wallet,
+    ):
+        """
+        Remplace la demande payée par une vente encaissée, en une seule transaction de
+        base : tout est écrit, ou rien.
+        / Replaces the paid request by a settled sale, in one database transaction.
+
+        LOCALISATION : BaseBillet/views.py (QrCodeScanPay)
+
+        FLUX (dans `atomic`) :
+        1. La demande est supprimée.
+        2. `ouvrir_vente` : une vente de nature VENTE, au nom du payeur, avec sa carte
+           si elle est connue. Ni point de vente (le QR code naît sur une page web), ni
+           opérateur.
+        3. Pour chaque transaction de l'ancien Fedow :
+           - une part (`ajouter_article`) : `amount` = total payé, `qty` = la part de sa
+             monnaie, `total_catalogue_impose` = l'argent réellement débité dans cette
+             monnaie. La PREMIÈRE part garde l'uuid de la demande : l'écran de
+             l'encaisseur (`check_payment`) interroge cet uuid ;
+           - un règlement (`ajouter_reglement`) : moyen, montant et monnaie copiés, la
+             carte, et l'uuid de la transaction distante dans `reference_externe`
+             (`fedow_transaction_uuid` est réservé aux transactions `fedow_core`
+             locales). Pas de portefeuille : comme les règlements de l'ancien Fedow à
+             la caisse.
+        4. `encaisser_vente` EN DERNIER : il pose le verrou du lieu jusqu'au commit.
+        Aucun appel réseau ici : ils sont tous faits avant.
+        / Delete the request, open the sale, one part and one payment per remote
+        transaction (the first part keeps the request uuid), settle LAST. No network.
+
+        APPELÉ PAR : process_with_nfc, valid_payment
+
+        :param demande: la `LigneArticle` de la demande, réservée (UNPAID)
+        :param transactions: les transactions rendues par le débit
+        :param moyens_par_monnaie: sortie de `_moyens_des_monnaies_debitees`
+        :param total_paye: le total réellement débité, en centimes (int)
+        :param parts_avec_qty: sortie de `_calculer_qty_partielles`, dans l'ordre des
+            transactions
+        :param metadata: les métadonnées de la demande (dict), recopiées sur chaque part
+        :param origine: `SaleOrigin.QRCODE_MA` ou `SaleOrigin.NFC_MA`
+        :param client: le payeur (`TibilletUser`)
+        :param carte: la `CarteCashless` locale du tag lu, ou None
+        :param wallet: le portefeuille du payeur, posé sur chaque part
+        :return: la vente encaissée
+        """
+        # Imports locaux, comme controlvanne/billing.py : le service de vente et la
+        # caisse importent eux-mêmes des modèles de BaseBillet.
+        # / Local imports, like controlvanne/billing.py.
+        from BaseBillet.models_vente import Vente
+        from BaseBillet.services_vente import (
+            ajouter_article,
+            ajouter_reglement,
+            encaisser_vente,
+            ouvrir_vente,
+        )
+        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
+        pricesold_de_la_demande = demande.pricesold
+        produit_vendu = pricesold_de_la_demande.productsold.product
+        uuid_de_la_demande = demande.uuid
+        metadata_en_texte = json.dumps(metadata, cls=DjangoJSONEncoder)
+
+        with db_transaction.atomic():
+            demande.delete()
+
+            vente = ouvrir_vente(
+                origine=origine,
+                nature=Vente.Nature.VENTE,
+                client=client,
+                carte=carte,
+            )
+
+            for index_transaction, transaction_fedow in enumerate(transactions):
+                moyen_de_paiement = moyens_par_monnaie[str(transaction_fedow['asset'])]
+                montant_debite_dans_cette_monnaie = transaction_fedow['amount']
+
+                premiere_part = index_transaction == 0
+                if premiere_part:
+                    uuid_de_la_part = uuid_de_la_demande
+                else:
+                    uuid_de_la_part = uuid.uuid4()
+
+                # Taux de TVA : celui du produit, sinon le taux par défaut du lieu.
+                # / VAT rate: the product's, otherwise the venue default.
+                taux_tva_de_la_part = _taux_tva_de_la_ligne_de_caisse(
+                    produit_vendu, moyen_de_paiement
+                )
+
+                ajouter_article(
+                    vente,
+                    pricesold=pricesold_de_la_demande,
+                    quantite=parts_avec_qty[index_transaction]["qty"],
+                    prix_unitaire=total_paye,
+                    taux_tva=taux_tva_de_la_part,
+                    total_catalogue_impose=montant_debite_dans_cette_monnaie,
+                    uuid=uuid_de_la_part,
+                    payment_method=moyen_de_paiement,
+                    status=LigneArticle.VALID,
+                    metadata=metadata_en_texte,
+                    asset=transaction_fedow['asset'],
+                    wallet=wallet,
+                )
+
+                ajouter_reglement(
+                    vente,
+                    moyen=moyen_de_paiement,
+                    montant=montant_debite_dans_cette_monnaie,
+                    asset=transaction_fedow['asset'],
+                    carte=carte,
+                    reference_externe=str(transaction_fedow['uuid']),
+                )
+
+            vente_encaissee = encaisser_vente(vente)
+
+        return vente_encaissee
 
     @action(detail=True, methods=['GET'], permission_classes=[CanInitiatePaymentPermission, ])
     def check_payment(self, request: HttpRequest, pk=None):
@@ -1932,12 +2119,13 @@ class QrCodeScanPay(viewsets.ViewSet):
         # Le validateur a lu la ligne en CREATED, mais sans rien bloquer : deux
         # lectures de carte simultanees passent toutes les deux. On reserve la
         # ligne (CREATED -> UNPAID, une seule requete gagne) avant de debiter.
+        # La demande se reconnait a son origine QR code (`sale_origin`).
         # / The validator read the line as CREATED without locking it: two
         #   simultaneous card reads both pass. Reserve it before debiting.
         nombre_de_lignes_reservees = LigneArticle.objects.filter(
             uuid=ligne_article.uuid,
             status=LigneArticle.CREATED,
-            payment_method=PaymentMethod.QRCODE_MA,
+            sale_origin=SaleOrigin.QRCODE_MA,
         ).update(status=LigneArticle.UNPAID)
         if nombre_de_lignes_reservees == 0:
             return Response(
@@ -1986,22 +2174,41 @@ class QrCodeScanPay(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        # Le debit est fait. Tous les autres appels reseau passent AVANT la base :
+        # la categorie de chaque monnaie debitee. En cas d'erreur (reseau, categorie
+        # inconnue), la ligne passe en echec, aucune vente n'est ecrite, et le
+        # caissier lit le meme message que pour un debit incertain.
+        # / The debit is done. Every other network call happens BEFORE the database.
+        #   On error: the line fails, no sale, same message as an uncertain debit.
         try:
             assert transactions is not None
             assert type(transactions) is list
-            # on supprime la ligne article pour la recréer en fonction de la ou des transactions
-            total_amount = ligne_article.amount
-            metadata['transactions'] = transactions
-            pricesold = ligne_article.pricesold
-            ex_ligne_article_uuid = ligne_article.uuid
-            ligne_article.delete()
+            moyens_par_monnaie = self._moyens_des_monnaies_debitees(fedowAPI, transactions)
+        except Exception as erreur_apres_le_debit:
+            logger.error(
+                f"Paiement NFC : debit fait, monnaies illisibles, ligne {ligne_article.uuid} "
+                f"en echec (montant {ligne_article.amount}, payeur {wallet.user.email}, "
+                f"transactions {transactions}) : {erreur_apres_le_debit}"
+            )
+            LigneArticle.objects.filter(uuid=ligne_article.uuid).update(status=LigneArticle.FAILED)
+            return Response(
+                {'detail': _(
+                    "Le paiement n'a pas pu être confirmé. Demandez au lieu de vérifier votre portefeuille avant de réessayer."
+                )},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-            # Une ligne par monnaie debitee. Chaque ligne porte le prix UNITAIRE du
+        total_amount = ligne_article.amount
+        ex_ligne_article_uuid = ligne_article.uuid
+        try:
+            metadata['transactions'] = transactions
+
+            # Une part par monnaie debitee. Chaque part porte le prix UNITAIRE du
             # paiement (le montant total) et sa part dans qty : total = amount x qty.
             # qty a 6 decimales, la derniere part prend le reste pour que la somme
             # des qty vaille exactement 1.
             # Import local, comme controlvanne/billing.py.
-            # / One line per debited currency: unit price in amount, share in qty.
+            # / One part per debited currency: unit price in amount, share in qty.
             from laboutik.views import _calculer_qty_partielles
 
             parts_par_transaction = [
@@ -2024,61 +2231,61 @@ class QrCodeScanPay(viewsets.ViewSet):
                 parts_par_transaction, total_amount, Decimal("1")
             )
 
-            for index_transaction, transaction in enumerate(transactions):
-                # On récupère les infos de l'asset :
-                asset_used = fedowAPI.asset.retrieve(str(transaction['asset']))
-                if asset_used['category'] == 'FED':
-                    mp = PaymentMethod.STRIPE_FED
-                elif asset_used['category'] == 'TLF':
-                    mp = PaymentMethod.LOCAL_EURO
-                else:
-                    raise Exception("Unknown asset category")
+            # La carte locale du tag lu, si le lieu la connait. / The local card, if known.
+            from QrcodeCashless.models import CarteCashless
+            carte_du_tag_lu = CarteCashless.objects.filter(tag_id=tag_id).first()
 
-                # Create LigneArticle with metadata containing admin email
-                ligne_article = LigneArticle.objects.create(
-                    uuid=ex_ligne_article_uuid if index_transaction == 0 else uuid.uuid4(),
-                    pricesold=pricesold,
-                    qty=parts_avec_qty[index_transaction]["qty"],
-                    amount=total_amount,
-                    payment_method=mp,
-                    status=LigneArticle.VALID,
-                    metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
-                    asset=transaction['asset'],
-                    wallet=wallet,
-                    sale_origin=SaleOrigin.NFC_MA,
-                )
-
-                # import ipdb; ipdb.set_trace()
-                # Chaque transaction doit être bien enregistré sur LaBoutik avec le bon Asset indiqué
-                send_sale_to_laboutik.delay(ligne_article.uuid)
-
-            # Envoi des emails de confirmation (admin et utilisateur)
-            try:
-                place = connection.tenant.name
-                # Email admin
-                send_payment_success_admin.delay(total_amount, timezone.now(), place, request.user.email)
-                # Email user
-                send_payment_success_user.delay(wallet.user.email, total_amount, timezone.now(), place)
-            except Exception as e_mail:
-                logger.error(f"Error sending payment confirmation emails: {e_mail}")
+            self._ecrire_la_vente_payee(
+                demande=ligne_article,
+                transactions=transactions,
+                moyens_par_monnaie=moyens_par_monnaie,
+                total_paye=total_amount,
+                parts_avec_qty=parts_avec_qty,
+                metadata=metadata,
+                origine=SaleOrigin.NFC_MA,
+                client=wallet.user,
+                carte=carte_du_tag_lu,
+                wallet=wallet,
+            )
 
         except Exception as e:
-            # Le debit est fait mais l'enregistrement de la vente a echoue :
-            # on le journalise et on repond au caissier au lieu d'une erreur 500 brute.
-            # / The debit went through but recording the sale failed: log it and
-            #   answer the cashier instead of a raw 500 error.
-            logger.error(f"Error validating payment: {str(e)}")
+            # Le debit est fait mais l'enregistrement de la vente a echoue (rien
+            # n'est ecrit : une seule transaction de base). La ligne passe en echec :
+            # le debit ne se rejoue jamais, le lieu verifie a la main.
+            # / The debit went through but recording the sale failed (nothing is
+            #   written). The line fails: the debit is never replayed.
+            logger.error(
+                f"Error validating payment: {str(e)} (ligne {ex_ligne_article_uuid}, "
+                f"payeur {wallet.user.email}, transactions {transactions})"
+            )
+            LigneArticle.objects.filter(uuid=ex_ligne_article_uuid).update(status=LigneArticle.FAILED)
             return Response(
                 {'detail': _("Error validating payment")},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        # Les mails partent APRES la validation en base : jamais un mail pour une
+        # vente qui n'existe pas.
+        # / Mails are sent AFTER the commit: never a mail for a sale that does not exist.
+        nom_du_lieu = connection.tenant.name
+        email_du_lecteur = request.user.email
+        email_du_payeur = wallet.user.email
+
+        def envoyer_les_mails_de_confirmation():
+            try:
+                send_payment_success_admin.delay(total_amount, timezone.now(), nom_du_lieu, email_du_lecteur)
+                send_payment_success_user.delay(email_du_payeur, total_amount, timezone.now(), nom_du_lieu)
+            except Exception as e_mail:
+                logger.error(f"Error sending payment confirmation emails: {e_mail}")
+
+        db_transaction.on_commit(envoyer_les_mails_de_confirmation)
+
         # C'est un retour vers une swal alert -> on fait pas de HTML pour une fois
         return Response({
             'status': 'Paiement OK',
             'user_email': wallet.user.email,
-            'amount_paid': dround(ligne_article.amount),
-            'balance': dround(nfc_validator.user_balance - ligne_article.amount),
+            'amount_paid': dround(total_amount),
+            'balance': dround(nfc_validator.user_balance - total_amount),
         }, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=['GET'], permission_classes=[
@@ -2219,15 +2426,15 @@ class QrCodeScanPay(viewsets.ViewSet):
         # On reserve la ligne AVANT de debiter : une seule requete passe de
         # CREATED a UNPAID (« paiement en cours »). Fedow debite a chaque appel :
         # un second ecran de validation ou un rejeu trouve 0 ligne a reserver
-        # et s'arrete sans appeler Fedow. Le filtre sur le moyen de paiement
-        # refuse tout uuid qui n'est pas une demande de paiement QR.
+        # et s'arrete sans appeler Fedow. Le filtre sur l'origine QR code
+        # (`sale_origin`) refuse tout uuid qui n'est pas une demande de paiement QR.
         # / Reserve the line BEFORE debiting: only one request moves it from
         #   CREATED to UNPAID. Fedow debits on every call: a replay finds
         #   nothing to reserve and stops. Only QR payment requests qualify.
         nombre_de_lignes_reservees = LigneArticle.objects.filter(
             uuid=ligne_article.uuid,
             status=LigneArticle.CREATED,
-            payment_method=PaymentMethod.QRCODE_MA,
+            sale_origin=SaleOrigin.QRCODE_MA,
         ).update(status=LigneArticle.UNPAID)
         if nombre_de_lignes_reservees == 0:
             template_context['error_message'] = _("This payment has already been processed")
@@ -2257,22 +2464,39 @@ class QrCodeScanPay(viewsets.ViewSet):
             )
             return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
 
+        # Le debit est fait. Tous les autres appels reseau passent AVANT la base :
+        # la categorie de chaque monnaie debitee. En cas d'erreur (reseau, categorie
+        # inconnue), la ligne passe en echec, aucune vente n'est ecrite, et
+        # l'adherent lit le meme message que pour un debit incertain.
+        # / The debit is done. Every other network call happens BEFORE the database.
+        #   On error: the line fails, no sale, same message as an uncertain debit.
         try:
             assert transactions is not None
             assert type(transactions) is list
-            # on supprime la ligne article pour la recréer en fonction de la ou des transactions
-            total_amount = ligne_article.amount
-            metadata['transactions'] = transactions
-            pricesold = ligne_article.pricesold
-            ex_ligne_article_uuid = ligne_article.uuid
-            ligne_article.delete()
+            moyens_par_monnaie = self._moyens_des_monnaies_debitees(fedow_api, transactions)
+        except Exception as erreur_apres_le_debit:
+            logger.error(
+                f"Paiement QR : debit fait, monnaies illisibles, ligne {ligne_article.uuid} "
+                f"en echec (montant {amount}, payeur {user.email}, "
+                f"transactions {transactions}) : {erreur_apres_le_debit}"
+            )
+            LigneArticle.objects.filter(uuid=ligne_article.uuid).update(status=LigneArticle.FAILED)
+            template_context['error_message'] = _(
+                "Le paiement n'a pas pu être confirmé. Demandez au lieu de vérifier votre portefeuille avant de réessayer."
+            )
+            return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
 
-            # Une ligne par monnaie debitee. Chaque ligne porte le prix UNITAIRE du
+        total_amount = ligne_article.amount
+        ex_ligne_article_uuid = ligne_article.uuid
+        try:
+            metadata['transactions'] = transactions
+
+            # Une part par monnaie debitee. Chaque part porte le prix UNITAIRE du
             # paiement (le montant total) et sa part dans qty : total = amount x qty.
             # qty a 6 decimales, la derniere part prend le reste pour que la somme
             # des qty vaille exactement 1.
             # Import local, comme controlvanne/billing.py.
-            # / One line per debited currency: unit price in amount, share in qty.
+            # / One part per debited currency: unit price in amount, share in qty.
             from laboutik.views import _calculer_qty_partielles
 
             parts_par_transaction = [
@@ -2295,59 +2519,62 @@ class QrCodeScanPay(viewsets.ViewSet):
                 parts_par_transaction, total_amount, Decimal("1")
             )
 
-            for index_transaction, transaction in enumerate(transactions):
-                # On récupère les infos de l'asset :
-                asset_used = fedow_api.asset.retrieve(str(transaction['asset']))
-                if asset_used['category'] == 'FED':
-                    mp = PaymentMethod.STRIPE_FED
-                elif asset_used['category'] == 'TLF':
-                    mp = PaymentMethod.LOCAL_EURO
-                else:
-                    raise Exception("Unknown asset category")
+            # Pas de carte ici : l'adherent paie depuis son telephone.
+            # / No card here: the member pays from their phone.
+            self._ecrire_la_vente_payee(
+                demande=ligne_article,
+                transactions=transactions,
+                moyens_par_monnaie=moyens_par_monnaie,
+                total_paye=total_amount,
+                parts_avec_qty=parts_avec_qty,
+                metadata=metadata,
+                origine=SaleOrigin.QRCODE_MA,
+                client=user,
+                carte=None,
+                wallet=wallet,
+            )
 
-                # Create LigneArticle with metadata containing admin email
-                ligne_article = LigneArticle.objects.create(
-                    uuid=ex_ligne_article_uuid if index_transaction == 0 else uuid.uuid4(),
-                    pricesold=pricesold,
-                    qty=parts_avec_qty[index_transaction]["qty"],
-                    amount=total_amount,
-                    payment_method=mp,
-                    status=LigneArticle.VALID,
-                    metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
-                    asset=transaction['asset'],
-                    wallet=wallet,
-                    sale_origin=SaleOrigin.QRCODE_MA,
-                )
+        except Exception as e:
+            # Le debit est fait mais l'enregistrement de la vente a echoue (rien
+            # n'est ecrit : une seule transaction de base). La ligne passe en echec :
+            # le debit ne se rejoue jamais, le lieu verifie a la main.
+            # / The debit went through but recording the sale failed (nothing is
+            #   written). The line fails: the debit is never replayed.
+            logger.error(
+                f"Error validating payment: {str(e)} (ligne {ex_ligne_article_uuid}, "
+                f"payeur {user.email}, transactions {transactions})"
+            )
+            LigneArticle.objects.filter(uuid=ex_ligne_article_uuid).update(status=LigneArticle.FAILED)
+            template_context['error_message'] = _("Error validating payment")
+            return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
 
-                # import ipdb; ipdb.set_trace()
-                # Chaque transaction doit être bien enregistré sur LaBoutik avec le bon Asset indiqué
-                send_sale_to_laboutik.delay(ligne_article.uuid)
+        # Le solde affiche apres le paiement est calcule (solde lu avant le debit,
+        # moins ce qui a ete debite) : aucun appel reseau apres l'ecriture de la vente.
+        # / The balance shown is computed (balance read before the debit minus what
+        #   was debited): no network call after the sale is written.
+        tenant = connection.tenant
+        template_context['payment_location'] = tenant.name
+        template_context['amount'] = amount
+        template_context['payment_time'] = timezone.now().strftime("%d/%m/%Y %H:%M")
+        template_context['user_balance'] = user_balance - total_amount
 
-            # Set the payment details in the template context
-            tenant = connection.tenant
-            template_context['payment_location'] = tenant.name
-            template_context['amount'] = amount
-            template_context['payment_time'] = timezone.now().strftime("%d/%m/%Y %H:%M")
-            template_context['user_balance'] = fedow_api.wallet.get_total_fiducial_and_all_federated_token(user)
+        # Les mails partent APRES la validation en base : jamais un mail pour une
+        # vente qui n'existe pas.
+        # / Mails are sent AFTER the commit: never a mail for a sale that does not exist.
+        payment_time_str = template_context['payment_time']
+        nom_du_lieu = tenant.name
+        email_du_payeur = user.email
 
-            # Envoi des emails de confirmation (admin et utilisateur)
+        def envoyer_les_mails_de_confirmation():
             try:
-                payment_time_str = template_context['payment_time']
-                place = tenant.name
-                # Email admin
-                send_payment_success_admin.delay(amount, payment_time_str, place, user.email)
-                # Email user
-                send_payment_success_user.delay(user.email, amount, payment_time_str, place)
+                send_payment_success_admin.delay(amount, payment_time_str, nom_du_lieu, email_du_payeur)
+                send_payment_success_user.delay(email_du_payeur, amount, payment_time_str, nom_du_lieu)
             except Exception as e_mail:
                 logger.error(f"Error sending payment confirmation emails: {e_mail}")
 
-            return render(request, "fonctionnel/qrcode_scan_pay/payment_confirmation.html", context=template_context)
+        db_transaction.on_commit(envoyer_les_mails_de_confirmation)
 
-
-        except Exception as e:
-            logger.error(f"Error validating payment: {str(e)}")
-            template_context['error_message'] = _("Error validating payment")
-            return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
+        return render(request, "fonctionnel/qrcode_scan_pay/payment_confirmation.html", context=template_context)
 
     '''
     def get_permissions(self):

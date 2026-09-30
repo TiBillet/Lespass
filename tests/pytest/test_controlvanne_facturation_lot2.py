@@ -107,6 +107,14 @@ class TestFonctionsDArgent:
 # ─────────────────────────────────────────────────────────────────────
 
 
+# Marque django_db : chaque test facture un tirage (ou ferme une session). La vente,
+# ses règlements, les cartes et les débits créés par le test disparaissent au rollback
+# de fin de test : aucun nettoyage à la main (une vente enregistrée protège la carte,
+# le portefeuille et le point de vente contre la suppression).
+# / django_db mark: each test bills a pour (or closes a session). The sale, its
+# payments, the cards and the debits created by the test vanish on rollback: no manual
+# cleanup (a recorded sale protects the card, wallet and POS from deletion).
+@pytest.mark.django_db
 class TestFacturationLot2:
     def test_04_erreur_de_stock_ne_casse_pas_la_facture(
         self, billing_client, billing_headers, tireuse_billing, tenant, asset_tlf
@@ -121,8 +129,7 @@ class TestFacturationLot2:
         carte = _nouvelle_carte(tenant, asset_tlf, 1000)
         with tenant_context(tenant):
             fut = tireuse_billing.fut_actif
-            stock_cree_par_le_test = not Stock.objects.filter(product=fut).exists()
-            if stock_cree_par_le_test:
+            if not Stock.objects.filter(product=fut).exists():
                 Stock.objects.create(
                     product=fut,
                     quantite=0,
@@ -138,27 +145,22 @@ class TestFacturationLot2:
                 curseur.execute("SELECT * FROM table_qui_n_existe_pas_lot2")
 
         donnees = {"tireuse_uuid": str(tireuse_billing.uuid), "uid": carte.tag_id}
-        try:
-            assert _poster(
-                billing_client, billing_headers, "authorize", donnees
-            ).json()["authorized"]
-            with mock.patch(
-                "inventaire.services.StockService.decrementer_pour_vente",
-                side_effect=decrementer_en_cassant_la_transaction,
-            ):
-                reponse = _poster(
-                    billing_client,
-                    billing_headers,
-                    "event",
-                    {**donnees, "event_type": "pour_end", "volume_ml": "200.00"},
-                )
-            assert reponse.status_code == 200, reponse.content
-            # 200 ml à 5 €/L = 1,00 € facturé / billed
-            assert reponse.json()["montant_centimes"] == 100
-        finally:
-            if stock_cree_par_le_test:
-                with tenant_context(tenant):
-                    Stock.objects.filter(product=fut).delete()
+        assert _poster(
+            billing_client, billing_headers, "authorize", donnees
+        ).json()["authorized"]
+        with mock.patch(
+            "inventaire.services.StockService.decrementer_pour_vente",
+            side_effect=decrementer_en_cassant_la_transaction,
+        ):
+            reponse = _poster(
+                billing_client,
+                billing_headers,
+                "event",
+                {**donnees, "event_type": "pour_end", "volume_ml": "200.00"},
+            )
+        assert reponse.status_code == 200, reponse.content
+        # 200 ml à 5 €/L = 1,00 € facturé / billed
+        assert reponse.json()["montant_centimes"] == 100
 
     def test_05_reservoir_decremente_sur_la_valeur_a_jour(
         self, tireuse_billing, tenant, asset_tlf
@@ -192,9 +194,6 @@ class TestFacturationLot2:
             assert reservoir_final == Decimal("3900.00")
             # L'objet en mémoire est aussi à jour / In-memory object is fresh too
             assert tireuse_perimee.reservoir_ml == Decimal("3900.00")
-            TireuseBec.objects.filter(pk=tireuse_billing.pk).update(
-                reservoir_ml=Decimal("30000.00")
-            )
 
     def test_06_montants_de_l_ecran_calcules_par_le_serveur(
         self, billing_client, billing_headers, tireuse_billing, tenant, asset_tlf

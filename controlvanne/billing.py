@@ -9,10 +9,11 @@ Le ViewSet appelle ces fonctions — séparation ViewSet / logique métier.
 / This module encapsulates tap-specific billing logic.
 The ViewSet calls these functions — separation of ViewSet / business logic.
 
-Cascade fiduciaire : même ordre que LaBoutik — TNF → TLF → FED.
-Les assets fédérés (FED) sont inclus si accessibles via une Fédération.
-/ Fiduciary cascade: same order as LaBoutik — TNF → TLF → FED.
-Federated assets (FED) are included if accessible via a Federation.
+Cascade fiduciaire : même ordre que LaBoutik — TNF → TLF → FED (Fedow local), puis le
+reste sur l'ancien Fedow (TLF fédérés puis FED), pour une carte d'utilisateur dans un
+lieu relié. Temps et fidélité ne paient jamais un tirage.
+/ Fiduciary cascade: same order as LaBoutik — TNF → TLF → FED (local Fedow), then the
+remainder on the old Fedow (user card, linked venue). Time and loyalty never pay.
 
 Dépendances :
 - fedow_core.services : AssetService, WalletService, TransactionService
@@ -21,7 +22,9 @@ Dépendances :
 - inventaire.services : StockService
 - QrcodeCashless.models : CarteCashless
 - laboutik.views : ORDRE_CASCADE_FIDUCIAIRE,                              
-  MAPPING_ASSET_CATEGORY_PAYMENT_METHOD, _obtenir_ou_creer_wallet, _calculer_qty_partielles
+  MAPPING_ASSET_CATEGORY_PAYMENT_METHOD, _obtenir_ou_creer_wallet, _calculer_qty_partielles,
+  lire_depensable_fed_frais, _debiter_legacy (ancien Fedow ; importés au moment de
+  l'appel)
 """
 
 import logging
@@ -115,21 +118,26 @@ VOLUME_D_UN_VERRE_ML = Decimal("250")
 
 def calculer_montant_centimes(volume_ml, prix_litre):
     """
-    Prix d'un volume servi, en centimes. C'est ce montant qui est facturé.
-    / Price of a served volume, in cents. This is the billed amount.
+    Prix d'un volume servi, en centimes. C'est ce montant qui est facturé, et c'est
+    aussi celui que l'écran de la tireuse affiche : les deux restent égaux.
+    / Price of a served volume, in cents. Billed AND displayed: both stay equal.
 
     Exemple : 250 ml à 3,50 €/L = 0,250 L × 3,50 = 0,875 € → 88 centimes.
-    Arrondi : round() de Python (au plus proche, cas .5 au pair).
+    Arrondi : au centime DEMI-HAUT (`arrondir_au_centime_demi_haut`, la règle de tout
+    l'argent du projet). 173 ml à 5 €/L = 86,5 centimes → 87.
+    / Rounding: half-up to the cent, the project's money rule. 86.5 → 87.
 
     :param volume_ml: Decimal, float ou str — volume servi en ml
     :param prix_litre: Decimal — prix au litre en euros
     :return: int — montant en centimes (0 si volume ou prix nul)
     """
+    from BaseBillet.services_vente import arrondir_au_centime_demi_haut
+
     volume_en_ml = Decimal(str(volume_ml))
     if volume_en_ml <= 0 or prix_litre <= 0:
         return 0
-    montant_en_euros = volume_en_ml * prix_litre / Decimal("1000")
-    return int(round(montant_en_euros * 100))
+    montant_exact_en_centimes = volume_en_ml * prix_litre / Decimal("1000") * 100
+    return arrondir_au_centime_demi_haut(montant_exact_en_centimes)
 
 
 def calculer_nombre_de_verres(solde_centimes, prix_litre):
@@ -183,6 +191,61 @@ def calculer_solde_total_cascade(wallet_client, cascade_assets):
     return total
 
 
+def lire_le_solde_de_l_ancien_fedow(carte):
+    """
+    Solde dépensable de la carte sur l'ancien Fedow (TLF fédérés + FED), lu frais.
+    / Card's spendable balance on the old Fedow (federated TLF + FED), read fresh.
+
+    LOCALISATION : controlvanne/billing.py
+
+    L'ancien Fedow ne débite que le portefeuille d'un UTILISATEUR : une carte anonyme
+    vaut 0, sans aucun appel. Pour une carte d'utilisateur, la lecture passe par
+    `lire_depensable_fed_frais` (brique de la caisse) : elle rend « indisponible » si le
+    lieu n'est pas relié à l'ancien Fedow ou si le serveur ne répond pas. Indisponible
+    vaut 0 : la tireuse continue avec les monnaies locales, jamais de refus pour ça.
+    / Anonymous card: 0, no call. User card: fresh read through the register's helper;
+    unavailable (venue not linked, server down) counts as 0, never a refusal.
+
+    L'import se fait au moment de l'appel, comme les autres briques de la caisse.
+    / Imported at call time, like the other register building blocks.
+
+    :param carte: CarteCashless
+    :return: int — solde en centimes (0 si carte anonyme ou ancien Fedow indisponible)
+    """
+    from laboutik.views import lire_depensable_fed_frais
+
+    carte_sans_utilisateur = carte.user_id is None
+    if carte_sans_utilisateur:
+        return 0
+
+    solde_distant_en_centimes, ancien_fedow_disponible = lire_depensable_fed_frais(
+        carte.user
+    )
+    if not ancien_fedow_disponible:
+        return 0
+    return solde_distant_en_centimes
+
+
+def calculer_solde_de_la_carte(carte, contexte_cashless):
+    """
+    Solde total de la carte pour la tireuse : monnaies locales (cascade TNF → TLF →
+    FED local) + solde de l'ancien Fedow. C'est LA fonction de solde de la tireuse :
+    le badge (`authorize`) et l'écran (`_lire_le_solde_de_la_carte`) l'utilisent tous
+    les deux, pour dire le même solde.
+    / Card total balance for the tap: local currencies + old Fedow. THE tap balance
+    function, used by both authorize and the screen, so they show the same balance.
+
+    :param carte: CarteCashless
+    :param contexte_cashless: dict retourné par obtenir_contexte_cashless()
+    :return: int — solde en centimes
+    """
+    solde_des_monnaies_locales = calculer_solde_total_cascade(
+        contexte_cashless["wallet_client"], contexte_cashless["cascade_assets"]
+    )
+    solde_de_l_ancien_fedow = lire_le_solde_de_l_ancien_fedow(carte)
+    return solde_des_monnaies_locales + solde_de_l_ancien_fedow
+
+
 def calculer_volume_autorise_ml(
     solde_centimes, prix_litre_decimal, reservoir_disponible_ml
 ):
@@ -221,19 +284,74 @@ def facturer_tirage(
     session, tireuse, carte, volume_ml, contexte_cashless, ip="0.0.0.0"
 ):
     """
-    Facture un tirage de bière en cascade TNF → TLF → FED.
-    / Bills a beer pour using TNF → TLF → FED cascade.
+    Facture un tirage de bière : monnaies locales d'abord, puis l'ancien Fedow.
+    / Bills a beer pour: local currencies first, then the old Fedow.
 
-    Appelé au pour_end quand le volume final est connu.
-    / Called at pour_end when the final volume is known.
+    Appelé au pour_end quand le volume final est connu, sous le verrou de la session
+    (`_cloturer_session_et_facturer`, qui empêche de facturer deux fois).
+    / Called at pour_end, under the session lock (no double billing).
 
-    Cascade : débit TNF en premier (cadeau/gift), puis TLF (local), puis FED (fédéré).
-    Une Transaction fedow_core est créée par asset débité.
-    N LigneArticle créées (une par asset débité) avec qty proportionnelle et
-        payment_method correct (TNF→LOCAL_GIFT, TLF/FED→LOCAL_EURO).
-    / Cascade: debit TNF first (gift), then TLF (local), then FED (federated).
-    One fedow_core Transaction is created per debited asset.
-    
+    RÉPARTITION (la même que le cashless de la caisse) : monnaies locales d'abord (Fedow
+    local, en cascade : jetons cadeau TNF, puis TLF, puis FED local), puis le reste sur
+    l'ancien Fedow (TLF fédérés puis FED). L'ancien Fedow ne sert qu'à une carte
+    d'utilisateur dans un lieu relié. Temps et fidélité ne paient jamais un tirage.
+    / Split (same as the register's cashless): local currencies first, then the
+    remainder on the old Fedow (user card, linked venue only). Never time or loyalty.
+
+    ORDRE DES OPÉRATIONS (le même que la caisse) :
+    1. LIRE, sans rien débiter : les soldes des monnaies locales de la cascade, puis le
+       solde de l'ancien Fedow (lu frais : il a pu baisser depuis le badge).
+    2. RÉPARTIR le montant : monnaies locales dans l'ordre de la cascade, le reste sur
+       l'ancien Fedow, plafonné à son solde lu.
+    3. DÉBITER L'ANCIEN FEDOW D'ABORD (`_debiter_legacy`, appel réseau ; il débite
+       lui-même les TLF fédérés puis le FED, et rend le moyen de chaque transaction).
+       Ce débit se fait AVANT le bloc atomique local, donc avant tout verrou de jeton :
+       pendant l'appel réseau, les autres ventes cashless du lieu n'attendent pas. Il
+       reste sous le verrou de la session (l'appelant), pour ne facturer qu'une fois.
+    4. PUIS, dans le bloc atomique : les débits locaux (une Transaction fedow_core par
+       monnaie), la vente, et `encaisser_vente` en dernier.
+    Ancien Fedow en échec, ou solde lu insuffisant : on facture ce qui a été réellement
+    débité. L'échec du débit distant est journalisé en ERROR (il peut suivre un débit
+    déjà fait côté serveur), et UN SEUL avertissement dit le montant non facturé. La
+    bière est déjà servie.
+    / Order (same as the register): 1. read local and remote balances, no debit;
+    2. split; 3. debit the old Fedow FIRST, before the local atomic block and any token
+    lock (still under the session lock); 4. then local debits, the sale, and
+    encaisser_vente last. Remote failure logged as ERROR; one warning for the unbilled
+    amount.
+
+    LE TIRAGE EST UNE VENTE (service de vente, BaseBillet/services_vente.py) :
+    1. une `Vente` d'origine TIREUSE, au point de vente de la tireuse, avec la carte et
+       son utilisateur comme client (None pour une carte anonyme) ;
+    2. un article (une `LigneArticle`) par transaction débitée, locale ou distante. La
+       ligne garde sa forme : `amount` = total du tirage, `qty` = la part de sa monnaie
+       (fraction de 1). Son total catalogue est l'argent RÉEL débité dans sa monnaie,
+       jamais recalculé depuis la fraction. Part payée en jetons cadeau (LG) : offerte
+       en entier (JETONS). Part de l'ancien Fedow : monnaie distante, moyen rendu ;
+    3. un règlement par transaction : montant et uuid copiés de la transaction. Locale :
+       `fedow_transaction_uuid`. Ancien Fedow : `reference_externe` (la transaction vit
+       sur le serveur distant) ;
+    4. `encaisser_vente` EN DERNIER : il vérifie les deux égalités, pose le numéro et
+       l'empreinte chaînée. Il prend le verrou du lieu jusqu'à la fin de la transaction :
+       le débit de l'ancien Fedow (appel réseau) se fait avant, et aucun appel réseau ne
+       suit.
+
+    ÉCHEC APRÈS LE DÉBIT DE L'ANCIEN FEDOW
+    Le débit de l'ancien Fedow ne s'annule pas avec la base : l'argent pris là-bas reste
+    pris. Si le bloc atomique local échoue ensuite, seul le local est annulé (débits
+    locaux, articles, vente) :
+    - l'encaissement refuse les égalités (`EgaliteDeVenteRompue`) : l'exception n'est
+      pas attrapée, la requête répond 500 et Sentry la capte ;
+    - un solde local a baissé entre la lecture et le débit (`SoldeInsuffisant`) :
+      l'exception remonte à l'appelant (`_cloturer_session_et_facturer`), qui la
+      journalise en erreur.
+    Dans les deux cas, aucune vente n'est écrite pour l'argent déjà pris sur l'ancien
+    Fedow : c'est l'erreur journalisée qui le signale.
+    / The pour is a sale: one TIREUSE sale, one item and one payment per debited
+    transaction (local: fedow_transaction_uuid; old Fedow: reference_externe), settled
+    LAST. The old Fedow debit is NOT rolled back with the database: if the local block
+    fails afterwards (broken equality → 500 + Sentry; SoldeInsuffisant → logged by the
+    caller), only the local part is undone and the money taken remotely stays taken.
 
     :param session: RfidSession — la session de service
     :param tireuse: TireuseBec — la tireuse
@@ -251,6 +369,13 @@ def facturer_tirage(
         PriceSold,
         PaymentMethod,
         SaleOrigin,
+    )
+    from BaseBillet.models_vente import Vente
+    from BaseBillet.services_vente import (
+        ajouter_article,
+        ajouter_reglement,
+        encaisser_vente,
+        ouvrir_vente,
     )
 
     if volume_ml <= 0:
@@ -285,26 +410,117 @@ def facturer_tirage(
     # point to a user wallet — causing debit and credit to cancel out (balance unchanged).
     wallet_lieu = WalletService.get_or_create_wallet_tenant(tenant_courant)
 
-    # --- Bloc atomique : transactions cascade + LigneArticle + stock ---
-    # / Atomic block: cascade transactions + LigneArticle + stock
+    # 1. LIRE les soldes des monnaies locales et RÉPARTIR, sans rien débiter.
+    # Monnaies locales dans l'ordre de la cascade (TNF → TLF → FED local) : chacune
+    # prend ce qu'elle peut couvrir. Les débits se font plus bas, dans le bloc
+    # atomique, APRÈS le débit de l'ancien Fedow.
+    # / 1. READ local balances and SPLIT, no debit yet. Local currencies in cascade
+    #   order; the debits happen below, in the atomic block, AFTER the old Fedow debit.
+    restant_centimes = montant_centimes
+    repartition_sur_les_monnaies_locales = []
+    for asset in cascade_assets:
+        if restant_centimes <= 0:
+            break
+
+        solde_asset = WalletService.obtenir_solde(wallet_client, asset)
+        if solde_asset <= 0:
+            continue
+
+        montant_asset = min(solde_asset, restant_centimes)
+        repartition_sur_les_monnaies_locales.append((asset, montant_asset))
+        restant_centimes -= montant_asset
+
+    # Identifiant de paiement du tirage : sur toutes ses lignes, et envoyé à
+    # l'ancien Fedow avec le débit (traçabilité tireuse ↔ ancien Fedow).
+    # / The pour's payment id: on all its lines, and sent with the old Fedow debit.
+    uuid_transaction = uuid_module.uuid4()
+
+    # 1 bis. Le reste sur l'ancien Fedow : LIRE son solde (frais, il a pu baisser depuis le
+    # badge), RÉPARTIR (plafonné au solde lu), puis DÉBITER, D'ABORD. C'est un appel
+    # réseau : il se fait ICI, avant le bloc atomique local, donc avant tout verrou de
+    # jeton (`creer_vente` verrouille les jetons du client ET du lieu) et avant le
+    # verrou du lieu pris par `encaisser_vente`. Pendant l'appel, les autres ventes
+    # cashless du lieu n'attendent pas. Il reste sous le verrou de la session
+    # (l'appelant) : une session n'est facturée qu'une fois.
+    # Ce débit ne s'annule pas avec la base : l'argent pris là-bas reste pris.
+    # / 1 bis. The remainder on the old Fedow: read (fresh), split (capped), then debit
+    #   FIRST. Network call HERE, before the local atomic block: no token lock nor
+    #   venue lock is held meanwhile. Still under the session lock (bill once).
+    #   It is not rolled back with the database.
+    transactions_de_l_ancien_fedow = []
+    if restant_centimes > 0:
+        solde_de_l_ancien_fedow = lire_le_solde_de_l_ancien_fedow(carte)
+        if solde_de_l_ancien_fedow > 0:
+            from laboutik.views import _debiter_legacy
+
+            montant_demande_a_l_ancien_fedow = min(
+                solde_de_l_ancien_fedow, restant_centimes
+            )
+            try:
+                transactions_de_l_ancien_fedow = _debiter_legacy(
+                    carte.user, montant_demande_a_l_ancien_fedow, uuid_transaction
+                )
+            except Exception as erreur_de_l_ancien_fedow:
+                # L'échec peut arriver APRÈS un débit fait côté serveur (réponse
+                # perdue) : c'est une ERREUR, avec sa cause, la carte et le montant
+                # demandé. La bière est servie : on facture les monnaies locales
+                # seules ; le montant non facturé est dit par l'avertissement plus bas.
+                # / The failure may follow a server-side debit (lost response): an
+                #   ERROR with cause, card and requested amount. Bill locals only;
+                #   the warning below gives the unbilled amount.
+                logger.error(
+                    f"Débit de l'ancien Fedow en échec au pour_end "
+                    f"(tireuse={tireuse.nom_tireuse}, carte={carte.tag_id}, "
+                    f"demandé {montant_demande_a_l_ancien_fedow} cts ; le serveur a "
+                    f"pu débiter quand même) : {erreur_de_l_ancien_fedow}"
+                )
+                transactions_de_l_ancien_fedow = []
+
+        for transaction_distante in transactions_de_l_ancien_fedow:
+            montant_de_la_transaction_distante = transaction_distante[1]
+            restant_centimes -= montant_de_la_transaction_distante
+
+    if restant_centimes > 0:
+        # Montant non couvert : ce qui manque n'est pas facturé. Arrive quand le
+        # volume envoyé dépasse allowed_ml (le Pi ne contrôle le plafond qu'une
+        # fois par seconde et déborde de quelques dizaines de ml), ou quand
+        # l'ancien Fedow échoue ou a baissé depuis le badge.
+        # La bière est déjà servie : on facture ce qui a été réellement débité
+        # plutôt que d'abandonner toute la facturation (sinon le tirage est offert).
+        # C'est le SEUL avertissement du montant non facturé.
+        # / Uncovered amount, not billed (volume over allowed_ml, old Fedow failed
+        # or lower). Beer is poured: bill what was really debited. The ONLY
+        # warning about the unbilled amount.
+        logger.warning(
+            f"Solde insuffisant au pour_end (tireuse={tireuse.nom_tireuse}, "
+            f"carte={carte.tag_id}) : demande {montant_centimes} cts, "
+            f"debite {montant_centimes - restant_centimes} cts, "
+            f"manque {restant_centimes} cts (non facturé)."
+        )
+        montant_centimes -= restant_centimes
+
+    rien_a_debiter = (
+        not repartition_sur_les_monnaies_locales and not transactions_de_l_ancien_fedow
+    )
+    if rien_a_debiter:
+        # Aucune monnaie à débiter, ni locale ni sur l'ancien Fedow : rien à
+        # facturer, rien à enregistrer.
+        # / Nothing to debit, local or old Fedow: nothing to bill.
+        return None
+
+    # --- Bloc atomique : débits locaux + vente + stock + encaissement ---
+    # / Atomic block: local debits + sale + stock + settlement
     with transaction.atomic():
 
-        # 1. Débiter en cascade TNF → TLF → FED
-        # / Debit in cascade TNF → TLF → FED
-        restant_centimes = montant_centimes
+        # 1 ter. Débiter les monnaies locales, selon la répartition lue plus haut. Chaque
+        # débit verrouille les jetons (client et lieu) jusqu'à la fin de la
+        # transaction. Un solde local qui a baissé depuis la lecture lève
+        # `SoldeInsuffisant` : le bloc est annulé, l'appelant journalise l'erreur.
+        # / 1 ter. Debit local currencies as split above. Each debit locks the tokens
+        #   until commit. A balance lowered since the read raises SoldeInsuffisant.
         transactions_creees = []
         debits_par_asset = []
-
-        for asset in cascade_assets:
-            if restant_centimes <= 0:
-                break
-
-            solde_asset = WalletService.obtenir_solde(wallet_client, asset)
-            if solde_asset <= 0:
-                continue
-
-            montant_asset = min(solde_asset, restant_centimes)
-
+        for asset, montant_asset in repartition_sur_les_monnaies_locales:
             tx = TransactionService.creer_vente(
                 sender_wallet=wallet_client,
                 receiver_wallet=wallet_lieu,
@@ -320,30 +536,6 @@ def facturer_tirage(
             )
             transactions_creees.append(tx)
             debits_par_asset.append((asset, montant_asset))
-            restant_centimes -= montant_asset
-
-        if restant_centimes > 0:
-            # Solde insuffisant pour couvrir le montant total. Arrive des que le
-            # volume envoye depasse allowed_ml : le Pi ne controle le plafond
-            # qu'une fois par seconde et deborde de quelques dizaines de ml.
-            # La biere est deja servie : on facture ce que le solde permet plutot
-            # que d'abandonner toute la facturation (sinon le tirage est offert).
-            # / Insufficient balance. Happens as soon as the reported volume
-            # exceeds allowed_ml: the Pi only checks the cap once per second.
-            # Beer is already poured: bill what the balance allows instead of
-            # dropping the whole billing (otherwise the pour is free).
-            logger.warning(
-                f"Solde insuffisant au pour_end (tireuse={tireuse.nom_tireuse}, "
-                f"carte={carte.tag_id}) : demande {montant_centimes} cts, "
-                f"debite {montant_centimes - restant_centimes} cts, "
-                f"manque {restant_centimes} cts (volume servi > allowed_ml)."
-            )
-            montant_centimes -= restant_centimes
-
-        if not debits_par_asset:
-            # Aucun asset debitable : rien a facturer, rien a enregistrer.
-            # / No debitable asset: nothing to bill.
-            return None
 
         # Volume en centilitres pour weight_quantity (unité stock = cl)
         # / Volume in centiliters for weight_quantity (stock unit = cl)
@@ -370,42 +562,108 @@ def facturer_tirage(
             defaults={"prix": prix_obj.prix},
         )
 
-        # 3. Créer N LigneArticle (1 par asset débité) — conformité LNE rapports clôture.
-        # Chaque ligne porte le prix UNITAIRE du tirage dans amount, et la part de sa
-        # monnaie dans qty : total = amount x qty.
+        # 3. La vente du tirage. Elle naît « en attente » ; elle est encaissée à la fin
+        # du bloc, après les articles et les règlements.
+        # / 3. The pour's sale, born pending; settled at the end of the block.
+        vente = ouvrir_vente(
+            origine=SaleOrigin.TIREUSE,
+            nature=Vente.Nature.VENTE,
+            point_de_vente=tireuse.point_de_vente,
+            client=carte.user,
+            carte=carte,
+        )
+
+        # 4. Un article par transaction débitée (locale, puis ancien Fedow), écrit par
+        # le service de vente. La ligne garde sa forme : le prix du tirage dans amount,
+        # et la part de sa monnaie dans qty (fraction de 1, par _calculer_qty_partielles).
         # Pinte à 4 € payée 1 € TNF + 3 € TLF → 2 lignes à amount 400 :
         # qty 0.25 LOCAL_GIFT + qty 0.75 LOCAL_EURO (1 € + 3 €).
-        # qty proportionnelle via _calculer_qty_partielles (laboutik) sur qty_totale=1 tirage.
         # weight_quantity identique sur toutes les lignes — stock décrémenté 1 seule fois.
-        # / Create N LigneArticle (1 per debited asset): unit price of the pour in
-        #   amount, share of the currency in qty.
+        # / 4. One item per debited transaction (local, then old Fedow), written by the
+        #   sale service. Same line shape: pour price in amount, currency share in qty.
+        from laboutik.views import (
+            MAPPING_ASSET_CATEGORY_PAYMENT_METHOD,
+            _calculer_qty_partielles,
+            _taux_tva_de_la_ligne_de_caisse,
+        )
 
-        from laboutik.views import MAPPING_ASSET_CATEGORY_PAYMENT_METHOD, _calculer_qty_partielles
-        
-        uuid_transaction = uuid_module.uuid4()
+        # Les parts du tirage : (uuid de la monnaie, argent débité, moyen de paiement).
+        # Part locale : la monnaie fedow_core et le moyen de sa catégorie. Part de
+        # l'ancien Fedow : la monnaie distante et le moyen rendu par _debiter_legacy
+        # (FED → STRIPE_FED, TLF fédérés → LOCAL_EURO).
+        # / The pour's parts: (currency uuid, money debited, payment method).
+        parts_du_tirage = []
+        for asset, montant_a in debits_par_asset:
+            parts_du_tirage.append(
+                (
+                    asset.uuid,
+                    montant_a,
+                    MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[asset.category],
+                )
+            )
+        for transaction_distante in transactions_de_l_ancien_fedow:
+            uuid_de_la_monnaie_distante = transaction_distante[0]
+            montant_de_la_transaction_distante = transaction_distante[1]
+            moyen_de_la_transaction_distante = transaction_distante[2]
+            parts_du_tirage.append(
+                (
+                    uuid_de_la_monnaie_distante,
+                    montant_de_la_transaction_distante,
+                    moyen_de_la_transaction_distante,
+                )
+            )
 
-        lignes_amounts = [{"amount_centimes": montant_a} for _, montant_a in debits_par_asset]
+        lignes_amounts = []
+        for _uuid_de_la_monnaie, montant_de_la_part, _moyen in parts_du_tirage:
+            lignes_amounts.append({"amount_centimes": montant_de_la_part})
         lignes_avec_qty = _calculer_qty_partielles(
             lignes_amounts, montant_centimes, Decimal("1")
         )
 
+        # Le volume servi, en litres : l'unité du prix d'achat d'un fût.
+        # / Served volume in litres: the unit of a keg's purchase price.
+        litres_servis = Decimal(str(volume_ml)) / Decimal("1000")
+
         lignes_creees = []
         premiere_ligne = None
 
-        for i, (asset, montant_a) in enumerate(debits_par_asset):
-            payment_method = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
-                asset.category
-            ]
-            qty_partielle = lignes_avec_qty[i]["qty"]
+        for i, (uuid_de_la_monnaie, montant_a, payment_method) in enumerate(
+            parts_du_tirage
+        ):
+            qty_partielle = Decimal(lignes_avec_qty[i]["qty"])
 
-            ligne = LigneArticle.objects.create(
+            # Part payée en jetons cadeau (LG) : les jetons ne sont pas de l'argent.
+            # Toute la part est offerte, source JETONS ; son règlement est « jetons ».
+            # / Part paid in gift tokens: fully offered (JETONS), not money.
+            part_payee_en_jetons = payment_method == PaymentMethod.LOCAL_GIFT
+            if part_payee_en_jetons:
+                part_offerte_en_centimes = montant_a
+                source_de_l_offert = LigneArticle.SourceOffert.JETONS
+            else:
+                part_offerte_en_centimes = 0
+                source_de_l_offert = ""
+
+            # Le total catalogue de la part est l'argent RÉELLEMENT débité dans sa
+            # monnaie, jamais amount × qty : qty est arrondie à 6 décimales et ne doit
+            # pas décider d'un centime. Le coût d'achat porte sur les litres que la
+            # part paie (litres servis × sa fraction), au prix d'achat du fût au litre.
+            # / The part's catalogue total is the money REALLY debited, never
+            #   amount × qty. The cost is on the litres this part pays for.
+            ligne = ajouter_article(
+                vente,
                 pricesold=price_sold,
-                qty=qty_partielle,
-                amount=montant_centimes,
+                quantite=qty_partielle,
+                prix_unitaire=montant_centimes,
+                taux_tva=_taux_tva_de_la_ligne_de_caisse(produit, payment_method),
+                part_offerte=part_offerte_en_centimes,
+                source_offert=source_de_l_offert,
+                prix_achat=int(produit.prix_achat),
+                total_catalogue_impose=montant_a,
+                quantite_pour_cout=litres_servis * qty_partielle,
                 sale_origin=SaleOrigin.TIREUSE,
                 payment_method=payment_method,
                 status=LigneArticle.VALID,
-                asset=asset.uuid,
+                asset=uuid_de_la_monnaie,
                 carte=carte,
                 wallet=wallet_client,
                 point_de_vente=tireuse.point_de_vente,
@@ -416,12 +674,45 @@ def facturer_tirage(
             if premiere_ligne is None:
                 premiere_ligne = ligne
 
-        # 4.Session liée à la première LigneArticle (même convention que laboutik).
+        # 5. Un règlement par transaction fedow_core créée : son montant et son uuid
+        # sont COPIÉS de la transaction, jamais recalculés depuis les articles.
+        # / 5. One payment per fedow_core transaction, copied from it.
+        for transaction_de_la_monnaie in transactions_creees:
+            monnaie_debitee = transaction_de_la_monnaie.asset
+            ajouter_reglement(
+                vente,
+                moyen=MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[monnaie_debitee.category],
+                montant=transaction_de_la_monnaie.amount,
+                asset=monnaie_debitee.uuid,
+                carte=carte,
+                wallet=wallet_client,
+                fedow_transaction_uuid=transaction_de_la_monnaie.uuid,
+            )
+
+        # 5 bis. Un règlement par transaction de l'ancien Fedow, copié d'elle. Elle vit
+        # sur le serveur distant : son uuid va dans `reference_externe`
+        # (`fedow_transaction_uuid` est réservé aux transactions fedow_core locales).
+        # / 5 bis. One payment per old Fedow transaction; its uuid in reference_externe.
+        for transaction_distante in transactions_de_l_ancien_fedow:
+            uuid_de_la_monnaie_distante = transaction_distante[0]
+            montant_de_la_transaction_distante = transaction_distante[1]
+            moyen_de_la_transaction_distante = transaction_distante[2]
+            uuid_de_la_transaction_distante = transaction_distante[3]
+            ajouter_reglement(
+                vente,
+                moyen=moyen_de_la_transaction_distante,
+                montant=montant_de_la_transaction_distante,
+                asset=uuid_de_la_monnaie_distante,
+                carte=carte,
+                reference_externe=str(uuid_de_la_transaction_distante),
+            )
+
+        # 6. Session liée à la première LigneArticle (même convention que laboutik).
         # / Session linked to the first LigneArticle (same convention as laboutik).
         session.ligne_article = premiere_ligne
         session.save(update_fields=["ligne_article"])
 
-        # 5. Décrémenter le stock inventaire si le produit en a un
+        # 7. Décrémenter le stock inventaire si le produit en a un
         # / Decrement inventory stock if the product has one
         #
         # Pas de stock pour ce fût : rien à faire (cas normal). On le teste
@@ -459,6 +750,17 @@ def facturer_tirage(
                     f"volume={volume_cl} cl) : la facture est conservée."
                 )
 
+        # 8. Encaisser la vente, EN DERNIER : vérifie les deux égalités, pose le numéro
+        # et l'empreinte chaînée. Le verrou du lieu est tenu jusqu'à la fin de la
+        # transaction : aucun appel réseau après. `EgaliteDeVenteRompue` n'est pas
+        # attrapée : le bloc local est annulé (débits locaux, articles, vente), la
+        # requête répond 500 et Sentry la capte. Le débit de l'ancien Fedow, fait
+        # avant ce bloc, ne s'annule pas : l'argent pris là-bas reste pris, sans vente.
+        # / 8. Settle the sale LAST (venue lock held until commit: no network call
+        #   after). A broken equality is not caught: the local block rolls back (500,
+        #   Sentry); the old Fedow debit made before it stays taken.
+        encaisser_vente(vente)
+
     assets_debites_str = ", ".join(
         f"{tx.asset.category}" for tx in transactions_creees
     ) if transactions_creees else "aucun"
@@ -466,13 +768,15 @@ def facturer_tirage(
     logger.info(
         f"Facturation cascade: tireuse={tireuse.nom_tireuse} volume={float(volume_ml):.0f}ml "
         f"montant={montant_centimes}cts assets=[{assets_debites_str}] "
+        f"ancien_fedow={len(transactions_de_l_ancien_fedow)} transaction(s) "
         f"lignes={len(lignes_creees)} premiere_ligne={premiere_ligne.uuid if premiere_ligne else 'None'}"
     )
 
     return {
         "transactions": transactions_creees,
-        # Compatibilité avec le code existant qui lit ["transaction"]
-        # / Backward compatibility with existing code reading ["transaction"]
+        # Compatibilité avec le code existant qui lit ["transaction"]. None quand le
+        # tirage est payé entièrement par l'ancien Fedow (aucune transaction locale).
+        # / Backward compatibility. None when the old Fedow paid the whole pour.
         "transaction": transactions_creees[0] if transactions_creees else None,
         # Compatibilité avec le code existant qui lit ["ligne_article"]
         # / Backward compatibility with existing code reading ["ligne_article"]

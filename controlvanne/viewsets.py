@@ -147,20 +147,21 @@ def _cle_de_cache_du_solde(session):
 
 def _lire_le_solde_de_la_carte(carte):
     """
-    Solde total de la carte (cascade TNF → TLF → FED), en centimes.
-    / Card total balance (TNF → TLF → FED cascade), in cents.
+    Solde total de la carte, en centimes : monnaies locales (cascade TNF → TLF → FED)
+    + ancien Fedow. Même fonction de solde que le badge (`authorize`) : l'écran et
+    l'autorisation disent le même solde.
+    / Card total balance, in cents: local currencies + old Fedow. Same balance function
+    as authorize: the screen and the authorization show the same balance.
 
     :param carte: CarteCashless
     :return: int, ou None si la carte n'a pas de contexte cashless
     """
-    from controlvanne.billing import calculer_solde_total_cascade, obtenir_contexte_cashless
+    from controlvanne.billing import calculer_solde_de_la_carte, obtenir_contexte_cashless
 
     contexte = obtenir_contexte_cashless(carte)
     if not contexte:
         return None
-    return calculer_solde_total_cascade(
-        contexte["wallet_client"], contexte["cascade_assets"]
-    )
+    return calculer_solde_de_la_carte(carte, contexte)
 
 
 # Durée de vie du solde gardé en cache : largement plus qu'un service
@@ -362,17 +363,19 @@ def _cloturer_session_et_facturer(tireuse, session, volume_ml, ip="0.0.0.0"):
                         ip=ip,
                     )
                 except SoldeInsuffisant:
-                    # Le solde a changé entre authorize et pour_end (race
-                    # condition). La bière est déjà servie — on log sans
-                    # bloquer. L'atomic interne de facturer_tirage
-                    # (savepoint) a annulé la facturation ; la fermeture
-                    # de session et le réservoir sont conservés (réalité
-                    # physique).
-                    # / Balance changed between authorize and pour_end.
-                    # Beer already served — log without blocking. The
-                    # inner atomic of facturer_tirage (savepoint) rolled
-                    # back the billing; session close and reservoir are
-                    # kept (physical reality).
+                    # Un solde local a baissé entre la lecture et le débit
+                    # (course entre deux ventes). La bière est déjà servie :
+                    # on journalise sans bloquer. L'atomic interne de
+                    # facturer_tirage (savepoint) annule les débits locaux,
+                    # les lignes et la vente. Un débit déjà fait sur
+                    # l'ancien Fedow, lui, ne s'annule pas : l'argent pris
+                    # là-bas reste pris, sans vente. La fermeture de session
+                    # et le réservoir sont conservés (réalité physique).
+                    # / A local balance dropped between read and debit. Beer
+                    # already served: log without blocking. The inner atomic
+                    # (savepoint) undoes local debits, lines and sale; an old
+                    # Fedow debit already made is NOT undone (money taken,
+                    # no sale). Session close and reservoir are kept.
                     logger.error(
                         f"SoldeInsuffisant à la clôture: carte={session.uid} "
                         f"tireuse={tireuse.nom_tireuse} volume={volume_ml}ml"
@@ -750,7 +753,7 @@ class TireuseViewSet(viewsets.ViewSet):
         # / Normal service: check wallet balance
         from controlvanne.billing import (
             obtenir_contexte_cashless,
-            calculer_solde_total_cascade,
+            calculer_solde_de_la_carte,
             calculer_volume_autorise_ml,
         )
 
@@ -764,11 +767,12 @@ class TireuseViewSet(viewsets.ViewSet):
                 }
             )
 
-        # Solde total cascade TNF → TLF → FED (identique à LaBoutik)
-        # / Total cascade balance TNF → TLF → FED (same as LaBoutik)
-        solde_centimes = calculer_solde_total_cascade(
-            contexte["wallet_client"], contexte["cascade_assets"]
-        )
+        # Solde total : monnaies locales (TNF → TLF → FED) + ancien Fedow, lu frais.
+        # Ancien Fedow injoignable : il compte pour 0, on continue avec les monnaies
+        # locales (jamais de refus pour ça). Même fonction que l'écran.
+        # / Total balance: local currencies + old Fedow, read fresh. Unreachable old
+        # Fedow counts as 0 (never a refusal). Same function as the screen.
+        solde_centimes = calculer_solde_de_la_carte(carte, contexte)
 
         prix_litre = tireuse.prix_litre
         if prix_litre <= 0:
@@ -1053,6 +1057,13 @@ class TireuseViewSet(viewsets.ViewSet):
             solde_apres = None
             montant_facture_centimes = None
             if resultat_facturation:
+                # Pour l'affichage seulement : cette lecture relit l'ancien Fedow par
+                # le réseau (carte d'utilisateur, lieu relié), pour montrer le solde
+                # exact. Elle se fait APRÈS la facture, hors de sa transaction : elle
+                # ne tient aucun verrou et ne change rien à ce qui est facturé.
+                # / Display only: this read goes to the old Fedow over the network,
+                #   for an exact balance. It runs AFTER the bill, outside its
+                #   transaction: no lock held, nothing billed depends on it.
                 solde_apres = _lire_le_solde_de_la_carte(session.carte)
                 montant_facture_centimes = resultat_facturation["montant_centimes"]
 
@@ -1090,7 +1101,14 @@ class TireuseViewSet(viewsets.ViewSet):
         }
         if resultat_facturation:
             response_data["montant_centimes"] = resultat_facturation["montant_centimes"]
-            response_data["transaction_id"] = resultat_facturation["transaction"].id
+            # `transaction_id` : identifiant de la première transaction fedow_core
+            # locale (le Pi ne le lit que pour son journal). Tirage payé entièrement
+            # par l'ancien Fedow : aucune transaction locale, la clé est absente.
+            # / First local fedow_core transaction id (Pi log only). Old Fedow only:
+            # no local transaction, the key is absent.
+            premiere_transaction_locale = resultat_facturation["transaction"]
+            if premiere_transaction_locale is not None:
+                response_data["transaction_id"] = premiere_transaction_locale.id
 
         return Response(response_data)
 

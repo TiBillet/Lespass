@@ -107,21 +107,30 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## PROCHAINE ÉTAPE (mise à jour 2026-09-30)
+## PROCHAINE ÉTAPE (mise à jour 2026-09-30, fin de journée)
 **Relire d'abord, en entier : `CHANTIER-05-SUIVI.md` (§3 tableau, §4 écarts, §5 décisions,
 §6 journal — le plus récent en haut, §8 pièges) et la mémoire
 `project_chantier_montants_entiers`.**
 
-État : fiches 0, A′, A, **B commitées** (B : `b234cef8`). Fusion de `origin/main-fedow-import`
-faite et vérifiée (pytest 2454 passed ; e2e 136 passed, 1 failed hors chantier = bug n°18),
-avec **B-6** dedans (mineurs Fable de B-5, docstrings). **Vérifier d'abord avec `git log` que
-le mainteneur a commité la fusion** ; sinon, attendre. Aucun push sans lui.
+État : fiches 0, A′, A, B commitées ; fusion de `origin/main-fedow-import` commitée
+(`8407e954`, B-6 dedans). Aucun push sans le mainteneur.
 
-Prochaine fiche : **C** (tireuse, QR / NFC) ; 04-F-1 est livrée. **Relire la fiche contre le
-code fusionné** avant le brief : controlvanne (`controlvanne/billing.py`, tirages, lots) et
-le kiosque ont beaucoup changé. Le kiosque écrit des recharges sans vente : **hors
-chantier**, sujet PRIORITÉ après le chantier (`TODO/PRIORITE-KIOSK-recharge-fed-ancien-fedow.md`)
-— ne pas le traiter en C, mais ne pas le casser non plus.
+**Fiche C terminée, prouvée et relue, PAS ENCORE COMMITÉE** (C-0, C-1a, C-1b, C-2, C-3 ;
+`make test` 2492 passed ; 4 E2E du QR 10 passed ; relecture Fable : 0 bloquant, importants
+corrigés en C-3). **Vérifier avec `git log` que le mainteneur a commité la fiche C** avant
+d'ouvrir la suivante. Prochaine fiche : **D** (D-1 « une vente par paiement Stripe »), à relire
+contre le code actuel avant le brief.
+Décisions du 2026-09-30 : tireuse = même cascade que le cashless de la caisse (répartition
+locales puis ancien Fedow, débit distant exécuté d'abord, sans verrou du lieu) ; égalité
+rompue / échec après débit distant = 500 + Sentry, rien de dédié ; QR / NFC en ligne =
+ancien Fedow seul (TODO n°20) ; E2E complets seulement aux gros jalons (fin de B, G, H) ;
+bug n°18 : 280 événements archivés, les E2E archiveront ce qu'ils créent (avant fin de G).
+Nouveaux TODO : n°19 (activation caisse V2 sans monnaie locale, carte des recharges), n°20,
+n°21, n°22 ; chantier `TODO/CHARGE-forte-affluence-festivals.md`.
+
+Le kiosque (`kiosk/`) écrit des recharges sans vente : **hors chantier**, PRIORITÉ après le
+chantier (`TODO/PRIORITE-KIOSK-recharge-fed-ancien-fedow.md`). C n'y touche pas (vérifié :
+le kiosque n'utilise ni la tireuse ni le QR).
 
 Pièges de méthode appris pendant B (SUIVI §8) : tout test de route caisse est `django_db`
 ou en schéma dédié ; les E2E réels laissent de vraies données (ventes, sorties d'espèces) ;

@@ -108,21 +108,17 @@ def rf_tireuse(tenant):
     """TireuseBec avec fût à 5 EUR/L et réservoir suivi (non illimité).
     / TireuseBec with a 5 EUR/L keg and tracked reservoir (not unlimited)."""
     with schema_context(tenant.schema_name):
-        from controlvanne.models import TireuseBec
+        from controlvanne.models import RfidSession, TireuseBec
         from BaseBillet.models import Product, Price
-        from laboutik.models import PointDeVente, Terminal
+        from django.utils import timezone
+        from laboutik.models import PointDeVente
 
-        # Nettoyage anti-collision DB dev (cf. piège documenté dans
-        # test_controlvanne_billing) / Anti-collision cleanup on shared dev DB
-        TireuseBec.objects.filter(nom_tireuse="Tireuse review fixes").delete()
-        PointDeVente.objects.filter(name="Tireuse review fixes").delete()
-        # Le meme signal cree aussi un Terminal, qui porte lui aussi une
-        # contrainte unique sur "name" et n'est PAS supprime avec la TireuseBec.
-        # Sans ce nettoyage, le run suivant echoue en UniqueViolation sur
-        # laboutik_terminal_name.
-        # / The same signal also creates a Terminal, unique on "name" too, and
-        # not deleted with the TireuseBec: the next run fails on UniqueViolation.
-        Terminal.objects.filter(name="Tireuse review fixes").delete()
+        # On ne supprime JAMAIS la tireuse, son point de vente ni son terminal : une vente
+        # enregistrée (le test C1 facture un vrai tirage, sans rollback) protège le point
+        # de vente contre la suppression (PROTECT). On les réutilise s'ils existent.
+        # / NEVER delete the tap, its POS or its terminal: a recorded sale (test C1 bills a
+        # real pour, without rollback) protects the POS from deletion (PROTECT).
+        # They are reused when they exist.
 
         produit_fut, _ = Product.objects.get_or_create(
             name="Fut review fixes",
@@ -137,13 +133,27 @@ def rf_tireuse(tenant):
                 poids_mesure=True,
             )
 
-        tireuse = TireuseBec.objects.create(
-            nom_tireuse="Tireuse review fixes",
-            enabled=True,
-            fut_actif=produit_fut,
-            reservoir_illimite=True,
-            reservoir_ml=Decimal("30000.00"),
-        )
+        etat_attendu = {
+            "enabled": True,
+            "fut_actif": produit_fut,
+            "reservoir_illimite": True,
+            "reservoir_ml": Decimal("30000.00"),
+        }
+        tireuse = TireuseBec.objects.filter(nom_tireuse="Tireuse review fixes").first()
+        if tireuse is None:
+            tireuse = TireuseBec.objects.create(
+                nom_tireuse="Tireuse review fixes", **etat_attendu
+            )
+        else:
+            # Tireuse d'un lancement précédent : on remet l'état attendu par les tests
+            # et on ferme les sessions restées ouvertes.
+            # / Tap from a previous run: restore the state the tests expect and close
+            # the sessions left open.
+            TireuseBec.objects.filter(pk=tireuse.pk).update(**etat_attendu)
+            RfidSession.objects.filter(
+                tireuse_bec=tireuse, ended_at__isnull=True
+            ).update(ended_at=timezone.now())
+            tireuse.refresh_from_db()
         if tireuse.point_de_vente:
             PointDeVente.objects.filter(pk=tireuse.point_de_vente_id).update(
                 hidden=True

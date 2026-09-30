@@ -1375,10 +1375,14 @@ class QrCodeScanPayNfcValidator(serializers.Serializer):
         return value
 
     def validate_ligne_article_uuid_hex(self, value: str):
+        # Seule une demande de paiement QR encore en attente se paie. On la reconnaît à
+        # son ORIGINE (`sale_origin`), posée à la génération du QR code : le moyen de
+        # paiement de la ligne n'est pas un repère stable.
+        # / Only a pending QR payment request can be paid, recognised by its ORIGIN.
         try:
             la_uuid = UUID(value)
             la = LigneArticle.objects.get(uuid=la_uuid, status=LigneArticle.CREATED,
-                                          payment_method=PaymentMethod.QRCODE_MA)
+                                          sale_origin=SaleOrigin.QRCODE_MA)
         except Exception:
             raise serializers.ValidationError(_('Paiement introuvable.'))
         self.ligne_article = la

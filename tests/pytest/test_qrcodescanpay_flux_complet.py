@@ -15,7 +15,8 @@ Le parcours complet, en trois routes :
    solde sur le Fedow et on lui montre l'ecran de validation, ou celui de fonds
    insuffisants.
 3. `POST /qrcodescanpay/valid_payment/` — il confirme. La ligne en attente est
-   **remplacee** par une ligne validee par transaction Fedow.
+   **remplacee** par une ligne validee par transaction Fedow, dans une vente
+   encaissee (le detail de la vente : tests/pytest/test_qrcode_ecrit_la_vente.py).
 
 `tests/pytest/test_qrcodescanpay_permissions.py` couvre QUI a le droit d'ouvrir
 ces ecrans. Ce fichier-ci couvre ce qui s'y passe.
@@ -103,9 +104,17 @@ class TestPayerParQrCode(FastTenantTestCase):
         / One authorized collector, one payer, and an HTTP client for each."""
         from django.db import connection
 
+        from laboutik.models import LaboutikConfiguration
+
         # Le rollback du test precedent a rendu le `search_path` au public.
         # / The previous test's rollback returned the search_path to public.
         connection.set_tenant(self.tenant)
+
+        # Un paiement reussi encaisse une vente : le singleton de la caisse doit
+        # exister en base, il porte la cle de l'empreinte des ventes (PIEGES 9.86).
+        # / A successful payment settles a sale: the register singleton must exist
+        # in the database, it holds the sales HMAC key.
+        LaboutikConfiguration.get_solo().save()
 
         self.encaisseur = self._creer_utilisateur('encaisseur-qr')
         # Le droit `initiate_payment` est ce qui distingue celui qui ENCAISSE de
@@ -402,6 +411,7 @@ class TestPayerParQrCode(FastTenantTestCase):
             fedow.return_value = self._fedow_qui_repond(
                 solde_centimes=MONTANT_DEMANDE_CENTIMES + 500,
                 transactions=[{
+                    'uuid': uuid_module.uuid4(),
                     'asset': str(uuid_module.uuid4()),
                     'amount': MONTANT_DEMANDE_CENTIMES,
                 }],
@@ -437,6 +447,7 @@ class TestPayerParQrCode(FastTenantTestCase):
             fedow.return_value = self._fedow_qui_repond(
                 solde_centimes=MONTANT_DEMANDE_CENTIMES,
                 transactions=[{
+                    'uuid': uuid_module.uuid4(),
                     'asset': str(uuid_module.uuid4()),
                     'amount': MONTANT_DEMANDE_CENTIMES,
                 }],
@@ -462,6 +473,7 @@ class TestPayerParQrCode(FastTenantTestCase):
             fedow.return_value = self._fedow_qui_repond(
                 solde_centimes=MONTANT_DEMANDE_CENTIMES,
                 transactions=[{
+                    'uuid': uuid_module.uuid4(),
                     'asset': str(uuid_module.uuid4()),
                     'amount': MONTANT_DEMANDE_CENTIMES,
                 }],
@@ -492,8 +504,8 @@ class TestPayerParQrCode(FastTenantTestCase):
             fedow.return_value = self._fedow_qui_repond(
                 solde_centimes=MONTANT_DEMANDE_CENTIMES,
                 transactions=[
-                    {'asset': str(uuid_module.uuid4()), 'amount': 500},
-                    {'asset': str(uuid_module.uuid4()), 'amount': 750},
+                    {'uuid': uuid_module.uuid4(), 'asset': str(uuid_module.uuid4()), 'amount': 500},
+                    {'uuid': uuid_module.uuid4(), 'asset': str(uuid_module.uuid4()), 'amount': 750},
                 ],
                 categorie_asset='FED',
             )
@@ -544,8 +556,8 @@ class TestPayerParQrCode(FastTenantTestCase):
             fedow.return_value = self._fedow_qui_repond(
                 solde_centimes=MONTANT_DEMANDE_CENTIMES,
                 transactions=[
-                    {'asset': str(uuid_module.uuid4()), 'amount': 500},
-                    {'asset': str(uuid_module.uuid4()), 'amount': 700},
+                    {'uuid': uuid_module.uuid4(), 'asset': str(uuid_module.uuid4()), 'amount': 500},
+                    {'uuid': uuid_module.uuid4(), 'asset': str(uuid_module.uuid4()), 'amount': 700},
                 ],
                 categorie_asset='FED',
             )
@@ -574,9 +586,9 @@ class TestPayerParQrCode(FastTenantTestCase):
             fedow.return_value = self._fedow_qui_repond(
                 solde_centimes=1000,
                 transactions=[
-                    {'asset': str(uuid_module.uuid4()), 'amount': 333},
-                    {'asset': str(uuid_module.uuid4()), 'amount': 333},
-                    {'asset': str(uuid_module.uuid4()), 'amount': 334},
+                    {'uuid': uuid_module.uuid4(), 'asset': str(uuid_module.uuid4()), 'amount': 333},
+                    {'uuid': uuid_module.uuid4(), 'asset': str(uuid_module.uuid4()), 'amount': 333},
+                    {'uuid': uuid_module.uuid4(), 'asset': str(uuid_module.uuid4()), 'amount': 334},
                 ],
                 categorie_asset='FED',
             )
@@ -678,6 +690,7 @@ class TestPayerParQrCode(FastTenantTestCase):
             fedow.return_value = self._fedow_qui_repond(
                 solde_centimes=MONTANT_DEMANDE_CENTIMES,
                 transactions=[{
+                    'uuid': uuid_module.uuid4(),
                     'asset': str(uuid_module.uuid4()),
                     'amount': MONTANT_DEMANDE_CENTIMES,
                 }],
@@ -712,8 +725,10 @@ class TestPayerParQrCode(FastTenantTestCase):
 
         La vue ne connait que la monnaie federee et le token local fiduciaire.
         Si le Fedow debite un bon cadeau, des heures de benevolat ou des points
-        de fidelite, la traduction echoue et AUCUNE vente n'est enregistree —
-        alors que le Fedow, lui, a debite le portefeuille.
+        de fidelite, la traduction echoue AVANT toute ecriture en base : AUCUNE
+        vente n'est enregistree — alors que le Fedow, lui, a debite le
+        portefeuille. La demande passe en echec (FAILED) : elle ne se paie plus,
+        et le lieu verifie a la main.
 
         Ce test DECRIT le comportement actuel. Il echouera le jour ou ces
         categories seront prises en charge : ce sera le signal qu'il faut
@@ -721,7 +736,8 @@ class TestPayerParQrCode(FastTenantTestCase):
 
         / The view knows only federated and local fiduciary currency. If the
         Fedow debits a gift token, volunteer hours or loyalty points, the mapping
-        fails and NO sale is recorded — while the Fedow has debited the wallet.
+        fails before any database write and NO sale is recorded — while the Fedow
+        has debited the wallet. The request fails for good.
         This test DESCRIBES current behaviour.
         """
         for categorie_non_geree in ['TNF', 'TIM', 'FID']:
@@ -737,6 +753,14 @@ class TestPayerParQrCode(FastTenantTestCase):
                 f"La categorie {categorie_non_geree} est desormais traduite en "
                 f"moyen de paiement : mettre a jour ce test et verifier lequel."
             )
+
+            # Seule reste la demande, en echec. / Only the request remains, FAILED.
+            statuts_des_lignes_du_qrcode = list(
+                LigneArticle.objects.filter(
+                    sale_origin=SaleOrigin.QRCODE_MA,
+                ).values_list('status', flat=True)
+            )
+            assert statuts_des_lignes_du_qrcode == [LigneArticle.FAILED]
 
     # ------------------------------------------------------------------
     # 5. check_payment — l'encaisseur attend la confirmation
@@ -936,6 +960,7 @@ class TestPayerParQrCode(FastTenantTestCase):
                 MONTANT_DEMANDE_CENTIMES
             )
             faux_fedow.transaction.to_place_from_qrcode.return_value = [{
+                'uuid': uuid_module.uuid4(),
                 'asset': str(uuid_module.uuid4()),
                 'amount': MONTANT_DEMANDE_CENTIMES,
             }]
@@ -982,8 +1007,8 @@ class TestPayerParQrCode(FastTenantTestCase):
                 MONTANT_DEMANDE_CENTIMES
             )
             faux_fedow.transaction.to_place_from_qrcode.return_value = [
-                {'asset': str(uuid_module.uuid4()), 'amount': 500},
-                {'asset': str(uuid_module.uuid4()), 'amount': 750},
+                {'uuid': uuid_module.uuid4(), 'asset': str(uuid_module.uuid4()), 'amount': 500},
+                {'uuid': uuid_module.uuid4(), 'asset': str(uuid_module.uuid4()), 'amount': 750},
             ]
             faux_fedow.asset.retrieve.return_value = {'category': 'TLF'}
             reponse = self._poster_une_lecture_nfc('62FE1601', ligne)
@@ -1018,6 +1043,7 @@ class TestPayerParQrCode(FastTenantTestCase):
                 MONTANT_DEMANDE_CENTIMES
             )
             faux_fedow.transaction.to_place_from_qrcode.return_value = [{
+                'uuid': uuid_module.uuid4(),
                 'asset': str(uuid_module.uuid4()),
                 'amount': MONTANT_DEMANDE_CENTIMES,
             }]
@@ -1084,6 +1110,7 @@ class TestPayerParQrCode(FastTenantTestCase):
         faux_fedow = self._fedow_qui_repond(
             solde_centimes=99999,
             transactions=[{
+                'uuid': uuid_module.uuid4(),
                 'asset': str(uuid_module.uuid4()),
                 'amount': MONTANT_DEMANDE_CENTIMES,
             }],
@@ -1104,14 +1131,16 @@ class TestPayerParQrCode(FastTenantTestCase):
     def test_une_ligne_qui_n_est_pas_un_qrcode_ne_peut_pas_etre_payee(self):
         """Seule une demande de paiement QR se paie par cette route.
 
-        Sans ce filtre, un uuid de billet ou d'adhesion poste ici serait
+        Une demande QR se reconnait a son ORIGINE (`sale_origin`). Sans ce filtre,
+        un uuid de billet ou d'adhesion (origine « en ligne ») poste ici serait
         debite, supprime puis recree en vente QR.
-        / Without this filter, a ticket or membership uuid posted here would be
-        debited, deleted and recreated as a QR sale.
+        / A QR request is recognised by its ORIGIN. Without this filter, a ticket or
+        membership uuid posted here would be debited, deleted and recreated as a
+        QR sale.
         """
         ligne = self._generer_un_qrcode()
         LigneArticle.objects.filter(pk=ligne.pk).update(
-            payment_method=PaymentMethod.STRIPE_NOFED,
+            sale_origin=SaleOrigin.LESPASS,
         )
         payeur = self._creer_utilisateur('pas-un-qr', avec_wallet=True)
 
@@ -1269,6 +1298,7 @@ class TestPayerParQrCode(FastTenantTestCase):
             )
             faux_fedow.wallet.get_total_fiducial_and_all_federated_token.return_value = 99999
             faux_fedow.transaction.to_place_from_qrcode.return_value = [{
+                'uuid': uuid_module.uuid4(),
                 'asset': str(uuid_module.uuid4()),
                 'amount': MONTANT_DEMANDE_CENTIMES,
             }]

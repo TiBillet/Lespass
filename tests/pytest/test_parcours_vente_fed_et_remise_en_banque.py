@@ -158,7 +158,7 @@ class _TransactionsSimulees:
 
         self.fedow.solde_de_l_adherent -= amount
         self.fedow.encaisse_par_le_lieu += amount
-        return [{'asset': self.fedow.uuid_de_l_asset, 'amount': amount}]
+        return [{'uuid': uuid_module.uuid4(), 'asset': self.fedow.uuid_de_l_asset, 'amount': amount}]
 
     def list_by_asset(self, asset=None, user=None, start_date=None, end_date=None):
         return list(self.fedow.remises_en_banque)

@@ -256,6 +256,15 @@ class TestCalculVolume:
 # ─────────────────────────────────────────────────────────────────────
 
 
+# Marque django_db : chaque test tourne dans une transaction annulée à la fin.
+# Un pour_end facture le tirage : la vente, ses règlements et le débit du portefeuille
+# disparaissent au rollback. Ils ne restent donc pas dans la base de dev, et aucun
+# nettoyage à la main n'est nécessaire (une vente enregistrée protège la carte, le
+# portefeuille et le point de vente contre la suppression).
+# / django_db mark: each test runs in a transaction rolled back at the end. A pour_end
+# bills the pour: the sale, its payments and the wallet debit vanish on rollback.
+# No manual cleanup is needed (a recorded sale protects the card, wallet and POS).
+@pytest.mark.django_db
 class TestBillingIntegration:
     """Tests integration : authorize + pour_end via les endpoints API."""
 
@@ -362,7 +371,7 @@ class TestBillingIntegration:
                 origin=tenant,
                 name=f"Wallet zero {tag_id}",
             )
-            carte_zero = CarteCashless.objects.create(
+            CarteCashless.objects.create(
                 tag_id=tag_id,
                 number=number,
                 wallet_ephemere=wallet_zero,
@@ -392,12 +401,6 @@ class TestBillingIntegration:
         assert data["solde_centimes"] == 0, (
             f"solde attendu 0, obtenu {data.get('solde_centimes')}"
         )
-
-        # Nettoyage
-        with schema_context(tenant.schema_name):
-            carte_zero.delete()
-            Token.objects.filter(wallet=wallet_zero).delete()
-            wallet_zero.delete()
 
     def test_08_pour_end_reparti_sur_deux_monnaies_enregistre_le_montant_entier(
         self, billing_client, billing_headers, tireuse_billing, tenant,
@@ -442,75 +445,58 @@ class TestBillingIntegration:
             Token.objects.create(wallet=wallet_client, asset=asset_cadeau, value=100)
             Token.objects.create(wallet=wallet_client, asset=asset_local, value=1000)
 
-        # La base de dev est partagee et ce test n'a pas de rollback : tout ce
-        # qu'il cree (carte, wallet, tokens, transactions, lignes de vente) est
-        # supprime a la fin, meme en cas d'echec. Ordre impose par les PROTECT :
-        # lignes, transactions, tokens, carte, wallet.
-        # / Shared dev DB, no rollback: everything created is deleted at the end,
-        #   in the order imposed by PROTECT foreign keys.
-        try:
-            reponse_autorisation = billing_client.post(
-                "/controlvanne/api/tireuse/authorize/",
-                data={
-                    "tireuse_uuid": str(tireuse_billing.uuid),
-                    "uid": carte_deux_monnaies.tag_id,
-                },
-                content_type="application/json",
-                **billing_headers,
+        reponse_autorisation = billing_client.post(
+            "/controlvanne/api/tireuse/authorize/",
+            data={
+                "tireuse_uuid": str(tireuse_billing.uuid),
+                "uid": carte_deux_monnaies.tag_id,
+            },
+            content_type="application/json",
+            **billing_headers,
+        )
+        assert reponse_autorisation.status_code == 200
+        assert reponse_autorisation.json()["authorized"] is True
+
+        reponse_fin = billing_client.post(
+            "/controlvanne/api/tireuse/event/",
+            data={
+                "tireuse_uuid": str(tireuse_billing.uuid),
+                "uid": carte_deux_monnaies.tag_id,
+                "event_type": "pour_end",
+                "volume_ml": "500.00",
+            },
+            content_type="application/json",
+            **billing_headers,
+        )
+        assert reponse_fin.status_code == 200, reponse_fin.content.decode()[:400]
+        assert reponse_fin.json().get("montant_centimes") == 250
+
+        with schema_context(tenant.schema_name):
+            lignes_du_tirage = list(
+                LigneArticle.objects.filter(
+                    carte=carte_deux_monnaies,
+                    sale_origin=SaleOrigin.TIREUSE,
+                )
             )
-            assert reponse_autorisation.status_code == 200
-            assert reponse_autorisation.json()["authorized"] is True
 
-            reponse_fin = billing_client.post(
-                "/controlvanne/api/tireuse/event/",
-                data={
-                    "tireuse_uuid": str(tireuse_billing.uuid),
-                    "uid": carte_deux_monnaies.tag_id,
-                    "event_type": "pour_end",
-                    "volume_ml": "500.00",
-                },
-                content_type="application/json",
-                **billing_headers,
+            assert len(lignes_du_tirage) == 2, (
+                f"Attendu 2 lignes (une par monnaie), obtenu {len(lignes_du_tirage)}"
             )
-            assert reponse_fin.status_code == 200, reponse_fin.content.decode()[:400]
-            assert reponse_fin.json().get("montant_centimes") == 250
-
-            with schema_context(tenant.schema_name):
-                lignes_du_tirage = list(
-                    LigneArticle.objects.filter(
-                        carte=carte_deux_monnaies,
-                        sale_origin=SaleOrigin.TIREUSE,
-                    )
+            for une_ligne in lignes_du_tirage:
+                assert une_ligne.amount == 250, (
+                    f"amount doit etre le prix du tirage (250), obtenu {une_ligne.amount}"
                 )
 
-                assert len(lignes_du_tirage) == 2, (
-                    f"Attendu 2 lignes (une par monnaie), obtenu {len(lignes_du_tirage)}"
-                )
-                for une_ligne in lignes_du_tirage:
-                    assert une_ligne.amount == 250, (
-                        f"amount doit etre le prix du tirage (250), obtenu {une_ligne.amount}"
-                    )
+            somme_des_qty = sum(Decimal(une_ligne.qty) for une_ligne in lignes_du_tirage)
+            assert somme_des_qty == Decimal("1"), f"Somme des qty : {somme_des_qty}"
 
-                somme_des_qty = sum(Decimal(une_ligne.qty) for une_ligne in lignes_du_tirage)
-                assert somme_des_qty == Decimal("1"), f"Somme des qty : {somme_des_qty}"
-
-                somme_des_montants = sum(
-                    Decimal(une_ligne.amount) * Decimal(une_ligne.qty)
-                    for une_ligne in lignes_du_tirage
-                )
-                assert somme_des_montants == Decimal("250"), (
-                    f"Montant enregistre {somme_des_montants}, attendu 250"
-                )
-        finally:
-            with schema_context(tenant.schema_name):
-                from fedow_core.models import Transaction
-
-                LigneArticle.objects.filter(carte=carte_deux_monnaies).delete()
-                Transaction.objects.filter(card=carte_deux_monnaies).delete()
-                Transaction.objects.filter(sender=wallet_client).delete()
-                Token.objects.filter(wallet=wallet_client).delete()
-                carte_deux_monnaies.delete()
-                wallet_client.delete()
+            somme_des_montants = sum(
+                Decimal(une_ligne.amount) * Decimal(une_ligne.qty)
+                for une_ligne in lignes_du_tirage
+            )
+            assert somme_des_montants == Decimal("250"), (
+                f"Montant enregistre {somme_des_montants}, attendu 250"
+            )
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -519,6 +505,11 @@ class TestBillingIntegration:
 # ─────────────────────────────────────────────────────────────────────
 
 
+# Marque django_db : la fermeture de la session orpheline facture le tirage, dans la
+# transaction du test, annulée à la fin (voir TestBillingIntegration).
+# / django_db mark: closing the orphan session bills the pour, inside the test
+# transaction rolled back at the end (see TestBillingIntegration).
+@pytest.mark.django_db
 class TestSessionOrpheline:
     """
     Une session reste ouverte si card_removed n'arrive jamais (Pi redémarré,
