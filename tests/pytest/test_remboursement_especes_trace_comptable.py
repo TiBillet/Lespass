@@ -35,6 +35,7 @@ Lancement / Run:
 """
 
 import uuid as uuid_module
+from unittest.mock import patch
 
 import pytest
 from django.db import transaction as db_transaction
@@ -45,6 +46,7 @@ from AuthBillet.models import Wallet
 from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
 from Customers.models import Client as TenantClient
 from QrcodeCashless.models import CarteCashless, Detail
+from fedow_connect.models import FedowConfig
 from fedow_core.models import Asset, Token, Transaction
 from fedow_core.services import WalletService
 
@@ -134,7 +136,7 @@ def asset_monnaie_federee(tenant, wallet_du_lieu):
 
 
 @pytest.fixture
-def carte_client_mixte(tenant, asset_monnaie_locale, asset_monnaie_federee):
+def carte_client_mixte(request, tenant, asset_monnaie_locale, asset_monnaie_federee):
     """Une carte anonyme portant les DEUX monnaies a la fois.
 
     C'est la situation courante d'un festivalier : il a recharge en ligne (du
@@ -174,6 +176,12 @@ def carte_client_mixte(tenant, asset_monnaie_locale, asset_monnaie_federee):
 
         yield carte
 
+        # Test marque django_db : le rollback de fin de test efface tout. Un nettoyage a
+        # la main echouerait : la vente du vidage, scellee, protege la carte et le PV.
+        # / django_db test: the end-of-test rollback erases everything. A manual cleanup
+        # would fail: the sealed card-emptying sale protects the card and the POS.
+        if request.node.get_closest_marker("django_db") is not None:
+            return
         # Ordre impose par les FK PROTECT : lignes et transactions avant la
         # carte, tokens avant le wallet.
         # / Order imposed by PROTECT FKs.
@@ -185,7 +193,7 @@ def carte_client_mixte(tenant, asset_monnaie_locale, asset_monnaie_federee):
 
 
 @pytest.fixture
-def carte_du_caissier(tenant):
+def carte_du_caissier(request, tenant):
     """La carte primaire qui autorise l'operation au point de vente.
     / The primary card authorizing the operation at the point of sale."""
     with schema_context('lespass'):
@@ -205,12 +213,18 @@ def carte_du_caissier(tenant):
 
         yield carte
 
+        # Test marque django_db : le rollback de fin de test efface tout. Un nettoyage a
+        # la main echouerait : la vente du vidage, scellee, protege la carte et le PV.
+        # / django_db test: the end-of-test rollback erases everything. A manual cleanup
+        # would fail: the sealed card-emptying sale protects the card and the POS.
+        if request.node.get_closest_marker("django_db") is not None:
+            return
         Transaction.objects.filter(primary_card=carte).delete()
         carte.delete()
 
 
 @pytest.fixture
-def point_de_vente(carte_du_caissier):
+def point_de_vente(request, carte_du_caissier):
     """Un point de vente qui accepte la carte du caissier et le produit de
     remboursement.
     / A point of sale accepting the cashier's card and the refund product."""
@@ -236,6 +250,12 @@ def point_de_vente(carte_du_caissier):
 
         yield pv
 
+        # Test marque django_db : le rollback de fin de test efface tout. Un nettoyage a
+        # la main echouerait : la vente du vidage, scellee, protege la carte et le PV.
+        # / django_db test: the end-of-test rollback erases everything. A manual cleanup
+        # would fail: the sealed card-emptying sale protects the card and the POS.
+        if request.node.get_closest_marker("django_db") is not None:
+            return
         pv.products.remove(produit_de_remboursement)
         carte_primaire.points_de_vente.remove(pv)
         carte_primaire.delete()
@@ -473,6 +493,7 @@ def test_les_soldes_de_la_carte_retombent_a_zero(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.django_db
 def test_vider_une_carte_depuis_la_caisse_ecrit_les_deux_lignes(
     tenant, carte_client_mixte, carte_du_caissier, point_de_vente,
 ):
@@ -488,15 +509,18 @@ def test_vider_une_carte_depuis_la_caisse_ecrit_les_deux_lignes(
     """
     client, _administrateur = _connexion_caisse()
 
-    response = client.post(
-        "/laboutik/paiement/vider_carte/",
-        data={
-            "tag_id": carte_client_mixte.tag_id,
-            "tag_id_cm": carte_du_caissier.tag_id,
-            "uuid_pv": str(point_de_vente.uuid),
-            "vider_carte": "false",
-        },
-    )
+    # Lieu non relie a l'ancien Fedow (simule) : vidage local seul, aucun appel reseau.
+    # / Venue not linked to the old Fedow (faked): local emptying only, no network call.
+    with patch.object(FedowConfig, "can_fedow", return_value=False):
+        response = client.post(
+            "/laboutik/paiement/vider_carte/",
+            data={
+                "tag_id": carte_client_mixte.tag_id,
+                "tag_id_cm": carte_du_caissier.tag_id,
+                "uuid_pv": str(point_de_vente.uuid),
+                "vider_carte": "false",
+            },
+        )
 
     assert response.status_code == 200, response.content.decode()[:500]
 

@@ -200,6 +200,10 @@ class CardValidator(serializers.Serializer):
     first_tag_id = serializers.CharField(min_length=8, max_length=8, validators=[validate_hex8])
     number_printed = serializers.CharField(min_length=8, max_length=8, validators=[validate_hex8])
     is_wallet_ephemere = serializers.BooleanField()
+    # Calculé par l'ancien Fedow pour le lieu qui signe la requête, toujours présent
+    # dans sa réponse. La caisse le lit à l'ouverture (laboutik/views.py).
+    # / Computed by the old Fedow for the requesting venue, always sent.
+    is_primary = serializers.BooleanField()
 
 
 

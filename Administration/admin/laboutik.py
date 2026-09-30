@@ -25,6 +25,11 @@ from Administration.admin.products import ICON_POS, IconPickerWidget
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from QrcodeCashless.models import CarteCashless
+from fedow_connect.fedow_api import CarteInconnueDeFedow
+from laboutik.carte_primaire_ancien_fedow import (
+    declarer_la_carte_primaire_a_l_ancien_fedow,
+    retirer_la_carte_primaire_de_l_ancien_fedow,
+)
 from laboutik.models import (
     LaboutikConfiguration,
     Printer,
@@ -779,13 +784,115 @@ class TerminalAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
+class CartePrimaireAdminForm(forms.ModelForm):
+    """
+    Formulaire de l'admin des cartes primaires : à l'ajout, il déclare la carte à
+    l'ancien Fedow.
+    / Primary-card admin form: on creation, it declares the card to the old Fedow.
+
+    LOCALISATION : Administration/admin/laboutik.py
+
+    POURQUOI L'APPEL RÉSEAU EST DANS clean() ET PAS DANS save_model() :
+    save_model() ne peut pas lever de ValidationError (Django la laisse remonter en
+    erreur 500). Une erreur levée depuis clean() s'affiche en tête du formulaire, et
+    rien n'est enregistré en local : jamais une carte primaire acceptée ici et refusée
+    par l'ancien Fedow sans que le gestionnaire le sache.
+    / save_model() cannot raise ValidationError. An error raised from clean() shows at
+    the top of the form, and nothing is saved locally.
+    """
+
+    class Meta:
+        model = CartePrimaire
+        fields = ('carte', 'edit_mode', 'points_de_vente')
+
+    def clean(self):
+        donnees_nettoyees = super().clean()
+
+        # Seul l'ajout déclare : en modification, la carte est en lecture seule, et le
+        # mode gérant ou les points de vente ne concernent pas l'ancien Fedow.
+        # / Only creation declares: on change, the card is read-only.
+        carte_primaire_en_creation = self.instance._state.adding
+        if not carte_primaire_en_creation:
+            return donnees_nettoyees
+
+        # Carte absente ou invalide : Django a déjà posé l'erreur du champ.
+        # / Missing or invalid card: Django already posted the field error.
+        carte = donnees_nettoyees.get('carte')
+        if carte is None:
+            return donnees_nettoyees
+
+        try:
+            declarer_la_carte_primaire_a_l_ancien_fedow(carte)
+
+        except CarteInconnueDeFedow:
+            raise ValidationError(
+                _(
+                    "La carte %(tag)s est inconnue de l'ancien Fedow : "
+                    "créez-la d'abord dans l'admin des cartes."
+                ),
+                params={"tag": carte.tag_id},
+                code="carte_inconnue_de_l_ancien_fedow",
+            )
+
+        except Exception as erreur_de_l_ancien_fedow:
+            logger.error(
+                f"Déclaration de la carte primaire {carte.tag_id} à l'ancien Fedow : "
+                f"{erreur_de_l_ancien_fedow}"
+            )
+            raise ValidationError(
+                _(
+                    "L'ancien Fedow a refusé la carte primaire %(tag)s, elle n'a pas "
+                    "été créée. Détail : %(detail)s"
+                ),
+                params={"tag": carte.tag_id, "detail": str(erreur_de_l_ancien_fedow)},
+                code="ancien_fedow_refuse_la_carte_primaire",
+            )
+
+        return donnees_nettoyees
+
+
+def _retirer_la_carte_primaire_et_prevenir_le_gestionnaire(request, carte):
+    """
+    Retire la carte de l'ancien Fedow, après sa suppression en local. Un refus ne
+    rétablit pas la carte primaire (elle ne doit plus ouvrir la caisse) : il est
+    affiché au gestionnaire, avec le tag et le code de la réponse.
+    / Withdraws the card from the old Fedow after the local deletion. A refusal is
+    shown to the manager, with the tag and the answer code.
+
+    LOCALISATION : Administration/admin/laboutik.py
+
+    Fonction du module, hors de la classe d'admin : Unfold enveloppe les méthodes
+    d'un ModelAdmin (skill unfold, piège 23).
+    / Module-level function: Unfold wraps ModelAdmin methods.
+    """
+    try:
+        retirer_la_carte_primaire_de_l_ancien_fedow(carte)
+    except Exception as erreur_de_l_ancien_fedow:
+        logger.error(
+            f"Retrait de la carte primaire {carte.tag_id} de l'ancien Fedow : "
+            f"{erreur_de_l_ancien_fedow}"
+        )
+        messages.error(
+            request,
+            _(
+                "Carte primaire %(tag)s supprimée ici, mais l'ancien Fedow a refusé "
+                "de la retirer. Détail : %(detail)s"
+            ) % {"tag": carte.tag_id, "detail": str(erreur_de_l_ancien_fedow)},
+        )
+
+
 @admin.register(CartePrimaire, site=staff_admin_site)
 class CartePrimaireAdmin(ModelAdmin):
     """Admin pour les cartes primaires (operateurs de caisse).
     Admin for primary cards (POS operators).
-    LOCALISATION : Administration/admin/laboutik.py"""
+    LOCALISATION : Administration/admin/laboutik.py
+
+    L'ancien Fedow suit les cartes primaires du lieu : l'ajout les y déclare
+    (CartePrimaireAdminForm), la suppression les en retire (delete_model,
+    delete_queryset). / The old Fedow follows the venue's primary cards."""
     compressed_fields = True
     warn_unsaved_form = True
+    form = CartePrimaireAdminForm
 
     list_display = ('carte', 'edit_mode', 'datetime')
     list_filter = ['edit_mode']
@@ -836,6 +943,39 @@ class CartePrimaireAdmin(ModelAdmin):
                 detail__origine=connection.tenant,
             ).select_related('detail')
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def get_readonly_fields(self, request, obj=None):
+        """
+        La carte NFC d'une carte primaire existante ne se change pas : seule la
+        création la déclare à l'ancien Fedow. Pour changer de carte, on supprime la
+        carte primaire et on en crée une autre.
+        / The NFC card of an existing primary card cannot change: only creation
+        declares it to the old Fedow. Delete and recreate to change the card.
+        """
+        champs_en_lecture_seule = list(super().get_readonly_fields(request, obj))
+        carte_primaire_existante = obj is not None
+        if carte_primaire_existante:
+            champs_en_lecture_seule.append('carte')
+        return champs_en_lecture_seule
+
+    def delete_model(self, request, obj):
+        # La carte est gardée avant la suppression : on la retire ensuite de
+        # l'ancien Fedow. / The card is kept before deletion, then withdrawn.
+        carte_de_la_carte_primaire = obj.carte
+        super().delete_model(request, obj)
+        _retirer_la_carte_primaire_et_prevenir_le_gestionnaire(
+            request, carte_de_la_carte_primaire
+        )
+
+    def delete_queryset(self, request, queryset):
+        # Suppression groupée (action « supprimer la sélection ») : chaque carte est
+        # retirée une fois. / Bulk delete: each card is withdrawn once.
+        cartes_des_cartes_primaires = []
+        for carte_primaire in queryset.select_related('carte'):
+            cartes_des_cartes_primaires.append(carte_primaire.carte)
+        super().delete_queryset(request, queryset)
+        for carte in cartes_des_cartes_primaires:
+            _retirer_la_carte_primaire_et_prevenir_le_gestionnaire(request, carte)
 
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)

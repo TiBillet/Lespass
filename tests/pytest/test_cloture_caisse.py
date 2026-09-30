@@ -5,11 +5,20 @@ tests/pytest/test_cloture_caisse.py — Tests Phase 5: cash register closure.
 Couvre : ClotureCaisse, cloturer(), totaux, fermeture tables, rapport JSON.
 Covers: ClotureCaisse, cloturer(), totals, table closure, JSON report.
 
+SCHÉMA DÉDIÉ
+La clôture couvre TOUT le lieu, depuis la dernière clôture du point de vente. Elle
+compte toutes les lignes de caisse du lieu, et toutes ses sorties d'espèces. Sur la
+base de dev partagée, elle compterait aussi ce que d'autres tests y ont laissé. Ce
+fichier tourne donc dans un lieu qui ne contient que ses propres ventes
+(`FastTenantTestCase`, tronc §8.5 du chantier 05). Chaque test annule sa transaction à
+la fin : rien n'arrive dans la base de dev, et les totaux se vérifient à l'égalité.
+/ Dedicated schema: the closure covers the whole venue, so it runs in a venue that only
+holds this file's sales. Each test rolls back: nothing reaches the dev database.
+
 Lancement / Run:
-    docker exec lespass_django poetry run pytest tests/pytest/test_cloture_caisse.py -v --api-key dummy
+    make test ARGS="tests/pytest/test_cloture_caisse.py"
 """
 
-import os
 import sys
 
 # Le code Django est dans /DjangoFiles a l'interieur du conteneur.
@@ -21,103 +30,25 @@ import django
 
 django.setup()
 
-import pytest
+from decimal import Decimal  # noqa: E402
 
-from decimal import Decimal
+from django.db import connection  # noqa: E402
+from django_tenants.test.cases import FastTenantTestCase  # noqa: E402
+from django_tenants.test.client import TenantClient  # noqa: E402
 
-from django.utils import timezone
-from django_tenants.utils import schema_context
-
-from AuthBillet.models import TibilletUser
-from BaseBillet.models import (
-    LigneArticle, Price, PriceSold, Product, ProductSold,
-    SaleOrigin, PaymentMethod,
+from AuthBillet.models import TibilletUser  # noqa: E402
+from BaseBillet.models import (  # noqa: E402
+    CategorieProduct, Configuration, LigneArticle, PaymentMethod, Price, PriceSold,
+    Product, ProductSold, SaleOrigin,
 )
-from Customers.models import Client
-from laboutik.models import (
-    PointDeVente, ClotureCaisse, Table, CommandeSauvegarde,
+from laboutik.models import (  # noqa: E402
+    ClotureCaisse, CommandeSauvegarde, PointDeVente, Table,
 )
 
 
-# Schema tenant utilise pour les tests.
-# / Tenant schema used for tests.
-TENANT_SCHEMA = 'lespass'
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="module")
-def tenant():
-    """Le tenant 'lespass' (doit exister dans la base).
-    / The 'lespass' tenant (must exist in DB)."""
-    return Client.objects.get(schema_name=TENANT_SCHEMA)
-
-
-@pytest.fixture(scope="module")
-def test_data(tenant):
-    """Lance create_test_pos_data pour s'assurer que les donnees existent.
-    / Runs create_test_pos_data to ensure test data exists."""
-    from django.core.management import call_command
-    call_command('create_test_pos_data')
-    return True
-
-
-@pytest.fixture(scope="module")
-def admin_user(tenant):
-    """Un utilisateur admin du tenant.
-    / A tenant admin user."""
-    with schema_context(TENANT_SCHEMA):
-        email = 'admin-test-cloture@tibillet.localhost'
-        user, created = TibilletUser.objects.get_or_create(
-            email=email,
-            defaults={
-                'username': email,
-                'is_staff': True,
-                'is_active': True,
-            },
-        )
-        user.client_admin.add(tenant)
-        return user
-
-
-@pytest.fixture(scope="module")
-def premier_pv(test_data):
-    """Le point de vente « Bar », cree par create_test_pos_data.
-    / The "Bar" point of sale, created by create_test_pos_data.
-
-    Vise par son nom : trier par poid_liste ne suffit pas, d'autres tests laissent
-    des points de vente a poid_liste 0 dans lespass, et l'ex aequo tombait au hasard.
-    / Targeted by name: other tests leave poid_liste 0 points of sale behind."""
-    with schema_context(TENANT_SCHEMA):
-        return PointDeVente.objects.get(name="Bar")
-
-
-@pytest.fixture(scope="module")
-def premier_produit_et_prix(premier_pv):
-    """Premier produit du PV avec son prix.
-    / First product of the PV with its price."""
-    with schema_context(TENANT_SCHEMA):
-        produit = premier_pv.products.filter(
-            methode_caisse__isnull=False,
-        ).first()
-        prix = Price.objects.filter(
-            product=produit,
-            publish=True,
-            asset__isnull=True,
-        ).order_by('order').first()
-        return produit, prix
-
-
-def _make_client(admin_user, tenant):
-    """Cree un client DRF authentifie comme admin du tenant.
-    / Creates a DRF client authenticated as tenant admin."""
-    from rest_framework.test import APIClient
-    client = APIClient()
-    client.force_authenticate(user=admin_user)
-    client.defaults['SERVER_NAME'] = f'{TENANT_SCHEMA}.tibillet.localhost'
-    return client
+# Adresse de la clôture au comptoir (laboutik/urls.py).
+# / Counter closure address.
+URL_DE_LA_CLOTURE = '/laboutik/caisse/cloturer/'
 
 
 def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method_code, dt=None, pv=None):
@@ -134,14 +65,14 @@ def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method
     """
     # ProductSold : snapshot du produit
     # / Product snapshot
-    product_sold, _ = ProductSold.objects.get_or_create(
+    product_sold, _product_sold_cree = ProductSold.objects.get_or_create(
         product=produit,
         event=None,
         defaults={'categorie_article': produit.categorie_article},
     )
     # PriceSold : snapshot du prix
     # / Price snapshot
-    price_sold, _ = PriceSold.objects.get_or_create(
+    price_sold, _price_sold_cree = PriceSold.objects.get_or_create(
         productsold=product_sold,
         price=prix,
         defaults={'prix': prix.prix},
@@ -162,310 +93,275 @@ def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method
     return ligne
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+class TestClotureCaisse(FastTenantTestCase):
+    """
+    La clôture journalière déclenchée au comptoir, dans un lieu de test isolé.
+    / The daily closure triggered at the counter, in an isolated test venue.
+    """
 
-@pytest.mark.usefixtures("test_data")
-class TestClotureTotauxCorrects:
-    """Verifie que les totaux de la cloture sont corrects.
-    / Verify that closure totals are correct."""
+    # Schéma et domaine propres à ce fichier : deux fichiers qui partageraient le même
+    # schéma se marcheraient dessus. `Client.name` est unique et obligatoire.
+    # / Schema and domain specific to this file. Client.name is unique and required.
+    @classmethod
+    def get_test_schema_name(cls):
+        return 'test_cloture_caisse'
 
-    def test_cloture_totaux_corrects(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
+    @classmethod
+    def get_test_tenant_domain(cls):
+        return 'test-cloture-caisse.tibillet.localhost'
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        """Champ requis sur Client. / Required field on Client."""
+        tenant.name = 'Test Cloture Caisse'
+
+    def setUp(self):
+        """
+        Un comptoir, un produit vendu en caisse avec son tarif, un admin connecté.
+        / A counter, a register product with its price, a logged-in admin.
+        """
+        # Le rollback du test précédent a rendu le `search_path` au public.
+        # / The previous test's rollback returned the search_path to public.
+        connection.set_tenant(self.tenant)
+
+        # Les routes de la caisse sont gardées par `module_caisse`, qui exige
+        # `module_monnaie_locale`. Schéma dédié : on peut enregistrer la
+        # configuration de CE lieu de test.
+        # / Register routes are guarded by module_caisse, which requires
+        # module_monnaie_locale. Dedicated schema: this venue's config can be saved.
+        configuration = Configuration.get_solo()
+        configuration.module_monnaie_locale = True
+        configuration.module_caisse = True
+        configuration.save()
+
+        categorie = CategorieProduct.objects.create(name='Boissons test cloture')
+        self.produit = Product.objects.create(
+            name='Biere test cloture',
+            categorie_article=Product.VENTE,
+            methode_caisse=Product.VENTE,
+            categorie_pos=categorie,
+            publish=True,
+        )
+        self.prix = Price.objects.create(
+            product=self.produit,
+            name='Pinte',
+            prix=Decimal('5.00'),
+            publish=True,
+        )
+        self.point_de_vente = PointDeVente.objects.create(
+            name='Comptoir test cloture',
+            comportement=PointDeVente.DIRECT,
+            service_direct=True,
+            accepte_especes=True,
+            accepte_carte_bancaire=True,
+        )
+        self.point_de_vente.products.add(self.produit)
+
+        # `TibilletUser` vit dans le schéma public (SHARED_APPS). Il est créé dans la
+        # transaction du test, donc annulé avec elle.
+        # / TibilletUser lives in the public schema; created inside the test's
+        # transaction, so rolled back with it.
+        self.admin, _admin_cree = TibilletUser.objects.get_or_create(
+            email='admin-test-cloture@tibillet.localhost',
+            defaults={
+                'username': 'admin-test-cloture@tibillet.localhost',
+                'is_staff': True,
+                'is_active': True,
+            },
+        )
+        self.admin.client_admin.add(self.tenant)
+
+        # Client HTTP routé vers le lieu de test, avec la session de l'admin.
+        # / HTTP client routed to the test venue, with the admin session.
+        self.client_http = TenantClient(self.tenant)
+        self.client_http.force_login(self.admin)
+
+        self.post_data = {'uuid_pv': str(self.point_de_vente.uuid)}
+
+    def test_cloture_totaux_corrects(self):
         """
         Setup : creer 3 LigneArticle (1 espece 500c, 1 CB 1000c, 1 NFC 2000c).
         Action : cloturer().
         Verify : total_especes=500, total_cb=1000, total_nfc=2000, total_general=3500.
         """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
+        # Creer les 3 LigneArticle
+        # / Create the 3 LigneArticle
+        _creer_ligne_article_directe(self.produit, self.prix, 500, PaymentMethod.CASH)
+        _creer_ligne_article_directe(self.produit, self.prix, 1000, PaymentMethod.CC)
+        _creer_ligne_article_directe(self.produit, self.prix, 2000, PaymentMethod.LOCAL_EURO)
 
-            # Creer les 3 LigneArticle
-            # / Create the 3 LigneArticle
-            _creer_ligne_article_directe(produit, prix, 500, PaymentMethod.CASH)
-            _creer_ligne_article_directe(produit, prix, 1000, PaymentMethod.CC)
-            _creer_ligne_article_directe(produit, prix, 2000, PaymentMethod.LOCAL_EURO)
+        # Appeler l'endpoint de cloture (datetime_ouverture est calcule automatiquement)
+        # / Call the closure endpoint (datetime_ouverture is computed automatically)
+        response = self.client_http.post(URL_DE_LA_CLOTURE, data=self.post_data)
+        assert response.status_code == 200
 
-            # Appeler l'endpoint de cloture (datetime_ouverture est calcule automatiquement)
-            # / Call the closure endpoint (datetime_ouverture is computed automatically)
-            client = _make_client(admin_user, tenant)
-            post_data = {
-                'uuid_pv': str(premier_pv.uuid),
-            }
-            response = client.post('/laboutik/caisse/cloturer/', data=post_data)
-            assert response.status_code == 200
+        # Verifier que la ClotureCaisse a ete creee
+        # / Verify that ClotureCaisse was created
+        cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
+        assert cloture is not None
+        assert cloture.total_especes == 500
+        assert cloture.total_carte_bancaire == 1000
+        assert cloture.total_cashless == 2000
+        assert cloture.total_general == 3500
 
-            # Verifier que la ClotureCaisse a ete creee
-            # / Verify that ClotureCaisse was created
-            cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
-            assert cloture is not None
-            assert cloture.total_especes >= 500
-            assert cloture.total_carte_bancaire >= 1000
-            assert cloture.total_cashless >= 2000
-            assert cloture.total_general >= 3500
-
-
-@pytest.mark.usefixtures("test_data")
-class TestClotureNombreTransactions:
-    """Verifie le nombre de transactions dans la cloture.
-    / Verify the transaction count in the closure."""
-
-    def test_cloture_nombre_transactions(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
+    def test_cloture_nombre_transactions(self):
         """
         Verify : nombre_transactions compte les lignes de la periode.
         """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
+        _creer_ligne_article_directe(self.produit, self.prix, 100, PaymentMethod.CASH)
+        _creer_ligne_article_directe(self.produit, self.prix, 200, PaymentMethod.CC)
+        _creer_ligne_article_directe(self.produit, self.prix, 300, PaymentMethod.LOCAL_EURO)
 
-            _creer_ligne_article_directe(produit, prix, 100, PaymentMethod.CASH)
-            _creer_ligne_article_directe(produit, prix, 200, PaymentMethod.CC)
-            _creer_ligne_article_directe(produit, prix, 300, PaymentMethod.LOCAL_EURO)
+        response = self.client_http.post(URL_DE_LA_CLOTURE, data=self.post_data)
+        assert response.status_code == 200
 
-            client = _make_client(admin_user, tenant)
-            post_data = {
-                'uuid_pv': str(premier_pv.uuid),
-            }
-            response = client.post('/laboutik/caisse/cloturer/', data=post_data)
-            assert response.status_code == 200
+        cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
+        assert cloture is not None
+        assert cloture.nombre_transactions == 3
 
-            cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
-            assert cloture is not None
-            assert cloture.nombre_transactions >= 3
-
-
-@pytest.mark.usefixtures("test_data")
-class TestClotureFermeTables:
-    """Verifie que les tables ouvertes sont liberees apres cloture.
-    / Verify that open tables are freed after closure."""
-
-    def test_cloture_ferme_tables(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
+    def test_cloture_ferme_tables(self):
         """
         Setup : 2 tables OCCUPEE + 1 vente (pour que la cloture ait quelque chose a cloturer).
         Action : cloturer().
         Verify : les 2 tables passent a LIBRE.
         """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
+        # Creer 2 tables OCCUPEE pour le test
+        # / Create 2 OCCUPIED tables for the test
+        table1 = Table.objects.create(name='Test Cloture T1', statut=Table.OCCUPEE)
+        table2 = Table.objects.create(name='Test Cloture T2', statut=Table.OCCUPEE)
 
-            # Creer 2 tables OCCUPEE pour le test
-            # / Create 2 OCCUPIED tables for the test
-            table1, _ = Table.objects.get_or_create(
-                name='Test Cloture T1',
-                defaults={'statut': Table.OCCUPEE},
-            )
-            table1.statut = Table.OCCUPEE
-            table1.save(update_fields=['statut'])
+        # Il faut au moins une vente pour que la cloture fonctionne
+        # / Need at least one sale for the closure to work
+        _creer_ligne_article_directe(self.produit, self.prix, 100, PaymentMethod.CASH)
 
-            table2, _ = Table.objects.get_or_create(
-                name='Test Cloture T2',
-                defaults={'statut': Table.OCCUPEE},
-            )
-            table2.statut = Table.OCCUPEE
-            table2.save(update_fields=['statut'])
+        response = self.client_http.post(URL_DE_LA_CLOTURE, data=self.post_data)
+        assert response.status_code == 200
 
-            # Il faut au moins une vente pour que la cloture fonctionne
-            # / Need at least one sale for the closure to work
-            _creer_ligne_article_directe(produit, prix, 100, PaymentMethod.CASH)
+        # Recharger depuis la DB
+        # / Reload from DB
+        table1.refresh_from_db()
+        table2.refresh_from_db()
+        assert table1.statut == Table.LIBRE
+        assert table2.statut == Table.LIBRE
 
-            client = _make_client(admin_user, tenant)
-            post_data = {
-                'uuid_pv': str(premier_pv.uuid),
-            }
-            response = client.post('/laboutik/caisse/cloturer/', data=post_data)
-            assert response.status_code == 200
-
-            # Recharger depuis la DB
-            # / Reload from DB
-            table1.refresh_from_db()
-            table2.refresh_from_db()
-            assert table1.statut == Table.LIBRE
-            assert table2.statut == Table.LIBRE
-
-
-@pytest.mark.usefixtures("test_data")
-class TestClotureRapportJSON:
-    """Verifie que le rapport JSON contient les bonnes sections.
-    / Verify that the JSON report contains the correct sections."""
-
-    def test_cloture_rapport_json_complet(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
+    def test_cloture_rapport_json_complet(self):
         """
         Verify : rapport_json contient par_categorie, par_produit, par_moyen_paiement.
         """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
+        _creer_ligne_article_directe(self.produit, self.prix, 500, PaymentMethod.CASH)
 
-            _creer_ligne_article_directe(produit, prix, 500, PaymentMethod.CASH)
+        response = self.client_http.post(URL_DE_LA_CLOTURE, data=self.post_data)
+        assert response.status_code == 200
 
-            client = _make_client(admin_user, tenant)
-            post_data = {
-                'uuid_pv': str(premier_pv.uuid),
-            }
-            response = client.post('/laboutik/caisse/cloturer/', data=post_data)
-            assert response.status_code == 200
+        cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
+        assert cloture is not None
+        rapport = cloture.rapport_json
 
-            cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
-            assert cloture is not None
-            rapport = cloture.rapport_json
+        # Les 15 cles du RapportComptableService
+        # / The 15 keys from RapportComptableService
+        assert 'totaux_par_moyen' in rapport
+        assert 'detail_ventes' in rapport
+        assert 'offerts' in rapport
+        assert 'non_monetaire' in rapport
+        assert 'tva' in rapport
+        assert 'solde_caisse' in rapport
+        assert 'recharges' in rapport
+        assert 'adhesions' in rapport
+        assert 'remboursements' in rapport
+        assert 'habitus' in rapport
+        assert 'billets' in rapport
+        assert 'synthese_operations' in rapport
+        assert 'operateurs' in rapport
+        assert 'ventilation_par_pv' in rapport
+        assert 'infos_legales' in rapport
 
-            # Les 15 cles du RapportComptableService
-            # / The 15 keys from RapportComptableService
-            assert 'totaux_par_moyen' in rapport
-            assert 'detail_ventes' in rapport
-            assert 'offerts' in rapport
-            assert 'non_monetaire' in rapport
-            assert 'tva' in rapport
-            assert 'solde_caisse' in rapport
-            assert 'recharges' in rapport
-            assert 'adhesions' in rapport
-            assert 'remboursements' in rapport
-            assert 'habitus' in rapport
-            assert 'billets' in rapport
-            assert 'synthese_operations' in rapport
-            assert 'operateurs' in rapport
-            assert 'ventilation_par_pv' in rapport
-            assert 'infos_legales' in rapport
+        # Verifier la structure totaux_par_moyen
+        # / Verify totaux_par_moyen structure
+        totaux = rapport['totaux_par_moyen']
+        assert 'especes' in totaux
+        assert 'carte_bancaire' in totaux
+        assert 'cashless' in totaux
 
-            # Verifier la structure totaux_par_moyen
-            # / Verify totaux_par_moyen structure
-            totaux = rapport['totaux_par_moyen']
-            assert 'especes' in totaux
-            assert 'carte_bancaire' in totaux
-            assert 'cashless' in totaux
+        # Verifier la structure TVA
+        # / Verify TVA structure
+        tva = rapport['tva']
+        assert isinstance(tva, dict)
+        for cle_taux, donnees_tva in tva.items():
+            assert 'taux' in donnees_tva
+            assert 'total_ttc' in donnees_tva
+            assert 'total_ht' in donnees_tva
+            assert 'total_tva' in donnees_tva
 
-            # Verifier la structure TVA
-            # / Verify TVA structure
-            tva = rapport['tva']
-            assert isinstance(tva, dict)
-            for cle_taux, donnees_tva in tva.items():
-                assert 'taux' in donnees_tva
-                assert 'total_ttc' in donnees_tva
-                assert 'total_ht' in donnees_tva
-                assert 'total_tva' in donnees_tva
-
-
-@pytest.mark.usefixtures("test_data")
-class TestClotureCalculAutoDatetime:
-    """Verifie que datetime_ouverture est calcule automatiquement.
-    / Verify that datetime_ouverture is computed automatically."""
-
-    def test_cloture_datetime_ouverture_auto(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
+    def test_cloture_datetime_ouverture_auto(self):
         """
         Setup : creer une vente.
         Action : cloturer (sans datetime_ouverture dans le POST).
         Verify : la cloture a bien un datetime_ouverture et contient la vente.
         """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
+        # Creer une LigneArticle
+        # / Create a LigneArticle
+        _creer_ligne_article_directe(self.produit, self.prix, 777, PaymentMethod.CASH)
 
-            # Creer une LigneArticle
-            # / Create a LigneArticle
-            _creer_ligne_article_directe(produit, prix, 777, PaymentMethod.CASH)
+        response = self.client_http.post(URL_DE_LA_CLOTURE, data=self.post_data)
+        assert response.status_code == 200
 
-            client = _make_client(admin_user, tenant)
-            post_data = {
-                'uuid_pv': str(premier_pv.uuid),
-            }
-            response = client.post('/laboutik/caisse/cloturer/', data=post_data)
-            assert response.status_code == 200
+        # La cloture doit exister avec datetime_ouverture renseigne
+        # / The closure must exist with datetime_ouverture set
+        cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
+        assert cloture is not None
+        assert cloture.datetime_ouverture is not None
+        assert cloture.datetime_ouverture < cloture.datetime_cloture
+        assert cloture.nombre_transactions == 1
 
-            # La cloture doit exister avec datetime_ouverture renseigne
-            # / The closure must exist with datetime_ouverture set
-            cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
-            assert cloture is not None
-            assert cloture.datetime_ouverture is not None
-            assert cloture.datetime_ouverture < cloture.datetime_cloture
-            assert cloture.nombre_transactions >= 1
-
-
-@pytest.mark.usefixtures("test_data")
-class TestDoubleClotureMmePeriode:
-    """Verifie qu'on peut cloturer 2 fois la meme periode (pas de blocage).
-    / Verify that double closure of the same period works (no blocking)."""
-
-    def test_double_cloture_meme_periode(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
+    def test_double_cloture_meme_periode(self):
         """
         Action : cloturer 2 fois la meme periode.
         Verify : 2 ClotureCaisse creees.
         """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
+        _creer_ligne_article_directe(self.produit, self.prix, 100, PaymentMethod.CASH)
 
-            _creer_ligne_article_directe(produit, prix, 100, PaymentMethod.CASH)
+        nb_clotures_avant = ClotureCaisse.objects.count()
 
-            nb_clotures_avant = ClotureCaisse.objects.count()
+        # Premiere cloture
+        # / First closure
+        response1 = self.client_http.post(URL_DE_LA_CLOTURE, data=self.post_data)
+        assert response1.status_code == 200
 
-            client = _make_client(admin_user, tenant)
-            post_data = {
-                'uuid_pv': str(premier_pv.uuid),
-            }
+        # Creer une nouvelle vente pour la 2eme cloture
+        # / Create a new sale for the 2nd closure
+        _creer_ligne_article_directe(self.produit, self.prix, 200, PaymentMethod.CC)
 
-            # Premiere cloture
-            # / First closure
-            response1 = client.post('/laboutik/caisse/cloturer/', data=post_data)
-            assert response1.status_code == 200
+        # Deuxieme cloture
+        # / Second closure
+        response2 = self.client_http.post(URL_DE_LA_CLOTURE, data=self.post_data)
+        assert response2.status_code == 200
 
-            # Creer une nouvelle vente pour la 2eme cloture
-            # / Create a new sale for the 2nd closure
-            _creer_ligne_article_directe(produit, prix, 200, PaymentMethod.CC)
+        # Verifier que 2 nouvelles clotures ont ete creees
+        # / Verify that 2 new closures were created
+        nb_clotures_apres = ClotureCaisse.objects.count()
+        assert nb_clotures_apres == nb_clotures_avant + 2
 
-            # Deuxieme cloture
-            # / Second closure
-            response2 = client.post('/laboutik/caisse/cloturer/', data=post_data)
-            assert response2.status_code == 200
-
-            # Verifier que 2 nouvelles clotures ont ete creees
-            # / Verify that 2 new closures were created
-            nb_clotures_apres = ClotureCaisse.objects.count()
-            assert nb_clotures_apres >= nb_clotures_avant + 2
-
-
-@pytest.mark.usefixtures("test_data")
-class TestClotureAnnuleCommandes:
-    """Verifie que les commandes OPEN sont annulees apres cloture.
-    / Verify that OPEN orders are cancelled after closure."""
-
-    def test_cloture_annule_commandes_ouvertes(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
+    def test_cloture_annule_commandes_ouvertes(self):
         """
         Setup : 1 commande OPEN + 1 vente.
         Action : cloturer().
         Verify : la commande passe a CANCEL.
         """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
+        # Creer une commande OPEN pour le test
+        # / Create an OPEN order for the test
+        commande = CommandeSauvegarde.objects.create(
+            statut=CommandeSauvegarde.OPEN,
+            commentaire='Test cloture phase 5',
+        )
 
-            # Creer une commande OPEN pour le test
-            # / Create an OPEN order for the test
-            commande = CommandeSauvegarde.objects.create(
-                statut=CommandeSauvegarde.OPEN,
-                commentaire='Test cloture phase 5',
-            )
+        # Il faut au moins une vente pour que la cloture fonctionne
+        # / Need at least one sale for the closure to work
+        _creer_ligne_article_directe(self.produit, self.prix, 100, PaymentMethod.CASH)
 
-            # Il faut au moins une vente pour que la cloture fonctionne
-            # / Need at least one sale for the closure to work
-            _creer_ligne_article_directe(produit, prix, 100, PaymentMethod.CASH)
+        response = self.client_http.post(URL_DE_LA_CLOTURE, data=self.post_data)
+        assert response.status_code == 200
 
-            client = _make_client(admin_user, tenant)
-            post_data = {
-                'uuid_pv': str(premier_pv.uuid),
-            }
-            response = client.post('/laboutik/caisse/cloturer/', data=post_data)
-            assert response.status_code == 200
-
-            # Recharger la commande
-            # / Reload the order
-            commande.refresh_from_db()
-            assert commande.statut == CommandeSauvegarde.CANCEL
+        # Recharger la commande
+        # / Reload the order
+        commande.refresh_from_db()
+        assert commande.statut == CommandeSauvegarde.CANCEL

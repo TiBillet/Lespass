@@ -10,9 +10,11 @@ Popup .card-modal, teinte « warn » : de l'argent sort de la caisse et le
 geste ne se defait pas. Lecture de haut en bas :
 1. Pastille + « Vider la carte » + numero de carte
 2. « À rendre en espèces » en tres gros
-3. Les soldes de la carte (tableau Monnaie · Solde)
-4. Le choix : reinitialiser la carte, ou garder le compte du membre
-/ Warn-tinted popup: badge, amount to give back, balances, then the choice.
+3. Ce qui sera repris, une partie par Fedow (hx_vider_carte_parties.html) ;
+   l'ancien Fedow est lu sans rien débiter. S'il ne répond pas, l'écran le dit.
+4. Le choix : reinitialiser la carte, ou garder le compte du membre (seulement
+   s'il y a quelque chose a reprendre)
+/ Warn-tinted popup: badge, amount to give back, one part per Fedow, then the choice.
 {% endcomment %}
 <div id="messages">
   <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="vider-titre" data-testid="vider-carte-confirm">
@@ -33,29 +35,21 @@ geste ne se defait pas. Lecture de haut en bas :
         <span class="succes-rendre-val">{{ total_centimes|cents_to_euros }}</span>
       </div>
 
-      {# Soldes remboursables de la carte / Refundable balances #}
-      <div class="succes-carte">
-        <div class="succes-carte-ref">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M7.6 8.4a5.6 5.6 0 0 1 0 7.2"/><path d="M11.7 5.4a10.4 10.4 0 0 1 0 13.2"/><path d="M15.8 2.4a15.2 15.2 0 0 1 0 19.2"/></g></svg>
-          {% translate "Carte" %} <b>{{ carte.tag_id }}</b>
-        </div>
-        <table class="succes-assets" data-testid="vider-carte-tokens-table">
-          <thead>
-            <tr>
-              <th scope="col">{% translate "Monnaie" %}</th>
-              <th scope="col" class="num">{% translate "Solde" %}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for token in tokens %}
-              <tr>
-                <td>{{ token.asset.name }}</td>
-                <td class="num">{{ token.value|cents_to_asset:token.asset }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      {# Carte scannée / Scanned card #}
+      <div class="succes-carte-ref">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M7.6 8.4a5.6 5.6 0 0 1 0 7.2"/><path d="M11.7 5.4a10.4 10.4 0 0 1 0 13.2"/><path d="M15.8 2.4a15.2 15.2 0 0 1 0 19.2"/></g></svg>
+        {% translate "Carte" %} <b>{{ carte.tag_id }}</b>
       </div>
+
+      {# Ce qui sera repris, séparé par Fedow / What will be taken back, split by Fedow #}
+      {% include "laboutik/partial/hx_vider_carte_parties.html" %}
+
+      {% if ancien_fedow_injoignable %}
+        {# L'ancien Fedow ne répond pas : son solde est inconnu, la vidange sera refusée #}
+        <p class="vider-note" role="alert" data-testid="vider-carte-ancien-fedow-injoignable">
+          {% translate "L'ancien Fedow ne répond pas : son solde n'est pas affiché. La carte ne pourra pas être vidée tant qu'il ne répond pas." %}
+        </p>
+      {% endif %}
 
       {# POST vider_carte : le bouton clique envoie sa valeur vider_carte (true|false) #}
       <form hx-post="{% url 'laboutik-paiement-vider_carte' %}"
@@ -75,8 +69,9 @@ geste ne se defait pas. Lecture de haut en bas :
           {% translate "Rembourser et réinitialiser la carte" %}
         </button>
 
-        {% if carte.user %}
-          {# Carte d'un membre : on peut garder le lien carte ↔ compte #}
+        {% if carte.user and il_y_a_quelque_chose_a_reprendre %}
+          {# Carte d'un membre : on peut garder le lien carte ↔ compte. #}
+          {# Sans rien à reprendre, seule la réinitialisation a un sens (elle délie la carte). #}
           <button type="submit" name="vider_carte" value="false"
                   class="vider-bouton vider-bouton--secondaire"
                   data-testid="vider-carte-btn-keep-user"

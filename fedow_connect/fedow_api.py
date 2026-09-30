@@ -782,6 +782,146 @@ class NFCcardFedow():
 
         return serialized_card.validated_data
 
+    def refund(self,
+               user_card_firstTagId: str = None,
+               primary_card_fisrtTagId: str = None,
+               void: bool = False):
+        """
+        Vide une carte sur l'ancien Fedow (route `card/refund`).
+        / Empties a card on the old Fedow (`card/refund` route).
+
+        LOCALISATION : fedow_connect/fedow_api.py
+
+        L'ancien Fedow reprend les jetons de la carte qui viennent du lieu (monnaie
+        locale TLF, jetons cadeau TNF) et la monnaie fédérée (FED). Il écrit une
+        transaction REFUND par jeton repris, vers le portefeuille du lieu.
+        Avec `void=True` (action VOID), il délie aussi la carte de son utilisateur.
+        La carte primaire doit être une carte primaire du lieu connue de l'ancien Fedow.
+        / The old Fedow takes back the venue's tokens (TLF, TNF) and the FED, one REFUND
+        transaction per token. VOID also unlinks the card from its user.
+
+        Repris du client de LaBoutik V1 (`NFCcard.refund` / `void`), SANS ses écritures
+        en base : la caisse Lespass met elle-même la carte à jour (fedow_core/services.py,
+        `rembourser_en_especes`).
+        / Taken from the LaBoutik V1 client, WITHOUT its database writes.
+
+        Toute réponse autre que 205 lève une exception : un résultat vide rendu en
+        silence ferait croire la carte vidée sur l'ancien Fedow.
+        / Any answer other than 205 raises: a silent empty result would look like success.
+
+        APPELÉ PAR : laboutik/views.py, `_vider_la_carte_sur_l_ancien_fedow`.
+
+        :param user_card_firstTagId: tag NFC de la carte à vider
+        :param primary_card_fisrtTagId: tag NFC de la carte primaire du caissier
+        :param void: True pour « vider et délier » (VOID), False pour vider (REFUND)
+        :return: dict {
+            "serialized_card": la carte après le vidage (données brutes),
+            "before_refund_serialized_wallet": le portefeuille avant le vidage (brut),
+            "serialized_transactions": les transactions REFUND, validées
+                (`TransactionValidator`),
+        }
+        :raises Exception: réponse autre que 205, ou transactions invalides
+        """
+        # VID = vider et délier, RFD = vider (codes de `TransactionValidator`).
+        # / VID = empty and unlink, RFD = empty.
+        if void:
+            action_demandee = TransactionValidator.VOID
+        else:
+            action_demandee = TransactionValidator.REFUND
+
+        donnees_du_vidage = {
+            "user_card_firstTagId": user_card_firstTagId.upper(),
+            "primary_card_fisrtTagId": primary_card_fisrtTagId.upper(),
+            "action": action_demandee,
+        }
+        reponse_du_vidage = _post(
+            fedow_config=self.fedow_config,
+            data=donnees_du_vidage,
+            path='card/refund',
+        )
+
+        if reponse_du_vidage.status_code != 205:
+            logger.error(
+                f"NFCcardFedow.refund ERRORS : {reponse_du_vidage.status_code} "
+                f"{reponse_du_vidage.content}"
+            )
+            raise Exception(
+                f"card/refund refusé par l'ancien Fedow : {reponse_du_vidage.status_code}"
+            )
+
+        corps_de_la_reponse = reponse_du_vidage.json()
+        transactions_validees = TransactionValidator(
+            data=corps_de_la_reponse.get('serialized_transactions'),
+            many=True,
+        )
+        if not transactions_validees.is_valid():
+            logger.error(f"NFCcardFedow.refund transactions : {transactions_validees.errors}")
+            raise Exception(
+                f"card/refund : transactions invalides {transactions_validees.errors}"
+            )
+
+        return {
+            "serialized_card": corps_de_la_reponse.get('serialized_card'),
+            "before_refund_serialized_wallet": corps_de_la_reponse.get(
+                'before_refund_serialized_wallet'
+            ),
+            "serialized_transactions": transactions_validees.validated_data,
+        }
+
+    def set_primary(self, tag_id: str, delete: bool = False):
+        """
+        Déclare une carte comme carte primaire du lieu sur l'ancien Fedow, ou la retire.
+        / Declares a card as a primary card of the venue on the old Fedow, or withdraws it.
+
+        LOCALISATION : fedow_connect/fedow_api.py
+
+        L'ancien Fedow refuse un vidage signé par une carte qu'il ne connaît pas comme
+        carte primaire du lieu. La même carte primaire sert aux deux Fedow : elle est donc
+        déclarée là-bas à sa création, et retirée à sa suppression.
+        / The old Fedow refuses an emptying signed by a card it does not know as a primary
+        card of the venue: the same primary card is declared there, and withdrawn.
+
+        Repris du client de LaBoutik V1 (`NFCcard.set_primary`). Réponses de l'ancien
+        Fedow : 200 déclarée, 208 déjà déclarée, 205 retirée. Une carte inconnue de
+        l'ancien Fedow donne une erreur 500 (le serveur ne gère pas son absence).
+        / Taken from the LaBoutik V1 client. 200 declared, 208 already, 205 withdrawn.
+
+        `delete` part en vrai booléen (corps JSON) : l'ancien Fedow le lit tel quel, et
+        une chaîne « False » serait vraie pour lui.
+        / `delete` is sent as a real boolean: the old Fedow reads it as is.
+
+        APPELÉ PAR : laboutik/carte_primaire_ancien_fedow.py.
+
+        :param tag_id: tag NFC de la carte (8 caractères hexadécimaux)
+        :param delete: True pour retirer la carte, False pour la déclarer
+        :raises Exception: réponse autre que 200, 205 ou 208, avec le code dans le message
+        """
+        donnees_de_la_declaration = {
+            "first_tag_id": tag_id,
+            "delete": delete,
+        }
+        reponse_de_la_declaration = _post(
+            fedow_config=self.fedow_config,
+            data=donnees_de_la_declaration,
+            path='card/set_primary',
+        )
+
+        codes_acceptes = [200, 205, 208]
+        if reponse_de_la_declaration.status_code not in codes_acceptes:
+            logger.error(
+                f"NFCcardFedow.set_primary ERRORS : {reponse_de_la_declaration.status_code} "
+                f"{reponse_de_la_declaration.content}"
+            )
+            raise Exception(
+                f"card/set_primary refusé par l'ancien Fedow : "
+                f"{reponse_de_la_declaration.status_code}"
+            )
+
+        logger.info(
+            f"NFCcardFedow.set_primary {tag_id} (retrait : {delete}) : "
+            f"{reponse_de_la_declaration.status_code}"
+        )
+
     def card_tag_id_retrieve(self, card_number: str):
         response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_tag_id_retrieve')
         if not response_qr.status_code == 200:

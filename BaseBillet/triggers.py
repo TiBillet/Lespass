@@ -140,6 +140,100 @@ def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
     return membership
 
 
+def appliquer_les_effets_d_une_adhesion_payee(adhesion: Membership):
+    """
+    Écrit en base les effets d'une adhésion payée : l'échéance, le rattachement de
+    l'adhérent au lieu, son nom et son prénom.
+    / Writes the effects of a paid membership to the database: deadline, member attached
+    to the venue, first and last name.
+
+    LOCALISATION : BaseBillet/triggers.py
+
+    Une adhésion payée a les mêmes effets en ligne et en caisse : c'est ce code-ci, pour
+    les deux. Il n'écrit qu'en base : il tourne DANS la transaction du paiement. Si la
+    vente est annulée, ces écritures le sont aussi.
+    Les tâches Celery (facture, newsletter, récompense) sont dans
+    `demander_les_taches_d_une_adhesion_payee`, appelée juste après.
+    / Same effects online and at the register, through this code. Database writes only:
+    it runs INSIDE the payment transaction. Celery tasks live in the next function.
+
+    FLUX :
+    - en ligne : `TRIGGER_LigneArticlePaid_ActionByCategorie.trigger_A` (ligne passée
+      `PAID`) → CETTE FONCTION → `demander_les_taches_d_une_adhesion_payee` ;
+    - en caisse : `laboutik/views.py` `_appliquer_les_effets_d_une_adhesion_vendue_en_caisse`
+      → CETTE FONCTION dans la transaction, puis `demander_les_taches_d_une_adhesion_payee`
+      après la validation en base.
+
+    :param adhesion: Membership payée
+    """
+    # L'échéance est calculée depuis la dernière cotisation et le type d'abonnement du tarif.
+    # Son enregistrement demande le webhook d'adhésion (signal post_save de Membership).
+    # / The deadline comes from the last contribution and the price's subscription type.
+    echeance = adhesion.set_deadline()
+    logger.info(f"        Adhésion payée {adhesion.uuid} : échéance {echeance}")
+
+    # On rattache l'adhérent au lieu : il devient visible dans l'admin, et ses adhésions
+    # et réservations apparaissent dans « Mon compte ».
+    # / The member is attached to the venue: visible in the admin and in "My account".
+    adherent: TibilletUser = adhesion.user
+    if connection.tenant not in adherent.client_achat.all():
+        adherent.client_achat.add(connection.tenant)
+
+    # Si l'adhérent n'a pas de nom ou de prénom, on lui donne ceux de l'adhésion.
+    # / If the member has no first or last name, give them the membership's ones.
+    if not adherent.first_name or not adherent.last_name:
+        if not adherent.first_name:
+            adherent.first_name = adhesion.first_name
+        if not adherent.last_name:
+            adherent.last_name = adhesion.last_name
+        adherent.save()
+
+
+def demander_les_taches_d_une_adhesion_payee(adhesion: Membership, ligne_article: LigneArticle):
+    """
+    Demande les tâches Celery d'une adhésion payée : la facture par mail, la newsletter
+    (si l'adhérent l'accepte), la récompense en monnaie.
+    / Requests the Celery tasks of a paid membership: invoice mail, newsletter (if the
+    member accepts it), currency reward.
+
+    LOCALISATION : BaseBillet/triggers.py
+
+    L'ordre des demandes est un contrat : les tests de caractérisation en ligne
+    (tests/pytest/test_caracterisation_en_ligne.py) assertent la liste ordonnée des tâches.
+    / The request order is a contract: online characterization tests assert it.
+
+    La récompense part toujours APRÈS la validation en base (on_commit) : le worker
+    Celery relit la ligne avec sa propre connexion. Hors transaction, on_commit lance la
+    tâche tout de suite.
+    / The reward always goes AFTER the commit. Outside a transaction, it runs at once.
+
+    FLUX :
+    - en ligne : `trigger_A` l'appelle juste après `appliquer_les_effets_d_une_adhesion_payee` ;
+    - en caisse : l'adhésion est créée DANS la transaction du paiement. La caisse appelle
+      donc CETTE FONCTION en `transaction.on_commit` : sinon le worker pourrait chercher
+      une adhésion pas encore validée en base
+      (`laboutik/views.py` `_appliquer_les_effets_d_une_adhesion_vendue_en_caisse`).
+
+    :param adhesion: Membership payée
+    :param ligne_article: LigneArticle qui porte l'adhésion (lue par la tâche de récompense)
+    """
+    # La facture par mail : le mail porte le lien vers la facture de l'adhésion.
+    # / The invoice mail: it carries the link to the membership's invoice.
+    send_membership_invoice_to_email.delay(str(adhesion.uuid))
+
+    # Si l'adhérent accepte la newsletter.
+    # / If the member accepts the newsletter.
+    if adhesion.newsletter:
+        send_to_ghost.delay(adhesion.pk)
+        send_to_brevo.delay(adhesion.pk)
+
+    # La récompense en monnaie (réglage du tarif), après la validation en base.
+    # / The currency reward (price setting), after the commit.
+    pk_de_la_ligne = ligne_article.pk
+    transaction.on_commit(
+        lambda: refill_from_lespass_to_user_wallet_from_price_solded.delay(pk_de_la_ligne)
+    )
+
 
 ### END MEMBERSHIP TRIGGER ####
 
@@ -263,28 +357,14 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         if ligne_article.paiement_stripe:
             membership: Membership = update_membership_state_after_stripe_paiement(ligne_article)
 
-        # Mise à jour de la deadline
-        deadline = membership.set_deadline()
-        logger.info(f"        TRIGGER_A membeshipr set_deadline() : {deadline}")
-
-        # On lie le tenant à l'user, pour qu'iel soit visible dans l'admin et que les adéhsion et reservations soient visible dans my_account
-        user: TibilletUser = membership.user
-        if connection.tenant not in user.client_achat.all():
-            user.client_achat.add(connection.tenant)
-
-        # Si l'user n'a pas de nom/prenom, on lui colle celui de l'adhésion
-        if not user.first_name or not user.last_name:
-            user.first_name = membership.first_name if not user.first_name else user.first_name
-            user.last_name = membership.last_name if not user.last_name else user.last_name
-            user.save()
-
-        # C'est parti pour l'envoi dans les mails !
-        email_sended = send_membership_invoice_to_email.delay(str(membership.uuid))
-
-        # Si la personne accepte la newsletter :
-        if membership.newsletter:
-            send_to_ghost.delay(membership.pk)
-            send_to_brevo.delay(membership.pk)
+        # Les effets communs à toute adhésion payée, en ligne comme en caisse : d'abord les
+        # écritures en base (échéance, rattachement au lieu, nom), puis les tâches (facture,
+        # newsletter, récompense). L'ordre des tâches demandées est un contrat (tests de
+        # caractérisation en ligne).
+        # / Effects shared by every paid membership, online and at the register: database
+        # writes, then tasks. The task order is a contract.
+        appliquer_les_effets_d_une_adhesion_payee(membership)
+        demander_les_taches_d_une_adhesion_payee(membership, ligne_article)
 
         # L'adhésion n'est PLUS poussée vers Fedow.
         # Ce push existait pour que LaBoutik V1 lise l'adhésion sous forme de jeton SUB dans
@@ -299,18 +379,14 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         #   the source of truth (it holds the deadline, hence validity). The membership
         #   ASSET stays declared to Fedow: a V1 counter still needs it to SELL memberships.
 
-        # Récompense monnaie (réglage du tarif) puis envoi de la vente à LaBoutik.
-        # Les deux tâches partent APRÈS la validation en base (on_commit) : le worker Celery a
-        # sa propre connexion et relit la ligne. Lancée avant (panier matérialisé dans une
-        # transaction), la tâche peut ne pas la trouver et échouer sans nouvel essai. Hors
-        # transaction, on_commit lance la tâche tout de suite.
-        # / Reward then LaBoutik sale, sent AFTER the commit: the Celery worker reads the line
-        # with its own connection. Outside a transaction, on_commit runs right away.
+        # Envoi de la vente à l'ancien LaBoutik, propre au paiement en ligne (la caisse V2 ne
+        # parle pas à la caisse legacy). Il part APRÈS la validation en base (on_commit) : le
+        # worker Celery a sa propre connexion et relit la ligne. Lancée avant (panier
+        # matérialisé dans une transaction), la tâche peut ne pas la trouver et échouer sans
+        # nouvel essai. Hors transaction, on_commit lance la tâche tout de suite.
+        # / Legacy LaBoutik sale, online only, sent AFTER the commit: the Celery worker reads
+        # the line with its own connection. Outside a transaction, on_commit runs right away.
         pk_de_la_ligne = ligne_article.pk
-        transaction.on_commit(
-            lambda: refill_from_lespass_to_user_wallet_from_price_solded.delay(pk_de_la_ligne)
-        )
-
         logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à LaBoutik?")
         transaction.on_commit(lambda: send_sale_to_laboutik.delay(pk_de_la_ligne))
 

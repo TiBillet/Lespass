@@ -21,6 +21,14 @@ Trois choses doivent etre vraies, et chacune a son test :
 Le lieu de la verite est `Product.methode_caisse == Product.RETOUR_CONSIGNE`, comme en
 V1 (`LaBoutik/webview/views.py`, `methode_CR`).
 
+Un retour de consigne est RELIE au produit consigne qu'il rembourse (le gobelet vendu,
+`Product.consigne_remboursee`) : la caisse rend le prix du gobelet, avec son taux de TVA,
+jamais le prix ni le taux propres du produit de retour (decision D11, chantier 05). Un
+retour sans consigne reliee est refuse. Le detail de cette regle est teste dans
+tests/pytest/test_caisse_ecrit_la_vente.py.
+/ A deposit return is LINKED to the cup it refunds: the register gives back the cup's
+price, at the cup's VAT rate (D11). An unlinked return is refused.
+
 Lancement / Run:
     docker exec lespass_django poetry run pytest tests/pytest/test_pos_retour_consigne.py -v
 """
@@ -57,7 +65,13 @@ from fedow_core.services import AssetService
 from laboutik.models import PointDeVente
 
 
-# Le prix d'un retour de consigne, en euros. NEGATIF : le lieu rend cet argent.
+# Le prix du gobelet consigne vendu, en euros. C'est lui que la caisse rend au retour.
+# / The sold deposit cup's price, in euros: what the register gives back on a return.
+PRIX_GOBELET_EUROS = Decimal("1.00")
+
+# Le prix propre du produit de retour, en euros. NEGATIF. La caisse ne le lit plus : elle
+# rend le prix du gobelet relie (D11). Il est garde egal pour la lisibilite des tests.
+# / The return product's own price: no longer read by the register (D11).
 # Meme montant que l'article « Retour Consigne » de la V1
 # (`LaBoutik/administration/management/commands/install.py`).
 # / A deposit return price, in euros. NEGATIVE: the venue gives this money back.
@@ -130,6 +144,24 @@ class TestPosRetourConsigne(FastTenantTestCase):
 
         self.categorie = CategorieProduct.objects.create(name="Consignes test")
 
+        # --- Le gobelet consigne, vendu au comptoir ---
+        # C'est le produit que le retour rembourse : la caisse rend SON prix, avec SON
+        # taux de TVA (`Product.consigne_remboursee`, D11).
+        # / The deposit cup sold at the counter: the return gives back ITS price and rate.
+        self.produit_gobelet = Product.objects.create(
+            name="Gobelet consigne",
+            categorie_article=Product.VENTE,
+            methode_caisse=Product.VENTE,
+            categorie_pos=self.categorie,
+            publish=True,
+        )
+        self.prix_gobelet = Price.objects.create(
+            product=self.produit_gobelet,
+            name="Gobelet consigne",
+            prix=PRIX_GOBELET_EUROS,
+            publish=True,
+        )
+
         # --- L'article « Retour Consigne » ---
         # Prix NEGATIF et `methode_caisse=RETOUR_CONSIGNE` : les deux vont ensemble.
         # L'asset porte la monnaie a crediter en cashless — il se pose sur le PRODUIT,
@@ -144,6 +176,7 @@ class TestPosRetourConsigne(FastTenantTestCase):
             categorie_pos=self.categorie,
             asset=self.asset_tlf,
             publish=True,
+            consigne_remboursee=self.produit_gobelet,
         )
         self.prix_retour_consigne = Price.objects.create(
             product=self.produit_retour_consigne,
@@ -239,7 +272,7 @@ class TestPosRetourConsigne(FastTenantTestCase):
         Joue le geste du caissier : un retour de consigne au panier, et on paie.
         / Plays the cashier's gesture: one deposit return in the cart, then pay.
         """
-        prix_en_centimes = int(round(self.prix_retour_consigne.prix * 100)) * quantite
+        prix_en_centimes = -int(round(self.prix_gobelet.prix * 100)) * quantite
         donnees = self._donnees_de_base(moyen_paiement)
         donnees["total"] = str(prix_en_centimes)
         donnees[self._cle_panier(self.produit_retour_consigne, self.prix_retour_consigne)] = str(quantite)
@@ -250,7 +283,7 @@ class TestPosRetourConsigne(FastTenantTestCase):
         Le client presente sa carte : le retour doit la CREDITER.
         / The customer taps their card: the return must CREDIT it.
         """
-        prix_en_centimes = int(round(self.prix_retour_consigne.prix * 100)) * quantite
+        prix_en_centimes = -int(round(self.prix_gobelet.prix * 100)) * quantite
         donnees = self._donnees_de_base("nfc")
         donnees["total"] = str(prix_en_centimes)
         donnees["tag_id"] = self.carte_client.tag_id
@@ -271,7 +304,7 @@ class TestPosRetourConsigne(FastTenantTestCase):
         Un panier qui melange une biere et un retour de consigne.
         / A cart mixing a beer and a deposit return.
         """
-        total_centimes = int(round((self.prix_biere.prix + self.prix_retour_consigne.prix) * 100))
+        total_centimes = int(round((self.prix_biere.prix - self.prix_gobelet.prix) * 100))
         donnees = self._donnees_de_base(moyen_paiement)
         donnees["total"] = str(total_centimes)
         donnees[self._cle_panier(self.produit_biere, self.prix_biere)] = "1"
@@ -286,7 +319,7 @@ class TestPosRetourConsigne(FastTenantTestCase):
         donnees = {"uuid_pv": str(self.point_de_vente.uuid)}
         if avec_retour_consigne:
             donnees[self._cle_panier(self.produit_retour_consigne, self.prix_retour_consigne)] = "1"
-            donnees["total"] = str(int(round(self.prix_retour_consigne.prix * 100)))
+            donnees["total"] = str(-int(round(self.prix_gobelet.prix * 100)))
         else:
             donnees[self._cle_panier(self.produit_biere, self.prix_biere)] = "1"
             donnees["total"] = str(int(round(self.prix_biere.prix * 100)))
@@ -427,7 +460,7 @@ class TestPosRetourConsigne(FastTenantTestCase):
         """
         donnees = {
             "uuid_pv": str(self.point_de_vente.uuid),
-            "total": str(int(round((self.prix_biere.prix + self.prix_retour_consigne.prix) * 100))),
+            "total": str(int(round((self.prix_biere.prix - self.prix_gobelet.prix) * 100))),
             self._cle_panier(self.produit_biere, self.prix_biere): "1",
             self._cle_panier(self.produit_retour_consigne, self.prix_retour_consigne): "1",
         }
@@ -641,7 +674,8 @@ class TestPosRetourConsigne(FastTenantTestCase):
 
     def test_la_chaine_lne_reste_coherente_avec_une_tva_sur_le_retour(self):
         """
-        Le même contrôle, mais avec un taux de TVA réel sur le produit.
+        Le même contrôle, mais avec un taux de TVA réel sur le gobelet consigne : le
+        retour prend le taux du gobelet qu'il rembourse (D11).
 
         Sans taux, `calculer_total_ht` renvoie le montant tel quel et la division par
         `(1 + taux/100)` n'est jamais exercée. C'est pourtant là qu'une erreur de signe
@@ -654,8 +688,8 @@ class TestPosRetourConsigne(FastTenantTestCase):
         from BaseBillet.models import Tva
 
         taux_vingt, _cree = Tva.objects.get_or_create(tva_rate=Decimal("20.00"))
-        self.produit_retour_consigne.tva = taux_vingt
-        self.produit_retour_consigne.save()
+        self.produit_gobelet.tva = taux_vingt
+        self.produit_gobelet.save()
 
         self._poster_retour_consigne(moyen_paiement="espece")
 
@@ -879,6 +913,19 @@ class TestPosRetourConsigne(FastTenantTestCase):
             currency_code="EUR",
             wallet_origin=self.wallet_lieu,
         )
+        assiette_consignee = Product.objects.create(
+            name="Assiette consignee",
+            categorie_article=Product.VENTE,
+            methode_caisse=Product.VENTE,
+            categorie_pos=self.categorie,
+            publish=True,
+        )
+        Price.objects.create(
+            product=assiette_consignee,
+            name="Assiette consignee",
+            prix=Decimal("2.00"),
+            publish=True,
+        )
         second_retour = Product.objects.create(
             name="Retour Consigne assiette",
             categorie_article=Product.VENTE,
@@ -886,6 +933,7 @@ class TestPosRetourConsigne(FastTenantTestCase):
             categorie_pos=self.categorie,
             asset=autre_monnaie,
             publish=True,
+            consigne_remboursee=assiette_consignee,
         )
         prix_second_retour = Price.objects.create(
             product=second_retour,

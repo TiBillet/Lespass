@@ -101,6 +101,14 @@ Aucune suppression automatique de lignes par une migration.
   `launch_payment.py` (~l.160), `_demo_data_v2_ventes.py`, `demo_data_v2.py` → par le
   service de vente.
 - Tests existants : voir §6.
+- Branche « vente absente » de `laboutik/views.py` `_creer_lignes_articles` (et de
+  `_executer_recharges`) : ne sert plus qu'aux appels directs de 11 tests existants
+  (stock, billetterie, offerts). La retirer, et réécrire ces tests pour qu'ils passent une
+  vente (fiche B §5, décision de B-3).
+- `_tarifs_vendables_a_la_caisse` / `_tarifs_en_euros_vendables_a_la_caisse` : règle
+  partagée par la caisse et l'admin des produits (import local depuis `laboutik/views.py`
+  dans `Administration/admin/products.py`). La déplacer dans un module de service de
+  `laboutik/` (relecture Fable de B, mineur 5).
 
 ## 4 bis. Session H-4 — les mails vérifiés de bout en bout (Mailpit, E2E)
 

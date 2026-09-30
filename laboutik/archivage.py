@@ -15,9 +15,12 @@ import io
 import json
 import zipfile
 from datetime import datetime, time
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
 from django.utils import timezone
+
+from laboutik.integrity import calculer_total_ht
 
 
 # =====================================================================
@@ -171,12 +174,36 @@ def _extraire_lignes_article(debut, fin):
         # Taux de TVA / VAT rate
         taux_tva = f"{float(ligne.vat):.2f}"
 
-        # Total HT en centimes (stocke en base) / Total excl. tax in cents (from DB)
-        total_ht_centimes = str(ligne.total_ht)
+        # Total HT en centimes.
+        # Une ligne écrite par le service de vente (elle appartient à une vente) porte
+        # dans `total_ht` le HT de son NET vendu : 0 pour une ligne offerte ou une part
+        # payée en jetons cadeau. L'archive ne lit donc PAS ce champ pour elle : elle
+        # recalcule le HT sur le TTC de la ligne (prix unitaire × quantité, arrondi
+        # 0,5 vers le haut), avec `calculer_total_ht`, comme la caisse l'écrivait
+        # avant. Sinon, la TVA ci-dessous (TTC − HT) inventerait de la TVA sur un
+        # article offert. Une ligne sans vente garde le HT stocké, jamais recalculé.
+        # La fiche G fait passer l'archive aux montants entiers des ventes.
+        # / Total excl. tax in cents. A line written by the sale service stores the HT
+        #   of its NET sold (0 when offered): the archive recomputes the line HT from
+        #   the line TTC, as the register stored it before. A line without a sale keeps
+        #   its stored HT. Sheet G moves the archive to the sales' whole-cent amounts.
+        ligne_ecrite_par_le_service_de_vente = ligne.vente_id is not None
+        if ligne_ecrite_par_le_service_de_vente:
+            ttc_de_la_ligne_arrondi_centimes = int(
+                Decimal(ligne.amount * ligne.qty).quantize(
+                    Decimal("1"), rounding=ROUND_HALF_UP
+                )
+            )
+            total_ht_de_la_ligne = calculer_total_ht(
+                ttc_de_la_ligne_arrondi_centimes, ligne.vat
+            )
+        else:
+            total_ht_de_la_ligne = ligne.total_ht
+        total_ht_centimes = str(total_ht_de_la_ligne)
 
         # Total TVA = TTC * qty - HT / VAT amount = TTC * qty - HT
         total_ttc = int(ligne.amount * ligne.qty)
-        total_tva_centimes = str(total_ttc - ligne.total_ht)
+        total_tva_centimes = str(total_ttc - total_ht_de_la_ligne)
 
         # Point de vente / Point of sale
         pdv = ''

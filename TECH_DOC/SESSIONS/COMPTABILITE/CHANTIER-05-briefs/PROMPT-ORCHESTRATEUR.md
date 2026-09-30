@@ -31,6 +31,18 @@ fabrique pas plus que ce que la spec demande.
   `make test ARGS="..."` ; **jamais deux pytest en parallèle** (`docker exec
   lespass_django pgrep -af pytest`). Pas de `runserver` (byobu). Pas de `makemessages` /
   `compilemessages`. Pas de `ruff format` / `ruff check --fix` sur un fichier existant.
+- **« Ceinture et bretelles » sur tout le chantier** (consigne du mainteneur) : aucune
+  étape de la boucle allégée, garde-fous redondants gardés, toute mutation survivante
+  donne un test de plus (ou est documentée comme double sécurité). **Seule exception** :
+  la chaîne d'empreintes reste **simple** (fiche A §5) ; sécurisation et NF525 →
+  `TODO/COMPTABILITE-certification-NF525.md`.
+- Un ouvrier qui touche un point de **logique métier** non tranché s'arrête **avant de
+  coder** ; tu poses la question au mainteneur (en FALC, avec des bouts de code).
+- Bugs hors chantier trouvés en route → `TODO/BUGS-constats-chantier-05.md` (à traiter
+  après le chantier).
+- Mutations : attendre **3 réponses 200 d'affilée** du serveur byobu avant `make test`
+  (sinon 502, faux « survit ») ; **aucun script** : Edit à la main, `sha256sum` avant /
+  après ; `make test` toujours avec des chemins (`ARGS="tests/pytest/..."`).
 - Comptabilité légale (Z chaîné LNE, archive, FEC) : **aucune décision comptable sans
   le mainteneur**. Tout écart à la spec est écrit dans `CHANTIER-05-SUIVI.md` §4
   **avant** d'être codé ; s'il touche une décision D ou un choix R, le mainteneur valide.
@@ -95,9 +107,22 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## PROCHAINE ÉTAPE
-Relire le tableau de bord (SUIVI §3) et reprendre à la première session qui n'est pas
-`commité`. Ordre : **05-0, 05-A′, 05-A** (relue par Fable), puis B, C, D (E en parallèle
-de B), F, G, H. Avant d'ouvrir une fiche, vérifier dans le SUIVI §5 que ses questions
-ont une réponse (au 2026-09-29, **toutes** sont tranchées ; toute nouvelle question
-posée en cours de chantier s'y ajoute et bloque sa fiche jusqu'à la réponse).
+## PROCHAINE ÉTAPE (mise à jour 2026-09-30)
+**Relire d'abord, en entier : `CHANTIER-05-SUIVI.md` (§3 tableau, §4 écarts, §5 décisions,
+§6 journal — le plus récent en haut, §8 pièges) et la mémoire
+`project_chantier_montants_entiers`.**
+
+État : fiches 0, A′, A **commitées**. Fiche **B terminée, NON commitée** : toutes ses sessions
+prouvées, dont **B-4** (corrections de la relecture Fable, 2315 passed) et **B-5** (l'ancien
+Fedow fait autorité à l'ouverture de la caisse, comme V1 ; brief `05-B-5.md`). Après B-5 :
+`make test` complet puis `make e2e` (résultats dans le SUIVI §7). À faire ensuite :
+1. si les deux suites sont vertes : SUIVI §7, proposer au mainteneur le message de commit
+   de la fiche B (sans Co-Authored-By) et **attendre son commit** ;
+2. fiche suivante : D ou E (C attend 04-F-1) — vérifier le SUIVI §5 avant.
+
+Pièges de méthode appris pendant B (SUIVI §8) : tout test de route caisse est `django_db`
+ou en schéma dédié ; les E2E réels laissent de vraies données (ventes, sorties d'espèces) ;
+le serveur byobu peut mourir après ~30 rechargements (demander au mainteneur de le
+relancer) ; une mutation dont l'`Edit` échoue (« 2 matches ») ne s'est pas appliquée ;
+un texte muté doit rester unique (garder du contexte), sinon le retour échoue : sha256
+toujours comparé après chaque mutation.

@@ -7,7 +7,9 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_vider_carte_success.html
 RENDU PAR : PaiementViewSet.vider_carte()
 
 Meme popup que « Paiement réussi » : pastille verte, titre, le montant rendu
-en gros, le detail par monnaie, puis Imprimer le reçu + Terminé.
+en gros, le detail par Fedow et par monnaie (hx_vider_carte_parties.html), puis
+Imprimer le reçu + Terminé. Le formulaire du reçu ne poste que des uuid : le reçu
+relit chaque transaction (en base pour le Fedow local, sur l'ancien Fedow sinon).
 / Same popup as "Payment successful".
 {% endcomment %}
 <div id="messages">
@@ -27,14 +29,8 @@ en gros, le detail par monnaie, puis Imprimer le reçu + Terminé.
         <span class="succes-rendre-val">{{ total_centimes|cents_to_euros }}</span>
       </div>
 
-      <div class="succes-lignes">
-        {% if total_tlf_centimes > 0 %}
-          <div class="card-confirm-row"><span>{% translate "Monnaie locale" %}</span><b>{{ total_tlf_centimes|cents_to_euros }}</b></div>
-        {% endif %}
-        {% if total_fed_centimes > 0 %}
-          <div class="card-confirm-row"><span>{% translate "Fiduciaire fédérée" %}</span><b>{{ total_fed_centimes|cents_to_euros }}</b></div>
-        {% endif %}
-      </div>
+      {# Ce qui a été repris, séparé par Fedow / What was taken back, split by Fedow #}
+      {% include "laboutik/partial/hx_vider_carte_parties.html" %}
 
       {% if vider_carte %}
         <span class="vider-etat" role="status">{% translate "La carte a été réinitialisée." %}</span>
@@ -46,7 +42,9 @@ en gros, le detail par monnaie, puis Imprimer le reçu + Terminé.
               hx-swap="innerHTML"
               class="vider-form-imprimer">
           {% csrf_token %}
+          {# Des uuid seulement, jamais de montant : le reçu relit chaque transaction. #}
           {% for tx_uuid in transaction_uuids %}<input type="hidden" name="transaction_uuids" value="{{ tx_uuid }}">{% endfor %}
+          {% for tx_uuid in transaction_uuids_ancien_fedow %}<input type="hidden" name="transaction_uuids_ancien_fedow" value="{{ tx_uuid }}">{% endfor %}
           <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
           <button type="submit"
                   class="card-confirm-cancel succes-imprimer"

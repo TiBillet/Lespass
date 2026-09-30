@@ -144,6 +144,14 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
         builder.setAlignment(ALIGN_LEFT)
         for article in articles:
             article_name = article.get("name", "")
+
+            # Ligne de texte seul (titre de partie, ligne sans argent d'un reçu) : le
+            # nom seul, sans quantité ni prix.
+            # / Text-only line (part title, no-money line): the name only.
+            if article.get("texte_seul"):
+                builder.appendText(article_name + "\n")
+                continue
+
             article_qty = article.get("qty", 1)
             article_price = article.get("price", 0)
             article_total = article.get("total", 0)

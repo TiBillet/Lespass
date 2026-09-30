@@ -13,6 +13,7 @@ import uuid as uuid_module
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from json import dumps
+from types import SimpleNamespace
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -67,8 +68,9 @@ from fedow_core.services import (
 
 # Interop reseau federe (FED) : lecture du solde FED sur le serveur Fedow distant.
 # / Federated network interop (FED): reads the FED balance from the remote Fedow server.
-from fedow_connect.fedow_api import FedowAPI
+from fedow_connect.fedow_api import CarteInconnueDeFedow, FedowAPI
 from fedow_connect.models import FedowConfig
+from fedow_connect.validators import TransactionValidator
 
 from AuthBillet.models import Wallet
 from AuthBillet.utils import get_or_create_user
@@ -88,7 +90,15 @@ from BaseBillet.models import (
     PaymentMethod,
     Ticket,
 )
+from BaseBillet.models_vente import Vente
 from BaseBillet.permissions import HasLaBoutikAccess, HasLaBoutikTerminalAccess
+from BaseBillet.services_vente import (
+    EgaliteDeVenteRompue,
+    ajouter_article,
+    ajouter_reglement,
+    encaisser_vente,
+    ouvrir_vente,
+)
 from QrcodeCashless.models import CarteCashless
 from laboutik.models import (
     LaboutikConfiguration,
@@ -698,6 +708,25 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
 
         prix_en_centimes = int(round(prix_obj.prix * 100))
 
+        # Un retour de consigne affiche le prix du gobelet qu'il rembourse, jamais le
+        # sien : la tuile doit annoncer ce que la caisse rendra vraiment.
+        # Quand la caisse ne sait pas calculer ce prix (pas de consigne reliée, ou
+        # gobelet sans tarif en euros vendable), le retour n'a PAS de tuile. La vente
+        # reste refusée en plus, si un panier l'envoie quand même
+        # (_extraire_articles_du_panier).
+        # / A deposit return shows the cup's price, never its own. When that price
+        #   cannot be computed, the return has NO tile.
+        prix_de_la_consigne_remboursee_en_centimes = None
+        if product.methode_caisse == Product.RETOUR_CONSIGNE:
+            try:
+                prix_de_la_consigne_remboursee_en_centimes = (
+                    _prix_de_la_consigne_remboursee_en_centimes(product)
+                )
+            except ValueError:
+                continue
+        if prix_de_la_consigne_remboursee_en_centimes is not None:
+            prix_en_centimes = prix_de_la_consigne_remboursee_en_centimes
+
         # Catégorie POS du produit (ou catégorie par défaut)
         # Product POS category (or default category)
         categorie_pos = product.categorie_pos
@@ -742,11 +771,17 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
         tarifs = []
         if multi_tarif:
             for p in product.prix_euros:
+                # Un retour de consigne relié : chaque tarif rend le prix du gobelet.
+                # / A linked deposit return: every price gives back the cup's price.
+                if prix_de_la_consigne_remboursee_en_centimes is not None:
+                    prix_du_tarif_en_centimes = prix_de_la_consigne_remboursee_en_centimes
+                else:
+                    prix_du_tarif_en_centimes = int(round(p.prix * 100))
                 tarifs.append(
                     {
                         "price_uuid": str(p.uuid),
                         "name": p.name,
-                        "prix_centimes": int(round(p.prix * 100)),
+                        "prix_centimes": prix_du_tarif_en_centimes,
                         # Unite du prix (tuile, popup des tarifs, panier)
                         # / Price unit (tile, rate popup, cart)
                         "unite_label": _unite_du_tarif(p),
@@ -1129,6 +1164,86 @@ def _charger_carte_primaire(tag_id):
     return carte_primaire_obj, None
 
 
+def _verifier_carte_primaire_aupres_de_l_ancien_fedow(carte_primaire_obj):
+    """
+    Demande à l'ancien Fedow si la carte est encore une carte primaire de ce lieu.
+    Retourne None si oui, sinon le message d'erreur à afficher.
+    / Asks the old Fedow whether the card is still a primary card of this venue.
+    Returns None if so, otherwise the error message to display.
+
+    LOCALISATION : laboutik/views.py
+
+    Appelée par CaisseViewSet.carte_primaire(), à l'ouverture de la caisse, une fois la
+    carte primaire trouvée en local. Même comportement que LaBoutik V1
+    (../LaBoutik/webview/views.py) : l'ancien Fedow fait autorité. Il peut retirer une
+    carte primaire sans prévenir la caisse (VOID de la carte, carte perdue).
+    L'ancien Fedow calcule `is_primary` pour le lieu qui signe la requête.
+
+    FLUX :
+    1. Lieu non relié à l'ancien Fedow : ouverture refusée, rien n'est supprimé.
+    2. On lit la carte sur l'ancien Fedow (`NFCcard.retrieve`). Serveur injoignable,
+       erreur HTTP, réponse illisible ou carte inconnue : ouverture refusée, rien
+       n'est supprimé.
+    3. `is_primary` faux : la carte primaire locale est supprimée, ouverture refusée.
+       Suppression locale seulement : l'ancien Fedow ne la connaît déjà plus comme
+       carte primaire, on ne lui renvoie rien.
+    4. `is_primary` vrai : None, la caisse s'ouvre.
+
+    :param carte_primaire_obj: CartePrimaire trouvée en local
+    :return: None si la carte est confirmée, sinon le message d'erreur (str)
+    """
+    tag_id_de_la_carte = carte_primaire_obj.carte.tag_id
+
+    # Garde indispensable : on teste can_fedow() AVANT de créer FedowAPI. Sur un lieu
+    # sans place Fedow, sa création lancerait create_place() (un appel réseau).
+    # / Mandatory guard: check can_fedow() BEFORE building FedowAPI.
+    lieu_relie_a_l_ancien_fedow = FedowConfig.get_solo().can_fedow()
+    if not lieu_relie_a_l_ancien_fedow:
+        logger.error(
+            f"carte_primaire : ouverture refusée pour la carte {tag_id_de_la_carte}, "
+            f"le lieu n'est pas relié à l'ancien Fedow."
+        )
+        return _("Ce lieu n'est pas relié à Fedow : prévenez un responsable.")
+
+    # Toute erreur de lecture refuse l'ouverture sans rien supprimer : on ne sait pas
+    # si la carte est encore primaire. Le message est le même pour toutes les causes,
+    # la cause réelle part dans le journal.
+    # / Any read error refuses the opening without deleting anything.
+    message_verification_impossible = _(
+        "Impossible de vérifier la carte primaire auprès de Fedow. "
+        "Réessayez dans un instant, puis prévenez un responsable si cela recommence."
+    )
+    try:
+        fiche_de_la_carte = FedowAPI().NFCcard.retrieve(tag_id_de_la_carte)
+    except CarteInconnueDeFedow as erreur_carte_inconnue:
+        logger.error(
+            f"carte_primaire : ouverture refusée, carte {tag_id_de_la_carte} "
+            f"inconnue de l'ancien Fedow : {erreur_carte_inconnue}"
+        )
+        return message_verification_impossible
+    except Exception as erreur_de_l_ancien_fedow:
+        logger.error(
+            f"carte_primaire : ouverture refusée, lecture de la carte "
+            f"{tag_id_de_la_carte} sur l'ancien Fedow en échec : "
+            f"{type(erreur_de_l_ancien_fedow).__name__} {erreur_de_l_ancien_fedow}"
+        )
+        return message_verification_impossible
+
+    carte_encore_primaire = fiche_de_la_carte["is_primary"]
+    if not carte_encore_primaire:
+        logger.warning(
+            f"carte_primaire : la carte {tag_id_de_la_carte} n'est plus primaire pour "
+            f"ce lieu sur l'ancien Fedow. Carte primaire locale supprimée."
+        )
+        carte_primaire_obj.delete()
+        return _(
+            "Cette carte n'est plus une carte primaire pour ce lieu. "
+            "Prévenez un responsable."
+        )
+
+    return None
+
+
 def obtenir_wallet_carte_depuis_fedow(carte):
     """
     Demande a Fedow (source de verite) le wallet de la carte et le miroir en
@@ -1401,8 +1516,12 @@ def _repartir_legacy_sur_articles(lignes_complement, transactions_legacy):
 
     :param lignes_complement: liste de tuples (article_dict, None, montant_centimes, None)
         — les parts d'articles non couvertes par les locaux (asset=None), dans l'ordre.
-    :param transactions_legacy: liste de tuples (asset_uuid, montant_centimes, payment_method)
-        — ce que Fedow a réellement débité (1 par asset legacy), moyen déjà résolu, dans l'ordre.
+    :param transactions_legacy: liste de tuples (asset_uuid, montant_centimes, payment_method,
+        uuid_de_la_transaction) rendus par `_debiter_legacy` — ce que Fedow a réellement débité
+        (1 par asset legacy), moyen déjà résolu, dans l'ordre. Seuls les trois premiers
+        éléments servent ici : l'uuid de la transaction sert aux RÈGLEMENTS, que l'appelant
+        écrit directement depuis `transactions_legacy` (une part d'article perd le lien avec
+        sa transaction).
         INVARIANT : somme des montants legacy == somme des montants de lignes_complement.
     :return: liste de tuples (article_dict, asset_uuid, montant_centimes, payment_method)
         — 1 par recouvrement (article × transaction), prête pour _creer_lignes_articles_cascade.
@@ -1410,11 +1529,16 @@ def _repartir_legacy_sur_articles(lignes_complement, transactions_legacy):
     lignes_legacy = []
 
     # File des transactions à consommer, dans l'ordre renvoyé par Fedow (mutable : on décrémente).
+    # On lit les trois premiers éléments par leur position : un éventuel élément de plus
+    # (l'uuid de la transaction) est ignoré ici.
     # / Queue of transactions to consume, in Fedow's order (mutable: we decrement amounts).
-    file_transactions = [
-        [asset_uuid, montant, payment_method]
-        for (asset_uuid, montant, payment_method) in transactions_legacy
-    ]
+    #   The first three elements are read by position: an extra element (the uuid) is ignored.
+    file_transactions = []
+    for transaction_legacy in transactions_legacy:
+        asset_uuid = transaction_legacy[0]
+        montant = transaction_legacy[1]
+        payment_method = transaction_legacy[2]
+        file_transactions.append([asset_uuid, montant, payment_method])
     index_transaction = 0
 
     # Pour chaque part d'article à couvrir, on pioche dans les transactions tant qu'il reste
@@ -1597,7 +1721,9 @@ def _debiter_legacy(user, montant_centimes, uuid_transaction):
     :param user: TibilletUser (carte liée, signable)
     :param montant_centimes: int — montant à débiter
     :param uuid_transaction: UUID de la vente POS (traçabilité POS ↔ Fedow)
-    :return: liste de tuples (asset_uuid, montant_centimes, payment_method)
+    :return: liste de tuples (asset_uuid, montant_centimes, payment_method,
+        uuid_de_la_transaction). L'uuid de la transaction distante sert au règlement de la
+        vente (`reference_externe`) et au journal d'incident.
     """
     fedow_api = FedowAPI()
     transactions = fedow_api.transaction.to_place_from_qrcode(
@@ -1622,9 +1748,445 @@ def _debiter_legacy(user, montant_centimes, uuid_transaction):
         else:
             raise Exception(f"Débit legacy : catégorie d'asset inattendue '{categorie}'")
         transactions_legacy.append(
-            (transaction["asset"], transaction["amount"], payment_method)
+            (
+                transaction["asset"],
+                transaction["amount"],
+                payment_method,
+                transaction["uuid"],
+            )
         )
     return transactions_legacy
+
+
+class CarteVideeSurLAncienFedowReponseIllisible(Exception):
+    """
+    La carte EST vidée sur l'ancien Fedow (`card/refund` a réussi), mais la caisse ne
+    sait pas lire ce qui a été repris (catégorie ou nom d'une monnaie).
+    / The card IS emptied on the old Fedow, but the register cannot read what was
+    taken back.
+
+    LOCALISATION : laboutik/views.py
+
+    Elle est distincte de toute autre erreur de l'ancien Fedow : après elle, la carte
+    est vidée là-bas et un nouvel essai ne rendrait jamais cet argent. La caisse ne
+    doit donc pas dire « rien n'a été fait : réessayez », mais la vérité : vidée sur
+    l'ancien Fedow, pas en local, incident enregistré.
+    / Distinct from any other old-Fedow error: the card is emptied there and a retry
+    would never give this money back. The screen must tell the truth.
+
+    LEVÉE PAR : _vider_la_carte_sur_l_ancien_fedow (après avoir journalisé l'INCIDENT)
+    ATTRAPÉE PAR : PaiementViewSet.vider_carte
+    """
+
+
+def _vider_la_carte_sur_l_ancien_fedow(carte_client, tag_id_carte_primaire, vider_et_delier):
+    """
+    Vide la carte du client sur l'ancien Fedow (serveur distant), AVANT le Fedow local.
+    / Empties the customer card on the old Fedow (remote server), BEFORE the local Fedow.
+
+    LOCALISATION : laboutik/views.py
+
+    Appel réseau : à faire HORS de toute transaction de base. Un vidage distant ne
+    s'annule pas.
+    / Network call: OUTSIDE any database transaction. A remote emptying cannot be undone.
+
+    - Lieu non relié à l'ancien Fedow : rien n'est appelé, rend None. On teste
+      `can_fedow()` AVANT de créer `FedowAPI` : sur un lieu sans place Fedow, sa
+      création lancerait une création de place sur le serveur.
+    - Carte inconnue de l'ancien Fedow (réponse 404, `CarteInconnueDeFedow`) : rend
+      None, la caisse vide le Fedow local seul.
+    - Carte connue : elle est TOUJOURS envoyée à `card/refund`, même sans solde
+      là-bas : sinon « vider et délier » (VOID) ne la délierait jamais. Rend la liste
+      des transactions reprises (vide si la carte n'avait rien là-bas).
+    - `card/refund` réussit, puis ce qui a été repris est illisible : INCIDENT
+      journalisé, puis `CarteVideeSurLAncienFedowReponseIllisible` (la carte EST vidée
+      là-bas).
+    - Toute autre erreur (serveur injoignable, refus) remonte : rien n'est fait.
+    / Venue not linked or card unknown (404): None. Known card: always sent to
+      card/refund, returns the (possibly empty) list. Refund done but unreadable:
+      INCIDENT logged, then CarteVideeSurLAncienFedowReponseIllisible. Any other error
+      is raised.
+
+    La même carte primaire sert aux deux Fedow : son tag est envoyé tel quel.
+    / The same primary card is used for both Fedow servers.
+
+    APPELÉ PAR : PaiementViewSet.vider_carte
+
+    :param carte_client: CarteCashless à vider
+    :param tag_id_carte_primaire: tag de la carte primaire du caissier
+    :param vider_et_delier: True → action VOID (délie aussi la carte), sinon REFUND
+    :return: None si la carte n'est pas envoyée à l'ancien Fedow ; sinon une liste
+        de dicts, un par transaction REFUND de l'ancien Fedow :
+        {"uuid", "asset" (uuid de la monnaie distante), "montant" (centimes),
+        "categorie" ("TLF" monnaie locale du lieu, "TNF" jetons cadeau, "FED"),
+        "nom" (nom de la monnaie), "code_monnaie" (ex. "EUR", ou "" si inconnu)}
+    :raises CarteVideeSurLAncienFedowReponseIllisible: carte vidée là-bas, réponse
+        illisible
+    :raises Exception: l'ancien Fedow échoue, rien n'est fait
+    """
+    if not FedowConfig.get_solo().can_fedow():
+        return None
+
+    fedow_api = FedowAPI()
+    try:
+        fedow_api.NFCcard.retrieve(carte_client.tag_id)
+    except CarteInconnueDeFedow:
+        return None
+
+    reponse_du_vidage = fedow_api.NFCcard.refund(
+        user_card_firstTagId=carte_client.tag_id,
+        primary_card_fisrtTagId=tag_id_carte_primaire,
+        void=vider_et_delier,
+    )
+    transactions_rendues = reponse_du_vidage["serialized_transactions"]
+
+    # La catégorie et le nom de chaque monnaie reprise se lisent dans le portefeuille
+    # d'avant le vidage, rendu dans la même réponse (aucun appel réseau de plus). Les
+    # transactions du vrai serveur n'ont pas de fiche de monnaie.
+    # / Each currency's category and name are read in the before-refund wallet.
+    jeton_avant_le_vidage_par_monnaie = {}
+    portefeuille_avant_le_vidage = reponse_du_vidage.get("before_refund_serialized_wallet") or {}
+    for jeton in portefeuille_avant_le_vidage.get("tokens", []):
+        jeton_avant_le_vidage_par_monnaie[str(jeton["asset_uuid"])] = jeton
+
+    transactions_de_l_ancien_fedow = []
+    try:
+        for transaction_rendue in transactions_rendues:
+            jeton_avant_le_vidage = jeton_avant_le_vidage_par_monnaie.get(
+                str(transaction_rendue["asset"])
+            )
+            if jeton_avant_le_vidage is not None:
+                categorie = jeton_avant_le_vidage["asset_category"]
+                nom_de_la_monnaie = jeton_avant_le_vidage.get("asset_name") or ""
+                fiche_de_la_monnaie = jeton_avant_le_vidage.get("asset") or {}
+                code_de_la_monnaie = fiche_de_la_monnaie.get("currency_code") or ""
+            else:
+                # Monnaie absente du portefeuille renvoyé : on demande sa fiche.
+                # / Currency missing from the returned wallet: ask for its record.
+                fiche_de_la_monnaie = fedow_api.asset.retrieve(str(transaction_rendue["asset"]))
+                categorie = fiche_de_la_monnaie["category"]
+                nom_de_la_monnaie = fiche_de_la_monnaie["name"]
+                code_de_la_monnaie = fiche_de_la_monnaie.get("currency_code") or ""
+            transactions_de_l_ancien_fedow.append(
+                {
+                    "uuid": transaction_rendue["uuid"],
+                    "asset": transaction_rendue["asset"],
+                    "montant": transaction_rendue["amount"],
+                    "categorie": categorie,
+                    "nom": nom_de_la_monnaie,
+                    "code_monnaie": code_de_la_monnaie,
+                }
+            )
+    except Exception as erreur_de_lecture:
+        # La carte EST vidée sur l'ancien Fedow, mais on ne sait pas lire ce qui a été
+        # repris : rien n'est écrit en local, régularisation à la main.
+        # / The card IS emptied on the old Fedow, but the result cannot be read.
+        uuids_des_transactions = []
+        for transaction_rendue in transactions_rendues:
+            uuids_des_transactions.append(str(transaction_rendue["uuid"]))
+        logger.error(
+            f"INCIDENT ancien Fedow vidé, catégories illisibles — "
+            f"carte={carte_client.tag_id} "
+            f"transactions_ancien_fedow={', '.join(uuids_des_transactions)} : "
+            f"régularisation manuelle requise. ({erreur_de_lecture})"
+        )
+        raise CarteVideeSurLAncienFedowReponseIllisible(
+            f"Carte {carte_client.tag_id} vidée sur l'ancien Fedow, réponse illisible."
+        ) from erreur_de_lecture
+
+    return transactions_de_l_ancien_fedow
+
+
+def _ecrire_la_vente_du_vidage(
+    request,
+    point_de_vente,
+    carte_client,
+    client_de_la_vente,
+    transactions_locales,
+    transactions_de_l_ancien_fedow,
+):
+    """
+    Écrit la vente `VIDAGE_CARTE` d'un vidage de carte : sans article, un règlement
+    POSITIF par remboursement d'argent, puis un règlement espèces de MOINS le total
+    rendu. La somme des règlements vaut 0.
+    / Writes the card-emptying sale: no item, one POSITIVE payment per money refund,
+    then minus the total in cash. Payments sum to 0.
+
+    LOCALISATION : laboutik/views.py
+
+    À appeler DANS le `transaction.atomic()` du vidage local. L'appelant encaisse la
+    vente (`encaisser_vente`) en dernier.
+    / Call INSIDE the local emptying atomic block. The caller settles the sale last.
+
+    Règlements :
+    - transaction locale (`fedow_core`) : son uuid dans `fedow_transaction_uuid` ;
+    - transaction de l'ancien Fedow (serveur distant) : son uuid dans
+      `reference_externe` ;
+    - monnaie locale du lieu → `LE`, monnaie fédérée → `SF` ;
+    - jetons cadeau : repris sans argent, AUCUN règlement (D12).
+    Aucun argent rendu (carte avec seulement des jetons cadeau) : AUCUNE vente.
+    / Local uuid in fedow_transaction_uuid, remote uuid in reference_externe. No payment
+      for gift tokens; no money at all → no sale.
+
+    APPELÉ PAR : PaiementViewSet.vider_carte
+
+    :param client_de_la_vente: le titulaire de la carte, lu AVANT le vidage (« vider et
+        délier » le retire de la carte)
+    :param transactions_locales: les `Transaction` REFUND du Fedow local
+    :param transactions_de_l_ancien_fedow: les dicts de `_vider_la_carte_sur_l_ancien_fedow`
+    :return: la `Vente` EN_ATTENTE, ou None s'il n'y a aucun argent rendu
+    """
+    # Les remboursements d'argent, des deux Fedow : (moyen, montant, asset,
+    # portefeuille, uuid local, référence distante).
+    # / Money refunds from both Fedow servers.
+    remboursements_d_argent = []
+    for transaction_locale in transactions_locales:
+        categorie_locale = transaction_locale.asset.category
+        if categorie_locale == Asset.TLF:
+            moyen_du_reglement = PaymentMethod.LOCAL_EURO
+        elif categorie_locale == Asset.FED:
+            moyen_du_reglement = PaymentMethod.STRIPE_FED
+        else:
+            continue
+        remboursements_d_argent.append(
+            (
+                moyen_du_reglement,
+                transaction_locale.amount,
+                transaction_locale.asset.uuid,
+                transaction_locale.sender,
+                transaction_locale.uuid,
+                "",
+            )
+        )
+    for transaction_distante in transactions_de_l_ancien_fedow:
+        if transaction_distante["categorie"] == "TLF":
+            moyen_du_reglement = PaymentMethod.LOCAL_EURO
+        elif transaction_distante["categorie"] == "FED":
+            moyen_du_reglement = PaymentMethod.STRIPE_FED
+        else:
+            continue
+        remboursements_d_argent.append(
+            (
+                moyen_du_reglement,
+                transaction_distante["montant"],
+                transaction_distante["asset"],
+                None,
+                None,
+                str(transaction_distante["uuid"]),
+            )
+        )
+
+    argent_rendu_en_centimes = 0
+    for remboursement_d_argent in remboursements_d_argent:
+        montant_rembourse = remboursement_d_argent[1]
+        argent_rendu_en_centimes += montant_rembourse
+    if argent_rendu_en_centimes == 0:
+        return None
+
+    vente = ouvrir_vente(
+        origine=SaleOrigin.LABOUTIK,
+        nature=Vente.Nature.VIDAGE_CARTE,
+        point_de_vente=point_de_vente,
+        operateur=_operateur_de_la_caisse(request, request.POST.get("tag_id_cm", "")),
+        client=client_de_la_vente,
+        carte=carte_client,
+    )
+    for (
+        moyen_du_reglement,
+        montant_rembourse,
+        uuid_de_la_monnaie,
+        portefeuille_de_la_carte,
+        uuid_de_la_transaction_locale,
+        reference_distante,
+    ) in remboursements_d_argent:
+        ajouter_reglement(
+            vente,
+            moyen=moyen_du_reglement,
+            montant=montant_rembourse,
+            asset=uuid_de_la_monnaie,
+            carte=carte_client,
+            wallet=portefeuille_de_la_carte,
+            fedow_transaction_uuid=uuid_de_la_transaction_locale,
+            reference_externe=reference_distante,
+        )
+    # L'argent sort du tiroir : un seul règlement espèces, négatif.
+    # / Cash leaves the drawer: one negative cash payment.
+    ajouter_reglement(
+        vente,
+        moyen=PaymentMethod.CASH,
+        montant=-argent_rendu_en_centimes,
+    )
+    return vente
+
+
+def _ligne_de_vidage(nom_de_la_monnaie, montant_centimes, categorie, code_de_la_monnaie):
+    """
+    Une ligne de l'aperçu, de l'écran de succès ou du reçu d'un vidage de carte : une
+    monnaie reprise, sur un des deux Fedow.
+    / One line of a card-emptying preview, success screen or receipt.
+
+    LOCALISATION : laboutik/views.py
+
+    Seules la monnaie locale (TLF) et la monnaie fédérée (FED) sont de l'argent rendu.
+    Les jetons cadeau (TNF) sont repris, sans argent.
+    `currency_code` porte le nom attendu par le filtre `cents_to_asset`.
+    / Only TLF and FED are money given back. Gift tokens (TNF) carry no money.
+
+    APPELÉ PAR : vider_carte_preview, vider_carte
+    """
+    return SimpleNamespace(
+        nom=nom_de_la_monnaie,
+        montant_centimes=montant_centimes,
+        est_de_l_argent_rendu=categorie in (Asset.TLF, Asset.FED),
+        est_un_jeton_cadeau=categorie == Asset.TNF,
+        currency_code=code_de_la_monnaie,
+    )
+
+
+def _lire_la_carte_sur_l_ancien_fedow(carte_client):
+    """
+    Lit, SANS RIEN DÉBITER, ce que le vidage reprendrait sur l'ancien Fedow.
+    / Reads, WITHOUT DEBITING, what the emptying would take back on the old Fedow.
+
+    LOCALISATION : laboutik/views.py
+
+    Lecture : `NFCcard.retrieve(tag_id)` (GET `card/{tag_id}/`, le « check carte » de
+    l'ancien Fedow). On garde les jetons que `card/refund` reprendrait
+    (../Fedow/fedow_core/serializers.py, `CardRefundOrVoidValidator`) : solde positif,
+    et monnaie fédérée, ou monnaie locale / jetons cadeau créés par CE lieu (monnaie
+    dont le portefeuille d'origine est celui du lieu sur l'ancien Fedow).
+    / Keeps the tokens card/refund would take: FED, or the venue's own TLF / TNF.
+
+    EFFET DE BORD ACCEPTÉ : les validateurs de `fedow_connect` écrivent des miroirs
+    locaux (portefeuille, fiche de monnaie, empreinte de transaction), comme pour la
+    vidange elle-même.
+    / Accepted side effect: fedow_connect validators write local mirrors.
+
+    APPELÉ PAR : PaiementViewSet.vider_carte_preview
+
+    :param carte_client: CarteCashless scannée
+    :return: SimpleNamespace(
+        statut : "absente" (lieu non relié, ou carte inconnue là-bas : réponse 404),
+                 "injoignable" (toute autre erreur) ou "connue",
+        jetons : liste des jetons repris (dicts `TokenValidator`), vide sauf "connue")
+    """
+    # On teste `can_fedow()` AVANT de créer `FedowAPI` : sur un lieu sans place Fedow,
+    # sa création lancerait une création de place sur le serveur.
+    # / Check can_fedow() BEFORE building FedowAPI.
+    configuration_fedow = FedowConfig.get_solo()
+    if not configuration_fedow.can_fedow():
+        return SimpleNamespace(statut="absente", jetons=[])
+
+    try:
+        fiche_de_la_carte = FedowAPI().NFCcard.retrieve(carte_client.tag_id)
+    except CarteInconnueDeFedow:
+        return SimpleNamespace(statut="absente", jetons=[])
+    except Exception as erreur_de_lecture:
+        logger.warning(
+            f"Aperçu du vidage : ancien Fedow injoignable pour la carte "
+            f"{carte_client.tag_id} : {erreur_de_lecture}"
+        )
+        return SimpleNamespace(statut="injoignable", jetons=[])
+
+    portefeuille_du_lieu = str(configuration_fedow.fedow_place_wallet_uuid)
+    jetons_repris = []
+    for jeton in fiche_de_la_carte["wallet"]["tokens"]:
+        if jeton["value"] <= 0:
+            continue
+        categorie = jeton["asset_category"]
+        monnaie_du_lieu = str(jeton["asset"].get("wallet_origin")) == portefeuille_du_lieu
+        est_repris = categorie == Asset.FED or (
+            categorie in (Asset.TLF, Asset.TNF) and monnaie_du_lieu
+        )
+        if est_repris:
+            jetons_repris.append(jeton)
+    return SimpleNamespace(statut="connue", jetons=jetons_repris)
+
+
+def _relire_les_transactions_de_l_ancien_fedow(uuids_postes):
+    """
+    Relit sur l'ancien Fedow les transactions d'un vidage, pour le reçu.
+    / Re-reads a card-emptying's transactions on the old Fedow, for the receipt.
+
+    LOCALISATION : laboutik/views.py
+
+    Le navigateur ne poste que des uuid : les montants, les monnaies et le
+    destinataire viennent TOUJOURS de l'ancien Fedow (un montant posté se falsifie).
+    On ne garde qu'une transaction de remboursement (REFUND ou VOID) reçue par le
+    portefeuille du lieu. Tout autre uuid (inconnu, d'un autre lieu, pas un
+    remboursement, mal formé, en double) est ignoré.
+    / Only uuids are posted: amounts always come from the old Fedow. Only refunds
+    received by the venue's wallet are kept; any other uuid is ignored.
+
+    APPELÉ PAR : PaiementViewSet.vider_carte_imprimer_recu
+
+    :param uuids_postes: les uuid postés par le formulaire d'impression
+    :return: liste de dicts {"uuid", "montant", "categorie", "nom", "code_monnaie"}
+    :raises Exception: l'ancien Fedow ne répond pas, ou répond mal. Le reçu n'est
+        alors pas imprimé : jamais de reçu partiel.
+    """
+    if not uuids_postes:
+        return []
+
+    # Lieu non relié : aucune transaction de l'ancien Fedow n'est la sienne.
+    # / Venue not linked: no old Fedow transaction belongs to it.
+    configuration_fedow = FedowConfig.get_solo()
+    if not configuration_fedow.can_fedow():
+        return []
+
+    fedow_api = FedowAPI()
+    portefeuille_du_lieu = str(configuration_fedow.fedow_place_wallet_uuid)
+    actions_de_remboursement = (TransactionValidator.REFUND, TransactionValidator.VOID)
+    uuids_deja_lus = set()
+    transactions_relues = []
+    for uuid_poste in uuids_postes:
+        try:
+            uuid_de_la_transaction = str(uuid_module.UUID(str(uuid_poste)))
+        except ValueError:
+            continue
+        if uuid_de_la_transaction in uuids_deja_lus:
+            continue
+        uuids_deja_lus.add(uuid_de_la_transaction)
+
+        transaction_relue = fedow_api.transaction.retrieve(uuid_de_la_transaction)
+
+        # CONTRAINTE : `TransactionFedow.retrieve` ne lève pas d'exception. Il rend les
+        # données validées (un dict), OU le dict des erreurs de validation, OU le code
+        # HTTP (un entier). 404 = transaction inconnue : ignorée. Tout le reste qui
+        # n'est pas une transaction lisible est une panne : le reçu est refusé.
+        # / TransactionFedow.retrieve never raises: it returns validated data, OR the
+        # validation errors, OR the HTTP status code. 404 is ignored; anything else
+        # unreadable is a failure.
+        if transaction_relue == 404:
+            continue
+        transaction_lisible = isinstance(transaction_relue, dict) and isinstance(
+            transaction_relue.get("amount"), int
+        )
+        if not transaction_lisible:
+            raise Exception(
+                f"Ancien Fedow : transaction {uuid_de_la_transaction} illisible "
+                f"({transaction_relue})"
+            )
+
+        if transaction_relue.get("action") not in actions_de_remboursement:
+            continue
+        if str(transaction_relue.get("receiver")) != portefeuille_du_lieu:
+            continue
+
+        fiche_de_la_monnaie = fedow_api.asset.retrieve(str(transaction_relue["asset"]))
+        categorie = fiche_de_la_monnaie["category"]
+        if categorie not in (Asset.TLF, Asset.FED, Asset.TNF):
+            continue
+        transactions_relues.append(
+            {
+                "uuid": uuid_de_la_transaction,
+                "montant": transaction_relue["amount"],
+                "categorie": categorie,
+                "nom": fiche_de_la_monnaie["name"],
+                "code_monnaie": fiche_de_la_monnaie.get("currency_code") or "",
+            }
+        )
+    return transactions_relues
 
 
 def _render_erreur_toast(request, msg):
@@ -2167,6 +2729,92 @@ def _asset_de_retour_consigne(articles_panier):
     return asset_a_crediter, None
 
 
+def _tarifs_en_euros_vendables_a_la_caisse(produit):
+    """
+    Les tarifs EN EUROS d'un produit que la caisse sait vendre, dans l'ordre de la
+    caisse (`_tarifs_vendables_a_la_caisse`). Sans les tarifs en points ou en temps.
+    / The EURO prices of a product the POS can sell, in POS order.
+
+    LOCALISATION : laboutik/views.py
+
+    Le prix d'un retour de consigne est le premier de ces tarifs, pris sur le gobelet
+    relié. L'admin des produits de caisse refuse un retour relié à un gobelet qui n'en a
+    aucun : la caisse et l'admin lisent donc la même règle, ici.
+    / A deposit return's price is the first of these prices, on the linked cup. The POS
+    product admin refuses a return linked to a cup without any: one shared rule.
+
+    Appelée par / Called by : _prix_de_la_consigne_remboursee_en_centimes(),
+    Administration/admin/products.py POSProductForm.clean().
+
+    :param produit: Product
+    :return: QuerySet de Price
+    """
+    return _tarifs_vendables_a_la_caisse().filter(
+        product=produit,
+        asset__isnull=True,
+        non_fiduciaire=False,
+    )
+
+
+def _prix_de_la_consigne_remboursee_en_centimes(produit_de_retour):
+    """
+    Le prix d'un retour de consigne, en centimes, NÉGATIF : l'opposé du prix du produit
+    consigne qu'il rembourse (`Product.consigne_remboursee`, le gobelet vendu).
+    / The price of a deposit return, in cents, NEGATIVE: minus the sold cup's price.
+
+    LOCALISATION : laboutik/views.py
+
+    Le prix propre du produit « Retour de consigne » n'est jamais utilisé (D11) : la
+    tuile, le total de la caisse, les espèces rendues et le recrédit de la carte
+    prennent tous le prix du gobelet. Le retour
+    annule ainsi exactement la vente du gobelet.
+    Le prix du gobelet est son premier tarif en euros vendable à la caisse, lu comme la
+    tuile du gobelet le lit (`_tarifs_vendables_a_la_caisse`, les euros d'abord).
+    / The return product's own price is never used: tile, total, cash and card
+    re-credit all take the cup's price (its first POS-sellable euro price).
+
+    Appelée par / Called by : _construire_donnees_articles() (tuile),
+    _extraire_articles_du_panier() (prix du panier, calculé par le serveur).
+
+    :param produit_de_retour: Product de méthode de caisse RETOUR_CONSIGNE
+    :return: int, centimes, négatif
+    :raises ValueError: aucune consigne reliée, ou consigne sans tarif en euros
+        (message traduit, lisible par le caissier)
+    """
+    produit_de_la_consigne = produit_de_retour.consigne_remboursee
+    if produit_de_la_consigne is None:
+        raise ValueError(
+            _(
+                "Le retour « %(nom)s » ne dit pas quelle consigne il rembourse. "
+                "Prévenez le gestionnaire : il faut le relier au produit consigne "
+                "dans l'administration."
+            )
+            % {"nom": produit_de_retour.name}
+        )
+
+    tarif_en_euros_de_la_consigne = _tarifs_en_euros_vendables_a_la_caisse(
+        produit_de_la_consigne
+    ).first()
+    if tarif_en_euros_de_la_consigne is None:
+        raise ValueError(
+            _(
+                "La consigne « %(nom)s » n'a pas de tarif en euros : "
+                "le retour ne peut pas être remboursé. Prévenez le gestionnaire."
+            )
+            % {"nom": produit_de_la_consigne.name}
+        )
+
+    # Conversion euros → centimes par Decimal, arrondie au demi supérieur : le prix
+    # est déjà au centime, l'arrondi ne fait que produire un entier exact.
+    # / Euros → cents through Decimal; the price is already whole cents.
+    prix_de_la_consigne_en_centimes = int(
+        (Decimal(tarif_en_euros_de_la_consigne.prix) * 100).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+    )
+    return -prix_de_la_consigne_en_centimes
+
+
 def _panier_contient_uniquement_recharges_gratuites(articles_panier):
     """
     Vérifie si le panier ne contient QUE des recharges gratuites (RC/TM).
@@ -2185,6 +2833,87 @@ def _panier_contient_uniquement_recharges_gratuites(articles_panier):
         if article["product"].methode_caisse not in METHODES_RECHARGE_GRATUITES:
             return False
     return True
+
+
+def _somme_encaissee_du_panier_en_centimes(articles_panier):
+    """
+    La somme d'argent que le caissier encaisse pour ce panier (espèces, CB, chèque),
+    en centimes, signée : négative pour un retour de consigne (argent rendu).
+    / The money the cashier collects for this cart, in cents, signed.
+
+    LOCALISATION : laboutik/views.py
+
+    C'est la somme demandée au client (le total du panier) SANS les recharges cadeau :
+    elles sont offertes par le lieu, et le service de vente leur écrit un règlement
+    « offert » (FREE). Un panier qui mêle une recharge cadeau à d'autres articles est
+    refusé avant d'arriver ici (`_panier_melange_recharge_cadeau_et_autres_articles`).
+    Elle devient le montant du règlement espèces / CB / chèque de la vente : un montant
+    copié de ce qui est encaissé, pas une somme des lignes écrites.
+    / The total asked from the customer, without gift top-ups (offered, FREE payment).
+
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :return: int
+    """
+    somme_encaissee_en_centimes = 0
+    for article in articles_panier:
+        article_est_une_recharge_cadeau = (
+            article["product"].methode_caisse in METHODES_RECHARGE_GRATUITES
+        )
+        if article_est_une_recharge_cadeau:
+            continue
+        somme_encaissee_en_centimes += article["prix_centimes"] * article["quantite"]
+    return somme_encaissee_en_centimes
+
+
+def _operateur_de_la_caisse(request, tag_id_carte_manager):
+    """
+    La personne qui encaisse, pour `Vente.operateur` : le titulaire de la carte
+    primaire présentée s'il est connu, sinon l'utilisateur connecté à la caisse
+    (administrateur du lieu ou terminal).
+    / Who collects the money: the primary card holder if known, else the logged-in user.
+
+    LOCALISATION : laboutik/views.py
+
+    :param request: la requête de paiement
+    :param tag_id_carte_manager: tag de la carte primaire (POST « tag_id_cm »), ou ""
+    :return: TibilletUser ou None
+    """
+    if tag_id_carte_manager:
+        carte_primaire_obj, erreur = _charger_carte_primaire(tag_id_carte_manager)
+        carte_primaire_trouvee = erreur is None
+        if carte_primaire_trouvee and carte_primaire_obj.carte.user is not None:
+            return carte_primaire_obj.carte.user
+
+    if request.user.is_authenticated:
+        return request.user
+    return None
+
+
+def _panier_melange_recharge_cadeau_et_autres_articles(articles_panier):
+    """
+    Le panier contient-il une recharge cadeau (RC) ET au moins un autre article ?
+    / Does the cart hold a gift top-up (RC) AND at least one other item?
+
+    LOCALISATION : laboutik/views.py
+
+    Un tel panier est refusé par le serveur : la caisse additionne tous les articles
+    pour calculer la somme à payer, cadeau compris, et le client paierait le cadeau. La recharge cadeau se fait à part ; seule,
+    elle est créditée sans paiement (`identifier_client`).
+    / Such a cart is refused: the register would make the customer pay for the gift.
+
+    Appelée par / Called by : _executer_paiement(), _executer_paiement_complementaire().
+
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :return: bool
+    """
+    panier_contient_une_recharge_cadeau = False
+    panier_contient_un_autre_article = False
+    for article in articles_panier:
+        if article["product"].methode_caisse in METHODES_RECHARGE_GRATUITES:
+            panier_contient_une_recharge_cadeau = True
+        else:
+            panier_contient_un_autre_article = True
+    return panier_contient_une_recharge_cadeau and panier_contient_un_autre_article
 
 
 # --------------------------------------------------------------------------- #
@@ -2237,6 +2966,9 @@ class CaisseViewSet(viewsets.ViewSet):
 
         - Carte inconnue → "Carte inconnue" / unknown card
         - Carte non primaire → "Carte non primaire" / not a primary card
+        - L'ancien Fedow ne confirme pas la carte → ouverture refusée
+          (voir _verifier_carte_primaire_aupres_de_l_ancien_fedow)
+          / old Fedow does not confirm the card → opening refused
         - 0 PV → "Aucun point de vente configuré" / no POS configured
         - 1 PV → redirect direct vers le PV / direct redirect to POS
         - N PV → choix du PV (hx_choose_pv.html) / POS selection
@@ -2273,6 +3005,22 @@ class CaisseViewSet(viewsets.ViewSet):
                 "laboutik/partial/hx_primary_card_message.html",
                 {
                     "msg": erreur,
+                },
+            )
+
+        # L'ancien Fedow fait autorité : il confirme que la carte est encore primaire
+        # pour ce lieu. Sinon la caisse ne s'ouvre pas (et la carte primaire locale est
+        # supprimée si l'ancien Fedow l'a retirée).
+        # / The old Fedow is authoritative: it confirms the card is still primary here.
+        erreur_de_l_ancien_fedow = _verifier_carte_primaire_aupres_de_l_ancien_fedow(
+            carte_primaire_obj
+        )
+        if erreur_de_l_ancien_fedow is not None:
+            return render(
+                request,
+                "laboutik/partial/hx_primary_card_message.html",
+                {
+                    "msg": erreur_de_l_ancien_fedow,
                 },
             )
 
@@ -4663,9 +5411,18 @@ def _executer_avec_cle_idempotence(request, fonction_de_paiement):
     with connection.cursor() as curseur:
         curseur.execute("SELECT pg_advisory_lock(hashtext(%s))", [numero_de_verrou])
     try:
-        paiement_deja_enregistre = LigneArticle.objects.filter(
+        # Deux traces possibles d'un paiement déjà fait : ses lignes (tous les chemins)
+        # ou sa vente (chemins passés au service de vente : `Vente.idempotency_key`
+        # reprend la clé). L'une OU l'autre suffit à ne rien rejouer.
+        # / Two traces of a payment already made: its lines or its sale. Either one
+        #   is enough to replay nothing.
+        lignes_deja_enregistrees = LigneArticle.objects.filter(
             uuid_transaction=cle_idempotence
         ).exists()
+        vente_deja_enregistree = Vente.objects.filter(
+            idempotency_key=str(cle_idempotence)
+        ).exists()
+        paiement_deja_enregistre = lignes_deja_enregistrees or vente_deja_enregistree
         if paiement_deja_enregistre:
             logger.warning(
                 f"Paiement en double ignore (cle {cle_idempotence}) : "
@@ -4691,6 +5448,32 @@ def _executer_avec_cle_idempotence(request, fonction_de_paiement):
             )
 
 
+def _diviseur_de_la_quantite_saisie(produit):
+    """
+    Le nombre qui convertit la quantité saisie au poids ou au volume dans l'unité du
+    prix : 1000 (grammes → kilo) ou 100 (centilitres → litre).
+    / Converts the typed weight/volume into the price unit: 1000 (g → kg) or 100 (cl → L).
+
+    LOCALISATION : laboutik/views.py
+
+    Une seule règle pour le prix (`_montant_poids_mesure_en_centimes`) et pour le coût
+    d'achat (`_creer_lignes_articles`) : les deux doivent diviser de la même façon.
+    / One rule for the price and the purchase cost: both must divide the same way.
+
+    :param produit: Product vendu au poids/mesure
+    :return: Decimal (1000 ou 100)
+    """
+    # getattr avec defaut marche sur une relation OneToOne inverse absente
+    # (RelatedObjectDoesNotExist herite d'AttributeError).
+    # Sans stock, on suppose des grammes, comme la tuile.
+    # / getattr default works on a missing reverse OneToOne. No stock → grams.
+    stock_du_produit = getattr(produit, "stock_inventaire", None)
+    unite_en_centilitres = stock_du_produit is not None and stock_du_produit.unite == "CL"
+    if unite_en_centilitres:
+        return Decimal(100)
+    return Decimal(1000)
+
+
 def _montant_poids_mesure_en_centimes(produit, prix_obj, quantite_saisie):
     """
     Calcule le prix d'une vente au poids ou au volume, en centimes.
@@ -4713,16 +5496,7 @@ def _montant_poids_mesure_en_centimes(produit, prix_obj, quantite_saisie):
     :param quantite_saisie: int, quantite en g ou en cl (> 0)
     :return: int, montant en centimes (arrondi au centime le plus proche)
     """
-    # getattr avec defaut marche sur une relation OneToOne inverse absente
-    # (RelatedObjectDoesNotExist herite d'AttributeError).
-    # Sans stock, on suppose des grammes, comme la tuile.
-    # / getattr default works on a missing reverse OneToOne. No stock → grams.
-    stock_du_produit = getattr(produit, "stock_inventaire", None)
-    unite_en_centilitres = stock_du_produit is not None and stock_du_produit.unite == "CL"
-    if unite_en_centilitres:
-        diviseur = Decimal(100)
-    else:
-        diviseur = Decimal(1000)
+    diviseur = _diviseur_de_la_quantite_saisie(produit)
 
     prix_de_reference_en_centimes = Decimal(prix_obj.prix) * 100
     montant_en_centimes = (
@@ -4947,6 +5721,15 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         # Le prix effectif : montant custom (prix libre) ou prix standard
         # Effective price: custom amount (free price) or standard price
         prix_en_centimes = custom_amount_centimes or int(round(prix_obj.prix * 100))
+
+        # Un retour de consigne rend le prix du gobelet qu'il rembourse, jamais le sien
+        # (D11). Sans consigne reliée, `_prix_de_la_consigne_remboursee_en_centimes`
+        # lève une ValueError au message clair : l'appelant refuse la vente (400)
+        # avant toute écriture.
+        # / A deposit return gives back the cup's price. Without a link: ValueError,
+        #   the caller refuses the sale before writing anything.
+        if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+            prix_en_centimes = _prix_de_la_consigne_remboursee_en_centimes(produit)
 
         articles_panier.append(
             {
@@ -5308,6 +6091,53 @@ def _formater_erreurs_stock(erreurs):
     return f"{_('Stock insuffisant — vente refusée.')} {' ; '.join(parts)}"
 
 
+def _taux_tva_de_la_ligne_de_caisse(produit, methode_db):
+    """
+    Le taux de TVA d'une ligne écrite par la caisse, en pour cent (Decimal).
+    / The VAT rate of a line written by the register, in percent (Decimal).
+
+    LOCALISATION : laboutik/views.py
+
+    Le service de vente écrit le taux qu'on lui passe (`ajouter_article`) : la caisse
+    le calcule ici, avec la même règle que la TVA par défaut d'une ligne
+    (`LigneArticle._compute_default_vat`), plus deux règles (points 2 et 3) :
+    1. ligne offerte (FREE) ou en points / temps (NON_MONETAIRE) : 0, ce n'est pas une
+       vente en argent ;
+    2. recharge (RE, RC) : 0. Une recharge est une dette envers le porteur de la carte,
+       pas une vente taxée (D10) ;
+    3. retour de consigne : le taux du produit consigne qu'il rembourse (le gobelet,
+       `Product.consigne_remboursee`) : le retour annule la vente du gobelet, TVA
+       comprise (D11) ;
+    4. sinon : le taux du produit, ou à défaut le taux par défaut du lieu
+       (`Configuration.vat_taxe`), jamais celui de la catégorie.
+    / 0 for offered, points, top-ups; the cup's rate for a deposit return; otherwise the
+    product's rate, else the venue default.
+
+    :param produit: Product vendu
+    :param methode_db: PaymentMethod de la ligne (valeur en base, ex. "CA", "NA")
+    :return: Decimal
+    """
+    ligne_hors_vente_en_argent = methode_db in (
+        PaymentMethod.FREE,
+        PaymentMethod.NON_MONETAIRE,
+    )
+    if ligne_hors_vente_en_argent:
+        return Decimal("0")
+
+    if produit.methode_caisse in METHODES_RECHARGE:
+        return Decimal("0")
+
+    produit_qui_porte_la_tva = produit
+    if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+        # `_extraire_articles_du_panier` a déjà refusé un retour sans consigne reliée.
+        # / A return without a linked deposit was already refused upstream.
+        produit_qui_porte_la_tva = produit.consigne_remboursee
+
+    if produit_qui_porte_la_tva.tva is not None:
+        return Decimal(produit_qui_porte_la_tva.tva.tva_rate)
+    return Decimal(Configuration.get_solo().vat_taxe)
+
+
 def _creer_lignes_articles(
     articles_panier,
     code_methode_paiement,
@@ -5316,6 +6146,7 @@ def _creer_lignes_articles(
     wallet=None,
     uuid_transaction=None,
     point_de_vente=None,
+    vente=None,
 ):
     """
     Crée ProductSold, PriceSold et LigneArticle pour chaque article du panier.
@@ -5324,17 +6155,35 @@ def _creer_lignes_articles(
     LOCALISATION : laboutik/views.py
 
     Cette fonction est appelée dans un bloc transaction.atomic() par les fonctions
-    de paiement (_payer_par_carte_ou_cheque, _payer_en_especes, _payer_par_nfc).
-    This function is called inside a transaction.atomic() block by the payment
-    functions (_payer_par_carte_ou_cheque, _payer_en_especes, _payer_par_nfc).
+    de paiement (_payer_par_carte_ou_cheque, _payer_en_especes, _rembourser_consigne_par_nfc,
+    _executer_recharges, payer_commande).
+    This function is called inside a transaction.atomic() block by the payment functions.
+
+    DEUX FAÇONS D'ÉCRIRE UNE LIGNE :
+    - `vente` donnée : c'est le cas de tous les chemins de la caisse. La ligne est un
+      article de la vente, écrit par le service de vente (`ajouter_article`) avec ses
+      montants entiers, et avec ses champs historiques (moyen, statut, carte,
+      identifiant de paiement…). Le HT vient du service, la boucle HMAC ne le
+      recalcule pas. L'appelant ajoute les règlements et encaisse la vente.
+    - `vente` absente : plus aucun chemin de la caisse ne l'utilise. Seuls des tests
+      existants appellent encore cette fonction sans vente (stock, billetterie,
+      offerts). La ligne est alors créée directement (`LigneArticle.objects.create`),
+      et son HT est calculé par la boucle HMAC.
+      TODO : retirer cette branche avec l'ancien modèle (fiche H), et réécrire ces
+      tests pour qu'ils passent une vente.
+    / Two ways: with a sale (every register path), or a direct create, now used only by
+    existing tests calling this function directly. TODO: remove that branch with the
+    old model (sheet H) and rewrite those tests to pass a sale.
 
     :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
-    :param code_methode_paiement: code du moyen de paiement ("carte_bancaire", "espece", "CH", "nfc")
+    :param code_methode_paiement: code du moyen de paiement ("carte_bancaire", "espece", "CH", "nfc", "gift")
     :param asset_uuid: UUID de l'asset fedow_core (NFC uniquement, None pour espèces/CB)
     :param carte: CarteCashless (NFC uniquement, None pour espèces/CB)
     :param wallet: Wallet du client (NFC uniquement, None pour espèces/CB)
+    :param uuid_transaction: identifiant du paiement, posé sur chaque ligne
     :param point_de_vente: PointDeVente d'origine (nullable, pour ventilation CA par PV)
-    :return: liste de LigneArticle créées
+    :param vente: la `Vente` EN_ATTENTE qui reçoit les articles, ou None (voir plus haut)
+    :return: tuple (liste de LigneArticle créées, produits dont le stock est négatif)
     """
     methode_db = MAPPING_CODES_PAIEMENT.get(
         code_methode_paiement, PaymentMethod.UNKNOWN
@@ -5395,24 +6244,88 @@ def _creer_lignes_articles(
             defaults={"prix": prix_obj.prix},
         )
 
-        # LigneArticle : ligne comptable de la vente
-        # LigneArticle: accounting line of the sale
-        ligne = LigneArticle.objects.create(
-            pricesold=price_sold,
-            qty=quantite,
-            amount=prix_centimes,
-            sale_origin=sale_origin_pour_ligne,
-            payment_method=methode_db,
-            status=LigneArticle.VALID,
-            uuid_transaction=uuid_transaction,
-            point_de_vente=point_de_vente,
+        # Les champs historiques de la ligne (moyen, statut, carte, identifiant de
+        # paiement…) : les anciens rapports les lisent jusqu'à la fiche H.
+        # / The line's historical fields: old reports read them until sheet H.
+        champs_historiques_de_la_ligne = {
+            "sale_origin": sale_origin_pour_ligne,
+            "payment_method": methode_db,
+            "status": LigneArticle.VALID,
+            "uuid_transaction": uuid_transaction,
+            "point_de_vente": point_de_vente,
             # Champs NFC (optionnels, None pour espèces/CB)
             # NFC fields (optional, None for cash/CC)
-            asset=asset_uuid,
-            carte=carte,
-            wallet=wallet,
-            weight_quantity=weight_amount,
-        )
+            "asset": asset_uuid,
+            "carte": carte,
+            "wallet": wallet,
+            "weight_quantity": weight_amount,
+        }
+
+        if vente is None:
+            # Ligne sans vente : seuls des tests existants appellent encore cette
+            # fonction sans vente (stock, billetterie, offerts).
+            # TODO : retirer cette branche avec l'ancien modèle (fiche H).
+            # / Line without a sale: only existing tests still call this without a
+            # sale. TODO: remove this branch with the old model (sheet H).
+            ligne = LigneArticle.objects.create(
+                pricesold=price_sold,
+                qty=quantite,
+                amount=prix_centimes,
+                **champs_historiques_de_la_ligne,
+            )
+        else:
+            # Le service de vente accepte des types exacts seulement : des centimes
+            # `int`, une quantité et un taux `int` ou `Decimal`, jamais un `float` ni
+            # un texte (ValueError sinon). Les valeurs du panier sont converties ici,
+            # explicitement.
+            # / The sale service takes exact types only: converted here, explicitly.
+            quantite_vendue = int(quantite)
+            prix_unitaire_en_centimes = int(prix_centimes)
+            prix_achat_en_centimes = int(produit.prix_achat)
+
+            # Retour de consigne : le coût d'achat est celui du gobelet rendu
+            # (`consigne_remboursee`), jamais celui du produit de retour. Il est passé
+            # en NÉGATIF, comme le prix de la ligne (prix négatif, quantité positive) :
+            # un gobelet rendu retire son coût de la marge (D21). Un gobelet sans prix
+            # d'achat (0) donne 0 : le coût reste inconnu, comme pour tout article.
+            # `_extraire_articles_du_panier` a déjà refusé un retour sans consigne reliée.
+            # / Deposit return: the returned cup's purchase cost, passed NEGATIVE like
+            #   the line's price; a returned cup removes its cost from the margin.
+            if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+                produit_du_gobelet_rendu = produit.consigne_remboursee
+                prix_achat_en_centimes = -int(produit_du_gobelet_rendu.prix_achat)
+
+            # Vente au poids ou au volume : la ligne garde qty = 1 et le poids dans
+            # `weight_quantity` (anciens lecteurs). Le coût d'achat, lui, porte sur la
+            # quantité réellement servie, dans l'unité du prix d'achat (kg, L) :
+            # 350 g → 0,350 kg.
+            # / Weight/volume sale: qty stays 1; the cost is on the real served quantity.
+            vente_au_poids = bool(weight_amount) and prix_obj.poids_mesure
+            if vente_au_poids:
+                quantite_reellement_servie = (
+                    Decimal(weight_amount)
+                    / _diviseur_de_la_quantite_saisie(produit)
+                    * Decimal(quantite_vendue)
+                )
+            else:
+                quantite_reellement_servie = None
+
+            # OFFRIR (mode gérant) et recharge cadeau : l'article est entièrement
+            # offert. Le service pose la part offerte et ajoute le règlement FREE.
+            # / GIFT and gift top-up: fully offered; the service adds the FREE payment.
+            article_offert_en_totalite = methode_db == PaymentMethod.FREE
+
+            ligne = ajouter_article(
+                vente,
+                pricesold=price_sold,
+                quantite=quantite_vendue,
+                prix_unitaire=prix_unitaire_en_centimes,
+                taux_tva=_taux_tva_de_la_ligne_de_caisse(produit, methode_db),
+                prix_achat=prix_achat_en_centimes,
+                offert_en_totalite=article_offert_en_totalite,
+                quantite_pour_cout=quantite_reellement_servie,
+                **champs_historiques_de_la_ligne,
+            )
         # --- Décrémentation stock inventaire ---
         # Si le produit a un Stock lié, on décrémente automatiquement.
         # Après décrémentation, on relit le stock depuis la DB
@@ -5508,28 +6421,51 @@ def _creer_lignes_articles(
     previous_hmac_value = obtenir_previous_hmac(sale_origin=sale_origin_pour_chaine)
 
     for ligne_a_chainer in lignes_creees:
-        # Calculer le HT (donnee elementaire LNE exigence 3)
-        # / Compute HT (LNE req. 3 elementary data)
-        # Le HT porte sur le TTC de la LIGNE (prix unitaire x quantite), pas sur
-        # un seul article. Arrondi comme montant_ttc_centimes() des rapports
-        # (0,5 -> 1, comme Round() de PostgreSQL).
-        # / HT is computed on the LINE total (unit price x qty), not one item.
-        ttc_de_la_ligne_centimes = int(
-            Decimal(ligne_a_chainer.amount * ligne_a_chainer.qty).quantize(
-                Decimal("1"), rounding=ROUND_HALF_UP
+        if vente is None:
+            # Ligne sans vente (appels directs de tests existants seulement).
+            # TODO : retirer ce calcul avec la branche sans vente (fiche H).
+            # / Line without a sale (direct test calls only). TODO: remove with the
+            # no-sale branch (sheet H).
+            # Calculer le HT (donnee elementaire LNE exigence 3)
+            # / Compute HT (LNE req. 3 elementary data)
+            # Le HT porte sur le TTC de la LIGNE (prix unitaire x quantite), pas sur
+            # un seul article. Arrondi comme montant_ttc_centimes() des rapports
+            # (0,5 -> 1, comme Round() de PostgreSQL).
+            # / HT is computed on the LINE total (unit price x qty), not one item.
+            ttc_de_la_ligne_centimes = int(
+                Decimal(ligne_a_chainer.amount * ligne_a_chainer.qty).quantize(
+                    Decimal("1"), rounding=ROUND_HALF_UP
+                )
             )
-        )
-        ligne_a_chainer.total_ht = calculer_total_ht(
-            ttc_de_la_ligne_centimes, ligne_a_chainer.vat
-        )
+            ligne_a_chainer.total_ht = calculer_total_ht(
+                ttc_de_la_ligne_centimes, ligne_a_chainer.vat
+            )
 
-        # Chainer le HMAC avec la ligne precedente
-        # / Chain HMAC with previous line
-        ligne_a_chainer.previous_hmac = previous_hmac_value
-        ligne_a_chainer.hmac_hash = calculer_hmac(
-            ligne_a_chainer, cle_hmac, previous_hmac_value
-        )
-        ligne_a_chainer.save(update_fields=["total_ht", "hmac_hash", "previous_hmac"])
+            # Chainer le HMAC avec la ligne precedente
+            # / Chain HMAC with previous line
+            ligne_a_chainer.previous_hmac = previous_hmac_value
+            ligne_a_chainer.hmac_hash = calculer_hmac(
+                ligne_a_chainer, cle_hmac, previous_hmac_value
+            )
+            ligne_a_chainer.save(
+                update_fields=["total_ht", "hmac_hash", "previous_hmac"]
+            )
+        else:
+            # Ligne écrite par le service de vente : son HT est DÉJÀ juste (arrondi
+            # demi vers le haut, HT + TVA = net). On ne le recalcule PAS :
+            # `calculer_total_ht` arrondit au pair (111 c à 20 % donnerait 92 au lieu
+            # de 93). L'empreinte est écrite par `.update()`, jamais par un second
+            # `save()` (qui relancerait la machine à statuts de la ligne).
+            # / Written by the sale service: its HT is already right, NOT recomputed.
+            #   The fingerprint is written by .update(), never by a second save().
+            ligne_a_chainer.previous_hmac = previous_hmac_value
+            ligne_a_chainer.hmac_hash = calculer_hmac(
+                ligne_a_chainer, cle_hmac, previous_hmac_value
+            )
+            LigneArticle.objects.filter(pk=ligne_a_chainer.pk).update(
+                hmac_hash=ligne_a_chainer.hmac_hash,
+                previous_hmac=ligne_a_chainer.previous_hmac,
+            )
 
         previous_hmac_value = ligne_a_chainer.hmac_hash
 
@@ -5558,6 +6494,7 @@ def _creer_lignes_articles(
 
 def _creer_lignes_articles_cascade(
     lignes_pre_calculees,
+    vente,
     carte=None,
     carte_complement=None,
     wallet=None,
@@ -5577,6 +6514,18 @@ def _creer_lignes_articles_cascade(
     A 4€ article paid 1€ TNF + 3€ TLF produces 2 LigneArticle
     with partial qty proportional to the amount.
 
+    CHAQUE PART EST UN ARTICLE DE LA VENTE :
+    Elle est écrite par le service de vente (`ajouter_article`) avec ses champs
+    historiques d'aujourd'hui (prix unitaire, quantité partielle, moyen, carte…). Son
+    total catalogue est l'argent RÉEL de la part (3ᵉ élément du tuple), jamais
+    recalculé depuis la quantité partielle. Une part payée en jetons cadeau (LG) est
+    offerte (JETONS) : les jetons ne sont pas de l'argent. Le HT vient du service, la
+    boucle HMAC ne le recalcule pas. L'appelant écrit les règlements et encaisse la
+    vente. Appelants : paiement NFC seul, complément espèces / CB, 2ᵉ carte.
+    / Each part is an item of the sale, written by the sale service (the part's real
+    money as catalogue total, token parts offered). The caller writes the payments
+    and settles the sale.
+
     :param lignes_pre_calculees: liste de tuples
         (article_dict, asset_ou_none, amount_centimes, payment_method_code)
     :param carte: CarteCashless principale (1ère carte NFC)
@@ -5584,6 +6533,7 @@ def _creer_lignes_articles_cascade(
     :param wallet: Wallet du client (1ère carte)
     :param uuid_transaction: UUID partagé par toutes les lignes du paiement
     :param point_de_vente: PointDeVente d'origine (ventilation CA par PV)
+    :param vente: la `Vente` EN_ATTENTE qui reçoit les parts (obligatoire)
     :return: liste de toutes les LigneArticle créées
     """
     # --- MODE ECOLE DESACTIVE : toute vente est une vente reelle ---
@@ -5715,23 +6665,78 @@ def _creer_lignes_articles_cascade(
             # / amount = UNIT price (cents), NOT the part's total money. Unified with the
             # simple path and LigneArticle.total = amount × qty. Storing money here
             # double-counted the quantity in the display (bug B: 45 € instead of 15 €).
-            ligne = LigneArticle.objects.create(
-                pricesold=price_sold,
-                qty=qty_partielle,
-                amount=prix_centimes,
-                sale_origin=sale_origin_pour_ligne,
-                payment_method=payment_method_code,
-                status=LigneArticle.VALID,
-                uuid_transaction=uuid_transaction,
-                point_de_vente=point_de_vente,
+            champs_historiques_de_la_part = {
+                "sale_origin": sale_origin_pour_ligne,
+                "payment_method": payment_method_code,
+                "status": LigneArticle.VALID,
+                "uuid_transaction": uuid_transaction,
+                "point_de_vente": point_de_vente,
                 # Champs NFC (optionnels, None pour espèces/CB)
                 # NFC fields (optional, None for cash/CC)
-                asset=asset_uuid,
-                carte=carte_pour_cette_ligne,
-                wallet=wallet,
+                "asset": asset_uuid,
+                "carte": carte_pour_cette_ligne,
+                "wallet": wallet,
                 # weight_quantity identique sur toutes les lignes d'un même article
                 # / weight_quantity same on all lines of the same article
-                weight_quantity=weight_amount,
+                "weight_quantity": weight_amount,
+            }
+
+            # Le service de vente accepte des types exacts seulement : des centimes
+            # `int`, une quantité et un taux `int` ou `Decimal`, jamais un `float`.
+            # Les valeurs sont converties ici, explicitement.
+            # / The sale service takes exact types only: converted here, explicitly.
+            quantite_de_la_part = Decimal(qty_partielle)
+            prix_unitaire_en_centimes = int(prix_centimes)
+            argent_reel_de_la_part_en_centimes = int(amount_centimes)
+            prix_achat_en_centimes = int(produit.prix_achat)
+
+            # Part payée en jetons cadeau (LG) : les jetons ne sont pas de l'argent
+            # (D8). Toute la part est offerte, source JETONS ; l'appelant écrit le
+            # règlement « jetons » (LG) de la transaction.
+            # / Part paid in gift tokens: fully offered (JETONS), not money.
+            part_payee_en_jetons = payment_method_code == PaymentMethod.LOCAL_GIFT
+            if part_payee_en_jetons:
+                part_offerte_en_centimes = argent_reel_de_la_part_en_centimes
+                source_de_l_offert = LigneArticle.SourceOffert.JETONS
+            else:
+                part_offerte_en_centimes = 0
+                source_de_l_offert = ""
+
+            # Vente au poids ou au volume : la ligne garde le poids dans
+            # `weight_quantity`. Le coût d'achat porte sur la quantité réellement
+            # servie, dans l'unité du prix d'achat (kg, L), pour la fraction de
+            # l'article que paie CETTE part (sa quantité partielle : l'article au
+            # poids a une quantité de 1). 350 g payés à 60 % → 0,350 × 0,6 kg.
+            # / Weight/volume sale: the cost is on the real served quantity, for
+            #   this part's share of the item (its partial quantity).
+            vente_au_poids = bool(weight_amount) and prix_obj.poids_mesure
+            if vente_au_poids:
+                quantite_reellement_servie_par_la_part = (
+                    Decimal(weight_amount)
+                    / _diviseur_de_la_quantite_saisie(produit)
+                    * quantite_de_la_part
+                )
+            else:
+                quantite_reellement_servie_par_la_part = None
+
+            # Le total catalogue de la part est son argent RÉEL (le débit qui la
+            # paie), jamais prix × quantité partielle : la quantité partielle est
+            # arrondie à 6 décimales et ne doit pas décider d'un centime.
+            # / The part's catalogue total is its REAL money, never price × partial qty.
+            ligne = ajouter_article(
+                vente,
+                pricesold=price_sold,
+                quantite=quantite_de_la_part,
+                prix_unitaire=prix_unitaire_en_centimes,
+                taux_tva=_taux_tva_de_la_ligne_de_caisse(
+                    produit, payment_method_code
+                ),
+                part_offerte=part_offerte_en_centimes,
+                source_offert=source_de_l_offert,
+                prix_achat=prix_achat_en_centimes,
+                total_catalogue_impose=argent_reel_de_la_part_en_centimes,
+                quantite_pour_cout=quantite_reellement_servie_par_la_part,
+                **champs_historiques_de_la_part,
             )
 
             toutes_les_lignes_creees.append(ligne)
@@ -5822,28 +6827,21 @@ def _creer_lignes_articles_cascade(
     previous_hmac_value = obtenir_previous_hmac(sale_origin=sale_origin_pour_chaine)
 
     for ligne_a_chainer in toutes_les_lignes_creees:
-        # Calculer le HT (donnée élémentaire LNE exigence 3)
-        # / Compute HT (LNE req. 3 elementary data)
-        # Le HT porte sur le TTC de la LIGNE (prix unitaire x quantite), pas sur
-        # un seul article. Arrondi comme montant_ttc_centimes() des rapports
-        # (0,5 -> 1, comme Round() de PostgreSQL).
-        # / HT is computed on the LINE total (unit price x qty), not one item.
-        ttc_de_la_ligne_centimes = int(
-            Decimal(ligne_a_chainer.amount * ligne_a_chainer.qty).quantize(
-                Decimal("1"), rounding=ROUND_HALF_UP
-            )
-        )
-        ligne_a_chainer.total_ht = calculer_total_ht(
-            ttc_de_la_ligne_centimes, ligne_a_chainer.vat
-        )
-
-        # Chaîner le HMAC avec la ligne précédente
-        # / Chain HMAC with previous line
+        # Part écrite par le service de vente : son HT est DÉJÀ juste (arrondi demi
+        # vers le haut, HT + TVA = net). On ne le recalcule PAS : `calculer_total_ht`
+        # arrondit au pair (111 c à 20 % donnerait 92 au lieu de 93). L'empreinte est
+        # écrite par `.update()`, jamais par un second `save()` (qui relancerait la
+        # machine à statuts de la ligne).
+        # / Written by the sale service: its HT is already right, NOT recomputed.
+        #   The fingerprint is written by .update(), never by a second save().
         ligne_a_chainer.previous_hmac = previous_hmac_value
         ligne_a_chainer.hmac_hash = calculer_hmac(
             ligne_a_chainer, cle_hmac, previous_hmac_value
         )
-        ligne_a_chainer.save(update_fields=["total_ht", "hmac_hash", "previous_hmac"])
+        LigneArticle.objects.filter(pk=ligne_a_chainer.pk).update(
+            hmac_hash=ligne_a_chainer.hmac_hash,
+            previous_hmac=ligne_a_chainer.previous_hmac,
+        )
 
         previous_hmac_value = ligne_a_chainer.hmac_hash
 
@@ -5886,6 +6884,13 @@ def _creer_ou_renouveler_adhesion(
     - If existing Membership for this (user, price) → renew.
     - Otherwise → create a new Membership.
 
+    L'échéance n'est PAS posée ici : l'appelant rattache l'adhésion à sa ligne de vente,
+    puis appelle `_appliquer_les_effets_d_une_adhesion_vendue_en_caisse`, qui la pose
+    (même code qu'en ligne). La poser aussi ici l'enregistrerait deux fois.
+    / The deadline is NOT set here: the caller then calls
+    `_appliquer_les_effets_d_une_adhesion_vendue_en_caisse`, which sets it (same code as
+    online). Setting it here too would save it twice.
+
     :param user: TibilletUser ou None
     :param product: Product adhesion
     :param price: Price associé au product
@@ -5917,8 +6922,10 @@ def _creer_ou_renouveler_adhesion(
     )
 
     if membership_existante is not None:
-        # Renouveler : mettre à jour la date de contribution et recalculer la deadline
-        # Renew: update contribution date and recalculate deadline
+        # Renouveler : mettre à jour la date de contribution. L'échéance est recalculée
+        # ensuite, par les effets communs d'une adhésion payée.
+        # / Renew: update the contribution date. The deadline is recalculated afterwards,
+        # by the shared effects of a paid membership.
         membership_existante.last_contribution = tz.now()
         membership_existante.status = Membership.LABOUTIK
         membership_existante.contribution_value = valeur_contribution
@@ -5930,7 +6937,6 @@ def _creer_ou_renouveler_adhesion(
             membership_existante.last_name = last_name
             champs_a_mettre_a_jour.append("last_name")
         membership_existante.save(update_fields=champs_a_mettre_a_jour)
-        membership_existante.set_deadline()
         return membership_existante
 
     # Créer une nouvelle Membership
@@ -5945,8 +6951,62 @@ def _creer_ou_renouveler_adhesion(
         first_name=first_name or "",
         last_name=last_name or "",
     )
-    nouvelle_adhesion.set_deadline()
     return nouvelle_adhesion
+
+
+def _appliquer_les_effets_d_une_adhesion_vendue_en_caisse(
+    adhesion, ligne_qui_porte_l_adhesion
+):
+    """
+    Applique à une adhésion vendue en caisse les mêmes effets qu'à une adhésion payée en
+    ligne : échéance, rattachement au lieu, nom, facture par mail, newsletter, récompense.
+    / Applies to a membership sold at the register the same effects as online: deadline,
+    venue, name, invoice mail, newsletter, reward.
+
+    LOCALISATION : laboutik/views.py
+
+    Appelée DANS le bloc atomic du paiement, une fois par adhésion, APRÈS que l'adhésion
+    est rattachée à sa ligne de vente. En cascade (plusieurs lignes pour une adhésion),
+    on passe la ligne qui porte la clé `membership`.
+    / Called INSIDE the payment atomic block, once per membership, AFTER it is linked to
+    its sale line.
+
+    FLUX :
+    1. `appliquer_les_effets_d_une_adhesion_payee` (BaseBillet/triggers.py) écrit en
+       base, dans la transaction : si la vente est annulée, ces écritures le sont aussi.
+    2. `demander_les_taches_d_une_adhesion_payee` (BaseBillet/triggers.py) part en
+       `on_commit`, APRÈS la validation en base : le worker Celery relit l'adhésion avec
+       sa propre connexion, et ne la trouverait pas avant.
+    Pas d'envoi à l'ancien LaBoutik : la caisse V2 ne parle pas à la caisse legacy.
+
+    :param adhesion: Membership rendue par `_creer_ou_renouveler_adhesion`
+    :param ligne_qui_porte_l_adhesion: LigneArticle rattachée à l'adhésion, ou None
+    """
+    from BaseBillet.triggers import (
+        appliquer_les_effets_d_une_adhesion_payee,
+        demander_les_taches_d_une_adhesion_payee,
+    )
+
+    # Sans ligne de vente, la récompense n'a rien à lire : aucun effet, on le signale.
+    # / Without a sale line, the reward has nothing to read: no effect, report it.
+    if ligne_qui_porte_l_adhesion is None:
+        logger.error(
+            f"Adhésion vendue en caisse {adhesion.uuid} : aucune ligne de vente ne la "
+            f"porte. Aucun effet appliqué (échéance, facture, récompense)."
+        )
+        return
+
+    appliquer_les_effets_d_une_adhesion_payee(adhesion)
+
+    # Les paramètres de cette fonction sont propres à chaque appel : la fonction lambda
+    # garde la bonne adhésion, même quand l'appelant boucle sur plusieurs adhésions.
+    # / This function's parameters belong to each call: the lambda keeps the right
+    # membership, even when the caller loops over several memberships.
+    db_transaction.on_commit(
+        lambda: demander_les_taches_d_une_adhesion_payee(
+            adhesion, ligne_qui_porte_l_adhesion
+        )
+    )
 
 
 def _fedow_a_deja_lie_la_carte(carte, user):
@@ -6316,6 +7376,9 @@ def _creer_adhesions_depuis_panier(
             if ligne_correspondante:
                 ligne_correspondante.membership = membership
                 ligne_correspondante.save(update_fields=["membership"])
+            _appliquer_les_effets_d_une_adhesion_vendue_en_caisse(
+                membership, ligne_correspondante
+            )
 
     return memberships_creees
 
@@ -6625,6 +7688,8 @@ def _executer_recharges(
     code_methode_paiement,
     ip_client,
     point_de_vente=None,
+    vente=None,
+    uuid_transaction=None,
 ):
     """
     Execute les recharges contenues dans le panier.
@@ -6645,6 +7710,18 @@ def _executer_recharges(
     :param point_de_vente: PointDeVente d'origine (renseigne sur les LigneArticle pour
         ventiler le CA par PV dans les rapports)
     / :param point_de_vente: Origin POS (set on LigneArticle for per-POS CA reports)
+    :param vente: la `Vente` EN_ATTENTE du panier : les recharges sont des articles de
+        la MEME vente que le reste du panier, hors chiffre d'affaires et TVA 0 (D10).
+        Tous les chemins de la caisse passent une vente. None est transmis tel quel a
+        `_creer_lignes_articles`, qui cree alors la ligne sans vente (sa branche sans
+        vente, gardee pour des tests existants qui l'appellent directement).
+        TODO : retirer None avec cette branche (fiche H).
+    / :param vente: the cart's pending sale: top-ups are items of the SAME sale. Every
+        register path passes one. None is forwarded to `_creer_lignes_articles` (its
+        no-sale branch). TODO: remove None with that branch (sheet H).
+    :param uuid_transaction: identifiant du paiement, pose sur les lignes de recharge
+        comme sur les autres lignes du panier (le rejeu d'un double clic les retrouve)
+    / :param uuid_transaction: payment id, set on the top-up lines too.
     :return: None
     """
     tenant_courant = connection.tenant
@@ -6698,8 +7775,104 @@ def _executer_recharges(
             asset_uuid=asset.uuid,
             carte=carte_client,
             wallet=wallet_client,
+            uuid_transaction=uuid_transaction,
             point_de_vente=point_de_vente,
+            vente=vente,
         )
+
+
+def _ouvrir_la_vente_de_caisse(
+    request,
+    point_de_vente,
+    uuid_transaction,
+    consigne_dans_panier,
+    carte_client,
+    adherent,
+):
+    """
+    Ouvre la vente d'un encaissement à UN moyen de paiement (espèces, CB, chèque,
+    OFFRIR). Appelée DANS le `transaction.atomic()` du paiement, avant les lignes.
+    / Opens the sale of a one-method collection, inside the payment's atomic block.
+
+    LOCALISATION : laboutik/views.py
+
+    - nature : AVOIR pour un retour de consigne (le panier n'a alors que des retours :
+      garde de `_executer_paiement`), VENTE sinon, recharges comprises (une recharge est
+      un article hors chiffre d'affaires d'une vente ordinaire, D10) ;
+    - clé d'idempotence : l'identifiant du paiement (`uuid_transaction`), le même que
+      sur les lignes. Un rejeu de la même clé retrouve cette vente ;
+    - client : l'adhérent identifié, sinon le titulaire de la carte du client ;
+    - carte : la carte du client (recharges), si elle est connue.
+    / AVOIR for a deposit return, VENTE otherwise; the payment id is the idempotency key.
+
+    FLUX : _payer_par_carte_ou_cheque / _payer_en_especes → CETTE FONCTION →
+    _creer_lignes_articles(vente=...) → _executer_recharges(vente=...) →
+    _regler_et_encaisser_la_vente_de_caisse()
+
+    :return: la `Vente` EN_ATTENTE
+    """
+    if consigne_dans_panier:
+        nature_de_la_vente = Vente.Nature.AVOIR
+    else:
+        nature_de_la_vente = Vente.Nature.VENTE
+
+    client_de_la_vente = None
+    if adherent is not None:
+        client_de_la_vente = adherent["user"]
+    elif carte_client is not None:
+        client_de_la_vente = carte_client.user
+
+    tag_id_carte_manager = request.POST.get("tag_id_cm", "")
+    return ouvrir_vente(
+        origine=SaleOrigin.LABOUTIK,
+        nature=nature_de_la_vente,
+        point_de_vente=point_de_vente,
+        operateur=_operateur_de_la_caisse(request, tag_id_carte_manager),
+        client=client_de_la_vente,
+        carte=carte_client,
+        idempotency_key=str(uuid_transaction),
+    )
+
+
+def _regler_et_encaisser_la_vente_de_caisse(vente, articles_panier, moyen_paiement_code):
+    """
+    Écrit le règlement d'un encaissement à UN moyen de paiement, puis encaisse la vente.
+    Dernière étape du `transaction.atomic()` du paiement.
+    / Writes the payment of a one-method collection, then settles the sale. Last step.
+
+    LOCALISATION : laboutik/views.py
+
+    - espèces, CB, chèque : UN règlement, du montant encaissé (la somme demandée au
+      client, sans les recharges cadeau ; négatif pour un retour de consigne) ;
+    - OFFRIR (code « gift ») : aucun règlement ici. Le service de vente a déjà écrit un
+      règlement « offert » (FREE) par article offert à montant non nul ;
+    - aucun règlement de 0 : une vente gratuite n'en a pas.
+    Puis `encaisser_vente` vérifie les deux égalités de la vente et pose son numéro :
+    si elles ne tiennent pas, il lève `EgaliteDeVenteRompue` et toute la transaction du
+    paiement est annulée (lignes, recharges, adhésions).
+    / Cash, card, cheque: one payment of the collected amount; GIFT: none here (the
+    service wrote FREE). Then settle: a broken equality rolls back the whole payment.
+
+    :param vente: la `Vente` EN_ATTENTE ouverte par `_ouvrir_la_vente_de_caisse`
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :param moyen_paiement_code: code d'interface ("espece", "carte_bancaire", "CH", "gift")
+    :return: la `Vente` encaissée
+    """
+    moyen_en_base = MAPPING_CODES_PAIEMENT[moyen_paiement_code]
+    paiement_offert_par_le_lieu = moyen_en_base == PaymentMethod.FREE
+
+    if not paiement_offert_par_le_lieu:
+        montant_encaisse_en_centimes = _somme_encaissee_du_panier_en_centimes(
+            articles_panier
+        )
+        if montant_encaisse_en_centimes != 0:
+            ajouter_reglement(
+                vente,
+                moyen=moyen_en_base,
+                montant=montant_encaisse_en_centimes,
+            )
+
+    return encaisser_vente(vente)
 
 
 # -------------------------------------------------------------------------- #
@@ -7061,6 +8234,25 @@ class PaiementViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
+        # --- Une recharge cadeau se fait à part ---
+        # La caisse additionne tous les articles pour la somme à payer : mêlée à
+        # d'autres articles, la recharge cadeau serait payée par le client. Refus AVANT
+        # l'aiguillage, donc avant toute écriture et tout débit de carte. Seule, elle
+        # est créditée sans paiement (`identifier_client`).
+        # / A gift top-up is done on its own: mixed carts refused before any write.
+        if _panier_melange_recharge_cadeau_et_autres_articles(articles_panier):
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": _(
+                    "La recharge cadeau se fait à part : retirez les autres articles."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         # --- Calculer le total en centimes ---
         # --- Calculate total in centimes ---
         consigne_dans_panier = _panier_contient_retour_consigne(articles_panier)
@@ -7410,6 +8602,27 @@ class PaiementViewSet(viewsets.ViewSet):
 
         produits_stock_negatif = []
         with db_transaction.atomic():
+            # La vente du panier : ouverte en premier, encaissée en dernier, dans la
+            # MEME transaction que les lignes. Si l'encaissement échoue, rien n'est
+            # écrit. Sa clé d'idempotence est l'identifiant du paiement : un rejeu la
+            # retrouve (_executer_avec_cle_idempotence).
+            # / The cart's sale: opened first, settled last, in the SAME transaction.
+            # Panier vide (tous les articles ont été écartés à la lecture) : rien n'est
+            # vendu, aucune vente n'est ouverte, et la caisse répond par un succès sans
+            # rien écrire. Le service refuse une vente sans article.
+            # / Empty cart: nothing is sold, no sale is opened, a success writing nothing.
+            vente = None
+            panier_vide = len(articles_panier) == 0
+            if not panier_vide:
+                vente = _ouvrir_la_vente_de_caisse(
+                    request,
+                    point_de_vente,
+                    uuid_transaction,
+                    consigne_dans_panier,
+                    carte_client,
+                    adherent,
+                )
+
             # Articles normaux (ventes, adhesions) → LigneArticle
             # Normal articles (sales, memberships) → LigneArticle
             lignes_normales = []
@@ -7419,6 +8632,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     moyen_paiement_code,
                     uuid_transaction=uuid_transaction,
                     point_de_vente=point_de_vente,
+                    vente=vente,
                 )
 
             # Recharges AVANT les adhesions, et l'ordre compte.
@@ -7437,6 +8651,8 @@ class PaiementViewSet(viewsets.ViewSet):
                     code_methode_paiement=moyen_paiement_code,
                     ip_client=ip_client,
                     point_de_vente=point_de_vente,
+                    vente=vente,
+                    uuid_transaction=uuid_transaction,
                 )
 
             # Adhesions → creer les Memberships et les rattacher aux LigneArticle
@@ -7455,6 +8671,14 @@ class PaiementViewSet(viewsets.ViewSet):
                 articles_normaux,
                 lignes_articles=lignes_normales,
             )
+
+            # En DERNIER : les liens adhésion / billet sont posés sur les lignes, la
+            # vente peut être réglée puis encaissée (elle ne se modifie plus ensuite).
+            # / LAST: memberships and tickets are linked, the sale is paid and settled.
+            if vente is not None:
+                _regler_et_encaisser_la_vente_de_caisse(
+                    vente, articles_panier, moyen_paiement_code
+                )
 
         # Apres le bloc atomic : envoyer les billets par email via Celery.
         # Ne pas appeler dans le bloc atomic (si rollback, le mail partirait quand meme).
@@ -7635,6 +8859,26 @@ class PaiementViewSet(viewsets.ViewSet):
             # Créer les lignes articles en base (atomique)
             # Create article lines in DB (atomic)
             with db_transaction.atomic():
+                # La vente du panier : ouverte en premier, encaissée en dernier, dans
+                # la MEME transaction que les lignes. Un retour de consigne en espèces
+                # est une vente AVOIR (argent rendu).
+                # / The cart's sale: opened first, settled last, same transaction.
+                # Panier vide (tous les articles ont été écartés à la lecture) : rien n'est
+                # vendu, aucune vente n'est ouverte, et la caisse répond par un succès sans
+                # rien écrire. Le service refuse une vente sans article.
+                # / Empty cart: nothing is sold, no sale is opened, a success writing nothing.
+                vente = None
+                panier_vide = len(articles_panier) == 0
+                if not panier_vide:
+                    vente = _ouvrir_la_vente_de_caisse(
+                        request,
+                        point_de_vente,
+                        uuid_transaction,
+                        consigne_dans_panier,
+                        carte_client,
+                        adherent,
+                    )
+
                 # Articles normaux (ventes, adhesions) → LigneArticle
                 # Normal articles (sales, memberships) → LigneArticle
                 lignes_normales = []
@@ -7644,6 +8888,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         moyen_paiement_code,
                         uuid_transaction=uuid_transaction,
                         point_de_vente=point_de_vente,
+                        vente=vente,
                     )
 
                 # Recharges AVANT les adhesions, et l'ordre compte.
@@ -7662,6 +8907,8 @@ class PaiementViewSet(viewsets.ViewSet):
                         code_methode_paiement=moyen_paiement_code,
                         ip_client=ip_client,
                         point_de_vente=point_de_vente,
+                        vente=vente,
+                        uuid_transaction=uuid_transaction,
                     )
 
                 # Adhesions → creer les Memberships et les rattacher aux LigneArticle
@@ -7680,6 +8927,13 @@ class PaiementViewSet(viewsets.ViewSet):
                     articles_normaux,
                     lignes_articles=lignes_normales,
                 )
+
+                # En DERNIER : la vente est réglée puis encaissée.
+                # / LAST: the sale is paid and settled.
+                if vente is not None:
+                    _regler_et_encaisser_la_vente_de_caisse(
+                        vente, articles_panier, moyen_paiement_code
+                    )
 
             # Apres le bloc atomic : envoyer les billets par email via Celery
             # / After the atomic block: send tickets by email via Celery
@@ -7831,7 +9085,23 @@ class PaiementViewSet(viewsets.ViewSet):
         montant_a_rendre_centimes = abs(_calculer_total_panier_centimes(articles_panier))
 
         with db_transaction.atomic():
-            TransactionService.creer_recharge(
+            # Un retour de consigne est un remboursement : une vente AVOIR, sans vente
+            # liée (le gobelet est anonyme, D11). Ouverte en premier, encaissée en
+            # dernier, dans la même transaction que le crédit de la carte.
+            # / A deposit return is a refund: a CREDIT NOTE sale, no linked sale.
+            vente = ouvrir_vente(
+                origine=SaleOrigin.LABOUTIK,
+                nature=Vente.Nature.AVOIR,
+                point_de_vente=point_de_vente,
+                operateur=_operateur_de_la_caisse(
+                    request, request.POST.get("tag_id_cm", "")
+                ),
+                client=carte_client.user,
+                carte=carte_client,
+                idempotency_key=str(uuid_transaction),
+            )
+
+            transaction_de_recredit = TransactionService.creer_recharge(
                 sender_wallet=asset_a_crediter.wallet_origin,
                 receiver_wallet=wallet_client,
                 asset=asset_a_crediter,
@@ -7839,11 +9109,11 @@ class PaiementViewSet(viewsets.ViewSet):
                 tenant=connection.tenant,
                 ip=ip_client,
             )
-            # Le montant de la ligne reste NEGATIF (il vient du prix de l'article).
-            # C'est ce signe qui fait baisser le chiffre d'affaires cashless dans tous
-            # les rapports, sans une ligne de code de plus.
+            # Le montant de la ligne reste NEGATIF (le prix du gobelet rendu). C'est ce
+            # signe qui fait baisser le chiffre d'affaires cashless dans tous les
+            # anciens rapports, sans une ligne de code de plus.
             # / The line amount stays NEGATIVE: that sign is what lowers cashless
-            #   revenue in every report.
+            #   revenue in every old report.
             _creer_lignes_articles(
                 articles_panier,
                 "nfc",
@@ -7852,7 +9122,22 @@ class PaiementViewSet(viewsets.ViewSet):
                 wallet=wallet_client,
                 uuid_transaction=uuid_transaction,
                 point_de_vente=point_de_vente,
+                vente=vente,
             )
+
+            # Le règlement est copié de la transaction de recrédit : son montant (rendu,
+            # donc négatif) et son identifiant. Jamais recalculé depuis les lignes.
+            # / The payment is copied from the re-credit transaction, never from lines.
+            ajouter_reglement(
+                vente,
+                moyen=PaymentMethod.LOCAL_EURO,
+                montant=-transaction_de_recredit.amount,
+                asset=asset_a_crediter.uuid,
+                carte=carte_client,
+                wallet=wallet_client,
+                fedow_transaction_uuid=transaction_de_recredit.uuid,
+            )
+            encaisser_vente(vente)
 
         context = {
             "currency_data": CURRENCY_DATA,
@@ -8332,6 +9617,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # / LEGACY debit (OUTSIDE atomic: network call). If it covers all the remainder, debit now.
         # Fail-fast on error: no local debit, ask to rescan.
         lignes_legacy = []
+        transactions_legacy = []
         if legacy_couvre_tout:
             lignes_complement = [t for t in lignes_nfc if t[1] is None]
             try:
@@ -8389,10 +9675,71 @@ class PaiementViewSet(viewsets.ViewSet):
                     status=400,
                 )
 
+        # Le journal d'incident du débit legacy, préparé ici, AVANT le bloc atomic :
+        # le débit du réseau est déjà fait et ne s'annule pas. Si le bloc échoue ensuite
+        # (solde local insuffisant, égalité de la vente rompue), l'argent est prélevé
+        # sur le réseau sans vente ni ligne : ce message permet de le régulariser à la
+        # main (montant, carte, uuid de chaque transaction du réseau).
+        # / The legacy-debit incident log, prepared BEFORE the atomic block: if the block
+        #   fails, the network money is taken without a sale; this message allows a
+        #   manual fix (amount, card, uuid of each network transaction).
+        message_d_incident_legacy = ""
+        if legacy_couvre_tout and lignes_legacy:
+            uuids_des_transactions_legacy = []
+            for transaction_legacy in transactions_legacy:
+                uuids_des_transactions_legacy.append(str(transaction_legacy[3]))
+            message_d_incident_legacy = (
+                f"INCIDENT legacy débité sans LigneArticle (atomic local échoué) — "
+                f"uuid_transaction={uuid_transaction} carte={carte_client.tag_id} "
+                f"montant_legacy={montant_legacy} "
+                f"transactions_legacy={', '.join(uuids_des_transactions_legacy)} : "
+                f"régularisation manuelle requise."
+            )
+
         try:
             with db_transaction.atomic():
+                # ----- 7.0) Ouvrir la vente du paiement -----
+                # Une seule vente pour tout le panier : articles en euros, en points,
+                # recharges cadeau. La clé d'idempotence est l'identifiant du paiement,
+                # le même que sur les lignes : un rejeu retrouve cette vente.
+                # Panier en points (une seule monnaie, voir _monnaie_du_panier) : la vente
+                # est tenue dans cette monnaie (`unite` = son uuid), sinon en euros.
+                # Le client : l'adhérent identifié, sinon le titulaire de la carte.
+                # Panier vide (tous les articles ont été écartés à la lecture) : rien
+                # n'est vendu, aucune vente n'est ouverte, et la caisse répond par un
+                # succès sans rien écrire. Le service refuse une vente sans article.
+                # / One sale for the whole cart. The payment id is its idempotency key.
+                #   Points cart: the sale's unit is the points currency.
+                #   Empty cart: no sale is opened, a success writing nothing.
+                unite_de_la_vente = "EUR"
+                if articles_non_fiduciaires:
+                    monnaie_du_panier_en_points = articles_non_fiduciaires[0]["price"].asset
+                    unite_de_la_vente = str(monnaie_du_panier_en_points.uuid)
+
+                client_de_la_vente = carte_client.user
+                if adherent is not None:
+                    client_de_la_vente = adherent["user"]
+
+                vente = None
+                panier_vide = len(articles_panier) == 0
+                if not panier_vide:
+                    vente = ouvrir_vente(
+                        origine=SaleOrigin.LABOUTIK,
+                        nature=Vente.Nature.VENTE,
+                        unite=unite_de_la_vente,
+                        point_de_vente=point_de_vente,
+                        operateur=_operateur_de_la_caisse(
+                            request, request.POST.get("tag_id_cm", "")
+                        ),
+                        client=client_de_la_vente,
+                        carte=carte_client,
+                        idempotency_key=str(uuid_transaction),
+                    )
+
                 # ----- 7a) Crédits recharges gratuites AVANT les débits -----
-                # / Free top-up credits BEFORE debits
+                # Les recharges sont des articles de la MÊME vente, avec l'identifiant
+                # du paiement sur leurs lignes.
+                # / Free top-up credits BEFORE debits, items of the SAME sale.
                 if articles_recharge_gratuite:
                     _executer_recharges(
                         articles_recharge_gratuite,
@@ -8401,15 +9748,20 @@ class PaiementViewSet(viewsets.ViewSet):
                         code_methode_paiement="gift",
                         ip_client=ip_client,
                         point_de_vente=point_de_vente,
+                        vente=vente,
+                        uuid_transaction=uuid_transaction,
                     )
 
                 # ----- 7b) Débits non-fiduciaires (direct sur asset du prix) -----
-                # / Non-fiduciary debits (direct on the price's asset)
+                # Une transaction par article, et un règlement par transaction : son
+                # montant et son uuid sont COPIÉS de la transaction renvoyée.
+                # / Non-fiduciary debits: one transaction per item, one payment per
+                #   transaction, copied from the returned transaction.
                 lignes_non_fidu = []
                 for article_nf in articles_non_fiduciaires:
                     asset_nf_cible = article_nf["price"].asset
                     montant_nf = article_nf["prix_centimes"] * article_nf["quantite"]
-                    TransactionService.creer_vente(
+                    transaction_en_points = TransactionService.creer_vente(
                         sender_wallet=wallet_client,
                         receiver_wallet=asset_nf_cible.wallet_origin,
                         asset=asset_nf_cible,
@@ -8421,6 +9773,15 @@ class PaiementViewSet(viewsets.ViewSet):
                     pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
                         asset_nf_cible.category
                     ]
+                    ajouter_reglement(
+                        vente,
+                        moyen=pm_nf,
+                        montant=transaction_en_points.amount,
+                        asset=asset_nf_cible.uuid,
+                        carte=carte_client,
+                        wallet=wallet_client,
+                        fedow_transaction_uuid=transaction_en_points.uuid,
+                    )
                     lignes_non_fidu.append(
                         (article_nf, asset_nf_cible, montant_nf, pm_nf)
                     )
@@ -8436,8 +9797,12 @@ class PaiementViewSet(viewsets.ViewSet):
                             debits_par_asset[asset_c] = 0
                         debits_par_asset[asset_c] += amount_c
 
+                # Un règlement par transaction : son montant et son uuid sont COPIÉS de
+                # la transaction renvoyée, jamais recalculés depuis les parts. Jetons
+                # cadeau : règlement « jetons » (LG), qui ne compte pas comme argent.
+                # / One payment per transaction, copied from it. Gift tokens: LG payment.
                 for asset_a_debiter, total_debit_asset in debits_par_asset.items():
-                    TransactionService.creer_vente(
+                    transaction_de_la_monnaie = TransactionService.creer_vente(
                         sender_wallet=wallet_client,
                         receiver_wallet=asset_a_debiter.wallet_origin,
                         asset=asset_a_debiter,
@@ -8446,11 +9811,46 @@ class PaiementViewSet(viewsets.ViewSet):
                         card=carte_client,
                         ip=ip_client,
                     )
+                    ajouter_reglement(
+                        vente,
+                        moyen=MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                            asset_a_debiter.category
+                        ],
+                        montant=transaction_de_la_monnaie.amount,
+                        asset=asset_a_debiter.uuid,
+                        carte=carte_client,
+                        wallet=wallet_client,
+                        fedow_transaction_uuid=transaction_de_la_monnaie.uuid,
+                    )
+
+                # ----- 7c bis) Règlements du débit legacy (fait plus haut, hors atomic) -----
+                # Un règlement par transaction du réseau, lu dans `transactions_legacy` et
+                # non dans les parts (une part a perdu le lien avec sa transaction). La
+                # transaction vit sur le serveur Fedow distant : son uuid va dans
+                # `reference_externe` (`fedow_transaction_uuid` est réservé aux
+                # transactions `fedow_core` locales).
+                # / One payment per network transaction, read from transactions_legacy.
+                #   Remote transaction: its uuid goes to reference_externe.
+                for transaction_legacy in transactions_legacy:
+                    asset_legacy_uuid = transaction_legacy[0]
+                    montant_legacy_de_la_transaction = transaction_legacy[1]
+                    moyen_legacy = transaction_legacy[2]
+                    uuid_de_la_transaction_legacy = transaction_legacy[3]
+                    ajouter_reglement(
+                        vente,
+                        moyen=moyen_legacy,
+                        montant=montant_legacy_de_la_transaction,
+                        asset=asset_legacy_uuid,
+                        carte=carte_client,
+                        reference_externe=str(uuid_de_la_transaction_legacy),
+                    )
 
                 # ----- 7d) Créer toutes les LigneArticle (non-fidu + cascade locale + legacy) -----
                 # Les lignes_legacy (FED/TLF fédérés débités plus haut hors atomic) portent déjà
                 # leur moyen de paiement résolu (LOCAL_EURO / STRIPE_FED) et l'uuid de l'asset distant.
-                # / Create all LigneArticle (non-fidu + local cascade + legacy lines).
+                # Chaque part est un article de la vente.
+                # / Create all LigneArticle (non-fidu + local cascade + legacy lines), each
+                #   part an item of the sale.
                 toutes_les_lignes_pre_calculees = (
                     lignes_non_fidu + lignes_nfc + lignes_legacy
                 )
@@ -8460,6 +9860,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     wallet=wallet_client,
                     uuid_transaction=uuid_transaction,
                     point_de_vente=point_de_vente,
+                    vente=vente,
                 )
 
                 # ----- 7e) Adhésions : créer Membership, rattacher à la 1ère LigneArticle -----
@@ -8531,6 +9932,17 @@ class PaiementViewSet(viewsets.ViewSet):
                             if ligne_ad:
                                 ligne_ad.membership = membership
                                 ligne_ad.save(update_fields=["membership"])
+                            _appliquer_les_effets_d_une_adhesion_vendue_en_caisse(
+                                membership, ligne_ad
+                            )
+
+                # ----- 7f) Encaisser la vente, EN DERNIER -----
+                # `encaisser_vente` vérifie les deux égalités et pose le numéro. Si elles
+                # ne tiennent pas, il lève `EgaliteDeVenteRompue` : tout le bloc est
+                # annulé (lignes, débits locaux, recharges, adhésions).
+                # / Settle the sale, LAST: a broken equality rolls back the whole block.
+                if vente is not None:
+                    encaisser_vente(vente)
 
         except SoldeInsuffisant:
             # Race condition : solde a changé entre le check et le débit
@@ -8539,12 +9951,8 @@ class PaiementViewSet(viewsets.ViewSet):
             # local échoue ensuite, le FED/TLF fédéré est prélevé SANS LigneArticle. On le
             # JOURNALISE pour régularisation manuelle (le legacy n'est pas annulable automatiquement).
             # / Rare INCIDENT: legacy already debited but local atomic failed → log for manual fix.
-            if legacy_couvre_tout and lignes_legacy:
-                logger.error(
-                    f"INCIDENT legacy débité sans LigneArticle (atomic local échoué) — "
-                    f"uuid_transaction={uuid_transaction} carte={carte_client.tag_id} "
-                    f"montant_legacy={montant_legacy} : régularisation manuelle requise."
-                )
+            if message_d_incident_legacy:
+                logger.error(message_d_incident_legacy)
             nom_monnaie_fallback = _("Monnaie locale")
             premier_asset_fallback = assets_accessibles.filter(
                 category__in=[Asset.TLF, Asset.TNF, Asset.FED],
@@ -8581,6 +9989,49 @@ class PaiementViewSet(viewsets.ViewSet):
                 "laboutik/partial/hx_funds_insufficient.html",
                 context_insuffisant,
             )
+
+        except EgaliteDeVenteRompue as erreur_d_egalite:
+            # Les règlements ne couvrent pas exactement les articles : le bloc atomic a
+            # tout annulé (lignes, débits locaux, recharges, adhésions). Le débit legacy,
+            # fait avant, reste : même journal d'incident que pour un solde insuffisant.
+            # La caisse montre son écran d'erreur, jamais une erreur 500.
+            # / Broken equality: the atomic block rolled everything back. The legacy
+            #   debit stays: same incident log. The register shows its error screen.
+            if message_d_incident_legacy:
+                logger.error(message_d_incident_legacy)
+            logger.error(
+                f"Vente NFC refusée (égalité rompue) — uuid_transaction={uuid_transaction} "
+                f"carte={carte_client.tag_id} : {erreur_d_egalite}"
+            )
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Le paiement n'a pas été enregistré : la vente est incohérente. "
+                    "Prévenez un responsable du lieu."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=409
+            )
+
+        except Exception as erreur_imprevue:
+            # Toute AUTRE exception dans l'atomic (erreur du service, contrainte de la
+            # base…) : le local est annulé, mais le débit du réseau, fait avant, reste
+            # prélevé SANS vente ni ligne. On JOURNALISE l'incident avec le message
+            # préparé avant l'atomic, plus l'exception, puis on relaie l'exception
+            # (500 volontaire). Cet `except` vient APRÈS les deux autres : ils gardent
+            # leur écran de la caisse.
+            # / Any OTHER exception in the atomic: the network debit, done before, stays
+            #   taken without a sale. Log the prepared incident message plus the
+            #   exception, then re-raise (500). This `except` comes AFTER the other two.
+            if message_d_incident_legacy:
+                logger.error(
+                    f"{message_d_incident_legacy} "
+                    f"Exception imprévue dans l'atomic : {erreur_imprevue}"
+                )
+            raise
 
         # ================================================================ #
         #  PHASE 8 : Succès — soldes multi-asset                            #
@@ -8872,6 +10323,22 @@ class PaiementViewSet(viewsets.ViewSet):
             wallet_client = _obtenir_ou_creer_wallet(carte)
 
             with db_transaction.atomic():
+                # Une vente ordinaire, sans règlement d'argent : la recharge cadeau est
+                # un article hors chiffre d'affaires, entièrement offert, et le service
+                # de vente lui écrit un règlement « offert » (FREE). Ce parcours n'a pas
+                # de clé d'idempotence (pas d'écran de paiement) : la vente n'en a pas.
+                # / An ordinary sale with no money: the gift top-up is fully offered,
+                #   the service writes a FREE payment. No idempotency key on this path.
+                vente_de_la_recharge_cadeau = ouvrir_vente(
+                    origine=SaleOrigin.LABOUTIK,
+                    nature=Vente.Nature.VENTE,
+                    point_de_vente=point_de_vente,
+                    operateur=_operateur_de_la_caisse(
+                        request, request.POST.get("tag_id_cm", "")
+                    ),
+                    client=carte.user,
+                    carte=carte,
+                )
                 _executer_recharges(
                     articles_panier,
                     wallet_client,
@@ -8879,7 +10346,9 @@ class PaiementViewSet(viewsets.ViewSet):
                     code_methode_paiement="gift",
                     ip_client=ip_client,
                     point_de_vente=point_de_vente,
+                    vente=vente_de_la_recharge_cadeau,
                 )
+                encaisser_vente(vente_de_la_recharge_cadeau)
 
             # Calculer le solde apres credit pour l'ecran de succes
             # / Compute balance after credit for the success screen
@@ -9207,6 +10676,22 @@ class PaiementViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
+        # Une recharge cadeau se fait à part : même garde que `_executer_paiement`,
+        # pour un POST qui arriverait directement ici. Avant tout débit.
+        # / A gift top-up is done on its own: same guard as _executer_paiement.
+        if _panier_melange_recharge_cadeau_et_autres_articles(articles_panier):
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": _(
+                    "La recharge cadeau se fait à part : retirez les autres articles."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         total_centimes = _calculer_total_panier_centimes(articles_panier)
         state = _construire_state(point_de_vente, user=request.user)
 
@@ -9413,6 +10898,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # / LEGACY tier (C2.3): fresh FED read; cover what it can; debit OUTSIDE atomic; the
             # remaining balance is settled by the chosen complement method (cash/CC).
             lignes_legacy = []
+            transactions_legacy = []
             montant_legacy = 0
             lignes_locales_c1 = [t for t in lignes_nfc_carte1 if t[1] is not None]
             lignes_complement_c1 = [t for t in lignes_nfc_carte1 if t[1] is None]
@@ -9478,10 +10964,58 @@ class PaiementViewSet(viewsets.ViewSet):
                 # / FED-covered parts removed: only locals + cash/CC part (lignes_reste) remain.
                 lignes_nfc_carte1 = lignes_locales_c1 + lignes_reste
 
+            # Le journal d'incident du débit legacy, préparé ici, AVANT le bloc atomic :
+            # le débit du réseau est déjà fait et ne s'annule pas. Si le bloc échoue ensuite
+            # (solde local insuffisant, égalité de la vente rompue, autre erreur), l'argent
+            # est prélevé sur le réseau sans vente ni ligne : ce message permet de le
+            # régulariser à la main (montant, carte, uuid de chaque transaction du réseau).
+            # / The legacy-debit incident log, prepared BEFORE the atomic block: if the block
+            #   fails, the network money is taken without a sale; this message allows a
+            #   manual fix (amount, card, uuid of each network transaction).
+            uuids_des_transactions_legacy = []
+            for transaction_legacy in transactions_legacy:
+                uuids_des_transactions_legacy.append(str(transaction_legacy[3]))
+            message_d_incident_legacy = ""
+            if lignes_legacy:
+                message_d_incident_legacy = (
+                    f"INCIDENT legacy débité sans LigneArticle (complément, atomic échoué) — "
+                    f"uuid_transaction={uuid_transaction} carte={carte1.tag_id} "
+                    f"montant_legacy={montant_legacy} "
+                    f"transactions_legacy={', '.join(uuids_des_transactions_legacy)} : "
+                    f"régularisation manuelle requise."
+                )
+
             try:
                 with db_transaction.atomic():
+                    # 6.0) Ouvrir la vente du paiement
+                    # Une seule vente pour tout le paiement : ce que paie la carte 1, ce
+                    # que paie le réseau, et le reste en espèces ou en CB. La clé
+                    # d'idempotence est l'identifiant du paiement, le même que sur les
+                    # lignes : un rejeu retrouve cette vente. Un panier en points n'arrive
+                    # jamais ici (garde en tête de fonction) : la vente est en euros.
+                    # Le client est le titulaire de la carte 1.
+                    # / 6.0) Open the payment's sale: one sale for the whole payment. The
+                    #   payment id is its idempotency key. Always in euros.
+                    vente = ouvrir_vente(
+                        origine=SaleOrigin.LABOUTIK,
+                        nature=Vente.Nature.VENTE,
+                        point_de_vente=point_de_vente,
+                        operateur=_operateur_de_la_caisse(
+                            request, request.POST.get("tag_id_cm", "")
+                        ),
+                        client=carte1.user,
+                        carte=carte1,
+                        idempotency_key=str(uuid_transaction),
+                    )
+
                     # 6a) Recharges gratuites
-                    # / 6a) Free top-ups
+                    # Elles n'arrivent pas ici aujourd'hui : une recharge cadeau mêlée à
+                    # d'autres articles est refusée plus haut, et seule elle ne laisse
+                    # rien à payer (sortie « le solde a changé »). Si une garde change,
+                    # elles restent des articles de la MÊME vente, avec l'identifiant du
+                    # paiement sur leurs lignes.
+                    # / 6a) Free top-ups: unreachable today (guards above). If a guard
+                    #   changes, they stay items of the SAME sale, with the payment id.
                     if articles_recharge_gratuite:
                         _executer_recharges(
                             articles_recharge_gratuite,
@@ -9490,17 +11024,22 @@ class PaiementViewSet(viewsets.ViewSet):
                             code_methode_paiement="gift",
                             ip_client=ip_client,
                             point_de_vente=point_de_vente,
+                            vente=vente,
+                            uuid_transaction=uuid_transaction,
                         )
 
                     # 6b) Débits non-fiduciaires
-                    # / 6b) Non-fiduciary debits
+                    # Une transaction par article, et un règlement par transaction : son
+                    # montant et son uuid sont COPIÉS de la transaction renvoyée.
+                    # / 6b) Non-fiduciary debits: one payment per transaction, copied
+                    #   from the returned transaction.
                     lignes_non_fidu = []
                     for article_nf in articles_non_fiduciaires:
                         asset_nf_cible = article_nf["price"].asset
                         montant_nf = (
                             article_nf["prix_centimes"] * article_nf["quantite"]
                         )
-                        TransactionService.creer_vente(
+                        transaction_non_fiduciaire = TransactionService.creer_vente(
                             sender_wallet=wallet_carte1,
                             receiver_wallet=asset_nf_cible.wallet_origin,
                             asset=asset_nf_cible,
@@ -9512,6 +11051,15 @@ class PaiementViewSet(viewsets.ViewSet):
                         pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
                             asset_nf_cible.category
                         ]
+                        ajouter_reglement(
+                            vente,
+                            moyen=pm_nf,
+                            montant=transaction_non_fiduciaire.amount,
+                            asset=asset_nf_cible.uuid,
+                            carte=carte1,
+                            wallet=wallet_carte1,
+                            fedow_transaction_uuid=transaction_non_fiduciaire.uuid,
+                        )
                         lignes_non_fidu.append(
                             (article_nf, asset_nf_cible, montant_nf, pm_nf)
                         )
@@ -9526,11 +11074,16 @@ class PaiementViewSet(viewsets.ViewSet):
                                 debits_par_asset_c1[asset_c] = 0
                             debits_par_asset_c1[asset_c] += amount_c
 
+                    # Un règlement par transaction : son montant et son uuid sont COPIÉS
+                    # de la transaction renvoyée, jamais recalculés depuis les parts.
+                    # Jetons cadeau : règlement « jetons » (LG), qui ne compte pas comme
+                    # argent.
+                    # / One payment per transaction, copied from it. Gift tokens: LG.
                     for (
                         asset_a_debiter,
                         total_debit_asset,
                     ) in debits_par_asset_c1.items():
-                        TransactionService.creer_vente(
+                        transaction_de_la_monnaie = TransactionService.creer_vente(
                             sender_wallet=wallet_carte1,
                             receiver_wallet=asset_a_debiter.wallet_origin,
                             asset=asset_a_debiter,
@@ -9538,6 +11091,52 @@ class PaiementViewSet(viewsets.ViewSet):
                             tenant=tenant_courant,
                             card=carte1,
                             ip=ip_client,
+                        )
+                        ajouter_reglement(
+                            vente,
+                            moyen=MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                                asset_a_debiter.category
+                            ],
+                            montant=transaction_de_la_monnaie.amount,
+                            asset=asset_a_debiter.uuid,
+                            carte=carte1,
+                            wallet=wallet_carte1,
+                            fedow_transaction_uuid=transaction_de_la_monnaie.uuid,
+                        )
+
+                    # 6c bis) Règlements du débit legacy (fait plus haut, hors atomic)
+                    # Un règlement par transaction du réseau, lu dans `transactions_legacy`
+                    # et non dans les parts (une part a perdu le lien avec sa
+                    # transaction). La transaction vit sur le serveur Fedow distant : son
+                    # uuid va dans `reference_externe` (`fedow_transaction_uuid` est
+                    # réservé aux transactions `fedow_core` locales).
+                    # / One payment per network transaction, read from transactions_legacy.
+                    #   Remote transaction: its uuid goes to reference_externe.
+                    for transaction_legacy in transactions_legacy:
+                        asset_legacy_uuid = transaction_legacy[0]
+                        montant_legacy_de_la_transaction = transaction_legacy[1]
+                        moyen_legacy = transaction_legacy[2]
+                        uuid_de_la_transaction_legacy = transaction_legacy[3]
+                        ajouter_reglement(
+                            vente,
+                            moyen=moyen_legacy,
+                            montant=montant_legacy_de_la_transaction,
+                            asset=asset_legacy_uuid,
+                            carte=carte1,
+                            reference_externe=str(uuid_de_la_transaction_legacy),
+                        )
+
+                    # 6c ter) Règlement du reste, en espèces ou en CB
+                    # UN règlement du reste dû (le reste après la carte et le réseau),
+                    # jamais la somme donnée par le client : la monnaie rendue n'est pas
+                    # un règlement. Pas de règlement de 0 (réseau qui paie tout le reste).
+                    # / ONE payment of the amount due, never the amount handed over: the
+                    #   change given back is not a payment. No 0 payment.
+                    if montant_paye_en_complement > 0:
+                        ajouter_reglement(
+                            vente,
+                            moyen=pm_complement,
+                            montant=montant_paye_en_complement,
                         )
 
                     # 6d) Remplacer les lignes complémentaires (asset=None)
@@ -9558,6 +11157,8 @@ class PaiementViewSet(viewsets.ViewSet):
                     # avec leur moyen résolu (STRIPE_FED / LOCAL_EURO) et l'uuid de l'asset distant.
                     # / + lignes_legacy: FED-covered parts (already debited outside atomic).
                     toutes_les_lignes = lignes_non_fidu + lignes_finales + lignes_legacy
+                    # Chaque part est un article de la vente.
+                    # / Each part is an item of the sale.
                     lignes_creees, produits_stock_negatif = (
                         _creer_lignes_articles_cascade(
                             lignes_pre_calculees=toutes_les_lignes,
@@ -9565,6 +11166,7 @@ class PaiementViewSet(viewsets.ViewSet):
                             wallet=wallet_carte1,
                             uuid_transaction=uuid_transaction,
                             point_de_vente=point_de_vente,
+                            vente=vente,
                         )
                     )
 
@@ -9591,18 +11193,24 @@ class PaiementViewSet(viewsets.ViewSet):
                                 if ligne_ad:
                                     ligne_ad.membership = membership
                                     ligne_ad.save(update_fields=["membership"])
+                                _appliquer_les_effets_d_une_adhesion_vendue_en_caisse(
+                                    membership, ligne_ad
+                                )
+
+                    # 6f) Encaisser la vente, EN DERNIER
+                    # `encaisser_vente` vérifie les deux égalités et pose le numéro. Si
+                    # elles ne tiennent pas, il lève `EgaliteDeVenteRompue` : tout le bloc
+                    # est annulé (lignes, débits locaux, adhésions).
+                    # / 6f) Settle the sale, LAST: a broken equality rolls back the block.
+                    encaisser_vente(vente)
 
             except SoldeInsuffisant:
                 # INCIDENT rarissime : si le legacy a déjà été débité (hors atomic) et que l'atomic
                 # local échoue, le FED/TLF fédéré est prélevé SANS LigneArticle → on JOURNALISE pour
                 # régularisation manuelle (le legacy n'est pas annulable automatiquement).
                 # / Rare INCIDENT: legacy debited but local atomic failed → log for manual fix.
-                if lignes_legacy:
-                    logger.error(
-                        f"INCIDENT legacy débité sans LigneArticle (complément, atomic échoué) — "
-                        f"uuid_transaction={uuid_transaction} carte={carte1.tag_id} "
-                        f"montant_legacy={montant_legacy} : régularisation manuelle requise."
-                    )
+                if message_d_incident_legacy:
+                    logger.error(message_d_incident_legacy)
                 context_erreur = {
                     "action": "initUrlAddition();",
                     "msg_type": "warning",
@@ -9615,18 +11223,54 @@ class PaiementViewSet(viewsets.ViewSet):
                     request, "laboutik/partial/hx_messages.html", context_erreur
                 )
 
+            # Cet `except` vient AVANT `except Exception` : sinon l'égalité rompue
+            # partirait en erreur 500.
+            # / This `except` comes BEFORE `except Exception`: otherwise a 500.
+            except EgaliteDeVenteRompue as erreur_d_egalite:
+                # Les règlements ne couvrent pas exactement les articles : le bloc atomic
+                # a tout annulé (lignes, débits locaux, adhésions). Le débit legacy, fait
+                # avant, reste : même journal d'incident que pour un solde insuffisant.
+                # La caisse montre son écran d'erreur, jamais une erreur 500.
+                # / Broken equality: the atomic block rolled everything back. The legacy
+                #   debit stays: same incident log. The register shows its error screen.
+                if message_d_incident_legacy:
+                    logger.error(message_d_incident_legacy)
+                logger.error(
+                    f"Vente complément refusée (égalité rompue) — "
+                    f"uuid_transaction={uuid_transaction} carte={carte1.tag_id} : "
+                    f"{erreur_d_egalite}"
+                )
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Le paiement n'a pas été enregistré : la vente est incohérente. "
+                        "Prévenez un responsable du lieu."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=409,
+                )
+
             except Exception as e:
                 # Toute AUTRE exception dans l'atomic : si le legacy a deja ete debite
                 # (hors atomic), le local rollback mais le FED/TLF federe reste preleve
-                # SANS LigneArticle (orphelin). On JOURNALISE l'incident puis on relaie
-                # l'exception (500 volontaire). Pas de journalisation en base, juste le log.
+                # SANS LigneArticle (orphelin). On JOURNALISE l'incident, avec les uuid
+                # des transactions du reseau, puis on relaie l'exception (500 volontaire).
+                # Pas de journalisation en base, juste le log.
                 # / Any OTHER exception in the atomic: if the legacy debit already happened
                 # (outside the atomic), the local rolls back but the federated FED/TLF stays
-                # debited WITHOUT LigneArticle (orphan). Log the incident then re-raise (500).
+                # debited WITHOUT LigneArticle (orphan). Log the incident (with the network
+                # transaction uuids) then re-raise (500).
                 if lignes_legacy:
                     logger.error(
                         f"INCIDENT : débit legacy orphelin (complément, exception atomic) — "
                         f"carte={carte1.tag_id} montant_legacy_centimes={montant_legacy} "
+                        f"transactions_legacy={', '.join(uuids_des_transactions_legacy)} "
                         f"uuid_transaction={uuid_transaction} exception={e}"
                     )
                 raise
@@ -9755,6 +11399,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # remaining amount is correct. CALCULATION ONLY: the FED debit is DEFERRED to the
             # success atomic (a re-render would otherwise orphan the debit).
             lignes_legacy_c1 = []
+            transactions_legacy_c1 = []
             lignes_pour_fed_c1 = []
             montant_legacy_c1 = 0
             lignes_complement_c1 = [t for t in lignes_nfc_carte1 if t[1] is None]
@@ -9835,6 +11480,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # / LEGACY tier (C3): the 2nd networked card covers the remainder with its FED. ALL-OR-
             # NOTHING (a partial debit would be lost by the re-render). Otherwise cash/CC next round.
             lignes_legacy_c2 = []
+            transactions_legacy_c2 = []
             montant_legacy_c2 = 0
             if carte2.user is not None and total_reste_apres_carte2 > 0:
                 depensable_legacy_c2, legacy_dispo_c2 = lire_depensable_fed_frais(
@@ -10012,6 +11658,28 @@ class PaiementViewSet(viewsets.ViewSet):
                     logger.warning(
                         f"Débit legacy (carte1, complément NFC) échoué : {erreur_legacy_c1}"
                     )
+                    # Le réseau de la carte 2 est débité plus haut, et ce débit ne
+                    # s'annule pas : l'argent de la carte 2 est pris sans vente ni
+                    # ligne. On le journalise pour une régularisation à la main
+                    # (montant, carte 2, uuid de chaque transaction du réseau).
+                    # / Card 2's network debit (above) cannot be undone: its money is
+                    #   taken without a sale. Logged for a manual fix.
+                    if transactions_legacy_c2:
+                        uuids_des_transactions_legacy_c2 = []
+                        for transaction_legacy_c2 in transactions_legacy_c2:
+                            uuids_des_transactions_legacy_c2.append(
+                                str(transaction_legacy_c2[3])
+                            )
+                        logger.error(
+                            f"INCIDENT legacy débité sans LigneArticle (2ème carte, "
+                            f"débit legacy de la carte 1 échoué) — "
+                            f"uuid_transaction={uuid_transaction} "
+                            f"carte2={carte2.tag_id} "
+                            f"montant_legacy={montant_legacy_c2} "
+                            f"transactions_legacy="
+                            f"{', '.join(uuids_des_transactions_legacy_c2)} : "
+                            f"régularisation manuelle requise."
+                        )
                     context_erreur = {
                         "action": "initUrlAddition();",
                         "msg_type": "warning",
@@ -10030,12 +11698,79 @@ class PaiementViewSet(viewsets.ViewSet):
                     lignes_pour_fed_c1, transactions_legacy_c1
                 )
 
-            # Carte2 couvre tout le reste → bloc atomic
-            # / Card2 covers all remainder → atomic block
+            # Le journal d'incident des débits legacy, préparé ici, AVANT le bloc
+            # atomic : les débits du réseau des DEUX cartes sont déjà faits et ne
+            # s'annulent pas. Si le bloc échoue ensuite (solde local insuffisant,
+            # égalité de la vente rompue), l'argent est prélevé sur le réseau sans
+            # vente ni ligne : ce message unique permet de le régulariser à la main
+            # (pour chaque carte débitée : la carte, le montant, l'uuid de chaque
+            # transaction du réseau).
+            # / The legacy-debit incident log, prepared BEFORE the atomic block: both
+            #   cards' network debits cannot be undone. One message covering each
+            #   debited card (card, amount, transaction uuids), for a manual fix.
+            uuids_des_transactions_legacy_c1 = []
+            for transaction_legacy_c1 in transactions_legacy_c1:
+                uuids_des_transactions_legacy_c1.append(str(transaction_legacy_c1[3]))
+            uuids_des_transactions_legacy_c2 = []
+            for transaction_legacy_c2 in transactions_legacy_c2:
+                uuids_des_transactions_legacy_c2.append(str(transaction_legacy_c2[3]))
+
+            debits_legacy_a_journaliser = []
+            if transactions_legacy_c1:
+                debits_legacy_a_journaliser.append(
+                    f"carte1={carte1.tag_id} montant_legacy={montant_legacy_c1} "
+                    f"transactions_legacy={', '.join(uuids_des_transactions_legacy_c1)}"
+                )
+            if transactions_legacy_c2:
+                debits_legacy_a_journaliser.append(
+                    f"carte2={carte2.tag_id} montant_legacy={montant_legacy_c2} "
+                    f"transactions_legacy={', '.join(uuids_des_transactions_legacy_c2)}"
+                )
+            message_d_incident_legacy = ""
+            if debits_legacy_a_journaliser:
+                message_d_incident_legacy = (
+                    f"INCIDENT legacy débité sans LigneArticle (2ème carte, atomic échoué) — "
+                    f"uuid_transaction={uuid_transaction} "
+                    f"{' ; '.join(debits_legacy_a_journaliser)} : "
+                    f"régularisation manuelle requise."
+                )
+
+            # Carte2 couvre tout le reste (ou le reste est réglé en espèces / CB) →
+            # bloc atomic
+            # / Card2 covers all remainder (or the rest is paid in cash / CC) → atomic
             try:
                 with db_transaction.atomic():
+                    # Ouvrir la vente du paiement
+                    # Une seule vente pour tout le paiement : ce que paient les deux
+                    # cartes, ce que paie le réseau pour chacune, et le reste en
+                    # espèces ou en CB. La clé d'idempotence est l'identifiant du
+                    # paiement, le même que sur les lignes : un rejeu retrouve cette
+                    # vente. Un panier en points n'arrive jamais ici (garde en tête de
+                    # fonction) : la vente est en euros. Le client et la carte de la
+                    # vente sont ceux de la carte 1.
+                    # / Open the payment's sale: one sale for the whole payment. The
+                    #   payment id is its idempotency key. Always in euros. Card 1 gives
+                    #   the sale's customer and card.
+                    vente = ouvrir_vente(
+                        origine=SaleOrigin.LABOUTIK,
+                        nature=Vente.Nature.VENTE,
+                        point_de_vente=point_de_vente,
+                        operateur=_operateur_de_la_caisse(
+                            request, request.POST.get("tag_id_cm", "")
+                        ),
+                        client=carte1.user,
+                        carte=carte1,
+                        idempotency_key=str(uuid_transaction),
+                    )
+
                     # Recharges gratuites
-                    # / Free top-ups
+                    # Elles n'arrivent pas ici aujourd'hui : une recharge cadeau mêlée à
+                    # d'autres articles est refusée en tête de fonction, et seule elle
+                    # ne laisse rien à payer (sortie « le solde a changé »). Si une
+                    # garde change, elles restent des articles de la MÊME vente, avec
+                    # l'identifiant du paiement sur leurs lignes.
+                    # / Free top-ups: unreachable today (guards above). If a guard
+                    #   changes, they stay items of the SAME sale, with the payment id.
                     if articles_recharge_gratuite:
                         _executer_recharges(
                             articles_recharge_gratuite,
@@ -10044,17 +11779,25 @@ class PaiementViewSet(viewsets.ViewSet):
                             code_methode_paiement="gift",
                             ip_client=ip_client,
                             point_de_vente=point_de_vente,
+                            vente=vente,
+                            uuid_transaction=uuid_transaction,
                         )
 
                     # Débits non-fiduciaires carte1
-                    # / Card1 non-fiduciary debits
+                    # Ils n'arrivent pas ici aujourd'hui : un tarif non fiduciaire porte
+                    # une monnaie de points ou de temps, et la garde en tête de fonction
+                    # refuse un panier en points. Si elle change, chaque transaction
+                    # reste un règlement de la vente, COPIÉ de la transaction renvoyée,
+                    # avec la carte 1 et son portefeuille.
+                    # / Card1 non-fiduciary debits: unreachable today (points guard). If
+                    #   it changes, one payment per transaction, copied from it.
                     lignes_non_fidu = []
                     for article_nf in articles_non_fiduciaires:
                         asset_nf_cible = article_nf["price"].asset
                         montant_nf = (
                             article_nf["prix_centimes"] * article_nf["quantite"]
                         )
-                        TransactionService.creer_vente(
+                        transaction_non_fiduciaire = TransactionService.creer_vente(
                             sender_wallet=wallet_carte1,
                             receiver_wallet=asset_nf_cible.wallet_origin,
                             asset=asset_nf_cible,
@@ -10066,6 +11809,15 @@ class PaiementViewSet(viewsets.ViewSet):
                         pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
                             asset_nf_cible.category
                         ]
+                        ajouter_reglement(
+                            vente,
+                            moyen=pm_nf,
+                            montant=transaction_non_fiduciaire.amount,
+                            asset=asset_nf_cible.uuid,
+                            carte=carte1,
+                            wallet=wallet_carte1,
+                            fedow_transaction_uuid=transaction_non_fiduciaire.uuid,
+                        )
                         lignes_non_fidu.append(
                             (article_nf, asset_nf_cible, montant_nf, pm_nf)
                         )
@@ -10080,11 +11832,17 @@ class PaiementViewSet(viewsets.ViewSet):
                                 debits_par_asset_c1[asset_c] = 0
                             debits_par_asset_c1[asset_c] += amount_c
 
+                    # Un règlement par transaction : son montant et son uuid sont COPIÉS
+                    # de la transaction renvoyée, jamais recalculés depuis les parts.
+                    # Il porte la carte 1 et son portefeuille. Jetons cadeau : règlement
+                    # « jetons » (LG), qui ne compte pas comme argent.
+                    # / One payment per transaction, copied from it, with card 1 and its
+                    #   wallet. Gift tokens: LG.
                     for (
                         asset_a_debiter,
                         total_debit_asset,
                     ) in debits_par_asset_c1.items():
-                        TransactionService.creer_vente(
+                        transaction_de_la_monnaie_c1 = TransactionService.creer_vente(
                             sender_wallet=wallet_carte1,
                             receiver_wallet=asset_a_debiter.wallet_origin,
                             asset=asset_a_debiter,
@@ -10092,6 +11850,17 @@ class PaiementViewSet(viewsets.ViewSet):
                             tenant=tenant_courant,
                             card=carte1,
                             ip=ip_client,
+                        )
+                        ajouter_reglement(
+                            vente,
+                            moyen=MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                                asset_a_debiter.category
+                            ],
+                            montant=transaction_de_la_monnaie_c1.amount,
+                            asset=asset_a_debiter.uuid,
+                            carte=carte1,
+                            wallet=wallet_carte1,
+                            fedow_transaction_uuid=transaction_de_la_monnaie_c1.uuid,
                         )
 
                     # Débits cascade carte2
@@ -10103,11 +11872,15 @@ class PaiementViewSet(viewsets.ViewSet):
                                 debits_par_asset_c2[asset_c2] = 0
                             debits_par_asset_c2[asset_c2] += amount_c2
 
+                    # Même règle que pour la carte 1, mais chaque règlement porte la
+                    # carte 2 et SON portefeuille : c'est elle qui a payé.
+                    # / Same rule as card 1, but each payment carries card 2 and ITS
+                    #   wallet: card 2 paid.
                     for (
                         asset_a_debiter_c2,
                         total_debit_c2,
                     ) in debits_par_asset_c2.items():
-                        TransactionService.creer_vente(
+                        transaction_de_la_monnaie_c2 = TransactionService.creer_vente(
                             sender_wallet=wallet_carte2,
                             receiver_wallet=asset_a_debiter_c2.wallet_origin,
                             asset=asset_a_debiter_c2,
@@ -10115,6 +11888,59 @@ class PaiementViewSet(viewsets.ViewSet):
                             tenant=tenant_courant,
                             card=carte2,
                             ip=ip_client,
+                        )
+                        ajouter_reglement(
+                            vente,
+                            moyen=MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[
+                                asset_a_debiter_c2.category
+                            ],
+                            montant=transaction_de_la_monnaie_c2.amount,
+                            asset=asset_a_debiter_c2.uuid,
+                            carte=carte2,
+                            wallet=wallet_carte2,
+                            fedow_transaction_uuid=transaction_de_la_monnaie_c2.uuid,
+                        )
+
+                    # Règlements des débits legacy (faits plus haut, hors atomic)
+                    # Un règlement par transaction du réseau, lu dans les transactions
+                    # renvoyées et non dans les parts (une part a perdu le lien avec sa
+                    # transaction). Chaque règlement porte la carte débitée : la carte 1
+                    # pour ses transactions, la carte 2 pour les siennes. La transaction
+                    # vit sur le serveur Fedow distant : son uuid va dans
+                    # `reference_externe` (`fedow_transaction_uuid` est réservé aux
+                    # transactions `fedow_core` locales).
+                    # / One payment per network transaction, with the debited card.
+                    #   Remote transaction: its uuid goes to reference_externe.
+                    for transaction_legacy_c1 in transactions_legacy_c1:
+                        ajouter_reglement(
+                            vente,
+                            moyen=transaction_legacy_c1[2],
+                            montant=transaction_legacy_c1[1],
+                            asset=transaction_legacy_c1[0],
+                            carte=carte1,
+                            reference_externe=str(transaction_legacy_c1[3]),
+                        )
+                    for transaction_legacy_c2 in transactions_legacy_c2:
+                        ajouter_reglement(
+                            vente,
+                            moyen=transaction_legacy_c2[2],
+                            montant=transaction_legacy_c2[1],
+                            asset=transaction_legacy_c2[0],
+                            carte=carte2,
+                            reference_externe=str(transaction_legacy_c2[3]),
+                        )
+
+                    # Règlement du reste après les deux cartes, en espèces ou en CB
+                    # UN règlement du reste dû, jamais la somme donnée par le client :
+                    # la monnaie rendue n'est pas un règlement. Pas de règlement de 0 :
+                    # quand les cartes couvrent tout, il n'y a pas de reste.
+                    # / ONE payment of the amount due, never the amount handed over.
+                    #   No 0 payment: when the cards cover everything, there is no rest.
+                    if lignes_reste_apres_carte2:
+                        ajouter_reglement(
+                            vente,
+                            moyen=pm_reste,
+                            montant=total_reste_apres_carte2,
                         )
 
                     # Créer les LigneArticle pour carte1 (lignes NFC couvertes)
@@ -10143,6 +11969,11 @@ class PaiementViewSet(viewsets.ViewSet):
                         + lignes_legacy_c2
                         + lignes_reste_apres_carte2
                     )
+                    # Chaque part est un article de la vente. Les lignes gardent la
+                    # carte 1, même pour les parts payées par la carte 2 : seuls les
+                    # règlements disent quelle carte a payé.
+                    # / Each part is an item of the sale. The lines keep card 1; only
+                    #   the payments say which card paid.
                     lignes_creees, produits_stock_negatif = (
                         _creer_lignes_articles_cascade(
                             lignes_pre_calculees=toutes_les_lignes,
@@ -10151,6 +11982,7 @@ class PaiementViewSet(viewsets.ViewSet):
                             wallet=wallet_carte1,
                             uuid_transaction=uuid_transaction,
                             point_de_vente=point_de_vente,
+                            vente=vente,
                         )
                     )
 
@@ -10177,18 +12009,25 @@ class PaiementViewSet(viewsets.ViewSet):
                                 if ligne_ad:
                                     ligne_ad.membership = membership
                                     ligne_ad.save(update_fields=["membership"])
+                                _appliquer_les_effets_d_une_adhesion_vendue_en_caisse(
+                                    membership, ligne_ad
+                                )
+
+                    # Encaisser la vente, EN DERNIER
+                    # `encaisser_vente` vérifie les deux égalités et pose le numéro. Si
+                    # elles ne tiennent pas, il lève `EgaliteDeVenteRompue` : tout le bloc
+                    # est annulé (lignes, débits locaux des deux cartes, adhésions).
+                    # / Settle the sale, LAST: a broken equality rolls back the block.
+                    encaisser_vente(vente)
 
             except SoldeInsuffisant:
-                # INCIDENT rarissime : le legacy de la carte2 a été débité (hors atomic) mais l'atomic
-                # local a échoué → le FED de la carte2 est prélevé SANS LigneArticle. On JOURNALISE
-                # pour régularisation manuelle (le legacy n'est pas annulable automatiquement).
-                # / Rare INCIDENT: card2 legacy debited but local atomic failed → log for manual fix.
-                if lignes_legacy_c2:
-                    logger.error(
-                        f"INCIDENT legacy débité sans LigneArticle (2ème carte, atomic échoué) — "
-                        f"uuid_transaction={uuid_transaction} carte2={carte2.tag_id} "
-                        f"montant_legacy={montant_legacy_c2} : régularisation manuelle requise."
-                    )
+                # INCIDENT rarissime : le legacy d'une carte (ou des deux) a été débité
+                # hors atomic, puis l'atomic local a échoué : l'argent du réseau est
+                # prélevé SANS vente ni ligne. On JOURNALISE pour une régularisation à la
+                # main (le legacy ne s'annule pas automatiquement).
+                # / Rare INCIDENT: legacy debited, local atomic failed → log for manual fix.
+                if message_d_incident_legacy:
+                    logger.error(message_d_incident_legacy)
                 context_erreur = {
                     "action": "initUrlAddition();",
                     "msg_type": "warning",
@@ -10201,19 +12040,52 @@ class PaiementViewSet(viewsets.ViewSet):
                     request, "laboutik/partial/hx_messages.html", context_erreur
                 )
 
+            # Cet `except` vient AVANT `except Exception` : sinon l'égalité rompue
+            # partirait en erreur 500.
+            # / This `except` comes BEFORE `except Exception`: otherwise a 500.
+            except EgaliteDeVenteRompue as erreur_d_egalite:
+                # Les règlements ne couvrent pas exactement les articles : le bloc atomic
+                # a tout annulé (lignes, débits locaux, adhésions). Les débits legacy,
+                # faits avant, restent : même journal d'incident que pour un solde
+                # insuffisant. La caisse montre son écran d'erreur, jamais une erreur 500.
+                # / Broken equality: the atomic block rolled everything back. The legacy
+                #   debits stay: same incident log. The register shows its error screen.
+                if message_d_incident_legacy:
+                    logger.error(message_d_incident_legacy)
+                logger.error(
+                    f"Vente 2ème carte refusée (égalité rompue) — "
+                    f"uuid_transaction={uuid_transaction} carte1={carte1.tag_id} "
+                    f"carte2={carte2.tag_id} : {erreur_d_egalite}"
+                )
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Le paiement n'a pas été enregistré : la vente est incohérente. "
+                        "Prévenez un responsable du lieu."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=409,
+                )
+
             except Exception as e:
-                # Toute AUTRE exception dans l'atomic : si le legacy de la carte2 a deja
-                # ete debite (hors atomic), le local rollback mais le FED federe reste
-                # preleve SANS LigneArticle (orphelin). On JOURNALISE l'incident puis on
-                # relaie l'exception (500 volontaire). Pas de journalisation en base.
-                # / Any OTHER exception in the atomic: if the card2 legacy debit already
-                # happened (outside the atomic), the local rolls back but the federated FED
-                # stays debited WITHOUT LigneArticle (orphan). Log then re-raise (500).
-                if lignes_legacy_c2:
+                # Toute AUTRE exception dans l'atomic : le local est annulé, mais les
+                # débits du réseau (d'une carte ou des deux), faits avant, restent
+                # prélevés SANS vente ni ligne. On JOURNALISE l'incident avec le message
+                # préparé avant l'atomic (pour chaque carte débitée : la carte, le
+                # montant, les uuid), plus l'exception, puis on relaie l'exception
+                # (500 volontaire). Pas de journalisation en base.
+                # / Any OTHER exception in the atomic: the network debits of one or both
+                #   cards stay taken without a sale. Log the prepared incident message
+                #   plus the exception, then re-raise (500).
+                if message_d_incident_legacy:
                     logger.error(
-                        f"INCIDENT : débit legacy orphelin (2ème carte, exception atomic) — "
-                        f"carte={carte2.tag_id} montant_legacy_centimes={montant_legacy_c2} "
-                        f"uuid_transaction={uuid_transaction} exception={e}"
+                        f"{message_d_incident_legacy} Exception imprévue dans l'atomic : {e}"
                     )
                 raise
 
@@ -10522,13 +12394,24 @@ class PaiementViewSet(viewsets.ViewSet):
     def vider_carte_preview(self, request):
         """
         POST /laboutik/paiement/vider_carte/preview/
-        Calcule les tokens eligibles pour la carte client scannee et renvoie
-        l'overlay de confirmation. Pas de mutation DB.
-        / Computes eligible tokens for the scanned client card and returns
-        the confirmation overlay. No DB mutation.
+        Montre ce que le vidage reprendra, séparé par Fedow, et l'argent à rendre.
+        Rien n'est débité, ni en local ni sur l'ancien Fedow.
+        / Shows what the emptying will take back, split by Fedow, and the cash to give
+        back. Nothing is debited.
+
+        FLUX :
+        1. Gardes (carte primaire scannée, carte inconnue).
+        2. Fedow local : les jetons que `WalletService.rembourser_en_especes` reprendra
+           (monnaie locale et jetons cadeau du lieu, monnaie fédérée), lus en base.
+        3. Ancien Fedow : `_lire_la_carte_sur_l_ancien_fedow` (lecture seule).
+        4. Refus seulement si la vidange refuserait aussi : rien à reprendre nulle part,
+           carte inconnue de l'ancien Fedow (ou lieu non relié), ancien Fedow joignable.
+           Une carte vide partout mais connue de l'ancien Fedow s'accepte : « vider et
+           délier » la délie des deux côtés.
+        / Refused only when the emptying would refuse too.
         """
         from django.db.models import Q
-        from fedow_core.models import Asset, Token
+        from fedow_core.models import Token
 
         tag_id = request.POST.get("tag_id", "").strip().upper()
         tag_id_cm = request.POST.get("tag_id_cm", "").strip().upper()
@@ -10546,36 +12429,84 @@ class PaiementViewSet(viewsets.ViewSet):
         except CarteCashless.DoesNotExist:
             return _render_erreur_toast(request, _("Carte client inconnue."))
 
-        wallet = _obtenir_ou_creer_wallet(carte)
+        # 2. Fedow local : même portefeuille et même filtre que le vidage
+        # (fedow_core/services.py, `rembourser_en_especes`). On ne crée pas de
+        # portefeuille : une carte sans portefeuille n'a aucun jeton local.
+        # / Local Fedow: same wallet and filter as the emptying. No wallet is created.
+        portefeuille_de_la_carte = None
+        if carte.user is not None and carte.user.wallet is not None:
+            portefeuille_de_la_carte = carte.user.wallet
+        elif carte.wallet_ephemere is not None:
+            portefeuille_de_la_carte = carte.wallet_ephemere
 
-        tokens = list(
-            Token.objects.filter(
-                wallet=wallet,
-                value__gt=0,
+        jetons_locaux = []
+        if portefeuille_de_la_carte is not None:
+            jetons_locaux = list(
+                Token.objects.filter(
+                    wallet=portefeuille_de_la_carte,
+                    value__gt=0,
+                )
+                .filter(
+                    Q(asset__category=Asset.TLF, asset__tenant_origin=connection.tenant)
+                    | Q(asset__category=Asset.TNF, asset__tenant_origin=connection.tenant)
+                    | Q(asset__category=Asset.FED)
+                )
+                .select_related("asset")
+                .order_by("asset__category", "asset__name")
             )
-            .filter(
-                Q(asset__category=Asset.TLF, asset__tenant_origin=connection.tenant)
-                | Q(asset__category=Asset.FED)
-            )
-            .select_related("asset", "asset__tenant_origin")
-            .order_by("asset__category")
-        )
 
-        if not tokens:
+        lignes_fedow_local = []
+        for jeton_local in jetons_locaux:
+            lignes_fedow_local.append(
+                _ligne_de_vidage(
+                    jeton_local.asset.name,
+                    jeton_local.value,
+                    jeton_local.asset.category,
+                    jeton_local.asset.currency_code,
+                )
+            )
+
+        # 3. Ancien Fedow, en lecture seule.
+        # / Old Fedow, read only.
+        carte_sur_l_ancien_fedow = _lire_la_carte_sur_l_ancien_fedow(carte)
+        lignes_ancien_fedow = []
+        for jeton_distant in carte_sur_l_ancien_fedow.jetons:
+            lignes_ancien_fedow.append(
+                _ligne_de_vidage(
+                    jeton_distant["asset_name"],
+                    jeton_distant["value"],
+                    jeton_distant["asset_category"],
+                    jeton_distant["asset"].get("currency_code") or "",
+                )
+            )
+
+        # 4. Refus seulement si la vidange refuserait aussi.
+        # / Refused only when the emptying would refuse too.
+        il_y_a_quelque_chose_a_reprendre = bool(lignes_fedow_local or lignes_ancien_fedow)
+        carte_connue_de_l_ancien_fedow = carte_sur_l_ancien_fedow.statut == "connue"
+        ancien_fedow_injoignable = carte_sur_l_ancien_fedow.statut == "injoignable"
+        if (
+            not il_y_a_quelque_chose_a_reprendre
+            and not carte_connue_de_l_ancien_fedow
+            and not ancien_fedow_injoignable
+        ):
             return _render_erreur_toast(
                 request,
                 _("Aucun solde remboursable sur cette carte."),
             )
 
-        total_tlf = sum(t.value for t in tokens if t.asset.category == Asset.TLF)
-        total_fed = sum(t.value for t in tokens if t.asset.category == Asset.FED)
+        argent_a_rendre_en_centimes = 0
+        for ligne in lignes_fedow_local + lignes_ancien_fedow:
+            if ligne.est_de_l_argent_rendu:
+                argent_a_rendre_en_centimes += ligne.montant_centimes
 
         contexte = {
             "carte": carte,
-            "tokens": tokens,
-            "total_centimes": total_tlf + total_fed,
-            "total_tlf_centimes": total_tlf,
-            "total_fed_centimes": total_fed,
+            "lignes_fedow_local": lignes_fedow_local,
+            "lignes_ancien_fedow": lignes_ancien_fedow,
+            "ancien_fedow_injoignable": ancien_fedow_injoignable,
+            "il_y_a_quelque_chose_a_reprendre": il_y_a_quelque_chose_a_reprendre,
+            "total_centimes": argent_a_rendre_en_centimes,
             "tag_id": tag_id,
             "tag_id_cm": tag_id_cm,
             "uuid_pv": uuid_pv,
@@ -10595,10 +12526,24 @@ class PaiementViewSet(viewsets.ViewSet):
     def vider_carte(self, request):
         """
         POST /laboutik/paiement/vider_carte/
-        Execute le remboursement via WalletService.rembourser_en_especes.
+        Vide la carte du client sur les DEUX Fedow, et écrit la vente du vidage.
         Renvoie l'ecran de succes ou un toast d'erreur.
-        / Executes the refund via WalletService.rembourser_en_especes.
+        / Empties the customer card on BOTH Fedow servers and writes the sale.
         Returns the success screen or an error toast.
+
+        FLUX :
+        1. Gardes (carte client, carte primaire, point de vente).
+        2. Ancien Fedow, hors transaction : `_vider_la_carte_sur_l_ancien_fedow`.
+           Échec → rien n'est fait, toast d'erreur. Vidé là-bas mais réponse
+           illisible → rien n'est écrit en local, toast qui dit la vérité (vidée sur
+           l'ancien Fedow, pas en local, incident enregistré).
+        3. Un seul `atomic` : `WalletService.rembourser_en_especes` (Fedow local et
+           lignes « Refund » des deux Fedow), `_ecrire_la_vente_du_vidage`, puis
+           `encaisser_vente` EN DERNIER. Échec après un vidage distant → journal
+           INCIDENT, toast d'erreur.
+        La vidange se fait dès qu'un des deux Fedow a quelque chose à reprendre.
+        / Old Fedow first (failure: nothing done), then one atomic block for the local
+        emptying, the sale and its settlement (failure after a remote emptying: INCIDENT).
         """
         from fedow_core.exceptions import NoEligibleTokens
 
@@ -10641,29 +12586,176 @@ class PaiementViewSet(viewsets.ViewSet):
 
         receiver_wallet = WalletService.get_or_create_wallet_tenant(connection.tenant)
 
+        # 1. L'ancien Fedow d'abord, HORS de la transaction de base (appel réseau,
+        # il ne s'annule pas). S'il échoue, rien n'est fait.
+        # / 1. The old Fedow first, OUTSIDE the database transaction. If it fails,
+        # nothing is done.
         try:
-            resultat = WalletService.rembourser_en_especes(
-                carte=carte_client,
-                tenant=connection.tenant,
-                receiver_wallet=receiver_wallet,
-                ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
-                vider_carte=vider_carte_flag,
-                primary_card=carte_primaire_obj.carte,
+            reponse_de_l_ancien_fedow = _vider_la_carte_sur_l_ancien_fedow(
+                carte_client,
+                carte_primaire_obj.carte.tag_id,
+                vider_carte_flag,
             )
+        except CarteVideeSurLAncienFedowReponseIllisible:
+            # La carte EST vidée sur l'ancien Fedow : « réessayez » serait faux. Le
+            # helper a déjà journalisé l'INCIDENT. Rien n'est écrit en local.
+            # / The card IS emptied on the old Fedow: "retry" would be false. The
+            # helper already logged the INCIDENT. Nothing is written locally.
+            return _render_erreur_toast(
+                request,
+                _(
+                    "La carte est vidée sur l'ancien Fedow, mais pas en local. "
+                    "Incident enregistré : prévenez un responsable."
+                ),
+            )
+        except Exception as erreur_ancien_fedow:
+            logger.warning(
+                f"Vidage de la carte {carte_client.tag_id} sur l'ancien Fedow échoué, "
+                f"rien n'est fait : {erreur_ancien_fedow}"
+            )
+            return _render_erreur_toast(
+                request,
+                _("L'ancien Fedow n'a pas pu vider la carte. Rien n'a été fait : réessayez."),
+            )
+
+        # None : la carte n'a pas été envoyée à l'ancien Fedow (lieu non relié, carte
+        # inconnue là-bas). Sinon, `card/refund` a réussi (REFUND ou VOID).
+        # / None: the card was not sent to the old Fedow. Otherwise card/refund succeeded.
+        carte_videe_sur_l_ancien_fedow = reponse_de_l_ancien_fedow is not None
+        transactions_de_l_ancien_fedow = []
+        if carte_videe_sur_l_ancien_fedow:
+            transactions_de_l_ancien_fedow = reponse_de_l_ancien_fedow
+
+        # Argent repris sur l'ancien Fedow (monnaie locale du lieu, monnaie fédérée).
+        # Les jetons cadeau sont repris sans argent.
+        # / Money taken back on the old Fedow. Gift tokens carry no money.
+        total_tlf_ancien_fedow = 0
+        total_fed_ancien_fedow = 0
+        uuid_fed_ancien_fedow = None
+        uuids_des_transactions_de_l_ancien_fedow = []
+        for transaction_distante in transactions_de_l_ancien_fedow:
+            uuids_des_transactions_de_l_ancien_fedow.append(str(transaction_distante["uuid"]))
+            if transaction_distante["categorie"] == "TLF":
+                total_tlf_ancien_fedow += transaction_distante["montant"]
+            elif transaction_distante["categorie"] == "FED":
+                total_fed_ancien_fedow += transaction_distante["montant"]
+                uuid_fed_ancien_fedow = transaction_distante["asset"]
+        ancien_fedow_a_repris_des_jetons = len(transactions_de_l_ancien_fedow) > 0
+
+        # Le journal d'incident, préparé AVANT le bloc atomic : l'ancien Fedow est déjà
+        # vidé (ou la carte déliée). Si le vidage local échoue, ce message permet de
+        # régulariser à la main (montant, carte, uuid de chaque transaction distante).
+        # / The incident log, prepared BEFORE the atomic block: the old Fedow is already
+        # emptied (or the card unlinked). If the local emptying fails: manual fix.
+        message_d_incident_ancien_fedow = ""
+        if carte_videe_sur_l_ancien_fedow:
+            message_d_incident_ancien_fedow = (
+                f"INCIDENT ancien Fedow vidé sans vidage local (atomic local échoué) — "
+                f"carte={carte_client.tag_id} "
+                f"montant_argent={total_tlf_ancien_fedow + total_fed_ancien_fedow} "
+                f"transactions_ancien_fedow="
+                f"{', '.join(uuids_des_transactions_de_l_ancien_fedow)} : "
+                f"régularisation manuelle requise."
+            )
+
+        # Le titulaire de la carte, lu AVANT le vidage : « vider et délier » le retire.
+        # / The card holder, read BEFORE the emptying: "empty and unlink" removes it.
+        client_de_la_vente = carte_client.user
+
+        # 2. Un seul bloc atomic : vidage local, vente du vidage, encaissement EN DERNIER.
+        # / 2. One atomic block: local emptying, sale, settlement LAST.
+        try:
+            with db_transaction.atomic():
+                resultat = WalletService.rembourser_en_especes(
+                    carte=carte_client,
+                    tenant=connection.tenant,
+                    receiver_wallet=receiver_wallet,
+                    ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+                    vider_carte=vider_carte_flag,
+                    primary_card=carte_primaire_obj.carte,
+                    total_tlf_ancien_fedow_centimes=total_tlf_ancien_fedow,
+                    total_fed_ancien_fedow_centimes=total_fed_ancien_fedow,
+                    uuid_fed_ancien_fedow=uuid_fed_ancien_fedow,
+                    ancien_fedow_a_repris_des_jetons=ancien_fedow_a_repris_des_jetons,
+                    carte_videe_sur_l_ancien_fedow=carte_videe_sur_l_ancien_fedow,
+                )
+                vente_du_vidage = _ecrire_la_vente_du_vidage(
+                    request,
+                    pv,
+                    carte_client,
+                    client_de_la_vente,
+                    resultat["transactions"],
+                    transactions_de_l_ancien_fedow,
+                )
+                if vente_du_vidage is not None:
+                    encaisser_vente(vente_du_vidage)
         except NoEligibleTokens:
+            # Rien à reprendre, ni en local ni sur l'ancien Fedow.
+            # / Nothing to take back, locally or on the old Fedow.
             return _render_erreur_toast(
                 request,
                 _("Aucun solde remboursable (solde a pu changer)."),
             )
+        except Exception:
+            # Sans vidage distant, l'erreur remonte comme avant. Après un vidage
+            # distant, la carte est vidée là-bas sans trace locale : INCIDENT
+            # journalisé, écran d'erreur.
+            # / Without a remote emptying, the error is raised as before. After one:
+            # INCIDENT logged, error screen.
+            if not carte_videe_sur_l_ancien_fedow:
+                raise
+            logger.exception(message_d_incident_ancien_fedow)
+            return _render_erreur_toast(
+                request,
+                _(
+                    "La carte est vidée sur l'ancien Fedow, mais pas en local. "
+                    "Incident enregistré : prévenez un responsable."
+                ),
+            )
+
+        argent_rendu_ancien_fedow = total_tlf_ancien_fedow + total_fed_ancien_fedow
+
+        # Le détail séparé par Fedow, une ligne par monnaie reprise, pour l'écran.
+        # / The detail split by Fedow, one line per currency, for the screen.
+        lignes_fedow_local = []
+        for transaction_locale in resultat["transactions"]:
+            lignes_fedow_local.append(
+                _ligne_de_vidage(
+                    transaction_locale.asset.name,
+                    transaction_locale.amount,
+                    transaction_locale.asset.category,
+                    transaction_locale.asset.currency_code,
+                )
+            )
+        lignes_ancien_fedow = []
+        for transaction_distante in transactions_de_l_ancien_fedow:
+            lignes_ancien_fedow.append(
+                _ligne_de_vidage(
+                    transaction_distante["nom"],
+                    transaction_distante["montant"],
+                    transaction_distante["categorie"],
+                    transaction_distante["code_monnaie"],
+                )
+            )
 
         contexte = {
-            "total_centimes": resultat["total_centimes"],
-            "total_tlf_centimes": resultat["total_tlf_centimes"],
-            "total_fed_centimes": resultat["total_fed_centimes"],
+            # Argent à rendre au client : les deux Fedow.
+            # / Money to hand back: both Fedow servers.
+            "total_centimes": resultat["total_centimes"] + argent_rendu_ancien_fedow,
+            "total_tlf_centimes": resultat["total_tlf_centimes"] + total_tlf_ancien_fedow,
+            "total_fed_centimes": resultat["total_fed_centimes"] + total_fed_ancien_fedow,
             "lignes_articles": resultat["lignes_articles"],
             "transaction_uuids": [str(tx.uuid) for tx in resultat["transactions"]],
             "uuid_pv": uuid_pv,
             "vider_carte": vider_carte_flag,
+            # Le détail séparé par Fedow, pour l'écran et le reçu détaillés. Le reçu
+            # ne reçoit que des uuid : il relit chaque transaction.
+            # / The detail split by Fedow. The receipt only gets uuids: it re-reads.
+            "transactions_fedow_local": resultat["transactions"],
+            "transactions_ancien_fedow": transactions_de_l_ancien_fedow,
+            "lignes_fedow_local": lignes_fedow_local,
+            "lignes_ancien_fedow": lignes_ancien_fedow,
+            "transaction_uuids_ancien_fedow": uuids_des_transactions_de_l_ancien_fedow,
         }
         return render(
             request,
@@ -10680,13 +12772,27 @@ class PaiementViewSet(viewsets.ViewSet):
     def vider_carte_imprimer_recu(self, request):
         """
         POST /laboutik/paiement/vider_carte/imprimer_recu/
-        Lance l'impression Celery du recu pour les transactions_uuids donnees.
-        / Launches the Celery receipt print for the given transaction UUIDs.
+        Imprime le reçu d'un vidage de carte, séparé par Fedow et détaillé.
+        / Prints a card-emptying receipt, split by Fedow and detailed.
+
+        FLUX :
+        1. Reçoit des uuid seulement : `transaction_uuids` (Fedow local) et
+           `transaction_uuids_ancien_fedow` (ancien Fedow). Jamais de montant.
+        2. Fedow local : les transactions de remboursement relues en base.
+        3. Ancien Fedow : `_relire_les_transactions_de_l_ancien_fedow`. S'il ne répond
+           pas, l'impression est refusée : jamais de reçu partiel.
+        4. `formatter_recu_vider_carte`, puis l'impression Celery.
+        / Only uuids are posted; every transaction is re-read. Old Fedow unreachable:
+        printing refused, never a partial receipt.
         """
         transaction_uuids = request.POST.getlist("transaction_uuids")
+        transaction_uuids_ancien_fedow = request.POST.getlist(
+            "transaction_uuids_ancien_fedow"
+        )
         uuid_pv = request.POST.get("uuid_pv", "")
 
-        if not transaction_uuids or not uuid_pv:
+        aucune_transaction_postee = not transaction_uuids and not transaction_uuids_ancien_fedow
+        if aucune_transaction_postee or not uuid_pv:
             return render(
                 request,
                 "laboutik/partial/hx_print_feedback.html",
@@ -10707,14 +12813,41 @@ class PaiementViewSet(viewsets.ViewSet):
                 },
             )
 
-        transactions = Transaction.objects.filter(
-            uuid__in=transaction_uuids,
-        ).select_related("asset")
+        transactions_locales = list(
+            Transaction.objects.filter(
+                uuid__in=transaction_uuids,
+                action=Transaction.REFUND,
+            ).select_related("asset")
+        )
+
+        try:
+            transactions_ancien_fedow = _relire_les_transactions_de_l_ancien_fedow(
+                transaction_uuids_ancien_fedow
+            )
+        except Exception as erreur_ancien_fedow:
+            logger.warning(
+                f"Reçu de vidage non imprimé : l'ancien Fedow n'a pas pu relire les "
+                f"transactions : {erreur_ancien_fedow}"
+            )
+            return render(
+                request,
+                "laboutik/partial/hx_print_feedback.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "L'ancien Fedow ne répond pas : le reçu n'est pas imprimé. "
+                        "Réessayez plus tard."
+                    ),
+                },
+            )
 
         from laboutik.printing.formatters import formatter_recu_vider_carte
         from laboutik.printing.tasks import imprimer_async
 
-        recu_data = formatter_recu_vider_carte(list(transactions))
+        recu_data = formatter_recu_vider_carte(
+            transactions_locales,
+            transactions_ancien_fedow,
+        )
         imprimer_async.delay(
             str(printer_de_ce_terminal.pk),
             recu_data,
@@ -10722,12 +12855,12 @@ class PaiementViewSet(viewsets.ViewSet):
         )
         return render(
             request,
-                "laboutik/partial/hx_print_feedback.html",
-                {
-                    "msg_type": "success",
-                    "msg_content": _("Reçu imprimé"),
-                },
-            )
+            "laboutik/partial/hx_print_feedback.html",
+            {
+                "msg_type": "success",
+                "msg_content": _("Reçu imprimé"),
+            },
+        )
 
     # ------------------------------------------------------------------ #
     #  Impression ticket de vente (bouton sur l'ecran de succes)           #
@@ -10974,6 +13107,18 @@ class PaiementViewSet(viewsets.ViewSet):
         2. NFC interdit (ancien moyen) — les paiements cashless sont lies a des Transactions fedow_core
         3. Post-cloture interdit — les lignes couvertes par une cloture sont immuables
         4. Meme moyen interdit — pas de correction sans changement
+        5. Lignes de plusieurs ventes interdites — une correction porte sur UNE vente
+        6. Montant nul interdit (lignes avec vente) — rien a deplacer
+
+        VENTE DE CORRECTION (D14, CHANTIER-05-montants-entiers.md) :
+        La vente d'origine est deja encaissee : elle ne change jamais. Dans la meme
+        transaction que la correction des lignes, la caisse ecrit une vente CORRECTION,
+        liee a la vente d'origine, sans article, avec deux reglements qui s'annulent :
+        −montant a l'ancien moyen, +montant au nouveau. Le montant est la somme des
+        `total_ttc` des lignes corrigees. `encaisser_vente` vient en dernier (numero,
+        empreinte chainee).
+        / The settled original sale never changes. In the same transaction, a CORRECTION
+        sale linked to it, without items, with two payments that cancel out.
         """
         # --- Validation des champs via serializer DRF ---
         # Le serializer valide le format UUID, les choix de moyen, et la raison.
@@ -11101,17 +13246,68 @@ class PaiementViewSet(viewsets.ViewSet):
             # Anciennes donnees sans uuid_transaction — corriger cette ligne seule
             # / Old data without uuid_transaction — correct this line only
             lignes_transaction = LigneArticle.objects.filter(uuid=ligne.uuid)
+        lignes_a_corriger = list(lignes_transaction)
 
-        # --- Creer les traces d'audit + modifier le moyen (atomique) ---
+        # --- GARDE 4 : toutes les lignes corrigees appartiennent a UNE vente ---
+        # Les lignes d'un meme paiement sont ecrites dans une seule vente. Si elles
+        # appartiennent a plusieurs ventes (ou certaines a aucune), la vente a corriger
+        # n'est pas connue : refus, rien n'est ecrit.
+        # / Lines of one payment belong to one sale. Several sales: refused.
+        identifiants_des_ventes_des_lignes = set()
+        for ligne_a_corriger in lignes_a_corriger:
+            identifiants_des_ventes_des_lignes.add(ligne_a_corriger.vente_id)
+        if len(identifiants_des_ventes_des_lignes) > 1:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Ces lignes appartiennent à plusieurs ventes : "
+                        "correction impossible"
+                    ),
+                },
+                status=400,
+            )
+        vente_d_origine = lignes_a_corriger[0].vente
+
+        # Le montant corrige : la somme des nets vendus des lignes, des entiers figes a
+        # la vente, additionnes (jamais recalcules).
+        # / The corrected amount: the sum of the lines' frozen net totals.
+        montant_corrige_en_centimes = 0
+        for ligne_a_corriger in lignes_a_corriger:
+            montant_corrige_en_centimes += ligne_a_corriger.total_ttc
+
+        # --- GARDE 5 : une vente dont les lignes corrigees valent 0 ---
+        # Il n'y a pas d'argent a deplacer : la vente CORRECTION n'aurait que des
+        # reglements de 0, que le service de vente refuse. Refus propre, rien n'est
+        # ecrit. La garde ne vaut que pour une ligne AVEC vente : une ligne sans vente
+        # a un net vendu `total_ttc` a 0 par defaut (champ jamais rempli) et se corrige
+        # comme avant.
+        # / Lines worth 0: no money to move, the service refuses 0 payments. Clean
+        #   refusal, nothing written. Only for lines WITH a sale: a line without one
+        #   has total_ttc 0 by default and is corrected as before.
+        if vente_d_origine is not None and montant_corrige_en_centimes == 0:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Rien à corriger : le montant est nul."),
+                },
+                status=400,
+            )
+
+        # --- Creer les traces d'audit + modifier le moyen + la vente de correction ---
         # Les operations DOIVENT etre dans la meme transaction DB.
         # Une CorrectionPaiement est creee par LigneArticle pour la tracabilite.
-        # / Create audit trails + modify the method (atomic).
+        # / Create audit trails + modify the method + the correction sale (atomic).
         # One CorrectionPaiement per LigneArticle for traceability.
         operateur = request.user if request.user.is_authenticated else None
         nombre_lignes_corrigees = 0
 
         with db_transaction.atomic():
-            for ligne_a_corriger in lignes_transaction:
+            for ligne_a_corriger in lignes_a_corriger:
                 CorrectionPaiement.objects.create(
                     ligne_article=ligne_a_corriger,
                     ancien_moyen=ancien_moyen,
@@ -11126,6 +13322,42 @@ class PaiementViewSet(viewsets.ViewSet):
                 ligne_a_corriger.payment_method = nouveau_moyen
                 ligne_a_corriger.save(update_fields=["payment_method"])
                 nombre_lignes_corrigees += 1
+
+            # Lignes ecrites sans vente, avant le chantier « montants entiers » (base de
+            # dev seulement) : la correction des lignes suffit, il n'y a pas de vente a
+            # corriger.
+            # TODO : fiche H — toute ligne a une vente ; retirer ce cas.
+            # / Lines written without a sale (dev database only): the line correction is
+            # enough. TODO sheet H: every line has a sale.
+            if vente_d_origine is not None:
+                # La vente CORRECTION : liee a la vente d'origine, sans article, au
+                # point de vente de la vente d'origine (le formulaire n'en envoie pas),
+                # a l'operateur de la correction.
+                # / The CORRECTION sale: linked, without items, at the original sale's
+                # point of sale, by the correction's operator.
+                vente_de_correction = ouvrir_vente(
+                    origine=SaleOrigin.LABOUTIK,
+                    nature=Vente.Nature.CORRECTION,
+                    point_de_vente=vente_d_origine.point_de_vente,
+                    operateur=operateur,
+                    vente_liee=vente_d_origine,
+                )
+                # Deux reglements qui s'annulent : l'argent quitte l'ancien moyen et
+                # arrive sur le nouveau.
+                # / Two payments that cancel out: from the old method to the new one.
+                ajouter_reglement(
+                    vente_de_correction,
+                    moyen=ancien_moyen,
+                    montant=-montant_corrige_en_centimes,
+                )
+                ajouter_reglement(
+                    vente_de_correction,
+                    moyen=nouveau_moyen,
+                    montant=montant_corrige_en_centimes,
+                )
+                # En dernier : les egalites, le numero et l'empreinte chainee.
+                # / Last: equalities, number and chained fingerprint.
+                encaisser_vente(vente_de_correction)
 
         logger.info(
             f"Correction paiement : {nombre_lignes_corrigees} ligne(s) "
@@ -11755,6 +13987,13 @@ class CommandeViewSet(viewsets.ViewSet):
         #   the fedow_core payment and the order/table update.
         #   Success detection: we look for 'paiement-succes' in the returned HTML.
 
+        # L'identifiant du paiement : posé sur chaque ligne, et clé d'idempotence de
+        # la vente. En NFC, il est passé à `_payer_par_nfc`, qui écrit la vente sous
+        # cette clé : c'est par elle que la commande retrouve sa vente.
+        # / The payment id: set on every line, and the sale's idempotency key. In NFC,
+        # passed to _payer_par_nfc; the order finds its sale through it.
+        uuid_transaction = uuid_module.uuid4()
+
         if moyen_paiement_code == "nfc":
             with db_transaction.atomic():
                 paiement_vs = PaiementViewSet()
@@ -11768,6 +14007,7 @@ class CommandeViewSet(viewsets.ViewSet):
                     False,
                     moyen_paiement_code,
                     point_de_vente,
+                    uuid_transaction_impose=uuid_transaction,
                 )
 
                 # Détecter le succès NFC via le data-testid dans le HTML
@@ -11781,10 +14021,27 @@ class CommandeViewSet(viewsets.ViewSet):
                     # The inner savepoint already rolled back.
                     return response_nfc
 
+                # La vente écrite par le paiement NFC, retrouvée par sa clé.
+                # Une commande payée a TOUJOURS sa vente. Si elle est introuvable
+                # après un succès, l'exception sort de ce bloc atomic : il annule le
+                # paiement NFC et le statut de la commande, qui reste à payer.
+                # / The sale written by the NFC payment, found by its key. A paid
+                # order ALWAYS has its sale: if missing, the exception leaves this
+                # atomic block, which rolls back the payment and the order status.
+                vente_du_paiement_nfc = Vente.objects.filter(
+                    idempotency_key=str(uuid_transaction),
+                ).first()
+                if vente_du_paiement_nfc is None:
+                    raise RuntimeError(
+                        f"payer_commande : paiement NFC réussi sans vente pour la clé "
+                        f"{uuid_transaction} (commande {commande.uuid})"
+                    )
+
                 # NFC réussi → mettre à jour commande + table
                 # NFC succeeded → update order + table
                 commande.statut = CommandeSauvegarde.PAID
-                commande.save(update_fields=["statut"])
+                commande.vente = vente_du_paiement_nfc
+                commande.save(update_fields=["statut", "vente"])
 
                 commande.articles.exclude(
                     statut=ArticleCommandeSauvegarde.ANNULE,
@@ -11815,16 +14072,39 @@ class CommandeViewSet(viewsets.ViewSet):
         # --- Paiement non-NFC (espèces, CB, chèque) ---
         # --- Non-NFC payment (cash, CC, check) ---
         with db_transaction.atomic():
+            # La vente de la commande : ouverte en premier, encaissée avant le
+            # changement de statut, dans la MÊME transaction que les lignes et la
+            # commande. Pas de consigne (refusée plus haut), pas de carte client.
+            # / The order's sale: opened first, settled before the status change,
+            # in the SAME transaction as the lines and the order.
+            vente = _ouvrir_la_vente_de_caisse(
+                request,
+                point_de_vente,
+                uuid_transaction,
+                consigne_dans_panier=False,
+                carte_client=None,
+                adherent=None,
+            )
+
             _creer_lignes_articles(
                 articles_panier,
                 moyen_paiement_code,
+                uuid_transaction=uuid_transaction,
                 point_de_vente=point_de_vente,
+                vente=vente,
             )
 
-            # Marquer la commande comme payée
-            # Mark order as paid
+            # Un règlement du moyen, du montant encaissé, puis l'encaissement.
+            # / One payment of the method, of the collected amount, then settle.
+            _regler_et_encaisser_la_vente_de_caisse(
+                vente, articles_panier, moyen_paiement_code
+            )
+
+            # Marquer la commande comme payée, avec sa vente
+            # Mark order as paid, with its sale
             commande.statut = CommandeSauvegarde.PAID
-            commande.save(update_fields=["statut"])
+            commande.vente = vente
+            commande.save(update_fields=["statut", "vente"])
 
             # Marquer tous les articles comme servis
             # Mark all articles as served

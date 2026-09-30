@@ -245,23 +245,25 @@ def payer_a_la_caisse(
 # --------------------------------------------------------------------------
 
 
-def test_vente_caisse_adhesion_sans_facture_ni_envoi_laboutik(
+def test_vente_caisse_adhesion_facture_et_recompense_sans_envoi_laboutik(
     lieu, django_capture_on_commit_callbacks
 ):
     """
     P9 : le caissier vend une adhésion à 20 € en espèces à une adhérente identifiée
     par son e-mail. Une ligne de vente validée (`V`) est créée ; l'adhésion est créée
     au statut « caisse » (`LABOUTIK`), avec une échéance.
-    Une seule tâche est demandée : le webhook d'adhésion (l'adhésion est enregistrée
-    avec une échéance). AUCUNE facture par mail, AUCUNE récompense en monnaie,
-    AUCUN envoi à l'ancien LaBoutik : la caisse crée la ligne directement validée,
-    sans passer par la machine à états (`trigger_A`).
-    Change en B-0 (fiche B §2 bis) : la facture et la récompense partent aussi pour
-    une adhésion vendue à la caisse, toujours sans envoi à l'ancien LaBoutik ; le test
-    est alors renommé `…_facture_et_recompense_sans_envoi_laboutik`.
+    Trois tâches sont demandées, toutes APRÈS la validation en base, dans cet ordre :
+    le webhook d'adhésion (l'adhésion est enregistrée avec une échéance), la facture
+    par mail, la récompense en monnaie. AUCUN envoi à l'ancien LaBoutik : la caisse V2
+    ne parle pas à la caisse legacy.
+    Ce test fait partie des tests qui ont le droit de changer (fiche A′ §4) : une
+    adhésion payée a les mêmes effets en ligne et en caisse, par le même code
+    (BaseBillet/triggers.py, fiche B §2 bis). Le détail de ces effets est testé dans
+    tests/pytest/test_caisse_effets_adhesion.py.
     / P9: a 20 € membership sold in cash. One VALID line, membership LABOUTIK with a
-    deadline. Only the membership webhook is requested: no invoice, no reward, no
-    legacy LaBoutik sale. Changes in B-0 (invoice and reward added).
+    deadline. Three tasks, all after the commit: membership webhook, invoice mail,
+    currency reward. No legacy LaBoutik sale. A paid membership has the same effects
+    online and at the register, through the same code (sheet B §2 bis).
     """
     adherente = creer_utilisateur(prenom="Ada", nom="Lovelace")
     adhesion = creer_adhesion(prix="20.00")
@@ -298,16 +300,29 @@ def test_vente_caisse_adhesion_sans_facture_ni_envoi_laboutik(
     etat_attendu = {
         "adhesion": Membership.LABOUTIK,
         "adhesion_a_une_echeance": True,
-        "taches": ["webhook_membership"],
+        "taches": [
+            "webhook_membership",
+            "send_membership_invoice_to_email",
+            "refill_from_lespass_to_user_wallet_from_price_solded",
+        ],
     }
     assert (
         etat_metier(adhesion=adhesion_vendue, taches_demandees=lieu.taches_demandees)
         == etat_attendu
     )
     assert statuts_des_lignes_du_tarif(adhesion.tarif) == [LigneArticle.VALID]
+    ligne_de_l_adhesion = LigneArticle.objects.get(
+        pricesold__price=adhesion.tarif, membership=adhesion_vendue
+    )
     assert arguments_des_taches(lieu.taches_demandees, "webhook_membership") == [
         (adhesion_vendue.pk,)
     ]
+    assert arguments_des_taches(
+        lieu.taches_demandees, "send_membership_invoice_to_email"
+    ) == [(str(adhesion_vendue.uuid),)]
+    assert arguments_des_taches(
+        lieu.taches_demandees, "refill_from_lespass_to_user_wallet_from_price_solded"
+    ) == [(ligne_de_l_adhesion.pk,)]
 
 
 # --------------------------------------------------------------------------

@@ -650,9 +650,20 @@ class TestPaiementComplementaire(FastTenantTestCase):
             return (0, False)
 
         def fake_debit_legacy(user, montant, uuid_tx):
-            # Fedow renverrait une transaction FED du montant débité.
-            # / Fedow would return a FED transaction for the debited amount.
-            return [(FED_UUID, montant, PaymentMethod.STRIPE_FED)]
+            # Fedow renverrait une transaction FED du montant débité. Même forme que
+            # `_debiter_legacy` : le 4ᵉ élément est l'uuid de la transaction distante,
+            # que la caisse copie dans le règlement de la vente et dans le journal
+            # d'incident.
+            # / Fedow would return a FED transaction for the debited amount. Same shape
+            #   as _debiter_legacy: the 4th item is the remote transaction uuid.
+            return [
+                (
+                    FED_UUID,
+                    montant,
+                    PaymentMethod.STRIPE_FED,
+                    "44444444-4444-4444-4444-444444444444",
+                )
+            ]
 
         with (
             mock.patch('laboutik.views.lire_depensable_fed_frais', side_effect=fake_fed),

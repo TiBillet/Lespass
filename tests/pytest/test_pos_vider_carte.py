@@ -6,6 +6,7 @@ LANCEMENT :
 """
 
 import uuid as uuid_module
+from unittest.mock import patch
 
 import pytest
 from django.db import transaction as db_transaction
@@ -15,6 +16,7 @@ from django_tenants.utils import schema_context, tenant_context
 from AuthBillet.models import Wallet
 from Customers.models import Client
 from QrcodeCashless.models import CarteCashless, Detail
+from fedow_connect.models import FedowConfig
 from fedow_core.models import Asset, Token, Transaction
 from fedow_core.services import WalletService
 
@@ -49,7 +51,7 @@ def asset_tlf_vc(tenant_lespass_vc, wallet_lieu_vc):
 
 
 @pytest.fixture
-def carte_caissier_vc(tenant_lespass_vc):
+def carte_caissier_vc(request, tenant_lespass_vc):
     """Carte NFC primaire du caissier pour les tests Phase 3.
 
     Resilience : get_or_create pour eviter IntegrityError si run precedent non nettoye.
@@ -70,6 +72,12 @@ def carte_caissier_vc(tenant_lespass_vc):
             },
         )
         yield carte
+        # Test marque django_db : le rollback de fin de test efface tout. Un nettoyage a
+        # la main echouerait : la vente du vidage, scellee, protege la carte et le PV.
+        # / django_db test: the end-of-test rollback erases everything. A manual cleanup
+        # would fail: the sealed card-emptying sale protects the card and the POS.
+        if request.node.get_closest_marker("django_db") is not None:
+            return
         # Nettoyer les Transactions referencing cette carte avant suppression
         # / Clean up Transactions referencing this card before deletion
         Transaction.objects.filter(primary_card=carte).delete()
@@ -77,7 +85,7 @@ def carte_caissier_vc(tenant_lespass_vc):
 
 
 @pytest.fixture
-def carte_client_vc_avec_tlf(tenant_lespass_vc, asset_tlf_vc):
+def carte_client_vc_avec_tlf(request, tenant_lespass_vc, asset_tlf_vc):
     """Carte client avec wallet_ephemere credite 1000c TLF."""
     with schema_context("lespass"):
         detail, _ = Detail.objects.get_or_create(
@@ -100,6 +108,12 @@ def carte_client_vc_avec_tlf(tenant_lespass_vc, asset_tlf_vc):
                 montant_en_centimes=1000,
             )
         yield carte
+        # Test marque django_db : le rollback de fin de test efface tout. Un nettoyage a
+        # la main echouerait : la vente du vidage, scellee, protege la carte et le PV.
+        # / django_db test: the end-of-test rollback erases everything. A manual cleanup
+        # would fail: the sealed card-emptying sale protects the card and the POS.
+        if request.node.get_closest_marker("django_db") is not None:
+            return
         from BaseBillet.models import LigneArticle
 
         LigneArticle.objects.filter(carte=carte).delete()
@@ -249,7 +263,7 @@ from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
 
 
 @pytest.fixture
-def pv_cashless_vc(carte_caissier_vc):
+def pv_cashless_vc(request, carte_caissier_vc):
     """PointDeVente qui autorise carte_caissier_vc et contient le Product VIDER_CARTE."""
     from laboutik.models import CartePrimaire, PointDeVente
     from BaseBillet.services_refund import get_or_create_product_remboursement
@@ -267,12 +281,19 @@ def pv_cashless_vc(carte_caissier_vc):
         product_vc = get_or_create_product_remboursement()
         pv.products.add(product_vc)
         yield pv
+        # Test marque django_db : le rollback de fin de test efface tout. Un nettoyage a
+        # la main echouerait : la vente du vidage, scellee, protege la carte et le PV.
+        # / django_db test: the end-of-test rollback erases everything. A manual cleanup
+        # would fail: the sealed card-emptying sale protects the card and the POS.
+        if request.node.get_closest_marker("django_db") is not None:
+            return
         pv.products.remove(product_vc)
         cp.points_de_vente.remove(pv)
         cp.delete()
         pv.delete()
 
 
+@pytest.mark.django_db
 def test_vider_carte_execute_remboursement_complet(
     carte_client_vc_avec_tlf,
     carte_caissier_vc,
@@ -284,15 +305,18 @@ def test_vider_carte_execute_remboursement_complet(
     primary_card de la Transaction == carte_caissier.
     """
     client, user = _login_as_admin()
-    response = client.post(
-        "/laboutik/paiement/vider_carte/",
-        data={
-            "tag_id": carte_client_vc_avec_tlf.tag_id,
-            "tag_id_cm": carte_caissier_vc.tag_id,
-            "uuid_pv": str(pv_cashless_vc.uuid),
-            "vider_carte": "false",
-        },
-    )
+    # Lieu non relie a l'ancien Fedow (simule) : vidage local seul, aucun appel reseau.
+    # / Venue not linked to the old Fedow (faked): local emptying only, no network call.
+    with patch.object(FedowConfig, "can_fedow", return_value=False):
+        response = client.post(
+            "/laboutik/paiement/vider_carte/",
+            data={
+                "tag_id": carte_client_vc_avec_tlf.tag_id,
+                "tag_id_cm": carte_caissier_vc.tag_id,
+                "uuid_pv": str(pv_cashless_vc.uuid),
+                "vider_carte": "false",
+            },
+        )
     assert response.status_code == 200, response.content.decode()[:500]
 
     tx_refund = Transaction.objects.filter(
@@ -311,6 +335,7 @@ def test_vider_carte_execute_remboursement_complet(
     assert lignes_cash.first().amount == -1000
 
 
+@pytest.mark.django_db
 def test_vider_carte_execute_avec_vv(
     carte_client_vc_avec_tlf,
     carte_caissier_vc,
@@ -318,15 +343,18 @@ def test_vider_carte_execute_avec_vv(
 ):
     """vider_carte=true → carte.user=None, carte.wallet_ephemere=None."""
     client, user = _login_as_admin()
-    response = client.post(
-        "/laboutik/paiement/vider_carte/",
-        data={
-            "tag_id": carte_client_vc_avec_tlf.tag_id,
-            "tag_id_cm": carte_caissier_vc.tag_id,
-            "uuid_pv": str(pv_cashless_vc.uuid),
-            "vider_carte": "true",
-        },
-    )
+    # Lieu non relie a l'ancien Fedow (simule) : vidage local seul, aucun appel reseau.
+    # / Venue not linked to the old Fedow (faked): local emptying only, no network call.
+    with patch.object(FedowConfig, "can_fedow", return_value=False):
+        response = client.post(
+            "/laboutik/paiement/vider_carte/",
+            data={
+                "tag_id": carte_client_vc_avec_tlf.tag_id,
+                "tag_id_cm": carte_caissier_vc.tag_id,
+                "uuid_pv": str(pv_cashless_vc.uuid),
+                "vider_carte": "true",
+            },
+        )
     assert response.status_code == 200
 
     carte_client_vc_avec_tlf.refresh_from_db()

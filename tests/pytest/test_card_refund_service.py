@@ -246,8 +246,22 @@ def test_rembourser_carte_avec_user_fed_seul(
         assert ligne_cash.first().amount == -500
 
 
-def test_rembourser_exclut_tnf_tim_fid(tenant_lespass, wallet_lieu_lespass):
-    """Tokens TNF/TIM/FID ignores : NoEligibleTokens levee."""
+def test_rembourser_reprend_les_jetons_cadeau_du_lieu_et_exclut_tim_fid(
+    tenant_lespass, wallet_lieu_lespass,
+):
+    """
+    Les jetons cadeau (TNF) du lieu sont repris, sans argent rendu ; le temps (TIM) et
+    les points de fidelite (FID) restent sur la carte.
+    / The venue's gift tokens (TNF) are taken back, with no money; time (TIM) and
+    loyalty points (FID) stay on the card.
+
+    La carte porte 3,00 de jetons cadeau, 2,00 de temps et 1,00 de points, tous du lieu.
+    Le vidage reprend les jetons cadeau (solde a 0, une transaction REFUND de 300) :
+    aucune erreur « aucun solde remboursable ». Aucun argent n'est rendu : total 0, et
+    aucune ligne (ni FED, ni especes). Le temps et les points ne sont pas touches.
+    / Gift tokens go to 0 through one REFUND of 300, no error. No money: total 0, no
+    line. Time and points untouched.
+    """
     import time
     # Utilise timestamp court pour eviter les collisions de nom entre les runs de tests
     # / Use short timestamp to avoid name collisions between test runs
@@ -267,31 +281,70 @@ def test_rembourser_exclut_tnf_tim_fid(tenant_lespass, wallet_lieu_lespass):
             detail=detail,
             wallet_ephemere=wallet_eph,
         )
-        wallet_origine_tnf = Wallet.objects.create(name=f'{REFUND_TEST_PREFIX} TNF o {unique_suffix}')
+        wallet_origine = Wallet.objects.create(name=f'{REFUND_TEST_PREFIX} TNF o {unique_suffix}')
         asset_tnf = AssetService.creer_asset(
             tenant=tenant_lespass,
             name=f'{REFUND_TEST_PREFIX} TNF c {unique_suffix}',
             category=Asset.TNF,
             currency_code='EUR',
-            wallet_origin=wallet_origine_tnf,
+            wallet_origin=wallet_origine,
+        )
+        asset_tim = AssetService.creer_asset(
+            tenant=tenant_lespass,
+            name=f'{REFUND_TEST_PREFIX} TIM c {unique_suffix}',
+            category=Asset.TIM,
+            currency_code='TMP',
+            wallet_origin=wallet_origine,
+        )
+        asset_fid = AssetService.creer_asset(
+            tenant=tenant_lespass,
+            name=f'{REFUND_TEST_PREFIX} FID c {unique_suffix}',
+            category=Asset.FID,
+            currency_code='PTS',
+            wallet_origin=wallet_origine,
         )
         with db_transaction.atomic():
             WalletService.crediter(wallet=wallet_eph, asset=asset_tnf, montant_en_centimes=300)
+            WalletService.crediter(wallet=wallet_eph, asset=asset_tim, montant_en_centimes=200)
+            WalletService.crediter(wallet=wallet_eph, asset=asset_fid, montant_en_centimes=100)
 
-        with tenant_context(tenant_lespass):
-            from fedow_core.exceptions import NoEligibleTokens
-            with pytest.raises(NoEligibleTokens):
-                WalletService.rembourser_en_especes(
+        try:
+            with tenant_context(tenant_lespass):
+                resultat = WalletService.rembourser_en_especes(
                     carte=carte,
                     tenant=tenant_lespass,
                     receiver_wallet=wallet_lieu_lespass,
                 )
 
-        Token.objects.filter(wallet=wallet_eph).delete()
-        carte.delete()
-        wallet_eph.delete()
-        Asset.objects.filter(name__icontains=f'TNF c {unique_suffix}').delete()
-        wallet_origine_tnf.delete()
+                # Les jetons cadeau sont repris : une transaction REFUND de 300.
+                # / Gift tokens are taken back: one REFUND of 300.
+                assert WalletService.obtenir_solde(wallet=wallet_eph, asset=asset_tnf) == 0
+                remboursements = list(
+                    Transaction.objects.filter(card=carte, action=Transaction.REFUND)
+                )
+                assert len(remboursements) == 1
+                assert remboursements[0].asset_id == asset_tnf.pk
+                assert remboursements[0].amount == 300
+
+                # Aucun argent rendu : total 0, aucune ligne.
+                # / No money given back: total 0, no line.
+                assert resultat["total_centimes"] == 0
+                assert resultat["lignes_articles"] == []
+                assert not LigneArticle.objects.filter(carte=carte).exists()
+
+                # Le temps et les points ne sont pas touches.
+                # / Time and points are not touched.
+                assert WalletService.obtenir_solde(wallet=wallet_eph, asset=asset_tim) == 200
+                assert WalletService.obtenir_solde(wallet=wallet_eph, asset=asset_fid) == 100
+        finally:
+            # Ordre impose par les FK PROTECT : transactions avant la carte, tokens
+            # avant le portefeuille. Les assets, leurs produits de recharge et leur
+            # portefeuille d'origine partent avec le nettoyage du module (prefixe).
+            # / Order imposed by PROTECT FKs. Assets go with the module cleanup.
+            Transaction.objects.filter(card=carte).delete()
+            Token.objects.filter(wallet=wallet_eph).delete()
+            carte.delete()
+            wallet_eph.delete()
 
 
 def test_rembourser_avec_vider_carte_reset(

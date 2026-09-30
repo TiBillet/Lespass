@@ -1477,6 +1477,28 @@ class Product(models.Model):
         ),
     )
 
+    # Le produit consigne (le gobelet vendu) que ce « Retour de consigne » rembourse.
+    # Rempli seulement sur un produit de méthode de caisse « Retour de consigne » (CR).
+    # À la caisse, le retour prend le PRIX et le TAUX DE TVA de ce produit, jamais les
+    # siens : il annule exactement la vente du gobelet (D11).
+    # Un retour sans consigne reliée est refusé à la vente (laboutik/views.py,
+    # `_prix_de_la_consigne_remboursee_en_centimes`). SET_NULL : supprimer le gobelet ne
+    # bloque rien, le retour est alors refusé avec un message clair.
+    # / The deposit product (the sold cup) this "deposit return" refunds. At the register
+    # the return takes the cup's price and VAT rate; without a link, the sale is refused.
+    consigne_remboursee = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="retours_de_consigne",
+        verbose_name=_("Rembourse la consigne"),
+        help_text=_(
+            "Le produit consigne (par exemple le gobelet) que ce retour rembourse. "
+            "La caisse rend son prix, avec son taux de TVA."
+        ),
+    )
+
     def fedow_category(self):
         self_category_map = {
             self.ADHESION: 'SUB',

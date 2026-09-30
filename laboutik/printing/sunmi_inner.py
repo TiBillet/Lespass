@@ -90,6 +90,18 @@ def ticket_data_to_json_commands(ticket_data):
     articles = ticket_data.get("articles", [])
     for article in articles:
         article_name = article.get("name", "")
+
+        # Ligne de texte seul (titre de partie, ligne sans argent d'un reçu) : le nom
+        # seul, sans quantité ni prix. Même règle que escpos_builder.
+        # / Text-only line: the name only. Same rule as escpos_builder.
+        if article.get("texte_seul"):
+            commands.append({
+                "type": "text",
+                "value": article_name,
+                "align": "left",
+            })
+            continue
+
         article_qty = article.get("qty", 1)
         article_price = article.get("price", 0)
         article_total = article.get("total", 0)

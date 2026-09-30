@@ -1688,6 +1688,17 @@ class POSProductForm(ProductAdminCustomForm):
             "leur catégorie : bouton « Synchroniser la TVA » de la catégorie."
         )
 
+        # « Rembourse la consigne » : seuls les articles de caisse ordinaires (méthode
+        # « Vente ») peuvent être une consigne remboursée. INDISPENSABLE : le queryset
+        # du champ VALIDE la valeur postée, la liste affichée n'est qu'un confort.
+        # Le champ n'existe que si le fieldset de l'admin le demande.
+        # / Only ordinary sale items can be the refunded deposit. The queryset VALIDATES
+        #   the posted value.
+        if "consigne_remboursee" in self.fields:
+            self.fields["consigne_remboursee"].queryset = Product.objects.filter(
+                methode_caisse=Product.VENTE,
+            ).order_by("name")
+
     def clean_categorie_article(self):
         """Pas de validation de categorie pour les produits POS.
         No category validation for POS products."""
@@ -1709,6 +1720,47 @@ class POSProductForm(ProductAdminCustomForm):
             cleaned["couleur_texte_pos"] = text_hex
             cleaned["couleur_fond_pos"] = bg_hex
 
+        # Un « Retour de consigne » rend le prix du gobelet qu'il rembourse. Sans
+        # gobelet relié, ou avec un gobelet qui n'a aucun tarif en euros vendable en
+        # caisse, la caisse ne sait pas quel prix rendre : on refuse d'enregistrer.
+        # La caisse masque aussi la tuile d'un tel retour et refuse de l'encaisser.
+        # Le champ n'existe que si le fieldset de l'admin le demande.
+        # / A deposit return gives back its cup's price. Without a cup, or with a cup
+        #   without a POS-sellable euro price, the product is refused.
+        methode_est_un_retour_de_consigne = (
+            cleaned.get("methode_caisse") == Product.RETOUR_CONSIGNE
+        )
+        if methode_est_un_retour_de_consigne and "consigne_remboursee" in self.fields:
+            gobelet_rembourse = cleaned.get("consigne_remboursee")
+            if gobelet_rembourse is None:
+                self.add_error(
+                    "consigne_remboursee",
+                    _(
+                        "Choisissez la consigne que ce retour rembourse (par exemple "
+                        "le gobelet). Sans elle, la caisse ne sait pas quel prix rendre."
+                    ),
+                )
+            else:
+                # Import local : la règle « tarif en euros vendable » est celle de la
+                # caisse (laboutik/views.py), lue au même endroit par les deux.
+                # / Local import: the "sellable euro price" rule is the register's.
+                from laboutik.views import _tarifs_en_euros_vendables_a_la_caisse
+
+                gobelet_a_un_tarif_en_euros_vendable = (
+                    _tarifs_en_euros_vendables_a_la_caisse(gobelet_rembourse).exists()
+                )
+                if not gobelet_a_un_tarif_en_euros_vendable:
+                    self.add_error(
+                        "consigne_remboursee",
+                        _(
+                            "La consigne « %(nom)s » n'a pas de tarif en euros publié "
+                            "pour la caisse. Ajoutez-lui un tarif en euros, ou "
+                            "choisissez une autre consigne : sinon la caisse ne sait "
+                            "pas quel prix rendre."
+                        )
+                        % {"nom": gobelet_rembourse.name},
+                    )
+
         return cleaned
 
 
@@ -1721,6 +1773,13 @@ class POSProductAdmin(ProductAdmin):
     form = POSProductForm
     inlines = [POSPriceInline]
     change_form_after_template = "admin/product/inline_conditional_fields.html"
+
+    # « Rembourse la consigne » n'a de sens que pour un « Retour de consigne » (CR) :
+    # le champ est caché pour toute autre méthode de caisse (expression Alpine.js).
+    # / "Refunds the deposit" only makes sense for a deposit return (CR).
+    conditional_fields = {
+        "consigne_remboursee": f"methode_caisse == '{Product.RETOUR_CONSIGNE}'",
+    }
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         # Collecte les regles conditionnelles de chaque inline qui en declare
@@ -1797,6 +1856,7 @@ class POSProductAdmin(ProductAdmin):
                     "name",
                     "categorie_article",
                     "methode_caisse",
+                    "consigne_remboursee",
                     "categorie_pos",
                     "tva",
                     "prix_achat",

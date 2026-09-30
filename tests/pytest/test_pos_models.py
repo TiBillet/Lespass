@@ -545,3 +545,12 @@ def test_create_test_pos_data_command(tenant):
             categorie_article=Product.ADHESION,
         ).count()
         assert adhesions_dans_cashless == 0, "PdV 'Cashless' ne doit PAS avoir de produits adhesion"
+
+        # --- Le retour de consigne de la demo rembourse le gobelet « Consigne » ---
+        # Sans ce lien, la caisse ne sait pas quel prix rendre : pas de tuile.
+        # / The demo deposit return refunds the "Consigne" cup. Without the link: no tile.
+        produit_consigne = Product.objects.get(name='Consigne')
+        produit_retour_consigne = Product.objects.get(name='Retour Consigne')
+        assert produit_retour_consigne.consigne_remboursee_id == produit_consigne.pk, (
+            "'Retour Consigne' doit rembourser le produit 'Consigne'"
+        )

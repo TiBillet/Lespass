@@ -33,6 +33,8 @@ from django_tenants.utils import schema_context
 from AuthBillet.models import Wallet
 from BaseBillet.models import CategorieProduct, Product, Price
 from Customers.models import Client
+from fedow_connect.fedow_api import CarteInconnueDeFedow
+from laboutik.carte_primaire_ancien_fedow import declarer_la_carte_primaire_a_l_ancien_fedow
 from laboutik.models import CartePrimaire, PointDeVente, Printer, Terminal
 from QrcodeCashless.models import CarteCashless, Detail
 
@@ -738,16 +740,26 @@ class Command(BaseCommand):
                     "methode_caisse": Product.RETOUR_CONSIGNE,
                     "categorie_pos": categorie_bar,
                     "asset": asset_local,
+                    "consigne_remboursee": produit_consigne,
                     "couleur_fond_pos": "#0284C7",
                     "couleur_texte_pos": "#FFFFFF",
                     "icon_pos": "undo",
                 },
             )
+            # Le retour rembourse le gobelet « Consigne » : la caisse rend son prix.
+            # Sans ce lien, la caisse n'affiche pas la tuile du retour. Un « Retour
+            # Consigne » déjà présent sans lien est relié ici : la commande est rejouable.
+            # / The return refunds the "Consigne" cup. Without this link the register
+            #   shows no tile. An existing unlinked return is linked here.
+            if produit_retour_consigne.consigne_remboursee_id is None:
+                produit_retour_consigne.consigne_remboursee = produit_consigne
+                produit_retour_consigne.save(update_fields=["consigne_remboursee"])
             if retour_cree:
-                # Prix NEGATIF : le lieu rend cet argent. C'est ce signe qui fait
-                # baisser le chiffre d'affaires et le tiroir-caisse dans les rapports.
-                # / NEGATIVE price: the venue gives this money back, and that sign is
-                #   what lowers revenue and the cash drawer in the reports.
+                # Ce prix propre du retour n'est pas lu par la caisse : elle rend le prix
+                # du gobelet relié (`consigne_remboursee`, D11), sur la tuile, le total,
+                # les espèces rendues et le recrédit de la carte.
+                # / The return's own price is not read by the register: it gives back
+                #   the linked cup's price (D11).
                 Price.objects.create(
                     product=produit_retour_consigne,
                     name="Gobelet",
@@ -1226,10 +1238,37 @@ class Command(BaseCommand):
                     "detail": detail_test,
                 },
             )
-            carte_primaire_cm, _ = CartePrimaire.objects.get_or_create(
+            carte_primaire_cm, carte_primaire_cm_creee = CartePrimaire.objects.get_or_create(
                 carte=carte_cm,
                 defaults={"edit_mode": True},
             )
+
+            # Une carte primaire créée ici est déclarée à l'ancien Fedow (lieu relié
+            # seulement) : la même carte primaire sert aux deux Fedow. Un refus ne
+            # plante pas la commande, mais s'écrit en rouge : sans la déclaration,
+            # l'ancien Fedow refuse les vidages signés par cette carte. Rattrapage :
+            # `declarer_cartes_primaires_ancien_fedow --schema <lieu> --appliquer`.
+            # / A primary card created here is declared to the old Fedow. A refusal
+            # does not crash the command but is printed loudly.
+            if carte_primaire_cm_creee:
+                try:
+                    carte_declaree = declarer_la_carte_primaire_a_l_ancien_fedow(carte_cm)
+                    if carte_declaree:
+                        self.stdout.write(
+                            f"  Carte primaire {tag_id_cm} déclarée à l'ancien Fedow."
+                        )
+                except CarteInconnueDeFedow:
+                    self.stderr.write(self.style.ERROR(
+                        f"  Carte primaire {tag_id_cm} INCONNUE de l'ancien Fedow : "
+                        "non déclarée. La créer là-bas, puis lancer la commande "
+                        "declarer_cartes_primaires_ancien_fedow."
+                    ))
+                except Exception as erreur_de_l_ancien_fedow:
+                    self.stderr.write(self.style.ERROR(
+                        f"  Carte primaire {tag_id_cm} REFUSÉE par l'ancien Fedow : "
+                        f"{erreur_de_l_ancien_fedow}. Lancer ensuite la commande "
+                        "declarer_cartes_primaires_ancien_fedow."
+                    ))
             carte_primaire_cm.points_de_vente.set(
                 [
                     pdv_bar,

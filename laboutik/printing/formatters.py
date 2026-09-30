@@ -723,28 +723,46 @@ def formatter_ticket_cloture(cloture):
     }
 
 
-def formatter_recu_vider_carte(transactions):
+def formatter_recu_vider_carte(transactions_locales, transactions_ancien_fedow=()):
     """
-    Formate un recu client pour un vider carte (remboursement especes).
-    Inclut les mentions legales + detail par asset + reference Transaction.
-    / Formats a customer receipt for a card refund (cash refund).
-    Includes legal mentions + detail per asset + Transaction reference.
+    Formate le reçu d'un vidage de carte : séparé par Fedow et détaillé.
+    / Formats a card-emptying receipt: split by Fedow and detailed.
 
     LOCALISATION : laboutik/printing/formatters.py
 
-    :param transactions: liste de Transaction REFUND (1 par asset)
+    Le reçu se lit de haut en bas :
+    1. les mentions légales du lieu (nom, adresse, SIREN) ;
+    2. la partie « Fedow local » : une ligne par monnaie reprise ;
+    3. la partie « Ancien Fedow » : une ligne par monnaie reprise ;
+    4. le total : l'argent rendu en espèces.
+    Seules la monnaie locale (TLF) et la monnaie fédérée (FED) sont de l'argent rendu.
+    Les jetons cadeau (TNF) sont écrits « repris, sans argent » et ne comptent pas
+    dans le total.
+    / Legal mentions, local part, old Fedow part, then the cash given back. Gift tokens
+    are "taken back, no money" and are not in the total.
+
+    Les clés sont celles que lisent les imprimantes (escpos_builder.py,
+    sunmi_inner.py) : `price` / `total` par ligne, `business_name` / `address` pour
+    les mentions légales. Un titre de partie ou une ligne sans argent porte
+    `texte_seul` : l'imprimante écrit son nom seul.
+    / Keys are the ones printers read. `texte_seul`: the printer writes the name only.
+
+    APPELÉ PAR : laboutik/views.py, PaiementViewSet.vider_carte_imprimer_recu
+
+    :param transactions_locales: `Transaction` REFUND du Fedow local, relues en base
+    :param transactions_ancien_fedow: dicts relus sur l'ancien Fedow
+        {"montant", "categorie", "nom", "code_monnaie"}
     :return: dict ticket_data compatible avec imprimer_async
     """
     from BaseBillet.models import Configuration
-    from laboutik.models import LaboutikConfiguration
+    from fedow_core.models import Asset
 
     now = timezone.localtime(timezone.now())
 
     config = Configuration.get_solo()
-    laboutik_config = LaboutikConfiguration.get_solo()
 
-    # Mentions legales basiques (adresse + SIRET si dispo).
-    # / Basic legal mentions.
+    # Mentions légales du lieu (nom, adresse, SIREN), comme le ticket de vente.
+    # / Venue legal mentions, like the sale receipt.
     parties_adresse = []
     if config.adress:
         parties_adresse.append(config.adress)
@@ -755,23 +773,67 @@ def formatter_recu_vider_carte(transactions):
     adresse_complete = " ".join(parties_adresse)
 
     legal = {
-        "organisation": config.organisation or "",
-        "adresse": adresse_complete,
-        "siret": getattr(laboutik_config, "siret", "") or "",
+        "business_name": config.organisation or "",
+        "address": adresse_complete,
+        "siret": config.siren or "",
     }
 
-    # Calcul du total et detail par asset.
-    # / Compute total and per-asset detail.
-    total_centimes = 0
+    mention_des_jetons_cadeau = str(_("repris, sans argent"))
     articles = []
-    for tx in transactions:
-        total_centimes += tx.amount
-        articles.append({
-            "name": f"{tx.asset.name} ({tx.get_action_display()})",
-            "qty": 1,
-            "prix_centimes": tx.amount,
-            "total_centimes": tx.amount,
-        })
+    argent_rendu_en_centimes = 0
+
+    # Les lignes des deux Fedow : (titre de la partie, liste de (nom, montant,
+    # catégorie, code de la monnaie)).
+    # / Both Fedow parts: (title, list of (name, amount, category, currency code)).
+    lignes_du_fedow_local = []
+    for transaction_locale in transactions_locales:
+        lignes_du_fedow_local.append(
+            (
+                transaction_locale.asset.name,
+                transaction_locale.amount,
+                transaction_locale.asset.category,
+                transaction_locale.asset.currency_code,
+            )
+        )
+    lignes_de_l_ancien_fedow = []
+    for transaction_distante in transactions_ancien_fedow:
+        lignes_de_l_ancien_fedow.append(
+            (
+                transaction_distante["nom"],
+                transaction_distante["montant"],
+                transaction_distante["categorie"],
+                transaction_distante["code_monnaie"],
+            )
+        )
+    parties_du_recu = [
+        (str(_("Fedow local")), lignes_du_fedow_local),
+        (str(_("Ancien Fedow")), lignes_de_l_ancien_fedow),
+    ]
+
+    for titre_de_la_partie, lignes_de_la_partie in parties_du_recu:
+        if not lignes_de_la_partie:
+            continue
+        articles.append({"name": titre_de_la_partie.upper(), "texte_seul": True})
+        for nom, montant_centimes, categorie, code_de_la_monnaie in lignes_de_la_partie:
+            if categorie in (Asset.TLF, Asset.FED):
+                argent_rendu_en_centimes += montant_centimes
+                articles.append({
+                    "name": nom,
+                    "qty": 1,
+                    "price": montant_centimes,
+                    "total": montant_centimes,
+                })
+            elif categorie == Asset.TNF:
+                # Arithmétique entière : euros et centimes séparés par // et %.
+                # / Integer arithmetic.
+                quantite_reprise = f"{montant_centimes // 100}.{montant_centimes % 100:02d}"
+                articles.append({
+                    "name": (
+                        f"{nom} {quantite_reprise} {code_de_la_monnaie} : "
+                        f"{mention_des_jetons_cadeau}"
+                    ),
+                    "texte_seul": True,
+                })
 
     return {
         "header": {
@@ -782,8 +844,8 @@ def formatter_recu_vider_carte(transactions):
         "legal": legal,
         "articles": articles,
         "total": {
-            "amount": total_centimes,
-            "label": str(_("Especes")),
+            "amount": argent_rendu_en_centimes,
+            "label": str(_("Rendu en espèces")),
         },
         "is_duplicata": False,
         "is_simulation": False,

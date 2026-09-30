@@ -226,9 +226,11 @@ class TestTotalHtDeLaLigne(FastTenantTestCase):
     def test_le_ht_des_parts_d_un_paiement_en_cascade(self):
         """Vin a 10,00 € paye 6,00 € cadeau + 4,00 € monnaie locale, TVA 20 %.
 
-        Deux lignes au prix unitaire 1000, qty 0,6 et 0,4. Le HT de chaque part :
-        600 / 1,2 = 500 et 400 / 1,2 = 333.
-        / Two lines at unit price 1000; HT of each share: 500 and 333.
+        Deux lignes au prix unitaire 1000, qty 0,6 et 0,4. Le champ `total_ht` porte
+        le HT du NET vendu. La part payee en jetons cadeau est offerte (D8) : net 0,
+        HT 0. La part en monnaie locale : 400 / 1,2 = 333.
+        / Two lines at unit price 1000. `total_ht` is the HT of the NET sold: the
+        gift-token part is offered (net 0, HT 0); the local-currency part: 333.
         """
         self._encaisser(
             "nfc", self.vin, prix_centimes=1000, quantite=1, tag_id=self.carte.tag_id
@@ -237,7 +239,7 @@ class TestTotalHtDeLaLigne(FastTenantTestCase):
         lignes = LigneArticle.objects.filter(pricesold__productsold__product=self.vin)
         ht_par_part = sorted(ligne.total_ht for ligne in lignes)
         assert lignes.count() == 2
-        assert ht_par_part == [333, 500], f"HT des parts : {ht_par_part}"
+        assert ht_par_part == [0, 333], f"HT des parts : {ht_par_part}"
 
     def test_l_archive_fiscale_deduit_la_bonne_tva_de_la_ligne(self):
         """L'archive exporte TVA = TTC de la ligne - HT stocke : 1500 - 1250 = 250.

@@ -521,21 +521,41 @@ class WalletService:
         ip: str = "0.0.0.0",
         vider_carte: bool = False,
         primary_card=None,
+        total_tlf_ancien_fedow_centimes: int = 0,
+        total_fed_ancien_fedow_centimes: int = 0,
+        uuid_fed_ancien_fedow=None,
+        ancien_fedow_a_repris_des_jetons: bool = False,
+        carte_videe_sur_l_ancien_fedow: bool = False,
     ) -> dict:
         """
         Rembourse en especes les tokens eligibles d'une carte.
         Refunds in cash the eligible tokens of a card.
 
         Tokens eligibles / Eligible tokens :
-        - TLF avec asset.tenant_origin == tenant
+        - TLF avec asset.tenant_origin == tenant (argent rendu)
         - FED (toutes valeurs, sans filtre origine — un seul FED dans le systeme)
+          (argent rendu)
+        - TNF avec asset.tenant_origin == tenant : jetons cadeau du lieu, repris
+          SANS argent rendu (ni ligne, ni especes)
+        - TIM, FID et monnaies des autres lieux : jamais touches
 
         Cree :
         - 1 Transaction(action=REFUND, sender=wallet_carte, receiver=receiver_wallet) par asset
-        - 1 LigneArticle FED (encaissement positif STRIPE_FED) si solde FED > 0
-        - 1 LigneArticle CASH negative (sortie cash totale TLF + FED)
+        - 1 LigneArticle FED (encaissement positif STRIPE_FED) si du FED est rendu
+        - 1 LigneArticle CASH negative (sortie cash totale TLF + FED) si de l'argent
+          est rendu
         - Si vider_carte=True : carte.user=None, carte.wallet_ephemere=None,
           CartePrimaire.objects.filter(carte=carte).delete()
+
+        ANCIEN FEDOW : la caisse vide d'abord la carte sur l'ancien Fedow (serveur
+        distant), puis appelle cette fonction. Cette fonction ne fait AUCUN appel
+        reseau : les montants repris sur l'ancien Fedow lui sont passes en parametres,
+        pour que les deux LigneArticle (lues par les anciens rapports) comptent les
+        deux Fedow. Une carte vide en local mais videe sur l'ancien Fedow passe quand
+        meme ici : aucune transaction locale, seulement les lignes et le reset.
+        / OLD FEDOW: the register empties the old Fedow first, then calls this function,
+        which makes NO network call: the old Fedow amounts are passed as parameters so
+        the two LigneArticle count both Fedow servers.
 
         Tout dans un seul transaction.atomic().
         All in a single transaction.atomic() block.
@@ -545,15 +565,24 @@ class WalletService:
         :param receiver_wallet: Wallet (le wallet receveur des REFUND, generalement le wallet du lieu)
         :param ip: str (adresse IP de la requete)
         :param vider_carte: bool (si True, reset user + wallet_ephemere + CartePrimaire)
+        :param total_tlf_ancien_fedow_centimes: monnaie locale reprise sur l'ancien Fedow
+        :param total_fed_ancien_fedow_centimes: FED repris sur l'ancien Fedow
+        :param uuid_fed_ancien_fedow: uuid de la monnaie FED de l'ancien Fedow (pour la
+            ligne FED quand aucun FED n'est rendu en local), ou None
+        :param ancien_fedow_a_repris_des_jetons: True si l'ancien Fedow a repris au moins
+            un jeton (argent ou cadeau)
+        :param carte_videe_sur_l_ancien_fedow: True si la carte a ete envoyee a l'ancien
+            Fedow (card/refund reussi, meme sans rien a reprendre la-bas)
 
         :return: dict {
-            "transactions": list[Transaction],
+            "transactions": list[Transaction] (locales, jetons cadeau compris),
             "lignes_articles": list[LigneArticle],
-            "total_centimes": int,
-            "total_tlf_centimes": int,
-            "total_fed_centimes": int,
+            "total_centimes": int (argent rendu en LOCAL),
+            "total_tlf_centimes": int (local),
+            "total_fed_centimes": int (local),
         }
-        :raises NoEligibleTokens: si aucun token eligible n'a value > 0
+        :raises NoEligibleTokens: si aucun token local eligible n'a value > 0, que
+            l'ancien Fedow n'a rien repris, et qu'il n'y a pas de carte a delier
         """
         # Imports locaux pour eviter le cycle (BaseBillet est en TENANT_APPS)
         # / Local imports to avoid cycle (BaseBillet is in TENANT_APPS)
@@ -573,24 +602,35 @@ class WalletService:
         elif carte.wallet_ephemere is not None:
             wallet_carte = carte.wallet_ephemere
 
-        if wallet_carte is None:
-            raise NoEligibleTokens(carte_tag_id=carte.tag_id)
+        # 2. Filtrer les tokens eligibles : TLF et TNF du tenant + FED.
+        # Une carte sans portefeuille local n'a aucun token local.
+        # / 2. Filter eligible tokens: tenant's TLF and TNF + FED.
+        # A card without a local wallet has no local token.
+        tokens_eligibles = []
+        if wallet_carte is not None:
+            tokens_eligibles = list(
+                Token.objects.filter(
+                    wallet=wallet_carte,
+                    value__gt=0,
+                )
+                .filter(
+                    Q(asset__category=Asset.TLF, asset__tenant_origin=tenant)
+                    | Q(asset__category=Asset.TNF, asset__tenant_origin=tenant)
+                    | Q(asset__category=Asset.FED)
+                )
+                .select_related("asset", "asset__tenant_origin")
+            )
 
-        # 2. Filtrer les tokens eligibles : TLF du tenant + FED
-        # / 2. Filter eligible tokens: tenant's TLF + FED
-        tokens_eligibles = list(
-            Token.objects.filter(
-                wallet=wallet_carte,
-                value__gt=0,
-            )
-            .filter(
-                Q(asset__category=Asset.TLF, asset__tenant_origin=tenant)
-                | Q(asset__category=Asset.FED)
-            )
-            .select_related("asset", "asset__tenant_origin")
+        # La vidange se fait des qu'un des deux Fedow a quelque chose a reprendre.
+        # Une carte vide partout mais deliee sur l'ancien Fedow (« vider et delier »,
+        # VOID) est aussi deliee ici : sinon elle resterait liee d'un seul cote.
+        # / The emptying happens as soon as one of the two Fedow has something to take.
+        # A card empty everywhere but unlinked on the old Fedow is unlinked here too.
+        rien_a_reprendre_nulle_part = (
+            not tokens_eligibles and not ancien_fedow_a_repris_des_jetons
         )
-
-        if not tokens_eligibles:
+        carte_deliee_sur_l_ancien_fedow = vider_carte and carte_videe_sur_l_ancien_fedow
+        if rien_a_reprendre_nulle_part and not carte_deliee_sur_l_ancien_fedow:
             raise NoEligibleTokens(carte_tag_id=carte.tag_id)
 
         # 3. Atomic : transactions REFUND + LigneArticle + reset eventuel
@@ -617,10 +657,23 @@ class WalletService:
                     },
                 )
                 transactions_creees.append(tx)
+                # Les jetons cadeau (TNF) sont repris sans argent : ils ne comptent
+                # dans aucun total.
+                # / Gift tokens (TNF) are taken back without money: in no total.
                 if token.asset.category == Asset.TLF:
                     total_tlf += token.value
                 elif token.asset.category == Asset.FED:
                     total_fed += token.value
+
+            # Argent rendu sur les DEUX Fedow : c'est lui que comptent les lignes.
+            # / Money given back on BOTH Fedow servers: the lines count it.
+            total_fed_des_deux_fedow = total_fed + total_fed_ancien_fedow_centimes
+            total_argent_des_deux_fedow = (
+                total_tlf
+                + total_fed
+                + total_tlf_ancien_fedow_centimes
+                + total_fed_ancien_fedow_centimes
+            )
 
             # 4. Creer les LigneArticle (Product/PriceSold systeme partages)
             # / 4. Create LigneArticle (shared system Product/PriceSold)
@@ -629,21 +682,27 @@ class WalletService:
 
             lignes_creees = []
 
-            if total_fed > 0:
-                # Recupere l'asset FED unique (convention : 1 seul FED dans le systeme)
-                # On utilise .filter().first() pour un message d'erreur clair si absent
-                # / Get the unique FED asset (convention: 1 FED in the system).
-                # Using .filter().first() for a clear error message if missing.
-                fed_asset = Asset.objects.filter(category=Asset.FED).first()
-                if fed_asset is None:
-                    raise RuntimeError(
-                        "Aucun asset FED n'existe dans le systeme : "
-                        "impossible de rembourser le solde federe."
-                    )
+            if total_fed_des_deux_fedow > 0:
+                # La ligne FED porte le FED local quand du FED est rendu en local
+                # (un seul FED dans le systeme). Sinon, elle porte l'uuid du FED de
+                # l'ancien Fedow : c'est le cas de la production, la ou un FED local est
+                # interdit (AssetFedLocalInterdit).
+                # / The FED line carries the local FED when FED is refunded locally.
+                # Otherwise it carries the old Fedow FED uuid (production case).
+                if total_fed > 0:
+                    fed_asset = Asset.objects.filter(category=Asset.FED).first()
+                    if fed_asset is None:
+                        raise RuntimeError(
+                            "Aucun asset FED n'existe dans le systeme : "
+                            "impossible de rembourser le solde federe."
+                        )
+                    uuid_de_la_monnaie_federee = fed_asset.uuid
+                else:
+                    uuid_de_la_monnaie_federee = uuid_fed_ancien_fedow
                 ligne_fed = LigneArticle.objects.create(
                     pricesold=pricesold_refund,
                     qty=1,
-                    amount=total_fed,
+                    amount=total_fed_des_deux_fedow,
                     payment_method=PaymentMethod.STRIPE_FED,
                     status=LigneArticle.VALID,
                     # Origine CAISSE, et non ADMIN : le vidage de carte se
@@ -659,21 +718,25 @@ class WalletService:
                     sale_origin=SaleOrigin.LABOUTIK,
                     carte=carte,
                     wallet=wallet_carte,
-                    asset=fed_asset.uuid,
+                    asset=uuid_de_la_monnaie_federee,
                 )
                 lignes_creees.append(ligne_fed)
 
-            ligne_cash = LigneArticle.objects.create(
-                pricesold=pricesold_refund,
-                qty=1,
-                amount=-(total_tlf + total_fed),
-                payment_method=PaymentMethod.CASH,
-                status=LigneArticle.VALID,
-                sale_origin=SaleOrigin.LABOUTIK,
-                carte=carte,
-                wallet=wallet_carte,
-            )
-            lignes_creees.append(ligne_cash)
+            # Aucune ligne especes quand aucun argent n'est rendu (carte avec
+            # seulement des jetons cadeau) : il n'y a rien a compter pour l'ancien Z.
+            # / No cash line when no money is given back (gift tokens only).
+            if total_argent_des_deux_fedow > 0:
+                ligne_cash = LigneArticle.objects.create(
+                    pricesold=pricesold_refund,
+                    qty=1,
+                    amount=-total_argent_des_deux_fedow,
+                    payment_method=PaymentMethod.CASH,
+                    status=LigneArticle.VALID,
+                    sale_origin=SaleOrigin.LABOUTIK,
+                    carte=carte,
+                    wallet=wallet_carte,
+                )
+                lignes_creees.append(ligne_cash)
 
             # 5. Reset optionnel de la carte (action VV)
             # / 5. Optional card reset (VV action)

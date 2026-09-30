@@ -1,0 +1,76 @@
+{% load i18n billet_filters %}
+{% comment %}
+VIDER CARTE — CE QUI EST REPRIS, SÉPARÉ PAR FEDOW
+/ Empty card — what is taken back, split by Fedow
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_vider_carte_parties.html
+INCLUS PAR : hx_vider_carte_confirm.html (aperçu) et hx_vider_carte_success.html (succès)
+
+Une partie « Fedow local », une partie « Ancien Fedow ». Chaque partie a une ligne
+par monnaie reprise (`vider-carte-ligne`). Les jetons cadeau sont repris sans argent :
+leur ligne le dit. L'argent rendu (monnaie locale, monnaie fédérée) s'affiche en
+euros : ces monnaies valent l'euro, quel que soit leur code sur l'ancien Fedow.
+Une partie sans ligne n'est pas affichée.
+/ One part per Fedow, one line per currency taken back. Gift tokens say "taken back,
+no money". An empty part is not shown.
+
+CONTEXTE : lignes_fedow_local, lignes_ancien_fedow (voir laboutik/views.py,
+`_ligne_de_vidage` : nom, montant_centimes, est_un_jeton_cadeau, currency_code).
+{% endcomment %}
+<div class="succes-cartes">
+  {% if lignes_fedow_local %}
+    <section class="succes-carte" aria-labelledby="vider-partie-fedow-local-titre" data-testid="vider-carte-partie-fedow-local">
+      <h3 class="succes-carte-ref" id="vider-partie-fedow-local-titre">{% translate "Fedow local" %}</h3>
+      <table class="succes-assets">
+        <thead>
+          <tr>
+            <th scope="col">{% translate "Monnaie" %}</th>
+            <th scope="col" class="num">{% translate "Repris" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ligne in lignes_fedow_local %}
+            <tr data-testid="vider-carte-ligne">
+              <td>{{ ligne.nom }}</td>
+              <td class="num">
+                {% if ligne.est_de_l_argent_rendu %}
+                  {{ ligne.montant_centimes|cents_to_euros }}
+                {% else %}
+                  {{ ligne.montant_centimes|cents_to_asset:ligne }}<br><small>{% translate "repris, sans argent" %}</small>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+
+  {% if lignes_ancien_fedow %}
+    <section class="succes-carte" aria-labelledby="vider-partie-ancien-fedow-titre" data-testid="vider-carte-partie-ancien-fedow">
+      <h3 class="succes-carte-ref" id="vider-partie-ancien-fedow-titre">{% translate "Ancien Fedow" %}</h3>
+      <table class="succes-assets">
+        <thead>
+          <tr>
+            <th scope="col">{% translate "Monnaie" %}</th>
+            <th scope="col" class="num">{% translate "Repris" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ligne in lignes_ancien_fedow %}
+            <tr data-testid="vider-carte-ligne">
+              <td>{{ ligne.nom }}</td>
+              <td class="num">
+                {% if ligne.est_de_l_argent_rendu %}
+                  {{ ligne.montant_centimes|cents_to_euros }}
+                {% else %}
+                  {{ ligne.montant_centimes|cents_to_asset:ligne }}<br><small>{% translate "repris, sans argent" %}</small>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+</div>

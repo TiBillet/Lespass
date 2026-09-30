@@ -44,6 +44,45 @@ TENANT_SCHEMA = 'lespass'
 # Fixtures
 # ---------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def ancien_fedow_simule_qui_confirme_les_cartes_primaires():
+    """
+    L'ouverture de la caisse lit la carte primaire sur l'ancien Fedow
+    (`NFCcardFedow.retrieve`). Ici, l'ancien Fedow est simulé : le lieu est relié, et
+    toute carte demandée est une carte primaire du lieu (`is_primary: true`).
+    Aucun envoi réseau réel : `_get` et `_post` du client Fedow échouent, et la liste
+    des envois tentés doit être vide à la fin du test.
+    Les refus de l'ancien Fedow sont testés dans test_caisse_ouverture_ancien_fedow.py.
+    / The old Fedow is faked: the venue is linked and every card is primary. No real
+    network call.
+    """
+    from unittest import mock
+
+    from fedow_connect.fedow_api import NFCcardFedow
+    from fedow_connect.models import FedowConfig
+
+    envois_reseau_tentes = []
+
+    def envoi_reseau_interdit(*arguments, **arguments_nommes):
+        envois_reseau_tentes.append((arguments, arguments_nommes))
+        raise AssertionError(
+            "Appel réseau réel vers l'ancien Fedow interdit dans un test pytest."
+        )
+
+    def faux_retrieve(self, tag_id):
+        return {"first_tag_id": tag_id, "is_primary": True}
+
+    with mock.patch.object(FedowConfig, "can_fedow", return_value=True):
+        with mock.patch.object(NFCcardFedow, "retrieve", new=faux_retrieve):
+            with mock.patch("fedow_connect.fedow_api._post", side_effect=envoi_reseau_interdit):
+                with mock.patch("fedow_connect.fedow_api._get", side_effect=envoi_reseau_interdit):
+                    yield
+
+    assert envois_reseau_tentes == [], (
+        f"Envois réseau réels tentés vers l'ancien Fedow : {envois_reseau_tentes}"
+    )
+
+
 @pytest.fixture(scope="module")
 def tenant():
     """Le tenant 'lespass' (doit exister dans la base).
