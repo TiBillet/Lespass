@@ -2485,7 +2485,9 @@ def index(request):
     for event in events_a_afficher:
         event_products = event.products.all()
         products = list(event_products)
-        prices = [price for product in products for price in product.prices.all()]
+        # Un tarif archivé (« supprimé ») n'est jamais affiché.
+        # / An archived ("deleted") price is never shown.
+        prices = [price for product in products for price in product.prices.filter(archived=False)]
         tarifs = [price.prix for price in prices]
         free_price = any(price.free_price for price in prices)
         # Calcul des prix min et max
@@ -3342,8 +3344,9 @@ class EventMVT(viewsets.ViewSet):
             event_products = event.products.prefetch_related("prices")
             products = list(event_products)
 
-            # Récupération des prix
-            prices = [price for product in products for price in product.prices.all()]
+            # Récupération des prix. Un tarif archivé (« supprimé ») n'est jamais affiché.
+            # / Get prices. An archived ("deleted") price is never shown.
+            prices = [price for product in products for price in product.prices.all() if not price.archived]
 
             # Si l'user est connecté, on vérifie qu'il n'a pas déja reservé
             product_max_per_user_reached = []
@@ -3371,7 +3374,7 @@ class EventMVT(viewsets.ViewSet):
 
             # Vérification de l'existence d'un prix libre (sans requêtes supplémentaires)
             event.free_price = any(
-                price.free_price for product in products for price in product.prices.all()
+                price.free_price for price in prices
             )
 
             event_in_this_tenant = True
@@ -3409,6 +3412,7 @@ class EventMVT(viewsets.ViewSet):
             product__event=event,
             product__categorie_article__in=[Product.BILLET, Product.FREERES],
             publish=True,
+            archived=False,
         ).order_by('product__poids', 'order', 'prix')
         for p in event.published_prices:
             if p.name is None:
@@ -3668,7 +3672,7 @@ class MembershipMVT(viewsets.ViewSet):
             # Les tarifs en points ou en temps se vendent a la caisse seulement :
             # ils ne comptent pas dans le prix affiche en euros.
             # / Points or time prices are sold at the POS only: not an euro price.
-            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False)
+            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False)
             tarifs = [price.prix for price in prices]
             # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
             # la caisse seulement), la carte n'affiche pas de prix.
@@ -3741,7 +3745,7 @@ class MembershipMVT(viewsets.ViewSet):
             # site ne le propose pas (il serait paye en euros par Stripe).
             # / Published prices. A points or time price is POS-only: never online.
             published_prices = product.prices.filter(
-                publish=True, asset__isnull=True, non_fiduciaire=False
+                publish=True, archived=False, asset__isnull=True, non_fiduciaire=False
             ).order_by('order', 'prix')
             context['published_prices'] = published_prices
             context['published_prices_count'] = published_prices.count()
@@ -6193,7 +6197,9 @@ class PanierMVT(viewsets.ViewSet):
         code_promo_applique_a_un_billet = False
         try:
             for product in event.products.all():
-                for price in product.prices.all():
+                # Un tarif archivé (« supprimé ») ne peut plus être mis au panier.
+                # / An archived ("deleted") price can no longer be added to the cart.
+                for price in product.prices.filter(archived=False):
                     price_key = str(price.uuid)
                     raw_qty = request.POST.get(price_key)
                     if not raw_qty:

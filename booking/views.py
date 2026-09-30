@@ -629,7 +629,7 @@ class BookingViewSet(viewsets.ViewSet):
 
         try:
             price_uuid = request.POST.get('price_uuid') or request.POST.get('price')
-            price = Price.objects.get(uuid=price_uuid)
+            price = Price.objects.get(uuid=price_uuid, archived=False)
         except Price.DoesNotExist:
             messages.error(request, _("Le prix n'existe pas"))
             response = HttpResponse("")

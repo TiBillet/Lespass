@@ -61,7 +61,7 @@ def produit_adhesion_limite_a_une(tenant):
 
         Membership.objects.filter(user=adherent).delete()
         adherent.delete()
-        tarif.delete()
+        tarif.hard_delete()
         try:
             produit.delete()
         except Exception:

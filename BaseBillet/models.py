@@ -1313,6 +1313,16 @@ class Product(models.Model):
         help_text=_("Limit the quantity per user. Leave this field blank if the number is unlimited.")
     )
 
+    def tarifs_non_archives(self):
+        """
+        Les tarifs du produit qui ne sont pas archivés (« supprimés »).
+        Pratique dans un template : {% for price in product.tarifs_non_archives %}
+        / The product prices that are not archived ("deleted").
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        return self.prices.filter(archived=False)
+
     def max_per_user_reached(self, user, event=None, adhesions_deja_au_panier=0) -> bool:
         if not self.max_per_user:
             return False  # Aucune limite
@@ -1794,7 +1804,7 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
 
     if instance.categorie_article == Product.FREERES:
         # On est sur un produit a réservation gratuite, on fabrique le price s'il n'existe pas ou s'il n'a pas été archivé
-        if not instance.prices.filter(prix=0).exists():
+        if not instance.prices.filter(prix=0, archived=False).exists():
             config = Configuration.get_solo()
             activate(config.language)
             Price.objects.create(product=instance, name=_("Free rate"), prix=0, publish=True)
@@ -1843,6 +1853,11 @@ class Price(models.Model):
                                      help_text=_("The amount will be asked on the Stripe checkout page."))
 
     publish = models.BooleanField(default=True, verbose_name=_("Publish"))
+
+    # Un tarif archivé est un tarif « supprimé » : il reste en base pour l'historique
+    # des ventes, mais il n'est plus jamais affiché ni vendu. Voir Price.delete().
+    # / An archived price is a "deleted" price: kept for sales history, never shown again.
+    archived = models.BooleanField(default=False, verbose_name=_("Archived"))
 
     TNA, DIX, VINGT, HUITCINQ, DEUXDEUX = 'NA', 'DX', 'VG', 'HC', 'DD'
     TVA_CHOICES = [
@@ -2112,7 +2127,52 @@ class Price(models.Model):
     def save(self, *args, **kwargs):
         if self.recurring_payment:
             self.max_per_user = 1
+
+        # Un tarif archivé n'est plus jamais en vente.
+        # On le dépublie donc toujours. Même règle que pour un produit archivé.
+        # / An archived price is never for sale: always unpublish it.
+        if self.archived:
+            self.publish = False
+
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """
+        « Supprime » un tarif : en réalité, on l'archive.
+        / "Deletes" a price: it is actually archived.
+
+        LOCALISATION : BaseBillet/models.py
+
+        Un tarif déjà vendu ne peut pas être effacé de la base.
+        Les ventes passées (PriceSold), les adhésions (Membership) et les commandes
+        de caisse sauvegardées pointent vers lui, en PROTECT.
+        Si on l'efface, on perd le nom et les réglages du tarif dans l'historique.
+
+        Donc on garde la ligne en base, et on la cache :
+        - archived = True : le tarif n'est plus affiché ni proposé nulle part.
+        - publish = False : le tarif n'est plus en vente.
+
+        ATTENTION : Price.objects.filter(...).delete() ne passe PAS par cette méthode.
+        Django efface alors vraiment les lignes (ou lève ProtectedError si le tarif a été vendu).
+        Pour effacer vraiment un seul tarif (tests, nettoyage), utiliser hard_delete().
+        / WARNING: queryset.delete() bypasses this method and really deletes rows.
+
+        :return: même forme que Model.delete() : (0, {}) car rien n'est effacé.
+        """
+        self.archived = True
+        self.publish = False
+        self.save(update_fields=["archived", "publish"])
+        return 0, {}
+
+    def hard_delete(self, *args, **kwargs):
+        """
+        Efface vraiment le tarif de la base. Réservé aux tests et aux nettoyages.
+        Lève ProtectedError si le tarif a déjà été vendu.
+        / Really deletes the price. For tests and cleanups only.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        return super().delete(*args, **kwargs)
 
 
 class Event(models.Model):
@@ -2401,7 +2461,7 @@ class Event(models.Model):
     def reservation_solo(self):
         if self.max_per_user == 1:
             if self.products.all().count() == 1:
-                if self.products.first().prices.all().count() == 1:
+                if self.products.first().prices.filter(archived=False).count() == 1:
                     return True
         return False
 

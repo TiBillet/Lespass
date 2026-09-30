@@ -87,7 +87,7 @@ def adhesion_avec_engagement(tenant):
 
         Membership.objects.filter(user=adherent).delete()
         adherent.delete()
-        tarif.delete()
+        tarif.hard_delete()
         try:
             produit.delete()
         except Exception:

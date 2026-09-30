@@ -136,7 +136,7 @@ def get_permission_Api_ALL_Admin(self: ViewSet):
 class TarifBilletViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
 
     def list(self, request):
-        queryset = Price.objects.all().order_by('prix')
+        queryset = Price.objects.filter(archived=False).order_by('prix')
         serializer = PriceSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -235,7 +235,7 @@ class HereViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
         dict_return.update(place_serialized.data)
 
         products_adhesion = MembershipProduct.objects.filter(
-            prices__isnull=False,
+            prices__archived=False,
             publish=True,
         ).distinct()
 

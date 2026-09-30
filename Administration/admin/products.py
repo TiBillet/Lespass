@@ -445,8 +445,47 @@ class BasePriceInline(StackedInline):
             )
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
+    def get_queryset(self, request):
+        # Un tarif archivé (« supprimé ») n'est plus jamais affiché dans le produit.
+        # / An archived ("deleted") price is never shown in the product again.
+        return super().get_queryset(request).filter(archived=False)
+
+    def get_formset(self, request, obj=None, **kwargs):
+        """
+        Autorise la case « Supprimer » sur un tarif déjà vendu.
+        / Allows the "Delete" checkbox on a price that was already sold.
+
+        LOCALISATION : Administration/admin/products.py
+
+        Par défaut, l'admin Django refuse de supprimer un objet si d'autres objets
+        protégés pointent vers lui (ici : PriceSold, Membership, en PROTECT).
+        Ce contrôle est fait par la méthode hand_clean_DELETE du formulaire.
+
+        Pour un tarif, ce contrôle est inutile : Price.delete() n'efface rien.
+        Il archive le tarif (voir BaseBillet/models.py). Les ventes passées restent intactes.
+        On remplace donc ce contrôle par une méthode qui ne fait rien.
+
+        FLUX :
+        1. L'admin coche « Supprimer » sur un tarif et enregistre le produit
+        2. Le formset appelle tarif.delete()
+        3. Price.delete() passe archived=True et publish=False
+        4. get_queryset() ci-dessus ne renvoie plus ce tarif : il disparaît de la page
+        """
+        classe_du_formset = super().get_formset(request, obj, **kwargs)
+
+        class FormulaireDeTarifQuiArchive(classe_du_formset.form):
+            def hand_clean_DELETE(self):
+                # Rien à vérifier : la suppression d'un tarif est un archivage.
+                # / Nothing to check: deleting a price is an archiving.
+                return
+
+        classe_du_formset.form = FormulaireDeTarifQuiArchive
+        return classe_du_formset
+
     def has_delete_permission(self, request, obj=None):
-        return False
+        # « Supprimer » un tarif l'archive. Voir Price.delete() dans BaseBillet/models.py.
+        # / "Deleting" a price archives it. See Price.delete().
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -1283,7 +1322,7 @@ class ProductAdmin(ModelAdmin):
 
         # On parcourt tous les tarifs associés au produit source
         # Loop through all prices associated with the source product
-        for tarif_original in produit_source.prices.all():
+        for tarif_original in produit_source.prices.filter(archived=False):
             # Création d'une copie du tarif
             # Creating a copy of the price
             nouveau_tarif = Price.objects.get(pk=tarif_original.pk)

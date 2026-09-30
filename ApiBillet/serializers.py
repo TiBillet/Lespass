@@ -99,6 +99,18 @@ class ProductCreateSerializer(serializers.ModelSerializer):
             'prices',
         ]
 
+    def to_representation(self, instance):
+        # depth = 1 renvoie tous les tarifs du produit.
+        # On retire les tarifs archivés (« supprimés ») : ils ne sont plus jamais affichés.
+        # / depth = 1 returns every price: remove the archived ("deleted") ones.
+        representation = super().to_representation(instance)
+        tarifs_non_archives = []
+        for tarif in representation.get("prices", []):
+            if not tarif.get("archived"):
+                tarifs_non_archives.append(tarif)
+        representation["prices"] = tarifs_non_archives
+        return representation
+
     def validate_option_generale_radio(self, value):
         self.option_generale_radio = []
         for uuid in value:
@@ -170,6 +182,18 @@ class ProductSerializer(serializers.ModelSerializer):
             'uuid',
             'prices',
         ]
+
+    def to_representation(self, instance):
+        # depth = 1 renvoie tous les tarifs du produit.
+        # On retire les tarifs archivés (« supprimés ») : ils ne sont plus jamais affichés.
+        # / depth = 1 returns every price: remove the archived ("deleted") ones.
+        representation = super().to_representation(instance)
+        tarifs_non_archives = []
+        for tarif in representation.get("prices", []):
+            if not tarif.get("archived"):
+                tarifs_non_archives.append(tarif)
+        representation["prices"] = tarifs_non_archives
+        return representation
 
 
 class PriceSerializer(serializers.ModelSerializer):
@@ -1034,7 +1058,7 @@ class ApiReservationValidator(serializers.Serializer):
         for entry in value:
             logger.info(f"price entry : {entry}")
             try:
-                price = Price.objects.get(pk=entry['uuid'])
+                price = Price.objects.get(pk=entry['uuid'], archived=False)
                 product = price.product
                 price_object = {
                     'price': price,

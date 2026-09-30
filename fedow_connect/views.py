@@ -48,10 +48,10 @@ class Membership_fwh(viewsets.ViewSet):
         amount = dround(transaction_serialized.get('amount'))
         asset_uuid = transaction_serialized['asset']
         product = Product.objects.get(pk=asset_uuid)
-        price = Price.objects.filter(product=product, prix=amount).first()
+        price = Price.objects.filter(product=product, prix=amount, archived=False).first()
         if not price:
             try :
-                price = Price.objects.get(free_price=True, product=product)
+                price = Price.objects.get(free_price=True, product=product, archived=False)
             except Price.DoesNotExist:
                 # Fabrication d'un prix libre, non publié si créé
                 price = Price.objects.create(

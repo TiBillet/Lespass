@@ -318,8 +318,63 @@ class PriceAdmin(ModelAdmin):
         )
         return redirect(product_url)
 
+    def get_queryset(self, request):
+        # Un tarif archivé (« supprimé ») n'est plus jamais affiché dans l'admin.
+        # / An archived ("deleted") price is never shown in the admin again.
+        return super().get_queryset(request).filter(archived=False)
+
+    def get_deleted_objects(self, objs, request):
+        """
+        Prépare la page « Êtes-vous sûr ? » avant la suppression d'un tarif.
+        / Builds the "Are you sure?" page before deleting a price.
+
+        LOCALISATION : Administration/admin/prices.py
+
+        Par défaut, Django liste ici les objets protégés (PriceSold, Membership)
+        et bloque la suppression. Pour un tarif, rien n'est effacé :
+        Price.delete() archive le tarif. On ne renvoie donc aucun objet protégé.
+
+        :return: (objets affichés, nombre par modèle, permissions manquantes, objets protégés)
+        """
+        tarifs_qui_seront_archives = []
+        for tarif in objs:
+            tarifs_qui_seront_archives.append(
+                _("%(name)s (will be archived, past sales are kept)") % {"name": tarif}
+            )
+        nombre_par_modele = {Price._meta.verbose_name_plural: len(tarifs_qui_seront_archives)}
+        permissions_manquantes = set()
+        objets_proteges = []
+        return tarifs_qui_seront_archives, nombre_par_modele, permissions_manquantes, objets_proteges
+
+    def delete_queryset(self, request, queryset):
+        # queryset.delete() effacerait vraiment les lignes sans passer par Price.delete().
+        # On appelle donc delete() sur chaque tarif, un par un, pour l'archiver.
+        # / queryset.delete() would bypass Price.delete(): archive each price one by one.
+        for tarif in queryset:
+            tarif.delete()
+
+    def response_delete(self, request, obj_display, obj_id):
+        # Après l'archivage, on revient sur la page du produit parent.
+        # Le tarif existe encore en base (il est archivé), on peut donc retrouver son produit.
+        # / After archiving, go back to the parent product page.
+        tarif_archive = Price.objects.filter(pk=obj_id).first()
+        if tarif_archive is None:
+            return super().response_delete(request, obj_display, obj_id)
+
+        self.message_user(
+            request,
+            _('The price "%(name)s" was archived. Past sales are kept.') % {"name": obj_display},
+            messages.SUCCESS,
+        )
+        product_url = reverse(
+            "staff_admin:BaseBillet_product_change", args=[tarif_archive.product_id]
+        )
+        return redirect(product_url)
+
     def has_delete_permission(self, request, obj=None):
-        return False
+        # « Supprimer » un tarif l'archive. Voir Price.delete() dans BaseBillet/models.py.
+        # / "Deleting" a price archives it. See Price.delete().
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)

@@ -382,7 +382,7 @@ class TestExportDepuisUnVraiRapport:
             ligne.delete()
             tarif_vendu.delete()
             produit_vendu.delete()
-            tarif.delete()
+            tarif.hard_delete()
             try:
                 produit.delete()
             except TypeError:

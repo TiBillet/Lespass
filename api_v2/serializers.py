@@ -895,7 +895,7 @@ class ProductSchemaSerializer(serializers.Serializer):
         category = instance.get_categorie_article_display() if hasattr(instance, "get_categorie_article_display") else None
 
         offers: List[Dict[str, Any]] = []
-        for price in instance.prices.all().select_related("asset").order_by("order"):
+        for price in instance.prices.filter(archived=False).select_related("asset").order_by("order"):
             # Un tarif en points ou en temps porte le code de sa monnaie, pas EUR.
             # / A points or time price carries its currency code, not EUR.
             code_de_la_monnaie = "EUR"
@@ -1300,7 +1300,7 @@ class ReservationCreateSerializer(serializers.Serializer):
             if price_uuid:
                 price_uuids.append(str(price_uuid))
 
-        products_of_requested_prices = Product.objects.filter(prices__uuid__in=price_uuids).distinct()
+        products_of_requested_prices = Product.objects.filter(prices__uuid__in=price_uuids, prices__archived=False).distinct()
         if not products_of_requested_prices.exists():
             raise serializers.ValidationError({"reservedTicket": "No product found for the given prices."})
 
