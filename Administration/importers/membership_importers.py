@@ -19,6 +19,14 @@ class EmailUserForeignKeyWidget(ForeignKeyWidget):
         return val
 
 
+class ProductNonArchiveForeignKeyWidget(ForeignKeyWidget):
+    def get_queryset(self, value, row, *args, **kwargs):
+        # Un produit archivé peut porter le même nom qu'un produit actif.
+        # L'import cherche le produit par son nom : on ne garde que les produits non archivés.
+        # / An archived product may share its name with an active one: import on active only.
+        return Product.objects.filter(archive=False)
+
+
 class PriceForeignKeyWidget(ForeignKeyWidget):
     def get_queryset(self, value, row, *args, **kwargs):
         # Un tarif archivé (« supprimé ») ne peut pas recevoir de nouvelle adhésion importée.
@@ -29,7 +37,12 @@ class PriceForeignKeyWidget(ForeignKeyWidget):
         try:
             val = super().clean(value)
         except MultipleObjectsReturned:
-            val = Price.objects.get(name=value, product__name=row.get('product_name'), archived=False)
+            val = Price.objects.get(
+                name=value,
+                product__name=row.get('product_name'),
+                product__archive=False,
+                archived=False,
+            )
         except Exception as err:
             raise err
         return val
@@ -145,7 +158,7 @@ class MembershipImportResource(resources.ModelResource):
     product_name = fields.Field(
         column_name='product_name',
         attribute='product_name',
-        widget=ForeignKeyWidget(Product, field='name'))  # renvoie une erreur si le produit n'existe pas
+        widget=ProductNonArchiveForeignKeyWidget(Product, field='name'))  # renvoie une erreur si le produit n'existe pas
 
     price_name = fields.Field(
         column_name='price_name',
