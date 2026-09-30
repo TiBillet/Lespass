@@ -8,7 +8,7 @@
 
 
 /* --- Icones Material Symbols / Material Symbols icons ---
-   La police est locale : laboutik/static/fonts/material-symbols/.
+   La police est globale au projet : static/fonts/material-symbols/.
    C'est la police VARIABLE de Google (axes FILL, wght, GRAD, opsz).
    La police fournie par django-unfold est statique : elle n'a pas d'axe FILL.
    Avec elle, font-variation-settings: 'FILL' 1 ne fait rien.

@@ -28,6 +28,39 @@
 @font-face { font-family: 'Luciole'; src: url('../fonts/Luciole-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
 @font-face { font-family: 'Luciole'; src: url('../fonts/Luciole-Bold-Italic.woff2') format('woff2'); font-weight: 700; font-style: italic; font-display: swap; }
 
+/*
+Voir comment ajouter Material icon, la police fait 4mon, un peu too much pour juste quelques icones.
+Une solution proposé par claude c'est d'utiliser fontTools pour limiter les icones a juste celle utilisé,
+ en générant un autre fichier de police. Mais faut le refaire dès qu'on rajoute des icones :/
+
+@font-face {
+  font-family: "Material Symbols Lespass";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url("../../fonts/material-symbols/MaterialSymbolsOutlined-variable.woff2") format("woff2");
+}
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Lespass";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  vertical-align: middle;
+  font-feature-settings: "liga";
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  font-variation-settings: 'FILL' 1;
+}
+*/
+
 :root {
   /* --- Palette de marque (charte Tibillet) ---
      Valeurs canoniques : réservées aux fonds pleins, dégradés et
