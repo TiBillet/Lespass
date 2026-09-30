@@ -1505,7 +1505,21 @@ class Product(models.Model):
         ordering = ('poids',)
         verbose_name = _('Product')
         verbose_name_plural = _('Products')
-        unique_together = ('categorie_article', 'name')
+        # Deux produits NON archivés ne peuvent pas avoir le même nom dans la même catégorie.
+        # Un produit archivé ne bloque pas le nom : on peut créer un nouveau produit du même nom.
+        # Plusieurs produits archivés peuvent porter le même nom.
+        # / Two NON-archived products cannot share a name within a category.
+        #   An archived product does not reserve its name.
+        constraints = [
+            models.UniqueConstraint(
+                fields=['categorie_article', 'name'],
+                condition=Q(archive=False),
+                name='unique_product_non_archive_par_categorie_et_nom',
+                violation_error_message=_(
+                    "Un produit avec ce nom existe déjà. Choisissez un autre nom, ou archivez le produit existant."
+                )
+            ),
+        ]
 
 
 class TicketProductManager(models.Manager):

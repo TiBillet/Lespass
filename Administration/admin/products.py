@@ -1122,6 +1122,26 @@ class TvaAdmin(ModelAdmin):
         return False
 
 
+def un_autre_produit_non_archive_porte_ce_nom(produit):
+    """
+    Vrai si un AUTRE produit non archivé a le même nom et la même catégorie.
+    / True when ANOTHER non-archived product has the same name and category.
+
+    LOCALISATION : Administration/admin/products.py
+
+    Sert avant de désarchiver un produit : deux produits non archivés ne peuvent pas
+    avoir le même nom dans la même catégorie (contrainte de Product, BaseBillet/models.py).
+    Fonction au niveau module, pas dans le ModelAdmin : Unfold enveloppe les méthodes
+    des ModelAdmin.
+    """
+    autres_produits_non_archives_du_meme_nom = Product.objects.filter(
+        name=produit.name,
+        categorie_article=produit.categorie_article,
+        archive=False,
+    ).exclude(pk=produit.pk)
+    return autres_produits_non_archives_du_meme_nom.exists()
+
+
 class ProductArchiveFilter(admin.SimpleListFilter):
     title = _("Archivé")
     parameter_name = "archive"
@@ -1398,6 +1418,24 @@ class ProductAdmin(ModelAdmin):
     )
     def desarchive(self, request, object_id):
         obj = get_object_or_404(Product, pk=object_id)
+
+        # Un produit archivé ne bloque pas son nom : un autre produit du même nom a pu
+        # être créé depuis. Deux produits non archivés ne peuvent pas avoir le même nom
+        # dans la même catégorie (contrainte de Product). On refuse donc avec un message.
+        # / An archived product does not reserve its name: refuse to unarchive it when a
+        #   non-archived product with the same name and category exists.
+        un_produit_actif_porte_deja_ce_nom = un_autre_produit_non_archive_porte_ce_nom(obj)
+        if un_produit_actif_porte_deja_ce_nom:
+            messages.error(
+                request,
+                _(
+                    "A product named « %(name)s » already exists. "
+                    "Rename one of them before unarchiving."
+                )
+                % {"name": obj.name},
+            )
+            return redirect(request.META["HTTP_REFERER"])
+
         obj.archive = False
         obj.save()
         messages.success(request, _("%(name)s unarchived") % {"name": obj.name})
