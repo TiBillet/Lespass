@@ -140,6 +140,20 @@ account pages (home and sub-pages) are the only ones without the venue's
                     {% endif %}
                 </span>
             </a>
+            {# Affiche un lien admin rapide dans la navbar pour les admins du lieu et les super_users #}
+            {% if profile.admin_this_tenant or request.user.is_superuser %}
+                {# Lien admin rapide #}
+                <a class="icon-btn icon-btn--panier" href="/admin/"
+                   title="{% translate 'Administration' %}"
+                   aria-label="{% translate 'Administration' %}" aria-describedby="admin-badge-nav">
+                    {# Cadenas ouvert en SVG, même trait que les autres icônes de la barre. #}
+                    {# Pas de police d'icônes ici : le SVG ne pèse presque rien. #}
+                    {# / Open padlock as inline SVG, same stroke as the other bar icons. #}
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="11" width="15" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 7.7-1.5"/><path d="M12 15v2.5"/></svg>
+                    <span id="admin-badge-nav">
+                </span>
+                </a>
+            {% endif %}
 
             {% comment %} V2-HERE
             Boutons de la maquette sans fonctionnalité derrière :
