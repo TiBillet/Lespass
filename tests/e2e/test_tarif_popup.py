@@ -131,6 +131,15 @@ def caisse(page):
                 formulaire.appendChild(champ)
             }
             champ.value = ajout.quantity
+            // Vente au poids : addition.js ajoute aussi weight-<ligne>.
+            // La garde stock de tarif.js additionne ces champs.
+            // / Weight sale: addition.js also adds weight-<line>, summed by the stock guard.
+            if (ajout.weightAmount) {
+                const champPoids = document.createElement('input')
+                champPoids.name = 'weight-' + ajout.lineId
+                champPoids.value = ajout.weightAmount
+                formulaire.appendChild(champPoids)
+            }
         })
     }""")
 
@@ -447,6 +456,28 @@ def test_poids_bloque_si_le_stock_est_insuffisant(page, caisse):
     assert _ajouts(page) == []
 
 
+def test_poids_la_garde_compte_ce_qui_est_deja_au_panier(page, caisse):
+    """100 g en stock, vente hors stock interdite : 100 g passent, les 100 g suivants
+    sont refuses (200 g au total). Avant, chaque pesee etait comparee seule au stock.
+    / 100 g stock: first 100 g accepted, next 100 g refused (200 g total)."""
+    tarif_avec_stock = dict(TARIF_POIDS, stock_disponible=100, autoriser_hors_stock=False)
+    caisse([tarif_avec_stock])
+
+    _toucher(page, ["1", "0", "0"], ZONE_POIDS)
+    page.click('[data-testid="tarif-numpad-ok-POIDS"]')
+    assert len(_ajouts(page)) == 1
+
+    _toucher(page, ["1", "0", "0"], ZONE_POIDS)
+    page.click('[data-testid="tarif-numpad-ok-POIDS"]')
+
+    assert len(_ajouts(page)) == 1
+    texte_alerte = page.inner_text("#tarif-numpad-alerte-POIDS")
+    assert "Stock insuffisant" in texte_alerte
+    assert "Déjà dans le panier : 100g" in texte_alerte
+    assert "En stock : 100g" in texte_alerte
+    assert "Vous ne pouvez plus en ajouter" in texte_alerte
+
+
 # ------------------------------------------------------------------ #
 #  Style et securite / Style and safety
 # ------------------------------------------------------------------ #
@@ -474,3 +505,82 @@ def test_les_noms_sont_echappes(page, caisse):
     assert page.locator("#tarif-overlay img").count() == 0
     assert page.evaluate("window.pirate") is None
     assert nom_dangereux in page.inner_text(".tarif-overlay-title")
+
+
+# ------------------------------------------------------------------ #
+#  Petit ecran / Small screen
+# ------------------------------------------------------------------ #
+
+def _boite(page, selecteur):
+    """Rectangle d'un element a l'ecran. / On-screen rectangle of an element."""
+    return page.eval_on_selector(
+        selecteur,
+        """element => {
+            const rectangle = element.getBoundingClientRect()
+            return {haut: rectangle.top, bas: rectangle.bottom,
+                    gauche: rectangle.left, droite: rectangle.right}
+        }""",
+    )
+
+
+def test_petit_ecran_la_popup_couvre_categories_et_articles_au_dessus_du_panier(page, caisse):
+    """
+    Telephone 360 x 640 : le voile va du bas du header (49 px)
+    jusqu'au haut du panier replie (200 px), sur toute la largeur.
+    Il couvre donc aussi la colonne des categories, a gauche.
+    / 360x640 phone: the veil spans from the header to the folded cart,
+    full width, so it also covers the categories column.
+    """
+    page.set_viewport_size({"width": 360, "height": 640})
+    page.add_style_tag(content=":root { --header-height: 49px; --addition-collapsed-height: 200px; }")
+    # #products a droite des categories (64 px), comme dans la vraie caisse
+    # / #products right of the categories column, as in the real POS
+    page.evaluate("""() => {
+        const grille = document.querySelector('#products')
+        grille.style.cssText = 'height:391px;width:296px;margin:49px 0 0 64px'
+    }""")
+    caisse([TARIF_SOUTIEN])
+
+    voile = _boite(page, "#tarif-overlay")
+    assert voile["gauche"] == 0
+    assert voile["droite"] == 360
+    assert voile["haut"] == 49
+    assert voile["bas"] == 640 - 200
+
+
+def test_petit_ecran_le_pave_prix_libre_reste_dans_le_voile(page, caisse):
+    """
+    Pave prix libre ouvert sur un telephone : la boite est plus haute que la zone.
+    Elle doit rester dans le voile et defiler, pas etre coupee en haut et en bas.
+    / Free price keypad open on a phone: the box stays inside the veil and scrolls.
+    """
+    page.set_viewport_size({"width": 360, "height": 640})
+    page.add_style_tag(content=":root { --header-height: 49px; --addition-collapsed-height: 200px; }")
+    caisse([TARIF_DEMI, TARIF_PINTE, TARIF_SOUTIEN])
+    page.click('[data-testid="tarif-libre-ouvrir-SOUTIEN"]')
+
+    voile = _boite(page, "#tarif-overlay")
+    boite = _boite(page, ".tarif-overlay-content")
+    assert boite["haut"] >= voile["haut"]
+    assert boite["bas"] <= voile["bas"]
+    hauteur_du_contenu_plus_grande = page.eval_on_selector(
+        ".tarif-overlay-content", "element => element.scrollHeight > element.clientHeight"
+    )
+    assert hauteur_du_contenu_plus_grande
+
+
+def test_grand_ecran_la_boite_reste_dans_une_grille_basse(page, caisse):
+    """
+    Grand ecran, grille d'articles basse (300 px) : la boite ne deborde pas.
+    Avant, la ligne de grille du voile grandissait avec le contenu.
+    / Large screen, short article grid: the box does not overflow.
+    """
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.evaluate("() => { document.querySelector('#products').style.height = '300px' }")
+    caisse([TARIF_DEMI, TARIF_PINTE, TARIF_SOUTIEN, TARIF_POIDS])
+
+    voile = _boite(page, "#tarif-overlay")
+    boite = _boite(page, ".tarif-overlay-content")
+    assert voile["bas"] - voile["haut"] == 300
+    assert boite["haut"] >= voile["haut"]
+    assert boite["bas"] <= voile["bas"]

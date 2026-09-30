@@ -1,4 +1,5 @@
-{# Ecran d'annulation. Pousse par le websocket (wsocket/consumers.py) avec un #}
-{# contexte VIDE : tout est dans le partial, qui ne depend d'aucune requete. #}
-{# / Cancellation screen. Pushed by the websocket with an EMPTY context. #}
-{% include "kiosk/partial/state_screen.html" with est_succes=False %}
+{# Ecran de refus / annulation. Pousse par le websocket (wsocket/consumers.py) #}
+{# ou le sondage de secours (views.py : payment_status). Contexte : `event` seul. #}
+{# / Refusal screen. Pushed by the websocket or the safety poll. #}
+{# LOCALISATION : kiosk/templates/kiosk/cancel.html #}
+{% include "kiosk/partial/etat_final.html" with est_succes=False %}

@@ -16,8 +16,11 @@
    rows; free price and weight in a neutral block.
    ============================================================ */
 
-/* #products porte la popup en position absolute
-   / #products hosts the absolutely positioned popup */
+/* #products porte la popup en position absolute.
+   Sur ecran <= 1022 px (panier replie en bas), la popup passe en position fixed :
+   elle couvre alors les categories ET les articles (voir media query plus bas).
+   / #products hosts the absolutely positioned popup. On screens <= 1022px the
+   popup becomes fixed and covers categories + articles (see media query below). */
 #products {
     position: relative;
     background: var(--bg);
@@ -36,6 +39,15 @@
     inset: 0;
     z-index: 100;
     display: grid;
+    /* Pistes explicites, comme .card-modal (overlay.css).
+       Sans elles, la ligne de la grille grandit avec le contenu.
+       Le max-height: 100% de la boite ne limitait alors rien :
+       le pave prix libre ou poids depassait, et le haut et le bas etaient coupes.
+       Avec minmax(0, 1fr), la boite reste dans le voile et defile a l'interieur.
+       / Explicit tracks: without them the auto row grows with content and the
+       box's max-height does nothing. Now the box fits and scrolls inside. */
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     place-items: center;
     padding: 16px;
     background: var(--modal-veil);
@@ -353,14 +365,36 @@
     }
 }
 
-/* Telephone en paysage (ecran bas) : #products ne fait plus que ~170 px de haut,
-   la popup y etait trop serree. Elle passe en plein ecran (comme ventes.css).
-   Au-dessus de 500 px de haut, elle reste sur la grille et le ticket reste visible.
-   / Landscape phone: #products is only ~170px tall, so the popup goes full screen.
-   Taller screens keep it on the grid with the ticket visible. */
+/* Ecran moyen et petit (<= 1022 px) : le panier replie est en bas,
+   les categories sont a gauche des articles.
+   La popup couvre les categories ET les articles :
+   du bas du header jusqu'au haut du panier replie.
+   On gagne la largeur des categories, et on ne peut plus toucher une categorie
+   a cote du voile. Le panier replie reste visible.
+   position: fixed sort la popup du cadre de #products.
+   Le overflow: hidden de #products ne la coupe donc pas.
+   / Medium and small screens: the popup covers categories + articles, from the
+   header down to the folded cart, which stays visible. */
+@media only screen and (max-width: 1022px) {
+    .tarif-overlay {
+        position: fixed;
+        top: var(--header-height, 0px);
+        right: 0;
+        bottom: var(--addition-collapsed-height, 0px);
+        left: 0;
+    }
+}
+
+/* Telephone en paysage (ecran bas) : la zone au-dessus du panier ne fait plus
+   que ~170 px de haut, la popup y etait trop serree.
+   Elle passe en plein ecran (comme ventes.css), header et panier compris.
+   inset: 0 annule le top / bottom de la regle precedente.
+   / Landscape phone: the popup goes full screen. inset: 0 overrides the
+   previous rule's top / bottom. */
 @media only screen and (max-height: 500px) {
     .tarif-overlay {
         position: fixed;
+        inset: 0;
         padding: 8px;
     }
 }

@@ -20,12 +20,10 @@
     {# Pave numerique : charge ici car tarif.js clone le pave (cotton/numpad.html) #}
     {# / Keypad CSS: loaded here since tarif.js clones the keypad component       #}
     <link rel="stylesheet" href="{% static 'css/numpad.css' %}" />
-    {# Material Symbols Outlined : police LOCALE, fournie par django-unfold      #}
-    {# (static/unfold/fonts/material-symbols). Plus de Google Fonts ni de        #}
-    {# FontAwesome. La classe .material-symbols-outlined est dans components.css. #}
-    {# / Local Material Symbols font (shipped by django-unfold). No Google Fonts, #}
-    {#   no FontAwesome. The class is declared in components.css.                 #}
-    <link rel="stylesheet" href="{% static 'unfold/fonts/material-symbols/styles.css' %}" />
+    {# Material Symbols : police VARIABLE LOCALE (laboutik/static/fonts/).       #}
+    {# Le @font-face et la classe .material-symbols-outlined sont dans          #}
+    {# components.css. Plus de Google Fonts ni de FontAwesome.                  #}
+    {# / Local variable Material Symbols font, declared in components.css.       #}
     <link rel="icon" href="{% static 'images/favicon.ico' %}" />
     {% block css %}
     {% endblock css %}

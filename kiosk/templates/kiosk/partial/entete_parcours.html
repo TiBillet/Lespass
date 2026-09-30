@@ -1,0 +1,41 @@
+{% load i18n %}
+{% comment %}
+EN-TETE DU PARCOURS — le lieu a gauche, « Recommencer » et « Admin » a droite
+/ Flow header — the place on the left, "Start over" and "Admin" on the right
+
+LOCALISATION : kiosk/templates/kiosk/partial/entete_parcours.html
+
+Inclus par recharge.html, HORS de #tb-kiosque : il survit a tous les swaps.
+« Recommencer » est masque a l'etape 1 par le CSS (body[data-etape], pose par
+main.js). Pendant le paiement au TPE, « Recommencer » ET « Admin » sont masques :
+quitter l'ecran laisserait le lecteur arme. Seul « Annuler » permet d'en sortir. / Included OUTSIDE #tb-kiosque. "Start over" is hidden on step 1.
+
+COMMUNICATION :
+Le bouton Admin ouvre la modale #modale-admin (data-modal-open, main.js).
+{% endcomment %}
+<header class="kiosk-page__top">
+    <div class="kiosk-page__place" data-testid="kiosk-place">
+        {% include "kiosk/partial/marque_du_lieu.html" %}
+        <span>{{ nom_du_lieu }}</span>
+    </div>
+
+    <div class="kiosk-page__right">
+        {# Un vrai lien : il recharge /kiosk/ et remet tout a zero. #}
+        {# / A real link: reloads /kiosk/ and resets everything. #}
+        <a href="{% url 'kiosk-list' %}" class="kiosk-page__home" data-testid="kiosk-restart">
+            <svg class="icone-ligne" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> {% translate "Recommencer" %}
+        </a>
+
+        <button type="button" class="kiosk-page__admin"
+                data-modal-open="modale-admin"
+                data-testid="kiosk-admin-open"
+                aria-haspopup="dialog">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M8 11 V8 a4 4 0 0 1 8 0 v3" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            {% translate "Admin" %}
+            <span class="visually-hidden">{% translate "Accès réservé à l'équipe" %}</span>
+        </button>
+    </div>
+</header>

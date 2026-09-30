@@ -25,7 +25,7 @@ Routes calibration (admin staff) :
 from django.urls import path, include
 from rest_framework import routers
 
-from controlvanne.viewsets import TireuseViewSet, AuthKioskView, KioskViewSet, KioskTokenView
+from controlvanne.viewsets import TireuseViewSet, AuthKioskView, KioskViewSet
 from controlvanne.calibration_views import (
     calibration_page,
     calibration_sessions_partial,
@@ -38,7 +38,6 @@ router.register(r"api/tireuse", TireuseViewSet, basename="controlvanne-tireuse")
 urlpatterns = [
     # Auth kiosk
     path("auth-kiosk/", AuthKioskView.as_view(), name="controlvanne-auth-kiosk"),
-    path("kiosk-token/<str:token>/", KioskTokenView.as_view(), name="controlvanne-kiosk-token"),
 
     # Kiosk
     path("kiosk/", KioskViewSet.as_view({"get": "list"}), name="controlvanne-kiosk-list"),

@@ -1,0 +1,168 @@
+{% load i18n kiosk_tags %}
+{% comment %}
+ETAPES 6, 9 ET 7 — SUCCES PUIS MERCI, OU REFUS
+/ Steps 6, 9 and 7 — success then thanks, or refusal
+
+LOCALISATION : kiosk/templates/kiosk/partial/etat_final.html
+
+Inclus par success.html (est_succes=True) et cancel.html (est_succes=False).
+
+CONTEXTE HORS REQUETE — ATTENTION :
+wsocket/consumers.py rend ce template via get_template(...).render(), donc sans
+`request`, sans `csrf_token`, sans processeur de contexte. Il ne recoit que
+`event` : le dict de PaymentsIntent.contexte_ecran_final() (kiosk/models.py) :
+montant_ajoute_centimes, nouveau_solde_centimes (ou None), tag_id,
+montant_pour_formulaire. Le POST « Reessayer » passe le jeton CSRF par le
+hx-headers du <body> (base.html), pas par un {% csrf_token %}.
+/ Rendered OUTSIDE a request: only `event` is available. The retry POST gets
+its CSRF token from <body hx-headers>.
+
+SWAP :
+hx-swap-oob="innerHTML:#tb-kiosque" : le websocket remplace le CONTENU de
+#tb-kiosque, pas l'element. Le <main aria-live> reste en place, donc le lecteur
+d'ecran annonce le nouvel ecran. / Replaces the CONTENT of #tb-kiosque, so the
+live region survives and screen readers announce the change.
+
+REFUS INCERTAIN : event.statut_certain est faux quand Stripe n'a pas confirme
+l'annulation (erreur de suivi, delai depasse). On ne dit alors PAS que l'argent
+n'est pas parti, et on ne propose pas de reessayer.
+/ Uncertain refusal: no "no money taken" claim, no retry.
+
+FLUX DU SUCCES : ecran 6 (montant + nouveau solde) -> 6 s -> ecran 9 (merci)
+-> 6 s -> retour a /kiosk/. FLUX DU REFUS : retour auto apres 30 s.
+{% endcomment %}
+<div hx-swap-oob="innerHTML:#tb-kiosque">
+
+{% if est_succes %}
+    <div class="kiosk-etapes" data-etape="succes" data-testid="kiosk-success-page">
+
+        {# ---------------- Etape 6 : accepte ---------------- #}
+        <section class="stage" data-bloc="succes">
+            <div class="rcard">
+                <div class="rcard__done-mark" aria-hidden="true">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 12 L10 17 L19 7" stroke="currentColor" stroke-width="2.5"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                {% if event.montant_ajoute_centimes %}
+                    <p class="rcard__done-line" data-testid="kiosk-succes-ajout">
+                        {% blocktrans with montant=event.montant_ajoute_centimes|euros %}Vous avez ajouté <strong>{{ montant }} €</strong> sur votre carte.{% endblocktrans %}
+                    </p>
+                {% else %}
+                    <p class="rcard__done-line">{% translate "Votre carte est rechargée." %}</p>
+                {% endif %}
+                {% if event.nouveau_solde_centimes is not None and event.nouveau_solde_centimes != "" %}
+                    <div class="rcard__head">
+                        <div class="rcard__solde-label">{% translate "Votre nouveau solde" %}</div>
+                        <div class="rcard__balance" data-testid="kiosk-succes-nouveau-solde">
+                            {{ event.nouveau_solde_centimes|euros }}<span class="eur"> €</span>
+                        </div>
+                    </div>
+                {% endif %}
+                <p class="stage__lede">{% translate "Vous pouvez reprendre votre carte." %}</p>
+            </div>
+        </section>
+
+        {# ---------------- Etape 9 : merci ---------------- #}
+        <section class="stage" data-bloc="merci" hidden>
+            <div class="rcard rcard--merci" data-testid="kiosk-merci">
+                <div class="merci__badge" aria-hidden="true">
+                    <div class="merci__mark">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    {# Etoiles aux couleurs de la charte (jetons --letchi, --zanana...). #}
+                    {# / Stars in the brand colours (tokens). #}
+                    <svg class="merci__star merci__star--a" viewBox="0 0 24 24">
+                        <defs><linearGradient id="etoileA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color: var(--letchi)"/><stop offset="1" style="stop-color: var(--zanana)"/></linearGradient></defs>
+                        <path d="M12 2 L14.6 9 22 9.2 16.2 13.6 18.3 21 12 16.6 5.7 21 7.8 13.6 2 9.2 9.4 9 Z" fill="url(#etoileA)"/>
+                    </svg>
+                    <svg class="merci__star merci__star--b" viewBox="0 0 24 24">
+                        <defs><linearGradient id="etoileB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color: var(--loseyan)"/><stop offset="1" style="stop-color: var(--violet)"/></linearGradient></defs>
+                        <path d="M12 2 L14.6 9 22 9.2 16.2 13.6 18.3 21 12 16.6 5.7 21 7.8 13.6 2 9.2 9.4 9 Z" fill="url(#etoileB)"/>
+                    </svg>
+                    <svg class="merci__star merci__star--c" viewBox="0 0 24 24">
+                        <defs><linearGradient id="etoileC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color: var(--zanana)"/><stop offset="1" style="stop-color: var(--chouchou)"/></linearGradient></defs>
+                        <path d="M12 2 L14.6 9 22 9.2 16.2 13.6 18.3 21 12 16.6 5.7 21 7.8 13.6 2 9.2 9.4 9 Z" fill="url(#etoileC)"/>
+                    </svg>
+                    <svg class="merci__star merci__star--d" viewBox="0 0 24 24">
+                        <defs><linearGradient id="etoileD" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color: var(--violet)"/><stop offset="1" style="stop-color: var(--letchi)"/></linearGradient></defs>
+                        <path d="M12 2 L14.6 9 22 9.2 16.2 13.6 18.3 21 12 16.6 5.7 21 7.8 13.6 2 9.2 9.4 9 Z" fill="url(#etoileD)"/>
+                    </svg>
+                </div>
+                <h1 class="merci__title">{% translate "Merci !" %}</h1>
+                <p class="merci__text">{% translate "On ne vous retient plus, la fête vous attend." %}</p>
+            </div>
+        </section>
+    </div>
+
+{% else %}
+    {# ---------------- Etape 7 : refuse ---------------- #}
+    <section class="stage" data-etape="refus" data-testid="kiosk-cancel-page">
+        <div class="rcard">
+            {% if event.statut_certain %}
+                <h1 class="rcard__q rcard__q--lg">{% translate "La connexion avec votre banque n'a pas fonctionné." %}</h1>
+                <p class="stage__lede">{% translate "L'argent n'est pas parti de votre compte. Vous pouvez trouver de l'aide au bar si vous le souhaitez." %}</p>
+            {% else %}
+                <h1 class="rcard__q rcard__q--lg" data-testid="kiosk-refus-incertain">{% translate "Nous n'avons pas pu confirmer le paiement." %}</h1>
+                <p class="stage__lede">{% translate "Avant de recommencer, adressez-vous au bar : l'équipe vérifiera si votre paiement est passé." %}</p>
+            {% endif %}
+            <div class="rcard__actions">
+                {% if event.statut_certain and event.tag_id and event.montant_pour_formulaire %}
+                    {# Relance le MEME paiement : carte et montant revalides cote serveur. #}
+                    {# / Replays the SAME payment: card and amount revalidated. #}
+                    <button type="button" class="kiosk-btn kiosk-btn--signature kiosk-btn--lg"
+                            hx-post="{% url 'kiosk-refill-with-wisepos' %}"
+                            hx-vals='{"tag_id": "{{ event.tag_id }}", "totalAmount": "{{ event.montant_pour_formulaire }}"}'
+                            hx-target="#tb-kiosque"
+                            hx-swap="innerHTML"
+                            data-testid="kiosk-bouton-reessayer">
+                        {% translate "Réessayer" %}
+                    </button>
+                {% endif %}
+                <a href="{% url 'kiosk-list' %}" class="kiosk-btn kiosk-btn--outline kiosk-btn--lg"
+                   data-testid="kiosk-return-home">
+                    {% translate "Retour à l'accueil" %}
+                </a>
+            </div>
+        </div>
+    </section>
+{% endif %}
+
+    <script>
+        // IIFE : ce template peut etre swappe plusieurs fois (rejeu d'etat du
+        // websocket, sondage de secours). Des `let` globaux redeclares feraient
+        // une SyntaxError. / IIFE: may be swapped several times.
+        (function () {
+            // Un seul minuteur a la fois : un second swap annule le premier.
+            // / One timer at a time: a second swap cancels the first.
+            if (window.minuteurEcranFinal) {
+                clearTimeout(window.minuteurEcranFinal);
+            }
+
+            const blocMerci = document.querySelector('#tb-kiosque [data-bloc="merci"]');
+            const blocSucces = document.querySelector('#tb-kiosque [data-bloc="succes"]');
+
+            function retournerAlAccueil() {
+                window.location.href = "{% url 'kiosk-list' %}";
+            }
+
+            // Refus : on laisse le temps de lire et de reessayer.
+            // / Refusal: time to read and retry.
+            if (!blocMerci) {
+                window.minuteurEcranFinal = setTimeout(retournerAlAccueil, 30000);
+                return;
+            }
+
+            // Succes : 6 s pour lire le nouveau solde, puis merci, puis accueil.
+            // / Success: 6 s to read the balance, then thanks, then home.
+            window.minuteurEcranFinal = setTimeout(function () {
+                blocSucces.hidden = true;
+                blocMerci.hidden = false;
+                window.minuteurEcranFinal = setTimeout(retournerAlAccueil, 6000);
+            }, 6000);
+        })();
+    </script>
+</div>

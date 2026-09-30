@@ -1,4 +1,5 @@
-{# Ecran de reussite. Pousse par le websocket (wsocket/consumers.py) avec un #}
-{# contexte VIDE : tout est dans le partial, qui ne depend d'aucune requete. #}
-{# / Success screen. Pushed by the websocket with an EMPTY context. #}
-{% include "kiosk/partial/state_screen.html" with est_succes=True %}
+{# Ecran de reussite. Pousse par le websocket (wsocket/consumers.py) ou le #}
+{# sondage de secours (views.py : payment_status). Contexte : `event` seul. #}
+{# / Success screen. Pushed by the websocket or the safety poll. #}
+{# LOCALISATION : kiosk/templates/kiosk/success.html #}
+{% include "kiosk/partial/etat_final.html" with est_succes=True %}

@@ -1,13 +1,31 @@
 {% load i18n %}
-<div class="d-flex gap-2 flex-wrap mb-3">
+{% comment %}
+BOUTONS AU-DESSUS DU FORMULAIRE D'UNE TIREUSE (admin)
+/ Buttons above the tap form (admin)
+
+LOCALISATION : controlvanne/templates/admin/controlvanne/tireusebec_before.html
+
+Affiché par TireuseBecAdmin (change_form_before_template).
+kiosk_url et calibration_url viennent de TireuseBecAdmin.changeform_view.
+Styles en ligne avec les variables Unfold : Unfold n'embarque ni Bootstrap
+ni les classes Tailwind personnalisées.
+/ Shown by TireuseBecAdmin. Inline styles with Unfold variables.
+{% endcomment %}
+<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;" data-testid="admin-tireuse-actions">
   {% if kiosk_url %}
-  <a href="{{ kiosk_url }}" target="_blank" class="btn btn-outline-secondary btn-sm">
-    📺 {% translate "View kiosk" %}
-  </a>
+    <a href="{{ kiosk_url }}" target="_blank" rel="noopener"
+       data-testid="admin-tireuse-voir-kiosk"
+       style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; background-color: var(--color-primary-600, #1d9e75); color: white; font-weight: 600; white-space: nowrap;">
+      <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 18px;">tv</span>
+      {% translate "View kiosk" %}
+    </a>
   {% endif %}
   {% if calibration_url %}
-  <a href="{{ calibration_url }}" class="btn btn-outline-warning btn-sm">
-    ⚙️ {% translate "Calibrate flow meter" %}
-  </a>
+    <a href="{{ calibration_url }}"
+       data-testid="admin-tireuse-calibrer"
+       style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; border: 1px solid #b45309; color: #b45309; font-weight: 600; white-space: nowrap;">
+      <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 18px;">tune</span>
+      {% translate "Calibrate flow meter" %}
+    </a>
   {% endif %}
 </div>

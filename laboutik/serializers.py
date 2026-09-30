@@ -521,3 +521,25 @@ class RechargeMontantLibreSerializer(serializers.Serializer):
             raise serializers.ValidationError(_("Montant inférieur au minimum"))
 
         return montant_en_centimes
+
+
+class StockInsuffisantSerializer(serializers.Serializer):
+    """
+    Valide la demande du message "stock insuffisant" (garde stock au clic).
+    / Validates the "insufficient stock" message request (click stock guard).
+
+    LOCALISATION : laboutik/serializers.py
+
+    Utilise par PaiementViewSet.stock_insuffisant() (GET).
+    articles.js:verifierStockAvantAjout() a refuse un ajout au panier et
+    demande au serveur le texte du message (popup hx_messages.html).
+    / Used by PaiementViewSet.stock_insuffisant() (GET).
+    """
+
+    product_uuid = serializers.UUIDField()
+    # Ce que le panier demandait AVANT ce clic (en unite de stock : pieces, g, cl)
+    # / What the cart already requested BEFORE this click (stock unit)
+    quantite_au_panier = serializers.IntegerField(min_value=0)
+    # Ce que le clic refuse voulait ajouter (1 piece, 50 cl, 200 g...)
+    # / What the refused click wanted to add
+    quantite_a_ajouter = serializers.IntegerField(min_value=1)

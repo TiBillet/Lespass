@@ -1,0 +1,56 @@
+{% extends "kiosk/base.html" %}
+{% load i18n %}
+{% comment %}
+ACCUEIL OPERATEUR — CHOIX DES SERVICES DE LA BORNE
+/ Operator home — choosing the kiosk's services
+
+LOCALISATION : kiosk/templates/kiosk/configuration.html
+
+Rendu par KioskViewSet.configuration (GET /kiosk/configuration/), seulement
+apres une carte primaire (session « kiosk_admin », cf. acces_admin).
+
+Le kiosque prend la couleur du lieu et n'affiche rien de Tibillet en tete.
+Tibillet signe au pied. / The kiosk wears the place's colour; Tibillet signs
+the foot.
+
+FLUX :
+1. Interrupteur -> hx-post basculer_module -> partial/modules_borne.html
+   recalcule (etat, nombre de services, note) dans #kiosk-modules.
+2. Demarrer -> hx-post demarrer -> HX-Redirect /kiosk/ (retour au public).
+{% endcomment %}
+
+{% block title %}{% translate "Configuration de la borne" %}{% if nom_du_lieu %} — {{ nom_du_lieu }}{% endif %}{% endblock %}
+
+{% block main %}
+<div class="kiosk" data-testid="kiosk-page-configuration">
+
+    <header class="kiosk__head">
+        {% include "kiosk/partial/marque_du_lieu.html" %}
+        <div>
+            <div class="kiosk__place-name">{{ nom_du_lieu }}</div>
+            {% if terminal %}
+                <div class="kiosk__terminal-name" data-testid="kiosk-nom-borne">{{ terminal.name }}</div>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="kiosk__main">
+        <div class="kiosk__intro">
+            <p class="kiosk__eyebrow">{% translate "Accueil de la borne" %}</p>
+            <h1 class="kiosk__title">{% translate "Choisissez ce qui tourne ce soir." %}</h1>
+            <p class="kiosk__lede">
+                {% translate "Les services que vous ouvrez seront proposés au public. Démarrez la borne pour l'ouvrir à la file." %}
+            </p>
+        </div>
+
+        <div id="kiosk-modules" aria-live="polite">
+            {% include "kiosk/partial/modules_borne.html" %}
+        </div>
+    </main>
+
+    <footer class="kiosk__foot">
+        <span class="kiosk__foot-mark">Tibillet</span>
+        <span>{% translate "L'outil des lieux qui le font vivre." %}</span>
+    </footer>
+</div>
+{% endblock %}

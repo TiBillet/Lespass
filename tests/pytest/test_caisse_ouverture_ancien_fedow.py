@@ -4,7 +4,7 @@ Tests de l'ouverture de la caisse : l'ancien Fedow dit si la carte primaire l'es
 
 LOCALISATION : tests/pytest/test_caisse_ouverture_ancien_fedow.py
 
-RÈGLE MÉTIER TESTÉE (décision du mainteneur, 2026-09-30 : « comme LaBoutik V1 »)
+RÈGLE MÉTIER TESTÉE (la même que LaBoutik V1)
 L'ancien Fedow peut retirer une carte primaire sans prévenir la caisse (VOID de la carte,
 carte déclarée perdue). À chaque ouverture de la caisse (`POST carte_primaire`), une fois
 la carte primaire trouvée en local, la caisse lit la carte sur l'ancien Fedow
@@ -15,26 +15,29 @@ requête. Donc :
    (en local seulement : l'ancien Fedow ne la connaît déjà plus comme primaire, aucun
    `set_primary`). Un avertissement est journalisé. L'écran dit que la carte n'est plus
    une carte primaire pour ce lieu, et qu'il faut prévenir un responsable ;
-3. l'ancien Fedow ne répond pas, répond une erreur, répond quelque chose d'illisible, ou
-   ne connaît pas la carte : la caisse ne s'ouvre pas, rien n'est supprimé, une erreur
-   est journalisée avec sa cause. L'écran le dit, avec un message différent du point 2 ;
-4. carte inconnue en local, ou carte non primaire en local : l'ancien Fedow n'est pas
+3. l'ancien Fedow ne répond pas, répond une erreur, ou répond quelque chose d'illisible :
+   la caisse ne s'ouvre pas, rien n'est supprimé, une erreur est journalisée avec sa
+   cause. L'écran le dit, avec un message différent du point 2 ;
+4. l'ancien Fedow ne connaît pas la carte : même chose qu'au point 3, et l'erreur
+   journalisée dit que la carte est inconnue ;
+5. carte inconnue en local, ou carte non primaire en local : l'ancien Fedow n'est pas
    interrogé, message actuel ;
-5. l'ancien Fedow reçoit le tag de la carte scannée, et aucun autre.
+6. l'ancien Fedow reçoit le tag de la carte scannée, et aucun autre ;
+7. lieu NON relié à l'ancien Fedow (`can_fedow()` faux) : la caisse ne s'ouvre pas, rien
+   n'est supprimé, une erreur est journalisée avec le tag, et le client `FedowAPI` n'est
+   jamais créé (sa création lancerait `PlaceFedow.create_place()`, un appel réseau).
 / On each register opening, the old Fedow is asked whether the card is still primary.
 Not primary: the local primary card is deleted (locally only) and the register stays
 closed. Old Fedow unreachable, failing, unreadable or not knowing the card: the register
-stays closed, nothing is deleted.
+stays closed, nothing is deleted. Venue not linked to the old Fedow: the register stays
+closed, nothing is deleted, `FedowAPI` is never built.
+Les sections des tests plus bas portent les mêmes numéros.
+/ The test sections below use the same numbers.
 
-Référence V1 (lecture seule) : ../LaBoutik/webview/views.py (l.241-270).
-Calcul de `is_primary` : ../Fedow/fedow_core/serializers.py (l.441-452, `CardSerializer`).
+Référence V1 (lecture seule) : ../LaBoutik/webview/views.py, fonction `index`, branche
+`valider_carte_maitresse`.
+Calcul de `is_primary` : ../Fedow/fedow_core/serializers.py, `CardSerializer.get_is_primary`.
 Fiche : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-B-caisse.md.
-
-6. lieu NON relié à l'ancien Fedow (`can_fedow()` faux) : la caisse ne s'ouvre pas, rien
-   n'est supprimé, une erreur est journalisée avec le tag, et le client `FedowAPI` n'est
-   jamais créé (sa création lancerait `PlaceFedow.create_place()`, un appel réseau).
-/ Venue not linked to the old Fedow: the register stays closed, nothing is deleted,
-`FedowAPI` is never built.
 
 L'ANCIEN FEDOW EST SIMULÉ, JAMAIS APPELÉ
 Une garde (fixture automatique) fait échouer tout envoi réseau du client Fedow
@@ -90,11 +93,11 @@ MESSAGE_CARTE_RETIREE = (
 )
 
 # Début de ce que l'écran dit quand l'ancien Fedow ne peut pas confirmer la carte
-# (point 3). / Start of what the screen says when the old Fedow cannot confirm the card.
+# (points 3 et 4). / Start of what the screen says when the old Fedow cannot confirm the card.
 DEBUT_DU_MESSAGE_VERIFICATION_IMPOSSIBLE = "Impossible de vérifier la carte primaire"
 
-# Ce que l'écran dit quand le lieu n'est pas relié à l'ancien Fedow (point 6).
-# / What the screen says when the venue is not linked to the old Fedow (point 6).
+# Ce que l'écran dit quand le lieu n'est pas relié à l'ancien Fedow (point 7).
+# / What the screen says when the venue is not linked to the old Fedow (point 7).
 MESSAGE_LIEU_NON_RELIE = "Ce lieu n'est pas relié à Fedow : prévenez un responsable."
 
 
@@ -617,7 +620,7 @@ def test_ouverture_lieu_non_relie_a_l_ancien_fedow_refuse_sans_rien_supprimer(
 def reponse_json_de_l_ancien_fedow(tag_id, est_primaire):
     """
     Le corps JSON que l'ancien Fedow renvoie pour `GET card/<tag>/` (`CardSerializer`,
-    ../Fedow/fedow_core/serializers.py l.441). `est_primaire=None` : sans `is_primary`.
+    ../Fedow/fedow_core/serializers.py). `est_primaire=None` : sans `is_primary`.
     / The JSON body the old Fedow sends back. `None`: without `is_primary`.
     """
     corps = json.loads(

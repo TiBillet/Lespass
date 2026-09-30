@@ -112,13 +112,16 @@ fabrique pas plus que ce que la spec demande.
 §6 journal — le plus récent en haut, §8 pièges) et la mémoire
 `project_chantier_montants_entiers`.**
 
-État : fiches 0, A′, A **commitées**. Fiche **B terminée, NON commitée** : toutes ses sessions
-prouvées, dont **B-4** (corrections de la relecture Fable, 2315 passed) et **B-5** (l'ancien
-Fedow fait autorité à l'ouverture de la caisse, comme V1 ; brief `05-B-5.md`). Après B-5 :
-`make test` complet puis `make e2e` (résultats dans le SUIVI §7). À faire ensuite :
-1. si les deux suites sont vertes : SUIVI §7, proposer au mainteneur le message de commit
-   de la fiche B (sans Co-Authored-By) et **attendre son commit** ;
-2. fiche suivante : D ou E (C attend 04-F-1) — vérifier le SUIVI §5 avant.
+État : fiches 0, A′, A, **B commitées** (B : `b234cef8`). Fusion de `origin/main-fedow-import`
+faite et vérifiée (pytest 2454 passed ; e2e 136 passed, 1 failed hors chantier = bug n°18),
+avec **B-6** dedans (mineurs Fable de B-5, docstrings). **Vérifier d'abord avec `git log` que
+le mainteneur a commité la fusion** ; sinon, attendre. Aucun push sans lui.
+
+Prochaine fiche : **C** (tireuse, QR / NFC) ; 04-F-1 est livrée. **Relire la fiche contre le
+code fusionné** avant le brief : controlvanne (`controlvanne/billing.py`, tirages, lots) et
+le kiosque ont beaucoup changé. Le kiosque écrit des recharges sans vente : **hors
+chantier**, sujet PRIORITÉ après le chantier (`TODO/PRIORITE-KIOSK-recharge-fed-ancien-fedow.md`)
+— ne pas le traiter en C, mais ne pas le casser non plus.
 
 Pièges de méthode appris pendant B (SUIVI §8) : tout test de route caisse est `django_db`
 ou en schéma dédié ; les E2E réels laissent de vraies données (ventes, sorties d'espèces) ;

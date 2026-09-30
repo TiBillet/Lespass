@@ -189,34 +189,30 @@ def test_pos_product_proxy(tenant):
             categorie_article=Product.BILLET,
         )
 
-        # POSProduct est un proxy : meme table, meme manager par defaut.
-        # Le filtrage est fait dans l'admin (get_queryset), pas dans le manager.
-        # On verifie que le proxy fonctionne (meme pk, isinstance).
-        # / POSProduct is a proxy: same table, same default manager.
-        # Filtering is done in admin (get_queryset), not in the manager.
-        # We verify the proxy works (same pk, isinstance).
+        # POSProduct est un proxy : meme table que Product.
+        # Son manager (POSProductManager) ne garde que methode_caisse IS NOT NULL.
+        # L'admin s'appuie sur ce manager, sans filtre a lui.
+        # / POSProduct is a proxy: same table. Its manager keeps only
+        # methode_caisse IS NOT NULL. The admin relies on it.
 
         pos_via_proxy = POSProduct.objects.get(pk=pos_product.pk)
         assert isinstance(pos_via_proxy, Product)
         assert isinstance(pos_via_proxy, POSProduct)
         assert pos_via_proxy.methode_caisse == Product.VENTE
 
-        # Le produit normal est aussi accessible via POSProduct (pas de manager custom),
-        # mais son methode_caisse est None.
-        # / Normal product is also accessible via POSProduct (no custom manager),
-        # but its methode_caisse is None.
-        normal_via_proxy = POSProduct.objects.get(pk=normal_product.pk)
-        assert normal_via_proxy.methode_caisse is None
+        # Le produit normal (sans methode_caisse) n'est PAS visible via POSProduct.
+        # / The normal product (no methode_caisse) is NOT visible via POSProduct.
+        assert not POSProduct.objects.filter(pk=normal_product.pk).exists()
 
-        # Verification que le filtre admin fonctionnerait :
-        # methode_caisse__isnull=False ne retourne que les produits POS.
-        # / Verify admin filter would work:
-        # methode_caisse__isnull=False returns only POS products.
-        qs_pos_only = POSProduct.objects.filter(
-            methode_caisse__isnull=False,
-            name__startswith=TEST_PREFIX,
+        # Il reste visible via Product : le manager filtre, il ne supprime rien.
+        # / It is still visible via Product: the manager filters, deletes nothing.
+        assert Product.objects.filter(pk=normal_product.pk).exists()
+
+        # Sans filtre explicite, POSProduct.objects ne rend que les produits POS.
+        # / Without an explicit filter, POSProduct.objects returns only POS products.
+        pks = list(
+            POSProduct.objects.filter(name__startswith=TEST_PREFIX).values_list('pk', flat=True)
         )
-        pks = list(qs_pos_only.values_list('pk', flat=True))
         assert pos_product.pk in pks
         assert normal_product.pk not in pks
 

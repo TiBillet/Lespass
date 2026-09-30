@@ -1,5 +1,6 @@
 {% load static %}
 {% load i18n %}
+{% load l10n %}
 {% load laboutik_process %}
 
 <!-- les data articles sont prises dans le container #products -->
@@ -21,6 +22,7 @@
 		data-est-adhesion="{{ article.est_adhesion|yesno:'true,false' }}"
 		data-tarifs='{{ article.tarifs_json }}'
 		data-poids-mesure="{{ article.a_poids_mesure|yesno:'true,false' }}"
+		data-contenance="{{ article.contenance|default:1|unlocalize }}"
 		{% if article.unite_saisie_label %}data-unite-saisie="{{ article.unite_saisie_label }}"{% endif %}
 		{% if article.prix_reference_label %}data-prix-reference="{{ article.prix_reference_label }}"{% endif %}
 		{% if article.stock_bloquant %}data-stock-bloquant="true"{% endif %}
@@ -56,7 +58,18 @@
 		<div id="stock-badge-{{ article.id }}"
 		     aria-live="polite"
 		     data-testid="stock-badge-{{ article.id }}"
-            {% if article.stock_en_rupture %}data-stock_bloquant="true"{% endif %}>
+		     {% comment %}
+		     Mêmes attributs que hx_stock_badge.html (remplacé par le WebSocket après chaque vente).
+		     - data-stock-bloquant : rupture ET vente hors stock interdite.
+		       En JS il se lit dataset.stockBloquant (articles.js).
+		     - data-stock-quantite : quantité à jour, lue par la garde stock (articles.js, tarif.js).
+		       unlocalize : pas d'espace des milliers, sinon Number() échoue.
+		     - data-autoriser-hors-stock : "false" si la vente hors stock est interdite.
+		       La garde au clic ne bloque que dans ce cas.
+		     / Same attributes as hx_stock_badge.html (replaced by WebSocket after each sale).
+		     {% endcomment %}
+		     {% if article.stock_quantite is not None %}data-stock-quantite="{{ article.stock_quantite|unlocalize }}" data-autoriser-hors-stock="{{ article.stock_autoriser_hors_stock|yesno:'true,false' }}"{% endif %}
+		     {% if article.stock_bloquant %}data-stock-bloquant="true"{% endif %}>
 			{% if article.stock_en_alerte %}
 			<span class="article-stock-badge article-stock-badge-alerte"
 			      data-testid="stock-badge-alerte">{{ article.stock_quantite_lisible }}</span>

@@ -1,0 +1,39 @@
+{% comment %}
+ÉTAPE FIN — carte retirée, bilan du service
+/ END STAGE — card removed, service summary
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/etapes/fin.html
+
+Visible quand data-etat="fin" (voir tireuse.css).
+ecran_tireuse.js revient en veille tout seul après 6 secondes.
+/ Visible when data-etat="fin". JS goes back to idle after 6 seconds.
+
+Champs écrits par ecran_tireuse.js (data-champ) :
+- prenom     : prénom du titulaire, vide si carte anonyme
+- volume-cl  : volume servi pendant la session
+- prix-servi : prix du volume servi (volume × prix au litre)
+- solde      : solde restant sur la carte
+- verres     : nombre de verres de 25 cl encore possibles
+{% endcomment %}
+{% load i18n %}
+<section class="stage stage--fin" data-testid="tireuse-etape-fin">
+  <div class="screen screen--center">
+    <div class="done" aria-live="polite">
+      <div class="done__mark" aria-hidden="true">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12 L10 17 L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1 class="screen__title">{% translate "Merci" %}<span data-champ="prenom"></span>&nbsp;!</h1>
+      <p class="done__line">
+        {% translate "Tu as tiré" %} <strong><span data-champ="volume-cl">0</span>&nbsp;cl</strong>
+        {% translate "pour" %} <strong data-champ="prix-servi">—</strong>.
+      </p>
+      <p class="done__balance">
+        {% translate "Il te reste" %} <strong data-champ="solde">—</strong>
+        — {% translate "encore" %} <strong data-champ="verres">—</strong> {% translate "verres" %}.
+      </p>
+      <p class="done__cheers">{% translate "Bonne soif !" %}</p>
+    </div>
+  </div>
+</section>

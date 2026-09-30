@@ -345,7 +345,7 @@ def _construire_sections_modules(request):
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Bookings"),
+                        "title": _("Réservations"),
                         "icon": "event_upcoming",
                         "link": _safe_rev(
                             "staff_admin:BaseBillet_reservation_changelist"
@@ -582,7 +582,7 @@ def _construire_sections_modules(request):
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Federations"),
+                        "title": _("Réseaux de monnaie"),
                         "icon": "hub",
                         "link": _safe_rev(
                             "staff_admin:fedow_core_federation_changelist"
@@ -648,7 +648,9 @@ def _construire_sections_modules(request):
                 "collapsible": True,
                 "items": [
                     {
-                        "title": _("Kiosk dashboard"),
+                        # L'ecran public des tireuses, pas le module Kiosk.
+                        # / The taps' public screen, not the Kiosk module.
+                        "title": _("Écran public des tireuses"),
                         "icon": "monitoring",
                         "link": "/controlvanne/kiosk/",
                         "permission": admin_permission,
@@ -685,27 +687,18 @@ def _construire_sections_modules(request):
                         ),
                         "permission": admin_permission,
                     },
+                    # UN seul historique des tirages. « Sessions » (toutes les
+                    # sessions RFID) et « Historique cartes » affichaient le meme
+                    # modele avec d'autres colonnes : ils sont retires du menu.
+                    # Leurs admins restent enregistres (les anciens liens marchent).
+                    # On cherche une carte avec la recherche de cet historique.
+                    # / ONE pour history. "Sessions" and "Card history" showed the
+                    # same model: removed from the menu, admins still registered.
                     {
-                        "title": _("Sessions"),
-                        "icon": "history",
-                        "link": _safe_rev(
-                            "staff_admin:controlvanne_rfidsession_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
-                    {
-                        "title": _("Tap history"),
+                        "title": _("Historique des tirages"),
                         "icon": "timeline",
                         "link": _safe_rev(
                             "staff_admin:controlvanne_historiquetireuse_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
-                    {
-                        "title": _("Card history"),
-                        "icon": "manage_search",
-                        "link": _safe_rev(
-                            "staff_admin:controlvanne_historiquecarte_changelist"
                         ),
                         "permission": admin_permission,
                     },
@@ -742,8 +735,13 @@ def _construire_sections_modules(request):
     # Le lecteur de carte bancaire n'a PAS d'entree ici : ce n'est pas un objet a part,
     # c'est une capacite d'un terminal appaire (une caisse LaBoutik peut en avoir un).
     # On l'active en editant le terminal, dans « Terminaux materiels ».
+    #
+    # « Bornes » (kiosk.Borne) est un proxy de laboutik.Terminal, filtre sur le role
+    # Kiosk. On cree ses bornes ICI, sans passer par « Terminaux materiels ».
+    # Les reglages de chaque borne sont un bloc de sa fiche : ils n'ont plus d'entree.
     # / The card reader has NO entry here: it is not a separate object, it is a capability
-    # of a paired terminal. It is enabled by editing the terminal.
+    # of a paired terminal. "Kiosks" is a Terminal proxy: kiosks are created HERE.
+    # Kiosk settings are an inline of the kiosk page, no own entry.
     if configuration.module_kiosk:
         navigation.append(
             {
@@ -755,6 +753,12 @@ def _construire_sections_modules(request):
                 "separator": True,
                 "collapsible": True,
                 "items": [
+                    {
+                        "title": _("Bornes"),
+                        "icon": "smart_display",
+                        "link": _safe_rev("staff_admin:kiosk_borne_changelist"),
+                        "permission": admin_permission,
+                    },
                     {
                         "title": _("Paiements"),
                         "icon": "payments",
@@ -811,7 +815,7 @@ def _construire_sections_modules(request):
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Bookings"),
+                        "title": _("Réservations de ressources"),
                         "icon": "event_available",
                         "link": _safe_rev("staff_admin:booking_booking_changelist"),
                         "permission": admin_permission,
@@ -1320,12 +1324,14 @@ DESCRIPTION_DES_PAGES = {
     "controlvanne.configurationtireuse": _("Les réglages du serveur de tirage."),
     "controlvanne.sessioncalibration": _("L'étalonnage des débitmètres."),
     "controlvanne.rfidsession": _("Les sessions de tirage."),
-    "controlvanne.historiquetireuse": _("Ce qui a coulé, bec par bec."),
+    "controlvanne.historiquetireuse": _("Ce qui a coulé, par bec et par carte."),
     "controlvanne.historiquecarte": _("Ce que chaque carte a consommé."),
     "controlvanne.historiquemaintenance": _("Les interventions sur le matériel."),
-    "/controlvanne/kiosk/": _("L'écran public des tireuses."),
+    "/controlvanne/kiosk/": _("L'écran affiché au-dessus des tireuses."),
     # --- Kiosk : borne libre-service ---
+    "kiosk.borne": _("Vos bornes, leur appairage et leurs services."),
     "kiosk.paymentsintent": _("Les paiements passés en autonomie."),
+    "kiosk.reglagesborne": _("Les services proposés par chaque borne."),
     # --- Ressources ---
     "booking.booking": _("Les réservations de salles et de matériel."),
     "BaseBillet.resourceproduct": _("Les ressources mises à la réservation."),
@@ -1397,7 +1403,9 @@ CATEGORIE_DES_PAGES = {
     "controlvanne.historiquemaintenance": "analyser",
     "/controlvanne/kiosk/": "analyser",
     # --- Kiosk : borne libre-service ---
-    "kiosk.paymentsintent": "gerer",
+    "kiosk.borne": "gerer",
+    "kiosk.paymentsintent": "analyser",  # journal en lecture seule / read-only log
+    "kiosk.reglagesborne": "configurer",
     # --- Ressources ---
     "booking.booking": "gerer",
     "BaseBillet.resourceproduct": "configurer",

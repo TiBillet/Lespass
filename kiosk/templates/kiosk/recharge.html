@@ -1,0 +1,49 @@
+{% extends "kiosk/base.html" %}
+{% load i18n %}
+{% comment %}
+PARCOURS DE RECHARGE — page complete
+/ Refill flow — full page
+
+LOCALISATION : kiosk/templates/kiosk/recharge.html
+
+Rendu par KioskViewSet.list (GET /kiosk/).
+
+#tb-kiosque est LA cible de swap unique du parcours. Chaque etape est un
+partial rendu par le serveur et swappe dedans (innerHTML). Aucun partial rendu
+dedans ne re-declare cet id, SAUF l'ecran final (partial/etat_final.html) qui
+le remplace en entier par un swap OOB du websocket.
+/ #tb-kiosque is THE single swap target. Each step is a server-rendered
+partial swapped inside. Only the final screen (etat_final.html) re-declares the
+id: it replaces it whole through a websocket OOB swap.
+
+ETAPES :
+1. partial/etape_poser_carte.html      (ici, au chargement)
+2+3. partial/etape_solde_et_montant.html (check_request_card)
+4. partial/etape_recapitulatif.html    (recapitulatif)
+5. waiting_credit_card_terminal.html   (refill_with_wisepos)
+6/9 et 7. success.html / cancel.html   (websocket ou sondage de secours)
+{% endcomment %}
+
+{% block title %}{% translate "Recharger ma carte" %}{% if nom_du_lieu %} — {{ nom_du_lieu }}{% endif %}{% endblock %}
+
+{% block main %}
+<div class="kiosk-page" data-testid="kiosk-page-recharge">
+
+    {% include "kiosk/partial/entete_parcours.html" %}
+
+    <main id="tb-kiosque" class="kiosk-page__stages" aria-live="polite"
+          itemscope itemtype="https://schema.org/WebPage">
+        {% if not recharge_active %}
+            {% include "kiosk/partial/borne_en_pause.html" %}
+        {% elif message_sans_tpe %}
+            {# Aucun TPE actif lie : erreur des l'accueil (views.py : trouver_la_borne_et_son_tpe). #}
+            {# / No active reader linked: error right on the home screen. #}
+            {% include "kiosk/partial/borne_sans_tpe.html" %}
+        {% else %}
+            {% include "kiosk/partial/etape_poser_carte.html" %}
+        {% endif %}
+    </main>
+
+    {% include "kiosk/partial/modale_admin.html" %}
+</div>
+{% endblock %}

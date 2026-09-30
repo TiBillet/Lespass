@@ -97,6 +97,75 @@ def obtenir_contexte_cashless(carte):
     }
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Calculs d'argent communs à la facture et à l'écran du kiosk
+# / Money computations shared by the bill and the kiosk screen
+# ──────────────────────────────────────────────────────────────────────
+#
+# Une seule formule pour le montant facturé ET le montant affiché : l'écran ne
+# peut plus annoncer un centime de différence avec ce qui est débité. Le JS du
+# kiosk (ecran_tireuse.js) ne calcule plus rien : il écrit ces valeurs.
+# (audit 2026-09-26, point 2.3)
+# / One formula for the billed AND displayed amount; the kiosk JS only writes.
+
+# Volume d'un « verre » pour « soit N verres » (25 cl)
+# / Glass volume for "N glasses" (25 cl)
+VOLUME_D_UN_VERRE_ML = Decimal("250")
+
+
+def calculer_montant_centimes(volume_ml, prix_litre):
+    """
+    Prix d'un volume servi, en centimes. C'est ce montant qui est facturé.
+    / Price of a served volume, in cents. This is the billed amount.
+
+    Exemple : 250 ml à 3,50 €/L = 0,250 L × 3,50 = 0,875 € → 88 centimes.
+    Arrondi : round() de Python (au plus proche, cas .5 au pair).
+
+    :param volume_ml: Decimal, float ou str — volume servi en ml
+    :param prix_litre: Decimal — prix au litre en euros
+    :return: int — montant en centimes (0 si volume ou prix nul)
+    """
+    volume_en_ml = Decimal(str(volume_ml))
+    if volume_en_ml <= 0 or prix_litre <= 0:
+        return 0
+    montant_en_euros = volume_en_ml * prix_litre / Decimal("1000")
+    return int(round(montant_en_euros * 100))
+
+
+def calculer_nombre_de_verres(solde_centimes, prix_litre):
+    """
+    Nombre de verres de 25 cl que le solde permet (arrondi vers le bas).
+    / Number of 25 cl glasses the balance allows (rounded down).
+
+    Le prix d'un verre est calculé avec la même formule que la facture.
+    / The glass price uses the same formula as the bill.
+
+    :param solde_centimes: int — solde en centimes
+    :param prix_litre: Decimal — prix au litre en euros
+    :return: int, ou None si le prix est nul (pas de nombre de verres à afficher)
+    """
+    prix_d_un_verre_centimes = calculer_montant_centimes(VOLUME_D_UN_VERRE_ML, prix_litre)
+    if prix_d_un_verre_centimes <= 0:
+        return None
+    return max(0, int(solde_centimes) // prix_d_un_verre_centimes)
+
+
+def formater_euros(montant_centimes):
+    """
+    Montant en centimes → texte affichable, au format de la langue active.
+    / Amount in cents → displayable text, in the active language format.
+
+    Exemple (fr) : 1410 → « 14,10 € ».
+
+    :param montant_centimes: int
+    :return: str
+    """
+    from django.utils.formats import number_format
+
+    montant_en_euros = Decimal(int(montant_centimes)) / Decimal("100")
+    return f"{number_format(montant_en_euros, decimal_pos=2, use_l10n=True)}\u00a0€"
+
+
 def calculer_solde_total_cascade(wallet_client, cascade_assets):
     """
     Somme les soldes de tous les assets de la cascade pour ce wallet.
@@ -194,11 +263,9 @@ def facturer_tirage(
         )
         return None
 
-    # Calculer le montant total en centimes / Calculate total amount in cents
-    # montant = volume_ml * prix_litre / 1000 * 100
-    # Ex: 250ml * 3.50 EUR/L = 0.250L * 3.50 = 0.875 EUR = 88 centimes
-    montant_eur = volume_ml * prix_litre / Decimal("1000")
-    montant_centimes = int(round(montant_eur * 100))
+    # Montant total en centimes : même formule que l'écran du kiosk
+    # / Total amount in cents: same formula as the kiosk screen
+    montant_centimes = calculer_montant_centimes(volume_ml, prix_litre)
 
     if montant_centimes <= 0:
         return None
@@ -289,13 +356,15 @@ def facturer_tirage(
         # / The tap bills in euros: a per-litre points/time price is never used.
         prix_obj = produit.prices.filter(poids_mesure=True, asset__isnull=True).first()
 
-        product_sold, _ = ProductSold.objects.get_or_create(
+        # _created et pas _ : « _ » masquerait gettext si on l'importe un jour
+        # / _created, not _: "_" would shadow gettext if imported later
+        product_sold, _created = ProductSold.objects.get_or_create(
             product=produit,
             event=None,
             defaults={"categorie_article": produit.categorie_article},
         )
 
-        price_sold, _ = PriceSold.objects.get_or_create(
+        price_sold, _created = PriceSold.objects.get_or_create(
             productsold=product_sold,
             price=prix_obj,
             defaults={"prix": prix_obj.prix},
@@ -354,20 +423,41 @@ def facturer_tirage(
 
         # 5. Décrémenter le stock inventaire si le produit en a un
         # / Decrement inventory stock if the product has one
-        try:
-            stock_du_produit = produit.stock_inventaire
+        #
+        # Pas de stock pour ce fût : rien à faire (cas normal). On le teste
+        # avec hasattr, sans try/except qui cacherait les vraies erreurs.
+        # Stock présent : on le décrémente dans un SAVEPOINT (atomic imbriqué).
+        # Si StockService échoue en base, seul le savepoint est annulé : la
+        # facture (transactions, LigneArticle, session) reste valide, et
+        # l'erreur est journalisée. Avant, un except/pass SANS savepoint
+        # laissait la transaction Postgres cassée : la requête suivante levait
+        # une erreur et TOUTE la facture était annulée (audit 2026-09-26, point 2.1).
+        # / No stock: nothing to do. Stock: decrement inside a SAVEPOINT, so a
+        # stock DB error only rolls back the savepoint; the bill stays valid.
+        le_produit_a_un_stock = hasattr(produit, "stock_inventaire")
+        if le_produit_a_un_stock:
             from inventaire.services import StockService
 
-            StockService.decrementer_pour_vente(
-                stock=stock_du_produit,
-                contenance=volume_cl,
-                qty=1,
-                ligne_article=premiere_ligne,  # 1 seul mouvement de stock quel que soit le nb d'assets
-            )
-        except Exception:
-            # Pas de stock géré — comportement normal
-            # / No stock managed — normal behavior
-            pass
+            try:
+                with transaction.atomic():
+                    StockService.decrementer_pour_vente(
+                        stock=produit.stock_inventaire,
+                        contenance=volume_cl,
+                        qty=1,
+                        ligne_article=premiere_ligne,  # 1 seul mouvement de stock quel que soit le nb d'assets
+                    )
+
+                # Prévenir les caisses LaBoutik du nouveau stock (badge de la tuile),
+                # après le commit de la facture. / Notify POS terminals after commit.
+                from wsocket.broadcast import broadcast_etat_stock
+
+                stock_du_fut = produit.stock_inventaire
+                transaction.on_commit(lambda: broadcast_etat_stock(stock_du_fut))
+            except Exception:
+                logger.exception(
+                    f"Stock non décrémenté pour le tirage (tireuse={tireuse.nom_tireuse}, "
+                    f"volume={volume_cl} cl) : la facture est conservée."
+                )
 
     assets_debites_str = ", ".join(
         f"{tx.asset.category}" for tx in transactions_creees

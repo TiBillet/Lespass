@@ -79,6 +79,19 @@
   var affichage_autorise = document.getElementById("simu-allowed-display");
   var zone_message = document.getElementById("simu-message");
 
+  /**
+   * Libellé traduit, lu sur le panneau (attributs data-libelle-*).
+   * Les textes sont traduits par Django dans kiosk_detail.html : le JS ne
+   * contient aucun texte affiché.
+   * / Translated label read from the panel (data-libelle-* attributes).
+   *
+   * @param {string} cle — nom en camelCase, ex. "libelleVanneOuverte"
+   * @return {string} le texte traduit, ou la clé si l'attribut manque
+   */
+  function libelle(cle) {
+    return panneau.dataset[cle] || cle;
+  }
+
 
   // --- Etat du simulateur (meme structure que TibeerController) ---
   // / Simulator state (same structure as TibeerController)
@@ -122,29 +135,32 @@
   }
 
   function maj_affichage_etat() {
-    badge_etat.textContent = etat;
     if (etat === "IDLE") {
-      badge_etat.className = "ms-auto badge bg-dark";
+      badge_etat.textContent = libelle("libelleEtatAttente");
+      badge_etat.className = "badge bg-dark";
     } else if (etat === "SERVING") {
-      badge_etat.className = "ms-auto badge bg-success";
+      badge_etat.textContent = libelle("libelleEtatService");
+      badge_etat.className = "badge bg-success";
     } else if (etat === "CARD_PRESENT") {
-      badge_etat.className = "ms-auto badge bg-info text-dark";
+      badge_etat.textContent = libelle("libelleEtatCartePosee");
+      badge_etat.className = "badge bg-info";
     }
   }
 
   function maj_affichage_vanne() {
     if (vanne_ouverte) {
       badge_vanne.className = "badge bg-success";
-      badge_vanne.textContent = "Ouverte";
+      badge_vanne.textContent = libelle("libelleVanneOuverte");
     } else {
       badge_vanne.className = "badge bg-danger";
-      badge_vanne.textContent = "Fermée";
+      badge_vanne.textContent = libelle("libelleVanneFermee");
     }
   }
 
   function afficher_message(texte, est_erreur) {
     zone_message.textContent = texte;
-    zone_message.style.color = est_erreur ? "#e74c3c" : "#666";
+    // Couleur gérée par le CSS (tireuse.css) / Color handled by CSS
+    zone_message.classList.toggle("demo-sim__message--erreur", Boolean(est_erreur));
   }
 
   /**
@@ -215,7 +231,7 @@
     }
 
     uid_courant = tag_id;
-    afficher_message("Autorisation en cours...", false);
+    afficher_message(libelle("libelleAutorisationEnCours"), false);
 
     // Desactiver les boutons carte, activer retirer
     // / Disable card buttons, enable remove
@@ -249,9 +265,9 @@
           affichage_autorise.textContent = Math.round(volume_autorise_ml) + " ml";
 
           afficher_message(
-            "Vanne ouverte — solde: " +
+            libelle("libelleVanneOuverteSolde") + " " +
               (resultat.solde_centimes / 100).toFixed(2) +
-              " \u20ac — ouvrez le robinet (slider)",
+              " \u20ac — " + libelle("libelleOuvrezLeRobinet"),
             false
           );
 
@@ -275,7 +291,7 @@
           etat = "CARD_PRESENT";
           maj_affichage_etat();
           afficher_message(
-            "Refus\u00e9: " + (resultat.message || "Non autoris\u00e9"),
+            libelle("libelleRefuse") + " " + (resultat.message || libelle("libelleNonAutorise")),
             true
           );
         }
@@ -283,7 +299,7 @@
       .catch(function (erreur) {
         etat = "CARD_PRESENT";
         maj_affichage_etat();
-        afficher_message("Erreur: " + erreur.message, true);
+        afficher_message(libelle("libelleErreur") + " " + erreur.message, true);
       });
   }
 
@@ -330,7 +346,7 @@
     if (volume_autorise_ml > 0 && volume_cumule_ml >= volume_autorise_ml) {
       volume_cumule_ml = volume_autorise_ml;
       affichage_volume.textContent = Math.round(volume_cumule_ml) + " ml";
-      fermer_vanne_et_terminer("Volume max atteint \u2014 retirez la carte");
+      fermer_vanne_et_terminer(libelle("libelleVolumeMaxAtteint"));
       return;
     }
 
@@ -396,7 +412,7 @@
         );
       })
       .catch(function (err) {
-        afficher_message("Erreur pour_end: " + err.message, true);
+        afficher_message(libelle("libelleErreur") + " pour_end : " + err.message, true);
       });
   }
 
@@ -421,7 +437,7 @@
 
     // Desactiver le bouton pour eviter les double-clics / Disable to prevent double-clicks
     bouton_retirer.disabled = true;
-    afficher_message("Carte retir\u00e9e \u2014 fermeture en cours...", false);
+    afficher_message(libelle("libelleRetraitEnCours"), false);
 
     // Grace period (1 seconde, comme CARD_GRACE_PERIOD_S du Pi)
     // Sur le vrai Pi, le lecteur RFID fait plusieurs tentatives avant de conclure
@@ -453,9 +469,9 @@
             envoyer_event("card_removed", 0)
               .then(function () {
                 afficher_message(
-                  "Carte retir\u00e9e \u2014 " +
+                  libelle("libelleCarteRetiree") + " \u2014 " +
                     Math.round(volume_cumule_ml) +
-                    " ml servis",
+                    " ml",
                   false
                 );
               })
@@ -473,7 +489,7 @@
         // Send only card_removed
         envoyer_event("card_removed", 0)
           .then(function () {
-            afficher_message("Carte retir\u00e9e", false);
+            afficher_message(libelle("libelleCarteRetiree"), false);
           })
           .catch(function (err) {
             afficher_message("card_removed: " + err.message, true);

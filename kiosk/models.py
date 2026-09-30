@@ -21,8 +21,11 @@ class PaymentsIntent(models.Model):
     Pilotage d'un paiement TPE + affichage. Copié de LaBoutik APIcashless.PaymentsIntent.
     / Card-terminal payment driver + display state. Copied from LaBoutik.
 
-    Objet TECHNIQUE local : ce n'est PAS le crédit (le crédit = Fedow via webhook).
-    Le champ `pos` de LaBoutik est supprimé (inutile au flux Fedow, cf. SPEC).
+    Suit le paiement Stripe. Quand il reussit, la carte est creditee dans la base
+    locale (fedow_core), comme a la caisse V2 : voir kiosk/credit.py.
+    Le champ `pos` de LaBoutik est supprimé.
+    / Tracks the Stripe payment. On success the card is credited locally
+    (fedow_core), like the V2 POS: see kiosk/credit.py.
     """
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     amount = models.PositiveIntegerField(verbose_name=_("Montant"))  # centimes / cents
@@ -74,10 +77,79 @@ class PaymentsIntent(models.Model):
     status = models.CharField(max_length=2, choices=STATUS_CHOICES,
                               default=REQUIRES_PAYMENT_METHOD, verbose_name=_("Status"))
 
+    # Solde de la carte AVANT la recharge, lu au moment du paiement.
+    # Il sert seulement a l'affichage : l'ecran de succes est rendu hors requete
+    # (websocket), il ne peut pas relire la carte.
+    # / Card balance BEFORE the refill, read at payment time. Display only: the
+    # success screen is rendered outside a request (websocket).
+    solde_avant_centimes = models.PositiveIntegerField(
+        blank=True, null=True,
+        verbose_name=_("Solde avant recharge (centimes)"),
+    )
+
+    # Date du credit de la carte. Vide = pas encore credite.
+    # Pose dans la MEME transaction que le credit (kiosk/credit.py) : c'est ce
+    # qui empeche de crediter deux fois le meme paiement.
+    # / Card credit date. Empty = not credited yet. Set in the SAME transaction
+    # as the credit: this prevents a double credit.
+    carte_creditee_le = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name=_("Carte créditée le"),
+    )
+
+    def contexte_ecran_final(self):
+        """
+        Les montants affiches sur l'ecran de succes, en centimes.
+        / Amounts shown on the success screen, in cents.
+
+        LOCALISATION : kiosk/models.py
+
+        Utilise par kiosk/tasks.py (evenement websocket), wsocket/consumers.py
+        (rejeu a la reconnexion) et kiosk/views.py (payment_status). Les valeurs
+        sont des entiers : elles traversent le channel layer Redis, qui ne sait
+        pas serialiser un Decimal. Le filtre `euros` (kiosk_tags) les formate.
+        / Integers only: they go through the Redis channel layer. The `euros`
+        template filter formats them.
+
+        Le nouveau solde = solde avant + montant. La carte est creditee dans la
+        base locale au moment ou le paiement passe a « reussi » (kiosk/credit.py).
+        / New balance = balance before + amount. The card is credited locally
+        when the payment turns "succeeded".
+        """
+        nouveau_solde_centimes = None
+        if self.solde_avant_centimes is not None:
+            nouveau_solde_centimes = self.solde_avant_centimes + self.amount
+        # Le bouton « Reessayer » de l'ecran de refus relance le meme paiement :
+        # il lui faut la carte et le montant (avec un point decimal).
+        # / The refusal screen's "Retry" button replays the same payment.
+        tag_id_de_la_carte = self.card.tag_id if self.card_id else ""
+        montant_pour_formulaire = f"{self.amount // 100}.{self.amount % 100:02d}"
+
+        # « L'argent n'est pas parti » ne s'ecrit que si Stripe a CONFIRME
+        # l'annulation. Sinon (erreur de suivi, delai depasse sans reponse),
+        # l'ecran reste prudent et ne propose pas de reessayer.
+        # / "No money was taken" only when Stripe CONFIRMED the cancellation.
+        statut_certain = self.status in (PaymentsIntent.SUCCEEDED, PaymentsIntent.CANCELED)
+
+        return {
+            "statut_certain": statut_certain,
+            "montant_ajoute_centimes": self.amount,
+            "nouveau_solde_centimes": nouveau_solde_centimes,
+            "tag_id": tag_id_de_la_carte,
+            "montant_pour_formulaire": montant_pour_formulaire,
+        }
+
     def get_from_stripe(self):
-        """Rafraîchit le statut depuis Stripe.
-        / Refresh status from Stripe."""
-        if self.status in [PaymentsIntent.CANCELED, PaymentsIntent.SUCCEEDED]:
+        """Rafraîchit le statut depuis Stripe, et credite la carte des que le
+        paiement a reussi (kiosk/credit.py, une seule fois).
+        / Refresh status from Stripe, and credit the card once the payment
+        succeeded (kiosk/credit.py, once only)."""
+        if self.status == PaymentsIntent.SUCCEEDED:
+            # Deja reussi : on rattrape un credit qui aurait echoue avant.
+            # / Already succeeded: catch up a credit that failed before.
+            self.crediter_la_carte_si_besoin()
+            return self.status
+        if self.status == PaymentsIntent.CANCELED:
             return self.status
 
         import stripe
@@ -94,8 +166,30 @@ class PaymentsIntent(models.Model):
             self.status = PaymentsIntent.CANCELED
         elif stripe_payment.status == "succeeded":
             self.status = PaymentsIntent.SUCCEEDED
-        self.save()
+        # update_fields : SEULEMENT le statut. Une copie en memoire perimee (celle
+        # de la tache Celery, chargee avant le credit) ne doit jamais remettre
+        # carte_creditee_le a vide : ce serait un double credit.
+        # / Status ONLY: a stale in-memory copy must never reset carte_creditee_le.
+        self.save(update_fields=["status"])
+
+        if self.status == PaymentsIntent.SUCCEEDED:
+            self.crediter_la_carte_si_besoin()
         return self.status
+
+    def crediter_la_carte_si_besoin(self):
+        """
+        Credite la carte si ce n'est pas deja fait (voir kiosk/credit.py).
+        / Credits the card unless already done.
+
+        LOCALISATION : kiosk/models.py
+        """
+        if self.carte_creditee_le is not None:
+            return
+        from kiosk.credit import crediter_la_carte_du_paiement
+
+        crediter_la_carte_du_paiement(self.pk)
+        # Relit la date posee par le credit. / Re-read the date set by the credit.
+        self.refresh_from_db(fields=["carte_creditee_le"])
 
     def send_to_terminal(self, terminal):
         """Crée le PaymentIntent Stripe (card_present) et l'envoie au lecteur de carte.
@@ -224,3 +318,98 @@ class PaymentsIntent(models.Model):
         except Exception as erreur_refresh:
             logger.error(f"annuler_sur_le_terminal : get_from_stripe a echoue : {erreur_refresh}")
             return self.status
+
+
+class ReglagesBorne(models.Model):
+    """
+    Les services proposes au public par UNE borne.
+    / The services one kiosk offers to the public.
+
+    LOCALISATION : kiosk/models.py
+
+    Une ligne par borne (laboutik.Terminal). L'equipe du lieu les change depuis
+    l'ecran de configuration de la borne, debloque par une carte primaire
+    (kiosk/views.py : acces_admin, configuration, basculer_module).
+
+    Seule la recharge existe aujourd'hui. Adhesion, reservation et caisse sont
+    affichees « bientot » : elles auront leur champ quand elles existeront.
+    / Only the refill exists today. Membership, booking and cash register are
+    shown as "coming soon": they will get a field when they exist.
+    """
+    terminal = models.OneToOneField(
+        "laboutik.Terminal", on_delete=models.CASCADE,
+        related_name="reglages_borne", verbose_name=_("Borne"),
+    )
+    recharge_active = models.BooleanField(
+        default=True, verbose_name=_("Recharge de carte active"),
+    )
+
+    class Meta:
+        verbose_name = _("Réglages de la borne")
+        verbose_name_plural = _("Réglages des bornes")
+
+    def __str__(self):
+        return f"{self.terminal}"
+
+
+def obtenir_reglages_de_la_borne(terminal):
+    """
+    Renvoie les reglages de la borne, et les cree la premiere fois.
+    / Returns the kiosk settings, creating them the first time.
+
+    :param terminal: laboutik.Terminal, ou None (admin en DEMO sans borne appairee)
+    :return: ReglagesBorne, ou None si aucune borne
+    """
+    if terminal is None:
+        return None
+    reglages, _created = ReglagesBorne.objects.get_or_create(terminal=terminal)
+    return reglages
+
+
+# --- Borne : un terminal vu depuis le module Kiosk ---
+# / Kiosk: a terminal seen from the Kiosk module
+
+# Import ici, et pas en tete : ce modele est le seul a avoir besoin de la classe
+# Terminal elle-meme (les autres la designent par une chaine "laboutik.Terminal").
+# / Imported here: only this proxy needs the Terminal class itself.
+from laboutik.models import Terminal  # noqa: E402
+
+
+class BorneManager(models.Manager):
+    """
+    Ne renvoie que les terminaux de role « Kiosk ».
+    / Returns only kiosk-role terminals.
+    """
+
+    def get_queryset(self):
+        from AuthBillet.models import TibilletUser
+
+        return super().get_queryset().filter(
+            terminal_role=TibilletUser.ROLE_KIOSQUE,
+        )
+
+
+class Borne(Terminal):
+    """
+    Une borne libre-service. C'est un laboutik.Terminal de role « Kiosk ».
+    / A self-service kiosk: a laboutik.Terminal with the "Kiosk" role.
+
+    LOCALISATION : kiosk/models.py
+
+    POURQUOI UN PROXY :
+    Avant, on creait une borne dans « Terminaux matériels », en choisissant le
+    type « Kiosk ». Le module Kiosk ne montrait que ses paiements et ses reglages.
+    Pour trouver ses bornes, il fallait aller dans un autre module.
+    Ce proxy donne au module Kiosk sa propre liste de bornes, avec sa propre URL
+    (/admin/kiosk/borne/). Meme table que Terminal : aucune donnee n'est copiee.
+
+    Admin : kiosk/admin.py, BorneAdmin.
+    / Same table as Terminal, no data copied. Gives the Kiosk module its own list.
+    """
+
+    objects = BorneManager()
+
+    class Meta:
+        proxy = True
+        verbose_name = _("Borne")
+        verbose_name_plural = _("Bornes")

@@ -7,6 +7,7 @@ LOCALISATION : inventaire/services.py
 
 import logging
 
+from django.db import transaction
 from django.db.models import F
 
 from inventaire.models import (
@@ -16,6 +17,28 @@ from inventaire.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _prevenir_les_caisses_apres_commit(stock):
+    """
+    Prévient les caisses du nouvel état du stock, une fois la transaction validée.
+    / Notifies POS terminals of the new stock state, once the transaction commits.
+
+    LOCALISATION : inventaire/services.py
+
+    Appelée par creer_mouvement() et ajuster_inventaire().
+    Ces deux méthodes servent à TOUS les changements manuels :
+    admin (boutons de la fiche stock), panel stock de la caisse, API, débit mètre.
+    Sans cet appel, une réception faite depuis l'admin ne changeait rien
+    sur les caisses ouvertes : la tuile restait "Épuisé" et bloquée.
+
+    on_commit : si la transaction est annulée, aucun message n'est envoyé.
+    Hors transaction (autocommit), on_commit exécute tout de suite.
+    / on_commit: nothing is sent on rollback. In autocommit, runs immediately.
+    """
+    from wsocket.broadcast import broadcast_etat_stock
+
+    transaction.on_commit(lambda: broadcast_etat_stock(stock))
 
 
 class StockService:
@@ -108,6 +131,73 @@ class StockService:
             f"motif='{motif}'"
         )
 
+        _prevenir_les_caisses_apres_commit(stock)
+
+    @staticmethod
+    def creer_stock_initial(
+        product,
+        unite,
+        quantite_initiale=0,
+        seuil_alerte=None,
+        autoriser_vente_hors_stock=True,
+        utilisateur=None,
+    ):
+        """
+        Crée le stock d'un produit, avec sa quantité de départ tracée.
+        / Creates a product's stock, with its starting quantity traced.
+
+        LOCALISATION : inventaire/services.py
+
+        Le stock est d'abord créé à 0.
+        Puis un mouvement Réception « Stock initial » apporte la quantité.
+        Ainsi, la quantité de départ apparaît dans le journal des mouvements.
+        On ne crée pas le stock directement avec la quantité :
+        creer_mouvement AJOUTE la quantité, elle serait comptée deux fois.
+        / Stock is created at 0, then an RE movement adds the quantity
+        (otherwise creer_mouvement would count it twice).
+
+        Appelée par :
+        - StockAdmin.save_model (Administration/admin/inventaire.py)
+        - la section Stock de la fiche produit (Administration/admin/stock_fiche_produit.py)
+
+        :param product: instance Product
+        :param unite: UniteStock (UN, CL, GR)
+        :param quantite_initiale: int >= 0. 0 = pas de mouvement.
+        :param seuil_alerte: int ou None (None = pas d'alerte)
+        :param autoriser_vente_hors_stock: bool
+        :param utilisateur: TibilletUser ou None
+        :return: l'instance Stock créée, relue depuis la base
+        """
+        from django.utils.translation import gettext
+
+        stock_cree = Stock.objects.create(
+            product=product,
+            quantite=0,
+            unite=unite,
+            seuil_alerte=seuil_alerte,
+            autoriser_vente_hors_stock=autoriser_vente_hors_stock,
+        )
+
+        il_y_a_une_quantite_de_depart = quantite_initiale and quantite_initiale > 0
+        if il_y_a_une_quantite_de_depart:
+            # creer_mouvement prévient aussi les caisses ouvertes
+            # / creer_mouvement also notifies open POS terminals
+            StockService.creer_mouvement(
+                stock=stock_cree,
+                type_mouvement=TypeMouvement.RE,
+                quantite=quantite_initiale,
+                motif=gettext("Stock initial"),
+                utilisateur=utilisateur,
+            )
+        else:
+            # Pas de mouvement : on prévient quand même les caisses
+            # (la tuile peut passer en « Épuisé »)
+            # / No movement: still notify POS terminals
+            _prevenir_les_caisses_apres_commit(stock_cree)
+
+        stock_cree.refresh_from_db()
+        return stock_cree
+
     @staticmethod
     def ajuster_inventaire(stock, stock_reel, motif="", utilisateur=None):
         """
@@ -138,6 +228,8 @@ class StockService:
             f"Ajustement inventaire : {stock.product.name} "
             f"{stock_avant} → {stock_reel} (delta={delta:+d})"
         )
+
+        _prevenir_les_caisses_apres_commit(stock)
 
 
 class ResumeStockService:

@@ -1647,6 +1647,20 @@ Proposées, non jouées :
 | `fedow_connect/validators.py` : `is_primary = BooleanField(required=False)` | `test_client_retrieve_refuse_une_reponse_sans_is_primary` |
 | retirer `is_primary` de `CardValidator` | `test_client_retrieve_garde_is_primary_…` (`KeyError`) |
 
+### Session B-6 — docstrings et numérotation après la relecture de B-5 / Docstrings and numbering after the B-5 review
+
+**Quoi / What :** documentation seulement, aucun changement de comportement.
+/ Documentation only, no behaviour change.
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/pytest/test_caisse_ouverture_ancien_fedow.py` | Docstring au présent : plus de date ni de décision de session, renvois V1/Fedow par nom de fonction (plus de numéros de ligne). Une seule numérotation 1 à 7, la même dans la docstring, les constantes et les sections de tests. |
+| `laboutik/views.py` | Docstring de `CaisseViewSet.carte_primaire` : redirection vers le premier point de vente visible (tri `poid_liste`), pas d'écran de choix. Commentaire au-dessus de `except CarteInconnueDeFedow` : branche gardée pour un journal plus clair. |
+| `tests/pytest/test_caisse_navigation.py` | Docstring de la garde réseau : elle couvre les tests, pas la fixture de module `test_data` (bug n°14). |
+
+Tests : les deux fichiers de caisse, 26 passed ; `check` sans erreur.
+/ Tests: both register files, 26 passed; `check` clean.
+
 ---
 
 ## Comment tester (a la main) / Manual test

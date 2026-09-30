@@ -495,9 +495,10 @@ class TerminalConsumer(AsyncWebsocketConsumer):
     def get_finished_template_name(self):
         """
         Lit le statut reel du paiement en base et renvoie le nom du template final
-        si le paiement est termine, sinon None.
-        / Reads the real payment status from DB; returns the final template name
-        if the payment is finished, else None.
+        si le paiement est termine, sinon None. Renvoie aussi le contexte de
+        l'ecran final (PaymentsIntent.contexte_ecran_final).
+        / Reads the real payment status from DB; returns (final template name or
+        None, final screen context).
 
         room_name == payment_intent_stripe_id
         (voir kiosk/routing.py et kiosk/templates/kiosk/waiting_credit_card_terminal.html)
@@ -510,21 +511,22 @@ class TerminalConsumer(AsyncWebsocketConsumer):
         # / Same as _paiement_appartient_a: TENANT_APP on the public sync thread.
         tenant = self.scope.get("tenant")
         if tenant is None:
-            return None
+            return None, {}
         try:
             with tenant_context(tenant):
                 payment_intent = PaymentsIntent.objects.get(payment_intent_stripe_id=self.room_name)
                 statut = payment_intent.status
+                contexte_ecran_final = payment_intent.contexte_ecran_final()
         except Exception:
-            return None
+            return None, {}
 
         if statut == PaymentsIntent.SUCCEEDED:
-            return "success.html"
+            return "success.html", contexte_ecran_final
         if statut == PaymentsIntent.CANCELED:
-            return "cancel.html"
+            return "cancel.html", contexte_ecran_final
         # Paiement encore en cours : le polling enverra la suite.
         # / Still in progress: polling will send the rest.
-        return None
+        return None, {}
 
     async def replay_payment_state_if_finished(self):
         """
@@ -532,14 +534,18 @@ class TerminalConsumer(AsyncWebsocketConsumer):
         deja termine au moment ou ce client (re)connecte. Sinon ne fait rien.
         / Immediately replays the final screen if the payment is already finished.
         """
-        template_name = await self.get_finished_template_name()
+        template_name, contexte_ecran_final = await self.get_finished_template_name()
         if not template_name:
             return
         logger.info(f"Rejeu d'etat WS pour {self.room_name} -> kiosk/{template_name}")
         # Meme rendu que la methode `template()` : le HTML porte un hx-swap-oob
-        # qui remplace #tb-kiosque cote borne.
-        # / Same render as `template()`: the HTML carries an hx-swap-oob.
-        html = get_template(f"kiosk/{template_name}").render(context={})
+        # qui remplace #tb-kiosque cote borne. Le contexte a la meme forme que
+        # l'evenement de kiosk/tasks.py (montant ajoute, nouveau solde).
+        # / Same render as `template()`: the HTML carries an hx-swap-oob. Context
+        # has the same shape as kiosk/tasks.py's event.
+        html = get_template(f"kiosk/{template_name}").render(
+            context={"event": contexte_ecran_final},
+        )
         await self.send(text_data=html)
 
     async def disconnect(self, close_code):
@@ -557,7 +563,18 @@ class TerminalConsumer(AsyncWebsocketConsumer):
     async def template(self, event):
         logger.info(f"template event: {event}")
         template_name = event["template"]
-        html = get_template(f"kiosk/{template_name}").render(context={"event": event})
+
+        # Le contexte de l'ecran final (montant, nouveau solde, statut certain)
+        # est RELU en base ici, plutot que pris tel quel dans l'evenement : un
+        # worker Celery pas encore redemarre enverrait un evenement incomplet,
+        # et l'ecran de refus deviendrait « incertain » a tort.
+        # / The final screen context is RE-READ from the DB here, so an outdated
+        # Celery worker sending an incomplete event cannot degrade the screen.
+        _nom_du_template_en_base, contexte_depuis_la_base = await self.get_finished_template_name()
+        contexte_de_l_ecran = dict(event)
+        contexte_de_l_ecran.update(contexte_depuis_la_base)
+
+        html = get_template(f"kiosk/{template_name}").render(context={"event": contexte_de_l_ecran})
         await self.send(text_data=html)
 
     async def message(self, event):

@@ -4,14 +4,51 @@ Renvoyé par stock_action_view() après chaque action.
 / HTMX partial — stock actions form + feedback.
 
 LOCALISATION : Administration/templates/admin/inventaire/stock_actions_partial.html
+
+Affiché à deux endroits :
+- la fiche Stock (StockAdmin, via stock_actions.html) ;
+- la section Stock de la fiche produit (Administration/admin/stock_fiche_produit.py).
+Dans les deux cas, le panneau est DANS le <form> de la fiche.
+
+Les champs Quantité et Motif portent form="stock-operations-hors-formulaire".
+Aucun <form> n'a cet id : les champs n'appartiennent donc à aucun formulaire.
+Résultat : ils ne sont pas envoyés avec la fiche,
+et la touche Entrée ne soumet pas la fiche.
+hx-include les récupère quand même (sélecteur #id).
+/ Inputs have no form owner: not sent with the page form, Enter does not submit it.
+
+CSRF : csrf_token peut manquer (rendu sans request
+depuis la fiche produit). htmx envoie alors le csrfmiddlewaretoken du formulaire
+qui entoure les boutons.
+/ Without csrf_token, htmx sends the enclosing form's csrfmiddlewaretoken.
 -->
 {% load i18n %}
 
 <div style="padding: 20px; border: 1px solid var(--color-primary-200, #e5e7eb); border-radius: 10px; background: var(--color-base-0, #fff);">
 
-    <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">
+    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">
         {% translate "Opérations de stock" %} — {{ product_name }}
     </h3>
+
+    {% comment %}
+    Stock actuel + état. Relu à chaque réponse HTMX : toujours à jour après une opération.
+    / Current stock + state. Refreshed by each HTMX response.
+    {% endcomment %}
+    <p style="margin: 0 0 16px 0; font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;"
+       data-testid="stock-actuel">
+        <span>{% translate "Stock actuel" %} :</span>
+        <strong data-testid="stock-actuel-quantite">{{ stock.quantite }} {{ stock.get_unite_display|lower }}</strong>
+        {% if stock.est_en_rupture %}
+            <span style="padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background-color: #fef2f2; color: #991b1b;"
+                  data-testid="stock-actuel-etat">{% translate "Épuisé" %}</span>
+        {% elif stock.est_en_alerte %}
+            <span style="padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background-color: #fffbeb; color: #92400e;"
+                  data-testid="stock-actuel-etat">{% translate "Stock bas" %}</span>
+        {% else %}
+            <span style="padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background-color: #dcfce7; color: #166534;"
+                  data-testid="stock-actuel-etat">{% translate "OK" %}</span>
+        {% endif %}
+    </p>
 
     {% if message_feedback %}
     <div style="padding: 10px 14px; margin-bottom: 16px; border-radius: 6px; background-color: #dcfce7; color: #166534; font-weight: 500;"
@@ -59,6 +96,7 @@ LOCALISATION : Administration/templates/admin/inventaire/stock_actions_partial.h
                 {% translate "Quantité" %}
             </label>
             <input type="number" name="quantite" id="id_quantite_action" required min="0"
+                   form="stock-operations-hors-formulaire"
                    style="padding: 8px 12px; border: 1px solid var(--color-base-300, #d1d5db); border-radius: 6px; width: 120px; font-size: 14px;"
                    data-testid="input-quantite-action">
         </div>
@@ -68,6 +106,7 @@ LOCALISATION : Administration/templates/admin/inventaire/stock_actions_partial.h
                 {% translate "Motif" %} <span style="color: var(--color-base-400, #9ca3af);">({% translate "optionnel" %})</span>
             </label>
             <input type="text" name="motif" id="id_motif_action" maxlength="200"
+                   form="stock-operations-hors-formulaire"
                    style="padding: 8px 12px; border: 1px solid var(--color-base-300, #d1d5db); border-radius: 6px; width: 100%; font-size: 14px;"
                    data-testid="input-motif-action">
         </div>
@@ -87,7 +126,7 @@ LOCALISATION : Administration/templates/admin/inventaire/stock_actions_partial.h
                 hx-include="#id_quantite_action, #id_motif_action"
                 hx-target="#stock-actions-container"
                 hx-swap="innerHTML"
-                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                {% if csrf_token %}hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% endif %}
                 style="padding: 8px 18px; background-color: #16a34a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;"
                 data-testid="btn-reception">
             {% translate "Réception" %}
@@ -98,7 +137,7 @@ LOCALISATION : Administration/templates/admin/inventaire/stock_actions_partial.h
                 hx-include="#id_quantite_action, #id_motif_action"
                 hx-target="#stock-actions-container"
                 hx-swap="innerHTML"
-                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                {% if csrf_token %}hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% endif %}
                 style="padding: 8px 18px; background-color: #d97706; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;"
                 data-testid="btn-ajustement">
             {% translate "Ajustement" %}
@@ -109,7 +148,7 @@ LOCALISATION : Administration/templates/admin/inventaire/stock_actions_partial.h
                 hx-include="#id_quantite_action, #id_motif_action"
                 hx-target="#stock-actions-container"
                 hx-swap="innerHTML"
-                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                {% if csrf_token %}hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% endif %}
                 style="padding: 8px 18px; background-color: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;"
                 data-testid="btn-offert">
             {% translate "Offert" %}
@@ -120,7 +159,7 @@ LOCALISATION : Administration/templates/admin/inventaire/stock_actions_partial.h
                 hx-include="#id_quantite_action, #id_motif_action"
                 hx-target="#stock-actions-container"
                 hx-swap="innerHTML"
-                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                {% if csrf_token %}hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% endif %}
                 style="padding: 8px 18px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;"
                 data-testid="btn-perte">
             {% translate "Perte/casse" %}
@@ -142,7 +181,7 @@ LOCALISATION : Administration/templates/admin/inventaire/stock_actions_partial.h
             </li>
             {% endfor %}
         </ul>
-        <a href="/admin/inventaire/mouvementstock/?stock__pk__exact={{ stock.pk }}&amp;type_mvt=all"
+        <a href="{% url 'staff_admin:inventaire_mouvementstock_changelist' %}?stock__pk__exact={{ stock.pk }}&amp;type_mvt=all"
            style="display: inline-block; margin-top: 8px; font-size: 13px; color: var(--color-primary-600, #2563eb);"
            data-testid="link-tous-mouvements">
             {% translate "Voir tous les mouvements de cet article" %} →

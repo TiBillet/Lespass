@@ -18,6 +18,10 @@ FLUX :
 3. Une tuile « Compléter avec » charge l'etape suivante dans #confirm :
    confirmer() (especes, CB) ou lire_nfc() (autre carte), avec
    total = montant manquant. La popup de #messages s'efface pendant ce temps.
+4. La croix ou le fond ferme la popup et appelle abandonnerLePaiementRefuse()
+   (tibilletUtils.js) : carte lue oubliee, URL remise sur moyens_paiement.
+   Le prochain VALIDER redemande donc la carte.
+   / Cross or backdrop: card forgotten, URL reset, next VALIDATE asks for the card.
 
 CONTEXTE (_payer_par_nfc) :
 - payment.missing   : montant manquant en euros
@@ -34,9 +38,12 @@ CONTEXTE (_payer_par_nfc) :
     <div class="card-modal" role="alertdialog" aria-modal="true"
          aria-labelledby="fonds-insuffisants-titre" aria-describedby="fonds-insuffisants-manque">
       {# Toucher le fond ferme la popup, comme la croix / Tapping the backdrop closes the popup #}
-      <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages')"></div>
+      {# Fermer oublie la carte lue et remet l'URL sur moyens_paiement : sinon le     #}
+      {# prochain VALIDER paie direct avec la meme carte, sans nouveau scan.          #}
+      {# / Closing forgets the card and resets the URL: no payment without a rescan.  #}
+      <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages');abandonnerLePaiementRefuse();"></div>
       <div class="card-modal-box">
-        <c-V2.bt.return selector="#messages" data-testid="paiement-insuffisant-btn-fermer" />
+        <c-V2.bt.return selector="#messages" action="abandonnerLePaiementRefuse();" data-testid="paiement-insuffisant-btn-fermer" />
 
         {# --- CE QUI MANQUE / WHAT IS MISSING --- #}
         <div class="card-erreur">

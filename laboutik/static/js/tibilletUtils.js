@@ -209,6 +209,34 @@ function initUrlAddition() {
 	})
 }
 
+/**
+ * Abandonne le paiement refuse : on oublie la carte lue
+ * / Drops the refused payment: forgets the scanned card
+ *
+ * LOCALISATION : laboutik/static/js/tibilletUtils.js
+ *
+ * POURQUOI : apres « Fonds insuffisants », #addition-form garde
+ * la carte lue (tag_id) et son URL reste sur /payer/.
+ * Un nouveau clic sur VALIDER payait donc tout de suite,
+ * avec l'ancienne carte, sans la scanner a nouveau.
+ * / WHY: after "insufficient funds", the form kept the card and the /payer/ URL,
+ *   so the next VALIDATE paid at once with the old card, without a new scan.
+ *
+ * Actions :
+ * - remet l'URL du formulaire sur moyens_paiement (initUrlAddition) ;
+ * - oublie le client et la carte lue (addition.js:additionOublierLeClient).
+ *
+ * Utilise par / Used by : partial/hx_funds_insufficient.html (croix et fond)
+ */
+function abandonnerLePaiementRefuse() {
+	initUrlAddition()
+	sendEventOrganizer({
+		src: { file: 'tibilletUtils.js', method: 'abandonnerLePaiementRefuse' },
+		msg: 'additionManageForm',
+		data: { actionType: 'oublierLeClient' }
+	})
+}
+
 
 /**
  * Envoyer des datas à un élément html par 'event'

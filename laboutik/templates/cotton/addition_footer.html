@@ -50,7 +50,19 @@ Ids are prefixed with addition- so a returning footer would not collide.
 </div>
 
 <div class="addition-actions">
-	<button type="button"
+    <button type="button"
+            id="addition-vider"
+            class="addition-vider"
+            onclick="additionArmerVider()"
+            data-label-vider="{% translate 'Vider' %}"
+            data-label-confirmer="{% translate 'Confirmer' %}"
+            data-testid="addition-vider"
+            disabled>
+        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+        <span class="addition-vider-label">{% translate "Vider" %}</span>
+    </button>
+
+    <button type="button"
 	        id="addition-bt-check-card"
 	        class="addition-act addition-act-card"
 	        hx-get="{% url 'laboutik-paiement-verifier_carte' %}"

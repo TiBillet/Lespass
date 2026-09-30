@@ -54,11 +54,13 @@ seo/views_legal.py.
     </ol>
 </nav>
 
-{# tabindex="-1" : une <section> n'est pas focusable nativement. Sans lui,
+{% comment %}
+    tabindex="-1" : une <section> n'est pas focusable nativement. Sans lui,
    un lien du sommaire deplace le defilement mais PAS le focus clavier, qui
    reste sur le sommaire — la tabulation suivante repart en haut de page.
    / Without tabindex="-1" an anchor moves the scroll but not the keyboard
-   focus, which stays on the table of contents. #}
+   focus, which stays on the table of contents.
+{% endcomment %}
 <section id="cgu-objet" tabindex="-1" data-testid="cgu-objet">
     <h2 class="h4 mt-4">1. De quoi parle ce document ?</h2>
 

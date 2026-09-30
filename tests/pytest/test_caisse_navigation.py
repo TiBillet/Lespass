@@ -50,11 +50,16 @@ def ancien_fedow_simule_qui_confirme_les_cartes_primaires():
     L'ouverture de la caisse lit la carte primaire sur l'ancien Fedow
     (`NFCcardFedow.retrieve`). Ici, l'ancien Fedow est simulé : le lieu est relié, et
     toute carte demandée est une carte primaire du lieu (`is_primary: true`).
-    Aucun envoi réseau réel : `_get` et `_post` du client Fedow échouent, et la liste
-    des envois tentés doit être vide à la fin du test.
+    Pendant chaque test, aucun envoi réseau réel : `_get` et `_post` du client Fedow
+    échouent, et la liste des envois tentés doit être vide à la fin du test.
+    Cette garde NE COUVRE PAS la fixture de module `test_data` : pytest la lance avant
+    les fixtures de test, donc avant cette garde. Sur une base neuve,
+    `create_test_pos_data` peut déclarer la carte primaire au vrai ancien Fedow.
+    Voir le bug n°14 de TECH_DOC/SESSIONS/TODO/BUGS-constats-chantier-05.md.
     Les refus de l'ancien Fedow sont testés dans test_caisse_ouverture_ancien_fedow.py.
     / The old Fedow is faked: the venue is linked and every card is primary. No real
-    network call.
+    network call during each test. Not covered: the module fixture `test_data`, which
+    runs before this guard (bug #14 in BUGS-constats-chantier-05.md).
     """
     from unittest import mock
 

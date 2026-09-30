@@ -1,0 +1,20 @@
+{% load i18n %}
+{% comment %}
+MODALE ADMIN — acces a la configuration par carte primaire
+/ Admin modal — configuration access through a primary card
+
+LOCALISATION : kiosk/templates/kiosk/partial/modale_admin.html
+
+Inclus par recharge.html, HORS de #tb-kiosque. Ouverte par le bouton Admin de
+l'en-tete (data-modal-open, main.js). Son contenu (#modale-admin-contenu) est
+remplace par le serveur quand la carte n'est pas une carte primaire.
+/ Included OUTSIDE #tb-kiosque. Its content is replaced by the server when the
+card is not a primary card.
+{% endcomment %}
+<dialog class="kiosk-modal" id="modale-admin"
+        aria-labelledby="modale-admin-titre"
+        data-testid="kiosk-modale-admin">
+    <div class="kiosk-modal__card kiosk-modal__card--wide" id="modale-admin-contenu" aria-live="polite">
+        {% include "kiosk/partial/modale_admin_etat.html" with etat="intro" %}
+    </div>
+</dialog>

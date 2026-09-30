@@ -1,0 +1,24 @@
+{% comment %}
+BAS DE PAGE DES ÉCRANS TIREUSE — mention légale + signature
+/ Tap screen footer — legal notice + signature
+
+LOCALISATION : controlvanne/templates/controlvanne/partial/tireuse_pied.html
+
+Inclus par partial/tireuse_ecran.html et kiosk_list.html.
+La signature affiche le nom du lieu (config.organisation) × TiBillet.
+/ Included by tireuse_ecran.html and kiosk_list.html.
+
+Variable attendue : {{ config }} — Configuration du tenant
+/ Expected variable: {{ config }} — tenant Configuration
+{% endcomment %}
+{% load i18n %}
+<footer class="tireuse__footer" data-testid="tireuse-pied">
+  <p class="tireuse__legal">
+    {% translate "L'abus d'alcool est dangereux pour la santé. Interdit aux mineurs. Ne convient pas aux femmes enceintes." %}
+  </p>
+  <p class="tireuse__brand">
+    <span class="brand-lieu">{{ config.organisation|default:"TiBillet" }}</span>
+    <span class="brand-x" aria-hidden="true">x</span>
+    <span class="brand-tibillet">TiBillet</span>
+  </p>
+</footer>
