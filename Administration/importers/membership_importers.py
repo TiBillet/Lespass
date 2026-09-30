@@ -20,11 +20,16 @@ class EmailUserForeignKeyWidget(ForeignKeyWidget):
 
 
 class PriceForeignKeyWidget(ForeignKeyWidget):
+    def get_queryset(self, value, row, *args, **kwargs):
+        # Un tarif archivé (« supprimé ») ne peut pas recevoir de nouvelle adhésion importée.
+        # / An archived ("deleted") price cannot receive a newly imported membership.
+        return Price.objects.filter(archived=False)
+
     def clean(self, value, row=None, **kwargs):
         try:
             val = super().clean(value)
         except MultipleObjectsReturned:
-            val = Price.objects.get(name=value, product__name=row.get('product_name'))
+            val = Price.objects.get(name=value, product__name=row.get('product_name'), archived=False)
         except Exception as err:
             raise err
         return val

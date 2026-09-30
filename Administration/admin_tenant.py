@@ -1321,7 +1321,7 @@ class MembershipAddForm(ModelForm):
     # / Only membership prices
     price = forms.ModelChoiceField(
         queryset=Price.objects.filter(
-            product__categorie_article=Product.ADHESION, product__archive=False
+            product__categorie_article=Product.ADHESION, product__archive=False, archived=False
         ).select_related('product', 'fedow_reward_asset').order_by("-free_price","name"),
         # Remplis le champ select avec les objets Price
         # / Fills the select with Price objects
@@ -2547,7 +2547,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         # Doit être dans save_related (pas save_model) car les M2M products
         # ne sont disponibles qu'après que Django les a sauvées.
         for product in obj.products.all():
-            for price in product.prices.all():
+            for price in product.prices.filter(archived=False):
                 get_or_create_price_sold(price=price, event=obj)
 
     def has_view_permission(self, request, obj=None):
@@ -2871,7 +2871,7 @@ def _build_event_price_options():
     for evenement in evenements:
         date_affichee = evenement.datetime.strftime("%d/%m")
         for produit in evenement.products.all():
-            for tarif in produit.prices.all():
+            for tarif in produit.prices.filter(archived=False):
                 valeur = f"{evenement.uuid}:{tarif.uuid}"
                 libelle = f"{date_affichee} - {evenement.name} - {tarif.name} - {tarif.prix}€"
                 choix.append((valeur, libelle))
@@ -2989,7 +2989,7 @@ class ReservationAddAdmin(ModelForm):
         event_uuid, price_uuid = valeur.split(":", 1)
         try:
             evenement = Event.objects.get(uuid=event_uuid)
-            tarif = Price.objects.get(uuid=price_uuid)
+            tarif = Price.objects.get(uuid=price_uuid, archived=False)
         except (Event.DoesNotExist, Price.DoesNotExist, ValueError):
             return None, None
         return evenement, tarif

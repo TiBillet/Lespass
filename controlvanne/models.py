@@ -313,7 +313,7 @@ class TireuseBec(models.Model):
             # Tarif en euros seulement : la tireuse ne facture pas en points.
             # / Euro price only: the tap never bills in points.
             price = self.fut_actif.prices.filter(
-                poids_mesure=True, asset__isnull=True
+                poids_mesure=True, asset__isnull=True, archived=False
             ).first()
             if price and price.prix:
                 return price.prix

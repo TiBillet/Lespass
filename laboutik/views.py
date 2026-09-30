@@ -11510,7 +11510,7 @@ class CommandeViewSet(viewsets.ViewSet):
 
             try:
                 prix = Price.objects.get(
-                    uuid=article_data["price_uuid"], product=produit
+                    uuid=article_data["price_uuid"], product=produit, archived=False
                 )
             except Price.DoesNotExist:
                 logger.warning(
@@ -11693,7 +11693,7 @@ class CommandeViewSet(viewsets.ViewSet):
                 try:
                     produit = Product.objects.get(uuid=article_data["product_uuid"])
                     prix = Price.objects.get(
-                        uuid=article_data["price_uuid"], product=produit
+                        uuid=article_data["price_uuid"], product=produit, archived=False
                     )
                 except (Product.DoesNotExist, Price.DoesNotExist):
                     continue

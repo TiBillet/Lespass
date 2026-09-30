@@ -72,7 +72,7 @@ def trouver_le_produit_de_recharge_de_la_borne():
     if produit_de_recharge is None:
         return None, None
 
-    tarif_libre = produit_de_recharge.prices.filter(free_price=True).first()
+    tarif_libre = produit_de_recharge.prices.filter(free_price=True, archived=False).first()
     if tarif_libre is None:
         return produit_de_recharge, None
 

@@ -123,7 +123,7 @@ class Resource(models.Model):
         verbose_name_plural = _('Resources')
 
     def published_prices(self):
-        return self.product.prices.filter(publish=True)
+        return self.product.prices.filter(publish=True, archived=False)
 
     def __str__(self):
         return self.product.name
