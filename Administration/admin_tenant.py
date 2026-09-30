@@ -100,6 +100,9 @@ from Administration.admin.base import ModelAdmin
 from unfold.admin import TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.filters.admin import (
+    ChoicesDropdownFilter,
+    DropdownFilter,
+    RelatedDropdownFilter,
     # AutocompleteSelectMultipleFilter,
     # ChoicesDropdownFilter,
     # MultipleRelatedDropdownFilter,
@@ -1626,9 +1629,20 @@ class LigneArticleInline(TabularInline):
         return False
 
 
-class MembershipPublishedFilter(admin.SimpleListFilter):
+class MembershipPublishedFilter(DropdownFilter):
     """
-    Filter for filtering Membership by MembershipProduct that are not archived
+    Filtre les adhésions par produit d'adhésion non archivé.
+    / Filter for filtering Membership by MembershipProduct that are not archived
+
+    LOCALISATION : Administration/admin_tenant.py
+
+    DropdownFilter (Unfold) affiche une liste déroulante avec un champ de recherche.
+    Un SimpleListFilter classique affiche tous les produits les uns sous les autres :
+    illisible dès qu'il y a beaucoup de produits.
+    Le filtre est un champ de formulaire, envoyé par le bouton « Filtrer »
+    (list_filter_submit = True, posé sur le ModelAdmin de base du projet).
+    / Unfold DropdownFilter: searchable dropdown instead of a long list of links.
+    Sent by the "Filter" button (list_filter_submit, set on the project base ModelAdmin).
     """
     title = _('Product')
     parameter_name = 'price' # Get the product from the price
@@ -1637,7 +1651,7 @@ class MembershipPublishedFilter(admin.SimpleListFilter):
         # Return only product that are not archived to display in the filter
         return [
             (product.pk, product.name)
-            for product in MembershipProduct.objects.filter(archive=False)
+            for product in MembershipProduct.objects.filter(archive=False).order_by("name")
         ]
 
     def queryset(self, request, queryset):
@@ -1916,9 +1930,16 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
 
 ### VENTES ###
 
-class LigneArticlePublishedFilter(admin.SimpleListFilter):
+class LigneArticlePublishedFilter(DropdownFilter):
     """
-    Filter for filtering LigneArticle by Product that are not archived
+    Filtre les ventes par produit non archivé.
+    / Filter for filtering LigneArticle by Product that are not archived
+
+    LOCALISATION : Administration/admin_tenant.py
+
+    Liste déroulante avec recherche (Unfold DropdownFilter), comme
+    MembershipPublishedFilter.
+    / Searchable dropdown, like MembershipPublishedFilter.
     """
     title = _('Product')
     parameter_name = 'product'
@@ -1927,7 +1948,7 @@ class LigneArticlePublishedFilter(admin.SimpleListFilter):
         # Return only product that are not archived to display in the filter
         return [
             (product.pk, product.name)
-            for product in Product.objects.filter(archive=False)
+            for product in Product.objects.filter(archive=False).order_by("name")
         ]
 
     def queryset(self, request, queryset):
@@ -1983,7 +2004,9 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
     warn_unsaved_form = True  # Default: False
     list_filter_submit = True
 
-    list_filter = ('status',
+    # Filtres en liste déroulante (Unfold), envoyés par le bouton « Filtrer ».
+    # / Dropdown filters (Unfold), sent by the "Filter" button.
+    list_filter = (('status', ChoicesDropdownFilter),
                    LigneArticlePublishedFilter,
                    ('datetime', RangeDateTimeFilterWithTimeZone),
                    )
@@ -3117,7 +3140,10 @@ class ReservationCustomFormSection(TemplateSection):
     verbose_name = _("Custom form answers")
 
 
-class EventArchivedFilter(admin.SimpleListFilter):
+class EventArchivedFilter(DropdownFilter):
+    # Liste déroulante avec recherche (Unfold) : la liste des événements est trop longue
+    # pour être affichée en liens. Envoyée par le bouton « Filtrer ».
+    # / Searchable dropdown (Unfold): the event list is too long for links.
     title = _("Archived Event")
     parameter_name = 'event_archived'
 
@@ -3134,7 +3160,10 @@ class EventArchivedFilter(admin.SimpleListFilter):
         return queryset
 
 
-class EventFutureFilter(admin.SimpleListFilter):
+class EventFutureFilter(DropdownFilter):
+    # Liste déroulante avec recherche (Unfold) : la liste des événements est trop longue
+    # pour être affichée en liens. Envoyée par le bouton « Filtrer ».
+    # / Searchable dropdown (Unfold): the event list is too long for links.
     title = _("-> Future event")
     parameter_name = 'event_future'
 
@@ -3152,7 +3181,10 @@ class EventFutureFilter(admin.SimpleListFilter):
         return queryset
 
 
-class EventPastFilter(admin.SimpleListFilter):
+class EventPastFilter(DropdownFilter):
+    # Liste déroulante avec recherche (Unfold) : la liste des événements est trop longue
+    # pour être affichée en liens. Envoyée par le bouton « Filtrer ».
+    # / Searchable dropdown (Unfold): the event list is too long for links.
     title = _("<- Past event")
     parameter_name = 'event_past'
 
@@ -3203,10 +3235,10 @@ class ReservationAdmin(ModelAdmin):
     search_fields = ['event__name', 'user_commande__email', 'datetime', 'custom_form']
     list_filter = [
         EventFutureFilter,
+        EventPastFilter,
         ReservationValidFilter,
         'datetime',
         # 'options',
-        EventPastFilter,
         EventArchivedFilter,
     ]
 
@@ -4813,7 +4845,10 @@ class InitiativeAdmin(ModelAdmin):
 
     )
 
-    list_filter = ("created_at", "tags")
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = ("created_at", ("tags", RelatedDropdownFilter))
     search_fields = ("name", "description", "tags__name")
     date_hierarchy = "created_at"
     inlines = [VoteInline, BudgetItemInline, ContributionInline, ParticipationInline]

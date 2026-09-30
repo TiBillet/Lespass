@@ -11,6 +11,7 @@ from django.utils.translation import gettext_lazy as _
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
 from Administration.admin.base import ModelAdmin
+from unfold.contrib.filters.admin import RelatedDropdownFilter
 from unfold.decorators import display
 
 from Administration.admin.site import staff_admin_site
@@ -49,7 +50,10 @@ class PromotionalCodeAdmin(ModelAdmin):
 
     readonly_fields = ("usage_count",)
 
-    list_filter = ["is_active", "product"]
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = ["is_active", ("product", RelatedDropdownFilter)]
     search_fields = ["name", "product__name"]
     ordering = ("-date_created",)
 

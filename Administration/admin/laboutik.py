@@ -20,6 +20,7 @@ from solo.admin import SingletonModelAdmin
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
 from Administration.admin.base import ModelAdmin
 from unfold.admin import TabularInline
+from unfold.contrib.filters.admin import RelatedDropdownFilter
 
 from Administration.admin.products import ICON_POS, IconPickerWidget
 from Administration.admin.site import staff_admin_site
@@ -1631,7 +1632,10 @@ class HistoriqueFondDeCaisseAdmin(ModelAdmin):
     Read-only admin for cash float history.
     LOCALISATION : Administration/admin/laboutik.py"""
     list_display = ('datetime', _euros_ancien, _euros_nouveau, 'operateur')
-    list_filter = ('point_de_vente',)
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = (('point_de_vente', RelatedDropdownFilter),)
     search_fields = ('operateur__email',)
     ordering = ('-datetime',)
     readonly_fields = ('uuid', 'point_de_vente', 'operateur', 'datetime', 'ancien_montant', 'nouveau_montant', 'raison')

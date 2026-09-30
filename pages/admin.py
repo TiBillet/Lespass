@@ -560,7 +560,7 @@ class PageAdmin(ModelAdmin):
     list_display = [
         "titre",
         "publie",
-        "display_accueil",
+        #"display_accueil",
         "nb_blocs",
         "nb_sous_pages",
         "display_voir",
@@ -580,7 +580,7 @@ class PageAdmin(ModelAdmin):
     # NiveauDePageFilter en tete : sans selection, il restreint la liste aux
     # pages principales. / NiveauDePageFilter first: with no selection, it
     # restricts the list to main pages.
-    list_filter = [NiveauDePageFilter, "publie", "est_accueil"]
+    list_filter = [NiveauDePageFilter, "publie",] #"est_accueil"]
     search_fields = ["titre", "slug"]
     list_select_related = ["parent"]
     ordering = ["position", "titre"]
@@ -611,7 +611,7 @@ class PageAdmin(ModelAdmin):
                     "titre",
                     "slug",
                     "position",
-                    ("publie", "est_accueil"),
+                    ("publie", ),#"est_accueil"),
                     "parent",
                     # `affichage_nav` decide de la place de la page dans la
                     # navigation, et c'est lui qui declenche le menu lateral
@@ -1248,6 +1248,31 @@ class BlocAdmin(ModelAdmin):
             )
             return HttpResponseRedirect(reverse("staff_admin:pages_page_changelist"))
         return super().add_view(request, form_url, extra_context)
+
+    def changelist_view(self, request, extra_context=None):
+        """
+        La liste de tous les blocs n'est jamais affichee.
+        / The list of all blocks is never shown.
+
+        LOCALISATION : pages/admin.py — BlocAdmin.changelist_view
+
+        Un bloc n'a de sens que dans sa page : on le cree, on le deplace et on
+        le supprime depuis la fiche de la page. La liste a plat de tous les blocs
+        du site n'apporte rien et perd l'admin.
+        Si quelqu'un arrive sur son adresse (fil d'Ariane, ancien favori), on le
+        renvoie vers la liste des pages avec une explication.
+        Meme retour que add_view ci-dessus quand la page manque.
+        / A block only makes sense inside its page. Anyone landing on the flat
+        list (breadcrumb, old bookmark) is redirected to the page list.
+        """
+        messages.info(
+            request,
+            _(
+                "Les blocs se gèrent depuis la fiche de leur page : ouvrez une "
+                "page pour voir et modifier ses blocs."
+            ),
+        )
+        return HttpResponseRedirect(reverse("staff_admin:pages_page_changelist"))
 
     def get_urls(self):
         """

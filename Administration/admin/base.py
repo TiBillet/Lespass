@@ -105,6 +105,15 @@ class ModelAdmin(UnfoldModelAdmin):
     / The project's ModelAdmin. See the file header.
     """
 
+    # Bouton « Filtrer » en bas du panneau de filtres, sur TOUTES les listes de l'admin.
+    # Les filtres Unfold qui sont des champs de formulaire (liste déroulante, plage de
+    # dates, texte) ne sont envoyés que par ce bouton : sans lui, ils ne font rien.
+    # Les filtres classiques (listes de liens) continuent de s'appliquer au clic.
+    # Une liste sans filtre n'affiche pas de panneau, donc pas de bouton.
+    # / "Filter" button on every admin changelist: required by Unfold's form-based
+    #   filters (dropdown, date range, text). Classic link filters still apply on click.
+    list_filter_submit = True
+
     @property
     def search_help_text(self):
         """

@@ -37,6 +37,7 @@ from django.views.decorators.http import require_POST
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
 from Administration.admin.base import ModelAdmin
+from unfold.contrib.filters.admin import ChoicesDropdownFilter, RelatedDropdownFilter
 
 from Administration.admin_tenant import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
@@ -518,7 +519,10 @@ class TokenAdmin(ModelAdmin):
         "asset",
         "value_court",
     ]
-    list_filter = ["asset"]
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = [("asset", RelatedDropdownFilter)]
     search_fields = ["wallet__name"]
 
     def wallet_court(self, obj):
@@ -591,7 +595,10 @@ class TransactionAdmin(ModelAdmin):
         "receiver_court",
         "datetime",
     ]
-    list_filter = ["action", "asset"]
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = [("action", ChoicesDropdownFilter), ("asset", RelatedDropdownFilter)]
     search_fields = ["id", "comment"]
 
     def amount_court(self, obj):
