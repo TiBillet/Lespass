@@ -1398,7 +1398,13 @@ class MyAccount(viewsets.ViewSet):
             'highlighted_booking_pk': highlighted_booking_pk,
         })
 
-        return render(request, "booking/views/my_bookings.html", context=context)
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/bookings.html")
+
+
+        return render(request, template_path, context=context)
 
 
     @action(detail=True, methods=['POST'])
