@@ -3062,6 +3062,10 @@ class Reservation(models.Model):
     def valid_tickets(self):
         return self.tickets.filter(status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED])
 
+    def canceled_tickets(self):
+        return self.tickets.filter(status__in=[Ticket.CANCELED])
+
+
     def total_paid(self):
         total_paid = 0
         for ligne_article in self.articles_paid():
