@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import timedelta
+from decimal import Decimal
 
 import stripe
 from django.contrib.auth import get_user_model
@@ -45,6 +46,7 @@ class CreationPaiementStripe():
                  cancel_url: (str, None) = None,
                  invoice=None,
                  accept_sepa: (bool, None) = None,
+                 vente=None,
                  ) -> None:
         """
         accept_sepa : None = comportement legacy (SEPA si reservation=None + config ON)
@@ -53,6 +55,11 @@ class CreationPaiementStripe():
         / accept_sepa: None = legacy (SEPA if reservation=None + config ON)
                        True = force allow SEPA (standalone membership case)
                        False = force deny SEPA (cart-with-tickets case)
+
+        vente : la vente d'origine de ce paiement (BaseBillet/models_vente.py), ouverte
+                par le producteur (ou par le panier) avec ses articles. Elle est posée
+                dans l'INSERT du paiement. None = paiement sans vente.
+        / vente: the original sale of this payment, set in the payment's INSERT.
         """
 
         # On va chercher les informations de configuration
@@ -65,6 +72,7 @@ class CreationPaiementStripe():
         self.reservation = reservation
         self.booking = booking
         self.source = source
+        self.vente = vente
 
         self.metadata = metadata
         self.metadata_json = json.dumps(self.metadata)
@@ -108,6 +116,11 @@ class CreationPaiementStripe():
             'booking': self.booking,
             'source': self.source,
             'status': Paiement_stripe.PENDING,
+            # La vente d'origine est posée dès la création, dans le même INSERT : un
+            # save() plus tard relancerait la machine à états du paiement.
+            # / The original sale is set in the creation INSERT: a later save() would
+            # run the payment's status machine again.
+            'vente': self.vente,
         }
 
         if self.invoice:
@@ -304,14 +317,76 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
     lignes_articles = []
 
     from ApiBillet.serializers import get_or_create_price_sold
+    from BaseBillet.models_vente import Vente
+    from BaseBillet.services_vente import (
+        ajouter_article,
+        arrondir_au_centime_demi_haut,
+        ouvrir_vente,
+    )
+    # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
+    # / Imported at call time: laboutik/views.py imports all of BaseBillet.
+    from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
+    # La vente de cette échéance : un paiement Stripe = une vente (R5). Elle est ouverte
+    # AVANT ses lignes et reste EN_ATTENTE : elle est encaissée quand la facture est
+    # constatée payée (branche INVOICE).
+    # / This instalment's sale, opened BEFORE its lines, PENDING until the invoice is paid.
+    vente = ouvrir_vente(
+        origine=SaleOrigin.WEBHOOK,
+        nature=Vente.Nature.VENTE,
+        client=user,
+    )
+
     for line in lines['data']:
-        # id_price_stripe = line.pricing.price_details.price
-        ligne_article = LigneArticle.objects.create(
-            # pricesold=PriceSold.objects.get(id_price_stripe=id_price_stripe)
-            pricesold=get_or_create_price_sold(membership.price, custom_amount=line.amount), #PriceSold.objects.get(id_price_stripe=id_price_stripe)
+        # Le prix unitaire Stripe. Version d'API du projet (« basil ») : une ligne de
+        # facture n'a pas d'attribut `price` ; le prix unitaire est
+        # `pricing.unit_amount_decimal`, un TEXTE en centimes qui peut porter des
+        # décimales. `line.amount` est le TOTAL de la ligne : l'écrire comme prix
+        # unitaire avec `line.quantity` compterait la ligne deux fois dès que la
+        # quantité dépasse 1.
+        # / Stripe's unit price: `pricing.unit_amount_decimal` (text, cents, may carry
+        # decimals). `line.amount` is the line TOTAL, never a unit price.
+        prix_unitaire_stripe_en_texte = None
+        tarification_de_la_ligne = getattr(line, "pricing", None)
+        if tarification_de_la_ligne is not None:
+            prix_unitaire_stripe_en_texte = getattr(
+                tarification_de_la_ligne, "unit_amount_decimal", None
+            )
+
+        if prix_unitaire_stripe_en_texte is not None:
+            prix_unitaire_en_centimes = arrondir_au_centime_demi_haut(
+                Decimal(prix_unitaire_stripe_en_texte)
+            )
+            quantite_de_la_ligne = line.quantity
+        else:
+            # Prix unitaire inconnu : l'article vaut la ligne ENTIÈRE, au total de la
+            # ligne, quantité 1. Jamais `line.amount` × `line.quantity` (double compte).
+            # / Unknown unit price: the item is the WHOLE line, quantity 1.
+            logger.warning(
+                f"new_entry_from_stripe_subscription_invoice : facture {stripe_invoice.id}, "
+                f"ligne sans prix unitaire (pricing.unit_amount_decimal absent). "
+                f"Article écrit au total de la ligne ({line.amount}), quantité 1."
+            )
+            prix_unitaire_en_centimes = line.amount
+            quantite_de_la_ligne = 1
+
+        # La ligne de l'échéance, écrite par le service de vente dans la vente :
+        # montants entiers et TVA (celle du produit, sinon celle du lieu). Le PriceSold
+        # est au prix unitaire (centimes entiers, convertis en euros par
+        # get_or_create_price_sold), comme `amount`.
+        # / The instalment line, written by the sale service into the sale. The
+        # PriceSold is at the unit price, like `amount`.
+        ligne_article = ajouter_article(
+            vente,
+            pricesold=get_or_create_price_sold(
+                membership.price, custom_amount=prix_unitaire_en_centimes
+            ),
+            quantite=quantite_de_la_ligne,
+            prix_unitaire=prix_unitaire_en_centimes,
+            taux_tva=_taux_tva_de_la_ligne_de_caisse(
+                membership.price.product, PaymentMethod.STRIPE_RECURENT
+            ),
             payment_method=PaymentMethod.STRIPE_RECURENT,
-            amount=line.amount,
-            qty=line.quantity,
             membership=membership,
             sale_origin=SaleOrigin.WEBHOOK,
         )
@@ -336,6 +411,7 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
         source=Paiement_stripe.INVOICE,
         invoice=stripe_invoice,
         absolute_domain=None,
+        vente=vente,
     )
 
     if new_paiement_stripe.is_valid():

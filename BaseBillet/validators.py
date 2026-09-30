@@ -20,6 +20,8 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, PostalAddress, Tag, Configuration
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Reservation, \
     PriceSold, Ticket, ProductSold, ProductFormField, PromotionalCode, PaymentMethod, SaleOrigin
+from BaseBillet.models_vente import Vente
+from BaseBillet.services_vente import ajouter_article, ouvrir_vente
 from BaseBillet.tasks import send_membership_pending_admin, send_membership_pending_user
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
@@ -193,7 +195,8 @@ class TicketCreator():
     def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None,
                  sale_origin: str = SaleOrigin.LESPASS,
                  create_checkout: bool = True,
-                 paid_externally: bool = False, external_payment_method: str = None):
+                 paid_externally: bool = False, external_payment_method: str = None,
+                 vente=None):
 
         self.products_dict = products_dict
         self.reservation = reservation
@@ -218,6 +221,21 @@ class TicketCreator():
         # / Ticket already paid elsewhere (e.g., LaBoutik cash register).
         self.paid_externally = paid_externally
         self.external_payment_method = external_payment_method
+
+        # La vente (BaseBillet/models_vente.py) qui reçoit les billets à payer par Stripe.
+        # - None et create_checkout=True : TicketCreator ouvre SA vente, juste avant la
+        #   première ligne à payer (method_B). Un paiement Stripe = une vente (R5).
+        # - Une vente passée par l'appelant : les billets y sont ajoutés. Le panier
+        #   (CommandeService, create_checkout=False) passe toujours la vente de sa commande.
+        # - None et create_checkout=False : les lignes sont écrites sans vente. Aucun
+        #   chemin de production ne l'utilise ; il reste pour les appels sans vente
+        #   (tests) et sera retiré en fiche H.
+        # Si le total vaut 0 (pas de Stripe), la vente reste EN_ATTENTE.
+        # / The sale that receives the tickets: opened here when None and
+        # create_checkout=True; passed by the caller (the cart always passes its order's
+        # sale). None with create_checkout=False: no production path; kept for calls
+        # without a sale (tests), removed in sheet H.
+        self.vente = vente
 
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
@@ -371,6 +389,11 @@ class TicketCreator():
         return tickets
 
     def method_B(self, prices_dict):
+        # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
+        # Même règle de TVA que la caisse, le QR code et la tireuse.
+        # / Imported at call time: laboutik/views.py imports all of BaseBillet.
+        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
         reservation: Reservation = self.reservation
         tickets = []
         for price_generique, qty in prices_dict.items():
@@ -434,15 +457,48 @@ class TicketCreator():
 
             # Ligne comptable de la vente, liee a la reservation
             # / Accounting line for the sale, linked to reservation
-            line_article = LigneArticle.objects.create(
-                pricesold=pricesold,
-                amount=dec_to_int(pricesold.prix),
-                payment_method=PaymentMethod.STRIPE_NOFED,
-                qty=qty,
-                promotional_code=code_promo_de_ce_tarif,
-                sale_origin=self.sale_origin,
-                reservation=reservation,
-            )
+            if self.vente is None and self.create_checkout:
+                # La vente naît avec la première ligne à payer, AVANT elle : la ligne
+                # est écrite dans la vente, en un seul INSERT.
+                # / The sale is opened right before the first line to pay.
+                self.vente = ouvrir_vente(
+                    origine=self.sale_origin,
+                    nature=Vente.Nature.VENTE,
+                    client=self.user,
+                )
+
+            if self.vente is None:
+                # Ligne sans vente. Aucun chemin de production n'arrive ici : un
+                # producteur direct ouvre sa vente juste au-dessus, le panier passe la
+                # sienne. Reste pour les appels sans vente (tests) ; retiré en fiche H.
+                # / Line without a sale: no production path reaches it (direct producers
+                # open theirs, the cart passes its own). Kept for tests; removed in H.
+                line_article = LigneArticle.objects.create(
+                    pricesold=pricesold,
+                    amount=dec_to_int(pricesold.prix),
+                    payment_method=PaymentMethod.STRIPE_NOFED,
+                    qty=qty,
+                    promotional_code=code_promo_de_ce_tarif,
+                    sale_origin=self.sale_origin,
+                    reservation=reservation,
+                )
+            else:
+                # La même ligne, écrite par le service de vente dans la vente : montants
+                # entiers et TVA (celle du produit, sinon celle du lieu).
+                # / The same line, written by the sale service into the sale.
+                line_article = ajouter_article(
+                    self.vente,
+                    pricesold=pricesold,
+                    quantite=qty,
+                    prix_unitaire=dec_to_int(pricesold.prix),
+                    taux_tva=_taux_tva_de_la_ligne_de_caisse(
+                        price_generique.product, PaymentMethod.STRIPE_NOFED
+                    ),
+                    payment_method=PaymentMethod.STRIPE_NOFED,
+                    promotional_code=code_promo_de_ce_tarif,
+                    sale_origin=self.sale_origin,
+                    reservation=reservation,
+                )
             self.list_line_article_sold.append(line_article)
 
             # Création des tickets en mode non payé
@@ -495,6 +551,7 @@ class TicketCreator():
             success_url=f"stripe_return/",
             cancel_url=f"stripe_return/",
             absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
+            vente=self.vente,
         )
 
         if not new_paiement_stripe.is_valid():
@@ -971,12 +1028,28 @@ class MembershipValidator(serializers.Serializer):
 
         amount = dec_to_int(membership.contribution_value)
 
-        ligne_article_adhesion = LigneArticle.objects.create(
+        # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
+        # / Imported at call time: laboutik/views.py imports all of BaseBillet.
+        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
+        # Un paiement Stripe = une vente (R5). Chaque appel ouvre une NOUVELLE vente :
+        # le lien de paiement d'une adhésion validée rappelle cette fonction quand la
+        # session précédente a expiré, et l'ancienne vente reste EN_ATTENTE, sans numéro.
+        # / One Stripe payment = one sale. Each call opens a NEW sale; the expired
+        # payment's sale stays PENDING, without number.
+        vente = ouvrir_vente(
+            origine=sale_origin,
+            nature=Vente.Nature.VENTE,
+            client=user,
+        )
+        ligne_article_adhesion = ajouter_article(
+            vente,
             pricesold=get_or_create_price_sold(price, custom_amount=membership.contribution_value),
+            quantite=1,
+            prix_unitaire=amount,
+            taux_tva=_taux_tva_de_la_ligne_de_caisse(price.product, PaymentMethod.STRIPE_NOFED),
             membership=membership,
             payment_method=PaymentMethod.STRIPE_NOFED,
-            amount=amount,
-            qty=1,
             sale_origin=sale_origin,
         )
 
@@ -990,6 +1063,7 @@ class MembershipValidator(serializers.Serializer):
             success_url=f"stripe_return/",
             cancel_url=f"stripe_return/",
             absolute_domain=f"https://{tenant.get_primary_domain()}/memberships/",
+            vente=vente,
         )
 
         # Passage du status en UNPAID

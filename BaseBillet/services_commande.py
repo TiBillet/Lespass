@@ -4,9 +4,12 @@ Orchestrateur de matérialisation d'un panier en objets DB.
 
 Responsabilité unique : transformer un PanierSession en Commande + N Reservations
 + M Memberships + LigneArticle + éventuel Paiement_stripe. Le tout atomique.
+Toute la commande est UNE vente (BaseBillet/models_vente.py) : un paiement Stripe = une
+vente (R5). Les lignes de vente sont les articles de cette vente.
 
 / Single responsibility: transform a PanierSession into Commande + N Reservations
 + M Memberships + LigneArticle + optional Paiement_stripe. Atomic.
+The whole order is ONE sale; the sale lines are its items.
 """
 from datetime import datetime
 import logging
@@ -16,7 +19,9 @@ from django.db import connection, transaction
 from django.utils.translation import gettext_lazy as _
 
 from BaseBillet.models import Membership, Price
+from BaseBillet.models_vente import Vente
 from BaseBillet.services_panier import InvalidItemError
+from BaseBillet.services_vente import ajouter_article, ouvrir_vente
 from booking.models import Resource, Booking
 
 logger = logging.getLogger(__name__)
@@ -80,7 +85,7 @@ class CommandeService:
                 )
 
             from BaseBillet.models import (
-                Commande, LigneArticle, Membership, PaymentMethod, Price,
+                Commande, Membership, PaymentMethod, Price,
                 Reservation, SaleOrigin,
             )
             from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
@@ -151,6 +156,20 @@ class CommandeService:
                 if pivot_promo_code:
                     break
 
+            # La vente de toute la commande : UNE vente pour un paiement (R5). Elle est
+            # ouverte ici, avec la Commande et dans la même transaction, puis passée à
+            # chaque producteur (adhésions, TicketCreator, validate_new_booking), qui y
+            # écrit ses lignes. Elle reste EN_ATTENTE : elle est encaissée quand le
+            # paiement est confirmé. Une commande gratuite garde aussi sa vente en
+            # attente (encaissement à 0 avec les ventes sans Stripe).
+            # / The whole order's sale: ONE sale per payment. Opened here with the Order,
+            # passed to every producer. It stays PENDING until the payment is confirmed.
+            vente = ouvrir_vente(
+                origine=SaleOrigin.LESPASS,
+                nature=Vente.Nature.VENTE,
+                client=user,
+            )
+
             commande = Commande.objects.create(
                 user=user,
                 email_acheteur=email,
@@ -158,9 +177,20 @@ class CommandeService:
                 last_name=buyer_lastname,
                 status=Commande.PENDING,
                 promo_code=pivot_promo_code,
+                vente=vente,
             )
 
+            # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
+            # Même règle de TVA que la caisse et les producteurs en ligne.
+            # / Imported at call time: laboutik/views.py imports all of BaseBillet.
+            from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
             all_lines = []
+
+            # Le total de la commande (décision Stripe ou gratuit, garde des 0,50 €) est
+            # la somme des totaux catalogue de ses articles : le montant écrit dans la
+            # vente, jamais recalculé à côté.
+            # / The order total is the sum of its items' catalogue totals.
             total_centimes = 0
 
             # -- Phase 1 : Memberships en premier --
@@ -213,18 +243,26 @@ class CommandeService:
                 applicable_promo = item_promo_code if (
                     item_promo_code and item_promo_code.product_id == price.product_id
                 ) else None
-                line = LigneArticle.objects.create(
+                # La ligne de l'adhésion, écrite par le service de vente dans la vente de
+                # la commande : montants entiers et TVA (celle du produit, sinon celle du
+                # lieu).
+                # / The membership line, written by the sale service into the order's sale.
+                line = ajouter_article(
+                    vente,
                     pricesold=price_sold,
+                    quantite=1,
+                    prix_unitaire=amount_cts,
+                    taux_tva=_taux_tva_de_la_ligne_de_caisse(
+                        price.product, PaymentMethod.STRIPE_NOFED
+                    ),
                     membership=membership,
                     payment_method=PaymentMethod.STRIPE_NOFED,
-                    amount=amount_cts,
-                    qty=1,
                     sale_origin=SaleOrigin.LESPASS,
                     promotional_code=applicable_promo,
                 )
 
                 all_lines.append(line)
-                total_centimes += amount_cts
+                total_centimes += line.total_catalogue
 
             # -- Phase 2 : Reservations groupées par event_uuid --
             # -- Phase 2: Reservations grouped by event_uuid --
@@ -284,8 +322,10 @@ class CommandeService:
                 # TicketCreator gère Tickets + LigneArticle, un appel par code promo. On bloque
                 # son Stripe : CommandeService crée UN paiement pour toute la Commande.
                 # Il n'applique le code qu'aux tarifs de SON produit (method_B).
+                # Il reçoit la vente de la commande : ses lignes en sont les articles.
                 # / TicketCreator handles Tickets + LigneArticle, one call per promo code, with
                 # its Stripe disabled. It applies the code only to its own product's prices.
+                # It receives the order's sale: its lines are the sale's items.
                 from BaseBillet.validators import TicketCreator
                 for nom_du_code_promo, products_dict in products_dict_par_code_promo.items():
                     creator = TicketCreator(
@@ -294,10 +334,11 @@ class CommandeService:
                         promo_code=_resolve_promo({'promotional_code_name': nom_du_code_promo}),
                         sale_origin=SaleOrigin.LESPASS,
                         create_checkout=False,
+                        vente=vente,
                     )
                     for line in creator.list_line_article_sold:
                         all_lines.append(line)
-                        total_centimes += int(line.amount * line.qty)
+                        total_centimes += line.total_catalogue
 
                 # Un item a prix libre garde SON montant : il passe dans son propre
                 # TicketCreator, sur la meme reservation. Additionner ses quantites avec un
@@ -315,10 +356,11 @@ class CommandeService:
                         custom_amounts={price.uuid: montant_saisi},
                         sale_origin=SaleOrigin.LESPASS,
                         create_checkout=False,
+                        vente=vente,
                     )
                     for line in creator.list_line_article_sold:
                         all_lines.append(line)
-                        total_centimes += int(line.amount * line.qty)
+                        total_centimes += line.total_catalogue
 
             # -- Phase 3 : Reservation de resource -- #
             # -- Phase 3 : Reservation de resource -- #
@@ -367,6 +409,7 @@ class CommandeService:
                     last_name=resolved_lastname,
                     first_name=resolved_firstname,
                     custom_amount=custom_amount,
+                    vente=vente,
                 )
 
                 if not is_valid:
@@ -379,7 +422,7 @@ class CommandeService:
                 # applied, so recording a code would make the sale line lie.
                 for ligne in result.lignearticles.all():
                     all_lines.append(ligne)
-                    total_centimes += ligne.amount
+                    total_centimes += ligne.total_catalogue
 
 
             # -- Phase 3/4 : Stripe ou gratuit --
@@ -393,9 +436,12 @@ class CommandeService:
                 raise CommandeServiceError(_("The amount must be 0 (free) or at least €0.50."))
 
             if total_centimes > 0:
-                CommandeService._creer_paiement_stripe(commande, user, all_lines)
+                CommandeService._creer_paiement_stripe(commande, user, all_lines, vente)
                 # Status reste PENDING — Stripe webhook basculera en PAID via signaux
             else:
+                # La vente reste EN_ATTENTE : elle sera encaissée à 0 avec les ventes
+                # sans Stripe.
+                # / The sale stays PENDING: settled at 0 with the non-Stripe sales.
                 CommandeService._finaliser_gratuit(commande, all_lines)
 
             logger.info(
@@ -414,9 +460,11 @@ class CommandeService:
         return price.prix or Decimal("0.00")
 
     @staticmethod
-    def _creer_paiement_stripe(commande, user, lignes):
+    def _creer_paiement_stripe(commande, user, lignes, vente):
         """Phase 3 — crée un Paiement_stripe consolidé pour toutes les lignes.
-        / Phase 3 — create a consolidated Paiement_stripe for all lines."""
+        Le paiement porte la vente de la commande (`vente`), posée dans son INSERT.
+        / Phase 3 — create a consolidated Paiement_stripe for all lines. The payment
+        carries the order's sale, set in its INSERT."""
         from BaseBillet.models import LigneArticle, Paiement_stripe
         from PaiementStripe.views import CreationPaiementStripe
 
@@ -463,6 +511,7 @@ class CommandeService:
             cancel_url="stripe_return/",
             absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
             accept_sepa=(not contains_tickets and not contains_bookings),
+            vente=vente,
         )
 
         if not new_paiement.is_valid():

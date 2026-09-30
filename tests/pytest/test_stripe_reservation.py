@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from fabriques_reservation import EVENEMENTS_A_ARCHIVER
+
 
 def _random_id():
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
@@ -63,6 +65,11 @@ def _create_event_and_product(api_client, auth_headers, event_name, product_name
     )
     event_data = resp_event.json()
     event_uuid = event_data["identifier"]
+
+    # Les données du test restent en base de dev ; l'événement sera archivé à la fin
+    # du test pour ne pas remplir l'agenda du lieu.
+    # / Test data stays in the dev DB; the event is archived at the end of the test.
+    EVENEMENTS_A_ARCHIVER.append(event_uuid)
 
     # Créer le produit / Create product
     product_payload = {

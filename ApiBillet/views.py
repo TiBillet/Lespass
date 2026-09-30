@@ -848,6 +848,14 @@ def paiment_stripe_validator(request, paiement_stripe: Paiement_stripe):
             paiement_stripe.status = Paiement_stripe.PAID
             paiement_stripe.last_action = timezone.now()
             paiement_stripe.traitement_en_cours = True
+            # Le montant réellement encaissé, en centimes, tel que la facture l'annonce.
+            # Une facture payée par le solde du client vaut 0 (un montant, pas « vide »).
+            # Posé AVANT le save() : ce save() déclenche la transition vers PAID
+            # (pre_save), qui doit trouver le montant déjà posé.
+            # / The amount really collected, in cents, as the invoice announces it (0
+            # when paid by the customer balance). Set BEFORE save(), which triggers the
+            # PAID transition (pre_save).
+            paiement_stripe.montant_encaisse = invoice.amount_paid
             paiement_stripe.save()
 
             return Response(
@@ -1311,6 +1319,18 @@ class Webhook_stripe(APIView):
                 paiement_stripe.status = Paiement_stripe.FAILED
                 paiement_stripe.lignearticles.all().update(status=LigneArticle.FAILED)
                 paiement_stripe.save()
+
+                # Prélèvement SEPA refusé : Stripe a dit non. Le passage à FAILED ne
+                # déclenche aucune transition : la vente du paiement est annulée ici,
+                # explicitement, si elle est encore en attente (sans numéro).
+                # / Refused SEPA debit: the FAILED status fires no transition, so the
+                # payment's pending sale is cancelled here, explicitly.
+                from BaseBillet.models_vente import Vente
+                from BaseBillet.services_vente import annuler_vente
+
+                vente_du_paiement = paiement_stripe.vente
+                if vente_du_paiement is not None and vente_du_paiement.statut == Vente.Statut.EN_ATTENTE:
+                    annuler_vente(vente_du_paiement)
 
                 # Échec du prélèvement SEPA : on réarme les adhésions liées qui
                 # étaient "paiement soumis, en attente". On les repasse en

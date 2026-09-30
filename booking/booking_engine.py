@@ -41,6 +41,8 @@ from rest_framework import serializers
 
 from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
 from BaseBillet.models import Paiement_stripe, LigneArticle, SaleOrigin, PaymentMethod, PromotionalCode
+from BaseBillet.models_vente import Vente
+from BaseBillet.services_vente import ajouter_article, ouvrir_vente
 from PaiementStripe.views import CreationPaiementStripe
 from booking.models import Booking
 from booking.serializers import BookingCreateSerializer
@@ -452,7 +454,8 @@ def validate_new_booking(resource,
                          create_checkout: bool = True,
                          first_name: str = None,
                          last_name: str = None,
-                         custom_amount: Decimal = None
+                         custom_amount: Decimal = None,
+                         vente=None,
                          ):
     """
     Valide B ⊆ E' et crée la réservation dans une transaction SERIALIZABLE.
@@ -526,6 +529,19 @@ def validate_new_booking(resource,
 
     reference_now : datetime fixe injecté pour les tests (finding §13).
                     / Fixed datetime injected for tests (finding §13).
+
+    vente : la vente (BaseBillet/models_vente.py) qui reçoit la ligne du créneau.
+            None et create_checkout=True : le booking ouvre SA vente, avant la ligne
+            (un paiement Stripe = une vente, R5). Si le créneau est gratuit, elle reste
+            EN_ATTENTE. Une vente passée par l'appelant reçoit la ligne : le panier
+            (CommandeService, create_checkout=False) passe toujours la vente de sa
+            commande. None et create_checkout=False : ligne sans vente ; aucun chemin
+            de production ne l'utilise, il reste pour les appels sans vente (tests) et
+            sera retiré en fiche H.
+            / The sale that receives the slot line: opened here when None and
+            create_checkout=True; passed by the caller (the cart always passes its
+            order's sale). None with create_checkout=False: no production path; kept
+            for calls without a sale (tests), removed in sheet H.
 
     :return: (True, Booking) si créé / if created
              (False, str)    message d'erreur / error message
@@ -688,17 +704,56 @@ def validate_new_booking(resource,
 
             price_sold = get_or_create_price_sold(price=price, promo_code=promo_code, custom_amount=amount)
 
+            moyen_de_la_ligne = external_payment_method or PaymentMethod.UNKNOWN
 
-            ligne_article = LigneArticle.objects.create(
-                booking=new_booking,
-                pricesold=price_sold,
-                qty=1,
-                amount=dec_to_int(price_sold.prix),
-                status=LigneArticle.CREATED,
-                payment_method=external_payment_method or PaymentMethod.UNKNOWN,
-                sale_origin=sale_origin,
-                promotional_code=promo_code,
-            )
+            # La vente naît AVANT la ligne, dans la même transaction : un refus de
+            # créneau (erreur de sérialisation) annule les deux.
+            # / The sale is opened BEFORE the line, in the same transaction.
+            if vente is None and create_checkout:
+                vente = ouvrir_vente(
+                    origine=sale_origin,
+                    nature=Vente.Nature.VENTE,
+                    client=member,
+                )
+
+            if vente is None:
+                # Ligne sans vente. Aucun chemin de production n'arrive ici : le booking
+                # direct ouvre sa vente juste au-dessus, le panier passe la sienne. Reste
+                # pour les appels sans vente (tests) ; retiré en fiche H.
+                # / Line without a sale: no production path reaches it (direct booking
+                # opens its own, the cart passes its own). Kept for tests; removed in H.
+                ligne_article = LigneArticle.objects.create(
+                    booking=new_booking,
+                    pricesold=price_sold,
+                    qty=1,
+                    amount=dec_to_int(price_sold.prix),
+                    status=LigneArticle.CREATED,
+                    payment_method=moyen_de_la_ligne,
+                    sale_origin=sale_origin,
+                    promotional_code=promo_code,
+                )
+            else:
+                # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
+                # / Imported at call time: laboutik/views.py imports all of BaseBillet.
+                from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
+                # La même ligne, écrite par le service de vente dans la vente : montants
+                # entiers et TVA (celle du produit, sinon celle du lieu).
+                # / The same line, written by the sale service into the sale.
+                ligne_article = ajouter_article(
+                    vente,
+                    pricesold=price_sold,
+                    quantite=1,
+                    prix_unitaire=dec_to_int(price_sold.prix),
+                    taux_tva=_taux_tva_de_la_ligne_de_caisse(
+                        price.product, moyen_de_la_ligne
+                    ),
+                    booking=new_booking,
+                    status=LigneArticle.CREATED,
+                    payment_method=moyen_de_la_ligne,
+                    sale_origin=sale_origin,
+                    promotional_code=promo_code,
+                )
 
 
     except OperationalError as e:
@@ -726,7 +781,7 @@ def validate_new_booking(resource,
                 ligne_article.status = LigneArticle.UNPAID
                 ligne_article.save()
 
-            checkout_url = get_checkout_stripe(new_booking)
+            checkout_url = get_checkout_stripe(new_booking, vente=vente)
         else:
             # Réservation gratuite : pas de Stripe. La ligne de vente passe directement à
             # « validée » en « offert », comme au panier (CommandeService._finaliser_gratuit).
@@ -747,7 +802,13 @@ def validate_new_booking(resource,
 
     return True, new_booking, checkout_url
 
-def get_checkout_stripe(booking):
+def get_checkout_stripe(booking, vente=None):
+    """
+    Crée le paiement Stripe du booking et sa session de paiement.
+    / Creates the booking's Stripe payment and its checkout session.
+
+    :param vente: la vente d'origine du paiement, posée dans son INSERT (ou None)
+    """
     booking: Booking = booking
     tenant = connection.tenant
     # Création du checkout stripe
@@ -767,6 +828,7 @@ def get_checkout_stripe(booking):
         cancel_url="stripe_return/",
         absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
         accept_sepa=False,
+        vente=vente,
     )
 
     if not new_paiement_stripe.is_valid():

@@ -42,6 +42,8 @@ from .serializers import (
     ParticipationCompleteSerializer,
 )
 from ApiBillet.serializers import get_or_create_price_sold
+from BaseBillet.models_vente import Vente
+from BaseBillet.services_vente import ajouter_article, ouvrir_vente
 from PaiementStripe.views import CreationPaiementStripe
 
 from django.contrib.auth import get_user_model
@@ -1183,12 +1185,30 @@ class InitiativeViewSet(viewsets.ViewSet):
             price_crowdfunding = _get_or_create_crowdfunding_price()
             price_sold_obj = get_or_create_price_sold(price_crowdfunding, custom_amount=montant_en_euros)
 
-            # FR: Créer la ligne comptable (LigneArticle) pour le suivi des ventes
-            # EN: Create the accounting line (LigneArticle) for sales tracking
-            ligne_comptable = LigneArticle.objects.create(
+            # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
+            # / Imported at call time: laboutik/views.py imports all of BaseBillet.
+            from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
+            # FR: La vente de ce paiement Stripe (un paiement = une vente, R5), ouverte
+            #     AVANT sa ligne. Elle reste EN_ATTENTE jusqu'au paiement confirmé.
+            # EN: The sale of this Stripe payment, opened BEFORE its line; PENDING until paid.
+            vente = ouvrir_vente(
+                origine=SaleOrigin.LESPASS,
+                nature=Vente.Nature.VENTE,
+                client=request.user,
+            )
+
+            # FR: Créer la ligne comptable (LigneArticle) pour le suivi des ventes, par le
+            #     service de vente : montants entiers et TVA (produit, sinon lieu).
+            # EN: Create the accounting line (LigneArticle) through the sale service.
+            ligne_comptable = ajouter_article(
+                vente,
                 pricesold=price_sold_obj,
-                qty=1,
-                amount=montant_en_centimes,
+                quantite=1,
+                prix_unitaire=montant_en_centimes,
+                taux_tva=_taux_tva_de_la_ligne_de_caisse(
+                    price_crowdfunding.product, PaymentMethod.STRIPE_NOFED
+                ),
                 payment_method=PaymentMethod.STRIPE_NOFED,
                 sale_origin=SaleOrigin.LESPASS,
             )
@@ -1220,6 +1240,7 @@ class InitiativeViewSet(viewsets.ViewSet):
                 absolute_domain=request.build_absolute_uri(
                     f"/crowd/{initiative.pk}/contributions/{contribution.pk}/"
                 ),
+                vente=vente,
             )
 
             if not payment_builder.is_valid():

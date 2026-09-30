@@ -1775,9 +1775,12 @@ class Commande(models.Model):
         verbose_name=_("Stripe payment"),
     )
 
-    # La vente créée quand l'achat est encaissé (BaseBillet/models_vente.py).
-    # Vide tant que le panier n'est pas payé.
-    # / The sale created when the purchase is settled. Empty until the cart is paid.
+    # La vente de la commande (BaseBillet/models_vente.py) : ouverte avec la commande,
+    # EN_ATTENTE, par CommandeService.materialiser ; encaissée quand le paiement est
+    # confirmé. Ses articles sont toutes les lignes de la commande (un paiement = une
+    # vente).
+    # / The order's sale: opened PENDING with the order, settled when the payment is
+    # confirmed. Its items are all the order's lines.
     vente = models.ForeignKey(
         "BaseBillet.Vente",
         on_delete=models.PROTECT,
@@ -3750,6 +3753,14 @@ class Paiement_stripe(models.Model):
                 self.status = Paiement_stripe.PAID
                 self.last_action = timezone.now()
                 self.traitement_en_cours = True
+
+                # Le montant réellement encaissé, en centimes, tel que Stripe l'annonce
+                # (jamais le total du catalogue). Posé AVANT le save() final : ce save()
+                # déclenche la transition vers PAID (pre_save), qui doit trouver le
+                # montant déjà posé.
+                # / The amount really collected, in cents, as Stripe announces it. Set
+                # BEFORE the final save(), which triggers the PAID transition (pre_save).
+                self.montant_encaisse = checkout_session.amount_total
 
                 # Paiement constaté payé : s'il n'a pas été reconnu comme un SEPA plus
                 # haut (ni à un passage précédent), c'est un paiement par carte.

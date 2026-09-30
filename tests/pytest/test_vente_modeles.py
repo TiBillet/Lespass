@@ -399,6 +399,10 @@ def test_paiement_stripe_moyen_sr_pose_a_la_creation_d_une_echeance(lieu, mock_s
     facture_stripe_simulee = SimpleNamespace(
         id=identifiant_de_la_nouvelle_facture,
         status="paid",
+        # Une vraie facture Stripe porte toujours `amount_paid` : il est lu comme le
+        # montant encaissé du paiement de l'échéance.
+        # / A real Stripe invoice always carries `amount_paid`, read as the collected amount.
+        amount_paid=1500,
         lines={"data": [SimpleNamespace(amount=1500, quantity=1)]},
         parent=SimpleNamespace(
             subscription_details=SimpleNamespace(

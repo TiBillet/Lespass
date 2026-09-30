@@ -115,11 +115,12 @@ fabrique pas plus que ce que la spec demande.
 État : fiches 0, A′, A, B commitées ; fusion de `origin/main-fedow-import` commitée
 (`8407e954`, B-6 dedans). Aucun push sans le mainteneur.
 
-**Fiche C terminée, prouvée et relue, PAS ENCORE COMMITÉE** (C-0, C-1a, C-1b, C-2, C-3 ;
-`make test` 2492 passed ; 4 E2E du QR 10 passed ; relecture Fable : 0 bloquant, importants
-corrigés en C-3). **Vérifier avec `git log` que le mainteneur a commité la fiche C** avant
-d'ouvrir la suivante. Prochaine fiche : **D** (D-1 « une vente par paiement Stripe »), à relire
-contre le code actuel avant le brief.
+**Fiche C commitée** (`d475f3ac`). **Fiche D ouverte** : D-1 relue contre le code (écarts au
+SUIVI §4 : deux chemins vivants vers « payé », code mort, `save()` imbriqué du paiement,
+`CANCELED` = `no_payment_required`, producteurs manquants) ; découpage **D-1a** (producteurs
+directs ouvrent la vente `EN_ATTENTE`) → **D-1b** (panier, abonnement) → **D-1c** (fixture,
+`montant_encaisse`, point d'encaissement unique, écart, T4-T6). D-1a : brief écrit, ouvrier en
+étape 1. Puis D-2 (sans Stripe), D-3 (avoirs).
 Décisions du 2026-09-30 : tireuse = même cascade que le cashless de la caisse (répartition
 locales puis ancien Fedow, débit distant exécuté d'abord, sans verrou du lieu) ; égalité
 rompue / échec après débit distant = 500 + Sentry, rien de dédié ; QR / NFC en ligne =

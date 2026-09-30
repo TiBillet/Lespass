@@ -61,7 +61,6 @@ class TestCrowdsContributionStripe:
         """
         from django_tenants.utils import schema_context
         from crowds.models import Initiative, Contribution
-        from BaseBillet.models import LigneArticle
 
         with schema_context("lespass"):
             initiative = Initiative.objects.first()
@@ -106,11 +105,12 @@ class TestCrowdsContributionStripe:
             assert contrib.amount == 1500
 
             # Vérifier la LigneArticle créée
-            ligne = LigneArticle.objects.filter(
-                amount=1500,
-                sale_origin="LP",
-            ).order_by("-datetime").first()
+            # La ligne de CETTE contribution, pas la dernière ligne de 15 € du lieu.
+            # / The line of THIS contribution, not the venue's latest 15 € line.
+            ligne = contrib.ligne_article
             assert ligne is not None, "LigneArticle non trouvée pour la contribution"
+            assert ligne.amount == 1500
+            assert ligne.sale_origin == "LP"
 
             # Remettre direct_debit à False / Reset direct_debit
             initiative.direct_debit = False

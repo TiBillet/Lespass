@@ -28,16 +28,6 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 
-# Événements et produits créés par `creer_evenement_et_produit`, en attente de nettoyage.
-# La fixture automatique `_nettoyer_les_evenements_de_la_fabrique` (tests/pytest/conftest.py)
-# les supprime après chaque test. Sans ça, chaque `make test` laisse une dizaine
-# d'événements à J+1 dans l'agenda du lieu lespass : au-delà de 200 à venir, la page 1
-# de l'agenda est pleine, et le test E2E de l'assistant d'événement ne trouve plus le sien.
-# / Events and products created by `creer_evenement_et_produit`, awaiting cleanup
-# by the autouse fixture in tests/pytest/conftest.py.
-EVENEMENTS_A_NETTOYER = []
-
-
 def identifiant_aleatoire():
     """8 caractères pour rendre uniques les noms et les emails de test.
     / 8 characters to make test names and emails unique."""
@@ -105,59 +95,38 @@ def creer_evenement_et_produit(
         f"Création produit échouée ({resp_product.status_code}): {resp_product.content[:300]}"
     )
     price_uuid = resp_product.json()["offers"][0]["identifier"]
-    EVENEMENTS_A_NETTOYER.append((event_uuid, resp_product.json()["identifier"]))
+    EVENEMENTS_A_ARCHIVER.append(event_uuid)
     return event_uuid, price_uuid
 
 
-def nettoyer_evenements_crees(tenant):
-    """Supprime les événements et produits créés par `creer_evenement_et_produit`,
-    avec tout ce qui les protège (PROTECT) : ventes, paiements, réservations.
-    / Deletes the events and products created by `creer_evenement_et_produit`, with
-    everything that PROTECTs them: sales, payments, reservations.
+# Identifiants des événements créés par les tests, en attente d'archivage.
+# La fixture automatique `_archiver_les_evenements_crees` (tests/pytest/conftest.py)
+# les archive après chaque test. On n'archive PAS dès la création : un événement
+# archivé n'est plus en vente, le panier le refuserait.
+# / Ids of events created by tests, awaiting archiving by the autouse fixture in
+# tests/pytest/conftest.py. Not archived at creation: an archived event is no longer
+# on sale, the cart would refuse it.
+EVENEMENTS_A_ARCHIVER = []
 
-    L'ordre suit les PROTECT : les avoirs avant les lignes qu'ils annulent, les lignes
-    avant les paiements et les réservations, les réservations avant l'événement,
-    les tarifs vendus avant le tarif, le tarif avant le produit.
-    / The order follows the PROTECTs.
+
+def archiver_evenements_crees():
+    """Archive les événements créés par les tests : ils sortent de l'agenda de lespass.
+    / Archives the events created by tests: they leave the lespass agenda.
+
+    Les tests ne font pas de ménage : leurs données (événements, produits, ventes,
+    paiements) restent en base de dev. Seuls les événements sont archivés, sinon chaque
+    `make test` remplit l'agenda : au-delà de 200 événements à venir, la page 1 est
+    pleine et le test E2E de l'assistant d'événement ne trouve plus le sien.
+    / Tests do not clean up: their data stays in the dev DB. Only events are archived,
+    otherwise every `make test` fills the agenda.
     """
-    from django.db import transaction
-    from django.db.models import Q
     from django_tenants.utils import tenant_context
-    from BaseBillet.models import (
-        Commande, Event, LigneArticle, Paiement_stripe, Price, PriceSold, Product,
-        ProductSold, Reservation,
-    )
+    from BaseBillet.models import Event
+    from Customers.models import Client
 
-    with tenant_context(tenant), transaction.atomic():
-        while EVENEMENTS_A_NETTOYER:
-            event_uuid, product_uuid = EVENEMENTS_A_NETTOYER.pop()
-            reservations = Reservation.objects.filter(event_id=event_uuid)
-            commandes_ids = list(
-                reservations.exclude(commande=None).values_list("commande_id", flat=True)
-            )
-            paiements = Paiement_stripe.objects.filter(
-                Q(reservation__in=reservations) | Q(commande_obj__in=commandes_ids)
-            )
-            lignes = LigneArticle.objects.filter(
-                Q(reservation__in=reservations)
-                | Q(paiement_stripe__in=paiements)
-                | Q(pricesold__productsold__event_id=event_uuid)
-                | Q(pricesold__price__product_id=product_uuid)
-            )
-            LigneArticle.objects.filter(credit_note_for__in=lignes).delete()
-            lignes.delete()
-            paiements.delete()
-            reservations.delete()
-            Commande.objects.filter(pk__in=commandes_ids).delete()
-            PriceSold.objects.filter(
-                Q(productsold__event_id=event_uuid) | Q(price__product_id=product_uuid)
-            ).delete()
-            ProductSold.objects.filter(
-                Q(event_id=event_uuid) | Q(product_id=product_uuid)
-            ).delete()
-            Event.objects.filter(pk=event_uuid).delete()
-            Price.objects.filter(product_id=product_uuid).delete()
-            Product.objects.filter(pk=product_uuid).delete()
+    with tenant_context(Client.objects.get(schema_name="lespass")):
+        while EVENEMENTS_A_ARCHIVER:
+            Event.objects.filter(pk=EVENEMENTS_A_ARCHIVER.pop()).update(archived=True)
 
 
 def creer_reservation_api(
@@ -310,8 +279,6 @@ def reservation_payee(
             )
             paiement = reservation.commande.paiement_stripe
 
-    # Garde vitale : filter(paiement_stripe=None).delete() viderait la compta du tenant.
-    # / Vital guard: filter(paiement_stripe=None).delete() would wipe the tenant's accounting.
     assert paiement is not None, "Paiement_stripe introuvable"
 
     with tenant_context(tenant):
@@ -335,18 +302,6 @@ def reservation_payee(
 
     mock_stripe.session.payment_intent = payment_intent_id
     return reservation, paiement, prix_un_billet
-
-
-def nettoyer_paiement(tenant, paiement):
-    """Retire les lignes comptables d'un paiement (vente + remboursements) : la base
-    de dev est partagée et sans rollback.
-    / Removes a payment's accounting lines (sale + refunds): the dev DB is shared, no rollback.
-    """
-    from django_tenants.utils import tenant_context
-    from BaseBillet.models import LigneArticle
-
-    with tenant_context(tenant):
-        LigneArticle.objects.filter(paiement_stripe=paiement).delete()
 
 
 def vente_admin_especes(tenant, event_uuid, price_uuid, qty, offert=False):
@@ -386,14 +341,3 @@ def vente_admin_especes(tenant, event_uuid, price_uuid, qty, offert=False):
         ligne = LigneArticle.objects.get(reservation=reservation)
     return reservation, ligne
 
-
-def nettoyer_vente_admin(tenant, ligne):
-    """Retire une ligne admin et ses avoirs (d'abord les avoirs : credit_note_for est en PROTECT).
-    / Removes an admin line and its credit notes (credit notes first: PROTECT FK).
-    """
-    from django_tenants.utils import tenant_context
-    from BaseBillet.models import LigneArticle
-
-    with tenant_context(tenant):
-        LigneArticle.objects.filter(credit_note_for=ligne).delete()
-        LigneArticle.objects.filter(pk=ligne.pk).delete()

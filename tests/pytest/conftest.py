@@ -289,20 +289,17 @@ def _enable_db_access_for_all(django_db_blocker):
 
 
 @pytest.fixture(autouse=True)
-def _nettoyer_les_evenements_de_la_fabrique():
-    """Après chaque test, supprime les événements et produits créés par
-    `fabriques_reservation.creer_evenement_et_produit` (base de dev partagée, sans rollback).
-    / After each test, deletes the events and products created by the factory.
+def _archiver_les_evenements_crees():
+    """Après chaque test, archive les événements créés par les tests Stripe
+    (base de dev partagée, sans rollback ; les autres données restent en base).
+    / After each test, archives the events created by the Stripe tests
+    (shared dev DB, no rollback; the other data stays).
     """
     yield
     import fabriques_reservation
 
-    if fabriques_reservation.EVENEMENTS_A_NETTOYER:
-        from Customers.models import Client
-
-        fabriques_reservation.nettoyer_evenements_crees(
-            Client.objects.get(schema_name="lespass")
-        )
+    if fabriques_reservation.EVENEMENTS_A_ARCHIVER:
+        fabriques_reservation.archiver_evenements_crees()
 
 
 @pytest.fixture(autouse=True, scope="class")
@@ -381,9 +378,87 @@ def mock_stripe():
         def test_something(mock_stripe, ...):
             # mock_stripe.session contient le mock Session
             # mock_stripe.session.id == "cs_test_mock_session"
+
+    LES MONTANTS RENVOYES PAR STRIPE (centimes)
+    - `session.amount_total` est calcule AU MOMENT OU ON LE LIT : c'est la somme des
+      `total_catalogue` des articles de la vente d'origine du `Paiement_stripe` le plus
+      recent qui porte l'id de la session simulee. Pas de paiement, ou pas de vente : 0.
+    - `stripe.Invoice.retrieve(id)` renvoie `facture` : `status` = "paid", et
+      `amount_paid` calcule de la meme facon, pour le paiement qui porte cet id de
+      facture. La facture simulee n'a ni `lines` ni `parent` : un test qui cree le
+      paiement d'une echeance (`new_entry_from_stripe_subscription_invoice`) patche sa
+      propre facture.
+    Le montant n'est donc jamais fixe : un montant fixe ferait apparaitre un ecart
+    d'encaissement dans tous les tests, et 0 simulerait une facture payee par le solde
+    du client. Un `MagicMock` ne convient pas non plus : `int(MagicMock())` vaut 1.
+    / Stripe amounts (cents) are computed when read: sum of `total_catalogue` of the
+    items of the original sale of the newest payment carrying the simulated session id
+    (or invoice id). No payment or no sale: 0.
+
+    IMPOSER UN MONTANT (test d'ecart d'encaissement) : une simple affectation.
+        mock_stripe.session.amount_total = 2400
+        mock_stripe.facture.amount_paid = 0
+    La valeur imposee est rendue telle quelle jusqu'a la fin du test.
+    / To impose an amount, just assign it; it is returned as is until the end of the test.
     """
     from unittest.mock import patch, MagicMock
     from types import SimpleNamespace
+
+    def total_catalogue_de_la_vente_du_paiement_le_plus_recent(paiements_candidats):
+        """
+        Somme des `total_catalogue` des articles de la vente d'origine du paiement le
+        plus recent parmi `paiements_candidats`. Pas de paiement, ou pas de vente : 0.
+        Lu dans le schema courant : le test est deja dans le lieu quand Stripe est lu.
+        / Sum of the catalogue totals of the newest payment's original sale; 0 otherwise.
+        """
+        from BaseBillet.models import LigneArticle
+
+        paiement_le_plus_recent = paiements_candidats.order_by("-order_date").first()
+        if paiement_le_plus_recent is None:
+            return 0
+        if paiement_le_plus_recent.vente_id is None:
+            return 0
+
+        total_catalogue_des_articles = 0
+        for article in LigneArticle.objects.filter(
+            vente_id=paiement_le_plus_recent.vente_id
+        ):
+            total_catalogue_des_articles += article.total_catalogue
+        return total_catalogue_des_articles
+
+    # Les montants imposes par le test, par nom d'attribut.
+    # / Amounts imposed by the test, by attribute name.
+    montants_imposes_par_le_test = {}
+
+    def lire_amount_total(session):
+        if "amount_total" in montants_imposes_par_le_test:
+            return montants_imposes_par_le_test["amount_total"]
+        from BaseBillet.models import Paiement_stripe
+
+        paiements_de_la_session = Paiement_stripe.objects.filter(
+            checkout_session_id_stripe=session.id
+        )
+        return total_catalogue_de_la_vente_du_paiement_le_plus_recent(
+            paiements_de_la_session
+        )
+
+    def imposer_amount_total(session, montant_impose):
+        montants_imposes_par_le_test["amount_total"] = montant_impose
+
+    def lire_amount_paid(facture):
+        if "amount_paid" in montants_imposes_par_le_test:
+            return montants_imposes_par_le_test["amount_paid"]
+        from BaseBillet.models import Paiement_stripe
+
+        paiements_de_la_facture = Paiement_stripe.objects.filter(
+            invoice_stripe=facture.id
+        )
+        return total_catalogue_de_la_vente_du_paiement_le_plus_recent(
+            paiements_de_la_facture
+        )
+
+    def imposer_amount_paid(facture, montant_impose):
+        montants_imposes_par_le_test["amount_paid"] = montant_impose
 
     fake_session = MagicMock()
     fake_session.id = "cs_test_mock_session"
@@ -394,6 +469,21 @@ def mock_stripe():
     fake_session.metadata = {}
     fake_session.subscription = None
     fake_session.status = "complete"
+    # Chaque MagicMock a sa PROPRE classe : la propriete posee sur `type(...)` ne
+    # concerne que cet objet (ni les autres mocks, ni ses attributs enfants).
+    # / Each MagicMock has its OWN class: the property only affects this object.
+    type(fake_session).amount_total = property(lire_amount_total, imposer_amount_total)
+
+    fake_facture = MagicMock()
+    fake_facture.id = None
+    fake_facture.status = "paid"
+    type(fake_facture).amount_paid = property(lire_amount_paid, imposer_amount_paid)
+
+    def relire_la_facture_chez_stripe(identifiant_de_la_facture, **options_stripe):
+        """`stripe.Invoice.retrieve` simule : la facture demandee, payee.
+        / Simulated `stripe.Invoice.retrieve`: the requested invoice, paid."""
+        fake_facture.id = identifiant_de_la_facture
+        return fake_facture
 
     fake_pi = MagicMock()
     fake_pi.payment_method_types = ["card"]
@@ -405,11 +495,16 @@ def mock_stripe():
         patch("stripe.PaymentIntent.retrieve", return_value=fake_pi) as mock_pi,
         patch("stripe.Subscription.retrieve", return_value=MagicMock(id="sub_test_mock")) as mock_sub,
         patch("stripe.Subscription.modify", return_value=MagicMock()) as mock_sub_mod,
+        patch(
+            "stripe.Invoice.retrieve", side_effect=relire_la_facture_chez_stripe
+        ) as mock_invoice,
     ):
         yield SimpleNamespace(
             session=fake_session,
+            facture=fake_facture,
             pi=fake_pi,
             mock_create=mock_create,
             mock_retrieve=mock_retrieve,
             mock_pi=mock_pi,
+            mock_invoice=mock_invoice,
         )

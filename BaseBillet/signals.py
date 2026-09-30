@@ -17,6 +17,8 @@ from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
     trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership, \
     refill_from_lespass_to_user_wallet_from_ticket_scanned
+from BaseBillet.models_vente import Vente
+from BaseBillet.services_vente import annuler_vente, encaisser_vente_stripe
 from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
 from booking.models import Booking
 from fedow_connect.fedow_api import AssetFedow
@@ -80,12 +82,49 @@ def set_ligne_article_paid(old_instance: Paiement_stripe, new_instance: Paiement
             reservation.status = Reservation.PAID
             reservation.save()
 
+    # Le point d'encaissement unique de la vente en ligne, EN DERNIER : après le
+    # passage des lignes et des réservations en payé. Aucune exception ne sort d'ici :
+    # le client est payé et ses billets partent ; la vente reste EN_ATTENTE et se rejoue
+    # en rappelant `encaisser_vente_stripe(paiement)`. Sans ce `try`, le paiement
+    # resterait PENDING et Stripe rejouerait tout.
+    # / The single settlement point, LAST. No exception leaves here: the customer is
+    # paid; the sale stays PENDING and is replayed by calling the function again.
+    try:
+        encaisser_vente_stripe(new_instance)
+    except Exception as erreur:
+        logger.error(
+            f"Encaissement de la vente du paiement Stripe {new_instance.uuid} en "
+            f"échec, vente laissée en attente : {erreur!r}"
+        )
+
     logger.info(f"    END PAIEMENT_STRIPE set_ligne_article_paid\n")
 
 
 def expire_paiement_stripe(old_instance, new_instance):
+    # Une session expirée ne change rien à la vente : elle reste EN_ATTENTE, sans
+    # numéro. Un paiement tardif (EXPIRE → PAID) l'encaisse telle quelle.
+    # / An expired session changes nothing to the sale: it stays PENDING.
     logger.info(f"    SIGNAL PAIEMENT STRIPE expire_paiement_stripe {old_instance.status} to {new_instance.status}")
-    pass
+
+
+def annuler_la_vente_du_paiement_stripe(old_instance, new_instance):
+    """
+    Stripe dit « non » (`PENDING → CANCELED`) : la vente du paiement passe ANNULEE,
+    sans numéro, si elle est encore EN_ATTENTE. Un paiement sans vente (antérieur au
+    chantier) : rien.
+    / Stripe says no (PENDING -> CANCELED): the payment's pending sale is cancelled.
+
+    LOCALISATION : BaseBillet/signals.py (transition du pre_save de Paiement_stripe)
+    """
+    logger.info(
+        f"    SIGNAL PAIEMENT STRIPE annuler_la_vente_du_paiement_stripe "
+        f"{old_instance.status} to {new_instance.status}"
+    )
+    vente_du_paiement = new_instance.vente
+    if vente_du_paiement is None:
+        return
+    if vente_du_paiement.statut == Vente.Statut.EN_ATTENTE:
+        annuler_vente(vente_du_paiement)
 
 
 def valide_stripe_paiement(old_instance, new_instance):
@@ -310,7 +349,7 @@ PRE_SAVE_TRANSITIONS = {
         Paiement_stripe.PENDING: {
             Paiement_stripe.PAID: set_ligne_article_paid,
             Paiement_stripe.EXPIRE: expire_paiement_stripe,
-            Paiement_stripe.CANCELED: expire_paiement_stripe,
+            Paiement_stripe.CANCELED: annuler_la_vente_du_paiement_stripe,
         },
         Paiement_stripe.EXPIRE: {
             Paiement_stripe.PAID: set_ligne_article_paid,

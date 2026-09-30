@@ -29,7 +29,6 @@ import pytest
 from fabriques_reservation import (
     creer_evenement_et_produit,
     identifiant_aleatoire,
-    nettoyer_paiement,
     reservation_payee,
 )
 
@@ -86,41 +85,38 @@ class TestRemboursementStripeReel:
             compte_stripe_reel=compte_stripe_de_test,
         )
 
-        try:
-            with tenant_context(tenant):
-                for billet in reservation.tickets.order_by("pk"):
-                    reservation.cancel_and_refund_ticket(billet)
+        with tenant_context(tenant):
+            for billet in reservation.tickets.order_by("pk"):
+                reservation.cancel_and_refund_ticket(billet)
 
-                montants_chez_stripe = montants_rembourses_chez_stripe(
-                    paiement.payment_intent_id,
-                    compte_stripe_de_test,
-                )
-                assert montants_chez_stripe == [
-                    prix_un_billet,
-                    prix_un_billet,
-                    prix_un_billet,
-                ], (
-                    f"Stripe doit avoir 3 remboursements de {prix_un_billet}, obtenu {montants_chez_stripe}"
-                )
+            montants_chez_stripe = montants_rembourses_chez_stripe(
+                paiement.payment_intent_id,
+                compte_stripe_de_test,
+            )
+            assert montants_chez_stripe == [
+                prix_un_billet,
+                prix_un_billet,
+                prix_un_billet,
+            ], (
+                f"Stripe doit avoir 3 remboursements de {prix_un_billet}, obtenu {montants_chez_stripe}"
+            )
 
-                # Le paiement lui-même, lu chez Stripe : 30 € encaissés, 30 € remboursés.
-                # / The payment itself, read at Stripe: 30 € captured, 30 € refunded.
-                etat_chez_stripe = etat_du_paiement_chez_stripe(
-                    paiement.payment_intent_id,
-                    compte_stripe_de_test,
-                )
-                assert etat_chez_stripe == {
-                    "montant_encaisse": prix_un_billet * 3,
-                    "montant_rembourse": prix_un_billet * 3,
-                    "rembourse_en_totalite": True,
-                }, f"Paiement inattendu chez Stripe : {etat_chez_stripe}"
+            # Le paiement lui-même, lu chez Stripe : 30 € encaissés, 30 € remboursés.
+            # / The payment itself, read at Stripe: 30 € captured, 30 € refunded.
+            etat_chez_stripe = etat_du_paiement_chez_stripe(
+                paiement.payment_intent_id,
+                compte_stripe_de_test,
+            )
+            assert etat_chez_stripe == {
+                "montant_encaisse": prix_un_billet * 3,
+                "montant_rembourse": prix_un_billet * 3,
+                "rembourse_en_totalite": True,
+            }, f"Paiement inattendu chez Stripe : {etat_chez_stripe}"
 
-                paiement.refresh_from_db()
-                assert paiement.status == Paiement_stripe.REFUNDED
-                reservation.refresh_from_db()
-                assert reservation.status == Reservation.CANCELED
-        finally:
-            nettoyer_paiement(tenant, paiement)
+            paiement.refresh_from_db()
+            assert paiement.status == Paiement_stripe.REFUNDED
+            reservation.refresh_from_db()
+            assert reservation.status == Reservation.CANCELED
 
     @pytest.mark.parametrize("parcours", ["sans_panier", "avec_panier"])
     def test_reservation_complete_remboursee_chez_stripe(
@@ -157,33 +153,30 @@ class TestRemboursementStripeReel:
             compte_stripe_reel=compte_stripe_de_test,
         )
 
-        try:
-            with tenant_context(tenant):
-                reservation.cancel_and_refund_resa()
+        with tenant_context(tenant):
+            reservation.cancel_and_refund_resa()
 
-                montants_chez_stripe = montants_rembourses_chez_stripe(
-                    paiement.payment_intent_id,
-                    compte_stripe_de_test,
-                )
-                assert montants_chez_stripe == [prix_un_billet * 3], (
-                    f"Stripe doit avoir 1 remboursement de {prix_un_billet * 3}, obtenu {montants_chez_stripe}"
-                )
+            montants_chez_stripe = montants_rembourses_chez_stripe(
+                paiement.payment_intent_id,
+                compte_stripe_de_test,
+            )
+            assert montants_chez_stripe == [prix_un_billet * 3], (
+                f"Stripe doit avoir 1 remboursement de {prix_un_billet * 3}, obtenu {montants_chez_stripe}"
+            )
 
-                # Le paiement lui-même, lu chez Stripe : 30 € encaissés, 30 € remboursés.
-                # / The payment itself, read at Stripe: 30 € captured, 30 € refunded.
-                etat_chez_stripe = etat_du_paiement_chez_stripe(
-                    paiement.payment_intent_id,
-                    compte_stripe_de_test,
-                )
-                assert etat_chez_stripe == {
-                    "montant_encaisse": prix_un_billet * 3,
-                    "montant_rembourse": prix_un_billet * 3,
-                    "rembourse_en_totalite": True,
-                }, f"Paiement inattendu chez Stripe : {etat_chez_stripe}"
+            # Le paiement lui-même, lu chez Stripe : 30 € encaissés, 30 € remboursés.
+            # / The payment itself, read at Stripe: 30 € captured, 30 € refunded.
+            etat_chez_stripe = etat_du_paiement_chez_stripe(
+                paiement.payment_intent_id,
+                compte_stripe_de_test,
+            )
+            assert etat_chez_stripe == {
+                "montant_encaisse": prix_un_billet * 3,
+                "montant_rembourse": prix_un_billet * 3,
+                "rembourse_en_totalite": True,
+            }, f"Paiement inattendu chez Stripe : {etat_chez_stripe}"
 
-                paiement.refresh_from_db()
-                assert paiement.status == Paiement_stripe.REFUNDED
-                reservation.refresh_from_db()
-                assert reservation.status == Reservation.CANCELED
-        finally:
-            nettoyer_paiement(tenant, paiement)
+            paiement.refresh_from_db()
+            assert paiement.status == Paiement_stripe.REFUNDED
+            reservation.refresh_from_db()
+            assert reservation.status == Reservation.CANCELED

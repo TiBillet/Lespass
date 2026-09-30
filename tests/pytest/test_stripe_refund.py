@@ -39,8 +39,6 @@ from fabriques_reservation import (
     creer_evenement_et_produit,
     creer_reservation_api,
     identifiant_aleatoire,
-    nettoyer_paiement,
-    nettoyer_vente_admin,
     reservation_payee,
     vente_admin_especes,
 )
@@ -71,60 +69,57 @@ class TestRemboursementStripe:
             parcours, api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=3,
         )
 
-        try:
-            with tenant_context(tenant):
-                billets = list(reservation.tickets.order_by("pk"))
-                statut_paiement_attendu = [
-                    Paiement_stripe.PARTIALLY_REFUNDED,
-                    Paiement_stripe.PARTIALLY_REFUNDED,
-                    Paiement_stripe.REFUNDED,
-                ]
-                total_paye_attendu = [Decimal("20.00"), Decimal("10.00"), Decimal("0.00")]
-                date_de_reservation = reservation.datetime
+        with tenant_context(tenant):
+            billets = list(reservation.tickets.order_by("pk"))
+            statut_paiement_attendu = [
+                Paiement_stripe.PARTIALLY_REFUNDED,
+                Paiement_stripe.PARTIALLY_REFUNDED,
+                Paiement_stripe.REFUNDED,
+            ]
+            total_paye_attendu = [Decimal("20.00"), Decimal("10.00"), Decimal("0.00")]
+            date_de_reservation = reservation.datetime
 
-                with patch(
-                    "stripe.Refund.create",
-                    return_value=MagicMock(status="succeeded"),
-                ) as mock_refund:
-                    for numero, billet in enumerate(billets):
-                        reservation.cancel_and_refund_ticket(billet)
+            with patch(
+                "stripe.Refund.create",
+                return_value=MagicMock(status="succeeded"),
+            ) as mock_refund:
+                for numero, billet in enumerate(billets):
+                    reservation.cancel_and_refund_ticket(billet)
 
-                        paiement.refresh_from_db()
-                        assert paiement.status == statut_paiement_attendu[numero], (
-                            f"Billet {numero + 1} : paiement attendu {statut_paiement_attendu[numero]}, "
-                            f"obtenu {paiement.status}"
-                        )
-                        assert reservation.total_paid() == total_paye_attendu[numero], (
-                            f"Billet {numero + 1} : total payé attendu {total_paye_attendu[numero]}, "
-                            f"obtenu {reservation.total_paid()}"
-                        )
+                    paiement.refresh_from_db()
+                    assert paiement.status == statut_paiement_attendu[numero], (
+                        f"Billet {numero + 1} : paiement attendu {statut_paiement_attendu[numero]}, "
+                        f"obtenu {paiement.status}"
+                    )
+                    assert reservation.total_paid() == total_paye_attendu[numero], (
+                        f"Billet {numero + 1} : total payé attendu {total_paye_attendu[numero]}, "
+                        f"obtenu {reservation.total_paid()}"
+                    )
 
-                montants = [appel.kwargs["amount"] for appel in mock_refund.call_args_list]
-                assert montants == [prix_un_billet, prix_un_billet, prix_un_billet], (
-                    f"3 remboursements d'un billet ({prix_un_billet}) attendus, obtenu {montants}"
-                )
+            montants = [appel.kwargs["amount"] for appel in mock_refund.call_args_list]
+            assert montants == [prix_un_billet, prix_un_billet, prix_un_billet], (
+                f"3 remboursements d'un billet ({prix_un_billet}) attendus, obtenu {montants}"
+            )
 
-                # Chaque remboursement est une ligne négative rattachée à la réservation.
-                # / Each refund is a negative line linked to the reservation.
-                remboursements = LigneArticle.objects.filter(
-                    paiement_stripe=paiement, status=LigneArticle.REFUNDED,
-                )
-                assert remboursements.count() == 3
-                assert all(ligne.qty == -1 for ligne in remboursements)
-                assert all(ligne.reservation_id == reservation.pk for ligne in remboursements), (
-                    "Les lignes de remboursement doivent être rattachées à la réservation."
-                )
+            # Chaque remboursement est une ligne négative rattachée à la réservation.
+            # / Each refund is a negative line linked to the reservation.
+            remboursements = LigneArticle.objects.filter(
+                paiement_stripe=paiement, status=LigneArticle.REFUNDED,
+            )
+            assert remboursements.count() == 3
+            assert all(ligne.qty == -1 for ligne in remboursements)
+            assert all(ligne.reservation_id == reservation.pk for ligne in remboursements), (
+                "Les lignes de remboursement doivent être rattachées à la réservation."
+            )
 
-                assert all(billet.status == Ticket.CANCELED for billet in reservation.tickets.all())
-                reservation.refresh_from_db()
-                assert reservation.status == Reservation.CANCELED, (
-                    f"Plus aucun billet actif : réservation attendue CANCELED, obtenu {reservation.status}"
-                )
-                # Seul le statut est réécrit : la date de réservation ne bouge pas.
-                # / Only the status is rewritten: the reservation date does not move.
-                assert reservation.datetime == date_de_reservation
-        finally:
-            nettoyer_paiement(tenant, paiement)
+            assert all(billet.status == Ticket.CANCELED for billet in reservation.tickets.all())
+            reservation.refresh_from_db()
+            assert reservation.status == Reservation.CANCELED, (
+                f"Plus aucun billet actif : réservation attendue CANCELED, obtenu {reservation.status}"
+            )
+            # Seul le statut est réécrit : la date de réservation ne bouge pas.
+            # / Only the status is rewritten: the reservation date does not move.
+            assert reservation.datetime == date_de_reservation
 
     @pytest.mark.parametrize("parcours", ["sans_panier", "avec_panier"])
     def test_reservation_complete_remboursee_d_un_coup(
@@ -141,40 +136,37 @@ class TestRemboursementStripe:
             parcours, api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=3,
         )
 
-        try:
-            with tenant_context(tenant):
-                with patch(
-                    "stripe.Refund.create",
-                    return_value=MagicMock(status="succeeded"),
-                ) as mock_refund:
-                    reservation.cancel_and_refund_resa()
+        with tenant_context(tenant):
+            with patch(
+                "stripe.Refund.create",
+                return_value=MagicMock(status="succeeded"),
+            ) as mock_refund:
+                reservation.cancel_and_refund_resa()
 
-                assert mock_refund.call_count == 1
-                kwargs = mock_refund.call_args.kwargs
-                assert kwargs["amount"] == prix_un_billet * 3, (
-                    f"Remboursement de 3 billets attendu ({prix_un_billet * 3}), obtenu {kwargs['amount']}"
-                )
-                assert kwargs["payment_intent"] == mock_stripe.session.payment_intent
+            assert mock_refund.call_count == 1
+            kwargs = mock_refund.call_args.kwargs
+            assert kwargs["amount"] == prix_un_billet * 3, (
+                f"Remboursement de 3 billets attendu ({prix_un_billet * 3}), obtenu {kwargs['amount']}"
+            )
+            assert kwargs["payment_intent"] == mock_stripe.session.payment_intent
 
-                paiement.refresh_from_db()
-                assert paiement.status == Paiement_stripe.REFUNDED
+            paiement.refresh_from_db()
+            assert paiement.status == Paiement_stripe.REFUNDED
 
-                remboursement = LigneArticle.objects.get(
-                    paiement_stripe=paiement, status=LigneArticle.REFUNDED,
-                )
-                assert remboursement.qty == -3
-                assert remboursement.reservation_id == reservation.pk, (
-                    "La ligne de remboursement doit être rattachée à la réservation."
-                )
+            remboursement = LigneArticle.objects.get(
+                paiement_stripe=paiement, status=LigneArticle.REFUNDED,
+            )
+            assert remboursement.qty == -3
+            assert remboursement.reservation_id == reservation.pk, (
+                "La ligne de remboursement doit être rattachée à la réservation."
+            )
 
-                reservation.refresh_from_db()
-                assert reservation.status == Reservation.CANCELED
-                assert all(billet.status == Ticket.CANCELED for billet in reservation.tickets.all())
-                assert reservation.total_paid() == Decimal("0.00"), (
-                    f"Tout est remboursé : total payé attendu 0, obtenu {reservation.total_paid()}"
-                )
-        finally:
-            nettoyer_paiement(tenant, paiement)
+            reservation.refresh_from_db()
+            assert reservation.status == Reservation.CANCELED
+            assert all(billet.status == Ticket.CANCELED for billet in reservation.tickets.all())
+            assert reservation.total_paid() == Decimal("0.00"), (
+                f"Tout est remboursé : total payé attendu 0, obtenu {reservation.total_paid()}"
+            )
 
     @pytest.mark.parametrize("parcours", ["sans_panier", "avec_panier"])
     def test_un_billet_puis_reservation_complete(
@@ -191,27 +183,24 @@ class TestRemboursementStripe:
             parcours, api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=3,
         )
 
-        try:
-            with tenant_context(tenant):
-                with patch(
-                    "stripe.Refund.create",
-                    return_value=MagicMock(status="succeeded"),
-                ) as mock_refund:
-                    reservation.cancel_and_refund_ticket(reservation.tickets.order_by("pk").first())
-                    reservation.cancel_and_refund_resa()
+        with tenant_context(tenant):
+            with patch(
+                "stripe.Refund.create",
+                return_value=MagicMock(status="succeeded"),
+            ) as mock_refund:
+                reservation.cancel_and_refund_ticket(reservation.tickets.order_by("pk").first())
+                reservation.cancel_and_refund_resa()
 
-                montants = [appel.kwargs["amount"] for appel in mock_refund.call_args_list]
-                assert montants == [prix_un_billet, prix_un_billet * 2], (
-                    f"Remboursements attendus : 1 billet, puis les 2 restants. Obtenu {montants}"
-                )
+            montants = [appel.kwargs["amount"] for appel in mock_refund.call_args_list]
+            assert montants == [prix_un_billet, prix_un_billet * 2], (
+                f"Remboursements attendus : 1 billet, puis les 2 restants. Obtenu {montants}"
+            )
 
-                paiement.refresh_from_db()
-                assert paiement.status == Paiement_stripe.REFUNDED
-                reservation.refresh_from_db()
-                assert reservation.status == Reservation.CANCELED
-                assert reservation.total_paid() == Decimal("0.00")
-        finally:
-            nettoyer_paiement(tenant, paiement)
+            paiement.refresh_from_db()
+            assert paiement.status == Paiement_stripe.REFUNDED
+            reservation.refresh_from_db()
+            assert reservation.status == Reservation.CANCELED
+            assert reservation.total_paid() == Decimal("0.00")
 
     @pytest.mark.parametrize("parcours", ["sans_panier", "avec_panier"])
     def test_annuler_apres_trois_billets_rembourses_ne_rembourse_rien_de_plus(
@@ -229,24 +218,21 @@ class TestRemboursementStripe:
             parcours, api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=3,
         )
 
-        try:
-            with tenant_context(tenant):
-                with patch(
-                    "stripe.Refund.create",
-                    return_value=MagicMock(status="succeeded"),
-                ) as mock_refund:
-                    for billet in reservation.tickets.order_by("pk"):
-                        reservation.cancel_and_refund_ticket(billet)
-                    lignes_avant = LigneArticle.objects.filter(paiement_stripe=paiement).count()
+        with tenant_context(tenant):
+            with patch(
+                "stripe.Refund.create",
+                return_value=MagicMock(status="succeeded"),
+            ) as mock_refund:
+                for billet in reservation.tickets.order_by("pk"):
+                    reservation.cancel_and_refund_ticket(billet)
+                lignes_avant = LigneArticle.objects.filter(paiement_stripe=paiement).count()
 
-                    message_attendu = re.escape(gettext("This reservation has already been canceled."))
-                    with pytest.raises(Exception, match=message_attendu):
-                        reservation.cancel_and_refund_resa()
+                message_attendu = re.escape(gettext("This reservation has already been canceled."))
+                with pytest.raises(Exception, match=message_attendu):
+                    reservation.cancel_and_refund_resa()
 
-                assert mock_refund.call_count == 3, "Aucun remboursement Stripe de plus."
-                assert LigneArticle.objects.filter(paiement_stripe=paiement).count() == lignes_avant
-        finally:
-            nettoyer_paiement(tenant, paiement)
+            assert mock_refund.call_count == 3, "Aucun remboursement Stripe de plus."
+            assert LigneArticle.objects.filter(paiement_stripe=paiement).count() == lignes_avant
 
     def test_annulation_billet_par_billet_n_ecrit_pas_d_erreur_dans_les_logs(
         self, api_client, auth_headers, mock_stripe, tenant, caplog
@@ -266,23 +252,20 @@ class TestRemboursementStripe:
             "sans_panier", api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=2,
         )
 
-        try:
-            with tenant_context(tenant):
-                Reservation.objects.filter(pk=reservation.pk).update(status=Reservation.PAID)
-                reservation.refresh_from_db()
+        with tenant_context(tenant):
+            Reservation.objects.filter(pk=reservation.pk).update(status=Reservation.PAID)
+            reservation.refresh_from_db()
 
-                with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
-                    for billet in reservation.tickets.order_by("pk"):
-                        reservation.cancel_and_refund_ticket(billet)
+            with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
+                for billet in reservation.tickets.order_by("pk"):
+                    reservation.cancel_and_refund_ticket(billet)
 
-                reservation.refresh_from_db()
-                assert reservation.status == Reservation.CANCELED
+            reservation.refresh_from_db()
+            assert reservation.status == Reservation.CANCELED
 
-            assert "erreur_regression" not in caplog.text, (
-                "Une annulation a déclenché error_regression dans la machine à états."
-            )
-        finally:
-            nettoyer_paiement(tenant, paiement)
+        assert "erreur_regression" not in caplog.text, (
+            "Une annulation a déclenché error_regression dans la machine à états."
+        )
 
     @pytest.mark.parametrize("annulation", ["billet", "reservation"])
     def test_annuler_sans_paiement_remboursable_leve_une_erreur_et_n_annule_rien(
@@ -300,28 +283,25 @@ class TestRemboursementStripe:
             "sans_panier", api_client, auth_headers, tenant, mock_stripe, event_uuid, price_uuid, qty=2,
         )
 
-        try:
-            with tenant_context(tenant):
-                # Un statut que les filtres de remboursement ne retiennent pas.
-                # / A status the refund filters do not keep.
-                Paiement_stripe.objects.filter(pk=paiement.pk).update(status=Paiement_stripe.CANCELED)
+        with tenant_context(tenant):
+            # Un statut que les filtres de remboursement ne retiennent pas.
+            # / A status the refund filters do not keep.
+            Paiement_stripe.objects.filter(pk=paiement.pk).update(status=Paiement_stripe.CANCELED)
 
-                message_attendu = re.escape(gettext("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
-                with patch("stripe.Refund.create") as mock_refund:
-                    with pytest.raises(Exception, match=message_attendu):
-                        if annulation == "billet":
-                            reservation.cancel_and_refund_ticket(reservation.tickets.order_by("pk").first())
-                        else:
-                            reservation.cancel_and_refund_resa()
+            message_attendu = re.escape(gettext("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
+            with patch("stripe.Refund.create") as mock_refund:
+                with pytest.raises(Exception, match=message_attendu):
+                    if annulation == "billet":
+                        reservation.cancel_and_refund_ticket(reservation.tickets.order_by("pk").first())
+                    else:
+                        reservation.cancel_and_refund_resa()
 
-                assert not mock_refund.called
-                assert not reservation.tickets.filter(status=Ticket.CANCELED).exists(), (
-                    "Aucun billet ne doit être annulé sans remboursement."
-                )
-                reservation.refresh_from_db()
-                assert reservation.status == Reservation.VALID
-        finally:
-            nettoyer_paiement(tenant, paiement)
+            assert not mock_refund.called
+            assert not reservation.tickets.filter(status=Ticket.CANCELED).exists(), (
+                "Aucun billet ne doit être annulé sans remboursement."
+            )
+            reservation.refresh_from_db()
+            assert reservation.status == Reservation.VALID
 
     def test_annuler_une_reservation_gratuite_n_appelle_pas_stripe(
         self, api_client, auth_headers, mock_stripe, tenant
@@ -352,20 +332,17 @@ class TestRemboursementStripe:
             ).order_by("-datetime").first()
             assert reservation is not None
 
-            try:
-                assert not mock_stripe.mock_create.called, "Le parcours gratuit ne doit ouvrir aucun paiement Stripe."
-                assert not LigneArticle.objects.filter(
-                    reservation=reservation, status__in=[LigneArticle.VALID, LigneArticle.PAID],
-                ).exists(), "Une réservation gratuite ne doit avoir aucune ligne payée."
+            assert not mock_stripe.mock_create.called, "Le parcours gratuit ne doit ouvrir aucun paiement Stripe."
+            assert not LigneArticle.objects.filter(
+                reservation=reservation, status__in=[LigneArticle.VALID, LigneArticle.PAID],
+            ).exists(), "Une réservation gratuite ne doit avoir aucune ligne payée."
 
-                with patch("stripe.Refund.create") as mock_refund:
-                    reservation.cancel_and_refund_resa()
+            with patch("stripe.Refund.create") as mock_refund:
+                reservation.cancel_and_refund_resa()
 
-                assert not mock_refund.called, "Aucun remboursement Stripe pour une réservation gratuite."
-                reservation.refresh_from_db()
-                assert reservation.status == Reservation.CANCELED
-            finally:
-                LigneArticle.objects.filter(reservation=reservation).delete()
+            assert not mock_refund.called, "Aucun remboursement Stripe pour une réservation gratuite."
+            reservation.refresh_from_db()
+            assert reservation.status == Reservation.CANCELED
 
 
 class TestAvoirsHorsStripe:
@@ -388,24 +365,20 @@ class TestAvoirsHorsStripe:
         )
         reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=1)
 
-        try:
-            with tenant_context(tenant):
-                # Précondition : les deux ventes partagent le même tarif vendu.
-                # / Precondition: both sales share the same sold price.
-                assert reservation_stripe.tickets.get().pricesold_id == ligne_admin.pricesold_id
+        with tenant_context(tenant):
+            # Précondition : les deux ventes partagent le même tarif vendu.
+            # / Precondition: both sales share the same sold price.
+            assert reservation_stripe.tickets.get().pricesold_id == ligne_admin.pricesold_id
 
-                with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
-                    reservation_stripe.cancel_and_refund_resa()
+            with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
+                reservation_stripe.cancel_and_refund_resa()
 
-                avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
-                assert avoirs.count() == 0, (
-                    "Annuler la réservation Stripe a créé un avoir sur la vente espèces d'un autre client."
-                )
-                reservation_admin.refresh_from_db()
-                assert reservation_admin.status == Reservation.VALID
-        finally:
-            nettoyer_vente_admin(tenant, ligne_admin)
-            nettoyer_paiement(tenant, paiement)
+            avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
+            assert avoirs.count() == 0, (
+                "Annuler la réservation Stripe a créé un avoir sur la vente espèces d'un autre client."
+            )
+            reservation_admin.refresh_from_db()
+            assert reservation_admin.status == Reservation.VALID
 
     def test_annuler_un_billet_stripe_ne_touche_pas_la_vente_especes_d_un_autre_client(
         self, api_client, auth_headers, mock_stripe, tenant
@@ -422,25 +395,21 @@ class TestAvoirsHorsStripe:
         )
         _reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=1)
 
-        try:
-            with tenant_context(tenant):
-                with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
-                    message = reservation_stripe.cancel_and_refund_ticket(
-                        reservation_stripe.tickets.order_by("pk").first()
-                    )
+        with tenant_context(tenant):
+            with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
+                message = reservation_stripe.cancel_and_refund_ticket(
+                    reservation_stripe.tickets.order_by("pk").first()
+                )
 
-                avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
-                assert avoirs.count() == 0, (
-                    "Annuler un billet Stripe a créé un avoir sur la vente espèces d'un autre client."
-                )
-                # Remboursé par Stripe : le message est celui du remboursement.
-                # / Refunded by Stripe: the message is the refund one.
-                assert str(message) == str(reservation_stripe.cancel_text()), (
-                    f"Message de remboursement attendu, obtenu {message!r}"
-                )
-        finally:
-            nettoyer_vente_admin(tenant, ligne_admin)
-            nettoyer_paiement(tenant, paiement)
+            avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
+            assert avoirs.count() == 0, (
+                "Annuler un billet Stripe a créé un avoir sur la vente espèces d'un autre client."
+            )
+            # Remboursé par Stripe : le message est celui du remboursement.
+            # / Refunded by Stripe: the message is the refund one.
+            assert str(message) == str(reservation_stripe.cancel_text()), (
+                f"Message de remboursement attendu, obtenu {message!r}"
+            )
 
     def test_annuler_une_reservation_admin_especes_cree_son_avoir(
         self, api_client, auth_headers, tenant
@@ -454,33 +423,30 @@ class TestAvoirsHorsStripe:
         event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
         reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=3)
 
-        try:
-            with tenant_context(tenant):
-                assert reservation_admin.total_paid() == Decimal("30.00")
+        with tenant_context(tenant):
+            assert reservation_admin.total_paid() == Decimal("30.00")
 
-                reservation_admin.cancel_and_refund_resa()
+            reservation_admin.cancel_and_refund_resa()
 
-                avoir = LigneArticle.objects.get(credit_note_for=ligne_admin)
-                assert avoir.status == LigneArticle.CREDIT_NOTE
-                assert avoir.qty == -3
-                assert avoir.reservation_id == reservation_admin.pk, (
-                    "L'avoir doit être rattaché à la réservation."
-                )
-                reservation_admin.refresh_from_db()
-                assert reservation_admin.status == Reservation.CANCELED
-                assert reservation_admin.total_paid() == Decimal("0.00"), (
-                    f"Avoir compté : total payé attendu 0, obtenu {reservation_admin.total_paid()}"
-                )
+            avoir = LigneArticle.objects.get(credit_note_for=ligne_admin)
+            assert avoir.status == LigneArticle.CREDIT_NOTE
+            assert avoir.qty == -3
+            assert avoir.reservation_id == reservation_admin.pk, (
+                "L'avoir doit être rattaché à la réservation."
+            )
+            reservation_admin.refresh_from_db()
+            assert reservation_admin.status == Reservation.CANCELED
+            assert reservation_admin.total_paid() == Decimal("0.00"), (
+                f"Avoir compté : total payé attendu 0, obtenu {reservation_admin.total_paid()}"
+            )
 
-                # La fiche utilisateur de l'admin recalcule le montant payé à sa façon.
-                # / The admin user page computes the paid amount its own way.
-                from Administration.admin_tenant import _lignes_payees_prefetch
-                montant_admin = sum(
-                    int(ligne.amount * ligne.qty) for ligne in _lignes_payees_prefetch(reservation_admin)
-                )
-                assert montant_admin == 0, f"Montant payé côté admin attendu 0, obtenu {montant_admin}"
-        finally:
-            nettoyer_vente_admin(tenant, ligne_admin)
+            # La fiche utilisateur de l'admin recalcule le montant payé à sa façon.
+            # / The admin user page computes the paid amount its own way.
+            from Administration.admin_tenant import _lignes_payees_prefetch
+            montant_admin = sum(
+                int(ligne.amount * ligne.qty) for ligne in _lignes_payees_prefetch(reservation_admin)
+            )
+            assert montant_admin == 0, f"Montant payé côté admin attendu 0, obtenu {montant_admin}"
 
     def test_trois_billets_admin_annules_un_par_un_creent_trois_avoirs_d_un_billet(
         self, api_client, auth_headers, tenant
@@ -494,29 +460,26 @@ class TestAvoirsHorsStripe:
         event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
         reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=3)
 
-        try:
-            with tenant_context(tenant):
-                total_paye_attendu = [Decimal("20.00"), Decimal("10.00"), Decimal("0.00")]
-                for numero, billet in enumerate(reservation_admin.tickets.order_by("pk")):
-                    reservation_admin.cancel_and_refund_ticket(billet)
+        with tenant_context(tenant):
+            total_paye_attendu = [Decimal("20.00"), Decimal("10.00"), Decimal("0.00")]
+            for numero, billet in enumerate(reservation_admin.tickets.order_by("pk")):
+                reservation_admin.cancel_and_refund_ticket(billet)
 
-                    avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
-                    assert [avoir.qty for avoir in avoirs] == [-1] * (numero + 1), (
-                        f"Billet {numero + 1} : un avoir de -1 par billet attendu, "
-                        f"obtenu {[avoir.qty for avoir in avoirs]}"
-                    )
-                    assert reservation_admin.total_paid() == total_paye_attendu[numero], (
-                        f"Billet {numero + 1} : total payé attendu {total_paye_attendu[numero]}, "
-                        f"obtenu {reservation_admin.total_paid()}"
-                    )
+                avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
+                assert [avoir.qty for avoir in avoirs] == [-1] * (numero + 1), (
+                    f"Billet {numero + 1} : un avoir de -1 par billet attendu, "
+                    f"obtenu {[avoir.qty for avoir in avoirs]}"
+                )
+                assert reservation_admin.total_paid() == total_paye_attendu[numero], (
+                    f"Billet {numero + 1} : total payé attendu {total_paye_attendu[numero]}, "
+                    f"obtenu {reservation_admin.total_paid()}"
+                )
 
-                reservation_admin.refresh_from_db()
-                assert reservation_admin.status == Reservation.CANCELED
-                # Une ligne entièrement créditée n'est plus proposée.
-                # / A fully credited line is no longer offered.
-                assert reservation_admin._lignes_hors_stripe() == []
-        finally:
-            nettoyer_vente_admin(tenant, ligne_admin)
+            reservation_admin.refresh_from_db()
+            assert reservation_admin.status == Reservation.CANCELED
+            # Une ligne entièrement créditée n'est plus proposée.
+            # / A fully credited line is no longer offered.
+            assert reservation_admin._lignes_hors_stripe() == []
 
     def test_un_billet_admin_puis_reservation_complete_cree_un_avoir_pour_le_reste(
         self, api_client, auth_headers, tenant
@@ -530,20 +493,17 @@ class TestAvoirsHorsStripe:
         event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
         reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=3)
 
-        try:
-            with tenant_context(tenant):
-                reservation_admin.cancel_and_refund_ticket(reservation_admin.tickets.order_by("pk").first())
-                reservation_admin.cancel_and_refund_resa()
+        with tenant_context(tenant):
+            reservation_admin.cancel_and_refund_ticket(reservation_admin.tickets.order_by("pk").first())
+            reservation_admin.cancel_and_refund_resa()
 
-                quantites_des_avoirs = sorted(
-                    avoir.qty for avoir in LigneArticle.objects.filter(credit_note_for=ligne_admin)
-                )
-                assert quantites_des_avoirs == [-2, -1], (
-                    f"Avoirs attendus : -1 (le billet), puis -2 (le reste). Obtenu {quantites_des_avoirs}"
-                )
-                assert reservation_admin.total_paid() == Decimal("0.00")
-        finally:
-            nettoyer_vente_admin(tenant, ligne_admin)
+            quantites_des_avoirs = sorted(
+                avoir.qty for avoir in LigneArticle.objects.filter(credit_note_for=ligne_admin)
+            )
+            assert quantites_des_avoirs == [-2, -1], (
+                f"Avoirs attendus : -1 (le billet), puis -2 (le reste). Obtenu {quantites_des_avoirs}"
+            )
+            assert reservation_admin.total_paid() == Decimal("0.00")
 
     def test_annuler_une_reservation_gratuite_ne_touche_pas_la_vente_admin_du_meme_tarif(
         self, api_client, auth_headers, mock_stripe, tenant
@@ -568,22 +528,17 @@ class TestAvoirsHorsStripe:
             tenant, event_uuid, price_uuid, qty=1, offert=True,
         )
 
-        try:
-            with tenant_context(tenant):
-                reservation_gratuite = Reservation.objects.filter(
-                    user_commande__email=email,
-                ).order_by("-datetime").first()
-                assert reservation_gratuite.tickets.get().pricesold_id == ligne_admin.pricesold_id
+        with tenant_context(tenant):
+            reservation_gratuite = Reservation.objects.filter(
+                user_commande__email=email,
+            ).order_by("-datetime").first()
+            assert reservation_gratuite.tickets.get().pricesold_id == ligne_admin.pricesold_id
 
-                reservation_gratuite.cancel_and_refund_resa()
+            reservation_gratuite.cancel_and_refund_resa()
 
-                assert LigneArticle.objects.filter(credit_note_for=ligne_admin).count() == 0, (
-                    "Annuler la réservation gratuite a créé un avoir sur la vente admin."
-                )
-        finally:
-            nettoyer_vente_admin(tenant, ligne_admin)
-            with tenant_context(tenant):
-                LigneArticle.objects.filter(reservation__user_commande__email=email).delete()
+            assert LigneArticle.objects.filter(credit_note_for=ligne_admin).count() == 0, (
+                "Annuler la réservation gratuite a créé un avoir sur la vente admin."
+            )
 
     def test_lignes_hors_stripe_ne_renvoie_que_les_lignes_de_la_reservation(
         self, api_client, auth_headers, mock_stripe, tenant
@@ -611,17 +566,11 @@ class TestAvoirsHorsStripe:
                 sale_origin=SaleOrigin.ADMIN,
             )
 
-        try:
-            with tenant_context(tenant):
-                assert list(reservation_admin._lignes_hors_stripe()) == [ligne_admin]
-                assert list(reservation_admin._lignes_hors_stripe(
-                    pricesold_ids=[ligne_admin.pricesold_id],
-                )) == [ligne_admin]
-                assert list(reservation_stripe._lignes_hors_stripe()) == [], (
-                    "Une réservation Stripe n'a aucune ligne hors Stripe à elle."
-                )
-        finally:
-            nettoyer_vente_admin(tenant, ancienne_ligne_sans_reservation)
-            nettoyer_vente_admin(tenant, ligne_autre_client)
-            nettoyer_vente_admin(tenant, ligne_admin)
-            nettoyer_paiement(tenant, paiement)
+        with tenant_context(tenant):
+            assert list(reservation_admin._lignes_hors_stripe()) == [ligne_admin]
+            assert list(reservation_admin._lignes_hors_stripe(
+                pricesold_ids=[ligne_admin.pricesold_id],
+            )) == [ligne_admin]
+            assert list(reservation_stripe._lignes_hors_stripe()) == [], (
+                "Une réservation Stripe n'a aucune ligne hors Stripe à elle."
+            )

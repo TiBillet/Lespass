@@ -33,16 +33,28 @@ Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-montants-entiers.md 
 et CHANTIER-05-A-vente-reglement.md (§3).
 """
 
+import logging
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import connection, transaction
 from django.db.models import Max
 from django.utils import timezone
 
-from BaseBillet.models import LigneArticle, PaymentMethod, Product, SaleOrigin
+from BaseBillet.models import (
+    CategorieProduct,
+    LigneArticle,
+    PaymentMethod,
+    Price,
+    PriceSold,
+    Product,
+    ProductSold,
+    SaleOrigin,
+)
 from BaseBillet.models_vente import Reglement, Vente
 from laboutik.integrity import calculer_hmac_vente
 from laboutik.models import LaboutikConfiguration
+
+logger = logging.getLogger(__name__)
 
 # Les moyens « offerts » : ils gardent la trace d'un cadeau (jetons des bénévoles,
 # bouton OFFRIR), mais ce n'est pas de l'argent encaissé. Un règlement « offert » compte
@@ -73,6 +85,15 @@ METHODES_CAISSE_HORS_CHIFFRE_AFFAIRES = [
 # Les natures de vente qui peuvent n'avoir aucun article : leurs règlements s'annulent.
 # / Sale natures that may have no item: their payments cancel each other out.
 NATURES_SANS_ARTICLE_ACCEPTEES = [Vente.Nature.VIDAGE_CARTE, Vente.Nature.CORRECTION]
+
+# Les noms des deux produits système « Écart d'encaissement » (et de leurs catégories).
+# Ce sont des DONNÉES en base, comme tout nom de produit : jamais `_()`. Traduits, ils
+# changeraient avec la langue active, et `get_or_create` créerait un second produit
+# par langue (la fiche E relie chaque catégorie à un compte : 758 / 658).
+# / Names of the two "collection gap" system products: database DATA, never `_()`,
+# otherwise `get_or_create` would create one product per language.
+NOM_ECART_RECU_EN_PLUS = "Écart d'encaissement — reçu en plus"
+NOM_ECART_RECU_EN_MOINS = "Écart d'encaissement — reçu en moins"
 
 
 class EgaliteDeVenteRompue(Exception):
@@ -783,3 +804,195 @@ def annuler_vente(vente):
         vente_verrouillee.save()
 
     return vente_verrouillee
+
+
+def tarif_vendu_d_ecart_d_encaissement(nom_du_produit):
+    """
+    Le tarif vendu du produit système « Écart d'encaissement » demandé, créé à la
+    première demande avec sa catégorie du même nom.
+    / The sold price of the requested "collection gap" system product, created on
+    first request with its category of the same name.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    Le produit n'est jamais publié et n'est jamais saisi à la main : seul
+    `encaisser_vente_stripe` l'utilise. Son tarif vaut 0 : le montant de l'écart est
+    porté par la ligne (`amount`), pas par le tarif.
+    / Never published, never typed by hand. Its price is 0: the gap amount is on the line.
+
+    :param nom_du_produit: `NOM_ECART_RECU_EN_PLUS` ou `NOM_ECART_RECU_EN_MOINS`
+    :return: le `PriceSold` à passer à `ajouter_article`
+    """
+    # `_created` et non `_` : « _ » masquerait gettext si on l'importe un jour.
+    # / `_created`, not `_`: "_" would shadow gettext.
+    categorie_d_ecart, _created = CategorieProduct.objects.get_or_create(
+        name=nom_du_produit
+    )
+    produit_d_ecart, _created = Product.objects.get_or_create(
+        name=nom_du_produit,
+        defaults={
+            "categorie_article": Product.NONE,
+            "categorie_pos": categorie_d_ecart,
+            "publish": False,
+        },
+    )
+    tarif_d_ecart, _created = Price.objects.get_or_create(
+        product=produit_d_ecart,
+        defaults={"name": nom_du_produit, "prix": Decimal("0"), "publish": False},
+    )
+    produit_vendu_d_ecart, _created = ProductSold.objects.get_or_create(
+        product=produit_d_ecart,
+        event=None,
+        defaults={"categorie_article": produit_d_ecart.categorie_article},
+    )
+    tarif_vendu_d_ecart, _created = PriceSold.objects.get_or_create(
+        productsold=produit_vendu_d_ecart,
+        price=tarif_d_ecart,
+        defaults={"prix": tarif_d_ecart.prix},
+    )
+    return tarif_vendu_d_ecart
+
+
+def encaisser_vente_stripe(paiement_stripe):
+    """
+    Encaisse la vente d'origine d'un paiement Stripe, au montant que Stripe a
+    réellement encaissé. Le point d'encaissement unique de la vente en ligne.
+    / Settles the original sale of a Stripe payment, at the amount Stripe really
+    collected. The single settlement point of online sales.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    APPELÉE PAR : `BaseBillet/signals.py` `set_ligne_article_paid`, à la fin de la
+    transition vers PAID (pre_save de `Paiement_stripe`), dans un `try`. Aussi pour
+    rejouer un encaissement qui a échoué : on rappelle cette fonction, car un `save()`
+    du paiement, déjà VALID, ne rejoue rien.
+    / Called at the end of the PAID transition (pre_save), inside a `try`. Also called
+    directly to replay a failed settlement.
+
+    Le montant est lu sur l'OBJET reçu : dans le `pre_save`, il n'est pas encore en base.
+    / The amount is read on the RECEIVED object: in the pre_save it is not in the database yet.
+
+    FLUX (tout dans une transaction, un point de sauvegarde si l'appelant en a une) :
+    0. Paiement sans vente (antérieur au chantier) : rien, noté au journal (INFO).
+    1. Verrou du lieu (le même que `encaisser_vente`), vente relue sous verrou.
+    2. Déjà REGLEE → rendue telle quelle, RIEN n'est écrit (rejeu du webhook, retour
+       du navigateur). ANNULEE → ValueError (Stripe a dit non, puis « payé » : à
+       regarder à la main).
+    3. Montant encaissé vide → ValueError. Moyen vide alors qu'il y a un règlement à
+       écrire → ValueError.
+    4. Écart = montant encaissé − Σ totaux catalogue. Écart non nul : un article
+       « Écart d'encaissement » (reçu en plus : quantité +1 ; reçu en moins : −1),
+       prix unitaire = |écart|, TVA 0, hors chiffre d'affaires, ligne VALID sans
+       paiement Stripe.
+    5. Montant non nul : UN règlement au moyen du paiement (`Paiement_stripe.moyen`),
+       relié au paiement. Montant 0 (facture payée par le solde du client) : aucun.
+    6. `encaisser_vente` en dernier. Puis l'alerte d'écart au journal (ERROR).
+    / 0. no sale: nothing; 1. lock, read back; 2. settled: returned as is, cancelled:
+    refused; 3. empty amount / method: refused; 4. gap item; 5. one payment unless 0;
+    6. settle, then log the gap alert.
+
+    :param paiement_stripe: le `Paiement_stripe` constaté payé
+    :return: la vente REGLEE, ou None pour un paiement sans vente
+    """
+    # 0. Un paiement antérieur au chantier n'a pas de vente : rien à encaisser.
+    # / 0. A payment older than the sale model has no sale: nothing to settle.
+    paiement_sans_vente = paiement_stripe.vente_id is None
+    if paiement_sans_vente:
+        logger.info(
+            f"Paiement Stripe {paiement_stripe.uuid} sans vente d'origine : "
+            f"rien à encaisser."
+        )
+        return None
+
+    with transaction.atomic():
+        # 1. Verrou du lieu, puis la vente relue sous verrou : l'état en base fait foi.
+        # / 1. Venue lock, then the sale read back under lock.
+        nom_du_verrou_du_lieu = f"vente-{connection.schema_name}"
+        with connection.cursor() as curseur:
+            curseur.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                [nom_du_verrou_du_lieu],
+            )
+        vente = Vente.objects.select_for_update().get(pk=paiement_stripe.vente_id)
+
+        # 2. Rejeu : la vente est déjà encaissée, on ne réécrit rien.
+        # / 2. Replay: the sale is already settled, nothing is written again.
+        vente_deja_reglee = vente.statut == Vente.Statut.REGLEE
+        if vente_deja_reglee:
+            return vente
+
+        vente_annulee = vente.statut == Vente.Statut.ANNULEE
+        if vente_annulee:
+            raise ValueError(
+                f"Paiement Stripe {paiement_stripe.uuid} constaté payé, mais sa vente "
+                f"{vente.uuid} est annulée : à vérifier à la main."
+            )
+
+        # 3. Le montant et le moyen viennent du paiement. Aucun des deux n'est inventé.
+        # / 3. Amount and method come from the payment. Neither is invented.
+        montant_encaisse = paiement_stripe.montant_encaisse
+        if montant_encaisse is None:
+            raise ValueError(
+                f"Paiement Stripe {paiement_stripe.uuid} : montant encaissé vide, le "
+                f"chemin qui l'a constaté payé ne l'a pas posé."
+            )
+        moyen_du_paiement = paiement_stripe.moyen
+        reglement_a_ecrire = montant_encaisse != 0
+        if reglement_a_ecrire and not moyen_du_paiement:
+            raise ValueError(
+                f"Paiement Stripe {paiement_stripe.uuid} : moyen de paiement vide, le "
+                f"règlement ne peut pas être écrit."
+            )
+
+        # 4. L'écart entre l'argent reçu et le catalogue devient un article.
+        # / 4. The gap between money received and catalogue becomes an item.
+        somme_des_totaux_catalogue = 0
+        for article in LigneArticle.objects.filter(vente=vente):
+            somme_des_totaux_catalogue += article.total_catalogue
+        ecart_en_centimes = montant_encaisse - somme_des_totaux_catalogue
+
+        if ecart_en_centimes > 0:
+            nom_du_produit_d_ecart = NOM_ECART_RECU_EN_PLUS
+            quantite_de_l_ecart = Decimal("1")
+        else:
+            nom_du_produit_d_ecart = NOM_ECART_RECU_EN_MOINS
+            quantite_de_l_ecart = Decimal("-1")
+
+        if ecart_en_centimes != 0:
+            # La ligne naît VALID et sans paiement Stripe : elle ne bloque pas le
+            # passage du paiement à VALID (`set_paiement_stripe_valid`) et ne
+            # déclenche aucune transition (création, pas de changement de statut).
+            # / Born VALID, without Stripe payment: blocks nothing, triggers nothing.
+            ajouter_article(
+                vente,
+                pricesold=tarif_vendu_d_ecart_d_encaissement(nom_du_produit_d_ecart),
+                quantite=quantite_de_l_ecart,
+                prix_unitaire=abs(ecart_en_centimes),
+                taux_tva=Decimal("0"),
+                hors_chiffre_affaires=True,
+                status=LigneArticle.VALID,
+            )
+
+        # 5. Un seul règlement, du montant encaissé. Jamais de règlement de 0.
+        # / 5. One single payment, of the collected amount. Never a 0 payment.
+        if reglement_a_ecrire:
+            ajouter_reglement(
+                vente,
+                moyen=moyen_du_paiement,
+                montant=montant_encaisse,
+                paiement_stripe=paiement_stripe,
+            )
+
+        # 6. Encaisser en dernier.
+        # / 6. Settle last.
+        vente_encaissee = encaisser_vente(vente)
+
+        if ecart_en_centimes != 0:
+            logger.error(
+                f"Écart d'encaissement sur la vente {vente_encaissee.uuid} "
+                f"(paiement Stripe {paiement_stripe.uuid}) : Stripe a encaissé "
+                f"{montant_encaisse} centimes pour {somme_des_totaux_catalogue} "
+                f"centimes au catalogue (écart {ecart_en_centimes})."
+            )
+
+    return vente_encaissee
