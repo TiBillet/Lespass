@@ -1320,9 +1320,26 @@ class ProductAdmin(ModelAdmin):
         # 3. DUPLICATION DES TARIFS (Price)
         # 3. DUPLICATION OF PRICES (Price)
 
+        # Un tarif archivé (« supprimé ») n'est pas copié.
+        # / An archived ("deleted") price is not copied.
+        tarifs_a_copier = list(produit_source.prices.filter(archived=False))
+
+        # Pour un produit « réservation gratuite », l'enregistrement du nouveau produit
+        # (étape 1) a déjà créé un tarif gratuit automatique : c'est le signal
+        # post_save_Product de BaseBillet/models.py.
+        # Si on copie ensuite les tarifs du produit source, ce tarif automatique est en trop.
+        # On l'efface vraiment (hard_delete) : il vient d'être créé, il n'a jamais été vendu.
+        # Voir l'issue GitHub #459.
+        # / For a "free booking" product, saving the new product already auto-created a
+        #   free price (post_save_Product signal). It would be one price too many: really
+        #   delete it before copying the source prices (GitHub issue #459).
+        if tarifs_a_copier:
+            for tarif_cree_automatiquement in nouveau_produit.prices.all():
+                tarif_cree_automatiquement.hard_delete()
+
         # On parcourt tous les tarifs associés au produit source
         # Loop through all prices associated with the source product
-        for tarif_original in produit_source.prices.filter(archived=False):
+        for tarif_original in tarifs_a_copier:
             # Création d'une copie du tarif
             # Creating a copy of the price
             nouveau_tarif = Price.objects.get(pk=tarif_original.pk)
