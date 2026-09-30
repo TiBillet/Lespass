@@ -279,12 +279,28 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
             user.save()
 
         # C'est parti pour l'envoi dans les mails !
-        email_sended = send_membership_invoice_to_email.delay(str(membership.uuid))
+        #
+        # On attend le COMMIT avant d'envoyer les tâches Celery.
+        # Le worker Celery a sa propre connexion à la base.
+        # Si la tâche part avant le COMMIT (ex : adhésion créée dans l'admin Django,
+        # dont les vues sont dans une transaction), le worker ne trouve pas encore
+        # l'adhésion et plante sur « Membership DoesNotExist ». Voir l'issue GitHub #117.
+        # Hors transaction, on_commit lance la fonction tout de suite : rien ne change.
+        # / Wait for COMMIT before dispatching the Celery tasks: the worker has its own
+        #   DB connection and would not find the membership yet (GitHub issue #117).
+        uuid_de_l_adhesion = str(membership.uuid)
+        pk_de_l_adhesion = membership.pk
+        adhesion_inscrite_a_la_newsletter = membership.newsletter
 
-        # Si la personne accepte la newsletter :
-        if membership.newsletter:
-            send_to_ghost.delay(membership.pk)
-            send_to_brevo.delay(membership.pk)
+        def envoyer_les_taches_apres_le_commit():
+            send_membership_invoice_to_email.delay(uuid_de_l_adhesion)
+
+            # Si la personne accepte la newsletter :
+            if adhesion_inscrite_a_la_newsletter:
+                send_to_ghost.delay(pk_de_l_adhesion)
+                send_to_brevo.delay(pk_de_l_adhesion)
+
+        transaction.on_commit(envoyer_les_taches_apres_le_commit)
 
         # L'adhésion n'est PLUS poussée vers Fedow.
         # Ce push existait pour que LaBoutik V1 lise l'adhésion sous forme de jeton SUB dans
