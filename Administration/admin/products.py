@@ -20,6 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from Administration.admin.base import ModelAdmin
 from unfold.admin import StackedInline, TabularInline
 from unfold.components import register_component, BaseComponent
+from unfold.contrib.filters.admin import ChoicesDropdownFilter, RelatedDropdownFilter
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import action, display
 from unfold.forms import PaginationInlineFormSet
@@ -1953,7 +1954,15 @@ class POSProductAdmin(ProductAdmin):
         "poids",
     )
 
-    list_filter = ["publish", "methode_caisse", "categorie_pos", EtatStockFilter]
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = [
+        "publish",
+        ("methode_caisse", ChoicesDropdownFilter),
+        ("categorie_pos", RelatedDropdownFilter),
+        EtatStockFilter,
+    ]
     search_fields = ["name"]
 
     def get_fieldsets(self, request, obj=None):
