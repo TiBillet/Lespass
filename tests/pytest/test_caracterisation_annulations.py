@@ -34,7 +34,8 @@ CODE PARCOURU / CODE EXERCISED
 - BaseBillet/views.py — MyAccount.cancel_ticket, MyAccount.cancel_reservation (le client),
   MembershipMVT.cancel (l'admin annule une adhésion) ;
 - BaseBillet/models.py — Reservation.cancel_and_refund_ticket, cancel_and_refund_resa,
-  _lignes_hors_stripe, _creer_avoir, total_paid ;
+  _lignes_hors_stripe, total_paid ; BaseBillet/services_vente.py —
+  ecrire_la_vente_d_avoir_d_une_ligne (avoirs des annulations par l'admin) ;
 - PaiementStripe/utils.py — partial_refund_payment (remboursement Stripe) ;
 - Administration/admin_tenant.py — emettre_avoir (bouton « Avoir » d'une ligne de vente),
   TicketAdmin.action_cancel_refund_selected (« Cancel and refund » des billets) ;
@@ -306,23 +307,29 @@ def annuler_une_reservation_depuis_mon_compte(client_de_l_acheteur, reservation)
     )
 
 
-def annuler_des_billets_depuis_l_admin(client_de_l_admin, billets):
+def annuler_des_billets_depuis_l_admin(client_de_l_admin, billets, moyen_rembourse=None):
     """
     L'admin coche des billets dans la liste des billets et lance l'action
-    « Cancel and refund ». Si tous les billets d'une réservation sont cochés, c'est
-    toute la réservation qui est annulée (`cancel_and_refund_resa`).
-    / The admin ticks tickets in the ticket list and runs "Cancel and refund".
+    « Cancel and refund » : l'écran d'annulation s'ouvre (1er POST), puis l'admin le
+    valide (2e POST, `post=yes`, avec le moyen « Remboursé par » s'il est donné). Si
+    tous les billets d'une réservation sont cochés, c'est toute la réservation qui est
+    annulée (`cancel_and_refund_resa`). Rend la réponse de la validation.
+    / The admin ticks tickets and runs "Cancel and refund": the screen opens, then is
+    confirmed (`post=yes`, with the "Refunded by" method if given).
     """
     billets_coches = []
     for billet in billets:
         billets_coches.append(str(billet.pk))
-    return client_de_l_admin.post(
-        "/admin/BaseBillet/ticket/",
-        {
-            "action": "action_cancel_refund_selected",
-            "_selected_action": billets_coches,
-        },
-    )
+    donnees_de_l_action = {
+        "action": "action_cancel_refund_selected",
+        "_selected_action": billets_coches,
+    }
+    client_de_l_admin.post("/admin/BaseBillet/ticket/", donnees_de_l_action)
+    donnees_de_la_confirmation = dict(donnees_de_l_action)
+    donnees_de_la_confirmation["post"] = "yes"
+    if moyen_rembourse is not None:
+        donnees_de_la_confirmation["moyen_rembourse"] = moyen_rembourse
+    return client_de_l_admin.post("/admin/BaseBillet/ticket/", donnees_de_la_confirmation)
 
 
 def emettre_un_avoir_depuis_l_admin(client_de_l_admin, ligne, moyen_rembourse=None):
@@ -559,19 +566,19 @@ def test_annuler_un_billet_stripe_rembourse_un_billet(
 # --------------------------------------------------------------------------
 
 
-def test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir(
+def test_annulation_utilisateur_reservation_admin_especes_aucun_avoir(
     lieu, django_capture_on_commit_callbacks
 ):
     """
     P6, par le client : deux billets à 10 € vendus dans l'admin, payés en espèces. Le
     client annule sa réservation depuis « Mon compte ».
-    Aucun appel à Stripe. Un avoir (`N`, quantité −2) s'ajoute à la ligne validée ; la
-    réservation et ses deux billets passent annulés. L'ancien LaBoutik reçoit l'avoir
-    avec le moyen « espèces » (`CA`). Puis le mail d'annulation de la réservation.
-    Change en D (décision D31) : sans écran « Remboursé par », le client n'obtient plus
-    d'avoir hors Stripe ; seuls la réservation et les billets sont annulés.
-    / P6 by the buyer: 2 admin cash tickets cancelled from "My account". No Stripe call;
-    one CREDIT_NOTE line qty -2 sent to LaBoutik as cash. Changes in D (D31).
+    Décision D31 (fiche D, T9) : un achat réglé hors Stripe n'est pas remboursé quand le
+    client annule. Aucun avoir, aucun appel à Stripe, rien n'est envoyé à l'ancien
+    LaBoutik ; la ligne reste validée. La réservation et ses deux billets passent
+    annulés, puis le mail d'annulation de la réservation est demandé. Si le lieu
+    rembourse, l'admin fait un avoir.
+    / P6 by the buyer: 2 admin cash tickets cancelled from "My account". D31: no credit
+    note, no Stripe call, nothing sent to LaBoutik; reservation and tickets cancelled.
     """
     concert = creer_evenement_avec_tarif(prix="10.00")
     reservation, _ligne_de_la_vente = vente_admin_especes(
@@ -592,7 +599,7 @@ def test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir(
     etat_attendu = {
         "reservations": [Reservation.CANCELED],
         "billets": [Ticket.CANCELED, Ticket.CANCELED],
-        "taches": ["send_refund_to_laboutik", "send_reservation_cancellation_user"],
+        "taches": ["send_reservation_cancellation_user"],
     }
     assert (
         etat_metier(
@@ -602,19 +609,10 @@ def test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir(
         == etat_attendu
     )
     assert statuts_des_lignes_de_la_reservation(reservation) == [
-        LigneArticle.CREDIT_NOTE,
         LigneArticle.VALID,
     ]
     assert lieu.remboursement_stripe.call_count == 0
-
-    assert charges_utiles_des_avoirs_envoyees_a_laboutik(taches_de_l_annulation) == [
-        {
-            "payment_method": PaymentMethod.CASH,
-            "amount": 1000,
-            "qty": "-2.000000",
-            "status": LigneArticle.CREDIT_NOTE,
-        },
-    ]
+    assert charges_utiles_des_avoirs_envoyees_a_laboutik(taches_de_l_annulation) == []
 
 
 def test_annuler_un_billet_caisse_offert_cree_un_avoir(

@@ -421,7 +421,7 @@ class TestAvoirsHorsStripe:
         / 3-ticket admin cash reservation cancelled: one 3-ticket credit note, total paid at 0.
         """
         from django_tenants.utils import tenant_context
-        from BaseBillet.models import LigneArticle, Reservation
+        from BaseBillet.models import LigneArticle, PaymentMethod, Reservation
 
         event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
         reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=3)
@@ -429,7 +429,11 @@ class TestAvoirsHorsStripe:
         with tenant_context(tenant):
             assert reservation_admin.total_paid() == Decimal("30.00")
 
-            reservation_admin.cancel_and_refund_resa()
+            # L'admin annule, l'argent est rendu en espèces.
+            # / The admin cancels, the money is given back in cash.
+            reservation_admin.cancel_and_refund_resa(
+                annulation_par_l_admin=True, moyen_rembourse=PaymentMethod.CASH,
+            )
 
             avoir = LigneArticle.objects.get(credit_note_for=ligne_admin)
             assert avoir.status == LigneArticle.CREDIT_NOTE
@@ -458,7 +462,7 @@ class TestAvoirsHorsStripe:
         / 3 admin cash tickets cancelled one by one: 3 one-ticket credit notes.
         """
         from django_tenants.utils import tenant_context
-        from BaseBillet.models import LigneArticle, Reservation
+        from BaseBillet.models import LigneArticle, PaymentMethod, Reservation
 
         event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
         reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=3)
@@ -466,7 +470,9 @@ class TestAvoirsHorsStripe:
         with tenant_context(tenant):
             total_paye_attendu = [Decimal("20.00"), Decimal("10.00"), Decimal("0.00")]
             for numero, billet in enumerate(reservation_admin.tickets.order_by("pk")):
-                reservation_admin.cancel_and_refund_ticket(billet)
+                reservation_admin.cancel_and_refund_ticket(
+                    billet, annulation_par_l_admin=True, moyen_rembourse=PaymentMethod.CASH,
+                )
 
                 avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
                 assert [avoir.qty for avoir in avoirs] == [-1] * (numero + 1), (
@@ -491,14 +497,19 @@ class TestAvoirsHorsStripe:
         / 3 admin cash tickets: one cancelled, then the reservation. Credit notes of -1, then -2.
         """
         from django_tenants.utils import tenant_context
-        from BaseBillet.models import LigneArticle
+        from BaseBillet.models import LigneArticle, PaymentMethod
 
         event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
         reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=3)
 
         with tenant_context(tenant):
-            reservation_admin.cancel_and_refund_ticket(reservation_admin.tickets.order_by("pk").first())
-            reservation_admin.cancel_and_refund_resa()
+            reservation_admin.cancel_and_refund_ticket(
+                reservation_admin.tickets.order_by("pk").first(),
+                annulation_par_l_admin=True, moyen_rembourse=PaymentMethod.CASH,
+            )
+            reservation_admin.cancel_and_refund_resa(
+                annulation_par_l_admin=True, moyen_rembourse=PaymentMethod.CASH,
+            )
 
             quantites_des_avoirs = sorted(
                 avoir.qty for avoir in LigneArticle.objects.filter(credit_note_for=ligne_admin)

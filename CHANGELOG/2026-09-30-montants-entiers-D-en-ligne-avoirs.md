@@ -335,6 +335,42 @@ Sheet D §4 and §5 tests 17, 21; SUIVI §4 D-3; orchestrator decisions.
 | `tests/pytest/test_stripe_refund.py` | simulations de `Refund.create` par `rembourser_comme_stripe` ; aucune assertion changée |
 | `tests/pytest/fabriques_reservation.py` | `simuler_paiement_valide` encaisse la vente d'origine (montant encaissé, moyen `SN`, `encaisser_vente_stripe`) |
 
+## D-3c-1 — Annulations : l'avoir de l'admin écrit sa vente, écran « Remboursé par » ; l'utilisateur hors Stripe n'a plus d'avoir (D31) / Cancellations: the admin credit note writes its sale, "Refunded by" screen; no credit note for a non-Stripe user (D31)
+
+**Migration :** Non — **Chaînes i18n :** 7 nouvelles (msgid français) : « Annuler et rembourser », « Sélection », « Les achats payés en ligne sont remboursés par Stripe. », « Confirmer l'annulation », « Retour à la liste », « Réglé sur place : pour un éventuel remboursement, contactez l'organisateur. » (réservation, billet : la vue ajoute déjà « … has been cancelled. » devant), « Votre réservation est annulée. Elle a été réglée sur place : pour un éventuel remboursement, contactez l'organisateur. » (booking, dont la vue n'ajoute rien). Workflow i18n à lancer par le mainteneur.
+
+### Resume / Summary
+**Quoi / What :**
+- **Fonction commune** `ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origine)` (`BaseBillet/services_vente.py`), extraite du POST d'`emettre_avoir` : vente AVOIR liée, article miroir, un règlement d'argent (moyen Stripe d'origine, ou moyen choisi, obligatoire s'il y a de l'argent hors Stripe à rendre), FREE pour la part offerte (jamais deux fois), encaissement, PUIS `CREDIT_NOTE`. Refus si la vente d'origine n'est pas réglée. Une transaction (point de sauvegarde si l'appelant en a une). `emettre_avoir` l'appelle (comportement inchangé). Nouvelle petite fonction `ligne_entierement_offerte(ligne)`, lue par les deux écrans. /
+  Shared service function for one line's credit note, called by the "Credit note" button and the admin cancellations.
+- **Avoir partiel d'une ligne entièrement offerte : permis** (SUIVI D-3c (d)) : `ajouter_l_article_d_avoir` accepte une partie de la quantité quand part offerte = total catalogue (non nul) ; l'avoir est entièrement offert lui aussi. Une ligne **en partie** offerte reste refusée en partiel. /
+  Partial credit note of a fully offered line is allowed.
+- **`cancel_and_refund_resa(annulation_par_l_admin=False, moyen_rembourse=None)` et `cancel_and_refund_ticket(ticket, annulation_par_l_admin=False, moyen_rembourse=None)`** : partie Stripe inchangée (D-3b). Lignes hors Stripe : l'ADMIN écrit un avoir par ligne par la fonction commune, origine ADMIN : un billet = 1 ; toute la réservation = les billets ENCORE ACTIFS du tarif (comparé par `Price`, la caisse écrivant ligne et billets sur deux `PriceSold`), bornés par la quantité pas encore créditée (un billet annulé par l'utilisateur sans avoir n'est pas rendu, un billet déjà remboursé par l'admin ne l'est pas deux fois) ; l'UTILISATEUR (valeurs par défaut, vues inchangées) n'écrit **aucun avoir** (D31). Garde « payée mais rien de remboursable » : l'admin sur tout l'argent payé (inchangé) ; l'utilisateur sur l'argent payé par Stripe seulement. `Reservation._creer_avoir` supprimée. /
+  Explicit admin flag; the admin writes one credit note per non-Stripe line; the user writes none (D31); the refusal guard only looks at Stripe money for the user.
+- **Les deux actions admin** (« Cancel and refund selected reservations », « Cancel and refund » des billets) passent par un **écran intermédiaire** (convention Django : 1er POST = écran, 2e POST `post=yes` = annulation). Champ « Remboursé par » (espèces, CB, chèque, virement) seulement si une ligne hors Stripe de la sélection a de l'argent à rendre ; pré-rempli si toutes ces lignes ont le même moyen d'origine dans la liste ; obligatoire quand il est affiché (champ vide → l'écran revient, rien n'est annulé). Un seul moyen pour toute la sélection. Mails et messages de succès / d'erreur inchangés. Nouveau gabarit `admin/annulation/confirmer_annulation.html`. /
+  Both admin cancel actions go through a confirmation screen with an optional, required-when-shown "Refunded by" field.
+- **Booking** : plus d'avoir hors Stripe dans `cancel_and_refund_booking` (seule la personne annule un booking, D31) ; `Booking._creer_avoir` supprimée ; `_lignes_hors_stripe` ne sert plus qu'au message. /
+  Bookings: no non-Stripe credit note any more.
+- **Changements de comportement (D31, décision du mainteneur)** : un utilisateur qui annule depuis « Mon compte » une réservation, un billet ou un booking réglé hors Stripe n'obtient plus d'avoir ; l'argent reste acquis, l'admin fait un avoir si le lieu rembourse. Le message dit « Réglé sur place : pour un éventuel remboursement, contactez l'organisateur. » après « Your reservation / ticket has been cancelled. » (booking : « Votre réservation est annulée. Elle a été réglée sur place… »), au lieu de « You will be refunded to the credit card… ». Seulement s'il y a de l'argent hors Stripe : un achat entièrement offert garde le message d'avant. /
+  Behaviour change (D31): no credit note for a user cancelling an on-site purchase; new message when money was paid on site.
+
+**Pourquoi / Why :** fiche D §4 (avoir de réservation hors Stripe fait par l'admin, annulation par l'utilisateur), annexe T9 (D31), §6 ; SUIVI §4 « D-3c (décisions techniques, avant brief) » (a)-(f) ; décisions de l'orchestrateur (paramètre explicite `annulation_par_l_admin`, garde utilisateur sur la partie Stripe seulement, contrat d'écran `post=yes`) et du mainteneur (message « réglée sur place »). La ligne « Avoir de booking fait par l'admin » de la fiche §4 est périmée (SUIVI (e)). /
+Sheet D §4, T9 (D31); SUIVI D-3c; orchestrator and maintainer decisions.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/services_vente.py` | `ecrire_la_vente_d_avoir_d_une_ligne` et `ligne_entierement_offerte` (nouvelles) ; `ajouter_l_article_d_avoir` accepte l'avoir partiel d'une ligne entièrement offerte |
+| `BaseBillet/models.py` | `cancel_and_refund_resa` / `cancel_and_refund_ticket` : `annulation_par_l_admin`, `moyen_rembourse`, D31, garde utilisateur sur Stripe, message « réglée sur place » ; `_montant_paye_par_stripe` (nouvelle) ; `_creer_avoir` supprimée |
+| `Administration/admin_tenant.py` | `emettre_avoir` appelle la fonction commune ; `preparer_le_champ_rembourse_par` et `afficher_ou_valider_l_ecran_d_annulation` (module) ; les deux actions d'annulation passent par l'écran ; imports du service mis à jour |
+| `Administration/templates/admin/annulation/confirmer_annulation.html` | nouveau : écran « Annuler et rembourser » |
+| `booking/models.py` | `cancel_and_refund_booking` sans avoir hors Stripe, message « réglée sur place » ; `_creer_avoir` supprimée ; `_lignes_hors_stripe` simplifiée ; import `SaleOrigin` retiré |
+| `Administration/management/commands/_demo_data_v2_ventes.py` | un commentaire qui citait `Reservation._creer_avoir()` |
+| `tests/pytest/test_avoirs_ecrivent_la_vente.py` | 13 tests (14 cas) : écran et avoir au moyen choisi, écran sans champ (Stripe), moyen vide refusé, un billet sur trois, un billet offert sur deux, deux réservations (pré-remplissage), échec d'encaissement, utilisateur hors Stripe (réservation, billet ; message), réservation, billet et booking offerts (message d'avant), billet annulé par l'utilisateur puis réservation par l'admin (billet actif seulement), booking hors Stripe (message) |
+| `tests/pytest/test_caracterisation_annulations.py` | `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` → `…_aucun_avoir` (D31 : aucun avoir, rien envoyé à LaBoutik, réservation et billets annulés) ; l'aide `annuler_des_billets_depuis_l_admin` passe par l'écran (mécanisme) ; docstring |
+| `tests/pytest/test_stripe_refund.py` | les trois tests d'avoir admin hors Stripe passent `annulation_par_l_admin=True, moyen_rembourse=CASH` (mécanisme) ; aucune assertion changée |
+| `tests/e2e/test_admin_reservation_cancel.py` | l'admin valide l'écran de confirmation (mécanisme) |
+
 ---
 
 ## Comment tester (a la main) / Manual test
@@ -514,3 +550,24 @@ Pas de test à la main : l'échec d'encaissement ne se provoque pas sans simulat
 
 ### Verifs automatiques (D-3b)
 `make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_stripe_refund.py tests/pytest/test_caracterisation_annulations.py tests/pytest/test_en_ligne_ecrit_la_vente.py"` ; une fois, vrai Stripe en mode test : `make test ARGS="tests/pytest/test_stripe_reel_remboursement.py"`
+
+### Test 24 (D-3c-1) — l'admin annule une réservation payée en espèces
+1. Admin > Réservations > « Ajouter » : deux billets à 10 €, moyen « Espèces ».
+2. Cocher la réservation, action « Cancel and refund selected reservations ».
+3. Attendu : un écran « Annuler et rembourser » avec la sélection et le champ « Remboursé par » pré-rempli « Espèces ». Valider sans rien changer (ou choisir « Virement »).
+4. Attendu : retour à la liste, message de succès ; la réservation et ses billets sont annulés ; dans `manage.py shell`, la dernière vente `AVOIR` est `REGLEE`, origine `AD`, un article `(-2, -2000, 'N')`, un règlement au moyen choisi de −2000.
+5. Recommencer avec deux réservations, l'une en espèces, l'autre par CB : le champ est vide et obligatoire (« Confirmer » sans choix → l'écran revient avec l'erreur, rien n'est annulé).
+
+### Test 25 (D-3c-1) — un billet sur deux, offert
+1. Admin > Réservations > « Ajouter » : deux billets à 15 €, moyen « Offert ».
+2. Admin > Billets : cocher UN des deux billets, action « Cancel and refund ».
+3. Attendu : écran sans champ « Remboursé par » ; après validation, ce billet est annulé, l'autre reste actif ; la vente `AVOIR` a un article `(-1)` entièrement offert et un seul règlement `FREE` de −1500.
+
+### Test 26 (D-3c-1) — l'utilisateur annule un achat réglé sur place (D31)
+1. Vendre dans l'admin deux billets en espèces à un compte que vous pouvez ouvrir.
+2. Se connecter avec ce compte, « Mon compte » > Réservations : annuler la réservation.
+3. Attendu : message « … Réglé sur place : pour un éventuel remboursement, contactez l'organisateur. » ; réservation et billets annulés ; **aucune** vente `AVOIR` nouvelle, la ligne de vente reste « Confirmée ».
+4. Variante : vendre deux billets en espèces, l'utilisateur en annule UN, puis l'admin annule la réservation (« Remboursé par : espèces ») : l'avoir ne porte que sur le billet encore actif (−1, −1000).
+
+### Verifs automatiques (D-3c-1)
+`make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_caracterisation_annulations.py tests/pytest/test_stripe_refund.py"` ; E2E seul : `make e2e ARGS="tests/e2e/test_admin_reservation_cancel.py"`

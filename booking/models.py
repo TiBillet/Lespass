@@ -14,7 +14,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.db.transaction import atomic
 from datetime import timedelta
-from BaseBillet.models import Product, ResourceProduct, Price, LigneArticle, Configuration, Paiement_stripe, SaleOrigin, Commande
+from BaseBillet.models import Product, ResourceProduct, Price, LigneArticle, Configuration, Paiement_stripe, Commande
 from PaiementStripe.utils import partial_refund_payment
 from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
@@ -589,58 +589,24 @@ class Booking(models.Model):
             total_paid += int(ligne_article.amount * ligne_article.qty)  # int car on multiplie un int par un float
         return dround(total_paid)
 
-    def _lignes_hors_stripe(self, pricesold_ids=None):
+    def _lignes_hors_stripe(self):
         """
-        Retrouve les LigneArticle VALID/PAID sans paiement Stripe pour cette reservation.
-        Utilise la FK directe.
-        / Finds VALID/PAID LigneArticle without Stripe payment for this reservation.
-        Uses direct FK if.
-        """
-        # Filtre de base : pas de Stripe, statut VALID ou PAID, pas d'avoir existant
-        # / Base filter: no Stripe, VALID or PAID status, no existing credit note
-        base_filter = {
-            'paiement_stripe__isnull': True,
-            'status__in': [LigneArticle.VALID, LigneArticle.PAID],
-        }
+        Les lignes VALID/PAID payantes (montant non nul) de ce booking sans paiement
+        Stripe (réglées sur place : espèces, chèque…), pas encore créditées. Seule la FK
+        directe compte.
+        / Paid (non-zero) VALID/PAID non-Stripe lines of this booking, not yet credited.
 
-        # Essai via FK directe (nouvelles donnees)
-        # / Try via direct FK (new data)
-        lignes = self.lignearticles.filter(**base_filter).exclude(
+        Lue par `cancel_and_refund_booking` pour choisir le message de l'annulation.
+        / Read by cancel_and_refund_booking to pick the cancellation message.
+        """
+        lignes = self.lignearticles.filter(
+            paiement_stripe__isnull=True,
+            status__in=[LigneArticle.VALID, LigneArticle.PAID],
+            amount__gt=0,
+        ).exclude(
             credit_notes__isnull=False,
-        ).select_related('pricesold', 'pricesold__productsold')
-
-        if pricesold_ids is not None:
-            lignes = lignes.filter(pricesold_id__in=pricesold_ids)
-
-        return lignes
-
-    @staticmethod
-    def _creer_avoir(ligne):
-        """
-        Cree un avoir (credit note) pour une LigneArticle hors-Stripe.
-        / Creates a credit note for a non-Stripe LigneArticle.
-        """
-
-        metadata = ligne.metadata if ligne.metadata else {}
-        metadata['original_lignearticle_uuid'] = str(ligne.uuid)
-        avoir = LigneArticle.objects.create(
-            pricesold=ligne.pricesold,
-            qty=-ligne.qty,
-            amount=ligne.amount,
-            vat=ligne.vat,
-            paiement_stripe=ligne.paiement_stripe,
-            membership=ligne.membership,
-            payment_method=ligne.payment_method,
-            asset=ligne.asset,
-            wallet=ligne.wallet,
-            sale_origin=SaleOrigin.ADMIN,
-            credit_note_for=ligne,
-            metadata=metadata,
-            status=LigneArticle.CREATED,
         )
-        avoir.status = LigneArticle.CREDIT_NOTE
-        avoir.save()
-        return avoir
+        return lignes
 
     def deadline(self):
         deadline = self.start_datetime - timedelta(
@@ -663,6 +629,9 @@ class Booking(models.Model):
 
     @atomic
     def cancel_and_refund_booking(self):
+        # Import local : services_vente importe BaseBillet.models au chargement.
+        # / Local import: services_vente imports BaseBillet.models when it loads.
+        from BaseBillet.services_vente import ligne_entierement_offerte
 
         if self.status in [Booking.USER_CANCELED, Booking.ADMIN_CANCELED]:
             raise Exception(_("This booking is already cancelled."))
@@ -687,17 +656,25 @@ class Booking(models.Model):
                                                               ]):
                     partial_refund_payment(paiement, config, paiement.lignearticles.filter(status__in=[LigneArticle.VALID, LigneArticle.PAID]))
 
-        # 2) Avoir pour les lignes hors-Stripe (reservations admin : cheque, especes, etc.)
-        # / Credit note for non-Stripe lines (admin reservations: check, cash, etc.)
+        # 2) Lignes réglées hors Stripe (espèces, chèque…) : AUCUN avoir (D31). Seule la
+        # personne annule un booking ; l'argent reste acquis, et si le lieu rembourse,
+        # l'admin fait un avoir depuis la liste des ventes.
+        # / 2) Non-Stripe lines: NO credit note (D31); the venue issues one if it refunds.
+        # Le message « réglée sur place » ne vaut que pour de l'ARGENT : un créneau
+        # entièrement offert garde le message d'avant.
+        # / The "paid on site" message is for money only: a fully offered slot keeps
+        # the old message.
+        reglee_hors_stripe_en_argent = False
         for ligne in self._lignes_hors_stripe():
-            if ligne.amount > 0:
-                self._creer_avoir(ligne)
-                logger.info(f"Credit note created for non-Stripe line {ligne.uuid}")
+            if not ligne_entierement_offerte(ligne):
+                reglee_hors_stripe_en_argent = True
 
         self.status = Booking.USER_CANCELED
 
         self.save()
 
+        if reglee_hors_stripe_en_argent:
+            return _("Votre réservation est annulée. Elle a été réglée sur place : pour un éventuel remboursement, contactez l'organisateur.")
         return self.cancel_text()
 
 

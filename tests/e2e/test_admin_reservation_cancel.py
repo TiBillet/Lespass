@@ -104,6 +104,18 @@ def _create_reservation_api(api_key, event_uuid, email, price_uuid, qty=1):
     return {"ok": resp.ok, "status": resp.status_code, "data": data, "text": resp.text[:500]}
 
 
+def _confirmer_l_ecran_d_annulation(page):
+    """
+    L'action d'annulation ouvre d'abord un écran de confirmation (« Remboursé par »
+    seulement si de l'argent hors Stripe est à rendre). L'admin le valide.
+    / The cancel action first opens a confirmation screen; the admin confirms it.
+    """
+    bouton_de_confirmation = page.locator('[data-testid="annulation-valider"]')
+    expect(bouton_de_confirmation).to_be_visible(timeout=10000)
+    bouton_de_confirmation.click()
+    page.wait_for_load_state("networkidle")
+
+
 class TestAdminReservationCancel:
     """Annulation de reservation admin + verification FK / Admin reservation cancel + FK check."""
 
@@ -216,6 +228,7 @@ class TestAdminReservationCancel:
             "() => { const form = document.querySelector('#changelist-form'); if (form) form.submit(); }"
         )
         page.wait_for_load_state("networkidle")
+        _confirmer_l_ecran_d_annulation(page)
 
         # Verifier le message de succes (Unfold affiche bg-green-100 ou messagelist .success).
         # / Check success message (Unfold shows bg-green-100 or messagelist .success).
@@ -336,6 +349,7 @@ class TestAdminReservationCancel:
             "() => { const form = document.querySelector('#changelist-form'); if (form) form.submit(); }"
         )
         page.wait_for_load_state("networkidle")
+        _confirmer_l_ecran_d_annulation(page)
 
         # --- Etape 4 : Deuxieme tentative d'annulation ---
         # Chercher a nouveau et tenter d'annuler une deuxieme fois.
@@ -368,6 +382,7 @@ class TestAdminReservationCancel:
                     "() => { const form = document.querySelector('#changelist-form'); if (form) form.submit(); }"
                 )
                 page.wait_for_load_state("networkidle")
+                _confirmer_l_ecran_d_annulation(page)
 
                 # Verifier qu'il n'y a pas de doublon d'avoir en base.
                 # Au max 1 avoir par reservation (pas de credit_note en double).

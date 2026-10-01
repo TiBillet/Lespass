@@ -59,17 +59,41 @@ Encaissée, PUIS les lignes passent REFUNDED. Tout ou rien.
 one negative Stripe payment of the amount Stripe returns, the refund id as external
 reference, a gap item when amounts differ; settled, then REFUNDED. All or nothing.
 
+LES ANNULATIONS (fin du fichier)
+- L'ADMIN annule des réservations ou des billets (actions de liste). Un écran s'ouvre
+  d'abord. Le champ « Remboursé par » n'y est que si une ligne hors Stripe de la
+  sélection a de l'argent à rendre ; il est alors obligatoire, et un seul moyen vaut pour
+  toute la sélection. Chaque ligne hors Stripe reçoit son avoir, écrit comme celui du
+  bouton « Avoir » : une vente AVOIR encaissée, origine ADMIN. Un billet seul = un avoir
+  d'une unité, même d'une ligne entièrement offerte.
+- L'UTILISATEUR annule depuis « Mon compte » une réservation, un billet ou un booking payé
+  hors Stripe (D31) : AUCUN avoir, aucune vente ; seuls la réservation, le billet ou le
+  booking passent annulés.
+/ The ADMIN cancels through a screen ("Refunded by" only when money is owed); each
+non-Stripe line gets a settled AVOIR sale. The USER cancelling a non-Stripe purchase
+(D31) gets no credit note and no sale: only the statuses change.
+
+CONTRAT DE L'ÉCRAN D'ANNULATION (comme la confirmation de suppression de Django)
+- 1er POST sur la liste (`action`, `_selected_action`) : l'écran (200), contexte `form` ;
+- 2e POST : les mêmes données, plus `post=yes` et `moyen_rembourse` s'il est choisi ;
+  l'annulation est faite (302) ; formulaire refusé : l'écran revient (200).
+/ First POST = the screen (200, `form` context); second POST adds `post=yes` and
+`moyen_rembourse`; refused form = screen again (200).
+
 CODE PARCOURU / CODE EXERCISED
 - Administration/admin_tenant.py — LigneArticleAdmin.emettre_avoir (écran et action) ;
+  ReservationAdmin.action_cancel_refund_reservations, TicketAdmin.action_cancel_refund_selected ;
 - BaseBillet/services_vente.py — ajouter_l_article_d_avoir, ouvrir_vente,
   ajouter_reglement, encaisser_vente ;
+- BaseBillet/models.py — Reservation.cancel_and_refund_resa, cancel_and_refund_ticket ;
+  booking/models.py — Booking.cancel_and_refund_booking ;
 - PaiementStripe/utils.py — partial_refund_payment (remboursement Stripe), appelé par
   Reservation.cancel_and_refund_ticket / cancel_and_refund_resa et
   Booking.cancel_and_refund_booking.
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-D-en-ligne-avoirs.md (§4,
-§5 tests 17, 18, 18b, 18c, 19, 21) ; CHANTIER-05-SUIVI.md §4 (D-3) ; briefs
-CHANTIER-05-briefs/05-D-3a.md et 05-D-3b.md.
+§5 tests 17, 18, 18b, 18c, 19, 21, annexe T9) ; CHANTIER-05-SUIVI.md §4 (D-3, D-3c) ;
+briefs CHANTIER-05-briefs/05-D-3a.md, 05-D-3b.md et 05-D-3c-1.md.
 
 Lancer / Run : make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py"
 """
@@ -92,6 +116,7 @@ from BaseBillet.models import (
     PaymentMethod,
     Reservation,
     SaleOrigin,
+    Ticket,
 )
 from BaseBillet.models_vente import Reglement, Vente
 from BaseBillet.services_vente import NOM_ECART_RECU_EN_PLUS
@@ -104,6 +129,7 @@ from fabriques_panier import (
     creer_ressource_avec_tarif,
     creer_utilisateur,
     identifiant_unique,
+    noms_des_taches,
     taches_celery_enregistrees,
 )
 from fabriques_vente import (
@@ -120,6 +146,9 @@ from test_admin_ecrit_la_vente import (
 from test_caracterisation_admin_api import reserver_une_ressource_sans_panier
 from test_caracterisation_annulations import (
     acheter_des_billets_payes_par_stripe,
+    annuler_un_billet_depuis_mon_compte,
+    annuler_une_reservation_depuis_mon_compte,
+    client_de_mon_compte,
     rembourser_comme_stripe,
 )
 from test_caracterisation_en_ligne import (
@@ -144,6 +173,19 @@ MESSAGE_REMBOURSEMENT_STRIPE_A_LA_MAIN = (
 # / The refusal when the original sale is not settled (French msgid).
 MESSAGE_VENTE_D_ORIGINE_PAS_REGLEE = (
     "La vente d'origine n'est pas réglée : l'avoir est impossible."
+)
+
+# Les messages de l'utilisateur qui annule un achat réglé sur place (D31, msgid
+# français). Réservation et billet : la vue ajoute déjà « … has been cancelled. »
+# devant, le modèle ne rend que la phrase complémentaire. Booking : sa vue n'ajoute
+# rien, la phrase est complète.
+# / Messages for a user cancelling an on-site purchase (D31, French msgids).
+MESSAGE_COMPLEMENTAIRE_REGLE_SUR_PLACE = (
+    "Réglé sur place : pour un éventuel remboursement, contactez l'organisateur."
+)
+MESSAGE_BOOKING_REGLE_SUR_PLACE = (
+    "Votre réservation est annulée. Elle a été réglée sur place : pour un éventuel "
+    "remboursement, contactez l'organisateur."
 )
 
 # Les moyens proposés par le champ « Remboursé par » : espèces, CB, chèque, virement.
@@ -1521,3 +1563,752 @@ def test_remboursement_stripe_rien_a_rendre_aucune_vente_ouverte(lieu):
         == nombre_de_ventes_avoir_avant
     ), "Une vente AVOIR a été ouverte alors qu'il n'y a rien à rendre."
     rien_n_est_ecrit_pour_le_remboursement(ligne, paiement, statut_du_paiement_avant)
+
+
+# --------------------------------------------------------------------------
+# Annulations par l'admin : l'écran « Remboursé par », puis un avoir par ligne
+# / Admin cancellations: the "Refunded by" screen, then one credit note per line
+# --------------------------------------------------------------------------
+
+URL_DE_LA_LISTE_DES_RESERVATIONS = "/admin/BaseBillet/reservation/"
+URL_DE_LA_LISTE_DES_BILLETS = "/admin/BaseBillet/ticket/"
+ACTION_ANNULER_LES_RESERVATIONS = "action_cancel_refund_reservations"
+ACTION_ANNULER_LES_BILLETS = "action_cancel_refund_selected"
+
+
+def donnees_de_l_action(nom_de_l_action, objets_coches):
+    """
+    Les données que la liste de l'admin poste quand l'admin coche des objets et lance
+    une action : le nom de l'action et les clés des objets cochés.
+    / The data the admin list posts for an action: its name and the ticked keys.
+    """
+    cles_des_objets_coches = []
+    for objet_coche in objets_coches:
+        cles_des_objets_coches.append(str(objet_coche.pk))
+    return {
+        "action": nom_de_l_action,
+        "_selected_action": cles_des_objets_coches,
+    }
+
+
+def lancer_l_action_d_annulation(
+    client_de_l_admin, url_de_la_liste, nom_de_l_action, objets_coches
+):
+    """
+    1er POST : l'admin coche les objets et lance l'action d'annulation. L'écran
+    d'annulation doit s'ouvrir (200) ; rien n'est encore annulé.
+    / First POST: the admin ticks and runs the cancel action; the screen must open.
+    """
+    return client_de_l_admin.post(
+        url_de_la_liste, donnees_de_l_action(nom_de_l_action, objets_coches)
+    )
+
+
+def confirmer_l_ecran_d_annulation(
+    client_de_l_admin,
+    url_de_la_liste,
+    nom_de_l_action,
+    objets_coches,
+    moyen_rembourse=None,
+):
+    """
+    2e POST : l'admin valide l'écran. Mêmes données que le 1er POST, plus `post=yes`
+    (la confirmation, comme l'écran de suppression de Django) et le moyen « Remboursé
+    par » s'il est donné.
+    / Second POST: same data plus `post=yes` and the "Refunded by" method if given.
+    """
+    donnees_du_formulaire = donnees_de_l_action(nom_de_l_action, objets_coches)
+    donnees_du_formulaire["post"] = "yes"
+    if moyen_rembourse is not None:
+        donnees_du_formulaire["moyen_rembourse"] = moyen_rembourse
+    return client_de_l_admin.post(url_de_la_liste, donnees_du_formulaire)
+
+
+def statuts_des_billets(reservation):
+    """Les statuts des billets de la réservation, triés. / Sorted ticket statuses."""
+    statuts = []
+    for billet in Ticket.objects.filter(reservation=reservation):
+        statuts.append(billet.status)
+    return sorted(statuts)
+
+
+def rien_n_est_annule(reservation, statut_de_la_reservation_avant, statuts_des_billets_avant):
+    """
+    Vérifie que l'annulation n'a rien changé : la réservation et ses billets gardent
+    leurs statuts.
+    / Checks the cancellation changed nothing: same reservation and ticket statuses.
+    """
+    reservation.refresh_from_db()
+    assert reservation.status == statut_de_la_reservation_avant
+    assert statuts_des_billets(reservation) == statuts_des_billets_avant
+
+
+def test_annulation_admin_reservation_especes_avoir_au_moyen_choisi(lieu):
+    """
+    Deux billets à 10 € vendus dans l'admin, payés par CB (`CC`). L'admin coche la
+    réservation et lance « Annuler et rembourser ».
+    - L'écran s'ouvre : champ « Remboursé par », pré-rempli avec CB (le moyen d'origine
+      est dans la liste). Rien n'est encore annulé.
+    - L'admin choisit « espèces » (`CA`) et valide : réservation et billets annulés, le
+      mail d'annulation est demandé.
+    - L'avoir : quantité −2, prix unitaire 1000, net −2000, CREDIT_NOTE ; sa vente AVOIR
+      (origine ADMIN) est réglée, liée à la vente d'origine, même client ; UN règlement
+      espèces −2000.
+    / Admin card sale cancelled through the screen, refunded in cash: one AVOIR sale with
+    one cash payment of −2000; reservation and tickets cancelled.
+    """
+    vente_admin = vendre_et_relire(
+        lieu, prix="10.00", quantite=2, moyen_de_paiement=PaymentMethod.CC
+    )
+    reservation = vente_admin.reservation
+    ligne_d_origine = vente_admin.ligne
+    vente_d_origine = Vente.objects.get(pk=ligne_d_origine.vente_id)
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+    statut_de_la_reservation_avant = reservation.status
+    statuts_des_billets_avant = statuts_des_billets(reservation)
+    lieu.taches_demandees.clear()
+
+    reponse_de_l_ecran = lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_RESERVATIONS,
+        ACTION_ANNULER_LES_RESERVATIONS,
+        [reservation],
+    )
+    assert "moyen_rembourse" in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
+    assert valeur_pre_remplie_du_moyen(reponse_de_l_ecran) == PaymentMethod.CC
+    # Ouvrir l'écran n'annule rien. / Opening the screen cancels nothing.
+    rien_n_est_annule(
+        reservation, statut_de_la_reservation_avant, statuts_des_billets_avant
+    )
+    rien_n_est_ecrit_pour_la_ligne(ligne_d_origine)
+
+    reponse_de_l_action = confirmer_l_ecran_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_RESERVATIONS,
+        ACTION_ANNULER_LES_RESERVATIONS,
+        [reservation],
+        moyen_rembourse=PaymentMethod.CASH,
+    )
+
+    assert reponse_de_l_action.status_code == 302
+    reservation.refresh_from_db()
+    assert reservation.status == Reservation.CANCELED
+    assert statuts_des_billets(reservation) == [Ticket.CANCELED, Ticket.CANCELED]
+    assert "send_reservation_cancellation_user" in noms_des_taches(
+        lieu.taches_demandees
+    )
+    assert lieu.remboursement_stripe.call_count == 0
+
+    avoir = l_avoir_de_la_ligne(ligne_d_origine)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.qty == Decimal("-2")
+    assert avoir.amount == 1000
+    assert avoir.total_ttc == -2000
+    assert avoir.reservation_id == reservation.pk
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.CASH, -2000)
+    ]
+    verifier_egalites(vente_d_avoir)
+
+
+def test_annulation_admin_ecran_sans_champ_pour_une_reservation_stripe(lieu):
+    """
+    Deux billets à 10 € payés en ligne par Stripe. L'admin coche la réservation et lance
+    « Annuler et rembourser ».
+    - L'écran s'ouvre SANS champ « Remboursé par » : l'argent est rendu par Stripe.
+    - L'admin valide : Stripe est appelé UNE fois, pour 2000 ; la réservation est
+      annulée ; le remboursement écrit sa vente AVOIR (D-3b), qui tient ses égalités.
+    / Stripe-paid reservation: the screen has no "Refunded by" field; confirming refunds
+    through Stripe once and cancels the reservation.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=2)
+    reservation = Reservation.objects.get(pk=achat.reservation.pk)
+    ligne_d_origine = LigneArticle.objects.get(paiement_stripe=achat.paiement)
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_de_l_ecran = lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_RESERVATIONS,
+        ACTION_ANNULER_LES_RESERVATIONS,
+        [reservation],
+    )
+    assert "moyen_rembourse" not in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
+
+    with remboursement_stripe_simule() as stripe_simule:
+        reponse_de_l_action = confirmer_l_ecran_d_annulation(
+            client_de_l_admin,
+            URL_DE_LA_LISTE_DES_RESERVATIONS,
+            ACTION_ANNULER_LES_RESERVATIONS,
+            [reservation],
+        )
+
+    assert reponse_de_l_action.status_code == 302
+    assert stripe_simule.appels.call_count == 1
+    assert stripe_simule.appels.call_args.kwargs["amount"] == 2000
+    reservation.refresh_from_db()
+    assert reservation.status == Reservation.CANCELED
+
+    avoir = le_remboursement_de_la_ligne(ligne_d_origine)
+    assert avoir.vente_id is not None, "La ligne remboursée n'a pas de vente."
+    verifier_egalites(Vente.objects.get(pk=avoir.vente_id))
+
+
+def test_annulation_admin_sans_moyen_refusee(lieu):
+    """
+    Deux billets à 10 € vendus dans l'admin en espèces. L'écran d'annulation affiche le
+    champ « Remboursé par ». L'admin valide sans choisir de moyen :
+    - l'écran revient (200), avec le champ ;
+    - rien n'est annulé : réservation et billets gardent leurs statuts, aucun avoir,
+      aucune vente AVOIR, la ligne reste VALID.
+    / The field is shown but left empty: the screen comes back, nothing is cancelled.
+    """
+    vente_admin = vendre_et_relire(
+        lieu, prix="10.00", quantite=2, moyen_de_paiement=PaymentMethod.CASH
+    )
+    reservation = vente_admin.reservation
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+    statut_de_la_reservation_avant = reservation.status
+    statuts_des_billets_avant = statuts_des_billets(reservation)
+
+    reponse_de_l_ecran = lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_RESERVATIONS,
+        ACTION_ANNULER_LES_RESERVATIONS,
+        [reservation],
+    )
+    assert "moyen_rembourse" in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
+
+    reponse_de_l_action = confirmer_l_ecran_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_RESERVATIONS,
+        ACTION_ANNULER_LES_RESERVATIONS,
+        [reservation],
+        moyen_rembourse="",
+    )
+
+    assert "moyen_rembourse" in champs_du_formulaire_de_l_ecran(reponse_de_l_action)
+    rien_n_est_annule(
+        reservation, statut_de_la_reservation_avant, statuts_des_billets_avant
+    )
+    rien_n_est_ecrit_pour_la_ligne(vente_admin.ligne)
+
+
+def test_annulation_admin_d_un_billet_avoir_d_une_unite(lieu):
+    """
+    Trois billets à 10 € vendus dans l'admin par CB. Dans la liste des billets, l'admin
+    coche UN seul billet et lance « Annuler et rembourser ».
+    - L'écran : champ « Remboursé par », pré-rempli avec CB.
+    - L'admin choisit « virement » (`TR`) : ce billet est annulé, les deux autres restent
+      actifs, la réservation n'est pas annulée ; le mail d'annulation du billet est
+      demandé.
+    - L'avoir : quantité −1, net −1000 ; sa vente AVOIR, liée, réglée : UN règlement
+      virement −1000.
+    / One ticket out of three cancelled from the ticket list, refunded by transfer: a
+    one-unit credit note, one transfer payment of −1000.
+    """
+    vente_admin = vendre_et_relire(
+        lieu, prix="10.00", quantite=3, moyen_de_paiement=PaymentMethod.CC
+    )
+    reservation = vente_admin.reservation
+    ligne_d_origine = vente_admin.ligne
+    vente_d_origine = Vente.objects.get(pk=ligne_d_origine.vente_id)
+    billet_a_annuler = reservation.tickets.order_by("pk").first()
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+    statut_de_la_reservation_avant = reservation.status
+    lieu.taches_demandees.clear()
+
+    reponse_de_l_ecran = lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_BILLETS,
+        ACTION_ANNULER_LES_BILLETS,
+        [billet_a_annuler],
+    )
+    assert "moyen_rembourse" in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
+    assert valeur_pre_remplie_du_moyen(reponse_de_l_ecran) == PaymentMethod.CC
+
+    reponse_de_l_action = confirmer_l_ecran_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_BILLETS,
+        ACTION_ANNULER_LES_BILLETS,
+        [billet_a_annuler],
+        moyen_rembourse=PaymentMethod.TRANSFER,
+    )
+
+    assert reponse_de_l_action.status_code == 302
+    billet_a_annuler.refresh_from_db()
+    assert billet_a_annuler.status == Ticket.CANCELED
+    assert statuts_des_billets(reservation).count(Ticket.CANCELED) == 1
+    reservation.refresh_from_db()
+    assert reservation.status == statut_de_la_reservation_avant
+    assert "send_ticket_cancellation_user" in noms_des_taches(lieu.taches_demandees)
+
+    avoir = l_avoir_de_la_ligne(ligne_d_origine)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.qty == Decimal("-1")
+    assert avoir.total_ttc == -1000
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.TRANSFER, -1000)
+    ]
+    verifier_egalites(vente_d_avoir)
+
+
+def test_annulation_admin_d_un_billet_offert_sur_deux_permise(lieu):
+    """
+    Décision D-3c (d). Deux billets à 15 € « Offert » vendus dans l'admin (D32 : ligne
+    au prix, entièrement offerte). L'admin annule UN des deux billets.
+    - L'écran n'a PAS de champ « Remboursé par » : aucun argent à rendre.
+    - L'avoir partiel d'une ligne ENTIÈREMENT offerte est permis : quantité −1,
+      catalogue −1500, offert −1500, net 0, source OFFRIR.
+    - Sa vente AVOIR, liée, réglée : UN seul règlement FREE −1500 (jamais deux).
+    - Le billet est annulé, l'autre reste actif.
+    / Cancelling one of two fully offered tickets is allowed: a one-unit credit note,
+    fully offered, with ONE FREE payment of −1500; no "Refunded by" field.
+    """
+    vente_admin_offerte = vendre_et_relire(
+        lieu, prix="15.00", quantite=2, moyen_de_paiement=PaymentMethod.FREE
+    )
+    reservation = vente_admin_offerte.reservation
+    ligne_d_origine = vente_admin_offerte.ligne
+    vente_d_origine = Vente.objects.get(pk=ligne_d_origine.vente_id)
+    billet_a_annuler = reservation.tickets.order_by("pk").first()
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_de_l_ecran = lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_BILLETS,
+        ACTION_ANNULER_LES_BILLETS,
+        [billet_a_annuler],
+    )
+    assert "moyen_rembourse" not in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
+
+    reponse_de_l_action = confirmer_l_ecran_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_BILLETS,
+        ACTION_ANNULER_LES_BILLETS,
+        [billet_a_annuler],
+    )
+
+    assert reponse_de_l_action.status_code == 302
+    billet_a_annuler.refresh_from_db()
+    assert billet_a_annuler.status == Ticket.CANCELED
+    assert statuts_des_billets(reservation).count(Ticket.CANCELED) == 1
+
+    avoir = l_avoir_de_la_ligne(ligne_d_origine)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.amount == 1500
+    assert avoir.qty == Decimal("-1")
+    assert avoir.total_catalogue == -1500
+    assert avoir.part_offerte == -1500
+    assert avoir.total_ttc == 0
+    assert avoir.source_offert == LigneArticle.SourceOffert.OFFRIR
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.FREE, -1500)
+    ]
+    verifier_egalites(vente_d_avoir)
+
+
+def test_annulation_admin_deux_reservations_meme_moyen_ecran_pre_rempli(lieu):
+    """
+    L'admin coche DEUX réservations vendues dans l'admin et lance « Annuler et
+    rembourser ». Un seul moyen vaut pour toute la sélection :
+    - les deux payées en espèces (`CA`) : le champ « Remboursé par » est pré-rempli
+      avec espèces ;
+    - l'une par CB (`CC`), l'autre en espèces : moyens différents, le champ est vide.
+    Ouvrir l'écran n'annule rien.
+    / Two ticked reservations: the field is pre-filled when both share the same original
+    method (cash), empty when they differ (card and cash). Opening cancels nothing.
+    """
+    premiere_vente_en_especes = vendre_et_relire(
+        lieu, prix="10.00", quantite=1, moyen_de_paiement=PaymentMethod.CASH
+    )
+    seconde_vente_en_especes = vendre_et_relire(
+        lieu, prix="12.00", quantite=1, moyen_de_paiement=PaymentMethod.CASH
+    )
+    vente_par_carte = vendre_et_relire(
+        lieu, prix="8.00", quantite=1, moyen_de_paiement=PaymentMethod.CC
+    )
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    ecran_meme_moyen = lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_RESERVATIONS,
+        ACTION_ANNULER_LES_RESERVATIONS,
+        [premiere_vente_en_especes.reservation, seconde_vente_en_especes.reservation],
+    )
+    assert "moyen_rembourse" in champs_du_formulaire_de_l_ecran(ecran_meme_moyen)
+    assert valeur_pre_remplie_du_moyen(ecran_meme_moyen) == PaymentMethod.CASH
+
+    ecran_moyens_differents = lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_RESERVATIONS,
+        ACTION_ANNULER_LES_RESERVATIONS,
+        [premiere_vente_en_especes.reservation, vente_par_carte.reservation],
+    )
+    assert "moyen_rembourse" in champs_du_formulaire_de_l_ecran(ecran_moyens_differents)
+    assert valeur_pre_remplie_du_moyen(ecran_moyens_differents) in (None, "")
+
+    # Ouvrir l'écran n'annule rien. / Opening the screen cancels nothing.
+    for vente_admin in [premiere_vente_en_especes, seconde_vente_en_especes, vente_par_carte]:
+        vente_admin.reservation.refresh_from_db()
+        assert vente_admin.reservation.status != Reservation.CANCELED
+        rien_n_est_ecrit_pour_la_ligne(vente_admin.ligne)
+
+
+def test_annulation_admin_echec_d_encaissement_rien_n_est_annule(lieu):
+    """
+    Deux billets à 10 € vendus dans l'admin par CB. L'admin annule la réservation par
+    l'écran, « Remboursé par : espèces », mais l'encaissement de l'avoir échoue (simulé).
+    Tout ou rien : la réservation et ses billets gardent leurs statuts ; aucun avoir,
+    aucune vente AVOIR, aucun règlement négatif ; la ligne reste VALID.
+    / The credit note's settlement fails: nothing is cancelled, nothing is written.
+    """
+    vente_admin = vendre_et_relire(
+        lieu, prix="10.00", quantite=2, moyen_de_paiement=PaymentMethod.CC
+    )
+    reservation = vente_admin.reservation
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+    # Une exception dans la vue devient une réponse 500, au lieu de sortir du test.
+    # / An exception in the view becomes a 500 response instead of leaving the test.
+    client_de_l_admin.raise_request_exception = False
+    statut_de_la_reservation_avant = reservation.status
+    statuts_des_billets_avant = statuts_des_billets(reservation)
+
+    reponse_de_l_ecran = lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_RESERVATIONS,
+        ACTION_ANNULER_LES_RESERVATIONS,
+        [reservation],
+    )
+    assert "moyen_rembourse" in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
+
+    with encaissement_qui_echoue():
+        confirmer_l_ecran_d_annulation(
+            client_de_l_admin,
+            URL_DE_LA_LISTE_DES_RESERVATIONS,
+            ACTION_ANNULER_LES_RESERVATIONS,
+            [reservation],
+            moyen_rembourse=PaymentMethod.CASH,
+        )
+
+    rien_n_est_annule(
+        reservation, statut_de_la_reservation_avant, statuts_des_billets_avant
+    )
+    rien_n_est_ecrit_pour_la_ligne(vente_admin.ligne)
+
+
+# --------------------------------------------------------------------------
+# Annulations par l'utilisateur, achat hors Stripe : aucun avoir (D31)
+# / User cancellations of a non-Stripe purchase: no credit note (D31)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("ce_qui_est_annule", ["reservation", "billet"])
+def test_annulation_utilisateur_hors_stripe_aucun_avoir_aucune_vente(
+    lieu, ce_qui_est_annule
+):
+    """
+    Fiche T9 (D31). Deux billets à 10 € vendus dans l'admin, payés en espèces. Le client
+    annule depuis « Mon compte » toute sa réservation, ou un seul billet.
+    - AUCUN avoir : aucune ligne d'avoir, aucune vente nouvelle (AVOIR ou autre), aucun
+      règlement négatif ; la ligne vendue reste VALID. L'argent reste acquis ; si le lieu
+      rembourse, l'admin fait un avoir.
+    - Aucun appel à Stripe.
+    - Réservation : elle et ses deux billets passent annulés. Billet : ce billet passe
+      annulé, l'autre reste actif.
+    - Le message dit que l'achat a été réglé sur place et qu'il faut contacter
+      l'organisateur pour un éventuel remboursement.
+    / D31: a user cancelling a non-Stripe purchase gets no credit note and no sale; only
+    the reservation or the ticket is cancelled; the message points to the organiser.
+    """
+    vente_admin = vendre_et_relire(
+        lieu, prix="10.00", quantite=2, moyen_de_paiement=PaymentMethod.CASH
+    )
+    reservation = vente_admin.reservation
+    client_de_l_acheteur = client_de_mon_compte(lieu, vente_admin.acheteur)
+    nombre_de_ventes_avant = Vente.objects.count()
+
+    if ce_qui_est_annule == "reservation":
+        reponse = annuler_une_reservation_depuis_mon_compte(
+            client_de_l_acheteur, reservation
+        )
+    else:
+        billet_a_annuler = reservation.tickets.order_by("pk").first()
+        reponse = annuler_un_billet_depuis_mon_compte(
+            client_de_l_acheteur, billet_a_annuler
+        )
+
+    assert reponse.status_code == 200
+    rien_n_est_ecrit_pour_la_ligne(vente_admin.ligne)
+    assert Vente.objects.count() == nombre_de_ventes_avant, (
+        "Une vente a été écrite par l'annulation de l'utilisateur."
+    )
+    messages_de_la_personne = " ".join(textes_des_messages_de_l_admin(reponse))
+    assert MESSAGE_COMPLEMENTAIRE_REGLE_SUR_PLACE in messages_de_la_personne, (
+        messages_de_la_personne
+    )
+    # Pas de seconde phrase « annulée » : la vue la dit déjà.
+    # / No second "cancelled" sentence: the view already says it.
+    assert "Votre réservation est annulée" not in messages_de_la_personne
+    assert "Votre billet est annulé" not in messages_de_la_personne
+    assert lieu.remboursement_stripe.call_count == 0
+
+    reservation.refresh_from_db()
+    if ce_qui_est_annule == "reservation":
+        assert reservation.status == Reservation.CANCELED
+        assert statuts_des_billets(reservation) == [Ticket.CANCELED, Ticket.CANCELED]
+    else:
+        billet_a_annuler.refresh_from_db()
+        assert billet_a_annuler.status == Ticket.CANCELED
+        assert statuts_des_billets(reservation).count(Ticket.CANCELED) == 1
+        assert reservation.status != Reservation.CANCELED
+
+
+def test_annulation_utilisateur_booking_hors_stripe_aucun_avoir(lieu):
+    """
+    D31, booking. Un créneau d'une ressource, payé 12 € en espèces (vente encaissée par
+    le service, ligne VALID reliée au booking). La personne annule son booking
+    (`cancel_and_refund_booking`, seul appelant : « Mon compte »).
+    - AUCUN avoir : aucune ligne d'avoir, aucune vente nouvelle, aucun règlement négatif ;
+      la ligne reste VALID.
+    - Aucun appel à Stripe.
+    - Le booking passe « annulé par l'utilisateur ».
+    - Le message dit que l'achat a été réglé sur place et qu'il faut contacter
+      l'organisateur pour un éventuel remboursement.
+    / D31 for bookings: cancelling a cash-paid booking writes no credit note and no sale;
+    the booking is USER_CANCELED; the message points to the organiser.
+    """
+    location = creer_ressource_avec_tarif(prix="12.00")
+    personne = creer_utilisateur()
+    # ÉTAT DE DÉPART : un booking déjà payé hors Stripe, fabriqué directement : il pose
+    # une vente antérieure, jamais un paiement testé (tests/PIEGES.md 12.17).
+    # / STARTING STATE: a booking already paid outside Stripe, built directly.
+    booking = Booking.objects.create(
+        resource=location.ressource,
+        user=personne,
+        start_datetime=location.debut_du_creneau,
+        slot_duration_minutes=60,
+        slot_count=1,
+        status=Booking.PAID_BY_USER,
+    )
+    tarif_vendu = creer_tarif_vendu(nom="Créneau", prix_en_euros="12.00")
+    vente_du_booking = fabriquer_vente_encaissee(
+        origine=SaleOrigin.ADMIN,
+        articles=[
+            {
+                "pricesold": tarif_vendu,
+                "quantite": Decimal("1"),
+                "prix_unitaire": 1200,
+                "taux_tva": Decimal("20"),
+                "payment_method": PaymentMethod.CASH,
+                "booking": booking,
+                "status": LigneArticle.VALID,
+            }
+        ],
+        reglements=[{"moyen": PaymentMethod.CASH, "montant": 1200}],
+    )
+    ligne_du_booking = vente_du_booking.articles.get()
+    nombre_de_ventes_avant = Vente.objects.count()
+
+    message_de_l_annulation = booking.cancel_and_refund_booking()
+
+    assert str(message_de_l_annulation) == MESSAGE_BOOKING_REGLE_SUR_PLACE
+    rien_n_est_ecrit_pour_la_ligne(ligne_du_booking)
+    assert Vente.objects.count() == nombre_de_ventes_avant, (
+        "Une vente a été écrite par l'annulation du booking."
+    )
+    assert lieu.remboursement_stripe.call_count == 0
+    booking.refresh_from_db()
+    assert booking.status == Booking.USER_CANCELED
+
+
+def test_annulation_utilisateur_reservation_offerte_garde_le_message_d_avant(lieu):
+    """
+    D31, cas sans argent : deux billets à 15 € « Offert » vendus dans l'admin (D32 :
+    entièrement offerts). Le client annule sa réservation depuis « Mon compte ».
+    Aucun argent hors Stripe n'a été payé : le message « Réglé sur place… » ne
+    s'affiche PAS, le message d'avant reste. Aucun avoir, réservation annulée.
+    / A fully offered reservation cancelled by the user: no "paid on site" message,
+    the previous message stays; no credit note.
+    """
+    vente_admin_offerte = vendre_et_relire(
+        lieu, prix="15.00", quantite=2, moyen_de_paiement=PaymentMethod.FREE
+    )
+    reservation = vente_admin_offerte.reservation
+    client_de_l_acheteur = client_de_mon_compte(lieu, vente_admin_offerte.acheteur)
+
+    reponse = annuler_une_reservation_depuis_mon_compte(client_de_l_acheteur, reservation)
+
+    assert reponse.status_code == 200
+    messages_de_la_personne = " ".join(textes_des_messages_de_l_admin(reponse))
+    # Aucune phrase « réglé(e) sur place » : on cherche leur fin commune.
+    # / No "paid on site" sentence: we look for their common ending.
+    assert "contactez l'organisateur" not in messages_de_la_personne, (
+        messages_de_la_personne
+    )
+    rien_n_est_ecrit_pour_la_ligne(vente_admin_offerte.ligne)
+    reservation.refresh_from_db()
+    assert reservation.status == Reservation.CANCELED
+
+
+def test_annulation_admin_apres_annulation_utilisateur_d_un_billet_rembourse_le_billet_actif_seulement(
+    lieu,
+):
+    """
+    Deux billets à 10 € vendus dans l'admin, payés en espèces. Le client annule UN
+    billet depuis « Mon compte » : aucun avoir (D31), l'argent reste acquis. Puis
+    l'admin annule la réservation, « Remboursé par : espèces ».
+    L'admin ne rembourse que les billets ENCORE ACTIFS, comme le chemin Stripe : un
+    avoir d'UNE unité (−1000), un règlement espèces −1000. La réservation est annulée.
+    / The user cancels one of two cash tickets (no credit note, D31); the admin then
+    cancels the reservation: only the still active ticket is refunded (one unit).
+    """
+    vente_admin = vendre_et_relire(
+        lieu, prix="10.00", quantite=2, moyen_de_paiement=PaymentMethod.CASH
+    )
+    reservation = vente_admin.reservation
+    ligne_d_origine = vente_admin.ligne
+    vente_d_origine = Vente.objects.get(pk=ligne_d_origine.vente_id)
+    client_de_l_acheteur = client_de_mon_compte(lieu, vente_admin.acheteur)
+    billet_annule_par_l_utilisateur = reservation.tickets.order_by("pk").first()
+    annuler_un_billet_depuis_mon_compte(
+        client_de_l_acheteur, billet_annule_par_l_utilisateur
+    )
+    billet_annule_par_l_utilisateur.refresh_from_db()
+    assert billet_annule_par_l_utilisateur.status == Ticket.CANCELED
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_RESERVATIONS,
+        ACTION_ANNULER_LES_RESERVATIONS,
+        [reservation],
+    )
+    reponse_de_l_action = confirmer_l_ecran_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_RESERVATIONS,
+        ACTION_ANNULER_LES_RESERVATIONS,
+        [reservation],
+        moyen_rembourse=PaymentMethod.CASH,
+    )
+
+    assert reponse_de_l_action.status_code == 302
+    reservation.refresh_from_db()
+    assert reservation.status == Reservation.CANCELED
+
+    avoir = l_avoir_de_la_ligne(ligne_d_origine)
+    assert avoir.qty == Decimal("-1")
+    assert avoir.total_ttc == -1000
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.CASH, -1000)
+    ]
+    verifier_egalites(vente_d_avoir)
+
+
+def test_annulation_utilisateur_booking_offert_garde_le_message_d_avant(lieu):
+    """
+    D31, booking sans argent : un créneau d'une ressource à 12 €, entièrement offert
+    (moyen « offert », vente encaissée par le service). La personne annule son booking.
+    Aucun argent hors Stripe n'a été payé : le message « réglée sur place » ne
+    s'affiche PAS, le message d'avant reste. Aucun avoir ; booking annulé.
+    / A fully offered booking cancelled by the user: no "paid on site" message, the
+    previous message stays; no credit note.
+    """
+    location = creer_ressource_avec_tarif(prix="12.00")
+    personne = creer_utilisateur()
+    # ÉTAT DE DÉPART : un booking offert, fabriqué directement (tests/PIEGES.md 12.17).
+    # / STARTING STATE: an offered booking, built directly.
+    booking = Booking.objects.create(
+        resource=location.ressource,
+        user=personne,
+        start_datetime=location.debut_du_creneau,
+        slot_duration_minutes=60,
+        slot_count=1,
+        status=Booking.PAID_BY_USER,
+    )
+    tarif_vendu = creer_tarif_vendu(nom="Créneau offert", prix_en_euros="12.00")
+    # Le moyen « offert » déclenche la règle du service : part offerte = total, et un
+    # règlement FREE de 1200 écrit par le service lui-même.
+    # / The FREE method triggers the service rule: fully offered, FREE payment written.
+    vente_du_booking = fabriquer_vente_encaissee(
+        origine=SaleOrigin.ADMIN,
+        articles=[
+            {
+                "pricesold": tarif_vendu,
+                "quantite": Decimal("1"),
+                "prix_unitaire": 1200,
+                "taux_tva": Decimal("20"),
+                "payment_method": PaymentMethod.FREE,
+                "booking": booking,
+                "status": LigneArticle.VALID,
+            }
+        ],
+    )
+    ligne_du_booking = vente_du_booking.articles.get()
+    assert ligne_du_booking.part_offerte == ligne_du_booking.total_catalogue == 1200
+
+    message_de_l_annulation = booking.cancel_and_refund_booking()
+
+    assert "contactez l'organisateur" not in str(message_de_l_annulation), (
+        message_de_l_annulation
+    )
+    assert str(message_de_l_annulation) == str(booking.cancel_text())
+    rien_n_est_ecrit_pour_la_ligne(ligne_du_booking)
+    booking.refresh_from_db()
+    assert booking.status == Booking.USER_CANCELED
+
+
+def test_annulation_utilisateur_billet_offert_garde_le_message_d_avant(lieu):
+    """
+    D31, billet sans argent : deux billets à 15 € « Offert » vendus dans l'admin (D32 :
+    entièrement offerts). Le client annule UN billet depuis « Mon compte ».
+    Aucun argent hors Stripe n'a été payé : le message « Réglé sur place… » ne
+    s'affiche PAS, le message d'avant reste. Aucun avoir ; ce billet est annulé.
+    Billet vendu dans l'admin et non à la caisse : un billet de caisse ne retrouve pas
+    sa ligne par son tarif vendu (TODO n°26).
+    / One fully offered admin ticket cancelled by the user: no "paid on site" message,
+    the previous message stays; no credit note.
+    """
+    vente_admin_offerte = vendre_et_relire(
+        lieu, prix="15.00", quantite=2, moyen_de_paiement=PaymentMethod.FREE
+    )
+    reservation = vente_admin_offerte.reservation
+    billet_a_annuler = reservation.tickets.order_by("pk").first()
+    client_de_l_acheteur = client_de_mon_compte(lieu, vente_admin_offerte.acheteur)
+
+    reponse = annuler_un_billet_depuis_mon_compte(client_de_l_acheteur, billet_a_annuler)
+
+    assert reponse.status_code == 200
+    messages_de_la_personne = " ".join(textes_des_messages_de_l_admin(reponse))
+    # Aucune phrase « réglé sur place » : on cherche sa fin.
+    # / No "paid on site" sentence: we look for its ending.
+    assert "contactez l'organisateur" not in messages_de_la_personne, (
+        messages_de_la_personne
+    )
+    rien_n_est_ecrit_pour_la_ligne(vente_admin_offerte.ligne)
+    billet_a_annuler.refresh_from_db()
+    assert billet_a_annuler.status == Ticket.CANCELED

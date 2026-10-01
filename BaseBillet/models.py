@@ -3059,36 +3059,24 @@ class Reservation(models.Model):
 
         return lignes_a_crediter
 
-    @staticmethod
-    def _creer_avoir(ligne, quantite):
+    def _montant_paye_par_stripe(self):
         """
-        Cree un avoir (credit note) de `quantite` billets pour une LigneArticle hors-Stripe.
-        / Creates a credit note of `quantite` tickets for a non-Stripe LigneArticle.
+        Le montant payé par Stripe pour cette réservation, en centimes : les lignes
+        payées (et leurs remboursements) qui portent un paiement Stripe.
+        / The amount paid through Stripe for this reservation, in cents.
+
+        Sert à la garde « payée mais rien de remboursable » de l'utilisateur : elle ne
+        regarde que l'argent payé par Stripe (D31 ne vise que l'argent hors Stripe).
+        / Used by the user's "paid but nothing refundable" guard: Stripe money only.
         """
-        metadata = ligne.metadata if ligne.metadata else {}
-        metadata['original_lignearticle_uuid'] = str(ligne.uuid)
-        avoir = LigneArticle.objects.create(
-            pricesold=ligne.pricesold,
-            qty=-quantite,
-            amount=ligne.amount,
-            vat=ligne.vat,
-            paiement_stripe=ligne.paiement_stripe,
-            reservation=ligne.reservation,
-            membership=ligne.membership,
-            payment_method=ligne.payment_method,
-            asset=ligne.asset,
-            wallet=ligne.wallet,
-            sale_origin=SaleOrigin.ADMIN,
-            credit_note_for=ligne,
-            metadata=metadata,
-            status=LigneArticle.CREATED,
-        )
-        avoir.status = LigneArticle.CREDIT_NOTE
-        avoir.save()
-        return avoir
+        montant_paye_par_stripe = 0
+        for ligne_payee in self.articles_paid():
+            if ligne_payee.paiement_stripe_id is not None:
+                montant_paye_par_stripe += int(ligne_payee.amount * ligne_payee.qty)
+        return montant_paye_par_stripe
 
     @atomic
-    def cancel_and_refund_resa(self):
+    def cancel_and_refund_resa(self, annulation_par_l_admin=False, moyen_rembourse=None):
         """
         Annule toute la réservation et rembourse ce qui reste à rembourser.
         / Cancels the whole reservation and refunds what is left to refund.
@@ -3097,15 +3085,34 @@ class Reservation(models.Model):
 
         FLUX :
         1. Payée par Stripe : remboursement des billets encore actifs
-           (partial_refund_payment crée une ligne négative REFUNDED).
-        2. Vente hors Stripe (espèces, chèque…) : avoir de la quantité pas encore créditée.
-        3. Si la réservation a été payée mais que rien n'a pu être remboursé : erreur,
-           rien n'est annulé.
+           (partial_refund_payment écrit sa vente AVOIR, lignes REFUNDED).
+        2. Vente hors Stripe (espèces, chèque…) :
+           - par l'ADMIN : un avoir par ligne, de la quantité pas encore créditée
+             (`ecrire_la_vente_d_avoir_d_une_ligne`, BaseBillet/services_vente.py),
+             l'argent rendu au moyen `moyen_rembourse` ;
+           - par l'UTILISATEUR (D31) : AUCUN avoir. L'argent reste acquis ; si le lieu
+             rembourse, l'admin fait un avoir.
+        3. Garde « payée mais rien de remboursable » : erreur, rien n'est annulé.
+           L'admin la voit sur tout l'argent payé ; l'utilisateur seulement sur l'argent
+           payé par Stripe.
         4. La réservation et tous ses billets passent CANCELED.
 
-        Appelée par : BaseBillet/views.py (cancel_reservation) et les actions admin d'annulation.
-        / Called by: BaseBillet/views.py (cancel_reservation) and the admin cancel actions.
+        Appelée par : BaseBillet/views.py (cancel_reservation, l'utilisateur : valeurs
+        par défaut) et les actions admin d'annulation (`annulation_par_l_admin=True`).
+        / Called by: the user view (defaults) and the admin cancel actions.
+
+        :param annulation_par_l_admin: True quand l'admin annule
+        :param moyen_rembourse: `PaymentMethod` de l'argent hors Stripe rendu par
+            l'admin ; vide permis quand les lignes hors Stripe sont entièrement offertes
+        :return: le message pour la personne
         """
+        # Import local : services_vente importe ce module au chargement.
+        # / Local import: services_vente imports this module when it loads.
+        from BaseBillet.services_vente import (
+            ecrire_la_vente_d_avoir_d_une_ligne,
+            ligne_entierement_offerte,
+        )
+
         if self.status == Reservation.CANCELED:
             raise Exception(_("This reservation has already been canceled."))
 
@@ -3113,7 +3120,9 @@ class Reservation(models.Model):
             raise Exception(_("You cannot cancel a reservation that has been scanned."))
 
         montant_paye = self.total_paid()
-        remboursement_effectue = False
+        montant_paye_par_stripe = self._montant_paye_par_stripe()
+        remboursement_stripe_effectue = False
+        avoir_hors_stripe_ecrit = False
 
         # 1) Remboursement Stripe, avec ou sans panier
         # / Stripe refund, with or without cart
@@ -3135,7 +3144,7 @@ class Reservation(models.Model):
 
                 # Appel la fonction helper pour gérer le refund
                 partial_refund_payment(paiement, config, lignes)
-                remboursement_effectue = True
+                remboursement_stripe_effectue = True
 
             # Si la commande est faite SANS le panier, récupère la lignearticle depuis le paiement
             elif self.paiements.count() > 0:
@@ -3153,21 +3162,51 @@ class Reservation(models.Model):
                         ligne.to_refund_qty = valid_ticket.count()
 
                     partial_refund_payment(paiement, config, lignes)
-                    remboursement_effectue = True
+                    remboursement_stripe_effectue = True
 
-        # 2) Avoir pour les lignes hors-Stripe (reservations admin : cheque, especes, etc.)
-        # / Credit note for non-Stripe lines (admin reservations: check, cash, etc.)
-        for ligne in self._lignes_hors_stripe():
-            # Avoir de ce qui n'a pas encore été crédité (billets déjà annulés un par un exclus).
-            # / Credit note for what is not yet credited (tickets already cancelled one by one excluded).
-            self._creer_avoir(ligne, quantite=ligne.quantite_restante)
-            remboursement_effectue = True
-            logger.info(f"Credit note created for non-Stripe line {ligne.uuid}")
+        # 2) Lignes hors Stripe (réservations admin, caisse : chèque, espèces, offert…).
+        # L'admin écrit un avoir par ligne ; l'utilisateur n'en écrit aucun (D31).
+        # / Non-Stripe lines: the admin writes one credit note per line; the user none.
+        lignes_hors_stripe_a_crediter = self._lignes_hors_stripe()
+        if annulation_par_l_admin:
+            for ligne in lignes_hors_stripe_a_crediter:
+                # L'avoir ne rend que les billets ENCORE ACTIFS du tarif, comme le chemin
+                # Stripe : un billet annulé par l'utilisateur (sans avoir, D31) n'est pas
+                # rendu. La quantité pas encore créditée borne aussi : un billet déjà
+                # remboursé un par un par l'admin n'est jamais rendu deux fois.
+                # On compare le TARIF (`Price`), pas le tarif vendu : la caisse écrit sa
+                # ligne et ses billets sur deux `PriceSold` différents (laboutik/views.py).
+                # / Only still active tickets are given back (like the Stripe path),
+                # capped by the not yet credited quantity: never refunded twice. The
+                # Price is compared, not the PriceSold (the register uses two of them).
+                nombre_de_billets_actifs_du_tarif = self.tickets.filter(
+                    status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+                    pricesold__price_id=ligne.pricesold.price_id,
+                ).count()
+                quantite_a_crediter = min(
+                    ligne.quantite_restante, Decimal(nombre_de_billets_actifs_du_tarif)
+                )
+                if quantite_a_crediter <= 0:
+                    continue
+                ecrire_la_vente_d_avoir_d_une_ligne(
+                    ligne,
+                    quantite=quantite_a_crediter,
+                    moyen_rembourse=moyen_rembourse,
+                    origine=SaleOrigin.ADMIN,
+                )
+                avoir_hors_stripe_ecrit = True
+                logger.info(f"Credit note created for non-Stripe line {ligne.uuid}")
 
-        # Payée mais rien de remboursable : on refuse d'annuler plutôt que de garder l'argent en silence.
-        # / Paid but nothing refundable: refuse to cancel rather than silently keep the money.
-        if montant_paye > 0 and not remboursement_effectue:
-            raise Exception(_("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
+        # 3) Payée mais rien de remboursable : on refuse d'annuler plutôt que de garder
+        # l'argent en silence. L'utilisateur n'est arrêté que pour l'argent payé par Stripe.
+        # / 3) Paid but nothing refundable: refuse. The user only for Stripe money.
+        if annulation_par_l_admin:
+            rien_de_rembourse = not remboursement_stripe_effectue and not avoir_hors_stripe_ecrit
+            if montant_paye > 0 and rien_de_rembourse:
+                raise Exception(_("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
+        else:
+            if montant_paye_par_stripe > 0 and not remboursement_stripe_effectue:
+                raise Exception(_("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
 
         self.status = Reservation.CANCELED
         for ticket in self.tickets.all():
@@ -3175,10 +3214,21 @@ class Reservation(models.Model):
             ticket.save()
         self.save()
 
+        # L'utilisateur qui annule un achat réglé sur place en ARGENT ne reçoit rien :
+        # le message le lui dit. La vue écrit déjà « … has been cancelled. » devant :
+        # on ne rend que la phrase complémentaire. Un achat entièrement offert garde
+        # le message d'avant.
+        # / A user cancelling an on-site money purchase is told who to contact (the view
+        # already prefixes "cancelled"); a fully offered purchase keeps the old message.
+        if not annulation_par_l_admin:
+            for ligne in lignes_hors_stripe_a_crediter:
+                ligne_avec_de_l_argent = ligne.amount > 0 and not ligne_entierement_offerte(ligne)
+                if ligne_avec_de_l_argent:
+                    return _("Réglé sur place : pour un éventuel remboursement, contactez l'organisateur.")
         return self.cancel_text()
 
     @atomic
-    def cancel_and_refund_ticket(self, ticket):
+    def cancel_and_refund_ticket(self, ticket, annulation_par_l_admin=False, moyen_rembourse=None):
         """
         Annule et rembourse UN billet de cette réservation.
         / Cancels and refunds ONE ticket of this reservation.
@@ -3187,16 +3237,34 @@ class Reservation(models.Model):
 
         FLUX :
         1. Payé par Stripe : remboursement Stripe du prix d'un billet
-           (partial_refund_payment crée une ligne négative REFUNDED).
-        2. Sinon, vente hors Stripe (espèces, chèque…) : avoir d'un billet sur la ligne de la réservation.
-        3. Si la réservation a été payée mais que rien n'a pu être remboursé : erreur,
-           le billet n'est pas annulé.
+           (partial_refund_payment écrit sa vente AVOIR, ligne REFUNDED).
+        2. Sinon, vente hors Stripe (espèces, chèque…) :
+           - par l'ADMIN : avoir d'UN billet sur la ligne de la réservation
+             (`ecrire_la_vente_d_avoir_d_une_ligne`), au moyen `moyen_rembourse` ;
+           - par l'UTILISATEUR (D31) : AUCUN avoir.
+        3. Garde « payée mais rien de remboursable » : erreur, le billet n'est pas
+           annulé. L'admin la voit sur tout l'argent payé ; l'utilisateur seulement sur
+           l'argent payé par Stripe.
         4. Le billet passe CANCELED.
         5. S'il ne reste aucun billet non annulé, la réservation passe CANCELED.
 
-        Appelée par : BaseBillet/views.py (cancel_ticket) et l'action admin « Cancel and refund ».
-        / Called by: BaseBillet/views.py (cancel_ticket) and the admin action "Cancel and refund".
+        Appelée par : BaseBillet/views.py (cancel_ticket, l'utilisateur : valeurs par
+        défaut) et l'action admin « Cancel and refund » (`annulation_par_l_admin=True`).
+        / Called by: the user view (defaults) and the admin action "Cancel and refund".
+
+        :param ticket: le `Ticket` à annuler
+        :param annulation_par_l_admin: True quand l'admin annule
+        :param moyen_rembourse: `PaymentMethod` de l'argent hors Stripe rendu par
+            l'admin ; vide permis quand la ligne est entièrement offerte
+        :return: le message pour la personne
         """
+        # Import local : services_vente importe ce module au chargement.
+        # / Local import: services_vente imports this module when it loads.
+        from BaseBillet.services_vente import (
+            ecrire_la_vente_d_avoir_d_une_ligne,
+            ligne_entierement_offerte,
+        )
+
         # Garde-fous / Basic guards
         if ticket.status == Ticket.CANCELED:
             raise Exception(_("This ticket has already been canceled."))
@@ -3207,6 +3275,7 @@ class Reservation(models.Model):
 
         refund = False
         montant_paye = self.total_paid()
+        montant_paye_par_stripe = self._montant_paye_par_stripe()
         # 1) Réservation payée : remboursement Stripe d'un billet
         # / Paid reservation: Stripe refund of one ticket
         if montant_paye > 0:
@@ -3255,22 +3324,37 @@ class Reservation(models.Model):
 
                     break
 
-        # 2) Avoir pour les lignes hors-Stripe (ticket admin : cheque, especes, etc.)
-        # / Credit note for non-Stripe lines (admin ticket: check, cash, etc.)
+        remboursement_stripe_effectue = refund
+
+        # 2) Lignes hors Stripe (billet admin, caisse : chèque, espèces, offert…).
+        # L'admin écrit l'avoir d'UN billet ; l'utilisateur n'en écrit aucun (D31).
+        # / Non-Stripe lines: the admin writes ONE ticket's credit note; the user none.
+        lignes_hors_stripe_du_billet = []
         if not refund:
-            lignes_hors_stripe = self._lignes_hors_stripe(
+            lignes_hors_stripe_du_billet = self._lignes_hors_stripe(
                 pricesold_ids=[ticket.pricesold_id]
             )
-            for ligne in lignes_hors_stripe:
-                self._creer_avoir(ligne, quantite=1)
-                logger.info(f"Credit note created for non-Stripe line {ligne.uuid} (single ticket cancel)")
-                refund = True
-                break  # Un seul avoir pour un seul ticket
+            if annulation_par_l_admin:
+                for ligne in lignes_hors_stripe_du_billet:
+                    ecrire_la_vente_d_avoir_d_une_ligne(
+                        ligne,
+                        quantite=Decimal("1"),
+                        moyen_rembourse=moyen_rembourse,
+                        origine=SaleOrigin.ADMIN,
+                    )
+                    logger.info(f"Credit note created for non-Stripe line {ligne.uuid} (single ticket cancel)")
+                    refund = True
+                    break  # Un seul avoir pour un seul ticket
 
-        # Payé mais rien de remboursable : on refuse d'annuler plutôt que de garder l'argent en silence.
-        # / Paid but nothing refundable: refuse to cancel rather than silently keep the money.
-        if montant_paye > 0 and not refund:
-            raise Exception(_("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
+        # Payé mais rien de remboursable : on refuse d'annuler plutôt que de garder
+        # l'argent en silence. L'utilisateur n'est arrêté que pour l'argent payé par Stripe.
+        # / Paid but nothing refundable: refuse. The user only for Stripe money.
+        if annulation_par_l_admin:
+            if montant_paye > 0 and not refund:
+                raise Exception(_("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
+        else:
+            if montant_paye_par_stripe > 0 and not remboursement_stripe_effectue:
+                raise Exception(_("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
 
         ticket.status = Ticket.CANCELED
         ticket.save()
@@ -3283,6 +3367,17 @@ class Reservation(models.Model):
             self.status = Reservation.CANCELED
             self.save(update_fields=["status"])
 
+        # L'utilisateur qui annule un billet réglé sur place en ARGENT ne reçoit rien :
+        # le message le lui dit. La vue écrit déjà « … has been cancelled. » devant :
+        # on ne rend que la phrase complémentaire. Un billet entièrement offert garde
+        # le message d'avant.
+        # / A user cancelling an on-site money ticket is told who to contact (the view
+        # already prefixes "cancelled"); a fully offered ticket keeps the old message.
+        if not annulation_par_l_admin:
+            for ligne in lignes_hors_stripe_du_billet:
+                ligne_avec_de_l_argent = ligne.amount > 0 and not ligne_entierement_offerte(ligne)
+                if ligne_avec_de_l_argent:
+                    return _("Réglé sur place : pour un éventuel remboursement, contactez l'organisateur.")
         return self.cancel_text() if refund else _("Ticket cancelled.")
 
     def __str__(self):

@@ -665,7 +665,8 @@ def seed_ventes_demo(*, reset=False):
         # --- 4. AVOIR (CREDIT_NOTE) sur 1 billet Plein -> -20 EUR
         # / Credit note on 1 Full ticket -> -20 EUR
         # On simule l'avoir comme une 2e ligne avec qty=-1 et status=CREDIT_NOTE.
-        # C'est l'effet final que produirait Reservation._creer_avoir().
+        # C'est la ligne d'avoir qu'écrit ecrire_la_vente_d_avoir_d_une_ligne()
+        # (BaseBillet/services_vente.py), sans sa vente AVOIR.
         # / Simulate credit note as a second line with qty=-1 and status=CREDIT_NOTE.
         l_avoir = _creer_lignearticle(
             pricesold=prix_jazz_plein, qty=Decimal("-1"), amount_centimes=2000,

@@ -133,12 +133,10 @@ from BaseBillet.models import Configuration, Product, Price, Paiement_stripe, Me
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
-from BaseBillet.models_vente import Reglement, Vente
+from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import (
-    ajouter_l_article_d_avoir,
-    ajouter_reglement,
-    encaisser_vente,
-    ouvrir_vente,
+    ecrire_la_vente_d_avoir_d_une_ligne,
+    ligne_entierement_offerte,
 )
 from Customers.models import Client
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
@@ -2151,19 +2149,12 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
         - ligne payée par Stripe : pas de champ ; l'écran prévient de rembourser depuis
           le tableau de bord Stripe. Aucun appel à Stripe ici.
 
-        FLUX DU POST (tout dans UNE transaction, tout ou rien) :
-        1. vente AVOIR, origine ADMIN, liée à la vente de la ligne (vide pour une
-           ligne d'avant le chantier), client = celui de la vente liée ;
-        2. l'article d'avoir : `ajouter_l_article_d_avoir` (BaseBillet/services_vente.py) ;
-        3. UN règlement d'argent du net rendu, s'il n'est pas nul : au moyen Stripe
-           d'origine (relié au paiement, sans référence externe), ou au moyen choisi ;
-        4. un règlement FREE négatif pour la part offerte, sauf la partie déjà tracée
-           par la règle « offert » du service (jamais deux fois) ;
-        5. `encaisser_vente` ;
-        6. PUIS la transition CREDIT_NOTE par `save()` : elle déclenche l'envoi à
-           l'ancien LaBoutik (BaseBillet/signals.py).
-        / GET = screen, POST = one transaction: AVOIR sale, mirrored item, one money
-        payment, one FREE payment for the offered part, settle, then CREDIT_NOTE.
+        FLUX DU POST : `ecrire_la_vente_d_avoir_d_une_ligne` (BaseBillet/services_vente.py)
+        pour toute la quantité de la ligne, origine ADMIN : vente AVOIR liée, article
+        miroir, un règlement d'argent (moyen Stripe d'origine, ou moyen choisi), un
+        règlement FREE pour la part offerte, encaissement, PUIS CREDIT_NOTE. Tout ou
+        rien. Un refus du service (ValueError) devient un message d'erreur.
+        / GET = screen, POST = the service writes the whole credit note (all or nothing).
         """
         ligne_originale = get_object_or_404(
             LigneArticle.objects.select_related(
@@ -2204,16 +2195,9 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
 
         # Quel écran ? / Which screen?
         ligne_payee_par_stripe = ligne_originale.paiement_stripe_id is not None
-        ligne_offerte_par_ses_montants = (
-            ligne_originale.total_catalogue != 0
-            and ligne_originale.part_offerte == ligne_originale.total_catalogue
-        )
-        ligne_offerte_par_son_moyen = ligne_originale.payment_method == PaymentMethod.FREE
-        ligne_entierement_offerte = (
-            ligne_offerte_par_ses_montants or ligne_offerte_par_son_moyen
-        )
+        ligne_sans_argent_a_rendre = ligne_entierement_offerte(ligne_originale)
         champ_rembourse_par_demande = (
-            not ligne_payee_par_stripe and not ligne_entierement_offerte
+            not ligne_payee_par_stripe and not ligne_sans_argent_a_rendre
         )
 
         if request.method == "POST":
@@ -2242,7 +2226,7 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
                 "ligne": ligne_originale,
                 "montant_de_la_ligne": dround(ligne_originale.total()),
                 "ligne_payee_par_stripe": ligne_payee_par_stripe,
-                "ligne_entierement_offerte": ligne_entierement_offerte,
+                "ligne_entierement_offerte": ligne_sans_argent_a_rendre,
                 "champ_rembourse_par_demande": champ_rembourse_par_demande,
                 "url_de_la_liste_des_ventes": url_de_la_liste_des_ventes,
             }
@@ -2252,79 +2236,24 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
                 contexte_de_l_ecran,
             )
 
-        # Le moyen de l'argent rendu : le moyen Stripe d'origine, ou le moyen choisi.
-        # Une ligne entièrement offerte ne rend pas d'argent : pas de moyen.
-        # / The money method: the original Stripe one, or the chosen one.
-        if ligne_payee_par_stripe:
-            paiement_d_origine = ligne_originale.paiement_stripe
-            moyen_de_l_argent_rendu = (
-                paiement_d_origine.moyen or ligne_originale.payment_method
-            )
-        elif champ_rembourse_par_demande:
-            paiement_d_origine = None
-            moyen_de_l_argent_rendu = formulaire.cleaned_data["moyen_rembourse"]
+        # Le moyen choisi, s'il y a un champ. Une ligne Stripe ou entièrement offerte
+        # n'en a pas : la fonction du service prend le moyen Stripe d'origine, ou
+        # n'écrit aucun règlement d'argent.
+        # / The chosen method, if there is a field; otherwise the service decides.
+        if champ_rembourse_par_demande:
+            moyen_choisi = formulaire.cleaned_data["moyen_rembourse"]
         else:
-            paiement_d_origine = None
-            moyen_de_l_argent_rendu = None
+            moyen_choisi = None
 
         try:
-            with db_transaction.atomic():
-                # 1. La vente AVOIR. / 1. The AVOIR sale.
-                if vente_d_origine is not None:
-                    client_de_la_vente_liee = vente_d_origine.client
-                else:
-                    client_de_la_vente_liee = None
-                vente_d_avoir = ouvrir_vente(
-                    origine=SaleOrigin.ADMIN,
-                    nature=Vente.Nature.AVOIR,
-                    client=client_de_la_vente_liee,
-                    vente_liee=vente_d_origine,
-                )
-
-                # 2. L'article d'avoir : toute la quantité de la ligne.
-                # / 2. The credit note item: the whole quantity of the line.
-                article_d_avoir = ajouter_l_article_d_avoir(
-                    vente_d_avoir, ligne_originale, ligne_originale.qty
-                )
-
-                # 3. UN règlement d'argent, du net rendu, s'il n'est pas nul.
-                # / 3. ONE money payment, of the net given back, if not zero.
-                net_rendu = article_d_avoir.total_ttc
-                if net_rendu != 0:
-                    ajouter_reglement(
-                        vente_d_avoir,
-                        moyen=moyen_de_l_argent_rendu,
-                        montant=net_rendu,
-                        paiement_stripe=paiement_d_origine,
-                    )
-
-                # 4. La part offerte annulée, tracée par un règlement FREE. La règle
-                # « offert » du service a pu l'écrire déjà (moyen historique FREE) :
-                # on n'écrit que ce qui manque.
-                # / 4. The cancelled offered part, as a FREE payment, never twice.
-                part_offerte_deja_tracee = 0
-                reglements_offerts_deja_ecrits = Reglement.objects.filter(
-                    vente=vente_d_avoir, moyen=PaymentMethod.FREE
-                )
-                for reglement_offert in reglements_offerts_deja_ecrits:
-                    part_offerte_deja_tracee += reglement_offert.montant
-                part_offerte_a_tracer = (
-                    article_d_avoir.part_offerte - part_offerte_deja_tracee
-                )
-                if part_offerte_a_tracer != 0:
-                    ajouter_reglement(
-                        vente_d_avoir,
-                        moyen=PaymentMethod.FREE,
-                        montant=part_offerte_a_tracer,
-                    )
-
-                # 5. L'encaissement. / 5. Settlement.
-                encaisser_vente(vente_d_avoir)
-
-                # 6. PUIS la transition : elle déclenche la machine à états.
-                # / 6. THEN the transition: it triggers the state machine.
-                article_d_avoir.status = LigneArticle.CREDIT_NOTE
-                article_d_avoir.save()
+            # Toute la quantité de la ligne, en une transaction (tout ou rien).
+            # / The whole quantity of the line, in one transaction (all or nothing).
+            ecrire_la_vente_d_avoir_d_une_ligne(
+                ligne_originale,
+                quantite=ligne_originale.qty,
+                moyen_rembourse=moyen_choisi,
+                origine=SaleOrigin.ADMIN,
+            )
         except ValueError as erreur:
             # Une règle du service refuse l'avoir : rien n'est écrit (transaction).
             # / A service rule refuses the credit note: nothing is written.
@@ -3460,6 +3389,125 @@ class EventPastFilter(admin.SimpleListFilter):
         return queryset
 
 
+def preparer_le_champ_rembourse_par(lignes_hors_stripe):
+    """
+    Décide si l'écran d'annulation affiche le champ « Remboursé par », et avec quel
+    moyen pré-rempli.
+    / Decides whether the cancel screen shows the "Refunded by" field, and its initial
+    method.
+
+    LOCALISATION : Administration/admin_tenant.py
+    (utilisé par `afficher_ou_valider_l_ecran_d_annulation`)
+
+    RÈGLES :
+    - champ affiché seulement si au moins une ligne hors Stripe a de l'argent à rendre
+      (pas entièrement offerte) ;
+    - pré-rempli si TOUTES ces lignes ont le même moyen d'origine, et qu'il est dans
+      la liste du champ (espèces, CB, chèque, virement) ; sinon vide.
+    / Field shown only when a non-Stripe line has money to give back; pre-filled when
+    all those lines share the same original method from the field's list.
+
+    :param lignes_hors_stripe: les `LigneArticle` hors Stripe de la sélection
+    :return: (champ_demande, moyen_pre_rempli) ; moyen_pre_rempli vaut None si vide
+    """
+    moyens_d_origine_de_l_argent_a_rendre = []
+    for ligne in lignes_hors_stripe:
+        if ligne_entierement_offerte(ligne):
+            continue
+        moyens_d_origine_de_l_argent_a_rendre.append(ligne.payment_method)
+
+    champ_demande = len(moyens_d_origine_de_l_argent_a_rendre) > 0
+    if not champ_demande:
+        return False, None
+
+    premier_moyen = moyens_d_origine_de_l_argent_a_rendre[0]
+    tous_les_moyens_identiques = True
+    for moyen_d_origine in moyens_d_origine_de_l_argent_a_rendre:
+        if moyen_d_origine != premier_moyen:
+            tous_les_moyens_identiques = False
+
+    if tous_les_moyens_identiques and premier_moyen in MOYENS_DU_CHAMP_REMBOURSE_PAR:
+        return True, premier_moyen
+    return True, None
+
+
+def afficher_ou_valider_l_ecran_d_annulation(
+    model_admin, request, objets_coches, lignes_hors_stripe, descriptions_des_objets
+):
+    """
+    L'écran intermédiaire des actions admin d'annulation (réservations, billets).
+    / The intermediate screen of the admin cancel actions (reservations, tickets).
+
+    LOCALISATION : Administration/admin_tenant.py
+    Gabarit : Administration/templates/admin/annulation/confirmer_annulation.html
+
+    FLUX (comme la confirmation de suppression de Django) :
+    1. 1er POST de la liste (l'admin lance l'action) : l'écran est rendu, rien n'est
+       annulé ;
+    2. 2e POST de l'écran (`post=yes`, plus `moyen_rembourse` si le champ est
+       affiché) : formulaire valide → l'appelant annule ; formulaire refusé (champ
+       vide) → l'écran revient, avec l'erreur.
+    / First POST = screen; second POST (`post=yes`) = cancel if the form is valid,
+    screen again otherwise.
+
+    Un seul moyen vaut pour toute la sélection.
+    / One method applies to the whole selection.
+
+    :param model_admin: le ModelAdmin de la liste (réservations ou billets)
+    :param request: la requête de l'action
+    :param objets_coches: les objets cochés (réservations ou billets)
+    :param lignes_hors_stripe: les `LigneArticle` hors Stripe touchées par l'annulation
+    :param descriptions_des_objets: une ligne de texte par objet coché, pour l'écran
+    :return: (reponse_de_l_ecran, moyen_choisi) : la réponse à rendre (écran) ou None ;
+        le moyen choisi (None sans champ) quand le formulaire est valide
+    """
+    champ_demande, moyen_pre_rempli = preparer_le_champ_rembourse_par(lignes_hors_stripe)
+    confirmation_envoyee = request.POST.get("post") == "yes"
+
+    if confirmation_envoyee:
+        if champ_demande:
+            formulaire = EmettreAvoirAvecMoyenForm(request.POST)
+        else:
+            formulaire = EmettreAvoirSansMoyenForm(request.POST)
+        if formulaire.is_valid():
+            moyen_choisi = formulaire.cleaned_data.get("moyen_rembourse") or None
+            return None, moyen_choisi
+    else:
+        valeurs_initiales = {}
+        if moyen_pre_rempli is not None:
+            valeurs_initiales["moyen_rembourse"] = moyen_pre_rempli
+        if champ_demande:
+            formulaire = EmettreAvoirAvecMoyenForm(initial=valeurs_initiales)
+        else:
+            formulaire = EmettreAvoirSansMoyenForm()
+
+    cles_des_objets_coches = []
+    for objet_coche in objets_coches:
+        cles_des_objets_coches.append(str(objet_coche.pk))
+
+    options_du_modele = model_admin.model._meta
+    url_de_la_liste = reverse(
+        f"{model_admin.admin_site.name}:{options_du_modele.app_label}_{options_du_modele.model_name}_changelist"
+    )
+    contexte_de_l_ecran = {
+        **model_admin.admin_site.each_context(request),
+        "title": _("Annuler et rembourser"),
+        "opts": options_du_modele,
+        "form": formulaire,
+        "champ_rembourse_par_demande": champ_demande,
+        "nom_de_l_action": request.POST.get("action", ""),
+        "cles_des_objets_coches": cles_des_objets_coches,
+        "descriptions_des_objets": descriptions_des_objets,
+        "url_de_la_liste": url_de_la_liste,
+    }
+    reponse_de_l_ecran = render(
+        request,
+        "admin/annulation/confirmer_annulation.html",
+        contexte_de_l_ecran,
+    )
+    return reponse_de_l_ecran, None
+
+
 @admin.register(Reservation, site=staff_admin_site)
 class ReservationAdmin(ModelAdmin):
     # Expandable section to display custom form answers in changelist
@@ -3517,13 +3565,51 @@ class ReservationAdmin(ModelAdmin):
 
     @admin.action(description=_("Cancel and refund selected reservations"))
     def action_cancel_refund_reservations(self, request, queryset):
+        """
+        Annule et rembourse les réservations cochées, après un écran de confirmation.
+        / Cancels and refunds the ticked reservations, after a confirmation screen.
+
+        LOCALISATION : Administration/admin_tenant.py
+
+        FLUX :
+        1. l'écran (`afficher_ou_valider_l_ecran_d_annulation`) : champ « Remboursé par »
+           si une ligne hors Stripe a de l'argent à rendre ;
+        2. formulaire valide : `cancel_and_refund_resa(annulation_par_l_admin=True,
+           moyen_rembourse=…)` pour chaque réservation (Stripe : remboursement ; hors
+           Stripe : un avoir par ligne), puis le mail d'annulation.
+        / Screen first, then each reservation is cancelled by the admin with the chosen
+        method, then the cancellation mail.
+        """
         # Only operate on queryset of reservations; prefetch to reduce queries
         qs = queryset.select_related('user_commande', 'event').prefetch_related('tickets')
+
+        reservations_cochees = list(qs)
+        lignes_hors_stripe_de_la_selection = []
+        descriptions_des_reservations = []
+        for reservation_cochee in reservations_cochees:
+            for ligne_hors_stripe in reservation_cochee._lignes_hors_stripe():
+                lignes_hors_stripe_de_la_selection.append(ligne_hors_stripe)
+            descriptions_des_reservations.append(
+                f"{reservation_cochee.event} — {reservation_cochee}"
+            )
+        reponse_de_l_ecran, moyen_choisi = afficher_ou_valider_l_ecran_d_annulation(
+            self,
+            request,
+            reservations_cochees,
+            lignes_hors_stripe_de_la_selection,
+            descriptions_des_reservations,
+        )
+        if reponse_de_l_ecran is not None:
+            return reponse_de_l_ecran
+
         success_count = 0
         errors = []
-        for resa in qs:
+        for resa in reservations_cochees:
             try:
-                msg = resa.cancel_and_refund_resa()
+                msg = resa.cancel_and_refund_resa(
+                    annulation_par_l_admin=True,
+                    moyen_rembourse=moyen_choisi,
+                )
                 try:
                     send_reservation_cancellation_user.delay(str(resa.uuid))
                 except Exception as ce:
@@ -3694,10 +3780,50 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
 
     @admin.action(description=_("Cancel and refund"))
     def action_cancel_refund_selected(self, request, queryset):
+        """
+        Annule et rembourse les billets cochés, après un écran de confirmation. Tous
+        les billets d'une réservation cochés : toute la réservation est annulée.
+        / Cancels and refunds the ticked tickets, after a confirmation screen.
+
+        LOCALISATION : Administration/admin_tenant.py
+
+        FLUX :
+        1. l'écran (`afficher_ou_valider_l_ecran_d_annulation`) : champ « Remboursé par »
+           si une ligne hors Stripe a de l'argent à rendre ;
+        2. formulaire valide : `cancel_and_refund_resa` ou `cancel_and_refund_ticket`
+           avec `annulation_par_l_admin=True` et le moyen choisi, puis les mails.
+        / Screen first, then the admin cancellation with the chosen method, then mails.
+        """
         # Group selected tickets by reservation
-        tickets = queryset.select_related('reservation')
+        tickets = queryset.select_related(
+            'reservation', 'reservation__event', 'reservation__user_commande', 'pricesold'
+        )
+
+        billets_coches = list(tickets)
+        lignes_hors_stripe_de_la_selection = []
+        descriptions_des_billets = []
+        for billet_coche in billets_coches:
+            lignes_hors_stripe_du_billet = billet_coche.reservation._lignes_hors_stripe(
+                pricesold_ids=[billet_coche.pricesold_id]
+            )
+            for ligne_hors_stripe in lignes_hors_stripe_du_billet:
+                lignes_hors_stripe_de_la_selection.append(ligne_hors_stripe)
+            descriptions_des_billets.append(
+                f"{billet_coche.reservation.event} — {billet_coche.pricesold} — "
+                f"{billet_coche.reservation.user_commande.email}"
+            )
+        reponse_de_l_ecran, moyen_choisi = afficher_ou_valider_l_ecran_d_annulation(
+            self,
+            request,
+            billets_coches,
+            lignes_hors_stripe_de_la_selection,
+            descriptions_des_billets,
+        )
+        if reponse_de_l_ecran is not None:
+            return reponse_de_l_ecran
+
         res_to_tickets: Dict[str, Dict[str, Any]] = {}
-        for t in tickets:
+        for t in billets_coches:
             resa_id = str(t.reservation_id)
             bucket = res_to_tickets.setdefault(resa_id, {"reservation": t.reservation, "tickets": []})
             bucket["tickets"].append(t)
@@ -3713,7 +3839,10 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
                 total_in_resa = resa.tickets.count()
                 if len(selected_tickets) == total_in_resa:
                     # All tickets of reservation selected -> cancel whole reservation
-                    msg = resa.cancel_and_refund_resa()
+                    msg = resa.cancel_and_refund_resa(
+                        annulation_par_l_admin=True,
+                        moyen_rembourse=moyen_choisi,
+                    )
                     try:
                         send_reservation_cancellation_user.delay(str(resa.uuid))
                     except Exception as ce:
@@ -3723,7 +3852,11 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
                     # Partial selection -> cancel each selected ticket
                     for t in selected_tickets:
                         try:
-                            msg = resa.cancel_and_refund_ticket(t)
+                            msg = resa.cancel_and_refund_ticket(
+                                t,
+                                annulation_par_l_admin=True,
+                                moyen_rembourse=moyen_choisi,
+                            )
                             try:
                                 send_ticket_cancellation_user.delay(str(t.uuid))
                             except Exception as ce:
