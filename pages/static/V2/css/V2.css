@@ -1296,7 +1296,6 @@ img { max-width: 100%; display: block; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-text-muted);
-  margin-bottom: var(--space-2);
 }
 /* Le vrai gros titre de page (l'équivalent du h1 hero de la DA) :
    Unbounded, pas Luciole — contrairement aux titres de carte, bien
@@ -2194,6 +2193,19 @@ img { max-width: 100%; display: block; }
 /* --- Page événement ------------------------------------------------ */
 /* / Event page */
 .event-retour { margin: var(--space-2) 0 var(--space-4); }
+.event-top-bar{
+  display: flex;
+  justify-content: space-between;
+}
+.event-admin-buttons .icon-btn{
+  border : solid 1px var(--color-primary);
+}
+.event-date-and-admin{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
 /* La couverture reçoit une vraie image : l'image remplit le bandeau,
    les tags restent posés dessus. / Real image fills the cover. */
 .event-hero__cover { position: relative; overflow: hidden; }
