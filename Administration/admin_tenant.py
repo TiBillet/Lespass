@@ -3211,7 +3211,12 @@ class ReservationAdmin(ModelAdmin):
     add_form = ReservationAddAdmin
     autocomplete_fields = ["event",]
 
-    exclude = ["commande"]
+    # custom_form (les réponses au formulaire personnalisé) n'est plus affiché en JSON brut
+    # dans le formulaire. Il est affiché en tableau, en lecture seule, sous le formulaire :
+    # voir change_form_after_template. Même affichage que la fiche adhésion.
+    # / custom_form is no longer shown as raw JSON: read-only table below the form.
+    exclude = ["commande", "custom_form"]
+    change_form_after_template = "admin/reservation/custom_form.html"
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie le formulaire"""
