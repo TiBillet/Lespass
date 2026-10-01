@@ -3,6 +3,7 @@ from import_export import resources, fields
 from import_export.fields import Field
 from django import forms
 
+from Administration.importers.reponses_formulaire_export import cles_des_reponses_a_exporter
 from BaseBillet.models import Ticket, Event, Configuration
 from unfold.contrib.import_export.forms import ExportForm
 
@@ -56,8 +57,18 @@ class TicketExportResource(resources.ModelResource):
 
     # --- Dynamic columns for Reservation.custom_form ---
     def before_export(self, queryset, *args, **kwargs):
-        # Collect all keys from parent reservation.custom_form JSON across queryset
+        """
+        Prépare les colonnes des réponses au formulaire personnalisé.
+        / Prepares the custom form answer columns.
+
+        On lit les clés des réponses des billets exportés, et les produits de ces
+        billets. cles_des_reponses_a_exporter (reponses_formulaire_export.py) trie
+        les colonnes dans l'ordre d'affichage des questions. Issue #290.
+        / Keys and products of the exported tickets; ordering is done by
+        cles_des_reponses_a_exporter.
+        """
         keys = set()
+        uuids_des_produits = set()
         try:
             for obj in queryset:
                 reservation = getattr(obj, 'reservation', None)
@@ -68,8 +79,14 @@ class TicketExportResource(resources.ModelResource):
                             keys.add(str(k))
         except Exception:
             pass
-        # Store sorted keys for deterministic column order
-        self._custom_form_keys = sorted(keys)
+
+        # Les produits des billets, en UNE requête (pas une par billet).
+        # / The tickets' products, in ONE query.
+        if hasattr(queryset, 'values_list'):
+            for uuid_du_produit in queryset.values_list('pricesold__productsold__product_id', flat=True).distinct():
+                if uuid_du_produit is not None:
+                    uuids_des_produits.add(uuid_du_produit)
+        self._custom_form_keys = cles_des_reponses_a_exporter(keys, uuids_des_produits)
 
     def get_export_fields(self, *args, **kwargs):
         base_fields = super().get_export_fields(*args, **kwargs)
