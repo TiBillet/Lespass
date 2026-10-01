@@ -3,6 +3,7 @@ import logging
 from django.contrib import messages
 from django.db import models
 from django.http import HttpResponseRedirect
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from unfold.sites import UnfoldAdminSite
 
@@ -76,6 +77,27 @@ class StaffAdminSite(UnfoldAdminSite):
             ),
         ]
         return routes_des_modules + super().get_urls()
+
+    def app_index(self, request, app_label, extra_context=None):
+        """
+        Les pages generiques des applications Django ne sont jamais affichees.
+        / The generic Django app pages are never shown.
+
+        LOCALISATION : Administration/admin/site.py
+
+        /admin/BaseBillet/, /admin/laboutik/, etc. listent a plat tous les
+        modeles d'une application Django. Ce decoupage est technique : il ne
+        correspond pas a la navigation Domaines -> Modules de la sidebar.
+        On renvoie donc vers le tableau de bord.
+
+        On garde la ROUTE et on ne change que la VUE : Unfold et Django
+        fabriquent des liens vers ces pages (reverse("...:app_list")). Si la
+        route disparaissait, ces reverse() leveraient NoReverseMatch, donc une
+        erreur 500 sur les pages qui les utilisent.
+        / Keep the route, change the view: removing it would make Unfold's and
+          Django's reverse("...:app_list") raise NoReverseMatch (500).
+        """
+        return HttpResponseRedirect(reverse(f"{self.name}:index"))
 
     # FROM V2 : TO ADD ONE DAY
     # def get_urls(self):

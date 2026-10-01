@@ -23,11 +23,11 @@ Python, et il n'existe NI reglage UNFOLD, NI bloc de gabarit pour l'inflechir
 CE QUI CHANGE, ET RIEN D'AUTRE
 Une ligne, qui delegue a notre balise. Aucune logique n'est ecrite ici : tout
 est dans Administration/templatetags/tb_admin.py, ou c'est testable. La
-balise remplace AU PLUS une entree, n'en retire ni n'en ajoute jamais, et
-rend « parts » intact des qu'elle a le moindre doute — une changelist qui
-n'appartient a aucun module garde donc le fil d'Ariane d'Unfold.
-/ One line, delegating to our tag. It replaces at most one entry and returns
-  parts untouched at the slightest doubt.
+balise remplace l'entree de l'application Django par le module de la page.
+Si la page n'a pas de module, elle retire cette entree : la page de
+l'application (/admin/BaseBillet/...) n'est jamais affichee.
+/ One line, delegating to our tag. It replaces the Django app entry with the
+  page's module, or removes it when there is no module.
 
 A RELIRE A CHAQUE MONTEE DE VERSION D'UNFOLD.
 C'est le deuxieme gabarit d'Unfold surcharge, apres

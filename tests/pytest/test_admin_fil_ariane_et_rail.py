@@ -308,19 +308,34 @@ def test_le_fil_d_ariane_garde_sa_longueur(navigateur, chemin, entrees_attendues
 
 
 @pytest.mark.django_db
-def test_une_changelist_hors_module_garde_son_fil_d_ariane(navigateur):
+def test_une_changelist_hors_module_n_affiche_pas_l_application(navigateur):
     """
-    Ce qui protege les 31 changelists sans module, et tout modele ajoute
-    demain sans etre range : au moindre doute, on ne touche a rien.
-    / What protects the 31 module-less changelists, and any model added
-      tomorrow without being sorted.
+    Une changelist sans module n'a pas de module a mettre en tete du fil
+    d'Ariane. L'entree de l'application Django (« Billetterie », lien vers
+    /admin/BaseBillet/) est retiree : sa page n'est jamais affichee.
+    Le reste du fil d'Ariane est garde.
+    / A module-less changelist drops the Django app entry and keeps the rest.
     """
     entrees = _entrees_du_fil(
         navigateur.get("/admin/BaseBillet/configuration/").content.decode()
     )
-    assert entrees[0] == ("Billetterie", "/admin/BaseBillet/"), (
-        f"Le fil d'Ariane d'Unfold devait rester intact : {entrees}"
-    )
+    liens = [lien for _libelle, lien in entrees]
+    assert "/admin/BaseBillet/" not in liens, entrees
+    assert entrees, "Le fil d'Ariane a disparu."
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "chemin", ["/admin/BaseBillet/", "/admin/laboutik/", "/admin/pages/"]
+)
+def test_la_page_d_une_application_renvoie_vers_le_tableau_de_bord(navigateur, chemin):
+    """
+    /admin/<application>/ n'est jamais affichee : redirection vers /admin/.
+    / /admin/<app>/ is never shown: redirect to /admin/.
+    """
+    reponse = navigateur.get(chemin)
+    assert reponse.status_code == 302
+    assert reponse.url == "/admin/"
 
 
 @pytest.mark.django_db
