@@ -1,0 +1,79 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+<!--
+ÉCRAN « ÉMETTRE UN AVOIR »
+/ "Issue a credit note" screen
+
+LOCALISATION : Administration/templates/admin/lignearticle/emettre_avoir.html
+
+Rendu en GET par LigneArticleAdmin.emettre_avoir (Administration/admin_tenant.py),
+bouton « Avoir » d'une ligne de la liste des ventes. Le formulaire est posté (POST) à la
+même adresse : la vue écrit l'avoir, puis redirige vers la liste des ventes.
+
+TROIS CAS :
+- ligne hors Stripe, pas entièrement offerte : champ « Remboursé par » (form.moyen_rembourse) ;
+- ligne entièrement offerte : pas de champ, aucun argent à rendre ;
+- ligne payée par Stripe : pas de champ, rappel de rembourser depuis le tableau de bord
+  Stripe (aucun appel à Stripe n'est fait ici).
+/ Three cases: "Refunded by" field, fully offered (no field), Stripe-paid (reminder).
+-->
+
+{% block title %}{% translate "Émettre un avoir" %}{% endblock %}
+
+{% block content %}
+<div style="max-width: 560px; margin: 40px auto; padding: 24px; border: 1px solid #d1d5db; border-radius: 8px;"
+     data-testid="avoir-ecran">
+    <h2 style="margin: 0 0 16px; font-size: 1.25em; font-weight: 600;">{% translate "Émettre un avoir" %}</h2>
+
+    {# Récapitulatif de la ligne annulée / Summary of the cancelled line #}
+    <p style="margin: 0 0 16px;" data-testid="avoir-recapitulatif">
+        <strong>{{ ligne.pricesold }}</strong>
+        — {{ montant_de_la_ligne }} € (× {{ ligne.qty|floatformat:"-3" }})
+    </p>
+
+    {% if ligne_payee_par_stripe %}
+    <div role="alert"
+         style="margin: 0 0 16px; padding: 12px; border-radius: 6px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;"
+         data-testid="avoir-rappel-stripe">
+        {% translate "Remboursez cette somme depuis votre tableau de bord Stripe." %}
+    </div>
+    {% elif ligne_entierement_offerte %}
+    <p style="margin: 0 0 16px;" data-testid="avoir-ligne-offerte">
+        {% translate "Cet article a été offert : aucun argent n'est à rendre." %}
+    </p>
+    {% endif %}
+
+    <form method="post" aria-label="{% translate 'Émettre un avoir' %}">
+        {% csrf_token %}
+
+        {% if champ_rembourse_par_demande %}
+        <div style="margin-bottom: 16px;">
+            <label for="{{ form.moyen_rembourse.id_for_label }}"
+                   style="display: block; font-weight: 500; margin-bottom: 4px;">
+                {{ form.moyen_rembourse.label }}
+            </label>
+            {{ form.moyen_rembourse }}
+            <p style="margin: 4px 0 0; font-size: 0.85em; color: #6b7280;">{{ form.moyen_rembourse.help_text }}</p>
+            {% if form.moyen_rembourse.errors %}
+            <p role="alert" style="margin: 4px 0 0; color: #b91c1c;" data-testid="avoir-moyen-rembourse-erreur">
+                {{ form.moyen_rembourse.errors|join:" " }}
+            </p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button type="submit"
+                    style="padding: 10px 20px; background: #d97706; color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer;"
+                    data-testid="avoir-valider">
+                {% translate "Émettre l'avoir" %}
+            </button>
+            <a href="{{ url_de_la_liste_des_ventes }}"
+               style="color: #6b7280; text-decoration: none;"
+               data-testid="avoir-annuler">
+                {% translate "Annuler" %}
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
