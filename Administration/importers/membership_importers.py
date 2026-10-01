@@ -5,6 +5,7 @@ from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 
+from Administration.importers.reponses_formulaire_export import cles_des_reponses_a_exporter
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Membership, Product, Price, OptionGenerale
@@ -98,16 +99,32 @@ class MembershipExportResource(resources.ModelResource):
     status_name = Field(attribute='status_name', column_name='status_name')
 
     def before_export(self, queryset, *args, **kwargs):
-        # Collect all keys from custom_form JSON across queryset
+        """
+        Prépare les colonnes des réponses au formulaire personnalisé.
+        / Prepares the custom form answer columns.
+
+        On lit les clés des réponses des adhésions exportées, et leurs produits.
+        cles_des_reponses_a_exporter (reponses_formulaire_export.py) trie les
+        colonnes dans l'ordre d'affichage des questions. Issue #290.
+        / Keys and products of the exported memberships; ordering is done by
+        cles_des_reponses_a_exporter.
+        """
         keys = set()
+        uuids_des_produits = set()
         for obj in queryset:
             data = getattr(obj, 'custom_form', None)
             if isinstance(data, dict):
                 for k in data.keys():
                     if k is not None:
                         keys.add(str(k))
-        # Store sorted keys for deterministic column order
-        self._custom_form_keys = sorted(keys)
+
+        # Les produits des adhésions, en UNE requête (pas une par adhésion).
+        # / The memberships' products, in ONE query.
+        if hasattr(queryset, 'values_list'):
+            for uuid_du_produit in queryset.values_list('price__product_id', flat=True).distinct():
+                if uuid_du_produit is not None:
+                    uuids_des_produits.add(uuid_du_produit)
+        self._custom_form_keys = cles_des_reponses_a_exporter(keys, uuids_des_produits)
 
     def get_export_fields(self, *args, **kwargs):
         base_fields = super().get_export_fields(*args, **kwargs)
