@@ -278,3 +278,60 @@ def test_un_paiement_ne_reactive_jamais_une_adhesion_annulee_par_un_admin(
             "deduplication du webhook, sans elle un rejeu Stripe creerait une "
             "deuxieme vente."
         )
+
+
+def test_l_avoir_d_annulation_porte_l_uuid_de_la_vente_d_origine(
+    admin_client, adhesion_en_prelevement
+):
+    """Annulation avec avoir : l'avoir garde l'uuid de la vente d'origine.
+
+    LaBoutik exige metadata['original_lignearticle_uuid'] pour enregistrer un
+    avoir. Sans lui, il repondait 400 et l'avoir n'etait jamais synchronise
+    (issue #319).
+    / The credit note must carry the original sale uuid, required by LaBoutik.
+    """
+    from ApiBillet.serializers import get_or_create_price_sold
+    from BaseBillet.models import LigneArticle, PaymentMethod
+
+    tenant, adhesion, _adherent = adhesion_en_prelevement
+
+    # Une vente payee pour cette adhesion. create() avec le statut final :
+    # aucun signal, donc aucune tache Celery.
+    # / A paid sale for this membership. create() with the final status fires no signal.
+    with tenant_context(tenant):
+        ligne_de_vente = LigneArticle.objects.create(
+            pricesold=get_or_create_price_sold(adhesion.price),
+            qty=1,
+            amount=1000,
+            membership=adhesion,
+            payment_method=PaymentMethod.CASH,
+            status=LigneArticle.VALID,
+        )
+
+    patch_modify, patch_connect = _patcher_stripe()
+    try:
+        with patch_modify, patch_connect, patch("BaseBillet.signals.send_refund_to_laboutik.delay"):
+            admin_client.post(
+                f"/memberships/{adhesion.pk}/cancel/",
+                {"with_credit_note": "1"},
+            )
+
+        with tenant_context(tenant):
+            avoir = LigneArticle.objects.get(credit_note_for=ligne_de_vente)
+            assert avoir.status == LigneArticle.CREDIT_NOTE
+            assert avoir.metadata.get("original_lignearticle_uuid") == str(ligne_de_vente.uuid), (
+                f"L'avoir doit porter l'uuid de la vente d'origine (metadata : {avoir.metadata})."
+            )
+    finally:
+        # Les avoirs d'abord : credit_note_for est en PROTECT.
+        # / Credit notes first: credit_note_for is PROTECT.
+        # Puis le PriceSold, sinon la fixture ne peut plus supprimer le tarif.
+        # / Then the PriceSold, otherwise the fixture cannot delete the price.
+        with tenant_context(tenant):
+            LigneArticle.objects.filter(credit_note_for=ligne_de_vente).delete()
+            LigneArticle.objects.filter(pk=ligne_de_vente.pk).delete()
+            prix_vendu = ligne_de_vente.pricesold
+            produit_vendu = prix_vendu.productsold
+            prix_vendu.delete()
+            if not produit_vendu.pricesold_set.exists():
+                produit_vendu.delete()

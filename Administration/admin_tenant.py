@@ -2101,6 +2101,12 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
             messages.error(request, _("A credit note already exists for this entry."))
             return redirect(redirect_url)
 
+        # LaBoutik a besoin de l'uuid de la vente d'origine pour enregistrer l'avoir.
+        # Sans lui, il repond 400 et l'avoir n'est jamais synchronise (issue #319).
+        # / LaBoutik needs the original sale uuid to record the credit note.
+        metadata_de_l_avoir = dict(ligne_originale.metadata or {})
+        metadata_de_l_avoir['original_lignearticle_uuid'] = str(ligne_originale.uuid)
+
         # Creer la ligne avoir / Create the credit note line
         avoir = LigneArticle.objects.create(
             pricesold=ligne_originale.pricesold,
@@ -2114,6 +2120,7 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
             wallet=ligne_originale.wallet,
             sale_origin=SaleOrigin.ADMIN,
             credit_note_for=ligne_originale,
+            metadata=metadata_de_l_avoir,
             status=LigneArticle.CREATED,
         )
         # Declenche la machine a etat / Trigger state machine
