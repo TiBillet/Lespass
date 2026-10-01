@@ -4678,6 +4678,11 @@ class MembershipMVT(viewsets.ViewSet):
         if creation_avoirs_demandee:
             nombre_avoirs_crees = 0
             for ligne in lignes_de_vente_payees:
+                # LaBoutik a besoin de l'uuid de la vente d'origine pour enregistrer l'avoir.
+                # Sans lui, il repond 400 et l'avoir n'est jamais synchronise (issue #319).
+                # / LaBoutik needs the original sale uuid to record the credit note.
+                metadata_de_l_avoir = dict(ligne.metadata or {})
+                metadata_de_l_avoir['original_lignearticle_uuid'] = str(ligne.uuid)
                 avoir = LigneArticle.objects.create(
                     pricesold=ligne.pricesold,
                     qty=-ligne.qty,
@@ -4690,6 +4695,7 @@ class MembershipMVT(viewsets.ViewSet):
                     wallet=ligne.wallet,
                     sale_origin=SaleOrigin.ADMIN,
                     credit_note_for=ligne,
+                    metadata=metadata_de_l_avoir,
                     status=LigneArticle.CREATED,
                 )
                 avoir.status = LigneArticle.CREDIT_NOTE
