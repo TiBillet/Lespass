@@ -5772,6 +5772,87 @@ class EventWizard(viewsets.ViewSet):
                       context=context)
 
 
+def quantite_de_billets_demandee(valeur_saisie):
+    """
+    Lit la quantité saisie pour un tarif dans le formulaire de réservation.
+    / Reads the quantity typed for a price in the booking form.
+
+    LOCALISATION : BaseBillet/views.py
+
+    Une quantité non numérique, infinie ou démesurée, positive ou négative
+    (formulaire trafiqué) est ignorée. Le maximum est contrôlé AVANT int() :
+    convertir « 1e999999999 » ou « -1e999999999 » bloquerait le serveur.
+    `Decimal("abc")` lève InvalidOperation, qui n'hérite pas de ValueError.
+    / A non-numeric, infinite or huge quantity is ignored, checked before int().
+
+    :param valeur_saisie: la valeur postée (str ou None)
+    :return: la quantité (int > 0), ou None si rien d'utilisable n'a été saisi
+    """
+    from decimal import Decimal, InvalidOperation
+
+    from BaseBillet.validators import QUANTITE_MAXIMUM_PAR_TARIF
+
+    if not valeur_saisie:
+        return None
+    try:
+        quantite_decimale = Decimal(str(valeur_saisie).replace(',', '.'))
+        if (not quantite_decimale.is_finite()
+                or quantite_decimale > QUANTITE_MAXIMUM_PAR_TARIF
+                or quantite_decimale < -QUANTITE_MAXIMUM_PAR_TARIF):
+            return None
+        quantite = int(quantite_decimale)
+    except (TypeError, ValueError, InvalidOperation):
+        return None
+    if quantite <= 0:
+        return None
+    return quantite
+
+
+def reponses_du_formulaire_personnalise_pour_le_panier(request, produits):
+    """
+    Lit et valide les réponses au formulaire personnalisé, pour un ajout au panier.
+    / Reads and validates the custom form answers, for an add-to-cart.
+
+    LOCALISATION : BaseBillet/views.py
+
+    Même fonction que le parcours sans panier (réservation et adhésion directes) :
+    build_custom_form_from_request (BaseBillet/validators.py). Les réponses sont donc
+    rangées de la même façon partout :
+    - sous le LIBELLÉ de la question (pas sous sa clé technique) ;
+    - case à cocher en oui/non, choix multiple en liste ;
+    - question obligatoire vérifiée, choix hors liste refusé.
+    Avant, le panier recopiait le formulaire tel quel (clé technique, texte brut,
+    dernière valeur seulement pour un choix multiple).
+    / Same builder as the direct flow, so answers are stored the same way everywhere.
+
+    :param request: la requête (request.POST contient les champs « form__<clé> »)
+    :param produits: les produits dont on lit les questions
+    :return: (réponses, message d'erreur). Le message vaut None si tout est valide.
+    """
+    from rest_framework.exceptions import ValidationError as ErreurDeValidation
+
+    from BaseBillet.models import ProductFormField
+    from BaseBillet.validators import build_custom_form_from_request
+
+    try:
+        reponses = build_custom_form_from_request(request.POST, produits, prefix='form__')
+        return reponses, None
+    except ErreurDeValidation as erreur:
+        # L'erreur est rangée sous la clé du champ (« form__<clé> »). On affiche le
+        # libellé de la question, que la personne a sous les yeux.
+        # / The error is keyed by the field key: show the question label instead.
+        details = erreur.detail if isinstance(erreur.detail, dict) else {}
+        for cle_du_champ, messages_d_erreur in details.items():
+            nom_du_champ = str(cle_du_champ).replace('form__', '', 1)
+            question = ProductFormField.objects.filter(
+                product__in=list(produits), name=nom_du_champ,
+            ).first()
+            libelle = question.label if question else nom_du_champ
+            premier_message = messages_d_erreur[0] if messages_d_erreur else ''
+            return {}, f"{libelle} : {premier_message}"
+        return {}, str(erreur)
+
+
 class PanierMVT(viewsets.ViewSet):
     """
     ViewSet du panier d'achat. Toutes les actions manipulent PanierSession
@@ -5902,7 +5983,6 @@ class PanierMVT(viewsets.ViewSet):
         custom_amount = custom_amount or None
 
         options = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
-        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
 
         # Le formulaire d'adhesion collecte les noms (cf. membership/form.html).
         # On les passe a PanierSession pour qu'ils soient stockes sur l'item et
@@ -5934,6 +6014,26 @@ class PanierMVT(viewsets.ViewSet):
                     item_promo = promotional_code_name
             except PriceModel.DoesNotExist:
                 pass  # add_membership levera l'erreur Price not found
+
+        # Réponses au formulaire personnalisé du produit d'adhésion, validées et rangées
+        # comme dans le parcours sans panier. Tarif introuvable : pas de réponse à lire,
+        # add_membership refusera le tarif juste après.
+        # / Custom form answers, validated like the direct flow.
+        from BaseBillet.models import Price as TarifDuPanier
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        tarif_choisi = None
+        if price_uuid:
+            try:
+                tarif_choisi = TarifDuPanier.objects.select_related('product').get(uuid=price_uuid)
+            except (TarifDuPanier.DoesNotExist, ValueError, DjangoValidationError):
+                tarif_choisi = None
+        custom_form = {}
+        if tarif_choisi is not None:
+            custom_form, erreur_du_formulaire = reponses_du_formulaire_personnalise_pour_le_panier(
+                request, [tarif_choisi.product],
+            )
+            if erreur_du_formulaire:
+                return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
 
         panier = PanierSession(request)
         try:
@@ -6151,8 +6251,6 @@ class PanierMVT(viewsets.ViewSet):
         """
         from BaseBillet.models import Event
         from BaseBillet.services_panier import PanierSession, InvalidItemError
-        from BaseBillet.validators import QUANTITE_MAXIMUM_PAR_TARIF
-        from decimal import Decimal, InvalidOperation
 
         # Accepter soit `slug` (legacy htmx/views/event.html), soit `event` (uuid, booking_form.html prod).
         # / Accept either `slug` (legacy template) or `event` (uuid, prod booking_form.html).
@@ -6179,8 +6277,22 @@ class PanierMVT(viewsets.ViewSet):
 
         # Extraire options de l'event / Extract event options
         options_ids = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
-        # Custom form fields (prefix form__) / Custom form fields
-        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+        # Réponses au formulaire personnalisé : on ne lit que les questions des produits
+        # dont au moins un billet est demandé (comme ReservationValidator). Sinon une
+        # question obligatoire d'un produit non choisi bloquerait l'ajout.
+        # / Custom form answers: only questions of products with a requested ticket.
+        produits_demandes = []
+        for produit_de_l_evenement in event.products.all():
+            for tarif_du_produit in produit_de_l_evenement.prices.filter(archived=False):
+                if quantite_de_billets_demandee(request.POST.get(str(tarif_du_produit.uuid))):
+                    produits_demandes.append(produit_de_l_evenement)
+                    break
+        custom_form, erreur_du_formulaire = reponses_du_formulaire_personnalise_pour_le_panier(
+            request, produits_demandes,
+        )
+        if erreur_du_formulaire:
+            return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
+
         # Code promo saisi dans booking_form (champ `promotional_code`).
         # Valide cote serveur dans PanierSession.add_ticket (existence, actif,
         # is_usable, lie au produit). Le front n'envoie que le nom.
@@ -6208,26 +6320,10 @@ class PanierMVT(viewsets.ViewSet):
                 # Un tarif archivé (« supprimé ») ne peut plus être mis au panier.
                 # / An archived ("deleted") price can no longer be added to the cart.
                 for price in product.prices.filter(archived=False):
-                    price_key = str(price.uuid)
-                    raw_qty = request.POST.get(price_key)
-                    if not raw_qty:
-                        continue
-                    # Une quantité non numérique, infinie ou démesurée, positive ou négative
-                    # (formulaire trafiqué) est ignorée. Le maximum est contrôlé AVANT int() :
-                    # convertir « 1e999999999 » ou « -1e999999999 »
-                    # bloquerait le serveur. `Decimal("abc")` lève InvalidOperation, qui
-                    # n'hérite pas de ValueError.
-                    # / A non-numeric, infinite or huge quantity is ignored, checked before int().
-                    try:
-                        quantite_decimale = Decimal(str(raw_qty).replace(',', '.'))
-                        if (not quantite_decimale.is_finite()
-                                or quantite_decimale > QUANTITE_MAXIMUM_PAR_TARIF
-                                or quantite_decimale < -QUANTITE_MAXIMUM_PAR_TARIF):
-                            raise ValueError(raw_qty)
-                        qty = int(quantite_decimale)
-                    except (TypeError, ValueError, InvalidOperation):
-                        continue
-                    if qty <= 0:
+                    # Quantité illisible, nulle ou démesurée : tarif ignoré.
+                    # / Unreadable, zero or huge quantity: price skipped.
+                    qty = quantite_de_billets_demandee(request.POST.get(str(price.uuid)))
+                    if qty is None:
                         continue
 
                     # Custom amount si free_price / Custom amount if free_price
