@@ -27,7 +27,7 @@ from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.translation import gettext_lazy as _, ngettext
+from django.utils.translation import gettext_lazy as _, ngettext, get_language
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET, require_http_methods
 from django_htmx.http import HttpResponseClientRedirect
@@ -2852,6 +2852,67 @@ class EventMVT(viewsets.ViewSet):
         # / EventMVT now only exposes public views. Admin create actions live in EventWizardAdmin.
         return [permissions.AllowAny()]
 
+    def _calculer_prix_min_max_event(self, event):
+        """
+        Pose sur l'event les prix min et max, et le drapeau prix libre.
+        / Sets min/max prices and the free-price flag on the event.
+
+        LOCALISATION : BaseBillet/views.py — EventMVT
+
+        Ces attributs ne sont pas des champs du modele : ils vivent en memoire.
+        Ils sont lus par partials/reservation_declencheur.html.
+        Utilise par federated_events_get() et federated_events_get_hex8().
+
+        A appeler DANS le tenant_context de l'event : les tarifs vivent
+        dans le schema du tenant.
+        / Must be called INSIDE the event's tenant_context.
+        """
+        # Un tarif archive (« supprime ») n'est jamais pris en compte.
+        # / An archived ("deleted") price is never counted.
+        prices = []
+        for product in event.products.all():
+            for price in product.prices.all():
+                if not price.archived:
+                    prices.append(price)
+
+        tarifs = [price.prix for price in prices]
+        event.price_min = min(tarifs) if tarifs else None
+        event.price_max = max(tarifs) if tarifs else None
+        event.free_price = any(price.free_price for price in prices)
+
+    def _libelle_prix_agenda(self, event):
+        """
+        Renvoie le texte du prix affiche sur la carte d'un event dans l'agenda.
+        / Returns the price label shown on an event card in the agenda.
+
+        LOCALISATION : BaseBillet/views.py — EventMVT
+
+        Meme format que index() : « A partir de X € », « Prix libre » ou « Entré libre ».
+        Le resultat va dans event.price_min, lu par cotton/V2/event_card.html.
+
+        A appeler DANS le tenant_context de l'event : les tarifs vivent
+        dans le schema du tenant.
+        / Must be called INSIDE the event's tenant_context.
+        """
+        # Un tarif archive (« supprime ») n'est jamais pris en compte.
+        # On lit products.all() et prices.all() : ils sont deja precharges
+        # par le prefetch_related de federated_events_filter (pas de requete en plus).
+        # / Archived prices are skipped. Reads the prefetched relations (no extra query).
+        prices = []
+        for product in event.products.all():
+            for price in product.prices.all():
+                if not price.archived:
+                    prices.append(price)
+
+        tarifs = [price.prix for price in prices]
+        il_y_a_un_prix_libre = any(price.free_price for price in prices)
+
+        if tarifs:
+            return _("A partir de %(price)s €") % {"price": min(tarifs)}
+        if il_y_a_un_prix_libre:
+            return _("Prix libre")
+        return _("Entré libre")
+
     def federated_events_get(self, slug):
         for place in FederatedPlace.objects.all().select_related('tenant'):
             tenant = place.tenant
@@ -2864,6 +2925,7 @@ class EventMVT(viewsets.ViewSet):
                     ).get(slug=slug)
                     event.img = event.get_img()
                     event.sticker_img = event.get_sticker_img()
+                    self._calculer_prix_min_max_event(event)
                     return event
                 except Event.DoesNotExist:
                     continue
@@ -2882,6 +2944,7 @@ class EventMVT(viewsets.ViewSet):
                     ).get(uuid__startswith=hex8)
                     event.img = event.get_img()
                     event.sticker_img = event.get_sticker_img()
+                    self._calculer_prix_min_max_event(event)
                     return event
                 except Event.DoesNotExist:
                     continue
@@ -2906,10 +2969,15 @@ class EventMVT(viewsets.ViewSet):
             # Jeton de version du cache liste pour ce tenant (défaut 'v0' si jamais écrit)
             # / List-cache version token for this tenant (default 'v0' if never written)
             version = cache.get(f'event_list_version_{connection.tenant.uuid}', 'v0')
+            # La langue fait partie de la cle : le resultat contient le prix
+            # deja traduit (event.price_min, ex : « A partir de 12 € »).
+            # Sans elle, tous les visiteurs verraient la langue du premier.
+            # / Language is part of the key: the result holds translated price labels.
+            langue = get_language()
             if date_seule:
-                cache_key = f'event_list_{connection.tenant.uuid}_{version}_date_{date_filter.isoformat()}'
+                cache_key = f'event_list_{connection.tenant.uuid}_{version}_{langue}_date_{date_filter.isoformat()}'
             else:
-                cache_key = f'event_list_{connection.tenant.uuid}_{version}'
+                cache_key = f'event_list_{connection.tenant.uuid}_{version}_{langue}'
             cached = cache.get(cache_key)
             if cached:
                 return cached
@@ -3084,6 +3152,10 @@ class EventMVT(viewsets.ViewSet):
                     # On va chercher les urls d'images :
                     event.img = event.get_img()
                     event.sticker_img = event.get_sticker_img()
+
+                    # Texte du prix affiche sur la carte de l'agenda
+                    # / Price label shown on the agenda card
+                    event.price_min = self._libelle_prix_agenda(event)
 
                     date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
