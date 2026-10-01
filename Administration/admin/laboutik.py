@@ -165,7 +165,8 @@ class PointDeVenteAdmin(ModelAdmin):
         }),
         (_('Options'), {
             'fields': (
-                'service_direct',
+                # TODO : Ré-Ajouter ce champ quand le mode restaurant sera là
+                # 'service_direct',
                 'afficher_les_prix',
                 'accepte_especes',
                 'accepte_carte_bancaire',
