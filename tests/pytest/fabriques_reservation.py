@@ -202,20 +202,41 @@ def simuler_paiement_valide(reservation, paiement, payment_intent_id):
     La réservation passe VALID (payée, mail envoyé), comme en production : les
     transitions de la machine à états sont alors celles de la vraie vie.
     / The reservation goes VALID (paid, mail sent), as in production.
+
+    La vente d'origine du paiement est ENCAISSÉE (REGLEE), comme en production :
+    un remboursement Stripe refuse une vente pas réglée. Le montant encaissé vaut la
+    somme des totaux catalogue des lignes du paiement (aucun écart), au moyen « Stripe »
+    (`SN`) : `encaisser_vente_stripe` refuse un moyen vide. Un paiement sans vente :
+    la fonction ne fait rien.
+    / The payment's original sale is SETTLED, as in production: a Stripe refund refuses
+    an unsettled sale. Amount = sum of the lines' catalogue totals, method SN.
     """
-    from BaseBillet.models import Paiement_stripe, LigneArticle, Reservation, Ticket
+    from BaseBillet.models import (
+        LigneArticle,
+        Paiement_stripe,
+        PaymentMethod,
+        Reservation,
+        Ticket,
+    )
+    from BaseBillet.services_vente import encaisser_vente_stripe
+
+    lignes_du_paiement = LigneArticle.objects.filter(paiement_stripe=paiement)
+    montant_encaisse_par_stripe = 0
+    for ligne in lignes_du_paiement:
+        montant_encaisse_par_stripe += ligne.total_catalogue
 
     Paiement_stripe.objects.filter(pk=paiement.pk).update(
         status=Paiement_stripe.VALID,
         payment_intent_id=payment_intent_id,
+        montant_encaisse=montant_encaisse_par_stripe,
+        moyen=PaymentMethod.STRIPE_NOFED,
     )
-    LigneArticle.objects.filter(paiement_stripe=paiement).update(
-        status=LigneArticle.VALID,
-    )
+    lignes_du_paiement.update(status=LigneArticle.VALID)
     reservation.tickets.update(status=Ticket.NOT_SCANNED)
     Reservation.objects.filter(pk=reservation.pk).update(status=Reservation.VALID)
     reservation.refresh_from_db()
     paiement.refresh_from_db()
+    encaisser_vente_stripe(paiement)
 
 
 def reservation_payee(

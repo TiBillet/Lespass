@@ -46,18 +46,36 @@ scellée ne reste en base de dev (tests/PIEGES.md 13.1). Stripe (session, catalo
 remboursement) et Celery sont simulés : aucun appel réseau, aucune tâche envoyée.
 / Rolled-back transaction per test. Stripe (including refunds) and Celery are faked.
 
+LE REMBOURSEMENT STRIPE (dernière partie du fichier)
+Un remboursement Stripe (`partial_refund_payment`, total ou partiel) écrit, lui aussi,
+UNE vente AVOIR : origine LESPASS, liée à la vente du paiement, client = celui de cette
+vente. Un article par ligne remboursée (`ajouter_l_article_d_avoir`), écrit AVANT l'appel
+à Stripe : un refus du service n'appelle jamais Stripe. Puis UN règlement Stripe négatif,
+au montant RENVOYÉ par Stripe (`refund.amount`, jamais calculé), avec l'identifiant du
+remboursement (`refund.id`) en référence externe. Si ce montant diffère des articles, un
+article « Écart d'encaissement » (comme à l'encaissement en ligne) et une alerte ERROR.
+Encaissée, PUIS les lignes passent REFUNDED. Tout ou rien.
+/ A Stripe refund writes ONE AVOIR sale (LESPASS), items written BEFORE the Stripe call,
+one negative Stripe payment of the amount Stripe returns, the refund id as external
+reference, a gap item when amounts differ; settled, then REFUNDED. All or nothing.
+
 CODE PARCOURU / CODE EXERCISED
 - Administration/admin_tenant.py — LigneArticleAdmin.emettre_avoir (écran et action) ;
 - BaseBillet/services_vente.py — ajouter_l_article_d_avoir, ouvrir_vente,
-  ajouter_reglement, encaisser_vente.
+  ajouter_reglement, encaisser_vente ;
+- PaiementStripe/utils.py — partial_refund_payment (remboursement Stripe), appelé par
+  Reservation.cancel_and_refund_ticket / cancel_and_refund_resa et
+  Booking.cancel_and_refund_booking.
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-D-en-ligne-avoirs.md (§4,
-§5 tests 18, 18b, 18c, 19) ; CHANTIER-05-SUIVI.md §4 (D-3) ; brief
-CHANTIER-05-briefs/05-D-3a.md.
+§5 tests 17, 18, 18b, 18c, 19, 21) ; CHANTIER-05-SUIVI.md §4 (D-3) ; briefs
+CHANTIER-05-briefs/05-D-3a.md et 05-D-3b.md.
 
 Lancer / Run : make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py"
 """
 
+import logging
+from contextlib import contextmanager
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -67,12 +85,25 @@ from django.contrib.messages import get_messages
 from django_tenants.utils import tenant_context
 
 from BaseBillet import services_vente
-from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+from BaseBillet.models import (
+    Configuration,
+    LigneArticle,
+    Paiement_stripe,
+    PaymentMethod,
+    Reservation,
+    SaleOrigin,
+)
 from BaseBillet.models_vente import Reglement, Vente
+from BaseBillet.services_vente import NOM_ECART_RECU_EN_PLUS
+from booking.models import Booking
+from PaiementStripe.utils import partial_refund_payment
 from fabriques_panier import (
     catalogue_stripe_simule,
+    client_connecte,
     creer_evenement_avec_tarif,
+    creer_ressource_avec_tarif,
     creer_utilisateur,
+    identifiant_unique,
     taches_celery_enregistrees,
 )
 from fabriques_vente import (
@@ -86,8 +117,20 @@ from test_admin_ecrit_la_vente import (
     statuts_des_articles_a_l_encaissement,
     vendre_et_relire,
 )
-from test_caracterisation_annulations import acheter_des_billets_payes_par_stripe
-from test_caracterisation_en_ligne import creer_un_administrateur_du_lieu
+from test_caracterisation_admin_api import reserver_une_ressource_sans_panier
+from test_caracterisation_annulations import (
+    acheter_des_billets_payes_par_stripe,
+    rembourser_comme_stripe,
+)
+from test_caracterisation_en_ligne import (
+    creer_un_administrateur_du_lieu,
+    revenir_de_stripe_billetterie,
+)
+from test_en_ligne_ecrit_la_vente import (
+    articles_d_ecart_de_la_vente,
+    reserver_des_billets_a_payer,
+    verifier_l_article_d_ecart,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -219,18 +262,22 @@ def l_avoir_de_la_ligne(ligne):
     return LigneArticle.objects.get(credit_note_for=ligne)
 
 
-def verifier_la_vente_d_avoir_encaissee(avoir, vente_liee_attendue, client_attendu):
+def verifier_la_vente_d_avoir_encaissee(
+    avoir, vente_liee_attendue, client_attendu, origine_attendue=SaleOrigin.ADMIN
+):
     """
     Relit la vente de la ligne d'avoir et vérifie la règle commune : nature AVOIR,
-    origine ADMIN, REGLEE, numérotée, liée à la vente d'origine, client attendu.
-    / Reads the credit note's sale back: AVOIR, ADMIN, settled, numbered, linked, client.
+    origine attendue (ADMIN pour l'écran d'avoir, LESPASS pour un remboursement Stripe),
+    REGLEE, numérotée, liée à la vente d'origine, client attendu.
+    / Reads the credit note's sale back: AVOIR, expected origin, settled, numbered,
+    linked, client.
 
     :return: la vente d'avoir relue
     """
     assert avoir.vente_id is not None, "La ligne d'avoir n'a pas de vente."
     vente_d_avoir = Vente.objects.get(pk=avoir.vente_id)
     assert vente_d_avoir.nature == Vente.Nature.AVOIR
-    assert vente_d_avoir.origine == SaleOrigin.ADMIN
+    assert vente_d_avoir.origine == origine_attendue
     assert vente_d_avoir.statut == Vente.Statut.REGLEE, (
         f"La vente d'avoir n'est pas encaissée (statut {vente_d_avoir.statut})."
     )
@@ -930,3 +977,547 @@ def test_avoir_vente_d_origine_pas_reglee_refuse(lieu):
         reponse_de_l_action
     )
     rien_n_est_ecrit_pour_la_ligne(ligne_d_une_vente_en_attente)
+
+
+# --------------------------------------------------------------------------
+# Remboursement Stripe : une vente AVOIR au montant renvoyé par Stripe
+# / Stripe refund: one AVOIR sale at the amount Stripe returns
+# --------------------------------------------------------------------------
+
+# Les journaux où l'alerte d'écart et l'erreur après remboursement peuvent être écrites :
+# le service de vente, ou la fonction de remboursement.
+# / The loggers that may carry the gap alert and the after-refund error.
+JOURNAUX_DU_REMBOURSEMENT_STRIPE = ("BaseBillet.services_vente", "PaiementStripe.utils")
+
+
+@contextmanager
+def remboursement_stripe_simule(montant_rendu_par_stripe=None):
+    """
+    Remplace `stripe.Refund.create` le temps du bloc. Chaque appel rend un remboursement
+    réussi, avec un identifiant unique et le montant rendu : le montant demandé, ou
+    `montant_rendu_par_stripe` s'il est donné (frais, arrondi chez Stripe).
+    / Replaces `stripe.Refund.create` within the block. Each call returns a successful
+    refund with a unique id and the amount given back: the amount asked, or
+    `montant_rendu_par_stripe` when given.
+
+    :param montant_rendu_par_stripe: centimes que Stripe annonce rendus, ou None
+    :return: un objet avec `appels` (le faux `Refund.create`, pour compter et lire ses
+        arguments) et `remboursements_rendus` (les objets rendus, dans l'ordre)
+    """
+    remboursements_rendus = []
+
+    def rembourser(**arguments_du_remboursement):
+        remboursement = rembourser_comme_stripe(**arguments_du_remboursement)
+        if montant_rendu_par_stripe is not None:
+            remboursement.amount = montant_rendu_par_stripe
+        remboursements_rendus.append(remboursement)
+        return remboursement
+
+    with patch("stripe.Refund.create", side_effect=rembourser) as appels_a_stripe:
+        yield SimpleNamespace(
+            appels=appels_a_stripe,
+            remboursements_rendus=remboursements_rendus,
+        )
+
+
+def le_remboursement_de_la_ligne(ligne):
+    """
+    La ligne négative qui rembourse cette ligne payée par Stripe : même paiement Stripe,
+    quantité négative, uuid de la ligne d'origine dans `metadata`. Une seule attendue.
+    / The negative line that refunds this Stripe-paid line. Exactly one expected.
+    """
+    lignes_de_remboursement = LigneArticle.objects.filter(
+        paiement_stripe_id=ligne.paiement_stripe_id,
+        qty__lt=0,
+        metadata__original_lignearticle_uuid=str(ligne.uuid),
+    )
+    assert lignes_de_remboursement.count() == 1, (
+        f"Une ligne de remboursement attendue pour la ligne {ligne.uuid}, "
+        f"{lignes_de_remboursement.count()} trouvée(s)."
+    )
+    return lignes_de_remboursement.get()
+
+
+def verifier_l_article_rembourse(avoir, ligne_d_origine, quantite_rendue):
+    """
+    Vérifie l'article d'avoir écrit par un remboursement Stripe : statut REFUNDED, lié à
+    la ligne d'origine, même prix unitaire, quantité négative, montants miroirs, relié au
+    paiement Stripe, et dans une vente.
+    / Checks a Stripe refund item: REFUNDED, linked to the original line, same unit
+    price, negative quantity, mirrored amounts, linked to the Stripe payment, in a sale.
+    """
+    assert avoir.vente_id is not None, "La ligne remboursée n'a pas de vente."
+    assert avoir.credit_note_for_id == ligne_d_origine.pk
+    assert avoir.status == LigneArticle.REFUNDED
+    assert avoir.pricesold_id == ligne_d_origine.pricesold_id
+    assert avoir.amount == ligne_d_origine.amount
+    assert avoir.qty == -Decimal(quantite_rendue)
+    total_rendu_attendu = -ligne_d_origine.amount * quantite_rendue
+    assert avoir.total_catalogue == total_rendu_attendu
+    assert avoir.part_offerte == 0
+    assert avoir.total_ttc == total_rendu_attendu
+    assert avoir.paiement_stripe_id == ligne_d_origine.paiement_stripe_id
+
+
+def verifier_le_reglement_stripe_du_remboursement(vente_d_avoir, paiement, remboursement):
+    """
+    Vérifie l'UNIQUE règlement de la vente d'avoir : au moyen du paiement Stripe
+    d'origine, montant = −montant RENVOYÉ par Stripe, référence externe = identifiant du
+    remboursement, relié au paiement.
+    / Checks the ONLY payment of the credit note sale: original Stripe method, amount =
+    −amount RETURNED by Stripe, external reference = refund id, linked to the payment.
+    """
+    paiement.refresh_from_db()
+    assert paiement.moyen, "Le paiement Stripe d'origine n'a pas de moyen."
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (paiement.moyen, -remboursement.amount)
+    ]
+    reglement_du_remboursement = vente_d_avoir.reglements.get()
+    assert reglement_du_remboursement.reference_externe == remboursement.id
+    assert reglement_du_remboursement.paiement_stripe_id == paiement.pk
+
+
+def erreurs_journalisees_du_remboursement(caplog):
+    """Les enregistrements ERROR (ou plus) des journaux du remboursement Stripe.
+    / ERROR (or higher) records of the Stripe refund loggers."""
+    erreurs = []
+    for enregistrement in caplog.records:
+        journal_du_remboursement = enregistrement.name in JOURNAUX_DU_REMBOURSEMENT_STRIPE
+        if journal_du_remboursement and enregistrement.levelno >= logging.ERROR:
+            erreurs.append(enregistrement)
+    return erreurs
+
+
+def rien_n_est_ecrit_pour_le_remboursement(ligne, paiement, statut_du_paiement_avant):
+    """
+    Vérifie qu'un remboursement n'a RIEN écrit : aucun avoir pour la ligne (voir
+    `rien_n_est_ecrit_pour_la_ligne`), aucune ligne négative sur le paiement Stripe, et le
+    paiement garde son statut.
+    / Checks a refund wrote NOTHING: no credit note, no negative line on the Stripe
+    payment, and the payment keeps its status.
+    """
+    rien_n_est_ecrit_pour_la_ligne(ligne)
+    assert not LigneArticle.objects.filter(
+        paiement_stripe=paiement, qty__lt=0
+    ).exists(), "Une ligne négative a été écrite sur le paiement Stripe."
+    paiement.refresh_from_db()
+    assert paiement.status == statut_du_paiement_avant
+
+
+def vendre_en_ligne_une_entree_en_partie_offerte():
+    """
+    ÉTAT DE DÉPART : une vente en ligne réglée par Stripe, écrite par le service de vente.
+    Deux entrées à 10 € (catalogue 2000), dont 10 € offerts (part offerte 1000, source
+    OFFRIR) : net 1000. Règlements : Stripe 1000 (relié au paiement) et FREE 1000. Le
+    paiement Stripe est VALID, au moyen « Stripe » (`SN`), lié à la vente.
+    Rend la ligne et son paiement.
+    / STARTING STATE: a settled online sale paid by Stripe: two 10 € entries, 10 € of
+    which offered (net 1000). Returns the line and its payment.
+    """
+    acheteur = creer_utilisateur()
+    tarif_vendu = creer_tarif_vendu(nom="Entrée en partie offerte", prix_en_euros="10.00")
+    vente_en_ligne = services_vente.ouvrir_vente(
+        origine=SaleOrigin.LESPASS,
+        nature=Vente.Nature.VENTE,
+        client=acheteur,
+    )
+    # Une création : aucune transition de la machine à états ne part.
+    # / A creation: no state machine transition runs.
+    paiement = Paiement_stripe.objects.create(
+        user=acheteur,
+        status=Paiement_stripe.VALID,
+        moyen=PaymentMethod.STRIPE_NOFED,
+        payment_intent_id=f"pi_test_{identifiant_unique()}",
+        vente=vente_en_ligne,
+    )
+    ligne = services_vente.ajouter_article(
+        vente_en_ligne,
+        pricesold=tarif_vendu,
+        quantite=Decimal("2"),
+        prix_unitaire=1000,
+        taux_tva=Decimal("20"),
+        part_offerte=1000,
+        source_offert=LigneArticle.SourceOffert.OFFRIR,
+        payment_method=PaymentMethod.STRIPE_NOFED,
+        paiement_stripe=paiement,
+        status=LigneArticle.VALID,
+    )
+    services_vente.ajouter_reglement(
+        vente_en_ligne,
+        moyen=PaymentMethod.STRIPE_NOFED,
+        montant=1000,
+        paiement_stripe=paiement,
+    )
+    services_vente.ajouter_reglement(
+        vente_en_ligne, moyen=PaymentMethod.FREE, montant=1000
+    )
+    services_vente.encaisser_vente(vente_en_ligne)
+    return SimpleNamespace(ligne=ligne, paiement=paiement)
+
+
+def test_remboursement_stripe_partiel_avoir_montant_du_refund(lieu):
+    """
+    Fiche test 17. Trois billets à 10 € payés par Stripe ; UN billet est annulé
+    (`cancel_and_refund_ticket`) : un remboursement Stripe partiel.
+    - Stripe est appelé UNE fois, pour 1000 centimes.
+    - UN article d'avoir : quantité −1, prix unitaire 1000, net −1000, lié à la ligne
+      d'origine et au paiement Stripe, statut REFUNDED.
+    - La vente AVOIR : origine LESPASS, réglée, numérotée, liée à la vente du paiement,
+      même client.
+    - UN règlement : −montant renvoyé par Stripe, au moyen du paiement, référence
+      externe = identifiant du remboursement, relié au paiement.
+    - Ordre : à l'encaissement, l'article est encore CREATED ; il passe REFUNDED après.
+    - Le paiement passe « remboursé en partie ».
+    / Test 17: one ticket out of three refunded through Stripe: one AVOIR sale, linked,
+    one item qty −1, one payment of −refund.amount with the refund id; REFUNDED after
+    the settlement.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=3)
+    ligne_d_origine = LigneArticle.objects.get(paiement_stripe=achat.paiement)
+    vente_d_origine = Vente.objects.get(pk=ligne_d_origine.vente_id)
+    reservation = Reservation.objects.get(pk=achat.reservation.pk)
+    billet_a_annuler = reservation.tickets.order_by("pk").first()
+
+    with remboursement_stripe_simule() as stripe_simule:
+        with statuts_des_articles_a_l_encaissement() as statuts_releves:
+            reservation.cancel_and_refund_ticket(billet_a_annuler)
+
+    assert stripe_simule.appels.call_count == 1
+    assert stripe_simule.appels.call_args.kwargs["amount"] == 1000
+    remboursement = stripe_simule.remboursements_rendus[0]
+
+    avoir = le_remboursement_de_la_ligne(ligne_d_origine)
+    verifier_l_article_rembourse(avoir, ligne_d_origine, quantite_rendue=1)
+    assert avoir.reservation_id == reservation.pk
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+        origine_attendue=SaleOrigin.LESPASS,
+    )
+    assert vente_d_avoir.articles.count() == 1
+    verifier_le_reglement_stripe_du_remboursement(
+        vente_d_avoir, achat.paiement, remboursement
+    )
+
+    # Un seul encaissement : celui de l'avoir, article encore CREATED.
+    # / One settlement: the credit note's, item still CREATED.
+    assert statuts_releves == [[LigneArticle.CREATED]]
+
+    achat.paiement.refresh_from_db()
+    assert achat.paiement.status == Paiement_stripe.PARTIALLY_REFUNDED
+    verifier_egalites(vente_d_avoir)
+
+
+def test_remboursement_stripe_total_reservation_une_vente_avoir(lieu):
+    """
+    Une réservation payée par Stripe, DEUX lignes : 2 billets à 10 € et 1 billet réduit
+    à 5 € (2500). Toute la réservation est annulée (`cancel_and_refund_resa`).
+    - Stripe est appelé UNE fois, pour 2500.
+    - UNE seule vente AVOIR, avec DEUX articles (−2000 et −500), tous deux REFUNDED.
+    - UN seul règlement : −2500, référence = identifiant du remboursement.
+    - À l'encaissement, les deux articles sont encore CREATED.
+    - Le paiement passe « remboursé ».
+    / A two-line reservation fully refunded: one Stripe call, ONE AVOIR sale with two
+    items, ONE payment of −2500.
+    """
+    achat = reserver_des_billets_a_payer(lieu)
+    revenir_de_stripe_billetterie(achat.client, achat.paiement)
+    lignes_d_origine = list(
+        LigneArticle.objects.filter(paiement_stripe=achat.paiement).order_by("-amount")
+    )
+    assert len(lignes_d_origine) == 2
+    ligne_tarif_plein = lignes_d_origine[0]
+    ligne_tarif_reduit = lignes_d_origine[1]
+    vente_d_origine = Vente.objects.get(pk=ligne_tarif_plein.vente_id)
+    reservation = Reservation.objects.get(pk=achat.reservation.pk)
+
+    with remboursement_stripe_simule() as stripe_simule:
+        with statuts_des_articles_a_l_encaissement() as statuts_releves:
+            reservation.cancel_and_refund_resa()
+
+    assert stripe_simule.appels.call_count == 1
+    assert stripe_simule.appels.call_args.kwargs["amount"] == 2500
+    remboursement = stripe_simule.remboursements_rendus[0]
+
+    avoir_tarif_plein = le_remboursement_de_la_ligne(ligne_tarif_plein)
+    avoir_tarif_reduit = le_remboursement_de_la_ligne(ligne_tarif_reduit)
+    verifier_l_article_rembourse(avoir_tarif_plein, ligne_tarif_plein, quantite_rendue=2)
+    verifier_l_article_rembourse(
+        avoir_tarif_reduit, ligne_tarif_reduit, quantite_rendue=1
+    )
+    assert avoir_tarif_plein.vente_id == avoir_tarif_reduit.vente_id, (
+        "Les deux lignes remboursées doivent être dans la même vente AVOIR."
+    )
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir_tarif_plein,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+        origine_attendue=SaleOrigin.LESPASS,
+    )
+    assert vente_d_avoir.articles.count() == 2
+    verifier_le_reglement_stripe_du_remboursement(
+        vente_d_avoir, achat.paiement, remboursement
+    )
+    assert statuts_releves == [[LigneArticle.CREATED, LigneArticle.CREATED]]
+
+    achat.paiement.refresh_from_db()
+    assert achat.paiement.status == Paiement_stripe.REFUNDED
+    verifier_egalites(vente_d_avoir)
+
+
+def test_remboursement_stripe_montant_different_ecart_d_encaissement(lieu, caplog):
+    """
+    Un billet à 10 € payé par Stripe, remboursé en entier. Stripe reçoit une demande de
+    1000 mais annonce 900 rendus (frais, arrondi).
+    - L'article d'avoir vaut −1000 (le billet rendu, au prix vendu).
+    - UN règlement : −900, le montant RENVOYÉ par Stripe, jamais le montant calculé.
+    - L'écart (+100 : rendu en moins, donc gardé en plus) devient un article « Écart
+      d'encaissement — reçu en plus » : quantité +1, prix 100, TVA 0, hors chiffre
+      d'affaires, VALID, sans paiement Stripe.
+    - Une alerte est journalisée (ERROR).
+    / Stripe returns 900 for 1000 asked: a −900 payment, the −1000 item, and a "received
+    more" gap item of +100; an ERROR alert is logged.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=1)
+    ligne_d_origine = LigneArticle.objects.get(paiement_stripe=achat.paiement)
+    vente_d_origine = Vente.objects.get(pk=ligne_d_origine.vente_id)
+    reservation = Reservation.objects.get(pk=achat.reservation.pk)
+
+    with remboursement_stripe_simule(montant_rendu_par_stripe=900) as stripe_simule:
+        reservation.cancel_and_refund_resa()
+
+    assert stripe_simule.appels.call_count == 1
+    assert stripe_simule.appels.call_args.kwargs["amount"] == 1000
+    remboursement = stripe_simule.remboursements_rendus[0]
+
+    avoir = le_remboursement_de_la_ligne(ligne_d_origine)
+    verifier_l_article_rembourse(avoir, ligne_d_origine, quantite_rendue=1)
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+        origine_attendue=SaleOrigin.LESPASS,
+    )
+    verifier_le_reglement_stripe_du_remboursement(
+        vente_d_avoir, achat.paiement, remboursement
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir)[0][1] == -900
+
+    articles_d_ecart = articles_d_ecart_de_la_vente(vente_d_avoir)
+    assert len(articles_d_ecart) == 1
+    verifier_l_article_d_ecart(
+        articles_d_ecart[0],
+        nom_attendu=NOM_ECART_RECU_EN_PLUS,
+        quantite_attendue=1,
+        ecart_en_centimes=100,
+    )
+    assert len(erreurs_journalisees_du_remboursement(caplog)) >= 1
+
+    verifier_egalites(vente_d_avoir)
+
+
+def test_remboursement_stripe_avoir_partiel_d_un_offert_refuse_avant_stripe(lieu):
+    """
+    Une ligne payée par Stripe : deux entrées à 10 €, dont 10 € offerts. On demande le
+    remboursement d'UNE seule entrée (`specified_quantity=1`). Le service refuse
+    (ValueError « rembourser l'article entier » : aucun prorata d'offert), et ce refus
+    arrive AVANT Stripe :
+    - `stripe.Refund.create` n'est JAMAIS appelé ;
+    - rien n'est écrit : aucun avoir, aucune vente AVOIR, aucune ligne négative, le
+      paiement reste VALID, la ligne reste VALID.
+    / A partial refund of an item with an offered part is refused by the service BEFORE
+    Stripe: no Stripe call, nothing written.
+    """
+    entree_en_partie_offerte = vendre_en_ligne_une_entree_en_partie_offerte()
+    ligne = entree_en_partie_offerte.ligne
+    paiement = entree_en_partie_offerte.paiement
+
+    with remboursement_stripe_simule() as stripe_simule:
+        with pytest.raises(ValueError, match="rembourser l'article entier"):
+            partial_refund_payment(
+                paiement, Configuration.get_solo(), [ligne], specified_quantity=1
+            )
+
+    assert stripe_simule.appels.call_count == 0, (
+        "Stripe a été appelé alors que le service refuse l'avoir."
+    )
+    rien_n_est_ecrit_pour_le_remboursement(
+        ligne, paiement, statut_du_paiement_avant=Paiement_stripe.VALID
+    )
+
+
+def test_remboursement_stripe_echec_d_encaissement_rien_n_est_ecrit(lieu, caplog):
+    """
+    Deux billets à 10 € payés par Stripe, remboursés en entier. Stripe rend l'argent,
+    puis l'encaissement de la vente AVOIR échoue (simulé). Règle « 500 + Sentry » :
+    - l'erreur remonte à l'appelant, et elle est journalisée (ERROR) ;
+    - rien n'est écrit : aucun avoir, aucune vente AVOIR, aucune ligne négative ; le
+      paiement garde son statut, la ligne reste VALID.
+    / Stripe refunds, then the AVOIR settlement fails (faked): the error is raised and
+    logged, nothing is written.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=2)
+    ligne = LigneArticle.objects.get(paiement_stripe=achat.paiement)
+    paiement = Paiement_stripe.objects.get(pk=achat.paiement.pk)
+    statut_du_paiement_avant = paiement.status
+
+    with remboursement_stripe_simule() as stripe_simule:
+        with encaissement_qui_echoue():
+            with pytest.raises(Exception):
+                partial_refund_payment(paiement, Configuration.get_solo(), [ligne])
+
+    # Stripe a été appelé : l'échec arrive APRÈS le remboursement.
+    # / Stripe was called: the failure comes AFTER the refund.
+    assert stripe_simule.appels.call_count == 1
+    remboursement = stripe_simule.remboursements_rendus[0]
+
+    # L'erreur journalisée porte l'identifiant du remboursement Stripe : un humain
+    # rapproche à la main l'argent rendu, qu'aucune vente ne trace.
+    # / The logged error carries the Stripe refund id, for a manual reconciliation.
+    messages_d_erreur = []
+    for enregistrement in erreurs_journalisees_du_remboursement(caplog):
+        messages_d_erreur.append(enregistrement.getMessage())
+    erreur_avec_l_id_du_remboursement = False
+    for message_d_erreur in messages_d_erreur:
+        if remboursement.id in message_d_erreur:
+            erreur_avec_l_id_du_remboursement = True
+    assert erreur_avec_l_id_du_remboursement, (
+        f"Aucune erreur journalisée ne cite le remboursement {remboursement.id} : "
+        f"{messages_d_erreur}"
+    )
+    rien_n_est_ecrit_pour_le_remboursement(ligne, paiement, statut_du_paiement_avant)
+
+
+def test_remboursement_stripe_vente_d_origine_pas_reglee_refuse_avant_stripe(lieu):
+    """
+    Une ligne payée par Stripe dont la vente d'origine existe mais n'est pas réglée (EN
+    ATTENTE). Le remboursement est refusé (ValueError « pas réglée ») AVANT Stripe :
+    - `stripe.Refund.create` n'est JAMAIS appelé ;
+    - rien n'est écrit : aucun avoir, aucune vente AVOIR, aucune ligne négative, le
+      paiement et la ligne gardent leur statut.
+    / A line whose original sale is not settled: the refund is refused BEFORE Stripe,
+    nothing is written.
+    """
+    acheteur = creer_utilisateur()
+    tarif_vendu = creer_tarif_vendu(nom="Vente pas réglée", prix_en_euros="10.00")
+    # ÉTAT DE DÉPART : une vente en ligne ouverte, avec son article payé par Stripe,
+    # jamais encaissée.
+    # / STARTING STATE: an open online sale, its Stripe-paid item, never settled.
+    vente_en_attente = services_vente.ouvrir_vente(
+        origine=SaleOrigin.LESPASS,
+        nature=Vente.Nature.VENTE,
+        client=acheteur,
+    )
+    paiement = Paiement_stripe.objects.create(
+        user=acheteur,
+        status=Paiement_stripe.VALID,
+        moyen=PaymentMethod.STRIPE_NOFED,
+        payment_intent_id=f"pi_test_{identifiant_unique()}",
+        vente=vente_en_attente,
+    )
+    ligne = services_vente.ajouter_article(
+        vente_en_attente,
+        pricesold=tarif_vendu,
+        quantite=Decimal("1"),
+        prix_unitaire=1000,
+        taux_tva=Decimal("20"),
+        payment_method=PaymentMethod.STRIPE_NOFED,
+        paiement_stripe=paiement,
+        status=LigneArticle.VALID,
+    )
+
+    with remboursement_stripe_simule() as stripe_simule:
+        with pytest.raises(ValueError, match="pas réglée"):
+            partial_refund_payment(paiement, Configuration.get_solo(), [ligne])
+
+    assert stripe_simule.appels.call_count == 0, (
+        "Stripe a été appelé alors que la vente d'origine n'est pas réglée."
+    )
+    rien_n_est_ecrit_pour_le_remboursement(
+        ligne, paiement, statut_du_paiement_avant=Paiement_stripe.VALID
+    )
+
+
+def test_remboursement_stripe_booking_pose_la_fk_booking(lieu):
+    """
+    Fiche test 21, côté Stripe. Un créneau d'une heure d'une ressource à 12 €/h, payé
+    par Stripe (sans panier), puis annulé par la personne (`cancel_and_refund_booking`).
+    - L'article d'avoir porte le booking (FK `booking`), quantité −1, net −1200,
+      REFUNDED.
+    - La vente AVOIR : liée à la vente du booking, réglée ; UN règlement −1200 avec
+      l'identifiant du remboursement.
+    / Sheet test 21, Stripe side: the refunded booking's item carries the booking FK; one
+    AVOIR sale, one −1200 payment with the refund id.
+    """
+    acheteur = creer_utilisateur()
+    client_de_l_acheteur = client_connecte(acheteur)
+    location = creer_ressource_avec_tarif(prix="12.00")
+    reserver_une_ressource_sans_panier(client_de_l_acheteur, location)
+    booking = Booking.objects.get(user=acheteur, resource=location.ressource)
+    paiement = Paiement_stripe.objects.get(booking=booking)
+    revenir_de_stripe_billetterie(client_de_l_acheteur, paiement)
+    booking.refresh_from_db()
+    assert booking.status == Booking.PAID_BY_USER
+    ligne_du_booking = LigneArticle.objects.get(booking=booking, qty__gt=0)
+    vente_d_origine = Vente.objects.get(pk=ligne_du_booking.vente_id)
+
+    with remboursement_stripe_simule() as stripe_simule:
+        booking.cancel_and_refund_booking()
+
+    assert stripe_simule.appels.call_count == 1
+    assert stripe_simule.appels.call_args.kwargs["amount"] == 1200
+    remboursement = stripe_simule.remboursements_rendus[0]
+
+    avoir = le_remboursement_de_la_ligne(ligne_du_booking)
+    verifier_l_article_rembourse(avoir, ligne_du_booking, quantite_rendue=1)
+    assert avoir.booking_id == booking.pk
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+        origine_attendue=SaleOrigin.LESPASS,
+    )
+    verifier_le_reglement_stripe_du_remboursement(vente_d_avoir, paiement, remboursement)
+    verifier_egalites(vente_d_avoir)
+
+
+def test_remboursement_stripe_rien_a_rendre_aucune_vente_ouverte(lieu):
+    """
+    Une ligne payée par Stripe dont la quantité à rendre vaut 0 (`to_refund_qty`, posé
+    par l'appelant quand tous les billets du tarif sont déjà annulés). Rien à rendre :
+    - `stripe.Refund.create` n'est pas appelé ;
+    - AUCUNE vente AVOIR n'est ouverte (pas de vente vide) ; rien n'est écrit.
+    / A line with nothing to give back: no Stripe call, NO AVOIR sale opened, nothing
+    written.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=1)
+    ligne = LigneArticle.objects.get(paiement_stripe=achat.paiement)
+    paiement = Paiement_stripe.objects.get(pk=achat.paiement.pk)
+    statut_du_paiement_avant = paiement.status
+    nombre_de_ventes_avoir_avant = Vente.objects.filter(
+        nature=Vente.Nature.AVOIR
+    ).count()
+    ligne.to_refund_qty = 0
+
+    with remboursement_stripe_simule() as stripe_simule:
+        partial_refund_payment(paiement, Configuration.get_solo(), [ligne])
+
+    assert stripe_simule.appels.call_count == 0
+    assert (
+        Vente.objects.filter(nature=Vente.Nature.AVOIR).count()
+        == nombre_de_ventes_avoir_avant
+    ), "Une vente AVOIR a été ouverte alors qu'il n'y a rien à rendre."
+    rien_n_est_ecrit_pour_le_remboursement(ligne, paiement, statut_du_paiement_avant)

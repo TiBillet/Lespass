@@ -10,7 +10,7 @@ Online Stripe sales, sales without Stripe (admin, API) and credit notes go throu
 **Pourquoi / Why :** chantier 05 « montants entiers » : toute vente écrit son argent en centimes entiers, une seule fois, dans une `Vente` chaînée. /
 Worksite 05 "whole amounts": every sale writes its money once, in whole cents, in a chained `Vente`.
 
-Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2). / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z.
+Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2), D-3b (le remboursement Stripe écrit sa vente AVOIR). / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z, D-3b.
 
 ## D-1a — Les producteurs Stripe directs ouvrent leur vente / Direct Stripe producers open their sale
 
@@ -301,6 +301,40 @@ Fable review of D-1 and D-2 (findings 1, 3, 4, 7, 8); finding 2 kept as is.
 | `tests/pytest/test_en_ligne_ecrit_la_vente.py` | 1 test : `CANCELED` avec annulation en échec → pas d'exception, paiement `CANCELED`, erreur journalisée |
 | `tests/pytest/test_caracterisation_admin_api.py` | docstring seulement |
 
+## D-3b — Le remboursement Stripe écrit sa vente AVOIR, au montant renvoyé par Stripe / The Stripe refund writes its AVOIR sale, at the amount Stripe returns
+
+**Migration :** Non — **Chaînes i18n :** aucune nouvelle.
+
+### Resume / Summary
+**Quoi / What :**
+- **`partial_refund_payment` écrit une vente AVOIR par remboursement** (annulation d'un billet, d'une réservation ou d'un booking payés par Stripe). Origine LESPASS, liée à la vente du paiement (vide pour un paiement antérieur aux ventes), client de cette vente. Un article par ligne remboursée, par `ajouter_l_article_d_avoir` (même règle de quantité qu'avant). Tout se fait dans une seule transaction. /
+  `partial_refund_payment` writes one AVOIR sale per refund, one item per refunded line, in one transaction.
+- **Les articles sont écrits AVANT l'appel à Stripe** : un refus du service (avoir partiel d'un article avec une part offerte, quantité hors bornes) arrête tout avant que Stripe ne rende de l'argent. Nouvelle garde, elle aussi avant Stripe : une vente d'origine qui existe mais n'est pas réglée est refusée (`ValueError`). Rien à rendre sur aucune ligne : aucune vente n'est ouverte. /
+  Items are written BEFORE the Stripe call; unsettled original sale refused before Stripe; nothing to give back: no sale opened.
+- **Le montant demandé à Stripe** = −Σ des nets des articles (centimes entiers), au lieu de prix × quantité. **UN règlement** Stripe négatif, montant = −`refund.amount` **lu sur l'objet renvoyé par Stripe**, au moyen du paiement (repli : moyen de la ligne), relié au paiement, `reference_externe` = `refund.id`. La part offerte (aucune aujourd'hui sur une ligne Stripe) serait tracée par un règlement FREE négatif, comme en D-3a. /
+  One negative Stripe payment of the amount Stripe returns, with the refund id as external reference.
+- **Écart d'encaissement** : si Stripe rend un autre montant que les articles (frais, arrondi), un article « Écart d'encaissement » (même produit système et mêmes règles qu'à l'encaissement en ligne) et une alerte ERROR. La création de cet article devient une fonction commune du service, `ajouter_l_article_d_ecart_d_encaissement`, appelée aussi par `encaisser_vente_stripe` (comportement inchangé). /
+  Collection gap item when Stripe returns another amount; shared service function.
+- **Ordre** : encaissement de la vente AVOIR, PUIS le paiement passe « remboursé en partie » (ou « remboursé »), PUIS les articles passent `REFUNDED` (envoi à l'ancien LaBoutik, inchangé). Une écriture qui échoue après le remboursement Stripe : rien n'est écrit, le paiement garde son statut, l'erreur est journalisée (ERROR, Sentry) avec l'id et le montant du remboursement pour un rapprochement à la main, puis remontée. /
+  Settle, then payment status, then REFUNDED. A failure after the refund writes nothing and logs the refund id and amount.
+- **Changement de comportement** : la ligne remboursée par Stripe porte désormais `credit_note_for` (la ligne d'origine). Après un remboursement Stripe **partiel**, le bouton « Avoir » de la liste des ventes refuse donc la ligne d'origine (« A credit note already exists for this entry. ») et la liste affiche ⚠ sur son statut : pas de double remboursement. Le rapport comptable lit les avoirs par statut, pas par ce lien : inchangé. /
+  Behaviour change: Stripe-refunded lines carry `credit_note_for`; after a partial Stripe refund the "Credit note" button refuses the original line.
+- **Tests** : la simulation de `stripe.Refund.create` rend un objet avec `id`, `amount` (le montant demandé) et `status` (plus de `MagicMock`, dont `int()` vaut 1). La fabrique `simuler_paiement_valide` encaisse la vente d'origine comme en production (`montant_encaisse`, moyen `SN`, `encaisser_vente_stripe`) : un remboursement refuse une vente pas réglée. Aucune assertion des tests existants ne change. /
+  Tests: the faked refund returns id/amount/status; the paid-reservation factory settles the original sale as in production. No existing assertion changes.
+
+**Pourquoi / Why :** fiche D §4 (« Remboursement Stripe », règle « Remboursement Stripe différent de la somme des articles »), §5 tests 17 et 21 ; SUIVI §4 « D-3 » (a)-(e) ; décisions techniques de l'orchestrateur (pas de vente vide, garde « vente pas réglée », FREE de la part offerte, `credit_note_for` accepté, erreur journalisée avec l'id du remboursement). /
+Sheet D §4 and §5 tests 17, 21; SUIVI §4 D-3; orchestrator decisions.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `PaiementStripe/utils.py` | `partial_refund_payment` réécrite : vente AVOIR, articles avant Stripe, règlement au montant du refund, écart, transaction unique ; import `timezone` retiré |
+| `BaseBillet/services_vente.py` | nouvelle fonction `ajouter_l_article_d_ecart_d_encaissement`, appelée par `encaisser_vente_stripe` et `partial_refund_payment` |
+| `tests/pytest/test_avoirs_ecrivent_la_vente.py` | 8 tests : remboursement partiel, total (une vente, un règlement), écart, avoir partiel d'un offert refusé avant Stripe, échec d'encaissement (rien d'écrit, id du refund journalisé), vente d'origine pas réglée refusée avant Stripe, booking (FK `booking`), rien à rendre (aucune vente) ; aide `verifier_la_vente_d_avoir_encaissee` : paramètre `origine_attendue` (ADMIN par défaut) |
+| `tests/pytest/test_caracterisation_annulations.py` | nouvelle aide `rembourser_comme_stripe` ; la fixture `lieu` l'utilise ; aucune assertion changée |
+| `tests/pytest/test_stripe_refund.py` | simulations de `Refund.create` par `rembourser_comme_stripe` ; aucune assertion changée |
+| `tests/pytest/fabriques_reservation.py` | `simuler_paiement_valide` encaisse la vente d'origine (montant encaissé, moyen `SN`, `encaisser_vente_stripe`) |
+
 ---
 
 ## Comment tester (a la main) / Manual test
@@ -461,3 +495,22 @@ Pas de test à la main : l'échec d'encaissement ne se provoque pas sans simulat
 
 ### Verifs automatiques (D-1z)
 `make test ARGS="tests/pytest/test_api_ecrit_la_vente.py tests/pytest/test_en_ligne_ecrit_la_vente.py"`
+
+### Test 22 (D-3b) — annulation d'un billet payé par Stripe (Stripe en mode test, `stripe listen` lancé)
+1. Acheter trois billets à 10 € en ligne, payer avec la carte de test.
+2. « Mon compte » : annuler UN billet.
+3. Dans `manage.py shell` (tenant lespass) :
+   ```python
+   from BaseBillet.models_vente import Vente
+   v = Vente.objects.filter(nature="AVOIR").order_by("-datetime_creation").first()
+   print(v.origine, v.statut, v.numero, v.vente_liee_id, list(v.articles.values_list("qty", "total_ttc", "status")), list(v.reglements.values_list("moyen", "montant", "reference_externe")))
+   ```
+4. Attendu : `LP`, `REGLEE`, numérotée, liée à la vente des billets ; un article `(-1, -1000, 'R')` ; un règlement `('SN', -1000, 're_…')`. L'id `re_…` est celui du remboursement visible dans le tableau de bord Stripe.
+5. Admin > Ventes : sur la ligne des trois billets, bouton « Avoir » → « A credit note already exists for this entry. ».
+
+### Test 23 (D-3b) — annulation d'une réservation de ressource payée par Stripe
+1. Réserver un créneau payant d'une ressource, payer, puis l'annuler depuis « Mon compte ».
+2. Attendu : une vente AVOIR `REGLEE`, son article porte le booking, un règlement `SN` négatif avec la référence `re_…`.
+
+### Verifs automatiques (D-3b)
+`make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_stripe_refund.py tests/pytest/test_caracterisation_annulations.py tests/pytest/test_en_ligne_ecrit_la_vente.py"` ; une fois, vrai Stripe en mode test : `make test ARGS="tests/pytest/test_stripe_reel_remboursement.py"`

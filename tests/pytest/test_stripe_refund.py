@@ -31,7 +31,7 @@ Lancer / Run :
 
 import re
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -42,6 +42,9 @@ from fabriques_reservation import (
     reservation_payee,
     vente_admin_especes,
 )
+# Le remboursement simulé rend, comme Stripe, un identifiant et le montant rendu.
+# / The faked refund returns, like Stripe, an id and the amount given back.
+from test_caracterisation_annulations import rembourser_comme_stripe
 
 
 class TestRemboursementStripe:
@@ -81,7 +84,7 @@ class TestRemboursementStripe:
 
             with patch(
                 "stripe.Refund.create",
-                return_value=MagicMock(status="succeeded"),
+                side_effect=rembourser_comme_stripe,
             ) as mock_refund:
                 for numero, billet in enumerate(billets):
                     reservation.cancel_and_refund_ticket(billet)
@@ -139,7 +142,7 @@ class TestRemboursementStripe:
         with tenant_context(tenant):
             with patch(
                 "stripe.Refund.create",
-                return_value=MagicMock(status="succeeded"),
+                side_effect=rembourser_comme_stripe,
             ) as mock_refund:
                 reservation.cancel_and_refund_resa()
 
@@ -186,7 +189,7 @@ class TestRemboursementStripe:
         with tenant_context(tenant):
             with patch(
                 "stripe.Refund.create",
-                return_value=MagicMock(status="succeeded"),
+                side_effect=rembourser_comme_stripe,
             ) as mock_refund:
                 reservation.cancel_and_refund_ticket(reservation.tickets.order_by("pk").first())
                 reservation.cancel_and_refund_resa()
@@ -221,7 +224,7 @@ class TestRemboursementStripe:
         with tenant_context(tenant):
             with patch(
                 "stripe.Refund.create",
-                return_value=MagicMock(status="succeeded"),
+                side_effect=rembourser_comme_stripe,
             ) as mock_refund:
                 for billet in reservation.tickets.order_by("pk"):
                     reservation.cancel_and_refund_ticket(billet)
@@ -256,7 +259,7 @@ class TestRemboursementStripe:
             Reservation.objects.filter(pk=reservation.pk).update(status=Reservation.PAID)
             reservation.refresh_from_db()
 
-            with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
+            with patch("stripe.Refund.create", side_effect=rembourser_comme_stripe):
                 for billet in reservation.tickets.order_by("pk"):
                     reservation.cancel_and_refund_ticket(billet)
 
@@ -370,7 +373,7 @@ class TestAvoirsHorsStripe:
             # / Precondition: both sales share the same sold price.
             assert reservation_stripe.tickets.get().pricesold_id == ligne_admin.pricesold_id
 
-            with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
+            with patch("stripe.Refund.create", side_effect=rembourser_comme_stripe):
                 reservation_stripe.cancel_and_refund_resa()
 
             avoirs = LigneArticle.objects.filter(credit_note_for=ligne_admin)
@@ -396,7 +399,7 @@ class TestAvoirsHorsStripe:
         _reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=1)
 
         with tenant_context(tenant):
-            with patch("stripe.Refund.create", return_value=MagicMock(status="succeeded")):
+            with patch("stripe.Refund.create", side_effect=rembourser_comme_stripe):
                 message = reservation_stripe.cancel_and_refund_ticket(
                     reservation_stripe.tickets.order_by("pk").first()
                 )

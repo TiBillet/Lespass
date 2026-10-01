@@ -60,7 +60,7 @@ Lancer / Run : make test ARGS="tests/pytest/test_caracterisation_annulations.py"
 import uuid
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
@@ -114,6 +114,27 @@ def _langue_par_defaut_apres_chaque_test():
     translation.deactivate()
 
 
+def rembourser_comme_stripe(**arguments_du_remboursement):
+    """
+    Remplace `stripe.Refund.create` : rend un remboursement réussi, comme Stripe, avec
+    son identifiant et le montant rendu. Ici, Stripe rend exactement le montant demandé.
+    / Replaces `stripe.Refund.create`: a successful refund, with its id and the amount
+    given back. Here Stripe gives back exactly the amount asked.
+
+    Un `MagicMock` ne convient pas : `int(MagicMock())` vaut 1, sans erreur (voir la
+    fixture `mock_stripe`, tests/pytest/conftest.py).
+    / A MagicMock does not fit: int(MagicMock()) is 1, silently.
+
+    :param arguments_du_remboursement: les arguments passés à `stripe.Refund.create`
+    :return: un objet avec `id`, `amount` (centimes) et `status`
+    """
+    return SimpleNamespace(
+        id=f"re_test_{identifiant_unique()}",
+        amount=arguments_du_remboursement["amount"],
+        status="succeeded",
+    )
+
+
 @pytest.fixture
 def lieu(tenant, mock_stripe):
     """
@@ -126,12 +147,11 @@ def lieu(tenant, mock_stripe):
     tâche demandée.
     / `remboursement_stripe` replaces `stripe.Refund.create`: its calls are read.
     """
-    remboursement_reussi = MagicMock(status="succeeded")
     with tenant_context(tenant):
         with catalogue_stripe_simule() as catalogue_stripe:
             with taches_celery_enregistrees() as taches_demandees:
                 with patch(
-                    "stripe.Refund.create", return_value=remboursement_reussi
+                    "stripe.Refund.create", side_effect=rembourser_comme_stripe
                 ) as remboursement_stripe:
                     yield SimpleNamespace(
                         tenant=tenant,

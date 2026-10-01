@@ -932,9 +932,9 @@ def tarif_vendu_d_ecart_d_encaissement(nom_du_produit):
 
     LOCALISATION : BaseBillet/services_vente.py
 
-    Le produit n'est jamais publié et n'est jamais saisi à la main : seul
-    `encaisser_vente_stripe` l'utilise. Son tarif vaut 0 : le montant de l'écart est
-    porté par la ligne (`amount`), pas par le tarif.
+    Le produit n'est jamais publié et n'est jamais saisi à la main : seule
+    `ajouter_l_article_d_ecart_d_encaissement` l'utilise. Son tarif vaut 0 : le
+    montant de l'écart est porté par la ligne (`amount`), pas par le tarif.
     / Never published, never typed by hand. Its price is 0: the gap amount is on the line.
 
     :param nom_du_produit: `NOM_ECART_RECU_EN_PLUS` ou `NOM_ECART_RECU_EN_MOINS`
@@ -968,6 +968,54 @@ def tarif_vendu_d_ecart_d_encaissement(nom_du_produit):
         defaults={"prix": tarif_d_ecart.prix},
     )
     return tarif_vendu_d_ecart
+
+
+def ajouter_l_article_d_ecart_d_encaissement(vente, ecart_en_centimes):
+    """
+    Ajoute à la vente l'article « Écart d'encaissement » : la différence entre
+    l'argent que Stripe annonce et ce que valent les articles. Rien si l'écart vaut 0.
+    / Adds the "collection gap" item to the sale: the difference between the money
+    Stripe announces and the items' value. Nothing when the gap is 0.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    APPELÉE PAR : `encaisser_vente_stripe` (encaissement d'une vente en ligne) et
+    `PaiementStripe/utils.py` `partial_refund_payment` (remboursement Stripe).
+    / Called by encaisser_vente_stripe and partial_refund_payment.
+
+    L'ARTICLE : écart positif (Stripe a compté plus que les articles) → produit
+    « reçu en plus », quantité +1 ; écart négatif → « reçu en moins », quantité −1.
+    Prix unitaire = |écart|, TVA 0, hors chiffre d'affaires. La ligne naît VALID et
+    sans paiement Stripe : elle ne bloque pas le passage du paiement à VALID
+    (`set_paiement_stripe_valid`) et ne déclenche aucune transition (création, pas de
+    changement de statut). L'alerte au journal reste à l'appelant.
+    / Positive gap: "received more", qty +1; negative: "received less", qty −1. Unit
+    price |gap|, VAT 0, off revenue, born VALID without Stripe payment. The caller logs.
+
+    :param vente: la `Vente` EN_ATTENTE qui reçoit l'article
+    :param ecart_en_centimes: argent annoncé par Stripe − valeur des articles (int)
+    :return: la `LigneArticle` d'écart, ou None si l'écart vaut 0
+    """
+    if ecart_en_centimes == 0:
+        return None
+
+    if ecart_en_centimes > 0:
+        nom_du_produit_d_ecart = NOM_ECART_RECU_EN_PLUS
+        quantite_de_l_ecart = Decimal("1")
+    else:
+        nom_du_produit_d_ecart = NOM_ECART_RECU_EN_MOINS
+        quantite_de_l_ecart = Decimal("-1")
+
+    article_d_ecart = ajouter_article(
+        vente,
+        pricesold=tarif_vendu_d_ecart_d_encaissement(nom_du_produit_d_ecart),
+        quantite=quantite_de_l_ecart,
+        prix_unitaire=abs(ecart_en_centimes),
+        taux_tva=Decimal("0"),
+        hors_chiffre_affaires=True,
+        status=LigneArticle.VALID,
+    )
+    return article_d_ecart
 
 
 def encaisser_vente_stripe(paiement_stripe):
@@ -1067,28 +1115,7 @@ def encaisser_vente_stripe(paiement_stripe):
         for article in LigneArticle.objects.filter(vente=vente):
             somme_des_totaux_catalogue += article.total_catalogue
         ecart_en_centimes = montant_encaisse - somme_des_totaux_catalogue
-
-        if ecart_en_centimes > 0:
-            nom_du_produit_d_ecart = NOM_ECART_RECU_EN_PLUS
-            quantite_de_l_ecart = Decimal("1")
-        else:
-            nom_du_produit_d_ecart = NOM_ECART_RECU_EN_MOINS
-            quantite_de_l_ecart = Decimal("-1")
-
-        if ecart_en_centimes != 0:
-            # La ligne naît VALID et sans paiement Stripe : elle ne bloque pas le
-            # passage du paiement à VALID (`set_paiement_stripe_valid`) et ne
-            # déclenche aucune transition (création, pas de changement de statut).
-            # / Born VALID, without Stripe payment: blocks nothing, triggers nothing.
-            ajouter_article(
-                vente,
-                pricesold=tarif_vendu_d_ecart_d_encaissement(nom_du_produit_d_ecart),
-                quantite=quantite_de_l_ecart,
-                prix_unitaire=abs(ecart_en_centimes),
-                taux_tva=Decimal("0"),
-                hors_chiffre_affaires=True,
-                status=LigneArticle.VALID,
-            )
+        ajouter_l_article_d_ecart_d_encaissement(vente, ecart_en_centimes)
 
         # 5. Un seul règlement, du montant encaissé. Jamais de règlement de 0.
         # / 5. One single payment, of the collected amount. Never a 0 payment.
