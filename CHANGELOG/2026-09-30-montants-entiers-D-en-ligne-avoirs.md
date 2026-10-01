@@ -10,7 +10,7 @@ Online Stripe sales, sales without Stripe (admin, API) and credit notes go throu
 **Pourquoi / Why :** chantier 05 « montants entiers » : toute vente écrit son argent en centimes entiers, une seule fois, dans une `Vente` chaînée. /
 Worksite 05 "whole amounts": every sale writes its money once, in whole cents, in a chained `Vente`.
 
-Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse). / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c.
+Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2). / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z.
 
 ## D-1a — Les producteurs Stripe directs ouvrent leur vente / Direct Stripe producers open their sale
 
@@ -244,6 +244,63 @@ Two fake invoices get `amount_paid=1500` (the amount they already simulate): a r
 | `fedow_connect/views.py` | `Membership_fwh.retrieve` : vente LaBoutik, ligne par le service, règlement `UNKNOWN`, encaissement, dans un `atomic` ; variable locale `transaction` renommée `transaction_fedow` (elle masquait `django.db.transaction`) |
 | `tests/pytest/test_api_ecrit_la_vente.py` | nouveau : 12 fonctions de test, 14 cas (adhésion gratuite API et front ; recharge : échec puis nouvel essai, temps, cadeau, 409 ; payé ailleurs espèces / carte, avec réservation gratuite dans les deux ordres ; webhook : vente, rejeu, adhérent inconnu, encaissement en échec) |
 
+## D-3a — L'avoir émis dans l'admin écrit sa vente ; écran « Remboursé par » / The admin credit note writes its sale; "Refunded by" screen
+
+**Migration :** Non — **Chaînes i18n nouvelles (msgid FR) :** « Remboursé par », « Le moyen par lequel l'argent est rendu au client. », « Émettre un avoir », « Émettre l'avoir », « Annuler », « Remboursez cette somme depuis votre tableau de bord Stripe. », « Cet article a été offert : aucun argent n'est à rendre. », « La vente d'origine n'est pas réglée : l'avoir est impossible. », « L'avoir n'a pas pu être émis : %(raison)s ». Workflow i18n à lancer par le mainteneur.
+
+### Resume / Summary
+**Quoi / What :**
+- **Nouvelle fonction du service** `ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite)` : l'article miroir d'une ligne vendue, dans une vente AVOIR. Même tarif vendu, même prix unitaire, même TVA, quantité négative. Toute la quantité d'une ligne écrite par le service : total catalogue et part offerte recopiés en négatif, exactement (une « part » de caisse en cascade rend son total d'origine au centime). Ligne d'avant le chantier (total 0) : prix × −quantité. Quantité partielle d'une ligne avec une part offerte : refusée (« rembourser l'article entier »). Champs recopiés : `credit_note_for`, moyen historique, monnaie, portefeuille, carte, paiement Stripe, adhésion, réservation, booking, `metadata` (+ `original_lignearticle_uuid`), hors chiffre d'affaires ; statut `CREATED`. Aucun règlement (sauf le FREE de la règle « offert » du service). Elle servira aux producteurs de D-3b et D-3c. /
+  New service function: the negative mirror item of a sold line, exact totals for a full return, partial return of an offered item refused, no payment written.
+- **Bouton « Avoir » de la liste des ventes** (`LigneArticleAdmin.emettre_avoir`) : un GET affiche désormais un **écran** (il ne crée plus l'avoir en un clic), le POST l'écrit. Trois écrans : ligne hors Stripe → champ « Remboursé par » (espèces, CB, chèque, virement), pré-rempli avec le moyen d'origine s'il est dans la liste, sinon vide et obligatoire ; ligne entièrement offerte (part offerte = total, ou moyen historique « offert ») → simple confirmation ; ligne payée par Stripe → simple confirmation et rappel « Remboursez cette somme depuis votre tableau de bord Stripe. » (aucun appel à Stripe). Nouvelle garde : vente d'origine pas réglée → refus. /
+  The "Credit note" button now opens a screen (GET) and writes on POST; three screens; new guard on an unsettled original sale.
+- **L'avoir écrit sa vente**, dans une seule transaction : vente AVOIR (origine admin, liée à la vente de la ligne, vide pour une ligne d'avant le chantier, client de la vente liée), l'article par la fonction ci-dessus, UN règlement d'argent du net rendu (moyen choisi, ou moyen Stripe d'origine relié au paiement, sans référence externe), un règlement FREE négatif pour la part offerte (jamais deux fois), encaissement, PUIS la transition `CREDIT_NOTE` (envoi à l'ancien LaBoutik, inchangé). Après l'action, retour à la liste des ventes. /
+  The credit note writes an AVOIR sale in one transaction: one money payment, one FREE payment for the offered part, settled, then CREDIT_NOTE.
+
+**Pourquoi / Why :** fiche D §4 (avoir admin hors Stripe et Stripe), §5 tests 18, 18b, 18c, 19 ; SUIVI §4 « D-3 » et §5 du 2026-10-01 (décision D27 : écran « Remboursé par ») ; décisions techniques de l'orchestrateur à l'étape 2 (total recopié exactement, règlement Stripe relié au paiement, carte recopiée, « entièrement offerte » = montants ou moyen FREE). Tests existants : seul le mécanisme d'appel change (GET puis POST), aucune assertion. /
+  Sheet D §4 and §5; decision D27. Existing tests: only the call mechanism changes.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/services_vente.py` | nouvelle fonction `ajouter_l_article_d_avoir` |
+| `Administration/admin_tenant.py` | `MOYENS_DU_CHAMP_REMBOURSE_PAR`, `EmettreAvoirAvecMoyenForm`, `EmettreAvoirSansMoyenForm` ; `LigneArticleAdmin.emettre_avoir` réécrite (écran + vente AVOIR) ; import `render` |
+| `Administration/templates/admin/lignearticle/emettre_avoir.html` | nouveau : l'écran « Émettre un avoir » |
+| `tests/pytest/test_avoirs_ecrivent_la_vente.py` | nouveau : 12 tests (espèces au lieu de CB, pré-remplissage, champ vide refusé, ligne Stripe, billet offert, ligne ancienne offerte, part en jetons, part arrondie, avoir partiel refusé, ligne sans vente, échec d'encaissement, vente d'origine pas réglée) |
+| `tests/pytest/test_caracterisation_annulations.py` | aide `emettre_un_avoir_depuis_l_admin` : GET de l'écran puis POST (paramètre `moyen_rembourse` optionnel) ; aucune assertion changée |
+| `tests/pytest/test_caracterisation_en_ligne.py` | T13 : GET de l'écran puis POST ; aucune assertion changée |
+| `tests/e2e/test_admin_credit_note.py` | passe par l'écran (vérifie l'absence du champ pour une ligne offerte, clique « Émettre l'avoir ») |
+
+## D-1z — Corrections de la relecture de D-1 et D-2 / Fixes from the D-1 and D-2 review
+
+**Migration :** Non — **Chaînes i18n :** aucune nouvelle.
+
+### Resume / Summary
+**Quoi / What :**
+- **API v2, réservation « payée ailleurs » et réservation gratuite : tout ou rien.** `ReservationViewSet.create` écrit la réservation, les billets, les lignes, la vente, le règlement et l'encaissement dans une seule transaction. Si l'encaissement échoue, rien n'est écrit et l'erreur remonte (500, Sentry) : un nouvel envoi de la caisse ne crée plus une seconde réservation. Limites acceptées : (1) les tâches lancées sans `on_commit` par `reservation_paid` (`webhook_reservation`, `ticket_celery_mailer`, réservation gratuite d'un compte déjà actif) partent tout de suite ; après un échec, elles ne trouvent pas la réservation retirée et leur erreur part dans Sentry ; (2) le produit et le prix du catalogue Stripe créés par `get_or_create_price_sold` restent chez Stripe, orphelins (sans effet sur l'argent). /
+  API v2 reservation: one transaction; a failed settlement writes nothing and returns a 500. Accepted limits: tasks sent without `on_commit` by `reservation_paid` leave at once (their error goes to Sentry); Stripe catalogue objects stay orphaned.
+- **Paiement Stripe refusé (`PENDING → CANCELED`) : aucune exception ne sort du `pre_save`.** Un échec de l'annulation de la vente (vente devenue réglée entre-temps, erreur de base) est journalisé (Sentry) ; la vente reste telle quelle, le paiement passe `CANCELED`. Même règle que l'encaissement (T4). /
+  Stripe CANCELED: a failed sale cancellation is logged, the payment still turns CANCELED.
+- **Billets vendus dans l'admin** : le prix unitaire en centimes passe par `dec_to_int` (même calcul, une seule fonction). /
+  Admin tickets: unit price in cents through `dec_to_int`.
+- **Imports** : dans `BaseBillet/signals.py` (adhésion créée dans l'admin) et `LigneArticleAdmin.emettre_avoir`, les imports locaux montent en tête de module : aucun cycle d'import ne les justifiait (vérifié au démarrage de Django). Leur commentaire, faux, disparaît. /
+  Local imports moved to module top: no import cycle; the wrong comment is gone.
+- **Test** : la docstring de `test_billets_vendus_dans_l_admin_offert_au_prix_part_offerte_totale` ne raconte plus la session ; aucune assertion changée. /
+  Test docstring no longer tells the session story.
+
+**Pourquoi / Why :** relecture Fable de D-1 et D-2 (SUIVI §4, constats 1, 3, 4, 7, 8) ; le constat 2 (webhook Fedow) est gardé tel quel (mainteneur, SUIVI §5). /
+Fable review of D-1 and D-2 (findings 1, 3, 4, 7, 8); finding 2 kept as is.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/views.py` | `ReservationViewSet.create` : `transaction.atomic()` autour de `input_serializer.save()` |
+| `BaseBillet/signals.py` | `annuler_la_vente_du_paiement_stripe` : `try / except` + `logger.error` ; imports du service de vente et de `_taux_tva_de_la_ligne_de_caisse` en tête de module |
+| `Administration/admin_tenant.py` | `dec_to_int(prix_unitaire)` ; imports de `emettre_avoir` en tête de module |
+| `tests/pytest/test_api_ecrit_la_vente.py` | 2 tests : « payé ailleurs » et réservation gratuite, encaissement en échec → 500, rien n'est écrit (par la vraie route) |
+| `tests/pytest/test_en_ligne_ecrit_la_vente.py` | 1 test : `CANCELED` avec annulation en échec → pas d'exception, paiement `CANCELED`, erreur journalisée |
+| `tests/pytest/test_caracterisation_admin_api.py` | docstring seulement |
+
 ---
 
 ## Comment tester (a la main) / Manual test
@@ -383,3 +440,24 @@ Pas de test manuel simple (il faut une échéance Stripe réelle). Couvert par l
 
 ### Verifs automatiques (D-2c)
 `make test ARGS="tests/pytest/test_api_ecrit_la_vente.py tests/pytest/test_api_v2_reservation_laboutik.py tests/pytest/test_api_v2_wallet_refill.py tests/pytest/test_caracterisation_admin_api.py"`
+
+### Test 19 (D-3a) — avoir d'une vente admin, remboursé en espèces
+1. Admin > Réservations > Ajouter : deux billets à 10 €, payés par CB.
+2. Admin > Ventes : sur la ligne, bouton « Avoir ». Attendu : l'écran « Émettre un avoir », champ « Remboursé par » pré-rempli « CB ».
+3. Choisir « Espèces », cliquer « Émettre l'avoir ». Attendu : retour à la liste, « Credit note created. », une ligne `Avoir` (quantité −2).
+4. Dans `manage.py shell` (tenant lespass) : la vente de la ligne d'avoir est `AVOIR`, `REGLEE`, `vente_liee` = la vente des billets, règlements `[('CA', -2000)]`.
+5. Cliquer de nouveau « Avoir » sur la ligne d'origine : « A credit note already exists for this entry. ».
+
+### Test 20 (D-3a) — les autres écrans
+1. Ligne payée en ligne par Stripe : l'écran n'a pas de champ et affiche « Remboursez cette somme depuis votre tableau de bord Stripe. » ; aucun remboursement n'apparaît chez Stripe ; règlement `[('SN', -<montant>)]` relié au paiement, sans référence externe.
+2. Billet « Offert » vendu dans l'admin : l'écran n'a pas de champ ; règlements de l'avoir `[('NA', -1500)]`.
+3. Ligne de caisse payée en monnaie locale : le champ est vide ; valider sans choisir → l'écran revient avec une erreur, rien n'est écrit.
+
+### Verifs automatiques (D-3a)
+`make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_caracterisation_annulations.py tests/pytest/test_caracterisation_en_ligne.py"` ; `make e2e ARGS="tests/e2e/test_admin_credit_note.py"`
+
+### Test 21 (D-1z) — API v2 : rien n'est écrit si l'encaissement échoue
+Pas de test à la main : l'échec d'encaissement ne se provoque pas sans simulation. Témoin à la main : `POST /api/v2/reservations/` « payé ailleurs » (`paymentMethod = "cash"`) répond toujours 201, avec sa vente `LB` `REGLEE`.
+
+### Verifs automatiques (D-1z)
+`make test ARGS="tests/pytest/test_api_ecrit_la_vente.py tests/pytest/test_en_ligne_ecrit_la_vente.py"`

@@ -71,7 +71,7 @@ from django.db import models, connection, IntegrityError, transaction as db_tran
 from django.db.models import Count, Q, Prefetch, F
 from django.forms import ModelForm, Form
 from django.http import HttpResponse
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import redirect, get_object_or_404, render
 from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string
 from django.urls import re_path
@@ -124,7 +124,7 @@ from unfold.widgets import (
 from Administration.importers.ticket_exporter import TicketExportResource
 from Administration.importers.lignearticle_exporter import LigneArticleExportResource
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
-from ApiBillet.serializers import get_or_create_price_sold
+from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import HumanUser, TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
@@ -133,6 +133,13 @@ from BaseBillet.models import Configuration, Product, Price, Paiement_stripe, Me
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
+from BaseBillet.models_vente import Reglement, Vente
+from BaseBillet.services_vente import (
+    ajouter_l_article_d_avoir,
+    ajouter_reglement,
+    encaisser_vente,
+    ouvrir_vente,
+)
 from Customers.models import Client
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
 from fedow_connect.fedow_api import FedowAPI
@@ -1987,6 +1994,63 @@ class RangeDateTimeFilterWithTimeZone(RangeDateTimeFilter):
         except (ValueError, ValidationError):
             return None
 
+
+# Les moyens proposés par le champ « Remboursé par » de l'écran d'avoir : de l'argent
+# rendu à la main. Le recrédit d'une carte cashless n'en fait pas partie.
+# / The methods offered by the "Refunded by" field: money given back by hand.
+MOYENS_DU_CHAMP_REMBOURSE_PAR = [
+    PaymentMethod.CASH,
+    PaymentMethod.CC,
+    PaymentMethod.CHEQUE,
+    PaymentMethod.TRANSFER,
+]
+
+
+def choix_du_champ_rembourse_par():
+    """
+    Les choix du champ « Remboursé par » : une ligne vide, puis les quatre moyens.
+    / The "Refunded by" choices: an empty line, then the four methods.
+    """
+    choix = [("", "---------")]
+    for moyen in MOYENS_DU_CHAMP_REMBOURSE_PAR:
+        choix.append((moyen.value, moyen.label))
+    return choix
+
+
+class EmettreAvoirAvecMoyenForm(forms.Form):
+    """
+    Formulaire de l'écran « Émettre un avoir » d'une ligne hors Stripe, pas entièrement
+    offerte : l'admin dit comment l'argent a été rendu. Champ obligatoire.
+    / "Issue a credit note" form for a non-Stripe line: how the money was given back.
+
+    LOCALISATION : Administration/admin_tenant.py (utilisé par LigneArticleAdmin.emettre_avoir)
+    """
+
+    moyen_rembourse = forms.ChoiceField(
+        label=_("Remboursé par"),
+        choices=choix_du_champ_rembourse_par,
+        required=True,
+        help_text=_("Le moyen par lequel l'argent est rendu au client."),
+        widget=forms.Select(
+            attrs={
+                "data-testid": "avoir-moyen-rembourse",
+                "style": "width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;",
+            }
+        ),
+    )
+
+
+class EmettreAvoirSansMoyenForm(forms.Form):
+    """
+    Formulaire de l'écran « Émettre un avoir » sans champ : simple confirmation. Sert à
+    une ligne payée par Stripe (on rembourse depuis Stripe) et à une ligne entièrement
+    offerte (aucun argent à rendre).
+    / Field-less form: plain confirmation (Stripe-paid or fully offered line).
+
+    LOCALISATION : Administration/admin_tenant.py (utilisé par LigneArticleAdmin.emettre_avoir)
+    """
+
+
 @admin.register(LigneArticle, site=staff_admin_site)
 class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
     compressed_fields = True  # Default: False
@@ -2068,47 +2132,218 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
     )
     def emettre_avoir(self, request, object_id):
         """
-        Cree un avoir (ligne negative) pour annuler comptablement cette vente.
-        / Creates a credit note (negative line) to cancel this sale.
+        Émet un avoir sur une ligne de vente : GET affiche l'écran de confirmation,
+        POST écrit l'avoir.
+        / Issues a credit note on a sale line: GET shows the screen, POST writes it.
+
+        LOCALISATION : Administration/admin_tenant.py
+        Gabarit : Administration/templates/admin/lignearticle/emettre_avoir.html
+
+        GARDES (GET et POST) : la ligne est VALID ou PAID ; elle n'a pas déjà d'avoir ;
+        sa vente d'origine, si elle existe, est réglée.
+
+        TROIS ÉCRANS :
+        - ligne hors Stripe, pas entièrement offerte : champ « Remboursé par » (espèces,
+          CB, chèque, virement), pré-rempli avec le moyen d'origine s'il est dans cette
+          liste, sinon vide et obligatoire ;
+        - ligne entièrement offerte (part offerte = total catalogue, non nul, ou moyen
+          historique « offert ») : pas de champ, aucun argent à rendre ;
+        - ligne payée par Stripe : pas de champ ; l'écran prévient de rembourser depuis
+          le tableau de bord Stripe. Aucun appel à Stripe ici.
+
+        FLUX DU POST (tout dans UNE transaction, tout ou rien) :
+        1. vente AVOIR, origine ADMIN, liée à la vente de la ligne (vide pour une
+           ligne d'avant le chantier), client = celui de la vente liée ;
+        2. l'article d'avoir : `ajouter_l_article_d_avoir` (BaseBillet/services_vente.py) ;
+        3. UN règlement d'argent du net rendu, s'il n'est pas nul : au moyen Stripe
+           d'origine (relié au paiement, sans référence externe), ou au moyen choisi ;
+        4. un règlement FREE négatif pour la part offerte, sauf la partie déjà tracée
+           par la règle « offert » du service (jamais deux fois) ;
+        5. `encaisser_vente` ;
+        6. PUIS la transition CREDIT_NOTE par `save()` : elle déclenche l'envoi à
+           l'ancien LaBoutik (BaseBillet/signals.py).
+        / GET = screen, POST = one transaction: AVOIR sale, mirrored item, one money
+        payment, one FREE payment for the offered part, settle, then CREDIT_NOTE.
         """
         ligne_originale = get_object_or_404(
-            LigneArticle.objects.select_related('pricesold', 'pricesold__productsold'),
+            LigneArticle.objects.select_related(
+                'pricesold', 'pricesold__productsold', 'paiement_stripe', 'vente'
+            ),
             pk=object_id,
         )
-
-        redirect_url = request.META.get("HTTP_REFERER", "/admin/")
+        url_de_la_liste_des_ventes = reverse(
+            f"{self.admin_site.name}:BaseBillet_lignearticle_changelist"
+        )
 
         # Garde : uniquement sur les lignes VALID ou PAID
+        # / Guard: only VALID or PAID lines
         if ligne_originale.status not in [LigneArticle.VALID, LigneArticle.PAID]:
             messages.error(request, _("A credit note can only be issued for a confirmed or paid entry."))
-            return redirect(redirect_url)
+            return redirect(url_de_la_liste_des_ventes)
 
         # Garde : pas d'avoir si un avoir existe deja
+        # / Guard: no credit note if one already exists
         if ligne_originale.credit_notes.exists():
             messages.error(request, _("A credit note already exists for this entry."))
-            return redirect(redirect_url)
+            return redirect(url_de_la_liste_des_ventes)
 
-        # Creer la ligne avoir / Create the credit note line
-        avoir = LigneArticle.objects.create(
-            pricesold=ligne_originale.pricesold,
-            qty=-ligne_originale.qty,
-            amount=ligne_originale.amount,
-            vat=ligne_originale.vat,
-            paiement_stripe=ligne_originale.paiement_stripe,
-            membership=ligne_originale.membership,
-            payment_method=ligne_originale.payment_method,
-            asset=ligne_originale.asset,
-            wallet=ligne_originale.wallet,
-            sale_origin=SaleOrigin.ADMIN,
-            credit_note_for=ligne_originale,
-            status=LigneArticle.CREATED,
+        # Garde : une vente d'origine pas encore réglée ne reçoit pas d'avoir. Une ligne
+        # d'avant le chantier n'a pas de vente : elle passe.
+        # / Guard: an unsettled original sale gets no credit note. No sale: allowed.
+        vente_d_origine = ligne_originale.vente
+        vente_d_origine_pas_reglee = (
+            vente_d_origine is not None
+            and vente_d_origine.statut != Vente.Statut.REGLEE
         )
-        # Declenche la machine a etat / Trigger state machine
-        avoir.status = LigneArticle.CREDIT_NOTE
-        avoir.save()
+        if vente_d_origine_pas_reglee:
+            messages.error(
+                request,
+                _("La vente d'origine n'est pas réglée : l'avoir est impossible."),
+            )
+            return redirect(url_de_la_liste_des_ventes)
+
+        # Quel écran ? / Which screen?
+        ligne_payee_par_stripe = ligne_originale.paiement_stripe_id is not None
+        ligne_offerte_par_ses_montants = (
+            ligne_originale.total_catalogue != 0
+            and ligne_originale.part_offerte == ligne_originale.total_catalogue
+        )
+        ligne_offerte_par_son_moyen = ligne_originale.payment_method == PaymentMethod.FREE
+        ligne_entierement_offerte = (
+            ligne_offerte_par_ses_montants or ligne_offerte_par_son_moyen
+        )
+        champ_rembourse_par_demande = (
+            not ligne_payee_par_stripe and not ligne_entierement_offerte
+        )
+
+        if request.method == "POST":
+            if champ_rembourse_par_demande:
+                formulaire = EmettreAvoirAvecMoyenForm(request.POST)
+            else:
+                formulaire = EmettreAvoirSansMoyenForm(request.POST)
+        else:
+            # Le champ est pré-rempli avec le moyen d'origine s'il est dans la liste.
+            # / The field is pre-filled with the original method if it is in the list.
+            valeurs_initiales = {}
+            moyen_d_origine = ligne_originale.payment_method
+            if moyen_d_origine in MOYENS_DU_CHAMP_REMBOURSE_PAR:
+                valeurs_initiales["moyen_rembourse"] = moyen_d_origine
+            if champ_rembourse_par_demande:
+                formulaire = EmettreAvoirAvecMoyenForm(initial=valeurs_initiales)
+            else:
+                formulaire = EmettreAvoirSansMoyenForm()
+
+        formulaire_a_afficher = request.method != "POST" or not formulaire.is_valid()
+        if formulaire_a_afficher:
+            contexte_de_l_ecran = {
+                **self.admin_site.each_context(request),
+                "title": _("Émettre un avoir"),
+                "form": formulaire,
+                "ligne": ligne_originale,
+                "montant_de_la_ligne": dround(ligne_originale.total()),
+                "ligne_payee_par_stripe": ligne_payee_par_stripe,
+                "ligne_entierement_offerte": ligne_entierement_offerte,
+                "champ_rembourse_par_demande": champ_rembourse_par_demande,
+                "url_de_la_liste_des_ventes": url_de_la_liste_des_ventes,
+            }
+            return render(
+                request,
+                "admin/lignearticle/emettre_avoir.html",
+                contexte_de_l_ecran,
+            )
+
+        # Le moyen de l'argent rendu : le moyen Stripe d'origine, ou le moyen choisi.
+        # Une ligne entièrement offerte ne rend pas d'argent : pas de moyen.
+        # / The money method: the original Stripe one, or the chosen one.
+        if ligne_payee_par_stripe:
+            paiement_d_origine = ligne_originale.paiement_stripe
+            moyen_de_l_argent_rendu = (
+                paiement_d_origine.moyen or ligne_originale.payment_method
+            )
+        elif champ_rembourse_par_demande:
+            paiement_d_origine = None
+            moyen_de_l_argent_rendu = formulaire.cleaned_data["moyen_rembourse"]
+        else:
+            paiement_d_origine = None
+            moyen_de_l_argent_rendu = None
+
+        try:
+            with db_transaction.atomic():
+                # 1. La vente AVOIR. / 1. The AVOIR sale.
+                if vente_d_origine is not None:
+                    client_de_la_vente_liee = vente_d_origine.client
+                else:
+                    client_de_la_vente_liee = None
+                vente_d_avoir = ouvrir_vente(
+                    origine=SaleOrigin.ADMIN,
+                    nature=Vente.Nature.AVOIR,
+                    client=client_de_la_vente_liee,
+                    vente_liee=vente_d_origine,
+                )
+
+                # 2. L'article d'avoir : toute la quantité de la ligne.
+                # / 2. The credit note item: the whole quantity of the line.
+                article_d_avoir = ajouter_l_article_d_avoir(
+                    vente_d_avoir, ligne_originale, ligne_originale.qty
+                )
+
+                # 3. UN règlement d'argent, du net rendu, s'il n'est pas nul.
+                # / 3. ONE money payment, of the net given back, if not zero.
+                net_rendu = article_d_avoir.total_ttc
+                if net_rendu != 0:
+                    ajouter_reglement(
+                        vente_d_avoir,
+                        moyen=moyen_de_l_argent_rendu,
+                        montant=net_rendu,
+                        paiement_stripe=paiement_d_origine,
+                    )
+
+                # 4. La part offerte annulée, tracée par un règlement FREE. La règle
+                # « offert » du service a pu l'écrire déjà (moyen historique FREE) :
+                # on n'écrit que ce qui manque.
+                # / 4. The cancelled offered part, as a FREE payment, never twice.
+                part_offerte_deja_tracee = 0
+                reglements_offerts_deja_ecrits = Reglement.objects.filter(
+                    vente=vente_d_avoir, moyen=PaymentMethod.FREE
+                )
+                for reglement_offert in reglements_offerts_deja_ecrits:
+                    part_offerte_deja_tracee += reglement_offert.montant
+                part_offerte_a_tracer = (
+                    article_d_avoir.part_offerte - part_offerte_deja_tracee
+                )
+                if part_offerte_a_tracer != 0:
+                    ajouter_reglement(
+                        vente_d_avoir,
+                        moyen=PaymentMethod.FREE,
+                        montant=part_offerte_a_tracer,
+                    )
+
+                # 5. L'encaissement. / 5. Settlement.
+                encaisser_vente(vente_d_avoir)
+
+                # 6. PUIS la transition : elle déclenche la machine à états.
+                # / 6. THEN the transition: it triggers the state machine.
+                article_d_avoir.status = LigneArticle.CREDIT_NOTE
+                article_d_avoir.save()
+        except ValueError as erreur:
+            # Une règle du service refuse l'avoir : rien n'est écrit (transaction).
+            # / A service rule refuses the credit note: nothing is written.
+            logger.error(f"Avoir refusé pour la ligne {ligne_originale.uuid} : {erreur}")
+            messages.error(
+                request,
+                _("L'avoir n'a pas pu être émis : %(raison)s") % {"raison": erreur},
+            )
+            return redirect(url_de_la_liste_des_ventes)
 
         messages.success(request, _("Credit note created."))
-        return redirect(redirect_url)
+        if ligne_payee_par_stripe:
+            # Le rappel reste affiché après l'action : l'argent n'est pas encore rendu.
+            # / The reminder stays after the action: the money is not given back yet.
+            messages.warning(
+                request,
+                _("Remboursez cette somme depuis votre tableau de bord Stripe."),
+            )
+        return redirect(url_de_la_liste_des_ventes)
 
     def has_custom_actions_row_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -3102,7 +3337,7 @@ class ReservationAddAdmin(ModelForm):
         # Un billet « offert » garde le prix du tarif : il est écrit comme un offert
         # de la caisse (part offerte = total, règlement FREE posé par le service).
         # / An "offered" ticket keeps the rate's price, like a register gift.
-        amount = int(prix_unitaire * 100)
+        amount = dec_to_int(prix_unitaire)
 
         # La vente de l'admin : écrite par le service de vente, puis encaissée tout de
         # suite (l'argent est déclaré reçu par le gestionnaire). Elle est écrite dans

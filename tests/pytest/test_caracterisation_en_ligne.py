@@ -627,12 +627,17 @@ def test_paiement_reste_paye_puis_rejeu_repasse_les_avoirs_en_paye(
         status=Paiement_stripe.PAID, traitement_en_cours=False
     )
 
-    # L'admin émet un avoir sur la ligne du billet, par le bouton de l'admin.
-    # / The admin issues a credit note on the ticket line, through the admin button.
+    # L'admin émet un avoir sur la ligne du billet, par le bouton de l'admin : l'écran
+    # s'ouvre (GET), puis il le valide (POST). Ligne payée par Stripe : pas de champ
+    # « Remboursé par ».
+    # / The admin issues a credit note on the ticket line: the screen opens (GET), then
+    # is confirmed (POST). Stripe-paid line: no "Refunded by" field.
     client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
-    reponse_de_l_admin = client_de_l_admin.get(
+    url_de_l_avoir = (
         f"/admin/BaseBillet/lignearticle/{ligne_du_billet.pk}/emettre_avoir/"
     )
+    client_de_l_admin.get(url_de_l_avoir)
+    reponse_de_l_admin = client_de_l_admin.post(url_de_l_avoir, {})
     assert reponse_de_l_admin.status_code == 302
     avoir = LigneArticle.objects.get(credit_note_for=ligne_du_billet)
     assert avoir.status == LigneArticle.CREDIT_NOTE

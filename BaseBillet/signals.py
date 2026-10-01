@@ -18,11 +18,19 @@ from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
     trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership, \
     refill_from_lespass_to_user_wallet_from_ticket_scanned
 from BaseBillet.models_vente import Vente
-from BaseBillet.services_vente import annuler_vente, encaisser_vente_stripe
+from BaseBillet.services_vente import (
+    ajouter_article,
+    ajouter_reglement,
+    annuler_vente,
+    encaisser_vente,
+    encaisser_vente_stripe,
+    ouvrir_vente,
+)
 from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
 from booking.models import Booking
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +132,19 @@ def annuler_la_vente_du_paiement_stripe(old_instance, new_instance):
     if vente_du_paiement is None:
         return
     if vente_du_paiement.statut == Vente.Statut.EN_ATTENTE:
-        annuler_vente(vente_du_paiement)
+        # Aucune exception ne sort d'ici : le paiement passe CANCELED quoi qu'il arrive.
+        # Si l'annulation échoue (vente devenue REGLEE entre-temps, erreur de base), la
+        # vente reste telle quelle et l'erreur est journalisée (Sentry). Sans ce `try`,
+        # le paiement resterait PENDING et Stripe rejouerait l'annonce.
+        # / No exception leaves here: the payment turns CANCELED anyway. A failed
+        # cancellation leaves the sale as is and is logged (Sentry).
+        try:
+            annuler_vente(vente_du_paiement)
+        except Exception as erreur:
+            logger.error(
+                f"Annulation de la vente du paiement Stripe {new_instance.uuid} en "
+                f"échec, vente laissée telle quelle : {erreur!r}"
+            )
 
 
 def valide_stripe_paiement(old_instance, new_instance):
@@ -537,16 +557,6 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
     # Pour une nouvelle adhésion réalisée sur l'admin et non offerte, une vente est enregitrée.
     if created and membership.status == Membership.ADMIN:
         logger.info(f"create_lignearticle_if_membership_created_on_admin {instance} {created}")
-
-        # Imports locaux : le service de vente importe la caisse, qui importe BaseBillet.
-        # / Local imports: the sale service imports the register, which imports BaseBillet.
-        from BaseBillet.services_vente import (
-            ajouter_article,
-            ajouter_reglement,
-            encaisser_vente,
-            ouvrir_vente,
-        )
-        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
         # La vente de l'admin : client = l'adhérent, opérateur vide. Elle est écrite
         # dans la transaction de l'admin (changeform_view est atomic).

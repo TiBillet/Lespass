@@ -49,6 +49,16 @@ ses billets sont créés, et la vente ne contient que les lignes payées.
 / API v2 "paid elsewhere": one sale, one payment at the declared method for the net total
 of the paid lines, then settled. A free booking of the same call writes no line.
 
+LA RÉSERVATION DE L'API V2 EST ÉCRITE EN ENTIER OU PAS DU TOUT
+(`ReservationViewSet.create`, « payé ailleurs » et réservation gratuite)
+Réservation, billets, lignes, vente, règlement et encaissement sont écrits dans une seule
+transaction. Si l'encaissement échoue, rien n'est écrit : ni réservation, ni billet, ni
+ligne, ni vente. L'erreur remonte : la réponse est une erreur serveur (500, Sentry). Ces
+tests passent par la vraie route (`POST /api/v2/reservations/`), car la transaction est
+posée par la vue.
+/ The API v2 reservation is all or nothing: if the settlement fails, nothing is written
+and the response is a server error (500). Tested through the real route.
+
 LE WEBHOOK FEDOW D'ADHÉSION (`Membership_fwh`, ancienne caisse)
 Une adhésion vendue par l'ancienne caisse arrive par Fedow. Sa ligne (moyen inconnu,
 origine LaBoutik) entre dans une vente (client = l'adhérent, vide s'il est inconnu de
@@ -68,15 +78,16 @@ CODE PARCOURU / CODE EXERCISED
 - BaseBillet/validators.py — MembershipValidator (branche gratuite), TicketCreator
   (branche `paid_externally`) ;
 - api_v2/serializers.py — MembershipCreateSerializer, ReservationCreateSerializer ;
-- api_v2/views.py — WalletRefillViewSet (recharge cadeau, `_creer_ligne_article_recharge`) ;
+- api_v2/views.py — WalletRefillViewSet (recharge cadeau, `_creer_ligne_article_recharge`),
+  ReservationViewSet.create (la transaction de la réservation) ;
 - BaseBillet/views.py — MembershipMVT.create (adhésion du front) ;
 - fedow_connect/views.py — Membership_fwh.retrieve (webhook Fedow d'adhésion) ;
 - BaseBillet/services_vente.py — ouvrir_vente, ajouter_article, ajouter_reglement,
   encaisser_vente.
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-D-en-ligne-avoirs.md (§3,
-§5 tests 13 et 16) ; CHANTIER-05-SUIVI.md (§4 « D-2 », §5 du 2026-10-01) ; brief
-CHANTIER-05-briefs/05-D-2c.md.
+§5 tests 13 et 16) ; CHANTIER-05-SUIVI.md (§4 « D-2 » et « Relecture Fable D-1 + D-2 »,
+§5 du 2026-10-01) ; briefs CHANTIER-05-briefs/05-D-2c.md et 05-D-1z.md.
 
 Lancer / Run : make test ARGS="tests/pytest/test_api_ecrit_la_vente.py"
 """
@@ -103,6 +114,7 @@ from BaseBillet.models import (
     Product,
     Reservation,
     SaleOrigin,
+    Ticket,
 )
 from BaseBillet.models_vente import Vente
 from fabriques_panier import (
@@ -811,6 +823,167 @@ def test_api_v2_paye_ailleurs_et_reservation_gratuite_meme_vente(
     assert vente.total_catalogue == 1000
     assert moyens_et_montants_des_reglements(vente) == [(PaymentMethod.CASH, 1000)]
     verifier_egalites(vente)
+
+
+# --------------------------------------------------------------------------
+# API v2 : la réservation est écrite en entier ou pas du tout
+# / API v2: the reservation is written all or nothing
+# --------------------------------------------------------------------------
+
+# Adresse de création d'une réservation de l'API v2 (api_v2/urls.py).
+# / API v2 reservation creation address.
+URL_DES_RESERVATIONS = "/api/v2/reservations/"
+
+
+def creer_une_cle_api_de_reservation():
+    """
+    Une clé API v2 autorisée à créer des réservations (permission `reservation`).
+    / An API v2 key allowed to create reservations.
+
+    :return: le texte de la clé, à mettre dans l'en-tête `Authorization`
+    """
+    cle_api, texte_de_la_cle = APIKey.objects.create_key(
+        name=f"TEST_reservation {identifiant_unique()}"
+    )
+    ExternalApiKey.objects.create(
+        name=f"TEST_reservation {identifiant_unique()}",
+        key=cle_api,
+        reservation=True,
+    )
+    return texte_de_la_cle
+
+
+def reserver_par_la_route_api_v2(
+    texte_de_la_cle, evenement, quantites_par_tarif, email, moyen=None
+):
+    """
+    Appelle la vraie route de l'API v2 : `POST /api/v2/reservations/`. La transaction de
+    la réservation est posée par la vue : passer par le serializer seul ne la voit pas.
+    `moyen` : "cash" ou "card" pour un billet « payé ailleurs », rien sinon.
+    Une erreur non prévue de la vue devient une réponse 500, comme en production : le
+    client de test ne relance pas l'exception (`raise_request_exception = False`).
+    / Calls the real API v2 route. The transaction is set by the view. An unexpected
+    error becomes a 500 response, like in production.
+
+    :return: la réponse de la route
+    """
+    billets_demandes = []
+    for tarif, quantite in quantites_par_tarif.items():
+        billets_demandes.append(
+            {
+                "@type": "Ticket",
+                "identifier": str(tarif.uuid),
+                "ticketQuantity": quantite,
+            }
+        )
+    donnees_de_la_reservation = {
+        "@context": "https://schema.org",
+        "@type": "Reservation",
+        "reservationFor": {"@type": "Event", "identifier": str(evenement.uuid)},
+        "underName": {"@type": "Person", "email": email},
+        "reservedTicket": billets_demandes,
+    }
+    if moyen is not None:
+        donnees_de_la_reservation["additionalProperty"] = [
+            {"@type": "PropertyValue", "name": "paymentMethod", "value": moyen},
+        ]
+
+    client_de_la_caisse = APIClient()
+    client_de_la_caisse.raise_request_exception = False
+    return client_de_la_caisse.post(
+        URL_DES_RESERVATIONS,
+        donnees_de_la_reservation,
+        format="json",
+        SERVER_NAME=DOMAINE_DU_LIEU,
+        HTTP_AUTHORIZATION=f"Api-Key {texte_de_la_cle}",
+    )
+
+
+def verifier_que_rien_n_est_ecrit_pour_l_evenement(
+    evenement, tarifs, nombre_de_ventes_avant
+):
+    """
+    Après un appel en échec : aucune réservation pour l'événement, aucun billet, aucune
+    ligne de vente pour ses tarifs, et pas une vente de plus en base.
+    / After a failed call: no reservation, no ticket, no sale line, no extra sale.
+    """
+    assert not Reservation.objects.filter(event=evenement).exists(), (
+        "Une réservation est restée en base après l'échec de l'encaissement."
+    )
+    assert not Ticket.objects.filter(reservation__event=evenement).exists(), (
+        "Des billets sont restés en base après l'échec de l'encaissement."
+    )
+    for tarif in tarifs:
+        assert not LigneArticle.objects.filter(pricesold__price=tarif).exists(), (
+            f"Une ligne de vente du tarif {tarif.name} est restée en base."
+        )
+    assert Vente.objects.count() == nombre_de_ventes_avant, (
+        f"{Vente.objects.count() - nombre_de_ventes_avant} vente(s) de plus en base "
+        f"après l'échec de l'encaissement, aucune attendue."
+    )
+
+
+def test_api_v2_paye_ailleurs_encaissement_en_echec_rien_n_est_ecrit(lieu):
+    """
+    La caisse envoie deux billets à 10 € déjà payés en espèces (« cash ») par la route
+    de l'API v2. L'encaissement de la vente échoue (simulé : la vente refuse de passer
+    REGLEE). La réponse est une erreur serveur (500). Rien n'est écrit : ni réservation,
+    ni billet, ni ligne de vente, ni vente. Un nouvel envoi de la caisse ne crée donc pas
+    une seconde réservation.
+    / Two cash-paid tickets through the API v2 route; the settlement fails. The response
+    is a 500 and nothing is written: no reservation, ticket, sale line or sale.
+    """
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    texte_de_la_cle = creer_une_cle_api_de_reservation()
+    email_de_la_personne = f"test+apivente{identifiant_unique()}@mock.test"
+    nombre_de_ventes_avant = Vente.objects.count()
+
+    with encaissement_qui_echoue():
+        reponse = reserver_par_la_route_api_v2(
+            texte_de_la_cle,
+            concert.evenement,
+            {concert.tarif: 2},
+            email_de_la_personne,
+            moyen="cash",
+        )
+
+    assert reponse.status_code == 500, (
+        f"Réponse {reponse.status_code} : une erreur serveur (500) est attendue."
+    )
+    verifier_que_rien_n_est_ecrit_pour_l_evenement(
+        concert.evenement, [concert.tarif], nombre_de_ventes_avant
+    )
+
+
+def test_api_v2_reservation_gratuite_encaissement_en_echec_rien_n_est_ecrit(lieu):
+    """
+    Par la route de l'API v2, une « réservation gratuite » (FREERES) seule, sans moyen
+    de paiement. L'API écrit sa ligne dans une vente qu'elle ouvre, puis l'encaisse à 0.
+    L'encaissement échoue (simulé : la vente refuse de passer REGLEE). La réponse est
+    une erreur serveur (500). Rien n'est écrit : ni réservation, ni billet, ni ligne de
+    vente, ni vente.
+    / A free booking alone through the API v2 route; the API writes its line in a sale
+    it opens, then settles it at 0. The settlement fails: 500, nothing is written.
+    """
+    atelier_gratuit = creer_evenement_avec_tarif(categorie=Product.FREERES)
+    texte_de_la_cle = creer_une_cle_api_de_reservation()
+    email_de_la_personne = f"test+apivente{identifiant_unique()}@mock.test"
+    nombre_de_ventes_avant = Vente.objects.count()
+
+    with encaissement_qui_echoue():
+        reponse = reserver_par_la_route_api_v2(
+            texte_de_la_cle,
+            atelier_gratuit.evenement,
+            {atelier_gratuit.tarif: 1},
+            email_de_la_personne,
+        )
+
+    assert reponse.status_code == 500, (
+        f"Réponse {reponse.status_code} : une erreur serveur (500) est attendue."
+    )
+    verifier_que_rien_n_est_ecrit_pour_l_evenement(
+        atelier_gratuit.evenement, [atelier_gratuit.tarif], nombre_de_ventes_avant
+    )
 
 
 # --------------------------------------------------------------------------

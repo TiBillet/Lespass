@@ -522,6 +522,123 @@ def ajouter_article(
     return ligne
 
 
+def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
+    """
+    Ajoute à une vente AVOIR l'article qui annule `quantite` unités d'une ligne vendue :
+    le miroir négatif de la ligne d'origine.
+    / Adds to an AVOIR sale the item that cancels `quantite` units of a sold line: the
+    negative mirror of the original line.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    L'ARTICLE ÉCRIT (par `ajouter_article`) :
+    - même tarif vendu, même prix unitaire, même taux de TVA ;
+    - quantité NÉGATIVE (−quantite) ;
+    - toute la quantité rendue, ligne écrite par le service (total catalogue non nul) :
+      total catalogue = −total d'origine et part offerte = −part offerte d'origine,
+      recopiés tels quels. Une « part » d'article (caisse en cascade) a un total imposé
+      que prix × quantité ne redonne pas toujours au centime : on rend exactement ce
+      qui a été vendu ;
+    - ligne écrite avant le chantier (total catalogue 0) : calculé prix × −quantité ;
+    - statut CREATED : l'appelant fait la transition (CREDIT_NOTE, REFUNDED) par un
+      `save()`, après l'encaissement.
+    Champs recopiés : `credit_note_for` (la ligne d'origine), `payment_method`,
+    `asset`, `wallet`, `carte`, `paiement_stripe`, `membership`, `reservation`,
+    `booking`, `metadata` (avec `original_lignearticle_uuid`), `hors_chiffre_affaires`.
+    / Same sold price, unit price and VAT, negative quantity; a full return of a line
+    written by the service mirrors its totals exactly; status CREATED.
+
+    RÈGLEMENTS : cette fonction n'en écrit AUCUN, c'est l'appelant. Seule exception :
+    la règle « offert à montant non nul » d'`ajouter_article` (moyen historique FREE)
+    écrit déjà le règlement FREE de l'article. L'appelant ne l'écrit donc pas une
+    seconde fois.
+    / Writes NO payment (the caller does), except the FREE one written by the
+    "offered" rule of ajouter_article: the caller must not write it twice.
+
+    Refuse (ValueError) :
+    - une vente qui n'est pas de nature AVOIR ;
+    - une quantité nulle, négative, ou plus grande que celle de la ligne ;
+    - une quantité partielle d'une ligne qui a une part offerte : le projet ne fait
+      aucun prorata d'offert, il faut rembourser l'article entier.
+    / Refuses a non-AVOIR sale, a wrong quantity, and a partial return of an item with
+    an offered part (no prorata: refund the whole item).
+
+    :param vente_avoir: la `Vente` AVOIR EN_ATTENTE qui reçoit l'article
+    :param ligne_d_origine: la `LigneArticle` vendue que l'avoir annule
+    :param quantite: la quantité rendue (Decimal), positive, au plus celle de la ligne
+    :return: la `LigneArticle` d'avoir créée
+    """
+    if vente_avoir.nature != Vente.Nature.AVOIR:
+        raise ValueError(
+            f"La vente {vente_avoir.uuid} est de nature {vente_avoir.nature} : un "
+            f"article d'avoir va dans une vente AVOIR."
+        )
+
+    quantite_vendue = ligne_d_origine.qty
+    quantite_hors_bornes = quantite <= 0 or quantite > quantite_vendue
+    if quantite_hors_bornes:
+        raise ValueError(
+            f"La quantité rendue ({quantite}) doit être positive et au plus égale à "
+            f"la quantité vendue ({quantite_vendue})."
+        )
+
+    toute_la_quantite_rendue = quantite == quantite_vendue
+    ligne_avec_une_part_offerte = ligne_d_origine.part_offerte != 0
+    if ligne_avec_une_part_offerte and not toute_la_quantite_rendue:
+        raise ValueError(
+            "Cet article a une part offerte : il faut rembourser l'article entier "
+            "(pas de remboursement d'une partie de la quantité)."
+        )
+
+    # Les montants : recopiés en négatif quand toute la ligne est rendue et que le
+    # service l'a écrite ; sinon calculés par la formule (prix × −quantité).
+    # / Amounts: mirrored for a full return of a service-written line, else computed.
+    ligne_ecrite_par_le_service = ligne_d_origine.total_catalogue != 0
+    if toute_la_quantite_rendue and ligne_ecrite_par_le_service:
+        total_catalogue_de_l_avoir = -ligne_d_origine.total_catalogue
+        part_offerte_de_l_avoir = -ligne_d_origine.part_offerte
+    else:
+        total_catalogue_de_l_avoir = None
+        part_offerte_de_l_avoir = 0
+
+    if part_offerte_de_l_avoir != 0:
+        source_de_l_offert = ligne_d_origine.source_offert
+    else:
+        source_de_l_offert = ""
+
+    # La trace de la ligne d'origine dans les métadonnées de l'avoir. Une copie : le
+    # dictionnaire de la ligne d'origine n'est jamais modifié.
+    # / The original line's trace in the credit note metadata, on a copy.
+    metadonnees_de_l_avoir = {}
+    if ligne_d_origine.metadata:
+        metadonnees_de_l_avoir.update(ligne_d_origine.metadata)
+    metadonnees_de_l_avoir["original_lignearticle_uuid"] = str(ligne_d_origine.uuid)
+
+    article_d_avoir = ajouter_article(
+        vente_avoir,
+        pricesold=ligne_d_origine.pricesold,
+        quantite=-quantite,
+        prix_unitaire=ligne_d_origine.amount,
+        taux_tva=ligne_d_origine.vat,
+        part_offerte=part_offerte_de_l_avoir,
+        source_offert=source_de_l_offert,
+        total_catalogue_impose=total_catalogue_de_l_avoir,
+        hors_chiffre_affaires=ligne_d_origine.hors_chiffre_affaires,
+        credit_note_for=ligne_d_origine,
+        payment_method=ligne_d_origine.payment_method,
+        asset=ligne_d_origine.asset,
+        wallet=ligne_d_origine.wallet,
+        carte=ligne_d_origine.carte,
+        paiement_stripe=ligne_d_origine.paiement_stripe,
+        membership=ligne_d_origine.membership,
+        reservation=ligne_d_origine.reservation,
+        booking=ligne_d_origine.booking,
+        metadata=metadonnees_de_l_avoir,
+        status=LigneArticle.CREATED,
+    )
+    return article_d_avoir
+
+
 def ajouter_reglement(
     vente,
     moyen,

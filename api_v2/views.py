@@ -617,7 +617,24 @@ class ReservationViewSet(viewsets.ViewSet):
     def create(self, request):
         input_serializer = ReservationCreateSerializer(data=request.data, context={"request": request})
         input_serializer.is_valid(raise_exception=True)
-        reservation = input_serializer.save()
+
+        # Une seule transaction pour toute la création : réservation, billets, lignes,
+        # vente, règlement et encaissement (api_v2/serializers.py,
+        # ReservationCreateSerializer.create). Si l'encaissement échoue, rien n'est écrit
+        # et l'erreur remonte (500, Sentry) : un nouvel envoi de la caisse ne crée pas une
+        # seconde réservation. Les tâches lancées en `on_commit` (mail de connexion, envoi
+        # à LaBoutik) ne partent qu'après la validation.
+        # Les tâches lancées sans `on_commit` par `reservation_paid` (BaseBillet/signals.py :
+        # `webhook_reservation`, `ticket_celery_mailer`, quand une réservation gratuite
+        # passe FREERES_USERACTIV) partent tout de suite : après un échec, elles ne
+        # trouvent pas la réservation retirée et leur erreur part dans Sentry.
+        # / One transaction for the whole creation: if the settlement fails, nothing is
+        # written and the error is raised (500, Sentry). Tasks sent without `on_commit` by
+        # `reservation_paid` leave at once: after a failure they miss the withdrawn
+        # reservation and their error goes to Sentry.
+        with transaction.atomic():
+            reservation = input_serializer.save()
+
         output_serializer = ReservationSchemaSerializer(reservation)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 

@@ -89,11 +89,14 @@ de `set_ligne_article_paid` appelle `encaisser_vente_stripe(paiement)` :
   le client est payé, la vente reste EN_ATTENTE et se rejoue en rappelant la fonction ;
 - un paiement sans vente (antérieur au chantier) n'encaisse rien, sans erreur.
 Stripe dit « non » : `CANCELED` (aucun paiement requis) ou SEPA refusé → vente ANNULEE,
-sans numéro. Une session expirée ne change rien : la vente reste EN_ATTENTE (T6), et un
-paiement tardif (`EXPIRE → PAID`) l'encaisse.
+sans numéro. Une erreur d'annulation ne sort pas non plus du `pre_save` (T4) : elle est
+journalisée, le paiement passe CANCELED, la vente reste telle quelle. Une session expirée
+ne change rien : la vente reste EN_ATTENTE (T6), et un paiement tardif (`EXPIRE → PAID`)
+l'encaisse.
 / Settlement at the single point: REGLEE, one payment at the collected amount, gap item
 when Stripe's amount differs, idempotent, errors never leave the pre_save; CANCELED and
-refused SEPA cancel the sale; an expired session changes nothing.
+refused SEPA cancel the sale (a cancellation error is logged, never raised); an expired
+session changes nothing.
 
 SIMULATIONS
 Chaque test est marqué `django_db` : la transaction est annulée à la fin, rien ne reste
@@ -2147,6 +2150,38 @@ def test_erreur_d_encaissement_ne_bloque_pas_le_paiement(lieu, caplog):
         assert ligne.status == LigneArticle.VALID
     achat.reservation.refresh_from_db()
     assert achat.reservation.status == Reservation.PAID
+
+    vente = vente_du_paiement(achat.paiement)
+    assert vente.statut == Vente.Statut.EN_ATTENTE
+    assert vente.numero is None
+    assert vente.reglements.count() == 0
+    assert len(erreurs_du_journal(caplog, JOURNAL_DU_POINT_D_ENCAISSEMENT)) >= 1
+
+
+def test_paiement_canceled_annulation_en_echec_ne_bloque_pas_le_paiement(lieu, caplog):
+    """
+    T4, côté « non » de Stripe. Le paiement passe `PENDING → CANCELED` ; l'annulation de
+    sa vente échoue pendant le `pre_save` du paiement (simulé : `annuler_vente` lève,
+    comme pour une vente devenue REGLEE entre-temps). Aucune exception ne sort : le
+    `save()` du paiement ne lève pas, le paiement est CANCELED en base. La vente reste
+    telle quelle : EN_ATTENTE, sans numéro, sans règlement. L'erreur est journalisée
+    (ERROR) dans `BaseBillet.signals`.
+    / T4, Stripe's "no" side: PENDING -> CANCELED; the sale cancellation fails inside the
+    payment pre_save. No exception leaves: the payment save does not raise, the payment
+    is CANCELED; the sale stays PENDING, unnumbered, without payment; the error is logged.
+    """
+    achat = reserver_des_billets_a_payer(lieu)
+    assert achat.paiement.status == Paiement_stripe.PENDING
+    caplog.clear()
+
+    erreur_simulee = ValueError("Annulation de la vente refusée, simulée par le test.")
+    with caplog.at_level(logging.ERROR, logger=JOURNAL_DU_POINT_D_ENCAISSEMENT):
+        with patch("BaseBillet.signals.annuler_vente", side_effect=erreur_simulee):
+            achat.paiement.status = Paiement_stripe.CANCELED
+            achat.paiement.save()
+
+    achat.paiement.refresh_from_db()
+    assert achat.paiement.status == Paiement_stripe.CANCELED
 
     vente = vente_du_paiement(achat.paiement)
     assert vente.statut == Vente.Statut.EN_ATTENTE

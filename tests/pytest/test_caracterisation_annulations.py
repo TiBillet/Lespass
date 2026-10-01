@@ -305,12 +305,21 @@ def annuler_des_billets_depuis_l_admin(client_de_l_admin, billets):
     )
 
 
-def emettre_un_avoir_depuis_l_admin(client_de_l_admin, ligne):
-    """L'admin clique « Avoir » sur une ligne de vente (liste des ventes).
-    / The admin clicks "Credit note" on a sale line."""
-    return client_de_l_admin.get(
-        f"/admin/BaseBillet/lignearticle/{ligne.pk}/emettre_avoir/"
-    )
+def emettre_un_avoir_depuis_l_admin(client_de_l_admin, ligne, moyen_rembourse=None):
+    """
+    L'admin clique « Avoir » sur une ligne de vente (liste des ventes) : l'écran
+    « Émettre un avoir » s'ouvre (GET), puis l'admin le valide (POST). Le moyen
+    « Remboursé par » n'est envoyé que s'il est donné : une ligne payée par Stripe n'a
+    pas ce champ. Rend la réponse de la validation.
+    / The admin clicks "Credit note": the screen opens (GET), then is confirmed (POST),
+    with the "Refunded by" method only if given. Returns the confirmation response.
+    """
+    url_de_l_avoir = f"/admin/BaseBillet/lignearticle/{ligne.pk}/emettre_avoir/"
+    client_de_l_admin.get(url_de_l_avoir)
+    donnees_du_formulaire = {}
+    if moyen_rembourse is not None:
+        donnees_du_formulaire["moyen_rembourse"] = moyen_rembourse
+    return client_de_l_admin.post(url_de_l_avoir, donnees_du_formulaire)
 
 
 def annuler_une_adhesion_avec_avoirs_depuis_l_admin(client_de_l_admin, adhesion):

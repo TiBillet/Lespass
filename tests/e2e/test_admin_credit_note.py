@@ -9,9 +9,10 @@ Scenarios :
 2. Tenter un 2e avoir sur la meme ligne -> erreur "already exists".
 
 Strategie : on cree une adhesion gratuite (qui genere une LigneArticle VALID),
-puis on emet un avoir dessus depuis l'URL emettre_avoir dans l'admin.
+puis on emet un avoir dessus par l'ecran « Emettre un avoir » de l'admin (URL
+emettre_avoir : l'ecran s'ouvre, l'admin valide).
 / Strategy: create a free membership (generates a VALID LigneArticle),
-then issue a credit note from the admin emettre_avoir URL.
+then issue a credit note through the admin "Issue a credit note" screen.
 """
 
 import datetime
@@ -192,14 +193,25 @@ class TestAdminCreditNote:
         ligne_pk = pk_match
 
         # --- Etape 3 : Se connecter en admin et emettre un avoir ---
-        # On appelle directement l'URL emettre_avoir qui effectue l'action et
-        # redirige vers la changelist avec un message de succes.
-        # / Step 3: Login as admin and issue a credit note.
-        # We call the emettre_avoir URL directly — it performs the action and
-        # redirects to the changelist with a success message.
+        # L'URL emettre_avoir ouvre l'ecran « Emettre un avoir » (GET). L'adhesion
+        # est gratuite, au moyen « offert » : la ligne est entierement offerte, l'ecran
+        # n'a donc PAS de champ « Rembourse par ». L'admin valide : la vue ecrit
+        # l'avoir et redirige vers la changelist avec un message de succes.
+        # / Step 3: Login as admin, open the credit note screen (GET). Free membership,
+        # "offered" method: no "Refunded by" field. Confirm: the view writes the
+        # credit note and redirects to the changelist with a success message.
         login_as_admin(page)
 
         page.goto(f"/admin/BaseBillet/lignearticle/{ligne_pk}/emettre_avoir/")
+        page.wait_for_load_state("networkidle")
+        assert page.locator('[data-testid="avoir-ecran"]').is_visible(), (
+            f"Ecran d'avoir non affiche. Contenu : {page.inner_text('body')[:500]}"
+        )
+        assert page.locator('[data-testid="avoir-moyen-rembourse"]').count() == 0, (
+            "Une ligne entierement offerte ne doit pas proposer « Rembourse par »."
+        )
+
+        page.locator('[data-testid="avoir-valider"]').click()
         page.wait_for_load_state("networkidle")
 
         # Verifier le message de succes (FR ou EN selon la langue active)

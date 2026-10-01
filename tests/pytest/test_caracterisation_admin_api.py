@@ -421,12 +421,10 @@ def test_billets_vendus_dans_l_admin_offert_au_prix_part_offerte_totale(
     offerte égale à son total (3000) ; son net vendu vaut 0.
     Tâche : l'envoi des billets par mail, seulement. Une vente faite dans l'admin n'est
     pas envoyée à l'ancienne caisse LaBoutik (décision du mainteneur, D-2b).
-    Modifié en D-2b (décision D32, liste fermée A′ §4) : avant, le montant était 0 et la
-    vente partait à l'ancien LaBoutik.
     / P16/T12: 2 tickets of a 15 € price sold as "Offered" in the admin: reservation and
     line VALID, tickets NOT_SCANNED. Written like a register gift (D32): unit price 1500,
     offered part = total (3000), net 0. Only the tickets mail; nothing sent to the legacy
-    LaBoutik. Changed in D-2b.
+    LaBoutik.
     """
     concert = creer_evenement_avec_tarif(prix="15.00")
     email_de_l_acheteur = f"test+caracterisation{identifiant_unique()}@mock.test"
