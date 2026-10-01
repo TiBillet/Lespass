@@ -21,7 +21,7 @@ from django.utils.translation import gettext_lazy as _
 from BaseBillet.models import Membership, Price
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_panier import InvalidItemError
-from BaseBillet.services_vente import ajouter_article, ouvrir_vente
+from BaseBillet.services_vente import ajouter_article, annuler_vente, encaisser_vente, ouvrir_vente
 from booking.models import Resource, Booking
 
 logger = logging.getLogger(__name__)
@@ -160,10 +160,11 @@ class CommandeService:
             # ouverte ici, avec la Commande et dans la même transaction, puis passée à
             # chaque producteur (adhésions, TicketCreator, validate_new_booking), qui y
             # écrit ses lignes. Elle reste EN_ATTENTE : elle est encaissée quand le
-            # paiement est confirmé. Une commande gratuite garde aussi sa vente en
-            # attente (encaissement à 0 avec les ventes sans Stripe).
+            # paiement est confirmé. Une commande gratuite l'encaisse à 0 dans
+            # `_finaliser_gratuit`, après le passage de ses lignes.
             # / The whole order's sale: ONE sale per payment. Opened here with the Order,
-            # passed to every producer. It stays PENDING until the payment is confirmed.
+            # passed to every producer. It stays PENDING until the payment is confirmed;
+            # a free order settles it at 0 in `_finaliser_gratuit`.
             vente = ouvrir_vente(
                 origine=SaleOrigin.LESPASS,
                 nature=Vente.Nature.VENTE,
@@ -439,9 +440,9 @@ class CommandeService:
                 CommandeService._creer_paiement_stripe(commande, user, all_lines, vente)
                 # Status reste PENDING — Stripe webhook basculera en PAID via signaux
             else:
-                # La vente reste EN_ATTENTE : elle sera encaissée à 0 avec les ventes
-                # sans Stripe.
-                # / The sale stays PENDING: settled at 0 with the non-Stripe sales.
+                # Commande gratuite : pas de Stripe, la vente est encaissée à 0 (ou annulée
+                # si elle n'a aucun article) à la fin de la finalisation.
+                # / Free order: no Stripe, the sale is settled at 0 (or cancelled if empty).
                 CommandeService._finaliser_gratuit(commande, all_lines)
 
             logger.info(
@@ -531,6 +532,8 @@ class CommandeService:
         monnaie) ; les réservations et bookings prennent leur statut gratuit.
         / Phase 4 — free order (total 0€): no Stripe. Lines valid as "free", memberships go
         through the payment trigger, reservations and bookings get their free status.
+        Enfin la vente de la commande est encaissée à 0, ou annulée si elle est vide.
+        / Finally the order's sale is settled at 0, or cancelled if empty.
         """
         from django.utils import timezone
         from BaseBillet.models import Commande, LigneArticle, Membership, PaymentMethod, Reservation
@@ -599,3 +602,16 @@ class CommandeService:
         commande.status = Commande.PAID
         commande.paid_at = now
         commande.save(update_fields=["status", "paid_at"])
+
+        # La vente de la commande, après le passage de TOUTES ses lignes :
+        # - elle a des articles : encaissée à 0 (REGLEE, numérotée, aucun règlement),
+        #   c'est une opération enregistrée ;
+        # - elle n'a aucun article (commande de « réservations gratuites » seules, qui
+        #   n'écrivent pas de ligne) : annulée, sans numéro. Pas de vente sans ligne.
+        # / The order's sale, after ALL its lines: settled at 0 if it has items, cancelled
+        # (no number) if it has none.
+        vente_de_la_commande = commande.vente
+        if vente_de_la_commande.articles.exists():
+            encaisser_vente(vente_de_la_commande)
+        else:
+            annuler_vente(vente_de_la_commande)

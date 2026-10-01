@@ -2,6 +2,7 @@ import json
 import logging
 
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db import transaction
 from django.utils.timezone import localtime
 from uuid import UUID
 
@@ -13,6 +14,8 @@ from rest_framework.response import Response
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import Wallet, TibilletUser
 from BaseBillet.models import Membership, FedowTransaction, Product, Price, LigneArticle, PaymentMethod, SaleOrigin
+from BaseBillet.models_vente import Vente
+from BaseBillet.services_vente import ajouter_article, ajouter_reglement, encaisser_vente, ouvrir_vente
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
 from django.utils.translation import gettext_lazy as _
@@ -33,9 +36,9 @@ class Membership_fwh(viewsets.ViewSet):
         # Récupération des infos de la transaction
         fedowAPI = FedowAPI()
         transaction_serialized = fedowAPI.transaction.retrieve(transaction_uuid)
-        transaction = FedowTransaction.objects.get(pk=transaction_serialized['uuid'])
+        transaction_fedow = FedowTransaction.objects.get(pk=transaction_serialized['uuid'])
 
-        if Membership.objects.filter(fedow_transactions=transaction).exists():
+        if Membership.objects.filter(fedow_transactions=transaction_fedow).exists():
             # Déja enregistré !
             logger.info("transaction déja enregistrée")
             return Response(status=status.HTTP_208_ALREADY_REPORTED)
@@ -79,7 +82,7 @@ class Membership_fwh(viewsets.ViewSet):
             contribution_value=amount,
             status=Membership.LABOUTIK, # Provenance de Fedow = LaBoutik
         )
-        membership.fedow_transactions.add(transaction)
+        membership.fedow_transactions.add(transaction_fedow)
 
         # On rajoute la deadline en fonction du prix choisi :
         membership.set_deadline()
@@ -91,19 +94,50 @@ class Membership_fwh(viewsets.ViewSet):
         except Exception as e:
             logger.error(f"Erreur de création metadata depuis transaction fedow : {e}")
 
+        # La vente de l'ancienne caisse : l'argent a été reçu là-bas, le moyen n'est pas
+        # connu. La ligne (VALID, moyen inconnu, origine LaBoutik) est l'article d'une
+        # vente (client = l'adhérent, vide s'il est inconnu de Lespass), avec UN
+        # règlement UNKNOWN du montant, puis l'encaissement. Ligne, vente et
+        # encaissement sont écrits ensemble ou pas du tout (`atomic`).
+        # LIMITE : l'adhésion est créée AVANT ce bloc. Si ce bloc échoue, l'erreur est
+        # journalisée, l'adhésion reste sans ligne ni vente, et un rejeu de Fedow répond
+        # 208 sans rien écrire : la vente n'est pas réécrite.
+        # / The legacy register's sale: one sale, one UNKNOWN payment, settled; all or
+        # nothing. LIMIT: the membership is created BEFORE this block; on failure it stays
+        # without line nor sale, and a Fedow replay (208) writes nothing.
         try :
+            # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
+            # / Imported at call time: laboutik/views.py imports all of BaseBillet.
+            from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
             #TODO : Ajouter toute les infos de wallet, card, asset, moyen de paiement quand Laboutik sera intégrée :
             # beaucoup d'info dans le metadata
-            vente = LigneArticle.objects.create(
-                pricesold=get_or_create_price_sold(price),
-                qty=1,
-                membership=membership,
-                amount=dec_to_int(membership.contribution_value),
-                payment_method=PaymentMethod.UNKNOWN,
-                status=LigneArticle.VALID,
-                sale_origin=SaleOrigin.LABOUTIK,
-                metadata=metadata,
-            )
+            with transaction.atomic():
+                vente_de_l_ancienne_caisse = ouvrir_vente(
+                    origine=SaleOrigin.LABOUTIK,
+                    nature=Vente.Nature.VENTE,
+                    client=user,
+                )
+                ligne_de_l_adhesion = ajouter_article(
+                    vente_de_l_ancienne_caisse,
+                    pricesold=get_or_create_price_sold(price),
+                    quantite=1,
+                    prix_unitaire=dec_to_int(membership.contribution_value),
+                    taux_tva=_taux_tva_de_la_ligne_de_caisse(product, PaymentMethod.UNKNOWN),
+                    membership=membership,
+                    payment_method=PaymentMethod.UNKNOWN,
+                    status=LigneArticle.VALID,
+                    sale_origin=SaleOrigin.LABOUTIK,
+                    metadata=metadata,
+                )
+                montant_recu_par_l_ancienne_caisse = ligne_de_l_adhesion.total_catalogue
+                if montant_recu_par_l_ancienne_caisse != 0:
+                    ajouter_reglement(
+                        vente_de_l_ancienne_caisse,
+                        moyen=PaymentMethod.UNKNOWN,
+                        montant=montant_recu_par_l_ancienne_caisse,
+                    )
+                encaisser_vente(vente_de_l_ancienne_caisse)
         except Exception as e:
             logger.error(f"Erreur de création ligne article depuis membership from wallet fedow : {e}")
 

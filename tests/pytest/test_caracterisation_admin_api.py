@@ -410,21 +410,23 @@ def test_adhesion_creee_dans_l_admin_passe_par_trigger_a(
 # --------------------------------------------------------------------------
 
 
-def test_billets_vendus_dans_l_admin_offert_montant_zero(
+def test_billets_vendus_dans_l_admin_offert_au_prix_part_offerte_totale(
     lieu, django_capture_on_commit_callbacks
 ):
     """
     P16 / T12 : l'admin vend deux billets d'un tarif à 15 € et choisit « Offert ».
     La réservation est créée validée (`V`), ses deux billets actifs (`K`), et UNE ligne
-    de vente validée (`V`), de quantité 2 et de montant ZÉRO : le prix du tarif n'est pas
-    écrit, l'offert ne laisse aucune trace de montant.
-    Tâches, demandées tout de suite : l'envoi à l'ancien LaBoutik, puis l'envoi des
-    billets par mail. L'ancien LaBoutik reçoit la vente « offert » (`NA`) à 0 centime.
-    Change en D (décision D32) : le billet offert est écrit comme à la caisse, au prix
-    du tarif, avec une part offerte totale.
+    de vente validée (`V`), de quantité 2. Le billet offert est écrit comme un offert de
+    la caisse (décision D32) : au prix du tarif (1500 centimes l'unité), avec une part
+    offerte égale à son total (3000) ; son net vendu vaut 0.
+    Tâche : l'envoi des billets par mail, seulement. Une vente faite dans l'admin n'est
+    pas envoyée à l'ancienne caisse LaBoutik (décision du mainteneur, D-2b).
+    Modifié en D-2b (décision D32, liste fermée A′ §4) : avant, le montant était 0 et la
+    vente partait à l'ancien LaBoutik.
     / P16/T12: 2 tickets of a 15 € price sold as "Offered" in the admin: reservation and
-    line VALID, tickets NOT_SCANNED, amount ZERO. LaBoutik sale + ticket mail at once.
-    Changes in D (D32).
+    line VALID, tickets NOT_SCANNED. Written like a register gift (D32): unit price 1500,
+    offered part = total (3000), net 0. Only the tickets mail; nothing sent to the legacy
+    LaBoutik. Changed in D-2b.
     """
     concert = creer_evenement_avec_tarif(prix="15.00")
     email_de_l_acheteur = f"test+caracterisation{identifiant_unique()}@mock.test"
@@ -452,7 +454,7 @@ def test_billets_vendus_dans_l_admin_offert_montant_zero(
     etat_attendu = {
         "reservations": [Reservation.VALID],
         "billets": [Ticket.NOT_SCANNED, Ticket.NOT_SCANNED],
-        "taches": ["send_sale_to_laboutik", "ticket_celery_mailer"],
+        "taches": ["ticket_celery_mailer"],
     }
     assert (
         etat_metier(reservations=[reservation], taches_demandees=taches_de_l_admin)
@@ -461,23 +463,15 @@ def test_billets_vendus_dans_l_admin_offert_montant_zero(
     assert statuts_des_lignes_de_la_reservation(reservation) == [LigneArticle.VALID]
 
     ligne_de_la_vente = LigneArticle.objects.get(reservation=reservation)
-    assert arguments_des_taches(taches_de_l_admin, "send_sale_to_laboutik") == [
-        (ligne_de_la_vente.pk,)
-    ]
     assert arguments_des_taches(taches_de_l_admin, "ticket_celery_mailer") == [
         (reservation.pk,)
     ]
 
-    # Le cœur du test : montant 0, quantité 2, moyen « offert ».
-    # / The heart of the test: amount 0, quantity 2, method "offered".
-    assert charges_utiles_envoyees_a_laboutik(taches_de_l_admin) == [
-        {
-            "payment_method": PaymentMethod.FREE,
-            "amount": 0,
-            "qty": "2.000000",
-            "status": LigneArticle.VALID,
-        },
-    ]
+    # Le cœur du test : prix du tarif écrit, part offerte = total, net 0.
+    # / The heart of the test: rate's price written, offered part = total, net 0.
+    assert ligne_de_la_vente.total_catalogue == 3000
+    assert ligne_de_la_vente.part_offerte == 3000
+    assert ligne_de_la_vente.total_ttc == 0
 
 
 # --------------------------------------------------------------------------

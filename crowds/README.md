@@ -37,5 +37,14 @@ profit.
 → Exemple : un festival vise 10 000 €. À 1000 participants, chacun paie 10 €. Si 2000 participants arrivent, chacun paie
 5 €.
 
+## Financement global : débranché (2026-09-30)
 
+Le financement global (« contribuer au pot commun », route `global-funding`, bouton
+« Je finance » de la page d'accueil Crowds) est débranché : jamais utilisé en production.
+Il n'existe plus de route, de vue ni de bouton. Le modèle `GlobalFunding` et les champs
+`CrowdConfig.global_funding_button` / `global_funding_button_text` restent en base
+(leur retrait demande une migration).
 
+The global funding feature (route, view, "Je finance" button) is disconnected: it was never
+used in production. The `GlobalFunding` model and the two `CrowdConfig` button fields stay
+in the database (removing them needs a migration).

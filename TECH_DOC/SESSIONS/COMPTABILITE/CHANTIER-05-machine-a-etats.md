@@ -516,7 +516,7 @@ et les tests de `controlvanne`.
 | Test | Fige |
 |---|---|
 | `test_adhesion_creee_dans_l_admin_passe_par_trigger_a` | P16 : ligne `V`, `deadline`, tâches (facture, récompense, LaBoutik on_commit, `webhook_membership`) |
-| `test_billets_vendus_dans_l_admin_offert_montant_zero` | P16/T12 : `amount = 0`, tâches `send_sale_to_laboutik` + `ticket_celery_mailer` ; **change en D** (D32) |
+| `test_billets_vendus_dans_l_admin_offert_au_prix_part_offerte_totale` | P16/T12 : `amount = 0`, tâches `send_sale_to_laboutik` + `ticket_celery_mailer` ; **change en D** (D32) |
 | `test_recharge_api_v2_echec_puis_nouvel_essai_meme_ligne` | P13 : `O → D → O → V`, une seule ligne, rejeu 208 identique |
 | `test_decision_stripe_ou_gratuit_billets_et_booking` | T21 : total > 0 → checkout ; total 0 → validation gratuite (TicketCreator et `Booking.to_pay`) |
 

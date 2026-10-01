@@ -1,11 +1,10 @@
 # crowd/urls.py
 from django.urls import path
 from rest_framework.routers import DefaultRouter
-from .views import InitiativeViewSet, GlobalFundingViewset, contribution_stripe_return
+from .views import InitiativeViewSet, contribution_stripe_return
 
 router = DefaultRouter()
 router.register(r"", InitiativeViewSet, basename="crowds")
-router.register(r"global-funding", GlobalFundingViewset, basename="crowds-global-funding")
 
 urlpatterns = [
     # FR: Retour Stripe après paiement d'une contribution.

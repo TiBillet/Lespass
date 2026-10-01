@@ -1420,6 +1420,16 @@ class MembershipAddForm(ModelForm):
                 raise forms.ValidationError(_("Please add a payment method for the contribution."),
                                             code="invalid")
 
+            # Une contribution sans moyen de paiement est refusée : la vente de
+            # l'adhésion écrit un règlement au moyen choisi, il en faut un.
+            # / A contribution without payment method is refused: the sale writes a
+            #   payment at the chosen method.
+            if cleaned_data.get("contribution") > 0 and not cleaned_data.get("payment_method"):
+                raise forms.ValidationError(
+                    _("Choisissez un moyen de paiement pour la contribution."),
+                    code="invalid",
+                )
+
         if cleaned_data.get("payment_method") != PaymentMethod.FREE:
             if not cleaned_data.get("contribution"):
                 raise forms.ValidationError(_("Please fill in the value of the contribution."), code="invalid")
@@ -3089,24 +3099,69 @@ class ReservationAddAdmin(ModelForm):
         # / LigneArticle.amount is the UNIT amount in cents: quantity is held by
         #   the qty field and total = amount × qty. Do NOT multiply by quantity
         #   here, otherwise it is double-counted (amount × qty²).
-        if payment_method == PaymentMethod.FREE:
-            amount = 0
-        else:
-            amount = int(prix_unitaire * 100)
+        # Un billet « offert » garde le prix du tarif : il est écrit comme un offert
+        # de la caisse (part offerte = total, règlement FREE posé par le service).
+        # / An "offered" ticket keeps the rate's price, like a register gift.
+        amount = int(prix_unitaire * 100)
 
-        vente = LigneArticle.objects.create(
+        # La vente de l'admin : écrite par le service de vente, puis encaissée tout de
+        # suite (l'argent est déclaré reçu par le gestionnaire). Elle est écrite dans
+        # la transaction de l'admin (changeform_view est atomic) : réservation,
+        # billets, ligne et vente sont enregistrés ensemble, ou pas du tout.
+        # Imports locaux : le service de vente et la caisse importent BaseBillet.
+        # / The admin sale: written by the sale service, settled at once, inside the
+        #   admin's transaction. Local imports: those modules import BaseBillet.
+        from BaseBillet.models_vente import Vente
+        from BaseBillet.services_vente import (
+            ajouter_article,
+            ajouter_reglement,
+            encaisser_vente,
+            ouvrir_vente,
+        )
+        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
+        # Client = l'acheteur ; opérateur vide (aucune carte de caisse dans l'admin).
+        # / Client = the buyer; no operator in the admin.
+        vente_de_l_admin = ouvrir_vente(
+            origine=SaleOrigin.ADMIN,
+            nature=Vente.Nature.VENTE,
+            client=user,
+        )
+        billet_offert = payment_method == PaymentMethod.FREE
+        ligne_des_billets = ajouter_article(
+            vente_de_l_admin,
             pricesold=pricesold,
-            qty=quantity,
-            amount=amount,
+            quantite=quantity,
+            prix_unitaire=amount,
+            taux_tva=_taux_tva_de_la_ligne_de_caisse(price.product, payment_method),
+            offert_en_totalite=billet_offert,
             payment_method=payment_method,
             status=LigneArticle.VALID,
             sale_origin=SaleOrigin.ADMIN,
             reservation=reservation,
         )
-        # envoie à Laboutik
-        send_sale_to_laboutik.delay(vente.pk)
 
-        # Envoie des ticket par mail
+        # Un seul règlement d'argent, au moyen choisi, du montant total. Rien pour un
+        # billet offert (le service a posé le règlement FREE) ni pour un total de 0
+        # (une vente gratuite n'a aucun règlement).
+        # / One money payment at the chosen method for the total. None for an offered
+        #   ticket (FREE payment set by the service) nor for a 0 total.
+        total_des_billets = ligne_des_billets.total_catalogue
+        if not billet_offert and total_des_billets != 0:
+            ajouter_reglement(
+                vente_de_l_admin,
+                moyen=payment_method,
+                montant=total_des_billets,
+            )
+
+        # Encaissement en dernier, avant toute tâche Celery.
+        # / Settle last, before any Celery task.
+        encaisser_vente(vente_de_l_admin)
+
+        # Une vente faite dans l'admin n'est pas envoyée à l'ancienne caisse LaBoutik.
+        # Seul le mail des billets part.
+        # / A sale made in the admin is not sent to the legacy LaBoutik register.
+        #   Only the tickets mail is sent.
         ticket_celery_mailer.delay(reservation.pk)
 
         return reservation

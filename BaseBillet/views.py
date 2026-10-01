@@ -4710,13 +4710,17 @@ class MembershipMVT(viewsets.ViewSet):
         GET  : retourne le formulaire de paiement (partial HTMX)
         POST :
           1. Valide avec PaiementHorsLigneSerializer
-          2. Met à jour l'adhésion (contribution_value, payment_method, status → ONCE)
-          3. Crée LigneArticle CREATED puis PAID → déclenche trigger_A (deadline, email, Fedow)
-          4. Retourne un partial de succès
+          2. Dans une transaction : met à jour l'adhésion (contribution_value,
+             payment_method, status → ONCE), ouvre la vente ADMIN, y ajoute la ligne
+             CREATED puis la passe PAID → déclenche trigger_A (deadline, email),
+             ajoute un règlement au moyen choisi et encaisse la vente en dernier
+          3. Retourne un partial de succès
 
         DÉPENDANCES :
         - PaiementHorsLigneSerializer (BaseBillet/validators.py)
         - get_or_create_price_sold, dec_to_int (ApiBillet/serializers.py)
+        - ouvrir_vente, ajouter_article, ajouter_reglement, encaisser_vente
+          (BaseBillet/services_vente.py)
         - Signal pre_save sur LigneArticle → trigger_A (BaseBillet/signals.py)
         - Templates : admin/membership/partials/ajouter_paiement_form.html
                       admin/membership/partials/ajouter_paiement_success.html
@@ -4762,32 +4766,75 @@ class MembershipMVT(viewsets.ViewSet):
         montant_valide = serializer_paiement.validated_data['amount']
         moyen_paiement_valide = serializer_paiement.validated_data['payment_method']
 
-        # 1. Mise à jour de l'adhésion AVANT la création de LigneArticle
-        #    trigger_A a besoin de last_contribution pour calculer la deadline
-        # / Update membership BEFORE creating LigneArticle (trigger_A needs last_contribution)
-        membership.contribution_value = dround(montant_valide)
-        membership.payment_method = moyen_paiement_valide
-        if not membership.first_contribution:
-            membership.first_contribution = timezone.localtime()
-        membership.last_contribution = timezone.localtime()
-        membership.status = Membership.ONCE
-        membership.save()
-
-        # 2. Crée la LigneArticle en CREATED puis la passe en PAID
-        #    CREATED → PAID déclenche trigger_A via signal pre_save
-        # / Creates LigneArticle as CREATED then sets to PAID — triggers trigger_A
-        pricesold = get_or_create_price_sold(membership.price)
-        ligne_article_paiement = LigneArticle.objects.create(
-            pricesold=pricesold,
-            qty=1,
-            membership=membership,
-            amount=dec_to_int(membership.contribution_value),
-            payment_method=moyen_paiement_valide,
-            status=LigneArticle.CREATED,
-            sale_origin=SaleOrigin.ADMIN,
+        # Imports locaux : le service de vente et la caisse importent BaseBillet.
+        # / Local imports: the sale service and the register import BaseBillet.
+        from BaseBillet.models_vente import Vente
+        from BaseBillet.services_vente import (
+            ajouter_article,
+            ajouter_reglement,
+            encaisser_vente,
+            ouvrir_vente,
         )
-        ligne_article_paiement.status = LigneArticle.PAID
-        ligne_article_paiement.save()
+        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
+        # Adhésion, ligne, vente et encaissement sont écrits ensemble, ou pas du tout.
+        # CONTRAINTE : une erreur SQL dans `trigger_A` casse cette transaction (la
+        # machine à états avale l'exception, sans point de sauvegarde) ; l'encaissement
+        # échoue alors et TOUT est annulé : rien n'est perdu, le paiement est à refaire.
+        # / Membership, line, sale and settlement are all-or-nothing. A SQL error inside
+        #   trigger_A breaks this transaction: everything is rolled back, nothing is lost.
+        with db_transaction.atomic():
+            # 1. Mise à jour de l'adhésion AVANT la création de LigneArticle
+            #    trigger_A a besoin de last_contribution pour calculer la deadline
+            # / Update membership BEFORE creating LigneArticle (trigger_A needs last_contribution)
+            membership.contribution_value = dround(montant_valide)
+            membership.payment_method = moyen_paiement_valide
+            if not membership.first_contribution:
+                membership.first_contribution = timezone.localtime()
+            membership.last_contribution = timezone.localtime()
+            membership.status = Membership.ONCE
+            membership.save()
+
+            # 2. La vente de l'admin (client = l'adhérent, opérateur vide) et sa ligne,
+            #    écrite CREATED par le service de vente.
+            # / The admin sale (client = the member, no operator) and its line, CREATED.
+            pricesold = get_or_create_price_sold(membership.price)
+            vente_de_l_admin = ouvrir_vente(
+                origine=SaleOrigin.ADMIN,
+                nature=Vente.Nature.VENTE,
+                client=membership.user,
+            )
+            ligne_article_paiement = ajouter_article(
+                vente_de_l_admin,
+                pricesold=pricesold,
+                quantite=1,
+                prix_unitaire=dec_to_int(membership.contribution_value),
+                taux_tva=_taux_tva_de_la_ligne_de_caisse(
+                    membership.price.product, moyen_paiement_valide
+                ),
+                membership=membership,
+                payment_method=moyen_paiement_valide,
+                status=LigneArticle.CREATED,
+                sale_origin=SaleOrigin.ADMIN,
+            )
+
+            # 3. CREATED → PAID déclenche trigger_A via le signal pre_save
+            #    (échéance, mails, récompense ; la ligne passe VALID).
+            # / CREATED → PAID runs trigger_A through the pre_save signal.
+            ligne_article_paiement.status = LigneArticle.PAID
+            ligne_article_paiement.save()
+
+            # 4. Un règlement au moyen choisi, puis l'encaissement, EN DERNIER. La vente
+            #    est encaissée même si trigger_A a échoué (la ligne reste alors PAID) :
+            #    l'argent est déclaré reçu par le gestionnaire.
+            # / One payment at the chosen method, then settle LAST, even if trigger_A
+            #   failed: the money is declared received.
+            ajouter_reglement(
+                vente_de_l_admin,
+                moyen=moyen_paiement_valide,
+                montant=ligne_article_paiement.total_catalogue,
+            )
+            encaisser_vente(vente_de_l_admin)
 
         return render(request, "admin/membership/partials/ajouter_paiement_success.html", {
             "membership": membership,

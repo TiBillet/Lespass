@@ -538,20 +538,56 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
     if created and membership.status == Membership.ADMIN:
         logger.info(f"create_lignearticle_if_membership_created_on_admin {instance} {created}")
 
-        vente = LigneArticle.objects.create(
+        # Imports locaux : le service de vente importe la caisse, qui importe BaseBillet.
+        # / Local imports: the sale service imports the register, which imports BaseBillet.
+        from BaseBillet.services_vente import (
+            ajouter_article,
+            ajouter_reglement,
+            encaisser_vente,
+            ouvrir_vente,
+        )
+        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
+        # La vente de l'admin : client = l'adhérent, opérateur vide. Elle est écrite
+        # dans la transaction de l'admin (changeform_view est atomic).
+        # / The admin sale: client = the member, no operator, in the admin's transaction.
+        vente_de_l_admin = ouvrir_vente(
+            origine=SaleOrigin.ADMIN,
+            nature=Vente.Nature.VENTE,
+            client=membership.user,
+        )
+        ligne_de_l_adhesion = ajouter_article(
+            vente_de_l_admin,
             pricesold=get_or_create_price_sold(membership.price),
-            qty=1,
+            quantite=1,
+            prix_unitaire=dec_to_int(membership.contribution_value),
+            taux_tva=_taux_tva_de_la_ligne_de_caisse(
+                membership.price.product, membership.payment_method
+            ),
             membership=membership,
-            amount=dec_to_int(membership.contribution_value),
             payment_method=membership.payment_method,
             status=LigneArticle.CREATED,
             sale_origin=SaleOrigin.ADMIN,
         )
 
         # On lance les post_save et triggers associés au adhésions en passant en PAID
-        # Envoie a la boutik, Fedow, webhook, etc ...
-        vente.status = LigneArticle.PAID
-        vente.save()
+        # Envoie a la boutik, webhook, etc ...
+        ligne_de_l_adhesion.status = LigneArticle.PAID
+        ligne_de_l_adhesion.save()
+
+        # Un règlement au moyen de l'adhésion, puis l'encaissement EN DERNIER, après
+        # le déclencheur. Une adhésion offerte vaut 0 (le formulaire refuse « Offert »
+        # avec une contribution) : vente à 0, aucun règlement.
+        # / One payment at the membership's method, then settle LAST, after the trigger.
+        #   An offered membership is 0: sale at 0, no payment.
+        total_de_l_adhesion = ligne_de_l_adhesion.total_catalogue
+        if total_de_l_adhesion != 0:
+            ajouter_reglement(
+                vente_de_l_admin,
+                moyen=membership.payment_method,
+                montant=total_de_l_adhesion,
+            )
+        encaisser_vente(vente_de_l_admin)
 
     # On envoi un webhook. Si deadline, ça veut dire que l'adhésion est valide
     if membership.deadline:

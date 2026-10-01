@@ -585,9 +585,7 @@ Lancer quand même la **suite complète**, pas seulement le domaine touché.
   attraper l'erreur (`views.py:622-623`, D2).
 - Une réservation `F` reste bloquée si le compte est activé depuis **un autre** lieu
   (`signals.py:233-238`).
-- L'API v1 `ApiReservationViewset.create` est encore en `AllowAny`
-  (`ApiBillet/views.py:515-517`). C'est une réservation anonyme résiduelle, qui plante déjà
-  (`self.user_commande` jamais posé, `ApiBillet/serializers.py:1142`).
+- L'API v1 de réservation (`/api/reservations/`) a été supprimée le 2026-09-30.
 - La route cassée `/api/user/activate/<uid>/<token>` (`AuthBillet/urls.py:31`).
 - Un plafond réseau (`limit_req` nginx).
 - Rouvrir automatiquement le panneau d'adhésion après la connexion.

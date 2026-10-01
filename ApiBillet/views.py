@@ -25,8 +25,8 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
 from ApiBillet.permissions import TenantAdminApiPermission, TibilletUser, get_apikey_valid
-from ApiBillet.serializers import EventSerializer, EventWriteSerializer, PriceSerializer, ProductSerializer, ApiReservationSerializer, \
-    ApiReservationValidator, ConfigurationSerializer, TicketSerializer, \
+from ApiBillet.serializers import EventSerializer, EventWriteSerializer, PriceSerializer, ProductSerializer, \
+    ConfigurationSerializer, TicketSerializer, \
     OptionsSerializer, ProductCreateSerializer, EmailSerializer
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
@@ -484,36 +484,6 @@ class ChargeCashless(viewsets.ViewSet):
         permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
 """
-
-
-class ApiReservationViewset(DeprecatedV1Mixin, viewsets.ViewSet):
-    def list(self, request):
-        queryset = Reservation.objects.all().order_by('-datetime')
-        serializer = ApiReservationSerializer(queryset, many=True, context={'request': request})
-        return Response(serializer.data)
-
-    def retrieve(self, request, pk=None):
-        queryset = Reservation.objects.all().order_by('-datetime')
-        resa = get_object_or_404(queryset, pk=pk)
-        serializer = ApiReservationSerializer(resa)
-        return Response(serializer.data)
-
-    def create(self, request):
-        logger.info(f"ReservationViewset CREATE : {request.data}")
-        validator = ApiReservationValidator(data=request.data, context={'request': request})
-        if validator.is_valid():
-            return Response(validator.data, status=status.HTTP_201_CREATED)
-
-        # Validation 400 cote client (payload incomplet) : ce n'est PAS une erreur
-        # applicative. En warning -> pas d'event Sentry (event_level=ERROR par defaut),
-        # seulement un breadcrumb. Le 400 + le corps d'erreur informent deja l'appelant.
-        # / Client-side 400 validation, not an app error. warning -> no Sentry event.
-        logger.warning(f"ReservationViewset CREATE : validation refusee (400) : {validator.errors}")
-        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def get_permissions(self):
-        # Tout le monde peut reserver (create), mais seul les admins peuvent lister
-        return get_permission_Api_LR_Admin_CU_Any(self)
 
 
 class OptionTicket(DeprecatedV1Mixin, viewsets.ViewSet):

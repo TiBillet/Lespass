@@ -104,7 +104,7 @@ def test_admin_reservation_add_tarif_gratuit_cree_reservation_et_ligne(tenant):
         # / The buyer email is readable on the accounting line.
         assert ligne.user_email() == email_saisi
 
-        mock_laboutik.assert_called_once()
+        mock_laboutik.assert_not_called()
         mock_mailer.assert_called_once()
 
         Ticket.objects.filter(reservation=reservation).delete()
@@ -175,7 +175,7 @@ def test_admin_reservation_add_tarif_payant_calcule_le_montant_en_centimes(tenan
         assert ligne.pricesold == pricesold
         assert ligne.user_email() == email_saisi
 
-        mock_laboutik.assert_called_once()
+        mock_laboutik.assert_not_called()
         mock_mailer.assert_called_once()
 
         Ticket.objects.filter(reservation=reservation).delete()

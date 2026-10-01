@@ -710,6 +710,7 @@ class WalletRefillViewSet(viewsets.ViewSet):
         from fedow_connect.models import FedowConfig
         from fedow_connect.fedow_api import FedowAPI
         from AuthBillet.utils import get_or_create_user
+        from BaseBillet.services_vente import encaisser_vente
 
         # 1. Recupere l'objet cle API pour connaitre l'asset autorise
         # / Get the API key object to know the allowed asset
@@ -902,6 +903,15 @@ class WalletRefillViewSet(viewsets.ViewSet):
             metadata=metadata_ligne,
         )
 
+        # La recharge est faite : sa vente est encaissée, en dernier, après l'appel à
+        # Fedow. Au nouvel essai d'une recharge échouée, c'est la vente ouverte au
+        # premier essai (la même ligne) : une seule vente par recharge.
+        # Une ligne sans vente (antérieure à la vente) n'a rien à encaisser.
+        # / The refill is done: its sale is settled, last, after the Fedow call. On a
+        # retry it is the sale opened on the first attempt: one sale per refill.
+        if ligne_article.vente_id is not None:
+            encaisser_vente(ligne_article.vente)
+
         # 10. Reponse schema.org MoneyTransfer
         payload = {
             "@context": "https://schema.org",
@@ -947,6 +957,9 @@ class WalletRefillViewSet(viewsets.ViewSet):
         OFFERED (payment_method=FREE). ProductSold/PriceSold created by hand to
         avoid the Stripe call done by get_or_create_price_sold.
 
+        La ligne est l'article d'une vente EN_ATTENTE ouverte ici (voir plus bas).
+        / The line is the item of a PENDING sale opened here.
+
         La ligne est creee en CREATED. Aucun trigger ne se declenche :
         _state.adding=True a la creation (cf signals.py), et trigger_R
         (RECHARGE_CASHLESS) n'existe pas. Le credit reel est fait par l'appel
@@ -959,7 +972,13 @@ class WalletRefillViewSet(viewsets.ViewSet):
             Product, Price, ProductSold, PriceSold, LigneArticle,
             PaymentMethod, SaleOrigin,
         )
+        from BaseBillet.models_vente import Vente
+        from BaseBillet.services_vente import ajouter_article, ouvrir_vente
         from AuthBillet.models import Wallet
+        from fedow_public.models import AssetFedowPublic
+        # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
+        # / Imported at call time: laboutik/views.py imports all of BaseBillet.
+        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
         # Produit + tarif de recharge dedies a cet asset (idempotent).
         # / Refill product + price dedicated to this asset (idempotent).
@@ -984,10 +1003,40 @@ class WalletRefillViewSet(viewsets.ViewSet):
         # / wallet: only a real Wallet (None otherwise).
         wallet = user.wallet if isinstance(getattr(user, "wallet", None), Wallet) else None
 
-        return LigneArticle.objects.create(
+        # La ligne est l'article d'une vente EN_ATTENTE ouverte avec elle (origine =
+        # celle de la ligne, client = le destinataire). La vente est encaissée quand
+        # Fedow a crédité (ligne VALID, dans `create`). Si Fedow échoue, elle reste
+        # EN_ATTENTE, sans numéro, et le nouvel essai (même ligne) l'encaisse.
+        # Unité : la monnaie créditée (son uuid) seulement pour du temps ou des points ;
+        # une monnaie cadeau est libellée en euros et garde "EUR" (sinon les rapports la
+        # classeraient « points »).
+        # / The line is the item of a PENDING sale opened with it; settled once Fedow has
+        # credited. Unit = the currency only for time or points; a gift currency keeps EUR.
+        monnaie_en_temps_ou_en_points = asset.category in [
+            AssetFedowPublic.TIME,
+            AssetFedowPublic.FIDELITY,
+        ]
+        if monnaie_en_temps_ou_en_points:
+            unite_de_la_vente = str(asset.uuid)
+        else:
+            unite_de_la_vente = "EUR"
+        vente_de_la_recharge = ouvrir_vente(
+            origine=SaleOrigin.LESPASS,
+            nature=Vente.Nature.VENTE,
+            unite=unite_de_la_vente,
+            client=user,
+        )
+
+        # Article hors chiffre d'affaires (catégorie recharge), offert en totalité :
+        # part offerte = total, et le service écrit un règlement FREE du même montant.
+        # / Off-revenue item, fully offered: the service writes a FREE payment.
+        return ajouter_article(
+            vente_de_la_recharge,
             pricesold=pricesold,
-            amount=amount,  # unites brutes de l'asset creditees / raw asset units credited
-            qty=Decimal("1"),
+            quantite=Decimal("1"),
+            prix_unitaire=amount,  # unites brutes de l'asset creditees / raw asset units credited
+            taux_tva=_taux_tva_de_la_ligne_de_caisse(produit, PaymentMethod.FREE),
+            offert_en_totalite=True,
             asset=asset.uuid,
             wallet=wallet,
             payment_method=PaymentMethod.FREE,  # recharge offerte / offered refill

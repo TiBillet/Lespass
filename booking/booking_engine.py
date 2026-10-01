@@ -42,7 +42,7 @@ from rest_framework import serializers
 from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
 from BaseBillet.models import Paiement_stripe, LigneArticle, SaleOrigin, PaymentMethod, PromotionalCode
 from BaseBillet.models_vente import Vente
-from BaseBillet.services_vente import ajouter_article, ouvrir_vente
+from BaseBillet.services_vente import ajouter_article, encaisser_vente, ouvrir_vente
 from PaiementStripe.views import CreationPaiementStripe
 from booking.models import Booking
 from booking.serializers import BookingCreateSerializer
@@ -799,6 +799,11 @@ def validate_new_booking(resource,
             ligne_article.status = LigneArticle.VALID
             new_booking.save()
             ligne_article.save()
+
+            # La vente gratuite est encaissée à 0 après sa ligne : REGLEE, numérotée, aucun
+            # règlement (c'est une opération enregistrée).
+            # / The free sale is settled at 0 after its line: settled, numbered, no payment.
+            encaisser_vente(vente)
 
     return True, new_booking, checkout_url
 

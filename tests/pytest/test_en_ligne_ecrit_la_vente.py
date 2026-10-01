@@ -26,18 +26,36 @@ LES PRODUCTEURS TESTÉS (un paiement Stripe direct chacun)
 - lien de paiement d'une adhésion validée par l'admin (`get_checkout_for_membership`) ;
 - réservation de ressource hors panier (`validate_new_booking`) ;
 - crowds : contribution à une initiative.
-Une réservation gratuite (total 0, pas de Stripe) ouvre aussi sa vente, qui reste
-EN_ATTENTE : témoin.
 / Producers tested: tickets, membership, membership payment link, booking, crowds
-contribution. A free reservation also opens its sale (witness).
+contribution.
 
 LE PANIER (un paiement pour toute la commande)
 `CommandeService.materialiser` ouvre UNE vente pour toute la commande, juste après la
 `Commande`. Il la passe aux producteurs (adhésions, `TicketCreator`, `validate_new_booking`),
 qui y ajoutent leurs lignes. `Commande.vente` et `Paiement_stripe.vente` portent cette
-vente. Une commande à 0 € (sans Stripe) ouvre aussi sa vente, qui reste EN_ATTENTE.
+vente.
 / The cart opens ONE sale for the whole order and passes it to the producers.
-`Commande.vente` and `Paiement_stripe.vente` carry it. A 0 € order opens it too.
+`Commande.vente` and `Paiement_stripe.vente` carry it.
+
+LES VOIES GRATUITES (total 0, pas de Stripe)
+Une vente gratuite est encaissée à 0 : REGLEE, numérotée (c'est une opération
+enregistrée), sans aucun règlement. Elle est encaissée par l'appelant qui écrit la
+DERNIÈRE ligne, jamais avant :
+- réservation à 0 € du front (`TicketCreator`, appelé par `ReservationValidator`) ;
+- réservation gratuite de l'API v2 : les lignes « réservation gratuite » que l'API ajoute
+  après `TicketCreator` entrent dans la MÊME vente (celle de `TicketCreator`, sinon une
+  vente ouverte par l'API, origine API), puis la vente est encaissée. La quantité reçue
+  en texte est convertie en entier ; une quantité décimale est refusée. Un prix non nul
+  sur une réservation gratuite est entièrement offert (part offerte, règlement FREE) ;
+- booking gratuit (`validate_new_booking`) ;
+- panier gratuit (`CommandeService._finaliser_gratuit`). Un panier qui n'a que des
+  réservations gratuites n'écrit aucune ligne : sa vente vide est ANNULEE, sans numéro.
+Pas de vente sans ligne : une réservation gratuite seule, hors panier, n'ouvre pas de
+vente. Une réservation à 0 € annulée après coup (place perdue) garde sa vente REGLEE à 0
+(trou T16, accepté : montant 0, aucun effet comptable).
+/ Free paths: the sale is settled at 0 (REGLEE, numbered, no payment) by the caller that
+writes the LAST line. The API v2 free-booking lines go into the same sale. A cart with
+free bookings only cancels its empty sale. No sale without a line.
 
 LE RENOUVELLEMENT D'ABONNEMENT
 La ligne de l'échéance est écrite dans une vente ouverte avec elle, au prix unitaire de
@@ -84,14 +102,18 @@ simulés : aucun appel réseau, aucune tâche envoyée au worker.
 / Rolled-back transaction per test. Stripe and Celery are faked.
 
 CODE PARCOURU / CODE EXERCISED
-- BaseBillet/validators.py — TicketCreator, MembershipValidator.get_checkout_stripe ;
+- BaseBillet/validators.py — TicketCreator, ReservationValidator,
+  MembershipValidator.get_checkout_stripe ;
+- api_v2/serializers.py — ReservationCreateSerializer (réservation gratuite) ;
 - BaseBillet/views.py — MembershipMVT.get_checkout_for_membership ;
 - booking/booking_engine.py — validate_new_booking, get_checkout_stripe ;
 - crowds/views.py — InitiativeViewSet.contribute ;
 - BaseBillet/services_commande.py — CommandeService.materialiser (panier) ;
 - PaiementStripe/views.py — CreationPaiementStripe,
   new_entry_from_stripe_subscription_invoice (renouvellement d'abonnement) ;
-- BaseBillet/services_vente.py — ouvrir_vente, ajouter_article, encaisser_vente_stripe ;
+- BaseBillet/services_vente.py — ouvrir_vente, ajouter_article, encaisser_vente,
+  annuler_vente, encaisser_vente_stripe ;
+- BaseBillet/signals.py — activator_free_reservation (réservation annulée faute de place) ;
 - BaseBillet/signals.py — set_ligne_article_paid (point d'encaissement unique),
   transition PENDING → CANCELED ;
 - BaseBillet/models.py — Paiement_stripe.update_checkout_status (montant encaissé) ;
@@ -100,7 +122,7 @@ CODE PARCOURU / CODE EXERCISED
 - tests/pytest/conftest.py — la fixture `mock_stripe` (montants renvoyés par Stripe).
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-D-en-ligne-avoirs.md (§1,
-§2.1, §2.2, §2.3, §5 tests 1 à 10, trous T4, T5, T6).
+§2.1, §2.2, §2.3, §3 voies gratuites, §5 tests 1 à 10, 14 et 15, trous T4, T5, T6, T16).
 
 Lancer / Run : make test ARGS="tests/pytest/test_en_ligne_ecrit_la_vente.py"
 """
@@ -118,7 +140,10 @@ import stripe
 from django.db.models import Q
 from django.utils import timezone
 from django_tenants.utils import tenant_context
+from rest_framework import serializers
 
+from api_v2.serializers import ReservationCreateSerializer
+from AuthBillet.models import TibilletUser
 from BaseBillet import services_vente
 from BaseBillet.models import (
     LigneArticle,
@@ -150,6 +175,7 @@ from fabriques_panier import (
     creer_adhesion,
     creer_evenement_avec_tarif,
     creer_ressource_avec_tarif,
+    creer_un_billet_deja_vendu,
     creer_utilisateur,
     identifiant_unique,
     requete_avec_session,
@@ -157,6 +183,7 @@ from fabriques_panier import (
 )
 from test_caracterisation_admin_api import reserver_une_ressource_sans_panier
 from test_caracterisation_en_ligne import (
+    EN_TETE_HTMX,
     adherer_sans_panier,
     envoyer_un_evenement_stripe,
     objet_session_de_paiement,
@@ -522,19 +549,56 @@ def test_crowds_contribution_vente_en_attente(lieu):
 
 
 # --------------------------------------------------------------------------
-# Réservation gratuite : la vente est ouverte, et reste en attente
-# / Free reservation: the sale is opened, and stays pending
+# Voies gratuites : la vente est encaissée à 0
+# / Free paths: the sale is settled at 0
 # --------------------------------------------------------------------------
 
 
-def test_reservation_gratuite_vente_ouverte_en_attente(lieu):
+def verifier_la_vente_gratuite_encaissee(vente, origine_attendue, client_attendu):
     """
-    Témoin : un billet payant à 0 €, réservé sans panier. Aucun paiement Stripe n'est
-    créé (le total vaut 0), mais la vente est ouverte AVANT la ligne, comme pour un
-    billet payant : sa ligne en est l'article. La vente reste EN_ATTENTE, sans numéro ni
-    règlement ; son encaissement à 0 viendra avec les ventes sans Stripe.
-    / Witness: a 0 € paid-category ticket without cart. No Stripe payment, but the sale is
-    opened before the line and stays PENDING, without number or payment.
+    Relit la vente en base et vérifie la règle d'une vente gratuite : une VENTE,
+    encaissée (REGLEE), numérotée, sans aucun règlement, pour un total catalogue de 0.
+    / Reads the sale back and checks the free-sale rule: VENTE, settled, numbered, no
+    payment, catalogue total 0.
+
+    :return: la vente relue, pour les vérifications propres à chaque test
+    """
+    vente_relue = Vente.objects.get(pk=vente.pk)
+    assert vente_relue.nature == Vente.Nature.VENTE
+    assert vente_relue.statut == Vente.Statut.REGLEE, (
+        f"La vente gratuite n'est pas encaissée (statut {vente_relue.statut})."
+    )
+    assert vente_relue.numero is not None
+    assert vente_relue.reglements.count() == 0
+    assert vente_relue.total_catalogue == 0
+    assert vente_relue.origine == origine_attendue
+    assert vente_relue.client == client_attendu
+    return vente_relue
+
+
+def la_vente_unique_de_la_reservation(reservation):
+    """
+    Rend LA vente dont les articles sont les lignes de la réservation. Échoue s'il n'y en
+    a aucune, ou plus d'une.
+    / Returns THE sale whose items are the reservation's lines. Fails on none or several.
+    """
+    ventes_de_la_reservation = Vente.objects.filter(
+        articles__reservation=reservation
+    ).distinct()
+    assert ventes_de_la_reservation.count() == 1, (
+        f"La réservation a {ventes_de_la_reservation.count()} vente(s), une attendue."
+    )
+    return ventes_de_la_reservation.get()
+
+
+def test_reservation_gratuite_vente_encaissee_a_zero(lieu):
+    """
+    Un billet payant à 0 €, réservé sans panier. Aucun paiement Stripe n'est créé (le
+    total vaut 0). La vente est ouverte avant la ligne, puis encaissée à 0 après elle :
+    REGLEE, numérotée, sans règlement, origine « en ligne » (LP), client = l'acheteur.
+    Son unique article est la ligne du billet, validée en « offert ».
+    / A 0 € paid-category ticket without cart: no Stripe; the sale is settled at 0,
+    numbered, no payment; its only item is the ticket line, valid as "free".
     """
     acheteur = creer_utilisateur()
     client = client_connecte(acheteur)
@@ -549,24 +613,331 @@ def test_reservation_gratuite_vente_ouverte_en_attente(lieu):
     assert lieu.stripe.mock_create.call_count == 0
     assert not reservation.paiements.exists()
 
-    ventes_de_la_reservation = Vente.objects.filter(
-        articles__reservation=reservation
-    ).distinct()
-    assert ventes_de_la_reservation.count() == 1
-    vente = ventes_de_la_reservation.get()
-    assert vente.nature == Vente.Nature.VENTE
-    assert vente.statut == Vente.Statut.EN_ATTENTE
-    assert vente.numero is None
-    assert vente.reglements.count() == 0
-    assert vente.origine == SaleOrigin.LESPASS
-    assert vente.client == acheteur
-
+    vente = verifier_la_vente_gratuite_encaissee(
+        la_vente_unique_de_la_reservation(reservation),
+        origine_attendue=SaleOrigin.LESPASS,
+        client_attendu=acheteur,
+    )
     article_du_billet = vente.articles.get()
     assert article_du_billet.total_catalogue == 0
-    # La voie gratuite d'aujourd'hui est inchangée : la ligne passe « payée » en
-    # « offert », puis la machine à états la valide.
-    # / Today's free path is unchanged: the line goes paid as "offered", then valid.
     assert article_du_billet.status == LigneArticle.VALID
+    assert article_du_billet.payment_method == PaymentMethod.FREE
+    verifier_egalites(vente)
+
+
+def test_reservation_freeres_seule_aucune_vente(lieu):
+    """
+    Témoin : une « réservation gratuite » (FREERES) seule, sans panier. Elle n'écrit
+    aucune ligne de vente, donc aucune vente n'est ouverte : pas de vente sans ligne.
+    / Witness: a free booking alone, without cart, writes no sale line: no sale is opened.
+    """
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    atelier_gratuit = creer_evenement_avec_tarif(categorie=Product.FREERES)
+    nombre_de_ventes_avant = Vente.objects.count()
+
+    reserver_des_billets_sans_panier(
+        client, acheteur, atelier_gratuit.evenement, {atelier_gratuit.tarif: 1}
+    )
+    reservation = Reservation.objects.get(
+        user_commande=acheteur, event=atelier_gratuit.evenement
+    )
+    assert reservation.status == Reservation.FREERES_USERACTIV
+    assert not LigneArticle.objects.filter(reservation=reservation).exists()
+    assert Vente.objects.count() == nombre_de_ventes_avant
+
+
+def test_reservation_a_zero_annulee_garde_sa_vente_reglee(lieu):
+    """
+    Trou T16 (accepté). Un visiteur anonyme réserve le dernier billet à 0 € d'un concert
+    (jauge 1). Son compte n'est pas encore activé : la réservation attend la confirmation
+    de son adresse mail (FREERES). La vente est déjà encaissée à 0.
+    Il confirme 40 minutes plus tard : sa place n'est plus retenue, et une autre personne
+    a pris le dernier billet entre-temps. La réservation passe ANNULEE. La vente, elle,
+    reste REGLEE à 0, numérotée : montant 0, aucun effet comptable.
+    / T16 (accepted): a 0 € reservation cancelled afterwards (seat lost while waiting for
+    the email confirmation) keeps its sale settled at 0.
+    """
+    from datetime import timedelta as duree
+
+    client_anonyme = client_connecte()
+    concert = creer_evenement_avec_tarif(prix="0.00", jauge_max=1)
+    email_du_visiteur = f"test+chantierpanier{identifiant_unique()}@mock.test"
+    client_anonyme.post(
+        f"/event/{concert.evenement.slug}/reservation/",
+        {
+            "event": str(concert.evenement.uuid),
+            "email": email_du_visiteur,
+            str(concert.tarif.uuid): "1",
+        },
+        **EN_TETE_HTMX,
+    )
+    visiteur = TibilletUser.objects.get(email=email_du_visiteur)
+    reservation = Reservation.objects.get(
+        user_commande=visiteur, event=concert.evenement
+    )
+    assert reservation.status == Reservation.FREERES
+
+    # La place n'est plus retenue (plus de 30 minutes), et le dernier billet est vendu
+    # à une autre personne. `update()` : `Reservation.datetime` est en auto_now
+    # (tests/PIEGES.md 13.19).
+    # / The seat is no longer held, and the last ticket is sold to someone else.
+    Reservation.objects.filter(pk=reservation.pk).update(
+        datetime=timezone.now() - duree(minutes=40)
+    )
+    creer_un_billet_deja_vendu(creer_utilisateur(), concert)
+
+    # La confirmation de l'adresse mail active le compte : la machine à états annule la
+    # réservation et lève une erreur pour prévenir le visiteur.
+    # / Confirming the email activates the account: the reservation is cancelled.
+    visiteur.is_active = True
+    with pytest.raises(ValueError):
+        visiteur.save()
+
+    reservation.refresh_from_db()
+    assert reservation.status == Reservation.CANCELED
+    vente = verifier_la_vente_gratuite_encaissee(
+        la_vente_unique_de_la_reservation(reservation),
+        origine_attendue=SaleOrigin.LESPASS,
+        client_attendu=visiteur,
+    )
+    verifier_egalites(vente)
+
+
+def test_booking_gratuit_vente_encaissee_a_zero(lieu):
+    """
+    Un créneau d'une heure d'une ressource gratuite (0 €/h), réservé sans panier. Aucun
+    paiement Stripe. La vente du booking est encaissée à 0 : REGLEE, numérotée, sans
+    règlement, origine « en ligne » (LP), client = la personne qui réserve. Son unique
+    article est la ligne du booking, validée en « offert ».
+    / A free resource slot without cart: the booking's sale is settled at 0, numbered, no
+    payment; its only item is the booking line, valid as "free".
+    """
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    location_gratuite = creer_ressource_avec_tarif(prix="0.00")
+
+    reserver_une_ressource_sans_panier(client, location_gratuite)
+    booking = Booking.objects.get(user=acheteur, resource=location_gratuite.ressource)
+    assert lieu.stripe.mock_create.call_count == 0
+    assert booking.status == Booking.FREERES_USERACTIV
+
+    ventes_du_booking = Vente.objects.filter(articles__booking=booking).distinct()
+    assert ventes_du_booking.count() == 1
+    vente = verifier_la_vente_gratuite_encaissee(
+        ventes_du_booking.get(),
+        origine_attendue=SaleOrigin.LESPASS,
+        client_attendu=acheteur,
+    )
+    article_du_booking = vente.articles.get()
+    assert article_du_booking.booking == booking
+    assert article_du_booking.status == LigneArticle.VALID
+    assert article_du_booking.payment_method == PaymentMethod.FREE
+    verifier_egalites(vente)
+
+
+# --------------------------------------------------------------------------
+# API v2 : la réservation gratuite et ses lignes « réservation gratuite »
+# / API v2: the free reservation and its free-booking lines
+# --------------------------------------------------------------------------
+
+
+def reserver_par_l_api_v2(evenement, quantites_par_tarif, email, prix_par_tarif=None):
+    """
+    Crée une réservation par le serializer d'entrée de l'API v2, comme le fait
+    `ReservationViewSet.create` (api_v2/views.py) : validation, puis `save()`.
+    / Creates a reservation through the API v2 input serializer, like the view does.
+
+    `quantites_par_tarif` : {tarif: quantité}. La quantité est envoyée telle quelle : un
+    entier, ou un texte comme le ferait un client JSON (`"2"`).
+    `prix_par_tarif` : {tarif: prix en euros, texte}, le champ `price` d'un billet
+    (api_v2/openapi-schema.yaml : un texte). Absent par défaut.
+    / The quantity is sent as is. `prix_par_tarif`: the optional `price` field (a text).
+
+    :return: la `Reservation` créée
+    """
+    if prix_par_tarif is None:
+        prix_par_tarif = {}
+    billets_demandes = []
+    for tarif, quantite in quantites_par_tarif.items():
+        billet_demande = {
+            "@type": "Ticket",
+            "identifier": str(tarif.uuid),
+            "ticketQuantity": quantite,
+        }
+        if tarif in prix_par_tarif:
+            billet_demande["price"] = prix_par_tarif[tarif]
+        billets_demandes.append(billet_demande)
+    serializer_de_reservation = ReservationCreateSerializer(
+        data={
+            "reservationFor": {"@type": "Event", "identifier": str(evenement.uuid)},
+            "underName": {"@type": "Person", "email": email},
+            "reservedTicket": billets_demandes,
+        }
+    )
+    serializer_de_reservation.is_valid(raise_exception=True)
+    return serializer_de_reservation.save()
+
+
+@pytest.mark.parametrize("produit_cree_en_premier", ["payant", "reservation_gratuite"])
+def test_reservation_gratuite_api_v2_meme_vente_que_ticket_creator(
+    lieu, produit_cree_en_premier
+):
+    """
+    Fiche test 14. Par l'API v2, dans le même appel : un billet d'un tarif payant à 0 €
+    et une « réservation gratuite » (FREERES) du même événement.
+    `TicketCreator` écrit la ligne du billet à 0 € dans SA vente ; l'API écrit ensuite la
+    ligne de la réservation gratuite dans CETTE MÊME vente, puis l'encaisse :
+    - une seule vente de plus en base ;
+    - ses articles sont TOUTES les lignes de la réservation (les deux) ;
+    - REGLEE, numérotée, sans règlement, origine API, client = la personne réservée.
+    Les deux ordres des produits sont joués (tests/PIEGES.md 13.15).
+    / Sheet test 14: a 0 € paid-category ticket and a free booking in one API call. One
+    sale holds both lines and is settled at the end. Both product orders are played.
+    """
+    if produit_cree_en_premier == "payant":
+        concert = creer_evenement_avec_tarif(prix="0.00")
+        tarif_payant_a_zero = concert.tarif
+        produit_gratuit = Product.objects.create(
+            name=f"{PREFIXE_DE_TEST} gratuit {identifiant_unique()}",
+            categorie_article=Product.FREERES,
+        )
+        concert.evenement.products.add(produit_gratuit)
+        tarif_reservation_gratuite = produit_gratuit.prices.get(prix=0)
+    else:
+        concert = creer_evenement_avec_tarif(categorie=Product.FREERES)
+        tarif_reservation_gratuite = concert.tarif
+        produit_payant = Product.objects.create(
+            name=f"{PREFIXE_DE_TEST} billet {identifiant_unique()}",
+            categorie_article=Product.BILLET,
+        )
+        concert.evenement.products.add(produit_payant)
+        tarif_payant_a_zero = ajouter_un_tarif(produit_payant, prix="0.00", nom="Gratuit")
+    email_de_la_personne = f"test+chantierpanier{identifiant_unique()}@mock.test"
+    nombre_de_ventes_avant = Vente.objects.count()
+
+    reservation = reserver_par_l_api_v2(
+        concert.evenement,
+        {tarif_payant_a_zero: 1, tarif_reservation_gratuite: 1},
+        email_de_la_personne,
+    )
+
+    assert lieu.stripe.mock_create.call_count == 0
+    assert Vente.objects.count() == nombre_de_ventes_avant + 1
+    personne_reservee = TibilletUser.objects.get(email=email_de_la_personne)
+    vente = verifier_la_vente_gratuite_encaissee(
+        la_vente_unique_de_la_reservation(reservation),
+        origine_attendue=SaleOrigin.API,
+        client_attendu=personne_reservee,
+    )
+
+    # Les articles de la vente sont exactement les deux lignes de la réservation.
+    # / The sale's items are exactly the reservation's two lines.
+    articles_de_la_vente = set()
+    for article in vente.articles.all():
+        articles_de_la_vente.add(article.pk)
+    lignes_de_la_reservation = set()
+    for ligne in LigneArticle.objects.filter(reservation=reservation):
+        lignes_de_la_reservation.add(ligne.pk)
+    assert len(lignes_de_la_reservation) == 2
+    assert articles_de_la_vente == lignes_de_la_reservation
+    assert vente.articles.filter(
+        pricesold__price=tarif_reservation_gratuite, status=LigneArticle.FREERES
+    ).count() == 1
+    verifier_egalites(vente)
+
+
+def test_api_v2_quantite_texte_castee_en_entier(lieu):
+    """
+    Fiche test 15. Par l'API v2, une « réservation gratuite » seule, quantité envoyée en
+    texte : `"2"`. `TicketCreator` n'écrit aucune ligne (pas de vente) ; l'API écrit la
+    ligne, dans une vente qu'elle ouvre (origine API), puis l'encaisse à 0. La quantité
+    de la ligne est l'entier 2, comme le nombre de billets.
+    / Sheet test 15: free booking alone through the API, quantity sent as text "2". The
+    API opens its own sale (API origin), settles it at 0; the line quantity is 2.
+    """
+    atelier_gratuit = creer_evenement_avec_tarif(categorie=Product.FREERES)
+    email_de_la_personne = f"test+chantierpanier{identifiant_unique()}@mock.test"
+
+    reservation = reserver_par_l_api_v2(
+        atelier_gratuit.evenement,
+        {atelier_gratuit.tarif: "2"},
+        email_de_la_personne,
+    )
+
+    assert reservation.tickets.count() == 2
+    personne_reservee = TibilletUser.objects.get(email=email_de_la_personne)
+    vente = verifier_la_vente_gratuite_encaissee(
+        la_vente_unique_de_la_reservation(reservation),
+        origine_attendue=SaleOrigin.API,
+        client_attendu=personne_reservee,
+    )
+    ligne_de_la_reservation_gratuite = vente.articles.get()
+    assert ligne_de_la_reservation_gratuite.qty == Decimal("2")
+    assert ligne_de_la_reservation_gratuite.status == LigneArticle.FREERES
+    verifier_egalites(vente)
+
+
+def test_reservation_freeres_api_v2_prix_non_nul_offerte(lieu):
+    """
+    Par l'API v2, une « réservation gratuite » seule, avec un prix envoyé : `"5.00"`.
+    La ligne est écrite au prix de 500 centimes, en « offert » (moyen FREE). C'est la
+    règle « offert à montant non nul » du service de vente : la part offerte vaut tout
+    le total catalogue (source OFFRIR), le net vendu vaut 0, et un règlement FREE de 500
+    est ajouté. La vente, ouverte par l'API (origine API), est encaissée : REGLEE,
+    numérotée, égalités tenues.
+    / Free booking through the API with a price "5.00": the line is fully offered (500),
+    one FREE payment of 500, the API's sale is settled and both equalities hold.
+    """
+    atelier_gratuit = creer_evenement_avec_tarif(categorie=Product.FREERES)
+    email_de_la_personne = f"test+chantierpanier{identifiant_unique()}@mock.test"
+
+    reservation = reserver_par_l_api_v2(
+        atelier_gratuit.evenement,
+        {atelier_gratuit.tarif: 1},
+        email_de_la_personne,
+        prix_par_tarif={atelier_gratuit.tarif: "5.00"},
+    )
+
+    vente = Vente.objects.get(pk=la_vente_unique_de_la_reservation(reservation).pk)
+    assert vente.statut == Vente.Statut.REGLEE
+    assert vente.numero is not None
+    assert vente.origine == SaleOrigin.API
+    assert vente.client == TibilletUser.objects.get(email=email_de_la_personne)
+
+    article_offert = vente.articles.get()
+    assert article_offert.amount == 500
+    assert article_offert.total_catalogue == 500
+    assert article_offert.part_offerte == 500
+    assert article_offert.source_offert == LigneArticle.SourceOffert.OFFRIR
+    assert article_offert.total_ttc == 0
+
+    reglement_offert = vente.reglements.get()
+    assert reglement_offert.moyen == PaymentMethod.FREE
+    assert reglement_offert.montant == 500
+    verifier_egalites(vente)
+
+
+def test_api_v2_quantite_decimale_refusee(lieu):
+    """
+    Fiche test 15, second cas. Par l'API v2, une quantité décimale (`"2.5"`) est refusée
+    avec une erreur de validation claire. Rien n'est créé : ni réservation, ni vente.
+    / Sheet test 15, second case: a decimal quantity is refused with a clear validation
+    error; nothing is created.
+    """
+    atelier_gratuit = creer_evenement_avec_tarif(categorie=Product.FREERES)
+    email_de_la_personne = f"test+chantierpanier{identifiant_unique()}@mock.test"
+    nombre_de_ventes_avant = Vente.objects.count()
+
+    with pytest.raises(serializers.ValidationError):
+        reserver_par_l_api_v2(
+            atelier_gratuit.evenement,
+            {atelier_gratuit.tarif: "2.5"},
+            email_de_la_personne,
+        )
+
+    assert not Reservation.objects.filter(event=atelier_gratuit.evenement).exists()
+    assert Vente.objects.count() == nombre_de_ventes_avant
 
 
 # --------------------------------------------------------------------------
@@ -747,15 +1118,15 @@ def test_panier_deux_codes_promo_et_prix_libre_une_seule_vente(lieu):
     assert vente.articles.filter(reservation=reservation).count() == 4
 
 
-def test_panier_gratuit_vente_ouverte_en_attente(lieu):
+def test_panier_gratuit_vente_encaissee_a_zero(lieu):
     """
     Une commande à 0 € : un billet d'un concert à 0 € et une adhésion à 0 €. Aucun
-    paiement Stripe n'est créé. La vente est quand même ouverte par le panier, comme
-    pour une commande payante : elle reste EN_ATTENTE, sans numéro ni règlement (son
-    encaissement à 0 viendra avec les ventes sans Stripe). La commande la porte, et ses
-    articles sont les deux lignes de la commande, pour 0 centime.
-    / A 0 € order (ticket + membership): no Stripe payment, but the cart still opens its
-    sale, which stays PENDING without number or payment; the order carries it.
+    paiement Stripe n'est créé. La vente ouverte par le panier est encaissée à 0 après
+    le passage des lignes : REGLEE, numérotée, sans règlement, origine « en ligne » (LP),
+    client = l'acheteur. La commande la porte, et ses articles sont les deux lignes de la
+    commande, pour 0 centime.
+    / A 0 € order (ticket + membership): no Stripe; the cart's sale is settled at 0 after
+    the lines, numbered, no payment; the order carries it; its items are the two lines.
     """
     acheteur = creer_utilisateur()
     concert_gratuit = creer_evenement_avec_tarif(prix="0.00")
@@ -776,13 +1147,11 @@ def test_panier_gratuit_vente_ouverte_en_attente(lieu):
     )
     assert Vente.objects.count() == nombre_de_ventes_avant + 1
 
-    vente = Vente.objects.get(pk=commande.vente_id)
-    assert vente.nature == Vente.Nature.VENTE
-    assert vente.statut == Vente.Statut.EN_ATTENTE
-    assert vente.numero is None
-    assert vente.reglements.count() == 0
-    assert vente.origine == SaleOrigin.LESPASS
-    assert vente.client == acheteur
+    vente = verifier_la_vente_gratuite_encaissee(
+        Vente.objects.get(pk=commande.vente_id),
+        origine_attendue=SaleOrigin.LESPASS,
+        client_attendu=acheteur,
+    )
 
     # Les articles de la vente sont exactement les lignes de la commande.
     # / The sale's items are exactly the order's lines.
@@ -796,11 +1165,35 @@ def test_panier_gratuit_vente_ouverte_en_attente(lieu):
         lignes_de_la_commande.add(ligne.pk)
     assert len(lignes_de_la_commande) == 2
     assert articles_de_la_vente == lignes_de_la_commande
+    verifier_egalites(vente)
 
-    total_catalogue_des_articles = 0
-    for article in vente.articles.all():
-        total_catalogue_des_articles += article.total_catalogue
-    assert total_catalogue_des_articles == 0
+
+def test_panier_freeres_seules_vente_vide_annulee(lieu):
+    """
+    Un panier qui n'a qu'une « réservation gratuite » (FREERES). Aucune ligne de vente
+    n'est écrite. La vente ouverte par le panier reste donc vide : elle est ANNULEE à la
+    finalisation, sans numéro, sans article, sans règlement. La commande la porte.
+    / A cart with free bookings only writes no sale line: its empty sale is cancelled,
+    without number, item or payment.
+    """
+    acheteur = creer_utilisateur()
+    atelier_gratuit = creer_evenement_avec_tarif(categorie=Product.FREERES)
+
+    panier = PanierSession(requete_avec_session(acheteur))
+    panier.add_ticket(
+        atelier_gratuit.evenement.uuid, atelier_gratuit.tarif.uuid, qty=1
+    )
+    commande = payer_le_panier(panier, acheteur)
+
+    assert commande.paiement_stripe is None
+    assert not LigneArticle.objects.filter(reservation__commande=commande).exists()
+    vente = Vente.objects.get(pk=commande.vente_id)
+    assert vente.statut == Vente.Statut.ANNULEE, (
+        f"La vente vide du panier n'est pas annulée (statut {vente.statut})."
+    )
+    assert vente.numero is None
+    assert vente.articles.count() == 0
+    assert vente.reglements.count() == 0
 
 
 # --------------------------------------------------------------------------

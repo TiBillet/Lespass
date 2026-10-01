@@ -10,7 +10,7 @@ Online Stripe sales, sales without Stripe (admin, API) and credit notes go throu
 **Pourquoi / Why :** chantier 05 « montants entiers » : toute vente écrit son argent en centimes entiers, une seule fois, dans une `Vente` chaînée. /
 Worksite 05 "whole amounts": every sale writes its money once, in whole cents, in a chained `Vente`.
 
-Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement). / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2.
+Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse). / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c.
 
 ## D-1a — Les producteurs Stripe directs ouvrent leur vente / Direct Stripe producers open their sale
 
@@ -139,6 +139,113 @@ Two fake invoices get `amount_paid=1500` (the amount they already simulate): a r
 
 ---
 
+## D-1c-3 — Les tests du rapport comptable tournent dans un lieu dédié (tests seulement) / Accounting report tests run in a dedicated venue (tests only)
+
+### Resume / Summary
+**Quoi / What :** `tests/pytest/test_comptabilite_service.py` passe en schéma dédié (`FastTenantTestCase`, schéma `test_comptabilite_service`). Mêmes scénarios, mêmes assertions ; les totaux se vérifient à l'égalité au lieu d'un « avant / après ». Chaque test annule sa transaction : les `.delete()` de fin de test et le contournement des `post_delete` d'`Event` disparaissent, plus rien n'arrive dans la base de dev. / Same scenarios, same assertions; totals are now exact; each test rolls back.
+
+**Pourquoi / Why :** le service lit le lieu entier sur 5 minutes. Les avoirs laissés en base de dev par `test_stripe_refund.py` faussaient `test_calculer_remboursements_status_negatifs` (`-18500 == -500`). / The service reads the whole venue over 5 minutes; credit notes left by the Stripe refund tests skewed a total.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `tests/pytest/test_comptabilite_service.py` | 17 tests en classe `FastTenantTestCase` ; assertions exactes (ensemble des lignes du queryset, totaux par moyen, total d'adhésion, total de billet, un seul article par catégorie) |
+
+---
+
+## D-2a — Les voies gratuites : la vente est encaissée à 0 / Free paths: the sale is settled at 0
+
+**Migration :** Non — **Chaînes i18n :** deux nouvelles (msgid français, `api_v2/serializers.py`) : « La quantité de billets doit être un nombre entier. » et « Le prix d'un billet doit être un montant positif en euros. ». Le workflow i18n est à lancer par le mainteneur.
+
+### Resume / Summary
+**Quoi / What :**
+- **Une vente gratuite est encaissée à 0** : `encaisser_vente(vente)` sans règlement (total 0). Elle est `REGLEE` et numérotée : c'est une opération enregistrée. Elle est encaissée par l'appelant qui écrit la DERNIÈRE ligne, jamais avant (une vente encaissée ne reçoit plus d'article). /
+  A free sale is settled at 0 (REGLEE, numbered, no payment) by the caller that writes the LAST line.
+- **Réservation à 0 € du front** : `TicketCreator.valider_une_reservation_a_zero_euro` encaisse après les lignes et le statut gratuit. Nouveau paramètre `TicketCreator(encaisser_la_vente_gratuite=True)` ; `ReservationValidator` le lit dans son contexte (`encaisser_la_vente_gratuite`, `True` par défaut). /
+  Front 0 € reservation: settled by `TicketCreator`, unless the caller passes `encaisser_la_vente_gratuite=False`.
+- **Réservation gratuite de l'API v2** : l'API passe `encaisser_la_vente_gratuite=False`. Ses lignes « réservation gratuite » (FREERES) sont écrites par `ajouter_article` dans la MÊME vente que `TicketCreator` (sinon une vente ouverte par l'API, origine API, juste avant la première ligne), TVA par `_taux_tva_de_la_ligne_de_caisse` (FREE → 0), puis l'API encaisse. Un `price` non nul sur une réservation gratuite suit la règle « offert à montant non nul » : part offerte totale (OFFRIR) et règlement FREE du même montant. /
+  API v2: its free-booking lines go into the same sale, then the API settles it; a non-zero price is fully offered with a FREE payment.
+- **API v2, contrôle des billets demandés** (avant `ReservationValidator`) : la quantité (`ticketQuantity`) est convertie en entier (`"2"` → 2), bornée par `QUANTITE_MAXIMUM_PAR_TARIF` avant `int()` ; une quantité non entière (`"2.5"`) est refusée avec une erreur claire, et rien n'est créé (avant, `ReservationValidator` en faisait 2 billets et la ligne gardait 2,5). Le `price` (texte en euros, `openapi-schema.yaml`) devient un `Decimal` ; un texte qui n'est pas un montant entre 0 et 999 999,99 est refusé (avant : erreur 500 `'str' object has no attribute 'quantize'` dans `dround`). /
+  API v2: the quantity is cast to an int, a decimal quantity is refused; the price text becomes a Decimal, an invalid one is refused (it used to crash).
+- **Booking gratuit** (`validate_new_booking`, branche gratuite) : encaissé après le passage de sa ligne en `VALID` / FREE. /
+  Free booking: settled after its line.
+- **Panier gratuit** (`CommandeService._finaliser_gratuit`) : encaissé après le passage de toutes les lignes ; une vente sans article (panier de réservations gratuites seules) est ANNULEE, sans numéro. /
+  Free cart: settled after all lines; an empty sale (free bookings only) is cancelled.
+- **Pas de vente sans ligne** : une réservation gratuite seule, hors panier, n'ouvre toujours aucune vente (test témoin). **T16** (accepté) : une réservation à 0 € annulée après coup (place perdue en attendant la confirmation du mail) garde sa vente `REGLEE` à 0. /
+  No sale without a line; a 0 € reservation cancelled afterwards keeps its settled sale (accepted, T16).
+
+**Pourquoi / Why :** fiche D §3 (« Gratuit : total 0, aucun règlement, vente numérotée »), décisions D-2 du SUIVI (a, b, g, h). Hors session : la branche « payé en caisse » de l'API v2 (`paid_externally`, D-2c). / Sheet D §3 and the D-2 decisions; the API "paid at the POS" branch stays for D-2c.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/validators.py` | `TicketCreator(encaisser_la_vente_gratuite=True)` ; `valider_une_reservation_a_zero_euro` encaisse la vente ; `ReservationValidator` passe le paramètre lu dans son contexte |
+| `api_v2/serializers.py` | `ReservationCreateSerializer.create` : quantité entière et prix `Decimal` contrôlés avant le validateur ; contexte `encaisser_la_vente_gratuite=False` ; lignes FREERES par `ajouter_article` dans la vente de `TicketCreator` (ou une vente API) ; encaissement final |
+| `booking/booking_engine.py` | branche gratuite de `validate_new_booking` : `encaisser_vente(vente)` après la ligne |
+| `BaseBillet/services_commande.py` | `_finaliser_gratuit` : encaisse la vente de la commande, ou l'annule si elle n'a aucun article ; commentaires de `materialiser` |
+| `tests/pytest/test_en_ligne_ecrit_la_vente.py` | les deux témoins D-1 changent de sens et de nom (`…_vente_encaissee_a_zero`) ; 9 tests : témoin FREERES seule (vert attendu), T16, booking gratuit, fiche 14 (deux ordres de produits), fiche 15 en deux (texte `"2"`, décimale `"2.5"`), FREERES API à prix non nul offerte, panier FREERES seules annulé |
+
+## D-2b — Les ventes faites dans l'admin écrivent leur vente, encaissée / Admin sales write their sale, settled
+
+**Migration :** Non — **Chaînes i18n :** une nouvelle (msgid français, `Administration/admin_tenant.py`, `MembershipAddForm.clean`) : « Choisissez un moyen de paiement pour la contribution. ». Le workflow i18n est à lancer par le mainteneur.
+
+### Resume / Summary
+**Quoi / What :**
+- **Billets vendus dans l'admin** (`ReservationAddAdmin.save`) : une vente `ADMIN` (client = l'acheteur, opérateur vide), la ligne par `ajouter_article` (TVA par `_taux_tva_de_la_ligne_de_caisse`), UN règlement au moyen choisi (espèces, CB, chèque, virement) du montant total, puis `encaisser_vente`, avant le mail des billets, dans la transaction de l'admin. Une réservation gratuite (FREERES, 0 €) donne une vente encaissée à 0, sans règlement. /
+  Tickets sold in the admin: one ADMIN sale, one payment at the chosen method, settled before the tickets mail.
+- **Billet offert dans l'admin (D32, T12)** : écrit comme un offert de la caisse : au prix du tarif (avant : 0), part offerte = total, source OFFRIR, un règlement FREE du même montant (posé par le service). /
+  Offered ticket: written at the rate's price, fully offered, with a FREE payment (it used to be 0).
+- **Billets vendus dans l'admin : plus d'envoi à l'ancienne caisse LaBoutik V1** (décision du mainteneur, tous les billets admin) : `send_sale_to_laboutik.delay` est retiré ; le mail des billets reste. /
+  Tickets sold in the admin are no longer sent to the legacy LaBoutik V1 register.
+- **Paiement d'adhésion dans l'admin** (`MembershipMVT.ajouter_paiement`) : adhésion, vente `ADMIN` (client = l'adhérent), ligne, règlement au moyen choisi et encaissement dans UNE transaction. La ligne passe `PAID` (déclencheur `trigger_A`), PUIS la vente est encaissée, même si `trigger_A` échoue (la ligne reste alors `PAID` : l'argent est déclaré reçu). Limite acceptée : une erreur SQL dans `trigger_A` annule tout (rien n'est perdu, le paiement est à refaire). /
+  Membership payment in the admin: one transaction; trigger first, then settle, even if the trigger fails.
+- **Adhésion créée ou renouvelée dans l'admin** (signal `create_lignearticle_if_membership_created_on_admin`) : même forme (vente `ADMIN`, client = l'adhérent, ligne par le service, `PAID` puis encaissement) ; règlement au moyen de l'adhésion ; une adhésion offerte (0) donne une vente à 0, sans règlement. /
+  Membership created or renewed in the admin: same shape; an offered membership is a sale at 0.
+- **Formulaire d'ajout d'adhésion** (`MembershipAddForm.clean`) : une contribution > 0 sans moyen de paiement est refusée (avant : acceptée, la ligne gardait un moyen vide). /
+  The add form refuses a contribution without payment method.
+
+**Pourquoi / Why :** fiche D §3 (lignes admin), §5 test 11, trous T12 (D32) et T15 ; décisions D-2 du SUIVI (e, f, g, i, k). Tests existants changés : le test A′ `test_billets_vendus_dans_l_admin_offert_montant_zero` devient `…_offert_au_prix_part_offerte_totale` (D32, liste fermée A′ §4 ; tâches attendues : le mail des billets seulement) ; dans `tests/pytest/test_admin_reservation_add.py`, les deux `assert_called_once()` sur `send_sale_to_laboutik` deviennent `assert_not_called()`, pour la seule raison de l'arrêt de l'envoi à LaBoutik V1. /
+  Sheet D §3, test 11, gaps T12 and T15. The A′ test is renamed (D32); two assertions of the admin reservation test follow the end of the LaBoutik V1 sending.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `ReservationAddAdmin.save` : vente `ADMIN` par le service, billet offert au prix (D32), un règlement au moyen choisi, encaissement avant le mail ; plus de `send_sale_to_laboutik` (l'import reste : les tests le patchent). `MembershipAddForm.clean` : contribution sans moyen refusée |
+| `BaseBillet/views.py` | `MembershipMVT.ajouter_paiement` : tout dans un `atomic` ; vente `ADMIN`, ligne par `ajouter_article`, `PAID` (`trigger_A`), règlement, encaissement en dernier |
+| `BaseBillet/signals.py` | `create_lignearticle_if_membership_created_on_admin` : vente `ADMIN`, ligne par le service, `PAID`, règlement (sauf 0), encaissement |
+| `tests/pytest/test_admin_ecrit_la_vente.py` | nouveau : 10 tests (billets espèces / offert D32 / virement ; `ajouter_paiement` : ordre, déclencheur en échec, tout ou rien ; adhésion admin payée et offerte ; formulaire sans moyen refusé) |
+| `tests/pytest/test_caracterisation_admin_api.py` | test A′ renommé `…_offert_au_prix_part_offerte_totale` : prix 1500, part offerte 3000, net 0 ; tâches : `ticket_celery_mailer` seulement |
+| `tests/pytest/test_admin_reservation_add.py` | `send_sale_to_laboutik` : `assert_called_once()` → `assert_not_called()` (2 lignes, rien d'autre) |
+
+## D-2c — API et ancienne caisse : adhésion gratuite, recharge cadeau, « payé ailleurs », webhook Fedow / API and legacy register: free membership, gift refill, "paid elsewhere", Fedow webhook
+
+**Migration :** Non — **Chaînes i18n :** aucune nouvelle.
+
+### Resume / Summary
+**Quoi / What :**
+- **Adhésion gratuite** (`MembershipValidator`, branche gratuite ; API v2 en mode « FREE », origine API, et front à 0 €, origine en ligne) : la ligne est l'article d'une vente ouverte avec elle (client = l'adhérent), écrite « offerte en totalité ». Montant non nul : part offerte = total, règlement FREE du même montant. Montant 0 : vente à 0. La vente est encaissée APRÈS le passage « payée » de la ligne (le déclencheur garde son rôle : e-mails, échéance, ligne VALID). /
+  Free membership: one sale opened with the line, fully offered (FREE payment when non-zero), settled after the line's trigger.
+- **Recharge cadeau de l'API v2** (`WalletRefillViewSet`) : la ligne `CREATED` naît dans une vente `EN_ATTENTE` (origine en ligne, client = le destinataire). Fedow répond : ligne `VALID`, vente encaissée (article hors chiffre d'affaires, offert en totalité, règlement FREE). Fedow échoue : ligne `FAILED`, la vente reste `EN_ATTENTE`, sans numéro ; le nouvel essai (même ligne) encaisse la MÊME vente. `Vente.unite` = l'uuid de la monnaie pour du temps ou des points (TIM, FID) ; une monnaie cadeau (TNF) garde `EUR`. L'anti double crédit reste le verrou de `LigneArticle.idempotency_key` (409). /
+  API v2 gift refill: PENDING sale with the CREATED line; settled on success; stays PENDING on failure and the retry settles the same sale; unit = the currency only for time or points; the 409 lock is unchanged.
+- **Billets « payés ailleurs » de l'API v2** (`paymentMethod` cash / card) : les lignes payées (`VALID`, origine LaBoutik) sont les articles d'UNE vente (client = la personne réservée), avec UN règlement au moyen déclaré (cash → CA, card → CC) du total net, puis encaissée par l'API. Une « réservation gratuite » du même appel n'écrit toujours aucune ligne (comportement gardé) : elle n'entre pas dans la vente. /
+  API v2 "paid elsewhere": one sale, one payment at the declared method, settled by the API; free bookings of the same call still write no line.
+- **Webhook Fedow d'adhésion** (`fedow_connect/views.py`, adhésion vendue par l'ancienne caisse) : la ligne (`VALID`, moyen inconnu, origine LaBoutik) est l'article d'une vente (client = l'adhérent, vide s'il est inconnu de Lespass), avec UN règlement `UNKNOWN` du montant, encaissée. Ligne, vente et encaissement dans un `atomic` ; le `try / except` et la tolérance aux rejeux restent. Limite acceptée : l'adhésion est créée avant ce bloc ; s'il échoue, elle reste sans ligne ni vente, et un rejeu (208) ne réécrit rien. /
+  Fedow membership webhook: one sale, one UNKNOWN payment, settled, all or nothing; the membership is created before (accepted limit).
+
+**Pourquoi / Why :** fiche D §3 (adhésion gratuite, recharge cadeau, webhook Fedow), §5 tests 13 et 16 ; SUIVI §4 « D-2 » (c, d, g) et §5 du 2026-10-01 (argent encaissé par l'ancienne caisse : une vente, règlement au moyen déclaré ; webhook encore utilisé). Aucun test existant modifié. /
+  Sheet D §3, tests 13 and 16; maintainer decision of 2026-10-01 on money collected by the legacy register.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/validators.py` | adhésion gratuite : vente ouverte avec la ligne (`ajouter_article`, `offert_en_totalite`), encaissement après le `save()` qui lance le déclencheur ; `TicketCreator.method_B`, branche `paid_externally` : vente ouverte avant la première ligne, lignes par `ajouter_article` (TVA `_taux_tva_de_la_ligne_de_caisse`) |
+| `api_v2/serializers.py` | `ReservationCreateSerializer.create`, « payé ailleurs » : un règlement au moyen déclaré (total net), puis `encaisser_vente`, avant le retour anticipé |
+| `api_v2/views.py` | `WalletRefillViewSet` : `_creer_ligne_article_recharge` ouvre la vente (unité, client) et écrit l'article offert ; encaissement après le passage `VALID` |
+| `fedow_connect/views.py` | `Membership_fwh.retrieve` : vente LaBoutik, ligne par le service, règlement `UNKNOWN`, encaissement, dans un `atomic` ; variable locale `transaction` renommée `transaction_fedow` (elle masquait `django.db.transaction`) |
+| `tests/pytest/test_api_ecrit_la_vente.py` | nouveau : 12 fonctions de test, 14 cas (adhésion gratuite API et front ; recharge : échec puis nouvel essai, temps, cadeau, 409 ; payé ailleurs espèces / carte, avec réservation gratuite dans les deux ordres ; webhook : vente, rejeu, adhérent inconnu, encaissement en échec) |
+
+---
+
 ## Comment tester (a la main) / Manual test
 
 ### Test 1 — billets hors panier
@@ -160,7 +267,7 @@ Two fake invoices get `amount_paid=1500` (the amount they already simulate): a r
 
 ### Test 3 — réservation gratuite
 1. Réserver un billet d'un tarif à 0 € (catégorie billet payant), sans panier.
-2. Attendu : aucun paiement Stripe ; une vente `EN_ATTENTE` dont l'article est la ligne du billet (0 centime).
+2. Attendu : aucun paiement Stripe ; une vente dont l'article est la ligne du billet (0 centime). Depuis D-2a, elle est `REGLEE`, numérotée, sans règlement (voir Test 11).
 
 ### Test 4 (D-1b) — panier mixte, une seule vente
 1. Mettre dans le panier une adhésion, deux billets de deux événements et un créneau de ressource ; payer le panier, ne PAS payer chez Stripe.
@@ -176,7 +283,7 @@ Two fake invoices get `amount_paid=1500` (the amount they already simulate): a r
 
 ### Test 5 (D-1b) — panier gratuit
 1. Panier avec un billet à 0 € et une adhésion à 0 €, valider.
-2. Attendu : aucun paiement Stripe ; `Commande.vente` posée, `EN_ATTENTE`, sans numéro, deux articles à 0.
+2. Attendu : aucun paiement Stripe ; `Commande.vente` posée, deux articles à 0. Depuis D-2a, elle est `REGLEE`, numérotée, sans règlement (voir Test 12).
 
 ### Test 6 (D-1b) — renouvellement d'abonnement
 Pas de test manuel simple (il faut une échéance Stripe réelle). Couvert par les tests automatiques `test_abonnement_*` : quantité 2 au prix unitaire, prix unitaire décimal arrondi demi-haut, ligne sans `pricing` écrite au total, quantité 1.
@@ -211,3 +318,68 @@ Pas de test manuel simple (il faut une échéance Stripe réelle). Couvert par l
 3. Attendu : `V REGLEE <numéro>` et un seul règlement `('SN', <montant payé en centimes>)`.
 4. Abandonner un autre checkout (ne pas payer) : sa vente reste `EN_ATTENTE`, sans numéro.
 5. Écart d'encaissement : pas de test manuel simple (Stripe encaisse le montant demandé) ; couvert par `test_montant_stripe_*` et `test_facture_payee_par_le_solde_client_montant_zero`.
+
+### Test 10 (D-1c-3) — le rapport ne dépend plus de la base de dev
+1. Lancer `make test ARGS="tests/pytest/test_stripe_refund.py"`, puis tout de suite `make test ARGS="tests/pytest/test_comptabilite_service.py"`.
+2. Attendu : 17 passés (le second fichier ne voit aucune ligne du lieu `lespass`).
+
+### Test 11 (D-2a) — réservation et booking gratuits encaissés à 0
+1. Réserver un billet d'un tarif à 0 € sans panier, puis un créneau d'une ressource à 0 €/h.
+2. Dans `manage.py shell` (tenant lespass) :
+   ```python
+   from BaseBillet.models_vente import Vente
+   for v in Vente.objects.order_by("-datetime_creation")[:2]:
+       print(v.statut, v.numero, v.origine, v.total_catalogue, v.reglements.count())
+   ```
+3. Attendu : deux ventes `REGLEE`, numérotées, origine `LP`, total 0, 0 règlement.
+
+### Test 12 (D-2a) — panier gratuit, et panier de réservations gratuites seules
+1. Panier avec un billet à 0 € et une adhésion à 0 €, valider : `Commande.vente` est `REGLEE`, numérotée, sans règlement.
+2. Panier avec une seule « réservation gratuite » (FREERES), valider : `Commande.vente` est `ANNULEE`, sans numéro, sans article.
+
+### Test 13 (D-2a) — API v2, réservation gratuite
+1. `POST /api/v2/reservations/` (clé API, permission réservation) avec, pour le même événement, un tarif billet à 0 € et un tarif « réservation gratuite » (`ticketQuantity: "2"`).
+2. Attendu : une seule vente `REGLEE`, origine `AP` (API), qui porte les deux lignes ; la ligne FREERES a la quantité 2.
+3. Même appel avec `ticketQuantity: "2.5"` : réponse 400, « La quantité de billets doit être un nombre entier. », aucune réservation créée.
+4. Une réservation gratuite seule avec `"price": "5.00"` : la ligne vaut 500 centimes, entièrement offerte, un règlement FREE de 500 ; vente `REGLEE`.
+
+### Verifs automatiques (D-2a)
+`make test ARGS="tests/pytest/test_en_ligne_ecrit_la_vente.py"`
+
+### Test 14 (D-2b) — billets vendus dans l'admin
+1. Admin > Réservations > Ajouter : un tarif à 10 €, quantité 2, « Espèces ». Enregistrer.
+2. Dans `manage.py shell` (tenant lespass) :
+   ```python
+   from BaseBillet.models_vente import Vente
+   v = Vente.objects.order_by("-datetime_creation").first()
+   print(v.origine, v.statut, v.numero, v.client, v.operateur, list(v.reglements.values_list("moyen", "montant")))
+   ```
+3. Attendu : `AD`, `REGLEE`, numérotée, client = l'acheteur, opérateur `None`, `[('CA', 2000)]`.
+4. Même chose en « Offert » sur un tarif à 15 €, quantité 2 : ligne `amount = 1500`, `part_offerte = 3000`, règlements `[('NA', 3000)]`.
+5. Le worker Celery ne reçoit AUCUNE tâche `send_sale_to_laboutik` pour ces ventes ; le mail des billets part.
+
+### Test 15 (D-2b) — paiement et création d'adhésion dans l'admin
+1. Une adhésion « en attente de paiement » : panneau « Ajouter un paiement », 20 €, « Chèque ». Attendu : ligne `V`, vente `AD` `REGLEE`, `[('CH', 2000)]`.
+2. Admin > Adhésions > Ajouter : 20 €, « Virement ». Attendu : vente `AD` `REGLEE`, `[('TR', 2000)]`.
+3. Admin > Adhésions > Ajouter : contribution vide, « Offert ». Attendu : vente `AD` `REGLEE` à 0, aucun règlement.
+4. Admin > Adhésions > Ajouter : 20 €, sans moyen de paiement. Attendu : le formulaire revient avec « Choisissez un moyen de paiement pour la contribution. » ; rien n'est créé.
+
+### Verifs automatiques (D-2b)
+`make test ARGS="tests/pytest/test_admin_ecrit_la_vente.py tests/pytest/test_caracterisation_admin_api.py tests/pytest/test_admin_reservation_add.py"`
+
+### Test 16 (D-2c) — adhésion gratuite par l'API v2
+1. `POST /api/v2/memberships/` (clé API « membership »), sur un tarif d'adhésion à 15 €, sans `paymentMode` (donc « FREE »).
+2. Dans `manage.py shell` (tenant lespass) : la ligne de l'adhésion a `part_offerte = 1500`, sa vente est `AP`, `REGLEE`, numérotée, règlements `[('NA', 1500)]`.
+3. Même chose par le formulaire du site sur un tarif à 0 € : vente `LP`, `REGLEE`, aucun règlement.
+
+### Test 17 (D-2c) — recharge cadeau, Fedow en panne puis rétabli
+1. `POST /api/v2/wallet-refills/` avec un `Idempotency-Key`, Fedow arrêté : réponse 502. La ligne est `F`, sa vente `EN_ATTENTE`, sans numéro.
+2. Fedow relancé, même requête, même clé : 201. La MÊME vente est `REGLEE`, `unite = 'EUR'` (monnaie cadeau), règlements `[('NA', <montant>)]`.
+3. Même requête une troisième fois : 208, rien de plus en base.
+
+### Test 18 (D-2c) — billets « payés ailleurs » et webhook Fedow
+1. `POST /api/v2/reservations/` avec `additionalProperty paymentMethod = "card"`, deux billets à 10 € : vente `LB`, `REGLEE`, `[('CC', 2000)]`.
+2. Une adhésion vendue par l'ancienne caisse LaBoutik : la vente `LB` de la ligne est `REGLEE`, `[('UK', <montant>)]`.
+
+### Verifs automatiques (D-2c)
+`make test ARGS="tests/pytest/test_api_ecrit_la_vente.py tests/pytest/test_api_v2_reservation_laboutik.py tests/pytest/test_api_v2_wallet_refill.py tests/pytest/test_caracterisation_admin_api.py"`

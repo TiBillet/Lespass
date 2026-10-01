@@ -19,37 +19,17 @@ pytestmark = pytest.mark.e2e
 class TestCrowdsSummaryToggle:
     """Toggle du résumé crowds / Crowds summary toggle."""
 
-    def test_summary_details_expand_and_admin_popups(self, page, login_as_admin, django_shell):
-        """Ouvre la page liste /crowd/, vérifie la barre de résumé, les popups
-        admin (allocation + financement global), puis le toggle des détails.
-        / Opens /crowd/ list page, checks summary bar, admin popups, then the
-        details toggle.
+    def test_summary_details_expand_and_admin_popups(self, page, login_as_admin):
+        """Ouvre la page liste /crowd/, vérifie la barre de résumé (sans bouton de
+        financement global), puis le toggle des détails.
+        / Opens /crowd/ list page, checks the summary bar (no global funding button),
+        then the details toggle.
         """
-        # --- Étape 0 : Activer le bouton de financement global, le temps du test ---
-        # La section admin et le bouton de financement global ne s'affichent que si
-        # CrowdConfig.global_funding_button est vrai (crowds/partial/summary.html). Le
-        # test POSE ce reglage au lieu de dependre de l'etat de la base, puis le rend.
-        # / Step 0: enable the global funding button for the test, then restore it.
-        valeur_d_origine = django_shell(
-            "from crowds.models import CrowdConfig\n"
-            "config = CrowdConfig.get_solo()\n"
-            "print('ORIGINE=' + str(config.global_funding_button))\n"
-            "config.global_funding_button = True\n"
-            "config.save()"
-        ).split("ORIGINE=")[1].split()[0]
-        try:
-            self._parcours_du_resume(page, login_as_admin)
-        finally:
-            django_shell(
-                "from crowds.models import CrowdConfig\n"
-                "config = CrowdConfig.get_solo()\n"
-                f"config.global_funding_button = {valeur_d_origine}\n"
-                "config.save()"
-            )
+        self._parcours_du_resume(page, login_as_admin)
 
     def _parcours_du_resume(self, page, login_as_admin):
-        """Le parcours, avec le bouton de financement global actif.
-        / The journey, with the global funding button enabled."""
+        """Le parcours du résumé crowds.
+        / The crowds summary journey."""
         # --- Étape 1 : Connexion admin ---
         # Le spec TS passait par le flow UI (navbar + formulaire + lien
         # TEST MODE). En Python, la fixture login_as_admin injecte
@@ -126,21 +106,11 @@ class TestCrowdsSummaryToggle:
         #     page.keyboard.press("Escape")
         # expect(popup).to_be_hidden()
 
-        # Bouton de contribution au financement global : OBLIGATOIRE (reglage actif).
-        # / Global funding contribution button: MANDATORY (setting enabled).
-        global_funding_button = page.locator(
-            '[data-testid="crowds-summary-global-funding-button"]'
-        )
-        expect(global_funding_button).to_be_visible()
-        global_funding_button.click()
-        popup = page.locator(".swal2-popup")
-        expect(popup).to_be_visible()
-        expect(popup.locator("#contrib-name")).to_be_visible()
-        expect(popup.locator("#contrib-amt")).to_be_visible()
-        # FR : "Annuler" / EN : "Cancel"
-        popup.locator(
-            'button:has-text("Annuler"), button:has-text("Cancel")'
-        ).first.click()
+        # Le financement global est débranché : aucun bouton « Je finance ».
+        # / Global funding is disconnected: no "Je finance" button.
+        expect(
+            page.locator('[data-testid="crowds-summary-global-funding-button"]')
+        ).to_have_count(0)
 
         # --- Étape 4 : Vérifier le bouton toggle ---
         # / Step 4: check toggle button

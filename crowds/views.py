@@ -14,9 +14,9 @@ from rest_framework.decorators import action
 
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import Count, Q, Sum, F, DecimalField, ExpressionWrapper
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
-from django.utils.translation import gettext as _, gettext
+from django.utils.translation import gettext as _
 import json
 
 from BaseBillet.views import get_context
@@ -32,12 +32,10 @@ from BaseBillet.models import (
 )
 from Customers.models import Client
 from fedow_public.models import AssetFedowPublic
-from .models import Initiative, Contribution, CrowdConfig, Vote, Participation, BudgetItem, GlobalFunding
+from .models import Initiative, Contribution, CrowdConfig, Vote, Participation, BudgetItem
 from .serializers import (
     BudgetItemProposalSerializer,
     ContributionCreateSerializer,
-    GlobalFundingCreateSerializer,
-    GlobalFundingAllocateSerializer,
     ParticipationCreateSerializer,
     ParticipationCompleteSerializer,
 )
@@ -50,50 +48,6 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-
-GLOBAL_FUNDING_ALLOC_NAME = "Répartition globale"
-
-
-def _user_funded_cache_key(tenant_id, user_id):
-    return f"crowds:user-funded:{tenant_id}:{user_id}"
-
-
-def get_user_funded_total(user):
-    """
-    FR: Calcule le total financé par un utilisateur spécifique.
-        Prend en compte le financement global ET les contributions aux projets.
-    EN: Compute the total amount funded by a specific user.
-        Includes global funding AND project contributions.
-    """
-    if not user or not user.is_authenticated:
-        return 0
-    tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
-    cache_key = _user_funded_cache_key(tenant_id, user.pk)
-    cached_total = cache.get(cache_key)
-    if cached_total is not None:
-        return cached_total
-
-    # FR: Somme des financements globaux / EN: Sum of global fundings
-    total_global_funding = GlobalFunding.objects.filter(user=user).aggregate(total=Sum("amount_funded")).get("total") or 0
-    # FR: Somme des contributions directes / EN: Sum of direct contributions
-    total_project_contributions = Contribution.objects.filter(contributor=user).aggregate(total=Sum("amount")).get("total") or 0
-    
-    grand_total = total_global_funding + total_project_contributions
-    
-    # FR: Cache court (1 min) car les paiements Stripe peuvent changer la valeur vite
-    # EN: Short cache (1 min) as Stripe payments can change values quickly
-    cache.set(cache_key, grand_total, 60)
-    return grand_total
-
-
-def clear_user_funded_cache(user):
-    """
-    FR: Supprime le cache du montant financé pour un utilisateur.
-    EN: Clears the funded amount cache for a user.
-    """
-    tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
-    cache.delete(_user_funded_cache_key(tenant_id, user.pk))
-
 
 def contribution_stripe_return(request, initiative_uuid, contribution_uuid, paiement_uuid):
     """
@@ -174,11 +128,6 @@ def contribution_stripe_return(request, initiative_uuid, contribution_uuid, paie
                     str(contribution.pk),
                 )
 
-    # FR: Invalider le cache du montant financé par l'utilisateur
-    # EN: Invalidate user funded amount cache
-    if request.user.is_authenticated:
-        clear_user_funded_cache(request.user)
-
     # FR: Redirection vers la page de détail de l'initiative
     # EN: Redirect to the initiative detail page
     return HttpResponseRedirect(f"/crowd/{initiative_uuid}/")
@@ -207,178 +156,6 @@ def _get_or_create_crowdfunding_price() -> Price:
             publish=False,
         )
     return price
-
-
-class GlobalFundingViewset(viewsets.ViewSet):
-    """
-    FR: Gère le financement "global" (don non affecté à un projet précis au départ).
-    EN: Manages "global" funding (donation not assigned to a specific project initially).
-    """
-    authentication_classes = [SessionAuthentication]
-    permission_classes = [permissions.AllowAny]
-
-    def create(self, request):
-        """
-        FR: Crée une intention de financement global et redirige vers Stripe.
-        EN: Creates a global funding intention and redirects to Stripe.
-        """
-        if not request.user.is_authenticated:
-            return JsonResponse({"error": _("Authentication required.")}, status=401)
-
-        serializer = GlobalFundingCreateSerializer(data=request.data)
-        if not serializer.is_valid():
-            return JsonResponse({"error": serializer.errors}, status=400)
-
-        data = serializer.validated_data
-        amount_cents = data.get("amount") or 0
-        if amount_cents <= 0:
-            return JsonResponse({"error": _("Invalid amount.")}, status=400)
-
-        # FR: Préparation de la ligne comptable (LigneArticle)
-        # EN: Accounting line preparation (LigneArticle)
-        price_obj = _get_or_create_crowdfunding_price()
-        amount_decimal = (Decimal(amount_cents) / Decimal("100")).quantize(Decimal("0.01"))
-        price_sold_obj = get_or_create_price_sold(price_obj, custom_amount=amount_decimal)
-
-        accounting_line = LigneArticle.objects.create(
-            pricesold=price_sold_obj,
-            qty=1,
-            amount=amount_cents,
-            payment_method=PaymentMethod.STRIPE_NOFED,
-            sale_origin=SaleOrigin.LESPASS,
-        )
-
-        # FR: Création de l'objet GlobalFunding
-        # EN: Creation of the GlobalFunding object
-        global_funding_instance = GlobalFunding.objects.create(
-            user=request.user,
-            amount_funded=amount_cents,
-            amount_to_be_included=amount_cents,
-            contributor_name=data.get("contributor_name") or "",
-            description=data.get("description") or "",
-            ligne_article=accounting_line,
-        )
-
-        # FR: Métadonnées pour Stripe (pour le webhook de retour)
-        # EN: Metadata for Stripe (for return webhook)
-        stripe_metadata = {
-            "tenant": f"{connection.tenant.uuid}",
-            "global_funding_uuid": f"{global_funding_instance.pk}",
-            "user": f"{request.user.email}",
-        }
-
-        # FR: Initialisation du paiement via le builder TiBillet
-        # EN: Payment initialization via TiBillet builder
-        payment_builder = CreationPaiementStripe(
-            user=request.user,
-            liste_ligne_article=[accounting_line],
-            metadata=stripe_metadata,
-            reservation=None,
-            source=Paiement_stripe.FRONT_CROWDS,
-            success_url="stripe_return/",
-            cancel_url="stripe_return/",
-            absolute_domain=request.build_absolute_uri("/crowd/global-funding/"),
-        )
-
-        if not payment_builder.is_valid():
-            return JsonResponse(
-                {"error": _("Erreur lors de la création du paiement.")},
-                status=400,
-            )
-
-        # FR: Passage en UNPAID en attendant le retour de Stripe
-        # EN: Set to UNPAID while waiting for Stripe return
-        payment_db_obj = payment_builder.paiement_stripe_db
-        payment_db_obj.lignearticles.all().update(status=LigneArticle.UNPAID)
-        
-        # FR: On invalide le cache car l'utilisateur a initié un flux
-        # EN: Invalidate cache since user initiated a flow
-        clear_user_funded_cache(request.user)
-        
-        return JsonResponse({"stripe_url": payment_builder.checkout_session.url})
-
-    @action(detail=True, methods=["get"], url_path="stripe_return")
-    def stripe_return(self, request, pk=None):
-        """
-        FR: Retour de Stripe (succès ou annulation) vers la page liste des projets.
-        EN: Stripe return (success or cancel) back to the list page.
-        """
-        paiement_stripe = get_object_or_404(Paiement_stripe, uuid=pk)
-        paiement_stripe.update_checkout_status()
-        paiement_stripe.refresh_from_db()
-
-        # TODO traitement en cours False, ligne article valide, mail envoyé
-
-        return HttpResponseRedirect("/crowd/")
-
-    @action(detail=False, methods=["get"], url_path="funded-total")
-    def funded_total(self, request):
-        """
-        FR: Retourne un fragment HTMX "J'ai financé X".
-        EN: Returns the HTMX fragment "I funded X".
-        """
-        context = get_context(request)
-        context.update({
-            "user_funded_total": get_user_funded_total(request.user),
-            "global_funding_currency": context["config"].currency_code,
-        })
-        return render(request, "crowds/partial/global_funding_amount.html", context)
-
-    @action(detail=False, methods=["post"], url_path="allocate")
-    def allocate(self, request):
-        """
-        FR: Répartit un montant vers un projet et réduit la somme à répartir.
-        EN: Allocates an amount to a project and reduces the remaining pool.
-        """
-        if not request.user.is_authenticated:
-            return JsonResponse({"error": _("Authentication required.")}, status=401)
-        if not (request.user.is_staff or request.user.is_superuser or request.user.is_current_tenant_admin):
-            return JsonResponse({"error": _("Permission denied.")}, status=403)
-
-        serializer = GlobalFundingAllocateSerializer(data=request.data)
-        if not serializer.is_valid():
-            return JsonResponse({"error": serializer.errors}, status=400)
-
-        initiative = get_object_or_404(Initiative, pk=serializer.validated_data["initiative"])
-        amount = serializer.amount or 0
-        if amount <= 0:
-            return JsonResponse({"error": _("Invalid amount.")}, status=400)
-
-        recharge_total_eur = LigneArticle.objects.filter(
-            carte__isnull=False,
-            paiement_stripe__isnull=False,
-            paiement_stripe__status__in=[Paiement_stripe.PAID, Paiement_stripe.VALID],
-            payment_method__in=[PaymentMethod.STRIPE_FED, PaymentMethod.STRIPE_NOFED, PaymentMethod.STRIPE_SEPA_NOFED],
-        ).aggregate(
-            total=Sum(
-                ExpressionWrapper(
-                    F("pricesold__prix") * F("qty"),
-                    output_field=DecimalField(max_digits=12, decimal_places=2),
-                )
-            )
-        ).get("total") or Decimal("0.00")
-        recharge_total = int(recharge_total_eur * 100)
-        global_funding_total = GlobalFunding.objects.aggregate(total=Sum("amount_funded")).get("total") or 0
-        allocated_total = Contribution.objects.filter(
-            contributor_name=GLOBAL_FUNDING_ALLOC_NAME
-        ).aggregate(total=Sum("amount")).get("total") or 0
-        available_total = recharge_total + global_funding_total - allocated_total
-        if available_total < 0:
-            available_total = 0
-        if amount > available_total:
-            return JsonResponse({"error": _("Amount exceeds remaining pool.")}, status=400)
-
-        Contribution.objects.create(
-            initiative=initiative,
-            contributor=request.user,
-            contributor_name=GLOBAL_FUNDING_ALLOC_NAME,
-            description=_("Répartition du financement global"),
-            amount=amount,
-            payment_status=Contribution.PaymentStatus.PAID_ADMIN,
-            paid_at=timezone.now(),
-        )
-
-        return JsonResponse({"ok": True})
 
 
 # Create your views here.
@@ -501,19 +278,13 @@ class InitiativeViewSet(viewsets.ViewSet):
         initiatives_list = list(initiatives_queryset)
 
         view_context = get_context(request)
-        contributor_name_help = Contribution._meta.get_field("contributor_name").help_text or _(
-            "Votre nom ou celui de votre organisation (affiché publiquement)")
-        contribution_description_help = Contribution._meta.get_field("description").help_text or _(
-            "Un petit mot pour décrire votre contribution")
-            
+
         view_context.update({
             "crowd_config": CrowdConfig.get_solo(),
             "initiatives": initiatives_list,
             "active_tag": active_tag_obj,
             "all_tags": Tag.objects.filter(initiatives__isnull=False).distinct(),
             "search_query": search_query_str,
-            "contrib_name_help": contributor_name_help,
-            "contrib_desc_help": contribution_description_help,
         })
 
         # FR: Requête HTMX : on ne renvoie que le fragment de liste
@@ -526,7 +297,6 @@ class InitiativeViewSet(viewsets.ViewSet):
         # EN: Standard request: add global summary to context
         view_context.update(self._summary_context())
         view_context.update({
-            "user_funded_total": get_user_funded_total(request.user),
             "global_funding_currency": view_context["config"].currency_code,
         })
         return render(request, "crowds/views/list.html", view_context)
@@ -738,12 +508,6 @@ class InitiativeViewSet(viewsets.ViewSet):
             "summary_active_participations_count": total_active_participations_count,
             # "summary_funding_to_allocate": funding_to_allocate,  # debranche, voir plus haut
             "summary_initiatives_for_alloc": initiatives_for_allocation,
-            # FR: Textes d'aide pour le formulaire de financement global
-            # EN: Help texts for Global Funding form
-            "contrib_name_help": Contribution._meta.get_field("contributor_name").help_text or gettext(
-                "Votre nom ou celui de votre organisation (affiché publiquement)"),
-            "contrib_desc_help": Contribution._meta.get_field("description").help_text or gettext(
-                "Un petit mot pour décrire votre contribution"),
             # FR: Indicateurs de budget financé vs réclamé
             # EN: Indicators for funded vs claimed budget
             "summary_remaining_to_claim": max(0, remaining_to_claim_amount),
@@ -1260,11 +1024,10 @@ class InitiativeViewSet(viewsets.ViewSet):
             contribution.ligne_article = ligne_comptable
             contribution.save(update_fields=["paiement_stripe", "ligne_article"])
 
-            # FR: Invalider le cache et retourner l'URL Stripe en JSON
+            # FR: Retourne l'URL Stripe en JSON
             #     Le JS côté client (htmx:afterOnLoad) redirige automatiquement vers cette URL
-            # EN: Invalidate cache and return the Stripe URL as JSON
+            # EN: Return the Stripe URL as JSON
             #     Client-side JS (htmx:afterOnLoad) automatically redirects to this URL
-            clear_user_funded_cache(request.user)
             return JsonResponse({"stripe_url": payment_builder.checkout_session.url})
 
         return _render_contributions(200)

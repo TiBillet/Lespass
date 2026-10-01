@@ -21,7 +21,7 @@ from BaseBillet.models import Event, PostalAddress, Tag, Configuration
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Reservation, \
     PriceSold, Ticket, ProductSold, ProductFormField, PromotionalCode, PaymentMethod, SaleOrigin
 from BaseBillet.models_vente import Vente
-from BaseBillet.services_vente import ajouter_article, ouvrir_vente
+from BaseBillet.services_vente import ajouter_article, encaisser_vente, ouvrir_vente
 from BaseBillet.tasks import send_membership_pending_admin, send_membership_pending_user
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
@@ -196,7 +196,8 @@ class TicketCreator():
                  sale_origin: str = SaleOrigin.LESPASS,
                  create_checkout: bool = True,
                  paid_externally: bool = False, external_payment_method: str = None,
-                 vente=None):
+                 vente=None,
+                 encaisser_la_vente_gratuite: bool = True):
 
         self.products_dict = products_dict
         self.reservation = reservation
@@ -230,12 +231,20 @@ class TicketCreator():
         # - None et create_checkout=False : les lignes sont écrites sans vente. Aucun
         #   chemin de production ne l'utilise ; il reste pour les appels sans vente
         #   (tests) et sera retiré en fiche H.
-        # Si le total vaut 0 (pas de Stripe), la vente reste EN_ATTENTE.
         # / The sale that receives the tickets: opened here when None and
         # create_checkout=True; passed by the caller (the cart always passes its order's
         # sale). None with create_checkout=False: no production path; kept for calls
         # without a sale (tests), removed in sheet H.
         self.vente = vente
+
+        # Réservation à 0 € (pas de Stripe) : la vente est encaissée à 0 après la dernière
+        # ligne, jamais avant (une vente encaissée ne reçoit plus d'article).
+        # - True : TicketCreator écrit la dernière ligne, il encaisse lui-même ;
+        # - False : l'appelant écrit encore des lignes dans cette vente après TicketCreator
+        #   (l'API v2 ajoute ses « réservations gratuites ») : c'est lui qui encaisse.
+        # / 0 € reservation: the sale is settled at 0 after the LAST line. False when the
+        # caller still writes lines into this sale after TicketCreator: it settles itself.
+        self.encaisser_la_vente_gratuite = encaisser_la_vente_gratuite
 
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
@@ -318,9 +327,12 @@ class TicketCreator():
         états lance trigger_B (envoi de la vente à LaBoutik), qui les passe « validées ».
         Puis la réservation passe au statut gratuit : la machine à états active les billets
         et les envoie par mail (utilisateur actif).
+        Enfin la vente est encaissée à 0 (REGLEE, numérotée, aucun règlement), sauf si
+        l'appelant écrit encore des lignes dans cette vente (`encaisser_la_vente_gratuite`).
         / Reservation where every line is 0 €: no Stripe. Lines go "paid" as "free", so
         trigger_B sends the sale to LaBoutik and sets them valid. Then the free status
-        activates and mails the tickets.
+        activates and mails the tickets. Finally the sale is settled at 0, unless the
+        caller still writes lines into it.
         """
         reservation: Reservation = self.reservation
         for ligne_vendue in self.list_line_article_sold:
@@ -333,6 +345,11 @@ class TicketCreator():
         else:
             reservation.status = Reservation.FREERES
         reservation.save()
+
+        # Une vente gratuite est une opération enregistrée : encaissée à 0, numérotée.
+        # / A free sale is a recorded operation: settled at 0, numbered.
+        if self.encaisser_la_vente_gratuite and self.vente is not None:
+            encaisser_vente(self.vente)
 
     # Methode ACTION
     def method_A(self, prices_dict=None):
@@ -429,14 +446,31 @@ class TicketCreator():
             # La création directe en VALID ne déclenche pas la machine à état
             # (signals.pre_save_signal_status ignore _state.adding=True).
             # Donc pas de renvoi de la vente vers LaBoutik : pas de boucle.
+            # La ligne est l'article d'une vente, ouverte avant la première ligne (origine
+            # = celle des lignes, client = l'acheteur). Le règlement au moyen déclaré et
+            # l'encaissement sont faits par l'appelant, après la dernière ligne : l'API v2
+            # (api_v2/serializers.py, ReservationCreateSerializer.create).
             # / Ticket already paid elsewhere (e.g., LaBoutik POS):
             # / create the sale line as VALID, no Stripe checkout, no state machine loop.
+            # / The line is an item of a sale opened before the first line; the caller
+            # (API v2) adds the declared payment and settles the sale.
             if self.paid_externally:
-                line_article = LigneArticle.objects.create(
+                moyen_declare = self.external_payment_method or PaymentMethod.UNKNOWN
+                if self.vente is None:
+                    self.vente = ouvrir_vente(
+                        origine=self.sale_origin,
+                        nature=Vente.Nature.VENTE,
+                        client=self.user,
+                    )
+                line_article = ajouter_article(
+                    self.vente,
                     pricesold=pricesold,
-                    amount=dec_to_int(pricesold.prix),
-                    payment_method=self.external_payment_method or PaymentMethod.UNKNOWN,
-                    qty=qty,
+                    quantite=qty,
+                    prix_unitaire=dec_to_int(pricesold.prix),
+                    taux_tva=_taux_tva_de_la_ligne_de_caisse(
+                        price_generique.product, moyen_declare
+                    ),
+                    payment_method=moyen_declare,
                     promotional_code=code_promo_de_ce_tarif,
                     sale_origin=self.sale_origin,
                     reservation=reservation,
@@ -938,6 +972,10 @@ class ReservationValidator(serializers.Serializer):
         # / Ticket already paid elsewhere (e.g., LaBoutik POS)? Context carries the flag.
         paid_externally = self.context.get('paid_externally', False)
         external_payment_method = self.context.get('external_payment_method', None)
+        # Réservation à 0 € : TicketCreator encaisse la vente, sauf si l'appelant écrit
+        # encore des lignes après lui (l'API v2 passe False et encaisse elle-même).
+        # / 0 € reservation: TicketCreator settles the sale unless the caller still writes lines.
+        encaisser_la_vente_gratuite = self.context.get('encaisser_la_vente_gratuite', True)
         self.tickets = TicketCreator(
             reservation=reservation,
             products_dict=products_dict,
@@ -946,6 +984,7 @@ class ReservationValidator(serializers.Serializer):
             sale_origin=sale_origin,
             paid_externally=paid_externally,
             external_payment_method=external_payment_method,
+            encaisser_la_vente_gratuite=encaisser_la_vente_gratuite,
         )
         self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :
@@ -1214,19 +1253,43 @@ class MembershipValidator(serializers.Serializer):
             # / Compute deadline from last_contribution and subscription type
             membership.set_deadline()
 
+            # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
+            # / Imported at call time: laboutik/views.py imports all of BaseBillet.
+            from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
+            # La ligne de l'adhésion est l'article d'une vente ouverte avec elle (origine
+            # = celle de la ligne, client = l'adhérent). Elle est entièrement offerte : à
+            # montant non nul (tarif payant pris en mode « FREE » par l'API), la part
+            # offerte vaut tout le total et un règlement FREE du même montant est écrit ;
+            # à 0, la vente vaut 0, sans règlement.
+            # / The membership line is the item of a sale opened with it. Fully offered:
+            # non-zero → offered part = total plus a FREE payment; 0 → sale at 0.
+            vente_de_l_adhesion = ouvrir_vente(
+                origine=sale_origin,
+                nature=Vente.Nature.VENTE,
+                client=membership.user,
+            )
             price_sold = get_or_create_price_sold(self.price, custom_amount=membership.contribution_value)
-            line = LigneArticle.objects.create(
+            line = ajouter_article(
+                vente_de_l_adhesion,
                 pricesold=price_sold,
+                quantite=1,
+                prix_unitaire=dec_to_int(membership.contribution_value),
+                taux_tva=_taux_tva_de_la_ligne_de_caisse(self.price.product, PaymentMethod.FREE),
+                offert_en_totalite=True,
                 membership=membership,
                 payment_method=PaymentMethod.FREE,
-                amount=dec_to_int(membership.contribution_value),
-                qty=1,
                 sale_origin=sale_origin,
                 status=LigneArticle.PAID,
                 metadata={"source": "api"},
             )
             # Important pour lancer le triggers pre save qui envoie les mails
             line.save(update_fields=["status"])
+
+            # Encaissée EN DERNIER, après le déclencheur de l'adhésion (e-mails,
+            # échéance), qui a passé la ligne VALID.
+            # / Settled LAST, after the membership trigger that set the line VALID.
+            encaisser_vente(vente_de_l_adhesion)
 
         return attrs
 

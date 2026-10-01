@@ -1328,10 +1328,22 @@ class ReservationCreateSerializer(serializers.Serializer):
         from django.http import QueryDict
         from types import SimpleNamespace
 
+        from decimal import InvalidOperation
+
         from BaseBillet.models import Reservation, Ticket, Price
-        from BaseBillet.validators import ReservationValidator
+        from BaseBillet.models_vente import Vente
+        from BaseBillet.services_vente import (
+            ajouter_article,
+            ajouter_reglement,
+            encaisser_vente,
+            ouvrir_vente,
+        )
+        from BaseBillet.validators import QUANTITE_MAXIMUM_PAR_TARIF, ReservationValidator
         from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
         from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+        # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
+        # / Imported at call time: laboutik/views.py imports all of BaseBillet.
+        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
         reservation_for = validated_data.get("reservationFor") or {}
         under_name = validated_data.get("underName") or {}
@@ -1406,14 +1418,64 @@ class ReservationCreateSerializer(serializers.Serializer):
             price_value = item.get("price")
             if not price_uuid:
                 raise serializers.ValidationError({"reservedTicket": "identifier is required for each ticket."})
-            data.update({str(price_uuid): str(qty)})
-            price_qty_pairs.append((str(price_uuid), qty, price_value))
+
+            # La quantité arrive en nombre ou en texte (JSON). Elle doit être un nombre
+            # entier de billets : "2" donne 2, "2.5" est refusé. Ce contrôle a lieu AVANT
+            # ReservationValidator, qui tronquerait 2.5 en 2 billets sans le dire, alors que
+            # la ligne de vente garderait 2.5. Bornée avant int() (tests/PIEGES.md 13.17).
+            # / The quantity must be a whole number, checked before ReservationValidator
+            # (which would silently truncate it). Bounded before int().
+            message_quantite_invalide = _("La quantité de billets doit être un nombre entier.")
+            try:
+                quantite_decimale = Decimal(str(qty).strip())
+            except InvalidOperation:
+                raise serializers.ValidationError({"reservedTicket": message_quantite_invalide})
+            quantite_hors_bornes = (
+                not quantite_decimale.is_finite()
+                or quantite_decimale > QUANTITE_MAXIMUM_PAR_TARIF
+                or quantite_decimale < -QUANTITE_MAXIMUM_PAR_TARIF
+            )
+            if quantite_hors_bornes:
+                raise serializers.ValidationError({"reservedTicket": message_quantite_invalide})
+            quantite_non_entiere = quantite_decimale != quantite_decimale.to_integral_value()
+            if quantite_non_entiere:
+                raise serializers.ValidationError({"reservedTicket": message_quantite_invalide})
+            quantite_entiere = int(quantite_decimale)
+
+            # Le prix (champ `price`, un texte en euros) devient un Decimal : il fixe le prix
+            # de la ligne d'une « réservation gratuite » écrite plus bas. Un texte qui n'est
+            # pas un montant positif est refusé, sinon l'écriture de la ligne planterait.
+            # / The price (a text in euros) becomes a Decimal; invalid or negative is refused.
+            prix_saisi = None
+            if price_value is not None:
+                message_prix_invalide = _("Le prix d'un billet doit être un montant positif en euros.")
+                try:
+                    prix_saisi = Decimal(str(price_value).strip().replace(',', '.'))
+                except InvalidOperation:
+                    raise serializers.ValidationError({"reservedTicket": message_prix_invalide})
+                prix_hors_bornes = (
+                    not prix_saisi.is_finite()
+                    or prix_saisi < 0
+                    or prix_saisi > Decimal('999999.99')
+                )
+                if prix_hors_bornes:
+                    raise serializers.ValidationError({"reservedTicket": message_prix_invalide})
+
+            data.update({str(price_uuid): str(quantite_entiere)})
+            price_qty_pairs.append((str(price_uuid), quantite_entiere, prix_saisi))
             if price_value is not None:
                 data.update({f"custom_amount_{price_uuid}": str(price_value)})
 
         # Build a fake request for the validator
         fake_request = SimpleNamespace(user=AnonymousUser(), data=data)
-        validator_context = {"request": fake_request, "sale_origin": SaleOrigin.API}
+        # L'API écrit encore des lignes après TicketCreator (les « réservations gratuites »,
+        # plus bas) : c'est elle qui encaisse la vente gratuite, après la dernière ligne.
+        # / The API still writes lines after TicketCreator: it settles the free sale itself.
+        validator_context = {
+            "request": fake_request,
+            "sale_origin": SaleOrigin.API,
+            "encaisser_la_vente_gratuite": False,
+        }
         if paid_externally:
             # Vente déjà payée en caisse : origine LaBoutik,
             # le TicketCreator créera la ligne de vente en VALID sans Stripe.
@@ -1432,7 +1494,25 @@ class ReservationCreateSerializer(serializers.Serializer):
         # sinon une deuxième ligne de vente serait créée en double.
         # / Paid at the POS: everything is already created and valid.
         # / Skip the free-booking blocks below to avoid a duplicate sale line.
+        # Les lignes payées sont les articles d'UNE vente (celle de TicketCreator). La
+        # caisse a déjà reçu l'argent : UN règlement au moyen déclaré (espèces CA, carte
+        # CC), du total net des lignes, puis l'encaissement, en dernier. Une « réservation
+        # gratuite » du même appel n'écrit aucune ligne : elle n'entre pas dans la vente.
+        # / The paid lines are the items of ONE sale. The register already got the money:
+        # one payment at the declared method for the net total, then settle, last.
         if paid_externally:
+            vente_payee_ailleurs = validator.tickets.vente
+            if vente_payee_ailleurs is not None:
+                total_net_des_lignes_payees = 0
+                for article in vente_payee_ailleurs.articles.all():
+                    total_net_des_lignes_payees += article.total_ttc
+                if total_net_des_lignes_payees != 0:
+                    ajouter_reglement(
+                        vente_payee_ailleurs,
+                        moyen=external_payment_method,
+                        montant=total_net_des_lignes_payees,
+                    )
+                encaisser_vente(vente_payee_ailleurs)
             return reservation
 
         # Confirm free reservations (optional)
@@ -1446,10 +1526,16 @@ class ReservationCreateSerializer(serializers.Serializer):
         # déjà créé (et validé sans Stripe) celles des tarifs « payants » à 0 € ; l'API crée
         # seulement celles des tarifs qui n'en ont pas encore (réservations gratuites).
         # En recréer une ferait compter la vente deux fois.
-        # / Free booking: each price gets exactly one sale line. TicketCreator already created
-        # the 0 € paid-category ones; the API only creates the missing ones.
+        # Toutes ces lignes sont les articles d'UNE vente : celle de TicketCreator s'il en a
+        # ouvert une, sinon une vente ouverte ici (origine API) avant la première ligne.
+        # Puis la vente est encaissée à 0, après la dernière ligne. Un prix non nul en
+        # « offert » (FREE) suit la règle « offert à montant non nul » du service de vente :
+        # part offerte totale et règlement FREE.
+        # / Free booking: each price gets exactly one sale line, all in ONE sale (TicketCreator's,
+        # else one opened here, API origin), settled at 0 after the last line.
         if not checkout_link:
-            for price_uuid, qty, price_value in price_qty_pairs:
+            vente_de_la_reservation = validator.tickets.vente
+            for price_uuid, qty, prix_saisi in price_qty_pairs:
                 try:
                     price = Price.objects.get(uuid=price_uuid)
                 except Price.DoesNotExist:
@@ -1459,17 +1545,31 @@ class ReservationCreateSerializer(serializers.Serializer):
                 ).exists()
                 if ce_tarif_a_deja_sa_ligne:
                     continue
-                price_sold = get_or_create_price_sold(price, event=event, custom_amount=price_value)
-                LigneArticle.objects.create(
+                price_sold = get_or_create_price_sold(price, event=event, custom_amount=prix_saisi)
+
+                if vente_de_la_reservation is None:
+                    vente_de_la_reservation = ouvrir_vente(
+                        origine=SaleOrigin.API,
+                        nature=Vente.Nature.VENTE,
+                        client=reservation.user_commande,
+                    )
+                ajouter_article(
+                    vente_de_la_reservation,
                     pricesold=price_sold,
-                    amount=dec_to_int(price_sold.prix),
-                    qty=qty,
+                    quantite=qty,
+                    prix_unitaire=dec_to_int(price_sold.prix),
+                    taux_tva=_taux_tva_de_la_ligne_de_caisse(price.product, PaymentMethod.FREE),
                     payment_method=PaymentMethod.FREE,
                     sale_origin=SaleOrigin.API,
                     status=LigneArticle.FREERES,
                     reservation=reservation,
                     metadata={"source": "api"},
                 )
+
+            # Pas de vente sans ligne : une vente n'existe que si une ligne a été écrite.
+            # / No sale without a line: a sale exists only if a line was written.
+            if vente_de_la_reservation is not None:
+                encaisser_vente(vente_de_la_reservation)
 
         return reservation
 
