@@ -82,6 +82,12 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
     :param ligne_articles: les `LigneArticle` du paiement à rembourser
     :param specified_quantity: quantité rendue sur chaque ligne, ou None
     """
+    # Imports locaux INDISPENSABLES : `BaseBillet/models.py` importe ce module au
+    # chargement (`partial_refund_payment`). `services_vente` et `models_vente`
+    # importent `BaseBillet.models` : montés en tête, ces imports font un cycle
+    # (services_vente -> BaseBillet.models -> PaiementStripe.utils -> services_vente).
+    # / Required local imports: BaseBillet/models.py imports this module when it loads;
+    # at module top they would make an import cycle.
     from BaseBillet.models import Paiement_stripe, LigneArticle, PaymentMethod, SaleOrigin
     from BaseBillet.models_vente import Reglement, Vente
     from BaseBillet.services_vente import (

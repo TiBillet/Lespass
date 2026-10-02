@@ -14,6 +14,13 @@ from stripe._error import InvalidRequestError
 
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold, \
     PaymentMethod, SaleOrigin, DUREE_D_UN_PAIEMENT_EN_COURS
+from BaseBillet.models_vente import Vente
+from BaseBillet.services_vente import (
+    ajouter_article,
+    arrondir_au_centime_demi_haut,
+    ouvrir_vente,
+)
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -317,15 +324,6 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
     lignes_articles = []
 
     from ApiBillet.serializers import get_or_create_price_sold
-    from BaseBillet.models_vente import Vente
-    from BaseBillet.services_vente import (
-        ajouter_article,
-        arrondir_au_centime_demi_haut,
-        ouvrir_vente,
-    )
-    # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
-    # / Imported at call time: laboutik/views.py imports all of BaseBillet.
-    from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
     # La vente de cette échéance : un paiement Stripe = une vente (R5). Elle est ouverte
     # AVANT ses lignes et reste EN_ATTENTE : elle est encaissée quand la facture est

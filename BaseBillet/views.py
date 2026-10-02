@@ -57,6 +57,16 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
     WizardEventSerializer
+from BaseBillet.models_vente import Vente
+from BaseBillet.services_vente import (
+    MOYENS_DU_CHAMP_REMBOURSE_PAR,
+    ajouter_article,
+    ajouter_reglement,
+    choix_du_champ_rembourse_par,
+    encaisser_vente,
+    ligne_entierement_offerte,
+    ouvrir_vente,
+)
 from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain
 from TiBillet import settings
@@ -73,6 +83,7 @@ from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from root_billet.models import RootConfiguration
 from django.utils.dateparse import parse_datetime
 
@@ -1905,9 +1916,14 @@ class QrCodeScanPay(viewsets.ViewSet):
         :param wallet: le portefeuille du payeur, posé sur chaque part
         :return: la vente encaissée
         """
-        # Imports locaux, comme controlvanne/billing.py : le service de vente et la
-        # caisse importent eux-mêmes des modèles de BaseBillet.
-        # / Local imports, like controlvanne/billing.py.
+        # Imports faits à l'appel, INDISPENSABLES : les tests du paiement QR
+        # (tests/pytest/test_qrcode_ecrit_la_vente.py) remplacent `encaisser_vente` par
+        # `mock.patch("BaseBillet.services_vente.encaisser_vente")`. Ce patch ne change
+        # que le module `services_vente` : un import en tête de ce fichier garderait la
+        # vraie fonction, et le test ne verrait plus son échec simulé.
+        # / Imported at call time on purpose: the QR payment tests patch
+        # `BaseBillet.services_vente.encaisser_vente`; a module-top import would keep the
+        # real function.
         from BaseBillet.models_vente import Vente
         from BaseBillet.services_vente import (
             ajouter_article,
@@ -3844,10 +3860,6 @@ class AnnulationAdhesionSerializer(serializers.Serializer):
     resilier_abonnement_stripe = serializers.BooleanField(required=False, default=False)
 
     def validate_moyen_rembourse(self, moyen_recu):
-        # Import local, comme les autres imports du service de vente de ce module.
-        # / Local import, like the other sale service imports of this module.
-        from BaseBillet.services_vente import MOYENS_DU_CHAMP_REMBOURSE_PAR
-
         if moyen_recu == "":
             return moyen_recu
         if moyen_recu not in MOYENS_DU_CHAMP_REMBOURSE_PAR:
@@ -4816,17 +4828,6 @@ class MembershipMVT(viewsets.ViewSet):
         montant_valide = serializer_paiement.validated_data['amount']
         moyen_paiement_valide = serializer_paiement.validated_data['payment_method']
 
-        # Imports locaux : le service de vente et la caisse importent BaseBillet.
-        # / Local imports: the sale service and the register import BaseBillet.
-        from BaseBillet.models_vente import Vente
-        from BaseBillet.services_vente import (
-            ajouter_article,
-            ajouter_reglement,
-            encaisser_vente,
-            ouvrir_vente,
-        )
-        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
-
         # Adhésion, ligne, vente et encaissement sont écrits ensemble, ou pas du tout.
         # CONTRAINTE : une erreur SQL dans `trigger_A` casse cette transaction (la
         # machine à états avale l'exception, sans point de sauvegarde) ; l'encaissement
@@ -4918,13 +4919,6 @@ class MembershipMVT(viewsets.ViewSet):
         :param erreurs: les erreurs du serializer, ou None
         :return: le dictionnaire de contexte
         """
-        # Import local, comme les autres imports du service de vente de ce module.
-        # / Local import, like the other sale service imports of this module.
-        from BaseBillet.services_vente import (
-            MOYENS_DU_CHAMP_REMBOURSE_PAR,
-            choix_du_champ_rembourse_par,
-            ligne_entierement_offerte,
-        )
 
         dernier_paiement_deja_rembourse = (
             ligne_du_dernier_paiement is not None

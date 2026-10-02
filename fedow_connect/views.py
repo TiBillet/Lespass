@@ -18,6 +18,7 @@ from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import ajouter_article, ajouter_reglement, encaisser_vente, ouvrir_vente
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
@@ -106,10 +107,6 @@ class Membership_fwh(viewsets.ViewSet):
         # nothing. LIMIT: the membership is created BEFORE this block; on failure it stays
         # without line nor sale, and a Fedow replay (208) writes nothing.
         try :
-            # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
-            # / Imported at call time: laboutik/views.py imports all of BaseBillet.
-            from laboutik.views import _taux_tva_de_la_ligne_de_caisse
-
             #TODO : Ajouter toute les infos de wallet, card, asset, moyen de paiement quand Laboutik sera intégrée :
             # beaucoup d'info dans le metadata
             with transaction.atomic():

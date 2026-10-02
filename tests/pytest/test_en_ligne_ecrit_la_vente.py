@@ -114,6 +114,7 @@ CODE PARCOURU / CODE EXERCISED
 - BaseBillet/validators.py — TicketCreator, ReservationValidator,
   MembershipValidator.get_checkout_stripe ;
 - api_v2/serializers.py — ReservationCreateSerializer (réservation gratuite) ;
+- api_v2/views.py — ReservationViewSet.create (la route `POST /api/v2/reservations/`) ;
 - BaseBillet/views.py — MembershipMVT.get_checkout_for_membership ;
 - booking/booking_engine.py — validate_new_booking, get_checkout_stripe ;
 - crowds/views.py — InitiativeViewSet.contribute ;
@@ -179,6 +180,10 @@ from laboutik.integrity import calculer_hmac_vente
 from laboutik.models import LaboutikConfiguration
 from PaiementStripe.views import new_entry_from_stripe_subscription_invoice
 from fabriques_vente import verifier_egalites
+from test_api_ecrit_la_vente import (
+    creer_une_cle_api_de_reservation,
+    reserver_par_la_route_api_v2,
+)
 from fabriques_panier import (
     PREFIXE_DE_TEST,
     ajouter_un_tarif,
@@ -952,6 +957,67 @@ def test_api_v2_quantite_decimale_refusee(lieu):
 
     assert not Reservation.objects.filter(event=atelier_gratuit.evenement).exists()
     assert Vente.objects.count() == nombre_de_ventes_avant
+
+
+def test_api_v2_route_quantite_decimale_refusee_en_400(lieu):
+    """
+    Fiche test 15, par la route HTTP. `POST /api/v2/reservations/` avec une quantité
+    décimale (`"2.5"`) pour une « réservation gratuite » seule. La réponse est 400, et
+    l'erreur porte sur les billets demandés (clé `reservedTicket`). Rien n'est créé : ni
+    réservation, ni vente.
+    On vérifie la CLÉ de l'erreur, jamais son texte : le texte change avec la langue.
+    Le billet envoyé a un identifiant valide et pas de prix : sous `reservedTicket`, seul
+    le contrôle de la quantité peut refuser cette demande.
+    / Sheet test 15, through the HTTP route: a decimal quantity gives a 400 whose error
+    key is `reservedTicket`; nothing is created. The key is checked, never the text.
+    """
+    atelier_gratuit = creer_evenement_avec_tarif(categorie=Product.FREERES)
+    texte_de_la_cle = creer_une_cle_api_de_reservation()
+    email_de_la_personne = f"test+chantierpanier{identifiant_unique()}@mock.test"
+    nombre_de_ventes_avant = Vente.objects.count()
+
+    reponse = reserver_par_la_route_api_v2(
+        texte_de_la_cle,
+        atelier_gratuit.evenement,
+        {atelier_gratuit.tarif: "2.5"},
+        email_de_la_personne,
+    )
+
+    assert reponse.status_code == 400, (
+        f"Réponse {reponse.status_code} : une erreur de validation (400) est attendue."
+    )
+    assert "reservedTicket" in reponse.json(), (
+        f"L'erreur ne porte pas sur les billets demandés : {reponse.json()}"
+    )
+    assert not Reservation.objects.filter(event=atelier_gratuit.evenement).exists()
+    assert Vente.objects.count() == nombre_de_ventes_avant
+
+
+def test_api_v2_route_quantite_texte_entiere_cree_deux_billets(lieu):
+    """
+    Fiche test 15, par la route HTTP. `POST /api/v2/reservations/` avec une quantité
+    entière envoyée en texte (`"2"`) pour une « réservation gratuite » seule. La réponse
+    est 201, et la réservation créée a 2 billets.
+    / Sheet test 15, through the HTTP route: the text quantity "2" gives a 201 and a
+    reservation with 2 tickets.
+    """
+    atelier_gratuit = creer_evenement_avec_tarif(categorie=Product.FREERES)
+    texte_de_la_cle = creer_une_cle_api_de_reservation()
+    email_de_la_personne = f"test+chantierpanier{identifiant_unique()}@mock.test"
+
+    reponse = reserver_par_la_route_api_v2(
+        texte_de_la_cle,
+        atelier_gratuit.evenement,
+        {atelier_gratuit.tarif: "2"},
+        email_de_la_personne,
+    )
+
+    assert reponse.status_code == 201, (
+        f"Réponse {reponse.status_code} : une création (201) est attendue. "
+        f"Corps : {reponse.content[:500]}"
+    )
+    reservation = Reservation.objects.get(event=atelier_gratuit.evenement)
+    assert reservation.tickets.count() == 2
 
 
 # --------------------------------------------------------------------------

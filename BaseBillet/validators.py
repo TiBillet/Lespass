@@ -28,6 +28,7 @@ from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import dround
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -406,10 +407,9 @@ class TicketCreator():
         return tickets
 
     def method_B(self, prices_dict):
-        # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
-        # Même règle de TVA que la caisse, le QR code et la tireuse.
-        # / Imported at call time: laboutik/views.py imports all of BaseBillet.
-        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+        # Les lignes écrites plus bas prennent leur TVA par `_taux_tva_de_la_ligne_de_caisse` :
+        # même règle de TVA que la caisse, le QR code et la tireuse.
+        # / The lines below take their VAT from the register's rule (QR code, beer tap too).
 
         reservation: Reservation = self.reservation
         tickets = []
@@ -1067,10 +1067,6 @@ class MembershipValidator(serializers.Serializer):
 
         amount = dec_to_int(membership.contribution_value)
 
-        # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
-        # / Imported at call time: laboutik/views.py imports all of BaseBillet.
-        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
-
         # Un paiement Stripe = une vente (R5). Chaque appel ouvre une NOUVELLE vente :
         # le lien de paiement d'une adhésion validée rappelle cette fonction quand la
         # session précédente a expiré, et l'ancienne vente reste EN_ATTENTE, sans numéro.
@@ -1252,10 +1248,6 @@ class MembershipValidator(serializers.Serializer):
             # Calcul de la deadline a partir de last_contribution et du type d'abonnement
             # / Compute deadline from last_contribution and subscription type
             membership.set_deadline()
-
-            # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
-            # / Imported at call time: laboutik/views.py imports all of BaseBillet.
-            from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
             # La ligne de l'adhésion est l'article d'une vente ouverte avec elle (origine
             # = celle de la ligne, client = l'adhérent). Elle est entièrement offerte : à

@@ -15,6 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from django.db.transaction import atomic
 from datetime import timedelta
 from BaseBillet.models import Product, ResourceProduct, Price, LigneArticle, Configuration, Paiement_stripe, Commande
+from BaseBillet.services_vente import ligne_entierement_offerte
 from PaiementStripe.utils import partial_refund_payment
 from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
@@ -629,10 +630,6 @@ class Booking(models.Model):
 
     @atomic
     def cancel_and_refund_booking(self):
-        # Import local : services_vente importe BaseBillet.models au chargement.
-        # / Local import: services_vente imports BaseBillet.models when it loads.
-        from BaseBillet.services_vente import ligne_entierement_offerte
-
         if self.status in [Booking.USER_CANCELED, Booking.ADMIN_CANCELED]:
             raise Exception(_("This booking is already cancelled."))
 

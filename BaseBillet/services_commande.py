@@ -23,6 +23,7 @@ from BaseBillet.models_vente import Vente
 from BaseBillet.services_panier import InvalidItemError
 from BaseBillet.services_vente import ajouter_article, annuler_vente, encaisser_vente, ouvrir_vente
 from booking.models import Resource, Booking
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
 logger = logging.getLogger(__name__)
 
@@ -181,11 +182,6 @@ class CommandeService:
                 vente=vente,
             )
 
-            # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
-            # Même règle de TVA que la caisse et les producteurs en ligne.
-            # / Imported at call time: laboutik/views.py imports all of BaseBillet.
-            from laboutik.views import _taux_tva_de_la_ligne_de_caisse
-
             all_lines = []
 
             # Le total de la commande (décision Stripe ou gratuit, garde des 0,50 €) est
@@ -246,8 +242,9 @@ class CommandeService:
                 ) else None
                 # La ligne de l'adhésion, écrite par le service de vente dans la vente de
                 # la commande : montants entiers et TVA (celle du produit, sinon celle du
-                # lieu).
+                # lieu). Même règle de TVA que la caisse et les producteurs en ligne.
                 # / The membership line, written by the sale service into the order's sale.
+                # Same VAT rule as the register and the online producers.
                 line = ajouter_article(
                     vente,
                     pricesold=price_sold,

@@ -10,7 +10,7 @@ Online Stripe sales, sales without Stripe (admin, API) and credit notes go throu
 **Pourquoi / Why :** chantier 05 « montants entiers » : toute vente écrit son argent en centimes entiers, une seule fois, dans une `Vente` chaînée. /
 Worksite 05 "whole amounts": every sale writes its money once, in whole cents, in a chained `Vente`.
 
-Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2), D-3b (le remboursement Stripe écrit sa vente AVOIR), D-3c-1 (annulations de réservation et de billet), D-3c-2 (annulation d'adhésion, D30), D-3z (corrections de la relecture de D-3 : double avoir, double remboursement Stripe, billets de caisse), D-4a (corrections de la grande relecture de la fiche D ; plus aucun avoir admin envoyé à LaBoutik V1), puis le tableau des mutations jouées. / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z, D-3b, D-3c-1, D-3c-2, D-3z, D-4a, then the table of the mutations played.
+Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2), D-3b (le remboursement Stripe écrit sa vente AVOIR), D-3c-1 (annulations de réservation et de billet), D-3c-2 (annulation d'adhésion, D30), D-3z (corrections de la relecture de D-3 : double avoir, double remboursement Stripe, billets de caisse), D-4a (corrections de la grande relecture de la fiche D ; plus aucun avoir admin envoyé à LaBoutik V1), D-4b (imports locaux sans cycle montés en tête ; test de route de la quantité de l'API v2), puis le tableau des mutations jouées. / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z, D-3b, D-3c-1, D-3c-2, D-3z, D-4a, D-4b, then the table of the mutations played.
 
 ## D-1a — Les producteurs Stripe directs ouvrent leur vente / Direct Stripe producers open their sale
 
@@ -517,6 +517,47 @@ Full Opus and Fable reviews of sheet D, and the maintainer's LaBoutik V1 decisio
 | verrou de l'adhésion retiré | `ApiBillet/views.py` l.1460 | `test_renouvellement_d_abonnement_rejoue_une_seule_vente` |
 | `try` du SEPA retiré | `ApiBillet/views.py` l.1310-1316 | `test_sepa_refuse_annulation_en_echec_ne_bloque_pas` |
 
+## D-4b — Imports locaux sans cycle montés en tête ; test de route de la quantité de l'API v2 / Local imports without a cycle moved to module top; API v2 quantity route test
+
+**Migration :** Non — **Chaînes i18n :** aucune. **Refactoring interne / Internal refactoring** : aucun comportement ne change.
+
+### Resume / Summary
+**Quoi / What :**
+- **Imports locaux** : le commentaire « Import au moment de l'appel : laboutik/views.py importe tout BaseBillet » (ou « Imports locaux : le service de vente et la caisse importent BaseBillet ») était faux. Aucun cycle d'import ne justifiait ces imports locaux. Ils montent en tête de leur module, et le commentaire disparaît. Les imports locaux de `models_vente` et `services_vente` des mêmes fonctions montent aussi. Dans `ReservationAddAdmin.save`, l'import local de `Vente` réimportait ce que la tête du module importe déjà : il est supprimé. La phrase « Même règle de TVA… » est une contrainte métier : elle reste, au-dessus des appels. /
+  Local imports with a false "circular import" comment moved to module top; the comment is gone. The VAT rule sentence stays.
+- **Import local gardé pour les tests** : dans `_ecrire_la_vente_payee` (`BaseBillet/views.py`, paiement QR / NFC), les imports restent faits à l'appel. Les tests du paiement QR remplacent `encaisser_vente` par `mock.patch("BaseBillet.services_vente.encaisser_vente")` : un import en tête garderait la vraie fonction. Le commentaire dit cette contrainte. /
+  `_ecrire_la_vente_payee` keeps its call-time imports: the QR tests patch `BaseBillet.services_vente.encaisser_vente`.
+- **Vrais cycles, commentés exactement** : `BaseBillet/models.py` (`cancel_and_refund_resa`, `cancel_and_refund_ticket` : `services_vente` importe `BaseBillet.models`), commentaire inchangé ; `PaiementStripe/utils.py` (`partial_refund_payment` : `BaseBillet.models` importe ce module), commentaire ajouté. /
+  Real cycles keep their local imports, with an exact comment.
+- **Vérification d'un cycle** : pour chaque import, un processus Python à part, avec l'import ajouté en tête du module au chargement par un crochet d'import (aucun fichier modifié), `django.setup()`, le module et la cible dans les deux ordres, puis les URL tenant et public ; en plus, une recherche de chemin dans les imports faits au chargement (cible → module). /
+  Each cycle checked by a separate boot with the import hooked at module top, both orders, plus an import-path search.
+- **Test de route** : la quantité de billets de l'API v2 est testée par la vraie route `POST /api/v2/reservations/` : `"2.5"` → 400, erreur sous la clé `reservedTicket` (la clé, pas le texte, qui change avec la langue) ; `"2"` → 201 et 2 billets. Le test du serializer reste. /
+  API v2 quantity tested through the HTTP route: "2.5" → 400 on `reservedTicket`; "2" → 201 with 2 tickets.
+
+**Pourquoi / Why :** grande relecture Fable de la fiche D (SUIVI §4, constats 5 et 11). /
+Full Fable review of sheet D, findings 5 and 11.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `api_v2/views.py` | `Vente`, `ajouter_article`, `ouvrir_vente`, `_taux_tva_de_la_ligne_de_caisse` en tête (`_creer_ligne_article_recharge`) |
+| `api_v2/serializers.py` | `Vente`, 4 fonctions de `services_vente`, `_taux_tva_de_la_ligne_de_caisse` en tête (`ReservationCreateSerializer.create`) |
+| `PaiementStripe/views.py` | `Vente`, 3 fonctions de `services_vente`, `_taux_tva_de_la_ligne_de_caisse` en tête (`new_entry_from_stripe_subscription_invoice`) |
+| `PaiementStripe/utils.py` | commentaire du vrai cycle ajouté (`partial_refund_payment`) |
+| `fedow_connect/views.py`, `crowds/views.py`, `booking/booking_engine.py` | `_taux_tva_de_la_ligne_de_caisse` en tête |
+| `BaseBillet/services_commande.py` | `_taux_tva_de_la_ligne_de_caisse` en tête ; phrase « Même règle de TVA » au-dessus de l'appel |
+| `BaseBillet/validators.py` | `_taux_tva_de_la_ligne_de_caisse` en tête (3 imports locaux) ; phrase « Même règle de TVA » en tête de `method_B` |
+| `booking/models.py` | `ligne_entierement_offerte` en tête (pas de cycle) |
+| `Administration/admin_tenant.py` | `ReservationAddAdmin.save` : `Vente` local supprimé (déjà en tête), 4 fonctions de `services_vente` ajoutées à l'import de tête, `_taux_tva_de_la_ligne_de_caisse` en tête |
+| `BaseBillet/views.py` | `Vente`, 7 noms de `services_vente`, `_taux_tva_de_la_ligne_de_caisse` en tête (`validate_moyen_rembourse`, `ajouter_paiement`, `_contexte_du_formulaire_d_annulation`) ; `_ecrire_la_vente_payee` : imports locaux gardés, commentaire de la vraie contrainte (tests QR) |
+| `tests/pytest/test_en_ligne_ecrit_la_vente.py` | 2 tests de route (`test_api_v2_route_quantite_decimale_refusee_en_400`, `test_api_v2_route_quantite_texte_entiere_cree_deux_billets`) |
+
+### Mutations (non jouées par l'ouvrier) / Mutations (not played by the worker)
+| Mutation | Fichier:ligne | Test attendu en échec |
+|---|---|---|
+| refus de la quantité non entière retiré | `api_v2/serializers.py` l.1439-1440 | `test_api_v2_route_quantite_decimale_refusee_en_400` (et `test_api_v2_quantite_decimale_refusee`) |
+| 201 → 200 à la création | `api_v2/views.py` l.642 | `test_api_v2_route_quantite_texte_entiere_cree_deux_billets` seul |
+
 ### Mutations jouées / Mutations played
 Une ligne par session de la fiche D. Recopié du SUIVI §3 (colonne des mutations). /
 One row per session of sheet D, copied from SUIVI §3.
@@ -786,3 +827,9 @@ Pas de test à la main : l'échec d'encaissement ne se provoque pas sans simulat
 
 ### Verifs automatiques (D-4a)
 `make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_en_ligne_ecrit_la_vente.py tests/pytest/test_caracterisation_annulations.py tests/pytest/test_stripe_refund.py booking/tests"` ; une fois, vrai Stripe : `make test ARGS="tests/pytest/test_stripe_reel_remboursement.py"` ; E2E seuls : `test_admin_credit_note.py`, `test_admin_reservation_cancel.py`, `test_admin_cancel_membership.py`.
+
+### Test 34 (D-4b) — rien ne change à l'écran
+Refactoring interne : aucun parcours ne change. Contrôle rapide : le serveur démarre sans erreur d'import ; une réservation gratuite par l'API v2 avec `"ticketQuantity": "2.5"` répond 400 (`reservedTicket`), avec `"2"` répond 201.
+
+### Verifs automatiques (D-4b)
+`docker exec lespass_django poetry run python /DjangoFiles/manage.py check` ; `make test ARGS="tests/pytest/test_en_ligne_ecrit_la_vente.py tests/pytest/test_api_ecrit_la_vente.py tests/pytest/test_caracterisation_*.py booking/tests"`, plus les fichiers de tests des modules touchés (`rg -l` de leurs modules dans `tests/`).

@@ -14,7 +14,15 @@ from django.utils.translation import gettext_lazy as _
 from django.core.files.base import ContentFile
 
 from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale, LigneArticle, Price, PriceSold, Product, ProductFormField, Reservation, Membership
+from BaseBillet.models_vente import Vente
+from BaseBillet.services_vente import (
+    ajouter_article,
+    ajouter_reglement,
+    encaisser_vente,
+    ouvrir_vente,
+)
 from crowds.models import Initiative, BudgetItem, Participation
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from fedow_connect.utils import dround
 from Administration.utils import clean_html, url_a_schema_dangereux
 from django.db.models.fields.files import FieldFile
@@ -1331,19 +1339,9 @@ class ReservationCreateSerializer(serializers.Serializer):
         from decimal import InvalidOperation
 
         from BaseBillet.models import Reservation, Ticket, Price
-        from BaseBillet.models_vente import Vente
-        from BaseBillet.services_vente import (
-            ajouter_article,
-            ajouter_reglement,
-            encaisser_vente,
-            ouvrir_vente,
-        )
         from BaseBillet.validators import QUANTITE_MAXIMUM_PAR_TARIF, ReservationValidator
         from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
         from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
-        # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
-        # / Imported at call time: laboutik/views.py imports all of BaseBillet.
-        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
         reservation_for = validated_data.get("reservationFor") or {}
         under_name = validated_data.get("underName") or {}

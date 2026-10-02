@@ -43,6 +43,7 @@ from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
 from BaseBillet.models import Paiement_stripe, LigneArticle, SaleOrigin, PaymentMethod, PromotionalCode
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import ajouter_article, encaisser_vente, ouvrir_vente
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from PaiementStripe.views import CreationPaiementStripe
 from booking.models import Booking
 from booking.serializers import BookingCreateSerializer
@@ -733,10 +734,6 @@ def validate_new_booking(resource,
                     promotional_code=promo_code,
                 )
             else:
-                # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
-                # / Imported at call time: laboutik/views.py imports all of BaseBillet.
-                from laboutik.views import _taux_tva_de_la_ligne_de_caisse
-
                 # La même ligne, écrite par le service de vente dans la vente : montants
                 # entiers et TVA (celle du produit, sinon celle du lieu).
                 # / The same line, written by the sale service into the sale.

@@ -136,9 +136,13 @@ from BaseBillet.tasks import webhook_reservation, \
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import (
     MOYENS_DU_CHAMP_REMBOURSE_PAR,
+    ajouter_article,
+    ajouter_reglement,
     choix_du_champ_rembourse_par,
     ecrire_la_vente_d_avoir_d_une_ligne,
+    encaisser_vente,
     ligne_entierement_offerte,
+    ouvrir_vente,
 )
 from Customers.models import Client
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
@@ -146,6 +150,7 @@ from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
 from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
 # from simple_history.admin import SimpleHistoryAdmin
 
@@ -3252,18 +3257,8 @@ class ReservationAddAdmin(ModelForm):
         # suite (l'argent est déclaré reçu par le gestionnaire). Elle est écrite dans
         # la transaction de l'admin (changeform_view est atomic) : réservation,
         # billets, ligne et vente sont enregistrés ensemble, ou pas du tout.
-        # Imports locaux : le service de vente et la caisse importent BaseBillet.
         # / The admin sale: written by the sale service, settled at once, inside the
-        #   admin's transaction. Local imports: those modules import BaseBillet.
-        from BaseBillet.models_vente import Vente
-        from BaseBillet.services_vente import (
-            ajouter_article,
-            ajouter_reglement,
-            encaisser_vente,
-            ouvrir_vente,
-        )
-        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
-
+        #   admin's transaction.
         # Client = l'acheteur ; opérateur vide (aucune carte de caisse dans l'admin).
         # / Client = the buyer; no operator in the admin.
         vente_de_l_admin = ouvrir_vente(

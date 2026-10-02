@@ -42,6 +42,7 @@ from .serializers import (
 from ApiBillet.serializers import get_or_create_price_sold
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import ajouter_article, ouvrir_vente
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from PaiementStripe.views import CreationPaiementStripe
 
 from django.contrib.auth import get_user_model
@@ -948,10 +949,6 @@ class InitiativeViewSet(viewsets.ViewSet):
             # EN: Get or create the "crowdfunding" technical product and its free price
             price_crowdfunding = _get_or_create_crowdfunding_price()
             price_sold_obj = get_or_create_price_sold(price_crowdfunding, custom_amount=montant_en_euros)
-
-            # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
-            # / Imported at call time: laboutik/views.py imports all of BaseBillet.
-            from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
             # FR: La vente de ce paiement Stripe (un paiement = une vente, R5), ouverte
             #     AVANT sa ligne. Elle reste EN_ATTENTE jusqu'au paiement confirmé.

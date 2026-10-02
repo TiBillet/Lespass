@@ -20,7 +20,10 @@ from ApiBillet.permissions import TenantAdminApiPermission
 from ApiBillet.views import get_permission_Api_ALL_Admin
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership, logger
+from BaseBillet.models_vente import Vente
+from BaseBillet.services_vente import ajouter_article, ouvrir_vente
 from crowds.models import Initiative, BudgetItem, Participation, Vote
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from .permissions import SemanticApiKeyPermission
 from .serializers import (
     EventSchemaSerializer,
@@ -989,13 +992,8 @@ class WalletRefillViewSet(viewsets.ViewSet):
             Product, Price, ProductSold, PriceSold, LigneArticle,
             PaymentMethod, SaleOrigin,
         )
-        from BaseBillet.models_vente import Vente
-        from BaseBillet.services_vente import ajouter_article, ouvrir_vente
         from AuthBillet.models import Wallet
         from fedow_public.models import AssetFedowPublic
-        # Import au moment de l'appel : laboutik/views.py importe tout BaseBillet.
-        # / Imported at call time: laboutik/views.py imports all of BaseBillet.
-        from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
         # Produit + tarif de recharge dedies a cet asset (idempotent).
         # / Refill product + price dedicated to this asset (idempotent).
