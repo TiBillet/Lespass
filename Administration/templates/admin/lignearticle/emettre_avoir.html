@@ -43,7 +43,16 @@ TROIS CAS :
     </p>
     {% endif %}
 
-    <form method="post" aria-label="{% translate 'Émettre un avoir' %}">
+    <!--
+    onsubmit : le bouton « Émettre l'avoir » est désactivé une fois l'envoi parti. Il n'a
+    pas de `name` : aucune valeur n'est perdue. C'est un filet contre le double clic ; la
+    vraie garde est le verrou côté serveur (BaseBillet/services_vente.py,
+    quantite_restante_de_la_ligne_sous_verrou).
+    / The submit button is disabled once the form is sent (it has no name: no value is
+    lost). A safety net against double clicks; the real guard is the server-side lock.
+    -->
+    <form method="post" aria-label="{% translate 'Émettre un avoir' %}"
+          onsubmit="this.querySelector('[data-testid=avoir-valider]').disabled = true;">
         {% csrf_token %}
 
         {% if champ_rembourse_par_demande %}

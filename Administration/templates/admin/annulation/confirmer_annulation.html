@@ -41,8 +41,17 @@ shown only when non-Stripe money is owed; one method for the whole selection.
         {% translate "Les achats payés en ligne sont remboursés par Stripe." %}
     </p>
 
+    <!--
+    onsubmit : le bouton « Confirmer l'annulation » est désactivé une fois l'envoi parti.
+    Il n'a pas de `name` : aucune valeur n'est perdue. C'est un filet contre le double
+    clic ; la vraie garde est le verrou côté serveur (BaseBillet/services_vente.py,
+    quantite_restante_de_la_ligne_sous_verrou).
+    / The submit button is disabled once the form is sent (it has no name: no value is
+    lost). A safety net against double clicks; the real guard is the server-side lock.
+    -->
     <form method="post" action="{{ url_de_la_liste }}" aria-label="{% translate 'Annuler et rembourser' %}"
-          data-testid="annulation-formulaire">
+          data-testid="annulation-formulaire"
+          onsubmit="this.querySelector('[data-testid=annulation-valider]').disabled = true;">
         {% csrf_token %}
         <input type="hidden" name="action" value="{{ nom_de_l_action }}">
         {% for cle in cles_des_objets_coches %}

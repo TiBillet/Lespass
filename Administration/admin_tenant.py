@@ -135,6 +135,8 @@ from BaseBillet.tasks import webhook_reservation, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import (
+    MOYENS_DU_CHAMP_REMBOURSE_PAR,
+    choix_du_champ_rembourse_par,
     ecrire_la_vente_d_avoir_d_une_ligne,
     ligne_entierement_offerte,
 )
@@ -1993,28 +1995,6 @@ class RangeDateTimeFilterWithTimeZone(RangeDateTimeFilter):
             return None
 
 
-# Les moyens proposés par le champ « Remboursé par » de l'écran d'avoir : de l'argent
-# rendu à la main. Le recrédit d'une carte cashless n'en fait pas partie.
-# / The methods offered by the "Refunded by" field: money given back by hand.
-MOYENS_DU_CHAMP_REMBOURSE_PAR = [
-    PaymentMethod.CASH,
-    PaymentMethod.CC,
-    PaymentMethod.CHEQUE,
-    PaymentMethod.TRANSFER,
-]
-
-
-def choix_du_champ_rembourse_par():
-    """
-    Les choix du champ « Remboursé par » : une ligne vide, puis les quatre moyens.
-    / The "Refunded by" choices: an empty line, then the four methods.
-    """
-    choix = [("", "---------")]
-    for moyen in MOYENS_DU_CHAMP_REMBOURSE_PAR:
-        choix.append((moyen.value, moyen.label))
-    return choix
-
-
 class EmettreAvoirAvecMoyenForm(forms.Form):
     """
     Formulaire de l'écran « Émettre un avoir » d'une ligne hors Stripe, pas entièrement
@@ -3803,8 +3783,12 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         lignes_hors_stripe_de_la_selection = []
         descriptions_des_billets = []
         for billet_coche in billets_coches:
+            # La ligne du billet est cherchée par son tarif (`Price`), comme
+            # `cancel_and_refund_resa` et `cancel_and_refund_ticket` : la caisse écrit sa
+            # ligne et ses billets sur deux tarifs vendus différents.
+            # / The ticket's line is found by its Price, like the model methods.
             lignes_hors_stripe_du_billet = billet_coche.reservation._lignes_hors_stripe(
-                pricesold_ids=[billet_coche.pricesold_id]
+                price_ids=[billet_coche.pricesold.price_id]
             )
             for ligne_hors_stripe in lignes_hors_stripe_du_billet:
                 lignes_hors_stripe_de_la_selection.append(ligne_hors_stripe)

@@ -102,6 +102,26 @@ CONTRAT DU FORMULAIRE D'ANNULATION D'ADHÉSION (partiel HTMX de la vue DRF)
 original method) or the Stripe sentence; POST = 204, or the form again (200) when the
 method is missing.
 
+DOUBLE DEMANDE ET NOUVEL ESSAI
+- Deux demandes d'avoir pour la même ligne (double clic) : la seconde est refusée. La
+  quantité déjà rendue (avoirs et remboursements Stripe) est relue sous verrou, dans la
+  fonction commune comme dans le remboursement Stripe, avant toute écriture et avant
+  tout appel à Stripe.
+- Le remboursement Stripe porte une clé d'idempotence `remboursement-{paiement}-{n}`,
+  `n` = nombre de règlements négatifs déjà écrits pour ce paiement. Un nouvel essai après
+  un échec (rien d'écrit) envoie la MÊME clé : Stripe rend le même remboursement. Le
+  remboursement suivant, une fois le premier écrit, a une clé nouvelle.
+/ A second credit note request for the same line is refused (credited quantity read
+again under lock). The Stripe refund carries an idempotency key: same key on a retry,
+a new key for the next refund.
+
+LES BILLETS VENDUS À LA CAISSE
+La caisse écrit sa ligne et ses billets sur deux tarifs vendus (`PriceSold`) différents
+du même tarif (`Price`) (laboutik/views.py). L'écran d'annulation et l'annulation d'un
+billet retrouvent la ligne par le tarif, comme l'annulation d'une réservation.
+/ The register writes its line and its tickets on two PriceSold of the same Price: the
+cancel screen and the single-ticket cancellation match lines by Price.
+
 CODE PARCOURU / CODE EXERCISED
 - Administration/admin_tenant.py — LigneArticleAdmin.emettre_avoir (écran et action) ;
   ReservationAdmin.action_cancel_refund_reservations, TicketAdmin.action_cancel_refund_selected ;
@@ -117,8 +137,8 @@ CODE PARCOURU / CODE EXERCISED
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-D-en-ligne-avoirs.md (§4,
 §5 tests 17, 18, 18b, 18c, 19, 20, 21, annexes T7, T8, T9) ; CHANTIER-05-SUIVI.md §4
-(D-3, D-3c) ; briefs CHANTIER-05-briefs/05-D-3a.md, 05-D-3b.md, 05-D-3c-1.md et
-05-D-3c-2.md.
+(D-3, D-3c, D-3z) ; briefs CHANTIER-05-briefs/05-D-3a.md, 05-D-3b.md, 05-D-3c-1.md,
+05-D-3c-2.md et 05-D-3z.md.
 
 Lancer / Run : make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py"
 """
@@ -143,18 +163,24 @@ from BaseBillet.models import (
     Membership,
     Paiement_stripe,
     PaymentMethod,
+    PriceSold,
+    ProductSold,
     Reservation,
     SaleOrigin,
     Ticket,
 )
 from BaseBillet.models_vente import Reglement, Vente
-from BaseBillet.services_vente import NOM_ECART_RECU_EN_PLUS
+from BaseBillet.services_vente import (
+    MOYENS_DU_CHAMP_REMBOURSE_PAR,
+    NOM_ECART_RECU_EN_PLUS,
+)
 from ApiBillet.serializers import get_or_create_price_sold
 from booking.models import Booking
 from PaiementStripe.utils import partial_refund_payment
 from fabriques_panier import (
     catalogue_stripe_simule,
     client_connecte,
+    configuration_modifiee,
     creer_adhesion,
     creer_evenement_avec_tarif,
     creer_ressource_avec_tarif,
@@ -168,6 +194,7 @@ from fabriques_vente import (
     fabriquer_vente_encaissee,
     verifier_egalites,
 )
+from laboutik.models import PointDeVente
 from test_admin_ecrit_la_vente import (
     creer_l_adhesion_et_relire,
     encaissement_qui_echoue,
@@ -242,16 +269,6 @@ def dans_la_langue_active(msgid):
     """Le texte de ce msgid dans la langue active du test (code appelé sans client).
     / The text of this msgid in the test's active language (code called without client)."""
     return translation.gettext(msgid)
-
-
-# Les moyens proposés par le champ « Remboursé par » : espèces, CB, chèque, virement.
-# / The methods offered by the "Refunded by" field: cash, card, cheque, transfer.
-MOYENS_DU_CHAMP_REMBOURSE_PAR = [
-    PaymentMethod.CASH,
-    PaymentMethod.CC,
-    PaymentMethod.CHEQUE,
-    PaymentMethod.TRANSFER,
-]
 
 
 @pytest.fixture(autouse=True)
@@ -1081,6 +1098,62 @@ def test_avoir_vente_d_origine_pas_reglee_refuse(lieu):
 
 
 # --------------------------------------------------------------------------
+# Double demande : la quantité déjà rendue est relue sous verrou
+# / Double request: the quantity already given back is read again under lock
+# --------------------------------------------------------------------------
+
+
+def test_avoir_deux_fois_la_meme_ligne_refuse_le_second(lieu):
+    """
+    Deux billets à 10 € vendus dans l'admin par CB. Deux demandes d'avoir arrivent pour
+    toute la ligne, comme deux POST d'un double clic : chacune a lu la ligne AVANT que
+    l'autre n'écrive. La seconde porte donc une ligne périmée, qui ne voit pas le premier
+    avoir.
+    - La première demande écrit l'avoir : quantité −2.
+    - La seconde est refusée (ValueError) : la fonction commune relit, sous verrou, la
+      quantité déjà rendue ; il ne reste rien.
+    - Une seule ligne d'avoir, une seule vente AVOIR liée à la vente d'origine.
+    Les deux demandes passent par la fonction commune, pas par l'écran : la garde de
+    l'écran (« un avoir existe déjà ») arrête deux POST l'un après l'autre, pas deux POST
+    simultanés, qu'un test ne sait pas jouer.
+    / Two credit note requests for the whole line, the second one holding a stale line:
+    the second is refused (the quantity given back is read again under lock); one credit
+    note line, one AVOIR sale.
+    """
+    vente_admin = vendre_et_relire(
+        lieu, prix="10.00", quantite=2, moyen_de_paiement=PaymentMethod.CC
+    )
+    ligne_lue_par_la_premiere_demande = vente_admin.ligne
+    ligne_lue_par_la_seconde_demande = LigneArticle.objects.get(pk=vente_admin.ligne.pk)
+    vente_d_origine = Vente.objects.get(pk=vente_admin.ligne.vente_id)
+
+    services_vente.ecrire_la_vente_d_avoir_d_une_ligne(
+        ligne_lue_par_la_premiere_demande,
+        quantite=Decimal("2"),
+        moyen_rembourse=PaymentMethod.CASH,
+        origine=SaleOrigin.ADMIN,
+    )
+
+    with pytest.raises(ValueError):
+        services_vente.ecrire_la_vente_d_avoir_d_une_ligne(
+            ligne_lue_par_la_seconde_demande,
+            quantite=Decimal("2"),
+            moyen_rembourse=PaymentMethod.CASH,
+            origine=SaleOrigin.ADMIN,
+        )
+
+    assert (
+        LigneArticle.objects.filter(credit_note_for=vente_admin.ligne).count() == 1
+    ), "La même ligne a reçu deux avoirs."
+    assert (
+        Vente.objects.filter(
+            nature=Vente.Nature.AVOIR, vente_liee=vente_d_origine
+        ).count()
+        == 1
+    ), "Deux ventes AVOIR ont été écrites pour la même ligne."
+
+
+# --------------------------------------------------------------------------
 # Remboursement Stripe : une vente AVOIR au montant renvoyé par Stripe
 # / Stripe refund: one AVOIR sale at the amount Stripe returns
 # --------------------------------------------------------------------------
@@ -1625,6 +1698,207 @@ def test_remboursement_stripe_rien_a_rendre_aucune_vente_ouverte(lieu):
 
 
 # --------------------------------------------------------------------------
+# Remboursement Stripe : jamais deux fois le même argent
+# / Stripe refund: never the same money twice
+# --------------------------------------------------------------------------
+
+
+@contextmanager
+def remboursement_stripe_qui_respecte_la_cle_d_idempotence():
+    """
+    Remplace `stripe.Refund.create` le temps du bloc, comme Stripe le fait avec une clé
+    d'idempotence : un appel avec une clé DÉJÀ VUE rend le MÊME remboursement (même
+    identifiant), sans rendre d'argent de plus. Un appel sans clé, ou avec une clé
+    nouvelle, rend un remboursement nouveau.
+    / Replaces `stripe.Refund.create` like Stripe with an idempotency key: a key already
+    seen returns the SAME refund; no key, or a new key, returns a new refund.
+
+    :return: un objet avec `appels` (le faux `Refund.create`) et `remboursements_rendus`
+        (les objets rendus, dans l'ordre des appels)
+    """
+    remboursements_par_cle = {}
+    remboursements_rendus = []
+
+    def rembourser(**arguments_du_remboursement):
+        cle_d_idempotence = arguments_du_remboursement.get("idempotency_key")
+        cle_deja_vue = (
+            cle_d_idempotence is not None and cle_d_idempotence in remboursements_par_cle
+        )
+        if cle_deja_vue:
+            remboursement = remboursements_par_cle[cle_d_idempotence]
+        else:
+            remboursement = rembourser_comme_stripe(**arguments_du_remboursement)
+            if cle_d_idempotence is not None:
+                remboursements_par_cle[cle_d_idempotence] = remboursement
+        remboursements_rendus.append(remboursement)
+        return remboursement
+
+    with patch("stripe.Refund.create", side_effect=rembourser) as appels_a_stripe:
+        yield SimpleNamespace(
+            appels=appels_a_stripe,
+            remboursements_rendus=remboursements_rendus,
+        )
+
+
+def cles_d_idempotence_envoyees(appels_a_stripe):
+    """Les clés d'idempotence reçues par `stripe.Refund.create`, dans l'ordre (None si
+    absente). / The idempotency keys received, in order (None when missing)."""
+    cles = []
+    for appel in appels_a_stripe.call_args_list:
+        cles.append(appel.kwargs.get("idempotency_key"))
+    return cles
+
+
+def cle_d_idempotence_attendue(paiement, nombre_de_remboursements_deja_ecrits):
+    """La clé décidée en D-3z : `remboursement-{uuid du paiement}-{n}`.
+    / The key decided in D-3z."""
+    return f"remboursement-{paiement.uuid}-{nombre_de_remboursements_deja_ecrits}"
+
+
+def test_remboursement_stripe_deux_fois_la_meme_ligne_refuse_le_second_avant_stripe(lieu):
+    """
+    Un billet à 10 € payé par Stripe. Deux demandes de remboursement de toute la ligne
+    arrivent (double clic) : chacune a lu la ligne AVANT que l'autre n'écrive.
+    - La première rembourse : Stripe est appelé une fois, une vente AVOIR est écrite.
+    - La seconde est refusée (ValueError) AVANT Stripe : `partial_refund_payment` relit,
+      sous verrou, la quantité déjà rendue ; il ne reste rien.
+    - Stripe n'est appelé qu'UNE fois ; une seule ligne négative sur le paiement.
+    / Two refund requests for the same line: the second one is refused BEFORE Stripe
+    (quantity given back read again under lock); one Stripe call, one negative line.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=1)
+    ligne_lue_par_la_premiere_demande = LigneArticle.objects.get(
+        paiement_stripe=achat.paiement
+    )
+    ligne_lue_par_la_seconde_demande = LigneArticle.objects.get(
+        pk=ligne_lue_par_la_premiere_demande.pk
+    )
+    paiement_lu_par_la_premiere_demande = Paiement_stripe.objects.get(pk=achat.paiement.pk)
+    paiement_lu_par_la_seconde_demande = Paiement_stripe.objects.get(pk=achat.paiement.pk)
+
+    with remboursement_stripe_simule() as stripe_simule:
+        partial_refund_payment(
+            paiement_lu_par_la_premiere_demande,
+            Configuration.get_solo(),
+            [ligne_lue_par_la_premiere_demande],
+        )
+        with pytest.raises(ValueError):
+            partial_refund_payment(
+                paiement_lu_par_la_seconde_demande,
+                Configuration.get_solo(),
+                [ligne_lue_par_la_seconde_demande],
+            )
+
+    assert stripe_simule.appels.call_count == 1, (
+        "Stripe a été appelé deux fois pour la même ligne."
+    )
+    assert (
+        LigneArticle.objects.filter(paiement_stripe=achat.paiement, qty__lt=0).count()
+        == 1
+    )
+
+
+def test_remboursement_stripe_nouvel_essai_reprend_la_meme_cle(lieu):
+    """
+    Deux billets à 10 € payés par Stripe, remboursés en entier.
+    - 1er essai : Stripe rend l'argent, puis l'encaissement de la vente AVOIR échoue
+      (simulé) : rien n'est écrit.
+    - 2e essai, normal : `stripe.Refund.create` reçoit la MÊME clé d'idempotence,
+      `remboursement-{paiement}-0` (aucun règlement négatif écrit entre les deux). Stripe
+      rend donc le MÊME remboursement : aucun argent de plus.
+    - La vente AVOIR est écrite UNE fois ; son règlement porte l'identifiant de ce
+      remboursement unique.
+    / First try: Stripe refunds, then the settlement fails, nothing written. Retry: the
+    SAME idempotency key, so the SAME refund; the AVOIR sale is written once, with that
+    refund's id.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=2)
+    ligne = LigneArticle.objects.get(paiement_stripe=achat.paiement)
+    vente_d_origine = Vente.objects.get(pk=ligne.vente_id)
+    paiement = Paiement_stripe.objects.get(pk=achat.paiement.pk)
+    statut_du_paiement_avant = paiement.status
+
+    with remboursement_stripe_qui_respecte_la_cle_d_idempotence() as stripe_simule:
+        with encaissement_qui_echoue():
+            with pytest.raises(Exception):
+                partial_refund_payment(paiement, Configuration.get_solo(), [ligne])
+        rien_n_est_ecrit_pour_le_remboursement(ligne, paiement, statut_du_paiement_avant)
+
+        partial_refund_payment(
+            Paiement_stripe.objects.get(pk=paiement.pk),
+            Configuration.get_solo(),
+            [LigneArticle.objects.get(pk=ligne.pk)],
+        )
+
+    cle_du_premier_remboursement = cle_d_idempotence_attendue(paiement, 0)
+    assert cles_d_idempotence_envoyees(stripe_simule.appels) == [
+        cle_du_premier_remboursement,
+        cle_du_premier_remboursement,
+    ]
+    identifiants_des_remboursements = set()
+    for remboursement_rendu in stripe_simule.remboursements_rendus:
+        identifiants_des_remboursements.add(remboursement_rendu.id)
+    assert len(identifiants_des_remboursements) == 1, (
+        "Stripe a fait deux remboursements différents pour le même argent."
+    )
+    remboursement_unique = stripe_simule.remboursements_rendus[0]
+
+    avoir = le_remboursement_de_la_ligne(ligne)
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+        origine_attendue=SaleOrigin.LESPASS,
+    )
+    assert (
+        Vente.objects.filter(
+            nature=Vente.Nature.AVOIR, vente_liee=vente_d_origine
+        ).count()
+        == 1
+    )
+    verifier_le_reglement_stripe_du_remboursement(
+        vente_d_avoir, paiement, remboursement_unique
+    )
+    verifier_egalites(vente_d_avoir)
+
+
+def test_remboursement_stripe_second_remboursement_cle_nouvelle(lieu):
+    """
+    Trois billets à 10 € payés par Stripe. Deux billets sont annulés l'un après l'autre
+    (`cancel_and_refund_ticket`) : deux remboursements Stripe.
+    - Le premier porte la clé `remboursement-{paiement}-0` (aucun règlement négatif
+      écrit avant lui).
+    - Le second, une fois le premier écrit, porte une clé NOUVELLE :
+      `remboursement-{paiement}-1`. Stripe fait donc bien un second remboursement.
+    / Two tickets refunded one after the other: keys `-0` then `-1`, two refunds.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=3)
+    reservation = Reservation.objects.get(pk=achat.reservation.pk)
+    billets_dans_l_ordre = list(reservation.tickets.order_by("pk"))
+    premier_billet_annule = billets_dans_l_ordre[0]
+    second_billet_annule = billets_dans_l_ordre[1]
+
+    with remboursement_stripe_qui_respecte_la_cle_d_idempotence() as stripe_simule:
+        reservation.cancel_and_refund_ticket(premier_billet_annule)
+        reservation.cancel_and_refund_ticket(second_billet_annule)
+
+    assert cles_d_idempotence_envoyees(stripe_simule.appels) == [
+        cle_d_idempotence_attendue(achat.paiement, 0),
+        cle_d_idempotence_attendue(achat.paiement, 1),
+    ]
+    assert (
+        Reglement.objects.filter(paiement_stripe=achat.paiement, montant__lt=0).count()
+        == 2
+    ), "Les deux remboursements doivent être écrits."
+
+
+# --------------------------------------------------------------------------
 # Annulations par l'admin : l'écran « Remboursé par », puis un avoir par ligne
 # / Admin cancellations: the "Refunded by" screen, then one credit note per line
 # --------------------------------------------------------------------------
@@ -2076,6 +2350,298 @@ def test_annulation_admin_echec_d_encaissement_rien_n_est_annule(lieu):
 
 
 # --------------------------------------------------------------------------
+# Billets vendus à la caisse : la ligne et les billets sur deux tarifs vendus
+# / Register tickets: the line and the tickets on two sold prices
+# --------------------------------------------------------------------------
+
+
+def vendre_des_billets_en_especes_a_la_caisse(lieu, acheteur, billetterie, quantite):
+    """
+    La caisse vend `quantite` billets de l'événement, payés en espèces. Rend la
+    réservation créée.
+    / The register sells `quantite` tickets of the event, paid in cash. Returns the
+    reservation.
+
+    Le geste passe par la vraie route de paiement de la caisse, `POST
+    /laboutik/paiement/payer/` (laboutik/views.py, `PaiementViewSet.payer`), comme
+    `vendre_un_billet_offert_a_la_caisse` (test_caracterisation_annulations.py) : la clé
+    `repid-<événement>__<tarif>` d'une tuile billet porte la quantité, le client est
+    identifié par son e-mail. Payer en espèces ne demande pas la carte du gérant.
+    La caisse écrit UNE ligne pour le produit, et les billets sur un AUTRE tarif vendu
+    (`PriceSold` dont le produit vendu porte l'événement) du même tarif (`Price`).
+    / The real register payment route; cash needs no manager card. The register writes
+    ONE line, and the tickets on ANOTHER PriceSold of the same Price.
+
+    ÉTAT DE DÉPART, posé ici : la caisse activée EN MÉMOIRE le temps de la vente
+    (`configuration_modifiee()`, tests/PIEGES.md 13.22), un point de vente « billetterie »
+    caché (tests/PIEGES.md 9.41), un caissier administrateur du lieu connecté.
+    / STARTING STATE: register switched on in memory, hidden ticketing point of sale,
+    admin cashier.
+    """
+    point_de_vente_billetterie = PointDeVente.objects.create(
+        name=f"TEST_avoirs billetterie {identifiant_unique()}",
+        comportement=PointDeVente.BILLETTERIE,
+        hidden=True,
+    )
+    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
+    prix_du_billet_en_centimes = int(round(billetterie.tarif.prix * 100))
+    cle_de_la_tuile_billet = (
+        f"repid-{billetterie.evenement.uuid}__{billetterie.tarif.uuid}"
+    )
+    donnees_du_formulaire = {
+        "uuid_pv": str(point_de_vente_billetterie.uuid),
+        "moyen_paiement": "espece",
+        "total": str(prix_du_billet_en_centimes * quantite),
+        "given_sum": "0",
+        "email_adhesion": acheteur.email,
+        cle_de_la_tuile_billet: str(quantite),
+    }
+    # Le module caisse a besoin du module monnaie locale.
+    # / The register module needs the local currency module.
+    with configuration_modifiee(module_caisse=True, module_monnaie_locale=True):
+        reponse_de_la_caisse = client_du_caissier.post(
+            "/laboutik/paiement/payer/", donnees_du_formulaire
+        )
+
+    assert reponse_de_la_caisse.status_code == 200
+    return Reservation.objects.get(user_commande=acheteur, event=billetterie.evenement)
+
+
+def verifier_la_ligne_et_les_billets_sur_deux_tarifs_vendus(ligne_de_caisse, billets):
+    """
+    Vérifie l'état de départ d'une vente de caisse : la ligne et les billets ont le
+    même tarif (`Price`), mais deux tarifs vendus (`PriceSold`) différents.
+    / Checks the register starting state: same Price, two different PriceSold.
+    """
+    for billet in billets:
+        assert billet.pricesold_id != ligne_de_caisse.pricesold_id, (
+            "État de départ inattendu : le billet et la ligne de caisse ont le même "
+            "tarif vendu."
+        )
+        assert billet.pricesold.price_id == ligne_de_caisse.pricesold.price_id
+
+
+def test_annulation_admin_de_tous_les_billets_d_une_reservation_de_caisse_par_l_ecran_billets(
+    lieu,
+):
+    """
+    Deux billets à 10 € vendus à la caisse, payés en espèces. Dans la liste des billets,
+    l'admin coche LES DEUX billets et lance « Annuler et rembourser » : toute la
+    réservation est annulée (`cancel_and_refund_resa`).
+    - L'écran trouve la ligne de caisse par le tarif (`Price`), comme l'annulation de la
+      réservation : le champ « Remboursé par » est affiché, pré-rempli avec espèces.
+    - L'admin valide avec espèces : réservation et billets annulés.
+    - L'avoir : quantité −2, net −2000, CREDIT_NOTE ; sa vente AVOIR, liée, réglée ; UN
+      règlement espèces −2000.
+    / All tickets of a register reservation ticked on the ticket list: the screen finds
+    the register line by Price and shows "Refunded by"; one cash credit note of −2000.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    reservation = vendre_des_billets_en_especes_a_la_caisse(
+        lieu, acheteur, concert, quantite=2
+    )
+    ligne_de_caisse = LigneArticle.objects.get(reservation=reservation)
+    vente_d_origine = Vente.objects.get(pk=ligne_de_caisse.vente_id)
+    tous_les_billets = list(reservation.tickets.order_by("pk"))
+    assert len(tous_les_billets) == 2
+    verifier_la_ligne_et_les_billets_sur_deux_tarifs_vendus(
+        ligne_de_caisse, tous_les_billets
+    )
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_de_l_ecran = lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_BILLETS,
+        ACTION_ANNULER_LES_BILLETS,
+        tous_les_billets,
+    )
+    assert "moyen_rembourse" in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
+    assert valeur_pre_remplie_du_moyen(reponse_de_l_ecran) == PaymentMethod.CASH
+
+    reponse_de_l_action = confirmer_l_ecran_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_BILLETS,
+        ACTION_ANNULER_LES_BILLETS,
+        tous_les_billets,
+        moyen_rembourse=PaymentMethod.CASH,
+    )
+
+    assert reponse_de_l_action.status_code == 302
+    reservation.refresh_from_db()
+    assert reservation.status == Reservation.CANCELED
+    assert statuts_des_billets(reservation) == [Ticket.CANCELED, Ticket.CANCELED]
+
+    avoir = l_avoir_de_la_ligne(ligne_de_caisse)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.qty == Decimal("-2")
+    assert avoir.total_ttc == -2000
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.CASH, -2000)
+    ]
+    verifier_egalites(vente_d_avoir)
+
+
+def test_annulation_admin_d_un_billet_de_caisse(lieu):
+    """
+    Deux billets à 10 € vendus à la caisse, payés en espèces. Dans la liste des billets,
+    l'admin coche UN seul billet et lance « Annuler et rembourser »
+    (`cancel_and_refund_ticket`).
+    - L'écran trouve la ligne de caisse par le tarif : champ « Remboursé par »,
+      pré-rempli avec espèces.
+    - L'admin valide avec espèces : ce billet est annulé, l'autre reste actif, la
+      réservation n'est pas annulée.
+    - L'avoir d'UNE unité : quantité −1, net −1000 ; sa vente AVOIR, liée, réglée ; UN
+      règlement espèces −1000.
+    / One register ticket out of two cancelled by the admin: the line is found by Price;
+    a one-unit cash credit note of −1000.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    reservation = vendre_des_billets_en_especes_a_la_caisse(
+        lieu, acheteur, concert, quantite=2
+    )
+    ligne_de_caisse = LigneArticle.objects.get(reservation=reservation)
+    vente_d_origine = Vente.objects.get(pk=ligne_de_caisse.vente_id)
+    billet_a_annuler = reservation.tickets.order_by("pk").first()
+    verifier_la_ligne_et_les_billets_sur_deux_tarifs_vendus(
+        ligne_de_caisse, [billet_a_annuler]
+    )
+    statut_de_la_reservation_avant = reservation.status
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_de_l_ecran = lancer_l_action_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_BILLETS,
+        ACTION_ANNULER_LES_BILLETS,
+        [billet_a_annuler],
+    )
+    assert "moyen_rembourse" in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
+    assert valeur_pre_remplie_du_moyen(reponse_de_l_ecran) == PaymentMethod.CASH
+
+    reponse_de_l_action = confirmer_l_ecran_d_annulation(
+        client_de_l_admin,
+        URL_DE_LA_LISTE_DES_BILLETS,
+        ACTION_ANNULER_LES_BILLETS,
+        [billet_a_annuler],
+        moyen_rembourse=PaymentMethod.CASH,
+    )
+
+    assert reponse_de_l_action.status_code == 302
+    billet_a_annuler.refresh_from_db()
+    assert billet_a_annuler.status == Ticket.CANCELED
+    assert statuts_des_billets(reservation).count(Ticket.CANCELED) == 1
+    reservation.refresh_from_db()
+    assert reservation.status == statut_de_la_reservation_avant
+
+    avoir = l_avoir_de_la_ligne(ligne_de_caisse)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.qty == Decimal("-1")
+    assert avoir.total_ttc == -1000
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.CASH, -1000)
+    ]
+    verifier_egalites(vente_d_avoir)
+
+
+def test_annulation_admin_deux_lignes_du_meme_tarif_un_billet_actif(lieu):
+    """
+    Une réservation dont le même tarif (`Price`) est vendu sur DEUX lignes hors Stripe,
+    une unité chacune, à 10 € en espèces. Deux billets ; l'un est déjà annulé par le
+    client (sans avoir, D31) : il reste UN billet actif.
+    L'admin annule la réservation (`cancel_and_refund_resa`, `annulation_par_l_admin`),
+    « Remboursé par : espèces ».
+    - Le nombre de billets actifs du tarif DIMINUE de ce qui vient d'être crédité, d'une
+      ligne à l'autre : UN seul avoir, d'une unité (−1000), jamais un par ligne.
+    - UNE vente AVOIR liée à la vente d'origine ; UN règlement espèces −1000.
+    Appel direct du modèle : l'écran n'ajoute rien à cette règle.
+    / Two non-Stripe lines of the same Price, one active ticket: the admin cancellation
+    writes ONE one-unit credit note (the active count goes down line after line).
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    # ÉTAT DE DÉPART fabriqué directement (tests/PIEGES.md 12.17) : la réservation, ses
+    # deux billets (un actif, un annulé par le client) et la vente de ses deux lignes.
+    # / STARTING STATE built directly: the reservation, its two tickets (one active, one
+    # cancelled by the buyer) and the sale of its two lines.
+    produit_vendu_de_l_evenement, _produit_vendu_cree = ProductSold.objects.get_or_create(
+        product=concert.produit, event=concert.evenement
+    )
+    tarif_vendu = PriceSold.objects.create(
+        productsold=produit_vendu_de_l_evenement,
+        price=concert.tarif,
+        prix=concert.tarif.prix,
+    )
+    reservation = Reservation.objects.create(
+        user_commande=acheteur, event=concert.evenement, status=Reservation.VALID
+    )
+    Ticket.objects.create(
+        reservation=reservation, pricesold=tarif_vendu, status=Ticket.NOT_SCANNED
+    )
+    Ticket.objects.create(
+        reservation=reservation, pricesold=tarif_vendu, status=Ticket.CANCELED
+    )
+    article_d_une_unite_en_especes = {
+        "pricesold": tarif_vendu,
+        "quantite": Decimal("1"),
+        "prix_unitaire": 1000,
+        "taux_tva": Decimal("20"),
+        "payment_method": PaymentMethod.CASH,
+        "reservation": reservation,
+        "status": LigneArticle.VALID,
+    }
+    vente_d_origine = fabriquer_vente_encaissee(
+        origine=SaleOrigin.ADMIN,
+        articles=[
+            dict(article_d_une_unite_en_especes),
+            dict(article_d_une_unite_en_especes),
+        ],
+        reglements=[{"moyen": PaymentMethod.CASH, "montant": 2000}],
+    )
+    deux_lignes_du_meme_tarif = list(vente_d_origine.articles.all())
+    assert len(deux_lignes_du_meme_tarif) == 2
+
+    reservation.cancel_and_refund_resa(
+        annulation_par_l_admin=True, moyen_rembourse=PaymentMethod.CASH
+    )
+
+    avoirs_des_deux_lignes = LigneArticle.objects.filter(
+        credit_note_for__in=deux_lignes_du_meme_tarif
+    )
+    assert avoirs_des_deux_lignes.count() == 1, (
+        f"Un seul billet actif : un seul avoir attendu, "
+        f"{avoirs_des_deux_lignes.count()} écrit(s)."
+    )
+    avoir = avoirs_des_deux_lignes.get()
+    assert avoir.qty == Decimal("-1")
+    assert avoir.total_ttc == -1000
+
+    ventes_d_avoir = Vente.objects.filter(
+        nature=Vente.Nature.AVOIR, vente_liee=vente_d_origine
+    )
+    assert ventes_d_avoir.count() == 1
+    vente_d_avoir = ventes_d_avoir.get()
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.CASH, -1000)
+    ]
+    verifier_egalites(vente_d_avoir)
+    reservation.refresh_from_db()
+    assert reservation.status == Reservation.CANCELED
+
+
+# --------------------------------------------------------------------------
 # Annulations par l'utilisateur, achat hors Stripe : aucun avoir (D31)
 # / User cancellations of a non-Stripe purchase: no credit note (D31)
 # --------------------------------------------------------------------------
@@ -2356,8 +2922,8 @@ def test_annulation_utilisateur_billet_offert_garde_le_message_d_avant(lieu):
     entièrement offerts). Le client annule UN billet depuis « Mon compte ».
     Aucun argent hors Stripe n'a été payé : le message « Réglé sur place… » ne
     s'affiche PAS, le message d'avant reste. Aucun avoir ; ce billet est annulé.
-    Billet vendu dans l'admin et non à la caisse : un billet de caisse ne retrouve pas
-    sa ligne par son tarif vendu (TODO n°26).
+    Le billet de caisse payé en argent a son propre test :
+    `test_annulation_utilisateur_billet_de_caisse_message_regle_sur_place`.
     / One fully offered admin ticket cancelled by the user: no "paid on site" message,
     the previous message stays; no credit note.
     """
@@ -2380,6 +2946,50 @@ def test_annulation_utilisateur_billet_offert_garde_le_message_d_avant(lieu):
     rien_n_est_ecrit_pour_la_ligne(vente_admin_offerte.ligne)
     billet_a_annuler.refresh_from_db()
     assert billet_a_annuler.status == Ticket.CANCELED
+
+
+def test_annulation_utilisateur_billet_de_caisse_message_regle_sur_place(lieu):
+    """
+    D31, billet de caisse : deux billets à 10 € vendus à la caisse, payés en espèces. Le
+    client annule UN billet depuis « Mon compte ».
+    - La ligne de caisse est retrouvée par le tarif (`Price`) : la caisse écrit sa ligne
+      et ses billets sur deux tarifs vendus différents.
+    - AUCUN avoir : aucune ligne d'avoir, aucune vente nouvelle ; la ligne reste VALID.
+    - Le message dit que l'achat a été réglé sur place et qu'il faut contacter
+      l'organisateur pour un éventuel remboursement.
+    - Ce billet est annulé, l'autre reste actif.
+    / D31 for a register ticket paid in cash: the line is found by Price; no credit note,
+    the "paid on site" message; the ticket is cancelled.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    reservation = vendre_des_billets_en_especes_a_la_caisse(
+        lieu, acheteur, concert, quantite=2
+    )
+    ligne_de_caisse = LigneArticle.objects.get(reservation=reservation)
+    billet_a_annuler = reservation.tickets.order_by("pk").first()
+    verifier_la_ligne_et_les_billets_sur_deux_tarifs_vendus(
+        ligne_de_caisse, [billet_a_annuler]
+    )
+    client_de_l_acheteur = client_de_mon_compte(lieu, acheteur)
+    nombre_de_ventes_avant = Vente.objects.count()
+
+    reponse = annuler_un_billet_depuis_mon_compte(client_de_l_acheteur, billet_a_annuler)
+
+    assert reponse.status_code == 200
+    messages_de_la_personne = " ".join(textes_des_messages_de_l_admin(reponse))
+    assert (
+        dans_la_langue_du_client(MESSAGE_COMPLEMENTAIRE_REGLE_SUR_PLACE)
+        in messages_de_la_personne
+    ), messages_de_la_personne
+    rien_n_est_ecrit_pour_la_ligne(ligne_de_caisse)
+    assert Vente.objects.count() == nombre_de_ventes_avant, (
+        "Une vente a été écrite par l'annulation de l'utilisateur."
+    )
+    assert lieu.remboursement_stripe.call_count == 0
+    billet_a_annuler.refresh_from_db()
+    assert billet_a_annuler.status == Ticket.CANCELED
+    assert statuts_des_billets(reservation).count(Ticket.CANCELED) == 1
 
 
 # --------------------------------------------------------------------------

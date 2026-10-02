@@ -3844,12 +3844,9 @@ class AnnulationAdhesionSerializer(serializers.Serializer):
     resilier_abonnement_stripe = serializers.BooleanField(required=False, default=False)
 
     def validate_moyen_rembourse(self, moyen_recu):
-        # Import local : charger les vues n'oblige pas à charger tout le module de
-        # l'admin (il n'y a pas de cycle d'imports). Au moment de l'appel, Django l'a déjà
-        # chargé (découverte de l'admin au démarrage).
-        # / Local import: loading the views does not load the whole admin module (no
-        # import cycle); Django has already loaded it by the time this runs.
-        from Administration.admin_tenant import MOYENS_DU_CHAMP_REMBOURSE_PAR
+        # Import local, comme les autres imports du service de vente de ce module.
+        # / Local import, like the other sale service imports of this module.
+        from BaseBillet.services_vente import MOYENS_DU_CHAMP_REMBOURSE_PAR
 
         if moyen_recu == "":
             return moyen_recu
@@ -4921,16 +4918,13 @@ class MembershipMVT(viewsets.ViewSet):
         :param erreurs: les erreurs du serializer, ou None
         :return: le dictionnaire de contexte
         """
-        # Import local : charger les vues n'oblige pas à charger tout le module de
-        # l'admin (il n'y a pas de cycle d'imports). Au moment de l'appel, Django l'a déjà
-        # chargé (découverte de l'admin au démarrage).
-        # / Local import: loading the views does not load the whole admin module (no
-        # import cycle); Django has already loaded it by the time this runs.
-        from Administration.admin_tenant import (
+        # Import local, comme les autres imports du service de vente de ce module.
+        # / Local import, like the other sale service imports of this module.
+        from BaseBillet.services_vente import (
             MOYENS_DU_CHAMP_REMBOURSE_PAR,
             choix_du_champ_rembourse_par,
+            ligne_entierement_offerte,
         )
-        from BaseBillet.services_vente import ligne_entierement_offerte
 
         dernier_paiement_deja_rembourse = (
             ligne_du_dernier_paiement is not None

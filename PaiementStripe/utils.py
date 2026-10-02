@@ -32,13 +32,23 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
     FLUX (tout dans UNE transaction, tout ou rien) :
     1. Rien à rendre sur aucune ligne : aucune vente n'est ouverte.
     2. Vente du paiement existante mais pas réglée : refus (ValueError), AVANT Stripe.
+    2b. Chaque ligne est verrouillée et sa quantité déjà rendue relue
+       (`quantite_restante_de_la_ligne_sous_verrou`) : refus (ValueError), AVANT Stripe,
+       si la quantité demandée dépasse ce qui reste. Deux demandes pour la même ligne
+       (double clic) ne remboursent jamais deux fois.
     3. Vente AVOIR, origine LESPASS, liée à la vente du paiement (vide pour un paiement
        antérieur aux ventes), client = celui de cette vente. Un article par ligne
        (`ajouter_l_article_d_avoir`), écrit AVANT Stripe : un refus du service (avoir
        partiel d'un article avec une part offerte, quantité hors bornes) arrête tout
        avant que Stripe ne rende de l'argent.
     4. Montant demandé = −Σ nets des articles (centimes entiers). Moins d'un centime :
-       pas d'appel à Stripe. Sinon `stripe.Refund.create`.
+       pas d'appel à Stripe. Sinon `stripe.Refund.create`, avec la clé d'idempotence
+       `remboursement-{paiement.uuid}-{n}`, n = nombre de règlements négatifs déjà
+       écrits pour ce paiement (lu sous le verrou du point 2b). Un nouvel essai après un
+       échec (rien d'écrit) reprend la MÊME clé : Stripe renvoie le MÊME remboursement,
+       sans rendre d'argent de plus. Le remboursement suivant, une fois le précédent
+       écrit, a une clé nouvelle. Limite : Stripe garde une clé 24 h ; un nouvel essai
+       plus tardif rembourserait de nouveau.
     5. UN règlement Stripe négatif, montant = −`refund.amount` (LU sur l'objet renvoyé
        par Stripe, jamais calculé), au moyen du paiement (repli : le moyen de la ligne),
        relié au paiement, référence externe = `refund.id`.
@@ -53,10 +63,11 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
     Une écriture qui échoue APRÈS le remboursement Stripe : rien n'est écrit, l'erreur
     est journalisée (ERROR, Sentry) avec l'id et le montant du remboursement, pour un
     rapprochement à la main, puis remontée à l'appelant.
-    / One transaction: AVOIR sale, items BEFORE Stripe, Stripe refund, one negative
-    payment of refund.amount with refund.id, FREE payment for the offered part, gap item,
-    settle, then transitions. A failure after the refund is logged with its id and
-    re-raised; nothing is written.
+    / One transaction: lines locked and already refunded quantity read again, AVOIR sale,
+    items BEFORE Stripe, Stripe refund with an idempotency key (same key on a retry), one
+    negative payment of refund.amount with refund.id, FREE payment for the offered part,
+    gap item, settle, then transitions. A failure after the refund is logged with its id
+    and re-raised; nothing is written.
 
     :param paiement: le `Paiement_stripe` à rembourser
     :param config: la `Configuration` du lieu (compte Stripe Connect)
@@ -71,15 +82,23 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
         ajouter_reglement,
         encaisser_vente,
         ouvrir_vente,
+        quantite_restante_de_la_ligne_sous_verrou,
     )
 
+    # Une quantité imposée à 0 ne rembourse rien : c'est une erreur de l'appelant.
+    # / A forced quantity of 0 refunds nothing: a caller error.
     if specified_quantity == 0:
-        raise Exception(_("Vous devez rembourser au moins un article"))
+        raise ValueError(_("Vous devez rembourser au moins un article"))
 
+    # Chaque ligne doit appartenir au paiement remboursé.
+    # / Every line must belong to the refunded payment.
     for ligne_article in ligne_articles:
         if not paiement.lignearticles.filter(pk=ligne_article.pk).exists():
-            raise Exception(_("Une LigneArticle n'est pas lié au bon paiement"))
+            raise ValueError(_("Une LigneArticle n'est pas lié au bon paiement"))
 
+    # Le PaymentIntent à rembourser : lu sur la session Checkout, sinon celui gardé sur
+    # le paiement (session expirée ou paiement sans session).
+    # / The PaymentIntent to refund: from the Checkout session, else the stored one.
     paiement: Paiement_stripe
     try:
         checkout = paiement.get_checkout_session()
@@ -129,6 +148,20 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
                 else:
                     client_de_la_vente_liee = None
 
+                # 2b. Sous verrou, ce qui reste à rendre sur chaque ligne, AVANT Stripe.
+                # / 2b. Under lock, what is left to give back on each line, BEFORE Stripe.
+                for ligne_article, quantite_rendue in lignes_et_quantites_a_rendre:
+                    quantite_restante = quantite_restante_de_la_ligne_sous_verrou(
+                        ligne_article
+                    )
+                    if quantite_rendue > quantite_restante:
+                        raise ValueError(
+                            f"La quantité remboursée ({quantite_rendue}) dépasse ce qui "
+                            f"reste à rendre sur la ligne {ligne_article.uuid} "
+                            f"({quantite_restante}) : un avoir ou un remboursement a "
+                            f"déjà été fait."
+                        )
+
                 # 3. La vente AVOIR et ses articles, AVANT Stripe.
                 # / 3. The AVOIR sale and its items, BEFORE Stripe.
                 vente_d_avoir = ouvrir_vente(
@@ -150,13 +183,29 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
             montant_demande_a_stripe = -somme_des_nets_rendus
             refund = None
             if montant_demande_a_stripe >= 1:
+                # La clé d'idempotence : n = remboursements déjà ÉCRITS pour ce paiement.
+                # Un essai qui a échoué n'a rien écrit : le nouvel essai garde la même
+                # clé, et Stripe renvoie le même remboursement.
+                # Deux lignes du même paiement remboursées en même temps liraient le même
+                # n : Stripe refuse alors la seconde demande, rien n'est rendu deux fois.
+                # / The idempotency key: n = refunds already WRITTEN for this payment. A
+                # failed try wrote nothing: the retry keeps the key, same refund. Two
+                # lines of one payment refunded at once: Stripe refuses the second one.
+                nombre_de_remboursements_deja_ecrits = Reglement.objects.filter(
+                    paiement_stripe=paiement,
+                    montant__lt=0,
+                ).count()
+                cle_d_idempotence = (
+                    f"remboursement-{paiement.uuid}-{nombre_de_remboursements_deja_ecrits}"
+                )
                 refund = stripe.Refund.create(
                     payment_intent=payment_intent,
                     reason='requested_by_customer',
                     amount=montant_demande_a_stripe,
-                    stripe_account=config.get_stripe_connect_account()
+                    stripe_account=config.get_stripe_connect_account(),
+                    idempotency_key=cle_d_idempotence,
                 )
-                logger.info(f"Refund stripe : {refund.status}")
+                logger.info(f"Remboursement Stripe {refund.id} : {refund.status}")
 
             # Désormais, l'argent est peut-être parti chez Stripe : toute erreur est
             # journalisée avec l'id et le montant du remboursement.
@@ -228,7 +277,8 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
                     article_d_avoir.status = LigneArticle.REFUNDED
                     article_d_avoir.save()
 
-                # Check if paiment is fully refunded
+                # Tout le paiement est rendu : il passe « remboursé ».
+                # / The whole payment is given back: it turns REFUNDED.
                 if paiement.is_fully_refunded():
                     paiement.status = Paiement_stripe.REFUNDED
                     paiement.save()
@@ -243,9 +293,14 @@ def partial_refund_payment(paiement, config, ligne_articles, specified_quantity=
                     )
                 raise
 
+    # Stripe refuse la demande (paiement inconnu, montant trop grand…) : rien n'est écrit.
+    # / Stripe refuses the request: nothing is written.
     except InvalidRequestError as e:
         logger.error(f"CheckoutStripe Refund InvalidRequestError {e}")
         raise Exception(f"CheckoutStripe Refund InvalidRequestError {e}")
+    # Toute autre erreur (refus du service, échec d'écriture) : journalisée, puis remontée
+    # telle quelle à l'appelant.
+    # / Any other error (service refusal, write failure): logged, then re-raised as is.
     except Exception as e:
         logger.error(f"CheckoutStripe Refund Exception : {e}")
         raise e

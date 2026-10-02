@@ -685,6 +685,64 @@ def ligne_entierement_offerte(ligne):
     return ligne_offerte_par_ses_montants or ligne_offerte_par_son_moyen
 
 
+# Les moyens proposés par le champ « Remboursé par » : de l'argent rendu à la main. Le
+# recrédit d'une carte cashless n'en fait pas partie.
+# Lus par les écrans de l'admin (Administration/admin_tenant.py : avoir, annulations) et
+# par le formulaire d'annulation d'adhésion (BaseBillet/views.py, MembershipMVT).
+# / The methods offered by the "Refunded by" field: money given back by hand. Read by
+# the admin screens and the membership cancellation form.
+MOYENS_DU_CHAMP_REMBOURSE_PAR = [
+    PaymentMethod.CASH,
+    PaymentMethod.CC,
+    PaymentMethod.CHEQUE,
+    PaymentMethod.TRANSFER,
+]
+
+
+def choix_du_champ_rembourse_par():
+    """
+    Les choix du champ « Remboursé par » : une ligne vide, puis les quatre moyens.
+    / The "Refunded by" choices: an empty line, then the four methods.
+    """
+    choix = [("", "---------")]
+    for moyen in MOYENS_DU_CHAMP_REMBOURSE_PAR:
+        choix.append((moyen.value, moyen.label))
+    return choix
+
+
+def quantite_restante_de_la_ligne_sous_verrou(ligne):
+    """
+    Verrouille une ligne vendue et rend la quantité qui reste à rendre : la quantité
+    vendue, moins celle de ses avoirs et de ses remboursements Stripe (les lignes qui la
+    citent dans `credit_note_for`, de quantité négative).
+    / Locks a sold line and returns the quantity left to give back: the sold quantity
+    minus its credit notes and Stripe refunds.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    À appeler DANS une transaction, AVANT toute écriture et tout appel à Stripe. Le
+    verrou (`select_for_update`) tient jusqu'à la fin de la transaction : une seconde
+    demande pour la même ligne (double clic, nouvel essai) attend que la première
+    finisse, puis relit la quantité déjà rendue. Sans lui, deux demandes simultanées
+    lisent la même quantité restante et rendent deux fois.
+    / Call INSIDE a transaction, BEFORE any write or Stripe call. The lock holds until the
+    transaction ends: a second request for the same line waits, then reads again.
+
+    APPELÉE PAR : `ecrire_la_vente_d_avoir_d_une_ligne` (ce module) et
+    PaiementStripe/utils.py `partial_refund_payment`.
+
+    :param ligne: la `LigneArticle` vendue (l'objet peut être périmé : on relit en base)
+    :return: la quantité restante (Decimal), 0 si tout est déjà rendu
+    """
+    ligne_verrouillee = LigneArticle.objects.select_for_update().get(pk=ligne.pk)
+    quantite_restante = ligne_verrouillee.qty
+    for ligne_qui_rend_une_partie in ligne_verrouillee.credit_notes.all():
+        # Un avoir ou un remboursement a une quantité négative : on l'ajoute.
+        # / A credit note or a refund has a negative quantity: it is added.
+        quantite_restante += ligne_qui_rend_une_partie.qty
+    return quantite_restante
+
+
 def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origine):
     """
     Écrit l'avoir de `quantite` unités d'une ligne vendue : une vente AVOIR complète,
@@ -702,6 +760,10 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
 
     FLUX (dans UNE transaction ; un point de sauvegarde si l'appelant en a une) :
     1. refus si la vente d'origine existe et n'est pas réglée ;
+    1b. la ligne est verrouillée et la quantité déjà rendue relue
+       (`quantite_restante_de_la_ligne_sous_verrou`) : refus si `quantite` dépasse ce
+       qui reste. Deux demandes pour la même ligne (double clic) n'écrivent jamais deux
+       avoirs ;
     2. vente AVOIR, origine `origine`, liée à la vente de la ligne (vide pour une ligne
        d'avant le chantier), client = celui de la vente liée ;
     3. l'article d'avoir : `ajouter_l_article_d_avoir` ;
@@ -718,11 +780,11 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
     (original Stripe method, or the chosen one); one FREE payment for the offered part;
     settle; THEN CREDIT_NOTE.
 
-    Refuse (ValueError, rien n'est écrit) : vente d'origine pas réglée ; argent hors
-    Stripe à rendre sans moyen ; toute règle du service (quantité, avoir partiel d'un
-    article en partie offert…).
-    / Refuses (ValueError, nothing written): unsettled original sale, money to give back
-    without a method, any service rule.
+    Refuse (ValueError, rien n'est écrit) : vente d'origine pas réglée ; quantité plus
+    grande que ce qui reste à rendre ; argent hors Stripe à rendre sans moyen ; toute
+    règle du service (quantité, avoir partiel d'un article en partie offert…).
+    / Refuses (ValueError, nothing written): unsettled original sale, more than what is
+    left to give back, money to give back without a method, any service rule.
 
     :param ligne: la `LigneArticle` vendue (VALID ou PAID)
     :param quantite: la quantité rendue (Decimal), positive, au plus celle de la ligne
@@ -751,6 +813,15 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
         moyen_de_l_argent_rendu = moyen_rembourse
 
     with transaction.atomic():
+        # 1b. Sous verrou, la quantité qui reste à rendre. / 1b. Under lock, what is left.
+        quantite_restante = quantite_restante_de_la_ligne_sous_verrou(ligne)
+        if quantite > quantite_restante:
+            raise ValueError(
+                f"La quantité rendue ({quantite}) dépasse ce qui reste à rendre sur la "
+                f"ligne {ligne.uuid} ({quantite_restante}) : un avoir ou un "
+                f"remboursement a déjà été fait."
+            )
+
         # 2. La vente AVOIR. / 2. The AVOIR sale.
         if vente_d_origine is not None:
             client_de_la_vente_liee = vente_d_origine.client

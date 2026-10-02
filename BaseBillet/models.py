@@ -3026,13 +3026,19 @@ class Reservation(models.Model):
         else:
             return _("The deadline for getting a refund has passed.")
 
-    def _lignes_hors_stripe(self, pricesold_ids=None):
+    def _lignes_hors_stripe(self, price_ids=None):
         """
         Lignes VALID/PAID sans paiement Stripe (espèces, chèque…) de CETTE réservation,
         pas encore entièrement créditées. Seule la FK directe compte : la vente d'une
         autre réservation n'est jamais touchée.
         / VALID/PAID non-Stripe lines (cash, check…) of THIS reservation, not yet fully
         credited. Only the direct FK counts: another reservation's sale is never touched.
+
+        `price_ids` limite aux lignes de ces tarifs (`Price`). On compare le tarif, jamais
+        le tarif vendu (`PriceSold`) : la caisse écrit sa ligne et ses billets sur deux
+        `PriceSold` différents du même `Price` (laboutik/views.py).
+        / `price_ids` keeps the lines of these Prices. The Price is compared, never the
+        PriceSold: the register writes its line and its tickets on two PriceSold.
 
         Chaque ligne renvoyée porte `quantite_restante` : la quantité pas encore créditée.
         / Each returned line carries `quantite_restante`: the quantity not yet credited.
@@ -3042,8 +3048,10 @@ class Reservation(models.Model):
             status__in=[LigneArticle.VALID, LigneArticle.PAID],
         ).select_related('pricesold', 'pricesold__productsold')
 
-        if pricesold_ids is not None:
-            lignes_vendues_hors_stripe = lignes_vendues_hors_stripe.filter(pricesold_id__in=pricesold_ids)
+        if price_ids is not None:
+            lignes_vendues_hors_stripe = lignes_vendues_hors_stripe.filter(
+                pricesold__price_id__in=price_ids
+            )
 
         lignes_a_crediter = []
         for ligne in lignes_vendues_hors_stripe:
@@ -3168,6 +3176,9 @@ class Reservation(models.Model):
         # L'admin écrit un avoir par ligne ; l'utilisateur n'en écrit aucun (D31).
         # / Non-Stripe lines: the admin writes one credit note per line; the user none.
         lignes_hors_stripe_a_crediter = self._lignes_hors_stripe()
+        # Par tarif (`Price`) : les billets actifs déjà rendus par les lignes précédentes.
+        # / Per Price: the active tickets already given back by the previous lines.
+        billets_actifs_deja_credites_par_tarif = {}
         if annulation_par_l_admin:
             for ligne in lignes_hors_stripe_a_crediter:
                 # L'avoir ne rend que les billets ENCORE ACTIFS du tarif, comme le chemin
@@ -3176,15 +3187,27 @@ class Reservation(models.Model):
                 # remboursé un par un par l'admin n'est jamais rendu deux fois.
                 # On compare le TARIF (`Price`), pas le tarif vendu : la caisse écrit sa
                 # ligne et ses billets sur deux `PriceSold` différents (laboutik/views.py).
+                # Le même tarif peut être vendu sur plusieurs lignes : les billets actifs
+                # déjà rendus par une ligne précédente sont retirés, sinon un même billet
+                # serait rendu une fois par ligne.
                 # / Only still active tickets are given back (like the Stripe path),
                 # capped by the not yet credited quantity: never refunded twice. The
                 # Price is compared, not the PriceSold (the register uses two of them).
+                # Tickets already given back by a previous line of the same Price are
+                # taken off.
+                tarif_de_la_ligne = ligne.pricesold.price_id
                 nombre_de_billets_actifs_du_tarif = self.tickets.filter(
                     status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
-                    pricesold__price_id=ligne.pricesold.price_id,
+                    pricesold__price_id=tarif_de_la_ligne,
                 ).count()
+                billets_actifs_deja_credites = billets_actifs_deja_credites_par_tarif.get(
+                    tarif_de_la_ligne, Decimal("0")
+                )
+                billets_actifs_pas_encore_credites = (
+                    Decimal(nombre_de_billets_actifs_du_tarif) - billets_actifs_deja_credites
+                )
                 quantite_a_crediter = min(
-                    ligne.quantite_restante, Decimal(nombre_de_billets_actifs_du_tarif)
+                    ligne.quantite_restante, billets_actifs_pas_encore_credites
                 )
                 if quantite_a_crediter <= 0:
                     continue
@@ -3193,6 +3216,9 @@ class Reservation(models.Model):
                     quantite=quantite_a_crediter,
                     moyen_rembourse=moyen_rembourse,
                     origine=SaleOrigin.ADMIN,
+                )
+                billets_actifs_deja_credites_par_tarif[tarif_de_la_ligne] = (
+                    billets_actifs_deja_credites + quantite_a_crediter
                 )
                 avoir_hors_stripe_ecrit = True
                 logger.info(f"Credit note created for non-Stripe line {ligne.uuid}")
@@ -3328,11 +3354,14 @@ class Reservation(models.Model):
 
         # 2) Lignes hors Stripe (billet admin, caisse : chèque, espèces, offert…).
         # L'admin écrit l'avoir d'UN billet ; l'utilisateur n'en écrit aucun (D31).
+        # La ligne du billet est cherchée par son tarif (`Price`) : la caisse écrit sa
+        # ligne et ses billets sur deux tarifs vendus différents.
         # / Non-Stripe lines: the admin writes ONE ticket's credit note; the user none.
+        # The ticket's line is found by its Price (the register uses two PriceSold).
         lignes_hors_stripe_du_billet = []
         if not refund:
             lignes_hors_stripe_du_billet = self._lignes_hors_stripe(
-                pricesold_ids=[ticket.pricesold_id]
+                price_ids=[ticket.pricesold.price_id]
             )
             if annulation_par_l_admin:
                 for ligne in lignes_hors_stripe_du_billet:

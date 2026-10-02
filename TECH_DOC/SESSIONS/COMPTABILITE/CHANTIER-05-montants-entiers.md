@@ -4,6 +4,9 @@
 > **Branche** : `main-fedow-import`
 > **Contexte** : environnement de **dev uniquement**. Aucune donnée historique à
 > rattraper, aucune ligne existante à migrer. Le format HMAC peut être redéfini.
+> **Exception (2026-10-02)** : la **production** a des années de lignes sans vente ;
+> leur reprise fait l'objet de la fiche [R](CHANTIER-05-R-reprise-ventes.md), après G et
+> avant H.
 > **Diagnostic** : [`CHANTIER-05-diagnostic.md`](CHANTIER-05-diagnostic.md)
 > **Machine à états** : [`CHANTIER-05-machine-a-etats.md`](CHANTIER-05-machine-a-etats.md) (statuts, transitions, parcours P1-P17, trous T1-T22, tests de caractérisation)
 > **Suivi** : [`CHANTIER-05-SUIVI.md`](CHANTIER-05-SUIVI.md)
@@ -285,6 +288,7 @@ On ne casse rien d'un coup. Trois temps :
 | [E](CHANTIER-05-E-plan-comptable.md) | Plan comptable unique : compte par catégorie de caisse, sinon compte par défaut du type de produit ; par moyen et par monnaie ; journal par point de vente | 1,5 j | — |
 | [F](CHANTIER-05-F-rapport-unique.md) | Moteur de rapport unique, clôture unique J/H/M/A, Z chaîné, marge brute, FEC équilibré ; comparaison avec les anciens rapports sur trois scénarios ; tests existants réécrits | 3,5 j | B, C, D, E |
 | [G](CHANTIER-05-G-lecteurs.md) | Bascule des lecteurs : archive LNE, exports, tickets imprimés, fiche « Vente » dans l'admin, totaux client, vérification d'intégrité, garde « correction après clôture », FK de clôture (impressions), API, ancien LaBoutik | 4,75 j | F |
+| [R](CHANTIER-05-R-reprise-ventes.md) | Reprise des ventes existantes de la production : une vente, des montants entiers et des règlements pour chaque ancienne ligne, numérotées et chaînées à leur date d'origine ; commande rejouable avec passage à blanc ; clôture de reprise ; archive légale avant H | 3 j (projet, à valider) | F, G |
 | [H](CHANTIER-05-H-retrait.md) | Une ligne par article, forme poids / tireuse (D15), avoir sur un article ; retrait de l'ancien modèle et des doublons ; test de garde « pas de `amount × qty` » ; **H-4 : mails vérifiés par Mailpit (E2E)** | 6,5 j | G |
 
 **Total estimé : 31 à 33 jours** (somme des fiches : 31,5 j). B, C et D touchent des fichiers différents mais

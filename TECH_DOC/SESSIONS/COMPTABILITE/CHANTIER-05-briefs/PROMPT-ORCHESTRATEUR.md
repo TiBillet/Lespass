@@ -107,27 +107,35 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## PROCHAINE ÉTAPE (mise à jour 2026-09-30, fin de journée)
+## PROCHAINE ÉTAPE (mise à jour 2026-10-02)
 **Relire d'abord, en entier : `CHANTIER-05-SUIVI.md` (§3 tableau, §4 écarts, §5 décisions,
 §6 journal — le plus récent en haut, §8 pièges) et la mémoire
 `project_chantier_montants_entiers`.**
 
-État : fiches 0, A′, A, B commitées ; fusion de `origin/main-fedow-import` commitée
-(`8407e954`, B-6 dedans). Aucun push sans le mainteneur.
+État : fiches 0, A′, A, B, C commitées ; **fiche D** : D-1 à D-3c-2 commitées (dernier
+commit `2e6d8c11`), **D-3z** (corrections de la relecture Fable de D-3 : verrou contre le
+double avoir, clé d'idempotence du remboursement Stripe, appariement par `Price`, bug
+n°26) prouvée, **à commiter** ; avec elle, la fiche D est terminée et relue (Fable D-1+D-2
+et D-3 : 0 bloquant). Aucun push sans le mainteneur.
 
-**Fiche C commitée** (`d475f3ac`). **Fiche D ouverte** : D-1 relue contre le code (écarts au
-SUIVI §4 : deux chemins vivants vers « payé », code mort, `save()` imbriqué du paiement,
-`CANCELED` = `no_payment_required`, producteurs manquants) ; découpage **D-1a** (producteurs
-directs ouvrent la vente `EN_ATTENTE`) → **D-1b** (panier, abonnement) → **D-1c** (fixture,
-`montant_encaisse`, point d'encaissement unique, écart, T4-T6). D-1a : brief écrit, ouvrier en
-étape 1. Puis D-2 (sans Stripe), D-3 (avoirs).
-Décisions du 2026-09-30 : tireuse = même cascade que le cashless de la caisse (répartition
-locales puis ancien Fedow, débit distant exécuté d'abord, sans verrou du lieu) ; égalité
-rompue / échec après débit distant = 500 + Sentry, rien de dédié ; QR / NFC en ligne =
-ancien Fedow seul (TODO n°20) ; E2E complets seulement aux gros jalons (fin de B, G, H) ;
-bug n°18 : 280 événements archivés, les E2E archiveront ce qu'ils créent (avant fin de G).
-Nouveaux TODO : n°19 (activation caisse V2 sans monnaie locale, carte des recharges), n°20,
-n°21, n°22 ; chantier `TODO/CHARGE-forte-affluence-festivals.md`.
+Suite : **fiche E** (plan comptable ; ne dépend que d'elle-même) : la relire contre le code
+avant tout brief (agent de recherche), questions FALC au mainteneur, découpage. Puis F, G,
+**R** (nouvelle, 2026-10-02 : reprise des ventes existantes de la production, après G et
+avant H ; fiche `CHANTIER-05-R-reprise-ventes.md` en PROJET, questions Q1-Q6 en attente du
+mainteneur), H.
+
+Décisions récentes à connaître (SUIVI §4, §5) : D27 écran « Remboursé par » partout ;
+D30 un seul avoir d'adhésion (dernier paiement) ; D31 annulation client hors Stripe sans
+avoir, message « Réglé sur place : … contactez l'organisateur » ; l'admin ne rembourse que
+les billets encore actifs ; webhook Fedow en échec : Sentry suffit ; égalité rompue ou
+échec après un appel distant : 500 + Sentry. Pour F : ventes « payé ailleurs » et webhook
+(origine LB) aussi dans la caisse V1 (ne pas compter deux fois) ; coût d'achat non recopié
+par l'avoir. Pour H : `int(amount * qty)` dans `_montant_paye_par_stripe`, six lectures de
+`ligne.payment_method` dans le code de D-3.
+
+Décisions du 2026-09-30 (toujours valables) : tireuse = même cascade que le cashless de la
+caisse ; QR / NFC en ligne = ancien Fedow seul (TODO n°20) ; E2E complets seulement aux gros
+jalons (fin de B, G, H) ; les E2E archiveront ce qu'ils créent (avant fin de G).
 
 Le kiosque (`kiosk/`) écrit des recharges sans vente : **hors chantier**, PRIORITÉ après le
 chantier (`TODO/PRIORITE-KIOSK-recharge-fed-ancien-fedow.md`). C n'y touche pas (vérifié :

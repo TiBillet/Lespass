@@ -583,7 +583,7 @@ class TestAvoirsHorsStripe:
         with tenant_context(tenant):
             assert list(reservation_admin._lignes_hors_stripe()) == [ligne_admin]
             assert list(reservation_admin._lignes_hors_stripe(
-                pricesold_ids=[ligne_admin.pricesold_id],
+                price_ids=[ligne_admin.pricesold.price_id],
             )) == [ligne_admin]
             assert list(reservation_stripe._lignes_hors_stripe()) == [], (
                 "Une réservation Stripe n'a aucune ligne hors Stripe à elle."

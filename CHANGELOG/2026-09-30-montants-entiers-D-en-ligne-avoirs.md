@@ -10,7 +10,7 @@ Online Stripe sales, sales without Stripe (admin, API) and credit notes go throu
 **Pourquoi / Why :** chantier 05 « montants entiers » : toute vente écrit son argent en centimes entiers, une seule fois, dans une `Vente` chaînée. /
 Worksite 05 "whole amounts": every sale writes its money once, in whole cents, in a chained `Vente`.
 
-Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2), D-3b (le remboursement Stripe écrit sa vente AVOIR), D-3c-1 (annulations de réservation et de billet), D-3c-2 (annulation d'adhésion, D30). / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z, D-3b, D-3c-1, D-3c-2.
+Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2), D-3b (le remboursement Stripe écrit sa vente AVOIR), D-3c-1 (annulations de réservation et de billet), D-3c-2 (annulation d'adhésion, D30), D-3z (corrections de la relecture de D-3 : double avoir, double remboursement Stripe, billets de caisse), puis le tableau des mutations jouées. / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z, D-3b, D-3c-1, D-3c-2, D-3z, then the table of the mutations played.
 
 ## D-1a — Les producteurs Stripe directs ouvrent leur vente / Direct Stripe producers open their sale
 
@@ -407,6 +407,74 @@ Sheet D §4, T7 (D30), T8; SUIVI D-3c; orchestrator decisions.
 | `tests/pytest/test_avoirs_ecrivent_la_vente.py` | 7 tests : dernier paiement seulement (T7), avoir lié en espèces (test 20), sans moyen refusé, ligne Stripe sans appel Stripe, dernier paiement déjà remboursé, échec d'encaissement, adhésion entièrement offerte (FREE seul) ; textes attendus traduits dans la langue du client |
 | `tests/pytest/test_caracterisation_annulations.py` | test A′ D30 renommé ; fabrique `creer_une_adhesion_payee_trois_fois` par le service de vente |
 
+## D-3z — Corrections de la relecture de D-3 : un seul avoir par demande, un seul remboursement Stripe, billets de caisse retrouvés par leur tarif / D-3 review fixes: one credit note per request, one Stripe refund, register tickets found by their price
+
+**Migration :** Non — **Chaînes i18n :** aucune nouvelle (les refus du service restent des messages techniques en français, sans `_()`).
+
+### Resume / Summary
+**Quoi / What :**
+- **Pas de double avoir** : `quantite_restante_de_la_ligne_sous_verrou` (nouveau, `BaseBillet/services_vente.py`) verrouille la ligne vendue (`select_for_update`) et relit ce qui reste à rendre (quantité vendue moins ses avoirs et remboursements). `ecrire_la_vente_d_avoir_d_une_ligne` l'appelle avant d'ouvrir la vente AVOIR : une quantité plus grande que le reste → `ValueError`, rien n'est écrit. Deux POST d'un double clic n'écrivent plus deux ventes AVOIR. /
+  The sold line is locked and what is left to give back is read again before the AVOIR sale is opened: a double click no longer writes two credit notes.
+- **Pas de double remboursement Stripe** : `partial_refund_payment` (`PaiementStripe/utils.py`) fait la même relecture sous verrou, AVANT Stripe, et envoie une **clé d'idempotence** `remboursement-{paiement.uuid}-{n}`, n = nombre de règlements négatifs déjà écrits pour ce paiement. Après un échec postérieur au remboursement (rien d'écrit), le nouvel essai envoie la même clé : Stripe renvoie le même remboursement, sans rendre d'argent de plus. Le remboursement suivant, une fois le précédent écrit, a une clé nouvelle. Limite : Stripe garde une clé 24 h. /
+  Same locked read in the Stripe refund, before Stripe, plus an idempotency key: a retry gets the same refund back.
+- **Billets de caisse (bug n°26)** : `Reservation._lignes_hors_stripe(price_ids=…)` (remplace `pricesold_ids=`) compare le tarif (`Price`) ; l'écran de l'action « billets » et `cancel_and_refund_ticket` l'utilisent, comme `cancel_and_refund_resa`. La caisse écrit sa ligne et ses billets sur deux `PriceSold` différents : l'admin peut désormais annuler un ou tous les billets d'une réservation de caisse (champ « Remboursé par » affiché, avoir écrit), et le client qui annule un billet de caisse payé en argent voit le message « Réglé sur place… » (D31). /
+  Lines are matched by Price: register tickets can be cancelled by the admin; the user sees the D31 message.
+- **Même tarif sur deux lignes** : `cancel_and_refund_resa` retire, ligne après ligne, les billets actifs déjà rendus du même tarif : un billet actif = un seul avoir d'une unité. /
+  Active tickets already given back by a previous line of the same Price are taken off.
+- `MOYENS_DU_CHAMP_REMBOURSE_PAR` et `choix_du_champ_rembourse_par` vont dans `BaseBillet/services_vente.py` ; l'admin et les vues les importent de là ; le test aussi. /
+  The "Refunded by" constant moves to the sale service.
+- `partial_refund_payment` : commentaires en français puis anglais ; les deux refus d'entrée (`Vous devez rembourser…`, ligne d'un autre paiement) lèvent `ValueError` (les appelants attrapent `Exception` : compatible). /
+  French-then-English comments; entry refusals raise ValueError.
+- `cancel_form.html` : boucle d'erreurs sans variable inutile ; la liste « Remboursé par » porte `aria-describedby` vers le bloc d'erreur. /
+  Error loop cleaned; the select is described by the error block.
+- **Filet contre le double clic** sur les trois écrans : `cancel_form.html` désactive ses boutons pendant la requête (`hx-disabled-elt`, htmx natif, après lecture de la valeur du bouton cliqué) ; `emettre_avoir.html` et `confirmer_annulation.html` (formulaires classiques) désactivent le bouton de validation dans `onsubmit`, une fois l'envoi parti (bouton sans `name` : aucune valeur perdue). La vraie garde reste le verrou côté serveur. /
+  Double-click safety net on the three screens; the real guard is the server-side lock.
+
+**Pourquoi / Why :** relecture Fable de D-3 (SUIVI §4, constats 1, 2, 3, 5, 6, 8, 11, 12) et décisions « D-3z (décisions techniques) ». /
+Fable review of D-3 and the D-3z technical decisions.
+
+**Tests changés (raison) :**
+- `tests/pytest/test_stripe_refund.py` : l'appel `_lignes_hors_stripe(pricesold_ids=…)` devient `price_ids=[ligne_admin.pricesold.price_id]` (paramètre renommé ; aucune assertion changée). /
+  Call updated to the renamed parameter.
+- `tests/pytest/test_avoirs_ecrivent_la_vente.py` : la liste des moyens « Remboursé par » est importée du service au lieu d'être recopiée ; la docstring d'un test D31 ne cite plus le bug n°26. /
+  The constant is imported; one docstring updated.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/services_vente.py` | `MOYENS_DU_CHAMP_REMBOURSE_PAR`, `choix_du_champ_rembourse_par` (déplacés) ; `quantite_restante_de_la_ligne_sous_verrou` (nouveau) ; relecture sous verrou dans `ecrire_la_vente_d_avoir_d_une_ligne` |
+| `PaiementStripe/utils.py` | relecture sous verrou avant Stripe ; clé d'idempotence ; `ValueError` ; commentaires FR puis EN |
+| `BaseBillet/models.py` | `_lignes_hors_stripe(price_ids=…)` ; `cancel_and_refund_ticket` par tarif ; décrément des billets actifs par tarif dans `cancel_and_refund_resa` |
+| `Administration/admin_tenant.py` | écran des billets par tarif ; constante importée du service |
+| `BaseBillet/views.py` | constante et choix importés du service |
+| `Administration/templates/admin/membership/partials/cancel_form.html` | boucle d'erreurs ; `id` du bloc d'erreur ; `aria-describedby` ; `hx-disabled-elt` (formulaire, et `this` sur « Retour ») |
+| `Administration/templates/admin/lignearticle/emettre_avoir.html` | `onsubmit` qui désactive « Émettre l'avoir » une fois l'envoi parti |
+| `Administration/templates/admin/annulation/confirmer_annulation.html` | `onsubmit` qui désactive « Confirmer l'annulation » une fois l'envoi parti |
+| `tests/pytest/test_avoirs_ecrivent_la_vente.py` | 8 tests : double avoir refusé ; double remboursement refusé avant Stripe ; nouvel essai = même clé ; second remboursement = clé nouvelle ; tous les billets d'une réservation de caisse ; un billet de caisse ; deux lignes du même tarif, un billet actif ; client qui annule un billet de caisse (D31) |
+| `tests/pytest/test_stripe_refund.py` | appel au paramètre renommé |
+
+### Mutations jouées / Mutations played
+Une ligne par session de la fiche D. Recopié du SUIVI §3 (colonne des mutations). /
+One row per session of sheet D, copied from SUIVI §3.
+
+| Session | Mutations |
+|---|---|
+| D-1a | 6/6 tuées à la main (vente absente de l'INSERT du paiement ; billets sans vente ; lien d'adhésion qui réutilise une vente en attente ; booking sans vente ; contribution crowds sans vente sur le paiement ; encaissement à la création du checkout), sha256 identiques (4 fichiers) |
+| D-1b | 7/7 tuées à la main (vente non passée au `TicketCreator` des codes promo / du prix libre / au booking ; `Commande.vente` non posée ; abonnement au total de la ligne ; troncature au lieu du demi-haut ; repli avec la quantité de la facture), sha256 identiques (2 fichiers) ; `total_centimes` en `amount × qty` équivalente |
+| D-1c-0 | sans objet (tests seulement) |
+| D-1c-1 | 3/3 tuées à la main (`amount_subtotal` au lieu d'`amount_total` ; facture à 0 devenue vide ; branche facture sans montant), sha256 identiques ; « posé après le `save()` » vérifiable seulement en D-1c-2 |
+| D-1c-2 | 9/9 tuées à la main (montant = Σ catalogue ; idempotence retirée ; règlement de 0 ; ligne d'écart `PAID` avec paiement ; `EXPIRE` annule ; `CANCELED` n'annule plus ; appel hors `try` ; SEPA refusé sans annulation ; montant posé après le `save()`), sha256 identiques (4 fichiers) ; gardes « vente annulée » et « moyen vide » équivalentes (double sécurité) |
+| D-1c-3 | — (tests seulement) |
+| D-2a | 7/7 tuées à la main (encaissement retiré : front, API v2, booking, panier ; encaissement dans `TicketCreator` avant les lignes de l'API ; quantité non entière acceptée ; vente vide du panier non annulée), sha256 identiques (4 fichiers) |
+| D-2b | 8/8 tuées à la main (encaissement retiré : billets, signal ; offert écrit à 0 ; envoi LaBoutik remis ; refus du formulaire retiré ; `atomic` retiré ; encaissement conditionné au déclencheur ; moyen forcé en espèces), sha256 identiques (3 fichiers) |
+| D-2c | 10/10 tuées à la main (encaissement retiré : adhésion gratuite, payé ailleurs, recharge, webhook ; règlement payé ailleurs au mauvais moyen ; `unite` en uuid pour une monnaie en euros ; vente `ANNULEE` à l'échec de la recharge ; nouvelle vente au nouvel essai ; webhook réglé en espèces ; `atomic` retiré du webhook), sha256 identiques (4 fichiers) |
+| D-3a | 13/13 tuées à la main (part offerte non recopiée ; quantité positive ; total non imposé ; avoir partiel d'un offert accepté ; moyen d'origine forcé ; champ pour un offert ; appel `Refund.create` ; FREE écrit deux fois ; `atomic` retiré ; `vente_liee` vide ; `CREDIT_NOTE` avant l'encaissement ; garde « vente pas réglée » ; règlement Stripe non relié), sha256 identiques (2 fichiers) |
+| D-1z | 3/3 tuées à la main (`atomic` retiré de la vue ; `except` qui relance ; `except` qui n'attrape rien), sha256 identiques (2 fichiers) |
+| D-3b | 10/10 tuées à la main (montant calculé au lieu de `refund.amount` ; référence vide ; Stripe appelé avant les articles ; écart non écrit ; une vente par ligne ; `REFUNDED` avant l'encaissement ; `atomic` retiré ; garde « pas réglée » ; vente ouverte sans rien à rendre ; fonction d'écart commune neutralisée), sha256 identiques (2 fichiers) |
+| D-3c-1 | 16/16 tuées à la main (avoir pour l'utilisateur, réservation / billet ; garde admin appliquée à l'utilisateur ; garde Stripe utilisateur retirée, réservation / billet ; billets actifs ignorés ; comparaison par `PriceSold` ; message pour un offert, réservation / billet ; moyen d'origine forcé ; avoir partiel d'un offert refusé ; champ toujours affiché ; pré-rempli malgré des moyens différents ; action sans le drapeau admin ; booking qui écrit un avoir), sha256 identiques (4 fichiers) |
+| D-3c-2 | 8/8 tuées à la main (premier paiement au lieu du dernier ; remontée à la période précédente ; moyen d'origine forcé ; `atomic` retiré ; validation « moyen obligatoire » neutralisée ; champ pour un offert ; appel `Refund.create` ; avoir sur tous les renouvellements), sha256 identique |
+| D-3z | 8 tuées à la main (refus de la fonction commune neutralisé ; somme des avoirs retirée de la relecture ; refus de `partial_refund_payment` neutralisé ; clé d'idempotence retirée ; `n` compté sur tous les règlements ; écran billets par `PriceSold` ; `cancel_and_refund_ticket` par `PriceSold` ; décompte des billets actifs retiré), 1 survivante attendue (`select_for_update` retiré : il faut deux connexions simultanées pour la voir) |
+
 ---
 
 ## Comment tester (a la main) / Manual test
@@ -622,3 +690,17 @@ Pas de test à la main : l'échec d'encaissement ne se provoque pas sans simulat
 
 ### Verifs automatiques (D-3c-2)
 `make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_caracterisation_annulations.py tests/pytest/test_admin_annulation_abonnement_stripe.py"` ; E2E seul : `make e2e ARGS="tests/e2e/test_admin_cancel_membership.py"`
+
+### Test 29 (D-3z) — billets vendus à la caisse
+1. Ouvrir la caisse (point de vente « billetterie ») et vendre deux billets d'un événement en espèces, à un compte que vous pouvez ouvrir.
+2. Admin > Billets : cocher UN des deux billets, « Annuler et rembourser ».
+3. Attendu : l'écran affiche « Remboursé par », pré-rempli « Espèces » ; après validation, ce billet est annulé, l'autre reste actif ; la dernière vente `AVOIR` a un article `(-1)` et un règlement espèces du prix d'un billet.
+4. Recommencer avec une nouvelle vente de deux billets et cocher LES DEUX billets : toute la réservation est annulée, un avoir `(-2)`.
+5. Variante client : avec le compte acheteur, « Mon compte » > annuler un billet acheté à la caisse : message « … Réglé sur place : pour un éventuel remboursement, contactez l'organisateur. », aucune vente `AVOIR` nouvelle.
+
+### Test 30 (D-3z) — un seul avoir, un seul remboursement
+1. Admin > Ventes : ouvrir l'écran « Avoir » d'une ligne dans deux onglets, valider dans le premier, puis dans le second : le second est refusé (« Un avoir existe déjà » ou « L'avoir n'a pas pu être émis : … ») ; une seule vente `AVOIR`.
+2. Stripe en mode test : annuler un billet payé par Stripe ; dans le tableau de bord Stripe (Développeurs > Journaux), la requête de remboursement porte l'en-tête `Idempotency-Key: remboursement-<uuid du paiement>-0` ; un second billet annulé ensuite porte `…-1`.
+
+### Verifs automatiques (D-3z)
+`make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_stripe_refund.py tests/pytest/test_caracterisation_annulations.py"` ; une fois, vrai Stripe : `make test ARGS="tests/pytest/test_stripe_reel_remboursement.py"` ; E2E seuls : `make e2e ARGS="tests/e2e/test_admin_credit_note.py"`, `test_admin_reservation_cancel.py`, `test_admin_cancel_membership.py`.

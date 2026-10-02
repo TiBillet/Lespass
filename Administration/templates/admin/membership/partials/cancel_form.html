@@ -19,10 +19,19 @@ seulement pour « Annuler avec avoir ».
 `required` attribute (it would block "Cancel without credit note"): the serializer
 requires it for "Cancel with credit note" only.
 -->
+<!--
+hx-disabled-elt : htmx désactive les boutons pendant la requête, APRÈS avoir lu la
+valeur du bouton cliqué (`with_credit_note`). C'est un filet contre le double clic ; la
+vraie garde est le verrou côté serveur (BaseBillet/services_vente.py,
+quantite_restante_de_la_ligne_sous_verrou).
+/ htmx disables the buttons during the request, after reading the clicked button's
+value. A safety net against double clicks; the real guard is the server-side lock.
+-->
 <form data-testid="membership-cancel-form"
       hx-post="/memberships/{{ membership.pk }}/cancel/"
       hx-target="#response-cancel"
-      hx-swap="innerHTML">
+      hx-swap="innerHTML"
+      hx-disabled-elt="find button">
     {% csrf_token %}
 
     <div style="padding:1rem;border-radius:.375rem;background:#fef2f2;border:1px solid #fca5a5;font-size:.875rem">
@@ -42,9 +51,10 @@ requires it for "Cancel with credit note" only.
         {# Erreurs du formulaire refusé / Errors of the refused form #}
         {% if erreurs %}
         <div role="alert"
+             id="membership-cancel-errors"
              data-testid="membership-cancel-errors"
              style="margin-bottom:.75rem;padding:.625rem .75rem;border-radius:.25rem;background:#fee2e2;border:1px solid #f87171;color:#991b1b;font-size:.8125rem">
-            {% for nom_du_champ, messages_d_erreur in erreurs.items %}
+            {% for messages_d_erreur in erreurs.values %}
                 {% for message_d_erreur in messages_d_erreur %}
                     <p style="margin-bottom:0">{{ message_d_erreur }}</p>
                 {% endfor %}
@@ -114,9 +124,12 @@ requires it for "Cancel with credit note" only.
                            style="display:block;font-size:.8125rem;font-weight:600;color:#9a3412;margin-bottom:.25rem">
                         {% translate "Remboursé par" %}
                     </label>
+                    {# Le lecteur d'écran relie la liste à l'erreur affichée plus haut. #}
+                    {# / The screen reader links the select to the error shown above.  #}
                     <select id="membership-cancel-moyen-rembourse"
                             name="moyen_rembourse"
                             data-testid="membership-cancel-moyen-rembourse"
+                            {% if erreurs %}aria-describedby="membership-cancel-errors"{% endif %}
                             style="width:100%;padding:.375rem .5rem;border:1px solid #d1d5db;border-radius:.375rem;font-size:.8125rem;background:#fff;color:#111827">
                         {% for valeur_du_moyen, libelle_du_moyen in choix_du_champ_rembourse_par %}
                             <option value="{{ valeur_du_moyen }}"{% if valeur_du_moyen == moyen_rembourse_affiche %} selected{% endif %}>{{ libelle_du_moyen }}</option>
@@ -176,10 +189,13 @@ requires it for "Cancel with credit note" only.
         <div style="display:flex;gap:.5rem;flex-wrap:wrap">
 
             {# Retour : réinitialise la zone / Back: clears the response zone #}
+            {# hx-disabled-elt="this" : sinon il hérite du « find button » du formulaire, #}
+            {# qui ne trouve rien sous ce bouton. / Overrides the inherited selector.     #}
             <button type="button"
                     hx-get="/memberships/{{ membership.pk }}/cancel_reset/"
                     hx-target="#response-cancel"
                     hx-swap="innerHTML"
+                    hx-disabled-elt="this"
                     style="padding:.4rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;border:1px solid #d1d5db;background:transparent;color:#374151;cursor:pointer">
                 {% translate "Retour" %}
             </button>
