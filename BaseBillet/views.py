@@ -32,7 +32,7 @@ from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET, require_http_methods
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
@@ -3818,6 +3818,59 @@ class Badge(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+class AnnulationAdhesionSerializer(serializers.Serializer):
+    """
+    Valide le POST du formulaire « Annuler l'adhésion » de l'admin.
+    / Validates the POST of the admin "Cancel membership" form.
+
+    LOCALISATION : BaseBillet/views.py (utilisé par MembershipMVT.cancel)
+
+    CHAMPS :
+    - `with_credit_note` : le bouton cliqué, « Annuler avec avoir » (1) ou « sans
+      avoir » (0) ;
+    - `moyen_rembourse` : « Remboursé par » (espèces, CB, chèque, virement), ou vide ;
+    - `resilier_abonnement_stripe` : la case « Résilier aussi l'abonnement Stripe ».
+
+    CONTEXTE : `moyen_rembourse_obligatoire` vaut True quand le formulaire affiche le
+    champ « Remboursé par » (dernier paiement hors Stripe, avec de l'argent à rendre).
+    Le moyen est alors exigé pour « Annuler avec avoir », jamais pour « sans avoir ».
+    / The method is required for "with credit note" only when the form shows the field.
+    """
+
+    with_credit_note = serializers.BooleanField(required=False, default=False)
+    moyen_rembourse = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+    resilier_abonnement_stripe = serializers.BooleanField(required=False, default=False)
+
+    def validate_moyen_rembourse(self, moyen_recu):
+        # Import local : charger les vues n'oblige pas à charger tout le module de
+        # l'admin (il n'y a pas de cycle d'imports). Au moment de l'appel, Django l'a déjà
+        # chargé (découverte de l'admin au démarrage).
+        # / Local import: loading the views does not load the whole admin module (no
+        # import cycle); Django has already loaded it by the time this runs.
+        from Administration.admin_tenant import MOYENS_DU_CHAMP_REMBOURSE_PAR
+
+        if moyen_recu == "":
+            return moyen_recu
+        if moyen_recu not in MOYENS_DU_CHAMP_REMBOURSE_PAR:
+            raise serializers.ValidationError(_("Moyen de remboursement inconnu."))
+        return moyen_recu
+
+    def validate(self, donnees):
+        moyen_obligatoire = self.context.get("moyen_rembourse_obligatoire", False)
+        moyen_manquant = donnees["moyen_rembourse"] == ""
+        if donnees["with_credit_note"] and moyen_obligatoire and moyen_manquant:
+            raise serializers.ValidationError(
+                {
+                    "moyen_rembourse": _(
+                        "Choisissez le moyen par lequel l'argent est rendu."
+                    )
+                }
+            )
+        return donnees
+
+
 class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
@@ -4840,65 +4893,246 @@ class MembershipMVT(viewsets.ViewSet):
             "membership": membership,
         })
 
+    def _contexte_du_formulaire_d_annulation(
+        self, membership, ligne_du_dernier_paiement, valeurs_postees=None, erreurs=None
+    ):
+        """
+        Le contexte du formulaire « Annuler l'adhésion » (cancel_form.html).
+        / The context of the "Cancel membership" form.
+
+        LOCALISATION : BaseBillet/views.py — MembershipMVT (utilisé par `cancel`)
+
+        Le formulaire ne parle que du DERNIER paiement de l'adhésion : c'est lui, et lui
+        seul, qui reçoit l'avoir (décision D30). Trois cas :
+        - il n'y a aucun paiement : simple annulation ;
+        - le dernier paiement a déjà un avoir ou un remboursement : pas d'option « avec
+          avoir », une phrase le dit ;
+        - sinon : le dernier paiement est listé, avec l'option « avec avoir ». Le champ
+          « Remboursé par » n'est affiché que s'il y a de l'argent à rendre hors Stripe.
+          Il est pré-rempli avec le moyen d'origine s'il est dans la liste. Une ligne
+          payée par Stripe affiche à la place « Remboursez cette somme depuis votre
+          tableau de bord Stripe. ».
+        / Only the latest payment is shown and credited (D30): no payment, already
+        refunded, or the "with credit note" option with the "Refunded by" field.
+
+        :param membership: l'adhésion à annuler
+        :param ligne_du_dernier_paiement: la `LigneArticle` du dernier paiement, ou None
+        :param valeurs_postees: les données du POST refusé, pour garder le choix, ou None
+        :param erreurs: les erreurs du serializer, ou None
+        :return: le dictionnaire de contexte
+        """
+        # Import local : charger les vues n'oblige pas à charger tout le module de
+        # l'admin (il n'y a pas de cycle d'imports). Au moment de l'appel, Django l'a déjà
+        # chargé (découverte de l'admin au démarrage).
+        # / Local import: loading the views does not load the whole admin module (no
+        # import cycle); Django has already loaded it by the time this runs.
+        from Administration.admin_tenant import (
+            MOYENS_DU_CHAMP_REMBOURSE_PAR,
+            choix_du_champ_rembourse_par,
+        )
+        from BaseBillet.services_vente import ligne_entierement_offerte
+
+        dernier_paiement_deja_rembourse = (
+            ligne_du_dernier_paiement is not None
+            and ligne_du_dernier_paiement.credit_notes.exists()
+        )
+        avoir_possible = (
+            ligne_du_dernier_paiement is not None and not dernier_paiement_deja_rembourse
+        )
+
+        # Le champ « Remboursé par » : seulement s'il y a de l'argent à rendre hors Stripe.
+        # / The "Refunded by" field: only when money is owed outside Stripe.
+        ligne_payee_par_stripe = False
+        champ_rembourse_par_affiche = False
+        if avoir_possible:
+            ligne_payee_par_stripe = ligne_du_dernier_paiement.paiement_stripe_id is not None
+            ligne_sans_argent_a_rendre = ligne_entierement_offerte(ligne_du_dernier_paiement)
+            champ_rembourse_par_affiche = (
+                not ligne_payee_par_stripe and not ligne_sans_argent_a_rendre
+            )
+
+        # Le moyen affiché : celui du POST refusé, sinon le moyen d'origine s'il est
+        # dans la liste.
+        # / The shown method: the refused POST's one, else the original one if listed.
+        moyen_affiche = ""
+        if valeurs_postees is not None:
+            moyen_affiche = valeurs_postees.get("moyen_rembourse", "")
+        elif champ_rembourse_par_affiche:
+            moyen_d_origine = ligne_du_dernier_paiement.payment_method
+            if moyen_d_origine in MOYENS_DU_CHAMP_REMBOURSE_PAR:
+                moyen_affiche = moyen_d_origine
+
+        lignes_payees_affichees = []
+        if avoir_possible:
+            lignes_payees_affichees.append(ligne_du_dernier_paiement)
+
+        return {
+            "membership": membership,
+            "membership_email": membership.user.email if membership.user else "—",
+            "has_paid_lines": avoir_possible,
+            "lignes_payees": lignes_payees_affichees,
+            "dernier_paiement_deja_rembourse": dernier_paiement_deja_rembourse,
+            "ligne_payee_par_stripe": ligne_payee_par_stripe,
+            "champ_rembourse_par_affiche": champ_rembourse_par_affiche,
+            "choix_du_champ_rembourse_par": choix_du_champ_rembourse_par(),
+            "moyen_rembourse_affiche": moyen_affiche,
+            "erreurs": erreurs,
+            # La case « resilier l'abonnement » n'a de sens que sur une
+            # adhesion en prelevement automatique. On se fie au statut AUTO,
+            # pose par le trigger en meme temps que stripe_id_subscription :
+            # se fier au seul identifiant afficherait la case sur des
+            # abonnements deja clos chez Stripe, et chaque annulation
+            # declencherait une alerte Sentry pour rien.
+            # / The checkbox only makes sense on an auto-renewing membership.
+            # We rely on the AUTO status, set together with the subscription id.
+            "abonnement_stripe_resiliable": membership.est_renouvellement_auto,
+        }
+
     @action(detail=True, methods=['GET', 'POST'])
     def cancel(self, request, pk=None):
         """
-        Annule une adhésion avec option de créer un avoir comptable.
-        / Cancels a membership with option to create a credit note.
+        Annule une adhésion, avec ou sans avoir comptable.
+        / Cancels a membership, with or without a credit note.
 
         LOCALISATION : BaseBillet/views.py — MembershipMVT
 
+        LA RÈGLE (décision D30) : UN SEUL avoir, sur le DERNIER paiement de l'adhésion,
+        c'est-à-dire sa ligne VALID / PAID la plus récente (par date). Les paiements
+        passés (renouvellements des années précédentes) ne sont jamais touchés. Si ce
+        dernier paiement a déjà un avoir ou un remboursement, aucun avoir n'est écrit :
+        on ne remonte pas à la période précédente.
+        / ONE credit note, on the latest payment only; none if it is already credited.
+
         FLUX :
-        GET  : retourne le formulaire de confirmation inline (partial HTMX)
+        GET  : le formulaire de confirmation (partiel HTMX, cancel_form.html).
         POST :
-          1. Passe l'adhésion en ADMIN_CANCELED
-          2. Crée les avoirs si demandé (with_credit_note=1 dans le POST)
-          3. Retourne HX-Redirect vers la changelist (adhésion terminée)
+          1. Valide le formulaire avec AnnulationAdhesionSerializer. Refusé (moyen
+             « Remboursé par » manquant) : le formulaire revient (200), rien n'est annulé.
+          2. Dans UNE transaction (tout ou rien) : l'adhésion passe ADMIN_CANCELED, puis,
+             si « avec avoir », l'avoir du dernier paiement est écrit par
+             `ecrire_la_vente_d_avoir_d_une_ligne` (vente AVOIR liée, origine ADMIN,
+             encaissée, puis CREDIT_NOTE). Un refus du service (ValueError) : le
+             formulaire revient avec la raison, rien n'est annulé.
+          3. APRÈS la transaction : la résiliation de l'abonnement Stripe, si demandée.
+          4. HX-Redirect vers la liste des adhésions.
+        Aucun appel de remboursement à Stripe : pour une ligne payée par Stripe, l'admin
+        rembourse depuis son tableau de bord Stripe (décision D27).
 
         DÉPENDANCES :
-        - LigneArticle.credit_notes (related_name de credit_note_for FK)
+        - AnnulationAdhesionSerializer (ce fichier)
+        - BaseBillet/services_vente.py : ecrire_la_vente_d_avoir_d_une_ligne
         - Template : admin/membership/partials/cancel_form.html
         """
+        from BaseBillet.services_vente import ecrire_la_vente_d_avoir_d_une_ligne
+
         membership = get_object_or_404(
             Membership.objects.select_related('user', 'price', 'price__product'),
             pk=pk,
         )
 
-        # Lignes de vente payées liées à cette adhésion, sans avoir existant
-        # / Paid sale lines for this membership, without existing credit note
-        lignes_de_vente_payees = LigneArticle.objects.filter(
-            membership=membership,
-            status__in=[LigneArticle.VALID, LigneArticle.PAID],
-        ).exclude(
-            credit_notes__isnull=False,
-        ).select_related('pricesold', 'pricesold__productsold')
+        # Le dernier paiement : la ligne VALID / PAID la plus récente de l'adhésion.
+        # Une ligne d'avoir n'est jamais VALID / PAID : elle n'est pas candidate.
+        # / The latest payment: the most recent VALID / PAID line of the membership.
+        ligne_du_dernier_paiement = (
+            LigneArticle.objects.filter(
+                membership=membership,
+                status__in=[LigneArticle.VALID, LigneArticle.PAID],
+            )
+            .select_related('pricesold', 'pricesold__productsold', 'paiement_stripe', 'vente')
+            .order_by('-datetime')
+            .first()
+        )
 
         if request.method == 'GET':
-            # Retourne le formulaire de confirmation inline
-            # / Returns the inline confirmation form
-            return render(request, "admin/membership/partials/cancel_form.html", {
-                "membership": membership,
-                "membership_email": membership.user.email if membership.user else "—",
-                "has_paid_lines": lignes_de_vente_payees.exists(),
-                "lignes_payees": lignes_de_vente_payees,
-                # La case « resilier l'abonnement » n'a de sens que sur une
-                # adhesion en prelevement automatique. On se fie au statut AUTO,
-                # pose par le trigger en meme temps que stripe_id_subscription :
-                # se fier au seul identifiant afficherait la case sur des
-                # abonnements deja clos chez Stripe, et chaque annulation
-                # declencherait une alerte Sentry pour rien.
-                # / The checkbox only makes sense on an auto-renewing membership.
-                # We rely on the AUTO status, set together with the subscription id.
-                "abonnement_stripe_resiliable": membership.est_renouvellement_auto,
-            })
+            contexte_du_formulaire = self._contexte_du_formulaire_d_annulation(
+                membership, ligne_du_dernier_paiement
+            )
+            return render(
+                request,
+                "admin/membership/partials/cancel_form.html",
+                contexte_du_formulaire,
+            )
 
-        # POST : annulation effective
-        # / POST: actual cancellation
-        membership.archiver = True
-        membership.status = Membership.ADMIN_CANCELED
-        membership.save()
+        # POST : validation par le serializer.
+        # / POST: validation by the serializer.
+        contexte_du_formulaire = self._contexte_du_formulaire_d_annulation(
+            membership, ligne_du_dernier_paiement
+        )
+        serializer_annulation = AnnulationAdhesionSerializer(
+            data=request.POST,
+            context={
+                "moyen_rembourse_obligatoire": contexte_du_formulaire[
+                    "champ_rembourse_par_affiche"
+                ],
+            },
+        )
+        if not serializer_annulation.is_valid():
+            contexte_avec_erreurs = self._contexte_du_formulaire_d_annulation(
+                membership,
+                ligne_du_dernier_paiement,
+                valeurs_postees=request.POST,
+                erreurs=serializer_annulation.errors,
+            )
+            return render(
+                request,
+                "admin/membership/partials/cancel_form.html",
+                contexte_avec_erreurs,
+            )
+
+        avoir_demande = serializer_annulation.validated_data["with_credit_note"]
+        avoir_a_ecrire = avoir_demande and contexte_du_formulaire["has_paid_lines"]
+        ligne_payee_par_stripe = contexte_du_formulaire["ligne_payee_par_stripe"]
+
+        # Le moyen « Remboursé par », seulement si le champ est affiché. Une ligne Stripe
+        # ou entièrement offerte n'en a pas : le service prend le moyen Stripe d'origine,
+        # ou n'écrit aucun règlement d'argent.
+        # / The chosen method, only when the field is shown; otherwise the service decides.
+        moyen_choisi = None
+        if contexte_du_formulaire["champ_rembourse_par_affiche"]:
+            moyen_choisi = serializer_annulation.validated_data["moyen_rembourse"]
+
+        # L'annulation et l'avoir : tout ou rien.
+        # / Cancellation and credit note: all or nothing.
+        nombre_avoirs_crees = 0
+        try:
+            with db_transaction.atomic():
+                membership.archiver = True
+                membership.status = Membership.ADMIN_CANCELED
+                membership.save()
+
+                if avoir_a_ecrire:
+                    ecrire_la_vente_d_avoir_d_une_ligne(
+                        ligne_du_dernier_paiement,
+                        quantite=ligne_du_dernier_paiement.qty,
+                        moyen_rembourse=moyen_choisi,
+                        origine=SaleOrigin.ADMIN,
+                    )
+                    nombre_avoirs_crees = 1
+        except ValueError as erreur:
+            # Une règle du service refuse l'avoir : la transaction est annulée, l'adhésion
+            # n'est pas annulée. Le formulaire revient avec la raison.
+            # / A service rule refuses the credit note: nothing is cancelled.
+            logger.error(f"Annulation de l'adhésion {membership.uuid} refusée : {erreur}")
+            membership.refresh_from_db()
+            contexte_avec_erreurs = self._contexte_du_formulaire_d_annulation(
+                membership,
+                ligne_du_dernier_paiement,
+                valeurs_postees=request.POST,
+                erreurs={
+                    "non_field_errors": [
+                        _("L'avoir n'a pas pu être émis : %(raison)s") % {"raison": erreur}
+                    ]
+                },
+            )
+            return render(
+                request,
+                "admin/membership/partials/cancel_form.html",
+                contexte_avec_erreurs,
+            )
 
         # Resiliation de l'abonnement Stripe, si le gestionnaire l'a demandee.
+        # Elle vient APRES la transaction : l'appel reseau ne tient pas le verrou du
+        # lieu pris par l'encaissement de l'avoir.
         #
         # L'appel reseau ne doit JAMAIS faire echouer l'annulation, qui vient
         # d'etre enregistree : meme parti pris que BaseBillet.triggers quand il
@@ -4909,11 +5143,13 @@ class MembershipMVT(viewsets.ViewSet):
         # Connect enregistre, il en CREE un chez Stripe et peut lever.
         # Le filet de securite si tout cela echoue est la garde ADMIN_CANCELED
         # de BaseBillet.triggers : un prelevement ne reactivera pas la fiche.
-        # / The network call must NEVER fail the cancellation just recorded.
-        # On failure: ERROR level so Sentry alerts, a human must cancel the
-        # subscription in the Stripe dashboard. The safety net is the
-        # ADMIN_CANCELED guard in BaseBillet.triggers.
-        resiliation_demandee = request.POST.get("resilier_abonnement_stripe") == "1"
+        # / Stripe subscription cancellation, AFTER the transaction. The network call
+        # must NEVER fail the cancellation just recorded. On failure: ERROR level so
+        # Sentry alerts, a human must cancel the subscription in the Stripe dashboard.
+        # The safety net is the ADMIN_CANCELED guard in BaseBillet.triggers.
+        resiliation_demandee = serializer_annulation.validated_data[
+            "resilier_abonnement_stripe"
+        ]
         if resiliation_demandee and membership.stripe_id_subscription:
             try:
                 stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
@@ -4934,34 +5170,20 @@ class MembershipMVT(viewsets.ViewSet):
                     f"prelevement continue : resilier a la main dans Stripe."
                 )
 
-        # Crée les avoirs si demandé
-        # / Creates credit notes if requested
-        creation_avoirs_demandee = request.POST.get("with_credit_note") == "1"
-        if creation_avoirs_demandee:
-            nombre_avoirs_crees = 0
-            for ligne in lignes_de_vente_payees:
-                avoir = LigneArticle.objects.create(
-                    pricesold=ligne.pricesold,
-                    qty=-ligne.qty,
-                    amount=ligne.amount,
-                    vat=ligne.vat,
-                    paiement_stripe=ligne.paiement_stripe,
-                    membership=membership,
-                    payment_method=ligne.payment_method,
-                    asset=ligne.asset,
-                    wallet=ligne.wallet,
-                    sale_origin=SaleOrigin.ADMIN,
-                    credit_note_for=ligne,
-                    status=LigneArticle.CREATED,
-                )
-                avoir.status = LigneArticle.CREDIT_NOTE
-                avoir.save()
-                nombre_avoirs_crees += 1
-
+        # Le message de fin : le nombre d'avoirs (0 ou 1) quand l'avoir était demandé.
+        # / The closing message: the number of credit notes (0 or 1) when requested.
+        if avoir_demande:
             messages.success(
                 request,
                 _("Adhésion annulée. %(count)d avoir(s) créé(s).") % {"count": nombre_avoirs_crees}
             )
+            if nombre_avoirs_crees == 1 and ligne_payee_par_stripe:
+                # Le rappel reste affiché après l'action : l'argent n'est pas encore rendu.
+                # / The reminder stays after the action: the money is not given back yet.
+                messages.warning(
+                    request,
+                    _("Remboursez cette somme depuis votre tableau de bord Stripe."),
+                )
         else:
             messages.success(request, _("Adhésion annulée."))
 

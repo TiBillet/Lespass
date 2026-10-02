@@ -80,11 +80,35 @@ CONTRAT DE L'ÉCRAN D'ANNULATION (comme la confirmation de suppression de Django
 / First POST = the screen (200, `form` context); second POST adds `post=yes` and
 `moyen_rembourse`; refused form = screen again (200).
 
+L'ANNULATION D'ADHÉSION PAR L'ADMIN (D30, fin du fichier)
+L'admin annule une adhésion depuis sa fiche, bouton « Annuler avec avoir ». UN SEUL
+avoir, sur le DERNIER paiement de l'adhésion (sa ligne VALID / PAID la plus récente, par
+date) : les renouvellements passés ne sont jamais touchés, et si ce dernier paiement a
+déjà un avoir ou un remboursement, aucun avoir n'est écrit (pas de remontée). L'avoir
+est écrit comme celui du bouton « Avoir » ; l'annulation et l'avoir : tout ou rien.
+/ ONE credit note, on the latest payment only; none if that payment already has one;
+written like the "Credit note" button; cancellation and credit note: all or nothing.
+
+CONTRAT DU FORMULAIRE D'ANNULATION D'ADHÉSION (partiel HTMX de la vue DRF)
+- GET `/memberships/<pk>/cancel/` : le formulaire (200). Ligne hors Stripe, pas
+  entièrement offerte : une liste `<select name="moyen_rembourse">` (espèces, CB,
+  chèque, virement), l'`<option>` du moyen d'origine marquée `selected` s'il est dans la
+  liste. Ligne payée par Stripe : pas de liste, la phrase « Remboursez cette somme
+  depuis votre tableau de bord Stripe. » ;
+- POST `with_credit_note=1` (+ `moyen_rembourse`) : annulation faite, 204 avec
+  `HX-Redirect` ; moyen manquant alors qu'il est demandé : le formulaire revient (200),
+  rien n'est annulé.
+/ GET = the form, with a `moyen_rembourse` select for a non-Stripe line (pre-selected
+original method) or the Stripe sentence; POST = 204, or the form again (200) when the
+method is missing.
+
 CODE PARCOURU / CODE EXERCISED
 - Administration/admin_tenant.py — LigneArticleAdmin.emettre_avoir (écran et action) ;
   ReservationAdmin.action_cancel_refund_reservations, TicketAdmin.action_cancel_refund_selected ;
-- BaseBillet/services_vente.py — ajouter_l_article_d_avoir, ouvrir_vente,
-  ajouter_reglement, encaisser_vente ;
+- BaseBillet/views.py — MembershipMVT.cancel (annulation d'adhésion, et son gabarit
+  Administration/templates/admin/membership/partials/cancel_form.html) ;
+- BaseBillet/services_vente.py — ecrire_la_vente_d_avoir_d_une_ligne,
+  ajouter_l_article_d_avoir, ouvrir_vente, ajouter_reglement, encaisser_vente ;
 - BaseBillet/models.py — Reservation.cancel_and_refund_resa, cancel_and_refund_ticket ;
   booking/models.py — Booking.cancel_and_refund_booking ;
 - PaiementStripe/utils.py — partial_refund_payment (remboursement Stripe), appelé par
@@ -92,8 +116,9 @@ CODE PARCOURU / CODE EXERCISED
   Booking.cancel_and_refund_booking.
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-D-en-ligne-avoirs.md (§4,
-§5 tests 17, 18, 18b, 18c, 19, 21, annexe T9) ; CHANTIER-05-SUIVI.md §4 (D-3, D-3c) ;
-briefs CHANTIER-05-briefs/05-D-3a.md, 05-D-3b.md et 05-D-3c-1.md.
+§5 tests 17, 18, 18b, 18c, 19, 20, 21, annexes T7, T8, T9) ; CHANTIER-05-SUIVI.md §4
+(D-3, D-3c) ; briefs CHANTIER-05-briefs/05-D-3a.md, 05-D-3b.md, 05-D-3c-1.md et
+05-D-3c-2.md.
 
 Lancer / Run : make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py"
 """
@@ -101,17 +126,21 @@ Lancer / Run : make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py"
 import logging
 from contextlib import contextmanager
 from decimal import Decimal
+from html.parser import HTMLParser
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.messages import get_messages
+from django.utils import translation
+from django.utils.html import escape
 from django_tenants.utils import tenant_context
 
 from BaseBillet import services_vente
 from BaseBillet.models import (
     Configuration,
     LigneArticle,
+    Membership,
     Paiement_stripe,
     PaymentMethod,
     Reservation,
@@ -120,11 +149,13 @@ from BaseBillet.models import (
 )
 from BaseBillet.models_vente import Reglement, Vente
 from BaseBillet.services_vente import NOM_ECART_RECU_EN_PLUS
+from ApiBillet.serializers import get_or_create_price_sold
 from booking.models import Booking
 from PaiementStripe.utils import partial_refund_payment
 from fabriques_panier import (
     catalogue_stripe_simule,
     client_connecte,
+    creer_adhesion,
     creer_evenement_avec_tarif,
     creer_ressource_avec_tarif,
     creer_utilisateur,
@@ -138,6 +169,7 @@ from fabriques_vente import (
     verifier_egalites,
 )
 from test_admin_ecrit_la_vente import (
+    creer_l_adhesion_et_relire,
     encaissement_qui_echoue,
     moyens_et_montants_des_reglements,
     statuts_des_articles_a_l_encaissement,
@@ -146,12 +178,15 @@ from test_admin_ecrit_la_vente import (
 from test_caracterisation_admin_api import reserver_une_ressource_sans_panier
 from test_caracterisation_annulations import (
     acheter_des_billets_payes_par_stripe,
+    acheter_une_adhesion_payee_par_stripe,
     annuler_un_billet_depuis_mon_compte,
     annuler_une_reservation_depuis_mon_compte,
     client_de_mon_compte,
+    creer_une_adhesion_payee_trois_fois,
     rembourser_comme_stripe,
 )
 from test_caracterisation_en_ligne import (
+    EN_TETE_HTMX,
     creer_un_administrateur_du_lieu,
     revenir_de_stripe_billetterie,
 )
@@ -187,6 +222,27 @@ MESSAGE_BOOKING_REGLE_SUR_PLACE = (
     "Votre réservation est annulée. Elle a été réglée sur place : pour un éventuel "
     "remboursement, contactez l'organisateur."
 )
+
+# La langue des clients de test : `client_connecte` (fabriques_panier.py) envoie
+# `Accept-Language: en`. Les textes attendus sont traduits dans cette langue : le test
+# reste vrai quand la traduction anglaise d'un msgid arrive.
+# / The test clients' language (Accept-Language: en): expected texts are translated in
+# it, so the test stays true when an English translation arrives.
+LANGUE_DES_CLIENTS_DE_TEST = "en"
+
+
+def dans_la_langue_du_client(msgid):
+    """Le texte que le client de test lit pour ce msgid.
+    / The text the test client reads for this msgid."""
+    with translation.override(LANGUE_DES_CLIENTS_DE_TEST):
+        return translation.gettext(msgid)
+
+
+def dans_la_langue_active(msgid):
+    """Le texte de ce msgid dans la langue active du test (code appelé sans client).
+    / The text of this msgid in the test's active language (code called without client)."""
+    return translation.gettext(msgid)
+
 
 # Les moyens proposés par le champ « Remboursé par » : espèces, CB, chèque, virement.
 # / The methods offered by the "Refunded by" field: cash, card, cheque, transfer.
@@ -606,15 +662,18 @@ def test_avoir_admin_ligne_stripe_n_appelle_pas_stripe_et_previent_l_admin(lieu)
 
     reponse_de_l_ecran = ouvrir_l_ecran_de_l_avoir(client_de_l_admin, ligne_d_origine)
     assert "moyen_rembourse" not in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
-    assert MESSAGE_REMBOURSEMENT_STRIPE_A_LA_MAIN in reponse_de_l_ecran.content.decode()
+    assert (
+        dans_la_langue_du_client(MESSAGE_REMBOURSEMENT_STRIPE_A_LA_MAIN)
+        in reponse_de_l_ecran.content.decode()
+    )
 
     reponse_de_l_action = valider_l_ecran_de_l_avoir(client_de_l_admin, ligne_d_origine)
 
     assert reponse_de_l_action.status_code == 302
     assert lieu.remboursement_stripe.call_count == 0
-    assert MESSAGE_REMBOURSEMENT_STRIPE_A_LA_MAIN in textes_des_messages_de_l_admin(
-        reponse_de_l_action
-    )
+    assert dans_la_langue_du_client(
+        MESSAGE_REMBOURSEMENT_STRIPE_A_LA_MAIN
+    ) in textes_des_messages_de_l_admin(reponse_de_l_action)
 
     avoir = l_avoir_de_la_ligne(ligne_d_origine)
     assert avoir.status == LigneArticle.CREDIT_NOTE
@@ -1015,9 +1074,9 @@ def test_avoir_vente_d_origine_pas_reglee_refuse(lieu):
     )
 
     assert reponse_de_l_action.status_code == 302
-    assert MESSAGE_VENTE_D_ORIGINE_PAS_REGLEE in textes_des_messages_de_l_admin(
-        reponse_de_l_action
-    )
+    assert dans_la_langue_du_client(
+        MESSAGE_VENTE_D_ORIGINE_PAS_REGLEE
+    ) in textes_des_messages_de_l_admin(reponse_de_l_action)
     rien_n_est_ecrit_pour_la_ligne(ligne_d_une_vente_en_attente)
 
 
@@ -2063,7 +2122,10 @@ def test_annulation_utilisateur_hors_stripe_aucun_avoir_aucune_vente(
         "Une vente a été écrite par l'annulation de l'utilisateur."
     )
     messages_de_la_personne = " ".join(textes_des_messages_de_l_admin(reponse))
-    assert MESSAGE_COMPLEMENTAIRE_REGLE_SUR_PLACE in messages_de_la_personne, (
+    assert (
+        dans_la_langue_du_client(MESSAGE_COMPLEMENTAIRE_REGLE_SUR_PLACE)
+        in messages_de_la_personne
+    ), (
         messages_de_la_personne
     )
     # Pas de seconde phrase « annulée » : la vue la dit déjà.
@@ -2131,7 +2193,9 @@ def test_annulation_utilisateur_booking_hors_stripe_aucun_avoir(lieu):
 
     message_de_l_annulation = booking.cancel_and_refund_booking()
 
-    assert str(message_de_l_annulation) == MESSAGE_BOOKING_REGLE_SUR_PLACE
+    assert str(message_de_l_annulation) == dans_la_langue_active(
+        MESSAGE_BOOKING_REGLE_SUR_PLACE
+    )
     rien_n_est_ecrit_pour_la_ligne(ligne_du_booking)
     assert Vente.objects.count() == nombre_de_ventes_avant, (
         "Une vente a été écrite par l'annulation du booking."
@@ -2160,11 +2224,15 @@ def test_annulation_utilisateur_reservation_offerte_garde_le_message_d_avant(lie
 
     assert reponse.status_code == 200
     messages_de_la_personne = " ".join(textes_des_messages_de_l_admin(reponse))
-    # Aucune phrase « réglé(e) sur place » : on cherche leur fin commune.
-    # / No "paid on site" sentence: we look for their common ending.
-    assert "contactez l'organisateur" not in messages_de_la_personne, (
-        messages_de_la_personne
-    )
+    # Aucune phrase « réglé(e) sur place ». / No "paid on site" sentence.
+    for phrase_regle_sur_place in [
+        MESSAGE_COMPLEMENTAIRE_REGLE_SUR_PLACE,
+        MESSAGE_BOOKING_REGLE_SUR_PLACE,
+    ]:
+        assert (
+            dans_la_langue_du_client(phrase_regle_sur_place)
+            not in messages_de_la_personne
+        ), messages_de_la_personne
     rien_n_est_ecrit_pour_la_ligne(vente_admin_offerte.ligne)
     reservation.refresh_from_db()
     assert reservation.status == Reservation.CANCELED
@@ -2273,9 +2341,9 @@ def test_annulation_utilisateur_booking_offert_garde_le_message_d_avant(lieu):
 
     message_de_l_annulation = booking.cancel_and_refund_booking()
 
-    assert "contactez l'organisateur" not in str(message_de_l_annulation), (
+    assert dans_la_langue_active(MESSAGE_BOOKING_REGLE_SUR_PLACE) not in str(
         message_de_l_annulation
-    )
+    ), message_de_l_annulation
     assert str(message_de_l_annulation) == str(booking.cancel_text())
     rien_n_est_ecrit_pour_la_ligne(ligne_du_booking)
     booking.refresh_from_db()
@@ -2304,11 +2372,578 @@ def test_annulation_utilisateur_billet_offert_garde_le_message_d_avant(lieu):
 
     assert reponse.status_code == 200
     messages_de_la_personne = " ".join(textes_des_messages_de_l_admin(reponse))
-    # Aucune phrase « réglé sur place » : on cherche sa fin.
-    # / No "paid on site" sentence: we look for its ending.
-    assert "contactez l'organisateur" not in messages_de_la_personne, (
-        messages_de_la_personne
-    )
+    # Aucune phrase « réglé sur place ». / No "paid on site" sentence.
+    assert (
+        dans_la_langue_du_client(MESSAGE_COMPLEMENTAIRE_REGLE_SUR_PLACE)
+        not in messages_de_la_personne
+    ), messages_de_la_personne
     rien_n_est_ecrit_pour_la_ligne(vente_admin_offerte.ligne)
     billet_a_annuler.refresh_from_db()
     assert billet_a_annuler.status == Ticket.CANCELED
+
+
+# --------------------------------------------------------------------------
+# Annulation d'adhésion par l'admin : un seul avoir, sur le dernier paiement (D30)
+# / Admin membership cancellation: one credit note, on the latest payment (D30)
+# --------------------------------------------------------------------------
+
+# Le message de fin d'une annulation d'adhésion avec avoir (msgid français existant).
+# / The closing message of a membership cancellation with credit note.
+MESSAGE_ADHESION_ANNULEE_AVEC_AVOIRS = "Adhésion annulée. %(count)d avoir(s) créé(s)."
+
+# La phrase du formulaire quand le dernier paiement a déjà un avoir (msgid français).
+# / The form sentence when the latest payment is already credited (French msgid).
+MESSAGE_DERNIER_PAIEMENT_DEJA_REMBOURSE = (
+    "Le dernier paiement est déjà remboursé : aucun avoir ne sera créé."
+)
+
+# Les repères du formulaire d'annulation d'adhésion (cancel_form.html).
+# / Markers of the membership cancellation form.
+REPERE_BOUTON_AVEC_AVOIR = 'data-testid="membership-cancel-with-credit-note"'
+REPERE_LIGNE_PAYEE_AFFICHEE = 'data-testid="membership-cancel-ligne-payee"'
+
+# L'erreur du formulaire quand le moyen « Remboursé par » manque (msgid français).
+# / The form error when the "Refunded by" method is missing (French msgid).
+MESSAGE_MOYEN_REMBOURSE_MANQUANT = "Choisissez le moyen par lequel l'argent est rendu."
+
+
+def message_de_fin_attendu(nombre_d_avoirs):
+    """Le message de fin d'une annulation d'adhésion avec avoir, tel que le client le lit.
+    / The closing message, as the test client reads it."""
+    return dans_la_langue_du_client(MESSAGE_ADHESION_ANNULEE_AVEC_AVOIRS) % {
+        "count": nombre_d_avoirs
+    }
+
+
+def url_de_l_annulation_d_adhesion(adhesion):
+    """L'adresse du panneau « Annuler l'adhésion » de la fiche adhésion de l'admin.
+    / The address of the "Cancel membership" panel of the admin membership page."""
+    return f"/memberships/{adhesion.pk}/cancel/"
+
+
+def ouvrir_le_formulaire_d_annulation_d_adhesion(client_de_l_admin, adhesion):
+    """L'admin clique « Annuler l'adhésion » : le formulaire de confirmation s'ouvre
+    (GET, partiel HTMX).
+    / The admin clicks "Cancel membership": the confirmation form opens (GET)."""
+    return client_de_l_admin.get(
+        url_de_l_annulation_d_adhesion(adhesion), **EN_TETE_HTMX
+    )
+
+
+def annuler_l_adhesion_avec_avoir(client_de_l_admin, adhesion, moyen_rembourse=None):
+    """
+    L'admin valide le formulaire par le bouton « Annuler avec avoir »
+    (`with_credit_note=1`), avec le moyen « Remboursé par » s'il est donné. Sans moyen,
+    le formulaire est envoyé sans ce champ.
+    / The admin confirms with "Cancel with credit note", with the "Refunded by" method
+    if given.
+    """
+    donnees_du_formulaire = {"with_credit_note": "1"}
+    if moyen_rembourse is not None:
+        donnees_du_formulaire["moyen_rembourse"] = moyen_rembourse
+    return client_de_l_admin.post(
+        url_de_l_annulation_d_adhesion(adhesion),
+        donnees_du_formulaire,
+        **EN_TETE_HTMX,
+    )
+
+
+class LecteurDuChampRemboursePar(HTMLParser):
+    """
+    Lit, dans le HTML du formulaire d'annulation d'adhésion, la liste déroulante
+    `<select name="moyen_rembourse">` : les moyens proposés (valeurs non vides des
+    `<option>`) et le moyen pré-rempli (l'`<option>` marquée `selected`).
+    / Reads the `<select name="moyen_rembourse">` of the cancellation form: the offered
+    methods and the pre-selected one.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.champ_present = False
+        self.dans_le_champ = False
+        self.moyens_proposes = []
+        self.moyen_pre_rempli = None
+
+    def handle_starttag(self, balise, attributs):
+        attributs_de_la_balise = dict(attributs)
+        if balise == "select" and attributs_de_la_balise.get("name") == "moyen_rembourse":
+            self.champ_present = True
+            self.dans_le_champ = True
+            return
+        if balise == "option" and self.dans_le_champ:
+            valeur_de_l_option = attributs_de_la_balise.get("value") or ""
+            if valeur_de_l_option:
+                self.moyens_proposes.append(valeur_de_l_option)
+            option_selectionnee = "selected" in attributs_de_la_balise
+            if option_selectionnee and valeur_de_l_option:
+                self.moyen_pre_rempli = valeur_de_l_option
+
+    def handle_endtag(self, balise):
+        if balise == "select":
+            self.dans_le_champ = False
+
+
+def lire_le_champ_rembourse_par(reponse_du_formulaire):
+    """Lit le champ « Remboursé par » du formulaire d'annulation d'adhésion.
+    / Reads the "Refunded by" field of the membership cancellation form."""
+    lecteur = LecteurDuChampRemboursePar()
+    lecteur.feed(reponse_du_formulaire.content.decode())
+    return lecteur
+
+
+def un_message_contient(reponse, texte_attendu):
+    """Dit si l'un des messages laissés à l'admin contient le texte attendu.
+    / Tells whether one of the admin messages contains the expected text."""
+    for texte_du_message in textes_des_messages_de_l_admin(reponse):
+        if texte_attendu in texte_du_message:
+            return True
+    return False
+
+
+def l_adhesion_n_est_pas_annulee(adhesion, statut_avant):
+    """Vérifie que l'adhésion garde son statut et n'est pas archivée.
+    / Checks the membership keeps its status and is not archived."""
+    adhesion_relue = Membership.objects.get(pk=adhesion.pk)
+    assert adhesion_relue.status == statut_avant, (
+        f"L'adhésion a changé de statut : {statut_avant} → {adhesion_relue.status}."
+    )
+    assert not adhesion_relue.archiver
+
+
+def adhesion_payee_hors_stripe_dans_l_admin(lieu, moyen_de_paiement):
+    """
+    ÉTAT DE DÉPART : un administrateur ajoute une adhésion à 20 €, payée au moyen donné,
+    par le formulaire « Ajouter une adhésion » (le vrai producteur : vente ADMIN réglée,
+    ligne VALID). Rend l'adhésion, l'adhérente, sa ligne et sa vente.
+    / STARTING STATE: an admin adds a 20 € membership paid with the given method.
+    """
+    adhesion_admin = creer_l_adhesion_et_relire(
+        lieu, contribution="20", moyen_de_paiement=moyen_de_paiement
+    )
+    ligne_de_l_adhesion = LigneArticle.objects.get(membership=adhesion_admin.adhesion)
+    vente_de_l_adhesion = Vente.objects.get(pk=ligne_de_l_adhesion.vente_id)
+    return SimpleNamespace(
+        adhesion=adhesion_admin.adhesion,
+        adherente=adhesion_admin.adherente,
+        ligne=ligne_de_l_adhesion,
+        vente=vente_de_l_adhesion,
+    )
+
+
+def test_annulation_adhesion_avoir_seulement_sur_le_dernier_paiement(lieu):
+    """
+    Annexe T7 (D30). Une adhésion en abonnement payée trois fois par Stripe : l'achat il
+    y a deux ans, deux renouvellements il y a un an et hier, 15 € chacun. L'admin
+    l'annule avec avoir.
+    - UN SEUL avoir : sur la ligne du DERNIER paiement (hier). L'achat et le premier
+      renouvellement n'ont aucun avoir et restent VALID.
+    - Sa vente AVOIR (origine ADMIN) est réglée, liée à la vente du dernier paiement,
+      même client ; UN règlement −1500 au moyen Stripe de ce paiement (`SR`), relié au
+      paiement, sans référence externe. Aucun appel à Stripe.
+    - Le formulaire ne liste que la ligne du dernier paiement ; le message de fin dit
+      « 1 avoir(s) ».
+    / T7 (D30): a membership paid three times; cancelled with credit note: ONE credit
+    note, on the latest payment only, linked to its sale, one SR payment of −1500.
+    """
+    acheteur = creer_utilisateur()
+    adhesion = creer_adhesion(prix="15.00", recurrente=True)
+    adhesion_payee_trois_fois = creer_une_adhesion_payee_trois_fois(acheteur, adhesion)
+    ligne_de_l_achat, ligne_du_premier_renouvellement, ligne_du_dernier_paiement = (
+        adhesion_payee_trois_fois.lignes
+    )
+    vente_du_dernier_paiement = adhesion_payee_trois_fois.ventes[2]
+    paiement_du_dernier_paiement = adhesion_payee_trois_fois.paiements[2]
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    # Le formulaire ne liste que la ligne du dernier paiement, celle de l'avoir.
+    # / The form lists the latest payment's line only, the one credited.
+    reponse_du_formulaire = ouvrir_le_formulaire_d_annulation_d_adhesion(
+        client_de_l_admin, adhesion_payee_trois_fois.adhesion
+    )
+    assert reponse_du_formulaire.status_code == 200
+    contenu_du_formulaire = reponse_du_formulaire.content.decode()
+    assert contenu_du_formulaire.count(REPERE_LIGNE_PAYEE_AFFICHEE) == 1
+    assert REPERE_BOUTON_AVEC_AVOIR in contenu_du_formulaire
+
+    reponse = annuler_l_adhesion_avec_avoir(
+        client_de_l_admin, adhesion_payee_trois_fois.adhesion
+    )
+
+    assert reponse.status_code == 204
+    adhesion_relue = Membership.objects.get(pk=adhesion_payee_trois_fois.adhesion.pk)
+    assert adhesion_relue.status == Membership.ADMIN_CANCELED
+    assert lieu.remboursement_stripe.call_count == 0
+
+    # Un seul avoir pour toute l'adhésion. / One credit note for the whole membership.
+    avoirs_de_l_adhesion = LigneArticle.objects.filter(
+        membership=adhesion_payee_trois_fois.adhesion, credit_note_for__isnull=False
+    )
+    assert avoirs_de_l_adhesion.count() == 1
+    rien_n_est_ecrit_pour_la_ligne(ligne_de_l_achat)
+    rien_n_est_ecrit_pour_la_ligne(ligne_du_premier_renouvellement)
+
+    avoir = l_avoir_de_la_ligne(ligne_du_dernier_paiement)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.qty == Decimal("-1")
+    assert avoir.amount == 1500
+    assert avoir.total_ttc == -1500
+    assert avoir.paiement_stripe_id == paiement_du_dernier_paiement.pk
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_du_dernier_paiement,
+        client_attendu=vente_du_dernier_paiement.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.STRIPE_RECURENT, -1500)
+    ]
+    reglement_de_l_avoir = vente_d_avoir.reglements.get()
+    assert reglement_de_l_avoir.reference_externe == ""
+    assert reglement_de_l_avoir.paiement_stripe_id == paiement_du_dernier_paiement.pk
+
+    assert un_message_contient(reponse, message_de_fin_attendu(1))
+    verifier_egalites(vente_d_avoir)
+
+
+def test_annulation_adhesion_avoir_lie(lieu):
+    """
+    Fiche test 20. Une adhésion à 20 € ajoutée dans l'admin, payée par CB (`CC`).
+    - Le formulaire d'annulation propose « Remboursé par » : espèces, CB, chèque,
+      virement ; pré-rempli avec CB (le moyen d'origine est dans la liste). L'ouvrir
+      n'annule rien.
+    - L'admin choisit « espèces » (`CA`) et clique « Annuler avec avoir » : l'adhésion
+      passe « annulée par l'admin » ; l'avoir (quantité −1, prix unitaire 2000, net
+      −2000, CREDIT_NOTE, relié à l'adhésion) a sa vente AVOIR (origine ADMIN) réglée,
+      liée à la vente d'origine, même client, avec UN règlement espèces −2000.
+    - Le message de fin dit « 1 avoir(s) ».
+    / Test 20. Admin card membership, cancelled with credit note refunded in cash: one
+    linked AVOIR sale with one cash payment of −2000.
+    """
+    adhesion_payee = adhesion_payee_hors_stripe_dans_l_admin(
+        lieu, moyen_de_paiement=PaymentMethod.CC
+    )
+    statut_de_l_adhesion_avant = adhesion_payee.adhesion.status
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_du_formulaire = ouvrir_le_formulaire_d_annulation_d_adhesion(
+        client_de_l_admin, adhesion_payee.adhesion
+    )
+    assert reponse_du_formulaire.status_code == 200
+    champ_rembourse_par = lire_le_champ_rembourse_par(reponse_du_formulaire)
+    assert champ_rembourse_par.champ_present, (
+        "Le formulaire d'annulation n'a pas de champ « Remboursé par » "
+        "(<select name=\"moyen_rembourse\">)."
+    )
+    assert sorted(champ_rembourse_par.moyens_proposes) == sorted(
+        MOYENS_DU_CHAMP_REMBOURSE_PAR
+    )
+    assert champ_rembourse_par.moyen_pre_rempli == PaymentMethod.CC
+    # Ouvrir le formulaire n'annule rien. / Opening the form cancels nothing.
+    l_adhesion_n_est_pas_annulee(adhesion_payee.adhesion, statut_de_l_adhesion_avant)
+    rien_n_est_ecrit_pour_la_ligne(adhesion_payee.ligne)
+
+    reponse = annuler_l_adhesion_avec_avoir(
+        client_de_l_admin, adhesion_payee.adhesion, moyen_rembourse=PaymentMethod.CASH
+    )
+
+    assert reponse.status_code == 204
+    adhesion_relue = Membership.objects.get(pk=adhesion_payee.adhesion.pk)
+    assert adhesion_relue.status == Membership.ADMIN_CANCELED
+
+    avoir = l_avoir_de_la_ligne(adhesion_payee.ligne)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.qty == Decimal("-1")
+    assert avoir.amount == 2000
+    assert avoir.total_ttc == -2000
+    assert avoir.membership_id == adhesion_payee.adhesion.pk
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=adhesion_payee.vente,
+        client_attendu=adhesion_payee.vente.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.CASH, -2000)
+    ]
+    assert un_message_contient(reponse, message_de_fin_attendu(1))
+    verifier_egalites(vente_d_avoir)
+
+
+def test_annulation_adhesion_sans_moyen_refusee_rien_n_est_annule(lieu):
+    """
+    Une adhésion à 20 € ajoutée dans l'admin, payée par CB. L'admin clique « Annuler
+    avec avoir » SANS choisir de moyen « Remboursé par » (champ absent, puis vide) :
+    le formulaire revient (200) avec son champ et l'erreur « Choisissez le moyen par
+    lequel l'argent est rendu. », et RIEN n'est annulé : l'adhésion garde
+    son statut, aucun avoir, aucune vente AVOIR, aucun règlement ; la ligne reste VALID.
+    / "Cancel with credit note" without a "Refunded by" method: the form comes back,
+    nothing is cancelled, nothing is written.
+    """
+    adhesion_payee = adhesion_payee_hors_stripe_dans_l_admin(
+        lieu, moyen_de_paiement=PaymentMethod.CC
+    )
+    statut_de_l_adhesion_avant = adhesion_payee.adhesion.status
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    for moyen_envoye in [None, ""]:
+        reponse = annuler_l_adhesion_avec_avoir(
+            client_de_l_admin, adhesion_payee.adhesion, moyen_rembourse=moyen_envoye
+        )
+
+        assert reponse.status_code == 200, (
+            f"Moyen {moyen_envoye!r} : le formulaire doit revenir (200), reçu "
+            f"{reponse.status_code}."
+        )
+        contenu_de_la_reponse = reponse.content.decode()
+        assert 'data-testid="membership-cancel-form"' in contenu_de_la_reponse
+        assert lire_le_champ_rembourse_par(reponse).champ_present
+        # L'erreur vient du formulaire (le moyen manque), pas d'un refus plus loin.
+        # Le gabarit échappe l'apostrophe : on compare au texte échappé.
+        # / The error comes from the form (missing method); the template escapes it.
+        assert (
+            escape(dans_la_langue_du_client(MESSAGE_MOYEN_REMBOURSE_MANQUANT))
+            in contenu_de_la_reponse
+        )
+        l_adhesion_n_est_pas_annulee(
+            adhesion_payee.adhesion, statut_de_l_adhesion_avant
+        )
+        rien_n_est_ecrit_pour_la_ligne(adhesion_payee.ligne)
+
+
+def test_annulation_adhesion_ligne_stripe_n_appelle_pas_stripe(lieu):
+    """
+    Annexe T8 (D27). Une adhésion à 15 € payée en ligne par Stripe.
+    - Le formulaire d'annulation n'a PAS de champ « Remboursé par » et prévient :
+      « Remboursez cette somme depuis votre tableau de bord Stripe. ».
+    - L'admin clique « Annuler avec avoir » : l'adhésion est annulée ; `stripe.Refund.create`
+      n'est JAMAIS appelé ; la vente AVOIR, liée à la vente du paiement, même client, a
+      UN règlement −1500 au moyen Stripe d'origine (`Paiement_stripe.moyen`), relié au
+      paiement, sans référence externe.
+    - Le message de fin redit « Remboursez cette somme depuis votre tableau de bord
+      Stripe. ».
+    / T8 (D27): Stripe-paid membership: no "Refunded by" field, a warning, no Stripe call,
+    one payment at the original Stripe method; the closing message repeats the warning.
+    """
+    acheteur = creer_utilisateur()
+    adhesion = creer_adhesion(prix="15.00")
+    achat = acheter_une_adhesion_payee_par_stripe(acheteur, adhesion)
+    ligne_d_origine = LigneArticle.objects.get(paiement_stripe=achat.paiement)
+    vente_d_origine = Vente.objects.get(pk=ligne_d_origine.vente_id)
+    achat.paiement.refresh_from_db()
+    moyen_stripe_d_origine = achat.paiement.moyen
+    assert moyen_stripe_d_origine, "Le paiement Stripe d'origine n'a pas de moyen."
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_du_formulaire = ouvrir_le_formulaire_d_annulation_d_adhesion(
+        client_de_l_admin, achat.adhesion
+    )
+    assert reponse_du_formulaire.status_code == 200
+    assert not lire_le_champ_rembourse_par(reponse_du_formulaire).champ_present
+    assert (
+        dans_la_langue_du_client(MESSAGE_REMBOURSEMENT_STRIPE_A_LA_MAIN)
+        in reponse_du_formulaire.content.decode()
+    )
+
+    reponse = annuler_l_adhesion_avec_avoir(client_de_l_admin, achat.adhesion)
+
+    assert reponse.status_code == 204
+    assert lieu.remboursement_stripe.call_count == 0
+    adhesion_relue = Membership.objects.get(pk=achat.adhesion.pk)
+    assert adhesion_relue.status == Membership.ADMIN_CANCELED
+    assert un_message_contient(
+        reponse, dans_la_langue_du_client(MESSAGE_REMBOURSEMENT_STRIPE_A_LA_MAIN)
+    )
+
+    avoir = l_avoir_de_la_ligne(ligne_d_origine)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.qty == Decimal("-1")
+    assert avoir.amount == 1500
+    assert avoir.paiement_stripe_id == achat.paiement.pk
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (moyen_stripe_d_origine, -1500)
+    ]
+    reglement_de_l_avoir = vente_d_avoir.reglements.get()
+    assert reglement_de_l_avoir.reference_externe == ""
+    assert reglement_de_l_avoir.paiement_stripe_id == achat.paiement.pk
+    verifier_egalites(vente_d_avoir)
+
+
+def test_annulation_adhesion_dernier_paiement_deja_rembourse_aucun_avoir(lieu):
+    """
+    D30, pas de remontée. Une adhésion en abonnement payée trois fois par Stripe ; son
+    DERNIER paiement a déjà un avoir (émis avant, état de départ écrit par le service).
+    - Le formulaire ne propose ni « Annuler avec avoir » ni « Remboursé par », ne liste
+      aucune ligne, et dit « Le dernier paiement est déjà remboursé : aucun avoir ne
+      sera créé. ».
+    - L'admin poste quand même « avec avoir » : AUCUN nouvel avoir, on ne remonte pas à
+      la période précédente. L'achat et le
+      premier renouvellement n'ont aucun avoir et restent VALID ; le dernier paiement
+      garde son seul avoir d'avant.
+    - L'adhésion est annulée ; aucun appel à Stripe ; le message de fin dit
+      « 0 avoir(s) ».
+    / D30, no walking back: the latest payment already has a credit note; cancelling
+    with credit note writes NO new one; the earlier payments are untouched.
+    """
+    acheteur = creer_utilisateur()
+    adhesion = creer_adhesion(prix="15.00", recurrente=True)
+    adhesion_payee_trois_fois = creer_une_adhesion_payee_trois_fois(acheteur, adhesion)
+    ligne_de_l_achat, ligne_du_premier_renouvellement, ligne_du_dernier_paiement = (
+        adhesion_payee_trois_fois.lignes
+    )
+    # ÉTAT DE DÉPART : l'avoir déjà émis sur le dernier paiement, par le service.
+    # / STARTING STATE: the credit note already issued on the latest payment.
+    avoir_deja_emis = services_vente.ecrire_la_vente_d_avoir_d_une_ligne(
+        ligne_du_dernier_paiement,
+        quantite=Decimal("1"),
+        moyen_rembourse=None,
+        origine=SaleOrigin.ADMIN,
+    )
+    nombre_de_ventes_avoir_avant = Vente.objects.filter(
+        nature=Vente.Nature.AVOIR
+    ).count()
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_du_formulaire = ouvrir_le_formulaire_d_annulation_d_adhesion(
+        client_de_l_admin, adhesion_payee_trois_fois.adhesion
+    )
+    assert reponse_du_formulaire.status_code == 200
+    contenu_du_formulaire = reponse_du_formulaire.content.decode()
+    assert REPERE_BOUTON_AVEC_AVOIR not in contenu_du_formulaire
+    assert not lire_le_champ_rembourse_par(reponse_du_formulaire).champ_present
+    assert REPERE_LIGNE_PAYEE_AFFICHEE not in contenu_du_formulaire
+    assert (
+        dans_la_langue_du_client(MESSAGE_DERNIER_PAIEMENT_DEJA_REMBOURSE)
+        in contenu_du_formulaire
+    )
+
+    reponse = annuler_l_adhesion_avec_avoir(
+        client_de_l_admin, adhesion_payee_trois_fois.adhesion
+    )
+
+    assert reponse.status_code == 204
+    adhesion_relue = Membership.objects.get(pk=adhesion_payee_trois_fois.adhesion.pk)
+    assert adhesion_relue.status == Membership.ADMIN_CANCELED
+    assert lieu.remboursement_stripe.call_count == 0
+
+    rien_n_est_ecrit_pour_la_ligne(ligne_de_l_achat)
+    rien_n_est_ecrit_pour_la_ligne(ligne_du_premier_renouvellement)
+    avoirs_du_dernier_paiement = LigneArticle.objects.filter(
+        credit_note_for=ligne_du_dernier_paiement
+    )
+    assert list(avoirs_du_dernier_paiement) == [avoir_deja_emis]
+    assert (
+        Vente.objects.filter(nature=Vente.Nature.AVOIR).count()
+        == nombre_de_ventes_avoir_avant
+    )
+    assert un_message_contient(reponse, message_de_fin_attendu(0))
+
+
+def test_annulation_adhesion_echec_d_encaissement_rien_n_est_annule(lieu):
+    """
+    Une adhésion à 20 € ajoutée dans l'admin, payée par CB. L'admin l'annule avec avoir,
+    « Remboursé par : espèces », mais l'encaissement de l'avoir échoue (simulé). Tout ou
+    rien : l'adhésion garde son statut ; aucun avoir, aucune vente AVOIR, aucun
+    règlement négatif ; la ligne reste VALID. Peu importe la réponse de la vue.
+    / The credit note's settlement fails: the membership is not cancelled, nothing is
+    written, whatever the view returns.
+    """
+    adhesion_payee = adhesion_payee_hors_stripe_dans_l_admin(
+        lieu, moyen_de_paiement=PaymentMethod.CC
+    )
+    statut_de_l_adhesion_avant = adhesion_payee.adhesion.status
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+    # Une exception dans la vue devient une réponse 500, au lieu de sortir du test.
+    # / An exception in the view becomes a 500 response instead of leaving the test.
+    client_de_l_admin.raise_request_exception = False
+
+    with encaissement_qui_echoue():
+        annuler_l_adhesion_avec_avoir(
+            client_de_l_admin,
+            adhesion_payee.adhesion,
+            moyen_rembourse=PaymentMethod.CASH,
+        )
+
+    l_adhesion_n_est_pas_annulee(adhesion_payee.adhesion, statut_de_l_adhesion_avant)
+    rien_n_est_ecrit_pour_la_ligne(adhesion_payee.ligne)
+
+
+def test_annulation_adhesion_entierement_offerte_reglement_free_sans_champ(lieu):
+    """
+    Une adhésion à 20 € entièrement OFFERTE (part offerte = total catalogue = 2000), dans
+    une vente ADMIN réglée par un règlement FREE 2000. L'état de départ est écrit par le
+    service de vente : le formulaire « Ajouter une adhésion » n'écrit une adhésion
+    offerte qu'à 0.
+    - Le formulaire d'annulation n'a PAS de champ « Remboursé par » : il n'y a pas
+      d'argent à rendre.
+    - L'admin clique « Annuler avec avoir » : l'adhésion est annulée ; l'avoir a
+      catalogue −2000, offert −2000, net 0 ; sa vente AVOIR (origine ADMIN), liée à la
+      vente d'origine, a UN seul règlement : FREE −2000. Aucun règlement d'argent.
+    / A fully offered 20 € membership: no "Refunded by" field; the credit note has
+    catalogue −2000, offered −2000, net 0, and ONE FREE payment of −2000.
+    """
+    adhesion = creer_adhesion(prix="20.00")
+    adherente = creer_utilisateur()
+    adhesion_offerte = Membership.objects.create(
+        user=adherente,
+        price=adhesion.tarif,
+        first_name="Ada",
+        last_name="Lovelace",
+        status=Membership.ADMIN_VALID,
+    )
+    tarif_vendu = get_or_create_price_sold(adhesion.tarif)
+    # ÉTAT DE DÉPART : la vente de l'adhésion offerte, écrite par le service (la règle
+    # « offert à montant non nul » écrit le règlement FREE 2000).
+    # / STARTING STATE: the offered membership sale, written by the sale service.
+    vente_d_origine = services_vente.ouvrir_vente(
+        origine=SaleOrigin.ADMIN, nature=Vente.Nature.VENTE, client=adherente
+    )
+    ligne_offerte = services_vente.ajouter_article(
+        vente_d_origine,
+        pricesold=tarif_vendu,
+        quantite=Decimal("1"),
+        prix_unitaire=2000,
+        taux_tva=Decimal("0"),
+        offert_en_totalite=True,
+        membership=adhesion_offerte,
+        status=LigneArticle.VALID,
+    )
+    services_vente.encaisser_vente(vente_d_origine)
+    assert ligne_offerte.part_offerte == ligne_offerte.total_catalogue == 2000
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_du_formulaire = ouvrir_le_formulaire_d_annulation_d_adhesion(
+        client_de_l_admin, adhesion_offerte
+    )
+    assert reponse_du_formulaire.status_code == 200
+    assert not lire_le_champ_rembourse_par(reponse_du_formulaire).champ_present
+    assert REPERE_BOUTON_AVEC_AVOIR in reponse_du_formulaire.content.decode()
+
+    reponse = annuler_l_adhesion_avec_avoir(client_de_l_admin, adhesion_offerte)
+
+    assert reponse.status_code == 204
+    adhesion_relue = Membership.objects.get(pk=adhesion_offerte.pk)
+    assert adhesion_relue.status == Membership.ADMIN_CANCELED
+
+    avoir = l_avoir_de_la_ligne(ligne_offerte)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.qty == Decimal("-1")
+    assert avoir.total_catalogue == -2000
+    assert avoir.part_offerte == -2000
+    assert avoir.total_ttc == 0
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=Vente.objects.get(pk=vente_d_origine.pk),
+        client_attendu=adherente,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.FREE, -2000)
+    ]
+    assert un_message_contient(reponse, message_de_fin_attendu(1))
+    verifier_egalites(vente_d_avoir)

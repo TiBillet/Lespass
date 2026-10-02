@@ -508,7 +508,7 @@ et les tests de `controlvanne`.
 | `test_annuler_un_billet_stripe_rembourse_un_billet` | P5 : `Refund.create(amount=…)` appelé une fois avec le prix d'**un** billet, `Pmt H`, ligne `R` de qty −1, tâche `send_refund_to_laboutik` et sa charge utile |
 | `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` | P6 : avoir `N`, moyen `CA` dans la charge utile `send_refund_to_laboutik` ; **change en D** (D31) |
 | `test_annuler_un_billet_caisse_offert_cree_un_avoir` | P6 : billet `FREE` à prix non nul → avoir créé (garde `total_paid`) ; **change en G** (`total_paid` sur `total_ttc`, validé le 2026-09-29) |
-| `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` | P7 : 1 achat + 2 renouvellements → 3 avoirs, `Adh AC` ; **change en D** (D30) |
+| `test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement` | P7 : 1 achat + 2 renouvellements → **un seul** avoir, sur le dernier paiement (D30, depuis D-3c-2), `Adh AC` |
 | `test_avoirs_admin_et_annulation_adhesion_n_appellent_pas_stripe` | P7/P8 (T8, D27) : `Refund.create` jamais appelé par `emettre_avoir` ni par `cancel` ; reste vert |
 
 **`tests/pytest/test_caracterisation_admin_api.py`**
@@ -555,7 +555,7 @@ et `amount` par part) et `test_qr_echec_fedow_ligne_en_echec_rejeu_refuse` (P10,
 | webhook SEPA : condition `payment_method == SP` inversée | `test_sepa_soumis_statuts_et_mail_en_attente` |
 | `async_payment_failed` : ne plus réarmer les adhésions | `test_sepa_refuse_lignes_en_echec_adhesion_rearmee` |
 | `partial_refund_payment` : `specified_quantity` ignoré | `test_annuler_un_billet_stripe_rembourse_un_billet` |
-| annulation d'adhésion : ne créer que le premier avoir | `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` (jusqu'à D ; ensuite le test D30 de la fiche D) |
+| annulation d'adhésion : avoir sur un autre paiement que le dernier | `test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement` (A′, D30) et `test_annulation_adhesion_avoir_seulement_sur_le_dernier_paiement` (`test_avoirs_ecrivent_la_vente.py`) |
 | `_creer_ou_renouveler_adhesion` : `status = ONCE` | `test_vente_caisse_adhesion_sans_facture_ni_envoi_laboutik` |
 | clôture : retirer l'annulation des commandes ouvertes | `test_cloture_annule_les_commandes_ouvertes_et_libere_les_tables` |
 | recharge API v2 : créer une nouvelle ligne au lieu de réutiliser la `FAILED` | `test_recharge_api_v2_echec_puis_nouvel_essai_meme_ligne` |

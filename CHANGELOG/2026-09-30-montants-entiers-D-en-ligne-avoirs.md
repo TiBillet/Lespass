@@ -10,7 +10,7 @@ Online Stripe sales, sales without Stripe (admin, API) and credit notes go throu
 **Pourquoi / Why :** chantier 05 « montants entiers » : toute vente écrit son argent en centimes entiers, une seule fois, dans une `Vente` chaînée. /
 Worksite 05 "whole amounts": every sale writes its money once, in whole cents, in a chained `Vente`.
 
-Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2), D-3b (le remboursement Stripe écrit sa vente AVOIR). / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z, D-3b.
+Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2), D-3b (le remboursement Stripe écrit sa vente AVOIR), D-3c-1 (annulations de réservation et de billet), D-3c-2 (annulation d'adhésion, D30). / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z, D-3b, D-3c-1, D-3c-2.
 
 ## D-1a — Les producteurs Stripe directs ouvrent leur vente / Direct Stripe producers open their sale
 
@@ -371,6 +371,42 @@ Sheet D §4, T9 (D31); SUIVI D-3c; orchestrator and maintainer decisions.
 | `tests/pytest/test_stripe_refund.py` | les trois tests d'avoir admin hors Stripe passent `annulation_par_l_admin=True, moyen_rembourse=CASH` (mécanisme) ; aucune assertion changée |
 | `tests/e2e/test_admin_reservation_cancel.py` | l'admin valide l'écran de confirmation (mécanisme) |
 
+## D-3c-2 — Annulation d'adhésion : un seul avoir, sur le dernier paiement (D30), qui écrit sa vente ; « Remboursé par » / Membership cancellation: one credit note, on the latest payment (D30), writing its sale; "Refunded by"
+
+**Migration :** Non — **Chaînes i18n :** 3 nouvelles (msgid français) : « Le dernier paiement est déjà remboursé : aucun avoir ne sera créé. », « Choisissez le moyen par lequel l'argent est rendu. », « Moyen de remboursement inconnu. ». Réutilisées : « Remboursé par », « Remboursez cette somme depuis votre tableau de bord Stripe. », « L'avoir n'a pas pu être émis : %(raison)s », « Adhésion annulée. %(count)d avoir(s) créé(s). ». Workflow i18n à lancer par le mainteneur.
+
+### Resume / Summary
+**Quoi / What :**
+- **Un seul avoir, sur le dernier paiement** (`MembershipMVT.cancel`, `BaseBillet/views.py`) : la ligne VALID / PAID la plus récente de l'adhésion (par date). Les paiements passés ne sont jamais touchés. Si ce dernier paiement a déjà un avoir ou un remboursement, aucun avoir (pas de remontée à la période précédente) ; le formulaire le dit et ne propose plus « Annuler avec avoir ». /
+  One credit note, on the membership's latest payment only; none if that payment is already credited.
+- **L'avoir écrit sa vente** par la fonction commune `ecrire_la_vente_d_avoir_d_une_ligne` (D-3c-1) : vente AVOIR liée à la vente du dernier paiement, origine ADMIN, article miroir, règlement, encaissement, PUIS `CREDIT_NOTE`. Ligne hors Stripe : champ « Remboursé par » (espèces, CB, chèque, virement), pré-rempli avec le moyen d'origine s'il est dans la liste, obligatoire pour « Annuler avec avoir » seulement (pas d'attribut HTML `required` : il bloquerait « Annuler sans avoir »). Ligne entièrement offerte : pas de champ, règlement FREE seul. Ligne payée par Stripe : pas de champ, **aucun appel à Stripe** (D27, T8), règlement au moyen Stripe d'origine sans référence ; le formulaire et le message de fin disent « Remboursez cette somme depuis votre tableau de bord Stripe. ». /
+  The credit note writes its sale through the shared service function; "Refunded by" field for a non-Stripe line; no Stripe call.
+- **Validation du POST** par `AnnulationAdhesionSerializer` (`with_credit_note`, `moyen_rembourse`, `resilier_abonnement_stripe`) : moyen manquant quand il est demandé → le formulaire revient (200) avec l'erreur, rien n'est annulé. Un refus du service (vente d'origine pas réglée…) : le formulaire revient avec la raison, rien n'est annulé. /
+  POST validated by a DRF serializer; a refused form comes back (200), nothing is cancelled.
+- **Tout ou rien** : passage `ADMIN_CANCELED` et avoir dans une seule transaction. La résiliation de l'abonnement Stripe se fait APRÈS la transaction ; son comportement ne change pas (un échec Stripe ne fait jamais échouer l'annulation). /
+  Cancellation and credit note in one transaction; Stripe subscription cancellation after it, unchanged.
+- Le formulaire ne liste que la ligne du dernier paiement (celle qui recevra l'avoir) ; le message de fin dit le nombre d'avoirs (0 ou 1). /
+  The form lists the latest payment only; the closing message gives the count (0 or 1).
+- **Changement de comportement (D30, décision du mainteneur)** : avant, « Annuler avec avoir » créait un avoir pour chaque paiement de l'adhésion (achat ET tous les renouvellements), sans vente. Désormais : un seul, pour la période en cours. /
+  Behaviour change (D30): one credit note instead of one per payment.
+
+**Pourquoi / Why :** fiche D §4 (ligne « Annulation d'adhésion »), annexes T7 (D30) et T8 (D27), §5 test 20, §6 ; SUIVI §4 « D-3c (décisions techniques, avant brief) » ; décisions de l'orchestrateur (dernier paiement déjà remboursé : pas d'option « avec avoir » ; la liste ne montre que le dernier paiement ; formulaire refusé en 200). /
+Sheet D §4, T7 (D30), T8; SUIVI D-3c; orchestrator decisions.
+
+**Tests changés (raison) :**
+- `test_caracterisation_annulations.py` : `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` → `test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement` (D30 : un seul avoir, une seule tâche `send_refund_to_laboutik`). Sa fabrique `creer_une_adhesion_payee_trois_fois` pose les trois paiements par le service de vente (vente, règlement, `Paiement_stripe.moyen` / `vente` / `montant_encaisse`, dates posées), **sans** `payment_method` sur la ligne (annexe T7 : la fiche H retire la colonne). Conséquence : la charge utile LaBoutik est comparée sans le moyen (montant, quantité, statut). /
+  The A′ test follows D30; its factory goes through the sale service, without the payment_method column.
+- `test_avoirs_ecrivent_la_vente.py` : les textes attendus de D-3a et D-3c-1 sont traduits par `gettext` dans la langue du client de test (`en`) au lieu d'être comparés au msgid français : ils survivent au prochain passage i18n (mécanisme seulement, aucune attente changée). /
+  Expected texts are translated in the test client's language (mechanism only).
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | `AnnulationAdhesionSerializer` (nouveau) ; `MembershipMVT._contexte_du_formulaire_d_annulation` (nouveau) ; `MembershipMVT.cancel` : dernier paiement, D30, fonction commune, `atomic`, résiliation Stripe après la transaction ; import `serializers` |
+| `Administration/templates/admin/membership/partials/cancel_form.html` | erreurs ; liste réduite au dernier paiement (`data-testid="membership-cancel-ligne-payee"`) ; champ « Remboursé par » ; phrase Stripe ; cas « dernier paiement déjà remboursé » |
+| `tests/pytest/test_avoirs_ecrivent_la_vente.py` | 7 tests : dernier paiement seulement (T7), avoir lié en espèces (test 20), sans moyen refusé, ligne Stripe sans appel Stripe, dernier paiement déjà remboursé, échec d'encaissement, adhésion entièrement offerte (FREE seul) ; textes attendus traduits dans la langue du client |
+| `tests/pytest/test_caracterisation_annulations.py` | test A′ D30 renommé ; fabrique `creer_une_adhesion_payee_trois_fois` par le service de vente |
+
 ---
 
 ## Comment tester (a la main) / Manual test
@@ -571,3 +607,18 @@ Pas de test à la main : l'échec d'encaissement ne se provoque pas sans simulat
 
 ### Verifs automatiques (D-3c-1)
 `make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_caracterisation_annulations.py tests/pytest/test_stripe_refund.py"` ; E2E seul : `make e2e ARGS="tests/e2e/test_admin_reservation_cancel.py"`
+
+### Test 27 (D-3c-2) — annuler une adhésion payée en espèces, avec avoir
+1. Admin > Adhésions > « Ajouter » : une adhésion à 20 €, moyen « Carte bancaire ».
+2. Ouvrir la fiche, « Annuler l'adhésion ».
+3. Attendu : une seule ligne listée ; dans le bloc « Annuler avec avoir », le champ « Remboursé par » pré-rempli « Carte bancaire ».
+4. Vider le champ, cliquer « Annuler avec avoir » : le formulaire revient avec « Choisissez le moyen par lequel l'argent est rendu. », l'adhésion n'est pas annulée. « Annuler sans avoir » reste possible sans choisir de moyen.
+5. Choisir « Espèces », « Annuler avec avoir » : retour à la liste, « Adhésion annulée. 1 avoir(s) créé(s). » ; dans `manage.py shell`, la dernière vente `AVOIR` est `REGLEE`, origine `AD`, liée à la vente de l'adhésion, un règlement espèces de −2000.
+
+### Test 28 (D-3c-2) — adhésion renouvelée, et adhésion payée par Stripe
+1. Une adhésion en abonnement renouvelée (plusieurs paiements) : « Annuler avec avoir » ne crée qu'UN avoir, sur le dernier paiement ; les anciens restent « Confirmés ».
+2. Une adhésion dont le dernier paiement a déjà un avoir : le formulaire dit « Le dernier paiement est déjà remboursé : aucun avoir ne sera créé. » et ne propose pas « Annuler avec avoir ».
+3. Une adhésion payée en ligne par Stripe : pas de champ « Remboursé par », la phrase « Remboursez cette somme depuis votre tableau de bord Stripe. » ; après « Annuler avec avoir », le même rappel s'affiche, aucun remboursement n'apparaît dans Stripe.
+
+### Verifs automatiques (D-3c-2)
+`make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_caracterisation_annulations.py tests/pytest/test_admin_annulation_abonnement_stripe.py"` ; E2E seul : `make e2e ARGS="tests/e2e/test_admin_cancel_membership.py"`

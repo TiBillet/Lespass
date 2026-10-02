@@ -60,6 +60,7 @@ Lancer / Run : make test ARGS="tests/pytest/test_caracterisation_annulations.py"
 
 import uuid
 from datetime import timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -69,6 +70,7 @@ from django_tenants.utils import tenant_context
 
 from ApiBillet.serializers import LigneArticleSerializer, get_or_create_price_sold
 from AuthBillet.models import TibilletUser, Wallet
+from BaseBillet import services_vente
 from BaseBillet.models import (
     LigneArticle,
     Membership,
@@ -78,6 +80,7 @@ from BaseBillet.models import (
     SaleOrigin,
     Ticket,
 )
+from BaseBillet.models_vente import Vente
 from fabriques_panier import (
     catalogue_stripe_simule,
     client_connecte,
@@ -442,12 +445,38 @@ def vendre_un_billet_offert_a_la_caisse(lieu, acheteur, billetterie):
 def creer_une_adhesion_payee_trois_fois(acheteur, adhesion):
     """
     ÉTAT DE DÉPART : une adhésion en abonnement, payée trois fois par Stripe — l'achat
-    (carte, `SN`) puis deux renouvellements (prélèvement récurrent, `SR`), 15 € chacun.
-    Chaque paiement a son `Paiement_stripe` validé et sa ligne de vente validée.
-    Fabriqué par `create(status=…)`, sans passer par la machine à états : il sert à poser
-    des ventes antérieures, jamais à tester un paiement (tests/PIEGES.md 9.41, 12.17).
-    / STARTING STATE: a subscription paid three times by Stripe (purchase + two renewals),
-    built with create(status=...), never used to test a payment.
+    (carte, `SN`) il y a deux ans, puis deux renouvellements (prélèvement récurrent,
+    `SR`) il y a un an et hier, 15 € chacun.
+    / STARTING STATE: a subscription paid three times by Stripe (purchase two years ago,
+    renewals one year ago and yesterday), 15 € each.
+
+    Chaque paiement est écrit PAR LE SERVICE DE VENTE, comme en ligne : une vente
+    LESPASS réglée, avec son article (la ligne de l'adhésion, VALID, reliée au paiement)
+    et UN règlement Stripe de 1500 relié au paiement ; le `Paiement_stripe` validé porte
+    sa vente, son moyen et son montant encaissé.
+    / Each payment is written by the sale service: a settled LESPASS sale, its item (the
+    VALID membership line) and one Stripe payment; the Stripe payment carries its sale,
+    its method and the collected amount.
+
+    CONTRAINTE : la ligne n'a PAS de `payment_method`. Le moyen d'un paiement est porté
+    par son règlement et par `Paiement_stripe.moyen` ; la colonne de la ligne est retirée
+    par la fiche H, et cet état de départ doit lui survivre.
+    / CONSTRAINT: the line has NO payment_method (removed by sheet H): the method lives
+    on the payment row and on Paiement_stripe.moyen.
+
+    La date de chaque ligne est posée par `update()` avant l'encaissement : `datetime`
+    est rempli à la création (`auto_now_add`) et ne fait pas partie de l'empreinte de la
+    vente. Le « dernier paiement » de l'adhésion est celui d'hier.
+    / Each line's date is set by update() before settlement (not part of the sale
+    fingerprint). The latest payment is yesterday's.
+
+    Fabriqué sans passer par la machine à états (création directe au statut VALID) : il
+    sert à poser des ventes antérieures, jamais à tester un paiement (tests/PIEGES.md
+    9.41, 12.17).
+    / Built without the state machine: it sets past sales, never tests a payment.
+
+    :return: un objet avec `adhesion`, et `lignes`, `ventes`, `paiements` : les trois
+        paiements dans l'ordre des dates (le dernier en dernier)
     """
     adhesion_abonnee = Membership.objects.create(
         user=acheteur,
@@ -461,28 +490,61 @@ def creer_une_adhesion_payee_trois_fois(acheteur, adhesion):
     )
     tarif_vendu = get_or_create_price_sold(adhesion.tarif)
 
-    moyens_des_trois_paiements = [
-        PaymentMethod.STRIPE_NOFED,
-        PaymentMethod.STRIPE_RECURENT,
-        PaymentMethod.STRIPE_RECURENT,
+    maintenant = timezone.now()
+    moyens_et_dates_des_trois_paiements = [
+        (PaymentMethod.STRIPE_NOFED, maintenant - timedelta(days=730)),
+        (PaymentMethod.STRIPE_RECURENT, maintenant - timedelta(days=365)),
+        (PaymentMethod.STRIPE_RECURENT, maintenant - timedelta(days=1)),
     ]
-    for moyen_de_paiement in moyens_des_trois_paiements:
+    lignes_des_paiements = []
+    ventes_des_paiements = []
+    paiements_stripe = []
+    for moyen_de_paiement, date_du_paiement in moyens_et_dates_des_trois_paiements:
+        vente_du_paiement = services_vente.ouvrir_vente(
+            origine=SaleOrigin.LESPASS,
+            nature=Vente.Nature.VENTE,
+            client=acheteur,
+        )
         paiement_valide = Paiement_stripe.objects.create(
             user=acheteur,
             status=Paiement_stripe.VALID,
             payment_intent_id=f"pi_test_{identifiant_unique()}",
+            vente=vente_du_paiement,
+            moyen=moyen_de_paiement,
+            montant_encaisse=1500,
         )
-        LigneArticle.objects.create(
+        ligne_de_l_adhesion = services_vente.ajouter_article(
+            vente_du_paiement,
             pricesold=tarif_vendu,
-            qty=1,
-            amount=1500,
+            quantite=Decimal("1"),
+            prix_unitaire=1500,
+            taux_tva=Decimal("0"),
             membership=adhesion_abonnee,
             paiement_stripe=paiement_valide,
-            payment_method=moyen_de_paiement,
-            sale_origin=SaleOrigin.LESPASS,
             status=LigneArticle.VALID,
         )
-    return adhesion_abonnee
+        LigneArticle.objects.filter(pk=ligne_de_l_adhesion.pk).update(
+            datetime=date_du_paiement
+        )
+        services_vente.ajouter_reglement(
+            vente_du_paiement,
+            moyen=moyen_de_paiement,
+            montant=1500,
+            paiement_stripe=paiement_valide,
+        )
+        services_vente.encaisser_vente(vente_du_paiement)
+
+        ligne_de_l_adhesion.refresh_from_db()
+        lignes_des_paiements.append(ligne_de_l_adhesion)
+        ventes_des_paiements.append(Vente.objects.get(pk=vente_du_paiement.pk))
+        paiements_stripe.append(paiement_valide)
+
+    return SimpleNamespace(
+        adhesion=adhesion_abonnee,
+        lignes=lignes_des_paiements,
+        ventes=ventes_des_paiements,
+        paiements=paiements_stripe,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -681,24 +743,25 @@ def test_annuler_un_billet_caisse_offert_cree_un_avoir(
 # --------------------------------------------------------------------------
 
 
-def test_annulation_adhesion_avoirs_de_tous_les_renouvellements(
+def test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement(
     lieu, django_capture_on_commit_callbacks
 ):
     """
     P7 : une adhésion en abonnement payée trois fois par Stripe (l'achat puis deux
     renouvellements, 15 € chacun). L'admin l'annule, case « créer les avoirs » cochée.
-    L'adhésion passe « annulée par l'admin » (`AC`), son échéance reste posée. TROIS
-    avoirs (`N`, quantité −1) sont créés : un par paiement, l'achat ET les deux
-    renouvellements (voir T7). Aucun appel à Stripe.
-    Tâches : un envoi à l'ancien LaBoutik par avoir (moyens « Stripe CB » puis deux fois
-    « Stripe récurrent »), puis le webhook d'adhésion après la validation en base.
-    Change en D (décision D30) : un seul avoir, pour le dernier paiement.
-    / P7: a membership paid 3 times is cancelled with credit notes: ADMIN_CANCELED, THREE
-    credit notes (purchase and both renewals), no Stripe call. Changes in D (D30).
+    L'adhésion passe « annulée par l'admin » (`AC`), son échéance reste posée. UN SEUL
+    avoir (`N`, quantité −1) est créé : pour le DERNIER paiement, la période en cours
+    (décision D30, annexe T7). L'achat et le premier renouvellement ne sont pas touchés.
+    Aucun appel à Stripe.
+    Tâches : un envoi à l'ancien LaBoutik pour l'avoir, puis le webhook d'adhésion après
+    la validation en base.
+    / P7: a membership paid 3 times is cancelled with credit notes: ADMIN_CANCELED, ONE
+    credit note, for the latest payment only (D30); no Stripe call.
     """
     acheteur = creer_utilisateur()
     adhesion = creer_adhesion(prix="15.00", recurrente=True)
-    adhesion_abonnee = creer_une_adhesion_payee_trois_fois(acheteur, adhesion)
+    adhesion_payee_trois_fois = creer_une_adhesion_payee_trois_fois(acheteur, adhesion)
+    adhesion_abonnee = adhesion_payee_trois_fois.adhesion
     client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
     # On oublie les tâches demandées par la préparation (produit, adhésion).
     # / Forget the tasks requested while preparing (product, membership).
@@ -716,8 +779,6 @@ def test_annulation_adhesion_avoirs_de_tous_les_renouvellements(
         "adhesion_a_une_echeance": True,
         "taches": [
             "send_refund_to_laboutik",
-            "send_refund_to_laboutik",
-            "send_refund_to_laboutik",
             "webhook_membership",
         ],
     }
@@ -730,31 +791,30 @@ def test_annulation_adhesion_avoirs_de_tous_les_renouvellements(
     )
     assert statuts_des_lignes_de_l_adhesion(adhesion_abonnee) == [
         LigneArticle.CREDIT_NOTE,
-        LigneArticle.CREDIT_NOTE,
-        LigneArticle.CREDIT_NOTE,
         LigneArticle.VALID,
         LigneArticle.VALID,
         LigneArticle.VALID,
     ]
     assert lieu.remboursement_stripe.call_count == 0
 
-    # Charges utiles triées par moyen : « Stripe CB » (SN) avant « Stripe récurrent » (SR).
-    # / Payloads sorted by method: SN before SR.
-    assert charges_utiles_des_avoirs_envoyees_a_laboutik(taches_de_l_annulation) == [
+    # La charge utile de l'unique avoir. Le moyen n'est pas comparé : l'état de départ
+    # n'écrit pas la colonne `payment_method` de la ligne (retirée par la fiche H), le
+    # moyen d'origine vit dans le règlement et dans `Paiement_stripe.moyen`.
+    # / The single credit note's payload. The method is not compared: the starting
+    # state does not write the line's payment_method column (removed by sheet H).
+    charges_utiles_sans_le_moyen = []
+    for charge_utile in charges_utiles_des_avoirs_envoyees_a_laboutik(
+        taches_de_l_annulation
+    ):
+        charges_utiles_sans_le_moyen.append(
+            {
+                "amount": charge_utile["amount"],
+                "qty": charge_utile["qty"],
+                "status": charge_utile["status"],
+            }
+        )
+    assert charges_utiles_sans_le_moyen == [
         {
-            "payment_method": PaymentMethod.STRIPE_NOFED,
-            "amount": 1500,
-            "qty": "-1.000000",
-            "status": LigneArticle.CREDIT_NOTE,
-        },
-        {
-            "payment_method": PaymentMethod.STRIPE_RECURENT,
-            "amount": 1500,
-            "qty": "-1.000000",
-            "status": LigneArticle.CREDIT_NOTE,
-        },
-        {
-            "payment_method": PaymentMethod.STRIPE_RECURENT,
             "amount": 1500,
             "qty": "-1.000000",
             "status": LigneArticle.CREDIT_NOTE,

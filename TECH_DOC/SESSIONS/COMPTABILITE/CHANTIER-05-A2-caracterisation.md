@@ -61,7 +61,7 @@ comportement**, dans la même session, avec la raison au CHANGELOG :
 |---|---|---|
 | `test_vente_caisse_adhesion_sans_facture_ni_envoi_laboutik` | B (session B-0) | effets d'adhésion communs : facture et récompense en caisse, toujours pas d'envoi legacy ; renommé `…_facture_et_recompense_sans_envoi_laboutik` (mainteneur, 2026-09-29) |
 | `test_qr_deux_monnaies_deux_envois_laboutik_et_deux_mails` | C | envoi à l'ancien LaBoutik débranché pour le QR / NFC (mainteneur, 2026-09-29) : plus aucun `send_sale_to_laboutik`, les deux mails restent ; renommé `…_aucun_envoi_laboutik_et_deux_mails` |
-| `test_annulation_adhesion_avoirs_de_tous_les_renouvellements` | D | D30 : un seul avoir, pour le dernier paiement |
+| `test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement` (ex-`…avoirs_de_tous_les_renouvellements`, renommé en D-3c-2) | D | D30 : un seul avoir, pour le dernier paiement |
 | `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` | D | D31 : plus d'avoir ni de remboursement hors Stripe |
 | `test_billets_vendus_dans_l_admin_offert_au_prix_part_offerte_totale` | D | D32 : offert écrit comme à la caisse |
 | `test_annuler_un_billet_caisse_offert_cree_un_avoir` | G | `total_paid()` lit `total_ttc` : un billet **entièrement offert** n'a rien à rembourser → plus d'avoir d'argent, seule la trace `FREE −X` (validé le 2026-09-29) |

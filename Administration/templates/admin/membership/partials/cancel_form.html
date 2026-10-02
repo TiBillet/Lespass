@@ -7,7 +7,17 @@ LOCALISATION : Administration/templates/admin/membership/partials/cancel_form.ht
 
 Partial HTMX retourné en GET depuis /memberships/{pk}/cancel/.
 Remplace le bouton "Annuler l'adhésion" dans le panneau d'actions admin.
-Le POST renvoie un HX-Redirect vers la changelist.
+Le POST renvoie un HX-Redirect vers la changelist. Refusé (moyen « Remboursé par »
+manquant, refus du service de vente), il renvoie ce formulaire avec l'erreur.
+
+Le formulaire ne montre que le DERNIER paiement de l'adhésion : c'est le seul qui reçoit
+l'avoir (décision D30, voir MembershipMVT.cancel dans BaseBillet/views.py).
+Le champ « Remboursé par » n'a PAS d'attribut `required` : il bloquerait aussi le
+bouton « Annuler sans avoir ». Le serializer AnnulationAdhesionSerializer l'exige
+seulement pour « Annuler avec avoir ».
+/ Only the latest payment is shown and credited (D30). The "Refunded by" select has no
+`required` attribute (it would block "Cancel without credit note"): the serializer
+requires it for "Cancel with credit note" only.
 -->
 <form data-testid="membership-cancel-form"
       hx-post="/memberships/{{ membership.pk }}/cancel/"
@@ -29,7 +39,20 @@ Le POST renvoie un HX-Redirect vers la changelist.
             {% endif %}
         </p>
 
-        {# Lignes de vente payées / Paid sale lines #}
+        {# Erreurs du formulaire refusé / Errors of the refused form #}
+        {% if erreurs %}
+        <div role="alert"
+             data-testid="membership-cancel-errors"
+             style="margin-bottom:.75rem;padding:.625rem .75rem;border-radius:.25rem;background:#fee2e2;border:1px solid #f87171;color:#991b1b;font-size:.8125rem">
+            {% for nom_du_champ, messages_d_erreur in erreurs.items %}
+                {% for message_d_erreur in messages_d_erreur %}
+                    <p style="margin-bottom:0">{{ message_d_erreur }}</p>
+                {% endfor %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# Le dernier paiement, celui qui reçoit l'avoir / The latest payment, the one credited #}
         {% if has_paid_lines %}
         <div style="margin-bottom:.875rem;padding:.75rem;border-radius:.25rem;background:#fefce8;border:1px solid #fde68a">
             <p style="font-size:.8125rem;font-weight:500;color:#92400e;margin-bottom:.375rem">
@@ -37,7 +60,7 @@ Le POST renvoie un HX-Redirect vers la changelist.
             </p>
             <ul style="font-size:.8125rem;color:#a16207;list-style:disc;padding-left:1.25rem;margin-bottom:0">
                 {% for ligne in lignes_payees %}
-                <li>{{ ligne.pricesold }} — {{ ligne.total_decimal }} € (× {{ ligne.qty|floatformat:0 }})</li>
+                <li data-testid="membership-cancel-ligne-payee">{{ ligne.pricesold }} — {{ ligne.total_decimal }} € (× {{ ligne.qty|floatformat:0 }})</li>
                 {% endfor %}
             </ul>
         </div>
@@ -72,6 +95,45 @@ Le POST renvoie un HX-Redirect vers la changelist.
                 </ul>
                 <p style="font-size:.8125rem;color:#9a3412;font-style:italic;margin-bottom:0">
                     {% translate "⚠ TiBillet ne procède à aucun remboursement automatique. Il vous appartient de vérifier que le remboursement a bien été effectué auprès de l'adhérent·e." %}
+                </p>
+
+                {# Ligne payée par Stripe : l'admin rembourse depuis Stripe (D27) #}
+                {# / Stripe-paid line: the admin refunds from Stripe (D27)          #}
+                {% if ligne_payee_par_stripe %}
+                <p data-testid="membership-cancel-rembourser-depuis-stripe"
+                   style="font-size:.8125rem;font-weight:600;color:#9a3412;margin-top:.5rem;margin-bottom:0">
+                    {% translate "Remboursez cette somme depuis votre tableau de bord Stripe." %}
+                </p>
+                {% endif %}
+
+                {# « Remboursé par » : seulement s'il y a de l'argent à rendre hors Stripe #}
+                {# / "Refunded by": only when money is owed outside Stripe               #}
+                {% if champ_rembourse_par_affiche %}
+                <div style="margin-top:.625rem">
+                    <label for="membership-cancel-moyen-rembourse"
+                           style="display:block;font-size:.8125rem;font-weight:600;color:#9a3412;margin-bottom:.25rem">
+                        {% translate "Remboursé par" %}
+                    </label>
+                    <select id="membership-cancel-moyen-rembourse"
+                            name="moyen_rembourse"
+                            data-testid="membership-cancel-moyen-rembourse"
+                            style="width:100%;padding:.375rem .5rem;border:1px solid #d1d5db;border-radius:.375rem;font-size:.8125rem;background:#fff;color:#111827">
+                        {% for valeur_du_moyen, libelle_du_moyen in choix_du_champ_rembourse_par %}
+                            <option value="{{ valeur_du_moyen }}"{% if valeur_du_moyen == moyen_rembourse_affiche %} selected{% endif %}>{{ libelle_du_moyen }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+            </div>
+
+        {% elif dernier_paiement_deja_rembourse %}
+
+            {# Dernier paiement déjà remboursé : aucun avoir (D30, pas de remontée) #}
+            {# / Latest payment already refunded: no credit note (D30)              #}
+            <div data-testid="membership-cancel-deja-rembourse"
+                 style="margin-bottom:.875rem;padding:.625rem .75rem;border-radius:.25rem;background:#fef2f2;border:1px solid #fca5a5">
+                <p style="font-size:.8125rem;color:#7f1d1d;margin-bottom:0">
+                    {% translate "Le dernier paiement est déjà remboursé : aucun avoir ne sera créé." %}
                 </p>
             </div>
 
