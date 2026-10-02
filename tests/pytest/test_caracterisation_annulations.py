@@ -563,10 +563,13 @@ def test_annuler_un_billet_stripe_rembourse_un_billet(
     Le paiement passe « remboursé en partie » (`H`). Une ligne négative « remboursée »
     (`R`, quantité −1) s'ajoute à la ligne validée. Le billet annulé passe `R`, les deux
     autres restent actifs (`K`) ; la réservation reste payée (`P`).
-    Tâches : l'envoi du remboursement à l'ancien LaBoutik (moyen « Stripe CB »), puis le
-    mail d'annulation du billet.
+    Tâches : le mail d'annulation du billet, puis l'envoi du remboursement à l'ancien
+    LaBoutik (moyen « Stripe CB »). L'envoi à LaBoutik part après la validation de la
+    transaction (`on_commit`), donc après le mail demandé par la vue (fiche D-4a : seul
+    l'ordre a changé).
     / P5: 3 tickets paid by Stripe, the buyer cancels ONE. One Stripe refund of one ticket
-    price; payment PARTIALLY_REFUNDED; one REFUNDED line, qty -1; LaBoutik refund + mail.
+    price; payment PARTIALLY_REFUNDED; one REFUNDED line, qty -1; mail, then the
+    LaBoutik refund (sent after the commit).
     """
     acheteur = creer_utilisateur()
     concert = creer_evenement_avec_tarif(prix="10.00")
@@ -588,7 +591,7 @@ def test_annuler_un_billet_stripe_rembourse_un_billet(
         "lignes": [LigneArticle.REFUNDED, LigneArticle.VALID],
         "reservations": [Reservation.PAID],
         "billets": [Ticket.NOT_SCANNED, Ticket.NOT_SCANNED, Ticket.CANCELED],
-        "taches": ["send_refund_to_laboutik", "send_ticket_cancellation_user"],
+        "taches": ["send_ticket_cancellation_user", "send_refund_to_laboutik"],
     }
     assert (
         etat_metier(
@@ -688,12 +691,14 @@ def test_annuler_un_billet_caisse_offert_cree_un_avoir(
     Aucun appel à Stripe. Un avoir (`N`, quantité −1, 1500 centimes, moyen « offert »)
     s'ajoute à la ligne validée : la garde « payé mais rien de remboursable » voit un
     montant payé non nul (`total_paid()` lit `amount × qty`, offert compris).
-    Réservation et billet annulés. Tâches : l'avoir envoyé à l'ancien LaBoutik, puis le
-    mail d'annulation de la réservation.
+    Réservation et billet annulés. Tâches : le mail d'annulation de la réservation
+    seulement. Un avoir fait dans l'admin ne part pas à l'ancien LaBoutik (décision du
+    mainteneur, 2026-10-02, fiche D-4a).
     Change en G : `total_paid()` lira `total_ttc`, nul pour un billet entièrement offert ;
     plus d'avoir d'argent, seulement la trace de l'offert annulé.
     / P6 by the admin: a register ticket OFFERED at 15 € is cancelled: a CREDIT_NOTE line
-    of the full price, method "offered", is created. Changes in G (total_paid on total_ttc).
+    of the full price, method "offered", is created, never sent to legacy LaBoutik.
+    Changes in G (total_paid on total_ttc).
     """
     acheteur = creer_utilisateur()
     concert = creer_evenement_avec_tarif(prix="15.00")
@@ -712,7 +717,7 @@ def test_annuler_un_billet_caisse_offert_cree_un_avoir(
     etat_attendu = {
         "reservations": [Reservation.CANCELED],
         "billets": [Ticket.CANCELED],
-        "taches": ["send_refund_to_laboutik", "send_reservation_cancellation_user"],
+        "taches": ["send_reservation_cancellation_user"],
     }
     assert (
         etat_metier(
@@ -727,14 +732,7 @@ def test_annuler_un_billet_caisse_offert_cree_un_avoir(
     ]
     assert lieu.remboursement_stripe.call_count == 0
 
-    assert charges_utiles_des_avoirs_envoyees_a_laboutik(taches_de_l_annulation) == [
-        {
-            "payment_method": PaymentMethod.FREE,
-            "amount": 1500,
-            "qty": "-1.000000",
-            "status": LigneArticle.CREDIT_NOTE,
-        },
-    ]
+    assert charges_utiles_des_avoirs_envoyees_a_laboutik(taches_de_l_annulation) == []
 
 
 # --------------------------------------------------------------------------
@@ -753,10 +751,12 @@ def test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement(
     avoir (`N`, quantité −1) est créé : pour le DERNIER paiement, la période en cours
     (décision D30, annexe T7). L'achat et le premier renouvellement ne sont pas touchés.
     Aucun appel à Stripe.
-    Tâches : un envoi à l'ancien LaBoutik pour l'avoir, puis le webhook d'adhésion après
-    la validation en base.
+    Tâches : le webhook d'adhésion après la validation en base, seulement. L'avoir, fait
+    dans l'admin, ne part pas à l'ancien LaBoutik (décision du mainteneur, 2026-10-02,
+    fiche D-4a).
     / P7: a membership paid 3 times is cancelled with credit notes: ADMIN_CANCELED, ONE
-    credit note, for the latest payment only (D30); no Stripe call.
+    credit note, for the latest payment only (D30); no Stripe call; the credit note is
+    not sent to legacy LaBoutik.
     """
     acheteur = creer_utilisateur()
     adhesion = creer_adhesion(prix="15.00", recurrente=True)
@@ -778,7 +778,6 @@ def test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement(
         "adhesion": Membership.ADMIN_CANCELED,
         "adhesion_a_une_echeance": True,
         "taches": [
-            "send_refund_to_laboutik",
             "webhook_membership",
         ],
     }
@@ -797,29 +796,9 @@ def test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement(
     ]
     assert lieu.remboursement_stripe.call_count == 0
 
-    # La charge utile de l'unique avoir. Le moyen n'est pas comparé : l'état de départ
-    # n'écrit pas la colonne `payment_method` de la ligne (retirée par la fiche H), le
-    # moyen d'origine vit dans le règlement et dans `Paiement_stripe.moyen`.
-    # / The single credit note's payload. The method is not compared: the starting
-    # state does not write the line's payment_method column (removed by sheet H).
-    charges_utiles_sans_le_moyen = []
-    for charge_utile in charges_utiles_des_avoirs_envoyees_a_laboutik(
-        taches_de_l_annulation
-    ):
-        charges_utiles_sans_le_moyen.append(
-            {
-                "amount": charge_utile["amount"],
-                "qty": charge_utile["qty"],
-                "status": charge_utile["status"],
-            }
-        )
-    assert charges_utiles_sans_le_moyen == [
-        {
-            "amount": 1500,
-            "qty": "-1.000000",
-            "status": LigneArticle.CREDIT_NOTE,
-        },
-    ]
+    # Aucune charge utile : l'avoir admin ne part pas à l'ancien LaBoutik.
+    # / No payload: the admin credit note is not sent to legacy LaBoutik.
+    assert charges_utiles_des_avoirs_envoyees_a_laboutik(taches_de_l_annulation) == []
 
 
 # --------------------------------------------------------------------------
@@ -838,10 +817,11 @@ def test_avoirs_admin_et_annulation_adhesion_n_appellent_pas_stripe(
     Stripe n'est JAMAIS appelé pour rembourser : l'avoir est seulement comptable. Chaque
     ligne payée reçoit un avoir (`N`) ; les deux paiements Stripe restent validés (`V`) ;
     la réservation reste payée, son billet actif ; l'adhésion passe `AC`.
-    Tâches : un envoi à l'ancien LaBoutik par avoir, moyen « Stripe CB » ; puis le webhook
-    d'adhésion. Reste vert pendant tout le chantier.
+    Tâches : le webhook d'adhésion seulement. Les avoirs, faits dans l'admin, ne partent
+    pas à l'ancien LaBoutik (décision du mainteneur, 2026-10-02, fiche D-4a : seules ces
+    tâches ont changé). Le reste ne change pas pendant tout le chantier.
     / P7/P8 (D27): admin credit note on a Stripe ticket line and membership cancellation
-    with credit notes never call Stripe refund. Stays green through the whole chantier.
+    with credit notes never call Stripe refund, and are not sent to legacy LaBoutik.
     """
     acheteur = creer_utilisateur()
     concert = creer_evenement_avec_tarif(prix="10.00")
@@ -891,8 +871,6 @@ def test_avoirs_admin_et_annulation_adhesion_n_appellent_pas_stripe(
         "adhesion": Membership.ADMIN_CANCELED,
         "adhesion_a_une_echeance": True,
         "taches": [
-            "send_refund_to_laboutik",
-            "send_refund_to_laboutik",
             "webhook_membership",
         ],
     }
@@ -905,19 +883,6 @@ def test_avoirs_admin_et_annulation_adhesion_n_appellent_pas_stripe(
         == etat_attendu_de_l_adhesion
     )
 
-    # Avoir du billet (10 €) et avoir de l'adhésion (15 €), triés par montant.
-    # / Ticket credit note (10 €) and membership credit note (15 €), sorted by amount.
-    assert charges_utiles_des_avoirs_envoyees_a_laboutik(taches_de_l_admin) == [
-        {
-            "payment_method": PaymentMethod.STRIPE_NOFED,
-            "amount": 1000,
-            "qty": "-1.000000",
-            "status": LigneArticle.CREDIT_NOTE,
-        },
-        {
-            "payment_method": PaymentMethod.STRIPE_NOFED,
-            "amount": 1500,
-            "qty": "-1.000000",
-            "status": LigneArticle.CREDIT_NOTE,
-        },
-    ]
+    # Aucune charge utile : les avoirs admin ne partent pas à l'ancien LaBoutik.
+    # / No payload: admin credit notes are not sent to legacy LaBoutik.
+    assert charges_utiles_des_avoirs_envoyees_a_laboutik(taches_de_l_admin) == []

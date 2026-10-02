@@ -115,6 +115,37 @@ DOUBLE DEMANDE ET NOUVEL ESSAI
 again under lock). The Stripe refund carries an idempotency key: same key on a retry,
 a new key for the next refund.
 
+DEMANDES SIMULTANÉES (VERROUS)
+- Deux demandes d'annulation du même billet (deux onglets, le client et l'admin) : la
+  seconde relit le billet sous verrou ; il est déjà annulé, elle est refusée avant
+  Stripe. De même pour deux annulations de toute la réservation.
+- Le `n` de la clé d'idempotence est compté sous le verrou du paiement Stripe : deux
+  remboursements du même paiement passent l'un après l'autre, le second lit `n` + 1.
+  Une seule connexion ne peut pas faire attendre une autre demande : le test relève les
+  requêtes SQL et vérifie que le paiement est verrouillé AVANT le comptage.
+/ Two cancellations of the same ticket: the second reads the ticket again under lock
+and is refused. `n` is counted under the payment's lock (checked on the SQL queries).
+
+DEUX LIGNES DU MÊME TARIF VENDU (PANIER, PRIX LIBRE)
+Deux billets à prix libre saisis au même montant font deux lignes du même tarif vendu.
+L'annulation Stripe répartit les billets actifs entre les lignes : une ligne ne reçoit
+jamais plus que ce qu'il lui reste à rendre. Un billet seul est rendu sur une ligne qui
+a encore une quantité à rendre.
+/ Two lines of the same PriceSold: active tickets are spread between the lines.
+
+ÉCART « REÇU EN MOINS » À L'ENCAISSEMENT
+Stripe a encaissé moins que les articles. Le remboursement ne demande jamais à Stripe
+plus que ce qu'il détient encore pour ce paiement (`montant_encaisse` moins les
+remboursements déjà écrits) ; la différence avec les articles devient l'article d'écart.
+/ The refund never asks Stripe more than it still holds for the payment.
+
+L'ANCIEN LABOUTIK (V1)
+Aucun avoir fait dans l'admin (bouton « Avoir », annulations admin, annulation
+d'adhésion, origine ADMIN) n'est envoyé à LaBoutik V1 : les ventes admin n'y partent
+pas non plus. Un remboursement Stripe (origine LESPASS, statut REFUNDED) y part toujours,
+et seulement APRÈS la validation de la transaction (`transaction.on_commit`).
+/ No admin credit note is sent to LaBoutik V1; a Stripe refund still is, after commit.
+
 LES BILLETS VENDUS À LA CAISSE
 La caisse écrit sa ligne et ses billets sur deux tarifs vendus (`PriceSold`) différents
 du même tarif (`Price`) (laboutik/views.py). L'écran d'annulation et l'annulation d'un
@@ -137,8 +168,9 @@ CODE PARCOURU / CODE EXERCISED
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-D-en-ligne-avoirs.md (§4,
 §5 tests 17, 18, 18b, 18c, 19, 20, 21, annexes T7, T8, T9) ; CHANTIER-05-SUIVI.md §4
-(D-3, D-3c, D-3z) ; briefs CHANTIER-05-briefs/05-D-3a.md, 05-D-3b.md, 05-D-3c-1.md,
-05-D-3c-2.md et 05-D-3z.md.
+(D-3, D-3c, D-3z, grandes relectures de la fiche D) et §5 (LaBoutik V1, 2026-10-02) ;
+briefs CHANTIER-05-briefs/05-D-3a.md, 05-D-3b.md, 05-D-3c-1.md, 05-D-3c-2.md,
+05-D-3z.md et 05-D-4a.md.
 
 Lancer / Run : make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py"
 """
@@ -148,7 +180,7 @@ from contextlib import contextmanager
 from decimal import Decimal
 from html.parser import HTMLParser
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from django.contrib.messages import get_messages
@@ -170,6 +202,7 @@ from BaseBillet.models import (
     Ticket,
 )
 from BaseBillet.models_vente import Reglement, Vente
+from BaseBillet.services_panier import PanierSession
 from BaseBillet.services_vente import (
     MOYENS_DU_CHAMP_REMBOURSE_PAR,
     NOM_ECART_RECU_EN_PLUS,
@@ -187,6 +220,7 @@ from fabriques_panier import (
     creer_utilisateur,
     identifiant_unique,
     noms_des_taches,
+    requete_avec_session,
     taches_celery_enregistrees,
 )
 from fabriques_vente import (
@@ -214,11 +248,15 @@ from test_caracterisation_annulations import (
 )
 from test_caracterisation_en_ligne import (
     EN_TETE_HTMX,
+    arguments_des_taches,
     creer_un_administrateur_du_lieu,
     revenir_de_stripe_billetterie,
 )
 from test_en_ligne_ecrit_la_vente import (
     articles_d_ecart_de_la_vente,
+    payer_le_panier,
+    position_de_la_premiere_requete,
+    requetes_sql_relevees,
     reserver_des_billets_a_payer,
     verifier_l_article_d_ecart,
 )
@@ -288,15 +326,17 @@ def lieu(tenant, mock_stripe):
     pendant tout le test.
     / The `lespass` venue, with Stripe (session, catalogue, refund) and Celery faked.
 
-    `remboursement_stripe` remplace `stripe.Refund.create` : on compte ses appels.
-    / `remboursement_stripe` replaces `stripe.Refund.create`: its calls are counted.
+    `remboursement_stripe` remplace `stripe.Refund.create` : on compte ses appels. Il
+    rend un remboursement comme Stripe (`rembourser_comme_stripe`) : un identifiant et
+    le montant rendu, en centimes entiers.
+    / `remboursement_stripe` replaces `stripe.Refund.create`: its calls are counted. It
+    returns a refund like Stripe does: an id and the amount given back, in cents.
     """
-    remboursement_reussi = MagicMock(status="succeeded")
     with tenant_context(tenant):
         with catalogue_stripe_simule():
             with taches_celery_enregistrees() as taches_demandees:
                 with patch(
-                    "stripe.Refund.create", return_value=remboursement_reussi
+                    "stripe.Refund.create", side_effect=rembourser_comme_stripe
                 ) as remboursement_stripe:
                     yield SimpleNamespace(
                         tenant=tenant,
@@ -3557,3 +3597,573 @@ def test_annulation_adhesion_entierement_offerte_reglement_free_sans_champ(lieu)
     ]
     assert un_message_contient(reponse, message_de_fin_attendu(1))
     verifier_egalites(vente_d_avoir)
+
+
+# --------------------------------------------------------------------------
+# Demandes simultanées : un billet et un paiement relus sous verrou
+# / Simultaneous requests: a ticket and a payment read again under lock
+# --------------------------------------------------------------------------
+
+
+@contextmanager
+def requetes_sql_jusqu_a_l_appel_a_stripe():
+    """
+    Relève le texte SQL des requêtes du bloc (`requetes_sql_relevees`). Remplace
+    `stripe.Refund.create` (Stripe rend le montant demandé) et garde, au moment de
+    chaque appel, la liste des requêtes déjà faites.
+    / Records the block's SQL texts. Replaces `stripe.Refund.create` and keeps, at each
+    call, the list of queries already run.
+
+    Une seule connexion ne peut pas faire attendre une seconde demande : on ne voit pas
+    un verrou « tenir ». On voit en revanche la requête qui le pose (`FOR UPDATE`) et
+    sa place parmi les autres.
+    / One connection cannot make a second request wait: we see the locking query and
+    its place among the others.
+
+    :return: un objet avec `appels` (le faux `Refund.create`) et
+        `requetes_avant_chaque_appel` (une liste de textes SQL par appel à Stripe)
+    """
+    releve = SimpleNamespace(appels=None, requetes_avant_chaque_appel=[])
+    with requetes_sql_relevees() as textes_sql_du_bloc:
+
+        def rembourser_en_relevant_les_requetes(**arguments_du_remboursement):
+            requetes_deja_faites = list(textes_sql_du_bloc)
+            releve.requetes_avant_chaque_appel.append(requetes_deja_faites)
+            return rembourser_comme_stripe(**arguments_du_remboursement)
+
+        with patch(
+            "stripe.Refund.create", side_effect=rembourser_en_relevant_les_requetes
+        ) as appels_a_stripe:
+            releve.appels = appels_a_stripe
+            yield releve
+
+
+def test_annulation_d_un_billet_deja_annule_par_une_autre_demande_refusee(lieu):
+    """
+    Deux billets à 10 € payés par Stripe. Deux demandes d'annulation du MÊME billet
+    arrivent en même temps (deux onglets, ou le client et l'admin) : chacune a chargé la
+    réservation et le billet AVANT que l'autre n'écrive.
+    - La première annule le billet : Stripe rend 1000, le billet passe annulé.
+    - La seconde a encore en mémoire un billet actif. Elle relit le billet sous verrou :
+      il est annulé, elle est refusée (« This ticket has already been canceled. »),
+      AVANT Stripe.
+    - Stripe n'est appelé qu'UNE fois ; un seul remboursement est écrit ; l'autre billet
+      reste actif, la réservation n'est pas annulée.
+    - La première demande pose le verrou du billet (`SELECT … FOR UPDATE`) AVANT Stripe :
+      c'est lui qui fait attendre une demande simultanée (une seule connexion ne peut pas
+      le montrer « tenir », on vérifie la requête SQL).
+    / Two cancellations of the SAME ticket, both loaded before the other one writes: the
+    second reads the ticket again under lock, finds it cancelled and is refused before
+    Stripe. One Stripe call, one refund written. The ticket lock is set before Stripe.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=2)
+    billets_dans_l_ordre = list(
+        Reservation.objects.get(pk=achat.reservation.pk).tickets.order_by("pk")
+    )
+    billet_vise = billets_dans_l_ordre[0]
+    autre_billet = billets_dans_l_ordre[1]
+
+    # Les deux demandes chargent leurs objets avant toute écriture.
+    # / Both requests load their objects before any write.
+    reservation_lue_par_la_premiere_demande = Reservation.objects.get(
+        pk=achat.reservation.pk
+    )
+    billet_lu_par_la_premiere_demande = Ticket.objects.get(pk=billet_vise.pk)
+    reservation_lue_par_la_seconde_demande = Reservation.objects.get(
+        pk=achat.reservation.pk
+    )
+    billet_lu_par_la_seconde_demande = Ticket.objects.get(pk=billet_vise.pk)
+
+    with requetes_sql_jusqu_a_l_appel_a_stripe() as releve_de_la_premiere_demande:
+        reservation_lue_par_la_premiere_demande.cancel_and_refund_ticket(
+            billet_lu_par_la_premiere_demande
+        )
+    with remboursement_stripe_simule() as stripe_simule_pour_la_seconde_demande:
+        with pytest.raises(Exception) as refus_de_la_seconde_demande:
+            reservation_lue_par_la_seconde_demande.cancel_and_refund_ticket(
+                billet_lu_par_la_seconde_demande
+            )
+
+    assert str(refus_de_la_seconde_demande.value) == dans_la_langue_active(
+        "This ticket has already been canceled."
+    )
+    assert releve_de_la_premiere_demande.appels.call_count == 1
+    assert stripe_simule_pour_la_seconde_demande.appels.call_count == 0, (
+        "Stripe a été appelé deux fois pour le même billet."
+    )
+
+    # La première demande verrouille le billet AVANT d'appeler Stripe : une seconde
+    # demande simultanée attend, puis relit le billet annulé.
+    # / The first request locks the ticket BEFORE calling Stripe.
+    requetes_avant_stripe = releve_de_la_premiere_demande.requetes_avant_chaque_appel[0]
+    position_du_verrou_sur_le_billet = position_de_la_premiere_requete(
+        requetes_avant_stripe, ['FROM "BaseBillet_ticket"', "FOR UPDATE"]
+    )
+    assert position_du_verrou_sur_le_billet is not None, (
+        "Le billet n'est pas verrouillé (SELECT … FOR UPDATE) avant Stripe."
+    )
+    assert (
+        LigneArticle.objects.filter(paiement_stripe=achat.paiement, qty__lt=0).count()
+        == 1
+    )
+    assert (
+        Reglement.objects.filter(paiement_stripe=achat.paiement, montant__lt=0).count()
+        == 1
+    )
+
+    billet_vise.refresh_from_db()
+    autre_billet.refresh_from_db()
+    assert billet_vise.status == Ticket.CANCELED
+    assert autre_billet.status == Ticket.NOT_SCANNED
+    reservation_relue = Reservation.objects.get(pk=achat.reservation.pk)
+    assert reservation_relue.status != Reservation.CANCELED
+
+
+def test_annulation_d_une_reservation_deja_annulee_par_une_autre_demande_refusee(lieu):
+    """
+    Deux billets à 10 € payés par Stripe. Deux demandes d'annulation de TOUTE la
+    réservation arrivent en même temps : chacune a chargé la réservation AVANT que
+    l'autre n'écrive.
+    - La première annule la réservation : Stripe rend 2000.
+    - La seconde a encore en mémoire une réservation payée. Elle relit la réservation
+      sous verrou : elle est annulée, la seconde est refusée (« This reservation has
+      already been canceled. »), AVANT Stripe.
+    - La première demande pose le verrou de la réservation (`SELECT … FOR UPDATE`)
+      AVANT Stripe (une seule connexion ne peut pas le montrer « tenir », on vérifie la
+      requête SQL).
+    / Two cancellations of the whole reservation, both loaded before the other one
+    writes: the second reads the reservation again under lock and is refused before
+    Stripe. The reservation lock is set before Stripe.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=2)
+
+    # Les deux demandes chargent la réservation avant toute écriture.
+    # / Both requests load the reservation before any write.
+    reservation_lue_par_la_premiere_demande = Reservation.objects.get(
+        pk=achat.reservation.pk
+    )
+    reservation_lue_par_la_seconde_demande = Reservation.objects.get(
+        pk=achat.reservation.pk
+    )
+
+    with requetes_sql_jusqu_a_l_appel_a_stripe() as releve_de_la_premiere_demande:
+        reservation_lue_par_la_premiere_demande.cancel_and_refund_resa()
+    with remboursement_stripe_simule() as stripe_simule_pour_la_seconde_demande:
+        with pytest.raises(Exception) as refus_de_la_seconde_demande:
+            reservation_lue_par_la_seconde_demande.cancel_and_refund_resa()
+
+    assert str(refus_de_la_seconde_demande.value) == dans_la_langue_active(
+        "This reservation has already been canceled."
+    )
+    assert releve_de_la_premiere_demande.appels.call_count == 1
+    assert releve_de_la_premiere_demande.appels.call_args.kwargs["amount"] == 2000
+    assert stripe_simule_pour_la_seconde_demande.appels.call_count == 0, (
+        "Stripe a été appelé deux fois pour la même réservation."
+    )
+    assert (
+        Reglement.objects.filter(paiement_stripe=achat.paiement, montant__lt=0).count()
+        == 1
+    )
+
+    requetes_avant_stripe = releve_de_la_premiere_demande.requetes_avant_chaque_appel[0]
+    position_du_verrou_sur_la_reservation = position_de_la_premiere_requete(
+        requetes_avant_stripe, ['FROM "BaseBillet_reservation"', "FOR UPDATE"]
+    )
+    assert position_du_verrou_sur_la_reservation is not None, (
+        "La réservation n'est pas verrouillée (SELECT … FOR UPDATE) avant Stripe."
+    )
+
+
+def test_remboursement_compte_n_sous_verrou_du_paiement(lieu):
+    """
+    Trois billets à 10 € payés par Stripe, sur UNE ligne. Deux remboursements d'un
+    billet chacun. Le second reçoit un paiement lu AVANT le premier remboursement
+    (objet périmé, comme une demande partie en même temps).
+    - Le second remboursement verrouille le paiement Stripe (`SELECT … FOR UPDATE`) AVANT
+      de compter les règlements négatifs déjà écrits (`n` de la clé d'idempotence) : deux
+      demandes du même paiement passent l'une après l'autre.
+    - `n` est lu en base, pas sur l'objet périmé : la clé du second vaut
+      `remboursement-{paiement}-1`.
+    / Two one-ticket refunds; the second gets a payment read before the first refund.
+    The payment is locked BEFORE `n` is counted; the key of the second one ends in -1.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=3)
+    ligne = LigneArticle.objects.get(paiement_stripe=achat.paiement)
+    paiement_lu_avant_le_premier_remboursement = Paiement_stripe.objects.get(
+        pk=achat.paiement.pk
+    )
+
+    with remboursement_stripe_simule():
+        partial_refund_payment(
+            Paiement_stripe.objects.get(pk=achat.paiement.pk),
+            Configuration.get_solo(),
+            [LigneArticle.objects.get(pk=ligne.pk)],
+            specified_quantity=1,
+        )
+
+    with requetes_sql_jusqu_a_l_appel_a_stripe() as releve:
+        partial_refund_payment(
+            paiement_lu_avant_le_premier_remboursement,
+            Configuration.get_solo(),
+            [LigneArticle.objects.get(pk=ligne.pk)],
+            specified_quantity=1,
+        )
+
+    assert cles_d_idempotence_envoyees(releve.appels) == [
+        cle_d_idempotence_attendue(achat.paiement, 1)
+    ]
+
+    requetes_avant_stripe = releve.requetes_avant_chaque_appel[0]
+    # Le remboursement ne touche qu'un paiement : le seul verrou attendu sur la table
+    # des paiements Stripe est le sien.
+    # / The refund touches one payment only: the only expected lock on that table.
+    position_du_verrou = position_de_la_premiere_requete(
+        requetes_avant_stripe, ['FROM "BaseBillet_paiement_stripe"', "FOR UPDATE"]
+    )
+    position_du_comptage = position_de_la_premiere_requete(
+        requetes_avant_stripe, ["COUNT(", 'FROM "BaseBillet_reglement"']
+    )
+    assert position_du_comptage is not None, (
+        "Le comptage des règlements négatifs (n) n'est pas fait avant Stripe."
+    )
+    assert position_du_verrou is not None, (
+        "Le paiement Stripe n'est pas verrouillé (SELECT … FOR UPDATE) avant Stripe."
+    )
+    assert position_du_verrou < position_du_comptage, (
+        "Le paiement Stripe est verrouillé APRÈS le comptage de n."
+    )
+
+
+# --------------------------------------------------------------------------
+# L'ancien LaBoutik (V1) : aucun avoir admin, les remboursements Stripe après validation
+# / Legacy LaBoutik (V1): no admin credit note, Stripe refunds after commit
+# --------------------------------------------------------------------------
+
+
+def test_avoir_admin_n_est_pas_envoye_a_laboutik(
+    lieu, django_capture_on_commit_callbacks
+):
+    """
+    Un billet à 10 € vendu dans l'admin, payé par CB. L'admin émet un avoir (bouton
+    « Avoir », remboursé en espèces) : la ligne d'avoir (origine ADMIN) passe
+    CREDIT_NOTE, mais AUCUNE tâche `send_refund_to_laboutik` n'est demandée, même après
+    la validation de la transaction. Les ventes admin ne partent pas à LaBoutik V1 :
+    leurs avoirs non plus (décision du mainteneur, 2026-10-02).
+    / An admin credit note (ADMIN origin) turns CREDIT_NOTE but is never sent to
+    LaBoutik V1, even after commit.
+    """
+    vente_admin = vendre_et_relire(
+        lieu, prix="10.00", quantite=1, moyen_de_paiement=PaymentMethod.CC
+    )
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+    # On ne garde que les tâches demandées par l'avoir.
+    # / Keep only the tasks requested by the credit note.
+    lieu.taches_demandees.clear()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        reponse_de_l_action = valider_l_ecran_de_l_avoir(
+            client_de_l_admin, vente_admin.ligne, moyen_rembourse=PaymentMethod.CASH
+        )
+
+    assert reponse_de_l_action.status_code == 302
+    avoir = l_avoir_de_la_ligne(vente_admin.ligne)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.sale_origin == SaleOrigin.ADMIN
+    assert "send_refund_to_laboutik" not in noms_des_taches(lieu.taches_demandees)
+
+
+def test_remboursement_stripe_toujours_envoye_a_laboutik(
+    lieu, django_capture_on_commit_callbacks
+):
+    """
+    Deux billets à 10 € payés par Stripe ; le client en annule un
+    (`cancel_and_refund_ticket`). Sa vente en ligne est partie à LaBoutik V1 : son
+    remboursement y part aussi. UNE tâche `send_refund_to_laboutik` est demandée, pour
+    la ligne de remboursement (statut REFUNDED, origine LESPASS).
+    / A Stripe refund (REFUNDED, LESPASS) is still sent to LaBoutik V1: one task, for
+    the refund line.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=2)
+    ligne_d_origine = LigneArticle.objects.get(paiement_stripe=achat.paiement)
+    reservation = Reservation.objects.get(pk=achat.reservation.pk)
+    billet_a_annuler = reservation.tickets.order_by("pk").first()
+    # On ne garde que les tâches demandées par l'annulation.
+    # / Keep only the tasks requested by the cancellation.
+    lieu.taches_demandees.clear()
+
+    with remboursement_stripe_simule():
+        with django_capture_on_commit_callbacks(execute=True):
+            reservation.cancel_and_refund_ticket(billet_a_annuler)
+
+    ligne_de_remboursement = le_remboursement_de_la_ligne(ligne_d_origine)
+    assert ligne_de_remboursement.status == LigneArticle.REFUNDED
+    assert ligne_de_remboursement.sale_origin == SaleOrigin.LESPASS
+    assert arguments_des_taches(
+        lieu.taches_demandees, "send_refund_to_laboutik"
+    ) == [(ligne_de_remboursement.pk,)]
+
+
+def test_avoir_envoye_a_laboutik_apres_la_transaction(
+    lieu, django_capture_on_commit_callbacks
+):
+    """
+    Deux billets à 10 € payés par Stripe ; le client en annule un. L'envoi du
+    remboursement à LaBoutik V1 attend la validation de la transaction
+    (`transaction.on_commit`) : sinon le worker peut chercher une ligne pas encore
+    écrite, ou une ligne qu'un échec a fait disparaître.
+    - Pendant la transaction : aucune tâche `send_refund_to_laboutik`.
+    - Après la validation : une tâche, pour la ligne de remboursement.
+    / The LaBoutik V1 sending waits for the commit: no task during the transaction, one
+    task after it.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    achat = acheter_des_billets_payes_par_stripe(acheteur, concert, quantite=2)
+    ligne_d_origine = LigneArticle.objects.get(paiement_stripe=achat.paiement)
+    reservation = Reservation.objects.get(pk=achat.reservation.pk)
+    billet_a_annuler = reservation.tickets.order_by("pk").first()
+    lieu.taches_demandees.clear()
+
+    with remboursement_stripe_simule():
+        with django_capture_on_commit_callbacks(
+            execute=False
+        ) as actions_apres_la_validation:
+            reservation.cancel_and_refund_ticket(billet_a_annuler)
+
+        taches_pendant_la_transaction = noms_des_taches(lieu.taches_demandees)
+        assert "send_refund_to_laboutik" not in taches_pendant_la_transaction, (
+            "L'envoi à LaBoutik part avant la validation de la transaction."
+        )
+
+        # La transaction est validée : ses actions différées partent.
+        # / The transaction is committed: its deferred actions run.
+        for action_apres_la_validation in actions_apres_la_validation:
+            action_apres_la_validation()
+
+    ligne_de_remboursement = le_remboursement_de_la_ligne(ligne_d_origine)
+    assert arguments_des_taches(
+        lieu.taches_demandees, "send_refund_to_laboutik"
+    ) == [(ligne_de_remboursement.pk,)]
+
+
+# --------------------------------------------------------------------------
+# Deux lignes du même tarif vendu (panier, prix libre)
+# / Two lines of the same sold price (cart, free price)
+# --------------------------------------------------------------------------
+
+
+def acheter_au_panier_deux_billets_a_prix_libre_au_meme_montant(
+    quantites_saisies=(1, 1),
+):
+    """
+    ÉTAT DE DÉPART : au panier, deux saisies d'un tarif à prix libre, toutes deux à
+    12 €, de quantités `quantites_saisies` (1 et 1 par défaut). Le panier fait UNE ligne
+    par saisie : deux lignes du MÊME tarif vendu (même `PriceSold`), chacune de la
+    quantité saisie. Payé par UN paiement Stripe, puis retour de Stripe : payé.
+    / STARTING STATE: two free-price entries typed at 12 € in the cart: two lines of
+    the SAME PriceSold, of the typed quantities, one Stripe payment, paid.
+
+    :param quantites_saisies: les quantités des deux saisies (entiers)
+    :return: un objet avec `reservation`, `paiement` et `lignes` (les deux lignes, de la
+        plus grande quantité à la plus petite)
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="5.00", prix_libre=True)
+    panier = PanierSession(requete_avec_session(acheteur))
+    for quantite_saisie in quantites_saisies:
+        panier.add_ticket(
+            concert.evenement.uuid,
+            concert.tarif.uuid,
+            qty=quantite_saisie,
+            custom_amount="12.00",
+        )
+    commande = payer_le_panier(panier, acheteur)
+    paiement = commande.paiement_stripe
+    revenir_de_stripe_billetterie(client_connecte(acheteur), paiement)
+
+    lignes_du_paiement = list(
+        LigneArticle.objects.filter(paiement_stripe=paiement).order_by("-qty", "pk")
+    )
+    assert len(lignes_du_paiement) == 2
+    assert lignes_du_paiement[0].pricesold_id == lignes_du_paiement[1].pricesold_id, (
+        "État de départ : les deux lignes doivent porter le même tarif vendu."
+    )
+    quantites_des_lignes = sorted(
+        [int(lignes_du_paiement[0].qty), int(lignes_du_paiement[1].qty)], reverse=True
+    )
+    assert quantites_des_lignes == sorted(quantites_saisies, reverse=True)
+    for ligne in lignes_du_paiement:
+        assert ligne.status in (LigneArticle.VALID, LigneArticle.PAID)
+
+    reservation = commande.reservations.get()
+    nombre_de_billets_attendu = sum(quantites_saisies)
+    assert (
+        reservation.tickets.exclude(status=Ticket.CANCELED).count()
+        == nombre_de_billets_attendu
+    )
+    return SimpleNamespace(
+        reservation=reservation, paiement=paiement, lignes=lignes_du_paiement
+    )
+
+
+@pytest.mark.parametrize(
+    "geste_d_annulation", ["toute_la_reservation", "billet_par_billet"]
+)
+def test_annulation_stripe_deux_lignes_du_meme_tarif_vendu(lieu, geste_d_annulation):
+    """
+    Deux lignes du même tarif vendu (deux billets à prix libre saisis à 12 €), un billet
+    chacune, payées par UN paiement Stripe. Le client annule :
+    - toute la réservation (`cancel_and_refund_resa`) : les billets actifs du tarif sont
+      RÉPARTIS entre les lignes, un par ligne. Stripe est appelé une fois, pour 2400 ;
+    - ou les billets l'un après l'autre (`cancel_and_refund_ticket`) : chaque billet est
+      rendu sur une ligne qui a ENCORE une quantité à rendre. Stripe est appelé deux
+      fois, 1200 chacune.
+    Dans les deux cas : chaque ligne a UN remboursement de quantité −1, les deux billets
+    sont annulés, le paiement passe « remboursé ».
+    / Two lines of the same PriceSold: the whole reservation spreads the tickets between
+    the lines; one ticket at a time uses a line that still has something to give back.
+    Each line gets ONE refund of −1; both tickets cancelled; payment REFUNDED.
+    """
+    achat = acheter_au_panier_deux_billets_a_prix_libre_au_meme_montant()
+    reservation = Reservation.objects.get(pk=achat.reservation.pk)
+
+    with remboursement_stripe_simule() as stripe_simule:
+        if geste_d_annulation == "toute_la_reservation":
+            reservation.cancel_and_refund_resa()
+        else:
+            for billet in list(reservation.tickets.order_by("pk")):
+                Reservation.objects.get(pk=reservation.pk).cancel_and_refund_ticket(
+                    Ticket.objects.get(pk=billet.pk)
+                )
+
+    montants_demandes_a_stripe = []
+    for appel in stripe_simule.appels.call_args_list:
+        montants_demandes_a_stripe.append(appel.kwargs["amount"])
+    if geste_d_annulation == "toute_la_reservation":
+        assert montants_demandes_a_stripe == [2400]
+    else:
+        assert montants_demandes_a_stripe == [1200, 1200]
+
+    for ligne_d_origine in achat.lignes:
+        ligne_de_remboursement = le_remboursement_de_la_ligne(ligne_d_origine)
+        verifier_l_article_rembourse(
+            ligne_de_remboursement, ligne_d_origine, quantite_rendue=1
+        )
+
+    for billet in Reservation.objects.get(pk=reservation.pk).tickets.all():
+        assert billet.status == Ticket.CANCELED
+    paiement_relu = Paiement_stripe.objects.get(pk=achat.paiement.pk)
+    assert paiement_relu.status == Paiement_stripe.REFUNDED
+
+
+def test_annulation_stripe_repartit_les_billets_actifs_entre_les_lignes(lieu):
+    """
+    Deux lignes du même tarif vendu (prix libre à 12 €), de quantités 2 et 1, payées
+    par UN paiement Stripe : trois billets. UN billet est déjà annulé SANS
+    remboursement (état posé directement par `update()`, sans signal : PIEGES 12.17).
+    L'admin annule toute la réservation (`cancel_and_refund_resa`).
+    - Il reste DEUX billets actifs : ils sont répartis entre les lignes, et une ligne
+      ne reçoit jamais des billets déjà donnés à la ligne précédente. Deux unités sont
+      rendues en tout, pas trois.
+    - Stripe est appelé une fois, pour le prix de DEUX billets (2400).
+    - Tous les billets sont annulés.
+    / Two lines of the same PriceSold (quantities 2 and 1), three tickets, one already
+    cancelled without refund: the admin cancellation gives back TWO units in all, and
+    Stripe gets the price of two tickets.
+    """
+    achat = acheter_au_panier_deux_billets_a_prix_libre_au_meme_montant(
+        quantites_saisies=(2, 1)
+    )
+    billet_deja_annule = achat.reservation.tickets.order_by("pk").first()
+    Ticket.objects.filter(pk=billet_deja_annule.pk).update(status=Ticket.CANCELED)
+    reservation = Reservation.objects.get(pk=achat.reservation.pk)
+
+    with remboursement_stripe_simule() as stripe_simule:
+        reservation.cancel_and_refund_resa(annulation_par_l_admin=True)
+
+    assert stripe_simule.appels.call_count == 1
+    assert stripe_simule.appels.call_args.kwargs["amount"] == 2400
+
+    quantite_totale_rendue = Decimal("0")
+    for ligne_de_remboursement in LigneArticle.objects.filter(
+        paiement_stripe=achat.paiement, qty__lt=0
+    ):
+        quantite_totale_rendue += ligne_de_remboursement.qty
+    assert quantite_totale_rendue == Decimal("-2"), (
+        f"Deux unités devaient être rendues, {-quantite_totale_rendue} l'ont été."
+    )
+
+    for billet in Reservation.objects.get(pk=reservation.pk).tickets.all():
+        assert billet.status == Ticket.CANCELED
+
+
+# --------------------------------------------------------------------------
+# Écart « reçu en moins » : Stripe ne rend jamais plus que ce qu'il a encaissé
+# / "Received less" gap: Stripe never gives back more than it collected
+# --------------------------------------------------------------------------
+
+
+def test_remboursement_apres_ecart_recu_en_moins_demande_au_plus_l_encaisse(lieu):
+    """
+    Trois billets (2500 au catalogue), Stripe n'encaisse que 2400 : la vente d'origine a
+    un article « Écart d'encaissement — reçu en moins » (−100). Toute la réservation est
+    annulée (`cancel_and_refund_resa`).
+    - Stripe ne détient que 2400 pour ce paiement : il est appelé UNE fois, pour 2400,
+      jamais pour les 2500 des articles (Stripe refuserait).
+    - La vente AVOIR a ses deux articles (−2000 et −500), UN règlement de −2400, et un
+      article « Écart d'encaissement — reçu en plus » de +100 : il annule l'écart de la
+      vente d'origine. Les égalités de la vente tiennent.
+    - Le paiement passe « remboursé ».
+    / Stripe collected 2400 for 2500 of items: the refund asks Stripe 2400, never 2500;
+    the AVOIR sale has its items, one −2400 payment and a +100 gap item.
+    """
+    achat = reserver_des_billets_a_payer(lieu)
+    lieu.stripe.session.amount_total = 2400
+    revenir_de_stripe_billetterie(achat.client, achat.paiement)
+    paiement = Paiement_stripe.objects.get(pk=achat.paiement.pk)
+    assert paiement.montant_encaisse == 2400
+    ligne_tarif_plein = LigneArticle.objects.filter(
+        paiement_stripe=paiement
+    ).order_by("-amount")[0]
+    vente_d_origine = Vente.objects.get(pk=ligne_tarif_plein.vente_id)
+    reservation = Reservation.objects.get(pk=achat.reservation.pk)
+
+    with remboursement_stripe_simule() as stripe_simule:
+        reservation.cancel_and_refund_resa()
+
+    assert stripe_simule.appels.call_count == 1
+    assert stripe_simule.appels.call_args.kwargs["amount"] == 2400
+    remboursement = stripe_simule.remboursements_rendus[0]
+
+    avoir_tarif_plein = le_remboursement_de_la_ligne(ligne_tarif_plein)
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir_tarif_plein,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+        origine_attendue=SaleOrigin.LESPASS,
+    )
+    verifier_le_reglement_stripe_du_remboursement(
+        vente_d_avoir, paiement, remboursement
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir)[0][1] == -2400
+
+    articles_d_ecart = articles_d_ecart_de_la_vente(vente_d_avoir)
+    assert len(articles_d_ecart) == 1
+    verifier_l_article_d_ecart(
+        articles_d_ecart[0],
+        nom_attendu=NOM_ECART_RECU_EN_PLUS,
+        quantite_attendue=1,
+        ecart_en_centimes=100,
+    )
+    verifier_egalites(vente_d_avoir)
+
+    paiement.refresh_from_db()
+    assert paiement.status == Paiement_stripe.REFUNDED

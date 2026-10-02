@@ -3083,6 +3083,86 @@ class Reservation(models.Model):
                 montant_paye_par_stripe += int(ligne_payee.amount * ligne_payee.qty)
         return montant_paye_par_stripe
 
+    @staticmethod
+    def _quantite_pas_encore_rendue(ligne):
+        """
+        La quantité d'une ligne vendue qui n'est pas encore rendue : sa quantité, moins
+        ses avoirs et remboursements (lignes qui la citent dans `credit_note_for`, de
+        quantité négative). Lecture simple : `partial_refund_payment` la relit sous
+        verrou avant Stripe.
+        / The not yet given back quantity of a sold line (plain read; re-read under lock
+        by partial_refund_payment).
+        """
+        quantite_pas_encore_rendue = ligne.qty
+        for ligne_qui_rend_une_partie in ligne.credit_notes.all():
+            quantite_pas_encore_rendue += ligne_qui_rend_une_partie.qty
+        return quantite_pas_encore_rendue
+
+    def _poser_les_quantites_a_rendre_des_lignes_stripe(
+        self, lignes, billets_actifs_deja_repartis_par_tarif_vendu
+    ):
+        """
+        Pose `to_refund_qty` sur chaque ligne Stripe : les billets actifs de son tarif
+        vendu, RÉPARTIS entre les lignes. Le même tarif vendu peut être sur plusieurs
+        lignes (panier, deux billets à prix libre saisis au même montant) : une ligne ne
+        reçoit jamais plus que ce qu'il lui reste à rendre, ni les billets déjà donnés
+        à une ligne précédente. Sans cela, chaque ligne recevrait tous les billets du
+        tarif, et `partial_refund_payment` refuserait (plus que la quantité restante).
+        Le code d'aujourd'hui n'écrit jamais un billet annulé sans son remboursement sur
+        une ligne Stripe : chaque billet est remboursé d'abord. Le plafond par ligne
+        suffit alors. Le décompte des billets déjà répartis protège les données
+        anciennes (reprise des ventes existantes), où un billet peut être annulé sans
+        remboursement relié à sa ligne.
+        / Sets `to_refund_qty` on each Stripe line: its PriceSold's active tickets,
+        SPREAD between the lines; a line never gets more than it has left to give back.
+        Today's code never cancels a ticket on a Stripe line without refunding it first;
+        the spreading protects old data (imported sales).
+
+        LOCALISATION : BaseBillet/models.py
+
+        :param lignes: les lignes Stripe (VALID / PAID) à rembourser
+        :param billets_actifs_deja_repartis_par_tarif_vendu: dict {pricesold_id: nombre},
+            mis à jour ici (partagé entre les paiements de la réservation)
+        """
+        for ligne in lignes:
+            nombre_de_billets_actifs_du_tarif_vendu = self.tickets.filter(
+                status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+                pricesold=ligne.pricesold,
+            ).count()
+            billets_deja_repartis = billets_actifs_deja_repartis_par_tarif_vendu.get(
+                ligne.pricesold_id, 0
+            )
+            billets_pas_encore_repartis = (
+                nombre_de_billets_actifs_du_tarif_vendu - billets_deja_repartis
+            )
+            quantite_a_rendre = min(
+                self._quantite_pas_encore_rendue(ligne), billets_pas_encore_repartis
+            )
+            if quantite_a_rendre < 0:
+                quantite_a_rendre = 0
+            ligne.to_refund_qty = quantite_a_rendre
+            billets_actifs_deja_repartis_par_tarif_vendu[ligne.pricesold_id] = (
+                billets_deja_repartis + quantite_a_rendre
+            )
+
+    def _ligne_stripe_du_billet_avec_une_quantite_a_rendre(self, paiement, ticket):
+        """
+        La ligne de ce paiement, du tarif vendu du billet, qui a ENCORE une quantité à
+        rendre ; None s'il n'y en a pas. Le même tarif vendu peut être sur plusieurs
+        lignes (panier, prix libre) : la première ligne trouvée peut être déjà toute
+        rendue.
+        / This payment's line of the ticket's PriceSold that still has something to give
+        back; None if none.
+        """
+        lignes_du_tarif_vendu = paiement.lignearticles.filter(
+            pricesold=ticket.pricesold,
+            status__in=[LigneArticle.PAID, LigneArticle.VALID],
+        ).order_by("datetime", "pk")
+        for ligne in lignes_du_tarif_vendu:
+            if self._quantite_pas_encore_rendue(ligne) > 0:
+                return ligne
+        return None
+
     @atomic
     def cancel_and_refund_resa(self, annulation_par_l_admin=False, moyen_rembourse=None):
         """
@@ -3092,7 +3172,11 @@ class Reservation(models.Model):
         LOCALISATION : BaseBillet/models.py
 
         FLUX :
-        1. Payée par Stripe : remboursement des billets encore actifs
+        0. La réservation et ses billets sont verrouillés (`select_for_update`) et
+           relus : une seconde demande simultanée attend, puis voit la réservation
+           annulée et est refusée.
+        1. Payée par Stripe : remboursement des billets encore actifs, RÉPARTIS entre
+           les lignes du même tarif vendu (`_poser_les_quantites_a_rendre_des_lignes_stripe`)
            (partial_refund_payment écrit sa vente AVOIR, lignes REFUNDED).
         2. Vente hors Stripe (espèces, chèque…) :
            - par l'ADMIN : un avoir par ligne, de la quantité pas encore créditée
@@ -3121,6 +3205,15 @@ class Reservation(models.Model):
             ligne_entierement_offerte,
         )
 
+        # 0. Verrou puis relecture : la réservation, puis ses billets (toujours dans cet
+        # ordre, comme `cancel_and_refund_ticket`). L'objet reçu peut être périmé : une
+        # autre demande a pu annuler entre-temps. Le statut relu fait foi.
+        # / 0. Lock then read again: the reservation, then its tickets (always in this
+        # order). The object may be stale: the status read again decides.
+        Reservation.objects.select_for_update().get(pk=self.pk)
+        list(Ticket.objects.select_for_update().filter(reservation_id=self.pk))
+        self.refresh_from_db()
+
         if self.status == Reservation.CANCELED:
             raise Exception(_("This reservation has already been canceled."))
 
@@ -3131,6 +3224,10 @@ class Reservation(models.Model):
         montant_paye_par_stripe = self._montant_paye_par_stripe()
         remboursement_stripe_effectue = False
         avoir_hors_stripe_ecrit = False
+        # Par tarif vendu : les billets actifs déjà donnés à rendre aux lignes Stripe
+        # précédentes (le même tarif vendu peut être sur plusieurs lignes).
+        # / Per PriceSold: active tickets already given to previous Stripe lines.
+        billets_actifs_deja_repartis_par_tarif_vendu = {}
 
         # 1) Remboursement Stripe, avec ou sans panier
         # / Stripe refund, with or without cart
@@ -3145,10 +3242,11 @@ class Reservation(models.Model):
                 paiement = self.lignearticles.first().paiement_stripe
                 lignes = self.lignearticles.filter(status__in=[LigneArticle.VALID, LigneArticle.PAID])
 
-                # Pour chaque ligne récupère le nombre de ticket valid, pour ne pas remboursé des tickets qui l'aurait déjà été
-                for ligne in lignes:
-                    valid_ticket = self.tickets.filter(status__in=[Ticket.NOT_SCANNED,Ticket.SCANNED],pricesold=ligne.pricesold)
-                    ligne.to_refund_qty = valid_ticket.count()
+                # Chaque ligne reçoit sa part des billets actifs de son tarif vendu.
+                # / Each line gets its share of its PriceSold's active tickets.
+                self._poser_les_quantites_a_rendre_des_lignes_stripe(
+                    lignes, billets_actifs_deja_repartis_par_tarif_vendu
+                )
 
                 # Appel la fonction helper pour gérer le refund
                 partial_refund_payment(paiement, config, lignes)
@@ -3165,9 +3263,11 @@ class Reservation(models.Model):
                                                                   ]):
 
                     lignes = paiement.lignearticles.filter(status__in=[LigneArticle.VALID, LigneArticle.PAID])
-                    for ligne in lignes:
-                        valid_ticket = self.tickets.filter(status__in=[Ticket.NOT_SCANNED,Ticket.SCANNED],pricesold=ligne.pricesold)
-                        ligne.to_refund_qty = valid_ticket.count()
+                    # Chaque ligne reçoit sa part des billets actifs de son tarif vendu.
+                    # / Each line gets its share of its PriceSold's active tickets.
+                    self._poser_les_quantites_a_rendre_des_lignes_stripe(
+                        lignes, billets_actifs_deja_repartis_par_tarif_vendu
+                    )
 
                     partial_refund_payment(paiement, config, lignes)
                     remboursement_stripe_effectue = True
@@ -3262,7 +3362,11 @@ class Reservation(models.Model):
         LOCALISATION : BaseBillet/models.py
 
         FLUX :
-        1. Payé par Stripe : remboursement Stripe du prix d'un billet
+        0. La réservation puis le billet sont verrouillés (`select_for_update`) et
+           relus : une seconde demande simultanée pour le même billet attend, puis voit
+           le billet annulé et est refusée, avant tout remboursement.
+        1. Payé par Stripe : remboursement Stripe du prix d'un billet, sur une ligne de
+           son tarif vendu qui a ENCORE une quantité à rendre
            (partial_refund_payment écrit sa vente AVOIR, ligne REFUNDED).
         2. Sinon, vente hors Stripe (espèces, chèque…) :
            - par l'ADMIN : avoir d'UN billet sur la ligne de la réservation
@@ -3291,6 +3395,18 @@ class Reservation(models.Model):
             ligne_entierement_offerte,
         )
 
+        # 0. Verrou puis relecture : la réservation, puis le billet (toujours dans cet
+        # ordre, comme `cancel_and_refund_resa`). Les objets reçus peuvent être périmés :
+        # une autre demande (autre onglet, l'admin) a pu annuler ce billet entre-temps.
+        # Sans ce verrou, les deux demandes voient le billet actif et le remboursent
+        # deux fois. Le statut relu fait foi.
+        # / 0. Lock then read again: the reservation, then the ticket. The objects may be
+        # stale; without this lock two requests would refund the same ticket twice.
+        Reservation.objects.select_for_update().get(pk=self.pk)
+        Ticket.objects.select_for_update().get(pk=ticket.pk)
+        self.refresh_from_db()
+        ticket.refresh_from_db()
+
         # Garde-fous / Basic guards
         if ticket.status == Ticket.CANCELED:
             raise Exception(_("This ticket has already been canceled."))
@@ -3311,10 +3427,9 @@ class Reservation(models.Model):
 
             if self.commande and self.lignearticles:
                 paiement = self.lignearticles.first().paiement_stripe
-                ligne = paiement.lignearticles.filter(
-                    pricesold=ticket.pricesold,
-                    status__in=[LigneArticle.PAID, LigneArticle.VALID]
-                ).first()
+                ligne = self._ligne_stripe_du_billet_avec_une_quantite_a_rendre(
+                    paiement, ticket
+                )
                 if not ligne:
                     raise Exception(_("Ticket does not have a matching LigneArticle."))
 
@@ -3335,10 +3450,9 @@ class Reservation(models.Model):
                                                                   ]):
 
 
-                    ligne = paiement.lignearticles.filter(
-                        pricesold=ticket.pricesold,
-                        status__in=[LigneArticle.PAID, LigneArticle.VALID]
-                    ).first()
+                    ligne = self._ligne_stripe_du_billet_avec_une_quantite_a_rendre(
+                        paiement, ticket
+                    )
                     if not ligne:
                         raise Exception(_("Ticket does not have a matching LigneArticle."))
 

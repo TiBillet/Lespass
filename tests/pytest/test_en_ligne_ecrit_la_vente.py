@@ -61,8 +61,12 @@ LE RENOUVELLEMENT D'ABONNEMENT
 La ligne de l'échéance est écrite dans une vente ouverte avec elle, au prix unitaire de
 Stripe et à la quantité de la ligne de facture : son total catalogue vaut le total de la
 facture. Le paiement de l'échéance porte la vente.
+Le webhook `invoice.paid` relit l'adhésion sous verrou avant de comparer la facture à
+`last_stripe_invoice` : la même facture envoyée deux fois (rejeu, envois simultanés)
+ne crée qu'un paiement et qu'une vente.
 / Subscription renewal: the instalment line is written in a sale opened with it, at
-Stripe's unit price and the invoice line quantity.
+Stripe's unit price and the invoice line quantity. The membership is read under lock:
+the same invoice posted twice makes one payment and one sale.
 
 LE MONTANT ENCAISSÉ
 Quand Stripe confirme le paiement, le montant qu'il annonce (en centimes) est rangé dans
@@ -90,7 +94,9 @@ de `set_ligne_article_paid` appelle `encaisser_vente_stripe(paiement)` :
 - un paiement sans vente (antérieur au chantier) n'encaisse rien, sans erreur.
 Stripe dit « non » : `CANCELED` (aucun paiement requis) ou SEPA refusé → vente ANNULEE,
 sans numéro. Une erreur d'annulation ne sort pas non plus du `pre_save` (T4) : elle est
-journalisée, le paiement passe CANCELED, la vente reste telle quelle. Une session expirée
+journalisée, le paiement passe CANCELED, la vente reste telle quelle. Pour le SEPA
+refusé, une erreur d'annulation ne sort pas du webhook : elle est journalisée, le
+paiement passe « échoué », l'adhésion est réarmée. Une session expirée
 ne change rien : la vente reste EN_ATTENTE (T6), et un paiement tardif (`EXPIRE → PAID`)
 l'encaisse.
 / Settlement at the single point: REGLEE, one payment at the collected amount, gap item
@@ -125,7 +131,9 @@ CODE PARCOURU / CODE EXERCISED
 - tests/pytest/conftest.py — la fixture `mock_stripe` (montants renvoyés par Stripe).
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-D-en-ligne-avoirs.md (§1,
-§2.1, §2.2, §2.3, §3 voies gratuites, §5 tests 1 à 10, 14 et 15, trous T4, T5, T6, T16).
+§2.1, §2.2, §2.3, §3 voies gratuites, §5 tests 1 à 10, 14 et 15, trous T4, T5, T6, T16) ;
+CHANTIER-05-SUIVI.md §4 (grandes relectures de la fiche D) ; brief
+CHANTIER-05-briefs/05-D-4a.md.
 
 Lancer / Run : make test ARGS="tests/pytest/test_en_ligne_ecrit_la_vente.py"
 """
@@ -133,6 +141,7 @@ Lancer / Run : make test ARGS="tests/pytest/test_en_ligne_ecrit_la_vente.py"
 import json
 import logging
 import time
+from contextlib import contextmanager
 from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -140,6 +149,7 @@ from unittest.mock import patch
 
 import pytest
 import stripe
+from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 from django_tenants.utils import tenant_context
@@ -181,6 +191,7 @@ from fabriques_panier import (
     creer_un_billet_deja_vendu,
     creer_utilisateur,
     identifiant_unique,
+    noms_des_taches,
     requete_avec_session,
     taches_celery_enregistrees,
 )
@@ -1513,23 +1524,53 @@ def envoyer_la_facture_payee(
     lieu. La facture relue chez Stripe annonce `montant_paye` centimes (`amount_paid`).
     Le webhook crée le paiement de l'échéance, puis le constate payé par la branche
     `INVOICE`.
-    La facture est patchée ici, et non prise dans `mock_stripe` : la création du
-    paiement de l'échéance lit aussi ses lignes et son abonnement.
     / Stripe charges an instalment and posts `invoice.paid`; the invoice announces
-    `montant_paye` cents. Patched here: the instalment creation also reads its lines.
+    `montant_paye` cents.
 
     :param ligne_de_facture: la ligne de la facture (`ligne_de_facture_simulee`) ; None =
         une ligne de 15 €, quantité 1
     :return: le `Paiement_stripe` de l'échéance, relu en base
+    """
+    identifiant_de_la_nouvelle_facture = f"in_test_{identifiant_unique()}"
+    reponse_du_webhook = poster_la_facture_payee(
+        lieu,
+        adhesion_abonnee,
+        identifiant_de_la_nouvelle_facture,
+        montant_paye,
+        ligne_de_facture,
+    )
+
+    assert reponse_du_webhook.status_code == 202
+    return Paiement_stripe.objects.get(invoice_stripe=identifiant_de_la_nouvelle_facture)
+
+
+def poster_la_facture_payee(
+    lieu,
+    adhesion_abonnee,
+    identifiant_de_la_facture,
+    montant_paye,
+    ligne_de_facture=None,
+):
+    """
+    Envoie au webhook du lieu l'événement `invoice.paid` de la facture
+    `identifiant_de_la_facture` (une échéance de l'abonnement). Rejouer la même facture :
+    rappeler avec le même identifiant, comme Stripe qui renvoie un événement.
+    La facture est patchée ici, et non prise dans `mock_stripe` : la création du
+    paiement de l'échéance lit aussi ses lignes et son abonnement.
+    / Posts the `invoice.paid` event of that invoice to the venue webhook. Same id =
+    Stripe replaying the event. Patched here: the instalment creation reads its lines.
+
+    :param ligne_de_facture: la ligne de la facture (`ligne_de_facture_simulee`) ; None =
+        une ligne de 15 €, quantité 1
+    :return: la réponse du webhook
     """
     if ligne_de_facture is None:
         ligne_de_facture = ligne_de_facture_simulee(
             total_de_la_ligne=1500, quantite=1, prix_unitaire_decimal="1500"
         )
 
-    identifiant_de_la_nouvelle_facture = f"in_test_{identifiant_unique()}"
     facture_stripe_simulee = SimpleNamespace(
-        id=identifiant_de_la_nouvelle_facture,
+        id=identifiant_de_la_facture,
         status="paid",
         amount_paid=montant_paye,
         lines={"data": [ligne_de_facture]},
@@ -1540,7 +1581,7 @@ def envoyer_la_facture_payee(
         ),
     )
     evenement_facture_payee = {
-        "id": identifiant_de_la_nouvelle_facture,
+        "id": identifiant_de_la_facture,
         "billing_reason": "subscription_cycle",
         "paid": True,
         "subscription": adhesion_abonnee.stripe_id_subscription,
@@ -1558,9 +1599,7 @@ def envoyer_la_facture_payee(
         reponse_du_webhook = envoyer_un_evenement_stripe(
             "invoice.paid", evenement_facture_payee
         )
-
-    assert reponse_du_webhook.status_code == 202
-    return Paiement_stripe.objects.get(invoice_stripe=identifiant_de_la_nouvelle_facture)
+    return reponse_du_webhook
 
 
 def test_facture_payee_pose_le_montant_encaisse(lieu):
@@ -1622,6 +1661,9 @@ NOM_ECART_RECU_EN_MOINS = "Écart d'encaissement — reçu en moins"
 # / Logger of the settlement call site, and logger of the sale service.
 JOURNAL_DU_POINT_D_ENCAISSEMENT = "BaseBillet.signals"
 JOURNAL_DU_SERVICE_DE_VENTE = "BaseBillet.services_vente"
+# Le journal du webhook Stripe (ApiBillet/views.py).
+# / The Stripe webhook logger.
+JOURNAL_DU_WEBHOOK_STRIPE = "ApiBillet.views"
 
 
 def reserver_des_billets_a_payer(lieu):
@@ -2106,6 +2148,110 @@ def test_abonnement_quantite_2_encaisse_par_la_branche_invoice(lieu):
     verifier_egalites(vente)
 
 
+@contextmanager
+def requetes_sql_relevees():
+    """
+    Relève le texte SQL de chaque requête faite dans le bloc, dans l'ordre (paramètres
+    à part, sous la forme `%s`). Passe aussi par les requêtes faites pendant une requête
+    HTTP du client de test.
+    / Records the SQL text of every query run in the block, in order (parameters left
+    out as `%s`), including those run during a test client HTTP request.
+
+    `CaptureQueriesContext` ne convient pas ici : chaque requête HTTP vide le journal
+    des requêtes de la connexion (signal `request_started` → `reset_queries`).
+    / CaptureQueriesContext does not fit: each HTTP request empties the query log.
+
+    :return: la liste des textes SQL, remplie au fil du bloc
+    """
+    textes_sql = []
+
+    def relever_la_requete(executer, texte_sql, parametres, plusieurs, contexte):
+        textes_sql.append(texte_sql)
+        return executer(texte_sql, parametres, plusieurs, contexte)
+
+    with connection.execute_wrapper(relever_la_requete):
+        yield textes_sql
+
+
+def position_de_la_premiere_requete(textes_sql, morceaux_attendus):
+    """
+    La place de la première requête SQL qui contient TOUS les morceaux attendus, ou None.
+    / The position of the first SQL query holding ALL the expected pieces, or None.
+    """
+    for position, texte_sql in enumerate(textes_sql):
+        tous_les_morceaux_presents = True
+        for morceau in morceaux_attendus:
+            if morceau not in texte_sql:
+                tous_les_morceaux_presents = False
+        if tous_les_morceaux_presents:
+            return position
+    return None
+
+
+def test_renouvellement_d_abonnement_rejoue_une_seule_vente(lieu):
+    """
+    Stripe envoie DEUX fois `invoice.paid` pour la même échéance d'un abonnement (rejeu,
+    ou deux envois simultanés).
+    - Le premier envoi relit l'adhésion sous verrou (`SELECT … FOR UPDATE`) AVANT de
+      comparer la facture à `last_stripe_invoice` et de créer le paiement de
+      l'échéance : deux envois simultanés passent l'un après l'autre, le second voit la
+      facture déjà comptée. Une seule connexion ne peut pas faire attendre le second
+      envoi : on vérifie la place du verrou parmi les requêtes SQL.
+    - Au total : UN paiement pour cette facture, UNE vente, UNE ligne de plus pour
+      l'adhésion.
+    / Stripe posts `invoice.paid` twice for the same instalment. The membership is read
+    under lock BEFORE the invoice check and the payment creation (checked on the SQL
+    queries). One payment, one sale, one more line.
+    """
+    abonne = creer_utilisateur()
+    adhesion_abonnee = creer_un_abonnement_en_cours(abonne)
+    nombre_de_lignes_de_l_adhesion_avant = LigneArticle.objects.filter(
+        membership=adhesion_abonnee
+    ).count()
+    identifiant_de_la_facture = f"in_test_{identifiant_unique()}"
+
+    with requetes_sql_relevees() as requetes_du_premier_envoi:
+        reponse_du_premier_envoi = poster_la_facture_payee(
+            lieu, adhesion_abonnee, identifiant_de_la_facture, montant_paye=1500
+        )
+    reponse_du_second_envoi = poster_la_facture_payee(
+        lieu, adhesion_abonnee, identifiant_de_la_facture, montant_paye=1500
+    )
+
+    assert reponse_du_premier_envoi.status_code == 202
+    assert reponse_du_second_envoi.status_code != 202
+
+    paiements_de_la_facture = Paiement_stripe.objects.filter(
+        invoice_stripe=identifiant_de_la_facture
+    )
+    assert paiements_de_la_facture.count() == 1
+    assert (
+        Vente.objects.filter(
+            paiements_stripe__invoice_stripe=identifiant_de_la_facture
+        ).count()
+        == 1
+    )
+    assert (
+        LigneArticle.objects.filter(membership=adhesion_abonnee).count()
+        == nombre_de_lignes_de_l_adhesion_avant + 1
+    )
+
+    position_du_verrou_sur_l_adhesion = position_de_la_premiere_requete(
+        requetes_du_premier_envoi, ['FROM "BaseBillet_membership"', "FOR UPDATE"]
+    )
+    position_de_la_creation_du_paiement = position_de_la_premiere_requete(
+        requetes_du_premier_envoi, ['INSERT INTO "BaseBillet_paiement_stripe"']
+    )
+    assert position_de_la_creation_du_paiement is not None
+    assert position_du_verrou_sur_l_adhesion is not None, (
+        "L'adhésion n'est pas lue sous verrou (SELECT … FOR UPDATE) par la branche "
+        "invoice.paid."
+    )
+    assert position_du_verrou_sur_l_adhesion < position_de_la_creation_du_paiement, (
+        "L'adhésion est verrouillée APRÈS la création du paiement de l'échéance."
+    )
+
+
 # --------------------------------------------------------------------------
 # T4 : une erreur d'encaissement ne sort jamais du pre_save
 # / T4: a settlement error never leaves the pre_save
@@ -2260,6 +2406,52 @@ def test_sepa_refuse_vente_annulee(lieu):
     assert vente.statut == Vente.Statut.ANNULEE
     assert vente.numero is None
     assert vente.reglements.count() == 0
+
+
+def test_sepa_refuse_annulation_en_echec_ne_bloque_pas(lieu, caplog):
+    """
+    T5, avec une annulation qui échoue. Une adhésion validée par l'admin (20 €) est
+    payée par prélèvement SEPA, puis Stripe annonce le refus
+    (`checkout.session.async_payment_failed`). L'annulation de la vente échoue (simulé :
+    `annuler_vente` lève, comme pour une vente devenue REGLEE entre-temps).
+    Comme pour `CANCELED` (BaseBillet/signals.py), l'erreur ne sort pas du webhook :
+    - le webhook répond 200 ; le paiement est « échoué » ;
+    - l'adhésion est réarmée (« validée par l'admin ») et le mail « paiement refusé »
+      est demandé ;
+    - la vente reste telle quelle (EN_ATTENTE, sans numéro, sans règlement) ;
+    - l'erreur est journalisée (ERROR) dans `ApiBillet.views`.
+    / T5 with a failing cancellation: the error never leaves the webhook (200), the
+    payment fails, the membership is rearmed, the refused mail is asked, the sale stays
+    as is, the error is logged.
+    """
+    adhesion_validee = preparer_une_adhesion_validee_par_l_admin()
+    prelevement = soumettre_un_prelevement_sepa(lieu, adhesion_validee)
+    assert vente_du_paiement(prelevement.paiement).statut == Vente.Statut.EN_ATTENTE
+    lieu.taches_demandees.clear()
+    caplog.clear()
+
+    erreur_simulee = ValueError("Annulation de la vente refusée, simulée par le test.")
+    with caplog.at_level(logging.ERROR, logger=JOURNAL_DU_WEBHOOK_STRIPE):
+        with patch(
+            "BaseBillet.services_vente.annuler_vente", side_effect=erreur_simulee
+        ):
+            reponse_du_webhook = envoyer_un_evenement_stripe(
+                "checkout.session.async_payment_failed",
+                objet_session_de_paiement(lieu, prelevement.identifiant_de_session),
+            )
+
+    assert reponse_du_webhook.status_code == 200
+    prelevement.paiement.refresh_from_db()
+    assert prelevement.paiement.status == Paiement_stripe.FAILED
+    adhesion_validee.refresh_from_db()
+    assert adhesion_validee.status == Membership.ADMIN_VALID
+    assert "send_payment_refused_user" in noms_des_taches(lieu.taches_demandees)
+
+    vente = vente_du_paiement(prelevement.paiement)
+    assert vente.statut == Vente.Statut.EN_ATTENTE
+    assert vente.numero is None
+    assert vente.reglements.count() == 0
+    assert len(erreurs_du_journal(caplog, JOURNAL_DU_WEBHOOK_STRIPE)) >= 1
 
 
 def test_panier_abandonne_reste_en_attente_sans_numero(lieu):

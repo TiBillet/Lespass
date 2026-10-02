@@ -10,7 +10,7 @@ Online Stripe sales, sales without Stripe (admin, API) and credit notes go throu
 **Pourquoi / Why :** chantier 05 « montants entiers » : toute vente écrit son argent en centimes entiers, une seule fois, dans une `Vente` chaînée. /
 Worksite 05 "whole amounts": every sale writes its money once, in whole cents, in a chained `Vente`.
 
-Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2), D-3b (le remboursement Stripe écrit sa vente AVOIR), D-3c-1 (annulations de réservation et de billet), D-3c-2 (annulation d'adhésion, D30), D-3z (corrections de la relecture de D-3 : double avoir, double remboursement Stripe, billets de caisse), puis le tableau des mutations jouées. / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z, D-3b, D-3c-1, D-3c-2, D-3z, then the table of the mutations played.
+Sections ci-dessous : D-1a (les producteurs Stripe directs ouvrent la vente), D-1b (panier et renouvellement d'abonnement), D-1c-0 (tests Stripe sans ménage), D-1c-1 (montant encaissé), D-1c-2 (encaissement de la vente, écart d'encaissement), D-1c-3 (tests du rapport comptable), D-2a (voies gratuites encaissées à 0), D-2b (ventes faites dans l'admin), D-2c (API et ancienne caisse), D-3a (avoir admin et écran « Remboursé par »), D-1z (corrections de la relecture de D-1 et D-2), D-3b (le remboursement Stripe écrit sa vente AVOIR), D-3c-1 (annulations de réservation et de billet), D-3c-2 (annulation d'adhésion, D30), D-3z (corrections de la relecture de D-3 : double avoir, double remboursement Stripe, billets de caisse), D-4a (corrections de la grande relecture de la fiche D ; plus aucun avoir admin envoyé à LaBoutik V1), puis le tableau des mutations jouées. / Sections below: D-1a, D-1b, D-1c-0, D-1c-1, D-1c-2, D-1c-3, D-2a, D-2b, D-2c, D-3a, D-1z, D-3b, D-3c-1, D-3c-2, D-3z, D-4a, then the table of the mutations played.
 
 ## D-1a — Les producteurs Stripe directs ouvrent leur vente / Direct Stripe producers open their sale
 
@@ -453,6 +453,70 @@ Fable review of D-3 and the D-3z technical decisions.
 | `tests/pytest/test_avoirs_ecrivent_la_vente.py` | 8 tests : double avoir refusé ; double remboursement refusé avant Stripe ; nouvel essai = même clé ; second remboursement = clé nouvelle ; tous les billets d'une réservation de caisse ; un billet de caisse ; deux lignes du même tarif, un billet actif ; client qui annule un billet de caisse (D31) |
 | `tests/pytest/test_stripe_refund.py` | appel au paramètre renommé |
 
+## D-4a — Corrections de la grande relecture de la fiche D : remboursements simultanés, LaBoutik V1, écart, abonnement / Sheet D full review fixes: simultaneous refunds, LaBoutik V1, gap, subscription
+
+**Migration :** Non — **Chaînes i18n :** aucune nouvelle (messages techniques en français, sans `_()`, comme en D-3z).
+
+### Resume / Summary
+**Quoi / What :**
+- **Un billet n'est jamais rendu deux fois** : `cancel_and_refund_ticket` et `cancel_and_refund_resa` (`BaseBillet/models.py`) verrouillent la réservation puis le(s) billet(s) (`select_for_update`, toujours dans cet ordre) et les relisent avant tout remboursement. Deux demandes simultanées pour le même billet (deux onglets, le client et l'admin) : la seconde voit le billet annulé et est refusée, avant Stripe. /
+  Reservation then ticket(s) locked and read again: a second simultaneous request is refused before Stripe.
+- **`n` compté sous le verrou du paiement** : `partial_refund_payment` (`PaiementStripe/utils.py`) verrouille le `Paiement_stripe` en premier. Deux remboursements du même paiement passent l'un après l'autre ; le second lit `n` + 1 (clé d'idempotence nouvelle). /
+  The Stripe payment is locked first: the second refund reads n + 1.
+- **Changement de comportement — LaBoutik V1** : aucun avoir fait dans l'admin (origine ADMIN : bouton « Avoir », annulations admin, annulation d'adhésion) n'est plus envoyé à l'ancien LaBoutik (`ligne_article_credit_note`, `BaseBillet/signals.py`). Les ventes admin n'y partent pas : leurs avoirs non plus (décision du mainteneur, 2026-10-02). Les remboursements Stripe (REFUNDED, origine LESPASS) y partent toujours. La branche d'envoi des CREDIT_NOTE reste pour un futur producteur d'une autre origine. /
+  Behaviour change: admin credit notes are no longer sent to legacy LaBoutik V1; Stripe refunds still are.
+- **Envoi après la validation** : `send_refund_to_laboutik` part par `transaction.on_commit` (le worker trouve la ligne écrite ; une transaction annulée n'envoie rien). `send_sale_to_laboutik` passait déjà par `on_commit` (`BaseBillet/triggers.py`). /
+  `send_refund_to_laboutik` is sent after commit.
+- **Deux lignes du même tarif vendu** (panier, deux billets à prix libre au même montant) : l'annulation Stripe d'une réservation répartit les billets actifs entre les lignes (`_poser_les_quantites_a_rendre_des_lignes_stripe`) ; l'annulation d'un billet prend une ligne qui a encore une quantité à rendre (`_ligne_stripe_du_billet_avec_une_quantite_a_rendre`). Avant, l'annulation était refusée. /
+  Active tickets are spread between lines of the same PriceSold; a single ticket uses a line with something left.
+- **Écart « reçu en moins »** : le montant demandé à Stripe est plafonné à ce qu'il détient encore pour le paiement (`montant_encaisse` moins les remboursements déjà écrits) ; la différence avec les articles devient l'article d'écart (D26). Paiement sans `montant_encaisse` (antérieur au chantier) : pas de plafond. /
+  The Stripe refund is capped at what Stripe still holds; the difference becomes the gap item.
+- **Renouvellement d'abonnement compté une fois** : la branche `invoice.paid` (`ApiBillet/views.py`) relit l'adhésion sous verrou (`select_for_update(of=("self",))`), dans une transaction, avant le contrôle `last_stripe_invoice`. /
+  The membership is locked before the invoice check: two simultaneous invoice.paid make one payment.
+- **SEPA refusé** : `annuler_vente` dans un `try / except` + `logger.error`, comme `CANCELED` : le webhook répond 200, l'adhésion est réarmée, le mail part. /
+  A failed sale cancellation no longer breaks the refused SEPA webhook.
+- `partial_refund_payment` : refus de Stripe (`InvalidRequestError`) → `ValueError` avec un message en français (les appelants attrapent `Exception`). /
+  Stripe refusal raises ValueError (French message).
+
+**Pourquoi / Why :** grandes relectures Opus et Fable de toute la fiche D (SUIVI §4, constats Opus 1, 2, 3, 4, 6, 7, 9, 11 ; Fable 4, 6) et décision LaBoutik V1 du mainteneur (SUIVI §5, 2026-10-02). /
+Full Opus and Fable reviews of sheet D, and the maintainer's LaBoutik V1 decision.
+
+**Tests changés (raison) :**
+- `tests/pytest/test_caracterisation_annulations.py` — la liste fermée de A′ est élargie par décision du mainteneur (2026-10-02, LaBoutik V1). Seules les assertions qui figeaient l'envoi d'un avoir admin à l'ancien LaBoutik changent (tâche `send_refund_to_laboutik` retirée, charges utiles CREDIT_NOTE → aucune) : `test_annuler_un_billet_caisse_offert_cree_un_avoir`, `test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement`, `test_avoirs_admin_et_annulation_adhesion_n_appellent_pas_stripe`. Le reste de leurs assertions ne change pas. /
+  Closed A′ list widened by the maintainer: only the admin credit note LaBoutik assertions change.
+- `tests/pytest/test_caracterisation_annulations.py` — `test_annuler_un_billet_stripe_rembourse_un_billet` (P5) : **ordre seulement** (décision technique de l'orchestrateur). L'envoi à LaBoutik part après la validation de la transaction (`on_commit`), donc après le mail demandé par la vue : `["send_ticket_cancellation_user", "send_refund_to_laboutik"]`. Mêmes tâches, même charge utile. /
+  P5: task order only (the LaBoutik sending now runs after commit).
+- `tests/pytest/test_avoirs_ecrivent_la_vente.py` : la fixture `lieu` simule `Refund.create` par `rembourser_comme_stripe` (plus de `MagicMock`) ; aucune assertion ne change. /
+  Fixture refund simulated like Stripe; no assertion changed.
+- `tests/pytest/test_en_ligne_ecrit_la_vente.py` : `envoyer_la_facture_payee` appelle `poster_la_facture_payee` (même comportement), pour rejouer une même facture. /
+  Invoice helper split to replay one invoice.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | verrou et relecture réservation / billets dans `cancel_and_refund_resa` et `cancel_and_refund_ticket` ; `_quantite_pas_encore_rendue`, `_poser_les_quantites_a_rendre_des_lignes_stripe`, `_ligne_stripe_du_billet_avec_une_quantite_a_rendre` (nouveaux) |
+| `PaiementStripe/utils.py` | verrou du paiement en premier ; plafond « encaissé » ; journal d'écart sans remboursement ; `ValueError` en français |
+| `BaseBillet/signals.py` | avoir ADMIN non envoyé à LaBoutik V1 ; `send_refund_to_laboutik` en `on_commit` |
+| `ApiBillet/views.py` | adhésion sous verrou dans une transaction (`invoice.paid`) ; `try` autour de `annuler_vente` (SEPA refusé) |
+| `tests/pytest/test_avoirs_ecrivent_la_vente.py` | 8 tests (billet déjà annulé par une autre demande + verrou du billet ; réservation déjà annulée par une autre demande + verrou de la réservation ; `n` sous verrou du paiement ; avoir admin non envoyé ; remboursement Stripe toujours envoyé ; envoi après la transaction ; deux lignes du même tarif vendu ×2 ; écart « reçu en moins ») ; fixture `lieu` |
+| `tests/pytest/test_en_ligne_ecrit_la_vente.py` | 2 tests (renouvellement rejoué, verrou de l'adhésion ; SEPA refusé avec annulation en échec) ; `poster_la_facture_payee`, `requetes_sql_relevees`, `position_de_la_premiere_requete` |
+| `tests/pytest/test_caracterisation_annulations.py` | 3 tests : envoi des avoirs admin à LaBoutik retiré (décision du mainteneur) ; P5 : ordre des tâches seulement |
+
+### Mutations (non jouées par l'ouvrier) / Mutations (not played by the worker)
+| Mutation | Fichier:ligne | Test attendu en échec |
+|---|---|---|
+| relecture du billet retirée | `BaseBillet/models.py` l.3401 (`ticket.refresh_from_db()`) | `test_annulation_d_un_billet_deja_annule_par_une_autre_demande_refusee` (DID NOT RAISE) |
+| verrou du billet retiré | `BaseBillet/models.py` l.3399 | idem (verrou absent avant Stripe) |
+| verrou de la réservation retiré | `BaseBillet/models.py` l.3206 | `test_annulation_d_une_reservation_deja_annulee_par_une_autre_demande_refusee` (verrou absent avant Stripe) |
+| relecture de la réservation retirée | `BaseBillet/models.py` l.3208 (`self.refresh_from_db()`) | idem (DID NOT RAISE) |
+| verrou du paiement retiré | `PaiementStripe/utils.py` l.145 (`.select_for_update()` ôté) | `test_remboursement_compte_n_sous_verrou_du_paiement` |
+| avoir admin envoyé | `BaseBillet/signals.py` l.237 (`if avoir_fait_dans_l_admin:` → `if False:`) | `test_avoir_admin_n_est_pas_envoye_a_laboutik` + les 3 tests A′ changés |
+| répartition entre lignes retirée | `BaseBillet/models.py` l.3131 (`quantite_a_rendre` = billets actifs du tarif vendu) ; l.3155 (`> 0` ôté) | `test_annulation_stripe_deux_lignes_du_meme_tarif_vendu[toute_la_reservation]` ; `[billet_par_billet]` |
+| plafond « encaissé » retiré | `PaiementStripe/utils.py` l.218 | `test_remboursement_apres_ecart_recu_en_moins_demande_au_plus_l_encaisse` |
+| `on_commit` retiré | `BaseBillet/signals.py` l.217 | `test_avoir_envoye_a_laboutik_apres_la_transaction` ; P5 (ordre des tâches) |
+| verrou de l'adhésion retiré | `ApiBillet/views.py` l.1460 | `test_renouvellement_d_abonnement_rejoue_une_seule_vente` |
+| `try` du SEPA retiré | `ApiBillet/views.py` l.1310-1316 | `test_sepa_refuse_annulation_en_echec_ne_bloque_pas` |
+
 ### Mutations jouées / Mutations played
 Une ligne par session de la fiche D. Recopié du SUIVI §3 (colonne des mutations). /
 One row per session of sheet D, copied from SUIVI §3.
@@ -704,3 +768,21 @@ Pas de test à la main : l'échec d'encaissement ne se provoque pas sans simulat
 
 ### Verifs automatiques (D-3z)
 `make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_stripe_refund.py tests/pytest/test_caracterisation_annulations.py"` ; une fois, vrai Stripe : `make test ARGS="tests/pytest/test_stripe_reel_remboursement.py"` ; E2E seuls : `make e2e ARGS="tests/e2e/test_admin_credit_note.py"`, `test_admin_reservation_cancel.py`, `test_admin_cancel_membership.py`.
+
+### Test 31 (D-4a) — un avoir admin ne part plus à LaBoutik V1
+1. Admin > Réservations > « Ajouter » : un billet à 10 €, moyen « Carte bancaire ». Admin > Ventes : bouton « Avoir » sur la ligne, « Remboursé par : espèces ».
+2. Attendu : la vente `AVOIR` est écrite (origine `AD`) ; dans les journaux Celery, **aucune** tâche `send_refund_to_laboutik` ; côté LaBoutik V1, aucun « −10 € » n'arrive.
+3. Contre-épreuve : annuler depuis « Mon compte » un billet payé par Stripe : une tâche `send_refund_to_laboutik` part, après la fin de la requête.
+
+### Test 32 (D-4a) — deux billets à prix libre au même montant
+1. Un événement avec un tarif à prix libre. Au panier, ajouter deux fois ce billet en saisissant 12 € les deux fois ; payer avec la carte de test.
+2. « Mon compte » : annuler UN billet, puis l'autre (ou toute la réservation).
+3. Attendu : chaque annulation passe ; Stripe rembourse 12 € par billet (24 € pour la réservation entière) ; chaque ligne de vente a un seul remboursement `(-1)`.
+
+### Test 33 (D-4a) — deux onglets, le même billet
+1. Acheter deux billets en ligne. Ouvrir « Mon compte » dans deux onglets.
+2. Annuler le même billet dans le premier onglet, puis dans le second.
+3. Attendu : le second est refusé (« This ticket has already been canceled. ») ; un seul remboursement dans le tableau de bord Stripe.
+
+### Verifs automatiques (D-4a)
+`make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py tests/pytest/test_en_ligne_ecrit_la_vente.py tests/pytest/test_caracterisation_annulations.py tests/pytest/test_stripe_refund.py booking/tests"` ; une fois, vrai Stripe : `make test ARGS="tests/pytest/test_stripe_reel_remboursement.py"` ; E2E seuls : `test_admin_credit_note.py`, `test_admin_reservation_cancel.py`, `test_admin_cancel_membership.py`.

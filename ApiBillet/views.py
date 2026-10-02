@@ -8,7 +8,7 @@ import stripe
 from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
 
-from django.db import connection
+from django.db import connection, transaction
 from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.template.loader import render_to_string
@@ -1300,7 +1300,20 @@ class Webhook_stripe(APIView):
 
                 vente_du_paiement = paiement_stripe.vente
                 if vente_du_paiement is not None and vente_du_paiement.statut == Vente.Statut.EN_ATTENTE:
-                    annuler_vente(vente_du_paiement)
+                    # Aucune exception ne sort d'ici, comme pour CANCELED
+                    # (BaseBillet/signals.py `annuler_la_vente_du_paiement_stripe`) : le
+                    # paiement est déjà « échoué », l'adhésion doit être réarmée et le mail
+                    # parti. Une annulation qui échoue laisse la vente telle quelle et est
+                    # journalisée (Sentry).
+                    # / No exception leaves here (like CANCELED): a failed cancellation
+                    # leaves the sale as is and is logged.
+                    try:
+                        annuler_vente(vente_du_paiement)
+                    except Exception as erreur:
+                        logger.error(
+                            f"Annulation de la vente du paiement Stripe {paiement_stripe.uuid} "
+                            f"(SEPA refusé) en échec, vente laissée telle quelle : {erreur!r}"
+                        )
 
                 # Échec du prélèvement SEPA : on réarme les adhésions liées qui
                 # étaient "paiement soumis, en attente". On les repasse en
@@ -1432,8 +1445,19 @@ class Webhook_stripe(APIView):
                         price_uuid = metadata['price_uuid']
                         tenant = Client.objects.get(uuid=tenant_uuid)
                         logger.info(f"Webhook_stripe invoice.paid. tenant : {tenant.name}")
-                        with tenant_context(tenant):
-                            membership = Membership.objects.get(
+                        with tenant_context(tenant), transaction.atomic():
+                            # L'adhésion est relue SOUS VERROU, dans une transaction, AVANT
+                            # le contrôle `last_stripe_invoice` : deux `invoice.paid`
+                            # simultanés pour la même facture passent l'un après l'autre.
+                            # Le second attend la fin du premier, relit la facture déjà
+                            # comptée, et ne crée ni paiement ni vente.
+                            # `of=("self",)` : seule la ligne de l'adhésion est verrouillée,
+                            # pas le tarif joint par le filtre `price__uuid`.
+                            # / The membership is read UNDER LOCK, in a transaction, BEFORE
+                            # the last_stripe_invoice check: two simultaneous invoice.paid
+                            # for the same invoice run one after the other. Only the
+                            # membership row is locked, not the joined price.
+                            membership = Membership.objects.select_for_update(of=("self",)).get(
                                 uuid=membership_uuid,
                                 stripe_id_subscription=stripe_id_subscription,
                                 price__uuid=price_uuid

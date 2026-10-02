@@ -113,16 +113,23 @@ fabrique pas plus que ce que la spec demande.
 `project_chantier_montants_entiers`.**
 
 État : fiches 0, A′, A, B, C commitées ; **fiche D** : D-1 à D-3c-2 commitées (dernier
-commit `2e6d8c11`), **D-3z** (corrections de la relecture Fable de D-3 : verrou contre le
+commit `ad45d610`), **D-3z** (corrections de la relecture Fable de D-3 : verrou contre le
 double avoir, clé d'idempotence du remboursement Stripe, appariement par `Price`, bug
-n°26) prouvée, **à commiter** ; avec elle, la fiche D est terminée et relue (Fable D-1+D-2
+n°26) commitée (`ad45d610`) ; avec elle, la fiche D est terminée et relue (Fable D-1+D-2
 et D-3 : 0 bloquant). Aucun push sans le mainteneur.
 
-Suite : **fiche E** (plan comptable ; ne dépend que d'elle-même) : la relire contre le code
-avant tout brief (agent de recherche), questions FALC au mainteneur, découpage. Puis F, G,
-**R** (nouvelle, 2026-10-02 : reprise des ventes existantes de la production, après G et
-avant H ; fiche `CHANTIER-05-R-reprise-ventes.md` en PROJET, questions Q1-Q6 en attente du
-mainteneur), H.
+Grande relecture de toute la fiche D (Opus + Fable, 2026-10-02) : 0 bloquant ; corrections
+**D-4a** (verrous billet / réservation / paiement / adhésion, avoirs admin plus envoyés à
+LaBoutik V1, lignes du même tarif, plafond « encaissé », `on_commit`, SEPA) prouvée, à
+commiter ; **D-4b** (hygiène : commentaires « import local » faux dans ~12 fichiers, test de
+route pour la quantité API v2) à faire.
+
+Suite : **fiche E réécrite** (`CHANTIER-05-E-plan-comptable.md`, relue Fable, corrigée,
+toutes les questions répondues) : sessions E-1 (plan unique + règles de compte), E-2
+(écrans, « Plan complet ? »), **E-3 jetons (D8 bis : les jetons offerts soldent leur dette,
+ventes en jetons au 707900 hors TVA ; reprend du code de B, C, D)**, puis régénérer la base
+de dev. Puis F (à mettre en cohérence avec D8 bis avant de l'ouvrir), G, **R** (reprise des
+ventes existantes de la production, projet, Q1-Q7 en attente), H.
 
 Décisions récentes à connaître (SUIVI §4, §5) : D27 écran « Remboursé par » partout ;
 D30 un seul avoir d'adhésion (dernier paiement) ; D31 annulation client hors Stripe sans

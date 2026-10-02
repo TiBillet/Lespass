@@ -131,7 +131,7 @@ with transaction.atomic():
 | Paiement d'adhésion dans l'admin | `BaseBillet/views.py` `ajouter_paiement` ~l.4477 | moyen choisi |
 | Adhésion créée / renouvelée dans l'admin | `BaseBillet/signals.py` ~l.494 | moyen de l'adhésion ; **encaisser après** les déclencheurs Fedow (`trigger_A`, HTTP) |
 | Adhésion gratuite (API) | `BaseBillet/validators.py` ~l.1128-1153 | `amount` = `contribution_value`, qui peut être **non nul** avec FREE → règle « offert à montant non nul » du service (fiche A) : part offerte totale + règlement FREE. La transition `CREATED`/`PAID → PAID` du producteur (~l.1153, e-mails) est gardée |
-| Réservation API v1 | `ApiBillet/serializers.py` ~l.1185 | moyen déclaré (« payé ailleurs ») |
+| ~~Réservation API v1~~ | **Supprimée** en D-1x (route cassée, `AllowAny` ; décision du mainteneur, SUIVI §5) | — |
 | Réservation gratuite API v2 | `api_v2/serializers.py` ~l.1444-1471 | complète les lignes de `TicketCreator` : **même vente** (R5) ; `qty` castée en entier (aujourd'hui brute) ; `amount = prix` avec FREE (~l.1463) : si le prix n'est pas nul, règle « offert à montant non nul » (fiche A) |
 | Recharge cadeau API v2 | `api_v2/views.py` `_creer_ligne_article_recharge` ~l.825-900 | voir ci-dessous |
 | Webhook Fedow d'adhésion (legacy) | `fedow_connect/views.py` ~l.97 | la ligne porte `UNKNOWN` et `sale_origin=LABOUTIK` : règlement `UNKNOWN` (argent reçu par l'ancienne caisse), compte d'attente 471 (fiche E) |
@@ -146,8 +146,8 @@ totalité `OFFRIR`, règlement FREE) ; à l'échec elle **reste `EN_ATTENTE`** (
 `Vente.unite` : la monnaie créditée **seulement si c'est des points ou du temps**
 (FID / TIM, unités brutes, D16 du chantier 04) ; une monnaie libellée en euros (locale,
 cadeau, fédérée) garde `unite = EUR` — sinon le rapport (fiche F) la classerait « points »
-et l'exclurait de tout. L'idempotence passe de `LigneArticle.idempotency_key` à
-`Vente.idempotency_key` (retrait du premier en H).
+et l'exclurait de tout. L'idempotence **reste** sur `LigneArticle.idempotency_key` jusqu'à H (le verrou 409 en
+dépend ; SUIVI §4, D-2c) ; elle passe à `Vente.idempotency_key` en H.
 
 Gratuit : total 0, aucun règlement, vente numérotée (c'est une opération enregistrée).
 
@@ -159,7 +159,7 @@ Pas de vente : `BankTransferService.enregistrer_virement` (`fedow_core/services.
 | Producteur | Fichier | Règlement négatif |
 |---|---|---|
 | Annulation d'adhésion | `BaseBillet/views.py` `cancel` ~l.4593 | **un seul avoir, pour le dernier paiement** de l'adhésion (la période en cours), **pas** pour les renouvellements passés (D30 : change le comportement actuel, qui fait un avoir par ligne payée ~l.4595-4602). Règlement : ligne hors Stripe → moyen choisi (D27) ; ligne Stripe → comme l'avoir admin Stripe ci-dessous |
-| Avoir de réservation hors Stripe, **fait par l'admin** | `BaseBillet/models.py` `Reservation._creer_avoir` ~l.2971 | moyen choisi (D27) |
+| Avoir de réservation hors Stripe, **fait par l'admin** | `BaseBillet/models.py` `cancel_and_refund_resa` / `cancel_and_refund_ticket` (`annulation_par_l_admin=True`), par la fonction commune `ecrire_la_vente_d_avoir_d_une_ligne` (`Reservation._creer_avoir` retirée en D-3c-1) | moyen choisi (D27) ; seulement les billets encore actifs (mainteneur, 2026-10-01) |
 | Annulation **par l'utilisateur** d'une réservation / d'un booking payé **hors Stripe** (`BaseBillet/views.py` ~l.1413, ~l.1434 ; `booking/views.py` ~l.839) | `cancel_and_refund_resa` (`BaseBillet/models.py` ~l.2999-3087), **partagée** avec l'admin (`admin_tenant.py` ~l.3236, ~l.3426, ~l.3436) : elle reçoit `annulation_par_l_admin=False` (l'utilisateur, valeur par défaut) ; l'admin passe `annulation_par_l_admin=True` et `moyen_rembourse` (SUIVI §6, 2026-10-01, D-3c-1) | **aucun avoir, aucun remboursement** (D31) : réservation et billets passent `CANCELED`, l'argent reste acquis ; la garde actuelle « refus si payé et rien de remboursable » ne s'applique plus à ce cas. Si le lieu rembourse, l'admin fait un avoir (il passe un moyen). Change le comportement actuel (qui crée un avoir) |
 | ~~Avoir de booking fait par l'admin~~ | **Périmé** (SUIVI §4, D-3c (e)) : aucune annulation de booking par l'admin n'existe ; l'utilisateur relève de D31 ; `Booking._creer_avoir` retiré en D-3c-1. La FK `booking` est posée par `ajouter_l_article_d_avoir` (remboursement Stripe, D-3b) | — |
 | Remboursement Stripe (total ou partiel) | `PaiementStripe/utils.py` `partial_refund_payment` ~l.78 | Stripe, montant = **montant du refund renvoyé par Stripe**, `reference_externe` = id du refund |
@@ -188,9 +188,12 @@ Règles :
   mouvement de monnaie cadeau à tracer. Les deux égalités tiennent. Pendant la
   transition, l'article est coupé en parts : l'avoir d'une part « jetons » donne
   catalogue −300, offert −300, net 0, un seul règlement FREE −300.
-- Avoir **partiel** (une partie de la quantité) d'un article avec `part_offerte > 0` :
-  **refusé** avec un message clair (« rembourser l'article entier ») — cas de la fiche H,
-  où l'avoir partiel apparaît. Aucun prorata d'offert dans le projet.
+- Avoir **partiel** (une partie de la quantité) d'un article **en partie** offert
+  (`0 < part_offerte < total_catalogue`) : **refusé** avec un message clair (« rembourser
+  l'article entier ») — cas de la fiche H, où l'avoir partiel apparaît. Aucun prorata
+  d'offert dans le projet. Un article **entièrement** offert (`part_offerte =
+  total_catalogue`) accepte l'avoir partiel : la part offerte de l'avoir vaut son total,
+  exact sans prorata (SUIVI §4, D-3c (d) : annuler 1 billet offert sur 2).
 - Remboursement Stripe différent de la somme des articles de l'avoir (frais, arrondi) :
   même règle qu'à l'encaissement (écart d'encaissement, D26).
 - `emettre_avoir` ne sait faire aujourd'hui qu'un avoir de **ligne entière** et refuse
@@ -218,18 +221,18 @@ Fichiers : `tests/pytest/test_en_ligne_ecrit_la_vente.py`,
 | 9 | `test_montant_stripe_inferieur_ecart_negatif_658` | article « reçu en moins », quantité −1 |
 | 10 | `test_abonnement_quantite_2_prix_unitaire` | `amount` unitaire, total = facture ; encaissée par la branche `INVOICE` |
 | 11 | `test_vente_admin_billets_especes_encaissee` | |
-| 12 | `test_adhesion_admin_encaissee_apres_trigger_fedow` | ordre des appels (le verrou n'est pas tenu pendant l'appel HTTP mocké) |
+| 12 | ~~`test_adhesion_admin_encaissee_apres_trigger_fedow`~~ → `test_ajouter_paiement_vente_reglee_et_ligne_valide_en_sortie` (T15 : `trigger_A` ne fait plus d'appel Fedow) | ordre des appels |
 | 13 | `test_adhesion_gratuite_api_montant_non_nul_offerte` | part offerte totale + FREE |
 | 14 | `test_reservation_gratuite_api_v2_meme_vente_que_ticket_creator` | |
 | 15 | `test_api_v2_quantite_texte_castee_en_entier` | `"2"` → 2 ; `"2.5"` → refus |
-| 16 | `test_recharge_api_v2_echec_puis_nouvel_essai_une_vente` | reste `EN_ATTENTE` à l'échec, `REGLEE` au nouvel essai, une seule vente ; idempotence par `Vente.idempotency_key` |
+| 16 | `test_recharge_api_v2_echec_puis_nouvel_essai_une_vente` | reste `EN_ATTENTE` à l'échec, `REGLEE` au nouvel essai, une seule vente ; idempotence par `LigneArticle.idempotency_key` jusqu'à H (SUIVI §4, D-2c) |
 | 17 | `test_remboursement_stripe_partiel_avoir_montant_du_refund` | `AVOIR` liée, qty négative, règlement = refund, `reference_externe` |
 | 18 | `test_avoir_admin_rembourse_par_especes_un_seul_reglement` | moyen choisi ≠ moyen d'origine accepté |
 | 18b | `test_avoir_admin_ligne_stripe_n_appelle_pas_stripe_et_previent_l_admin` | `stripe.Refund.create` **jamais** appelé ; règlement négatif au moyen Stripe d'origine, `reference_externe` vide ; message « Remboursez… depuis Stripe » |
 | 18c | `test_avoir_billet_entierement_offert_un_seul_reglement_free` | billet offert 1500 (admin, D32) annulé par l'admin → un règlement `FREE −1500`, pas de champ « Remboursé par », aucun règlement d'argent |
-| 19 | `test_avoir_article_en_partie_en_jetons` | −300 offert, CB −200, FREE −300 ; égalités tenues |
+| 19 | `test_avoir_part_en_jetons_de_la_cascade_un_seul_reglement_free` (l'article est en parts jusqu'à H) | −300 offert, CB −200, FREE −300 ; égalités tenues |
 | 20 | `test_annulation_adhesion_avoir_lie` | |
-| 21 | `test_avoir_booking_pose_la_fk_booking` | |
+| 21 | `test_remboursement_stripe_booking_pose_la_fk_booking` (seul l'utilisateur annule un booking : côté Stripe, D-3b) | |
 
 Chaque test qui encaisse finit par `verifier_egalites(vente)` (fiche A). Vus rouges :
 tous (aucune vente) sauf 15 (comportement actuel à observer). Le 18b est rouge sur le
@@ -268,7 +271,7 @@ caractérisation de la fiche A′ doivent rester verts pendant cette fiche.
 
 | Trou | À faire dans cette fiche | Test |
 |---|---|---|
-| T4 | **Aucune exception ne sort du `pre_save`** de `Paiement_stripe` : `encaisser_vente_stripe` est enveloppée dans `try / except`, `logger.error` (Sentry), vente laissée `EN_ATTENTE`. Sinon le client est payé, ses billets partent, mais le paiement reste `PENDING` et Stripe rejoue tout. **Rejeu** = `paiement_stripe.save()` : la transition `PAID → PAID` rappelle `set_ligne_article_paid`, donc l'encaissement. L'action admin « Rejouer l'encaissement » du filtre « À vérifier » (fiche G) ne fait que ça ; aucune commande. | `test_erreur_d_encaissement_ne_bloque_pas_le_paiement`, `test_save_du_paiement_rejoue_l_encaissement` |
+| T4 | **Aucune exception ne sort du `pre_save`** de `Paiement_stripe` : `encaisser_vente_stripe` est enveloppée dans `try / except`, `logger.error` (Sentry), vente laissée `EN_ATTENTE`. Sinon le client est payé, ses billets partent, mais le paiement reste `PENDING` et Stripe rejoue tout. **Rejeu = un appel à `encaisser_vente_stripe(paiement)`**, PAS `paiement_stripe.save()` : le paiement passe `VALID` dans son propre `pre_save` (save imbriqué de `set_paiement_stripe_valid`), et `VALID → VALID` n'est pas une transition : un `save()` ne rejoue rien (SUIVI §4 D-1, code `services_vente.py` `encaisser_vente_stripe`). L'action admin « Rejouer l'encaissement » du filtre « À vérifier » (fiche G) appelle cette fonction ; aucune commande. | `test_erreur_d_encaissement_ne_bloque_pas_le_paiement`, `test_rejeu_de_l_encaissement_par_la_fonction` |
 | T5 | SEPA refusé (`async_payment_failed`, `ApiBillet/views.py` ~l.1312) : aucune transition n'est appelée → `annuler_vente(paiement.vente)` **explicite** dans cette branche. | `test_sepa_refuse_vente_annulee` |
 | T6 | D16 précisé : `EN_ATTENTE` = paiement pas encore constaté, **abandon et `EXPIRE` compris** ; `ANNULEE` seulement quand Stripe a dit non (`CANCELED`, SEPA refusé), sans retour arrière. Un panier abandonné reste `EN_ATTENTE` sans numéro : aucun effet comptable. Traiter `checkout.session.expired` = nouveau comportement, hors chantier. | `test_panier_abandonne_reste_en_attente_sans_numero` |
 | T7 | **Tranché (D30)** : l'annulation d'adhésion fait **un seul avoir, pour le dernier paiement** (la période en cours), pas pour les renouvellements passés. Le test de caractérisation `…avoirs_de_tous_les_renouvellements` (A′) est modifié **ici** (renommé `test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement`) ; sa réécriture pose l'état de départ (trois paiements) **sans écrire** de colonne que H retire (`payment_method=` sur `LigneArticle.objects.create`, dans `creer_une_adhesion_payee_trois_fois`) : par le service de vente de A (vente, règlements, `Paiement_stripe.moyen`), sinon H le recasse (relecture Fable A′, constat 4). | `test_annulation_adhesion_avoir_seulement_sur_le_dernier_paiement` |

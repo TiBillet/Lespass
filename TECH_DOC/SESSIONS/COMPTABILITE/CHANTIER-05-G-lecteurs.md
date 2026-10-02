@@ -71,8 +71,9 @@ DML dans la même) :
   `Administration/admin_tenant.py` ~l.2059-2105), avec le champ **« Remboursé par »**
   (D27, fiche D ; absent si l'article est entièrement offert) ; liens vers la vente liée
   et vers Stripe. Action **« Rejouer l'encaissement »** sur une vente Stripe
-  `EN_ATTENTE` du filtre « À vérifier » : un simple `paiement_stripe.save()` (T4, fiche
-  D). **« Avoir sur un article »**
+  `EN_ATTENTE` du filtre « À vérifier » : un appel à **`encaisser_vente_stripe(paiement)`**
+  (T4, fiche D). **Pas** `paiement_stripe.save()` : le paiement est déjà `VALID` (passé
+  dans son propre `pre_save`) et `VALID → VALID` ne rejoue rien. **« Avoir sur un article »**
   (quantité partielle) arrive en **H** : avant H, un article payé avec deux moyens est
   coupé en parts à quantité fractionnaire, et « 1 jus sur 3 » n'y a pas de sens.
 - Menu « Ventes & comptabilité » : **Ventes**, puis rapport / clôtures, puis plan
@@ -123,7 +124,7 @@ vérification d'intégrité sur une vente altérée) ; les autres en base partag
 | 14 | `test_admin_fiche_vente_articles_et_reglements` | lecture seule |
 | 15 | `test_admin_avoir_total_rembourse_par_especes` | vente CB 1050 → vente `AVOIR` −1050, un règlement espèces −1050 |
 | 16 | `test_admin_filtre_ventes_a_verifier` | |
-| 16b | `test_admin_rejouer_l_encaissement` | vente Stripe `EN_ATTENTE` (paiement `PAID`) → action → `REGLEE`, un règlement |
+| 16b | `test_admin_rejouer_l_encaissement` | vente Stripe `EN_ATTENTE`, paiement **`VALID`** (l'état réel après un encaissement en échec) → action → `REGLEE`, un règlement |
 | 17 | `test_export_lignes_colonnes_entieres` | |
 | 18 | `test_envoi_ancien_laboutik_charge_utile_inchangee` | **non-régression** : vente à un règlement → même charge utile avant et après ; panier 2 billets + adhésion payé Stripe → **3 messages**, identiques à aujourd'hui |
 | 19 | `test_aucun_lecteur_ne_multiplie_amount_par_qty` | garde sur les fichiers des §2-4 |

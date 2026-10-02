@@ -201,22 +201,52 @@ def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     set_paiement_stripe_valid(old_instance, new_instance)
 
 def ligne_article_refunded(old_instance: LigneArticle, new_instance: LigneArticle):
+    """
+    Remboursement Stripe (ligne REFUNDED) : envoyé à l'ancien LaBoutik (V1), comme la
+    vente en ligne qu'il rembourse.
+    / Stripe refund (REFUNDED line): sent to legacy LaBoutik (V1), like its online sale.
+
+    L'envoi part APRÈS la validation de la transaction (`on_commit`) : le worker trouve
+    alors la ligne écrite, et une transaction annulée n'envoie rien.
+    / Sent AFTER the commit: the worker finds the written line; a rollback sends nothing.
+    """
     if not new_instance.sended_to_laboutik:
         logger.info(
             f"    LIGNE ARTICLE ligne_article_refunded {new_instance} -> {old_instance.status} to {new_instance.status}")
-        send_refund_to_laboutik.delay(new_instance.pk)
+        pk_de_la_ligne = new_instance.pk
+        transaction.on_commit(lambda: send_refund_to_laboutik.delay(pk_de_la_ligne))
 
 
 def ligne_article_credit_note(old_instance: LigneArticle, new_instance: LigneArticle):
     """
-    Avoir comptable : envoie l'info a LaBoutik si besoin.
-    / Credit note: notify LaBoutik if needed.
+    Avoir comptable (ligne CREDIT_NOTE) : aucun avoir fait dans l'admin (origine ADMIN :
+    bouton « Avoir », annulations admin, annulation d'adhésion) ne part à l'ancien
+    LaBoutik (V1). Les ventes admin n'y partent pas : leurs avoirs non plus (décision du
+    mainteneur, 2026-10-02).
+    / Credit note: no admin-made credit note (ADMIN origin) is sent to legacy LaBoutik
+    V1, as admin sales are not sent there either.
+
+    Aujourd'hui, tous les producteurs de lignes CREDIT_NOTE sont d'origine ADMIN
+    (`ecrire_la_vente_d_avoir_d_une_ligne`, BaseBillet/services_vente.py) : rien ne part.
+    La branche d'envoi reste pour un futur producteur d'une autre origine. Elle part
+    après la validation de la transaction (`on_commit`).
+    / Today every CREDIT_NOTE producer is ADMIN: nothing is sent. The sending branch is
+    kept for a future producer of another origin, after the commit.
     """
+    avoir_fait_dans_l_admin = new_instance.sale_origin == SaleOrigin.ADMIN
+    if avoir_fait_dans_l_admin:
+        logger.info(
+            f"    LIGNE ARTICLE ligne_article_credit_note {new_instance} : avoir admin, "
+            f"pas d'envoi à LaBoutik V1")
+        return
+
     if not new_instance.sended_to_laboutik:
         logger.info(
             f"    LIGNE ARTICLE ligne_article_credit_note {new_instance} -> {old_instance.status} to {new_instance.status}")
-        # Reutilise le meme endpoint que le remboursement (meme structure : qty negative)
-        send_refund_to_laboutik.delay(new_instance.pk)
+        # Même tâche que le remboursement (même structure : quantité négative).
+        # / Same task as the refund (same shape: negative quantity).
+        pk_de_la_ligne = new_instance.pk
+        transaction.on_commit(lambda: send_refund_to_laboutik.delay(pk_de_la_ligne))
 
 ######################## SIGNAL RESERVATION ########################
 
