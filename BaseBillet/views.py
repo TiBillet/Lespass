@@ -4704,8 +4704,6 @@ class MembershipMVT(viewsets.ViewSet):
         # / POST: actual cancellation
         membership.archiver = True
         membership.status = Membership.ADMIN_CANCELED
-        # Set the deadline to now, the membership is canceled now.
-        membership.deadline = datetime.now()
         membership.save()
 
         # Resiliation de l'abonnement Stripe, si le gestionnaire l'a demandee.
