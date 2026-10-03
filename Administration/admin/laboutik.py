@@ -74,6 +74,11 @@ class LaboutikConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 # Voir CHANGELOG/2026-07-22-mode-ecole-desactive.md
             ),
         }),
+        (_("Configuration"), {
+            "fields":(
+                "show_membership_after_payment",
+            )
+        }),
         (_('Sunmi Cloud'), {
             'fields': (
                 'sunmi_app_id',

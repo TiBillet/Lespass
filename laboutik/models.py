@@ -188,6 +188,9 @@ class LaboutikConfiguration(SingletonModel):
         ),
     )
 
+    # Afficher les adhésions au retour d'un paiement
+    show_membership_after_payment = models.BooleanField(default=False,verbose_name=_("Afficher les adhésions au retour d'un paiement"), help_text=_("Après un paiement via la caisse (en cashless), affiche les adhésions lié à la carte."))
+
     def get_sunmi_app_id(self):
         """Dechiffre et retourne le Sunmi App ID, ou None si vide.
         / Decrypts and returns the Sunmi App ID, or None if empty."""
