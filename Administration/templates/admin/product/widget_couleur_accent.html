@@ -20,9 +20,8 @@ shows the selection; arrow keys work; "None" keeps the default cyan.
 Variables : widget.name, couleur_actuelle, couleur_actuelle_hors_liste,
 couleurs_proposees.
 
-Toutes les couleurs proposées restent lisibles avec le texte blanc de l'écran
-(≥ 4,5:1) et comme texte sur la carte sombre (≥ 3:1). Détail des contrastes :
-COULEURS_ACCENT dans Administration/admin/products.py.
+Les couleurs proposées sont la palette « Létireuz » (--color-tireuse-{teinte}).
+Liste et contrastes : COULEURS_ACCENT dans Administration/admin/products.py.
 
 Styles : bloc <style> avec des classes préfixées, car Unfold n'embarque
 pas les classes Tailwind personnalisées.
@@ -88,8 +87,8 @@ pas les classes Tailwind personnalisées.
 
   <span class="pastilles-accent__separateur" aria-hidden="true"></span>
 
-  {# Couleurs lisibles avec du texte blanc (≥ 4,5:1) et sur la carte sombre (≥ 3:1) #}
-  {# / Readable with white text (≥ 4.5:1) and on the dark card (≥ 3:1) #}
+  {# Palette « Létireuz » : 11 couleurs vives (voir COULEURS_ACCENT) #}
+  {# / "Létireuz" palette: 11 vivid colors (see COULEURS_ACCENT) #}
   {% for code_couleur, nom_couleur in couleurs_proposees %}
     <input type="radio" class="pastilles-accent__radio" name="{{ widget.name }}" value="{{ code_couleur }}"
            id="{{ widget.attrs.id }}_{{ forloop.counter }}" {% if couleur_actuelle == code_couleur %}checked{% endif %}>
