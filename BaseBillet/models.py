@@ -2541,6 +2541,32 @@ class Event(models.Model):
         else:
             return False
 
+    def places_restantes(self):
+        """
+        Nombre de places encore réservables, affiché dans le talon de la page
+        événement (partials/reservation_declencheur.html).
+        Même calcul que complet() : les billets en cours de paiement sont déjà
+        retirés, sinon le chiffre surestime pendant un rush. Jamais négatif.
+        / Seats still bookable. Same count as complet(): tickets being paid are
+        already taken out. Never negative.
+        """
+        places_prises = self.valid_tickets_count() + self.under_purchase()
+        places_restantes = self.jauge_max - places_prises
+        if places_restantes < 0:
+            return 0
+        return places_restantes
+
+    def jauge_presque_pleine(self):
+        """
+        Vrai quand il reste 15 % de la jauge ou moins : le talon ajoute alors
+        une pastille d'alerte (zanana) devant « Places restantes ».
+        / True when 15% of the capacity or less is left.
+        """
+        if not self.jauge_max:
+            return False
+        part_restante = self.places_restantes() / self.jauge_max
+        return part_restante <= 0.15
+
     def a_des_codes_promo(self):
         """
         Vrai si au moins un produit de l'événement a un code promo. Le formulaire de

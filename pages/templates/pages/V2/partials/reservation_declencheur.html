@@ -11,11 +11,59 @@ réservation) est du chrome partagé : commun/offcanvas/reservation.html,
 inclus en bas de ce fichier.
 Réserver est un geste TiBillet : bouton principal (.btn--primary), encre et liseré letchi.
 
+TALON : au-dessus du bouton, le prix et les places restantes sont posés de
+part et d'autre d'une perforation de billet (.talon, voir V2.css). Une case
+n'apparaît que si sa donnée existe : pas de jauge sans event.show_gauge, pas
+de prix si l'événement n'a aucun tarif. Sans aucune case, pas de talon.
+/ Ticket stub above the button: price and seats left, each cell only when its
+data exists.
+
+Données (vue détail, BaseBillet/views.py) : event.price_min, event.price_max,
+event.free_price. Jauge : event.places_restantes, event.jauge_presque_pleine,
+event.jauge_max (BaseBillet/models.py).
+
 A CONSERVER : data-testid="booking-open-panel" (4 tests E2E de réservation)
 et l'id #bookingPanel (aussi ouvert par ?openbookingPanel, voir evenement.html).
 / Keep the booking-open-panel testid and the #bookingPanel id.
 {% endcomment %}
 <div class="reservation-declencheur" data-testid="reservation-declencheur">
+    {% if event.free_price or event.price_max is not None or event.show_gauge %}
+        <dl class="talon" data-testid="reservation-talon">
+            {% if event.free_price %}
+                <div class="talon__case">
+                    <dt class="talon__libelle">{% translate "Vous choisissez" %}</dt>
+                    <dd class="talon__chiffre">{% translate "Prix libre" %}</dd>
+                </div>
+            {% elif event.price_max is not None %}
+                <div class="talon__case">
+                    {% if event.price_max == 0 %}
+                        <dt class="talon__libelle">{% translate "Le billet" %}</dt>
+                        <dd class="talon__chiffre">{% translate "Gratuit" %}</dd>
+                    {% elif event.price_min == event.price_max %}
+                        <dt class="talon__libelle">{% translate "Le billet" %}</dt>
+                        <dd class="talon__chiffre">{{ event.price_min|floatformat:"-2" }} €</dd>
+                    {% else %}
+                        <dt class="talon__libelle">{% translate "Par billet" %}</dt>
+                        <dd class="talon__chiffre">{{ event.price_min|floatformat:"-2" }}–{{ event.price_max|floatformat:"-2" }} €</dd>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {% if event.show_gauge %}
+                <div class="talon__case">
+                    <dt class="talon__libelle">
+                        {% if event.jauge_presque_pleine %}<span class="talon__alerte" aria-hidden="true"></span>{% endif %}
+                        {% translate "Places restantes" %}
+                    </dt>
+                    <dd class="talon__chiffre">{{ event.places_restantes }}</dd>
+                    <dd class="talon__libelle">
+                        {% blocktranslate trimmed with jauge=event.jauge_max %}sur {{ jauge }}{% endblocktranslate %}
+                    </dd>
+                </div>
+            {% endif %}
+        </dl>
+    {% endif %}
+
     <button
             class="btn btn--primary reservation-declencheur__bouton"
             type="button"
@@ -25,28 +73,6 @@ et l'id #bookingPanel (aussi ouvert par ?openbookingPanel, voir evenement.html).
             data-testid="booking-open-panel">
         {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
     </button>
-
-    {% if not event.free_price %}
-        {% if event.price_min or event.price_max %}
-            <p class="reservation-declencheur__note">
-                {% if event.price_min is not event.price_max %}
-                    {% blocktrans trimmed with min=event.price_min max=event.price_max %}
-                        Prices ranging between {{ min }} and {{ max }} euros per ticket.
-                    {% endblocktrans %}
-
-                {% elif event.price_min is event.price_max and event.price_min > 0 %}
-                    {% blocktrans trimmed with price=event.price_min %}
-                        Priced at {{ price }} euros per ticket.
-                    {% endblocktrans %}
-                {% endif %}
-            </p>
-        {% endif %}
-    {% endif %}
-    {% if event.show_gauge %}
-        <p class="reservation-declencheur__note">
-            {{ event.valid_tickets_count }} {% translate "reservations validées sur" %} {{ event.jauge_max }} {% translate "places disponibles" %}
-        </p>
-    {% endif %}
 </div>
 
 <!-- Tunnel de réservation (chrome partagé, extrait vers commun/ au CHANTIER-02).

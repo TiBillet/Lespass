@@ -2221,7 +2221,14 @@ img { max-width: 100%; display: block; }
   justify-content: space-around;
 }
 .event-hero__etat { white-space: normal; }
-.reservation-declencheur { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+/* Talon au-dessus du bouton. Le bloc prend la largeur de son bouton (jamais
+   plus que le bandeau) et le talon s'étire à cette même largeur. Ne pas le
+   brider à une largeur fixe : à 30rem, le libellé par défaut (~650px en 28px)
+   passait sur deux lignes même en desktop.
+   / The block is as wide as its button (never wider than the hero) and the
+   stub stretches to match. No fixed width: at 30rem the default label wrapped
+   even on desktop. */
+.reservation-declencheur { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); max-width: 100%; }
 /* Le libellé traduit est long (« Je veux réserver une ou plusieurs places ») :
    en 28px sur une seule ligne il faisait ~650px et était coupé net par le
    bandeau (overflow: hidden) sur mobile ET tablette. Taille fluide, retour à
@@ -2234,7 +2241,56 @@ img { max-width: 100%; display: block; }
   text-align: center;
   max-width: 100%;
 }
-.reservation-declencheur__note { font-size: var(--text-md); color: var(--color-text-muted); }
+/* Talon de billet : prix et places restantes de part et d'autre d'une
+   perforation. Contenu du lieu, donc encre et papier ; Unbounded seulement
+   pour les deux chiffres, comme le montant du solde. La pastille zanana
+   (alerte) signale une jauge presque pleine, jamais sous du texte.
+   Une ou deux cases : chaque case prend une colonne égale.
+   / Ticket stub: price and seats left on either side of a perforation. Ink and
+   paper; Unbounded only for the two figures. Zanana dot = nearly full. */
+.talon {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  margin: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  background: var(--color-bg);
+}
+.talon__case { position: relative; display: grid; gap: 2px; align-content: start; padding: var(--space-4); min-width: 0; }
+/* Perforation : pointillé rentré de 12px en haut et en bas. / Inset dashed perforation. */
+.talon__case + .talon__case::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--space-3);
+  inset-inline-start: -1px;
+  border-inline-start: 2px dashed var(--color-border-strong);
+}
+.talon__libelle { margin: 0; font-size: var(--text-sm); font-weight: 400; color: var(--color-text-muted); }
+.talon__chiffre {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(1.25rem, 1rem + 1.2vw, var(--text-2xl));
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.talon__alerte {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: 6px;
+  border-radius: 50%;
+  background: var(--zanana);
+  vertical-align: 1px;
+}
+/* Petit téléphone : les cases s'empilent, la perforation devient horizontale.
+   / Small phones: cells stack, the perforation turns horizontal. */
+@media (max-width: 26rem) {
+  .talon { grid-auto-flow: row; }
+  .talon__case + .talon__case::before { inset-block: -1px auto; inset-inline: var(--space-3); border-inline-start: 0; border-block-start: 2px dashed var(--color-border-strong); }
+}
 /* Texte long saisi par le lieu (HTML riche) : largeur de lecture. */
 /* / Long rich text from the venue: reading width. */
 .event-prose { max-width: 70ch; color: var(--color-text); line-height: 1.65; margin-top: var(--space-4); overflow-wrap: anywhere; }
