@@ -918,6 +918,14 @@ Les templates inline (`stacked.html`, `tabular.html`) n'ont pas de support `x-sh
 Pour des champs conditionnels dans un inline, utiliser le mecanisme custom
 `inline_conditional_fields` + `inline_conditional_fields.js` (cree en session 26).
 
+Pour reagir a une ligne ajoutee par « Ajouter un autre », ecouter l'evenement
+`formset:added` (emis par `inlines.js` de Django, `bubbles: true`, prefixe dans
+`detail.formsetName`). Un `MutationObserver` en `subtree: false` sur `#<prefixe>-group`
+ne voit RIEN : Unfold insere la ligne plusieurs niveaux plus bas
+(`#<prefixe>-group > fieldset > ... > #<prefixe>-data`). Symptome : regles appliquees
+aux tarifs existants, mais pas aux tarifs ajoutes — donc jamais sur une page de
+creation (issue #408). Test : `tests/e2e/test_admin_tarif_champs_conditionnels_creation.py`.
+
 Decouvert en session 26 (avril 2026) — refactoring PriceInline.
 
 ### Piege 66 : lignes panier a montant variable — suffixe `--N` obligatoire
