@@ -524,6 +524,16 @@ class EventCreateSerializer(serializers.Serializer):
                 f = req.FILES.get(fname)
                 if f:
                     _validate_uploaded_image(f)
+
+        # La fin ne peut pas etre avant le debut. Meme regle que Event.clean(),
+        # que DRF n'appelle pas.
+        # / End cannot be before start. Same rule as Event.clean(), not called by DRF.
+        date_de_debut = attrs.get("startDate")
+        date_de_fin = attrs.get("endDate")
+        if date_de_debut and date_de_fin and date_de_fin < date_de_debut:
+            raise serializers.ValidationError({
+                "endDate": _("La fin de l'évènement doit être après son début."),
+            })
         return attrs
 
     def create(self, validated_data: Dict[str, Any]) -> Event:

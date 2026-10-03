@@ -1586,6 +1586,25 @@ class EventWriteSerializer(serializers.Serializer):
         # Enforce required on create
         self._require_on_create(attrs, 'name')
         self._require_on_create(attrs, 'startDate')
+
+        # La fin ne peut pas etre avant le debut. Meme regle que Event.clean(),
+        # que DRF n'appelle pas.
+        # En modification partielle, une date absente de la requete est lue
+        # sur l'evenement existant : envoyer seulement endDate doit aussi etre verifie.
+        # / End cannot be before start. On partial update, a missing date is read
+        # from the existing event.
+        date_de_debut = attrs.get('startDate')
+        if 'startDate' not in attrs and self.instance is not None:
+            date_de_debut = self.instance.datetime
+
+        date_de_fin = attrs.get('endDate')
+        if 'endDate' not in attrs and self.instance is not None:
+            date_de_fin = self.instance.end_datetime
+
+        if date_de_debut and date_de_fin and date_de_fin < date_de_debut:
+            raise serializers.ValidationError({
+                'endDate': _("La fin de l'évènement doit être après son début."),
+            })
         return attrs
 
     def create(self, validated_data):
