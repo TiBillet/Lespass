@@ -2235,6 +2235,29 @@ def _panier_contient_uniquement_recharges_gratuites(articles_panier):
             return False
     return True
 
+def get_user_membership(carte):
+    adhesions = []
+    if carte.user:
+        # CANCELED n'est PAS exclu ici : une adhesion resiliee court
+        # jusqu'a sa deadline (l'adherent a paye sa periode), et c'est
+        # is_valid() qui tranche. L'exclure au niveau SQL priverait
+        # l'adherent de son adhesion des la resiliation.
+        # ADMIN_CANCELED reste exclu : annulation administrative, effet
+        # immediat, avoir possible.
+        # / CANCELED is NOT excluded here: a cancelled membership runs
+        # until its deadline and is_valid() decides. ADMIN_CANCELED stays
+        # excluded: admin cancellation is immediate.
+        toutes_adhesions = list(
+            Membership.objects.filter(
+                user=carte.user,
+            )
+            .exclude(
+                status=Membership.ADMIN_CANCELED,
+            )
+            .select_related("price__product")
+        )
+        adhesions = [m for m in toutes_adhesions if m.is_valid()]
+    return adhesions
 
 # --------------------------------------------------------------------------- #
 #  CaisseViewSet — pages principales                                          #
@@ -8877,6 +8900,17 @@ class PaiementViewSet(viewsets.ViewSet):
             # / Card-linking warnings: the cashier must know a card was not attached.
             "avertissements_adhesion": adherent["avertissements"] if adherent else [],
         }
+
+        laboutik_config = LaboutikConfiguration.get_solo()
+
+        # Si le flag `show_membership_after_payment` est activé,
+        if laboutik_config.show_membership_after_payment:
+            # 4. Adhésions actives (si user connu)
+            # 4. Active memberships (if user known)
+            adhesions = get_user_membership(carte_client)
+            context.update({"adhesions": adhesions, "config": laboutik_config})
+
+
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context
         )
@@ -10578,27 +10612,7 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # 4. Adhésions actives (si user connu)
         # 4. Active memberships (if user known)
-        adhesions = []
-        if carte.user:
-            # CANCELED n'est PAS exclu ici : une adhesion resiliee court
-            # jusqu'a sa deadline (l'adherent a paye sa periode), et c'est
-            # is_valid() qui tranche. L'exclure au niveau SQL priverait
-            # l'adherent de son adhesion des la resiliation.
-            # ADMIN_CANCELED reste exclu : annulation administrative, effet
-            # immediat, avoir possible.
-            # / CANCELED is NOT excluded here: a cancelled membership runs
-            # until its deadline and is_valid() decides. ADMIN_CANCELED stays
-            # excluded: admin cancellation is immediate.
-            toutes_adhesions = list(
-                Membership.objects.filter(
-                    user=carte.user,
-                )
-                .exclude(
-                    status=Membership.ADMIN_CANCELED,
-                )
-                .select_related("price__product")
-            )
-            adhesions = [m for m in toutes_adhesions if m.is_valid()]
+        adhesions = get_user_membership(carte)
 
         # 5. Couleur de fond selon le type de carte
         # 5. Background color based on card type
