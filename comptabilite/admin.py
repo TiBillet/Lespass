@@ -1,16 +1,23 @@
 """
-Admin Unfold pour l'app comptabilite.
-/ Unfold admin for the comptabilite app.
+Admin Unfold pour l'app comptabilite : la liste des clôtures, la fiche d'une clôture
+(son rapport stocké), le rapport temps réel et les exports.
+/ Unfold admin for the comptabilite app: closures list, closure page (its stored
+report), real-time report and exports.
 
 LOCALISATION : comptabilite/admin.py
 
-S1 : admin liste minimaliste, read-only. ClotureCaisseAdmin sera enrichi en S3
-avec change_form_before_template (rapport visuel) et en S4 avec les exports.
-
-/ S1: minimal read-only list admin. ClotureCaisseAdmin will be enriched in S3
-with change_form_before_template (visual report) and in S4 with exports.
+FLUX :
+- fiche d'une clôture : `changeform_view` → `sections_pour_affichage(rapport_json)`
+  (comptabilite/presentation.py) → gabarit `comptabilite/admin/change_form_before.html`
+  → `_sections_rapport.html` ;
+- rapport temps réel : `rapport_temps_reel` → `RapportDesVentes(debut, fin).rapport_x()`
+  (comptabilite/rapport.py) → `sections_pour_affichage` → gabarit
+  `comptabilite/views/rapport_temps_reel.html` → `_sections_rapport.html`.
+/ Flow: closure page and real-time report both go through sections_pour_affichage.
 """
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
@@ -21,7 +28,12 @@ from Administration.admin.base import ModelAdmin
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 
+from comptabilite.fec import generer_fec_cloture
 from comptabilite.models import ClotureCaisse
+from comptabilite.presentation import euros_a_la_francaise, sections_pour_affichage
+from comptabilite.rapport import RapportDesVentes
+from comptabilite.ventilation import EcritureDesequilibree
+from laboutik.plan_comptable import CompteComptableManquant
 
 
 # Helpers d'affichage definis AU NIVEAU MODULE (pas methodes de classe).
@@ -30,24 +42,17 @@ from comptabilite.models import ClotureCaisse
 # / Display helpers defined AT MODULE LEVEL (not class methods). Unfold wraps
 # ModelAdmin methods via @action which can break internal helpers.
 
-def _format_euros(centimes: int) -> str:
-    """
-    Formate un montant en centimes en chaine euros lisible.
-    / Format a cents amount as a readable euros string.
-    """
-    if centimes is None:
-        return "—"
-    return f"{centimes / 100:.2f} €"
 
-
-def _parse_datetime_param(value, defaut):
+def _parse_datetime_param(value, defaut, fuseau_du_lieu):
     """
     Parse une string ISO (depuis un GET param ou <input type="datetime-local">)
     en datetime aware. Si invalide ou vide, retourne defaut.
     / Parse an ISO string into an aware datetime. Falls back to defaut if invalid.
 
     Format attendu : 'YYYY-MM-DDTHH:MM' (input HTML5 datetime-local, sans tz).
-    On applique la timezone locale Django si le datetime parse est naive.
+    Une heure saisie sans fuseau est une heure du LIEU (`fuseau_du_lieu`), jamais
+    celle du serveur.
+    / A typed hour without time zone is the venue's hour, never the server's.
     """
     if not value:
         return defaut
@@ -56,7 +61,7 @@ def _parse_datetime_param(value, defaut):
         from django.utils import timezone
         dt = datetime.fromisoformat(value)
         if timezone.is_naive(dt):
-            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+            dt = timezone.make_aware(dt, fuseau_du_lieu)
         return dt
     except (ValueError, TypeError):
         return defaut
@@ -71,14 +76,6 @@ def _telecharger(bytes_data, filename, content_type):
     response = HttpResponse(bytes_data, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
-
-
-# L'enrichissement (ajout des cles *_euros + agregation des categories de
-# paiement) est centralise dans services.py et partage avec l'export PDF.
-# Un seul code source garantit que admin et exports affichent EXACTEMENT
-# les memes donnees et formats.
-# / Display enrichment is centralized in services.py, shared with PDF export.
-from comptabilite.services import enrichir_rapport_pour_affichage  # noqa: E402
 
 
 @admin.register(ClotureCaisse, site=staff_admin_site)
@@ -147,11 +144,6 @@ class ClotureCaisseAdmin(ModelAdmin):
                 self.admin_site.admin_view(self.exporter_fec),
                 name="comptabilite_cloturecaisse_fec",
             ),
-            path(
-                "<uuid:object_id>/exporter-csv-comptable/",
-                self.admin_site.admin_view(self.exporter_csv_comptable),
-                name="comptabilite_cloturecaisse_csv_comptable",
-            ),
         ]
         return custom + urls
 
@@ -188,85 +180,95 @@ class ClotureCaisseAdmin(ModelAdmin):
     def exporter_fec(self, request, object_id):
         """
         Telecharge la cloture au format FEC (Fichier des Ecritures Comptables,
-        norme francaise A47 A-1). Encodage CP1252, tabulation, 18 colonnes.
+        norme francaise A47 A-1). Encodage UTF-8 sans BOM, tabulation, 18 colonnes.
         / Download the cloture as FEC (French legal accounting format).
+
+        Refus (compte manquant, écriture déséquilibrée) : rien n'est téléchargé ; un
+        message d'erreur s'affiche sur la fiche de la clôture. Un compte manquant
+        renvoie à l'écran « Plan complet ? ».
+        / Refusal (missing account, unbalanced entry): nothing is downloaded; an error
+        message is shown on the closure page.
         """
-        from django.shortcuts import get_object_or_404
-        from comptabilite.fec import generer_fec_cloture
         cloture = get_object_or_404(ClotureCaisse, pk=object_id)
-        return _telecharger(*generer_fec_cloture(cloture))
-
-    def exporter_csv_comptable(self, request, object_id):
-        """
-        Export CSV comptable avec choix du profil (Sage50 / EBP / Paheko).
-        GET = form HTMX, POST = telecharge le CSV genere.
-        / Accounting CSV export with profile choice. GET = HTMX form. POST = CSV download.
-        """
-        from django.shortcuts import get_object_or_404, render
-        from comptabilite.csv_comptable import generer_csv_comptable
-        from comptabilite.profils_csv import PROFILS
-
-        cloture = get_object_or_404(ClotureCaisse, pk=object_id)
-
-        if request.method == "POST":
-            profil_slug = request.POST.get("profil", "sage_50")
-            if profil_slug not in PROFILS:
-                profil_slug = "sage_50"
-            bytes_data, filename, content_type, avertissements = generer_csv_comptable(
-                cloture, profil_slug,
-            )
-            if avertissements:
-                import logging
-                logging.getLogger(__name__).warning(
-                    f"CSV comptable {profil_slug} pour cloture "
-                    f"#{cloture.numero_sequentiel}: {len(avertissements)} avertissement(s)"
-                )
-            return _telecharger(bytes_data, filename, content_type)
-
-        # GET : retourne le form HTMX
-        # / GET: returns the HTMX form
-        return render(
-            request,
-            "comptabilite/admin/export_csv_comptable_form.html",
-            {
-                "cloture": cloture,
-                "profils": [(slug, p["nom_affiche"]) for slug, p in PROFILS.items()],
-            },
+        adresse_de_la_fiche = reverse(
+            "staff_admin:comptabilite_cloturecaisse_change", args=[cloture.pk]
         )
+        try:
+            contenu, nom_du_fichier, type_du_contenu = generer_fec_cloture(cloture)
+        except CompteComptableManquant as compte_manquant:
+            messages.error(
+                request,
+                _(
+                    "Export FEC refusé : %(raison)s Voir « Plan complet ? » en tête "
+                    "du plan comptable."
+                )
+                % {"raison": str(compte_manquant)},
+            )
+            return redirect(adresse_de_la_fiche)
+        except EcritureDesequilibree as ecriture_desequilibree:
+            messages.error(
+                request,
+                _("Export FEC refusé : %(raison)s")
+                % {"raison": str(ecriture_desequilibree)},
+            )
+            return redirect(adresse_de_la_fiche)
+        return _telecharger(contenu, nom_du_fichier, type_du_contenu)
 
     def rapport_temps_reel(self, request):
         """
-        Vue admin custom : rapport agrege sur une periode personnalisable.
-        / Custom admin view: aggregated report over a user-defined period.
+        Vue admin custom : le rapport X (temps réel, jamais stocké) sur une période
+        choisie. Les sections du Z sans l'intégrité, plus l'habitus des cartes et les
+        opérateurs (`RapportDesVentes.rapport_x()`).
+        / Custom admin view: the X report (never stored) over a chosen period.
 
-        Bornes par defaut : aujourd'hui 04:00 local -> now(). Si l'heure
-        courante est avant 04:00, on recule debut a hier 04:00 (service nuit).
+        Bornes par defaut : le service en cours, de la fin de la derniere cloture
+        journaliere (J) a maintenant ; sans J, de la premiere vente reglee du lieu ; sans
+        vente, maintenant -> maintenant (rapport vide).
         L'utilisateur peut surcharger via les GET params datetime_debut /
         datetime_fin (format ISO 'YYYY-MM-DDTHH:MM', input HTML5 datetime-local).
+        Les heures saisies et affichees sont en HEURE DU LIEU
+        (`Configuration.get_tzinfo()`), jamais celle du serveur.
         Pas de polling : F5 manuel suffit.
+        / Default bounds: the current service, from the end of the last J to now. Hours
+        are typed and shown in the venue's time zone.
         """
-        from datetime import timedelta
+        from django.db.models import Min
         from django.shortcuts import render
         from django.utils import timezone
-        from comptabilite.services import RapportComptableService
 
-        # --- Bornes par defaut : aujourd'hui 04:00 local -> now()
-        # / Default bounds: today 04:00 local -> now()
-        now_local = timezone.localtime()
-        debut_defaut = now_local.replace(hour=4, minute=0, second=0, microsecond=0)
-        if debut_defaut > now_local:
-            # On est avant 04:00 du matin : le service en cours a commence hier 04:00
-            # / Before 04:00 AM: the current shift started yesterday at 04:00
-            debut_defaut -= timedelta(days=1)
+        from BaseBillet.models import Configuration
+        from BaseBillet.models_vente import Vente
+
+        fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+
+        # --- Bornes par defaut : depuis la fin de la derniere J, jusqu'a maintenant
+        # / Default bounds: from the end of the last J to now
         fin_defaut = timezone.now()
+        derniere_j = (
+            ClotureCaisse.objects.filter(niveau=ClotureCaisse.NIVEAU_JOURNALIER)
+            .order_by("-numero_sequentiel")
+            .first()
+        )
+        if derniere_j is not None:
+            debut_defaut = derniere_j.datetime_fin
+        else:
+            premiere_heure_d_encaissement = Vente.objects.filter(
+                statut=Vente.Statut.REGLEE
+            ).aggregate(premiere_heure=Min("datetime_encaissement"))["premiere_heure"]
+            if premiere_heure_d_encaissement is not None:
+                debut_defaut = premiere_heure_d_encaissement
+            else:
+                debut_defaut = fin_defaut
 
-        # --- Override depuis GET params si presents
-        # / Override via GET params if present
+        # --- Override depuis GET params si presents (heures du lieu)
+        # / Override via GET params if present (venue hours)
         datetime_debut = _parse_datetime_param(
             request.GET.get("datetime_debut"), defaut=debut_defaut,
+            fuseau_du_lieu=fuseau_du_lieu,
         )
         datetime_fin = _parse_datetime_param(
             request.GET.get("datetime_fin"), defaut=fin_defaut,
+            fuseau_du_lieu=fuseau_du_lieu,
         )
 
         # Garde-fou : si debut > fin, on inverse (typo utilisateur)
@@ -274,44 +276,50 @@ class ClotureCaisseAdmin(ModelAdmin):
         if datetime_debut > datetime_fin:
             datetime_debut, datetime_fin = datetime_fin, datetime_debut
 
-        service = RapportComptableService(datetime_debut, datetime_fin)
-        rapport_brut = service.generer_rapport_complet()
-        rapport = enrichir_rapport_pour_affichage(rapport_brut)
+        # Le rapport X du moteur unique : la borne de fin est exclue.
+        # / The single engine's X report: the end bound is excluded.
+        rapport_x = RapportDesVentes(datetime_debut, datetime_fin).rapport_x()
 
         context = {
             **self.admin_site.each_context(request),
             "title": _("Rapport temps réel"),
-            "rapport": rapport,
+            "rapport": rapport_x,
+            "sections": sections_pour_affichage(rapport_x),
             "datetime_debut": datetime_debut,
             "datetime_fin": datetime_fin,
-            # Format pour input HTML5 datetime-local : 'YYYY-MM-DDTHH:MM'
-            # / Format for HTML5 datetime-local input
-            "datetime_debut_input": timezone.localtime(datetime_debut).strftime("%Y-%m-%dT%H:%M"),
-            "datetime_fin_input": timezone.localtime(datetime_fin).strftime("%Y-%m-%dT%H:%M"),
-            "nb_transactions": service.queryset.count(),
+            # Format pour input HTML5 datetime-local : 'YYYY-MM-DDTHH:MM', heure du lieu
+            # / Format for HTML5 datetime-local input, venue time
+            "datetime_debut_input": timezone.localtime(
+                datetime_debut, fuseau_du_lieu
+            ).strftime("%Y-%m-%dT%H:%M"),
+            "datetime_fin_input": timezone.localtime(
+                datetime_fin, fuseau_du_lieu
+            ).strftime("%Y-%m-%dT%H:%M"),
+            # La periode affichee, en heure du lieu
+            # / The shown period, venue time
+            "datetime_debut_affiche": timezone.localtime(
+                datetime_debut, fuseau_du_lieu
+            ).strftime("%d/%m/%Y %H:%M"),
+            "datetime_fin_affiche": timezone.localtime(
+                datetime_fin, fuseau_du_lieu
+            ).strftime("%d/%m/%Y %H:%M"),
+            "nombre_de_ventes": rapport_x["en_tete"]["nombre_de_ventes"],
             "opts": self.model._meta,
         }
         return render(request, "comptabilite/views/rapport_temps_reel.html", context)
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         """
-        Injecte la cloture + son rapport pre-formate dans le context du template.
-        / Inject the cloture + its pre-formatted report into the template context.
+        Injecte la clôture et les sections de son rapport stocké dans le contexte du
+        gabarit. Le rapport n'est jamais recalculé : c'est celui scellé à la clôture.
+        / Injects the closure and its stored report's sections into the template.
         """
         extra_context = extra_context or {}
         if object_id:
             from django.shortcuts import get_object_or_404
             cloture = get_object_or_404(ClotureCaisse, pk=object_id)
-            rapport_pretty = enrichir_rapport_pour_affichage(cloture.rapport_json or {})
             extra_context["cloture"] = cloture
-            extra_context["rapport"] = rapport_pretty
-            extra_context["datetime_debut"] = cloture.datetime_debut
-            extra_context["datetime_fin"] = cloture.datetime_fin
-            # Montants pre-formates en euros (les templates Django n'ont pas de division)
-            # / Pre-formatted euros (Django templates can't divide)
-            extra_context["cloture_total_general_euros"] = f"{cloture.total_general / 100:.2f}"
-            extra_context["cloture_total_ht_euros"] = f"{cloture.total_ht / 100:.2f}"
-            extra_context["cloture_total_tva_euros"] = f"{cloture.total_tva / 100:.2f}"
+            extra_context["sections"] = sections_pour_affichage(cloture.rapport_json)
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     # --- Permissions : modele immuable ---
@@ -334,6 +342,6 @@ class ClotureCaisseAdmin(ModelAdmin):
     # --- Colonnes d'affichage ---
     # / Display columns
 
-    @admin.display(description=_("Total TTC"), ordering="total_general")
+    @admin.display(description=_("Chiffre d'affaires TTC"), ordering="total_general")
     def ca_ttc(self, obj):
-        return _format_euros(obj.total_general)
+        return euros_a_la_francaise(obj.total_general)

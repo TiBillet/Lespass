@@ -49,7 +49,7 @@ from AuthBillet.models import TibilletUser
 from Customers.models import Client
 
 
-# Les 24 champs exposes AVANT le passage en onglets. Ecrits en dur, et c'est
+# Les 25 champs exposes AVANT le passage en onglets. Ecrits en dur, et c'est
 # volontaire : les relire depuis la classe testee ne prouverait rien (le test
 # suivrait la regression). C'est un releve, pas un calcul.
 # / Hard-coded on purpose: reading them from the class under test would make
@@ -67,6 +67,7 @@ CHAMPS_ATTENDUS = [
     "site_web",
     # Reglages
     "fuseau_horaire",
+    "heure_de_fermeture",
     "language",
     "jauge_max",
     "allow_concurrent_bookings",

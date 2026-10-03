@@ -867,9 +867,10 @@ class PointDeVente(models.Model):
     )
 
     # Code du journal comptable des ventes de ce point de vente (colonne `JournalCode`
-    # du FEC). Lettres majuscules seules : le profil PennyLane
-    # (laboutik/profils_csv.py) refuse tout autre caractère. Vide : le code est dérivé
-    # du nom (laboutik/plan_comptable.py, `code_journal_du_point_de_vente`).
+    # du FEC). Lettres majuscules seules : un code de journal reste simple pour tout
+    # logiciel comptable qui importe le FEC. Le code est de toute façon nettoyé à
+    # l'export (laboutik/plan_comptable.py, `code_journal_du_point_de_vente` : lettres
+    # A à Z, 10 au plus). Vide : le code est dérivé du nom.
     # / Accounting journal code (FEC JournalCode). Uppercase letters only. Empty: derived
     # from the name.
     code_journal = models.CharField(

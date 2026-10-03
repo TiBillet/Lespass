@@ -235,30 +235,19 @@ def _reset_ventes_demo():
     """
     Supprime les LigneArticle et objets associes (Reservation, Membership,
     Event, Product) crees par la demo (prefixe DEMO_PRODUCT_PREFIX).
-    Supprime aussi les ClotureCaisse de demo (cf. _bornes_cloture_demo).
-    Ordre de suppression : ClotureCaisse -> LigneArticle -> Reservation
-    -> Membership -> Event -> PriceSold -> Price -> ProductSold -> Product.
+    Ordre de suppression : LigneArticle -> Reservation -> Membership -> Event
+    -> PriceSold -> Price -> ProductSold -> Product.
     Doit etre appele DANS un tenant_context().
-    / Delete demo LigneArticle, related objects AND demo closures.
+
+    Les clotures ne sont JAMAIS supprimees : elles sont numerotees et chainees
+    (`comptabilite/integrite.py`). En supprimer une casserait la chaine du lieu.
+    / Delete demo LigneArticle and related objects. Closures are NEVER deleted:
+    they are numbered and chained.
     """
     from BaseBillet.models import (
         LigneArticle, Reservation, Membership, Event, Product, Price,
         ProductSold, PriceSold,
     )
-    from comptabilite.models import ClotureCaisse
-
-    # Suppression des clotures de demo (J + H sur les bornes calculees).
-    # On supprime AVANT les LigneArticle pour que la suppression soit propre :
-    # la cloture stocke rapport_json (JSONField) qui ne reference pas les FK,
-    # mais on garde l'ordre par symetrie avec la creation.
-    # / Delete demo closures first (cleaner, no FK to LigneArticle anyway).
-    bornes = _bornes_cloture_demo()
-    cq = ClotureCaisse.objects.filter(
-        datetime_debut__in=[bornes["J"][0], bornes["H"][0]],
-        datetime_fin__in=[bornes["J"][1], bornes["H"][1]],
-    )
-    nb_clotures = cq.count()
-    cq.delete()
 
     pq = LigneArticle.objects.filter(
         pricesold__productsold__product__name__startswith=DEMO_PRODUCT_PREFIX,
@@ -288,32 +277,9 @@ def _reset_ventes_demo():
     prq.delete()
 
     logger.info(
-        f"Reset demo : {nb_clotures} ClotureCaisse, {nb_lignes} LigneArticle, "
+        f"Reset demo : {nb_lignes} LigneArticle, "
         f"{nb_resa} Reservation, {nb_mb} Membership, {nb_event} Event supprimes."
     )
-
-
-def _bornes_cloture_demo():
-    """
-    Retourne les bornes (debut, fin) des 2 clotures generees par la demo.
-    Centralise pour partager entre seed et reset.
-    / Returns (debut, fin) for the 2 demo closures. Shared by seed + reset.
-
-    - J : hier 00:00 -> aujourd'hui 00:00 (contient les ventes du seed)
-    - H : lundi semaine derniere 00:00 -> lundi semaine courante 00:00
-      (vide si aucune vente n'a ete placee la, c'est OK pour la demo UI).
-    / - J: yesterday 00:00 -> today 00:00 (contains seed sales)
-    / - H: last Monday 00:00 -> this Monday 00:00 (likely empty, fine for UI demo)
-    """
-    now_local = timezone.localtime()
-    today_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-    hier_midnight = today_midnight - timedelta(days=1)
-    lundi_courant = today_midnight - timedelta(days=today_midnight.weekday())
-    lundi_precedent = lundi_courant - timedelta(days=7)
-    return {
-        "J": (hier_midnight, today_midnight),
-        "H": (lundi_precedent, lundi_courant),
-    }
 
 
 def seed_clotures_demo(schema_name):
@@ -323,26 +289,25 @@ def seed_clotures_demo(schema_name):
     / Generate 2 demo closures (J + H) on tenant `schema_name` after the
     sales seed, so PDF/CSV/Excel/FEC can be tested from the admin.
 
-    - J : couvre les ventes du seed (hier 14h) -> rapport non vide
-    - H : semaine derniere -> generalement vide (sauf si seed lance un lundi)
-      Permet d'avoir 2 entrees dans la changelist.
+    - J : la journee glissante, de la fin de la J precedente a maintenant. Elle
+      lit les ventes (`Vente`) du lieu : les lignes ecrites par cette demo n'ont
+      pas de vente, elles n'y sont donc pas.
+    - H : la semaine derniere (lundi-dimanche, heure locale du lieu).
+    Chaque cloture n'est creee que s'il y a des ventes dans sa periode.
 
     Doit etre appele HORS tenant_context (generer_cloture_pour_tenant
     pose son propre tenant_context interne).
     / Must be called OUTSIDE tenant_context (the task uses its own).
 
-    Retourne dict {niveau: uuid_str ou None si module billetterie/adhesion off}.
+    Retourne dict {niveau: uuid_str ou None si aucune vente}.
     """
     from comptabilite.tasks import generer_cloture_pour_tenant
 
-    bornes = _bornes_cloture_demo()
     resultats = {}
-    for niveau, (debut, fin) in bornes.items():
+    for niveau in ["J", "H"]:
         uuid_str = generer_cloture_pour_tenant(
             schema_name=schema_name,
             niveau=niveau,
-            datetime_debut_iso=debut.isoformat(),
-            datetime_fin_iso=fin.isoformat(),
         )
         resultats[niveau] = uuid_str
         logger.info(f"[{schema_name}] Cloture demo {niveau} : uuid={uuid_str}")
@@ -367,8 +332,8 @@ def seed_ventes_demo(*, reset=False):
     if reset:
         _reset_ventes_demo()
 
-    # --- Datetime cible : hier 14:00 heure locale (tombe dans la fenetre J)
-    # / Target datetime: yesterday 14:00 local (fits in daily closure window)
+    # --- Datetime cible : hier 14:00 heure locale
+    # / Target datetime: yesterday 14:00 local
     now_local = timezone.localtime()
     hier_14h = (now_local - timedelta(days=1)).replace(
         hour=14, minute=0, second=0, microsecond=0,
@@ -725,8 +690,8 @@ Cas NON couverts dans la compta TiBillet actuelle :
 {cas_non_couverts}
 
 Ces operations existent dans `fedow_core.Transaction` (V2) mais ne sont
-PAS tracees dans `LigneArticle` aujourd'hui — donc absentes du FEC,
-des CSV comptables, et du rapport temps reel.
+PAS tracees dans `LigneArticle` aujourd'hui — donc absentes du FEC
+et du rapport temps reel.
 
 Spec d'integration prevue apres le chantier Fedow V2 :
   TECH_DOC/SESSIONS/TODO/COMPTABILITE-inter-tenants.md

@@ -64,6 +64,7 @@ from BaseBillet.services_vente import (
     ajouter_reglement,
     choix_du_champ_rembourse_par,
     encaisser_vente,
+    ligne_payee_en_points,
     ligne_sans_argent_a_rendre,
     ouvrir_vente,
 )
@@ -4901,17 +4902,21 @@ class MembershipMVT(viewsets.ViewSet):
         LOCALISATION : BaseBillet/views.py — MembershipMVT (utilisé par `cancel`)
 
         Le formulaire ne parle que du DERNIER paiement de l'adhésion : c'est lui, et lui
-        seul, qui reçoit l'avoir (décision D30). Trois cas :
+        seul, qui reçoit l'avoir (décision D30). Quatre cas :
         - il n'y a aucun paiement : simple annulation ;
         - le dernier paiement a déjà un avoir ou un remboursement : pas d'option « avec
           avoir », une phrase le dit ;
+        - le dernier paiement est en points ou en temps (`ligne_payee_en_points`) : pas
+          d'option « avec avoir » (un avoir rendrait de l'argent pour des points), une
+          phrase le dit : les points ne sont pas rendus sur la carte ;
         - sinon : le dernier paiement est listé, avec l'option « avec avoir ». Le champ
           « Remboursé par » n'est affiché que s'il y a de l'argent à rendre hors Stripe.
           Il est pré-rempli avec le moyen d'origine s'il est dans la liste. Une ligne
           payée par Stripe affiche à la place « Remboursez cette somme depuis votre
           tableau de bord Stripe. ».
         / Only the latest payment is shown and credited (D30): no payment, already
-        refunded, or the "with credit note" option with the "Refunded by" field.
+        refunded, paid in points (no credit note), or the "with credit note" option with
+        the "Refunded by" field.
 
         :param membership: l'adhésion à annuler
         :param ligne_du_dernier_paiement: la `LigneArticle` du dernier paiement, ou None
@@ -4924,8 +4929,15 @@ class MembershipMVT(viewsets.ViewSet):
             ligne_du_dernier_paiement is not None
             and ligne_du_dernier_paiement.credit_notes.exists()
         )
+        dernier_paiement_en_points = (
+            ligne_du_dernier_paiement is not None
+            and not dernier_paiement_deja_rembourse
+            and ligne_payee_en_points(ligne_du_dernier_paiement)
+        )
         avoir_possible = (
-            ligne_du_dernier_paiement is not None and not dernier_paiement_deja_rembourse
+            ligne_du_dernier_paiement is not None
+            and not dernier_paiement_deja_rembourse
+            and not dernier_paiement_en_points
         )
 
         # Le champ « Remboursé par » : seulement s'il y a de l'argent à rendre hors Stripe.
@@ -4964,6 +4976,7 @@ class MembershipMVT(viewsets.ViewSet):
             "has_paid_lines": avoir_possible,
             "lignes_payees": lignes_payees_affichees,
             "dernier_paiement_deja_rembourse": dernier_paiement_deja_rembourse,
+            "dernier_paiement_en_points": dernier_paiement_en_points,
             "ligne_payee_par_stripe": ligne_payee_par_stripe,
             "champ_rembourse_par_affiche": champ_rembourse_par_affiche,
             "choix_du_champ_rembourse_par": choix_du_champ_rembourse_par(),
@@ -5000,6 +5013,8 @@ class MembershipMVT(viewsets.ViewSet):
         POST :
           1. Valide le formulaire avec AnnulationAdhesionSerializer. Refusé (moyen
              « Remboursé par » manquant) : le formulaire revient (200), rien n'est annulé.
+             « Avec avoir » sur un dernier paiement en points ou en temps : refusé de
+             même, le formulaire revient avec la raison.
           2. Dans UNE transaction (tout ou rien) : l'adhésion passe ADMIN_CANCELED, puis,
              si « avec avoir », l'avoir du dernier paiement est écrit par
              `ecrire_la_vente_d_avoir_d_une_ligne` (vente AVOIR liée, origine ADMIN,
@@ -5072,6 +5087,32 @@ class MembershipMVT(viewsets.ViewSet):
             )
 
         avoir_demande = serializer_annulation.validated_data["with_credit_note"]
+
+        # Dernier paiement en points ou en temps : « avec avoir » est refusé, même envoyé
+        # à la main (le bouton n'est pas affiché). Sans ce refus, l'adhésion serait
+        # annulée SANS avoir, en silence, alors que l'avoir était demandé.
+        # / Points payment: "with credit note" is refused, even when posted by hand;
+        # otherwise the membership would be cancelled without the requested credit note.
+        if avoir_demande and contexte_du_formulaire["dernier_paiement_en_points"]:
+            contexte_avec_erreurs = self._contexte_du_formulaire_d_annulation(
+                membership,
+                ligne_du_dernier_paiement,
+                valeurs_postees=request.POST,
+                erreurs={
+                    "non_field_errors": [
+                        _(
+                            "Adhésion payée en points ou en temps : aucun avoir n'est "
+                            "possible, et les points ne sont pas rendus sur la carte."
+                        )
+                    ]
+                },
+            )
+            return render(
+                request,
+                "admin/membership/partials/cancel_form.html",
+                contexte_avec_erreurs,
+            )
+
         avoir_a_ecrire = avoir_demande and contexte_du_formulaire["has_paid_lines"]
         ligne_payee_par_stripe = contexte_du_formulaire["ligne_payee_par_stripe"]
 

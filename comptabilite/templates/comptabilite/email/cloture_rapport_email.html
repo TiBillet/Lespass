@@ -1,4 +1,16 @@
 {% load i18n %}<!DOCTYPE html>
+{% comment %}
+EMAIL DE CLÔTURE — le résumé, le rapport complet en PDF joint
+/ Closure email — the summary, the full report as an attached PDF
+
+LOCALISATION : comptabilite/templates/comptabilite/email/cloture_rapport_email.html
+
+Envoyé par comptabilite/tasks.py `envoyer_email_cloture`, qui passe `config`, `cloture`,
+`chiffre_affaires_ttc_en_euros` (comptabilite/presentation.py `euros_a_la_francaise`) et
+la période déjà écrite en heure du lieu (`debut_en_heure_du_lieu`, `fin_en_heure_du_lieu`).
+Styles inline : un client mail ne lit pas de feuille externe.
+/ Sent by envoyer_email_cloture. Inline styles for mail clients.
+{% endcomment %}
 <html>
 <head><meta charset="UTF-8"></head>
 <body style="font-family: Arial, sans-serif; color: #222; max-width: 600px; margin: auto; padding: 16px;">
@@ -6,15 +18,13 @@
         {{ config.organisation }} — {% translate "Rapport de clôture" %}
     </h1>
     <p>
-        {% blocktrans with niveau=cloture.get_niveau_display num=cloture.numero_sequentiel %}
-        Clôture comptable périodique : {{ niveau }} #{{ num }}.
-        {% endblocktrans %}
+        {% blocktranslate with niveau=cloture.get_niveau_display numero=cloture.numero_sequentiel %}Clôture {{ niveau }} n° {{ numero }}.{% endblocktranslate %}
     </p>
     <p>
         <strong>{% translate "Période" %} :</strong>
-        {{ cloture.datetime_debut|date:"d/m/Y H:i" }} → {{ cloture.datetime_fin|date:"d/m/Y H:i" }}<br>
-        <strong>{% translate "Transactions" %} :</strong> {{ cloture.nombre_transactions }}<br>
-        <strong>{% translate "Total TTC" %} :</strong> {{ total_general_euros }} €
+        {{ debut_en_heure_du_lieu }} → {{ fin_en_heure_du_lieu }}<br>
+        <strong>{% translate "Ventes" %} :</strong> {{ cloture.nombre_transactions }}<br>
+        <strong>{% translate "Chiffre d'affaires TTC" %} :</strong> {{ chiffre_affaires_ttc_en_euros }}
     </p>
     <p>{% translate "Rapport complet en pièce jointe (PDF)." %}</p>
     <hr>

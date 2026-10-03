@@ -25,7 +25,7 @@ Fiche : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-E-plan-comptable.md §2, §3.
   toujours par sa monnaie, au 467000.
 - Le journal (§3.2) : le point de vente gagne ; sinon la table des neuf origines.
 - Le compte d'un article (§3.3) : les règles, dans l'ordre de la fiche.
-- Le CSV comptable en ligne (`comptabilite/csv_comptable.py`) lit le plan de la caisse,
+- Le FEC (`comptabilite/fec.py`) lit le plan de la caisse,
   et cherche la TVA par son taux.
 - Les écrans pour un bénévole (fiche §4) : le menu « Ventes & comptabilité » mène au
   plan, aux comptes des moyens et aux comptes des monnaies ; le plan est regroupé par
@@ -75,6 +75,7 @@ from django.core.exceptions import ValidationError  # noqa: E402
 from django.core.management import call_command  # noqa: E402
 from django.db import IntegrityError, connection, transaction  # noqa: E402
 from django.db.migrations.loader import MigrationLoader  # noqa: E402
+from django.db.models import Max, Min  # noqa: E402
 from django.test import RequestFactory  # noqa: E402
 from django.test.utils import CaptureQueriesContext  # noqa: E402
 from django.urls import reverse  # noqa: E402
@@ -113,7 +114,7 @@ from BaseBillet.services_vente import (  # noqa: E402
     ouvrir_vente,
     tarif_vendu_d_ecart_d_encaissement,
 )
-from comptabilite.csv_comptable import generer_csv_comptable  # noqa: E402
+from comptabilite.fec import generer_fec_cloture  # noqa: E402
 from comptabilite.models import ClotureCaisse  # noqa: E402
 from crowds.views import _get_or_create_crowdfunding_price  # noqa: E402
 from Customers.models import Client  # noqa: E402
@@ -453,41 +454,41 @@ def _point_de_vente(nom, code_journal=""):
     )
 
 
-def _cloture_avec_rapport(rapport, total_general, total_ht, total_tva):
+def _cloture_j_des_ventes_du_test():
     """
-    Une clôture du lieu courant, au rapport écrit à la main dans le format de
-    `comptabilite/services.py` (`RapportComptableService.generer_rapport_complet`).
-    / A closure of the current venue, with a hand-written report in the format of
-    comptabilite/services.py.
+    Une clôture J du lieu courant qui couvre toutes ses ventes réglées (sa plage de
+    numéros), écrite à la main : le FEC ne lit que la plage et le fuseau figé dans
+    l'en-tête du rapport.
+    / A J closure covering all settled sales, written by hand: the FEC only reads the
+    range and the frozen time zone.
     """
-    fin_de_la_periode = timezone.now() - timedelta(days=400)
+    numeros_des_ventes = Vente.objects.filter(statut=Vente.Statut.REGLEE).aggregate(
+        premier_numero=Min("numero"), dernier_numero=Max("numero")
+    )
+    fin_de_la_periode = timezone.now() + timedelta(minutes=1)
     return ClotureCaisse.objects.create(
         niveau=ClotureCaisse.NIVEAU_JOURNALIER,
         numero_sequentiel=990001,
         datetime_debut=fin_de_la_periode - timedelta(days=1),
         datetime_fin=fin_de_la_periode,
-        total_general=total_general,
-        total_ht=total_ht,
-        total_tva=total_tva,
-        rapport_json=rapport,
+        numero_premiere_vente=numeros_des_ventes["premier_numero"],
+        numero_derniere_vente=numeros_des_ventes["dernier_numero"],
+        rapport_json={"en_tete": {"fuseau_horaire": "Europe/Paris"}},
     )
 
 
-def _lignes_du_csv_sage_50(cloture):
+def _lignes_du_fec(cloture):
     """
-    Génère le CSV comptable au profil Sage 50 et rend ses lignes (dict par colonne),
-    avec les avertissements.
-    / Generates the Sage 50 accounting CSV and returns its rows and the warnings.
+    Génère le FEC de la clôture et rend ses lignes (dict par colonne).
+    / Generates the closure's FEC and returns its rows.
     """
-    contenu_en_octets, _nom, _type, avertissements = generer_csv_comptable(
-        cloture, "sage_50"
-    )
-    contenu = contenu_en_octets.decode("utf-8-sig")
-    lecteur = csv.DictReader(StringIO(contenu), delimiter=";")
-    lignes_du_csv = []
+    contenu_en_octets, _nom, _type = generer_fec_cloture(cloture)
+    contenu = contenu_en_octets.decode("utf-8")
+    lecteur = csv.DictReader(StringIO(contenu), delimiter="\t")
+    lignes_du_fec = []
     for ligne in lecteur:
-        lignes_du_csv.append(ligne)
-    return lignes_du_csv, avertissements
+        lignes_du_fec.append(ligne)
+    return lignes_du_fec
 
 
 # --------------------------------------------------------------------------- #
@@ -2115,13 +2116,15 @@ class TestPlanComptableUnique(FastTenantTestCase):
         )
 
     # ------------------------------------------------------------------ #
-    #  Le CSV comptable en ligne / The online accounting CSV              #
+    #  Le FEC lit le plan du lieu / The FEC reads the venue's plan         #
     # ------------------------------------------------------------------ #
 
     def test_tva_cherchee_par_taux(self):
-        """Le CSV prend le compte de TVA du lieu à ce taux, quel que soit son
-        numéro : 20 % au numéro du lieu, 2,1 % et 5,5 % aux numéros du plan.
-        / The CSV takes the venue's VAT account at that rate, whatever its number."""
+        """Le FEC prend le compte de TVA du lieu à ce taux, quel que soit son
+        numéro : 20 % au numéro du lieu, 2,1 % et 5,5 % aux numéros du plan. Trois
+        articles vendus en espèces, un par taux.
+        / The FEC takes the venue's VAT account at that rate, whatever its number."""
+        _preparer_la_caisse()
         _compte("445711").delete()
         CompteComptable.objects.create(
             numero_de_compte="445700",
@@ -2129,55 +2132,35 @@ class TestPlanComptableUnique(FastTenantTestCase):
             nature_du_compte=CompteComptable.TVA,
             taux_de_tva=Decimal("20.00"),
         )
-        rapport = {
-            "totaux_par_moyen": {
-                "CA": {"label": "Espèces", "total": 12500, "nb": 3},
-                "total": 12500,
-                "currency_code": "EUR",
-            },
-            "detail_ventes": {},
-            "tva": {
-                "20.00": {
-                    "taux": 20.0,
-                    "total_ttc": 6000,
-                    "total_ht": 5000,
-                    "total_tva": 1000,
-                },
-                "5.50": {
-                    "taux": 5.5,
-                    "total_ttc": 4220,
-                    "total_ht": 4000,
-                    "total_tva": 220,
-                },
-                "2.10": {
-                    "taux": 2.1,
-                    "total_ttc": 2280,
-                    "total_ht": 2233,
-                    "total_tva": 47,
-                },
-            },
-        }
-        cloture = _cloture_avec_rapport(
-            rapport, total_general=12500, total_ht=11233, total_tva=1267
+        for taux_tva in ["20", "5.5", "2.1"]:
+            tarif_vendu = creer_tarif_vendu(nom=f"Article à {taux_tva} %")
+            _ranger_dans_une_categorie(tarif_vendu, _compte("706000"))
+            _vendre(tarif_vendu, moyen="CA", taux_tva=taux_tva)
+        cloture = _cloture_j_des_ventes_du_test()
+
+        lignes_du_fec = _lignes_du_fec(cloture)
+
+        # Les comptes de TVA écrits, reconnus par leur nature dans le plan du lieu.
+        # / The written VAT accounts, recognised by their nature in the venue's plan.
+        numeros_des_comptes_de_tva = set(
+            CompteComptable.objects.filter(
+                nature_du_compte=CompteComptable.TVA
+            ).values_list("numero_de_compte", flat=True)
         )
-
-        lignes_du_csv, _avertissements = _lignes_du_csv_sage_50(cloture)
-
-        # Les écritures de TVA portent « TVA » dans leur libellé ; celle des espèces
-        # non.
-        # / VAT entries carry "TVA" in their label; the cash one does not.
         comptes_de_tva_ecrits = []
-        for ligne in lignes_du_csv:
-            if "TVA" in ligne["EcritureLib"]:
+        for ligne in lignes_du_fec:
+            if ligne["CompteNum"] in numeros_des_comptes_de_tva:
                 comptes_de_tva_ecrits.append(ligne["CompteNum"])
         assert sorted(comptes_de_tva_ecrits) == ["445700", "445713", "445714"]
 
-    def test_csv_comptable_lit_le_plan_de_la_caisse(self):
-        """Le CSV en ligne lit le plan de la caisse : les correspondances des moyens
+    def test_fec_lit_le_plan_de_la_caisse(self):
+        """Le FEC lit le plan de la caisse : les correspondances des moyens
         (`laboutik.MappingMoyenDePaiement`) et les comptes (`laboutik.CompteComptable`,
-        numéro et libellé du lieu), pour les moyens, les billets et les adhésions.
-        / The online CSV reads the register's plan: method mappings and accounts
+        numéro et libellé du lieu), pour les moyens, les billets et les adhésions. Un
+        billet (TVA 20 %) payé en espèces, une adhésion (TVA 0) payée par Stripe.
+        / The FEC reads the register's plan: method mappings and accounts
         (number and venue label), for methods, tickets and memberships."""
+        _preparer_la_caisse()
         # Le lieu envoie ses espèces vers son propre compte, et renomme deux comptes.
         # / The venue sends its cash to its own account and renames two accounts.
         compte_de_la_caisse_du_bar = _creer_un_compte(
@@ -2195,34 +2178,20 @@ class TestPlanComptableUnique(FastTenantTestCase):
         compte_des_cotisations.libelle_du_compte = "Cotisations (libellé du lieu)"
         compte_des_cotisations.save()
 
-        rapport = {
-            "totaux_par_moyen": {
-                "CA": {"label": "Espèces", "total": 2000, "nb": 1},
-                "SN": {"label": "Stripe", "total": 10000, "nb": 2},
-                "total": 12000,
-                "currency_code": "EUR",
-            },
-            "detail_ventes": {
-                "B": {"nom_categorie": "Billet", "articles": [], "total_ttc": 6000},
-                "A": {"nom_categorie": "Adhésion", "articles": [], "total_ttc": 6000},
-            },
-            "tva": {
-                "20.00": {
-                    "taux": 20.0,
-                    "total_ttc": 6000,
-                    "total_ht": 5000,
-                    "total_tva": 1000,
-                },
-            },
-        }
-        cloture = _cloture_avec_rapport(
-            rapport, total_general=12000, total_ht=11000, total_tva=1000
+        tarif_du_billet = creer_tarif_vendu(
+            nom="Billet", categorie_article=Product.BILLET
         )
+        tarif_de_l_adhesion = creer_tarif_vendu(
+            nom="Adhésion", taux_tva="0.00", categorie_article=Product.ADHESION
+        )
+        _vendre(tarif_du_billet, moyen="CA", taux_tva="20")
+        _vendre(tarif_de_l_adhesion, moyen="SN", taux_tva="0")
+        cloture = _cloture_j_des_ventes_du_test()
 
-        lignes_du_csv, avertissements = _lignes_du_csv_sage_50(cloture)
+        lignes_du_fec = _lignes_du_fec(cloture)
 
         comptes_ecrits = set()
-        for ligne in lignes_du_csv:
+        for ligne in lignes_du_fec:
             comptes_ecrits.add((ligne["CompteNum"], ligne["CompteLib"]))
         assert comptes_ecrits == {
             ("530100", "Caisse du bar"),
@@ -2231,7 +2200,6 @@ class TestPlanComptableUnique(FastTenantTestCase):
             ("756000", "Cotisations (libellé du lieu)"),
             ("445711", "TVA collectée 20 %"),
         }
-        assert avertissements == []
 
     # ------------------------------------------------------------------ #
     #  Les écrans pour un bénévole (fiche §4) / Volunteer screens         #

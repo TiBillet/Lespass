@@ -16,9 +16,11 @@ QUI APPELLE / CALLERS
   le bouton « Charger le plan par défaut » de l'admin (`laboutik/views.py`).
 - `s_assurer_que_le_plan_existe()` : le filet des rapports et des exports. Rien sur le
   chemin d'une vente.
-- `compte_pour_reglement()`, `compte_pour_article()`, `journal_pour()`,
-  `collisions_de_codes_journal()`, `points_de_vente_sans_code_journal()` : les exports
-  (fiche F) et « Plan complet ? ». Ces règles ne modifient rien en base.
+- `compte_pour_reglement()`, `compte_pour_article()`, `compte_de_tva_pour_taux()`,
+  `comptes_du_plan_par_defaut_du_lieu()`, `compte_des_cadeaux_a_la_clientele()`,
+  `journal_pour()`, `collisions_de_codes_journal()`, `points_de_vente_au_code_journal_reserve()`,
+  `points_de_vente_sans_code_journal()` : les exports (`comptabilite/ventilation.py`)
+  et « Plan complet ? ». Ces règles ne modifient rien en base.
 - `ce_qui_manque_pour_exporter()` (« Plan complet ? ») et
   `monnaies_acceptees_par_le_lieu()` : les écrans du plan dans l'admin
   (`Administration/admin/laboutik.py`).
@@ -312,6 +314,44 @@ def _compte_du_plan_par_defaut(cle, comptes_du_plan_par_defaut=None):
     return compte
 
 
+def comptes_du_plan_par_defaut_du_lieu():
+    """
+    Les comptes du lieu qui portent un numéro du plan par défaut (`COMPTE_PAR_DEFAUT`),
+    lus en UNE requête. Un appelant qui applique la règle d'un article à beaucoup de
+    lignes passe ce dict à `compte_pour_article` : la règle y cherche ses comptes au
+    lieu de relire la base pour chaque ligne.
+    / The venue's default-plan accounts, read in ONE query, to pass to
+    compte_pour_article.
+
+    :return: dict {numéro: CompteComptable} ; un numéro absent manque au lieu
+    """
+    comptes_du_plan_par_defaut = {}
+    comptes_lus = CompteComptable.objects.filter(
+        numero_de_compte__in=list(COMPTE_PAR_DEFAUT.values())
+    )
+    for compte_du_plan in comptes_lus:
+        comptes_du_plan_par_defaut[compte_du_plan.numero_de_compte] = compte_du_plan
+    return comptes_du_plan_par_defaut
+
+
+def compte_des_cadeaux_a_la_clientele(comptes_du_plan_par_defaut=None):
+    """
+    Le compte des cadeaux à la clientèle (623400) : la charge d'une recharge offerte
+    (D8 bis). C'est un compte du plan par défaut, cherché par son numéro.
+    / The "gifts to customers" account (623400), the expense of an offered top-up.
+
+    APPELÉE PAR : `comptabilite/ventilation.py` (recharge offerte).
+
+    :param comptes_du_plan_par_defaut: dict de `comptes_du_plan_par_defaut_du_lieu()`,
+        déjà lu par l'appelant, ou None pour lire le compte en base
+    :return: le `CompteComptable`
+    :raises CompteDuPlanParDefautManquant: si le lieu n'a pas ce compte
+    """
+    return _compte_du_plan_par_defaut(
+        "cadeaux_a_la_clientele", comptes_du_plan_par_defaut
+    )
+
+
 def _la_monnaie_est_celle_du_lieu(asset_uuid):
     """
     Vrai si la monnaie a été créée par le lieu courant : `fedow_core.Asset.tenant_origin`
@@ -430,38 +470,65 @@ JOURNAL_PAR_ORIGINE = {
     SaleOrigin.ADMIN: "ADMIN",
 }
 
+# Le libellé de chaque journal d'origine, écrit dans le FEC (`JournalLib`). Le journal
+# d'un point de vente a pour libellé le nom du point de vente. Ce sont des DONNÉES,
+# comme un libellé de compte : jamais `_()`.
+# / The label of each origin journal, written in the FEC. Data, never `_()`.
+LIBELLE_DU_JOURNAL_SANS_POINT_DE_VENTE = {
+    "CAISSE": "Caisse",
+    "TIREUSE": "Tireuse",
+    "WEB": "Ventes en ligne",
+    "ADMIN": "Administration",
+}
+
 LONGUEUR_MAXIMALE_D_UN_CODE_JOURNAL = 10
+
+
+def _lettres_d_un_code_journal(texte):
+    """
+    Les lettres d'un texte, comme un code journal les veut : majuscules, sans accent,
+    lettres A à Z seulement, 10 au plus. « Buvette d'Été 2 » → « BUVETTEDET ».
+    Rend "" si le texte ne contient aucune lettre.
+    / A text's letters, as a journal code wants them. Returns "" without any letter.
+    """
+    # NFKD sépare la lettre de son accent (« É » → « E » + accent) ; on ne garde que
+    # les lettres A à Z.
+    # / NFKD splits a letter from its accent; only A to Z letters are kept.
+    texte_decompose = unicodedata.normalize("NFKD", texte.upper())
+    lettres_du_texte = []
+    for caractere in texte_decompose:
+        if "A" <= caractere <= "Z":
+            lettres_du_texte.append(caractere)
+    return "".join(lettres_du_texte)[:LONGUEUR_MAXIMALE_D_UN_CODE_JOURNAL]
 
 
 def code_journal_du_point_de_vente(point_de_vente):
     """
-    Le code journal d'un point de vente : son code renseigné, en majuscules, sinon
-    dérivé de son nom (majuscules, sans accent, lettres seules, 10 caractères au plus).
-    / A point of sale's journal code: its set code in uppercase, else derived from its
-    name.
+    Le code journal d'un point de vente : son code renseigné, sinon son nom, nettoyé
+    par la même règle (majuscules, sans accent, lettres A à Z seulement, 10 au plus).
+    / A point of sale's journal code: its set code, else its name, cleaned by the same
+    rule.
 
-    « Buvette d'Été 2 » → « BUVETTEDET ».
+    « Buvette d'Été 2 » → « BUVETTEDET » ; code renseigné « bar2 » → « BAR ».
 
-    Le code renseigné passe en majuscules ici : le validateur du champ ne tourne que
-    dans l'admin, et un code posé autrement (shell, API, migration) arriverait tel quel
-    au FEC. Les collisions comparent donc des codes en majuscules.
-    / The set code is uppercased here: the field validator only runs in the admin.
+    Le code renseigné est nettoyé ici : le validateur du champ ne tourne que dans
+    l'admin, et un code posé autrement (shell, API, migration) arriverait tel quel au
+    FEC et aux logiciels comptables. Les collisions comparent donc des codes nettoyés.
+    / The set code is cleaned here: the field validator only runs in the admin.
 
-    :raises CompteComptableManquant: si le nom ne contient aucune lettre
+    :raises CompteComptableManquant: si le code renseigné, ou à défaut le nom, ne
+        contient aucune lettre
     """
     if point_de_vente.code_journal:
-        return point_de_vente.code_journal.upper()
+        code_nettoye = _lettres_d_un_code_journal(point_de_vente.code_journal)
+        if code_nettoye == "":
+            raise CompteComptableManquant(
+                f"Le code journal « {point_de_vente.code_journal} » du point de vente "
+                f"« {point_de_vente.name} » ne contient aucune lettre."
+            )
+        return code_nettoye
 
-    # NFKD sépare la lettre de son accent (« É » → « E » + accent) ; on ne garde que
-    # les lettres A à Z.
-    # / NFKD splits a letter from its accent; only A to Z letters are kept.
-    nom_decompose = unicodedata.normalize("NFKD", point_de_vente.name.upper())
-    lettres_du_nom = []
-    for caractere in nom_decompose:
-        if "A" <= caractere <= "Z":
-            lettres_du_nom.append(caractere)
-    code_derive = "".join(lettres_du_nom)[:LONGUEUR_MAXIMALE_D_UN_CODE_JOURNAL]
-
+    code_derive = _lettres_d_un_code_journal(point_de_vente.name)
     if code_derive == "":
         raise CompteComptableManquant(
             f"Le point de vente « {point_de_vente.name} » n'a pas de code journal, "
@@ -498,6 +565,29 @@ def journal_pour(point_de_vente, origine):
     return journal_de_l_origine
 
 
+def _points_de_vente_par_code_journal():
+    """
+    Les points de vente du lieu, regroupés par code journal, triés par nom.
+    Un point de vente sans code possible (code renseigné ou nom sans lettre) est sauté
+    ici, et rendu à part par `points_de_vente_sans_code_journal()`.
+    / The venue's points of sale grouped by journal code; one without a possible code
+    is skipped.
+
+    :return: dict {code journal: [PointDeVente, ...]}
+    """
+    points_de_vente_du_lieu = PointDeVente.objects.order_by("name")
+    points_de_vente_par_code = {}
+    for point_de_vente in points_de_vente_du_lieu:
+        try:
+            code = code_journal_du_point_de_vente(point_de_vente)
+        except CompteComptableManquant:
+            continue
+        if code not in points_de_vente_par_code:
+            points_de_vente_par_code[code] = []
+        points_de_vente_par_code[code].append(point_de_vente)
+    return points_de_vente_par_code
+
+
 def collisions_de_codes_journal():
     """
     Les codes journal portés par plusieurs points de vente. « Plan complet ? » les
@@ -506,36 +596,51 @@ def collisions_de_codes_journal():
 
     LOCALISATION : laboutik/plan_comptable.py (fiche E §3.2)
 
-    Un point de vente sans code, au nom sans aucune lettre, n'a pas de code : il est
-    sauté ici (il ne cache pas la collision des autres), et rendu à part par
-    `points_de_vente_sans_code_journal()`.
-    / A point of sale without derivable code is skipped here, and returned apart by
-    points_de_vente_sans_code_journal().
+    Un point de vente sans code possible est sauté (il ne cache pas la collision des
+    autres).
+    / A point of sale without possible code is skipped.
 
     :return: dict {code journal: [PointDeVente, ...]}, seulement les codes en double
     """
-    points_de_vente_par_code = {}
-    for point_de_vente in PointDeVente.objects.order_by("name"):
-        try:
-            code = code_journal_du_point_de_vente(point_de_vente)
-        except CompteComptableManquant:
-            continue
-        if code not in points_de_vente_par_code:
-            points_de_vente_par_code[code] = []
-        points_de_vente_par_code[code].append(point_de_vente)
-
     collisions = {}
+    points_de_vente_par_code = _points_de_vente_par_code_journal()
     for code, points_de_vente in points_de_vente_par_code.items():
         if len(points_de_vente) > 1:
             collisions[code] = points_de_vente
     return collisions
 
 
+def points_de_vente_au_code_journal_reserve():
+    """
+    Les points de vente dont le code journal est celui d'un journal d'origine
+    (`JOURNAL_PAR_ORIGINE` : CAISSE, TIREUSE, WEB, ADMIN), par exemple un point de vente
+    nommé « Caisse ». Ces codes sont réservés aux ventes sans point de vente : sinon les
+    deux se mêleraient dans un journal. « Plan complet ? » les signale et l'export est
+    refusé.
+    / Points of sale whose journal code is an origin journal's code (reserved).
+
+    LOCALISATION : laboutik/plan_comptable.py (fiche E §3.2)
+
+    :return: dict {code journal réservé: [PointDeVente, ...]}
+    """
+    codes_reserves_aux_origines = set()
+    for code_du_journal_d_origine in JOURNAL_PAR_ORIGINE.values():
+        codes_reserves_aux_origines.add(code_du_journal_d_origine)
+
+    points_de_vente_au_code_reserve = {}
+    points_de_vente_par_code = _points_de_vente_par_code_journal()
+    for code, points_de_vente in points_de_vente_par_code.items():
+        if code in codes_reserves_aux_origines:
+            points_de_vente_au_code_reserve[code] = points_de_vente
+    return points_de_vente_au_code_reserve
+
+
 def points_de_vente_sans_code_journal():
     """
-    Les points de vente qui n'ont pas de code journal et dont le nom ne contient
-    aucune lettre : aucun code ne peut en être dérivé. « Plan complet ? » les signale.
-    / Points of sale without journal code whose name has no letter.
+    Les points de vente sans code journal possible : leur code renseigné ne contient
+    aucune lettre, ou, sans code renseigné, leur nom n'en contient aucune.
+    « Plan complet ? » les signale.
+    / Points of sale without a possible journal code (set code or name without letter).
 
     LOCALISATION : laboutik/plan_comptable.py (fiche E §3.2)
 
@@ -727,6 +832,48 @@ def compte_pour_article(ligne, comptes_du_plan_par_defaut=None):
         f"Le produit « {produit.name} » n'a pas de compte : posez-lui une catégorie "
         f"de caisse reliée à un compte."
     )
+
+
+def compte_de_tva_pour_taux(taux_de_tva):
+    """
+    Le compte de TVA collectée d'un taux.
+    / The collected VAT account of a rate.
+
+    LOCALISATION : laboutik/plan_comptable.py (fiche E §3.4)
+
+    La TVA est cherchée par son TAUX, jamais par son numéro : un lieu peut renuméroter
+    ses comptes de TVA. Un compte actif de ce taux d'abord (le plus petit numéro s'il
+    y en a plusieurs) ; sinon un compte inactif de ce taux. « Inactif »
+    (`est_actif=False`) cache seulement le compte des menus de choix : l'export s'en
+    sert quand même.
+    Un taux de 0 n'écrit pas de TVA : l'appelant ne demande pas son compte.
+    / VAT is looked up by rate, never by number. An active account of that rate first
+    (lowest number), otherwise an inactive one: "inactive" only hides the account from
+    choice menus, the export still uses it.
+
+    APPELÉE PAR : `comptabilite/ventilation.py` (ventilation d'une clôture J).
+
+    :param taux_de_tva: le taux en pour cent (Decimal), celui de la ligne vendue
+    :return: le `CompteComptable` de TVA
+    :raises CompteComptableManquant: si aucun compte de TVA n'a ce taux
+    """
+    # Tri : les comptes actifs avant les inactifs (True avant False en ordre
+    # décroissant), puis le plus petit numéro.
+    # / Sort: active accounts first, then the lowest number.
+    compte_de_tva = (
+        CompteComptable.objects.filter(
+            nature_du_compte=CompteComptable.TVA,
+            taux_de_tva=taux_de_tva,
+        )
+        .order_by("-est_actif", "numero_de_compte")
+        .first()
+    )
+    if compte_de_tva is None:
+        raise CompteComptableManquant(
+            f"Le plan n'a pas de compte de TVA au taux de "
+            f"{_format_du_taux(Decimal(taux_de_tva))} %."
+        )
+    return compte_de_tva
 
 
 # --------------------------------------------------------------------------- #
@@ -921,8 +1068,10 @@ def ce_qui_manque_pour_exporter():
     2. un moyen de paiement utilisé sans compte ;
     3. une monnaie utilisée sans compte (monnaie d'un autre lieu, ou FED) ;
     4. un taux de TVA utilisé sans compte de TVA à ce taux (0 % n'en exige pas) ;
-    5. deux points de vente au même code journal ;
-    6. un point de vente sans code journal, au nom sans lettre ;
+    5. deux points de vente au même code journal ; 5 bis. un point de vente au code
+       d'un journal d'origine (CAISSE, TIREUSE, WEB, ADMIN) ;
+    6. un point de vente sans code journal possible (code renseigné ou nom sans
+       lettre) ;
     7. des règlements au compte d'attente 471000 (moyen inconnu), à reclasser.
 
     APPELÉ PAR : les trois écrans du plan dans l'admin (composant en tête,
@@ -945,11 +1094,7 @@ def ce_qui_manque_pour_exporter():
     # du compte d'un article les cherche dans ce dict au lieu de relire la base pour
     # chaque produit. Variable locale : rien ne survit à l'appel.
     # / Default plan accounts, read in ONE query for the whole call. Local variable.
-    comptes_du_plan_par_defaut = {}
-    for compte_du_plan in CompteComptable.objects.filter(
-        numero_de_compte__in=list(COMPTE_PAR_DEFAUT.values())
-    ):
-        comptes_du_plan_par_defaut[compte_du_plan.numero_de_compte] = compte_du_plan
+    comptes_du_plan_par_defaut = comptes_du_plan_par_defaut_du_lieu()
 
     # --- 1. Produits vendus sans compte / Products sold without account ---
     # Une ligne par triplet (produit, monnaie, moyen) suffit : la règle ne lit que le
@@ -1081,8 +1226,11 @@ def ce_qui_manque_pour_exporter():
         )
 
     # --- 4. Taux de TVA utilisés sans compte / VAT rates used without account ---
-    # Un taux de 0 % n'écrit pas de TVA : il n'exige pas de compte.
-    # / A 0 % rate writes no VAT: no account required.
+    # Un taux de 0 % n'écrit pas de TVA : il n'exige pas de compte. Un compte de TVA
+    # de ce taux suffit, actif ou non : « inactif » ne cache le compte que des menus de
+    # choix, l'export s'en sert quand même (`compte_de_tva_pour_taux`).
+    # / A 0 % rate writes no VAT: no account required. Any VAT account of that rate,
+    # active or not, is enough (the export uses it).
     taux_de_tva_utilises = (
         LigneArticle.objects.filter(vente__statut=Vente.Statut.REGLEE)
         .exclude(vat=0)
@@ -1124,15 +1272,40 @@ def ce_qui_manque_pour_exporter():
             }
         )
 
-    # --- 6. Points de vente sans code possible / Points of sale without code ---
-    for point_de_vente in points_de_vente_sans_code_journal():
+    # --- 5 bis. Codes journal réservés aux origines / Codes reserved to origins ---
+    points_de_vente_par_code_reserve = points_de_vente_au_code_journal_reserve()
+    for code, points_de_vente in points_de_vente_par_code_reserve.items():
+        noms_des_points_de_vente = []
+        for point_de_vente in points_de_vente:
+            noms_des_points_de_vente.append(f"« {point_de_vente.name} »")
         manques.append(
             {
                 "phrase": gettext(
-                    "Donnez un code journal au point de vente « %(nom)s » : son nom "
-                    "ne contient aucune lettre."
+                    "Le code journal « %(code)s » de %(noms)s est réservé aux ventes "
+                    "sans point de vente. Donnez-lui un autre code."
                 )
-                % {"nom": point_de_vente.name},
+                % {"noms": ", ".join(noms_des_points_de_vente), "code": code},
+                "lien": lien_des_points_de_vente,
+            }
+        )
+
+    # --- 6. Points de vente sans code possible / Points of sale without code ---
+    # La phrase dit ce qui ne contient aucune lettre : le code renseigné, ou le nom.
+    # / The sentence says what has no letter: the set code, or the name.
+    for point_de_vente in points_de_vente_sans_code_journal():
+        if point_de_vente.code_journal:
+            phrase_du_manque = gettext(
+                "Le code journal « %(code)s » du point de vente « %(nom)s » ne "
+                "contient aucune lettre. Donnez-lui un code en lettres."
+            ) % {"code": point_de_vente.code_journal, "nom": point_de_vente.name}
+        else:
+            phrase_du_manque = gettext(
+                "Donnez un code journal au point de vente « %(nom)s » : son nom "
+                "ne contient aucune lettre."
+            ) % {"nom": point_de_vente.name}
+        manques.append(
+            {
+                "phrase": phrase_du_manque,
                 "lien": reverse(
                     "staff_admin:laboutik_pointdevente_change",
                     args=[point_de_vente.pk],

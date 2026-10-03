@@ -128,6 +128,12 @@ gardent leur découpage : chaque part est un article, arrondi une fois.
 3. **FEC et rapports d'avant la bascule** (Q3) : ils ont été produits par l'ancien code.
 4. **Anciennes clôtures `laboutik.ClotureCaisse`** (Q4) : documents de caisse d'origine ;
    H retire le modèle.
+5. **Rattrapage automatique des clôtures** (constat F-2e, 2026-10-03) : la tâche horaire
+   crée toutes les semaines / mois / années finis et non vides qui manquent, depuis la
+   première vente du lieu. Après la reprise de plusieurs années de ventes, le premier
+   passage créerait des centaines de clôtures dans une seule sous-tâche (limite de temps
+   Celery) et enverrait un mail par clôture. À décider avec Q2 (clôture de reprise) :
+   une date de départ du rattrapage (la bascule) ou un plafond par passage.
 
 ## 7. Session R-2 — l'outil
 

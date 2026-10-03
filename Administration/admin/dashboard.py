@@ -471,9 +471,9 @@ def _construire_sections_modules(request):
                     #     "permission": admin_permission,
                     # },
                     # Les clotures de caisse ne sont PAS ici : elles vivent dans
-                    # « Ventes & comptabilite », sous le rapport des ventes en ligne.
+                    # « Ventes & comptabilite », sous le rapport des ventes.
                     # / POS closures are NOT here: they live in "Sales & accounting",
-                    # under the online sales report.
+                    # under the sales report.
                     {
                         "title": _("Cash float history"),
                         "icon": "account_balance_wallet",
@@ -826,13 +826,14 @@ def _construire_sections_modules(request):
 
     # --- Toujours visible : Ventes & comptabilite ---
     # / --- Always visible: Sales & accounting ---
-    # Les deux rapports sont ranges l'un sous l'autre : ventes en ligne, puis
-    # ventes caisse. Le rapport caisse n'apparait que si le module caisse est actif.
-    # / Both reports sit one under the other: online sales, then POS sales.
-    # The POS report only shows when the POS module is on.
+    # Les deux rapports sont ranges l'un sous l'autre : le rapport des ventes (la
+    # cloture unique, toutes origines), puis l'ancien rapport de la caisse. Celui-ci
+    # n'apparait que si le module caisse est actif.
+    # / Both reports sit one under the other: the sales report (single closure, every
+    # origin), then the old POS report, only when the POS module is on.
     items_ventes_et_comptabilite = [
         {
-            "title": _("Rapport ventes en ligne"),
+            "title": _("Rapport des ventes"),
             "icon": "lock",
             "link": _safe_rev(
                 "staff_admin:comptabilite_cloturecaisse_changelist"
@@ -843,7 +844,7 @@ def _construire_sections_modules(request):
     if configuration.module_caisse:
         items_ventes_et_comptabilite.append(
             {
-                "title": _("Rapport ventes caisse"),
+                "title": _("Ancien rapport caisse"),
                 "icon": "point_of_sale",
                 "link": _safe_rev(
                     "staff_admin:laboutik_cloturecaisse_changelist"

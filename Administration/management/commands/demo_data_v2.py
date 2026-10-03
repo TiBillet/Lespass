@@ -858,7 +858,7 @@ class Command(BaseCommand):
                 ))
             else:
                 self.stdout.write(self.style.WARNING(
-                    f"  - Cloture {niveau} : skip (modules billetterie/adhesion off)"
+                    f"  - Cloture {niveau} : rien a cloturer (aucune vente)"
                 ))
 
         afficher_warning_cas_non_couverts(self.stdout)

@@ -11,8 +11,9 @@ dans « Rapports » : la clôture caisse (`laboutik`) était rangée dans la sec
 de la caisse, loin de la clôture en ligne (`comptabilite`).
 
 Désormais, la section « Ventes & comptabilité » montre, dans cet ordre :
-  1. « Rapport ventes en ligne » -> clôtures `comptabilite` ;
-  2. « Rapport ventes caisse »   -> clôtures `laboutik`, seulement si le
+  1. « Rapport des ventes »    -> clôtures `comptabilite` (la clôture unique,
+     toutes origines) ;
+  2. « Ancien rapport caisse » -> clôtures `laboutik`, seulement si le
      module caisse est actif.
 L'entrée caisse quitte la section de la caisse : elle n'est pas dupliquée.
 / Chantier 05-0 (D25): both closure reports live in "Sales & accounting",
@@ -127,6 +128,21 @@ def test_menu_ventes_comptabilite_range_les_deux_rapports(lieu_lespass):
     ), (
         "La section Ventes & comptabilité doit lister le rapport en ligne "
         f"puis le rapport caisse. Liens trouvés : {liens_ventes}"
+    )
+
+    # 1 bis. Les libellés : « Rapport des ventes » (la clôture unique, toutes
+    # origines) et « Ancien rapport caisse » (l'ancienne clôture de la caisse).
+    # / 1a. The labels: the single closure report, and the old POS report.
+    titres_par_lien = {}
+    for item in section_ventes.get("items", []):
+        titres_par_lien[str(item.get("link"))] = str(item.get("title"))
+    assert titres_par_lien[lien_rapport_en_ligne] == _("Rapport des ventes"), (
+        f"Libellé attendu « Rapport des ventes », trouvé : "
+        f"{titres_par_lien[lien_rapport_en_ligne]}"
+    )
+    assert titres_par_lien[lien_rapport_caisse] == _("Ancien rapport caisse"), (
+        f"Libellé attendu « Ancien rapport caisse », trouvé : "
+        f"{titres_par_lien[lien_rapport_caisse]}"
     )
 
     # 2. Aucune autre section ne pointe vers les clôtures caisse.

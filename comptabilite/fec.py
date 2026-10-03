@@ -1,197 +1,145 @@
 """
-Export FEC (Fichier des Ecritures Comptables) — norme francaise.
-/ FEC export — French legal accounting file format.
+Export FEC (Fichier des Écritures Comptables) d'une clôture.
+/ FEC export (French legal accounting file) of a closure.
 
 LOCALISATION : comptabilite/fec.py
 
-Format texte tabule, 18 colonnes obligatoires, encodage CP1252.
-Reference : article A47 A-1 du Livre des procedures fiscales.
+LE FICHIER (article A47 A-1 du Livre des procédures fiscales)
+Texte tabulé, 18 colonnes, encodage UTF-8 sans BOM, lignes séparées par CRLF. Une ligne
+d'en-tête (les noms des colonnes), puis une ligne par compte de chaque écriture.
+Montants avec une virgule décimale (« 12,34 »).
 
-FEC simplifie avec les comptes ecrits ci-dessous ; il ne lit pas le plan du lieu.
-TODO : lire le plan de la caisse (`laboutik.CompteComptable`,
-`laboutik/plan_comptable.py`) — fiche F du chantier 05.
+LES ÉCRITURES
+Elles viennent de `ecritures_de_l_export` (comptabilite/ventilation.py), qui porte
+leurs règles. Le FEC est le seul export comptable du lieu : tout logiciel comptable
+(Sage, EBP, PennyLane, Paheko, Odoo…) l'importe.
+- Le FEC n'est produit que par les clôtures J : une écriture par journal, équilibrée.
+- Une semaine, un mois, une année (H / M / A) n'ont pas d'écriture propre : leur FEC
+  est la suite des écritures des J DATÉES dans la période, dans l'ordre des numéros.
+  Le FEC fait foi par J.
+- La date d'une écriture (`EcritureDate`, `PieceDate`, `ValidDate`) est la date de
+  début de service de sa J : la date locale de la première vente de la J, dans le
+  fuseau figé dans l'en-tête de son rapport. Une J du 31 à 22 h au 1ᵉʳ à 2 h est
+  datée du 31, et va dans le FEC du mois du 31.
+- `EcritureNum` : « numéro de la J-code journal », un par journal et par J. Ce fichier
+  est un fichier d'import pour le comptable du lieu. Le numéro est stable entre le
+  FEC d'une J et celui de sa période, mais il n'est pas continu : le logiciel
+  comptable renumérote les écritures à l'import.
+- `PieceRef` : le numéro de la clôture J.
+- Le nom du fichier porte une date locale : pour une J, sa date de début de service ;
+  pour une H / M / A, son dernier jour, dans son fuseau.
+- Le FEC est recalculé à chaque export, avec le plan comptable du moment : rien n'est
+  figé dans la clôture. C'est le logiciel comptable du lieu qui fige les écritures
+  qu'il importe.
+- Un refus de la ventilation (`CompteComptableManquant`, `EcritureDesequilibree`)
+  remonte : aucun fichier n'est produit. Un compte manquant est relevé avec le numéro
+  de la J en cause (utile dans le FEC d'une période).
+/ FEC built from the J entries only; a period = the entries of its dated J. Dated by
+the start of service, in the time zone frozen in the J report. Recomputed at each
+export. A refusal goes up: no file.
 
-/ Tab-separated text, 18 mandatory columns, CP1252 encoding.
-Simplified FEC with the accounts written below; it does not read the venue's plan.
+APPELÉE PAR : `comptabilite/admin.py` (`ClotureCaisseAdmin.exporter_fec`).
+
+Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-F-rapport-unique.md (§4).
+Tests : tests/pytest/test_fec_equilibre.py
 """
 
-# Comptes comptables de ce FEC (plan comptable francais standard PCG). Le plan du
-# lieu (`laboutik.CompteComptable`) n'est pas lu ici.
-# / This FEC's accounting accounts (standard French PCG). The venue plan is not read.
-COMPTES_PAR_DEFAUT = {
-    "client": ("411000", "Clients"),
-    "banque": ("512000", "Banque"),
-    "caisse": ("530000", "Caisse"),
-    "cheques": ("511000", "Chèques à encaisser"),
-    "tva_55": ("4457100", "TVA collectée 5,5%"),
-    "tva_10": ("4457200", "TVA collectée 10%"),
-    "tva_20": ("4457300", "TVA collectée 20%"),
-    "ventes_billets": ("706000", "Prestations - Billets"),
-    "ventes_adhesions": ("756000", "Cotisations - Adhésions"),
-}
+from decimal import Decimal
 
-# Mapping PaymentMethod -> compte de tresorerie (clef de COMPTES_PAR_DEFAUT).
-# / PaymentMethod -> treasury account.
-MAPPING_PAIEMENT = {
-    "CA": "caisse",
-    "CC": "banque",
-    "CH": "cheques",
-    "TR": "banque",
-    "SF": "banque", "SN": "banque", "SP": "banque", "SR": "banque",
-    "QR": "banque",
-    "LE": "client", "LG": "client",
-}
+from comptabilite.ventilation import ecritures_de_l_export
 
-# 18 colonnes obligatoires du FEC (article A47 A-1).
-# / 18 mandatory FEC columns.
+# Les 18 colonnes obligatoires du FEC, dans l'ordre (article A47 A-1).
+# / The 18 mandatory FEC columns, in order.
 COLONNES_FEC = [
-    "JournalCode", "JournalLib", "EcritureNum", "EcritureDate",
-    "CompteNum", "CompteLib", "CompAuxNum", "CompAuxLib",
-    "PieceRef", "PieceDate", "EcritureLib", "Debit", "Credit",
-    "EcritureLet", "DateLet", "ValidDate", "Montantdevise", "Idevise",
+    "JournalCode",
+    "JournalLib",
+    "EcritureNum",
+    "EcritureDate",
+    "CompteNum",
+    "CompteLib",
+    "CompAuxNum",
+    "CompAuxLib",
+    "PieceRef",
+    "PieceDate",
+    "EcritureLib",
+    "Debit",
+    "Credit",
+    "EcritureLet",
+    "DateLet",
+    "ValidDate",
+    "Montantdevise",
+    "Idevise",
 ]
 
 
-def _euros_str(centimes):
-    """Convertit centimes (int) en string decimal francais '12,34'."""
-    if centimes is None or centimes == 0:
-        return "0,00"
-    return f"{centimes / 100:.2f}".replace(".", ",")
-
-
-def _ligne_fec(**champs):
+def _montant_du_fec(centimes):
     """
-    Construit une ligne FEC tabulee a partir des colonnes nommees.
-    Toute valeur contenant '\\t' est remplacee par ' ' (separateur FEC).
-    / Build a tab-separated FEC line. Any '\\t' in values is replaced by ' '.
+    Des centimes entiers en montant du FEC : 1234 → « 12,34 », 0 → « 0,00 ».
+    / Whole cents written the FEC way.
+    """
+    montant_en_euros = Decimal(centimes) / Decimal(100)
+    return f"{montant_en_euros:.2f}".replace(".", ",")
+
+
+def _ligne_fec(valeur_par_colonne):
+    """
+    Une ligne du FEC : les 18 colonnes séparées par des tabulations, vides si absentes.
+    Une tabulation ou un saut de ligne dans une valeur casserait le format : ils
+    deviennent des espaces.
+    / One FEC line: the 18 tab-separated columns; tabs and newlines become spaces.
     """
     valeurs = []
-    for col in COLONNES_FEC:
-        val = str(champs.get(col, ""))
-        # Eviter les tabulations dans les libelles (casserait le format)
-        # / Avoid tabs in field values (would break the format)
-        val = val.replace("\t", " ").replace("\r", " ").replace("\n", " ")
-        valeurs.append(val)
+    for colonne in COLONNES_FEC:
+        valeur = str(valeur_par_colonne.get(colonne, ""))
+        valeur = valeur.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+        valeurs.append(valeur)
     return "\t".join(valeurs)
 
 
-def generer_fec_cloture(cloture) -> tuple:
+def generer_fec_cloture(cloture):
     """
-    Retourne (bytes, filename, content_type) pour l'export FEC.
-    / Returns (bytes, filename, content_type) for the FEC export.
+    Le FEC d'une clôture : ses écritures si c'est une J ; celles des J datées dans sa
+    période si c'est une H, M ou A (`ecritures_de_l_export`).
+    / The FEC of a closure: its entries for a J; its dated J's entries for H / M / A.
 
-    Strategie : 1 ecriture comptable par cloture, ventilee en N lignes :
-    - 1 debit par moyen de paiement (compte tresorerie)
-    - 1 credit par categorie de vente (billets/adhesions)
-    - 1 credit par taux TVA collectee
-    / Strategy: 1 accounting entry per closure, split into N lines.
+    :param cloture: une `ClotureCaisse`
+    :return: (contenu en octets UTF-8, nom du fichier, type du contenu)
+    :raises CompteComptableManquant: si un compte ou un journal manque
+    :raises EcritureDesequilibree: si une écriture n'est pas équilibrée
     """
-    rapport = cloture.rapport_json or {}
+    export = ecritures_de_l_export(cloture)
 
-    journal_code = "VTE"
-    journal_lib = "Ventes"
-    ecriture_num = str(cloture.numero_sequentiel)
-    ecriture_date = cloture.datetime_fin.strftime("%Y%m%d")
-    piece_ref = f"CLOT-{cloture.numero_sequentiel}"
-    piece_date = ecriture_date
-    valid_date = ecriture_date
-    ecriture_lib_base = f"Cloture {cloture.get_niveau_display()} #{cloture.numero_sequentiel}"
+    lignes_du_fichier = ["\t".join(COLONNES_FEC)]
+    for ecriture in export["ecritures"]:
+        date_de_l_ecriture = ecriture["date"].strftime("%Y%m%d")
+        for ligne in ecriture["lignes"]:
+            lignes_du_fichier.append(
+                _ligne_fec(
+                    {
+                        "JournalCode": ecriture["journal"],
+                        "JournalLib": ecriture["libelle_du_journal"],
+                        "EcritureNum": ecriture["numero_d_ecriture"],
+                        "EcritureDate": date_de_l_ecriture,
+                        "CompteNum": ligne["compte"],
+                        "CompteLib": ligne["libelle"],
+                        "PieceRef": ecriture["piece"],
+                        "PieceDate": date_de_l_ecriture,
+                        "EcritureLib": ecriture["libelle"],
+                        "Debit": _montant_du_fec(ligne["debit"]),
+                        "Credit": _montant_du_fec(ligne["credit"]),
+                        "ValidDate": date_de_l_ecriture,
+                    }
+                )
+            )
 
-    # Premiere ligne : en-tete (les 18 noms de colonnes)
-    # / First line: header
-    lignes = ["\t".join(COLONNES_FEC)]
+    # UTF-8 sans BOM : l'encodage du FEC. Tout caractère d'un nom (point de vente,
+    # compte) est gardé tel quel.
+    # / UTF-8 without BOM: the FEC encoding. Every character is kept as is.
+    contenu = "\r\n".join(lignes_du_fichier).encode("utf-8")
 
-    # --- Debits : 1 ligne par moyen de paiement utilise (non zero)
-    # / Debits: 1 line per used payment method (non-zero)
-    for code, item in (rapport.get("totaux_par_moyen") or {}).items():
-        if code in ("total", "currency_code", "categories"):
-            continue
-        if not isinstance(item, dict):
-            continue
-        total = item.get("total", 0)
-        if total == 0:
-            continue
-        compte_key = MAPPING_PAIEMENT.get(code, "banque")
-        num, lib = COMPTES_PAR_DEFAUT[compte_key]
-        lignes.append(_ligne_fec(
-            JournalCode=journal_code, JournalLib=journal_lib,
-            EcritureNum=ecriture_num, EcritureDate=ecriture_date,
-            CompteNum=num, CompteLib=lib,
-            PieceRef=piece_ref, PieceDate=piece_date,
-            EcritureLib=f"{ecriture_lib_base} - {item.get('label', code)}",
-            Debit=_euros_str(total), Credit="0,00",
-            ValidDate=valid_date,
-        ))
-
-    # --- Calcul des totaux par grande famille comptable depuis detail_ventes.
-    # / Compute totals per accounting family from detail_ventes.
-    # 706 (Prestations) : BILLET 'B', FREERES 'F', BADGE 'G', QRCODE_MA 'Q'
-    # 756 (Cotisations) : ADHESION 'A'
-    detail = rapport.get("detail_ventes") or {}
-    total_billets = sum(
-        detail.get(c, {}).get("total_ttc", 0) for c in ("B", "F", "G", "Q")
+    date_du_nom_du_fichier = export["date_du_nom_du_fichier"]
+    nom_du_fichier = (
+        f"FEC-{date_du_nom_du_fichier:%Y%m%d}-{cloture.numero_sequentiel}.txt"
     )
-    total_adhesions = detail.get("A", {}).get("total_ttc", 0)
-
-    # --- Credit ventes billets/prestations (706)
-    # / Ticket/services sales credit (706)
-    if total_billets:
-        num, lib = COMPTES_PAR_DEFAUT["ventes_billets"]
-        lignes.append(_ligne_fec(
-            JournalCode=journal_code, JournalLib=journal_lib,
-            EcritureNum=ecriture_num, EcritureDate=ecriture_date,
-            CompteNum=num, CompteLib=lib,
-            PieceRef=piece_ref, PieceDate=piece_date,
-            EcritureLib=f"{ecriture_lib_base} - Billets",
-            Debit="0,00", Credit=_euros_str(total_billets),
-            ValidDate=valid_date,
-        ))
-
-    # --- Credit adhesions (756)
-    # / Memberships credit (756)
-    if total_adhesions:
-        num, lib = COMPTES_PAR_DEFAUT["ventes_adhesions"]
-        lignes.append(_ligne_fec(
-            JournalCode=journal_code, JournalLib=journal_lib,
-            EcritureNum=ecriture_num, EcritureDate=ecriture_date,
-            CompteNum=num, CompteLib=lib,
-            PieceRef=piece_ref, PieceDate=piece_date,
-            EcritureLib=f"{ecriture_lib_base} - Adhesions",
-            Debit="0,00", Credit=_euros_str(total_adhesions),
-            ValidDate=valid_date,
-        ))
-
-    # --- Credits TVA (4457X) : 1 ligne par taux
-    # / VAT credits: 1 line per VAT rate
-    for taux, item in (rapport.get("tva") or {}).items():
-        if not isinstance(item, dict):
-            continue
-        tva_montant = item.get("total_tva", 0)
-        if tva_montant == 0:
-            continue
-        taux_float = float(item.get("taux", 0))
-        if taux_float <= 6:
-            compte_key = "tva_55"
-        elif taux_float <= 12:
-            compte_key = "tva_10"
-        else:
-            compte_key = "tva_20"
-        num, lib = COMPTES_PAR_DEFAUT[compte_key]
-        lignes.append(_ligne_fec(
-            JournalCode=journal_code, JournalLib=journal_lib,
-            EcritureNum=ecriture_num, EcritureDate=ecriture_date,
-            CompteNum=num, CompteLib=lib,
-            PieceRef=piece_ref, PieceDate=piece_date,
-            EcritureLib=f"{ecriture_lib_base} - TVA {taux_float}%",
-            Debit="0,00", Credit=_euros_str(tva_montant),
-            ValidDate=valid_date,
-        ))
-
-    # Encodage CP1252 obligatoire (norme francaise FEC). Replace les caracteres
-    # impossibles a encoder (rares : caracteres unicode hors plage Windows-1252).
-    # / CP1252 encoding required by the French FEC norm.
-    contenu = "\r\n".join(lignes).encode("cp1252", errors="replace")
-
-    filename = f"FEC-{cloture.datetime_fin:%Y%m%d}-{cloture.numero_sequentiel}.txt"
-    content_type = "text/plain; charset=cp1252"
-    return contenu, filename, content_type
+    type_du_contenu = "text/plain; charset=utf-8"
+    return contenu, nom_du_fichier, type_du_contenu

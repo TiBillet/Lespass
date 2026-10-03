@@ -1,9 +1,11 @@
 {% extends "admin/base_site.html" %}
 {% load i18n static unfold %}
 
-{# Page autonome : rapport temps reel sur periode personnalisable. #}
-{# / Standalone page: real-time report over a user-defined period. #}
+{# Page autonome : rapport temps reel (rapport X, jamais stocke) sur periode personnalisable. #}
+{# / Standalone page: real-time report (X report, never stored) over a user-defined period. #}
 {# LOCALISATION : comptabilite/templates/comptabilite/views/rapport_temps_reel.html #}
+{# Recoit `sections` (comptabilite/presentation.py) : sans integrite, avec habitus et operateurs. #}
+{# / Receives `sections`: no integrity, with card habits and operators. #}
 {# #}
 {# Pas de polling (couteux serveur) : l'utilisateur fait F5 ou clique 'Refresh'. #}
 {# / No polling (server-expensive): user presses F5 or clicks 'Refresh'. #}
@@ -57,14 +59,16 @@
             <a href="{% url 'staff_admin:comptabilite_cloturecaisse_temps_reel' %}"
                data-testid="comptabilite-lien-reset-periode"
                class="text-sm text-base-500 hover:text-base-700 underline ml-1">
-                {% translate "Réinitialiser (aujourd'hui 04:00 → maintenant)" %}
+                {% translate "Réinitialiser (service en cours : depuis la dernière clôture journalière)" %}
             </a>
         </form>
+        {# Les heures sont en heure du lieu, deja formatees par la vue. #}
+        {# / Hours are in the venue's time zone, already formatted by the view. #}
         <p class="text-base-500 text-sm mt-3 mb-0">
-            {% blocktrans with debut=datetime_debut|date:"d/m/Y H:i" fin=datetime_fin|date:"d/m/Y H:i" %}
+            {% blocktrans with debut=datetime_debut_affiche fin=datetime_fin_affiche %}
             Période sélectionnée : du {{ debut }} au {{ fin }}.
             {% endblocktrans %}
-            <strong>{% translate "Transactions" %} :</strong> {{ nb_transactions }}
+            <strong>{% translate "Ventes" %} :</strong> <span data-testid="comptabilite-nombre-de-ventes">{{ nombre_de_ventes }}</span>
         </p>
     {% endcomponent %}
 

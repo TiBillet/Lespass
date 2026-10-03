@@ -48,6 +48,7 @@ install:
 	sudo apt-get install -y --no-install-recommends \
 	    git nano locales fontconfig curl ca-certificates \
 	    python3 python3-venv python3-pip python3-dev \
+	    pkg-config libsystemd-dev \
 	    pigpio python3-pigpio \
 	    xserver-xorg xinit openbox unclutter x11-apps \
 	    chromium-browser chromium-chromedriver \

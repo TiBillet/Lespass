@@ -14,8 +14,9 @@ QUI LIT CE MODULE / WHO READS THIS MODULE
 - `laboutik/migrations/0012_relier_le_fed_au_compte_du_reseau.py` : le FED au 467000.
 - `laboutik/migrations/0013_ranger_les_crowds_dans_le_financement_participatif.py` :
   la catégorie des crowds au 754000.
-- `comptabilite/csv_comptable.py` (comptes des billets et des adhésions) et
-  `crowds/views.py` (catégorie du produit des contributions).
+- `laboutik/plan_comptable.py` (règles de compte) et `comptabilite/ventilation.py`
+  (la ventilation du FEC) ; `crowds/views.py` (catégorie du produit des
+  contributions).
 
 Une migration ne doit pas importer de modèle vivant : c'est pourquoi ce module ne
 contient que des listes. Les natures sont écrites en toutes lettres (les valeurs de
@@ -173,10 +174,10 @@ COMPTES_DU_PLAN_PAR_DEFAUT = [
 #  The accounts the rules look up by their number                              #
 # --------------------------------------------------------------------------- #
 # Lus par `laboutik/plan_comptable.py` (règles de compte, chargeur), par
-# `comptabilite/csv_comptable.py` (billets, adhésions), par `crowds/views.py` et par
+# `comptabilite/ventilation.py` (la ventilation du FEC), par `crowds/views.py` et par
 # les migrations `laboutik/0012` (FED) et `laboutik/0013` (crowds). Un lieu qui veut
 # un autre compte pose une catégorie de caisse ; il ne renumérote pas ces comptes.
-# / Read by the rules, the online CSV, crowds and the 0012 / 0013 migrations.
+# / Read by the rules, the FEC breakdown, crowds and the 0012 / 0013 migrations.
 
 COMPTE_PAR_DEFAUT = {
     "prestations": "706000",

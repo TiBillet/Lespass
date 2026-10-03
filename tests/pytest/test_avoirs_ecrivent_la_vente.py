@@ -156,6 +156,22 @@ billet retrouvent la ligne par le tarif, comme l'annulation d'une réservation.
 / The register writes its line and its tickets on two PriceSold of the same Price: the
 cancel screen and the single-ticket cancellation match lines by Price.
 
+LES LIGNES PAYÉES EN POINTS OU EN TEMPS (fin du fichier)
+Une ligne d'une vente qui n'est pas en euros (vente en points de la caisse, recharge
+offerte en points de l'API v2), ou une ligne au moyen « points ou temps » (NM), ne reçoit
+jamais d'avoir : un avoir est une vente en euros, il rendrait de l'argent pour des
+points. Le refus est dans la fonction commune `ajouter_l_article_d_avoir` ; le bouton
+« Avoir » ne s'ouvre pas ; le formulaire d'annulation d'une adhésion payée en points ne
+propose que « Annuler sans avoir » et le dit dans une phrase visible.
+/ A line of a non-euro sale, or with the NM method, never gets a credit note: refused by
+the shared function, the button does not open, the membership form says so.
+
+LE COÛT D'ACHAT DE L'AVOIR (fin du fichier)
+L'avoir reprend en négatif le coût figé de la ligne d'origine, au prorata de la quantité
+rendue, arrondi demi-haut ; une ligne sans coût donne un avoir sans coût.
+/ The credit note takes the original line's frozen cost back, negative, prorated and
+rounded half up; no cost gives no cost.
+
 CODE PARCOURU / CODE EXERCISED
 - Administration/admin_tenant.py — LigneArticleAdmin.emettre_avoir (écran et action) ;
   ReservationAdmin.action_cancel_refund_reservations, TicketAdmin.action_cancel_refund_selected ;
@@ -182,6 +198,7 @@ import logging
 import uuid
 from contextlib import contextmanager
 from decimal import Decimal
+from html import unescape
 from html.parser import HTMLParser
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -200,6 +217,7 @@ from BaseBillet.models import (
     Paiement_stripe,
     PaymentMethod,
     PriceSold,
+    Product,
     ProductSold,
     Reservation,
     SaleOrigin,
@@ -4434,3 +4452,656 @@ def test_remboursement_apres_ecart_recu_en_moins_demande_au_plus_l_encaisse(lieu
 
     paiement.refresh_from_db()
     assert paiement.status == Paiement_stripe.REFUNDED
+
+
+# --------------------------------------------------------------------------
+# Ligne payée en points ou en temps : aucun avoir
+# / Line paid in points or time: no credit note
+# --------------------------------------------------------------------------
+
+# Le refus du bouton « Avoir » pour une ligne payée en points (msgid français).
+# / The "Credit note" button refusal for a line paid in points (French msgid).
+MESSAGE_LIGNE_PAYEE_EN_POINTS = (
+    "Cette ligne a été payée en points ou en temps : l'avoir est impossible."
+)
+
+# Le début du refus du service (ValueError, texte non traduit).
+# / The start of the service refusal (ValueError, untranslated text).
+DEBUT_DU_REFUS_DU_SERVICE_POUR_LES_POINTS = "payée en points ou en temps"
+
+# La phrase du formulaire d'annulation d'une adhésion payée en points (msgid français),
+# et son repère.
+# / The cancellation form sentence for a membership paid in points, and its marker.
+MESSAGE_ADHESION_PAYEE_EN_POINTS = (
+    "Adhésion payée en points ou en temps : aucun avoir n'est possible, et les points "
+    "ne sont pas rendus sur la carte."
+)
+REPERE_ADHESION_PAYEE_EN_POINTS = 'data-testid="membership-cancel-payee-en-points"'
+
+
+def vendre_a_la_caisse_un_article_paye_en_points(adhesion=None):
+    """
+    ÉTAT DE DÉPART : une vente de caisse en points, comme la caisse l'écrit
+    (`laboutik/views.py` `_payer_par_nfc`) : la vente est tenue dans la monnaie de
+    points (`unite` = son uuid), un article à 300 centièmes de points, TVA 0, moyen
+    historique « points ou temps » (NM), un règlement NM de 300. Si une adhésion est
+    donnée, l'article lui est relié (adhésion payée en points). Rend la ligne.
+    / STARTING STATE: a register sale in points (unit = the points currency), one item
+    of 300 hundredths of points, 0 VAT, NM method, one NM payment.
+    """
+    monnaie_de_points = uuid.uuid4()
+    if adhesion is not None:
+        tarif_vendu = get_or_create_price_sold(adhesion.price)
+    else:
+        tarif_vendu = creer_tarif_vendu(nom="Planche en points", taux_tva="0.00")
+    vente_en_points = services_vente.ouvrir_vente(
+        origine=SaleOrigin.LABOUTIK,
+        nature=Vente.Nature.VENTE,
+        unite=str(monnaie_de_points),
+    )
+    ligne_payee_en_points = services_vente.ajouter_article(
+        vente_en_points,
+        pricesold=tarif_vendu,
+        quantite=Decimal("1"),
+        prix_unitaire=300,
+        taux_tva=Decimal("0"),
+        payment_method=PaymentMethod.NON_MONETAIRE,
+        asset=monnaie_de_points,
+        membership=adhesion,
+        status=LigneArticle.VALID,
+    )
+    services_vente.ajouter_reglement(
+        vente_en_points,
+        moyen=PaymentMethod.NON_MONETAIRE,
+        montant=300,
+        asset=monnaie_de_points,
+    )
+    services_vente.encaisser_vente(vente_en_points)
+    return LigneArticle.objects.get(pk=ligne_payee_en_points.pk)
+
+
+def nombre_de_ventes_avoir():
+    """Le nombre de ventes AVOIR du lieu. / The number of AVOIR sales of the venue."""
+    return Vente.objects.filter(nature=Vente.Nature.AVOIR).count()
+
+
+def test_avoir_ligne_payee_en_points_refuse_par_la_fonction_commune(lieu):
+    """
+    Une planche vendue 300 centièmes de points à la caisse (vente en points, moyen NM).
+    Un avoir par la fonction commune des avoirs est refusé (ValueError) : l'avoir est
+    une vente en euros, il rendrait de l'argent pour des points. Rien n'est écrit :
+    aucune vente AVOIR, aucune ligne d'avoir, la ligne reste VALID.
+    / An item sold in points: the common credit note function refuses it, nothing is
+    written.
+    """
+    ligne_payee_en_points = vendre_a_la_caisse_un_article_paye_en_points()
+    nombre_de_ventes_avoir_avant = nombre_de_ventes_avoir()
+
+    with pytest.raises(ValueError, match=DEBUT_DU_REFUS_DU_SERVICE_POUR_LES_POINTS):
+        services_vente.ecrire_la_vente_d_avoir_d_une_ligne(
+            ligne_payee_en_points,
+            quantite=Decimal("1"),
+            moyen_rembourse=PaymentMethod.CASH,
+            origine=SaleOrigin.ADMIN,
+        )
+
+    assert nombre_de_ventes_avoir() == nombre_de_ventes_avoir_avant
+    rien_n_est_ecrit_pour_la_ligne(ligne_payee_en_points)
+
+
+def test_avoir_ligne_payee_en_points_refuse_par_l_article_d_avoir(lieu):
+    """
+    La garde est dans `ajouter_l_article_d_avoir`, la fonction que partagent tous les
+    producteurs d'avoir (bouton « Avoir », annulations, remboursement Stripe) : appelée
+    seule sur une vente AVOIR ouverte, elle refuse la ligne en points, et n'ajoute aucun
+    article.
+    / The guard is in the shared `ajouter_l_article_d_avoir`: called alone, it refuses
+    the points line and adds no item.
+    """
+    ligne_payee_en_points = vendre_a_la_caisse_un_article_paye_en_points()
+    vente_d_avoir = services_vente.ouvrir_vente(
+        origine=SaleOrigin.ADMIN,
+        nature=Vente.Nature.AVOIR,
+        vente_liee=ligne_payee_en_points.vente,
+    )
+
+    with pytest.raises(ValueError, match=DEBUT_DU_REFUS_DU_SERVICE_POUR_LES_POINTS):
+        services_vente.ajouter_l_article_d_avoir(
+            vente_d_avoir, ligne_payee_en_points, Decimal("1")
+        )
+
+    assert not LigneArticle.objects.filter(vente=vente_d_avoir).exists()
+
+
+def test_avoir_admin_ligne_payee_en_points_l_ecran_ne_s_ouvre_pas(lieu):
+    """
+    L'admin clique « Avoir » sur la ligne en points (GET) : l'écran ne s'ouvre pas, il
+    revient à la liste des ventes avec le message « Cette ligne a été payée en points
+    ou en temps : l'avoir est impossible. ». Rien n'est écrit.
+    / The admin clicks "Credit note" on the points line: the screen does not open, a
+    message explains why, nothing is written.
+    """
+    ligne_payee_en_points = vendre_a_la_caisse_un_article_paye_en_points()
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_de_l_ecran = ouvrir_l_ecran_de_l_avoir(
+        client_de_l_admin, ligne_payee_en_points
+    )
+
+    assert reponse_de_l_ecran.status_code == 302
+    assert dans_la_langue_du_client(
+        MESSAGE_LIGNE_PAYEE_EN_POINTS
+    ) in textes_des_messages_de_l_admin(reponse_de_l_ecran)
+    rien_n_est_ecrit_pour_la_ligne(ligne_payee_en_points)
+
+
+def test_avoir_admin_ligne_payee_en_points_validation_refusee(lieu):
+    """
+    L'admin envoie quand même le formulaire (POST, « Remboursé par : espèces ») : refus,
+    même message, rien n'est écrit (aucune vente AVOIR, aucun règlement).
+    / The admin posts the form anyway: refused, same message, nothing written.
+    """
+    ligne_payee_en_points = vendre_a_la_caisse_un_article_paye_en_points()
+    nombre_de_ventes_avoir_avant = nombre_de_ventes_avoir()
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_de_l_action = valider_l_ecran_de_l_avoir(
+        client_de_l_admin, ligne_payee_en_points, moyen_rembourse=PaymentMethod.CASH
+    )
+
+    assert reponse_de_l_action.status_code == 302
+    assert dans_la_langue_du_client(
+        MESSAGE_LIGNE_PAYEE_EN_POINTS
+    ) in textes_des_messages_de_l_admin(reponse_de_l_action)
+    assert nombre_de_ventes_avoir() == nombre_de_ventes_avoir_avant
+    rien_n_est_ecrit_pour_la_ligne(ligne_payee_en_points)
+
+
+def test_avoir_recharge_offerte_en_points_refusee(lieu):
+    """
+    Une recharge de 500 centièmes de points offerte par l'API v2, comme
+    `api_v2/views.py` l'écrit : vente en points, article hors chiffre d'affaires
+    entièrement offert, moyen historique FREE (pas NM), règlement FREE. Son avoir est
+    refusé : la vente n'est pas en euros. Rien n'est écrit.
+    / A points top-up offered by the API v2 (points sale, FREE line): refused, because
+    the sale is not in euros.
+    """
+    monnaie_de_points = uuid.uuid4()
+    tarif_de_la_recharge = creer_tarif_vendu(
+        nom="Recharge en points",
+        prix_en_euros="0.00",
+        taux_tva="0.00",
+        categorie_article=Product.RECHARGE_CASHLESS,
+    )
+    vente_de_la_recharge = services_vente.ouvrir_vente(
+        origine=SaleOrigin.LESPASS,
+        nature=Vente.Nature.VENTE,
+        unite=str(monnaie_de_points),
+    )
+    article_de_la_recharge = services_vente.ajouter_article(
+        vente_de_la_recharge,
+        pricesold=tarif_de_la_recharge,
+        quantite=Decimal("1"),
+        prix_unitaire=500,
+        taux_tva=Decimal("0"),
+        offert_en_totalite=True,
+        asset=monnaie_de_points,
+        payment_method=PaymentMethod.FREE,
+        status=LigneArticle.VALID,
+    )
+    services_vente.encaisser_vente(vente_de_la_recharge)
+    # Relue en base : l'objet rendu par `ajouter_article` garde sa vente « en attente ».
+    # / Read back: the object from `ajouter_article` keeps its sale "pending".
+    ligne_de_la_recharge = LigneArticle.objects.get(pk=article_de_la_recharge.pk)
+    nombre_de_ventes_avoir_avant = nombre_de_ventes_avoir()
+
+    with pytest.raises(ValueError, match=DEBUT_DU_REFUS_DU_SERVICE_POUR_LES_POINTS):
+        services_vente.ecrire_la_vente_d_avoir_d_une_ligne(
+            ligne_de_la_recharge,
+            quantite=Decimal("1"),
+            moyen_rembourse=None,
+            origine=SaleOrigin.ADMIN,
+        )
+
+    assert nombre_de_ventes_avoir() == nombre_de_ventes_avoir_avant
+    rien_n_est_ecrit_pour_la_ligne(ligne_de_la_recharge)
+
+
+def test_avoir_ligne_sans_vente_au_moyen_points_refusee(lieu):
+    """
+    Une ligne écrite sans vente (avant le chantier), au moyen « points ou temps » (NM) :
+    rien ne dit son unité, sauf son moyen. Son avoir est refusé ; aucune vente AVOIR,
+    aucune ligne d'avoir.
+    / A line without sale, NM method: refused; no AVOIR sale, no credit note line.
+    """
+    tarif_vendu = creer_tarif_vendu(nom="Ancienne vente en points", taux_tva="0.00")
+    # ÉTAT DE DÉPART : une ligne d'avant le chantier, sans vente, par `create()` direct.
+    # / STARTING STATE: a pre-chantier line without sale, written by create().
+    ligne_sans_vente_en_points = LigneArticle.objects.create(
+        pricesold=tarif_vendu,
+        qty=1,
+        amount=300,
+        vat=Decimal("0"),
+        payment_method=PaymentMethod.NON_MONETAIRE,
+        sale_origin=SaleOrigin.LABOUTIK,
+        status=LigneArticle.VALID,
+    )
+    assert ligne_sans_vente_en_points.vente_id is None
+    nombre_de_ventes_avoir_avant = nombre_de_ventes_avoir()
+
+    with pytest.raises(ValueError, match=DEBUT_DU_REFUS_DU_SERVICE_POUR_LES_POINTS):
+        services_vente.ecrire_la_vente_d_avoir_d_une_ligne(
+            ligne_sans_vente_en_points,
+            quantite=Decimal("1"),
+            moyen_rembourse=PaymentMethod.CASH,
+            origine=SaleOrigin.ADMIN,
+        )
+
+    assert nombre_de_ventes_avoir() == nombre_de_ventes_avoir_avant
+    rien_n_est_ecrit_pour_la_ligne(ligne_sans_vente_en_points)
+
+
+def test_avoir_temoin_part_d_une_vente_en_euros_a_plusieurs_moyens_remboursable(lieu):
+    """
+    Témoin : une bière à 5 € payée en deux parts (jetons cadeau et CB), dans une vente
+    en euros. La part payée par CB reste remboursable : son avoir est écrit (CREDIT_NOTE)
+    et sa vente AVOIR a UN règlement espèces de −200.
+    / Control case: a part of a multi-method euro sale is still refundable.
+    """
+    biere_en_deux_parts = vendre_a_la_caisse_une_biere_en_deux_parts()
+    part_en_carte = biere_en_deux_parts.part_en_carte
+
+    avoir = services_vente.ecrire_la_vente_d_avoir_d_une_ligne(
+        part_en_carte,
+        quantite=part_en_carte.qty,
+        moyen_rembourse=PaymentMethod.CASH,
+        origine=SaleOrigin.ADMIN,
+    )
+
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    vente_d_avoir = Vente.objects.get(pk=avoir.vente_id)
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.CASH, -200)
+    ]
+    verifier_egalites(vente_d_avoir)
+
+
+def adhesion_payee_en_points_a_la_caisse():
+    """
+    ÉTAT DE DÉPART : une adhésion payée 300 centièmes de points à la caisse, comme la
+    caisse l'écrit : l'adhésion porte le moyen NM, sa ligne est l'article d'une vente
+    en points. Rend l'adhésion et sa ligne.
+    / STARTING STATE: a membership paid in points at the register (NM membership, its
+    line in a points sale).
+    """
+    adhesion = creer_adhesion(prix="3.00")
+    adherente = creer_utilisateur()
+    adhesion_payee_en_points = Membership.objects.create(
+        user=adherente,
+        price=adhesion.tarif,
+        first_name="Ada",
+        last_name="Lovelace",
+        status=Membership.ADMIN_VALID,
+        payment_method=PaymentMethod.NON_MONETAIRE,
+    )
+    ligne_de_l_adhesion = vendre_a_la_caisse_un_article_paye_en_points(
+        adhesion=adhesion_payee_en_points
+    )
+    return SimpleNamespace(adhesion=adhesion_payee_en_points, ligne=ligne_de_l_adhesion)
+
+
+def test_annulation_adhesion_payee_en_points_seulement_sans_avoir_et_le_dit(lieu):
+    """
+    Le formulaire d'annulation d'une adhésion payée en points ne propose que « Annuler
+    sans avoir » : ni bouton « Annuler avec avoir », ni champ « Remboursé par », ni
+    ligne de paiement à créditer. Il le dit, dans une phrase visible : « Adhésion payée
+    en points ou en temps : aucun avoir n'est possible, et les points ne sont pas
+    rendus sur la carte. »
+    / The form of a points membership only offers "Cancel without credit note", and
+    says why in a visible sentence.
+    """
+    adhesion_en_points = adhesion_payee_en_points_a_la_caisse()
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_du_formulaire = ouvrir_le_formulaire_d_annulation_d_adhesion(
+        client_de_l_admin, adhesion_en_points.adhesion
+    )
+
+    assert reponse_du_formulaire.status_code == 200
+    contenu_du_formulaire = reponse_du_formulaire.content.decode()
+    assert REPERE_BOUTON_AVEC_AVOIR not in contenu_du_formulaire
+    assert not lire_le_champ_rembourse_par(reponse_du_formulaire).champ_present
+    assert REPERE_LIGNE_PAYEE_AFFICHEE not in contenu_du_formulaire
+    assert REPERE_ADHESION_PAYEE_EN_POINTS in contenu_du_formulaire
+    assert (
+        dans_la_langue_du_client(MESSAGE_ADHESION_PAYEE_EN_POINTS)
+        in contenu_du_formulaire
+    )
+    assert dans_la_langue_du_client("Annuler sans avoir") in contenu_du_formulaire
+
+
+def test_annulation_adhesion_payee_en_points_sans_avoir_fonctionne(lieu):
+    """
+    L'admin clique « Annuler sans avoir » : l'adhésion est annulée (204), aucun avoir,
+    aucune vente AVOIR ; la ligne payée en points reste VALID.
+    / "Cancel without credit note": the membership is cancelled, no credit note.
+    """
+    adhesion_en_points = adhesion_payee_en_points_a_la_caisse()
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse = client_de_l_admin.post(
+        url_de_l_annulation_d_adhesion(adhesion_en_points.adhesion),
+        {"with_credit_note": "0"},
+        **EN_TETE_HTMX,
+    )
+
+    assert reponse.status_code == 204
+    adhesion_relue = Membership.objects.get(pk=adhesion_en_points.adhesion.pk)
+    assert adhesion_relue.status == Membership.ADMIN_CANCELED
+    rien_n_est_ecrit_pour_la_ligne(adhesion_en_points.ligne)
+
+
+def test_annulation_adhesion_payee_en_points_avec_avoir_force_refuse(lieu):
+    """
+    Un POST « Annuler avec avoir » forcé (le bouton n'est pas affiché), avec « Remboursé
+    par : espèces » : le formulaire revient (200) avec l'erreur, l'adhésion n'est PAS
+    annulée et rien n'est écrit. L'annulation ne se fait jamais en silence sans l'avoir
+    demandé.
+    / A forced "with credit note" POST: the form comes back with the error, the
+    membership is not cancelled, nothing is written.
+    """
+    adhesion_en_points = adhesion_payee_en_points_a_la_caisse()
+    statut_de_l_adhesion_avant = adhesion_en_points.adhesion.status
+    nombre_de_ventes_avoir_avant = nombre_de_ventes_avoir()
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse = annuler_l_adhesion_avec_avoir(
+        client_de_l_admin,
+        adhesion_en_points.adhesion,
+        moyen_rembourse=PaymentMethod.CASH,
+    )
+
+    assert reponse.status_code == 200
+    contenu_de_la_reponse = reponse.content.decode()
+    assert 'data-testid="membership-cancel-errors"' in contenu_de_la_reponse
+    assert (
+        escape(dans_la_langue_du_client(MESSAGE_ADHESION_PAYEE_EN_POINTS))
+        in contenu_de_la_reponse
+    )
+    l_adhesion_n_est_pas_annulee(
+        adhesion_en_points.adhesion, statut_de_l_adhesion_avant
+    )
+    assert nombre_de_ventes_avoir() == nombre_de_ventes_avoir_avant
+    rien_n_est_ecrit_pour_la_ligne(adhesion_en_points.ligne)
+
+
+def test_annulation_adhesion_payee_en_points_avec_avoir_force_dit_la_phrase_une_fois(
+    lieu,
+):
+    """
+    Un POST « Annuler avec avoir » forcé sur une adhésion payée en points : le
+    formulaire revient avec l'erreur. La phrase « Adhésion payée en points ou en
+    temps : aucun avoir n'est possible… » n'est écrite qu'UNE fois dans la réponse,
+    jamais à la fois dans l'erreur et dans la note du formulaire.
+    / A forced "with credit note" POST on a points membership: the sentence appears
+    only ONCE in the response, never both in the error and in the form's note.
+    """
+    adhesion_en_points = adhesion_payee_en_points_a_la_caisse()
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse = annuler_l_adhesion_avec_avoir(
+        client_de_l_admin,
+        adhesion_en_points.adhesion,
+        moyen_rembourse=PaymentMethod.CASH,
+    )
+
+    assert reponse.status_code == 200
+    # Le texte est lu sans échappement HTML : l'erreur ({{ }}) échappe l'apostrophe,
+    # la note ({% translate %}) ne l'échappe pas. Les deux formes sont comptées.
+    # / The text is read unescaped: both the escaped and the raw forms are counted.
+    contenu_sans_echappement = unescape(reponse.content.decode())
+    phrase_de_l_adhesion_payee_en_points = dans_la_langue_du_client(
+        MESSAGE_ADHESION_PAYEE_EN_POINTS
+    )
+    assert contenu_sans_echappement.count(phrase_de_l_adhesion_payee_en_points) == 1
+
+
+# --------------------------------------------------------------------------
+# Le coût d'achat de l'avoir : le coût figé de la ligne d'origine, en négatif
+# / The credit note's purchase cost: the original line's frozen cost, negative
+# --------------------------------------------------------------------------
+
+
+def avoir_de_la_ligne_par_le_service(ligne_d_origine, quantite_rendue):
+    """
+    L'article d'avoir de `quantite_rendue` unités de la ligne, écrit par
+    `ajouter_l_article_d_avoir` dans une vente AVOIR ouverte (pas encaissée : seul
+    l'article est regardé).
+    / The credit note item written by `ajouter_l_article_d_avoir` in an open AVOIR sale.
+    """
+    vente_d_avoir = services_vente.ouvrir_vente(
+        origine=SaleOrigin.ADMIN,
+        nature=Vente.Nature.AVOIR,
+        vente_liee=ligne_d_origine.vente,
+    )
+    return services_vente.ajouter_l_article_d_avoir(
+        vente_d_avoir, ligne_d_origine, quantite_rendue
+    )
+
+
+def ligne_d_une_vente_en_especes(article):
+    """
+    ÉTAT DE DÉPART : une vente de caisse en espèces d'un seul article VALID
+    (dictionnaire passé à `ajouter_article`, sans statut), encaissée. Le règlement
+    espèces vaut le total catalogue de l'article. Rend la ligne de l'article.
+    / STARTING STATE: a settled cash register sale of one VALID item.
+    """
+    article_valide = dict(article)
+    article_valide["status"] = LigneArticle.VALID
+    montants_de_l_article = services_vente.calculer_montants_article(
+        prix_unitaire=article["prix_unitaire"],
+        quantite=article["quantite"],
+        taux_tva=article["taux_tva"],
+    )
+    vente = fabriquer_vente_encaissee(
+        origine=SaleOrigin.LABOUTIK,
+        articles=[article_valide],
+        reglements=[
+            {
+                "moyen": PaymentMethod.CASH,
+                "montant": montants_de_l_article["total_catalogue"],
+            }
+        ],
+    )
+    return vente.articles.get()
+
+
+def test_cout_de_l_avoir_rendu_total_exactement_en_miroir(lieu):
+    """
+    Un jus 3,50 €, prix d'achat 1,20 € : coût d'origine 120. Tout est rendu : l'avoir
+    porte un coût de −120, exactement l'opposé.
+    / Full return: the credit note's cost is exactly the opposite (−120).
+    """
+    ligne_du_jus = ligne_d_une_vente_en_especes(
+        {
+            "pricesold": creer_tarif_vendu(nom="Jus", prix_en_euros="3.50"),
+            "quantite": Decimal("1"),
+            "prix_unitaire": 350,
+            "taux_tva": Decimal("20"),
+            "prix_achat": 120,
+        }
+    )
+    assert ligne_du_jus.cout_achat == 120
+
+    avoir = avoir_de_la_ligne_par_le_service(ligne_du_jus, Decimal("1"))
+
+    assert avoir.cout_achat == -120
+
+
+def test_cout_de_l_avoir_partiel_au_prorata_arrondi_demi_haut(lieu):
+    """
+    Deux portions de fromage au poids, 125 g chacune, prix d'achat 3,00 € le kg : coût
+    d'origine arrondi(0,250 × 300) = 75. Une portion est rendue : coût de l'avoir =
+    arrondi_demi_haut(75 × −1 / 2) = arrondi(−37,5) = −38 (0,5 s'éloigne de zéro).
+    / Partial return: prorata of the frozen cost, rounded half up (−37.5 → −38).
+    """
+    ligne_du_fromage = ligne_d_une_vente_en_especes(
+        {
+            "pricesold": creer_tarif_vendu(nom="Fromage", prix_en_euros="2.50"),
+            "quantite": Decimal("2"),
+            "prix_unitaire": 250,
+            "taux_tva": Decimal("5.5"),
+            "prix_achat": 300,
+            "quantite_pour_cout": Decimal("0.250"),
+        }
+    )
+    assert ligne_du_fromage.cout_achat == 75
+
+    avoir = avoir_de_la_ligne_par_le_service(ligne_du_fromage, Decimal("1"))
+
+    assert avoir.cout_achat == -38
+
+
+def test_cout_de_l_avoir_article_au_poids_reprend_le_poids_servi(lieu):
+    """
+    Un fromage au poids comme la caisse l'écrit : quantité 1 sur la ligne, coût sur le
+    poids servi (0,350 kg × 8,00 € = 280). L'avoir rend −280, jamais le prix d'achat
+    au kilo multiplié par la quantité de la ligne (−800).
+    / A weight item: the credit note gives back −280 (the served weight's cost), never
+    the price per kg times the line quantity.
+    """
+    ligne_du_fromage = ligne_d_une_vente_en_especes(
+        {
+            "pricesold": creer_tarif_vendu(nom="Fromage au poids", prix_en_euros="12.90"),
+            "quantite": Decimal("1"),
+            "prix_unitaire": 452,
+            "taux_tva": Decimal("5.5"),
+            "prix_achat": 800,
+            "quantite_pour_cout": Decimal("0.350"),
+        }
+    )
+    assert ligne_du_fromage.cout_achat == 280
+
+    avoir = avoir_de_la_ligne_par_le_service(ligne_du_fromage, Decimal("1"))
+
+    assert avoir.cout_achat == -280
+
+
+def test_cout_de_l_avoir_part_de_cascade(lieu):
+    """
+    Une bière payée en deux parts (jetons 0,6, CB 0,4), prix d'achat 1,25 € : la part
+    CB a coûté arrondi(0,4 × 125) = 50. L'avoir de cette part rend −50.
+    / A cascade part's credit note gives back the part's own cost (−50).
+    """
+    tarif_de_la_biere = creer_tarif_vendu(nom="Bière", prix_en_euros="5.00")
+    vente = fabriquer_vente_encaissee(
+        origine=SaleOrigin.LABOUTIK,
+        articles=[
+            {
+                "pricesold": tarif_de_la_biere,
+                "quantite": Decimal("0.6"),
+                "prix_unitaire": 500,
+                "taux_tva": Decimal("0"),
+                "total_catalogue_impose": 300,
+                "prix_achat": 125,
+                "payment_method": PaymentMethod.LOCAL_GIFT,
+                "status": LigneArticle.VALID,
+            },
+            {
+                "pricesold": tarif_de_la_biere,
+                "quantite": Decimal("0.4"),
+                "prix_unitaire": 500,
+                "taux_tva": Decimal("20"),
+                "total_catalogue_impose": 200,
+                "prix_achat": 125,
+                "payment_method": PaymentMethod.CC,
+                "status": LigneArticle.VALID,
+            },
+        ],
+        reglements=[
+            {"moyen": PaymentMethod.LOCAL_GIFT, "montant": 300},
+            {"moyen": PaymentMethod.CC, "montant": 200},
+        ],
+    )
+    part_en_carte = vente.articles.get(payment_method=PaymentMethod.CC)
+    assert part_en_carte.cout_achat == 50
+
+    avoir = avoir_de_la_ligne_par_le_service(part_en_carte, part_en_carte.qty)
+
+    assert avoir.cout_achat == -50
+
+
+def test_cout_de_l_avoir_d_un_retour_de_consigne_est_positif(lieu):
+    """
+    Un retour de consigne (vente AVOIR de caisse, prix −100, coût −30 : le gobelet rendu
+    retire son coût). L'avoir de ce retour remet le coût : +30.
+    / A deposit return has a cost of −30: its credit note puts it back (+30).
+    """
+    tarif_du_retour = creer_tarif_vendu(nom="Retour gobelet", prix_en_euros="-1.00")
+    vente_du_retour = fabriquer_vente_encaissee(
+        origine=SaleOrigin.LABOUTIK,
+        nature=Vente.Nature.AVOIR,
+        articles=[
+            {
+                "pricesold": tarif_du_retour,
+                "quantite": Decimal("1"),
+                "prix_unitaire": -100,
+                "taux_tva": Decimal("20"),
+                "prix_achat": -30,
+                "payment_method": PaymentMethod.CASH,
+                "status": LigneArticle.VALID,
+            }
+        ],
+        reglements=[{"moyen": PaymentMethod.CASH, "montant": -100}],
+    )
+    ligne_du_retour = vente_du_retour.articles.get()
+    assert ligne_du_retour.cout_achat == -30
+
+    avoir = avoir_de_la_ligne_par_le_service(ligne_du_retour, Decimal("1"))
+
+    assert avoir.cout_achat == 30
+
+
+def test_cout_de_l_avoir_ligne_sans_cout_reste_sans_cout(lieu):
+    """
+    Une ligne sans coût d'achat (prix d'achat inconnu, `cout_achat` vide) : l'avoir n'a
+    pas de coût non plus (vide, jamais 0 : un coût inconnu n'est pas un coût nul).
+    / A line without cost: the credit note has no cost either (empty, never 0).
+    """
+    ligne_sans_cout = ligne_d_une_vente_en_especes(
+        {
+            "pricesold": creer_tarif_vendu(nom="Planche", prix_en_euros="4.00"),
+            "quantite": Decimal("1"),
+            "prix_unitaire": 400,
+            "taux_tva": Decimal("10"),
+        }
+    )
+    assert ligne_sans_cout.cout_achat is None
+
+    avoir = avoir_de_la_ligne_par_le_service(ligne_sans_cout, Decimal("1"))
+
+    assert avoir.cout_achat is None
+
+
+def test_cout_impose_qui_n_est_pas_un_entier_refuse(lieu):
+    """
+    Un coût d'achat imposé à `ajouter_article` est déjà en centimes entiers : un
+    `Decimal` (montant recalculé ailleurs) est refusé, au lieu d'être arrondi en
+    silence. Aucun article n'est écrit.
+    / An imposed purchase cost must be whole cents (int): a Decimal is refused.
+    """
+    vente_d_avoir = services_vente.ouvrir_vente(
+        origine=SaleOrigin.ADMIN, nature=Vente.Nature.AVOIR
+    )
+
+    with pytest.raises(ValueError, match="coût d'achat imposé"):
+        services_vente.ajouter_article(
+            vente_d_avoir,
+            pricesold=creer_tarif_vendu(nom="Jus", prix_en_euros="3.50"),
+            quantite=Decimal("-1"),
+            prix_unitaire=350,
+            taux_tva=Decimal("20"),
+            cout_achat_impose=Decimal("-120"),
+        )
+
+    assert not LigneArticle.objects.filter(vente=vente_d_avoir).exists()

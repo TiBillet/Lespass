@@ -215,6 +215,15 @@ class Vente(models.Model):
                 name="unique_vente_idempotency_key",
             ),
         ]
+        indexes = [
+            # Le rapport des ventes et les clôtures lisent les ventes réglées d'une
+            # période (`comptabilite/rapport.py`, `comptabilite/tasks.py`).
+            # / The sales report and the closures read the settled sales of a period.
+            models.Index(
+                fields=["statut", "datetime_encaissement"],
+                name="vente_statut_encaissement",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         """

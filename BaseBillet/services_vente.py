@@ -381,6 +381,7 @@ def ajouter_article(
     total_catalogue_impose=None,
     quantite_pour_cout=None,
     hors_chiffre_affaires=False,
+    cout_achat_impose=None,
     **champs_de_la_ligne,
 ):
     """
@@ -398,6 +399,8 @@ def ajouter_article(
     3. Règle « offert à montant non nul » : si l'article est entièrement offert et que
        son total catalogue n'est pas 0, alors part offerte = total catalogue,
        source OFFRIR, et un règlement FREE du même montant est ajouté.
+    3b. Coût d'achat : celui imposé par l'appelant (un avoir reprend le coût figé de la
+       ligne qu'il annule), sinon celui de la formule.
     4. `hors_chiffre_affaires` calculé depuis le produit, ou forcé par l'appelant.
     5. Création de la ligne, avec le marqueur `_tva_explicite` : `LigneArticle.save()`
        garde alors la TVA passée, même 0. La ligne porte l'origine de la vente
@@ -423,6 +426,8 @@ def ajouter_article(
     :param quantite_pour_cout: la quantité réellement servie, pour le coût d'achat
     :param hors_chiffre_affaires: True pour forcer l'article hors chiffre d'affaires
         (écart d'encaissement) ; sinon calculé depuis le produit
+    :param cout_achat_impose: le coût d'achat de l'article en centimes (int), repris
+        tel quel au lieu de la formule (article d'avoir) ; None = la formule
     :param champs_de_la_ligne: champs historiques de la ligne posés pendant la
         transition (`payment_method`, `asset`, `status`, `reservation`…)
     :return: la `LigneArticle` créée
@@ -484,6 +489,20 @@ def ajouter_article(
         )
         source_offert = LigneArticle.SourceOffert.OFFRIR
 
+    # 3b. Le coût d'achat : imposé par l'appelant, sinon celui de la formule. Un coût
+    # imposé est déjà en centimes entiers : un autre type serait un montant recalculé,
+    # qu'on refuse au lieu de l'arrondir en silence.
+    # / 3b. The purchase cost: imposed by the caller, else the formula's. Int only.
+    if cout_achat_impose is None:
+        cout_achat_de_l_article = montants["cout_achat"]
+    else:
+        if type(cout_achat_impose) is not int:
+            raise ValueError(
+                f"Le coût d'achat imposé doit être un entier en centimes, "
+                f"reçu : {cout_achat_impose!r}"
+            )
+        cout_achat_de_l_article = cout_achat_impose
+
     # 4. Hors chiffre d'affaires : figé ici, depuis le produit tel qu'il est
     # maintenant. Un changement ultérieur du produit ne change pas la ligne.
     # / 4. Off revenue: frozen now, from the product as it is today.
@@ -520,7 +539,7 @@ def ajouter_article(
             total_ttc=montants["total_ttc"],
             total_ht=montants["total_ht"],
             total_tva=montants["total_tva"],
-            cout_achat=montants["cout_achat"],
+            cout_achat=cout_achat_de_l_article,
             hors_chiffre_affaires=ligne_hors_chiffre_affaires,
             **champs_de_la_ligne,
         )
@@ -560,6 +579,13 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
     - une partie de la quantité d'une ligne ENTIÈREMENT offerte (part offerte = total
       catalogue, non nul) : calculé prix × −quantité, et part offerte = ce total
       (entièrement offert lui aussi, sans prorata) ;
+    - coût d'achat : le coût FIGÉ de la ligne d'origine, en négatif, au prorata de la
+      quantité rendue : arrondi_demi_haut(coût d'origine × −quantité / quantité
+      vendue). Ligne sans coût (inconnu) : avoir sans coût. Le coût n'est jamais
+      recalculé depuis le produit : son prix d'achat a pu changer, et le coût d'un
+      article au poids ou d'une part porte sur la quantité réellement servie, que la
+      ligne ne garde pas. Limite : plusieurs avoirs partiels d'une même ligne peuvent
+      s'écarter d'un centime de son coût total (chacun est arrondi) ;
     - statut CREATED : l'appelant fait la transition (CREDIT_NOTE, REFUNDED) par un
       `save()`, après l'encaissement.
     Champs recopiés : `credit_note_for` (la ligne d'origine), `payment_method`,
@@ -577,12 +603,16 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
 
     Refuse (ValueError) :
     - une vente qui n'est pas de nature AVOIR ;
+    - une ligne payée en points ou en temps (`ligne_payee_en_points`) : l'avoir est
+      une vente en euros, il rendrait de l'argent pour des points. Ce refus vaut pour
+      tous les producteurs d'avoir, qui passent tous par cette fonction ;
     - une quantité nulle, négative, ou plus grande que celle de la ligne ;
     - une quantité partielle d'une ligne EN PARTIE offerte : le projet ne fait aucun
       prorata d'offert, il faut rembourser l'article entier. Une ligne entièrement
       offerte, elle, accepte une quantité partielle (aucun prorata à faire).
-    / Refuses a non-AVOIR sale, a wrong quantity, and a partial return of a partly
-    offered item (no prorata: refund the whole item). A fully offered line accepts it.
+    / Refuses a non-AVOIR sale, a line paid in points or time, a wrong quantity, and a
+    partial return of a partly offered item (no prorata: refund the whole item). A fully
+    offered line accepts it.
 
     :param vente_avoir: la `Vente` AVOIR EN_ATTENTE qui reçoit l'article
     :param ligne_d_origine: la `LigneArticle` vendue que l'avoir annule
@@ -593,6 +623,12 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
         raise ValueError(
             f"La vente {vente_avoir.uuid} est de nature {vente_avoir.nature} : un "
             f"article d'avoir va dans une vente AVOIR."
+        )
+
+    if ligne_payee_en_points(ligne_d_origine):
+        raise ValueError(
+            f"La ligne {ligne_d_origine.uuid} a été payée en points ou en temps : un "
+            f"avoir est impossible (il rendrait de l'argent pour des points)."
         )
 
     quantite_vendue = ligne_d_origine.qty
@@ -644,6 +680,22 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
     else:
         source_de_l_offert = ""
 
+    # Le coût d'achat : le coût figé de la ligne d'origine, en négatif, au prorata de la
+    # quantité rendue. On multiplie avant de diviser (plus exact), puis on arrondit une
+    # seule fois. Ligne sans coût : l'avoir n'a pas de coût (inconnu, jamais 0).
+    # / The purchase cost: the original line's frozen cost, negative, prorated; no cost
+    # gives no cost (unknown, never 0).
+    cout_achat_d_origine = ligne_d_origine.cout_achat
+    if cout_achat_d_origine is None:
+        cout_achat_de_l_avoir = None
+    else:
+        cout_exact_de_la_partie_rendue = (
+            Decimal(cout_achat_d_origine) * -quantite / quantite_vendue
+        )
+        cout_achat_de_l_avoir = arrondir_au_centime_demi_haut(
+            cout_exact_de_la_partie_rendue
+        )
+
     # La trace de la ligne d'origine dans les métadonnées de l'avoir. Une copie : le
     # dictionnaire de la ligne d'origine n'est jamais modifié.
     # / The original line's trace in the credit note metadata, on a copy.
@@ -661,6 +713,7 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
         part_offerte=part_offerte_de_l_avoir,
         source_offert=source_de_l_offert,
         total_catalogue_impose=total_catalogue_de_l_avoir,
+        cout_achat_impose=cout_achat_de_l_avoir,
         hors_chiffre_affaires=ligne_d_origine.hors_chiffre_affaires,
         credit_note_for=ligne_d_origine,
         payment_method=ligne_d_origine.payment_method,
@@ -712,6 +765,36 @@ def ligne_payee_en_jetons(ligne):
     / Recognised by its historical LG method until sheet H.
     """
     return ligne.payment_method == PaymentMethod.LOCAL_GIFT
+
+
+def ligne_payee_en_points(ligne):
+    """
+    Dit si une ligne vendue a été payée en points ou en temps : une telle ligne ne
+    reçoit jamais d'avoir.
+    / Tells whether a sold line was paid in points or time: it never gets a credit note.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    Deux façons de le savoir :
+    - sa vente n'est pas en euros (`unite` ≠ "EUR") : vente en points de la caisse,
+      recharge offerte en points ou en temps de l'API v2 (moyen FREE, pas NM) ;
+    - son moyen historique est « points ou temps » (NM), avec ou sans vente : c'est le
+      seul indice d'une ligne écrite sans vente.
+    / Its sale is not in euros, or its historical method is NM (with or without sale).
+
+    Lue par `ajouter_l_article_d_avoir` (ce module, le refus commun à tous les avoirs),
+    le bouton « Avoir » (Administration/admin_tenant.py `emettre_avoir`) et le
+    formulaire d'annulation d'adhésion (BaseBillet/views.py, MembershipMVT).
+    / Read by the shared credit note function, the admin button and the membership
+    cancellation form.
+    """
+    vente_de_la_ligne_en_points = (
+        ligne.vente_id is not None and ligne.vente.unite != "EUR"
+    )
+    ligne_au_moyen_points_ou_temps = (
+        ligne.payment_method == PaymentMethod.NON_MONETAIRE
+    )
+    return vente_de_la_ligne_en_points or ligne_au_moyen_points_ou_temps
 
 
 def ligne_sans_argent_a_rendre(ligne):

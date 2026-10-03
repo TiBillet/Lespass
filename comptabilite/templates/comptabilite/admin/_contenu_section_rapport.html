@@ -1,0 +1,62 @@
+{% load i18n %}
+
+{% comment %}
+CONTENU D'UNE SECTION DU RAPPORT — la phrase, puis les tableaux
+/ Content of a report section — the sentence, then the tables
+
+LOCALISATION : comptabilite/templates/comptabilite/admin/_contenu_section_rapport.html
+
+Inclus par _sections_rapport.html pour chaque `section` (comptabilite/presentation.py).
+Une phrase « en alerte » (marge incomplète, anomalies) et un tableau « en alerte »
+(écarts d'encaissement) sont écrits en rouge. Les nombres sont alignés à droite.
+Styles inline seulement (admin Unfold).
+/ Included for each section. Alerts are written in red. Numbers right-aligned.
+{% endcomment %}
+
+{% if section.phrase %}
+    <p data-testid="comptabilite-phrase-{{ section.testid }}"
+       style="margin: 0 0 12px 0; font-size: 14px;{% if section.phrase_en_alerte %} color: #b91c1c; font-weight: 600;{% endif %}">
+        {{ section.phrase }}
+    </p>
+{% endif %}
+
+{% for tableau in section.tableaux %}
+    <div style="margin-bottom: 12px; overflow-x: auto;">
+        {% if tableau.titre %}
+            <h4 style="margin: 8px 0; font-weight: 600; font-size: 14px;{% if tableau.alerte %} color: #b91c1c;{% endif %}">
+                {{ tableau.titre }}
+            </h4>
+        {% endif %}
+        {% if tableau.message_d_alerte %}
+            {# Le rouge seul ne se lit pas avec un lecteur d'écran : l'alerte est aussi écrite. #}
+            {# / Red alone is not read by a screen reader: the alert is also written. #}
+            <p data-testid="comptabilite-alerte-{{ tableau.testid }}"
+               style="margin: 0 0 6px 0; color: #b91c1c; font-weight: 600; font-size: 14px;">
+                <span aria-hidden="true">⚠</span> {{ tableau.message_d_alerte }}
+            </p>
+        {% endif %}
+        <table data-testid="comptabilite-{{ tableau.testid }}"
+               style="width: 100%; border-collapse: collapse; font-size: 14px;{% if tableau.alerte %} color: #b91c1c;{% endif %}">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--color-base-200, #e5e7eb);">
+                    {% for colonne in tableau.colonnes %}
+                        <th scope="col" style="text-align: left; padding: 6px 8px; font-weight: 600;">{{ colonne }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for ligne in tableau.lignes %}
+                    <tr style="border-bottom: 1px solid var(--color-base-100, #f3f4f6);">
+                        {% for cellule in ligne %}
+                            {% if cellule.valeur is not None %}
+                                <td style="text-align: right; padding: 6px 8px; font-family: monospace; white-space: nowrap;">{{ cellule.texte }}</td>
+                            {% else %}
+                                <td style="text-align: left; padding: 6px 8px;">{{ cellule.texte }}</td>
+                            {% endif %}
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endfor %}

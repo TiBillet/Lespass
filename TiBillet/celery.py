@@ -105,28 +105,15 @@ def setup_periodic_tasks(sender, **kwargs):
         cron_purge_stale_onboard_drafts.s(),
     )
 
-    # Clotures comptables periodiques (cf. comptabilite/tasks.py)
-    # / Periodic accounting closures
-    logger.info(f"setup_periodic_tasks cron_cloture_quotidienne at 6:00 UTC")
+    # Clotures comptables : une tache CHAQUE HEURE. Chaque lieu decide en heure
+    # locale : J au seuil de fermeture + 2 h, puis semaine, mois, annee precedents
+    # (cf. comptabilite/tasks.py).
+    # / Accounting closures: one task EVERY HOUR; each venue decides in local time.
+    logger.info("setup_periodic_tasks cron_clotures_automatiques every hour")
     sender.add_periodic_task(
-        crontab(hour=6, minute=0),
-        cron_cloture_quotidienne.s(),
-        name="cron_cloture_quotidienne",
-    )
-    sender.add_periodic_task(
-        crontab(day_of_week=1, hour=6, minute=15),
-        cron_cloture_hebdomadaire.s(),
-        name="cron_cloture_hebdomadaire",
-    )
-    sender.add_periodic_task(
-        crontab(day_of_month=1, hour=6, minute=30),
-        cron_cloture_mensuelle.s(),
-        name="cron_cloture_mensuelle",
-    )
-    sender.add_periodic_task(
-        crontab(month_of_year=1, day_of_month=1, hour=6, minute=45),
-        cron_cloture_annuelle.s(),
-        name="cron_cloture_annuelle",
+        crontab(minute=0),
+        cron_clotures_automatiques.s(),
+        name="cron_clotures_automatiques",
     )
 
     logger.info(f'setup_periodic_tasks DONE')
@@ -184,35 +171,22 @@ def cron_purge_stale_onboard_drafts():
 
 
 @app.task
-def cron_cloture_quotidienne():
+def cron_clotures_automatiques():
     """
-    Genere les clotures comptables quotidiennes (niveau J).
-    / Generates daily accounting closures (J level).
+    Les clotures comptables automatiques de tous les lieux, chaque heure : le filet J
+    (heure de fermeture + 2 h, heure locale), puis la semaine, le mois et l'annee
+    precedents. Wrapper @app.task local, comme cron_purge_stale_onboard_drafts.
+    / Automatic accounting closures of every venue, every hour. Local wrapper.
+
+    FLUX : celery beat (crontab(minute=0)) -> CETTE TACHE ->
+    comptabilite/tasks.py generer_les_clotures_automatiques -> une sous-tache
+    generer_les_clotures_automatiques_du_lieu par lieu (un lieu lent ou en erreur ne
+    retient pas les autres).
     """
-    logger.info(f"call_command generer_cloture --niveau=J START")
-    call_command("generer_cloture", "--niveau=J")
-    logger.info(f"call_command generer_cloture --niveau=J END")
-
-
-@app.task
-def cron_cloture_hebdomadaire():
-    """Wrapper hebdomadaire (lundi 6h15 UTC)."""
-    logger.info(f"call_command generer_cloture --niveau=H START")
-    call_command("generer_cloture", "--niveau=H")
-    logger.info(f"call_command generer_cloture --niveau=H END")
-
-
-@app.task
-def cron_cloture_mensuelle():
-    """Wrapper mensuel (1er du mois 6h30 UTC)."""
-    logger.info(f"call_command generer_cloture --niveau=M START")
-    call_command("generer_cloture", "--niveau=M")
-    logger.info(f"call_command generer_cloture --niveau=M END")
-
-
-@app.task
-def cron_cloture_annuelle():
-    """Wrapper annuel (1er janvier 6h45 UTC)."""
-    logger.info(f"call_command generer_cloture --niveau=A START")
-    call_command("generer_cloture", "--niveau=A")
-    logger.info(f"call_command generer_cloture --niveau=A END")
+    # Import local pour ne pas tirer les modeles au chargement de ce module, tres
+    # precoce dans le demarrage de Django.
+    # / Local import: this module loads very early in Django's boot.
+    from comptabilite.tasks import generer_les_clotures_automatiques
+    logger.info("generer_les_clotures_automatiques START")
+    generer_les_clotures_automatiques()
+    logger.info("generer_les_clotures_automatiques END")

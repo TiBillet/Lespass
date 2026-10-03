@@ -94,7 +94,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.db.models import Q
-from django.utils import timezone
+from django.utils import timezone, translation
 from django_tenants.utils import tenant_context
 
 from AuthBillet.models import Wallet
@@ -747,6 +747,15 @@ def test_recharge_cadeau_offerte_en_totalite(lieu):
 # / 6b — Gift top-up mixed with other items: refused
 # --------------------------------------------------------------------------
 
+# Le refus d'un panier qui mêle une recharge cadeau à d'autres articles (msgid
+# français). Le test le compare dans la langue de la réponse (`Content-Language`) :
+# il reste vrai quelle que soit la traduction.
+# / The refusal of a cart mixing a gift top-up with other items (French msgid),
+# compared in the response's language.
+MESSAGE_RECHARGE_CADEAU_A_PART = (
+    "La recharge cadeau se fait à part : retirez les autres articles."
+)
+
 
 @pytest.mark.parametrize("moyen_de_paiement", ["espece", "nfc"])
 def test_recharge_cadeau_melangee_a_d_autres_articles_refusee(lieu, moyen_de_paiement):
@@ -790,7 +799,9 @@ def test_recharge_cadeau_melangee_a_d_autres_articles_refusee(lieu, moyen_de_pai
     )
 
     assert reponse.status_code == 400
-    assert "recharge cadeau" in reponse.content.decode().lower()
+    with translation.override(reponse["Content-Language"]):
+        message_de_refus_attendu = translation.gettext(MESSAGE_RECHARGE_CADEAU_A_PART)
+    assert message_de_refus_attendu in reponse.content.decode()
     assert not Vente.objects.filter(idempotency_key=cle_d_idempotence).exists()
     assert not LigneArticle.objects.filter(pricesold__price=biere.tarif).exists()
     assert not LigneArticle.objects.filter(
@@ -838,7 +849,9 @@ def test_complement_refuse_le_melange_recharge_cadeau(lieu):
     )
 
     assert reponse.status_code == 400
-    assert "recharge cadeau" in reponse.content.decode().lower()
+    with translation.override(reponse["Content-Language"]):
+        message_de_refus_attendu = translation.gettext(MESSAGE_RECHARGE_CADEAU_A_PART)
+    assert message_de_refus_attendu in reponse.content.decode()
     assert not Vente.objects.filter(idempotency_key=cle_d_idempotence).exists()
     assert not LigneArticle.objects.filter(pricesold__price=biere.tarif).exists()
     assert not LigneArticle.objects.filter(

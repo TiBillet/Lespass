@@ -36,3 +36,21 @@ anti-fraude TVA, art. 286 CGI) sont traités ici.
   chaîne, le Z chaîné et l'archive du chantier 05 couvrent déjà.
 - Journal des événements techniques (JET), durée de conservation, export pour
   l'administration.
+- **FEC = Z à l'export** (relecture Fable finale de la fiche F) : le FEC est recalculé à
+  chaque export depuis les ventes de la plage de la J ; une vente sortie de `REGLEE` ou
+  supprimée après la J disparaîtrait du FEC en silence (l'équilibre tient). Seul
+  `verify_clotures` le voit. Garde possible : comparer Σ HT et Σ TVA crédités aux totaux
+  scellés de la J, et refuser l'export.
+- **Nom du FEC légal** : `SIRENFECAAAAMMJJ.txt` (date de clôture de l'exercice, A47 A-1).
+  Le FEC de Lespass est un fichier d'import (`FEC-AAAAMMJJ-n.txt`) ; le FEC remis à
+  l'administration est produit par le logiciel comptable du lieu.
+
+## À trancher dans ce chantier : le total perpétuel
+
+Depuis le chantier 05 (fiche F), chaque clôture porte un **total perpétuel net** : le
+chiffre d'affaires cumulé, avoirs déduits. Il peut donc baisser (un avoir le fait
+redescendre). Vérifier ce que le référentiel NF525 exige : un « grand total » qui ne
+descend jamais (ventes et avoirs cumulés à part) ? Si oui, ajouter deux cumuls
+(ventes perpétuelles, avoirs perpétuels) aux clôtures. Les clôtures déjà scellées ne
+les auront pas. Décision du mainteneur du 2026-10-03 : garder le net seul d'ici là
+(SUIVI du chantier 05, §5, Q-F16).

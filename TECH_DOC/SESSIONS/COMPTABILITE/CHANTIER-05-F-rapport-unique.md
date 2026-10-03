@@ -1,10 +1,28 @@
 # Chantier 05-F — Un moteur de rapport, une clôture, un FEC équilibré
 
-> **Statut** : 📋 SPEC RÉDIGÉE (2026-09-28) — relue Fable + Opus, corrigée
+> **Statut** : ✅ LIVRÉE (2026-10-03), à committer — relue Fable + Opus à chaque étape ; détail au SUIVI §3-§6
+> **Écarts finaux** : le CSV comptable est **retiré** (Q-F22) : le FEC est le seul export comptable ; FEC en UTF-8 (Q-F17) ; `EcritureNum` « n° de la J - journal », stable mais non continu (Q-F18)
 > Tronc : [`CHANTIER-05-montants-entiers.md`](CHANTIER-05-montants-entiers.md) — D19 à D23, D26, D28, R2
 > Effort : 3,5 j (3 sessions : §2, §3, §4, plus les tests existants du §7) — Dépend de :
 > B, C, D (toutes les ventes ont leur `Vente`), E (plan comptable). **Migration : oui**
 > (champs de clôture).
+
+> **Découpage et constats (relecture contre le code, 2026-10-03)** — détail au SUIVI §4.
+> Sessions : **F-1a** (rapport : sections 1-3, 5-8 ; tests 1-13), **F-1b** (sections 4,
+> 9-11, rapport X, comparaison §5 ; tests 11, 25c, 26), **F-2a** (clôture : champs,
+> `heure_de_fermeture`, J glissante, filet horaire, H/M/A en heure locale, chaîne,
+> `verify_clotures`, commande, menu ; tests 14-18), **F-2b** (tous les lecteurs de
+> `rapport_json` : gabarits admin, rapport temps réel, PDF, Excel, CSV, mail ; démo),
+> **F-3** (FEC ; le CSV comptable, écrit puis retiré par Q-F22 ; tests 19-25b). Ce que la fiche oubliait : les lecteurs de
+> `rapport_json` (`comptabilite/pdf.py`, `excel_export.py`, `csv_export.py`, gabarits
+> `admin/_sections_rapport.html`, `pdf/rapport_comptable.html`, `views/rapport_temps_reel.html`,
+> mail) ; `generer_cloture_pour_tenant` saute un lieu sans billetterie ni adhésion (un lieu
+> « caisse seule » n'aurait jamais de J) ; la démo (`_demo_data_v2_ventes.py`) crée des J à
+> bornes fixes ; `test_menu_rapports.py` fige les libellés du menu ;
+> `test_plan_comptable_unique.py` appelle `comptabilite.csv_comptable` ; aucune fonction
+> « compte de TVA d'un taux » (le CSV la fait à la main) ; `verifier_chaine_ventes` vérifie
+> toute la chaîne, pas une plage ; profils CSV : `comptabilite/profils_csv.py` (8 profils)
+> contient les 5 de `laboutik/profils_csv.py`.
 
 ## 1. Le principe
 
@@ -53,7 +71,7 @@ Définitions (une seule fois, dans le module) :
 | *Annexe* | | |
 | 7 | Avoirs, recharges, écarts, corrections | quatre sous-listes, même code : **avoirs** (nombre, total, par moyen ; dont **retours consigne**, D11 ; dont **remboursements Stripe à faire à la main : n / X €** = règlements Stripe négatifs sans `reference_externe`, D27) ; **recharges et cartes** (recharges encaissées par moyen ; cadeau émis ; cartes vidées, espèces rendues, jetons cadeau repris au vidage) ; **écarts d'encaissement** (nombre, total, D26 — en rouge s'il y en a) ; **corrections** (moyen avant → après, opérateur) |
 | 8 | Points | par monnaie |
-| 9 | **Marge brute** (D21) | CA HT − `Sum("cout_achat")` des **articles servis** (vendus, offerts, points ; retours de consigne en négatif) ; nombre d'articles au coût inconnu (prix d'achat 0) : « marge incomplète : 12 articles sans prix d'achat » |
+| 9 | **Marge brute** (D21) | CA HT − `Sum("cout_achat")` des **articles servis** (vendus, offerts, points ; retours de consigne en négatif) ; nombre d'articles **vendus** au coût inconnu (prix d'achat 0 → coût vide ; en unités, ventes `VENTE` seulement : un avoir ne compte pas, F-1f) : « marge incomplète : 12 articles sans prix d'achat ». Un avoir reprend le coût de la ligne d'origine en négatif (Q-F9, F-1d) |
 | 10 | Détail | billets (par événement, tarif), adhésions, ventes par produit (qté, TTC, HT, offert, coût) — **ce qui est imprimé sur le Z aujourd'hui**, réécrit sur les champs entiers. « Habitus cartes » et « opérateurs » restent au rapport X, hors du Z stocké |
 | 11 | Intégrité | `verifier_chaine_ventes` sur la plage : « OK » ou les anomalies |
 
@@ -64,30 +82,33 @@ Le rapport X (temps réel) = ce même calcul, non stocké, plus « habitus carte
 
 ### 3.1 La journée (D28)
 
-- **Clôture J** = `[fin de la J précédente, moment de la clôture]` : bouton de la caisse
-  en fin de service (branché en fiche G), et **filet automatique à l'heure de fermeture du
-  lieu + 2 h, heure locale** (`Configuration.fuseau_horaire`, `BaseBillet/models.py`
-  ~l.544). L'heure de fermeture n'existe pas encore : un seul champ ajouté,
-  `Configuration.heure_de_fermeture` (`TimeField`, défaut **02:00** → Z automatique à
-  **4 h**), réglable dans l'admin (migration dans cette fiche). **Condition du filet** :
-  en heure locale, il est **au moins** l'heure de fermeture + 2 h, **et** il y a des
-  ventes encaissées depuis la dernière J. Jamais une égalité d'heure : elle raterait
-  l'heure sautée au changement d'heure, et la condition « ≥ et ventes depuis la dernière
-  J » est idempotente (rejouée une heure plus tard, elle ne crée rien). Une seule J à la
-  fois (verrou du lieu, le même que les ventes).
-- **Planification** (`TiBillet/celery.py` ~l.108-128, à modifier dans cette fiche) :
-  aujourd'hui `cron_cloture_quotidienne` tourne à 6:00 UTC pour tous les lieux
-  (`CELERY_TIMEZONE` = variable d'environnement `TIME_ZONE`, `TiBillet/settings.py`
-  ~l.656). Elle devient une tâche **horaire** (`crontab(minute=0)`) qui ne clôture que
-  les lieux où la condition ci-dessus est vraie. Les tâches H / M / A gardent leur heure ;
-  leurs bornes calendaires sont calculées en heure locale du lieu.
-- **H, M, A** : **calendaires** (semaine du lundi au dimanche, mois, année), calculées
-  **directement sur les ventes** de la période. Une J de soirée à cheval sur deux mois
-  est découpée par la date d'encaissement de chaque vente : la M reste juste.
-- Idempotence : aujourd'hui fondée sur `(niveau, début, fin)` avec une J calendaire
-  (bornes : `comptabilite/tasks.py` ~l.50-51 ; contrainte `unique_cloture_periode` :
-  `comptabilite/models.py` ~l.139). Nouvelle règle : J = « pas de nouvelle J sans vente
-  depuis la précédente » ; H/M/A = unique sur `(niveau, début, fin)` (inchangé).
+- **Clôture J** (règle telle que codée, F-2a / F-2c, SUIVI §4) : `[fin de la J précédente, fin[`
+  (borne de fin exclue ; la première J d'un lieu commence à sa première vente).
+  - **Z demandé** (bouton de la caisse en fin de service, fiche G ; commande) : `fin` =
+    maintenant. Il doit être appelé **hors de toute transaction** (sinon refus) : sa fin
+    est fixée sous le verrou des ventes dans une transaction courte.
+  - **Filet automatique** : `Configuration.heure_de_fermeture` (`TimeField`, défaut
+    **02:00**), seuil = fermeture + 2 h **en heure locale** (`Configuration.fuseau_horaire`),
+    comparé en UTC (nuits de changement d'heure). Une J n'est créée que s'il y a des ventes
+    réglées dans `[fin de la dernière J, seuil[`, et elle **finit au seuil**. Les ventes
+    d'après le seuil attendent la J suivante (bouton ou filet du lendemain) : le filet ne
+    coupe jamais un service en deux. Rejoué, il ne crée rien.
+  - Trois temps : fin fixée sous le verrou des ventes (court), rapport calculé hors verrou,
+    J enregistrée sous un verrou de clôture avec revérification.
+- **Planification** (`TiBillet/celery.py`) : une seule tâche **horaire**
+  (`cron_clotures_automatiques`, `crontab(minute=0)`) qui lance **une sous-tâche par
+  lieu** (un lieu lent ou en erreur ne retient pas les autres). Chaque sous-tâche fait le
+  filet J, puis les H / M / A.
+- **H, M, A** : **calendaires** (semaine du lundi au dimanche, mois, année) **en heure
+  locale du lieu**, calculées **directement sur les ventes** de la période (jamais la
+  somme des J). Une période **sans vente n'a pas de clôture** (Q-F12). Elles ne stockent
+  ni la section 4 (tiroir) ni la section 11 (intégrité : chaque J l'a vérifiée sur sa
+  plage). Idempotence : unique sur `(niveau, début, fin)`.
+- Une J de soirée à cheval sur deux mois est découpée par la date d'encaissement de
+  chaque vente : la M reste juste.
+- Corrections décidées après la relecture Fable (session F-2e) : la H / M / A attend le
+  filet du jour où elle finit ; les périodes manquées sont rattrapées ; une barrière sur le
+  verrou des ventes précède son calcul.
 
 ### 3.2 Les champs
 
@@ -113,7 +134,9 @@ tourne encore jusqu'à G : entre F et G, une vente de caisse apparaît dans les 
 clôtures (dev, accepté). Menu : « Rapport ventes en ligne » devient **« Rapport des
 ventes »** ; « Rapport ventes caisse » devient **« Ancien rapport caisse »** (retiré en H).
 
-## 4. Session F-3 — FEC et CSV comptables, équilibrés par construction
+## 4. Session F-3 — le FEC, équilibré par construction
+
+> **Livré (2026-10-03)** : le FEC est le **seul** export comptable (Q-F22 : aucun profil CSV ne suivait le vrai format de son logiciel ; Sage, EBP, PennyLane, Paheko, Odoo importent le FEC). UTF-8 sans BOM (Q-F17). `EcritureNum` = « n° de la J - journal » (Q-F18). Refus aussi pour deux points de vente au même code journal et pour un code journal réservé aux origines (CAISSE, TIREUSE, WEB, ADMIN). Aucune ligne de TVA à 0. La règle commune vit dans `comptabilite/ventilation.py` (`ecritures_de_l_export`) ; `comptabilite/fec.py` est réécrit en place. Les puces sur les profils CSV ci-dessous sont **caduques**.
 
 Une seule fonction `ventiler_cloture(cloture_j)` (`comptabilite/ventilation.py`, remplace
 `laboutik/ventilation.py` et la logique de `comptabilite/fec.py`) produit **une écriture
@@ -138,6 +161,7 @@ par journal** et par clôture **J** :
   cadeau, eux, s'écrivent (D8 bis) : règlement `LG` au débit 419100, article au 707900 ;
   recharge offerte et jetons repris au vidage par les lignes ci-dessus.
 - Compte manquant → refus explicite (fiche E).
+- **Le FEC est recalculé à chaque export** (mainteneur, 2026-10-03, SUIVI §5 Q-F2) : ventes scellées de la J + plan comptable du moment. Rien n'est figé ni tracé côté Lespass, aucune mention « provisoire » : TiBillet n'est pas un logiciel de comptabilité, c'est le logiciel comptable du lieu qui fige les écritures importées. NF525 ne couvre que les données de caisse et les cumuls de clôture (BOI-TVA-DECLA-30-10-30 §50, §170) : la ventilation par compte est hors périmètre fiscal.
 - **Le FEC n'est produit que par les J.** Une période (mois, année) s'exporte en
   concaténant les écritures des J qu'elle contient. Les clôtures H / M / A sont des
   **rapports**, sans écriture propre (plus d'écriture vide).
@@ -148,10 +172,11 @@ par journal** et par clôture **J** :
   bords de mois, le FEC du mois et le rapport M peuvent donc différer des ventes faites
   après minuit : l'écart est écrit dans le rapport M (« dont ventes de la J du … comptées
   au FEC du mois précédent ») ; **le FEC fait foi par J**.
-- `ventiler_cloture` remplace `laboutik/ventilation.py` et `comptabilite/fec.py` pour la
-  clôture unique ; les anciens fichiers restent pour l'ancienne clôture caisse jusqu'à
-  G, et sont retirés en H.
-- Profils CSV comptables (Sage, EBP, Paheko… : `laboutik/csv_comptable.py`,
+- `ventiler_cloture` remplace `laboutik/ventilation.py` pour la clôture unique ;
+  `comptabilite/fec.py` est réécrit en place (livré). `laboutik/fec.py` et
+  `laboutik/ventilation.py` restent pour l'ancienne clôture caisse jusqu'à G, et sont
+  retirés en H.
+- *(Caduc, Q-F22 : CSV comptable retiré.)* Profils CSV comptables (Sage, EBP, Paheko… : `laboutik/csv_comptable.py`,
   `laboutik/profils_csv.py`, `comptabilite/csv_comptable.py`, `comptabilite/profils_csv.py`) :
   un seul jeu survit (le plus complet, à comparer au démarrage), il lit **cette**
   ventilation ; l'autre est retiré en H. Le jeu qui survit prend les comptes de TVA par
@@ -238,7 +263,7 @@ lit `RapportDesVentes`. Fichiers concernés (vérifiés au 2026-09-28 par
 | `tests/pytest/test_comptabilite_service.py` | teste l'ancien moteur en ligne : gardé tel quel jusqu'à H (le module reste), les cas utiles sont repris dans `test_rapport_unique.py` |
 | `tests/pytest/test_comptabilite_celery.py` | J calendaire → J glissante et filet de 4 h local ; H/M/A calendaires |
 | `tests/pytest/test_comptabilite_verify.py` | `verify_clotures` : `hash_lignes` retiré → plage de ventes + chaîne des clôtures |
-| `tests/pytest/test_comptabilite_admin.py`, `tests/pytest/test_comptabilite_exports.py`, `tests/pytest/test_comptabilite_csv_comptable.py` | champs de clôture ajoutés / retirés, `rapport_json` aux sections du §2 |
+| `tests/pytest/test_comptabilite_admin.py`, `tests/pytest/test_comptabilite_exports.py`, `tests/pytest/test_comptabilite_csv_comptable.py` (supprimé en F-3c) | champs de clôture ajoutés / retirés, `rapport_json` aux sections du §2 |
 | `tests/pytest/test_demo_data_ventes.py` | lit `comptabilite.services` : à relire, adapter si l'assertion porte sur la clôture |
 | `tests/e2e/conftest.py` (~l.785-920) | compare les deux anciens moteurs : inchangé jusqu'à H (les modules restent) |
 

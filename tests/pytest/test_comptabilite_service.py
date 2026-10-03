@@ -40,9 +40,7 @@ from BaseBillet.models import (  # noqa: E402
     Event, LigneArticle, Membership, PaymentMethod, Price, PriceSold, Product,
     ProductSold, Reservation, SaleOrigin,
 )
-from comptabilite.models import ClotureCaisse  # noqa: E402
 from comptabilite.services import RapportComptableService  # noqa: E402
-from comptabilite.tasks import generer_cloture_pour_tenant  # noqa: E402
 
 
 def _creer_ligne(**kwargs):
@@ -529,66 +527,3 @@ class TestRapportComptableService(FastTenantTestCase):
         payload = json.dumps(rapport)
         assert isinstance(payload, str)
         assert len(payload) > 100  # contenu non vide
-
-    # -----------------------------------------------------------------------
-    # Tests B4 — End-to-end: tasks.generer_cloture_pour_tenant
-    # -----------------------------------------------------------------------
-
-    def test_generer_cloture_pour_tenant_cree_une_cloture(self):
-        """
-        L'appel a generer_cloture_pour_tenant cree une ClotureCaisse en base.
-        / Calling generer_cloture_pour_tenant creates a ClotureCaisse in DB.
-        """
-        # Une periode passee : aucune ligne du test ne tombe dedans.
-        # / A past period: none of the test's lines fall inside it.
-        fin = timezone.now() - timedelta(days=30)
-        debut = fin - timedelta(days=1)
-
-        uuid_returned = generer_cloture_pour_tenant(
-            schema_name=self.tenant.schema_name,
-            niveau="J",
-            datetime_debut_iso=debut.isoformat(),
-            datetime_fin_iso=fin.isoformat(),
-        )
-
-        assert uuid_returned is not None, "La tache doit retourner l'UUID de la cloture creee"
-
-        cloture = ClotureCaisse.objects.get(uuid=uuid_returned)
-        assert cloture.niveau == "J"
-        assert cloture.numero_sequentiel >= 1
-        assert cloture.datetime_debut == debut
-        assert cloture.datetime_fin == fin
-        assert isinstance(cloture.rapport_json, dict)
-        # 5 sections de rapport + meta = 6 cles
-        # / 5 report sections + meta = 6 keys
-        assert len(cloture.rapport_json.keys()) == 6
-        assert "totaux_par_moyen" in cloture.rapport_json
-        assert len(cloture.hash_lignes) == 64
-
-    def test_generer_cloture_idempotent(self):
-        """
-        Deux appels avec les memes bornes → 1 seule cloture (idempotence).
-        / Two calls with same bounds → 1 single closure (idempotent).
-        """
-        fin = timezone.now() - timedelta(days=60)
-        debut = fin - timedelta(days=1)
-
-        uuid1 = generer_cloture_pour_tenant(
-            schema_name=self.tenant.schema_name,
-            niveau="J",
-            datetime_debut_iso=debut.isoformat(),
-            datetime_fin_iso=fin.isoformat(),
-        )
-        uuid2 = generer_cloture_pour_tenant(
-            schema_name=self.tenant.schema_name,
-            niveau="J",
-            datetime_debut_iso=debut.isoformat(),
-            datetime_fin_iso=fin.isoformat(),
-        )
-
-        assert uuid1 == uuid2, "L'idempotence doit retourner le meme UUID"
-        # Verifier qu'il n'y a qu'une seule cloture pour cette periode
-        clotures = ClotureCaisse.objects.filter(
-            datetime_debut=debut, datetime_fin=fin,
-        )
-        assert clotures.count() == 1

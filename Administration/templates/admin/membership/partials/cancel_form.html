@@ -12,10 +12,13 @@ manquant, refus du service de vente), il renvoie ce formulaire avec l'erreur.
 
 Le formulaire ne montre que le DERNIER paiement de l'adhésion : c'est le seul qui reçoit
 l'avoir (décision D30, voir MembershipMVT.cancel dans BaseBillet/views.py).
+Dernier paiement en points ou en temps (`dernier_paiement_en_points`) : seul « Annuler
+sans avoir » est proposé, et une phrase dit pourquoi (aucun avoir, points non rendus).
 Le champ « Remboursé par » n'a PAS d'attribut `required` : il bloquerait aussi le
 bouton « Annuler sans avoir ». Le serializer AnnulationAdhesionSerializer l'exige
 seulement pour « Annuler avec avoir ».
-/ Only the latest payment is shown and credited (D30). The "Refunded by" select has no
+/ Only the latest payment is shown and credited (D30); a points payment only offers
+"Cancel without credit note" and says why. The "Refunded by" select has no
 `required` attribute (it would block "Cancel without credit note"): the serializer
 requires it for "Cancel with credit note" only.
 -->
@@ -139,6 +142,23 @@ value. A safety net against double clicks; the real guard is the server-side loc
                 {% endif %}
             </div>
 
+        {% elif dernier_paiement_en_points %}
+
+            {# Dernier paiement en points ou en temps : aucun avoir, les points ne sont pas rendus. #}
+            {# Le seul refus possible ici (un POST « avec avoir » forcé) affiche déjà cette phrase  #}
+            {# dans l'erreur, plus haut : la note n'est pas répétée quand il y a une erreur.        #}
+            {# / Latest payment in points or time: no credit note. The note is not repeated when    #}
+            {# / the error above already says it.                                                   #}
+            {% if not erreurs %}
+            <div data-testid="membership-cancel-payee-en-points"
+                 role="note"
+                 style="margin-bottom:.875rem;padding:.625rem .75rem;border-radius:.25rem;background:#fef2f2;border:1px solid #fca5a5">
+                <p style="font-size:.8125rem;color:#7f1d1d;margin-bottom:0">
+                    {% translate "Adhésion payée en points ou en temps : aucun avoir n'est possible, et les points ne sont pas rendus sur la carte." %}
+                </p>
+            </div>
+            {% endif %}
+
         {% elif dernier_paiement_deja_rembourse %}
 
             {# Dernier paiement déjà remboursé : aucun avoir (D30, pas de remontée) #}
@@ -205,7 +225,7 @@ value. A safety net against double clicks; the real guard is the server-side loc
                     value="0"
                     data-testid="membership-cancel-confirm"
                     style="padding:.4rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;background:#dc2626;color:#fff;border:none;cursor:pointer">
-                {% if has_paid_lines %}
+                {% if has_paid_lines or dernier_paiement_en_points %}
                     {% translate "Annuler sans avoir" %}
                 {% else %}
                     {% translate "Confirmer l'annulation" %}

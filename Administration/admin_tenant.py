@@ -142,6 +142,7 @@ from BaseBillet.services_vente import (
     ecrire_la_vente_d_avoir_d_une_ligne,
     encaisser_vente,
     ligne_entierement_offerte,
+    ligne_payee_en_points,
     ligne_sans_argent_a_rendre,
     ouvrir_vente,
 )
@@ -476,6 +477,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             'classes': ["tab"],
             'fields': (
                 'fuseau_horaire',
+                'heure_de_fermeture',
                 'language',
                 'jauge_max',
                 'allow_concurrent_bookings',
@@ -2124,7 +2126,8 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
         Gabarit : Administration/templates/admin/lignearticle/emettre_avoir.html
 
         GARDES (GET et POST) : la ligne est VALID ou PAID ; elle n'a pas déjà d'avoir ;
-        sa vente d'origine, si elle existe, est réglée.
+        sa vente d'origine, si elle existe, est réglée ; elle n'est pas payée en points
+        ou en temps (`ligne_payee_en_points`).
 
         TROIS ÉCRANS :
         - ligne hors Stripe, pas entièrement offerte : champ « Remboursé par » (espèces,
@@ -2176,6 +2179,18 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
             messages.error(
                 request,
                 _("La vente d'origine n'est pas réglée : l'avoir est impossible."),
+            )
+            return redirect(url_de_la_liste_des_ventes)
+
+        # Garde : une ligne payée en points ou en temps ne reçoit pas d'avoir. L'avoir
+        # est une vente en euros : il rendrait de l'argent pour des points. L'écran ne
+        # s'ouvre donc pas (le service refuse aussi, `ajouter_l_article_d_avoir`).
+        # / Guard: a line paid in points or time gets no credit note; the screen does
+        # not open (the service refuses it too).
+        if ligne_payee_en_points(ligne_originale):
+            messages.error(
+                request,
+                _("Cette ligne a été payée en points ou en temps : l'avoir est impossible."),
             )
             return redirect(url_de_la_liste_des_ventes)
 

@@ -321,12 +321,25 @@ def calculer_hmac_vente(vente, cle, previous_hmac):
     ).hexdigest()
 
 
-def verifier_chaine_ventes(cle):
+def verifier_chaine_ventes(
+    cle, numero_de_la_premiere_vente=None, numero_de_la_derniere_vente=None
+):
     """
     Vérifie la chaîne des ventes réglées du lieu, et renvoie la liste des anomalies.
     / Checks the chain of settled sales of the venue, returns the list of anomalies.
 
     LOCALISATION : laboutik/integrity.py
+
+    LA PLAGE (facultative) : sans les deux numéros, toute la chaîne du lieu est
+    vérifiée. Avec eux, seules les ventes de la plage [première, dernière] le sont :
+    un lieu qui a des années de ventes ne relit pas tout pour une journée. La première
+    vente de la plage est alors reliée à l'empreinte STOCKÉE de la vente qui la précède
+    (la dernière vente réglée de numéro inférieur ; "" s'il n'y en a pas) : une
+    altération avant la plage n'est pas vue, mais un maillon cassé ou un trou de
+    numéro à l'entrée de la plage l'est.
+    / Optional range: without both numbers, the whole chain is checked. With them,
+    only the sales of the range; the first one is linked to the STORED fingerprint of
+    the sale before it.
 
     Les ventes REGLEE sont parcourues par numéro croissant. Pour chaque vente :
     1. trou de numéro : son numéro n'est pas le numéro de la vente d'avant + 1 ;
@@ -345,9 +358,12 @@ def verifier_chaine_ventes(cle):
     français). Une vente peut avoir plusieurs anomalies.
     / An anomaly is a dict: "numero", "uuid" (text), "raison" (French sentence).
 
-    FLUX : appelée par les tests et, plus tard, par les contrôles de la clôture.
+    FLUX : appelée par les tests, et par la section « intégrité » du rapport des ventes
+    (`comptabilite/rapport.py`) sur la plage de sa période.
 
     :param cle: str — la clé HMAC du lieu, en clair
+    :param numero_de_la_premiere_vente: int ou None — début de la plage (inclus)
+    :param numero_de_la_derniere_vente: int ou None — fin de la plage (incluse)
     :return: list — les anomalies ; vide si la chaîne est saine
     """
     # Imports locaux, comme dans tout ce module. Pour `services_vente`, c'est
@@ -369,6 +385,34 @@ def verifier_chaine_ventes(cle):
     ventes_reglees = Vente.objects.filter(statut=Vente.Statut.REGLEE).order_by(
         "numero"
     )
+
+    # Début de plage : la première vente est reliée à la vente qui la précède, lue
+    # en base avec son empreinte stockée. C'est la DERNIÈRE vente réglée de numéro
+    # inférieur au début de la plage, pas « numéro − 1 » : une vente supprimée juste
+    # avant la plage sort alors en « trou de numéro », comme sur la chaîne entière.
+    # Sans vente avant, la plage commence la chaîne : empreinte "" et aucun numéro
+    # précédent.
+    # / Range start: linked to the stored fingerprint of the last settled sale
+    # numbered below the range (not "number − 1"); if none, the range starts the chain.
+    if numero_de_la_premiere_vente is not None:
+        ventes_reglees = ventes_reglees.filter(numero__gte=numero_de_la_premiere_vente)
+        vente_avant_la_plage = (
+            Vente.objects.filter(
+                statut=Vente.Statut.REGLEE,
+                numero__lt=numero_de_la_premiere_vente,
+            )
+            .order_by("-numero")
+            .first()
+        )
+        if vente_avant_la_plage is not None:
+            empreinte_de_la_vente_precedente = vente_avant_la_plage.hmac_hash
+            numero_precedent = vente_avant_la_plage.numero
+
+    # Fin de plage : les ventes d'après ne sont pas vérifiées.
+    # / Range end: later sales are not checked.
+    if numero_de_la_derniere_vente is not None:
+        ventes_reglees = ventes_reglees.filter(numero__lte=numero_de_la_derniere_vente)
+
     for vente in ventes_reglees:
         # 1. Trou de numéro : le numéro ne suit pas celui de la vente d'avant.
         # / 1. Number gap: the number does not follow the previous sale's one.
@@ -416,15 +460,17 @@ def verifier_chaine_ventes(cle):
 
         # 4. Les deux égalités, relues en base.
         # / 4. The two equalities, read back from the database.
+        articles_de_la_vente = LigneArticle.objects.filter(vente_id=vente.pk)
         somme_des_totaux_catalogue = 0
         somme_des_nets_vendus = 0
-        for article in LigneArticle.objects.filter(vente_id=vente.pk):
+        for article in articles_de_la_vente:
             somme_des_totaux_catalogue += article.total_catalogue
             somme_des_nets_vendus += article.total_ttc
 
+        reglements_de_la_vente = Reglement.objects.filter(vente_id=vente.pk)
         somme_de_tous_les_reglements = 0
         somme_des_reglements_hors_offert = 0
-        for reglement in Reglement.objects.filter(vente_id=vente.pk):
+        for reglement in reglements_de_la_vente:
             somme_de_tous_les_reglements += reglement.montant
             reglement_offert = reglement.moyen in MOYENS_OFFERTS
             if not reglement_offert:

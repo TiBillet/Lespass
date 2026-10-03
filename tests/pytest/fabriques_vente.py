@@ -112,6 +112,9 @@ def fabriquer_vente_encaissee(
     articles=None,
     reglements=None,
     nature=Vente.Nature.VENTE,
+    point_de_vente=None,
+    operateur=None,
+    carte=None,
 ):
     """
     Écrit une vente complète par le service de vente, puis l'encaisse.
@@ -120,7 +123,8 @@ def fabriquer_vente_encaissee(
     LOCALISATION : tests/pytest/fabriques_vente.py
 
     FLUX :
-    1. `ouvrir_vente(origine, nature)` : la vente naît « en attente » ;
+    1. `ouvrir_vente(origine, nature, point_de_vente, operateur, carte)` : la vente
+       naît « en attente » ;
     2. `ajouter_article(vente, **article)` pour chaque article ;
     3. `ajouter_reglement(vente, **reglement)` pour chaque règlement ;
     4. `encaisser_vente(vente)` : vérifie les deux égalités, pose le numéro.
@@ -135,6 +139,9 @@ def fabriquer_vente_encaissee(
     :param reglements: liste de dictionnaires, chacun passé tel quel à `ajouter_reglement`
         (ex. `{"moyen": PaymentMethod.CASH, "montant": 1050}`) ; None = aucun règlement
     :param nature: `Vente.Nature` (VENTE par défaut)
+    :param point_de_vente: `laboutik.PointDeVente` de la vente, ou None (défaut)
+    :param operateur: l'utilisateur qui fait la vente, ou None (défaut)
+    :param carte: la `CarteCashless` du client de la vente, ou None (défaut)
     :return: la vente encaissée
     """
     # None plutôt qu'une liste vide en valeur par défaut : une liste par défaut serait
@@ -145,7 +152,13 @@ def fabriquer_vente_encaissee(
     if reglements is None:
         reglements = []
 
-    vente = ouvrir_vente(origine=origine, nature=nature)
+    vente = ouvrir_vente(
+        origine=origine,
+        nature=nature,
+        point_de_vente=point_de_vente,
+        operateur=operateur,
+        carte=carte,
+    )
 
     for article in articles:
         ajouter_article(vente, **article)

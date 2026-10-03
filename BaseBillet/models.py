@@ -3,7 +3,7 @@ import calendar
 import json
 import logging
 import uuid
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
 
@@ -560,6 +560,19 @@ class Configuration(SingletonModel):
         Paris) instead of the date's real offset.
         """
         return zoneinfo.ZoneInfo(self.fuseau_horaire)
+
+    # L'heure de fermeture du lieu, en heure locale. La clôture journalière
+    # automatique (le Z) passe 2 h après, si personne ne l'a faite en fin de service
+    # (`comptabilite/tasks.py`, `generer_les_clotures_automatiques_du_lieu`).
+    # / The venue's closing time, local. The automatic daily closure runs 2 h later.
+    heure_de_fermeture = models.TimeField(
+        default=time(2, 0),
+        verbose_name=_("Heure de fermeture"),
+        help_text=_(
+            "Heure locale de fermeture du lieu. Si personne n'a fait la clôture "
+            "de la journée, elle est faite automatiquement deux heures après."
+        ),
+    )
 
     FRENCH, ENGLISH = 'fr', 'en'
     LANGUAGE_CHOICES = [
