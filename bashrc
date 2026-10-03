@@ -11,7 +11,7 @@ alias cel="poetry run celery -A TiBillet worker -l INFO"
 
 alias test="poetry run python /DjangoFiles/manage.py test"
 
-alias mmes="poetry run python manage.py makemessages -l en && poetry run python manage.py  makemessages -l fr"
+alias mmes="poetry run python manage.py makemessages -l en -i htmlcov && poetry run python manage.py  makemessages -l fr -i htmlcov"
 alias cmes="poetry run python manage.py compilemessages"
 
 alias pshell="eval $(poetry env activate)"

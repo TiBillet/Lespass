@@ -53,6 +53,15 @@ francaise qui s'affiche en anglais, ou l'inverse). Les entrees deja correctes
 (source == langue du fichier, `msgstr` vide = fallback gettext) sont laissees
 intactes : c'est ce qui evite des milliers de faux positifs.
 
+Une fuite peut aussi venir d'un `msgstr` **rempli, non fuzzy, mais ecrit dans
+la mauvaise langue** (ex : `locale/en`, msgid `"Please login to access this page."`,
+msgstr `"Veuillez vous connecter..."`). `extract_sync.py` le detecte avec une
+regle stricte (`msgstr_wrong_lang` : au moins 2 mots-outils de la mauvaise langue
+et aucun de la bonne, accents ignores) et l'affiche :
+`[sync] msgstr dans la mauvaise langue : fr=.. en=..`. Il reste un peu de bruit
+tolere : quelques `msgstr` recopies du msgid (titre propre, libelle bilingue
+« FR / EN ») qui seront simplement retraduits.
+
 **Etapes :**
 
 1. **Extraire** (deterministe) :

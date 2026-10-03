@@ -501,7 +501,7 @@ Une ligne par événement, la plus récente en haut. Format :
 
 | Date | `make test` | `make e2e` | Remarque |
 |---|---|---|---|
-| 2026-10-03 | **2719 passed** (0 FAILED / ERROR) | E2E complet : en cours | **fin de la fiche E** après E-4 (orchestrateur), 18 min 14 ; E2E `test_admin_plan_comptable.py` 1 passed après E-4 |
+| 2026-10-03 | **2719 passed** (0 FAILED / ERROR) | **E2E complet : 138 passed**, 0 skipped, 11 min 31 (dont `test_parcours_fedow_reel.py`, D8 bis) | **fin de la fiche E** après E-4 (orchestrateur), 18 min 14 ; E2E `test_admin_plan_comptable.py` 1 passed après E-4 |
 | 2026-10-03 | **2688 passed** (0 FAILED / ERROR) | — | après E-3, avec couverture (orchestrateur), 25 min 31 |
 | 2026-10-02 | **2632 passed** (0 FAILED / ERROR) | — | après D-4b — fiche D close, 8 min 44 |
 | 2026-10-02 | **2630 passed** (0 FAILED / ERROR) | 3 E2E des écrans d'avoir verts, Stripe réel 4 passed (ouvrier) | après D-4a, 9 min 27 |

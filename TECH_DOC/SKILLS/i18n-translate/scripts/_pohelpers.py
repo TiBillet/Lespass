@@ -157,6 +157,28 @@ def source_lang(mid, fr_str, en_str, fr_fuzzy, en_fuzzy):
         return "en"
     return _lang_words(mid)
 
+def msgstr_wrong_lang(msgstr, file_lang):
+    """
+    True si un msgstr NON fuzzy est ecrit dans l'AUTRE langue que son fichier.
+    / True if a non-fuzzy msgstr is written in the other language than its file.
+
+    Cas reel : dans locale/en, msgid "Please login to access this page." avait
+    msgstr "Veuillez vous connecter pour acceder a cet espace." -> le site anglais
+    affichait du francais. Ni fuzzy, ni vide : la detection SYNC ne le voyait pas.
+
+    Regle volontairement STRICTE (sinon des dizaines de faux positifs) :
+    - au moins 2 mots-outils de la mauvaise langue ET zero de la bonne ;
+    - les accents ne comptent PAS : un msgstr anglais contient souvent des noms
+      propres accentues (Cooperative Code Commun, rose, cafe...).
+    Les chaines bilingues "FR / EN" contiennent des mots des deux langues : ignorees.
+    """
+    toks = re.findall(r"[a-zA-Zàâäéèêëîïôöûüçœ]+", unesc(msgstr).lower())
+    fr = sum(1 for t in toks if t in FR_WORDS)
+    en = sum(1 for t in toks if t in EN_WORDS)
+    if file_lang == "en":
+        return fr >= 2 and en == 0
+    return en >= 2 and fr == 0
+
 # ----------------------------------------------------------------------------
 # Signature de placeholders (verification deterministe)
 # ----------------------------------------------------------------------------

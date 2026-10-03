@@ -37,7 +37,7 @@ Chaque item :
 - src : langue SOURCE du msgid -> "fr", "en" ou "amb"
 - nfr : true s'il faut produire la chaine FRANCAISE (champ "fr")
 - nen : true s'il faut produire la chaine ANGLAISE (champ "en")
-- bad_fr / bad_en : ancienne traduction FAUSSE (fuzzy) a IGNORER et remplacer
+- bad_fr / bad_en : ancienne traduction FAUSSE (fuzzy, ou ecrite dans la mauvaise langue) a IGNORER et remplacer
 
 ## Ce que tu produis, par item -> { "i":<index>, "fr":<...|null>, "en":<...|null> }
 Champ "fr" (si nfr==true, sinon null) :
@@ -53,7 +53,7 @@ Champ "en" (si nen==true, sinon null) :
    Le NOM interne d'un placeholder ne se traduit JAMAIS.
 2. Garde les espaces de bord et la ponctuation de bord identiques au msgid.
 3. Calque la forme (pas de point/guillemet ajoute ou retire abusivement).
-4. Ignore totalement bad_fr/bad_en (fuzzy errones).
+4. Ignore totalement bad_fr/bad_en (fuzzy errones ou mauvaise langue).
 5. Si src=="amb", choisis la langue la plus plausible d'apres le sens.
 
 ## Sortie

@@ -4,13 +4,13 @@
       data-loading-class="active">
     <div>
         <div class="form-floating mb-3">
-            <input type="email" class="form-control" id="email" placeholder="mon@email.fr" required
+            <input type="email" class="form-control" id="email" placeholder="{% trans 'mon@email.fr' %}" required
             {% if user.is_authenticated %}value="{{ user.email }}"{% endif %} name="email">
             <label for="email">{% trans "Contact email" %}</label>
             <p>{% trans "We will reply to this address." %}</p>
         </div>
         <div class="form-floating mb-3">
-            <input type="text" class="form-control" id="subject" placeholder="Mon sujet" required name="subject">
+            <input type="text" class="form-control" id="subject" placeholder="{% trans 'Mon sujet' %}" required name="subject">
             <label for="subject">{% trans "Subject" %}</label>
         </div>
         <div class="mb-3">
