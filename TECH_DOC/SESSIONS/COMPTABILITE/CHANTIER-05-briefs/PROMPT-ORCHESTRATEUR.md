@@ -107,29 +107,27 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## PROCHAINE ÉTAPE (mise à jour 2026-10-02)
+## PROCHAINE ÉTAPE (mise à jour 2026-10-03)
 **Relire d'abord, en entier : `CHANTIER-05-SUIVI.md` (§3 tableau, §4 écarts, §5 décisions,
 §6 journal — le plus récent en haut, §8 pièges) et la mémoire
 `project_chantier_montants_entiers`.**
 
-État : fiches 0, A′, A, B, C commitées ; **fiche D** : D-1 à D-3c-2 commitées (dernier
-commit `ad45d610`), **D-3z** (corrections de la relecture Fable de D-3 : verrou contre le
-double avoir, clé d'idempotence du remboursement Stripe, appariement par `Price`, bug
-n°26) commitée (`ad45d610`) ; avec elle, la fiche D est terminée et relue (Fable D-1+D-2
-et D-3 : 0 bloquant). Aucun push sans le mainteneur.
+État : fiches 0, A′, A, B, C, **D** commitées (dernier commit de D : `583f08a8`, D-4b).
+**Fiche E terminée** (E-1a, E-1b, E-2, E-3, E-4 : plan comptable unique à 6 chiffres,
+règles de compte et de journal, écrans et « Plan complet ? », jetons D8 bis, corrections
+de la grande relecture) : toutes les mutations jouées à la main et tuées, deux relectures
+Fable (la seconde : « E est prête à commiter »). **À commiter en un seul commit** par le
+mainteneur, puis **régénérer la base de dev** (D8 bis rend fausses les ventes en jetons
+déjà scellées) et lancer le workflow i18n (chaînes listées au CHANGELOG E). Aucun push
+sans le mainteneur.
 
-Grande relecture de toute la fiche D (Opus + Fable, 2026-10-02) : 0 bloquant ; corrections
-**D-4a** (verrous billet / réservation / paiement / adhésion, avoirs admin plus envoyés à
-LaBoutik V1, lignes du même tarif, plafond « encaissé », `on_commit`, SEPA) prouvée, à
-commiter ; **D-4b** (hygiène : commentaires « import local » faux dans ~12 fichiers, test de
-route pour la quantité API v2) à faire.
-
-Suite : **fiche E réécrite** (`CHANTIER-05-E-plan-comptable.md`, relue Fable, corrigée,
-toutes les questions répondues) : sessions E-1 (plan unique + règles de compte), E-2
-(écrans, « Plan complet ? »), **E-3 jetons (D8 bis : les jetons offerts soldent leur dette,
-ventes en jetons au 707900 hors TVA ; reprend du code de B, C, D)**, puis régénérer la base
-de dev. Puis F (à mettre en cohérence avec D8 bis avant de l'ouvrir), G, **R** (reprise des
-ventes existantes de la production, projet, Q1-Q7 en attente), H.
+Suite : **fiche F** (rapport unique, clôture, FEC) — déjà mise en cohérence avec D8 bis
+(2026-10-03 : `LG` = cashless, écritures 623400 / 419100 / 707900, tests 3, 4, 8c, 24,
+24b ; codes journal à valider en lettres ; replis TVA à 7 chiffres du CSV en ligne à
+retirer ; compte de la recharge FED chez le pot central à confirmer) ; puis G (« Plan
+complet ? » à limiter), **R** (reprise des ventes de la production, Q1-Q7 en attente ;
+vérifier au déploiement que les anciennes tables `comptabilite` et l'ancien plan de
+caisse sont vides), H.
 
 Décisions récentes à connaître (SUIVI §4, §5) : D27 écran « Remboursé par » partout ;
 D30 un seul avoir d'adhésion (dernier paiement) ; D31 annulation client hors Stripe sans

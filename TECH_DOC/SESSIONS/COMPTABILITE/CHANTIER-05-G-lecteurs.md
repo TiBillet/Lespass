@@ -47,6 +47,12 @@ DML dans la même) :
 2. `AlterField` : nouvelle cible `comptabilite.ClotureCaisse` (même `null`, même
    `on_delete`).
 
+**« Plan complet ? » (fiche E)** : nombre de requêtes constant, mais il relit tout
+l'historique du lieu (lignes, règlements, taux) à chaque ouverture des trois écrans du
+plan. Accepté jusqu'ici ; quand la clôture unique existe, G le limite aux ventes depuis
+la dernière J couverte par un export, ou le met derrière un bouton (contre-relecture
+Fable de E, M-2).
+
 ## 3. Session G-2 — écrans et tickets de la caisse
 
 | Lecteur | Fichier | Changement |

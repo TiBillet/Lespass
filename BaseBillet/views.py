@@ -64,7 +64,7 @@ from BaseBillet.services_vente import (
     ajouter_reglement,
     choix_du_champ_rembourse_par,
     encaisser_vente,
-    ligne_entierement_offerte,
+    ligne_sans_argent_a_rendre,
     ouvrir_vente,
 )
 from Administration.utils import clean_html as admin_clean_html
@@ -4934,9 +4934,13 @@ class MembershipMVT(viewsets.ViewSet):
         champ_rembourse_par_affiche = False
         if avoir_possible:
             ligne_payee_par_stripe = ligne_du_dernier_paiement.paiement_stripe_id is not None
-            ligne_sans_argent_a_rendre = ligne_entierement_offerte(ligne_du_dernier_paiement)
+            # Ligne entièrement offerte ou payée en jetons cadeau : aucun argent.
+            # / Fully offered or paid in gift tokens: no money.
+            la_ligne_n_a_pas_d_argent_a_rendre = ligne_sans_argent_a_rendre(
+                ligne_du_dernier_paiement
+            )
             champ_rembourse_par_affiche = (
-                not ligne_payee_par_stripe and not ligne_sans_argent_a_rendre
+                not ligne_payee_par_stripe and not la_ligne_n_a_pas_d_argent_a_rendre
             )
 
         # Le moyen affiché : celui du POST refusé, sinon le moyen d'origine s'il est

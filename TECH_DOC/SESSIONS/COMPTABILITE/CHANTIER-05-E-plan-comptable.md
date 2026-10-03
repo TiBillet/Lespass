@@ -120,8 +120,8 @@ Une origine non listée (ajoutée plus tard) lève une erreur ; un test le véri
 
 Règle, dans l'ordre :
 
-0. **Article `hors_chiffre_affaires`** (recharges, écarts D26) : la catégorie de caisse
-   est **ignorée** (une recharge rangée dans une catégorie 7xx irait sinon au chiffre
+0. **Liste explicite d'articles hors chiffre d'affaires** (SUIVI §6, E-1b) : la catégorie
+   de caisse est **ignorée** (une recharge rangée dans une catégorie 7xx irait sinon au chiffre
    d'affaires) ; on prend directement :
    - écarts : par leur nom constant (`NOM_ECART_RECU_EN_PLUS` → 758000,
      `_EN_MOINS` → 658000) ;
@@ -129,7 +129,10 @@ Règle, dans l'ordre :
    - `VR` virement du pot central → **le compte de la monnaie de l'article**
      (`MappingMonnaie[ligne.asset]`, 467000 pour le FED) : le virement bancaire (débit
      512000, par le règlement `TR`) **solde la créance réseau** (mainteneur, 2026-10-02 :
-     « que le token fédéré soit à l'équilibre avec le virement du pot central »).
+     « que le token fédéré soit à l'équilibre avec le virement du pot central ») ;
+   - « Jetons cadeau repris au vidage » (E-3) → 623400 ;
+   - `TM` et `FD` (hors chiffre d'affaires, désactivé / inutilisé) : **erreur**, avec ou
+     sans catégorie.
 1. `CR` retour de consigne : le compte de la **vente de la consigne**
    (`produit.consigne_remboursee`, sa catégorie) — le retour reflète la vente (D11).
 2. la **catégorie de caisse** du produit (`Product.categorie_pos`) a un compte → ce compte
@@ -149,9 +152,10 @@ recherchée par `numero_de_compte` (unique, §2.1). Un lieu qui veut un autre co
 une catégorie de caisse (mécanisme existant) ; l'aide le dit : « ajoutez des comptes, ne
 renumérotez pas ceux du plan par défaut ».
 
-**Vidage de carte** (`VC`, D12) : vente `VIDAGE_CARTE` **sans article** ; ses règlements
-(+`LE` / +`SF`, −`CA`) suffisent (débit 419100 / 467000, crédit 530000). `VC` n'a pas de
-compte d'article.
+**Vidage de carte** (`VC`, D12) : vente `VIDAGE_CARTE` ; ses règlements (+`LE` / +`SF`,
+−`CA`) suffisent (débit 419100 / 467000, crédit 530000). `VC` n'a pas de compte
+d'article. Seule exception, D8 bis (§3.5) : les jetons cadeau repris au vidage sont un
+article « Jetons cadeau repris au vidage » (623400) réglé en `LG` (débit 419100).
 
 **Recharge offerte** (cadeau `RC` à la caisse, recharge cadeau `R` de l'API v2 réglée
 FREE) : l'article est **entièrement offert** (`total_ttc = 0`, `part_offerte` =
@@ -161,7 +165,8 @@ total). L'écriture **charge + dette** (D8 bis) porte sur **`part_offerte`** : d
 
 **Crowds = don, sans TVA** (mainteneur, 2026-10-02) : produit système `categorie_article
 = N` (`crowds/views.py` l.145), trouvé par son nom ; on ne change pas ce type. Il reçoit
-une catégorie de caisse « Financement participatif » reliée au **754000** ; les lignes
+**à sa création** (E-1b) une catégorie de caisse « Financement participatif » reliée au
+**754000** ; le chargeur crée cette catégorie et y range les produits crowds existants ; les lignes
 crowds passent en **TVA 0** (aujourd'hui elles portent la TVA du produit ou du lieu,
 `crowds/views.py` l.973 : à corriger en E-3). Une catégorie de caisse ne fait pas
 apparaître un produit à la caisse (la caisse lit `point_de_vente.products` filtré sur
@@ -294,7 +299,6 @@ des avoirs.
 | 7 | `test_code_journal_collision_signalee` |
 | 8 | `test_compte_article_ordre_des_regles` (recharge avec catégorie 7xx → 419100 ; `CR` → compte de la consigne ; bar par catégorie ; `AD` ; billet sans catégorie → 706000 ; recharge API v2 ; crowds → 754000 ; `VR` → compte de sa monnaie) |
 | 8b | `test_compte_article_sans_regle_refus` (`N` / `VT` sans catégorie, `TM`, `FD`) |
-| 8c | `test_recharge_offerte_charge_et_dette_sur_la_part_offerte` |
 | 9 | `test_ecarts_758_et_658` |
 | 10 | `test_migration_charge_le_plan_si_aucun_compte` (la fonction de la migration, pas un vrai lieu) et `test_filet_charge_le_plan_une_seule_fois` |
 | 11 | `test_recharger_le_plan_n_efface_rien` (bug du bouton) |
@@ -349,3 +353,4 @@ chaînes i18n : menus, aides par nature, messages de « Plan complet ? »).
   jetons perdus : **dette annulée** (débit 419100, crédit 623400) ; **crowds = don, TVA
   0** ; ventes de dev scellées avec jetons : **régénérer la base de dev** après E-3 ;
   numéros validés (623400, 445711-445714, 707900).
+- **Test 8c** (charge 623400 / dette 419100 d'une recharge offerte) : relève de **F** (l'écriture comptable), pas de E-1b.

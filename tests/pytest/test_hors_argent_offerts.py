@@ -110,10 +110,8 @@ class TestLignesHorsArgent(FastTenantTestCase):
         # Plan comptable du lieu : comptes de vente, de TVA et de tresorerie,
         # necessaires a l'ecriture FEC.
         # / Venue chart of accounts, needed for the FEC entry.
-        call_command(
-            "charger_plan_comptable", schema=self.tenant.schema_name, jeu="bar_resto"
-        )
-        compte_de_vente = CompteComptable.objects.get(numero_de_compte="7072000")
+        call_command("charger_plan_comptable", schema=self.tenant.schema_name)
+        compte_de_vente = CompteComptable.objects.get(numero_de_compte="707000")
 
         # Le taux d'une ligne vient de Product.tva (PIEGES 9.66).
         # / A line's rate comes from Product.tva.

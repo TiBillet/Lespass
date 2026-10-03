@@ -48,8 +48,8 @@ PAIEMENT PAR CARTE NFC : LES RÈGLEMENTS VIENNENT DES DÉBITS
 Les règlements sont copiés des débits réellement faits, jamais des lignes : un règlement
 par transaction `fedow_core` créée (son montant, son uuid dans `fedow_transaction_uuid`),
 un règlement par transaction du réseau (monnaie fédérée, serveur Fedow distant : son uuid
-dans `reference_externe`). Les jetons cadeau sont offerts : la part payée en jetons est
-une part offerte (JETONS), réglée « jetons » (LG).
+dans `reference_externe`). Un jeton cadeau dépensé solde la dette du lieu (D8 bis) : la
+part payée en jetons est une vente ordinaire, hors TVA, réglée « jetons » (LG).
 / Payments are copied from the real debits, never from the lines.
 
 CODE PARCOURU / CODE EXERCISED
@@ -1698,22 +1698,21 @@ def test_deux_articles_meme_monnaie_un_seul_reglement_par_monnaie(lieu):
 
 
 # --------------------------------------------------------------------------
-# 12a — Jetons et monnaie locale sur UN article : parts entières, jetons offerts
-# / 12a — Tokens and local currency on ONE item: whole parts, tokens offered
+# 12a — Jetons et monnaie locale sur UN article : parts entières
+# / 12a — Tokens and local currency on ONE item: whole parts
 # --------------------------------------------------------------------------
 
 
 def test_jetons_et_monnaie_locale_sur_un_article_parts_entieres(lieu):
     """
     Une bière à 5,00 € (TVA 20 %) payée par la carte du client : 3,00 € de jetons
-    cadeau, puis 2,00 € de monnaie locale. L'article est coupé en deux parts.
-    - part jetons : catalogue 300, entièrement offerte (300, source JETONS), net 0 ;
+    cadeau, puis 2,00 € de monnaie locale. L'article est coupé en deux parts entières.
+    - part jetons : catalogue 300, rien d'offert, net 300 (vente ordinaire, D8 bis) ;
     - part monnaie locale : catalogue 200, rien d'offert, net 200.
-    Les jetons ne sont pas de l'argent (D8) : un règlement « jetons » (LG) de 300 et un
-    règlement monnaie locale (LE) de 200. Vente : catalogue 500, offert 300, net 200,
-    HT 167, TVA 33.
-    / A 5.00 € beer paid 3.00 € in gift tokens + 2.00 € in local currency: two parts,
-    the token part fully offered (JETONS), payments LG 300 + LE 200; sale totals.
+    Un règlement « jetons » (LG) de 300 et un règlement monnaie locale (LE) de 200.
+    Vente : catalogue 500, offert 0, net 500, HT 467 (300 à TVA 0 + 167), TVA 33.
+    / A 5.00 € beer paid 3.00 € in gift tokens + 2.00 € in local currency: two whole
+    parts, nothing offered, payments LG 300 + LE 200; sale totals.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit])
@@ -1742,9 +1741,9 @@ def test_jetons_et_monnaie_locale_sur_un_article_parts_entieres(lieu):
 
     part_en_jetons = articles_par_moyen[PaymentMethod.LOCAL_GIFT][0]
     assert part_en_jetons.total_catalogue == 300
-    assert part_en_jetons.part_offerte == 300
-    assert part_en_jetons.source_offert == LigneArticle.SourceOffert.JETONS
-    assert part_en_jetons.total_ttc == 0
+    assert part_en_jetons.part_offerte == 0
+    assert part_en_jetons.source_offert == ""
+    assert part_en_jetons.total_ttc == 300
 
     part_en_monnaie_locale = articles_par_moyen[PaymentMethod.LOCAL_EURO][0]
     assert part_en_monnaie_locale.total_catalogue == 200
@@ -1764,9 +1763,82 @@ def test_jetons_et_monnaie_locale_sur_un_article_parts_entieres(lieu):
         (PaymentMethod.LOCAL_GIFT, 300),
     ]
     assert vente.total_catalogue == 500
-    assert vente.total_offert == 300
-    assert vente.total_ttc == 200
-    assert vente.total_ht == 167
+    assert vente.total_offert == 0
+    assert vente.total_ttc == 500
+    assert vente.total_ht == 467
+    assert vente.total_tva == 33
+    verifier_egalites(vente)
+
+
+# --------------------------------------------------------------------------
+# 12a bis — La part payée en jetons est une vente ordinaire, sans TVA (D8 bis)
+# / 12a bis — The part paid in tokens is an ordinary sale, without VAT (D8 bis)
+# --------------------------------------------------------------------------
+
+
+def test_jetons_vente_ordinaire_tva_zero(lieu):
+    """
+    Une bière à 5,00 € (TVA 20 %) payée par la carte du client : 3,00 € de jetons
+    cadeau, puis 2,00 € de monnaie locale. L'article est coupé en deux parts.
+    Un jeton dépensé solde la dette du lieu envers le porteur (D8 bis) : la part payée
+    en jetons est une VENTE ORDINAIRE, hors TVA.
+    - part jetons : catalogue 300, rien d'offert, sans source d'offert, net 300, TVA 0 %
+      (HT 300, TVA 0) ;
+    - part monnaie locale : catalogue 200, net 200, TVA 20 % (HT 167, TVA 33).
+    Le règlement « jetons » (LG) de 300 est un vrai règlement : il compte dans les deux
+    égalités. Vente : catalogue 500, offert 0, net 500, HT 467, TVA 33.
+    / A 5.00 € beer paid 3.00 € in gift tokens + 2.00 € in local currency. The token
+    part is an ordinary sale without VAT (net 300, nothing offered, VAT 0); the LG
+    payment counts in both equalities. Sale: net 500, HT 467, VAT 33.
+    """
+    biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
+    point_de_vente = creer_un_point_de_vente([biere.produit])
+    carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=200)
+    ajouter_un_solde_sur_la_carte(carte_du_client, monnaie_cadeau_du_lieu(lieu), 300)
+    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
+    cle_d_idempotence = nouvelle_cle_d_idempotence()
+
+    reponse = payer_par_la_carte_du_client(
+        client_du_caissier,
+        point_de_vente,
+        {f"repid-{cle_de_panier(biere)}": "1"},
+        carte_du_client,
+        cle_d_idempotence,
+    )
+
+    assert reponse.status_code == 200
+    vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
+    articles_par_moyen = articles_de_la_vente_par_moyen(vente)
+    assert len(articles_par_moyen[PaymentMethod.LOCAL_GIFT]) == 1
+    assert len(articles_par_moyen[PaymentMethod.LOCAL_EURO]) == 1
+
+    # La part en jetons : une vente ordinaire, au taux 0.
+    # / The token part: an ordinary sale, at a 0 rate.
+    part_en_jetons = articles_par_moyen[PaymentMethod.LOCAL_GIFT][0]
+    assert part_en_jetons.total_catalogue == 300
+    assert part_en_jetons.part_offerte == 0
+    assert part_en_jetons.source_offert == ""
+    assert part_en_jetons.total_ttc == 300
+    assert part_en_jetons.vat == 0
+    assert part_en_jetons.total_ht == 300
+    assert part_en_jetons.total_tva == 0
+
+    # La part en monnaie locale garde la TVA du produit.
+    # / The local currency part keeps the product's VAT.
+    part_en_monnaie_locale = articles_par_moyen[PaymentMethod.LOCAL_EURO][0]
+    assert part_en_monnaie_locale.vat == Decimal("20.00")
+    assert part_en_monnaie_locale.total_ttc == 200
+    assert part_en_monnaie_locale.total_ht == 167
+    assert part_en_monnaie_locale.total_tva == 33
+
+    assert reglements_de_la_vente(vente) == [
+        (PaymentMethod.LOCAL_EURO, 200),
+        (PaymentMethod.LOCAL_GIFT, 300),
+    ]
+    assert vente.total_catalogue == 500
+    assert vente.total_offert == 0
+    assert vente.total_ttc == 500
+    assert vente.total_ht == 467
     assert vente.total_tva == 33
     verifier_egalites(vente)
 
@@ -2594,25 +2666,24 @@ def test_nfc_trois_jus_500_le_550_cb_parts_entieres(lieu):
 
 
 # --------------------------------------------------------------------------
-# 12 — Jetons bénévoles + CB : la part en jetons est offerte, hors TVA
-# / 12 — Volunteer tokens + bank card: the token part is offered, outside VAT
+# 12 — Jetons bénévoles + CB : la part en jetons est une vente hors TVA
+# / 12 — Volunteer tokens + bank card: the token part is a sale outside VAT
 # --------------------------------------------------------------------------
 
 
-def test_jetons_benevoles_part_offerte_hors_tva(lieu):
+def test_jetons_benevoles_puis_cb_part_en_jetons_vendue_hors_tva(lieu):
     """
     Une bière à 5,00 € (TVA 20 %). La carte du client porte 3,00 € de jetons cadeau
     (bénévoles) et rien d'autre : les jetons paient 3,00 €, le reste (2,00 €) est réglé
     en CB.
-    Les jetons ne sont pas de l'argent (D8) :
-    - part jetons : catalogue 300, entièrement offerte (300, source JETONS), net 0 ;
-    - part CB : net 200.
-    Vente : net 200, HT 167, TVA 33 (la TVA ne porte que sur l'argent). Deux
-    règlements : « jetons » (LG) 300, qui garde la trace du débit de la carte, et
-    CB 200.
-    / A 5.00 € beer: 3.00 € of gift tokens + 2.00 € by bank card. The token part is fully
-    offered (JETONS), net 0; the card part net 200. Sale: net 200, HT 167, VAT 33.
-    Payments LG 300 + CB 200.
+    Un jeton dépensé solde la dette du lieu (D8 bis) :
+    - part jetons : catalogue 300, rien d'offert, net 300, TVA 0 ;
+    - part CB : net 200, TVA 20 %.
+    Vente : offert 0, net 500, HT 467 (300 + 167), TVA 33 (la TVA ne porte que sur la
+    part en argent). Deux règlements : « jetons » (LG) 300 et CB 200.
+    / A 5.00 € beer: 3.00 € of gift tokens + 2.00 € by bank card. The token part is an
+    ordinary sale at 0 % VAT (net 300); the card part net 200. Sale: net 500, HT 467,
+    VAT 33. Payments LG 300 + CB 200.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit])
@@ -2643,18 +2714,18 @@ def test_jetons_benevoles_part_offerte_hors_tva(lieu):
 
     part_en_jetons = articles_par_moyen[PaymentMethod.LOCAL_GIFT][0]
     assert part_en_jetons.total_catalogue == 300
-    assert part_en_jetons.part_offerte == 300
-    assert part_en_jetons.source_offert == LigneArticle.SourceOffert.JETONS
-    assert part_en_jetons.total_ttc == 0
+    assert part_en_jetons.part_offerte == 0
+    assert part_en_jetons.source_offert == ""
+    assert part_en_jetons.total_ttc == 300
 
     part_en_cb = articles_par_moyen[PaymentMethod.CC][0]
     assert part_en_cb.part_offerte == 0
     assert part_en_cb.total_ttc == 200
 
     assert vente.total_catalogue == 500
-    assert vente.total_offert == 300
-    assert vente.total_ttc == 200
-    assert vente.total_ht == 167
+    assert vente.total_offert == 0
+    assert vente.total_ttc == 500
+    assert vente.total_ht == 467
     assert vente.total_tva == 33
     assert reglements_de_la_vente(vente) == [
         (PaymentMethod.CC, 200),
@@ -3894,9 +3965,9 @@ def test_rejeu_deuxieme_carte_meme_cle_une_seule_vente(lieu):
 #
 # L'archive fiscale de la caisse (laboutik/archivage.py) exporte pour chaque ligne un HT
 # et une TVA = TTC de la ligne − HT. Le champ `LigneArticle.total_ht` d'une ligne écrite
-# par le service de vente porte le HT du NET vendu : 0 pour une ligne offerte ou une
-# part payée en jetons. L'archive garde les valeurs d'avant : elle ne doit pas inventer
-# de TVA sur un article offert.
+# par le service de vente porte le HT du NET vendu : 0 pour une ligne offerte. L'archive
+# garde les valeurs d'avant : elle ne doit pas inventer de TVA sur un article offert. Une
+# part payée en jetons est une vente ordinaire à TVA 0 (D8 bis) : HT = TTC, TVA 0.
 # / The register's fiscal archive keeps the values it exported before.
 
 
@@ -3949,14 +4020,14 @@ def test_archive_lne_ligne_offerte_garde_les_valeurs_d_avant(lieu):
     assert ligne_exportee["total_tva_centimes"] == "0"
 
 
-def test_archive_lne_part_en_jetons_garde_les_valeurs_d_avant(lieu):
+def test_archive_lne_part_en_jetons_tva_zero(lieu):
     """
     Un vin à 10,00 € (TVA 20 %) payé par la carte du client : 6,00 € de jetons cadeau
     et 4,00 € de monnaie locale. Deux parts, au prix unitaire 1000, quantités 0,6 et
-    0,4. L'archive exporte les valeurs d'avant : part jetons HT 500, TVA 100 ; part
-    monnaie locale HT 333, TVA 67.
+    0,4. La part en jetons est une vente ordinaire à TVA 0 (D8 bis) : l'archive exporte
+    HT 600, TVA 0. La part en monnaie locale garde ses valeurs : HT 333, TVA 67.
     / A 10.00 € wine paid 6.00 € in tokens + 4.00 € in local currency: the archive
-    exports token part HT 500 VAT 100, local part HT 333 VAT 67, as before.
+    exports token part HT 600 VAT 0 (0 % VAT, D8 bis), local part HT 333 VAT 67.
     """
     vin = creer_un_article_de_caisse("vin", prix_en_euros="10.00", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([vin.produit])
@@ -3980,8 +4051,8 @@ def test_archive_lne_part_en_jetons_garde_les_valeurs_d_avant(lieu):
         pricesold__price=vin.tarif, payment_method=PaymentMethod.LOCAL_EURO
     )
     part_en_jetons_exportee = ligne_dans_l_archive_lne(part_en_jetons)
-    assert part_en_jetons_exportee["total_ht_centimes"] == "500"
-    assert part_en_jetons_exportee["total_tva_centimes"] == "100"
+    assert part_en_jetons_exportee["total_ht_centimes"] == "600"
+    assert part_en_jetons_exportee["total_tva_centimes"] == "0"
     part_en_monnaie_locale_exportee = ligne_dans_l_archive_lne(part_en_monnaie_locale)
     assert part_en_monnaie_locale_exportee["total_ht_centimes"] == "333"
     assert part_en_monnaie_locale_exportee["total_tva_centimes"] == "67"

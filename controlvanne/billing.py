@@ -18,7 +18,7 @@ remainder on the old Fedow (user card, linked venue). Time and loyalty never pay
 Dépendances :
 - fedow_core.services : AssetService, WalletService, TransactionService
 - fedow_core.models : Asset, Token, Transaction
-- BaseBillet.models : LigneArticle, ProductSold, PriceSold, PaymentMethod, SaleOrigin
+- BaseBillet.models : LigneArticle, ProductSold, PriceSold, SaleOrigin
 - inventaire.services : StockService
 - QrcodeCashless.models : CarteCashless
 - laboutik.views : ORDRE_CASCADE_FIDUCIAIRE,                              
@@ -326,8 +326,9 @@ def facturer_tirage(
     2. un article (une `LigneArticle`) par transaction débitée, locale ou distante. La
        ligne garde sa forme : `amount` = total du tirage, `qty` = la part de sa monnaie
        (fraction de 1). Son total catalogue est l'argent RÉEL débité dans sa monnaie,
-       jamais recalculé depuis la fraction. Part payée en jetons cadeau (LG) : offerte
-       en entier (JETONS). Part de l'ancien Fedow : monnaie distante, moyen rendu ;
+       jamais recalculé depuis la fraction. Part payée en jetons cadeau (LG) : une vente
+       ordinaire, rien d'offert, TVA 0 (D8 bis : le jeton dépensé solde la dette du
+       lieu). Part de l'ancien Fedow : monnaie distante, moyen rendu ;
     3. un règlement par transaction : montant et uuid copiés de la transaction. Locale :
        `fedow_transaction_uuid`. Ancien Fedow : `reference_externe` (la transaction vit
        sur le serveur distant) ;
@@ -367,7 +368,6 @@ def facturer_tirage(
         LigneArticle,
         ProductSold,
         PriceSold,
-        PaymentMethod,
         SaleOrigin,
     )
     from BaseBillet.models_vente import Vente
@@ -632,31 +632,22 @@ def facturer_tirage(
         ):
             qty_partielle = Decimal(lignes_avec_qty[i]["qty"])
 
-            # Part payée en jetons cadeau (LG) : les jetons ne sont pas de l'argent.
-            # Toute la part est offerte, source JETONS ; son règlement est « jetons ».
-            # / Part paid in gift tokens: fully offered (JETONS), not money.
-            part_payee_en_jetons = payment_method == PaymentMethod.LOCAL_GIFT
-            if part_payee_en_jetons:
-                part_offerte_en_centimes = montant_a
-                source_de_l_offert = LigneArticle.SourceOffert.JETONS
-            else:
-                part_offerte_en_centimes = 0
-                source_de_l_offert = ""
-
             # Le total catalogue de la part est l'argent RÉELLEMENT débité dans sa
             # monnaie, jamais amount × qty : qty est arrondie à 6 décimales et ne doit
             # pas décider d'un centime. Le coût d'achat porte sur les litres que la
             # part paie (litres servis × sa fraction), au prix d'achat du fût au litre.
+            # Une part payée en jetons cadeau (LG) n'a rien d'offert : une vente
+            # ordinaire, au taux 0 (`_taux_tva_de_la_ligne_de_caisse`) ; son règlement
+            # est « jetons ».
             # / The part's catalogue total is the money REALLY debited, never
-            #   amount × qty. The cost is on the litres this part pays for.
+            #   amount × qty. The cost is on the litres this part pays for. A token
+            #   part offers nothing: an ordinary sale at 0 % VAT.
             ligne = ajouter_article(
                 vente,
                 pricesold=price_sold,
                 quantite=qty_partielle,
                 prix_unitaire=montant_centimes,
                 taux_tva=_taux_tva_de_la_ligne_de_caisse(produit, payment_method),
-                part_offerte=part_offerte_en_centimes,
-                source_offert=source_de_l_offert,
                 prix_achat=int(produit.prix_achat),
                 total_catalogue_impose=montant_a,
                 quantite_pour_cout=litres_servis * qty_partielle,

@@ -14,8 +14,8 @@ chaînée), d'origine `TIREUSE`, dans la même transaction que les débits des m
 - Les lignes gardent leur forme : `amount` = total du tirage, `qty` = la part de sa
   monnaie (fraction de 1). Chaque part reçoit en plus l'argent RÉEL débité dans sa
   monnaie (`total_catalogue`), jamais recalculé depuis la fraction.
-- Une part payée en jetons cadeau (TNF) est offerte en entier (source JETONS) : les
-  jetons ne sont pas de l'argent. Son règlement est « jetons » (LG).
+- Une part payée en jetons cadeau (TNF) est une vente ordinaire, hors TVA : un jeton
+  dépensé solde la dette du lieu (D8 bis). Son règlement est « jetons » (LG).
 - Un règlement par transaction `fedow_core` créée : montant et uuid copiés de la
   transaction.
 - Le coût d'achat d'une part porte sur les litres qu'elle paie (litres servis ×
@@ -23,8 +23,8 @@ chaînée), d'origine `TIREUSE`, dans la même transaction que les débits des m
 - Solde insuffisant : on facture ce qui a été réellement débité ; la vente tient.
 - Temps (TIM) et fidélité (FID) ne paient jamais un tirage.
 / One billed pour writes ONE settled, numbered, chained sale. Half-up total (screen =
-bill). Lines keep their shape; each part gets its real debited money. Gift tokens are
-offered. One payment per local transaction. Cost on the litres of the part. Time and
+bill). Lines keep their shape; each part gets its real debited money. A gift-token part
+is an ordinary 0 % VAT sale. One payment per local transaction. Cost on the litres of the part. Time and
 loyalty never pay a pour.
 
 COMMENT CHAQUE TEST RETROUVE SA VENTE
@@ -492,16 +492,17 @@ def test_tirage_jetons_et_monnaie_locale_parts_entieres(tenant):
     """
     50 cl à 8 €/L = 400, payés 100 en jetons cadeau (TNF) puis 300 en monnaie locale
     (TLF), par une carte anonyme :
-    - part « jetons » : total catalogue 100, offerte en entier (source JETONS), net 0 ;
+    - part « jetons » : total catalogue 100, rien d'offert, net 100 (D8 bis) ;
     - part « monnaie locale » : total catalogue 300, net 300 ;
     - deux règlements copiés des deux transactions : jetons (LG) 100, monnaie locale
       (LE) 300 ;
     - les deux lignes gardent leur forme : `amount` 400, `qty` 0,25 et 0,75, même
       identifiant de paiement ; la vente n'a pas de client.
-    / 400 paid 100 gift tokens + 300 local currency: the token part is fully offered,
-    two payments copied from the two transactions, lines keep their shape.
+    / 400 paid 100 gift tokens + 300 local currency: whole parts (the token part is an
+    ordinary sale), two payments copied from the two transactions, lines keep their
+    shape.
     """
-    from BaseBillet.models import LigneArticle, PaymentMethod
+    from BaseBillet.models import PaymentMethod
     from fedow_core.models import Asset
 
     jetons_cadeau = _monnaie_du_lieu(tenant, Asset.TNF)
@@ -524,18 +525,18 @@ def test_tirage_jetons_et_monnaie_locale_parts_entieres(tenant):
         vente = _la_vente_du_tirage(carte)
         assert vente.client_id is None
         assert vente.total_catalogue == 400
-        assert vente.total_offert == 100
-        assert vente.total_ttc == 300
-        assert vente.total_ht == 250
+        assert vente.total_offert == 0
+        assert vente.total_ttc == 400
+        assert vente.total_ht == 350
         assert vente.total_tva == 50
 
-        # Part en jetons cadeau : offerte en entier, ce n'est pas de l'argent.
-        # / Gift token part: fully offered, it is not money.
+        # Part en jetons cadeau : une vente ordinaire, rien d'offert (D8 bis).
+        # / Gift token part: an ordinary sale, nothing offered.
         part_en_jetons = vente.articles.get(payment_method=PaymentMethod.LOCAL_GIFT)
         assert part_en_jetons.total_catalogue == 100
-        assert part_en_jetons.part_offerte == 100
-        assert part_en_jetons.source_offert == LigneArticle.SourceOffert.JETONS
-        assert part_en_jetons.total_ttc == 0
+        assert part_en_jetons.part_offerte == 0
+        assert part_en_jetons.source_offert == ""
+        assert part_en_jetons.total_ttc == 100
         assert part_en_jetons.amount == 400
         assert part_en_jetons.qty == Decimal("0.25")
 
@@ -577,6 +578,74 @@ def test_tirage_jetons_et_monnaie_locale_parts_entieres(tenant):
             == debit_en_monnaie_locale.uuid
         )
         assert reglement_en_monnaie_locale.asset == monnaie_locale.uuid
+
+        verifier_egalites(vente)
+
+
+@pytest.mark.django_db
+def test_tireuse_jetons_vente_ordinaire_tva_zero(tenant):
+    """
+    50 cl à 8 €/L = 400 (fût à TVA 20 %), payés 100 en jetons cadeau (TNF) puis 300 en
+    monnaie locale (TLF). Un jeton dépensé solde la dette du lieu (D8 bis) : la part
+    payée en jetons est une VENTE ORDINAIRE, hors TVA.
+    - part « jetons » : catalogue 100, rien d'offert, sans source d'offert, net 100,
+      TVA 0 % (HT 100, TVA 0) ;
+    - part « monnaie locale » : catalogue 300, net 300, TVA 20 % (HT 250, TVA 50) ;
+    - le règlement « jetons » (LG) de 100 compte dans les deux égalités.
+    Vente : catalogue 400, offert 0, net 400, HT 350, TVA 50.
+    / 400 paid 100 gift tokens + 300 local currency: the token part is an ordinary sale
+    without VAT (net 100, nothing offered, VAT 0). Sale: net 400, HT 350, VAT 50.
+    """
+    from BaseBillet.models import PaymentMethod
+    from fedow_core.models import Asset
+
+    jetons_cadeau = _monnaie_du_lieu(tenant, Asset.TNF)
+    monnaie_locale = _monnaie_du_lieu(tenant, Asset.TLF)
+    tireuse, entetes_http = _creer_une_tireuse(tenant, prix_du_litre_en_euros="8.00")
+    carte, _portefeuille = _creer_une_carte(
+        tenant, [(jetons_cadeau, 100), (monnaie_locale, 1000)]
+    )
+
+    reponse = _servir_un_tirage(
+        ClientHttpDjango(HTTP_HOST=DOMAINE_DU_LIEU_PARTAGE),
+        entetes_http,
+        tireuse,
+        carte,
+        "500.00",
+    )
+    assert reponse.json()["montant_centimes"] == 400
+
+    with tenant_context(tenant):
+        vente = _la_vente_du_tirage(carte)
+
+        # Part en jetons : une vente ordinaire, au taux 0.
+        # / Token part: an ordinary sale, at a 0 rate.
+        part_en_jetons = vente.articles.get(payment_method=PaymentMethod.LOCAL_GIFT)
+        assert part_en_jetons.total_catalogue == 100
+        assert part_en_jetons.part_offerte == 0
+        assert part_en_jetons.source_offert == ""
+        assert part_en_jetons.total_ttc == 100
+        assert part_en_jetons.vat == 0
+        assert part_en_jetons.total_ht == 100
+        assert part_en_jetons.total_tva == 0
+
+        # Part en monnaie locale : la TVA du fût.
+        # / Local currency part: the keg's VAT.
+        part_en_monnaie_locale = vente.articles.get(
+            payment_method=PaymentMethod.LOCAL_EURO
+        )
+        assert part_en_monnaie_locale.vat == Decimal("20.00")
+        assert part_en_monnaie_locale.total_ttc == 300
+        assert part_en_monnaie_locale.total_ht == 250
+        assert part_en_monnaie_locale.total_tva == 50
+
+        assert vente.reglements.get(moyen=PaymentMethod.LOCAL_GIFT).montant == 100
+        assert vente.reglements.get(moyen=PaymentMethod.LOCAL_EURO).montant == 300
+        assert vente.total_catalogue == 400
+        assert vente.total_offert == 0
+        assert vente.total_ttc == 400
+        assert vente.total_ht == 350
+        assert vente.total_tva == 50
 
         verifier_egalites(vente)
 

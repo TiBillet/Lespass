@@ -4,10 +4,11 @@ Configuration de l'app comptabilite.
 
 LOCALISATION : comptabilite/apps.py
 
-App tenant qui hebergera : ClotureCaisse (cloture comptable),
-CompteComptable et MappingMoyenDePaiement (plan comptable parametrable, en S5).
-/ Tenant app hosting: ClotureCaisse (accounting closure), and later
-CompteComptable + MappingMoyenDePaiement (configurable accounting plan, S5).
+App tenant qui heberge ClotureCaisse (cloture comptable). Le plan comptable du lieu
+vit dans la caisse : `laboutik.CompteComptable` et `laboutik.MappingMoyenDePaiement`
+(voir laboutik/plan_comptable.py).
+/ Tenant app hosting ClotureCaisse (accounting closure). The venue's chart of accounts
+lives in the register app (laboutik).
 """
 from django.apps import AppConfig
 from django.utils.translation import gettext_lazy as _

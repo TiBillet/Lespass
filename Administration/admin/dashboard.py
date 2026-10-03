@@ -867,27 +867,39 @@ def _construire_sections_modules(request):
                     ),
                     "permission": admin_permission,
                 },
+                # Les trois ecrans du plan comptable. Toujours presents : le plan sert
+                # aussi a l'export des ventes en ligne, pas seulement a la caisse.
+                # / The three chart of accounts screens. Always shown: the plan also
+                # serves the online sales export, not only the POS.
+                {
+                    "title": _("Plan comptable"),
+                    "icon": "account_balance",
+                    "link": _safe_rev(
+                        "staff_admin:laboutik_comptecomptable_changelist"
+                    ),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Comptes des moyens de paiement"),
+                    "icon": "swap_horiz",
+                    "link": _safe_rev(
+                        "staff_admin:laboutik_mappingmoyendepaiement_changelist"
+                    ),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Comptes des monnaies"),
+                    "icon": "toll",
+                    "link": _safe_rev(
+                        "staff_admin:laboutik_mappingmonnaie_changelist"
+                    ),
+                    "permission": admin_permission,
+                },
                 # FROM V2 : TO ADD LATER (laboutik viendra plus tard)
                 # {
                 #     "title": _("Operation logs"),
                 #     "icon": "history",
                 #     "link": _safe_rev("staff_admin:laboutik_journaloperation_changelist"),
-                #     "permission": admin_permission,
-                # },
-                # {
-                #     "title": _("Accounting accounts"),
-                #     "icon": "account_balance",
-                #     "link": _safe_rev(
-                #         "staff_admin:comptabilite_comptecomptable_changelist"
-                #     ),
-                #     "permission": admin_permission,
-                # },
-                # {
-                #     "title": _("Payment method mapping"),
-                #     "icon": "swap_horiz",
-                #     "link": _safe_rev(
-                #         "staff_admin:comptabilite_mappingmoyendepaiement_changelist"
-                #     ),
                 #     "permission": admin_permission,
                 # },
             ],

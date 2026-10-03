@@ -21,7 +21,7 @@ from Administration.admin.base import ModelAdmin
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 
-from comptabilite.models import ClotureCaisse, CompteComptable, MappingMoyenDePaiement
+from comptabilite.models import ClotureCaisse
 
 
 # Helpers d'affichage definis AU NIVEAU MODULE (pas methodes de classe).
@@ -337,72 +337,3 @@ class ClotureCaisseAdmin(ModelAdmin):
     @admin.display(description=_("Total TTC"), ordering="total_general")
     def ca_ttc(self, obj):
         return _format_euros(obj.total_general)
-
-
-@admin.register(CompteComptable, site=staff_admin_site)
-class CompteComptableAdmin(ModelAdmin):
-    """
-    Admin pour le plan comptable (paramétrable par tenant).
-    / Admin for the chart of accounts (tenant-customizable).
-    """
-
-    compressed_fields = True
-    warn_unsaved_form = True
-
-    list_display = ("numero", "libelle", "type_compte", "actif")
-    list_filter = ("type_compte", "actif")
-    search_fields = ("numero", "libelle")
-    ordering = ("numero",)
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_add_permission(self, request):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_delete_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-
-@admin.register(MappingMoyenDePaiement, site=staff_admin_site)
-class MappingMoyenDePaiementAdmin(ModelAdmin):
-    """
-    Admin pour les mappings PaymentMethod -> CompteComptable.
-    / Admin for PaymentMethod -> CompteComptable mappings.
-    """
-
-    compressed_fields = True
-    warn_unsaved_form = True
-
-    list_display = ("payment_method_label", "payment_method", "compte")
-    list_filter = ("compte__type_compte",)
-    search_fields = ("payment_method", "compte__numero", "compte__libelle")
-    ordering = ("payment_method",)
-    autocomplete_fields = ("compte",)
-
-    @admin.display(description=_("Moyen de paiement"), ordering="payment_method")
-    def payment_method_label(self, obj):
-        """
-        Affiche le libelle humain de PaymentMethod (ex: 'Cash' pour 'CA').
-        Le champ payment_method du modele est un CharField sans choices,
-        donc Django ne fait pas le mapping automatique en list_display.
-        / Show the human label for PaymentMethod (e.g. 'Cash' for 'CA').
-        """
-        from BaseBillet.models import PaymentMethod
-        labels = dict(PaymentMethod.choices)
-        return str(labels.get(obj.payment_method, obj.payment_method))
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_add_permission(self, request):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_delete_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)

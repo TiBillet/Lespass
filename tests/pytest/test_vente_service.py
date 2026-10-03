@@ -67,6 +67,7 @@ from django_tenants.test.cases import FastTenantTestCase
 from BaseBillet.models import LigneArticle, PaymentMethod, Product, SaleOrigin
 from BaseBillet.models_vente import Reglement, Vente
 from BaseBillet.services_vente import (
+    MOYENS_OFFERTS,
     EgaliteDeVenteRompue,
     ajouter_article,
     ajouter_reglement,
@@ -765,6 +766,16 @@ class TestServiceDeVente(FastTenantTestCase):
         vente_relue = Vente.objects.get(pk=vente.pk)
         assert vente_relue.statut == Vente.Statut.EN_ATTENTE
         assert vente_relue.numero is None
+
+    def test_moyens_offerts_ne_contient_que_free(self):
+        """
+        Le seul moyen « offert » est FREE (bouton OFFRIR, recharge cadeau). Un jeton
+        dépensé solde la dette du lieu envers le porteur (D8 bis) : le règlement
+        « jetons » (LG) est un vrai règlement, il compte dans la 2ᵉ égalité.
+        / The only "offered" method is FREE. A spent token settles the venue's debt
+        (D8 bis): the LG payment is a real payment, counted in the 2nd equality.
+        """
+        assert MOYENS_OFFERTS == [PaymentMethod.FREE]
 
     def test_vente_payante_sans_reglement_refusee(self):
         """

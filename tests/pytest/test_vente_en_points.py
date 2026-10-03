@@ -130,10 +130,8 @@ class TestVenteEnPoints(FastTenantTestCase):
 
         # Plan comptable du lieu : necessaire a l'ecriture FEC.
         # / Venue chart of accounts, needed for the FEC entry.
-        call_command(
-            "charger_plan_comptable", schema=self.tenant.schema_name, jeu="bar_resto"
-        )
-        compte_de_vente = CompteComptable.objects.get(numero_de_compte="7072000")
+        call_command("charger_plan_comptable", schema=self.tenant.schema_name)
+        compte_de_vente = CompteComptable.objects.get(numero_de_compte="707000")
         categorie = CategorieProduct.objects.create(
             name="Boutique en points", compte_comptable=compte_de_vente
         )

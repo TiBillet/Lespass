@@ -6,7 +6,7 @@ Couvre :
 - CompteComptable (creation, champs)
 - MappingMoyenDePaiement (creation, lien FK, null ignore)
 - CategorieProduct.compte_comptable (FK vers CompteComptable)
-- charger_plan_comptable (bar_resto : 15 comptes, association : 10 comptes)
+- charger_plan_comptable (plan par defaut : voir test_plan_comptable_unique.py)
 - generer_fec (18 colonnes, equilibre debits/credits, format montants, format dates)
 - FEC avec categorie non mappee (avertissements)
 
@@ -37,7 +37,7 @@ from BaseBillet.models import (
 )
 from laboutik.models import (
     ClotureCaisse, CompteComptable, LaboutikConfiguration,
-    MappingMoyenDePaiement, PointDeVente,
+    MappingMonnaie, MappingMoyenDePaiement, PointDeVente,
 )
 
 
@@ -66,6 +66,9 @@ class TestExportComptable(FastTenantTestCase):
         # Nettoyer les singletons et les donnees des tests precedents
         # (FastTenantTestCase ne rollback pas)
         # / Clean singletons and data from previous tests
+        # Les correspondances des monnaies d'abord : elles protègent leur compte.
+        # / Currency mappings first: they protect their account (PROTECT).
+        MappingMonnaie.objects.all().delete()
         MappingMoyenDePaiement.objects.all().delete()
         CompteComptable.objects.all().delete()
         ClotureCaisse.objects.all().delete()
@@ -159,16 +162,15 @@ class TestExportComptable(FastTenantTestCase):
         return cloture
 
     def _charger_plan_et_mapper_categorie(self):
-        """Charge le plan bar_resto, associe le compte vente 20% a la categorie.
-        / Loads bar_resto plan, links the 20% sales account to the category."""
+        """Charge le plan par defaut, associe le compte de ventes de marchandises a la categorie.
+        / Loads the default plan, links the merchandise sales account to the category."""
         call_command(
             'charger_plan_comptable',
             schema=self.tenant.schema_name,
-            jeu='bar_resto',
         )
-        # Associer le compte de vente 20% a la categorie "Boissons Test"
-        # / Link the 20% sales account to the "Boissons Test" category
-        compte_vente = CompteComptable.objects.get(numero_de_compte='7072000')
+        # Associer le compte de ventes de marchandises a la categorie "Boissons Test"
+        # / Link the merchandise sales account to the "Boissons Test" category
+        compte_vente = CompteComptable.objects.get(numero_de_compte='707000')
         self.categorie.compte_comptable = compte_vente
         self.categorie.save()
 
@@ -251,39 +253,6 @@ class TestExportComptable(FastTenantTestCase):
         self.categorie.refresh_from_db()
         assert self.categorie.compte_comptable == compte
         assert self.categorie.compte_comptable.numero_de_compte == '7072000'
-
-    # ------------------------------------------------------------------- #
-    #  5. charger_plan_comptable : bar_resto → 15 comptes                  #
-    # ------------------------------------------------------------------- #
-
-    def test_charger_plan_bar_resto(self):
-        """charger_plan_comptable jeu=bar_resto cree 16 CompteComptable.
-        (15 comptes originaux + 1 compte 4191 avances clients cashless)
-        / charger_plan_comptable jeu=bar_resto creates 16 CompteComptable."""
-        call_command(
-            'charger_plan_comptable',
-            schema=self.tenant.schema_name,
-            jeu='bar_resto',
-        )
-
-        nb_comptes = CompteComptable.objects.count()
-        assert nb_comptes == 16, f"Attendu 16 comptes, trouve {nb_comptes}"
-
-    # ------------------------------------------------------------------- #
-    #  6. charger_plan_comptable : association → 10 comptes                #
-    # ------------------------------------------------------------------- #
-
-    def test_charger_plan_association(self):
-        """charger_plan_comptable jeu=association cree 10 CompteComptable.
-        / charger_plan_comptable jeu=association creates 10 CompteComptable."""
-        call_command(
-            'charger_plan_comptable',
-            schema=self.tenant.schema_name,
-            jeu='association',
-        )
-
-        nb_comptes = CompteComptable.objects.count()
-        assert nb_comptes == 10, f"Attendu 10 comptes, trouve {nb_comptes}"
 
     # ------------------------------------------------------------------- #
     #  7. FEC : 18 colonnes par ligne                                      #
@@ -440,7 +409,6 @@ class TestExportComptable(FastTenantTestCase):
         call_command(
             'charger_plan_comptable',
             schema=self.tenant.schema_name,
-            jeu='bar_resto',
         )
 
         cloture = self._creer_cloture_avec_rapport()

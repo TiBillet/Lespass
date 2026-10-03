@@ -26,6 +26,7 @@ from BaseBillet.models import (
     Configuration,
     Product,
 )
+from BaseBillet.services_vente import NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE
 from laboutik.models import (
     LaboutikConfiguration,
     SortieCaisse,
@@ -193,12 +194,17 @@ class RapportComptableService:
         self.fin = datetime_fin
 
         # Queryset de base : lignes valides encaissees par le lieu dans la periode.
-        # / Base queryset: valid lines collected by the venue within the period.
+        # Les jetons cadeau repris au vidage d'une carte (produit systeme, reconnu par
+        # son nom) ne sont pas des ventes : ils n'entrent pas dans le rapport.
+        # / Base queryset: valid lines collected by the venue within the period. Gift
+        # tokens taken back at card emptying are not sales: left out.
         self.lignes = LigneArticle.objects.filter(
             sale_origin__in=ORIGINES_ENCAISSEES_PAR_LE_LIEU,
             datetime__gte=self.debut,
             datetime__lte=self.fin,
             status=LigneArticle.VALID,
+        ).exclude(
+            pricesold__productsold__product__name=NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE,
         ).select_related(
             "pricesold__productsold__product__categorie_pos",
             "carte",

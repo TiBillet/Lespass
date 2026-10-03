@@ -23,9 +23,14 @@ two equalities (called at the end of every test that settles a sale).
 LES DEUX ÉGALITÉS, vraies pour TOUTE vente réglée :
     Σ règlements                    = Σ totaux catalogue des articles
     Σ règlements hors « offert »    = Σ nets vendus des articles
-Un règlement « offert » (moyen dans `MOYENS_OFFERTS` : jetons cadeau LG, bouton OFFRIR
-FREE) garde la trace d'un cadeau : il compte dans la 1ʳᵉ égalité, pas dans la 2ᵉ.
-/ The two equalities: all payments = catalogue totals; payments except "offered" = net sold.
+Un règlement « offert » (FREE : bouton OFFRIR, recharge cadeau) garde la trace d'un
+cadeau : il compte dans la 1ʳᵉ égalité, pas dans la 2ᵉ. Le règlement « jetons » (LG) est
+un vrai règlement (D8 bis) : il compte dans les deux.
+La liste des moyens offerts est écrite ICI, jamais importée du service : l'oracle ne
+doit pas changer avec le code qu'il vérifie (une erreur dans `MOYENS_OFFERTS` doit se
+voir).
+/ The two equalities: all payments = catalogue totals; payments except "offered" (FREE)
+= net sold. The offered list is written HERE, never imported from the service.
 
 Les fabriques sont appelées DANS un test qui annule sa transaction à la fin (marque
 `django_db`, ou `FastTenantTestCase`) et DANS le lieu du test : rien ne reste en base.
@@ -37,10 +42,9 @@ et CHANTIER-05-montants-entiers.md (§2, §5, §8).
 
 from decimal import Decimal
 
-from BaseBillet.models import Price, PriceSold, Product, ProductSold, Tva
+from BaseBillet.models import PaymentMethod, Price, PriceSold, Product, ProductSold, Tva
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import (
-    MOYENS_OFFERTS,
     ajouter_article,
     ajouter_reglement,
     encaisser_vente,
@@ -49,6 +53,10 @@ from BaseBillet.services_vente import (
 from fabriques_panier import identifiant_unique
 
 PREFIXE_DE_TEST_VENTE = "TEST_vente"
+
+# Les moyens « offerts » de l'oracle, écrits à la main (pas importés du service).
+# / The oracle's "offered" methods, written by hand (not imported from the service).
+MOYENS_OFFERTS_DE_L_ORACLE = [PaymentMethod.FREE]
 
 
 def creer_tarif_vendu(
@@ -181,7 +189,7 @@ def verifier_egalites(vente):
     somme_des_reglements_hors_offert = 0
     for reglement in vente_relue.reglements.all():
         somme_de_tous_les_reglements += reglement.montant
-        reglement_offert = reglement.moyen in MOYENS_OFFERTS
+        reglement_offert = reglement.moyen in MOYENS_OFFERTS_DE_L_ORACLE
         if not reglement_offert:
             somme_des_reglements_hors_offert += reglement.montant
 

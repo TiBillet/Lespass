@@ -93,11 +93,13 @@ from BaseBillet.models import (
 from BaseBillet.models_vente import Vente
 from BaseBillet.permissions import HasLaBoutikAccess, HasLaBoutikTerminalAccess
 from BaseBillet.services_vente import (
+    NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE,
     EgaliteDeVenteRompue,
     ajouter_article,
     ajouter_reglement,
     encaisser_vente,
     ouvrir_vente,
+    tarif_vendu_d_un_produit_systeme,
 )
 from QrcodeCashless.models import CarteCashless
 from laboutik.models import (
@@ -1950,11 +1952,14 @@ def _ecrire_la_vente_du_vidage(
     transactions_de_l_ancien_fedow,
 ):
     """
-    Écrit la vente `VIDAGE_CARTE` d'un vidage de carte : sans article, un règlement
-    POSITIF par remboursement d'argent, puis un règlement espèces de MOINS le total
-    rendu. La somme des règlements vaut 0.
-    / Writes the card-emptying sale: no item, one POSITIVE payment per money refund,
-    then minus the total in cash. Payments sum to 0.
+    Écrit la vente `VIDAGE_CARTE` d'un vidage de carte :
+    - un règlement POSITIF par remboursement d'argent, puis un règlement espèces de
+      MOINS le total rendu ;
+    - par transaction de jetons cadeau repris : un règlement « jetons » (LG) POSITIF
+      et un article « Jetons cadeau repris au vidage » du même montant.
+    / Writes the card-emptying sale: one POSITIVE payment per money refund, then minus
+    the total in cash; per gift-token transaction, a positive LG payment and a "gift
+    tokens taken back" item of the same amount.
 
     LOCALISATION : laboutik/views.py
 
@@ -1966,11 +1971,20 @@ def _ecrire_la_vente_du_vidage(
     - transaction locale (`fedow_core`) : son uuid dans `fedow_transaction_uuid` ;
     - transaction de l'ancien Fedow (serveur distant) : son uuid dans
       `reference_externe` ;
-    - monnaie locale du lieu → `LE`, monnaie fédérée → `SF` ;
-    - jetons cadeau : repris sans argent, AUCUN règlement (D12).
-    Aucun argent rendu (carte avec seulement des jetons cadeau) : AUCUNE vente.
-    / Local uuid in fedow_transaction_uuid, remote uuid in reference_externe. No payment
-      for gift tokens; no money at all → no sale.
+    - monnaie locale du lieu → `LE`, monnaie fédérée → `SF`, jetons cadeau → `LG` ;
+      chacun avec sa monnaie et la carte.
+    Jetons cadeau : des jetons perdus annulent la dette du lieu envers le porteur
+    (D8 bis). Aucun argent ne sort du tiroir pour eux. L'article « Jetons cadeau
+    repris au vidage » (produit système, `NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE`) est hors
+    chiffre d'affaires, TVA 0, quantité 1, prix = montant, sans carte ni monnaie ; le
+    plan comptable le reconnaît par son nom (623400). Les deux égalités tiennent :
+    Σ règlements = Σ articles = le total des jetons repris.
+    Une carte qui n'a QUE des jetons cadeau écrit aussi sa vente (aucun règlement
+    espèces). Aucun argent ni aucun jeton repris : AUCUNE vente.
+    / Local uuid in fedow_transaction_uuid, remote uuid in reference_externe. Gift
+    tokens: lost tokens cancel the venue's debt (D8 bis): LG payment + off-revenue,
+    0-VAT item. A card with tokens only also writes its sale; nothing taken back → no
+    sale.
 
     APPELÉ PAR : PaiementViewSet.vider_carte
 
@@ -1978,14 +1992,27 @@ def _ecrire_la_vente_du_vidage(
         délier » le retire de la carte)
     :param transactions_locales: les `Transaction` REFUND du Fedow local
     :param transactions_de_l_ancien_fedow: les dicts de `_vider_la_carte_sur_l_ancien_fedow`
-    :return: la `Vente` EN_ATTENTE, ou None s'il n'y a aucun argent rendu
+    :return: la `Vente` EN_ATTENTE, ou None s'il n'y a rien de repris
     """
-    # Les remboursements d'argent, des deux Fedow : (moyen, montant, asset,
-    # portefeuille, uuid local, référence distante).
-    # / Money refunds from both Fedow servers.
+    # Les remboursements d'argent et les jetons cadeau repris, des deux Fedow :
+    # (moyen, montant, asset, portefeuille, uuid local, référence distante).
+    # / Money refunds and gift tokens taken back, from both Fedow servers.
     remboursements_d_argent = []
+    jetons_cadeau_repris = []
     for transaction_locale in transactions_locales:
         categorie_locale = transaction_locale.asset.category
+        if categorie_locale == Asset.TNF:
+            jetons_cadeau_repris.append(
+                (
+                    PaymentMethod.LOCAL_GIFT,
+                    transaction_locale.amount,
+                    transaction_locale.asset.uuid,
+                    transaction_locale.sender,
+                    transaction_locale.uuid,
+                    "",
+                )
+            )
+            continue
         if categorie_locale == Asset.TLF:
             moyen_du_reglement = PaymentMethod.LOCAL_EURO
         elif categorie_locale == Asset.FED:
@@ -2003,28 +2030,34 @@ def _ecrire_la_vente_du_vidage(
             )
         )
     for transaction_distante in transactions_de_l_ancien_fedow:
-        if transaction_distante["categorie"] == "TLF":
+        categorie_distante = transaction_distante["categorie"]
+        if categorie_distante == "TNF":
+            moyen_du_reglement = PaymentMethod.LOCAL_GIFT
+        elif categorie_distante == "TLF":
             moyen_du_reglement = PaymentMethod.LOCAL_EURO
-        elif transaction_distante["categorie"] == "FED":
+        elif categorie_distante == "FED":
             moyen_du_reglement = PaymentMethod.STRIPE_FED
         else:
             continue
-        remboursements_d_argent.append(
-            (
-                moyen_du_reglement,
-                transaction_distante["montant"],
-                transaction_distante["asset"],
-                None,
-                None,
-                str(transaction_distante["uuid"]),
-            )
+        reglement_de_la_transaction_distante = (
+            moyen_du_reglement,
+            transaction_distante["montant"],
+            transaction_distante["asset"],
+            None,
+            None,
+            str(transaction_distante["uuid"]),
         )
+        if categorie_distante == "TNF":
+            jetons_cadeau_repris.append(reglement_de_la_transaction_distante)
+        else:
+            remboursements_d_argent.append(reglement_de_la_transaction_distante)
 
     argent_rendu_en_centimes = 0
     for remboursement_d_argent in remboursements_d_argent:
         montant_rembourse = remboursement_d_argent[1]
         argent_rendu_en_centimes += montant_rembourse
-    if argent_rendu_en_centimes == 0:
+    rien_n_est_repris = argent_rendu_en_centimes == 0 and len(jetons_cadeau_repris) == 0
+    if rien_n_est_repris:
         return None
 
     vente = ouvrir_vente(
@@ -2042,7 +2075,7 @@ def _ecrire_la_vente_du_vidage(
         portefeuille_de_la_carte,
         uuid_de_la_transaction_locale,
         reference_distante,
-    ) in remboursements_d_argent:
+    ) in remboursements_d_argent + jetons_cadeau_repris:
         ajouter_reglement(
             vente,
             moyen=moyen_du_reglement,
@@ -2053,13 +2086,37 @@ def _ecrire_la_vente_du_vidage(
             fedow_transaction_uuid=uuid_de_la_transaction_locale,
             reference_externe=reference_distante,
         )
-    # L'argent sort du tiroir : un seul règlement espèces, négatif.
-    # / Cash leaves the drawer: one negative cash payment.
-    ajouter_reglement(
-        vente,
-        moyen=PaymentMethod.CASH,
-        montant=-argent_rendu_en_centimes,
-    )
+
+    # Les jetons cadeau repris : un article par transaction, du même montant, hors
+    # chiffre d'affaires, TVA 0. Il porte le moyen historique LG (jusqu'à la fiche H).
+    # / Gift tokens taken back: one item per transaction, off revenue, 0 VAT.
+    if jetons_cadeau_repris:
+        tarif_vendu_des_jetons_repris = tarif_vendu_d_un_produit_systeme(
+            NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE
+        )
+        for jeton_cadeau_repris in jetons_cadeau_repris:
+            montant_des_jetons_repris = jeton_cadeau_repris[1]
+            ajouter_article(
+                vente,
+                pricesold=tarif_vendu_des_jetons_repris,
+                quantite=Decimal("1"),
+                prix_unitaire=montant_des_jetons_repris,
+                taux_tva=Decimal("0"),
+                hors_chiffre_affaires=True,
+                payment_method=PaymentMethod.LOCAL_GIFT,
+                status=LigneArticle.VALID,
+                point_de_vente=point_de_vente,
+            )
+
+    # L'argent sort du tiroir : un seul règlement espèces, négatif. Une carte qui n'a
+    # que des jetons cadeau ne rend aucun argent : pas de règlement espèces.
+    # / Cash leaves the drawer: one negative cash payment, none for tokens only.
+    if argent_rendu_en_centimes != 0:
+        ajouter_reglement(
+            vente,
+            moyen=PaymentMethod.CASH,
+            montant=-argent_rendu_en_centimes,
+        )
     return vente
 
 
@@ -4163,8 +4220,8 @@ class CaisseViewSet(viewsets.ViewSet):
         return response
 
     # ----------------------------------------------------------------------- #
-    #  Charger plan comptable — jeu de comptes par defaut                      #
-    #  Load chart of accounts — default account set                            #
+    #  Charger le plan comptable par defaut (ajoute ce qui manque)             #
+    #  Load the default chart of accounts (adds what is missing)               #
     # ----------------------------------------------------------------------- #
 
     @action(
@@ -4176,40 +4233,25 @@ class CaisseViewSet(viewsets.ViewSet):
     def charger_plan_comptable(self, request):
         """
         POST /laboutik/caisse/charger-plan-comptable/
-        Charge un jeu de comptes comptables par defaut (bar_resto ou association).
-        / Loads a default chart of accounts set (bar_resto or association).
+        Ajoute au lieu ce qui manque du plan comptable par defaut. N'efface rien :
+        les comptes existants et les liens des categories restent.
+        / Adds to the venue what is missing from the default chart of accounts.
+        Erases nothing: existing accounts and category links remain.
 
         LOCALISATION : laboutik/views.py
+
+        Appele par le bandeau de la liste des comptes de l'admin
+        (Administration/templates/admin/comptable/changelist_before.html).
+        Le chargement lui-meme : laboutik/plan_comptable.py.
+        / Called by the admin accounts list banner. Loading: laboutik/plan_comptable.py.
         """
-        from django.core.management import call_command
-        from django.db import connection
-
-        jeu = request.POST.get("jeu", "").strip()
-        if jeu not in ("bar_resto", "association"):
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _("Jeu de comptes invalide."),
-                },
-                status=400,
-            )
-
-        # Verifier si des comptes existent deja — si oui, forcer le reset
-        # Sinon la commande afficherait un warning et ne ferait rien
-        # / Check if accounts already exist — if so, force reset
         from laboutik.models import CompteComptable
+        from laboutik.plan_comptable import charger_le_plan_comptable_par_defaut
 
-        nb_existants = CompteComptable.objects.count()
+        nombre_de_comptes_avant = CompteComptable.objects.count()
 
         try:
-            call_command(
-                "charger_plan_comptable",
-                schema=connection.schema_name,
-                jeu=jeu,
-                reset=nb_existants > 0,
-            )
+            avertissements = charger_le_plan_comptable_par_defaut()
         except Exception as e:
             logger.error(f"Erreur chargement plan comptable : {e}")
             return render(
@@ -4222,19 +4264,27 @@ class CaisseViewSet(viewsets.ViewSet):
                 status=500,
             )
 
-        message = _("Plan comptable charge avec succes.")
-        if nb_existants > 0:
-            message = _(
-                "Plan comptable remplace avec succes (%(nb)s comptes precedents supprimes)."
-            ) % {
-                "nb": nb_existants,
-            }
+        nombre_de_comptes_ajoutes = (
+            CompteComptable.objects.count() - nombre_de_comptes_avant
+        )
+        message = _(
+            "%(nombre)s compte(s) ajouté(s) au plan comptable. Rien n'a été effacé."
+        ) % {
+            "nombre": nombre_de_comptes_ajoutes,
+        }
+
+        # Un avertissement (ex. numero de TVA deja pris) est montre au gestionnaire.
+        # / A warning (e.g. VAT number already taken) is shown to the manager.
+        type_du_message = "success"
+        if avertissements:
+            type_du_message = "warning"
+            message = f"{message} {' '.join(avertissements)}"
 
         return render(
             request,
             "laboutik/partial/hx_messages.html",
             {
-                "msg_type": "success",
+                "msg_type": type_du_message,
                 "msg_content": message,
             },
         )
@@ -6195,7 +6245,8 @@ def _taux_tva_de_la_ligne_de_caisse(produit, methode_db):
     le calcule ici, avec la même règle que la TVA par défaut d'une ligne
     (`LigneArticle._compute_default_vat`), plus deux règles (points 2 et 3) :
     1. ligne offerte (FREE) ou en points / temps (NON_MONETAIRE) : 0, ce n'est pas une
-       vente en argent ;
+       vente en argent ; ligne payée en jetons cadeau (LOCAL_GIFT) : 0, c'est une vente
+       ordinaire, hors TVA (D8 bis : le jeton dépensé solde la dette du lieu) ;
     2. recharge (RE, RC) : 0. Une recharge est une dette envers le porteur de la carte,
        pas une vente taxée (D10) ;
     3. retour de consigne : le taux du produit consigne qu'il rembourse (le gobelet,
@@ -6203,18 +6254,22 @@ def _taux_tva_de_la_ligne_de_caisse(produit, methode_db):
        comprise (D11) ;
     4. sinon : le taux du produit, ou à défaut le taux par défaut du lieu
        (`Configuration.vat_taxe`), jamais celui de la catégorie.
-    / 0 for offered, points, top-ups; the cup's rate for a deposit return; otherwise the
-    product's rate, else the venue default.
+    / 0 for offered, points, gift tokens, top-ups; the cup's rate for a deposit return;
+    otherwise the product's rate, else the venue default.
+
+    Sert aussi la tireuse (controlvanne/billing.py), le paiement QR, l'API v2.
+    / Also used by the tap, the QR payment and API v2.
 
     :param produit: Product vendu
     :param methode_db: PaymentMethod de la ligne (valeur en base, ex. "CA", "NA")
     :return: Decimal
     """
-    ligne_hors_vente_en_argent = methode_db in (
+    ligne_hors_tva_par_son_moyen = methode_db in (
         PaymentMethod.FREE,
         PaymentMethod.NON_MONETAIRE,
+        PaymentMethod.LOCAL_GIFT,
     )
-    if ligne_hors_vente_en_argent:
+    if ligne_hors_tva_par_son_moyen:
         return Decimal("0")
 
     if produit.methode_caisse in METHODES_RECHARGE:
@@ -6599,12 +6654,13 @@ def _creer_lignes_articles_cascade(
     historiques d'aujourd'hui (prix unitaire, quantité partielle, moyen, carte…). Son
     total catalogue est l'argent RÉEL de la part (3ᵉ élément du tuple), jamais
     recalculé depuis la quantité partielle. Une part payée en jetons cadeau (LG) est
-    offerte (JETONS) : les jetons ne sont pas de l'argent. Le HT vient du service, la
-    boucle HMAC ne le recalcule pas. L'appelant écrit les règlements et encaisse la
-    vente. Appelants : paiement NFC seul, complément espèces / CB, 2ᵉ carte.
+    une vente ordinaire, rien d'offert, au taux de TVA 0 (D8 bis : le jeton dépensé
+    solde la dette du lieu envers le porteur). Le HT vient du service, la boucle HMAC
+    ne le recalcule pas. L'appelant écrit les règlements et encaisse la vente.
+    Appelants : paiement NFC seul, complément espèces / CB, 2ᵉ carte.
     / Each part is an item of the sale, written by the sale service (the part's real
-    money as catalogue total, token parts offered). The caller writes the payments
-    and settles the sale.
+    money as catalogue total; a token part is an ordinary sale at 0 % VAT). The caller
+    writes the payments and settles the sale.
 
     :param lignes_pre_calculees: liste de tuples
         (article_dict, asset_ou_none, amount_centimes, payment_method_code)
@@ -6770,18 +6826,6 @@ def _creer_lignes_articles_cascade(
             argent_reel_de_la_part_en_centimes = int(amount_centimes)
             prix_achat_en_centimes = int(produit.prix_achat)
 
-            # Part payée en jetons cadeau (LG) : les jetons ne sont pas de l'argent
-            # (D8). Toute la part est offerte, source JETONS ; l'appelant écrit le
-            # règlement « jetons » (LG) de la transaction.
-            # / Part paid in gift tokens: fully offered (JETONS), not money.
-            part_payee_en_jetons = payment_method_code == PaymentMethod.LOCAL_GIFT
-            if part_payee_en_jetons:
-                part_offerte_en_centimes = argent_reel_de_la_part_en_centimes
-                source_de_l_offert = LigneArticle.SourceOffert.JETONS
-            else:
-                part_offerte_en_centimes = 0
-                source_de_l_offert = ""
-
             # Vente au poids ou au volume : la ligne garde le poids dans
             # `weight_quantity`. Le coût d'achat porte sur la quantité réellement
             # servie, dans l'unité du prix d'achat (kg, L), pour la fraction de
@@ -6802,7 +6846,11 @@ def _creer_lignes_articles_cascade(
             # Le total catalogue de la part est son argent RÉEL (le débit qui la
             # paie), jamais prix × quantité partielle : la quantité partielle est
             # arrondie à 6 décimales et ne doit pas décider d'un centime.
+            # Une part payée en jetons cadeau (LG) n'a rien d'offert : c'est une vente
+            # ordinaire, au taux 0 (`_taux_tva_de_la_ligne_de_caisse`). L'appelant
+            # écrit le règlement « jetons » (LG) de la transaction.
             # / The part's catalogue total is its REAL money, never price × partial qty.
+            # A token part offers nothing: an ordinary sale at 0 % VAT.
             ligne = ajouter_article(
                 vente,
                 pricesold=price_sold,
@@ -6811,8 +6859,6 @@ def _creer_lignes_articles_cascade(
                 taux_tva=_taux_tva_de_la_ligne_de_caisse(
                     produit, payment_method_code
                 ),
-                part_offerte=part_offerte_en_centimes,
-                source_offert=source_de_l_offert,
                 prix_achat=prix_achat_en_centimes,
                 total_catalogue_impose=argent_reel_de_la_part_en_centimes,
                 quantite_pour_cout=quantite_reellement_servie_par_la_part,
@@ -10029,7 +10075,8 @@ class PaiementViewSet(viewsets.ViewSet):
 
                 # Un règlement par transaction : son montant et son uuid sont COPIÉS de
                 # la transaction renvoyée, jamais recalculés depuis les parts. Jetons
-                # cadeau : règlement « jetons » (LG), qui ne compte pas comme argent.
+                # cadeau : règlement « jetons » (LG), un vrai règlement (il solde la
+                # dette du lieu, D8 bis).
                 # / One payment per transaction, copied from it. Gift tokens: LG payment.
                 for asset_a_debiter, total_debit_asset in debits_par_asset.items():
                     transaction_de_la_monnaie = TransactionService.creer_vente(
@@ -11306,8 +11353,8 @@ class PaiementViewSet(viewsets.ViewSet):
 
                     # Un règlement par transaction : son montant et son uuid sont COPIÉS
                     # de la transaction renvoyée, jamais recalculés depuis les parts.
-                    # Jetons cadeau : règlement « jetons » (LG), qui ne compte pas comme
-                    # argent.
+                    # Jetons cadeau : règlement « jetons » (LG), un vrai règlement
+                    # (D8 bis).
                     # / One payment per transaction, copied from it. Gift tokens: LG.
                     for (
                         asset_a_debiter,
@@ -12065,7 +12112,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     # Un règlement par transaction : son montant et son uuid sont COPIÉS
                     # de la transaction renvoyée, jamais recalculés depuis les parts.
                     # Il porte la carte 1 et son portefeuille. Jetons cadeau : règlement
-                    # « jetons » (LG), qui ne compte pas comme argent.
+                    # « jetons » (LG), un vrai règlement (D8 bis).
                     # / One payment per transaction, copied from it, with card 1 and its
                     #   wallet. Gift tokens: LG.
                     for (

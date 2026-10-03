@@ -530,11 +530,11 @@ def test_crowds_contribution_vente_en_attente(lieu):
     Une contribution de 15 € à une initiative en paiement direct. Le checkout ouvre une
     vente EN_ATTENTE, sans numéro ni règlement, origine « en ligne » (LP, tests/PIEGES.md
     9.21), client = la personne qui contribue. Son unique article est la ligne de la
-    contribution : 1500 centimes. Le produit technique « crowdfunding » n'a pas de TVA :
-    l'article prend le taux par défaut du lieu, ici 10 % (réglage patché, jamais
-    enregistré : tests/PIEGES.md 13.22). Hors taxes : 1500 × 100 / 110 → 1364.
-    / A 15 € direct-debit contribution: one PENDING sale, one 1500-cent item, venue
-    default VAT (the technical product has none), patched to 10 %.
+    contribution : 1500 centimes. Une contribution est un don, hors TVA : le taux par
+    défaut du lieu (ici 10 %, réglage patché, jamais enregistré : tests/PIEGES.md
+    13.22) ne s'applique pas. TVA 0 %, hors taxes 1500.
+    / A 15 € direct-debit contribution: one PENDING sale, one 1500-cent item, 0 % VAT
+    (a donation), even with a venue default rate patched to 10 %.
     """
     contributeur = creer_utilisateur()
     client = client_connecte(contributeur)
@@ -563,8 +563,45 @@ def test_crowds_contribution_vente_en_attente(lieu):
 
     article_de_la_contribution = vente.articles.get()
     assert article_de_la_contribution.pk == contribution.ligne_article_id
-    assert article_de_la_contribution.vat == Decimal("10.00")
-    assert article_de_la_contribution.total_ht == 1364
+    assert article_de_la_contribution.vat == 0
+    assert article_de_la_contribution.total_ht == 1500
+
+
+def test_crowds_tva_zero(lieu):
+    """
+    Une contribution de 15 € à une initiative en paiement direct. Une contribution
+    crowds est un DON (mainteneur, 2026-10-02) : sa ligne est hors TVA, même quand le
+    lieu a un taux par défaut (ici 10 %, réglage patché, jamais enregistré :
+    tests/PIEGES.md 13.22). TVA 0 %, HT 1500, TVA 0.
+    / A 15 € direct-debit contribution is a donation: its line has no VAT, even with a
+    venue default rate (patched to 10 %). VAT 0 %, HT 1500, VAT 0.
+    """
+    contributeur = creer_utilisateur()
+    client = client_connecte(contributeur)
+    initiative = Initiative.objects.create(
+        name=f"{PREFIXE_DE_TEST} initiative {identifiant_unique()}",
+        direct_debit=True,
+    )
+
+    with configuration_modifiee(vat_taxe=Decimal("10.00")):
+        reponse = client.post(
+            f"/crowd/{initiative.pk}/contribute/",
+            data=json.dumps(
+                {"amount": 1500, "contributor_name": "Ada", "description": "Merci"}
+            ),
+            content_type="application/json",
+        )
+    assert reponse.status_code == 200
+    contribution = Contribution.objects.get(initiative=initiative)
+
+    article_de_la_contribution = LigneArticle.objects.get(
+        pk=contribution.ligne_article_id
+    )
+    assert article_de_la_contribution.total_catalogue == 1500
+    assert article_de_la_contribution.vat == 0
+    assert article_de_la_contribution.total_ttc == 1500
+    assert article_de_la_contribution.total_ht == 1500
+    assert article_de_la_contribution.total_tva == 0
 
 
 # --------------------------------------------------------------------------

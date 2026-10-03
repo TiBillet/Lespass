@@ -22,6 +22,8 @@ Trois ventes, par la vraie route de paiement de la caisse :
 3. une bière à 5,00 € : 3,00 € en jetons cadeau sur la carte, le reste (2,00 €) en CB.
 Pour chacune, on relit les six calculs de l'ancien rapport que lit le ticket Z :
 totaux par moyen, détail des ventes, TVA, solde de caisse, offerts, recharges.
+Les jetons cadeau repris au vidage d'une carte ne sont pas des ventes : l'ancien
+rapport ne compte pas leur article (décision du mainteneur, 2026-10-03).
 
 D'OÙ VIENNENT LES VALEURS ATTENDUES
 Elles sont calculées à la main avec les formules de `laboutik/reports.py` et les
@@ -93,13 +95,19 @@ from QrcodeCashless.models import CarteCashless  # noqa: E402
 from fabriques_vente import verifier_egalites  # noqa: E402
 from fedow_core.models import Asset, Token  # noqa: E402
 from fedow_core.services import AssetService  # noqa: E402
-from laboutik.models import LaboutikConfiguration, PointDeVente  # noqa: E402
+from BaseBillet.services_vente import NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE  # noqa: E402
+from laboutik.models import (  # noqa: E402
+    CartePrimaire,
+    LaboutikConfiguration,
+    PointDeVente,
+)
 from laboutik.reports import RapportComptableService  # noqa: E402
 
 # Adresses de la caisse (laboutik/urls.py).
 # / Cash register addresses.
 URL_DU_PAIEMENT_CAISSE = "/laboutik/paiement/payer/"
 URL_DU_PAIEMENT_COMPLEMENTAIRE = "/laboutik/paiement/payer_complementaire/"
+URL_DU_VIDAGE_DE_CARTE = "/laboutik/paiement/vider_carte/"
 
 # Noms lus tels quels dans le rapport (catégorie, produits, monnaies).
 # / Names read as they are in the report.
@@ -541,18 +549,18 @@ class TestAnciensRapportsDeCaisseInchanges(FastTenantTestCase):
     # / Scenario 12 — a 5.00 € beer: 3.00 € gift tokens + 2.00 € bank card
     # ------------------------------------------------------------------
 
-    def test_anciens_rapports_inchanges_jetons_cadeau_puis_cb(self):
+    def test_anciens_rapports_jetons_cadeau_puis_cb_part_en_jetons_a_tva_zero(self):
         """
         Une bière à 5,00 € (TVA 20 %). La carte porte 3,00 € de jetons cadeau et
         aucune monnaie locale : les jetons paient 3,00 €, le reste (2,00 €) en CB.
-        Deux parts, prix unitaire 500, taux 20 (le taux du produit : LG n'est ni FREE
-        ni NON_MONETAIRE) :
-        - jetons (LG) : quantité = 300 / 500 = 0,6 ;
-        - CB (CC), dernière part : quantité = 1 − 0,6 = 0,4.
-        La Vente, elle, traite les jetons comme un cadeau (net 200) : l'ancien rapport
-        ne la lit pas et garde ses totaux d'avant.
-        / Two parts at unit price 500, 20 %: LG qty 0.6, CB qty 0.4. The old report
-        keeps its former totals.
+        Deux parts, prix unitaire 500 :
+        - jetons (LG) : quantité = 300 / 500 = 0,6, au taux 0 (une part payée en
+          jetons est une vente ordinaire hors TVA, D8 bis) ;
+        - CB (CC), dernière part : quantité = 1 − 0,6 = 0,4, au taux du produit (20).
+        L'ancien rapport regroupe par taux : la bière y fait deux lignes, et sa TVA ne
+        porte que sur la part en CB. Ses totaux par moyen ne changent pas.
+        / Two parts at unit price 500: LG qty 0.6 at 0 %, CB qty 0.4 at 20 %. The old
+        report groups by rate: two lines for the beer; VAT only on the card part.
         """
         carte = self._carte_du_client(
             "ANR12AAA", [(self.monnaie_locale, 0), (self.jetons_cadeau, 300)]
@@ -585,47 +593,70 @@ class TestAnciensRapportsDeCaisseInchanges(FastTenantTestCase):
             "total": 500,
         }
 
-        # Groupe LG (moyen cadeau) : offerts, quantité 0,6, TTC 300.
-        # Groupe CC : vendus, quantité 0,4, TTC 200.
-        # Quantité totale = 0,4 + 0,6 = 1,0 ; TTC = 200 + 300 = 500.
-        # HT = int(round(500 / 1,2)) = int(round(416,67)) = 417 ; TVA = 500 − 417 = 83.
-        # Coût = 100 × int(1.0) = 100 ; bénéfice = 417 − 100 = 317.
-        # / LG group gifted (0.6, 300), CC group sold (0.4, 200): TTC 500, HT 417,
-        #   VAT 83, cost 100, profit 317.
-        assert rapport.calculer_detail_ventes() == {
-            NOM_DE_LA_CATEGORIE: {
-                "articles": [
-                    {
-                        "nom": NOM_DE_LA_BIERE,
-                        "qty_vendus": 0.4,
-                        "qty_offerts": 0.6,
-                        "qty_total": 1.0,
-                        "total_ttc": 500,
-                        "total_ht": 417,
-                        "total_tva": 83,
-                        "taux_tva": 20.0,
-                        "prix_achat_unit": 100,
-                        "cout_total": 100,
-                        "benefice": 317,
-                        "poids_total": None,
-                        "unite_poids": None,
-                    }
-                ],
-                "total_ttc": 500,
-            }
-        }
+        # Deux lignes, une par taux (l'ancien rapport regroupe par produit et taux).
+        # L'ordre des lignes n'est pas fixé par la requête : on les trie par taux.
+        # - taux 0 (LG, compté « offerts » par l'ancien rapport) : quantité 0,6,
+        #   TTC 300, HT 300, TVA 0 ; coût = 100 × int(0,6) = 0 ; bénéfice 300.
+        # - taux 20 (CC) : quantité 0,4, TTC 200, HT = int(round(200 / 1,2)) = 167,
+        #   TVA 33 ; coût = 100 × int(0,4) = 0 ; bénéfice 167.
+        # / Two lines, one per rate, sorted by rate: 0 % (LG) TTC 300, HT 300; 20 % (CC)
+        #   TTC 200, HT 167, VAT 33. Cost 0 each (int of a partial quantity).
+        detail_des_ventes = rapport.calculer_detail_ventes()
+        assert list(detail_des_ventes.keys()) == [NOM_DE_LA_CATEGORIE]
+        assert detail_des_ventes[NOM_DE_LA_CATEGORIE]["total_ttc"] == 500
+        articles_tries_par_taux = sorted(
+            detail_des_ventes[NOM_DE_LA_CATEGORIE]["articles"],
+            key=lambda article: article["taux_tva"],
+        )
+        assert articles_tries_par_taux == [
+            {
+                "nom": NOM_DE_LA_BIERE,
+                "qty_vendus": 0.0,
+                "qty_offerts": 0.6,
+                "qty_total": 0.6,
+                "total_ttc": 300,
+                "total_ht": 300,
+                "total_tva": 0,
+                "taux_tva": 0.0,
+                "prix_achat_unit": 100,
+                "cout_total": 0,
+                "benefice": 300,
+                "poids_total": None,
+                "unite_poids": None,
+            },
+            {
+                "nom": NOM_DE_LA_BIERE,
+                "qty_vendus": 0.4,
+                "qty_offerts": 0.0,
+                "qty_total": 0.4,
+                "total_ttc": 200,
+                "total_ht": 167,
+                "total_tva": 33,
+                "taux_tva": 20.0,
+                "prix_achat_unit": 100,
+                "cout_total": 0,
+                "benefice": 167,
+                "poids_total": None,
+                "unite_poids": None,
+            },
+        ]
 
-        # Les deux parts sont au taux 20 et comptent dans la TVA (seuls FREE et
-        # NON_MONETAIRE en sortent) : TTC = ROUND(500 × 0,6 + 500 × 0,4) = 500 ;
-        # HT = 417 ; TVA = 83.
-        # / Both parts at 20 % count in the VAT: TTC 500, HT 417, VAT 83.
+        # La part en jetons est au taux 0 : TTC 300, HT 300, TVA 0. La part en CB au
+        # taux 20 : TTC 200, HT 167, TVA 33.
+        # / Token part at 0 %: TTC 300, HT 300. Card part at 20 %: TTC 200, HT 167.
         assert rapport.calculer_tva() == {
+            "0.00%": {
+                "taux": 0.0,
+                "total_ttc": 300,
+                "total_ht": 300,
+                "total_tva": 0,
+            },
             "20.00%": {
                 "taux": 20.0,
-                "total_ttc": 500,
-                "total_ht": 417,
-                "total_tva": 83,
-            }
+                "total_ttc": 200,
+                "total_ht": 167,
+                "total_tva": 33,
+            },
         }
 
         assert rapport.calculer_solde_caisse() == {
@@ -639,3 +670,119 @@ class TestAnciensRapportsDeCaisseInchanges(FastTenantTestCase):
         # / Tokens (LG) are not FREE: the gifts section stays empty.
         assert rapport.calculer_offerts() == AUCUN_OFFERT
         assert rapport.calculer_recharges() == AUCUNE_RECHARGE
+
+    # ------------------------------------------------------------------
+    # Les jetons cadeau repris au vidage ne sont pas des ventes
+    # / Gift tokens taken back at card emptying are not sales
+    # ------------------------------------------------------------------
+
+    def _vider_la_carte(self, carte_du_client):
+        """
+        Le caissier vide la carte du client : la vraie route de la caisse, avec sa
+        carte primaire (autorisée sur le comptoir). Le lieu n'est pas relié à l'ancien
+        Fedow : seul le Fedow local est vidé.
+        / The cashier empties the card through the real register route, with a
+        primary card. The venue is not linked to the old Fedow.
+        """
+        carte_du_caissier = CarteCashless.objects.create(
+            tag_id="ANRPRIMA",
+            number="ANRPRIMA",
+            uuid=uuid.uuid4(),
+        )
+        carte_primaire = CartePrimaire.objects.create(
+            carte=carte_du_caissier, edit_mode=False
+        )
+        carte_primaire.points_de_vente.add(self.point_de_vente)
+        donnees_du_formulaire = {
+            "tag_id": carte_du_client.tag_id,
+            "tag_id_cm": carte_du_caissier.tag_id,
+            "uuid_pv": str(self.point_de_vente.uuid),
+            "vider_carte": "false",
+        }
+        return self._envoyer_sans_le_reseau_fedow(
+            URL_DU_VIDAGE_DE_CARTE, donnees_du_formulaire
+        )
+
+    def test_ancien_z_ignore_les_jetons_cadeau_repris_au_vidage(self):
+        """
+        Deux gestes au comptoir pendant la période :
+        - une vraie vente en jetons : une bière à 5,00 €, 3,00 € en jetons cadeau et
+          2,00 € en CB (le scénario 12) ;
+        - le vidage d'une autre carte qui porte 2,00 € de jetons cadeau : la vente du
+          vidage écrit un article « Jetons cadeau repris au vidage » de 200, au moyen
+          historique LG. Ce n'est pas une vente (décision du mainteneur, 2026-10-03).
+        L'ancien rapport (le Z) ne compte ni cet article ni son montant : ses totaux
+        par moyen, son détail des ventes et sa TVA sont ceux de la seule vente en
+        jetons. La vraie vente en jetons, elle, y reste.
+        / A real token sale (scenario 12) and the emptying of another card holding
+        2.00 € of gift tokens. The old report counts neither the "taken back" item nor
+        its amount; the real token sale stays.
+        """
+        carte_de_la_vente = self._carte_du_client(
+            "ANRJVAAA", [(self.monnaie_locale, 0), (self.jetons_cadeau, 300)]
+        )
+        cle_d_idempotence = str(uuid.uuid4())
+        self._payer_par_la_carte_puis_le_reste_en_cb(
+            carte_de_la_vente,
+            self.biere,
+            self.tarif_de_la_biere,
+            quantite=1,
+            cle_d_idempotence=cle_d_idempotence,
+        )
+        self._verifier_la_vente_de_la_cle(cle_d_idempotence)
+
+        carte_a_vider = self._carte_du_client("ANRJVBBB", [(self.jetons_cadeau, 200)])
+        self._vider_la_carte(carte_a_vider)
+
+        # Le vidage a bien écrit sa vente, réglée, avec l'article des jetons repris.
+        # / The emptying wrote its settled sale, with the "taken back" item.
+        vente_du_vidage = Vente.objects.get(
+            nature=Vente.Nature.VIDAGE_CARTE, carte=carte_a_vider
+        )
+        assert vente_du_vidage.statut == Vente.Statut.REGLEE
+        noms_des_articles_du_vidage = []
+        for article in vente_du_vidage.articles.all():
+            noms_des_articles_du_vidage.append(
+                article.pricesold.productsold.product.name
+            )
+        assert noms_des_articles_du_vidage == [NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE]
+
+        rapport = self._ancien_rapport()
+
+        # Seule la vraie vente : CB 200, cashless 300 (jetons), total 500.
+        # / Only the real sale: CB 200, cashless 300 (tokens), total 500.
+        assert self._totaux_par_moyen_sans_la_devise(rapport) == {
+            "especes": 0,
+            "carte_bancaire": 200,
+            "cashless": 300,
+            "cashless_detail": [
+                {"nom": NOM_DES_JETONS_CADEAU, "code": "EUR", "montant": 300}
+            ],
+            "cheque": 0,
+            "federe": 0,
+            "total": 500,
+        }
+
+        # Le détail des ventes n'a que la catégorie de la bière.
+        # / The sales detail only has the beer's category.
+        detail_des_ventes = rapport.calculer_detail_ventes()
+        assert list(detail_des_ventes.keys()) == [NOM_DE_LA_CATEGORIE]
+        assert detail_des_ventes[NOM_DE_LA_CATEGORIE]["total_ttc"] == 500
+
+        # La TVA : la part en jetons (taux 0, 300) et la part en CB (taux 20, 200).
+        # Les jetons repris n'ajoutent rien au taux 0.
+        # / VAT: token part (0 %, 300) and card part (20 %, 200) only.
+        assert rapport.calculer_tva() == {
+            "0.00%": {
+                "taux": 0.0,
+                "total_ttc": 300,
+                "total_ht": 300,
+                "total_tva": 0,
+            },
+            "20.00%": {
+                "taux": 20.0,
+                "total_ttc": 200,
+                "total_ht": 167,
+                "total_tva": 33,
+            },
+        }

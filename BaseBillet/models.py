@@ -1453,10 +1453,8 @@ class Product(models.Model):
         default=0,
         verbose_name=_("Purchase price (cents)"),
         help_text=_(
-            "Prix d'achat unitaire en centimes. "
-            "Utilise pour le calcul du benefice estime. "
-            "/ Unit purchase price in cents. "
-            "Used for estimated profit calculation."
+            "Prix d'achat en centimes, par unité de vente (kg, litre, pièce) ; "
+            "0 = inconnu."
         ),
     )
 
@@ -3202,7 +3200,7 @@ class Reservation(models.Model):
         # / Local import: services_vente imports this module when it loads.
         from BaseBillet.services_vente import (
             ecrire_la_vente_d_avoir_d_une_ligne,
-            ligne_entierement_offerte,
+            ligne_sans_argent_a_rendre,
         )
 
         # 0. Verrou puis relecture : la réservation, puis ses billets (toujours dans cet
@@ -3342,13 +3340,14 @@ class Reservation(models.Model):
 
         # L'utilisateur qui annule un achat réglé sur place en ARGENT ne reçoit rien :
         # le message le lui dit. La vue écrit déjà « … has been cancelled. » devant :
-        # on ne rend que la phrase complémentaire. Un achat entièrement offert garde
-        # le message d'avant.
+        # on ne rend que la phrase complémentaire. Un achat entièrement offert (ou payé
+        # en jetons cadeau) garde le message d'avant.
         # / A user cancelling an on-site money purchase is told who to contact (the view
-        # already prefixes "cancelled"); a fully offered purchase keeps the old message.
+        # already prefixes "cancelled"); a fully offered (or token paid) purchase keeps
+        # the old message.
         if not annulation_par_l_admin:
             for ligne in lignes_hors_stripe_a_crediter:
-                ligne_avec_de_l_argent = ligne.amount > 0 and not ligne_entierement_offerte(ligne)
+                ligne_avec_de_l_argent = ligne.amount > 0 and not ligne_sans_argent_a_rendre(ligne)
                 if ligne_avec_de_l_argent:
                     return _("Réglé sur place : pour un éventuel remboursement, contactez l'organisateur.")
         return self.cancel_text()
@@ -3392,7 +3391,7 @@ class Reservation(models.Model):
         # / Local import: services_vente imports this module when it loads.
         from BaseBillet.services_vente import (
             ecrire_la_vente_d_avoir_d_une_ligne,
-            ligne_entierement_offerte,
+            ligne_sans_argent_a_rendre,
         )
 
         # 0. Verrou puis relecture : la réservation, puis le billet (toujours dans cet
@@ -3512,13 +3511,14 @@ class Reservation(models.Model):
 
         # L'utilisateur qui annule un billet réglé sur place en ARGENT ne reçoit rien :
         # le message le lui dit. La vue écrit déjà « … has been cancelled. » devant :
-        # on ne rend que la phrase complémentaire. Un billet entièrement offert garde
-        # le message d'avant.
+        # on ne rend que la phrase complémentaire. Un billet entièrement offert (ou payé
+        # en jetons cadeau) garde le message d'avant.
         # / A user cancelling an on-site money ticket is told who to contact (the view
-        # already prefixes "cancelled"); a fully offered ticket keeps the old message.
+        # already prefixes "cancelled"); a fully offered (or token paid) ticket keeps the
+        # old message.
         if not annulation_par_l_admin:
             for ligne in lignes_hors_stripe_du_billet:
-                ligne_avec_de_l_argent = ligne.amount > 0 and not ligne_entierement_offerte(ligne)
+                ligne_avec_de_l_argent = ligne.amount > 0 and not ligne_sans_argent_a_rendre(ligne)
                 if ligne_avec_de_l_argent:
                     return _("Réglé sur place : pour un éventuel remboursement, contactez l'organisateur.")
         return self.cancel_text() if refund else _("Ticket cancelled.")

@@ -559,11 +559,12 @@ def test_tirage_locales_puis_ancien_fedow_une_vente(tenant):
             uuids_de_paiement_des_parts.add(part.uuid_transaction)
         assert uuids_de_paiement_des_parts == {uuid_de_paiement}
 
-        # La vente : 400 au catalogue, 100 offerts (jetons), 300 d'argent.
-        # / The sale: 400 catalogue, 100 offered (tokens), 300 money.
+        # La vente : 400 au catalogue, rien d'offert, net 400 (la part en jetons est
+        # une vente ordinaire, D8 bis).
+        # / The sale: 400 catalogue, nothing offered, net 400 (token part sold).
         assert vente.total_catalogue == 400
-        assert vente.total_offert == 100
-        assert vente.total_ttc == 300
+        assert vente.total_offert == 0
+        assert vente.total_ttc == 400
 
         # 4 règlements : un par transaction débitée.
         # / 4 payments: one per debited transaction.
@@ -1240,10 +1241,12 @@ def test_ancien_fedow_debite_avant_les_monnaies_locales(tenant):
         assert Token.objects.get(wallet=portefeuille, asset=jetons_cadeau).value == 0
         assert Token.objects.get(wallet=portefeuille, asset=monnaie_locale).value == 0
 
+        # La part en jetons est une vente ordinaire (D8 bis) : rien d'offert.
+        # / The token part is an ordinary sale: nothing offered.
         vente = _la_vente_du_tirage(carte)
         assert vente.total_catalogue == 400
-        assert vente.total_offert == 100
-        assert vente.total_ttc == 300
+        assert vente.total_offert == 0
+        assert vente.total_ttc == 400
         assert vente.reglements.count() == 3
 
         verifier_egalites(vente)

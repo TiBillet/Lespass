@@ -7,16 +7,17 @@ LOCALISATION : comptabilite/fec.py
 Format texte tabule, 18 colonnes obligatoires, encodage CP1252.
 Reference : article A47 A-1 du Livre des procedures fiscales.
 
-S4 : FEC simplifie avec comptes par defaut (hardcodes).
-S5 ajoutera la personnalisation via CompteComptable / MappingMoyenDePaiement.
+FEC simplifie avec les comptes ecrits ci-dessous ; il ne lit pas le plan du lieu.
+TODO : lire le plan de la caisse (`laboutik.CompteComptable`,
+`laboutik/plan_comptable.py`) — fiche F du chantier 05.
 
 / Tab-separated text, 18 mandatory columns, CP1252 encoding.
-Simplified FEC with hardcoded default accounts. Customizable in S5.
+Simplified FEC with the accounts written below; it does not read the venue's plan.
 """
 
-# Comptes comptables par defaut (plan comptable francais standard PCG).
-# Personnalisable en S5 via le modele CompteComptable.
-# / Default accounting accounts (standard French PCG). Customizable in S5.
+# Comptes comptables de ce FEC (plan comptable francais standard PCG). Le plan du
+# lieu (`laboutik.CompteComptable`) n'est pas lu ici.
+# / This FEC's accounting accounts (standard French PCG). The venue plan is not read.
 COMPTES_PAR_DEFAUT = {
     "client": ("411000", "Clients"),
     "banque": ("512000", "Banque"),

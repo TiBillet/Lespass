@@ -176,8 +176,10 @@ def _extraire_lignes_article(debut, fin):
 
         # Total HT en centimes.
         # Une ligne écrite par le service de vente (elle appartient à une vente) porte
-        # dans `total_ht` le HT de son NET vendu : 0 pour une ligne offerte ou une part
-        # payée en jetons cadeau. L'archive ne lit donc PAS ce champ pour elle : elle
+        # dans `total_ht` le HT de son NET vendu : 0 pour une ligne offerte. Une part
+        # payée en jetons cadeau est une vente ordinaire à TVA 0 (D8 bis) : son taux 0
+        # suffit, son HT vaut le TTC de la ligne. L'archive ne lit donc PAS ce champ
+        # pour une ligne d'une vente : elle
         # recalcule le HT sur le TTC de la ligne (prix unitaire × quantité, arrondi
         # 0,5 vers le haut), avec `calculer_total_ht`, comme la caisse l'écrivait
         # avant. Sinon, la TVA ci-dessous (TTC − HT) inventerait de la TVA sur un

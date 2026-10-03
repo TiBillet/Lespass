@@ -24,6 +24,9 @@ Trois écrans :
   le moyen d'origine s'il est dans la liste, sinon vide et obligatoire ;
 - ligne entièrement offerte (part offerte = total catalogue, non nul) : pas de champ,
   un seul règlement FREE négatif ;
+- ligne payée en jetons cadeau (LG, vente ordinaire à TVA 0, D8 bis) : pas de champ,
+  un seul règlement « jetons » (LG) négatif, avec la monnaie et la carte de la ligne,
+  aucun recrédit de la carte ;
 - ligne payée par Stripe : pas de champ, l'écran prévient « Remboursez cette somme
   depuis votre tableau de bord Stripe. », aucun appel à Stripe, règlement négatif au
   moyen Stripe d'origine, sans référence externe.
@@ -176,6 +179,7 @@ Lancer / Run : make test ARGS="tests/pytest/test_avoirs_ecrivent_la_vente.py"
 """
 
 import logging
+import uuid
 from contextlib import contextmanager
 from decimal import Decimal
 from html.parser import HTMLParser
@@ -228,7 +232,9 @@ from fabriques_vente import (
     fabriquer_vente_encaissee,
     verifier_egalites,
 )
+from fedow_core.models import Transaction
 from laboutik.models import PointDeVente
+from QrcodeCashless.models import CarteCashless
 from test_admin_ecrit_la_vente import (
     creer_l_adhesion_et_relire,
     encaissement_qui_echoue,
@@ -497,8 +503,8 @@ def vendre_a_la_caisse_une_biere_en_deux_parts():
     ÉTAT DE DÉPART : une bière à 5 € payée 3 € en jetons cadeau (`LG`) et 2 € par CB,
     écrite en DEUX PARTS comme la caisse en cascade l'écrit
     (`laboutik/views.py` `_creer_lignes_articles_cascade`) :
-    - part « jetons » : quantité 0,6, total catalogue imposé 300, entièrement offerte
-      (source JETONS), moyen historique LG ;
+    - part « jetons » : quantité 0,6, total catalogue imposé 300, vente ordinaire à
+      TVA 0, rien d'offert (D8 bis), moyen historique LG ;
     - part « CB » : quantité 0,4, total catalogue imposé 200, moyen historique CC.
     Règlements : LG 300, CB 200. Rend les deux parts.
     / STARTING STATE: a 5 € beer paid 3 € in gift tokens and 2 € by card, written in
@@ -512,10 +518,8 @@ def vendre_a_la_caisse_une_biere_en_deux_parts():
                 "pricesold": tarif_vendu,
                 "quantite": Decimal("0.6"),
                 "prix_unitaire": 500,
-                "taux_tva": Decimal("20"),
+                "taux_tva": Decimal("0"),
                 "total_catalogue_impose": 300,
-                "part_offerte": 300,
-                "source_offert": LigneArticle.SourceOffert.JETONS,
                 "payment_method": PaymentMethod.LOCAL_GIFT,
                 "status": LigneArticle.VALID,
             },
@@ -803,18 +807,19 @@ def test_avoir_billet_entierement_offert_un_seul_reglement_free(lieu):
     verifier_egalites(vente_d_avoir)
 
 
-def test_avoir_part_en_jetons_de_la_cascade_un_seul_reglement_free(lieu):
+def test_avoir_part_en_jetons_de_la_cascade_un_seul_reglement_lg(lieu):
     """
     Fiche test 19, en parts. Une bière à 5 € payée 3 € en jetons cadeau et 2 € par CB,
     écrite en deux parts par la caisse en cascade. L'admin émet un avoir sur la part
-    « jetons » (entièrement offerte, source JETONS) : pas de champ « Remboursé par ».
-    - L'article d'avoir : catalogue −300, offert −300, net 0, source JETONS.
-    - UN seul règlement : FREE −300. Aucun jeton n'est recrédité (hors chantier), donc
-      pas de règlement LG.
+    « jetons » (vente ordinaire à TVA 0, D8 bis) : pas d'argent à rendre, donc pas de
+    champ « Remboursé par ».
+    - L'article d'avoir : catalogue −300, rien d'offert, net −300.
+    - UN seul règlement : jetons (LG) −300. Aucun jeton n'est recrédité : la dette du
+      lieu revient, les jetons ne reviennent pas.
     - La vente AVOIR est liée à la vente de caisse ; son client est vide, comme le
       sien.
     / Test 19, in parts: the credit note of the "tokens" part has catalogue −300,
-    offered −300, net 0, and ONE FREE payment of −300; no "Refunded by" field.
+    nothing offered, net −300, and ONE LG payment of −300; no "Refunded by" field.
     """
     biere_en_deux_parts = vendre_a_la_caisse_une_biere_en_deux_parts()
     part_en_jetons = biere_en_deux_parts.part_en_jetons
@@ -832,9 +837,9 @@ def test_avoir_part_en_jetons_de_la_cascade_un_seul_reglement_free(lieu):
     assert avoir.amount == 500
     assert avoir.qty == Decimal("-0.6")
     assert avoir.total_catalogue == -300
-    assert avoir.part_offerte == -300
-    assert avoir.total_ttc == 0
-    assert avoir.source_offert == LigneArticle.SourceOffert.JETONS
+    assert avoir.part_offerte == 0
+    assert avoir.total_ttc == -300
+    assert avoir.source_offert == ""
 
     vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
         avoir,
@@ -842,8 +847,172 @@ def test_avoir_part_en_jetons_de_la_cascade_un_seul_reglement_free(lieu):
         client_attendu=None,
     )
     assert moyens_et_montants_des_reglements(vente_d_avoir) == [
-        (PaymentMethod.FREE, -300)
+        (PaymentMethod.LOCAL_GIFT, -300)
     ]
+    verifier_egalites(vente_d_avoir)
+
+
+# --------------------------------------------------------------------------
+# Part payée en jetons : pas d'argent à rendre, la dette revient (D8 bis)
+# / Part paid in tokens: no money to give back, the debt comes back (D8 bis)
+# --------------------------------------------------------------------------
+
+
+def vendre_un_billet_paye_en_jetons():
+    """
+    ÉTAT DE DÉPART : un billet à 5 € (réservation validée, un billet actif), payé en
+    jetons cadeau (`LG`) par une carte, écrit par le service de vente comme une part en
+    jetons d'aujourd'hui (D8 bis) : une vente ordinaire, rien d'offert, net 500, TVA 0,
+    avec la monnaie des jetons et la carte. Règlement : jetons (LG) 500, même monnaie,
+    même carte. La réservation et son billet sont posés par `create(status=…)`, sans
+    machine à états (tests/PIEGES.md 12.17).
+    Rend la réservation, la ligne, sa vente, la carte et la monnaie des jetons.
+    / STARTING STATE: a 5 € ticket paid in gift tokens (LG) by a card, written by the
+    sale service as a D8 bis token part (ordinary sale, net 500, VAT 0), one LG payment.
+    """
+    acheteur = creer_utilisateur()
+    concert = creer_evenement_avec_tarif(prix="5.00")
+    produit_vendu, _produit_vendu_cree = ProductSold.objects.get_or_create(
+        product=concert.produit, event=concert.evenement
+    )
+    tarif_vendu = PriceSold.objects.create(
+        productsold=produit_vendu, price=concert.tarif, prix=concert.tarif.prix
+    )
+    reservation = Reservation.objects.create(
+        user_commande=acheteur, event=concert.evenement, status=Reservation.VALID
+    )
+    Ticket.objects.create(
+        reservation=reservation, pricesold=tarif_vendu, status=Ticket.NOT_SCANNED
+    )
+
+    # `tag_id` et `number` font 8 caractères au plus (tests/PIEGES.md 9.31).
+    # / `tag_id` and `number` are 8 characters at most.
+    identifiant_de_la_carte = identifiant_unique().upper()
+    carte_du_client = CarteCashless.objects.create(
+        tag_id=identifiant_de_la_carte,
+        number=identifiant_de_la_carte,
+        uuid=uuid.uuid4(),
+    )
+    monnaie_des_jetons = uuid.uuid4()
+
+    vente = fabriquer_vente_encaissee(
+        origine=SaleOrigin.LABOUTIK,
+        articles=[
+            {
+                "pricesold": tarif_vendu,
+                "quantite": Decimal("1"),
+                "prix_unitaire": 500,
+                "taux_tva": Decimal("0"),
+                "payment_method": PaymentMethod.LOCAL_GIFT,
+                "asset": monnaie_des_jetons,
+                "carte": carte_du_client,
+                "reservation": reservation,
+                "status": LigneArticle.VALID,
+            }
+        ],
+        reglements=[
+            {
+                "moyen": PaymentMethod.LOCAL_GIFT,
+                "montant": 500,
+                "asset": monnaie_des_jetons,
+                "carte": carte_du_client,
+            }
+        ],
+    )
+    return SimpleNamespace(
+        reservation=reservation,
+        ligne=vente.articles.get(),
+        vente=vente,
+        carte=carte_du_client,
+        monnaie_des_jetons=monnaie_des_jetons,
+    )
+
+
+@pytest.mark.parametrize(
+    "geste_de_l_admin", ["bouton_avoir", "annulation_de_la_reservation"]
+)
+def test_avoir_d_une_part_en_jetons_reglement_lg_negatif_sans_rembourse_par(
+    lieu, geste_de_l_admin
+):
+    """
+    Un billet à 5 € payé en jetons cadeau (D8 bis : vente ordinaire, net 500, TVA 0).
+    L'admin le rend, par le bouton « Avoir » ou par l'annulation de la réservation.
+    Une part payée en jetons n'a PAS d'argent à rendre :
+    - l'écran n'a PAS de champ « Remboursé par » ; l'admin valide sans moyen ;
+    - l'article d'avoir : quantité −1, catalogue −500, rien d'offert, net −500, TVA 0,
+      moyen historique LG ;
+    - UN seul règlement : jetons (LG) −500, avec la monnaie et la carte de la ligne
+      d'origine ; aucun règlement FREE, aucun règlement d'argent ;
+    - la carte n'est PAS recréditée (aucune transaction Fedow) : la dette du lieu
+      revient, les jetons ne reviennent pas (tronc §9).
+    / A ticket paid in gift tokens, given back by the "Credit note" button or by the
+    reservation cancellation: no "Refunded by" field, a mirrored item (net −500, VAT 0),
+    ONE LG payment of −500 with the line's currency and card, no FREE payment, and the
+    card is not credited back.
+    """
+    billet_en_jetons = vendre_un_billet_paye_en_jetons()
+    ligne_d_origine = billet_en_jetons.ligne
+    reservation = billet_en_jetons.reservation
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    if geste_de_l_admin == "bouton_avoir":
+        reponse_de_l_ecran = ouvrir_l_ecran_de_l_avoir(
+            client_de_l_admin, ligne_d_origine
+        )
+        assert "moyen_rembourse" not in champs_du_formulaire_de_l_ecran(
+            reponse_de_l_ecran
+        )
+        reponse_de_l_action = valider_l_ecran_de_l_avoir(
+            client_de_l_admin, ligne_d_origine
+        )
+    else:
+        reponse_de_l_ecran = lancer_l_action_d_annulation(
+            client_de_l_admin,
+            URL_DE_LA_LISTE_DES_RESERVATIONS,
+            ACTION_ANNULER_LES_RESERVATIONS,
+            [reservation],
+        )
+        assert "moyen_rembourse" not in champs_du_formulaire_de_l_ecran(
+            reponse_de_l_ecran
+        )
+        reponse_de_l_action = confirmer_l_ecran_d_annulation(
+            client_de_l_admin,
+            URL_DE_LA_LISTE_DES_RESERVATIONS,
+            ACTION_ANNULER_LES_RESERVATIONS,
+            [reservation],
+        )
+
+    assert reponse_de_l_action.status_code == 302
+    if geste_de_l_admin == "annulation_de_la_reservation":
+        reservation.refresh_from_db()
+        assert reservation.status == Reservation.CANCELED
+
+    avoir = l_avoir_de_la_ligne(ligne_d_origine)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.qty == Decimal("-1")
+    assert avoir.amount == 500
+    assert avoir.total_catalogue == -500
+    assert avoir.part_offerte == 0
+    assert avoir.total_ttc == -500
+    assert avoir.vat == 0
+    assert avoir.total_tva == 0
+    assert avoir.payment_method == PaymentMethod.LOCAL_GIFT
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=billet_en_jetons.vente,
+        client_attendu=billet_en_jetons.vente.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.LOCAL_GIFT, -500)
+    ]
+    reglement_des_jetons = vente_d_avoir.reglements.get()
+    assert reglement_des_jetons.asset == billet_en_jetons.monnaie_des_jetons
+    assert reglement_des_jetons.carte_id == billet_en_jetons.carte.pk
+
+    # Aucun recrédit de la carte : aucune transaction Fedow ne la touche.
+    # / No credit back on the card: no Fedow transaction touches it.
+    assert not Transaction.objects.filter(card=billet_en_jetons.carte).exists()
     verifier_egalites(vente_d_avoir)
 
 
@@ -3595,6 +3764,104 @@ def test_annulation_adhesion_entierement_offerte_reglement_free_sans_champ(lieu)
     assert moyens_et_montants_des_reglements(vente_d_avoir) == [
         (PaymentMethod.FREE, -2000)
     ]
+    assert un_message_contient(reponse, message_de_fin_attendu(1))
+    verifier_egalites(vente_d_avoir)
+
+
+def test_annulation_adhesion_payee_en_jetons_reglement_lg_sans_champ(lieu):
+    """
+    Une adhésion à 20 € payée en jetons cadeau à la caisse (la cascade rattache les
+    adhésions à leur part) : une vente ordinaire à TVA 0, net 2000, moyen historique
+    LG, avec la monnaie des jetons et la carte (D8 bis). L'état de départ est écrit par
+    le service de vente.
+    - Le formulaire d'annulation n'a PAS de champ « Remboursé par » : une part payée en
+      jetons n'a pas d'argent à rendre.
+    - L'admin clique « Annuler avec avoir » : l'adhésion est annulée ; l'avoir a
+      catalogue −2000, rien d'offert, net −2000 ; sa vente AVOIR (origine ADMIN), liée à
+      la vente d'origine, a UN seul règlement : jetons (LG) −2000, avec la monnaie et
+      la carte de la ligne. Aucun règlement FREE, aucun recrédit de la carte.
+    / A 20 € membership paid in gift tokens: no "Refunded by" field; the credit note
+    has net −2000 and ONE LG payment of −2000 (currency and card copied), no FREE
+    payment, no credit back on the card.
+    """
+    adhesion = creer_adhesion(prix="20.00")
+    adherente = creer_utilisateur()
+    adhesion_payee_en_jetons = Membership.objects.create(
+        user=adherente,
+        price=adhesion.tarif,
+        first_name="Ada",
+        last_name="Lovelace",
+        status=Membership.ADMIN_VALID,
+    )
+    tarif_vendu = get_or_create_price_sold(adhesion.tarif)
+    identifiant_de_la_carte = identifiant_unique().upper()
+    carte_du_client = CarteCashless.objects.create(
+        tag_id=identifiant_de_la_carte,
+        number=identifiant_de_la_carte,
+        uuid=uuid.uuid4(),
+    )
+    monnaie_des_jetons = uuid.uuid4()
+    # ÉTAT DE DÉPART : la vente de caisse de l'adhésion, payée en jetons.
+    # / STARTING STATE: the register sale of the membership, paid in tokens.
+    vente_d_origine = fabriquer_vente_encaissee(
+        origine=SaleOrigin.LABOUTIK,
+        articles=[
+            {
+                "pricesold": tarif_vendu,
+                "quantite": Decimal("1"),
+                "prix_unitaire": 2000,
+                "taux_tva": Decimal("0"),
+                "payment_method": PaymentMethod.LOCAL_GIFT,
+                "asset": monnaie_des_jetons,
+                "carte": carte_du_client,
+                "membership": adhesion_payee_en_jetons,
+                "status": LigneArticle.VALID,
+            }
+        ],
+        reglements=[
+            {
+                "moyen": PaymentMethod.LOCAL_GIFT,
+                "montant": 2000,
+                "asset": monnaie_des_jetons,
+                "carte": carte_du_client,
+            }
+        ],
+    )
+    ligne_payee_en_jetons = vente_d_origine.articles.get()
+    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+
+    reponse_du_formulaire = ouvrir_le_formulaire_d_annulation_d_adhesion(
+        client_de_l_admin, adhesion_payee_en_jetons
+    )
+    assert reponse_du_formulaire.status_code == 200
+    assert not lire_le_champ_rembourse_par(reponse_du_formulaire).champ_present
+    assert REPERE_BOUTON_AVEC_AVOIR in reponse_du_formulaire.content.decode()
+
+    reponse = annuler_l_adhesion_avec_avoir(client_de_l_admin, adhesion_payee_en_jetons)
+
+    assert reponse.status_code == 204
+    adhesion_relue = Membership.objects.get(pk=adhesion_payee_en_jetons.pk)
+    assert adhesion_relue.status == Membership.ADMIN_CANCELED
+
+    avoir = l_avoir_de_la_ligne(ligne_payee_en_jetons)
+    assert avoir.status == LigneArticle.CREDIT_NOTE
+    assert avoir.qty == Decimal("-1")
+    assert avoir.total_catalogue == -2000
+    assert avoir.part_offerte == 0
+    assert avoir.total_ttc == -2000
+
+    vente_d_avoir = verifier_la_vente_d_avoir_encaissee(
+        avoir,
+        vente_liee_attendue=vente_d_origine,
+        client_attendu=vente_d_origine.client,
+    )
+    assert moyens_et_montants_des_reglements(vente_d_avoir) == [
+        (PaymentMethod.LOCAL_GIFT, -2000)
+    ]
+    reglement_des_jetons = vente_d_avoir.reglements.get()
+    assert reglement_des_jetons.asset == monnaie_des_jetons
+    assert reglement_des_jetons.carte_id == carte_du_client.pk
+    assert not Transaction.objects.filter(card=carte_du_client).exists()
     assert un_message_contient(reponse, message_de_fin_attendu(1))
     verifier_egalites(vente_d_avoir)
 

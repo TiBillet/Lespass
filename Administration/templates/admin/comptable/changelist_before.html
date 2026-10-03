@@ -1,45 +1,38 @@
 {% load i18n unfold %}
-{# Bandeau pour charger un plan comptable par defaut (bar/resto ou association). #}
-{# Les boutons envoient un POST HTMX vers le ViewSet charger-plan-comptable.    #}
-{# / Banner to load a default chart of accounts (bar/restaurant or association). #}
-{# Buttons send an HTMX POST to the charger-plan-comptable ViewSet action.      #}
+{# Bandeau pour charger le plan comptable par defaut (un seul plan, 6 chiffres).     #}
+{# Le bouton envoie un POST HTMX vers le ViewSet charger-plan-comptable              #}
+{# (laboutik/views.py) : il AJOUTE ce qui manque, il n'efface rien.                  #}
+{# / Banner to load the default chart of accounts. The button sends an HTMX POST to  #}
+{# the charger-plan-comptable ViewSet action: it ADDS what is missing, erases nothing. #}
+{# En tete : le composant « Plan complet ? ». En bas : une phrase d'aide par nature   #}
+{# de compte (la liste est regroupee par nature, CompteComptableAdmin.ordering).      #}
+{# / On top: "Complete plan?". Below: one help sentence per account nature.           #}
+
+{% include "admin/comptable/plan_complet.html" %}
 
 {% if charger_plan_url %}
 <div class="p-4 flex flex-col gap-4" data-testid="bandeau-charger-plan">
 
     {% component "unfold/components/card.html" with title=_("Load a default chart of accounts") %}
-        <div id="zone-charger-plan">
+        <div id="zone-charger-plan" aria-live="polite">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 py-2">
 
                 <div class="flex flex-col gap-1 min-w-0">
                     <span class="text-sm text-font-subtle-light dark:text-font-subtle-dark">
-                        {% translate "Pre-fill accounting codes for your activity type. Existing accounts will not be overwritten." %}
+                        {% translate "Ajoute les comptes du plan par défaut qui manquent. Les comptes existants et les liens des catégories ne sont jamais modifiés. Ajoutez vos comptes, ne renumérotez pas ceux du plan par défaut." %}
                     </span>
                 </div>
 
                 <div class="flex gap-2 flex-shrink-0">
                     <button type="button"
                             hx-post="{{ charger_plan_url }}"
-                            hx-vals='{"jeu": "bar_resto"}'
                             hx-target="#zone-charger-plan"
                             hx-swap="innerHTML"
                             hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                             class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
-                            data-testid="btn-plan-bar-resto">
-                        <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">restaurant</span>
-                        {% translate "Bar / Restaurant" %}
-                    </button>
-
-                    <button type="button"
-                            hx-post="{{ charger_plan_url }}"
-                            hx-vals='{"jeu": "association"}'
-                            hx-target="#zone-charger-plan"
-                            hx-swap="innerHTML"
-                            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                            class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
-                            data-testid="btn-plan-association">
-                        <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">groups</span>
-                        {% translate "Association" %}
+                            data-testid="btn-charger-plan-par-defaut">
+                        <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">playlist_add</span>
+                        {% translate "Charger le plan par défaut" %}
                     </button>
                 </div>
             </div>
@@ -48,3 +41,38 @@
 
 </div>
 {% endif %}
+
+<div class="px-4 pb-4" data-testid="aides-des-natures">
+    {% component "unfold/components/card.html" with title=_("Les natures de compte") %}
+        <dl style="display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0;">
+            <dt style="font-weight: 600;">{% translate "Ventes" %}</dt>
+            <dd style="margin: 0;" data-testid="aide-nature-VENTE">
+                {% translate "Ce que le lieu vend. 754000 (dons) et 756000 (cotisations) sont des comptes d'association : un bar en société utilise plutôt 706000 (prestations) et 707000 (marchandises)." %}
+            </dd>
+            <dt style="font-weight: 600;">{% translate "TVA" %}</dt>
+            <dd style="margin: 0;" data-testid="aide-nature-TVA">
+                {% translate "La TVA collectée sur les ventes : un compte par taux." %}
+            </dd>
+            <dt style="font-weight: 600;">{% translate "Trésorerie" %}</dt>
+            <dd style="margin: 0;" data-testid="aide-nature-TRESORERIE">
+                {% translate "Où l'argent arrive : caisse, chèques, carte bancaire, Stripe, banque." %}
+            </dd>
+            <dt style="font-weight: 600;">{% translate "Tiers" %}</dt>
+            <dd style="margin: 0;" data-testid="aide-nature-TIERS">
+                {% translate "Ce que le lieu doit ou ce qu'on lui doit : l'argent des cartes des clients, le réseau fédéré, le compte d'attente." %}
+            </dd>
+            <dt style="font-weight: 600;">{% translate "Charges" %}</dt>
+            <dd style="margin: 0;" data-testid="aide-nature-CHARGE">
+                {% translate "Ce que le lieu dépense : les cadeaux aux clients, l'argent reçu en moins à la caisse." %}
+            </dd>
+            <dt style="font-weight: 600;">{% translate "Écarts" %}</dt>
+            <dd style="margin: 0;" data-testid="aide-nature-PRODUIT_EXCEPTIONNEL">
+                {% translate "L'argent reçu en plus à la caisse." %}
+            </dd>
+            <dt style="font-weight: 600;">{% translate "Spécial" %}</dt>
+            <dd style="margin: 0;" data-testid="aide-nature-SPECIAL">
+                {% translate "Un compte à part, qui n'entre dans aucune autre nature." %}
+            </dd>
+        </dl>
+    {% endcomponent %}
+</div>

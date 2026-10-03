@@ -600,16 +600,17 @@ def seed_ventes_demo(*, reset=False):
         stats["cas_couverts"].append("12b) Soft monnaie locale euro (LE) TVA 5.5% - 40.00 EUR")
         stats["total_ttc_centimes"] += 10 * 400
 
-        # === Cas 12c : Sandwich x 10 paye en monnaie locale gift (LG) TVA 5.5% -> 60 EUR
-        # / Case 12c: Sandwich x 10 paid in local gift currency (LG) -> 60 EUR
+        # === Cas 12c : Sandwich x 10 paye en monnaie locale gift (LG), TVA 0 -> 60 EUR
+        # Une vente payee en jetons cadeau est une vente ordinaire, hors TVA (D8 bis).
+        # / Case 12c: Sandwich x 10 paid in gift tokens (LG), 0 % VAT -> 60 EUR
         l12c = _creer_lignearticle(
             pricesold=prix_sandwich, qty=Decimal("10"), amount_centimes=600,
-            vat=Decimal("5.50"), payment_method=PaymentMethod.LOCAL_GIFT,
+            vat=Decimal("0"), payment_method=PaymentMethod.LOCAL_GIFT,
             status=LigneArticle.VALID, sale_origin=SaleOrigin.NFC_MA,
             asset=uuid_lib.uuid4(),
         )
         lignes_creees_uuids.append(l12c.uuid)
-        stats["cas_couverts"].append("12c) Sandwich monnaie locale gift (LG) TVA 5.5% - 60.00 EUR")
+        stats["cas_couverts"].append("12c) Sandwich monnaie locale gift (LG) TVA 0% - 60.00 EUR")
         stats["total_ttc_centimes"] += 10 * 600
 
         # --- 3bis. PRIX LIBRE A 0 EUR (deux cas distincts pour valider la

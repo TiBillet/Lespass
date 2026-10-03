@@ -269,30 +269,43 @@ class TestTicketClientImprime(FastTenantTestCase):
     # Le formateur / The formatter
     # ------------------------------------------------------------------
 
-    def test_les_parts_d_un_article_sont_regroupees(self):
-        """3 vins payes 6 € cadeau + 9 € locale : une seule ligne « x3 15,00 ».
-        / 3 wines paid 6 € gift + 9 € local: a single "x3 15.00" line."""
+    def test_les_parts_d_un_article_sont_regroupees_par_taux(self):
+        """3 vins payes 6 € cadeau + 9 € locale. Les parts d'un article se regroupent
+        quand elles ont le meme taux de TVA. La part en jetons est a TVA 0 (D8 bis), la
+        part en monnaie locale a 20 % : deux lignes, « x1.20 6,00 » et « x1.80 9,00 ».
+        Le total du ticket reste 15,00 €.
+        / 3 wines paid 6 € gift + 9 € local: parts group by VAT rate; the token part is
+        at 0 %, the local part at 20 %: two lines, total 15.00 €."""
         carte = self._carte_avec_soldes("TKC1AAAA", solde_cadeau=600, solde_local=900)
         self._payer_par_carte(carte, self.vin, quantite=3, prix_centimes=500)
 
         ticket = self._ticket(self._lignes_du_paiement_de(carte))
 
-        assert len(ticket["articles"]) == 1, ticket["articles"]
-        article = ticket["articles"][0]
-        assert article["qty"] == 3
-        assert isinstance(article["qty"], int), type(article["qty"])
-        assert article["total"] == 1500
+        assert len(ticket["articles"]) == 2, ticket["articles"]
+        taux_quantites_et_totaux = []
+        for article in ticket["articles"]:
+            taux_quantites_et_totaux.append(
+                (article["vat_rate"], article["qty"], article["total"])
+            )
+        assert sorted(taux_quantites_et_totaux) == [
+            ("0.00", "1.20", 600),
+            ("20.00", "1.80", 900),
+        ]
         assert ticket["total"]["amount"] == 1500
 
     def test_une_part_inferieure_a_un_article_n_est_pas_perdue(self):
-        """Une bouteille a 10 € payee 2 € + 8 € : le ticket affiche 10,00 €.
-        / A 10 € bottle paid 2 € + 8 €: the receipt shows 10.00 €."""
+        """Une bouteille a 10 € payee 2 € cadeau + 8 € locale : deux lignes (TVA 0 pour
+        les jetons, D8 bis), 2,00 € et 8,00 € ; le ticket affiche 10,00 €.
+        / A 10 € bottle paid 2 € + 8 €: two lines (2.00 and 8.00), total 10.00 €."""
         carte = self._carte_avec_soldes("TKC2AAAA", solde_cadeau=200, solde_local=800)
         self._payer_par_carte(carte, self.bouteille, quantite=1, prix_centimes=1000)
 
         ticket = self._ticket(self._lignes_du_paiement_de(carte))
 
-        assert ticket["articles"][0]["total"] == 1000
+        totaux_des_lignes = []
+        for article in ticket["articles"]:
+            totaux_des_lignes.append(article["total"])
+        assert sorted(totaux_des_lignes) == [200, 800]
         assert ticket["total"]["amount"] == 1000
 
     def test_le_detail_donne_le_montant_paye_par_chaque_monnaie(self):
@@ -324,17 +337,22 @@ class TestTicketClientImprime(FastTenantTestCase):
         assert ticket["articles"][0]["total"] == 1000
         assert len(ticket["cascade_detail"]) == 1, ticket["cascade_detail"]
 
-    def test_la_tva_du_ticket_porte_sur_le_montant_entier(self):
-        """15 € TTC a 20 % : HT 12,50 €, TVA 2,50 €.
-        / 15 € incl. VAT at 20 %: 12.50 € HT, 2.50 € VAT."""
+    def test_la_tva_du_ticket_porte_sur_la_part_en_argent(self):
+        """15 € TTC, dont 6 € payes en jetons (TVA 0, D8 bis) et 9 € en monnaie
+        locale a 20 % : taux 0 HT 6,00 € ; taux 20 % HT 7,50 €, TVA 1,50 €.
+        / 15 € incl. VAT: 6 € in tokens at 0 %, 9 € at 20 % (7.50 HT, 1.50 VAT)."""
         carte = self._carte_avec_soldes("TKC5AAAA", solde_cadeau=600, solde_local=900)
         self._payer_par_carte(carte, self.vin, quantite=3, prix_centimes=500)
 
         ticket = self._ticket(self._lignes_du_paiement_de(carte))
 
-        assert ticket["tva_breakdown"] == [
-            {"rate": "20.00", "ht": 1250, "tva": 250, "ttc": 1500}
-        ]
+        tva_par_taux = {}
+        for ligne_de_tva in ticket["tva_breakdown"]:
+            tva_par_taux[ligne_de_tva["rate"]] = ligne_de_tva
+        assert tva_par_taux == {
+            "0.00": {"rate": "0.00", "ht": 600, "tva": 0, "ttc": 600},
+            "20.00": {"rate": "20.00", "ht": 750, "tva": 150, "ttc": 900},
+        }
 
     def test_le_detail_inclut_le_complement_en_especes(self):
         """Carte 6 € cadeau + 4 € locale, complement 5 € especes : trois moyens.

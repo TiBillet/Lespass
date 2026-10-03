@@ -151,7 +151,8 @@ def test_seed_total_ttc_correspond_aux_lignes_demo(seed_lespass):
 
 def test_seed_ventilation_tva_par_taux(seed_lespass):
     """
-    3 taux de TVA non nuls presents : 5.5%, 10%, 20% (et 0% pour les adhesions).
+    3 taux de TVA non nuls presents : 5.5%, 10%, 20% (et 0% pour les adhesions et la
+    vente payee en jetons cadeau).
     Les montants correspondent aux chiffres ronds prevus, calcules en filtrant
     sur les lignes [DEMO] uniquement (DB dev partagee).
     / 3 non-zero VAT rates present. Filter on [DEMO] to avoid pollution.
@@ -188,8 +189,9 @@ def test_seed_ventilation_tva_par_taux(seed_lespass):
     assert par_taux["20.00"] == 10000
     # Billets : 200+80+120+20 = 420 - 20 (avoir) = 400€ TTC à 10% / Tickets
     assert par_taux["10.00"] == 40000
-    # Food : 40 + 60 = 100€ TTC à 5.5% / Food
-    assert par_taux["5.50"] == 10000
+    # Food : 40€ TTC à 5.5% (le sandwich payé en jetons, 60€, est à TVA 0 : D8 bis)
+    # / Food: 40 € at 5.5 % (the 60 € sandwich paid in tokens is at 0 % VAT)
+    assert par_taux["5.50"] == 4000
 
 
 def test_seed_avoir_et_remboursement_distincts(seed_lespass):

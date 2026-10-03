@@ -18,11 +18,14 @@ local (`fedow_core`, en base) et sur l'ancien Fedow (serveur distant). Vider la 
    INCIDENT (montant, carte, uuid des transactions distantes) et affiche une erreur ;
 3. les espèces rendues = la monnaie locale du lieu + la monnaie fédérée (FED), sur les
    deux Fedow ; les jetons cadeau sont repris sur les deux Fedow, sans argent rendu ;
-4. une vente `VIDAGE_CARTE` sans article : un règlement POSITIF par transaction de
-   remboursement d'argent (monnaie locale `LE`, monnaie fédérée `SF` ; transaction
-   locale → `fedow_transaction_uuid`, transaction distante → `reference_externe`),
-   puis un règlement ESPÈCES de moins le total ; la somme des règlements vaut 0 ;
-   aucun règlement pour un jeton cadeau ;
+4. une vente `VIDAGE_CARTE` : un règlement POSITIF par transaction de remboursement
+   d'argent (monnaie locale `LE`, monnaie fédérée `SF` ; transaction locale →
+   `fedow_transaction_uuid`, transaction distante → `reference_externe`), puis un
+   règlement ESPÈCES de moins le total. Des jetons perdus annulent la dette du lieu
+   (D8 bis) : par transaction de jetons repris, un règlement « jetons » (LG) positif
+   (mêmes champs) et un article « Jetons cadeau repris au vidage » du même montant,
+   hors chiffre d'affaires, TVA 0, sans carte. Une carte qui n'a que des jetons écrit
+   aussi sa vente ;
 5. carte inconnue de l'ancien Fedow, ou lieu non relié à l'ancien Fedow : vidage local
    seul, comme aujourd'hui ;
 6. les lignes « Refund » (anciens lecteurs) comptent les deux Fedow : ligne de monnaie
@@ -34,8 +37,9 @@ local (`fedow_core`, en base) et sur l'ancien Fedow (serveur distant). Vider la 
    les montants postés par le navigateur : il relit chaque transaction.
 / One gesture empties both Fedow servers: the old one first, then the local one. Cash
 given back = local currency + FED on both; gift tokens taken back with no money. One
-`VIDAGE_CARTE` sale without item: one positive payment per money refund, then minus the
-total in cash. Unknown card or venue not linked: local only.
+`VIDAGE_CARTE` sale: one positive payment per money refund, then minus the total in
+cash; gift tokens write an LG payment and a "taken back" item (D8 bis). Unknown card or
+venue not linked: local only.
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-B-caisse.md (§5, « Vider une
 carte sur les DEUX Fedow » et « Décisions du mainteneur »).
@@ -90,7 +94,10 @@ from django_tenants.utils import tenant_context
 from AuthBillet.models import Wallet
 from BaseBillet.models import LigneArticle, PaymentMethod
 from BaseBillet.models_vente import Vente
-from BaseBillet.services_vente import EgaliteDeVenteRompue
+from BaseBillet.services_vente import (
+    NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE,
+    EgaliteDeVenteRompue,
+)
 from BaseBillet.templatetags.billet_filters import cents_to_euros
 from fabriques_panier import (
     configuration_modifiee,
@@ -709,21 +716,22 @@ def test_vider_carte_tlf_et_fed_deux_reglements(lieu):
 
 
 # --------------------------------------------------------------------------
-# 20b — Les jetons cadeau locaux sont repris, sans argent ni règlement
-# / 20b — Local gift tokens are taken back, with no money and no payment
+# 20b — Les jetons cadeau locaux sont repris, sans argent rendu, réglés « jetons »
+# / 20b — Local gift tokens are taken back, no money given back, LG payment
 # --------------------------------------------------------------------------
 
 
-def test_vider_carte_jetons_cadeau_locaux_repris_sans_argent(lieu):
+def test_vider_carte_jetons_cadeau_locaux_repris_sans_argent_reglement_lg(lieu):
     """
     Le lieu n'est pas relié à l'ancien Fedow. La carte porte 5,00 € de monnaie locale
     et 2,00 € de jetons cadeau du lieu, sur le Fedow local. Le caissier la vide.
     Les jetons cadeau disparaissent aussi (décision du mainteneur) : leur solde passe à
-    0, par une transaction de remboursement vers le lieu. Mais ils ne sont pas de
-    l'argent : aucun règlement pour eux, et le tiroir ne rend que 5,00 €
-    (règlement espèces −500, ligne espèces −500).
-    / Local 5.00 + gift 2.00. Gift tokens go to 0 through a REFUND transaction, with no
-    payment and no cash: cash −500.
+    0, par une transaction de remboursement vers le lieu. Le tiroir ne rend que 5,00 €
+    (règlement espèces −500, ligne espèces −500). La dette des jetons perdus est
+    annulée (D8 bis) : un règlement « jetons » (LG) +200, avec l'uuid de sa transaction
+    locale, et l'article « Jetons cadeau repris au vidage » de 200.
+    / Local 5.00 + gift 2.00. Gift tokens go to 0 through a REFUND transaction; cash
+    −500 only; the tokens write an LG +200 payment and a 200 "taken back" item.
     """
     caisse = preparer_la_caisse(lieu)
     monnaie_locale = monnaie_locale_propre_au_lieu(lieu)
@@ -746,8 +754,8 @@ def test_vider_carte_jetons_cadeau_locaux_repris_sans_argent(lieu):
     )
     assert remboursement_des_jetons_cadeau.amount == 200
 
-    # Aucun argent pour les jetons cadeau : ni règlement, ni espèces.
-    # / No money for gift tokens: no payment, no cash.
+    # Aucun argent rendu pour les jetons cadeau : leur règlement est « jetons ».
+    # / No money given back for gift tokens: their payment is LG.
     remboursement_en_monnaie_locale = remboursement_local_de_la_monnaie(
         carte_du_client, monnaie_locale
     )
@@ -760,11 +768,150 @@ def test_vider_carte_jetons_cadeau_locaux_repris_sans_argent(lieu):
                 str(remboursement_en_monnaie_locale.uuid),
                 "",
             ),
+            (
+                PaymentMethod.LOCAL_GIFT,
+                200,
+                str(remboursement_des_jetons_cadeau.uuid),
+                "",
+            ),
             (PaymentMethod.CASH, -500, None, ""),
         ],
         key=str,
     )
+    verifier_les_articles_des_jetons_repris(vente, montants_attendus=[200])
     assert lignes_refund_de_la_carte(carte_du_client) == [(PaymentMethod.CASH, -500)]
+    verifier_egalites(vente)
+
+
+# --------------------------------------------------------------------------
+# 20b bis — Les jetons repris au vidage sont écrits : article et règlement LG (D8 bis)
+# / 20b bis — Tokens taken back at emptying are written: item and LG payment (D8 bis)
+# --------------------------------------------------------------------------
+
+
+def verifier_les_articles_des_jetons_repris(vente, montants_attendus):
+    """
+    Vérifie les articles « Jetons cadeau repris au vidage » de la vente : un article
+    par transaction de jetons repris, quantité 1, prix = montant de la transaction,
+    hors chiffre d'affaires, TVA 0, rien d'offert (net = total catalogue), moyen
+    historique LG, sans carte ni monnaie.
+    / Checks the "gift tokens taken back" items: one per token transaction, qty 1,
+    price = its amount, off revenue, VAT 0, nothing offered, LG, no card, no currency.
+
+    Le nom du produit système est une constante du service de vente : le plan
+    comptable le reconnaît par ce nom (623400).
+    / The system product's name is a sale service constant (623400 by name).
+
+    :param montants_attendus: les montants des transactions de jetons (centimes)
+    """
+    montants_des_articles = []
+    for article in vente.articles.all():
+        produit_de_l_article = article.pricesold.productsold.product
+        assert produit_de_l_article.name == NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE
+        assert article.qty == 1
+        assert article.amount == article.total_catalogue
+        assert article.hors_chiffre_affaires is True
+        assert article.vat == 0
+        assert article.part_offerte == 0
+        assert article.total_ttc == article.total_catalogue
+        assert article.total_ht == article.total_catalogue
+        assert article.total_tva == 0
+        assert article.payment_method == PaymentMethod.LOCAL_GIFT
+        assert article.carte_id is None
+        assert article.asset is None
+        montants_des_articles.append(article.total_catalogue)
+    assert sorted(montants_des_articles) == sorted(montants_attendus)
+
+
+def test_vider_carte_jetons_ecrits_article_et_reglement_lg(lieu):
+    """
+    Le lieu est relié à l'ancien Fedow. La carte porte, sur le Fedow local, 5,00 € de
+    monnaie locale et 2,00 € de jetons cadeau ; sur l'ancien Fedow, 0,50 € de jetons
+    cadeau. Le caissier la vide.
+    Des jetons perdus annulent la dette du lieu (D8 bis) : le vidage écrit leur montant.
+    Pour chaque transaction de jetons repris :
+    - un règlement « jetons » (LG) POSITIF du montant, avec la monnaie et la carte, et
+      comme les autres règlements du vidage : l'uuid de la transaction locale dans
+      `fedow_transaction_uuid`, ou l'uuid de la transaction de l'ancien Fedow dans
+      `reference_externe` ;
+    - un article « Jetons cadeau repris au vidage » du même montant, hors chiffre
+      d'affaires, TVA 0, sans carte ni monnaie.
+    L'argent rendu ne change pas : monnaie locale (LE) +500, espèces −500.
+    Les deux égalités tiennent.
+    / Local 5.00 + local tokens 2.00, remote tokens 0.50. Each token transaction writes
+    a positive LG payment (currency, card, local uuid or remote reference) and an
+    off-revenue, 0-VAT item of the same amount. Cash unchanged: LE +500, cash −500.
+    """
+    caisse = preparer_la_caisse(lieu)
+    monnaie_locale = monnaie_locale_propre_au_lieu(lieu)
+    monnaie_cadeau = monnaie_cadeau_propre_au_lieu(lieu)
+    carte_du_client = creer_une_carte_client_sans_solde(lieu)
+    poser_un_solde_sur_la_carte(carte_du_client, monnaie_locale, 500)
+    poser_un_solde_sur_la_carte(carte_du_client, monnaie_cadeau, 200)
+    faux_ancien_fedow, transactions_distantes = ancien_fedow_simule(
+        carte_du_client, [("TNF", 50)]
+    )
+    transaction_distante_des_jetons = transactions_distantes[0]
+
+    reponse, _classe_fedow_api = vider_la_carte_a_la_caisse(
+        caisse, carte_du_client, faux_ancien_fedow, lieu_relie=True
+    )
+
+    assert reponse.status_code == 200
+    vente = retrouver_la_vente_de_vidage(carte_du_client)
+    assert vente.statut == Vente.Statut.REGLEE
+    remboursement_en_monnaie_locale = remboursement_local_de_la_monnaie(
+        carte_du_client, monnaie_locale
+    )
+    remboursement_des_jetons_locaux = remboursement_local_de_la_monnaie(
+        carte_du_client, monnaie_cadeau
+    )
+
+    assert reglements_de_la_vidange(vente) == sorted(
+        [
+            (
+                PaymentMethod.LOCAL_EURO,
+                500,
+                str(remboursement_en_monnaie_locale.uuid),
+                "",
+            ),
+            (
+                PaymentMethod.LOCAL_GIFT,
+                200,
+                str(remboursement_des_jetons_locaux.uuid),
+                "",
+            ),
+            (
+                PaymentMethod.LOCAL_GIFT,
+                50,
+                None,
+                str(transaction_distante_des_jetons["uuid"]),
+            ),
+            (PaymentMethod.CASH, -500, None, ""),
+        ],
+        key=str,
+    )
+
+    # Chaque règlement « jetons » porte la monnaie reprise et la carte.
+    # / Each token payment carries the currency taken back and the card.
+    monnaie_par_montant_des_jetons = {}
+    for reglement_des_jetons in vente.reglements.filter(
+        moyen=PaymentMethod.LOCAL_GIFT
+    ):
+        assert reglement_des_jetons.carte_id == carte_du_client.pk
+        monnaie_par_montant_des_jetons[reglement_des_jetons.montant] = str(
+            reglement_des_jetons.asset
+        )
+    assert monnaie_par_montant_des_jetons == {
+        200: str(monnaie_cadeau.uuid),
+        50: str(transaction_distante_des_jetons["asset"]),
+    }
+
+    verifier_les_articles_des_jetons_repris(vente, montants_attendus=[200, 50])
+    assert vente.total_catalogue == 250
+    assert vente.total_offert == 0
+    assert vente.total_ttc == 250
+    assert vente.total_tva == 0
     verifier_egalites(vente)
 
 
@@ -783,12 +930,14 @@ def test_vider_carte_ancien_fedow_et_local(lieu):
     son appel, rien n'est encore remboursé en local. Puis le Fedow local est vidé.
     La vente a un règlement par remboursement d'argent : LE +500 (transaction locale,
     `fedow_transaction_uuid`), LE +400 et SF +100 (transactions distantes, uuid dans
-    `reference_externe`), puis espèces −1000. Aucun règlement pour les jetons cadeau.
+    `reference_externe`), puis espèces −1000. Les jetons cadeau (sans argent rendu)
+    ont leur règlement « jetons » (LG) +50, uuid distant dans `reference_externe`, et
+    leur article « Jetons cadeau repris au vidage » de 50 (D8 bis).
     Aucun FED n'existe en local (comme en production) : la monnaie fédérée ne vient
     que de l'ancien Fedow.
     / Old Fedow: local 4.00 + FED 1.00 + gift 0.50; local Fedow: local 5.00. Old Fedow
     emptied FIRST. Payments LE +500 (local), LE +400 and SF +100 (remote, in
-    `reference_externe`), cash −1000. No payment for gift tokens.
+    `reference_externe`), cash −1000; the gift tokens: LG +50 (remote) and a 50 item.
     """
     caisse = preparer_la_caisse(lieu)
     monnaie_locale = monnaie_locale_propre_au_lieu(lieu)
@@ -799,6 +948,7 @@ def test_vider_carte_ancien_fedow_et_local(lieu):
     )
     transaction_distante_monnaie_locale = transactions_distantes[0]
     transaction_distante_monnaie_federee = transactions_distantes[1]
+    transaction_distante_des_jetons = transactions_distantes[2]
 
     # Ce que le Fedow local contient au moment où l'ancien Fedow est vidé : l'ordre de
     # la règle veut que rien ne soit encore remboursé en local.
@@ -833,7 +983,7 @@ def test_vider_carte_ancien_fedow_et_local(lieu):
 
     vente = retrouver_la_vente_de_vidage(carte_du_client)
     assert vente.statut == Vente.Statut.REGLEE
-    assert vente.articles.count() == 0
+    verifier_les_articles_des_jetons_repris(vente, montants_attendus=[50])
     assert reglements_de_la_vidange(vente) == sorted(
         [
             (
@@ -854,6 +1004,12 @@ def test_vider_carte_ancien_fedow_et_local(lieu):
                 None,
                 str(transaction_distante_monnaie_federee["uuid"]),
             ),
+            (
+                PaymentMethod.LOCAL_GIFT,
+                50,
+                None,
+                str(transaction_distante_des_jetons["uuid"]),
+            ),
             (PaymentMethod.CASH, -1000, None, ""),
         ],
         key=str,
@@ -872,6 +1028,9 @@ def test_vider_carte_ancien_fedow_et_local(lieu):
         ),
         str(transaction_distante_monnaie_federee["uuid"]): str(
             transaction_distante_monnaie_federee["asset"]
+        ),
+        str(transaction_distante_des_jetons["uuid"]): str(
+            transaction_distante_des_jetons["asset"]
         ),
     }
     verifier_egalites(vente)
@@ -1490,29 +1649,33 @@ def test_vider_carte_vide_en_local_avec_solde_ancien_fedow(lieu):
 
 
 # --------------------------------------------------------------------------
-# 20j — Seulement des jetons cadeau : repris sur les deux Fedow, aucune vente
-# / 20j — Only gift tokens: taken back on both Fedow servers, no sale
+# 20j — Seulement des jetons cadeau : repris sur les deux Fedow, une vente (D8 bis)
+# / 20j — Only gift tokens: taken back on both Fedow servers, one sale (D8 bis)
 # --------------------------------------------------------------------------
 
 
-def test_vider_carte_seulement_jetons_cadeau_aucune_vente(lieu):
+def test_vider_carte_seulement_jetons_ecrit_une_vente(lieu):
     """
     Le lieu est relié à l'ancien Fedow. La carte ne porte que des jetons cadeau :
     2,00 € sur le Fedow local, 0,50 € sur l'ancien Fedow. Aucun argent n'est rendu.
     Les jetons sont repris sur les deux Fedow (le local par une transaction de
-    remboursement vers le lieu), mais AUCUNE vente n'est écrite (décision du
-    mainteneur) : ni article, ni règlement. Aucune ligne « Refund » non plus : il n'y
-    a aucun argent à compter pour l'ancien Z. La trace reste dans les transactions.
-    / Only gift tokens (2.00 local, 0.50 remote): taken back on both, no sale, no
-    Refund line. The trace stays in the transactions.
+    remboursement vers le lieu). Des jetons perdus annulent la dette du lieu (D8 bis) :
+    une vente `VIDAGE_CARTE` est écrite et encaissée, même sans argent. Elle a, par
+    transaction de jetons repris, un article « Jetons cadeau repris au vidage » et un
+    règlement « jetons » (LG) du même montant ; aucun règlement espèces. Aucune ligne
+    « Refund » (anciens lecteurs) : l'article ne porte pas la carte.
+    / Only gift tokens (2.00 local, 0.50 remote): taken back on both; a settled
+    `VIDAGE_CARTE` sale is written, one item and one LG payment per token transaction,
+    no cash payment, no Refund line.
     """
     caisse = preparer_la_caisse(lieu)
     monnaie_cadeau = monnaie_cadeau_propre_au_lieu(lieu)
     carte_du_client = creer_une_carte_client_sans_solde(lieu)
     poser_un_solde_sur_la_carte(carte_du_client, monnaie_cadeau, 200)
-    faux_ancien_fedow, _transactions_distantes = ancien_fedow_simule(
+    faux_ancien_fedow, transactions_distantes = ancien_fedow_simule(
         carte_du_client, [("TNF", 50)]
     )
+    transaction_distante_des_jetons = transactions_distantes[0]
 
     reponse, _classe_fedow_api = vider_la_carte_a_la_caisse(
         caisse, carte_du_client, faux_ancien_fedow, lieu_relie=True
@@ -1526,10 +1689,30 @@ def test_vider_carte_seulement_jetons_cadeau_aucune_vente(lieu):
         carte_du_client, monnaie_cadeau
     )
     assert remboursement_des_jetons_cadeau.amount == 200
-    assert not Vente.objects.filter(
-        nature=Vente.Nature.VIDAGE_CARTE, carte=carte_du_client
-    ).exists()
+
+    vente = retrouver_la_vente_de_vidage(carte_du_client)
+    assert vente.statut == Vente.Statut.REGLEE
+    assert vente.numero is not None
+    assert reglements_de_la_vidange(vente) == sorted(
+        [
+            (
+                PaymentMethod.LOCAL_GIFT,
+                200,
+                str(remboursement_des_jetons_cadeau.uuid),
+                "",
+            ),
+            (
+                PaymentMethod.LOCAL_GIFT,
+                50,
+                None,
+                str(transaction_distante_des_jetons["uuid"]),
+            ),
+        ],
+        key=str,
+    )
+    verifier_les_articles_des_jetons_repris(vente, montants_attendus=[200, 50])
     assert not LigneArticle.objects.filter(carte=carte_du_client).exists()
+    verifier_egalites(vente)
 
 
 # --------------------------------------------------------------------------

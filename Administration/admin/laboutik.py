@@ -10,6 +10,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from django.db import connection
+from django.db.models import Case, IntegerField, Value, When
 from django.shortcuts import get_object_or_404
 from django.utils.html import format_html
 from django.utils import timezone
@@ -42,8 +43,15 @@ from laboutik.models import (
     JournalOperation,
     HistoriqueFondDeCaisse,
     CompteComptable,
+    MappingMonnaie,
     MappingMoyenDePaiement,
 )
+from laboutik.plan_comptable import (
+    ce_qui_manque_pour_exporter,
+    monnaies_acceptees_par_le_lieu,
+    nom_de_la_monnaie,
+)
+from unfold.widgets import UnfoldAdminSelectWidget
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +173,7 @@ class PointDeVenteAdmin(ModelAdmin):
                 'comportement',
                 'poid_liste',
                 'hidden',
+                'code_journal',
             ),
         }),
         (_('Options'), {
@@ -1792,12 +1801,42 @@ class HistoriqueFondDeCaisseAdmin(ModelAdmin):
 # --- Plan comptable (export comptable) ---
 # --- Chart of accounts (accounting export) ---
 
+# L'ordre des natures dans la liste du plan : celui des phrases d'aide de l'ecran
+# (Administration/templates/admin/comptable/changelist_before.html), ventes d'abord.
+# Les deux doivent rester dans le meme ordre.
+# / Nature order in the plan list: the one of the screen's help sentences.
+ORDRE_DES_NATURES_COMME_L_AIDE = [
+    CompteComptable.VENTE,
+    CompteComptable.TVA,
+    CompteComptable.TRESORERIE,
+    CompteComptable.TIERS,
+    CompteComptable.CHARGE,
+    CompteComptable.PRODUIT_EXCEPTIONNEL,
+    CompteComptable.SPECIAL,
+]
+
+# Le rang de la nature d'un compte dans cet ordre, calcule par la base (Case/When).
+# Une nature inconnue passe en dernier.
+# / The rank of an account's nature in that order, computed by the database.
+conditions_du_rang_de_la_nature = []
+for rang_de_la_nature, nature_du_compte in enumerate(ORDRE_DES_NATURES_COMME_L_AIDE):
+    conditions_du_rang_de_la_nature.append(
+        When(nature_du_compte=nature_du_compte, then=Value(rang_de_la_nature))
+    )
+RANG_DE_LA_NATURE_COMME_L_AIDE = Case(
+    *conditions_du_rang_de_la_nature,
+    default=Value(len(ORDRE_DES_NATURES_COMME_L_AIDE)),
+    output_field=IntegerField(),
+)
+
+
 @admin.register(CompteComptable, site=staff_admin_site)
 class CompteComptableAdmin(ModelAdmin):
     """Admin CRUD pour les comptes du Plan Comptable General (PCG).
-    Bandeau « Charger un plan comptable » en haut de la liste.
-    CRUD admin for the French Chart of Accounts (PCG) entries.
-    "Load a chart of accounts" banner at the top of the list.
+    En haut de la liste : « Plan complet ? », le bandeau « Charger le plan par
+    defaut » et une phrase d'aide par nature de compte. Liste regroupee par nature.
+    / CRUD admin for the chart of accounts. On top: "Complete plan?", the "Load the
+    default plan" banner and one help sentence per account nature. Grouped by nature.
     LOCALISATION : Administration/admin/laboutik.py"""
     compressed_fields = True
     warn_unsaved_form = True
@@ -1805,15 +1844,20 @@ class CompteComptableAdmin(ModelAdmin):
     list_display = ('numero_de_compte', 'libelle_du_compte', 'nature_du_compte', 'taux_de_tva', 'est_actif')
     list_filter = ('nature_du_compte', 'est_actif')
     search_fields = ('numero_de_compte', 'libelle_du_compte')
-    ordering = ('numero_de_compte',)
+    # Regroupee par nature, dans l'ordre des phrases d'aide (ventes d'abord) : les
+    # comptes d'une meme nature se suivent.
+    # / Grouped by nature, in the help sentences' order (sales first).
+    ordering = (RANG_DE_LA_NATURE_COMME_L_AIDE.asc(), 'numero_de_compte')
 
     list_before_template = "admin/comptable/changelist_before.html"
 
     def changelist_view(self, request, extra_context=None):
-        """Injecte l'URL pour charger un plan comptable par defaut.
-        / Injects the URL to load a default chart of accounts."""
+        """Injecte l'URL pour charger le plan par defaut et les manques de
+        « Plan complet ? ».
+        / Injects the default plan loading URL and the "Complete plan?" items."""
         extra_context = extra_context or {}
         extra_context['charger_plan_url'] = '/laboutik/caisse/charger-plan-comptable/'
+        extra_context['manques_du_plan'] = ce_qui_manque_pour_exporter()
         return super().changelist_view(request, extra_context)
 
     def has_add_permission(self, request):
@@ -1856,6 +1900,15 @@ class MappingMoyenDePaiementAdmin(ModelAdmin):
     list_display = (_display_moyen_paiement, 'libelle_moyen', 'compte_de_tresorerie')
     autocomplete_fields = ['compte_de_tresorerie']
 
+    list_before_template = "admin/comptable/moyens_changelist_before.html"
+
+    def changelist_view(self, request, extra_context=None):
+        """Injecte les manques de « Plan complet ? ».
+        / Injects the "Complete plan?" items."""
+        extra_context = extra_context or {}
+        extra_context['manques_du_plan'] = ce_qui_manque_pour_exporter()
+        return super().changelist_view(request, extra_context)
+
     def get_form(self, request, obj=None, **kwargs):
         """
         Remplace le champ texte libre 'moyen_de_paiement' par un menu deroulant
@@ -1880,6 +1933,134 @@ class MappingMoyenDePaiementAdmin(ModelAdmin):
                 choices=choix_des_moyens,
             )
         return form
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+# --- Comptes des monnaies (un compte par monnaie) ---
+# --- Currency accounts (one account per currency) ---
+
+# Les natures de compte qu'on peut donner a une monnaie : la ou l'argent arrive
+# (tresorerie) ou ce que le lieu doit / ce qu'on lui doit (tiers).
+# / Account natures a currency may take: treasury or third party.
+NATURES_DU_COMPTE_D_UNE_MONNAIE = [CompteComptable.TRESORERIE, CompteComptable.TIERS]
+
+
+def _nom_de_la_monnaie_de_la_correspondance(correspondance):
+    """Le nom lisible de la monnaie d'une correspondance (deux moteurs).
+    / The readable name of a mapping's currency."""
+    return nom_de_la_monnaie(correspondance.asset_uuid)
+_nom_de_la_monnaie_de_la_correspondance.short_description = _("Monnaie")
+
+
+class MappingMonnaieForm(forms.ModelForm):
+    """
+    Formulaire du compte d'une monnaie : la monnaie se choisit dans la liste des
+    monnaies acceptees par le lieu, pas en tapant son uuid.
+    / Currency account form: the currency is picked among the venue's accepted
+    currencies, not typed as a uuid.
+
+    LOCALISATION : Administration/admin/laboutik.py
+    """
+
+    class Meta:
+        model = MappingMonnaie
+        fields = ['asset_uuid', 'compte_de_tresorerie']
+        # Une monnaie n'a qu'un compte (`asset_uuid` unique) : le doublon recoit une
+        # phrase pour un benevole, pas le message de Django.
+        # / One account per currency: the duplicate gets a plain sentence.
+        error_messages = {
+            'asset_uuid': {
+                'unique': _("Cette monnaie a déjà son compte : modifiez la ligne existante."),
+            },
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        uuids_acceptes = []
+        choix_des_monnaies = [('', '---')]
+        for ligne_de_la_monnaie in monnaies_acceptees_par_le_lieu():
+            uuid_en_texte = str(ligne_de_la_monnaie['uuid'])
+            uuids_acceptes.append(uuid_en_texte)
+            choix_des_monnaies.append((
+                uuid_en_texte,
+                f"{ligne_de_la_monnaie['nom']} ({ligne_de_la_monnaie['origine']})",
+            ))
+
+        # Une correspondance existante garde sa monnaie dans la liste, meme si le
+        # lieu ne l'accepte plus : sinon elle ne pourrait plus etre modifiee.
+        # / An existing mapping keeps its currency in the list, even if no longer
+        # accepted: otherwise it could not be edited anymore.
+        monnaie_actuelle = self.instance.asset_uuid
+        if monnaie_actuelle is not None and str(monnaie_actuelle) not in uuids_acceptes:
+            choix_des_monnaies.append(
+                (str(monnaie_actuelle), nom_de_la_monnaie(monnaie_actuelle))
+            )
+            uuids_acceptes.append(str(monnaie_actuelle))
+
+        self.uuids_acceptes = uuids_acceptes
+        self.fields['asset_uuid'].widget = UnfoldAdminSelectWidget(
+            choices=choix_des_monnaies,
+        )
+        self.fields['asset_uuid'].label = _("Monnaie")
+
+    def clean_asset_uuid(self):
+        """Refuse une monnaie que le lieu n'accepte pas.
+        / Refuses a currency the venue does not accept."""
+        monnaie_choisie = self.cleaned_data['asset_uuid']
+        if str(monnaie_choisie) not in self.uuids_acceptes:
+            raise ValidationError(_("Choisissez une monnaie acceptée par le lieu."))
+        return monnaie_choisie
+
+
+@admin.register(MappingMonnaie, site=staff_admin_site)
+class MappingMonnaieAdmin(ModelAdmin):
+    """
+    Admin « Comptes des monnaies » : le compte de chaque monnaie.
+    En haut de la liste : « Plan complet ? » et une ligne par monnaie acceptee par le
+    lieu, avec son origine et son compte ; une monnaie sans compte est en orange.
+    / "Currency accounts" admin. On top: "Complete plan?" and one row per accepted
+    currency, with origin and account; a currency without account is flagged.
+
+    LOCALISATION : Administration/admin/laboutik.py
+    """
+    form = MappingMonnaieForm
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = (_nom_de_la_monnaie_de_la_correspondance, 'compte_de_tresorerie')
+
+    list_before_template = "admin/comptable/monnaies_changelist_before.html"
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # INDISPENSABLE : c'est le queryset du champ qui VALIDE la valeur postee.
+        # Seuls les comptes de tresorerie ou de tiers sont proposes et acceptes.
+        # / The field queryset VALIDATES the posted value: treasury or third-party
+        # accounts only.
+        if db_field.name == 'compte_de_tresorerie':
+            kwargs['queryset'] = CompteComptable.objects.filter(
+                nature_du_compte__in=NATURES_DU_COMPTE_D_UNE_MONNAIE,
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def changelist_view(self, request, extra_context=None):
+        """Injecte les monnaies acceptees par le lieu et les manques de
+        « Plan complet ? ».
+        / Injects the accepted currencies and the "Complete plan?" items."""
+        extra_context = extra_context or {}
+        extra_context['manques_du_plan'] = ce_qui_manque_pour_exporter()
+        extra_context['lignes_des_monnaies'] = monnaies_acceptees_par_le_lieu()
+        return super().changelist_view(request, extra_context)
 
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)

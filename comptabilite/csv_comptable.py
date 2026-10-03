@@ -13,21 +13,26 @@ Pipeline :
 2. Rendre selon le mode_montant du profil
 3. Encoder selon encodage du profil
 
+Les comptes viennent du plan de la caisse (`laboutik.CompteComptable`,
+`laboutik.MappingMoyenDePaiement`) : un seul plan par lieu.
+/ Accounts come from the register's plan: one single plan per venue.
+
 Retourne (bytes, filename, content_type, avertissements).
 """
 import csv
 import io
+from decimal import Decimal
 
 from comptabilite.profils_csv import PROFILS
+from laboutik.models import CompteComptable, MappingMoyenDePaiement
+from laboutik.plan_comptable_par_defaut import COMPTE_PAR_DEFAUT
 
 
-# Comptes par defaut si MappingMoyenDePaiement ou CompteComptable manquent
-# (defense en profondeur — le seed normalement les cree tous).
-# / Default accounts if mapping/compte missing (defense in depth).
+# Comptes de repli si une correspondance ou un compte de TVA manquent.
+# Les billets et les adhesions prennent les numeros de COMPTE_PAR_DEFAUT.
+# / Fallback accounts if a mapping or a VAT account is missing.
 COMPTES_DEFAUT = {
     "banque": "512000",
-    "ventes_billets": "706000",
-    "ventes_adhesions": "756000",
     "tva_55": "4457100",
     "tva_10": "4457200",
     "tva_20": "4457300",
@@ -51,7 +56,6 @@ def _construire_ecritures(cloture):
     / Computes the dispatch of accounting entries. Returns (lines, warnings,
     date, ref).
     """
-    from comptabilite.models import CompteComptable, MappingMoyenDePaiement
     rapport = cloture.rapport_json or {}
     lignes = []
     avertissements = []
@@ -73,11 +77,17 @@ def _construire_ecritures(cloture):
             continue
         # Chercher le mapping
         # / Look up the mapping
-        mapping = MappingMoyenDePaiement.objects.filter(payment_method=code).first()
-        if mapping:
-            compte = mapping.compte
-            compte_num = compte.numero
-            compte_lib = compte.libelle
+        # Une correspondance au compte vide compte comme absente.
+        # / A mapping with an empty account counts as missing.
+        mapping = (
+            MappingMoyenDePaiement.objects.select_related("compte_de_tresorerie")
+            .filter(moyen_de_paiement=code)
+            .first()
+        )
+        if mapping and mapping.compte_de_tresorerie:
+            compte = mapping.compte_de_tresorerie
+            compte_num = compte.numero_de_compte
+            compte_lib = compte.libelle_du_compte
         else:
             avertissements.append(
                 f"Aucun mapping pour PaymentMethod '{code}' — compte 512000 utilisé par défaut."
@@ -111,9 +121,10 @@ def _construire_ecritures(cloture):
         # / Estimate HT from ratio; guard against zero division with "or 1".
         ratio = total_billets_ttc / (cloture.total_general or 1) if cloture.total_general else 1
         ht_billets = int(round(cloture.total_ht * ratio)) if cloture.total_ht else total_billets_ttc
-        compte = CompteComptable.objects.filter(numero=COMPTES_DEFAUT["ventes_billets"]).first()
-        compte_num = compte.numero if compte else COMPTES_DEFAUT["ventes_billets"]
-        compte_lib = compte.libelle if compte else "Prestations - Billets"
+        numero_des_billets = COMPTE_PAR_DEFAUT["prestations"]
+        compte = CompteComptable.objects.filter(numero_de_compte=numero_des_billets).first()
+        compte_num = compte.numero_de_compte if compte else numero_des_billets
+        compte_lib = compte.libelle_du_compte if compte else "Prestations - Billets"
         lignes.append({
             "compte_num": compte_num,
             "compte_lib": compte_lib,
@@ -127,9 +138,10 @@ def _construire_ecritures(cloture):
     if total_adhesions_ttc:
         ratio = total_adhesions_ttc / (cloture.total_general or 1) if cloture.total_general else 1
         ht_adhesions = int(round(cloture.total_ht * ratio)) if cloture.total_ht else total_adhesions_ttc
-        compte = CompteComptable.objects.filter(numero=COMPTES_DEFAUT["ventes_adhesions"]).first()
-        compte_num = compte.numero if compte else COMPTES_DEFAUT["ventes_adhesions"]
-        compte_lib = compte.libelle if compte else "Cotisations - Adhésions"
+        numero_des_adhesions = COMPTE_PAR_DEFAUT["cotisations"]
+        compte = CompteComptable.objects.filter(numero_de_compte=numero_des_adhesions).first()
+        compte_num = compte.numero_de_compte if compte else numero_des_adhesions
+        compte_lib = compte.libelle_du_compte if compte else "Cotisations - Adhésions"
         lignes.append({
             "compte_num": compte_num,
             "compte_lib": compte_lib,
@@ -153,9 +165,15 @@ def _construire_ecritures(cloture):
             compte_key = "tva_10"
         else:
             compte_key = "tva_20"
-        compte = CompteComptable.objects.filter(numero=COMPTES_DEFAUT[compte_key]).first()
-        compte_num = compte.numero if compte else COMPTES_DEFAUT[compte_key]
-        compte_lib = compte.libelle if compte else f"TVA collectée {taux_float}%"
+        # Le compte de TVA est cherché par son TAUX, jamais par son numéro : chaque
+        # lieu peut avoir ses propres numéros. Le repli garde l'ancien numéro.
+        # / The VAT account is looked up by its RATE, never by its number.
+        compte = CompteComptable.objects.filter(
+            nature_du_compte=CompteComptable.TVA,
+            taux_de_tva=Decimal(str(item.get("taux", 0))),
+        ).first()
+        compte_num = compte.numero_de_compte if compte else COMPTES_DEFAUT[compte_key]
+        compte_lib = compte.libelle_du_compte if compte else f"TVA collectée {taux_float}%"
         lignes.append({
             "compte_num": compte_num,
             "compte_lib": compte_lib,

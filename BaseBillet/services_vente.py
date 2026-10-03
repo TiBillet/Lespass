@@ -56,23 +56,28 @@ from laboutik.models import LaboutikConfiguration
 
 logger = logging.getLogger(__name__)
 
-# Les moyens « offerts » : ils gardent la trace d'un cadeau (jetons des bénévoles,
-# bouton OFFRIR), mais ce n'est pas de l'argent encaissé. Un règlement « offert » compte
-# dans « Σ règlements = Σ totaux catalogue », pas dans « Σ règlements = Σ nets vendus ».
+# Les moyens « offerts » : ils gardent la trace d'un cadeau (bouton OFFRIR, recharge
+# cadeau), mais ce n'est pas de l'argent encaissé. Un règlement « offert » compte dans
+# « Σ règlements = Σ totaux catalogue », pas dans « Σ règlements = Σ nets vendus ».
 # FREE vaut "NA" en base.
-# / "Offered" payment methods: a trace of a gift, not collected money.
-MOYENS_OFFERTS = [PaymentMethod.LOCAL_GIFT, PaymentMethod.FREE]
+# Les jetons cadeau (LG) n'en font PAS partie : un jeton dépensé solde la dette du lieu
+# envers le porteur (D8 bis). Son règlement est un vrai règlement, il compte dans les
+# deux égalités.
+# / "Offered" payment methods: a trace of a gift, not collected money. Gift tokens (LG)
+# are NOT offered: a spent token settles the venue's debt (D8 bis).
+MOYENS_OFFERTS = [PaymentMethod.FREE]
 
 # Les moyens qui ne sont pas des encaissements, pour les rapports : les moyens offerts,
 # et les points ou le temps (NM), qui ne sont pas de l'argent.
-# / Payment methods that are not collections, for the reports: offered, and points (NM).
+# TODO fiche H : aucun lecteur, à retirer.
+# / Payment methods that are not collections. TODO sheet H: no reader, to remove.
 MOYENS_HORS_ENCAISSEMENT = MOYENS_OFFERTS + [PaymentMethod.NON_MONETAIRE]
 
 # Les méthodes de caisse d'un produit dont la vente est hors chiffre d'affaires :
 # recharges (euros, cadeau, temps), virement du pot central, fidélité. Hors chiffre
 # d'affaires ne veut pas dire invisible : ces articles restent dans le Z et le FEC.
-# La catégorie RECHARGE_CASHLESS (recharge par l'API v2, sans méthode de caisse) est
-# aussi hors chiffre d'affaires : voir `ajouter_article`.
+# Les catégories RECHARGE_CASHLESS et RECHARGE_CASHLESS_FED (recharges en ligne, sans
+# méthode de caisse) sont aussi hors chiffre d'affaires : voir `ajouter_article`.
 # / POS methods whose sale is off revenue (still visible in the Z report and the FEC).
 METHODES_CAISSE_HORS_CHIFFRE_AFFAIRES = [
     Product.RECHARGE_EUROS,
@@ -94,6 +99,14 @@ NATURES_SANS_ARTICLE_ACCEPTEES = [Vente.Nature.VIDAGE_CARTE, Vente.Nature.CORREC
 # otherwise `get_or_create` would create one product per language.
 NOM_ECART_RECU_EN_PLUS = "Écart d'encaissement — reçu en plus"
 NOM_ECART_RECU_EN_MOINS = "Écart d'encaissement — reçu en moins"
+
+# Le nom du produit système des jetons cadeau repris au vidage d'une carte (et de sa
+# catégorie). Une DONNÉE, jamais `_()`, pour la même raison que les écarts. Le plan
+# comptable le reconnaît par ce nom (623400 : la dette des jetons perdus est annulée,
+# D8 bis) ; `laboutik/plan_comptable_par_defaut.py` en garde une copie.
+# / Name of the "gift tokens taken back at card emptying" system product: DATA, never
+# `_()`. The chart of accounts recognises it by this name (623400).
+NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE = "Jetons cadeau repris au vidage"
 
 
 class EgaliteDeVenteRompue(Exception):
@@ -474,10 +487,14 @@ def ajouter_article(
     # 4. Hors chiffre d'affaires : figé ici, depuis le produit tel qu'il est
     # maintenant. Un changement ultérieur du produit ne change pas la ligne.
     # / 4. Off revenue: frozen now, from the product as it is today.
+    # Une recharge n'est jamais une vente : les deux recharges en ligne (`R` cashless,
+    # `E` FED) sont hors chiffre d'affaires, comme les recharges de caisse.
+    # / A top-up is never a sale: both online top-ups (R, E) are off revenue.
     produit_vendu = pricesold.productsold.product
     produit_hors_chiffre_affaires = (
         produit_vendu.methode_caisse in METHODES_CAISSE_HORS_CHIFFRE_AFFAIRES
-        or produit_vendu.categorie_article == Product.RECHARGE_CASHLESS
+        or produit_vendu.categorie_article
+        in [Product.RECHARGE_CASHLESS, Product.RECHARGE_CASHLESS_FED]
     )
     ligne_hors_chiffre_affaires = hors_chiffre_affaires or produit_hors_chiffre_affaires
 
@@ -674,15 +691,52 @@ def ligne_entierement_offerte(ligne):
       à 0. Même règle que celle d'`ajouter_article` (retirée en fiche H).
     / By its amounts (offered = catalogue, non-zero) or by its historical FREE method.
 
-    Lue par l'écran « Émettre un avoir » et par l'écran d'annulation des actions admin
-    (Administration/admin_tenant.py) : sans argent à rendre, pas de champ « Remboursé par ».
-    / Read by the admin screens: no money to give back, no "Refunded by" field.
+    Lue par `ligne_sans_argent_a_rendre` (ce module).
+    / Read by `ligne_sans_argent_a_rendre`.
     """
     ligne_offerte_par_ses_montants = (
         ligne.total_catalogue != 0 and ligne.part_offerte == ligne.total_catalogue
     )
     ligne_offerte_par_son_moyen = ligne.payment_method == PaymentMethod.FREE
     return ligne_offerte_par_ses_montants or ligne_offerte_par_son_moyen
+
+
+def ligne_payee_en_jetons(ligne):
+    """
+    Dit si une ligne vendue a été payée en jetons cadeau.
+    / Tells whether a sold line was paid in gift tokens.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    Reconnue par son moyen historique « jetons » (LG) jusqu'à la fiche H.
+    / Recognised by its historical LG method until sheet H.
+    """
+    return ligne.payment_method == PaymentMethod.LOCAL_GIFT
+
+
+def ligne_sans_argent_a_rendre(ligne):
+    """
+    Dit si l'avoir d'une ligne vendue ne rend aucun argent : la ligne a été entièrement
+    offerte, ou payée en jetons cadeau.
+    / Tells whether a sold line's credit note gives no money back: fully offered, or
+    paid in gift tokens.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    Une part payée en jetons est une vente ordinaire (D8 bis), mais l'avoir rend la
+    dette au lieu, pas de l'argent ni les jetons (règlement « jetons » négatif, aucun
+    recrédit de la carte).
+    / A token part is an ordinary sale, but its credit note gives back the debt, not
+    money nor tokens.
+
+    Lue par les écrans qui décident d'afficher le champ « Remboursé par » : l'écran
+    « Émettre un avoir » et l'écran d'annulation des actions admin
+    (Administration/admin_tenant.py), le formulaire d'annulation d'adhésion
+    (BaseBillet/views.py), et les messages d'annulation de l'utilisateur
+    (BaseBillet/models.py, booking/models.py).
+    / Read by the screens that decide whether to show the "Refunded by" field.
+    """
+    return ligne_entierement_offerte(ligne) or ligne_payee_en_jetons(ligne)
 
 
 # Les moyens proposés par le champ « Remboursé par » : de l'argent rendu à la main. Le
@@ -767,7 +821,10 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
     2. vente AVOIR, origine `origine`, liée à la vente de la ligne (vide pour une ligne
        d'avant le chantier), client = celui de la vente liée ;
     3. l'article d'avoir : `ajouter_l_article_d_avoir` ;
-    4. UN règlement d'argent du net rendu, s'il n'est pas nul :
+    4. UN règlement du net rendu, s'il n'est pas nul :
+       - ligne payée en jetons cadeau (LG) : un règlement « jetons » négatif, avec la
+         monnaie et la carte de la ligne ; aucun moyen demandé, aucun recrédit de la
+         carte (la dette revient, les jetons ne reviennent pas) ;
        - ligne payée par Stripe : au moyen Stripe d'origine, relié au paiement, sans
          référence externe (aucun appel à Stripe : l'admin rembourse depuis Stripe) ;
        - sinon : au moyen `moyen_rembourse` (« Remboursé par »), obligatoire ici ;
@@ -776,9 +833,9 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
     6. `encaisser_vente` ;
     7. PUIS la transition CREDIT_NOTE par `save()` : elle déclenche l'envoi à l'ancien
        LaBoutik (BaseBillet/signals.py).
-    / Refuse an unsettled original sale; AVOIR sale; mirrored item; one money payment
-    (original Stripe method, or the chosen one); one FREE payment for the offered part;
-    settle; THEN CREDIT_NOTE.
+    / Refuse an unsettled original sale; AVOIR sale; mirrored item; one payment (LG for a
+    token line, the original Stripe method, or the chosen one); one FREE payment for the
+    offered part; settle; THEN CREDIT_NOTE.
 
     Refuse (ValueError, rien n'est écrit) : vente d'origine pas réglée ; quantité plus
     grande que ce qui reste à rendre ; argent hors Stripe à rendre sans moyen ; toute
@@ -789,7 +846,8 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
     :param ligne: la `LigneArticle` vendue (VALID ou PAID)
     :param quantite: la quantité rendue (Decimal), positive, au plus celle de la ligne
     :param moyen_rembourse: `PaymentMethod` de l'argent rendu (espèces, CB, chèque,
-        virement), ou None quand il n'y a pas d'argent hors Stripe à rendre
+        virement), ou None quand il n'y a pas d'argent hors Stripe à rendre (ligne
+        offerte, payée en jetons)
     :param origine: `SaleOrigin` de la vente AVOIR (ADMIN pour l'admin)
     :return: la `LigneArticle` d'avoir, au statut CREDIT_NOTE
     """
@@ -837,10 +895,23 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
         # 3. L'article d'avoir. / 3. The credit note item.
         article_d_avoir = ajouter_l_article_d_avoir(vente_d_avoir, ligne, quantite)
 
-        # 4. UN règlement d'argent, du net rendu, s'il n'est pas nul.
-        # / 4. ONE money payment, of the net given back, if not zero.
+        # 4. UN règlement du net rendu, s'il n'est pas nul.
+        # Ligne payée en jetons : un règlement « jetons » (LG) négatif, avec la monnaie
+        # et la carte de la ligne. Aucun argent n'est rendu et la carte n'est pas
+        # recréditée : la dette du lieu revient, les jetons ne reviennent pas.
+        # Sinon : un règlement d'argent.
+        # / 4. ONE payment of the net given back. Token line: a negative LG payment,
+        # no money, no credit back on the card. Otherwise: a money payment.
         net_rendu = article_d_avoir.total_ttc
-        if net_rendu != 0:
+        if net_rendu != 0 and ligne_payee_en_jetons(ligne):
+            ajouter_reglement(
+                vente_d_avoir,
+                moyen=PaymentMethod.LOCAL_GIFT,
+                montant=net_rendu,
+                asset=ligne.asset,
+                carte=ligne.carte,
+            )
+        elif net_rendu != 0:
             if not moyen_de_l_argent_rendu:
                 raise ValueError(
                     "De l'argent est à rendre : le moyen « Remboursé par » est "
@@ -1175,42 +1246,67 @@ def tarif_vendu_d_ecart_d_encaissement(nom_du_produit):
 
     LOCALISATION : BaseBillet/services_vente.py
 
-    Le produit n'est jamais publié et n'est jamais saisi à la main : seule
-    `ajouter_l_article_d_ecart_d_encaissement` l'utilise. Son tarif vaut 0 : le
-    montant de l'écart est porté par la ligne (`amount`), pas par le tarif.
-    / Never published, never typed by hand. Its price is 0: the gap amount is on the line.
+    Seule `ajouter_l_article_d_ecart_d_encaissement` l'utilise. Le produit est fabriqué
+    par `tarif_vendu_d_un_produit_systeme`.
+    / Only used by ajouter_l_article_d_ecart_d_encaissement; built by
+    tarif_vendu_d_un_produit_systeme.
 
     :param nom_du_produit: `NOM_ECART_RECU_EN_PLUS` ou `NOM_ECART_RECU_EN_MOINS`
     :return: le `PriceSold` à passer à `ajouter_article`
     """
+    return tarif_vendu_d_un_produit_systeme(nom_du_produit)
+
+
+def tarif_vendu_d_un_produit_systeme(nom_du_produit):
+    """
+    Le tarif vendu d'un produit système, créé à la première demande avec sa catégorie
+    du même nom : les deux écarts d'encaissement et les jetons cadeau repris au vidage.
+    / The sold price of a system product, created on first request with its category
+    of the same name: the two collection gaps and the gift tokens taken back.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    Le produit n'est jamais publié et n'est jamais saisi à la main. Son tarif vaut 0 :
+    le montant est porté par la ligne (`amount`), pas par le tarif. La catégorie porte
+    le même nom : le chargeur du plan comptable la relie à son compte.
+    / Never published, never typed by hand. Its price is 0: the amount is on the line.
+    The category has the same name: the plan loader links it to its account.
+
+    APPELÉE PAR : `tarif_vendu_d_ecart_d_encaissement` (ce module) et
+    laboutik/views.py `_ecrire_la_vente_du_vidage`.
+
+    :param nom_du_produit: `NOM_ECART_RECU_EN_PLUS`, `NOM_ECART_RECU_EN_MOINS` ou
+        `NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE`
+    :return: le `PriceSold` à passer à `ajouter_article`
+    """
     # `_created` et non `_` : « _ » masquerait gettext si on l'importe un jour.
     # / `_created`, not `_`: "_" would shadow gettext.
-    categorie_d_ecart, _created = CategorieProduct.objects.get_or_create(
+    categorie_du_produit_systeme, _created = CategorieProduct.objects.get_or_create(
         name=nom_du_produit
     )
-    produit_d_ecart, _created = Product.objects.get_or_create(
+    produit_systeme, _created = Product.objects.get_or_create(
         name=nom_du_produit,
         defaults={
             "categorie_article": Product.NONE,
-            "categorie_pos": categorie_d_ecart,
+            "categorie_pos": categorie_du_produit_systeme,
             "publish": False,
         },
     )
-    tarif_d_ecart, _created = Price.objects.get_or_create(
-        product=produit_d_ecart,
+    tarif_du_produit_systeme, _created = Price.objects.get_or_create(
+        product=produit_systeme,
         defaults={"name": nom_du_produit, "prix": Decimal("0"), "publish": False},
     )
-    produit_vendu_d_ecart, _created = ProductSold.objects.get_or_create(
-        product=produit_d_ecart,
+    produit_vendu_systeme, _created = ProductSold.objects.get_or_create(
+        product=produit_systeme,
         event=None,
-        defaults={"categorie_article": produit_d_ecart.categorie_article},
+        defaults={"categorie_article": produit_systeme.categorie_article},
     )
-    tarif_vendu_d_ecart, _created = PriceSold.objects.get_or_create(
-        productsold=produit_vendu_d_ecart,
-        price=tarif_d_ecart,
-        defaults={"prix": tarif_d_ecart.prix},
+    tarif_vendu_systeme, _created = PriceSold.objects.get_or_create(
+        productsold=produit_vendu_systeme,
+        price=tarif_du_produit_systeme,
+        defaults={"prix": tarif_du_produit_systeme.prix},
     )
-    return tarif_vendu_d_ecart
+    return tarif_vendu_systeme
 
 
 def ajouter_l_article_d_ecart_d_encaissement(vente, ecart_en_centimes):

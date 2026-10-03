@@ -149,7 +149,14 @@ gardent leur découpage : chaque part est un article, arrondi une fois.
 
 1. fenêtre de maintenance, caisses fermées ;
 2. archive légale (§6.1) ;
-3. migrations A à G ;
+3. migrations A à G — **avant**, vérifier dans chaque lieu (passage à blanc) : (a) les tables
+   `comptabilite_comptecomptable` et `comptabilite_mappingmoyendepaiement` sont vides
+   (la migration `comptabilite/0004` les supprime sans recopie) ; (b) aucun lieu n'a
+   l'ancien plan de caisse (comptes à 7 chiffres, `41910000`…) : sinon, après le
+   chargement du plan par défaut, les recharges iraient au 419100 et les moyens `LE` /
+   `LG` resteraient sur l'ancien compte. D'après le mainteneur (2026-10-02), aucun
+   compte comptable n'existe en production : les deux vérifications doivent rendre
+   « rien » ; sinon, STOP et règle à décider (contre-relecture Fable de E, I-1, M-6) ;
 4. passage à blanc, lecture du rapport, **zéro anomalie** ;
 5. `--executer` ;
 6. `verifier_chaine_ventes` et la migration de vérification de H (aucune ligne sans

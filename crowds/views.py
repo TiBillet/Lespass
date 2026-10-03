@@ -29,6 +29,7 @@ from BaseBillet.models import (
     PaymentMethod,
     SaleOrigin,
     Configuration,
+    CategorieProduct,
 )
 from Customers.models import Client
 from fedow_public.models import AssetFedowPublic
@@ -42,7 +43,11 @@ from .serializers import (
 from ApiBillet.serializers import get_or_create_price_sold
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import ajouter_article, ouvrir_vente
-from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+from laboutik.models import CompteComptable
+from laboutik.plan_comptable_par_defaut import (
+    COMPTE_PAR_DEFAUT,
+    NOM_CATEGORIE_FINANCEMENT_PARTICIPATIF,
+)
 from PaiementStripe.views import CreationPaiementStripe
 
 from django.contrib.auth import get_user_model
@@ -141,9 +146,31 @@ def _get_or_create_crowdfunding_price() -> Price:
     """
     product = Product.objects.filter(name__iexact="crowdfunding").order_by("pk").first()
     if not product:
+        # FR: Le produit est rangé dans la catégorie « Financement participatif »,
+        #     reliée au compte des dons (754000) : c'est elle qui donne le compte des
+        #     contributions (laboutik/plan_comptable.py, `compte_pour_article`).
+        #     Le nom d'une catégorie n'est pas unique : on prend la première. Une
+        #     catégorie qui existe sans compte est reliée au compte des dons.
+        # EN: The product goes in the crowdfunding category, linked to the donations
+        #     account: it gives the contributions' account.
+        compte_des_dons = CompteComptable.objects.filter(
+            numero_de_compte=COMPTE_PAR_DEFAUT["dons"]
+        ).first()
+        categorie_financement_participatif = CategorieProduct.objects.filter(
+            name=NOM_CATEGORIE_FINANCEMENT_PARTICIPATIF
+        ).first()
+        if categorie_financement_participatif is None:
+            categorie_financement_participatif = CategorieProduct.objects.create(
+                name=NOM_CATEGORIE_FINANCEMENT_PARTICIPATIF,
+                compte_comptable=compte_des_dons,
+            )
+        elif categorie_financement_participatif.compte_comptable is None:
+            categorie_financement_participatif.compte_comptable = compte_des_dons
+            categorie_financement_participatif.save(update_fields=["compte_comptable"])
         product = Product.objects.create(
             name="crowdfunding",
             categorie_article=Product.NONE,
+            categorie_pos=categorie_financement_participatif,
             publish=False,
             nominative=False,
         )
@@ -960,16 +987,17 @@ class InitiativeViewSet(viewsets.ViewSet):
             )
 
             # FR: Créer la ligne comptable (LigneArticle) pour le suivi des ventes, par le
-            #     service de vente : montants entiers et TVA (produit, sinon lieu).
-            # EN: Create the accounting line (LigneArticle) through the sale service.
+            #     service de vente : montants entiers. Une contribution est un DON, hors
+            #     TVA (décision du mainteneur, 2026-10-02) : taux 0, jamais celui du
+            #     produit ni du lieu.
+            # EN: Create the accounting line through the sale service. A contribution is
+            #     a donation: 0 % VAT.
             ligne_comptable = ajouter_article(
                 vente,
                 pricesold=price_sold_obj,
                 quantite=1,
                 prix_unitaire=montant_en_centimes,
-                taux_tva=_taux_tva_de_la_ligne_de_caisse(
-                    price_crowdfunding.product, PaymentMethod.STRIPE_NOFED
-                ),
+                taux_tva=Decimal("0"),
                 payment_method=PaymentMethod.STRIPE_NOFED,
                 sale_origin=SaleOrigin.LESPASS,
             )

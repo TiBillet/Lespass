@@ -15,7 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from django.db.transaction import atomic
 from datetime import timedelta
 from BaseBillet.models import Product, ResourceProduct, Price, LigneArticle, Configuration, Paiement_stripe, Commande
-from BaseBillet.services_vente import ligne_entierement_offerte
+from BaseBillet.services_vente import ligne_sans_argent_a_rendre
 from PaiementStripe.utils import partial_refund_payment
 from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
@@ -658,12 +658,12 @@ class Booking(models.Model):
         # l'admin fait un avoir depuis la liste des ventes.
         # / 2) Non-Stripe lines: NO credit note (D31); the venue issues one if it refunds.
         # Le message « réglée sur place » ne vaut que pour de l'ARGENT : un créneau
-        # entièrement offert garde le message d'avant.
-        # / The "paid on site" message is for money only: a fully offered slot keeps
-        # the old message.
+        # entièrement offert (ou payé en jetons cadeau) garde le message d'avant.
+        # / The "paid on site" message is for money only: a fully offered (or token
+        # paid) slot keeps the old message.
         reglee_hors_stripe_en_argent = False
         for ligne in self._lignes_hors_stripe():
-            if not ligne_entierement_offerte(ligne):
+            if not ligne_sans_argent_a_rendre(ligne):
                 reglee_hors_stripe_en_argent = True
 
         self.status = Booking.USER_CANCELED

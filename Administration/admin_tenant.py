@@ -142,6 +142,7 @@ from BaseBillet.services_vente import (
     ecrire_la_vente_d_avoir_d_une_ligne,
     encaisser_vente,
     ligne_entierement_offerte,
+    ligne_sans_argent_a_rendre,
     ouvrir_vente,
 )
 from Customers.models import Client
@@ -2179,10 +2180,16 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
             return redirect(url_de_la_liste_des_ventes)
 
         # Quel écran ? / Which screen?
+        # Pas d'argent à rendre : ligne entièrement offerte, ou payée en jetons cadeau
+        # (l'avoir rend la dette, pas de l'argent). Le message « offert » de l'écran
+        # ne vaut, lui, que pour une ligne offerte.
+        # / No money to give back: fully offered, or paid in gift tokens. The screen's
+        # "offered" message is for an offered line only.
         ligne_payee_par_stripe = ligne_originale.paiement_stripe_id is not None
-        ligne_sans_argent_a_rendre = ligne_entierement_offerte(ligne_originale)
+        la_ligne_n_a_pas_d_argent_a_rendre = ligne_sans_argent_a_rendre(ligne_originale)
+        la_ligne_est_entierement_offerte = ligne_entierement_offerte(ligne_originale)
         champ_rembourse_par_demande = (
-            not ligne_payee_par_stripe and not ligne_sans_argent_a_rendre
+            not ligne_payee_par_stripe and not la_ligne_n_a_pas_d_argent_a_rendre
         )
 
         if request.method == "POST":
@@ -2211,7 +2218,7 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
                 "ligne": ligne_originale,
                 "montant_de_la_ligne": dround(ligne_originale.total()),
                 "ligne_payee_par_stripe": ligne_payee_par_stripe,
-                "ligne_entierement_offerte": ligne_sans_argent_a_rendre,
+                "ligne_entierement_offerte": la_ligne_est_entierement_offerte,
                 "champ_rembourse_par_demande": champ_rembourse_par_demande,
                 "url_de_la_liste_des_ventes": url_de_la_liste_des_ventes,
             }
@@ -3376,7 +3383,7 @@ def preparer_le_champ_rembourse_par(lignes_hors_stripe):
 
     RÈGLES :
     - champ affiché seulement si au moins une ligne hors Stripe a de l'argent à rendre
-      (pas entièrement offerte) ;
+      (ni entièrement offerte, ni payée en jetons cadeau : `ligne_sans_argent_a_rendre`) ;
     - pré-rempli si TOUTES ces lignes ont le même moyen d'origine, et qu'il est dans
       la liste du champ (espèces, CB, chèque, virement) ; sinon vide.
     / Field shown only when a non-Stripe line has money to give back; pre-filled when
@@ -3387,7 +3394,7 @@ def preparer_le_champ_rembourse_par(lignes_hors_stripe):
     """
     moyens_d_origine_de_l_argent_a_rendre = []
     for ligne in lignes_hors_stripe:
-        if ligne_entierement_offerte(ligne):
+        if ligne_sans_argent_a_rendre(ligne):
             continue
         moyens_d_origine_de_l_argent_a_rendre.append(ligne.payment_method)
 

@@ -35,7 +35,7 @@ from BaseBillet.models import (
 )
 from laboutik.models import (
     ClotureCaisse, CompteComptable, LaboutikConfiguration,
-    MappingMoyenDePaiement, PointDeVente,
+    MappingMonnaie, MappingMoyenDePaiement, PointDeVente,
 )
 
 
@@ -63,6 +63,9 @@ class TestProfilsCsvComptable(FastTenantTestCase):
 
         # Nettoyer les donnees des tests precedents
         # / Clean data from previous tests
+        # Les correspondances des monnaies d'abord : elles protègent leur compte.
+        # / Currency mappings first: they protect their account (PROTECT).
+        MappingMonnaie.objects.all().delete()
         MappingMoyenDePaiement.objects.all().delete()
         CompteComptable.objects.all().delete()
         ClotureCaisse.objects.all().delete()
@@ -78,17 +81,16 @@ class TestProfilsCsvComptable(FastTenantTestCase):
         self.config = LaboutikConfiguration.get_solo()
         self.config.save()
 
-        # Charger le plan comptable bar_resto (comptes + mappings)
-        # / Load bar_resto chart of accounts (accounts + mappings)
+        # Charger le plan comptable par defaut (comptes + mappings)
+        # / Load the default chart of accounts (accounts + mappings)
         call_command(
             'charger_plan_comptable',
             schema=self.tenant.schema_name,
-            jeu='bar_resto',
         )
 
-        # Categorie avec compte comptable 7072000
-        # / Category with accounting account 7072000
-        compte_vente = CompteComptable.objects.get(numero_de_compte='7072000')
+        # Categorie avec compte comptable 707000
+        # / Category with accounting account 707000
+        compte_vente = CompteComptable.objects.get(numero_de_compte='707000')
         self.categorie = CategorieProduct.objects.create(
             name='Boissons Test',
             compte_comptable=compte_vente,

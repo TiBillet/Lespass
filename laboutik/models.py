@@ -7,6 +7,7 @@ LOCALISATION : laboutik/models.py
 """
 import uuid as uuid_module
 
+from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -863,6 +864,29 @@ class PointDeVente(models.Model):
         default=False,
         verbose_name=_("Hidden"),
         help_text=_("Hide this point of sale from the selection screen."),
+    )
+
+    # Code du journal comptable des ventes de ce point de vente (colonne `JournalCode`
+    # du FEC). Lettres majuscules seules : le profil PennyLane
+    # (laboutik/profils_csv.py) refuse tout autre caractère. Vide : le code est dérivé
+    # du nom (laboutik/plan_comptable.py, `code_journal_du_point_de_vente`).
+    # / Accounting journal code (FEC JournalCode). Uppercase letters only. Empty: derived
+    # from the name.
+    code_journal = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        validators=[
+            RegexValidator(
+                regex=r"^[A-Z]+$",
+                message=_("Lettres majuscules seules, sans accent (ex. : BAR)."),
+            ),
+        ],
+        verbose_name=_("Code journal"),
+        help_text=_(
+            "Code du journal comptable de ce point de vente, 10 lettres majuscules au "
+            "plus (ex. : BAR). Vide : dérivé du nom du point de vente."
+        ),
     )
 
     # NOTE : un point de vente ne porte AUCUNE imprimante. En festival, une vingtaine de
@@ -2007,11 +2031,11 @@ class HistoriqueFondDeCaisse(models.Model):
 class CompteComptable(models.Model):
     """
     Compte du Plan Comptable General (PCG) associe au tenant.
-    Exemples : 7072000 (Ventes de marchandises), 5311000 (Caisse),
-    4457100 (TVA collectee).
+    Exemples : 707000 (Ventes de marchandises), 530000 (Caisse),
+    445711 (TVA collectee 20 %).
     / PCG (French Chart of Accounts) entry for this tenant.
-    Examples: 7072000 (Merchandise sales), 5311000 (Cash register),
-    4457100 (Collected VAT).
+    Examples: 707000 (Merchandise sales), 530000 (Cash register),
+    445711 (Collected VAT 20 %).
 
     LOCALISATION : laboutik/models.py
     """
@@ -2041,14 +2065,17 @@ class CompteComptable(models.Model):
         unique=True, db_index=True,
     )
 
-    # Numero du compte PCG, ex: "7072000", "5311000", "4457100"
-    # / PCG account number, e.g. "7072000", "5311000", "4457100"
+    # Numero du compte PCG, ex: "707000", "530000". UNIQUE dans le lieu : le chargeur
+    # du plan par defaut (laboutik/plan_comptable.py) retrouve ses comptes par numero.
+    # / PCG account number. UNIQUE in the venue: the default plan loader looks its
+    # accounts up by number.
     numero_de_compte = models.CharField(
         max_length=20,
+        unique=True,
         verbose_name=_("Account number"),
         help_text=_(
-            "Numero du compte PCG (ex: 7072000). "
-            "/ PCG account number (e.g. 7072000)."
+            "Numero du compte PCG (ex: 707000). "
+            "/ PCG account number (e.g. 707000)."
         ),
     )
 
@@ -2201,3 +2228,50 @@ class MappingMoyenDePaiement(models.Model):
         ordering = ['moyen_de_paiement']
         verbose_name = _('Payment method mapping')
         verbose_name_plural = _('Payment method mappings')
+
+
+class MappingMonnaie(models.Model):
+    """
+    Le compte comptable d'une monnaie (un compte par monnaie).
+    / The accounting account of a currency (one account per currency).
+
+    LOCALISATION : laboutik/models.py
+
+    Un règlement dans cette monnaie est écrit sur ce compte, avant le compte de son
+    moyen de paiement (laboutik/plan_comptable.py, `compte_pour_reglement`). Le FED
+    (ses deux uuid) est relié au 467000 par le chargeur du plan.
+    / A payment in this currency goes to this account, before its payment method's.
+
+    `asset_uuid` n'a PAS de clé étrangère : la monnaie vit dans `fedow_core.Asset` OU
+    dans `fedow_public.AssetFedowPublic` (ancien Fedow).
+    / No foreign key: the currency lives in fedow_core.Asset OR fedow_public.AssetFedowPublic.
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False,
+        unique=True, db_index=True,
+    )
+
+    asset_uuid = models.UUIDField(
+        unique=True,
+        verbose_name=_("Monnaie (uuid)"),
+        help_text=_(
+            "Identifiant de la monnaie (fedow_core ou ancien Fedow)."
+        ),
+    )
+
+    # PROTECT : un compte qui porte une monnaie ne se supprime pas en silence.
+    # / PROTECT: an account carrying a currency is not deleted silently.
+    compte_de_tresorerie = models.ForeignKey(
+        CompteComptable, on_delete=models.PROTECT,
+        related_name='monnaies',
+        verbose_name=_("Compte de la monnaie"),
+    )
+
+    def __str__(self):
+        return f"{self.asset_uuid} → {self.compte_de_tresorerie}"
+
+    class Meta:
+        ordering = ['asset_uuid']
+        verbose_name = _('Compte d\'une monnaie')
+        verbose_name_plural = _('Comptes des monnaies')
