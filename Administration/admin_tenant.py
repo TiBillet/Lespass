@@ -13,7 +13,7 @@ from Administration.admin import (
     prices
 )
 from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
-from Administration.admin.mixins import HelpDisplayMixin
+from Administration.admin.mixins import ExportCsvLisibleParExcelMixin, HelpDisplayMixin
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 
@@ -1663,7 +1663,7 @@ class MembershipPublishedFilter(DropdownFilter):
 
 
 @admin.register(Membership, site=staff_admin_site)
-class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
+class MembershipAdmin(ExportCsvLisibleParExcelMixin, HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
 
     inlines = [LigneArticleInline]
     # Expandable section to display custom form answers in changelist
@@ -1999,7 +1999,7 @@ class RangeDateTimeFilterWithTimeZone(RangeDateTimeFilter):
             return None
 
 @admin.register(LigneArticle, site=staff_admin_site)
-class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
+class LigneArticleAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     list_filter_submit = True
@@ -2401,7 +2401,7 @@ class IsProposalFilter(admin.SimpleListFilter):
 
 
 @admin.register(Event, site=staff_admin_site)
-class EventAdmin(ModelAdmin, ImportExportModelAdmin):
+class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdmin):
     form = EventForm
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
@@ -3385,7 +3385,7 @@ class TicketCustomFormSection(TemplateSection):
 
 
 @admin.register(Ticket, site=staff_admin_site)
-class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
+class TicketAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAdmin):
     ordering = ('-reservation__datetime',)
     list_filter = [
         EventFutureFilter,
