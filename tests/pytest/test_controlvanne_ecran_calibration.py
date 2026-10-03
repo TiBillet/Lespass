@@ -6,7 +6,7 @@ LOCALISATION : tests/pytest/test_controlvanne_ecran_calibration.py
 
 Couvre les corrections des lots 3 et 4 de l'audit du 2026-09-26 :
 - rendu du kiosk : couleur d'accent du fût, écran « Aucun fût branché » ;
-- palette des couleurs de fût : lisible avec le texte blanc et sur la carte ;
+- palette des couleurs de fût : exactement la palette « Létireuz » ;
 - calibration : serializer, erreurs en 422, application du facteur,
   « Nouvelle série » datée par le serveur ;
 - FutProductForm : couleur hors format refusée.
@@ -26,48 +26,45 @@ from django_tenants.utils import schema_context, tenant_context
 # ─────────────────────────────────────────────────────────────────────
 
 
-def _luminance_relative(couleur_hexadecimale):
-    """Luminance relative WCAG d'une couleur #rrggbb. / WCAG relative luminance."""
-    code = couleur_hexadecimale.lstrip("#")
-    composantes_lineaires = []
-    for position in (0, 2, 4):
-        composante = int(code[position : position + 2], 16) / 255
-        if composante <= 0.03928:
-            composantes_lineaires.append(composante / 12.92)
-        else:
-            composantes_lineaires.append(((composante + 0.055) / 1.055) ** 2.4)
-    rouge, vert, bleu = composantes_lineaires
-    return 0.2126 * rouge + 0.7152 * vert + 0.0722 * bleu
-
-
-def _contraste(couleur_a, couleur_b):
-    """Ratio de contraste WCAG entre deux couleurs. / WCAG contrast ratio."""
-    luminances = sorted(
-        [_luminance_relative(couleur_a), _luminance_relative(couleur_b)], reverse=True
-    )
-    return (luminances[0] + 0.05) / (luminances[1] + 0.05)
+# Palette « Létireuz » : design tokens --color-tireuse-{teinte}, dans l'ordre.
+# / "Létireuz" palette: --color-tireuse-{hue} design tokens, in order.
+PALETTE_LETIREUZ = [
+    "#0f96f0",  # blue
+    "#009eb3",  # teal
+    "#884dff",  # violet
+    "#00a84c",  # green
+    "#ff589f",  # pink
+    "#a89500",  # olive
+    "#9d6401",  # brown
+    "#fa6000",  # orange
+    "#fd2629",  # red
+    "#2ca300",  # lime
+    "#5757ff",  # indigo
+]
 
 
 class TestPaletteDesFuts:
     """
-    Le texte de l'écran est toujours blanc. Chaque couleur proposée dans l'admin
-    doit rester lisible en fond sous du blanc ET comme texte sur la carte sombre.
-    / Screen text is always white: every offered color must stay readable.
+    L'admin propose exactement la palette « Létireuz », sans variante inventée.
+    / The admin offers exactly the "Létireuz" palette, no invented variant.
     """
 
-    def test_01_chaque_couleur_est_lisible_avec_du_texte_blanc(self):
-        """Fond sous du texte blanc (mention légale, Solde…) : au moins 4,5:1."""
+    def test_01_les_couleurs_proposees_sont_la_palette_letireuz(self):
+        """Les 11 couleurs, dans l'ordre du nuancier. / The 11 colors, in order."""
+        from Administration.admin.products import COULEURS_ACCENT
+
+        codes_des_couleurs_proposees = []
+        for code_couleur, _nom_couleur in COULEURS_ACCENT:
+            codes_des_couleurs_proposees.append(code_couleur)
+
+        assert codes_des_couleurs_proposees == PALETTE_LETIREUZ
+
+    def test_02_chaque_code_est_en_minuscules(self):
+        """Le widget compare la couleur du fût en minuscules : la liste doit l'être aussi."""
         from Administration.admin.products import COULEURS_ACCENT
 
         for code_couleur, nom_couleur in COULEURS_ACCENT:
-            assert _contraste(code_couleur, "#ffffff") >= 4.5, nom_couleur
-
-    def test_02_chaque_couleur_est_lisible_sur_la_carte_sombre(self):
-        """Texte en couleur sur la carte #2a2d2f (gros caractères) : au moins 3:1."""
-        from Administration.admin.products import COULEURS_ACCENT
-
-        for code_couleur, nom_couleur in COULEURS_ACCENT:
-            assert _contraste(code_couleur, "#2a2d2f") >= 3.0, nom_couleur
+            assert code_couleur == code_couleur.lower(), nom_couleur
 
 
 class _TagsFictifs:
@@ -116,12 +113,12 @@ class TestRenduKiosk:
 
     def test_05_detail_pose_la_couleur_du_fut(self):
         """Avec une couleur de fût, le <head> pose --tireuse-accent (texte toujours blanc)."""
-        tireuse = _tireuse_fictive(couleur="#8b59e2")
+        tireuse = _tireuse_fictive(couleur="#884dff")
         html = render_to_string(
             "controlvanne/kiosk_detail.html",
             {"tireuse": tireuse, "config": None, "slug_focus": str(tireuse.uuid)},
         )
-        assert "--tireuse-accent: #8b59e2;" in html
+        assert "--tireuse-accent: #884dff;" in html
         assert "--tireuse-accent-ink" not in html
 
     def test_06_veille_sans_fut_affiche_aucun_fut(self):
@@ -136,13 +133,13 @@ class TestRenduKiosk:
 
     def test_07_chaque_vignette_porte_l_accent_de_son_fut(self):
         """Dans la liste, chaque vignette pose l'accent de son propre fût."""
-        tireuse_violette = _tireuse_fictive(couleur="#8b59e2")
+        tireuse_violette = _tireuse_fictive(couleur="#884dff")
         tireuse_verte = _tireuse_fictive(couleur="#228747")
         html = render_to_string(
             "controlvanne/kiosk_list.html",
             {"becs": [tireuse_violette, tireuse_verte], "config": None},
         )
-        assert "--tireuse-accent: #8b59e2;" in html
+        assert "--tireuse-accent: #884dff;" in html
         assert "--tireuse-accent: #228747;" in html
 
 
@@ -518,7 +515,7 @@ class TestRechargementDuKiosk:
             fut_vu_par_l_admin = FutProduct.objects.get(
                 pk=tireuse_et_deux_futs.fut_a.pk
             )
-            fut_vu_par_l_admin.couleur_fond_pos = "#8b59e2"
+            fut_vu_par_l_admin.couleur_fond_pos = "#884dff"
             fut_vu_par_l_admin.save()
 
         assert canal.demandes_de_rechargement(tireuse_et_deux_futs.tireuse)

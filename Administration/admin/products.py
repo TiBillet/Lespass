@@ -2002,32 +2002,29 @@ class POSProductAdmin(ProductAdmin):
 
 
 # Couleurs proposées pour l'accent de l'écran de la tireuse.
-# Le texte de l'écran est TOUJOURS blanc (comme la maquette). L'accent sert :
-# - de FOND sous du texte blanc (fond de page, mention légale, pastille,
-#   case « Solde ») → contraste avec le blanc ≥ 4,5:1 (WCAG AA, texte normal) ;
-# - de TEXTE sur la carte sombre #2a2d2f (« Présentez votre carte », volume,
-#   bilan, tous en gros caractères) → contraste ≥ 3:1 (WCAG, gros texte).
-# Ces deux seuils ne laissent qu'une plage de luminosité très étroite : chaque
-# couleur ci-dessous a été calculée dans cette plage (≈ 4,55:1 et ≈ 3,05:1).
-# Les couleurs de la maquette (cyan, ambre, corail) ont été retirées : le texte
-# blanc était illisible dessus (2,4:1, 1,7:1, 2,9:1).
-# / Screen text is ALWAYS white. Each accent: ≥ 4.5:1 with white (background)
-# AND ≥ 3:1 on the dark card #2a2d2f (large text). Mockup colors removed.
+# C'est la palette « Létireuz » : 11 couleurs vives, un seul niveau chacune.
+# On n'utilise QUE ces couleurs. On n'invente pas de variante.
+# Le nom du design token est noté à droite de chaque couleur.
+# Cette palette n'a aucun lien avec la palette pastel (--color-{teinte}-{100|200|300}).
+# Les codes sont en minuscules : le widget compare la couleur du fût en minuscules.
+#
+# Contraste du texte blanc sur ces couleurs : entre 2,9:1 et 5:1.
+# Le blanc n'est bien lisible qu'en gros caractères gras (≥ 18,66 px gras ou ≥ 24 px).
+# Seuls violet, brown et indigo dépassent 4,5:1 avec le blanc.
+# / "Létireuz" palette: 11 vivid colors, use only these. Token name on the right.
+# White text contrast is 2.9–5:1: white is only readable as large bold text.
 COULEURS_ACCENT = [
-    ("#1f75d8", _("Bleu")),
-    ("#127fa6", _("Pétrole")),
-    ("#138383", _("Sarcelle")),
-    ("#228747", _("Vert")),
-    ("#777b16", _("Olive")),
-    ("#a16b0d", _("Ocre")),
-    ("#b95c15", _("Rouille")),
-    ("#d0471e", _("Brique")),
-    ("#de323d", _("Rouge")),
-    ("#da3068", _("Framboise")),
-    ("#d22ca0", _("Magenta")),
-    ("#b345c9", _("Prune")),
-    ("#8b59e2", _("Violet")),
-    ("#6368e4", _("Indigo")),
+    ("#0f96f0", _("Bleu")),
+    ("#009eb3", _("Sarcelle")),
+    ("#884dff", _("Violet")),
+    ("#00a84c", _("Vert")),
+    ("#ff589f", _("Rose")),
+    ("#a89500", _("Olive")),
+    ("#9d6401", _("Brun")),
+    ("#fa6000", _("Orange")),
+    ("#fd2629", _("Rouge")),
+    ("#2ca300", _("Citron vert")),
+    ("#5757ff", _("Indigo")),
 ]
 
 
