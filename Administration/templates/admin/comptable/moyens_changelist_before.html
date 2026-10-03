@@ -1,0 +1,11 @@
+{% load i18n %}
+{% comment %}
+EN TETE DE L'ECRAN « COMPTES DES MOYENS DE PAIEMENT »
+/ Top of the "Payment method accounts" screen
+
+LOCALISATION : Administration/templates/admin/comptable/moyens_changelist_before.html
+
+Affiche le composant « Plan complet ? » (contexte : `manques_du_plan`, pose par
+MappingMoyenDePaiementAdmin.changelist_view, Administration/admin/laboutik.py).
+{% endcomment %}
+{% include "admin/comptable/plan_complet.html" %}

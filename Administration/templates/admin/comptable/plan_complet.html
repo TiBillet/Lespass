@@ -1,0 +1,50 @@
+{% load i18n unfold %}
+{% comment %}
+COMPOSANT « PLAN COMPLET ? »
+/ "Complete plan?" component
+
+LOCALISATION : Administration/templates/admin/comptable/plan_complet.html
+
+Affiche ce qui manque au plan comptable pour que l'export comptable passe.
+Inclus en tete des trois ecrans du plan : plan comptable, comptes des moyens de
+paiement, comptes des monnaies (gabarits *_before.html du meme dossier).
+
+FLUX :
+1. changelist_view de l'admin (Administration/admin/laboutik.py) appelle
+   laboutik/plan_comptable.py : ce_qui_manque_pour_exporter() ;
+2. la liste arrive ici dans `manques_du_plan` : chaque manque a une phrase et un lien
+   vers l'ecran qui le regle ;
+3. liste vide : message vert « Le plan est complet : l'export est possible ».
+/ The admin changelist_view passes `manques_du_plan`; empty list: green message.
+{% endcomment %}
+<div class="px-4 pt-4" data-testid="plan-complet">
+    {% component "unfold/components/card.html" with title=_("Plan complet ?") %}
+        <div aria-live="polite">
+            {% if manques_du_plan %}
+                <p class="text-sm mb-2">
+                    {% translate "Il manque des choses pour faire l'export comptable :" %}
+                </p>
+                <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;">
+                    {% for manque in manques_du_plan %}
+                        <li data-testid="plan-complet-manque"
+                            style="color: #c2410c; border-left: 4px solid #ea580c; padding: 4px 10px;">
+                            <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">warning</span>
+                            {{ manque.phrase }}
+                            {# Le lien est répété à chaque manque : son aria-label reprend la phrase, pour qu'un lecteur d'écran sache ce qu'il règle. #}
+                            {# / The link repeats on each item: its aria-label carries the sentence for screen readers. #}
+                            <a href="{{ manque.lien }}"
+                               aria-label="{% translate 'Régler' %} : {{ manque.phrase }}"
+                               data-testid="plan-complet-regler"
+                               style="text-decoration: underline; margin-left: 6px;">{% translate "Régler" %}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p data-testid="plan-complet-ok" style="color: #15803d; font-weight: 600; margin: 0;">
+                    <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">check_circle</span>
+                    {% translate "Le plan est complet : l'export est possible" %}
+                </p>
+            {% endif %}
+        </div>
+    {% endcomponent %}
+</div>

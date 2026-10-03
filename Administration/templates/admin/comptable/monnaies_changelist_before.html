@@ -1,0 +1,67 @@
+{% load i18n unfold %}
+{% comment %}
+EN TETE DE L'ECRAN « COMPTES DES MONNAIES »
+/ Top of the "Currency accounts" screen
+
+LOCALISATION : Administration/templates/admin/comptable/monnaies_changelist_before.html
+
+1. Le composant « Plan complet ? » (contexte : `manques_du_plan`).
+2. Une ligne par monnaie acceptee par le lieu (contexte : `lignes_des_monnaies`, rendu
+   par laboutik/plan_comptable.py : monnaies_acceptees_par_le_lieu()) : son nom, son
+   origine, son compte.
+   - la monnaie a son compte : numero et libelle, lien « Modifier » ;
+   - une monnaie du lieu sans compte propre prend celui de son moyen : affiche en
+     neutre (l'export passe) ;
+   - sinon (monnaie d'un autre lieu, ou federee) : en orange, l'export est refuse ;
+     lien « Choisir un compte » vers le formulaire, monnaie deja choisie.
+/ One row per accepted currency: name, origin, account; missing account in orange.
+{% endcomment %}
+{% include "admin/comptable/plan_complet.html" %}
+
+<div class="p-4" data-testid="comptes-des-monnaies">
+    {% component "unfold/components/card.html" with title=_("Monnaies acceptées par le lieu") %}
+        {% if lignes_des_monnaies %}
+            <table style="width: 100%; border-collapse: collapse;" aria-label="{% translate 'Monnaies acceptées par le lieu' %}">
+                <thead>
+                    <tr style="text-align: left;">
+                        <th scope="col" style="padding: 6px;">{% translate "Monnaie" %}</th>
+                        <th scope="col" style="padding: 6px;">{% translate "Origine" %}</th>
+                        <th scope="col" style="padding: 6px;">{% translate "Compte" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ligne in lignes_des_monnaies %}
+                        <tr data-testid="monnaie-{{ ligne.uuid }}" style="border-top: 1px solid var(--color-base-200, #e5e7eb);">
+                            <td style="padding: 6px;">{{ ligne.nom }}</td>
+                            <td style="padding: 6px;">{{ ligne.origine }}</td>
+                            <td style="padding: 6px;">
+                                {% if ligne.correspondance %}
+                                    {{ ligne.correspondance.compte_de_tresorerie }}
+                                    <a href="{% url 'staff_admin:laboutik_mappingmonnaie_change' ligne.correspondance.pk %}"
+                                       style="text-decoration: underline; margin-left: 6px;"
+                                       data-testid="monnaie-modifier-{{ ligne.uuid }}">{% translate "Modifier" %}</a>
+                                {% elif ligne.compte_du_moyen %}
+                                    {% blocktranslate with compte=ligne.compte_du_moyen %}Compte du moyen utilisé : {{ compte }}{% endblocktranslate %}
+                                    <a href="{% url 'staff_admin:laboutik_mappingmonnaie_add' %}?asset_uuid={{ ligne.uuid }}"
+                                       style="text-decoration: underline; margin-left: 6px;"
+                                       data-testid="monnaie-choisir-{{ ligne.uuid }}">{% translate "Choisir un compte propre" %}</a>
+                                {% else %}
+                                    <span data-testid="monnaie-sans-compte-{{ ligne.uuid }}"
+                                          style="color: #c2410c; font-weight: 600;">
+                                        <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">warning</span>
+                                        {% translate "Compte manquant : l'export comptable sera refusé tant que ce compte manque." %}
+                                    </span>
+                                    <a href="{% url 'staff_admin:laboutik_mappingmonnaie_add' %}?asset_uuid={{ ligne.uuid }}"
+                                       style="text-decoration: underline; margin-left: 6px;"
+                                       data-testid="monnaie-choisir-{{ ligne.uuid }}">{% translate "Choisir un compte" %}</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="text-sm">{% translate "Le lieu n'accepte aucune monnaie." %}</p>
+        {% endif %}
+    {% endcomponent %}
+</div>
