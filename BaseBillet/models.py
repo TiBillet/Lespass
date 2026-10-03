@@ -2698,6 +2698,35 @@ class Event(models.Model):
             .distinct('pricesold__price_id')
         )
 
+    def clean(self):
+        """
+        Verifie que la fin de l'evenement n'est pas avant son debut.
+        / Checks that the event end is not before its start.
+
+        LOCALISATION : BaseBillet/models.py
+
+        Appelee automatiquement par les ModelForm (admin Unfold : EventForm).
+        Les serializers DRF ne l'appellent PAS. Les API ont donc leur propre
+        verification, avec le meme message :
+        - api_v2/serializers.py : EventCreateSerializer.validate
+        - ApiBillet/serializers.py : EventWriteSerializer.validate
+        Une fin egale au debut est acceptee.
+        """
+        super().clean()
+
+        # La fin est facultative : sans fin, rien a verifier.
+        # / End is optional: nothing to check without it.
+        le_debut_est_renseigne = self.datetime is not None
+        la_fin_est_renseignee = self.end_datetime is not None
+        if not le_debut_est_renseigne or not la_fin_est_renseignee:
+            return
+
+        la_fin_est_avant_le_debut = self.end_datetime < self.datetime
+        if la_fin_est_avant_le_debut:
+            raise ValidationError({
+                "end_datetime": _("La fin de l'évènement doit être après son début."),
+            })
+
     def save(self, *args, **kwargs):
         """
         Transforme le titre de l'evenemennt en slug, pour en faire une url lisible
