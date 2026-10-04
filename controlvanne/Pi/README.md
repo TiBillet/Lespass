@@ -5,13 +5,16 @@ Gère la lecture NFC, le contrôle de vanne et la communication avec le serveur 
 Aide-mémoire « où régler quoi » : [tireuses-FAQ.md](tireuses-FAQ.md)
 ## Prérequis matériels
 
-- Raspberry Pi (testé sur Bookworm 64-bit)
+- Raspberry Pi (testé sur Pi3B +)
 - Lecteur RFID : RC522 (SPI), VMA405 (UART) ou ACR122U (USB)
 - Électrovanne (GPIO 18 par défaut)
 - Débitmètre (GPIO 23 par défaut)
 - Écran HDMI pour le kiosk Chromium
 
 ## Installation sur Pi vierge
+1. Graver **Raspberry Pi OS (Legacy,32-bit) Lite** avec Raspberry Pi Imager.
+2. Dans les options avancées de l'Imager : activer **SSH**, définir l'utilisateur **`sysop`**, renseigner le Wi-Fi et le nom de machine.
+3. Démarrer le Pi, s'y connecter en SSH.
 
 Un seul prérequis côté serveur : créer une tireuse dans **Admin → Tireuses**, puis **l'ouvrir** — son code PIN à 6 chiffres s'affiche dans la fiche.
 
