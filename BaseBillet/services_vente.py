@@ -558,6 +558,100 @@ def ajouter_article(
     return ligne
 
 
+def _catalogue_impose_et_part_offerte_d_un_avoir(ligne_d_origine, quantite):
+    """
+    Le total catalogue imposé et la part offerte de l'article qui annule `quantite`
+    unités d'une ligne vendue. La règle des montants d'un avoir, écrite une seule fois :
+    lue par `ajouter_l_article_d_avoir` (qui écrit l'article) et par
+    `apercu_des_montants_d_un_avoir` (l'écran qui annonce la somme rendue).
+    / The imposed catalogue total and offered part of a credit note item: the single
+    rule, read by the writer and by the screen preview.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    - toute la quantité rendue, ligne écrite par le service : les totaux sont recopiés
+      en négatif (une « part » rend exactement ce qui a été vendu) ;
+    - une partie d'une ligne ENTIÈREMENT offerte : prix × −quantité, et part offerte =
+      ce total (entièrement offerte elle aussi) ;
+    - sinon : prix × −quantité (total catalogue non imposé), rien d'offert.
+    Refuse (ValueError) une partie de la quantité d'une ligne EN PARTIE offerte : le
+    projet ne fait aucun prorata d'offert.
+    / Full return: mirrored; part of a fully offered line: fully offered; else
+    computed. Refuses a partial return of a partly offered line.
+
+    :param ligne_d_origine: la `LigneArticle` vendue
+    :param quantite: la quantité rendue (Decimal), positive
+    :return: (total catalogue imposé ou None, part offerte en centimes)
+    """
+    quantite_vendue = ligne_d_origine.qty
+    toute_la_quantite_rendue = quantite == quantite_vendue
+    ligne_avec_une_part_offerte = ligne_d_origine.part_offerte != 0
+    ligne_ecrite_par_le_service = ligne_d_origine.total_catalogue != 0
+    ligne_entierement_offerte_par_ses_montants = (
+        ligne_ecrite_par_le_service
+        and ligne_d_origine.part_offerte == ligne_d_origine.total_catalogue
+    )
+    ligne_en_partie_offerte = (
+        ligne_avec_une_part_offerte and not ligne_entierement_offerte_par_ses_montants
+    )
+    if ligne_en_partie_offerte and not toute_la_quantite_rendue:
+        raise ValueError(
+            "Cet article a une part offerte : il faut rembourser l'article entier "
+            "(pas de remboursement d'une partie de la quantité)."
+        )
+
+    # Les montants : recopiés en négatif quand toute la ligne est rendue et que le
+    # service l'a écrite ; sinon calculés par la formule (prix × −quantité). Une partie
+    # d'une ligne entièrement offerte reste entièrement offerte : part offerte = total.
+    # / Amounts: mirrored for a full return of a service-written line, else computed;
+    # a part of a fully offered line stays fully offered.
+    if toute_la_quantite_rendue and ligne_ecrite_par_le_service:
+        total_catalogue_de_l_avoir = -ligne_d_origine.total_catalogue
+        part_offerte_de_l_avoir = -ligne_d_origine.part_offerte
+    elif ligne_entierement_offerte_par_ses_montants:
+        montants_de_la_partie_rendue = calculer_montants_article(
+            prix_unitaire=ligne_d_origine.amount,
+            quantite=-quantite,
+            taux_tva=ligne_d_origine.vat,
+        )
+        total_catalogue_de_l_avoir = None
+        part_offerte_de_l_avoir = montants_de_la_partie_rendue["total_catalogue"]
+    else:
+        total_catalogue_de_l_avoir = None
+        part_offerte_de_l_avoir = 0
+    return total_catalogue_de_l_avoir, part_offerte_de_l_avoir
+
+
+def apercu_des_montants_d_un_avoir(ligne_d_origine, quantite):
+    """
+    Les montants qu'aurait l'article d'avoir de `quantite` unités d'une ligne, SANS
+    rien écrire : pour l'écran qui annonce la somme rendue avant de confirmer. Même
+    règle que l'article écrit (`_catalogue_impose_et_part_offerte_d_un_avoir`), même
+    formule (`calculer_montants_article`).
+    Limite : une ligne d'avant le chantier au moyen « offert » (montants à 0) n'est pas
+    vue offerte ici ; ces lignes passent par la reprise des ventes.
+    / The amounts the credit note item would have, without writing anything (screen
+    preview). Same rule and formula as the written item.
+
+    LOCALISATION : BaseBillet/services_vente.py
+    LU PAR : Administration/admin_tenant.py `VenteAdmin.avoir_total` (écran).
+
+    :param ligne_d_origine: la `LigneArticle` vendue
+    :param quantite: la quantité rendue (Decimal), positive
+    :return: dict de `calculer_montants_article` (montants NÉGATIFS : total_ttc, part_offerte…)
+    """
+    total_catalogue_impose, part_offerte = _catalogue_impose_et_part_offerte_d_un_avoir(
+        ligne_d_origine, quantite
+    )
+    return calculer_montants_article(
+        prix_unitaire=ligne_d_origine.amount,
+        quantite=-quantite,
+        taux_tva=ligne_d_origine.vat,
+        part_offerte=part_offerte,
+        total_catalogue_impose=total_catalogue_impose,
+    )
+
+
 def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
     """
     Ajoute à une vente AVOIR l'article qui annule `quantite` unités d'une ligne vendue :
@@ -639,41 +733,9 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
             f"la quantité vendue ({quantite_vendue})."
         )
 
-    toute_la_quantite_rendue = quantite == quantite_vendue
-    ligne_avec_une_part_offerte = ligne_d_origine.part_offerte != 0
-    ligne_ecrite_par_le_service = ligne_d_origine.total_catalogue != 0
-    ligne_entierement_offerte_par_ses_montants = (
-        ligne_ecrite_par_le_service
-        and ligne_d_origine.part_offerte == ligne_d_origine.total_catalogue
+    total_catalogue_de_l_avoir, part_offerte_de_l_avoir = (
+        _catalogue_impose_et_part_offerte_d_un_avoir(ligne_d_origine, quantite)
     )
-    ligne_en_partie_offerte = (
-        ligne_avec_une_part_offerte and not ligne_entierement_offerte_par_ses_montants
-    )
-    if ligne_en_partie_offerte and not toute_la_quantite_rendue:
-        raise ValueError(
-            "Cet article a une part offerte : il faut rembourser l'article entier "
-            "(pas de remboursement d'une partie de la quantité)."
-        )
-
-    # Les montants : recopiés en négatif quand toute la ligne est rendue et que le
-    # service l'a écrite ; sinon calculés par la formule (prix × −quantité). Une partie
-    # d'une ligne entièrement offerte reste entièrement offerte : part offerte = total.
-    # / Amounts: mirrored for a full return of a service-written line, else computed;
-    # a part of a fully offered line stays fully offered.
-    if toute_la_quantite_rendue and ligne_ecrite_par_le_service:
-        total_catalogue_de_l_avoir = -ligne_d_origine.total_catalogue
-        part_offerte_de_l_avoir = -ligne_d_origine.part_offerte
-    elif ligne_entierement_offerte_par_ses_montants:
-        montants_de_la_partie_rendue = calculer_montants_article(
-            prix_unitaire=ligne_d_origine.amount,
-            quantite=-quantite,
-            taux_tva=ligne_d_origine.vat,
-        )
-        total_catalogue_de_l_avoir = None
-        part_offerte_de_l_avoir = montants_de_la_partie_rendue["total_catalogue"]
-    else:
-        total_catalogue_de_l_avoir = None
-        part_offerte_de_l_avoir = 0
 
     if part_offerte_de_l_avoir != 0:
         source_de_l_offert = ligne_d_origine.source_offert
@@ -943,16 +1005,6 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
             "La vente d'origine n'est pas réglée : l'avoir est impossible."
         )
 
-    # Le moyen de l'argent rendu : le moyen Stripe d'origine, ou le moyen choisi.
-    # / The money method: the original Stripe one, or the chosen one.
-    ligne_payee_par_stripe = ligne.paiement_stripe_id is not None
-    if ligne_payee_par_stripe:
-        paiement_d_origine = ligne.paiement_stripe
-        moyen_de_l_argent_rendu = paiement_d_origine.moyen or ligne.payment_method
-    else:
-        paiement_d_origine = None
-        moyen_de_l_argent_rendu = moyen_rembourse
-
     with transaction.atomic():
         # 1b. Sous verrou, la quantité qui reste à rendre. / 1b. Under lock, what is left.
         quantite_restante = quantite_restante_de_la_ligne_sous_verrou(ligne)
@@ -978,52 +1030,12 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
         # 3. L'article d'avoir. / 3. The credit note item.
         article_d_avoir = ajouter_l_article_d_avoir(vente_d_avoir, ligne, quantite)
 
-        # 4. UN règlement du net rendu, s'il n'est pas nul.
-        # Ligne payée en jetons : un règlement « jetons » (LG) négatif, avec la monnaie
-        # et la carte de la ligne. Aucun argent n'est rendu et la carte n'est pas
-        # recréditée : la dette du lieu revient, les jetons ne reviennent pas.
-        # Sinon : un règlement d'argent.
-        # / 4. ONE payment of the net given back. Token line: a negative LG payment,
-        # no money, no credit back on the card. Otherwise: a money payment.
-        net_rendu = article_d_avoir.total_ttc
-        if net_rendu != 0 and ligne_payee_en_jetons(ligne):
-            ajouter_reglement(
-                vente_d_avoir,
-                moyen=PaymentMethod.LOCAL_GIFT,
-                montant=net_rendu,
-                asset=ligne.asset,
-                carte=ligne.carte,
-            )
-        elif net_rendu != 0:
-            if not moyen_de_l_argent_rendu:
-                raise ValueError(
-                    "De l'argent est à rendre : le moyen « Remboursé par » est "
-                    "obligatoire."
-                )
-            ajouter_reglement(
-                vente_d_avoir,
-                moyen=moyen_de_l_argent_rendu,
-                montant=net_rendu,
-                paiement_stripe=paiement_d_origine,
-            )
-
-        # 5. La part offerte annulée, tracée par un règlement FREE. La règle « offert »
-        # du service a pu l'écrire déjà (moyen historique FREE) : on n'écrit que ce qui
-        # manque.
-        # / 5. The cancelled offered part, as a FREE payment, never twice.
-        part_offerte_deja_tracee = 0
-        reglements_offerts_deja_ecrits = Reglement.objects.filter(
-            vente=vente_d_avoir, moyen=PaymentMethod.FREE
+        # 4 et 5. Les règlements de l'avoir : la règle commune aux avoirs d'une ligne et
+        # d'une vente entière.
+        # / 4 and 5. The credit note payments: the rule shared with whole-sale ones.
+        ajouter_les_reglements_d_un_avoir(
+            vente_d_avoir, [(ligne, article_d_avoir)], moyen_rembourse
         )
-        for reglement_offert in reglements_offerts_deja_ecrits:
-            part_offerte_deja_tracee += reglement_offert.montant
-        part_offerte_a_tracer = article_d_avoir.part_offerte - part_offerte_deja_tracee
-        if part_offerte_a_tracer != 0:
-            ajouter_reglement(
-                vente_d_avoir,
-                moyen=PaymentMethod.FREE,
-                montant=part_offerte_a_tracer,
-            )
 
         # 6. L'encaissement. / 6. Settlement.
         encaisser_vente(vente_d_avoir)
@@ -1034,6 +1046,279 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
         article_d_avoir.save()
 
     return article_d_avoir
+
+
+def ajouter_les_reglements_d_un_avoir(
+    vente_d_avoir, lignes_et_articles_d_avoir, moyen_rembourse
+):
+    """
+    Écrit les règlements d'une vente AVOIR, d'après ses articles d'avoir : la règle
+    commune à l'avoir d'une ligne et à l'avoir d'une vente entière.
+    / Writes the payments of an AVOIR sale from its items: the rule shared by the
+    credit note of a line and of a whole sale.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    APPELÉE PAR : `ecrire_la_vente_d_avoir_d_une_ligne` et
+    `ecrire_la_vente_d_avoir_d_une_vente` (ce module), dans leur transaction.
+
+    LA RÈGLE (le net rendu de chaque article, quand il n'est pas nul) :
+    - ligne payée en jetons cadeau (LG) : un règlement « jetons » négatif par article,
+      avec la monnaie et la carte de la ligne. Aucun argent n'est rendu et la carte
+      n'est pas recréditée : la dette du lieu revient, les jetons ne reviennent pas ;
+    - ligne payée par Stripe : UN règlement par paiement Stripe, au moyen Stripe
+      d'origine, relié au paiement, sans référence externe (aucun appel à Stripe :
+      l'admin rembourse depuis le tableau de bord Stripe) ;
+    - tout autre argent : UN SEUL règlement pour tout, au moyen « Remboursé par »
+      (`moyen_rembourse`), obligatoire s'il y a de l'argent à rendre ;
+    - puis la part offerte annulée : UN règlement FREE négatif, sauf la partie déjà
+      tracée par la règle « offert » d'`ajouter_article` (jamais deux fois).
+    / Token lines: one LG payment each; Stripe lines: one payment per Stripe payment
+    (no Stripe call); any other money: ONE payment with the "Refunded by" method; then
+    the offered part as one FREE payment, never twice.
+
+    :param vente_d_avoir: la `Vente` AVOIR EN_ATTENTE
+    :param lignes_et_articles_d_avoir: liste de (ligne d'origine, article d'avoir)
+    :param moyen_rembourse: `PaymentMethod` de l'argent rendu, ou None
+    :raises ValueError: de l'argent hors Stripe est à rendre sans moyen
+    """
+    # Les nets à rendre, par paiement Stripe (dans l'ordre des articles), et ce qui se
+    # rend par le moyen choisi.
+    # / Nets to give back per Stripe payment, and what the chosen method gives back.
+    nets_par_paiement_stripe = {}
+    net_rendu_par_le_moyen_choisi = 0
+    for ligne_d_origine, article_d_avoir in lignes_et_articles_d_avoir:
+        net_rendu = article_d_avoir.total_ttc
+        if net_rendu == 0:
+            continue
+        if ligne_payee_en_jetons(ligne_d_origine):
+            ajouter_reglement(
+                vente_d_avoir,
+                moyen=PaymentMethod.LOCAL_GIFT,
+                montant=net_rendu,
+                asset=ligne_d_origine.asset,
+                carte=ligne_d_origine.carte,
+            )
+            continue
+        ligne_payee_par_stripe = ligne_d_origine.paiement_stripe_id is not None
+        if ligne_payee_par_stripe:
+            cle_du_paiement = ligne_d_origine.paiement_stripe_id
+            if cle_du_paiement not in nets_par_paiement_stripe:
+                # Le moyen Stripe d'origine ; repli sur le moyen historique de la
+                # ligne pour un paiement sans moyen (antérieur au chantier, fiche H).
+                # / The original Stripe method; falls back on the line's method.
+                paiement_d_origine = ligne_d_origine.paiement_stripe
+                moyen_stripe = paiement_d_origine.moyen or ligne_d_origine.payment_method
+                nets_par_paiement_stripe[cle_du_paiement] = {
+                    "paiement": paiement_d_origine,
+                    "moyen": moyen_stripe,
+                    "net": 0,
+                }
+            nets_par_paiement_stripe[cle_du_paiement]["net"] += net_rendu
+            continue
+        net_rendu_par_le_moyen_choisi += net_rendu
+
+    for net_d_un_paiement_stripe in nets_par_paiement_stripe.values():
+        if net_d_un_paiement_stripe["net"] == 0:
+            continue
+        ajouter_reglement(
+            vente_d_avoir,
+            moyen=net_d_un_paiement_stripe["moyen"],
+            montant=net_d_un_paiement_stripe["net"],
+            paiement_stripe=net_d_un_paiement_stripe["paiement"],
+        )
+
+    if net_rendu_par_le_moyen_choisi != 0:
+        if not moyen_rembourse:
+            raise ValueError(
+                "De l'argent est à rendre : le moyen « Remboursé par » est "
+                "obligatoire."
+            )
+        ajouter_reglement(
+            vente_d_avoir,
+            moyen=moyen_rembourse,
+            montant=net_rendu_par_le_moyen_choisi,
+        )
+
+    # La part offerte annulée, tracée par un règlement FREE. La règle « offert » du
+    # service a pu l'écrire déjà (moyen historique FREE) : on n'écrit que ce qui manque.
+    # / The cancelled offered part, as a FREE payment, never twice.
+    part_offerte_des_articles = 0
+    for _ligne_d_origine, article_d_avoir in lignes_et_articles_d_avoir:
+        part_offerte_des_articles += article_d_avoir.part_offerte
+    part_offerte_deja_tracee = 0
+    reglements_offerts_deja_ecrits = Reglement.objects.filter(
+        vente=vente_d_avoir, moyen=PaymentMethod.FREE
+    )
+    for reglement_offert in reglements_offerts_deja_ecrits:
+        part_offerte_deja_tracee += reglement_offert.montant
+    part_offerte_a_tracer = part_offerte_des_articles - part_offerte_deja_tracee
+    if part_offerte_a_tracer != 0:
+        ajouter_reglement(
+            vente_d_avoir,
+            moyen=PaymentMethod.FREE,
+            montant=part_offerte_a_tracer,
+        )
+
+
+# Les refus de l'avoir total qui ne viennent pas de l'état de la vente, mais de son
+# contenu. Textes du service (français) ; l'écran de l'admin a les siens, traduits.
+# / Full credit note refusals coming from the sale's content.
+MESSAGE_AVOIR_TOTAL_VENTE_AVEC_UN_ECART = (
+    "Cette vente a un écart d'encaissement : l'avoir total n'est pas possible. "
+    "Faites un avoir ligne par ligne."
+)
+MESSAGE_AVOIR_TOTAL_VENTE_AVEC_UNE_RECHARGE = (
+    "Cette vente contient une recharge de carte : l'avoir total n'est pas possible."
+)
+
+
+def vente_porte_un_ecart_d_encaissement(vente):
+    """
+    Dit si la vente porte un article « Écart d'encaissement » (reçu en plus ou en
+    moins) : Stripe a encaissé un autre montant que les articles. Même critère que le
+    filtre « À vérifier » de l'admin (le nom du produit système).
+    / Tells whether the sale carries a "collection gap" item (same criterion as the
+    admin "To check" filter).
+
+    LOCALISATION : BaseBillet/services_vente.py
+    LU PAR : `ecrire_la_vente_d_avoir_d_une_vente` (ce module) et l'écran « Avoir
+    total » (Administration/admin_tenant.py).
+    """
+    return LigneArticle.objects.filter(
+        vente=vente,
+        pricesold__productsold__product__name__in=[
+            NOM_ECART_RECU_EN_PLUS,
+            NOM_ECART_RECU_EN_MOINS,
+        ],
+    ).exists()
+
+
+def vente_contient_une_recharge(vente):
+    """
+    Dit si la vente contient un article hors chiffre d'affaires qui n'est pas un écart
+    d'encaissement : une recharge de carte (euros, cadeau, temps), un virement du pot
+    central, de la fidélité. Rendre une recharge par un avoir ne retire pas l'argent de
+    la carte : l'avoir total la refuse.
+    / Tells whether the sale contains an off-revenue item that is not a gap: a card
+    top-up (the credit note would not take the money back from the card).
+
+    LOCALISATION : BaseBillet/services_vente.py
+    LU PAR : `ecrire_la_vente_d_avoir_d_une_vente` (ce module) et l'écran « Avoir
+    total » (Administration/admin_tenant.py).
+    """
+    return (
+        LigneArticle.objects.filter(vente=vente, hors_chiffre_affaires=True)
+        .exclude(
+            pricesold__productsold__product__name__in=[
+                NOM_ECART_RECU_EN_PLUS,
+                NOM_ECART_RECU_EN_MOINS,
+            ]
+        )
+        .exists()
+    )
+
+
+def ecrire_la_vente_d_avoir_d_une_vente(vente, moyen_rembourse, origine):
+    """
+    Écrit l'avoir de TOUT ce qui reste à rendre d'une vente : UNE vente AVOIR, un
+    article d'avoir par ligne qui a encore une quantité à rendre, ses règlements,
+    encaissée, puis les articles passent CREDIT_NOTE. Tout ou rien.
+    / Writes the credit note of EVERYTHING left to give back on a sale: ONE AVOIR sale,
+    one item per line with a quantity left, its payments, settled, then CREDIT_NOTE.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    APPELÉE PAR : Administration/admin_tenant.py `VenteAdmin.avoir_total` (action
+    « Avoir total » de la fiche « Vente »).
+
+    FLUX (dans UNE transaction ; un point de sauvegarde si l'appelant en a une) :
+    1. refus si la vente n'est pas de nature VENTE, ou pas réglée, ou si elle porte un
+       article d'écart d'encaissement (`vente_porte_un_ecart_d_encaissement`), ou une
+       recharge de carte (`vente_contient_une_recharge`) : ces ventes se remboursent
+       ligne par ligne, quand c'est possible ;
+    2. chaque ligne vendue de la vente (quantité positive) est verrouillée et sa
+       quantité déjà rendue relue (`quantite_restante_de_la_ligne_sous_verrou`). Rien
+       ne reste sur aucune ligne : refus (« déjà remboursée en totalité »). Deux
+       demandes pour la même vente (double clic) n'écrivent jamais deux avoirs ;
+    3. UNE vente AVOIR, origine `origine`, liée à la vente, client = celui de la vente ;
+    4. un article d'avoir par ligne, pour toute sa quantité restante
+       (`ajouter_l_article_d_avoir`) ;
+    5. les règlements (`ajouter_les_reglements_d_un_avoir`) : jetons, Stripe (aucun
+       appel à Stripe), UN seul règlement pour tout autre argent, puis la part offerte ;
+    6. `encaisser_vente` (les deux égalités vérifiées) ;
+    7. PUIS chaque article passe CREDIT_NOTE par `save()`.
+    Une vente couverte par une clôture J n'est PAS refusée : l'avoir est une nouvelle
+    opération, comptée dans le service en cours.
+    / Refuses a non-VENTE or unsettled sale, and a sale with nothing left; one AVOIR
+    sale, one item per line left, shared payment rule, settle, THEN CREDIT_NOTE. A
+    sale covered by a J is not refused.
+
+    :param vente: la `Vente` d'origine (nature VENTE, réglée)
+    :param moyen_rembourse: `PaymentMethod` de l'argent rendu hors Stripe, ou None
+    :param origine: `SaleOrigin` de la vente AVOIR (ADMIN pour l'admin)
+    :return: la vente AVOIR réglée
+    :raises ValueError: refus, rien n'est écrit
+    """
+    if vente.nature != Vente.Nature.VENTE:
+        raise ValueError(
+            "Seule une vente de nature « Vente » reçoit un avoir total."
+        )
+    if vente.statut != Vente.Statut.REGLEE:
+        raise ValueError(
+            "La vente n'est pas réglée : l'avoir est impossible."
+        )
+    if vente_porte_un_ecart_d_encaissement(vente):
+        raise ValueError(MESSAGE_AVOIR_TOTAL_VENTE_AVEC_UN_ECART)
+    if vente_contient_une_recharge(vente):
+        raise ValueError(MESSAGE_AVOIR_TOTAL_VENTE_AVEC_UNE_RECHARGE)
+
+    with transaction.atomic():
+        # 2. Sous verrou, ce qui reste à rendre sur chaque ligne vendue.
+        # / 2. Under lock, what is left to give back on each sold line.
+        lignes_vendues = LigneArticle.objects.filter(
+            vente=vente, qty__gt=0
+        ).order_by("datetime", "pk")
+        lignes_et_quantites_restantes = []
+        for ligne_vendue in lignes_vendues:
+            quantite_restante = quantite_restante_de_la_ligne_sous_verrou(ligne_vendue)
+            if quantite_restante > 0:
+                lignes_et_quantites_restantes.append((ligne_vendue, quantite_restante))
+        if not lignes_et_quantites_restantes:
+            raise ValueError(
+                "La vente est déjà remboursée en totalité : rien n'est à rendre."
+            )
+
+        # 3. UNE vente AVOIR. / 3. ONE AVOIR sale.
+        vente_d_avoir = ouvrir_vente(
+            origine=origine,
+            nature=Vente.Nature.AVOIR,
+            client=vente.client,
+            vente_liee=vente,
+        )
+
+        # 4. Un article d'avoir par ligne. / 4. One credit note item per line.
+        lignes_et_articles_d_avoir = []
+        for ligne_vendue, quantite_restante in lignes_et_quantites_restantes:
+            article_d_avoir = ajouter_l_article_d_avoir(
+                vente_d_avoir, ligne_vendue, quantite_restante
+            )
+            lignes_et_articles_d_avoir.append((ligne_vendue, article_d_avoir))
+
+        # 5. Les règlements. / 5. The payments.
+        ajouter_les_reglements_d_un_avoir(
+            vente_d_avoir, lignes_et_articles_d_avoir, moyen_rembourse
+        )
+
+        # 6. L'encaissement. / 6. Settlement.
+        vente_d_avoir_reglee = encaisser_vente(vente_d_avoir)
+
+        # 7. PUIS les transitions. / 7. THEN the transitions.
+        for _ligne_vendue, article_d_avoir in lignes_et_articles_d_avoir:
+            article_d_avoir.status = LigneArticle.CREDIT_NOTE
+            article_d_avoir.save()
+
+    return vente_d_avoir_reglee
 
 
 def ajouter_reglement(

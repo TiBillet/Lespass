@@ -21,6 +21,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.signing import TimestampSigner
 from django.db import connection
+from django.db.models import Q
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
@@ -155,24 +156,98 @@ def create_membership_invoice_pdf(membership: Membership):
     # / Recipient email (may be absent for an anonymous membership)
     email = getattr(user, 'email', None) or ''
 
-    # Paiement Stripe associé (None si paiement hors-ligne : espèces, chèque, virement)
-    # / Associated Stripe payment (None if offline payment: cash, check, transfer)
-    paiement_stripe = membership.stripe_paiement.filter(
-        status=Paiement_stripe.VALID
-    ).order_by('-datetime').first()
+    # QUE PORTE LA FACTURE ? Une facture par paiement : celui de la DERNIÈRE ligne
+    # payée de l'adhésion (l'achat, ou le dernier renouvellement), par date.
+    # - Cette ligne a un paiement Stripe : la facture porte CE paiement en entier,
+    #   comme il a été payé (un billet du même panier compris). Les montants sont les
+    #   nets vendus des lignes (`LigneArticle.total_decimal`, `Paiement_stripe.total`,
+    #   sur `total_ttc`).
+    # - Sinon (hors Stripe) : les parts de l'adhésion de la vente de cette ligne. Une
+    #   adhésion payée avec plusieurs moyens à la caisse est écrite en plusieurs
+    #   « parts » (une par moyen), et une seule porte l'adhésion (FK `membership`) :
+    #   on prend les lignes de cette vente au même tarif, de cette adhésion ou sans
+    #   adhésion (jamais la part d'une autre adhésion). Elles sont regroupées en UN
+    #   article (`articles_de_la_vente_pour_l_affichage`), part offerte montrée. Les
+    #   autres articles de la vente (une bière du même panier) et les ventes plus
+    #   anciennes n'y sont pas. Une dernière ligne sans vente compte seule. Le total
+    #   est la somme de leurs nets vendus (`total_ttc`) ; sans ligne payée, il vaut 0.
+    #   Le mode de paiement : les moyens nets de la vente (corrections comprises,
+    #   sans l'offert), lus dans ses règlements.
+    # / ONE invoice per payment: the latest paid line's. If it has a Stripe payment,
+    # the whole payment. Otherwise the membership's parts of that line's sale (this
+    # membership or none), grouped in one item with the offered part shown; total =
+    # their net sold (0 without line); payment mode = the sale's net methods.
+    # Imports locaux : ce module est chargé par les signaux de BaseBillet, avant que
+    # laboutik et comptabilite soient prêts (cycle d'imports).
+    # / Local imports: this module loads with BaseBillet's signals (import cycle).
+    from comptabilite.presentation import euros_a_la_francaise
+    from laboutik.affichage_des_ventes import (
+        articles_de_la_vente_pour_l_affichage,
+        noms_des_monnaies_des_ventes,
+        noms_des_moyens_nets_de_la_vente,
+    )
 
-    # Lignes d'articles hors-ligne (utilisées dans le template quand paiement_stripe est absent)
-    # / Offline sale lines (used in the template when paiement_stripe is absent)
-    lignes_hors_ligne = []
+    statuts_des_lignes_payees = [LigneArticle.PAID, LigneArticle.VALID]
+    derniere_ligne_de_l_adhesion = (
+        membership.lignearticles.filter(status__in=statuts_des_lignes_payees)
+        .select_related('pricesold', 'paiement_stripe', 'vente')
+        .order_by('-datetime')
+        .first()
+    )
+
+    paiement_stripe = None
+    if derniere_ligne_de_l_adhesion is not None:
+        paiement_stripe = derniere_ligne_de_l_adhesion.paiement_stripe
+
+    articles_hors_ligne = []
+    taux_tva_hors_ligne = None
+    total_hors_ligne_a_la_francaise = None
+    moyens_hors_ligne = "—"
     if not paiement_stripe:
-        lignes_hors_ligne = membership.lignearticles.filter(
-            status__in=[LigneArticle.PAID, LigneArticle.VALID]
-        ).select_related('pricesold', 'pricesold__price', 'pricesold__price__product')
+        lignes_hors_ligne = []
+        if derniere_ligne_de_l_adhesion is not None:
+            taux_tva_hors_ligne = derniere_ligne_de_l_adhesion.vat
+            if derniere_ligne_de_l_adhesion.vente_id is None:
+                parts_de_l_adhesion = LigneArticle.objects.filter(
+                    pk=derniere_ligne_de_l_adhesion.pk
+                )
+            else:
+                parts_de_l_adhesion = LigneArticle.objects.filter(
+                    Q(membership=membership) | Q(membership__isnull=True),
+                    vente_id=derniere_ligne_de_l_adhesion.vente_id,
+                    pricesold__price_id=derniere_ligne_de_l_adhesion.pricesold.price_id,
+                    status__in=statuts_des_lignes_payees,
+                )
+                vente_de_l_adhesion = derniere_ligne_de_l_adhesion.vente
+                noms_des_moyens = noms_des_moyens_nets_de_la_vente(
+                    vente_de_l_adhesion,
+                    noms_des_monnaies_des_ventes([vente_de_l_adhesion]),
+                )
+                if noms_des_moyens:
+                    moyens_hors_ligne = ", ".join(noms_des_moyens)
+            lignes_hors_ligne = list(
+                parts_de_l_adhesion
+                .select_related(
+                    'pricesold__price',
+                    'pricesold__productsold__product',
+                    'pricesold__productsold__event',
+                )
+                .order_by('datetime')
+            )
+
+        articles_hors_ligne = articles_de_la_vente_pour_l_affichage(lignes_hors_ligne, "")
+        total_hors_ligne_en_centimes = 0
+        for part_de_l_adhesion in lignes_hors_ligne:
+            total_hors_ligne_en_centimes += part_de_l_adhesion.total_ttc
+        total_hors_ligne_a_la_francaise = euros_a_la_francaise(total_hors_ligne_en_centimes)
 
     context = {
         'config': config,
         'paiement': paiement_stripe,
-        'lignes_hors_ligne': lignes_hors_ligne,
+        'articles_hors_ligne': articles_hors_ligne,
+        'taux_tva_hors_ligne': taux_tva_hors_ligne,
+        'total_hors_ligne_a_la_francaise': total_hors_ligne_a_la_francaise,
+        'moyens_hors_ligne': moyens_hors_ligne,
         'membership': membership,
         'email': email,
         # Variables utilisées directement par le template (indépendantes de config.*)
@@ -978,6 +1053,12 @@ def send_refund_to_laboutik(self, ligne_article_pk):
 
     logger.info(f"send_refund_to_laboutik -> ligne_article status : {ligne_article.get_status_display()}")
 
+    # Même charge utile que la vente : le moyen, la monnaie et le portefeuille se lisent
+    # dans le règlement de la vente d'avoir (`LigneArticleSerializer`). Une ligne de
+    # remboursement ne passe REFUNDED qu'APRÈS l'encaissement de sa vente d'avoir
+    # (PaiementStripe/utils.py, tout ou rien) : son règlement existe toujours ici.
+    # / Same payload as a sale, read from the credit note sale's payment; a refund line
+    # turns REFUNDED only after its sale is settled, so the payment always exists.
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
     json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 
@@ -1085,6 +1166,58 @@ def send_sale_to_laboutik(self, ligne_article_pk):
             raise self.retry(countdown=3)
         except MaxRetriesExceededError:
             logger.error(f"send_sale_to_laboutik : ligne {ligne_article_pk} jamais passee VALID apres retries — abandon")
+            return False
+
+    # La charge utile lit le moyen dans le règlement de la vente
+    # (`LigneArticleSerializer`). Une vente pas encore réglée n'a pas encore son
+    # règlement : c'est un encaissement en échec (BaseBillet/signals.py le laisse en
+    # attente, à rejouer). On ne poste RIEN : la tâche se relance, avec une attente
+    # croissante plafonnée (3^essais, au plus MAX_RETRY_TIME), puis abandonne et le
+    # journalise. Une ligne héritée, sans vente, part telle quelle (ses propres champs).
+    # / The payload reads the method from the sale's payment. An unsettled sale (failed
+    # settlement) is not posted: the task retries with a growing capped delay, then
+    # gives up and logs it. A legacy line without a sale is sent as is.
+    vente_de_la_ligne = ligne_article.vente
+
+    # Import local : ce module est chargé par les signaux de BaseBillet, avant que le
+    # module des ventes soit prêt (cycle d'imports).
+    # / Local import: this module loads with BaseBillet's signals (import cycle).
+    from BaseBillet.models_vente import Vente
+
+    # Une vente ANNULÉE (Stripe a dit « non ») ne sera jamais réglée : relancer ne
+    # servirait à rien. Abandon tout de suite. Une ligne VALIDÉE dans une vente annulée
+    # n'est pas normale : un avertissement au journal.
+    # / A CANCELLED sale will never be settled: give up at once; a VALID line in a
+    # cancelled sale is not normal: a warning.
+    vente_annulee = (
+        vente_de_la_ligne is not None
+        and vente_de_la_ligne.statut == Vente.Statut.ANNULEE
+    )
+    if vente_annulee:
+        logger.warning(
+            f"send_sale_to_laboutik : ligne {ligne_article_pk} validée, mais sa vente "
+            f"{vente_de_la_ligne.uuid} est annulée — rien n'est envoyé à LaBoutik"
+        )
+        return False
+
+    vente_pas_encore_reglee = (
+        vente_de_la_ligne is not None
+        and vente_de_la_ligne.statut != Vente.Statut.REGLEE
+    )
+    if vente_pas_encore_reglee:
+        attente_avant_le_prochain_essai = min(3 ** self.request.retries, MAX_RETRY_TIME)
+        logger.info(
+            f"send_sale_to_laboutik -> vente {vente_de_la_ligne.uuid} pas encore réglée "
+            f"({vente_de_la_ligne.statut}), nouvel essai dans {attente_avant_le_prochain_essai} s"
+        )
+        try:
+            raise self.retry(countdown=attente_avant_le_prochain_essai)
+        except MaxRetriesExceededError:
+            logger.error(
+                f"send_sale_to_laboutik : ligne {ligne_article_pk}, vente "
+                f"{vente_de_la_ligne.uuid} jamais réglée après les essais — abandon, "
+                f"rien n'est envoyé à LaBoutik"
+            )
             return False
 
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data

@@ -232,10 +232,6 @@ _COUPURES_PAIRES_POUR_TEMPLATE = [
 
 logger = logging.getLogger(__name__)
 
-# La periode la plus longue d'un export fiscal, comme la commande `archiver_donnees`.
-# / The longest fiscal export period, like the archiver_donnees command.
-NOMBRE_DE_JOURS_MAXIMUM_D_UN_EXPORT_FISCAL = 365
-
 
 # --------------------------------------------------------------------------- #
 #  Fonctions utilitaires — état, articles, catégories                         #
@@ -3843,19 +3839,7 @@ class CaisseViewSet(viewsets.ViewSet):
         2. POST: validates dates, generates files, computes hashes,
            packages into ZIP, logs the operation, returns the ZIP.
         """
-        from datetime import date as date_type
-
-        from django.db import connection
-        from django.http import HttpResponse
-
-        from laboutik.archivage import (
-            calculer_hash_fichiers,
-            creer_entree_journal,
-            empaqueter_zip,
-            generer_fichiers_archive,
-        )
-
-        config = LaboutikConfiguration.get_solo()
+        from laboutik.archivage import reponse_de_l_export_fiscal
 
         if request.method == "GET":
             # Detecter si la requete vient de l'admin (HTMX) ou d'un acces direct (POS)
@@ -3876,119 +3860,11 @@ class CaisseViewSet(viewsets.ViewSet):
                 )
             return render(request, "laboutik/partial/hx_export_fiscal.html")
 
-        # --- POST : generation de l'archive ZIP ---
-        # --- POST: ZIP archive generation ---
-
-        # Recuperer la cle HMAC / Get the HMAC key
-        cle = config.get_or_create_hmac_key()
-        if not cle:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _("Cle HMAC non configuree. Export impossible."),
-                },
-                status=500,
-            )
-
-        # Parser les dates optionnelles / Parse optional dates
-        debut = None
-        fin = None
-        debut_str = request.POST.get("debut", "").strip()
-        fin_str = request.POST.get("fin", "").strip()
-        try:
-            if debut_str:
-                debut = date_type.fromisoformat(debut_str)
-            if fin_str:
-                fin = date_type.fromisoformat(fin_str)
-        except ValueError:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _("Format de date invalide."),
-                },
-                status=400,
-            )
-
-        # La periode, comme la commande `archiver_donnees` : la date de debut est
-        # obligatoire, la fin ne precede pas le debut, et 365 jours au plus. Sans date
-        # de fin, la fin est aujourd'hui (date du lieu). Une archive sans borne
-        # (tout l'historique, en memoire, dans une requete HTTP) n'existe pas.
-        # / The period, like the archiver_donnees command: start date required, end not
-        # before start, 365 days at most; without an end, it ends today.
-        if debut is None:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _("La date de début est obligatoire."),
-                },
-                status=400,
-            )
-        fin_de_la_periode = fin
-        if fin_de_la_periode is None:
-            fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
-            fin_de_la_periode = dj_timezone.now().astimezone(fuseau_du_lieu).date()
-        if fin_de_la_periode < debut:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _(
-                        "La date de fin est antérieure à la date de début."
-                    ),
-                },
-                status=400,
-            )
-        nombre_de_jours_de_la_periode = (fin_de_la_periode - debut).days
-        if nombre_de_jours_de_la_periode > NOMBRE_DE_JOURS_MAXIMUM_D_UN_EXPORT_FISCAL:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _(
-                        "La période demandée dépasse 365 jours. Faites un export "
-                        "par année."
-                    ),
-                },
-                status=400,
-            )
-
-        schema = connection.schema_name
-
-        # Generer les fichiers, calculer les hash, empaqueter en ZIP
-        # / Generate files, compute hashes, package into ZIP
-        fichiers = generer_fichiers_archive(schema, debut, fin)
-        hash_json = calculer_hash_fichiers(fichiers, cle)
-        zip_bytes = empaqueter_zip(fichiers, hash_json)
-
-        # Journaliser l'export / Log the export
-        details = {
-            "schema": schema,
-            "debut": debut_str or None,
-            "fin": fin_str or None,
-            "nb_fichiers": len(fichiers),
-            "taille_zip": len(zip_bytes),
-        }
-        creer_entree_journal(
-            type_operation="EXPORT_FISCAL",
-            details=details,
-            cle_secrete=cle,
-            operateur=request.user if request.user.is_authenticated else None,
-        )
-
-        # Reponse ZIP en telechargement / ZIP download response
-        date_label = dj_timezone.localtime(dj_timezone.now()).strftime("%Y%m%d_%H%M")
-        filename = f"export_fiscal_{schema}_{date_label}.zip"
-        response = HttpResponse(zip_bytes, content_type="application/zip")
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        return response
+        # --- POST : generation de l'archive ZIP, par la logique commune ---
+        # La meme fonction sert l'admin de la comptabilite (comptabilite/admin.py).
+        # / POST: ZIP archive generation, through the shared logic (also used by the
+        # accounting admin).
+        return reponse_de_l_export_fiscal(request)
 
     # ----------------------------------------------------------------------- #
     #  Export FEC — fichier des ecritures comptables (18 colonnes)              #

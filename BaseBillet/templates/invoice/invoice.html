@@ -187,12 +187,13 @@
             <td>{{ line.total_decimal }}€</td>
         </tr>{% endfor %}
     {% else %}
-        {% for line in lignes_hors_ligne %}<tr>
-            <td>{{ line.pricesold.price.product.name }} / {{ line.pricesold.price.name }}</td>
-            <td>{{ line.amount_decimal }}€</td>
-            <td>{{ line.qty | floatformat:2 }}</td>
-            <td>{{ line.vat }}%</td>
-            <td>{{ line.total_decimal }}€</td>
+        {# Hors Stripe : les parts de l'adhésion regroupées en un article (BaseBillet/tasks.py). #}
+        {% for article in articles_hors_ligne %}<tr>
+            <td>{{ article.nom }} / {{ article.tarif }}{% if article.part_offerte %} — {% translate "dont offert" %} {{ article.part_offerte_a_la_francaise }}{% endif %}</td>
+            <td>{{ article.prix_unitaire_a_la_francaise }}</td>
+            <td>{{ article.quantite_lisible }}</td>
+            <td>{{ taux_tva_hors_ligne }}%</td>
+            <td>{{ article.total_a_la_francaise }}</td>
         </tr>{% endfor %}
     {% endif %}
     </tbody>
@@ -215,8 +216,10 @@
             <td>{{ paiement.total }}€</td>
             {% else %}
             <td>{{ membership.last_contribution }}</td>
-            <td>{{ membership.payment_method_name }}</td>
-            <td>{{ membership.contribution_value }}€</td>
+            {# Les moyens nets de la vente, lus dans ses règlements (BaseBillet/tasks.py). #}
+            <td>{{ moyens_hors_ligne }}</td>
+            {# La somme des nets vendus des parts de l'adhésion (BaseBillet/tasks.py). #}
+            <td>{{ total_hors_ligne_a_la_francaise }}</td>
             {% endif %}
         </tr>
         </tbody>

@@ -315,7 +315,7 @@ class TicketCreator():
         if self.create_checkout and not self.paid_externally and self.list_line_article_sold:
             montant_total_en_centimes = 0
             for ligne_vendue in self.list_line_article_sold:
-                montant_total_en_centimes += int(ligne_vendue.amount * ligne_vendue.qty)
+                montant_total_en_centimes += ligne_vendue.total_ttc
             if montant_total_en_centimes > 0:
                 self.checkout_link = self.get_checkout_stripe()
             else:

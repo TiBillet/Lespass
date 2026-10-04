@@ -74,7 +74,7 @@ def test_admin_reservation_add_tarif_gratuit_cree_reservation_et_ligne(tenant):
         }
         form = ReservationAddAdmin(data=form_data)
 
-        with patch("Administration.admin_tenant.send_sale_to_laboutik.delay") as mock_laboutik, \
+        with patch("BaseBillet.tasks.send_sale_to_laboutik.delay") as mock_laboutik, \
              patch("Administration.admin_tenant.ticket_celery_mailer.delay") as mock_mailer:
             assert form.is_valid(), form.errors
             reservation = form.save()
@@ -153,7 +153,7 @@ def test_admin_reservation_add_tarif_payant_calcule_le_montant_en_centimes(tenan
         }
         form = ReservationAddAdmin(data=form_data)
 
-        with patch("Administration.admin_tenant.send_sale_to_laboutik.delay") as mock_laboutik, \
+        with patch("BaseBillet.tasks.send_sale_to_laboutik.delay") as mock_laboutik, \
              patch("Administration.admin_tenant.ticket_celery_mailer.delay") as mock_mailer:
             assert form.is_valid(), form.errors
             reservation = form.save()
@@ -234,7 +234,7 @@ def test_admin_reservation_add_tarif_partage_entre_deux_events(tenant):
             "quantity": 1,
         }
         form = ReservationAddAdmin(data=form_data)
-        with patch("Administration.admin_tenant.send_sale_to_laboutik.delay"), \
+        with patch("BaseBillet.tasks.send_sale_to_laboutik.delay"), \
              patch("Administration.admin_tenant.ticket_celery_mailer.delay"):
             assert form.is_valid(), form.errors
             reservation = form.save()
@@ -284,7 +284,7 @@ def test_admin_reservation_add_montant_par_billet_surcharge_le_prix(tenant):
             "quantity": 2,
         }
         form = ReservationAddAdmin(data=form_data)
-        with patch("Administration.admin_tenant.send_sale_to_laboutik.delay"), \
+        with patch("BaseBillet.tasks.send_sale_to_laboutik.delay"), \
              patch("Administration.admin_tenant.ticket_celery_mailer.delay"):
             assert form.is_valid(), form.errors
             reservation = form.save()
@@ -345,7 +345,7 @@ def test_admin_reservation_add_prix_libre_montant_obligatoire(tenant):
         # Avec 15€/billet, quantite 2 -> amount = 3000 centimes.
         # / With 15€/ticket, qty 2 -> amount = 3000 cents.
         form_ok = ReservationAddAdmin(data=dict(base, amount=15.0))
-        with patch("Administration.admin_tenant.send_sale_to_laboutik.delay"), \
+        with patch("BaseBillet.tasks.send_sale_to_laboutik.delay"), \
              patch("Administration.admin_tenant.ticket_celery_mailer.delay"):
             assert form_ok.is_valid(), form_ok.errors
             reservation = form_ok.save()

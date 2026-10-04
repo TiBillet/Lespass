@@ -10,7 +10,9 @@ QUI LIT CE MODULE :
 - laboutik/views.py : la liste des ventes (`lignes_de_la_liste_des_ventes`) et le
   detail d'une vente (articles, reglements, ventes liees) ;
 - laboutik/printing/formatters.py : le ticket de vente (`formatter_ticket_vente`),
-  avec les memes articles regroupes et les memes reglements.
+  avec les memes articles regroupes et les memes reglements ;
+- l'admin, l'export des lignes et la facture d'une adhesion : les moyens nets d'une
+  vente (`noms_des_moyens_nets_de_la_vente`), et les articles de la facture.
 Un ecran et un ticket lisent donc la meme chose, avec les memes libelles.
 / Read by the sales list and detail screens and by the sale receipt.
 
@@ -232,6 +234,60 @@ def moyens_en_clair(reglements_affiches):
     if not morceaux_de_la_phrase:
         return "—"
     return " + ".join(morceaux_de_la_phrase)
+
+
+def noms_des_moyens_nets_de_la_vente(vente, nom_par_uuid_de_monnaie):
+    """
+    « Payé comment » : les noms des moyens d'une vente, après ses corrections.
+    / "Paid how": the names of a sale's methods, after its corrections.
+
+    LOCALISATION : laboutik/affichage_des_ventes.py
+
+    On additionne, par moyen (et par monnaie), les règlements de la vente ET ceux de
+    ses ventes dérivées CORRECTION : une vente payée en espèces puis corrigée en CB
+    vaut 0 en espèces et le montant en CB. On garde les moyens dont le net n'est pas
+    nul, sans l'offert (FREE : la trace d'un cadeau, pas un moyen de paiement).
+    Libellés et ordre : ceux de `reglements_pour_l_affichage`.
+    / Payments of the sale AND of its CORRECTION sales are added up by method; methods
+    with a non-zero net are kept, offered left out. Labels and order of
+    `reglements_pour_l_affichage`.
+
+    Aucune requête si l'appelant précharge `reglements` et `ventes_derivees__reglements`
+    (les noms des monnaies sont reçus, jamais lus ici).
+    / No query when the caller prefetches the payments and the derived sales' payments.
+
+    LU PAR : Administration/admin_tenant.py (fiche utilisateur, liste des ventes,
+    onglet des ventes d'une adhésion), Administration/importers/lignearticle_exporter.py
+    (colonne « Moyens de la vente »), BaseBillet/tasks.py (pied de la facture d'une
+    adhésion).
+    / Read by the admin screens, the lines export and the membership invoice footer.
+
+    :param vente: la `Vente`
+    :param nom_par_uuid_de_monnaie: dict de `noms_des_monnaies_des_ventes`, ou {} :
+        un règlement cashless s'écrit alors par le nom de son moyen
+    :return: liste de libellés, sans doublon, dans l'ordre des moyens
+    """
+    reglements_de_la_vente_et_de_ses_corrections = list(vente.reglements.all())
+    for vente_derivee in vente.ventes_derivees.all():
+        if vente_derivee.nature == Vente.Nature.CORRECTION:
+            for reglement_de_la_correction in vente_derivee.reglements.all():
+                reglements_de_la_vente_et_de_ses_corrections.append(
+                    reglement_de_la_correction
+                )
+
+    reglements_affiches = reglements_pour_l_affichage(
+        reglements_de_la_vente_et_de_ses_corrections, nom_par_uuid_de_monnaie, ""
+    )
+    noms_des_moyens = []
+    for reglement_affiche in reglements_affiches:
+        if reglement_affiche["moyen"] == PaymentMethod.FREE:
+            continue
+        if reglement_affiche["montant"] == 0:
+            continue
+        if reglement_affiche["libelle"] in noms_des_moyens:
+            continue
+        noms_des_moyens.append(reglement_affiche["libelle"])
+    return noms_des_moyens
 
 
 def lignes_de_la_liste_des_ventes(ventes):

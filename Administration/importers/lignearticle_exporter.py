@@ -20,8 +20,17 @@ class LigneArticleExportResource(resources.ModelResource):
     qty = Field(attribute='qty', column_name=_("Quantité"))
     amount = Field(attribute='amount', column_name=_("Prix Unitaire"))
     vat = Field(attribute='vat', column_name=_("VAT"))
+    # « Montant » garde son nom (les lieux lisent déjà ces fichiers) : c'est le net
+    # vendu de la ligne (`total_ttc`). HT, TVA et numéro de vente le complètent.
+    # / "Montant" keeps its name: the line's net sold. HT, VAT and sale number follow.
     total = Field(column_name=_("Montant"))
-    payment_method = Field(column_name=_("Payment method"))
+    total_ht = Field(column_name=_("Total HT"))
+    total_tva = Field(column_name=_("Total TVA"))
+    numero_de_vente = Field(column_name=_("N° de vente"))
+    # Les moyens nets de la VENTE de la ligne (corrections comprises, sans l'offert),
+    # et non le moyen de la ligne : la colonne porte un nom qui le dit.
+    # / The net methods of the line's SALE, no longer the line's own method.
+    payment_method = Field(column_name=_("Moyens de la vente"))
     status = Field(column_name=_("Product entry status"))
     user_email = Field(column_name=_("User Email"))
     paiement_stripe = Field(column_name=_("Stripe payment"))
@@ -51,6 +60,9 @@ class LigneArticleExportResource(resources.ModelResource):
             'amount',
             'vat',
             'total',
+            'total_ht',
+            'total_tva',
+            'numero_de_vente',
             'payment_method',
             'status',
             'user_email',
@@ -59,7 +71,7 @@ class LigneArticleExportResource(resources.ModelResource):
             'wallet',
             'credit_note_ref',
         )
-        export_order = ('uuid', 'date','product','qty','amount','vat','total','payment_method','status','user_email','paiement_stripe','carte','wallet','credit_note_ref')
+        export_order = ('uuid', 'date','product','qty','amount','vat','total','total_ht','total_tva','numero_de_vente','payment_method','status','user_email','paiement_stripe','carte','wallet','credit_note_ref')
 
     def dehydrate_date(self, line):
         """
@@ -83,13 +95,34 @@ class LigneArticleExportResource(resources.ModelResource):
         return line.amount/100
 
     def dehydrate_total(self, line):
-        return line.total()/100
+        # Le net vendu de la ligne, en euros (part offerte déduite).
+        # / The line's net sold, in euros (offered part deducted).
+        return line.total_ttc/100
+
+    def dehydrate_total_ht(self, line):
+        return line.total_ht/100
+
+    def dehydrate_total_tva(self, line):
+        return line.total_tva/100
+
+    def dehydrate_numero_de_vente(self, line):
+        # Le numéro de la vente de la ligne ; vide pour une ligne sans vente ou une
+        # vente pas encore réglée.
+        # / The line's sale number; empty without a sale or before settlement.
+        if line.vente_id is None:
+            return ""
+        if line.vente.numero is None:
+            return ""
+        return line.vente.numero
 
     def dehydrate_status(self, line):
         return line.get_status_display()
 
     def dehydrate_payment_method(self, line):
-        return line.get_payment_method_display()
+        # Les moyens nets de la vente de la ligne, corrections comprises, sans l'offert
+        # (cellule vide quand il n'y en a aucun).
+        # / The net methods of the line's sale (empty cell when there is none).
+        return ", ".join(line.moyens_de_paiement_de_sa_vente())
 
     def dehydrate_user_email(self, line):
         return line.user_email()

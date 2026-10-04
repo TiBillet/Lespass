@@ -113,20 +113,51 @@ class ClotureCaisseAdmin(ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         """
         Ajoute l'adresse de l'export fiscal (archive LNE) au bandeau de la liste.
-        L'export est une route de la caisse (`laboutik/views.py` export_fiscal),
-        gardée par le module caisse : sans module caisse actif, la route refuse, et le
-        bouton n'est pas affiché.
-        / Adds the fiscal export address to the list banner. The route belongs to the
-        register and needs the register module: without it, no button.
+        L'archive couvre toutes les origines (en ligne, admin, caisse, tireuse) : le
+        bouton est proposé à TOUS les lieux, avec ou sans module caisse. Il pointe vers
+        la route de cet admin (`export_fiscal`), jamais vers celle de la caisse, gardée
+        par le module caisse.
+        / Adds the fiscal export address to the list banner, for EVERY venue: the
+        archive covers every origin. It points to this admin's route.
         """
-        from BaseBillet.models import Configuration
-
         extra_context = extra_context or {}
-        extra_context["export_fiscal_url"] = None
-        module_caisse_actif = Configuration.get_solo().module_caisse
-        if module_caisse_actif:
-            extra_context["export_fiscal_url"] = reverse("laboutik-caisse-export_fiscal")
+        extra_context["export_fiscal_url"] = reverse(
+            "staff_admin:comptabilite_cloturecaisse_export_fiscal"
+        )
         return super().changelist_view(request, extra_context)
+
+    def export_fiscal(self, request):
+        """
+        L'export fiscal depuis l'admin : GET rend le formulaire (partiel HTMX chargé
+        dans le bandeau de la liste), POST rend l'archive ZIP signée.
+        / The fiscal export from the admin: GET = the form, POST = the signed ZIP.
+
+        LOCALISATION : comptabilite/admin.py
+
+        La logique de l'envoi (période, archive, journal) est celle de la caisse, en
+        un seul endroit : `laboutik/archivage.py` `reponse_de_l_export_fiscal`.
+        / The POST logic is shared with the register route, in one place.
+        """
+        from django.shortcuts import render
+
+        from laboutik.archivage import reponse_de_l_export_fiscal
+
+        if request.method == "POST":
+            return reponse_de_l_export_fiscal(request)
+
+        adresse_de_la_liste_des_clotures = reverse(
+            "staff_admin:comptabilite_cloturecaisse_changelist"
+        )
+        return render(
+            request,
+            "admin/cloture/export_fiscal_form.html",
+            {
+                "form_action_url": request.path,
+                "cancel_url": request.headers.get(
+                    "HX-Current-URL", adresse_de_la_liste_des_clotures
+                ),
+            },
+        )
 
     def get_urls(self):
         """
@@ -141,6 +172,11 @@ class ClotureCaisseAdmin(ModelAdmin):
                 "rapport-temps-reel/",
                 self.admin_site.admin_view(self.rapport_temps_reel),
                 name="comptabilite_cloturecaisse_temps_reel",
+            ),
+            path(
+                "export-fiscal/",
+                self.admin_site.admin_view(self.export_fiscal),
+                name="comptabilite_cloturecaisse_export_fiscal",
             ),
             path(
                 "<uuid:object_id>/exporter-csv/",

@@ -13,7 +13,7 @@ from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, \
     PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress, PromotionalCode, \
-    MembershipProduct
+    MembershipProduct, PaymentMethod
 from Customers.models import Client
 from fedow_connect.utils import dround
 
@@ -990,8 +990,120 @@ class PriceSoldSerializer(serializers.ModelSerializer):
         ]
 
 
+def moyen_monnaie_et_portefeuille_envoyes_a_l_ancien_laboutik(ligne):
+    """
+    Le moyen, la monnaie (`asset`) et le portefeuille (`wallet`) d'une ligne, tels que
+    l'ancien LaBoutik (V1) les reçoit.
+    / The method, currency and wallet of a line, as legacy LaBoutik (V1) receives them.
+
+    LOCALISATION : ApiBillet/serializers.py
+    LU PAR : `LigneArticleSerializer` (ce module), envoyé par BaseBillet/tasks.py
+    `send_sale_to_laboutik` et `send_refund_to_laboutik`.
+
+    LA RÈGLE :
+    - la ligne a une vente : on lit LE règlement d'argent de la vente, hors offert
+      (FREE). Une vente envoyée n'en a qu'un ; s'il y en avait plusieurs, le premier
+      écrit est pris. Une vente gratuite, réglée sans aucun règlement d'argent : moyen
+      « offert » (NA), monnaie et portefeuille vides, comme ses lignes l'ont toujours
+      dit ;
+    - la ligne n'a pas de vente : c'est une ligne HÉRITÉE, écrite avant le chantier.
+      Elle garde ses propres champs (moyen, monnaie, portefeuille). Retiré en fiche H,
+      avec ces champs de la ligne.
+    / With a sale: the sale's money payment (offered left out); a free sale without
+    any payment says "NA", empty currency and wallet. Without a sale (legacy line,
+    removed in sheet H): the line's own fields.
+
+    La tâche d'envoi n'appelle ce sérialiseur que pour une vente RÉGLÉE (elle se relance
+    tant que la vente est en attente) : les règlements sont alors tous écrits.
+    / The sending task only serializes a SETTLED sale's line.
+
+    :param ligne: la `LigneArticle` envoyée
+    :return: dict {payment_method (code), asset (uuid en texte ou None), wallet (uuid
+        en texte ou None)}
+    """
+    ligne_heritee_sans_vente = ligne.vente_id is None
+    if ligne_heritee_sans_vente:
+        asset_de_la_ligne = None
+        if ligne.asset is not None:
+            asset_de_la_ligne = str(ligne.asset)
+        wallet_de_la_ligne = None
+        if ligne.wallet_id is not None:
+            wallet_de_la_ligne = str(ligne.wallet_id)
+        return {
+            "payment_method": ligne.payment_method,
+            "asset": asset_de_la_ligne,
+            "wallet": wallet_de_la_ligne,
+        }
+
+    reglements_d_argent = []
+    for reglement in ligne.vente.reglements.order_by("datetime", "pk"):
+        if reglement.moyen != PaymentMethod.FREE:
+            reglements_d_argent.append(reglement)
+
+    vente_sans_reglement_d_argent = len(reglements_d_argent) == 0
+    if vente_sans_reglement_d_argent:
+        return {
+            "payment_method": PaymentMethod.FREE.value,
+            "asset": None,
+            "wallet": None,
+        }
+
+    reglement_d_argent = reglements_d_argent[0]
+    asset_du_reglement = None
+    if reglement_d_argent.asset is not None:
+        asset_du_reglement = str(reglement_d_argent.asset)
+    wallet_du_reglement = None
+    if reglement_d_argent.wallet_id is not None:
+        wallet_du_reglement = str(reglement_d_argent.wallet_id)
+    return {
+        "payment_method": reglement_d_argent.moyen,
+        "asset": asset_du_reglement,
+        "wallet": wallet_du_reglement,
+    }
+
+
 class LigneArticleSerializer(serializers.ModelSerializer):
+    """
+    La charge utile d'UNE ligne envoyée à l'ancien LaBoutik (V1).
+    / The payload of ONE line sent to legacy LaBoutik (V1).
+
+    LOCALISATION : ApiBillet/serializers.py
+    Envoyée par BaseBillet/tasks.py `send_sale_to_laboutik` et `send_refund_to_laboutik`.
+
+    Les champs et leur forme sont un CONTRAT avec l'ancien LaBoutik : ils ne changent
+    pas. Seule leur source change pour trois d'entre eux : le moyen, la monnaie et le
+    portefeuille se lisent dans le règlement de la vente
+    (`moyen_monnaie_et_portefeuille_envoyes_a_l_ancien_laboutik`).
+    / Fields and shape are a CONTRACT with legacy LaBoutik; method, currency and wallet
+    are read from the sale's payment.
+    """
     pricesold = PriceSoldSerializer(many=False)
+    payment_method = serializers.SerializerMethodField()
+    asset = serializers.SerializerMethodField()
+    wallet = serializers.SerializerMethodField()
+
+    def _moyen_monnaie_et_portefeuille(self, ligne):
+        """
+        Lit le moyen, la monnaie et le portefeuille UNE seule fois par ligne : les trois
+        champs ci-dessous les demandent, une seule lecture des règlements suffit.
+        / Reads method, currency and wallet ONCE per line (three fields, one query).
+        """
+        if not hasattr(self, "_lectures_par_ligne"):
+            self._lectures_par_ligne = {}
+        if ligne.pk not in self._lectures_par_ligne:
+            self._lectures_par_ligne[ligne.pk] = (
+                moyen_monnaie_et_portefeuille_envoyes_a_l_ancien_laboutik(ligne)
+            )
+        return self._lectures_par_ligne[ligne.pk]
+
+    def get_payment_method(self, ligne):
+        return self._moyen_monnaie_et_portefeuille(ligne)["payment_method"]
+
+    def get_asset(self, ligne):
+        return self._moyen_monnaie_et_portefeuille(ligne)["asset"]
+
+    def get_wallet(self, ligne):
+        return self._moyen_monnaie_et_portefeuille(ligne)["wallet"]
 
     class Meta:
         model = LigneArticle

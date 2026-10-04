@@ -306,7 +306,7 @@ def reservation_payee(
         lignes_du_paiement = LigneArticle.objects.filter(paiement_stripe=paiement)
         montant_de_la_reservation = 0
         for ligne in lignes_du_paiement:
-            montant_de_la_reservation += int(ligne.amount * ligne.qty)
+            montant_de_la_reservation += ligne.total_ttc
         prix_un_billet = lignes_du_paiement.get().amount
 
         if compte_stripe_reel:
@@ -354,7 +354,7 @@ def vente_admin_especes(tenant, event_uuid, price_uuid, qty, offert=False):
     with tenant_context(tenant):
         form = ReservationAddAdmin(data=form_data)
         with (
-            patch("Administration.admin_tenant.send_sale_to_laboutik.delay"),
+            patch("BaseBillet.tasks.send_sale_to_laboutik.delay"),
             patch("Administration.admin_tenant.ticket_celery_mailer.delay"),
         ):
             assert form.is_valid(), form.errors

@@ -577,25 +577,43 @@ class Booking(models.Model):
         return str(self.slot_duration_minutes * self.slot_count) + "min"
 
     def to_pay(self):
+        """
+        Le reste à payer : la somme des nets vendus (`total_ttc`) des lignes pas encore
+        payées. Lu pour choisir Stripe ou gratuit (booking/booking_engine.py).
+        / Amount still to pay: sum of the unpaid lines' net sold.
+        """
         to_pay = 0
         for ligne_article in self.lignearticles.filter(status__in=[LigneArticle.UNPAID, LigneArticle.CREATED]):
-            ligne_article: LigneArticle
-            to_pay += int(ligne_article.amount * ligne_article.qty)  # int car on multiplie un int par un float
+            to_pay += ligne_article.total_ttc
         return dround(to_pay)
 
     def total_paid(self):
+        """
+        Le montant payé : la somme des nets vendus (`total_ttc`) des lignes payées,
+        remboursements et avoirs compris (négatifs), comme `Reservation.total_paid`.
+        / Amount paid: sum of the paid lines' net sold, refunds and credit notes
+        included, like Reservation.total_paid.
+        """
         total_paid = 0
-        for ligne_article in self.lignearticles.filter(status__in=[LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED]):
-            ligne_article: LigneArticle
-            total_paid += int(ligne_article.amount * ligne_article.qty)  # int car on multiplie un int par un float
+        statuts_des_lignes_payees = [
+            LigneArticle.PAID,
+            LigneArticle.VALID,
+            LigneArticle.REFUNDED,
+            LigneArticle.CREDIT_NOTE,
+        ]
+        for ligne_article in self.lignearticles.filter(status__in=statuts_des_lignes_payees):
+            total_paid += ligne_article.total_ttc
         return dround(total_paid)
 
     def _lignes_hors_stripe(self):
         """
-        Les lignes VALID/PAID payantes (montant non nul) de ce booking sans paiement
+        Les lignes VALID/PAID payantes (net vendu `total_ttc` non nul) de ce booking sans paiement
         Stripe (réglées sur place : espèces, chèque…), pas encore créditées. Seule la FK
-        directe compte.
+        directe compte. Une ligne entièrement offerte (net 0) n'y est pas ; une ligne
+        payée en jetons cadeau y est (son net n'est pas nul) : l'appelant l'écarte par
+        `ligne_sans_argent_a_rendre`.
         / Paid (non-zero) VALID/PAID non-Stripe lines of this booking, not yet credited.
+        A fully offered line is out; a gift-token line is in, the caller filters it.
 
         Lue par `cancel_and_refund_booking` pour choisir le message de l'annulation.
         / Read by cancel_and_refund_booking to pick the cancellation message.
@@ -603,7 +621,7 @@ class Booking(models.Model):
         lignes = self.lignearticles.filter(
             paiement_stripe__isnull=True,
             status__in=[LigneArticle.VALID, LigneArticle.PAID],
-            amount__gt=0,
+            total_ttc__gt=0,
         ).exclude(
             credit_notes__isnull=False,
         )

@@ -831,7 +831,16 @@ def _construire_sections_modules(request):
     # n'apparait que si le module caisse est actif.
     # / Both reports sit one under the other: the sales report (single closure, every
     # origin), then the old POS report, only when the POS module is on.
+    # « Ventes » en premier : la liste de toutes les ventes du lieu, toutes origines,
+    # en lecture seule (VenteAdmin, Administration/admin_tenant.py).
+    # / "Sales" first: every sale of the venue, read-only.
     items_ventes_et_comptabilite = [
+        {
+            "title": _("Ventes"),
+            "icon": "receipt",
+            "link": _safe_rev("staff_admin:BaseBillet_vente_changelist"),
+            "permission": admin_permission,
+        },
         {
             "title": _("Rapport des ventes"),
             "icon": "lock",

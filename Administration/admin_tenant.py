@@ -42,7 +42,9 @@ from Administration.admin import (  # noqa: F401
 # autodiscover, importing the module triggers the @admin.register calls.
 import pages.admin  # noqa: F401
 
+import hmac
 import json
+from functools import partial
 import logging
 import re
 from datetime import timedelta
@@ -68,7 +70,8 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError, transaction as db_transaction
-from django.db.models import Count, Q, Prefetch, F
+from django.db.models import Count, Q, Prefetch, F, Exists, OuterRef, Subquery, Sum
+from django.db import OperationalError
 from django.forms import ModelForm, Form
 from django.http import HttpResponse
 from django.shortcuts import redirect, get_object_or_404, render
@@ -76,7 +79,7 @@ from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string
 from django.urls import re_path
 from django.utils import timezone
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
@@ -132,19 +135,28 @@ from BaseBillet.models import Configuration, Product, Price, Paiement_stripe, Me
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, MembershipProduct, FederationConfiguration, ProductSold
 from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
-    send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
-from BaseBillet.models_vente import Vente
+    send_reservation_cancellation_user, forge_connexion_url, send_sale_to_laboutik
+from BaseBillet.models_vente import Reglement, Vente
 from BaseBillet.services_vente import (
+    NOM_ECART_RECU_EN_MOINS,
+    NOM_ECART_RECU_EN_PLUS,
     MOYENS_DU_CHAMP_REMBOURSE_PAR,
+    EgaliteDeVenteRompue,
     ajouter_article,
     ajouter_reglement,
+    apercu_des_montants_d_un_avoir,
     choix_du_champ_rembourse_par,
     ecrire_la_vente_d_avoir_d_une_ligne,
+    ecrire_la_vente_d_avoir_d_une_vente,
     encaisser_vente,
+    encaisser_vente_stripe,
     ligne_entierement_offerte,
+    ligne_payee_en_jetons,
     ligne_payee_en_points,
     ligne_sans_argent_a_rendre,
     ouvrir_vente,
+    vente_contient_une_recharge,
+    vente_porte_un_ecart_d_encaissement,
 )
 from Customers.models import Client
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
@@ -153,6 +165,15 @@ from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
 from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
 from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+from laboutik.affichage_des_ventes import (
+    badge_de_la_nature_d_une_vente,
+    nom_de_l_unite_de_la_vente,
+    reglements_pour_l_affichage,
+)
+from laboutik.integrity import calculer_hmac_vente
+from laboutik.models import LaboutikConfiguration
+from comptabilite.presentation import montant_a_la_francaise_dans_l_unite
+from comptabilite.rapport import nom_du_moyen_de_paiement
 
 # from simple_history.admin import SimpleHistoryAdmin
 
@@ -1178,7 +1199,13 @@ class HumanUserAdmin(ModelAdmin):
                     Reservation.objects
                     .filter(user_commande=user)
                     .select_related('event')
-                    .prefetch_related('tickets', 'lignearticles', 'paiements__lignearticles')
+                    .prefetch_related(
+                        'tickets',
+                        'lignearticles__vente__reglements',
+                        'lignearticles__vente__ventes_derivees__reglements',
+                        'paiements__lignearticles__vente__reglements',
+                        'paiements__lignearticles__vente__ventes_derivees__reglements',
+                    )
                     .order_by(F('event__datetime').desc(nulls_last=True))
                 )
                 evenements_a_venir = []
@@ -1188,12 +1215,21 @@ class HumanUserAdmin(ModelAdmin):
                     # Lignes payées calculées UNE seule fois sur les relations préchargées.
                     # / Paid lines computed once from prefetched relations.
                     lignes_payees = _lignes_payees_prefetch(reservation)
-                    montant_paye = dround(sum(int(ligne.amount * ligne.qty) for ligne in lignes_payees))
-                    moyens_de_paiement = sorted({
-                        ligne.get_payment_method_display()
-                        for ligne in lignes_payees
-                        if ligne.payment_method
-                    })
+
+                    # Montant payé : la somme des nets vendus (`total_ttc`) des lignes,
+                    # avoirs et remboursements compris (négatifs). Moyens : les moyens
+                    # nets des ventes de ces lignes, corrections comprises, sans l'offert,
+                    # sans doublon, dans l'ordre des moyens.
+                    # / Paid amount: sum of the lines' net sold. Methods: the net methods
+                    # of the lines' sales, corrections included, offered left out.
+                    montant_paye_en_centimes = 0
+                    moyens_de_paiement = []
+                    for ligne_payee in lignes_payees:
+                        montant_paye_en_centimes += ligne_payee.total_ttc
+                        for nom_du_moyen in ligne_payee.moyens_de_paiement_de_sa_vente():
+                            if nom_du_moyen not in moyens_de_paiement:
+                                moyens_de_paiement.append(nom_du_moyen)
+                    montant_paye = dround(montant_paye_en_centimes)
                     date_evenement = reservation.event.datetime if reservation.event else None
                     if date_evenement and date_evenement >= maintenant:
                         liste_cible = evenements_a_venir
@@ -1613,10 +1649,22 @@ class LigneArticleInline(TabularInline):
         "vat",
         "total_decimal",
         "display_status",
-        "payment_method",
+        "moyens_de_paiement",
         "sale_origin",
     )
     readonly_fields = fields
+
+    def get_queryset(self, request):
+        # La vente de chaque ligne, ses règlements et ceux de ses corrections sont
+        # préchargés : la colonne « Moyen de paiement » ne fait pas une requête par
+        # ligne.
+        # / Each line's sale, its payments and its corrections' payments are
+        # prefetched: no query per line.
+        queryset = super().get_queryset(request)
+        return queryset.select_related('vente').prefetch_related(
+            'vente__reglements',
+            'vente__ventes_derivees__reglements',
+        )
 
     @display(description=_("Value"))
     def amount_decimal(self, obj):
@@ -1633,6 +1681,14 @@ class LigneArticleInline(TabularInline):
     @display(description=_("Total"))
     def total_decimal(self, obj):
         return obj.total_decimal()
+
+    @display(description=_("Moyen de paiement"))
+    def moyens_de_paiement(self, obj):
+        # Les moyens nets de la vente de la ligne, corrections comprises, sans
+        # l'offert. « — » quand il n'y en a aucun : ligne sans vente, ou vente
+        # entièrement offerte.
+        # / The net methods of the line's sale; "—" when there is none.
+        return ", ".join(obj.moyens_de_paiement_de_sa_vente()) or "—"
 
     @display(description=_("Statut"), label={None: "danger", True: "success"})
     def display_status(self, instance: LigneArticle):
@@ -2057,7 +2113,7 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
         'vat',
         'total_decimal',
         'display_status',
-        'payment_method',
+        'moyens_de_paiement',
         'sale_origin',
         # 'sended_to_laboutik',
     ]
@@ -2071,14 +2127,26 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
     export_form_class = ExportForm
 
     def get_queryset(self, request):
-        # Utiliser select_related pour précharger pricesold et productsold
+        # Utiliser select_related pour précharger pricesold et productsold.
+        # La vente de chaque ligne, ses règlements et ceux de ses corrections sont
+        # préchargés : la colonne « Moyen de paiement » et l'export (qui passe par ce
+        # queryset, `get_export_queryset`) ne font pas une requête par ligne.
+        # / Each line's sale, its payments and its corrections' payments are
+        # prefetched (column and export, which goes through this queryset).
         queryset = super().get_queryset(request)
         return queryset.select_related('pricesold__productsold',
+                                       'pricesold__productsold__product',
+                                       'pricesold__productsold__event',
                                        'pricesold__price',
+                                       'reservation__user_commande',
                                        'paiement_stripe',
                                        'paiement_stripe__user',
                                        'membership',
                                        'membership__user',
+                                       'vente',
+                                       ).prefetch_related(
+                                           'vente__reglements',
+                                           'vente__ventes_derivees__reglements',
                                        )
 
     @display(description=_("Value"))
@@ -2091,7 +2159,17 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
 
     @display(description=_("Total"))
     def total_decimal(self, obj: LigneArticle):
-        return dround(obj.total())
+        # Le net vendu de la ligne (`LigneArticle.total_decimal`), part offerte déduite.
+        # / The line's net sold, offered part deducted.
+        return obj.total_decimal()
+
+    @display(description=_("Moyen de paiement"))
+    def moyens_de_paiement(self, obj: LigneArticle):
+        # Les moyens nets de la vente de la ligne, corrections comprises, sans
+        # l'offert. « — » quand il n'y en a aucun : ligne sans vente, ou vente
+        # entièrement offerte.
+        # / The net methods of the line's sale; "—" when there is none.
+        return ", ".join(obj.moyens_de_paiement_de_sa_vente()) or "—"
 
     @display(description=_("Product"))
     def productsold(self, obj):
@@ -2231,7 +2309,9 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
                 "title": _("Émettre un avoir"),
                 "form": formulaire,
                 "ligne": ligne_originale,
-                "montant_de_la_ligne": dround(ligne_originale.total()),
+                # Le net vendu de la ligne : l'argent que l'avoir rend.
+                # / The line's net sold: the money the credit note gives back.
+                "montant_de_la_ligne": dround(ligne_originale.total_ttc),
                 "ligne_payee_par_stripe": ligne_payee_par_stripe,
                 "ligne_entierement_offerte": la_ligne_est_entierement_offerte,
                 "champ_rembourse_par_demande": champ_rembourse_par_demande,
@@ -2291,6 +2371,1049 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
         return False
 
     def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+# ==========================================================================
+# LA FICHE « VENTE » — liste et fiche des ventes, en lecture seule
+# / THE "SALE" PAGE — sales list and detail, read-only
+# ==========================================================================
+#
+# LOCALISATION : Administration/admin_tenant.py
+#
+# Chaque `Vente` du lieu, toutes origines (caisse, en ligne, admin, tireuse…). Une
+# vente réglée est scellée par son empreinte : l'admin ne permet ni ajout, ni
+# modification, ni suppression. Les montants sont ceux écrits à la vente (centimes
+# entiers), jamais recalculés. Les libellés des moyens et des natures sont ceux de la
+# caisse (laboutik/affichage_des_ventes.py).
+# / Every sale of the venue, read-only; frozen amounts; register labels.
+#
+# Les helpers d'affichage sont au NIVEAU DU MODULE : Unfold enveloppe les méthodes
+# d'un ModelAdmin (skill unfold §23).
+# / Display helpers live at module level: Unfold wraps ModelAdmin methods.
+
+# Les ventes « en attente » depuis plus longtemps que ce délai sont à vérifier : un
+# encaissement en ligne en échec (le client a payé, la vente n'est pas réglée).
+# / Sales pending for longer than this are to be checked (failed online settlement).
+DELAI_AU_DELA_DUQUEL_UNE_VENTE_EN_ATTENTE_EST_A_VERIFIER = timedelta(hours=1)
+
+
+def _unite_d_une_vente(vente):
+    """
+    L'unité des montants d'une vente : "" pour l'euro, sinon le nom de sa monnaie de
+    points. Sans requête : un nom de monnaie introuvable s'écrit par un nom générique.
+    / A sale's amount unit, without any query.
+    """
+    return nom_de_l_unite_de_la_vente(vente, {})
+
+
+def _montant_d_une_vente(montant_en_centimes, vente):
+    """Un montant de la vente, à la française, dans son unité. / A sale amount."""
+    return montant_a_la_francaise_dans_l_unite(montant_en_centimes, _unite_d_une_vente(vente))
+
+
+def _lien_vers_la_fiche_d_une_vente(vente):
+    """
+    Un lien vers la fiche d'une vente : « Vente n° 12 », ou « Vente en attente » sans
+    numéro.
+    / A link to a sale's detail page.
+    """
+    adresse_de_la_fiche = reverse("staff_admin:BaseBillet_vente_change", args=[vente.pk])
+    if vente.numero is None:
+        texte_du_lien = f"{vente.get_nature_display()} — {vente.get_statut_display()}"
+    else:
+        texte_du_lien = f"{vente.get_nature_display()} n° {vente.numero}"
+    return format_html(
+        '<a href="{}" data-testid="vente-lien" style="color: var(--color-primary-600); text-decoration: underline;">{}</a>',
+        adresse_de_la_fiche,
+        texte_du_lien,
+    )
+
+
+def _adresse_stripe_d_un_reglement(reglement):
+    """
+    L'adresse d'un règlement dans le tableau de bord Stripe, ou None :
+    - un remboursement Stripe (référence externe `re_…`) : la page du remboursement ;
+    - un règlement relié à un paiement Stripe qui a son identifiant de paiement
+      (`payment_intent_id`) : la page du paiement.
+    / A payment's address in the Stripe dashboard (refund page or payment page), or None.
+    """
+    reference_externe = reglement.reference_externe or ""
+    if reference_externe.startswith("re_"):
+        return f"https://dashboard.stripe.com/refunds/{reference_externe}"
+    if reglement.paiement_stripe_id is not None:
+        identifiant_du_paiement = reglement.paiement_stripe.payment_intent_id
+        if identifiant_du_paiement:
+            return f"https://dashboard.stripe.com/payments/{identifiant_du_paiement}"
+    return None
+
+
+def _lignes_de_la_vente_avec_un_reste_a_rendre(vente):
+    """
+    Les lignes vendues de la vente (quantité positive) dont une quantité reste à rendre :
+    la quantité vendue, moins celle de leurs avoirs et remboursements. Lecture simple,
+    pour l'écran : le service relit sous verrou au moment d'écrire
+    (`quantite_restante_de_la_ligne_sous_verrou`).
+    / The sale's sold lines with a quantity left to give back (plain read, for the
+    screen; the service reads again under lock).
+    """
+    lignes_avec_un_reste = []
+    lignes_vendues = (
+        LigneArticle.objects.filter(vente=vente, qty__gt=0)
+        .select_related("paiement_stripe", "vente")
+        .prefetch_related("credit_notes")
+    )
+    for ligne_vendue in lignes_vendues:
+        quantite_restante = ligne_vendue.qty
+        for ligne_qui_rend_une_partie in ligne_vendue.credit_notes.all():
+            quantite_restante += ligne_qui_rend_une_partie.qty
+        if quantite_restante > 0:
+            lignes_avec_un_reste.append(ligne_vendue)
+    return lignes_avec_un_reste
+
+
+def _raison_du_refus_de_l_avoir_total(vente):
+    """
+    Pourquoi « Avoir total » est refusé sur cette vente, ou None s'il est permis :
+    nature autre que VENTE, vente pas réglée, vente qui n'est pas en euros, vente avec
+    un écart d'encaissement, vente avec une recharge de carte, vente déjà remboursée en
+    totalité. Une vente couverte par une clôture J n'est PAS refusée : l'avoir est une
+    nouvelle opération, comptée dans le service en cours.
+    Le service refuse les mêmes ventes (`ecrire_la_vente_d_avoir_d_une_vente`) : cette
+    lecture sert à refuser AVANT d'afficher l'écran.
+    / Why the full credit note is refused, or None. The service refuses the same sales.
+    """
+    if vente.nature != Vente.Nature.VENTE:
+        return _("Seule une vente de nature « Vente » reçoit un avoir total.")
+    if vente.statut != Vente.Statut.REGLEE:
+        return _("La vente n'est pas réglée : l'avoir est impossible.")
+    if vente.unite != "EUR":
+        return _(
+            "Cette vente n'est pas en euros (points ou temps) : l'avoir total n'est "
+            "pas possible."
+        )
+    if vente_porte_un_ecart_d_encaissement(vente):
+        return _(
+            "Cette vente a un écart d'encaissement : l'avoir total n'est pas "
+            "possible. Faites un avoir ligne par ligne."
+        )
+    if vente_contient_une_recharge(vente):
+        return _(
+            "Cette vente contient une recharge de carte : l'avoir total n'est pas "
+            "possible."
+        )
+    if not _lignes_de_la_vente_avec_un_reste_a_rendre(vente):
+        return _("La vente est déjà remboursée en totalité : rien n'est à rendre.")
+    return None
+
+
+def _sommes_rendues_par_l_avoir_total(vente):
+    """
+    Ce que « Avoir total » rendrait, par catégorie, SANS rien écrire : la même lecture
+    que le service (quantités restantes, montants de `apercu_des_montants_d_un_avoir`).
+    Lecture simple, pour l'écran : le service relit sous verrou au moment d'écrire.
+    / What the full credit note would give back, by category, without writing.
+
+    Les catégories (centimes, positifs) : `stripe` (à rembourser depuis Stripe),
+    `rembourse_par` (l'argent rendu au moyen choisi), `jetons` (dette en jetons cadeau
+    rendue), `offert` (part offerte annulée). Plus `ligne_entierement_offerte` : vrai
+    quand tout ce qui reste est entièrement offert (même règle que l'avoir d'une ligne).
+    / Categories in cents: stripe, chosen method, gift tokens, offered.
+    """
+    sommes = {
+        "stripe": 0,
+        "rembourse_par": 0,
+        "jetons": 0,
+        "offert": 0,
+    }
+    tout_ce_qui_reste_est_offert = True
+    for ligne_avec_un_reste in _lignes_de_la_vente_avec_un_reste_a_rendre(vente):
+        quantite_restante = ligne_avec_un_reste.qty
+        for ligne_qui_rend_une_partie in ligne_avec_un_reste.credit_notes.all():
+            quantite_restante += ligne_qui_rend_une_partie.qty
+        montants_de_l_avoir = apercu_des_montants_d_un_avoir(
+            ligne_avec_un_reste, quantite_restante
+        )
+        net_rendu = -montants_de_l_avoir["total_ttc"]
+        sommes["offert"] += -montants_de_l_avoir["part_offerte"]
+        if not ligne_entierement_offerte(ligne_avec_un_reste):
+            tout_ce_qui_reste_est_offert = False
+        if net_rendu == 0:
+            continue
+        if ligne_payee_en_jetons(ligne_avec_un_reste):
+            sommes["jetons"] += net_rendu
+        elif ligne_avec_un_reste.paiement_stripe_id is not None:
+            sommes["stripe"] += net_rendu
+        else:
+            sommes["rembourse_par"] += net_rendu
+    sommes["ligne_entierement_offerte"] = tout_ce_qui_reste_est_offert
+    return sommes
+
+
+def _moyen_pre_rempli_de_l_avoir_total(vente):
+    """
+    Le moyen « Remboursé par » proposé d'avance : le seul moyen d'argent de la vente,
+    s'il est dans la liste du champ (espèces, CB, chèque, virement), comme l'avoir d'une
+    ligne. Plusieurs moyens, ou un moyen hors de la liste : rien (l'admin choisit).
+    / The pre-filled method: the sale's only money method, if it is in the list.
+    """
+    moyens_d_argent = set()
+    for reglement in vente.reglements.all():
+        if reglement.moyen != PaymentMethod.FREE:
+            moyens_d_argent.add(reglement.moyen)
+    if len(moyens_d_argent) != 1:
+        return None
+    seul_moyen = moyens_d_argent.pop()
+    if seul_moyen in MOYENS_DU_CHAMP_REMBOURSE_PAR:
+        return seul_moyen
+    return None
+
+
+def _paiement_paye_de_la_vente(vente):
+    """
+    Le paiement Stripe PAYÉ (ou validé) le plus récent de la vente, ou None. Les
+    paiements pas payés (session expirée, annulée, en attente) sont écartés AVANT de
+    prendre le plus récent : une session abandonnée après le paiement ne le cache pas.
+    / The most recent PAID (or valid) Stripe payment of the sale, or None.
+    """
+    return (
+        vente.paiements_stripe.filter(
+            status__in=[Paiement_stripe.PAID, Paiement_stripe.VALID]
+        )
+        .order_by("-order_date")
+        .first()
+    )
+
+
+def _raison_du_refus_du_rejeu(vente):
+    """
+    Pourquoi « Rejouer l'encaissement » est refusé sur cette vente, ou None s'il est
+    permis : vente pas en attente, vente sans paiement Stripe, paiement Stripe pas
+    payé.
+    / Why replaying the settlement is refused, or None.
+    """
+    if vente.statut != Vente.Statut.EN_ATTENTE:
+        return _("Seule une vente en attente peut être encaissée de nouveau.")
+    if not vente.paiements_stripe.exists():
+        return _("Cette vente n'a pas de paiement Stripe : rien à rejouer.")
+    if _paiement_paye_de_la_vente(vente) is None:
+        return _("Le paiement Stripe de cette vente n'est pas payé : rien à rejouer.")
+    return None
+
+
+def _ligne_partira_a_l_ancien_laboutik(ligne):
+    """
+    Dit si une ligne vendue en ligne part à l'ancien LaBoutik : un billet ou une
+    adhésion, comme les déclencheurs du paiement (BaseBillet/triggers.py, trigger_B et
+    trigger_A, qui appellent `send_sale_to_laboutik`). La catégorie est celle du produit
+    vendu, sinon celle du produit (même lecture que les déclencheurs).
+    / Tells whether an online line is sent to legacy LaBoutik: a ticket or a membership,
+    like the payment triggers.
+    """
+    categorie_de_la_ligne = ligne.pricesold.productsold.categorie_article
+    if categorie_de_la_ligne == Product.NONE:
+        categorie_de_la_ligne = ligne.pricesold.productsold.product.categorie_article
+    return categorie_de_la_ligne in [Product.BILLET, Product.ADHESION]
+
+
+class VentesAVerifierFilter(admin.SimpleListFilter):
+    """
+    « À vérifier » :
+    - les ventes en attente depuis plus d'une heure dont le client a PAYÉ (un paiement
+      Stripe payé ou validé) : un encaissement en ligne en échec. Une vente en attente
+      sans aucun paiement Stripe y est aussi (personne ne l'a encore expliquée). Un
+      panier abandonné (session Stripe expirée ou annulée, rien de payé) n'y est pas ;
+    - les ventes qui portent un article « Écart d'encaissement » (Stripe a encaissé un
+      autre montant que les articles).
+    / "To check": sales pending for more than an hour that were paid (or have no Stripe
+    payment at all) — not abandoned carts —, and sales with a gap item.
+    """
+
+    title = _("À vérifier")
+    parameter_name = "a_verifier"
+
+    def lookups(self, request, model_admin):
+        return [("oui", _("À vérifier"))]
+
+    def queryset(self, request, queryset):
+        if self.value() != "oui":
+            return queryset
+        limite_d_attente = timezone.now() - DELAI_AU_DELA_DUQUEL_UNE_VENTE_EN_ATTENTE_EST_A_VERIFIER
+        paiements_payes_de_la_vente = Paiement_stripe.objects.filter(
+            vente=OuterRef("pk"),
+            status__in=[Paiement_stripe.PAID, Paiement_stripe.VALID],
+        )
+        paiements_de_la_vente = Paiement_stripe.objects.filter(vente=OuterRef("pk"))
+        payee_ou_sans_paiement_stripe = Q(Exists(paiements_payes_de_la_vente)) | ~Q(
+            Exists(paiements_de_la_vente)
+        )
+        en_attente_depuis_trop_longtemps = (
+            Q(
+                statut=Vente.Statut.EN_ATTENTE,
+                datetime_creation__lt=limite_d_attente,
+            )
+            & payee_ou_sans_paiement_stripe
+        )
+        avec_un_ecart_d_encaissement = Q(
+            articles__pricesold__productsold__product__name__in=[
+                NOM_ECART_RECU_EN_PLUS,
+                NOM_ECART_RECU_EN_MOINS,
+            ]
+        )
+        return queryset.filter(
+            en_attente_depuis_trop_longtemps | avec_un_ecart_d_encaissement
+        ).distinct()
+
+
+class MoyenDeReglementFilter(admin.SimpleListFilter):
+    """
+    Par moyen : les ventes qui ont au moins un règlement de ce moyen.
+    / By method: sales with at least one payment of this method.
+    """
+
+    title = _("Moyen de paiement")
+    parameter_name = "moyen"
+
+    def lookups(self, request, model_admin):
+        choix_des_moyens = []
+        for code_du_moyen, _libelle in PaymentMethod.choices:
+            choix_des_moyens.append((code_du_moyen, nom_du_moyen_de_paiement(code_du_moyen)))
+        return choix_des_moyens
+
+    def queryset(self, request, queryset):
+        if not self.value():
+            return queryset
+        reglements_de_ce_moyen = Reglement.objects.filter(
+            vente=OuterRef("pk"), moyen=self.value()
+        )
+        return queryset.filter(Exists(reglements_de_ce_moyen))
+
+
+class ArticlesDeLaVenteInline(TabularInline):
+    """
+    Les articles d'une vente : produit, tarif, quantité, prix unitaire, part offerte,
+    total (net vendu) et TVA. En lecture seule.
+    / A sale's items, read-only.
+    """
+
+    model = LigneArticle
+    fk_name = "vente"
+    extra = 0
+    can_delete = False
+    show_change_link = False
+    verbose_name = _("Article")
+    verbose_name_plural = _("Articles")
+    fields = (
+        "produit",
+        "tarif",
+        "quantite",
+        "prix_unitaire",
+        "offert",
+        "total",
+        "taux_de_tva",
+    )
+    readonly_fields = fields
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related(
+            "vente",
+            "pricesold__price",
+            "pricesold__productsold__product",
+        )
+
+    @display(description=_("Produit"))
+    def produit(self, ligne):
+        return ligne.pricesold.productsold.product.name
+
+    @display(description=_("Tarif"))
+    def tarif(self, ligne):
+        return ligne.pricesold.price.name
+
+    @display(description=_("Quantité"))
+    def quantite(self, ligne):
+        return dround(ligne.qty)
+
+    @display(description=_("Prix unitaire"))
+    def prix_unitaire(self, ligne):
+        return _montant_d_une_vente(ligne.amount, ligne.vente)
+
+    @display(description=_("Offert"))
+    def offert(self, ligne):
+        return _montant_d_une_vente(ligne.part_offerte, ligne.vente)
+
+    @display(description=_("Total"))
+    def total(self, ligne):
+        return _montant_d_une_vente(ligne.total_ttc, ligne.vente)
+
+    @display(description=_("TVA"))
+    def taux_de_tva(self, ligne):
+        return f"{ligne.vat} %"
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class ReglementsDeLaVenteInline(TabularInline):
+    """
+    Les règlements d'une vente : moyen, monnaie, montant, référence externe
+    (identifiant Stripe, numéro de chèque…). En lecture seule.
+    / A sale's payments, read-only.
+    """
+
+    model = Reglement
+    fk_name = "vente"
+    extra = 0
+    can_delete = False
+    show_change_link = False
+    verbose_name = _("Règlement")
+    verbose_name_plural = _("Règlements")
+    fields = ("moyen_affiche", "monnaie", "montant_affiche", "reference_et_lien_stripe")
+    readonly_fields = fields
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related("vente", "paiement_stripe")
+
+    @display(description=_("Référence"))
+    def reference_et_lien_stripe(self, reglement):
+        # La référence externe du règlement ; un lien vers le tableau de bord Stripe
+        # quand le règlement vient de Stripe (remboursement `re_…`, ou paiement).
+        # / The external reference; a link to the Stripe dashboard for Stripe payments.
+        adresse_chez_stripe = _adresse_stripe_d_un_reglement(reglement)
+        texte_de_la_reference = reglement.reference_externe or "—"
+        if adresse_chez_stripe is None:
+            return texte_de_la_reference
+        if not reglement.reference_externe:
+            texte_de_la_reference = _("Voir sur Stripe")
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener" data-testid="vente-lien-stripe" style="color: var(--color-primary-600); text-decoration: underline;">{}</a>',
+            adresse_chez_stripe,
+            texte_de_la_reference,
+        )
+
+    @display(description=_("Moyen de paiement"))
+    def moyen_affiche(self, reglement):
+        return nom_du_moyen_de_paiement(reglement.moyen)
+
+    @display(description=_("Monnaie"))
+    def monnaie(self, reglement):
+        if reglement.asset is None:
+            return "—"
+        return str(reglement.asset)
+
+    @display(description=_("Montant"))
+    def montant_affiche(self, reglement):
+        return _montant_d_une_vente(reglement.montant, reglement.vente)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Vente, site=staff_admin_site)
+class VenteAdmin(ModelAdmin):
+    """
+    La liste et la fiche des ventes du lieu, en lecture seule.
+    / The venue's sales list and detail page, read-only.
+
+    LOCALISATION : Administration/admin_tenant.py
+
+    LISTE : numéro, date (heure du lieu), origine, point de vente, client (e-mail, ou
+    numéro de carte), total, moyens (badges), nature, statut. Filtres : à vérifier,
+    moyen, origine, point de vente, nature, statut, date d'encaissement. Recherche :
+    numéro (exact), e-mail du client, carte. Nombre de requêtes constant (point de
+    vente, client, carte et règlements préchargés).
+    FICHE : en-tête, articles et règlements (inlines), vente liée et ventes dérivées
+    (liens), badge d'intégrité (empreinte recalculée par `calculer_hmac_vente`).
+    ACTIONS DE LA FICHE (montrées seulement quand elles ont un sens,
+    `get_actions_detail`) :
+    - « Avoir total » (`avoir_total`) : l'avoir de tout ce qui reste à rendre ;
+    - « Rejouer l'encaissement » (`rejouer_encaissement`) : une vente en ligne restée
+      en attente alors que le client a payé.
+    / List with filters and search; detail with items, payments, links and integrity;
+    two detail actions, shown only when they make sense.
+    """
+
+    compressed_fields = True
+    warn_unsaved_form = True
+    list_filter_submit = True
+
+    list_display = [
+        "numero_affiche",
+        "date_locale",
+        "origine_affichee",
+        "point_de_vente_affiche",
+        "client_affiche",
+        "total_affiche",
+        "moyens_affiches",
+        "nature_affichee",
+        "statut_affiche",
+    ]
+    list_display_links = ["numero_affiche"]
+    list_filter = [
+        VentesAVerifierFilter,
+        MoyenDeReglementFilter,
+        "origine",
+        "point_de_vente",
+        "nature",
+        "statut",
+        ("datetime_encaissement", RangeDateTimeFilterWithTimeZone),
+    ]
+    # Le numéro se cherche à part (`get_search_results`) : un nombre exact.
+    # / The number is searched separately: an exact number.
+    search_fields = ["client__email", "carte__tag_id", "carte__number"]
+    ordering = ("-datetime_creation",)
+    inlines = [ArticlesDeLaVenteInline, ReglementsDeLaVenteInline]
+
+    fieldsets = (
+        (
+            _("Vente"),
+            {
+                "fields": (
+                    "numero_affiche",
+                    "nature_affichee",
+                    "statut_affiche",
+                    "origine_affichee",
+                    "point_de_vente_affiche",
+                    "client_affiche",
+                    "operateur",
+                    "date_locale",
+                    "total_catalogue_affiche",
+                    "total_offert_affiche",
+                    "total_affiche",
+                    "total_ht_affiche",
+                    "total_tva_affiche",
+                    "vente_liee_affichee",
+                    "ventes_derivees_affichees",
+                    "integrite",
+                ),
+            },
+        ),
+    )
+    readonly_fields = (
+        "numero_affiche",
+        "nature_affichee",
+        "statut_affiche",
+        "origine_affichee",
+        "point_de_vente_affiche",
+        "client_affiche",
+        "operateur",
+        "date_locale",
+        "total_catalogue_affiche",
+        "total_offert_affiche",
+        "total_affiche",
+        "total_ht_affiche",
+        "total_tva_affiche",
+        "vente_liee_affichee",
+        "ventes_derivees_affichees",
+        "integrite",
+    )
+
+    def get_queryset(self, request):
+        # Les objets lus par chaque ligne de la liste sont préchargés : le nombre de
+        # requêtes ne grandit pas avec le nombre de ventes.
+        # / Objects read by each list row are prefetched: constant query count.
+        # Le total des articles d'une vente pas encore réglée (ses totaux ne sont posés
+        # qu'à l'encaissement) est calculé par une sous-requête : une seule requête,
+        # quel que soit le nombre de ventes, et aucune jointure qui doublerait la somme.
+        # / The items total of an unsettled sale, by a subquery (one query, no join).
+        queryset = super().get_queryset(request)
+        total_des_articles_de_la_vente = (
+            LigneArticle.objects.filter(vente=OuterRef("pk"))
+            .values("vente")
+            .annotate(total=Sum("total_ttc"))
+            .values("total")
+        )
+        return (
+            queryset.select_related(
+                "point_de_vente", "client", "carte", "operateur", "vente_liee"
+            )
+            .prefetch_related("reglements")
+            .annotate(total_des_articles=Subquery(total_des_articles_de_la_vente))
+        )
+
+    def get_search_results(self, request, queryset, search_term):
+        # Un terme fait de chiffres cherche AUSSI le numéro exact de la vente. Le
+        # numéro est un entier : il ne peut pas être dans `search_fields`, qui
+        # comparerait du texte (une adresse e-mail ferait échouer la requête). Un
+        # nombre trop grand pour la colonne (2^31 et plus) n'est pas un numéro de
+        # vente : PostgreSQL le refuserait.
+        # / A digits-only term ALSO searches the exact sale number, if it fits the
+        # integer column.
+        resultats, peut_avoir_des_doublons = super().get_search_results(
+            request, queryset, search_term
+        )
+        terme_cherche = search_term.strip()
+        if terme_cherche.isdigit() and int(terme_cherche) < 2**31:
+            resultats = resultats | queryset.filter(numero=int(terme_cherche))
+        return resultats, peut_avoir_des_doublons
+
+    def get_actions_detail(self, request, object_id):
+        # Les boutons de la fiche ne sont montrés que quand l'action a un sens :
+        # « Avoir total » si la vente l'accepte, « Rejouer l'encaissement » pour une
+        # vente en attente qui a un paiement Stripe payé. Les actions gardent leurs
+        # propres refus (message d'erreur) pour un appel direct à leur adresse.
+        # / Detail buttons are shown only when the action makes sense; the actions
+        # keep their own refusals for a direct call.
+        actions_permises = super().get_actions_detail(request, object_id)
+        vente = Vente.objects.filter(pk=object_id).first()
+        if vente is None:
+            return actions_permises
+        actions_montrees = []
+        for action_de_la_fiche in actions_permises:
+            if action_de_la_fiche.path == "avoir_total":
+                if _raison_du_refus_de_l_avoir_total(vente) is not None:
+                    continue
+            if action_de_la_fiche.path == "rejouer_encaissement":
+                if _raison_du_refus_du_rejeu(vente) is not None:
+                    continue
+            actions_montrees.append(action_de_la_fiche)
+        return actions_montrees
+
+    @display(description=_("N°"), ordering="numero")
+    def numero_affiche(self, vente):
+        if vente.numero is None:
+            return "—"
+        return vente.numero
+
+    @display(description=_("Date"), ordering="datetime_creation")
+    def date_locale(self, vente):
+        # L'heure du lieu : l'encaissement, ou la création d'une vente pas réglée.
+        # / The venue's time: settlement, or creation for an unsettled sale.
+        moment = vente.datetime_encaissement or vente.datetime_creation
+        fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        return moment.astimezone(fuseau_du_lieu).strftime("%d/%m/%Y %H:%M")
+
+    @display(description=_("Origine"))
+    def origine_affichee(self, vente):
+        return vente.get_origine_display()
+
+    @display(description=_("Point de vente"))
+    def point_de_vente_affiche(self, vente):
+        if vente.point_de_vente is None:
+            return "—"
+        return vente.point_de_vente.name
+
+    @display(description=_("Client"))
+    def client_affiche(self, vente):
+        # L'e-mail du client ; sans client connu, le numéro de la carte.
+        # / The customer's e-mail; without a known customer, the card number.
+        if vente.client is not None:
+            return vente.client.email
+        if vente.carte is not None:
+            return vente.carte.number
+        return "—"
+
+    @display(description=_("Total"))
+    def total_affiche(self, vente):
+        # Une vente réglée a son total stocké. Une vente pas encore réglée, pas encore :
+        # on montre la somme de ses articles (`total_des_articles`, `get_queryset`).
+        # / A settled sale has its stored total; otherwise the sum of its items.
+        if vente.statut == Vente.Statut.REGLEE:
+            return _montant_d_une_vente(vente.total_ttc, vente)
+        total_des_articles = getattr(vente, "total_des_articles", None) or 0
+        return _montant_d_une_vente(total_des_articles, vente)
+
+    @display(description=_("Total catalogue"))
+    def total_catalogue_affiche(self, vente):
+        return _montant_d_une_vente(vente.total_catalogue, vente)
+
+    @display(description=_("Total offert"))
+    def total_offert_affiche(self, vente):
+        return _montant_d_une_vente(vente.total_offert, vente)
+
+    @display(description=_("Total HT"))
+    def total_ht_affiche(self, vente):
+        return _montant_d_une_vente(vente.total_ht, vente)
+
+    @display(description=_("Total TVA"))
+    def total_tva_affiche(self, vente):
+        return _montant_d_une_vente(vente.total_tva, vente)
+
+    @display(description=_("Moyens"))
+    def moyens_affiches(self, vente):
+        # Un badge par moyen d'argent de la vente, montant compris, dans l'ordre et
+        # avec les libellés de la caisse. L'offert n'est pas un moyen de paiement.
+        # / One badge per money method, register order and labels; offered left out.
+        reglements_affiches = reglements_pour_l_affichage(
+            vente.reglements.all(), {}, _unite_d_une_vente(vente)
+        )
+        badges_des_moyens = []
+        for reglement_affiche in reglements_affiches:
+            if reglement_affiche["moyen"] == PaymentMethod.FREE:
+                continue
+            badges_des_moyens.append(
+                (
+                    reglement_affiche["montant_a_la_francaise"],
+                    reglement_affiche["libelle"],
+                )
+            )
+        if not badges_des_moyens:
+            return "—"
+        return format_html_join(
+            " ",
+            '<span data-testid="vente-moyen-badge" style="display: inline-block; padding: 2px 8px; border-radius: 9999px; background: var(--color-base-100, #f3f4f6); color: var(--color-base-700, #374151); font-size: 12px; white-space: nowrap;">{} {}</span>',
+            badges_des_moyens,
+        )
+
+    @display(
+        description=_("Nature"),
+        label={
+            Vente.Nature.VENTE: "success",
+            Vente.Nature.AVOIR: "warning",
+            Vente.Nature.CORRECTION: "info",
+            Vente.Nature.VIDAGE_CARTE: "info",
+        },
+    )
+    def nature_affichee(self, vente):
+        return vente.nature, badge_de_la_nature_d_une_vente(vente.nature)
+
+    @display(
+        description=_("Statut"),
+        label={
+            Vente.Statut.REGLEE: "success",
+            Vente.Statut.EN_ATTENTE: "warning",
+            Vente.Statut.ANNULEE: "danger",
+        },
+    )
+    def statut_affiche(self, vente):
+        return vente.statut, vente.get_statut_display()
+
+    @display(description=_("Vente liée"))
+    def vente_liee_affichee(self, vente):
+        if vente.vente_liee is None:
+            return "—"
+        return _lien_vers_la_fiche_d_une_vente(vente.vente_liee)
+
+    @display(description=_("Ventes dérivées"))
+    def ventes_derivees_affichees(self, vente):
+        liens_des_ventes_derivees = []
+        for vente_derivee in vente.ventes_derivees.all():
+            liens_des_ventes_derivees.append((_lien_vers_la_fiche_d_une_vente(vente_derivee),))
+        if not liens_des_ventes_derivees:
+            return "—"
+        return format_html_join(" ", "{}", liens_des_ventes_derivees)
+
+    @display(description=_("Intégrité"))
+    def integrite(self, vente):
+        # L'empreinte de la vente, recalculée (vente, articles et règlements relus en
+        # base) et comparée à l'empreinte enregistrée à l'encaissement. Une vente pas
+        # réglée n'est pas encore scellée.
+        # / The sale fingerprint, recomputed and compared with the stored one.
+        cle_du_lieu = None
+        if vente.statut == Vente.Statut.REGLEE:
+            cle_du_lieu = LaboutikConfiguration.get_solo().get_hmac_key()
+        if vente.statut != Vente.Statut.REGLEE:
+            texte_du_badge = _("Pas encore scellée")
+            couleur_du_badge = "#6b7280"
+        elif not cle_du_lieu:
+            texte_du_badge = _("Pas de clé d'intégrité pour ce lieu")
+            couleur_du_badge = "#6b7280"
+        else:
+            empreinte_recalculee = calculer_hmac_vente(
+                vente, cle_du_lieu, vente.previous_hmac
+            )
+            # Comparaison à temps constant, comme toute comparaison d'empreintes.
+            # / Constant-time comparison, as for any fingerprint comparison.
+            empreinte_identique = hmac.compare_digest(
+                empreinte_recalculee, vente.hmac_hash or ""
+            )
+            if empreinte_identique:
+                texte_du_badge = _("Intégrité OK")
+                couleur_du_badge = "#15803d"
+            else:
+                texte_du_badge = format_html(
+                    "{} — {}",
+                    _("Intégrité KO"),
+                    _(
+                        "L'empreinte recalculée ne correspond pas : la vente, un "
+                        "article ou un règlement a été modifié après l'encaissement."
+                    ),
+                )
+                couleur_du_badge = "#b91c1c"
+        return format_html(
+            '<span data-testid="vente-integrite" style="display: inline-block; padding: 2px 10px; border-radius: 9999px; color: #fff; background: {}; font-size: 12px; font-weight: 600;">{}</span>',
+            couleur_du_badge,
+            texte_du_badge,
+        )
+
+    # --- Actions de la fiche / Detail page actions ---
+    actions_detail = ["avoir_total", "rejouer_encaissement"]
+
+    @action(
+        description=_("Avoir total"),
+        url_path="avoir_total",
+        permissions=["action_sur_une_vente"],
+    )
+    def avoir_total(self, request, object_id):
+        """
+        « Avoir total » : l'avoir de tout ce qui reste à rendre sur la vente. GET affiche
+        l'écran de confirmation, POST écrit l'avoir.
+        / "Full credit note": everything left to give back. GET = screen, POST = write.
+
+        LOCALISATION : Administration/admin_tenant.py
+        Gabarit : Administration/templates/admin/lignearticle/emettre_avoir.html (le
+        même écran que l'avoir d'une ligne, récapitulatif de la vente).
+
+        REFUS (GET et POST, message d'erreur, retour à la fiche) : nature autre que
+        VENTE, vente pas réglée, vente qui n'est pas en euros, vente avec un écart
+        d'encaissement ou une recharge, vente déjà remboursée en totalité. Une vente
+        couverte par une clôture J n'est PAS refusée : l'avoir est une nouvelle
+        opération.
+
+        L'ÉCRAN : il annonce ce qui sera rendu, par catégorie (Stripe, « Remboursé
+        par », jetons, offert), avec la même lecture que le service. Le champ
+        « Remboursé par » (un seul moyen pour tout l'argent rendu à la main) n'apparaît
+        que s'il reste de l'argent hors Stripe et hors jetons ; il est pré-rempli quand
+        la vente n'a qu'un moyen d'argent, de la liste. Une vente payée par Stripe
+        rappelle la somme à rembourser depuis le tableau de bord Stripe (aucun appel à
+        Stripe ici).
+
+        FLUX DU POST : `ecrire_la_vente_d_avoir_d_une_vente` (BaseBillet/services_vente.py),
+        origine ADMIN, tout ou rien. Un refus du service, une égalité rompue ou une
+        erreur de la base deviennent un message d'erreur, jamais une page 500.
+        / Refusals, then a screen announcing the amounts; POST through the sale service.
+        """
+        vente = get_object_or_404(Vente, pk=object_id)
+        adresse_de_la_fiche = reverse("staff_admin:BaseBillet_vente_change", args=[vente.pk])
+
+        raison_du_refus = _raison_du_refus_de_l_avoir_total(vente)
+        if raison_du_refus is not None:
+            messages.error(request, raison_du_refus)
+            return redirect(adresse_de_la_fiche)
+
+        # Que reste-t-il à rendre ? Lecture simple pour l'écran : le service relit tout
+        # sous verrou au moment d'écrire.
+        # / What is left? Plain read for the screen; the service reads again under lock.
+        try:
+            sommes_rendues = _sommes_rendues_par_l_avoir_total(vente)
+        except ValueError as refus_du_service:
+            logger.warning(f"Avoir total refusé pour la vente {vente.uuid} : {refus_du_service}")
+            messages.error(
+                request,
+                _("L'avoir n'a pas pu être émis : %(raison)s") % {"raison": refus_du_service},
+            )
+            return redirect(adresse_de_la_fiche)
+        reste_de_l_argent_stripe = sommes_rendues["stripe"] != 0
+        champ_rembourse_par_demande = sommes_rendues["rembourse_par"] != 0
+
+        if request.method == "POST":
+            if champ_rembourse_par_demande:
+                formulaire = EmettreAvoirAvecMoyenForm(request.POST)
+            else:
+                formulaire = EmettreAvoirSansMoyenForm(request.POST)
+        else:
+            if champ_rembourse_par_demande:
+                valeurs_initiales = {}
+                moyen_pre_rempli = _moyen_pre_rempli_de_l_avoir_total(vente)
+                if moyen_pre_rempli is not None:
+                    valeurs_initiales["moyen_rembourse"] = moyen_pre_rempli
+                formulaire = EmettreAvoirAvecMoyenForm(initial=valeurs_initiales)
+            else:
+                formulaire = EmettreAvoirSansMoyenForm()
+
+        formulaire_a_afficher = request.method != "POST" or not formulaire.is_valid()
+        if formulaire_a_afficher:
+            if vente.numero is None:
+                titre_de_l_ecran = _("Avoir total de la vente")
+            else:
+                titre_de_l_ecran = _("Avoir total de la vente n° %(numero)s") % {
+                    "numero": vente.numero
+                }
+            contexte_de_l_ecran = {
+                **self.admin_site.each_context(request),
+                "title": titre_de_l_ecran,
+                "form": formulaire,
+                "vente": vente,
+                "total_de_la_vente": _montant_d_une_vente(vente.total_ttc, vente),
+                "somme_rendue_par_stripe": _montant_d_une_vente(sommes_rendues["stripe"], vente),
+                "somme_rendue_par_le_moyen_choisi": _montant_d_une_vente(
+                    sommes_rendues["rembourse_par"], vente
+                ),
+                "somme_rendue_en_jetons": _montant_d_une_vente(sommes_rendues["jetons"], vente),
+                "somme_offerte_annulee": _montant_d_une_vente(sommes_rendues["offert"], vente),
+                "il_y_a_des_jetons_rendus": sommes_rendues["jetons"] != 0,
+                "il_y_a_de_l_offert_annule": sommes_rendues["offert"] != 0,
+                "ligne_payee_par_stripe": reste_de_l_argent_stripe,
+                "ligne_entierement_offerte": sommes_rendues["ligne_entierement_offerte"],
+                "champ_rembourse_par_demande": champ_rembourse_par_demande,
+                "url_de_la_liste_des_ventes": adresse_de_la_fiche,
+            }
+            return render(
+                request,
+                "admin/lignearticle/emettre_avoir.html",
+                contexte_de_l_ecran,
+            )
+
+        if champ_rembourse_par_demande:
+            moyen_choisi = formulaire.cleaned_data["moyen_rembourse"]
+        else:
+            moyen_choisi = None
+
+        try:
+            vente_d_avoir = ecrire_la_vente_d_avoir_d_une_vente(
+                vente, moyen_rembourse=moyen_choisi, origine=SaleOrigin.ADMIN
+            )
+        except ValueError as refus_du_service:
+            # Une règle du service refuse l'avoir : rien n'est écrit (transaction).
+            # Un refus métier est attendu : un avertissement au journal, pas une erreur.
+            # / A service rule refuses: nothing written; logged as a warning.
+            logger.warning(f"Avoir total refusé pour la vente {vente.uuid} : {refus_du_service}")
+            messages.error(
+                request,
+                _("L'avoir n'a pas pu être émis : %(raison)s") % {"raison": refus_du_service},
+            )
+            return redirect(adresse_de_la_fiche)
+        except (EgaliteDeVenteRompue, OperationalError, IntegrityError) as erreur_d_ecriture:
+            # Une égalité rompue ou une erreur de la base (verrou, contrainte) : rien
+            # n'est écrit (transaction). L'admin reçoit un message, pas une page 500.
+            # / A broken equality or a database error: nothing written, a message.
+            logger.error(f"Avoir total en échec pour la vente {vente.uuid} : {erreur_d_ecriture!r}")
+            messages.error(
+                request,
+                _("L'avoir n'a pas pu être émis : %(raison)s") % {"raison": erreur_d_ecriture},
+            )
+            return redirect(adresse_de_la_fiche)
+
+        messages.success(request, _("Avoir émis."))
+        if reste_de_l_argent_stripe:
+            # Aucun appel à Stripe ici : l'argent n'est pas encore rendu.
+            # / No Stripe call here: the money is not given back yet.
+            messages.warning(
+                request,
+                _("Remboursez cette somme depuis votre tableau de bord Stripe."),
+            )
+        return redirect(
+            reverse("staff_admin:BaseBillet_vente_change", args=[vente_d_avoir.pk])
+        )
+
+    @action(
+        description=_("Rejouer l'encaissement"),
+        url_path="rejouer_encaissement",
+        permissions=["action_sur_une_vente"],
+    )
+    def rejouer_encaissement(self, request, object_id):
+        """
+        « Rejouer l'encaissement » d'une vente en ligne restée en attente (l'encaissement
+        a échoué alors que le client a payé). GET affiche l'écran, POST rejoue.
+        / Replays the settlement of a pending online sale. GET = screen, POST = replay.
+
+        LOCALISATION : Administration/admin_tenant.py
+
+        LE REJEU : un appel à `encaisser_vente_stripe(paiement)` (BaseBillet/services_vente.py),
+        le point d'encaissement unique des ventes en ligne. JAMAIS `paiement.save()` : le
+        paiement est déjà VALID, et une transition VALID → VALID ne rejoue rien.
+        REFUS (message d'erreur, retour à la fiche) : vente pas en attente, vente sans
+        paiement Stripe, paiement pas encore payé, refus du service (montant ou moyen
+        vides, vente annulée…).
+        / One call to encaisser_vente_stripe, never payment.save(). Refusals: not pending,
+        no Stripe payment, payment not paid, service refusal.
+        """
+        vente = get_object_or_404(Vente, pk=object_id)
+        adresse_de_la_fiche = reverse("staff_admin:BaseBillet_vente_change", args=[vente.pk])
+
+        raison_du_refus = _raison_du_refus_du_rejeu(vente)
+        if raison_du_refus is not None:
+            messages.error(request, raison_du_refus)
+            return redirect(adresse_de_la_fiche)
+        paiement_de_la_vente = _paiement_paye_de_la_vente(vente)
+
+        if request.method != "POST":
+            contexte_de_l_ecran = {
+                **self.admin_site.each_context(request),
+                "title": _("Rejouer l'encaissement"),
+                "vente": vente,
+                "url_de_la_fiche_de_la_vente": adresse_de_la_fiche,
+            }
+            return render(
+                request,
+                "admin/vente/rejouer_encaissement.html",
+                contexte_de_l_ecran,
+            )
+
+        try:
+            encaisser_vente_stripe(paiement_de_la_vente)
+        except ValueError as refus_du_service:
+            # Un refus métier (montant ou moyen vides, vente annulée) : attendu, un
+            # avertissement au journal.
+            # / A business refusal: expected, logged as a warning.
+            logger.warning(
+                f"Rejeu de l'encaissement refusé pour la vente {vente.uuid} : {refus_du_service}"
+            )
+            messages.error(
+                request,
+                _("L'encaissement n'a pas pu être rejoué : %(raison)s")
+                % {"raison": refus_du_service},
+            )
+            return redirect(adresse_de_la_fiche)
+        except (EgaliteDeVenteRompue, OperationalError, IntegrityError) as erreur_d_ecriture:
+            # Une égalité rompue ou une erreur de la base : rien n'est écrit
+            # (transaction). Un message, pas une page 500.
+            # / A broken equality or a database error: nothing written, a message.
+            logger.error(
+                f"Rejeu de l'encaissement en échec pour la vente {vente.uuid} : "
+                f"{erreur_d_ecriture!r}"
+            )
+            messages.error(
+                request,
+                _("L'encaissement n'a pas pu être rejoué : %(raison)s")
+                % {"raison": erreur_d_ecriture},
+            )
+            return redirect(adresse_de_la_fiche)
+
+        # La vente est réglée : ses billets et adhésions repartent vers l'ancien
+        # LaBoutik, comme après un encaissement normal (les déclencheurs du paiement
+        # l'avaient demandé, mais la tâche a pu abandonner pendant que la vente
+        # attendait). Après la validation en base (`on_commit`) : le worker relit la
+        # ligne. La tâche ne poste jamais deux fois la même ligne (`sended_to_laboutik`).
+        # / The sale is settled: its tickets and memberships are sent again to legacy
+        # LaBoutik, after the commit; the task never posts a line twice.
+        lignes_a_renvoyer = (
+            LigneArticle.objects.filter(vente=vente, status=LigneArticle.VALID)
+            .select_related("pricesold__productsold__product")
+            .order_by("datetime", "pk")
+        )
+        for ligne_a_renvoyer in lignes_a_renvoyer:
+            if _ligne_partira_a_l_ancien_laboutik(ligne_a_renvoyer):
+                pk_de_la_ligne = ligne_a_renvoyer.pk
+                db_transaction.on_commit(
+                    partial(send_sale_to_laboutik.delay, pk_de_la_ligne)
+                )
+
+        messages.success(request, _("Vente encaissée."))
+        return redirect(adresse_de_la_fiche)
+
+    def has_action_sur_une_vente_permission(self, request, object_id=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):

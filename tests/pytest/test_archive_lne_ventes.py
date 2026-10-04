@@ -92,7 +92,7 @@ import hmac  # noqa: E402
 import json  # noqa: E402
 import re  # noqa: E402
 import uuid  # noqa: E402
-from datetime import date, datetime  # noqa: E402
+from datetime import date, datetime, timedelta  # noqa: E402
 from datetime import timezone as fuseau_horaire_python  # noqa: E402
 from decimal import Decimal  # noqa: E402
 from io import StringIO  # noqa: E402
@@ -1229,11 +1229,14 @@ class TestArchiveLneDesVentes(FastTenantTestCase):
         )
         assert len(formulaires) == 1, reponse_du_formulaire.content.decode()[:400]
 
-    def test_bouton_export_fiscal_absent_sans_module_caisse(self):
+    def _ouvrir_le_formulaire_de_l_export_fiscal_sans_module_caisse(self):
         """
-        Sans module caisse actif, la route de l'export fiscal (une route de la caisse)
-        refuserait : le bandeau de la liste des clôtures n'affiche pas le bouton.
-        / Without the register module, no "Fiscal export" button.
+        Le lieu n'a PAS le module caisse (une billetterie en ligne seule). L'admin
+        ouvre la liste des clôtures uniques et clique « Export fiscal » : le bouton
+        existe, et son adresse est une adresse de l'ADMIN (`/admin/…`), pas une route
+        de la caisse. Rend l'adresse de l'export.
+        / The venue has NO register module: the button exists and points to an ADMIN
+        address. Returns the export address.
         """
         configuration = Configuration.get_solo()
         configuration.module_caisse = False
@@ -1247,7 +1250,61 @@ class TestArchiveLneDesVentes(FastTenantTestCase):
         boutons_export_fiscal = attributs_des_elements(
             reponse_de_la_liste.content.decode(), "btn-export-fiscal"
         )
-        assert boutons_export_fiscal == []
+        assert len(boutons_export_fiscal) == 1, boutons_export_fiscal
+        adresse_de_l_export = boutons_export_fiscal[0].get("hx-get")
+        assert adresse_de_l_export.startswith("/admin/"), adresse_de_l_export
+        return adresse_de_l_export
+
+    def test_bouton_export_fiscal_present_sans_module_caisse(self):
+        """
+        L'archive fiscale couvre toutes les origines (en ligne, admin, caisse) : un
+        lieu SANS module caisse a lui aussi le bouton « Export fiscal ». Le bouton
+        charge le formulaire de l'export (`data-testid="export-fiscal-form"`), servi
+        par l'admin de la comptabilité.
+        / The archive covers every origin: a venue WITHOUT the register module also
+        gets the button, which loads the export form from the accounting admin.
+        """
+        adresse_de_l_export = (
+            self._ouvrir_le_formulaire_de_l_export_fiscal_sans_module_caisse()
+        )
+
+        reponse_du_formulaire = self.navigateur.get(
+            adresse_de_l_export, HTTP_HX_REQUEST="true"
+        )
+
+        assert reponse_du_formulaire.status_code == 200
+        formulaires = attributs_des_elements(
+            reponse_du_formulaire.content.decode(), "export-fiscal-form"
+        )
+        assert len(formulaires) == 1, reponse_du_formulaire.content.decode()[:400]
+
+    def test_export_fiscal_sans_module_caisse_rend_l_archive(self):
+        """
+        Sans module caisse, l'admin envoie le formulaire de l'export (date de début
+        posée) : la réponse est l'archive ZIP, en téléchargement.
+        / Without the register module, posting the export form returns the ZIP archive.
+        """
+        self._vendre_un_jus_en_especes()
+        adresse_de_l_export = (
+            self._ouvrir_le_formulaire_de_l_export_fiscal_sans_module_caisse()
+        )
+
+        # Début = il y a 30 jours, dans le fuseau du lieu : la période reste sous le
+        # plafond de 365 jours quelle que soit la date du jour.
+        # / Start = 30 days ago in the venue's time zone: stays under the 365-day cap.
+        fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        aujourd_hui_au_lieu = timezone.now().astimezone(fuseau_du_lieu).date()
+        debut_de_l_export = aujourd_hui_au_lieu - timedelta(days=30)
+
+        reponse_de_l_export = self.navigateur.post(
+            adresse_de_l_export, {"debut": debut_de_l_export.isoformat()}
+        )
+
+        assert reponse_de_l_export.status_code == 200, (
+            reponse_de_l_export.content.decode(errors="replace")[:400]
+        )
+        assert reponse_de_l_export["Content-Type"] == "application/zip"
+        assert "attachment" in reponse_de_l_export["Content-Disposition"]
 
     # ------------------------------------------------------------------
     # La route d'export fiscal : la période

@@ -48,7 +48,7 @@ def send_booking_cancellation_user(booking_uuid: str):
         if booking.can_refund():
             montant_de_la_vente = 0
             for ligne in booking.lignearticles.filter(status__in=[LigneArticle.PAID, LigneArticle.VALID]):
-                montant_de_la_vente += int(ligne.amount * ligne.qty)
+                montant_de_la_vente += ligne.total_ttc
             refund_amount = dround(montant_de_la_vente)
     except Exception:
         refund_amount = None

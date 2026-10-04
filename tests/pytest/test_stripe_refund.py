@@ -571,6 +571,10 @@ class TestAvoirsHorsStripe:
                 "Annuler la réservation gratuite a créé un avoir sur la vente admin."
             )
 
+    # Ce test écrit une vente réglée (scellée) : la marque `django_db` l'annule à la
+    # fin, rien ne reste en base de dev (tests/PIEGES.md 13.1).
+    # / This test writes a sealed sale: `django_db` rolls it back.
+    @pytest.mark.django_db
     def test_lignes_hors_stripe_ne_renvoie_que_les_lignes_de_la_reservation(
         self, api_client, auth_headers, mock_stripe, tenant
     ):

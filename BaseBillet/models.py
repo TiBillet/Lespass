@@ -3022,10 +3022,16 @@ class Reservation(models.Model):
         return self.tickets.filter(status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED])
 
     def total_paid(self):
+        """
+        Le montant payé pour cette réservation : la somme des nets vendus (`total_ttc`,
+        centimes entiers) de ses lignes payées, avoirs et remboursements compris (ils
+        sont négatifs). Une ligne entièrement offerte vaut 0.
+        / The amount paid: sum of the net sold (`total_ttc`) of the paid lines, credit
+        notes and refunds included. A fully offered line counts 0.
+        """
         total_paid = 0
         for ligne_article in self.articles_paid():
-            ligne_article: LigneArticle
-            total_paid += int(ligne_article.amount * ligne_article.qty)  # int car on multiplie un int par un float
+            total_paid += ligne_article.total_ttc
         return dround(total_paid)
 
     def can_refund(self):
@@ -3091,7 +3097,7 @@ class Reservation(models.Model):
         montant_paye_par_stripe = 0
         for ligne_payee in self.articles_paid():
             if ligne_payee.paiement_stripe_id is not None:
-                montant_paye_par_stripe += int(ligne_payee.amount * ligne_payee.qty)
+                montant_paye_par_stripe += ligne_payee.total_ttc
         return montant_paye_par_stripe
 
     @staticmethod
@@ -3360,7 +3366,7 @@ class Reservation(models.Model):
         # the old message.
         if not annulation_par_l_admin:
             for ligne in lignes_hors_stripe_a_crediter:
-                ligne_avec_de_l_argent = ligne.amount > 0 and not ligne_sans_argent_a_rendre(ligne)
+                ligne_avec_de_l_argent = ligne.total_ttc > 0 and not ligne_sans_argent_a_rendre(ligne)
                 if ligne_avec_de_l_argent:
                     return _("Réglé sur place : pour un éventuel remboursement, contactez l'organisateur.")
         return self.cancel_text()
@@ -3531,7 +3537,7 @@ class Reservation(models.Model):
         # old message.
         if not annulation_par_l_admin:
             for ligne in lignes_hors_stripe_du_billet:
-                ligne_avec_de_l_argent = ligne.amount > 0 and not ligne_sans_argent_a_rendre(ligne)
+                ligne_avec_de_l_argent = ligne.total_ttc > 0 and not ligne_sans_argent_a_rendre(ligne)
                 if ligne_avec_de_l_argent:
                     return _("Réglé sur place : pour un éventuel remboursement, contactez l'organisateur.")
         return self.cancel_text() if refund else _("Ticket cancelled.")
@@ -3869,15 +3875,28 @@ class Paiement_stripe(models.Model):
         # Else the paiement is fully refunded
         return False
 
-    # total = models.FloatField(default=0)
     def total(self):
+        """
+        Le total du paiement, en euros (Decimal) : la somme des nets vendus
+        (`total_ttc`) de ses lignes, remboursements compris (négatifs). Un transfert de
+        compte Stripe lit son montant dans le message de Stripe.
+        Le montant réellement encaissé par Stripe est `montant_encaisse` : une ligne
+        « écart d'encaissement » n'a pas de paiement Stripe.
+        / Payment total in euros: sum of the lines' net sold, refunds included. A
+        Stripe account transfer reads its payload. The collected amount is
+        `montant_encaisse`.
+
+        Lu par `is_fully_refunded`, les mails d'échec et de refus de paiement
+        (BaseBillet/tasks.py) et la facture (invoice.html).
+        / Read by is_fully_refunded, the failure mails and the invoice.
+        """
         if self.source == self.TRANSFERT:  # c'est un transfert de compte stripe
             payload = json.loads(self.metadata_stripe)
             return dround(payload["data"]["object"]["amount"])
 
         total = 0
         for ligne in self.lignearticles.all():
-            total += int(ligne.amount * ligne.qty)
+            total += ligne.total_ttc
         return dround(total)
 
     def uuid_8(self):
@@ -3891,10 +3910,19 @@ class Paiement_stripe(models.Model):
         return self.uuid_8()
 
     def articles(self):
-        return " - ".join(
-            [
-                f"{ligne.pricesold.productsold.product.name} / {ligne.pricesold.price.name} / {dround(int(ligne.qty * ligne.amount))}€"
-                for ligne in self.lignearticles.all()])
+        """
+        Les articles du paiement en une phrase : « produit / tarif / net vendu€ »,
+        séparés par « - ». Le montant est le net vendu de la ligne (`total_ttc`).
+        / The payment's items in one sentence; the amount is the line's net sold.
+        """
+        textes_des_articles = []
+        for ligne in self.lignearticles.all():
+            nom_du_produit = ligne.pricesold.productsold.product.name
+            nom_du_tarif = ligne.pricesold.price.name
+            textes_des_articles.append(
+                f"{nom_du_produit} / {nom_du_tarif} / {dround(ligne.total_ttc)}€"
+            )
+        return " - ".join(textes_des_articles)
 
     def get_checkout_session(self):
         self.config = Configuration.get_solo()
@@ -4471,7 +4499,42 @@ class LigneArticle(models.Model):
         return int(montant_exact.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
     def total_decimal(self):
-        return dround(self.total())
+        """
+        Le net vendu de la ligne (`total_ttc`), en euros. Lu par la facture d'adhésion
+        (invoice.html), le formulaire d'annulation d'adhésion (cancel_form.html) et
+        l'onglet des ventes de la fiche adhésion (Administration/admin_tenant.py).
+        / The line's net sold, in euros. Read by the invoice, the membership
+        cancellation form and the membership sales tab.
+        """
+        return dround(self.total_ttc)
+
+    def moyens_de_paiement_de_sa_vente(self):
+        """
+        « Payé comment » : les noms des moyens nets de la vente de la ligne, après ses
+        corrections, sans l'offert (`noms_des_moyens_nets_de_la_vente`,
+        laboutik/affichage_des_ventes.py, la seule règle). Liste vide pour une ligne
+        sans vente. Sert à AFFICHER ; une décision lit le règlement elle-même.
+        Un règlement cashless s'écrit par le nom de son moyen : les noms des monnaies
+        demanderaient des requêtes par ligne.
+        / "Paid how": the net method names of the line's sale (single rule in
+        laboutik/affichage_des_ventes.py). Empty without a sale. Display only.
+
+        Lu par la fiche utilisateur, la liste des ventes et l'onglet des ventes de la
+        fiche adhésion (Administration/admin_tenant.py), et l'export des lignes
+        (Administration/importers/lignearticle_exporter.py). Précharger `vente`,
+        `vente__reglements` et `vente__ventes_derivees__reglements` évite des requêtes
+        par ligne.
+        / Read by the admin screens and the lines export. Prefetch the sale, its
+        payments and its derived sales' payments.
+        """
+        # Import local INDISPENSABLE : laboutik/affichage_des_ventes.py importe ce
+        # module au chargement (cycle).
+        # / Required local import: that module imports this one when it loads.
+        from laboutik.affichage_des_ventes import noms_des_moyens_nets_de_la_vente
+
+        if self.vente_id is None:
+            return []
+        return noms_des_moyens_nets_de_la_vente(self.vente, {})
 
     def get_stripe_checkout_session(self):
         paiement_stripe = self.paiement_stripe

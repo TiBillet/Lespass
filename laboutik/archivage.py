@@ -1005,3 +1005,154 @@ def creer_entree_journal(type_operation, details, cle_secrete, operateur=None):
         entree.save(update_fields=['hmac_hash'])
 
     return entree
+
+
+# La periode la plus longue d'un export fiscal, comme la commande `archiver_donnees`.
+# / The longest fiscal export period, like the archiver_donnees command.
+NOMBRE_DE_JOURS_MAXIMUM_D_UN_EXPORT_FISCAL = 365
+
+
+def reponse_de_l_export_fiscal(request):
+    """
+    Traite l'envoi (POST) du formulaire d'export fiscal : valide la periode, genere
+    l'archive ZIP signee, journalise l'export et rend le ZIP en telechargement. Un
+    refus rend un message (400 ou 500), rien n'est genere.
+    / Handles the fiscal export form POST: validates the period, builds the signed ZIP,
+    logs the export and returns it as a download. A refusal returns a message.
+
+    LOCALISATION : laboutik/archivage.py
+
+    APPELEE PAR (une seule logique, deux portes) :
+    - laboutik/views.py `CaisseViewSet.export_fiscal` (la caisse) ;
+    - comptabilite/admin.py `ClotureCaisseAdmin.export_fiscal` (l'admin, pour tous les
+      lieux, avec ou sans module caisse : l'archive couvre toutes les origines).
+    / Called by the register route and by the accounting admin (every venue).
+
+    LA PERIODE : la date de debut est obligatoire ; la fin ne precede pas le debut ;
+    365 jours au plus ; sans date de fin, la fin est aujourd'hui (date du lieu). Une
+    archive sans borne (tout l'historique, en memoire, dans une requete HTTP)
+    n'existe pas.
+    / Start date required, end not before start, 365 days at most, end defaults to
+    today.
+
+    :param request: la requete POST (champs `debut`, `fin`)
+    :return: HttpResponse (le ZIP, ou le message de refus)
+    """
+    # Imports locaux : ce module est lu par les commandes d'archivage sans les vues.
+    # / Local imports: this module is used by the archiving commands without views.
+    from datetime import date as date_type
+
+    from django.db import connection
+    from django.http import HttpResponse
+    from django.shortcuts import render
+    from django.utils.translation import gettext_lazy as _
+
+    from BaseBillet.models import Configuration
+    from laboutik.models import LaboutikConfiguration
+
+    configuration_de_la_caisse = LaboutikConfiguration.get_solo()
+
+    # Recuperer la cle HMAC / Get the HMAC key
+    cle = configuration_de_la_caisse.get_or_create_hmac_key()
+    if not cle:
+        return render(
+            request,
+            "laboutik/partial/hx_messages.html",
+            {
+                "msg_type": "warning",
+                "msg_content": _("Cle HMAC non configuree. Export impossible."),
+            },
+            status=500,
+        )
+
+    # Parser les dates optionnelles / Parse optional dates
+    debut = None
+    fin = None
+    debut_str = request.POST.get("debut", "").strip()
+    fin_str = request.POST.get("fin", "").strip()
+    try:
+        if debut_str:
+            debut = date_type.fromisoformat(debut_str)
+        if fin_str:
+            fin = date_type.fromisoformat(fin_str)
+    except ValueError:
+        return render(
+            request,
+            "laboutik/partial/hx_messages.html",
+            {
+                "msg_type": "warning",
+                "msg_content": _("Format de date invalide."),
+            },
+            status=400,
+        )
+
+    if debut is None:
+        return render(
+            request,
+            "laboutik/partial/hx_messages.html",
+            {
+                "msg_type": "warning",
+                "msg_content": _("La date de début est obligatoire."),
+            },
+            status=400,
+        )
+    fin_de_la_periode = fin
+    if fin_de_la_periode is None:
+        fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        fin_de_la_periode = timezone.now().astimezone(fuseau_du_lieu).date()
+    if fin_de_la_periode < debut:
+        return render(
+            request,
+            "laboutik/partial/hx_messages.html",
+            {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "La date de fin est antérieure à la date de début."
+                ),
+            },
+            status=400,
+        )
+    nombre_de_jours_de_la_periode = (fin_de_la_periode - debut).days
+    if nombre_de_jours_de_la_periode > NOMBRE_DE_JOURS_MAXIMUM_D_UN_EXPORT_FISCAL:
+        return render(
+            request,
+            "laboutik/partial/hx_messages.html",
+            {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "La période demandée dépasse 365 jours. Faites un export "
+                    "par année."
+                ),
+            },
+            status=400,
+        )
+
+    schema = connection.schema_name
+
+    # Generer les fichiers, calculer les hash, empaqueter en ZIP
+    # / Generate files, compute hashes, package into ZIP
+    fichiers = generer_fichiers_archive(schema, debut, fin)
+    hash_json = calculer_hash_fichiers(fichiers, cle)
+    zip_bytes = empaqueter_zip(fichiers, hash_json)
+
+    # Journaliser l'export / Log the export
+    details = {
+        "schema": schema,
+        "debut": debut_str or None,
+        "fin": fin_str or None,
+        "nb_fichiers": len(fichiers),
+        "taille_zip": len(zip_bytes),
+    }
+    creer_entree_journal(
+        type_operation="EXPORT_FISCAL",
+        details=details,
+        cle_secrete=cle,
+        operateur=request.user if request.user.is_authenticated else None,
+    )
+
+    # Reponse ZIP en telechargement / ZIP download response
+    date_label = timezone.localtime(timezone.now()).strftime("%Y%m%d_%H%M")
+    filename = f"export_fiscal_{schema}_{date_label}.zip"
+    response = HttpResponse(zip_bytes, content_type="application/zip")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
