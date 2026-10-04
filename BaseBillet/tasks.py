@@ -166,7 +166,9 @@ def create_membership_invoice_pdf(membership: Membership):
     #   adhésion payée avec plusieurs moyens à la caisse est écrite en plusieurs
     #   « parts » (une par moyen), et une seule porte l'adhésion (FK `membership`) :
     #   on prend les lignes de cette vente au même tarif, de cette adhésion ou sans
-    #   adhésion (jamais la part d'une autre adhésion). Elles sont regroupées en UN
+    #   adhésion (jamais la part d'une autre adhésion). Les parts sans adhésion ne sont
+    #   prises que si la vente ne porte qu'UNE adhésion à ce tarif ; sinon, seulement
+    #   les lignes de cette adhésion, et un avertissement au journal. Elles sont regroupées en UN
     #   article (`articles_de_la_vente_pour_l_affichage`), part offerte montrée. Les
     #   autres articles de la vente (une bière du même panier) et les ventes plus
     #   anciennes n'y sont pas. Une dernière ligne sans vente compte seule. Le total
@@ -212,12 +214,42 @@ def create_membership_invoice_pdf(membership: Membership):
                     pk=derniere_ligne_de_l_adhesion.pk
                 )
             else:
-                parts_de_l_adhesion = LigneArticle.objects.filter(
-                    Q(membership=membership) | Q(membership__isnull=True),
+                lignes_payees_au_meme_tarif = LigneArticle.objects.filter(
                     vente_id=derniere_ligne_de_l_adhesion.vente_id,
                     pricesold__price_id=derniere_ligne_de_l_adhesion.pricesold.price_id,
                     status__in=statuts_des_lignes_payees,
                 )
+                # Une part sans adhésion (FK vide) n'appartient sûrement à CETTE
+                # adhésion que si la vente ne porte qu'UNE adhésion à ce tarif. Avec
+                # deux adhérents au même tarif, on ne sait pas à qui elle est : la
+                # facture ne prend que les lignes de cette adhésion.
+                # / A part without membership surely belongs to THIS membership only
+                # when the sale carries ONE membership of this price.
+                nombre_d_adhesions_au_meme_tarif = (
+                    lignes_payees_au_meme_tarif.filter(membership__isnull=False)
+                    .values("membership_id")
+                    .distinct()
+                    .count()
+                )
+                if nombre_d_adhesions_au_meme_tarif <= 1:
+                    parts_de_l_adhesion = lignes_payees_au_meme_tarif.filter(
+                        Q(membership=membership) | Q(membership__isnull=True)
+                    )
+                else:
+                    parts_de_l_adhesion = lignes_payees_au_meme_tarif.filter(
+                        membership=membership
+                    )
+                    il_y_a_des_parts_sans_adhesion = lignes_payees_au_meme_tarif.filter(
+                        membership__isnull=True
+                    ).exists()
+                    if il_y_a_des_parts_sans_adhesion:
+                        logger.warning(
+                            f"create_membership_invoice_pdf : la vente "
+                            f"{derniere_ligne_de_l_adhesion.vente.uuid} porte "
+                            f"{nombre_d_adhesions_au_meme_tarif} adhésions au même tarif "
+                            f"et des parts sans adhésion : la facture de l'adhésion "
+                            f"{membership.uuid} ne porte que ses propres lignes"
+                        )
                 vente_de_l_adhesion = derniere_ligne_de_l_adhesion.vente
                 noms_des_moyens = noms_des_moyens_nets_de_la_vente(
                     vente_de_l_adhesion,

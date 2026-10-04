@@ -1202,9 +1202,11 @@ class Webhook_stripe(APIView):
                 paiement_stripe.refresh_from_db()
 
                 # Si c'est un paiement SEPA en attente, on envoie un mail via Celery pour prévenir
+                # Le moyen se lit sur le paiement (`moyen`, posé par
+                # update_checkout_status), pas sur une de ses lignes.
+                # / The method is read on the payment, not on one of its lines.
                 if paiement_stripe.status == Paiement_stripe.PENDING:
-                    first_ligne = paiement_stripe.lignearticles.first()
-                    if first_ligne and first_ligne.payment_method == PaymentMethod.STRIPE_SEPA_NOFED:
+                    if paiement_stripe.moyen == PaymentMethod.STRIPE_SEPA_NOFED:
                         # Envoi d'un email FALC pour informer l'utilisateur.
                         # Objectif: dire simplement que la demande est prise en compte
                         # et que l'adhésion sera active après réception du prélèvement SEPA.

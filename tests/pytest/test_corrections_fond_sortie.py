@@ -211,6 +211,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': str(ligne.uuid),
             'nouveau_moyen': PaymentMethod.CC,
             'raison': 'Erreur de saisie au moment du paiement',
+            'ancien_moyen': ligne.payment_method,
         })
 
         # Reponse 200 = succes
@@ -240,6 +241,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': str(ligne.uuid),
             'nouveau_moyen': PaymentMethod.CHEQUE,
             'raison': 'Client a paye par cheque finalement',
+            'ancien_moyen': ligne.payment_method,
         })
 
         assert response.status_code == 200
@@ -257,6 +259,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': str(ligne.uuid),
             'nouveau_moyen': PaymentMethod.CASH,
             'raison': 'Test correction NFC',
+            'ancien_moyen': ligne.payment_method,
         })
 
         assert response.status_code == 400
@@ -281,6 +284,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': str(ligne.uuid),
             'nouveau_moyen': PaymentMethod.LOCAL_EURO,
             'raison': 'Test conversion vers NFC',
+            'ancien_moyen': ligne.payment_method,
         })
 
         assert response.status_code == 400
@@ -303,6 +307,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': str(ligne.uuid),
             'nouveau_moyen': PaymentMethod.CC,
             'raison': 'Tentative apres cloture',
+            'ancien_moyen': ligne.payment_method,
         })
 
         assert response.status_code == 400
@@ -325,6 +330,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': str(ligne.uuid),
             'nouveau_moyen': PaymentMethod.CC,
             'raison': '',
+            'ancien_moyen': ligne.payment_method,
         })
         assert response.status_code == 200
 
@@ -367,6 +373,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': str(lignes[0].uuid),
             'nouveau_moyen': PaymentMethod.CC,
             'raison': 'Erreur sur tout le panier',
+            'ancien_moyen': lignes[0].payment_method,
         })
         assert response.status_code == 200
 
@@ -394,6 +401,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': str(ligne.uuid),
             'nouveau_moyen': PaymentMethod.CASH,
             'raison': 'Pas de changement',
+            'ancien_moyen': ligne.payment_method,
         })
 
         assert response.status_code == 400
@@ -402,6 +410,23 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
                 'Le moyen de paiement est deja identique'
             )
         assert message_de_refus_attendu in response.content.decode()
+
+    def test_correction_sans_ancien_moyen_refuse(self):
+        """Correction sans le moyen vu a l'ouverture du formulaire (`ancien_moyen`,
+        champ cache, obligatoire) : 400, la ligne n'est pas modifiee.
+        / Correction without the method seen when opening the form: 400, unchanged."""
+        ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.CASH)
+
+        response = self.c.post('/laboutik/paiement/corriger_moyen_paiement/', {
+            'ligne_uuid': str(ligne.uuid),
+            'nouveau_moyen': PaymentMethod.CC,
+            'raison': 'Envoi sans le champ cache',
+        })
+
+        assert response.status_code == 400
+        ligne.refresh_from_db()
+        assert ligne.payment_method == PaymentMethod.CASH
+        assert not CorrectionPaiement.objects.filter(ligne_article=ligne).exists()
 
     # ----------------------------------------------------------------------- #
     #  Tests fond de caisse                                                    #
@@ -569,6 +594,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': str(uuid_inexistant),
             'nouveau_moyen': PaymentMethod.CC,
             'raison': 'Test ligne introuvable',
+            'ancien_moyen': PaymentMethod.CASH,
         })
 
         assert response.status_code == 404
@@ -580,6 +606,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': 'pas-un-uuid',
             'nouveau_moyen': PaymentMethod.CC,
             'raison': 'Test UUID invalide',
+            'ancien_moyen': PaymentMethod.CASH,
         })
 
         assert response.status_code == 400
@@ -602,6 +629,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             'ligne_uuid': str(ligne.uuid),
             'nouveau_moyen': PaymentMethod.CC,
             'raison': 'Tentative non authentifiee',
+            'ancien_moyen': ligne.payment_method,
         })
 
         # HasLaBoutikAccess retourne 403 ou 401 selon la config DRF

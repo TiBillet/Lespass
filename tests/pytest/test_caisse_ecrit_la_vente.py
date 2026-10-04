@@ -4538,8 +4538,12 @@ def corriger_le_moyen_de_paiement(client_du_caissier, ligne, nouveau_moyen):
     :param ligne: la `LigneArticle` cliquée dans l'historique
     :param nouveau_moyen: `PaymentMethod.CASH`, `CC` ou `CHEQUE`
     """
+    # Le moyen que le formulaire affiche : celui de la ligne, relu en base (le
+    # formulaire est rouvert à chaque correction).
+    # / The method the form shows: the line's, read back.
     donnees_du_formulaire = {
         "ligne_uuid": str(ligne.uuid),
+        "ancien_moyen": LigneArticle.objects.get(pk=ligne.pk).payment_method,
         "nouveau_moyen": nouveau_moyen,
         "raison": "Erreur de moyen au moment du paiement",
     }

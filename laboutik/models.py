@@ -143,9 +143,12 @@ class LaboutikConfiguration(SingletonModel):
         ),
     )
 
-    # --- Compteur sequentiel de tickets de vente (conformite LNE) ---
-    # Incremente a chaque ticket de vente imprime. Global au tenant.
-    # / Sequential receipt counter (LNE compliance). Incremented per printed sale ticket. Global to tenant.
+    # --- Ancien compteur de tickets de vente ---
+    # Plus incremente : le ticket porte le numero de la vente (chantier 05, fiche G).
+    # Champ retire en fiche H. Son `help_text` dit encore l'inverse : il n'est pas
+    # change ici (le changer creerait une migration).
+    # / Former receipt counter, no longer incremented (the ticket carries the sale
+    # number); removed in sheet H. Its help_text is left unchanged (no migration).
     compteur_tickets = models.PositiveIntegerField(
         default=0,
         verbose_name=_("Receipt counter"),

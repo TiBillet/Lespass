@@ -95,6 +95,33 @@ Aucune suppression automatique de lignes par une migration.
 | Constantes `MOYENS_HORS_ARGENT`, `lignes_argent` (chantier 04) | remplacées par `MOYENS_OFFERTS` + `NM` |
 | « Entries » et « Ancien rapport caisse » | retirés du menu (l'URL « Entries » reste pour le support) |
 
+**Restes signalés par la relecture finale de la fiche G (2026-10-04)** — à traiter ou
+à retirer en H-2, vérifier chaque ligne avant d'agir :
+
+- Lecteurs de `ligne.payment_method` qui décident encore : `laboutik/plan_comptable.py`
+  ~l.792 (compte des jetons) ; `ApiBillet/views.py` ~l.1207 (mail « SEPA en attente »,
+  sauf si G-3-ter l'a déjà passé sur `Paiement_stripe.moyen`) ; la garde de correction de
+  `laboutik/views.py` ~l.4837 lit `MOYENS_HORS_ARGENT` de `laboutik/reports.py` (doublon
+  de `comptabilite/rapport.py` ~l.115).
+- `LigneArticle.total()` : plus aucun lecteur en production (3 fichiers de tests).
+- `LaboutikConfiguration.compteur_tickets`, `rapport_emails`, `rapport_periodicite` : plus
+  lus ni écrits (doublons de `Configuration.*`, Q-G3).
+- `laboutik/reports.py` vit encore par `CaisseViewSet.rapport_temps_reel` et l'ancien
+  `ClotureCaisseAdmin` ; `RapportComptableService.calculer_hash_lignes` n'a aucun appelant.
+- `comptabilite/services.py` : aucun import en production ; `test_comptabilite_service.py`,
+  `test_demo_data_ventes.py` ~l.244 et `tests/e2e/conftest.py` ~l.845/921 testent ou
+  utilisent ce module mort.
+- Libellés des moyens en double : `PAYMENT_METHOD_TRANSLATIONS` (`laboutik/views.py`
+  ~l.179, écrans de paiement) et les choix de `CorrectionPaiementSerializer`
+  (`laboutik/serializers.py` ~l.358) → `nom_du_moyen_de_paiement`.
+- Code mort antérieur à G : `imprimer_commande` (`laboutik/printing/tasks.py` ~l.171),
+  `formatter_ticket_commande` (`formatters.py` ~l.398), gabarit
+  `admin/cloture/export_csv_comptable_detail_form.html`, classes CSS de `ventes.css`
+  `.kpi-sub-sortie`, `.kpi-tva`, `.mini-table-large` (et `kpi-sub-solde` sans règle).
+- Avoir total : la quantité restante est calculée deux fois dans l'admin
+  (`_lignes_de_la_vente_avec_un_reste_a_rendre`, `_sommes_rendues_par_l_avoir_total`) et la
+  répartition jetons / Stripe / moyen choisi recopie `ajouter_les_reglements_d_un_avoir`.
+
 ## 4. Session H-3 — démo, fixtures, tests existants
 
 - Démo : `create_test_pos_data.py` (~l.1546 double compte, ~l.1703-1752),

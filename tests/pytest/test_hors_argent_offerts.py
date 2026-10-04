@@ -537,6 +537,7 @@ class TestLignesHorsArgent(FastTenantTestCase):
             "/laboutik/paiement/corriger_moyen_paiement/",
             data={
                 "ligne_uuid": str(ligne_offerte.uuid),
+                "ancien_moyen": ligne_offerte.payment_method,
                 "nouveau_moyen": PaymentMethod.CASH,
                 "raison": "test",
             },

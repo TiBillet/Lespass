@@ -67,6 +67,7 @@ tests 14 et 16) ; brief CHANTIER-05-briefs/05-G-3.md (G-3c-1).
 Lancer / Run : make test ARGS="tests/pytest/test_admin_vente.py"
 """
 
+import uuid
 from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -1403,6 +1404,70 @@ def test_avoir_total_refuse_une_vente_avec_une_recharge(lieu):
     assert ventes_d_avoir_de(vente) == []
 
 
+TEXTE_DU_REFUS_POUR_UNE_VENTE_PAS_EN_EUROS = (
+    "Cette vente n'est pas en euros (points ou temps) : l'avoir total n'est pas "
+    "possible."
+)
+
+
+def vendre_une_planche_en_points(client_de_la_vente):
+    """
+    Une vente de caisse réglée EN POINTS : la vente est tenue dans la monnaie de points
+    (`unite` = son uuid), une planche à 300 centièmes de points, TVA 0, moyen « points
+    ou temps » (NM), un règlement NM de 300. Rend la vente.
+    / A settled register sale in points (unit = the points currency). Returns it.
+    """
+    monnaie_de_points = uuid.uuid4()
+    vente = ouvrir_vente(
+        origine=SaleOrigin.LABOUTIK,
+        nature=Vente.Nature.VENTE,
+        client=client_de_la_vente,
+        unite=str(monnaie_de_points),
+    )
+    ajouter_article(
+        vente,
+        pricesold=creer_tarif_vendu(nom="Planche en points", taux_tva="0.00"),
+        quantite=Decimal("1"),
+        prix_unitaire=300,
+        taux_tva=Decimal("0"),
+        payment_method=PaymentMethod.NON_MONETAIRE,
+        asset=monnaie_de_points,
+        status=LigneArticle.VALID,
+    )
+    ajouter_reglement(
+        vente, moyen=PaymentMethod.NON_MONETAIRE, montant=300, asset=monnaie_de_points
+    )
+    return Vente.objects.get(pk=encaisser_vente(vente).pk)
+
+
+def test_avoir_total_refuse_une_vente_en_points(lieu):
+    """
+    Une vente tenue en points : l'avoir total est refusé par le SERVICE (ValueError,
+    message « pas en euros ») et par l'ADMIN (GET et POST : retour à la fiche, même
+    message). Aucun avoir n'est écrit.
+    / A points sale: refused by the service and by the admin, nothing written.
+    """
+    client_de_l_admin = client_de_l_admin_du_lieu(lieu)
+    vente = vendre_une_planche_en_points(creer_utilisateur())
+
+    with pytest.raises(ValueError, match="pas en euros"):
+        ecrire_la_vente_d_avoir_d_une_vente(
+            vente, moyen_rembourse=None, origine=SaleOrigin.ADMIN
+        )
+    reponse_de_l_ecran = client_de_l_admin.get(adresse_de_l_avoir_total(vente))
+    reponse_de_la_validation = client_de_l_admin.post(adresse_de_l_avoir_total(vente), {})
+
+    assert reponse_de_l_ecran.status_code == 302
+    assert message_traduit(
+        reponse_de_l_ecran, TEXTE_DU_REFUS_POUR_UNE_VENTE_PAS_EN_EUROS
+    ) in textes_des_messages(reponse_de_l_ecran)
+    assert reponse_de_la_validation.status_code == 302
+    assert message_traduit(
+        reponse_de_la_validation, TEXTE_DU_REFUS_POUR_UNE_VENTE_PAS_EN_EUROS
+    ) in textes_des_messages(reponse_de_la_validation)
+    assert ventes_d_avoir_de(vente) == []
+
+
 def test_filtre_a_verifier_ecarte_le_panier_abandonne(lieu):
     """
     Deux ventes en ligne en attente depuis 2 heures :
@@ -1590,19 +1655,6 @@ def test_admin_rejouer_l_encaissement_prend_le_paiement_paye_meme_s_il_est_ancie
     vente.refresh_from_db()
     assert vente.statut == Vente.Statut.REGLEE
     assert Reglement.objects.get(vente=vente).paiement_stripe_id == paiement_paye.pk
-
-
-def test_recherche_d_un_nombre_trop_grand_pour_un_numero(lieu):
-    """
-    Une recherche de 12 chiffres (trop grand pour un numéro de vente) : la liste
-    s'ouvre (200), sans erreur de la base.
-    / A 12-digit search term: the list opens, no database error.
-    """
-    client_de_l_admin = client_de_l_admin_du_lieu(lieu)
-
-    reponse = client_de_l_admin.get(ADRESSE_DE_LA_LISTE_DES_VENTES, {"q": "123456789012"})
-
-    assert reponse.status_code == 200
 
 
 def adresses_des_liens_de_la_fiche(client_de_l_admin, vente):

@@ -1164,6 +1164,10 @@ def ajouter_les_reglements_d_un_avoir(
 # Les refus de l'avoir total qui ne viennent pas de l'état de la vente, mais de son
 # contenu. Textes du service (français) ; l'écran de l'admin a les siens, traduits.
 # / Full credit note refusals coming from the sale's content.
+MESSAGE_AVOIR_TOTAL_VENTE_PAS_EN_EUROS = (
+    "Cette vente n'est pas en euros (points ou temps) : l'avoir total n'est pas "
+    "possible."
+)
 MESSAGE_AVOIR_TOTAL_VENTE_AVEC_UN_ECART = (
     "Cette vente a un écart d'encaissement : l'avoir total n'est pas possible. "
     "Faites un avoir ligne par ligne."
@@ -1233,8 +1237,8 @@ def ecrire_la_vente_d_avoir_d_une_vente(vente, moyen_rembourse, origine):
     « Avoir total » de la fiche « Vente »).
 
     FLUX (dans UNE transaction ; un point de sauvegarde si l'appelant en a une) :
-    1. refus si la vente n'est pas de nature VENTE, ou pas réglée, ou si elle porte un
-       article d'écart d'encaissement (`vente_porte_un_ecart_d_encaissement`), ou une
+    1. refus si la vente n'est pas de nature VENTE, ou pas réglée, ou pas en euros
+       (points ou temps), ou si elle porte un article d'écart d'encaissement (`vente_porte_un_ecart_d_encaissement`), ou une
        recharge de carte (`vente_contient_une_recharge`) : ces ventes se remboursent
        ligne par ligne, quand c'est possible ;
     2. chaque ligne vendue de la vente (quantité positive) est verrouillée et sa
@@ -1268,6 +1272,11 @@ def ecrire_la_vente_d_avoir_d_une_vente(vente, moyen_rembourse, origine):
         raise ValueError(
             "La vente n'est pas réglée : l'avoir est impossible."
         )
+    # Une vente tenue en points ou en temps (`unite` = l'uuid de la monnaie) ne reçoit
+    # jamais d'avoir total : ce n'est pas de l'argent.
+    # / A sale held in points or time never gets a full credit note.
+    if vente.unite != "EUR":
+        raise ValueError(MESSAGE_AVOIR_TOTAL_VENTE_PAS_EN_EUROS)
     if vente_porte_un_ecart_d_encaissement(vente):
         raise ValueError(MESSAGE_AVOIR_TOTAL_VENTE_AVEC_UN_ECART)
     if vente_contient_une_recharge(vente):

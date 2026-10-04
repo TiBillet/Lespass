@@ -510,6 +510,7 @@ class TestVenteEnPoints(FastTenantTestCase):
             "/laboutik/paiement/corriger_moyen_paiement/",
             data={
                 "ligne_uuid": str(ligne_en_points.uuid),
+                "ancien_moyen": ligne_en_points.payment_method,
                 "nouveau_moyen": PaymentMethod.CASH,
                 "raison": "test",
             },

@@ -373,14 +373,19 @@ class CorrectionPaiementSerializer(serializers.Serializer):
     # Le moyen que le caissier a vu a l'ouverture du formulaire (champ cache). La
     # route le compare au moyen actuel des lignes, sous verrou : un deuxieme envoi
     # du meme formulaire (double clic, deux caisses) est refuse au lieu de deplacer
-    # l'argent une deuxieme fois. Vide : pas de comparaison (appel sans le
-    # formulaire).
+    # l'argent une deuxieme fois. Obligatoire : le seul formulaire qui poste vers
+    # cette route (hx_corriger_moyen_paiement.html) l'envoie toujours, rempli (il
+    # n'est ouvert que pour une ligne en especes, CB ou cheque).
     # / The method the cashier saw when opening the form (hidden field); compared
-    #   under lock with the lines' current method. Empty: no comparison.
+    #   under lock with the lines' current method. Required: the only form always
+    #   sends it, filled.
     ancien_moyen = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        default="",
+        required=True,
+        allow_blank=False,
+        error_messages={
+            "required": _("Le moyen affiché par le formulaire manque : rouvrez la vente."),
+            "blank": _("Le moyen affiché par le formulaire manque : rouvrez la vente."),
+        },
     )
 
     def validate_raison(self, value):

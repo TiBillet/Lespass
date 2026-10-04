@@ -540,6 +540,7 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
         ligne_de_la_vente = vente_en_especes.articles.first()
         donnees_du_formulaire = {
             "ligne_uuid": str(ligne_de_la_vente.uuid),
+            "ancien_moyen": ligne_de_la_vente.payment_method,
             "nouveau_moyen": PaymentMethod.CC,
             "raison": "Erreur de moyen au moment du paiement",
         }
@@ -637,6 +638,9 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
             URL_DE_LA_CORRECTION_DU_MOYEN,
             {
                 "ligne_uuid": str(ligne.uuid),
+                # Le moyen que le formulaire affiche : celui de la ligne, relu en base.
+                # / The method the form shows: the line's, read back.
+                "ancien_moyen": LigneArticle.objects.get(pk=ligne.pk).payment_method,
                 "nouveau_moyen": nouveau_moyen,
                 "raison": "Erreur de moyen au moment du paiement",
             },

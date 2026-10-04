@@ -13622,10 +13622,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # Le formulaire envoie le moyen qu'il a affiche. Si le moyen actuel n'est
             # plus celui-la, une autre correction est passee entre-temps : refus.
             # / GUARD 2: the line changed since the form was opened: refused.
-            ligne_deja_corrigee = (
-                ancien_moyen_vu_par_le_caissier
-                and ancien_moyen_vu_par_le_caissier != ligne.payment_method
-            )
+            ligne_deja_corrigee = ancien_moyen_vu_par_le_caissier != ligne.payment_method
             if ligne_deja_corrigee:
                 return _refus_de_correction(
                     request,

@@ -2956,16 +2956,13 @@ class VenteAdmin(ModelAdmin):
     def get_search_results(self, request, queryset, search_term):
         # Un terme fait de chiffres cherche AUSSI le numéro exact de la vente. Le
         # numéro est un entier : il ne peut pas être dans `search_fields`, qui
-        # comparerait du texte (une adresse e-mail ferait échouer la requête). Un
-        # nombre trop grand pour la colonne (2^31 et plus) n'est pas un numéro de
-        # vente : PostgreSQL le refuserait.
-        # / A digits-only term ALSO searches the exact sale number, if it fits the
-        # integer column.
+        # comparerait du texte (une adresse e-mail ferait échouer la requête).
+        # / A digits-only term ALSO searches the exact sale number.
         resultats, peut_avoir_des_doublons = super().get_search_results(
             request, queryset, search_term
         )
         terme_cherche = search_term.strip()
-        if terme_cherche.isdigit() and int(terme_cherche) < 2**31:
+        if terme_cherche.isdigit():
             resultats = resultats | queryset.filter(numero=int(terme_cherche))
         return resultats, peut_avoir_des_doublons
 

@@ -120,9 +120,9 @@ Constats laissés pour la fiche H :
   - **ligne héritée sans vente** (écrite avant le chantier) : elle garde ses propres champs, comme avant. Ce cas est **retiré en fiche H**, avec ces champs de la ligne ;
   - moyen SEPA : la ligne et le règlement disent la même chose dans les flux d'aujourd'hui. Sans règle de repli, le règlement fait foi.
 - `send_sale_to_laboutik` : si la vente de la ligne n'est pas encore réglée (encaissement en échec), **rien n'est posté**. La tâche se relance avec une attente croissante plafonnée (`min(3 ** essais, 1800)` s), dans sa limite d'essais (20). Ensuite, elle abandonne et écrit une erreur dans le journal.
-- `send_sale_to_laboutik` : une vente ANNULÉE (Stripe a dit « non ») ne sera jamais réglée. La tâche abandonne tout de suite, sans relance, avec une ligne d'information au journal.
+- `send_sale_to_laboutik` : une vente ANNULÉE (Stripe a dit « non ») ne sera jamais réglée. La tâche abandonne tout de suite, sans relance, avec un avertissement au journal (niveau `warning` depuis G-3-bis).
 - `send_refund_to_laboutik` : même charge utile, lue dans le règlement de la vente d'avoir. Celle-ci est toujours réglée avant que la ligne passe « remboursée ».
-- Retrait de l'import inutilisé de `send_sale_to_laboutik` dans `Administration/admin_tenant.py`. Les patchs des tests visent maintenant `BaseBillet.tasks.send_sale_to_laboutik.delay` (`fabriques_reservation.vente_admin_especes`, `test_admin_reservation_add.py`).
+- Les patchs des tests visent maintenant la tâche elle-même, `BaseBillet.tasks.send_sale_to_laboutik.delay` (`fabriques_reservation.vente_admin_especes`, `test_admin_reservation_add.py`) : le patch couvre tous les modules qui importent la tâche. L'import de la tâche dans `Administration/admin_tenant.py`, retiré ici, y est revenu en G-3-bis (renvoi après le rejeu de l'encaissement).
 
 ### Tests ajoutés / Added tests
 `tests/pytest/test_lecteurs_montants_entiers.py`. La vraie tâche tourne ; le réseau est simulé.
@@ -139,7 +139,7 @@ Constats laissés pour la fiche H :
 ### Tests réécrits / Rewritten tests
 | Test | Raison / Reason |
 |---|---|
-| `tests/pytest/fabriques_reservation.py` `vente_admin_especes` | L'import patché a été retiré d'`admin_tenant.py` : le patch vise la tâche elle-même |
+| `tests/pytest/fabriques_reservation.py` `vente_admin_especes` | Le patch vise la tâche elle-même, pas un nom importé dans `admin_tenant.py` |
 | `tests/pytest/test_admin_reservation_add.py` (5 patchs) | Même raison ; l'assertion « rien n'est envoyé » reste |
 
 ### Fichiers modifiés / Modified files
@@ -147,7 +147,6 @@ Constats laissés pour la fiche H :
 |---|---|
 | `ApiBillet/serializers.py` | `moyen_monnaie_et_portefeuille_envoyes_a_l_ancien_laboutik`, `LigneArticleSerializer` (3 champs lus dans le règlement) |
 | `BaseBillet/tasks.py` | `send_sale_to_laboutik` : relance tant que la vente n'est pas réglée ; commentaire de `send_refund_to_laboutik` |
-| `Administration/admin_tenant.py` | Import inutilisé retiré |
 
 ## G-3c-1 — Fiche « Vente » de l'admin (lecture seule) et export fiscal pour tous
 
@@ -236,7 +235,7 @@ Nouvelles chaînes i18n : « Avoir total », « Avoir émis. », « Rejouer l'en
 - **Avoir total refusé** sur deux sortes de ventes. Le refus est fait deux fois : par l'écran de l'admin, avant l'affichage, et par le service `ecrire_la_vente_d_avoir_d_une_vente`.
   - Une vente qui porte un **écart d'encaissement** (reçu en plus ou en moins). Message : « Cette vente a un écart d'encaissement : l'avoir total n'est pas possible. Faites un avoir ligne par ligne. » L'avoir d'une ligne reste possible sur ces ventes : rien ne l'empêche.
   - Une vente qui contient une **recharge de carte**, c'est-à-dire un article hors chiffre d'affaires qui n'est pas un écart. L'avoir d'une ligne n'est pas touché.
-  - Une vente qui n'est pas en euros (points, temps) est aussi refusée par l'écran.
+  - Une vente qui n'est pas en euros (points, temps) est aussi refusée. Ce refus est fait deux fois depuis G-3-ter : par l'écran et par le service.
 - **L'écran de l'avoir total** :
   - il annonce ce qui sera rendu, par catégorie : au moyen choisi, depuis Stripe, en jetons, offert annulé. Ces montants sont calculés comme le service les calcule (`apercu_des_montants_d_un_avoir`, la règle commune `_catalogue_impose_et_part_offerte_d_un_avoir`) ;
   - le rappel Stripe dit la somme ;
@@ -252,7 +251,6 @@ Nouvelles chaînes i18n : « Avoir total », « Avoir émis. », « Rejouer l'en
   - leurs boutons ne sont montrés que quand l'action a un sens. Le masquage passe par `get_actions_detail`, et non par la permission par objet d'Unfold : cette permission sert aussi à l'appel de l'action, qui répondrait 403 au lieu du message de refus.
 - **Liste** :
   - une vente pas encore réglée montre la somme de ses articles (sous-requête, nombre de requêtes inchangé) ;
-  - un nombre trop grand pour la colonne (2^31 et plus) n'est plus cherché comme numéro ;
   - le préchargement des ventes dérivées est retiré.
 - **Badge d'intégrité** :
   - la comparaison est faite à temps constant (`hmac.compare_digest`) ;
@@ -279,7 +277,6 @@ Le workflow i18n est à lancer par le mainteneur.
   - l'écran annonce le reste à rendre, et son titre ;
   - le total d'une vente en attente dans la liste ;
   - le rejeu est refusé quand le paiement n'est pas payé, et il prend le paiement payé même s'il est plus ancien ;
-  - une recherche de 12 chiffres ;
   - les boutons montrés seulement quand ils ont un sens ;
   - le pré-remplissage de « Remboursé par » ;
   - le badge sans clé ;
@@ -295,10 +292,63 @@ Le workflow i18n est à lancer par le mainteneur.
 | Fichier / File | Changement / Change |
 |---|---|
 | `BaseBillet/services_vente.py` | Gardes « écart » et « recharge » de l'avoir total ; `apercu_des_montants_d_un_avoir` |
-| `Administration/admin_tenant.py` | Refus, montants de l'écran, pré-remplissage, filtre, rejeu, exceptions, boutons, total de la liste, recherche, badge |
+| `Administration/admin_tenant.py` | Refus, montants de l'écran, pré-remplissage, filtre, rejeu, exceptions, boutons, total de la liste, badge |
 | `Administration/templates/admin/lignearticle/emettre_avoir.html` | Montants rendus par catégorie, titre, somme du rappel Stripe |
 | `ApiBillet/serializers.py` | Un seul calcul du moyen par ligne, tri `datetime, pk` |
 | `BaseBillet/tasks.py` | `Vente.Statut`, avertissement pour une vente annulée |
+
+---
+
+## G-3-ter — Relecture finale de la fiche G
+
+### Resume / Summary
+- **Avoir total d'une vente en points ou en temps** : le refus est fait deux fois, par l'écran et par le service.
+  - Le service `ecrire_la_vente_d_avoir_d_une_vente` refuse lui aussi, avec un message constant (`MESSAGE_AVOIR_TOTAL_VENTE_PAS_EN_EUROS`). L'écran garde le même texte, traduit.
+- **Facture d'une adhésion payée hors Stripe** (`create_membership_invoice_pdf`) :
+  - les parts sans adhésion (FK vide) ne sont prises que si la vente ne porte qu'UNE adhésion à ce tarif ;
+  - avec deux adhérents ou plus au même tarif, la facture ne porte que les lignes de cette adhésion. Si des parts sans adhésion sont écartées, un avertissement au journal cite la vente.
+- **Mail « SEPA en attente »** (webhook Stripe, `ApiBillet/views.py`) :
+  - il se décide sur le moyen du paiement (`Paiement_stripe.moyen`), plus sur la première ligne ;
+  - `update_checkout_status` pose ce moyen en même temps que celui des lignes, avant l'enregistrement final.
+- **Correction de moyen à la caisse** : `ancien_moyen` est obligatoire et non vide.
+  - Le seul formulaire qui poste vers la route (`hx_corriger_moyen_paiement.html`) l'envoie toujours. Il n'est ouvert que pour une ligne en espèces, CB ou chèque.
+  - La garde « la ligne a changé depuis l'ouverture du formulaire » compare donc toujours.
+- **Recherche par numéro** : la garde `< 2**31` est retirée, avec son test. PostgreSQL compare un entier et un grand nombre sans erreur.
+- **Docs** :
+  - CHANGELOG de G-1 :
+    - l'invariant Σ = CA est vérifié dans `comptabilite/presentation.py` ;
+    - précision sur `get_solo()` et sur un lieu sans clé ni vente scellée ;
+    - les libellés des moyens ont une seule source pour les tickets et les rapports ;
+    - le README fiscal n'est pas dans le ZIP, ni avant ni après G-1 : il est écrit par `acces_fiscal`.
+  - CHANGELOG de G-2 :
+    - le seuil du détail des règlements est dans les imprimantes ;
+    - `ancien_moyen` est obligatoire.
+  - CHANGELOG de G-3b : l'import de la tâche dans l'admin est revenu en G-3-bis.
+  - Commentaire de `LaboutikConfiguration.compteur_tickets` : il n'est plus incrémenté. Son `help_text` n'est pas changé, pour ne pas créer de migration.
+
+Nouvelle chaîne i18n : « Le moyen affiché par le formulaire manque : rouvrez la vente. » Le workflow i18n est à lancer par le mainteneur.
+
+### Tests ajoutés / Added tests
+- `tests/pytest/test_admin_vente.py` : avoir total d'une vente en points, refusé côté service et côté admin.
+- `tests/pytest/test_lecteurs_montants_entiers.py` : deux adhésions au même tarif et une part sans adhésion. Chaque facture porte son montant, et un avertissement est écrit.
+- `tests/pytest/test_caracterisation_en_ligne.py` : le mail SEPA suit le moyen du paiement (deux cas croisés).
+- `tests/pytest/test_corrections_fond_sortie.py` : une correction sans `ancien_moyen` est refusée (400).
+
+### Tests réécrits / Rewritten tests
+| Test | Raison / Reason |
+|---|---|
+| `test_corrections_fond_sortie.py`, `test_menu_ventes.py`, `test_caisse_ecrit_la_vente.py`, `test_lecteurs_montants_entiers.py`, `test_hors_argent_offerts.py`, `test_vente_en_points.py` | Les envois vers `corriger_moyen_paiement` portent `ancien_moyen`, comme le formulaire : le moyen de la ligne, relu en base |
+| `test_admin_vente.py` | Test de la recherche de 12 chiffres retiré |
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/services_vente.py` | Refus des ventes qui ne sont pas en euros dans `ecrire_la_vente_d_avoir_d_une_vente` |
+| `BaseBillet/tasks.py` | Facture d'adhésion : parts sans adhésion seulement pour une adhésion unique au tarif |
+| `ApiBillet/views.py` | Mail SEPA décidé sur `Paiement_stripe.moyen` |
+| `laboutik/serializers.py`, `laboutik/views.py` | `ancien_moyen` obligatoire ; garde 2 sans cas « vide » |
+| `laboutik/models.py` | Commentaire de `compteur_tickets` |
+| `Administration/admin_tenant.py` | Garde `< 2**31` retirée |
 
 ---
 

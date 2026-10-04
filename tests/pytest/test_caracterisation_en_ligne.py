@@ -827,9 +827,9 @@ def test_sepa_soumis_statuts_et_mail_en_attente(
     « non payée » (`U`), l'adhésion passe « paiement soumis » (`PP`, son lien de paiement
     ne recrée plus de checkout). Le webhook demande le mail « SEPA en attente », une fois,
     pour l'adhésion.
-    Ce mail dépend du moyen de paiement posé sur la première ligne (voir T1).
+    Ce mail dépend du moyen posé sur le paiement (`Paiement_stripe.moyen`).
     / P3 SEPA submitted: payment PENDING, line UNPAID, membership PAYMENT_PENDING; the
-    webhook requests the "SEPA pending" mail once (T1: depends on the first line's method).
+    webhook requests the "SEPA pending" mail once (it depends on the payment's method).
     """
     adhesion_validee = preparer_une_adhesion_validee_par_l_admin()
     # On oublie les tâches demandées par la préparation (création du produit).
@@ -858,6 +858,69 @@ def test_sepa_soumis_statuts_et_mail_en_attente(
     assert arguments_des_taches(
         lieu.taches_demandees, "send_membership_sepa_pending_user"
     ) == [(str(adhesion_validee.uuid),)]
+
+
+@pytest.mark.parametrize(
+    "moyen_du_paiement, moyen_de_la_ligne, mail_attendu",
+    [
+        (PaymentMethod.STRIPE_SEPA_NOFED, PaymentMethod.STRIPE_NOFED, True),
+        (PaymentMethod.STRIPE_NOFED, PaymentMethod.STRIPE_SEPA_NOFED, False),
+    ],
+    ids=["paiement_sepa_ligne_carte", "paiement_carte_ligne_sepa"],
+)
+def test_mail_sepa_en_attente_lu_sur_le_moyen_du_paiement(
+    lieu,
+    django_capture_on_commit_callbacks,
+    moyen_du_paiement,
+    moyen_de_la_ligne,
+    mail_attendu,
+):
+    """
+    Le mail « SEPA en attente » suit le moyen du PAIEMENT (`Paiement_stripe.moyen`),
+    jamais celui de sa ligne. La relecture de la session Stripe est simulée : elle pose
+    le paiement « en attente » avec un moyen, et la ligne avec un AUTRE moyen.
+    - paiement SEPA, ligne carte : le mail part ;
+    - paiement carte, ligne SEPA : le mail ne part pas.
+    / The "SEPA pending" mail follows the payment's method, never its line's.
+    """
+    adhesion_validee = preparer_une_adhesion_validee_par_l_admin()
+    identifiant_de_session = f"cs_test_caracterisation_{identifiant_unique()}"
+    lieu.stripe.session.id = identifiant_de_session
+    client_de_l_acheteur = client_connecte(adhesion_validee.user)
+    client_de_l_acheteur.get(
+        f"/memberships/{adhesion_validee.uuid}/get_checkout_for_membership/"
+    )
+    lieu.taches_demandees.clear()
+
+    def relecture_simulee_de_la_session(paiement):
+        # Le paiement en attente avec son moyen, sa ligne avec un autre moyen.
+        # / The pending payment with its method, its line with another method.
+        Paiement_stripe.objects.filter(pk=paiement.pk).update(
+            status=Paiement_stripe.PENDING, moyen=moyen_du_paiement
+        )
+        paiement.lignearticles.update(payment_method=moyen_de_la_ligne)
+        return Paiement_stripe.PENDING
+
+    with patch.object(
+        Paiement_stripe,
+        "update_checkout_status",
+        autospec=True,
+        side_effect=relecture_simulee_de_la_session,
+    ):
+        with django_capture_on_commit_callbacks(execute=True):
+            reponse_du_webhook = envoyer_un_evenement_stripe(
+                "checkout.session.completed",
+                objet_session_de_paiement(lieu, identifiant_de_session),
+            )
+
+    assert reponse_du_webhook.status_code == 200
+    mails_sepa_demandes = arguments_des_taches(
+        lieu.taches_demandees, "send_membership_sepa_pending_user"
+    )
+    if mail_attendu:
+        assert mails_sepa_demandes == [(str(adhesion_validee.uuid),)]
+    else:
+        assert mails_sepa_demandes == []
 
 
 def test_sepa_refuse_lignes_en_echec_adhesion_rearmee(

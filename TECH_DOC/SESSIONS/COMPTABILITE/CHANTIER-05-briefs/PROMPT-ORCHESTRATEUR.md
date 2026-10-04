@@ -107,32 +107,37 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## PROCHAINE ÉTAPE (mise à jour 2026-10-03, fin de F)
+## PROCHAINE ÉTAPE (mise à jour 2026-10-04, fin de G)
 **Relire d'abord, en entier : `CHANTIER-05-SUIVI.md` (§3 tableau, §4 écarts, §5 décisions,
 §6 journal — le plus récent en haut, §8 pièges) et la mémoire
 `project_chantier_montants_entiers`.**
 
-État : fiches 0, A′, A, B, C, D, E et **F** commitées (F : `2aac806b`). F a livré le rapport
-unique (`comptabilite/rapport.py`), la clôture unique chaînée J/H/M/A
-(`comptabilite/tasks.py`, `integrite.py`) et le FEC équilibré (`comptabilite/ventilation.py`,
-`fec.py`) ; **le CSV comptable a été retiré** (Q-F22 : seul le FEC). Base de dev régénérée
-(`down -v`) en fin de F. Workflow i18n à lancer par le mainteneur (chaînes au CHANGELOG F).
+État : fiches 0, A′, A, B, C, D, E, F commitées ; **G** : G-1 et G-2 commitées
+(`3dbf1a3b`, `da3ae977`, `302483b7`), G-3 (G-3a, G-3b, G-3c-1, G-3c-2, G-3-bis, G-3-ter)
+prouvée et relue (Opus par étape, Fable finale : 0 bloquant), commit proposé au mainteneur.
+G a mis tous les lecteurs sur le nouveau modèle (clôture caisse unique, tickets Z / X /
+vente depuis `rapport_json` et la Vente, archive fiscale, admin « Ventes » avec « À
+vérifier », « Avoir total », « Rejouer l'encaissement », totaux client sur `total_ttc`,
+ancien LaBoutik lu dans les règlements). Workflow i18n à lancer par le mainteneur (chaînes
+aux CHANGELOGs G-1, G-2, G-3). Prod : relancer Postgres avec
+`max_locks_per_transaction=512` (compose modifiés, BUGS n°31).
 
-Suite : **fiche G** (`CHANTIER-05-G-lecteurs.md`) — tous les lecteurs sur le nouveau modèle.
-Première étape : relire G contre le code actuel (numéros de ligne périmés ; F a changé
-`comptabilite/`), découper en sessions, écrire le premier brief, questions au §5. Ce que F
-a ajouté à G (SUIVI §6) : bouton Z de la caisse **hors transaction** de la vue, avec
-`responsable` et `point_de_vente` ; « Plan complet ? » à limiter ; un seul jeu d'exports de
-clôture (celui de `comptabilite`, déjà sur `rapport_json`). Puis **R** (reprise des ventes ;
-rattrapage H/M/A au premier passage horaire, date de départ ou plafond à décider), puis H
-(liste des restes corrigée en fin de F : `comptabilite/fec.py` et `ventilation.py` restent).
+Reste promis avant la fin de G et pas fait : la session « les E2E archivent ce qu'ils
+créent » (bug n°18, décision du mainteneur du 2026-09-30) — à proposer au mainteneur.
 
-Pièges appris en F (SUIVI §6) : `make test` refuse de tourner si le serveur répond 502
-(une mutation fait recharger runserver) → sortie vide, à ne jamais lire comme un résultat ;
-trop de schémas `test_*` → `out of shared memory` (`max_locks_per_transaction` = 64) ;
-supprimer un tenant de test à la main est impossible proprement (25 tables publiques) ;
-avant de trancher une question « technique » d'un ouvrier, chercher dans le SUIVI §5 si le
-mainteneur l'a déjà décidée (erreur sur le compte de TVA inactif).
+Suite : **fiche R** (`CHANTIER-05-R-reprise-ventes.md`, en projet). Première étape : la
+relire contre le code d'après G (F et G ont changé la clôture, les rapports, l'archive ;
+§6.1 est sans objet, SUIVI §4 G-1d), poser au mainteneur les questions encore ouvertes du §9
+(Q1, Q2, Q3, Q5, Q6, Q7 ; Q4 sans objet ; rattrapage H/M/A au premier passage horaire :
+date de départ ou plafond, SUIVI §6 F-2e), relecture Fable de la fiche, puis briefs R-1,
+R-2. Ensuite **H** (fiche H §3 : liste des restes complétée en fin de G).
+
+Pièges appris (SUIVI §6, §8) : `make test` refuse de tourner si le serveur répond 502
+(une mutation fait recharger runserver) → attendre 3 × 200 (`tester.sh`) ; **prévenir le
+mainteneur avant chaque série de mutations** (il a commité une ligne mutée en G-1e) et lui
+dire quand les fichiers sont restaurés ; retirer `django_db` ne fait pas échouer un test
+(le conftest débloque la base pour toute la session) ; avant de trancher une question
+« technique » d'un ouvrier, chercher dans le SUIVI §5 si le mainteneur l'a déjà décidée.
 
 Décisions récentes à connaître (SUIVI §4, §5) : D27 écran « Remboursé par » partout ;
 D30 un seul avoir d'adhésion (dernier paiement) ; D31 annulation client hors Stripe sans

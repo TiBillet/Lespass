@@ -447,8 +447,11 @@ class TestGardeDeCorrectionSurLaClotureUnique(FastTenantTestCase):
         formulaire de l'historique des ventes l'envoie.
         / The cashier corrects the line's method into CB, through the real route.
         """
+        # Le moyen que le formulaire affiche : celui de la ligne, relu en base.
+        # / The method the form shows: the line's, read back.
         donnees_du_formulaire = {
             "ligne_uuid": str(ligne.uuid),
+            "ancien_moyen": LigneArticle.objects.get(pk=ligne.pk).payment_method,
             "nouveau_moyen": PaymentMethod.CC,
             "raison": "Erreur de moyen au moment du paiement",
         }
@@ -2348,6 +2351,66 @@ def test_facture_adhesion_sans_la_part_d_une_autre_adhesion(lieu):
     assert facture.rangees_des_lignes[0][2] == "1"
     assert facture.somme_des_lignes == Decimal("20.00")
     assert facture.total == Decimal("20.00")
+
+
+@pytest.mark.django_db
+def test_facture_adhesion_deux_adhesions_au_meme_tarif_et_une_part_sans_adhesion(
+    lieu, caplog
+):
+    """
+    Une vente de DEUX adhésions au même tarif (deux adhérentes) :
+    - la première est payée en deux parts : 10,00 € en espèces (la ligne porte
+      l'adhésion) et 10,00 € par CB (une part SANS adhésion) ;
+    - la seconde, 20,00 € en espèces (la ligne porte l'adhésion).
+    On ne sait pas à qui est la part sans adhésion : aucune facture ne la prend.
+    La facture de la seconde vaut 20,00 € (pas 30,00 €), celle de la première 10,00 €
+    (sa seule ligne), et un avertissement au journal cite la vente.
+    / Two memberships of the same price, one part without membership: no invoice takes
+    it; the second invoice is 20.00, the first 10.00, and a warning names the sale.
+    """
+    adhesion = creer_adhesion(prix="20.00")
+    premiere_adhesion = creer_une_adhesion_vendue(adhesion)
+    seconde_adhesion = creer_une_adhesion_vendue(adhesion)
+    tarif_vendu = get_or_create_price_sold(adhesion.tarif)
+    vente_d_un_panier = ouvrir_vente(
+        origine=SaleOrigin.ADMIN, nature=Vente.Nature.VENTE
+    )
+    parts_du_panier = [
+        (premiere_adhesion, 1000, PaymentMethod.CASH),
+        (None, 1000, PaymentMethod.CC),
+        (seconde_adhesion, 2000, PaymentMethod.CASH),
+    ]
+    for adhesion_de_la_part, montant_de_la_part, moyen_de_la_part in parts_du_panier:
+        ajouter_article(
+            vente_d_un_panier,
+            pricesold=tarif_vendu,
+            quantite=Decimal("1"),
+            prix_unitaire=montant_de_la_part,
+            taux_tva=Decimal("0"),
+            payment_method=moyen_de_la_part,
+            membership=adhesion_de_la_part,
+            status=LigneArticle.VALID,
+        )
+    ajouter_reglement(vente_d_un_panier, moyen=PaymentMethod.CASH, montant=3000)
+    ajouter_reglement(vente_d_un_panier, moyen=PaymentMethod.CC, montant=1000)
+    encaisser_vente(vente_d_un_panier)
+
+    with caplog.at_level(logging.WARNING, logger="BaseBillet.tasks"):
+        facture_de_la_seconde = lire_la_facture_de_l_adhesion(seconde_adhesion)
+        facture_de_la_premiere = lire_la_facture_de_l_adhesion(premiere_adhesion)
+
+    assert facture_de_la_seconde.total == Decimal("20.00")
+    assert facture_de_la_premiere.total == Decimal("10.00")
+    avertissements_sur_la_vente = []
+    for enregistrement in caplog.records:
+        avertissement_qui_cite_la_vente = (
+            enregistrement.name == "BaseBillet.tasks"
+            and enregistrement.levelno == logging.WARNING
+            and str(vente_d_un_panier.uuid) in enregistrement.getMessage()
+        )
+        if avertissement_qui_cite_la_vente:
+            avertissements_sur_la_vente.append(enregistrement)
+    assert len(avertissements_sur_la_vente) >= 1
 
 
 # --------------------------------------------------------------------------
