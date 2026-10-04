@@ -20,8 +20,13 @@ Après cette fiche, il n'existe **qu'une** façon d'écrire et de lire de l'arge
 
 - `_creer_lignes_articles_cascade` (caisse), `facturer_tirage` (tireuse), QR/NFC
   (`BaseBillet/views.py`) écrivent **une ligne par article** : `qty` = vraie quantité,
-  `amount` = prix unitaire, `part_offerte` = Σ des débits offerts (jetons, OFFRIR) de
-  cet article, `source_offert`. Les règlements ne changent pas.
+  `amount` = prix unitaire, `part_offerte` = Σ des débits offerts (OFFRIR) de cet
+  article, `source_offert`. Les règlements ne changent pas.
+  **Jetons cadeau (D8 bis, Q-H1 du 2026-10-04)** : ils ne sont **pas** de l'offert. Nouveau
+  champ entier `LigneArticle` « part payée en jetons » (Σ des débits LG de l'article) :
+  la TVA porte sur le reste (net − part en jetons), la part en jetons est à TVA 0 au
+  707900, dans le CA. Le rapport (CA par taux), le FEC (ventilation) et l'archive lisent
+  ce champ. Migration.
 - `_calculer_qty_partielles` (`laboutik/views.py` ~l.4507) et le regroupement par
   `id(article_dict)` sont **supprimés**.
 - **D15** : poids et mesure (caisse) → `qty` = kg / L, `amount` = prix au kg / au litre ;
@@ -167,7 +172,7 @@ Mailpit est recréé.
 | # | Test | Attendu |
 |---|---|---|
 | 1 | `test_nfc_trois_jus_une_seule_ligne_qty_3` | 1 ligne `qty` 3, 1050 ; règlements LE 500 + CB 550 |
-| 2 | `test_jetons_une_ligne_part_offerte_300` | 1 ligne, offert 300, net 200 |
+| 2 | `test_jetons_une_ligne_part_en_jetons_300` | bière 500 payée 300 LG + 200 LE : 1 ligne, part offerte 0, part en jetons 300, net 500, TVA sur 200 seulement (HT 467, TVA 33) ; règlements LG 300 + LE 200 ; Z : 300 au taux 0 ; FEC : 300 au 707900 (Q-H1) |
 | 3 | `test_fromage_une_ligne_0_350_kg_prix_au_kilo` | `qty` 0,350, `amount` 1290, total 452 |
 | 4 | `test_tireuse_une_ligne_litres_prix_au_litre` | `qty` = litres servis, `amount` = prix au litre, total = `qty × prix` = débit réel ; solde insuffisant : selon la vérification de C §1 (litres réduits, ou article d'écart) |
 | 5 | `test_retour_consigne_quantite_negative_prix_positif` | |

@@ -64,6 +64,7 @@ comportement**, dans la même session, avec la raison au CHANGELOG :
 | `test_annulation_adhesion_un_seul_avoir_sur_le_dernier_paiement` (ex-`…avoirs_de_tous_les_renouvellements`, renommé en D-3c-2) | D | D30 : un seul avoir, pour le dernier paiement |
 | `test_annulation_utilisateur_reservation_admin_especes_cree_un_avoir` | D | D31 : plus d'avoir ni de remboursement hors Stripe |
 | `test_billets_vendus_dans_l_admin_offert_au_prix_part_offerte_totale` | D | D32 : offert écrit comme à la caisse |
+| `test_qr_deux_monnaies_aucun_envoi_laboutik_et_deux_mails` | H (session H-1c) | une ligne par article : une seule ligne recréée au lieu d'une par monnaie ; statut, mails, aucun envoi, deux règlements inchangés (mainteneur, 2026-10-04, Q-H3) |
 | `test_annuler_un_billet_caisse_offert_cree_un_avoir` | G | `total_paid()` lit `total_ttc` : un billet **entièrement offert** n'a rien à rembourser → plus d'avoir d'argent, seule la trace `FREE −X` (validé le 2026-09-29) |
 
 Tableau « qui garde quoi vert » : annexe §6.3.

@@ -130,7 +130,11 @@ H-4 (mails vérifiés de bout en bout)**, avant la production ; **2. R** (repris
 mise en production ; **H-2 / H-3 après la production**. Les urgences TODO (kiosque,
 sécurité caisse V2, commandes de table) attendent la production.
 
-**Prochaine session = H-1.** Première étape : relire la fiche H §2 (H-1) contre le code
+**Mise à jour 2026-10-04 (nuit) : H-1 relue et découpée (H-1a → H-1d, SUIVI §3-§4),
+Q-H1 à Q-H4 tranchées (SUIVI §5), brief `05-H-1a.md` prêt, aucun ouvrier lancé.
+Prochaine étape : lancer l'ouvrier H-1a (Opus), après accord du mainteneur.**
+
+(Texte d'origine, fait :) **Prochaine session = H-1.** Première étape : relire la fiche H §2 (H-1) contre le code
 d'aujourd'hui (cascade caisse `_creer_lignes_articles_cascade` / `_calculer_qty_partielles`,
 tireuse `facturer_tirage`, QR / NFC `BaseBillet/views.py`, poids / mesure D15, écart QR,
 « Avoir sur un article » dans `VenteAdmin`), découper en sessions, écrire le premier
