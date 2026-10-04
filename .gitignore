@@ -262,3 +262,7 @@ OLD_REPO
 # Artefacts de diagnostic des echecs E2E (captures + HTML), regeneres a chaque echec.
 # / E2E failure diagnostics (screenshots + HTML), regenerated on each failure.
 tests/e2e/artefacts/
+
+# Copie de la base de production (donnees personnelles) : JAMAIS dans git.
+# / Production database copy (personal data): NEVER in git.
+db-prod/

@@ -114,7 +114,7 @@ fabrique pas plus que ce que la spec demande.
 
 État : fiches 0, A′, A, B, C, D, E, F commitées ; **G** : G-1 et G-2 commitées
 (`3dbf1a3b`, `da3ae977`, `302483b7`), G-3 (G-3a, G-3b, G-3c-1, G-3c-2, G-3-bis, G-3-ter)
-prouvée et relue (Opus par étape, Fable finale : 0 bloquant), commit proposé au mainteneur.
+prouvée et relue (Opus par étape, Fable finale : 0 bloquant) ; G-3 + G-3-bis commitées (`33b4526b`), G-3-ter et docs à committer par le mainteneur.
 G a mis tous les lecteurs sur le nouveau modèle (clôture caisse unique, tickets Z / X /
 vente depuis `rapport_json` et la Vente, archive fiscale, admin « Ventes » avec « À
 vérifier », « Avoir total », « Rejouer l'encaissement », totaux client sur `total_ttc`,
@@ -122,15 +122,32 @@ ancien LaBoutik lu dans les règlements). Workflow i18n à lancer par le mainten
 aux CHANGELOGs G-1, G-2, G-3). Prod : relancer Postgres avec
 `max_locks_per_transaction=512` (compose modifiés, BUGS n°31).
 
-Reste promis avant la fin de G et pas fait : la session « les E2E archivent ce qu'ils
-créent » (bug n°18, décision du mainteneur du 2026-09-30) — à proposer au mainteneur.
+Bug n°18 (E2E qui archivent ce qu'ils créent) : abandonné par le mainteneur (« on verra
+après, on flush »).
 
-Suite : **fiche R** (`CHANTIER-05-R-reprise-ventes.md`, en projet). Première étape : la
-relire contre le code d'après G (F et G ont changé la clôture, les rapports, l'archive ;
-§6.1 est sans objet, SUIVI §4 G-1d), poser au mainteneur les questions encore ouvertes du §9
-(Q1, Q2, Q3, Q5, Q6, Q7 ; Q4 sans objet ; rattrapage H/M/A au premier passage horaire :
-date de départ ou plafond, SUIVI §6 F-2e), relecture Fable de la fiche, puis briefs R-1,
-R-2. Ensuite **H** (fiche H §3 : liste des restes complétée en fin de G).
+**Ordre décidé (mainteneur, 2026-10-04, SUIVI §4)** : **1. H-1 (une ligne par article) et
+H-4 (mails vérifiés de bout en bout)**, avant la production ; **2. R** (reprise) ; puis la
+mise en production ; **H-2 / H-3 après la production**. Les urgences TODO (kiosque,
+sécurité caisse V2, commandes de table) attendent la production.
+
+**Prochaine session = H-1.** Première étape : relire la fiche H §2 (H-1) contre le code
+d'aujourd'hui (cascade caisse `_creer_lignes_articles_cascade` / `_calculer_qty_partielles`,
+tireuse `facturer_tirage`, QR / NFC `BaseBillet/views.py`, poids / mesure D15, écart QR,
+« Avoir sur un article » dans `VenteAdmin`), découper en sessions, écrire le premier
+brief, questions au mainteneur en FALC une par une. Attention : H-1 retire
+`total_catalogue_impose` — la reprise R ne l'utilise pas (elle écrit les montants par
+`.update()`), mais le noter dans R.
+
+**R, déjà préparée** : questions Q-R1 à Q-R19 **toutes tranchées** (SUIVI §5) ; constats à
+intégrer dans la réécriture de la fiche : `CHANTIER-05-briefs/05-R-relecture-fable-2026-10-04.md`
+(3 bloquants dont les anciennes clôtures `comptabilite` de la prod, 12 importants, cas non
+couverts, ordre de la nuit) et journal §6 (relecture Opus). Copie de la production :
+procédure `CHANTIER-05-R-copie-prod.md` (même pile que le dev, `lespass_celery` arrêté,
+script `db-prod/neutraliser_copie_prod.sh` AVANT tout `manage.py`, jamais de tests sur la
+copie, **aucune lecture de données personnelles : comptages seulement**, règle en tête de
+chaque brief qui touche la copie). Découpage : R-0 (comptage sur la copie), R-1 (calcul +
+passage à blanc), R-2 (écriture), R-3 (J reprise, rattrapage plafonné sans mail, FEC
+refusé avant la mise en service), R-4 (procédure de la nuit, répétition chronométrée).
 
 Pièges appris (SUIVI §6, §8) : `make test` refuse de tourner si le serveur répond 502
 (une mutation fait recharger runserver) → attendre 3 × 200 (`tester.sh`) ; **prévenir le

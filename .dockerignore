@@ -49,3 +49,7 @@ Docker
 .playwright-mcp/
 **/__pycache__/
 *.pyc
+
+# Copie de la base de production (donnees personnelles) : jamais dans une image.
+# / Production database copy (personal data): never in an image.
+db-prod/
