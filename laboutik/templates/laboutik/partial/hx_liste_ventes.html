@@ -1,4 +1,4 @@
-{% load i18n laboutik_filters %}
+{% load i18n %}
 {% comment %}
 HISTORIQUE DE COMMANDE — liste des ventes du service en cours
 / ORDER HISTORY — sales list of the current shift
@@ -10,18 +10,21 @@ Style : static/css/ventes.css (.detail-filters, .ventes-table, .ventes-ligne-cli
 Vue : CaisseViewSet.liste_ventes (laboutik/views.py), via _rendre_vue_ventes.
 
 TROIS RENDUS :
-1. Page 1, cible #detail-contenu : bouton « Historique de commande » de l'ecran
-   Ventes (hx_recap_en_cours.html), ou changement d'un filtre. Liste seule.
-2. Page 1, page complete (rechargement, lien direct) : la meme liste dans
+1. Premiere page, cible #detail-contenu : bouton « Historique de commande » de
+   l'ecran Ventes (hx_recap_en_cours.html), ou changement d'un filtre. Liste seule.
+2. Premiere page, page complete (rechargement, lien direct) : la meme liste dans
    .ventes-body, entouree d'un #detail-contenu pour que les filtres marchent pareil.
-3. Page > 1 : scroll infini, seulement des <tr> (le loader remplace sa ligne).
+3. La suite (`?avant=<numero>`) : scroll infini, seulement des <tr> (le loader
+   remplace sa ligne).
 
 Pattern collapse (detail d'une vente) :
-- Clic sur une ligne → insere un <tr> detail en dessous (toggleDetailVente)
+- Clic sur une ligne (ou Entree / Espace sur le bouton de son numero) → insere un
+  <tr> detail en dessous
+  (toggleDetailVente)
 - Re-clic sur la meme ligne → retire le <tr> detail
 - Clic sur une autre ligne → retire l'ancien detail, ouvre le nouveau
 {% endcomment %}
-{% if page_courante == 1 %}
+{% if premiere_page %}
 {% if request.htmx.target != "detail-contenu" %}
 <div class="ventes-body">
   <div class="ventes-view">
@@ -71,30 +74,32 @@ Pattern collapse (detail d'une vente) :
     </div>
 
     <div class="table-wrap" data-testid="liste-tableau">
-        <table class="ventes-table">
+        <table class="ventes-table" aria-label="{% translate 'Ventes du service en cours' %}">
             <thead>
                 <tr>
-                    <th>{% translate "Heure" %}</th>
-                    <th>{% translate "Articles" %}</th>
-                    <th>{% translate "Moyen" %}</th>
-                    <th>{% translate "Point de vente" %}</th>
-                    <th class="num">{% translate "Total" %}</th>
+                    <th scope="col">{% translate "N°" %}</th>
+                    <th scope="col">{% translate "Heure" %}</th>
+                    <th scope="col">{% translate "Nature" %}</th>
+                    <th scope="col">{% translate "Articles" %}</th>
+                    <th scope="col">{% translate "Moyens" %}</th>
+                    <th scope="col">{% translate "Point de vente" %}</th>
+                    <th scope="col" class="num">{% translate "Total" %}</th>
                 </tr>
             </thead>
             <tbody id="ventes-tbody">
-                {% for vente in ventes_groupees %}
+                {% for vente in lignes_de_la_liste %}
                 {% include "laboutik/partial/_ligne_vente.html" with numero_ligne=forloop.counter %}
                 {% empty %}
-                <tr><td colspan="5" class="empty">{% translate "Aucune commande pour ces filtres" %}</td></tr>
+                <tr><td colspan="7" class="empty">{% translate "Aucune commande pour ces filtres" %}</td></tr>
                 {% endfor %}
 
                 {% if a_page_suivante %}
-                <tr hx-get="{% url 'laboutik-caisse-liste_ventes' %}?page={{ page_suivante }}{% if filtre_pv %}&pv={{ filtre_pv }}{% endif %}{% if filtre_moyen %}&moyen={{ filtre_moyen }}{% endif %}&{{ params_ventes }}"
+                <tr hx-get="{% url 'laboutik-caisse-liste_ventes' %}?avant={{ numero_de_la_derniere_vente_de_la_page }}{% if filtre_pv %}&pv={{ filtre_pv|urlencode }}{% endif %}{% if filtre_moyen %}&moyen={{ filtre_moyen|urlencode }}{% endif %}&{{ params_ventes }}"
                     hx-target="this"
                     hx-swap="outerHTML"
                     hx-trigger="revealed"
                     data-testid="scroll-loader">
-                    <td colspan="5" class="empty">
+                    <td colspan="7" class="empty">
                         <span class="visually-hidden">{% translate "Chargement..." %}</span>
                     </td>
                 </tr>
@@ -111,21 +116,32 @@ Pattern collapse (detail d'une vente) :
  * - Si la ligne a deja un detail ouvert → on le retire (toggle ferme)
  * - Si une autre ligne a un detail → on le retire puis on ouvre le nouveau
  * - Le detail est charge par fetch() puis insere comme <tr> apres la ligne
+ * Le bouton de la cellule du numero porte `aria-expanded` : il dit au lecteur
+ * d'ecran si le detail est ouvert. Le <tr> du detail porte l'id vise par son
+ * `aria-controls`.
  *
- * / Toggle sale detail as a collapse row below the clicked row.
- * - If the row already has an open detail → remove it (close toggle)
- * - If another row has a detail → remove it, then open the new one
- * - Detail is loaded via fetch() then inserted as a <tr> after the row
+ * / Toggle sale detail as a collapse row below the clicked row; the number
+ *   button's aria-expanded follows the open state.
  *
  * LOCALISATION : laboutik/templates/laboutik/partial/hx_liste_ventes.html
  */
+function marquerLaLigneOuverte(ligneTr, estOuverte) {
+    // Le surlignage de la ligne et l'etat du bouton du numero vont ensemble.
+    // / Row highlight and the number button's state go together.
+    ligneTr.classList.toggle('ventes-ligne-active', estOuverte);
+    var boutonDuNumero = ligneTr.querySelector('.ventes-ligne-bouton');
+    if (boutonDuNumero) {
+        boutonDuNumero.setAttribute('aria-expanded', estOuverte ? 'true' : 'false');
+    }
+}
+
 function toggleDetailVente(ligneTr, url) {
     // Si cette ligne a deja un detail ouvert, le fermer
     // / If this row already has an open detail, close it
     var detailExistant = ligneTr.nextElementSibling;
     if (detailExistant && detailExistant.classList.contains('ventes-detail-row')) {
         detailExistant.remove();
-        ligneTr.classList.remove('ventes-ligne-active');
+        marquerLaLigneOuverte(ligneTr, false);
         return;
     }
 
@@ -133,12 +149,12 @@ function toggleDetailVente(ligneTr, url) {
     // / Close any open detail on another row
     var ancienDetail = document.querySelector('.ventes-detail-row');
     if (ancienDetail) {
-        ancienDetail.previousElementSibling.classList.remove('ventes-ligne-active');
+        marquerLaLigneOuverte(ancienDetail.previousElementSibling, false);
         ancienDetail.remove();
     }
 
     // Surligner la ligne cliquee / Highlight clicked row
-    ligneTr.classList.add('ventes-ligne-active');
+    marquerLaLigneOuverte(ligneTr, true);
 
     // Charger le detail depuis le serveur / Load detail from server
     fetch(url, {
@@ -156,9 +172,10 @@ function toggleDetailVente(ligneTr, url) {
         // / Create the detail <tr> and insert it after the clicked row
         var detailRow = document.createElement('tr');
         detailRow.className = 'ventes-detail-row';
+        detailRow.id = 'detail-vente-' + ligneTr.dataset.uuidDeLaVente;
         detailRow.setAttribute('data-testid', 'ventes-detail-collapse');
         var td = document.createElement('td');
-        td.setAttribute('colspan', '5');
+        td.setAttribute('colspan', '7');
         td.innerHTML = html;
         detailRow.appendChild(td);
         ligneTr.after(detailRow);
@@ -171,7 +188,7 @@ function toggleDetailVente(ligneTr, url) {
     .catch(function(erreur) {
         // Erreur reseau ou serveur → retirer le surlignage et afficher un message
         // / Network or server error → remove highlight and show message
-        ligneTr.classList.remove('ventes-ligne-active');
+        marquerLaLigneOuverte(ligneTr, false);
         console.error('Erreur chargement detail vente:', erreur);
     });
 }
@@ -184,17 +201,17 @@ function toggleDetailVente(ligneTr, url) {
 {% endif %}
 
 {% else %}
-{% for vente in ventes_groupees %}
+{% for vente in lignes_de_la_liste %}
 {% include "laboutik/partial/_ligne_vente.html" %}
 {% endfor %}
 
 {% if a_page_suivante %}
-<tr hx-get="{% url 'laboutik-caisse-liste_ventes' %}?page={{ page_suivante }}{% if filtre_pv %}&pv={{ filtre_pv }}{% endif %}{% if filtre_moyen %}&moyen={{ filtre_moyen }}{% endif %}&{{ params_ventes }}"
+<tr hx-get="{% url 'laboutik-caisse-liste_ventes' %}?avant={{ numero_de_la_derniere_vente_de_la_page }}{% if filtre_pv %}&pv={{ filtre_pv|urlencode }}{% endif %}{% if filtre_moyen %}&moyen={{ filtre_moyen|urlencode }}{% endif %}&{{ params_ventes }}"
     hx-target="this"
     hx-swap="outerHTML"
     hx-trigger="revealed"
     data-testid="scroll-loader">
-    <td colspan="5" class="empty">
+    <td colspan="7" class="empty">
         <span class="visually-hidden">{% translate "Chargement..." %}</span>
     </td>
 </tr>

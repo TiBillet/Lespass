@@ -77,11 +77,12 @@ def imprimer_async(self, printer_pk, ticket_data, schema_name):
                 format_emission = impression_meta.get("format_emission", "P")
 
                 # Detecter duplicata : une impression precedente existe-t-elle ?
-                # Sans uuid_transaction ni cloture_uuid, impossible de determiner
-                # le duplicata — on considere que c'est un original.
-                # / Detect duplicate: does a previous print exist?
-                # Without uuid_transaction or cloture_uuid, we can't determine
-                # duplicate status — treat as original.
+                # Pour un ticket de vente, `uuid_transaction` est l'uuid de la VENTE
+                # (`PaiementViewSet.imprimer_ticket`) : les impressions se comptent
+                # par vente. Sans uuid_transaction ni cloture_uuid, impossible de
+                # determiner le duplicata — on considere que c'est un original.
+                # / Detect duplicate. For a sale receipt, uuid_transaction is the SALE
+                # uuid: prints are counted per sale. Without a reference: original.
                 est_duplicata = False
                 if uuid_transaction:
                     nb_precedentes = ImpressionLog.objects.filter(

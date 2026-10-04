@@ -4978,22 +4978,23 @@ def test_deux_corrections_successives_deux_ventes_correction(lieu):
 
 
 # --------------------------------------------------------------------------
-# 21f — Lignes de deux ventes dans la même correction : refus, rien n'est écrit
-# / 21f — Lines of two sales in one correction: refused, nothing is written
+# 21f — Lignes de deux ventes au même identifiant de paiement : seule la vente
+# de la ligne cliquée est corrigée
+# / 21f — Lines of two sales sharing a payment id: only the clicked line's sale
 # --------------------------------------------------------------------------
 
 
-def test_correction_de_lignes_de_deux_ventes_refusee(lieu):
+def test_correction_de_lignes_de_deux_ventes_ne_touche_que_la_vente_cliquee(lieu):
     """
-    Une correction porte sur les lignes du même paiement (même `uuid_transaction`,
-    même moyen). Toutes appartiennent à une seule vente. Ce test fabrique le cas
-    contraire : deux bières payées en espèces dans deux ventes, puis la ligne de la
+    Une correction porte sur les lignes de la MÊME VENTE qui ont le même moyen
+    (`lignes_que_la_correction_deplace`), jamais sur un identifiant de paiement. Ce
+    test fabrique deux bières payées en espèces dans deux ventes, puis la ligne de la
     2ᵉ vente reçoit l'identifiant de paiement de la 1ʳᵉ (par `.update()`, qui ne passe
-    pas par la garde). Corriger la 1ʳᵉ ligne toucherait alors deux ventes : refus (400).
-    Rien n'est écrit : les deux lignes restent en espèces, sans trace de correction,
-    aucune vente `CORRECTION`.
-    / Two cash sales whose lines share one payment id: correcting would touch two
-    sales, so it is refused (400) and nothing is written.
+    pas par la garde). Corriger la 1ʳᵉ ligne en CB ne touche que la 1ʳᵉ vente : sa
+    ligne passe en CB, une vente CORRECTION de 500 lui est liée ; la ligne de la 2ᵉ
+    vente reste en espèces, sans trace de correction.
+    / Two cash sales whose lines share one payment id: the correction only moves
+    the clicked line's sale.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit])
@@ -5017,18 +5018,29 @@ def test_correction_de_lignes_de_deux_ventes_refusee(lieu):
     LigneArticle.objects.filter(pk=ligne_de_la_seconde_vente.pk).update(
         uuid_transaction=ligne_de_la_premiere_vente.uuid_transaction
     )
-    nombre_de_corrections_avant = nombre_de_ventes_de_correction()
-
     reponse = corriger_le_moyen_de_paiement(
         client_du_caissier, ligne_de_la_premiere_vente, PaymentMethod.CC
     )
 
-    assert reponse.status_code == 400
-    for ligne in (ligne_de_la_premiere_vente, ligne_de_la_seconde_vente):
-        ligne.refresh_from_db()
-        assert ligne.payment_method == PaymentMethod.CASH
-        assert not CorrectionPaiement.objects.filter(ligne_article=ligne).exists()
-    assert nombre_de_ventes_de_correction() == nombre_de_corrections_avant
+    assert reponse.status_code == 200
+    ligne_de_la_premiere_vente.refresh_from_db()
+    ligne_de_la_seconde_vente.refresh_from_db()
+    assert ligne_de_la_premiere_vente.payment_method == PaymentMethod.CC
+    assert ligne_de_la_seconde_vente.payment_method == PaymentMethod.CASH
+    assert not CorrectionPaiement.objects.filter(
+        ligne_article=ligne_de_la_seconde_vente
+    ).exists()
+    vente_de_correction = Vente.objects.get(
+        nature=Vente.Nature.CORRECTION, vente_liee=premiere_vente
+    )
+    montants_par_moyen = {}
+    reglements_de_la_correction = vente_de_correction.reglements.all()
+    for reglement in reglements_de_la_correction:
+        montants_par_moyen[reglement.moyen] = reglement.montant
+    assert montants_par_moyen == {PaymentMethod.CASH: -500, PaymentMethod.CC: 500}
+    assert not Vente.objects.filter(
+        nature=Vente.Nature.CORRECTION, vente_liee=seconde_vente
+    ).exists()
 
 
 # --------------------------------------------------------------------------

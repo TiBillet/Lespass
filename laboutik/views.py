@@ -37,10 +37,9 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connection
 from django.db.models import (
     Case,
-    CharField,
-    F,
+    Exists,
     IntegerField,
-    Max,
+    OuterRef,
     Min,
     Value,
     When,
@@ -48,10 +47,7 @@ from django.db.models import (
     Sum,
     Count,
     Q,
-    ExpressionWrapper,
-    DecimalField,
 )
-from django.db.models.functions import Cast, Coalesce
 
 from fedow_core.exceptions import (
     CarteDejaLiee,
@@ -91,7 +87,7 @@ from BaseBillet.models import (
     PaymentMethod,
     Ticket,
 )
-from BaseBillet.models_vente import Vente
+from BaseBillet.models_vente import Reglement, Vente
 from BaseBillet.permissions import HasLaBoutikAccess, HasLaBoutikTerminalAccess
 from BaseBillet.services_vente import (
     NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE,
@@ -111,6 +107,7 @@ from comptabilite.pdf import generer_pdf_cloture
 from comptabilite.presentation import (
     euros_a_la_francaise,
     lignes_du_tiroir,
+    montant_a_la_francaise_dans_l_unite,
     sections_pour_affichage,
 )
 from comptabilite.tasks import (
@@ -130,7 +127,21 @@ from laboutik.models import (
     SortieCaisse,
     HistoriqueFondDeCaisse,
 )
-from comptabilite.rapport import MOYENS_CASHLESS, RapportDesVentes
+from comptabilite.rapport import (
+    MOYENS_CASHLESS,
+    RapportDesVentes,
+    nom_du_moyen_de_paiement,
+)
+from laboutik.affichage_des_ventes import (
+    articles_de_la_vente_pour_l_affichage,
+    badge_de_la_nature_d_une_vente,
+    lignes_de_la_liste_des_ventes,
+    nom_d_une_monnaie_de_points_introuvable,
+    nom_de_l_unite_de_la_vente,
+    noms_des_monnaies_des_ventes,
+    phrase_d_une_vente_derivee,
+    reglements_pour_l_affichage,
+)
 from laboutik.printing.formatters import formatter_ticket_cloture, formatter_ticket_x
 from laboutik.printing.tasks import imprimer_async
 from laboutik.serializers import (
@@ -172,19 +183,6 @@ PAYMENT_METHOD_TRANSLATIONS = {
     "CH": _("chèque"),
     "gift": _("cadeau"),
     "": _("inconnu"),
-}
-
-# Traduction des codes DB (PaymentMethod.choices) pour l'affichage POS
-# / DB code (PaymentMethod.choices) translations for POS display
-LABELS_MOYENS_PAIEMENT_DB = {
-    PaymentMethod.CASH: _("Espèces"),
-    PaymentMethod.CC: _("Carte bancaire"),
-    PaymentMethod.CHEQUE: _("Chèque"),
-    PaymentMethod.LOCAL_EURO: _("Cashless"),
-    PaymentMethod.LOCAL_GIFT: _("Cadeau"),
-    PaymentMethod.FREE: _("Offert"),
-    PaymentMethod.STRIPE_FED: _("Monnaie fédérée"),
-    PaymentMethod.NON_MONETAIRE: _("Points ou temps"),
 }
 
 # Catégorie par défaut quand un produit n'a pas de categorie_pos
@@ -4572,8 +4570,8 @@ class CaisseViewSet(viewsets.ViewSet):
         )
 
     # ----------------------------------------------------------------------- #
-    #  Menu Ventes — Ticket X + liste des ventes (Session 16)                  #
-    #  Sales menu — Ticket X + sales list (Session 16)                         #
+    #  Menu Ventes — Ticket X + liste des ventes                               #
+    #  Sales menu — Ticket X + sales list                                      #
     # ----------------------------------------------------------------------- #
 
     @action(
@@ -4584,7 +4582,7 @@ class CaisseViewSet(viewsets.ViewSet):
     )
     def recap_en_cours(self, request):
         """
-        GET /laboutik/caisse/recap-en-cours/?vue=toutes|detail_articles|par_moyen
+        GET /laboutik/caisse/recap-en-cours/
         Le recapitulatif du service en cours (lecture seule, rien n'est stocke).
         / The current service recap (read-only, nothing stored).
 
@@ -4593,29 +4591,21 @@ class CaisseViewSet(viewsets.ViewSet):
         FLUX :
         1. Debut du service : `_calculer_datetime_ouverture_service` (fin de la
            derniere J). None : « aucune vente depuis la derniere cloture ».
-        2. Ecran complet : le rapport X du rapport des ventes unique
+        2. Le rapport X du rapport des ventes unique
            (`RapportDesVentes(debut, maintenant).rapport_x()`), mis en forme par
-           `sections_pour_affichage` : toutes ses sections, l'essentiel ouvert, le
-           reste replie, comme dans l'admin.
-        3. Historiques (?vue=detail_articles, ?vue=par_moyen, cible HTMX
-           « detail-contenu ») : encore lus par l'ancien moteur
-           (`RapportComptableService`).
-           TODO : basculer les historiques sur les ventes (liste et detail des
-           ventes par `Vente`).
-        4. Rend hx_recap_en_cours.html (page complete ou fragment).
-        / Full screen: the single report's X sections; histories still read the old
-          engine.
+           `sections_pour_affichage` : toutes ses sections (reglements et detail
+           des ventes compris), l'essentiel ouvert, le reste replie, comme dans
+           l'admin.
+        3. Rend hx_recap_en_cours.html. L'historique de commande (liste des ventes)
+           s'ouvre en bas de l'ecran par son bouton (`liste_ventes`).
+        / The single report's X sections; the order history opens below.
         """
         datetime_ouverture = _calculer_datetime_ouverture_service()
-        vue = request.GET.get("vue", "toutes")
 
         # Si aucune vente depuis la derniere cloture, afficher un message
         # / If no sales since last closure, show a message
         if datetime_ouverture is None:
-            context = {
-                "aucune_vente": True,
-                "vue": vue,
-            }
+            context = {"aucune_vente": True}
             return _rendre_vue_ventes(
                 request, "laboutik/partial/hx_recap_en_cours.html", context
             )
@@ -4623,38 +4613,12 @@ class CaisseViewSet(viewsets.ViewSet):
         datetime_fin = dj_timezone.now()
 
         context = {
-            "vue": vue,
             "aucune_vente": False,
             "datetime_ouverture": datetime_ouverture,
             "datetime_fin": datetime_fin,
         }
-
-        # L'ecran complet : chiffres du haut et sections du rapport X.
-        # Exception : un historique ouvert en bas de l'ecran (cible HTMX
-        # "detail-contenu") ; le gabarit ne rend alors que le tableau demande.
-        # / Full screen: top figures and the X report sections, except for a history
-        #   fragment (HTMX target "detail-contenu").
-        est_un_fragment_historique = (
-            request.htmx and request.htmx.target == "detail-contenu"
-        )
-        if not est_un_fragment_historique:
-            rapport_du_service = RapportDesVentes(
-                datetime_ouverture, datetime_fin
-            ).rapport_x()
-            context.update(_contexte_du_recap_du_service(rapport_du_service))
-
-        # Les historiques lisent encore l'ancien moteur, sur la meme periode.
-        # / Histories still read the old engine, over the same period.
-        if vue == "par_moyen" or vue == "detail_articles":
-            ancien_service = RapportComptableService(
-                None, datetime_ouverture, datetime_fin
-            )
-            if vue == "par_moyen":
-                context["synthese_operations"] = (
-                    ancien_service.calculer_synthese_operations()
-                )
-            else:
-                context["detail_ventes"] = ancien_service.calculer_detail_ventes()
+        rapport_du_service = RapportDesVentes(datetime_ouverture, datetime_fin).rapport_x()
+        context.update(_contexte_du_recap_du_service(rapport_du_service))
 
         return _rendre_vue_ventes(
             request, "laboutik/partial/hx_recap_en_cours.html", context
@@ -4718,138 +4682,116 @@ class CaisseViewSet(viewsets.ViewSet):
     )
     def liste_ventes(self, request):
         """
-        GET /laboutik/caisse/liste-ventes/?pv=uuid&moyen=CA&page=1
-        Liste paginee des ventes du service en cours.
+        GET /laboutik/caisse/liste-ventes/?pv=uuid&moyen=CA&avant=<numero>
+        Liste paginee des ventes du service en cours : une ligne par `Vente`.
         Pagination HTMX avec scroll infini (hx-trigger="revealed").
-        / Paginated list of sales for the current shift.
-        HTMX pagination with infinite scroll.
+        / Paginated list of the current service's sales: one row per sale.
 
         LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. Debut du service : `_calculer_datetime_ouverture_service` (None : aucune
+           vente en cours).
+        2. Les ventes reglees depuis ce debut, faites sur un point de vente du lieu
+           (caisse, tireuse), toutes natures ; filtres point de vente et moyen (un
+           reglement de ce moyen).
+        3. 20 ventes, la plus recente d'abord. La suite (`?avant=<numero>`) lit les
+           ventes de numero plus petit que la derniere affichee : une vente encaissee
+           pendant le defilement ne decale pas les pages. Chaque ligne est ecrite par
+           `lignes_de_la_liste_des_ventes`.
+        4. Rend hx_liste_ventes.html (page complete, liste seule ou lignes suivantes).
+        / Settled sales on a point of sale since the service start; 20 at a time,
+          the next ones by number (`avant`).
         """
         datetime_ouverture = _calculer_datetime_ouverture_service()
 
         if datetime_ouverture is None:
             context = {
                 "aucune_vente": True,
-                "ventes_groupees": [],
-                "page_courante": 1,
+                "lignes_de_la_liste": [],
+                "premiere_page": True,
                 "a_page_suivante": False,
             }
             return _rendre_vue_ventes(
                 request, "laboutik/partial/hx_liste_ventes.html", context
             )
 
-        # Queryset de base : lignes valides du service en cours
-        # / Base queryset: valid lines from current shift
-        lignes = LigneArticle.objects.filter(
-            sale_origin=SaleOrigin.LABOUTIK,
-            datetime__gte=datetime_ouverture,
-            datetime__lte=dj_timezone.now(),
-            status=LigneArticle.VALID,
+        # Les ventes du service : reglees depuis le debut du service, faites sur un
+        # point de vente du lieu (caisse ou tireuse). Une vente en ligne n'a pas de
+        # point de vente : elle n'est pas ici. Toutes les natures sont montrees
+        # (vente, avoir, correction, carte videe) : ce sont toutes les operations
+        # numerotees de ces points de vente.
+        # / The service's sales: settled since the service start, made on a point of
+        #   sale of the venue. Every nature is shown.
+        ventes_du_service = Vente.objects.filter(
+            statut=Vente.Statut.REGLEE,
+            datetime_encaissement__gte=datetime_ouverture,
+            point_de_vente__isnull=False,
         )
 
-        # Appliquer les filtres GET
-        # / Apply GET filters
-        filtre_pv = request.GET.get("pv")
-        filtre_moyen = request.GET.get("moyen")
+        # Les filtres. Un point de vente qui n'est pas un uuid ne garde aucune vente.
+        # / Filters. A point of sale that is not a uuid keeps no sale.
+        filtre_pv = request.GET.get("pv") or ""
+        filtre_moyen = request.GET.get("moyen") or ""
 
         if filtre_pv:
-            lignes = lignes.filter(point_de_vente__uuid=filtre_pv)
+            try:
+                uuid_du_point_de_vente_filtre = uuid_module.UUID(filtre_pv)
+                ventes_du_service = ventes_du_service.filter(
+                    point_de_vente__uuid=uuid_du_point_de_vente_filtre
+                )
+            except ValueError:
+                ventes_du_service = ventes_du_service.none()
+
+        # Le filtre par moyen garde les ventes qui ont AU MOINS UN REGLEMENT de ce
+        # moyen. Le moyen ecrit sur une ligne d'article ne compte pas : une ligne
+        # corrigee porte le nouveau moyen, alors que sa vente a ete reglee avec
+        # l'ancien (la vente CORRECTION porte le nouveau).
+        # / The method filter keeps sales with AT LEAST ONE PAYMENT of that method;
+        #   the line's method never counts.
         if filtre_moyen:
-            lignes = lignes.filter(payment_method=filtre_moyen)
-
-        # Regrouper par uuid_transaction cote PostgreSQL (GROUP BY).
-        # Les lignes sans uuid_transaction utilisent leur uuid comme cle.
-        # Coalesce(uuid_transaction, uuid) = COALESCE(uuid_transaction, uuid) en SQL.
-        # Tout le travail est fait par la DB : pas de chargement en memoire Python.
-        # / Group by uuid_transaction on the PostgreSQL side (GROUP BY).
-        # Lines without uuid_transaction use their uuid as key.
-        # All work done by the DB: no Python in-memory loading.
-        # Total transaction = somme des (amount * qty) par ligne.
-        # amount = prix unitaire en centimes (IntegerField).
-        # qty = quantite (DecimalField, peut etre fractionnaire pour cascade NFC).
-        # Sum(amount) seul est faux : il ignore qty (3 pintes a 5€ → 5€ au lieu de 15€).
-        # ExpressionWrapper en DecimalField pour gerer la qty fractionnaire,
-        # puis cast int en Python (le resultat reste en centimes).
-        # / Transaction total = sum of (amount * qty) per line.
-        # Sum(amount) alone is wrong: it ignores qty (3 pints at 5€ → 5€ instead of 15€).
-        total_ligne_centimes = ExpressionWrapper(
-            F("amount") * F("qty"),
-            output_field=DecimalField(max_digits=14, decimal_places=2),
-        )
-        ventes_requete = (
-            lignes.values(
-                cle_vente=Coalesce("uuid_transaction", "uuid"),
+            un_reglement_de_ce_moyen = Reglement.objects.filter(
+                vente_id=OuterRef("uuid"),
+                moyen=filtre_moyen,
             )
-            .annotate(
-                derniere_datetime=Max("datetime"),
-                total=Sum(total_ligne_centimes),
-                nb_articles=Count("uuid"),
-                moyen_paiement=Max("payment_method"),
-                nom_pv=Max("point_de_vente__name"),
-                # Monnaie d'une vente en points : toutes ses lignes ont la meme
-                # (une seule monnaie par panier). PostgreSQL n'a pas de Max sur un
-                # uuid : on passe par le texte.
-                # / Currency of a points sale (one per cart). No Max on uuid in PG.
-                asset_de_la_vente=Max(Cast("asset", output_field=CharField())),
+            ventes_du_service = ventes_du_service.filter(
+                Exists(un_reglement_de_ce_moyen)
             )
-            .order_by("-derniere_datetime")
-        )
 
-        # Pagination SQL native via slicing Django (traduit en LIMIT/OFFSET)
-        # / Native SQL pagination via Django slicing (translates to LIMIT/OFFSET)
+        # La suite de la liste : les ventes de numero plus petit que la derniere
+        # deja affichee. Un numero illisible donne la premiere page.
+        # / The rest of the list: sales numbered below the last one shown.
+        numero_de_la_derniere_vente_affichee = None
         try:
-            page = int(request.GET.get("page", 1))
+            numero_de_la_derniere_vente_affichee = int(request.GET.get("avant", ""))
         except (ValueError, TypeError):
-            page = 1
-        if page < 1:
-            page = 1
-        taille_page = 20
-        offset = (page - 1) * taille_page
-        ventes_page = list(ventes_requete[offset : offset + taille_page])
-        a_page_suivante = ventes_requete[
-            offset + taille_page : offset + taille_page + 1
-        ].exists()
-
-        # Ajouter le label humain du moyen de paiement a chaque vente
-        # (le queryset renvoie le code brut "CA", "CC", etc.)
-        # Caster aussi le total Decimal → int : on reste en centimes pour le filtre |euros.
-        # / Add human-readable payment method label to each sale.
-        # Cast total Decimal → int: stay in cents for the |euros template filter.
-        # Nom des monnaies des ventes en points, en une seule requete.
-        # / Currency names of points sales, in a single query.
-        uuids_des_monnaies_en_points = []
-        for vente in ventes_page:
-            if vente.get("moyen_paiement") == PaymentMethod.NON_MONETAIRE:
-                uuids_des_monnaies_en_points.append(vente["asset_de_la_vente"])
-        nom_par_uuid_de_monnaie = {}
-        for monnaie in Asset.objects.filter(uuid__in=uuids_des_monnaies_en_points):
-            nom_par_uuid_de_monnaie[str(monnaie.uuid)] = monnaie.name
-
-        for vente in ventes_page:
-            code_moyen = vente.get("moyen_paiement", "")
-            vente["moyen_paiement_label"] = LABELS_MOYENS_PAIEMENT_DB.get(
-                code_moyen, code_moyen
+            numero_de_la_derniere_vente_affichee = None
+        premiere_page = numero_de_la_derniere_vente_affichee is None
+        if not premiere_page:
+            ventes_du_service = ventes_du_service.filter(
+                numero__lt=numero_de_la_derniere_vente_affichee
             )
-            # Somme des amount x qty, arrondie au centime (jamais tronquee :
-            # 499,99985 vaut 500), comme LigneArticle.total().
-            # / Sum of amount x qty, rounded to the cent, never truncated.
-            total_brut = vente.get("total")
-            vente["total"] = 0
-            if total_brut is not None:
-                vente["total"] = int(
-                    Decimal(total_brut).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-                )
-            # Unite du total : nom de la monnaie pour une vente en points, vide
-            # pour une vente en euros (filtre montant_dans_la_monnaie).
-            # / Total unit: currency name for a points sale, empty for euros.
-            vente["unite"] = ""
-            if code_moyen == PaymentMethod.NON_MONETAIRE:
-                # Monnaie introuvable : « Points ou temps », jamais « € »
-                # / Currency not found: "Points or time", never "€"
-                vente["unite"] = nom_par_uuid_de_monnaie.get(
-                    vente.get("asset_de_la_vente"), str(_("Points ou temps"))
-                )
+
+        # La plus recente d'abord : le numero suit l'ordre des encaissements.
+        # Reglements et point de vente precharges, nombre d'articles annote : le
+        # nombre de requetes ne depend pas du nombre de ventes.
+        # / Most recent first; prefetched and annotated: constant query count.
+        ventes_triees = (
+            ventes_du_service.select_related("point_de_vente")
+            .prefetch_related("reglements")
+            .annotate(quantite_d_articles=Sum("articles__qty"))
+            .order_by("-numero")
+        )
+        ventes_de_la_page = list(ventes_triees[:NOMBRE_DE_VENTES_PAR_PAGE])
+
+        numero_de_la_derniere_vente_de_la_page = None
+        a_page_suivante = False
+        if ventes_de_la_page:
+            numero_de_la_derniere_vente_de_la_page = ventes_de_la_page[-1].numero
+            a_page_suivante = ventes_du_service.filter(
+                numero__lt=numero_de_la_derniere_vente_de_la_page
+            ).exists()
+        lignes_de_la_liste = lignes_de_la_liste_des_ventes(ventes_de_la_page)
 
         # Liste des PV pour le filtre (select)
         # / POS list for the filter (select)
@@ -4863,20 +4805,39 @@ class CaisseViewSet(viewsets.ViewSet):
 
         context = {
             "aucune_vente": False,
-            "ventes_groupees": ventes_page,
-            "page_courante": page,
+            "lignes_de_la_liste": lignes_de_la_liste,
+            "premiere_page": premiere_page,
             "a_page_suivante": a_page_suivante,
-            "page_suivante": page + 1,
-            "filtre_pv": filtre_pv or "",
-            "filtre_moyen": filtre_moyen or "",
+            "numero_de_la_derniere_vente_de_la_page": (
+                numero_de_la_derniere_vente_de_la_page
+            ),
+            "filtre_pv": filtre_pv,
+            "filtre_moyen": filtre_moyen,
             "points_de_vente": list(points_de_vente),
+            # Les moyens du comptoir par leur nom unique (`nom_du_moyen_de_paiement`) ;
+            # les moyens cashless et hors argent par un mot de famille, plus court
+            # que le libelle de `PaymentMethod`.
+            # / Counter methods by their single name; cashless and non-money methods
+            #   by a short family word.
             "moyens_paiement": [
-                {"code": PaymentMethod.CASH, "label": _("Espèces")},
-                {"code": PaymentMethod.CC, "label": _("Carte bancaire")},
+                {
+                    "code": PaymentMethod.CASH,
+                    "label": nom_du_moyen_de_paiement(PaymentMethod.CASH),
+                },
+                {
+                    "code": PaymentMethod.CC,
+                    "label": nom_du_moyen_de_paiement(PaymentMethod.CC),
+                },
+                {
+                    "code": PaymentMethod.CHEQUE,
+                    "label": nom_du_moyen_de_paiement(PaymentMethod.CHEQUE),
+                },
                 {"code": PaymentMethod.LOCAL_EURO, "label": _("Cashless")},
                 {"code": PaymentMethod.LOCAL_GIFT, "label": _("Cadeau")},
-                {"code": PaymentMethod.CHEQUE, "label": _("Chèque")},
-                {"code": PaymentMethod.NON_MONETAIRE, "label": _("Points ou temps")},
+                {
+                    "code": PaymentMethod.NON_MONETAIRE,
+                    "label": nom_d_une_monnaie_de_points_introuvable(),
+                },
             ],
         }
         return _rendre_vue_ventes(
@@ -4886,207 +4847,66 @@ class CaisseViewSet(viewsets.ViewSet):
     @action(
         detail=False,
         methods=["get"],
-        url_path=r"detail-vente/(?P<uuid_transaction>[^/.]+)",
+        url_path=r"detail-vente/(?P<uuid_vente>[^/.]+)",
         url_name="detail_vente",
     )
-    def detail_vente(self, request, uuid_transaction=None):
+    def detail_vente(self, request, uuid_vente=None):
         """
-        GET /laboutik/caisse/detail-vente/<uuid_transaction>/
-        Detail d'une vente : toutes les LigneArticle du meme uuid_transaction.
-        / Sale detail: all LigneArticle with the same uuid_transaction.
+        GET /laboutik/caisse/detail-vente/<uuid de la vente>/
+        Detail d'une vente : ses articles, ses reglements, sa vente liee, son statut.
+        / Sale detail: its items, payments, linked sale and status.
 
         LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. La vente, par son uuid (404 si l'adresse n'est pas un uuid ou si la vente
+           n'existe pas). Une vente en attente s'affiche aussi, avec son statut.
+        2. Le contexte : `_contexte_du_detail_d_une_vente` (articles, reglements,
+           boutons « Corriger », ventes liees et derivees).
+        3. Rend hx_detail_vente.html.
+        / Sale by uuid; context built by `_contexte_du_detail_d_une_vente`.
         """
+        contexte_vente_introuvable = {
+            "msg_type": "warning",
+            "msg_content": _("Vente introuvable"),
+            "selector_bt_retour": "#messages",
+        }
+
         # Valider le format UUID avant la requete
         # / Validate UUID format before the query
         try:
-            uuid_tx_valide = uuid_module.UUID(str(uuid_transaction))
+            uuid_de_la_vente = uuid_module.UUID(str(uuid_vente))
         except (ValueError, AttributeError):
-            context = {
-                "msg_type": "warning",
-                "msg_content": _("Transaction introuvable"),
-                "selector_bt_retour": "#messages",
-            }
             return render(
-                request, "laboutik/partial/hx_messages.html", context, status=404
+                request,
+                "laboutik/partial/hx_messages.html",
+                contexte_vente_introuvable,
+                status=404,
             )
 
-        # Recuperer les lignes de cette transaction.
-        # La cle peut etre un uuid_transaction (regroupement) ou un uuid de ligne
-        # (ventes sans uuid_transaction, anciennes donnees).
-        # On cherche d'abord par uuid_transaction, puis par uuid (pk).
-        # / Get all lines for this transaction.
-        # The key can be a uuid_transaction (grouped) or a line uuid
-        # (sales without uuid_transaction, old data).
-        # Try uuid_transaction first, then uuid (pk).
-        lignes = (
-            LigneArticle.objects.filter(
-                uuid_transaction=uuid_tx_valide,
-                sale_origin=SaleOrigin.LABOUTIK,
-            )
-            .select_related(
-                "pricesold__productsold__product",
-                "pricesold__price",
-                "point_de_vente",
-                "vente",
-            )
-            .order_by("datetime")
+        vente = (
+            Vente.objects.select_related("point_de_vente", "vente_liee")
+            .prefetch_related("ventes_derivees", "reglements")
+            .filter(uuid=uuid_de_la_vente)
+            .first()
         )
-
-        # Si pas trouve par uuid_transaction, chercher par uuid (pk de la ligne)
-        # / If not found by uuid_transaction, search by uuid (line pk)
-        if not lignes.exists():
-            lignes = (
-                LigneArticle.objects.filter(
-                    uuid=uuid_tx_valide,
-                    sale_origin=SaleOrigin.LABOUTIK,
-                )
-                .select_related(
-                    "pricesold__productsold__product",
-                    "pricesold__price",
-                    "point_de_vente",
-                    "vente",
-                )
-                .order_by("datetime")
-            )
-
-        if not lignes.exists():
-            context = {
-                "msg_type": "warning",
-                "msg_content": _("Transaction introuvable"),
-                "selector_bt_retour": "#messages",
-            }
+        if vente is None:
             return render(
-                request, "laboutik/partial/hx_messages.html", context, status=404
+                request,
+                "laboutik/partial/hx_messages.html",
+                contexte_vente_introuvable,
+                status=404,
             )
 
-        # Construire le detail des articles
-        # / Build article details
-        premiere_ligne = lignes.first()
-        articles_detail = []
-        total_transaction = 0
-
-        for ligne in lignes:
-            nom_article = ""
-            nom_tarif = ""
-            produit_lie = None
-            prix_decimal_ref = None  # Decimal en EUR (Price.prix snapshot)
-            if ligne.pricesold:
-                if ligne.pricesold.productsold:
-                    produit_lie = ligne.pricesold.productsold.product
-                    nom_article = produit_lie.name
-                if ligne.pricesold.price:
-                    nom_tarif = ligne.pricesold.price.name
-                    prix_decimal_ref = ligne.pricesold.price.prix
-
-            # Total ligne = prix unitaire * qty, arrondi au centime
-            # (LigneArticle.total()). Le total reste en centimes pour |euros.
-            # / Line total = unit price * qty, rounded (LigneArticle.total()).
-            prix_unitaire_centimes = ligne.amount or 0
-            total_ligne_centimes = ligne.total() if prix_unitaire_centimes else 0
-
-            # Detection ligne vrac : weight_quantity non-null et > 0.
-            # Pour vrac : qty=1, weight_quantity=350(g) ou 175(cl), amount=420c (350*0.012),
-            # et Price.prix=12.00 (= 12€/kg). Le caissier veut voir "350g" et "12,00 €/kg",
-            # pas "1" et "4,20 €" qui n'ont pas de sens metier.
-            # / Vrac line detection. For vrac the cashier wants weight + price/kg|L,
-            # not the qty=1 / line-amount which are meaningless to them.
-            est_vrac = bool(ligne.weight_quantity and ligne.weight_quantity > 0)
-            unite_poids = None
-            prix_par_unite_str = None
-            if est_vrac and produit_lie is not None:
-                # Unite (GR / CL) lue sur le Stock du produit.
-                # / Unit (GR / CL) read on product Stock.
-                stock_lie = getattr(produit_lie, "stock_inventaire", None)
-                if stock_lie is not None:
-                    unite_poids = stock_lie.unite
-                # Prix au kg / L : Price.prix est deja en €/kg pour GR, €/L pour CL
-                # (convention validee Session 28 multi-tarif poids/mesure).
-                # / Price per kg/L: Price.prix is already in €/kg or €/L.
-                if prix_decimal_ref is not None and unite_poids in ("GR", "CL"):
-                    suffixe_unite = "kg" if unite_poids == "GR" else "L"
-                    prix_par_unite_str = (
-                        f"{prix_decimal_ref:.2f}".replace(".", ",")
-                        + f" €/{suffixe_unite}"
-                    )
-
-            articles_detail.append(
-                {
-                    "nom": nom_article,
-                    "tarif": nom_tarif,
-                    "qty": ligne.qty,
-                    "est_vrac": est_vrac,
-                    # Alias "poids_total" + "unite_poids" pour reutiliser le filtre
-                    # afficher_poids (deja teste, conversion auto kg/L).
-                    # / Aliases to reuse the afficher_poids filter (auto kg/L conversion).
-                    "poids_total": ligne.weight_quantity if est_vrac else None,
-                    "unite_poids": unite_poids,
-                    "prix_unitaire": prix_unitaire_centimes,
-                    "prix_par_unite": prix_par_unite_str,
-                    "total_ligne": total_ligne_centimes,
-                }
-            )
-            total_transaction += total_ligne_centimes
-
-        # Le bouton « Corriger moyen » n'est propose que si la GARDE 1 de
-        # corriger_moyen_paiement accepte la ligne (meme fonction des refus).
-        # Les autres gardes de la route dependent du formulaire ou de toutes les
-        # lignes du paiement et restent dans la route : meme moyen (GARDE 2),
-        # lignes de plusieurs ventes (GARDE 3), montant nul (GARDE 4).
-        # / The "Correct" button is offered only when the route's GUARD 1 accepts the
-        #   line. Guards 2 to 4 stay in the route.
-        moyen_de_la_ligne = premiere_ligne.payment_method or ""
-        correction_est_possible = (
-            raison_du_refus_de_correction(premiere_ligne) is None
-        )
-
-        # Unite des montants : nom de la monnaie pour une vente en points (une
-        # seule monnaie par panier), vide pour une vente en euros.
-        # / Amount unit: currency name for a points sale, empty for euros.
-        unite_de_la_vente = ""
-        if moyen_de_la_ligne == PaymentMethod.NON_MONETAIRE:
-            # Monnaie introuvable : « Points ou temps », jamais « € »
-            # / Currency not found: "Points or time", never "€"
-            unite_de_la_vente = str(_("Points ou temps"))
-            monnaie_de_la_vente = Asset.objects.filter(uuid=premiere_ligne.asset).first()
-            if monnaie_de_la_vente is not None:
-                unite_de_la_vente = monnaie_de_la_vente.name
-
-        # Label humain du moyen de paiement (ex: "Espèces" au lieu de "CA")
-        # / Human-readable payment method label (e.g. "Cash" instead of "CA")
-        moyen_paiement_label = LABELS_MOYENS_PAIEMENT_DB.get(
-            moyen_de_la_ligne, moyen_de_la_ligne
-        )
-
-        context = {
-            "uuid_transaction": uuid_transaction,
-            "datetime": premiere_ligne.datetime,
-            "moyen_paiement": moyen_de_la_ligne,
-            "moyen_paiement_label": moyen_paiement_label,
-            "nom_pv": premiere_ligne.point_de_vente.name
-            if premiere_ligne.point_de_vente
-            else "",
-            # PV de la vente : le bouton Ré-imprimer doit l'envoyer a imprimer_ticket(),
-            # sinon la vue repond « Donnees manquantes pour l'impression ».
-            # / Sale's POS: the Reprint button must send it to imprimer_ticket().
-            "uuid_pv_vente": str(premiere_ligne.point_de_vente.uuid)
-            if premiere_ligne.point_de_vente
-            else "",
-            "articles": articles_detail,
-            "total": total_transaction,
-            "unite": unite_de_la_vente,
-            "nb_articles": len(articles_detail),
-            "correction_possible": correction_est_possible,
-            "premiere_ligne_uuid": str(premiere_ligne.uuid),
-        }
+        context = _contexte_du_detail_d_une_vente(vente)
         return _rendre_vue_ventes(
             request, "laboutik/partial/hx_detail_vente.html", context
         )
 
 
 # --------------------------------------------------------------------------- #
-#  Fonctions utilitaires — Menu Ventes (Session 16)                            #
-#  Utility functions — Sales Menu (Session 16)                                 #
+#  Fonctions utilitaires — Menu Ventes                                         #
+#  Utility functions — Sales Menu                                              #
 # --------------------------------------------------------------------------- #
 
 
@@ -5208,6 +5028,267 @@ def _calculer_datetime_ouverture_service():
         vente__statut=Vente.Statut.REGLEE,
     ).aggregate(premiere_heure=Min("datetime"))["premiere_heure"]
     return heure_de_la_premiere_ligne_reglee
+
+
+# --------------------------------------------------------------------------- #
+#  Une vente a l'ecran : liste et detail des ventes de la caisse               #
+#  A sale on screen: register sales list and detail                            #
+# --------------------------------------------------------------------------- #
+
+# Le nombre de ventes d'une page de la liste (la suite arrive au defilement).
+# / Number of sales per list page (the rest arrives on scroll).
+NOMBRE_DE_VENTES_PAR_PAGE = 20
+
+
+def lignes_que_la_correction_deplace(ligne):
+    """
+    Les lignes dont une correction de moyen change le moyen : les lignes de la MEME
+    VENTE qui portent le meme moyen ACTUEL que la ligne cliquee. Une ligne sans vente
+    (ecrite avant les ventes) est seule.
+    / The lines a payment method correction moves: the lines of the SAME SALE with
+    the same CURRENT method as the clicked line.
+
+    LOCALISATION : laboutik/views.py
+
+    C'est la seule definition de « ce que la correction deplace » : l'ecran du
+    formulaire affiche la somme de leurs `total_ttc`, et la route
+    `corriger_moyen_paiement` deplace exactement cette somme. Elle lit le moyen
+    ACTUEL des lignes : apres une correction especes → CB, les lignes portent CB, et
+    une deuxieme correction (CB → cheque) deplace ces memes lignes.
+    / The single definition, read by the form screen and by the route. It reads the
+    CURRENT method, so a second correction moves the same lines again.
+
+    Les deux appelants refusent d'abord une ligne sans vente reglee
+    (`raison_du_refus_de_correction`) : la ligne a toujours une vente ici.
+    / Both callers first refuse a line without a settled sale.
+
+    :param ligne: la `LigneArticle` cliquee (avec sa vente)
+    :return: liste de `LigneArticle` (au moins la ligne elle-meme)
+    """
+    lignes_du_meme_moyen = list(
+        LigneArticle.objects.filter(
+            vente_id=ligne.vente_id,
+            payment_method=ligne.payment_method,
+        ).order_by("datetime", "pk")
+    )
+    return lignes_du_meme_moyen
+
+
+def vente_imprimable_a_la_caisse(vente):
+    """
+    Dit si le ticket de cette vente s'imprime a la caisse : une vente ou un avoir,
+    reglee, faite sur un point de vente du lieu. Une correction ou un vidage de
+    carte n'ont pas de ticket client ; une vente en ligne non plus (ni point de
+    vente, ni imprimante a elle).
+    / Whether this sale's receipt prints at the register: a settled sale or credit
+    note made on a point of sale.
+
+    LOCALISATION : laboutik/views.py
+
+    APPELE PAR : `_contexte_du_detail_d_une_vente` (bouton « Ré-imprimer ») et
+    `PaiementViewSet.imprimer_ticket` (refus) : la meme regle.
+
+    :param vente: la `Vente`
+    :return: bool
+    """
+    nature_avec_ticket = vente.nature in (Vente.Nature.VENTE, Vente.Nature.AVOIR)
+    return (
+        vente.statut == Vente.Statut.REGLEE
+        and nature_avec_ticket
+        and vente.point_de_vente_id is not None
+    )
+
+
+def _uuid_de_la_vente_du_paiement(uuid_transaction):
+    """
+    L'uuid (texte) de la vente reglee d'un paiement de caisse, pour le bouton
+    « Imprimer » de l'ecran de fin de paiement ; "" si elle n'existe pas (rien a
+    imprimer).
+    / The settled sale's uuid of a register payment, for the success screen's print
+    button; "" if none.
+
+    LOCALISATION : laboutik/views.py
+
+    La caisse ouvre la vente d'un paiement avec l'identifiant du paiement comme
+    cle d'idempotence (`ouvrir_vente(..., idempotency_key=str(uuid_transaction))`,
+    tous les chemins de paiement de la caisse). On la retrouve par cette cle : les
+    ecrans de fin de paiement sont rendus par huit chemins, qui ne gardent pas tous
+    la vente sous la main.
+    / The register opens a payment's sale with the payment id as idempotency key:
+    the sale is found by that key.
+
+    :param uuid_transaction: l'identifiant du paiement (uuid ou texte)
+    :return: texte
+    """
+    vente_du_paiement = (
+        Vente.objects.filter(
+            idempotency_key=str(uuid_transaction),
+            statut=Vente.Statut.REGLEE,
+        )
+        .only("uuid")
+        .first()
+    )
+    if vente_du_paiement is None:
+        return ""
+    return str(vente_du_paiement.uuid)
+
+
+def _refus_de_correction(request, message, ligne_uuid, status=400):
+    """
+    La reponse d'un refus de correction : le message, rendu dans la zone du
+    formulaire de cette ligne (`#correction-zone-<uuid>`). Le formulaire vise le
+    detail entier (re-rendu apres une correction reussie) : sans `HX-Retarget`, un
+    refus effacerait le detail.
+    / A correction refusal, rendered in the line's form zone (HX-Retarget), so a
+    refusal does not replace the whole detail.
+
+    LOCALISATION : laboutik/views.py
+
+    :param message: le texte du refus (traduit)
+    :param ligne_uuid: l'uuid de la ligne du formulaire
+    :param status: le code HTTP (400 par defaut, 404 pour une ligne introuvable)
+    :return: HttpResponse
+    """
+    reponse = render(
+        request,
+        "laboutik/partial/hx_messages.html",
+        {"msg_type": "warning", "msg_content": message},
+        status=status,
+    )
+    reponse["HX-Retarget"] = f"#correction-zone-{ligne_uuid}"
+    reponse["HX-Reswap"] = "innerHTML"
+    return reponse
+
+
+def _contexte_du_detail_d_une_vente(vente):
+    """
+    Le contexte de l'ecran du detail d'une vente (`hx_detail_vente.html`).
+    / The context of a sale's detail screen.
+
+    LOCALISATION : laboutik/views.py
+
+    FLUX :
+    1. Les articles : `articles_de_la_vente_pour_l_affichage` (un article paye avec
+       deux moyens reste UN article, quantite reelle).
+    2. Les reglements : `reglements_pour_l_affichage` (moyen, monnaie, montant).
+    3. Un bouton « Corriger » par moyen ACTUEL des lignes qui se corrige (especes,
+       CB, cheque) : il ouvre la correction d'une ligne de ce moyen, si
+       `raison_du_refus_de_correction` l'accepte (seule source du refus, partagee
+       avec la route). Une vente deja corrigee garde donc un bouton pour son
+       nouveau moyen : on peut corriger une correction erronee.
+    4. La vente liee (origine d'un avoir ou d'une correction) et les ventes qui en
+       derivent (« Corrigée par la vente n° X »), avec leur lien.
+    APPELE PAR : `CaisseViewSet.detail_vente` et `PaiementViewSet.corriger_moyen_paiement`
+    (le detail est re-rendu apres une correction).
+    / Items, payments, one Correct button per current correctable method, linked and
+    derived sales. Called by the detail screen and after a correction.
+
+    :param vente: la `Vente` (lue avec `point_de_vente`, `vente_liee` et
+        `ventes_derivees`)
+    :return: dict de contexte
+    """
+    lignes_de_la_vente = list(
+        LigneArticle.objects.filter(vente=vente)
+        .select_related(
+            "pricesold__productsold__product__stock_inventaire",
+            "pricesold__productsold__event",
+            "pricesold__price",
+        )
+        .order_by("datetime", "pk")
+    )
+    reglements_de_la_vente = list(vente.reglements.all())
+
+    # L'unite des montants, puis les articles et les reglements a afficher.
+    # / The amount unit, then the items and payments to display.
+    nom_par_uuid_de_monnaie = noms_des_monnaies_des_ventes([vente])
+    nom_de_l_unite = nom_de_l_unite_de_la_vente(vente, nom_par_uuid_de_monnaie)
+    articles_affiches = articles_de_la_vente_pour_l_affichage(
+        lignes_de_la_vente, nom_de_l_unite
+    )
+    reglements_affiches = reglements_pour_l_affichage(
+        reglements_de_la_vente, nom_par_uuid_de_monnaie, nom_de_l_unite
+    )
+
+    # Le total de la vente : la somme des nets vendus de ses articles (une vente en
+    # attente n'a pas encore ses totaux stockes).
+    # / The sale total: the sum of its items' net totals.
+    total_de_la_vente = 0
+    for article_affiche in articles_affiches:
+        total_de_la_vente += article_affiche["total"]
+
+    # Un bouton « Corriger » par moyen actuel des lignes qui se corrige.
+    # / One "Correct" button per current correctable line method.
+    boutons_de_correction = []
+    moyens_deja_proposes = set()
+    for ligne in lignes_de_la_vente:
+        moyen_de_la_ligne = ligne.payment_method
+        moyen_corrigeable = moyen_de_la_ligne in MOYENS_CORRIGEABLES_A_LA_CAISSE
+        if not moyen_corrigeable or moyen_de_la_ligne in moyens_deja_proposes:
+            continue
+        moyens_deja_proposes.add(moyen_de_la_ligne)
+        if raison_du_refus_de_correction(ligne) is not None:
+            continue
+        boutons_de_correction.append(
+            {
+                "ligne_uuid": str(ligne.uuid),
+                "libelle_du_moyen": nom_du_moyen_de_paiement(moyen_de_la_ligne),
+            }
+        )
+
+    # La vente d'origine d'un avoir ou d'une correction, et les ventes qui derivent
+    # de celle-ci (prechargees). Une vente derivee pas encore reglee n'a pas de
+    # numero : elle n'est pas montree.
+    # / The original sale, and the settled sales derived from this one.
+    vente_liee = None
+    if vente.vente_liee is not None:
+        vente_liee = {
+            "uuid": vente.vente_liee.uuid,
+            "numero": vente.vente_liee.numero,
+            "badge_de_la_nature": badge_de_la_nature_d_une_vente(
+                vente.vente_liee.nature
+            ),
+        }
+    ventes_derivees = []
+    ventes_derivees_prechargees = vente.ventes_derivees.all()
+    for vente_derivee in ventes_derivees_prechargees:
+        if vente_derivee.numero is None:
+            continue
+        ventes_derivees.append(
+            {
+                "uuid": vente_derivee.uuid,
+                "nature": vente_derivee.nature,
+                "badge_de_la_nature": badge_de_la_nature_d_une_vente(
+                    vente_derivee.nature
+                ),
+                "phrase": phrase_d_une_vente_derivee(vente_derivee),
+            }
+        )
+
+    heure_de_la_vente = vente.datetime_encaissement or vente.datetime_creation
+    heure_locale_de_la_vente = heure_de_la_vente.astimezone(
+        Configuration.get_solo().get_tzinfo()
+    )
+
+    nom_pv = ""
+    if vente.point_de_vente is not None:
+        nom_pv = vente.point_de_vente.name
+
+    return {
+        "vente": vente,
+        "vente_imprimable": vente_imprimable_a_la_caisse(vente),
+        "statut_de_la_vente": vente.get_statut_display(),
+        "badge_de_la_nature": badge_de_la_nature_d_une_vente(vente.nature),
+        "date_et_heure": heure_locale_de_la_vente.strftime("%d/%m/%Y %H:%M"),
+        "nom_pv": nom_pv,
+        "articles": articles_affiches,
+        "reglements": reglements_affiches,
+        "total_a_la_francaise": montant_a_la_francaise_dans_l_unite(
+            total_de_la_vente, nom_de_l_unite
+        ),
+        "boutons_de_correction": boutons_de_correction,
+        "vente_liee": vente_liee,
+        "ventes_derivees": ventes_derivees,
+    }
 
 
 def _contexte_de_l_ecran_du_z(cloture):
@@ -9160,6 +9241,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "state": state,
             "original_payment": transaction_precedente,
             "uuid_transaction": str(uuid_transaction),
+            "uuid_vente": _uuid_de_la_vente_du_paiement(uuid_transaction),
             "uuid_pv": str(point_de_vente.uuid),
             "produits_stock_negatif": produits_stock_negatif,
             # Avertissements du rattachement de carte (adhesion) : le caissier
@@ -9421,6 +9503,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "state": state,
                 "original_payment": transaction_precedente,
                 "uuid_transaction": str(uuid_transaction),
+                "uuid_vente": _uuid_de_la_vente_du_paiement(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "produits_stock_negatif": produits_stock_negatif,
                 # Avertissements du rattachement de carte (adhesion) : le caissier
@@ -9596,6 +9679,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "state": state,
             "original_payment": None,
             "uuid_transaction": str(uuid_transaction),
+            "uuid_vente": _uuid_de_la_vente_du_paiement(uuid_transaction),
             "uuid_pv": str(point_de_vente.uuid),
             "produits_stock_negatif": [],
             "avertissements_adhesion": [],
@@ -10560,6 +10644,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "nouveau_solde": nouveau_solde_euros,
             "card_name": carte_client.tag_id,
             "uuid_transaction": str(uuid_transaction),
+            "uuid_vente": _uuid_de_la_vente_du_paiement(uuid_transaction),
             "uuid_pv": str(point_de_vente.uuid),
             # Multi-asset : liste des soldes après paiement
             # / Multi-asset: list of balances after payment
@@ -11794,6 +11879,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "nouveau_solde": nouveau_solde_euros,
                 "card_name": carte1.tag_id,
                 "uuid_transaction": str(uuid_transaction),
+                "uuid_vente": _uuid_de_la_vente_du_paiement(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "soldes_apres_paiement": soldes_apres_paiement,
                 "cartes_apres_paiement": cartes_apres_paiement,
@@ -12617,6 +12703,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "nouveau_solde": nouveau_solde_euros,
                 "card_name": carte1.tag_id,
                 "uuid_transaction": str(uuid_transaction),
+                "uuid_vente": _uuid_de_la_vente_du_paiement(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "soldes_apres_paiement": soldes_apres_paiement,
                 "cartes_apres_paiement": cartes_apres_paiement,
@@ -13355,49 +13442,47 @@ class PaiementViewSet(viewsets.ViewSet):
     def imprimer_ticket(self, request):
         """
         POST /laboutik/paiement/imprimer_ticket/
-        Imprime (ou re-imprime) un ticket de vente a partir du uuid_transaction.
-        Toutes les LigneArticle partageant ce uuid_transaction sont regroupees
-        sur un seul ticket.
-        / Prints (or reprints) a sale ticket from the uuid_transaction.
-        All LigneArticle sharing this uuid_transaction are grouped on one ticket.
+        Imprime (ou re-imprime) le ticket d'une VENTE.
+        / Prints (or reprints) the receipt of a SALE.
 
         LOCALISATION : laboutik/views.py
 
         FLUX :
-        1. Recoit uuid_transaction et uuid_pv en POST
-        2. Recupere le PV et son imprimante
-        3. Recupere les LigneArticle de la transaction
-        4. Formate le ticket via formatter_ticket_vente
-        5. Lance l'impression async via Celery
-        6. Retourne un partial HTML de confirmation
+        1. La vente : `uuid_vente` (bouton « Ré-imprimer » du detail d'une vente,
+           bouton « Imprimer » de l'ecran de fin de paiement). Seule une vente ou un
+           avoir regle, fait sur un point de vente, s'imprime
+           (`vente_imprimable_a_la_caisse`).
+        2. L'imprimante du terminal qui demande (`imprimante_du_terminal`).
+        3. Le ticket : `formatter_ticket_vente(vente, operateur)`.
+        4. L'impression part en tache Celery. Le journal des impressions compte les
+           impressions de la VENTE (`impression_meta["uuid_transaction"]` = uuid de
+           la vente, laboutik/printing/tasks.py) : la deuxieme est un DUPLICATA.
+        5. Retourne un partial HTML de confirmation.
+        / The sale, the terminal's printer, the receipt, the print task; the print
+          log counts the SALE's prints: the second one is a DUPLICATE.
         """
-        uuid_transaction_str = request.POST.get("uuid_transaction")
-        uuid_pv = request.POST.get("uuid_pv")
+        contexte_donnees_manquantes = {
+            "msg_type": "warning",
+            "msg_content": _("Donnees manquantes pour l'impression"),
+        }
 
-        if not uuid_transaction_str or not uuid_pv:
-            return render(
-                request,
-                "laboutik/partial/hx_print_feedback.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _("Donnees manquantes pour l'impression"),
-                },
-            )
-
-        # Recuperer le PV et son imprimante
-        # / Get the POS and its printer
+        vente = None
+        uuid_de_la_vente_recu = request.POST.get("uuid_vente", "")
         try:
-            point_de_vente = PointDeVente.objects.get(
-                uuid=uuid_pv
+            vente = (
+                Vente.objects.select_related("point_de_vente")
+                .prefetch_related("reglements")
+                .filter(uuid=uuid_module.UUID(uuid_de_la_vente_recu))
+                .first()
             )
-        except (PointDeVente.DoesNotExist, ValueError):
+        except ValueError:
+            vente = None
+
+        if vente is None or not vente_imprimable_a_la_caisse(vente):
             return render(
                 request,
                 "laboutik/partial/hx_print_feedback.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _("Point de vente introuvable"),
-                },
+                contexte_donnees_manquantes,
             )
 
         printer_de_ce_terminal = imprimante_du_terminal(request.user)
@@ -13413,25 +13498,6 @@ class PaiementViewSet(viewsets.ViewSet):
                 },
             )
 
-        # Recuperer les lignes de cette transaction
-        # / Get the lines for this transaction
-        # select_related : le ticket lit le tarif (nom de l'article) et le produit
-        # (detail d'une vente au poids) de chaque article, sans requete par article.
-        # / The receipt reads each item's price and product: no query per item.
-        lignes_du_paiement = LigneArticle.objects.filter(
-            uuid_transaction=uuid_transaction_str,
-        ).select_related("pricesold__productsold__product", "pricesold__price")
-
-        if not lignes_du_paiement.exists():
-            return render(
-                request,
-                "laboutik/partial/hx_print_feedback.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _("Aucune ligne trouvee pour cette transaction"),
-                },
-            )
-
         # Construire le ticket et lancer l'impression async
         # / Build the ticket and launch async printing
         from laboutik.printing.formatters import formatter_ticket_vente
@@ -13441,22 +13507,14 @@ class PaiementViewSet(viewsets.ViewSet):
         # / Operator = logged-in user (admin session)
         operateur = request.user if request.user.is_authenticated else None
 
-        # Moyen de paiement = celui de la premiere ligne
-        # / Payment method = from the first line
-        premiere_ligne = lignes_du_paiement.first()
-        moyen_paiement = premiere_ligne.payment_method if premiere_ligne else ""
+        ticket_data = formatter_ticket_vente(vente, operateur)
 
-        ticket_data = formatter_ticket_vente(
-            lignes_du_paiement,
-            point_de_vente,
-            operateur,
-            moyen_paiement,
-        )
-
-        # Ajouter les metadonnees d'impression pour la tracabilite (LNE exigence 9)
-        # / Add print metadata for tracking (LNE requirement 9)
+        # Les metadonnees d'impression pour la tracabilite (LNE exigence 9). Le
+        # champ `uuid_transaction` du journal recoit l'uuid de la VENTE : les
+        # impressions se comptent par vente.
+        # / Print metadata (LNE req. 9); the log's uuid_transaction gets the SALE uuid.
         ticket_data["impression_meta"] = {
-            "uuid_transaction": uuid_transaction_str,
+            "uuid_transaction": str(vente.uuid),
             "cloture_uuid": None,
             "type_justificatif": "VENTE",
             "operateur_pk": str(operateur.pk) if operateur else None,
@@ -13510,9 +13568,11 @@ class PaiementViewSet(viewsets.ViewSet):
                 status=400,
             )
 
+        # Un uuid illisible leve `ValidationError` (champ UUID de Django) : 404 aussi.
+        # / An unreadable uuid raises ValidationError: 404 too.
         try:
             ligne = LigneArticle.objects.get(uuid=ligne_uuid)
-        except (LigneArticle.DoesNotExist, ValueError):
+        except (LigneArticle.DoesNotExist, ValueError, DjangoValidationError):
             return render(
                 request,
                 "laboutik/partial/hx_messages.html",
@@ -13523,41 +13583,47 @@ class PaiementViewSet(viewsets.ViewSet):
                 status=404,
             )
 
-        # Liste des moyens corrigeables (ESP/CB/CHQ), sans le moyen actuel
-        # / List of correctable methods (CASH/CC/CHECK), without the current one
+        # La meme regle que la route : une ligne que la route refuserait n'ouvre pas
+        # de formulaire (le message de refus est rendu tel quel).
+        # / Same rule as the route: a line the route would refuse opens no form.
+        raison_du_refus = raison_du_refus_de_correction(ligne)
+        if raison_du_refus is not None:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {"msg_type": "warning", "msg_content": raison_du_refus},
+                status=400,
+            )
+
+        # Les nouveaux moyens possibles (especes, CB, cheque), sans le moyen actuel,
+        # par leur nom unique.
+        # / The possible new methods, without the current one, by their single name.
         moyens_corrigeables = []
-        if ligne.payment_method != PaymentMethod.CASH:
-            moyens_corrigeables.append(
-                {"code": PaymentMethod.CASH, "label": _("Especes")}
-            )
-        if ligne.payment_method != PaymentMethod.CC:
-            moyens_corrigeables.append(
-                {"code": PaymentMethod.CC, "label": _("Carte bancaire")}
-            )
-        if ligne.payment_method != PaymentMethod.CHEQUE:
-            moyens_corrigeables.append(
-                {"code": PaymentMethod.CHEQUE, "label": _("Cheque")}
-            )
+        for moyen_corrigeable in MOYENS_CORRIGEABLES_A_LA_CAISSE:
+            if moyen_corrigeable != ligne.payment_method:
+                moyens_corrigeables.append(
+                    {
+                        "code": moyen_corrigeable,
+                        "label": nom_du_moyen_de_paiement(moyen_corrigeable),
+                    }
+                )
 
-        # Label humain du moyen actuel + montant en euros pour l'affichage
-        # / Human label of current method + amount in euros for display
-        moyen_actuel_label = LABELS_MOYENS_PAIEMENT_DB.get(
-            ligne.payment_method, ligne.payment_method
-        )
-        montant_euros = f"{(ligne.amount or 0) / 100:.2f}"
-
-        # Nom de l'article pour le contexte
-        # / Article name for context
-        nom_article = ""
-        if ligne.pricesold and ligne.pricesold.productsold:
-            nom_article = ligne.pricesold.productsold.product.name
+        # Le montant affiche est celui que la route deplacera : la somme des nets
+        # vendus des lignes que la correction deplace (meme vente, meme moyen
+        # actuel). Une seule definition, `lignes_que_la_correction_deplace`.
+        # / The amount shown is what the route will move: the same lines.
+        montant_que_la_correction_deplace = 0
+        lignes_deplacees = lignes_que_la_correction_deplace(ligne)
+        for ligne_deplacee in lignes_deplacees:
+            montant_que_la_correction_deplace += ligne_deplacee.total_ttc
 
         context = {
             "ligne": ligne,
             "moyens_corrigeables": moyens_corrigeables,
-            "moyen_actuel_label": moyen_actuel_label,
-            "montant_euros": montant_euros,
-            "nom_article": nom_article,
+            "moyen_actuel_label": nom_du_moyen_de_paiement(ligne.payment_method),
+            "montant_du_reglement_a_la_francaise": euros_a_la_francaise(
+                montant_que_la_correction_deplace
+            ),
         }
         return render(
             request, "laboutik/partial/hx_corriger_moyen_paiement.html", context
@@ -13581,15 +13647,28 @@ class PaiementViewSet(viewsets.ViewSet):
 
         LOCALISATION : laboutik/views.py
 
-        Gardes de securite / Security guards (memes etiquettes que dans le code) :
-        - Serializer : UUID valide, nouveau moyen dans ESP/CB/CHQ, raison.
+        Gardes de securite / Security guards (memes etiquettes que dans le code),
+        toutes relues SOUS LE VERROU de la vente d'origine (`select_for_update`) :
+        - Serializer : UUID valide, nouveau moyen dans ESP/CB/CHQ, raison, moyen vu
+          par le caissier (`ancien_moyen`, champ cache du formulaire).
         - GARDE 1 : la ligne elle-meme (`raison_du_refus_de_correction`) — ancien
           moyen especes, CB ou cheque ; vente de la caisse ; vente reglee ; vente pas
           couverte par une cloture journaliere.
-        - GARDE 2 : meme moyen interdit — pas de correction sans changement.
-        - GARDE 3 : lignes de plusieurs ventes interdites — une correction porte sur
-          UNE vente.
+        - GARDE 2 : la ligne a change depuis l'ouverture du formulaire (moyen actuel
+          different de `ancien_moyen`) — deux envois identiques ne font qu'une
+          correction.
+        - GARDE 3 : meme moyen interdit — pas de correction sans changement.
         - GARDE 4 : montant nul interdit — rien a deplacer.
+        Un refus est rendu dans la zone du formulaire (`HX-Retarget`), pas a la
+        place du detail.
+
+        LES LIGNES DEPLACEES : `lignes_que_la_correction_deplace` (meme vente, meme
+        moyen actuel), la meme fonction que l'ecran du formulaire : le montant affiche
+        est le montant deplace. Une vente deja corrigee se corrige encore (CB → cheque
+        apres especes → CB) : ses lignes portent le moyen actuel.
+        Apres la correction, le detail de la vente d'origine est re-rendu.
+        / The moved lines: the same function as the form screen. A corrected sale can
+          be corrected again. The original sale's detail is re-rendered.
 
         VENTE DE CORRECTION (D14, CHANTIER-05-montants-entiers.md) :
         La vente d'origine est deja encaissee : elle ne change jamais. Dans la meme
@@ -13604,9 +13683,9 @@ class PaiementViewSet(viewsets.ViewSet):
         # --- Validation des champs via serializer DRF ---
         # Le serializer valide le format UUID, les choix de moyen, et la raison.
         # Les gardes metier (GARDE 1 a 4) restent dans la vue : elles dependent de
-        # l'etat en base.
+        # l'etat en base, relu sous verrou.
         # / Field validation via DRF serializer. Business guards (1 to 4) depend on
-        # database state and stay in the view.
+        # database state, read under lock.
         from laboutik.serializers import CorrectionPaiementSerializer
 
         serializer = CorrectionPaiementSerializer(data=request.POST)
@@ -13625,129 +13704,99 @@ class PaiementViewSet(viewsets.ViewSet):
         ligne_uuid = serializer.validated_data["ligne_uuid"]
         nouveau_moyen = serializer.validated_data["nouveau_moyen"]
         raison = serializer.validated_data["raison"]
+        ancien_moyen_vu_par_le_caissier = serializer.validated_data["ancien_moyen"]
 
         # --- Recuperer la ligne d'article ---
         # / Get the article line
-        try:
-            ligne = LigneArticle.objects.get(uuid=ligne_uuid)
-        except LigneArticle.DoesNotExist:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _("Ligne d'article introuvable"),
-                },
-                status=404,
+        ligne_cliquee = LigneArticle.objects.filter(uuid=ligne_uuid).first()
+        if ligne_cliquee is None:
+            return _refus_de_correction(
+                request, _("Ligne d'article introuvable"), ligne_uuid, status=404
             )
 
-        # --- GARDE 1 : la ligne elle-meme ---
-        # Moyen corrigeable, vente de la caisse, vente reglee, pas couverte par une
-        # cloture journaliere : les regles sont dans `raison_du_refus_de_correction`,
-        # partagee avec l'ecran du detail d'une vente.
-        # / GUARD 1: the line itself, shared with the sale detail screen.
-        raison_du_refus = raison_du_refus_de_correction(ligne)
-        if raison_du_refus is not None:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": raison_du_refus,
-                },
-                status=400,
-            )
-
-        # --- GARDE 2 : meme moyen = pas de correction ---
-        # / Same method = no correction needed
-        if ligne.payment_method == nouveau_moyen:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _("Le moyen de paiement est deja identique"),
-                },
-                status=400,
-            )
-
-        # --- Recuperer TOUTES les lignes de la transaction ---
-        # Une transaction peut contenir plusieurs articles (ex: Biere + Coca).
-        # La correction s'applique a toutes les lignes du meme paiement.
-        # / Get ALL lines of the transaction.
-        # A transaction may contain multiple articles (e.g. Beer + Soda).
-        # The correction applies to all lines of the same payment.
-        ancien_moyen = ligne.payment_method
-        if ligne.uuid_transaction:
-            lignes_transaction = LigneArticle.objects.filter(
-                uuid_transaction=ligne.uuid_transaction,
-                payment_method=ancien_moyen,
-            )
-        else:
-            # Anciennes donnees sans uuid_transaction — corriger cette ligne seule
-            # / Old data without uuid_transaction — correct this line only
-            lignes_transaction = LigneArticle.objects.filter(uuid=ligne.uuid)
-        lignes_a_corriger = list(lignes_transaction)
-
-        # --- GARDE 3 : toutes les lignes corrigees appartiennent a UNE vente ---
-        # Les lignes d'un meme paiement sont ecrites dans une seule vente. Si elles
-        # appartiennent a plusieurs ventes (ou certaines a aucune), la vente a corriger
-        # n'est pas connue : refus, rien n'est ecrit.
-        # / Lines of one payment belong to one sale. Several sales: refused.
-        identifiants_des_ventes_des_lignes = set()
-        for ligne_a_corriger in lignes_a_corriger:
-            identifiants_des_ventes_des_lignes.add(ligne_a_corriger.vente_id)
-        if len(identifiants_des_ventes_des_lignes) > 1:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _(
-                        "Ces lignes appartiennent à plusieurs ventes : "
-                        "correction impossible"
-                    ),
-                },
-                status=400,
-            )
-        vente_d_origine = lignes_a_corriger[0].vente
-
-        # Le montant corrige : la somme des nets vendus des lignes, des entiers figes a
-        # la vente, additionnes (jamais recalcules).
-        # / The corrected amount: the sum of the lines' frozen net totals.
-        montant_corrige_en_centimes = 0
-        for ligne_a_corriger in lignes_a_corriger:
-            montant_corrige_en_centimes += ligne_a_corriger.total_ttc
-
-        # --- GARDE 4 : une vente dont les lignes corrigees valent 0 ---
-        # Il n'y a pas d'argent a deplacer : la vente CORRECTION n'aurait que des
-        # reglements de 0, que le service de vente refuse. Refus propre, rien n'est
-        # ecrit.
-        # Ici, la vente d'origine existe toujours : la garde 1 a refuse une ligne sans
-        # vente, et la garde 3 a refuse des lignes de plusieurs ventes (ou sans vente).
-        # / Lines worth 0: no money to move, the service refuses 0 payments. Clean
-        #   refusal, nothing written. The original sale always exists here (guards 1
-        #   and 3).
-        if montant_corrige_en_centimes == 0:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _("Rien à corriger : le montant est nul."),
-                },
-                status=400,
-            )
-
-        # --- Creer les traces d'audit + modifier le moyen + la vente de correction ---
-        # Les operations DOIVENT etre dans la meme transaction DB.
-        # Une CorrectionPaiement est creee par LigneArticle pour la tracabilite.
-        # / Create audit trails + modify the method + the correction sale (atomic).
-        # One CorrectionPaiement per LigneArticle for traceability.
         operateur = request.user if request.user.is_authenticated else None
         nombre_lignes_corrigees = 0
 
+        # --- Tout se joue sous le verrou de la vente d'origine ---
+        # Deux envois du meme formulaire (double clic, deux caisses) passent l'un
+        # apres l'autre : le second relit la ligne APRES la premiere correction, et
+        # ses gardes la refusent. Les gardes, la lecture des lignes et l'ecriture
+        # sont dans la meme transaction.
+        # / Everything happens under the original sale's lock: a second submission
+        #   re-reads the line after the first correction and is refused.
         with db_transaction.atomic():
+            if ligne_cliquee.vente_id is not None:
+                Vente.objects.select_for_update().filter(
+                    pk=ligne_cliquee.vente_id
+                ).first()
+            ligne = LigneArticle.objects.select_related("vente").get(
+                pk=ligne_cliquee.pk
+            )
+
+            # --- GARDE 1 : la ligne elle-meme ---
+            # Moyen corrigeable, vente de la caisse, vente reglee, pas couverte par
+            # une cloture journaliere : `raison_du_refus_de_correction`, partagee
+            # avec l'ecran du detail d'une vente et le formulaire.
+            # / GUARD 1: the line itself, shared with the detail screen and the form.
+            raison_du_refus = raison_du_refus_de_correction(ligne)
+            if raison_du_refus is not None:
+                return _refus_de_correction(request, raison_du_refus, ligne_uuid)
+
+            # --- GARDE 2 : la ligne a change depuis l'ouverture du formulaire ---
+            # Le formulaire envoie le moyen qu'il a affiche. Si le moyen actuel n'est
+            # plus celui-la, une autre correction est passee entre-temps : refus.
+            # / GUARD 2: the line changed since the form was opened: refused.
+            ligne_deja_corrigee = (
+                ancien_moyen_vu_par_le_caissier
+                and ancien_moyen_vu_par_le_caissier != ligne.payment_method
+            )
+            if ligne_deja_corrigee:
+                return _refus_de_correction(
+                    request,
+                    _(
+                        "Ce paiement vient d'être corrigé (moyen actuel : %(moyen)s). "
+                        "Rouvrez la vente pour le corriger à nouveau."
+                    )
+                    % {"moyen": nom_du_moyen_de_paiement(ligne.payment_method)},
+                    ligne_uuid,
+                )
+
+            # --- GARDE 3 : meme moyen = pas de correction ---
+            # / GUARD 3: same method = no correction needed
+            if ligne.payment_method == nouveau_moyen:
+                return _refus_de_correction(
+                    request, _("Le moyen de paiement est deja identique"), ligne_uuid
+                )
+
+            # --- Les lignes que la correction deplace ---
+            # Toutes les lignes de la vente qui portent le moyen actuel de la ligne :
+            # la meme fonction que l'ecran du formulaire, qui en a affiche la somme.
+            # La garde 1 a refuse une ligne sans vente reglee : la vente existe ici.
+            # / The lines the correction moves: the same function as the form screen.
+            ancien_moyen = ligne.payment_method
+            lignes_a_corriger = lignes_que_la_correction_deplace(ligne)
+            vente_d_origine = ligne.vente
+
+            # Le montant corrige : la somme des nets vendus des lignes, des entiers
+            # figes a la vente, additionnes (jamais recalcules).
+            # / The corrected amount: the sum of the lines' frozen net totals.
+            montant_corrige_en_centimes = 0
+            for ligne_a_corriger in lignes_a_corriger:
+                montant_corrige_en_centimes += ligne_a_corriger.total_ttc
+
+            # --- GARDE 4 : une vente dont les lignes corrigees valent 0 ---
+            # Il n'y a pas d'argent a deplacer : la vente CORRECTION n'aurait que des
+            # reglements de 0, que le service de vente refuse. Refus propre, rien
+            # n'est ecrit.
+            # / GUARD 4: lines worth 0, nothing to move: clean refusal.
+            if montant_corrige_en_centimes == 0:
+                return _refus_de_correction(
+                    request, _("Rien à corriger : le montant est nul."), ligne_uuid
+                )
+
+            # --- Les traces d'audit, le nouveau moyen et la vente de correction ---
+            # Une CorrectionPaiement par LigneArticle pour la tracabilite.
+            # / Audit trails, new method and the correction sale.
             for ligne_a_corriger in lignes_a_corriger:
                 CorrectionPaiement.objects.create(
                     ligne_article=ligne_a_corriger,
@@ -13801,27 +13850,22 @@ class PaiementViewSet(viewsets.ViewSet):
             f"par {request.user} — raison : {raison}"
         )
 
-        # Re-rendre le detail complet de la vente avec le nouveau moyen
-        # pour que la ligne se mette a jour visuellement.
-        # / Re-render the full sale detail with the new method
-        # so the row updates visually.
-        ancien_moyen_label = LABELS_MOYENS_PAIEMENT_DB.get(ancien_moyen, ancien_moyen)
-        nouveau_moyen_label = LABELS_MOYENS_PAIEMENT_DB.get(
-            nouveau_moyen, nouveau_moyen
+        # Le detail de la vente d'origine est re-rendu (il remplace l'ancien sous la
+        # ligne de la liste) : le bouton « Corriger » suit le nouveau moyen, la vente
+        # CORRECTION apparait dans les ventes derivees, et un message dit la
+        # correction faite.
+        # / The original sale's detail is re-rendered, with a confirmation message.
+        vente_d_origine_relue = (
+            Vente.objects.select_related("point_de_vente", "vente_liee")
+            .prefetch_related("ventes_derivees", "reglements")
+            .get(pk=vente_d_origine.pk)
         )
-
-        return render(
-            request,
-            "laboutik/partial/hx_correction_succes.html",
-            {
-                "ancien_moyen_label": ancien_moyen_label,
-                "nouveau_moyen_label": nouveau_moyen_label,
-                "ligne_uuid": str(ligne.uuid),
-                "uuid_transaction": str(ligne.uuid_transaction)
-                if ligne.uuid_transaction
-                else str(ligne.uuid),
-            },
-        )
+        context = _contexte_du_detail_d_une_vente(vente_d_origine_relue)
+        context["correction_faite"] = {
+            "ancien_moyen_label": nom_du_moyen_de_paiement(ancien_moyen),
+            "nouveau_moyen_label": nom_du_moyen_de_paiement(nouveau_moyen),
+        }
+        return render(request, "laboutik/partial/hx_detail_vente.html", context)
 
 
 # --------------------------------------------------------------------------- #

@@ -88,6 +88,10 @@ import comptabilite.tasks  # noqa: E402
 from comptabilite.models import ClotureCaisse as ClotureCaisseUnique  # noqa: E402
 from comptabilite.rapport import RapportDesVentes  # noqa: E402
 from fedow_core.models import Asset  # noqa: E402
+from fabriques_ecran import (  # noqa: E402
+    texte_sans_espaces_en_trop,
+    textes_des_elements,
+)
 from fedow_core.services import AssetService, WalletService  # noqa: E402
 from laboutik.models import (  # noqa: E402
     ArticleCommandeSauvegarde,
@@ -1597,13 +1601,23 @@ class TestVenteEnPoints(FastTenantTestCase):
 
         reponse = self.navigateur.get("/laboutik/caisse/liste-ventes/")
 
-        contenu = reponse.content.decode()
+        # Les montants s'ecrivent avec des espaces insecables : on les ramene a une
+        # espace ordinaire avant de chercher le texte.
+        # / Amounts use non-breaking spaces: collapsed before searching the text.
+        contenu_brut = reponse.content.decode()
+        contenu = texte_sans_espaces_en_trop(contenu_brut)
         assert reponse.status_code == 200, contenu[:400]
-        assert "300,00 Points fidélité" in contenu
         assert "300,00 €" not in contenu
-        # Temoin : la vente en especes reste en euros
-        # / Control: the cash sale stays in euros
-        assert "5,00 €" in contenu
+        # La plus recente d'abord : le vin (especes, temoin en euros), puis le Pin's.
+        # / Most recent first: the wine (cash, euro control), then the pin.
+        assert textes_des_elements(contenu_brut, "vente-total") == [
+            "5,00 €",
+            "300,00 Points fidélité",
+        ]
+        assert textes_des_elements(contenu_brut, "vente-moyens") == [
+            "5,00 € Espèces",
+            "300,00 Points fidélité",
+        ]
 
     def test_la_liste_des_ventes_se_filtre_sur_les_points(self):
         """Filtre « Points ou temps » : la vente en points, pas celle en especes.
@@ -1612,7 +1626,7 @@ class TestVenteEnPoints(FastTenantTestCase):
 
         reponse = self.navigateur.get("/laboutik/caisse/liste-ventes/?moyen=NM")
 
-        contenu = reponse.content.decode()
+        contenu = texte_sans_espaces_en_trop(reponse.content.decode())
         assert reponse.status_code == 200, contenu[:400]
         assert 'value="NM"' in contenu
         assert "300,00 Points fidélité" in contenu
@@ -1627,16 +1641,14 @@ class TestVenteEnPoints(FastTenantTestCase):
         ligne = LigneArticle.objects.get()
 
         reponse = self.navigateur.get(
-            f"/laboutik/caisse/detail-vente/{ligne.uuid_transaction}/"
+            f"/laboutik/caisse/detail-vente/{ligne.vente_id}/"
         )
 
         contenu = reponse.content.decode()
         assert reponse.status_code == 200, contenu[:400]
-        total_affiche = re.search(
-            r'data-testid="detail-total-transaction">([^<]*)</strong>', contenu
-        ).group(1)
-        assert total_affiche == "300,00 Points fidélité", total_affiche
-        assert "300,00 €" not in contenu
+        totaux_affiches = textes_des_elements(contenu, "detail-total-transaction")
+        assert totaux_affiches == ["300,00 Points fidélité"], totaux_affiches
+        assert "300,00 €" not in texte_sans_espaces_en_trop(contenu)
         assert 'data-testid="btn-corriger"' not in contenu
 
     def test_la_popup_client_identifie_affiche_l_adhesion_en_points(self):
@@ -1846,12 +1858,15 @@ class TestVenteEnPoints(FastTenantTestCase):
     # ------------------------------------------------------------------
 
     def _ticket_de_la_vente(self, moyen):
-        """Ticket client de la derniere vente payee par `moyen` (code DB).
-        / Customer ticket of the last sale paid with `moyen`."""
+        """Ticket client de la vente d'une ligne payee par `moyen` (code DB) : le
+        ticket lit la vente.
+        / Customer ticket of the sale of a line paid with `moyen`: it reads the sale."""
         from laboutik.printing.formatters import formatter_ticket_vente
 
-        lignes = list(LigneArticle.objects.filter(payment_method=moyen))
-        return formatter_ticket_vente(lignes, self.point_de_vente, self.admin_du_lieu, "")
+        ligne_payee_par_ce_moyen = LigneArticle.objects.filter(
+            payment_method=moyen
+        ).first()
+        return formatter_ticket_vente(ligne_payee_par_ce_moyen.vente, self.admin_du_lieu)
 
     def test_le_ticket_client_en_points_n_a_ni_euros_ni_tva(self):
         """Ticket d'un Pin's en points : unite « Points fidelite », pas de TVA.
@@ -2035,17 +2050,33 @@ class TestVenteEnPoints(FastTenantTestCase):
     # / The e-mailed Z PDF is the single closure's: test_comptabilite_exports.py.
 
     def test_le_ticket_d_une_vente_en_points_sans_monnaie_connue(self):
-        """Ligne NM dont la monnaie est introuvable : « Points ou temps », jamais EUR.
-        / NM line with an unknown currency: "Points ou temps", never EUR."""
-        self._creer_ligne_de_caisse(
-            self.tarif_pins,
-            PaymentMethod.NON_MONETAIRE,
-            PRIX_PINS_EN_CENTIEMES_DE_POINTS,
-            1,
-            asset=None,
+        """Vente en points dont la monnaie est introuvable : « Points ou temps »,
+        jamais EUR. Le ticket lit la vente : elle est ecrite par le service de vente,
+        dans une unite (uuid) qu'aucune monnaie du lieu ne porte.
+        / Points sale with an unknown currency: "Points ou temps", never EUR."""
+        produit_vendu = ProductSold.objects.create(product=self.tarif_pins.product)
+        tarif_vendu = PriceSold.objects.create(
+            productsold=produit_vendu, price=self.tarif_pins, prix=self.tarif_pins.prix
         )
+        vente = self._vente_reglee_au_comptoir(
+            unite=str(uuid_module.uuid4()),
+            articles=[{
+                "pricesold": tarif_vendu,
+                "quantite": Decimal("1"),
+                "prix_unitaire": PRIX_PINS_EN_CENTIEMES_DE_POINTS,
+                "taux_tva": Decimal("0"),
+                "payment_method": PaymentMethod.NON_MONETAIRE,
+                "status": LigneArticle.VALID,
+                "point_de_vente": self.point_de_vente,
+            }],
+            reglements=[{
+                "moyen": PaymentMethod.NON_MONETAIRE,
+                "montant": PRIX_PINS_EN_CENTIEMES_DE_POINTS,
+            }],
+        )
+        from laboutik.printing.formatters import formatter_ticket_vente
 
-        ticket = self._ticket_de_la_vente(PaymentMethod.NON_MONETAIRE)
+        ticket = formatter_ticket_vente(vente, self.admin_du_lieu)
 
         assert ticket["unite"] == "Points ou temps"
         assert ticket["tva_breakdown"] == []
@@ -2202,9 +2233,12 @@ class TestVenteEnPoints(FastTenantTestCase):
 
         reponse = self.navigateur.get("/laboutik/caisse/liste-ventes/")
 
-        contenu = reponse.content.decode()
+        contenu_brut = reponse.content.decode()
+        contenu = texte_sans_espaces_en_trop(contenu_brut)
         assert reponse.status_code == 200, contenu[:400]
-        assert "300,00 Points ou temps" in contenu
+        assert textes_des_elements(contenu_brut, "vente-total") == [
+            "300,00 Points ou temps"
+        ]
         assert "300,00 €" not in contenu
 
     # ------------------------------------------------------------------
@@ -2285,22 +2319,20 @@ class TestVenteEnPoints(FastTenantTestCase):
         assert ligne_locale.total() == 500
 
     def test_le_detail_d_une_vente_repartie_tombe_juste(self):
-        """Detail de la vente a la caisse : 10,50 €, et 5,00 € pour la ligne locale.
-        / Sale detail: 10.50 €, and 5.00 € for the local-currency line."""
-        uuid_de_la_vente, _lignes = self._trois_jus_repartis_carte_et_monnaie_locale()
+        """Detail de la vente a la caisse : 10,50 €, et UN article de 10,50 € (les
+        deux parts 500 + 550 forment un seul article).
+        / Sale detail: 10.50 €, and ONE 10.50 € item (both parts form one item)."""
+        _uuid_du_paiement, lignes = self._trois_jus_repartis_carte_et_monnaie_locale()
+        uuid_de_la_vente = lignes[0].vente_id
 
         reponse = self.navigateur.get(f"/laboutik/caisse/detail-vente/{uuid_de_la_vente}/")
 
         contenu = reponse.content.decode()
         assert reponse.status_code == 200, contenu[:400]
-        total_affiche = re.search(
-            r'data-testid="detail-total-transaction">([^<]*)</strong>', contenu
-        ).group(1)
-        assert total_affiche == "10,50 €", total_affiche
-        totaux_des_lignes = re.findall(
-            r'data-testid="detail-total-ligne">([^<]*)</td>', contenu
-        )
-        assert sorted(totaux_des_lignes) == ["5,00 €", "5,50 €"], totaux_des_lignes
+        totaux_de_la_vente = textes_des_elements(contenu, "detail-total-transaction")
+        assert totaux_de_la_vente == ["10,50 €"], totaux_de_la_vente
+        totaux_des_lignes = textes_des_elements(contenu, "detail-total-ligne")
+        assert totaux_des_lignes == ["10,50 €"], totaux_des_lignes
 
     def test_la_liste_des_ventes_filtree_sur_la_monnaie_locale_tombe_juste(self):
         """Liste des ventes filtree sur la monnaie locale : 5,00 € (et non 4,99 €).
@@ -2309,7 +2341,14 @@ class TestVenteEnPoints(FastTenantTestCase):
 
         reponse = self.navigateur.get("/laboutik/caisse/liste-ventes/?moyen=LE")
 
-        contenu = reponse.content.decode()
+        contenu_brut = reponse.content.decode()
+        contenu = texte_sans_espaces_en_trop(contenu_brut)
         assert reponse.status_code == 200, contenu[:400]
-        assert "5,00 €" in contenu
         assert "4,99 €" not in contenu
+        # Toute la vente (10,50 €), et sa part en monnaie locale (5,00 €, jamais
+        # 4,99 €) dans les moyens en clair.
+        # / The whole sale, and its local currency part (5.00 €, never 4.99 €).
+        assert textes_des_elements(contenu_brut, "vente-total") == ["10,50 €"]
+        assert textes_des_elements(contenu_brut, "vente-moyens") == [
+            "5,50 € Carte bancaire + 5,00 € Monnaie locale en points"
+        ]

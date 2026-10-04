@@ -415,7 +415,7 @@ class TestAvoirsHorsStripe:
             )
 
     def test_annuler_une_reservation_admin_especes_cree_son_avoir(
-        self, api_client, auth_headers, tenant
+        self, api_client, auth_headers, tenant, admin_user
     ):
         """Réservation admin de 3 billets en espèces annulée : un avoir de 3 billets, total payé à 0.
         / 3-ticket admin cash reservation cancelled: one 3-ticket credit note, total paid at 0.
@@ -447,13 +447,30 @@ class TestAvoirsHorsStripe:
                 f"Avoir compté : total payé attendu 0, obtenu {reservation_admin.total_paid()}"
             )
 
-            # La fiche utilisateur de l'admin recalcule le montant payé à sa façon.
-            # / The admin user page computes the paid amount its own way.
-            from Administration.admin_tenant import _lignes_payees_prefetch
-            montant_admin = sum(
-                int(ligne.amount * ligne.qty) for ligne in _lignes_payees_prefetch(reservation_admin)
+            # La fiche utilisateur de l'admin calcule le montant payé à sa façon : on lit
+            # celui qu'elle affiche pour cette réservation. Un client neuf : la session
+            # d'un client partagé peut avoir été annulée par un test `django_db`
+            # (tests/PIEGES.md 13.10).
+            # / The admin user page computes the paid amount its own way: read the one it
+            # shows. A fresh client: a shared client's session may have been rolled back.
+            from django.test import Client as DjangoClient
+
+            client_de_l_admin = DjangoClient(HTTP_HOST="lespass.tibillet.localhost")
+            client_de_l_admin.force_login(admin_user)
+            reponse = client_de_l_admin.get(
+                f"/admin/AuthBillet/humanuser/{reservation_admin.user_commande.pk}/change/"
             )
-            assert montant_admin == 0, f"Montant payé côté admin attendu 0, obtenu {montant_admin}"
+            assert reponse.status_code == 200
+            montants_affiches_pour_la_reservation = []
+            reservations_affichees = (
+                reponse.context["evenements_a_venir"] + reponse.context["evenements_passes"]
+            )
+            for reservation_affichee in reservations_affichees:
+                if str(reservation_admin.pk) in (reservation_affichee["url"] or ""):
+                    montants_affiches_pour_la_reservation.append(reservation_affichee["montant"])
+            assert montants_affiches_pour_la_reservation == [0], (
+                f"Montant payé côté admin attendu 0, obtenu {montants_affiches_pour_la_reservation}"
+            )
 
     def test_trois_billets_admin_annules_un_par_un_creent_trois_avoirs_d_un_billet(
         self, api_client, auth_headers, tenant
@@ -560,11 +577,20 @@ class TestAvoirsHorsStripe:
         """_lignes_hors_stripe() ne renvoie que les lignes rattachées à la réservation.
         / _lignes_hors_stripe() only returns the lines linked to the reservation.
 
-        Ni la vente d'un autre client, ni une ancienne ligne sans réservation.
-        / Neither another customer's sale, nor an old line without reservation.
+        Ni la vente d'un autre client, ni la ligne d'une vente en espèces sans réservation
+        (même tarif vendu), écrite par le service de vente.
+        / Neither another customer's sale, nor the line of a cash sale without
+        reservation (same sold price), written by the sale service.
         """
         from django_tenants.utils import tenant_context
         from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+        from BaseBillet.models_vente import Vente
+        from BaseBillet.services_vente import (
+            ajouter_article,
+            ajouter_reglement,
+            encaisser_vente,
+            ouvrir_vente,
+        )
 
         event_uuid, price_uuid = creer_evenement_et_produit(api_client, auth_headers, identifiant_aleatoire())
         reservation_admin, ligne_admin = vente_admin_especes(tenant, event_uuid, price_uuid, qty=2)
@@ -574,11 +600,20 @@ class TestAvoirsHorsStripe:
         )
 
         with tenant_context(tenant):
-            ancienne_ligne_sans_reservation = LigneArticle.objects.create(
-                pricesold=ligne_admin.pricesold, qty=1, amount=1000,
-                payment_method=PaymentMethod.CASH, status=LigneArticle.VALID,
-                sale_origin=SaleOrigin.ADMIN,
+            vente_sans_reservation = ouvrir_vente(
+                origine=SaleOrigin.ADMIN, nature=Vente.Nature.VENTE
             )
+            ajouter_article(
+                vente_sans_reservation,
+                pricesold=ligne_admin.pricesold,
+                quantite=Decimal("1"),
+                prix_unitaire=1000,
+                taux_tva=Decimal(ligne_admin.vat),
+                payment_method=PaymentMethod.CASH,
+                status=LigneArticle.VALID,
+            )
+            ajouter_reglement(vente_sans_reservation, moyen=PaymentMethod.CASH, montant=1000)
+            encaisser_vente(vente_sans_reservation)
 
         with tenant_context(tenant):
             assert list(reservation_admin._lignes_hors_stripe()) == [ligne_admin]

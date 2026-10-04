@@ -145,6 +145,25 @@ def euros_a_la_francaise(montant_en_centimes):
     return f"{_nombre_a_deux_decimales(montant_en_centimes)}{ESPACE_INSECABLE}€"
 
 
+def montant_a_la_francaise_dans_l_unite(montant_en_centiemes, nom_de_l_unite):
+    """
+    Écrit un montant dans son unité, à la française : en euros sans nom d'unité
+    (« 10,50 € »), sinon suivi du nom de la monnaie de points ou de temps
+    (30000, « Points fidélité » → « 300,00 Points fidélité »). Les points et les
+    heures sont comptés en centièmes, comme les centimes.
+    / Writes an amount in its unit, French style: euros without a unit name,
+    otherwise followed by the points or time currency name.
+
+    :param montant_en_centiemes: un entier (None vaut 0)
+    :param nom_de_l_unite: "" pour les euros, sinon le nom de la monnaie
+    :return: le texte du montant
+    """
+    if not nom_de_l_unite:
+        return euros_a_la_francaise(montant_en_centiemes)
+    nombre = _nombre_a_deux_decimales(montant_en_centiemes)
+    return f"{nombre}{ESPACE_INSECABLE}{nom_de_l_unite}"
+
+
 def quantite_lisible(quantite_en_texte):
     """
     Une quantité du rapport (un `Decimal` écrit en texte, ex. « 3.000000 ») sans zéros

@@ -900,19 +900,58 @@ MOYEN_DE_REPLI_PAR_CATEGORIE_DE_MONNAIE = {
 }
 
 
+def noms_des_monnaies(uuids_des_monnaies):
+    """
+    Le nom lisible de plusieurs monnaies, cherché dans les deux moteurs (fedow_core
+    d'abord, puis l'ancien Fedow pour celles qui n'y sont pas), en deux requêtes au
+    plus, quel que soit le nombre de monnaies.
+    / The readable names of several currencies, looked up in both engines, in two
+    queries at most.
+
+    LOCALISATION : laboutik/plan_comptable.py
+
+    Une monnaie introuvable dans les deux moteurs n'est pas dans le dictionnaire :
+    l'appelant choisit son repli.
+    / A currency found in neither engine is left out: the caller picks its fallback.
+
+    :param uuids_des_monnaies: uuids (objets UUID ou textes)
+    :return: dict {uuid en texte: nom}
+    """
+    uuids_en_texte = set()
+    for uuid_de_la_monnaie in uuids_des_monnaies:
+        uuids_en_texte.add(str(uuid_de_la_monnaie))
+
+    nom_par_uuid = {}
+    if not uuids_en_texte:
+        return nom_par_uuid
+
+    monnaies_fedow_core = list(Asset.objects.filter(uuid__in=uuids_en_texte))
+    for monnaie in monnaies_fedow_core:
+        nom_par_uuid[str(monnaie.uuid)] = monnaie.name
+
+    uuids_pas_encore_trouves = set()
+    for uuid_en_texte in uuids_en_texte:
+        if uuid_en_texte not in nom_par_uuid:
+            uuids_pas_encore_trouves.add(uuid_en_texte)
+    if not uuids_pas_encore_trouves:
+        return nom_par_uuid
+
+    monnaies_de_l_ancien_fedow = list(
+        AssetFedowPublic.objects.filter(uuid__in=uuids_pas_encore_trouves)
+    )
+    for monnaie in monnaies_de_l_ancien_fedow:
+        nom_par_uuid[str(monnaie.uuid)] = monnaie.name
+    return nom_par_uuid
+
+
 def nom_de_la_monnaie(asset_uuid):
     """
     Le nom lisible d'une monnaie, cherché dans les deux moteurs (fedow_core, puis
-    ancien Fedow). L'uuid en texte si elle est introuvable.
+    ancien Fedow) par `noms_des_monnaies`. L'uuid en texte si elle est introuvable.
     / The readable name of a currency, looked up in both engines.
     """
-    monnaie_fedow_core = Asset.objects.filter(uuid=asset_uuid).first()
-    if monnaie_fedow_core is not None:
-        return monnaie_fedow_core.name
-    monnaie_ancien_fedow = AssetFedowPublic.objects.filter(uuid=asset_uuid).first()
-    if monnaie_ancien_fedow is not None:
-        return monnaie_ancien_fedow.name
-    return str(asset_uuid)
+    nom_par_uuid = noms_des_monnaies([asset_uuid])
+    return nom_par_uuid.get(str(asset_uuid), str(asset_uuid))
 
 
 def _ligne_d_une_monnaie(asset_uuid, nom, categorie, est_du_lieu):

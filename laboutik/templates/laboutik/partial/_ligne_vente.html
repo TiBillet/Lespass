@@ -1,23 +1,41 @@
-{% load i18n laboutik_filters %}
+{% load i18n %}
 {% comment %}
-UNE LIGNE DE L'HISTORIQUE DE COMMANDE
-/ One row of the order history
+UNE LIGNE DE L'HISTORIQUE DE COMMANDE : UNE VENTE
+/ One row of the order history: one sale
 
 LOCALISATION : laboutik/templates/laboutik/partial/_ligne_vente.html
-Inclus par hx_liste_ventes.html (page 1 et scroll infini).
-Clic → toggleDetailVente() (hx_liste_ventes.html) → detail sous la ligne.
+Inclus par hx_liste_ventes.html (premiere page et scroll infini).
+Clic sur la ligne → toggleDetailVente() (hx_liste_ventes.html) → detail de la vente
+sous la ligne. La ligne reste une ligne de tableau ; pour le clavier et les lecteurs
+d'ecran, la cellule du numero porte un vrai bouton (`aria-expanded`,
+`aria-controls` vers la ligne du detail) : Entree ou Espace sur le bouton fait un
+clic, qui remonte jusqu'a la ligne.
 
-Parametres : vente (dict de ventes_groupees), params_ventes,
-numero_ligne (page 1 seulement ; absent en scroll infini → testid "vente-ligne-scroll").
+Parametres : vente (un dict de `lignes_de_la_liste_des_ventes`,
+laboutik/affichage_des_ventes.py : uuid, numero, heure, nature, badge_de_la_nature,
+nom_pv, total_a_la_francaise, moyens_en_clair, nombre_d_articles), params_ventes,
+numero_ligne (premiere page seulement ; absent en scroll infini → testid
+"vente-ligne-scroll").
+Les montants arrivent deja ecrits a la francaise : aucun calcul ici.
+/ Parameters: one row dict; amounts already written, no computation here.
 {% endcomment %}
 <tr class="ventes-ligne-cliquable"
-    {% if vente.cle_vente %}
-    onclick="toggleDetailVente(this, '{% url 'laboutik-caisse-detail_vente' vente.cle_vente %}?{{ params_ventes }}')"
-    {% endif %}
+    data-url-du-detail="{% url 'laboutik-caisse-detail_vente' vente.uuid %}?{{ params_ventes }}"
+    data-uuid-de-la-vente="{{ vente.uuid }}"
+    onclick="toggleDetailVente(this, this.dataset.urlDuDetail)"
     data-testid="{% if numero_ligne %}vente-ligne-{{ numero_ligne }}{% else %}vente-ligne-scroll{% endif %}">
-    <td>{{ vente.derniere_datetime|date:"H:i" }}</td>
-    <td>{{ vente.nb_articles }} {% translate "article(s)" %}</td>
-    <td><span class="ventes-badge-moyen ventes-badge-{{ vente.moyen_paiement }}">{{ vente.moyen_paiement_label|default:vente.moyen_paiement }}</span></td>
-    <td{% if not vente.nom_pv %} class="muted"{% endif %}>{{ vente.nom_pv|default:_("Non attribué") }}</td>
-    <td class="num">{{ vente.total|montant_dans_la_monnaie:vente.unite }}</td>
+    <td data-testid="vente-numero">
+        <button type="button"
+                class="ventes-ligne-bouton"
+                aria-expanded="false"
+                aria-controls="detail-vente-{{ vente.uuid }}"
+                aria-label="{% blocktrans with numero=vente.numero %}Détail de la vente n° {{ numero }}{% endblocktrans %}"
+                data-testid="vente-bouton-detail">{{ vente.numero }}</button>
+    </td>
+    <td data-testid="vente-heure">{{ vente.heure }}</td>
+    <td><span class="ventes-badge-nature ventes-badge-nature-{{ vente.nature }}" data-testid="vente-nature">{{ vente.badge_de_la_nature }}</span></td>
+    <td data-testid="vente-nombre-articles">{{ vente.nombre_d_articles }} {% translate "article(s)" %}</td>
+    <td data-testid="vente-moyens">{{ vente.moyens_en_clair }}</td>
+    <td{% if not vente.nom_pv %} class="muted"{% endif %} data-testid="vente-point-de-vente">{{ vente.nom_pv|default:"—" }}</td>
+    <td class="num" data-testid="vente-total">{{ vente.total_a_la_francaise }}</td>
 </tr>

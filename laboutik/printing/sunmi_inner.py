@@ -66,6 +66,17 @@ def ticket_data_to_json_commands(ticket_data):
             "size": 2,
             "align": "center",
         })
+    # Le numero du justificatif (ticket de vente : « Vente n° 12 »). Meme regle que
+    # escpos_builder.
+    # / The receipt number. Same rule as escpos_builder.
+    numero_du_justificatif = header.get("numero", "")
+    if numero_du_justificatif:
+        commands.append({
+            "type": "text",
+            "value": numero_du_justificatif,
+            "bold": True,
+            "align": "center",
+        })
     if subtitle:
         commands.append({
             "type": "text",
@@ -84,6 +95,25 @@ def ticket_data_to_json_commands(ticket_data):
             "value": "--------------------------------",
             "align": "left",
         })
+
+    # --- Mention DUPLICATA (en haut, bien visible), puis la date de cette
+    # impression. Meme regle que escpos_builder.
+    # / DUPLICATE mention, then this print's date. Same rule as escpos_builder.
+    if ticket_data.get("is_duplicata", False):
+        commands.append({
+            "type": "text",
+            "value": "*** DUPLICATA ***",
+            "bold": True,
+            "size": 2,
+            "align": "center",
+        })
+        date_d_impression = header.get("date_d_impression", "")
+        if date_d_impression:
+            commands.append({
+                "type": "text",
+                "value": f"Imprimé le {date_d_impression}",
+                "align": "center",
+            })
 
     # --- Articles ---
     # / Articles
@@ -106,9 +136,11 @@ def ticket_data_to_json_commands(ticket_data):
         article_price = article.get("price", 0)
         article_total = article.get("total", 0)
 
-        # Meme logique que escpos_builder : price > 0 = format vente, sinon cuisine
-        # / Same logic as escpos_builder: price > 0 = sale format, otherwise kitchen
-        article_a_un_prix = (article_price is not None and article_price > 0)
+        # Meme logique que escpos_builder : un prix non nul (negatif compris) =
+        # format vente, sinon cuisine.
+        # / Same logic as escpos_builder: a non-zero price (negative included) =
+        #   sale format, otherwise kitchen.
+        article_a_un_prix = article_price is not None and article_price != 0
 
         if article_a_un_prix:
             total_euros = f"{article_total / 100:.2f}"
@@ -121,6 +153,16 @@ def ticket_data_to_json_commands(ticket_data):
             "value": line,
             "align": "left",
         })
+
+        # La part offerte d'un article, sous l'article. Meme regle que escpos_builder.
+        # / An item's offered part, under the item. Same rule as escpos_builder.
+        detail_offert = article.get("detail_offert")
+        if detail_offert:
+            commands.append({
+                "type": "text",
+                "value": detail_offert,
+                "align": "left",
+            })
 
     if articles:
         commands.append({
@@ -135,7 +177,11 @@ def ticket_data_to_json_commands(ticket_data):
     total_amount = total_data.get("amount", 0)
     total_label = total_data.get("label", "")
 
-    if total_amount:
+    # Le TOTAL est imprime meme a 0 (articles offerts, retour de consigne), comme
+    # escpos_builder.
+    # / TOTAL printed even at 0, like escpos_builder.
+    total_est_present = "amount" in total_data and total_amount is not None
+    if total_est_present:
         total_euros = f"{total_amount / 100:.2f}"
         commands.append({
             "type": "text",

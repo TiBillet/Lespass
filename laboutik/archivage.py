@@ -336,7 +336,7 @@ def _extraire_clotures(debut, fin):
     ).order_by('numero_sequentiel')
 
     if debut is not None:
-        clotures = clotures.filter(datetime_fin__gte=debut)
+        clotures = clotures.filter(datetime_fin__gt=debut)
     if fin is not None:
         clotures = clotures.filter(datetime_fin__lte=fin)
 

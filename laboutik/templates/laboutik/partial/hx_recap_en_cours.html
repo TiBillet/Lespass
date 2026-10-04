@@ -1,4 +1,4 @@
-{% load i18n laboutik_filters %}
+{% load i18n %}
 {% comment %}
 ECRAN VENTES — Ticket X du service en cours (lecture seule)
 / SALES SCREEN — Ticket X of the current shift (read-only)
@@ -9,30 +9,21 @@ Style : static/css/ventes.css
 
 Vue : CaisseViewSet.recap_en_cours (laboutik/views.py), via _rendre_vue_ventes.
 
-DEUX RENDUS SELON LA CIBLE HTMX :
-1. Cible "detail-contenu" : un historique est ouvert en bas de l'ecran.
-   On ne rend que le tableau demande (vue=detail_articles ou vue=par_moyen).
-   Voir laboutik/partial/_ventes_historique_recap.html.
-2. Sinon (page complete ou #ventes-zone) : l'ecran Ventes complet.
-   - Chiffres du haut : chiffre d'affaires TTC, fond de caisse et solde, actions.
-   - Les sections du rapport X du service en cours (rapport des ventes unique),
-     ecrites par comptabilite/presentation.py : l'essentiel ouvert, le reste replie.
-   - Trois boutons d'historique (un seul ouvert a la fois).
-   - Popups : fond de caisse (#ventes-modal), cloture (#cloture-modal).
-   Si ?vue=detail_articles ou ?vue=par_moyen : l'historique est deja ouvert.
+L'ECRAN (page complete ou #ventes-zone) :
+- Chiffres du haut : chiffre d'affaires TTC, fond de caisse et solde, actions.
+- Les sections du rapport X du service en cours (rapport des ventes unique),
+  ecrites par comptabilite/presentation.py : l'essentiel ouvert, le reste replie
+  (reglements et detail des ventes par article compris).
+- Le bouton « Historique de commande » : la liste des ventes, en bas de l'ecran.
+- Popups : fond de caisse (#ventes-modal), cloture (#cloture-modal).
 
 COMMUNICATION :
 - "Modifier" (fond) → hx-get fond_de_caisse → #ventes-modal (hx_fond_de_caisse.html)
 - "Sortie de caisse" → hx-get sortie_de_caisse → #ventes-zone (hx_sortie_de_caisse.html)
-- Historiques → basculerHistorique() → htmx.ajax GET → #detail-contenu
+- Historique de commande → basculerHistorique() → htmx.ajax GET liste_ventes → #detail-contenu
 - "Confirmer la cloture" → hx-post cloturer → #ventes-zone (hx_cloture_rapport.html)
 - Zone retour du header : renvoyee en hx-swap-oob (_hdr_retour_zone.html)
 {% endcomment %}
-
-{% if request.htmx.target == "detail-contenu" %}
-  {# --- 1. Fragment : seulement le tableau d'historique / History table only --- #}
-  {% include "laboutik/partial/_ventes_historique_recap.html" %}
-{% else %}
 
   {# Remet le header sur « Ventes », retour vers la caisse (utile en revenant de Sortie) #}
   {# / Resets the header to "Sales", back to the POS (useful when coming back from Withdrawal) #}
@@ -139,60 +130,30 @@ COMMUNICATION :
           {% endfor %}
         </div>
 
-        {# ============ HISTORIQUES / HISTORIES ============ #}
-        {# Un seul historique ouvert a la fois. Re-cliquer le bouton actif le ferme. #}
-        {# / Only one history open at a time. Clicking the active button closes it. #}
+        {# ============ HISTORIQUE DE COMMANDE / ORDER HISTORY ============ #}
+        {# La liste des ventes du service s'ouvre en bas de l'ecran ; re-cliquer le #}
+        {# bouton la ferme. Les reglements et le detail des ventes par article sont #}
+        {# deja dans les sections du rapport ci-dessus. #}
+        {# / The service's sales list opens below; payments and detail by item are #}
+        {# already in the report sections above. #}
         <div class="detail-toggle" role="group" aria-label="{% translate 'Historiques' %}">
-          <button type="button" class="voir-detail"
-                  aria-pressed="{% if vue == 'detail_articles' %}true{% else %}false{% endif %}"
-                  aria-controls="detail-section"
-                  data-url="{% url 'laboutik-caisse-recap_en_cours' %}?vue=detail_articles&{{ params_ventes }}"
-                  data-titre="{% translate 'Historique de vente par article' %}"
-                  onclick="basculerHistorique(this)"
-                  data-testid="btn-historique-ventes">
-            <span>{% translate "Historique de vente" %}</span>
-            <span class="voir-detail-chevron" aria-hidden="true"></span>
-          </button>
           <button type="button" class="voir-detail"
                   aria-pressed="false"
                   aria-controls="detail-section"
                   data-url="{% url 'laboutik-caisse-liste_ventes' %}?{{ params_ventes }}"
-                  data-titre="{% translate 'Historique de commande' %}"
                   onclick="basculerHistorique(this)"
                   data-testid="btn-historique-commandes">
             <span>{% translate "Historique de commande" %}</span>
             <span class="voir-detail-chevron" aria-hidden="true"></span>
           </button>
-          <button type="button" class="voir-detail"
-                  aria-pressed="{% if vue == 'par_moyen' %}true{% else %}false{% endif %}"
-                  aria-controls="detail-section"
-                  data-url="{% url 'laboutik-caisse-recap_en_cours' %}?vue=par_moyen&{{ params_ventes }}"
-                  data-titre="{% translate 'Lignes de caisse (hors ventes en ligne, recharges comprises)' %}"
-                  onclick="basculerHistorique(this)"
-                  data-testid="btn-historique-synthese">
-            <span>{% translate "Lignes de caisse" %}</span>
-            <span class="voir-detail-chevron" aria-hidden="true"></span>
-          </button>
         </div>
 
         <section class="detail-section" id="detail-section"
-                 aria-labelledby="detail-titre"
-                 {% if vue != 'detail_articles' and vue != 'par_moyen' %}hidden{% endif %}>
+                 aria-labelledby="detail-titre" hidden>
           <div class="detail-head">
-            <h3 id="detail-titre">
-              {# « Lignes de caisse » : l'ancien calcul, par lignes de la caisse et de la #}
-              {# tireuse, recharges comprises ; différent du chiffre d'affaires par moyen #}
-              {# des sections ci-dessus (toutes origines, sans recharges). #}
-              {# / Old computation by register lines, top-ups included: differs from the #}
-              {# revenue by method above. #}
-              {% if vue == 'detail_articles' %}{% translate "Historique de vente par article" %}{% elif vue == 'par_moyen' %}{% translate "Lignes de caisse (hors ventes en ligne, recharges comprises)" %}{% endif %}
-            </h3>
+            <h3 id="detail-titre">{% translate "Historique de commande" %}</h3>
           </div>
-          <div id="detail-contenu" class="detail-contenu" aria-live="polite">
-            {% if vue == 'detail_articles' or vue == 'par_moyen' %}
-              {% include "laboutik/partial/_ventes_historique_recap.html" %}
-            {% endif %}
-          </div>
+          <div id="detail-contenu" class="detail-contenu" aria-live="polite"></div>
         </section>
 
         {# ============ POPUP CLOTURE / CLOSURE POPUP ============ #}
@@ -228,39 +189,29 @@ COMMUNICATION :
 
         <script>
           /**
-           * Ouvre ou ferme un historique en bas de l'ecran Ventes
-           * / Opens or closes a history at the bottom of the Sales screen
+           * Ouvre ou ferme l'historique de commande en bas de l'ecran Ventes
+           * / Opens or closes the order history at the bottom of the Sales screen
            *
            * LOCALISATION : laboutik/templates/laboutik/partial/hx_recap_en_cours.html
            *
-           * Les trois boutons .voir-detail marchent comme un seul interrupteur :
-           * - clic sur le bouton deja actif → on ferme la section ;
-           * - clic sur un autre bouton → on l'active et on charge son tableau.
-           * Le tableau vient du serveur (HTMX) : data-url du bouton → #detail-contenu.
-           * Le serveur voit la cible "detail-contenu" et ne renvoie que le tableau.
+           * Le bouton est un interrupteur : ouvert → on ferme la section ; ferme →
+           * on l'ouvre et on charge la liste. La liste vient du serveur (HTMX) :
+           * data-url du bouton → #detail-contenu ; le serveur voit la cible
+           * "detail-contenu" et ne renvoie que la liste.
            *
-           * @param {HTMLButtonElement} boutonClique - le bouton .voir-detail clique
+           * @param {HTMLButtonElement} boutonClique - le bouton « Historique de commande »
            */
           function basculerHistorique(boutonClique) {
             const sectionHistorique = document.getElementById('detail-section')
-            const titreHistorique = document.getElementById('detail-titre')
             const historiqueDejaOuvert = boutonClique.getAttribute('aria-pressed') === 'true'
 
-            // On eteint tous les boutons / Turn every button off
-            const tousLesBoutons = document.querySelectorAll('.voir-detail')
-            for (const bouton of tousLesBoutons) {
-              bouton.setAttribute('aria-pressed', 'false')
-            }
-
-            // Deuxieme clic sur le meme bouton : on ferme / Second click on same button: close
             if (historiqueDejaOuvert) {
+              boutonClique.setAttribute('aria-pressed', 'false')
               sectionHistorique.hidden = true
               return
             }
 
-            // On allume ce bouton et on charge son tableau / Turn this one on and load its table
             boutonClique.setAttribute('aria-pressed', 'true')
-            titreHistorique.textContent = boutonClique.dataset.titre
             sectionHistorique.hidden = false
             htmx.ajax('GET', boutonClique.dataset.url, { target: '#detail-contenu', swap: 'innerHTML' })
           }
@@ -268,4 +219,3 @@ COMMUNICATION :
       {% endif %}
     </div>
   </div>
-{% endif %}

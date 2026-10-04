@@ -8,17 +8,27 @@ LOCALISATION : laboutik/printing/formatters.py
 
 Chaque formatter retourne un dict avec la structure suivante :
 {
-    "header": {"title": str, "subtitle": str, "date": str},
-    "articles": [{"name": str, "qty": int, "price": int, "total": int}],
+    "header": {"title": str, "subtitle": str, "date": str,
+               "numero": str (facultatif, « Vente n° 12 »),
+               "date_d_impression": str (facultatif, imprimee sur un DUPLICATA)},
+    "articles": [{"name": str, "qty": int, "price": int, "total": int,
+                  "weight_detail": str (facultatif), "detail_offert": str (facultatif)}],
     "total": {"amount": int, "label": str},
     "qrcode": str or None,
     "footer": [str, ...],
 }
 
-Les montants sont en centimes (int). Le builder ESC/POS les convertit en euros.
+Les montants sont en centimes (int), signes (un retour de consigne, un moyen
+rembourse sont negatifs). Les imprimantes (escpos_builder.py, sunmi_inner.py) les
+convertissent en euros.
+Le ticket de vente (`formatter_ticket_vente`) lit la `Vente` : aucun calcul d'argent
+ici, les montants sont ceux figes sur la vente, ses lignes et ses reglements.
+/ Amounts are signed whole cents. The sale receipt reads the sale: no money
+computation here.
 """
 
-from decimal import ROUND_HALF_UP, Decimal
+import textwrap
+from decimal import Decimal
 
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -30,34 +40,96 @@ from comptabilite.presentation import (
     lignes_du_tiroir,
 )
 from comptabilite.rapport import CLE_PLUSIEURS_MOYENS, nom_du_moyen_de_paiement
+from laboutik.affichage_des_ventes import (
+    articles_de_la_vente_pour_l_affichage,
+    nom_de_l_unite_de_la_vente,
+    noms_des_monnaies_des_ventes,
+    reglements_pour_l_affichage,
+)
 
 
-def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
+def _lignes_du_pied_du_ticket_de_vente(pied_ticket):
     """
-    Formate un ticket de vente client (apres paiement).
+    Le pied de ticket choisi par le lieu, replie en lignes de 32 caracteres au plus
+    (papier 58 mm), coupees entre deux mots : l'imprimante ne coupe pas une ligne
+    trop longue au milieu d'un mot. Un retour a la ligne du lieu est garde.
+    / The venue's footer folded into lines of 32 characters at most, cut between
+    words. The venue's own line breaks are kept.
+
+    Une ligne vide voulue par le lieu (pour aerer le pied) est gardee : `textwrap`
+    ne rend rien pour un texte vide, on la remet a la main.
+    / A blank line wanted by the venue is kept (`textwrap` returns nothing for it).
+
+    :param pied_ticket: le texte (`LaboutikConfiguration.pied_ticket`), peut etre vide
+    :return: liste de lignes
+    """
+    lignes_du_pied = []
+    paragraphes_du_pied = pied_ticket.splitlines()
+    for paragraphe in paragraphes_du_pied:
+        if not paragraphe.strip():
+            lignes_du_pied.append("")
+            continue
+        lignes_repliees = textwrap.wrap(paragraphe, width=LARGEUR_D_UNE_LIGNE_DE_TICKET)
+        lignes_du_pied.extend(lignes_repliees)
+    return lignes_du_pied
+
+
+def formatter_ticket_vente(vente, operateur):
+    """
+    Formate le ticket client d'une vente (`Vente`) : vente, re-impression, DUPLICATA.
     Inclut les mentions legales (raison sociale, SIRET, TVA) conformement LNE exigence 3.
-    / Formats a customer sale ticket (after payment).
-    Includes legal mentions (business name, SIRET, VAT) per LNE requirement 3.
+    / Formats the customer receipt of a sale. Includes legal mentions (LNE req. 3).
 
     LOCALISATION : laboutik/printing/formatters.py
 
-    :param lignes_articles: QuerySet ou list de LigneArticle
-    :param pv: PointDeVente
-    :param operateur: TibilletUser (caissier)
-    :param moyen_paiement: str (ex: "Especes", "CB", "NFC")
+    LE TICKET LIT LA VENTE, sans aucun calcul d'argent :
+    - en-tete : le point de vente, le NUMERO DE LA VENTE (« Vente n° 12 », « Avoir
+      n° 13 » pour un avoir ; sequence sans trou du lieu), l'operateur, la date de
+      l'ENCAISSEMENT dans le fuseau du lieu ; un DUPLICATA imprime en plus la date
+      d'impression (`date_d_impression`) ;
+    - articles : ceux du detail de la vente a l'ecran
+      (`articles_de_la_vente_pour_l_affichage`, laboutik/affichage_des_ventes.py) :
+      les parts d'un article paye avec plusieurs moyens forment UN article, avec sa
+      quantite reelle ; le nom du produit, puis celui du tarif s'il est different,
+      puis l'evenement et sa date ; sa part offerte est imprimee sous l'article ;
+    - TOTAL : le net vendu de la vente (`Vente.total_ttc`) ;
+    - TVA par taux : la somme des HT et des TVA figes sur les lignes ;
+    - detail des reglements : libelles et ordre de la liste des ventes
+      (`reglements_pour_l_affichage`), sans l'offert (montre sous l'article) ; les
+      imprimantes ne l'impriment qu'avec au moins deux moyens ;
+    - pied : le pied du lieu, replie en lignes de 32 caracteres.
+    / The receipt reads the sale, no money computation.
+
+    APPELE PAR : laboutik/views.py, `PaiementViewSet.imprimer_ticket`.
+
+    :param vente: la `Vente` reglee
+    :param operateur: TibilletUser (caissier), ou None
     :return: dict ticket_data
     """
-    from BaseBillet.models import Configuration, PaymentMethod
-    from fedow_core.models import Asset as FedowAsset
+    from BaseBillet.models import Configuration, LigneArticle
+    from BaseBillet.models_vente import Vente
     from laboutik.models import LaboutikConfiguration
-    from django.db.models import F
-
-    now = timezone.localtime(timezone.now())
 
     # --- Infos legales depuis Configuration (singleton du tenant) ---
     # / Legal info from Configuration (tenant singleton)
     config = Configuration.get_solo()
     laboutik_config = LaboutikConfiguration.get_solo()
+
+    # Les dates du ticket, dans le fuseau du lieu : l'encaissement de la vente (la
+    # date du justificatif), et le moment de l'impression (lu sur un DUPLICATA).
+    # / Receipt dates in the venue's time zone: settlement, and printing time.
+    fuseau_du_lieu = config.get_tzinfo()
+    date_de_l_encaissement = timezone.localtime(
+        vente.datetime_encaissement, fuseau_du_lieu
+    )
+    date_de_l_impression = timezone.localtime(timezone.now(), fuseau_du_lieu)
+
+    # Le numero : « Avoir n° » pour un avoir, « Vente n° » sinon.
+    # / The number: "Avoir n°" for a credit note, "Vente n°" otherwise.
+    if vente.nature == Vente.Nature.AVOIR:
+        numero_du_ticket = f"{_('Avoir n°')} {vente.numero}"
+    else:
+        numero_du_ticket = f"{_('Vente n°')} {vente.numero}"
 
     # Adresse complete
     # / Full address
@@ -78,185 +150,149 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
         else _("TVA non applicable, art. 293 B du CGI")
     )
 
-    # Numero sequentiel du ticket (incremente atomiquement avec verrou)
-    # Le select_for_update() garantit qu'aucun autre worker ne lit
-    # la meme valeur entre l'UPDATE et le refresh_from_db().
-    # / Sequential receipt number (atomically incremented with lock)
-    from django.db import transaction
-
-    with transaction.atomic():
-        LaboutikConfiguration.objects.select_for_update().filter(
-            pk=laboutik_config.pk,
-        ).update(compteur_tickets=F("compteur_tickets") + 1)
-        laboutik_config.refresh_from_db()
-    numero_ticket = laboutik_config.compteur_tickets
+    point_de_vente = vente.point_de_vente
+    nom_du_point_de_vente = ""
+    if point_de_vente is not None:
+        nom_du_point_de_vente = point_de_vente.name
 
     legal = {
         "business_name": config.organisation or "",
         "address": adresse_complete,
         "siret": config.siren or "",
         "tva_number": tva_display,
-        "receipt_number": f"T-{numero_ticket:06d}",
-        "terminal_id": pv.name if pv else "",
+        "terminal_id": nom_du_point_de_vente,
     }
 
-    # --- Regrouper les parts d'un meme article ---
-    # Un article paye avec plusieurs monnaies donne une ligne par monnaie : meme
-    # tarif vendu, meme prix unitaire (amount), meme TVA, et une quantite
-    # partielle chacune (total = amount x qty). On les regroupe : le client lit
-    # « Vin x3 15,00 », pas « Vin x1,2 » puis « Vin x1,8 ».
-    # / Parts of one item paid with several currencies are grouped back.
-    articles_regroupes = {}
-    for ligne in lignes_articles:
-        cle_article = (ligne.pricesold_id, ligne.amount, float(ligne.vat or 0))
-        if cle_article not in articles_regroupes:
-            articles_regroupes[cle_article] = {"ligne": ligne, "qty": Decimal("0")}
-        articles_regroupes[cle_article]["qty"] += Decimal(ligne.qty)
-
-    # --- Construire la liste des articles avec taux TVA ---
-    # / Build the articles list with VAT rate
-    articles = []
-    total_centimes = 0
-    tva_par_taux = {}
-
-    for article_regroupe in articles_regroupes.values():
-        # La 1re ligne du groupe porte le nom, la TVA et le detail au poids,
-        # identiques sur toutes les parts.
-        # / The group's 1st line carries name, VAT and weight detail.
-        ligne = article_regroupe["ligne"]
-        quantite_totale = article_regroupe["qty"]
-
-        # Montant = prix unitaire x quantite, arrondi au centime comme les
-        # rapports (0,5 -> 1). LigneArticle.amount est en centimes.
-        # / Amount = unit price x qty, rounded like the reports. amount is in cents.
-        amount_centimes = ligne.amount
-        article_total = int(
-            (Decimal(amount_centimes) * quantite_totale).quantize(
-                Decimal("1"), rounding=ROUND_HALF_UP
-            )
+    # --- La vente : ses lignes, ses reglements, son unite ---
+    # / The sale: its lines, payments and unit
+    lignes_de_la_vente = list(
+        LigneArticle.objects.filter(vente=vente)
+        .select_related(
+            "pricesold__productsold__product__stock_inventaire",
+            "pricesold__productsold__event",
+            "pricesold__price",
         )
-        total_centimes += article_total
+        .order_by("datetime", "pk")
+    )
+    reglements_de_la_vente = list(vente.reglements.all())
+    nom_par_uuid_de_monnaie = noms_des_monnaies_des_ventes([vente])
+    nom_de_l_unite = nom_de_l_unite_de_la_vente(vente, nom_par_uuid_de_monnaie)
+    ticket_en_points = nom_de_l_unite != ""
+    unite_du_ticket = "EUR"
+    suffixe_de_l_unite = "EUR"
+    if ticket_en_points:
+        unite_du_ticket = nom_de_l_unite
+        suffixe_de_l_unite = f" {nom_de_l_unite}"
 
-        # Quantite lisible sur le papier : un entier quand elle est entiere
-        # (cas normal), sinon deux decimales. Jamais un Decimal : les
-        # imprimantes l'ecrivent telle quelle et le ticket part en JSON (Celery).
+    # --- Les articles : ceux du detail de la vente a l'ecran ---
+    # / Items: the same as the sale detail screen
+    articles_affiches = articles_de_la_vente_pour_l_affichage(
+        lignes_de_la_vente, nom_de_l_unite
+    )
+    articles = []
+    for article_affiche in articles_affiches:
+        # Quantite lisible sur le papier : un entier quand elle est entiere, sinon
+        # deux decimales. Jamais un Decimal : le ticket part en JSON (Celery).
         # / Readable quantity: an int when whole, else two decimals. Never a Decimal.
+        quantite_totale = article_affiche["quantite"]
         if quantite_totale == quantite_totale.to_integral_value():
-            qty = int(quantite_totale)
+            quantite_imprimee = int(quantite_totale)
         else:
-            qty = f"{quantite_totale:.2f}"
+            quantite_imprimee = f"{quantite_totale:.2f}"
 
-        # Nom du produit via PriceSold → ProductSold
-        # / Product name via PriceSold → ProductSold
-        product_name = str(ligne.pricesold) if ligne.pricesold else _("Article")
+        # Le nom imprime : le produit, puis le tarif s'il est different (« Biere
+        # Demi »), puis l'evenement et sa date (« - Concert 12/10 »).
+        # / Printed name: product, then the price name if different, then the event
+        #   and its date.
+        nom_imprime = article_affiche["nom"]
+        if article_affiche["tarif"] and article_affiche["tarif"] != article_affiche["nom"]:
+            nom_imprime = f"{nom_imprime} {article_affiche['tarif']}"
+        if article_affiche["evenement"]:
+            nom_imprime = f"{nom_imprime} - {article_affiche['evenement']}"
+            if article_affiche["date_de_l_evenement"] is not None:
+                date_locale_de_l_evenement = timezone.localtime(
+                    article_affiche["date_de_l_evenement"], fuseau_du_lieu
+                )
+                nom_imprime = (
+                    f"{nom_imprime} {date_locale_de_l_evenement.strftime('%d/%m')}"
+                )
 
-        # Taux TVA de la ligne
-        # / VAT rate of the line
-        taux_tva = float(ligne.vat or 0)
-
-        article_dict = {
-            "name": product_name,
-            "qty": qty,
-            "price": amount_centimes,
-            "total": article_total,
-            "vat_rate": f"{taux_tva:.2f}",
+        article_du_ticket = {
+            "name": nom_imprime,
+            "qty": quantite_imprimee,
+            "price": article_affiche["prix_unitaire"],
+            "total": article_affiche["total"],
+            "offert": article_affiche["part_offerte"],
         }
 
-        # Si c'est une vente au poids/volume, ajouter une sous-ligne avec le détail
-        # / If weight/volume sale, add a sub-line with details
-        if ligne.weight_quantity:
-            try:
-                price_obj = ligne.pricesold.price if ligne.pricesold else None
-                if price_obj and price_obj.poids_mesure:
-                    # Accéder à l'unité de stock
-                    # / Access stock unit
-                    stock = price_obj.product.stock_inventaire
-                    unite = stock.unite if stock else "GR"
+        # La part offerte, sous l'article : le total de l'article est son net vendu.
+        # / The offered part, under the item: the item total is its net sold.
+        if article_affiche["part_offerte"]:
+            montant_offert = f"{article_affiche['part_offerte'] / 100:.2f}"
+            article_du_ticket["detail_offert"] = (
+                f"  {_('Offert')}: {montant_offert}{suffixe_de_l_unite}"
+            )
 
-                    # Déterminer le symbole d'unité et le prix de référence
-                    # / Determine unit symbol and reference price
-                    if unite == "GR":
-                        unite_display = "g"
-                        prix_reference = price_obj.prix
-                        sous_ligne = f"  {ligne.weight_quantity}{unite_display} x {prix_reference}E/kg"
-                    elif unite == "CL":
-                        unite_display = "cl"
-                        prix_reference = price_obj.prix
-                        sous_ligne = f"  {ligne.weight_quantity}{unite_display} x {prix_reference}E/L"
-                    else:
-                        # Unité par défaut (pièces) - ne pas afficher de sous-ligne
-                        sous_ligne = None
+        # Vente au poids ou au volume : le poids et le prix au kg / L, sous l'article.
+        # / Weight or volume sale: weight and price per kg / L, under the item.
+        unite_du_poids = article_affiche["unite_poids"]
+        poids_imprimable = (
+            article_affiche["est_vrac"]
+            and article_affiche["prix_par_unite"]
+            and unite_du_poids in ("GR", "CL")
+        )
+        if poids_imprimable:
+            symbole_du_poids = "g" if unite_du_poids == "GR" else "cl"
+            # L'ecran ecrit le prix avec une espace insecable ; le papier, avec une
+            # espace ordinaire (certaines imprimantes l'impriment mal).
+            # / The screen uses a non-breaking space; paper gets a plain one.
+            prix_par_unite_pour_le_papier = article_affiche["prix_par_unite"].replace(
+                " ", " "
+            )
+            article_du_ticket["weight_detail"] = (
+                f"  {article_affiche['poids_total']}{symbole_du_poids}"
+                f" x {prix_par_unite_pour_le_papier}"
+            )
 
-                    if sous_ligne:
-                        # Ajouter la sous-ligne au dictionnaire article
-                        # / Add sub-line to article dict
-                        article_dict["weight_detail"] = sous_ligne
-            except (AttributeError, TypeError):
-                # Si on ne peut pas accéder au stock, on ignore la sous-ligne
-                # / If we can't access stock, ignore sub-line
-                pass
+        articles.append(article_du_ticket)
 
-        articles.append(article_dict)
-
-        # Accumuler la TVA par taux
-        # / Accumulate VAT by rate
-        cle_tva = f"{taux_tva:.2f}"
-        if cle_tva not in tva_par_taux:
-            tva_par_taux[cle_tva] = {"rate": cle_tva, "ttc": 0}
-        tva_par_taux[cle_tva]["ttc"] += article_total
-
-    # Calculer HT et TVA pour chaque taux
-    # / Compute HT and VAT for each rate
+    # --- TVA par taux : sommes des montants figes sur les lignes ---
+    # Une vente en points ou en temps n'est pas de l'argent : pas de TVA.
+    # / VAT by rate: sums of the frozen line amounts. No VAT on a points sale.
     tva_breakdown = []
     total_ht_global = 0
     total_tva_global = 0
+    if not ticket_en_points:
+        tva_par_taux = {}
+        for ligne in lignes_de_la_vente:
+            cle_du_taux = f"{Decimal(ligne.vat or 0):.2f}"
+            if cle_du_taux not in tva_par_taux:
+                tva_par_taux[cle_du_taux] = {
+                    "rate": cle_du_taux,
+                    "ht": 0,
+                    "tva": 0,
+                    "ttc": 0,
+                }
+            tva_par_taux[cle_du_taux]["ht"] += ligne.total_ht
+            tva_par_taux[cle_du_taux]["tva"] += ligne.total_tva
+            tva_par_taux[cle_du_taux]["ttc"] += ligne.total_ttc
+        for ligne_de_tva in tva_par_taux.values():
+            tva_breakdown.append(ligne_de_tva)
+            total_ht_global += ligne_de_tva["ht"]
+            total_tva_global += ligne_de_tva["tva"]
 
-    for cle_tva, donnees_tva in tva_par_taux.items():
-        taux = float(cle_tva)
-        ttc = donnees_tva["ttc"]
-
-        if taux > 0:
-            ht = int(round(ttc / (1 + taux / 100)))
-            tva_montant = ttc - ht
-        else:
-            ht = ttc
-            tva_montant = 0
-
-        total_ht_global += ht
-        total_tva_global += tva_montant
-
-        tva_breakdown.append(
-            {
-                "rate": cle_tva,
-                "ht": ht,
-                "tva": tva_montant,
-                "ttc": ttc,
-            }
-        )
-
-    # --- Unite des montants du ticket ---
-    # Un panier ne contient qu'une monnaie. S'il est paye en points ou en temps
-    # (moyen NON_MONETAIRE), les montants sont dans cette monnaie (centiemes) et le
-    # ticket n'a pas de TVA : ce n'est pas une vente en argent.
-    # / One currency per cart. A points/time ticket shows that currency, no VAT.
-    unite_du_ticket = "EUR"
-    premiere_ligne_du_ticket = next(iter(lignes_articles), None)
-    ticket_en_points = (
-        premiere_ligne_du_ticket is not None
-        and premiere_ligne_du_ticket.payment_method == PaymentMethod.NON_MONETAIRE
+    # --- Detail des reglements : comme la liste des ventes, sans l'offert ---
+    # / Payments detail: like the sales list, without the offered part
+    reglements_affiches = reglements_pour_l_affichage(
+        reglements_de_la_vente, nom_par_uuid_de_monnaie, nom_de_l_unite
     )
-    if ticket_en_points:
-        # Monnaie introuvable : « Points ou temps », jamais « EUR »
-        # / Currency not found: "Points or time", never "EUR"
-        unite_du_ticket = str(_("Points ou temps"))
-        monnaie_du_ticket = FedowAsset.objects.filter(
-            uuid=premiere_ligne_du_ticket.asset
-        ).first()
-        if monnaie_du_ticket is not None:
-            unite_du_ticket = monnaie_du_ticket.name
-        tva_breakdown = []
-        total_ht_global = 0
-        total_tva_global = 0
+    cascade_detail = []
+    for reglement_affiche in reglements_affiches:
+        if reglement_affiche["moyen"] == PaymentMethod.FREE:
+            continue
+        cascade_detail.append(
+            {"name": reglement_affiche["libelle"], "total": reglement_affiche["montant"]}
+        )
 
     # Nom de l'operateur
     # / Operator name
@@ -264,101 +300,25 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
     if operateur:
         operateur_name = operateur.email if operateur.email else str(operateur)
 
-    # Pied de ticket personnalise
-    # / Custom receipt footer
+    # Pied de ticket personnalise, replie en 32 caracteres
+    # / Custom receipt footer, folded to 32 characters
     pied_ticket = laboutik_config.pied_ticket or ""
-
-    footer_lines = []
-    if pied_ticket:
-        footer_lines.append(pied_ticket)
+    footer_lines = _lignes_du_pied_du_ticket_de_vente(pied_ticket)
     footer_lines.append(_("Merci de votre visite !"))
-
-    # Mode ecole : les tickets portent la mention "SIMULATION" (LNE exigence 5)
-    # / Training mode: receipts carry "SIMULATION" label (LNE req. 5)
-    is_simulation = laboutik_config.mode_ecole
-
-    # Detail des moyens de paiement de ce paiement : une entree par monnaie de
-    # carte (par nom d'asset) et une par autre moyen (especes, CB, cheque). Les
-    # montants portent sur amount x qty. Les imprimantes ne l'impriment que si au
-    # moins deux moyens ont servi.
-    # / Payment methods detail: one entry per card currency and one per other
-    #   method, amounts on amount x qty. Printed only with two methods or more.
-    cascade_detail = []
-    uuid_tx = None
-    for ligne in lignes_articles:
-        if hasattr(ligne, "uuid_transaction") and ligne.uuid_transaction:
-            uuid_tx = ligne.uuid_transaction
-            break
-
-    if uuid_tx:
-        from BaseBillet.models import LigneArticle
-        from laboutik.reports import montant_ttc_centimes
-        from laboutik.views import LABELS_MOYENS_PAIEMENT_DB
-
-        # Toutes les lignes du paiement, complement en especes ou CB compris
-        # (il partage le uuid_transaction). list() : une seule requete.
-        # / All lines of the payment, cash/card complement included.
-        montants_par_moyen = list(
-            LigneArticle.objects.filter(uuid_transaction=uuid_tx)
-            .values("asset", "payment_method")
-            .annotate(total=montant_ttc_centimes())
-            .order_by("payment_method")
-        )
-
-        # Les assets en une requete (evite N+1).
-        # / Assets in one query (avoids N+1).
-        asset_uuids = [
-            entree["asset"] for entree in montants_par_moyen if entree["asset"]
-        ]
-        assets_par_uuid = {
-            a.uuid: a for a in FedowAsset.objects.filter(uuid__in=asset_uuids)
-        }
-        libelles_des_moyens = dict(PaymentMethod.choices)
-        libelles_des_moyens.update(LABELS_MOYENS_PAIEMENT_DB)
-
-        # Les monnaies de carte d'abord, dans l'ordre ou la cascade les debite
-        # (cadeau, puis locale, puis federee), puis les autres moyens (especes,
-        # CB...). Chaque montant est arrondi au centime par moyen : la somme du
-        # detail peut donc differer d'un centime du TOTAL, arrondi par article.
-        # / Card currencies first, in cascade order (gift, local, federated),
-        #   then other methods. Per-method rounding: the detail sum may differ
-        #   by one cent from the TOTAL.
-        rang_dans_la_cascade = {
-            PaymentMethod.LOCAL_GIFT: 0,
-            PaymentMethod.LOCAL_EURO: 1,
-            PaymentMethod.STRIPE_FED: 2,
-        }
-        montants_par_moyen.sort(
-            key=lambda entree: rang_dans_la_cascade.get(entree["payment_method"], 3)
-        )
-
-        detail_monnaies_de_carte = []
-        detail_autres_moyens = []
-        for entree in montants_par_moyen:
-            asset_obj = assets_par_uuid.get(entree["asset"])
-            if asset_obj is not None:
-                detail_monnaies_de_carte.append(
-                    {"name": asset_obj.name, "total": entree["total"]}
-                )
-            else:
-                code_du_moyen = entree["payment_method"]
-                nom_du_moyen = str(libelles_des_moyens.get(code_du_moyen, code_du_moyen))
-                detail_autres_moyens.append(
-                    {"name": nom_du_moyen, "total": entree["total"]}
-                )
-        cascade_detail = detail_monnaies_de_carte + detail_autres_moyens
 
     return {
         "header": {
-            "title": pv.name if pv else "",
+            "title": nom_du_point_de_vente,
+            "numero": numero_du_ticket,
             "subtitle": operateur_name,
-            "date": now.strftime("%d/%m/%Y %H:%M"),
+            "date": date_de_l_encaissement.strftime("%d/%m/%Y %H:%M"),
+            "date_d_impression": date_de_l_impression.strftime("%d/%m/%Y %H:%M"),
         },
         "legal": legal,
         "articles": articles,
         "total": {
-            "amount": total_centimes,
-            "label": moyen_paiement,
+            "amount": vente.total_ttc,
+            "label": "",
         },
         "tva_breakdown": tva_breakdown,
         "total_ht": total_ht_global,
@@ -368,7 +328,9 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
         "unite": unite_du_ticket,
         "cascade_detail": cascade_detail,
         "is_duplicata": False,
-        "is_simulation": is_simulation,
+        # Mode ecole : les tickets portent la mention "SIMULATION" (LNE exigence 5)
+        # / Training mode: receipts carry "SIMULATION" label (LNE req. 5)
+        "is_simulation": laboutik_config.mode_ecole,
         "pied_ticket": pied_ticket,
         "qrcode": None,
         "footer": footer_lines,

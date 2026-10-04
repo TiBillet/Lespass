@@ -156,11 +156,13 @@ cliquent '[data-testid="paiement-succes"] #bt-retour-layer1'.
 
         {# --- Actions : Imprimer (secondaire) + Nouvelle vente (principal) --- #}
         <div class="card-confirm-acts">
-          {% if uuid_transaction and uuid_pv %}
+          {# Le ticket de la vente du paiement (route imprimer_ticket, par vente). #}
+          {# / The receipt of the payment's sale (print route, by sale). #}
+          {% if uuid_vente %}
             <button type="button"
                     class="card-confirm-cancel succes-imprimer"
                     hx-post="{% url 'laboutik-paiement-imprimer_ticket' %}"
-                    hx-vals='{"uuid_transaction": "{{ uuid_transaction }}", "uuid_pv": "{{ uuid_pv }}"}'
+                    hx-vals='{"uuid_vente": "{{ uuid_vente }}"}'
                     hx-target="#print-feedback"
                     hx-swap="innerHTML"
                     data-loading-disable

@@ -79,6 +79,15 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
         builder.appendText(title + "\n")
         builder.setPrintModes(bold=False, double_h=False, double_w=False)
 
+    # Le numero du justificatif (ticket de vente : « Vente n° 12 »), en gras.
+    # / The receipt number (sale receipt: "Vente n° 12"), in bold.
+    numero_du_justificatif = header.get("numero", "")
+    if numero_du_justificatif:
+        builder.setAlignment(ALIGN_CENTER)
+        builder.setPrintModes(bold=True, double_h=False, double_w=False)
+        builder.appendText(numero_du_justificatif + "\n")
+        builder.setPrintModes(bold=False, double_h=False, double_w=False)
+
     if subtitle:
         builder.setAlignment(ALIGN_CENTER)
         builder.appendText(subtitle + "\n")
@@ -110,10 +119,6 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
         if tva_number:
             builder.appendText(f"TVA: {tva_number}\n")
 
-        receipt_number = legal.get("receipt_number", "")
-        if receipt_number:
-            builder.appendText(f"Ticket: {receipt_number}\n")
-
     if title or subtitle or date_text or legal:
         builder.appendText("--------------------------------\n")
 
@@ -125,6 +130,12 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
         builder.setPrintModes(bold=True, double_h=True, double_w=True)
         builder.appendText("*** DUPLICATA ***\n")
         builder.setPrintModes(bold=False, double_h=False, double_w=False)
+        # La date de cette impression : la date de l'en-tete est celle du
+        # justificatif d'origine (l'encaissement d'une vente).
+        # / This print's date: the header date is the original receipt's.
+        date_d_impression = header.get("date_d_impression", "")
+        if date_d_impression:
+            builder.appendText(f"Imprimé le {date_d_impression}\n")
         builder.appendText("--------------------------------\n")
 
     # --- Mention SIMULATION (mode ecole, LNE exigence 5) ---
@@ -158,8 +169,11 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
             weight_detail = article.get("weight_detail")
 
             # Distinguer ticket vente (avec prix) et ticket commande cuisine (sans prix).
-            # / Distinguish sale ticket (with price) from kitchen order (no price).
-            article_a_un_prix = article_price is not None and article_price > 0
+            # Un prix negatif est un prix : un retour de consigne, un moyen rembourse
+            # s'impriment avec leur montant et leur signe.
+            # / Distinguish sale ticket (with price) from kitchen order (no price). A
+            #   negative price is a price: printed with its sign.
+            article_a_un_prix = article_price is not None and article_price != 0
 
             if article_a_un_prix:
                 total_euros = f"{article_total / 100:.2f}"
@@ -180,6 +194,12 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
             # / If weight/volume sale, add a sub-line with details
             if weight_detail:
                 builder.appendText(weight_detail + "\n")
+
+            # La part offerte d'un article, sous l'article (ticket de vente).
+            # / An item's offered part, under the item (sale receipt).
+            detail_offert = article.get("detail_offert")
+            if detail_offert:
+                builder.appendText(detail_offert + "\n")
 
         builder.appendText("--------------------------------\n")
 

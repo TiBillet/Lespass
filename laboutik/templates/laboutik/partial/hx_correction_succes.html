@@ -1,17 +1,23 @@
 {% load i18n %}
 <!--
-CONFIRMATION DE CORRECTION — remplace la zone de correction apres succes
-/ CORRECTION CONFIRMATION — replaces the correction zone after success
+CONFIRMATION DE CORRECTION — en tete du detail de la vente, re-rendu apres succes
+/ CORRECTION CONFIRMATION — at the top of the sale detail, re-rendered after success
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_correction_succes.html
+INCLUS PAR : hx_detail_vente.html (contexte `correction_faite`, ecrit par
+PaiementViewSet.corriger_moyen_paiement).
 
 Affiche un message anime avec l'ancien et le nouveau moyen.
 L'animation correction-slide-in est definie en commun dans overlay.css.
-/ Animated message with old and new method. Animation defined in overlay.css.
+Le message recoit le focus (`autofocus`, applique par htmx apres l'echange) : le
+caissier au clavier ou au lecteur d'ecran ne se retrouve pas en haut de la page.
+/ Animated message with old and new method; it gets the focus after the swap.
 -->
 <div class="correction-succes-box"
      role="status"
      aria-live="polite"
+     tabindex="-1"
+     autofocus
      data-testid="correction-succes">
 
     <div class="correction-succes-header">

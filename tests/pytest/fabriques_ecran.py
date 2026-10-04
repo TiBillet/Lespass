@@ -22,6 +22,8 @@ CE QUE PORTE CE MODULE
   ce `data-testid` ;
 - `LecteurDesLiens` → chaque lien `<a>` d'un morceau de page (adresse, `aria-label`,
   texte) ;
+- `tableaux_de_la_page(page)` → chaque `<table>` de la page, dans l'ordre : une liste
+  de rangées, chaque rangée la liste des textes de ses cellules (`<th>` et `<td>`) ;
 - `texte_sans_espaces_en_trop(texte)` → le texte, espaces ramenées à une seule.
 C'est le seul endroit des lecteurs HTML des tests d'écran.
 Les montants attendus sont écrits par le test, jamais par le code testé.
@@ -264,3 +266,63 @@ class LecteurDesLiens(HTMLParser):
     def handle_data(self, texte):
         if self.lien_en_cours is not None:
             self.lien_en_cours["texte"].append(texte)
+
+
+class LecteurDesTableaux(HTMLParser):
+    """
+    Lit une page HTML et garde chaque tableau `<table>` : ses rangées `<tr>`, et pour
+    chaque rangée le texte de ses cellules `<th>` et `<td>` (entités décodées). Un
+    tableau dans un tableau n'est pas lu à part.
+    / Reads an HTML page and keeps each table: its rows, and each row's cell texts.
+    """
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tableaux = []
+        self.tableau_en_cours = None
+        self.rangee_en_cours = None
+        self.cellule_en_cours = None
+
+    def handle_starttag(self, balise, attributs):
+        if balise == "table":
+            self.tableau_en_cours = []
+            return
+        if balise == "tr" and self.tableau_en_cours is not None:
+            self.rangee_en_cours = []
+            return
+        cellule_qui_commence = balise in ("th", "td")
+        if cellule_qui_commence and self.rangee_en_cours is not None:
+            self.cellule_en_cours = []
+
+    def handle_endtag(self, balise):
+        cellule_qui_finit = balise in ("th", "td")
+        if cellule_qui_finit and self.cellule_en_cours is not None:
+            texte_de_la_cellule = texte_sans_espaces_en_trop(
+                " ".join(self.cellule_en_cours)
+            )
+            self.rangee_en_cours.append(texte_de_la_cellule)
+            self.cellule_en_cours = None
+            return
+        if balise == "tr" and self.rangee_en_cours is not None:
+            self.tableau_en_cours.append(self.rangee_en_cours)
+            self.rangee_en_cours = None
+            return
+        if balise == "table" and self.tableau_en_cours is not None:
+            self.tableaux.append(self.tableau_en_cours)
+            self.tableau_en_cours = None
+
+    def handle_data(self, texte):
+        if self.cellule_en_cours is not None:
+            self.cellule_en_cours.append(texte)
+
+
+def tableaux_de_la_page(contenu_html):
+    """
+    Chaque tableau de la page, dans l'ordre : une liste de rangées, chaque rangée la
+    liste des textes de ses cellules (espaces ramenées à une seule).
+    / Each table of the page, in order: a list of rows, each row its cell texts.
+    """
+    lecteur = LecteurDesTableaux()
+    lecteur.feed(contenu_html)
+    lecteur.close()
+    return lecteur.tableaux

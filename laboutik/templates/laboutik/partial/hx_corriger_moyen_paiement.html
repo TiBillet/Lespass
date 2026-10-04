@@ -1,4 +1,4 @@
-{% load i18n laboutik_filters %}
+{% load i18n %}
 <!--
 FORMULAIRE DE CORRECTION DE MOYEN DE PAIEMENT
 / Payment method correction form
@@ -16,35 +16,38 @@ Composants repris de la maquette (TEMP-tibillet-laboutik-main) :
 - .card-confirm-row / .card-confirm-acts / .card-valider : confirmation de recharge.
 / Mockup components: segmented control, note box, top-up confirmation buttons.
 
-ACCES : Ventes → Historique de vente → clic sur une ligne → « Corriger moyen ».
+ACCES : Ventes → Historique de commande → clic sur une ligne → « Corriger ».
 
 FLUX :
-1. Bouton "Corriger moyen" dans hx_detail_vente.html → hx-get → cette page
+1. Bouton « Corriger » dans hx_detail_vente.html → hx-get → cette page
 2. Utilisateur choisit nouveau moyen + saisit raison (optionnelle)
 3. Clic CORRIGER → hx-post → PaiementViewSet.corriger_moyen_paiement()
-4. Retour : hx_correction_succes.html (detail mis a jour)
+4. Retour : le detail de la vente, re-rendu (hx_detail_vente.html, avec le message
+   hx_correction_succes.html), remplace le detail ouvert.
+Le montant affiche est celui que la route deplace : la somme des lignes de la vente
+au moyen actuel (`lignes_que_la_correction_deplace`, laboutik/views.py).
+/ The amount shown is the amount the route moves.
 -->
 <div class="correction-box" data-testid="correction-form">
 
   <span class="payment-title">{% translate "Corriger le moyen de paiement" %}</span>
 
-  <!-- Rappel de la ligne corrigee : article, montant, moyen actuel -->
-  <!-- / Reminder of the corrected line: article, amount, current method -->
+  <!-- Rappel de la correction : le reglement a corriger (moyen actuel, montant) -->
+  <!-- / Reminder: the payment to correct (current method, amount) -->
   <div class="card-confirm-row">
-    <span>{{ nom_article|default:"—" }}</span>
-    <b>{{ ligne.amount|euros }}</b>
-  </div>
-  <div class="card-confirm-row">
-    <span>{% translate "Moyen actuel" %}</span>
-    <b>{{ moyen_actuel_label }}</b>
+    <span>{% blocktrans with moyen=moyen_actuel_label %}Règlement {{ moyen }}{% endblocktrans %}</span>
+    <b data-testid="correction-montant">{{ montant_du_reglement_a_la_francaise }}</b>
   </div>
 
   <form hx-post="{% url 'laboutik-paiement-corriger_moyen_paiement' %}"
-        hx-target="#correction-zone-{{ ligne.uuid }}"
-        hx-swap="innerHTML"
+        hx-target="closest .ventes-detail-collapse"
+        hx-swap="outerHTML"
         aria-label="{% translate 'Correction moyen de paiement' %}">
     {% csrf_token %}
     <input type="hidden" name="ligne_uuid" value="{{ ligne.uuid }}">
+    {# Le moyen vu a l'ouverture : la route refuse si la ligne a change depuis. #}
+    {# / The method seen when opening: the route refuses if the line changed since. #}
+    <input type="hidden" name="ancien_moyen" value="{{ ligne.payment_method }}">
 
     <!-- Nouveau moyen : controle segmente, un vrai radio par option -->
     <!-- / New method: segmented control, one real radio per option -->

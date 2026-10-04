@@ -10,87 +10,92 @@ booking : total_paid() vaut 0. Le mail doit donc lire la vente d'origine.
 / The mail is sent AFTER cancellation: the refund line is linked to the booking and
 total_paid() is 0. The mail must read the original sale.
 
+Le booking est payé et remboursé par les vrais gestes : réservation du créneau par son
+formulaire, retour de Stripe, puis annulation par la personne
+(`Booking.cancel_and_refund_booking`). La vente et son remboursement sont donc écrits par
+le service de vente, avec leurs montants entiers.
+/ The booking is paid and refunded through the real gestures: the sale and its refund are
+written by the sale service, with their whole-cent amounts.
+
+SIMULATIONS
+Le test est marqué `django_db` : la transaction est annulée à la fin (tests/PIEGES.md
+13.1), rien n'est supprimé à la main. Stripe (session, catalogue, remboursement) et
+Celery sont simulés ; l'envoi du mail aussi (`CeleryMailerClass`).
+/ Rolled-back transaction; Stripe, Celery and the mail sending are faked.
+
 Lancer / Run :
-    docker exec lespass_django poetry run pytest tests/pytest/test_mail_annulation_booking.py -q
+    make test ARGS="tests/pytest/test_mail_annulation_booking.py"
 """
 
-import uuid
-from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
-from django.utils import timezone
+from django.utils import translation
 from django_tenants.utils import tenant_context
 
+from BaseBillet.models import Paiement_stripe
+from booking.models import Booking
+from booking.tasks import send_booking_cancellation_user
+from fabriques_panier import (
+    catalogue_stripe_simule,
+    client_connecte,
+    creer_ressource_avec_tarif,
+    creer_utilisateur,
+    taches_celery_enregistrees,
+)
+from test_caracterisation_admin_api import reserver_une_ressource_sans_panier
+from test_caracterisation_annulations import rembourser_comme_stripe
+from test_caracterisation_en_ligne import revenir_de_stripe_billetterie
 
-def test_mail_d_annulation_annonce_le_montant_de_la_vente_et_pas_zero(tenant):
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _langue_par_defaut_apres_chaque_test():
+    """Les signaux et les tâches activent la langue du lieu sans la remettre
+    (tests/PIEGES.md, 10.5).
+    / Signals and tasks activate the venue language without resetting it."""
+    yield
+    translation.deactivate()
+
+
+def test_mail_d_annulation_annonce_le_montant_de_la_vente_et_pas_zero(
+    tenant, mock_stripe
+):
     """Booking payé 15 € puis remboursé : le mail annonce 15 €, pas 0 €.
     / Booking paid 15 € then refunded: the mail shows 15 €, not 0 €.
+
+    Le créneau est dans deux jours : la date limite d'annulation (24 h avant) n'est
+    pas passée, le mail annonce donc un remboursement.
+    / The slot is in two days: the cancellation deadline has not passed.
     """
-    from AuthBillet.utils import get_or_create_user
-    from BaseBillet.models import LigneArticle, PaymentMethod, PriceSold, SaleOrigin
-    from booking.models import Booking, Resource
-    from booking.tasks import send_booking_cancellation_user
-
     with tenant_context(tenant):
-        # Une ressource existante du lieu : seul le créneau compte ici.
-        # / An existing resource of the place: only the slot matters here.
-        ressource = Resource.objects.first()
-        if ressource is None:
-            pytest.fail(
-                "Aucune ressource de réservation dans le tenant : lancer les données de démo."
-            )
+        with catalogue_stripe_simule():
+            with taches_celery_enregistrees():
+                acheteur = creer_utilisateur()
+                client_de_l_acheteur = client_connecte(acheteur)
+                location = creer_ressource_avec_tarif(prix="15.00")
+                reserver_une_ressource_sans_panier(client_de_l_acheteur, location)
+                booking = Booking.objects.get(
+                    user=acheteur, resource=location.ressource
+                )
+                paiement = Paiement_stripe.objects.get(booking=booking)
+                revenir_de_stripe_billetterie(client_de_l_acheteur, paiement)
 
-        # N'importe quel tarif vendu du lieu : seul le montant compte ici.
-        # / Any sold price of the place: only the amount matters here.
-        tarif_vendu = PriceSold.objects.first()
-        client = get_or_create_user(
-            f"test+booking{uuid.uuid4().hex[:8]}@mock.test", send_mail=False
-        )
+                with patch(
+                    "stripe.Refund.create", side_effect=rembourser_comme_stripe
+                ):
+                    booking.cancel_and_refund_booking()
 
-        # Créneau loin dans le futur : la date limite d'annulation n'est pas passée.
-        # / Slot far in the future: the cancellation deadline has not passed.
-        booking = Booking.objects.create(
-            resource=ressource,
-            user=client,
-            start_datetime=timezone.now() + timedelta(days=60),
-            slot_duration_minutes=60,
-            slot_count=1,
-        )
+                # Précondition : total_paid() compte le remboursement.
+                # / Precondition: total_paid() counts the refund.
+                assert booking.total_paid() == Decimal("0.00")
 
-        try:
-            # La vente, puis la ligne négative que crée partial_refund_payment() au remboursement.
-            # / The sale, then the negative line partial_refund_payment() creates on refund.
-            LigneArticle.objects.create(
-                pricesold=tarif_vendu,
-                qty=1,
-                amount=1500,
-                booking=booking,
-                payment_method=PaymentMethod.STRIPE_NOFED,
-                status=LigneArticle.VALID,
-                sale_origin=SaleOrigin.LESPASS,
-            )
-            LigneArticle.objects.create(
-                pricesold=tarif_vendu,
-                qty=-1,
-                amount=1500,
-                booking=booking,
-                payment_method=PaymentMethod.STRIPE_NOFED,
-                status=LigneArticle.REFUNDED,
-                sale_origin=SaleOrigin.LESPASS,
-            )
-            # Précondition : total_paid() compte le remboursement.
-            # / Precondition: total_paid() counts the refund.
-            assert booking.total_paid() == Decimal("0.00")
+                with patch("booking.tasks.CeleryMailerClass") as faux_mailer:
+                    send_booking_cancellation_user(str(booking.pk))
 
-            with patch("booking.tasks.CeleryMailerClass") as faux_mailer:
-                send_booking_cancellation_user(str(booking.pk))
-
-            contexte_du_mail = faux_mailer.call_args.kwargs["context"]
-            assert contexte_du_mail["refund_amount"] == Decimal("15.00"), (
-                f"Le mail doit annoncer 15 €, obtenu {contexte_du_mail['refund_amount']}"
-            )
-        finally:
-            LigneArticle.objects.filter(booking=booking).delete()
-            booking.delete()
+    contexte_du_mail = faux_mailer.call_args.kwargs["context"]
+    assert contexte_du_mail["refund_amount"] == Decimal("15.00"), (
+        f"Le mail doit annoncer 15 €, obtenu {contexte_du_mail['refund_amount']}"
+    )
