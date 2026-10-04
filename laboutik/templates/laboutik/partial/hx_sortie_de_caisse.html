@@ -12,7 +12,9 @@ Affiche dans #ventes-zone, a la place de l'ecran Ventes.
 
 STRUCTURE :
 - Header (hx-swap-oob) : titre « Sortie de caisse », retour → ecran Ventes.
-- Trois chiffres : fond, especes encaissees, solde.
+- Les lignes du tiroir (section « caisse especes » du rapport des ventes) : fond,
+  especes recues, especes rendues, corrections, sorties, solde theorique.
+  data-especes = les especes nettes du service (solde − fond).
 - Deux colonnes : billets (500 € a 5 €) et pieces (2 € a 0,10 €), avec − / +.
 - Carte du bas : note (desactivee pour l'instant), total, enregistrer, imprimer (desactive).
   Pas de « montant libre » ni « vider la caisse » : le serveur ne prend que des coupures.
@@ -38,7 +40,7 @@ Champs envoyes : uuid_pv, tag_id_cm, type_app (pour garder params_ventes), coupu
         hx-swap="innerHTML"
         aria-label="{% translate 'Sortie de caisse' %}"
         data-fond="{{ fond_de_caisse_centimes }}"
-        data-especes="{{ entrees_especes_centimes }}">
+        data-especes="{{ especes_nettes_du_service_centimes }}">
     {% csrf_token %}
     <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
     {# tag_id_cm et type_app : renvoyes pour garder les params dans les URLs Ventes #}
@@ -47,10 +49,14 @@ Champs envoyes : uuid_pv, tag_id_cm, type_app (pour garder params_ventes), coupu
     <input type="hidden" name="type_app" value="{{ type_app }}">
 
     {# ============ ETAT DE LA CAISSE / CASH DRAWER STATE ============ #}
+    {# Les lignes du tiroir du service en cours (section « caisse espèces » du rapport #}
+    {# des ventes), écrites par comptabilite/presentation.py : fond, espèces reçues, #}
+    {# espèces rendues, corrections, sorties, solde théorique. Elles s'additionnent. #}
+    {# / The current service drawer lines, written by the shared presentation. #}
     <div class="sortie-stats" data-testid="sortie-etat-caisse">
-      <div class="sortie-stat"><span>{% translate "Fond" %}</span><b>{{ fond_de_caisse_euros }} €</b></div>
-      <div class="sortie-stat"><span>{% translate "Espèces" %}</span><b>{{ entrees_especes_euros }} €</b></div>
-      <div class="sortie-stat"><span>{% translate "Solde" %}</span><b>{{ solde_total_euros }} €</b></div>
+      {% for ligne_du_tiroir in lignes_du_tiroir %}
+        <div class="sortie-stat" data-testid="sortie-tiroir-ligne"><span>{{ ligne_du_tiroir.libelle }}</span><b>{{ ligne_du_tiroir.montant }}</b></div>
+      {% endfor %}
     </div>
 
     {# ============ BILLETS ET PIECES / NOTES AND COINS ============ #}
@@ -203,7 +209,10 @@ function afficherAlerteSortie(html_message, type_alerte, avec_confirmation) {
  *   total > fond + especes → erreur bloquante
  *   total > especes seules → avertissement avec nouveau fond propose
  *   total <= especes → OK direct
- * / Validation before HTMX submission.
+ * « especes » (data-especes) = l'argent du service dans le tiroir : solde moins
+ * fond. Ce controle est indicatif : le serveur (creer_sortie_de_caisse) ne compare
+ * pas la sortie au solde.
+ * / Validation before HTMX submission; indicative only (no server-side check).
  */
 document.getElementById('form-sortie-caisse').addEventListener('htmx:configRequest', function(event) {
     /* Deja confirme par l'utilisateur : laisser passer et remettre a zero.
@@ -232,9 +241,9 @@ document.getElementById('form-sortie-caisse').addEventListener('htmx:configReque
     /* / Case 1: total > total balance — blocking error */
     if (total_centimes > solde_total_centimes) {
         afficherAlerteSortie(
-            '{% translate "Montant impossible" %} : '
+            '{% filter escapejs %}{% translate "Montant impossible" %}{% endfilter %} : '
             + formaterEuros(total_centimes)
-            + ' &gt; {% translate "solde caisse" %} ('
+            + ' &gt; {% filter escapejs %}{% translate "solde caisse" %}{% endfilter %} ('
             + formaterEuros(solde_total_centimes)
             + ').',
             'erreur',
@@ -249,12 +258,12 @@ document.getElementById('form-sortie-caisse').addEventListener('htmx:configReque
     if (total_centimes > especes_centimes) {
         var nouveau_fond_centimes = solde_total_centimes - total_centimes;
         afficherAlerteSortie(
-            '{% translate "Le montant" %} ('
+            '{% filter escapejs %}{% translate "Le montant" %}{% endfilter %} ('
             + formaterEuros(total_centimes)
-            + ') {% translate "dépasse les ventes en espèces" %} ('
+            + ') {% filter escapejs %}{% translate "dépasse les espèces du service dans le tiroir (solde moins fond)" %}{% endfilter %} ('
             + formaterEuros(especes_centimes)
             + ').<br>'
-            + '{% translate "Le nouveau fond de caisse serait de" %} '
+            + '{% filter escapejs %}{% translate "Le nouveau fond de caisse serait de" %}{% endfilter %} '
             + '<strong class="sortie-alerte-fond">' + formaterEuros(nouveau_fond_centimes) + '</strong>.',
             'avertissement',
             true

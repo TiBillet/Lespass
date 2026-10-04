@@ -47,9 +47,17 @@ def _enable_db_access(django_db_blocker):
     django_db_blocker.restore()
 
 
+# Chaque test tourne dans une transaction annulee a la fin (marqueur `django_db`
+# sans `transaction=True`). Les fixtures de portee « function » s'ouvrent apres
+# le debut de cette transaction et se ferment avant son annulation. Tout ce
+# qu'elles ecrivent en base disparait donc seul : on ne supprime rien a la main.
+# Supprimer un utilisateur ou un wallet (schema public) ferait verifier les cles
+# etrangeres de tous les lieux, pour rien (voir tests/PIEGES.md).
+# / Each test runs in a transaction rolled back at the end. Function-scoped
+# fixtures run inside it, so nothing is deleted by hand.
 pytestmark = pytest.mark.django_db
 
-PATH = "/api/v2/wallet-refills/"
+PATH ="/api/v2/wallet-refills/"
 HOST = "lespass.tibillet.localhost"
 
 
@@ -65,10 +73,10 @@ def gift_setup():
     Cree dans le tenant 'lespass' : un wallet d'origine, deux assets cadeau
     (TNF), un asset monnaie temps (TIM), un asset fiduciaire (TLF), et trois
     cles API (une liee a l'asset cadeau, une liee a l'asset temps, une sans).
-    Nettoie tout en fin de test.
+    Pas de nettoyage : l'annulation de la transaction du test efface tout.
     / Create a wallet, two gift assets (TNF), one time-currency asset (TIM),
     one fiat asset (TLF), and three API keys (gift-bound, time-bound, none).
-    Cleans everything afterwards.
+    No cleanup: the test transaction rollback erases everything.
     """
     from Customers.models import Client
     from AuthBillet.models import Wallet
@@ -119,7 +127,7 @@ def gift_setup():
         ).first()
 
         api_obj, key_str = APIKey.objects.create_key(name=f"giftkey-{_suffix()}")
-        ext_key = ExternalApiKey.objects.create(
+        ExternalApiKey.objects.create(
             name=f"giftkey-{_suffix()}",
             key=api_obj,
             gift_asset=asset_gift,
@@ -128,14 +136,14 @@ def gift_setup():
         api_obj_time, key_str_time = APIKey.objects.create_key(
             name=f"timekey-{_suffix()}"
         )
-        ext_key_time = ExternalApiKey.objects.create(
+        ExternalApiKey.objects.create(
             name=f"timekey-{_suffix()}",
             key=api_obj_time,
             gift_asset=asset_time,
         )
 
         api_obj_no, key_str_no = APIKey.objects.create_key(name=f"nokey-{_suffix()}")
-        ext_key_no = ExternalApiKey.objects.create(
+        ExternalApiKey.objects.create(
             name=f"nokey-{_suffix()}",
             key=api_obj_no,
         )
@@ -160,27 +168,7 @@ def gift_setup():
         "key_no": key_str_no,
         "user": user_refill,
     }
-    yield data
-
-    # Nettoyage / Cleanup
-    with tenant_context(tenant):
-        ext_key.delete()
-        ext_key_time.delete()
-        ext_key_no.delete()
-        api_obj.delete()
-        api_obj_time.delete()
-        api_obj_no.delete()
-        asset_gift.delete()
-        asset_gift_other.delete()
-        asset_time.delete()
-        asset_fiat.delete()
-        # asset_fed n'est PAS supprimé : il préexistait, on l'a seulement réutilisé.
-        # / asset_fed is NOT deleted: it pre-existed, we only reused it.
-        try:
-            user_refill.delete()
-        except Exception:
-            pass  # best-effort : un wallet/objet lié peut le protéger
-        wallet.delete()
+    return data
 
 
 @pytest.fixture
@@ -223,7 +211,7 @@ def fedow_real_setup(tenant):
             "temps": AssetFedowPublic.TIME,
             "fidelite": AssetFedowPublic.FIDELITY,
         }
-        assets, keys, cles_creees, assets_crees = {}, {}, [], []
+        assets, keys = {}, {}
         for i, (nom, categorie) in enumerate(categories.items()):
             asset = AssetFedowPublic.objects.create(
                 category=categorie,
@@ -236,26 +224,21 @@ def fedow_real_setup(tenant):
             # / Create the asset on Fedow (with the Lespass uuid).
             api.asset.get_or_create_token_asset(asset)
             assets[nom] = asset
-            assets_crees.append(asset)
 
             api_obj, key_str = APIKey.objects.create_key(name=f"{nom}key-{suffixe}")
-            ext_key = ExternalApiKey.objects.create(
+            ExternalApiKey.objects.create(
                 name=f"{nom}key-{suffixe}", key=api_obj, gift_asset=asset,
             )
             keys[nom] = key_str
-            cles_creees.append((ext_key, api_obj))
 
-    yield {"tenant": tenant, "assets": assets, "keys": keys}
-
-    # Nettoyage : clés + assets locaux. Les assets côté Fedow restent (pas
-    # d'endpoint de suppression simple) — pollution mineure de la base dev.
-    # / Cleanup: keys + local assets. Fedow-side assets remain (minor dev noise).
-    with tenant_context(tenant):
-        for ext_key, api_obj in cles_creees:
-            ext_key.delete()
-            api_obj.delete()
-        for asset in assets_crees:
-            asset.delete()
+    # Pas de nettoyage local : l'annulation de la transaction du test efface les
+    # cles et les assets de Lespass. Les assets crees sur le serveur Fedow, eux,
+    # restent : c'est un autre processus, hors de cette transaction, et il n'a
+    # pas de route de suppression simple. Le nom unique par run evite le conflit.
+    # / No local cleanup: the test rollback erases Lespass keys and assets. The
+    # assets created on the Fedow server stay (another process, outside this
+    # transaction); the unique name per run avoids conflicts.
+    return {"tenant": tenant, "assets": assets, "keys": keys}
 
 
 def _post(payload=None, key=None, idem=None):
@@ -491,8 +474,6 @@ def test_refill_idempotent_meme_corps_208(gift_setup):
     n'est appele qu'UNE fois (pas de double credit).
     / Same key + same body: 201 then 208, Fedow called only once.
     """
-    from BaseBillet.models import LigneArticle
-
     idem = uuidlib.uuid4().hex
     tx_uuid = str(uuidlib.uuid4())
     payload = {
@@ -518,9 +499,6 @@ def test_refill_idempotent_meme_corps_208(gift_setup):
     assert resp2.json()["identifier"] == tx_uuid
     assert refill.call_count == 1, "Fedow ne doit etre credite qu'UNE fois"
 
-    with tenant_context(gift_setup["tenant"]):
-        LigneArticle.objects.filter(idempotency_key=idem).delete()
-
 
 def test_refill_meme_cle_corps_different_409(gift_setup):
     """Reutiliser la MEME cle avec un corps DIFFERENT (montant change) -> 409,
@@ -529,8 +507,6 @@ def test_refill_meme_cle_corps_different_409(gift_setup):
     / Reusing the SAME key with a DIFFERENT body (changed amount) -> 409, and
     Fedow is NOT called a second time.
     """
-    from BaseBillet.models import LigneArticle
-
     idem = uuidlib.uuid4().hex
     tx_uuid = str(uuidlib.uuid4())
     base = {
@@ -552,9 +528,6 @@ def test_refill_meme_cle_corps_different_409(gift_setup):
     assert resp1.status_code == 201, f"1er appel : {resp1.status_code} {resp1.content[:200]}"
     assert resp2.status_code == 409, "meme cle + montant different doit etre refuse (409)"
     assert refill.call_count == 1, "le 2e appel (montant different) ne doit PAS crediter"
-
-    with tenant_context(gift_setup["tenant"]):
-        LigneArticle.objects.filter(idempotency_key=idem).delete()
 
 
 def test_refill_retry_apres_echec_recredite(gift_setup):
@@ -601,7 +574,6 @@ def test_refill_retry_apres_echec_recredite(gift_setup):
         lignes = LigneArticle.objects.filter(idempotency_key=idem)
         assert lignes.count() == 1, "le retry doit reutiliser la meme ligne, pas en creer une 2e"
         assert lignes.first().status == LigneArticle.VALID
-        lignes.delete()
 
 
 # ---------------------------------------------------------------------------
@@ -664,7 +636,6 @@ def test_lignearticle_sans_cle_non_bloquant(tenant):
         assert l1.pk != l2.pk
         assert l1.idempotency_key is None
         assert l2.idempotency_key is None
-        LigneArticle.objects.filter(pk__in=[l1.pk, l2.pk]).delete()
 
 
 def test_lignearticle_cle_dupliquee_bloquee(tenant):
@@ -695,7 +666,6 @@ def test_lignearticle_cle_dupliquee_bloquee(tenant):
                     payment_method=PaymentMethod.FREE, sale_origin=SaleOrigin.LESPASS,
                     status=LigneArticle.VALID, idempotency_key=cle,
                 )
-        LigneArticle.objects.filter(idempotency_key=cle).delete()
 
 
 # ---------------------------------------------------------------------------
@@ -772,8 +742,6 @@ def test_refill_reel_idempotent_ne_recredite_pas(fedow_real_setup):
     le wallet qu'UNE seule fois (208 au rejeu).
     / REAL: two calls with the same Idempotency-Key credit the wallet only once.
     """
-    from BaseBillet.models import LigneArticle
-
     asset = fedow_real_setup["assets"]["cadeau"]
     key = fedow_real_setup["keys"]["cadeau"]
     email = f"realidem-{_suffix()}@example.org"
@@ -796,8 +764,3 @@ def test_refill_reel_idempotent_ne_recredite_pas(fedow_real_setup):
     assert solde_apres == solde_avant + montant, (
         f"Idempotence cassée : solde {solde_apres} != {solde_avant}+{montant} (double crédit ?)"
     )
-
-    # Nettoyage : la trace d'idempotence est desormais en base (LigneArticle),
-    # plus dans le cache. / Cleanup: idempotency trace is now in DB.
-    with tenant_context(fedow_real_setup["tenant"]):
-        LigneArticle.objects.filter(idempotency_key=idem).delete()

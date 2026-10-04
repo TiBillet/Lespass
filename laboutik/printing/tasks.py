@@ -110,15 +110,18 @@ def imprimer_async(self, printer_pk, ticket_data, schema_name):
                     except TibilletUser.DoesNotExist:
                         pass
 
-                # Cloture (pour les tickets Z)
-                # / Closure (for Z-tickets)
+                # Cloture (pour les tickets Z) : la cloture unique du lieu.
+                # / Closure (for Z-tickets): the venue's single closure.
                 cloture_obj = None
                 if cloture_uuid:
-                    from laboutik.models import ClotureCaisse
+                    from comptabilite.models import ClotureCaisse
                     try:
                         cloture_obj = ClotureCaisse.objects.get(uuid=cloture_uuid)
                     except ClotureCaisse.DoesNotExist:
-                        pass
+                        logger.warning(
+                            f"[PRINT TASK] Cloture {cloture_uuid} introuvable : "
+                            f"impression du Z tracee sans lien vers sa cloture."
+                        )
 
                 ImpressionLog.objects.create(
                     uuid_transaction=uuid_transaction,

@@ -1496,10 +1496,11 @@ class ImpressionLog(models.Model):
         ),
     )
 
-    # Cloture de caisse associee (uniquement pour les justificatifs de cloture)
-    # / Associated cash register closure (only for closure receipts)
+    # Cloture unique du lieu associee (uniquement pour les tickets Z) : sert aussi a
+    # reconnaitre un DUPLICATA (laboutik/printing/tasks.py, `imprimer_async`).
+    # / The venue's single closure (Z tickets only); also used to detect a DUPLICATE.
     cloture = models.ForeignKey(
-        ClotureCaisse,
+        'comptabilite.ClotureCaisse',
         on_delete=models.PROTECT,
         blank=True, null=True,
         related_name='impressions',
@@ -1612,14 +1613,12 @@ class ImpressionLog(models.Model):
 # --- Correction de moyen de paiement ---
 # Trace d'audit pour chaque correction de moyen de paiement sur une LigneArticle.
 # Requis par la certification LNE (exigence 4 : pas de modification directe,
-# seulement des operations tracees). Le HMAC chain est casse volontairement
-# par la correction — ce modele sert de preuve pour distinguer une correction
-# tracee d'une falsification (voir integrity.py verifier_chaine()).
-# / Payment method correction audit trail.
-# Required by LNE certification (req. 4: no direct modification,
-# only traced operations). The HMAC chain is intentionally broken
-# by the correction — this model serves as proof to distinguish
-# a traced correction from tampering (see integrity.py verifier_chaine()).
+# seulement des operations tracees). La correction change le moyen de la ligne
+# (l'empreinte par ligne ne correspond plus) ; ce modele garde l'ancien moyen, le
+# nouveau, la raison et l'operateur. L'argent deplace est dans une vente CORRECTION,
+# scellee dans la chaine des ventes (`laboutik/integrity.py` verifier_chaine_ventes).
+# / Payment method correction audit trail (old and new method, reason, operator).
+# The moved money is a CORRECTION sale, sealed in the sales chain.
 
 class CorrectionPaiement(models.Model):
     """

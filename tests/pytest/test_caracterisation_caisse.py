@@ -38,9 +38,11 @@ CODE PARCOURU / CODE EXERCISED
 
 SIMULATIONS
 Chaque test est marqué `django_db` : la transaction est annulée à la fin, rien ne reste
-en base de dev (clôture comprise). La caisse est activée par `configuration_modifiee()`,
-jamais enregistrée (tests/PIEGES.md 13.22). Fedow et Celery sont simulés : aucun appel
-réseau, aucune tâche envoyée au worker. Les tâches lancées en `transaction.on_commit`
+en base de dev. La caisse est activée par `configuration_modifiee()`, jamais
+enregistrée (tests/PIEGES.md 13.22). Seule exception, le test de la clôture (T11) : il
+tourne en schéma dédié (`FastTenantTestCase`), car une clôture journalière lit toutes
+les ventes du lieu ; la configuration de ce lieu de test y est enregistrée.
+Fedow et Celery sont simulés : aucun appel réseau, aucune tâche envoyée au worker. Les tâches lancées en `transaction.on_commit`
 sont exécutées par `django_capture_on_commit_callbacks(execute=True)` (tests/PIEGES.md 13.14).
 / Rolled-back transaction per test. The register module is switched on in memory only.
 Fedow and Celery are faked. on_commit tasks are run by the capture fixture.
@@ -58,10 +60,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from django.db import connection
+from django_tenants.test.cases import FastTenantTestCase
+from django_tenants.test.client import TenantClient
 from django_tenants.utils import tenant_context
 
 from AuthBillet.models import Wallet
-from BaseBillet.models import LigneArticle, Membership, Price, Product
+from BaseBillet.models import Configuration, LigneArticle, Membership, Price, Product
 from fabriques_panier import (
     configuration_modifiee,
     creer_adhesion,
@@ -75,6 +80,7 @@ from fedow_core.services import AssetService
 from laboutik.models import (
     ArticleCommandeSauvegarde,
     CommandeSauvegarde,
+    LaboutikConfiguration,
     PointDeVente,
     Table,
 )
@@ -484,70 +490,125 @@ def test_paiement_table_nfc_libere_la_table(lieu, django_capture_on_commit_callb
 # --------------------------------------------------------------------------
 
 
-def test_cloture_annule_les_commandes_ouvertes_et_libere_les_tables(
-    lieu, django_capture_on_commit_callbacks
-):
+class TestClotureDeCaisseT11(FastTenantTestCase):
     """
-    T11 (décision D29) : deux tables. La table A est occupée par une commande ouverte
-    (`OP`) ; la table B est servie, avec une commande servie mais pas encore payée
-    (`SV`). Le caissier clôture la caisse.
-    Résultat : la commande ouverte est annulée (`AN`), la commande servie reste servie
-    (`SV`), et les DEUX tables sont libres (`L`) — la table B aussi, alors que sa
-    commande n'est pas payée. Aucune tâche n'est demandée.
-    Reste vert en G : le nouveau bouton de clôture garde ces deux effets (D29).
-    / T11 (D29): closing the register cancels the open order, keeps the served one, and
-    frees BOTH tables, even the one whose served order is unpaid. Stays green in G.
+    T11 en SCHÉMA DÉDIÉ : le bouton de clôture crée une clôture journalière, qui lit
+    TOUTES les ventes du lieu. En base partagée, elle calculerait sur tout l'historique
+    de la base de dev. Ce lieu ne contient que la vente du test ; chaque test annule sa
+    transaction à la fin. Les assertions sont celles d'avant le changement de décor.
+    / T11 in a DEDICATED SCHEMA: the closure reads every sale of the venue. Same
+    assertions as before the change of setting.
     """
-    biere = creer_une_biere_vendue_a_la_caisse(prix="5.00")
-    point_de_vente = creer_un_point_de_vente([biere.produit])
-    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
 
-    # La clôture refuse de clôturer une caisse sans vente (tests/PIEGES.md 9.61) :
-    # on vend d'abord une bière en espèces.
-    # / The closure refuses a register without sales: sell one beer first.
-    payer_a_la_caisse(
-        client_du_caissier,
-        point_de_vente,
-        biere,
-        quantite=1,
-        moyen_de_paiement="espece",
-    )
+    @classmethod
+    def get_test_schema_name(cls):
+        return "test_caracterisation_cloture"
 
-    # ÉTAT DE DÉPART : table A occupée (commande ouverte), table B servie (commande
-    # servie, pas encore payée).
-    # / STARTING STATE: table A occupied (open order), table B served (served order).
-    table_a = Table.objects.create(
-        name=f"TEST_caracterisation table A {identifiant_unique()}",
-        statut=Table.OCCUPEE,
-    )
-    commande_ouverte = CommandeSauvegarde.objects.create(
-        table=table_a,
-        statut=CommandeSauvegarde.OPEN,
-    )
-    table_b = Table.objects.create(
-        name=f"TEST_caracterisation table B {identifiant_unique()}",
-        statut=Table.SERVIE,
-    )
-    commande_servie = CommandeSauvegarde.objects.create(
-        table=table_b,
-        statut=CommandeSauvegarde.SERVED,
-    )
-    # On ne garde que les tâches demandées par la clôture.
-    # / Keep only the tasks requested by the closure.
-    lieu.taches_demandees.clear()
+    @classmethod
+    def get_test_tenant_domain(cls):
+        return "test-caracterisation-cloture.tibillet.localhost"
 
-    with django_capture_on_commit_callbacks(execute=True):
-        reponse = client_du_caissier.post(
-            URL_DE_LA_CLOTURE_CAISSE, {"uuid_pv": str(point_de_vente.uuid)}
+    @classmethod
+    def setup_tenant(cls, tenant):
+        """`Client.name` est unique et obligatoire. / Client.name is unique."""
+        tenant.name = "Test caracterisation cloture"
+
+    def setUp(self):
+        """
+        Le lieu de test, caisse activée, avec Celery simulé pendant tout le test (comme
+        la fixture `lieu`), et un administrateur du lieu connecté à la caisse.
+        / The test venue, register on, Celery faked for the whole test (like the `lieu`
+        fixture), and a logged-in venue admin.
+        """
+        # Le rollback du test précédent a rendu le `search_path` au public.
+        # / The previous test's rollback returned the search_path to public.
+        connection.set_tenant(self.tenant)
+
+        # Le singleton de la caisse porte la clé des empreintes (tests/PIEGES.md 9.86).
+        # / The register singleton carries the fingerprint key.
+        LaboutikConfiguration.get_solo().save()
+
+        # Schéma dédié : la configuration de CE lieu peut être enregistrée. Toutes les
+        # valeurs sont écrites ici : le cache garde celles du test précédent. Aucun
+        # e-mail de rapport : la clôture n'en demande pas.
+        # / Dedicated schema: this venue's configuration can be saved. No report e-mail.
+        configuration = Configuration.get_solo()
+        configuration.module_caisse = True
+        configuration.module_monnaie_locale = True
+        configuration.rapport_emails = ""
+        configuration.save()
+
+        # Les tâches demandées, pendant tout le test : une paire (nom court,
+        # arguments) par tâche.
+        # / The requested tasks, for the whole test.
+        self.taches_demandees = self.enterContext(taches_celery_enregistrees())
+
+        administrateur = creer_utilisateur(prenom="Admin", nom="Lieu")
+        administrateur.client_admin.add(self.tenant)
+        self.client_du_caissier = TenantClient(self.tenant, HTTP_ACCEPT_LANGUAGE="en")
+        self.client_du_caissier.force_login(administrateur)
+
+    def test_cloture_annule_les_commandes_ouvertes_et_libere_les_tables(self):
+        """
+        T11 (décision D29) : deux tables. La table A est occupée par une commande
+        ouverte (`OP`) ; la table B est servie, avec une commande servie mais pas encore
+        payée (`SV`). Le caissier clôture la caisse.
+        Résultat : la commande ouverte est annulée (`AN`), la commande servie reste
+        servie (`SV`), et les DEUX tables sont libres (`L`) — la table B aussi, alors
+        que sa commande n'est pas payée. Aucune tâche n'est demandée.
+        / T11 (D29): closing the register cancels the open order, keeps the served one,
+        and frees BOTH tables, even the one whose served order is unpaid.
+        """
+        biere = creer_une_biere_vendue_a_la_caisse(prix="5.00")
+        point_de_vente = creer_un_point_de_vente([biere.produit])
+        client_du_caissier = self.client_du_caissier
+
+        # La clôture refuse de clôturer une caisse sans vente (tests/PIEGES.md 9.61) :
+        # on vend d'abord une bière en espèces.
+        # / The closure refuses a register without sales: sell one beer first.
+        payer_a_la_caisse(
+            client_du_caissier,
+            point_de_vente,
+            biere,
+            quantite=1,
+            moyen_de_paiement="espece",
         )
 
-    assert reponse.status_code == 200
-    commande_ouverte.refresh_from_db()
-    commande_servie.refresh_from_db()
-    table_a.refresh_from_db()
-    table_b.refresh_from_db()
-    assert commande_ouverte.statut == CommandeSauvegarde.CANCEL
-    assert commande_servie.statut == CommandeSauvegarde.SERVED
-    assert table_a.statut == Table.LIBRE
-    assert table_b.statut == Table.LIBRE
-    assert etat_metier(taches_demandees=lieu.taches_demandees) == {"taches": []}
+        # ÉTAT DE DÉPART : table A occupée (commande ouverte), table B servie
+        # (commande servie, pas encore payée).
+        # / STARTING STATE: table A occupied (open order), table B served.
+        table_a = Table.objects.create(
+            name=f"TEST_caracterisation table A {identifiant_unique()}",
+            statut=Table.OCCUPEE,
+        )
+        commande_ouverte = CommandeSauvegarde.objects.create(
+            table=table_a,
+            statut=CommandeSauvegarde.OPEN,
+        )
+        table_b = Table.objects.create(
+            name=f"TEST_caracterisation table B {identifiant_unique()}",
+            statut=Table.SERVIE,
+        )
+        commande_servie = CommandeSauvegarde.objects.create(
+            table=table_b,
+            statut=CommandeSauvegarde.SERVED,
+        )
+        # On ne garde que les tâches demandées par la clôture.
+        # / Keep only the tasks requested by the closure.
+        self.taches_demandees.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            reponse = client_du_caissier.post(
+                URL_DE_LA_CLOTURE_CAISSE, {"uuid_pv": str(point_de_vente.uuid)}
+            )
+
+        assert reponse.status_code == 200
+        commande_ouverte.refresh_from_db()
+        commande_servie.refresh_from_db()
+        table_a.refresh_from_db()
+        table_b.refresh_from_db()
+        assert commande_ouverte.statut == CommandeSauvegarde.CANCEL
+        assert commande_servie.statut == CommandeSauvegarde.SERVED
+        assert table_a.statut == Table.LIBRE
+        assert table_b.statut == Table.LIBRE
+        assert etat_metier(taches_demandees=self.taches_demandees) == {"taches": []}

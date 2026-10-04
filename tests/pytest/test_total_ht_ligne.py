@@ -9,7 +9,7 @@ CE QUI EST TESTE / WHAT IS TESTED
 ---------------------------------
 La certification LNE (exigence 3) demande de stocker le HT de chaque ligne de
 vente (`LigneArticle.total_ht`). Ce HT est scelle dans l'empreinte HMAC de la
-ligne et exporte dans l'archive fiscale, qui en deduit la TVA de la ligne.
+ligne et exporte dans l'archive fiscale, avec la TVA stockee de la ligne.
 
 Une ligne vaut `amount x qty` (prix unitaire x quantite). Le HT doit donc etre
 calcule sur ce total, pas sur le prix d'un seul article :
@@ -33,6 +33,7 @@ import django  # noqa: E402
 
 django.setup()
 
+import csv  # noqa: E402
 from datetime import timedelta  # noqa: E402
 from decimal import Decimal  # noqa: E402
 from unittest import mock  # noqa: E402
@@ -49,7 +50,6 @@ from BaseBillet.models import (  # noqa: E402
     LigneArticle,
     Price,
     Product,
-    SaleOrigin,
     Tva,
 )
 from QrcodeCashless.models import CarteCashless  # noqa: E402
@@ -241,28 +241,39 @@ class TestTotalHtDeLaLigne(FastTenantTestCase):
         assert lignes.count() == 2
         assert ht_par_part == [333, 600], f"HT des parts : {ht_par_part}"
 
-    def test_l_archive_fiscale_deduit_la_bonne_tva_de_la_ligne(self):
-        """L'archive exporte TVA = TTC de la ligne - HT stocke : 1500 - 1250 = 250.
-        / The archive exports VAT = line TTC - stored HT: 250."""
-        from laboutik.archivage import _extraire_lignes_article
+    def test_l_archive_fiscale_exporte_le_ht_et_la_tva_stockes_de_la_ligne(self):
+        """L'archive exporte le HT et la TVA stockés sur l'article : 3 bières à
+        5,00 € (TTC 1500) → HT 1250, TVA 1500 − 1250 = 250.
+        / The archive exports the item's stored HT and VAT: HT 1250, VAT 250."""
+        from laboutik.archivage import generer_fichiers_archive
 
         maintenant = timezone.now()
         self._encaisser("espece", self.biere, prix_centimes=500, quantite=3)
         ligne = LigneArticle.objects.get(pricesold__productsold__product=self.biere)
 
-        lignes_exportees = _extraire_lignes_article(
-            maintenant - timedelta(minutes=5), maintenant + timedelta(minutes=5)
+        fichiers_de_l_archive = generer_fichiers_archive(
+            schema=self.tenant.schema_name,
+            debut=maintenant - timedelta(minutes=5),
+            fin=maintenant + timedelta(minutes=5),
         )
-        ligne_exportee = next(
-            export for export in lignes_exportees if export["uuid"] == str(ligne.uuid)
+        texte_des_articles = fichiers_de_l_archive["articles.csv"].decode("utf-8-sig")
+        articles_exportes = list(
+            csv.DictReader(texte_des_articles.splitlines(), delimiter=";")
         )
-        assert ligne_exportee["total_ht_centimes"] == "1250"
-        assert ligne_exportee["total_tva_centimes"] == "250"
+        article_de_la_ligne = []
+        for article_exporte in articles_exportes:
+            if article_exporte["uuid"] == str(ligne.uuid):
+                article_de_la_ligne.append(article_exporte)
+        assert len(article_de_la_ligne) == 1, articles_exportes
+        assert article_de_la_ligne[0]["total_ht"] == "1250"
+        assert article_de_la_ligne[0]["total_tva"] == "250"
 
     def test_la_chaine_hmac_reste_valide(self):
-        """Le HT scelle reste coherent avec l'empreinte : la chaine est valide.
-        / The sealed HT stays consistent with the fingerprint: chain is valid."""
-        from laboutik.integrity import verifier_chaine
+        """Le HT scelle reste coherent avec l'empreinte : la chaine des ventes est
+        valide (`verifier_chaine_ventes` ne trouve aucune anomalie).
+        / The sealed HT stays consistent with the fingerprint: the sales chain is
+        valid."""
+        from laboutik.integrity import verifier_chaine_ventes
 
         self._encaisser("espece", self.biere, prix_centimes=500, quantite=3)
         self._encaisser(
@@ -270,7 +281,5 @@ class TestTotalHtDeLaLigne(FastTenantTestCase):
         )
 
         cle_hmac = LaboutikConfiguration.get_solo().get_or_create_hmac_key()
-        est_valide, erreurs, _corrections = verifier_chaine(
-            LigneArticle.objects.filter(sale_origin=SaleOrigin.LABOUTIK), cle_hmac
-        )
-        assert est_valide, f"Chaine invalide : {erreurs}"
+        anomalies = verifier_chaine_ventes(cle_hmac)
+        assert anomalies == [], f"Chaine invalide : {anomalies}"

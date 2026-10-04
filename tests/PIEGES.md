@@ -359,11 +359,13 @@ ligne.uuid_transaction = test_uuid
 lignes = LigneArticle.objects.filter(uuid_transaction=test_uuid)
 ```
 
-**9.58 — `obtenir_previous_hmac()` et `verifier_chaine()` doivent trier identiquement.**
-Les deux fonctions parcourent les LigneArticle dans un ordre. Si l'un trie
-par `(-datetime, -pk)` et l'autre par `(datetime, uuid)`, les lignes avec le
-meme `datetime` (creees dans la meme seconde) seront dans un ordre different.
-`uuid` est aleatoire, `pk` est auto-increment. Toujours utiliser `(datetime, pk)`.
+**9.58 — L'empreinte par ligne (`obtenir_previous_hmac()`) trie par `(datetime, pk)`.**
+`obtenir_previous_hmac()` cherche la derniere LigneArticle chainee par
+`(-datetime, -pk)`. Les lignes avec le meme `datetime` (creees dans la meme
+seconde) doivent toujours etre departagees par `pk` (auto-increment), jamais
+par `uuid` (aleatoire). La verification de l'ancienne chaine par ligne
+(`verifier_chaine`) est retiree : l'integrite se verifie sur la chaine des
+VENTES (`verifier_chaine_ventes`, triee par numero).
 
 **9.59 — `Ticket` non importe dans `laboutik/views.py` (bug pre-existant).**
 Le modele `Ticket` est utilise a 6 endroits dans `views.py` mais n'etait pas
@@ -403,12 +405,17 @@ Les tests qui envoyaient `datetime_ouverture` dans le POST continuent de
 fonctionner MAIS le champ est simplement ignore par le serializer (DRF ignore
 les champs inconnus). Cependant, c'est trompeur — retirer le champ du payload.
 
-**9.63 — Clotures M/A Celery Beat : `_generer_cloture_agregee()` est testable directement.**
-Pas besoin de mocker Celery Beat pour tester les clotures mensuelles/annuelles.
-La fonction utilitaire `_generer_cloture_agregee()` est importable directement :
+**9.63 — Clotures J/H/M/A : `generer_cloture_pour_tenant()` est testable directement.**
+Pas besoin de mocker Celery Beat pour tester une cloture. Les clotures sont des
+`comptabilite.ClotureCaisse`, creees par `comptabilite/tasks.py` ; la tache est
+appelable comme une fonction (bornes ISO facultatives, sinon la periode finie du
+niveau). Schema dedie : une cloture lit TOUTES les ventes du lieu.
 ```python
-from laboutik.tasks import _generer_cloture_agregee
-_generer_cloture_agregee(niveau='M', niveau_source='J', date_debut=..., date_fin=...)
+import comptabilite.tasks
+uuid_de_la_cloture = comptabilite.tasks.generer_cloture_pour_tenant(
+    schema_name=self.tenant.schema_name,
+    niveau=ClotureCaisse.NIVEAU_JOURNALIER,  # ou H / M / A
+)
 ```
 
 **9.64 — La cloture est GLOBALE au tenant, pas par PV.**
@@ -3704,6 +3711,20 @@ booking/tests/test_timezone_slots.py).
 ressource, signature de `validate_new_booking`, statut par défaut d'un booking) l'avaient
 cassé sans que personne le voie. Tout dossier de tests doit être dans le lancement par
 défaut (`scripts/lancer_tests.sh`).
+
+**13.24 — Sous `django_db`, ne pas supprimer à la main un utilisateur, un wallet ou une carte.**
+Ces objets vivent dans le schéma `public`, et une trentaine de tables de CHAQUE lieu pointent
+vers eux. Un `delete()` fait vérifier ces clés dans tous les schémas (environ 2 000 pour 71
+lieux), dans une seule transaction : chaque vérification prend un verrou, et le test tombe
+en `out of shared memory` (`max_locks_per_transaction`). C'est lent, et c'est inutile : la
+transaction du test est annulée à la fin (13.1), et les fixtures de portée « function »
+s'ouvrent à l'intérieur. Une suppression qui échoue en base empoisonne en plus la
+transaction : toute requête suivante du test lève une erreur, même sous `try/except`.
+Règle : pas de teardown, un e-mail ou un nom unique (`uuid4`) à la place. Le nettoyage reste
+nécessaire pour un test SANS la marque, avec `transaction=True`, une classe `unittest` non
+marquée, une fixture de portée `module` ou `session`, ou une écriture faite par un autre
+processus (serveur live, Fedow). Exemples : `test_balance_soldes_et_recharge.py`,
+`test_demo_wallet_alignment.py`.
 
 **Mises au point sur des pièges plus anciens :**
 - 9.17 (`Referer` requis par `MembershipMVT.create`) est périmé : la vue fait

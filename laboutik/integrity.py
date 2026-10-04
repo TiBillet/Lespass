@@ -96,75 +96,6 @@ def obtenir_previous_hmac(sale_origin=None):
     return derniere_hmac or ""
 
 
-def verifier_chaine(lignes_queryset, cle_secrete):
-    """
-    Verifie l'integrite de la chaine HMAC sur un queryset de LigneArticle.
-    Croise avec CorrectionPaiement pour distinguer corrections tracees de falsifications.
-    / Verifies HMAC chain integrity on a LigneArticle queryset.
-    Cross-checks with CorrectionPaiement to distinguish traced corrections from tampering.
-
-    LOCALISATION : laboutik/integrity.py
-
-    :param lignes_queryset: QuerySet de LigneArticle (sera ordonne par datetime, pk)
-    :param cle_secrete: str — cle HMAC en clair
-    :return: tuple (est_valide: bool, erreurs: list, corrections_tracees: list)
-    """
-    erreurs = []
-    corrections_tracees = []
-    previous = ""
-
-    for ligne in lignes_queryset.order_by("datetime", "pk"):
-        # Les lignes pre-migration n'ont pas de HMAC — on les ignore
-        # / Pre-migration lines have no HMAC — skip them
-        if not ligne.hmac_hash:
-            continue
-
-        attendu = calculer_hmac(ligne, cle_secrete, previous)
-
-        if ligne.hmac_hash != attendu:
-            # Verifier si c'est une correction tracee (CorrectionPaiement)
-            # Le modele n'existe pas encore (session 17) — on gere le cas
-            # / Check if it's a traced correction (CorrectionPaiement)
-            # Model doesn't exist yet (session 17) — handle gracefully
-            correction_trouvee = False
-            try:
-                from laboutik.models import CorrectionPaiement
-
-                correction = CorrectionPaiement.objects.filter(
-                    ligne_article=ligne,
-                ).first()
-                if correction:
-                    correction_trouvee = True
-                    corrections_tracees.append(
-                        {
-                            "uuid": str(ligne.uuid),
-                            "correction_uuid": str(correction.uuid),
-                            "ancien_moyen": correction.ancien_moyen,
-                            "nouveau_moyen": correction.nouveau_moyen,
-                            "raison": correction.raison,
-                        }
-                    )
-            except (ImportError, LookupError):
-                # Le modele CorrectionPaiement n'existe pas encore
-                # / CorrectionPaiement model doesn't exist yet
-                pass
-
-            if not correction_trouvee:
-                erreurs.append(
-                    {
-                        "uuid": str(ligne.uuid),
-                        "datetime": str(ligne.datetime),
-                        "attendu": attendu,
-                        "trouve": ligne.hmac_hash,
-                    }
-                )
-
-        previous = ligne.hmac_hash
-
-    est_valide = len(erreurs) == 0
-    return (est_valide, erreurs, corrections_tracees)
-
-
 def calculer_total_ht(amount_ttc_centimes, taux_tva):
     """
     Calcule le total HT depuis le TTC et le taux de TVA.
@@ -185,25 +116,59 @@ def calculer_total_ht(amount_ttc_centimes, taux_tva):
     return amount_ttc_centimes
 
 
-def ligne_couverte_par_cloture(ligne):
+def vente_couverte_par_cloture(vente):
     """
-    Verifie si une LigneArticle est couverte par une cloture journaliere existante.
-    Retourne la ClotureCaisse si oui, None sinon.
-    Utilisee comme garde pour interdire les corrections post-cloture.
-    Seules les clotures J sont verifiees (M/A sont des agregats, pas des periodes).
-    / Checks if a LigneArticle is covered by an existing daily closure.
-    Returns the ClotureCaisse if yes, None otherwise.
-    Only daily closures are checked (M/A are aggregates, not periods).
+    Dit si une vente réglée est couverte par une clôture journalière (J) du lieu.
+    / Tells whether a settled sale is covered by a daily closure (J) of the venue.
 
     LOCALISATION : laboutik/integrity.py
-    """
-    from laboutik.models import ClotureCaisse
 
-    return ClotureCaisse.objects.filter(
-        niveau=ClotureCaisse.JOURNALIERE,
-        datetime_ouverture__lte=ligne.datetime,
-        datetime_cloture__gte=ligne.datetime,
-    ).first()
+    Une vente est couverte quand son numéro est inférieur ou égal au PLUS GRAND
+    numéro de dernière vente de toutes les J du lieu (`comptabilite.ClotureCaisse`,
+    `numero_derniere_vente`). Le plus grand numéro ne dépend ni de l'ordre des J, ni
+    d'une J sans plage (son numéro vide est ignoré).
+    / A sale is covered when its number is ≤ the HIGHEST last-sale number of all the
+    venue's J. Independent of J order; a J without range is ignored.
+
+    La règle porte sur les J seulement. Une semaine, un mois ou une année recouvre
+    des ventes que leurs J couvrent déjà. Conséquence : une M lancée à la main avant
+    la J de son dernier jour ne protège pas les ventes de ce jour ; c'est la J qui
+    les protège, à sa création.
+    / J only: a manual M created before the J of its last day does not protect that
+    day's sales; the J does.
+
+    Une vente sans numéro (pas encore réglée) n'est jamais couverte : c'est à
+    l'appelant de la refuser (seule une vente réglée se corrige).
+    / A sale without a number is never covered: the caller refuses it.
+
+    FLUX : appelée par `laboutik/views.py` — `raison_du_refus_de_correction`
+    (route de correction et écran du détail d'une vente).
+    / Called by raison_du_refus_de_correction (correction route and detail screen).
+
+    :param vente: la `Vente` dont on veut savoir si elle est figée par une J
+    :return: True si une J couvre la vente, False sinon
+    """
+    # Import local, comme dans tout ce module : `laboutik.integrity` se charge sans
+    # charger les modèles des autres applications.
+    # / Local import, as in this whole module.
+    from django.db.models import Max
+
+    from comptabilite.models import ClotureCaisse
+
+    if vente.numero is None:
+        return False
+
+    numero_de_la_derniere_vente_couverte = ClotureCaisse.objects.filter(
+        niveau=ClotureCaisse.NIVEAU_JOURNALIER
+    ).aggregate(plus_grand_numero=Max("numero_derniere_vente"))["plus_grand_numero"]
+
+    # Aucune J (ou aucune J avec une plage) : rien n'est couvert.
+    # / No J (or no J with a range): nothing is covered.
+    if numero_de_la_derniere_vente_couverte is None:
+        return False
+
+    vente_dans_une_plage_de_j = vente.numero <= numero_de_la_derniere_vente_couverte
+    return vente_dans_une_plage_de_j
 
 
 def calculer_hmac_vente(vente, cle, previous_hmac):
@@ -358,8 +323,9 @@ def verifier_chaine_ventes(
     français). Une vente peut avoir plusieurs anomalies.
     / An anomaly is a dict: "numero", "uuid" (text), "raison" (French sentence).
 
-    FLUX : appelée par les tests, et par la section « intégrité » du rapport des ventes
-    (`comptabilite/rapport.py`) sur la plage de sa période.
+    FLUX : appelée par la section « intégrité » du rapport des ventes
+    (`comptabilite/rapport.py`) sur la plage de sa période, par `verify_clotures` (la
+    plage de chaque J) et par `verify_integrity` (toute la chaîne).
 
     :param cle: str — la clé HMAC du lieu, en clair
     :param numero_de_la_premiere_vente: int ou None — début de la plage (inclus)

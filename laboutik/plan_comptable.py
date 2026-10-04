@@ -14,16 +14,18 @@ QUI APPELLE / CALLERS
 ---------------------
 - `charger_le_plan_comptable_par_defaut()` : la commande `charger_plan_comptable` et
   le bouton « Charger le plan par défaut » de l'admin (`laboutik/views.py`).
-- `s_assurer_que_le_plan_existe()` : le filet des rapports et des exports. Rien sur le
-  chemin d'une vente.
+- `s_assurer_que_le_plan_existe()` : le filet. Appelé à l'ouverture des trois écrans
+  du plan (`Administration/admin/laboutik.py`), au début du FEC d'une clôture
+  (`comptabilite/fec.py` `generer_fec_cloture`) et par « Plan complet ? ». Rien sur
+  le chemin d'une vente.
 - `compte_pour_reglement()`, `compte_pour_article()`, `compte_de_tva_pour_taux()`,
   `comptes_du_plan_par_defaut_du_lieu()`, `compte_des_cadeaux_a_la_clientele()`,
   `journal_pour()`, `collisions_de_codes_journal()`, `points_de_vente_au_code_journal_reserve()`,
   `points_de_vente_sans_code_journal()` : les exports (`comptabilite/ventilation.py`)
   et « Plan complet ? ». Ces règles ne modifient rien en base.
-- `ce_qui_manque_pour_exporter()` (« Plan complet ? ») et
-  `monnaies_acceptees_par_le_lieu()` : les écrans du plan dans l'admin
-  (`Administration/admin/laboutik.py`).
+- `ce_qui_manque_pour_exporter()` (« Plan complet ? ») : le bouton « Vérifier le
+  plan » des écrans du plan (`CompteComptableAdmin.verifier_le_plan`), jamais leur
+  ouverture. `monnaies_acceptees_par_le_lieu()` : l'écran des comptes des monnaies.
 
 La migration `laboutik/0010_charger_le_plan_comptable_par_defaut` a sa propre version
 de ce chargement (modèles historiques, `apps.get_model`) : elle lit les mêmes données.
@@ -263,8 +265,10 @@ def s_assurer_que_le_plan_existe():
     Filet : charge le plan par défaut si le lieu n'a AUCUN compte. Sinon ne fait rien.
     / Safety net: loads the default plan if the venue has NO account. Else does nothing.
 
-    Appelé avant un rapport, un export ou « Plan complet ? ». Jamais pendant une vente.
-    / Called before a report, an export or "Complete plan?". Never during a sale.
+    Appelé à l'ouverture des trois écrans du plan, au début du FEC d'une clôture
+    (`generer_fec_cloture`) et par « Plan complet ? ». Jamais pendant une vente.
+    / Called when the three plan screens open, before a closure's FEC and by
+    "Complete plan?". Never during a sale.
 
     Deux appels en même temps (deux exports) ne cassent rien : le second tombe sur
     l'unicité du numéro de compte, sa transaction est annulée, le plan du premier
@@ -1074,8 +1078,10 @@ def ce_qui_manque_pour_exporter():
        lettre) ;
     7. des règlements au compte d'attente 471000 (moyen inconnu), à reclasser.
 
-    APPELÉ PAR : les trois écrans du plan dans l'admin (composant en tête,
-    `Administration/templates/admin/comptable/plan_complet.html`).
+    APPELÉ PAR : le bouton « Vérifier le plan » des trois écrans du plan dans
+    l'admin (`Administration/admin/laboutik.py` CompteComptableAdmin.verifier_le_plan,
+    composant `Administration/templates/admin/comptable/plan_complet.html`). Il relit
+    tout l'historique du lieu : il n'est jamais appelé à l'ouverture d'un écran.
 
     :return: liste de dict {"phrase": texte pour un bénévole, "lien": URL de l'écran
         qui règle le manque} ; vide si le plan est complet

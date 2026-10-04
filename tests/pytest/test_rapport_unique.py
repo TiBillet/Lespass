@@ -209,6 +209,7 @@ from BaseBillet.services_vente import (  # noqa: E402
     ouvrir_vente,
     tarif_vendu_d_un_produit_systeme,
 )
+from comptabilite.presentation import sections_pour_affichage  # noqa: E402
 from comptabilite.rapport import RapportDesVentes  # noqa: E402
 from fabriques_panier import (  # noqa: E402
     ajouter_un_tarif,
@@ -2276,6 +2277,636 @@ class TestRapportDesVentes(FastTenantTestCase):
         verifier_egalites(vente)
         return LigneArticle.objects.get(vente=vente)
 
+    def test_chiffre_affaires_par_moyen_decor_mele_somme_egale_au_ca(self):
+        """
+        Le chiffre d'affaires par moyen (section 2, `par_moyen`) sur un décor mêlé :
+        - un jus à 10,00 € en espèces, puis remboursé en espèces (avoir) : espèces
+          +1000 −1000, CA +1000 −1000 ;
+        - un jus à 3,50 € en espèces, corrigé en CB : espèces +350 −350, CB +350 ;
+        - une recharge de 20,00 € en espèces : espèces +2000, part hors CA −2000 ;
+        - une bière à 5,00 € en monnaie locale : monnaie locale +500 ;
+        - une bière à 5,00 € en CB : CB +500 ;
+        - un billet à 20,00 € payé par Stripe, qui encaisse 20,03 € : Stripe +2003,
+          écart hors CA −3.
+        Calcul à la main : espèces 1000 − 1000 + 350 − 350 + 2000 − 2000 = 0 ; CB
+        350 + 500 = 850 ; monnaie locale 500 ; Stripe 2003 − 3 = 2000. Chiffre
+        d'affaires : 1000 − 1000 + 350 + 500 + 500 + 2000 = 3350 = 0 + 850 + 500 +
+        2000. L'affichage ne met pas le tableau par moyen en alerte.
+        / Revenue by method on a mixed setting: cash 0, card 850, local 500, Stripe
+        2000; their sum equals the revenue 3350; no display alert.
+        """
+        monnaie_locale = self._monnaie(NOM_DE_LA_MONNAIE_LOCALE, Asset.TLF)
+        tarif_de_la_recharge = creer_tarif_vendu(
+            nom="Recharge", prix_en_euros="20.00", taux_tva="0.00",
+            methode_caisse=Product.RECHARGE_EUROS,
+        )
+        tarif_de_la_biere = creer_tarif_vendu(
+            nom="Biere", prix_en_euros="5.00", taux_tva="20.00",
+        )
+
+        # Le jus à 10,00 € puis son avoir en espèces.
+        # / The 10.00 € juice, then its cash credit note.
+        ligne_du_jus = self._ligne_d_un_jus_vendu_en_especes(prix=1000)
+        with taches_celery_enregistrees():
+            ecrire_la_vente_d_avoir_d_une_ligne(
+                ligne_du_jus,
+                quantite=Decimal("1"),
+                moyen_rembourse=PaymentMethod.CASH,
+                origine=SaleOrigin.ADMIN,
+            )
+        # Le jus à 3,50 € en espèces, corrigé en CB.
+        # / The 3.50 € cash juice, corrected into card.
+        vente_a_corriger = self._vendre_un_jus_en_especes()
+        self._corriger_les_especes_en_cb(vente_a_corriger, self._operateur())
+        # La recharge en espèces, la bière en monnaie locale, la bière en CB.
+        # / The cash top-up, the local currency beer, the card beer.
+        verifier_egalites(fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[{
+                "pricesold": tarif_de_la_recharge, "quantite": Decimal("1"),
+                "prix_unitaire": 2000, "taux_tva": Decimal("0"),
+            }],
+            reglements=[{"moyen": PaymentMethod.CASH, "montant": 2000}],
+        ))
+        verifier_egalites(fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[{
+                "pricesold": tarif_de_la_biere, "quantite": Decimal("1"),
+                "prix_unitaire": 500, "taux_tva": Decimal("20"),
+            }],
+            reglements=[{
+                "moyen": PaymentMethod.LOCAL_EURO, "montant": 500,
+                "asset": monnaie_locale.uuid,
+            }],
+        ))
+        verifier_egalites(fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[{
+                "pricesold": tarif_de_la_biere, "quantite": Decimal("1"),
+                "prix_unitaire": 500, "taux_tva": Decimal("20"),
+            }],
+            reglements=[{"moyen": PaymentMethod.CC, "montant": 500}],
+        ))
+        # Le billet Stripe avec un écart de +3.
+        # / The Stripe ticket with a +3 gap.
+        self._billet_vendu_en_ligne_par_stripe(2000, ecart_en_centimes=3)
+
+        chiffre_affaires = self._rapport().section_chiffre_affaires()
+
+        totaux_par_moyen = {}
+        somme_des_moyens = 0
+        for code_du_moyen, ligne_du_moyen in chiffre_affaires["par_moyen"].items():
+            totaux_par_moyen[code_du_moyen] = ligne_du_moyen["total_en_centimes"]
+            somme_des_moyens += ligne_du_moyen["total_en_centimes"]
+        assert totaux_par_moyen == {
+            PaymentMethod.CASH: 0,
+            PaymentMethod.CC: 850,
+            PaymentMethod.LOCAL_EURO: 500,
+            PaymentMethod.STRIPE_NOFED: 2000,
+        }
+        assert chiffre_affaires["total_ttc_en_centimes"] == 3350
+        assert somme_des_moyens == chiffre_affaires["total_ttc_en_centimes"]
+
+        with translation.override("fr"):
+            sections = sections_pour_affichage({"chiffre_affaires": chiffre_affaires})
+        tableau_par_moyen = None
+        for tableau in sections[0]["tableaux"]:
+            if tableau["testid"] == "chiffre-affaires-par-moyen":
+                tableau_par_moyen = tableau
+        assert tableau_par_moyen is not None
+        assert tableau_par_moyen["alerte"] is False
+
+    def test_chiffre_affaires_par_moyen_qui_ne_recompose_pas_le_ca_est_en_alerte(self):
+        """
+        Un rapport dont les lignes par moyen (900) ne recomposent pas le chiffre
+        d'affaires (1000) : le tableau « Par moyen de paiement » est en alerte, avec
+        l'écart écrit en mots (−1,00 €).
+        / Lines by method that do not add up to the revenue: the table is in alert,
+        with the gap in words.
+        """
+        chiffre_affaires_incoherent = {
+            "total_ttc_en_centimes": 1000,
+            "total_ht_en_centimes": 833,
+            "total_tva_en_centimes": 167,
+            "par_moyen": {
+                PaymentMethod.CASH: {"libelle": "Espèces", "total_en_centimes": 900},
+            },
+            "par_taux": {},
+            "par_categorie": {},
+            "par_origine": {},
+            "par_journal": {},
+        }
+
+        with translation.override("fr"):
+            sections = sections_pour_affichage(
+                {"chiffre_affaires": chiffre_affaires_incoherent}
+            )
+
+        tableau_par_moyen = None
+        for tableau in sections[0]["tableaux"]:
+            if tableau["testid"] == "chiffre-affaires-par-moyen":
+                tableau_par_moyen = tableau
+        assert tableau_par_moyen is not None
+        assert tableau_par_moyen["alerte"] is True
+        assert "ne recomposent pas" in tableau_par_moyen["message_d_alerte"]
+        # L'écart est signé : 900 − 1000 = −100, écrit « −1,00 € » (signe moins
+        # typographique, espace insécable).
+        # / The gap is signed: −100, written with the typographic minus.
+        ecart_attendu = f"écart de {chr(0x2212)}1,00{chr(0xA0)}€"
+        assert ecart_attendu in tableau_par_moyen["message_d_alerte"], (
+            tableau_par_moyen["message_d_alerte"]
+        )
+
+        # La fiche de la clôture dans l'admin écrit l'alerte en mots, pas seulement
+        # en rouge (une couleur seule ne se lit pas avec un lecteur d'écran).
+        # / The admin closure page writes the alert in words, not only in red.
+        from django.template.loader import render_to_string
+
+        with translation.override("fr"):
+            contenu_de_la_section = render_to_string(
+                "comptabilite/admin/_contenu_section_rapport.html",
+                {"section": sections[0]},
+            )
+        assert 'data-testid="comptabilite-alerte-chiffre-affaires-par-moyen"' in (
+            contenu_de_la_section
+        )
+        assert "ne recomposent pas" in contenu_de_la_section
+
+    # ------------------------------------------------------------------
+    # Σ du chiffre d'affaires par moyen = chiffre d'affaires TTC, cas par cas
+    # / Revenue by method adds up to the revenue, case by case
+    # ------------------------------------------------------------------
+
+    def _totaux_par_moyen(self, par_moyen):
+        """
+        Un dictionnaire « par moyen » du rapport, réduit à {code: montant}.
+        / A "by method" report dict, reduced to {code: amount}.
+        """
+        totaux = {}
+        moyens_et_lignes = par_moyen.items()
+        for code_du_moyen, ligne_du_moyen in moyens_et_lignes:
+            totaux[code_du_moyen] = ligne_du_moyen["total_en_centimes"]
+        return totaux
+
+    def _totaux_non_nuls_par_moyen(self, par_moyen):
+        """
+        Les lignes non nulles d'un dictionnaire « par moyen », en {code: montant} (un
+        moyen corrigé peut rester à 0).
+        / The non-zero lines of a "by method" dict (a corrected method may stay at 0).
+        """
+        totaux = {}
+        moyens_et_lignes = par_moyen.items()
+        for code_du_moyen, ligne_du_moyen in moyens_et_lignes:
+            if ligne_du_moyen["total_en_centimes"] != 0:
+                totaux[code_du_moyen] = ligne_du_moyen["total_en_centimes"]
+        return totaux
+
+    def _verifier_somme_egale_au_chiffre_d_affaires(self, chiffre_affaires):
+        """
+        L'invariant : Σ des lignes par moyen = chiffre d'affaires TTC.
+        / The invariant: the lines by method add up to the revenue.
+        """
+        somme_des_moyens = 0
+        lignes_par_moyen = chiffre_affaires["par_moyen"].values()
+        for ligne_du_moyen in lignes_par_moyen:
+            somme_des_moyens += ligne_du_moyen["total_en_centimes"]
+        assert somme_des_moyens == chiffre_affaires["total_ttc_en_centimes"]
+
+    def _tarif_de_recharge(self, prix_en_euros):
+        """Une recharge en euros de caisse (hors chiffre d'affaires, TVA 0).
+        / A register euro top-up (off revenue, 0 % VAT)."""
+        return creer_tarif_vendu(
+            nom="Recharge",
+            prix_en_euros=prix_en_euros,
+            taux_tva="0.00",
+            methode_caisse=Product.RECHARGE_EUROS,
+        )
+
+    def _corriger_le_moyen(self, vente_d_origine, moyen_ancien, moyen_nouveau, montant):
+        """
+        La correction du moyen de paiement d'une vente, comme la caisse l'écrit
+        (`corriger_moyen_paiement`) : une vente CORRECTION liée, sans article, ancien
+        moyen −montant, nouveau moyen +montant.
+        / A payment method correction, as the register writes it.
+        """
+        correction = ouvrir_vente(
+            origine=SaleOrigin.LABOUTIK,
+            nature=Vente.Nature.CORRECTION,
+            vente_liee=vente_d_origine,
+        )
+        ajouter_reglement(correction, moyen=moyen_ancien, montant=-montant)
+        ajouter_reglement(correction, moyen=moyen_nouveau, montant=montant)
+        correction = encaisser_vente(correction)
+        verifier_egalites(correction)
+        return correction
+
+    def test_chiffre_affaires_par_moyen_offert_total_et_part_offerte(self):
+        """
+        Une bière à 5,00 € offerte en totalité (règlement FREE 500, ajouté par le
+        service) et un jus à 3,50 € avec 1,50 € offerts (espèces 200, FREE 150).
+        L'offert n'est pas de l'argent : par moyen = {espèces 200} ; chiffre
+        d'affaires 0 + 200 = 200.
+        / A fully gifted beer and a juice with a gifted part: by method = cash 200;
+        revenue 200.
+        """
+        tarif_de_la_biere = creer_tarif_vendu(nom="Biere", prix_en_euros="5.00")
+        verifier_egalites(fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[{
+                "pricesold": tarif_de_la_biere, "quantite": Decimal("1"),
+                "prix_unitaire": 500, "taux_tva": Decimal("20"),
+                "offert_en_totalite": True,
+            }],
+        ))
+        verifier_egalites(fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[{
+                "pricesold": self.tarif_du_jus, "quantite": Decimal("1"),
+                "prix_unitaire": 350, "taux_tva": Decimal("20"),
+                "part_offerte": 150,
+                "source_offert": LigneArticle.SourceOffert.OFFRIR,
+            }],
+            reglements=[
+                {"moyen": PaymentMethod.CASH, "montant": 200},
+                {"moyen": PaymentMethod.FREE, "montant": 150},
+            ],
+        ))
+
+        chiffre_affaires = self._rapport().section_chiffre_affaires()
+
+        assert self._totaux_par_moyen(chiffre_affaires["par_moyen"]) == {
+            PaymentMethod.CASH: 200,
+        }
+        assert chiffre_affaires["total_ttc_en_centimes"] == 200
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+
+    def test_chiffre_affaires_par_moyen_jetons_cadeau(self):
+        """
+        Une bière à 5,00 € payée en jetons cadeau (LG, TVA 0, D8 bis) : c'est une
+        vente. Par moyen = {jetons 500} ; chiffre d'affaires 500.
+        / A beer paid in gift tokens is a sale: by method = tokens 500; revenue 500.
+        """
+        jetons_cadeau = self._monnaie(NOM_DES_JETONS_CADEAU, Asset.TNF)
+        tarif_de_la_biere = creer_tarif_vendu(
+            nom="Biere", prix_en_euros="5.00", taux_tva="0.00"
+        )
+        verifier_egalites(fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[{
+                "pricesold": tarif_de_la_biere, "quantite": Decimal("1"),
+                "prix_unitaire": 500, "taux_tva": Decimal("0"),
+            }],
+            reglements=[{
+                "moyen": PaymentMethod.LOCAL_GIFT, "montant": 500,
+                "asset": jetons_cadeau.uuid,
+            }],
+        ))
+
+        chiffre_affaires = self._rapport().section_chiffre_affaires()
+
+        assert self._totaux_par_moyen(chiffre_affaires["par_moyen"]) == {
+            PaymentMethod.LOCAL_GIFT: 500,
+        }
+        assert chiffre_affaires["total_ttc_en_centimes"] == 500
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+
+    def test_chiffre_affaires_par_moyen_vente_en_points_exclue(self):
+        """
+        Une planche à 300,00 points (vente en points, règlement NM) et un jus à
+        3,50 € en espèces. Les points ne sont ni du chiffre d'affaires ni un moyen :
+        par moyen = {espèces 350} ; chiffre d'affaires 350.
+        / A points sale and a cash juice: by method = cash 350; revenue 350.
+        """
+        points = self._monnaie(NOM_DES_POINTS, Asset.FID)
+        self._vente_en_points(points, 30000)
+        self._vendre_un_jus_en_especes()
+
+        chiffre_affaires = self._rapport().section_chiffre_affaires()
+
+        assert self._totaux_par_moyen(chiffre_affaires["par_moyen"]) == {
+            PaymentMethod.CASH: 350,
+        }
+        assert chiffre_affaires["total_ttc_en_centimes"] == 350
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+
+    def test_chiffre_affaires_par_moyen_ecart_negatif(self):
+        """
+        Un billet à 20,00 € payé par Stripe, qui n'encaisse que 19,98 € : règlement
+        Stripe 1998, écart d'encaissement hors chiffre d'affaires −2. Par moyen =
+        Stripe 1998 − (−2) = 2000 ; chiffre d'affaires 2000.
+        / A Stripe ticket collected 2 cents short: Stripe 1998 + 2 = 2000; revenue 2000.
+        """
+        self._billet_vendu_en_ligne_par_stripe(2000, ecart_en_centimes=-2)
+
+        chiffre_affaires = self._rapport().section_chiffre_affaires()
+
+        assert self._totaux_par_moyen(chiffre_affaires["par_moyen"]) == {
+            PaymentMethod.STRIPE_NOFED: 2000,
+        }
+        assert chiffre_affaires["total_ttc_en_centimes"] == 2000
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+
+    def test_chiffre_affaires_par_moyen_plusieurs_moyens(self):
+        """
+        Une recharge de 20,00 € et une bière à 5,00 €, payées 15,00 € en espèces et
+        10,00 € par CB. La part hors chiffre d'affaires (2000) ne sait pas sous quel
+        moyen tomber : elle est retirée de « plusieurs moyens ». Par moyen = espèces
+        1500, CB 1000, plusieurs moyens −2000 ; Σ = 500 = chiffre d'affaires (la
+        bière).
+        / A top-up and a beer paid by two methods: the off-revenue part goes under
+        "plusieurs_moyens": 1500 + 1000 − 2000 = 500 = revenue.
+        """
+        tarif_de_la_biere = creer_tarif_vendu(nom="Biere", prix_en_euros="5.00")
+        verifier_egalites(fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[
+                {
+                    "pricesold": self._tarif_de_recharge("20.00"),
+                    "quantite": Decimal("1"),
+                    "prix_unitaire": 2000, "taux_tva": Decimal("0"),
+                },
+                {
+                    "pricesold": tarif_de_la_biere, "quantite": Decimal("1"),
+                    "prix_unitaire": 500, "taux_tva": Decimal("20"),
+                },
+            ],
+            reglements=[
+                {"moyen": PaymentMethod.CASH, "montant": 1500},
+                {"moyen": PaymentMethod.CC, "montant": 1000},
+            ],
+        ))
+
+        chiffre_affaires = self._rapport().section_chiffre_affaires()
+
+        assert self._totaux_par_moyen(chiffre_affaires["par_moyen"]) == {
+            PaymentMethod.CASH: 1500,
+            PaymentMethod.CC: 1000,
+            "plusieurs_moyens": -2000,
+        }
+        assert chiffre_affaires["total_ttc_en_centimes"] == 500
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+
+    def test_recharge_en_especes_corrigee_en_cb(self):
+        """
+        Une recharge de 20,00 € encaissée en espèces par erreur, puis corrigée en CB
+        (vente CORRECTION : espèces −2000, CB +2000). La recharge n'est pas du
+        chiffre d'affaires : sa part suit l'argent.
+        - Chiffre d'affaires par moyen : espèces 2000 − 2000 (part hors CA) − 2000 +
+          2000 (part rendue) = 0 ; CB 2000 − 2000 (part retirée) = 0. Rien de non nul.
+        - Recharges par moyen : espèces 2000 − 2000 = 0, CB +2000.
+        - Ticket X : aucune ligne au-dessus du TOTAL, TOTAL 0, « Recharges: 20.00
+          EUR » sous le total.
+        / A cash top-up corrected to card: revenue by method all zero, top-ups under
+        card 2000, X ticket with no line above a 0 TOTAL.
+        """
+        from laboutik.printing.formatters import formatter_ticket_x
+
+        vente_de_la_recharge = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[{
+                "pricesold": self._tarif_de_recharge("20.00"),
+                "quantite": Decimal("1"),
+                "prix_unitaire": 2000, "taux_tva": Decimal("0"),
+            }],
+            reglements=[{"moyen": PaymentMethod.CASH, "montant": 2000}],
+        )
+        verifier_egalites(vente_de_la_recharge)
+        self._corriger_le_moyen(
+            vente_de_la_recharge, PaymentMethod.CASH, PaymentMethod.CC, 2000
+        )
+
+        rapport = self._rapport()
+        chiffre_affaires = rapport.section_chiffre_affaires()
+        recharges_encaissees = rapport.section_annexe()["recharges_et_cartes"][
+            "recharges_encaissees"
+        ]
+
+        assert self._totaux_non_nuls_par_moyen(chiffre_affaires["par_moyen"]) == {}
+        assert chiffre_affaires["total_ttc_en_centimes"] == 0
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+        assert self._totaux_non_nuls_par_moyen(recharges_encaissees["par_moyen"]) == {
+            PaymentMethod.CC: 2000,
+        }
+
+        ticket_x = formatter_ticket_x(rapport.rapport_x(), self.debut_de_la_periode)
+        assert ticket_x["articles"] == []
+        assert ticket_x["total"]["amount"] == 0
+        assert "Recharges: 20.00 EUR" in ticket_x["footer"]
+
+    def test_biere_et_recharge_en_especes_corrigees_en_cb(self):
+        """
+        Une bière à 5,00 € et une recharge de 10,00 €, payées 15,00 € en espèces,
+        puis corrigées en CB (espèces −1500, CB +1500).
+        - Chiffre d'affaires par moyen : espèces 1500 − 1000 − 1500 + 1000 = 0 ; CB
+          1500 − 1000 = 500. Chiffre d'affaires 500 (la bière).
+        - Recharges par moyen : espèces 1000 − 1000 = 0, CB +1000.
+        / A beer and a top-up paid in cash, corrected to card: revenue card 500,
+        top-ups card 1000.
+        """
+        tarif_de_la_biere = creer_tarif_vendu(nom="Biere", prix_en_euros="5.00")
+        vente_du_panier = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[
+                {
+                    "pricesold": tarif_de_la_biere, "quantite": Decimal("1"),
+                    "prix_unitaire": 500, "taux_tva": Decimal("20"),
+                },
+                {
+                    "pricesold": self._tarif_de_recharge("10.00"),
+                    "quantite": Decimal("1"),
+                    "prix_unitaire": 1000, "taux_tva": Decimal("0"),
+                },
+            ],
+            reglements=[{"moyen": PaymentMethod.CASH, "montant": 1500}],
+        )
+        verifier_egalites(vente_du_panier)
+        self._corriger_le_moyen(
+            vente_du_panier, PaymentMethod.CASH, PaymentMethod.CC, 1500
+        )
+
+        rapport = self._rapport()
+        chiffre_affaires = rapport.section_chiffre_affaires()
+        recharges_encaissees = rapport.section_annexe()["recharges_et_cartes"][
+            "recharges_encaissees"
+        ]
+
+        assert self._totaux_non_nuls_par_moyen(chiffre_affaires["par_moyen"]) == {
+            PaymentMethod.CC: 500,
+        }
+        assert chiffre_affaires["total_ttc_en_centimes"] == 500
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+        assert self._totaux_non_nuls_par_moyen(recharges_encaissees["par_moyen"]) == {
+            PaymentMethod.CC: 1000,
+        }
+
+    def test_recharge_vendue_puis_remboursee(self):
+        """
+        Une recharge de 20,00 € en espèces, puis remboursée en espèces (avoir : article
+        de recharge −2000, hors chiffre d'affaires ; espèces −2000).
+        - Chiffre d'affaires par moyen : espèces 2000 − 2000 − 2000 + 2000 = 0 ;
+          chiffre d'affaires 0.
+        - Réconciliation : recharges 2000 (brut), recharges remboursées −2000.
+        - Ticket X : sous le total, « Recharges: 20.00 EUR » et « Recharges
+          remboursées: -20.00 » (sans « EUR » : la ligne dépasserait les 32 caractères
+          du ticket).
+        / A top-up sold then refunded: revenue 0; refunded top-ups −2000, printed
+        under the X ticket total.
+        """
+        from laboutik.printing.formatters import formatter_ticket_x
+
+        vente_de_la_recharge = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[{
+                "pricesold": self._tarif_de_recharge("20.00"),
+                "quantite": Decimal("1"),
+                "prix_unitaire": 2000, "taux_tva": Decimal("0"),
+                "status": LigneArticle.VALID,
+            }],
+            reglements=[{"moyen": PaymentMethod.CASH, "montant": 2000}],
+        )
+        verifier_egalites(vente_de_la_recharge)
+        ligne_de_la_recharge = LigneArticle.objects.get(vente=vente_de_la_recharge)
+        vente_d_avoir = ouvrir_vente(
+            origine=SaleOrigin.ADMIN,
+            nature=Vente.Nature.AVOIR,
+            vente_liee=vente_de_la_recharge,
+        )
+        ajouter_l_article_d_avoir(vente_d_avoir, ligne_de_la_recharge, Decimal("1"))
+        ajouter_reglement(vente_d_avoir, moyen=PaymentMethod.CASH, montant=-2000)
+        verifier_egalites(encaisser_vente(vente_d_avoir))
+
+        rapport = self._rapport()
+        chiffre_affaires = rapport.section_chiffre_affaires()
+        reconciliation = rapport.section_reconciliation()
+
+        assert self._totaux_non_nuls_par_moyen(chiffre_affaires["par_moyen"]) == {}
+        assert chiffre_affaires["total_ttc_en_centimes"] == 0
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+        assert reconciliation["recharges_en_centimes"] == 2000
+        assert reconciliation["recharges_remboursees_en_centimes"] == -2000
+
+        ticket_x = formatter_ticket_x(rapport.rapport_x(), self.debut_de_la_periode)
+        assert "Recharges: 20.00 EUR" in ticket_x["footer"]
+        assert "Recharges remboursées: -20.00" in ticket_x["footer"]
+
+    def test_chiffre_affaires_par_moyen_requetes_constantes_avec_des_corrections(self):
+        """
+        Le nombre de requêtes de la section « chiffre d'affaires » ne grandit pas
+        avec le nombre de corrections de recharge : une, puis trois corrections, même
+        nombre de requêtes.
+        / The revenue section's query count does not grow with the number of
+        top-up corrections.
+        """
+        from django.test.utils import CaptureQueriesContext
+
+        tarif_de_la_recharge = self._tarif_de_recharge("20.00")
+        nombre_de_requetes_par_essai = []
+        for nombre_de_corrections_a_ajouter in [1, 2]:
+            compteur_de_corrections = 0
+            while compteur_de_corrections < nombre_de_corrections_a_ajouter:
+                vente_de_la_recharge = fabriquer_vente_encaissee(
+                    origine=SaleOrigin.LABOUTIK,
+                    articles=[{
+                        "pricesold": tarif_de_la_recharge,
+                        "quantite": Decimal("1"),
+                        "prix_unitaire": 2000, "taux_tva": Decimal("0"),
+                    }],
+                    reglements=[{"moyen": PaymentMethod.CASH, "montant": 2000}],
+                )
+                self._corriger_le_moyen(
+                    vente_de_la_recharge, PaymentMethod.CASH, PaymentMethod.CC, 2000
+                )
+                compteur_de_corrections += 1
+            rapport = self._rapport()
+            with CaptureQueriesContext(connection) as requetes:
+                rapport.section_chiffre_affaires()
+            nombre_de_requetes_par_essai.append(len(requetes))
+
+        assert nombre_de_requetes_par_essai[0] == nombre_de_requetes_par_essai[1]
+
+    def test_recharge_corrigee_deux_fois_suit_le_dernier_moyen(self):
+        """
+        Une recharge de 20,00 € en espèces, corrigée en CB, puis la CB corrigée en
+        chèque. La part de la recharge suit l'argent à chaque correction.
+        - Chiffre d'affaires par moyen : espèces 2000 − 2000 (hors CA) − 2000 + 2000
+          (rendue par la 1ʳᵉ correction) = 0 ; CB 2000 − 2000 (retirée) − 2000 + 2000
+          (rendue par la 2ᵉ) = 0 ; chèque 2000 − 2000 (retirée) = 0. Tout à 0.
+        - Recharges par moyen : espèces 2000 − 2000 = 0 ; CB +2000 − 2000 = 0 ;
+          chèque +2000. Seule ligne non nulle : chèque 2000.
+        / A cash top-up corrected to card, then card to cheque: revenue all zero,
+        top-ups under cheque 2000.
+        """
+        vente_de_la_recharge = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[{
+                "pricesold": self._tarif_de_recharge("20.00"),
+                "quantite": Decimal("1"),
+                "prix_unitaire": 2000, "taux_tva": Decimal("0"),
+            }],
+            reglements=[{"moyen": PaymentMethod.CASH, "montant": 2000}],
+        )
+        verifier_egalites(vente_de_la_recharge)
+        self._corriger_le_moyen(
+            vente_de_la_recharge, PaymentMethod.CASH, PaymentMethod.CC, 2000
+        )
+        self._corriger_le_moyen(
+            vente_de_la_recharge, PaymentMethod.CC, PaymentMethod.CHEQUE, 2000
+        )
+
+        rapport = self._rapport()
+        chiffre_affaires = rapport.section_chiffre_affaires()
+        recharges_encaissees = rapport.section_annexe()["recharges_et_cartes"][
+            "recharges_encaissees"
+        ]
+
+        assert self._totaux_non_nuls_par_moyen(chiffre_affaires["par_moyen"]) == {}
+        assert chiffre_affaires["total_ttc_en_centimes"] == 0
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+        assert self._totaux_non_nuls_par_moyen(recharges_encaissees["par_moyen"]) == {
+            PaymentMethod.CHEQUE: 2000,
+        }
+
+    def test_chiffre_affaires_par_moyen_ordre_a_l_ecran(self):
+        """
+        L'écran écrit les moyens du chiffre d'affaires dans l'ordre des tickets :
+        espèces, CB, chèque, puis les autres moyens d'argent (par code : SN), puis
+        le cashless (par code : LE), puis « plusieurs moyens ». Le dictionnaire est
+        donné dans un autre ordre exprès.
+        / The screen writes the methods in the tickets' order: cash, card, cheque,
+        other money, cashless, several.
+        """
+        chiffre_affaires = {
+            "total_ttc_en_centimes": 600,
+            "total_ht_en_centimes": 500,
+            "total_tva_en_centimes": 100,
+            "par_moyen": {
+                "plusieurs_moyens": {"libelle": "Plusieurs", "total_en_centimes": 100},
+                PaymentMethod.LOCAL_EURO: {"libelle": "LE", "total_en_centimes": 100},
+                PaymentMethod.STRIPE_NOFED: {"libelle": "SN", "total_en_centimes": 100},
+                PaymentMethod.CHEQUE: {"libelle": "CH", "total_en_centimes": 100},
+                PaymentMethod.CC: {"libelle": "CC", "total_en_centimes": 100},
+                PaymentMethod.CASH: {"libelle": "CA", "total_en_centimes": 100},
+            },
+            "par_taux": {},
+            "par_categorie": {},
+            "par_origine": {},
+            "par_journal": {},
+        }
+
+        with translation.override("fr"):
+            sections = sections_pour_affichage({"chiffre_affaires": chiffre_affaires})
+
+        tableau_par_moyen = None
+        tableaux_de_la_section = sections[0]["tableaux"]
+        for tableau in tableaux_de_la_section:
+            if tableau["testid"] == "chiffre-affaires-par-moyen":
+                tableau_par_moyen = tableau
+        assert tableau_par_moyen is not None
+        libelles_dans_l_ordre = []
+        for ligne in tableau_par_moyen["lignes"]:
+            libelles_dans_l_ordre.append(ligne[0]["texte"])
+        assert libelles_dans_l_ordre == ["CA", "CC", "CH", "SN", "LE", "Plusieurs"]
+
     def test_reconciliation_avoirs_correction_vidage_termes_et_egalites(self):
         """
         Section 5 sur un scénario complet :
@@ -2376,6 +3007,7 @@ class TestRapportDesVentes(FastTenantTestCase):
             "argent_recu_en_centimes": 802,
             "ventes_payees_en_argent_en_centimes": 5000,
             "recharges_en_centimes": 1500,
+            "recharges_remboursees_en_centimes": 0,
             "remboursements_en_centimes": -5000,
             "cartes_videes_en_centimes": -700,
             "ecarts_d_encaissement_en_centimes": 2,

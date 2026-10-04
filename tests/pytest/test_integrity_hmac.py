@@ -71,7 +71,7 @@ class TestCleHMAC:
             assert cle_1 == cle_2
 
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from BaseBillet.models import SaleOrigin, PaymentMethod
 
 
@@ -154,87 +154,9 @@ class TestChainageHMAC:
             assert len(hmac_resultat) == 64
             assert all(c in '0123456789abcdef' for c in hmac_resultat)
 
-    @pytest.mark.django_db
-    def test_hmac_chaine_3_lignes(self):
-        """3 lignes chainees → verifier_chaine True. / 3 chained lines → True."""
-        tenant = _get_tenant()
-        with tenant_context(tenant):
-            from laboutik.integrity import calculer_hmac, verifier_chaine, calculer_total_ht
-            from laboutik.models import LaboutikConfiguration
-            from BaseBillet.models import LigneArticle
-
-            config = LaboutikConfiguration.get_solo()
-            cle = config.get_or_create_hmac_key()
-
-            # Utiliser un uuid_transaction unique pour isoler les lignes de ce test
-            # / Use a unique uuid_transaction to isolate this test's lines
-            import uuid as uuid_module
-            test_uuid = uuid_module.uuid4()
-
-            previous = ''
-            for i in range(3):
-                ligne = _creer_ligne_article_test(tenant, amount=1000 + i * 100)
-                ligne.uuid_transaction = test_uuid
-                ligne.total_ht = calculer_total_ht(
-                    int(Decimal(ligne.amount * ligne.qty).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
-                    ligne.vat,
-                )
-                ligne.previous_hmac = previous
-                ligne.hmac_hash = calculer_hmac(ligne, cle, previous)
-                ligne.save(update_fields=['uuid_transaction', 'total_ht', 'hmac_hash', 'previous_hmac'])
-                previous = ligne.hmac_hash
-
-            # Verifier uniquement les lignes de ce test (pas celles des autres tests)
-            # / Verify only this test's lines (not from other tests)
-            lignes_chainees = LigneArticle.objects.filter(
-                uuid_transaction=test_uuid,
-            )
-            est_valide, erreurs, corrections = verifier_chaine(lignes_chainees, cle)
-            assert est_valide is True
-            assert len(erreurs) == 0
-
-    @pytest.mark.django_db
-    def test_hmac_detecte_modification(self):
-        """Modifier amount casse la chaine. / Modifying amount breaks chain."""
-        tenant = _get_tenant()
-        with tenant_context(tenant):
-            from laboutik.integrity import calculer_hmac, verifier_chaine, calculer_total_ht
-            from laboutik.models import LaboutikConfiguration
-            from BaseBillet.models import LigneArticle
-
-            config = LaboutikConfiguration.get_solo()
-            cle = config.get_or_create_hmac_key()
-
-            # Isoler les lignes de ce test avec un uuid_transaction unique
-            # / Isolate this test's lines with a unique uuid_transaction
-            import uuid as uuid_module
-            test_uuid = uuid_module.uuid4()
-
-            previous = ''
-            lignes = []
-            for i in range(2):
-                ligne = _creer_ligne_article_test(tenant, amount=1000)
-                ligne.uuid_transaction = test_uuid
-                ligne.total_ht = calculer_total_ht(
-                    int(Decimal(ligne.amount * ligne.qty).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
-                    ligne.vat,
-                )
-                ligne.previous_hmac = previous
-                ligne.hmac_hash = calculer_hmac(ligne, cle, previous)
-                ligne.save(update_fields=['uuid_transaction', 'total_ht', 'hmac_hash', 'previous_hmac'])
-                previous = ligne.hmac_hash
-                lignes.append(ligne)
-
-            # Falsifier la premiere ligne (modification directe en DB)
-            # / Tamper with first line (direct DB modification)
-            lignes[0].amount = 9999
-            lignes[0].save(update_fields=['amount'])
-
-            # Verifier uniquement les lignes de ce test
-            # / Verify only this test's lines
-            lignes_chainees = LigneArticle.objects.filter(
-                uuid_transaction=test_uuid,
-            )
-            est_valide, erreurs, corrections = verifier_chaine(lignes_chainees, cle)
-            assert est_valide is False
-            assert len(erreurs) >= 1
+    # La vérification de la chaîne est celle des VENTES (`verifier_chaine_ventes`) :
+    # chaîne saine et vente altérée sont testées dans test_archive_lne_ventes.py
+    # (verify_integrity) et test_rapport_unique.py (section intégrité). L'empreinte
+    # par ligne (`calculer_hmac`) est encore écrite par la caisse jusqu'à son retrait.
+    # / The chain check is the SALES one (tested elsewhere); the per-line
+    # fingerprint is still written by the register until its removal.

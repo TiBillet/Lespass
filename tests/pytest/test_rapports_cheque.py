@@ -34,6 +34,8 @@ import django
 
 django.setup()
 
+import csv
+import re
 from datetime import timedelta
 from decimal import Decimal
 
@@ -54,8 +56,12 @@ from BaseBillet.models import (
     ProductSold,
     SaleOrigin,
 )
-from laboutik.models import PointDeVente
+import comptabilite.tasks
+from comptabilite.models import ClotureCaisse as ClotureCaisseUnique
+from fabriques_vente import fabriquer_vente_encaissee, verifier_egalites
+from laboutik.models import LaboutikConfiguration, PointDeVente
 from laboutik.reports import RapportComptableService
+from fabriques_ecran import euros
 
 
 # Les trois encaissements du scenario, en centimes.
@@ -95,7 +101,14 @@ class TestRapportsCheque(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.module_monnaie_locale = True
         configuration.module_caisse = True
+        # Aucun e-mail de rapport : une clôture journalière n'envoie rien.
+        # / No report e-mail: a daily closure sends nothing.
+        configuration.rapport_emails = ""
         configuration.save()
+
+        # Le singleton de la caisse porte la clé des empreintes (tests/PIEGES.md 9.86).
+        # / The register singleton carries the fingerprint key.
+        LaboutikConfiguration.get_solo().save()
 
         self.categorie = CategorieProduct.objects.create(name="Boissons test cheque")
         self.produit = Product.objects.create(
@@ -182,39 +195,68 @@ class TestRapportsCheque(FastTenantTestCase):
         self._encaisser(MONTANT_CARTE_CENTIMES, PaymentMethod.CC)
         self._encaisser(MONTANT_CHEQUE_CENTIMES, PaymentMethod.CHEQUE)
 
+    def _vendre(self, montant_centimes, moyen_de_paiement):
+        """
+        Une vente reglee au comptoir, ecrite par le service de vente : une biere au
+        montant donne (TVA 20 %), payee avec un seul moyen. La cloture unique lit les
+        VENTES et leurs reglements.
+        / A settled counter sale written by the sale service; the single closure reads
+        sales and payments.
+        """
+        product_sold, _cree = ProductSold.objects.get_or_create(
+            product=self.produit,
+            event=None,
+            defaults={"categorie_article": self.produit.categorie_article},
+        )
+        price_sold, _cree_prix = PriceSold.objects.get_or_create(
+            productsold=product_sold,
+            price=self.prix,
+            defaults={"prix": self.prix.prix},
+        )
+        vente = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            point_de_vente=self.point_de_vente,
+            articles=[
+                {
+                    "pricesold": price_sold,
+                    "quantite": Decimal("1"),
+                    "prix_unitaire": montant_centimes,
+                    "taux_tva": Decimal("20"),
+                    "payment_method": moyen_de_paiement,
+                    "status": LigneArticle.VALID,
+                    "point_de_vente": self.point_de_vente,
+                },
+            ],
+            reglements=[{"moyen": moyen_de_paiement, "montant": montant_centimes}],
+        )
+        verifier_egalites(vente)
+        return vente
+
+    def _vendre_avec_les_trois_moyens(self):
+        """
+        Trois ventes : especes (1000), carte bancaire (2000) ET cheque (1500).
+        / Three sales: cash, card AND check.
+        """
+        self._vendre(MONTANT_ESPECES_CENTIMES, PaymentMethod.CASH)
+        self._vendre(MONTANT_CARTE_CENTIMES, PaymentMethod.CC)
+        self._vendre(MONTANT_CHEQUE_CENTIMES, PaymentMethod.CHEQUE)
+
+    def _cloturer_la_journee(self):
+        """
+        La cloture journaliere unique du lieu (J), creee par la tache de cloture.
+        / The venue's single daily closure (J), created by the closure task.
+        """
+        uuid_de_la_j = comptabilite.tasks.generer_cloture_pour_tenant(
+            schema_name=self.tenant.schema_name,
+            niveau=ClotureCaisseUnique.NIVEAU_JOURNALIER,
+        )
+        return ClotureCaisseUnique.objects.get(uuid=uuid_de_la_j)
+
     def _totaux(self):
         """Les totaux par moyen de paiement sur la periode.
         / Totals per payment method over the period."""
         service = RapportComptableService(self.point_de_vente, self.debut, self.fin)
         return service.calculer_totaux_par_moyen()
-
-    def _cloturer(self, totaux, nombre_transactions):
-        """
-        Ecrit la ClotureCaisse a partir des totaux calcules.
-        / Writes the ClotureCaisse from the computed totals.
-        """
-        from laboutik.models import ClotureCaisse
-
-        service = RapportComptableService(self.point_de_vente, self.debut, self.fin)
-        return ClotureCaisse.objects.create(
-            point_de_vente=self.point_de_vente,
-            datetime_ouverture=self.debut,
-            datetime_cloture=self.fin,
-            niveau=ClotureCaisse.JOURNALIERE,
-            numero_sequentiel=1,
-            total_especes=totaux["especes"],
-            total_carte_bancaire=totaux["carte_bancaire"],
-            total_cashless=totaux["cashless"],
-            total_cheque=totaux["cheque"],
-            total_general=totaux["total"],
-            nombre_transactions=nombre_transactions,
-            rapport_json=service.generer_rapport_complet(),
-        )
-
-    def _cloturer_apres_les_trois_moyens(self):
-        """Encaisse les trois moyens puis cloture. / Collects all three, then closes."""
-        self._encaisser_les_trois_moyens()
-        return self._cloturer(self._totaux(), nombre_transactions=3)
 
     # ------------------------------------------------------------------ #
     #  T1 — Le rapport
@@ -346,10 +388,14 @@ class TestRapportsCheque(FastTenantTestCase):
         extrait les totaux du rapport, et elle en oubliait un.
         / The other tests write the closure themselves: they prove the column exists,
           not that the closing code fills it. This is the path used every evening.
-        """
-        from laboutik.models import ClotureCaisse
 
-        self._encaisser_les_trois_moyens()
+        La clôture du bouton est la J unique : le chèque est un règlement d'argent de
+        son rapport (1500), et les règlements d'argent recomposent son chiffre
+        d'affaires : 1000 + 2000 + 1500 = 4500.
+        / The button's closure is the single J: the check is a money payment of its
+        report, and the money payments add up to its revenue (4500).
+        """
+        self._vendre_avec_les_trois_moyens()
 
         reponse = self.client_http.post(
             "/laboutik/caisse/cloturer/",
@@ -357,157 +403,38 @@ class TestRapportsCheque(FastTenantTestCase):
         )
 
         self.assertEqual(reponse.status_code, 200)
-        cloture = ClotureCaisse.objects.latest("datetime_cloture")
+        cloture = ClotureCaisseUnique.objects.get(
+            niveau=ClotureCaisseUnique.NIVEAU_JOURNALIER
+        )
+        argent_par_moyen = cloture.rapport_json["reglements"]["argent"]["par_moyen"]
         self.assertEqual(
-            cloture.total_cheque,
+            argent_par_moyen[PaymentMethod.CHEQUE]["total_en_centimes"],
             MONTANT_CHEQUE_CENTIMES,
             "La cloture du comptoir doit enregistrer les cheques encaisses.",
         )
-        self.assertEqual(
-            cloture.total_especes
-            + cloture.total_carte_bancaire
-            + cloture.total_cashless
-            + cloture.total_cheque,
-            cloture.total_general,
-        )
+        somme_des_moyens = 0
+        for ligne_du_moyen in argent_par_moyen.values():
+            somme_des_moyens += ligne_du_moyen["total_en_centimes"]
+        self.assertEqual(somme_des_moyens, 4500)
+        self.assertEqual(somme_des_moyens, cloture.total_general)
 
-    def test_la_cloture_agregee_additionne_les_cheques_des_journalieres(self):
-        """
-        Les clôtures mensuelles et annuelles agrègent les journalières : elles doivent
-        additionner les chèques comme les trois autres moyens.
-
-        Ce n'est pas le même code que la clôture du soir : l'agrégation passe par des
-        `Sum()` sur les colonnes des clôtures sources. Un moyen de paiement absent de
-        cette liste de sommes reste silencieusement à zéro pour toute la période, alors
-        même que les journalières le portaient correctement.
-        / Monthly and yearly closures aggregate the daily ones through Sum() on columns:
-          a payment method missing from that list stays silently at zero for the whole
-          period, even though the daily closures had it right.
-        """
-        from datetime import timedelta
-
-        from laboutik.models import ClotureCaisse
-        from laboutik.tasks import _generer_cloture_agregee
-
-        # Deux journalieres portant chacune des cheques, dans la periode agregee.
-        # / Two daily closures, each holding checks, inside the aggregated period.
-        for numero in (1, 2):
-            ClotureCaisse.objects.create(
-                point_de_vente=self.point_de_vente,
-                datetime_ouverture=self.debut,
-                datetime_cloture=dj_timezone.now() - timedelta(minutes=numero),
-                niveau=ClotureCaisse.JOURNALIERE,
-                numero_sequentiel=numero,
-                total_especes=MONTANT_ESPECES_CENTIMES,
-                total_carte_bancaire=MONTANT_CARTE_CENTIMES,
-                total_cashless=0,
-                total_cheque=MONTANT_CHEQUE_CENTIMES,
-                total_general=(
-                    MONTANT_ESPECES_CENTIMES
-                    + MONTANT_CARTE_CENTIMES
-                    + MONTANT_CHEQUE_CENTIMES
-                ),
-                nombre_transactions=3,
-            )
-
-        # La fenetre d'agregation est ancree sur le fuseau du LIEU (`tasks.py`), pas sur
-        # UTC. Prendre la date UTC ferait echouer ce test entre 22h et minuit UTC, quand
-        # la date locale a deja change : la fenetre exclurait les clotures qu'on vient
-        # de creer.
-        # / The aggregation window is anchored on the VENUE's timezone, not UTC.
-        aujourdhui = dj_timezone.now().astimezone(
-            Configuration.get_solo().get_tzinfo()
-        ).date()
-        _generer_cloture_agregee(
-            niveau=ClotureCaisse.MENSUELLE,
-            niveau_source=ClotureCaisse.JOURNALIERE,
-            date_debut=aujourdhui,
-            date_fin=aujourdhui,
-        )
-
-        cloture_agregee = ClotureCaisse.objects.get(niveau=ClotureCaisse.MENSUELLE)
-        self.assertEqual(
-            cloture_agregee.total_cheque,
-            MONTANT_CHEQUE_CENTIMES * 2,
-            "La cloture agregee doit additionner les cheques des journalieres.",
-        )
-        self.assertEqual(
-            cloture_agregee.total_especes
-            + cloture_agregee.total_carte_bancaire
-            + cloture_agregee.total_cashless
-            + cloture_agregee.total_cheque,
-            cloture_agregee.total_general,
-        )
+    # Les clôtures mensuelles et annuelles de la caisse ne somment plus les colonnes
+    # des journalières : la clôture unique relit les ventes de la période
+    # (tests/pytest/test_cloture_unique.py, test_mois_calendaire_egal_ventes_du_mois).
+    # / Monthly and yearly closures no longer sum the daily columns: the single
+    # closure reads the period's sales.
 
     # ------------------------------------------------------------------ #
     #  T3 — Les exports remis au gestionnaire
     # ------------------------------------------------------------------ #
 
-    def test_lexport_csv_de_la_cloture_montre_la_ligne_cheque(self):
-        """
-        Le CSV est ce que le gestionnaire ouvre pour vérifier sa caisse.
-
-        Il listait les espèces, la carte et le cashless, puis sautait au total
-        général : la personne qui vérifiait ses comptes voyait un total que ses
-        propres lignes ne justifiaient pas, sans savoir d'où venait l'écart.
-        / The CSV is what the manager opens: it showed a grand total its own lines
-          could not account for.
-        """
-        from laboutik.csv_export import generer_csv_cloture
-
-        cloture = self._cloturer_apres_les_trois_moyens()
-
-        contenu_csv = generer_csv_cloture(cloture)
-
-        # On verifie la LIGNE, pas seulement le nombre : un montant ecrit en face du
-        # mauvais libelle passerait un simple test de presence.
-        # / We assert the LINE, not just the number: a value written next to the wrong
-        #   label would pass a mere presence check.
-        lignes_du_csv = [ligne.strip() for ligne in contenu_csv.splitlines()]
-        ligne_cheque = [ligne for ligne in lignes_du_csv if ligne.startswith("Chèque")]
-        self.assertEqual(
-            len(ligne_cheque), 1, f"Une seule ligne Cheque attendue : {lignes_du_csv}"
-        )
-        self.assertIn(f"{MONTANT_CHEQUE_CENTIMES / 100:.2f}", ligne_cheque[0])
-
-    def test_le_pdf_de_la_cloture_porte_le_total_cheque(self):
-        """
-        Le PDF est le justificatif imprimé et archivé : il doit être complet.
-        / The PDF is the printed, archived receipt: it must be complete.
-        """
-        from unittest import mock
-
-        from laboutik.pdf import generer_pdf_cloture
-
-        cloture = self._cloturer_apres_les_trois_moyens()
-
-        # On intercepte le HTML juste avant sa conversion en PDF.
-        # Verifier seulement que « un PDF sort » ne prouverait RIEN : un PDF sortait
-        # deja quand le cheque etait absent. C'est le contenu qu'il faut lire, et le
-        # HTML est le dernier endroit ou il est encore lisible.
-        # / We intercept the HTML right before PDF conversion: asserting that "a PDF
-        #   came out" would prove nothing, since one already did without the check.
-        with mock.patch("laboutik.pdf.HTML") as html_mocke:
-            generer_pdf_cloture(cloture)
-
-        self.assertTrue(html_mocke.called, "Le PDF doit avoir ete rendu.")
-        html_rendu = html_mocke.call_args.kwargs["string"]
-
-        # Le montant doit suivre le libelle « Cheque » dans le tableau des moyens, et
-        # pas flotter n'importe ou dans la page.
-        # / The amount must follow the "Cheque" label in the methods table.
-        import re
-
-        cellule_cheque = re.search(
-            r"Chèque</td>\s*<td[^>]*>\s*([\d.,]+)", html_rendu
-        )
-        self.assertIsNotNone(
-            cellule_cheque, "Le PDF doit porter une ligne Cheque dans ses totaux."
-        )
-        self.assertEqual(
-            cellule_cheque.group(1).replace(",", "."),
-            f"{MONTANT_CHEQUE_CENTIMES / 100:.2f}",
-        )
+    # Les exports CSV, PDF et tableur d'une clôture sont ceux de la clôture unique
+    # (`comptabilite/`) : ils parcourent les sections du rapport, sans liste de moyens
+    # écrite en dur, et leurs totaux égalent le rapport
+    # (tests/pytest/test_comptabilite_exports.py, test_csv_totaux_egaux_au_rapport et
+    # test_pdf_totaux_egaux_au_rapport).
+    # / Closure exports are the single closure's: no hard-coded method list, totals
+    # equal to the report (test_comptabilite_exports.py).
 
     def test_lecran_de_cloture_au_comptoir_affiche_la_ligne_cheque(self):
         """
@@ -518,26 +445,42 @@ class TestRapportsCheque(FastTenantTestCase):
         sans savoir d'où il vient.
         / The end-of-service screen lists the methods then the grand total: a missing
           method makes that total unexplainable to whoever counts the drawer.
+
+        L'écran du Z montre les règlements de la J : le bloc des règlements porte le
+        chèque (« 15,00 € ») à côté des espèces (« 10,00 € ») et de la carte
+        (« 20,00 € ») ; leur somme, « 45,00 € », est le chiffre d'affaires affiché.
+        / The Z screen's payments block carries the check next to cash and card.
         """
-        self._encaisser_les_trois_moyens()
+        self._vendre_avec_les_trois_moyens()
 
         reponse = self.client_http.post(
             "/laboutik/caisse/cloturer/",
             data={"uuid_pv": str(self.point_de_vente.uuid)},
         )
 
-        self.assertEqual(reponse.status_code, 200)
-        self.assertEqual(reponse.context["total_cheque_euros"], MONTANT_CHEQUE_CENTIMES / 100)
-        self.assertContains(reponse, "cloture-total-cheque")
+        page = reponse.content.decode()
+        self.assertEqual(reponse.status_code, 200, page[:400])
+        bloc_des_reglements = re.search(
+            r'data-testid="cloture-reglements".*?</section>', page, re.DOTALL
+        )
+        self.assertIsNotNone(bloc_des_reglements, "Bloc des règlements absent.")
+        texte_des_reglements = bloc_des_reglements.group(0)
+        self.assertIn(euros("15,00"), texte_des_reglements)
+        self.assertIn(euros("10,00"), texte_des_reglements)
+        self.assertIn(euros("20,00"), texte_des_reglements)
+        self.assertIn(euros("45,00"), page)
 
     def test_le_ticket_z_imprime_porte_la_ligne_cheque(self):
         """
         Le ticket Z est un justificatif papier : ses lignes doivent expliquer son total.
+        Il est formaté depuis le rapport de la J unique : total = chiffre d'affaires
+        TTC (4500), une ligne par moyen, chèque compris.
         / The Z ticket is a paper receipt: its lines must account for its total.
         """
         from laboutik.printing.formatters import formatter_ticket_cloture
 
-        cloture = self._cloturer_apres_les_trois_moyens()
+        self._vendre_avec_les_trois_moyens()
+        cloture = self._cloturer_la_journee()
 
         ticket = formatter_ticket_cloture(cloture)
 
@@ -565,33 +508,42 @@ class TestRapportsCheque(FastTenantTestCase):
 
         Une archive fiscale qui ment n'est pas un détail de confort : c'est l'objet
         même de l'obligation d'inaltérabilité.
-        / The tax archive must tell the truth about checks. It hard-coded '0'.
+
+        L'archive exporte les ventes : le chèque est un règlement (`reglements.csv`,
+        moyen CH, 1500), et la J du soir porte le total des trois moyens
+        (`clotures.csv`, 1000 + 2000 + 1500 = 4500).
+        / The tax archive must tell the truth about checks. It hard-coded '0'. The
+        check is a payment row (CH, 1500); the J carries the three methods' total.
         """
-        from laboutik.archivage import _extraire_clotures
-        from laboutik.models import ClotureCaisse
+        from laboutik.archivage import generer_fichiers_archive
 
-        self._encaisser_les_trois_moyens()
-        totaux = self._totaux()
+        self._vendre_avec_les_trois_moyens()
+        cloture_j = self._cloturer_la_journee()
 
-        ClotureCaisse.objects.create(
-            point_de_vente=self.point_de_vente,
-            datetime_ouverture=self.debut,
-            datetime_cloture=self.fin,
-            niveau=ClotureCaisse.JOURNALIERE,
-            numero_sequentiel=1,
-            total_especes=totaux["especes"],
-            total_carte_bancaire=totaux["carte_bancaire"],
-            total_cashless=totaux["cashless"],
-            total_cheque=totaux["cheque"],
-            total_general=totaux["total"],
-            nombre_transactions=3,
+        fichiers_de_l_archive = generer_fichiers_archive(
+            schema=self.tenant.schema_name
         )
 
-        lignes_archivees = _extraire_clotures(self.debut, self.fin)
-
-        self.assertEqual(len(lignes_archivees), 1)
+        texte_des_reglements = fichiers_de_l_archive["reglements.csv"].decode(
+            "utf-8-sig"
+        )
+        reglements_archives = list(
+            csv.DictReader(texte_des_reglements.splitlines(), delimiter=";")
+        )
+        montants_des_cheques = []
+        for reglement in reglements_archives:
+            if reglement["moyen"] == PaymentMethod.CHEQUE:
+                montants_des_cheques.append(reglement["montant"])
         self.assertEqual(
-            lignes_archivees[0]["total_cheque"],
-            str(MONTANT_CHEQUE_CENTIMES),
+            montants_des_cheques,
+            [str(MONTANT_CHEQUE_CENTIMES)],
             "L'archive fiscale doit porter le montant reel des cheques, pas zero.",
         )
+
+        texte_des_clotures = fichiers_de_l_archive["clotures.csv"].decode("utf-8-sig")
+        clotures_archivees = list(
+            csv.DictReader(texte_des_clotures.splitlines(), delimiter=";")
+        )
+        self.assertEqual(len(clotures_archivees), 1)
+        self.assertEqual(clotures_archivees[0]["uuid"], str(cloture_j.uuid))
+        self.assertEqual(clotures_archivees[0]["total_general"], "4500")

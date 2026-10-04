@@ -107,27 +107,32 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## PROCHAINE ÉTAPE (mise à jour 2026-10-03)
+## PROCHAINE ÉTAPE (mise à jour 2026-10-03, fin de F)
 **Relire d'abord, en entier : `CHANTIER-05-SUIVI.md` (§3 tableau, §4 écarts, §5 décisions,
 §6 journal — le plus récent en haut, §8 pièges) et la mémoire
 `project_chantier_montants_entiers`.**
 
-État : fiches 0, A′, A, B, C, **D** commitées (dernier commit de D : `583f08a8`, D-4b).
-**Fiche E terminée** (E-1a, E-1b, E-2, E-3, E-4 : plan comptable unique à 6 chiffres,
-règles de compte et de journal, écrans et « Plan complet ? », jetons D8 bis, corrections
-de la grande relecture) : toutes les mutations jouées à la main et tuées, deux relectures
-Fable (la seconde : « E est prête à commiter »). **À commiter en un seul commit** par le
-mainteneur, puis **régénérer la base de dev** (D8 bis rend fausses les ventes en jetons
-déjà scellées) et lancer le workflow i18n (chaînes listées au CHANGELOG E). Aucun push
-sans le mainteneur.
+État : fiches 0, A′, A, B, C, D, E et **F** commitées (F : `2aac806b`). F a livré le rapport
+unique (`comptabilite/rapport.py`), la clôture unique chaînée J/H/M/A
+(`comptabilite/tasks.py`, `integrite.py`) et le FEC équilibré (`comptabilite/ventilation.py`,
+`fec.py`) ; **le CSV comptable a été retiré** (Q-F22 : seul le FEC). Base de dev régénérée
+(`down -v`) en fin de F. Workflow i18n à lancer par le mainteneur (chaînes au CHANGELOG F).
 
-Suite : **fiche F** (rapport unique, clôture, FEC) — déjà mise en cohérence avec D8 bis
-(2026-10-03 : `LG` = cashless, écritures 623400 / 419100 / 707900, tests 3, 4, 8c, 24,
-24b ; codes journal à valider en lettres ; replis TVA à 7 chiffres du CSV en ligne à
-retirer ; compte de la recharge FED chez le pot central à confirmer) ; puis G (« Plan
-complet ? » à limiter), **R** (reprise des ventes de la production, Q1-Q7 en attente ;
-vérifier au déploiement que les anciennes tables `comptabilite` et l'ancien plan de
-caisse sont vides), H.
+Suite : **fiche G** (`CHANTIER-05-G-lecteurs.md`) — tous les lecteurs sur le nouveau modèle.
+Première étape : relire G contre le code actuel (numéros de ligne périmés ; F a changé
+`comptabilite/`), découper en sessions, écrire le premier brief, questions au §5. Ce que F
+a ajouté à G (SUIVI §6) : bouton Z de la caisse **hors transaction** de la vue, avec
+`responsable` et `point_de_vente` ; « Plan complet ? » à limiter ; un seul jeu d'exports de
+clôture (celui de `comptabilite`, déjà sur `rapport_json`). Puis **R** (reprise des ventes ;
+rattrapage H/M/A au premier passage horaire, date de départ ou plafond à décider), puis H
+(liste des restes corrigée en fin de F : `comptabilite/fec.py` et `ventilation.py` restent).
+
+Pièges appris en F (SUIVI §6) : `make test` refuse de tourner si le serveur répond 502
+(une mutation fait recharger runserver) → sortie vide, à ne jamais lire comme un résultat ;
+trop de schémas `test_*` → `out of shared memory` (`max_locks_per_transaction` = 64) ;
+supprimer un tenant de test à la main est impossible proprement (25 tables publiques) ;
+avant de trancher une question « technique » d'un ouvrier, chercher dans le SUIVI §5 si le
+mainteneur l'a déjà décidée (erreur sur le compte de TVA inactif).
 
 Décisions récentes à connaître (SUIVI §4, §5) : D27 écran « Remboursé par » partout ;
 D30 un seul avoir d'adhésion (dernier paiement) ; D31 annulation client hors Stripe sans

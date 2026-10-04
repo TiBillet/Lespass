@@ -117,7 +117,7 @@ gardent leur découpage : chaque part est un article, arrondi une fois.
 
 ## 6. Session R-2 — clôtures, rapports, exports, archive légale
 
-1. **Avant** la reprise, pour chaque lieu (procédure documentée, pas de code nouveau) :
+1. *(Sans objet — mainteneur, 2026-10-04 : la caisse V2 `laboutik` n'a jamais été en production — absente de la branche `main` — ni l'ancienne archive LNE, ni des clôtures. Il n'y a donc aucune ancienne chaîne de lignes de caisse à archiver ni à vérifier. Ce qui compte : ne perdre aucune vente de l'ancien système, toutes converties dans le nouveau modèle. G-1d fait passer l'archive et `verify_integrity` sur les ventes.)* ~~**Avant** la reprise, pour chaque lieu (procédure documentée, pas de code nouveau) :~~
    - `manage.py verify_integrity` : l'ancienne chaîne des lignes de caisse est intacte ;
    - `manage.py archiver_donnees` : l'archive fiscale de l'ancien modèle est produite et
      rangée hors de la base. **H retire ensuite ces colonnes** (`hmac_hash`,

@@ -61,8 +61,20 @@ from BaseBillet.models import (  # noqa: E402
     CategorieProduct, LigneArticle, PaymentMethod, Price, PriceSold, Product,
     ProductSold, SaleOrigin, Tva,
 )
-from laboutik.models import ClotureCaisse, PointDeVente  # noqa: E402
+from comptabilite.models import ClotureCaisse  # noqa: E402
+from comptabilite.rapport import RapportDesVentes  # noqa: E402
+from fabriques_vente import (  # noqa: E402
+    creer_tarif_vendu,
+    fabriquer_vente_encaissee,
+    verifier_egalites,
+)
+from laboutik.models import PointDeVente  # noqa: E402
+from laboutik.printing.formatters import (  # noqa: E402
+    formatter_ticket_cloture,
+    formatter_ticket_x,
+)
 from laboutik.reports import RapportComptableService  # noqa: E402
+from laboutik.views import _calculer_datetime_ouverture_service  # noqa: E402
 
 # Prix unitaires choisis pour que les totaux ne puissent pas coincider par
 # hasard : 5,50 € et 3,20 € ne partagent aucun diviseur parlant, et leurs
@@ -122,6 +134,9 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.module_monnaie_locale = True
         configuration.module_caisse = True
+        # Aucun e-mail de rapport : une clôture journalière n'envoie rien.
+        # / No report e-mail: a daily closure sends nothing.
+        configuration.rapport_emails = ''
         configuration.save()
 
         # Le singleton de la caisse n'existe pas encore dans ce schema neuf :
@@ -229,9 +244,49 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
         assert reponse.status_code == 200, reponse.content.decode()[:400]
         return reponse
 
+    def _derniere_j(self):
+        """La derniere cloture journaliere unique du lieu (par numero).
+        / The venue's last single daily closure (by number)."""
+        return (
+            ClotureCaisse.objects.filter(niveau=ClotureCaisse.NIVEAU_JOURNALIER)
+            .order_by('-numero_sequentiel')
+            .first()
+        )
+
+    def _especes_de_la_j(self, cloture):
+        """Les especes de la J : son reglement d'argent « especes », 0 sans especes.
+        / The J's cash: its "cash" money payment, 0 without cash."""
+        argent_par_moyen = cloture.rapport_json['reglements']['argent']['par_moyen']
+        ligne_des_especes = argent_par_moyen.get(PaymentMethod.CASH)
+        if ligne_des_especes is None:
+            return 0
+        return ligne_des_especes['total_en_centimes']
+
+    def _ticket_x_du_service_en_cours(self):
+        """
+        Le vrai ticket X du service en cours, tel que `imprimer_ticket_x` l'envoie à
+        l'imprimante : `formatter_ticket_x` sur le rapport X du rapport des ventes,
+        du début du service jusqu'à maintenant.
+        / The real X ticket of the current service, as imprimer_ticket_x builds it.
+        """
+        debut_du_service = _calculer_datetime_ouverture_service()
+        assert debut_du_service is not None, "Aucun service en cours."
+        rapport_du_service = RapportDesVentes(
+            debut_du_service, timezone.now()
+        ).rapport_x()
+        return formatter_ticket_x(rapport_du_service, debut_du_service)
+
+    def _montants_des_lignes(self, ticket):
+        """Les montants des lignes d'un ticket, triés. / A ticket's line amounts."""
+        montants = []
+        for ligne_du_ticket in ticket['articles']:
+            montants.append(ligne_du_ticket['total'])
+        return sorted(montants)
+
     def _rapport(self):
-        """Le rapport de caisse sur une fenetre qui encadre tout le test.
-        / The register report over a window framing the whole test."""
+        """Le rapport de l'ancien moteur, sur une fenetre qui encadre tout le test.
+        Les tests qui le lisent partent avec l'ancien moteur, retire en H.
+        / The old engine report over a window framing the whole test (removed in H)."""
         maintenant = timezone.now()
         return RapportComptableService(
             point_de_vente=self.point_de_vente,
@@ -368,47 +423,44 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
     # Le perimetre : ce qui entre, ce qui reste dehors
     # ------------------------------------------------------------------
 
-    def test_une_vente_en_ligne_n_entre_pas_dans_le_rapport_de_caisse(self):
-        """Une vente de la billetterie en ligne ne pese pas sur le tiroir.
+    def test_une_vente_en_ligne_entre_dans_le_ticket_x_et_dans_la_j(self):
+        """Le ticket X et la J couvrent TOUTES les origines : une vente en ligne
+        payée par Stripe pendant le service y est, sur sa propre ligne.
 
-        Les ventes en ligne sont suivies par le service de comptabilite, qui
-        exclut justement la caisse. Les compter des deux cotes doublerait le
-        chiffre d'affaires.
-        / Online sales are tracked by the accounting service, which excludes the
-        register. Counting them twice would double the revenue.
+        Une pinte en espèces (550) à la caisse, puis un billet de 15,00 € payé en
+        ligne par Stripe (1500). Ticket X : une ligne de 550 (espèces), une ligne de
+        1500 (Stripe), TOTAL 2050. La J du bouton a le même total.
+        / The X ticket and the J cover every origin: a Stripe online sale is there,
+        on its own line. Lines 550 and 1500, TOTAL 2050.
         """
         self._encaisser('espece', self.biere, self.prix_biere)
-
-        # Une vente en ligne, ecrite directement : elle ne passe pas par la
-        # caisse, donc il n'y a pas de route de point de vente a appeler.
-        #
-        # Elle porte volontairement `CASH`, un moyen que le rapport SAIT
-        # additionner. Avec un moyen qu'il ignore (`STRIPE_NOFED` par exemple),
-        # le test passerait meme si l'origine entrait dans le perimetre : il ne
-        # prouverait plus rien. C'est ce que l'exclusion doit ecarter, pas
-        # l'arithmetique des moyens de paiement.
-        # / It deliberately carries CASH, a method the report knows how to sum.
-        # With a method it ignores, the test would pass even if the origin
-        # entered the scope, proving nothing.
-        produit_vendu = ProductSold.objects.create(product=self.biere)
-        tarif_vendu = PriceSold.objects.create(
-            productsold=produit_vendu, price=self.prix_biere, prix=PRIX_BIERE_EUROS,
+        vente_en_ligne = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LESPASS,
+            articles=[
+                {
+                    'pricesold': creer_tarif_vendu(nom='Billet', prix_en_euros='15.00'),
+                    'quantite': Decimal('1'),
+                    'prix_unitaire': 1500,
+                    'taux_tva': Decimal('20'),
+                    'payment_method': PaymentMethod.STRIPE_NOFED,
+                    'status': LigneArticle.VALID,
+                },
+            ],
+            reglements=[{'moyen': PaymentMethod.STRIPE_NOFED, 'montant': 1500}],
         )
-        LigneArticle.objects.create(
-            pricesold=tarif_vendu,
-            qty=1,
-            amount=9999,
-            payment_method=PaymentMethod.CASH,
-            status=LigneArticle.VALID,
-            sale_origin=SaleOrigin.LESPASS,
-        )
+        verifier_egalites(vente_en_ligne)
 
-        totaux = self._rapport().calculer_totaux_par_moyen()
+        ticket_x = self._ticket_x_du_service_en_cours()
 
-        assert totaux['especes'] == PRIX_BIERE_CENTIMES, (
-            "Une vente en ligne s'est glissee dans le rapport de caisse."
+        assert self._montants_des_lignes(ticket_x) == [PRIX_BIERE_CENTIMES, 1500]
+        assert ticket_x['total']['amount'] == PRIX_BIERE_CENTIMES + 1500
+
+        reponse = self.navigateur.post(
+            '/laboutik/caisse/cloturer/',
+            data={'uuid_pv': str(self.point_de_vente.uuid)},
         )
-        assert totaux['total'] == PRIX_BIERE_CENTIMES
+        assert reponse.status_code == 200, reponse.content.decode()[:400]
+        assert self._derniere_j().total_general == ticket_x['total']['amount']
 
     def test_une_vente_de_tireuse_entre_dans_le_rapport(self):
         """Une biere tiree au comptoir est une vente de caisse.
@@ -477,13 +529,18 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
         Le ticket X est la photo de l'instant, le ticket Z l'arrete. Si les deux
         divergent, le caissier ne peut plus se fier a ce qu'il voit pendant le
         service.
-        / The X ticket is the live snapshot, the Z ticket freezes it. Divergence
-        would make the live view untrustworthy.
+
+        Deux pintes en espèces (2 × 550 = 1100), trois cafés en CB (3 × 320 = 960).
+        Le vrai ticket X (`formatter_ticket_x` sur `rapport_x()`) porte une ligne de
+        1100 et une de 960, TOTAL 2060. Le ticket Z de la J du bouton porte les
+        mêmes lignes, dans le même ordre, et le même TOTAL.
+        / The X ticket is the live snapshot, the Z ticket freezes it: same lines,
+        same order, same TOTAL (1100, 960, 2060).
         """
         self._encaisser('espece', self.biere, self.prix_biere, quantite=2)
         self._encaisser('carte_bancaire', self.cafe, self.prix_cafe, quantite=3)
 
-        totaux_du_ticket_x = self._rapport().calculer_totaux_par_moyen()
+        ticket_x = self._ticket_x_du_service_en_cours()
 
         reponse = self.navigateur.post(
             '/laboutik/caisse/cloturer/',
@@ -491,13 +548,22 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
         )
         assert reponse.status_code == 200, reponse.content.decode()[:400]
 
-        cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
+        cloture = self._derniere_j()
         assert cloture is not None
+        ticket_z = formatter_ticket_cloture(cloture)
 
-        assert cloture.total_especes == totaux_du_ticket_x['especes']
-        assert cloture.total_carte_bancaire == totaux_du_ticket_x['carte_bancaire']
-        assert cloture.total_cashless == totaux_du_ticket_x['cashless']
-        assert cloture.total_general == totaux_du_ticket_x['total']
+        # Montants triés : 960 (cafés en CB), puis 1100 (pintes en espèces).
+        # / Sorted amounts: 960 (card coffees), then 1100 (cash pints).
+        assert self._montants_des_lignes(ticket_x) == [
+            3 * PRIX_CAFE_CENTIMES,
+            2 * PRIX_BIERE_CENTIMES,
+        ]
+        assert ticket_x['total']['amount'] == (
+            2 * PRIX_BIERE_CENTIMES + 3 * PRIX_CAFE_CENTIMES
+        )
+        assert ticket_z['articles'] == ticket_x['articles']
+        assert ticket_z['total']['amount'] == ticket_x['total']['amount']
+        assert cloture.total_general == ticket_x['total']['amount']
 
     def test_le_ticket_z_porte_le_detail_des_ventes(self):
         """Le rapport fige dans la cloture contient les sections de detail.
@@ -512,16 +578,26 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
             '/laboutik/caisse/cloturer/',
             data={'uuid_pv': str(self.point_de_vente.uuid)},
         )
-        cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
+        cloture = self._derniere_j()
 
-        from laboutik.reports import sections_de_detail_pour_export
+        # Le rapport de la J unique : ventes par produit (section « détail »), par
+        # catégorie et par taux (section « chiffre d'affaires ») ; 2 bières à 5,50 €
+        # = 1100 partout.
+        # / The single J report: by product, by category, by rate; 1100 everywhere.
+        rapport = cloture.rapport_json
+        ventes_de_la_biere = rapport['detail']['ventes_par_produit'][str(self.biere.uuid)]
+        assert ventes_de_la_biere['nom'] == self.biere.name
+        assert ventes_de_la_biere['total_ttc_en_centimes'] == 2 * PRIX_BIERE_CENTIMES
 
-        sections = sections_de_detail_pour_export(cloture.rapport_json)
-
-        assert self.biere.name in sections['par_produit']
-        assert sections['par_produit'][self.biere.name]['total'] == 2 * PRIX_BIERE_CENTIMES
-        assert sections['par_categorie'][self.categorie.name] == 2 * PRIX_BIERE_CENTIMES
-        assert sections['par_tva']['20.00%']['total_ttc'] == 2 * PRIX_BIERE_CENTIMES
+        totaux_par_nom_de_categorie = {}
+        for categorie_du_rapport in rapport['chiffre_affaires']['par_categorie'].values():
+            totaux_par_nom_de_categorie[categorie_du_rapport['nom']] = (
+                categorie_du_rapport['total_ttc_en_centimes']
+            )
+        assert totaux_par_nom_de_categorie[self.categorie.name] == 2 * PRIX_BIERE_CENTIMES
+        assert rapport['chiffre_affaires']['par_taux']['20.00']['total_ttc_en_centimes'] == (
+            2 * PRIX_BIERE_CENTIMES
+        )
 
     def test_une_cloture_sans_vente_est_refusee(self):
         """Cloturer sans rien avoir encaisse n'a pas de sens.
@@ -552,18 +628,18 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
             '/laboutik/caisse/cloturer/',
             data={'uuid_pv': str(self.point_de_vente.uuid)},
         )
-        premiere_cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
+        premiere_cloture = self._derniere_j()
 
         self._encaisser('espece', self.cafe, self.prix_cafe)
         self.navigateur.post(
             '/laboutik/caisse/cloturer/',
             data={'uuid_pv': str(self.point_de_vente.uuid)},
         )
-        seconde_cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
+        seconde_cloture = self._derniere_j()
 
         assert seconde_cloture.pk != premiere_cloture.pk
-        assert premiere_cloture.total_especes == 2 * PRIX_BIERE_CENTIMES
-        assert seconde_cloture.total_especes == PRIX_CAFE_CENTIMES, (
+        assert self._especes_de_la_j(premiere_cloture) == 2 * PRIX_BIERE_CENTIMES
+        assert self._especes_de_la_j(seconde_cloture) == PRIX_CAFE_CENTIMES, (
             "La seconde cloture a recompte les ventes de la premiere."
         )
 
@@ -576,14 +652,14 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
             '/laboutik/caisse/cloturer/',
             data={'uuid_pv': str(self.point_de_vente.uuid)},
         )
-        premiere = ClotureCaisse.objects.order_by('-datetime_cloture').first()
+        premiere = self._derniere_j()
 
         self._encaisser('espece', self.cafe, self.prix_cafe)
         self.navigateur.post(
             '/laboutik/caisse/cloturer/',
             data={'uuid_pv': str(self.point_de_vente.uuid)},
         )
-        seconde = ClotureCaisse.objects.order_by('-datetime_cloture').first()
+        seconde = self._derniere_j()
 
         assert seconde.numero_sequentiel == premiere.numero_sequentiel + 1
 

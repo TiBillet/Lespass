@@ -12,9 +12,10 @@ fuseau_horaire) pendant la requete, puis le relache. Les deux moities comptent :
   dans un export comptable — des sorties qui n'ont aucun navigateur.
 - APRES : le fuseau courant est un etat THREAD-LOCAL et les threads sont
   reutilises. S'il n'est pas relache, il deborde sur ce qui suit dans le meme
-  thread. Bug reel constate : `_generer_cloture_agregee` calculait ses bornes
-  de dates dans le fuseau de la derniere requete servie au lieu du fuseau
-  attendu, et une cloture creee en fin de soiree sortait de la fenetre.
+  thread. Bug reel constate : une ancienne tache de cloture agregee de la caisse
+  (retiree depuis) calculait ses bornes de dates dans le fuseau de la derniere
+  requete servie au lieu du fuseau attendu, et une cloture creee en fin de
+  soiree sortait de la fenetre.
 
 / The middleware sets the venue timezone during the request, then releases it.
 Both halves matter: dates are rendered AND parsed in venue time; and the

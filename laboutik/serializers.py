@@ -443,26 +443,6 @@ class SortieDeCaisseSerializer(serializers.Serializer):
     )
 
 
-class EnvoyerRapportSerializer(serializers.Serializer):
-    """
-    Valide l'adresse email pour l'envoi du rapport de cloture.
-    Validates the email address for sending the closure report.
-
-    LOCALISATION : laboutik/serializers.py
-
-    Utilise par CaisseViewSet.envoyer_rapport() (POST).
-    Used by CaisseViewSet.envoyer_rapport() (POST).
-    """
-
-    email = serializers.EmailField(
-        required=False,
-        allow_blank=True,
-        error_messages={
-            "invalid": _("Adresse email invalide"),
-        },
-    )
-
-
 class RechargeMontantLibreSerializer(serializers.Serializer):
     """
     Valide le montant libre saisi dans la popup « check carte » (zone Recharger).

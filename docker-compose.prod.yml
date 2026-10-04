@@ -76,6 +76,10 @@ services:
     restart: unless-stopped
     container_name: lespass_postgres
     hostname: lespass_postgres
+    # Un lieu = un schéma. Supprimer un objet partagé (utilisateur, wallet) fait vérifier
+    # ses clés étrangères dans TOUS les schémas, dans une seule transaction : un verrou par
+    # table. 64 (défaut) ne suffit plus avec des centaines de lieux (« out of shared memory »).
+    command: postgres -c max_locks_per_transaction=512
     logging: *default-logging
     volumes:
       - lespass_dev_db:/var/lib/postgresql/data

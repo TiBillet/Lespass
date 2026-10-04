@@ -38,6 +38,13 @@ from laboutik.carte_primaire_ancien_fedow import declarer_la_carte_primaire_a_l_
 from laboutik.models import CartePrimaire, PointDeVente, Printer, Terminal
 from QrcodeCashless.models import CarteCashless, Detail
 
+# L'uuid de transaction de toutes les lignes de demo : il les retrouve, pour ne pas
+# les recreer a chaque lancement de la commande.
+# / The transaction uuid of every demo line: finds them, so they are not recreated.
+UUID_TRANSACTION_DES_LIGNES_DE_DEMO = uuid_module.UUID(
+    "de300000-0000-4000-8000-000000000001"
+)
+
 
 def _qrcode_uuid_depuis_tag(tag_id):
     """
@@ -1510,10 +1517,10 @@ class Command(BaseCommand):
                 )
 
             # ================================================================ #
-            #  Cloture de demo avec LigneArticle de tous les types             #
-            #  Rempli tous les tableaux du rapport comptable                    #
-            #  Demo closure with LigneArticle of all types                     #
-            #  Fills all accounting report tables                              #
+            #  Lignes de demo de tous les types                                #
+            #  Remplissent les tableaux du rapport comptable                    #
+            #  Demo LigneArticle of all types                                  #
+            #  Fill the accounting report tables                               #
             # ================================================================ #
 
             from BaseBillet.models import (
@@ -1529,20 +1536,26 @@ class Command(BaseCommand):
             from datetime import timedelta
 
             now = timezone.now()
-            debut_service = now - timedelta(hours=6)
 
-            # Verifier si une cloture de demo existe deja (idempotent)
-            # / Check if a demo closure already exists (idempotent)
-            cloture_demo_existe = ClotureCaisse.objects.filter(
+            # Idempotent : les lignes de demo portent toutes le meme uuid de
+            # transaction (UUID_TRANSACTION_DES_LIGNES_DE_DEMO). Une base qui a deja
+            # l'ancienne cloture de demo (`laboutik.ClotureCaisse`, lue seulement) a
+            # aussi deja ses lignes : on ne les recree pas.
+            # / Idempotent: demo lines share one transaction uuid. A database that
+            # already has the old demo closure (read only) already has its lines.
+            lignes_de_demo_deja_creees = LigneArticle.objects.filter(
+                uuid_transaction=UUID_TRANSACTION_DES_LIGNES_DE_DEMO,
+            ).exists()
+            ancienne_cloture_de_demo_existe = ClotureCaisse.objects.filter(
                 nombre_transactions__gte=10,
             ).exists()
 
-            if cloture_demo_existe:
-                self.stdout.write("  Cloture de demo existante — pas de recreation")
+            if lignes_de_demo_deja_creees or ancienne_cloture_de_demo_existe:
+                self.stdout.write("  Lignes de demo existantes — pas de recreation")
             else:
-                self.stdout.write("  Creation de la cloture de demo...")
+                self.stdout.write("  Creation des lignes de demo...")
 
-                uuid_transaction_demo = uuid_module.uuid4()
+                uuid_transaction_demo = UUID_TRANSACTION_DES_LIGNES_DE_DEMO
                 lignes_demo = []
 
                 def creer_ligne_demo(
@@ -1642,167 +1655,125 @@ class Command(BaseCommand):
                     carte_nfc.user.wallet if carte_nfc and carte_nfc.user else None
                 )
 
-                # 1. Ventes bar (especes + CB + NFC)
-                if produit_biere:
-                    tarif = Price.objects.filter(product=produit_biere).first()
-                    if tarif:
-                        creer_ligne_demo(produit_biere, tarif, 10, PaymentMethod.CASH)
-                        creer_ligne_demo(produit_biere, tarif, 5, PaymentMethod.CC)
-                        if asset_tlf and carte_nfc:
-                            creer_ligne_demo(
-                                produit_biere,
-                                tarif,
-                                3,
-                                PaymentMethod.LOCAL_EURO,
-                                asset_uuid=asset_tlf.uuid,
-                                carte=carte_nfc,
-                                wallet=wallet_nfc,
-                            )
+                # Toutes les lignes de demo, ou aucune : une erreur au milieu annule
+                # celles deja ecrites. Sinon le relancement les sauterait (l'uuid de
+                # transaction existe deja) et la demo resterait a moitie faite.
+                # / All demo lines or none: otherwise a rerun would skip a half-made
+                # demo (the transaction uuid already exists).
+                with db_transaction.atomic():
+                    # 1. Ventes bar (especes + CB + NFC)
+                    if produit_biere:
+                        tarif = Price.objects.filter(product=produit_biere).first()
+                        if tarif:
+                            creer_ligne_demo(produit_biere, tarif, 10, PaymentMethod.CASH)
+                            creer_ligne_demo(produit_biere, tarif, 5, PaymentMethod.CC)
+                            if asset_tlf and carte_nfc:
+                                creer_ligne_demo(
+                                    produit_biere,
+                                    tarif,
+                                    3,
+                                    PaymentMethod.LOCAL_EURO,
+                                    asset_uuid=asset_tlf.uuid,
+                                    carte=carte_nfc,
+                                    wallet=wallet_nfc,
+                                )
 
-                if produit_coca:
-                    tarif = Price.objects.filter(product=produit_coca).first()
-                    if tarif:
-                        creer_ligne_demo(produit_coca, tarif, 4, PaymentMethod.CASH)
-                        creer_ligne_demo(produit_coca, tarif, 2, PaymentMethod.CC)
+                    if produit_coca:
+                        tarif = Price.objects.filter(product=produit_coca).first()
+                        if tarif:
+                            creer_ligne_demo(produit_coca, tarif, 4, PaymentMethod.CASH)
+                            creer_ligne_demo(produit_coca, tarif, 2, PaymentMethod.CC)
 
-                if produit_eau:
-                    tarif = Price.objects.filter(product=produit_eau).first()
-                    if tarif:
-                        creer_ligne_demo(produit_eau, tarif, 3, PaymentMethod.CASH)
+                    if produit_eau:
+                        tarif = Price.objects.filter(product=produit_eau).first()
+                        if tarif:
+                            creer_ligne_demo(produit_eau, tarif, 3, PaymentMethod.CASH)
 
-                if produit_chips:
-                    tarif = Price.objects.filter(product=produit_chips).first()
-                    if tarif:
-                        creer_ligne_demo(produit_chips, tarif, 2, PaymentMethod.CASH)
+                    if produit_chips:
+                        tarif = Price.objects.filter(product=produit_chips).first()
+                        if tarif:
+                            creer_ligne_demo(produit_chips, tarif, 2, PaymentMethod.CASH)
 
-                if produit_vin_rouge:
-                    tarif = Price.objects.filter(product=produit_vin_rouge).first()
-                    if tarif:
-                        creer_ligne_demo(produit_vin_rouge, tarif, 2, PaymentMethod.CC)
-                        if asset_tlf and carte_nfc:
-                            creer_ligne_demo(
-                                produit_vin_rouge,
-                                tarif,
-                                1,
-                                PaymentMethod.LOCAL_EURO,
-                                asset_uuid=asset_tlf.uuid,
-                                carte=carte_nfc,
-                                wallet=wallet_nfc,
-                            )
-
-                # 2. Recharges cashless (especes)
-                if produit_recharge_eur:
-                    tarif = Price.objects.filter(product=produit_recharge_eur).first()
-                    if tarif:
-                        creer_ligne_demo(
-                            produit_recharge_eur, tarif, 2, PaymentMethod.CASH
-                        )
-
-                if produit_recharge_cadeau:
-                    tarif = Price.objects.filter(
-                        product=produit_recharge_cadeau
-                    ).first()
-                    if tarif:
-                        creer_ligne_demo(
-                            produit_recharge_cadeau, tarif, 1, PaymentMethod.CASH
-                        )
-
-                # 3. Adhesions (especes + CB)
-                if produit_adhesion:
-                    tarif = Price.objects.filter(product=produit_adhesion).first()
-                    if tarif:
-                        creer_ligne_demo(produit_adhesion, tarif, 3, PaymentMethod.CASH)
-                        creer_ligne_demo(produit_adhesion, tarif, 1, PaymentMethod.CC)
-
-                if produit_adhesion_mix:
-                    tarif = Price.objects.filter(product=produit_adhesion_mix).first()
-                    if tarif:
-                        creer_ligne_demo(
-                            produit_adhesion_mix, tarif, 2, PaymentMethod.CASH
-                        )
-
-                # 4. Billets (si un event existe)
-                event_futur = Event.objects.filter(
-                    datetime__gte=now - timedelta(days=30)
-                ).first()
-                if event_futur:
-                    produit_billet = Product.objects.filter(
-                        event=event_futur,
-                        categorie_article__in=[Product.BILLET, Product.FREERES],
-                    ).first()
-                    if produit_billet:
-                        tarif = Price.objects.filter(product=produit_billet).first()
+                    if produit_vin_rouge:
+                        tarif = Price.objects.filter(product=produit_vin_rouge).first()
                         if tarif:
                             creer_ligne_demo(
-                                produit_billet, tarif, 3, PaymentMethod.CASH
+                                produit_vin_rouge, tarif, 2, PaymentMethod.CC
                             )
-                            creer_ligne_demo(produit_billet, tarif, 1, PaymentMethod.CC)
+                            if asset_tlf and carte_nfc:
+                                creer_ligne_demo(
+                                    produit_vin_rouge,
+                                    tarif,
+                                    1,
+                                    PaymentMethod.LOCAL_EURO,
+                                    asset_uuid=asset_tlf.uuid,
+                                    carte=carte_nfc,
+                                    wallet=wallet_nfc,
+                                )
 
-                # 5. Creer la cloture
-                total_especes = sum(
-                    ligne.amount
-                    for ligne in lignes_demo
-                    if ligne.payment_method == PaymentMethod.CASH
-                )
-                total_cb = sum(
-                    ligne.amount
-                    for ligne in lignes_demo
-                    if ligne.payment_method == PaymentMethod.CC
-                )
-                total_cashless = sum(
-                    ligne.amount
-                    for ligne in lignes_demo
-                    if ligne.payment_method
-                    in [PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT]
-                )
-                # Le cheque est compte comme les autres moyens : aucune ligne de
-                # demo n'en porte aujourd'hui, mais le total doit rester juste si
-                # quelqu'un en ajoute une.
-                # / Checks counted like the rest: no demo line uses one today, but the
-                #   total must stay correct if someone adds one.
-                total_cheque = sum(
-                    ligne.amount
-                    for ligne in lignes_demo
-                    if ligne.payment_method == PaymentMethod.CHEQUE
-                )
-                total_general = total_especes + total_cb + total_cashless + total_cheque
+                    # 2. Recharges cashless (especes)
+                    if produit_recharge_eur:
+                        tarif = Price.objects.filter(
+                            product=produit_recharge_eur
+                        ).first()
+                        if tarif:
+                            creer_ligne_demo(
+                                produit_recharge_eur, tarif, 2, PaymentMethod.CASH
+                            )
 
-                from AuthBillet.models import TibilletUser
+                    if produit_recharge_cadeau:
+                        tarif = Price.objects.filter(
+                            product=produit_recharge_cadeau
+                        ).first()
+                        if tarif:
+                            creer_ligne_demo(
+                                produit_recharge_cadeau, tarif, 1, PaymentMethod.CASH
+                            )
 
-                admin_email = getattr(settings, "ADMIN_EMAIL", "jturbeaux@pm.me")
-                responsable = TibilletUser.objects.filter(email=admin_email).first()
+                    # 3. Adhesions (especes + CB)
+                    if produit_adhesion:
+                        tarif = Price.objects.filter(product=produit_adhesion).first()
+                        if tarif:
+                            creer_ligne_demo(
+                                produit_adhesion, tarif, 3, PaymentMethod.CASH
+                            )
+                            creer_ligne_demo(produit_adhesion, tarif, 1, PaymentMethod.CC)
 
-                cloture_demo = ClotureCaisse.objects.create(
-                    point_de_vente=pdv_bar,
-                    responsable=responsable,
-                    datetime_ouverture=debut_service,
-                    datetime_cloture=now,
-                    total_especes=total_especes,
-                    total_carte_bancaire=total_cb,
-                    total_cashless=total_cashless,
-                    total_cheque=total_cheque,
-                    total_general=total_general,
-                    nombre_transactions=len(lignes_demo),
-                )
+                    if produit_adhesion_mix:
+                        tarif = Price.objects.filter(
+                            product=produit_adhesion_mix
+                        ).first()
+                        if tarif:
+                            creer_ligne_demo(
+                                produit_adhesion_mix, tarif, 2, PaymentMethod.CASH
+                            )
 
-                # Generer et sauvegarder le rapport JSON complet
-                from laboutik.reports import RapportComptableService
+                    # 4. Billets (si un event existe)
+                    event_futur = Event.objects.filter(
+                        datetime__gte=now - timedelta(days=30)
+                    ).first()
+                    if event_futur:
+                        produit_billet = Product.objects.filter(
+                            event=event_futur,
+                            categorie_article__in=[Product.BILLET, Product.FREERES],
+                        ).first()
+                        if produit_billet:
+                            tarif = Price.objects.filter(product=produit_billet).first()
+                            if tarif:
+                                creer_ligne_demo(
+                                    produit_billet, tarif, 3, PaymentMethod.CASH
+                                )
+                                creer_ligne_demo(
+                                    produit_billet, tarif, 1, PaymentMethod.CC
+                                )
 
-                service = RapportComptableService(
-                    point_de_vente=pdv_bar,
-                    datetime_debut=debut_service,
-                    datetime_fin=now,
-                )
-                cloture_demo.rapport_json = service.generer_rapport_complet()
-                cloture_demo.save(update_fields=["rapport_json"])
-
-                self.stdout.write(
-                    f"  Cloture de demo : {len(lignes_demo)} lignes, "
-                    f"total {total_general / 100:.2f} EUR "
-                    f"(especes {total_especes / 100:.2f}, "
-                    f"CB {total_cb / 100:.2f}, "
-                    f"cashless {total_cashless / 100:.2f})"
-                )
+                # Ces lignes sont ecrites sans vente ni cloture : elles remplissent
+                # les ecrans qui lisent encore les lignes. Les clotures du lieu sont
+                # ecrites par `comptabilite/tasks.py` (bouton « Clôturer » de la
+                # caisse, filet horaire), sur les ventes reglees.
+                # / These lines have no sale and no closure; closures are written by
+                # comptabilite/tasks.py on settled sales.
+                self.stdout.write(f"  Lignes de demo : {len(lignes_demo)} lignes")
 
             self.stdout.write(
                 self.style.SUCCESS("Donnees de test POS creees avec succes.")

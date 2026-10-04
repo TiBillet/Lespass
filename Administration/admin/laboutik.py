@@ -8,10 +8,11 @@ import logging
 
 from django import forms
 from django.contrib import admin, messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection
 from django.db.models import Case, IntegerField, Value, When
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
+from django.urls import path
 from django.utils.html import format_html
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -50,6 +51,7 @@ from laboutik.plan_comptable import (
     ce_qui_manque_pour_exporter,
     monnaies_acceptees_par_le_lieu,
     nom_de_la_monnaie,
+    s_assurer_que_le_plan_existe,
 )
 from unfold.widgets import UnfoldAdminSelectWidget
 
@@ -106,16 +108,11 @@ class LaboutikConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 "/ Sale receipt customization."
             ),
         }),
-        (_('Rapports automatiques / Automatic reports'), {
-            'fields': (
-                'rapport_emails',
-                'rapport_periodicite',
-            ),
-            'description': _(
-                "Envoi automatique des rapports de cloture par email (7h locale). "
-                "/ Automatic closure report email sending (7am local time)."
-            ),
-        }),
+        # `rapport_emails` et `rapport_periodicite` sont volontairement absents : les
+        # destinataires des rapports de clôture sont ceux du lieu (`Configuration`).
+        # Les champs restent en base jusqu'au retrait de l'ancienne clôture.
+        # / The register's report e-mail fields are deliberately absent: recipients
+        #   are the venue's. The fields stay in the database for now.
     )
 
     def has_add_permission(self, request):
@@ -1852,13 +1849,57 @@ class CompteComptableAdmin(ModelAdmin):
     list_before_template = "admin/comptable/changelist_before.html"
 
     def changelist_view(self, request, extra_context=None):
-        """Injecte l'URL pour charger le plan par defaut et les manques de
-        « Plan complet ? ».
-        / Injects the default plan loading URL and the "Complete plan?" items."""
+        """Charge le plan par defaut si le lieu n'a aucun compte (le filet), puis
+        injecte l'URL pour charger le plan par defaut. Le calcul des manques de
+        « Plan complet ? » n'est PAS fait ici : il relit tout l'historique du lieu, il
+        part au clic sur « Verifier le plan » (`verifier_le_plan` ci-dessous).
+        / Loads the default plan if the venue has no account (safety net), then
+        injects the loading URL. The "Complete plan?" missing items are NOT computed
+        here: they run when "Check the plan" is clicked."""
+        s_assurer_que_le_plan_existe()
         extra_context = extra_context or {}
         extra_context['charger_plan_url'] = '/laboutik/caisse/charger-plan-comptable/'
-        extra_context['manques_du_plan'] = ce_qui_manque_pour_exporter()
         return super().changelist_view(request, extra_context)
+
+    def get_urls(self):
+        """
+        Ajoute la route du verdict de « Plan complet ? » AVANT les routes standard :
+        sinon l'admin lirait « verifier-le-plan » comme la cle d'un compte.
+        / Adds the "Complete plan?" verdict route BEFORE the standard routes.
+        """
+        routes_standard = super().get_urls()
+        routes_du_plan = [
+            path(
+                "verifier-le-plan/",
+                self.admin_site.admin_view(self.verifier_le_plan),
+                name="laboutik_comptecomptable_verifier_le_plan",
+            ),
+        ]
+        return routes_du_plan + routes_standard
+
+    def verifier_le_plan(self, request):
+        """
+        Le verdict de « Plan complet ? » : ce qui manque au plan pour que l'export
+        comptable passe, ou le message vert. Appele en HTMX par le bouton « Verifier
+        le plan » des trois ecrans du plan
+        (`Administration/templates/admin/comptable/plan_complet.html`).
+        Cette vue PEUT ECRIRE : `ce_qui_manque_pour_exporter` appelle d'abord le filet
+        `s_assurer_que_le_plan_existe`, qui charge le plan par defaut si le lieu n'a
+        aucun compte.
+        / The "Complete plan?" verdict, called through HTMX by the "Check the plan"
+        button of the three plan screens. It may write (the safety net).
+
+        :return: le gabarit `admin/comptable/plan_complet_verdict.html`
+        """
+        if not TenantAdminPermissionWithRequest(request):
+            raise PermissionDenied
+
+        manques_du_plan = ce_qui_manque_pour_exporter()
+        return render(
+            request,
+            "admin/comptable/plan_complet_verdict.html",
+            {"manques_du_plan": manques_du_plan},
+        )
 
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)
@@ -1903,10 +1944,11 @@ class MappingMoyenDePaiementAdmin(ModelAdmin):
     list_before_template = "admin/comptable/moyens_changelist_before.html"
 
     def changelist_view(self, request, extra_context=None):
-        """Injecte les manques de « Plan complet ? ».
-        / Injects the "Complete plan?" items."""
-        extra_context = extra_context or {}
-        extra_context['manques_du_plan'] = ce_qui_manque_pour_exporter()
+        """Charge le plan par defaut si le lieu n'a aucun compte (le filet). Le
+        calcul des manques de « Plan complet ? » part au clic sur « Verifier le
+        plan ».
+        / Loads the default plan if the venue has no account (safety net)."""
+        s_assurer_que_le_plan_existe()
         return super().changelist_view(request, extra_context)
 
     def get_form(self, request, obj=None, **kwargs):
@@ -2054,11 +2096,14 @@ class MappingMonnaieAdmin(ModelAdmin):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def changelist_view(self, request, extra_context=None):
-        """Injecte les monnaies acceptees par le lieu et les manques de
-        « Plan complet ? ».
-        / Injects the accepted currencies and the "Complete plan?" items."""
+        """Charge le plan par defaut si le lieu n'a aucun compte (le filet), puis
+        injecte les monnaies acceptees par le lieu. Le calcul des manques de « Plan
+        complet ? » part au clic sur « Verifier le plan »
+        (CompteComptableAdmin.verifier_le_plan).
+        / Safety net, then the accepted currencies. "Complete plan?" runs on "Check
+        the plan"."""
+        s_assurer_que_le_plan_existe()
         extra_context = extra_context or {}
-        extra_context['manques_du_plan'] = ce_qui_manque_pour_exporter()
         extra_context['lignes_des_monnaies'] = monnaies_acceptees_par_le_lieu()
         return super().changelist_view(request, extra_context)
 

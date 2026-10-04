@@ -1,444 +1,275 @@
 """
-tests/pytest/test_cloture_enrichie.py — Tests Session 13 : clotures enrichies.
-tests/pytest/test_cloture_enrichie.py — Tests Session 13: enriched closures.
+Le contenu de la clôture journalière créée par le bouton « Clôturer » de la caisse :
+numéro séquentiel, total perpétuel, plage de la journée, sections du rapport stocké.
+/ The content of the daily closure created by the register "Close" button: sequential
+number, perpetual total, day range, stored report sections.
 
-Couvre : niveau, numero_sequentiel, total_perpetuel, hash_lignes,
-         datetime_ouverture auto, cloture M, garde correction post-cloture.
-Covers: level, sequential number, perpetual total, lines hash,
-        auto datetime_ouverture, monthly closure, post-closure correction guard.
+LOCALISATION : tests/pytest/test_cloture_enrichie.py
+
+RÈGLES MÉTIER TESTÉES
+- Chaque clic sur « Clôturer » (avec au moins une vente depuis la clôture précédente)
+  crée une clôture journalière unique (`comptabilite.ClotureCaisse`, la « J »),
+  numérotée à la suite : n° 1, puis n° 2.
+- La première J d'un lieu commence à sa première vente réglée ; la suivante commence
+  à la fin de la précédente.
+- Le total perpétuel d'une J = celui de la J précédente + le chiffre d'affaires TTC de
+  cette J ; jamais remis à zéro.
+- La J stocke toutes les sections du rapport des ventes (`RapportDesVentes`).
+/ Each click creates a numbered J; the first J starts at the first settled sale, the
+next one at the end of the previous one; perpetual total = previous + this J's revenue;
+the J stores every section of the sales report.
+
+Le détail du calcul d'une J (filet automatique, H / M / A, chaîne des clôtures) est
+testé par tests/pytest/test_cloture_unique.py, sur la tâche elle-même. Ce fichier
+vérifie que le BOUTON produit la même J.
+/ The J computation itself is tested in test_cloture_unique.py; this file checks the
+button produces the same J.
+
+SCHÉMA DÉDIÉ
+Une J lit TOUTES les ventes du lieu : ce fichier tourne dans un lieu qui ne contient
+que ses propres ventes (`FastTenantTestCase`). Chaque test annule sa transaction à la
+fin. Le singleton `LaboutikConfiguration` est créé en base (tests/PIEGES.md 9.86). Les
+ventes sont écrites PAR LE SERVICE (`fabriques_vente.py`).
+/ Dedicated schema, rolled back after each test. Sales through the sale service.
+
+D'OÙ VIENNENT LES VALEURS ATTENDUES (calcul à la main)
+Une bière vaut 5,00 € (500 centimes). Dix bières : 10 × 500 = 5000 ; six bières :
+6 × 500 = 3000. Total perpétuel : 0 + 5000 = 5000, puis 5000 + 3000 = 8000
+(fiche F §6 test 14 : précédent + CA de la J).
+/ Hand computation: 10 beers = 5000, 6 beers = 3000; perpetual 5000 then 8000.
+
+Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-F-rapport-unique.md (§3.1,
+§6), CHANTIER-05-G-lecteurs.md (§2).
 
 Lancement / Run:
-    docker exec lespass_django poetry run pytest tests/pytest/test_cloture_enrichie.py -v
+    make test ARGS="tests/pytest/test_cloture_enrichie.py"
 """
 import sys
+
+# Le code Django est dans /DjangoFiles a l'interieur du conteneur.
+# / Django code is in /DjangoFiles inside the container.
 sys.path.insert(0, '/DjangoFiles')
 
 import django
+
 django.setup()
 
-import pytest
-from django.utils import timezone
-from django_tenants.utils import schema_context
+import uuid  # noqa: E402
+from decimal import Decimal  # noqa: E402
 
-from AuthBillet.models import TibilletUser
-from BaseBillet.models import (
-    LigneArticle, Price, PriceSold, Product, ProductSold,
-    SaleOrigin, PaymentMethod,
+from django.db import connection  # noqa: E402
+from django_tenants.test.cases import FastTenantTestCase  # noqa: E402
+from django_tenants.test.client import TenantClient  # noqa: E402
+
+from AuthBillet.models import TibilletUser  # noqa: E402
+from BaseBillet.models import (  # noqa: E402
+    Configuration, LigneArticle, PaymentMethod, SaleOrigin,
 )
-from Customers.models import Client
-from laboutik.models import (
-    PointDeVente, ClotureCaisse, LaboutikConfiguration,
+from BaseBillet.models_vente import Vente  # noqa: E402
+from comptabilite.models import ClotureCaisse  # noqa: E402
+from fabriques_vente import (  # noqa: E402
+    creer_tarif_vendu,
+    fabriquer_vente_encaissee,
+    verifier_egalites,
 )
-from laboutik.integrity import ligne_couverte_par_cloture
-
-TENANT_SCHEMA = 'lespass'
+from laboutik.models import LaboutikConfiguration, PointDeVente  # noqa: E402
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+# Adresse de la clôture au comptoir (laboutik/urls.py).
+# / Counter closure address.
+URL_DE_LA_CLOTURE = '/laboutik/caisse/cloturer/'
 
-@pytest.fixture(scope="module")
-def tenant():
-    """Le tenant 'lespass' (doit exister dans la base).
-    / The 'lespass' tenant (must exist in DB)."""
-    return Client.objects.get(schema_name=TENANT_SCHEMA)
+# Les sections du rapport stocké dans une J (`RapportDesVentes.toutes_les_sections()`).
+# / The report sections stored in a J.
+SECTIONS_DU_RAPPORT_D_UNE_J = {
+    "en_tete",
+    "chiffre_affaires",
+    "reglements",
+    "caisse_especes",
+    "reconciliation",
+    "offerts",
+    "annexe",
+    "points",
+    "marge_brute",
+    "detail",
+    "integrite",
+}
 
 
-@pytest.fixture(scope="module")
-def test_data(tenant):
-    """Lance create_test_pos_data pour s'assurer que les donnees existent.
-    / Runs create_test_pos_data to ensure test data exists."""
-    from django.core.management import call_command
-    call_command('create_test_pos_data')
-    return True
+class TestClotureEnrichie(FastTenantTestCase):
+    """
+    Numéro, perpétuel, plage et sections de la J créée par le bouton.
+    / Number, perpetual total, range and sections of the J created by the button.
+    """
 
+    @classmethod
+    def get_test_schema_name(cls):
+        return 'test_cloture_enrichie'
 
-@pytest.fixture(scope="module")
-def admin_user(tenant):
-    """Un utilisateur admin du tenant.
-    / A tenant admin user."""
-    with schema_context(TENANT_SCHEMA):
-        email = 'admin-test-cloture-enrichie@tibillet.localhost'
-        user, created = TibilletUser.objects.get_or_create(
-            email=email,
-            defaults={'username': email, 'is_staff': True, 'is_active': True},
+    @classmethod
+    def get_test_tenant_domain(cls):
+        return 'test-cloture-enrichie.tibillet.localhost'
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        """Champ requis sur Client. / Required field on Client."""
+        tenant.name = 'Test Cloture Enrichie'
+
+    def setUp(self):
+        """
+        Un comptoir, une bière à 5,00 €, un admin connecté à la caisse.
+        / A counter, a beer at 5.00 €, a logged-in admin.
+        """
+        # Le rollback du test précédent a rendu le `search_path` au public.
+        # / The previous test's rollback returned the search_path to public.
+        connection.set_tenant(self.tenant)
+
+        # Le singleton de la caisse porte la clé des empreintes (tests/PIEGES.md 9.86).
+        # / The register singleton carries the fingerprint key.
+        LaboutikConfiguration.get_solo().save()
+
+        # Toutes les valeurs sont écrites ici : le cache garde celles du test d'avant.
+        # Aucun e-mail de rapport : une J n'envoie rien.
+        # / Every value is written here. No report e-mail.
+        configuration = Configuration.get_solo()
+        configuration.module_monnaie_locale = True
+        configuration.module_caisse = True
+        configuration.fuseau_horaire = "Europe/Paris"
+        configuration.rapport_emails = ""
+        configuration.save()
+
+        self.tarif_de_la_biere = creer_tarif_vendu(
+            nom="Biere", prix_en_euros="5.00", taux_tva="20.00",
         )
-        user.client_admin.add(tenant)
-        return user
+        self.point_de_vente = PointDeVente.objects.create(
+            name='Comptoir test cloture enrichie',
+            comportement=PointDeVente.DIRECT,
+            service_direct=True,
+            accepte_especes=True,
+            accepte_carte_bancaire=True,
+            hidden=True,
+        )
 
+        # `TibilletUser` vit dans le schéma public ; il est annulé avec le test.
+        # / TibilletUser lives in the public schema; rolled back with the test.
+        self.admin, _admin_cree = TibilletUser.objects.get_or_create(
+            email='admin-test-cloture-enrichie@tibillet.localhost',
+            defaults={
+                'username': 'admin-test-cloture-enrichie@tibillet.localhost',
+                'is_staff': True,
+                'is_active': True,
+            },
+        )
+        self.admin.client_admin.add(self.tenant)
 
-@pytest.fixture(scope="module")
-def premier_pv(test_data):
-    """Le point de vente « Bar », cree par create_test_pos_data.
-    / The "Bar" point of sale, created by create_test_pos_data.
+        self.client_http = TenantClient(self.tenant)
+        self.client_http.force_login(self.admin)
 
-    Vise par son nom : trier par poid_liste ne suffit pas, d'autres tests laissent
-    des points de vente a poid_liste 0 dans lespass, et l'ex aequo tombait au hasard.
-    / Targeted by name: other tests leave poid_liste 0 points of sale behind."""
-    with schema_context(TENANT_SCHEMA):
-        return PointDeVente.objects.get(name="Bar")
-
-
-@pytest.fixture(scope="module")
-def premier_produit_et_prix(premier_pv):
-    """Premier produit du PV avec son prix.
-    / First product of the PV with its price."""
-    with schema_context(TENANT_SCHEMA):
-        produit = premier_pv.products.filter(methode_caisse__isnull=False).first()
-        prix = Price.objects.filter(
-            product=produit, publish=True, asset__isnull=True,
-        ).order_by('order').first()
-        return produit, prix
-
-
-def _make_client(admin_user, tenant):
-    """Cree un client DRF authentifie comme admin du tenant.
-    / Creates a DRF client authenticated as tenant admin."""
-    from rest_framework.test import APIClient
-    client = APIClient()
-    client.force_authenticate(user=admin_user)
-    client.defaults['SERVER_NAME'] = f'{TENANT_SCHEMA}.tibillet.localhost'
-    return client
-
-
-def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method_code, dt=None, pv=None):
-    """
-    Cree une LigneArticle directement en base.
-    Creates a LigneArticle directly in DB.
-    """
-    product_sold, _ = ProductSold.objects.get_or_create(
-        product=produit, event=None,
-        defaults={'categorie_article': produit.categorie_article},
-    )
-    price_sold, _ = PriceSold.objects.get_or_create(
-        productsold=product_sold, price=prix,
-        defaults={'prix': prix.prix},
-    )
-    ligne = LigneArticle.objects.create(
-        pricesold=price_sold, qty=1, amount=montant_centimes,
-        sale_origin=SaleOrigin.LABOUTIK, payment_method=payment_method_code,
-        status=LigneArticle.VALID, point_de_vente=pv,
-    )
-    if dt is not None:
-        LigneArticle.objects.filter(pk=ligne.pk).update(datetime=dt)
-        ligne.refresh_from_db()
-    return ligne
-
-
-def _nettoyer_clotures_et_perpetuel(pv=None):
-    """Nettoie TOUTES les clotures du tenant et remet le total perpetuel a 0.
-    La cloture est globale au tenant, pas par PV.
-    / Cleans ALL closures for the tenant and resets perpetual total to 0.
-    Closure is global to the tenant, not per POS."""
-    ClotureCaisse.objects.all().delete()
-    config = LaboutikConfiguration.get_solo()
-    config.total_perpetuel = 0
-    # Pas de update_fields sur un singleton django-solo (piege 9.86) :
-    # si le singleton n'existe pas encore, save(update_fields=[...]) leve
-    # DatabaseError "Save with update_fields did not affect any rows".
-    # / No update_fields on a django-solo singleton (trap 9.86).
-    config.save()
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
-
-@pytest.mark.usefixtures("test_data")
-class TestClotureNumeroSequentiel:
-    """2 clotures J → numeros sequentiels 1 et 2.
-    / 2 daily closures → sequential numbers 1 and 2."""
-
-    def test_cloture_journal_numero_sequentiel(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
-            _nettoyer_clotures_et_perpetuel(premier_pv)
-
-            # Cloture 1 / Closure 1
-            _creer_ligne_article_directe(produit, prix, 500, PaymentMethod.CASH, pv=premier_pv)
-            client = _make_client(admin_user, tenant)
-            response = client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-            assert response.status_code == 200
-
-            cloture1 = ClotureCaisse.objects.filter(
-                niveau=ClotureCaisse.JOURNALIERE,
-            ).order_by('-numero_sequentiel').first()
-            assert cloture1.numero_sequentiel == 1
-            assert cloture1.niveau == ClotureCaisse.JOURNALIERE
-
-            # Cloture 2 / Closure 2
-            _creer_ligne_article_directe(produit, prix, 300, PaymentMethod.CC, pv=premier_pv)
-            response = client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-            assert response.status_code == 200
-
-            cloture2 = ClotureCaisse.objects.filter(
-                niveau=ClotureCaisse.JOURNALIERE,
-            ).order_by('-numero_sequentiel').first()
-            assert cloture2.numero_sequentiel == 2
-
-
-@pytest.mark.usefixtures("test_data")
-class TestClotureTotalPerpetuel:
-    """cloture 5000 + cloture 3000 → perpetuel 8000.
-    / closure 5000 + closure 3000 → perpetual 8000."""
-
-    def test_cloture_journal_total_perpetuel(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
+    def _vendre_des_bieres(self, quantite, moyen):
         """
-        Le total perpetuel est incremente du total de chaque cloture.
-        On verifie le delta entre 2 clotures successives.
-        / Perpetual total is incremented by each closure's total.
-        We verify the delta between 2 successive closures.
+        Une vente de caisse réglée au comptoir : `quantite` bières à 5,00 €, payées
+        avec un seul moyen. Rend la vente.
+        / A settled register sale: `quantite` beers paid with one method.
         """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
+        vente = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            point_de_vente=self.point_de_vente,
+            operateur=self.admin,
+            articles=[
+                {
+                    'pricesold': self.tarif_de_la_biere,
+                    'quantite': Decimal(quantite),
+                    'prix_unitaire': 500,
+                    'taux_tva': Decimal('20'),
+                    'payment_method': moyen,
+                    'status': LigneArticle.VALID,
+                    'uuid_transaction': uuid.uuid4(),
+                    'point_de_vente': self.point_de_vente,
+                },
+            ],
+            reglements=[{'moyen': moyen, 'montant': 500 * quantite}],
+        )
+        verifier_egalites(vente)
+        return vente
 
-            # Lire le total perpetuel actuel / Read current perpetual total
-            config = LaboutikConfiguration.get_solo()
-            perpetuel_avant = config.total_perpetuel
+    def _cliquer_sur_cloturer(self):
+        """
+        Le caissier clique sur « Clôturer » ; le bouton doit répondre 200. Rend la
+        dernière J du lieu.
+        / The cashier clicks "Close" (200 expected). Returns the venue's last J.
+        """
+        reponse = self.client_http.post(
+            URL_DE_LA_CLOTURE, {'uuid_pv': str(self.point_de_vente.uuid)}
+        )
+        assert reponse.status_code == 200, reponse.content.decode()[:400]
+        return (
+            ClotureCaisse.objects.filter(niveau=ClotureCaisse.NIVEAU_JOURNALIER)
+            .order_by('-numero_sequentiel')
+            .first()
+        )
 
-            # Cloturer tout ce qui traine / Close any pending sales
-            client = _make_client(admin_user, tenant)
-            client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-            config.refresh_from_db()
-            perpetuel_apres_nettoyage = config.total_perpetuel
+    def test_deux_clotures_du_bouton_numerotees_1_et_2_et_qui_se_suivent(self):
+        """
+        Une vente, « Clôturer » ; une vente, « Clôturer ». Deux J, n° 1 puis n° 2 ; la
+        n° 2 commence à la fin de la n° 1.
+        / Sale, close; sale, close: J no. 1 then no. 2, the second starting where the
+        first ends.
+        """
+        self._vendre_des_bieres(1, PaymentMethod.CASH)
+        premiere_j = self._cliquer_sur_cloturer()
+        self._vendre_des_bieres(1, PaymentMethod.CC)
+        deuxieme_j = self._cliquer_sur_cloturer()
 
-            # Cloture avec 5000 centimes / Closure with 5000 cents
-            _creer_ligne_article_directe(produit, prix, 5000, PaymentMethod.CASH, pv=premier_pv)
-            response = client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-            assert response.status_code == 200
+        assert premiere_j is not None
+        assert premiere_j.numero_sequentiel == 1
+        assert deuxieme_j.numero_sequentiel == 2
+        assert deuxieme_j.datetime_debut == premiere_j.datetime_fin
 
-            config.refresh_from_db()
-            perpetuel_apres_cloture1 = config.total_perpetuel
-            delta1 = perpetuel_apres_cloture1 - perpetuel_apres_nettoyage
-            assert delta1 == 5000
+    def test_premiere_j_du_bouton_commence_a_la_premiere_vente(self):
+        """
+        La première J du lieu commence à l'heure d'encaissement de sa première vente.
+        / The venue's first J starts at its first sale's settlement time.
+        """
+        premiere_vente = self._vendre_des_bieres(1, PaymentMethod.CASH)
+        heure_de_la_premiere_vente = Vente.objects.get(
+            pk=premiere_vente.pk
+        ).datetime_encaissement
 
-            # Cloture avec 3000 centimes / Closure with 3000 cents
-            _creer_ligne_article_directe(produit, prix, 3000, PaymentMethod.CC, pv=premier_pv)
-            response = client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-            assert response.status_code == 200
+        premiere_j = self._cliquer_sur_cloturer()
 
-            config.refresh_from_db()
-            perpetuel_apres_cloture2 = config.total_perpetuel
-            delta2 = perpetuel_apres_cloture2 - perpetuel_apres_cloture1
-            assert delta2 == 3000
+        assert premiere_j is not None
+        assert premiere_j.datetime_debut == heure_de_la_premiere_vente
 
-            # Le total perpetuel a augmente de 8000 au total / Total increase is 8000
-            delta_total = perpetuel_apres_cloture2 - perpetuel_apres_nettoyage
-            assert delta_total == 8000
+    def test_deux_clotures_du_bouton_total_perpetuel_cumule(self):
+        """
+        Dix bières (5000), « Clôturer » ; six bières (3000), « Clôturer ». Total
+        perpétuel : 5000, puis 5000 + 3000 = 8000 ; nombre de ventes perpétuel 1,
+        puis 2.
+        / 5000 then 3000: perpetual total 5000 then 8000; perpetual sales 1 then 2.
+        """
+        self._vendre_des_bieres(10, PaymentMethod.CASH)
+        premiere_j = self._cliquer_sur_cloturer()
+        self._vendre_des_bieres(6, PaymentMethod.CC)
+        deuxieme_j = self._cliquer_sur_cloturer()
 
-            # Le snapshot sur la cloture correspond au total config
-            # / The snapshot on the closure matches the config total
-            derniere_cloture = ClotureCaisse.objects.filter(
-                niveau=ClotureCaisse.JOURNALIERE,
-            ).order_by('-numero_sequentiel').first()
-            assert derniere_cloture.total_perpetuel == perpetuel_apres_cloture2
+        assert premiere_j is not None
+        assert premiere_j.total_general == 5000
+        assert premiere_j.total_perpetuel == 5000
+        assert premiere_j.nombre_ventes_perpetuel == 1
+        assert deuxieme_j.total_general == 3000
+        assert deuxieme_j.total_perpetuel == 8000
+        assert deuxieme_j.nombre_ventes_perpetuel == 2
 
+    def test_rapport_json_de_la_j_du_bouton_a_les_sections_du_rapport_unique(self):
+        """
+        La J du bouton stocke les sections du rapport des ventes d'une J : en-tête,
+        chiffre d'affaires, règlements, caisse espèces, réconciliation, offerts,
+        annexe, points, marge brute, détail, intégrité.
+        / The button's J stores every section of a J sales report.
+        """
+        self._vendre_des_bieres(1, PaymentMethod.CASH)
 
-@pytest.mark.usefixtures("test_data")
-class TestClotureMensuelle:
-    """Cloture M agrege les J du mois.
-    / Monthly closure aggregates daily closures."""
+        j_du_bouton = self._cliquer_sur_cloturer()
 
-    def test_cloture_mensuelle(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        with schema_context(TENANT_SCHEMA):
-            from laboutik.tasks import _generer_cloture_agregee
-            from BaseBillet.models import Configuration
-
-            produit, prix = premier_produit_et_prix
-
-            # Activer module_caisse : _generer_cloture_agregee court-circuite
-            # silencieusement si le module n'est pas actif sur le tenant.
-            # / Enable module_caisse: _generer_cloture_agregee silently returns
-            # if the module is not active on the tenant.
-            config_base = Configuration.get_solo()
-            if not config_base.module_caisse:
-                config_base.module_caisse = True
-                config_base.save()
-
-            # Cloturer tout ce qui traine / Close any pending sales
-            client = _make_client(admin_user, tenant)
-            client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-
-            # Supprimer les clotures M existantes pour ce PV
-            # / Delete existing M closures for this POS
-            ClotureCaisse.objects.filter(
-                niveau=ClotureCaisse.MENSUELLE,
-            ).delete()
-
-            # Compter les clotures J existantes ce mois-ci
-            # / Count existing daily closures this month
-            #
-            # La date est prise dans le fuseau DU LIEU, comme le fait la tache
-            # cron reelle : les bornes d'agregation sont ancrees sur l'heure du
-            # lieu. Utiliser date.today() (horloge serveur, UTC) donnerait un
-            # jour different des la fin de soiree pour un lieu en avance sur
-            # UTC, et la fenetre exclurait les clotures qu'on vient de creer.
-            # / The date is taken in the VENUE timezone, like the real cron
-            # task: aggregation bounds are anchored on venue time. Using
-            # date.today() (server clock, UTC) would yield a different day in
-            # the evening for a venue ahead of UTC.
-            aujourd_hui = timezone.now().astimezone(config_base.get_tzinfo()).date()
-            nb_j_avant = ClotureCaisse.objects.filter(
-                niveau=ClotureCaisse.JOURNALIERE,
-            ).count()
-
-            # Creer 2 clotures J supplementaires / Create 2 more daily closures
-            _creer_ligne_article_directe(produit, prix, 2000, PaymentMethod.CASH, pv=premier_pv)
-            client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-
-            _creer_ligne_article_directe(produit, prix, 3000, PaymentMethod.CC, pv=premier_pv)
-            client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-
-            # Compter les J apres / Count daily closures after
-            nb_j_apres = ClotureCaisse.objects.filter(
-                niveau=ClotureCaisse.JOURNALIERE,
-            ).count()
-            assert nb_j_apres >= nb_j_avant + 2
-
-            # Generer cloture M / Generate monthly closure
-            _generer_cloture_agregee(
-                niveau='M', niveau_source='J',
-                date_debut=aujourd_hui.replace(day=1),
-                date_fin=aujourd_hui,
-            )
-
-            # Verifier la cloture M / Verify monthly closure
-            cloture_m = ClotureCaisse.objects.filter(
-                niveau=ClotureCaisse.MENSUELLE,
-            ).order_by('-numero_sequentiel').first()
-            assert cloture_m is not None
-            assert cloture_m.numero_sequentiel >= 1
-            # Le total de la cloture M doit etre >= 5000 (les 2 nouvelles J)
-            # / Monthly closure total must be >= 5000 (the 2 new daily closures)
-            assert cloture_m.total_general >= 5000
-            # Le nombre de transactions doit etre >= 2
-            # / Transaction count must be >= 2
-            assert cloture_m.nombre_transactions >= 2
-
-
-@pytest.mark.usefixtures("test_data")
-class TestDatetimeOuvertureAuto:
-    """datetime_ouverture = datetime 1ere vente apres derniere cloture.
-    / datetime_ouverture = datetime of 1st sale after last closure."""
-
-    def test_datetime_ouverture_auto(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
-            _nettoyer_clotures_et_perpetuel(premier_pv)
-
-            # Cloture 1 / Closure 1
-            _creer_ligne_article_directe(produit, prix, 1000, PaymentMethod.CASH, pv=premier_pv)
-            client = _make_client(admin_user, tenant)
-            client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-
-            premiere_cloture = ClotureCaisse.objects.filter(
-                niveau=ClotureCaisse.JOURNALIERE,
-            ).order_by('numero_sequentiel').first()
-
-            # Nouvelle vente apres cloture 1 / New sale after closure 1
-            _creer_ligne_article_directe(produit, prix, 2000, PaymentMethod.CC, pv=premier_pv)
-
-            # Cloture 2 / Closure 2
-            response = client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-            assert response.status_code == 200
-
-            cloture2 = ClotureCaisse.objects.filter(
-                niveau=ClotureCaisse.JOURNALIERE,
-            ).order_by('-numero_sequentiel').first()
-
-            # datetime_ouverture de cloture2 doit etre apres datetime_cloture de cloture1
-            # / datetime_ouverture of closure2 must be after datetime_cloture of closure1
-            assert cloture2.datetime_ouverture > premiere_cloture.datetime_cloture
-
-
-@pytest.mark.usefixtures("test_data")
-class TestPasDeVentePasDeCloture:
-    """Retourne 400 si aucune vente a cloturer.
-    / Returns 400 if no sales to close."""
-
-    def test_pas_de_vente_pas_de_cloture(
-        self, admin_user, tenant, premier_pv,
-    ):
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client(admin_user, tenant)
-            # Cloturer tout ce qui traine / Close everything pending
-            client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-            # Re-cloturer : pas de vente → 400
-            # / Re-close: no sales → 400
-            response = client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-            assert response.status_code == 400
-
-
-@pytest.mark.usefixtures("test_data")
-class TestGardeCorrectionPostCloture:
-    """ligne_couverte_par_cloture() retourne la cloture.
-    / ligne_couverte_par_cloture() returns the closure."""
-
-    def test_garde_correction_post_cloture(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
-            _nettoyer_clotures_et_perpetuel(premier_pv)
-
-            ligne = _creer_ligne_article_directe(produit, prix, 1000, PaymentMethod.CASH, pv=premier_pv)
-
-            # Pas encore de cloture → ligne NON couverte
-            # / No closure yet → line NOT covered
-            assert ligne_couverte_par_cloture(ligne) is None
-
-            # Cloturer / Close
-            client = _make_client(admin_user, tenant)
-            response = client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-            assert response.status_code == 200
-
-            # Maintenant la ligne EST couverte / Now the line IS covered
-            ligne.refresh_from_db()
-            cloture_trouvee = ligne_couverte_par_cloture(ligne)
-            assert cloture_trouvee is not None
-            assert cloture_trouvee.point_de_vente == premier_pv
-
-
-@pytest.mark.usefixtures("test_data")
-class TestRapportJson14Cles:
-    """Le rapport JSON a 14 sections.
-    / The JSON report has 14 sections."""
-
-    def test_rapport_json_14_cles(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
-            _nettoyer_clotures_et_perpetuel(premier_pv)
-
-            _creer_ligne_article_directe(produit, prix, 1000, PaymentMethod.CASH, pv=premier_pv)
-            client = _make_client(admin_user, tenant)
-            response = client.post('/laboutik/caisse/cloturer/', {'uuid_pv': str(premier_pv.uuid)})
-            assert response.status_code == 200
-
-            cloture = ClotureCaisse.objects.filter(
-                niveau=ClotureCaisse.JOURNALIERE,
-            ).order_by('-numero_sequentiel').first()
-            rapport = cloture.rapport_json
-
-            # 15 cles attendues du RapportComptableService
-            # / 15 expected keys from RapportComptableService
-            cles_attendues = [
-                'totaux_par_moyen', 'detail_ventes', 'offerts', 'non_monetaire',
-                'tva', 'solde_caisse',
-                'recharges', 'adhesions', 'remboursements', 'habitus',
-                'billets', 'synthese_operations', 'operateurs',
-                'ventilation_par_pv', 'infos_legales',
-            ]
-            for cle in cles_attendues:
-                assert cle in rapport, f"Cle manquante: {cle}"
-            assert len(rapport) == 15
+        assert j_du_bouton is not None
+        assert set(j_du_bouton.rapport_json.keys()) == SECTIONS_DU_RAPPORT_D_UNE_J

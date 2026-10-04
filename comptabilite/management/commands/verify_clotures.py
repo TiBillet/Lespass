@@ -17,13 +17,21 @@ Verifications :
 4. Pour chaque J, la chaine des ventes de sa plage
    (`laboutik/integrity.py` verifier_chaine_ventes).
 
+La cle HMAC du lieu est lue, jamais creee : des clotures sans cle sont une anomalie.
+Seule ecriture possible : `LaboutikConfiguration.get_solo()` cree la ligne du
+singleton (vide, sans cle) si le lieu ne l'a pas encore.
+Une erreur sur un lieu est une anomalie ; l'audit des autres lieux continue.
+
+Code de sortie : 0 sans anomalie ; au moins une anomalie, ou un `--tenant` inconnu
+→ `CommandError`, code 1.
+
 / Checks:
 1. numero_sequentiel continuity (no gaps).
 2. The chain of closures (fingerprint, link to the previous closure).
 3. Continuity of the J (no gap, no overlap, in time and in sale numbers).
 4. For each J, the sales chain of its range.
 """
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django_tenants.utils import tenant_context
 
 
@@ -41,27 +49,43 @@ class Command(BaseCommand):
         from Customers.models import Client
 
         if opts.get("tenant"):
-            tenants = Client.objects.filter(schema_name=opts["tenant"])
-            if not tenants.exists():
-                self.stderr.write(f"Tenant {opts['tenant']} introuvable.")
-                return
+            tenants = list(Client.objects.filter(schema_name=opts["tenant"]))
+            if not tenants:
+                raise CommandError(f"Tenant {opts['tenant']} introuvable.")
         else:
-            tenants = Client.objects.exclude(schema_name="public")
+            tenants = list(Client.objects.exclude(schema_name="public"))
 
         total_anomalies = 0
 
         for tenant in tenants:
-            anomalies = self._verifier_tenant(tenant)
+            # Une erreur sur un lieu ne bloque pas les autres : elle compte comme une
+            # anomalie, et elle est écrite.
+            # / An error on one venue does not stop the others: it is an anomaly.
+            try:
+                anomalies = self._verifier_tenant(tenant)
+            except Exception as erreur_du_lieu:
+                anomalies = 1
+                self.stdout.write(self.style.ERROR(
+                    f"  [tenant={tenant.schema_name}] Erreur pendant l'audit : "
+                    f"{erreur_du_lieu}"
+                ))
             total_anomalies += anomalies
 
         if total_anomalies == 0:
             self.stdout.write(self.style.SUCCESS(
                 "\nAudit complet : aucune anomalie detectee."
             ))
-        else:
-            self.stdout.write(self.style.WARNING(
-                f"\nAudit complet : {total_anomalies} anomalie(s) detectee(s)."
-            ))
+            return
+
+        # Au moins une anomalie : la commande sort avec le code 1 (`CommandError`),
+        # pour qu'une tache planifiee ou un script voie l'alerte sans lire le texte.
+        # / At least one anomaly: exit code 1, so a scheduler or a script sees it.
+        self.stdout.write(self.style.WARNING(
+            f"\nAudit complet : {total_anomalies} anomalie(s) detectee(s)."
+        ))
+        raise CommandError(
+            f"Audit des clotures : {total_anomalies} anomalie(s) detectee(s)."
+        )
 
     def _verifier_tenant(self, tenant) -> int:
         """
@@ -112,9 +136,20 @@ class Command(BaseCommand):
                     f"{clotures[0].numero_sequentiel}-{clotures[-1].numero_sequentiel} continus"
                 ))
 
-            # 2. La chaine des clotures, tous niveaux.
-            # / The chain of closures, every level.
-            cle_du_lieu = LaboutikConfiguration.get_solo().get_or_create_hmac_key()
+            # 2. La chaine des clotures, tous niveaux. La cle est LUE, jamais creee
+            #    (`get_solo()` peut seulement creer la ligne vide du singleton). Des
+            #    clotures sans cle : la cle a disparu, les empreintes ne peuvent plus
+            #    etre verifiees, c'est une anomalie.
+            # / 2. The chain of closures. The key is read, never created (get_solo()
+            #    may only create the empty singleton row); closures without a key is
+            #    an anomaly.
+            cle_du_lieu = LaboutikConfiguration.get_solo().get_hmac_key()
+            if not cle_du_lieu:
+                self.stdout.write(self.style.ERROR(
+                    "  Pas de cle HMAC alors que des clotures existent : "
+                    "empreintes invérifiables."
+                ))
+                return anomalies + 1
             anomalies_des_clotures = verifier_chaine_clotures(cle_du_lieu)
             for anomalie in anomalies_des_clotures:
                 anomalies += 1

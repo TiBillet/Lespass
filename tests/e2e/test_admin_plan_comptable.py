@@ -9,8 +9,8 @@ UN SEUL PARCOURS (chantier 05, fiche E-2) :
    comptes des moyens de paiement, comptes des monnaies), chacun avec « Plan
    complet ? » en tête ;
 2. le moyen « Stripe » (SN), utilisé par des ventes réglées du lieu, perd son compte :
-   « Plan complet ? » le signale ;
-3. on lui pose son compte dans son formulaire : le manque disparaît.
+   le bouton « Vérifier le plan » le signale ;
+3. on lui pose son compte dans son formulaire : le bouton ne le signale plus.
 / One journey: the menu leads to the three screens; a used method without account is
 reported by "Complete plan?"; setting its account makes the report disappear.
 
@@ -81,6 +81,20 @@ def correspondance_sn_sans_compte(django_shell):
     )
 
 
+def _verifier_le_plan(page):
+    """
+    Clique le bouton « Vérifier le plan » de l'écran, puis attend le verdict de
+    « Plan complet ? » (message vert ou au moins un manque) : le verdict n'est plus
+    calculé à l'ouverture de l'écran.
+    / Clicks "Check the plan", then waits for the verdict (green message or a
+    missing item): it is no longer computed when the screen opens.
+    """
+    page.locator('[data-testid="plan-complet-verifier"]').click()
+    page.locator(
+        '[data-testid="plan-complet-ok"], [data-testid="plan-complet-manque"]'
+    ).first.wait_for()
+
+
 def _manques_du_moyen(page):
     """
     Les manques de « Plan complet ? » qui nomment le moyen du parcours.
@@ -125,6 +139,7 @@ def test_menu_mene_aux_ecrans_du_plan_et_plan_complet_suit_le_compte_pose(
 
     # --- 2. Le moyen sans compte est signalé / The method without account is reported ---
     page.goto(LIEN_DES_COMPTES_DES_MOYENS)
+    _verifier_le_plan(page)
     assert _manques_du_moyen(page).count() == 1
 
     # --- 3. On pose son compte : le manque disparaît / Set the account: report gone ---
@@ -146,4 +161,5 @@ def test_menu_mene_aux_ecrans_du_plan_et_plan_complet_suit_le_compte_pose(
     page.wait_for_url(f"**{LIEN_DES_COMPTES_DES_MOYENS}")
 
     assert page.locator('[data-testid="plan-complet"]').is_visible()
+    _verifier_le_plan(page)
     assert _manques_du_moyen(page).count() == 0

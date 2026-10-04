@@ -1,10 +1,15 @@
 """
-Module central d'archivage fiscal pour la caisse LaBoutik.
-Exporte les donnees d'encaissement en CSV (UTF-8 BOM, delimiteur ;) + JSON + hash HMAC.
-Appele par 3 management commands et 1 vue admin.
-/ Central fiscal archiving module for the LaBoutik POS.
-Exports POS data as CSV (UTF-8 BOM, delimiter ;) + JSON + HMAC hash.
-Called by 3 management commands and 1 admin view.
+Module central d'archivage fiscal d'un lieu : toutes ses ventes reglees, de toutes
+les origines (caisse, tireuse, en ligne, admin, API...), pas seulement la caisse.
+Exporte en CSV (UTF-8 BOM, delimiteur ;) + JSON + hash HMAC :
+- les ventes reglees, leurs articles et leurs reglements, avec les montants STOCKES
+  et l'empreinte chainee de chaque vente ;
+- les clotures `comptabilite.ClotureCaisse`, avec leur rapport complet ;
+- le journal des impressions, les sorties de caisse et l'historique du fond.
+Appele par 3 management commands (archiver_donnees, verifier_archive,
+acces_fiscal) et la route d'export fiscal de la caisse (`laboutik/views.py`).
+/ Central fiscal archiving module of a venue: every settled sale, every origin.
+Exports CSV + JSON + HMAC hash. Called by 3 management commands and the export route.
 
 LOCALISATION : laboutik/archivage.py
 """
@@ -14,37 +19,59 @@ import hashlib
 import io
 import json
 import zipfile
-from datetime import datetime, time
-from decimal import ROUND_HALF_UP, Decimal
+from datetime import datetime, time, timedelta
 
 from django.db import transaction
 from django.utils import timezone
-
-from laboutik.integrity import calculer_total_ht
 
 
 # =====================================================================
 # Colonnes CSV par modele / CSV columns per model
 # =====================================================================
 
-COLONNES_LIGNES_ARTICLE = [
-    'uuid', 'datetime', 'article', 'categorie', 'prix_ttc_centimes',
-    'quantite', 'payment_method', 'sale_origin', 'taux_tva',
-    'total_ht_centimes', 'total_tva_centimes', 'point_de_vente',
-    'operateur_email', 'user_email', 'uuid_transaction', 'hmac_hash',
+# Les ventes réglées : l'en-tête de chaque vente, ses totaux et son empreinte.
+# Les montants sont des entiers en centimes, tels qu'ils sont stockés.
+# / Settled sales: header, totals and fingerprint. Amounts are stored integer cents.
+COLONNES_VENTES = [
+    'uuid', 'numero', 'nature', 'statut', 'origine', 'unite',
+    'datetime_encaissement', 'point_de_vente', 'point_de_vente_uuid',
+    'operateur_email', 'vente_liee_uuid', 'total_catalogue', 'total_offert',
+    'total_ttc', 'total_ht', 'total_tva', 'previous_hmac', 'hmac_hash',
 ]
 
+# Les articles des ventes réglées, avec le HT et la TVA STOCKÉS sur l'article.
+# `uuid_transaction` relie un ticket imprimé (`impressions.csv`) à son article ;
+# `pricesold_uuid` est dans l'empreinte de la vente.
+# / The settled sales' items, with the HT and VAT STORED on the item.
+COLONNES_ARTICLES = [
+    'uuid', 'vente_uuid', 'vente_numero', 'datetime', 'article', 'categorie',
+    'pricesold_uuid', 'uuid_transaction', 'quantite', 'prix_unitaire', 'taux_tva',
+    'total_catalogue', 'part_offerte', 'source_offert', 'total_ttc', 'total_ht',
+    'total_tva', 'hors_chiffre_affaires',
+]
+
+# Les règlements des ventes réglées. Une correction de moyen de paiement est une
+# vente CORRECTION : ses deux règlements (ancien moyen en négatif, nouveau moyen en
+# positif) sont ici.
+# / The settled sales' payments. A payment correction is a CORRECTION sale.
+COLONNES_REGLEMENTS = [
+    'uuid', 'vente_uuid', 'vente_numero', 'moyen', 'montant', 'asset', 'carte',
+    'fedow_transaction_uuid', 'reference_externe', 'datetime',
+]
+
+# Les clôtures du lieu (`comptabilite.ClotureCaisse`), tous niveaux, chaînées.
+# `rapport_json` : le rapport complet de la clôture (ventilations par moyen, par
+# taux...), en JSON canonique (clés triées, sans espace, accents gardés), comme dans
+# le message de l'empreinte de la clôture (`comptabilite/integrite.py`).
+# / The venue's closures, every level, chained, with their full report as
+# canonical JSON.
 COLONNES_CLOTURES = [
-    'uuid', 'datetime_cloture', 'datetime_ouverture', 'niveau',
-    'numero_sequentiel', 'total_especes', 'total_carte_bancaire',
-    'total_cashless', 'total_cheque', 'total_general',
-    'nombre_transactions', 'total_perpetuel', 'hash_lignes',
-    'responsable_email', 'point_de_vente',
-]
-
-COLONNES_CORRECTIONS = [
-    'uuid', 'datetime', 'ligne_article_uuid', 'ancien_moyen',
-    'nouveau_moyen', 'raison', 'operateur_email',
+    'uuid', 'niveau', 'numero_sequentiel', 'datetime_debut', 'datetime_fin',
+    'numero_premiere_vente', 'numero_derniere_vente',
+    'empreinte_de_la_derniere_vente', 'total_general',
+    'total_ht', 'total_tva', 'total_argent_recu', 'nombre_transactions',
+    'total_perpetuel', 'nombre_ventes_perpetuel', 'responsable_email',
+    'point_de_vente', 'rapport_json', 'previous_hmac', 'hmac_hash',
 ]
 
 COLONNES_IMPRESSIONS = [
@@ -109,133 +136,173 @@ def _calculer_hmac_fichier(contenu_bytes, cle_secrete):
 # Fonctions d'extraction / Extract functions
 # =====================================================================
 
-def _extraire_lignes_article(debut, fin):
+def _texte_ou_vide(valeur):
     """
-    Extrait les LigneArticle de la periode [debut, fin].
-    debut et fin sont des datetime aware ou None (None = pas de filtre).
-    Retourne une liste de dicts avec des valeurs string pour le CSV.
-    / Extracts LigneArticle for the period [debut, fin].
-    debut and fin are aware datetimes or None (None = no filter).
-    Returns list of dicts with string values for CSV.
+    La valeur en texte pour le CSV, ou "" si elle est vide (None).
+    / The value as text for the CSV, or "" when it is None.
     """
-    from BaseBillet.models import LigneArticle, SaleOrigin
+    if valeur is None:
+        return ''
+    return str(valeur)
 
-    # Filtrer uniquement les ventes caisse.
-    # Les ventes en ligne (billetterie, adhesions) ne sont pas du ressort de la caisse.
-    # / Filter POS sales only. Online sales are not the register's business.
-    #
-    # Le mode ecole (LNE exigence 5) devait marquer ses ventes d'une origine
-    # distincte, archivee ici aux cotes des ventes reelles. Ce mecanisme est
-    # DESACTIVE : l'origine qu'il utilisait n'existe pas dans `SaleOrigin`, ce
-    # qui faisait echouer cette extraction — et donc tout l'archivage fiscal —
-    # avec une `AttributeError`, que le mode ecole soit actif ou non.
-    # Voir CHANGELOG/2026-07-22-mode-ecole-desactive.md.
-    # / Training mode (LNE req. 5) was meant to tag its sales with a separate
-    # origin, archived here alongside real ones. That mechanism is DISABLED: the
-    # origin it used does not exist in SaleOrigin, which made this extraction —
-    # and therefore the whole fiscal archive — fail with an AttributeError,
-    # whether training mode was on or not.
-    qs = LigneArticle.objects.filter(
-        sale_origin=SaleOrigin.LABOUTIK,
-    ).select_related(
-        'pricesold__productsold__product__categorie_pos',
-        'point_de_vente',
-        'membership__user',
-        'reservation__user_commande',
-        'paiement_stripe__user',
-    ).order_by('datetime')
 
+def _ventes_reglees_de_la_periode(debut, fin):
+    """
+    Les ventes RÉGLÉES du lieu encaissées dans [debut, fin[, par numéro croissant.
+    La fin est EXCLUSIVE : une vente encaissée pile à la fin appartient à la
+    période suivante. Toutes les origines : caisse, tireuse, en ligne, admin, API…
+    Une vente en attente ou annulée n'a ni numéro ni empreinte : elle n'est pas un
+    enregistrement fiscal, elle n'est pas archivée.
+    / The venue's SETTLED sales collected in [debut, fin[, by number. The end is
+    EXCLUSIVE. Every origin. Pending or cancelled sales are not archived.
+
+    :param debut: datetime aware ou None (None = pas de borne)
+    :param fin: datetime aware ou None (None = pas de borne), exclusive
+    :return: QuerySet de `Vente`
+    """
+    from BaseBillet.models_vente import Vente
+
+    ventes_reglees = Vente.objects.filter(statut=Vente.Statut.REGLEE)
     if debut is not None:
-        qs = qs.filter(datetime__gte=debut)
+        ventes_reglees = ventes_reglees.filter(datetime_encaissement__gte=debut)
     if fin is not None:
-        qs = qs.filter(datetime__lte=fin)
+        ventes_reglees = ventes_reglees.filter(datetime_encaissement__lt=fin)
+    return ventes_reglees.order_by('numero')
+
+
+def _extraire_ventes(debut, fin):
+    """
+    Extrait l'en-tête des ventes réglées de la période : numéro, nature, origine,
+    totaux stockés, et l'empreinte chaînée (`previous_hmac`, `hmac_hash`).
+    Retourne une liste de dicts avec des valeurs texte pour le CSV.
+    / Extracts the settled sales' headers: number, nature, origin, stored totals and
+    chained fingerprint. Returns a list of dicts with text values for the CSV.
+    """
+    ventes_reglees = _ventes_reglees_de_la_periode(debut, fin).select_related(
+        'point_de_vente',
+        'operateur',
+    )
 
     resultats = []
-    for ligne in qs.iterator():
-        # Nom de l'article / Article name
-        article = ''
-        categorie = ''
-        try:
-            if ligne.pricesold and ligne.pricesold.productsold:
-                product = ligne.pricesold.productsold.product
-                article = product.name if product else ''
-                if hasattr(product, 'categorie_pos') and product.categorie_pos:
-                    categorie = product.categorie_pos.name
-        except Exception:
-            # Certaines LigneArticle historiques n'ont pas de PriceSold lie.
-            # On utilise les champs directs article/categorie de LigneArticle.
-            # / Some historical LigneArticle lack a linked PriceSold.
-            pass
+    for vente in ventes_reglees.iterator():
+        nom_du_point_de_vente = ''
+        if vente.point_de_vente:
+            nom_du_point_de_vente = vente.point_de_vente.name
 
-        # Total TTC en centimes / Total incl. tax in cents
-        prix_ttc_centimes = str(ligne.amount)
-        quantite = str(ligne.qty)
-
-        # Taux de TVA / VAT rate
-        taux_tva = f"{float(ligne.vat):.2f}"
-
-        # Total HT en centimes.
-        # Une ligne écrite par le service de vente (elle appartient à une vente) porte
-        # dans `total_ht` le HT de son NET vendu : 0 pour une ligne offerte. Une part
-        # payée en jetons cadeau est une vente ordinaire à TVA 0 (D8 bis) : son taux 0
-        # suffit, son HT vaut le TTC de la ligne. L'archive ne lit donc PAS ce champ
-        # pour une ligne d'une vente : elle
-        # recalcule le HT sur le TTC de la ligne (prix unitaire × quantité, arrondi
-        # 0,5 vers le haut), avec `calculer_total_ht`, comme la caisse l'écrivait
-        # avant. Sinon, la TVA ci-dessous (TTC − HT) inventerait de la TVA sur un
-        # article offert. Une ligne sans vente garde le HT stocké, jamais recalculé.
-        # La fiche G fait passer l'archive aux montants entiers des ventes.
-        # / Total excl. tax in cents. A line written by the sale service stores the HT
-        #   of its NET sold (0 when offered): the archive recomputes the line HT from
-        #   the line TTC, as the register stored it before. A line without a sale keeps
-        #   its stored HT. Sheet G moves the archive to the sales' whole-cent amounts.
-        ligne_ecrite_par_le_service_de_vente = ligne.vente_id is not None
-        if ligne_ecrite_par_le_service_de_vente:
-            ttc_de_la_ligne_arrondi_centimes = int(
-                Decimal(ligne.amount * ligne.qty).quantize(
-                    Decimal("1"), rounding=ROUND_HALF_UP
-                )
-            )
-            total_ht_de_la_ligne = calculer_total_ht(
-                ttc_de_la_ligne_arrondi_centimes, ligne.vat
-            )
-        else:
-            total_ht_de_la_ligne = ligne.total_ht
-        total_ht_centimes = str(total_ht_de_la_ligne)
-
-        # Total TVA = TTC * qty - HT / VAT amount = TTC * qty - HT
-        total_ttc = int(ligne.amount * ligne.qty)
-        total_tva_centimes = str(total_ttc - total_ht_de_la_ligne)
-
-        # Point de vente / Point of sale
-        pdv = ''
-        if ligne.point_de_vente:
-            pdv = ligne.point_de_vente.name
-
-        # Email operateur : pas de FK responsable sur LigneArticle, champ vide
-        # / Operator email: no responsable FK on LigneArticle, empty field
-        operateur_email = ''
-
-        # Email utilisateur / User email
-        user_email = ligne.user_email() or ''
+        email_de_l_operateur = ''
+        if vente.operateur:
+            email_de_l_operateur = vente.operateur.email or ''
 
         resultats.append({
-            'uuid': str(ligne.uuid),
-            'datetime': ligne.datetime.isoformat() if ligne.datetime else '',
-            'article': article,
-            'categorie': categorie,
-            'prix_ttc_centimes': prix_ttc_centimes,
-            'quantite': quantite,
-            'payment_method': ligne.payment_method or '',
-            'sale_origin': ligne.sale_origin or '',
-            'taux_tva': taux_tva,
-            'total_ht_centimes': total_ht_centimes,
-            'total_tva_centimes': total_tva_centimes,
-            'point_de_vente': pdv,
-            'operateur_email': operateur_email,
-            'user_email': user_email,
-            'uuid_transaction': str(ligne.uuid_transaction) if ligne.uuid_transaction else '',
-            'hmac_hash': ligne.hmac_hash or '',
+            'uuid': str(vente.uuid),
+            'numero': _texte_ou_vide(vente.numero),
+            'nature': vente.nature,
+            'statut': vente.statut,
+            'origine': vente.origine,
+            'unite': vente.unite,
+            'datetime_encaissement': vente.datetime_encaissement.isoformat(),
+            'point_de_vente': nom_du_point_de_vente,
+            'point_de_vente_uuid': _texte_ou_vide(vente.point_de_vente_id),
+            'operateur_email': email_de_l_operateur,
+            'vente_liee_uuid': _texte_ou_vide(vente.vente_liee_id),
+            'total_catalogue': str(vente.total_catalogue),
+            'total_offert': str(vente.total_offert),
+            'total_ttc': str(vente.total_ttc),
+            'total_ht': str(vente.total_ht),
+            'total_tva': str(vente.total_tva),
+            'previous_hmac': vente.previous_hmac,
+            'hmac_hash': vente.hmac_hash,
+        })
+
+    return resultats
+
+
+def _extraire_articles(identifiants_des_ventes):
+    """
+    Extrait les articles des ventes extraites (`_extraire_ventes`), avec leurs
+    montants entiers STOCKÉS : total catalogue, part offerte, net vendu (TTC), HT et
+    TVA. Rien n'est recalculé : ce sont les montants scellés dans l'empreinte de la
+    vente. Les articles sont lus par la LISTE des ventes déjà extraites : une vente
+    encaissée pendant la génération n'a pas ses articles sans son en-tête.
+    / Extracts the extracted sales' items with their STORED whole-cent amounts, read
+    from the list of already extracted sales.
+
+    :param identifiants_des_ventes: liste des uuid (texte) des ventes extraites
+    """
+    from BaseBillet.models import LigneArticle
+
+    articles = LigneArticle.objects.filter(
+        vente_id__in=identifiants_des_ventes,
+    ).select_related(
+        'vente',
+        'pricesold__productsold__product__categorie_pos',
+    ).order_by('vente__numero', 'uuid')
+
+    resultats = []
+    for article in articles.iterator():
+        # Nom et catégorie du produit vendu.
+        # / Name and category of the sold product.
+        nom_de_l_article = ''
+        nom_de_la_categorie = ''
+        produit = article.pricesold.productsold.product
+        if produit is not None:
+            nom_de_l_article = produit.name
+            if produit.categorie_pos is not None:
+                nom_de_la_categorie = produit.categorie_pos.name
+
+        resultats.append({
+            'uuid': str(article.uuid),
+            'vente_uuid': str(article.vente_id),
+            'vente_numero': _texte_ou_vide(article.vente.numero),
+            'datetime': article.datetime.isoformat() if article.datetime else '',
+            'article': nom_de_l_article,
+            'categorie': nom_de_la_categorie,
+            'pricesold_uuid': str(article.pricesold_id),
+            'uuid_transaction': _texte_ou_vide(article.uuid_transaction),
+            'quantite': str(article.qty),
+            'prix_unitaire': str(article.amount),
+            'taux_tva': f"{article.vat:.2f}",
+            'total_catalogue': str(article.total_catalogue),
+            'part_offerte': str(article.part_offerte),
+            'source_offert': article.source_offert or '',
+            'total_ttc': str(article.total_ttc),
+            'total_ht': str(article.total_ht),
+            'total_tva': str(article.total_tva),
+            'hors_chiffre_affaires': str(article.hors_chiffre_affaires),
+        })
+
+    return resultats
+
+
+def _extraire_reglements(identifiants_des_ventes):
+    """
+    Extrait les règlements des ventes extraites (`_extraire_ventes`) : moyen et
+    montant signé, en centimes. Une correction de moyen de paiement est une vente
+    CORRECTION à deux règlements qui s'annulent : elle est ici, sans fichier à part.
+    / Extracts the extracted sales' payments (method, signed amount). A payment
+    correction is a CORRECTION sale with two payments that cancel out.
+
+    :param identifiants_des_ventes: liste des uuid (texte) des ventes extraites
+    """
+    from BaseBillet.models_vente import Reglement
+
+    reglements = Reglement.objects.filter(
+        vente_id__in=identifiants_des_ventes,
+    ).select_related('vente').order_by('vente__numero', 'uuid')
+
+    resultats = []
+    for reglement in reglements.iterator():
+        resultats.append({
+            'uuid': str(reglement.uuid),
+            'vente_uuid': str(reglement.vente_id),
+            'vente_numero': _texte_ou_vide(reglement.vente.numero),
+            'moyen': reglement.moyen,
+            'montant': str(reglement.montant),
+            'asset': _texte_ou_vide(reglement.asset),
+            'carte': _texte_ou_vide(reglement.carte_id),
+            'fedow_transaction_uuid': _texte_ou_vide(reglement.fedow_transaction_uuid),
+            'reference_externe': reglement.reference_externe or '',
+            'datetime': reglement.datetime.isoformat() if reglement.datetime else '',
         })
 
     return resultats
@@ -243,86 +310,118 @@ def _extraire_lignes_article(debut, fin):
 
 def _extraire_clotures(debut, fin):
     """
-    Extrait les ClotureCaisse de la periode [debut, fin].
-    / Extracts ClotureCaisse for the period [debut, fin].
-    """
-    from laboutik.models import ClotureCaisse
+    Extrait les clôtures du lieu (`comptabilite.ClotureCaisse`, tous niveaux) dont
+    la fin tombe dans ]debut, fin], par numéro croissant, avec leur empreinte
+    chaînée. La fin d'une clôture est exclusive pour ses ventes : une M de décembre
+    finit le 1er janvier à 00:00. Elle va donc dans l'archive qui finit à cet
+    instant, et pas dans celle qui en commence.
+    / Extracts the venue's closures (every level) ending in ]debut, fin], by
+    number. A closure's end is exclusive for its sales: a December M ends on
+    January 1st at 00:00, so it belongs to the archive ending at that instant.
 
-    qs = ClotureCaisse.objects.select_related(
+    Chaque clôture porte aussi l'empreinte de sa dernière vente couverte
+    (`empreinte_de_la_derniere_vente`), relue en base comme le fait
+    `calculer_hmac_cloture` : avec elle, l'empreinte de la clôture se recalcule
+    depuis les seuls fichiers de l'archive et la clé.
+    / Each closure also carries its last covered sale's fingerprint, read back
+    like `calculer_hmac_cloture` does: the closure's fingerprint can be recomputed
+    from the archive files and the key alone.
+    """
+    from BaseBillet.models_vente import Vente
+    from comptabilite.models import ClotureCaisse
+
+    clotures = ClotureCaisse.objects.select_related(
         'point_de_vente',
         'responsable',
-    ).order_by('datetime_cloture')
+    ).order_by('numero_sequentiel')
 
     if debut is not None:
-        qs = qs.filter(datetime_cloture__gte=debut)
+        clotures = clotures.filter(datetime_fin__gt=debut)
     if fin is not None:
-        qs = qs.filter(datetime_cloture__lte=fin)
+        clotures = clotures.filter(datetime_fin__lte=fin)
+
+    # Les empreintes des dernières ventes couvertes, en une seule requête.
+    # / The last covered sales' fingerprints, in a single query.
+    numeros_lus_sur_les_clotures = clotures.values_list(
+        'numero_derniere_vente', flat=True
+    )
+    numeros_des_dernieres_ventes = []
+    for numero_de_la_derniere_vente in numeros_lus_sur_les_clotures:
+        if numero_de_la_derniere_vente is not None:
+            numeros_des_dernieres_ventes.append(numero_de_la_derniere_vente)
+    empreinte_par_numero_de_vente = {}
+    ventes_couvertes = Vente.objects.filter(
+        numero__in=numeros_des_dernieres_ventes
+    ).values_list('numero', 'hmac_hash')
+    for numero_de_la_vente, empreinte_de_la_vente in ventes_couvertes:
+        empreinte_par_numero_de_vente[numero_de_la_vente] = empreinte_de_la_vente
 
     resultats = []
-    for cloture in qs.iterator():
-        pdv = ''
-        if cloture.point_de_vente:
-            pdv = cloture.point_de_vente.name
+    for cloture in clotures.iterator():
+        empreinte_de_la_derniere_vente = ''
+        if cloture.numero_derniere_vente is not None:
+            empreinte_de_la_derniere_vente = empreinte_par_numero_de_vente.get(
+                cloture.numero_derniere_vente, ''
+            )
 
-        responsable_email = ''
+        nom_du_point_de_vente = ''
+        if cloture.point_de_vente:
+            nom_du_point_de_vente = cloture.point_de_vente.name
+
+        email_du_responsable = ''
         if cloture.responsable:
-            responsable_email = cloture.responsable.email or ''
+            email_du_responsable = cloture.responsable.email or ''
 
         resultats.append({
             'uuid': str(cloture.uuid),
-            'datetime_cloture': cloture.datetime_cloture.isoformat() if cloture.datetime_cloture else '',
-            'datetime_ouverture': cloture.datetime_ouverture.isoformat() if cloture.datetime_ouverture else '',
-            'niveau': cloture.niveau or '',
+            'niveau': cloture.niveau,
             'numero_sequentiel': str(cloture.numero_sequentiel),
-            'total_especes': str(cloture.total_especes),
-            'total_carte_bancaire': str(cloture.total_carte_bancaire),
-            'total_cashless': str(cloture.total_cashless),
-            'total_cheque': str(cloture.total_cheque),
+            'datetime_debut': cloture.datetime_debut.isoformat(),
+            'datetime_fin': cloture.datetime_fin.isoformat(),
+            'numero_premiere_vente': _texte_ou_vide(cloture.numero_premiere_vente),
+            'numero_derniere_vente': _texte_ou_vide(cloture.numero_derniere_vente),
+            'empreinte_de_la_derniere_vente': empreinte_de_la_derniere_vente,
             'total_general': str(cloture.total_general),
+            'total_ht': str(cloture.total_ht),
+            'total_tva': str(cloture.total_tva),
+            'total_argent_recu': str(cloture.total_argent_recu),
             'nombre_transactions': str(cloture.nombre_transactions),
             'total_perpetuel': str(cloture.total_perpetuel),
-            'hash_lignes': cloture.hash_lignes or '',
-            'responsable_email': responsable_email,
-            'point_de_vente': pdv,
+            'nombre_ventes_perpetuel': str(cloture.nombre_ventes_perpetuel),
+            'responsable_email': email_du_responsable,
+            'point_de_vente': nom_du_point_de_vente,
+            # L'objet entier : `donnees.json` le garde tel quel, `clotures.csv`
+            # l'écrit en JSON canonique (`_lignes_csv_des_clotures`).
+            # / The whole object: kept as is in donnees.json, canonical JSON in CSV.
+            'rapport_json': cloture.rapport_json,
+            'previous_hmac': cloture.previous_hmac,
+            'hmac_hash': cloture.hmac_hash,
         })
 
     return resultats
 
 
-def _extraire_corrections(debut, fin):
+def _lignes_csv_des_clotures(clotures):
     """
-    Extrait les CorrectionPaiement de la periode [debut, fin].
-    / Extracts CorrectionPaiement for the period [debut, fin].
+    Les lignes du CSV des clôtures : comme les clôtures extraites, avec le rapport
+    écrit en JSON canonique (clés triées, sans espace, accents gardés) pour tenir
+    dans une cellule.
+    / The closures CSV rows: the report written as canonical JSON in one cell.
+
+    :param clotures: liste de dicts de `_extraire_clotures`
+    :return: liste de dicts pour `_ecrire_csv`
     """
-    from laboutik.models import CorrectionPaiement
-
-    qs = CorrectionPaiement.objects.select_related(
-        'ligne_article',
-        'operateur',
-    ).order_by('datetime')
-
-    if debut is not None:
-        qs = qs.filter(datetime__gte=debut)
-    if fin is not None:
-        qs = qs.filter(datetime__lte=fin)
-
-    resultats = []
-    for correction in qs.iterator():
-        operateur_email = ''
-        if correction.operateur:
-            operateur_email = correction.operateur.email or ''
-
-        resultats.append({
-            'uuid': str(correction.uuid),
-            'datetime': correction.datetime.isoformat() if correction.datetime else '',
-            'ligne_article_uuid': str(correction.ligne_article_id) if correction.ligne_article_id else '',
-            'ancien_moyen': correction.ancien_moyen or '',
-            'nouveau_moyen': correction.nouveau_moyen or '',
-            'raison': correction.raison or '',
-            'operateur_email': operateur_email,
-        })
-
-    return resultats
+    lignes_csv = []
+    for cloture in clotures:
+        ligne_csv = dict(cloture)
+        ligne_csv['rapport_json'] = json.dumps(
+            cloture['rapport_json'],
+            sort_keys=True,
+            separators=(',', ':'),
+            ensure_ascii=False,
+        )
+        lignes_csv.append(ligne_csv)
+    return lignes_csv
 
 
 def _extraire_impressions(debut, fin):
@@ -489,42 +588,78 @@ def _construire_meta(schema, debut, fin, compteurs):
 def generer_fichiers_archive(schema, debut=None, fin=None):
     """
     Genere tous les fichiers d'une archive fiscale pour un tenant.
-    Convertit les dates (date) en datetime aware si necessaire.
     Retourne un dict {nom_fichier: bytes}.
     / Generates all files for a fiscal archive for a tenant.
-    Converts date objects to aware datetimes if needed.
     Returns dict {filename: bytes}.
+
+    LES BORNES :
+    - une date (`date`) est lue dans le FUSEAU DU LIEU (`Configuration.fuseau_horaire`) :
+      le debut est le jour de `debut` a 00:00, la fin est le LENDEMAIN de `fin` a
+      00:00, heure du lieu, et elle est EXCLUSIVE ;
+    - sans `fin`, la fin est figee a maintenant, au debut de la generation : tous les
+      fichiers s'arretent au meme instant ;
+    - une vente est dans l'archive si son ENCAISSEMENT tombe dans [debut, fin[ ;
+    - une cloture est dans l'archive si sa FIN tombe dans ]debut, fin] : une J a
+      cheval sur deux periodes va dans l'archive de sa fin ; la M de decembre et l'A
+      de l'annee, qui finissent le 1er janvier a 00:00, vont dans l'archive de
+      l'annee, pas dans celle de l'annee suivante ;
+    - les articles et les reglements sont lus par la liste des ventes extraites.
+    / Dates are read in the venue's time zone: start at 00:00 of `debut`, end at
+    00:00 of the day after `fin`, exclusive. Without an end, the end is frozen to
+    now. Sales by settlement time in [debut, fin[, closures by their end in
+    ]debut, fin].
     """
     from datetime import date as date_type
 
-    # Convertir date → datetime aware / Convert date → aware datetime
-    if debut is not None and isinstance(debut, date_type) and not isinstance(debut, datetime):
-        debut = timezone.make_aware(datetime.combine(debut, time.min))
-    if fin is not None and isinstance(fin, date_type) and not isinstance(fin, datetime):
-        fin = timezone.make_aware(datetime.combine(fin, time.max))
+    from BaseBillet.models import Configuration
 
-    # Extraction de toutes les donnees / Extract all data
-    lignes_article = _extraire_lignes_article(debut, fin)
+    # Convertir une date en datetime aware, dans le fuseau du lieu. La fin devient
+    # le lendemain a 00:00 : c'est une borne exclusive, comme celle des clotures.
+    # / Convert a date into an aware datetime, in the venue's time zone. The end
+    # becomes the next day at 00:00: an exclusive bound, like the closures' one.
+    fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+    if debut is not None and isinstance(debut, date_type) and not isinstance(debut, datetime):
+        debut = timezone.make_aware(datetime.combine(debut, time.min), fuseau_du_lieu)
+    if fin is not None and isinstance(fin, date_type) and not isinstance(fin, datetime):
+        lendemain_de_la_fin = fin + timedelta(days=1)
+        fin = timezone.make_aware(
+            datetime.combine(lendemain_de_la_fin, time.min), fuseau_du_lieu
+        )
+    if fin is None:
+        fin = timezone.now()
+
+    # Extraction de toutes les donnees. Les articles et les reglements sont lus par
+    # la liste des ventes extraites, jamais par une deuxieme lecture des bornes.
+    # / Extract all data; items and payments from the list of extracted sales.
+    ventes = _extraire_ventes(debut, fin)
+    identifiants_des_ventes = []
+    for vente in ventes:
+        identifiants_des_ventes.append(vente['uuid'])
+    articles = _extraire_articles(identifiants_des_ventes)
+    reglements = _extraire_reglements(identifiants_des_ventes)
     clotures = _extraire_clotures(debut, fin)
-    corrections = _extraire_corrections(debut, fin)
     impressions = _extraire_impressions(debut, fin)
     sorties_caisse = _extraire_sorties_caisse(debut, fin)
     historique_fond = _extraire_historique_fond(debut, fin)
 
     # Generation des CSV / Generate CSVs
     fichiers = {}
-    fichiers['lignes_article.csv'] = _ecrire_csv(COLONNES_LIGNES_ARTICLE, lignes_article)
-    fichiers['clotures.csv'] = _ecrire_csv(COLONNES_CLOTURES, clotures)
-    fichiers['corrections.csv'] = _ecrire_csv(COLONNES_CORRECTIONS, corrections)
+    fichiers['ventes.csv'] = _ecrire_csv(COLONNES_VENTES, ventes)
+    fichiers['articles.csv'] = _ecrire_csv(COLONNES_ARTICLES, articles)
+    fichiers['reglements.csv'] = _ecrire_csv(COLONNES_REGLEMENTS, reglements)
+    fichiers['clotures.csv'] = _ecrire_csv(
+        COLONNES_CLOTURES, _lignes_csv_des_clotures(clotures)
+    )
     fichiers['impressions.csv'] = _ecrire_csv(COLONNES_IMPRESSIONS, impressions)
     fichiers['sorties_caisse.csv'] = _ecrire_csv(COLONNES_SORTIES_CAISSE, sorties_caisse)
     fichiers['historique_fond.csv'] = _ecrire_csv(COLONNES_HISTORIQUE_FOND, historique_fond)
 
     # Donnees JSON completes / Full JSON data
     donnees = {
-        'lignes_article': lignes_article,
+        'ventes': ventes,
+        'articles': articles,
+        'reglements': reglements,
         'clotures': clotures,
-        'corrections': corrections,
         'impressions': impressions,
         'sorties_caisse': sorties_caisse,
         'historique_fond': historique_fond,
@@ -533,9 +668,10 @@ def generer_fichiers_archive(schema, debut=None, fin=None):
 
     # Compteurs pour meta.json / Counters for meta.json
     compteurs = {
-        'lignes_article': len(lignes_article),
+        'ventes': len(ventes),
+        'articles': len(articles),
+        'reglements': len(reglements),
         'clotures': len(clotures),
-        'corrections': len(corrections),
         'impressions': len(impressions),
         'sorties_caisse': len(sorties_caisse),
         'historique_fond': len(historique_fond),
@@ -691,16 +827,22 @@ N° TVA : {config.tva_number or 'Non renseigne'}
 
 CONTENU DE L'ARCHIVE
 ---------------------
-- lignes_article.csv : Toutes les lignes d'articles (ventes)
-- clotures.csv : Rapports de cloture de caisse
-- corrections.csv : Corrections de moyens de paiement
+- ventes.csv : Les ventes REGLEES seulement (une vente en attente ou annulee
+  n'a ni numero ni empreinte), de toutes les origines (caisse, tireuse,
+  en ligne, admin, API) : numero, nature, origine, totaux, empreinte chainee
+- articles.csv : Les articles de chaque vente, avec le HT et la TVA stockes
+- reglements.csv : Les reglements de chaque vente (moyen, montant signe)
+- clotures.csv : Les clotures (journalieres, hebdomadaires, mensuelles,
+  annuelles), numerotees et chainees, avec leur rapport complet (colonne
+  rapport_json, JSON canonique)
 - impressions.csv : Journal des impressions de justificatifs
 - sorties_caisse.csv : Retraits d'especes
 - historique_fond.csv : Historique des changements de fond de caisse
 - donnees.json : Ensemble des donnees au format JSON
 - meta.json : Metadonnees de l'archive (organisation, periode, compteurs)
-- hash.json : Empreintes HMAC-SHA256 de chaque fichier + hash global
-- README.txt : Ce fichier
+- hash.json : Empreintes HMAC-SHA256 de chaque fichier ci-dessus + hash global
+- README.txt : Ce fichier. Il n'est PAS signe (absent de hash.json) : il
+  explique l'archive, il n'en fait pas partie.
 
 FORMAT CSV
 ----------
@@ -708,12 +850,84 @@ FORMAT CSV
 - Delimiteur : ; (point-virgule)
 - Guillemets : tous les champs sont entre guillemets doubles
 - Montants : en centimes (entiers). Ex: 50,10 EUR = 5010
+- Dates : ISO 8601 avec le decalage horaire
+
+LES BORNES DE LA PERIODE
+------------------------
+Les dates de debut et de fin sont lues dans le fuseau horaire du lieu.
+La periode commence le jour de debut a 00:00. Elle finit le LENDEMAIN du
+jour de fin a 00:00, et cette fin est EXCLUSIVE (c'est la fin ecrite dans
+meta.json). Sans date de fin, l'archive s'arrete au moment de sa generation.
+Une vente est dans l'archive si son heure d'ENCAISSEMENT est au debut ou
+apres, et strictement avant la fin. Une cloture est dans l'archive si sa
+FIN est strictement apres le debut, et au plus a la fin : une cloture a
+cheval sur deux periodes va dans l'archive de la periode ou elle finit.
+La fin d'une cloture est elle aussi exclusive pour ses ventes : la
+cloture mensuelle de decembre et la cloture annuelle finissent le 1er
+janvier a 00:00, et vont dans l'archive de l'annee qu'elles couvrent.
+
+LES ARTICLES EN PARTS
+---------------------
+Un article paye avec deux moyens peut etre ecrit en deux lignes (deux
+parts) : meme prix unitaire, quantites fractionnaires (ex. 1,428571 et
+1,571429), chacune avec ses montants reels. La somme des parts donne
+l'article ; la somme des articles donne les totaux de la vente.
+
+CORRECTIONS
+-----------
+Une vente reglee ne se modifie jamais. Une correction de moyen de paiement
+est une nouvelle vente de nature CORRECTION, liee a la vente d'origine
+(vente_liee_uuid), avec deux reglements qui s'annulent, sur deux moyens.
+Le sens ne se lit pas au signe : la paire de moyens dit d'ou part l'argent
+(le moyen de la vente liee, apres ses corrections precedentes, par numero
+croissant) et ou il arrive (l'autre moyen de la paire). La caisse ecrit
+l'ancien moyen en negatif et le nouveau en positif ; une correction d'un
+avoir (montants de signes inverses) se lit de la meme facon.
+Un remboursement est une vente AVOIR.
 
 VERIFICATION D'INTEGRITE
 -------------------------
-Chaque fichier est signe avec HMAC-SHA256.
+Chaque fichier liste dans hash.json est signe avec HMAC-SHA256.
 La cle de signature est la cle HMAC du tenant (chiffree Fernet).
 Pour verifier : recalculer le HMAC de chaque fichier et comparer avec hash.json.
+
+Chaque vente porte aussi son empreinte (hmac_hash), chainee avec celle de la
+vente precedente (previous_hmac). Elle se recalcule avec la cle du lieu,
+sur ce message : un JSON canonique (cles triees, separateurs "," et ":",
+sans espace, accents gardes) de l'objet
+  format = 1
+  uuid, numero, nature, origine, unite, statut (ventes.csv)
+  datetime_encaissement : ISO 8601 en UTC
+  point_de_vente : point_de_vente_uuid ("" sans point de vente)
+  vente_liee : vente_liee_uuid ("" sans vente liee)
+  totaux = [total_catalogue, total_offert, total_ttc, total_ht, total_tva]
+  articles = liste, triee par uuid, de
+    [uuid, pricesold_uuid, quantite avec 6 decimales, prix_unitaire,
+     taux_tva avec 2 decimales, total_catalogue, part_offerte,
+     source_offert, total_ttc, total_ht, total_tva, hors_chiffre_affaires
+     (vrai/faux JSON)]
+  reglements = liste, triee par uuid, de
+    [uuid, moyen, montant, asset, carte, fedow_transaction_uuid,
+     reference_externe] (un champ vide s'ecrit "")
+  previous_hmac
+Les nombres (numero, montants) sont des entiers JSON.
+
+Chaque cloture porte de meme son empreinte (hmac_hash), chainee avec la
+cloture precedente (previous_hmac), tous niveaux confondus, dans l'ordre
+de numero_sequentiel. Elle se recalcule avec la meme cle, sur le meme
+JSON canonique, de l'objet (colonnes de clotures.csv)
+  format = 1
+  niveau, numero_sequentiel
+  datetime_debut, datetime_fin : ISO 8601 en UTC
+  numero_premiere_vente, numero_derniere_vente (null si vide)
+  empreinte_de_la_derniere_vente ("" sans vente)
+  totaux = {{total_general, total_ht, total_tva, total_argent_recu,
+            nombre_transactions}}
+  perpetuels = {{total_perpetuel, nombre_ventes_perpetuel}}
+  rapport_json : l'objet JSON de la colonne rapport_json
+  previous_hmac
+Les nombres (numeros, totaux, perpetuels) sont des entiers JSON. Le point
+de vente et le responsable ne sont pas dans le message.
 
 CONFORMITE
 ----------
@@ -721,7 +935,7 @@ Ce format d'archivage respecte les exigences du referentiel LNE v1.7 :
 - Exigence 3 : donnees elementaires (HT, TTC, TVA stockes)
 - Exigence 6 : clotures numerotees sans trous
 - Exigence 7 : total perpetuel
-- Exigence 8 : chainage HMAC-SHA256
+- Exigence 8 : chainage HMAC-SHA256 des ventes et des clotures
 - Exigence 9 : tracabilite des impressions
 - Exigence 10 : archivage periodique
 """

@@ -61,6 +61,8 @@ from BaseBillet.models import (  # noqa: E402
     Tva,
 )
 from QrcodeCashless.models import CarteCashless  # noqa: E402
+import comptabilite.tasks  # noqa: E402
+from comptabilite.models import ClotureCaisse as ClotureCaisseUnique  # noqa: E402
 from fedow_core.models import Asset  # noqa: E402
 from fedow_core.services import AssetService  # noqa: E402
 from laboutik.models import (  # noqa: E402
@@ -70,6 +72,7 @@ from laboutik.models import (  # noqa: E402
     PointDeVente,
 )
 from laboutik.reports import RapportComptableService  # noqa: E402
+from fabriques_ecran import euros  # noqa: E402
 
 PRIX_VIN_CENTIMES = 500
 
@@ -101,6 +104,9 @@ class TestLignesHorsArgent(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.module_monnaie_locale = True
         configuration.module_caisse = True
+        # Aucun e-mail de rapport : une clôture journalière n'envoie rien.
+        # / No report e-mail: a daily closure sends nothing.
+        configuration.rapport_emails = ""
         configuration.save()
 
         # Le singleton de la caisse doit exister en base (PIEGES 9.86).
@@ -354,52 +360,66 @@ class TestLignesHorsArgent(FastTenantTestCase):
         assert avertissements == []
 
     def test_le_ticket_x_affiche_les_offerts(self):
-        """L'ecran Ventes (ticket X) montre la section « Offerts ».
-        / The Sales screen (X ticket) shows the "Gifted" section."""
-        self._offrir_des_vins(2)
+        """L'ecran Ventes (recapitulatif en cours) montre la section « Offerts » du
+        rapport des ventes : 2 vins offerts par le gerant (bouton OFFRIR), valeur
+        catalogue 2 x 5,00 € = 10,00 €, le vin nomme dans le detail par produit.
+        / The current recap shows the "Offerts" section: 2 gifted wines, 10.00 €."""
+        carte_du_gerant = self._carte_primaire("GER8AAAA", mode_gerant=True)
+        reponse_de_l_offre = self._offrir(carte_du_gerant.tag_id, self.vin.uuid, 2, 1000)
+        assert reponse_de_l_offre.status_code == 200, (
+            reponse_de_l_offre.content.decode()[:400]
+        )
         self._vendre_un_vin_en_especes()
 
         reponse = self.navigateur.get("/laboutik/caisse/recap-en-cours/")
 
         contenu = reponse.content.decode()
-        assert reponse.status_code == 200
-        assert 'data-testid="recap-offerts"' in contenu
-
-    def _cloture_avec_des_offerts(self):
-        """Une cloture dont le rapport contient 2 vins offerts et 1 vendu.
-        / A closure whose report holds 2 gifted wines and 1 sold."""
-        self._offrir_des_vins(2)
-        self._vendre_un_vin_en_especes()
-        return ClotureCaisse.objects.create(
-            point_de_vente=self.point_de_vente,
-            responsable=self.caissier,
-            datetime_ouverture=timezone.now(),
-            datetime_cloture=timezone.now(),
-            total_especes=PRIX_VIN_CENTIMES,
-            total_general=PRIX_VIN_CENTIMES,
-            nombre_transactions=2,
-            rapport_json=self._rapport().generer_rapport_complet(),
-        )
+        assert reponse.status_code == 200, contenu[:400]
+        debut_de_la_section = contenu.index('data-testid="recap-offerts"')
+        bloc_des_offerts = contenu[debut_de_la_section:]
+        fin_du_bloc = bloc_des_offerts.index("</section>")
+        bloc_des_offerts = bloc_des_offerts[:fin_du_bloc]
+        assert self.vin.name in bloc_des_offerts
+        assert euros("10,00") in bloc_des_offerts
 
     def test_le_ticket_z_imprime_mentionne_les_offerts(self):
-        """Le ticket Z imprime porte « Offerts : 2 articles, valeur 10.00 EUR ».
-        / The printed Z ticket mentions the gifted items."""
+        """Le ticket Z de la J unique porte « Offerts: 2 art., 10.00 EUR »
+        (2 vins offerts par le gerant, bouton OFFRIR, 2 x 5,00 €). Le total reste le
+        vin vendu seul (5,00 €) : l'offert n'est pas de l'argent.
+        / The single J's Z ticket mentions the gifted items; the total is the sold
+        wine only."""
         from laboutik.printing.formatters import formatter_ticket_cloture
 
-        ticket = formatter_ticket_cloture(self._cloture_avec_des_offerts())
+        carte_du_gerant = self._carte_primaire("GER9AAAA", mode_gerant=True)
+        reponse_de_l_offre = self._offrir(carte_du_gerant.tag_id, self.vin.uuid, 2, 1000)
+        assert reponse_de_l_offre.status_code == 200, (
+            reponse_de_l_offre.content.decode()[:400]
+        )
+        self._vendre_un_vin_en_especes()
+        uuid_de_la_j = comptabilite.tasks.generer_cloture_pour_tenant(
+            schema_name=self.tenant.schema_name,
+            niveau=ClotureCaisseUnique.NIVEAU_JOURNALIER,
+        )
 
-        assert "Offerts: 2 articles, valeur 10.00 EUR" in ticket["footer"]
+        ticket = formatter_ticket_cloture(
+            ClotureCaisseUnique.objects.get(uuid=uuid_de_la_j)
+        )
+
+        # Forme courte, pour tenir dans les 32 caractères du ticket.
+        # / Short form, to fit the 32-char ticket.
+        assert "Offerts: 2 art., 10.00 EUR" in ticket["footer"]
         assert ticket["total"]["amount"] == PRIX_VIN_CENTIMES
+        # L'offert n'est pas une ligne au-dessus du total : les lignes font le total.
+        # / The gift is not a line above the total: the lines add up to the total.
+        somme_des_lignes = 0
+        for ligne_du_ticket in ticket["articles"]:
+            somme_des_lignes += ligne_du_ticket["total"]
+        assert somme_des_lignes == ticket["total"]["amount"]
 
-    def test_l_export_csv_de_la_cloture_liste_les_offerts(self):
-        """L'export CSV de la cloture a une section « Offerts (hors argent) ».
-        / The closure CSV export has a "Gifted" section."""
-        from laboutik.csv_export import generer_csv_cloture
-
-        contenu_csv = generer_csv_cloture(self._cloture_avec_des_offerts())
-
-        assert "Offerts (hors argent)" in contenu_csv
-        assert "Vin hors argent;2.0;10.00" in contenu_csv
+    # La section « Offerts » des exports d'une clôture (CSV, tableur, PDF) est celle de
+    # la clôture unique : tests/pytest/test_comptabilite_exports.py (toutes les
+    # sections dans l'ordre, totaux égaux au rapport).
+    # / The "Gifted" section of closure exports: test_comptabilite_exports.py.
 
     # ------------------------------------------------------------------
     # Recharges cadeau / Gift top-ups

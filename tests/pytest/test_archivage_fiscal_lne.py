@@ -12,25 +12,22 @@ CE QUI EST TESTE / WHAT IS TESTED
 l'appellent : la vue `laboutik/views.py`, et les commandes `archiver_donnees`,
 `verifier_archive` et `acces_fiscal`.
 
-POURQUOI CE FICHIER EXISTE / WHY THIS FILE EXISTS
---------------------------------------------------
-Ce module n'avait AUCUN test. Il a passe des mois a lever une `AttributeError`
-sans que personne ne s'en apercoive : il filtrait sur une valeur de `SaleOrigin`
-absente de l'enumeration. L'archivage fiscal etait donc mort en production, quel
-que soit le reglage du mode ecole.
-
-Ces tests ne verifient pas le detail du contenu des archives — ils verifient que
-la chaine s'execute, ce qui aurait suffi a rendre la panne visible.
-/ This module had NO test at all and spent months raising an AttributeError,
-filtering on a SaleOrigin value missing from the enum. These tests do not check
-the archives' contents in detail; they check that the chain runs at all, which
-would have been enough to make the outage visible.
+CE QUE CE FICHIER GARDE / WHAT THIS FILE GUARDS
+------------------------------------------------
+L'archivage fiscal est une obligation legale : il doit s'executer sur la base du
+lieu de developpement, avec tous ses fichiers et les colonnes de ses ventes. Le
+detail du contenu des archives est teste dans
+`tests/pytest/test_archive_lne_ventes.py`.
+/ The fiscal archive is a legal duty: it must run on the development venue, with
+all its files and its sales columns. Contents are tested in
+test_archive_lne_ventes.py.
 
 Lancement / Run:
     docker exec lespass_django poetry run pytest \
         /DjangoFiles/tests/pytest/test_archivage_fiscal_lne.py -v
 """
 
+import csv
 import inspect
 import re
 
@@ -44,14 +41,28 @@ pytestmark = pytest.mark.django_db
 
 # Les fichiers que l'archive doit contenir. La liste vient de ce que le module
 # produit reellement ; elle sert de garde contre une disparition silencieuse
-# de l'un d'eux.
+# de l'un d'eux. Les corrections de moyen de paiement sont des ventes
+# « CORRECTION » : elles sont dans les fichiers des ventes, sans fichier a part.
 # / The files the archive must contain, as a guard against one silently vanishing.
+# Payment corrections are CORRECTION sales, inside the sales files.
 FICHIERS_ATTENDUS_DANS_L_ARCHIVE = [
-    "lignes_article.csv",
+    "ventes.csv",
+    "articles.csv",
+    "reglements.csv",
     "clotures.csv",
-    "corrections.csv",
     "impressions.csv",
     "sorties_caisse.csv",
+    "historique_fond.csv",
+]
+
+# Les colonnes du CSV des ventes, dans l'ordre (le contrat complet de chaque fichier
+# est dans tests/pytest/test_archive_lne_ventes.py).
+# / The sales CSV columns, in order.
+COLONNES_ATTENDUES_DES_VENTES = [
+    "uuid", "numero", "nature", "statut", "origine", "unite",
+    "datetime_encaissement", "point_de_vente", "point_de_vente_uuid",
+    "operateur_email", "vente_liee_uuid", "total_catalogue", "total_offert",
+    "total_ttc", "total_ht", "total_tva", "previous_hmac", "hmac_hash",
 ]
 
 
@@ -62,14 +73,11 @@ def tenant():
 
 
 def test_l_archivage_fiscal_s_execute_sans_erreur(tenant):
-    """La generation des fichiers d'archive aboutit.
-
-    C'est le test qui manquait : il echouait avec `AttributeError` tant que le
-    module filtrait sur une origine de vente inexistante. Une obligation legale
-    ne doit pas dependre d'un chemin que personne n'execute jamais.
-    / The missing test: it failed with AttributeError while the module filtered
-    on a nonexistent sale origin. A legal obligation must not rest on a code
-    path nobody ever runs.
+    """La generation des fichiers d'archive aboutit, avec tous ses fichiers, et sans
+    fichier des corrections (une correction est une vente CORRECTION).
+    Une obligation legale ne doit pas dependre d'un chemin que personne n'execute.
+    / Archive generation succeeds, with every file and no corrections file. A legal
+    obligation must not rest on a code path nobody runs.
     """
     with tenant_context(tenant):
         from laboutik.archivage import generer_fichiers_archive
@@ -79,18 +87,20 @@ def test_l_archivage_fiscal_s_execute_sans_erreur(tenant):
     assert isinstance(fichiers, dict)
     for nom_de_fichier in FICHIERS_ATTENDUS_DANS_L_ARCHIVE:
         assert nom_de_fichier in fichiers, (
-            f"L'archive fiscale ne contient plus {nom_de_fichier}"
+            f"L'archive fiscale ne contient pas {nom_de_fichier}"
         )
+    assert "corrections.csv" not in fichiers
 
 
 def test_l_archive_conserve_l_origine_de_chaque_vente(tenant):
-    """Le CSV des ventes porte une colonne d'origine.
+    """Le CSV des ventes a exactement les colonnes attendues, dans l'ordre, dont la
+    colonne d'origine.
 
     La norme demande de pouvoir distinguer les ventes selon leur provenance.
     Sans cette colonne, une archive resterait techniquement valide mais
-    inexploitable lors d'un controle.
-    / The standard requires telling sales apart by origin. Without this column
-    the archive stays technically valid but useless during an audit.
+    inexploitable lors d'un controle. L'archive exporte toutes les origines
+    (voir tests/pytest/test_archive_lne_ventes.py, tireuse et en ligne).
+    / The sales CSV has exactly the expected columns, in order, origin included.
     """
     with tenant_context(tenant):
         from laboutik.archivage import generer_fichiers_archive
@@ -101,37 +111,13 @@ def test_l_archive_conserve_l_origine_de_chaque_vente(tenant):
     # s'ouvre correctement dans un tableur. On decode avant de chercher.
     # / The module returns bytes prefixed with a UTF-8 BOM so the file opens
     # correctly in a spreadsheet. Decode before searching.
-    contenu_des_ventes = fichiers["lignes_article.csv"]
+    contenu_des_ventes = fichiers["ventes.csv"]
     if isinstance(contenu_des_ventes, bytes):
         contenu_des_ventes = contenu_des_ventes.decode("utf-8-sig")
 
-    entete = contenu_des_ventes.splitlines()[0]
-    assert "sale_origin" in entete
-
-
-def test_l_origine_utilisee_par_l_archivage_existe_bien(tenant):
-    """Garde-fou : l'origine filtree par l'archivage est une valeur reelle.
-
-    C'est exactement le defaut qui a mis l'archivage hors service — une constante
-    referencee mais absente de l'enumeration. Le test echoue si quelqu'un
-    reintroduit une valeur fantome.
-    / The exact defect that broke archiving: a constant referenced but missing
-    from the enum. This fails if someone reintroduces a ghost value.
-    """
-    from laboutik import archivage
-
-    code_source = inspect.getsource(archivage)
-
-    # Toutes les valeurs citees sous la forme `SaleOrigin.XXX` doivent exister.
-    # / Every `SaleOrigin.XXX` mentioned must exist.
-    origines_citees = set(re.findall(r"SaleOrigin\.([A-Z_]+)", code_source))
-    assert origines_citees, "Aucune origine citee : le test ne verifie plus rien."
-
-    for nom_d_origine in origines_citees:
-        assert hasattr(SaleOrigin, nom_d_origine), (
-            f"laboutik/archivage.py cite SaleOrigin.{nom_d_origine}, "
-            f"qui n'existe pas dans l'enumeration."
-        )
+    lecteur_des_ventes = csv.reader(contenu_des_ventes.splitlines(), delimiter=";")
+    colonnes_de_l_entete = next(lecteur_des_ventes)
+    assert colonnes_de_l_entete == COLONNES_ATTENDUES_DES_VENTES
 
 
 def test_le_mode_ecole_ne_marque_plus_les_ventes(tenant):

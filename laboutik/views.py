@@ -41,6 +41,7 @@ from django.db.models import (
     F,
     IntegerField,
     Max,
+    Min,
     Value,
     When,
     Prefetch,
@@ -102,6 +103,21 @@ from BaseBillet.services_vente import (
     tarif_vendu_d_un_produit_systeme,
 )
 from QrcodeCashless.models import CarteCashless
+# La cloture unique du lieu (la J) et ses lecteurs : exports, presentation, envoi.
+# / The venue's single closure (J) and its readers.
+from comptabilite.csv_export import generer_csv_cloture
+from comptabilite.models import ClotureCaisse as ClotureCaisseUnique
+from comptabilite.pdf import generer_pdf_cloture
+from comptabilite.presentation import (
+    euros_a_la_francaise,
+    lignes_du_tiroir,
+    sections_pour_affichage,
+)
+from comptabilite.tasks import (
+    creer_la_cloture_journaliere_de_la_caisse,
+    demander_l_email_automatique_si_configure,
+    envoyer_email_cloture_demande,
+)
 from laboutik.models import (
     LaboutikConfiguration,
     PointDeVente,
@@ -109,11 +125,14 @@ from laboutik.models import (
     Table,
     CommandeSauvegarde,
     ArticleCommandeSauvegarde,
-    ClotureCaisse,
     CorrectionPaiement,
+    ImpressionLog,
     SortieCaisse,
     HistoriqueFondDeCaisse,
 )
+from comptabilite.rapport import MOYENS_CASHLESS, RapportDesVentes
+from laboutik.printing.formatters import formatter_ticket_cloture, formatter_ticket_x
+from laboutik.printing.tasks import imprimer_async
 from laboutik.serializers import (
     ClientIdentificationSerializer,
     CartePrimaireSerializer,
@@ -121,7 +140,6 @@ from laboutik.serializers import (
     CommandeSerializer,
     ArticleCommandeSerializer,
     ClotureSerializer,
-    EnvoyerRapportSerializer,
     RechargeMontantLibreSerializer,
 )
 from laboutik.reports import MOYENS_HORS_ARGENT, RapportComptableService
@@ -133,7 +151,7 @@ from laboutik.integrity import (
     calculer_hmac,
     obtenir_previous_hmac,
     calculer_total_ht,
-    ligne_couverte_par_cloture,
+    vente_couverte_par_cloture,
 )
 
 
@@ -215,6 +233,10 @@ _COUPURES_PAIRES_POUR_TEMPLATE = [
 ]
 
 logger = logging.getLogger(__name__)
+
+# La periode la plus longue d'un export fiscal, comme la commande `archiver_donnees`.
+# / The longest fiscal export period, like the archiver_donnees command.
+NOMBRE_DE_JOURS_MAXIMUM_D_UN_EXPORT_FISCAL = 365
 
 
 # --------------------------------------------------------------------------- #
@@ -3412,12 +3434,24 @@ class CaisseViewSet(viewsets.ViewSet):
     def cloturer(self, request):
         """
         POST /laboutik/caisse/cloturer/
-        Cloture journaliere (niveau J) : calcule le rapport via RapportComptableService,
-        cree ClotureCaisse avec numero sequentiel et total perpetuel, ferme les tables.
-        / Daily closure (level J): computes report via RapportComptableService,
-        creates ClotureCaisse with sequential number and perpetual total, closes tables.
+        Le « Z de fin de service » : cree la cloture journaliere unique du lieu (la J,
+        `comptabilite.ClotureCaisse`), puis annule les commandes de table ouvertes et
+        libere les tables, imprime le ticket Z et affiche l'ecran du Z.
+        / The end-of-service Z: creates the venue's single daily closure (J), cancels
+        open table orders, frees the tables, prints the Z ticket, shows the Z screen.
 
         LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. Validation (point de vente, carte primaire).
+        2. `comptabilite.tasks.creer_la_cloture_journaliere_de_la_caisse` : la J, avec
+           l'operateur et le point de vente. Rien a cloturer (aucune vente reglee
+           depuis la derniere J) : 400, aucun autre effet.
+        3. Les deux effets du bouton : commandes ouvertes annulees, tables libres.
+        4. Les demandes au broker, chacune protegee (un echec est journalise) : le
+           ticket Z, sur l'imprimante du terminal, trace (type CLOT, lien vers la J) ;
+           l'e-mail automatique de la J, si le lieu l'a regle.
+        5. L'ecran du Z : l'essentiel du rapport stocke dans la J.
         """
         # --- 1. Valider les donnees (uuid_pv uniquement) ---
         # --- 1. Validate input (uuid_pv only) ---
@@ -3454,43 +3488,22 @@ class CaisseViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=404
             )
 
-        # --- 4. Calculer datetime_ouverture automatiquement ---
-        # Trouver la derniere cloture journaliere de ce PV
-        # / Find the last daily closure for this PV
-        derniere_cloture = (
-            ClotureCaisse.objects.filter(
-                point_de_vente=point_de_vente,
-                niveau=ClotureCaisse.JOURNALIERE,
-            )
-            .order_by("-datetime_cloture")
-            .first()
+        # --- 4. La J unique du lieu ---
+        # HORS de toute transaction : la creation de la J prend le verrou des ventes
+        # dans une transaction courte et DURABLE (`atomic(durable=True)`). Ne jamais
+        # entourer cet appel d'un `atomic()` : il leverait RuntimeError.
+        # / 4. The venue's single J. OUTSIDE any transaction: never wrap this call in
+        #   atomic() (durable step inside).
+        operateur = request.user if request.user.is_authenticated else None
+        cloture = creer_la_cloture_journaliere_de_la_caisse(
+            responsable=operateur,
+            point_de_vente=point_de_vente,
         )
 
-        if derniere_cloture:
-            # datetime_ouverture = 1ere LigneArticle VALID apres la derniere cloture
-            # / datetime_ouverture = 1st VALID LigneArticle after the last closure
-            premiere_vente = (
-                LigneArticle.objects.filter(
-                    sale_origin=SaleOrigin.LABOUTIK,
-                    status=LigneArticle.VALID,
-                    datetime__gt=derniere_cloture.datetime_cloture,
-                )
-                .order_by("datetime")
-                .first()
-            )
-        else:
-            # Aucune cloture precedente : 1ere LigneArticle VALID tous temps confondus
-            # / No previous closure: 1st VALID LigneArticle ever
-            premiere_vente = (
-                LigneArticle.objects.filter(
-                    sale_origin=SaleOrigin.LABOUTIK,
-                    status=LigneArticle.VALID,
-                )
-                .order_by("datetime")
-                .first()
-            )
-
-        if not premiere_vente:
+        # Rien a cloturer : aucune vente reglee depuis la derniere J (ou aucune
+        # vente). Aucune cloture vide, aucun autre effet.
+        # / Nothing to close: no settled sale since the last J. No empty closure.
+        if cloture is None:
             context_erreur = {
                 "msg_type": "warning",
                 "msg_content": _("Aucune vente à clôturer"),
@@ -3500,88 +3513,8 @@ class CaisseViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
-        datetime_ouverture = premiere_vente.datetime
-
-        # --- 5. Calculer le rapport via RapportComptableService ---
-        # --- 5. Compute the report via RapportComptableService ---
-        datetime_cloture = dj_timezone.now()
-        service = RapportComptableService(
-            point_de_vente, datetime_ouverture, datetime_cloture
-        )
-        rapport = service.generer_rapport_complet()
-        totaux = rapport["totaux_par_moyen"]
-        hash_lignes = service.calculer_hash_lignes()
-
-        # Extraire les totaux pour la ClotureCaisse et l'affichage
-        # / Extract totals for ClotureCaisse and display
-        total_especes = totaux["especes"]
-        total_carte_bancaire = totaux["carte_bancaire"]
-        total_cashless = totaux["cashless"]
-        total_cheque = totaux["cheque"]
-        total_general = totaux["total"]
-        nombre_transactions = service.lignes.count()
-
-        # --- 6. Bloc atomique : numero sequentiel + total perpetuel + creation ---
-        # La cloture est GLOBALE au tenant (couvre tous les PV).
-        # Le numero sequentiel est par niveau, pas par PV.
-        # Le point_de_vente est informatif (d'ou la cloture a ete declenchee).
-        # / Closure is GLOBAL to the tenant (covers all POS).
-        # Sequential number is per level, not per POS.
-        # point_de_vente is informational (where closure was triggered from).
-        with db_transaction.atomic():
-            # Numero sequentiel global par niveau : dernier +1, avec verrou
-            # / Global sequential number per level: last +1, with lock
-            clotures_niveau = (
-                ClotureCaisse.objects.select_for_update()
-                .filter(
-                    niveau=ClotureCaisse.JOURNALIERE,
-                )
-                .order_by("-numero_sequentiel")
-            )
-
-            dernier_seq = clotures_niveau.first()
-            numero_sequentiel = (
-                (dernier_seq.numero_sequentiel + 1) if dernier_seq else 1
-            )
-
-            # Total perpetuel : mise a jour atomique avec F() puis refresh.
-            # On utilise update_or_create pour garantir que la ligne existe
-            # meme si django-solo a cache un objet non persiste
-            # (piege 9.86 : get_solo peut retourner pk=1 sans ligne en DB).
-            # Attention : variable `_created` (pas `_`) — `_` est reserve a gettext
-            # plus loin dans cette fonction (piege 9.36).
-            # / Perpetual total: atomic update with F() then refresh.
-            # update_or_create guarantees the row exists even if django-solo
-            # cached a non-persisted object (trap 9.86).
-            # Use `_created` (not `_`) — `_` shadows gettext below (trap 9.36).
-            config, _created = LaboutikConfiguration.objects.update_or_create(pk=1)
-            LaboutikConfiguration.objects.filter(pk=config.pk).update(
-                total_perpetuel=F("total_perpetuel") + total_general
-            )
-            config.refresh_from_db()
-
-            # Creer la ClotureCaisse — point_de_vente = informatif
-            # / Create ClotureCaisse — point_de_vente = informational
-            cloture = ClotureCaisse.objects.create(
-                point_de_vente=point_de_vente,
-                responsable=request.user if request.user.is_authenticated else None,
-                datetime_ouverture=datetime_ouverture,
-                datetime_cloture=datetime_cloture,
-                total_especes=total_especes,
-                total_carte_bancaire=total_carte_bancaire,
-                total_cashless=total_cashless,
-                total_cheque=total_cheque,
-                total_general=total_general,
-                nombre_transactions=nombre_transactions,
-                rapport_json=rapport,
-                niveau=ClotureCaisse.JOURNALIERE,
-                numero_sequentiel=numero_sequentiel,
-                total_perpetuel=config.total_perpetuel,
-                hash_lignes=hash_lignes,
-            )
-
-        # --- 7. Fermer les tables ouvertes (OCCUPEE ou SERVIE → LIBRE) ---
-        # --- 7. Close open tables (OCCUPIED or SERVED → FREE) ---
+        # --- 5. Fermer les tables ouvertes (OCCUPEE ou SERVIE → LIBRE) ---
+        # --- 5. Close open tables (OCCUPIED or SERVED → FREE) ---
         Table.objects.filter(
             statut__in=[Table.OCCUPEE, Table.SERVIE],
         ).update(statut=Table.LIBRE)
@@ -3592,59 +3525,75 @@ class CaisseViewSet(viewsets.ViewSet):
             statut=CommandeSauvegarde.OPEN,
         ).update(statut=CommandeSauvegarde.CANCEL)
 
-        # --- 8. Imprimer le Ticket Z sur l'imprimante du terminal qui cloture ---
+        # --- 6. Imprimer le Ticket Z sur l'imprimante du terminal qui cloture ---
         #
         # La cloture est GLOBALE au lieu (elle couvre tous les points de vente), mais son
         # ticket sort sur l'imprimante de l'appareil qui la declenche : c'est l'operateur
         # qui est devant, c'est lui qui doit recuperer le papier.
         # / The closure is GLOBAL to the venue, but its ticket prints on the printer of the
         # device that triggered it: the operator is standing right there.
+        # Chaque impression d'un Z est tracee (LNE exigence 9) : la tache d'impression
+        # ecrit un `ImpressionLog` lie a la J, et marque DUPLICATA une 2e impression.
+        # / Every Z print is logged, linked to the J; a 2nd print is a DUPLICATE.
+        #
+        # Les demandes au broker (impression, e-mail) viennent APRES les effets du
+        # bouton, et chacune est protegee : un broker tombe est journalise, la J et
+        # l'ecran du Z restent (la J est deja enregistree).
+        # / Broker requests come AFTER the button's effects, each one protected: a
+        #   broker failure is logged, the J and the Z screen remain.
+        # La mise en forme du ticket est dans le meme `try` que la demande
+        # d'impression : un rapport illisible par le formatage ne casse pas l'ecran
+        # du Z, la J est deja enregistree.
+        # / Formatting is in the same `try` as the print request: a formatting
+        # error does not break the Z screen, the J is already saved.
         printer_de_ce_terminal = imprimante_du_terminal(request.user)
         if printer_de_ce_terminal:
-            from laboutik.printing.formatters import formatter_ticket_cloture
-            from laboutik.printing.tasks import imprimer_async
+            try:
+                ticket_z_data = formatter_ticket_cloture(cloture)
+                ticket_z_data["impression_meta"] = {
+                    "uuid_transaction": None,
+                    "cloture_uuid": str(cloture.uuid),
+                    "type_justificatif": ImpressionLog.CLOTURE,
+                    "operateur_pk": str(operateur.pk) if operateur else None,
+                    "format_emission": "P",
+                }
+                imprimer_async.delay(
+                    str(printer_de_ce_terminal.pk),
+                    ticket_z_data,
+                    connection.schema_name,
+                )
+            except Exception:
+                logger.exception(
+                    f"[{connection.schema_name}] Échec de la demande d'impression "
+                    f"du Z n° {cloture.numero_sequentiel}."
+                )
 
-            ticket_z_data = formatter_ticket_cloture(cloture)
-            schema_name = connection.schema_name
-            imprimer_async.delay(
-                str(printer_de_ce_terminal.pk),
-                ticket_z_data,
-                schema_name,
+        # L'e-mail automatique de la J, si le lieu l'a regle pour les J.
+        # / The J's automatic e-mail, when the venue set it for J.
+        try:
+            demander_l_email_automatique_si_configure(connection.schema_name, cloture)
+        except Exception:
+            logger.exception(
+                f"[{connection.schema_name}] Échec de la demande d'e-mail "
+                f"du Z n° {cloture.numero_sequentiel}."
             )
 
-        # --- 9. Logger avec les infos enrichies ---
-        # --- 9. Log with enriched info ---
+        # --- 7. Logger / Log ---
         logger.info(
             f"Cloture caisse: PV={point_de_vente.name}, "
-            f"niveau={cloture.niveau}, seq={numero_sequentiel}, "
-            f"total={total_general}cts, perpetuel={config.total_perpetuel}cts, "
-            f"transactions={nombre_transactions}"
+            f"J n° {cloture.numero_sequentiel}, total={cloture.total_general}cts, "
+            f"perpetuel={cloture.total_perpetuel}cts, "
+            f"operations={cloture.nombre_transactions}"
         )
 
-        # --- 9. Convertir la TVA en euros pour l'affichage ---
-        # --- 9. Convert VAT to euros for display ---
-        rapport_tva_euros = {}
-        for taux_label, tva_data in rapport["tva"].items():
-            rapport_tva_euros[taux_label] = {
-                "total_ht_euros": f"{tva_data['total_ht'] / 100:.2f}",
-                "total_tva_euros": f"{tva_data['total_tva'] / 100:.2f}",
-                "total_ttc_euros": f"{tva_data['total_ttc'] / 100:.2f}",
-            }
-
-        # --- 10. Retourner le rapport ---
-        # --- 10. Return the report ---
-        context = {
-            "cloture": cloture,
-            "rapport": rapport,
-            "rapport_tva_euros": rapport_tva_euros,
-            "total_especes_euros": total_especes / 100,
-            "total_cb_euros": total_carte_bancaire / 100,
-            "total_nfc_euros": total_cashless / 100,
-            "total_cheque_euros": total_cheque / 100,
-            "total_general_euros": total_general / 100,
-            "nombre_transactions": nombre_transactions,
-            "currency_data": CURRENCY_DATA,
-        }
+        # --- 8. L'ecran du Z ---
+        # L'essentiel du rapport stocke dans la J, mis en forme par
+        # `comptabilite/presentation.py` (aucune regle d'affichage recopiee ici) :
+        # chiffre d'affaires, reglements, tiroir, phrase de reconciliation. Le Z
+        # couvre aussi les ventes en ligne : le reste est sur la fiche de l'admin.
+        # / The Z screen: the essential sections of the J's stored report, formatted
+        #   by comptabilite/presentation.py; the rest is on the admin page.
+        context = _contexte_de_l_ecran_du_z(cloture)
         return render(request, "laboutik/partial/hx_cloture_rapport.html", context)
 
     # ----------------------------------------------------------------------- #
@@ -3658,30 +3607,16 @@ class CaisseViewSet(viewsets.ViewSet):
     def rapport_pdf(self, request, pk=None):
         """
         GET /laboutik/caisse/<uuid>/rapport_pdf/
-        Telecharge le rapport de cloture en PDF.
-        Downloads the closure report as PDF.
+        Telecharge le PDF de la cloture unique : le meme que celui de l'admin
+        (`comptabilite/pdf.py`).
+        / Downloads the single closure's PDF, the same as the admin's.
 
         LOCALISATION : laboutik/views.py
         """
-        from laboutik.pdf import generer_pdf_cloture
-
-        try:
-            cloture = ClotureCaisse.objects.select_related(
-                "point_de_vente",
-                "responsable",
-            ).get(uuid=pk)
-        except ClotureCaisse.DoesNotExist:
-            raise Http404
-
-        pdf_bytes = generer_pdf_cloture(cloture)
-
-        date_str = cloture.datetime_cloture.strftime("%Y%m%d_%H%M")
-        nom_fichier = f"cloture_{date_str}.pdf"
-
-        from django.http import HttpResponse
-
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="{nom_fichier}"'
+        cloture = get_object_or_404(ClotureCaisseUnique, uuid=pk)
+        contenu_du_pdf, nom_du_fichier, type_du_fichier = generer_pdf_cloture(cloture)
+        response = HttpResponse(contenu_du_pdf, content_type=type_du_fichier)
+        response["Content-Disposition"] = f'attachment; filename="{nom_du_fichier}"'
         return response
 
     @action(
@@ -3690,30 +3625,16 @@ class CaisseViewSet(viewsets.ViewSet):
     def rapport_csv(self, request, pk=None):
         """
         GET /laboutik/caisse/<uuid>/rapport_csv/
-        Telecharge le rapport de cloture en CSV.
-        Downloads the closure report as CSV.
+        Telecharge le CSV de la cloture unique : le meme que celui de l'admin
+        (`comptabilite/csv_export.py`).
+        / Downloads the single closure's CSV, the same as the admin's.
 
         LOCALISATION : laboutik/views.py
         """
-        from laboutik.csv_export import generer_csv_cloture
-
-        try:
-            cloture = ClotureCaisse.objects.select_related(
-                "point_de_vente",
-                "responsable",
-            ).get(uuid=pk)
-        except ClotureCaisse.DoesNotExist:
-            raise Http404
-
-        csv_string = generer_csv_cloture(cloture)
-
-        date_str = cloture.datetime_cloture.strftime("%Y%m%d_%H%M")
-        nom_fichier = f"cloture_{date_str}.csv"
-
-        from django.http import HttpResponse
-
-        response = HttpResponse(csv_string, content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = f'attachment; filename="{nom_fichier}"'
+        cloture = get_object_or_404(ClotureCaisseUnique, uuid=pk)
+        contenu_du_csv, nom_du_fichier, type_du_fichier = generer_csv_cloture(cloture)
+        response = HttpResponse(contenu_du_csv, content_type=type_du_fichier)
+        response["Content-Disposition"] = f'attachment; filename="{nom_du_fichier}"'
         return response
 
     @action(
@@ -3725,41 +3646,57 @@ class CaisseViewSet(viewsets.ViewSet):
     def envoyer_rapport(self, request, pk=None):
         """
         POST /laboutik/caisse/<uuid>/envoyer_rapport/
-        Envoie le rapport de cloture par email (PDF + CSV en PJ) via Celery.
-        Sends the closure report by email (PDF + CSV attachments) via Celery.
+        Envoie l'email de la cloture unique (PDF en piece jointe) aux destinataires
+        du lieu (`Configuration.rapport_emails`), quelle que soit la periodicite du
+        rapport : c'est un clic explicite. Une adresse postee avec le formulaire est
+        ignoree. Sans destinataire : message clair, rien n'est envoye.
+        / Sends the single closure's e-mail to the venue's recipients, whatever the
+        report periodicity. A posted address is ignored. No recipient: clear message.
 
         LOCALISATION : laboutik/views.py
         """
-        from laboutik.tasks import envoyer_rapport_cloture
+        cloture = get_object_or_404(ClotureCaisseUnique, uuid=pk)
 
-        try:
-            cloture = ClotureCaisse.objects.get(uuid=pk)
-        except ClotureCaisse.DoesNotExist:
-            raise Http404
-
-        serializer = EnvoyerRapportSerializer(data=request.data)
-        if not serializer.is_valid():
-            premiere_erreur = next(iter(serializer.errors.values()))[0]
+        destinataires_du_lieu = Configuration.get_solo().rapport_emails or ""
+        if not destinataires_du_lieu.strip():
             context_erreur = {
                 "msg_type": "warning",
-                "msg_content": str(premiere_erreur),
+                "msg_content": _(
+                    "Aucun destinataire de rapport n'est configuré pour le lieu."
+                ),
                 "selector_bt_retour": "#messages",
             }
             return render(
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
-        email = serializer.validated_data.get("email") or None
-
-        envoyer_rapport_cloture.delay(
-            connection.schema_name,
-            str(cloture.uuid),
-            email,
-        )
+        # La demande part au broker (Celery). Un broker en panne ne doit pas donner
+        # une erreur 500 : l'erreur est journalisée et la caisse le dit en mots.
+        # / The request goes to the broker; a broken broker gives a clear message.
+        try:
+            envoyer_email_cloture_demande.delay(
+                connection.schema_name,
+                str(cloture.uuid),
+            )
+        except Exception:
+            logger.exception(
+                f"[{connection.schema_name}] Échec de la demande d'envoi du rapport "
+                f"de la clôture n° {cloture.numero_sequentiel}."
+            )
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "L'envoi du rapport n'a pas pu être demandé. Réessayez plus tard."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=503
+            )
 
         context = {
             "msg_type": "info",
-            "msg_content": _("Rapport envoyé par email"),
+            "msg_content": _("Envoi du rapport demandé"),
         }
         return render(request, "laboutik/partial/hx_messages.html", context)
 
@@ -3833,33 +3770,40 @@ class CaisseViewSet(viewsets.ViewSet):
                 status=400,
             )
 
-        datetime_fin = dj_timezone.now()
-        service = RapportComptableService(None, datetime_ouverture, datetime_fin)
-        totaux_par_moyen = service.calculer_totaux_par_moyen()
-        solde_caisse = service.calculer_solde_caisse()
-        nb_transactions = service.lignes.count()
-        offerts = service.calculer_offerts()
-        non_monetaire = service.calculer_non_monetaire()
+        # Le rapport X du service en cours : le rapport des ventes unique, de la fin de
+        # la derniere J jusqu'a maintenant, jamais stocke.
+        # / The current service X report: the single sales report, never stored.
+        rapport_du_service = RapportDesVentes(
+            datetime_ouverture, dj_timezone.now()
+        ).rapport_x()
+        ticket_data = formatter_ticket_x(rapport_du_service, datetime_ouverture)
 
-        # Formater et imprimer / Format and print
-        from laboutik.printing.formatters import formatter_ticket_x
-        from laboutik.printing.tasks import imprimer_async
-
-        ticket_data = formatter_ticket_x(
-            totaux_par_moyen,
-            solde_caisse,
-            datetime_ouverture,
-            nb_transactions,
-            offerts=offerts,
-            non_monetaire=non_monetaire,
-        )
-
+        # La demande d'impression part au broker (Celery). Un broker en panne ne doit
+        # pas donner une erreur 500 : l'erreur est journalisée et la caisse le dit.
+        # / The print request goes to the broker; a broken broker gives a message.
         schema_name = connection.schema_name
-        imprimer_async.delay(
-            str(printer_de_ce_terminal.pk),
-            ticket_data,
-            schema_name,
-        )
+        try:
+            imprimer_async.delay(
+                str(printer_de_ce_terminal.pk),
+                ticket_data,
+                schema_name,
+            )
+        except Exception:
+            logger.exception(
+                f"[{schema_name}] Échec de la demande d'impression du ticket X."
+            )
+            return render(
+                request,
+                "laboutik/partial/hx_print_feedback.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Le ticket X n'a pas pu être envoyé à l'imprimante. "
+                        "Réessayez plus tard."
+                    ),
+                },
+                status=503,
+            )
 
         return render(
             request,
@@ -3884,12 +3828,12 @@ class CaisseViewSet(viewsets.ViewSet):
     def export_fiscal(self, request):
         """
         GET /laboutik/caisse/export-fiscal/
-        Affiche le formulaire avec dates debut/fin optionnelles.
-        / Shows the form with optional start/end dates.
+        Affiche le formulaire : date de debut obligatoire, date de fin facultative.
+        / Shows the form: start date required, end date optional.
 
         POST /laboutik/caisse/export-fiscal/
-        Genere et telecharge l'archive ZIP signee HMAC.
-        / Generates and downloads the HMAC-signed ZIP archive.
+        Genere et telecharge l'archive ZIP signee HMAC, sur 365 jours au plus.
+        / Generates and downloads the HMAC-signed ZIP archive, 365 days at most.
 
         LOCALISATION : laboutik/views.py
 
@@ -3967,6 +3911,53 @@ class CaisseViewSet(viewsets.ViewSet):
                 {
                     "msg_type": "warning",
                     "msg_content": _("Format de date invalide."),
+                },
+                status=400,
+            )
+
+        # La periode, comme la commande `archiver_donnees` : la date de debut est
+        # obligatoire, la fin ne precede pas le debut, et 365 jours au plus. Sans date
+        # de fin, la fin est aujourd'hui (date du lieu). Une archive sans borne
+        # (tout l'historique, en memoire, dans une requete HTTP) n'existe pas.
+        # / The period, like the archiver_donnees command: start date required, end not
+        # before start, 365 days at most; without an end, it ends today.
+        if debut is None:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("La date de début est obligatoire."),
+                },
+                status=400,
+            )
+        fin_de_la_periode = fin
+        if fin_de_la_periode is None:
+            fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+            fin_de_la_periode = dj_timezone.now().astimezone(fuseau_du_lieu).date()
+        if fin_de_la_periode < debut:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "La date de fin est antérieure à la date de début."
+                    ),
+                },
+                status=400,
+            )
+        nombre_de_jours_de_la_periode = (fin_de_la_periode - debut).days
+        if nombre_de_jours_de_la_periode > NOMBRE_DE_JOURS_MAXIMUM_D_UN_EXPORT_FISCAL:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "La période demandée dépasse 365 jours. Faites un export "
+                        "par année."
+                    ),
                 },
                 status=400,
             )
@@ -4408,23 +4399,23 @@ class CaisseViewSet(viewsets.ViewSet):
         type_app = request.GET.get("type_app", "")
         params_ventes = _construire_params_ventes(uuid_pv, tag_id_cm, type_app)
 
-        # Calculer le solde caisse via le meme service que le Ticket X
-        # Evite la duplication de logique (fond + especes - sorties).
-        # / Calculate cash balance via the same service as Ticket X
-        # Avoids logic duplication (float + cash - withdrawals).
-        datetime_ouverture = _calculer_datetime_ouverture_service()
-        if datetime_ouverture:
-            datetime_fin = dj_timezone.now()
-            service = RapportComptableService(None, datetime_ouverture, datetime_fin)
-            solde_caisse = service.calculer_solde_caisse()
-            fond_de_caisse_centimes = solde_caisse["fond_de_caisse"]
-            entrees_especes_centimes = solde_caisse["entrees_especes"]
-            solde_total_centimes = solde_caisse["solde"]
-        else:
-            config = LaboutikConfiguration.get_solo()
-            fond_de_caisse_centimes = config.fond_de_caisse or 0
-            entrees_especes_centimes = 0
-            solde_total_centimes = fond_de_caisse_centimes
+        # Le tiroir du service en cours : la section « caisse especes » du rapport des
+        # ventes unique (la meme que le ticket X et la J), mise en forme par
+        # `comptabilite/presentation.py`. Il commence a la fin de la derniere J, meme
+        # sans vente depuis (`_section_du_tiroir_du_service_en_cours`).
+        # / The current service drawer: the "caisse especes" section of the single
+        #   report, formatted by the shared presentation.
+        section_du_tiroir = _section_du_tiroir_du_service_en_cours()
+        lignes_du_tiroir_a_l_ecran = _lignes_du_tiroir_pour_l_ecran(section_du_tiroir)
+        fond_de_caisse_centimes = section_du_tiroir["fond_de_caisse_en_centimes"]
+        solde_total_centimes = section_du_tiroir["solde_theorique_en_centimes"]
+        # Les especes du service, nettes : tout ce qui est entre et sorti du tiroir
+        # depuis la derniere J. Le controle JS du formulaire refuse de sortir plus que
+        # fond + especes nettes (= le solde) et previent si la sortie entame le fond.
+        # / The service's net cash: the JS check compares withdrawals to it.
+        especes_nettes_du_service_centimes = (
+            solde_total_centimes - fond_de_caisse_centimes
+        )
 
         context = {
             "uuid_pv": uuid_pv,
@@ -4436,19 +4427,15 @@ class CaisseViewSet(viewsets.ViewSet):
             "coupures": _COUPURES_POUR_TEMPLATE,
             "coupures_paires": _COUPURES_PAIRES_POUR_TEMPLATE,
             "params_ventes": params_ventes,
-            # Données pour la validation JS (indicatives — le serveur re-vérifie)
-            # / Data for JS validation (indicative — server re-validates)
+            # Données pour l'avertissement JS, indicatives : `creer_sortie_de_caisse`
+            # ne compare pas la sortie au solde du tiroir.
+            # / Data for the JS warning, indicative: the server does not compare the
+            # withdrawal with the drawer balance.
             "fond_de_caisse_centimes": fond_de_caisse_centimes,
-            "entrees_especes_centimes": entrees_especes_centimes,
-            # Chaînes pré-formatées pour l'affichage dans le template
-            # / Pre-formatted strings for display in the template
-            "fond_de_caisse_euros": f"{fond_de_caisse_centimes / 100:.2f}".replace(
-                ".", ","
-            ),
-            "entrees_especes_euros": f"{entrees_especes_centimes / 100:.2f}".replace(
-                ".", ","
-            ),
-            "solde_total_euros": f"{solde_total_centimes / 100:.2f}".replace(".", ","),
+            "especes_nettes_du_service_centimes": especes_nettes_du_service_centimes,
+            # Les lignes du tiroir, deja ecrites par la presentation partagee.
+            # / The drawer lines, already written by the shared presentation.
+            "lignes_du_tiroir": lignes_du_tiroir_a_l_ecran,
         }
         return render(request, "laboutik/partial/hx_sortie_de_caisse.html", context)
 
@@ -4597,19 +4584,27 @@ class CaisseViewSet(viewsets.ViewSet):
     )
     def recap_en_cours(self, request):
         """
-        GET /laboutik/caisse/recap-en-cours/?vue=toutes|par_pv|par_moyen
-        Ticket X : synthese comptable du service en cours (lecture seule).
-        Pas de creation de ClotureCaisse. Appelle RapportComptableService.
-        / Ticket X: accounting summary of the current shift (read-only).
-        No ClotureCaisse created. Calls RapportComptableService.
+        GET /laboutik/caisse/recap-en-cours/?vue=toutes|detail_articles|par_moyen
+        Le recapitulatif du service en cours (lecture seule, rien n'est stocke).
+        / The current service recap (read-only, nothing stored).
 
         LOCALISATION : laboutik/views.py
 
         FLUX :
-        1. Calcule datetime_ouverture (1ere vente apres derniere cloture journaliere)
-        2. Instancie RapportComptableService(pv=None, debut, fin=now())
-        3. Selon le param ?vue : genere le rapport correspondant
-        4. Rend hx_recap_en_cours.html dans #products-container
+        1. Debut du service : `_calculer_datetime_ouverture_service` (fin de la
+           derniere J). None : « aucune vente depuis la derniere cloture ».
+        2. Ecran complet : le rapport X du rapport des ventes unique
+           (`RapportDesVentes(debut, maintenant).rapport_x()`), mis en forme par
+           `sections_pour_affichage` : toutes ses sections, l'essentiel ouvert, le
+           reste replie, comme dans l'admin.
+        3. Historiques (?vue=detail_articles, ?vue=par_moyen, cible HTMX
+           « detail-contenu ») : encore lus par l'ancien moteur
+           (`RapportComptableService`).
+           TODO : basculer les historiques sur les ventes (liste et detail des
+           ventes par `Vente`).
+        4. Rend hx_recap_en_cours.html (page complete ou fragment).
+        / Full screen: the single report's X sections; histories still read the old
+          engine.
         """
         datetime_ouverture = _calculer_datetime_ouverture_service()
         vue = request.GET.get("vue", "toutes")
@@ -4626,41 +4621,40 @@ class CaisseViewSet(viewsets.ViewSet):
             )
 
         datetime_fin = dj_timezone.now()
-        service = RapportComptableService(None, datetime_ouverture, datetime_fin)
 
-        # Construire le contexte selon la vue demandee
-        # / Build context based on the requested view
         context = {
             "vue": vue,
             "aucune_vente": False,
             "datetime_ouverture": datetime_ouverture,
             "datetime_fin": datetime_fin,
-            "nb_transactions": service.lignes.count(),
         }
 
-        # L'ecran Ventes affiche toujours les chiffres du haut (total, fond, TVA)
-        # et les deux mini-tableaux (par moyen, par point de vente).
-        # Exception : un historique ouvert en bas de l'ecran (cible HTMX "detail-contenu").
-        # Le template ne rend alors que le tableau demande : inutile de tout recalculer.
-        # / The Sales screen always shows KPIs and both summary tables,
-        # except for a history fragment (HTMX target "detail-contenu").
+        # L'ecran complet : chiffres du haut et sections du rapport X.
+        # Exception : un historique ouvert en bas de l'ecran (cible HTMX
+        # "detail-contenu") ; le gabarit ne rend alors que le tableau demande.
+        # / Full screen: top figures and the X report sections, except for a history
+        #   fragment (HTMX target "detail-contenu").
         est_un_fragment_historique = (
             request.htmx and request.htmx.target == "detail-contenu"
         )
         if not est_un_fragment_historique:
-            context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
-            context["offerts"] = service.calculer_offerts()
-            context["non_monetaire"] = service.calculer_non_monetaire()
-            context["tva"] = service.calculer_tva()
-            context["solde_caisse"] = service.calculer_solde_caisse()
-            context["ventilation_par_pv"] = service.calculer_ventilation_par_pv()
+            rapport_du_service = RapportDesVentes(
+                datetime_ouverture, datetime_fin
+            ).rapport_x()
+            context.update(_contexte_du_recap_du_service(rapport_du_service))
 
-        # Donnees propres a l'historique demande
-        # / Data specific to the requested history
-        if vue == "par_moyen":
-            context["synthese_operations"] = service.calculer_synthese_operations()
-        elif vue == "detail_articles":
-            context["detail_ventes"] = service.calculer_detail_ventes()
+        # Les historiques lisent encore l'ancien moteur, sur la meme periode.
+        # / Histories still read the old engine, over the same period.
+        if vue == "par_moyen" or vue == "detail_articles":
+            ancien_service = RapportComptableService(
+                None, datetime_ouverture, datetime_fin
+            )
+            if vue == "par_moyen":
+                context["synthese_operations"] = (
+                    ancien_service.calculer_synthese_operations()
+                )
+            else:
+                context["detail_ventes"] = ancien_service.calculer_detail_ventes()
 
         return _rendre_vue_ventes(
             request, "laboutik/partial/hx_recap_en_cours.html", context
@@ -4934,6 +4928,7 @@ class CaisseViewSet(viewsets.ViewSet):
                 "pricesold__productsold__product",
                 "pricesold__price",
                 "point_de_vente",
+                "vente",
             )
             .order_by("datetime")
         )
@@ -4950,6 +4945,7 @@ class CaisseViewSet(viewsets.ViewSet):
                     "pricesold__productsold__product",
                     "pricesold__price",
                     "point_de_vente",
+                    "vente",
                 )
                 .order_by("datetime")
             )
@@ -5032,19 +5028,16 @@ class CaisseViewSet(viewsets.ViewSet):
             )
             total_transaction += total_ligne_centimes
 
-        # La correction est possible si le moyen n'est pas NFC
-        # et si la ligne n'est pas couverte par une cloture
-        # / Correction is possible if method is not NFC
-        # and line is not covered by a closure
+        # Le bouton « Corriger moyen » n'est propose que si la GARDE 1 de
+        # corriger_moyen_paiement accepte la ligne (meme fonction des refus).
+        # Les autres gardes de la route dependent du formulaire ou de toutes les
+        # lignes du paiement et restent dans la route : meme moyen (GARDE 2),
+        # lignes de plusieurs ventes (GARDE 3), montant nul (GARDE 4).
+        # / The "Correct" button is offered only when the route's GUARD 1 accepts the
+        #   line. Guards 2 to 4 stay in the route.
         moyen_de_la_ligne = premiere_ligne.payment_method or ""
-        moyens_nfc = (PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT)
-        # Une vente hors argent (offerte, en points) ne se corrige pas :
-        # corriger_moyen_paiement la refuse, le bouton n'est pas propose.
-        # / A non-money sale cannot be corrected: no button.
         correction_est_possible = (
-            moyen_de_la_ligne not in moyens_nfc
-            and moyen_de_la_ligne not in MOYENS_HORS_ARGENT
-            and not ligne_couverte_par_cloture(premiere_ligne)
+            raison_du_refus_de_correction(premiere_ligne) is None
         )
 
         # Unite des montants : nom de la monnaie pour une vente en points (une
@@ -5097,54 +5090,255 @@ class CaisseViewSet(viewsets.ViewSet):
 # --------------------------------------------------------------------------- #
 
 
-def _calculer_datetime_ouverture_service():
+# Les seuls anciens moyens qu'une correction peut changer : l'argent compte au
+# comptoir. Liste POSITIVE : un moyen ajoute un jour a `PaymentMethod` n'est pas
+# corrigeable tant qu'il n'est pas ajoute ici.
+# / The only old methods a correction may change. A POSITIVE list: a new
+#   PaymentMethod is not correctable until it is added here.
+MOYENS_CORRIGEABLES_A_LA_CAISSE = (
+    PaymentMethod.CASH,
+    PaymentMethod.CC,
+    PaymentMethod.CHEQUE,
+)
+
+
+def raison_du_refus_de_correction(ligne):
     """
-    Calcule le debut du service en cours : 1ere LigneArticle VALID
-    apres la derniere cloture journaliere.
-    Retourne None si aucune vente depuis la derniere cloture.
-    / Computes the start of the current shift: 1st VALID LigneArticle
-    after the last daily closure.
-    Returns None if no sales since the last closure.
+    Dit pourquoi le moyen de paiement de cette ligne ne peut pas etre corrige, ou
+    None si la correction est possible.
+    / Tells why this line's payment method cannot be corrected, or None.
 
     LOCALISATION : laboutik/views.py
 
-    Logique identique a cloturer() lignes 947-979.
-    / Same logic as cloturer() lines 947-979.
+    Les regles qui ne dependent que de la ligne, dans l'ordre :
+    1. Un paiement cashless (NFC) est lie a des transactions fedow_core : le changer
+       casserait le registre.
+    2. Une vente hors argent (offerte, en points ou en temps) n'a rien encaisse : la
+       « corriger » ferait apparaitre de l'argent jamais recu.
+    3. Seuls les moyens de `MOYENS_CORRIGEABLES_A_LA_CAISSE` se corrigent (especes,
+       CB, cheque).
+    4. Seule une vente faite a la caisse (`sale_origin` LABOUTIK) se corrige : une
+       vente en ligne a ses propres regles (Stripe, remboursements).
+    5. Seule une vente reglee (elle a un numero) se corrige : une ligne sans vente
+       n'a pas de vente d'origine, une vente en attente n'a rien encaisse.
+    6. Une vente couverte par une cloture journaliere est figee.
+    / Line-only rules: not cashless, not non-money, cash/card/cheque only, register
+      sale only, settled sale only, not covered by a daily closure.
+
+    FLUX : appelee par `PaiementViewSet.corriger_moyen_paiement` (GARDE 1 : le
+    message est renvoye au caissier) et par `CaisseViewSet.detail_vente` (le bouton
+    « Corriger moyen » n'est propose que si elle rend None).
+    / Called by the correction route (guard 1) and by the sale detail screen.
+
+    :param ligne: la `LigneArticle` cliquee dans l'historique des ventes
+    :return: le message de refus (texte traduisible), ou None
     """
-    # La cloture est globale au tenant (pas par PV)
-    # / Closure is global to the tenant (not per POS)
-    derniere_cloture = (
-        ClotureCaisse.objects.filter(
-            niveau=ClotureCaisse.JOURNALIERE,
+    moyen_de_la_ligne = ligne.payment_method
+
+    if moyen_de_la_ligne in MOYENS_CASHLESS:
+        return _("Les paiements cashless ne peuvent pas etre modifies")
+
+    if moyen_de_la_ligne in MOYENS_HORS_ARGENT:
+        return _(
+            "Une vente hors argent (offerte, en points ou en temps) "
+            "ne peut pas être corrigée en paiement"
         )
-        .order_by("-datetime_cloture")
-        .first()
+
+    if moyen_de_la_ligne not in MOYENS_CORRIGEABLES_A_LA_CAISSE:
+        return _(
+            "Seul un paiement en espèces, par carte bancaire ou par chèque "
+            "peut être corrigé."
+        )
+
+    if ligne.sale_origin != SaleOrigin.LABOUTIK:
+        return _("Seule une vente faite à la caisse peut être corrigée.")
+
+    vente_de_la_ligne = ligne.vente
+    la_ligne_a_une_vente_reglee = (
+        vente_de_la_ligne is not None and vente_de_la_ligne.numero is not None
     )
+    if not la_ligne_a_une_vente_reglee:
+        return _("Seule une vente réglée peut être corrigée.")
 
-    if derniere_cloture:
-        premiere_vente = (
-            LigneArticle.objects.filter(
-                sale_origin=SaleOrigin.LABOUTIK,
-                status=LigneArticle.VALID,
-                datetime__gt=derniere_cloture.datetime_cloture,
-            )
-            .order_by("datetime")
-            .first()
-        )
+    if vente_couverte_par_cloture(vente_de_la_ligne):
+        return _("Cette vente est couverte par une cloture. Modification interdite.")
+
+    return None
+
+
+def _calculer_datetime_ouverture_service():
+    """
+    Calcule le debut du service en cours.
+    / Computes the start of the current service.
+
+    LOCALISATION : laboutik/views.py
+
+    Le service couvre TOUTES les origines (caisse, en ligne, tireuse...), comme la J
+    qui le cloturera.
+    - Le lieu a une cloture journaliere unique (J) : le service commence a la fin
+      de la derniere J (la J suivante commencera la aussi). Sans vente reglee depuis
+      cette fin, il n'y a pas de service en cours : None.
+    - Le lieu n'a aucune J : l'heure de la premiere LIGNE D'ARTICLE des ventes
+      reglees du lieu, toutes origines ; None s'il n'y en a pas. Une ligne est
+      ecrite quelques millisecondes AVANT l'encaissement de sa vente : partir de la
+      ligne (et non de `datetime_encaissement`) garde la premiere vente visible pour
+      les ecrans qui lisent encore les lignes par leur heure (`liste_ventes`, rapport
+      temps reel).
+    Les appelants (ticket X, recapitulatif, sortie de caisse, rapport temps reel,
+    liste des ventes) lisent None comme « aucune vente en cours ».
+    / Every origin. With a J: the end of the last J, or None without a settled sale
+      since. Without any J: the first item line of the settled sales (written just
+      before settlement), or None.
+    """
+    # La cloture est globale au lieu (pas par point de vente).
+    # / The closure is global to the venue (not per point of sale).
+    derniere_cloture_journaliere = ClotureCaisseUnique.derniere_journaliere()
+
+    if derniere_cloture_journaliere is not None:
+        fin_de_la_derniere_j = derniere_cloture_journaliere.datetime_fin
+        une_vente_reglee_depuis_la_j = Vente.objects.filter(
+            statut=Vente.Statut.REGLEE,
+            datetime_encaissement__gte=fin_de_la_derniere_j,
+        ).exists()
+        if not une_vente_reglee_depuis_la_j:
+            return None
+        return fin_de_la_derniere_j
+
+    heure_de_la_premiere_ligne_reglee = LigneArticle.objects.filter(
+        vente__statut=Vente.Statut.REGLEE,
+    ).aggregate(premiere_heure=Min("datetime"))["premiere_heure"]
+    return heure_de_la_premiere_ligne_reglee
+
+
+def _contexte_de_l_ecran_du_z(cloture):
+    """
+    Le contexte de l'ecran du Z (`hx_cloture_rapport.html`) : l'essentiel du rapport
+    stocke dans la J, mis en forme par `comptabilite/presentation.py`.
+    / The Z screen context: the essential sections of the J's stored report.
+
+    LOCALISATION : laboutik/views.py
+
+    L'ecran montre le chiffre d'affaires, les reglements (argent, cashless, hors
+    argent : offerts et points), le tiroir (caisse especes) et la phrase de
+    reconciliation, plus un lien vers la fiche complete de la cloture dans l'admin.
+    Aucune regle d'affichage n'est recopiee ici : les sections viennent telles
+    quelles de `sections_pour_affichage`.
+    / Revenue, payments, cash drawer, reconciliation sentence, and a link to the
+      admin page. No display rule is copied here.
+
+    :param cloture: la `comptabilite.ClotureCaisse` (J) creee par le bouton
+    :return: dict de contexte
+    """
+    sections_par_cle = {}
+    sections_du_rapport = sections_pour_affichage(cloture.rapport_json)
+    for section in sections_du_rapport:
+        sections_par_cle[section["cle"]] = section
+
+    phrase_de_reconciliation = ""
+    section_de_reconciliation = sections_par_cle.get("reconciliation")
+    if section_de_reconciliation is not None:
+        phrase_de_reconciliation = section_de_reconciliation["phrase"]
+
+    return {
+        "cloture": cloture,
+        "chiffre_affaires_ttc_a_la_francaise": euros_a_la_francaise(
+            cloture.total_general
+        ),
+        "section_chiffre_affaires": sections_par_cle.get("chiffre_affaires"),
+        "section_reglements": sections_par_cle.get("reglements"),
+        "section_caisse_especes": sections_par_cle.get("caisse_especes"),
+        "phrase_de_reconciliation": phrase_de_reconciliation,
+        "adresse_de_la_fiche_de_la_cloture": reverse(
+            "staff_admin:comptabilite_cloturecaisse_change", args=[cloture.pk]
+        ),
+    }
+
+
+def _contexte_du_recap_du_service(rapport_du_service):
+    """
+    Le contexte de l'ecran complet du recapitulatif en cours
+    (`hx_recap_en_cours.html`) : les chiffres du haut et toutes les sections du
+    rapport X, mises en forme par `comptabilite/presentation.py` (aucune regle
+    d'affichage recopiee ici).
+    / The current recap screen context: top figures and every X report section,
+      formatted by the shared presentation.
+
+    LOCALISATION : laboutik/views.py
+
+    :param rapport_du_service: dict de `RapportDesVentes(debut, maintenant).rapport_x()`
+    :return: dict de contexte
+    """
+    tiroir = rapport_du_service["caisse_especes"]
+    return {
+        "chiffre_affaires_ttc_a_la_francaise": euros_a_la_francaise(
+            rapport_du_service["chiffre_affaires"]["total_ttc_en_centimes"]
+        ),
+        "nombre_d_operations": rapport_du_service["en_tete"]["nombre_de_ventes"],
+        "fond_de_caisse_a_la_francaise": euros_a_la_francaise(
+            tiroir["fond_de_caisse_en_centimes"]
+        ),
+        "solde_du_tiroir_a_la_francaise": euros_a_la_francaise(
+            tiroir["solde_theorique_en_centimes"]
+        ),
+        "sections_du_rapport": sections_pour_affichage(rapport_du_service),
+    }
+
+
+def _section_du_tiroir_du_service_en_cours():
+    """
+    La section « caisse especes » du tiroir en cours, toujours calculee par le
+    rapport des ventes (`RapportDesVentes.section_caisse_especes`), jusqu'a
+    maintenant.
+    / The current cash drawer section, always computed by the sales report.
+
+    LOCALISATION : laboutik/views.py
+
+    LE DEBUT DU TIROIR :
+    - le lieu a une J : la fin de la derniere J, MEME SANS VENTE depuis. Une sortie
+      de caisse faite apres la J et avant la premiere vente compte donc tout de
+      suite dans le solde (la J suivante la comptera aussi) ;
+    - le lieu n'a aucune J : le debut du service (`_calculer_datetime_ouverture_service`) ;
+      sans vente reglee non plus, maintenant : le tiroir ne contient que le fond.
+    / With a J: the end of the last J, even without a sale since (a withdrawal made
+      before the first sale counts at once). Without a J: the service start, or now.
+
+    :return: dict de la section (montants en centimes, signes comme dans le rapport)
+    """
+    maintenant = dj_timezone.now()
+    derniere_cloture_journaliere = ClotureCaisseUnique.derniere_journaliere()
+    if derniere_cloture_journaliere is not None:
+        debut_du_tiroir = derniere_cloture_journaliere.datetime_fin
     else:
-        premiere_vente = (
-            LigneArticle.objects.filter(
-                sale_origin=SaleOrigin.LABOUTIK,
-                status=LigneArticle.VALID,
-            )
-            .order_by("datetime")
-            .first()
+        debut_du_tiroir = _calculer_datetime_ouverture_service()
+        if debut_du_tiroir is None:
+            debut_du_tiroir = maintenant
+    return RapportDesVentes(debut_du_tiroir, maintenant).section_caisse_especes()
+
+
+def _lignes_du_tiroir_pour_l_ecran(section_du_tiroir):
+    """
+    Les lignes du tiroir pour l'ecran de sortie de caisse, ecrites par la
+    presentation partagee (`comptabilite/presentation.py` `lignes_du_tiroir`) :
+    fond, especes recues, especes rendues, corrections, sorties, solde theorique,
+    montants signes (l'argent qui sort est negatif), comme le ticket X.
+    / The drawer lines for the cash withdrawal screen, written by the shared
+      presentation, signed like the X ticket.
+
+    LOCALISATION : laboutik/views.py
+
+    :param section_du_tiroir: dict de la section « caisse especes »
+    :return: liste de {"libelle", "montant"} (textes)
+    """
+    lignes_signees_du_tiroir = lignes_du_tiroir(section_du_tiroir)
+    lignes_pour_l_ecran = []
+    for ligne_du_tiroir in lignes_signees_du_tiroir:
+        lignes_pour_l_ecran.append(
+            {
+                "libelle": ligne_du_tiroir["libelle"],
+                "montant": euros_a_la_francaise(ligne_du_tiroir["montant_en_centimes"]),
+            }
         )
-
-    if not premiere_vente:
-        return None
-
-    return premiere_vente.datetime
+    return lignes_pour_l_ecran
 
 
 def _construire_params_ventes(uuid_pv, tag_id_cm, type_app):
@@ -13387,13 +13581,15 @@ class PaiementViewSet(viewsets.ViewSet):
 
         LOCALISATION : laboutik/views.py
 
-        Gardes de securite / Security guards :
-        1. Validation serializer (UUID valide, moyen dans ESP/CB/CHQ)
-        2. NFC interdit (ancien moyen) — les paiements cashless sont lies a des Transactions fedow_core
-        3. Post-cloture interdit — les lignes couvertes par une cloture sont immuables
-        4. Meme moyen interdit — pas de correction sans changement
-        5. Lignes de plusieurs ventes interdites — une correction porte sur UNE vente
-        6. Montant nul interdit (lignes avec vente) — rien a deplacer
+        Gardes de securite / Security guards (memes etiquettes que dans le code) :
+        - Serializer : UUID valide, nouveau moyen dans ESP/CB/CHQ, raison.
+        - GARDE 1 : la ligne elle-meme (`raison_du_refus_de_correction`) — ancien
+          moyen especes, CB ou cheque ; vente de la caisse ; vente reglee ; vente pas
+          couverte par une cloture journaliere.
+        - GARDE 2 : meme moyen interdit — pas de correction sans changement.
+        - GARDE 3 : lignes de plusieurs ventes interdites — une correction porte sur
+          UNE vente.
+        - GARDE 4 : montant nul interdit — rien a deplacer.
 
         VENTE DE CORRECTION (D14, CHANTIER-05-montants-entiers.md) :
         La vente d'origine est deja encaissee : elle ne change jamais. Dans la meme
@@ -13407,11 +13603,10 @@ class PaiementViewSet(viewsets.ViewSet):
         """
         # --- Validation des champs via serializer DRF ---
         # Le serializer valide le format UUID, les choix de moyen, et la raison.
-        # Les gardes metier (NFC, post-cloture, meme moyen) restent dans la vue
-        # car elles dependent de l'etat en base.
-        # / Field validation via DRF serializer.
-        # Business guards (NFC, post-closure, same method) remain in the view
-        # because they depend on database state.
+        # Les gardes metier (GARDE 1 a 4) restent dans la vue : elles dependent de
+        # l'etat en base.
+        # / Field validation via DRF serializer. Business guards (1 to 4) depend on
+        # database state and stay in the view.
         from laboutik.serializers import CorrectionPaiementSerializer
 
         serializer = CorrectionPaiementSerializer(data=request.POST)
@@ -13446,63 +13641,24 @@ class PaiementViewSet(viewsets.ViewSet):
                 status=404,
             )
 
-        # --- GARDE 1 : les paiements NFC (cashless) ne peuvent pas etre corriges ---
-        # Les paiements cashless sont lies a des Transactions fedow_core.
-        # Modifier le moyen de paiement casserait la coherence avec le registre fedow.
-        # / NFC payments are linked to fedow_core Transactions.
-        # Changing the method would break coherence with the fedow ledger.
-        moyens_nfc = (PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT)
-        if ligne.payment_method in moyens_nfc:
+        # --- GARDE 1 : la ligne elle-meme ---
+        # Moyen corrigeable, vente de la caisse, vente reglee, pas couverte par une
+        # cloture journaliere : les regles sont dans `raison_du_refus_de_correction`,
+        # partagee avec l'ecran du detail d'une vente.
+        # / GUARD 1: the line itself, shared with the sale detail screen.
+        raison_du_refus = raison_du_refus_de_correction(ligne)
+        if raison_du_refus is not None:
             return render(
                 request,
                 "laboutik/partial/hx_messages.html",
                 {
                     "msg_type": "warning",
-                    "msg_content": _(
-                        "Les paiements cashless ne peuvent pas etre modifies"
-                    ),
+                    "msg_content": raison_du_refus,
                 },
                 status=400,
             )
 
-        # --- GARDE 1 bis : une ligne hors argent (offerte, recharge cadeau,
-        # vente en points ou en temps) ---
-        # Elle n'a rien encaisse. La « corriger » en especes ou CB ferait
-        # apparaitre dans le Z de l'argent jamais recu.
-        # / A non-money line collected nothing: correcting it into cash or card
-        #   would add money that was never received.
-        if ligne.payment_method in MOYENS_HORS_ARGENT:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _(
-                        "Une vente hors argent (offerte, en points ou en temps) "
-                        "ne peut pas être corrigée en paiement"
-                    ),
-                },
-                status=400,
-            )
-
-        # --- GARDE 2 : post-cloture interdit ---
-        # Les lignes couvertes par une cloture journaliere sont immuables.
-        # / Lines covered by a daily closure are immutable.
-        cloture_existante = ligne_couverte_par_cloture(ligne)
-        if cloture_existante:
-            return render(
-                request,
-                "laboutik/partial/hx_messages.html",
-                {
-                    "msg_type": "warning",
-                    "msg_content": _(
-                        "Cette vente est couverte par une cloture. Modification interdite."
-                    ),
-                },
-                status=400,
-            )
-
-        # --- GARDE 3 : meme moyen = pas de correction ---
+        # --- GARDE 2 : meme moyen = pas de correction ---
         # / Same method = no correction needed
         if ligne.payment_method == nouveau_moyen:
             return render(
@@ -13533,7 +13689,7 @@ class PaiementViewSet(viewsets.ViewSet):
             lignes_transaction = LigneArticle.objects.filter(uuid=ligne.uuid)
         lignes_a_corriger = list(lignes_transaction)
 
-        # --- GARDE 4 : toutes les lignes corrigees appartiennent a UNE vente ---
+        # --- GARDE 3 : toutes les lignes corrigees appartiennent a UNE vente ---
         # Les lignes d'un meme paiement sont ecrites dans une seule vente. Si elles
         # appartiennent a plusieurs ventes (ou certaines a aucune), la vente a corriger
         # n'est pas connue : refus, rien n'est ecrit.
@@ -13563,16 +13719,16 @@ class PaiementViewSet(viewsets.ViewSet):
         for ligne_a_corriger in lignes_a_corriger:
             montant_corrige_en_centimes += ligne_a_corriger.total_ttc
 
-        # --- GARDE 5 : une vente dont les lignes corrigees valent 0 ---
+        # --- GARDE 4 : une vente dont les lignes corrigees valent 0 ---
         # Il n'y a pas d'argent a deplacer : la vente CORRECTION n'aurait que des
         # reglements de 0, que le service de vente refuse. Refus propre, rien n'est
-        # ecrit. La garde ne vaut que pour une ligne AVEC vente : une ligne sans vente
-        # a un net vendu `total_ttc` a 0 par defaut (champ jamais rempli) et se corrige
-        # comme avant.
+        # ecrit.
+        # Ici, la vente d'origine existe toujours : la garde 1 a refuse une ligne sans
+        # vente, et la garde 3 a refuse des lignes de plusieurs ventes (ou sans vente).
         # / Lines worth 0: no money to move, the service refuses 0 payments. Clean
-        #   refusal, nothing written. Only for lines WITH a sale: a line without one
-        #   has total_ttc 0 by default and is corrected as before.
-        if vente_d_origine is not None and montant_corrige_en_centimes == 0:
+        #   refusal, nothing written. The original sale always exists here (guards 1
+        #   and 3).
+        if montant_corrige_en_centimes == 0:
             return render(
                 request,
                 "laboutik/partial/hx_messages.html",
@@ -13600,49 +13756,44 @@ class PaiementViewSet(viewsets.ViewSet):
                     raison=raison,
                     operateur=operateur,
                 )
-                # Note : le HMAC chain est casse volontairement. C'est attendu.
-                # verifier_chaine() dans integrity.py croise avec CorrectionPaiement
-                # pour distinguer correction tracee de falsification.
-                # / Note: HMAC chain is intentionally broken. This is expected.
+                # Le moyen de la ligne change : son empreinte par ligne ne correspond
+                # plus, c'est attendu. La preuve de la correction est la trace
+                # CorrectionPaiement et la vente CORRECTION ci-dessous, scellee dans
+                # la chaine des ventes.
+                # / The line's method changes: its per-line fingerprint no longer
+                # matches, as expected. The proof is the trace and the CORRECTION sale.
                 ligne_a_corriger.payment_method = nouveau_moyen
                 ligne_a_corriger.save(update_fields=["payment_method"])
                 nombre_lignes_corrigees += 1
 
-            # Lignes ecrites sans vente, avant le chantier « montants entiers » (base de
-            # dev seulement) : la correction des lignes suffit, il n'y a pas de vente a
-            # corriger.
-            # TODO : fiche H — toute ligne a une vente ; retirer ce cas.
-            # / Lines written without a sale (dev database only): the line correction is
-            # enough. TODO sheet H: every line has a sale.
-            if vente_d_origine is not None:
-                # La vente CORRECTION : liee a la vente d'origine, sans article, au
-                # point de vente de la vente d'origine (le formulaire n'en envoie pas),
-                # a l'operateur de la correction.
-                # / The CORRECTION sale: linked, without items, at the original sale's
-                # point of sale, by the correction's operator.
-                vente_de_correction = ouvrir_vente(
-                    origine=SaleOrigin.LABOUTIK,
-                    nature=Vente.Nature.CORRECTION,
-                    point_de_vente=vente_d_origine.point_de_vente,
-                    operateur=operateur,
-                    vente_liee=vente_d_origine,
-                )
-                # Deux reglements qui s'annulent : l'argent quitte l'ancien moyen et
-                # arrive sur le nouveau.
-                # / Two payments that cancel out: from the old method to the new one.
-                ajouter_reglement(
-                    vente_de_correction,
-                    moyen=ancien_moyen,
-                    montant=-montant_corrige_en_centimes,
-                )
-                ajouter_reglement(
-                    vente_de_correction,
-                    moyen=nouveau_moyen,
-                    montant=montant_corrige_en_centimes,
-                )
-                # En dernier : les egalites, le numero et l'empreinte chainee.
-                # / Last: equalities, number and chained fingerprint.
-                encaisser_vente(vente_de_correction)
+            # La vente CORRECTION : liee a la vente d'origine, sans article, au point de
+            # vente de la vente d'origine (le formulaire n'en envoie pas), a l'operateur
+            # de la correction.
+            # / The CORRECTION sale: linked, without items, at the original sale's
+            # point of sale, by the correction's operator.
+            vente_de_correction = ouvrir_vente(
+                origine=SaleOrigin.LABOUTIK,
+                nature=Vente.Nature.CORRECTION,
+                point_de_vente=vente_d_origine.point_de_vente,
+                operateur=operateur,
+                vente_liee=vente_d_origine,
+            )
+            # Deux reglements qui s'annulent : l'argent quitte l'ancien moyen et
+            # arrive sur le nouveau.
+            # / Two payments that cancel out: from the old method to the new one.
+            ajouter_reglement(
+                vente_de_correction,
+                moyen=ancien_moyen,
+                montant=-montant_corrige_en_centimes,
+            )
+            ajouter_reglement(
+                vente_de_correction,
+                moyen=nouveau_moyen,
+                montant=montant_corrige_en_centimes,
+            )
+            # En dernier : les egalites, le numero et l'empreinte chainee.
+            # / Last: equalities, number and chained fingerprint.
+            encaisser_vente(vente_de_correction)
 
         logger.info(
             f"Correction paiement : {nombre_lignes_corrigees} ligne(s) "

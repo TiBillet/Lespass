@@ -111,12 +111,19 @@ def carte_client_avec_wallet_local():
     / NOT COVERED HERE: the Transaction and LigneArticle migration — crediter only creates a
     Token, so those two .update() calls have nothing to move in this fixture.
 
-    DB dev partagee, pas de rollback : nettoyage manuel en teardown.
+    Pas de nettoyage : le test tourne dans une transaction annulee a la fin
+    (`pytestmark = pytest.mark.django_db`), et cette fixture s'ouvre a l'interieur.
+    La carte, l'utilisateur, les wallets, le Token et les Transaction disparaissent
+    donc seuls. Les supprimer a la main ferait verifier les cles etrangeres de tous
+    les lieux (schema public), pour rien.
+    / No cleanup: the test runs in a rolled-back transaction and this fixture runs
+    inside it. Deleting public-schema objects by hand would check the foreign keys
+    of every venue, for nothing.
     """
     from AuthBillet.models import Wallet
     from AuthBillet.models import TibilletUser
     from QrcodeCashless.models import CarteCashless, Detail
-    from fedow_core.models import Asset, Token, Transaction
+    from fedow_core.models import Asset
     from fedow_core.services import WalletService
 
     tenant = Client.objects.get(schema_name="lespass")
@@ -150,31 +157,13 @@ def carte_client_avec_wallet_local():
         # / Credit the local wallet (creates a Token on wallet_local).
         WalletService.crediter(wallet_local, asset, 1500)
 
-    yield {
+    return {
         "tenant": tenant,
         "carte": carte,
         "user": user,
         "wallet_local": wallet_local,
         "asset": asset,
     }
-
-    # Nettoyage : on supprime tout ce qui peut subsister (selon que l'alignement a eu lieu).
-    # / Cleanup: remove whatever may remain (depending on whether alignment happened).
-    with tenant_context(tenant):
-        carte.refresh_from_db()
-        wallet_courant = carte.user.wallet if carte.user_id else None
-        carte.delete()
-        user.refresh_from_db()
-        user.wallet = None
-        user.save(update_fields=["wallet"])
-        user.delete()
-        for uuid_wallet in {wallet_local.uuid, getattr(wallet_courant, "uuid", None)}:
-            if uuid_wallet is None:
-                continue
-            Transaction.objects.filter(sender__uuid=uuid_wallet).delete()
-            Transaction.objects.filter(receiver__uuid=uuid_wallet).delete()
-            Token.objects.filter(wallet__uuid=uuid_wallet).delete()
-            Wallet.objects.filter(uuid=uuid_wallet).delete()
 
 
 @pytest.fixture

@@ -54,9 +54,17 @@ from Customers.models import Client as TenantClient
 from fedow_core.models import Asset, Token
 from fedow_core.services import AssetService
 
-# Prefixe pour reconnaitre et nettoyer les donnees de ce fichier.
-# La base de dev est partagee et sans rollback.
-# / Prefix to recognize and clean this file's data. Shared dev DB, no rollback.
+# Prefixe pour reconnaitre les donnees de ce fichier dans la base de dev.
+# / Prefix to recognize this file's data in the dev database.
+#
+# Pas de nettoyage a la main : chaque test qui ecrit en base porte
+# `pytest.mark.django_db` (sans `transaction=True`), donc il tourne dans une
+# transaction annulee a la fin. Les fixtures de portee « function » s'ouvrent a
+# l'interieur : utilisateurs, wallets, assets et Token disparaissent seuls.
+# Supprimer un utilisateur ou un wallet (schema public) ferait verifier les cles
+# etrangeres de tous les lieux, pour rien (voir tests/PIEGES.md).
+# / No manual cleanup: each DB test runs in a rolled-back transaction, and
+# function-scoped fixtures run inside it.
 PREFIXE_DE_TEST = 'TEST_balance'
 
 
@@ -81,10 +89,10 @@ def _creer_humain(tenant, prefixe, email_valide=True):
     """Cree un HumanUser jetable dans le schema du tenant.
     / Creates a throwaway HumanUser inside the tenant schema.
 
-    Chaque test cree le sien : la suite tourne sur la base de DEV, sans
-    rollback. Un identifiant unique evite toute collision entre les runs.
-    / Each test creates its own: the suite runs on the DEV database with no
-    rollback. A unique id avoids collisions between runs.
+    Chaque test cree le sien, avec un identifiant unique : la suite tourne sur
+    la base de DEV, ou un utilisateur au meme e-mail peut deja exister.
+    / Each test creates its own, with a unique id: the suite runs on the DEV
+    database, where a user with the same email may already exist.
     """
     identifiant_unique = f"{prefixe}_{uuid.uuid4().hex[:8]}@example.com"
     with tenant_context(tenant):
@@ -107,32 +115,6 @@ def _creer_humain_avec_wallet(tenant, prefixe):
         )
         utilisateur.save()
     return utilisateur
-
-
-def _supprimer_humain(tenant, utilisateur):
-    """Nettoie un utilisateur de test et son wallet.
-
-    L'ordre est impose par les FK PROTECT : les Token d'abord, puis
-    l'utilisateur, puis son wallet. Tout se fait dans `tenant_context` car les
-    cascades atteignent des tables de TENANT_APPS (`BaseBillet.LigneArticle`
-    pour le wallet), absentes du schema public (PIEGES 11.9).
-    / Order imposed by PROTECT FKs. Everything inside tenant_context because the
-    cascades reach TENANT_APPS tables missing from the public schema.
-    """
-    with tenant_context(tenant):
-        wallet = utilisateur.wallet
-        if wallet is not None:
-            Token.objects.filter(wallet=wallet).delete()
-        utilisateur.delete()
-        if wallet is not None:
-            try:
-                wallet.delete()
-            except Exception:
-                # Un objet metier peut proteger le wallet (FK PROTECT) : on
-                # laisse la trace plutot que de casser le test.
-                # / A business object may protect the wallet: leave it behind
-                # rather than breaking the test.
-                pass
 
 
 def _niveaux_des_messages(response):
@@ -216,19 +198,16 @@ def test_agregation_ne_fait_rien_sur_un_tenant_sans_monnaie_locale(tenant):
     / With the local engine disabled, balances live on the remote Fedow only.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "agreg_v1")
-    try:
-        tokens_distants = [_token_distant("Brouzouf", 1500)]
+    tokens_distants = [_token_distant("Brouzouf", 1500)]
 
-        resultat = _agreger_tokens_locaux(
-            tokens_distants,
-            utilisateur,
-            _config_factice(module_monnaie_locale=False),
-        )
+    resultat = _agreger_tokens_locaux(
+        tokens_distants,
+        utilisateur,
+        _config_factice(module_monnaie_locale=False),
+    )
 
-        assert len(resultat) == 1
-        assert resultat[0]["name"] == "Brouzouf"
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert len(resultat) == 1
+    assert resultat[0]["name"] == "Brouzouf"
 
 
 @pytest.mark.django_db
@@ -236,18 +215,15 @@ def test_agregation_ne_fait_rien_sans_wallet(tenant):
     """Un utilisateur sans wallet n'a aucun solde local a ajouter.
     / A user without a wallet has no local balance to add."""
     utilisateur = _creer_humain(tenant, "agreg_sans_wallet")
-    try:
-        tokens_distants = [_token_distant("Brouzouf", 1500)]
+    tokens_distants = [_token_distant("Brouzouf", 1500)]
 
-        resultat = _agreger_tokens_locaux(
-            tokens_distants,
-            utilisateur,
-            _config_factice(),
-        )
+    resultat = _agreger_tokens_locaux(
+        tokens_distants,
+        utilisateur,
+        _config_factice(),
+    )
 
-        assert len(resultat) == 1
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert len(resultat) == 1
 
 
 @pytest.mark.django_db
@@ -255,12 +231,9 @@ def test_agregation_avec_un_wallet_vide_ne_change_rien(tenant):
     """Wallet existant mais sans aucun Token : rien n'est ajoute.
     / Existing wallet with no Token: nothing is added."""
     utilisateur = _creer_humain_avec_wallet(tenant, "agreg_vide")
-    try:
-        resultat = _agreger_tokens_locaux([], utilisateur, _config_factice())
+    resultat = _agreger_tokens_locaux([], utilisateur, _config_factice())
 
-        assert resultat == []
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert resultat == []
 
 
 @pytest.mark.django_db
@@ -274,28 +247,25 @@ def test_un_token_local_est_ajoute_et_marque_comme_local(tenant, asset_local_cad
     holds the current org so the row is not greyed out.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "agreg_local")
-    try:
-        with tenant_context(tenant):
-            Token.objects.create(
-                wallet=utilisateur.wallet,
-                asset=asset_local_cadeau,
-                value=2500,
-            )
-
-        resultat = _agreger_tokens_locaux(
-            [],
-            utilisateur,
-            _config_factice(organisation="Le Tiers Lustre"),
+    with tenant_context(tenant):
+        Token.objects.create(
+            wallet=utilisateur.wallet,
+            asset=asset_local_cadeau,
+            value=2500,
         )
 
-        assert len(resultat) == 1
-        token_ajoute = resultat[0]
-        assert token_ajoute["value"] == 2500
-        assert token_ajoute["is_local"] is True
-        assert token_ajoute["asset"]["is_stripe_primary"] is False
-        assert token_ajoute["asset"]["names_of_place_federated"] == ["Le Tiers Lustre"]
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    resultat = _agreger_tokens_locaux(
+        [],
+        utilisateur,
+        _config_factice(organisation="Le Tiers Lustre"),
+    )
+
+    assert len(resultat) == 1
+    token_ajoute = resultat[0]
+    assert token_ajoute["value"] == 2500
+    assert token_ajoute["is_local"] is True
+    assert token_ajoute["asset"]["is_stripe_primary"] is False
+    assert token_ajoute["asset"]["names_of_place_federated"] == ["Le Tiers Lustre"]
 
 
 @pytest.mark.django_db
@@ -311,19 +281,16 @@ def test_un_token_local_sans_solde_positif_est_ignore(
     credit.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "agreg_zero")
-    try:
-        with tenant_context(tenant):
-            Token.objects.create(
-                wallet=utilisateur.wallet,
-                asset=asset_local_cadeau,
-                value=solde_nul_ou_negatif,
-            )
+    with tenant_context(tenant):
+        Token.objects.create(
+            wallet=utilisateur.wallet,
+            asset=asset_local_cadeau,
+            value=solde_nul_ou_negatif,
+        )
 
-        resultat = _agreger_tokens_locaux([], utilisateur, _config_factice())
+    resultat = _agreger_tokens_locaux([], utilisateur, _config_factice())
 
-        assert resultat == []
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert resultat == []
 
 
 @pytest.mark.django_db
@@ -342,31 +309,28 @@ def test_un_asset_deja_affiche_par_le_fedow_distant_n_est_pas_redouble(
     the upcoming import, which may preserve original uuids.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "agreg_dedup")
-    try:
-        with tenant_context(tenant):
-            Token.objects.create(
-                wallet=utilisateur.wallet,
-                asset=asset_local_cadeau,
-                value=2500,
-            )
-
-        # Le token distant porte l'uuid de l'asset local.
-        # / The remote token carries the local asset's uuid.
-        tokens_distants = [
-            _token_distant("Version distante", 700, asset_uuid=asset_local_cadeau.uuid),
-        ]
-
-        resultat = _agreger_tokens_locaux(
-            tokens_distants,
-            utilisateur,
-            _config_factice(),
+    with tenant_context(tenant):
+        Token.objects.create(
+            wallet=utilisateur.wallet,
+            asset=asset_local_cadeau,
+            value=2500,
         )
 
-        assert len(resultat) == 1
-        assert resultat[0]["name"] == "Version distante"
-        assert "is_local" not in resultat[0]
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    # Le token distant porte l'uuid de l'asset local.
+    # / The remote token carries the local asset's uuid.
+    tokens_distants = [
+        _token_distant("Version distante", 700, asset_uuid=asset_local_cadeau.uuid),
+    ]
+
+    resultat = _agreger_tokens_locaux(
+        tokens_distants,
+        utilisateur,
+        _config_factice(),
+    )
+
+    assert len(resultat) == 1
+    assert resultat[0]["name"] == "Version distante"
+    assert "is_local" not in resultat[0]
 
 
 @pytest.mark.django_db
@@ -380,25 +344,22 @@ def test_l_agregation_modifie_la_liste_recue(tenant, asset_local_cadeau):
     / The helper appends into the list it receives and returns that same list.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "agreg_mutation")
-    try:
-        with tenant_context(tenant):
-            Token.objects.create(
-                wallet=utilisateur.wallet,
-                asset=asset_local_cadeau,
-                value=2500,
-            )
-
-        liste_initiale = []
-        resultat = _agreger_tokens_locaux(
-            liste_initiale,
-            utilisateur,
-            _config_factice(),
+    with tenant_context(tenant):
+        Token.objects.create(
+            wallet=utilisateur.wallet,
+            asset=asset_local_cadeau,
+            value=2500,
         )
 
-        assert resultat is liste_initiale
-        assert len(liste_initiale) == 1
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    liste_initiale = []
+    resultat = _agreger_tokens_locaux(
+        liste_initiale,
+        utilisateur,
+        _config_factice(),
+    )
+
+    assert resultat is liste_initiale
+    assert len(liste_initiale) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -419,40 +380,37 @@ def test_le_tableau_affiche_les_monnaies_des_deux_moteurs(
     / The transition scenario: FED, another venue's currency, and two local ones.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "tableau_panorama")
-    try:
-        with tenant_context(tenant):
-            Token.objects.create(
-                wallet=utilisateur.wallet, asset=asset_local_cadeau, value=2500,
-            )
-            Token.objects.create(
-                wallet=utilisateur.wallet, asset=asset_local_monnaie, value=4200,
-            )
+    with tenant_context(tenant):
+        Token.objects.create(
+            wallet=utilisateur.wallet, asset=asset_local_cadeau, value=2500,
+        )
+        Token.objects.create(
+            wallet=utilisateur.wallet, asset=asset_local_monnaie, value=4200,
+        )
 
-        tokens_distants = [
-            _token_distant("TiBillet", 1000, categorie='FED', est_stripe_primaire=True),
-            _token_distant("Caisse sociale alimentaire", 5000, categorie='TLF'),
-        ]
+    tokens_distants = [
+        _token_distant("TiBillet", 1000, categorie='FED', est_stripe_primaire=True),
+        _token_distant("Caisse sociale alimentaire", 5000, categorie='TLF'),
+    ]
 
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
-                "tokens": tokens_distants,
-            }
-            response = client.get("/my_account/tokens_table/")
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
+            "tokens": tokens_distants,
+        }
+        response = client.get("/my_account/tokens_table/")
 
-        contenu = response.content.decode()
-        assert response.status_code == 200
-        assert "Caisse sociale alimentaire" in contenu
-        assert asset_local_cadeau.name in contenu
-        assert asset_local_monnaie.name in contenu
-        # Le FED s'affiche sous le libelle « TiBillets » du gabarit, pas sous son
-        # nom d'asset. / FED shows as the template's "TiBillets" label.
-        assert "TiBillets" in contenu
-        assert contenu.count('data-testid="token-badge-local"') == 2
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    contenu = response.content.decode()
+    assert response.status_code == 200
+    assert "Caisse sociale alimentaire" in contenu
+    assert asset_local_cadeau.name in contenu
+    assert asset_local_monnaie.name in contenu
+    # Le FED s'affiche sous le libelle « TiBillets » du gabarit, pas sous son
+    # nom d'asset. / FED shows as the template's "TiBillets" label.
+    assert "TiBillets" in contenu
+    assert contenu.count('data-testid="token-badge-local"') == 2
 
 
 @pytest.mark.django_db
@@ -464,25 +422,22 @@ def test_le_tableau_survit_a_une_panne_du_fedow_distant(tenant, asset_local_cade
     / If the remote Fedow is down, local balances must still show.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "tableau_panne")
-    try:
-        with tenant_context(tenant):
-            Token.objects.create(
-                wallet=utilisateur.wallet, asset=asset_local_cadeau, value=2500,
-            )
+    with tenant_context(tenant):
+        Token.objects.create(
+            wallet=utilisateur.wallet, asset=asset_local_cadeau, value=2500,
+        )
 
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.side_effect = (
-                ConnectionError("Fedow injoignable")
-            )
-            response = client.get("/my_account/tokens_table/")
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.side_effect = (
+            ConnectionError("Fedow injoignable")
+        )
+        response = client.get("/my_account/tokens_table/")
 
-        assert response.status_code == 200
-        assert asset_local_cadeau.name in response.content.decode()
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert response.status_code == 200
+    assert asset_local_cadeau.name in response.content.decode()
 
 
 @pytest.mark.django_db
@@ -494,26 +449,23 @@ def test_le_tableau_survit_a_une_panne_de_l_agregation_locale(tenant):
     / The mirror of the previous guard: each source has its own safety net.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "tableau_panne_locale")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with (
-            patch("BaseBillet.views.FedowAPI") as fedow_mocke,
-            patch(
-                "BaseBillet.views._agreger_tokens_locaux",
-                side_effect=RuntimeError("base locale indisponible"),
-            ),
-        ):
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
-                "tokens": [_token_distant("Caisse sociale alimentaire", 5000)],
-            }
-            response = client.get("/my_account/tokens_table/")
+    with (
+        patch("BaseBillet.views.FedowAPI") as fedow_mocke,
+        patch(
+            "BaseBillet.views._agreger_tokens_locaux",
+            side_effect=RuntimeError("base locale indisponible"),
+        ),
+    ):
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
+            "tokens": [_token_distant("Caisse sociale alimentaire", 5000)],
+        }
+        response = client.get("/my_account/tokens_table/")
 
-        assert response.status_code == 200
-        assert "Caisse sociale alimentaire" in response.content.decode()
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert response.status_code == 200
+    assert "Caisse sociale alimentaire" in response.content.decode()
 
 
 @pytest.mark.django_db
@@ -521,25 +473,22 @@ def test_le_tableau_reste_affichable_si_les_deux_sources_tombent(tenant):
     """Les deux moteurs en echec : page vide, jamais d'erreur serveur.
     / Both engines down: empty table, never a server error."""
     utilisateur = _creer_humain_avec_wallet(tenant, "tableau_double_panne")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with (
-            patch("BaseBillet.views.FedowAPI") as fedow_mocke,
-            patch(
-                "BaseBillet.views._agreger_tokens_locaux",
-                side_effect=RuntimeError("base locale indisponible"),
-            ),
-        ):
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.side_effect = (
-                ConnectionError("Fedow injoignable")
-            )
-            response = client.get("/my_account/tokens_table/")
+    with (
+        patch("BaseBillet.views.FedowAPI") as fedow_mocke,
+        patch(
+            "BaseBillet.views._agreger_tokens_locaux",
+            side_effect=RuntimeError("base locale indisponible"),
+        ),
+    ):
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.side_effect = (
+            ConnectionError("Fedow injoignable")
+        )
+        response = client.get("/my_account/tokens_table/")
 
-        assert response.status_code == 200
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert response.status_code == 200
 
 
 @pytest.mark.django_db
@@ -547,24 +496,21 @@ def test_les_adhesions_ne_sont_pas_dans_le_tableau_des_monnaies(tenant):
     """Un token d'adhesion (SUB) est ecarte : il a sa propre page.
     / A subscription token (SUB) is filtered out: it has its own page."""
     utilisateur = _creer_humain_avec_wallet(tenant, "tableau_sub")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
-                "tokens": [
-                    _token_distant("Adhesion annuelle", 2000, categorie='SUB'),
-                    _token_distant("Caisse sociale alimentaire", 5000),
-                ],
-            }
-            response = client.get("/my_account/tokens_table/")
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
+            "tokens": [
+                _token_distant("Adhesion annuelle", 2000, categorie='SUB'),
+                _token_distant("Caisse sociale alimentaire", 5000),
+            ],
+        }
+        response = client.get("/my_account/tokens_table/")
 
-        contenu = response.content.decode()
-        assert "Adhesion annuelle" not in contenu
-        assert "Caisse sociale alimentaire" in contenu
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    contenu = response.content.decode()
+    assert "Adhesion annuelle" not in contenu
+    assert "Caisse sociale alimentaire" in contenu
 
 
 @pytest.mark.django_db
@@ -577,21 +523,18 @@ def test_une_monnaie_non_acceptee_ici_est_grisee(tenant):
     / The member owns it but cannot spend it here: the template greys it out.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "tableau_grise")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
-                "tokens": [_token_distant("Monnaie lointaine", 5000)],
-            }
-            response = client.get("/my_account/tokens_table/")
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
+            "tokens": [_token_distant("Monnaie lointaine", 5000)],
+        }
+        response = client.get("/my_account/tokens_table/")
 
-        contenu = response.content.decode()
-        assert "Monnaie lointaine" in contenu
-        assert "opacity-50" in contenu
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    contenu = response.content.decode()
+    assert "Monnaie lointaine" in contenu
+    assert "opacity-50" in contenu
 
 
 @pytest.mark.django_db
@@ -599,21 +542,18 @@ def test_le_fed_du_reseau_n_est_jamais_grise(tenant):
     """Le FED est depensable partout : sa ligne reste pleinement lisible.
     / FED is spendable everywhere: its row is never greyed out."""
     utilisateur = _creer_humain_avec_wallet(tenant, "tableau_fed")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
-                "tokens": [
-                    _token_distant("TiBillet", 1000, categorie='FED', est_stripe_primaire=True),
-                ],
-            }
-            response = client.get("/my_account/tokens_table/")
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
+            "tokens": [
+                _token_distant("TiBillet", 1000, categorie='FED', est_stripe_primaire=True),
+            ],
+        }
+        response = client.get("/my_account/tokens_table/")
 
-        assert "opacity-50" not in response.content.decode()
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert "opacity-50" not in response.content.decode()
 
 
 @pytest.mark.django_db
@@ -641,20 +581,17 @@ def test_pas_de_remboursement_sans_portefeuille_federe(tenant):
     """Aucun token FED : on refuse, et Fedow n'est jamais sollicite.
     / No FED token: refused, and Fedow is never asked."""
     utilisateur = _creer_humain_avec_wallet(tenant, "refund_sans_fed")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
-                "tokens": [],
-            }
-            response = client.get("/my_account/refund_online/")
-            fedow_mocke.return_value.wallet.refund_fed_by_signature.assert_not_called()
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
+            "tokens": [],
+        }
+        response = client.get("/my_account/refund_online/")
+        fedow_mocke.return_value.wallet.refund_fed_by_signature.assert_not_called()
 
-        assert django_messages.ERROR in _niveaux_des_messages(response)
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert django_messages.ERROR in _niveaux_des_messages(response)
 
 
 @pytest.mark.django_db
@@ -670,29 +607,26 @@ def test_une_monnaie_locale_n_est_jamais_remboursee_en_ligne(tenant, asset_local
     card, can go back to a bank account. Local currency was paid to a venue.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "refund_locale")
-    try:
-        with tenant_context(tenant):
-            Token.objects.create(
-                wallet=utilisateur.wallet, asset=asset_local_cadeau, value=5000,
-            )
+    with tenant_context(tenant):
+        Token.objects.create(
+            wallet=utilisateur.wallet, asset=asset_local_cadeau, value=5000,
+        )
 
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            # Le Fedow distant ne connait qu'une monnaie de caisse sociale : pas
-            # de FED. / The remote Fedow only knows a local currency, no FED.
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
-                "tokens": [_token_distant("Caisse sociale alimentaire", 5000)],
-            }
-            response = client.get("/my_account/refund_online/")
-            fedow_mocke.return_value.wallet.refund_fed_by_signature.assert_not_called()
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        # Le Fedow distant ne connait qu'une monnaie de caisse sociale : pas
+        # de FED. / The remote Fedow only knows a local currency, no FED.
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
+            "tokens": [_token_distant("Caisse sociale alimentaire", 5000)],
+        }
+        response = client.get("/my_account/refund_online/")
+        fedow_mocke.return_value.wallet.refund_fed_by_signature.assert_not_called()
 
-        niveaux = _niveaux_des_messages(response)
-        assert django_messages.ERROR in niveaux
-        assert django_messages.SUCCESS not in niveaux
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    niveaux = _niveaux_des_messages(response)
+    assert django_messages.ERROR in niveaux
+    assert django_messages.SUCCESS not in niveaux
 
 
 @pytest.mark.django_db
@@ -700,22 +634,19 @@ def test_pas_de_remboursement_si_le_solde_federe_est_vide(tenant):
     """Un FED a zero : rien a rembourser.
     / A FED at zero: nothing to refund."""
     utilisateur = _creer_humain_avec_wallet(tenant, "refund_vide")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
-                "tokens": [
-                    _token_distant("TiBillet", 0, categorie='FED', est_stripe_primaire=True),
-                ],
-            }
-            response = client.get("/my_account/refund_online/")
-            fedow_mocke.return_value.wallet.refund_fed_by_signature.assert_not_called()
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
+            "tokens": [
+                _token_distant("TiBillet", 0, categorie='FED', est_stripe_primaire=True),
+            ],
+        }
+        response = client.get("/my_account/refund_online/")
+        fedow_mocke.return_value.wallet.refund_fed_by_signature.assert_not_called()
 
-        assert django_messages.ERROR in _niveaux_des_messages(response)
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert django_messages.ERROR in _niveaux_des_messages(response)
 
 
 @pytest.mark.django_db
@@ -732,43 +663,40 @@ def test_le_remboursement_accepte_porte_sur_le_seul_solde_federe(
     one.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "refund_ok")
-    try:
-        with tenant_context(tenant):
-            Token.objects.create(
-                wallet=utilisateur.wallet, asset=asset_local_cadeau, value=5000,
-            )
+    with tenant_context(tenant):
+        Token.objects.create(
+            wallet=utilisateur.wallet, asset=asset_local_cadeau, value=5000,
+        )
 
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with (
-            patch("BaseBillet.views.FedowAPI") as fedow_mocke,
-            patch("BaseBillet.views.send_email_generique") as courriel_mocke,
-            patch("BaseBillet.views.cache") as cache_mocke,
-        ):
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
-                "tokens": [
-                    _token_distant("TiBillet", 1200, categorie='FED', est_stripe_primaire=True),
-                    _token_distant("Caisse sociale alimentaire", 5000),
-                ],
-            }
-            fedow_mocke.return_value.wallet.refund_fed_by_signature.return_value = (
-                202, MagicMock(),
-            )
-            response = client.get("/my_account/refund_online/")
+    with (
+        patch("BaseBillet.views.FedowAPI") as fedow_mocke,
+        patch("BaseBillet.views.send_email_generique") as courriel_mocke,
+        patch("BaseBillet.views.cache") as cache_mocke,
+    ):
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
+            "tokens": [
+                _token_distant("TiBillet", 1200, categorie='FED', est_stripe_primaire=True),
+                _token_distant("Caisse sociale alimentaire", 5000),
+            ],
+        }
+        fedow_mocke.return_value.wallet.refund_fed_by_signature.return_value = (
+            202, MagicMock(),
+        )
+        response = client.get("/my_account/refund_online/")
 
-        assert django_messages.SUCCESS in _niveaux_des_messages(response)
-        cache_mocke.delete.assert_called_once_with(f"wallet_user_{utilisateur.wallet.uuid}")
+    assert django_messages.SUCCESS in _niveaux_des_messages(response)
+    cache_mocke.delete.assert_called_once_with(f"wallet_user_{utilisateur.wallet.uuid}")
 
-        # Le montant du courriel provient du seul token FED (1200 centimes),
-        # jamais du total avec la monnaie locale.
-        # / The email amount comes from the FED token alone, never the total.
-        courriel_mocke.delay.assert_called_once()
-        contexte_du_courriel = courriel_mocke.delay.call_args.kwargs["context"]
-        assert "12" in contexte_du_courriel["table_info"]["Montant remboursé"]
-        assert "62" not in contexte_du_courriel["table_info"]["Montant remboursé"]
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    # Le montant du courriel provient du seul token FED (1200 centimes),
+    # jamais du total avec la monnaie locale.
+    # / The email amount comes from the FED token alone, never the total.
+    courriel_mocke.delay.assert_called_once()
+    contexte_du_courriel = courriel_mocke.delay.call_args.kwargs["context"]
+    assert "12" in contexte_du_courriel["table_info"]["Montant remboursé"]
+    assert "62" not in contexte_du_courriel["table_info"]["Montant remboursé"]
 
 
 @pytest.mark.django_db
@@ -781,30 +709,27 @@ def test_un_refus_de_fedow_n_envoie_aucun_courriel(tenant):
     never arrives.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "refund_refuse")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with (
-            patch("BaseBillet.views.FedowAPI") as fedow_mocke,
-            patch("BaseBillet.views.send_email_generique") as courriel_mocke,
-        ):
-            fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
-                "tokens": [
-                    _token_distant("TiBillet", 1200, categorie='FED', est_stripe_primaire=True),
-                ],
-            }
-            fedow_mocke.return_value.wallet.refund_fed_by_signature.return_value = (
-                400, {"erreur": "refus"},
-            )
-            response = client.get("/my_account/refund_online/")
-            courriel_mocke.delay.assert_not_called()
+    with (
+        patch("BaseBillet.views.FedowAPI") as fedow_mocke,
+        patch("BaseBillet.views.send_email_generique") as courriel_mocke,
+    ):
+        fedow_mocke.return_value.wallet.cached_retrieve_by_signature.return_value.validated_data = {
+            "tokens": [
+                _token_distant("TiBillet", 1200, categorie='FED', est_stripe_primaire=True),
+            ],
+        }
+        fedow_mocke.return_value.wallet.refund_fed_by_signature.return_value = (
+            400, {"erreur": "refus"},
+        )
+        response = client.get("/my_account/refund_online/")
+        courriel_mocke.delay.assert_not_called()
 
-        niveaux = _niveaux_des_messages(response)
-        assert django_messages.WARNING in niveaux
-        assert django_messages.SUCCESS not in niveaux
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    niveaux = _niveaux_des_messages(response)
+    assert django_messages.WARNING in niveaux
+    assert django_messages.SUCCESS not in niveaux
 
 
 # ---------------------------------------------------------------------------
@@ -822,20 +747,17 @@ def test_la_recharge_renvoie_vers_l_adresse_de_paiement_donnee_par_fedow(tenant)
     relays the address.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "refill_ok")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        adresse_de_paiement = "https://checkout.stripe.com/c/pay/fake_session"
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.get_federated_token_refill_checkout.return_value = (
-                adresse_de_paiement
-            )
-            response = client.get("/my_account/refill_wallet/")
+    adresse_de_paiement = "https://checkout.stripe.com/c/pay/fake_session"
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.get_federated_token_refill_checkout.return_value = (
+            adresse_de_paiement
+        )
+        response = client.get("/my_account/refill_wallet/")
 
-        assert response["HX-Redirect"] == adresse_de_paiement
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert response["HX-Redirect"] == adresse_de_paiement
 
 
 @pytest.mark.django_db
@@ -848,18 +770,15 @@ def test_la_recharge_indisponible_ramene_au_compte_avec_une_erreur(tenant):
     / Real case: the Fedow instance has no payment key configured.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "refill_indispo")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.get_federated_token_refill_checkout.return_value = None
-            response = client.get("/my_account/refill_wallet/")
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.get_federated_token_refill_checkout.return_value = None
+        response = client.get("/my_account/refill_wallet/")
 
-        assert response["HX-Redirect"] == "/my_account/"
-        assert django_messages.ERROR in _niveaux_des_messages(response)
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert response["HX-Redirect"] == "/my_account/"
+    assert django_messages.ERROR in _niveaux_des_messages(response)
 
 
 @pytest.mark.django_db
@@ -885,21 +804,18 @@ def test_retour_recharge_wallet_confirme_par_fedow_affiche_un_succes(tenant):
     """Fedow confirme le paiement : message de succes et retour au compte.
     / Fedow confirms the payment: success message and back to the account."""
     utilisateur = _creer_humain(tenant, "retour_ok")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        # Fedow renvoie un wallet : la recharge est validee.
-        # / Fedow returns a wallet: the refill is confirmed.
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.retrieve_from_refill_checkout.return_value = MagicMock()
-            response = client.get(f"/my_account/{uuid.uuid4()}/return_refill_wallet/")
+    # Fedow renvoie un wallet : la recharge est validee.
+    # / Fedow returns a wallet: the refill is confirmed.
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.retrieve_from_refill_checkout.return_value = MagicMock()
+        response = client.get(f"/my_account/{uuid.uuid4()}/return_refill_wallet/")
 
-        assert response.status_code == 302
-        assert response.url == "/my_account/"
-        assert django_messages.SUCCESS in _niveaux_des_messages(response)
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    assert response.status_code == 302
+    assert response.url == "/my_account/"
+    assert django_messages.SUCCESS in _niveaux_des_messages(response)
 
 
 @pytest.mark.django_db
@@ -911,22 +827,19 @@ def test_retour_recharge_wallet_refuse_par_fedow_affiche_une_erreur(tenant):
     / Metadata signature mismatch: error message, and above all no success.
     """
     utilisateur = _creer_humain(tenant, "retour_ko")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        # Fedow renvoie None : paiement non verifie.
-        # / Fedow returns None: payment not verified.
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.retrieve_from_refill_checkout.return_value = None
-            response = client.get(f"/my_account/{uuid.uuid4()}/return_refill_wallet/")
+    # Fedow renvoie None : paiement non verifie.
+    # / Fedow returns None: payment not verified.
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.retrieve_from_refill_checkout.return_value = None
+        response = client.get(f"/my_account/{uuid.uuid4()}/return_refill_wallet/")
 
-        niveaux = _niveaux_des_messages(response)
-        assert response.status_code == 302
-        assert django_messages.ERROR in niveaux
-        assert django_messages.SUCCESS not in niveaux
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    niveaux = _niveaux_des_messages(response)
+    assert response.status_code == 302
+    assert django_messages.ERROR in niveaux
+    assert django_messages.SUCCESS not in niveaux
 
 
 @pytest.mark.django_db
@@ -939,22 +852,19 @@ def test_retour_recharge_wallet_survit_a_une_panne_fedow(tenant):
     their account with a message, not on a 500 page.
     """
     utilisateur = _creer_humain(tenant, "retour_panne")
-    try:
-        client = _client_navigateur()
-        client.force_login(utilisateur)
+    client = _client_navigateur()
+    client.force_login(utilisateur)
 
-        with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
-            fedow_mocke.return_value.wallet.retrieve_from_refill_checkout.side_effect = (
-                ConnectionError("Fedow injoignable")
-            )
-            response = client.get(f"/my_account/{uuid.uuid4()}/return_refill_wallet/")
+    with patch("BaseBillet.views.FedowAPI") as fedow_mocke:
+        fedow_mocke.return_value.wallet.retrieve_from_refill_checkout.side_effect = (
+            ConnectionError("Fedow injoignable")
+        )
+        response = client.get(f"/my_account/{uuid.uuid4()}/return_refill_wallet/")
 
-        niveaux = _niveaux_des_messages(response)
-        assert response.status_code == 302
-        assert django_messages.ERROR in niveaux
-        assert django_messages.SUCCESS not in niveaux
-    finally:
-        _supprimer_humain(tenant, utilisateur)
+    niveaux = _niveaux_des_messages(response)
+    assert response.status_code == 302
+    assert django_messages.ERROR in niveaux
+    assert django_messages.SUCCESS not in niveaux
 
 
 @pytest.mark.django_db
@@ -1046,34 +956,28 @@ def test_avec_un_compte_bancaire_actif_le_bouton_s_affiche():
 def wallet_du_lieu(tenant):
     """Wallet createur des assets locaux de ce fichier.
     / Origin wallet for this file's local assets."""
-    wallet = Wallet.objects.create(
+    return Wallet.objects.create(
         name=f'{PREFIXE_DE_TEST} lieu {uuid.uuid4().hex[:8]}',
         origin=tenant,
     )
-    yield wallet
-    with tenant_context(tenant):
-        try:
-            wallet.delete()
-        except Exception:
-            pass
 
 
 @pytest.fixture
 def asset_local_cadeau(tenant, wallet_du_lieu):
     """Une monnaie cadeau du moteur local.
     / A gift currency from the local engine."""
-    yield from _asset_local(tenant, wallet_du_lieu, 'Cadeau', Asset.TNF, 'EUR')
+    return _asset_local(tenant, wallet_du_lieu, 'Cadeau', Asset.TNF, 'EUR')
 
 
 @pytest.fixture
 def asset_local_monnaie(tenant, wallet_du_lieu):
     """Une monnaie locale fiduciaire du moteur local.
     / A local fiduciary currency from the local engine."""
-    yield from _asset_local(tenant, wallet_du_lieu, 'Monnaie', Asset.TLF, 'EUR')
+    return _asset_local(tenant, wallet_du_lieu, 'Monnaie', Asset.TLF, 'EUR')
 
 
 def _asset_local(tenant, wallet_du_lieu, libelle, categorie, code_devise):
-    """Cree un asset local jetable et le nettoie ensuite.
+    """Cree un asset local jetable.
 
     Le nom porte un suffixe unique : le signal post_save d'`Asset` cree un
     Product « Recharge {nom} » sous contrainte unique (categorie, nom), et le
@@ -1081,33 +985,24 @@ def _asset_local(tenant, wallet_du_lieu, libelle, categorie, code_devise):
     / The name carries a unique suffix: a post_save signal creates a
     "Recharge {name}" Product under a unique constraint.
 
-    La creation ET le nettoyage passent par `tenant_context`, pour deux raisons
-    distinctes :
+    La creation passe par `tenant_context` : le signal post_save d'`Asset`
+    cherche `BaseBillet.CategorieProduct` pour fabriquer son Product de
+    recharge. Cette table est une TENANT_APP : depuis le schema public, la
+    requete leve `ProgrammingError: relation "BaseBillet_categorieproduct" does
+    not exist`. Et rien ne garantit le schema courant : il depend du test
+    precedent.
+    / Creation goes through tenant_context: the post_save signal looks up
+    BaseBillet.CategorieProduct, a TENANT_APPS table missing from the public
+    schema. The current schema depends on the previous test.
 
-    - a la creation, le signal post_save d'`Asset` cherche
-      `BaseBillet.CategorieProduct` pour fabriquer son Product de recharge.
-      Cette table est une TENANT_APP : depuis le schema public, la requete leve
-      `ProgrammingError: relation "BaseBillet_categorieproduct" does not exist`.
-      Et rien ne garantit le schema courant : il depend du test precedent ;
-    - a la suppression, la cascade atteint `BaseBillet.Product`, absent lui
-      aussi du schema public (PIEGES 11.9).
-
-    / Both creation and cleanup go through tenant_context: on creation the
-    post_save signal looks up BaseBillet.CategorieProduct, and on delete the
-    cascade reaches BaseBillet.Product — both TENANT_APPS tables missing from
-    the public schema. The current schema depends on the previous test.
+    Pas de nettoyage : l'annulation de la transaction du test efface l'asset.
+    / No cleanup: the test rollback erases the asset.
     """
     with tenant_context(tenant):
-        asset = AssetService.creer_asset(
+        return AssetService.creer_asset(
             tenant=tenant,
             name=f'{PREFIXE_DE_TEST} {libelle} {uuid.uuid4().hex[:8]}',
             category=categorie,
             currency_code=code_devise,
             wallet_origin=wallet_du_lieu,
         )
-
-    yield asset
-
-    with tenant_context(tenant):
-        Token.objects.filter(asset=asset).delete()
-        asset.delete()

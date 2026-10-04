@@ -1,7 +1,15 @@
 {% load i18n unfold %}
 
-{# Bandeau au-dessus de la liste des clotures : lien vers le rapport temps reel. #}
-{# / Banner above the cloture list: link to the real-time report. #}
+{# Bandeau au-dessus de la liste des clotures : le rapport temps reel, puis        #}
+{# l'export fiscal (archive LNE signee). Le bouton de l'export ouvre son            #}
+{# formulaire en place, par HTMX (laboutik/views.py export_fiscal, GET HTMX).       #}
+{# `export_fiscal_url` vient de ClotureCaisseAdmin.changelist_view : vide sans      #}
+{# module caisse actif (la route de la caisse refuserait).                          #}
+{# / Banner above the closure list: the real-time report, then the fiscal export.  #}
+{# The export button opens its form in place through HTMX.                          #}
+{# Le bouton de l'export est en styles en ligne avec les variables d'Unfold : une  #}
+{# classe Tailwind absente du CSS compile d'Unfold ne s'afficherait pas.           #}
+{# / The export button uses inline styles with Unfold variables.                   #}
 {# LOCALISATION : comptabilite/templates/comptabilite/admin/changelist_before.html #}
 
 <div class="mb-4">
@@ -18,3 +26,28 @@
         </div>
     {% endcomponent %}
 </div>
+
+{% if export_fiscal_url %}
+<div class="mb-4" data-testid="bandeau-export-fiscal">
+    {% component "unfold/components/card.html" with title=_("Export fiscal") %}
+        {# Zone remplacée par le formulaire de l'export au clic sur le bouton. #}
+        {# / Zone replaced by the export form when the button is clicked. #}
+        <div id="export-fiscal-zone" aria-live="polite">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                <p class="text-base-500 text-sm m-0">
+                    {% translate "Archive signée (ZIP) des ventes, de leurs articles et règlements, et des clôtures, pour l'administration fiscale." %}
+                </p>
+                <button type="button"
+                        hx-get="{{ export_fiscal_url }}"
+                        hx-target="#export-fiscal-zone"
+                        hx-swap="innerHTML"
+                        data-testid="btn-export-fiscal"
+                        style="display:inline-flex;align-items:center;gap:.5rem;padding:.5rem 1rem;font-size:.875rem;font-weight:500;border-radius:.375rem;background:var(--color-primary-600,#7c3aed);color:#fff;border:none;cursor:pointer">
+                    <span class="material-symbols-outlined" style="font-size:18px;" aria-hidden="true">download</span>
+                    {% translate "Export fiscal" %}
+                </button>
+            </div>
+        </div>
+    {% endcomponent %}
+</div>
+{% endif %}

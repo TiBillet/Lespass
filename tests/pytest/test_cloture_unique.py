@@ -1303,8 +1303,9 @@ class TestClotureUnique(FastTenantTestCase):
         """
         Deux J. L'empreinte de la J n° 1 est écrasée (`update()`) : la J n° 2 n'est plus
         reliée à elle (maillon cassé). Le règlement de la vente n° 1 (dans la plage de la
-        J n° 1) passe en CB par `update()`. `verify_clotures --tenant` signale les deux.
-        / The audit command reports a broken link and an altered sale.
+        J n° 1) passe en CB par `update()`. `verify_clotures --tenant` signale les deux,
+        et sort avec un code différent de 0 (`CommandError`, code 1 par défaut).
+        / The audit command reports a broken link and an altered sale, exit code ≠ 0.
         """
         vente_numero_1 = self._vendre_des_jus_a(heure_de_paris(2026, 3, 10, 10, 0))
         premiere_j = self._cloturer_a(heure_de_paris(2026, 3, 10, 12, 0))
@@ -1315,13 +1316,20 @@ class TestClotureUnique(FastTenantTestCase):
         Reglement.objects.filter(vente=vente_numero_1).update(moyen=PaymentMethod.CC)
 
         sortie_de_la_commande = StringIO()
-        call_command(
-            "verify_clotures",
-            f"--tenant={self.tenant.schema_name}",
-            stdout=sortie_de_la_commande,
-        )
+        code_de_sortie = 0
+        try:
+            call_command(
+                "verify_clotures",
+                f"--tenant={self.tenant.schema_name}",
+                stdout=sortie_de_la_commande,
+            )
+        except CommandError as erreur_de_la_commande:
+            code_de_sortie = erreur_de_la_commande.returncode
+        except SystemExit as sortie_du_programme:
+            code_de_sortie = sortie_du_programme.code
         texte_de_la_sortie = sortie_de_la_commande.getvalue()
 
+        self.assertNotEqual(code_de_sortie, 0, texte_de_la_sortie)
         self.assertIn("Maillon cassé", texte_de_la_sortie)
         self.assertIn("clôture n° 2", texte_de_la_sortie)
         self.assertIn("la vente n° 1", texte_de_la_sortie)

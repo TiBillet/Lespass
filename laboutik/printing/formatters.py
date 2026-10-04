@@ -23,6 +23,14 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from BaseBillet.models import PaymentMethod
+from comptabilite.presentation import (
+    codes_des_moyens_dans_l_ordre,
+    fuseau_d_affichage_du_rapport,
+    lignes_du_tiroir,
+)
+from comptabilite.rapport import CLE_PLUSIEURS_MOYENS, nom_du_moyen_de_paiement
+
 
 def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
     """
@@ -475,248 +483,371 @@ def formatter_ticket_commande(commande, articles_groupe, printer):
     }
 
 
-def _ligne_des_offerts(offerts):
+# La largeur d'une ligne de ticket (papier 58 mm, police normale).
+# / The width of a ticket line (58 mm paper, normal font).
+LARGEUR_D_UNE_LIGNE_DE_TICKET = 32
+
+# La date des lignes de pied des tickets X et Z : année sur deux chiffres, pour que
+# « Début de période: 10/03/26 10:00 » tienne en 32 caractères.
+# / The date of the X and Z ticket footer lines: two-digit year, to fit 32 chars.
+FORMAT_DE_DATE_DU_PIED = "%d/%m/%y %H:%M"
+
+
+def _ligne_de_montant_du_pied(libelle, montant_en_centimes):
     """
-    Ligne de pied « Offerts : N articles, valeur X EUR », ou None s'il n'y en a pas.
-    Hors argent : cette valeur n'entre jamais dans le TOTAL du ticket.
-    / Footer line for gifted items, or None. Never part of the TOTAL.
-
-    LOCALISATION : laboutik/printing/formatters.py
-
-    :param offerts: dict de RapportComptableService.calculer_offerts() (ou None)
+    Une ligne de pied « Libellé: 12.34 EUR », montant signé. Si elle dépasse la
+    largeur du ticket, « EUR » est retiré (les autres lignes disent la monnaie) :
+    l'imprimante ne coupe pas la ligne au milieu d'un mot.
+    / A footer line "Label: 12.34 EUR", signed; " EUR" is dropped when the line is
+    wider than the ticket.
     """
-    if not offerts or not offerts.get("par_produit"):
-        return None
-    quantite = offerts.get("qty_totale", 0)
-    quantite_affichee = int(quantite) if quantite == int(quantite) else f"{quantite:.2f}"
-    valeur_euros = f"{offerts.get('valeur_totale', 0) / 100:.2f}"
-    return f"{_('Offerts')}: {quantite_affichee} {_('articles')}, {_('valeur')} {valeur_euros} EUR"
+    ligne = f"{libelle}: {montant_en_centimes / 100:.2f} EUR"
+    if len(ligne) > LARGEUR_D_UNE_LIGNE_DE_TICKET:
+        ligne = f"{libelle}: {montant_en_centimes / 100:.2f}"
+    return ligne
 
 
-def _lignes_du_non_monetaire(non_monetaire):
+def _lignes_du_tiroir_du_rapport(section_caisse_especes):
     """
-    Lignes de pied des ventes en points ou en temps, une par monnaie :
-    « Points fidélité (hors argent): 3 articles, 900.00 ». Liste vide sinon.
-    Hors argent : ces montants n'entrent jamais dans le TOTAL du ticket.
-    / Footer lines of points/time sales, one per currency. Never in the TOTAL.
+    Les lignes de pied du tiroir de la caisse, écrites par la présentation partagée
+    (`comptabilite/presentation.py` `lignes_du_tiroir`) : mêmes libellés et mêmes
+    signes qu'à l'écran. Fond, espèces reçues, espèces rendues, corrections, sorties
+    de caisse, solde théorique. Une ligne nulle n'est pas imprimée (le fond et le
+    solde le sont toujours). L'argent qui sort est négatif : les lignes au-dessus du
+    solde s'additionnent en solde.
+    / The cash drawer footer lines, written by the shared presentation (same labels
+    and signs as the screen). A zero line is not printed, except float and balance.
 
-    LOCALISATION : laboutik/printing/formatters.py
-
-    :param non_monetaire: dict de RapportComptableService.calculer_non_monetaire()
-        (ou None). `unites` est en centiemes de la monnaie.
+    :param section_caisse_especes: `rapport["caisse_especes"]` (ou None)
+    :return: liste de textes (vide sans section)
     """
     lignes = []
-    if not non_monetaire:
+    if not section_caisse_especes:
         return lignes
-    for monnaie in non_monetaire.get("par_monnaie", []):
-        quantite = monnaie.get("qty_articles", 0)
-        quantite_affichee = int(quantite) if quantite == int(quantite) else f"{quantite:.2f}"
-        montant_affiche = f"{monnaie.get('unites', 0) / 100:.2f}"
-        lignes.append(
-            f"{monnaie.get('nom', '')} ({_('hors argent')}): "
-            f"{quantite_affichee} {_('articles')}, {montant_affiche}"
-        )
+
+    lignes_signees_du_tiroir = lignes_du_tiroir(section_caisse_especes)
+    for ligne_du_tiroir in lignes_signees_du_tiroir:
+        montant = ligne_du_tiroir["montant_en_centimes"]
+        if not montant and not ligne_du_tiroir["toujours_imprimee"]:
+            continue
+        lignes.append(_ligne_de_montant_du_pied(ligne_du_tiroir["libelle"], montant))
     return lignes
 
 
-def formatter_ticket_x(
-    totaux_par_moyen,
-    solde_caisse,
-    datetime_ouverture,
-    nb_transactions,
-    offerts=None,
-    non_monetaire=None,
-):
+def formatter_ticket_x(rapport_du_service, datetime_ouverture):
     """
-    Formate un Ticket X temporaire (consultation du service en cours, pas de cloture).
-    Le Ticket X est un instantane : il n'est pas persiste en base.
-    / Formats a temporary X-ticket (current shift consultation, no closure).
-    The X-ticket is a snapshot: it is not persisted in the database.
+    Formate le ticket X : la consultation du service en cours, jamais stockee. Lu
+    dans le rapport X du rapport des ventes unique (`RapportDesVentes.rapport_x()`),
+    de la fin de la derniere cloture journaliere jusqu'a maintenant. Meme forme et
+    memes lignes que le ticket Z.
+    / Formats the X ticket from the single sales report (never stored). Same shape and
+    lines as the Z ticket.
 
     LOCALISATION : laboutik/printing/formatters.py
 
-    :param totaux_par_moyen: dict avec especes, carte_bancaire, cashless, cheque, total (centimes)
-    :param solde_caisse: dict avec fond_de_caisse, entrees_especes, sorties_especes, solde (centimes)
-    :param datetime_ouverture: datetime de la 1ere vente apres derniere cloture
-    :param nb_transactions: nombre de transactions dans la periode
-    :param offerts: dict de RapportComptableService.calculer_offerts() (optionnel)
-    :param non_monetaire: dict de RapportComptableService.calculer_non_monetaire() (optionnel)
+    CONTENU :
+    - au-dessus du total : le chiffre d'affaires par moyen (comme le ticket Z) ;
+    - total : le chiffre d'affaires TTC, et le nombre d'operations numerotees ;
+    - les heures dans le fuseau fige dans l'en-tete du rapport ;
+    - pied : les lignes a part (recharges, cartes videes, ecarts, si non nulles),
+      ouverture, impression, puis le tiroir (fond, especes recues, rendues,
+      corrections, sorties, solde ; une ligne nulle n'est pas imprimee), les offerts
+      et les points (hors argent, jamais dans le total).
+    / Lines per method, total = revenue incl. tax, footer with the drawer, gifts and
+      points.
+
+    APPELE PAR : laboutik/views.py, `CaisseViewSet.imprimer_ticket_x`.
+
+    :param rapport_du_service: dict de `RapportDesVentes(debut, maintenant).rapport_x()`
+    :param datetime_ouverture: debut du service (fin de la derniere J)
     :return: dict ticket_data
     """
-    now = timezone.localtime(timezone.now())
+    # Les heures s'écrivent dans le fuseau figé dans l'en-tête du rapport.
+    # / Hours are written in the time zone frozen in the report header.
+    fuseau_du_rapport = fuseau_d_affichage_du_rapport(rapport_du_service)
+    maintenant = timezone.localtime(timezone.now(), fuseau_du_rapport)
     date_ouverture = ""
     if datetime_ouverture:
-        date_ouverture = timezone.localtime(datetime_ouverture).strftime(
-            "%d/%m/%Y %H:%M"
-        )
+        date_ouverture = timezone.localtime(
+            datetime_ouverture, fuseau_du_rapport
+        ).strftime(FORMAT_DE_DATE_DU_PIED)
 
-    # Lignes par moyen de paiement / Lines by payment method
-    articles = []
-    if totaux_par_moyen.get("especes"):
-        articles.append(
-            {
-                "name": _("Especes"),
-                "qty": 1,
-                "price": totaux_par_moyen["especes"],
-                "total": totaux_par_moyen["especes"],
-            }
-        )
-    if totaux_par_moyen.get("carte_bancaire"):
-        articles.append(
-            {
-                "name": _("Carte bancaire"),
-                "qty": 1,
-                "price": totaux_par_moyen["carte_bancaire"],
-                "total": totaux_par_moyen["carte_bancaire"],
-            }
-        )
-    if totaux_par_moyen.get("cashless"):
-        articles.append(
-            {
-                "name": _("Cashless"),
-                "qty": 1,
-                "price": totaux_par_moyen["cashless"],
-                "total": totaux_par_moyen["cashless"],
-            }
-        )
-    if totaux_par_moyen.get("cheque"):
-        articles.append(
-            {
-                "name": _("Cheque"),
-                "qty": 1,
-                "price": totaux_par_moyen["cheque"],
-                "total": totaux_par_moyen["cheque"],
-            }
-        )
+    articles = _lignes_des_moyens_du_rapport(
+        rapport_du_service.get("chiffre_affaires", {})
+    )
 
-    # Lignes solde caisse / Cash drawer balance lines
-    footer = [
-        f"{_('Ouverture')}: {date_ouverture}",
-        f"{_('Impression')}: {now.strftime('%d/%m/%Y %H:%M')}",
-        "",
-    ]
-    if solde_caisse:
-        fond = solde_caisse.get("fond_de_caisse", 0)
-        entrees = solde_caisse.get("entrees_especes", 0)
-        sorties = solde_caisse.get("sorties_especes", 0)
-        solde = solde_caisse.get("solde", 0)
-        footer.append(f"{_('Fond de caisse')}: {fond / 100:.2f} EUR")
-        footer.append(f"{_('Entrees especes')}: {entrees / 100:.2f} EUR")
-        if sorties:
-            footer.append(f"{_('Sorties especes')}: -{sorties / 100:.2f} EUR")
-        footer.append(f"{_('Solde caisse')}: {solde / 100:.2f} EUR")
+    chiffre_affaires_ttc = rapport_du_service.get("chiffre_affaires", {}).get(
+        "total_ttc_en_centimes", 0
+    )
+    nombre_d_operations = rapport_du_service.get("en_tete", {}).get(
+        "nombre_de_ventes", 0
+    )
 
-    ligne_des_offerts = _ligne_des_offerts(offerts)
-    if ligne_des_offerts:
-        footer.append(ligne_des_offerts)
-    footer.extend(_lignes_du_non_monetaire(non_monetaire))
+    # Sous le total : les lignes a part (recharges, cartes videes, ecarts), puis
+    # l'ouverture, l'impression et le tiroir.
+    # / Under the total: separate lines, then opening, printing and the drawer.
+    footer = _lignes_a_part_sous_le_total(rapport_du_service.get("reconciliation"))
+    footer.extend(
+        [
+            f"{_('Ouverture')}: {date_ouverture}",
+            f"{_('Impression')}: {maintenant.strftime(FORMAT_DE_DATE_DU_PIED)}",
+            "",
+        ]
+    )
+    footer.extend(
+        _lignes_du_tiroir_du_rapport(rapport_du_service.get("caisse_especes"))
+    )
+    footer.extend(_lignes_des_offerts_du_rapport(rapport_du_service.get("offerts")))
+    footer.extend(_lignes_des_points_du_rapport(rapport_du_service.get("points")))
 
     return {
         "header": {
             "title": _("TICKET X"),
             "subtitle": _("Consultation en cours"),
-            "date": now.strftime("%d/%m/%Y %H:%M"),
+            "date": maintenant.strftime("%d/%m/%Y %H:%M"),
         },
         "articles": articles,
         "total": {
-            "amount": totaux_par_moyen.get("total", 0),
-            "label": f"{nb_transactions} {_('transactions')}",
+            "amount": chiffre_affaires_ttc,
+            "label": f"{_('Opérations numérotées')}: {nombre_d_operations}",
         },
         "qrcode": None,
         "footer": footer,
     }
 
 
+def _quantite_lisible_sur_un_ticket(quantite_en_texte):
+    """
+    Une quantite du rapport (texte d'un Decimal, ex. « 2.000 ») ecrite sur un ticket :
+    un entier sans decimale, sinon deux decimales.
+    / A report quantity written on a ticket: integer, otherwise two decimals.
+    """
+    quantite = Decimal(quantite_en_texte or "0")
+    if quantite == quantite.to_integral_value():
+        return int(quantite)
+    return f"{quantite:.2f}"
+
+
+def _lignes_des_offerts_du_rapport(section_offerts):
+    """
+    Lignes de pied des offerts, lues dans la section « offerts » du rapport d'une
+    cloture unique : « Offerts: N art., X.XX EUR » sur une ligne si elle tient dans
+    les 32 caracteres du ticket ; sinon repliee en deux lignes, « Offerts: N art. »
+    puis « Valeur offerte: X.XX EUR ». Aucune ligne s'il n'y a pas d'offert.
+    Hors argent : cette valeur n'entre jamais dans le TOTAL du ticket.
+    / Footer lines of the GIFT button: one line if it fits 32 chars, otherwise
+    folded into two lines. Empty without gifts.
+
+    :param section_offerts: `rapport_json["offerts"]` (ou None)
+    :return: liste de lignes (vide sans offert)
+    """
+    if not section_offerts or not section_offerts.get("par_produit"):
+        return []
+    quantite_affichee = _quantite_lisible_sur_un_ticket(section_offerts.get("quantite"))
+    valeur_en_centimes = section_offerts.get("valeur_catalogue_en_centimes", 0)
+    valeur_en_euros = f"{valeur_en_centimes / 100:.2f}"
+    ligne_des_articles = f"{_('Offerts')}: {quantite_affichee} {_('art.')}"
+    ligne_entiere = f"{ligne_des_articles}, {valeur_en_euros} EUR"
+    if len(ligne_entiere) <= LARGEUR_D_UNE_LIGNE_DE_TICKET:
+        return [ligne_entiere]
+    return [
+        ligne_des_articles,
+        _ligne_de_montant_du_pied(_("Valeur offerte"), valeur_en_centimes),
+    ]
+
+
+def _lignes_des_points_du_rapport(section_points):
+    """
+    Lignes de pied des ventes en points ou en temps, une par monnaie, lues dans la
+    section « points » du rapport d'une cloture unique : « Points fidélité (hors
+    argent): 300.00 ». Le rapport ne garde pas le nombre d'articles par monnaie : il
+    n'est pas imprime. Hors argent : jamais dans le TOTAL du ticket.
+    / Footer lines of points/time sales, one per currency, from the single closure
+    report. The report keeps no article count per currency.
+
+    :param section_points: `rapport_json["points"]` (ou None), clé = uuid de la monnaie
+    """
+    lignes = []
+    if not section_points:
+        return lignes
+    monnaies_triees_par_nom = sorted(
+        section_points.values(), key=_nom_d_une_monnaie_du_rapport
+    )
+    for monnaie in monnaies_triees_par_nom:
+        montant_affiche = f"{monnaie.get('total_en_centiemes', 0) / 100:.2f}"
+        ligne_de_la_monnaie = (
+            f"{monnaie.get('nom', '')} ({_('hors argent')}): {montant_affiche}"
+        )
+        # Trop large pour le ticket : la mention « hors argent » est retirée (le
+        # nom de la monnaie de points suffit) ; si c'est encore trop large, le nom
+        # est tronqué pour que le montant reste entier.
+        # / Too wide for the ticket: the "hors argent" mention is dropped; if still
+        # too wide, the name is cut so the amount stays whole.
+        if len(ligne_de_la_monnaie) > LARGEUR_D_UNE_LIGNE_DE_TICKET:
+            fin_de_la_ligne = f": {montant_affiche}"
+            place_pour_le_nom = LARGEUR_D_UNE_LIGNE_DE_TICKET - len(fin_de_la_ligne)
+            if place_pour_le_nom < 0:
+                place_pour_le_nom = 0
+            nom_tronque = monnaie.get("nom", "")[:place_pour_le_nom]
+            ligne_de_la_monnaie = f"{nom_tronque}{fin_de_la_ligne}"
+        lignes.append(ligne_de_la_monnaie)
+    return lignes
+
+
+def _nom_d_une_monnaie_du_rapport(monnaie):
+    """La cle de tri d'une monnaie du rapport : son nom. / Sort key: the name."""
+    return monnaie.get("nom", "")
+
+
+def _lignes_des_moyens_du_rapport(section_chiffre_affaires):
+    """
+    Les lignes des tickets X et Z au-dessus du TOTAL : le chiffre d'affaires par
+    moyen de paiement (`chiffre_affaires.par_moyen` du rapport), une ligne par moyen
+    non nul. Ordre : celui de l'écran (`codes_des_moyens_dans_l_ordre`) : especes,
+    carte bancaire, cheque, les autres moyens d'argent (par code), puis chaque moyen
+    cashless (par code), puis « plusieurs moyens ».
+    Les noms des moyens viennent de leur seule source (`nom_du_moyen_de_paiement`),
+    lus par le code : « Espèces », « Carte bancaire », « Chèque » partout. « Plusieurs
+    moyens » garde le libellé du rapport. Ces lignes s'additionnent en chiffre d'affaires TTC (le
+    TOTAL du ticket) : une recharge n'y est pas, elle a sa ligne a part, sous le total.
+    / Ticket lines above the TOTAL: revenue by payment method, one per non-zero
+    method; they add up to the TOTAL. A top-up is not there.
+
+    :param section_chiffre_affaires: `rapport["chiffre_affaires"]`
+    :return: liste de lignes de ticket
+    """
+    par_moyen = section_chiffre_affaires.get("par_moyen", {})
+    codes_dans_l_ordre_du_ticket = codes_des_moyens_dans_l_ordre(par_moyen)
+
+    lignes = []
+    for code_du_moyen in codes_dans_l_ordre_du_ticket:
+        ligne_du_moyen = par_moyen[code_du_moyen]
+        montant_du_moyen = ligne_du_moyen.get("total_en_centimes", 0)
+        if not montant_du_moyen:
+            continue
+        if code_du_moyen == CLE_PLUSIEURS_MOYENS:
+            nom_du_moyen = ligne_du_moyen.get("libelle", code_du_moyen)
+        else:
+            nom_du_moyen = nom_du_moyen_de_paiement(code_du_moyen)
+        lignes.append(
+            {
+                "name": nom_du_moyen,
+                "qty": 1,
+                "price": montant_du_moyen,
+                "total": montant_du_moyen,
+            }
+        )
+    return lignes
+
+
+def _lignes_a_part_sous_le_total(section_reconciliation):
+    """
+    Les lignes a part, sous le TOTAL des tickets X et Z : recharges (montant brut),
+    recharges remboursees, cartes videes, ecarts d'encaissement, lues dans la
+    reconciliation du rapport, chacune seulement si elle est non nulle. Ce n'est pas
+    du chiffre d'affaires : elles ne sont pas dans le total. Montants signes (une
+    recharge remboursee ou une carte videe rend de l'argent : negatif).
+    / Separate lines under the TOTAL: gross top-ups, refunded top-ups, emptied
+    cards, collection gaps, each only when non-zero. Not revenue. Signed amounts.
+
+    :param section_reconciliation: `rapport["reconciliation"]` (ou None ; une
+        ancienne cloture n'a pas les recharges remboursees)
+    :return: liste de textes
+    """
+    lignes = []
+    if not section_reconciliation:
+        return lignes
+    recharges = section_reconciliation.get("recharges_en_centimes", 0)
+    recharges_remboursees = section_reconciliation.get(
+        "recharges_remboursees_en_centimes", 0
+    )
+    cartes_videes = section_reconciliation.get("cartes_videes_en_centimes", 0)
+    ecarts = section_reconciliation.get("ecarts_d_encaissement_en_centimes", 0)
+    if recharges:
+        lignes.append(_ligne_de_montant_du_pied(_("Recharges"), recharges))
+    if recharges_remboursees:
+        lignes.append(
+            _ligne_de_montant_du_pied(_("Recharges remboursées"), recharges_remboursees)
+        )
+    if cartes_videes:
+        lignes.append(_ligne_de_montant_du_pied(_("Cartes vidées"), cartes_videes))
+    if ecarts:
+        lignes.append(_ligne_de_montant_du_pied(_("Écarts d'encaissement"), ecarts))
+    return lignes
+
+
 def formatter_ticket_cloture(cloture):
     """
-    Formate un ticket de cloture de caisse (Z-ticket).
-    / Formats a cash register closure ticket (Z-ticket).
+    Formate le ticket Z d'une cloture unique, depuis le rapport stocke dans la
+    cloture (`rapport_json`). La forme du dictionnaire est celle que lisent les
+    imprimantes (`escpos_builder.py`, `sunmi_inner.py`).
+    / Formats the Z ticket of a single closure from its stored report, in the shape
+    the printers read.
 
     LOCALISATION : laboutik/printing/formatters.py
 
-    :param cloture: laboutik.ClotureCaisse
+    CONTENU :
+    - en-tete : « CLOTURE CAISSE », le point de vente d'ou le Z est lance, la fin ;
+    - au-dessus du total : le chiffre d'affaires par moyen de paiement, une ligne par
+      moyen non nul ; elles s'additionnent en total ;
+    - total : le chiffre d'affaires TTC, et le nombre d'operations numerotees ;
+    - pied : les lignes a part (recharges, cartes videes, ecarts d'encaissement,
+      seulement si non nulles), le numero de la cloture, debut et fin de la periode,
+      la ligne des offerts, une ligne par monnaie de points (hors argent).
+    Les heures s'ecrivent dans le fuseau fige dans l'en-tete du rapport : un Z garde
+    les heures de son lieu, quel que soit le fuseau du serveur.
+    / Header, one line per payment method, total = revenue incl. tax, footer with
+      the closure number, the period, gifts and points. Hours in the report's frozen
+      time zone.
+
+    APPELE PAR : laboutik/views.py, `CaisseViewSet.cloturer`.
+
+    :param cloture: comptabilite.ClotureCaisse
     :return: dict ticket_data
     """
-    # Dates du service
-    # / Service dates
-    date_ouverture = ""
-    if cloture.datetime_ouverture:
-        date_ouverture = timezone.localtime(cloture.datetime_ouverture).strftime(
-            "%d/%m/%Y %H:%M"
-        )
-
-    date_cloture = ""
-    if cloture.datetime_cloture:
-        date_cloture = timezone.localtime(cloture.datetime_cloture).strftime(
-            "%d/%m/%Y %H:%M"
-        )
-
-    # Totaux par moyen de paiement (en centimes → articles pour affichage)
-    # / Totals by payment method (in cents → articles for display)
-    articles = []
-    if cloture.total_especes:
-        articles.append(
-            {
-                "name": _("Especes"),
-                "qty": 1,
-                "price": cloture.total_especes,
-                "total": cloture.total_especes,
-            }
-        )
-    if cloture.total_carte_bancaire:
-        articles.append(
-            {
-                "name": _("Carte bancaire"),
-                "qty": 1,
-                "price": cloture.total_carte_bancaire,
-                "total": cloture.total_carte_bancaire,
-            }
-        )
-    if cloture.total_cashless:
-        articles.append(
-            {
-                "name": _("Cashless"),
-                "qty": 1,
-                "price": cloture.total_cashless,
-                "total": cloture.total_cashless,
-            }
-        )
-    # Le cheque figure au meme titre que les autres moyens : sans lui, le total imprime
-    # ne correspond pas aux lignes imprimees, sur un justificatif papier.
-    # / Checks appear like the other methods: without them the printed total does not
-    #   match the printed lines, on a paper receipt.
-    if cloture.total_cheque:
-        articles.append(
-            {
-                "name": _("Chèque"),
-                "qty": 1,
-                "price": cloture.total_cheque,
-                "total": cloture.total_cheque,
-            }
-        )
-
-    pv_name = cloture.point_de_vente.name if cloture.point_de_vente else ""
-
-    footer = [
-        f"{_('Ouverture')}: {date_ouverture}",
-        f"{_('Fermeture')}: {date_cloture}",
-    ]
     rapport = cloture.rapport_json or {}
-    ligne_des_offerts = _ligne_des_offerts(rapport.get("offerts"))
-    if ligne_des_offerts:
-        footer.append(ligne_des_offerts)
-    footer.extend(_lignes_du_non_monetaire(rapport.get("non_monetaire")))
+
+    fuseau_du_rapport = fuseau_d_affichage_du_rapport(rapport)
+    debut_dans_le_fuseau = timezone.localtime(cloture.datetime_debut, fuseau_du_rapport)
+    fin_dans_le_fuseau = timezone.localtime(cloture.datetime_fin, fuseau_du_rapport)
+    # L'en-tête garde la date longue ; le pied, la date courte (32 caractères).
+    # / The header keeps the long date; the footer the short one (32 chars).
+    date_de_fin = fin_dans_le_fuseau.strftime("%d/%m/%Y %H:%M")
+    date_courte_de_debut = debut_dans_le_fuseau.strftime(FORMAT_DE_DATE_DU_PIED)
+    date_courte_de_fin = fin_dans_le_fuseau.strftime(FORMAT_DE_DATE_DU_PIED)
+
+    articles = _lignes_des_moyens_du_rapport(rapport.get("chiffre_affaires", {}))
+
+    chiffre_affaires_ttc = rapport.get("chiffre_affaires", {}).get(
+        "total_ttc_en_centimes", 0
+    )
+
+    nom_du_point_de_vente = ""
+    if cloture.point_de_vente:
+        nom_du_point_de_vente = cloture.point_de_vente.name
+
+    # Sous le total : les lignes a part (recharges, cartes videes, ecarts), puis le
+    # numero de la cloture et la periode.
+    # / Under the total: separate lines, then the closure number and the period.
+    footer = _lignes_a_part_sous_le_total(rapport.get("reconciliation"))
+    footer += [
+        f"{_('Clôture n°')} {cloture.numero_sequentiel}",
+        f"{_('Début de période')}: {date_courte_de_debut}",
+        f"{_('Fermeture')}: {date_courte_de_fin}",
+    ]
+    footer.extend(_lignes_des_offerts_du_rapport(rapport.get("offerts")))
+    footer.extend(_lignes_des_points_du_rapport(rapport.get("points")))
 
     return {
         "header": {
             "title": _("CLOTURE CAISSE"),
-            "subtitle": pv_name,
-            "date": date_cloture,
+            "subtitle": nom_du_point_de_vente,
+            "date": date_de_fin,
         },
         "articles": articles,
         "total": {
-            "amount": cloture.total_general,
-            "label": f"{cloture.nombre_transactions} {_('transactions')}",
+            "amount": chiffre_affaires_ttc,
+            "label": f"{_('Opérations numérotées')}: {cloture.nombre_transactions}",
         },
         "qrcode": None,
         "footer": footer,

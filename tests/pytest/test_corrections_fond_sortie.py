@@ -5,10 +5,18 @@ tests/pytest/test_corrections_fond_sortie.py — Session 17 : corrections, fond 
 Couvre :
 - Correction moyen de paiement (ESP/CB/CHQ) avec trace d'audit CorrectionPaiement
 - Garde NFC interdit (ancien et nouveau moyen)
-- Garde post-cloture interdit
+- Garde post-cloture interdit (la vente est couverte par la derniere cloture
+  journaliere du lieu, `comptabilite.ClotureCaisse`)
 - Garde raison obligatoire
 - Fond de caisse GET/POST
 - Sortie de caisse avec ventilation et total recalcule serveur
+
+Seule une vente reglee se corrige : chaque ligne corrigee ici appartient a une vente
+reglee, ecrite par le service de vente (`fabriques_vente.py`). La cloture journaliere
+est creee par la vraie tache (`comptabilite.tasks.generer_cloture_pour_tenant`) : elle
+lit toutes les ventes du lieu, d'ou le schema dedie de ce fichier.
+/ Only a settled sale is corrected: every corrected line here belongs to a settled
+sale written by the sale service. The daily closure comes from the real task.
 
 Lancement / Run:
     docker exec lespass_django poetry run pytest tests/pytest/test_corrections_fond_sortie.py -v
@@ -26,17 +34,20 @@ import uuid as uuid_module
 from decimal import Decimal
 
 from django.db import connection
-from django.utils import timezone
+from django.utils import translation
 from django_tenants.test.cases import FastTenantTestCase
 from django_tenants.test.client import TenantClient
 
+import comptabilite.tasks
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import (
-    LigneArticle, Price, PriceSold, Product, ProductSold,
+    Price, PriceSold, Product, ProductSold,
     SaleOrigin, PaymentMethod, CategorieProduct,
 )
+from comptabilite.models import ClotureCaisse
+from fabriques_vente import fabriquer_vente_encaissee
 from laboutik.models import (
-    ClotureCaisse, CorrectionPaiement, LaboutikConfiguration,
+    CorrectionPaiement, LaboutikConfiguration,
     PointDeVente, SortieCaisse,
 )
 
@@ -68,11 +79,19 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         # module_caisse exige module_monnaie_locale : on active les deux.
         # / Enable V2 POS on this test tenant: POS routes are guarded by
         # / module_caisse. module_caisse requires module_monnaie_locale.
+        # Aucun e-mail de rapport : la cloture journaliere d'un test n'envoie rien.
+        # / No report e-mail: a test's daily closure sends nothing.
         from BaseBillet.models import Configuration
         config = Configuration.get_solo()
         config.module_monnaie_locale = True
         config.module_caisse = True
+        config.rapport_emails = ''
         config.save()
+
+        # Le singleton de la caisse doit exister en base (tests/PIEGES.md 9.86) : il
+        # porte la cle des empreintes des ventes et des clotures.
+        # / The register singleton must exist in the database (fingerprint key).
+        LaboutikConfiguration.get_solo().save()
 
         # Categorie POS / POS category
         self.categorie = CategorieProduct.objects.create(
@@ -122,13 +141,13 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         self.c.force_login(self.admin)
 
     # ----------------------------------------------------------------------- #
-    #  Helper : creer une LigneArticle directement en base                     #
-    #  Helper: create a LigneArticle directly in the database                  #
+    #  Helpers : une vente reglee, une cloture journaliere                     #
+    #  Helpers: a settled sale, a daily closure                                #
     # ----------------------------------------------------------------------- #
 
-    def _creer_ligne_directe(self, payment_method_code, amount_centimes=500):
-        """Cree une LigneArticle avec le moyen de paiement specifie.
-        / Creates a LigneArticle with the specified payment method."""
+    def _creer_tarif_vendu_de_la_biere(self):
+        """Le tarif vendu (5,00 €) qu'une ligne de biere reference.
+        / The sold price (5.00 €) a beer line points to."""
         product_sold = ProductSold.objects.create(
             product=self.produit,
         )
@@ -138,19 +157,45 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
             qty_solded=1,
             prix=self.prix.prix,
         )
-        uuid_tx = uuid_module.uuid4()
-        ligne = LigneArticle.objects.create(
-            pricesold=price_sold,
-            qty=1,
-            amount=amount_centimes,
-            payment_method=payment_method_code,
-            sale_origin=SaleOrigin.LABOUTIK,
-            uuid_transaction=uuid_tx,
+        return price_sold
+
+    def _creer_ligne_d_une_vente_reglee(self, payment_method_code, amount_centimes=500):
+        """Une vente de caisse reglee, ecrite par le service de vente : une biere
+        (TVA 0) payee avec le moyen donne. La ligne porte aussi ses champs
+        historiques (moyen, identifiant du paiement, point de vente), comme une
+        vente faite a la caisse. Rend la ligne.
+        / A settled register sale written by the sale service: one beer paid with
+        the given method. Returns the line."""
+        vente = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
             point_de_vente=self.pv,
-            vat=Decimal('0.00'),
-            total_ht=amount_centimes,
+            articles=[
+                {
+                    'pricesold': self._creer_tarif_vendu_de_la_biere(),
+                    'quantite': Decimal('1'),
+                    'prix_unitaire': amount_centimes,
+                    'taux_tva': Decimal('0'),
+                    'payment_method': payment_method_code,
+                    'uuid_transaction': uuid_module.uuid4(),
+                    'point_de_vente': self.pv,
+                },
+            ],
+            reglements=[
+                {'moyen': payment_method_code, 'montant': amount_centimes},
+            ],
         )
-        return ligne
+        return vente.articles.get()
+
+    def _cloturer_la_journee(self):
+        """Le « Z de fin de service » : la cloture journaliere du lieu, maintenant,
+        par la vraie tache. Rend la cloture creee.
+        / The end-of-service Z: the venue's daily closure, now, by the real task."""
+        uuid_de_la_cloture = comptabilite.tasks.generer_cloture_pour_tenant(
+            schema_name=self.tenant.schema_name,
+            niveau=ClotureCaisse.NIVEAU_JOURNALIER,
+        )
+        assert uuid_de_la_cloture is not None, "La cloture aurait du etre creee."
+        return ClotureCaisse.objects.get(uuid=uuid_de_la_cloture)
 
     # ----------------------------------------------------------------------- #
     #  Tests correction moyen de paiement                                      #
@@ -160,7 +205,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
     def test_correction_espece_vers_cb(self):
         """Correction ESP → CB : 200, CorrectionPaiement creee, payment_method change.
         / Correction CASH → CC: 200, CorrectionPaiement created, payment_method changed."""
-        ligne = self._creer_ligne_directe(PaymentMethod.CASH)
+        ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.CASH)
 
         response = self.c.post('/laboutik/paiement/corriger_moyen_paiement/', {
             'ligne_uuid': str(ligne.uuid),
@@ -189,7 +234,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
     def test_correction_cb_vers_cheque(self):
         """Correction CB → CHQ : 200, CorrectionPaiement creee.
         / Correction CC → CHECK: 200, CorrectionPaiement created."""
-        ligne = self._creer_ligne_directe(PaymentMethod.CC)
+        ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.CC)
 
         response = self.c.post('/laboutik/paiement/corriger_moyen_paiement/', {
             'ligne_uuid': str(ligne.uuid),
@@ -206,7 +251,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         Les paiements cashless sont lies a des Transactions fedow_core.
         / NFC payment correction (LOCAL_EURO): 400.
         Cashless payments are linked to fedow_core Transactions."""
-        ligne = self._creer_ligne_directe(PaymentMethod.LOCAL_EURO)
+        ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.LOCAL_EURO)
 
         response = self.c.post('/laboutik/paiement/corriger_moyen_paiement/', {
             'ligne_uuid': str(ligne.uuid),
@@ -215,6 +260,11 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         })
 
         assert response.status_code == 400
+        with translation.override(response['Content-Language']):
+            message_de_refus_attendu = translation.gettext(
+                'Les paiements cashless ne peuvent pas etre modifies'
+            )
+        assert message_de_refus_attendu in response.content.decode()
         # La LigneArticle n'a PAS ete modifiee
         # / The LigneArticle was NOT modified
         ligne.refresh_from_db()
@@ -225,7 +275,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         On ne peut pas convertir en cashless apres coup.
         / Conversion to NFC (LOCAL_EURO): 400.
         Cannot convert to cashless after the fact."""
-        ligne = self._creer_ligne_directe(PaymentMethod.CASH)
+        ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.CASH)
 
         response = self.c.post('/laboutik/paiement/corriger_moyen_paiement/', {
             'ligne_uuid': str(ligne.uuid),
@@ -239,27 +289,15 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
 
     def test_correction_post_cloture_refuse(self):
         """Correction d'une vente couverte par une cloture : 400.
-        Les lignes couvertes par une cloture journaliere sont immuables (LNE Ex.4).
+        Les ventes couvertes par la cloture journaliere sont immuables (LNE Ex.4).
         / Correction of a sale covered by a closure: 400.
-        Lines covered by a daily closure are immutable (LNE req. 4)."""
-        ligne = self._creer_ligne_directe(PaymentMethod.CASH)
+        Sales covered by the daily closure are immutable (LNE req. 4)."""
+        ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.CASH)
 
-        # Creer une cloture qui couvre cette ligne
-        # / Create a closure that covers this line
-        ClotureCaisse.objects.create(
-            point_de_vente=self.pv,
-            responsable=self.admin,
-            datetime_ouverture=ligne.datetime - timezone.timedelta(minutes=5),
-            datetime_cloture=ligne.datetime + timezone.timedelta(minutes=5),
-            total_especes=500,
-            total_carte_bancaire=0,
-            total_cashless=0,
-            total_general=500,
-            nombre_transactions=1,
-            niveau=ClotureCaisse.JOURNALIERE,
-            numero_sequentiel=1,
-            total_perpetuel=500,
-        )
+        # La cloture journaliere du lieu couvre cette vente : c'est sa derniere vente.
+        # / The venue's daily closure covers this sale: it is its last sale.
+        cloture_journaliere = self._cloturer_la_journee()
+        assert cloture_journaliere.numero_derniere_vente == ligne.vente.numero
 
         response = self.c.post('/laboutik/paiement/corriger_moyen_paiement/', {
             'ligne_uuid': str(ligne.uuid),
@@ -268,13 +306,18 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         })
 
         assert response.status_code == 400
+        with translation.override(response['Content-Language']):
+            message_de_refus_attendu = translation.gettext(
+                'Cette vente est couverte par une cloture. Modification interdite.'
+            )
+        assert message_de_refus_attendu in response.content.decode()
         ligne.refresh_from_db()
         assert ligne.payment_method == PaymentMethod.CASH
 
     def test_correction_raison_optionnelle_acceptee(self):
         """Correction sans raison : 200. La raison est optionnelle.
         / Correction without reason: 200. Reason is optional."""
-        ligne = self._creer_ligne_directe(PaymentMethod.CASH)
+        ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.CASH)
 
         # Raison vide → acceptee
         # / Empty reason → accepted
@@ -295,25 +338,28 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
     def test_correction_multi_articles_toute_la_transaction(self):
         """Correction d'une transaction avec 3 articles : TOUTES les lignes sont corrigees.
         / Correction of a transaction with 3 articles: ALL lines are corrected."""
-        # Creer 3 lignes avec le meme uuid_transaction (1 panier = 3 articles)
-        # / Create 3 lines with the same uuid_transaction (1 cart = 3 articles)
+        # Une vente reglee de 3 articles, payes ensemble en especes : 3 lignes avec
+        # le meme uuid_transaction (1 panier = 3 articles), un reglement de 3 x 500.
+        # / One settled sale of 3 items paid together in cash: same uuid_transaction.
         uuid_tx_commun = uuid_module.uuid4()
-        lignes = []
-        for i in range(3):
-            product_sold = ProductSold.objects.create(product=self.produit)
-            price_sold = PriceSold.objects.create(
-                productsold=product_sold, price=self.prix,
-                qty_solded=1, prix=self.prix.prix,
-            )
-            ligne = LigneArticle.objects.create(
-                pricesold=price_sold, qty=1, amount=500,
-                payment_method=PaymentMethod.CASH,
-                sale_origin=SaleOrigin.LABOUTIK,
-                uuid_transaction=uuid_tx_commun,
-                point_de_vente=self.pv,
-                vat=Decimal('0.00'), total_ht=500,
-            )
-            lignes.append(ligne)
+        articles_du_panier = []
+        for _numero_de_l_article in range(3):
+            articles_du_panier.append({
+                'pricesold': self._creer_tarif_vendu_de_la_biere(),
+                'quantite': Decimal('1'),
+                'prix_unitaire': 500,
+                'taux_tva': Decimal('0'),
+                'payment_method': PaymentMethod.CASH,
+                'uuid_transaction': uuid_tx_commun,
+                'point_de_vente': self.pv,
+            })
+        vente_du_panier = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            point_de_vente=self.pv,
+            articles=articles_du_panier,
+            reglements=[{'moyen': PaymentMethod.CASH, 'montant': 1500}],
+        )
+        lignes = list(vente_du_panier.articles.order_by('datetime'))
 
         # Corriger en envoyant l'UUID de la premiere ligne
         # / Correct by sending the first line's UUID
@@ -342,7 +388,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
     def test_correction_meme_moyen_refuse(self):
         """Correction vers le meme moyen : 400. Pas de correction sans changement.
         / Correction to the same method: 400. No correction without change."""
-        ligne = self._creer_ligne_directe(PaymentMethod.CASH)
+        ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.CASH)
 
         response = self.c.post('/laboutik/paiement/corriger_moyen_paiement/', {
             'ligne_uuid': str(ligne.uuid),
@@ -351,6 +397,11 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         })
 
         assert response.status_code == 400
+        with translation.override(response['Content-Language']):
+            message_de_refus_attendu = translation.gettext(
+                'Le moyen de paiement est deja identique'
+            )
+        assert message_de_refus_attendu in response.content.decode()
 
     # ----------------------------------------------------------------------- #
     #  Tests fond de caisse                                                    #
@@ -541,7 +592,7 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
     def test_correction_non_authentifie_refuse(self):
         """POST correction sans session admin : 403 (HasLaBoutikAccess).
         / POST correction without admin session: 403 (HasLaBoutikAccess)."""
-        ligne = self._creer_ligne_directe(PaymentMethod.CASH)
+        ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.CASH)
 
         # Client HTTP sans session (pas de force_login)
         # / HTTP client without session (no force_login)

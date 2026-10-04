@@ -5,46 +5,49 @@ COMPOSANT « PLAN COMPLET ? »
 
 LOCALISATION : Administration/templates/admin/comptable/plan_complet.html
 
-Affiche ce qui manque au plan comptable pour que l'export comptable passe.
 Inclus en tete des trois ecrans du plan : plan comptable, comptes des moyens de
 paiement, comptes des monnaies (gabarits *_before.html du meme dossier).
 
+« Plan complet ? » relit tout l'historique du lieu (lignes, reglements, taux) : il
+n'est PAS calcule a l'ouverture de l'ecran.
+
 FLUX :
-1. changelist_view de l'admin (Administration/admin/laboutik.py) appelle
-   laboutik/plan_comptable.py : ce_qui_manque_pour_exporter() ;
-2. la liste arrive ici dans `manques_du_plan` : chaque manque a une phrase et un lien
-   vers l'ecran qui le regle ;
-3. liste vide : message vert « Le plan est complet : l'export est possible ».
-/ The admin changelist_view passes `manques_du_plan`; empty list: green message.
+1. clic sur « Verifier le plan » : requete HTMX GET vers
+   CompteComptableAdmin.verifier_le_plan (Administration/admin/laboutik.py) ;
+2. la vue appelle laboutik/plan_comptable.py : ce_qui_manque_pour_exporter() ;
+3. le verdict (plan_complet_verdict.html) remplace la zone #plan-complet-verdict :
+   les manques avec un lien « Regler », ou le message vert.
+/ "Check the plan" sends an HTMX GET; the verdict replaces #plan-complet-verdict.
 {% endcomment %}
 <div class="px-4 pt-4" data-testid="plan-complet">
     {% component "unfold/components/card.html" with title=_("Plan complet ?") %}
-        <div aria-live="polite">
-            {% if manques_du_plan %}
-                <p class="text-sm mb-2">
-                    {% translate "Il manque des choses pour faire l'export comptable :" %}
-                </p>
-                <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;">
-                    {% for manque in manques_du_plan %}
-                        <li data-testid="plan-complet-manque"
-                            style="color: #c2410c; border-left: 4px solid #ea580c; padding: 4px 10px;">
-                            <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">warning</span>
-                            {{ manque.phrase }}
-                            {# Le lien est répété à chaque manque : son aria-label reprend la phrase, pour qu'un lecteur d'écran sache ce qu'il règle. #}
-                            {# / The link repeats on each item: its aria-label carries the sentence for screen readers. #}
-                            <a href="{{ manque.lien }}"
-                               aria-label="{% translate 'Régler' %} : {{ manque.phrase }}"
-                               data-testid="plan-complet-regler"
-                               style="text-decoration: underline; margin-left: 6px;">{% translate "Régler" %}</a>
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p data-testid="plan-complet-ok" style="color: #15803d; font-weight: 600; margin: 0;">
-                    <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">check_circle</span>
-                    {% translate "Le plan est complet : l'export est possible" %}
-                </p>
-            {% endif %}
+        <div class="flex flex-col gap-3">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <span class="text-sm text-font-subtle-light dark:text-font-subtle-dark">
+                    {% translate "Vérifie que chaque produit, moyen de paiement, monnaie et taux de TVA utilisés a son compte, pour que l'export comptable passe." %}
+                </span>
+                {# Pendant la vérification (elle relit tout l'historique) : le bouton est #}
+                {# désactivé (pas de double clic) et un texte de chargement s'affiche. #}
+                {# / During the check: the button is disabled and a loading text shows. #}
+                <span id="plan-complet-chargement" class="htmx-indicator text-sm"
+                      role="status" data-testid="plan-complet-chargement">
+                    {% translate "Vérification en cours…" %}
+                </span>
+                <button type="button"
+                        hx-get="{% url 'staff_admin:laboutik_comptecomptable_verifier_le_plan' %}"
+                        hx-target="#plan-complet-verdict"
+                        hx-swap="innerHTML"
+                        hx-disabled-elt="this"
+                        hx-indicator="#plan-complet-chargement"
+                        class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
+                        data-testid="plan-complet-verifier">
+                    <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">fact_check</span>
+                    {% translate "Vérifier le plan" %}
+                </button>
+            </div>
+            {# Le verdict arrive ici au clic ; le lecteur d'écran l'annonce. #}
+            {# / The verdict lands here on click; screen readers announce it. #}
+            <div id="plan-complet-verdict" aria-live="polite" data-testid="plan-complet-verdict"></div>
         </div>
     {% endcomponent %}
 </div>

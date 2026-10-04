@@ -32,7 +32,9 @@ Fiche : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-E-plan-comptable.md §2, §3.
   nature, avec une aide par nature ; l'écran des monnaies liste les monnaies acceptées
   par le lieu ; le code journal est dans le formulaire du point de vente.
 - « Plan complet ? » (`ce_qui_manque_pour_exporter`) : ce qui manque pour exporter, et
-  son composant en tête des trois écrans du plan. Son nombre de requêtes ne grandit pas
+  son composant en tête des trois écrans du plan. Il relit tout l'historique du lieu :
+  il est calculé au clic sur le bouton « Vérifier le plan », jamais à l'ouverture d'un
+  écran. Son nombre de requêtes ne grandit pas
   avec le nombre de produits vendus ; les ventes en points n'y comptent pas ; un compte
   du plan par défaut supprimé est nommé.
 - Le formulaire du compte d'une monnaie (`MappingMonnaieForm`) : la liste des monnaies,
@@ -66,7 +68,6 @@ import re  # noqa: E402
 import uuid  # noqa: E402
 from datetime import timedelta  # noqa: E402
 from decimal import Decimal  # noqa: E402
-from html.parser import HTMLParser  # noqa: E402
 from io import StringIO  # noqa: E402
 from types import SimpleNamespace  # noqa: E402
 from unittest.mock import MagicMock, patch  # noqa: E402
@@ -123,6 +124,12 @@ from fabriques_panier import (  # noqa: E402
     creer_utilisateur,
     identifiant_unique,
     taches_celery_enregistrees,
+)
+from fabriques_ecran import (  # noqa: E402
+    LecteurDesLiens,
+    attributs_des_elements,
+    texte_sans_espaces_en_trop,
+    textes_des_elements,
 )
 from fabriques_vente import creer_tarif_vendu, verifier_egalites  # noqa: E402
 from fedow_connect.models import FedowConfig  # noqa: E402
@@ -610,74 +617,23 @@ def _navigateur_d_un_admin_du_lieu(lieu):
     return navigateur, administrateur
 
 
-def _texte_sans_espaces_en_trop(texte):
+def _verdict_du_bouton_verifier_le_plan(navigateur, contenu_de_l_ecran):
     """
-    Le texte avec ses espaces (y compris insécables) ramenés à un seul.
-    / The text with its spaces (non-breaking included) collapsed to one.
+    Clique le bouton « Vérifier le plan » d'un écran du plan, comme HTMX le fait : lit
+    son adresse (`hx-get`), la demande avec l'en-tête `HX-Request`, et rend le HTML
+    reçu (le verdict de « Plan complet ? »).
+    / Clicks the "Check the plan" button like HTMX does: reads its hx-get address,
+    requests it with the HX-Request header, returns the received HTML (the verdict).
     """
-    return " ".join(texte.replace("\xa0", " ").split())
+    boutons = attributs_des_elements(contenu_de_l_ecran, "plan-complet-verifier")
+    assert len(boutons) == 1, boutons
+    adresse_du_verdict = boutons[0].get("hx-get")
+    assert adresse_du_verdict, boutons[0]
 
+    reponse_du_verdict = navigateur.get(adresse_du_verdict, HTTP_HX_REQUEST="true")
 
-class _LecteurDesElementsParDataTestid(HTMLParser):
-    """
-    Lit une page HTML et garde le texte de chaque élément qui porte
-    `data-testid="<data_testid>"` (texte des enfants compris, entités décodées).
-    / Reads an HTML page and keeps the text of each element carrying that data-testid.
-    """
-
-    # Les balises sans balise de fin : elles ne changent pas la profondeur.
-    # / Void tags: they do not change the depth.
-    BALISES_SANS_FIN = {
-        "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
-        "source", "track", "wbr",
-    }
-
-    def __init__(self, data_testid):
-        super().__init__(convert_charrefs=True)
-        self.data_testid_cherche = data_testid
-        self.profondeur_dans_l_element = 0
-        self.texte_de_l_element_en_cours = []
-        self.textes_des_elements = []
-
-    def handle_starttag(self, balise, attributs):
-        if balise in self.BALISES_SANS_FIN:
-            return
-        if self.profondeur_dans_l_element > 0:
-            self.profondeur_dans_l_element += 1
-            return
-        for nom_de_l_attribut, valeur_de_l_attribut in attributs:
-            est_l_element_cherche = (
-                nom_de_l_attribut == "data-testid"
-                and valeur_de_l_attribut == self.data_testid_cherche
-            )
-            if est_l_element_cherche:
-                self.profondeur_dans_l_element = 1
-                self.texte_de_l_element_en_cours = []
-
-    def handle_endtag(self, balise):
-        if balise in self.BALISES_SANS_FIN:
-            return
-        if self.profondeur_dans_l_element == 0:
-            return
-        self.profondeur_dans_l_element -= 1
-        if self.profondeur_dans_l_element == 0:
-            texte_complet = " ".join(self.texte_de_l_element_en_cours)
-            self.textes_des_elements.append(_texte_sans_espaces_en_trop(texte_complet))
-
-    def handle_data(self, texte):
-        if self.profondeur_dans_l_element > 0:
-            self.texte_de_l_element_en_cours.append(texte)
-
-
-def _textes_des_elements(contenu_html, data_testid):
-    """
-    Le texte de chaque élément de la page qui porte ce `data-testid`, dans l'ordre.
-    / The text of each page element carrying this data-testid, in order.
-    """
-    lecteur = _LecteurDesElementsParDataTestid(data_testid)
-    lecteur.feed(contenu_html)
-    lecteur.close()
-    return lecteur.textes_des_elements
+    assert reponse_du_verdict.status_code == 200, adresse_du_verdict
+    return reponse_du_verdict.content.decode()
 
 
 def _phrases_des_manques(manques):
@@ -689,42 +645,6 @@ def _phrases_des_manques(manques):
     for manque in manques:
         phrases.append(manque["phrase"])
     return phrases
-
-
-class _LecteurDesLiens(HTMLParser):
-    """
-    Lit une page HTML et garde chaque lien `<a>` : son adresse, son `aria-label` et
-    son texte (entités décodées).
-    / Reads an HTML page and keeps each link: its address, aria-label and text.
-    """
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.liens = []
-        self.lien_en_cours = None
-
-    def handle_starttag(self, balise, attributs):
-        if balise != "a":
-            return
-        attributs_du_lien = dict(attributs)
-        self.lien_en_cours = {
-            "href": attributs_du_lien.get("href", ""),
-            "aria_label": attributs_du_lien.get("aria-label"),
-            "texte": [],
-        }
-
-    def handle_endtag(self, balise):
-        if balise != "a" or self.lien_en_cours is None:
-            return
-        self.lien_en_cours["texte"] = _texte_sans_espaces_en_trop(
-            " ".join(self.lien_en_cours["texte"])
-        )
-        self.liens.append(self.lien_en_cours)
-        self.lien_en_cours = None
-
-    def handle_data(self, texte):
-        if self.lien_en_cours is not None:
-            self.lien_en_cours["texte"].append(texte)
 
 
 def _noms_accessibles_des_liens_des_manques(contenu_html):
@@ -741,12 +661,12 @@ def _noms_accessibles_des_liens_des_manques(contenu_html):
     )
     noms_accessibles = []
     for element_du_manque in elements_des_manques:
-        lecteur = _LecteurDesLiens()
+        lecteur = LecteurDesLiens()
         lecteur.feed(element_du_manque)
         lecteur.close()
         for lien in lecteur.liens:
             if lien["aria_label"]:
-                noms_accessibles.append(_texte_sans_espaces_en_trop(lien["aria_label"]))
+                noms_accessibles.append(texte_sans_espaces_en_trop(lien["aria_label"]))
             else:
                 noms_accessibles.append(lien["texte"])
     return noms_accessibles
@@ -2305,11 +2225,11 @@ class TestPlanComptableUnique(FastTenantTestCase):
             CompteComptable.objects.values_list("nature_du_compte", flat=True)
         )
         for nature in natures_du_plan:
-            aides_de_la_nature = _textes_des_elements(contenu, f"aide-nature-{nature}")
+            aides_de_la_nature = textes_des_elements(contenu, f"aide-nature-{nature}")
             assert len(aides_de_la_nature) == 1, nature
             assert aides_de_la_nature[0] != "", nature
 
-        aide_des_ventes = _textes_des_elements(
+        aide_des_ventes = textes_des_elements(
             contenu, f"aide-nature-{CompteComptable.VENTE}"
         )[0]
         assert "association" in aide_des_ventes.lower(), aide_des_ventes
@@ -2386,7 +2306,7 @@ class TestPlanComptableUnique(FastTenantTestCase):
             (fed_de_l_ancien_fedow, gettext("fédérée"), "467000"),
         ]
         for monnaie, origine_attendue, numero_attendu in lignes_attendues:
-            lignes_de_la_monnaie = _textes_des_elements(
+            lignes_de_la_monnaie = textes_des_elements(
                 contenu, f"monnaie-{monnaie.uuid}"
             )
             assert len(lignes_de_la_monnaie) == 1, (
@@ -2401,14 +2321,14 @@ class TestPlanComptableUnique(FastTenantTestCase):
             )
             if numero_attendu is not None:
                 assert numero_attendu in texte_de_la_ligne, texte_de_la_ligne
-                alertes = _textes_des_elements(
+                alertes = textes_des_elements(
                     contenu, f"monnaie-sans-compte-{monnaie.uuid}"
                 )
                 assert alertes == [], (monnaie.name, alertes)
 
         # La monnaie d'un autre lieu sans compte est signalée.
         # / The other venue's currency without account is flagged.
-        alertes_de_la_monnaie_sans_compte = _textes_des_elements(
+        alertes_de_la_monnaie_sans_compte = textes_des_elements(
             contenu, f"monnaie-sans-compte-{monnaie_d_un_autre_lieu_sans_compte.uuid}"
         )
         assert len(alertes_de_la_monnaie_sans_compte) == 1
@@ -2424,7 +2344,7 @@ class TestPlanComptableUnique(FastTenantTestCase):
             monnaie_ancien_fedow_non_acceptee,
         ]:
             assert (
-                _textes_des_elements(contenu, f"monnaie-{monnaie_non_acceptee.uuid}")
+                textes_des_elements(contenu, f"monnaie-{monnaie_non_acceptee.uuid}")
                 == []
             ), monnaie_non_acceptee.name
 
@@ -2455,15 +2375,15 @@ class TestPlanComptableUnique(FastTenantTestCase):
         contenu = reponse.content.decode()
 
         for monnaie_du_lieu in [monnaie_fedow_core_du_lieu, monnaie_ancien_fedow_du_lieu]:
-            lignes = _textes_des_elements(contenu, f"monnaie-{monnaie_du_lieu.uuid}")
+            lignes = textes_des_elements(contenu, f"monnaie-{monnaie_du_lieu.uuid}")
             assert len(lignes) == 1, monnaie_du_lieu.name
             assert "419100" in lignes[0], lignes[0]
-            alertes = _textes_des_elements(
+            alertes = textes_des_elements(
                 contenu, f"monnaie-sans-compte-{monnaie_du_lieu.uuid}"
             )
             assert alertes == [], (monnaie_du_lieu.name, alertes)
 
-        alertes_du_fed = _textes_des_elements(
+        alertes_du_fed = textes_des_elements(
             contenu, f"monnaie-sans-compte-{fed_de_l_ancien_fedow.uuid}"
         )
         assert len(alertes_du_fed) == 1, alertes_du_fed
@@ -2517,11 +2437,11 @@ class TestPlanComptableUnique(FastTenantTestCase):
 
         for monnaie_sans_ligne in monnaies_sans_ligne:
             assert (
-                _textes_des_elements(contenu, f"monnaie-{monnaie_sans_ligne.uuid}")
+                textes_des_elements(contenu, f"monnaie-{monnaie_sans_ligne.uuid}")
                 == []
             ), (monnaie_sans_ligne.name, monnaie_sans_ligne.category)
         assert (
-            len(_textes_des_elements(contenu, f"monnaie-{monnaie_cadeau_du_lieu.uuid}"))
+            len(textes_des_elements(contenu, f"monnaie-{monnaie_cadeau_du_lieu.uuid}"))
             == 1
         )
 
@@ -2613,13 +2533,103 @@ class TestPlanComptableUnique(FastTenantTestCase):
         assert numeros_presents == NUMEROS_DU_PLAN_PAR_DEFAUT
         assert manques == [], _phrases_des_manques(manques)
 
+    def test_plan_complet_n_est_pas_calcule_a_l_ouverture_des_trois_ecrans(self):
+        """« Plan complet ? » relit tout l'historique du lieu : il n'est pas calculé
+        à l'ouverture des trois écrans du plan. Chaque écran porte le bouton
+        « Vérifier le plan » (`data-testid="plan-complet-verifier"`), et aucun verdict
+        (ni manque, ni message vert) tant qu'on ne l'a pas cliqué. Un manque existe
+        pourtant (chèque sans compte).
+        / "Complete plan?" is not computed when the three screens open: each
+        carries the "Check the plan" button and no verdict until it is clicked."""
+        _preparer_la_caisse()
+        MappingMoyenDePaiement.objects.filter(moyen_de_paiement="CH").delete()
+        _vendre(_biere_rangee_au_bar(), moyen="CH")
+        navigateur, _administrateur = _navigateur_d_un_admin_du_lieu(self.tenant)
+        libelle_attendu = texte_sans_espaces_en_trop(gettext("Vérifier le plan"))
+
+        # Les deux noms sous lesquels la fonction peut être appelée : celui du module
+        # du plan, et celui importé par l'admin (`create=True` : l'admin peut ne plus
+        # l'importer).
+        # / The two names the function can be called by: the plan module's, and the
+        # one imported by the admin (create=True: the admin may no longer import it).
+        with (
+            patch(
+                "laboutik.plan_comptable.ce_qui_manque_pour_exporter",
+                return_value=[],
+            ) as plan_complet_du_module,
+            patch(
+                "Administration.admin.laboutik.ce_qui_manque_pour_exporter",
+                return_value=[],
+                create=True,
+            ) as plan_complet_de_l_admin,
+        ):
+            for nom_de_l_ecran in NOMS_DES_TROIS_ECRANS_DU_PLAN:
+                reponse = navigateur.get(reverse(nom_de_l_ecran))
+                assert reponse.status_code == 200, nom_de_l_ecran
+                contenu = reponse.content.decode()
+
+                boutons = textes_des_elements(contenu, "plan-complet-verifier")
+                assert len(boutons) == 1, (nom_de_l_ecran, boutons)
+                assert libelle_attendu in boutons[0], (nom_de_l_ecran, boutons[0])
+                assert textes_des_elements(contenu, "plan-complet-manque") == [], (
+                    nom_de_l_ecran
+                )
+                assert textes_des_elements(contenu, "plan-complet-ok") == [], (
+                    nom_de_l_ecran
+                )
+
+        assert plan_complet_du_module.call_count == 0
+        assert plan_complet_de_l_admin.call_count == 0
+
+    def test_ouvrir_un_ecran_du_plan_charge_le_plan_d_un_lieu_neuf(self):
+        """Un lieu sans aucun compte ouvre l'un des trois écrans du plan : le filet
+        (`s_assurer_que_le_plan_existe`) charge le plan par défaut à l'ouverture,
+        même si le calcul des manques reste derrière le bouton « Vérifier le plan ».
+        / A venue without any account opens a plan screen: the safety net loads the
+        default plan."""
+        navigateur, _administrateur = _navigateur_d_un_admin_du_lieu(self.tenant)
+        for nom_de_l_ecran in NOMS_DES_TROIS_ECRANS_DU_PLAN:
+            _vider_le_plan_du_lieu()
+            assert not CompteComptable.objects.exists()
+
+            reponse = navigateur.get(reverse(nom_de_l_ecran))
+
+            assert reponse.status_code == 200, nom_de_l_ecran
+            numeros_presents = set(
+                CompteComptable.objects.values_list("numero_de_compte", flat=True)
+            )
+            assert numeros_presents == NUMEROS_DU_PLAN_PAR_DEFAUT, nom_de_l_ecran
+
+    def test_verifier_le_plan_refuse_un_utilisateur_qui_n_est_pas_admin_du_lieu(self):
+        """Un utilisateur connecté qui n'est pas administrateur du lieu demande le
+        verdict de « Plan complet ? » : refusé (le site d'admin le renvoie vers la
+        connexion), aucun verdict n'est rendu.
+        / A non-admin user asking for the verdict is refused; no verdict rendered."""
+        email_du_visiteur = f"visiteur-{identifiant_unique()}@tibillet.localhost"
+        visiteur = TibilletUser.objects.create(
+            email=email_du_visiteur, username=email_du_visiteur, is_active=True
+        )
+        navigateur = TenantClient(self.tenant)
+        navigateur.force_login(visiteur)
+
+        reponse = navigateur.get(
+            reverse("staff_admin:laboutik_comptecomptable_verifier_le_plan"),
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert reponse.status_code in (302, 403), reponse.status_code
+        contenu = reponse.content.decode()
+        assert 'data-testid="plan-complet-ok"' not in contenu
+        assert 'data-testid="plan-complet-manque"' not in contenu
+
     def test_plan_complet_rien_a_signaler_message_vert(self):
         """Un lieu au plan complet, avec des ventes réglées qui ont toutes un compte
         (dont un règlement dans la monnaie du lieu sans compte propre : repli sur le
-        moyen, fiche §3.1) : aucun manque, et le message vert en tête des trois
-        écrans du plan.
+        moyen, fiche §3.1) : aucun manque. Le bouton « Vérifier le plan » de chacun
+        des trois écrans du plan rend le message vert.
         / A complete plan with settled sales that all have an account: nothing
-        missing, and the green message on top of the three plan screens."""
+        missing; the "Check the plan" button of the three screens gives the green
+        message."""
         _preparer_la_caisse()
         biere = _biere_rangee_au_bar()
         _vendre(biere, moyen="CA")
@@ -2631,46 +2641,51 @@ class TestPlanComptableUnique(FastTenantTestCase):
         assert manques == [], _phrases_des_manques(manques)
 
         navigateur, _administrateur = _navigateur_d_un_admin_du_lieu(self.tenant)
-        message_attendu = _texte_sans_espaces_en_trop(gettext(MESSAGE_DU_PLAN_COMPLET))
+        message_attendu = texte_sans_espaces_en_trop(gettext(MESSAGE_DU_PLAN_COMPLET))
         for nom_de_l_ecran in NOMS_DES_TROIS_ECRANS_DU_PLAN:
             reponse = navigateur.get(reverse(nom_de_l_ecran))
             assert reponse.status_code == 200, nom_de_l_ecran
-            contenu = reponse.content.decode()
+            contenu = _verdict_du_bouton_verifier_le_plan(
+                navigateur, reponse.content.decode()
+            )
 
-            messages_verts = _textes_des_elements(contenu, "plan-complet-ok")
+            messages_verts = textes_des_elements(contenu, "plan-complet-ok")
             assert len(messages_verts) == 1, nom_de_l_ecran
             assert message_attendu in messages_verts[0], (
                 nom_de_l_ecran,
                 messages_verts[0],
             )
-            assert _textes_des_elements(contenu, "plan-complet-manque") == [], (
+            assert textes_des_elements(contenu, "plan-complet-manque") == [], (
                 nom_de_l_ecran
             )
 
     def test_plan_complet_affiche_les_manques_en_tete_des_trois_ecrans(self):
-        """Un manque est affiché en tête des trois écrans du plan, sans message vert.
-        / A missing item is shown on top of the three plan screens, without green
-        message."""
+        """Un manque est affiché par le bouton « Vérifier le plan » de chacun des
+        trois écrans du plan, sans message vert.
+        / The "Check the plan" button of the three plan screens shows a missing item,
+        without green message."""
         _preparer_la_caisse()
         MappingMoyenDePaiement.objects.filter(moyen_de_paiement="CH").delete()
         _vendre(_biere_rangee_au_bar(), moyen="CH")
         manques = _ce_qui_manque_pour_exporter()
         assert len(manques) == 1, _phrases_des_manques(manques)
-        phrase_du_manque = _texte_sans_espaces_en_trop(manques[0]["phrase"])
+        phrase_du_manque = texte_sans_espaces_en_trop(manques[0]["phrase"])
 
         navigateur, _administrateur = _navigateur_d_un_admin_du_lieu(self.tenant)
         for nom_de_l_ecran in NOMS_DES_TROIS_ECRANS_DU_PLAN:
             reponse = navigateur.get(reverse(nom_de_l_ecran))
             assert reponse.status_code == 200, nom_de_l_ecran
-            contenu = reponse.content.decode()
+            contenu = _verdict_du_bouton_verifier_le_plan(
+                navigateur, reponse.content.decode()
+            )
 
-            manques_affiches = _textes_des_elements(contenu, "plan-complet-manque")
+            manques_affiches = textes_des_elements(contenu, "plan-complet-manque")
             assert len(manques_affiches) == 1, (nom_de_l_ecran, manques_affiches)
             assert phrase_du_manque in manques_affiches[0], (
                 nom_de_l_ecran,
                 manques_affiches[0],
             )
-            assert _textes_des_elements(contenu, "plan-complet-ok") == [], (
+            assert textes_des_elements(contenu, "plan-complet-ok") == [], (
                 nom_de_l_ecran
             )
 
@@ -3049,6 +3064,9 @@ class TestPlanComptableUnique(FastTenantTestCase):
         _preparer_la_caisse()
         MappingMoyenDePaiement.objects.filter(moyen_de_paiement="CH").delete()
         _vendre(_biere_rangee_au_bar(), moyen="CH")
+        manques = _ce_qui_manque_pour_exporter()
+        assert len(manques) == 1, _phrases_des_manques(manques)
+        phrase_du_manque = texte_sans_espaces_en_trop(manques[0]["phrase"])
         navigateur, _administrateur = _navigateur_d_un_admin_du_lieu(self.tenant)
 
         reponse = navigateur.get(
@@ -3056,12 +3074,10 @@ class TestPlanComptableUnique(FastTenantTestCase):
         )
 
         assert reponse.status_code == 200
-        manques_affiches = reponse.context["manques_du_plan"]
-        assert len(manques_affiches) == 1, _phrases_des_manques(manques_affiches)
-        phrase_du_manque = _texte_sans_espaces_en_trop(manques_affiches[0]["phrase"])
-        noms_accessibles = _noms_accessibles_des_liens_des_manques(
-            reponse.content.decode()
+        verdict_du_plan = _verdict_du_bouton_verifier_le_plan(
+            navigateur, reponse.content.decode()
         )
+        noms_accessibles = _noms_accessibles_des_liens_des_manques(verdict_du_plan)
         assert len(noms_accessibles) == 1, noms_accessibles
         assert phrase_du_manque in noms_accessibles[0], noms_accessibles
 

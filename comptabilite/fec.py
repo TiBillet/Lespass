@@ -47,6 +47,7 @@ Tests : tests/pytest/test_fec_equilibre.py
 from decimal import Decimal
 
 from comptabilite.ventilation import ecritures_de_l_export
+from laboutik.plan_comptable import s_assurer_que_le_plan_existe
 
 # Les 18 colonnes obligatoires du FEC, dans l'ordre (article A47 A-1).
 # / The 18 mandatory FEC columns, in order.
@@ -107,6 +108,11 @@ def generer_fec_cloture(cloture):
     :raises CompteComptableManquant: si un compte ou un journal manque
     :raises EcritureDesequilibree: si une écriture n'est pas équilibrée
     """
+    # Le filet : un lieu qui n'a encore aucun compte reçoit le plan par défaut avant
+    # son premier export.
+    # / The safety net: a venue without any account gets the default plan first.
+    s_assurer_que_le_plan_existe()
+
     export = ecritures_de_l_export(cloture)
 
     lignes_du_fichier = ["\t".join(COLONNES_FEC)]

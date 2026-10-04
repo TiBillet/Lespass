@@ -1,7 +1,7 @@
 {% load i18n %}
 <!--
-EXPORT FISCAL — formulaire dates optionnelles + telechargement ZIP
-/ FISCAL EXPORT — optional date form + ZIP download
+EXPORT FISCAL — formulaire (date de debut obligatoire, fin facultative) + ZIP
+/ FISCAL EXPORT — form (start date required, end optional) + ZIP download
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_export_fiscal.html
 
@@ -23,7 +23,7 @@ DESIGN : meme style que hx_fond_de_caisse.html (theme POS sombre, Luciole).
         {% translate "Generate a signed archive (ZIP) of all POS data for the tax administration." %}
     </p>
     <p style="color: #a0a0a0; margin-bottom: 1.5rem; font-family: 'Luciole-regular'; font-size: 0.85rem;">
-        {% translate "Dates are optional. Without dates, all data will be exported." %}
+        {% translate "La date de début est obligatoire. Sans date de fin, l'archive va jusqu'à aujourd'hui. 365 jours au plus." %}
     </p>
 
     <form method="post"
@@ -38,7 +38,7 @@ DESIGN : meme style que hx_fond_de_caisse.html (theme POS sombre, Luciole).
                               font-size: 0.85rem; margin-bottom: 0.3rem;">
                     {% translate "Start date" %}
                 </label>
-                <input type="date" id="debut" name="debut"
+                <input type="date" id="debut" name="debut" required
                        style="width: 100%; padding: 0.6rem 0.75rem; font-size: 1rem;
                               font-family: 'Luciole-regular';
                               border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.3);

@@ -23,17 +23,25 @@ django.setup()
 import pytest
 
 from decimal import Decimal
+from django.db import connection
 from django.utils import timezone
+from django_tenants.test.cases import FastTenantTestCase
+from django_tenants.test.client import TenantClient
 from django_tenants.utils import schema_context
 
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import (
-    LigneArticle, Price, PriceSold, Product, ProductSold,
+    Configuration, LigneArticle, Price, PriceSold, Product, ProductSold,
     SaleOrigin, PaymentMethod,
 )
 from Customers.models import Client
+from fabriques_vente import (
+    creer_tarif_vendu,
+    fabriquer_vente_encaissee,
+    verifier_egalites,
+)
 from laboutik.models import (
-    PointDeVente, ClotureCaisse,
+    LaboutikConfiguration, PointDeVente,
 )
 
 # Schema tenant utilise pour les tests.
@@ -152,219 +160,12 @@ def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method
     return ligne
 
 
-# ---------------------------------------------------------------------------
-# Tests Ticket X (recap_en_cours)
-# ---------------------------------------------------------------------------
-
-@pytest.mark.usefixtures("test_data")
-class TestRecapEnCours:
-    """Tests du Ticket X — recap comptable du service en cours.
-    / Tests for Ticket X — accounting summary of current shift."""
-
-    def test_recap_en_cours_toutes_caisses(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        """
-        Cree des ventes, appelle recap-en-cours avec vue=toutes.
-        Verifie : 200, contient "Ticket X", contient les totaux.
-        / Create sales, call recap-en-cours with vue=toutes.
-        Verify: 200, contains "Ticket X", contains totals.
-        """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
-            # Creer une vente pour s'assurer qu'il y a des donnees
-            # / Create a sale to ensure data exists
-            _creer_ligne_article_directe(produit, prix, 500, PaymentMethod.CASH, pv=premier_pv)
-
-            client = _make_client(admin_user, tenant)
-            response = client.get('/laboutik/caisse/recap-en-cours/?vue=toutes')
-            assert response.status_code == 200
-
-            contenu = response.content.decode('utf-8')
-            # Verifie que le template Ticket X est rendu
-            # / Verify Ticket X template is rendered
-            assert 'data-testid="ventes-recap"' in contenu
-            # Verifie que les totaux sont presents (tableau des moyens de paiement)
-            # / Verify totals are present (payment method table)
-            assert 'data-testid="recap-totaux-moyen"' in contenu
-
-    def test_recap_en_cours_par_pv(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        """
-        Appelle recap-en-cours avec vue=par_pv.
-        Verifie : 200, contient le nom du PV.
-        / Calls recap-en-cours with vue=par_pv.
-        Verify: 200, contains POS name.
-        """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
-            _creer_ligne_article_directe(produit, prix, 300, PaymentMethod.CC, pv=premier_pv)
-
-            client = _make_client(admin_user, tenant)
-            response = client.get('/laboutik/caisse/recap-en-cours/?vue=par_pv')
-            assert response.status_code == 200
-
-            contenu = response.content.decode('utf-8')
-            # La ventilation par PV doit contenir le nom du PV
-            # / The POS breakdown must contain the POS name
-            assert premier_pv.name in contenu
-
-    def test_recap_en_cours_par_moyen(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        """
-        Appelle recap-en-cours avec vue=par_moyen.
-        Verifie : 200, contient le tableau synthese operations.
-        / Calls recap-en-cours with vue=par_moyen.
-        Verify: 200, contains operations summary table.
-        """
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client(admin_user, tenant)
-            response = client.get('/laboutik/caisse/recap-en-cours/?vue=par_moyen')
-            assert response.status_code == 200
-
-            contenu = response.content.decode('utf-8')
-            assert 'data-testid="recap-synthese-operations"' in contenu
-
-    def test_recap_en_cours_aucune_vente(
-        self, admin_user, tenant,
-    ):
-        """
-        Si aucune vente apres une cloture, affiche le message vide.
-        / If no sales after a closure, show empty message.
-
-        NOTE : ce test peut ne pas trouver "aucune vente" si d'autres tests
-        ont cree des LigneArticle. On verifie juste que la vue retourne 200.
-        / This test may not find "no sales" if other tests created LigneArticle.
-        We just verify the view returns 200.
-        """
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client(admin_user, tenant)
-            response = client.get('/laboutik/caisse/recap-en-cours/')
-            assert response.status_code == 200
-
-
-# ---------------------------------------------------------------------------
-# Tests liste des ventes
-# ---------------------------------------------------------------------------
-
-@pytest.mark.usefixtures("test_data")
-class TestListeVentes:
-    """Tests de la liste des ventes.
-    / Tests for the sales list."""
-
-    def test_liste_ventes_paginee(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        """
-        Appelle liste-ventes.
-        Verifie : 200, contient le tableau des ventes.
-        / Calls liste-ventes.
-        Verify: 200, contains sales table.
-        """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
-            # S'assurer qu'il y a au moins une vente
-            # / Ensure at least one sale exists
-            _creer_ligne_article_directe(produit, prix, 700, PaymentMethod.CASH, pv=premier_pv)
-
-            client = _make_client(admin_user, tenant)
-            response = client.get('/laboutik/caisse/liste-ventes/')
-            assert response.status_code == 200
-
-            contenu = response.content.decode('utf-8')
-            assert 'data-testid="ventes-liste"' in contenu
-
-    def test_liste_ventes_filtre_moyen(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        """
-        Filtre la liste par moyen de paiement (especes).
-        Verifie : 200, ne contient que les ventes en especes.
-        / Filter list by payment method (cash).
-        Verify: 200, contains only cash sales.
-        """
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client(admin_user, tenant)
-            response = client.get(f'/laboutik/caisse/liste-ventes/?moyen={PaymentMethod.CASH}')
-            assert response.status_code == 200
-
-            contenu = response.content.decode('utf-8')
-            # Le filtre est applique — on verifie que la page se charge
-            # / Filter is applied — we verify the page loads
-            assert 'data-testid="ventes-liste"' in contenu
-
-    def test_liste_ventes_total_qty_multiplie(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        """
-        Bug 4 : 3 pintes a 5€ doivent afficher 15€ dans la liste, pas 5€.
-        Le Sum doit etre amount * qty, pas amount seul.
-        / Bug 4: 3 pints at 5€ must show 15€ in the list, not 5€.
-        Sum must be amount * qty, not amount alone.
-        """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
-            uuid_tx = uuid_module.uuid4()
-
-            # Creer une ligne avec qty=3, amount=500 (5€ unitaire)
-            # Total reel transaction = 500 * 3 = 1500 centimes = 15€
-            # Ancien bug : Sum(amount) ramenait 500 → 5€ affiches.
-            # / Create line with qty=3, amount=500 (5€ unit). Real total = 1500c = 15€.
-            _creer_ligne_article_directe(
-                produit, prix, 500, PaymentMethod.CASH,
-                pv=premier_pv, uuid_tx=uuid_tx, qty=3,
-            )
-
-            client = _make_client(admin_user, tenant)
-            response = client.get(f'/laboutik/caisse/liste-ventes/?pv={premier_pv.uuid}&moyen={PaymentMethod.CASH}')
-            assert response.status_code == 200
-
-            contenu = response.content.decode('utf-8')
-            # Le total affiche doit etre 15,00 (3 pintes * 5€), pas 5,00.
-            # Format du filtre |euros : "15,00 €" (espace insecable U+00A0 entre montant et symbole).
-            # / The displayed total must be 15,00, not 5,00.
-            assert '15,00' in contenu, (
-                f"Total devrait inclure 15,00 € (3 x 5€), regression du bug 4. "
-                f"Si '5,00' est la, le Sum(amount) ne multiplie pas par qty. "
-                f"Contenu (extrait) : {contenu[:2000]}"
-            )
-
-    def test_liste_ventes_multi_lignes_qty(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        """
-        Une transaction = 2 lignes (pinte qty=3 a 5€, demi qty=2 a 3€).
-        Total reel = 15 + 6 = 21€. Verifie que le total agrege est correct.
-        / One transaction = 2 lines (pint qty=3 at 5€, half qty=2 at 3€).
-        Real total = 15 + 6 = 21€. Verify aggregate total is correct.
-        """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
-            uuid_tx = uuid_module.uuid4()
-
-            # Ligne 1 : 3 unites a 500c → 1500c
-            _creer_ligne_article_directe(
-                produit, prix, 500, PaymentMethod.CASH,
-                pv=premier_pv, uuid_tx=uuid_tx, qty=3,
-            )
-            # Ligne 2 : 2 unites a 300c → 600c (sur la meme transaction)
-            _creer_ligne_article_directe(
-                produit, prix, 300, PaymentMethod.CASH,
-                pv=premier_pv, uuid_tx=uuid_tx, qty=2,
-            )
-
-            client = _make_client(admin_user, tenant)
-            response = client.get(f'/laboutik/caisse/liste-ventes/?pv={premier_pv.uuid}&moyen={PaymentMethod.CASH}')
-            assert response.status_code == 200
-
-            contenu = response.content.decode('utf-8')
-            # Total reel = 1500 + 600 = 2100c = 21,00 €
-            # / Real total = 1500 + 600 = 2100c = 21,00 €
-            assert '21,00' in contenu, (
-                "Total devrait inclure 21,00 € (3*5 + 2*3), regression du bug 4."
-            )
+# Le récapitulatif en cours et la liste des ventes ont besoin d'un service en
+# cours : ils sont testés dans TestEcransVentesSurDesVentesReglees (schéma dédié,
+# ventes réglées), plus bas. Totaux et point de vente du récap :
+# test_rapport_temps_reel.py.
+# / The current recap and the sales list need a current service: tested in
+# TestEcransVentesSurDesVentesReglees (dedicated schema) below.
 
 
 # ---------------------------------------------------------------------------
@@ -553,37 +354,8 @@ class TestParamsVentesPropages:
     / Sales tabs push their URL. Each URL must keep uuid_pv, tag_id_cm and type_app.
     """
 
-    def test_recap_boutons_fond_et_sortie_de_caisse_gardent_les_params(
-        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
-    ):
-        """
-        Le Ticket X doit passer les 3 params aux boutons Fond de caisse et Sortie de caisse.
-        Avant le correctif, Fond de caisse n'avait aucun param.
-        / Ticket X must pass the 3 params to the Cash float and Cash withdrawal buttons.
-        """
-        with schema_context(TENANT_SCHEMA):
-            produit, prix = premier_produit_et_prix
-            _creer_ligne_article_directe(produit, prix, 500, PaymentMethod.CASH, pv=premier_pv)
-
-            client = _make_client(admin_user, tenant)
-            response = client.get(
-                f'/laboutik/caisse/recap-en-cours/?vue=toutes&uuid_pv={premier_pv.uuid}'
-                f'&tag_id_cm={TAG_ID_CM_DE_TEST}&type_app={TYPE_APP_DE_TEST}'
-            )
-            assert response.status_code == 200
-            contenu = response.content.decode('utf-8')
-
-            # Les params sont HTML-echappes dans les attributs (& devient &amp;)
-            # / Params are HTML-escaped in attributes (& becomes &amp;)
-            params_attendus = (
-                f'uuid_pv={premier_pv.uuid}&amp;tag_id_cm={TAG_ID_CM_DE_TEST}'
-                f'&amp;type_app={TYPE_APP_DE_TEST}'
-            )
-            assert f'/laboutik/caisse/fond-de-caisse/?{params_attendus}' in contenu
-            assert f'/laboutik/caisse/sortie-de-caisse/?{params_attendus}' in contenu
-            # Les onglets (hx-push-url) gardent aussi type_app
-            # / Tabs (hx-push-url) also keep type_app
-            assert f'?vue=par_moyen&{params_attendus}' in contenu
+    # Boutons fond et sortie de caisse du récap : TestEcransVentesSurDesVentesReglees.
+    # / Recap float and withdrawal buttons: TestEcransVentesSurDesVentesReglees.
 
     def test_fond_de_caisse_bouton_retour_garde_les_params(
         self, admin_user, tenant, premier_pv,
@@ -622,3 +394,248 @@ class TestParamsVentesPropages:
             contenu = response.content.decode('utf-8')
             assert f'name="tag_id_cm" value="{TAG_ID_CM_DE_TEST}"' in contenu
             assert f'name="type_app" value="{TYPE_APP_DE_TEST}"' in contenu
+
+
+# ---------------------------------------------------------------------------
+# Écrans Ventes sur des ventes réglées, en schéma dédié
+# / Sales screens on settled sales, in a dedicated schema
+# ---------------------------------------------------------------------------
+
+
+class TestEcransVentesSurDesVentesReglees(FastTenantTestCase):
+    """
+    Les tests des écrans Ventes qui ont besoin d'un service en cours. Le service en
+    cours commence à la fin de la dernière clôture journalière et n'existe que s'il
+    y a une vente RÉGLÉE depuis : en base partagée, il dépendrait de l'état de la base
+    de dev (une clôture faite par le filet automatique). Ici, le lieu ne contient que
+    les ventes du test, écrites par le service de vente, et chaque test annule sa
+    transaction.
+    / Sales screen tests needing a current service: dedicated schema, settled sales
+    written by the sale service.
+    """
+
+    @classmethod
+    def get_test_schema_name(cls):
+        return 'test_menu_ventes'
+
+    @classmethod
+    def get_test_tenant_domain(cls):
+        return 'test-menu-ventes.tibillet.localhost'
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        """`Client.name` est unique et obligatoire. / Client.name is unique."""
+        tenant.name = 'Test menu ventes'
+
+    def setUp(self):
+        """
+        Un comptoir, une pinte à 5,00 € et un demi à 3,00 €, un admin connecté.
+        / A counter, a pint at 5.00 € and a half at 3.00 €, a logged-in admin.
+        """
+        # Le rollback du test précédent a rendu le `search_path` au public.
+        # / The previous test's rollback returned the search_path to public.
+        connection.set_tenant(self.tenant)
+
+        # Le singleton de la caisse porte la clé des empreintes (tests/PIEGES.md 9.86).
+        # / The register singleton carries the fingerprint key.
+        LaboutikConfiguration.get_solo().save()
+
+        configuration = Configuration.get_solo()
+        configuration.module_monnaie_locale = True
+        configuration.module_caisse = True
+        configuration.rapport_emails = ''
+        configuration.save()
+
+        self.tarif_de_la_pinte = creer_tarif_vendu(
+            nom="Pinte", prix_en_euros="5.00", taux_tva="20.00",
+        )
+        self.tarif_du_demi = creer_tarif_vendu(
+            nom="Demi", prix_en_euros="3.00", taux_tva="20.00",
+        )
+        self.point_de_vente = PointDeVente.objects.create(
+            name='Comptoir menu ventes',
+            comportement=PointDeVente.DIRECT,
+            service_direct=True,
+            accepte_especes=True,
+            accepte_carte_bancaire=True,
+            hidden=True,
+        )
+
+        # `TibilletUser` vit dans le schéma public ; il est annulé avec le test.
+        # / TibilletUser lives in the public schema; rolled back with the test.
+        self.admin, _admin_cree = TibilletUser.objects.get_or_create(
+            email='admin-test-menu-ventes@tibillet.localhost',
+            defaults={
+                'username': 'admin-test-menu-ventes@tibillet.localhost',
+                'is_staff': True,
+                'is_active': True,
+            },
+        )
+        self.admin.client_admin.add(self.tenant)
+        self.client_http = TenantClient(self.tenant)
+        self.client_http.force_login(self.admin)
+
+    def _vendre_en_especes(self, articles_vendus):
+        """
+        Une vente de caisse réglée en espèces, au comptoir du test : un article par
+        couple (tarif, prix unitaire en centimes, quantité), toutes sur le même
+        identifiant de paiement (un panier).
+        / A settled cash register sale: one item per (price, unit price, quantity).
+        """
+        identifiant_du_paiement = uuid_module.uuid4()
+        articles = []
+        montant_total = 0
+        for tarif_vendu, prix_unitaire, quantite in articles_vendus:
+            articles.append({
+                'pricesold': tarif_vendu,
+                'quantite': Decimal(quantite),
+                'prix_unitaire': prix_unitaire,
+                'taux_tva': Decimal('20'),
+                'payment_method': PaymentMethod.CASH,
+                'status': LigneArticle.VALID,
+                'uuid_transaction': identifiant_du_paiement,
+                'point_de_vente': self.point_de_vente,
+            })
+            montant_total += prix_unitaire * quantite
+        vente = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            point_de_vente=self.point_de_vente,
+            articles=articles,
+            reglements=[{'moyen': PaymentMethod.CASH, 'montant': montant_total}],
+        )
+        verifier_egalites(vente)
+        return vente
+
+    def test_recap_en_cours_aucune_vente(self):
+        """
+        Un lieu sans aucune vente : le récapitulatif en cours répond 200 et dit
+        « aucune vente » (`data-testid="recap-aucune-vente"`).
+        / A venue without any sale: the recap says "no sale".
+        """
+        response = self.client_http.get('/laboutik/caisse/recap-en-cours/')
+
+        assert response.status_code == 200
+        contenu = response.content.decode('utf-8')
+        assert 'data-testid="recap-aucune-vente"' in contenu
+
+    def test_liste_ventes_paginee(self):
+        """
+        Une vente réglée en espèces, puis la liste des ventes : 200, et le tableau
+        des ventes (`data-testid="ventes-liste"`).
+        / A settled cash sale, then the sales list: 200 and the sales table.
+        """
+        self._vendre_en_especes([(self.tarif_de_la_pinte, 500, 1)])
+
+        response = self.client_http.get('/laboutik/caisse/liste-ventes/')
+
+        assert response.status_code == 200
+        contenu = response.content.decode('utf-8')
+        assert 'data-testid="ventes-liste"' in contenu
+
+    def test_liste_ventes_filtre_moyen(self):
+        """
+        Une vente réglée en espèces, puis la liste filtrée sur les espèces : 200, et
+        le tableau des ventes.
+        / A settled cash sale, then the list filtered on cash: 200 and the table.
+        """
+        self._vendre_en_especes([(self.tarif_de_la_pinte, 500, 1)])
+
+        response = self.client_http.get(
+            f'/laboutik/caisse/liste-ventes/?moyen={PaymentMethod.CASH}'
+        )
+
+        assert response.status_code == 200
+        contenu = response.content.decode('utf-8')
+        assert 'data-testid="ventes-liste"' in contenu
+
+    def test_recap_en_cours_par_moyen(self):
+        """
+        Une vente réglée, puis recap-en-cours avec vue=par_moyen.
+        Verifie : 200, contient le tableau synthese operations.
+        / A settled sale, then recap-en-cours with vue=par_moyen.
+        """
+        self._vendre_en_especes([(self.tarif_de_la_pinte, 500, 1)])
+
+        response = self.client_http.get('/laboutik/caisse/recap-en-cours/?vue=par_moyen')
+
+        assert response.status_code == 200
+        contenu = response.content.decode('utf-8')
+        assert 'data-testid="recap-synthese-operations"' in contenu
+        # Ce tableau lit les lignes de la caisse (recharges comprises, sans les
+        # ventes en ligne) : son titre le dit, pour qu'on ne le confonde pas avec le
+        # chiffre d'affaires par moyen du rapport.
+        # / This table reads register lines: its title says so.
+        assert "Lignes de caisse (hors ventes en ligne, recharges comprises)" in contenu
+
+    def test_liste_ventes_total_qty_multiplie(self):
+        """
+        Bug 4 : 3 pintes a 5€ doivent afficher 15€ dans la liste, pas 5€.
+        Le Sum doit etre amount * qty, pas amount seul.
+        / Bug 4: 3 pints at 5€ must show 15€ in the list, not 5€.
+        """
+        # Une ligne qty=3, amount=500 : total reel 500 * 3 = 1500 centimes = 15€.
+        # / One line qty=3, amount=500: real total 1500c = 15€.
+        self._vendre_en_especes([(self.tarif_de_la_pinte, 500, 3)])
+
+        response = self.client_http.get(
+            f'/laboutik/caisse/liste-ventes/?pv={self.point_de_vente.uuid}'
+            f'&moyen={PaymentMethod.CASH}'
+        )
+
+        assert response.status_code == 200
+        contenu = response.content.decode('utf-8')
+        assert '15,00' in contenu, (
+            f"Total devrait inclure 15,00 € (3 x 5€), regression du bug 4. "
+            f"Si '5,00' est la, le Sum(amount) ne multiplie pas par qty. "
+            f"Contenu (extrait) : {contenu[:2000]}"
+        )
+
+    def test_liste_ventes_multi_lignes_qty(self):
+        """
+        Une transaction = 2 lignes (pinte qty=3 a 5€, demi qty=2 a 3€).
+        Total reel = 15 + 6 = 21€. Verifie que le total agrege est correct.
+        / One transaction = 2 lines; real total 21€.
+        """
+        # 3 × 500 + 2 × 300 = 2100 centimes = 21,00 €.
+        # / 3 × 500 + 2 × 300 = 2100 cents.
+        self._vendre_en_especes([
+            (self.tarif_de_la_pinte, 500, 3),
+            (self.tarif_du_demi, 300, 2),
+        ])
+
+        response = self.client_http.get(
+            f'/laboutik/caisse/liste-ventes/?pv={self.point_de_vente.uuid}'
+            f'&moyen={PaymentMethod.CASH}'
+        )
+
+        assert response.status_code == 200
+        contenu = response.content.decode('utf-8')
+        assert '21,00' in contenu, (
+            "Total devrait inclure 21,00 € (3*5 + 2*3), regression du bug 4."
+        )
+
+    def test_recap_boutons_fond_et_sortie_de_caisse_gardent_les_params(self):
+        """
+        Le Ticket X doit passer les 3 params aux boutons Fond de caisse et Sortie de caisse.
+        / Ticket X must pass the 3 params to the Cash float and Cash withdrawal buttons.
+        """
+        self._vendre_en_especes([(self.tarif_de_la_pinte, 500, 1)])
+
+        response = self.client_http.get(
+            f'/laboutik/caisse/recap-en-cours/?vue=toutes&uuid_pv={self.point_de_vente.uuid}'
+            f'&tag_id_cm={TAG_ID_CM_DE_TEST}&type_app={TYPE_APP_DE_TEST}'
+        )
+
+        assert response.status_code == 200
+        contenu = response.content.decode('utf-8')
+        # Les params sont HTML-echappes dans les attributs (& devient &amp;)
+        # / Params are HTML-escaped in attributes (& becomes &amp;)
+        params_attendus = (
+            f'uuid_pv={self.point_de_vente.uuid}&amp;tag_id_cm={TAG_ID_CM_DE_TEST}'
+            f'&amp;type_app={TYPE_APP_DE_TEST}'
+        )
+        assert f'/laboutik/caisse/fond-de-caisse/?{params_attendus}' in contenu
+        assert f'/laboutik/caisse/sortie-de-caisse/?{params_attendus}' in contenu
+        # Les onglets (hx-push-url) gardent aussi type_app
+        # / Tabs (hx-push-url) also keep type_app
+        assert f'?vue=par_moyen&{params_attendus}' in contenu

@@ -1,39 +1,43 @@
-{% load i18n laboutik_filters %}
+{% load i18n %}
 
 <!--
-RAPPORT DE CLOTURE DE CAISSE
-/ Cash register closure report
+ECRAN DU Z : LA CLOTURE JOURNALIERE UNIQUE DU LIEU
+/ Z screen: the venue's single daily closure
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_cloture_rapport.html
 STYLE : laboutik/static/css/ventes.css (blocs .kpi-*, .mini-table, puis bloc CLOTURE)
 
-Affiche le resume de la cloture avec les totaux par moyen de paiement.
-Le rapport reprend les blocs de l'ecran Ventes (maquette TEMP-tibillet-laboutik-main) :
-- un bloc total a gauche, les exports empiles a droite (comme « Sortie de caisse ») ;
-- deux mini-tableaux : par moyen de paiement, et ventilation TVA ;
+Affiche l'essentiel du rapport stocke dans la J (`comptabilite.ClotureCaisse`) :
+- un bloc total a gauche (chiffre d'affaires TTC), les exports empiles a droite ;
+- le chiffre d'affaires, les reglements (argent, cashless, hors argent), le tiroir
+  (caisse especes), chacun dans un mini-tableau ;
+- la phrase de reconciliation ;
+- un lien vers la fiche complete de la cloture dans l'admin (le Z couvre aussi les
+  ventes en ligne : le detail est la-bas) ;
 - un seul geste de sortie en bas : « Fermer la caisse ».
-/ Displays the closure summary. Uses the Sales screen blocks from the mockup.
+/ Shows the essential sections of the J's stored report, the reconciliation
+  sentence and a link to the full admin page.
 
 ACCES : Ventes → « Clôturer toutes les caisses » → « Confirmer la clôture »
         → hx-post CaisseViewSet.cloturer() → remplace #ventes-zone.
 
-MONTANTS : lus en centimes sur l'objet cloture et sur rapport.tva, puis formates
-par le filtre |euros (virgule decimale, symbole du lieu), comme le reste de la caisse.
-/ Amounts are read in cents from the cloture object and formatted with |euros.
-
-Le header n'est pas mis a jour en hx-swap-oob : la vue cloturer() ne fournit pas
-pv / url_retour_pv, dont _hdr_retour_zone.html a besoin pour son bouton retour.
-/ The header is not swapped OOB: cloturer() does not provide what the back button needs.
+CONTEXTE : `_contexte_de_l_ecran_du_z` (laboutik/views.py). Les sections viennent de
+`comptabilite/presentation.py` (`sections_pour_affichage`) : leurs montants sont deja
+ecrits a la francaise, aucune regle d'affichage n'est recopiee ici.
+/ Context built by _contexte_de_l_ecran_du_z; sections come from the presentation.
 -->
-<div class="ventes-body" data-testid="cloture-rapport" aria-live="polite">
+<div class="ventes-body" data-testid="cloture-rapport">
   <div class="ventes-view">
 
     <div class="kpis">
-      <div class="kpi-block kpi-total" data-testid="cloture-total-general">
-        <span class="kpi-lbl">{% translate "Total clôturé" %}</span>
-        <span class="kpi-val">{{ cloture.total_general|euros }}</span>
-        <span class="kpi-sub">
-          {% blocktranslate count nombre=nombre_transactions %}{{ nombre }} transaction{% plural %}{{ nombre }} transactions{% endblocktranslate %}
+      {# Seul le total est annoncé par le lecteur d'écran à l'arrivée du Z : le reste #}
+      {# du rapport se lit à la demande. #}
+      {# / Only the total is announced when the Z arrives; the rest is read on demand. #}
+      <div class="kpi-block kpi-total" data-testid="cloture-total-general" aria-live="polite">
+        <span class="kpi-lbl">{% translate "Chiffre d'affaires TTC" %}</span>
+        <span class="kpi-val">{{ chiffre_affaires_ttc_a_la_francaise }}</span>
+        <span class="kpi-sub" data-testid="cloture-operations-numerotees">
+          {% translate "Opérations numérotées" %} : {{ cloture.nombre_transactions }}
           · {% translate "Clôture n°" %} {{ cloture.numero_sequentiel }}
         </span>
       </div>
@@ -62,115 +66,39 @@ pv / url_retour_pv, dont _hdr_retour_zone.html a besoin pour son bouton retour.
                 data-testid="cloture-btn-email">
           <span class="kpi-lbl">{% translate "Envoyer par email" %}</span>
         </button>
+        <a class="kpi-block kpi-action kpi-action-neutre"
+           href="{{ adresse_de_la_fiche_de_la_cloture }}"
+           target="_blank"
+           rel="noopener"
+           data-testid="cloture-lien-fiche-admin">
+          <span class="kpi-lbl">{% translate "Voir la fiche complète" %}<span class="sr-only"> ({% translate "nouvel onglet" %})</span></span>
+        </a>
       </div>
     </div>
+
+    {# Aide sous le lien : la fiche complete est dans l'administration #}
+    {# / Help under the link: the full page is in the admin #}
+    <p class="cloture-aide" data-testid="cloture-aide-fiche-admin">
+      {% translate "La fiche complète s'ouvre dans l'administration du lieu : il faut y être connecté." %}
+    </p>
 
     <div class="mini-tables">
-      <!-- Totaux par moyen de paiement / Totals by payment method -->
-      <div class="table-wrap mini-table" data-testid="cloture-totaux">
-        <h3 class="mini-table-title">{% translate "Par moyen de paiement" %}</h3>
-        <table>
-          <tbody>
-            <tr data-testid="cloture-total-especes">
-              <td>{% translate "Espèces" %}</td>
-              <td class="num">{{ cloture.total_especes|euros }}</td>
-            </tr>
-            <tr data-testid="cloture-total-cb">
-              <td>{% translate "Carte bancaire" %}</td>
-              <td class="num">{{ cloture.total_carte_bancaire|euros }}</td>
-            </tr>
-            <tr data-testid="cloture-total-nfc">
-              <td>{% translate "Cashless" %}</td>
-              <td class="num">{{ cloture.total_cashless|euros }}</td>
-            </tr>
-            <tr data-testid="cloture-total-cheque">
-              <td>{% translate "Chèque" %}</td>
-              <td class="num">{{ cloture.total_cheque|euros }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Ventilation TVA, montants en centimes dans rapport.tva -->
-      <!-- / VAT breakdown, amounts in cents in rapport.tva -->
-      {% if rapport.tva %}
-        <div class="table-wrap mini-table" data-testid="cloture-tva">
-          <h3 class="mini-table-title">{% translate "Ventilation TVA" %}</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>{% translate "Taux" %}</th>
-                <th class="num">{% translate "HT" %}</th>
-                <th class="num">{% translate "TVA" %}</th>
-                <th class="num">{% translate "TTC" %}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for taux_label, tva_data in rapport.tva.items %}
-                <tr data-testid="cloture-tva-{{ forloop.counter }}">
-                  <td>{{ taux_label }}</td>
-                  <td class="num">{{ tva_data.total_ht|euros }}</td>
-                  <td class="num">{{ tva_data.total_tva|euros }}</td>
-                  <td class="num">{{ tva_data.total_ttc|euros }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+      {% if section_chiffre_affaires %}
+        {% include "laboutik/partial/_section_du_rapport_caisse.html" with section=section_chiffre_affaires testid="cloture-chiffre-affaires" %}
       {% endif %}
-
-      <!-- Articles offerts : hors argent, jamais additionnes au total -->
-      <!-- / Gifted items: not money, never added to the total -->
-      {% if rapport.offerts.par_produit %}
-        <div class="table-wrap mini-table" data-testid="cloture-offerts">
-          <h3 class="mini-table-title">{% translate "Offerts (hors argent)" %}</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>{% translate "Article" %}</th>
-                <th class="num">{% translate "Quantité" %}</th>
-                <th class="num">{% translate "Valeur offerte" %}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for offert in rapport.offerts.par_produit %}
-                <tr>
-                  <td>{{ offert.nom }}</td>
-                  <td class="num">{{ offert.qty|floatformat:"-2" }}</td>
-                  <td class="num">{{ offert.valeur|euros }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+      {% if section_reglements %}
+        {% include "laboutik/partial/_section_du_rapport_caisse.html" with section=section_reglements testid="cloture-reglements" %}
       {% endif %}
-
-      <!-- Ventes en points ou en temps : hors argent, jamais additionnees au total -->
-      <!-- / Points or time sales: not money, never added to the total -->
-      {% if rapport.non_monetaire.par_monnaie %}
-        <div class="table-wrap mini-table" data-testid="cloture-non-monetaire">
-          <h3 class="mini-table-title">{% translate "Non monétaire (hors argent)" %}</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>{% translate "Monnaie" %}</th>
-                <th class="num">{% translate "Quantité" %}</th>
-                <th class="num">{% translate "Total" %}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for monnaie in rapport.non_monetaire.par_monnaie %}
-                <tr>
-                  <td>{{ monnaie.nom }}</td>
-                  <td class="num">{{ monnaie.qty_articles|floatformat:"-2" }}</td>
-                  <td class="num">{{ monnaie.unites|montant_dans_la_monnaie:monnaie.nom }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+      {% if section_caisse_especes %}
+        {% include "laboutik/partial/_section_du_rapport_caisse.html" with section=section_caisse_especes testid="cloture-caisse-especes" %}
       {% endif %}
     </div>
+
+    {% if phrase_de_reconciliation %}
+      <p class="cloture-reconciliation" data-testid="cloture-phrase-reconciliation">
+        {{ phrase_de_reconciliation }}
+      </p>
+    {% endif %}
 
     <!-- Retour a l'ecran de selection du point de vente (ferme la caisse) -->
     <!-- / Back to the POS selection screen (closes the register) -->

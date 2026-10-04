@@ -299,7 +299,9 @@ def _ventes_reglees_entre(debut, fin):
     )
 
 
-def _enregistrer_la_cloture(niveau, debut, fin, sections_du_rapport):
+def _enregistrer_la_cloture(
+    niveau, debut, fin, sections_du_rapport, responsable=None, point_de_vente=None
+):
     """
     Numérote, chaîne et enregistre une clôture. À appeler DANS une transaction, sous
     le verrou des clôtures du lieu : deux clôtures ne lisent jamais le même dernier
@@ -307,10 +309,16 @@ def _enregistrer_la_cloture(niveau, debut, fin, sections_du_rapport):
     / Numbers, chains and saves a closure. Call inside a transaction, under the
     closure lock.
 
+    Le responsable et le point de vente sont informatifs : ils ne sont pas dans
+    l'empreinte de la clôture (`comptabilite/integrite.py`, `calculer_hmac_cloture`).
+    / Operator and point of sale are informative, outside the closure fingerprint.
+
     :param niveau: "J", "H", "M" ou "A"
     :param debut: début de la période (inclus)
     :param fin: fin de la période (exclue)
     :param sections_du_rapport: le dictionnaire des sections (`RapportDesVentes`)
+    :param responsable: l'utilisateur qui a lancé la clôture, ou None (automatique)
+    :param point_de_vente: le `laboutik.PointDeVente` d'où elle est lancée, ou None
     :return: la `ClotureCaisse` enregistrée
     """
     en_tete = sections_du_rapport["en_tete"]
@@ -329,11 +337,7 @@ def _enregistrer_la_cloture(niveau, debut, fin, sections_du_rapport):
 
     # Perpétuels : ceux de la dernière J ; une J y ajoute les siens.
     # / Perpetual totals: the last J's; a J adds its own.
-    derniere_j = (
-        ClotureCaisse.objects.filter(niveau=ClotureCaisse.NIVEAU_JOURNALIER)
-        .order_by("-numero_sequentiel")
-        .first()
-    )
+    derniere_j = ClotureCaisse.derniere_journaliere()
     total_perpetuel = 0
     nombre_ventes_perpetuel = 0
     if derniere_j is not None:
@@ -366,6 +370,8 @@ def _enregistrer_la_cloture(niveau, debut, fin, sections_du_rapport):
         nombre_ventes_perpetuel=nombre_ventes_perpetuel,
         rapport_json=sections_du_rapport,
         previous_hmac=empreinte_precedente,
+        responsable=responsable,
+        point_de_vente=point_de_vente,
     )
     cle_du_lieu = LaboutikConfiguration.get_solo().get_or_create_hmac_key()
     cloture.hmac_hash = calculer_hmac_cloture(cloture, cle_du_lieu, empreinte_precedente)
@@ -373,7 +379,9 @@ def _enregistrer_la_cloture(niveau, debut, fin, sections_du_rapport):
     return cloture
 
 
-def _creer_la_cloture_journaliere(seuil_du_filet=None):
+def _creer_la_cloture_journaliere(
+    seuil_du_filet=None, responsable=None, point_de_vente=None
+):
     """
     Crée la J du lieu courant : [fin de la J précédente, maintenant[.
     / Creates the current venue's J: [end of the previous J, now[.
@@ -407,6 +415,8 @@ def _creer_la_cloture_journaliere(seuil_du_filet=None):
     :param seuil_du_filet: pour le filet automatique, le seuil courant (en UTC) : si la
         dernière J finit à ce seuil ou après, rien n'est créé ; sinon la J finit au
         seuil. None pour un Z demandé (la J finit maintenant).
+    :param responsable: l'utilisateur qui demande le Z (bouton de la caisse), ou None
+    :param point_de_vente: le point de vente d'où le Z est demandé, ou None
     :return: la `ClotureCaisse` créée, ou None (aucune vente dans la plage, J déjà
         faite depuis le seuil, ou J créée entre-temps par un autre appel)
     """
@@ -420,11 +430,7 @@ def _creer_la_cloture_journaliere(seuil_du_filet=None):
         else:
             fin = seuil_du_filet
 
-        derniere_j_lue = (
-            ClotureCaisse.objects.filter(niveau=ClotureCaisse.NIVEAU_JOURNALIER)
-            .order_by("-numero_sequentiel")
-            .first()
-        )
+        derniere_j_lue = ClotureCaisse.derniere_journaliere()
 
         # Le filet : une J par jour au plus, à partir du seuil.
         # / The net: at most one J per day, from the threshold on.
@@ -463,11 +469,7 @@ def _creer_la_cloture_journaliere(seuil_du_filet=None):
     # / 3. Number, perpetual totals, fingerprint, under the closure lock.
     with transaction.atomic():
         _prendre_le_verrou_des_clotures_du_lieu()
-        derniere_j_maintenant = (
-            ClotureCaisse.objects.filter(niveau=ClotureCaisse.NIVEAU_JOURNALIER)
-            .order_by("-numero_sequentiel")
-            .first()
-        )
+        derniere_j_maintenant = ClotureCaisse.derniere_journaliere()
         if derniere_j_lue is None:
             pk_de_la_derniere_j_lue = None
         else:
@@ -482,8 +484,40 @@ def _creer_la_cloture_journaliere(seuil_du_filet=None):
         if une_j_creee_entre_temps:
             return None
         return _enregistrer_la_cloture(
-            ClotureCaisse.NIVEAU_JOURNALIER, debut, fin, sections_du_rapport
+            ClotureCaisse.NIVEAU_JOURNALIER,
+            debut,
+            fin,
+            sections_du_rapport,
+            responsable=responsable,
+            point_de_vente=point_de_vente,
         )
+
+
+def creer_la_cloture_journaliere_de_la_caisse(responsable, point_de_vente):
+    """
+    Le « Z de fin de service » demandé au bouton « Clôturer » de la caisse : crée la
+    J du lieu courant, maintenant, avec l'opérateur et le point de vente. Ne parle
+    pas au broker : c'est la vue qui demande ensuite l'e-mail
+    (`demander_l_email_automatique_si_configure`), après les effets du bouton.
+    / The end-of-service Z requested by the register button: creates the current
+    venue's J now, with operator and point of sale. No broker call here.
+
+    LOCALISATION : comptabilite/tasks.py
+
+    À appeler HORS de toute transaction (le temps 1 de `_creer_la_cloture_journaliere`
+    est durable : ses verrous courts n'en seraient plus).
+    / Call OUTSIDE any transaction (step 1 is durable).
+
+    APPELÉE PAR : `laboutik/views.py`, `CaisseViewSet.cloturer`.
+
+    :param responsable: l'utilisateur connecté, ou None
+    :param point_de_vente: le `laboutik.PointDeVente` du bouton
+    :return: la `ClotureCaisse` créée, ou None (aucune vente depuis la dernière J)
+    """
+    return _creer_la_cloture_journaliere(
+        responsable=responsable,
+        point_de_vente=point_de_vente,
+    )
 
 
 def _creer_la_cloture_d_une_periode(niveau, debut, fin):
@@ -572,11 +606,14 @@ def _creer_la_cloture_d_une_periode(niveau, debut, fin):
         return _enregistrer_la_cloture(niveau, debut, fin, sections_du_rapport)
 
 
-def _demander_l_email_si_configure(schema_name, cloture):
+def demander_l_email_automatique_si_configure(schema_name, cloture):
     """
     Demande l'email de la clôture si le lieu a des destinataires et que la périodicité
     du rapport est le niveau de cette clôture.
     / Requests the closure email when configured for this level.
+
+    APPELÉE PAR : les tâches de clôture de ce module, et `laboutik/views.py`
+    `CaisseViewSet.cloturer` (après les effets du bouton, dans un try/except).
     """
     configuration = Configuration.get_solo()
     if configuration.rapport_periodicite == cloture.niveau and configuration.rapport_emails:
@@ -642,7 +679,7 @@ def generer_cloture_pour_tenant(
             f"[{schema_name}] Clôture {niveau} n° {cloture.numero_sequentiel} "
             f"(total={cloture.total_general} c, {cloture.nombre_transactions} ventes)."
         )
-        _demander_l_email_si_configure(schema_name, cloture)
+        demander_l_email_automatique_si_configure(schema_name, cloture)
         return str(cloture.uuid)
 
 
@@ -771,7 +808,7 @@ def generer_les_clotures_automatiques_du_lieu(schema_name):
                     f"[{schema_name}] Filet : clôture J n° {cloture_j.numero_sequentiel} "
                     f"({cloture_j.nombre_transactions} ventes)."
                 )
-                _demander_l_email_si_configure(schema_name, cloture_j)
+                demander_l_email_automatique_si_configure(schema_name, cloture_j)
 
             # Les semaines, mois, années finis qui manquent, dans l'ordre du
             # calendrier : chacun une seule fois.
@@ -791,7 +828,7 @@ def generer_les_clotures_automatiques_du_lieu(schema_name):
                         f"[{schema_name}] Clôture {niveau} n° "
                         f"{cloture_de_la_periode.numero_sequentiel} créée."
                     )
-                    _demander_l_email_si_configure(schema_name, cloture_de_la_periode)
+                    demander_l_email_automatique_si_configure(schema_name, cloture_de_la_periode)
     except Exception:
         logger.exception(f"[{schema_name}] Échec des clôtures automatiques du lieu.")
         raise
@@ -829,13 +866,45 @@ def generer_les_clotures_automatiques():
 @shared_task
 def envoyer_email_cloture(schema_name, cloture_uuid):
     """
+    L'envoi AUTOMATIQUE de l'email d'une clôture (demandé à sa création) : seulement
+    si la périodicité du rapport du lieu est le niveau de la clôture.
+    / AUTOMATIC closure e-mail: only when the report periodicity is the closure level.
+
+    :return: True si l'email est envoyé, False sinon
+    """
+    return _envoyer_l_email_de_la_cloture(
+        schema_name, cloture_uuid, respecter_la_periodicite=True
+    )
+
+
+@shared_task
+def envoyer_email_cloture_demande(schema_name, cloture_uuid):
+    """
+    L'envoi DEMANDÉ de l'email d'une clôture (bouton « Envoyer par e-mail » de la
+    caisse) : c'est un clic explicite, la périodicité du rapport ne compte pas. Les
+    destinataires sont toujours ceux du lieu.
+    / REQUESTED closure e-mail (register button): the periodicity does not apply.
+
+    APPELÉE PAR : `laboutik/views.py`, `CaisseViewSet.envoyer_rapport`.
+
+    :return: True si l'email est envoyé, False sinon
+    """
+    return _envoyer_l_email_de_la_cloture(
+        schema_name, cloture_uuid, respecter_la_periodicite=False
+    )
+
+
+def _envoyer_l_email_de_la_cloture(schema_name, cloture_uuid, respecter_la_periodicite):
+    """
     Envoie l'email d'une clôture aux destinataires de `Configuration.rapport_emails`,
     avec le PDF de la clôture en pièce jointe. Rien n'est envoyé si la liste des
-    destinataires est vide, ou si la périodicité du rapport n'est pas le niveau de la
-    clôture.
-    / Sends a closure email with its PDF, only when recipients are configured and the
-    report periodicity is the closure's level.
+    destinataires est vide ; ni, quand `respecter_la_periodicite` est vrai, si la
+    périodicité du rapport n'est pas le niveau de la clôture.
+    / Sends a closure email with its PDF to the venue's recipients. Nothing without
+    recipients; nor, for the automatic sending, for another level than the periodicity.
 
+    :param respecter_la_periodicite: True pour l'envoi automatique, False pour l'envoi
+        demandé à la caisse
     :return: True si l'email est envoyé, False sinon
     """
     tenant = Client.objects.get(schema_name=schema_name)
@@ -857,7 +926,8 @@ def envoyer_email_cloture(schema_name, cloture_uuid):
         # / Nothing to send without recipients, or for another level.
         if not config.rapport_emails or not config.rapport_emails.strip():
             return False
-        if config.rapport_periodicite != cloture.niveau:
+        niveau_hors_periodicite = config.rapport_periodicite != cloture.niveau
+        if respecter_la_periodicite and niveau_hors_periodicite:
             return False
 
         # Les destinataires : séparés par des virgules, sans les espaces autour.

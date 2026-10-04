@@ -70,7 +70,12 @@ from django.utils.translation import gettext, ngettext
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Configuration, PaymentMethod
 from comptabilite.models import ClotureCaisse
-from comptabilite.rapport import STATUT_INTEGRITE_OK
+from comptabilite.rapport import (
+    CLE_PLUSIEURS_MOYENS,
+    MOYENS_CASHLESS,
+    STATUT_INTEGRITE_OK,
+    nom_du_moyen_de_paiement,
+)
 
 # L'espace insécable : entre les milliers, et entre un nombre et « € ».
 # / The non-breaking space: between thousands, and between a number and "€".
@@ -350,12 +355,6 @@ def _section(cle, titre, repliee, tableaux, phrase="", phrase_en_alerte=False):
     }
 
 
-def _libelle_d_un_moyen(code_du_moyen):
-    """Le nom lisible d'un code de moyen de paiement. / Readable payment method name."""
-    libelles_des_moyens = dict(PaymentMethod.choices)
-    return str(libelles_des_moyens.get(code_du_moyen, code_du_moyen))
-
-
 def _libelles_d_une_liste_de_moyens(codes_separes_par_des_virgules):
     """
     « CA, CC » → « Espèces, Carte bancaire » : les moyens d'une correction, stockés en
@@ -365,8 +364,9 @@ def _libelles_d_une_liste_de_moyens(codes_separes_par_des_virgules):
     if not codes_separes_par_des_virgules:
         return ""
     libelles = []
-    for code_du_moyen in codes_separes_par_des_virgules.split(","):
-        libelles.append(_libelle_d_un_moyen(code_du_moyen.strip()))
+    codes_des_moyens = codes_separes_par_des_virgules.split(",")
+    for code_du_moyen in codes_des_moyens:
+        libelles.append(nom_du_moyen_de_paiement(code_du_moyen.strip()))
     return ", ".join(libelles)
 
 
@@ -563,7 +563,8 @@ def _lignes_ttc_ht_tva(dictionnaire_par_cle, nom_du_libelle):
     / The "label, incl. tax, excl. tax, VAT" rows of a revenue dictionary, by label.
     """
     lignes = []
-    for ligne_du_rapport in _valeurs_triees(dictionnaire_par_cle, [nom_du_libelle]):
+    lignes_triees_du_rapport = _valeurs_triees(dictionnaire_par_cle, [nom_du_libelle])
+    for ligne_du_rapport in lignes_triees_du_rapport:
         lignes.append(
             [
                 _cellule_texte(ligne_du_rapport.get(nom_du_libelle)),
@@ -573,6 +574,50 @@ def _lignes_ttc_ht_tva(dictionnaire_par_cle, nom_du_libelle):
             ]
         )
     return lignes
+
+
+# Les trois moyens du comptoir, en tête de toute liste de moyens, dans cet ordre.
+# / The three counter methods, first in every method list, in this order.
+MOYENS_DU_COMPTOIR_DANS_L_ORDRE = [
+    PaymentMethod.CASH,
+    PaymentMethod.CC,
+    PaymentMethod.CHEQUE,
+]
+
+
+def codes_des_moyens_dans_l_ordre(par_moyen):
+    """
+    Les codes d'un dictionnaire « par moyen » du rapport, dans l'ordre d'affichage :
+    espèces, carte bancaire, chèque, puis les autres moyens d'argent (par code),
+    puis chaque moyen cashless (par code), puis « plusieurs moyens ». C'est le seul
+    ordre des moyens : l'écran (`_section_chiffre_affaires`) et les tickets X et Z
+    (`laboutik/printing/formatters.py`) le lisent ici.
+    / The codes of a "by method" dict in display order: counter methods, other
+    money methods, cashless, several. The single method order, for screens and
+    tickets.
+
+    :param par_moyen: dict {code du moyen: ligne}
+    :return: liste de codes
+    """
+    codes_tries = sorted(par_moyen.keys())
+
+    codes_dans_l_ordre = []
+    for code_du_moyen in MOYENS_DU_COMPTOIR_DANS_L_ORDRE:
+        if code_du_moyen in par_moyen:
+            codes_dans_l_ordre.append(code_du_moyen)
+    for code_du_moyen in codes_tries:
+        moyen_deja_place = code_du_moyen in codes_dans_l_ordre
+        moyen_a_part = (
+            code_du_moyen in MOYENS_CASHLESS or code_du_moyen == CLE_PLUSIEURS_MOYENS
+        )
+        if not moyen_deja_place and not moyen_a_part:
+            codes_dans_l_ordre.append(code_du_moyen)
+    for code_du_moyen in codes_tries:
+        if code_du_moyen in MOYENS_CASHLESS:
+            codes_dans_l_ordre.append(code_du_moyen)
+    if CLE_PLUSIEURS_MOYENS in par_moyen:
+        codes_dans_l_ordre.append(CLE_PLUSIEURS_MOYENS)
+    return codes_dans_l_ordre
 
 
 def _section_chiffre_affaires(rapport):
@@ -606,6 +651,46 @@ def _section_chiffre_affaires(rapport):
             lignes_des_totaux,
         )
     ]
+
+    # Le chiffre d'affaires par moyen (absent d'une ancienne clôture), dans l'ordre
+    # des tickets (`codes_des_moyens_dans_l_ordre`). Les lignes doivent recomposer le
+    # chiffre d'affaires TTC : sinon le tableau est en alerte, avec l'écart en mots.
+    # / Revenue by method, in the tickets' order; an alert when the lines do not add
+    #   up to the revenue.
+    par_moyen = chiffre_affaires.get("par_moyen")
+    if par_moyen is not None:
+        lignes_par_moyen = []
+        somme_des_moyens = 0
+        codes_dans_l_ordre = codes_des_moyens_dans_l_ordre(par_moyen)
+        for code_du_moyen in codes_dans_l_ordre:
+            ligne_du_moyen = par_moyen[code_du_moyen]
+            lignes_par_moyen.append(
+                [
+                    _cellule_texte(ligne_du_moyen["libelle"]),
+                    _cellule_montant(ligne_du_moyen["total_en_centimes"]),
+                ]
+            )
+            somme_des_moyens += ligne_du_moyen["total_en_centimes"]
+        ecart_avec_le_chiffre_d_affaires = (
+            somme_des_moyens - chiffre_affaires["total_ttc_en_centimes"]
+        )
+        il_y_a_un_ecart = ecart_avec_le_chiffre_d_affaires != 0
+        message_de_l_ecart = ""
+        if il_y_a_un_ecart:
+            message_de_l_ecart = gettext(
+                "Les lignes par moyen ne recomposent pas le chiffre d'affaires TTC : "
+                "écart de %(ecart)s."
+            ) % {"ecart": euros_a_la_francaise(ecart_avec_le_chiffre_d_affaires)}
+        tableaux.append(
+            _tableau(
+                gettext("Par moyen de paiement"),
+                "chiffre-affaires-par-moyen",
+                [gettext("Moyen"), gettext("Montant")],
+                lignes_par_moyen,
+                alerte=il_y_a_un_ecart,
+                message_d_alerte=message_de_l_ecart,
+            )
+        )
 
     # Les taux, du plus petit au plus grand (clé « 5.50 », « 20.00 » : triée comme un
     # nombre, jamais comme un texte).
@@ -694,7 +779,8 @@ def _section_reglements(rapport):
 
     argent = reglements["argent"]
     lignes_de_l_argent = []
-    for ligne_du_moyen in _valeurs_triees(argent["par_moyen"], ["libelle"]):
+    moyens_d_argent_tries = _valeurs_triees(argent["par_moyen"], ["libelle"])
+    for ligne_du_moyen in moyens_d_argent_tries:
         lignes_de_l_argent.append(
             [
                 _cellule_texte(ligne_du_moyen["libelle"]),
@@ -710,7 +796,8 @@ def _section_reglements(rapport):
 
     cashless = reglements["cashless"]
     lignes_du_cashless = []
-    for ligne_du_moyen in _valeurs_triees(cashless["par_moyen"], ["libelle"]):
+    moyens_cashless_tries = _valeurs_triees(cashless["par_moyen"], ["libelle"])
+    for ligne_du_moyen in moyens_cashless_tries:
         monnaies_du_moyen = _valeurs_triees(ligne_du_moyen["par_monnaie"], ["nom"])
         for ligne_de_la_monnaie in monnaies_du_moyen:
             lignes_du_cashless.append(
@@ -784,40 +871,89 @@ def _section_reglements(rapport):
     return _section("reglements", gettext("Règlements"), False, tableaux)
 
 
+def lignes_du_tiroir(section_caisse_especes):
+    """
+    Les lignes du tiroir de la caisse, dans l'ordre, avec un libellé et un montant
+    SIGNÉ : l'argent qui sort du tiroir (espèces rendues, sorties de caisse) est
+    négatif. Les lignes au-dessus du solde s'additionnent donc en solde théorique.
+    C'est la seule écriture du tiroir : l'écran (section « caisse espèces », sortie
+    de caisse, récapitulatif) et les tickets X lisent ces lignes.
+    / The cash drawer lines, in order, with a label and a SIGNED amount (money
+    leaving the drawer is negative); the lines above the balance add up to it. The
+    single writing of the drawer, read by screens and tickets.
+
+    APPELÉ PAR : `_section_caisse_especes` (ci-dessous) et
+    `laboutik/printing/formatters.py` (`_lignes_du_tiroir_du_rapport`).
+
+    :param section_caisse_especes: `rapport["caisse_especes"]`
+    :return: liste de {"libelle", "montant_en_centimes", "toujours_imprimee"} ; le
+        fond et le solde sont toujours imprimés, les autres seulement s'ils ne sont
+        pas nuls (ticket)
+    """
+    sorties_en_positif = section_caisse_especes.get("sorties_en_centimes", 0)
+    return [
+        {
+            "libelle": gettext("Fond de caisse"),
+            "montant_en_centimes": section_caisse_especes.get(
+                "fond_de_caisse_en_centimes", 0
+            ),
+            "toujours_imprimee": True,
+        },
+        {
+            "libelle": gettext("Espèces reçues"),
+            "montant_en_centimes": section_caisse_especes.get(
+                "especes_recues_en_centimes", 0
+            ),
+            "toujours_imprimee": False,
+        },
+        {
+            # Déjà négatives dans le rapport (avoirs, vidages).
+            # / Already negative in the report.
+            "libelle": gettext("Espèces rendues"),
+            "montant_en_centimes": section_caisse_especes.get(
+                "especes_rendues_en_centimes", 0
+            ),
+            "toujours_imprimee": False,
+        },
+        {
+            "libelle": gettext("Corrections"),
+            "montant_en_centimes": section_caisse_especes.get(
+                "corrections_en_centimes", 0
+            ),
+            "toujours_imprimee": False,
+        },
+        {
+            # Positives dans le rapport : elles sortent du tiroir, donc négatives ici.
+            # / Positive in the report: they leave the drawer, negative here.
+            "libelle": gettext("Sorties de caisse"),
+            "montant_en_centimes": -sorties_en_positif,
+            "toujours_imprimee": False,
+        },
+        {
+            "libelle": gettext("Solde théorique"),
+            "montant_en_centimes": section_caisse_especes.get(
+                "solde_theorique_en_centimes", 0
+            ),
+            "toujours_imprimee": True,
+        },
+    ]
+
+
 def _section_caisse_especes(rapport):
     """
-    Section 4 (J seulement) : le tiroir de la caisse. Les espèces rendues et les
-    sorties s'écrivent en positif (le libellé dit que l'argent sort) ; les corrections
-    et le solde gardent leur signe.
-    / Section 4: the cash drawer; outflows written as positive amounts.
+    Section 4 (J seulement) : le tiroir de la caisse, écrit par `lignes_du_tiroir` :
+    montants signés, l'argent qui sort est négatif.
+    / Section 4: the cash drawer, written by lignes_du_tiroir (signed amounts).
     """
-    caisse = rapport["caisse_especes"]
-    lignes = [
-        [
-            _cellule_texte(gettext("Fond de caisse")),
-            _cellule_montant(caisse["fond_de_caisse_en_centimes"]),
-        ],
-        [
-            _cellule_texte(gettext("Espèces reçues")),
-            _cellule_montant(caisse["especes_recues_en_centimes"]),
-        ],
-        [
-            _cellule_texte(gettext("Espèces rendues")),
-            _cellule_montant(-caisse["especes_rendues_en_centimes"]),
-        ],
-        [
-            _cellule_texte(gettext("Corrections de moyen de paiement")),
-            _cellule_montant(caisse["corrections_en_centimes"]),
-        ],
-        [
-            _cellule_texte(gettext("Sorties de caisse")),
-            _cellule_montant(caisse["sorties_en_centimes"]),
-        ],
-        [
-            _cellule_texte(gettext("Solde théorique")),
-            _cellule_montant(caisse["solde_theorique_en_centimes"]),
-        ],
-    ]
+    lignes_signees_du_tiroir = lignes_du_tiroir(rapport["caisse_especes"])
+    lignes = []
+    for ligne_du_tiroir in lignes_signees_du_tiroir:
+        lignes.append(
+            [
+                _cellule_texte(ligne_du_tiroir["libelle"]),
+                _cellule_montant(ligne_du_tiroir["montant_en_centimes"]),
+            ]
+        )
     tableau_du_tiroir = _tableau(
         "", "caisse-especes", [gettext("Libellé"), gettext("Montant")], lignes
     )
@@ -977,7 +1113,8 @@ def _section_offerts(rapport):
     ]
 
     lignes_par_produit = []
-    for ligne_du_produit in _valeurs_triees(offerts["par_produit"], ["nom"]):
+    produits_offerts_tries = _valeurs_triees(offerts["par_produit"], ["nom"])
+    for ligne_du_produit in produits_offerts_tries:
         lignes_par_produit.append(
             [
                 _cellule_texte(ligne_du_produit["nom"]),
@@ -1027,7 +1164,8 @@ def _section_annexe(rapport):
             _cellule_montant(-avoirs["total_en_centimes"]),
         ]
     ]
-    for ligne_du_moyen in _valeurs_triees(avoirs["par_moyen"], ["libelle"]):
+    moyens_des_avoirs_tries = _valeurs_triees(avoirs["par_moyen"], ["libelle"])
+    for ligne_du_moyen in moyens_des_avoirs_tries:
         lignes_des_avoirs.append(
             [
                 _cellule_texte(
@@ -1203,7 +1341,8 @@ def _section_points(rapport):
     / Section 8: points or time sales by currency.
     """
     lignes = []
-    for ligne_de_la_monnaie in _valeurs_triees(rapport["points"], ["nom"]):
+    monnaies_triees = _valeurs_triees(rapport["points"], ["nom"])
+    for ligne_de_la_monnaie in monnaies_triees:
         lignes.append(
             [
                 _cellule_texte(ligne_de_la_monnaie["nom"]),
@@ -1303,7 +1442,8 @@ def _section_detail(rapport, fuseau_du_lieu):
     tableaux = []
 
     lignes_des_billets = []
-    for evenement in _evenements_tries_par_date(detail["billets"]):
+    evenements_tries = _evenements_tries_par_date(detail["billets"])
+    for evenement in evenements_tries:
         date_de_l_evenement = _date_heure_locale(evenement["date"], fuseau_du_lieu)
         tarifs_tries = _valeurs_triees(evenement["par_tarif"], ["nom", "produit"])
         for tarif in tarifs_tries:
@@ -1335,7 +1475,8 @@ def _section_detail(rapport, fuseau_du_lieu):
         )
 
     lignes_des_adhesions = []
-    for adhesion in _valeurs_triees(detail["adhesions"], ["nom"]):
+    adhesions_triees = _valeurs_triees(detail["adhesions"], ["nom"])
+    for adhesion in adhesions_triees:
         lignes_des_adhesions.append(
             [
                 _cellule_texte(adhesion["nom"]),
@@ -1500,7 +1641,8 @@ def _section_operateurs(rapport):
     / X report: by operator, sales count, revenue and money.
     """
     lignes = []
-    for operateur in _valeurs_triees(rapport["operateurs"], ["nom"]):
+    operateurs_tries = _valeurs_triees(rapport["operateurs"], ["nom"])
+    for operateur in operateurs_tries:
         nom_de_l_operateur = operateur["nom"]
         if not nom_de_l_operateur:
             nom_de_l_operateur = gettext("Compte supprimé")
@@ -1540,7 +1682,7 @@ def _section_operateurs(rapport):
 # ----------------------------------------------------------------------
 
 
-def _fuseau_d_affichage_du_rapport(rapport):
+def fuseau_d_affichage_du_rapport(rapport):
     """
     Le fuseau dans lequel s'écrivent les heures d'un rapport : celui figé dans son
     en-tête au moment du calcul (`fuseau_horaire`). Un Z scellé garde ainsi ses heures
@@ -1548,6 +1690,9 @@ def _fuseau_d_affichage_du_rapport(rapport):
     lieu (une ancienne clôture n'a pas ce champ).
     / The time zone of a report's hours: the one frozen in its header, otherwise the
     venue's current one.
+
+    APPELÉE PAR : `sections_pour_affichage` (ci-dessous) et les tickets X et Z
+    (`laboutik/printing/formatters.py`).
     """
     en_tete = rapport.get("en_tete", {})
     nom_du_fuseau_fige = en_tete.get("fuseau_horaire")
@@ -1581,7 +1726,7 @@ def sections_pour_affichage(rapport):
     if not rapport:
         return []
 
-    fuseau_du_lieu = _fuseau_d_affichage_du_rapport(rapport)
+    fuseau_du_lieu = fuseau_d_affichage_du_rapport(rapport)
     sections = []
 
     if "en_tete" in rapport:

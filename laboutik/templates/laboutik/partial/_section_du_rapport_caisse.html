@@ -1,0 +1,56 @@
+{% load i18n %}
+<!--
+UNE SECTION DU RAPPORT DES VENTES, AU STYLE DE LA CAISSE
+/ One sales report section, in the register style
+
+LOCALISATION : laboutik/templates/laboutik/partial/_section_du_rapport_caisse.html
+STYLE : laboutik/static/css/ventes.css (blocs .mini-table)
+
+Recoit `section` : une section de `comptabilite/presentation.py`
+(`sections_pour_affichage`), et `testid` : le data-testid du bloc.
+Ecrit chaque tableau de la section tel quel : titre, colonnes, puis le texte de
+chaque cellule (montants deja ecrits a la francaise par la presentation). Aucune
+regle d'affichage n'est recopiee ici.
+/ Receives a presentation section and a testid; writes each table as is.
+
+ACCESSIBILITE : la section est une region nommee par son titre (aria-labelledby),
+chaque en-tete de colonne porte scope="col". Avec `titre_dans_le_resume` (section
+repliee dans un <details>), le titre est deja ecrit dans le <summary>, qui porte
+l'id « <testid>-titre » : la section ne le repete pas.
+/ Accessibility: a region named by its title; column headers carry scope="col".
+With titre_dans_le_resume, the <summary> already holds the title (same id).
+
+INCLUS PAR : laboutik/partial/hx_cloture_rapport.html (ecran du Z),
+laboutik/partial/hx_recap_en_cours.html (recapitulatif en cours).
+-->
+<section class="table-wrap mini-table" data-testid="{{ testid }}" aria-labelledby="{{ testid }}-titre">
+  {% if not titre_dans_le_resume %}
+    <h3 class="mini-table-title" id="{{ testid }}-titre">{{ section.titre }}</h3>
+  {% endif %}
+  {% for tableau in section.tableaux %}
+    {% if tableau.titre %}
+      <h4 class="mini-table-title">{{ tableau.titre }}</h4>
+    {% endif %}
+    {% if tableau.message_d_alerte %}
+      <p role="alert">{{ tableau.message_d_alerte }}</p>
+    {% endif %}
+    <table>
+      <thead>
+        <tr>
+          {% for colonne in tableau.colonnes %}
+            <th scope="col">{{ colonne }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for ligne in tableau.lignes %}
+          <tr>
+            {% for cellule in ligne %}
+              <td{% if cellule.est_un_montant %} class="num"{% endif %}>{{ cellule.texte }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endfor %}
+</section>

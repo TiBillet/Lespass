@@ -110,6 +110,24 @@ class ClotureCaisseAdmin(ModelAdmin):
     change_form_before_template = "comptabilite/admin/change_form_before.html"
     list_before_template = "comptabilite/admin/changelist_before.html"
 
+    def changelist_view(self, request, extra_context=None):
+        """
+        Ajoute l'adresse de l'export fiscal (archive LNE) au bandeau de la liste.
+        L'export est une route de la caisse (`laboutik/views.py` export_fiscal),
+        gardée par le module caisse : sans module caisse actif, la route refuse, et le
+        bouton n'est pas affiché.
+        / Adds the fiscal export address to the list banner. The route belongs to the
+        register and needs the register module: without it, no button.
+        """
+        from BaseBillet.models import Configuration
+
+        extra_context = extra_context or {}
+        extra_context["export_fiscal_url"] = None
+        module_caisse_actif = Configuration.get_solo().module_caisse
+        if module_caisse_actif:
+            extra_context["export_fiscal_url"] = reverse("laboutik-caisse-export_fiscal")
+        return super().changelist_view(request, extra_context)
+
     def get_urls(self):
         """
         Ajoute la route /rapport-temps-reel/ AVANT les routes standard de l'admin.

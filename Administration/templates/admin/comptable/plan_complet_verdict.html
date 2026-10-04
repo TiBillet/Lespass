@@ -1,0 +1,41 @@
+{% load i18n %}
+{% comment %}
+VERDICT DE « PLAN COMPLET ? »
+/ "Complete plan?" verdict
+
+LOCALISATION : Administration/templates/admin/comptable/plan_complet_verdict.html
+
+Rendu par CompteComptableAdmin.verifier_le_plan (Administration/admin/laboutik.py),
+appele en HTMX par le bouton « Verifier le plan » (plan_complet.html). Il remplace la
+zone `#plan-complet-verdict`.
+
+- `manques_du_plan` non vide : chaque manque a une phrase et un lien vers l'ecran qui
+  le regle ;
+- liste vide : message vert « Le plan est complet : l'export est possible ».
+/ Rendered by verifier_le_plan, swapped into #plan-complet-verdict.
+{% endcomment %}
+{% if manques_du_plan %}
+    <p class="text-sm mb-2">
+        {% translate "Il manque des choses pour faire l'export comptable :" %}
+    </p>
+    <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;">
+        {% for manque in manques_du_plan %}
+            <li data-testid="plan-complet-manque"
+                style="color: #c2410c; border-left: 4px solid #ea580c; padding: 4px 10px;">
+                <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">warning</span>
+                {{ manque.phrase }}
+                {# Le lien est répété à chaque manque : son aria-label reprend la phrase, pour qu'un lecteur d'écran sache ce qu'il règle. #}
+                {# / The link repeats on each item: its aria-label carries the sentence for screen readers. #}
+                <a href="{{ manque.lien }}"
+                   aria-label="{% translate 'Régler' %} : {{ manque.phrase }}"
+                   data-testid="plan-complet-regler"
+                   style="text-decoration: underline; margin-left: 6px;">{% translate "Régler" %}</a>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p data-testid="plan-complet-ok" style="color: #15803d; font-weight: 600; margin: 0;">
+        <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">check_circle</span>
+        {% translate "Le plan est complet : l'export est possible" %}
+    </p>
+{% endif %}

@@ -25,9 +25,8 @@
                 <label for="id_debut"
                        class="block text-xs font-medium text-font-subtle-light dark:text-font-subtle-dark mb-1">
                     {% translate "Start date" %}
-                    <span class="text-base-400 dark:text-base-500 font-normal ml-1">({% translate "optional" %})</span>
                 </label>
-                <input type="date" id="id_debut" name="debut"
+                <input type="date" id="id_debut" name="debut" required
                        class="w-full px-3 py-2 text-sm rounded-default
                               border border-base-200 dark:border-base-700
                               bg-white dark:bg-base-900
@@ -54,7 +53,7 @@
         </div>
 
         <p class="text-xs text-base-400 dark:text-base-500">
-            {% translate "Leave empty to export all data. The archive contains CSV, JSON, and HMAC-SHA256 integrity hashes." %}
+            {% translate "La date de début est obligatoire. Sans date de fin, l'archive va jusqu'à aujourd'hui. 365 jours au plus." %}
         </p>
 
         {# Boutons action / Action buttons #}

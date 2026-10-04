@@ -192,3 +192,18 @@ class ClotureCaisse(models.Model):
 
     def __str__(self):
         return f"{self.get_niveau_display()} #{self.numero_sequentiel} — {self.datetime_fin:%Y-%m-%d}"
+
+    @classmethod
+    def derniere_journaliere(cls):
+        """
+        La dernière clôture journalière (J) du lieu, par numéro, ou None s'il n'y en
+        a aucune. C'est la seule lecture de « la dernière J » : le début du service,
+        le tiroir de la caisse et les clôtures automatiques la lisent ici.
+        / The venue's last daily closure (J), by number, or None. The single read of
+        "the last J".
+        """
+        return (
+            cls.objects.filter(niveau=cls.NIVEAU_JOURNALIER)
+            .order_by("-numero_sequentiel")
+            .first()
+        )

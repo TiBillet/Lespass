@@ -83,6 +83,7 @@ The remote Fedow network is faked.
 Lancer / Run : make test ARGS="tests/pytest/test_caisse_ecrit_la_vente.py"
 """
 
+import csv
 import html
 import logging
 import re
@@ -93,6 +94,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.db import connection
 from django.db.models import Q
 from django.utils import timezone, translation
 from django_tenants.utils import tenant_context
@@ -120,12 +122,11 @@ from fabriques_panier import (
 from fabriques_vente import verifier_egalites
 from fedow_core.models import Asset, Token, Transaction
 from fedow_core.services import AssetService, WalletService
-from laboutik.archivage import _extraire_lignes_article
+from laboutik.archivage import generer_fichiers_archive
 from laboutik.integrity import verifier_chaine_ventes
 from laboutik.models import (
     ArticleCommandeSauvegarde,
     CartePrimaire,
-    ClotureCaisse,
     CommandeSauvegarde,
     CorrectionPaiement,
     LaboutikConfiguration,
@@ -3972,42 +3973,49 @@ def test_rejeu_deuxieme_carte_meme_cle_une_seule_vente(lieu):
 
 
 # ==========================================================================
-# ARCHIVE FISCALE LNE : les mêmes HT et TVA qu'avant la vente en montants entiers
-# / LNE FISCAL ARCHIVE: the same HT and VAT as before whole-cent sales
+# ARCHIVE FISCALE LNE : le HT et la TVA stockés sur chaque article
+# / LNE FISCAL ARCHIVE: the HT and VAT stored on each item
 # ==========================================================================
 #
-# L'archive fiscale de la caisse (laboutik/archivage.py) exporte pour chaque ligne un HT
-# et une TVA = TTC de la ligne − HT. Le champ `LigneArticle.total_ht` d'une ligne écrite
-# par le service de vente porte le HT du NET vendu : 0 pour une ligne offerte. L'archive
-# garde les valeurs d'avant : elle ne doit pas inventer de TVA sur un article offert. Une
-# part payée en jetons est une vente ordinaire à TVA 0 (D8 bis) : HT = TTC, TVA 0.
-# / The register's fiscal archive keeps the values it exported before.
+# L'archive fiscale (laboutik/archivage.py) exporte les articles des ventes dans
+# `articles.csv`, avec le HT et la TVA STOCKÉS sur l'article (`total_ht`, `total_tva`),
+# jamais recalculés depuis `amount × qty`. Une ligne offerte a un net vendu de 0 : HT 0,
+# TVA 0, jamais une TVA inventée. Une part payée en jetons est une vente ordinaire à
+# TVA 0 (D8 bis) : HT = TTC, TVA 0.
+# / The fiscal archive exports the sales' items with their STORED HT and VAT.
 
 
-def ligne_dans_l_archive_lne(ligne):
+def article_dans_l_archive_lne(ligne):
     """
-    La ligne telle que l'archive fiscale LNE l'exporte, par la vraie fonction
-    d'extraction (`_extraire_lignes_article`), sur une fenêtre de dix minutes autour
-    de maintenant. La base est partagée : on garde la ligne du test par son uuid.
-    / The line as the LNE fiscal archive exports it, through the real extraction.
+    L'article tel que l'archive fiscale LNE l'exporte (`articles.csv`), par la vraie
+    génération de l'archive, sur une fenêtre de dix minutes autour de maintenant. La
+    base est partagée : on garde l'article du test par son uuid.
+    / The item as the LNE fiscal archive exports it, through the real archive.
     """
     maintenant = timezone.now()
-    lignes_exportees = _extraire_lignes_article(
-        maintenant - timedelta(minutes=5), maintenant + timedelta(minutes=5)
+    fichiers_de_l_archive = generer_fichiers_archive(
+        schema=connection.schema_name,
+        debut=maintenant - timedelta(minutes=5),
+        fin=maintenant + timedelta(minutes=5),
     )
-    for ligne_exportee in lignes_exportees:
-        if ligne_exportee["uuid"] == str(ligne.uuid):
-            return ligne_exportee
-    raise AssertionError(f"La ligne {ligne.uuid} est absente de l'archive.")
+    texte_des_articles = fichiers_de_l_archive["articles.csv"].decode("utf-8-sig")
+    lecteur_des_articles = csv.DictReader(
+        texte_des_articles.splitlines(), delimiter=";"
+    )
+    for article_exporte in lecteur_des_articles:
+        if article_exporte["uuid"] == str(ligne.uuid):
+            return article_exporte
+    raise AssertionError(f"L'article {ligne.uuid} est absent de l'archive.")
 
 
-def test_archive_lne_ligne_offerte_garde_les_valeurs_d_avant(lieu):
+def test_archive_lne_ligne_offerte_exporte_ses_montants_stockes(lieu):
     """
-    Le gérant offre une bière à 5,00 € (TVA 20 %). La ligne est entièrement offerte :
-    son TTC de ligne vaut 5,00 €, à TVA 0 (un article offert n'est pas une vente en
-    argent). L'archive exporte HT 500 et TVA 0, comme avant : jamais une TVA de 500
-    inventée sur un article offert.
-    / A 5.00 € beer gifted by the manager: the archive exports HT 500, VAT 0, as before.
+    Le gérant offre une bière à 5,00 € (TVA 20 %). L'article est entièrement offert :
+    total catalogue 500, part offerte 500, net vendu 0. L'archive exporte les montants
+    stockés : TTC 0, HT 0, TVA 0, part offerte 500. Jamais une TVA inventée sur un
+    article offert.
+    / A 5.00 € beer gifted by the manager: the archive exports the stored amounts
+    (TTC 0, HT 0, VAT 0, offered part 500).
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit])
@@ -4028,9 +4036,12 @@ def test_archive_lne_ligne_offerte_garde_les_valeurs_d_avant(lieu):
 
     assert reponse.status_code == 200
     ligne_de_la_biere = LigneArticle.objects.get(pricesold__price=biere.tarif)
-    ligne_exportee = ligne_dans_l_archive_lne(ligne_de_la_biere)
-    assert ligne_exportee["total_ht_centimes"] == "500"
-    assert ligne_exportee["total_tva_centimes"] == "0"
+    article_exporte = article_dans_l_archive_lne(ligne_de_la_biere)
+    assert article_exporte["total_catalogue"] == "500"
+    assert article_exporte["part_offerte"] == "500"
+    assert article_exporte["total_ttc"] == "0"
+    assert article_exporte["total_ht"] == "0"
+    assert article_exporte["total_tva"] == "0"
 
 
 def test_archive_lne_part_en_jetons_tva_zero(lieu):
@@ -4038,7 +4049,8 @@ def test_archive_lne_part_en_jetons_tva_zero(lieu):
     Un vin à 10,00 € (TVA 20 %) payé par la carte du client : 6,00 € de jetons cadeau
     et 4,00 € de monnaie locale. Deux parts, au prix unitaire 1000, quantités 0,6 et
     0,4. La part en jetons est une vente ordinaire à TVA 0 (D8 bis) : l'archive exporte
-    HT 600, TVA 0. La part en monnaie locale garde ses valeurs : HT 333, TVA 67.
+    HT 600, TVA 0. La part en monnaie locale : HT = arrondi(400 / 1,2 = 333,33) = 333,
+    TVA 67.
     / A 10.00 € wine paid 6.00 € in tokens + 4.00 € in local currency: the archive
     exports token part HT 600 VAT 0 (0 % VAT, D8 bis), local part HT 333 VAT 67.
     """
@@ -4063,18 +4075,18 @@ def test_archive_lne_part_en_jetons_tva_zero(lieu):
     part_en_monnaie_locale = LigneArticle.objects.get(
         pricesold__price=vin.tarif, payment_method=PaymentMethod.LOCAL_EURO
     )
-    part_en_jetons_exportee = ligne_dans_l_archive_lne(part_en_jetons)
-    assert part_en_jetons_exportee["total_ht_centimes"] == "600"
-    assert part_en_jetons_exportee["total_tva_centimes"] == "0"
-    part_en_monnaie_locale_exportee = ligne_dans_l_archive_lne(part_en_monnaie_locale)
-    assert part_en_monnaie_locale_exportee["total_ht_centimes"] == "333"
-    assert part_en_monnaie_locale_exportee["total_tva_centimes"] == "67"
+    part_en_jetons_exportee = article_dans_l_archive_lne(part_en_jetons)
+    assert part_en_jetons_exportee["total_ht"] == "600"
+    assert part_en_jetons_exportee["total_tva"] == "0"
+    part_en_monnaie_locale_exportee = article_dans_l_archive_lne(part_en_monnaie_locale)
+    assert part_en_monnaie_locale_exportee["total_ht"] == "333"
+    assert part_en_monnaie_locale_exportee["total_tva"] == "67"
 
 
 def test_archive_lne_ligne_ordinaire_inchangee(lieu):
     """
     Témoin : une bière à 5,00 € (TVA 20 %) payée en espèces. L'archive exporte
-    HT 417 et TVA 83, comme avant.
+    HT = arrondi(500 / 1,2 = 416,67) = 417 et TVA 83, comme avant.
     / Witness: a 5.00 € beer paid in cash: the archive exports HT 417, VAT 83.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
@@ -4092,57 +4104,27 @@ def test_archive_lne_ligne_ordinaire_inchangee(lieu):
 
     assert reponse.status_code == 200
     ligne_de_la_biere = LigneArticle.objects.get(pricesold__price=biere.tarif)
-    ligne_exportee = ligne_dans_l_archive_lne(ligne_de_la_biere)
-    assert ligne_exportee["total_ht_centimes"] == "417"
-    assert ligne_exportee["total_tva_centimes"] == "83"
+    article_exporte = article_dans_l_archive_lne(ligne_de_la_biere)
+    assert article_exporte["total_ht"] == "417"
+    assert article_exporte["total_tva"] == "83"
 
 
-def test_archive_lne_ligne_sans_vente_garde_son_ht_stocke(lieu):
-    """
-    Témoin : une ligne de caisse écrite SANS vente, comme les lignes du vidage de carte
-    (fedow_core/services.py, `rembourser_en_especes`) : 8,00 € rendus en espèces, dont
-    aucun HT n'est calculé (champ laissé à 0). L'archive exporte le HT stocké, comme
-    avant : HT 0, TVA −800. Recalculer le HT de cette ligne changerait une valeur que
-    le chantier ne touche pas.
-    / Witness: a register line written WITHOUT a sale (like card emptying lines), whose
-    HT is left at 0: the archive exports the stored HT, as before (HT 0, VAT −800).
-    """
-    remboursement = creer_un_article_de_caisse(
-        "remboursement", prix_en_euros="0.00", taux_tva="20.00"
-    )
-    produit_vendu = ProductSold.objects.create(product=remboursement.produit)
-    tarif_vendu = PriceSold.objects.create(
-        productsold=produit_vendu, price=remboursement.tarif, prix=Decimal("0")
-    )
-    ligne_sans_vente = LigneArticle.objects.create(
-        pricesold=tarif_vendu,
-        qty=1,
-        amount=-800,
-        payment_method=PaymentMethod.CASH,
-        status=LigneArticle.VALID,
-        sale_origin=SaleOrigin.LABOUTIK,
-    )
-    assert ligne_sans_vente.vente_id is None
-
-    ligne_exportee = ligne_dans_l_archive_lne(ligne_sans_vente)
-
-    assert ligne_exportee["total_ht_centimes"] == "0"
-    assert ligne_exportee["total_tva_centimes"] == "-800"
+# L'archive exporte les articles des VENTES (tests/pytest/test_archive_lne_ventes.py) :
+# une ligne écrite sans vente n'en fait pas partie.
+# / The archive exports the SALES' items: a line without a sale is not part of it.
 
 
-def test_archive_lne_part_au_centime_arrondi_comme_avant(lieu):
+def test_archive_lne_part_au_centime_tva_stockee(lieu):
     """
     Trois jus à 3,50 € (TVA 20 %, 10,50 €) payés par la carte du client : 5,50 € de
     jetons cadeau, puis 5,00 € de monnaie locale. La part en monnaie locale garde le
     prix unitaire 350 et une quantité partielle de 1,428571 : `amount × qty` vaut
     499,99985, entre deux centimes.
-    L'archive arrondit ce TTC de ligne 0,5 vers le haut (500), comme la caisse avant la
-    vente en montants entiers : HT = calculer_total_ht(500, 20) = 417. Sa TVA garde la
-    formule de l'archive, `int(amount × qty) − HT` = 499 − 417 = 82. Un arrondi par
-    troncature (499) donnerait HT 416.
+    L'archive exporte l'argent réel stocké sur la part : TTC 500,
+    HT = arrondi(500 / 1,2 = 416,67) = 417, TVA = 500 − 417 = 83. Une TVA recalculée
+    par `int(amount × qty) − HT` donnerait 499 − 417 = 82.
     / Three 3.50 € juices paid 5.50 € in tokens + 5.00 € in local currency: the local
-    part's amount × qty is 499.99985. The archive rounds it half-up (500) as before:
-    HT 417, VAT 82 (archive formula). Truncation would give HT 416.
+    part exports its stored TTC 500, HT 417, VAT 83 (a recomputed one: 82).
     """
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([jus.produit])
@@ -4168,10 +4150,11 @@ def test_archive_lne_part_au_centime_arrondi_comme_avant(lieu):
     assert part_en_monnaie_locale.amount == 350
     assert part_en_monnaie_locale.qty == Decimal("1.428571")
 
-    part_exportee = ligne_dans_l_archive_lne(part_en_monnaie_locale)
+    part_exportee = article_dans_l_archive_lne(part_en_monnaie_locale)
 
-    assert part_exportee["total_ht_centimes"] == "417"
-    assert part_exportee["total_tva_centimes"] == "82"
+    assert part_exportee["total_ttc"] == "500"
+    assert part_exportee["total_ht"] == "417"
+    assert part_exportee["total_tva"] == "83"
 
 
 # ==========================================================================
@@ -4537,8 +4520,7 @@ def test_paiement_table_nfc_refuse_aucune_vente_commande_ouverte(lieu):
 # que les anomalies de LEURS ventes. Une anomalie d'une vente dépend de ses propres
 # données et de la vente qui la précède dans la chaîne, posée sous le verrou du lieu par
 # `encaisser_vente`. Aucun test n'asserte une valeur de numéro ni la santé de la chaîne
-# entière. La clôture du test 21b est écrite dans la transaction du test, annulée à la
-# fin : elle n'est jamais vue par le serveur de dev.
+# entière. Aucun test de ce fichier ne crée de clôture.
 # / Shared database: the tests only read the anomalies of THEIR sales, which depend on
 # their own data and on their predecessor. No number value is asserted.
 
@@ -4739,65 +4721,8 @@ def test_correction_moyen_nouvelle_vente_correction(lieu):
     verifier_egalites(vente_de_correction)
 
 
-# --------------------------------------------------------------------------
-# 21b — Vente couverte par une clôture : refus, aucune vente CORRECTION
-# / 21b — Sale covered by a closure: refused, no CORRECTION sale
-# --------------------------------------------------------------------------
-
-
-def test_correction_moyen_apres_cloture_refusee_aucune_vente(lieu):
-    """
-    Une bière à 5,00 € payée en espèces, puis une clôture journalière qui couvre la
-    vente. Le caissier tente de corriger en CB : refus (400). Rien n'est écrit :
-    la ligne reste en espèces, sans trace de correction, aucune vente `CORRECTION`
-    n'est créée, et la vente d'origine ne change pas.
-    / A 5.00 € beer paid in cash, then a daily closure covering it. Correcting into CB
-    is refused (400): the line stays cash, no audit trail, no CORRECTION sale, the
-    original sale unchanged.
-    """
-    biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
-    point_de_vente = creer_un_point_de_vente([biere.produit])
-    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
-    cle_d_idempotence = nouvelle_cle_d_idempotence()
-
-    reponse_du_paiement = payer_a_la_caisse(
-        client_du_caissier,
-        point_de_vente,
-        biere,
-        quantite=1,
-        moyen_de_paiement="espece",
-        autres_champs={"cle_idempotence_paiement": cle_d_idempotence},
-    )
-    assert reponse_du_paiement.status_code == 200
-    vente_d_origine = retrouver_la_vente_de_la_cle(cle_d_idempotence)
-    ligne_de_la_biere = seul_article_de_la_vente(vente_d_origine)
-
-    # Une clôture journalière dont la période couvre l'heure de la ligne.
-    # / A daily closure whose period covers the line's time.
-    ClotureCaisse.objects.create(
-        point_de_vente=point_de_vente,
-        datetime_ouverture=ligne_de_la_biere.datetime - timedelta(minutes=5),
-        datetime_cloture=ligne_de_la_biere.datetime + timedelta(minutes=5),
-        niveau=ClotureCaisse.JOURNALIERE,
-    )
-    vente_d_origine_avant_la_correction = photographie_de_la_vente(vente_d_origine)
-    nombre_de_corrections_avant = nombre_de_ventes_de_correction()
-
-    reponse = corriger_le_moyen_de_paiement(
-        client_du_caissier, ligne_de_la_biere, PaymentMethod.CC
-    )
-
-    assert reponse.status_code == 400
-    ligne_de_la_biere.refresh_from_db()
-    assert ligne_de_la_biere.payment_method == PaymentMethod.CASH
-    assert not CorrectionPaiement.objects.filter(
-        ligne_article=ligne_de_la_biere
-    ).exists()
-    assert ventes_de_correction_liees_a(vente_d_origine) == []
-    assert nombre_de_ventes_de_correction() == nombre_de_corrections_avant
-    assert photographie_de_la_vente(vente_d_origine) == (
-        vente_d_origine_avant_la_correction
-    )
+# 21b — Vente couverte par une clôture : test_lecteurs_montants_entiers.py (schéma dédié).
+# / 21b — Sale covered by a closure: test_lecteurs_montants_entiers.py.
 
 
 # --------------------------------------------------------------------------
@@ -4897,20 +4822,22 @@ def test_correction_du_complement_especes_en_cb(lieu):
 
 
 # --------------------------------------------------------------------------
-# 21d — Ligne écrite sans vente : corrigée comme aujourd'hui, sans vente CORRECTION
-# / 21d — Line written without a sale: corrected as today, no CORRECTION sale
+# 21d — Ligne écrite sans vente : refus, rien n'est écrit
+# / 21d — Line written without a sale: refused, nothing is written
 # --------------------------------------------------------------------------
 
 
-def test_correction_d_une_ligne_sans_vente_comme_avant(lieu):
+def test_correction_d_une_ligne_sans_vente_refusee(lieu):
     """
-    Une ligne de caisse écrite SANS vente, comme celles écrites avant le chantier
-    (base de dev seulement) : une bière à 5,00 € en espèces. Le caissier la corrige en
-    CB. La correction est faite comme aujourd'hui : la ligne passe en CB, avec sa trace
-    `CorrectionPaiement`. Il n'y a pas de vente d'origine : aucune vente `CORRECTION`
-    n'est créée, et la ligne reste sans vente.
-    / A register line written WITHOUT a sale (dev database only), corrected into CB:
-    corrected as today, no CORRECTION sale, the line stays without a sale.
+    Une ligne de caisse écrite SANS vente, comme les lignes d'avant les ventes (base
+    de dev seulement) : une bière à 5,00 € en espèces. Le caissier tente de la
+    corriger en CB : refus (400). Seule une vente réglée, pas encore couverte par une
+    clôture journalière, se corrige ; une ligne sans vente n'a ni numéro ni
+    règlement. Rien n'est écrit : la ligne reste en espèces et sans vente, sans trace
+    `CorrectionPaiement`, et aucune vente `CORRECTION` n'est créée.
+    / A register line written WITHOUT a sale (dev database only): correcting it into
+    CB is refused (400). Only a settled sale not yet covered by a daily closure is
+    corrected. Nothing is written.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit])
@@ -4936,18 +4863,18 @@ def test_correction_d_une_ligne_sans_vente_comme_avant(lieu):
         client_du_caissier, ligne_sans_vente, PaymentMethod.CC
     )
 
-    assert reponse.status_code == 200
+    assert reponse.status_code == 400
+    with translation.override(reponse["Content-Language"]):
+        message_de_refus_attendu = translation.gettext(
+            "Seule une vente réglée peut être corrigée."
+        )
+    assert message_de_refus_attendu in reponse.content.decode()
     ligne_sans_vente.refresh_from_db()
-    assert ligne_sans_vente.payment_method == PaymentMethod.CC
+    assert ligne_sans_vente.payment_method == PaymentMethod.CASH
     assert ligne_sans_vente.vente_id is None
-    assert (
-        CorrectionPaiement.objects.filter(
-            ligne_article=ligne_sans_vente,
-            ancien_moyen=PaymentMethod.CASH,
-            nouveau_moyen=PaymentMethod.CC,
-        ).count()
-        == 1
-    )
+    assert not CorrectionPaiement.objects.filter(
+        ligne_article=ligne_sans_vente
+    ).exists()
     assert nombre_de_ventes_de_correction() == nombre_de_corrections_avant
 
 

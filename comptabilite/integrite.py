@@ -194,8 +194,9 @@ def verifier_chaine_clotures(cle):
     2. empreinte fausse : l'empreinte recalculée (avec son `previous_hmac`) n'est pas
        celle enregistrée — la clôture a été modifiée après coup.
     Les trous de numéro sont vérifiés par `verify_clotures`.
+    FLUX : appelée par les commandes `verify_clotures` et `verify_integrity`.
     / Walks closures by number: broken link, wrong fingerprint. Number gaps are checked
-    by the verify_clotures command.
+    by the verify_clotures command. Called by verify_clotures and verify_integrity.
 
     Une anomalie est un dictionnaire : "numero" (numéro de la clôture), "uuid" (texte)
     et "raison" (phrase en français).

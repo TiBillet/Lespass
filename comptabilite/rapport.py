@@ -234,8 +234,22 @@ def _mediane_en_centimes(valeurs_en_centimes):
     return _moyenne_en_centimes(somme_des_deux_du_milieu, 2)
 
 
-def _libelle_du_moyen(code_du_moyen):
-    """Le nom lisible d'un moyen de paiement. / Readable name of a payment method."""
+def nom_du_moyen_de_paiement(code_du_moyen):
+    """
+    Le nom lisible d'un moyen de paiement. C'est la seule source des noms des
+    moyens du rapport, de l'écran et des tickets : les trois moyens du comptoir ont
+    un nom court, avec accents (« Espèces », « Carte bancaire », « Chèque ») ; les
+    autres gardent le libellé de `PaymentMethod`.
+    / Readable name of a payment method: the single source for the report, the
+    screens and the tickets. Short names for the three counter methods.
+    """
+    noms_des_moyens_du_comptoir = {
+        PaymentMethod.CASH: gettext("Espèces"),
+        PaymentMethod.CC: gettext("Carte bancaire"),
+        PaymentMethod.CHEQUE: gettext("Chèque"),
+    }
+    if code_du_moyen in noms_des_moyens_du_comptoir:
+        return noms_des_moyens_du_comptoir[code_du_moyen]
     libelles_des_moyens = dict(PaymentMethod.choices)
     return str(libelles_des_moyens.get(code_du_moyen, code_du_moyen))
 
@@ -248,6 +262,33 @@ def _cle_et_nom_de_la_monnaie(uuid_de_la_monnaie):
     if uuid_de_la_monnaie is None:
         return CLE_SANS_MONNAIE, gettext("Sans monnaie")
     return str(uuid_de_la_monnaie), nom_de_la_monnaie(uuid_de_la_monnaie)
+
+
+def _filtre_des_articles_de_recharge():
+    """
+    Le `Q` des articles dont le produit est une recharge : mêmes règles que le plan
+    comptable (`RE`, `RC` à la caisse, `R`, `E` en ligne).
+    / The Q of items whose product is a top-up (same rules as the chart of accounts).
+    """
+    return Q(
+        pricesold__productsold__product__methode_caisse__in=METHODES_CAISSE_DES_RECHARGES
+    ) | Q(
+        pricesold__productsold__product__categorie_article__in=TYPES_DE_PRODUIT_DES_RECHARGES
+    )
+
+
+def _ajouter_au_moyen(par_moyen, code_du_moyen, libelle_du_moyen, montant_en_centimes):
+    """
+    Ajoute un montant (signé) à la ligne d'un moyen dans un dictionnaire « par
+    moyen » du rapport, en créant la ligne si elle manque.
+    / Adds signed cents to a method line of a "by method" dict, creating it.
+    """
+    if code_du_moyen not in par_moyen:
+        par_moyen[code_du_moyen] = {
+            "libelle": libelle_du_moyen,
+            "total_en_centimes": 0,
+        }
+    par_moyen[code_du_moyen]["total_en_centimes"] += montant_en_centimes
 
 
 class RapportDesVentes:
@@ -329,19 +370,199 @@ class RapportDesVentes:
         une recharge (mêmes règles que le plan comptable : `RE`, `RC` à la caisse,
         `R`, `E` en ligne), dans les ventes en euros de nature VENTE. C'est un montant
         brut : une recharge remboursée reste comptée ici, et son remboursement apparaît
-        dans les avoirs.
+        dans les avoirs (`_articles_de_recharge_remboursees`).
         / Collected top-ups (gross): off-revenue top-up items of VENTE euro sales.
         """
-        produit_est_une_recharge = Q(
-            pricesold__productsold__product__methode_caisse__in=METHODES_CAISSE_DES_RECHARGES
-        ) | Q(
-            pricesold__productsold__product__categorie_article__in=TYPES_DE_PRODUIT_DES_RECHARGES
-        )
         return self._articles_des_ventes_en_euros().filter(
-            produit_est_une_recharge,
+            _filtre_des_articles_de_recharge(),
             hors_chiffre_affaires=True,
             vente__nature=Vente.Nature.VENTE,
         )
+
+    def _articles_de_recharge_remboursees(self):
+        """
+        Les recharges remboursées : les articles de recharge des avoirs en euros. Un
+        article d'avoir reprend le produit et le « hors chiffre d'affaires » de
+        l'article qu'il annule ; son net est négatif.
+        / Refunded top-ups: the top-up items of euro credit notes (negative net).
+        """
+        return self._articles_des_ventes_en_euros().filter(
+            _filtre_des_articles_de_recharge(),
+            hors_chiffre_affaires=True,
+            vente__nature=Vente.Nature.AVOIR,
+        )
+
+    def _parts_deplacees_par_les_corrections(
+        self, filtre_des_articles_deplaces, moyens_ignores
+    ):
+        """
+        Les parts d'articles qu'une correction de moyen de paiement déplace avec
+        l'argent, pour chaque vente CORRECTION de la période.
+        / The item parts a payment method correction moves along with the money.
+
+        POURQUOI : une vente CORRECTION n'a aucun article. Ses deux règlements
+        (deux moyens, deux montants opposés) déplacent TOUT l'argent des lignes
+        corrigées de la vente liée, recharge comprise. La part de ces lignes qui
+        n'est pas du chiffre d'affaires (une recharge) doit donc suivre l'argent :
+        retirée du chiffre d'affaires du moyen d'arrivée, rendue au moyen de départ ;
+        et, dans les recharges par moyen, passée du moyen de départ au moyen
+        d'arrivée.
+        / A CORRECTION sale has no item; its two payments move all the money of the
+        corrected lines, top-up included: that part must follow the money.
+
+        LE SENS DU DÉPLACEMENT ne dépend pas du signe des règlements : une correction
+        porte une paire de moyens {m1, m2}. Si le moyen où se trouve la part est dans
+        la paire, la part passe à l'autre moyen de la paire. Une correction d'avoir
+        (montants de signes inverses) se lit donc comme une correction de vente.
+        / The direction does not depend on the payments' sign: a correction carries
+        a pair {m1, m2}; a part under one of them moves to the other.
+
+        LES LIGNES CORRIGÉES : la correction déplace toutes les lignes du même
+        paiement et du même moyen. Une vente qui contient un article hors chiffre
+        d'affaires a un seul moyen d'argent (la caisse refuse le cashless pour une
+        recharge payante) : sa part est sous ce moyen. Une vente liée à plusieurs
+        moyens (ou sans moyen) range sa part sous « plusieurs moyens » : rien n'est
+        déplacé.
+        / A sale with an off-revenue item has one money method; otherwise nothing
+        moves.
+
+        TOUTES LES CORRECTIONS DE LA VENTE LIÉE sont suivies, dans l'ordre de leurs
+        numéros, même hors de la période : une correction d'avant la période a déjà
+        changé le moyen de la part. Seules les corrections de la période émettent un
+        déplacement. La vente liée est elle aussi lue hors de la période.
+        / Every correction of the linked sale is followed by number, even outside
+        the period; only the period's corrections emit a move.
+
+        REQUÊTES : cinq, quel que soit le nombre de ventes.
+        / Five queries, whatever the number of sales.
+
+        :param filtre_des_articles_deplaces: `Q` des articles dont la part suit
+            l'argent (hors chiffre d'affaires, ou recharges seulement)
+        :param moyens_ignores: les moyens qui ne comptent pas pour trouver le moyen
+            de la vente liée
+        :return: liste de (moyen_de_depart, moyen_d_arrivee, part_en_centimes)
+        """
+        # 1. Les corrections de la période, et leurs ventes liées.
+        # / 1. The period's corrections, and their linked sales.
+        corrections_de_la_periode = (
+            self._ventes_en_euros()
+            .filter(nature=Vente.Nature.CORRECTION, vente_liee__isnull=False)
+            .values("pk", "vente_liee_id")
+        )
+        identifiants_des_corrections_de_la_periode = set()
+        identifiants_des_ventes_liees = set()
+        for correction_de_la_periode in corrections_de_la_periode:
+            identifiants_des_corrections_de_la_periode.add(
+                correction_de_la_periode["pk"]
+            )
+            identifiants_des_ventes_liees.add(
+                correction_de_la_periode["vente_liee_id"]
+            )
+
+        # 2. Toutes les corrections réglées de ces ventes liées, sans borne de
+        #    période, dans l'ordre des numéros.
+        # / 2. Every settled correction of these linked sales, with no period
+        #    bound, by number.
+        toutes_les_corrections_des_ventes_liees = list(
+            Vente.objects.filter(
+                statut=Vente.Statut.REGLEE,
+                unite="EUR",
+                nature=Vente.Nature.CORRECTION,
+                vente_liee_id__in=identifiants_des_ventes_liees,
+            )
+            .order_by("numero")
+            .values("pk", "vente_liee_id")
+        )
+        identifiants_de_toutes_les_corrections = []
+        for correction_de_la_vente_liee in toutes_les_corrections_des_ventes_liees:
+            identifiants_de_toutes_les_corrections.append(
+                correction_de_la_vente_liee["pk"]
+            )
+
+        reglements_des_corrections = Reglement.objects.filter(
+            vente_id__in=identifiants_de_toutes_les_corrections
+        ).values("vente_id", "moyen")
+        parts_des_ventes_liees = (
+            LigneArticle.objects.filter(vente_id__in=identifiants_des_ventes_liees)
+            .filter(filtre_des_articles_deplaces)
+            .values("vente_id")
+            .annotate(total_en_centimes=Sum("total_ttc"))
+            .order_by("vente_id")
+        )
+        moyens_des_ventes_liees = (
+            Reglement.objects.filter(vente_id__in=identifiants_des_ventes_liees)
+            .exclude(moyen__in=moyens_ignores)
+            .values("vente_id", "moyen")
+            .distinct()
+        )
+
+        # La paire de moyens de chaque correction, sans regarder le signe.
+        # / Each correction's pair of methods, regardless of the sign.
+        paire_de_moyens_par_correction = {}
+        for reglement in reglements_des_corrections:
+            identifiant_de_la_correction = reglement["vente_id"]
+            if identifiant_de_la_correction not in paire_de_moyens_par_correction:
+                paire_de_moyens_par_correction[identifiant_de_la_correction] = set()
+            paire_de_moyens_par_correction[identifiant_de_la_correction].add(
+                reglement["moyen"]
+            )
+
+        # La part de chaque vente liée.
+        # / Each linked sale's part.
+        part_par_vente_liee = {}
+        for part_de_la_vente in parts_des_ventes_liees:
+            part_par_vente_liee[part_de_la_vente["vente_id"]] = part_de_la_vente[
+                "total_en_centimes"
+            ]
+
+        # Le moyen où se trouve la part de chaque vente liée : son seul moyen.
+        # / The method holding each linked sale's part: its only method.
+        moyens_par_vente_liee = {}
+        for vente_et_moyen in moyens_des_ventes_liees:
+            identifiant_de_la_vente = vente_et_moyen["vente_id"]
+            if identifiant_de_la_vente not in moyens_par_vente_liee:
+                moyens_par_vente_liee[identifiant_de_la_vente] = set()
+            moyens_par_vente_liee[identifiant_de_la_vente].add(vente_et_moyen["moyen"])
+        moyen_de_la_part_par_vente_liee = {}
+        ventes_liees_et_leurs_moyens = moyens_par_vente_liee.items()
+        for identifiant_de_la_vente, moyens_de_la_vente in ventes_liees_et_leurs_moyens:
+            if len(moyens_de_la_vente) == 1:
+                moyen_de_la_part_par_vente_liee[identifiant_de_la_vente] = list(
+                    moyens_de_la_vente
+                )[0]
+
+        # Chaque correction, dans l'ordre des numéros, déplace la part si son moyen
+        # est dans la paire. Seules les corrections de la période émettent.
+        # / Each correction, by number, moves the part if its method is in the
+        # pair. Only the period's corrections emit.
+        parts_deplacees = []
+        for correction_de_la_vente_liee in toutes_les_corrections_des_ventes_liees:
+            identifiant_de_la_correction = correction_de_la_vente_liee["pk"]
+            identifiant_de_la_vente_liee = correction_de_la_vente_liee["vente_liee_id"]
+            paire_de_moyens = paire_de_moyens_par_correction.get(
+                identifiant_de_la_correction, set()
+            )
+            if len(paire_de_moyens) != 2:
+                continue
+            moyen_de_la_part = moyen_de_la_part_par_vente_liee.get(
+                identifiant_de_la_vente_liee
+            )
+            if moyen_de_la_part not in paire_de_moyens:
+                continue
+            autres_moyens_de_la_paire = paire_de_moyens - {moyen_de_la_part}
+            moyen_d_arrivee = list(autres_moyens_de_la_paire)[0]
+            moyen_de_la_part_par_vente_liee[identifiant_de_la_vente_liee] = (
+                moyen_d_arrivee
+            )
+
+            part = part_par_vente_liee.get(identifiant_de_la_vente_liee, 0)
+            correction_de_la_periode = (
+                identifiant_de_la_correction
+                in identifiants_des_corrections_de_la_periode
+            )
+            if part and correction_de_la_periode:
+                parts_deplacees.append((moyen_de_la_part, moyen_d_arrivee, part))
+        return parts_deplacees
 
     def _articles_d_ecart_d_encaissement(self):
         """
@@ -453,6 +674,7 @@ class RapportDesVentes:
             "total_ttc_en_centimes": totaux["total_ttc_en_centimes"],
             "total_ht_en_centimes": totaux["total_ht_en_centimes"],
             "total_tva_en_centimes": totaux["total_tva_en_centimes"],
+            "par_moyen": self._chiffre_affaires_par_moyen(),
             "par_taux": self._chiffre_affaires_par_taux(articles_du_chiffre_d_affaires),
             "par_categorie": self._chiffre_affaires_par_categorie(
                 articles_du_chiffre_d_affaires
@@ -464,6 +686,121 @@ class RapportDesVentes:
                 articles_du_chiffre_d_affaires
             ),
         }
+
+    def _chiffre_affaires_par_moyen(self):
+        """
+        Le chiffre d'affaires TTC par moyen de paiement (argent et cashless) : les
+        règlements des ventes VENTE, AVOIR et CORRECTION par moyen, moins la part
+        HORS chiffre d'affaires de chaque vente (recharges, écarts d'encaissement,
+        autres articles hors chiffre d'affaires), imputée au moyen de cette vente.
+        Un avoir y est en négatif (un remboursement d'article est du chiffre
+        d'affaires négatif) ; une correction déplace l'argent d'un moyen à l'autre.
+        / Revenue by payment method: payments by method minus each sale's off-revenue
+        part, charged to that sale's method. Credit notes are negative; corrections
+        move money between methods.
+
+        L'IMPUTATION (même règle que les recharges par moyen, section 7) : une vente
+        qui contient un article hors chiffre d'affaires a un seul moyen (une recharge
+        payante ne se paie jamais en cashless, un écart n'existe que sur un paiement
+        Stripe). Une vente avec plusieurs moyens, ou sans aucun, impute sa part hors
+        chiffre d'affaires sous « plusieurs_moyens » : rien n'est perdu.
+        / Imputation: a sale holding an off-revenue item has one method; otherwise
+        "plusieurs_moyens".
+
+        LA CORRECTION D'UNE RECHARGE : une vente CORRECTION déplace tout l'argent des
+        lignes corrigées, recharge comprise. La part hors chiffre d'affaires de ces
+        lignes suit l'argent : retirée du moyen d'arrivée, rendue au moyen de départ
+        (`_parts_deplacees_par_les_corrections`, sans dépendre du signe).
+        / A correction moves the top-up money too: its off-revenue part is removed
+        from the arrival method and given back to the departure one.
+
+        INVARIANT : Σ des `total_en_centimes` = le chiffre d'affaires TTC. Il découle
+        de la 2ᵉ égalité de chaque vente (Σ règlements hors offert = Σ nets vendus).
+        Il suppose qu'une vente en euros n'a aucun règlement NM (points) : le service
+        de vente ne l'interdit pas, et un tel règlement compte dans la 2ᵉ égalité mais
+        pas ici. L'affichage vérifie l'invariant et le signale s'il casse.
+        / Invariant: the sum equals the revenue incl. tax. It assumes no euro sale has
+        an NM payment; the display checks it.
+
+        :return: {code du moyen: {"libelle", "total_en_centimes"}} ; les montants
+            nuls sont gardés (un moyen corrigé à 0 reste visible)
+        """
+        ventes_de_la_section = self._ventes_en_euros().filter(
+            nature__in=NATURES_DES_REGLEMENTS
+        )
+        sommes_par_vente_et_moyen = (
+            Reglement.objects.filter(vente__in=ventes_de_la_section)
+            .exclude(moyen__in=MOYENS_HORS_ARGENT)
+            .values("vente", "moyen")
+            .annotate(total_en_centimes=Sum("montant"))
+            .order_by("vente", "moyen")
+        )
+        hors_chiffre_affaires_par_vente = (
+            LigneArticle.objects.filter(
+                vente__in=ventes_de_la_section,
+                hors_chiffre_affaires=True,
+            )
+            .values("vente")
+            .annotate(total_en_centimes=Sum("total_ttc"))
+            .order_by("vente")
+        )
+
+        # 1. Les règlements, additionnés par moyen ; et les moyens de chaque vente.
+        # / 1. Payments summed by method; and each sale's methods.
+        par_moyen = {}
+        moyens_par_vente = {}
+        for somme_du_groupe in sommes_par_vente_et_moyen:
+            code_du_moyen = somme_du_groupe["moyen"]
+            identifiant_de_la_vente = somme_du_groupe["vente"]
+            _ajouter_au_moyen(
+                par_moyen,
+                code_du_moyen,
+                nom_du_moyen_de_paiement(code_du_moyen),
+                somme_du_groupe["total_en_centimes"],
+            )
+            if identifiant_de_la_vente not in moyens_par_vente:
+                moyens_par_vente[identifiant_de_la_vente] = set()
+            moyens_par_vente[identifiant_de_la_vente].add(code_du_moyen)
+
+        # 2. La part hors chiffre d'affaires de chaque vente, retirée de son moyen.
+        # / 2. Each sale's off-revenue part, removed from its method.
+        for hors_chiffre_affaires_de_la_vente in hors_chiffre_affaires_par_vente:
+            montant_hors_chiffre_affaires = hors_chiffre_affaires_de_la_vente[
+                "total_en_centimes"
+            ]
+            if montant_hors_chiffre_affaires == 0:
+                continue
+            moyens_de_la_vente = moyens_par_vente.get(
+                hors_chiffre_affaires_de_la_vente["vente"], set()
+            )
+            if len(moyens_de_la_vente) == 1:
+                cle_du_moyen = list(moyens_de_la_vente)[0]
+                libelle_du_moyen = nom_du_moyen_de_paiement(cle_du_moyen)
+            else:
+                cle_du_moyen = CLE_PLUSIEURS_MOYENS
+                libelle_du_moyen = gettext("Plusieurs moyens")
+            _ajouter_au_moyen(
+                par_moyen,
+                cle_du_moyen,
+                libelle_du_moyen,
+                -montant_hors_chiffre_affaires,
+            )
+
+        # 3. La part hors chiffre d'affaires déplacée par une correction : retirée du
+        #    moyen d'arrivée, rendue au moyen de départ.
+        # / 3. The off-revenue part moved by a correction: removed from the arrival
+        #    method, given back to the departure method.
+        parts_deplacees = self._parts_deplacees_par_les_corrections(
+            Q(hors_chiffre_affaires=True), MOYENS_HORS_ARGENT
+        )
+        for moyen_de_depart, moyen_d_arrivee, part in parts_deplacees:
+            _ajouter_au_moyen(
+                par_moyen, moyen_d_arrivee, nom_du_moyen_de_paiement(moyen_d_arrivee), -part
+            )
+            _ajouter_au_moyen(
+                par_moyen, moyen_de_depart, nom_du_moyen_de_paiement(moyen_de_depart), part
+            )
+        return par_moyen
 
     def _chiffre_affaires_par_taux(self, articles_du_chiffre_d_affaires):
         """
@@ -661,7 +998,7 @@ class RapportDesVentes:
         for somme_du_moyen in sommes_par_moyen:
             code_du_moyen = somme_du_moyen["moyen"]
             par_moyen[code_du_moyen] = {
-                "libelle": _libelle_du_moyen(code_du_moyen),
+                "libelle": nom_du_moyen_de_paiement(code_du_moyen),
                 "total_en_centimes": somme_du_moyen["total_en_centimes"],
             }
             total_de_l_argent += somme_du_moyen["total_en_centimes"]
@@ -689,7 +1026,7 @@ class RapportDesVentes:
 
             if code_du_moyen not in par_moyen:
                 par_moyen[code_du_moyen] = {
-                    "libelle": _libelle_du_moyen(code_du_moyen),
+                    "libelle": nom_du_moyen_de_paiement(code_du_moyen),
                     "total_en_centimes": 0,
                     "par_monnaie": {},
                 }
@@ -840,7 +1177,13 @@ class RapportDesVentes:
         - ventes payées en argent : l'argent des ventes VENTE et CORRECTION, moins les
           recharges et les écarts hors avoirs.
         Argent reçu = somme des cinq termes, par construction.
+        En plus, hors de la phrase : les recharges remboursées, le net (négatif) des
+        articles de recharge des avoirs. Elles sont déjà dans « remboursements » ;
+        les tickets X et Z les impriment sous le total, à côté des recharges (un
+        montant brut).
         / The terms; money received equals the sum of the five terms by construction.
+        Also, outside the sentence: refunded top-ups (already in refunds), printed
+        under the ticket total next to the gross top-ups.
         """
         reglements_d_argent = self._reglements_d_argent()
 
@@ -858,6 +1201,9 @@ class RapportDesVentes:
         ).aggregate(total=Coalesce(Sum("montant"), 0))["total"]
 
         recharges = self._articles_de_recharge_encaissees().aggregate(
+            total=Coalesce(Sum("total_ttc"), 0)
+        )["total"]
+        recharges_remboursees = self._articles_de_recharge_remboursees().aggregate(
             total=Coalesce(Sum("total_ttc"), 0)
         )["total"]
 
@@ -885,6 +1231,7 @@ class RapportDesVentes:
             "argent_recu_en_centimes": argent_recu,
             "ventes_payees_en_argent_en_centimes": ventes_payees_en_argent,
             "recharges_en_centimes": recharges,
+            "recharges_remboursees_en_centimes": recharges_remboursees,
             "remboursements_en_centimes": remboursements,
             "cartes_videes_en_centimes": cartes_videes,
             "ecarts_d_encaissement_en_centimes": tous_les_ecarts,
@@ -994,7 +1341,7 @@ class RapportDesVentes:
         for somme_du_moyen in sommes_par_moyen:
             code_du_moyen = somme_du_moyen["moyen"]
             par_moyen[code_du_moyen] = {
-                "libelle": _libelle_du_moyen(code_du_moyen),
+                "libelle": nom_du_moyen_de_paiement(code_du_moyen),
                 "total_en_centimes": somme_du_moyen["total_en_centimes"],
             }
 
@@ -1086,8 +1433,26 @@ class RapportDesVentes:
         contient. Une vente avec une recharge payante a un seul moyen d'argent (la
         caisse refuse le cashless pour une recharge payante). Une vente avec plusieurs
         moyens d'argent, ou sans aucun, range ses recharges sous « plusieurs_moyens » :
-        rien n'est perdu.
+        rien n'est perdu. Une recharge dont le moyen a été corrigé est rangée sous le
+        moyen corrigé (`_parts_deplacees_par_les_corrections`) ; le moyen de départ
+        peut rester à 0. Seules les recharges des ventes de nature VENTE se
+        déplacent, comme seules elles sont comptées ici : un avoir de recharge
+        corrigé ne change pas les recharges encaissées.
         / Top-ups under their sale's money method; otherwise under "plusieurs_moyens".
+        A corrected top-up of a VENTE sale moves to the corrected method.
+
+        UNE CORRECTION D'UNE AUTRE PÉRIODE QUE LA RECHARGE : chaque déplacement est
+        compté dans la période de SA correction, la recharge dans la période de sa
+        vente. Un déplacement retire autant qu'il ajoute : la somme des recharges par
+        moyen vaut toujours le total des recharges de la période. Mais quand la
+        recharge est d'une période d'avant, la période de la correction montre une
+        ligne négative sous le moyen de départ (et autant en positif sous le moyen
+        d'arrivée), alors que sa recharge reste sous le moyen de départ dans le
+        rapport de sa propre période. C'est rare : la caisse refuse de corriger une
+        vente déjà couverte par une J.
+        / A correction in another period than its top-up: each move counts in its
+        correction's period; the by-method sum still equals the period's total, but
+        that period shows a negative line under the departure method.
         """
         net_des_recharges_par_vente = (
             articles_de_recharge.values("vente")
@@ -1126,17 +1491,35 @@ class RapportDesVentes:
             )
             if len(moyens_de_la_vente) == 1:
                 cle_du_moyen = list(moyens_de_la_vente)[0]
-                libelle_du_moyen = _libelle_du_moyen(cle_du_moyen)
+                libelle_du_moyen = nom_du_moyen_de_paiement(cle_du_moyen)
             else:
                 cle_du_moyen = CLE_PLUSIEURS_MOYENS
                 libelle_du_moyen = gettext("Plusieurs moyens")
 
-            if cle_du_moyen not in par_moyen:
-                par_moyen[cle_du_moyen] = {
-                    "libelle": libelle_du_moyen,
-                    "total_en_centimes": 0,
-                }
-            par_moyen[cle_du_moyen]["total_en_centimes"] += net_des_recharges
+            _ajouter_au_moyen(
+                par_moyen, cle_du_moyen, libelle_du_moyen, net_des_recharges
+            )
+
+        # Une recharge dont le moyen a été corrigé passe, avec son argent, du moyen
+        # de départ au moyen d'arrivée.
+        # / A corrected top-up moves, with its money, from the departure method to
+        # the arrival one.
+        filtre_des_recharges_deplacees = (
+            _filtre_des_articles_de_recharge()
+            & Q(hors_chiffre_affaires=True)
+            & Q(vente__nature=Vente.Nature.VENTE)
+        )
+        parts_deplacees = self._parts_deplacees_par_les_corrections(
+            filtre_des_recharges_deplacees,
+            MOYENS_QUI_NE_SONT_PAS_DE_L_ARGENT,
+        )
+        for moyen_de_depart, moyen_d_arrivee, part in parts_deplacees:
+            _ajouter_au_moyen(
+                par_moyen, moyen_de_depart, nom_du_moyen_de_paiement(moyen_de_depart), -part
+            )
+            _ajouter_au_moyen(
+                par_moyen, moyen_d_arrivee, nom_du_moyen_de_paiement(moyen_d_arrivee), part
+            )
         return par_moyen
 
     def _annexe_ecarts_d_encaissement(self):

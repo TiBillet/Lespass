@@ -14,8 +14,9 @@ DEUX RENDUS SELON LA CIBLE HTMX :
    On ne rend que le tableau demande (vue=detail_articles ou vue=par_moyen).
    Voir laboutik/partial/_ventes_historique_recap.html.
 2. Sinon (page complete ou #ventes-zone) : l'ecran Ventes complet.
-   - Chiffres du haut : total, fond de caisse, actions.
-   - Deux mini-tableaux : par moyen de paiement, par point de vente. + TVA.
+   - Chiffres du haut : chiffre d'affaires TTC, fond de caisse et solde, actions.
+   - Les sections du rapport X du service en cours (rapport des ventes unique),
+     ecrites par comptabilite/presentation.py : l'essentiel ouvert, le reste replie.
    - Trois boutons d'historique (un seul ouvert a la fois).
    - Popups : fond de caisse (#ventes-modal), cloture (#cloture-modal).
    Si ?vue=detail_articles ou ?vue=par_moyen : l'historique est deja ouvert.
@@ -53,34 +54,22 @@ COMMUNICATION :
         {# ============ CHIFFRES DU HAUT / TOP FIGURES ============ #}
         <div class="kpis">
 
-          {# Total des ventes du service / Shift sales total #}
+          {# Chiffre d'affaires du service / Service revenue #}
           <div class="kpi-block kpi-total" data-testid="recap-kpi-total">
-            <span class="kpi-lbl">{% translate "Total" %}</span>
-            <span class="kpi-val">{{ totaux_par_moyen.total|euros }}</span>
+            <span class="kpi-lbl">{% translate "Chiffre d'affaires TTC" %}</span>
+            <span class="kpi-val">{{ chiffre_affaires_ttc_a_la_francaise }}</span>
             <span class="kpi-sub" data-testid="recap-periode">
-              {{ nb_transactions }} {% translate "ventes" %} · {% translate "depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
+              {% blocktrans with nombre=nombre_d_operations debut=datetime_ouverture|date:"d/m/Y H:i" %}Opérations numérotées : {{ nombre }} · depuis {{ debut }}{% endblocktrans %}
             </span>
-            {% if tva %}
-              <span class="kpi-tva">
-                {% for taux_cle, taux_data in tva.items %}{% translate "TVA" %} {{ taux_cle }} · {{ taux_data.total_tva|euros }}{% if not forloop.last %} — {% endif %}{% endfor %}
-              </span>
-            {% endif %}
           </div>
 
-          {# Fond de caisse + solde especes / Cash float + cash balance #}
+          {# Fond de caisse + solde du tiroir (le detail est dans la section « Caisse espèces ») #}
+          {# / Cash float + drawer balance (detail in the "Caisse espèces" section) #}
           <div class="kpi-block kpi-fond" data-testid="recap-solde">
             <span class="kpi-lbl">{% translate "Fond de caisse" %}</span>
-            <span class="kpi-val">{{ solde_caisse.fond_de_caisse|euros }}</span>
-            <span class="kpi-sub">
-              {% translate "Entrées espèces" %} · {{ solde_caisse.entrees_especes|euros }}
-            </span>
-            {% if solde_caisse.sorties_especes %}
-              <span class="kpi-sub kpi-sub-sortie" data-testid="recap-sorties-especes">
-                {% translate "Sorties espèces" %} · &minus; {{ solde_caisse.sorties_especes|euros }}
-              </span>
-            {% endif %}
+            <span class="kpi-val">{{ fond_de_caisse_a_la_francaise }}</span>
             <span class="kpi-sub kpi-sub-solde">
-              {% translate "Solde" %} · <b>{{ solde_caisse.solde|euros }}</b>
+              {% translate "Solde" %} · <b>{{ solde_du_tiroir_a_la_francaise }}</b>
             </span>
             <button type="button" class="kpi-fond-modifier"
                     hx-get="{% url 'laboutik-caisse-fond_de_caisse' %}?{{ params_ventes }}"
@@ -122,128 +111,32 @@ COMMUNICATION :
         {# Retour de l'impression du Ticket X / Ticket X print feedback #}
         <div id="recap-feedback" class="recap-feedback" aria-live="polite"></div>
 
-        {# ============ MINI-TABLEAUX / SUMMARY TABLES ============ #}
-        <div class="mini-tables">
-
-          {# Par moyen de paiement / By payment method #}
-          <div class="table-wrap mini-table">
-            <h3 class="mini-table-title">{% translate "Par moyen de paiement" %}</h3>
-            <table data-testid="recap-totaux-moyen">
-              <thead>
-                <tr><th>{% translate "Moyen" %}</th><th class="num">{% translate "Montant" %}</th></tr>
-              </thead>
-              <tbody>
-                <tr><td>{% translate "Espèces" %}</td><td class="num">{{ totaux_par_moyen.especes|euros }}</td></tr>
-                <tr><td>{% translate "Carte bancaire" %}</td><td class="num">{{ totaux_par_moyen.carte_bancaire|euros }}</td></tr>
-                <tr><td>{% translate "Cashless" %}</td><td class="num">{{ totaux_par_moyen.cashless|euros }}</td></tr>
-                {% for detail_cashless in totaux_par_moyen.cashless_detail %}
-                  <tr class="sous-ligne">
-                    <td>↳ {{ detail_cashless.nom }}</td>
-                    <td class="num">{{ detail_cashless.montant|euros }}</td>
-                  </tr>
-                {% endfor %}
-                <tr><td>{% translate "Chèque" %}</td><td class="num">{{ totaux_par_moyen.cheque|euros }}</td></tr>
-              </tbody>
-            </table>
-          </div>
-
-          {# Par point de vente / By point of sale #}
-          <div class="table-wrap mini-table">
-            <h3 class="mini-table-title">{% translate "Par point de vente" %}</h3>
-            <table data-testid="recap-par-pv">
-              <thead>
-                <tr><th>{% translate "Point de vente" %}</th><th class="num">{% translate "Montant" %}</th></tr>
-              </thead>
-              <tbody>
-                {% for ligne_pv in ventilation_par_pv %}
-                  <tr data-testid="recap-pv-{{ forloop.counter }}">
-                    <td{% if not ligne_pv.uuid %} class="muted"{% endif %}>{{ ligne_pv.nom }}</td>
-                    <td class="num">{{ ligne_pv.total_ttc|euros }}</td>
-                  </tr>
-                {% empty %}
-                  <tr><td colspan="2" class="empty">{% translate "Aucune vente attribuée à un point de vente" %}</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-
-          {# TVA par taux / VAT by rate #}
-          {% if tva %}
-            <div class="table-wrap mini-table mini-table-large">
-              <h3 class="mini-table-title">{% translate "TVA" %}</h3>
-              <table data-testid="recap-tva">
-                <thead>
-                  <tr>
-                    <th>{% translate "Taux" %}</th>
-                    <th class="num">{% translate "HT" %}</th>
-                    <th class="num">{% translate "TVA" %}</th>
-                    <th class="num">{% translate "TTC" %}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for taux_cle, taux_data in tva.items %}
-                    <tr>
-                      <td>{{ taux_cle }}</td>
-                      <td class="num">{{ taux_data.total_ht|euros }}</td>
-                      <td class="num">{{ taux_data.total_tva|euros }}</td>
-                      <td class="num">{{ taux_data.total_ttc|euros }}</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          {% endif %}
-
-          {# Articles offerts : hors argent, jamais additionnes au total #}
-          {# / Gifted items: not money, never added to the total #}
-          {% if offerts.par_produit %}
-            <div class="table-wrap mini-table">
-              <h3 class="mini-table-title">{% translate "Offerts (hors argent)" %}</h3>
-              <table data-testid="recap-offerts">
-                <thead>
-                  <tr>
-                    <th>{% translate "Article" %}</th>
-                    <th class="num">{% translate "Quantité" %}</th>
-                    <th class="num">{% translate "Valeur offerte" %}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for offert in offerts.par_produit %}
-                    <tr>
-                      <td>{{ offert.nom }}</td>
-                      <td class="num">{{ offert.qty|floatformat:"-2" }}</td>
-                      <td class="num">{{ offert.valeur|euros }}</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          {% endif %}
-          {# Ventes en points ou en temps : hors argent, jamais additionnees au total #}
-          {# / Points or time sales: not money, never added to the total #}
-          {% if non_monetaire.par_monnaie %}
-            <div class="table-wrap mini-table">
-              <h3 class="mini-table-title">{% translate "Non monétaire (hors argent)" %}</h3>
-              <table data-testid="recap-non-monetaire">
-                <thead>
-                  <tr>
-                    <th>{% translate "Monnaie" %}</th>
-                    <th class="num">{% translate "Quantité" %}</th>
-                    <th class="num">{% translate "Total" %}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for monnaie in non_monetaire.par_monnaie %}
-                    <tr>
-                      <td>{{ monnaie.nom }}</td>
-                      <td class="num">{{ monnaie.qty_articles|floatformat:"-2" }}</td>
-                      <td class="num">{{ monnaie.unites|montant_dans_la_monnaie:monnaie.nom }}</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          {% endif %}
+        {# ============ SECTIONS DU RAPPORT X / X REPORT SECTIONS ============ #}
+        {# Toutes les sections du rapport X du service en cours, mises en forme par #}
+        {# comptabilite/presentation.py : l'essentiel ouvert, le reste replie (comme #}
+        {# dans l'admin). Chaque section : data-testid « recap-<cle> ». #}
+        {# / Every X report section: essentials open, the rest folded, as in the admin. #}
+        <div class="mini-tables" data-testid="recap-sections">
+          {% for section in sections_du_rapport %}
+            {% with testid_de_la_section="recap-"|add:section.testid %}
+              {% if section.repliee %}
+                <details class="recap-section-repliee" data-testid="{{ testid_de_la_section }}-repliee">
+                  {# Le titre est dans le résumé ; la section incluse ne le répète pas. #}
+                  {# / The title is in the summary; the included section does not repeat it. #}
+                  <summary id="{{ testid_de_la_section }}-titre">{{ section.titre }}</summary>
+                  {% if section.phrase %}
+                    <p class="recap-phrase">{{ section.phrase }}</p>
+                  {% endif %}
+                  {% include "laboutik/partial/_section_du_rapport_caisse.html" with section=section testid=testid_de_la_section titre_dans_le_resume=True %}
+                </details>
+              {% else %}
+                {% if section.phrase %}
+                  <p class="recap-phrase" data-testid="{{ testid_de_la_section }}-phrase">{{ section.phrase }}</p>
+                {% endif %}
+                {% include "laboutik/partial/_section_du_rapport_caisse.html" with section=section testid=testid_de_la_section %}
+              {% endif %}
+            {% endwith %}
+          {% endfor %}
         </div>
 
         {# ============ HISTORIQUES / HISTORIES ============ #}
@@ -274,10 +167,10 @@ COMMUNICATION :
                   aria-pressed="{% if vue == 'par_moyen' %}true{% else %}false{% endif %}"
                   aria-controls="detail-section"
                   data-url="{% url 'laboutik-caisse-recap_en_cours' %}?vue=par_moyen&{{ params_ventes }}"
-                  data-titre="{% translate 'Synthèse par moyen de paiement' %}"
+                  data-titre="{% translate 'Lignes de caisse (hors ventes en ligne, recharges comprises)' %}"
                   onclick="basculerHistorique(this)"
                   data-testid="btn-historique-synthese">
-            <span>{% translate "Synthèse par moyen" %}</span>
+            <span>{% translate "Lignes de caisse" %}</span>
             <span class="voir-detail-chevron" aria-hidden="true"></span>
           </button>
         </div>
@@ -287,7 +180,12 @@ COMMUNICATION :
                  {% if vue != 'detail_articles' and vue != 'par_moyen' %}hidden{% endif %}>
           <div class="detail-head">
             <h3 id="detail-titre">
-              {% if vue == 'detail_articles' %}{% translate "Historique de vente par article" %}{% elif vue == 'par_moyen' %}{% translate "Synthèse par moyen de paiement" %}{% endif %}
+              {# « Lignes de caisse » : l'ancien calcul, par lignes de la caisse et de la #}
+              {# tireuse, recharges comprises ; différent du chiffre d'affaires par moyen #}
+              {# des sections ci-dessus (toutes origines, sans recharges). #}
+              {# / Old computation by register lines, top-ups included: differs from the #}
+              {# revenue by method above. #}
+              {% if vue == 'detail_articles' %}{% translate "Historique de vente par article" %}{% elif vue == 'par_moyen' %}{% translate "Lignes de caisse (hors ventes en ligne, recharges comprises)" %}{% endif %}
             </h3>
           </div>
           <div id="detail-contenu" class="detail-contenu" aria-live="polite">

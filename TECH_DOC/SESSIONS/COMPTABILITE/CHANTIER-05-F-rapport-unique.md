@@ -63,7 +63,7 @@ Définitions (une seule fois, dans le module) :
 | # | Section | Contenu (entiers, sommes) |
 |---|---|---|
 | 1 | En-tête | lieu, période, niveau, n° de clôture, **plage de ventes [premier n°, dernier n°]**, nombre de ventes (dont ventes gratuites, numérotées elles aussi), total perpétuel |
-| 2 | **Chiffre d'affaires** | TTC / HT / TVA ; **par taux** ; par catégorie ; **par origine** ; **par journal** (fiche E) |
+| 2 | **Chiffre d'affaires** | TTC / HT / TVA ; **par moyen** (`par_moyen` : règlements des ventes `VENTE`, `AVOIR`, `CORRECTION` par moyen, argent et cashless, moins la part hors CA de chaque vente imputée à son moyen, « plusieurs moyens » en filet ; avoirs en négatif ; **invariant Σ `par_moyen` = CA TTC**, alerte à l'affichage sinon) ; **par taux** ; par catégorie ; **par origine** ; **par journal** (fiche E) |
 | 3 | **Règlements** | natures `VENTE`, `AVOIR`, `CORRECTION` (le `VIDAGE_CARTE` est en 7) ; par moyen **et par monnaie**, en trois blocs : argent (espèces, CB, chèque, Stripe, virement, inconnu) ; cashless (monnaie locale par nom, fédérée, jetons cadeau par nom) ; hors argent (offert, points par monnaie). Les règlements d'une vente `CORRECTION` sont comptés dans la **J où la correction est faite**. Une correction n'est possible que tant que la vente d'origine n'est couverte par aucune J (garde, fiche G) : les deux sont donc presque toujours dans la même J |
 | 4 | Caisse espèces | fond, espèces reçues, sorties (`SortieCaisse`), espèces rendues, solde théorique |
 | 5 | Réconciliation | une phrase : « Argent reçu = ventes payées en argent + recharges − remboursements − cartes vidées ± écarts d'encaissement », avec les chiffres |

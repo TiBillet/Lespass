@@ -62,7 +62,7 @@ from QrcodeCashless.models import CarteCashless
 from fedow_connect.models import FedowConfig
 from fedow_core.models import Asset, Token
 from fedow_core.services import AssetService
-from laboutik.models import PointDeVente
+from laboutik.models import LaboutikConfiguration, PointDeVente
 
 
 # Le prix du gobelet consigne vendu, en euros. C'est lui que la caisse rend au retour.
@@ -117,6 +117,11 @@ class TestPosRetourConsigne(FastTenantTestCase):
         configuration.module_monnaie_locale = True
         configuration.module_caisse = True
         configuration.save()
+
+        # Le singleton de la caisse doit exister en base (tests/PIEGES.md 9.86) : il
+        # porte la clé des empreintes, que le paiement écrit avec `update_fields`.
+        # / The register singleton must exist in the database (fingerprint key).
+        LaboutikConfiguration.get_solo().save()
 
         # --- Le lieu est branche a Fedow ---
         # `can_fedow()` est vrai des que les trois champs sont remplis
@@ -630,13 +635,13 @@ class TestPosRetourConsigne(FastTenantTestCase):
         l'un des deux traitait le signe de travers, la chaîne d'intégrité serait déclarée
         rompue — et une caisse dont la chaîne est rompue est une caisse non conforme.
 
-        On ne le suppose pas : on chaîne une ligne de retour réelle et on demande à
-        `verifier_chaine` de se prononcer.
+        On ne le suppose pas : on écrit un retour réel et on demande à la vérification
+        de la chaîne des ventes (`verifier_chaine_ventes`) de se prononcer.
         / Deposit returns introduce something new in the accounting chain: a negative
-          LigneArticle. A broken chain means a non-compliant register, so we ask
-          verifier_chaine rather than assume.
+          LigneArticle. A broken chain means a non-compliant register, so we ask the
+          sales chain check rather than assume.
         """
-        from laboutik.integrity import verifier_chaine
+        from laboutik.integrity import verifier_chaine_ventes
         from laboutik.models import LaboutikConfiguration
 
         self._poster_retour_consigne(moyen_paiement="espece")
@@ -644,24 +649,19 @@ class TestPosRetourConsigne(FastTenantTestCase):
         ligne = LigneArticle.objects.get()
         self.assertLess(ligne.amount, 0, "Le test n'a de sens que sur une ligne negative.")
 
-        # On verifie la chaine TELLE QUE LE POS L'A PRODUITE. Recalculer nous-memes le
-        # HMAC avant de le verifier comparerait `calculer_hmac` a elle-meme : le test
-        # serait vert quel que soit le montant, et il effacerait au passage le chainage
-        # reel pose par `_creer_lignes_articles`.
-        # / We verify the chain AS THE POS PRODUCED IT: recomputing the HMAC here would
-        #   compare calculer_hmac to itself and erase the real chaining.
-        self.assertTrue(ligne.hmac_hash, "Le POS doit avoir chaine la ligne.")
+        # On verifie la chaine TELLE QUE LE POS L'A PRODUITE : la vente du retour est
+        # scellee par le service de vente, la verification recalcule son empreinte.
+        # / We verify the chain AS THE POS PRODUCED IT.
+        self.assertIsNotNone(ligne.vente_id, "Le retour doit etre ecrit dans une vente.")
 
         cle_hmac = LaboutikConfiguration.get_solo().get_or_create_hmac_key()
-        est_valide, erreurs, _corrections = verifier_chaine(
-            LigneArticle.objects.filter(pk=ligne.pk), cle_hmac
-        )
+        anomalies = verifier_chaine_ventes(cle_hmac)
 
-        self.assertTrue(
-            est_valide,
-            f"La chaine LNE doit rester valide sur un montant negatif. Erreurs : {erreurs}",
+        self.assertEqual(
+            anomalies,
+            [],
+            f"La chaine LNE doit rester valide sur un montant negatif : {anomalies}",
         )
-        self.assertEqual(erreurs, [])
 
         # Le total HT suit le signe du TTC : un remboursement est negatif de bout en
         # bout, sinon l'ecriture comptable derivee serait fausse.
@@ -683,7 +683,7 @@ class TestPosRetourConsigne(FastTenantTestCase):
         / Without a rate, the division in calculer_total_ht is never exercised — yet
           that is exactly where a sign error would hide.
         """
-        from laboutik.integrity import verifier_chaine
+        from laboutik.integrity import verifier_chaine_ventes
         from laboutik.models import LaboutikConfiguration
         from BaseBillet.models import Tva
 
@@ -697,11 +697,9 @@ class TestPosRetourConsigne(FastTenantTestCase):
         self.assertEqual(ligne.amount, -100)
 
         cle_hmac = LaboutikConfiguration.get_solo().get_or_create_hmac_key()
-        est_valide, erreurs, _corrections = verifier_chaine(
-            LigneArticle.objects.filter(pk=ligne.pk), cle_hmac
-        )
+        anomalies = verifier_chaine_ventes(cle_hmac)
 
-        self.assertTrue(est_valide, f"Chaine LNE invalide : {erreurs}")
+        self.assertEqual(anomalies, [], f"Chaine LNE invalide : {anomalies}")
         # -100 TTC a 20 % => -83 HT (arrondi au centime).
         # / -100 TTC at 20% => -83 HT (rounded to the cent).
         self.assertEqual(ligne.total_ht, -83)
