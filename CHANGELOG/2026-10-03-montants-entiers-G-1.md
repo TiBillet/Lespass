@@ -65,7 +65,9 @@ Sections: G-1a to G-1d, then the review fixes, then the i18n strings.
 
 ### Resume / Summary
 - `laboutik/archivage.py` : `ventes.csv` (en-tête, totaux, `point_de_vente_uuid`, empreinte chaînée), `articles.csv` (montants **stockés**, `pricesold_uuid`, `uuid_transaction`), `reglements.csv`, `clotures.csv` (clôtures uniques, `rapport_json` en JSON canonique), toutes origines, ventes RÉGLÉES seulement. Plus de `corrections.csv` (Q-G8 : la vente CORRECTION suffit). `donnees.json` porte le rapport entier de chaque clôture. Bornes dans le fuseau du lieu ; fin figée au début de la génération ; articles et règlements lus depuis les ventes extraites. README réécrit (fichiers, bornes, parts, corrections, message de l'empreinte d'une vente, README non signé).
-- Bouton « Export fiscal » dans le bandeau de la liste des clôtures (`comptabilite/admin.py`), seulement avec le module caisse. La route web plafonne la période à 365 jours, comme `archiver_donnees`.
+- Bouton « Export fiscal » dans le bandeau de la liste des clôtures (`comptabilite/admin.py`, styles en ligne et variables Unfold), seulement avec le module caisse. La route web exige une date de début (sans elle : 400, « La date de début est obligatoire. ») ; sans date de fin, l'archive va jusqu'à aujourd'hui ; la période est plafonnée à 365 jours, comme `archiver_donnees`.
+- Bornes de l'archive : la fin donnée en date devient le lendemain à 00:00 (heure du lieu), exclusive. Ventes : `debut <= encaissement < fin` ; clôtures : `debut < fin de la clôture <= fin`. La M de décembre et l'A de l'année (finies le 1er janvier à 00:00) sont dans l'archive de leur année, pas dans celle de l'année suivante.
+- `clotures.csv` porte `empreinte_de_la_derniere_vente` ; le README décrit le message de l'empreinte d'une clôture : elle se recalcule depuis les seuls fichiers et la clé.
 - `verify_integrity` : chaîne des ventes + chaîne des clôtures, tous les lieux (ou `--schema`), clé lue jamais créée, sortie ≠ 0 sur anomalie, sans lieu, ou sans clé avec ventes scellées. `verify_clotures` : sortie ≠ 0 sur anomalie et `--tenant` inconnu, clé lue jamais créée, erreur d'un lieu = anomalie (la boucle continue).
 - Q-G7 : tâches de clôture mortes de `laboutik/tasks.py` retirées. Code mort retiré : `laboutik/pdf.py`, `csv_export.py`, `excel_export.py`, deux gabarits, `EnvoyerRapportSerializer`, `sections_de_detail_pour_export`, `verifier_chaine` (ancienne chaîne par ligne ; l'empreinte par ligne est encore écrite jusqu'à H).
 - `create_test_pos_data.py` : plus d'ancienne clôture ; lignes de démo dans un `atomic()`, retrouvées par un uuid de transaction fixe.
@@ -76,6 +78,10 @@ Sections: G-1a to G-1d, then the review fixes, then the i18n strings.
 |---|---|
 | `test_archive_lne_ventes.py` (nouveau, schéma dédié) | Tests 4, 5, 6 de la fiche ; colonnes exactes ; rapport des clôtures ; `uuid_transaction` ; empreinte recalculée depuis l'archive ; bornes et fuseau ; signature ; bouton ; plafond ; `verify_integrity` (cas limites) ; tâches mortes ; garde-fous « ancienne clôture » (écriture et liste blanche). |
 | `test_archivage_fiscal_lne.py` `test_l_origine_utilisee_par_l_archivage_existe_bien` | Retiré : l'archive ne filtre plus par origine (couvert par `test_archive_lne_contient_tireuse_et_en_ligne`). |
+| `test_archivage_fiscal_lne.py` en-têtes | Fichiers attendus réécrits (`lignes_article.csv` → `ventes.csv`, `articles.csv`, `reglements.csv`) ; colonne `sale_origin` → `origine`, et la liste exacte des colonnes de `ventes.csv` est comparée. |
+| `test_archive_lne_ventes.py` (G-1e) | Fin sans début → 400 ; empreinte d'une clôture recalculée depuis l'archive ; M de décembre et A de l'année dans l'archive de leur année. |
+| `test_rapport_unique.py` (G-1e) | Correction d'avant la période suivie sans déplacement ; deux corrections à cheval sur la borne d'une M ; correction d'un avoir de recharge (sans dépendre du signe). |
+| `test_hors_argent_offerts.py` (G-1e) | Pied du ticket en 32 caractères avec de grands montants ; « Espèces » au-dessus du total. |
 | `test_caisse_ecrit_la_vente.py` `test_archive_lne_ligne_offerte_garde_les_valeurs_d_avant` → `..._exporte_ses_montants_stockes` ; `test_archive_lne_part_au_centime_arrondi_comme_avant` → `..._tva_stockee` | L'archive lit les montants stockés (offert : HT 0 ; part : TVA 83, plus 82). |
 | `test_caisse_ecrit_la_vente.py` `test_archive_lne_ligne_sans_vente_garde_son_ht_stocke` | Retiré : l'archive exporte les ventes ; rien de l'ancien modèle à archiver (aucune caisse V2 en production). |
 | `test_total_ht_ligne.py` `test_l_archive_fiscale_deduit_la_bonne_tva_de_la_ligne` → `..._exporte_le_ht_et_la_tva_stockes_de_la_ligne` ; `test_la_chaine_hmac_reste_valide` | Archive lue dans `articles.csv` ; chaîne vérifiée par `verifier_chaine_ventes`. |
@@ -96,9 +102,14 @@ Sections: G-1a to G-1d, then the review fixes, then the i18n strings.
 
 - **Recharge corrigée** (mainteneur : permise, rapport corrigé) : `_parts_deplacees_par_les_corrections` déplace la part hors CA des lignes corrigées avec l'argent, dans le CA par moyen et dans les recharges par moyen (requêtes constantes, corrections successives suivies).
 - **Recharges remboursées** : `reconciliation.recharges_remboursees_en_centimes`, ligne sous le total des tickets.
-- **Tiroir** : une seule écriture signée (`presentation.lignes_du_tiroir`), mêmes libellés à l'écran et sur le ticket ; tiroir calculé depuis la fin de la J même sans vente.
+- **Tiroir** : une seule écriture signée (`presentation.lignes_du_tiroir`), mêmes libellés à l'écran, sur le ticket et dans les PDF et CSV de l'admin (« Espèces rendues » en négatif, « Corrections de moyen de paiement » devient « Corrections ») ; tiroir calculé depuis la fin de la J même sans vente.
+- **Suivi des corrections** : toutes les corrections d'une vente liée sont lues sans borne de période (une requête de plus, nombre constant) et suivies dans l'ordre des numéros ; seules celles de la période déplacent la part. Le sens du déplacement ne dépend pas du signe (paire de moyens). Une recharge corrigée dans une autre période que sa vente donne une ligne négative sous le moyen de départ dans la période de la correction (somme par moyen = total, toujours).
+- **Libellés des moyens** : une seule source (`comptabilite/rapport.py` `nom_du_moyen_de_paiement`) : « Espèces », « Carte bancaire », « Chèque » partout (rapport, écran, tickets).
+- **Moyens cashless et dernière J** : la garde de correction lit `MOYENS_CASHLESS` du rapport ; « la dernière J » est lue par `ClotureCaisse.derniere_journaliere()` (début du service, tiroir, clôtures automatiques).
+- **Bouton « Clôturer »** : la mise en forme du ticket Z est dans le même `try` que la demande d'impression.
+- **Sortie de caisse** : `escapejs` sur les chaînes traduites du script.
 - **Ordre des moyens** : une seule fonction (`codes_des_moyens_dans_l_ordre`), écran et tickets.
-- **Tickets en 32 caractères** : « EUR » retiré si la ligne déborde, date courte dans le pied (`Début de période: 10/03/26 10:00`), « Offerts: N art., X.XX EUR », points sans « (hors argent) » si trop long.
+- **Tickets en 32 caractères** : « EUR » retiré si la ligne déborde, date courte dans le pied (`Début de période: 10/03/26 10:00`), « Offerts: N art., X.XX EUR » replié en « Offerts: N art. » puis « Valeur offerte: X.XX EUR » si trop long, points sans « (hors argent) » puis nom tronqué si trop long.
 - **Broker** : `.delay` protégés dans `imprimer_ticket_x` et `envoyer_rapport` (503 et message).
 - **Accessibilité** : titre unique des sections repliées, `aria-live` limité au total du Z, « (nouvel onglet) » ; `blocktrans` dans le récap.
 - **Récap** : l'historique de l'ancien moteur titré « Lignes de caisse (hors ventes en ligne, recharges comprises) ».
@@ -119,6 +130,9 @@ Sections: G-1a to G-1d, then the review fixes, then the i18n strings.
 | `comptabilite/rapport.py`, `presentation.py`, `tasks.py`, `admin.py`, `fec.py` | CA par moyen, corrections, recharges remboursées, tiroir, ordre, bouton Export fiscal, filet du FEC |
 | `Administration/admin/laboutik.py`, gabarits du plan | Bouton « Vérifier le plan », filet à l'ouverture |
 | `laboutik/templates/laboutik/partial/*` | Écran du Z, récap, sortie de caisse, section du rapport |
+| `comptabilite/models.py` | `ClotureCaisse.derniere_journaliere()` (sans migration) |
+| `tests/pytest/fabriques_ecran.py` | Montants à la française et lecteurs HTML par `data-testid` (une seule source pour les tests d'écran) |
+| `tests/PIEGES.md` | §9.58 et §9.63 mis à jour |
 
 ---
 
@@ -139,7 +153,7 @@ Sections: G-1a to G-1d, then the review fixes, then the i18n strings.
 
 ### Test 4 — Export fiscal
 1. Admin → Clôtures : bandeau « Export fiscal » → formulaire → télécharger. Le ZIP contient `ventes.csv`, `articles.csv`, `reglements.csv`, `clotures.csv` (colonne `rapport_json`), pas de `corrections.csv`.
-2. Demander une période de plus de 365 jours : refus.
+2. Demander une période de plus de 365 jours : refus. Ne donner qu'une date de fin : refus, « La date de début est obligatoire. »
 
 ### Test 5 — Plan comptable
 1. Ouvrir Plan comptable : le composant « Plan complet ? » montre le bouton « Vérifier le plan », sans verdict.
@@ -156,7 +170,8 @@ Nouvelles chaînes (msgid en français) :
 - Tickets : « Début de période », « Fermeture », « Recharges », « Recharges remboursées », « Cartes vidées », « Écarts d'encaissement », « Opérations numérotées », « art. », « Le ticket X n'a pas pu être envoyé à l'imprimante. Réessayez plus tard. »
 - Rapport et tiroir : « Plusieurs moyens », « Par moyen de paiement », « Moyen », « Les lignes par moyen ne recomposent pas le chiffre d'affaires TTC : écart de %(ecart)s. », « Espèces reçues », « Espèces rendues », « Corrections », « Sorties de caisse », « Solde théorique »
 - Récap et sortie : « Opérations numérotées : %(nombre)s · depuis %(debut)s » (blocktrans), « Lignes de caisse », « Lignes de caisse (hors ventes en ligne, recharges comprises) », « dépasse les espèces du service dans le tiroir (solde moins fond) »
-- Export fiscal : « Export fiscal », « Archive signée (ZIP) des ventes, de leurs articles et règlements, et des clôtures, pour l'administration fiscale. », « La date de fin est antérieure à la date de début. », « La période demandée dépasse 365 jours. Faites un export par année. »
+- Export fiscal : « Export fiscal », « Archive signée (ZIP) des ventes, de leurs articles et règlements, et des clôtures, pour l'administration fiscale. », « La date de fin est antérieure à la date de début. », « La période demandée dépasse 365 jours. Faites un export par année. », « La date de début est obligatoire. », « La date de début est obligatoire. Sans date de fin, l'archive va jusqu'à aujourd'hui. 365 jours au plus. »
+- Tickets (G-1e) : « Valeur offerte » ; moyens : « Espèces », « Carte bancaire », « Chèque » (déjà présentes).
 - Plan : « Vérifier le plan », « Vérification en cours… », « Vérifie que chaque produit, moyen de paiement, monnaie et taux de TVA utilisés a son compte, pour que l'export comptable passe. »
 
 Chaînes qui ne servent plus aux tickets : « Entrees especes », « Sorties especes », « Solde caisse », « articles », « valeur ». Les `.po` citent encore les gabarits retirés (`laboutik/pdf/cloture_rapport_pdf.html`, `laboutik/email/cloture_rapport_email.html`) : le prochain `makemessages` les nettoie.

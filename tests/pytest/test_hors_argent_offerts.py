@@ -416,6 +416,55 @@ class TestLignesHorsArgent(FastTenantTestCase):
             somme_des_lignes += ligne_du_ticket["total"]
         assert somme_des_lignes == ticket["total"]["amount"]
 
+    def test_pied_du_ticket_tient_en_32_caracteres_avec_de_grands_montants(self):
+        """
+        Un rapport X écrit à la main, avec de grands montants :
+        - 1 234 articles offerts pour 123 456,78 € : « Offerts: 1234 art.,
+          123456.78 EUR » ferait 33 caractères ; le pied se replie en deux lignes,
+          « Offerts: 1234 art. » puis « Valeur offerte: 123456.78 EUR » ;
+        - une monnaie de points au nom très long, 9 876 543,21 points : la mention
+          « hors argent » est retirée, puis le nom tronqué, le montant reste entier ;
+        - des espèces au-dessus du total : la ligne s'appelle « Espèces », avec son
+          accent (la seule source des noms des moyens).
+        Aucune ligne du pied ne dépasse les 32 caractères du ticket.
+        / A hand-written X report with large amounts: the gifts line folds in two,
+        the points currency name is cut, every footer line fits 32 chars; cash is
+        named "Espèces".
+        """
+        from laboutik.printing.formatters import formatter_ticket_x
+
+        rapport_ecrit_a_la_main = {
+            "en_tete": {"fuseau_horaire": "Europe/Paris", "nombre_de_ventes": 1},
+            "chiffre_affaires": {
+                "total_ttc_en_centimes": 500,
+                "par_moyen": {
+                    PaymentMethod.CASH: {
+                        "libelle": "Cash", "total_en_centimes": 500,
+                    },
+                },
+            },
+            "offerts": {
+                "par_produit": {"vin": {"nom": "Vin"}},
+                "quantite": "1234.000",
+                "valeur_catalogue_en_centimes": 12345678,
+            },
+            "points": {
+                "monnaie-de-points": {
+                    "nom": "Points de fidelite du festival d'ete",
+                    "total_en_centiemes": 987654321,
+                },
+            },
+        }
+
+        ticket = formatter_ticket_x(rapport_ecrit_a_la_main, None)
+
+        assert "Offerts: 1234 art." in ticket["footer"]
+        assert "Valeur offerte: 123456.78 EUR" in ticket["footer"]
+        assert "Points de fidelite d: 9876543.21" in ticket["footer"]
+        for ligne_du_pied in ticket["footer"]:
+            assert len(ligne_du_pied) <= 32, ligne_du_pied
+        assert ticket["articles"][0]["name"] == "Espèces"
+
     # La section « Offerts » des exports d'une clôture (CSV, tableur, PDF) est celle de
     # la clôture unique : tests/pytest/test_comptabilite_exports.py (toutes les
     # sections dans l'ordre, totaux égaux au rapport).

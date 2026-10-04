@@ -169,10 +169,11 @@ django.setup()
 
 import json  # noqa: E402
 import uuid  # noqa: E402
-from datetime import timedelta  # noqa: E402
+from datetime import datetime, timedelta  # noqa: E402
 from decimal import Decimal  # noqa: E402
 from pathlib import Path  # noqa: E402
 from unittest.mock import patch  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
 
 from django.db import connection  # noqa: E402
 from django.utils import timezone, translation  # noqa: E402
@@ -2864,6 +2865,176 @@ class TestRapportDesVentes(FastTenantTestCase):
         self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
         assert self._totaux_non_nuls_par_moyen(recharges_encaissees["par_moyen"]) == {
             PaymentMethod.CHEQUE: 2000,
+        }
+
+    def _recharge_en_especes_a_l_heure(self, heure):
+        """
+        Une recharge de 20,00 € encaissée en espèces à l'heure donnée.
+        / A 20.00 € cash top-up settled at the given time.
+        """
+        with patch("django.utils.timezone.now", return_value=heure):
+            vente_de_la_recharge = fabriquer_vente_encaissee(
+                origine=SaleOrigin.LABOUTIK,
+                articles=[{
+                    "pricesold": self._tarif_de_recharge("20.00"),
+                    "quantite": Decimal("1"),
+                    "prix_unitaire": 2000, "taux_tva": Decimal("0"),
+                }],
+                reglements=[{"moyen": PaymentMethod.CASH, "montant": 2000}],
+            )
+        verifier_egalites(vente_de_la_recharge)
+        return vente_de_la_recharge
+
+    def _corriger_le_moyen_a_l_heure(
+        self, heure, vente_d_origine, moyen_ancien, moyen_nouveau, montant
+    ):
+        """
+        La correction du moyen de paiement d'une vente, encaissée à l'heure donnée.
+        / A payment method correction settled at the given time.
+        """
+        with patch("django.utils.timezone.now", return_value=heure):
+            return self._corriger_le_moyen(
+                vente_d_origine, moyen_ancien, moyen_nouveau, montant
+            )
+
+    def test_correction_d_avant_la_periode_suivie_sans_deplacement(self):
+        """
+        Une recharge de 20,00 € en espèces le 10/03/2026 à 12:00, corrigée en CB le
+        même jour à 12:10 (C1), puis la CB corrigée en chèque le 12/03/2026 à 12:00
+        (C2). Le rapport du 12/03 (Paris) ne contient que C2.
+        - C1 est hors de la période : elle est suivie (la part est sous CB avant C2),
+          mais elle ne déplace rien dans ce rapport. Les espèces n'y apparaissent pas.
+        - C2 déplace la part de la CB au chèque.
+        - Chiffre d'affaires par moyen : CB −2000 + 2000 = 0 ; chèque 2000 − 2000 = 0.
+        - Recharges par moyen : CB −2000, chèque +2000 (la recharge est comptée le
+          10/03, sous les espèces, dans le rapport de son jour).
+        / A correction before the period is followed but emits nothing: only C2 moves
+        the part, from card to cheque; cash never appears.
+        """
+        fuseau_de_paris = ZoneInfo("Europe/Paris")
+        vente_de_la_recharge = self._recharge_en_especes_a_l_heure(
+            datetime(2026, 3, 10, 12, 0, tzinfo=fuseau_de_paris)
+        )
+        self._corriger_le_moyen_a_l_heure(
+            datetime(2026, 3, 10, 12, 10, tzinfo=fuseau_de_paris),
+            vente_de_la_recharge, PaymentMethod.CASH, PaymentMethod.CC, 2000,
+        )
+        self._corriger_le_moyen_a_l_heure(
+            datetime(2026, 3, 12, 12, 0, tzinfo=fuseau_de_paris),
+            vente_de_la_recharge, PaymentMethod.CC, PaymentMethod.CHEQUE, 2000,
+        )
+
+        rapport_du_12_mars = self._rapport(
+            debut=datetime(2026, 3, 12, 0, 0, tzinfo=fuseau_de_paris),
+            fin=datetime(2026, 3, 13, 0, 0, tzinfo=fuseau_de_paris),
+        )
+        chiffre_affaires = rapport_du_12_mars.section_chiffre_affaires()
+        recharges_encaissees = rapport_du_12_mars.section_annexe()[
+            "recharges_et_cartes"
+        ]["recharges_encaissees"]
+
+        assert self._totaux_par_moyen(chiffre_affaires["par_moyen"]) == {
+            PaymentMethod.CC: 0,
+            PaymentMethod.CHEQUE: 0,
+        }
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+        assert self._totaux_par_moyen(recharges_encaissees["par_moyen"]) == {
+            PaymentMethod.CC: -2000,
+            PaymentMethod.CHEQUE: 2000,
+        }
+        assert recharges_encaissees["total_en_centimes"] == 0
+
+    def test_deux_corrections_a_cheval_sur_la_borne_d_une_m(self):
+        """
+        Le lieu est à Paris. Une recharge de 20,00 € en espèces le 31/01/2026 à 23:30 ;
+        C1 espèces → CB le 31/01 à 23:50 ; C2 CB → chèque le 01/02 à 00:10. Le rapport
+        de la M de février (01/02 00:00 → 01/03 00:00, heure de Paris) ne contient
+        que C2.
+        - Chiffre d'affaires par moyen : CB 0, chèque 0.
+        - Recharges par moyen : CB −2000, chèque +2000.
+        / Two corrections across a calendar M boundary: in February's M, revenue by
+        method card 0 / cheque 0; top-ups card −2000 / cheque +2000.
+        """
+        fuseau_de_paris = ZoneInfo("Europe/Paris")
+        vente_de_la_recharge = self._recharge_en_especes_a_l_heure(
+            datetime(2026, 1, 31, 23, 30, tzinfo=fuseau_de_paris)
+        )
+        self._corriger_le_moyen_a_l_heure(
+            datetime(2026, 1, 31, 23, 50, tzinfo=fuseau_de_paris),
+            vente_de_la_recharge, PaymentMethod.CASH, PaymentMethod.CC, 2000,
+        )
+        self._corriger_le_moyen_a_l_heure(
+            datetime(2026, 2, 1, 0, 10, tzinfo=fuseau_de_paris),
+            vente_de_la_recharge, PaymentMethod.CC, PaymentMethod.CHEQUE, 2000,
+        )
+
+        rapport_de_fevrier = self._rapport(
+            debut=datetime(2026, 2, 1, 0, 0, tzinfo=fuseau_de_paris),
+            fin=datetime(2026, 3, 1, 0, 0, tzinfo=fuseau_de_paris),
+        )
+        chiffre_affaires = rapport_de_fevrier.section_chiffre_affaires()
+        recharges_encaissees = rapport_de_fevrier.section_annexe()[
+            "recharges_et_cartes"
+        ]["recharges_encaissees"]
+
+        assert self._totaux_par_moyen(chiffre_affaires["par_moyen"]) == {
+            PaymentMethod.CC: 0,
+            PaymentMethod.CHEQUE: 0,
+        }
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+        assert self._totaux_par_moyen(recharges_encaissees["par_moyen"]) == {
+            PaymentMethod.CC: -2000,
+            PaymentMethod.CHEQUE: 2000,
+        }
+
+    def test_correction_d_un_avoir_de_recharge_sans_dependre_du_signe(self):
+        """
+        Une recharge de 20,00 € en espèces, remboursée en espèces (avoir : article de
+        recharge −2000, espèces −2000), puis l'avoir corrigé en CB : la correction
+        porte les signes inverses d'une correction de vente (espèces +2000, CB −2000).
+        Le déplacement suit la paire {espèces, CB}, pas le signe.
+        - Chiffre d'affaires par moyen : tout à 0 (rien de non nul).
+        - Recharges encaissées par moyen : espèces 2000 (la recharge de la vente) ; un
+          avoir n'est pas une recharge encaissée, sa correction ne la déplace pas.
+        / A refunded top-up whose credit note is corrected to card (reversed signs):
+        the move follows the pair, not the sign; revenue all zero, top-ups cash 2000.
+        """
+        vente_de_la_recharge = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            articles=[{
+                "pricesold": self._tarif_de_recharge("20.00"),
+                "quantite": Decimal("1"),
+                "prix_unitaire": 2000, "taux_tva": Decimal("0"),
+                "status": LigneArticle.VALID,
+            }],
+            reglements=[{"moyen": PaymentMethod.CASH, "montant": 2000}],
+        )
+        verifier_egalites(vente_de_la_recharge)
+        ligne_de_la_recharge = LigneArticle.objects.get(vente=vente_de_la_recharge)
+        vente_d_avoir = ouvrir_vente(
+            origine=SaleOrigin.LABOUTIK,
+            nature=Vente.Nature.AVOIR,
+            vente_liee=vente_de_la_recharge,
+        )
+        ajouter_l_article_d_avoir(vente_d_avoir, ligne_de_la_recharge, Decimal("1"))
+        ajouter_reglement(vente_d_avoir, moyen=PaymentMethod.CASH, montant=-2000)
+        vente_d_avoir = encaisser_vente(vente_d_avoir)
+        verifier_egalites(vente_d_avoir)
+        self._corriger_le_moyen(
+            vente_d_avoir, PaymentMethod.CASH, PaymentMethod.CC, -2000
+        )
+
+        rapport = self._rapport()
+        chiffre_affaires = rapport.section_chiffre_affaires()
+        recharges_encaissees = rapport.section_annexe()["recharges_et_cartes"][
+            "recharges_encaissees"
+        ]
+
+        assert self._totaux_non_nuls_par_moyen(chiffre_affaires["par_moyen"]) == {}
+        assert chiffre_affaires["total_ttc_en_centimes"] == 0
+        self._verifier_somme_egale_au_chiffre_d_affaires(chiffre_affaires)
+        assert self._totaux_non_nuls_par_moyen(recharges_encaissees["par_moyen"]) == {
+            PaymentMethod.CASH: 2000,
         }
 
     def test_chiffre_affaires_par_moyen_ordre_a_l_ecran(self):
