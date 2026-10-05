@@ -829,11 +829,11 @@ def _construire_sections_modules(request):
     # « Ventes » en premier : la liste de toutes les ventes du lieu, toutes origines,
     # en lecture seule (VenteAdmin, Administration/admin_tenant.py). Puis le rapport
     # des ventes (la cloture unique, toutes origines). L'ancienne cloture de la
-    # caisse (`laboutik.ClotureCaisse`) n'est plus dans l'admin : son moteur
+    # caisse (`laboutik.ClotureCaisse`) n'est pas dans l'admin : son moteur
     # (`laboutik/reports.py`) lit le moyen des lignes et recalcule la TVA depuis le
     # taux, faux pour une part payee en jetons.
-    # / "Sales" first, then the sales report. The old POS closure is no longer in the
-    # admin (its engine reads the lines' method and recomputes VAT from the rate).
+    # / "Sales" first, then the sales report. The old POS closure is not in the admin
+    # (its engine reads the lines' method and recomputes VAT from the rate).
     items_ventes_et_comptabilite = [
         {
             "title": _("Ventes"),

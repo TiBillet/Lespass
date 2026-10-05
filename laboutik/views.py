@@ -3852,7 +3852,7 @@ class CaisseViewSet(viewsets.ViewSet):
             # Si direct : renvoyer la page POS complete
             # / Detect if request comes from admin (HTMX) or direct access (POS)
             # TODO : retirer avec la fiche H-2 cette branche de l'ancienne liste admin
-            # des clôtures de la caisse, qui n'est plus enregistrée dans l'admin.
+            # des clôtures de la caisse, qui n'est pas enregistrée dans l'admin.
             # / TODO: remove with sheet H-2 (the old admin closure list is unregistered).
             est_requete_htmx = request.headers.get("HX-Request") == "true"
             if est_requete_htmx:
@@ -3908,9 +3908,8 @@ class CaisseViewSet(viewsets.ViewSet):
         if request.method == "GET":
             # Detecter si la requete vient de l'admin (HTMX) ou d'un acces direct (POS)
             # / Detect if request comes from admin (HTMX) or direct access (POS)
-            # TODO : retirer avec la fiche H-2 cette branche de l'ancienne liste admin
-            # des clôtures de la caisse, qui n'est plus enregistrée dans l'admin.
-            # / TODO: remove with sheet H-2 (the old admin closure list is unregistered).
+            # TODO : même retrait H-2 que la branche HTMX d'`export_fiscal`.
+            # / TODO: same H-2 removal as the HTMX branch of `export_fiscal`.
             est_requete_htmx = request.headers.get("HX-Request") == "true"
             if est_requete_htmx:
                 return render(
@@ -5957,6 +5956,25 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         # / Validate free price or weight/volume (custom_amount_centimes)
         # Weight/volume: server recomputes the amount. Free price: amount >= minimum.
         # Other prices: a custom amount is rejected.
+
+        # Un poids n'a de sens que pour un tarif au poids. L'ecran n'envoie jamais de
+        # champ `weight-` pour un tarif a la piece : un tel envoi est forge. Accepte, il
+        # poserait `weight_quantity` sur la ligne, qui passerait pour une pesee (« kg »
+        # au ticket et a l'admin, avoir partiel refuse). Refus, avant toute ecriture.
+        # / A weight only makes sense for a weight price. Sent for a per-item price, it
+        # is a forged post: refused before writing anything.
+        poids_envoye_pour_un_tarif_a_la_piece = (
+            weight_amount is not None and not prix_obj.poids_mesure
+        )
+        if poids_envoye_pour_un_tarif_a_la_piece:
+            raise ValueError(
+                _(
+                    "Un poids ne se vend que sur un tarif au poids : poids refusé "
+                    "pour « %(nom)s »."
+                )
+                % {"nom": produit.name}
+            )
+
         if prix_obj.poids_mesure:
             # Poids/mesure : le serveur recalcule le montant lui-meme.
             # On ne fait jamais confiance au montant envoye par le JS :
@@ -13660,7 +13678,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # La vente CORRECTION : liee a la vente d'origine, sans article, au point de
             # vente de la vente d'origine (le formulaire n'en envoie pas), a l'operateur
             # de la correction. La raison est posee tant que la vente est en attente :
-            # une vente reglee ne se modifie plus.
+            # une vente reglee est figee.
             # / The CORRECTION sale: linked, without items, at the original sale's
             # point of sale, by the correction's operator. The reason is set while the
             # sale is still pending.

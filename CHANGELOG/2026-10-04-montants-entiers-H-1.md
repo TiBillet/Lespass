@@ -1,7 +1,7 @@
 # Une ligne par article (chantier 05, fiche H, session H-1) / One line per item (worksite 05, sheet H, session H-1)
 
 **Date :** 2026-10-04
-**Migration :** Oui — `BaseBillet/migrations/0234_vente_raison.py` (H-1a : champ `Vente.raison`) ; `BaseBillet/migrations/0235_lignearticle_part_en_jetons.py` (H-1b-1 : champ `LigneArticle.part_en_jetons` et sa contrainte).
+**Migration :** Oui — `BaseBillet/migrations/0234_vente_raison.py` (H-1a : champ `Vente.raison`) ; `BaseBillet/migrations/0235_lignearticle_part_en_jetons.py` (H-1b-1 : champ `LigneArticle.part_en_jetons` et sa contrainte) ; `laboutik/migrations/0016_cle_d_empreinte_toujours_en_base.py` (H-1-ter : migration de données, la configuration LaBoutik et sa clé d'empreinte dans chaque lieu).
 `docker exec lespass_django poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing`
 
 ## Resume / Summary
@@ -457,6 +457,83 @@ Opus review of H-1c; maintainer decision Q-H13.
 ### Chaînes i18n ajoutées / Added i18n strings
 1 chaîne : « dont payés en cashless » (`comptabilite/presentation.py`). Le workflow i18n est à lancer par le mainteneur.
 
+## H-1-ter — Corrections de la relecture Fable finale de H-1, clé d'empreinte en base
+
+**Migration :** Oui — `laboutik/migrations/0016_cle_d_empreinte_toujours_en_base.py` (données seulement).
+`docker exec lespass_django poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing`
+
+### Resume / Summary
+**Quoi / What :** la caisse refuse un poids envoyé pour un tarif à la pièce ; la garde « pas de montant × quantité » voit aussi `prix_centimes × quantite` ; l'écran « Avoir sur un article » est refusé sur une vente avec écart et ne propose que les articles du chiffre d'affaires ; la tireuse arrondit le prix au litre d'une seule façon ; un avoir accepte des métadonnées en texte vide ; la clé d'empreinte du lieu se lit et s'écrit toujours en base. /
+The register refuses a weight sent for a per-item price; the guard also sees `prix_centimes × quantite`; the "Credit note on one item" screen is refused on a sale with a gap and only offers revenue items; the tap rounds the price per litre one way; a credit note accepts empty-text metadata; the venue fingerprint key is always read and written in the database.
+
+**Pourquoi / Why :** relecture Fable finale de H-1 (3 importants, 9 mineurs, aucun bloquant) ; décision du mainteneur du 2026-10-05 sur la clé d'empreinte (piège 9.86 : après un `down -v`, des centaines d'échecs `Save with update_fields did not affect any rows`). /
+Final Fable review of H-1; maintainer decision on the fingerprint key.
+
+- **Poids forgé (I-1)** (`_extraire_articles_du_panier`) : un champ `weight-<produit>` pour un tarif qui n'est pas au poids est refusé (400, avant toute écriture), comme une pesée en quantité 2. Sans ce refus, la ligne gardait le poids et passait pour une pesée.
+- **Garde n° 10 (I-2)** (`tests/pytest/test_garde_aucun_amount_fois_qty.py`) : motifs `prix_centimes … * … quantite` et l'inverse. Deux exceptions nommées et fermées :
+  - le débit du panier de la caisse : 8 lignes de `laboutik/views.py`, écrites mot pour mot, autant de fois qu'elles apparaissent (raison : entiers × entiers, la ligne passe par `calculer_montants_article`, l'égalité de la vente refuse toute divergence) ;
+  - la démo `create_test_pos_data.py` (un extrait, raison « démo, réécrite en H-3 »). La règle de fermeture accepte les extraits nommés de H-3.
+  Aucun code de production ne change pour ce point.
+- **Écran « Avoir sur un article » (I-3)** : `_raison_du_refus_de_l_avoir_sur_un_article` refuse une vente qui porte un écart d'encaissement (message du service) : le bouton est caché, le GET renvoie à la fiche avec le message. L'écran ne propose que les articles du chiffre d'affaires (`_lignes_du_chiffre_d_affaires`) ; une vente dont il ne reste que des articles hors chiffre d'affaires est refusée avec son propre message. « Avoir total » garde sa lecture (`_lignes_de_la_vente_avec_un_reste_a_rendre`, inchangée).
+- **Message de l'écart** : « Avoir total » (service et admin) dit « Cette vente a un écart d'encaissement : aucun avoir n'est possible. » (Q-H13). Le conseil « Faites un avoir ligne par ligne » est retiré.
+- **Prix au litre (M-1)** : `calculer_volume_autorise_ml` lit le prix par `calculer_prix_au_litre_en_centimes` (demi-haut), comme la ligne : 3,505 €/L → 351 c/L, et la facture du volume autorisé ne dépasse jamais le solde.
+- **Métadonnées en texte vide (M-2)** (`ajouter_l_article_d_avoir`) : un texte vide ou blanc vaut un dictionnaire vide, sans `json.loads`.
+- **Clé d'empreinte en base (point 8)** :
+  - `LaboutikConfiguration.get_hmac_key()` et `get_or_create_hmac_key()` relisent `hmac_key` en base, jamais l'attribut de l'objet venu du cache de django-solo ;
+  - une ligne ou une clé manquante est écrite sous verrou (`select_for_update().get_or_create`, puis `update`), jamais par `save(update_fields=…)`, puis le cache du singleton est vidé ;
+  - migration de données 0016 : crée la ligne et sa clé dans chaque lieu (et à la création d'un lieu) ; une clé existante ne change jamais ; inverse : rien ;
+  - `tests/PIEGES.md` 9.86 réécrit (cause : cache + rollback).
+- **djc (M-8)** : « retiré en fiche H » → « retiré en H-2 » ; commentaires au présent (`dashboard.py`, `laboutik/views.py`) ; le TODO H-2 en double d'`export_fec` renvoie à celui d'`export_fiscal`. Le commentaire de `ClotureCaisseAdmin` (`Administration/admin/laboutik.py`) est déjà au présent : inchangé.
+- **Tests ajoutés sans code (M-4, M-5, M-9)** : un produit à 0 % payé en jetons et en monnaie locale a UNE ligne « 0.00 » au rapport et au ticket ; l'avoir sur un article d'une ligne mixte jetons + espèces rend LG −300 (monnaie et carte d'origine) et espèces −200 ; une correction refusée n'écrit aucune trace `CorrectionPaiement`.
+/ See above.
+
+### Enquête M-3 — le moyen envoyé à l'ancien LaBoutik / M-3 inquiry
+**Question :** `ApiBillet/serializers.py` (`moyen_monnaie_et_portefeuille_envoyes_a_l_ancien_laboutik`) envoie le moyen du PREMIER règlement d'argent de la vente. Une ligne dont la vente a deux règlements d'argent ou plus peut-elle partir ?
+**Réponse : NON, aujourd'hui.**
+- Les envois partent des déclencheurs de la machine à états (`BaseBillet/signals.py` `pre_save_signal_status`), qui ne tournent que sur une ligne DÉJÀ en base (`if not instance._state.adding`), pour les transitions CREATED/UNPAID/PAID → PAID (trigger A adhésion, trigger B billet), CREATED → REFUNDED et CREATED → CREDIT_NOTE.
+- Chemins qui y arrivent, tous à un seul règlement d'argent (ou aucun) :
+  - Stripe en ligne (`set_ligne_article_paid`) : `encaisser_vente_stripe` écrit UN règlement (étape 5) ;
+  - « Rejouer l'encaissement » (`admin_tenant.py`) : une vente Stripe ;
+  - adhésion créée dans l'admin (`signals.py`, `create_lignearticle_if_membership_created_on_admin`) et paiement d'adhésion par le formulaire (`BaseBillet/views.py`) : un règlement au moyen choisi ;
+  - parcours gratuits (`services_commande.py`, `validators.py`) : aucun règlement d'argent, le sérialiseur envoie « NA » ;
+  - `launch_payment.py` : lignes sans vente, branche « ligne héritée » (ses propres champs) ;
+  - remboursement Stripe (`PaiementStripe/utils.py`, ligne REFUNDED) : un règlement Stripe négatif ;
+  - CREDIT_NOTE : tous les producteurs sont d'origine ADMIN, rien ne part.
+- Les lignes à plusieurs règlements (caisse, tireuse, QR / NFC) naissent VALID : aucune transition, aucun envoi (voir aussi `test_qr_deux_monnaies_aucun_envoi_laboutik_et_deux_mails`, Q-H3).
+- La réponse change si un futur chemin fait passer en PAID une ligne de caisse ou de QR, ou complète un encaissement Stripe par un second moyen.
+/ No: only single-payment (or free) sales reach the senders; multi-payment lines are born VALID and trigger nothing.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/views.py` | `_extraire_articles_du_panier` : refus d'un poids sur un tarif à la pièce ; commentaires M-8 |
+| `Administration/admin_tenant.py` | `_lignes_du_chiffre_d_affaires`, `_raison_du_refus_de_l_avoir_sur_un_article` (écart, hors chiffre d'affaires), liste de l'écran filtrée ; message de l'écart de `_raison_du_refus_de_l_avoir_total` |
+| `Administration/admin/dashboard.py` | Commentaire au présent |
+| `controlvanne/billing.py` | `calculer_volume_autorise_ml` lit `calculer_prix_au_litre_en_centimes` |
+| `BaseBillet/services_vente.py` | Métadonnées en texte vide ; `MESSAGE_AVOIR_TOTAL_VENTE_AVEC_UN_ECART` ; docstring de l'avoir total ; « retiré en H-2 » |
+| `laboutik/models.py` | `get_hmac_key`, `get_or_create_hmac_key` : lecture en base, écriture sous verrou, cache vidé |
+| `laboutik/migrations/0016_cle_d_empreinte_toujours_en_base.py` | Nouveau : migration de données |
+| `tests/PIEGES.md` | 9.86 réécrit |
+| `tests/pytest/test_cle_d_empreinte_du_lieu.py` | Nouveau : tests 10 à 12 |
+| `tests/pytest/test_caisse_une_ligne_par_article.py` | Test 1 (2 cas) |
+| `tests/pytest/test_garde_aucun_amount_fois_qty.py` | Motifs, exceptions du débit du panier et de la démo, règle de fermeture |
+| `tests/pytest/test_admin_avoir_sur_un_article.py` | Tests 3, 4, 8 |
+| `tests/pytest/test_tireuse_et_qr_une_ligne.py` | Tests 5, 6 (2 cas) |
+| `tests/pytest/test_part_en_jetons.py` | Test 7 ; paramètre facultatif `taux_tva` des outils de la bière |
+| `tests/pytest/test_une_ligne_par_article_lecteurs.py` | Test 9 : aucune trace `CorrectionPaiement` |
+| `tests/pytest/test_admin_vente.py` | Nouveau texte du refus de l'écart |
+
+### Chaînes i18n ajoutées / Added i18n strings
+- « Un poids ne se vend que sur un tarif au poids : poids refusé pour « %(nom)s ». »
+- « Les articles qui restent sont hors chiffre d'affaires (recharge de carte) : un avoir sur un article n'est pas possible. »
+- « Cette vente a un écart d'encaissement : aucun avoir n'est possible. » (remplace « … l'avoir total n'est pas possible. Faites un avoir ligne par ligne. »)
+Le workflow i18n est à lancer par le mainteneur.
+
+### Tests
+- Rouge avant le code (prouvé par l'orchestrateur) : tests 1 à 9, `8 failed, 121 passed` (1, 3, 4, 5, 6 rouges pour la bonne raison, garde rouge sur la démo ; 7, 8, 9 verts par construction) ; tests 10 à 12, `3 failed`.
+- Vert après le code : les 7 fichiers de la session, `132 passed`. Voisins (`test_caisse_ecrit_la_vente`, `test_admin_vente`, `test_tireuse_ancien_fedow`, `test_tireuse_ecrit_la_vente`, `test_qrcode*`, `test_controlvanne_billing`, `test_avoirs_ecrivent_la_vente`, `test_archive_lne_ventes`, `test_lecteurs_montants_entiers`, `test_cloture_unique`, `test_comptabilite_exports`, `test_integrity_hmac`) : `447 passed`. Caractérisation (`test_caracterisation_*.py`) : `24 passed`, sans modification.
+- `manage.py check` : aucun problème ; `makemigrations --check` : aucun changement ; `migrate_schemas --executor=multiprocessing` : 0016 appliquée dans chaque lieu de la base de dev, sans erreur. La clé manquait en base dans plusieurs lieux de dev, dont `lespass` (voir piège 9.86).
+
 ---
 
 ## Comment tester (à la main) / Manual test
@@ -518,7 +595,13 @@ Avant : régénérer la base de dev (les lignes de l'historique gardent l'ancien
 4. Mettre 1,5 : refus « … doit être un nombre entier d'articles ». Mettre 3 : refus (il n'en reste que 2).
 5. Caisse : 350 g de comté. « Avoir sur un article » : la quantité 0,350 est en lecture seule ; valider rend 4,52 €.
 6. Une vente en ligne payée par Stripe (2 billets) : pas de champ « Remboursé par » ; rendre 1 billet affiche le rappel Stripe.
-7. Une vente avec un « Écart d'encaissement » : le POST est refusé, avec le message « Cette vente a un écart d'encaissement… ».
+7. Une vente avec un « Écart d'encaissement » : la fiche n'a pas le bouton « Avoir sur un article » ; l'adresse de l'écran renvoie à la fiche avec le message « Cette vente a un écart d'encaissement : aucun avoir n'est possible sur ses articles. » (H-1-ter).
+8. Une vente de caisse avec un billet et une recharge de carte : la liste de l'écran ne propose que le billet (H-1-ter).
+
+### Test 11 — H-1-ter
+1. Caisse : forger un POST avec `weight-<jus>=350` sur un jus à la pièce (outils du navigateur) : refus, rien n'est écrit.
+2. Tireuse : un fût à 3,505 €/L, une carte à 3,51 € : le volume autorisé vaut 1000 ml, et le tirage complet coûte 3,51 €.
+3. Clé d'empreinte : `docker exec lespass_django poetry run python /DjangoFiles/manage.py shell`, dans un lieu : `LaboutikConfiguration.objects.values_list("hmac_key", flat=True)` n'est pas vide ; `verify_integrity` passe sur les ventes écrites après la migration 0016.
 
 ### Vérifs DB
 `docker exec lespass_django poetry run python /DjangoFiles/manage.py shell` : `Vente.objects.filter(nature="CORRECTION").values("numero", "raison")` ; `LigneArticle.objects.exclude(part_en_jetons=0).values("vat", "total_ttc", "part_en_jetons", "total_ht", "total_tva")` ; `LigneArticle.objects.filter(sale_origin="LB", vente__isnull=False).exclude(payment_method=None).count()` (0 pour les ventes écrites après H-1b-2, hors l'article « Jetons cadeau repris au vidage »).

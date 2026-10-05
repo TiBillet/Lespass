@@ -223,12 +223,27 @@ class LaboutikConfiguration(SingletonModel):
             self.sunmi_app_key = fernet_encrypt(value)
 
     def get_hmac_key(self):
-        """Dechiffre et retourne la cle HMAC, ou None si vide.
-        / Decrypts and returns the HMAC key, or None if empty."""
-        if not self.hmac_key:
+        """
+        La cle HMAC du lieu, dechiffree, RELUE EN BASE ; None si la ligne ou la cle
+        manque.
+        / The venue HMAC key, decrypted, READ FROM THE DATABASE; None if missing.
+
+        INDISPENSABLE : on ne lit jamais `self.hmac_key`. L'objet vient souvent du cache
+        de django-solo (`get_solo()`, memcached, 5 minutes). Le cache peut garder un
+        objet que la base n'a pas : un objet cree dans une transaction annulee ensuite,
+        ou une autre cle. Une empreinte calculee avec une cle que la base n'a pas ne se
+        verifie plus (tests/PIEGES.md 9.86).
+        / Never read `self.hmac_key`: the object often comes from the cache, which can
+        hold an object the database does not have.
+        """
+        cle_chiffree_en_base = (
+            LaboutikConfiguration.objects.filter(pk=self.singleton_instance_id)
+            .values_list("hmac_key", flat=True)
+            .first()
+        )
+        if not cle_chiffree_en_base:
             return None
-        from root_billet.utils import fernet_decrypt
-        return fernet_decrypt(self.hmac_key)
+        return fernet_decrypt(cle_chiffree_en_base)
 
     def set_hmac_key(self, value):
         """Chiffre et stocke la cle HMAC.
@@ -241,20 +256,48 @@ class LaboutikConfiguration(SingletonModel):
 
     def get_or_create_hmac_key(self):
         """
-        Retourne la cle HMAC. La genere si elle n'existe pas encore.
-        Cle de 256 bits (32 octets) en hexadecimal.
-        / Returns HMAC key. Generates it if not yet created.
-        256-bit key (32 bytes) in hexadecimal.
+        La cle HMAC du lieu, relue en base (`get_hmac_key`). Si la ligne du singleton
+        ou sa cle manque en base, les ecrit, puis vide le cache du singleton.
+        Cle de 256 bits (32 octets) en hexadecimal, chiffree Fernet en base.
+        / The venue HMAC key, read from the database. A missing row or key is written,
+        then the singleton cache is cleared. 256-bit hex key, Fernet-encrypted.
+
+        L'ECRITURE se fait sous verrou (`select_for_update`), sur la ligne relue en
+        base : deux ventes simultanees ecrivent une seule cle. Jamais de
+        `save(update_fields=...)` sur `self` : l'objet peut venir du cache sans ligne
+        en base (`DatabaseError` « did not affect any rows »).
+        La migration `laboutik/migrations/0016_cle_d_empreinte_toujours_en_base` cree
+        deja la ligne et la cle dans chaque lieu : cette ecriture est un filet.
+        / Written under lock on the row read from the database, never by
+        save(update_fields) on self. The 0016 migration already creates them: safety net.
         """
         cle_existante = self.get_hmac_key()
         if cle_existante:
             return cle_existante
 
         import secrets
-        nouvelle_cle = secrets.token_hex(32)
-        self.set_hmac_key(nouvelle_cle)
-        self.save(update_fields=['hmac_key'])
-        return nouvelle_cle
+        from django.db import transaction
+
+        with transaction.atomic():
+            configuration_verrouillee, _ligne_creee = (
+                LaboutikConfiguration.objects.select_for_update().get_or_create(
+                    pk=self.singleton_instance_id
+                )
+            )
+            # Une autre vente a pu ecrire la cle pendant qu'on attendait le verrou.
+            # / Another sale may have written the key while we waited for the lock.
+            if configuration_verrouillee.hmac_key:
+                cle_du_lieu = fernet_decrypt(configuration_verrouillee.hmac_key)
+            else:
+                cle_du_lieu = secrets.token_hex(32)
+                LaboutikConfiguration.objects.filter(
+                    pk=self.singleton_instance_id
+                ).update(hmac_key=fernet_encrypt(cle_du_lieu))
+
+        # Le cache peut garder un objet sans cle : le prochain `get_solo()` relit la base.
+        # / The cache may hold a keyless object: the next get_solo() reads the database.
+        LaboutikConfiguration.clear_cache()
+        return cle_du_lieu
 
     def __str__(self):
         return "LaBoutik Configuration"

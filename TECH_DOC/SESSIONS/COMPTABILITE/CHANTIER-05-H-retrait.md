@@ -186,6 +186,17 @@ Aucune suppression automatique de lignes par une migration.
 | Constantes `MOYENS_HORS_ARGENT`, `lignes_argent` (chantier 04) | remplacées par `MOYENS_OFFERTS` + `NM` |
 | « Entries » et « Ancien rapport caisse » | retirés du menu (l'URL « Entries » reste pour le support) |
 
+**Restes signalés par la relecture Fable finale de H-1 (2026-10-05)** — à traiter en H-2 :
+
+- `laboutik/plan_comptable.py` ~l.793-800 lit `ligne.asset` pour le compte du virement reçu
+  (`Product.VIREMENT_RECU`) : aucun producteur n'écrit de ligne VR aujourd'hui ; à rebrancher
+  sur le règlement.
+- `LigneArticleInline` (`Administration/admin_tenant.py` ~l.1643-1670) ne précharge pas le stock
+  du produit lu par `_unite_d_une_pesee` (une requête par pesée ; une adhésion n'en a pas).
+- `laboutik/templatetags/laboutik_filters.py` `afficher_poids` et les clés `poids_total` /
+  `unite_poids` ne sont lus que par l'ancien moteur (`laboutik/reports.py`,
+  `rapport_comptable.html`, `rapport_before.html`) : à retirer avec lui.
+
 **Restes signalés par la relecture finale de la fiche G (2026-10-04)** — à traiter ou
 à retirer en H-2, vérifier chaque ligne avant d'agir :
 

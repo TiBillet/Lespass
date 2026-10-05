@@ -36,8 +36,10 @@ Aucune part : `_calculer_qty_partielles` n'existe pas dans le code de production
 Lecteurs (tests 11 à 18) : un tirage s'affiche en litres (caisse, ticket, Z, admin) et
 compte pour UN article, même sous 5 ml ; un écart n'est pas un article ; un écart payé
 en cashless n'est pas de l'argent dans la réconciliation ; l'avoir d'une ligne QR
-s'écrit (métadonnées en dictionnaire, ou en texte JSON pour une ligne historique) ; la
-page du payeur QR affiche l'argent débité.
+s'écrit (métadonnées en dictionnaire, en texte JSON pour une ligne historique, ou en
+texte vide ou blanc) ; la page du payeur QR affiche l'argent débité.
+Volume autorisé au badge (test 19) : il lit le prix au litre arrondi comme celui de la
+ligne (demi-haut), la facture de ce volume ne dépasse jamais le solde.
 / Tap: one line, litres × price per litre (quantity rounded first), screen = bill =
 line, token part, cost on litres, authorised volume billed (overflow free), missing
 money after an old Fedow failure → "received less" gap item. QR / NFC:
@@ -51,6 +53,8 @@ D'OÙ VIENNENT LES VALEURS ATTENDUES (calculées à la main)
   jetons 100 : HT = 100 + arrondi(300 × 100 / 120 = 250) = 350, TVA 50 ;
 - 200 de solde à 6 €/L : 333,33 ml autorisés → 333 ml ; 0,333 × 600 = 199,8 → 200 ;
 - 300 de solde à 6 €/L : 500 ml autorisés ; 530 ml servis → 0,500 L, 300, stock −53 cl ;
+- 3,505 €/L : 350,5 → 351 c/L (demi-haut) ; 351 de solde → 1000 ml (au pair, 350 c/L :
+  1002 ml, facturés 352) ;
 - 333,7 ml à 7,50 €/L : la quantité d'abord, 0,3337 → 0,334 L ; 0,334 × 750 = 250,5 →
   251. (Sans arrondir la quantité : 0,3337 × 750 = 250,275 → 250.)
 - QR 1000 débité 800 : ligne 1000, écart −200 ; débité 1100 : ligne 1000, écart +100.
@@ -94,7 +98,7 @@ CODE PARCOURU / CODE EXERCISED
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-H-retrait.md (§2, §2.1,
 §5 tests 4 et 5b) ; CHANTIER-05-montants-entiers.md (D15, D26) ;
 CHANTIER-05-C-tireuse-qr.md (§1, §1 bis) ; CHANTIER-05-SUIVI.md (§5 Q-H2, Q-H3,
-Q-H13).
+Q-H13) ; brief CHANTIER-05-briefs/05-H-1-ter.md (tests 5 et 6).
 
 Lancer / Run : make test ARGS="tests/pytest/test_tireuse_et_qr_une_ligne.py"
 """
@@ -1661,3 +1665,97 @@ def test_tirage_de_moins_de_5_ml_reste_au_volume(lieu):
     marge_brute = rapport.section_marge_brute()
     assert marge_brute["nombre_d_articles_au_cout_inconnu"] == 1
     verifier_egalites(vente_du_tirage)
+
+
+# ---------------------------------------------------------------------------
+# 19 — Volume autorisé au badge : le même arrondi du prix au litre que la ligne
+# / 19 — Volume allowed at the badge: the same price-per-litre rounding as the line
+# ---------------------------------------------------------------------------
+
+
+def test_volume_autorise_meme_arrondi_que_le_prix_de_la_ligne(lieu):
+    """
+    Un fût à 3,505 €/L. La ligne du tirage porte le prix au litre arrondi au centime
+    DEMI-HAUT : 350,5 → 351 centimes (`calculer_prix_au_litre_en_centimes`). Le
+    volume autorisé au badge lit le MÊME prix : avec 351 centimes de solde, il vaut
+    351 / 351 × 1000 = 1000 ml. Avec un arrondi au pair (350 centimes), il vaudrait
+    351 / 350 × 1000 = 1002,857 → 1002 ml, et la facture de ce volume (1,002 × 351 =
+    351,7 → 352) dépasserait le solde lu au badge.
+    / A 3.505 €/L keg: the line's price per litre is rounded half up (351 cents). The
+    allowed volume reads the SAME price: 351 cents of balance → 1000 ml, and its bill
+    (351) never exceeds the balance. A half-even rounding (350) would allow 1002 ml,
+    billed 352.
+    """
+    from controlvanne.billing import (
+        calculer_montant_centimes,
+        calculer_prix_au_litre_en_centimes,
+        calculer_volume_autorise_ml,
+    )
+
+    prix_du_litre_en_euros = Decimal("3.505")
+    solde_lu_au_badge_en_centimes = 351
+
+    volume_autorise_en_ml = calculer_volume_autorise_ml(
+        solde_lu_au_badge_en_centimes,
+        prix_du_litre_en_euros,
+        reservoir_disponible_ml=50000,
+    )
+
+    assert calculer_prix_au_litre_en_centimes(prix_du_litre_en_euros) == 351
+    assert volume_autorise_en_ml == Decimal("1000")
+    montant_de_la_facture_en_centimes = calculer_montant_centimes(
+        volume_autorise_en_ml, prix_du_litre_en_euros
+    )
+    assert montant_de_la_facture_en_centimes <= solde_lu_au_badge_en_centimes
+
+
+# ---------------------------------------------------------------------------
+# 20 — L'avoir d'une ligne aux métadonnées en texte vide ou blanc
+# / 20 — The credit note of a line whose metadata is an empty or blank text
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("texte_des_metadonnees", ["", "   "], ids=["vide", "blanc"])
+def test_avoir_d_une_ligne_aux_metadonnees_texte_vide(lieu, texte_des_metadonnees):
+    """
+    Un QR code de 10,00 € payé en entier (monnaie locale). La ligne payée est ramenée
+    à des métadonnées en TEXTE vide (ou blanc), comme une ligne historique sans
+    métadonnées. L'avoir de la ligne s'écrit quand même : un texte vide ou blanc vaut
+    « aucune métadonnée ». Les métadonnées de l'avoir sont seulement l'uuid de la ligne
+    d'origine.
+    / A paid QR line whose metadata is an empty (or blank) text: its credit note is
+    written; its metadata only holds the original line uuid.
+    """
+    from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+    from BaseBillet.services_vente import ecrire_la_vente_d_avoir_d_une_ligne
+
+    client_de_l_encaisseur = creer_un_encaisseur(lieu)
+    payeur = creer_un_payeur()
+    demande = generer_une_demande(client_de_l_encaisseur, 1000)
+    transaction_complete, monnaie_locale = transaction_de_l_ancien_fedow(1000)
+    faux_fedow = fedow_simule(
+        transactions_du_debit=[transaction_complete],
+        monnaies_du_fedow={monnaie_locale: {"category": "TLF"}},
+    )
+    confirmer_par_qrcode(payeur, demande, faux_fedow)
+    vente_du_qrcode = la_vente_de_la_demande(demande)
+    ligne_du_qrcode = le_seul_article_hors_ecart(vente_du_qrcode)
+    LigneArticle.objects.filter(pk=ligne_du_qrcode.pk).update(
+        metadata=texte_des_metadonnees
+    )
+    ligne_du_qrcode.refresh_from_db()
+    assert ligne_du_qrcode.metadata == texte_des_metadonnees
+
+    ligne_d_avoir = ecrire_la_vente_d_avoir_d_une_ligne(
+        ligne_du_qrcode,
+        Decimal("1"),
+        moyen_rembourse=PaymentMethod.CASH,
+        origine=SaleOrigin.ADMIN,
+    )
+
+    ligne_d_avoir_relue = LigneArticle.objects.get(pk=ligne_d_avoir.pk)
+    assert ligne_d_avoir_relue.total_ttc == -1000
+    assert ligne_d_avoir_relue.metadata == {
+        "original_lignearticle_uuid": str(ligne_du_qrcode.uuid)
+    }
+    verifier_egalites(ligne_d_avoir_relue.vente)

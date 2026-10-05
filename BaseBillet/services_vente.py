@@ -500,8 +500,9 @@ def ajouter_article(
     )
 
     # 3. Règle « offert à montant non nul ». Pendant la transition, le moyen historique
-    # FREE sur la ligne la déclenche aussi (retiré en fiche H).
-    # / 3. "Offered at a non-zero price" rule. FREE on the line also triggers it (until H).
+    # FREE sur la ligne la déclenche aussi (retiré en H-2).
+    # / 3. "Offered at a non-zero price" rule. FREE on the line also triggers it
+    # (removed in H-2).
     moyen_historique_de_la_ligne = champs_de_la_ligne.get("payment_method")
     ligne_offerte_par_le_moyen_historique = (
         moyen_historique_de_la_ligne == PaymentMethod.FREE
@@ -847,13 +848,19 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
     # La trace de la ligne d'origine dans les métadonnées de l'avoir. Une copie : le
     # dictionnaire de la ligne d'origine n'est jamais modifié. Une ligne QR historique
     # (déjà en base, reprise des anciennes ventes) peut porter ses métadonnées en TEXTE
-    # JSON : le texte est relu en dictionnaire.
+    # JSON : le texte est relu en dictionnaire. Un texte vide ou blanc vaut « aucune
+    # métadonnée » (`json.loads` le refuserait).
     # / The original line's trace in the credit note metadata, on a copy. Older QR
-    # lines keep their metadata as JSON TEXT: the text is read back as a dict.
+    # lines keep their metadata as JSON TEXT: the text is read back as a dict. An empty
+    # or blank text means "no metadata".
     metadonnees_de_l_avoir = {}
     metadonnees_de_la_ligne_d_origine = ligne_d_origine.metadata
     if isinstance(metadonnees_de_la_ligne_d_origine, str):
-        metadonnees_de_la_ligne_d_origine = json.loads(metadonnees_de_la_ligne_d_origine)
+        texte_des_metadonnees = metadonnees_de_la_ligne_d_origine.strip()
+        if texte_des_metadonnees == "":
+            metadonnees_de_la_ligne_d_origine = {}
+        else:
+            metadonnees_de_la_ligne_d_origine = json.loads(texte_des_metadonnees)
     if metadonnees_de_la_ligne_d_origine:
         metadonnees_de_l_avoir.update(metadonnees_de_la_ligne_d_origine)
     metadonnees_de_l_avoir["original_lignearticle_uuid"] = str(ligne_d_origine.uuid)
@@ -1546,8 +1553,7 @@ MESSAGE_AVOIR_TOTAL_VENTE_PAS_EN_EUROS = (
     "possible."
 )
 MESSAGE_AVOIR_TOTAL_VENTE_AVEC_UN_ECART = (
-    "Cette vente a un écart d'encaissement : l'avoir total n'est pas possible. "
-    "Faites un avoir ligne par ligne."
+    "Cette vente a un écart d'encaissement : aucun avoir n'est possible."
 )
 MESSAGE_AVOIR_TOTAL_VENTE_AVEC_UNE_RECHARGE = (
     "Cette vente contient une recharge de carte : l'avoir total n'est pas possible."
@@ -1617,9 +1623,10 @@ def ecrire_la_vente_d_avoir_d_une_vente(vente, moyen_rembourse, origine):
 
     FLUX (dans UNE transaction ; un point de sauvegarde si l'appelant en a une) :
     1. refus si la vente n'est pas de nature VENTE, ou pas réglée, ou pas en euros
-       (points ou temps), ou si elle porte un article d'écart d'encaissement (`vente_porte_un_ecart_d_encaissement`), ou une
-       recharge de carte (`vente_contient_une_recharge`) : ces ventes se remboursent
-       ligne par ligne, quand c'est possible ;
+       (points ou temps), ou si elle porte un article d'écart d'encaissement
+       (`vente_porte_un_ecart_d_encaissement` : aucun avoir n'est possible, Q-H13), ou
+       une recharge de carte (`vente_contient_une_recharge` : ses autres articles se
+       remboursent un par un) ;
     2. chaque ligne vendue de la vente (quantité positive) est verrouillée et sa
        quantité déjà rendue relue (`quantite_restante_de_la_ligne_sous_verrou`). Rien
        ne reste sur aucune ligne : refus (« déjà remboursée en totalité »). Deux

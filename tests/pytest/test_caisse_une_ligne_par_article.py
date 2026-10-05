@@ -21,6 +21,7 @@ règlements de la vente.
   le prix au kg / au litre ; le total vaut ce que la caisse a fait encaisser ; le poids
   saisi reste dans `weight_quantity` (le stock le lit) ; une pesée est UN article :
   une quantité de panier autre que 1 (envoi forgé) est refusée, rien n'est écrit ;
+  un poids envoyé pour un tarif à la pièce (envoi forgé) est refusé de la même façon ;
 - l'écran du détail, le ticket (deux imprimantes), l'admin, le rapport et son export
   tableur affichent la quantité avec son unité (« 0,350 kg ») ; deux pesées restent
   deux articles ; un produit vendu au poids et à la pièce donne une ligne par unité au
@@ -69,7 +70,8 @@ l'ancien Fedow et le client `FedowAPI` est simulé.
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-H-retrait.md (§2, §2.1,
 §5 tests 1, 2, 3, 5) ; CHANTIER-05-montants-entiers.md (§2, D12, D13, D15, D21) ;
 CHANTIER-05-SUIVI.md (§4 relecture Opus de la spec H-1 ; §5 Q-H1, Q-H2, Q-H4) ;
-briefs CHANTIER-05-briefs/05-H-1b-2.md et 05-H-1b-2-bis.md (tests 13 à 23).
+briefs CHANTIER-05-briefs/05-H-1b-2.md et 05-H-1b-2-bis.md (tests 13 à 23),
+05-H-1-ter.md (test 1).
 
 Lancer / Run : make test ARGS="tests/pytest/test_caisse_une_ligne_par_article.py"
 """
@@ -892,6 +894,56 @@ def test_pesee_en_quantite_2_refusee_rien_n_est_ecrit(lieu, facon_de_payer):
     assert reponse.status_code == 400, reponse.content.decode()[:400]
     assert not Vente.objects.filter(idempotency_key=cle_d_idempotence).exists()
     assert not LigneArticle.objects.filter(pricesold__price=comte.tarif).exists()
+    assert solde_de_la_carte(carte_du_client, monnaie_locale_du_lieu(lieu)) == 2000
+
+
+# --------------------------------------------------------------------------
+# 6 ter — Un poids forgé sur un tarif à la pièce : refusé, rien n'est écrit
+# / 6 ter — A forged weight on a per-item price: refused, nothing written
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("facon_de_payer", ["espece", "nfc"])
+def test_poids_forge_sur_un_tarif_a_la_piece_refuse(lieu, facon_de_payer):
+    """
+    Un envoi forgé porte 3 jus (tarif à la pièce, pas au poids) avec un poids de
+    350 (`weight-<jus>`). L'écran n'envoie jamais de poids pour un tarif à la pièce.
+    La caisse refuse (400), comme une pesée en quantité 2, avant toute écriture : ni
+    vente, ni ligne, ni débit de la carte. Sans ce refus, la ligne garderait le poids
+    et passerait pour une pesée (« kg » au ticket et à l'admin, avoir partiel refusé).
+    / A forged post sends a weight for a per-item price: refused (400) before writing
+    anything, like a weighing in quantity 2; in cash and by card.
+    """
+    jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
+    point_de_vente = creer_un_point_de_vente([jus.produit])
+    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
+    carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=2000)
+    cle_d_idempotence = nouvelle_cle_d_idempotence()
+    champs_du_panier = {
+        f"repid-{cle_de_panier(jus)}": "3",
+        f"weight-{cle_de_panier(jus)}": "350",
+    }
+
+    if facon_de_payer == "espece":
+        reponse = payer_un_panier_compose_a_la_caisse(
+            client_du_caissier,
+            point_de_vente,
+            champs_du_panier,
+            moyen_de_paiement="espece",
+            cle_d_idempotence=cle_d_idempotence,
+        )
+    else:
+        reponse = payer_par_la_carte_du_client(
+            client_du_caissier,
+            point_de_vente,
+            champs_du_panier,
+            carte_du_client,
+            cle_d_idempotence,
+        )
+
+    assert reponse.status_code == 400, reponse.content.decode()[:400]
+    assert not Vente.objects.filter(idempotency_key=cle_d_idempotence).exists()
+    assert not LigneArticle.objects.filter(pricesold__price=jus.tarif).exists()
     assert solde_de_la_carte(carte_du_client, monnaie_locale_du_lieu(lieu)) == 2000
 
 

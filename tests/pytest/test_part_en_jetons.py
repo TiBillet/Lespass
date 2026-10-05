@@ -101,7 +101,7 @@ D'OÙ VIENNENT LES VALEURS ATTENDUES (calculées à la main)
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-H-retrait.md (§2, §2.1,
 §5 test 2) ; CHANTIER-05-montants-entiers.md (§2, D8 bis, D10, D13) ;
 CHANTIER-05-SUIVI.md (§4 relecture Opus de la spec H-1, §5 Q-H1) ; brief
-CHANTIER-05-briefs/05-H-1b-1.md et 05-H-1b-1-bis.md.
+CHANTIER-05-briefs/05-H-1b-1.md, 05-H-1b-1-bis.md et 05-H-1-ter.md (test 7).
 
 Lancer / Run : make test ARGS="tests/pytest/test_part_en_jetons.py"
 """
@@ -263,11 +263,15 @@ def creer_une_carte_du_client():
     )
 
 
-def creer_une_biere_rangee_dans_les_boissons():
+def creer_une_biere_rangee_dans_les_boissons(taux_tva="20.00"):
     """
-    Le tarif vendu d'une bière à 5,00 € (TVA 20 %), rangée dans une catégorie de caisse
-    neuve reliée au compte 707000. Rend le tarif vendu, le produit et la catégorie.
-    / A 5.00 € beer (20 % VAT) in a new POS category linked to account 707000.
+    Le tarif vendu d'une bière à 5,00 € (TVA 20 % par défaut), rangée dans une
+    catégorie de caisse neuve reliée au compte 707000. Rend le tarif vendu, le produit
+    et la catégorie.
+    / A 5.00 € beer (20 % VAT by default) in a new POS category linked to account
+    707000.
+
+    :param taux_tva: le taux de TVA du produit, en texte (ex. "20.00", "0.00")
     """
     compte_des_marchandises = CompteComptable.objects.get(numero_de_compte="707000")
     categorie_des_boissons = CategorieProduct.objects.create(
@@ -277,7 +281,7 @@ def creer_une_biere_rangee_dans_les_boissons():
     tarif_vendu = creer_tarif_vendu(
         nom="Bière jetons",
         prix_en_euros="5.00",
-        taux_tva="20.00",
+        taux_tva=taux_tva,
         methode_caisse=Product.VENTE,
     )
     produit = tarif_vendu.productsold.product
@@ -291,7 +295,7 @@ def creer_une_biere_rangee_dans_les_boissons():
 
 
 def vendre_des_bieres_a_la_forme_de_demain(
-    lieu, nombre_de_bieres, part_en_jetons, montant_en_monnaie_locale
+    lieu, nombre_de_bieres, part_en_jetons, montant_en_monnaie_locale, taux_tva="20.00"
 ):
     """
     ÉTAT DE DÉPART : une vente de caisse réglée, écrite par le service de vente, à la
@@ -306,8 +310,9 @@ def vendre_des_bieres_a_la_forme_de_demain(
     :param nombre_de_bieres: quantité de la ligne (int)
     :param part_en_jetons: centimes payés en jetons (int)
     :param montant_en_monnaie_locale: centimes payés en monnaie locale (int)
+    :param taux_tva: le taux de TVA de la bière, en texte (20 % par défaut)
     """
-    biere = creer_une_biere_rangee_dans_les_boissons()
+    biere = creer_une_biere_rangee_dans_les_boissons(taux_tva=taux_tva)
     jetons_cadeau = monnaie_cadeau_du_lieu(lieu)
     monnaie_locale = monnaie_locale_du_lieu(lieu)
     assert jetons_cadeau is not None, "Le lieu n'a pas de monnaie cadeau (TNF)."
@@ -341,7 +346,7 @@ def vendre_des_bieres_a_la_forme_de_demain(
                 "pricesold": biere.tarif_vendu,
                 "quantite": Decimal(nombre_de_bieres),
                 "prix_unitaire": 500,
-                "taux_tva": Decimal("20"),
+                "taux_tva": Decimal(taux_tva),
                 "part_en_jetons": part_en_jetons,
                 "status": LigneArticle.VALID,
             }
@@ -850,6 +855,57 @@ def test_ticket_tva_par_taux_avec_les_jetons(lieu):
     assert ticket["total_ht"] == 467
     assert ticket["total_tva"] == 33
     verifier_egalites(vente_mixte.vente)
+
+
+# --------------------------------------------------------------------------
+# 9 bis — Produit à 0 % : la part en jetons et le reste sur UNE ligne « 0.00 »
+# / 9 bis — 0 % product: the token part and the rest on ONE "0.00" row
+# --------------------------------------------------------------------------
+
+
+def test_jetons_sur_un_produit_a_0_pourcent_une_ligne_au_z_et_au_ticket(lieu):
+    """
+    Une bière à 5,00 € au taux 0 %, payée 300 en jetons + 200 en monnaie locale. La
+    part en jetons va au taux « 0.00 », et le reste AUSSI (son taux est 0 %). Le
+    chiffre d'affaires par taux du rapport et la TVA par taux du ticket ont donc UNE
+    seule ligne « 0.00 » : TTC 500, HT 500, TVA 0. Les deux parts s'additionnent : aucune
+    n'écrase l'autre (ce qui donnerait 300 ou 200).
+    La période du rapport ne contient que l'instant d'encaissement de la vente.
+    / A 0 % beer, 300 tokens + 200 local currency: the report and the receipt have ONE
+    "0.00" row, TTC 500, HT 500, VAT 0 (both parts added, none overwrites the other).
+    """
+    vente_a_zero_pourcent = vendre_des_bieres_a_la_forme_de_demain(
+        lieu,
+        nombre_de_bieres=1,
+        part_en_jetons=300,
+        montant_en_monnaie_locale=200,
+        taux_tva="0.00",
+    )
+    instant_de_l_encaissement = vente_a_zero_pourcent.vente.datetime_encaissement
+    rapport = RapportDesVentes(
+        debut=instant_de_l_encaissement,
+        fin=instant_de_l_encaissement + timedelta(microseconds=1),
+    )
+
+    chiffre_affaires = rapport.section_chiffre_affaires()
+    ticket = formatter_ticket_vente(vente_a_zero_pourcent.vente, None)
+
+    assert chiffre_affaires["par_taux"] == {
+        "0.00": {
+            "total_ttc_en_centimes": 500,
+            "total_ht_en_centimes": 500,
+            "total_tva_en_centimes": 0,
+        },
+    }
+    assert chiffre_affaires["total_ttc_en_centimes"] == 500
+    assert chiffre_affaires["total_ht_en_centimes"] == 500
+    assert chiffre_affaires["total_tva_en_centimes"] == 0
+    assert ticket["tva_breakdown"] == [
+        {"rate": "0.00", "ht": 500, "tva": 0, "ttc": 500},
+    ]
+    assert ticket["total_ht"] == 500
+    assert ticket["total_tva"] == 0
+    verifier_egalites(vente_a_zero_pourcent.vente)
 
 
 # --------------------------------------------------------------------------

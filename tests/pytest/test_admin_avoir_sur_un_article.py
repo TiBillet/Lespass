@@ -8,12 +8,16 @@ RÈGLE MÉTIER TESTÉE
 Depuis la fiche d'une vente réglée, l'admin rend une partie d'un article : par exemple
 1 jus sur 3. L'avoir est une vente AVOIR liée à la vente, avec le même prix unitaire et
 une quantité négative, écrite par `ecrire_la_vente_d_avoir_d_une_ligne` (origine ADMIN).
-- L'écran ne propose que les articles qui ont encore une quantité à rendre (la
-  quantité vendue, moins celle des avoirs déjà faits). Au moment d'écrire, cette
+- L'écran ne propose que les articles du chiffre d'affaires (ni recharge, ni article
+  d'écart) qui ont encore une quantité à rendre (la quantité vendue, moins celle des
+  avoirs déjà faits). Au moment d'écrire, cette
   quantité est relue sous verrou : deux envois identiques n'écrivent qu'un avoir.
 - Le champ « Remboursé par » suit D27 : pas de champ pour un article payé par Stripe
   (règlement négatif au moyen Stripe d'origine, référence vide, message « remboursez
   depuis Stripe ») ; sinon il est pré-rempli par le moyen d'origine.
+- Une ligne payée en partie en jetons cadeau et en partie en espèces : « Remboursé
+  par » est demandé, l'avoir rend un règlement LG (monnaie et carte du règlement LG
+  d'origine) et le reste au moyen choisi.
 - REFUS (rien n'est écrit) : une quantité plus grande que le reste ; une partie d'un
   article qui a une part offerte ou une part payée en jetons (« rembourser l'article
   entier ») ; une partie d'un article au poids ou à la tireuse (Q-H5 : seulement
@@ -22,7 +26,9 @@ une quantité négative, écrite par `ecrire_la_vente_d_avoir_d_une_ligne` (orig
   porte un écart d'encaissement (aucun avoir sur ses articles, Q-H13) ; une
   recharge cashless ; une partie non entière d'un article à la pièce ; une partie d'une
   pesée. Tout ce qui reste, même non entier (une « part » d'historique), passe.
-- REFUS DE L'ÉCRAN sur l'état de la vente : vente pas réglée, vente en points.
+- REFUS DE L'ÉCRAN sur l'état de la vente : vente pas réglée, vente en points,
+  vente qui porte un écart d'encaissement (le bouton de la fiche est caché, l'écran
+  renvoie à la fiche avec le message du service).
 / Partial credit note of one item from the sale page; refusals (service and screen);
 D27 for Stripe.
 
@@ -57,7 +63,8 @@ D'OÙ VIENNENT LES VALEURS ATTENDUES
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-H-retrait.md (§2 « Avoir sur
 un article », §5 test 5c) ; brief CHANTIER-05-briefs/05-H-1d.md (tests 1 à 6) ;
-CHANTIER-05-montants-entiers.md D13, D27 ; SUIVI Q-H5.
+CHANTIER-05-montants-entiers.md D13, D27 ; SUIVI Q-H5, Q-H13 ; brief
+CHANTIER-05-briefs/05-H-1-ter.md (tests 3, 4 et 8).
 
 Lancer / Run : make test ARGS="tests/pytest/test_admin_avoir_sur_un_article.py"
 """
@@ -76,11 +83,14 @@ from BaseBillet.models import (
     LigneArticle,
     Paiement_stripe,
     PaymentMethod,
+    Product,
     SaleOrigin,
 )
 from BaseBillet.models_vente import Reglement, Vente
 from BaseBillet.services_vente import (
+    MESSAGE_AVOIR_LIGNE_VENTE_AVEC_UN_ECART,
     ajouter_article,
+    ajouter_l_article_d_ecart_d_encaissement,
     ajouter_reglement,
     ecrire_la_vente_d_avoir_d_une_ligne,
     encaisser_vente,
@@ -100,6 +110,7 @@ from fabriques_vente import (
     verifier_egalites,
 )
 from test_admin_vente import (
+    adresse_de_la_fiche,
     client_de_l_admin_du_lieu,
     message_traduit,
     moyens_et_montants,
@@ -111,7 +122,12 @@ from test_admin_vente import (
     vendre_une_recharge_de_carte_par_cb,
     ventes_d_avoir_de,
 )
-from test_part_en_jetons import vendre_des_bieres_a_la_forme_de_demain
+from test_caisse_ecrit_la_vente import monnaie_cadeau_du_lieu
+from test_part_en_jetons import (
+    creer_une_carte_du_client,
+    reglements_en_detail,
+    vendre_des_bieres_a_la_forme_de_demain,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -486,6 +502,104 @@ def test_admin_avoir_partiel_refuse_sur_une_part_offerte_ou_en_jetons(
 
 
 # --------------------------------------------------------------------------
+# 2 bis — Une ligne mixte jetons et espèces : tout le reste, par l'écran
+# / 2 bis — A mixed tokens and cash line: everything left, through the screen
+# --------------------------------------------------------------------------
+
+
+def vendre_une_biere_300_jetons_200_especes(lieu):
+    """
+    Une vente de caisse réglée : UNE bière à 5,00 € (TVA 20 %), part en jetons 300.
+    Règlements : jetons cadeau (LG) 300, avec la monnaie cadeau du lieu et la carte du
+    client ; espèces 200. Rend la vente relue, sa ligne, la carte et la monnaie cadeau.
+    / A settled register sale: ONE beer, token part 300; payments LG 300 (gift
+    currency, customer card) and cash 200.
+    """
+    jetons_cadeau = monnaie_cadeau_du_lieu(lieu)
+    assert jetons_cadeau is not None, "Le lieu n'a pas de monnaie cadeau (TNF)."
+    carte_du_client = creer_une_carte_du_client()
+    vente = fabriquer_vente_encaissee(
+        origine=SaleOrigin.LABOUTIK,
+        articles=[
+            {
+                "pricesold": creer_tarif_vendu(nom="Biere", prix_en_euros="5.00"),
+                "quantite": Decimal("1"),
+                "prix_unitaire": 500,
+                "taux_tva": Decimal("20"),
+                "part_en_jetons": 300,
+                "status": LigneArticle.VALID,
+            }
+        ],
+        reglements=[
+            {
+                "moyen": PaymentMethod.LOCAL_GIFT,
+                "montant": 300,
+                "asset": jetons_cadeau.uuid,
+                "carte": carte_du_client,
+            },
+            {"moyen": PaymentMethod.CASH, "montant": 200},
+        ],
+        carte=carte_du_client,
+    )
+    vente_relue = Vente.objects.get(pk=vente.pk)
+    return SimpleNamespace(
+        vente=vente_relue,
+        ligne=vente_relue.articles.get(),
+        carte=carte_du_client,
+        jetons_cadeau=jetons_cadeau,
+    )
+
+
+def test_avoir_sur_un_article_d_une_ligne_mixte_jetons_et_especes(lieu):
+    """
+    Une bière payée 300 en jetons cadeau + 200 en espèces (UNE ligne). L'écran de
+    l'article demande « Remboursé par » : il y a 200 d'argent à rendre. L'admin rend
+    tout le reste (la bière) en espèces :
+    - règlements de l'avoir : jetons (LG) −300, avec la monnaie et la carte du
+      règlement LG de la vente d'origine ; espèces −200 ;
+    - article d'avoir : part en jetons −300, total −500.
+    / A beer paid 300 tokens + 200 cash: the screen asks "Refunded by"; the whole beer
+    refunded in cash gives LG −300 (original currency and card) and cash −200.
+    """
+    client_de_l_admin = client_de_l_admin_du_lieu(lieu)
+    biere_mixte = vendre_une_biere_300_jetons_200_especes(lieu)
+
+    reponse_de_l_ecran = client_de_l_admin.get(
+        adresse_de_l_avoir_sur_un_article(biere_mixte.vente, biere_mixte.ligne)
+    )
+    assert reponse_de_l_ecran.status_code == 200
+    assert "moyen_rembourse" in reponse_de_l_ecran.context["form"].fields
+
+    reponse = client_de_l_admin.post(
+        adresse_de_l_avoir_sur_un_article(biere_mixte.vente, biere_mixte.ligne),
+        {"quantite": "1", "moyen_rembourse": PaymentMethod.CASH},
+    )
+
+    assert reponse.status_code == 302
+    avoirs = ventes_d_avoir_de(biere_mixte.vente)
+    assert len(avoirs) == 1
+    vente_d_avoir = avoirs[0]
+    assert vente_d_avoir.statut == Vente.Statut.REGLEE
+    assert reglements_en_detail(vente_d_avoir) == sorted(
+        [
+            (PaymentMethod.CASH, -200, None, None),
+            (
+                PaymentMethod.LOCAL_GIFT,
+                -300,
+                biere_mixte.jetons_cadeau.uuid,
+                biere_mixte.carte.pk,
+            ),
+        ],
+        key=str,
+    )
+    article_d_avoir = vente_d_avoir.articles.get()
+    assert article_d_avoir.part_en_jetons == -300
+    assert article_d_avoir.total_ttc == -500
+    assert quantite_restante_de_la_ligne(biere_mixte.ligne) == Decimal("0")
+    verifier_egalites(vente_d_avoir)
+
+
+# --------------------------------------------------------------------------
 # 3 — Poids et tireuse : seulement l'article entier (Q-H5)
 # / 3 — Weight and tap: the whole item only (Q-H5)
 # --------------------------------------------------------------------------
@@ -733,6 +847,139 @@ def test_admin_avoir_sur_un_article_affiche_le_refus_du_service_pour_un_ecart(li
     assert l_avoir_est_refuse(reponse), reponse.status_code
     assert REFUS_POUR_UN_ECART in " ".join(textes_des_refus(reponse))
     assert ventes_d_avoir_de(vente) == []
+
+
+def vendre_deux_billets_en_ligne_avec_un_ecart():
+    """
+    Une vente en ligne réglée : 2 billets à 10,00 € (UNE ligne, quantité 2), et
+    l'article « Écart d'encaissement — reçu en plus » de 1,00 € (Stripe a encaissé
+    21,00 €). Rend la vente relue.
+    / A settled online sale: 2 tickets on one line, plus a 1.00 "received more" gap
+    item (Stripe collected 21.00).
+    """
+    vente = ouvrir_vente(
+        origine=SaleOrigin.LESPASS,
+        nature=Vente.Nature.VENTE,
+        client=creer_utilisateur(),
+    )
+    ajouter_article(
+        vente,
+        pricesold=creer_tarif_vendu(nom="Billet", prix_en_euros="10.00"),
+        quantite=Decimal("2"),
+        prix_unitaire=1000,
+        taux_tva=Decimal("0"),
+        payment_method=PaymentMethod.STRIPE_NOFED,
+    )
+    ajouter_l_article_d_ecart_d_encaissement(vente, 100)
+    ajouter_reglement(vente, moyen=PaymentMethod.STRIPE_NOFED, montant=2100)
+    return Vente.objects.get(pk=encaisser_vente(vente).pk)
+
+
+def test_bouton_cache_et_ecran_refuse_sur_une_vente_avec_ecart(lieu):
+    """
+    Une vente en ligne de 2 billets qui porte un écart d'encaissement (reçu en plus).
+    Le service refuse tout avoir sur ses articles (Q-H13) : l'écran le dit AVANT.
+    - la fiche de la vente ne montre pas le bouton « Avoir sur un article » ;
+    - l'écran (GET) ne s'ouvre pas : retour à la fiche (302), avec le message du
+      service ;
+    - aucun avoir n'est écrit.
+    Témoin : la fiche d'une vente sans écart (3 jus en espèces) montre le bouton. Sans
+    ce témoin, une fiche qui n'afficherait jamais l'adresse du bouton ferait passer le
+    test.
+    / A sale with a collection gap: no button on the detail page, the screen redirects
+    with the service message, nothing written. A gap-free sale shows the button.
+    """
+    client_de_l_admin = client_de_l_admin_du_lieu(lieu)
+    vente_avec_ecart = vendre_deux_billets_en_ligne_avec_un_ecart()
+    vente_temoin = vendre_trois_jus_payes_en_especes()
+
+    fiche_du_temoin = client_de_l_admin.get(adresse_de_la_fiche(vente_temoin.vente))
+    fiche_de_la_vente_avec_ecart = client_de_l_admin.get(
+        adresse_de_la_fiche(vente_avec_ecart)
+    )
+    reponse_de_l_ecran = client_de_l_admin.get(
+        adresse_de_l_avoir_sur_un_article(vente_avec_ecart)
+    )
+
+    assert fiche_du_temoin.status_code == 200
+    assert adresse_de_l_avoir_sur_un_article(vente_temoin.vente) in (
+        fiche_du_temoin.content.decode()
+    )
+    assert fiche_de_la_vente_avec_ecart.status_code == 200
+    assert adresse_de_l_avoir_sur_un_article(vente_avec_ecart) not in (
+        fiche_de_la_vente_avec_ecart.content.decode()
+    )
+    assert reponse_de_l_ecran.status_code == 302
+    message_du_service = message_traduit(
+        reponse_de_l_ecran, MESSAGE_AVOIR_LIGNE_VENTE_AVEC_UN_ECART
+    )
+    assert message_du_service in textes_des_refus(reponse_de_l_ecran)
+    assert ventes_d_avoir_de(vente_avec_ecart) == []
+
+
+def vendre_un_billet_et_une_recharge_en_especes():
+    """
+    Une vente de caisse réglée : un billet à 10,00 € (dans le chiffre d'affaires) et une
+    recharge de carte de 10,00 € (hors chiffre d'affaires), payés 20,00 € en espèces.
+    Rend la vente, la ligne du billet et la ligne de la recharge.
+    / A settled register sale: a ticket (revenue) and a card top-up (off revenue), paid
+    in cash.
+    """
+    vente = fabriquer_vente_encaissee(
+        origine=SaleOrigin.LABOUTIK,
+        articles=[
+            {
+                "pricesold": creer_tarif_vendu(nom="Billet", prix_en_euros="10.00"),
+                "quantite": Decimal("1"),
+                "prix_unitaire": 1000,
+                "taux_tva": Decimal("0"),
+                "status": LigneArticle.VALID,
+            },
+            {
+                "pricesold": creer_tarif_vendu(
+                    nom="Recharge",
+                    prix_en_euros="10.00",
+                    taux_tva="0.00",
+                    categorie_article=Product.RECHARGE_CASHLESS,
+                ),
+                "quantite": Decimal("1"),
+                "prix_unitaire": 1000,
+                "taux_tva": Decimal("0"),
+                "status": LigneArticle.VALID,
+            },
+        ],
+        reglements=[{"moyen": PaymentMethod.CASH, "montant": 2000}],
+    )
+    vente_relue = Vente.objects.get(pk=vente.pk)
+    return SimpleNamespace(
+        vente=vente_relue,
+        ligne_du_billet=vente_relue.articles.get(hors_chiffre_affaires=False),
+        ligne_de_la_recharge=vente_relue.articles.get(hors_chiffre_affaires=True),
+    )
+
+
+def test_liste_des_articles_sans_recharge_ni_ecart(lieu):
+    """
+    Une vente de caisse avec un billet et une recharge de carte. La liste des articles
+    de l'écran « Avoir sur un article » ne propose que le billet : une ligne hors
+    chiffre d'affaires (recharge, article d'écart) n'a pas d'avoir sur un article (le
+    service la refuserait). La recharge tient lieu ici des deux : une vente qui porte un
+    article d'écart n'ouvre pas l'écran du tout
+    (`test_bouton_cache_et_ecran_refuse_sur_une_vente_avec_ecart`).
+    / The item list offers only the ticket, never an off-revenue line (top-up, gap
+    item); a sale with a gap item does not open the screen at all.
+    """
+    client_de_l_admin = client_de_l_admin_du_lieu(lieu)
+    vente_mixte = vendre_un_billet_et_une_recharge_en_especes()
+
+    reponse_de_la_liste = client_de_l_admin.get(
+        adresse_de_l_avoir_sur_un_article(vente_mixte.vente)
+    )
+
+    assert reponse_de_la_liste.status_code == 200
+    page_de_la_liste = reponse_de_la_liste.content.decode()
+    assert str(vente_mixte.ligne_du_billet.pk) in page_de_la_liste
+    assert str(vente_mixte.ligne_de_la_recharge.pk) not in page_de_la_liste
 
 
 def test_service_avoir_d_une_ligne_refuse_une_recharge_cashless(lieu):

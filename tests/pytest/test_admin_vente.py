@@ -1298,8 +1298,7 @@ def message_traduit(reponse, texte_source):
 
 
 TEXTE_DU_REFUS_POUR_UN_ECART = (
-    "Cette vente a un écart d'encaissement : l'avoir total n'est pas possible. "
-    "Faites un avoir ligne par ligne."
+    "Cette vente a un écart d'encaissement : aucun avoir n'est possible."
 )
 TEXTE_DU_REFUS_POUR_UNE_RECHARGE = (
     "Cette vente contient une recharge de carte : l'avoir total n'est pas possible."
@@ -1315,7 +1314,7 @@ def test_avoir_total_refuse_une_vente_avec_un_ecart_d_encaissement(lieu, ecart_e
     moins) : l'avoir total est refusé.
     - par le SERVICE : ValueError qui cite l'écart ;
     - par l'ADMIN : l'écran ne s'ouvre pas (GET → retour à la fiche) et la validation
-      est refusée (POST), avec le message « Faites un avoir ligne par ligne ».
+      est refusée (POST), avec le message « aucun avoir n'est possible » (Q-H13).
     Aucun avoir n'est écrit.
     / A sale with a collection gap: the full credit note is refused by the service and
     by the admin (no screen, error message). Nothing written.

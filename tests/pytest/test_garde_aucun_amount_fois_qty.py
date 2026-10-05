@@ -12,6 +12,8 @@ tests) et échoue s'il y trouve :
 - `F("amount") * F("qty")`, `F("qty") * F("amount")`, `F("pricesold__prix") * F("qty")` ;
 - `amount * qty`, `amount*qty`, `qty * amount`, y compris sur des attributs ou des
   variables dérivées (`ligne.amount * ligne.qty`, `amount_eur * qty`) ;
+- `prix_centimes * quantite` et l'inverse, y compris sur les clés d'un dictionnaire
+  (`article["prix_centimes"] * article["quantite"]`) ;
 - un `int(` autour d'un calcul (`*` ou `/`) sur un montant de ligne (`amount`,
   `total_ttc`, `total_ht`, `total_tva`, `total_catalogue`, `part_offerte`,
   `part_en_jetons`, `cout_achat`).
@@ -25,24 +27,39 @@ connus passent donc, volontairement :
   (fonction retirée en H-2 avec le HMAC par ligne) ;
 - `Administration/management/commands/demo_data_v2.py` : `int(round(amount_eur * 100))`,
   une conversion d'euros en centimes de la démo (réécrite en H-3).
+Le motif « `prix_centimes` × `quantite` » ne regarde que le mot `quantite`. Le reste à
+payer d'une commande de table (`laboutik/views.py`, `reste_a_payer=prix_centimes *
+article["qty"]`) passe donc : c'est le montant d'une commande ouverte, pas celui d'une
+ligne de vente.
 / Known cases the guard does not see: names outside the list above.
 
 LISTE D'EXCEPTIONS FERMÉE
 - les fichiers retirés en H-2 (fiche H §3 : ancien moteur caisse, ancien moteur en
   ligne, ancien FEC, ancienne ventilation, ancien CSV comptable), entiers, avec la
   raison « retiré en H-2 » ;
-- UNE occurrence de `laboutik/views.py` : le HT de la branche « vente absente » de
-  `_creer_lignes_articles`, avec la raison « retiré en H-3 (branche vente absente) ».
-  Elle est reconnue par son extrait, jamais par le fichier entier : toute autre
-  occurrence dans `laboutik/views.py` fait échouer le test.
+- des extraits nommés, retirés ou réécrits en H-3 (fiche H §4), reconnus par leur
+  extrait, jamais par le fichier entier :
+  - UNE occurrence de `laboutik/views.py` : le HT de la branche « vente absente » de
+    `_creer_lignes_articles`, avec la raison « retiré en H-3 (branche vente absente) » ;
+    toute autre occurrence dans `laboutik/views.py` fait échouer le test ;
+  - UNE occurrence de `laboutik/management/commands/create_test_pos_data.py` : le
+    montant d'une ligne de la démo, avec la raison « démo, réécrite en H-3 » ;
+- le débit du panier de la caisse (`laboutik/views.py`), avec la raison « débit du
+  panier de la caisse : entiers × entiers, la ligne passe par
+  `calculer_montants_article` et l'égalité de la vente refuse toute divergence ».
+  `prix_centimes` et `quantite` sont deux entiers du panier : leur produit est le
+  montant à débiter, jamais le montant d'une ligne. Chaque ligne exceptée est écrite
+  en entier dans la liste, autant de fois qu'elle apparaît dans le fichier. Une ligne
+  de plus, une ligne de moins ou une ligne réécrite fait échouer le test.
 Une exception qui ne trouve plus d'occurrence est périmée : le test échoue pour la
 faire retirer.
-/ Closed exception list: whole files removed in H-2, plus ONE excerpt of
-laboutik/views.py removed in H-3; a stale exception fails the test.
+/ Closed exception list: whole files removed in H-2, named excerpts removed or
+rewritten in H-3 (the "no sale" branch, the demo), and the register cart debit lines of laboutik/views.py (each line
+listed as many times as it appears); a stale exception fails the test.
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-H-retrait.md (§3, §5 test
-10) ; CHANTIER-05-montants-entiers.md (§2) ; brief CHANTIER-05-briefs/05-H-1d.md (règle
-3, test 7).
+10) ; CHANTIER-05-montants-entiers.md (§2) ; briefs CHANTIER-05-briefs/05-H-1d.md
+(règle 3, test 7) et 05-H-1-ter.md (I-2, test 2).
 
 Lancer / Run : make test ARGS="tests/pytest/test_garde_aucun_amount_fois_qty.py"
 """
@@ -86,13 +103,58 @@ FICHIERS_RETIRES_EN_H2 = {
 
 RAISON_RETIRE_EN_H2 = "retiré en H-2"
 
-# La seule exception hors H-2 : une occurrence de la branche « vente absente » de
-# `_creer_lignes_articles` (fiche H §4, retirée en H-3), reconnue par son extrait.
-# / The only non-H-2 exception: one excerpt of the "no sale" branch, removed in H-3.
+# Les extraits nommés de H-3 (fiche H §4), chacun reconnu par son extrait :
+# - une occurrence de la branche « vente absente » de `_creer_lignes_articles`
+#   (retirée en H-3) ;
+# - le montant d'une ligne de la démo (`create_test_pos_data.py`, réécrite en H-3 par
+#   le service de vente).
+# / The named H-3 excerpts: the "no sale" branch, and the demo (rewritten in H-3).
 EXCEPTION_BRANCHE_VENTE_ABSENTE = {
     "chemin": "laboutik/views.py",
     "raison": "retiré en H-3 (branche vente absente)",
     "extrait": "ligne_a_chainer.amount * ligne_a_chainer.qty",
+}
+EXCEPTION_DEMO_DE_LA_CAISSE = {
+    "chemin": "laboutik/management/commands/create_test_pos_data.py",
+    "raison": "démo, réécrite en H-3",
+    "extrait": "amount=prix_centimes * quantite",
+}
+EXCEPTIONS_PAR_EXTRAIT_DE_H3 = [
+    EXCEPTION_BRANCHE_VENTE_ABSENTE,
+    EXCEPTION_DEMO_DE_LA_CAISSE,
+]
+
+# Le débit du panier de la caisse : `prix_centimes` × `quantite`, deux entiers du
+# panier (`_extraire_articles_du_panier`). Leur produit est le montant à débiter. La
+# ligne de vente, elle, passe par `calculer_montants_article`, et l'égalité de la vente
+# refuse toute divergence entre les deux. Chaque ligne exceptée est écrite en entier
+# (sans les espaces du début), autant de fois qu'elle apparaît dans le fichier.
+# / The register cart debit: two cart integers. Each excepted line is written in full,
+# as many times as it appears in the file.
+EXCEPTION_DEBIT_DU_PANIER_DE_LA_CAISSE = {
+    "chemin": "laboutik/views.py",
+    "raison": (
+        "débit du panier de la caisse : entiers × entiers, la ligne passe par "
+        "`calculer_montants_article` et l'égalité de la vente refuse toute divergence"
+    ),
+    "lignes_exactes": [
+        # `_somme_encaissee_du_panier_en_centimes`
+        'somme_encaissee_en_centimes += article["prix_centimes"] * article["quantite"]',
+        # `_calculer_total_panier_centimes`
+        'total_centimes += article["prix_centimes"] * article["quantite"]',
+        # `_payer_par_nfc` : besoin par monnaie non fiduciaire / non-fiat need
+        'montant_de_l_article = article_nf["prix_centimes"] * article_nf["quantite"]',
+        # `_payer_par_nfc` puis `_executer_paiement_complementaire` : la cascade
+        # / card payment then complement payment: the cascade
+        'article_cascade["prix_centimes"] * article_cascade["quantite"]',
+        'article_cascade["prix_centimes"] * article_cascade["quantite"]',
+        # `_payer_par_nfc` : débits non fiduciaires / non-fiat debits
+        'montant_nf = article_nf["prix_centimes"] * article_nf["quantite"]',
+        # `_executer_paiement_complementaire` : débits non fiduciaires, deux chemins
+        # / complement payment: non-fiat debits, two paths
+        'article_nf["prix_centimes"] * article_nf["quantite"]',
+        'article_nf["prix_centimes"] * article_nf["quantite"]',
+    ],
 }
 
 # La liste d'exceptions fermée. `extrait` vide (None) : tout le fichier est excepté ;
@@ -106,11 +168,17 @@ EXCEPTIONS = [
         "extrait": None,
     },
     EXCEPTION_BRANCHE_VENTE_ABSENTE,
+    EXCEPTION_DEMO_DE_LA_CAISSE,
+    EXCEPTION_DEBIT_DU_PANIER_DE_LA_CAISSE,
 ]
 
 # Les motifs interdits, ligne par ligne.
 # / The forbidden patterns, line by line.
 MOTIFS_INTERDITS_SUR_UNE_LIGNE = [
+    # prix_centimes * quantite, article["prix_centimes"] * article["quantite"]
+    re.compile(r"""\bprix_centimes\w*["'\]]*\s*\*\s*[\w.\[\]"']*quantite"""),
+    # quantite * prix_centimes, article["quantite"] * article["prix_centimes"]
+    re.compile(r"""\bquantite\w*["'\]]*\s*\*\s*[\w.\[\]"']*prix_centimes"""),
     # F("amount") * F("qty"), F("qty") * F("amount"), F("pricesold__prix") * F("qty")
     re.compile(
         r"""F\(\s*["'](amount|qty|pricesold__prix)["']\s*\)\s*\*\s*F\(\s*["'](qty|amount)["']\s*\)"""
@@ -244,6 +312,10 @@ def l_exception_couvre_l_occurrence(exception, chemin_relatif, extrait):
     / Tells whether an exception covers this occurrence."""
     if exception["chemin"] != chemin_relatif:
         return False
+    # Le débit du panier : la ligne entière doit être dans la liste, mot pour mot.
+    # / The cart debit: the whole line must be in the list, word for word.
+    if "lignes_exactes" in exception:
+        return extrait in exception["lignes_exactes"]
     if exception["extrait"] is None:
         return True
     return exception["extrait"] in extrait
@@ -252,19 +324,31 @@ def l_exception_couvre_l_occurrence(exception, chemin_relatif, extrait):
 def test_garde_aucun_amount_fois_qty_dans_le_projet():
     """
     Aucune occurrence interdite hors de la liste d'exceptions fermée ; la liste ne
-    contient que des fichiers retirés en H-2 (raison « retiré en H-2 ») et l'extrait de
-    la branche « vente absente » (raison « retiré en H-3 ») ; chaque exception couvre
-    encore au moins une occurrence (sinon elle est périmée).
+    contient que des fichiers retirés en H-2 (raison « retiré en H-2 »), des extraits
+    nommés de H-3 (raison qui cite H-3) et les lignes du débit du panier de la caisse,
+    chacune trouvée autant de fois qu'elle est listée ; chaque exception couvre encore
+    au moins une occurrence (sinon elle est périmée).
     / No forbidden occurrence outside the closed exception list; the list holds only
-    H-2 files and the H-3 excerpt, each still needed.
+    H-2 files, named H-3 excerpts and the cart debit lines, each still needed.
     """
     racine_du_projet = Path(settings.BASE_DIR)
 
-    # La liste d'exceptions est fermée : des fichiers retirés en H-2, entiers, ou
-    # l'extrait de la branche « vente absente ».
-    # / The exception list is closed: whole H-2 files, or the H-3 excerpt.
+    # La liste d'exceptions est fermée : des fichiers retirés en H-2, entiers ; des
+    # extraits nommés de H-3, chacun avec son extrait et une raison qui cite H-3 ; les
+    # lignes du débit du panier.
+    # / The exception list is closed: whole H-2 files, named H-3 excerpts, the cart
+    # debit lines.
     for exception in EXCEPTIONS:
-        if exception == EXCEPTION_BRANCHE_VENTE_ABSENTE:
+        if exception in EXCEPTIONS_PAR_EXTRAIT_DE_H3:
+            assert exception["extrait"], (
+                f"L'exception H-3 {exception['chemin']} doit donner son extrait."
+            )
+            assert "H-3" in exception["raison"], (
+                f"Raison de l'exception {exception['chemin']} : « {exception['raison']} » "
+                f"(elle doit citer H-3)."
+            )
+            continue
+        if exception == EXCEPTION_DEBIT_DU_PANIER_DE_LA_CAISSE:
             continue
         assert exception["chemin"] in FICHIERS_RETIRES_EN_H2, (
             f"{exception['chemin']} n'est pas retiré en H-2 : il ne peut pas être excepté."
@@ -283,6 +367,7 @@ def test_garde_aucun_amount_fois_qty_dans_le_projet():
     # / Each occurrence: covered by an exception, or forbidden.
     occurrences_hors_exceptions = []
     exceptions_utilisees = []
+    lignes_du_debit_du_panier_trouvees = []
     for chemin_relatif, occurrences in occurrences_par_fichier.items():
         for numero_de_ligne, extrait in occurrences:
             exception_qui_couvre = None
@@ -293,8 +378,23 @@ def test_garde_aucun_amount_fois_qty_dans_le_projet():
                 occurrences_hors_exceptions.append(
                     f"{chemin_relatif}:{numero_de_ligne}  {extrait}"
                 )
-            elif exception_qui_couvre not in exceptions_utilisees:
+                continue
+            if exception_qui_couvre == EXCEPTION_DEBIT_DU_PANIER_DE_LA_CAISSE:
+                lignes_du_debit_du_panier_trouvees.append(extrait)
+            if exception_qui_couvre not in exceptions_utilisees:
                 exceptions_utilisees.append(exception_qui_couvre)
+
+    # Le débit du panier est une liste fermée, ligne à ligne : chaque ligne exceptée
+    # est trouvée autant de fois qu'elle est écrite dans la liste, ni plus ni moins.
+    # / The cart debit is a closed list, line by line: each excepted line is found as
+    # many times as it is listed, no more, no less.
+    lignes_attendues = sorted(EXCEPTION_DEBIT_DU_PANIER_DE_LA_CAISSE["lignes_exactes"])
+    lignes_trouvees = sorted(lignes_du_debit_du_panier_trouvees)
+    assert lignes_trouvees == lignes_attendues, (
+        "Débit du panier de la caisse (laboutik/views.py) : les lignes trouvées ne "
+        "sont pas celles de la liste fermée.\n"
+        f"Trouvées : {lignes_trouvees}\nAttendues : {lignes_attendues}"
+    )
 
     # Une exception qui ne couvre plus rien est périmée : la retirer de la liste.
     # / An exception covering nothing is stale: remove it from the list.

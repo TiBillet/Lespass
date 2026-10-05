@@ -313,8 +313,11 @@ def calculer_volume_autorise_ml(
     if prix_litre_decimal <= 0:
         return Decimal("0.00")
 
-    # Prix au litre en centimes / Price per liter in cents
-    prix_centimes_par_litre = int(round(prix_litre_decimal * 100))
+    # Prix au litre en centimes, arrondi DEMI-HAUT comme le prix de la ligne du tirage
+    # (`calculer_prix_au_litre_en_centimes`) : 3,505 €/L → 351 c/L. Un autre arrondi
+    # autoriserait un volume dont la facture dépasse le solde.
+    # / Price per litre in cents, rounded half up like the line's price.
+    prix_centimes_par_litre = calculer_prix_au_litre_en_centimes(prix_litre_decimal)
     if prix_centimes_par_litre <= 0:
         return Decimal("0.00")
 

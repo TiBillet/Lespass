@@ -594,14 +594,26 @@ Seul le burger menu cible `body` → page complete.
 
 ### Corrections, fond de caisse, sortie de caisse (session 17)
 
-**9.86 — `LaboutikConfiguration.get_solo()` en FastTenantTestCase : singleton absent.**
-Le singleton django-solo n'existe pas dans le schema de test cree par
-`FastTenantTestCase`. `get_solo()` retourne un objet en memoire avec
-`_state.adding=True`. Un `save(update_fields=[...])` sur cet objet leve
-`DatabaseError: Save with update_fields did not affect any rows.`
-Solution : utiliser `save()` sans `update_fields` pour le singleton.
-django-solo gere l'insert-or-update correctement quand `update_fields`
-n'est pas specifie.
+**9.86 — `LaboutikConfiguration` : le cache de django-solo garde un objet que la base n'a pas.**
+Cause reelle : `get_solo()` lit d'abord memcached (`SOLO_CACHE = 'default'`, 5 min,
+partage avec le serveur de dev). Si la ligne du singleton est creee (ou modifiee par
+`save()`) dans une transaction annulee ensuite (test `django_db`, vente en echec), la
+base revient en arriere mais PAS le cache. Le cache rend alors un objet sans ligne en
+base, ou avec une autre cle. Symptomes : `DatabaseError: Save with update_fields did
+not affect any rows` (par centaines apres un `down -v`), ou des ventes chainees avec
+une cle que la base n'a jamais eue (empreinte cassee a l'expiration du cache).
+Correction faite dans le modele (05-H-1-ter) :
+- `get_hmac_key()` et `get_or_create_hmac_key()` relisent `hmac_key` EN BASE, jamais
+  l'attribut de l'objet venu du cache ;
+- `get_or_create_hmac_key()` ecrit une ligne ou une cle manquante sous verrou
+  (`select_for_update().get_or_create`, puis `update`), jamais par
+  `save(update_fields=...)`, puis vide le cache (`clear_cache()`) ;
+- la migration `laboutik/migrations/0016_cle_d_empreinte_toujours_en_base` cree la ligne
+  et la cle dans chaque lieu (et a la creation d'un lieu).
+Dans un test : un objet de singleton qu'on met en cache (par `save()` ou
+`set_to_cache()`) survit au ROLLBACK. Vider le cache en fin de test
+(`LaboutikConfiguration.clear_cache()`, voir `tests/pytest/test_cle_d_empreinte_du_lieu.py`).
+Ne pas faire `save(update_fields=[...])` sur un objet rendu par `get_solo()`.
 
 **9.87 — `ProductSold` n'a pas de champ `name` — ne pas passer `name=` au create.**
 `ProductSold` a seulement `product` (FK) et `categorie_article`.

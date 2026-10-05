@@ -142,6 +142,7 @@ from BaseBillet.services_vente import (
     NOM_ECART_RECU_EN_PLUS,
     MOYENS_DU_CHAMP_REMBOURSE_PAR,
     EgaliteDeVenteRompue,
+    MESSAGE_AVOIR_LIGNE_VENTE_AVEC_UN_ECART,
     ajouter_article,
     ajouter_reglement,
     apercu_des_montants_d_un_avoir,
@@ -2617,10 +2618,7 @@ def _raison_du_refus_de_l_avoir_total(vente):
             "pas possible."
         )
     if vente_porte_un_ecart_d_encaissement(vente):
-        return _(
-            "Cette vente a un écart d'encaissement : l'avoir total n'est pas "
-            "possible. Faites un avoir ligne par ligne."
-        )
+        return _("Cette vente a un écart d'encaissement : aucun avoir n'est possible.")
     if vente_contient_une_recharge(vente):
         return _(
             "Cette vente contient une recharge de carte : l'avoir total n'est pas "
@@ -2703,13 +2701,31 @@ def _moyen_pre_rempli_de_l_avoir_total(vente):
     return None
 
 
+def _lignes_du_chiffre_d_affaires(lignes):
+    """
+    Les lignes de cette liste qui sont dans le chiffre d'affaires. Une ligne hors
+    chiffre d'affaires (recharge de carte, article d'écart) n'a pas d'avoir sur un
+    article : le service le refuserait.
+    / The lines of this list that are in the revenue.
+
+    LU PAR : `_raison_du_refus_de_l_avoir_sur_un_article` et l'écran
+    `VenteAdmin.avoir_sur_un_article`. « Avoir total » ne l'utilise pas.
+    """
+    lignes_du_chiffre_d_affaires = []
+    for ligne in lignes:
+        if not ligne.hors_chiffre_affaires:
+            lignes_du_chiffre_d_affaires.append(ligne)
+    return lignes_du_chiffre_d_affaires
+
+
 def _raison_du_refus_de_l_avoir_sur_un_article(vente):
     """
     Pourquoi « Avoir sur un article » est refusé sur cette vente, ou None s'il est
     permis : nature autre que VENTE, vente pas réglée, vente qui n'est pas en euros,
-    aucun article avec un reste à rendre. Cette lecture sert à refuser AVANT d'afficher
-    l'écran et à cacher le bouton. Les autres refus (écart d'encaissement, recharge,
-    quantité) viennent du service au moment d'écrire
+    vente qui porte un écart d'encaissement (le message du service, Q-H13), aucun
+    article avec un reste à rendre, ou seulement des articles hors chiffre d'affaires.
+    Cette lecture sert à refuser AVANT d'afficher l'écran et à cacher le bouton. Les
+    autres refus (recharge, quantité, pesée) viennent du service au moment d'écrire
     (`ecrire_la_vente_d_avoir_d_une_ligne`), et l'écran affiche son message.
     / Why the item credit note is refused on this sale, or None. Other refusals come
     from the service when writing.
@@ -2723,8 +2739,16 @@ def _raison_du_refus_de_l_avoir_sur_un_article(vente):
             "Cette vente n'est pas en euros (points ou temps) : l'avoir n'est pas "
             "possible."
         )
-    if not _lignes_de_la_vente_avec_un_reste_a_rendre(vente):
+    if vente_porte_un_ecart_d_encaissement(vente):
+        return MESSAGE_AVOIR_LIGNE_VENTE_AVEC_UN_ECART
+    lignes_avec_un_reste = _lignes_de_la_vente_avec_un_reste_a_rendre(vente)
+    if not lignes_avec_un_reste:
         return _("La vente est déjà remboursée en totalité : rien n'est à rendre.")
+    if not _lignes_du_chiffre_d_affaires(lignes_avec_un_reste):
+        return _(
+            "Les articles qui restent sont hors chiffre d'affaires (recharge de "
+            "carte) : un avoir sur un article n'est pas possible."
+        )
     return None
 
 
@@ -3556,7 +3580,12 @@ class VenteAdmin(ModelAdmin):
             messages.error(request, raison_du_refus)
             return redirect(adresse_de_la_fiche)
 
-        lignes_avec_un_reste = _lignes_de_la_vente_avec_un_reste_a_rendre(vente)
+        # Seuls les articles du chiffre d'affaires sont proposés : ni recharge, ni
+        # article d'écart. « Avoir total » garde sa propre lecture.
+        # / Only revenue items are offered; the full credit note keeps its own read.
+        lignes_avec_un_reste = _lignes_du_chiffre_d_affaires(
+            _lignes_de_la_vente_avec_un_reste_a_rendre(vente)
+        )
         if vente.numero is None:
             titre_de_l_ecran = _("Avoir sur un article")
         else:

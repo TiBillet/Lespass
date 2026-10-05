@@ -81,8 +81,8 @@ D'OÙ VIENNENT LES VALEURS ATTENDUES (calculées à la main)
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-H-retrait.md (§2, §2.1,
 §5 test 6) ; CHANTIER-05-montants-entiers.md (§2, D14, D27) ; CHANTIER-05-SUIVI.md
-(§4 G-1a, G-2a-bis, G-2b-bis, Q-G10 ; §5 Q-H2, Q-H6) ; brief
-CHANTIER-05-briefs/05-H-1a.md.
+(§4 G-1a, G-2a-bis, G-2b-bis, Q-G10 ; §5 Q-H2, Q-H6) ; briefs
+CHANTIER-05-briefs/05-H-1a.md et 05-H-1-ter.md (test 9).
 
 Lancer / Run : make test ARGS="tests/pytest/test_une_ligne_par_article_lecteurs.py"
 """
@@ -1101,6 +1101,12 @@ def nombre_de_ventes_de_correction_liees_a(vente_d_origine):
     ).count()
 
 
+def nombre_de_traces_de_correction_de_la_vente(vente):
+    """Le nombre de traces `CorrectionPaiement` écrites sur les articles de cette vente.
+    / The number of `CorrectionPaiement` traces written on this sale's items."""
+    return CorrectionPaiement.objects.filter(ligne_article__vente=vente).count()
+
+
 def test_vidage_de_carte_jamais_corrigeable(lieu):
     """
     Le caissier vide, par la vraie route de la caisse, une carte qui porte 5,00 € de
@@ -1211,10 +1217,11 @@ def test_post_force_sur_une_vente_offerte_ou_en_points_refuse(lieu):
     - une bière à 5,00 € entièrement offerte (un règlement « offert » de 500) ;
     - un pin's à 300 points, dans une vente en points (un règlement « points ou
       temps » de 300).
-    Un POST forgé « espèces → CB » sur chacune est refusé (400), et aucune vente
-    CORRECTION n'est écrite : il n'y a pas d'espèces à déplacer (net des espèces nul).
+    Un POST forgé « espèces → CB » sur chacune est refusé (400). Aucune vente
+    CORRECTION ni trace `CorrectionPaiement` n'est écrite : il n'y a pas d'espèces à
+    déplacer (net des espèces nul).
     / Two settled register sales without money (fully offered, points): a forged
-    "cash → card" POST is refused on each, no CORRECTION sale.
+    "cash → card" POST is refused on each, no CORRECTION sale, no CorrectionPaiement.
     """
     point_de_vente = creer_un_point_de_vente([])
     client_du_caissier = client_francais_de_l_admin_du_lieu(lieu)
@@ -1273,6 +1280,8 @@ def test_post_force_sur_une_vente_offerte_ou_en_points_refuse(lieu):
     assert reponse_sur_la_vente_en_points.status_code == 400
     assert nombre_de_ventes_de_correction_liees_a(vente_offerte) == 0
     assert nombre_de_ventes_de_correction_liees_a(vente_en_points) == 0
+    assert nombre_de_traces_de_correction_de_la_vente(vente_offerte) == 0
+    assert nombre_de_traces_de_correction_de_la_vente(vente_en_points) == 0
     verifier_egalites(vente_offerte)
     verifier_egalites(vente_en_points)
 
@@ -1287,9 +1296,10 @@ def test_ancien_moyen_inconnu_refuse_sans_cible(lieu):
     - `ancien_moyen=LE` (monnaie locale, cashless) : refusé (400) par la règle
       métier « Les paiements cashless ne peuvent pas être modifiés », sans cible :
       la zone d'un formulaire n'existe que pour un moyen corrigeable.
-    Aucune vente CORRECTION n'est écrite.
+    Aucune vente CORRECTION ni trace `CorrectionPaiement` n'est écrite.
     / Forged POSTs: an unknown code is refused by the form validation, a cashless code
-    by the business rule; neither carries an HX-Retarget; no CORRECTION sale.
+    by the business rule; neither carries an HX-Retarget; no CORRECTION sale, no
+    CorrectionPaiement.
     """
     point_de_vente = creer_un_point_de_vente([])
     client_du_caissier = client_francais_de_l_admin_du_lieu(lieu)
@@ -1326,4 +1336,5 @@ def test_ancien_moyen_inconnu_refuse_sans_cible(lieu):
     assert refus_metier_du_cashless in contenu_au_moyen_cashless
     assert "HX-Retarget" not in reponse_au_moyen_cashless
     assert nombre_de_ventes_de_correction_liees_a(vente) == 0
+    assert nombre_de_traces_de_correction_de_la_vente(vente) == 0
     verifier_egalites(vente)
