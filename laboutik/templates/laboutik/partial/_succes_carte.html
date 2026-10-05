@@ -71,22 +71,4 @@ AFFICHAGE :
       </tbody>
     </table>
   {% endif %}
-    {% if config.show_membership_after_payment %}
-        {% if adhesions %}
-            <div class="card-adhesions">
-                <span class="card-section-lbl">{% translate "Adhesions actives" %}</span>
-                <ul>
-                    {% for adhesion in adhesions %}
-                        <li data-testid="retour-carte-adhesion-{{ forloop.counter }}">
-                            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.6 5.4 9.1 16.9l-5.7-5.7 2.3-2.3 3.4 3.4 9.2-9.2z"/></svg>
-                            <span>{{ adhesion.price.product.name }}</span>
-                            {% if adhesion.deadline %}
-                                <small>{% translate "Expire" %} {{ adhesion.deadline|date:"d/m/Y" }}</small>
-                            {% endif %}
-                        </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        {% endif %}
-    {% endif %}
 </div>
