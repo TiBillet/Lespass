@@ -2235,29 +2235,76 @@ def _panier_contient_uniquement_recharges_gratuites(articles_panier):
             return False
     return True
 
-def get_user_membership(carte):
-    adhesions = []
-    if carte.user:
-        # CANCELED n'est PAS exclu ici : une adhesion resiliee court
-        # jusqu'a sa deadline (l'adherent a paye sa periode), et c'est
-        # is_valid() qui tranche. L'exclure au niveau SQL priverait
-        # l'adherent de son adhesion des la resiliation.
-        # ADMIN_CANCELED reste exclu : annulation administrative, effet
-        # immediat, avoir possible.
-        # / CANCELED is NOT excluded here: a cancelled membership runs
-        # until its deadline and is_valid() decides. ADMIN_CANCELED stays
-        # excluded: admin cancellation is immediate.
-        toutes_adhesions = list(
-            Membership.objects.filter(
-                user=carte.user,
-            )
-            .exclude(
-                status=Membership.ADMIN_CANCELED,
-            )
-            .select_related("price__product")
+def _adhesions_actives_de_la_carte(carte):
+    """
+    Renvoie les adhesions actives du titulaire d'une carte cashless.
+    / Returns the active memberships of a cashless card holder.
+
+    LOCALISATION : laboutik/views.py
+
+    Une carte anonyme (sans utilisateur) n'a aucune adhesion : liste vide.
+    Le tri final (adhesion valide ou non) est fait par Membership.is_valid().
+
+    APPELEE PAR :
+    - PaiementViewSet.retour_carte() : popup « Verifier une carte »
+    - _adhesions_a_afficher_apres_paiement() : ecran de succes d'un paiement cashless
+
+    :param carte: CarteCashless (seul carte.user est lu)
+    :return: liste de Membership valides (price__product deja charge)
+    """
+    adhesions_actives = []
+
+    carte_sans_titulaire = carte.user is None
+    if carte_sans_titulaire:
+        return adhesions_actives
+
+    # CANCELED n'est PAS exclu ici : une adhesion resiliee court
+    # jusqu'a sa deadline (l'adherent a paye sa periode), et c'est
+    # is_valid() qui tranche. L'exclure au niveau SQL priverait
+    # l'adherent de son adhesion des la resiliation.
+    # ADMIN_CANCELED reste exclu : annulation administrative, effet
+    # immediat, avoir possible.
+    # / CANCELED is NOT excluded here: a cancelled membership runs
+    # until its deadline and is_valid() decides. ADMIN_CANCELED stays
+    # excluded: admin cancellation is immediate.
+    adhesions_du_titulaire = (
+        Membership.objects.filter(
+            user=carte.user,
         )
-        adhesions = [m for m in toutes_adhesions if m.is_valid()]
-    return adhesions
+        .exclude(
+            status=Membership.ADMIN_CANCELED,
+        )
+        .select_related("price__product")
+    )
+    for adhesion in adhesions_du_titulaire:
+        if adhesion.is_valid():
+            adhesions_actives.append(adhesion)
+    return adhesions_actives
+
+
+def _adhesions_a_afficher_apres_paiement(carte):
+    """
+    Renvoie les adhesions a montrer sur l'ecran de succes d'un paiement cashless.
+    / Returns the memberships to show on the cashless payment success screen.
+
+    LOCALISATION : laboutik/views.py
+
+    L'affichage depend du reglage « Afficher les adhesions au retour d'un paiement »
+    (LaboutikConfiguration.show_membership_after_payment, admin laboutik).
+    Reglage desactive : liste vide, et aucune requete sur les adhesions.
+
+    FLUX : PaiementViewSet._payer_par_nfc() -> CETTE FONCTION
+    -> context["adhesions_actives"] -> hx_return_payment_success.html
+
+    :param carte: CarteCashless qui vient de payer
+    :return: liste de Membership valides, ou liste vide
+    """
+    configuration_laboutik = LaboutikConfiguration.get_solo()
+    affichage_des_adhesions_active = configuration_laboutik.show_membership_after_payment
+    if not affichage_des_adhesions_active:
+        return []
+    return _adhesions_actives_de_la_carte(carte)
+
 
 # --------------------------------------------------------------------------- #
 #  CaisseViewSet — pages principales                                          #
@@ -8899,17 +8946,11 @@ class PaiementViewSet(viewsets.ViewSet):
             # qu'une carte n'a pas ete rattachee, meme si la vente a abouti.
             # / Card-linking warnings: the cashier must know a card was not attached.
             "avertissements_adhesion": adherent["avertissements"] if adherent else [],
+            # Adhesions actives du titulaire, seulement si le reglage laboutik
+            # l'autorise (liste vide sinon).
+            # / Holder's active memberships, only if the laboutik setting allows it.
+            "adhesions_actives": _adhesions_a_afficher_apres_paiement(carte_client),
         }
-
-        laboutik_config = LaboutikConfiguration.get_solo()
-
-        # Si le flag `show_membership_after_payment` est activé,
-        if laboutik_config.show_membership_after_payment:
-            # 4. Adhésions actives (si user connu)
-            # 4. Active memberships (if user known)
-            adhesions = get_user_membership(carte_client)
-            context.update({"adhesions": adhesions, "config": laboutik_config})
-
 
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context
@@ -10612,7 +10653,7 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # 4. Adhésions actives (si user connu)
         # 4. Active memberships (if user known)
-        adhesions = get_user_membership(carte)
+        adhesions = _adhesions_actives_de_la_carte(carte)
 
         # 5. Couleur de fond selon le type de carte
         # 5. Background color based on card type
