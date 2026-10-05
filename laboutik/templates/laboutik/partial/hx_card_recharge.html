@@ -34,7 +34,7 @@ ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
 {% url 'laboutik-paiement-recharge_carte' as url_recharge %}
 <div id="card-recharge-zone" class="card-modes" aria-live="polite" data-testid="retour-carte-recharge">
   {% if recharge.produits %}
-    <span class="card-section-lbl" id="card-recharge-titre">{% translate "Recharger" %}</span>
+    <span class="card-section-lbl" id="card-recharge-titre">{% translate "Choisissez la monnaie à charger sur la carte" %}</span>
 
     {# --- ETAPE 1 : QUOI / STEP 1: WHAT --- #}
     <div class="card-modes-row" role="group" aria-labelledby="card-recharge-titre">
@@ -219,7 +219,7 @@ ETAPES (contexte « recharge » construit par _construire_contexte_recharge) :
           {% else %}
             {# Recharge payante : un moyen de paiement du point de vente → payer() #}
             {# / Paid top-up: one of the POS payment methods → payer()              #}
-            <p class="payment-title">{% translate "Payé en" %}</p>
+            <p class="payment-title">{% translate "Moyen de paiement" %}</p>
             <div class="payment-methods">
               {% if 'espece' in recharge.moyens_paiement %}
                 <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ recharge.montant_centimes|divide_by:100|force_dot }}&recharge=1" hx-target="#confirm" hx-swap="outerHTML" hx-on:htmx:before-request="choisirMoyenRecharge('espece')" data-loading-disable data-testid="recharge-btn-especes" />
