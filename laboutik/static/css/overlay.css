@@ -1076,6 +1076,29 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 	color: var(--text-faint);
 }
 
+/* « Autres actions sur la carte » en bas de la popup : un lien discret,
+   centre, qui deplie les boutons Clôturer / Vider (<details> natif).
+   / "Other card actions": a discreet link unfolding the Close / Empty buttons. */
+.card-autres-actions { margin-top: calc(4px * var(--k)); }
+.card-autres-actions-lien {
+	display: block;
+	list-style: none;
+	font-size: max(var(--fs-min), calc(13px * var(--k)));
+	font-weight: 600;
+	text-align: center;
+	text-decoration: underline;
+	color: var(--text-dim);
+	cursor: pointer;
+}
+/* Cache le triangle natif de <summary> (Safari) / Hide native marker (Safari) */
+.card-autres-actions-lien::-webkit-details-marker { display: none; }
+.card-autres-actions-lien:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
+.card-autres-actions-liste {
+	display: grid;
+	gap: calc(8px * var(--k));
+	margin-top: calc(10px * var(--k));
+}
+
 /* Carte inconnue : meme gabarit que l'attente, en rouge
    / Unknown card: same layout as the wait screen, in red */
 .card-erreur {
@@ -1805,6 +1828,38 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 }
 .vider-rendre .succes-rendre-val { color: var(--warn); }
 
+/* Confirmation « Clôturer » : pastille rouge (« Vider » garde l'orange de .vider-box)
+   / "Close" confirmation: red badge ("Empty" keeps the .vider-box orange) */
+.vider-box .vider-pastille--cloturer {
+	background: var(--danger);
+	color: var(--danger-ink);
+	box-shadow: 0 0 0 calc(6px * var(--k)) color-mix(in oklab, var(--danger), transparent 82%);
+}
+/* Message d'avertissement (confirmation) ou de resultat (ecran final)
+   / Warning (confirmation) or result (final screen) message */
+.vider-message {
+	margin: 0;
+	font-size: max(var(--fs-min), calc(14px * var(--k)));
+	color: var(--text-dim);
+	text-align: center;
+	text-wrap: balance;
+}
+/* Consigne finale au caissier : que faire de la carte
+   / Final instruction to the cashier: what to do with the card */
+.vider-consigne {
+	margin: 0;
+	padding: calc(10px * var(--k)) calc(12px * var(--k));
+	border-radius: calc(var(--r-ctrl) * var(--k));
+	background: var(--surface-2);
+	font-size: max(var(--fs-min), calc(13px * var(--k)));
+	font-weight: 650;
+	color: var(--text);
+	text-align: center;
+	text-wrap: balance;
+}
+/* Annuler + Clôturer / Vider sur une ligne / Cancel + confirm on one row */
+.card-confirm-acts .vider-bouton { flex: 1.4; }
+
 /* Les deux choix, empiles, pleine largeur / The two choices, stacked, full width */
 .vider-choix { display: grid; gap: calc(8px * var(--k)); }
 .vider-bouton {
@@ -1820,6 +1875,7 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 	font-weight: 800;
 	cursor: pointer;
 	touch-action: manipulation;
+	align-content: center;
 }
 /* Principal : rembourser et reinitialiser (le cas courant)
    / Primary: refund and reset (the usual case) */
@@ -1833,12 +1889,20 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 	color: var(--text);
 }
 .vider-bouton--secondaire:active { background: var(--surface-3); }
+/* Danger : cloturer la carte (elle est reinitialisee)
+   / Danger: close the card (it gets reset) */
+.vider-bouton--danger { background: var(--danger); color: var(--danger-ink); }
+.vider-bouton--danger:active { filter: brightness(1.08); }
 .vider-bouton small {
 	font-size: max(var(--fs-min), calc(12px * var(--k)));
 	font-weight: 600;
 	color: var(--text-dim);
 	overflow-wrap: anywhere;
 }
+/* Sur un fond colore, l'explication reprend la couleur du texte du bouton
+   / On a coloured background, the hint uses the button's text colour */
+.vider-bouton--principal small,
+.vider-bouton--danger small { color: inherit; opacity: .85; text-wrap: balance; }
 .vider-bouton:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px; }
 .vider-bouton:disabled { opacity: .6; cursor: progress; }
 

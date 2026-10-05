@@ -159,11 +159,12 @@ modules (R11).
                         </div>
                     </div>
                 {% else %}
+{#                    Add later when a "fast" add card  link will be available  #}
                     {# Pas encore de carte : une invitation, pas un reproche (maquette vide). #}
                     {# / No card yet: an invitation, not a complaint. #}
                     <div class="module__invite" data-testid="compte-carte-vide">
                         <p>{% translate "Pas encore de carte TiBillet liée à votre compte. Vous pouvez en lier une à tout moment." %}</p>
-                        <a class="btn btn--secondary btn--sm" href="/my_account/card/" hx-get="/my_account/card/" hx-target="body" hx-push-url="true">{% translate 'Lier une carte' %}</a>
+{#                        <a class="btn btn--secondary btn--sm" href="/my_account/card/" hx-get="/my_account/card/" hx-target="body" hx-push-url="true">{% translate 'Lier une carte' %}</a>#}
                     </div>
                 {% endif %}
             </div>

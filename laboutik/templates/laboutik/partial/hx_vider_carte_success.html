@@ -7,13 +7,93 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_vider_carte_success.html
 RENDU PAR : PaiementViewSet.vider_carte()
 
 Meme popup que « Paiement réussi » : pastille verte, titre, le montant rendu
-en gros, le detail par monnaie, puis Imprimer le reçu + Terminé.
-/ Same popup as "Payment successful".
+en gros. Deux affichages :
+
+A. action_carte fourni (choix fait dans la popup retour carte) :
+   - « cloturer » : carte n° … clôturée, montant a rembourser, donnees
+     supprimees, consigne « rangez la carte avec les cartes vierges ».
+   - « vider » : carte n° … vidée, montant rembourse, nouveau solde,
+     consigne « rendez sa carte au client ».
+   Un seul bouton : « Retour à la caisse ».
+B. Sans action_carte (tuile « Vider carte ») : detail par monnaie, puis
+   Imprimer le reçu + Terminé.
+/ Same popup as "Payment successful". A: per-choice summary + back to POS.
+/ B: per-currency detail, print receipt + done.
 {% endcomment %}
 <div id="messages">
   <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="vider-succes-titre" data-testid="vider-carte-success">
     <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages')"></div>
 
+    {% if action_carte %}
+    <div class="card-modal-box succes-box">
+      {# ================================================================== #}
+      {# --- A. RESUME APRES CLOTURE / VIDAGE ---                           #}
+      {# / A. SUMMARY AFTER CLOSING / EMPTYING                              #}
+      {# ================================================================== #}
+      <div class="succes-entete">
+        <span class="succes-pastille" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24" focusable="false"><path d="M20.6 5.4 9.1 16.9l-5.7-5.7 2.3-2.3 3.4 3.4 9.2-9.2z"/></svg>
+        </span>
+        <h2 class="succes-titre" id="vider-succes-titre" data-testid="vider-carte-success-titre">
+          {% if action_carte == "cloturer" %}
+            {% blocktranslate with numero=numero_carte %}Carte n° {{ numero }} clôturée avec succès{% endblocktranslate %}
+          {% else %}
+            {% blocktranslate with numero=numero_carte %}Carte n° {{ numero }} vidée avec succès{% endblocktranslate %}
+          {% endif %}
+        </h2>
+      </div>
+
+      <p class="vider-message">
+        {% if action_carte == "cloturer" %}
+          {% translate "La carte a bien été effacée et remise à zéro." %}
+        {% else %}
+          {% translate "Le solde a bien été remboursé. La carte reste active et appartient toujours au client." %}
+        {% endif %}
+      </p>
+
+      <div class="succes-rendre" data-testid="vider-carte-success-amount">
+        <span class="payment-total-lbl">
+          {% if action_carte == "cloturer" %}
+            {% translate "Montant à rembourser au client" %}
+          {% else %}
+            {% translate "Montant remboursé au client" %}
+          {% endif %}
+        </span>
+        <span class="succes-rendre-val">{{ total_centimes|cents_to_euros }}</span>
+      </div>
+
+      <div class="succes-lignes">
+        {% if action_carte == "cloturer" %}
+          <div class="card-confirm-row" data-testid="vider-carte-success-donnees">
+            <span>{% translate "Données supprimées" %}</span>
+            <b>{% translate "solde, nom, historique" %}</b>
+          </div>
+        {% else %}
+          <div class="card-confirm-row" data-testid="vider-carte-success-nouveau-solde">
+            <span>{% translate "Nouveau solde" %}</span>
+            <b>{{ nouveau_solde_centimes|cents_to_euros }}</b>
+          </div>
+        {% endif %}
+      </div>
+
+      <p class="vider-consigne" role="status">
+        {% if action_carte == "cloturer" %}
+          {% translate "Rangez la carte avec les cartes vierges. Elle peut être utilisée par un nouveau client." %}
+        {% else %}
+          {% translate "Rendez sa carte au client : il pourra la recharger lors d'un prochain événement." %}
+        {% endif %}
+      </p>
+
+      <button type="button"
+              id="bt-retour-layer1"
+              class="card-valider"
+              onclick="hideAndEmptyElement('#messages')"
+              data-testid="vider-carte-btn-retour-caisse">
+        {% translate "Retour à la caisse" %}
+      </button>
+    </div>
+
+    {% else %}
     <div class="card-modal-box succes-box">
       <div class="succes-entete">
         <span class="succes-pastille" aria-hidden="true">
@@ -66,5 +146,6 @@ en gros, le detail par monnaie, puis Imprimer le reçu + Terminé.
       </div>
       <div id="print-feedback" aria-live="polite"></div>
     </div>
+    {% endif %}
   </div>
 </div>

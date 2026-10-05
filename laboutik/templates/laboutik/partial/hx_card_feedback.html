@@ -14,6 +14,10 @@ FLUX :
 3. Carte inconnue : message d'erreur + « Scanner une autre carte »
 4. Sinon : titulaire, solde total, detail par monnaie, adhesions actives,
    puis la zone « Recharger » (hx_card_recharge.html, etapes via HTMX).
+5. Lien « Autres actions sur la carte » → deplie deux boutons (<details>, sans JS) :
+   « Clôturer la carte » et « Vider la carte ». Chaque bouton → vider_carte_preview()
+   avec action_carte=cloturer|vider → hx_vider_carte_confirm.html
+   (confirmation du remboursement, remplace #messages en outerHTML).
 
 Pas de id="messages" ici : l'element #messages existe dans base.html.
 / No id="messages" here: the element lives in base.html.
@@ -131,6 +135,46 @@ Pas de id="messages" ici : l'element #messages existe dans base.html.
       {# / Steps are rendered by the server (HTMX).                         #}
       {# ================================================================== #}
       {% include "laboutik/partial/hx_card_recharge.html" %}
+
+      {# ================================================================== #}
+      {# --- AUTRES ACTIONS SUR LA CARTE / OTHER CARD ACTIONS ---           #}
+      {# Le lien deplie deux boutons (<details> natif, sans JS).           #}
+      {# Chaque bouton ouvre la confirmation du remboursement              #}
+      {# (vider_carte_preview, aucune ecriture en base) avec le choix fait : #}
+      {# - cloturer : la carte est reinitialisee (vider_carte=true)        #}
+      {# - vider : le client garde sa carte (vider_carte=false)            #}
+      {# tag_id = la carte scannee. tag_id_cm et uuid_pv viennent de       #}
+      {# #addition-form. La reponse porte son propre #messages : outerHTML. #}
+      {# / The link unfolds two buttons; each opens the refund confirmation #}
+      {# with the choice already made.                                     #}
+      {# ================================================================== #}
+      <details class="card-autres-actions" data-testid="retour-carte-autres-actions">
+        <summary class="card-autres-actions-lien" data-testid="retour-carte-autres-actions-lien">
+          {% translate "Autres actions sur la carte" %}
+        </summary>
+        <div class="card-autres-actions-liste">
+          <button type="button" class="vider-bouton vider-bouton--danger"
+                  hx-post="{% url 'laboutik-paiement-vider_carte_preview' %}"
+                  hx-vals='{"tag_id": "{{ tag_id|escapejs }}", "action_carte": "cloturer"}'
+                  hx-include="#addition-form [name='tag_id_cm'], #addition-form [name='uuid_pv']"
+                  hx-target="#messages" hx-swap="outerHTML"
+                  data-loading-disable
+                  data-testid="retour-carte-btn-cloturer">
+            {% translate "Clôturer la carte" %}
+            <small>{% translate "Rendez en espèces son solde au client et récupérez la carte pour qu'elle soit réinitialisée." %}</small>
+          </button>
+          <button type="button" class="vider-bouton vider-bouton--principal"
+                  hx-post="{% url 'laboutik-paiement-vider_carte_preview' %}"
+                  hx-vals='{"tag_id": "{{ tag_id|escapejs }}", "action_carte": "vider"}'
+                  hx-include="#addition-form [name='tag_id_cm'], #addition-form [name='uuid_pv']"
+                  hx-target="#messages" hx-swap="outerHTML"
+                  data-loading-disable
+                  data-testid="retour-carte-btn-vider">
+            {% translate "Vider la carte" %}
+            <small>{% translate "Rendez en espèces son solde au client, il conserve sa carte." %}</small>
+          </button>
+        </div>
+      </details>
     {% endif %}
   </div>
 </div>

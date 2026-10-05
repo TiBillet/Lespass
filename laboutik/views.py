@@ -6853,6 +6853,15 @@ class ViderCarteSerializer(serializers.Serializer):
     tag_id_cm = serializers.CharField(max_length=8)
     uuid_pv = serializers.UUIDField()
     vider_carte = serializers.BooleanField(required=False, default=False)
+    # Choix fait dans la popup retour carte (hx_card_feedback.html).
+    # Vide quand on vient de la tuile « Vider carte ».
+    # / Choice made in the card feedback popup. Blank from the POS tile.
+    action_carte = serializers.ChoiceField(
+        choices=["cloturer", "vider"],
+        required=False,
+        allow_blank=True,
+        default="",
+    )
 
     def validate_tag_id(self, value):
         return value.strip().upper()
@@ -10874,6 +10883,14 @@ class PaiementViewSet(viewsets.ViewSet):
         tag_id_cm = request.POST.get("tag_id_cm", "").strip().upper()
         uuid_pv = request.POST.get("uuid_pv", "")
 
+        # Choix deja fait dans la popup retour carte (hx_card_feedback.html) :
+        # « cloturer » (carte reinitialisee) ou « vider » (le client garde sa carte).
+        # Toute autre valeur, ou rien (tuile « Vider carte ») : on propose les deux choix.
+        # / Choice made in the card feedback popup, otherwise both choices are offered.
+        action_carte = request.POST.get("action_carte", "").strip()
+        if action_carte not in ("cloturer", "vider"):
+            action_carte = ""
+
         # Protection self-refund.
         if tag_id and tag_id == tag_id_cm:
             return _render_erreur_toast(
@@ -10919,6 +10936,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "tag_id": tag_id,
             "tag_id_cm": tag_id_cm,
             "uuid_pv": uuid_pv,
+            "action_carte": action_carte,
         }
         return render(
             request,
@@ -10949,6 +10967,15 @@ class PaiementViewSet(viewsets.ViewSet):
         tag_id_cm = serializer.validated_data["tag_id_cm"]
         uuid_pv = serializer.validated_data["uuid_pv"]
         vider_carte_flag = serializer.validated_data["vider_carte"]
+        action_carte = serializer.validated_data["action_carte"]
+
+        # Quand le choix vient de la popup retour carte, c'est lui qui decide :
+        # « cloturer » reinitialise la carte, « vider » la laisse au client.
+        # / A choice from the card popup decides: "cloturer" resets, "vider" keeps.
+        if action_carte == "cloturer":
+            vider_carte_flag = True
+        elif action_carte == "vider":
+            vider_carte_flag = False
 
         # Protection self-refund (meme check qu'en preview).
         # / Self-refund protection (same check as preview).
@@ -10996,6 +11023,24 @@ class PaiementViewSet(viewsets.ViewSet):
                 _("Aucun solde remboursable (solde a pu changer)."),
             )
 
+        # Numero imprime sur la carte, en deux blocs de 4 : « 1234 ABCD ».
+        # / Number printed on the card, in two blocks of 4.
+        numero_carte = f"{carte_client.number[:4]} {carte_client.number[4:]}"
+
+        # Nouveau solde (ecran final « vider ») : ce qui reste dans le wallet
+        # local de la carte apres le remboursement (ex : monnaie cadeau, non
+        # remboursable). Pas d'appel au Fedow distant.
+        # Inutile apres une cloture : la carte n'a plus de wallet.
+        # / New balance ("vider" final screen): what is left in the card's local
+        # wallet after the refund. No remote Fedow call. Not needed after closing.
+        nouveau_solde_centimes = 0
+        if not vider_carte_flag:
+            wallet_apres_remboursement = _obtenir_ou_creer_wallet(carte_client)
+            for token in WalletService.obtenir_tous_les_soldes(
+                wallet_apres_remboursement
+            ):
+                nouveau_solde_centimes += token.value
+
         contexte = {
             "total_centimes": resultat["total_centimes"],
             "total_tlf_centimes": resultat["total_tlf_centimes"],
@@ -11004,6 +11049,9 @@ class PaiementViewSet(viewsets.ViewSet):
             "transaction_uuids": [str(tx.uuid) for tx in resultat["transactions"]],
             "uuid_pv": uuid_pv,
             "vider_carte": vider_carte_flag,
+            "action_carte": action_carte,
+            "numero_carte": numero_carte,
+            "nouveau_solde_centimes": nouveau_solde_centimes,
         }
         return render(
             request,

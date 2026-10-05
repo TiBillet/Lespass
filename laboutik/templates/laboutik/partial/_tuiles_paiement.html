@@ -47,9 +47,9 @@ Les data-testid sont lus par les tests : ne pas les renommer.
       {% if carte_deja_scannee %}
         {# La carte scannee pour l'identification sert aussi a payer #}
         {# / The card scanned for identification is also used to pay #}
-        <c-V2.bt.paiement name='{% translate "CASHLESS" %}' icon="wallet" onclick="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc'); askAdditionManageForm('postUrl',null,'{% url 'laboutik-paiement-payer' %}'); askAdditionManageForm('submit')" data-loading-disable data-testid="paiement-btn-cashless" />
+        <c-V2.bt.paiement name='{% translate "Carte Tibillet" %}' icon="wallet" onclick="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc'); askAdditionManageForm('postUrl',null,'{% url 'laboutik-paiement-payer' %}'); askAdditionManageForm('submit')" data-loading-disable data-testid="paiement-btn-cashless" />
       {% else %}
-        <c-V2.bt.paiement name='{% translate "CASHLESS" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}?total={{ total|unlocalize }}&devise={{ currency_data.symbol|urlencode }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" data-loading-disable data-testid="paiement-btn-cashless" />
+        <c-V2.bt.paiement name='{% translate "Carte Tibillet" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}?total={{ total|unlocalize }}&devise={{ currency_data.symbol|urlencode }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" data-loading-disable data-testid="paiement-btn-cashless" />
       {% endif %}
     {% endif %}
     {% if 'espece' in moyens_paiement %}
