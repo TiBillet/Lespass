@@ -159,7 +159,16 @@
         // / Draggable marker (created only when valid coords are available).
         let marqueur = null;
 
-        function placer_marqueur_et_remplir_champs(latitude, longitude, adresse_complete, parties_adresse) {
+        // `ne_pas_ecraser_par_du_vide` : passe a true UNIQUEMENT par le chemin
+        // reverse (drag, clic carte, repli apres recherche). Un reverse partiel
+        // (point sans rue, hameau) ne vide alors pas la rue / ville deja saisies.
+        // Les autres appelants ne le passent pas -> comportement historique :
+        // une recherche vers un lieu sans rue VIDE la rue, et la validation
+        // serveur (onboard : rue obligatoire) force l'utilisateur a corriger.
+        // / `ne_pas_ecraser_par_du_vide`: true ONLY from the reverse path. A
+        // partial reverse then does not blank the street / city. Other callers
+        // keep the historical behaviour (a forward search blanks the street).
+        function placer_marqueur_et_remplir_champs(latitude, longitude, adresse_complete, parties_adresse, ne_pas_ecraser_par_du_vide) {
             const lat_lng = L.latLng(latitude, longitude);
 
             if (marqueur === null) {
@@ -184,17 +193,23 @@
                 if (input_rue) {
                     const numero = parties_adresse.house_number || "";
                     const rue = parties_adresse.road || "";
-                    input_rue.value = (numero + " " + rue).trim();
+                    const rue_complete = (numero + " " + rue).trim();
+                    if (rue_complete || !ne_pas_ecraser_par_du_vide) {
+                        input_rue.value = rue_complete;
+                    }
                 }
                 if (input_code_postal && parties_adresse.postcode) {
                     input_code_postal.value = parties_adresse.postcode;
                 }
                 if (input_ville) {
-                    input_ville.value = parties_adresse.city
+                    const ville = parties_adresse.city
                         || parties_adresse.town
                         || parties_adresse.village
                         || parties_adresse.municipality
                         || "";
+                    if (ville || !ne_pas_ecraser_par_du_vide) {
+                        input_ville.value = ville;
+                    }
                 }
                 if (input_pays && parties_adresse.country) {
                     input_pays.value = parties_adresse.country;
@@ -254,11 +269,14 @@
                 }
 
                 const donnees = await reponse.json();
+                // `true` : un reverse partiel n'efface pas rue / ville (cf. plus haut).
+                // / `true`: a partial reverse does not blank street / city.
                 placer_marqueur_et_remplir_champs(
                     latitude,
                     longitude,
                     donnees.display_name || "",
                     donnees.address || {},
+                    true,
                 );
             } catch (erreur) {
                 // Réseau coupé, CORS, ou erreur fetch : on garde le marqueur
