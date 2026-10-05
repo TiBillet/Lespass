@@ -1364,7 +1364,7 @@ class Product(models.Model):
     validate_button_text = models.CharField(
         blank=True,
         null=True,
-        max_length=20,
+        max_length=30,
         verbose_name=_("Validate button text for membership"),
         help_text=_("'Subscribe' If empty. Only useful for membership or subscription products.")
     )
