@@ -145,8 +145,9 @@ class TestPaiementEspecesCB(FastTenantTestCase):
     # ----------------------------------------------------------------------- #
 
     def test_paiement_especes_cree_ligne_article(self):
-        """Payer en especes cree une LigneArticle avec payment_method='CA'.
-        / Cash payment creates a LigneArticle with payment_method='CA'."""
+        """Payer en especes cree une LigneArticle validee, dont la vente a un reglement
+        especes ('CA'). Le moyen est sur le reglement, pas sur la ligne (Q-H2).
+        / Cash payment creates a valid LigneArticle whose sale has a 'CA' payment."""
         response = self._post_paiement('espece')
         assert response.status_code == 200
 
@@ -154,20 +155,20 @@ class TestPaiementEspecesCB(FastTenantTestCase):
             sale_origin=SaleOrigin.LABOUTIK,
         ).order_by('-datetime').first()
         assert derniere_ligne is not None
-        assert derniere_ligne.payment_method == PaymentMethod.CASH
+        assert derniere_ligne.vente.reglements.get().moyen == PaymentMethod.CASH
         assert derniere_ligne.status == LigneArticle.VALID
 
     def test_paiement_cb_cree_ligne_article(self):
-        """Payer par CB cree une LigneArticle avec payment_method='CC'.
-        / CC payment creates a LigneArticle with payment_method='CC'."""
+        """Payer par CB cree une LigneArticle dont la vente a un reglement CB ('CC').
+        / CC payment creates a LigneArticle whose sale has a 'CC' payment."""
         response = self._post_paiement('carte_bancaire')
         assert response.status_code == 200
 
         derniere_ligne = LigneArticle.objects.filter(
             sale_origin=SaleOrigin.LABOUTIK,
-            payment_method=PaymentMethod.CC,
         ).order_by('-datetime').first()
         assert derniere_ligne is not None
+        assert derniere_ligne.vente.reglements.get().moyen == PaymentMethod.CC
 
     def test_total_centimes_correct(self):
         """Le montant dans LigneArticle == int(round(prix * 100)).

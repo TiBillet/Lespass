@@ -330,12 +330,15 @@ class TestTicketClientImprime(FastTenantTestCase):
         return reponse
 
     def _vente_payee_par(self, carte):
-        """La vente du paiement fait avec cette carte (complement compris).
-        / The sale of the payment made with this card (complement included)."""
-        ligne_de_la_carte = LigneArticle.objects.filter(carte=carte).first()
-        assert ligne_de_la_carte is not None, "Aucune ligne pour cette carte."
-        assert ligne_de_la_carte.vente is not None, "La ligne n'a pas de vente."
-        return ligne_de_la_carte.vente
+        """La vente du paiement fait avec cette carte (complement compris), lue par sa
+        carte (`Vente.carte`) : la ligne ne porte pas la carte, elle est sur la vente
+        et ses règlements (Q-H2).
+        / The sale of the payment made with this card, read through Vente.carte."""
+        ventes_de_la_carte = list(Vente.objects.filter(carte=carte))
+        assert len(ventes_de_la_carte) == 1, (
+            f"Attendu : une vente pour cette carte, trouvé : {len(ventes_de_la_carte)}."
+        )
+        return ventes_de_la_carte[0]
 
     def _ticket(self, vente):
         return formatter_ticket_vente(vente, None)
@@ -457,11 +460,11 @@ class TestTicketClientImprime(FastTenantTestCase):
     # / The formatter: items, total, VAT
     # ------------------------------------------------------------------
 
-    def test_les_parts_d_un_article_forment_un_seul_article(self):
+    def test_un_article_paye_par_deux_monnaies_est_un_seul_article(self):
         """3 vins payes 6 € en jetons cadeau (TVA 0) + 9 € en monnaie locale (TVA
-        20 %) : deux parts, UN article sur le ticket, « x3 », total 15,00 €, comme dans
+        20 %) : UNE ligne, UN article sur le ticket, « x3 », total 15,00 €, comme dans
         le detail de la vente a l'ecran. Le total du ticket est 15,00 €.
-        / Two parts, ONE item on the receipt: x3, 15.00 €."""
+        / ONE line, ONE item on the receipt: x3, 15.00 €."""
         carte = self._carte_avec_soldes("TKC1AAAA", solde_cadeau=600, solde_local=900)
         self._payer_par_carte(carte, self.vin, quantite=3, prix_centimes=500)
 
@@ -472,7 +475,7 @@ class TestTicketClientImprime(FastTenantTestCase):
         assert ticket["articles"][0]["total"] == 1500
         assert ticket["total"]["amount"] == 1500
 
-    def test_une_part_inferieure_a_un_article_n_est_pas_perdue(self):
+    def test_un_article_paye_en_partie_en_jetons_garde_sa_quantite(self):
         """Une bouteille a 10 € payee 2 € cadeau + 8 € locale : un article « x1 » a
         10,00 € ; le ticket affiche 10,00 €.
         / A 10 € bottle paid 2 € + 8 €: one item x1 at 10.00 €, total 10.00 €."""

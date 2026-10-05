@@ -85,6 +85,7 @@ from laboutik.plan_comptable import (
     CompteComptableManquant,
     collisions_de_codes_journal,
     compte_des_cadeaux_a_la_clientele,
+    compte_des_ventes_reglees_en_jetons,
     compte_de_tva_pour_taux,
     compte_pour_article,
     compte_pour_reglement,
@@ -188,14 +189,27 @@ def _ecrire_l_article_du_chiffre_d_affaires(
     soldes_par_numero, ligne, comptes_du_plan_par_defaut
 ):
     """
-    Un article du chiffre d'affaires : son HT au crédit du compte de l'article. Un
-    article sans HT (entièrement offert) n'écrit rien et n'a pas besoin de compte.
-    / A revenue item: its HT credited to the item's account.
+    Un article du chiffre d'affaires : sa part payée en jetons au crédit du compte des
+    ventes réglées en jetons (707900, hors TVA, D8 bis), puis le HT du reste au crédit
+    du compte de l'article (`compte_pour_article`). Un article sans HT (entièrement
+    offert) n'écrit rien. Un article entièrement payé en jetons n'écrit rien au compte
+    de l'article, et n'en a pas besoin.
+    / A revenue item: its token part credited to 707900 (no VAT), then the
+    remainder's HT credited to the item's account. Nothing for a zero HT; nothing on
+    the item's account for a fully token-paid item.
     """
-    if ligne.total_ht == 0:
+    part_en_jetons = ligne.part_en_jetons
+    if part_en_jetons != 0:
+        compte_des_jetons = compte_des_ventes_reglees_en_jetons(
+            comptes_du_plan_par_defaut
+        )
+        _ajouter_au_compte(soldes_par_numero, compte_des_jetons, -part_en_jetons)
+
+    ht_du_reste = ligne.total_ht - part_en_jetons
+    if ht_du_reste == 0:
         return
     compte_de_l_article = compte_pour_article(ligne, comptes_du_plan_par_defaut)
-    _ajouter_au_compte(soldes_par_numero, compte_de_l_article, -ligne.total_ht)
+    _ajouter_au_compte(soldes_par_numero, compte_de_l_article, -ht_du_reste)
 
 
 def _ecrire_la_tva_de_l_article(soldes_par_numero, ligne, compte_de_tva_par_taux):

@@ -193,6 +193,21 @@ class Vente(models.Model):
         verbose_name=_("Empreinte précédente"),
     )
 
+    # La raison écrite par le caissier quand il corrige un moyen de paiement (vente
+    # CORRECTION). Vide pour les autres ventes. Posée avant l'encaissement : une
+    # vente réglée ne se modifie plus. Elle n'entre ni dans l'empreinte ni dans
+    # l'archive : c'est un commentaire, pas de l'argent.
+    # / The cashier's reason for a payment method correction (CORRECTION sale). Empty
+    # otherwise. Set before settlement. Not in the fingerprint nor in the archive.
+    raison = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Raison"),
+        help_text=_(
+            "Raison écrite par le caissier lors d'une correction de moyen de paiement."
+        ),
+    )
+
     # Clé anti double clic : une même clé = une seule vente.
     # / Anti double-click key: one key = one sale.
     idempotency_key = models.CharField(

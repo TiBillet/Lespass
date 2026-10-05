@@ -70,7 +70,7 @@ from Customers.models import Client
 from QrcodeCashless.models import CarteCashless, Detail
 from fedow_core.models import Asset, Token, Transaction
 from fedow_core.services import AssetService, WalletService
-from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+from BaseBillet.models import LigneArticle
 
 REFUND_TEST_PREFIX = '[refund_test]'
 
@@ -188,7 +188,11 @@ def carte_avec_solde_fed(tenant_lespass, asset_fed_unique):
 def test_rembourser_carte_avec_user_tlf_seul(
     tenant_lespass, wallet_lieu_lespass, asset_tlf_lespass, carte_avec_solde_tlf,
 ):
-    """1000c TLF -> 1 Transaction REFUND + 1 LigneArticle CASH (-1000). Solde -> 0."""
+    """
+    1000c TLF -> 1 Transaction REFUND, solde -> 0. Aucune LigneArticle : la caisse écrit
+    la vente VIDAGE_CARTE (D12).
+    / 1000c TLF -> 1 REFUND transaction, balance 0; no LigneArticle (D12).
+    """
     with tenant_context(tenant_lespass):
         resultat = WalletService.rembourser_en_especes(
             carte=carte_avec_solde_tlf,
@@ -206,24 +210,16 @@ def test_rembourser_carte_avec_user_tlf_seul(
         solde = WalletService.obtenir_solde(wallet=wallet_user, asset=asset_tlf_lespass)
         assert solde == 0
 
-        lignes_cash = LigneArticle.objects.filter(
-            carte=carte_avec_solde_tlf,
-            payment_method=PaymentMethod.CASH,
-            sale_origin=SaleOrigin.LABOUTIK,
-        )
-        assert lignes_cash.count() == 1
-        assert lignes_cash.first().amount == -1000
-
-        lignes_fed = LigneArticle.objects.filter(
-            carte=carte_avec_solde_tlf, payment_method=PaymentMethod.STRIPE_FED,
-        )
-        assert lignes_fed.count() == 0
+        assert not LigneArticle.objects.filter(carte=carte_avec_solde_tlf).exists()
 
 
 def test_rembourser_carte_avec_user_fed_seul(
     tenant_lespass, wallet_lieu_lespass, asset_fed_unique, carte_avec_solde_fed,
 ):
-    """500c FED -> 1 LigneArticle FED (+500) + 1 LigneArticle CASH (-500)."""
+    """
+    500c FED -> total FED 500, aucune LigneArticle (la vente VIDAGE_CARTE, D12).
+    / 500c FED -> FED total 500, no LigneArticle (D12).
+    """
     with tenant_context(tenant_lespass):
         resultat = WalletService.rembourser_en_especes(
             carte=carte_avec_solde_fed,
@@ -233,17 +229,8 @@ def test_rembourser_carte_avec_user_fed_seul(
         assert resultat["total_fed_centimes"] == 500
         assert resultat["total_tlf_centimes"] == 0
 
-        ligne_fed = LigneArticle.objects.filter(
-            carte=carte_avec_solde_fed, payment_method=PaymentMethod.STRIPE_FED,
-        )
-        assert ligne_fed.count() == 1
-        assert ligne_fed.first().amount == 500
-
-        ligne_cash = LigneArticle.objects.filter(
-            carte=carte_avec_solde_fed, payment_method=PaymentMethod.CASH,
-        )
-        assert ligne_cash.count() == 1
-        assert ligne_cash.first().amount == -500
+        assert len(resultat["transactions"]) == 1
+        assert not LigneArticle.objects.filter(carte=carte_avec_solde_fed).exists()
 
 
 def test_rembourser_reprend_les_jetons_cadeau_du_lieu_et_exclut_tim_fid(
@@ -329,7 +316,6 @@ def test_rembourser_reprend_les_jetons_cadeau_du_lieu_et_exclut_tim_fid(
                 # Aucun argent rendu : total 0, aucune ligne.
                 # / No money given back: total 0, no line.
                 assert resultat["total_centimes"] == 0
-                assert resultat["lignes_articles"] == []
                 assert not LigneArticle.objects.filter(carte=carte).exists()
 
                 # Le temps et les points ne sont pas touches.

@@ -225,6 +225,7 @@ def calculer_hmac_vente(vente, cle, previous_hmac):
                 article.total_catalogue,
                 article.part_offerte,
                 article.source_offert,
+                article.part_en_jetons,
                 article.total_ttc,
                 article.total_ht,
                 article.total_tva,

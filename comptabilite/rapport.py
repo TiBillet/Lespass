@@ -23,8 +23,9 @@ LES DÉFINITIONS (fiche F §2) :
   points ou en temps (`unite` = uuid de sa monnaie) n'est comptée qu'en section 8 et
   dans les points de la section 3, par monnaie.
 - Articles du chiffre d'affaires : ventes en euros, articles
-  `hors_chiffre_affaires = False`, natures VENTE et AVOIR. Les articles payés en jetons
-  cadeau en font partie (vente ordinaire à TVA 0, D8 bis).
+  `hors_chiffre_affaires = False`, natures VENTE et AVOIR. La part payée en jetons
+  cadeau de chaque article (`part_en_jetons`) en fait partie : vente ordinaire, hors
+  TVA (D8 bis), comptée au taux « 0.00 » du CA par taux.
 - Argent : règlements dont le moyen n'est ni offert (FREE), ni points (NM), ni
   cashless. Cashless : monnaie locale (LE), fédérée (SF), jetons cadeau (LG).
 - Recharges, écarts d'encaissement, jetons cadeau repris : reconnus par l'ARTICLE (hors
@@ -57,7 +58,21 @@ Tests : tests/pytest/test_rapport_unique.py
 from decimal import Decimal
 
 from django.db import connection
-from django.db.models import Count, Max, Min, Q, Sum
+from django.db.models import (
+    BooleanField,
+    Case,
+    Count,
+    DecimalField,
+    Exists,
+    F,
+    Max,
+    Min,
+    OuterRef,
+    Q,
+    Sum,
+    Value,
+    When,
+)
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext
 
@@ -277,6 +292,118 @@ def _filtre_des_articles_de_recharge():
     )
 
 
+def unite_d_une_vente_au_poids(unite_du_stock, categorie_du_produit=None):
+    """
+    Le symbole de l'unité d'une vente au poids ou au volume (D15, Q-H4) :
+    - « L » pour un fût (`Product.FUT`) : la tireuse écrit toujours des litres, que
+      le fût ait un stock ou non ;
+    - « L » si le stock du produit est en centilitres ;
+    - « kg » sinon (stock en grammes, ou sans stock). Même règle que la caisse
+      (`_diviseur_de_la_quantite_saisie`, laboutik/views.py).
+    La quantité d'une telle ligne est dans cette unité.
+    / The unit symbol of a weight / volume sale: "L" for a keg (the tap always writes
+    litres) or a centilitre stock, "kg" otherwise (same rule as the register).
+
+    LOCALISATION : comptabilite/rapport.py
+
+    LU PAR : ce module (détail des ventes, offerts), laboutik/affichage_des_ventes.py
+    (détail d'une vente, ticket), Administration/admin_tenant.py (fiche « Vente »,
+    onglet des lignes).
+
+    :param unite_du_stock: `Stock.unite` du produit ("GR", "CL", "UN"), ou None
+    :param categorie_du_produit: `Product.categorie_article` du produit, ou None
+    :return: "kg" ou "L"
+    """
+    if categorie_du_produit == Product.FUT:
+        return "L"
+    if unite_du_stock == "CL":
+        return "L"
+    return "kg"
+
+
+def quantite_en_nombre_d_articles(prefixe_du_chemin=""):
+    """
+    L'expression SQL du nombre d'articles d'une ligne :
+    - un article « Écart d'encaissement » ne compte pas : ce n'est pas un article vendu ;
+    - une vente au poids ou au volume compte pour UN article : un poids dans
+      `weight_quantity`, ou une ligne de fût (`Product.FUT`, un tirage de moins de
+      5 ml a un poids de 0 cl). 0,350 kg de comté est une pesée, pas 0,35 article ;
+    - sinon : sa quantité.
+    C'est la seule règle « une pesée = un article » du projet.
+    / SQL expression of a line's number of items: a collection gap counts 0, a weighing
+    or a keg line counts ONE, otherwise its quantity. The project's only rule.
+
+    LOCALISATION : comptabilite/rapport.py
+
+    LU PAR : ce module (marge, total des offerts), laboutik/views.py (nombre
+    d'articles de la liste des ventes, depuis les ventes : préfixe « articles__ »).
+
+    :param prefixe_du_chemin: le chemin de la vente vers ses lignes (« articles__ »),
+        vide pour une requête sur `LigneArticle`
+    :return: une expression `Case`
+    """
+    chemin_du_produit = f"{prefixe_du_chemin}pricesold__productsold__product__"
+    return Case(
+        When(
+            **{f"{chemin_du_produit}name__in": NOMS_DES_ECARTS_D_ENCAISSEMENT},
+            then=Value(Decimal("0")),
+        ),
+        When(
+            **{f"{prefixe_du_chemin}weight_quantity__gt": 0},
+            then=Value(Decimal("1")),
+        ),
+        When(
+            **{f"{chemin_du_produit}categorie_article": Product.FUT},
+            then=Value(Decimal("1")),
+        ),
+        default=F(f"{prefixe_du_chemin}qty"),
+        output_field=DecimalField(max_digits=12, decimal_places=6),
+    )
+
+
+def _ligne_au_poids_ou_au_volume():
+    """
+    L'expression SQL « cette ligne est une vente au poids ou au volume » : un poids
+    dans `weight_quantity`, ou une ligne de fût (`Product.FUT` : un tirage de moins
+    de 5 ml a un poids de 0 cl, et reste en litres). Elle sépare, au détail du
+    rapport, les lignes au poids des lignes à la pièce d'un même produit : deux unités
+    ne s'additionnent jamais.
+    / SQL expression "this line is a weight / volume sale" (a weight, or a keg line).
+    """
+    return Case(
+        When(weight_quantity__gt=0, then=Value(True)),
+        When(
+            pricesold__productsold__product__categorie_article=Product.FUT,
+            then=Value(True),
+        ),
+        default=Value(False),
+        output_field=BooleanField(),
+    )
+
+
+def _cle_et_unite_d_une_ligne_par_produit(sommes_du_produit):
+    """
+    La clé et l'unité d'une ligne « par produit » du rapport : un produit à la pièce
+    garde son uuid comme clé et une unité vide ; ses lignes au poids ou au volume
+    forment une autre ligne, de clé « uuid--kg » (ou « --L »), dans l'unité du stock
+    (`unite_d_une_vente_au_poids`).
+    / The key and unit of a "by product" report row: the product uuid for pieces,
+    "uuid--kg" (or "--L") for its weight / volume lines.
+
+    :param sommes_du_produit: une ligne de `values()` qui porte le produit, son type
+        (`categorie_article`), `au_poids_ou_au_volume` et l'unité du stock
+    :return: tuple (clé, unité)
+    """
+    uuid_du_produit = str(sommes_du_produit["pricesold__productsold__product"])
+    if not sommes_du_produit["au_poids_ou_au_volume"]:
+        return (uuid_du_produit, "")
+    unite_de_la_quantite = unite_d_une_vente_au_poids(
+        sommes_du_produit["pricesold__productsold__product__stock_inventaire__unite"],
+        sommes_du_produit["pricesold__productsold__product__categorie_article"],
+    )
+    return (f"{uuid_du_produit}--{unite_de_la_quantite}", unite_de_la_quantite)
+
+
 def _ajouter_au_moyen(par_moyen, code_du_moyen, libelle_du_moyen, montant_en_centimes):
     """
     Ajoute un montant (signé) à la ligne d'un moyen dans un dictionnaire « par
@@ -401,9 +528,9 @@ class RapportDesVentes:
         / The item parts a payment method correction moves along with the money.
 
         POURQUOI : une vente CORRECTION n'a aucun article. Ses deux règlements
-        (deux moyens, deux montants opposés) déplacent TOUT l'argent des lignes
-        corrigées de la vente liée, recharge comprise. La part de ces lignes qui
-        n'est pas du chiffre d'affaires (une recharge) doit donc suivre l'argent :
+        (deux moyens, deux montants opposés) déplacent TOUT le net du moyen corrigé
+        de la vente liée, recharge comprise. La part des articles qui n'est pas du
+        chiffre d'affaires (une recharge) doit donc suivre l'argent :
         retirée du chiffre d'affaires du moyen d'arrivée, rendue au moyen de départ ;
         et, dans les recharges par moyen, passée du moyen de départ au moyen
         d'arrivée.
@@ -417,10 +544,11 @@ class RapportDesVentes:
         / The direction does not depend on the payments' sign: a correction carries
         a pair {m1, m2}; a part under one of them moves to the other.
 
-        LES LIGNES CORRIGÉES : la correction déplace toutes les lignes du même
-        paiement et du même moyen. Une vente qui contient un article hors chiffre
-        d'affaires a un seul moyen d'argent (la caisse refuse le cashless pour une
-        recharge payante) : sa part est sous ce moyen. Une vente liée à plusieurs
+        L'ARGENT CORRIGÉ : la correction déplace le net du moyen corrigé (règlements
+        de la vente liée et de ses corrections) ; elle ne modifie aucune ligne. Une
+        vente qui contient un article hors chiffre d'affaires a un seul moyen
+        d'argent (la caisse refuse le cashless pour une recharge payante) : sa part
+        est sous ce moyen. Une vente liée à plusieurs
         moyens (ou sans moyen) range sa part sous « plusieurs moyens » : rien n'est
         déplacé.
         / A sale with an off-revenue item has one money method; otherwise nothing
@@ -575,6 +703,24 @@ class RapportDesVentes:
             pricesold__productsold__product__name__in=NOMS_DES_ECARTS_D_ENCAISSEMENT,
         )
 
+    def _articles_d_ecart_payes_en_cashless(self):
+        """
+        Les articles « Écart d'encaissement » des ventes qui ont au moins un règlement
+        cashless (monnaie locale, monnaie fédérée, jetons) : l'écart d'un tirage ou d'un
+        paiement QR / NFC. Aucun argent n'a bougé pour eux. Une vente qui mêle argent,
+        cashless et écart n'existe pas : un écart vient d'un seul paiement (Stripe,
+        tirage, QR / NFC).
+        / Gap items of sales with at least one cashless payment (tap, QR / NFC): no
+        money moved. A sale mixing money, cashless and a gap does not exist.
+        """
+        un_reglement_cashless_de_la_vente = Reglement.objects.filter(
+            vente_id=OuterRef("vente_id"),
+            moyen__in=MOYENS_CASHLESS,
+        )
+        return self._articles_d_ecart_d_encaissement().filter(
+            Exists(un_reglement_cashless_de_la_vente)
+        )
+
     def _reglements_d_argent(self):
         """
         Les règlements d'argent au sens strict des ventes en euros, TOUTES natures
@@ -700,10 +846,12 @@ class RapportDesVentes:
         move money between methods.
 
         L'IMPUTATION (même règle que les recharges par moyen, section 7) : une vente
-        qui contient un article hors chiffre d'affaires a un seul moyen (une recharge
-        payante ne se paie jamais en cashless, un écart n'existe que sur un paiement
-        Stripe). Une vente avec plusieurs moyens, ou sans aucun, impute sa part hors
-        chiffre d'affaires sous « plusieurs_moyens » : rien n'est perdu.
+        qui contient un article hors chiffre d'affaires a le plus souvent un seul moyen
+        (une recharge payante ne se paie jamais en cashless ; un écart vient d'un
+        paiement Stripe, d'un tirage de la tireuse ou d'un paiement QR / NFC, et porte
+        alors le moyen de ce paiement). Une vente avec plusieurs moyens (tirage payé en
+        jetons et en monnaie locale, QR payé en deux monnaies), ou sans aucun, impute sa
+        part hors chiffre d'affaires sous « plusieurs_moyens » : rien n'est perdu.
         / Imputation: a sale holding an off-revenue item has one method; otherwise
         "plusieurs_moyens".
 
@@ -805,22 +953,79 @@ class RapportDesVentes:
     def _chiffre_affaires_par_taux(self, articles_du_chiffre_d_affaires):
         """
         Clé : le taux stocké sur la ligne, en texte (« 20.00 », « 5.50 »).
-        / Key: the rate stored on the line, as text.
+        La part payée en jetons cadeau de chaque article (`part_en_jetons`) est vendue
+        hors TVA (D8 bis) : elle va au taux « 0.00 » (HT = TTC, TVA 0), et le reste de
+        l'article à son taux. Le total du chiffre d'affaires ne change pas.
+        Un taux dont TOUTES les lignes sont entièrement en jetons n'a plus rien à
+        montrer : il n'apparaît pas. Un taux qui vaut 0 pour une autre raison (une
+        vente et son avoir qui s'annulent) reste affiché, comme sans jetons.
+        / Key: the rate stored on the line, as text. Each item's token part goes to the
+        "0.00" rate (HT = TTC, VAT 0), the rest to its rate. A rate whose lines are ALL
+        fully token-paid is not shown; a rate at 0 for another reason stays.
         """
+        lignes_entierement_en_jetons = Q(part_en_jetons=F("total_ttc")) & ~Q(
+            part_en_jetons=0
+        )
         sommes_par_taux = (
             articles_du_chiffre_d_affaires.values("vat")
-            .annotate(**_sommes_ttc_ht_tva())
+            .annotate(
+                **_sommes_ttc_ht_tva(),
+                part_en_jetons_en_centimes=Coalesce(Sum("part_en_jetons"), 0),
+                nombre_de_lignes_avec_un_reste=Count(
+                    "pk", filter=~lignes_entierement_en_jetons
+                ),
+            )
             .order_by("vat")
         )
         par_taux = {}
+        cle_du_taux_zero = "0.00"
+        total_des_jetons = 0
         for sommes_du_taux in sommes_par_taux:
-            ligne_du_taux = {
-                "total_ttc_en_centimes": 0,
-                "total_ht_en_centimes": 0,
-                "total_tva_en_centimes": 0,
+            part_en_jetons_du_taux = sommes_du_taux["part_en_jetons_en_centimes"]
+            total_des_jetons += part_en_jetons_du_taux
+
+            # Le reste du taux : ses sommes, moins la part en jetons (hors TVA : elle
+            # est dans son HT et son TTC, jamais dans sa TVA).
+            # / The rate's rest: its sums minus the token part (in HT and TTC only).
+            reste_du_taux = {
+                "total_ttc_en_centimes": (
+                    sommes_du_taux["total_ttc_en_centimes"] - part_en_jetons_du_taux
+                ),
+                "total_ht_en_centimes": (
+                    sommes_du_taux["total_ht_en_centimes"] - part_en_jetons_du_taux
+                ),
+                "total_tva_en_centimes": sommes_du_taux["total_tva_en_centimes"],
             }
-            _ajouter_les_trois_totaux(ligne_du_taux, sommes_du_taux)
-            par_taux[str(sommes_du_taux["vat"])] = ligne_du_taux
+
+            # Un taux dont toutes les lignes sont entièrement en jetons n'a plus rien
+            # à montrer.
+            # / A rate whose lines are all fully token-paid has nothing left to show.
+            taux_entierement_en_jetons = (
+                sommes_du_taux["nombre_de_lignes_avec_un_reste"] == 0
+            )
+            if taux_entierement_en_jetons:
+                continue
+
+            cle_du_taux = str(sommes_du_taux["vat"])
+            if cle_du_taux not in par_taux:
+                par_taux[cle_du_taux] = {
+                    "total_ttc_en_centimes": 0,
+                    "total_ht_en_centimes": 0,
+                    "total_tva_en_centimes": 0,
+                }
+            _ajouter_les_trois_totaux(par_taux[cle_du_taux], reste_du_taux)
+
+        # Les jetons de tous les taux, au taux « 0.00 » : HT = TTC, TVA 0.
+        # / The tokens of every rate, at the "0.00" rate: HT = TTC, VAT 0.
+        if total_des_jetons != 0:
+            if cle_du_taux_zero not in par_taux:
+                par_taux[cle_du_taux_zero] = {
+                    "total_ttc_en_centimes": 0,
+                    "total_ht_en_centimes": 0,
+                    "total_tva_en_centimes": 0,
+                }
+            par_taux[cle_du_taux_zero]["total_ttc_en_centimes"] += total_des_jetons
+            par_taux[cle_du_taux_zero]["total_ht_en_centimes"] += total_des_jetons
         return par_taux
 
     def _chiffre_affaires_par_categorie(self, articles_du_chiffre_d_affaires):
@@ -1169,13 +1374,15 @@ class RapportDesVentes:
           vidages compris (comme le solde de caisse de LaBoutik V1). Il vaut l'argent
           de la section 3 plus les espèces rendues aux vidages ;
         - recharges : Σ net des recharges encaissées (le total de l'annexe) ;
-        - écarts d'encaissement : Σ net de TOUS les articles d'écart (le total de
-          l'annexe) ;
-        - remboursements : l'argent des avoirs, moins les écarts des avoirs (déjà
-          comptés dans « écarts ») ;
+        - écarts d'encaissement : Σ net des articles d'écart EN ARGENT, ceux des ventes
+          sans règlement cashless (un écart Stripe). L'écart d'un tirage ou d'un paiement
+          QR / NFC est payé en cashless : aucun argent n'a bougé, il reste seulement
+          dans l'annexe (« dont payés en cashless ») ;
+        - remboursements : l'argent des avoirs, moins les écarts en argent des avoirs
+          (déjà comptés dans « écarts ») ;
         - cartes vidées : l'argent des vidages (négatif) ;
         - ventes payées en argent : l'argent des ventes VENTE et CORRECTION, moins les
-          recharges et les écarts hors avoirs.
+          recharges et les écarts en argent hors avoirs.
         Argent reçu = somme des cinq termes, par construction.
         En plus, hors de la phrase : les recharges remboursées, le net (négatif) des
         articles de recharge des avoirs. Elles sont déjà dans « remboursements » ;
@@ -1207,25 +1414,27 @@ class RapportDesVentes:
             total=Coalesce(Sum("total_ttc"), 0)
         )["total"]
 
-        articles_d_ecart = self._articles_d_ecart_d_encaissement()
-        tous_les_ecarts = articles_d_ecart.aggregate(
+        # Les écarts EN ARGENT : ceux des ventes sans règlement cashless. Une recharge
+        # payante ne se paie jamais en cashless : son net est de l'argent.
+        # / Gaps IN MONEY: those of sales without a cashless payment.
+        ecarts_payes_en_cashless = self._articles_d_ecart_payes_en_cashless()
+        identifiants_des_ecarts_cashless = ecarts_payes_en_cashless.values("pk")
+        articles_d_ecart_en_argent = self._articles_d_ecart_d_encaissement().exclude(
+            pk__in=identifiants_des_ecarts_cashless
+        )
+        ecarts_en_argent = articles_d_ecart_en_argent.aggregate(
             total=Coalesce(Sum("total_ttc"), 0)
         )["total"]
-        ecarts_des_avoirs = articles_d_ecart.filter(
+        ecarts_en_argent_des_avoirs = articles_d_ecart_en_argent.filter(
             vente__nature=Vente.Nature.AVOIR
         ).aggregate(total=Coalesce(Sum("total_ttc"), 0))["total"]
-        ecarts_hors_avoirs = tous_les_ecarts - ecarts_des_avoirs
+        ecarts_en_argent_hors_avoirs = ecarts_en_argent - ecarts_en_argent_des_avoirs
 
-        remboursements = argent_des_avoirs - ecarts_des_avoirs
+        remboursements = argent_des_avoirs - ecarts_en_argent_des_avoirs
 
-        # TODO : cette formule suppose que le net d'une recharge payante et d'un écart
-        # est entièrement de l'argent : une recharge payante ne se paie jamais en
-        # cashless, et un écart n'existe aujourd'hui que sur un paiement Stripe. La
-        # fiche H prévoit des écarts sur un paiement QR / NFC (Fedow débite en partie) :
-        # leur net ne serait plus de l'argent, la formule sera à revoir.
-        # / TODO: assumes top-ups and gaps are paid in money; gaps on QR / NFC payments
-        # (sheet H) would break this assumption.
-        ventes_payees_en_argent = argent_des_ventes - recharges - ecarts_hors_avoirs
+        ventes_payees_en_argent = (
+            argent_des_ventes - recharges - ecarts_en_argent_hors_avoirs
+        )
 
         return {
             "argent_recu_en_centimes": argent_recu,
@@ -1234,7 +1443,7 @@ class RapportDesVentes:
             "recharges_remboursees_en_centimes": recharges_remboursees,
             "remboursements_en_centimes": remboursements,
             "cartes_videes_en_centimes": cartes_videes,
-            "ecarts_d_encaissement_en_centimes": tous_les_ecarts,
+            "ecarts_d_encaissement_en_centimes": ecarts_en_argent,
         }
 
     # ------------------------------------------------------------------
@@ -1247,22 +1456,32 @@ class RapportDesVentes:
         Le bouton OFFRIR : quantités, valeur catalogue offerte, coût d'achat, sur les
         articles du chiffre d'affaires SEULEMENT. La recharge cadeau (hors chiffre
         d'affaires) n'y est pas : elle est en section 7, « cadeau émis ». Les jetons
-        dépensés n'y sont pas : ce sont des ventes (D8 bis). Détail par produit : clé =
-        uuid du produit.
-        / The GIFT button, on revenue items only; detail keyed by product uuid.
+        dépensés n'y sont pas : ce sont des ventes (D8 bis). Détail par produit et par
+        unité (`_cle_et_unite_d_une_ligne_par_produit`) : quantité dans l'unité de la
+        ligne (`unite` : « kg » ou « L » pour les lignes au poids ou au volume, vide à
+        la pièce). La quantité totale est un nombre d'articles : une pesée compte pour
+        un.
+        / The GIFT button, on revenue items only; detail by product and unit; the total
+        quantity counts a weighing as one item.
         """
         articles_offerts = self._articles_du_chiffre_d_affaires().filter(
             source_offert=LigneArticle.SourceOffert.OFFRIR
         )
         totaux = articles_offerts.aggregate(
-            quantite=Sum("qty"),
+            quantite=Sum(quantite_en_nombre_d_articles()),
             valeur_catalogue_en_centimes=Coalesce(Sum("part_offerte"), 0),
             cout_achat_en_centimes=Coalesce(Sum("cout_achat"), 0),
         )
         sommes_par_produit = (
-            articles_offerts.values(
+            articles_offerts.annotate(
+                au_poids_ou_au_volume=_ligne_au_poids_ou_au_volume()
+            )
+            .values(
                 "pricesold__productsold__product",
                 "pricesold__productsold__product__name",
+                "pricesold__productsold__product__categorie_article",
+                "pricesold__productsold__product__stock_inventaire__unite",
+                "au_poids_ou_au_volume",
             )
             .annotate(
                 quantite=Sum("qty"),
@@ -1276,10 +1495,13 @@ class RapportDesVentes:
         # / A quantity is a Decimal: returned as text (JSON).
         par_produit = {}
         for sommes_du_produit in sommes_par_produit:
-            uuid_du_produit = sommes_du_produit["pricesold__productsold__product"]
-            par_produit[str(uuid_du_produit)] = {
+            cle_de_la_ligne, unite_de_la_quantite = (
+                _cle_et_unite_d_une_ligne_par_produit(sommes_du_produit)
+            )
+            par_produit[cle_de_la_ligne] = {
                 "nom": sommes_du_produit["pricesold__productsold__product__name"],
                 "quantite": str(sommes_du_produit["quantite"]),
+                "unite": unite_de_la_quantite,
                 "valeur_catalogue_en_centimes": sommes_du_produit[
                     "valeur_catalogue_en_centimes"
                 ],
@@ -1345,12 +1567,12 @@ class RapportDesVentes:
                 "total_en_centimes": somme_du_moyen["total_en_centimes"],
             }
 
-        # Retours consigne : le nombre est un nombre de gobelets (Σ quantités). Le
-        # `int()` porte sur une quantité, jamais sur de l'argent.
-        # TODO fiche H : la caisse écrit aujourd'hui le retour avec un prix négatif et
-        # une quantité positive ; quand la quantité deviendra négative (D13), prendre
-        # l'opposé de la somme.
-        # / Deposit returns: a number of cups. TODO sheet H: the quantity sign changes.
+        # Retours consigne : le nombre est un nombre de gobelets rendus. La ligne d'un
+        # retour a une quantité NÉGATIVE et un prix positif (D13) : le nombre de
+        # gobelets est l'opposé de la somme des quantités. Le `int()` porte sur une
+        # quantité, jamais sur de l'argent.
+        # / Deposit returns: a number of cups, minus the sum of the (negative)
+        # quantities.
         totaux_des_retours = LigneArticle.objects.filter(
             vente__in=ventes_d_avoir,
             pricesold__productsold__product__methode_caisse=Product.RETOUR_CONSIGNE,
@@ -1377,7 +1599,7 @@ class RapportDesVentes:
             "total_en_centimes": totaux_des_avoirs["total_en_centimes"],
             "par_moyen": par_moyen,
             "retours_consigne": {
-                "nombre": int(quantite_des_retours),
+                "nombre": int(-quantite_des_retours),
                 "total_en_centimes": totaux_des_retours["total_en_centimes"],
             },
             "remboursements_stripe_a_faire_a_la_main": {
@@ -1525,16 +1747,23 @@ class RapportDesVentes:
     def _annexe_ecarts_d_encaissement(self):
         """
         Les écarts d'encaissement (D26) : nombre d'articles et total net, toutes
-        natures (un remboursement Stripe peut aussi en écrire un).
-        / Collection gaps: number of items and net total, every nature.
+        natures (un remboursement Stripe peut aussi en écrire un), dont la part payée
+        en cashless (tirage, paiement QR / NFC : aucun argent n'a bougé).
+        / Collection gaps: number of items and net total, every nature, of which the
+        part paid in cashless.
         """
         totaux_des_ecarts = self._articles_d_ecart_d_encaissement().aggregate(
             nombre=Count("pk"),
             total_en_centimes=Coalesce(Sum("total_ttc"), 0),
         )
+        articles_d_ecart_payes_en_cashless = self._articles_d_ecart_payes_en_cashless()
+        ecarts_payes_en_cashless = articles_d_ecart_payes_en_cashless.aggregate(
+            total=Coalesce(Sum("total_ttc"), 0)
+        )["total"]
         return {
             "nombre": totaux_des_ecarts["nombre"],
             "total_en_centimes": totaux_des_ecarts["total_en_centimes"],
+            "dont_payes_en_cashless_en_centimes": ecarts_payes_en_cashless,
         }
 
     def _annexe_corrections(self):
@@ -1647,8 +1876,8 @@ class RapportDesVentes:
         ni un retour de consigne (il est dans une vente AVOIR) : le nombre n'est donc
         jamais négatif, même quand la vente d'origine est dans une autre période. Un
         article à 0 € (billet gratuit) ne rend pas la marge incomplète. On compte des
-        UNITÉS (Σ des quantités, arrondie demi-haut à l'entier), pas des lignes : un
-        article payé en deux parts compte 1, trois planches sur une ligne comptent 3.
+        ARTICLES, pas des lignes : trois planches sur une ligne comptent 3, une pesée
+        (0,350 kg de comté) compte 1 (`quantite_en_nombre_d_articles`).
         / Gross margin = revenue excl. tax − Σ purchase costs of served items; SOLD items
         (VENTE sales, quantity > 0) with an unknown cost and a non-zero catalogue total
         are counted: never negative.
@@ -1657,9 +1886,9 @@ class RapportDesVentes:
         cout_achat = articles_servis.aggregate(
             total=Coalesce(Sum("cout_achat"), 0)
         )["total"]
-        # La somme des quantités est un `Decimal` (des parts à 6 décimales) : elle est
-        # arrondie à l'unité entière. Ce n'est pas de l'argent.
-        # / The sum of quantities is a Decimal: rounded to a whole unit. Not money.
+        # La somme est un `Decimal` (des lignes de l'historique en parts, à 6
+        # décimales) : elle est arrondie à l'unité entière. Ce n'est pas de l'argent.
+        # / The sum is a Decimal: rounded to a whole unit. Not money.
         quantite_au_cout_inconnu = (
             articles_servis.filter(
                 vente__nature=Vente.Nature.VENTE,
@@ -1667,7 +1896,7 @@ class RapportDesVentes:
                 cout_achat__isnull=True,
             )
             .exclude(total_catalogue=0)
-            .aggregate(total=Sum("qty"))["total"]
+            .aggregate(total=Sum(quantite_en_nombre_d_articles()))["total"]
         )
         if quantite_au_cout_inconnu is None:
             quantite_au_cout_inconnu = Decimal("0")
@@ -1794,16 +2023,25 @@ class RapportDesVentes:
         compris) : quantité, TTC, HT, part offerte, coût d'achat. Clé : uuid du
         produit ; `categorie` = la clé de la catégorie dans `par_categorie` (section
         2), pour grouper à l'affichage. Les lignes additionnent exactement le chiffre
-        d'affaires.
-        / All revenue items by product; the lines add up exactly to the revenue.
+        d'affaires. La quantité d'une vente au poids ou au volume est en kg ou en
+        litres (D15) : `unite` le dit (« kg », « L »), vide pour des pièces (Q-H4).
+        Deux unités ne s'additionnent jamais : un produit vendu au poids ET à la pièce
+        donne deux lignes (`_cle_et_unite_d_une_ligne_par_produit`).
+        / All revenue items by product and unit; the lines add up exactly to the
+        revenue; a product sold by weight and by piece gives two rows.
         """
         sommes_par_produit = (
-            articles_du_chiffre_d_affaires.values(
+            articles_du_chiffre_d_affaires.annotate(
+                au_poids_ou_au_volume=_ligne_au_poids_ou_au_volume()
+            )
+            .values(
                 "pricesold__productsold__product",
                 "pricesold__productsold__product__name",
                 "pricesold__productsold__product__categorie_pos",
                 "pricesold__productsold__product__categorie_pos__name",
                 "pricesold__productsold__product__categorie_article",
+                "pricesold__productsold__product__stock_inventaire__unite",
+                "au_poids_ou_au_volume",
             )
             .annotate(
                 quantite=Sum("qty"),
@@ -1827,11 +2065,14 @@ class RapportDesVentes:
                 ],
                 sommes_du_produit["pricesold__productsold__product__categorie_article"],
             )
-            uuid_du_produit = sommes_du_produit["pricesold__productsold__product"]
-            ventes_par_produit[str(uuid_du_produit)] = {
+            cle_de_la_ligne, unite_de_la_quantite = (
+                _cle_et_unite_d_une_ligne_par_produit(sommes_du_produit)
+            )
+            ventes_par_produit[cle_de_la_ligne] = {
                 "nom": sommes_du_produit["pricesold__productsold__product__name"],
                 "categorie": cle_de_la_categorie,
                 "quantite": str(sommes_du_produit["quantite"]),
+                "unite": unite_de_la_quantite,
                 "total_ttc_en_centimes": sommes_du_produit["total_ttc_en_centimes"],
                 "total_ht_en_centimes": sommes_du_produit["total_ht_en_centimes"],
                 "offert_en_centimes": sommes_du_produit["offert_en_centimes"],

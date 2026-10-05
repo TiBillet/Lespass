@@ -81,7 +81,13 @@ from BaseBillet.models import (  # noqa: E402
     Tva,
 )
 from BaseBillet.models_vente import Vente  # noqa: E402
-from BaseBillet.services_vente import ecrire_la_vente_d_avoir_d_une_ligne  # noqa: E402
+from BaseBillet.services_vente import (  # noqa: E402
+    ajouter_article,
+    ajouter_reglement,
+    ecrire_la_vente_d_avoir_d_une_ligne,
+    encaisser_vente,
+    ouvrir_vente,
+)
 from comptabilite.admin import ClotureCaisseAdmin  # noqa: E402
 from comptabilite.csv_export import generer_csv_cloture  # noqa: E402
 from comptabilite.excel_export import generer_excel_cloture  # noqa: E402
@@ -576,6 +582,136 @@ class TestComptabiliteExports(FastTenantTestCase):
         assert "text/csv" in reponse["Content-Type"]
         assert "attachment" in reponse["Content-Disposition"]
         assert ".csv" in reponse["Content-Disposition"]
+
+    def test_csv_points_par_monnaie_et_adhesion_en_points_absente_des_euros(self):
+        """
+        Une J qui ne contient qu'une adhésion payée 300,00 points (monnaie « Points
+        fidélité exports ») : le CSV donne la monnaie et ses points dans la section
+        « Points » (300,00, dont offerts 0,00). Les ventes en points n'y sont données
+        qu'en total par monnaie (fiche F §8) : l'adhésion n'est nommée dans aucune
+        section, et surtout dans aucune section en euros (détail des ventes, CA).
+        / A J with one membership paid in points: the CSV gives the currency with its
+        points; the membership is named in no section, never in a euro section.
+        """
+        moment_de_la_vente = timezone.now() + timedelta(minutes=5)
+        portefeuille_d_origine = Wallet.objects.create(
+            name=f"Portefeuille points exports {identifiant_unique()}"
+        )
+        monnaie_de_points = Asset.objects.create(
+            name="Points fidélité exports",
+            currency_code="PTS",
+            category=Asset.FID,
+            tenant_origin=self.tenant,
+            wallet_origin=portefeuille_d_origine,
+        )
+        nom_de_l_adhesion = f"Adhésion en points exports {identifiant_unique()}"
+        # Créer un produit adhésion appelle Fedow en HTTP : simulé (tests/PIEGES.md
+        # 13.2). / Creating a membership product calls Fedow: faked.
+        with patch("BaseBillet.signals.AssetFedow") as ancien_fedow_simule:
+            ancien_fedow_simule.return_value.get_or_create_membership_asset.return_value = (
+                MagicMock(),
+                True,
+            )
+            produit_de_l_adhesion = Product.objects.create(
+                name=nom_de_l_adhesion, categorie_article=Product.ADHESION
+            )
+        tarif_de_l_adhesion = Price.objects.create(
+            product=produit_de_l_adhesion,
+            name="Points",
+            prix=Decimal("3.00"),
+            publish=True,
+        )
+        tarif_vendu_de_l_adhesion = PriceSold.objects.create(
+            productsold=ProductSold.objects.create(product=produit_de_l_adhesion),
+            price=tarif_de_l_adhesion,
+            prix=tarif_de_l_adhesion.prix,
+        )
+        # La vente en points : unité = la monnaie de points, TVA 0, règlement NM.
+        # / The points sale: unit = the points currency, 0 VAT, NM payment.
+        with patch("django.utils.timezone.now", return_value=moment_de_la_vente):
+            vente = ouvrir_vente(
+                origine=SaleOrigin.LABOUTIK,
+                nature=Vente.Nature.VENTE,
+                unite=str(monnaie_de_points.uuid),
+            )
+            ajouter_article(
+                vente,
+                pricesold=tarif_vendu_de_l_adhesion,
+                quantite=Decimal("1"),
+                prix_unitaire=30000,
+                taux_tva=Decimal("0"),
+            )
+            ajouter_reglement(
+                vente,
+                moyen=PaymentMethod.NON_MONETAIRE,
+                montant=30000,
+                asset=monnaie_de_points.uuid,
+            )
+            vente = encaisser_vente(vente)
+        verifier_egalites(vente)
+        cloture = self._cloturer_a(moment_de_la_vente + timedelta(minutes=5))
+
+        lignes = self._lignes_du_csv(cloture)
+
+        # La monnaie apparaît aussi dans les règlements (« hors argent ») : on lit la
+        # ligne de la section « Points », après son titre.
+        # / The currency also shows in the payments: read the "Points" section's row.
+        position_de_la_section_des_points = self._position_de_la_ligne_qui_contient(
+            lignes, "[Points]"
+        )
+        lignes_de_la_section_des_points = lignes[position_de_la_section_des_points:]
+        ligne_de_la_monnaie = self._ligne_qui_commence_par(
+            lignes_de_la_section_des_points, "Points fidélité exports"
+        )
+        assert ligne_de_la_monnaie == ["Points fidélité exports", "300,00", "0,00"]
+
+        lignes_qui_nomment_l_adhesion = []
+        for ligne in lignes:
+            if nom_de_l_adhesion in " ".join(ligne):
+                lignes_qui_nomment_l_adhesion.append(ligne)
+        assert lignes_qui_nomment_l_adhesion == []
+
+    def test_csv_liste_les_offerts_avec_leurs_valeurs(self):
+        """
+        Une J qui ne contient que deux vins à 5,00 € offerts (bouton OFFRIR) : la
+        section « Offerts » du CSV donne la quantité offerte (2), la valeur catalogue
+        offerte (10,00 €), et la ligne du vin (2, 10,00 €).
+        / A J with two gifted wines: the CSV "Offerts" section gives quantity 2, value
+        10.00 €, and the wine's row.
+        """
+        moment_de_la_vente = timezone.now() + timedelta(minutes=5)
+        tarif_du_vin = creer_tarif_vendu(
+            nom="Vin offert exports",
+            prix_en_euros="5.00",
+            taux_tva="20.00",
+            methode_caisse=Product.VENTE,
+        )
+        nom_du_vin = tarif_du_vin.productsold.product.name
+        with patch("django.utils.timezone.now", return_value=moment_de_la_vente):
+            vente = fabriquer_vente_encaissee(
+                origine=SaleOrigin.LABOUTIK,
+                articles=[
+                    {
+                        "pricesold": tarif_du_vin,
+                        "quantite": Decimal("2"),
+                        "prix_unitaire": 500,
+                        "taux_tva": Decimal("20"),
+                        "offert_en_totalite": True,
+                    }
+                ],
+            )
+        verifier_egalites(vente)
+        cloture = self._cloturer_a(moment_de_la_vente + timedelta(minutes=5))
+
+        lignes = self._lignes_du_csv(cloture)
+
+        assert self._ligne_qui_commence_par(lignes, "Quantité offerte")[1] == "2"
+        assert self._ligne_qui_commence_par(lignes, "Valeur catalogue offerte")[
+            1
+        ] == euros("10,00")
+        ligne_du_vin = self._ligne_qui_commence_par(lignes, nom_du_vin)
+        assert ligne_du_vin[1] == "2"
+        assert ligne_du_vin[2] == euros("10,00")
 
     # ------------------------------------------------------------------
     # Tableur (Excel)

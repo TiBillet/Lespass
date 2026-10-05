@@ -176,9 +176,9 @@ def creer_la_carte_de_l_adherente_en_deux_monnaies(lieu, adherente):
 
     La caisse paie en cascade : d'abord la monnaie cadeau, puis la monnaie locale
     (laboutik/views.py `ORDRE_CASCADE_FIDUCIAIRE`). Une adhésion à 20 € est donc payée
-    en deux morceaux : 10 € cadeau + 10 € locale, soit deux lignes de vente.
+    en deux morceaux : 10 € cadeau + 10 € locale, soit UNE ligne et deux règlements.
     / The register pays in cascade: gift first, then local. A 20 € membership is paid in
-    two parts, hence two sale lines.
+    two parts: ONE line, two payments.
 
     Pour chaque monnaie, la caisse lit la PREMIÈRE du lieu dans sa catégorie : on crédite
     la carte dans cette monnaie-là, lue par la même requête (tests/PIEGES.md 9.97).
@@ -350,12 +350,12 @@ def test_adhesion_caisse_nfc_demande_facture_et_recompense_une_fois(
     """
     Le caissier vend une adhésion à 20 €, payée avec la carte NFC de l'adhérente. La
     carte porte 10 € de monnaie cadeau et 50 € de monnaie locale : la caisse paie en
-    cascade, et crée DEUX lignes de vente pour la même adhésion.
+    cascade : UNE ligne de vente pour l'adhésion, et deux règlements.
     Résultat : UNE seule facture et UNE seule récompense, pour la ligne qui porte
     l'adhésion. Rien n'est envoyé à l'ancien LaBoutik. L'adhérente est rattachée au lieu.
-    / NFC cascade payment: two sale lines for one membership, yet ONE invoice and ONE
-    reward, for the line that carries the membership. Nothing sent to legacy LaBoutik.
-    The member is attached to the venue.
+    / NFC cascade payment: one sale line, two payments; ONE invoice and ONE reward, for
+    the line that carries the membership. Nothing sent to legacy LaBoutik. The member
+    is attached to the venue.
     """
     adherente = creer_utilisateur(prenom="Ada", nom="Lovelace")
     adhesion = creer_adhesion(prix="20.00")
@@ -376,10 +376,12 @@ def test_adhesion_caisse_nfc_demande_facture_et_recompense_une_fois(
         )
 
     assert reponse.status_code == 200
-    # Le parcours en cascade a bien eu lieu : deux lignes pour une adhésion. Sans
-    # elles, « une seule facture » ne prouverait rien.
-    # / The cascade did happen: two lines for one membership.
-    assert LigneArticle.objects.filter(pricesold__price=adhesion.tarif).count() == 2
+    # Le parcours en cascade a bien eu lieu : UNE ligne pour l'adhésion, deux
+    # règlements (monnaie cadeau, monnaie locale). Sans eux, « une seule facture » ne
+    # prouverait rien.
+    # / The cascade did happen: ONE line for the membership, two payments.
+    ligne_de_l_adhesion = LigneArticle.objects.get(pricesold__price=adhesion.tarif)
+    assert ligne_de_l_adhesion.vente.reglements.count() == 2
 
     adhesion_vendue = Membership.objects.get(user=adherente, price=adhesion.tarif)
     ligne_qui_porte_l_adhesion = LigneArticle.objects.get(
@@ -453,9 +455,10 @@ def test_adhesion_caisse_complement_demande_facture_et_recompense(
     assert reponse_de_la_carte.status_code == 200
     assert 'data-testid="complement-paiement"' in reponse_de_la_carte.content.decode()
     assert reponse_du_complement.status_code == 200
-    # Deux lignes : 10 € par la carte, 10 € en espèces.
-    # / Two lines: 10 € by card, 10 € in cash.
-    assert LigneArticle.objects.filter(pricesold__price=adhesion.tarif).count() == 2
+    # UNE ligne, deux règlements : 10 € par la carte, 10 € en espèces.
+    # / ONE line, two payments: 10 € by card, 10 € in cash.
+    ligne_de_l_adhesion = LigneArticle.objects.get(pricesold__price=adhesion.tarif)
+    assert ligne_de_l_adhesion.vente.reglements.count() == 2
 
     adhesion_vendue = Membership.objects.get(user=adherente, price=adhesion.tarif)
     ligne_qui_porte_l_adhesion = LigneArticle.objects.get(
@@ -523,9 +526,10 @@ def test_adhesion_caisse_seconde_carte_demande_facture_et_recompense(
     assert reponse_de_la_carte.status_code == 200
     assert 'data-testid="complement-paiement"' in reponse_de_la_carte.content.decode()
     assert reponse_de_la_seconde_carte.status_code == 200
-    # Deux lignes : 10 € par chaque carte.
-    # / Two lines: 10 € from each card.
-    assert LigneArticle.objects.filter(pricesold__price=adhesion.tarif).count() == 2
+    # UNE ligne, deux règlements : 10 € par chaque carte.
+    # / ONE line, two payments: 10 € from each card.
+    ligne_de_l_adhesion = LigneArticle.objects.get(pricesold__price=adhesion.tarif)
+    assert ligne_de_l_adhesion.vente.reglements.count() == 2
 
     adhesion_vendue = Membership.objects.get(user=adherente, price=adhesion.tarif)
     ligne_qui_porte_l_adhesion = LigneArticle.objects.get(

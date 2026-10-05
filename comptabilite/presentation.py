@@ -187,6 +187,35 @@ def quantite_lisible(quantite_en_texte):
     return f"{signe}{quantite_sans_zeros_inutiles.replace('.', ',')}"
 
 
+def quantite_au_poids_a_la_francaise(quantite, unite):
+    """
+    La quantité d'une vente au poids ou au volume, avec son unité (D15, Q-H4) : les kg
+    à 3 décimales (« 0,350 kg »), les litres à 2 décimales (« 0,33 L ») : la précision
+    à laquelle la caisse arrondit la quantité d'une pesée.
+    / A weight / volume quantity with its unit: kg with 3 decimals, litres with 2.
+
+    LOCALISATION : comptabilite/presentation.py
+
+    LU PAR : ce module (détail des ventes, offerts du rapport),
+    laboutik/affichage_des_ventes.py (détail d'une vente, ticket).
+
+    :param quantite: la quantité (Decimal, ou son texte)
+    :param unite: « kg » ou « L »
+    :return: texte
+    """
+    if unite == "L":
+        pas_d_arrondi = Decimal("0.01")
+    else:
+        pas_d_arrondi = Decimal("0.001")
+    quantite_arrondie = Decimal(str(quantite)).quantize(pas_d_arrondi)
+    if quantite_arrondie < 0:
+        signe = SIGNE_MOINS
+    else:
+        signe = ""
+    texte_du_nombre = format(abs(quantite_arrondie), "f").replace(".", ",")
+    return f"{signe}{texte_du_nombre} {unite}"
+
+
 def commence_comme_une_formule(texte):
     """
     Vrai si un texte commence par « = », « + », « - » ou « @ » : un tableur le lirait
@@ -271,14 +300,27 @@ def _cellule_nombre(nombre):
     }
 
 
-def _cellule_quantite(quantite_en_texte):
-    """Une cellule de quantité (texte du rapport). / A quantity cell."""
+def _cellule_quantite(quantite_en_texte, unite=""):
+    """
+    Une cellule de quantité (texte du rapport). Avec une unité (« kg », « L » : un
+    produit vendu au poids ou au volume), le texte la porte : « 0,350 kg », et la
+    cellule la garde (`unite`) pour le format de nombre du tableur.
+    / A quantity cell; with a unit, the text carries it and the cell keeps it for the
+    spreadsheet number format.
+    """
     if quantite_en_texte is None or quantite_en_texte == "":
         quantite_en_texte = "0"
+    if unite:
+        texte_de_la_quantite = quantite_au_poids_a_la_francaise(
+            quantite_en_texte, unite
+        )
+    else:
+        texte_de_la_quantite = quantite_lisible(quantite_en_texte)
     return {
-        "texte": quantite_lisible(quantite_en_texte),
+        "texte": texte_de_la_quantite,
         "valeur": Decimal(str(quantite_en_texte)),
         "est_un_montant": False,
+        "unite": unite,
     }
 
 
@@ -1137,7 +1179,11 @@ def _section_offerts(rapport):
         lignes_par_produit.append(
             [
                 _cellule_texte(ligne_du_produit["nom"]),
-                _cellule_quantite(ligne_du_produit["quantite"]),
+                # Un Z stocké avant les ventes au poids en kg n'a pas d'unité.
+                # / A Z stored before kg weight sales has no unit.
+                _cellule_quantite(
+                    ligne_du_produit["quantite"], ligne_du_produit.get("unite", "")
+                ),
                 _cellule_montant(ligne_du_produit["valeur_catalogue_en_centimes"]),
                 _cellule_montant(ligne_du_produit["cout_achat_en_centimes"]),
             ]
@@ -1274,12 +1320,23 @@ def _section_annexe(rapport):
         message_des_ecarts = gettext("Attention : écart d'encaissement")
     else:
         message_des_ecarts = ""
+    # « dont payés en cashless » : les écarts d'un tirage ou d'un paiement QR / NFC.
+    # Aucun argent n'a bougé : la réconciliation ne les compte pas. Le rapport figé
+    # d'une clôture plus ancienne n'a pas cette clé : il vaut alors 0.
+    # / "of which paid in cashless": tap and QR / NFC gaps, not in the reconciliation.
+    # An older frozen closure report lacks the key: 0.
+    ecarts_payes_en_cashless = ecarts.get("dont_payes_en_cashless_en_centimes", 0)
     lignes_des_ecarts = [
         [
             _cellule_texte(gettext("Écarts d'encaissement")),
             _cellule_nombre(ecarts["nombre"]),
             _cellule_montant(ecarts["total_en_centimes"]),
-        ]
+        ],
+        [
+            _cellule_texte(gettext("dont payés en cashless")),
+            _cellule_texte(""),
+            _cellule_montant(ecarts_payes_en_cashless),
+        ],
     ]
 
     tableaux = [
@@ -1525,7 +1582,11 @@ def _section_detail(rapport, fuseau_du_lieu):
             [
                 _cellule_texte(nom_de_la_categorie),
                 _cellule_texte(ligne_du_produit["nom"]),
-                _cellule_quantite(ligne_du_produit["quantite"]),
+                # Un Z stocké avant les ventes au poids en kg n'a pas d'unité.
+                # / A Z stored before kg weight sales has no unit.
+                _cellule_quantite(
+                    ligne_du_produit["quantite"], ligne_du_produit.get("unite", "")
+                ),
                 _cellule_montant(ligne_du_produit["total_ttc_en_centimes"]),
                 _cellule_montant(ligne_du_produit["total_ht_en_centimes"]),
                 _cellule_montant(ligne_du_produit["offert_en_centimes"]),

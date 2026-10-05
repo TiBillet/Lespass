@@ -44,6 +44,7 @@ from BaseBillet.models import (
     Price, PriceSold, Product, ProductSold,
     SaleOrigin, PaymentMethod, CategorieProduct,
 )
+from BaseBillet.models_vente import Vente
 from comptabilite.models import ClotureCaisse
 from fabriques_vente import fabriquer_vente_encaissee
 from laboutik.models import (
@@ -203,8 +204,10 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
     # ----------------------------------------------------------------------- #
 
     def test_correction_espece_vers_cb(self):
-        """Correction ESP → CB : 200, CorrectionPaiement creee, payment_method change.
-        / Correction CASH → CC: 200, CorrectionPaiement created, payment_method changed."""
+        """Correction ESP → CB : 200, CorrectionPaiement creee. La ligne garde son
+        moyen (D14) : seule une vente CORRECTION deplace l'argent.
+        / Correction CASH → CC: 200, CorrectionPaiement created; the line keeps its
+        method (D14)."""
         ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.CASH)
 
         response = self.c.post('/laboutik/paiement/corriger_moyen_paiement/', {
@@ -218,10 +221,13 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         # / Response 200 = success
         assert response.status_code == 200
 
-        # La LigneArticle a ete modifiee en base
-        # / The LigneArticle was modified in the database
+        # La LigneArticle n'est pas modifiee : la vente CORRECTION porte la correction
+        # / The LigneArticle is not modified: the CORRECTION sale carries it
         ligne.refresh_from_db()
-        assert ligne.payment_method == PaymentMethod.CC
+        assert ligne.payment_method == PaymentMethod.CASH
+        assert Vente.objects.filter(
+            nature=Vente.Nature.CORRECTION, vente_liee_id=ligne.vente_id
+        ).count() == 1
 
         # Une CorrectionPaiement a ete creee
         # / A CorrectionPaiement was created
@@ -233,8 +239,10 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         assert correction.operateur == self.admin
 
     def test_correction_cb_vers_cheque(self):
-        """Correction CB → CHQ : 200, CorrectionPaiement creee.
-        / Correction CC → CHECK: 200, CorrectionPaiement created."""
+        """Correction CB → CHQ : 200, CorrectionPaiement creee, la ligne garde son
+        moyen (D14).
+        / Correction CC → CHECK: 200, CorrectionPaiement created, the line keeps its
+        method."""
         ligne = self._creer_ligne_d_une_vente_reglee(PaymentMethod.CC)
 
         response = self.c.post('/laboutik/paiement/corriger_moyen_paiement/', {
@@ -246,7 +254,9 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
 
         assert response.status_code == 200
         ligne.refresh_from_db()
-        assert ligne.payment_method == PaymentMethod.CHEQUE
+        assert ligne.payment_method == PaymentMethod.CC
+        correction = CorrectionPaiement.objects.get(ligne_article=ligne)
+        assert correction.nouveau_moyen == PaymentMethod.CHEQUE
 
     def test_correction_nfc_refuse(self):
         """Correction d'un paiement NFC (LOCAL_EURO) : 400.
@@ -342,8 +352,11 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         assert correction.nouveau_moyen == PaymentMethod.CC
 
     def test_correction_multi_articles_toute_la_transaction(self):
-        """Correction d'une transaction avec 3 articles : TOUTES les lignes sont corrigees.
-        / Correction of a transaction with 3 articles: ALL lines are corrected."""
+        """Correction d'une transaction avec 3 articles : TOUT l'argent en especes de
+        la vente est deplace (une vente CORRECTION de 1500), et chaque ligne recoit sa
+        trace. Aucune ligne ne change de moyen (D14).
+        / Correction of a transaction with 3 articles: ALL the sale's cash is moved
+        (one CORRECTION of 1500), one trail per line, no line changes its method."""
         # Une vente reglee de 3 articles, payes ensemble en especes : 3 lignes avec
         # le meme uuid_transaction (1 panier = 3 articles), un reglement de 3 x 500.
         # / One settled sale of 3 items paid together in cash: same uuid_transaction.
@@ -377,13 +390,23 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         })
         assert response.status_code == 200
 
-        # TOUTES les 3 lignes doivent etre corrigees en CB
-        # / ALL 3 lines must be corrected to CC
+        # Les 3 lignes gardent leur moyen ; la vente CORRECTION deplace les 1500
+        # / The 3 lines keep their method; the CORRECTION sale moves the 1500
         for ligne in lignes:
             ligne.refresh_from_db()
-            assert ligne.payment_method == PaymentMethod.CC, (
-                f"Ligne {ligne.uuid} toujours {ligne.payment_method} au lieu de CC"
+            assert ligne.payment_method == PaymentMethod.CASH, (
+                f"Ligne {ligne.uuid} modifiee : {ligne.payment_method} au lieu de CA"
             )
+        vente_de_correction = Vente.objects.get(
+            nature=Vente.Nature.CORRECTION, vente_liee=vente_du_panier
+        )
+        montants_par_moyen = {}
+        for reglement in vente_de_correction.reglements.all():
+            montants_par_moyen[reglement.moyen] = reglement.montant
+        assert montants_par_moyen == {
+            PaymentMethod.CASH: -1500,
+            PaymentMethod.CC: 1500,
+        }
 
         # 3 CorrectionPaiement creees (une par ligne)
         # / 3 CorrectionPaiement created (one per line)

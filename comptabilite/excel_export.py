@@ -54,6 +54,14 @@ _BORDURE_FINE = Border(
 # / The number format of an amount in euros.
 _FORMAT_DES_EUROS = '#,##0.00 "€"'
 
+# Le format d'une quantité vendue au poids ou au volume (D15, Q-H4) : la précision
+# de la caisse (kg à 3 décimales, litres à 2) et l'unité après le nombre.
+# / The number format of a weight / volume quantity, with its unit.
+_FORMAT_PAR_UNITE_DE_QUANTITE = {
+    "kg": '0.000 "kg"',
+    "L": '0.00 "L"',
+}
+
 # Le nombre de colonnes d'un titre de section (le plus large tableau du rapport).
 # / Number of columns of a section title (the widest table of the report).
 _LARGEUR_D_UN_TITRE = 7
@@ -114,7 +122,7 @@ def _ecrire_une_ligne_de_cellules(feuille, numero_de_ligne, cellules):
     """
     Écrit une ligne de cellules du rapport : la valeur (un nombre) quand la cellule en
     a une, sinon son texte (protégé contre les formules). Un montant reçoit le format
-    des euros.
+    des euros, une quantité au poids ou au volume le format de son unité (kg, L).
     / Writes a row of report cells: the number when there is one, otherwise the text.
     """
     numero_de_colonne = 1
@@ -126,6 +134,11 @@ def _ecrire_une_ligne_de_cellules(feuille, numero_de_ligne, cellules):
             case.alignment = _ALIGNEMENT_A_DROITE
             if cellule["est_un_montant"]:
                 case.number_format = _FORMAT_DES_EUROS
+            # Une quantité au poids ou au volume porte son unité dans son format.
+            # / A weight / volume quantity carries its unit in its format.
+            unite_de_la_quantite = cellule.get("unite", "")
+            if unite_de_la_quantite in _FORMAT_PAR_UNITE_DE_QUANTITE:
+                case.number_format = _FORMAT_PAR_UNITE_DE_QUANTITE[unite_de_la_quantite]
         else:
             case = _ecrire_un_texte(
                 feuille, numero_de_ligne, numero_de_colonne, cellule["texte"]

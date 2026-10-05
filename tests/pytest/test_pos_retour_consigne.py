@@ -10,9 +10,10 @@ qui va dans ce sens, et c'est ce qui la rend fragile : tout le reste du code de 
 suppose qu'un panier coute quelque chose.
 
 Trois choses doivent etre vraies, et chacune a son test :
- 1. La ligne comptable garde un montant NEGATIF. C'est ce signe, et rien d'autre, qui
-    fait que le retour se soustrait du chiffre d'affaires et du tiroir-caisse dans tous
-    les rapports (`reports.py` somme `amount x qty` sans valeur absolue).
+ 1. La ligne comptable garde un total NEGATIF : quantité négative, prix positif du
+    gobelet (D13). C'est ce signe, et rien d'autre, qui fait que le retour se soustrait
+    du chiffre d'affaires et du tiroir-caisse dans tous les rapports (ils additionnent
+    les totaux figés des lignes).
  2. En cashless, un retour de consigne est une RECHARGE : on credite la carte du montant
     absolu. Un debit negatif ne veut rien dire pour la cascade multi-asset.
  3. On ne rembourse une consigne qu'en especes ou en cashless. Ni carte bancaire, ni
@@ -601,10 +602,12 @@ class TestPosRetourConsigne(FastTenantTestCase):
         Le signe du montant est le coeur du sujet.
 
         C'est lui, et rien d'autre, qui fait que le retour se soustrait du chiffre
-        d'affaires et du tiroir-caisse : `reports.py` somme `amount x qty` sans valeur
-        absolue. Une ligne positive ferait apparaitre le remboursement comme une
-        recette.
-        / The sign IS the subject: reports sum amount x qty with no abs().
+        d'affaires et du tiroir-caisse : le rapport additionne les totaux figés des
+        lignes. Une ligne positive ferait apparaitre le remboursement comme une
+        recette. La ligne porte une quantité NÉGATIVE et le prix positif du gobelet
+        (D13) : son total catalogue est négatif. Le règlement espèces est négatif.
+        / The sign IS the subject: negative quantity, positive price (D13), negative
+        catalogue total; negative cash payment.
         """
         reponse = self._poster_retour_consigne(moyen_paiement="espece")
 
@@ -614,12 +617,17 @@ class TestPosRetourConsigne(FastTenantTestCase):
         self.assertEqual(lignes.count(), 1)
 
         ligne = lignes.first()
+        self.assertEqual(ligne.qty, -1)
+        self.assertEqual(ligne.amount, 100)
         self.assertEqual(
-            ligne.amount,
+            ligne.total_catalogue,
             -100,
-            "Le montant doit rester negatif : le lieu rend cet argent.",
+            "Le total doit rester negatif : le lieu rend cet argent.",
         )
-        self.assertEqual(ligne.payment_method, "CA")
+        reglements_de_la_vente = list(ligne.vente.reglements.all())
+        self.assertEqual(len(reglements_de_la_vente), 1)
+        self.assertEqual(reglements_de_la_vente[0].moyen, "CA")
+        self.assertEqual(reglements_de_la_vente[0].montant, -100)
 
     # ------------------------------------------------------------------ #
     #  T6 — L'inaltérabilité LNE tolère un montant négatif
@@ -647,7 +655,9 @@ class TestPosRetourConsigne(FastTenantTestCase):
         self._poster_retour_consigne(moyen_paiement="espece")
 
         ligne = LigneArticle.objects.get()
-        self.assertLess(ligne.amount, 0, "Le test n'a de sens que sur une ligne negative.")
+        self.assertLess(
+            ligne.total_catalogue, 0, "Le test n'a de sens que sur une ligne negative."
+        )
 
         # On verifie la chaine TELLE QUE LE POS L'A PRODUITE : la vente du retour est
         # scellee par le service de vente, la verification recalcule son empreinte.
@@ -694,7 +704,7 @@ class TestPosRetourConsigne(FastTenantTestCase):
         self._poster_retour_consigne(moyen_paiement="espece")
 
         ligne = LigneArticle.objects.get()
-        self.assertEqual(ligne.amount, -100)
+        self.assertEqual(ligne.total_catalogue, -100)
 
         cle_hmac = LaboutikConfiguration.get_solo().get_or_create_hmac_key()
         anomalies = verifier_chaine_ventes(cle_hmac)
@@ -837,9 +847,9 @@ class TestPosRetourConsigne(FastTenantTestCase):
 
         Deux assertions, et les deux comptent :
           - la carte est créditée du montant ABSOLU (l'argent arrive vraiment) ;
-          - la ligne comptable garde le montant NÉGATIF (le CA cashless baisse).
+          - la ligne comptable garde un total NÉGATIF (le CA cashless baisse).
         / In cashless a deposit return is a TOP-UP: the card is credited the absolute
-          amount, while the accounting line keeps the negative amount.
+          amount, while the accounting line keeps a negative total.
         """
         solde_avant = self._solde_de_la_carte()
 
@@ -854,14 +864,19 @@ class TestPosRetourConsigne(FastTenantTestCase):
 
         ligne = LigneArticle.objects.get()
         self.assertEqual(
-            ligne.amount,
+            ligne.total_catalogue,
             -100,
             "La ligne comptable reste negative : c'est elle qui fait baisser le CA.",
         )
-        self.assertEqual(ligne.payment_method, "LE")
-        self.assertEqual(ligne.carte, self.carte_client)
-        self.assertEqual(ligne.wallet, self.wallet_carte)
-        self.assertEqual(ligne.asset, self.asset_tlf.uuid)
+        # Le moyen, la carte, le portefeuille et la monnaie sont sur le règlement de
+        # la vente, jamais sur la ligne (Q-H2).
+        # / Method, card, wallet and currency are on the sale's payment (Q-H2).
+        self.assertIsNone(ligne.payment_method)
+        reglement_du_retour = ligne.vente.reglements.get()
+        self.assertEqual(reglement_du_retour.moyen, "LE")
+        self.assertEqual(reglement_du_retour.montant, -100)
+        self.assertEqual(reglement_du_retour.carte, self.carte_client)
+        self.assertEqual(reglement_du_retour.asset, self.asset_tlf.uuid)
 
     def test_un_retour_de_consigne_en_nfc_de_deux_gobelets_credite_deux_euros(self):
         """
@@ -994,10 +1009,10 @@ class TestPosRetourConsigne(FastTenantTestCase):
         self.assertEqual(reponse.status_code, 200)
 
         ligne = LigneArticle.objects.get()
-        self.assertEqual(ligne.amount, -100)
-        self.assertEqual(ligne.qty, 2)
+        self.assertEqual(ligne.amount, 100)
+        self.assertEqual(ligne.qty, -2)
         self.assertEqual(
-            ligne.total(),
+            ligne.total_catalogue,
             -200,
             "Deux gobelets rendus valent deux euros rendus.",
         )

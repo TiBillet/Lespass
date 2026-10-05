@@ -542,8 +542,9 @@ class TestFecEquilibre(FastTenantTestCase):
     def _biere_payee_en_jetons(self, jetons_cadeau):
         """
         Une bière à 3,00 € payée en jetons cadeau, comme la caisse l'écrit : la ligne
-        porte le moyen LG et la monnaie des jetons, TVA 0 ; un règlement « jetons » de
-        300. La ligne est VALID et relue en base.
+        porte le moyen LG, la monnaie des jetons, le taux de la bière (20 %) et sa part
+        payée en jetons (300, hors TVA : TVA 0) ; un règlement « jetons » de 300. La
+        ligne est VALID et relue en base.
         / A 3.00 € beer paid in gift tokens, like the register writes it.
         """
         vente = fabriquer_vente_encaissee(
@@ -553,7 +554,8 @@ class TestFecEquilibre(FastTenantTestCase):
                     "pricesold": self.tarif_de_la_biere,
                     "quantite": Decimal("1"),
                     "prix_unitaire": 300,
-                    "taux_tva": Decimal("0"),
+                    "taux_tva": Decimal("20"),
+                    "part_en_jetons": 300,
                     "payment_method": PaymentMethod.LOCAL_GIFT,
                     "asset": jetons_cadeau.uuid,
                     "status": LigneArticle.VALID,

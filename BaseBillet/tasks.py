@@ -162,11 +162,12 @@ def create_membership_invoice_pdf(membership: Membership):
     #   comme il a été payé (un billet du même panier compris). Les montants sont les
     #   nets vendus des lignes (`LigneArticle.total_decimal`, `Paiement_stripe.total`,
     #   sur `total_ttc`).
-    # - Sinon (hors Stripe) : les parts de l'adhésion de la vente de cette ligne. Une
-    #   adhésion payée avec plusieurs moyens à la caisse est écrite en plusieurs
-    #   « parts » (une par moyen), et une seule porte l'adhésion (FK `membership`) :
-    #   on prend les lignes de cette vente au même tarif, de cette adhésion ou sans
-    #   adhésion (jamais la part d'une autre adhésion). Les parts sans adhésion ne sont
+    # - Sinon (hors Stripe) : les lignes de l'adhésion de la vente de cette ligne. La
+    #   caisse écrit UNE ligne par adhésion, quels que soient les moyens ; une vente de
+    #   l'historique (ancienne forme) peut en avoir plusieurs « parts » (une par moyen),
+    #   dont une seule porte l'adhésion (FK `membership`) : on prend les lignes de
+    #   cette vente au même tarif, de cette adhésion ou sans adhésion (jamais la part
+    #   d'une autre adhésion). Les parts sans adhésion ne sont
     #   prises que si la vente ne porte qu'UNE adhésion à ce tarif ; sinon, seulement
     #   les lignes de cette adhésion, et un avertissement au journal. Elles sont regroupées en UN
     #   article (`articles_de_la_vente_pour_l_affichage`), part offerte montrée. Les

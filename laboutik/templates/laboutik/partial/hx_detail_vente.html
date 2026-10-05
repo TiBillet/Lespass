@@ -11,7 +11,10 @@ ecrits a la francaise : aucun calcul ici.
 Contenu : en-tete (numero, nature, statut, date, point de vente), articles
 (quantite reelle, prix unitaire, part offerte, total), reglements (moyen, monnaie,
 montant), vente liee et ventes derivees, puis les actions (re-imprimer, un bouton
-« Corriger » par moyen actuel corrigeable).
+« Corriger » par moyen corrigeable qui a encore de l'argent dans les reglements nets
+de la vente). Chaque bouton transmet une ligne de la vente (pour retrouver la vente)
+et le moyen corrige ; son formulaire se charge dans la zone de ce moyen
+(`correction-zone-<uuid de la vente>-<code du moyen>`).
 / Header, items, payments, linked and derived sales, then actions.
 -->
 <div class="ventes-detail-collapse" data-testid="ventes-detail">
@@ -60,10 +63,10 @@ montant), vente liee et ventes derivees, puis les actions (re-imprimer, un bouto
             <tr>
                 <td>{{ article.nom }}</td>
                 <td>{% if article.evenement %}{{ article.evenement }} · {% endif %}{{ article.tarif }}</td>
-                {# Vrac, tireuse : le poids ou le volume (350g, 1,5kg, 50cl, 2L) au lieu de la quantite. #}
-                {# / Bulk, tap: weight or volume instead of the quantity. #}
+                {# Vrac : la quantite avec son unite (0,350 kg, 0,33 L) ; tireuse : le volume (50cl). #}
+                {# / Bulk: quantity with its unit; tap: the volume. #}
                 <td class="num" data-testid="detail-qty">
-                    {% if article.est_vrac %}{{ article|afficher_poids }}{% else %}{{ article.quantite_lisible }}{% endif %}
+                    {{ article.quantite_lisible }}
                 </td>
                 {# Vrac : le prix au kg / L (12,00 €/kg) au lieu du prix de la ligne. #}
                 {# / Bulk: price per kg / L instead of the line price. #}
@@ -145,8 +148,8 @@ montant), vente liee et ventes derivees, puis les actions (re-imprimer, un bouto
         {% endif %}
         {% for bouton in boutons_de_correction %}
         <button class="ventes-btn-action"
-                hx-get="{% url 'laboutik-paiement-formulaire_correction' %}?ligne_uuid={{ bouton.ligne_uuid }}"
-                hx-target="#correction-zone-{{ bouton.ligne_uuid }}"
+                hx-get="{% url 'laboutik-paiement-formulaire_correction' %}?ligne_uuid={{ bouton.ligne_uuid }}&amp;ancien_moyen={{ bouton.ancien_moyen }}"
+                hx-target="#{{ bouton.identifiant_de_la_zone }}"
                 hx-swap="innerHTML"
                 data-loading-disable
                 data-testid="btn-corriger">
@@ -157,10 +160,10 @@ montant), vente liee et ventes derivees, puis les actions (re-imprimer, un bouto
     </div>
     <!-- Retour de la re-impression (charge en HTMX) / Reprint feedback (loaded via HTMX) -->
     <div id="reimpression-{{ vente.uuid }}" class="ventes-reimpression" aria-live="polite" data-testid="reimpression-feedback"></div>
-    <!-- Une zone par bouton « Corriger », pour son formulaire (charge en HTMX) -->
-    <!-- / One zone per "Correct" button, for its form (loaded via HTMX) -->
+    <!-- Une zone par moyen corrigeable, pour son formulaire (charge en HTMX) -->
+    <!-- / One zone per correctable method, for its form (loaded via HTMX) -->
     {% for bouton in boutons_de_correction %}
-    <div id="correction-zone-{{ bouton.ligne_uuid }}" data-testid="correction-zone" aria-live="polite"></div>
+    <div id="{{ bouton.identifiant_de_la_zone }}" data-testid="correction-zone" aria-live="polite"></div>
     {% endfor %}
 
 </div>

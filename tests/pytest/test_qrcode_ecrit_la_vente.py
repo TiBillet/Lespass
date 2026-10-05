@@ -14,10 +14,10 @@ LE PARCOURS
 3. Tous les appels réseau passent AVANT la base : la catégorie de chaque monnaie
    débitée est lue sur l'ancien Fedow. Une erreur ici met la demande en échec
    (`FAILED`), sans aucune vente.
-4. Une seule transaction de base : la demande est remplacée par une ligne par monnaie
-   débitée (la première garde l'uuid de la demande), dans UNE vente encaissée
-   (`REGLEE`, numérotée), d'origine « QR code » ou « NFC ». Un règlement par
-   transaction de l'ancien Fedow, avec son uuid dans `reference_externe`.
+4. Une seule transaction de base : la demande est remplacée par UNE ligne au montant
+   demandé (elle garde l'uuid de la demande), dans UNE vente encaissée (`REGLEE`,
+   numérotée), d'origine « QR code » ou « NFC ». Un règlement par transaction de
+   l'ancien Fedow, avec son uuid dans `reference_externe`.
 5. Après la validation en base : les deux mails (au lieu, à l'adhérent). Aucun envoi à
    l'ancien LaBoutik.
 / Generate a request (no sale yet), confirm or tap a card, debit on the old Fedow,
@@ -26,16 +26,16 @@ parts and its payments; mails after commit, nothing sent to legacy LaBoutik.
 
 RÈGLES MÉTIER TESTÉES
 - La vente naît au paiement, jamais à la génération du QR code.
-- Forme des lignes inchangée : `amount` = total payé, `qty` = la part de la monnaie
-  (fraction de 1). Chaque part reçoit l'argent RÉEL débité dans sa monnaie
-  (`total_catalogue`).
-- Moyens : monnaie fédérée (FED) → « Stripe fédéré » (SF), monnaie locale (TLF) →
-  « monnaie locale » (LE).
-- Débit partiel : la vente enregistre ce qui a été réellement débité.
+- UNE ligne : `qty` 1, `amount` = le montant demandé ; ni moyen, ni monnaie, ni
+  portefeuille sur la ligne (Q-H2) : ils vivent dans les règlements.
+- Moyens des règlements : monnaie fédérée (FED) → « Stripe fédéré » (SF), monnaie
+  locale (TLF) → « monnaie locale » (LE).
+- Débit partiel : la ligne garde le montant demandé, un article « Écart
+  d'encaissement — reçu en moins » porte la différence (D26) : la vente vaut ce qui a
+  été réellement débité.
 - L'anti-rejeu lit l'origine de la demande (`sale_origin`), plus son moyen de paiement.
-/ The sale is born at payment; lines keep their shape; each part carries its real
-debited money; partial debits are recorded as debited; the replay guard reads
-`sale_origin`.
+/ The sale is born at payment; one line at the requested amount; payments carry the
+methods; a partial debit adds a gap item; the replay guard reads `sale_origin`.
 
 COMMENT CHAQUE TEST RETROUVE SA VENTE
 Les tests tournent dans un schéma à eux (`FastTenantTestCase`), annulé à la fin de
@@ -354,11 +354,10 @@ class TestPaiementQrCodeEcritLaVente(FastTenantTestCase):
         Un QR code de 12,50 € est payé avec 5,00 € de monnaie locale (TLF) et 7,50 € de
         monnaie fédérée (FED). UNE vente « QR code » est encaissée (`REGLEE`,
         numérotée), au nom du payeur, sans carte, sans point de vente, sans opérateur.
-        Elle a deux parts : chacune à `amount` = 1250, `qty` = sa fraction, et l'argent
-        réel de sa monnaie (500 / 750). La première part garde l'uuid de la demande.
-        Deux règlements : LE 500 et SF 750, chacun avec l'uuid de sa monnaie et l'uuid
-        de sa transaction de l'ancien Fedow (`reference_externe`).
-        / A 12.50 € QR code paid 5.00 TLF + 7.50 FED: one settled QR sale, two parts,
+        Elle a UNE ligne : `amount` 1250, `qty` 1, l'uuid de la demande, sans moyen ni
+        monnaie. Deux règlements : LE 500 et SF 750, chacun avec l'uuid de sa monnaie et
+        l'uuid de sa transaction de l'ancien Fedow (`reference_externe`).
+        / A 12.50 € QR code paid 5.00 TLF + 7.50 FED: one settled QR sale, one line,
         two payments with the old Fedow transaction uuid.
         """
         demande = self._generer_un_qrcode()
@@ -397,34 +396,18 @@ class TestPaiementQrCodeEcritLaVente(FastTenantTestCase):
         assert vente.operateur_id is None
         assert vente.total_ttc == MONTANT_DEMANDE_EN_CENTIMES
 
-        # Les parts : forme inchangée, argent réel de chaque monnaie.
-        # / The parts: unchanged shape, real money of each currency.
-        parts_par_moyen = {}
-        for part in vente.articles.all():
-            parts_par_moyen[part.payment_method] = part
-        assert sorted(parts_par_moyen.keys()) == sorted(
-            [PaymentMethod.LOCAL_EURO, PaymentMethod.STRIPE_FED]
-        )
-        part_locale = parts_par_moyen[PaymentMethod.LOCAL_EURO]
-        part_federee = parts_par_moyen[PaymentMethod.STRIPE_FED]
-        assert part_locale.amount == MONTANT_DEMANDE_EN_CENTIMES
-        assert part_federee.amount == MONTANT_DEMANDE_EN_CENTIMES
-        assert part_locale.qty == Decimal("0.400000")
-        assert part_federee.qty == Decimal("0.600000")
-        assert part_locale.total_catalogue == 500
-        assert part_federee.total_catalogue == 750
-        assert part_locale.asset == uuid_de_la_monnaie_locale
-        assert part_federee.asset == uuid_de_la_monnaie_federee
-        assert part_locale.status == LigneArticle.VALID
-        assert part_federee.status == LigneArticle.VALID
-        assert part_locale.sale_origin == SaleOrigin.QRCODE_MA
-        assert part_federee.sale_origin == SaleOrigin.QRCODE_MA
-        # La part de la PREMIÈRE transaction débitée (ici la monnaie locale, rendue en
-        # premier par l'ancien Fedow) garde l'uuid de la demande : l'écran de
-        # l'encaisseur (`check_payment`) interroge cet uuid.
-        # / The part of the FIRST debited transaction keeps the request uuid.
-        assert part_locale.uuid == demande.uuid
-        assert part_federee.uuid != demande.uuid
+        # UNE ligne au montant demandé : ni moyen, ni monnaie (Q-H2). Elle garde l'uuid
+        # de la demande : l'écran de l'encaisseur (`check_payment`) interroge cet uuid.
+        # / ONE line at the requested amount, no method nor currency; request uuid.
+        ligne = vente.articles.get()
+        assert ligne.amount == MONTANT_DEMANDE_EN_CENTIMES
+        assert ligne.qty == Decimal("1")
+        assert ligne.total_catalogue == MONTANT_DEMANDE_EN_CENTIMES
+        assert ligne.payment_method is None
+        assert ligne.asset is None
+        assert ligne.status == LigneArticle.VALID
+        assert ligne.sale_origin == SaleOrigin.QRCODE_MA
+        assert ligne.uuid == demande.uuid
 
         # Plus aucune demande en attente ou en cours : tout est dans la vente.
         # / No pending or reserved request left: everything is in the sale.
@@ -534,14 +517,14 @@ class TestPaiementQrCodeEcritLaVente(FastTenantTestCase):
         assert vente.statut == Vente.Statut.REGLEE
         assert vente.numero is not None
 
-        part = vente.articles.get()
-        assert part.uuid == demande.uuid
-        assert part.sale_origin == SaleOrigin.NFC_MA
-        assert part.payment_method == PaymentMethod.LOCAL_EURO
-        assert part.amount == MONTANT_DEMANDE_EN_CENTIMES
-        assert part.qty == Decimal("1")
-        assert part.total_catalogue == MONTANT_DEMANDE_EN_CENTIMES
-        assert part.wallet_id == payeur.wallet.pk
+        ligne = vente.articles.get()
+        assert ligne.uuid == demande.uuid
+        assert ligne.sale_origin == SaleOrigin.NFC_MA
+        assert ligne.payment_method is None
+        assert ligne.amount == MONTANT_DEMANDE_EN_CENTIMES
+        assert ligne.qty == Decimal("1")
+        assert ligne.total_catalogue == MONTANT_DEMANDE_EN_CENTIMES
+        assert ligne.wallet_id is None
 
         reglement = vente.reglements.get()
         assert reglement.moyen == PaymentMethod.LOCAL_EURO
@@ -905,11 +888,11 @@ class TestPaiementQrCodeEcritLaVente(FastTenantTestCase):
 
     def test_qr_tva_taux_du_lieu(self):
         """
-        Le produit « vente par QR code » n'a pas de taux de TVA : chaque part porte le
+        Le produit « vente par QR code » n'a pas de taux de TVA : la ligne porte le
         taux par défaut du lieu (ici 20 %). 12,50 € payés 5,00 € (TLF) + 7,50 € (FED) :
-        HT 417 + TVA 83 = 500 ; HT 625 + TVA 125 = 750. HT + TVA = net sur chaque part.
+        une ligne de 1250, HT arrondi(1250 × 100 / 120 = 1041,67) = 1042, TVA 208.
         Le taux du lieu est posé en mémoire, jamais enregistré (tests/PIEGES.md 13.5).
-        / The QR product has no VAT rate: each part carries the venue default (20 %).
+        / The QR product has no VAT rate: the line carries the venue default (20 %).
         """
         demande = self._generer_un_qrcode()
         payeur = self._creer_utilisateur("qr-tva")
@@ -930,28 +913,25 @@ class TestPaiementQrCodeEcritLaVente(FastTenantTestCase):
             self._confirmer_le_paiement(payeur, demande, faux_fedow)
 
         vente = Vente.objects.get()
-        montants_par_moyen = {}
-        for part in vente.articles.all():
-            assert part.vat == Decimal("20.00")
-            assert part.total_ht + part.total_tva == part.total_ttc
-            montants_par_moyen[part.payment_method] = (part.total_ht, part.total_tva)
-        assert montants_par_moyen == {
-            PaymentMethod.LOCAL_EURO: (417, 83),
-            PaymentMethod.STRIPE_FED: (625, 125),
-        }
+        ligne = vente.articles.get()
+        assert ligne.vat == Decimal("20.00")
+        assert ligne.total_ht == 1042
+        assert ligne.total_tva == 208
+        assert ligne.total_ht + ligne.total_tva == ligne.total_ttc
 
         verifier_egalites(vente)
 
     # ------------------------------------------------------------------
-    # Débit partiel : la vente enregistre ce qui a été débité
+    # Débit partiel : la vente vaut ce qui a été débité, par un article d'écart
     # ------------------------------------------------------------------
 
     def test_qr_debit_partiel_vente_du_montant_debite(self):
         """
-        12,50 € demandés, l'ancien Fedow débite 5,00 € (TLF) + 7,00 € (FED). La vente
-        vaut 12,00 € : chaque part porte le montant débité (`amount` = 1200), ses
-        totaux 500 et 700, deux règlements 500 et 700. Les égalités tiennent.
-        / 12.50 requested, 12.00 debited: the sale is worth 12.00, equalities hold.
+        12,50 € demandés, l'ancien Fedow débite 5,00 € (TLF) + 7,00 € (FED). La ligne
+        garde le montant demandé (1250), un article « Écart d'encaissement — reçu en
+        moins » porte −50 (D26) : la vente vaut 12,00 €. Deux règlements 500 et 700.
+        Les égalités tiennent.
+        / 12.50 requested, 12.00 debited: line 1250, gap −50, sale worth 12.00.
         """
         demande = self._generer_un_qrcode()
         payeur = self._creer_utilisateur("qr-partiel")
@@ -974,11 +954,10 @@ class TestPaiementQrCodeEcritLaVente(FastTenantTestCase):
         assert vente.statut == Vente.Statut.REGLEE
         assert vente.total_ttc == 1200
 
-        totaux_des_parts = []
-        for part in vente.articles.all():
-            assert part.amount == 1200
-            totaux_des_parts.append(part.total_catalogue)
-        assert sorted(totaux_des_parts) == [500, 700]
+        totaux_des_articles = []
+        for article in vente.articles.all():
+            totaux_des_articles.append(article.total_ttc)
+        assert sorted(totaux_des_articles) == [-50, MONTANT_DEMANDE_EN_CENTIMES]
 
         montants_des_reglements = []
         for reglement in vente.reglements.all():

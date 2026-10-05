@@ -148,6 +148,7 @@ from laboutik.plan_comptable import (  # noqa: E402
     charger_le_plan_comptable_par_defaut,
     code_journal_du_point_de_vente,
     collisions_de_codes_journal,
+    compte_des_ventes_reglees_en_jetons,
     compte_pour_article,
     compte_pour_reglement,
     journal_pour,
@@ -675,8 +676,10 @@ def _noms_accessibles_des_liens_des_manques(contenu_html):
 def _vendre_payee_en_jetons(tarif_vendu, jetons_cadeau):
     """
     Une vente RÉGLÉE d'un article à 5 € payé en jetons cadeau : la ligne porte le moyen
-    historique LG et la monnaie, TVA 0 (D8 bis), comme la caisse l'écrit.
-    / A SETTLED sale of one 5 € item paid in gift tokens (LG line, 0 % VAT).
+    historique LG, la monnaie, le taux du produit (20 %) et sa part payée en jetons
+    (500, hors TVA, D8 bis : TVA 0), comme la caisse l'écrit.
+    / A SETTLED sale of one 5 € item paid in gift tokens (LG line, product rate, token
+    part 500).
     """
     vente = ouvrir_vente(origine=SaleOrigin.LABOUTIK, nature=Vente.Nature.VENTE)
     ajouter_article(
@@ -684,7 +687,8 @@ def _vendre_payee_en_jetons(tarif_vendu, jetons_cadeau):
         pricesold=tarif_vendu,
         quantite=Decimal("1"),
         prix_unitaire=500,
-        taux_tva=Decimal("0"),
+        taux_tva=Decimal("20"),
+        part_en_jetons=500,
         payment_method=PaymentMethod.LOCAL_GIFT,
         asset=jetons_cadeau.uuid,
     )
@@ -2005,22 +2009,23 @@ class TestPlanComptableUnique(FastTenantTestCase):
             tarif_vendu_des_jetons_repris, hors_chiffre_affaires=True
         )
         # Le vidage écrit cet article au moyen historique LG : la règle par le nom
-        # passe avant celle des lignes payées en jetons (707900).
-        # / The emptying writes this item with the LG method: the name rule wins over
-        # the token-paid line rule.
+        # donne 623400, le moyen de la ligne n'est jamais lu.
+        # / The emptying writes this item with the LG method: the name rule gives
+        # 623400; the line's method is never read.
         ligne_des_jetons_repris.payment_method = PaymentMethod.LOCAL_GIFT
 
         assert (
             compte_pour_article(ligne_des_jetons_repris).numero_de_compte == "623400"
         )
 
-    def test_compte_pour_article_jeton_depense_au_707900(self):
-        """Une ligne payée en jetons cadeau (moyen LG) va au 707900 « ventes réglées en
-        jetons offerts » : un jeton dépensé solde la dette du lieu (D8 bis). Sa
-        catégorie de caisse est ignorée, même reliée au 707000. La même bière payée en
-        monnaie locale garde le compte de sa catégorie.
-        / A line paid in gift tokens (LG) goes to 707900, whatever its POS category;
-        the same beer paid in local currency keeps its category's account."""
+    def test_jetons_au_707900_et_compte_pour_article_rend_le_compte_du_reste(self):
+        """Un jeton dépensé solde la dette du lieu (D8 bis) : la part payée en jetons
+        d'un article va au 707900 « ventes réglées en jetons offerts »
+        (`compte_des_ventes_reglees_en_jetons`). `compte_pour_article` rend le compte
+        du RESTE de l'article (sa catégorie, 707000), sans lire le moyen de la ligne :
+        la même bière, au moyen LG ou LE, a le même compte de reste.
+        / The token part goes to 707900; compte_pour_article gives the remainder's
+        account (its category), never reading the line's method."""
         biere = creer_tarif_vendu(nom="Bière", methode_caisse=Product.VENTE)
         _ranger_dans_une_categorie(biere, _compte("707000"))
 
@@ -2029,7 +2034,8 @@ class TestPlanComptableUnique(FastTenantTestCase):
         part_payee_en_monnaie_locale = _ligne_d_article(biere)
         part_payee_en_monnaie_locale.payment_method = PaymentMethod.LOCAL_EURO
 
-        assert compte_pour_article(part_payee_en_jetons).numero_de_compte == "707900"
+        assert compte_des_ventes_reglees_en_jetons().numero_de_compte == "707900"
+        assert compte_pour_article(part_payee_en_jetons).numero_de_compte == "707000"
         assert (
             compte_pour_article(part_payee_en_monnaie_locale).numero_de_compte
             == "707000"

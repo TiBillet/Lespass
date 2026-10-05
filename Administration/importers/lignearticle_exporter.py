@@ -34,8 +34,10 @@ class LigneArticleExportResource(resources.ModelResource):
     status = Field(column_name=_("Product entry status"))
     user_email = Field(column_name=_("User Email"))
     paiement_stripe = Field(column_name=_("Stripe payment"))
-    carte = Field(attribute='carte',column_name=_("Carte cashless"))
-    wallet = Field(attribute='wallet',column_name=_("Wallet from"))
+    # Pas de colonne « carte » ni « portefeuille » : ces champs de la ligne ne disent
+    # pas comment la ligne est payée (une ligne peut avoir plusieurs règlements). Les
+    # moyens de la vente sont dans « Moyens de la vente ».
+    # / No card nor wallet column: the line's own fields do not tell how it is paid.
     credit_note_ref = Field(column_name=_("Credit note ref."))  # Ref. avoir
 
     def get_export_headers(self, selected_fields=None, *args, **kwargs):
@@ -67,11 +69,9 @@ class LigneArticleExportResource(resources.ModelResource):
             'status',
             'user_email',
             'paiement_stripe',
-            'carte',
-            'wallet',
             'credit_note_ref',
         )
-        export_order = ('uuid', 'date','product','qty','amount','vat','total','total_ht','total_tva','numero_de_vente','payment_method','status','user_email','paiement_stripe','carte','wallet','credit_note_ref')
+        export_order = ('uuid', 'date','product','qty','amount','vat','total','total_ht','total_tva','numero_de_vente','payment_method','status','user_email','paiement_stripe','credit_note_ref')
 
     def dehydrate_date(self, line):
         """
@@ -86,6 +86,12 @@ class LigneArticleExportResource(resources.ModelResource):
             return line.datetime.strftime('%Y-%m-%d')
 
     def dehydrate_qty(self, line):
+        # Une vente au poids ou au volume a une quantité réelle en kg (3 décimales) ou
+        # en litres (D15) : on garde ses 3 décimales (0,355 kg ne devient pas 0,36).
+        # / A weight / volume line keeps its 3 decimals (real kg or litres).
+        ligne_au_poids_ou_au_volume = bool(line.weight_quantity)
+        if ligne_au_poids_ou_au_volume:
+            return self.round_decimal(line.qty, decimal_places=3)
         return self.round_decimal(line.qty)
 
     def dehydrate_vat(self, line):

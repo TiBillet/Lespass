@@ -4287,8 +4287,9 @@ class LigneArticle(models.Model):
         default=0,
         verbose_name=_("Total catalogue (centimes)"),
     )
-    # Les centimes offerts sur cet article (bouton OFFRIR, jetons cadeau).
-    # / The cents offered on this item.
+    # Les centimes offerts sur cet article (bouton OFFRIR, recharge cadeau). Les jetons
+    # cadeau dépensés ne sont pas de l'offert : voir `part_en_jetons`.
+    # / The cents offered on this item. Spent gift tokens are not offered.
     part_offerte = models.IntegerField(
         default=0,
         verbose_name=_("Part offerte (centimes)"),
@@ -4307,6 +4308,20 @@ class LigneArticle(models.Model):
         blank=True,
         default="",
         verbose_name=_("Source de l'offert"),
+    )
+    # La part du net payée en jetons cadeau (monnaie des bénévoles, moyen LG). Un jeton
+    # dépensé est une vente ordinaire, dans le chiffre d'affaires, hors TVA (D8 bis) :
+    # ce n'est PAS de l'offert. La TVA de la ligne porte sur le reste (net − jetons).
+    # Entre 0 et le net (entre le net et 0 pour un avoir) ; 0 hors chiffre d'affaires.
+    # / The part of the net paid in gift tokens: an ordinary sale without VAT, not an
+    # offered part. The line's VAT is on the remainder.
+    part_en_jetons = models.IntegerField(
+        default=0,
+        verbose_name=_("Part payée en jetons (centimes)"),
+        help_text=_(
+            "Centimes du net vendu payés en jetons cadeau. Cette part est vendue "
+            "hors TVA ; la TVA de l'article porte sur le reste."
+        ),
     )
     # Net vendu = total catalogue − part offerte.
     # / Net sold = catalogue total − offered part.
@@ -4364,6 +4379,26 @@ class LigneArticle(models.Model):
                 check=Q(vente__isnull=True) | Q(total_ttc=F('total_ht') + F('total_tva')),
                 name='lignearticle_ht_plus_tva_egal_ttc_si_vente',
             ),
+            # La part payée en jetons reste entre 0 et le net vendu, du même signe que
+            # lui (un avoir a un net négatif) ; elle vaut 0 sur une ligne hors chiffre
+            # d'affaires (une recharge n'est pas une vente).
+            # / The token part stays between 0 and the net, same sign; 0 off revenue.
+            models.CheckConstraint(
+                check=(
+                    (
+                        Q(total_ttc__gte=0)
+                        & Q(part_en_jetons__gte=0)
+                        & Q(part_en_jetons__lte=F('total_ttc'))
+                    )
+                    | (
+                        Q(total_ttc__lt=0)
+                        & Q(part_en_jetons__lte=0)
+                        & Q(part_en_jetons__gte=F('total_ttc'))
+                    )
+                )
+                & (Q(hors_chiffre_affaires=False) | Q(part_en_jetons=0)),
+                name='lignearticle_part_en_jetons_entre_zero_et_le_net',
+            ),
         ]
 
     def uuid_8(self):
@@ -4420,7 +4455,8 @@ class LigneArticle(models.Model):
 
             champs_figes_d_une_ligne_reglee = [
                 'amount', 'qty', 'vat',
-                'total_catalogue', 'part_offerte', 'total_ttc', 'total_ht', 'total_tva',
+                'total_catalogue', 'part_offerte', 'part_en_jetons',
+                'total_ttc', 'total_ht', 'total_tva',
                 'pricesold_id', 'vente_id',
             ]
             # On relit la ligne EN BASE : sa vente d'aujourd'hui et ses valeurs figées.

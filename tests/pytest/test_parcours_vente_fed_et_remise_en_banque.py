@@ -390,7 +390,13 @@ def test_une_vente_federee_puis_sa_remise_en_banque(
             ).first()
         assert vente is not None, "Le paiement n'a laisse aucune vente."
         assert vente.amount == MONTANT_DE_LA_VENTE
-        assert vente.payment_method == PaymentMethod.STRIPE_FED
+        # Le moyen vit sur le règlement de la vente, plus sur la ligne (Q-H2).
+        # / The method lives on the sale's payment, no longer on the line.
+        with tenant_context(tenant):
+            moyens_des_reglements = list(
+                vente.vente.reglements.values_list('moyen', flat=True)
+            )
+        assert moyens_des_reglements == [PaymentMethod.STRIPE_FED]
 
         # Cote Fedow, l'adherent a ete debite et le lieu credite.
         # / On the Fedow side, the member was debited and the venue credited.

@@ -1206,6 +1206,10 @@ class PanierSession:
         / Cart TTC total in cents, as the checkout will bill it (promo codes included).
         """
         from BaseBillet.models import Price
+        from BaseBillet.services_vente import (
+            arrondir_au_centime_demi_haut,
+            calculer_montants_article,
+        )
         total = 0
         for item in self._data.get('items', []):
             try:
@@ -1229,7 +1233,17 @@ class PanierSession:
                 amount_eur = Decimal(item.get('total_estimation'))
 
             qty = int(item.get('qty', 1))
-            total += int(amount_eur * qty * 100)
+            # Le prix unitaire en centimes (arrondi demi-haut), puis le total de
+            # l'article par la seule formule d'argent du projet.
+            # / The unit price in cents (half-up), then the item total through the
+            # project's only money formula.
+            prix_unitaire_en_centimes = arrondir_au_centime_demi_haut(amount_eur * 100)
+            montants_de_l_article = calculer_montants_article(
+                prix_unitaire=prix_unitaire_en_centimes,
+                quantite=qty,
+                taux_tva=Decimal("0"),
+            )
+            total += montants_de_l_article["total_catalogue"]
         return total
 
     def revalidate_all(self):

@@ -60,13 +60,13 @@ from BaseBillet.models import (  # noqa: E402
     Product,
     Tva,
 )
+from BaseBillet.models_vente import Vente  # noqa: E402
 from QrcodeCashless.models import CarteCashless  # noqa: E402
 import comptabilite.tasks  # noqa: E402
 from comptabilite.models import ClotureCaisse as ClotureCaisseUnique  # noqa: E402
 from fedow_core.models import Asset  # noqa: E402
 from fedow_core.services import AssetService  # noqa: E402
 from laboutik.models import (  # noqa: E402
-    ClotureCaisse,
     CompteComptable,
     LaboutikConfiguration,
     PointDeVente,
@@ -294,14 +294,6 @@ class TestLignesHorsArgent(FastTenantTestCase):
             {"nom": "Vin hors argent", "qty": 2, "valeur": 1000, "cout_achat": 200}
         ]
 
-    def test_le_total_du_rapport_ignore_les_offerts(self):
-        """Le total encaisse reste 5,00 € (non-regression).
-        / The collected total stays 5.00 € (non-regression)."""
-        self._offrir_des_vins(2)
-        self._vendre_un_vin_en_especes()
-
-        assert self._rapport().calculer_totaux_par_moyen()["total"] == PRIX_VIN_CENTIMES
-
     def test_un_article_offert_ne_compte_pas_dans_le_ca_du_point_de_vente(self):
         """CA du point de vente : 5,00 €.
         / Point of sale revenue: 5.00 €."""
@@ -318,46 +310,12 @@ class TestLignesHorsArgent(FastTenantTestCase):
             }
         ]
 
-    def test_l_ecriture_comptable_reste_equilibree(self):
-        """FEC d'une cloture avec des offerts : debits = credits, sans alerte.
-        / FEC of a closure with gifted items: debits = credits, no warning."""
-        from laboutik.ventilation import (
-            charger_categories_par_nom,
-            charger_comptes_tva,
-            charger_mappings_paiement,
-            ventiler_cloture,
-        )
-
-        self._offrir_des_vins(2)
-        self._vendre_un_vin_en_especes()
-        rapport = self._rapport().generer_rapport_complet()
-        cloture = ClotureCaisse.objects.create(
-            point_de_vente=self.point_de_vente,
-            responsable=self.caissier,
-            datetime_ouverture=timezone.now(),
-            datetime_cloture=timezone.now(),
-            total_especes=PRIX_VIN_CENTIMES,
-            total_general=PRIX_VIN_CENTIMES,
-            nombre_transactions=2,
-            rapport_json=rapport,
-        )
-
-        lignes, avertissements = ventiler_cloture(
-            cloture,
-            charger_mappings_paiement(),
-            charger_categories_par_nom(),
-            charger_comptes_tva(),
-        )
-
-        total_debits = sum(
-            ligne["montant_centimes"] for ligne in lignes if ligne["sens"] == "D"
-        )
-        total_credits = sum(
-            ligne["montant_centimes"] for ligne in lignes if ligne["sens"] == "C"
-        )
-        assert total_debits == PRIX_VIN_CENTIMES
-        assert total_debits == total_credits
-        assert avertissements == []
+    # Le total encaissé et le FEC d'une clôture avec des offerts sont testés sur le
+    # rapport unique et le FEC unique (tests/pytest/test_rapport_unique.py, CA par
+    # moyen et part offerte ; tests/pytest/test_fec_equilibre.py) : l'ancien moteur
+    # lit le moyen de la ligne, que la caisse laisse vide (Q-H2).
+    # / The collected total and the FEC with gifted items are tested on the single
+    # report and FEC: the old engine reads the line's method, left empty (Q-H2).
 
     def test_le_ticket_x_affiche_les_offerts(self):
         """L'ecran Ventes (recapitulatif en cours) montre la section « Offerts » du
@@ -474,47 +432,12 @@ class TestLignesHorsArgent(FastTenantTestCase):
     # Recharges cadeau / Gift top-ups
     # ------------------------------------------------------------------
 
-    def test_une_recharge_cadeau_sort_du_total_des_recharges(self):
-        """Recharge cadeau 10 € + recharge euros 20 € : 20 € encaisses, 10 € emis.
-        / Gift top-up 10 € + euro top-up 20 €: 20 € collected, 10 € issued."""
-        self._payer(
-            "nfc",
-            self._cle_du_tarif(self.recharge_cadeau, "10"),
-            1,
-            1000,
-            tag_id=self.carte.tag_id,
-        )
-        self._payer(
-            "espece",
-            self._cle_du_tarif(self.recharge_euros, "10"),
-            2,
-            2000,
-            tag_id=self.carte.tag_id,
-        )
-
-        recharges = self._rapport().calculer_recharges()
-
-        assert recharges["total"] == 2000
-        assert recharges["cadeau_emis"] == 1000
-
-    def test_une_recharge_cadeau_ne_gonfle_pas_le_panier_moyen(self):
-        """Recharge cadeau 10 € puis achat de 5 € : panier moyen 5 €, aucune recharge payee.
-        / Gift top-up then a 5 € purchase: average basket 5 €, no paid top-up."""
-        self._payer(
-            "nfc",
-            self._cle_du_tarif(self.recharge_cadeau, "10"),
-            1,
-            1000,
-            tag_id=self.carte.tag_id,
-        )
-        self._payer(
-            "nfc", self.vin.uuid, 1, PRIX_VIN_CENTIMES, tag_id=self.carte.tag_id
-        )
-
-        habitus = self._rapport().calculer_habitus()
-
-        assert habitus["panier_moyen"] == PRIX_VIN_CENTIMES
-        assert habitus["recharge_mediane"] == 0
+    # Les recharges cadeau dans le rapport (cadeau émis, panier moyen) sont testées sur
+    # le rapport unique (tests/pytest/test_rapport_unique.py, annexe « recharges et
+    # cartes », habitus des cartes) : l'ancien moteur lit le moyen de la ligne, que la
+    # caisse laisse vide (Q-H2).
+    # / Gift top-ups in the report are tested on the single report: the old engine
+    # reads the line's method, left empty by the register (Q-H2).
 
     # ------------------------------------------------------------------
     # Correction de moyen de paiement / Payment method correction
@@ -531,21 +454,22 @@ class TestLignesHorsArgent(FastTenantTestCase):
             1000,
             tag_id=self.carte.tag_id,
         )
-        ligne_offerte = LigneArticle.objects.get(payment_method=PaymentMethod.FREE)
+        ligne_offerte = LigneArticle.objects.get(
+            source_offert=LigneArticle.SourceOffert.OFFRIR
+        )
 
         reponse = self.navigateur.post(
             "/laboutik/paiement/corriger_moyen_paiement/",
             data={
                 "ligne_uuid": str(ligne_offerte.uuid),
-                "ancien_moyen": ligne_offerte.payment_method,
+                "ancien_moyen": PaymentMethod.FREE,
                 "nouveau_moyen": PaymentMethod.CASH,
                 "raison": "test",
             },
         )
 
         assert reponse.status_code == 400
-        ligne_offerte.refresh_from_db()
-        assert ligne_offerte.payment_method == PaymentMethod.FREE
+        assert not Vente.objects.filter(nature=Vente.Nature.CORRECTION).exists()
 
     def test_le_mapping_fec_de_l_admin_ne_propose_pas_offert(self):
         """Un moyen hors argent n'a pas de compte de tresorerie : absent du menu.
@@ -626,14 +550,16 @@ class TestLignesHorsArgent(FastTenantTestCase):
         assert 'data-testid="paiement-btn-offrir"' not in reponse.content.decode()
 
     def test_le_gerant_offre_un_panier_payant(self):
-        """2 vins offerts : une ligne FREE au prix du vin, quantite 2, sans TVA.
-        / 2 wines gifted: one FREE line at the wine price, qty 2, no VAT."""
+        """2 vins offerts : une ligne entierement offerte (source OFFRIR) au prix du
+        vin, quantite 2, sans TVA ; la vente a un reglement « offert » (FREE).
+        / 2 wines gifted: one fully offered line, qty 2, no VAT; a FREE payment."""
         carte_du_gerant = self._carte_primaire("GER2AAAA", mode_gerant=True)
 
         reponse = self._offrir(carte_du_gerant.tag_id, self.vin.uuid, 2, 1000)
 
         assert reponse.status_code == 200, reponse.content.decode()[:400]
-        ligne = LigneArticle.objects.get(payment_method=PaymentMethod.FREE)
+        ligne = LigneArticle.objects.get(source_offert=LigneArticle.SourceOffert.OFFRIR)
+        assert ligne.vente.reglements.get().moyen == PaymentMethod.FREE
         assert ligne.amount == PRIX_VIN_CENTIMES
         assert ligne.qty == 2
         assert ligne.vat == 0

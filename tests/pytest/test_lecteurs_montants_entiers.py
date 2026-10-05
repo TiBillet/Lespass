@@ -447,8 +447,11 @@ class TestGardeDeCorrectionSurLaClotureUnique(FastTenantTestCase):
         formulaire de l'historique des ventes l'envoie.
         / The cashier corrects the line's method into CB, through the real route.
         """
-        # Le moyen que le formulaire affiche : celui de la ligne, relu en base.
-        # / The method the form shows: the line's, read back.
+        # Le moyen corrigé : ces ventes n'ont qu'un règlement, au moyen écrit sur leur
+        # ligne (relu en base). Le refus d'une vente en ligne (moyen « SN ») part
+        # ainsi du vrai moyen de la vente.
+        # / The corrected method: these sales have one payment, with the method
+        # written on their line (read back).
         donnees_du_formulaire = {
             "ligne_uuid": str(ligne.uuid),
             "ancien_moyen": LigneArticle.objects.get(pk=ligne.pk).payment_method,
@@ -670,8 +673,8 @@ class TestGardeDeCorrectionSurLaClotureUnique(FastTenantTestCase):
         Une bière, puis la J ; une deuxième bière, payée APRÈS la J. Le lieu a donc
         une J, mais elle ne couvre pas la deuxième vente (son numéro est plus grand
         que le dernier de la J). La correction en CB de la deuxième bière est
-        acceptée (200) : la ligne passe en CB, avec sa trace de correction, et une
-        vente `CORRECTION` liée à la vente d'origine est écrite.
+        acceptée (200) : sa trace de correction et une vente `CORRECTION` liée à la
+        vente d'origine sont écrites ; la ligne garde son moyen (D14).
         / Beer, J; second beer paid AFTER the J. The J does not cover it: correcting
         it into CB is accepted (200), with its audit trail and a CORRECTION sale.
         """
@@ -690,7 +693,9 @@ class TestGardeDeCorrectionSurLaClotureUnique(FastTenantTestCase):
 
         self.assertEqual(reponse.status_code, 200, reponse.content.decode()[:400])
         ligne_de_la_deuxieme_biere.refresh_from_db()
-        self.assertEqual(ligne_de_la_deuxieme_biere.payment_method, PaymentMethod.CC)
+        self.assertEqual(
+            ligne_de_la_deuxieme_biere.payment_method, PaymentMethod.CASH
+        )
         self.assertEqual(
             CorrectionPaiement.objects.filter(
                 ligne_article=ligne_de_la_deuxieme_biere,
@@ -2023,14 +2028,14 @@ def test_facture_adhesion_multi_moyens_35_euros(lieu):
     """
     Fiche test 12. Le caissier vend une adhésion à 35,00 € (vrais gestes de la
     caisse) : la carte NFC de l'adhérente porte 10,00 € de monnaie locale, le reste
-    (25,00 €) est réglé par CB sur l'écran de complément. La caisse écrit deux parts :
-    1000 et 2500.
+    (25,00 €) est réglé par CB sur l'écran de complément. La caisse écrit UNE ligne
+    de 3500 et deux règlements (monnaie locale 1000, CB 2500).
     La facture de l'adhésion (`create_membership_invoice_pdf`) compte toute la vente :
-    les deux parts sont regroupées en UN article (quantité 1, 35,00 €), et son total
-    vaut 35,00 €. Pas une seule part. Son mode de paiement lit les règlements : la CB
-    y est (« Carte bancaire », ou « Bank card » si le lieu parle anglais).
-    / Sheet test 12: the two parts form ONE item (qty 1, 35.00), total 35.00; the
-    payment mode reads the payments (CB is in it).
+    UN article (quantité 1, 35,00 €), et son total vaut 35,00 €. Son mode de paiement
+    lit les règlements : la CB y est (« Carte bancaire », ou « Bank card » si le lieu
+    parle anglais).
+    / Sheet test 12: ONE line of 3500, two payments; the invoice shows ONE item (qty
+    1, 35.00), total 35.00; the payment mode reads the payments (CB is in it).
     """
     adherente = creer_utilisateur(prenom="Ada", nom="Lovelace")
     adhesion = creer_adhesion(prix="35.00")
@@ -2065,10 +2070,10 @@ def test_facture_adhesion_multi_moyens_35_euros(lieu):
 
     assert reponse_de_la_carte.status_code == 200
     assert reponse_du_complement.status_code == 200
-    nets_des_parts = []
-    for part in LigneArticle.objects.filter(pricesold__price=adhesion.tarif):
-        nets_des_parts.append(part.total_ttc)
-    assert sorted(nets_des_parts) == [1000, 2500]
+    nets_des_lignes = []
+    for ligne in LigneArticle.objects.filter(pricesold__price=adhesion.tarif):
+        nets_des_lignes.append(ligne.total_ttc)
+    assert nets_des_lignes == [3500]
     adhesion_vendue = Membership.objects.get(user=adherente, price=adhesion.tarif)
 
     facture = lire_la_facture_de_l_adhesion(adhesion_vendue)

@@ -315,18 +315,17 @@ def test_part_offerte_superieure_au_total_refusee():
 
 def test_cout_achat_sur_la_quantite_reelle():
     """
-    Vente au poids pendant la transition : la ligne a `quantite = 1` et un prix de 4,52 €
-    (350 g de fromage). Le prix d'achat est au kilo (8,00 €) : le coût se calcule sur la
-    quantité réellement servie, 0,350 kg, passée à part. 800 × 0,350 = 280.
-    Calculé sur `quantite` (1), il vaudrait 800.
-    / Weight sale with qty = 1: the cost uses the real quantity served (0.350 kg) → 280.
+    Vente au poids (D15) : 350 g de fromage à 12,90 € le kilo, la ligne a
+    `quantite = 0,350` (kg). Le prix d'achat est au kilo (8,00 €) : le coût se calcule
+    sur la quantité réellement servie, 800 × 0,350 = 280. Sur une pièce (1), il
+    vaudrait 800.
+    / Weight sale (D15): qty 0.350 kg, purchase price per kg: cost 280.
     """
     montants = calculer_montants_article(
-        prix_unitaire=452,
-        quantite=Decimal("1"),
+        prix_unitaire=1290,
+        quantite=Decimal("0.350"),
         taux_tva=TVA_ALIMENTAIRE_5_5_POURCENT,
         prix_achat=800,
-        quantite_pour_cout=Decimal("0.350"),
     )
 
     assert montants["cout_achat"] == 280
@@ -365,34 +364,6 @@ def test_quantite_en_float_refusee():
             prix_unitaire=1290,
             quantite=0.35,
             taux_tva=TVA_ALIMENTAIRE_5_5_POURCENT,
-        )
-
-
-def test_quantite_pour_cout_en_float_refusee():
-    """
-    La quantité réellement servie, pour le coût d'achat, suit la même règle que la
-    quantité : un `float` est refusé (ValueError), avec un message qui demande un
-    `Decimal`. Il est refusé TOUJOURS, même sans prix d'achat, quand la valeur ne sert
-    pas au calcul : une seule règle.
-    / The quantity used for the cost follows the same rule: a float is always refused,
-    even without a purchase price.
-    """
-    with pytest.raises(ValueError, match="Decimal"):
-        calculer_montants_article(
-            prix_unitaire=452,
-            quantite=Decimal("1"),
-            taux_tva=TVA_ALIMENTAIRE_5_5_POURCENT,
-            prix_achat=800,
-            quantite_pour_cout=0.35,
-        )
-
-    with pytest.raises(ValueError, match="Decimal"):
-        calculer_montants_article(
-            prix_unitaire=452,
-            quantite=Decimal("1"),
-            taux_tva=TVA_ALIMENTAIRE_5_5_POURCENT,
-            prix_achat=0,
-            quantite_pour_cout=0.35,
         )
 
 

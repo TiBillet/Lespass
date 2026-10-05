@@ -1131,7 +1131,10 @@ class TestBilletGratuit:
             assert tickets.first().payment_method == PaymentMethod.FREE
             ligne = LigneArticle.objects.get(reservation=reservation)
             assert ligne.amount == 0
-            assert ligne.payment_method == PaymentMethod.FREE
+            # Le moyen est sur la vente (une vente gratuite n'a aucun règlement),
+            # jamais sur la ligne (Q-H2).
+            # / The method lives on the sale, never on the line (Q-H2).
+            assert ligne.payment_method is None
 
             # Nettoyage / Cleanup
             LigneArticle.objects.filter(reservation=reservation).delete()

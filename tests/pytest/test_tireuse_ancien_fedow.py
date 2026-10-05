@@ -23,13 +23,15 @@ RÈGLE MÉTIER TESTÉE
    Ancien Fedow en échec ou solde lu insuffisant : on facture ce qui a été réellement
    débité, et UN SEUL avertissement dit le montant non facturé. L'échec du débit
    distant est journalisé en ERROR avec sa cause (il peut suivre un débit côté serveur).
-5. La vente : une part et un règlement par transaction débitée. Règlement local :
+5. La vente : UNE ligne (litres au prix du litre, D15) et un règlement par
+   transaction débitée ; ce qui manque devient un article d'écart « reçu en moins ».
+   Règlement local :
    `fedow_transaction_uuid`. Règlement de l'ancien Fedow : `reference_externe` = uuid
    de la transaction distante, `asset` = uuid de la monnaie distante.
 / Locals first, then the remainder on the old Fedow; old Fedow only for a card with a
 user in a linked venue; authorize counts the old Fedow balance; remote debit before any
 local debit, and before the sale is opened and settled; failure or short balance: bill
-what was really debited, one warning, the failure logged as ERROR; one part and one
+what was really debited, one warning, the failure logged as ERROR; one line and one
 payment per debited transaction.
 
 COMMENT CHAQUE TEST RETROUVE SA VENTE
@@ -499,14 +501,15 @@ def test_tirage_locales_puis_ancien_fedow_une_vente(tenant):
     débite 150 en TLF fédérés et 50 en FED.
     - les monnaies locales passent d'abord (soldes à 0), puis `_debiter_legacy` est
       appelé UNE fois, avec l'utilisateur, 200, et l'identifiant de paiement du tirage ;
-    - UNE vente : 4 parts (une par transaction débitée), 4 règlements ;
+    - UNE vente : UNE ligne (0,500 L à 800, total 400, part en jetons 100), et
+      4 règlements (un par transaction débitée) ;
     - règlements locaux : `fedow_transaction_uuid` de leur transaction `fedow_core` ;
     - règlements de l'ancien Fedow : `reference_externe` = uuid de la transaction
       distante, `asset` = uuid de la monnaie distante, moyens `LE` (TLF) et `SF` (FED),
       pas de `fedow_transaction_uuid` ;
-    - parts de l'ancien Fedow : monnaie distante, moyen rendu, argent réel débité.
+    - la ligne ne porte ni moyen ni monnaie (Q-H2) : les règlements les portent.
     / 400 = 100 tokens + 100 local TLF + 200 old Fedow (150 federated TLF + 50 FED):
-    locals first, one old Fedow debit of 200, one sale, 4 parts, 4 payments.
+    locals first, one old Fedow debit of 200, one sale, one line, 4 payments.
     """
     from BaseBillet.models import PaymentMethod
     from fedow_core.models import Asset, Token
@@ -548,16 +551,13 @@ def test_tirage_locales_puis_ancien_fedow_une_vente(tenant):
         vente = _la_vente_du_tirage(carte)
 
         # Puis UN débit sur l'ancien Fedow : le reste, 200, avec l'identifiant de
-        # paiement du tirage (le même que sur les parts).
+        # paiement du tirage (le même que sur la ligne).
         # / Then ONE old Fedow debit: the remainder, 200, with the pour's payment id.
         assert len(ancien_fedow.debits) == 1
         utilisateur_debite, montant_demande, uuid_de_paiement = ancien_fedow.debits[0]
         assert utilisateur_debite == carte.user
         assert montant_demande == 200
-        uuids_de_paiement_des_parts = set()
-        for part in vente.articles.all():
-            uuids_de_paiement_des_parts.add(part.uuid_transaction)
-        assert uuids_de_paiement_des_parts == {uuid_de_paiement}
+        assert vente.articles.get().uuid_transaction == uuid_de_paiement
 
         # La vente : 400 au catalogue, rien d'offert, net 400 (la part en jetons est
         # une vente ordinaire, D8 bis).
@@ -613,26 +613,15 @@ def test_tirage_locales_puis_ancien_fedow_une_vente(tenant):
         ]
         assert sorted(reglements_lus, key=str) == sorted(reglements_attendus, key=str)
 
-        # 4 parts : une par transaction débitée, chacune avec l'argent réel débité.
-        # / 4 parts: one per debited transaction, each with the real debited money.
-        parts_lues = []
-        somme_des_fractions = Decimal("0")
-        for part in vente.articles.all():
-            parts_lues.append(
-                (part.payment_method, str(part.asset), part.total_catalogue)
-            )
-            assert part.amount == 400
-            somme_des_fractions += part.qty
-        assert sorted(parts_lues, key=str) == sorted(
-            [
-                (PaymentMethod.LOCAL_GIFT, str(jetons_cadeau.uuid), 100),
-                (PaymentMethod.LOCAL_EURO, str(monnaie_locale.uuid), 100),
-                (PaymentMethod.LOCAL_EURO, transaction_en_tlf_federes[0], 150),
-                (PaymentMethod.STRIPE_FED, transaction_en_fed[0], 50),
-            ],
-            key=str,
-        )
-        assert somme_des_fractions == Decimal("1")
+        # UNE ligne : les litres servis au prix du litre, la part en jetons dedans.
+        # / ONE line: litres served at the price per litre, token part included.
+        ligne = vente.articles.get()
+        assert ligne.qty == Decimal("0.500")
+        assert ligne.amount == 800
+        assert ligne.total_catalogue == 400
+        assert ligne.part_en_jetons == 100
+        assert ligne.payment_method is None
+        assert ligne.asset is None
 
         verifier_egalites(vente)
 
@@ -644,12 +633,12 @@ def test_tirage_paye_entierement_par_l_ancien_fedow(tenant):
     payés entièrement par l'ancien Fedow : 250 en TLF fédérés et 150 en FED.
     - le badge autorise le service sur le seul solde de l'ancien Fedow ;
     - aucun débit local ; `_debiter_legacy` appelé avec 400 ;
-    - UNE vente de 400 : une part et un règlement par transaction distante ;
+    - UNE vente de 400 : une ligne, et un règlement par transaction distante ;
     - la réponse du `pour_end` (statut 200) n'a PAS de clé `transaction_id` : elle ne
       porte que l'identifiant d'une transaction `fedow_core` locale, et il n'y en a
       aucune (le Raspberry Pi ne la lit que pour son journal).
     / No local currency: 400 paid entirely by the old Fedow (250 TLF + 150 FED); one
-    part and one payment per remote transaction; no `transaction_id` in the response.
+    line, one payment per remote transaction; no `transaction_id` in the response.
     """
     from BaseBillet.models import PaymentMethod
 
@@ -716,18 +705,9 @@ def test_tirage_paye_entierement_par_l_ancien_fedow(tenant):
             key=str,
         )
 
-        parts_lues = []
-        for part in vente.articles.all():
-            parts_lues.append(
-                (part.payment_method, str(part.asset), part.total_catalogue)
-            )
-        assert sorted(parts_lues, key=str) == sorted(
-            [
-                (PaymentMethod.LOCAL_EURO, transaction_en_tlf_federes[0], 250),
-                (PaymentMethod.STRIPE_FED, transaction_en_fed[0], 150),
-            ],
-            key=str,
-        )
+        ligne = vente.articles.get()
+        assert ligne.total_catalogue == 400
+        assert ligne.part_en_jetons == 0
 
         verifier_egalites(vente)
 
@@ -943,11 +923,12 @@ def test_fin_de_service_ancien_fedow_en_echec_facture_les_locales(tenant, caplog
     """
     Carte reliée à un utilisateur : 100 en monnaie locale, 1000 sur l'ancien Fedow. Le
     badge autorise 50 cl à 8 €/L (400). À la fin du service, le débit distant (300) est
-    tenté puis échoue (réseau coupé). La bière est servie : on facture ce qui a été
-    réellement débité (les 100 locaux). La vente tient ses égalités ; UN SEUL
-    avertissement de la tireuse dit le montant non facturé (300).
-    / Remote debit fails at pour end: bill the 100 local, the sale holds, one warning
-    with the unbilled amount (300).
+    tenté puis échoue (réseau coupé). La bière est servie : on encaisse ce qui a été
+    réellement débité (les 100 locaux) ; la ligne garde son prix (400) et un article
+    « Écart d'encaissement — reçu en moins » porte −300. La vente tient ses égalités ;
+    UN SEUL avertissement de la tireuse dit le montant non facturé (300).
+    / Remote debit fails at pour end: collect the 100 local, line 400 + gap −300, the
+    sale holds, one warning with the unbilled amount (300).
     """
     from BaseBillet.models import PaymentMethod
     from fedow_core.models import Asset, Token
@@ -992,7 +973,10 @@ def test_fin_de_service_ancien_fedow_en_echec_facture_les_locales(tenant, caplog
         assert reglement.moyen == PaymentMethod.LOCAL_EURO
         assert reglement.montant == 100
         assert not reglement.reference_externe
-        assert vente.articles.count() == 1
+        totaux_des_articles = []
+        for article in vente.articles.all():
+            totaux_des_articles.append(article.total_ttc)
+        assert sorted(totaux_des_articles) == [-300, 400]
 
         verifier_egalites(vente)
 

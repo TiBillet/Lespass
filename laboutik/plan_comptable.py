@@ -39,7 +39,7 @@ import unicodedata
 from decimal import Decimal
 
 from django.db import IntegrityError, connection, transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.urls import reverse
 from django.utils.translation import gettext, ngettext
 
@@ -353,6 +353,26 @@ def compte_des_cadeaux_a_la_clientele(comptes_du_plan_par_defaut=None):
     """
     return _compte_du_plan_par_defaut(
         "cadeaux_a_la_clientele", comptes_du_plan_par_defaut
+    )
+
+
+def compte_des_ventes_reglees_en_jetons(comptes_du_plan_par_defaut=None):
+    """
+    Le compte des ventes réglées en jetons cadeau (707900), hors TVA : il reçoit la
+    part payée en jetons de chaque article (D8 bis). C'est un compte du plan par
+    défaut, cherché par son numéro.
+    / The "sales settled in gift tokens" account (707900), without VAT.
+
+    APPELÉE PAR : `comptabilite/ventilation.py` (part en jetons d'un article) et
+    `ce_qui_manque_pour_exporter` (ce module, « Plan complet ? »).
+
+    :param comptes_du_plan_par_defaut: dict de `comptes_du_plan_par_defaut_du_lieu()`,
+        déjà lu par l'appelant, ou None pour lire le compte en base
+    :return: le `CompteComptable`
+    :raises CompteDuPlanParDefautManquant: si le lieu n'a pas ce compte
+    """
+    return _compte_du_plan_par_defaut(
+        "ventes_reglees_en_jetons", comptes_du_plan_par_defaut
     )
 
 
@@ -708,8 +728,6 @@ def compte_pour_article(ligne, comptes_du_plan_par_defaut=None):
        - le virement du pot central `VR` : le compte de la monnaie de la ligne ;
        - les jetons cadeau repris au vidage, par leur nom : 623400.
     0 bis. `TM` et `FD` : erreur, avec ou sans catégorie.
-    0 ter. Une ligne payée en jetons cadeau (moyen LG) : 707900, quelle que soit sa
-       catégorie.
     1. Retour de consigne `CR` : le compte de la catégorie de la consigne remboursée.
     2. La catégorie de caisse du produit a un compte : ce compte.
     3. Le mode de caisse : `AD` → 756000, `BI` → 706000 ; `VT`, `FR` : erreur (la
@@ -717,8 +735,15 @@ def compte_pour_article(ligne, comptes_du_plan_par_defaut=None):
     4. Le type de produit : `B`, `F`, `G`, `Q`, `C` → 706000, `A` → 756000.
     5. Sinon : erreur.
     / Rules in order: 0 explicit off-revenue list (category ignored), TM/FD error,
-    token-paid line 707900, 1 deposit return, 2 POS category, 3 POS method, 4 product
-    type, 5 error.
+    1 deposit return, 2 POS category, 3 POS method, 4 product type, 5 error.
+
+    LA PART EN JETONS (D8 bis) : ce compte est celui du RESTE de l'article (net − part
+    payée en jetons). La part en jetons va au compte des ventes réglées en jetons
+    (707900), écrit par la ventilation (comptabilite/ventilation.py). Une ligne
+    entièrement en jetons n'a pas de reste : la ventilation n'appelle pas cette règle
+    pour elle, et « Plan complet ? » ne lui demande pas de compte.
+    / This account is the one of the item's REMAINDER; the token part goes to 707900,
+    written by the ventilation.
 
     :param ligne: la `LigneArticle` (lue seulement : son produit, sa monnaie)
     :param comptes_du_plan_par_defaut: dict {numéro: CompteComptable} des comptes du
@@ -781,17 +806,6 @@ def compte_pour_article(ligne, comptes_du_plan_par_defaut=None):
         raise CompteComptableManquant(
             f"Le produit « {produit.name} » a un mode de caisse sans compte "
             f"(« {produit.methode_caisse} »)."
-        )
-
-    # --- 0 ter. Ligne payée en jetons cadeau / Line paid in gift tokens ---
-    # Un jeton dépensé solde la dette du lieu : la vente va au compte des ventes
-    # réglées en jetons, hors TVA (D8 bis), quelle que soit la catégorie du produit.
-    # Reconnue par son moyen historique LG jusqu'à la fiche H.
-    # / A spent token settles the venue's debt: the sale goes to the token sales
-    # account, whatever the product's category.
-    if ligne.payment_method == PaymentMethod.LOCAL_GIFT:
-        return _compte_du_plan_par_defaut(
-            "ventes_reglees_en_jetons", comptes_du_plan_par_defaut
         )
 
     # --- 1. Retour de consigne / Deposit return ---
@@ -1107,10 +1121,14 @@ def ce_qui_manque_pour_exporter():
     LES MANQUES, dans cet ordre :
     1. un produit vendu en euros sans compte (`compte_pour_article` lève) ; si la
        cause est un compte du plan par défaut supprimé, un seul manque par numéro,
-       qui renvoie au bouton « Charger le plan par défaut » ;
+       qui renvoie au bouton « Charger le plan par défaut ». Une ligne entièrement
+       payée en jetons n'exige pas de compte de produit ;
+    1 bis. le compte des ventes réglées en jetons (707900) absent, alors qu'un article
+       a une part payée en jetons (même phrase que ci-dessus) ;
     2. un moyen de paiement utilisé sans compte ;
     3. une monnaie utilisée sans compte (monnaie d'un autre lieu, ou FED) ;
-    4. un taux de TVA utilisé sans compte de TVA à ce taux (0 % n'en exige pas) ;
+    4. un taux de TVA utilisé sans compte de TVA à ce taux (0 %, ou des lignes sans
+       TVA, n'en exigent pas) ;
     5. deux points de vente au même code journal ; 5 bis. un point de vente au code
        d'un journal d'origine (CAISSE, TIREUSE, WEB, ADMIN) ;
     6. un point de vente sans code journal possible (code renseigné ou nom sans
@@ -1142,26 +1160,35 @@ def ce_qui_manque_pour_exporter():
     comptes_du_plan_par_defaut = comptes_du_plan_par_defaut_du_lieu()
 
     # --- 1. Produits vendus sans compte / Products sold without account ---
-    # Une ligne par triplet (produit, monnaie, moyen) suffit : la règle ne lit que le
-    # produit, la monnaie et le moyen de la ligne (DISTINCT ON de Postgres).
+    # Une ligne par couple (produit, monnaie) suffit : la règle ne lit que le produit
+    # et la monnaie de la ligne (DISTINCT ON de Postgres), jamais son moyen.
     # Les ventes en points (`unite` ≠ "EUR") n'ont pas d'écriture comptable (fiche F
     # §4) : leurs produits n'ont pas besoin de compte.
+    # Une ligne ENTIÈREMENT payée en jetons (part en jetons = net, non nul) n'a pas de
+    # reste : tout va au compte des ventes réglées en jetons, rien au compte du
+    # produit. Elle n'exige donc pas de compte de produit (vérifiée plus bas, par le
+    # 707900).
     # Le `select_related` lit d'un coup ce que la règle lit : la catégorie du produit
     # et son compte (règle 2), la catégorie de la consigne remboursée et son compte
     # (règle 1). Sans lui, chaque produit vendu coûterait une à deux requêtes.
-    # / One line per triple is enough. Points sales write no entry: skipped. The
-    # select_related reads what the rule reads, in one query.
+    # / One line per (product, currency) pair is enough; the line's method is never
+    # read. Points sales write no entry: skipped. A fully token-paid line needs no
+    # product account. The select_related reads what the rule reads, in one query.
+    lignes_entierement_en_jetons = Q(part_en_jetons=F("total_ttc")) & ~Q(
+        part_en_jetons=0
+    )
     lignes_representatives = (
         LigneArticle.objects.filter(
             vente__statut=Vente.Statut.REGLEE,
             vente__unite="EUR",
         )
+        .exclude(lignes_entierement_en_jetons)
         .select_related(
             "pricesold__productsold__product__categorie_pos__compte_comptable",
             "pricesold__productsold__product__consigne_remboursee__categorie_pos__compte_comptable",
         )
-        .order_by("pricesold__productsold__product_id", "asset", "payment_method")
-        .distinct("pricesold__productsold__product_id", "asset", "payment_method")
+        .order_by("pricesold__productsold__product_id", "asset")
+        .distinct("pricesold__productsold__product_id", "asset")
     )
     produits_deja_signales = set()
     numeros_du_plan_par_defaut_deja_signales = set()
@@ -1204,6 +1231,36 @@ def ce_qui_manque_pour_exporter():
                     "lien": lien_des_categories,
                 }
             )
+
+    # --- 1 bis. Le compte des ventes réglées en jetons / The token sales account ---
+    # Dès qu'un article vendu en euros a une part payée en jetons, le FEC écrit cette
+    # part au compte des ventes réglées en jetons (707900) : il doit exister.
+    # / As soon as a euro item has a token part, the FEC writes it to 707900.
+    des_articles_ont_une_part_en_jetons = (
+        LigneArticle.objects.filter(
+            vente__statut=Vente.Statut.REGLEE,
+            vente__unite="EUR",
+        )
+        .exclude(part_en_jetons=0)
+        .exists()
+    )
+    if des_articles_ont_une_part_en_jetons:
+        try:
+            compte_des_ventes_reglees_en_jetons(comptes_du_plan_par_defaut)
+        except CompteDuPlanParDefautManquant as erreur:
+            numero_manquant = erreur.numero_de_compte
+            if numero_manquant not in numeros_du_plan_par_defaut_deja_signales:
+                numeros_du_plan_par_defaut_deja_signales.add(numero_manquant)
+                manques.append(
+                    {
+                        "phrase": gettext(
+                            "Le compte %(numero)s du plan par défaut manque. Le "
+                            "bouton « Charger le plan par défaut » le remet."
+                        )
+                        % {"numero": numero_manquant},
+                        "lien": lien_du_plan,
+                    }
+                )
 
     # --- 2 et 3. Moyens et monnaies utilisés sans compte ---
     # Les sections 2, 3, 4 et 7 n'ont pas besoin d'écarter les ventes en points : une
@@ -1271,14 +1328,18 @@ def ce_qui_manque_pour_exporter():
         )
 
     # --- 4. Taux de TVA utilisés sans compte / VAT rates used without account ---
-    # Un taux de 0 % n'écrit pas de TVA : il n'exige pas de compte. Un compte de TVA
-    # de ce taux suffit, actif ou non : « inactif » ne cache le compte que des menus de
-    # choix, l'export s'en sert quand même (`compte_de_tva_pour_taux`).
-    # / A 0 % rate writes no VAT: no account required. Any VAT account of that rate,
-    # active or not, is enough (the export uses it).
+    # Un taux de 0 % n'écrit pas de TVA : il n'exige pas de compte. Une ligne dont la
+    # TVA vaut 0 (entièrement payée en jetons, entièrement offerte) n'en écrit pas non
+    # plus (comptabilite/ventilation.py `_ecrire_la_tva_de_l_article`) : elle n'exige
+    # pas de compte à son taux. Un compte de TVA de ce taux suffit, actif ou non :
+    # « inactif » ne cache le compte que des menus de choix, l'export s'en sert quand
+    # même (`compte_de_tva_pour_taux`).
+    # / A 0 % rate, or a line whose VAT is 0, writes no VAT: no account required. Any
+    # VAT account of that rate, active or not, is enough (the export uses it).
     taux_de_tva_utilises = (
         LigneArticle.objects.filter(vente__statut=Vente.Statut.REGLEE)
         .exclude(vat=0)
+        .exclude(total_tva=0)
         .order_by("vat")
         .values_list("vat", flat=True)
         .distinct()

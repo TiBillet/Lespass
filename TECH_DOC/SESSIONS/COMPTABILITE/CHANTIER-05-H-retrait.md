@@ -50,10 +50,96 @@ Après cette fiche, il n'existe **qu'une** façon d'écrire et de lire de l'arge
 - **« Avoir sur un article »** (quantité partielle) dans la fiche « Vente » de l'admin
   (reporté de G) : l'article n'est plus coupé en parts ; même prix unitaire, quantité
   négative, champ « Remboursé par ». **Refusé** si l'article a une `part_offerte > 0`
-  (message « rembourser l'article entier ») : aucun prorata d'offert dans le projet
-  (fiche D §4).
+  ou une part en jetons (message « rembourser l'article entier ») : aucun prorata
+  d'offert dans le projet (fiche D §4). **Article au poids ou à la tireuse** : toujours
+  l'article entier (Q-H5, 2026-10-05).
+
+### 2.1 Précisions de la relecture Opus de la spec (2026-10-04, code `e5670391`)
+
+**Découpage de H-1** : H-1a (lecteurs du moyen sur les règlements : correction D14,
+« Remboursé par », colonnes masquées dans « Entries », menu) → H-1b-1 (champ « part
+payée en jetons » et tous ses lecteurs, migration) → H-1b-2 (fusion de la caisse, D15
+caisse, D13) → H-1c (tireuse, QR, écarts D26) → H-1d (avoir sur un article, garde
+n° 10).
+
+**Champ « part payée en jetons » (Q-H1) — tout ce qui le lit ou l'écrit (H-1b-1)** :
+- service : `calculer_montants_article` / `ajouter_article` (`BaseBillet/services_vente.py`)
+  reçoivent la part en jetons ; HT = jetons + arrondi_demi_haut((net − jetons) × 100 /
+  (100 + taux)), TVA = net − HT (test 2 : 300 + 167 = 467, TVA 33) ;
+- base : une `CheckConstraint` (0 ≤ jetons ≤ net ; même signe pour un avoir ; 0 sur une
+  ligne hors chiffre d'affaires) ; garde d'immutabilité (`champs_figes_d_une_ligne_reglee`) ;
+- empreinte de la vente (`laboutik/integrity.py` `calculer_hmac_vente`) : champ ajouté au
+  format 1, sans nouveau numéro de format (la prod n'a aucune `Vente` avant R ; la base de
+  dev est régénérée après H-1b-1) ; archive (`laboutik/archivage.py` colonnes des articles
+  et description du message de l'empreinte) ;
+- ticket client (`laboutik/printing/formatters.py`, TVA par taux) ; rapport
+  (`comptabilite/rapport.py` CA par taux : la part en jetons au taux 0) ; plan comptable
+  (`compte_pour_article`, règle « 0 ter » : deux comptes pour une ligne mixte, 707900 pour
+  les jetons) ; ventilation FEC (`comptabilite/ventilation.py`) ; « Plan complet ? »
+  section 1 ;
+- avoirs : miroir du champ et refus de l'avoir partiel d'une ligne avec une part en jetons
+  (`_catalogue_impose_et_part_offerte_d_un_avoir`) ; règlements de l'avoir coupés LG /
+  argent, monnaie et carte du LG lues dans le règlement LG de la vente
+  (`ajouter_les_reglements_d_un_avoir`) ; « Avoir total » (`_sommes_rendues_par_l_avoir_total`) ;
+  `ligne_payee_en_jetons` / `ligne_sans_argent_a_rendre` et leurs lecteurs (une ligne
+  mixte a net − jetons à rendre) ;
+- `_taux_tva_de_la_ligne_de_caisse` : la règle « LG → 0 » disparaît (la part en jetons
+  porte son taux 0) ;
+- les producteurs qui ont des parts LG (caisse, tireuse) posent le champ dès H-1b-1, sur
+  leurs parts, sans fusion : ensuite les lecteurs ne lisent plus que le champ ;
+- reprise R : une ancienne ligne LG de la prod reçoit le champ (fiche R à compléter).
+
+**Colonnes vides (Q-H2) — périmètre** : seules les lignes écrites par la caisse, la
+tireuse et le QR / NFC (H-1b-2, H-1c) laissent `payment_method` / `asset` / `carte` /
+`wallet` vides. Les autres producteurs (commande, billets, booking, crowds, abonnement,
+admin, recharge API v2 dont l'idempotence lit `ligne.asset`, T18) gardent leur écriture
+jusqu'à H-2. La ligne de demande QR (sans vente) reste telle quelle. Lecteurs à rebrancher
+avec la fusion : règlement LG de l'avoir, `/api/v2/sales/` (`api_v2/serializers.py`
+~l.858), export des lignes (carte, wallet), compte du virement reçu (`plan_comptable.py`
+~l.768, sans appelant).
+
+**Lignes « Refund » du vidage** (`fedow_core/services.py` ~l.702-745) : D12 les remplace
+par la vente `VIDAGE_CARTE`. Elles ne servent plus qu'à l'ancien moteur (sorti du menu
+en H-1a) : arrêtées en H-1b-2, sinon des lignes sans vente arriveraient en production et
+bloqueraient la migration de vérification de H-2.
+
+**D15 — lecteurs qui supposent « nombre d'unités »** (H-1b-2, H-1c) : poids affiché
+(`laboutik/affichage_des_ventes.py` ~l.380-451 : `weight_quantity` × Σ qty), nombre
+d'articles de la liste des ventes, quantités du rapport (unité Q-H4 : kg, ou L si le
+stock est en CL, même règle que `_diviseur_de_la_quantite_saisie` ; tireuse : L), marge
+« articles au coût inconnu », export. Le stock garde `weight_quantity`. **Règle
+d'arrondi** : la quantité est arrondie d'abord (kg à 3 décimales, L à 2 pour la caisse ;
+litres de la tireuse arrondis comme la ligne), puis UN seul calcul du montant sur cette
+quantité ; une pesée = un article de quantité réelle (piège 66, jamais n × pesée). À la
+tireuse, le montant facturé est calculé sur la quantité de la ligne, sinon l'égalité
+casse après le débit Fedow.
+
+**D13 — retour de consigne** : `qty` négative, prix positif, prix d'achat positif
+(`laboutik/views.py` ~l.6593 le passe en négatif aujourd'hui) ; rapport « retours de
+consigne » (`comptabilite/rapport.py` ~l.1349-1365, `int(Sum(qty))` devient négatif) ;
+l'écran du panier (prix négatif) ne change pas.
+
+**Tireuse, volume facturé (Q-H13, mainteneur, 2026-10-05)** : la ligne facture `min(litres servis, litres autorisés par le solde au badge)` ; le débordement de quelques ml (contrôle du Pi une fois par seconde) n'est pas facturé ; le stock baisse du volume réel. L'écart « reçu en moins » ne sert plus que si l'ancien Fedow échoue ; un avoir sur une vente qui porte un écart est refusé.
+
+**D26 — écarts** : QR : deux chemins (`process_with_nfc` et `valid_payment`,
+`BaseBillet/views.py` ~l.2232-2250 et ~l.2517-2540) ; écart « reçu en moins » ou « reçu
+en plus » (`ajouter_l_article_d_ecart_d_encaissement` gère les deux signes) ; montant des
+mails après un débit partiel : l'argent réellement débité. Tireuse : vérifié, le volume
+n'est PAS réduit (`controlvanne/billing.py` ~l.482-498) : l'écart est un article « reçu
+en moins ».
+
+**`total_catalogue_impose`** : retiré des **producteurs** (caisse, tireuse, QR) ; le
+paramètre du service **reste** pour l'avoir miroir des lignes en parts de l'historique
+repris (Q-R10) ; le test de garde n° 10 ne le signale pas.
 
 ## 3. Session H-2 — retrait des champs et de l'ancienne clôture
+
+**Ordre (Q-H7, 2026-10-05)** : H-2 et H-3 viennent après la production ET après le
+chantier kiosque (recharge FED qui écrit sa vente) : sinon la migration « vente
+obligatoire » refuse les lignes du kiosque et H-3 casse la recharge au kiosque.
+**Raison d'une correction** : déjà sur la vente CORRECTION (champ `raison`, Q-H6,
+H-1a) avant le retrait de `CorrectionPaiement`. **API v2** : la revue du contrat des
+ventes est un chantier après la production (Q-H8).
 
 **Champs retirés de `LigneArticle`** : `payment_method`, `asset`, `carte`, `wallet`,
 `uuid_transaction`, `hmac_hash`, `previous_hmac`, `idempotency_key`, `point_de_vente`.
@@ -159,8 +245,10 @@ son API répond sur `http://mailpit:8025/api/v1/` (depuis les conteneurs) et
 
 | Test | Vérifie |
 |---|---|
-| `test_adhesion_vendue_en_caisse_facture_recue` | caisse → adhésion payée en espèces → mail de facture reçu, PDF joint (effet de B-0) |
+| `test_adhesion_vendue_en_caisse_facture_recue` | caisse → adhésion payée en espèces → mail de facture reçu, avec le lien « demander un reçu » (pas de PDF joint : constat B-0) |
 | `test_billet_paye_en_ligne_billet_recu` | billet payé par Stripe (test) → mail des billets reçu |
+| `test_rapport_z_recu_par_mail` | bouton Z de la caisse → le rapport arrive aux destinataires du lieu (Q-H9) |
+| `test_annulation_admin_avec_avoir_mail_recu` | annulation d'une réservation par l'admin (« Remboursé par ») → mail d'annulation reçu par le client (Q-H9) |
 
 Pièges : le worker `lespass_celery` doit tourner (et être redémarré après une
 modification de tâche) ; la file Redis peut contenir des tâches laissées par pytest
@@ -174,7 +262,7 @@ Mailpit est recréé.
 | 1 | `test_nfc_trois_jus_une_seule_ligne_qty_3` | 1 ligne `qty` 3, 1050 ; règlements LE 500 + CB 550 |
 | 2 | `test_jetons_une_ligne_part_en_jetons_300` | bière 500 payée 300 LG + 200 LE : 1 ligne, part offerte 0, part en jetons 300, net 500, TVA sur 200 seulement (HT 467, TVA 33) ; règlements LG 300 + LE 200 ; Z : 300 au taux 0 ; FEC : 300 au 707900 (Q-H1) |
 | 3 | `test_fromage_une_ligne_0_350_kg_prix_au_kilo` | `qty` 0,350, `amount` 1290, total 452 |
-| 4 | `test_tireuse_une_ligne_litres_prix_au_litre` | `qty` = litres servis, `amount` = prix au litre, total = `qty × prix` = débit réel ; solde insuffisant : selon la vérification de C §1 (litres réduits, ou article d'écart) |
+| 4 | `test_tireuse_une_ligne_litres_prix_au_litre` | `qty` = litres servis, `amount` = prix au litre, total = `qty × prix` = débit réel ; solde insuffisant : le volume n'est pas réduit → article « Écart d'encaissement reçu en moins » (D26) |
 | 5 | `test_retour_consigne_quantite_negative_prix_positif` | |
 | 5b | `test_qr_debit_partiel_ecart_d_encaissement` | Fedow débite 800 sur 1000 demandés → article 1000 + article « reçu en moins » −200, règlement 800, égalités tenues |
 | 5c | `test_admin_avoir_sur_un_article_quantite_partielle` | 1 jus sur 3, remboursé en espèces → vente `AVOIR` −350, un règlement espèces −350 ; 1 bière sur 3 d'un article payé en partie en jetons → **refus** |

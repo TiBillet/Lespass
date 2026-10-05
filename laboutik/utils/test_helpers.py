@@ -20,11 +20,12 @@ logger = logging.getLogger(__name__)
 
 def reset_carte(tag_id=None):
     """
-    Remet a zero une carte NFC : detache le user et supprime le wallet_ephemere.
+    Remet a zero une carte NFC : detache le user et le wallet_ephemere (le
+    portefeuille reste en base : les ventes encaissees de la carte le referencent).
     La carte reste en base (tag_id, number, detail) mais redevient anonyme.
     Utilisee par les tests Playwright et par create_test_pos_data (carte 3 jetable).
     Sera aussi la base de la feature caisse "reset carte" (retirer user/wallet d'une carte).
-    / Resets an NFC card: detaches user and deletes wallet_ephemere.
+    / Resets an NFC card: detaches user and wallet_ephemere (the wallet is kept).
     The card stays in DB (tag_id, number, detail) but becomes anonymous.
     Used by Playwright tests and create_test_pos_data (disposable card 3).
     Will also be the basis for the POS "reset card" feature (remove user/wallet from card).
@@ -42,7 +43,6 @@ def reset_carte(tag_id=None):
         return {"status": "refused", "reason": "DEBUG=False"}
 
     from QrcodeCashless.models import CarteCashless
-    from AuthBillet.models import Wallet
 
     if tag_id is None:
         tag_id = getattr(settings, "DEMO_TAGID_CLIENT3", "D74B1B5D")
@@ -69,36 +69,22 @@ def reset_carte(tag_id=None):
         resultat["ancien_email"] = ancien_email
         logger.info(f"reset_carte : user {ancien_email} detache de {tag_id}")
 
-    # 2. Supprimer le wallet ephemere (supprimer l'objet Wallet + les tokens)
-    #    Il faut d'abord supprimer les objets qui referencent ce wallet
-    #    (Transaction.sender/receiver et LigneArticle.wallet sont PROTECT).
-    # / 2. Remove ephemeral wallet (delete the Wallet object + tokens)
-    #    Must first delete objects referencing this wallet
-    #    (Transaction.sender/receiver and LigneArticle.wallet are PROTECT).
+    # 2. Delier le wallet ephemere SANS le supprimer. Il reste en base, avec ses
+    #    jetons et ses transactions : les ventes encaissees de la carte le
+    #    referencent (`Reglement.wallet`, PROTECT) et une vente reglee ne se modifie
+    #    plus. La carte redevient anonyme ; un nouveau portefeuille sera cree au
+    #    prochain usage.
+    # / 2. Unlink the ephemeral wallet WITHOUT deleting it: settled sales reference it
+    #    (Reglement.wallet, PROTECT). The card becomes anonymous.
     if hasattr(carte, 'wallet_ephemere') and carte.wallet_ephemere is not None:
-        wallet_eph = carte.wallet_ephemere
+        ancien_wallet_ephemere = carte.wallet_ephemere
         carte.wallet_ephemere = None
         carte.save()
-
-        # Supprimer les transactions liees au wallet ephemere (sender ou receiver)
-        # / Delete transactions linked to the ephemeral wallet (sender or receiver)
-        from fedow_core.models import Token, Transaction
-        nb_tx = Transaction.objects.filter(sender=wallet_eph).delete()[0]
-        nb_tx += Transaction.objects.filter(receiver=wallet_eph).delete()[0]
-
-        # Supprimer les lignes d'article liees au wallet ephemere
-        # / Delete article lines linked to the ephemeral wallet
-        from BaseBillet.models import LigneArticle
-        nb_lignes = LigneArticle.objects.filter(wallet=wallet_eph).delete()[0]
-
-        # Supprimer les tokens du wallet ephemere
-        # / Delete tokens from ephemeral wallet
-        nb_tokens_supprimes = Token.objects.filter(wallet=wallet_eph).delete()[0]
-
-        wallet_eph.delete()
         resultat["wallet_ephemere_removed"] = True
-        resultat["tokens_supprimes"] = nb_tokens_supprimes
-        logger.info(f"reset_carte : wallet ephemere supprime ({nb_tokens_supprimes} tokens)")
+        logger.info(
+            f"reset_carte : wallet ephemere {ancien_wallet_ephemere.uuid} delie "
+            f"de {tag_id} (garde en base)"
+        )
     else:
         carte.save()
 

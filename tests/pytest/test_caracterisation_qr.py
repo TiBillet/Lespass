@@ -21,13 +21,13 @@ LE PARCOURS
 1. Un encaisseur du lieu génère un QR code pour un montant : une ligne de vente est
    créée « en attente » (`O`).
 2. L'adhérent confirme le paiement : la ligne est réservée (`U`), Fedow débite son
-   portefeuille, puis la ligne est SUPPRIMÉE et recréée validée (`V`), une fois par
-   monnaie débitée. Rien n'est envoyé à l'ancien LaBoutik ; deux mails partent (au
-   lieu, à l'adhérent).
+   portefeuille, puis la ligne est SUPPRIMÉE et recréée validée (`V`), UNE fois quel
+   que soit le nombre de monnaies débitées (Q-H3). Rien n'est envoyé à
+   l'ancien LaBoutik ; deux mails partent (au lieu, à l'adhérent).
 3. Si Fedow répond par une erreur, la ligne passe « échouée » (`D`) et ne se paie plus.
 / 1. A collector generates a QR code: a pending line. 2. The member confirms: the line
-is reserved, Fedow debits, the line is recreated VALID once per currency, nothing is
-sent to legacy LaBoutik, two mails. 3. A Fedow error fails the line for good.
+is reserved, Fedow debits, the line is recreated VALID once, nothing is sent to legacy
+LaBoutik, two mails. 3. A Fedow error fails the line for good.
 
 CE QUE CES TESTS REGARDENT (et rien d'autre)
 - les statuts des lignes de vente, relus en base ;
@@ -206,12 +206,12 @@ def test_qr_deux_monnaies_aucun_envoi_laboutik_et_deux_mails(
 ):
     """
     P10 : l'adhérent confirme un QR code de 12,50 €. Fedow débite 5 € de monnaie locale
-    et 7,50 € de monnaie fédérée. La demande est remplacée par DEUX lignes validées
-    (`V`), une par monnaie.
+    et 7,50 € de monnaie fédérée. La demande est remplacée par UNE ligne validée
+    (`V`), quel que soit le nombre de monnaies (Q-H3).
     Tâches : AUCUN envoi à l'ancien LaBoutik (débranché pour le QR code), puis le mail
     au lieu et le mail à l'adhérent, avec le montant demandé en centimes.
-    / P10: a 12.50 € QR code paid with 5 € local + 7.50 € federated currency. Two VALID
-    lines. Tasks: nothing sent to legacy LaBoutik, then the two mails.
+    / P10: a 12.50 € QR code paid with 5 € local + 7.50 € federated currency. One VALID
+    line. Tasks: nothing sent to legacy LaBoutik, then the two mails.
     """
     client_de_l_encaisseur = creer_un_encaisseur(lieu)
     payeur = creer_un_payeur()
@@ -248,16 +248,15 @@ def test_qr_deux_monnaies_aucun_envoi_laboutik_et_deux_mails(
     assert etat_metier(taches_demandees=taches_de_la_confirmation) == etat_attendu
     assert faux_fedow.transaction.to_place_from_qrcode.call_count == 1
 
-    # Les deux lignes recréées, une par monnaie, toutes deux validées. La première garde
-    # l'uuid de la demande ; les deux sont les articles de la même vente.
-    # / The two recreated lines, both VALID. The first keeps the request uuid; both are
-    # the items of the same sale.
+    # La ligne recréée, une seule pour les deux monnaies, validée. Elle garde l'uuid de
+    # la demande ; c'est l'unique article de la vente.
+    # / The single recreated line, VALID. It keeps the request uuid; the sale's only
+    # item.
     premiere_ligne_recreee = LigneArticle.objects.get(uuid=demande_de_paiement.uuid)
     statuts_des_lignes_recreees = []
     for ligne in premiere_ligne_recreee.vente.articles.all():
         statuts_des_lignes_recreees.append(ligne.status)
     assert sorted(statuts_des_lignes_recreees) == [
-        LigneArticle.VALID,
         LigneArticle.VALID,
     ]
 

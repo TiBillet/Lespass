@@ -21,15 +21,14 @@ Dépendances :
 - BaseBillet.models : LigneArticle, ProductSold, PriceSold, SaleOrigin
 - inventaire.services : StockService
 - QrcodeCashless.models : CarteCashless
-- laboutik.views : ORDRE_CASCADE_FIDUCIAIRE,                              
-  MAPPING_ASSET_CATEGORY_PAYMENT_METHOD, _obtenir_ou_creer_wallet, _calculer_qty_partielles,
-  lire_depensable_fed_frais, _debiter_legacy (ancien Fedow ; importés au moment de
-  l'appel)
+- laboutik.views : ORDRE_CASCADE_FIDUCIAIRE, MAPPING_ASSET_CATEGORY_PAYMENT_METHOD,
+  _obtenir_ou_creer_wallet, _taux_tva_de_la_ligne_de_caisse, lire_depensable_fed_frais,
+  _debiter_legacy (ancien Fedow ; importés au moment de l'appel)
 """
 
 import logging
 import uuid as uuid_module
-from decimal import Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from django.db import connection, transaction
 
@@ -116,16 +115,58 @@ def obtenir_contexte_cashless(carte):
 VOLUME_D_UN_VERRE_ML = Decimal("250")
 
 
+def calculer_litres_du_volume(volume_ml):
+    """
+    Un volume en litres, arrondi à 3 décimales (au millilitre, demi-haut). Pour le
+    volume facturé d'un tirage, c'est la quantité (`qty`) de sa ligne, et la quantité
+    sur laquelle le montant est calculé.
+    / A volume in litres, rounded to 3 decimals: for a pour's billed volume, the line's
+    quantity and the quantity the amount is computed on.
+
+    Exemple : 333,7 ml → 0,334 L.
+
+    :param volume_ml: Decimal, float ou str — volume en ml
+    :return: Decimal à 3 décimales
+    """
+    volume_en_ml = Decimal(str(volume_ml))
+    litres_exacts = volume_en_ml / Decimal("1000")
+    return litres_exacts.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+
+
+def calculer_prix_au_litre_en_centimes(prix_litre):
+    """
+    Le prix au litre en centimes entiers (arrondi demi-haut) : le prix unitaire
+    (`amount`) de la ligne du tirage.
+    / The price per litre in whole cents: the line's unit price.
+
+    :param prix_litre: Decimal — prix au litre en euros
+    :return: int
+    """
+    from BaseBillet.services_vente import arrondir_au_centime_demi_haut
+
+    return arrondir_au_centime_demi_haut(prix_litre * Decimal("100"))
+
+
 def calculer_montant_centimes(volume_ml, prix_litre):
     """
-    Prix d'un volume servi, en centimes. C'est ce montant qui est facturé, et c'est
-    aussi celui que l'écran de la tireuse affiche : les deux restent égaux.
-    / Price of a served volume, in cents. Billed AND displayed: both stay equal.
+    Prix d'un volume servi, en centimes. C'est ce montant qui est facturé, c'est celui
+    que l'écran de la tireuse affiche, et c'est le total de la ligne du tirage : les
+    trois restent égaux.
+    / Price of a served volume, in cents. Billed, displayed, and the line's total: all
+    three stay equal.
 
-    Exemple : 250 ml à 3,50 €/L = 0,250 L × 3,50 = 0,875 € → 88 centimes.
-    Arrondi : au centime DEMI-HAUT (`arrondir_au_centime_demi_haut`, la règle de tout
-    l'argent du projet). 173 ml à 5 €/L = 86,5 centimes → 87.
-    / Rounding: half-up to the cent, the project's money rule. 86.5 → 87.
+    LE CALCUL (le même que la formule du service de vente pour la ligne) :
+    1. la quantité d'abord : les litres du volume arrondis à 3 décimales
+       (`calculer_litres_du_volume`) ;
+    2. puis UN seul calcul : prix au litre en centimes × litres, arrondi au centime
+       DEMI-HAUT (`arrondir_au_centime_demi_haut`, la règle de tout l'argent du projet).
+    Calculer sur le volume exact donnerait parfois un centime de plus ou de moins que
+    la ligne, et l'égalité de la vente casserait après le débit des monnaies.
+    / Quantity first (litres rounded to 3 decimals), then one half-up computation: the
+    same as the sale service's formula for the line, so the sale's equality holds.
+
+    Exemples : 250 ml à 3,50 €/L = 0,250 × 350 = 87,5 → 88 centimes ;
+    333,7 ml à 7,50 €/L = 0,334 × 750 = 250,5 → 251.
 
     :param volume_ml: Decimal, float ou str — volume servi en ml
     :param prix_litre: Decimal — prix au litre en euros
@@ -136,7 +177,9 @@ def calculer_montant_centimes(volume_ml, prix_litre):
     volume_en_ml = Decimal(str(volume_ml))
     if volume_en_ml <= 0 or prix_litre <= 0:
         return 0
-    montant_exact_en_centimes = volume_en_ml * prix_litre / Decimal("1000") * 100
+    litres_du_volume = calculer_litres_du_volume(volume_en_ml)
+    prix_au_litre_en_centimes = calculer_prix_au_litre_en_centimes(prix_litre)
+    montant_exact_en_centimes = Decimal(prix_au_litre_en_centimes) * litres_du_volume
     return arrondir_au_centime_demi_haut(montant_exact_en_centimes)
 
 
@@ -256,10 +299,16 @@ def calculer_volume_autorise_ml(
     Formule : (solde_centimes / prix_centimes_par_litre) * 1000 ml
     / Formula: (balance_cents / price_cents_per_liter) * 1000 ml
 
+    Arrondi VERS LE BAS au millilitre : la facture porte au plus ce volume
+    (`facturer_tirage`), et son montant ne dépasse donc jamais le solde lu au badge.
+    Exemple : 87 c à 3,50 €/L = 248,57 ml → 248 ml → 0,248 × 350 = 86,8 → 87 c.
+    / Rounded DOWN to the millilitre: the bill carries at most this volume, so its
+    amount never exceeds the balance read at the badge.
+
     :param solde_centimes: int — solde total (tous assets cascade) en centimes
     :param prix_litre_decimal: Decimal — prix au litre en EUR (ex: Decimal("3.50"))
     :param reservoir_disponible_ml: float — volume restant dans la tireuse en ml
-    :return: Decimal — volume autorisé en ml (arrondi à 2 décimales)
+    :return: Decimal — volume autorisé en ml (entier de millilitres)
     """
     if prix_litre_decimal <= 0:
         return Decimal("0.00")
@@ -277,7 +326,8 @@ def calculer_volume_autorise_ml(
     # Limiter au réservoir disponible / Cap at available reservoir
     volume_max_ml = min(volume_max_solde_ml, Decimal(str(reservoir_disponible_ml)))
 
-    return max(Decimal("0.00"), volume_max_ml.quantize(Decimal("0.01")))
+    volume_max_au_ml_inferieur = volume_max_ml.quantize(Decimal("1"), rounding=ROUND_DOWN)
+    return max(Decimal("0"), volume_max_au_ml_inferieur)
 
 
 def facturer_tirage(
@@ -310,28 +360,44 @@ def facturer_tirage(
        reste sous le verrou de la session (l'appelant), pour ne facturer qu'une fois.
     4. PUIS, dans le bloc atomique : les débits locaux (une Transaction fedow_core par
        monnaie), la vente, et `encaisser_vente` en dernier.
-    Ancien Fedow en échec, ou solde lu insuffisant : on facture ce qui a été réellement
-    débité. L'échec du débit distant est journalisé en ERROR (il peut suivre un débit
-    déjà fait côté serveur), et UN SEUL avertissement dit le montant non facturé. La
-    bière est déjà servie.
     / Order (same as the register): 1. read local and remote balances, no debit;
     2. split; 3. debit the old Fedow FIRST, before the local atomic block and any token
     lock (still under the session lock); 4. then local debits, the sale, and
-    encaisser_vente last. Remote failure logged as ERROR; one warning for the unbilled
-    amount.
+    encaisser_vente last.
+
+    LE VOLUME FACTURÉ (Q-H13) : le plus petit du volume servi et du volume autorisé au
+    badge (`session.allowed_ml_session`, calculé depuis le solde et arrondi vers le bas
+    au millilitre par `calculer_volume_autorise_ml`). Le Raspberry Pi ne contrôle le
+    plafond qu'une fois par seconde : le débordement au-delà du volume autorisé n'est
+    pas facturé. Le poids pour le stock (`weight_quantity`) et le décrément du stock
+    gardent le volume RÉELLEMENT servi : l'inventaire reste juste.
+    / Billed volume: the smaller of the served volume and the volume authorised at the
+    badge (rounded down to the ml); the overflow is not billed. The stock keeps the
+    really served volume.
+
+    LE FILET : l'argent débité ne couvre pas la ligne quand l'ancien Fedow échoue ou que
+    son solde a baissé depuis le badge. La bière est servie : la ligne garde son prix,
+    et ce qui manque devient un article « Écart d'encaissement — reçu en moins » (D26).
+    L'échec du débit distant est journalisé en ERROR (il peut suivre un débit déjà fait
+    côté serveur), et UN SEUL avertissement dit le montant non encaissé.
+    / Safety net: when the old Fedow fails or its balance dropped, the line keeps its
+    price and a "received less" gap item carries the missing money. One warning.
 
     LE TIRAGE EST UNE VENTE (service de vente, BaseBillet/services_vente.py) :
     1. une `Vente` d'origine TIREUSE, au point de vente de la tireuse, avec la carte et
        son utilisateur comme client (None pour une carte anonyme) ;
-    2. un article (une `LigneArticle`) par transaction débitée, locale ou distante. La
-       ligne garde sa forme : `amount` = total du tirage, `qty` = la part de sa monnaie
-       (fraction de 1). Son total catalogue est l'argent RÉEL débité dans sa monnaie,
-       jamais recalculé depuis la fraction. Part payée en jetons cadeau (LG) : une vente
-       ordinaire, rien d'offert, TVA 0 (D8 bis : le jeton dépensé solde la dette du
-       lieu). Part de l'ancien Fedow : monnaie distante, moyen rendu ;
+    2. UN article (une `LigneArticle`), quel que soit le nombre de monnaies débitées
+       (D15) : `qty` = les litres facturés (`calculer_litres_du_volume`), `amount` = le
+       prix au litre en centimes, total par la formule du service (le même centime que
+       `calculer_montant_centimes`), coût d'achat sur ces litres. La part payée en
+       jetons cadeau (LG) va dans `part_en_jetons` : vendue hors TVA (D8 bis). La ligne
+       ne porte ni moyen, ni monnaie, ni carte, ni portefeuille (Q-H2) : ils sont dans
+       les règlements ;
     3. un règlement par transaction : montant et uuid copiés de la transaction. Locale :
        `fedow_transaction_uuid`. Ancien Fedow : `reference_externe` (la transaction vit
        sur le serveur distant) ;
+    3 bis. si les règlements ne couvrent pas la ligne : l'article d'écart « reçu en
+       moins » (`ajouter_l_article_d_ecart_d_encaissement`) ;
     4. `encaisser_vente` EN DERNIER : il vérifie les deux égalités, pose le numéro et
        l'empreinte chaînée. Il prend le verrou du lieu jusqu'à la fin de la transaction :
        le débit de l'ancien Fedow (appel réseau) se fait avant, et aucun appel réseau ne
@@ -348,24 +414,28 @@ def facturer_tirage(
       journalise en erreur.
     Dans les deux cas, aucune vente n'est écrite pour l'argent déjà pris sur l'ancien
     Fedow : c'est l'erreur journalisée qui le signale.
-    / The pour is a sale: one TIREUSE sale, one item and one payment per debited
-    transaction (local: fedow_transaction_uuid; old Fedow: reference_externe), settled
-    LAST. The old Fedow debit is NOT rolled back with the database: if the local block
-    fails afterwards (broken equality → 500 + Sentry; SoldeInsuffisant → logged by the
-    caller), only the local part is undone and the money taken remotely stays taken.
+    / The pour is a sale: one TIREUSE sale, ONE item (litres × price per litre), one
+    payment per debited transaction (local: fedow_transaction_uuid; old Fedow:
+    reference_externe), a gap item if money is missing, settled LAST. The old Fedow
+    debit is NOT rolled back with the database: if the local block fails afterwards
+    (broken equality → 500 + Sentry; SoldeInsuffisant → logged by the caller), only
+    the local part is undone and the money taken remotely stays taken.
 
-    :param session: RfidSession — la session de service
+    :param session: RfidSession — la session de service (porte le volume autorisé)
     :param tireuse: TireuseBec — la tireuse
     :param carte: CarteCashless — la carte NFC du client
     :param volume_ml: Decimal — volume servi en ml
     :param contexte_cashless: dict retourné par obtenir_contexte_cashless()
     :param ip: str — IP du Raspberry Pi
-    :return: dict avec transactions, ligne_article, montant_centimes. None si volume=0.
+    :return: dict avec transactions, ligne_article, montant_centimes (l'argent
+        réellement débité : il s'affiche à l'écran de fin de service). None si rien
+        n'est facturé (volume nul, prix nul, aucune monnaie débitée).
     """
     from fedow_core.services import TransactionService, WalletService
     from fedow_core.exceptions import SoldeInsuffisant
     from BaseBillet.models import (
         LigneArticle,
+        PaymentMethod,
         ProductSold,
         PriceSold,
         SaleOrigin,
@@ -388,9 +458,24 @@ def facturer_tirage(
         )
         return None
 
-    # Montant total en centimes : même formule que l'écran du kiosk
-    # / Total amount in cents: same formula as the kiosk screen
-    montant_centimes = calculer_montant_centimes(volume_ml, prix_litre)
+    # Le volume facturé : le plus petit du volume servi et du volume autorisé au badge
+    # (Q-H13). Le débordement au-delà du volume autorisé n'est pas facturé ; le stock,
+    # lui, baisse du volume réellement servi (plus bas).
+    # / Billed volume: the smaller of the served and the authorised volume (Q-H13).
+    volume_servi_ml = Decimal(str(volume_ml))
+    volume_autorise_ml = Decimal(str(session.allowed_ml_session))
+    volume_facture_ml = min(volume_servi_ml, volume_autorise_ml)
+    if volume_facture_ml < volume_servi_ml:
+        logger.info(
+            f"Débordement non facturé (tireuse={tireuse.nom_tireuse}, "
+            f"carte={carte.tag_id}) : servi {volume_servi_ml} ml, autorisé "
+            f"{volume_autorise_ml} ml, facturé {volume_facture_ml} ml."
+        )
+
+    # Prix des litres facturés, en centimes : même formule que l'écran du kiosk, et
+    # même centime que le total de la ligne (la quantité est arrondie d'abord).
+    # / Price of the billed litres: same formula as the kiosk screen and the line.
+    montant_centimes = calculer_montant_centimes(volume_facture_ml, prix_litre)
 
     if montant_centimes <= 0:
         return None
@@ -463,11 +548,11 @@ def facturer_tirage(
             except Exception as erreur_de_l_ancien_fedow:
                 # L'échec peut arriver APRÈS un débit fait côté serveur (réponse
                 # perdue) : c'est une ERREUR, avec sa cause, la carte et le montant
-                # demandé. La bière est servie : on facture les monnaies locales
-                # seules ; le montant non facturé est dit par l'avertissement plus bas.
+                # demandé. La bière est servie : on encaisse les monnaies locales
+                # seules ; le montant non encaissé est dit par l'avertissement plus bas.
                 # / The failure may follow a server-side debit (lost response): an
-                #   ERROR with cause, card and requested amount. Bill locals only;
-                #   the warning below gives the unbilled amount.
+                #   ERROR with cause, card and requested amount. Collect locals only;
+                #   the warning below gives the uncollected amount.
                 logger.error(
                     f"Débit de l'ancien Fedow en échec au pour_end "
                     f"(tireuse={tireuse.nom_tireuse}, carte={carte.tag_id}, "
@@ -480,24 +565,29 @@ def facturer_tirage(
             montant_de_la_transaction_distante = transaction_distante[1]
             restant_centimes -= montant_de_la_transaction_distante
 
+    # L'argent réellement débité, toutes monnaies : c'est lui que la réponse et l'écran
+    # de fin de service annoncent.
+    # / The money really debited, all currencies: announced by the response and screen.
+    montant_debite_centimes = montant_centimes - restant_centimes
+
     if restant_centimes > 0:
-        # Montant non couvert : ce qui manque n'est pas facturé. Arrive quand le
-        # volume envoyé dépasse allowed_ml (le Pi ne contrôle le plafond qu'une
-        # fois par seconde et déborde de quelques dizaines de ml), ou quand
-        # l'ancien Fedow échoue ou a baissé depuis le badge.
-        # La bière est déjà servie : on facture ce qui a été réellement débité
+        # Montant non couvert : le filet. Le volume facturé ne dépasse jamais le volume
+        # autorisé au badge : il manque de l'argent seulement si l'ancien Fedow échoue,
+        # ou si un solde a baissé depuis le badge.
+        # La bière est déjà servie : on encaisse ce qui a été réellement débité
         # plutôt que d'abandonner toute la facturation (sinon le tirage est offert).
-        # C'est le SEUL avertissement du montant non facturé.
-        # / Uncovered amount, not billed (volume over allowed_ml, old Fedow failed
-        # or lower). Beer is poured: bill what was really debited. The ONLY
-        # warning about the unbilled amount.
+        # La ligne garde le prix des litres facturés ; ce qui manque devient l'article
+        # d'écart « reçu en moins », plus bas. C'est le SEUL avertissement du montant
+        # non encaissé.
+        # / Uncovered amount, the safety net (old Fedow failed or a balance dropped
+        # since the badge). Collect what was really debited; the line keeps its price
+        # and a "received less" gap item carries the rest. The ONLY warning about it.
         logger.warning(
             f"Solde insuffisant au pour_end (tireuse={tireuse.nom_tireuse}, "
             f"carte={carte.tag_id}) : demande {montant_centimes} cts, "
-            f"debite {montant_centimes - restant_centimes} cts, "
-            f"manque {restant_centimes} cts (non facturé)."
+            f"debite {montant_debite_centimes} cts, "
+            f"manque {restant_centimes} cts (non encaissé, écart reçu en moins)."
         )
-        montant_centimes -= restant_centimes
 
     rien_a_debiter = (
         not repartition_sur_les_monnaies_locales and not transactions_de_l_ancien_fedow
@@ -537,8 +627,9 @@ def facturer_tirage(
             transactions_creees.append(tx)
             debits_par_asset.append((asset, montant_asset))
 
-        # Volume en centilitres pour weight_quantity (unité stock = cl)
-        # / Volume in centiliters for weight_quantity (stock unit = cl)
+        # Volume RÉELLEMENT servi, en centilitres, pour weight_quantity et le stock
+        # (unité stock = cl) : débordement compris, l'inventaire reste juste.
+        # / Really served volume in cl, for weight_quantity and the stock.
         volume_cl = int(round(float(volume_ml) / 10))
         # 2. Snapshots ProductSold / PriceSold
         # / ProductSold / PriceSold snapshots
@@ -573,97 +664,53 @@ def facturer_tirage(
             carte=carte,
         )
 
-        # 4. Un article par transaction débitée (locale, puis ancien Fedow), écrit par
-        # le service de vente. La ligne garde sa forme : le prix du tirage dans amount,
-        # et la part de sa monnaie dans qty (fraction de 1, par _calculer_qty_partielles).
-        # Pinte à 4 € payée 1 € TNF + 3 € TLF → 2 lignes à amount 400 :
-        # qty 0.25 LOCAL_GIFT + qty 0.75 LOCAL_EURO (1 € + 3 €).
-        # weight_quantity identique sur toutes les lignes — stock décrémenté 1 seule fois.
-        # / 4. One item per debited transaction (local, then old Fedow), written by the
-        #   sale service. Same line shape: pour price in amount, currency share in qty.
+        # 4. UN article pour le tirage, quel que soit le nombre de monnaies débitées
+        # (D15), écrit par le service de vente :
+        # - qty = les litres facturés, arrondis à 3 décimales ; amount = le prix au litre
+        #   en centimes. Le service calcule le total (prix × litres, demi-haut) : le
+        #   même centime que `montant_centimes` (même quantité, même prix, même arrondi) ;
+        # - le coût d'achat porte sur ces litres (le prix d'achat d'un fût est au litre) ;
+        # - la part payée en jetons cadeau (débits LG) va dans `part_en_jetons` : vendue
+        #   hors TVA (D8 bis), la TVA du fût ne porte que sur le reste ;
+        # - ni moyen, ni monnaie, ni carte, ni portefeuille (Q-H2) : les règlements les
+        #   portent. Le poids en centilitres reste dans `weight_quantity` (le stock).
+        # Pinte de 0,500 L à 8 €/L payée 1 € TNF + 3 € TLF → 1 ligne : qty 0,500,
+        # amount 800, total 400, part en jetons 100.
+        # / 4. ONE item for the pour (D15): qty = litres billed, amount = price per
+        #   litre; cost on the litres; gift-token debits in part_en_jetons; no method,
+        #   currency, card or wallet on the line (Q-H2).
         from laboutik.views import (
             MAPPING_ASSET_CATEGORY_PAYMENT_METHOD,
-            _calculer_qty_partielles,
             _taux_tva_de_la_ligne_de_caisse,
         )
 
-        # Les parts du tirage : (uuid de la monnaie, argent débité, moyen de paiement).
-        # Part locale : la monnaie fedow_core et le moyen de sa catégorie. Part de
-        # l'ancien Fedow : la monnaie distante et le moyen rendu par _debiter_legacy
-        # (FED → STRIPE_FED, TLF fédérés → LOCAL_EURO).
-        # / The pour's parts: (currency uuid, money debited, payment method).
-        parts_du_tirage = []
-        for asset, montant_a in debits_par_asset:
-            parts_du_tirage.append(
-                (
-                    asset.uuid,
-                    montant_a,
-                    MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[asset.category],
-                )
-            )
-        for transaction_distante in transactions_de_l_ancien_fedow:
-            uuid_de_la_monnaie_distante = transaction_distante[0]
-            montant_de_la_transaction_distante = transaction_distante[1]
-            moyen_de_la_transaction_distante = transaction_distante[2]
-            parts_du_tirage.append(
-                (
-                    uuid_de_la_monnaie_distante,
-                    montant_de_la_transaction_distante,
-                    moyen_de_la_transaction_distante,
-                )
-            )
+        part_payee_en_jetons = 0
+        for asset, montant_debite_dans_la_monnaie in debits_par_asset:
+            moyen_de_la_monnaie = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD[asset.category]
+            if moyen_de_la_monnaie == PaymentMethod.LOCAL_GIFT:
+                part_payee_en_jetons += montant_debite_dans_la_monnaie
 
-        lignes_amounts = []
-        for _uuid_de_la_monnaie, montant_de_la_part, _moyen in parts_du_tirage:
-            lignes_amounts.append({"amount_centimes": montant_de_la_part})
-        lignes_avec_qty = _calculer_qty_partielles(
-            lignes_amounts, montant_centimes, Decimal("1")
+        litres_factures = calculer_litres_du_volume(volume_facture_ml)
+        prix_au_litre_en_centimes = calculer_prix_au_litre_en_centimes(prix_litre)
+
+        # Le taux de TVA : celui du fût (ou le taux par défaut du lieu). Aucun moyen
+        # n'est passé : la ligne n'en a pas, et les jetons sont sortis de la TVA par
+        # leur part.
+        # / VAT rate: the keg's (or the venue default); no method on the line.
+        ligne_du_tirage = ajouter_article(
+            vente,
+            pricesold=price_sold,
+            quantite=litres_factures,
+            prix_unitaire=prix_au_litre_en_centimes,
+            taux_tva=_taux_tva_de_la_ligne_de_caisse(produit, None),
+            prix_achat=int(produit.prix_achat),
+            part_en_jetons=part_payee_en_jetons,
+            sale_origin=SaleOrigin.TIREUSE,
+            status=LigneArticle.VALID,
+            point_de_vente=tireuse.point_de_vente,
+            weight_quantity=volume_cl,
+            uuid_transaction=uuid_transaction,
         )
-
-        # Le volume servi, en litres : l'unité du prix d'achat d'un fût.
-        # / Served volume in litres: the unit of a keg's purchase price.
-        litres_servis = Decimal(str(volume_ml)) / Decimal("1000")
-
-        lignes_creees = []
-        premiere_ligne = None
-
-        for i, (uuid_de_la_monnaie, montant_a, payment_method) in enumerate(
-            parts_du_tirage
-        ):
-            qty_partielle = Decimal(lignes_avec_qty[i]["qty"])
-
-            # Le total catalogue de la part est l'argent RÉELLEMENT débité dans sa
-            # monnaie, jamais amount × qty : qty est arrondie à 6 décimales et ne doit
-            # pas décider d'un centime. Le coût d'achat porte sur les litres que la
-            # part paie (litres servis × sa fraction), au prix d'achat du fût au litre.
-            # Une part payée en jetons cadeau (LG) n'a rien d'offert : une vente
-            # ordinaire, au taux 0 (`_taux_tva_de_la_ligne_de_caisse`) ; son règlement
-            # est « jetons ».
-            # / The part's catalogue total is the money REALLY debited, never
-            #   amount × qty. The cost is on the litres this part pays for. A token
-            #   part offers nothing: an ordinary sale at 0 % VAT.
-            ligne = ajouter_article(
-                vente,
-                pricesold=price_sold,
-                quantite=qty_partielle,
-                prix_unitaire=montant_centimes,
-                taux_tva=_taux_tva_de_la_ligne_de_caisse(produit, payment_method),
-                prix_achat=int(produit.prix_achat),
-                total_catalogue_impose=montant_a,
-                quantite_pour_cout=litres_servis * qty_partielle,
-                sale_origin=SaleOrigin.TIREUSE,
-                payment_method=payment_method,
-                status=LigneArticle.VALID,
-                asset=uuid_de_la_monnaie,
-                carte=carte,
-                wallet=wallet_client,
-                point_de_vente=tireuse.point_de_vente,
-                weight_quantity=volume_cl,
-                uuid_transaction=uuid_transaction,
-            )
-            lignes_creees.append(ligne)
-            if premiere_ligne is None:
-                premiere_ligne = ligne
 
         # 5. Un règlement par transaction fedow_core créée : son montant et son uuid
         # sont COPIÉS de la transaction, jamais recalculés depuis les articles.
@@ -698,9 +745,21 @@ def facturer_tirage(
                 reference_externe=str(uuid_de_la_transaction_distante),
             )
 
-        # 6. Session liée à la première LigneArticle (même convention que laboutik).
-        # / Session linked to the first LigneArticle (same convention as laboutik).
-        session.ligne_article = premiere_ligne
+        # 5 ter. Le filet : les règlements ne couvrent pas la ligne (ancien Fedow en
+        # échec, ou solde baissé depuis le badge). La ligne garde le prix des litres
+        # facturés ; ce qui manque devient l'article « Écart d'encaissement — reçu en
+        # moins » (D26). Un débit ne s'annule pas : c'est l'écart qui fait tenir les
+        # deux égalités. Écart = argent débité − total de la ligne ; rien s'il vaut 0.
+        # / 5 ter. Safety net: the payments do not cover the line; the missing money
+        #   becomes a "received less" gap item (D26), so both equalities hold.
+        from BaseBillet.services_vente import ajouter_l_article_d_ecart_d_encaissement
+
+        ecart_en_centimes = montant_debite_centimes - ligne_du_tirage.total_ttc
+        ajouter_l_article_d_ecart_d_encaissement(vente, ecart_en_centimes)
+
+        # 6. Session liée à la ligne du tirage (même convention que laboutik).
+        # / Session linked to the pour's line (same convention as laboutik).
+        session.ligne_article = ligne_du_tirage
         session.save(update_fields=["ligne_article"])
 
         # 7. Décrémenter le stock inventaire si le produit en a un
@@ -726,7 +785,7 @@ def facturer_tirage(
                         stock=produit.stock_inventaire,
                         contenance=volume_cl,
                         qty=1,
-                        ligne_article=premiere_ligne,  # 1 seul mouvement de stock quel que soit le nb d'assets
+                        ligne_article=ligne_du_tirage,
                     )
 
                 # Prévenir les caisses LaBoutik du nouveau stock (badge de la tuile),
@@ -758,9 +817,10 @@ def facturer_tirage(
 
     logger.info(
         f"Facturation cascade: tireuse={tireuse.nom_tireuse} volume={float(volume_ml):.0f}ml "
-        f"montant={montant_centimes}cts assets=[{assets_debites_str}] "
+        f"prix={montant_centimes}cts debite={montant_debite_centimes}cts "
+        f"assets=[{assets_debites_str}] "
         f"ancien_fedow={len(transactions_de_l_ancien_fedow)} transaction(s) "
-        f"lignes={len(lignes_creees)} premiere_ligne={premiere_ligne.uuid if premiere_ligne else 'None'}"
+        f"ligne={ligne_du_tirage.uuid}"
     )
 
     return {
@@ -769,11 +829,10 @@ def facturer_tirage(
         # tirage est payé entièrement par l'ancien Fedow (aucune transaction locale).
         # / Backward compatibility. None when the old Fedow paid the whole pour.
         "transaction": transactions_creees[0] if transactions_creees else None,
-        # Compatibilité avec le code existant qui lit ["ligne_article"]
-        # / Backward compatibility with existing code reading ["ligne_article"]
-        "ligne_article": premiere_ligne,
-        # Liste complète des N LigneArticle créées
-        # / Full list of N created LigneArticle
-        "lignes_articles": lignes_creees,
-        "montant_centimes": montant_centimes,
+        # La ligne du tirage (une seule) / The pour's line (only one)
+        "ligne_article": ligne_du_tirage,
+        # L'argent réellement débité : la réponse au Raspberry Pi et l'écran de fin
+        # de service l'annoncent (inférieur au prix si le solde manquait).
+        # / The money really debited: announced to the Pi and on the end screen.
+        "montant_centimes": montant_debite_centimes,
     }

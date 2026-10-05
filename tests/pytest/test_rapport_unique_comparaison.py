@@ -11,10 +11,11 @@ LOCALISATION : tests/pytest/test_rapport_unique_comparaison.py
 RÈGLE MÉTIER TESTÉE (fiche F §5)
 Le nouveau rapport (`comptabilite/rapport.py`, `RapportDesVentes`) remplace l'ancien
 rapport de caisse (`laboutik/reports.py`, `RapportComptableService`). Sur une vente que
-l'ancien calculait juste, les deux donnent :
-- les mêmes totaux TTC, HT et TVA, au total et par taux ;
-- les mêmes règlements par moyen : espèces, CB, chèque, cashless (monnaie locale et
-  jetons cadeau, par nom de monnaie), fédéré.
+l'ancien calculait juste, les deux donnent les mêmes totaux TTC, HT et TVA, au total et
+par taux.
+Les règlements et le tiroir ne se comparent plus : l'ancien moteur les lit dans le
+moyen de la ligne, que la caisse laisse vide (Q-H2, session H-1b-2 ; l'ancien moteur
+part en H-2). Le nouveau rapport y est vérifié seul, sur ses valeurs exactes.
 Les ventes que l'ancien calculait faux (troncatures, recharges dans le chiffre
 d'affaires, jetons comptés en argent…) ne sont pas comparées ici : les valeurs exactes
 de `test_rapport_unique.py` tiennent ce rôle.
@@ -338,36 +339,17 @@ class TestRapportUniqueComparaison(FastTenantTestCase):
             "nouveau_total": nouveau_total,
         }
 
-    def _reglements_des_deux_rapports(self):
+    def _reglements_du_nouveau_rapport(self):
         """
-        Les règlements de chaque rapport, ramenés à la même forme (voir la
+        Les règlements du nouveau rapport, ramenés à la forme de l'ancien (voir la
         correspondance en tête du fichier) : un montant par moyen, le total, et le
         cashless par nom de monnaie.
-        / Each report's payments in the same shape: one amount per method, the total,
-        and cashless by currency name.
+        / The new report's payments in the old shape: one amount per method, the
+        total, and cashless by currency name.
         """
-        ancien_rapport = RapportComptableService(
-            self.point_de_vente, self.debut_de_la_periode, self.fin_de_la_periode
-        )
         nouveau_rapport = RapportDesVentes(
             self.debut_de_la_periode, self.fin_de_la_periode
         )
-
-        totaux_de_l_ancien = ancien_rapport.calculer_totaux_par_moyen()
-        cashless_de_l_ancien_par_nom = {}
-        for ligne_de_la_monnaie in totaux_de_l_ancien["cashless_detail"]:
-            cashless_de_l_ancien_par_nom[ligne_de_la_monnaie["nom"]] = (
-                ligne_de_la_monnaie["montant"]
-            )
-        reglements_de_l_ancien = {
-            "especes": totaux_de_l_ancien["especes"],
-            "carte_bancaire": totaux_de_l_ancien["carte_bancaire"],
-            "cheque": totaux_de_l_ancien["cheque"],
-            "cashless": totaux_de_l_ancien["cashless"],
-            "cashless_par_nom": cashless_de_l_ancien_par_nom,
-            "federe": totaux_de_l_ancien["federe"],
-            "total": totaux_de_l_ancien["total"],
-        }
 
         reglements_du_nouveau = nouveau_rapport.section_reglements()
         argent_par_moyen = reglements_du_nouveau["argent"]["par_moyen"]
@@ -398,7 +380,7 @@ class TestRapportUniqueComparaison(FastTenantTestCase):
             "total": reglements_du_nouveau["argent"]["total_en_centimes"]
             + reglements_du_nouveau["cashless"]["total_en_centimes"],
         }
-        return reglements_de_l_ancien, reglements_du_nouveau_meme_forme
+        return reglements_du_nouveau_meme_forme
 
     def _montant_du_moyen(self, lignes_par_moyen, code_du_moyen):
         """
@@ -418,18 +400,16 @@ class TestRapportUniqueComparaison(FastTenantTestCase):
     def test_comparaison_trois_jus_en_especes(self):
         """
         Trois jus à 3,50 € en espèces. Les deux rapports : 1050 TTC, 875 HT, 175 TVA
-        (taux 20) ; espèces 1050, rien d'autre ; même tiroir (fond 0, entrées 1050,
-        sorties 0, solde 1050).
-        / Three juices in cash: both reports give 1050 / 875 / 175, cash 1050, and the
-        same cash drawer.
+        (taux 20). Le nouveau rapport : espèces 1050, rien d'autre ; tiroir fond 0,
+        entrées 1050, sorties 0, solde 1050.
+        / Three juices in cash: both reports give 1050 / 875 / 175; the new report
+        gives cash 1050 and its drawer.
         """
         cle_d_idempotence = self._payer_trois_jus("espece")
         self._verifier_la_vente_de_la_cle(cle_d_idempotence)
 
         chiffres = self._chiffre_affaires_des_deux_rapports()
-        reglements_de_l_ancien, reglements_du_nouveau = (
-            self._reglements_des_deux_rapports()
-        )
+        reglements_du_nouveau = self._reglements_du_nouveau_rapport()
 
         # 350 × 3 = 1050 ; HT arrondi(1050 / 1,2) = 875 ; TVA 175.
         # / 350 × 3 = 1050; HT 875; VAT 175.
@@ -440,20 +420,14 @@ class TestRapportUniqueComparaison(FastTenantTestCase):
         )
         assert len(chiffres["nouveau_par_taux"]) == len(chiffres["ancien_par_taux"])
 
-        assert reglements_du_nouveau == reglements_de_l_ancien
         assert reglements_du_nouveau["especes"] == 1050
+        assert reglements_du_nouveau["carte_bancaire"] == 0
+        assert reglements_du_nouveau["cashless"] == 0
         assert reglements_du_nouveau["total"] == 1050
 
-        # Le tiroir : fond, espèces, sorties, solde. L'ancien moteur ne sépare pas
-        # les espèces reçues, rendues et corrigées : ses « entrées espèces » sont la
-        # somme nette des lignes payées en espèces. On compare donc à la somme des
-        # trois lignes du nouveau.
-        # / The drawer. The old engine does not split cash received, given back and
-        # corrected: its "cash in" is compared with the sum of the three new lines.
-        ancien_rapport = RapportComptableService(
-            self.point_de_vente, self.debut_de_la_periode, self.fin_de_la_periode
-        )
-        solde_de_l_ancien = ancien_rapport.calculer_solde_caisse()
+        # Le tiroir du nouveau rapport : fond 0, espèces reçues 1050, aucune sortie,
+        # solde 1050.
+        # / The new report's drawer: no float, 1050 received, no outflow, 1050.
         caisse_du_nouveau = RapportDesVentes(
             self.debut_de_la_periode, self.fin_de_la_periode
         ).section_caisse_especes()
@@ -462,37 +436,23 @@ class TestRapportUniqueComparaison(FastTenantTestCase):
             + caisse_du_nouveau["especes_rendues_en_centimes"]
             + caisse_du_nouveau["corrections_en_centimes"]
         )
-
-        assert (
-            caisse_du_nouveau["fond_de_caisse_en_centimes"]
-            == solde_de_l_ancien["fond_de_caisse"]
-        )
-        assert (
-            entrees_especes_du_nouveau == solde_de_l_ancien["entrees_especes"] == 1050
-        )
-        assert (
-            caisse_du_nouveau["sorties_en_centimes"]
-            == solde_de_l_ancien["sorties_especes"]
-        )
-        assert (
-            caisse_du_nouveau["solde_theorique_en_centimes"]
-            == solde_de_l_ancien["solde"]
-            == 1050
-        )
+        assert caisse_du_nouveau["fond_de_caisse_en_centimes"] == 0
+        assert entrees_especes_du_nouveau == 1050
+        assert caisse_du_nouveau["sorties_en_centimes"] == 0
+        assert caisse_du_nouveau["solde_theorique_en_centimes"] == 1050
 
     def test_comparaison_trois_jus_en_cb(self):
         """
         Trois jus à 3,50 € en CB. Les deux rapports : 1050 TTC, 875 HT, 175 TVA
-        (taux 20) ; CB 1050, rien d'autre.
-        / Three juices by bank card: both reports give 1050 / 875 / 175 and card 1050.
+        (taux 20). Le nouveau rapport : CB 1050, rien d'autre.
+        / Three juices by bank card: both reports give 1050 / 875 / 175; the new
+        report gives card 1050.
         """
         cle_d_idempotence = self._payer_trois_jus("carte_bancaire")
         self._verifier_la_vente_de_la_cle(cle_d_idempotence)
 
         chiffres = self._chiffre_affaires_des_deux_rapports()
-        reglements_de_l_ancien, reglements_du_nouveau = (
-            self._reglements_des_deux_rapports()
-        )
+        reglements_du_nouveau = self._reglements_du_nouveau_rapport()
 
         assert chiffres["nouveau_total"] == chiffres["ancien_total"] == (1050, 875, 175)
         assert (
@@ -501,26 +461,26 @@ class TestRapportUniqueComparaison(FastTenantTestCase):
         )
         assert len(chiffres["nouveau_par_taux"]) == len(chiffres["ancien_par_taux"])
 
-        assert reglements_du_nouveau == reglements_de_l_ancien
         assert reglements_du_nouveau["carte_bancaire"] == 1050
+        assert reglements_du_nouveau["especes"] == 0
+        assert reglements_du_nouveau["cashless"] == 0
         assert reglements_du_nouveau["total"] == 1050
 
     def test_comparaison_trois_jus_par_la_carte_en_monnaie_locale(self):
         """
         Trois jus à 3,50 € payés par la carte du client, qui porte 20,00 € de monnaie
         locale : la carte paie tout, d'une seule monnaie. Les deux rapports : 1050 TTC,
-        875 HT, 175 TVA (taux 20) ; cashless 1050, tout en monnaie locale (par son nom).
+        875 HT, 175 TVA (taux 20). Le nouveau rapport : cashless 1050, tout en monnaie
+        locale (par son nom).
         / Three juices paid by the customer's card (one currency): both reports give
-        1050 / 875 / 175 and cashless 1050 in local currency.
+        1050 / 875 / 175; the new report gives cashless 1050 in local currency.
         """
         carte = self._carte_du_client("RUCNFCAA", 2000)
         cle_d_idempotence = self._payer_trois_jus("nfc", carte=carte)
         self._verifier_la_vente_de_la_cle(cle_d_idempotence)
 
         chiffres = self._chiffre_affaires_des_deux_rapports()
-        reglements_de_l_ancien, reglements_du_nouveau = (
-            self._reglements_des_deux_rapports()
-        )
+        reglements_du_nouveau = self._reglements_du_nouveau_rapport()
 
         assert chiffres["nouveau_total"] == chiffres["ancien_total"] == (1050, 875, 175)
         assert (
@@ -529,7 +489,8 @@ class TestRapportUniqueComparaison(FastTenantTestCase):
         )
         assert len(chiffres["nouveau_par_taux"]) == len(chiffres["ancien_par_taux"])
 
-        assert reglements_du_nouveau == reglements_de_l_ancien
+        assert reglements_du_nouveau["especes"] == 0
+        assert reglements_du_nouveau["carte_bancaire"] == 0
         assert reglements_du_nouveau["cashless"] == 1050
         assert reglements_du_nouveau["cashless_par_nom"] == {
             NOM_DE_LA_MONNAIE_LOCALE: 1050

@@ -235,3 +235,25 @@ retirée (rejeu en double).
 Aucune ligne n'est supprimée ; aucun montant vendu ne change ; aucune nouvelle colonne ;
 le comportement des ventes d'aujourd'hui (`encaisser_vente`) est inchangé ; `kiosk/`
 intouché.
+
+## 11. Conséquences de la fiche H-1 (relecture Opus de la spec H-1, 2026-10-05)
+
+À intégrer à la réécriture de la fiche :
+- **`total_catalogue_impose` reste** dans le service (`calculer_montants_article`) :
+  H-1 le retire des producteurs seulement. Il sert à l'avoir « miroir » des anciennes
+  lignes en parts (parts QR de l'historique repris, Q-R10). La reprise écrit ses
+  montants par `.update()` et n'en dépend pas.
+- **Champ `LigneArticle.part_en_jetons`** (Q-H1, H-1b-1) : une ancienne ligne payée en
+  jetons cadeau (moyen LG), s'il en existe en production, reçoit `part_en_jetons` = son
+  net ; sinon les lecteurs ne la reconnaissent plus comme payée en jetons.
+- **Ordre des migrations** : la nuit de la bascule passe aussi les migrations de H-1
+  (`0234_vente_raison`, champ jetons de H-1b-1…), pas seulement A à G (§7.2).
+- **Lignes sans vente écrites après la bascule** (demandes QR jamais payées) : à régler
+  par la règle « vente obligatoire » de H-2 (H-2 après la production et après le
+  chantier kiosque, Q-H7).
+- **Anciennes pesées et anciens retours de consigne** (H-1b-2) — **sans objet pour la production** (relecture Opus H-1b-2, 2026-10-05) : la caisse V2 (`laboutik`) n'a jamais tourné en production (G-1d) ; ces formes n'existent qu'en base de dev, régénérée. Pour mémoire : une ancienne ligne au
+  poids a `qty` 1 et le prix de la pesée dans `amount` ; un ancien retour de consigne a
+  `qty` +1 et un prix négatif. Les lecteurs d'après H-1 lisent `qty` en kg / L et
+  comptent les gobelets rendus par −Σ qty : la reprise convertit ces deux formes (pesée :
+  `qty` = poids réel depuis `weight_quantity`, `amount` = prix de référence ; retour :
+  `qty` −1, prix positif), montants inchangés.

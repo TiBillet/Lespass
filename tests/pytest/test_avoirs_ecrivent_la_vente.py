@@ -252,6 +252,7 @@ from fabriques_vente import (
 )
 from fedow_core.models import Transaction
 from laboutik.models import PointDeVente
+from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from QrcodeCashless.models import CarteCashless
 from test_admin_ecrit_la_vente import (
     creer_l_adhesion_et_relire,
@@ -521,8 +522,9 @@ def vendre_a_la_caisse_une_biere_en_deux_parts():
     ÉTAT DE DÉPART : une bière à 5 € payée 3 € en jetons cadeau (`LG`) et 2 € par CB,
     écrite en DEUX PARTS comme la caisse en cascade l'écrit
     (`laboutik/views.py` `_creer_lignes_articles_cascade`) :
-    - part « jetons » : quantité 0,6, total catalogue imposé 300, vente ordinaire à
-      TVA 0, rien d'offert (D8 bis), moyen historique LG ;
+    - part « jetons » : quantité 0,6, total catalogue imposé 300, part payée en jetons
+      300 (vente ordinaire hors TVA, rien d'offert, D8 bis), taux du produit, moyen
+      historique LG ;
     - part « CB » : quantité 0,4, total catalogue imposé 200, moyen historique CC.
     Règlements : LG 300, CB 200. Rend les deux parts.
     / STARTING STATE: a 5 € beer paid 3 € in gift tokens and 2 € by card, written in
@@ -536,8 +538,9 @@ def vendre_a_la_caisse_une_biere_en_deux_parts():
                 "pricesold": tarif_vendu,
                 "quantite": Decimal("0.6"),
                 "prix_unitaire": 500,
-                "taux_tva": Decimal("0"),
+                "taux_tva": Decimal("20"),
                 "total_catalogue_impose": 300,
+                "part_en_jetons": 300,
                 "payment_method": PaymentMethod.LOCAL_GIFT,
                 "status": LigneArticle.VALID,
             },
@@ -880,10 +883,12 @@ def vendre_un_billet_paye_en_jetons():
     """
     ÉTAT DE DÉPART : un billet à 5 € (réservation validée, un billet actif), payé en
     jetons cadeau (`LG`) par une carte, écrit par le service de vente comme une part en
-    jetons d'aujourd'hui (D8 bis) : une vente ordinaire, rien d'offert, net 500, TVA 0,
-    avec la monnaie des jetons et la carte. Règlement : jetons (LG) 500, même monnaie,
-    même carte. La réservation et son billet sont posés par `create(status=…)`, sans
-    machine à états (tests/PIEGES.md 12.17).
+    jetons d'aujourd'hui (D8 bis) : une vente ordinaire, rien d'offert, net 500, part
+    payée en jetons 500, au taux que la caisse écrit pour ce produit
+    (`_taux_tva_de_la_ligne_de_caisse`), donc TVA 0 ; avec la monnaie des jetons et la
+    carte. Règlement : jetons (LG) 500, même monnaie, même carte. La réservation et son
+    billet sont posés par `create(status=…)`, sans machine à états (tests/PIEGES.md
+    12.17).
     Rend la réservation, la ligne, sa vente, la carte et la monnaie des jetons.
     / STARTING STATE: a 5 € ticket paid in gift tokens (LG) by a card, written by the
     sale service as a D8 bis token part (ordinary sale, net 500, VAT 0), one LG payment.
@@ -920,7 +925,10 @@ def vendre_un_billet_paye_en_jetons():
                 "pricesold": tarif_vendu,
                 "quantite": Decimal("1"),
                 "prix_unitaire": 500,
-                "taux_tva": Decimal("0"),
+                "taux_tva": _taux_tva_de_la_ligne_de_caisse(
+                    concert.produit, PaymentMethod.LOCAL_GIFT
+                ),
+                "part_en_jetons": 500,
                 "payment_method": PaymentMethod.LOCAL_GIFT,
                 "asset": monnaie_des_jetons,
                 "carte": carte_du_client,
@@ -957,10 +965,11 @@ def test_avoir_d_une_part_en_jetons_reglement_lg_negatif_sans_rembourse_par(
     L'admin le rend, par le bouton « Avoir » ou par l'annulation de la réservation.
     Une part payée en jetons n'a PAS d'argent à rendre :
     - l'écran n'a PAS de champ « Remboursé par » ; l'admin valide sans moyen ;
-    - l'article d'avoir : quantité −1, catalogue −500, rien d'offert, net −500, TVA 0,
+    - l'article d'avoir : quantité −1, catalogue −500, rien d'offert, net −500, part
+      en jetons −500, taux de la ligne d'origine, TVA 0,
       moyen historique LG ;
-    - UN seul règlement : jetons (LG) −500, avec la monnaie et la carte de la ligne
-      d'origine ; aucun règlement FREE, aucun règlement d'argent ;
+    - UN seul règlement : jetons (LG) −500, avec la monnaie et la carte du règlement
+      LG de la vente d'origine ; aucun règlement FREE, aucun règlement d'argent ;
     - la carte n'est PAS recréditée (aucune transaction Fedow) : la dette du lieu
       revient, les jetons ne reviennent pas (tronc §9).
     / A ticket paid in gift tokens, given back by the "Credit note" button or by the
@@ -1012,7 +1021,8 @@ def test_avoir_d_une_part_en_jetons_reglement_lg_negatif_sans_rembourse_par(
     assert avoir.total_catalogue == -500
     assert avoir.part_offerte == 0
     assert avoir.total_ttc == -500
-    assert avoir.vat == 0
+    assert avoir.vat == ligne_d_origine.vat
+    assert avoir.part_en_jetons == -500
     assert avoir.total_tva == 0
     assert avoir.payment_method == PaymentMethod.LOCAL_GIFT
 
@@ -3789,15 +3799,17 @@ def test_annulation_adhesion_entierement_offerte_reglement_free_sans_champ(lieu)
 def test_annulation_adhesion_payee_en_jetons_reglement_lg_sans_champ(lieu):
     """
     Une adhésion à 20 € payée en jetons cadeau à la caisse (la cascade rattache les
-    adhésions à leur part) : une vente ordinaire à TVA 0, net 2000, moyen historique
-    LG, avec la monnaie des jetons et la carte (D8 bis). L'état de départ est écrit par
-    le service de vente.
+    adhésions à leur part) : une vente ordinaire, net 2000, part payée en jetons 2000
+    au taux que la caisse écrit pour ce produit (donc TVA 0), moyen historique LG, avec
+    la monnaie des jetons et la carte (D8 bis). L'état de départ est écrit par le
+    service de vente.
     - Le formulaire d'annulation n'a PAS de champ « Remboursé par » : une part payée en
       jetons n'a pas d'argent à rendre.
     - L'admin clique « Annuler avec avoir » : l'adhésion est annulée ; l'avoir a
       catalogue −2000, rien d'offert, net −2000 ; sa vente AVOIR (origine ADMIN), liée à
       la vente d'origine, a UN seul règlement : jetons (LG) −2000, avec la monnaie et
-      la carte de la ligne. Aucun règlement FREE, aucun recrédit de la carte.
+      la carte du règlement LG d'origine. Aucun règlement FREE, aucun recrédit de la
+      carte.
     / A 20 € membership paid in gift tokens: no "Refunded by" field; the credit note
     has net −2000 and ONE LG payment of −2000 (currency and card copied), no FREE
     payment, no credit back on the card.
@@ -3828,7 +3840,10 @@ def test_annulation_adhesion_payee_en_jetons_reglement_lg_sans_champ(lieu):
                 "pricesold": tarif_vendu,
                 "quantite": Decimal("1"),
                 "prix_unitaire": 2000,
-                "taux_tva": Decimal("0"),
+                "taux_tva": _taux_tva_de_la_ligne_de_caisse(
+                    adhesion.tarif.product, PaymentMethod.LOCAL_GIFT
+                ),
+                "part_en_jetons": 2000,
                 "payment_method": PaymentMethod.LOCAL_GIFT,
                 "asset": monnaie_des_jetons,
                 "carte": carte_du_client,
@@ -4940,8 +4955,8 @@ def test_cout_de_l_avoir_rendu_total_exactement_en_miroir(lieu):
 
 def test_cout_de_l_avoir_partiel_au_prorata_arrondi_demi_haut(lieu):
     """
-    Deux portions de fromage au poids, 125 g chacune, prix d'achat 3,00 € le kg : coût
-    d'origine arrondi(0,250 × 300) = 75. Une portion est rendue : coût de l'avoir =
+    Deux portions de fromage, coût d'origine figé à 75 (un coût impair, imposé comme
+    l'avoir le fait pour un coût déjà figé). Une portion est rendue : coût de l'avoir =
     arrondi_demi_haut(75 × −1 / 2) = arrondi(−37,5) = −38 (0,5 s'éloigne de zéro).
     / Partial return: prorata of the frozen cost, rounded half up (−37.5 → −38).
     """
@@ -4952,7 +4967,7 @@ def test_cout_de_l_avoir_partiel_au_prorata_arrondi_demi_haut(lieu):
             "prix_unitaire": 250,
             "taux_tva": Decimal("5.5"),
             "prix_achat": 300,
-            "quantite_pour_cout": Decimal("0.250"),
+            "cout_achat_impose": 75,
         }
     )
     assert ligne_du_fromage.cout_achat == 75
@@ -4964,25 +4979,25 @@ def test_cout_de_l_avoir_partiel_au_prorata_arrondi_demi_haut(lieu):
 
 def test_cout_de_l_avoir_article_au_poids_reprend_le_poids_servi(lieu):
     """
-    Un fromage au poids comme la caisse l'écrit : quantité 1 sur la ligne, coût sur le
-    poids servi (0,350 kg × 8,00 € = 280). L'avoir rend −280, jamais le prix d'achat
-    au kilo multiplié par la quantité de la ligne (−800).
-    / A weight item: the credit note gives back −280 (the served weight's cost), never
-    the price per kg times the line quantity.
+    Un fromage au poids comme la caisse l'écrit (D15) : 0,350 kg au prix du kilo
+    (12,90 €), coût sur le poids servi (0,350 kg × 8,00 € = 280). L'article entier est
+    rendu : l'avoir rend −280, jamais le prix d'achat au kilo multiplié par une
+    quantité d'une pièce (−800).
+    / A weight item (D15): the credit note gives back −280 (the served weight's cost).
     """
     ligne_du_fromage = ligne_d_une_vente_en_especes(
         {
             "pricesold": creer_tarif_vendu(nom="Fromage au poids", prix_en_euros="12.90"),
-            "quantite": Decimal("1"),
-            "prix_unitaire": 452,
+            "quantite": Decimal("0.350"),
+            "prix_unitaire": 1290,
             "taux_tva": Decimal("5.5"),
             "prix_achat": 800,
-            "quantite_pour_cout": Decimal("0.350"),
+            "weight_quantity": 350,
         }
     )
     assert ligne_du_fromage.cout_achat == 280
 
-    avoir = avoir_de_la_ligne_par_le_service(ligne_du_fromage, Decimal("1"))
+    avoir = avoir_de_la_ligne_par_le_service(ligne_du_fromage, Decimal("0.350"))
 
     assert avoir.cout_achat == -280
 

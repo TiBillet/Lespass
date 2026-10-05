@@ -1265,7 +1265,13 @@ def _ecrire_rapport_csv_excel(writer, cloture, rapport):
         writer.append_blank()
 
 
-@admin.register(ClotureCaisse, site=staff_admin_site)
+# PAS ENREGISTRÉ dans l'admin : l'ancienne clôture de la caisse lit l'ancien moteur
+# (`laboutik/reports.py`), qui recalcule la TVA depuis le taux de la ligne. C'est faux
+# pour une part payée en jetons (hors TVA par sa `part_en_jetons`). Les clôtures se
+# lisent dans l'admin de `comptabilite` (comptabilite/admin.py).
+# TODO : retirer cette classe, ses exports et le modèle avec la fiche H-2.
+# / NOT registered in the admin: the old register closure reads the old engine, which
+# recomputes VAT from the rate (wrong for a token part). TODO: remove with sheet H-2.
 class ClotureCaisseAdmin(ModelAdmin):
     """Admin lecture seule pour les clotures de caisse.
     Document comptable immuable — aucune modification possible.
@@ -1328,7 +1334,6 @@ class ClotureCaisseAdmin(ModelAdmin):
         extra_context['export_fiscal_url'] = '/laboutik/caisse/export-fiscal/'
         extra_context['export_fec_url'] = '/laboutik/caisse/export-fec/'
         extra_context['export_csv_comptable_url'] = '/laboutik/caisse/export-csv-comptable/'
-        extra_context['rapport_temps_reel_url'] = '/laboutik/caisse/rapport-temps-reel/'
         return super().changelist_view(request, extra_context)
 
     list_before_template = "admin/cloture/changelist_before.html"

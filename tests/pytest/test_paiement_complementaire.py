@@ -44,6 +44,7 @@ from BaseBillet.models import (
 from QrcodeCashless.models import CarteCashless
 from fedow_core.models import Asset, Token
 from fedow_core.services import AssetService, WalletService
+from BaseBillet.models_vente import Reglement
 from laboutik.models import PointDeVente
 
 
@@ -296,16 +297,15 @@ class TestPaiementComplementaire(FastTenantTestCase):
         )
 
     def test_cloture_cascade_fractionnee_totaux_corrects(self):
-        """Bug B, volet clôture : vente NFC fractionnée (6 € TLF + 9 € espèces).
+        """Bug B, volet clôture : vente NFC payée 6 € TLF + 9 € espèces.
 
-        Le rapport comptable (RapportComptableService, qui agrège amount × qty avec
-        arrondi au centime) doit donner : total 15 €, cashless 6 €, espèces 9 € —
-        malgré les qty fractionnaires (1,2 et 1,8). Verrouille reports.py.
-        / Cloture report with fractional qty must total 15 €, cashless 6 €, cash 9 €.
+        Le rapport des ventes (`RapportDesVentes`, qui additionne les règlements)
+        doit donner : total 15 €, cashless 6 €, espèces 9 €.
+        / The sales report must total 15 €, cashless 6 €, cash 9 €.
         """
         from django.utils import timezone
         from datetime import timedelta
-        from laboutik.reports import RapportComptableService
+        from comptabilite.rapport import RapportDesVentes
 
         with (
             mock.patch('laboutik.views.FedowConfig') as MockConfig,
@@ -325,14 +325,16 @@ class TestPaiementComplementaire(FastTenantTestCase):
 
         debut = timezone.now() - timedelta(hours=1)
         fin = timezone.now() + timedelta(hours=1)
-        rapport = RapportComptableService(self.pv, debut, fin)
-        totaux = rapport.calculer_totaux_par_moyen()
+        reglements_du_rapport = RapportDesVentes(debut, fin).section_reglements()
+        total_argent = reglements_du_rapport["argent"]["total_en_centimes"]
+        total_cashless = reglements_du_rapport["cashless"]["total_en_centimes"]
+        especes = reglements_du_rapport["argent"]["par_moyen"]["CA"]["total_en_centimes"]
 
-        # Totaux en centimes ENTIERS, malgré les qty 1,2 / 1,8.
-        # / Integer-cent totals despite fractional qty 1.2 / 1.8.
-        assert totaux["total"] == 1500, f"Total clôture attendu 1500, obtenu {totaux['total']}"
-        assert totaux["cashless"] == 600, f"Cashless attendu 600, obtenu {totaux['cashless']}"
-        assert totaux["especes"] == 900, f"Espèces attendu 900, obtenu {totaux['especes']}"
+        # Totaux en centimes ENTIERS, lus sur les règlements.
+        # / Integer-cent totals, read from the payments.
+        assert total_argent + total_cashless == 1500
+        assert total_cashless == 600
+        assert especes == 900
 
     def test_nfc1_puis_espece_montants_comptables_corrects(self):
         """3 vins (15 €), carte1 TLF 6 € + complément 9 € en espèces → succès.
@@ -490,9 +492,9 @@ class TestPaiementComplementaire(FastTenantTestCase):
         lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.LABOUTIK)
         assert sum(ligne.total() for ligne in lignes) == 1500
         assert all(ligne.qty > 0 for ligne in lignes)
-        # Une part au moins réglée en CB (le complément 9 €).
-        # / At least one part settled by CC (the 9 € complement).
-        assert lignes.filter(payment_method=PaymentMethod.CC).exists()
+        # Le complément de 9 € est un règlement CB de la vente.
+        # / The 9 € complement is a CC payment of the sale.
+        assert Reglement.objects.filter(moyen=PaymentMethod.CC, montant=900).exists()
         assert WalletService.obtenir_solde(self.wallet1, self.asset_tlf) == 0
 
     # ------------------------------------------------------------------ #
@@ -636,7 +638,7 @@ class TestPaiementComplementaire(FastTenantTestCase):
         """Bug C, chemin succès : carte1 (0 local + 6 € FED) + carte2 (9 € local) couvre tout.
 
         Le paiement se finalise : FED de carte1 **débité** (différé), carte2 débitée,
-        compta = 15 €, et une part comptable en **STRIPE_FED** (le réseau).
+        compta = 15 €, et un règlement en **STRIPE_FED** (le réseau).
         / Success path: card1 FED (deferred debit) + card2 local cover all → finalize.
         """
         FED_UUID = "33333333-3333-3333-3333-333333333333"
@@ -694,9 +696,9 @@ class TestPaiementComplementaire(FastTenantTestCase):
 
         lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.LABOUTIK)
         assert sum(ligne.total() for ligne in lignes) == 1500
-        # Une part réglée par le réseau (FED de carte1).
-        # / A part settled by the network (card1's FED).
-        assert lignes.filter(payment_method=PaymentMethod.STRIPE_FED).exists()
+        # Un règlement du réseau (FED de carte1).
+        # / A network payment (card1's FED).
+        assert Reglement.objects.filter(moyen=PaymentMethod.STRIPE_FED).exists()
         # Carte2 débitée de ses 9 € locaux.
         # / Card2 debited its 9 € local.
         assert WalletService.obtenir_solde(self.wallet2, self.asset_tlf) == 0
@@ -780,8 +782,8 @@ class TestPaiementComplementaire(FastTenantTestCase):
 
         lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.LABOUTIK)
         assert sum(ligne.total() for ligne in lignes) == 1500
-        lignes_especes = lignes.filter(payment_method=PaymentMethod.CASH)
-        assert sum(ligne.total() for ligne in lignes_especes) == 100
+        reglements_especes = Reglement.objects.filter(moyen=PaymentMethod.CASH)
+        assert sum(reglement.montant for reglement in reglements_especes) == 100
 
         assert WalletService.obtenir_solde(self.wallet1, self.asset_tlf) == 0
         assert WalletService.obtenir_solde(self.wallet2, self.asset_tlf) == 0
@@ -802,8 +804,8 @@ class TestPaiementComplementaire(FastTenantTestCase):
 
         lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.LABOUTIK)
         assert sum(ligne.total() for ligne in lignes) == 1500
-        lignes_cb = lignes.filter(payment_method=PaymentMethod.CC)
-        assert sum(ligne.total() for ligne in lignes_cb) == 100
+        reglements_cb = Reglement.objects.filter(moyen=PaymentMethod.CC)
+        assert sum(reglement.montant for reglement in reglements_cb) == 100
 
         assert WalletService.obtenir_solde(self.wallet1, self.asset_tlf) == 0
         assert WalletService.obtenir_solde(self.wallet2, self.asset_tlf) == 0

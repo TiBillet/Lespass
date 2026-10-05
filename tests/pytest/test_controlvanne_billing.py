@@ -409,11 +409,10 @@ class TestBillingIntegration:
 
         La carte porte 1,00 € de monnaie cadeau (TNF) et 10,00 € de monnaie
         locale (TLF). Un tirage de 500 ml a 5 €/L coute 2,50 € : la cascade prend
-        1,00 € en cadeau puis 1,50 € en monnaie locale. Deux lignes, chacune au
-        prix unitaire du tirage (250), la part de chaque monnaie dans qty. La
-        somme des montants (amount x qty) vaut 250.
-        / A pour paid with two currencies records the full pour price: two lines
-        at the unit price, shares in qty, amounts summing to 250.
+        1,00 € en cadeau puis 1,50 € en monnaie locale. UNE ligne (D15) : 0,500 L
+        au prix du litre (500), total 250, dont 100 payes en jetons cadeau.
+        / A pour paid with two currencies records the full pour price: one line,
+        0.500 L at 500 per litre, total 250, 100 of it paid in gift tokens.
 
         Les monnaies sont celles que la facturation choisit elle-meme : la
         premiere de chaque categorie parmi les assets accessibles du lieu.
@@ -472,31 +471,24 @@ class TestBillingIntegration:
         assert reponse_fin.json().get("montant_centimes") == 250
 
         with schema_context(tenant.schema_name):
+            # La ligne ne porte pas la carte : elle est sur la vente et ses
+            # règlements (Q-H2). On passe par la vente.
+            # / The line no longer carries the card: go through the sale.
             lignes_du_tirage = list(
                 LigneArticle.objects.filter(
-                    carte=carte_deux_monnaies,
+                    vente__carte=carte_deux_monnaies,
                     sale_origin=SaleOrigin.TIREUSE,
                 )
             )
 
-            assert len(lignes_du_tirage) == 2, (
-                f"Attendu 2 lignes (une par monnaie), obtenu {len(lignes_du_tirage)}"
+            assert len(lignes_du_tirage) == 1, (
+                f"Attendu 1 ligne pour le tirage, obtenu {len(lignes_du_tirage)}"
             )
-            for une_ligne in lignes_du_tirage:
-                assert une_ligne.amount == 250, (
-                    f"amount doit etre le prix du tirage (250), obtenu {une_ligne.amount}"
-                )
-
-            somme_des_qty = sum(Decimal(une_ligne.qty) for une_ligne in lignes_du_tirage)
-            assert somme_des_qty == Decimal("1"), f"Somme des qty : {somme_des_qty}"
-
-            somme_des_montants = sum(
-                Decimal(une_ligne.amount) * Decimal(une_ligne.qty)
-                for une_ligne in lignes_du_tirage
-            )
-            assert somme_des_montants == Decimal("250"), (
-                f"Montant enregistre {somme_des_montants}, attendu 250"
-            )
+            ligne_du_tirage = lignes_du_tirage[0]
+            assert ligne_du_tirage.qty == Decimal("0.500")
+            assert ligne_du_tirage.amount == 500
+            assert ligne_du_tirage.total_ttc == 250
+            assert ligne_du_tirage.part_en_jetons == 100
 
 
 # ─────────────────────────────────────────────────────────────────────

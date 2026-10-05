@@ -33,6 +33,7 @@ Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-montants-entiers.md 
 et CHANTIER-05-A-vente-reglement.md (§3).
 """
 
+import json
 import logging
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -143,7 +144,7 @@ def calculer_montants_article(
     part_offerte=0,
     prix_achat=0,
     total_catalogue_impose=None,
-    quantite_pour_cout=None,
+    part_en_jetons=0,
 ):
     """
     Calcule les montants d'un article vendu, en centimes entiers.
@@ -155,18 +156,21 @@ def calculer_montants_article(
     LA FORMULE :
         total_catalogue = arrondi_demi_haut(prix_unitaire × quantite)
         net_vendu       = total_catalogue − part_offerte
-        total_ht        = arrondi_demi_haut(net_vendu × 100 / (100 + taux_tva))
+        total_ht        = part_en_jetons
+                          + arrondi_demi_haut((net_vendu − part_en_jetons) × 100 / (100 + taux_tva))
         total_tva       = net_vendu − total_ht
-        cout_achat      = arrondi_demi_haut(quantité réelle × prix_achat), vide si prix_achat = 0
+        cout_achat      = arrondi_demi_haut(quantite × prix_achat), vide si prix_achat = 0
 
     La TVA est la DIFFÉRENCE entre le net et le HT : HT + TVA = net, toujours.
-    / VAT is the DIFFERENCE between net and excl. tax: HT + VAT = net, always.
+    La part payée en jetons cadeau est vendue hors TVA (D8 bis) : son HT vaut son TTC.
+    La TVA ne porte que sur le reste du net.
+    / VAT is the DIFFERENCE between net and excl. tax: HT + VAT = net, always. The part
+    paid in gift tokens has no VAT: VAT is only on the remainder of the net.
 
     LES TYPES REÇUS (sinon ValueError, avant tout calcul) :
-    - les centimes (`prix_unitaire`, `part_offerte`, `prix_achat`,
+    - les centimes (`prix_unitaire`, `part_offerte`, `prix_achat`, `part_en_jetons`,
       `total_catalogue_impose`) sont des `int`, et rien d'autre ;
-    - `quantite`, `quantite_pour_cout` et `taux_tva` sont des `Decimal` ou des `int`,
-      jamais des `float`.
+    - `quantite` et `taux_tva` sont des `Decimal` ou des `int`, jamais des `float`.
     / Cents are int only; quantities and VAT rate are Decimal or int, never float.
 
     :param prix_unitaire: prix unitaire TTC en centimes (int), comme `LigneArticle.amount`
@@ -175,15 +179,17 @@ def calculer_montants_article(
     :param part_offerte: les centimes offerts (int), entre 0 et le total catalogue (même
         signe que lui pour un avoir) ; sinon ValueError
     :param prix_achat: prix d'achat du produit en centimes (int), dans l'unité de vente
-        (pièce, kg, L) ; 0 veut dire « inconnu »
-    :param total_catalogue_impose: pendant la transition (fiches B, C), l'argent réel
-        d'une « part » d'article payée avec plusieurs moyens (int) ; repris tel quel au
-        lieu de prix × quantité. Retiré en fiche H.
-    :param quantite_pour_cout: la quantité réellement servie (Decimal ou int), dans
-        l'unité du prix d'achat, quand `quantite` ne l'est pas (vente au poids avec
-        qty = 1, part) ; None → `quantite`
+        (pièce, kg, L) ; 0 veut dire « inconnu ». Le coût porte sur `quantite`, qui est
+        toujours la quantité réellement vendue dans cette unité (D15).
+    :param total_catalogue_impose: le total catalogue (int) repris tel quel au lieu de
+        prix × quantité. Aucun producteur ne le passe : seul l'avoir « miroir » d'une
+        ligne historique coupée en « parts » (reprise des anciennes ventes, Q-R10) s'en
+        sert, pour rendre exactement l'argent de la part. None → la formule.
+    :param part_en_jetons: les centimes du net payés en jetons cadeau (int), entre 0 et
+        le net vendu (entre le net et 0 pour un avoir) ; sinon ValueError
     :return: dict d'entiers : total_catalogue, part_offerte, total_ttc, total_ht,
-        total_tva, cout_achat (None si le prix d'achat est inconnu)
+        total_tva, cout_achat (None si le prix d'achat est inconnu). La part en jetons
+        n'y est pas : elle est reçue telle quelle, jamais recalculée.
     """
     # 0. Les centimes reçus sont des `int`. Un `Decimal` ou un `float` serait un montant
     # recalculé ailleurs, qu'on refuse au lieu de l'arrondir ici en silence.
@@ -193,6 +199,7 @@ def calculer_montants_article(
         "prix_unitaire": prix_unitaire,
         "part_offerte": part_offerte,
         "prix_achat": prix_achat,
+        "part_en_jetons": part_en_jetons,
     }
     for nom_du_montant, montant_recu in centimes_recus.items():
         if type(montant_recu) is not int:
@@ -201,23 +208,15 @@ def calculer_montants_article(
                 f"reçu : {montant_recu!r}"
             )
 
-    # 0 bis. La quantité, la quantité pour le coût et le taux de TVA sont exacts : des
-    # `Decimal` ou des `int`. Un `float` n'est pas exact : `Decimal(0.35)` vaut
-    # 0,34999…, et 1290 × 0,35 donnerait 451 au lieu de 452. Le refus vaut toujours,
-    # même quand la valeur ne sert pas au calcul (quantité pour le coût sans prix
-    # d'achat) : une seule règle.
-    # / 0 bis. Quantities and VAT rate must be exact (Decimal or int), never float.
+    # 0 bis. La quantité et le taux de TVA sont exacts : des `Decimal` ou des `int`. Un
+    # `float` n'est pas exact : `Decimal(0.35)` vaut 0,34999…, et 1290 × 0,35 donnerait
+    # 451 au lieu de 452.
+    # / 0 bis. Quantity and VAT rate must be exact (Decimal or int), never float.
     valeurs_exactes_recues = {
         "quantite": quantite,
         "taux_tva": taux_tva,
-        "quantite_pour_cout": quantite_pour_cout,
     }
     for nom_de_la_valeur, valeur_recue in valeurs_exactes_recues.items():
-        quantite_pour_cout_absente = (
-            nom_de_la_valeur == "quantite_pour_cout" and valeur_recue is None
-        )
-        if quantite_pour_cout_absente:
-            continue
         valeur_exacte = type(valeur_recue) is int or type(valeur_recue) is Decimal
         if not valeur_exacte:
             raise ValueError(
@@ -259,28 +258,51 @@ def calculer_montants_article(
             f"{part_offerte_minimum} et {part_offerte_maximum} centimes."
         )
 
-    # 3. Net vendu, puis HT arrondi une fois, puis TVA par différence.
-    # / 3. Net sold, then excl. tax rounded once, then VAT by difference.
+    # 3. Net vendu.
+    # / 3. Net sold.
     net_vendu = total_catalogue - part_offerte
-    montant_exact_hors_taxes = (
-        Decimal(net_vendu) * Decimal("100") / (Decimal("100") + Decimal(taux_tva))
+
+    # 3 bis. La part en jetons reste entre 0 et le net vendu (même signe pour un avoir).
+    # / 3 bis. The token part stays between 0 and the net sold (same sign).
+    if net_vendu >= 0:
+        part_en_jetons_minimum = 0
+        part_en_jetons_maximum = net_vendu
+    else:
+        part_en_jetons_minimum = net_vendu
+        part_en_jetons_maximum = 0
+    part_en_jetons_hors_bornes = (
+        part_en_jetons < part_en_jetons_minimum
+        or part_en_jetons > part_en_jetons_maximum
     )
-    total_ht = arrondir_au_centime_demi_haut(montant_exact_hors_taxes)
+    if part_en_jetons_hors_bornes:
+        raise ValueError(
+            f"La part payée en jetons ({part_en_jetons}) doit être comprise entre "
+            f"{part_en_jetons_minimum} et {part_en_jetons_maximum} centimes."
+        )
+
+    # 3 ter. HT : la part en jetons (hors TVA), plus le HT du reste arrondi une fois.
+    # Puis la TVA par différence.
+    # / 3 ter. HT: the token part (no VAT) plus the remainder's HT rounded once. Then
+    # VAT by difference.
+    reste_soumis_a_la_tva = net_vendu - part_en_jetons
+    montant_exact_hors_taxes_du_reste = (
+        Decimal(reste_soumis_a_la_tva)
+        * Decimal("100")
+        / (Decimal("100") + Decimal(taux_tva))
+    )
+    total_ht = part_en_jetons + arrondir_au_centime_demi_haut(
+        montant_exact_hors_taxes_du_reste
+    )
     total_tva = net_vendu - total_ht
 
-    # 4. Coût d'achat, sur la quantité réellement servie. Prix d'achat 0 = inconnu.
-    # / 4. Purchase cost, on the quantity really served. Purchase price 0 = unknown.
+    # 4. Coût d'achat, sur la quantité vendue (kg, L ou pièces). Prix d'achat 0 =
+    # inconnu.
+    # / 4. Purchase cost, on the quantity sold. Purchase price 0 = unknown.
     prix_d_achat_inconnu = prix_achat == 0
     if prix_d_achat_inconnu:
         cout_achat = None
     else:
-        if quantite_pour_cout is None:
-            quantite_reellement_servie = quantite
-        else:
-            quantite_reellement_servie = quantite_pour_cout
-        montant_exact_du_cout = Decimal(quantite_reellement_servie) * Decimal(
-            prix_achat
-        )
+        montant_exact_du_cout = Decimal(quantite) * Decimal(prix_achat)
         cout_achat = arrondir_au_centime_demi_haut(montant_exact_du_cout)
 
     return {
@@ -379,9 +401,9 @@ def ajouter_article(
     prix_achat=0,
     offert_en_totalite=False,
     total_catalogue_impose=None,
-    quantite_pour_cout=None,
     hors_chiffre_affaires=False,
     cout_achat_impose=None,
+    part_en_jetons=0,
     **champs_de_la_ligne,
 ):
     """
@@ -394,7 +416,8 @@ def ajouter_article(
     FLUX :
     0. La vente, relue en base, doit être EN_ATTENTE : une vente réglée ou annulée ne
        reçoit plus rien (ValueError).
-    1. Vente en points (`unite` ≠ "EUR") : la TVA doit valoir 0, sinon refus.
+    1. Vente en points (`unite` ≠ "EUR") : la TVA doit valoir 0 et la part en jetons
+       aussi, sinon refus.
     2. Montants par `calculer_montants_article` (la seule formule d'argent).
     3. Règle « offert à montant non nul » : si l'article est entièrement offert et que
        son total catalogue n'est pas 0, alors part offerte = total catalogue,
@@ -422,12 +445,16 @@ def ajouter_article(
     :param source_offert: `LigneArticle.SourceOffert` (OFFRIR, JETONS), vide sinon
     :param prix_achat: prix d'achat du produit en centimes ; 0 = inconnu
     :param offert_en_totalite: True pour un article entièrement offert (règle ci-dessus)
-    :param total_catalogue_impose: l'argent réel d'une « part » (transition, retiré en H)
-    :param quantite_pour_cout: la quantité réellement servie, pour le coût d'achat
+    :param total_catalogue_impose: le total catalogue repris tel quel (int) ; seul
+        l'avoir « miroir » d'une ligne historique en « parts » le passe (voir
+        `calculer_montants_article`) ; aucun producteur
     :param hors_chiffre_affaires: True pour forcer l'article hors chiffre d'affaires
         (écart d'encaissement) ; sinon calculé depuis le produit
     :param cout_achat_impose: le coût d'achat de l'article en centimes (int), repris
         tel quel au lieu de la formule (article d'avoir) ; None = la formule
+    :param part_en_jetons: les centimes du net payés en jetons cadeau (int), vendus hors
+        TVA (voir `calculer_montants_article`) ; jamais sur un article hors chiffre
+        d'affaires (ValueError)
     :param champs_de_la_ligne: champs historiques de la ligne posés pendant la
         transition (`payment_method`, `asset`, `status`, `reservation`…)
     :return: la `LigneArticle` créée
@@ -451,6 +478,14 @@ def ajouter_article(
         raise ValueError(
             f"Une vente en points n'a pas de TVA : taux reçu {taux_tva} %, attendu 0."
         )
+    # Une vente en points n'est pas payée en jetons cadeau (des euros offerts) : une
+    # seule unité par vente (D4 du chantier 04).
+    # / A points sale is never paid in gift tokens: one unit per sale.
+    if vente_en_points and part_en_jetons != 0:
+        raise ValueError(
+            f"Une vente en points n'a pas de part payée en jetons (reçu : "
+            f"{part_en_jetons})."
+        )
 
     # 2. Les montants, par la seule formule d'argent du projet.
     # / 2. The amounts, by the only money formula of the project.
@@ -461,7 +496,7 @@ def ajouter_article(
         part_offerte=part_offerte,
         prix_achat=prix_achat,
         total_catalogue_impose=total_catalogue_impose,
-        quantite_pour_cout=quantite_pour_cout,
+        part_en_jetons=part_en_jetons,
     )
 
     # 3. Règle « offert à montant non nul ». Pendant la transition, le moyen historique
@@ -485,7 +520,7 @@ def ajouter_article(
             part_offerte=montants["total_catalogue"],
             prix_achat=prix_achat,
             total_catalogue_impose=total_catalogue_impose,
-            quantite_pour_cout=quantite_pour_cout,
+            part_en_jetons=part_en_jetons,
         )
         source_offert = LigneArticle.SourceOffert.OFFRIR
 
@@ -517,6 +552,15 @@ def ajouter_article(
     )
     ligne_hors_chiffre_affaires = hors_chiffre_affaires or produit_hors_chiffre_affaires
 
+    # Une part en jetons est une vente (D8 bis) : un article hors chiffre d'affaires
+    # n'en a jamais. La base le refuse aussi (contrainte de `LigneArticle`).
+    # / A token part is a sale: an off-revenue item never has one.
+    if ligne_hors_chiffre_affaires and part_en_jetons != 0:
+        raise ValueError(
+            f"Un article hors chiffre d'affaires n'a pas de part payée en jetons "
+            f"(reçu : {part_en_jetons})."
+        )
+
     # La ligne porte l'origine de sa vente, sauf si le producteur en passe une : sans
     # cela, le défaut du champ (« en ligne ») marquerait à tort une vente de caisse.
     # / The line carries its sale's origin unless the producer passes one.
@@ -536,6 +580,7 @@ def ajouter_article(
             total_catalogue=montants["total_catalogue"],
             part_offerte=montants["part_offerte"],
             source_offert=source_offert,
+            part_en_jetons=part_en_jetons,
             total_ttc=montants["total_ttc"],
             total_ht=montants["total_ht"],
             total_tva=montants["total_tva"],
@@ -558,30 +603,37 @@ def ajouter_article(
     return ligne
 
 
-def _catalogue_impose_et_part_offerte_d_un_avoir(ligne_d_origine, quantite):
+def _montants_imposes_d_un_avoir(ligne_d_origine, quantite):
     """
-    Le total catalogue imposé et la part offerte de l'article qui annule `quantite`
-    unités d'une ligne vendue. La règle des montants d'un avoir, écrite une seule fois :
-    lue par `ajouter_l_article_d_avoir` (qui écrit l'article) et par
-    `apercu_des_montants_d_un_avoir` (l'écran qui annonce la somme rendue).
-    / The imposed catalogue total and offered part of a credit note item: the single
-    rule, read by the writer and by the screen preview.
+    Le total catalogue imposé, la part offerte et la part en jetons de l'article qui
+    annule `quantite` unités d'une ligne vendue. La règle des montants d'un avoir,
+    écrite une seule fois : lue par `ajouter_l_article_d_avoir` (qui écrit l'article)
+    et par `apercu_des_montants_d_un_avoir` (l'écran qui annonce la somme rendue).
+    / The imposed catalogue total, offered part and token part of a credit note item:
+    the single rule, read by the writer and by the screen preview.
 
     LOCALISATION : BaseBillet/services_vente.py
 
     - toute la quantité rendue, ligne écrite par le service : les totaux sont recopiés
-      en négatif (une « part » rend exactement ce qui a été vendu) ;
+      en négatif (une « part » rend exactement ce qui a été vendu), part en jetons
+      comprise ;
     - une partie d'une ligne ENTIÈREMENT offerte : prix × −quantité, et part offerte =
       ce total (entièrement offerte elle aussi) ;
-    - sinon : prix × −quantité (total catalogue non imposé), rien d'offert.
-    Refuse (ValueError) une partie de la quantité d'une ligne EN PARTIE offerte : le
-    projet ne fait aucun prorata d'offert.
-    / Full return: mirrored; part of a fully offered line: fully offered; else
-    computed. Refuses a partial return of a partly offered line.
+    - une partie d'une ligne ENTIÈREMENT payée en jetons (part en jetons = net, non
+      nul) : prix × −quantité, et part en jetons = ce total (entièrement en jetons
+      elle aussi) ;
+    - sinon : prix × −quantité (total catalogue non imposé), rien d'offert, rien en
+      jetons.
+    Refuse (ValueError) une partie de la quantité d'une ligne EN PARTIE offerte, ou EN
+    PARTIE payée en jetons : le projet ne fait aucun prorata.
+    / Full return: mirrored; part of a fully offered (or fully token-paid) line: fully
+    offered (or fully in tokens); else computed. Refuses a partial return of a partly
+    offered or partly token-paid line.
 
     :param ligne_d_origine: la `LigneArticle` vendue
     :param quantite: la quantité rendue (Decimal), positive
-    :return: (total catalogue imposé ou None, part offerte en centimes)
+    :return: dict {"total_catalogue_impose": int ou None, "part_offerte": int,
+        "part_en_jetons": int}
     """
     quantite_vendue = ligne_d_origine.qty
     toute_la_quantite_rendue = quantite == quantite_vendue
@@ -600,34 +652,62 @@ def _catalogue_impose_et_part_offerte_d_un_avoir(ligne_d_origine, quantite):
             "(pas de remboursement d'une partie de la quantité)."
         )
 
+    ligne_avec_une_part_en_jetons = ligne_d_origine.part_en_jetons != 0
+    ligne_entierement_en_jetons = (
+        ligne_avec_une_part_en_jetons
+        and ligne_d_origine.part_en_jetons == ligne_d_origine.total_ttc
+    )
+    ligne_en_partie_en_jetons = (
+        ligne_avec_une_part_en_jetons and not ligne_entierement_en_jetons
+    )
+    if ligne_en_partie_en_jetons and not toute_la_quantite_rendue:
+        raise ValueError(
+            "Cet article a une part payée en jetons : il faut rembourser l'article "
+            "entier (pas de remboursement d'une partie de la quantité)."
+        )
+
     # Les montants : recopiés en négatif quand toute la ligne est rendue et que le
     # service l'a écrite ; sinon calculés par la formule (prix × −quantité). Une partie
     # d'une ligne entièrement offerte reste entièrement offerte : part offerte = total.
+    # Une partie d'une ligne entièrement en jetons reste entièrement en jetons : part
+    # en jetons = total (une telle ligne n'a rien d'offert, sinon elle serait refusée
+    # plus haut comme « en partie offerte »).
     # / Amounts: mirrored for a full return of a service-written line, else computed;
-    # a part of a fully offered line stays fully offered.
+    # a part of a fully offered (or fully token-paid) line stays so.
+    total_catalogue_de_l_avoir = None
+    part_offerte_de_l_avoir = 0
+    part_en_jetons_de_l_avoir = 0
     if toute_la_quantite_rendue and ligne_ecrite_par_le_service:
         total_catalogue_de_l_avoir = -ligne_d_origine.total_catalogue
         part_offerte_de_l_avoir = -ligne_d_origine.part_offerte
+        part_en_jetons_de_l_avoir = -ligne_d_origine.part_en_jetons
     elif ligne_entierement_offerte_par_ses_montants:
         montants_de_la_partie_rendue = calculer_montants_article(
             prix_unitaire=ligne_d_origine.amount,
             quantite=-quantite,
             taux_tva=ligne_d_origine.vat,
         )
-        total_catalogue_de_l_avoir = None
         part_offerte_de_l_avoir = montants_de_la_partie_rendue["total_catalogue"]
-    else:
-        total_catalogue_de_l_avoir = None
-        part_offerte_de_l_avoir = 0
-    return total_catalogue_de_l_avoir, part_offerte_de_l_avoir
+    elif ligne_entierement_en_jetons:
+        montants_de_la_partie_rendue = calculer_montants_article(
+            prix_unitaire=ligne_d_origine.amount,
+            quantite=-quantite,
+            taux_tva=ligne_d_origine.vat,
+        )
+        part_en_jetons_de_l_avoir = montants_de_la_partie_rendue["total_ttc"]
+    return {
+        "total_catalogue_impose": total_catalogue_de_l_avoir,
+        "part_offerte": part_offerte_de_l_avoir,
+        "part_en_jetons": part_en_jetons_de_l_avoir,
+    }
 
 
 def apercu_des_montants_d_un_avoir(ligne_d_origine, quantite):
     """
     Les montants qu'aurait l'article d'avoir de `quantite` unités d'une ligne, SANS
     rien écrire : pour l'écran qui annonce la somme rendue avant de confirmer. Même
-    règle que l'article écrit (`_catalogue_impose_et_part_offerte_d_un_avoir`), même
-    formule (`calculer_montants_article`).
+    règle que l'article écrit (`_montants_imposes_d_un_avoir`), même formule
+    (`calculer_montants_article`).
     Limite : une ligne d'avant le chantier au moyen « offert » (montants à 0) n'est pas
     vue offerte ici ; ces lignes passent par la reprise des ventes.
     / The amounts the credit note item would have, without writing anything (screen
@@ -638,18 +718,20 @@ def apercu_des_montants_d_un_avoir(ligne_d_origine, quantite):
 
     :param ligne_d_origine: la `LigneArticle` vendue
     :param quantite: la quantité rendue (Decimal), positive
-    :return: dict de `calculer_montants_article` (montants NÉGATIFS : total_ttc, part_offerte…)
+    :return: dict de `calculer_montants_article`, plus `part_en_jetons` (montants
+        NÉGATIFS : total_ttc, part_offerte, part_en_jetons…)
     """
-    total_catalogue_impose, part_offerte = _catalogue_impose_et_part_offerte_d_un_avoir(
-        ligne_d_origine, quantite
-    )
-    return calculer_montants_article(
+    montants_imposes = _montants_imposes_d_un_avoir(ligne_d_origine, quantite)
+    montants_de_l_avoir = calculer_montants_article(
         prix_unitaire=ligne_d_origine.amount,
         quantite=-quantite,
         taux_tva=ligne_d_origine.vat,
-        part_offerte=part_offerte,
-        total_catalogue_impose=total_catalogue_impose,
+        part_offerte=montants_imposes["part_offerte"],
+        total_catalogue_impose=montants_imposes["total_catalogue_impose"],
+        part_en_jetons=montants_imposes["part_en_jetons"],
     )
+    montants_de_l_avoir["part_en_jetons"] = montants_imposes["part_en_jetons"]
+    return montants_de_l_avoir
 
 
 def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
@@ -665,14 +747,16 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
     - même tarif vendu, même prix unitaire, même taux de TVA ;
     - quantité NÉGATIVE (−quantite) ;
     - toute la quantité rendue, ligne écrite par le service (total catalogue non nul) :
-      total catalogue = −total d'origine et part offerte = −part offerte d'origine,
-      recopiés tels quels. Une « part » d'article (caisse en cascade) a un total imposé
-      que prix × quantité ne redonne pas toujours au centime : on rend exactement ce
-      qui a été vendu ;
+      total catalogue = −total d'origine, part offerte = −part offerte d'origine et
+      part en jetons = −part en jetons d'origine, recopiés tels quels. Une « part »
+      d'article (caisse en cascade) a un total imposé que prix × quantité ne redonne
+      pas toujours au centime : on rend exactement ce qui a été vendu ;
     - ligne écrite avant le chantier (total catalogue 0) : calculé prix × −quantité ;
     - une partie de la quantité d'une ligne ENTIÈREMENT offerte (part offerte = total
       catalogue, non nul) : calculé prix × −quantité, et part offerte = ce total
       (entièrement offert lui aussi, sans prorata) ;
+    - une partie de la quantité d'une ligne ENTIÈREMENT payée en jetons (part en
+      jetons = net, non nul) : calculé prix × −quantité, et part en jetons = ce total ;
     - coût d'achat : le coût FIGÉ de la ligne d'origine, en négatif, au prorata de la
       quantité rendue : arrondi_demi_haut(coût d'origine × −quantité / quantité
       vendue). Ligne sans coût (inconnu) : avoir sans coût. Le coût n'est jamais
@@ -701,12 +785,13 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
       une vente en euros, il rendrait de l'argent pour des points. Ce refus vaut pour
       tous les producteurs d'avoir, qui passent tous par cette fonction ;
     - une quantité nulle, négative, ou plus grande que celle de la ligne ;
-    - une quantité partielle d'une ligne EN PARTIE offerte : le projet ne fait aucun
-      prorata d'offert, il faut rembourser l'article entier. Une ligne entièrement
-      offerte, elle, accepte une quantité partielle (aucun prorata à faire).
+    - une quantité partielle d'une ligne EN PARTIE offerte, ou EN PARTIE payée en
+      jetons : le projet ne fait aucun prorata, il faut rembourser l'article entier.
+      Une ligne entièrement offerte, ou entièrement en jetons, accepte une quantité
+      partielle (aucun prorata à faire).
     / Refuses a non-AVOIR sale, a line paid in points or time, a wrong quantity, and a
-    partial return of a partly offered item (no prorata: refund the whole item). A fully
-    offered line accepts it.
+    partial return of a partly offered or partly token-paid item (no prorata: refund
+    the whole item). A fully offered or fully token-paid line accepts it.
 
     :param vente_avoir: la `Vente` AVOIR EN_ATTENTE qui reçoit l'article
     :param ligne_d_origine: la `LigneArticle` vendue que l'avoir annule
@@ -733,9 +818,10 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
             f"la quantité vendue ({quantite_vendue})."
         )
 
-    total_catalogue_de_l_avoir, part_offerte_de_l_avoir = (
-        _catalogue_impose_et_part_offerte_d_un_avoir(ligne_d_origine, quantite)
-    )
+    montants_imposes = _montants_imposes_d_un_avoir(ligne_d_origine, quantite)
+    total_catalogue_de_l_avoir = montants_imposes["total_catalogue_impose"]
+    part_offerte_de_l_avoir = montants_imposes["part_offerte"]
+    part_en_jetons_de_l_avoir = montants_imposes["part_en_jetons"]
 
     if part_offerte_de_l_avoir != 0:
         source_de_l_offert = ligne_d_origine.source_offert
@@ -759,11 +845,17 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
         )
 
     # La trace de la ligne d'origine dans les métadonnées de l'avoir. Une copie : le
-    # dictionnaire de la ligne d'origine n'est jamais modifié.
-    # / The original line's trace in the credit note metadata, on a copy.
+    # dictionnaire de la ligne d'origine n'est jamais modifié. Une ligne QR historique
+    # (déjà en base, reprise des anciennes ventes) peut porter ses métadonnées en TEXTE
+    # JSON : le texte est relu en dictionnaire.
+    # / The original line's trace in the credit note metadata, on a copy. Older QR
+    # lines keep their metadata as JSON TEXT: the text is read back as a dict.
     metadonnees_de_l_avoir = {}
-    if ligne_d_origine.metadata:
-        metadonnees_de_l_avoir.update(ligne_d_origine.metadata)
+    metadonnees_de_la_ligne_d_origine = ligne_d_origine.metadata
+    if isinstance(metadonnees_de_la_ligne_d_origine, str):
+        metadonnees_de_la_ligne_d_origine = json.loads(metadonnees_de_la_ligne_d_origine)
+    if metadonnees_de_la_ligne_d_origine:
+        metadonnees_de_l_avoir.update(metadonnees_de_la_ligne_d_origine)
     metadonnees_de_l_avoir["original_lignearticle_uuid"] = str(ligne_d_origine.uuid)
 
     article_d_avoir = ajouter_article(
@@ -774,6 +866,7 @@ def ajouter_l_article_d_avoir(vente_avoir, ligne_d_origine, quantite):
         taux_tva=ligne_d_origine.vat,
         part_offerte=part_offerte_de_l_avoir,
         source_offert=source_de_l_offert,
+        part_en_jetons=part_en_jetons_de_l_avoir,
         total_catalogue_impose=total_catalogue_de_l_avoir,
         cout_achat_impose=cout_achat_de_l_avoir,
         hors_chiffre_affaires=ligne_d_origine.hors_chiffre_affaires,
@@ -816,17 +909,30 @@ def ligne_entierement_offerte(ligne):
     return ligne_offerte_par_ses_montants or ligne_offerte_par_son_moyen
 
 
-def ligne_payee_en_jetons(ligne):
+def ligne_entierement_payee_en_jetons(ligne):
     """
-    Dit si une ligne vendue a été payée en jetons cadeau.
-    / Tells whether a sold line was paid in gift tokens.
+    Dit si une ligne vendue a été ENTIÈREMENT payée en jetons cadeau : son avoir ne
+    rend aucun argent.
+    / Tells whether a sold line was FULLY paid in gift tokens.
 
     LOCALISATION : BaseBillet/services_vente.py
 
-    Reconnue par son moyen historique « jetons » (LG) jusqu'à la fiche H.
-    / Recognised by its historical LG method until sheet H.
+    Deux façons de le savoir :
+    - ligne d'une vente : sa part en jetons vaut son net vendu, non nul. Une ligne
+      mixte (une part en jetons, le reste en argent) n'est PAS entièrement en jetons :
+      elle a net − part en jetons d'argent à rendre ;
+    - ligne écrite sans vente (avant le chantier) : son moyen historique « jetons »
+      (LG), seul indice qu'elle porte.
+    / A sale's line: token part = net, non-zero. A line without sale: its historical
+    LG method.
+
+    Lue par `ligne_sans_argent_a_rendre` et `ajouter_les_reglements_d_un_avoir` (ce
+    module).
+    / Read by `ligne_sans_argent_a_rendre` and the credit note payments.
     """
-    return ligne.payment_method == PaymentMethod.LOCAL_GIFT
+    if ligne.vente_id is None:
+        return ligne.payment_method == PaymentMethod.LOCAL_GIFT
+    return ligne.part_en_jetons != 0 and ligne.part_en_jetons == ligne.total_ttc
 
 
 def ligne_payee_en_points(ligne):
@@ -862,17 +968,18 @@ def ligne_payee_en_points(ligne):
 def ligne_sans_argent_a_rendre(ligne):
     """
     Dit si l'avoir d'une ligne vendue ne rend aucun argent : la ligne a été entièrement
-    offerte, ou payée en jetons cadeau.
+    offerte, ou entièrement payée en jetons cadeau.
     / Tells whether a sold line's credit note gives no money back: fully offered, or
-    paid in gift tokens.
+    fully paid in gift tokens.
 
     LOCALISATION : BaseBillet/services_vente.py
 
     Une part payée en jetons est une vente ordinaire (D8 bis), mais l'avoir rend la
     dette au lieu, pas de l'argent ni les jetons (règlement « jetons » négatif, aucun
-    recrédit de la carte).
+    recrédit de la carte). Une ligne mixte a de l'argent à rendre : net − part en
+    jetons.
     / A token part is an ordinary sale, but its credit note gives back the debt, not
-    money nor tokens.
+    money nor tokens. A mixed line has money to give back.
 
     Lue par les écrans qui décident d'afficher le champ « Remboursé par » : l'écran
     « Émettre un avoir » et l'écran d'annulation des actions admin
@@ -881,7 +988,7 @@ def ligne_sans_argent_a_rendre(ligne):
     (BaseBillet/models.py, booking/models.py).
     / Read by the screens that decide whether to show the "Refunded by" field.
     """
-    return ligne_entierement_offerte(ligne) or ligne_payee_en_jetons(ligne)
+    return ligne_entierement_offerte(ligne) or ligne_entierement_payee_en_jetons(ligne)
 
 
 # Les moyens proposés par le champ « Remboursé par » : de l'argent rendu à la main. Le
@@ -907,6 +1014,123 @@ def choix_du_champ_rembourse_par():
     for moyen in MOYENS_DU_CHAMP_REMBOURSE_PAR:
         choix.append((moyen.value, moyen.label))
     return choix
+
+
+# Les règlements qui ne sont pas de l'argent rendu à la main : l'offert (la trace
+# d'un cadeau) et les jetons cadeau (l'avoir rend la dette, pas de l'argent). Ils ne
+# comptent pas pour choisir le moyen « Remboursé par » proposé d'avance.
+# / Payments that are not money given back by hand: offered and gift tokens.
+MOYENS_IGNORES_POUR_LE_REMBOURSE_PAR = [PaymentMethod.FREE, PaymentMethod.LOCAL_GIFT]
+
+
+def moyen_d_argent_unique_de_la_vente(vente):
+    """
+    Le seul moyen d'argent de la vente, lu dans ses règlements NETS (la vente et ses
+    ventes CORRECTION, `reglements_nets_de_la_vente`), ou None.
+    / The sale's single money method, read from its NET payments, or None.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    On garde les moyens dont le net n'est pas nul, sans l'offert ni les jetons cadeau
+    (`MOYENS_IGNORES_POUR_LE_REMBOURSE_PAR`). Le cashless compte comme un moyen : une
+    vente payée 5 € en monnaie locale + 5,50 € en espèces a DEUX moyens, et rend None.
+    Une vente payée en espèces puis corrigée en CB a un seul moyen : la CB.
+    Le moyen rendu peut être hors de la liste du champ « Remboursé par » (ex. la
+    monnaie locale) : c'est à l'appelant de vérifier qu'il y est
+    (`MOYENS_DU_CHAMP_REMBOURSE_PAR`).
+    / Non-zero nets, offered and gift tokens left out; cashless counts. The caller
+    checks the method is in the field's list.
+
+    LU PAR : `moyen_d_origine_de_la_ligne` (ce module) et l'« Avoir total »
+    (Administration/admin_tenant.py, `_moyen_pre_rempli_de_l_avoir_total`).
+    / Read by the line's original method and the full credit note pre-fill.
+
+    :param vente: la `Vente`
+    :return: le code du moyen (texte), ou None (aucun moyen, ou plusieurs)
+    """
+    # Import local, obligatoire : un import en tête de module ferait un cycle.
+    # services_vente → laboutik.affichage_des_ventes → comptabilite.rapport et
+    # laboutik.plan_comptable → services_vente (ces deux modules importent
+    # services_vente en tête).
+    # / Local import, required: a top-level import would make an import cycle
+    # (services_vente → affichage_des_ventes → rapport / plan_comptable → services_vente).
+    from laboutik.affichage_des_ventes import reglements_nets_de_la_vente
+
+    moyens_d_argent_nets = []
+    for reglement_net in reglements_nets_de_la_vente(vente, {}):
+        moyen_du_reglement = reglement_net["moyen"]
+        if moyen_du_reglement in MOYENS_IGNORES_POUR_LE_REMBOURSE_PAR:
+            continue
+        if reglement_net["montant"] == 0:
+            continue
+        if moyen_du_reglement not in moyens_d_argent_nets:
+            moyens_d_argent_nets.append(moyen_du_reglement)
+    if len(moyens_d_argent_nets) != 1:
+        return None
+    return moyens_d_argent_nets[0]
+
+
+def moyen_d_origine_de_la_ligne(ligne):
+    """
+    Le moyen d'origine d'une ligne vendue, pour pré-remplir « Remboursé par » : le
+    seul moyen d'argent de sa vente (`moyen_d_argent_unique_de_la_vente`), ou None.
+    Une ligne écrite sans vente (avant le chantier) n'a pas de règlements : on lit
+    alors son moyen historique (`payment_method`).
+    / A sold line's original method: its sale's single money method, or the line's
+    historical method when it has no sale.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    LU PAR : Administration/admin_tenant.py (`LigneArticleAdmin.emettre_avoir`,
+    `preparer_le_champ_rembourse_par`) et le formulaire d'annulation d'adhésion
+    (BaseBillet/views.py, `MembershipMVT._contexte_du_formulaire_d_annulation`).
+    / Read by the line credit note, the admin cancel screen and the membership form.
+
+    :param ligne: la `LigneArticle` vendue
+    :return: le code du moyen (texte), ou None
+    """
+    if ligne.vente_id is None:
+        return ligne.payment_method
+    return moyen_d_argent_unique_de_la_vente(ligne.vente)
+
+
+def article_vendu_au_poids_ou_a_la_tireuse(ligne):
+    """
+    Dit si une ligne vendue est une pesée de la caisse ou un tirage de la tireuse (D15) :
+    sa quantité est un poids ou un volume, pas un nombre d'articles. Son avoir porte
+    toujours sur tout ce qui reste (Q-H5) : une partie d'une pesée n'existe pas.
+    / Tells whether a sold line is a register weighing or a tap pour: its credit note
+    always covers everything left (Q-H5).
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    Deux indices : le poids ou le volume saisi (`weight_quantity`, posé par la caisse
+    et par la tireuse), ou l'origine « tireuse » de la ligne.
+    / Two clues: the entered weight / volume, or the "tap" origin of the line.
+
+    LU PAR : `ecrire_la_vente_d_avoir_d_une_ligne` (ce module, le refus) et l'écran
+    « Avoir sur un article » (Administration/admin_tenant.py, quantité figée).
+    """
+    ligne_avec_un_poids_ou_un_volume = bool(ligne.weight_quantity)
+    ligne_de_la_tireuse = ligne.sale_origin == SaleOrigin.TIREUSE
+    return ligne_avec_un_poids_ou_un_volume or ligne_de_la_tireuse
+
+
+# Les refus de l'avoir d'une ligne qui viennent de l'article ou de sa vente. Textes du
+# service (français), affichés tels quels par l'écran de l'admin.
+# / Line credit note refusals coming from the item or its sale.
+MESSAGE_AVOIR_LIGNE_VENTE_AVEC_UN_ECART = (
+    "Cette vente a un écart d'encaissement : aucun avoir n'est possible sur ses "
+    "articles."
+)
+MESSAGE_AVOIR_LIGNE_RECHARGE = (
+    "Cet article est une recharge de carte (hors chiffre d'affaires) : un avoir ne "
+    "retire pas l'argent de la carte, il est impossible."
+)
+MESSAGE_AVOIR_LIGNE_PARTIE_D_UNE_PESEE = (
+    "Cet article est vendu au poids ou à la tireuse : il faut rembourser l'article "
+    "entier (pas de remboursement d'une partie de la quantité)."
+)
 
 
 def quantite_restante_de_la_ligne_sous_verrou(ligne):
@@ -952,27 +1176,34 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
     LOCALISATION : BaseBillet/services_vente.py
 
     APPELÉE PAR :
-    - Administration/admin_tenant.py `LigneArticleAdmin.emettre_avoir` (bouton « Avoir ») ;
+    - Administration/admin_tenant.py `LigneArticleAdmin.emettre_avoir` (bouton « Avoir »)
+      et `VenteAdmin.avoir_sur_un_article` (action de la fiche « Vente ») ;
     - BaseBillet/models.py `Reservation.cancel_and_refund_resa` et
-      `cancel_and_refund_ticket`, quand l'ADMIN annule des lignes hors Stripe.
-    / Called by the "Credit note" button and by the admin cancellations.
+      `cancel_and_refund_ticket`, quand l'ADMIN annule des lignes hors Stripe ;
+    - BaseBillet/views.py, l'annulation d'une adhésion par l'admin.
+    / Called by the "Credit note" buttons and by the admin cancellations.
 
     FLUX (dans UNE transaction ; un point de sauvegarde si l'appelant en a une) :
-    1. refus si la vente d'origine existe et n'est pas réglée ;
+    1. refus si la vente d'origine existe et n'est pas réglée, si elle porte un écart
+       d'encaissement, ou si la ligne est une recharge (hors chiffre d'affaires) ;
     1b. la ligne est verrouillée et la quantité déjà rendue relue
        (`quantite_restante_de_la_ligne_sous_verrou`) : refus si `quantite` dépasse ce
        qui reste. Deux demandes pour la même ligne (double clic) n'écrivent jamais deux
-       avoirs ;
+       avoirs. Une PARTIE de ce qui reste doit être un nombre entier d'articles, et
+       jamais une partie d'une pesée ou d'un tirage (Q-H5). Tout ce qui reste est
+       toujours accepté, même une quantité non entière (pesée, « part » d'historique) ;
     2. vente AVOIR, origine `origine`, liée à la vente de la ligne (vide pour une ligne
        d'avant le chantier), client = celui de la vente liée ;
     3. l'article d'avoir : `ajouter_l_article_d_avoir` ;
-    4. UN règlement du net rendu, s'il n'est pas nul :
-       - ligne payée en jetons cadeau (LG) : un règlement « jetons » négatif, avec la
-         monnaie et la carte de la ligne ; aucun moyen demandé, aucun recrédit de la
-         carte (la dette revient, les jetons ne reviennent pas) ;
-       - ligne payée par Stripe : au moyen Stripe d'origine, relié au paiement, sans
+    4. les règlements du net rendu, s'il n'est pas nul :
+       - la part en jetons : un règlement « jetons » négatif, avec la monnaie et la
+         carte des règlements LG de la vente d'origine (sans carte s'il y en a eu
+         plusieurs) ; aucun recrédit de la carte (la dette revient, les jetons ne
+         reviennent pas) ;
+       - le reste, payé par Stripe : au moyen Stripe d'origine, relié au paiement, sans
          référence externe (aucun appel à Stripe : l'admin rembourse depuis Stripe) ;
-       - sinon : au moyen `moyen_rembourse` (« Remboursé par »), obligatoire ici ;
+       - le reste, sinon : au moyen `moyen_rembourse` (« Remboursé par »), obligatoire
+         s'il y a de l'argent à rendre ;
     5. un règlement FREE négatif pour la part offerte, sauf la partie déjà tracée par la
        règle « offert » d'`ajouter_article` (jamais deux fois) ;
     6. `encaisser_vente` ;
@@ -982,11 +1213,15 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
     token line, the original Stripe method, or the chosen one); one FREE payment for the
     offered part; settle; THEN CREDIT_NOTE.
 
-    Refuse (ValueError, rien n'est écrit) : vente d'origine pas réglée ; quantité plus
-    grande que ce qui reste à rendre ; argent hors Stripe à rendre sans moyen ; toute
-    règle du service (quantité, avoir partiel d'un article en partie offert…).
-    / Refuses (ValueError, nothing written): unsettled original sale, more than what is
-    left to give back, money to give back without a method, any service rule.
+    Refuse (ValueError, rien n'est écrit) : vente d'origine pas réglée ; vente qui porte
+    un écart d'encaissement (Q-H13) ;
+    ligne de recharge ; quantité plus grande que ce qui reste à rendre ; partie de ce
+    qui reste non entière, ou partie d'une pesée ou d'un tirage ; argent hors Stripe à
+    rendre sans moyen ; toute règle du service (quantité, avoir partiel d'un article en
+    partie offert ou en partie payé en jetons, ligne payée en points…).
+    / Refuses (ValueError, nothing written): unsettled original sale, sale with a
+    collection gap, top-up line, more than what is left, a non-whole part or a part of
+    a weighing / pour, money to give back without a method, any service rule.
 
     :param ligne: la `LigneArticle` vendue (VALID ou PAID)
     :param quantite: la quantité rendue (Decimal), positive, au plus celle de la ligne
@@ -1005,6 +1240,21 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
             "La vente d'origine n'est pas réglée : l'avoir est impossible."
         )
 
+    # Une vente qui porte un écart d'encaissement ne reçoit aucun avoir sur ses
+    # articles (Q-H13) : l'avoir ne saurait pas quoi faire de l'écart.
+    # / A sale with a collection gap gets no credit note on its items (Q-H13).
+    if vente_d_origine is not None and vente_porte_un_ecart_d_encaissement(vente_d_origine):
+        raise ValueError(MESSAGE_AVOIR_LIGNE_VENTE_AVEC_UN_ECART)
+
+    # Une recharge (hors chiffre d'affaires) : l'avoir ne reprendrait pas l'argent mis
+    # sur la carte. Même refus que l'« Avoir total » (`vente_contient_une_recharge`).
+    # Une recharge payée en points ou en temps garde le refus commun « points »
+    # (`ajouter_l_article_d_avoir`), plus précis : il est levé plus loin.
+    # / A top-up (off revenue): the credit note would not take the money back. A
+    # points top-up keeps the shared, more precise "points" refusal raised later.
+    if ligne.hors_chiffre_affaires and not ligne_payee_en_points(ligne):
+        raise ValueError(MESSAGE_AVOIR_LIGNE_RECHARGE)
+
     with transaction.atomic():
         # 1b. Sous verrou, la quantité qui reste à rendre. / 1b. Under lock, what is left.
         quantite_restante = quantite_restante_de_la_ligne_sous_verrou(ligne)
@@ -1014,6 +1264,23 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
                 f"ligne {ligne.uuid} ({quantite_restante}) : un avoir ou un "
                 f"remboursement a déjà été fait."
             )
+
+        # Une PARTIE de ce qui reste : un nombre entier d'articles à la pièce, jamais
+        # une partie d'une pesée ou d'un tirage (Q-H5). Tout ce qui reste passe
+        # toujours, même non entier (une pesée, une « part » d'historique).
+        # / A PART of what is left: a whole number of pieces, never a part of a
+        # weighing or a pour. Everything left always passes, even non-whole.
+        avoir_d_une_partie_du_reste = quantite != quantite_restante
+        if avoir_d_une_partie_du_reste:
+            if article_vendu_au_poids_ou_a_la_tireuse(ligne):
+                raise ValueError(MESSAGE_AVOIR_LIGNE_PARTIE_D_UNE_PESEE)
+            quantite_en_decimal = Decimal(quantite)
+            quantite_entiere = quantite_en_decimal == quantite_en_decimal.to_integral_value()
+            if not quantite_entiere:
+                raise ValueError(
+                    f"La quantité rendue ({quantite}) doit être un nombre entier "
+                    f"d'articles."
+                )
 
         # 2. La vente AVOIR. / 2. The AVOIR sale.
         if vente_d_origine is not None:
@@ -1048,6 +1315,61 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
     return article_d_avoir
 
 
+def monnaie_et_carte_des_jetons_de_la_vente(vente_d_origine):
+    """
+    La monnaie et la carte des jetons cadeau d'une vente, lues dans ses règlements
+    « jetons » (LG). L'avoir d'une part en jetons les recopie sur son règlement LG.
+    / The currency and card of a sale's gift tokens, read from its LG payments.
+
+    LOCALISATION : BaseBillet/services_vente.py
+    LUE PAR : `ajouter_les_reglements_d_un_avoir` (ce module, l'écriture) et
+    Administration/admin_tenant.py `_sommes_rendues_par_l_avoir_total` (l'écran
+    « Avoir total », qui annonce donc le même refus que l'écriture).
+    / Read by the credit note payments and by the "Full credit note" screen.
+
+    - une seule monnaie et une seule carte : cette monnaie et cette carte ;
+    - une seule monnaie, plusieurs cartes (le client a payé avec deux cartes) : cette
+      monnaie, et AUCUNE carte. Le compte comptable (419100) ne dépend que de la
+      monnaie ;
+    - plusieurs monnaies : refus (ValueError). On ne choisit pas à la place du lieu à
+      quelle monnaie la dette revient ;
+    - aucun règlement LG : refus (ValueError).
+    / One currency and one card: both. One currency, several cards: the currency, no
+    card. Several currencies or none: refused.
+
+    :param vente_d_origine: la `Vente` vendue
+    :return: (uuid de la monnaie ou None, `CarteCashless` ou None)
+    """
+    monnaies_des_jetons = []
+    cartes_des_jetons = []
+    reglements_en_jetons = Reglement.objects.filter(
+        vente=vente_d_origine, moyen=PaymentMethod.LOCAL_GIFT
+    ).select_related("carte")
+    for reglement_en_jetons in reglements_en_jetons:
+        if reglement_en_jetons.asset not in monnaies_des_jetons:
+            monnaies_des_jetons.append(reglement_en_jetons.asset)
+        if reglement_en_jetons.carte not in cartes_des_jetons:
+            cartes_des_jetons.append(reglement_en_jetons.carte)
+
+    if len(monnaies_des_jetons) == 0:
+        raise ValueError(
+            "La vente d'origine a une part payée en jetons, mais aucun règlement en "
+            "jetons : l'avoir est impossible."
+        )
+    if len(monnaies_des_jetons) > 1:
+        raise ValueError(
+            "La vente d'origine a été payée avec plusieurs monnaies de jetons : "
+            "l'avoir automatique est impossible."
+        )
+
+    monnaie_des_jetons = monnaies_des_jetons[0]
+    if len(cartes_des_jetons) == 1:
+        carte_des_jetons = cartes_des_jetons[0]
+    else:
+        carte_des_jetons = None
+    return monnaie_des_jetons, carte_des_jetons
+
+
 def ajouter_les_reglements_d_un_avoir(
     vente_d_avoir, lignes_et_articles_d_avoir, moyen_rembourse
 ):
@@ -1063,35 +1385,53 @@ def ajouter_les_reglements_d_un_avoir(
     `ecrire_la_vente_d_avoir_d_une_vente` (ce module), dans leur transaction.
 
     LA RÈGLE (le net rendu de chaque article, quand il n'est pas nul) :
-    - ligne payée en jetons cadeau (LG) : un règlement « jetons » négatif par article,
-      avec la monnaie et la carte de la ligne. Aucun argent n'est rendu et la carte
-      n'est pas recréditée : la dette du lieu revient, les jetons ne reviennent pas ;
-    - ligne payée par Stripe : UN règlement par paiement Stripe, au moyen Stripe
-      d'origine, relié au paiement, sans référence externe (aucun appel à Stripe :
-      l'admin rembourse depuis le tableau de bord Stripe) ;
-    - tout autre argent : UN SEUL règlement pour tout, au moyen « Remboursé par »
-      (`moyen_rembourse`), obligatoire s'il y a de l'argent à rendre ;
+    - la part en jetons rendue (`part_en_jetons` des articles d'avoir) : UN règlement
+      « jetons » (LG) négatif par vente d'origine, avec la monnaie et la carte de ses
+      règlements LG (`monnaie_et_carte_des_jetons_de_la_vente` : sans carte si le
+      client a payé avec plusieurs cartes). Aucun argent n'est rendu pour elle et la
+      carte n'est pas recréditée : la dette du lieu revient, les jetons ne reviennent
+      pas ;
+    - une ligne d'avant le chantier (sans vente) au moyen LG : tout son net en
+      « jetons », avec la monnaie et la carte de la ligne ;
+    - le reste (net − part en jetons) est de l'argent :
+      - ligne payée par Stripe : UN règlement par paiement Stripe, au moyen Stripe
+        d'origine, relié au paiement, sans référence externe (aucun appel à Stripe :
+        l'admin rembourse depuis le tableau de bord Stripe) ;
+      - tout autre argent : UN SEUL règlement pour tout, au moyen « Remboursé par »
+        (`moyen_rembourse`), obligatoire s'il y a de l'argent à rendre ;
     - puis la part offerte annulée : UN règlement FREE négatif, sauf la partie déjà
       tracée par la règle « offert » d'`ajouter_article` (jamais deux fois).
-    / Token lines: one LG payment each; Stripe lines: one payment per Stripe payment
-    (no Stripe call); any other money: ONE payment with the "Refunded by" method; then
-    the offered part as one FREE payment, never twice.
+    / Token part: one LG payment per original sale (currency and card of its LG
+    payments); the rest is money: one payment per Stripe payment (no Stripe call), ONE
+    payment with the "Refunded by" method for any other money; then the offered part
+    as one FREE payment, never twice.
 
     :param vente_d_avoir: la `Vente` AVOIR EN_ATTENTE
     :param lignes_et_articles_d_avoir: liste de (ligne d'origine, article d'avoir)
     :param moyen_rembourse: `PaymentMethod` de l'argent rendu, ou None
-    :raises ValueError: de l'argent hors Stripe est à rendre sans moyen
+    :raises ValueError: de l'argent hors Stripe est à rendre sans moyen ; les jetons
+        de la vente d'origine n'ont pas UNE monnaie (voir
+        `monnaie_et_carte_des_jetons_de_la_vente`)
     """
     # Les nets à rendre, par paiement Stripe (dans l'ordre des articles), et ce qui se
     # rend par le moyen choisi.
     # / Nets to give back per Stripe payment, and what the chosen method gives back.
     nets_par_paiement_stripe = {}
     net_rendu_par_le_moyen_choisi = 0
+    jetons_par_vente_d_origine = {}
     for ligne_d_origine, article_d_avoir in lignes_et_articles_d_avoir:
         net_rendu = article_d_avoir.total_ttc
         if net_rendu == 0:
             continue
-        if ligne_payee_en_jetons(ligne_d_origine):
+
+        # Une ligne d'avant le chantier (sans vente) payée en jetons : elle n'a ni part
+        # en jetons ni règlements ; sa monnaie et sa carte sont sur la ligne.
+        # / A historical line (no sale) paid in tokens: currency and card on the line.
+        ligne_historique_payee_en_jetons = (
+            ligne_d_origine.vente_id is None
+            and ligne_entierement_payee_en_jetons(ligne_d_origine)
+        )
+        if ligne_historique_payee_en_jetons:
             ajouter_reglement(
                 vente_d_avoir,
                 moyen=PaymentMethod.LOCAL_GIFT,
@@ -1099,6 +1439,27 @@ def ajouter_les_reglements_d_un_avoir(
                 asset=ligne_d_origine.asset,
                 carte=ligne_d_origine.carte,
             )
+            continue
+
+        # La part en jetons rendue, additionnée par vente d'origine : elle devient un
+        # règlement « jetons » après la boucle.
+        # / The token part given back, summed per original sale (one LG payment later).
+        jetons_rendus = article_d_avoir.part_en_jetons
+        if jetons_rendus != 0:
+            cle_de_la_vente_d_origine = ligne_d_origine.vente_id
+            if cle_de_la_vente_d_origine not in jetons_par_vente_d_origine:
+                jetons_par_vente_d_origine[cle_de_la_vente_d_origine] = {
+                    "vente": ligne_d_origine.vente,
+                    "jetons": 0,
+                }
+            jetons_par_vente_d_origine[cle_de_la_vente_d_origine]["jetons"] += (
+                jetons_rendus
+            )
+
+        # Le reste est de l'argent : Stripe, ou le moyen choisi.
+        # / The rest is money: Stripe, or the chosen method.
+        argent_rendu = net_rendu - jetons_rendus
+        if argent_rendu == 0:
             continue
         ligne_payee_par_stripe = ligne_d_origine.paiement_stripe_id is not None
         if ligne_payee_par_stripe:
@@ -1114,9 +1475,25 @@ def ajouter_les_reglements_d_un_avoir(
                     "moyen": moyen_stripe,
                     "net": 0,
                 }
-            nets_par_paiement_stripe[cle_du_paiement]["net"] += net_rendu
+            nets_par_paiement_stripe[cle_du_paiement]["net"] += argent_rendu
             continue
-        net_rendu_par_le_moyen_choisi += net_rendu
+        net_rendu_par_le_moyen_choisi += argent_rendu
+
+    # Les jetons rendus : UN règlement « jetons » négatif par vente d'origine, avec la
+    # monnaie et la carte de ses règlements LG, lues une seule fois par vente.
+    # / Tokens given back: ONE negative LG payment per original sale, its currency and
+    # card read once per sale.
+    for jetons_d_une_vente in jetons_par_vente_d_origine.values():
+        monnaie_des_jetons, carte_des_jetons = monnaie_et_carte_des_jetons_de_la_vente(
+            jetons_d_une_vente["vente"]
+        )
+        ajouter_reglement(
+            vente_d_avoir,
+            moyen=PaymentMethod.LOCAL_GIFT,
+            montant=jetons_d_une_vente["jetons"],
+            asset=monnaie_des_jetons,
+            carte=carte_des_jetons,
+        )
 
     for net_d_un_paiement_stripe in nets_par_paiement_stripe.values():
         if net_d_un_paiement_stripe["net"] == 0:
@@ -1180,14 +1557,16 @@ MESSAGE_AVOIR_TOTAL_VENTE_AVEC_UNE_RECHARGE = (
 def vente_porte_un_ecart_d_encaissement(vente):
     """
     Dit si la vente porte un article « Écart d'encaissement » (reçu en plus ou en
-    moins) : Stripe a encaissé un autre montant que les articles. Même critère que le
+    moins) : Stripe, la tireuse ou le paiement QR / NFC a encaissé un autre montant que
+    les articles. Même critère que le
     filtre « À vérifier » de l'admin (le nom du produit système).
     / Tells whether the sale carries a "collection gap" item (same criterion as the
     admin "To check" filter).
 
     LOCALISATION : BaseBillet/services_vente.py
-    LU PAR : `ecrire_la_vente_d_avoir_d_une_vente` (ce module) et l'écran « Avoir
-    total » (Administration/admin_tenant.py).
+    LU PAR : `ecrire_la_vente_d_avoir_d_une_vente`, `ecrire_la_vente_d_avoir_d_une_ligne`
+    (ce module) et les écrans « Avoir total » et « Avoir sur un article »
+    (Administration/admin_tenant.py).
     """
     return LigneArticle.objects.filter(
         vente=vente,
@@ -1689,17 +2068,25 @@ def tarif_vendu_d_un_produit_systeme(nom_du_produit):
 def ajouter_l_article_d_ecart_d_encaissement(vente, ecart_en_centimes):
     """
     Ajoute à la vente l'article « Écart d'encaissement » : la différence entre
-    l'argent que Stripe annonce et ce que valent les articles. Rien si l'écart vaut 0.
+    l'argent réellement encaissé et ce que valent les articles. Rien si l'écart vaut 0.
     / Adds the "collection gap" item to the sale: the difference between the money
-    Stripe announces and the items' value. Nothing when the gap is 0.
+    really collected and the items' value. Nothing when the gap is 0.
 
     LOCALISATION : BaseBillet/services_vente.py
 
-    APPELÉE PAR : `encaisser_vente_stripe` (encaissement d'une vente en ligne) et
-    `PaiementStripe/utils.py` `partial_refund_payment` (remboursement Stripe).
-    / Called by encaisser_vente_stripe and partial_refund_payment.
+    APPELÉE PAR :
+    - `encaisser_vente_stripe` (encaissement d'une vente en ligne) et
+      `PaiementStripe/utils.py` `partial_refund_payment` (remboursement Stripe) ;
+    - `controlvanne/billing.py` `facturer_tirage` : solde insuffisant, la bière est
+      servie mais les monnaies n'ont pas tout couvert (reçu en moins) ;
+    - `BaseBillet/views.py` `QrCodeScanPay._ecrire_la_vente_payee` : l'ancien Fedow a
+      débité moins (ou plus) que le montant demandé par le QR code.
+    Un débit réseau ne s'annule pas : l'article garde son prix, l'écart porte la
+    différence, et les deux égalités de la vente tiennent.
+    / Called by the Stripe settlement and refund, the tap (balance too low) and the
+    QR / NFC payment (old Fedow debited another amount). The item keeps its price.
 
-    L'ARTICLE : écart positif (Stripe a compté plus que les articles) → produit
+    L'ARTICLE : écart positif (plus d'argent reçu que les articles) → produit
     « reçu en plus », quantité +1 ; écart négatif → « reçu en moins », quantité −1.
     Prix unitaire = |écart|, TVA 0, hors chiffre d'affaires. La ligne naît VALID et
     sans paiement Stripe : elle ne bloque pas le passage du paiement à VALID
@@ -1709,7 +2096,7 @@ def ajouter_l_article_d_ecart_d_encaissement(vente, ecart_en_centimes):
     price |gap|, VAT 0, off revenue, born VALID without Stripe payment. The caller logs.
 
     :param vente: la `Vente` EN_ATTENTE qui reçoit l'article
-    :param ecart_en_centimes: argent annoncé par Stripe − valeur des articles (int)
+    :param ecart_en_centimes: argent réellement encaissé − valeur des articles (int)
     :return: la `LigneArticle` d'écart, ou None si l'écart vaut 0
     """
     if ecart_en_centimes == 0:

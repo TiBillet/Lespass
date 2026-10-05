@@ -143,10 +143,11 @@ class TestPosPaiementCheque(FastTenantTestCase):
         Un chèque encaissé doit être reconnaissable en base comme un chèque.
 
         C'est la condition de tout le reste : le rapport, la clôture et l'archive
-        fiscale filtrent sur `payment_method`. Une vente enregistrée sous un autre
-        moyen serait comptée dans la mauvaise colonne, sans que rien ne le signale.
-        / Everything downstream filters on payment_method: a check recorded under
-          another method would be counted in the wrong column, silently.
+        fiscale lisent le moyen du règlement de la vente. Une vente enregistrée sous
+        un autre moyen serait comptée dans la mauvaise colonne, sans que rien ne le
+        signale.
+        / Everything downstream reads the sale's payment method: a check recorded
+          under another method would be counted in the wrong column, silently.
         """
         reponse = self.client_http.post(
             "/laboutik/paiement/payer/", data=self._donnees_du_panier("CH")
@@ -155,7 +156,7 @@ class TestPosPaiementCheque(FastTenantTestCase):
         self.assertEqual(reponse.status_code, 200)
 
         ligne = LigneArticle.objects.get()
-        self.assertEqual(ligne.payment_method, PaymentMethod.CHEQUE)
+        self.assertEqual(ligne.vente.reglements.get().moyen, PaymentMethod.CHEQUE)
         self.assertEqual(ligne.amount, int(round(PRIX_ARTICLE_EUROS * 100)))
 
     # ------------------------------------------------------------------ #

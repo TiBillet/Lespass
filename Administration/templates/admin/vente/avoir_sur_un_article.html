@@ -1,0 +1,147 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+<!--
+ÉCRAN « AVOIR SUR UN ARTICLE »
+/ "Credit note on one item" screen
+
+LOCALISATION : Administration/templates/admin/vente/avoir_sur_un_article.html
+
+Rendu par VenteAdmin.avoir_sur_un_article (Administration/admin_tenant.py), action de
+la fiche d'une vente réglée. Deux écrans, à la même adresse :
+- `ligne` vide : la liste des articles qui ont encore un reste à rendre, chacun avec un
+  lien vers son écran (`?ligne=<pk>`) ;
+- `ligne` présente : l'article choisi. Le formulaire est posté (POST) à la même adresse
+  (paramètre `ligne` compris) : la vue écrit l'avoir par le service de vente, puis
+  ouvre la fiche de la vente AVOIR.
+Le champ « Quantité rendue » est en lecture seule pour une pesée ou un tirage (Q-H5).
+Le champ « Remboursé par » n'existe que pour de l'argent rendu à la main (D27).
+/ Two screens: the list of items with a remainder, then the chosen item and its form.
+-->
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div style="max-width: 640px; margin: 40px auto; padding: 24px; border: 1px solid #d1d5db; border-radius: 8px;"
+     data-testid="avoir-article-ecran">
+    <h2 style="margin: 0 0 16px; font-size: 1.25em; font-weight: 600;">{{ title }}</h2>
+
+    {% if ligne is None %}
+    {# Premier écran : les articles qui ont un reste à rendre. #}
+    {# / First screen: the items with something left to give back. #}
+    <p style="margin: 0 0 16px;">{% translate "Choisissez l'article à rembourser." %}</p>
+    <table style="width: 100%; border-collapse: collapse;" data-testid="avoir-article-liste"
+           aria-label="{% translate 'Articles qui ont encore un reste à rendre' %}">
+        <thead>
+            <tr>
+                <th scope="col" style="text-align: left; padding: 8px; border-bottom: 1px solid #d1d5db;">{% translate "Article" %}</th>
+                <th scope="col" style="text-align: right; padding: 8px; border-bottom: 1px solid #d1d5db;">{% translate "Prix unitaire" %}</th>
+                <th scope="col" style="text-align: right; padding: 8px; border-bottom: 1px solid #d1d5db;">{% translate "Reste à rendre" %}</th>
+                <th scope="col" style="padding: 8px; border-bottom: 1px solid #d1d5db;"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">{% translate "Action" %}</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for article in articles_proposes %}
+            <tr data-testid="avoir-article-ligne">
+                <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">{{ article.ligne.pricesold }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">{{ article.prix_unitaire }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">{{ article.quantite_restante }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">
+                    <a href="{{ article.adresse }}"
+                       style="color: #d97706; font-weight: 500; text-decoration: none;"
+                       data-testid="avoir-article-choisir"
+                       aria-label="{% blocktranslate with article=article.ligne.pricesold %}Rembourser {{ article }}{% endblocktranslate %}">
+                        {% translate "Rembourser" %}
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <p style="margin: 16px 0 0;">
+        <a href="{{ url_de_la_fiche_de_la_vente }}" style="color: #6b7280; text-decoration: none;"
+           data-testid="avoir-article-retour">{% translate "Retour à la vente" %}</a>
+    </p>
+
+    {% else %}
+    {# Second écran : l'article choisi. / Second screen: the chosen item. #}
+    <p style="margin: 0 0 16px;" data-testid="avoir-article-recapitulatif">
+        <strong>{{ ligne.pricesold }}</strong>
+        — {% translate "prix unitaire" %} {{ prix_unitaire }}
+        — {% translate "reste à rendre" %} {{ quantite_restante }}
+    </p>
+
+    {% if quantite_figee %}
+    <p style="margin: 0 0 16px;" data-testid="avoir-article-entier">
+        {% translate "Article vendu au poids ou à la tireuse : seul l'article entier se rembourse." %}
+    </p>
+    {% endif %}
+
+    {% if ligne_payee_par_stripe %}
+    <div role="alert"
+         style="margin: 0 0 16px; padding: 12px; border-radius: 6px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;"
+         data-testid="avoir-rappel-stripe">
+        {% translate "Remboursez cette somme depuis votre tableau de bord Stripe." %}
+    </div>
+    {% elif ligne_entierement_offerte %}
+    <p style="margin: 0 0 16px;" data-testid="avoir-ligne-offerte">
+        {% translate "Cet article a été offert : aucun argent n'est à rendre." %}
+    </p>
+    {% endif %}
+
+    <!--
+    action : la même adresse, paramètre `ligne` compris. onsubmit : le bouton est
+    désactivé une fois l'envoi parti (filet contre le double clic) ; la vraie garde
+    est le verrou du service (quantite_restante_de_la_ligne_sous_verrou).
+    / Same address with the `ligne` parameter; the button is disabled once sent, the
+    real guard is the service lock.
+    -->
+    <form method="post" action="?ligne={{ ligne.pk }}" aria-label="{% translate 'Avoir sur un article' %}"
+          onsubmit="this.querySelector('[data-testid=avoir-valider]').disabled = true;">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 16px;">
+            <label for="{{ form.quantite.id_for_label }}"
+                   style="display: block; font-weight: 500; margin-bottom: 4px;">
+                {{ form.quantite.label }}
+            </label>
+            {{ form.quantite }}
+            <p style="margin: 4px 0 0; font-size: 0.85em; color: #6b7280;">{{ form.quantite.help_text }}</p>
+            {% if form.quantite.errors %}
+            <p role="alert" style="margin: 4px 0 0; color: #b91c1c;" data-testid="avoir-quantite-erreur">
+                {{ form.quantite.errors|join:" " }}
+            </p>
+            {% endif %}
+        </div>
+
+        {% if champ_rembourse_par_demande %}
+        <div style="margin-bottom: 16px;">
+            <label for="{{ form.moyen_rembourse.id_for_label }}"
+                   style="display: block; font-weight: 500; margin-bottom: 4px;">
+                {{ form.moyen_rembourse.label }}
+            </label>
+            {{ form.moyen_rembourse }}
+            <p style="margin: 4px 0 0; font-size: 0.85em; color: #6b7280;">{{ form.moyen_rembourse.help_text }}</p>
+            {% if form.moyen_rembourse.errors %}
+            <p role="alert" style="margin: 4px 0 0; color: #b91c1c;" data-testid="avoir-moyen-rembourse-erreur">
+                {{ form.moyen_rembourse.errors|join:" " }}
+            </p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button type="submit"
+                    style="padding: 10px 20px; background: #d97706; color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer;"
+                    data-testid="avoir-valider">
+                {% translate "Émettre l'avoir" %}
+            </button>
+            <a href="{{ url_de_la_liste_des_articles }}"
+               style="color: #6b7280; text-decoration: none;"
+               data-testid="avoir-annuler">
+                {% translate "Annuler" %}
+            </a>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

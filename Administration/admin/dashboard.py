@@ -826,14 +826,14 @@ def _construire_sections_modules(request):
 
     # --- Toujours visible : Ventes & comptabilite ---
     # / --- Always visible: Sales & accounting ---
-    # Les deux rapports sont ranges l'un sous l'autre : le rapport des ventes (la
-    # cloture unique, toutes origines), puis l'ancien rapport de la caisse. Celui-ci
-    # n'apparait que si le module caisse est actif.
-    # / Both reports sit one under the other: the sales report (single closure, every
-    # origin), then the old POS report, only when the POS module is on.
     # « Ventes » en premier : la liste de toutes les ventes du lieu, toutes origines,
-    # en lecture seule (VenteAdmin, Administration/admin_tenant.py).
-    # / "Sales" first: every sale of the venue, read-only.
+    # en lecture seule (VenteAdmin, Administration/admin_tenant.py). Puis le rapport
+    # des ventes (la cloture unique, toutes origines). L'ancienne cloture de la
+    # caisse (`laboutik.ClotureCaisse`) n'est plus dans l'admin : son moteur
+    # (`laboutik/reports.py`) lit le moyen des lignes et recalcule la TVA depuis le
+    # taux, faux pour une part payee en jetons.
+    # / "Sales" first, then the sales report. The old POS closure is no longer in the
+    # admin (its engine reads the lines' method and recomputes VAT from the rate).
     items_ventes_et_comptabilite = [
         {
             "title": _("Ventes"),
@@ -850,17 +850,6 @@ def _construire_sections_modules(request):
             "permission": admin_permission,
         },
     ]
-    if configuration.module_caisse:
-        items_ventes_et_comptabilite.append(
-            {
-                "title": _("Ancien rapport caisse"),
-                "icon": "point_of_sale",
-                "link": _safe_rev(
-                    "staff_admin:laboutik_cloturecaisse_changelist"
-                ),
-                "permission": admin_permission,
-            }
-        )
     navigation.append(
         {
             "title": _("Sales & accounting"),
@@ -1361,8 +1350,6 @@ DESCRIPTION_DES_PAGES = {
     "booking.resourcegroup": _("Le rangement des ressources."),
     "booking.calendar": _("Les calendriers de disponibilité."),
     "booking.weeklyopening": _("Les horaires d'ouverture habituels."),
-    # --- Ventes & comptabilite ---
-    "laboutik.cloturecaisse": _("Le bilan de chaque journée."),
     # --- Financement participatif ---
     "crowds.initiative": _("Les projets soumis au financement."),
     "crowds.crowdconfig": _("Les mots et les règles de vos campagnes."),
@@ -1435,8 +1422,6 @@ CATEGORIE_DES_PAGES = {
     "booking.resourcegroup": "configurer",
     "booking.calendar": "configurer",
     "booking.weeklyopening": "configurer",
-    # --- Ventes & comptabilite ---
-    "laboutik.cloturecaisse": "analyser",
     # --- Financement participatif ---
     "crowds.initiative": "gerer",
     "crowds.crowdconfig": "configurer",

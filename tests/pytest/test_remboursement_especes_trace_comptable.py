@@ -11,23 +11,18 @@ Vider une carte a la caisse rend de l'argent liquide a un adherent. L'operation
 doit laisser une trace comptable complete, sinon la caisse ne tombe plus juste
 et le solde du lieu derive sans qu'on sache pourquoi.
 
-`WalletService.rembourser_en_especes` produit :
+`WalletService.rembourser_en_especes` produit une `Transaction` REFUND par monnaie
+remboursee (le mouvement de portefeuille), et aucune `LigneArticle`. La caisse
+ecrit ensuite la vente VIDAGE_CARTE (D12) : un reglement par monnaie rendue (le
+lieu encaisse la monnaie du reseau), puis un reglement especes NEGATIF du total
+rendu (la sortie du tiroir).
 
-- une `Transaction` REFUND par monnaie remboursee (le mouvement de portefeuille) ;
-- une `LigneArticle` POSITIVE en STRIPE_FED si un solde federe est rendu — c'est
-  l'encaissement, par le lieu, de monnaie qui appartenait au reseau ;
-- une `LigneArticle` NEGATIVE en CASH du total rendu — c'est la sortie du tiroir.
+Ce fichier couvre le cas ou les DEUX monnaies sont presentes en meme temps : le
+total rendu est verifie comme une vraie somme (1000 + 500), et non une recopie.
 
-Ce fichier couvre ce que les tests voisins laissent de cote : le cas ou les DEUX
-monnaies sont presentes en meme temps, et le detail des champs de tracabilite.
-`test_card_refund_service.py` et `test_pos_vider_carte.py` ne testent chaque
-monnaie que SEULE : la ligne CASH y vaut `-(1000 + 0)` ou `-(0 + 500)`, ce qui ne
-distingue pas une somme d'une simple recopie du plus grand des deux.
-
-/ Emptying a card at the register hands real cash to a member: the accounting
-trail must be complete. This file covers what the neighbouring tests leave out:
-BOTH currencies at once (so the CASH line is verified as a true sum), and the
-traceability fields.
+/ Emptying a card at the register hands real cash to a member. The service writes
+one REFUND transaction per currency and no line; the register writes the
+VIDAGE_CARTE sale (D12). This file covers BOTH currencies at once.
 
 Lancement / Run:
     docker exec lespass_django poetry run pytest \
@@ -43,7 +38,8 @@ from django.test import override_settings
 from django_tenants.utils import schema_context, tenant_context
 
 from AuthBillet.models import Wallet
-from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+from BaseBillet.models import LigneArticle, PaymentMethod
+from BaseBillet.models_vente import Vente
 from Customers.models import Client as TenantClient
 from QrcodeCashless.models import CarteCashless, Detail
 from fedow_connect.models import FedowConfig
@@ -358,77 +354,10 @@ def test_rembourser_les_deux_monnaies_rend_la_somme_exacte(
         assert resultat["total_fed_centimes"] == SOLDE_MONNAIE_FEDEREE
         assert resultat["total_centimes"] == TOTAL_ATTENDU
 
-        ligne_de_sortie_de_caisse = LigneArticle.objects.get(
-            carte=carte_client_mixte,
-            payment_method=PaymentMethod.CASH,
-        )
-        assert ligne_de_sortie_de_caisse.amount == -TOTAL_ATTENDU
-
-
-def test_le_solde_federe_rembourse_est_encaisse_par_le_lieu(
-    tenant, wallet_du_lieu, carte_client_mixte, asset_monnaie_federee,
-):
-    """Une ligne positive en monnaie federee accompagne la sortie de caisse.
-
-    Rendre du federe en billets, c'est deux mouvements comptables : le lieu
-    encaisse de la monnaie du reseau (ligne positive), et sort du liquide
-    (ligne negative). Sans la ligne positive, la caisse afficherait une sortie
-    sans contrepartie.
-    / Refunding federated money in cash is two accounting movements: the venue
-    takes in network currency, and pays out cash. Without the positive line, the
-    register would show an outflow with no counterpart.
-    """
-    with tenant_context(tenant):
-        WalletService.rembourser_en_especes(
-            carte=carte_client_mixte,
-            tenant=tenant,
-            receiver_wallet=wallet_du_lieu,
-        )
-
-        ligne_federee = LigneArticle.objects.get(
-            carte=carte_client_mixte,
-            payment_method=PaymentMethod.STRIPE_FED,
-        )
-        assert ligne_federee.amount == SOLDE_MONNAIE_FEDEREE
-        # L'asset est trace sur la ligne : c'est ce qui permet de savoir QUELLE
-        # monnaie du reseau a ete encaissee.
-        # / The asset is recorded on the line: it tells WHICH network currency
-        # was taken in.
-        assert ligne_federee.asset == asset_monnaie_federee.uuid
-
-
-def test_les_lignes_portent_une_trace_comptable_complete(
-    tenant, wallet_du_lieu, carte_client_mixte,
-):
-    """Chaque ligne sait d'ou elle vient : carte, portefeuille, origine, etat.
-
-    Une ligne sans `carte` ni `wallet` serait un montant orphelin dans le
-    journal : impossible de rattacher la sortie de caisse a la personne
-    remboursee lors d'un controle.
-    / A line without carte or wallet would be an orphan amount in the journal:
-    impossible to tie the cash outflow to the refunded person during an audit.
-    """
-    with tenant_context(tenant):
-        WalletService.rembourser_en_especes(
-            carte=carte_client_mixte,
-            tenant=tenant,
-            receiver_wallet=wallet_du_lieu,
-        )
-
-        lignes = LigneArticle.objects.filter(carte=carte_client_mixte)
-        assert lignes.count() == 2
-
-        for ligne in lignes:
-            assert ligne.carte_id == carte_client_mixte.pk
-            assert ligne.wallet_id == carte_client_mixte.wallet_ephemere_id
-            assert ligne.status == LigneArticle.VALID
-            assert ligne.sale_origin == SaleOrigin.LABOUTIK
-            assert ligne.qty == 1
-            # Le tarif rattache la ligne au produit systeme « Remboursement »,
-            # sans lequel elle n'apparaitrait dans aucun export comptable.
-            # / The price ties the line to the system "Refund" product, without
-            # which it would appear in no accounting export.
-            assert ligne.pricesold is not None
+        # Le service n'écrit aucune ligne : la caisse écrit la vente VIDAGE_CARTE
+        # (D12, test_caisse_vider_carte_deux_fedow.py).
+        # / The service writes no line: the register writes the VIDAGE_CARTE sale.
+        assert not LigneArticle.objects.filter(carte=carte_client_mixte).exists()
 
 
 def test_chaque_monnaie_rendue_laisse_sa_transaction(
@@ -437,11 +366,9 @@ def test_chaque_monnaie_rendue_laisse_sa_transaction(
     """Deux monnaies rendues, deux mouvements de portefeuille, et les comptes
     tombent juste.
 
-    Les `Transaction` tracent le portefeuille, les `LigneArticle` tracent la
-    caisse. Les deux doivent raconter la meme histoire : si leurs totaux
-    divergent, l'un des deux journaux ment.
-    / Transactions track the wallet, LigneArticle track the register. Both must
-    tell the same story: diverging totals mean one of the journals lies.
+    Les `Transaction` tracent le portefeuille ; leur total vaut l'argent rendu
+    annoncé par le service (c'est lui que la caisse écrit en règlement espèces).
+    / Transactions track the wallet; their total equals the money given back.
     """
     with tenant_context(tenant):
         resultat = WalletService.rembourser_en_especes(
@@ -457,12 +384,10 @@ def test_chaque_monnaie_rendue_laisse_sa_transaction(
         assert transactions.count() == 2
         assert len(resultat["transactions"]) == 2
 
-        total_des_transactions = sum(tx.amount for tx in transactions)
-        ligne_de_sortie_de_caisse = LigneArticle.objects.get(
-            carte=carte_client_mixte,
-            payment_method=PaymentMethod.CASH,
-        )
-        assert total_des_transactions == abs(ligne_de_sortie_de_caisse.amount)
+        total_des_transactions = 0
+        for transaction_de_remboursement in transactions:
+            total_des_transactions += transaction_de_remboursement.amount
+        assert total_des_transactions == resultat["total_centimes"] == TOTAL_ATTENDU
 
 
 def test_les_soldes_de_la_carte_retombent_a_zero(
@@ -494,10 +419,15 @@ def test_les_soldes_de_la_carte_retombent_a_zero(
 
 
 @pytest.mark.django_db
-def test_vider_une_carte_depuis_la_caisse_ecrit_les_deux_lignes(
+def test_vider_une_carte_depuis_la_caisse_ecrit_la_vente_du_vidage(
     tenant, carte_client_mixte, carte_du_caissier, point_de_vente,
 ):
     """Le parcours reel : un caissier vide une carte, la trace est complete.
+
+    La trace est la vente VIDAGE_CARTE (D12) : un règlement par monnaie rendue
+    (monnaie locale +1000, monnaie fédérée +500), puis un règlement espèces −1500
+    (ce qui sort du tiroir). Aucune ligne « Refund ».
+    / The trail is the VIDAGE_CARTE sale: one payment per currency, then cash −1500.
 
     Ce test remplace la verification manuelle « vider une carte au point de
     vente » : il passe par la vraie route HTTP, avec la carte primaire, le
@@ -525,18 +455,20 @@ def test_vider_une_carte_depuis_la_caisse_ecrit_les_deux_lignes(
     assert response.status_code == 200, response.content.decode()[:500]
 
     with tenant_context(tenant):
-        ligne_de_sortie_de_caisse = LigneArticle.objects.get(
-            carte=carte_client_mixte,
-            payment_method=PaymentMethod.CASH,
-            sale_origin=SaleOrigin.LABOUTIK,
+        vente_du_vidage = Vente.objects.get(
+            nature=Vente.Nature.VIDAGE_CARTE, carte=carte_client_mixte
         )
-        assert ligne_de_sortie_de_caisse.amount == -TOTAL_ATTENDU
-
-        ligne_federee = LigneArticle.objects.get(
-            carte=carte_client_mixte,
-            payment_method=PaymentMethod.STRIPE_FED,
-        )
-        assert ligne_federee.amount == SOLDE_MONNAIE_FEDEREE
+        montants_par_moyen = {}
+        for reglement in vente_du_vidage.reglements.all():
+            montants_par_moyen[reglement.moyen] = reglement.montant
+        assert montants_par_moyen == {
+            PaymentMethod.LOCAL_EURO: SOLDE_MONNAIE_LOCALE,
+            PaymentMethod.STRIPE_FED: SOLDE_MONNAIE_FEDEREE,
+            PaymentMethod.CASH: -TOTAL_ATTENDU,
+        }
+        assert not LigneArticle.objects.filter(
+            carte=carte_client_mixte, vente__isnull=True
+        ).exists()
 
         # La carte du caissier est tracee sur chaque mouvement : c'est ce qui
         # permet de savoir QUI a rendu l'argent.
@@ -552,125 +484,10 @@ def test_vider_une_carte_depuis_la_caisse_ecrit_les_deux_lignes(
 
 
 # ---------------------------------------------------------------------------
-# C. La remontee dans les rapports de caisse (ticket X et ticket Z)
+# C. La remontee dans les rapports de caisse : lue sur la vente VIDAGE_CARTE par le
+# rapport unique (tests/pytest/test_rapport_unique.py, « cartes vidées »).
+# / C. Report: read from the VIDAGE_CARTE sale by the single report.
 # ---------------------------------------------------------------------------
-#
-# Un remboursement sort de l'argent du tiroir. Le rapport de caisse doit donc le
-# voir, sans quoi la caisse ne tombe plus juste : le tiroir contient moins que ce
-# que le ticket annonce, et l'ecart n'est explique nulle part.
-#
-# Le rapport ne lit que les lignes dont l'origine figure dans
-# `ORIGINES_ENCAISSEES_PAR_LE_LIEU` (laboutik/reports.py). Le vidage de carte se
-# declenchant depuis le point de vente, ses lignes portent l'origine caisse et y
-# entrent — c'est ce que verifient les tests ci-dessous.
-#
-# / A refund takes cash out of the drawer, so the register report must see it.
-# The report only reads lines whose origin is in ORIGINES_ENCAISSEES_PAR_LE_LIEU;
-# card emptying happens at the point of sale, so its lines belong there.
-
-
-def _rapport_de_la_periode(point_de_vente):
-    """Le service de rapport sur une fenetre encadrant l'instant present.
-
-    C'est le meme service qui alimente le ticket X (rapport temps reel) et le
-    ticket Z (cloture) : les deux lisent `RapportComptableService`.
-    / The same service feeds both the X report (real time) and the Z report
-    (closure).
-    """
-    from datetime import timedelta
-
-    from django.utils import timezone
-
-    from laboutik.reports import RapportComptableService
-
-    maintenant = timezone.now()
-    return RapportComptableService(
-        point_de_vente=point_de_vente,
-        datetime_debut=maintenant - timedelta(minutes=5),
-        datetime_fin=maintenant + timedelta(minutes=5),
-    )
-
-
-def test_la_ligne_de_remboursement_porte_l_origine_caisse(
-    tenant, wallet_du_lieu, carte_client_mixte,
-):
-    """L'origine decide de tout : c'est elle qui fait entrer la ligne au rapport.
-
-    Etiqueter ces lignes en ADMIN les ferait disparaitre des tickets X et Z, sans
-    aucune erreur visible — le rapport afficherait simplement un montant faux.
-    / The origin is what lets the line into the report. Tagging these lines ADMIN
-    would silently drop them from the X and Z tickets.
-    """
-    with tenant_context(tenant):
-        WalletService.rembourser_en_especes(
-            carte=carte_client_mixte,
-            tenant=tenant,
-            receiver_wallet=wallet_du_lieu,
-        )
-
-        ligne_de_sortie_de_caisse = LigneArticle.objects.get(
-            carte=carte_client_mixte,
-            payment_method=PaymentMethod.CASH,
-        )
-
-        assert ligne_de_sortie_de_caisse.sale_origin == SaleOrigin.LABOUTIK
-
-
-def test_le_remboursement_apparait_dans_les_totaux_du_rapport(
-    tenant, wallet_du_lieu, carte_client_mixte, point_de_vente,
-):
-    """La sortie d'especes doit peser sur le total especes du rapport.
-
-    Rendre 1500 centimes en billets diminue d'autant les especes de la periode.
-    Sans cela, le ticket X affiche un total d'especes superieur a ce que
-    contient reellement le tiroir.
-    / Handing 1500 cents back lowers the period's cash total by as much.
-
-    On mesure un DELTA, jamais un total absolu : la fenetre de cinq minutes est
-    partagee avec tous les autres tests de la suite, qui encaissent eux aussi
-    des especes. Un total absolu passerait en isolation et echouerait en suite
-    complete (PIEGES 9.60).
-    / We measure a DELTA, never an absolute total: the five-minute window is
-    shared with every other test in the suite. An absolute total would pass in
-    isolation and fail in the full suite.
-    """
-    with tenant_context(tenant):
-        especes_avant = _rapport_de_la_periode(point_de_vente).calculer_totaux_par_moyen()["especes"]
-
-        WalletService.rembourser_en_especes(
-            carte=carte_client_mixte,
-            tenant=tenant,
-            receiver_wallet=wallet_du_lieu,
-        )
-
-        especes_apres = _rapport_de_la_periode(point_de_vente).calculer_totaux_par_moyen()["especes"]
-
-        assert especes_apres - especes_avant == -TOTAL_ATTENDU
-
-
-def test_le_remboursement_diminue_le_solde_de_caisse_du_rapport(
-    tenant, wallet_du_lieu, carte_client_mixte, point_de_vente,
-):
-    """Le solde annonce doit correspondre a ce qu'il y a dans le tiroir.
-
-    C'est la raison d'etre du solde de caisse : le comparer au comptage physique
-    en fin de service. Un remboursement non compte cree un ecart que le caissier
-    ne peut pas expliquer.
-    / The register balance exists to be compared with the physical count at
-    closing. An uncounted refund creates an unexplainable discrepancy.
-    """
-    with tenant_context(tenant):
-        solde_avant = _rapport_de_la_periode(point_de_vente).calculer_solde_caisse()["solde"]
-
-        WalletService.rembourser_en_especes(
-            carte=carte_client_mixte,
-            tenant=tenant,
-            receiver_wallet=wallet_du_lieu,
-        )
-
-        solde_apres = _rapport_de_la_periode(point_de_vente).calculer_solde_caisse()["solde"]
-
-        assert solde_apres == solde_avant - TOTAL_ATTENDU
 
 
 # ---------------------------------------------------------------------------

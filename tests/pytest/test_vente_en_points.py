@@ -77,7 +77,7 @@ from BaseBillet.models import (  # noqa: E402
     Tva,
 )
 from QrcodeCashless.models import CarteCashless  # noqa: E402
-from BaseBillet.models_vente import Vente  # noqa: E402
+from BaseBillet.models_vente import Reglement, Vente  # noqa: E402
 from BaseBillet.services_vente import (  # noqa: E402
     ajouter_article,
     ajouter_reglement,
@@ -96,7 +96,6 @@ from fedow_core.services import AssetService, WalletService  # noqa: E402
 from laboutik.models import (  # noqa: E402
     ArticleCommandeSauvegarde,
     CartePrimaire,
-    ClotureCaisse,
     CommandeSauvegarde,
     CompteComptable,
     LaboutikConfiguration,
@@ -621,15 +620,21 @@ class TestVenteEnPoints(FastTenantTestCase):
     # ------------------------------------------------------------------
 
     def test_un_pins_paye_en_points_cree_une_ligne_non_monetaire(self):
-        """300 points debites, une ligne NM a 30000 unites, TVA 0.
-        / 300 points debited, one NM line at 30000 units, VAT 0."""
+        """300 points debites : une ligne a 30000 unites, TVA 0, dans une vente en
+        points reglee « points ou temps » (NM). Le moyen est sur le reglement, pas sur
+        la ligne (Q-H2).
+        / 300 points debited: one line at 30000 units, VAT 0, NM payment."""
         self._crediter_la_carte(self.asset_points, PRIX_PINS_EN_CENTIEMES_DE_POINTS)
 
         reponse = self._payer("nfc", {self.pins.uuid: 1})
 
         assert reponse.status_code == 200, reponse.content.decode()[:400]
         ligne = LigneArticle.objects.get()
-        assert ligne.payment_method == PaymentMethod.NON_MONETAIRE
+        assert ligne.payment_method is None
+        moyens_de_la_vente = []
+        for reglement in ligne.vente.reglements.all():
+            moyens_de_la_vente.append(reglement.moyen)
+        assert moyens_de_la_vente == [PaymentMethod.NON_MONETAIRE]
         assert ligne.amount == PRIX_PINS_EN_CENTIEMES_DE_POINTS
         assert ligne.qty == 1
         assert ligne.vat == 0
@@ -656,7 +661,7 @@ class TestVenteEnPoints(FastTenantTestCase):
         assert reponse.status_code == 200, reponse.content.decode()[:400]
         adhesion = Membership.objects.get(user=self.client_de_la_carte)
         ligne = LigneArticle.objects.get()
-        assert ligne.payment_method == PaymentMethod.NON_MONETAIRE
+        assert ligne.vente.reglements.get().moyen == PaymentMethod.NON_MONETAIRE
         assert ligne.membership == adhesion
         # La fiche d'adhesion dit « payee en points » ; le montant est en points.
         # / The membership says "paid in points"; the amount is in points.
@@ -846,63 +851,12 @@ class TestVenteEnPoints(FastTenantTestCase):
         reponse_especes = self._payer("espece", {self.vin.uuid: 1})
         assert reponse_especes.status_code == 200, reponse_especes.content.decode()[:400]
 
-    def test_la_cloture_separe_les_points_de_l_argent(self):
-        """Total 5,00 €, TVA sur le vin seul, section « Non monetaire ».
-        / Total 5.00 €, VAT on the wine only, "Non-monetary" section."""
-        self._vendre_un_pins_en_points_et_un_vin_en_especes()
-
-        rapport = self._rapport().generer_rapport_complet()
-
-        assert rapport["totaux_par_moyen"]["total"] == PRIX_VIN_CENTIMES
-        total_ttc_des_taux = sum(taux["total_ttc"] for taux in rapport["tva"].values())
-        assert total_ttc_des_taux == PRIX_VIN_CENTIMES
-        assert rapport["non_monetaire"]["par_monnaie"] == [
-            {
-                "nom": "Points fidélité",
-                "qty_articles": 1.0,
-                "unites": PRIX_PINS_EN_CENTIEMES_DE_POINTS,
-            }
-        ]
-
-    def test_l_ecriture_comptable_ignore_les_points(self):
-        """FEC equilibre, 5,00 € au debit, aucune alerte.
-        / Balanced FEC, 5.00 € debited, no warning."""
-        from laboutik.ventilation import (
-            charger_categories_par_nom,
-            charger_comptes_tva,
-            charger_mappings_paiement,
-            ventiler_cloture,
-        )
-
-        self._vendre_un_pins_en_points_et_un_vin_en_especes()
-        rapport = self._rapport().generer_rapport_complet()
-        cloture = ClotureCaisse.objects.create(
-            point_de_vente=self.point_de_vente,
-            responsable=self.admin_du_lieu,
-            datetime_ouverture=timezone.now(),
-            datetime_cloture=timezone.now(),
-            total_especes=PRIX_VIN_CENTIMES,
-            total_general=PRIX_VIN_CENTIMES,
-            nombre_transactions=2,
-            rapport_json=rapport,
-        )
-
-        lignes, avertissements = ventiler_cloture(
-            cloture,
-            charger_mappings_paiement(),
-            charger_categories_par_nom(),
-            charger_comptes_tva(),
-        )
-
-        total_debits = sum(
-            ligne["montant_centimes"] for ligne in lignes if ligne["sens"] == "D"
-        )
-        total_credits = sum(
-            ligne["montant_centimes"] for ligne in lignes if ligne["sens"] == "C"
-        )
-        assert total_debits == PRIX_VIN_CENTIMES
-        assert total_debits == total_credits
-        assert avertissements == []
+    # La clôture et le FEC de l'ancien moteur ne lisent plus une vente de la caisse
+    # (moyen de la ligne vide, Q-H2) : les points y sont testés sur le rapport unique
+    # (tests/pytest/test_rapport_unique.py, points par monnaie) et le FEC unique
+    # (tests/pytest/test_fec_equilibre.py, vente en points sans écriture).
+    # / The old engine's closure and FEC no longer read a register sale: points are
+    # tested on the single report and the single FEC.
 
     def test_l_archive_fiscale_garde_la_vente_en_points_sans_tva(self):
         """L'article payé en points est dans l'archive (`articles.csv`), TVA 0,
@@ -913,7 +867,7 @@ class TestVenteEnPoints(FastTenantTestCase):
 
         self._vendre_un_pins_en_points_et_un_vin_en_especes()
         ligne_en_points = LigneArticle.objects.get(
-            payment_method=PaymentMethod.NON_MONETAIRE
+            vente__reglements__moyen=PaymentMethod.NON_MONETAIRE
         )
 
         fichiers = generer_fichiers_archive(schema=self.tenant.schema_name)
@@ -1058,8 +1012,14 @@ class TestVenteEnPoints(FastTenantTestCase):
             reservoir_ml=Decimal("30000.00"),
         )
         self._crediter_la_carte(self.asset_euros, 1000)
+        # Le volume autorisé est posé au badge et plafonne le volume facturé (Q-H13).
+        # / The authorised volume is set at the badge and caps the billed volume.
         session = RfidSession.objects.create(
-            uid=self.carte.tag_id, carte=self.carte, tireuse_bec=tireuse, authorized=True
+            uid=self.carte.tag_id,
+            carte=self.carte,
+            tireuse_bec=tireuse,
+            authorized=True,
+            allowed_ml_session=Decimal("1000.00"),
         )
 
         facturer_tirage(
@@ -1095,8 +1055,9 @@ class TestVenteEnPoints(FastTenantTestCase):
         assert self._solde(self.asset_points) == 0
 
     def test_une_biere_payee_en_temps(self):
-        """Le tarif « Benevole » de la biere (1 heure) se paie en temps : ligne NM.
-        / The beer's time price is paid in time: NM line."""
+        """Le tarif « Benevole » de la biere (1 heure) se paie en temps : la vente est
+        dans l'unite du temps, reglee « points ou temps » (NM) dans cette monnaie.
+        / The beer's time price is paid in time: NM payment in the time currency."""
         self._crediter_la_carte(self.asset_temps, 100)
         cle_du_tarif_en_temps = f"{self.biere.uuid}--{self.tarif_biere_temps.uuid}"
 
@@ -1104,9 +1065,10 @@ class TestVenteEnPoints(FastTenantTestCase):
 
         assert reponse.status_code == 200, reponse.content.decode()[:400]
         ligne = LigneArticle.objects.get()
-        assert ligne.payment_method == PaymentMethod.NON_MONETAIRE
         assert ligne.amount == 100
-        assert ligne.asset == self.asset_temps.uuid
+        reglement_en_temps = ligne.vente.reglements.get()
+        assert reglement_en_temps.moyen == PaymentMethod.NON_MONETAIRE
+        assert reglement_en_temps.asset == self.asset_temps.uuid
         assert self._solde(self.asset_temps) == 0
 
     def test_deux_monnaies_de_points_dans_un_panier_sont_refusees(self):
@@ -1684,32 +1646,6 @@ class TestVenteEnPoints(FastTenantTestCase):
     # / X and Z tickets, exports: "Non-monetary" section
     # ------------------------------------------------------------------
 
-    def _cloture_avec_une_vente_en_points(self):
-        """Une cloture : un Pin's en points et un vin en especes.
-        / A closure: one pin in points and one wine in cash."""
-        self._vendre_un_pins_en_points_et_un_vin_en_especes()
-        # Periode qui couvre les deux ventes : l'admin et l'export Excel
-        # recalculent le rapport sur cette periode.
-        # / Period covering both sales: admin and Excel recompute the report on it.
-        return ClotureCaisse.objects.create(
-            point_de_vente=self.point_de_vente,
-            responsable=self.admin_du_lieu,
-            datetime_ouverture=timezone.now() - timedelta(hours=1),
-            datetime_cloture=timezone.now(),
-            total_especes=PRIX_VIN_CENTIMES,
-            total_general=PRIX_VIN_CENTIMES,
-            nombre_transactions=2,
-            rapport_json=self._rapport().generer_rapport_complet(),
-        )
-
-    def _cellule_total_de_la_section(self, contenu, attribut_de_la_section):
-        """Le texte de la 3e cellule de la 1re ligne d'une section « Non monetaire ».
-        / Text of the 3rd cell of the first row of a "Non-monetary" section."""
-        debut_de_la_section = contenu.index(attribut_de_la_section)
-        section = contenu[debut_de_la_section:]
-        cellules = re.findall(r"<td[^>]*>([^<]*)</td>", section)
-        return cellules[0].strip(), cellules[2].strip()
-
     def test_l_ecran_du_ticket_x_montre_les_ventes_en_points(self):
         """Recapitulatif en cours : la section « Points » du rapport des ventes
         montre « Points fidélité » 300,00.
@@ -1798,56 +1734,14 @@ class TestVenteEnPoints(FastTenantTestCase):
         assert ligne_des_points is not None, bloc_des_reglements[:800]
         assert ligne_des_points.group(1).strip() == "300,00"
 
-    def test_le_rapport_de_cloture_de_l_admin_montre_les_ventes_en_points(self):
-        """Admin, fiche d'une cloture : section « Non monetaire ».
-        / Admin closure page: "Non-monetary" section."""
-        cloture = self._cloture_avec_une_vente_en_points()
-
-        reponse = self.navigateur.get(
-            f"/admin/laboutik/cloturecaisse/{cloture.pk}/change/"
-        )
-
-        contenu = reponse.content.decode()
-        assert reponse.status_code == 200, contenu[:400]
-
-        nom, total = self._cellule_total_de_la_section(
-            contenu, 'data-testid="section-non-monetaire"'
-        )
-        assert nom == "Points fidélité"
-        assert total == "300,00 Points fidélité"
-
-    def test_le_rapport_en_temps_reel_montre_les_ventes_en_points(self):
-        """Rapport en temps reel : section « Non monetaire ».
-        / Real-time report: "Non-monetary" section."""
-        self._vendre_un_pins_en_points_et_un_vin_en_especes()
-
-        reponse = self.navigateur.get("/laboutik/caisse/rapport-temps-reel/")
-
-        contenu = reponse.content.decode()
-        assert reponse.status_code == 200, contenu[:400]
-        nom, total = self._cellule_total_de_la_section(
-            contenu, 'data-testid="section-non-monetaire"'
-        )
-        assert nom == "Points fidélité"
-        assert total == "300,00 Points fidélité"
-
-    def test_le_pdf_de_cloture_montre_les_ventes_en_points(self):
-        """Gabarit du PDF de cloture (admin) : section « Non monetaire ».
-        / Closure PDF template (admin): "Non-monetary" section."""
-        from django.template.loader import render_to_string
-
-        cloture = self._cloture_avec_une_vente_en_points()
-
-        contenu = render_to_string(
-            "laboutik/pdf/rapport_comptable.html",
-            {"rapport": cloture.rapport_json, "cloture": cloture},
-        )
-
-        nom, total = self._cellule_total_de_la_section(
-            contenu, "Non monétaire (hors argent)"
-        )
-        assert nom == "Points fidélité"
-        assert total == "300,00 Points fidélité"
+    # La fiche d'une clôture, son PDF et le rapport temps réel de l'ancien moteur ne
+    # sont plus joignables (tests/pytest/test_part_en_jetons.py, test 15), et l'ancien
+    # moteur ne sait plus lire une vente de la caisse (moyen de la ligne vide, Q-H2).
+    # Les points de ces écrans sont lus sur le rapport des ventes unique : l'écran du
+    # Z (`test_l_ecran_de_cloture_montre_les_ventes_en_points`), le ticket Z et le
+    # récapitulatif en cours (`test_l_ecran_du_ticket_x_montre_les_ventes_en_points`).
+    # / The old engine's screens are unreachable and cannot read a register sale;
+    # points are read on the single sales report (Z screen, Z ticket, current recap).
 
     # Les exports CSV et tableur d'une clôture sont ceux de la clôture unique : leur
     # section « Points » est testée dans tests/pytest/test_comptabilite_exports.py
@@ -1859,15 +1753,13 @@ class TestVenteEnPoints(FastTenantTestCase):
     # ------------------------------------------------------------------
 
     def _ticket_de_la_vente(self, moyen):
-        """Ticket client de la vente d'une ligne payee par `moyen` (code DB) : le
-        ticket lit la vente.
-        / Customer ticket of the sale of a line paid with `moyen`: it reads the sale."""
+        """Ticket client de la vente reglee par `moyen` (code DB), retrouvee par son
+        reglement (la ligne ne porte plus le moyen, Q-H2) : le ticket lit la vente.
+        / Customer ticket of the sale paid with `moyen`, found through its payment."""
         from laboutik.printing.formatters import formatter_ticket_vente
 
-        ligne_payee_par_ce_moyen = LigneArticle.objects.filter(
-            payment_method=moyen
-        ).first()
-        return formatter_ticket_vente(ligne_payee_par_ce_moyen.vente, self.admin_du_lieu)
+        reglement_de_ce_moyen = Reglement.objects.filter(moyen=moyen).first()
+        return formatter_ticket_vente(reglement_de_ce_moyen.vente, self.admin_du_lieu)
 
     def test_le_ticket_client_en_points_n_a_ni_euros_ni_tva(self):
         """Ticket d'un Pin's en points : unite « Points fidelite », pas de TVA.
@@ -1932,57 +1824,15 @@ class TestVenteEnPoints(FastTenantTestCase):
             reponse = self._payer("nfc", {self.adhesion.uuid: 1})
         assert reponse.status_code == 200, reponse.content.decode()[:400]
 
-    def test_la_section_adhesions_de_l_admin_ecrit_l_adhesion_en_points(self):
-        """Admin, fiche de cloture : l'adhesion payee en points s'ecrit en points,
-        jamais « 300,00 € ».
-        / Admin closure page: the points membership is written in points."""
-        self._vendre_une_adhesion_en_points()
-        cloture = ClotureCaisse.objects.create(
-            point_de_vente=self.point_de_vente,
-            responsable=self.admin_du_lieu,
-            datetime_ouverture=timezone.now() - timedelta(hours=1),
-            datetime_cloture=timezone.now(),
-            total_general=0,
-            nombre_transactions=1,
-            rapport_json=self._rapport().generer_rapport_complet(),
-        )
-
-        reponse = self.navigateur.get(
-            f"/admin/laboutik/cloturecaisse/{cloture.pk}/change/"
-        )
-
-        contenu = reponse.content.decode()
-        assert reponse.status_code == 200, contenu[:400]
-        section_adhesions = contenu[contenu.index('data-testid="section-adhesions"'):]
-        section_adhesions = section_adhesions[: section_adhesions.index("</table>")]
-        assert "300,00 Points fidélité" in section_adhesions
-        assert "300,00 €" not in section_adhesions
-
-    def test_l_export_csv_de_l_admin_liste_les_points_et_l_adhesion(self):
-        """Export CSV de l'admin : section « Non monetaire » et adhesion en points.
-        / Admin CSV export: "Non-monetary" section and points membership."""
-        self._vendre_une_adhesion_en_points()
-        cloture = ClotureCaisse.objects.create(
-            point_de_vente=self.point_de_vente,
-            responsable=self.admin_du_lieu,
-            datetime_ouverture=timezone.now() - timedelta(hours=1),
-            datetime_cloture=timezone.now(),
-            total_general=0,
-            nombre_transactions=1,
-            rapport_json=self._rapport().generer_rapport_complet(),
-        )
-
-        reponse = self.navigateur.get(
-            f"/admin/laboutik/cloturecaisse/{cloture.pk}/exporter-csv/"
-        )
-
-        contenu = reponse.content.decode("utf-8-sig")
-        assert reponse.status_code == 200, contenu[:400]
-        # L'export ecrit les titres de section en majuscules
-        # / The export writes section titles in upper case
-        assert "NON MONÉTAIRE (HORS ARGENT)" in contenu, contenu
-        assert "Points fidélité;1.0;300.00 Points fidélité" in contenu
-        assert "Adhésion en points;Points;NM;1;300.00 Points fidélité" in contenu
+    # La fiche et l'export CSV de l'ancienne clôture de la caisse ne sont plus
+    # joignables. L'adhésion en points dans le rapport des ventes unique :
+    # tests/pytest/test_rapport_unique.py
+    # `test_adhesion_payee_en_points_ecrite_en_points_jamais_en_euros` ; dans son
+    # export CSV : tests/pytest/test_comptabilite_exports.py
+    # `test_csv_points_par_monnaie_et_adhesion_en_points_absente_des_euros` (les points
+    # en total par monnaie, fiche F §8).
+    # / The old closure page and CSV export are gone; the points membership is tested
+    # on the single sales report and its CSV export.
 
     # Le PDF du Z envoyé par e-mail est celui de la clôture unique : sa section
     # « Points » est testée dans tests/pytest/test_comptabilite_exports.py.
@@ -2018,33 +1868,12 @@ class TestVenteEnPoints(FastTenantTestCase):
         assert ticket["unite"] == "Temps"
         assert ticket["tva_breakdown"] == []
 
-    def _cloture_avec_deux_vins_offerts(self):
-        """Une cloture avec 2 vins offerts (FREE, valeur 5,00 € chacun).
-        / A closure with 2 gifted wines."""
-        self._creer_ligne_de_caisse(self.tarif_vin, PaymentMethod.FREE, PRIX_VIN_CENTIMES, 2)
-        return ClotureCaisse.objects.create(
-            point_de_vente=self.point_de_vente,
-            responsable=self.admin_du_lieu,
-            datetime_ouverture=timezone.now() - timedelta(hours=1),
-            datetime_cloture=timezone.now(),
-            total_general=0,
-            nombre_transactions=1,
-            rapport_json=self._rapport().generer_rapport_complet(),
-        )
-
-    def test_l_export_csv_de_l_admin_liste_les_offerts(self):
-        """Export CSV de l'admin : section « Offerts », 2 vins, valeur 10,00.
-        / Admin CSV export: "Gifted" section, 2 wines, value 10.00."""
-        cloture = self._cloture_avec_deux_vins_offerts()
-
-        reponse = self.navigateur.get(
-            f"/admin/laboutik/cloturecaisse/{cloture.pk}/exporter-csv/"
-        )
-
-        contenu = reponse.content.decode("utf-8-sig")
-        assert reponse.status_code == 200, contenu[:400]
-        assert "OFFERTS (HORS ARGENT)" in contenu, contenu
-        assert "Vin en euros;2.0;10.0" in contenu, contenu
+    # L'export CSV de l'ancienne clôture de la caisse n'est plus joignable. Les offerts
+    # dans l'export CSV du rapport des ventes unique :
+    # tests/pytest/test_comptabilite_exports.py
+    # `test_csv_liste_les_offerts_avec_leurs_valeurs`.
+    # / The old closure CSV export is gone; gifted items are tested on the single
+    # sales report's CSV export.
 
     # Le PDF du Z envoyé par e-mail est celui de la clôture unique : sa section
     # « Offerts » est testée dans tests/pytest/test_comptabilite_exports.py.

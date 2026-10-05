@@ -94,6 +94,7 @@ from BaseBillet.services_vente import (
     EgaliteDeVenteRompue,
     ajouter_article,
     ajouter_reglement,
+    calculer_montants_article,
     encaisser_vente,
     ouvrir_vente,
     tarif_vendu_d_un_produit_systeme,
@@ -131,6 +132,7 @@ from comptabilite.rapport import (
     MOYENS_CASHLESS,
     RapportDesVentes,
     nom_du_moyen_de_paiement,
+    quantite_en_nombre_d_articles,
 )
 from laboutik.affichage_des_ventes import (
     articles_de_la_vente_pour_l_affichage,
@@ -140,6 +142,7 @@ from laboutik.affichage_des_ventes import (
     nom_de_l_unite_de_la_vente,
     noms_des_monnaies_des_ventes,
     phrase_d_une_vente_derivee,
+    reglements_nets_de_la_vente,
     reglements_pour_l_affichage,
 )
 from laboutik.printing.formatters import formatter_ticket_cloture, formatter_ticket_x
@@ -153,7 +156,7 @@ from laboutik.serializers import (
     ClotureSerializer,
     RechargeMontantLibreSerializer,
 )
-from laboutik.reports import MOYENS_HORS_ARGENT, RapportComptableService
+from laboutik.reports import MOYENS_HORS_ARGENT
 from inventaire.models import Stock, TypeMouvement
 from inventaire.serializers import MouvementRapideSerializer
 from inventaire.services import StockService
@@ -2104,8 +2107,11 @@ def _ecrire_la_vente_du_vidage(
         )
 
     # Les jetons cadeau repris : un article par transaction, du même montant, hors
-    # chiffre d'affaires, TVA 0. Il porte le moyen historique LG (jusqu'à la fiche H).
-    # / Gift tokens taken back: one item per transaction, off revenue, 0 VAT.
+    # chiffre d'affaires, TVA 0. La ligne ne porte pas de moyen (Q-H2) : le règlement
+    # « jetons » (LG) le porte. Le plan comptable et le rapport reconnaissent cet
+    # article par son produit système (`NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE`).
+    # / Gift tokens taken back: one item per transaction, off revenue, 0 VAT; no method
+    # on the line, the LG payment carries it.
     if jetons_cadeau_repris:
         tarif_vendu_des_jetons_repris = tarif_vendu_d_un_produit_systeme(
             NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE
@@ -2119,7 +2125,6 @@ def _ecrire_la_vente_du_vidage(
                 prix_unitaire=montant_des_jetons_repris,
                 taux_tva=Decimal("0"),
                 hors_chiffre_affaires=True,
-                payment_method=PaymentMethod.LOCAL_GIFT,
                 status=LigneArticle.VALID,
                 point_de_vente=point_de_vente,
             )
@@ -3846,6 +3851,9 @@ class CaisseViewSet(viewsets.ViewSet):
             # Si HTMX : renvoyer le partial admin Unfold (charge dans la card)
             # Si direct : renvoyer la page POS complete
             # / Detect if request comes from admin (HTMX) or direct access (POS)
+            # TODO : retirer avec la fiche H-2 cette branche de l'ancienne liste admin
+            # des clôtures de la caisse, qui n'est plus enregistrée dans l'admin.
+            # / TODO: remove with sheet H-2 (the old admin closure list is unregistered).
             est_requete_htmx = request.headers.get("HX-Request") == "true"
             if est_requete_htmx:
                 return render(
@@ -3900,6 +3908,9 @@ class CaisseViewSet(viewsets.ViewSet):
         if request.method == "GET":
             # Detecter si la requete vient de l'admin (HTMX) ou d'un acces direct (POS)
             # / Detect if request comes from admin (HTMX) or direct access (POS)
+            # TODO : retirer avec la fiche H-2 cette branche de l'ancienne liste admin
+            # des clôtures de la caisse, qui n'est plus enregistrée dans l'admin.
+            # / TODO: remove with sheet H-2 (the old admin closure list is unregistered).
             est_requete_htmx = request.headers.get("HX-Request") == "true"
             if est_requete_htmx:
                 return render(
@@ -4501,59 +4512,6 @@ class CaisseViewSet(viewsets.ViewSet):
         )
 
     @action(
-        detail=False,
-        methods=["get"],
-        url_path="rapport-temps-reel",
-        url_name="rapport_temps_reel",
-    )
-    def rapport_temps_reel(self, request):
-        """
-        GET /laboutik/caisse/rapport-temps-reel/
-        Rapport comptable complet du service en cours (lecture seule).
-        Calcule en temps reel depuis la derniere cloture journaliere.
-        Pas de creation de ClotureCaisse. Page standalone (nouvel onglet).
-        / Full accounting report of the current shift (read-only).
-        Computed in real time since the last daily closure.
-        No ClotureCaisse created. Standalone page (new tab).
-
-        LOCALISATION : laboutik/views.py
-
-        FLUX :
-        1. Calcule datetime_ouverture via _calculer_datetime_ouverture_service()
-        2. Instancie RapportComptableService(pv=None, debut, fin=now())
-        3. Appelle generer_rapport_complet() (15 sections)
-        4. Rend rapport_temps_reel.html (page complete, pas un partial)
-        """
-        datetime_ouverture = _calculer_datetime_ouverture_service()
-
-        # Si aucune vente depuis la derniere cloture, afficher un message
-        # / If no sales since last closure, show a message
-        if datetime_ouverture is None:
-            return render(
-                request,
-                "admin/cloture/rapport_temps_reel.html",
-                {"aucune_vente": True},
-            )
-
-        datetime_fin = dj_timezone.now()
-        service = RapportComptableService(None, datetime_ouverture, datetime_fin)
-        rapport = service.generer_rapport_complet()
-        nombre_de_transactions = service.lignes.count()
-
-        context = {
-            "aucune_vente": False,
-            "rapport": rapport,
-            "datetime_ouverture": datetime_ouverture,
-            "datetime_fin": datetime_fin,
-            "nb_transactions": nombre_de_transactions,
-        }
-        return render(
-            request,
-            "admin/cloture/rapport_temps_reel.html",
-            context,
-        )
-
-    @action(
         detail=False, methods=["get"], url_path="liste-ventes", url_name="liste_ventes"
     )
     def liste_ventes(self, request):
@@ -4651,11 +4609,17 @@ class CaisseViewSet(viewsets.ViewSet):
         # La plus recente d'abord : le numero suit l'ordre des encaissements.
         # Reglements et point de vente precharges, nombre d'articles annote : le
         # nombre de requetes ne depend pas du nombre de ventes.
-        # / Most recent first; prefetched and annotated: constant query count.
+        # Le nombre d'articles : la somme des quantites, une pesee ou un tirage comptant
+        # pour UN article, un article d'ecart d'encaissement pour zero
+        # (`quantite_en_nombre_d_articles`, la regle du rapport, lue depuis la vente par
+        # le chemin « articles__ »).
+        # / Most recent first; prefetched and annotated: constant query count. A
+        # weighing or a pour counts as ONE item, a gap as zero (the report's rule).
+        nombre_d_articles_d_une_ligne = quantite_en_nombre_d_articles("articles__")
         ventes_triees = (
             ventes_du_service.select_related("point_de_vente")
             .prefetch_related("reglements")
-            .annotate(quantite_d_articles=Sum("articles__qty"))
+            .annotate(quantite_d_articles=Sum(nombre_d_articles_d_une_ligne))
             .order_by("-numero")
         )
         ventes_de_la_page = list(ventes_triees[:NOMBRE_DE_VENTES_PAR_PAGE])
@@ -4760,9 +4724,14 @@ class CaisseViewSet(viewsets.ViewSet):
                 status=404,
             )
 
+        # Les reglements des ventes derivees sont precharges : les boutons
+        # « Corriger » lisent les reglements nets (la vente et ses corrections).
+        # / Derived sales' payments are prefetched: the buttons read the net payments.
         vente = (
             Vente.objects.select_related("point_de_vente", "vente_liee")
-            .prefetch_related("ventes_derivees", "reglements")
+            .prefetch_related(
+                "ventes_derivees", "ventes_derivees__reglements", "reglements"
+            )
             .filter(uuid=uuid_de_la_vente)
             .first()
         )
@@ -4797,67 +4766,125 @@ MOYENS_CORRIGEABLES_A_LA_CAISSE = (
     PaymentMethod.CHEQUE,
 )
 
+# Les seules natures de vente dont un moyen se corrige : une vente, et un avoir de
+# caisse rendu en especes (ex. un retour de consigne). Un vidage de carte rend de
+# l'argent qui sort du registre de la carte, et une correction ne se corrige pas
+# elle-meme. Liste POSITIVE, comme les moyens.
+# / The only sale natures whose method can be corrected: a sale and a register
+#   credit note. A card emptying or a correction is refused. A POSITIVE list.
+NATURES_DE_VENTE_CORRIGEABLES = (
+    Vente.Nature.VENTE,
+    Vente.Nature.AVOIR,
+)
 
-def raison_du_refus_de_correction(ligne):
+
+def montant_net_du_moyen_dans_la_vente(vente, code_du_moyen):
     """
-    Dit pourquoi le moyen de paiement de cette ligne ne peut pas etre corrige, ou
-    None si la correction est possible.
-    / Tells why this line's payment method cannot be corrected, or None.
+    L'argent encore reglé par ce moyen sur la vente, en centimes : la somme des
+    reglements de ce moyen, sur la vente ET sur ses ventes CORRECTION.
+    / The money still paid with this method on the sale, in cents: the sale's payments
+    of this method plus those of its CORRECTION sales.
 
     LOCALISATION : laboutik/views.py
 
-    Les regles qui ne dependent que de la ligne, dans l'ordre :
+    La regle du net est celle de `reglements_nets_de_la_vente`
+    (laboutik/affichage_des_ventes.py) : elle n'est pas recopiee ici. Exemple : une
+    vente de 10,50 € en especes, corrigee en CB, vaut 0 en especes et 1050 en CB. Les
+    lignes d'article ne sont jamais lues : une ligne peut porter plusieurs moyens, ou
+    aucun.
+    / The net rule is `reglements_nets_de_la_vente`'s; the item lines are never read.
+
+    LU PAR : `raison_du_refus_de_correction`, `_contexte_du_detail_d_une_vente`,
+    `PaiementViewSet.formulaire_correction` et `PaiementViewSet.corriger_moyen_paiement`.
+    / Read by the refusal rules, the detail screen, the form and the route.
+
+    :param vente: la `Vente` d'origine
+    :param code_du_moyen: le code `PaymentMethod` (ex. "CA")
+    :return: int, en centimes (0 si le moyen n'a plus d'argent sur la vente)
+    """
+    montant_net_du_moyen = 0
+    for reglement_net in reglements_nets_de_la_vente(vente, {}):
+        if reglement_net["moyen"] == code_du_moyen:
+            montant_net_du_moyen += reglement_net["montant"]
+    return montant_net_du_moyen
+
+
+def raison_du_refus_de_correction(vente, moyen_corrige):
+    """
+    Dit pourquoi le moyen `moyen_corrige` de cette vente ne peut pas etre corrige, ou
+    None si la correction est possible.
+    / Tells why this sale's `moyen_corrige` method cannot be corrected, or None.
+
+    LOCALISATION : laboutik/views.py
+
+    Les regles, dans l'ordre :
     1. Un paiement cashless (NFC) est lie a des transactions fedow_core : le changer
        casserait le registre.
     2. Une vente hors argent (offerte, en points ou en temps) n'a rien encaisse : la
        « corriger » ferait apparaitre de l'argent jamais recu.
     3. Seuls les moyens de `MOYENS_CORRIGEABLES_A_LA_CAISSE` se corrigent (especes,
        CB, cheque).
-    4. Seule une vente faite a la caisse (`sale_origin` LABOUTIK) se corrige : une
-       vente en ligne a ses propres regles (Stripe, remboursements).
-    5. Seule une vente reglee (elle a un numero) se corrige : une ligne sans vente
+    4. Seule une vente reglee (elle a un numero) se corrige : une ligne sans vente
        n'a pas de vente d'origine, une vente en attente n'a rien encaisse.
-    6. Une vente couverte par une cloture journaliere est figee.
-    / Line-only rules: not cashless, not non-money, cash/card/cheque only, register
-      sale only, settled sale only, not covered by a daily closure.
+    5. Seules les natures de `NATURES_DE_VENTE_CORRIGEABLES` se corrigent (vente,
+       avoir) : un vidage de carte ou une correction, non.
+    6. Seule une vente faite a la caisse (`origine` LABOUTIK) se corrige : une vente
+       en ligne a ses propres regles (Stripe, remboursements).
+    7. Une vente couverte par une cloture journaliere est figee.
+    8. Le moyen doit avoir encore de l'argent sur la vente : son net (reglements de
+       la vente et de ses ventes CORRECTION, `montant_net_du_moyen_dans_la_vente`)
+       n'est pas nul. C'est aussi la garde contre un deuxieme envoi du meme
+       formulaire : apres la premiere correction, le net de l'ancien moyen vaut 0.
+       Une vente offerte ou en points n'a pas d'especes, de CB ni de cheque : elle
+       est refusee ici.
+    / Rules: not cashless, not non-money, cash/card/cheque only, settled sale only,
+      sale or credit note only, register sale only, not covered by a daily closure,
+      non-zero net for the method (also the guard against a second submission).
 
-    FLUX : appelee par `PaiementViewSet.corriger_moyen_paiement` (GARDE 1 : le
-    message est renvoye au caissier) et par `CaisseViewSet.detail_vente` (le bouton
-    « Corriger moyen » n'est propose que si elle rend None).
-    / Called by the correction route (guard 1) and by the sale detail screen.
+    FLUX : appelee par `PaiementViewSet.corriger_moyen_paiement` (GARDE 1, sous le
+    verrou de la vente), par `PaiementViewSet.formulaire_correction` et par
+    `_contexte_du_detail_d_une_vente` (un bouton « Corriger » par moyen pour lequel
+    elle rend None).
+    / Called by the correction route (guard 1, under lock), the form and the detail.
 
-    :param ligne: la `LigneArticle` cliquee dans l'historique des ventes
+    :param vente: la `Vente` d'origine, ou None (ligne ecrite sans vente)
+    :param moyen_corrige: le code du moyen a corriger (ex. "CA")
     :return: le message de refus (texte traduisible), ou None
     """
-    moyen_de_la_ligne = ligne.payment_method
-
-    if moyen_de_la_ligne in MOYENS_CASHLESS:
+    if moyen_corrige in MOYENS_CASHLESS:
         return _("Les paiements cashless ne peuvent pas etre modifies")
 
-    if moyen_de_la_ligne in MOYENS_HORS_ARGENT:
+    if moyen_corrige in MOYENS_HORS_ARGENT:
         return _(
             "Une vente hors argent (offerte, en points ou en temps) "
             "ne peut pas être corrigée en paiement"
         )
 
-    if moyen_de_la_ligne not in MOYENS_CORRIGEABLES_A_LA_CAISSE:
+    if moyen_corrige not in MOYENS_CORRIGEABLES_A_LA_CAISSE:
         return _(
             "Seul un paiement en espèces, par carte bancaire ou par chèque "
             "peut être corrigé."
         )
 
-    if ligne.sale_origin != SaleOrigin.LABOUTIK:
-        return _("Seule une vente faite à la caisse peut être corrigée.")
-
-    vente_de_la_ligne = ligne.vente
-    la_ligne_a_une_vente_reglee = (
-        vente_de_la_ligne is not None and vente_de_la_ligne.numero is not None
-    )
-    if not la_ligne_a_une_vente_reglee:
+    vente_reglee = vente is not None and vente.numero is not None
+    if not vente_reglee:
         return _("Seule une vente réglée peut être corrigée.")
 
-    if vente_couverte_par_cloture(vente_de_la_ligne):
+    if vente.nature not in NATURES_DE_VENTE_CORRIGEABLES:
+        return _("Seule une vente ou un avoir peut être corrigé.")
+
+    if vente.origine != SaleOrigin.LABOUTIK:
+        return _("Seule une vente faite à la caisse peut être corrigée.")
+
+    if vente_couverte_par_cloture(vente):
         return _("Cette vente est couverte par une cloture. Modification interdite.")
+
+    if montant_net_du_moyen_dans_la_vente(vente, moyen_corrige) == 0:
+        return _(
+            "Il ne reste rien à corriger pour le moyen « %(moyen)s » sur cette "
+            "vente : elle vient peut-être d'être corrigée. Rouvrez la vente pour "
+            "voir ses règlements."
+        ) % {"moyen": nom_du_moyen_de_paiement(moyen_corrige)}
 
     return None
 
@@ -4914,40 +4941,6 @@ def _calculer_datetime_ouverture_service():
 # Le nombre de ventes d'une page de la liste (la suite arrive au defilement).
 # / Number of sales per list page (the rest arrives on scroll).
 NOMBRE_DE_VENTES_PAR_PAGE = 20
-
-
-def lignes_que_la_correction_deplace(ligne):
-    """
-    Les lignes dont une correction de moyen change le moyen : les lignes de la MEME
-    VENTE qui portent le meme moyen ACTUEL que la ligne cliquee. Une ligne sans vente
-    (ecrite avant les ventes) est seule.
-    / The lines a payment method correction moves: the lines of the SAME SALE with
-    the same CURRENT method as the clicked line.
-
-    LOCALISATION : laboutik/views.py
-
-    C'est la seule definition de « ce que la correction deplace » : l'ecran du
-    formulaire affiche la somme de leurs `total_ttc`, et la route
-    `corriger_moyen_paiement` deplace exactement cette somme. Elle lit le moyen
-    ACTUEL des lignes : apres une correction especes → CB, les lignes portent CB, et
-    une deuxieme correction (CB → cheque) deplace ces memes lignes.
-    / The single definition, read by the form screen and by the route. It reads the
-    CURRENT method, so a second correction moves the same lines again.
-
-    Les deux appelants refusent d'abord une ligne sans vente reglee
-    (`raison_du_refus_de_correction`) : la ligne a toujours une vente ici.
-    / Both callers first refuse a line without a settled sale.
-
-    :param ligne: la `LigneArticle` cliquee (avec sa vente)
-    :return: liste de `LigneArticle` (au moins la ligne elle-meme)
-    """
-    lignes_du_meme_moyen = list(
-        LigneArticle.objects.filter(
-            vente_id=ligne.vente_id,
-            payment_method=ligne.payment_method,
-        ).order_by("datetime", "pk")
-    )
-    return lignes_du_meme_moyen
 
 
 def vente_imprimable_a_la_caisse(vente):
@@ -5009,19 +5002,39 @@ def _uuid_de_la_vente_du_paiement(uuid_transaction):
     return str(vente_du_paiement.uuid)
 
 
-def _refus_de_correction(request, message, ligne_uuid, status=400):
+def _identifiant_de_la_zone_de_correction(vente, code_du_moyen):
+    """
+    L'identifiant HTML de la zone du formulaire de correction d'un moyen d'une vente :
+    `correction-zone-<uuid de la vente>-<code du moyen>`. Une zone par moyen
+    corrigeable : le bouton du detail y charge le formulaire, et les refus de la
+    route y sont rendus (`HX-Retarget`).
+    / The HTML id of a sale method's correction form zone (one zone per method).
+
+    LOCALISATION : laboutik/views.py
+    LU PAR : `_contexte_du_detail_d_une_vente` (gabarit hx_detail_vente.html) et
+    `_refus_de_correction`.
+    """
+    return f"correction-zone-{vente.uuid}-{code_du_moyen}"
+
+
+def _refus_de_correction(request, message, vente=None, code_du_moyen="", status=400):
     """
     La reponse d'un refus de correction : le message, rendu dans la zone du
-    formulaire de cette ligne (`#correction-zone-<uuid>`). Le formulaire vise le
-    detail entier (re-rendu apres une correction reussie) : sans `HX-Retarget`, un
-    refus effacerait le detail.
-    / A correction refusal, rendered in the line's form zone (HX-Retarget), so a
-    refusal does not replace the whole detail.
+    formulaire de ce moyen (`_identifiant_de_la_zone_de_correction`). Le formulaire
+    vise le detail entier (re-rendu apres une correction reussie) : sans
+    `HX-Retarget`, un refus effacerait le detail.
+    Une zone n'existe que pour une vente connue et un moyen corrigeable
+    (`MOYENS_CORRIGEABLES_A_LA_CAISSE`) : sans vente (ligne introuvable, ou ecrite
+    sans vente) ou pour un autre moyen (cashless, POST forge), le message est rendu
+    sans cible. L'ecran du detail ne propose jamais ces cas.
+    / A correction refusal, rendered in the method's form zone (HX-Retarget). Without
+    a sale or for a non-correctable method there is no zone: no retarget.
 
     LOCALISATION : laboutik/views.py
 
     :param message: le texte du refus (traduit)
-    :param ligne_uuid: l'uuid de la ligne du formulaire
+    :param vente: la `Vente` d'origine, ou None
+    :param code_du_moyen: le moyen corrige (code `PaymentMethod`)
     :param status: le code HTTP (400 par defaut, 404 pour une ligne introuvable)
     :return: HttpResponse
     """
@@ -5031,8 +5044,15 @@ def _refus_de_correction(request, message, ligne_uuid, status=400):
         {"msg_type": "warning", "msg_content": message},
         status=status,
     )
-    reponse["HX-Retarget"] = f"#correction-zone-{ligne_uuid}"
-    reponse["HX-Reswap"] = "innerHTML"
+    la_zone_existe = (
+        vente is not None and code_du_moyen in MOYENS_CORRIGEABLES_A_LA_CAISSE
+    )
+    if la_zone_existe:
+        identifiant_de_la_zone = _identifiant_de_la_zone_de_correction(
+            vente, code_du_moyen
+        )
+        reponse["HX-Retarget"] = f"#{identifiant_de_la_zone}"
+        reponse["HX-Reswap"] = "innerHTML"
     return reponse
 
 
@@ -5047,11 +5067,13 @@ def _contexte_du_detail_d_une_vente(vente):
     1. Les articles : `articles_de_la_vente_pour_l_affichage` (un article paye avec
        deux moyens reste UN article, quantite reelle).
     2. Les reglements : `reglements_pour_l_affichage` (moyen, monnaie, montant).
-    3. Un bouton « Corriger » par moyen ACTUEL des lignes qui se corrige (especes,
-       CB, cheque) : il ouvre la correction d'une ligne de ce moyen, si
-       `raison_du_refus_de_correction` l'accepte (seule source du refus, partagee
-       avec la route). Une vente deja corrigee garde donc un bouton pour son
-       nouveau moyen : on peut corriger une correction erronee.
+    3. Un bouton « Corriger » par moyen corrigeable (especes, CB, cheque) qui a
+       encore de l'argent sur la vente, lu dans les REGLEMENTS nets (la vente et ses
+       ventes CORRECTION), si `raison_du_refus_de_correction` l'accepte (seule
+       source du refus, partagee avec la route). Le bouton transmet une ligne de la
+       vente (pour retrouver la vente) et le moyen corrige. Une vente deja corrigee
+       a donc un bouton pour son nouveau moyen : on peut corriger une correction
+       erronee. Une vente sans article (une correction) n'a pas de bouton.
     4. La vente liee (origine d'un avoir ou d'une correction) et les ventes qui en
        derivent (« Corrigée par la vente n° X »), avec leur lien.
     APPELE PAR : `CaisseViewSet.detail_vente` et `PaiementViewSet.corriger_moyen_paiement`
@@ -5092,24 +5114,28 @@ def _contexte_du_detail_d_une_vente(vente):
     for article_affiche in articles_affiches:
         total_de_la_vente += article_affiche["total"]
 
-    # Un bouton « Corriger » par moyen actuel des lignes qui se corrige.
-    # / One "Correct" button per current correctable line method.
+    # Un bouton « Corriger » par moyen corrigeable qui a encore de l'argent sur la
+    # vente (reglements nets). Le bouton porte une ligne de la vente : la route s'en
+    # sert seulement pour retrouver la vente.
+    # / One "Correct" button per correctable method with a non-zero net. The button
+    # carries one line of the sale, only used to find the sale.
     boutons_de_correction = []
-    moyens_deja_proposes = set()
-    for ligne in lignes_de_la_vente:
-        moyen_de_la_ligne = ligne.payment_method
-        moyen_corrigeable = moyen_de_la_ligne in MOYENS_CORRIGEABLES_A_LA_CAISSE
-        if not moyen_corrigeable or moyen_de_la_ligne in moyens_deja_proposes:
-            continue
-        moyens_deja_proposes.add(moyen_de_la_ligne)
-        if raison_du_refus_de_correction(ligne) is not None:
-            continue
-        boutons_de_correction.append(
-            {
-                "ligne_uuid": str(ligne.uuid),
-                "libelle_du_moyen": nom_du_moyen_de_paiement(moyen_de_la_ligne),
-            }
-        )
+    la_vente_a_des_articles = len(lignes_de_la_vente) > 0
+    if la_vente_a_des_articles:
+        une_ligne_de_la_vente = lignes_de_la_vente[0]
+        for moyen_corrigeable in MOYENS_CORRIGEABLES_A_LA_CAISSE:
+            if raison_du_refus_de_correction(vente, moyen_corrigeable) is not None:
+                continue
+            boutons_de_correction.append(
+                {
+                    "ligne_uuid": str(une_ligne_de_la_vente.uuid),
+                    "ancien_moyen": moyen_corrigeable,
+                    "libelle_du_moyen": nom_du_moyen_de_paiement(moyen_corrigeable),
+                    "identifiant_de_la_zone": _identifiant_de_la_zone_de_correction(
+                        vente, moyen_corrigeable
+                    ),
+                }
+            )
 
     # La vente d'origine d'un avoir ou d'une correction, et les ventes qui derivent
     # de celle-ci (prechargees). Une vente derivee pas encore reglee n'a pas de
@@ -5499,81 +5525,6 @@ MAPPING_ASSET_CATEGORY_PAYMENT_METHOD = {
     Asset.FID: PaymentMethod.NON_MONETAIRE,  # NM — fidélité, pas de l'argent
 }
 
-# Constante Decimal pour arrondir les qty partielles à 6 décimales.
-# / Decimal constant for rounding partial qty to 6 decimal places.
-SIX_DECIMALES = Decimal("0.000001")
-
-
-def _calculer_qty_partielles(lignes_avec_amounts, prix_unitaire_centimes, qty_totale):
-    """
-    Calcule les qty partielles pour N lignes d'un même article splitté.
-    / Computes partial qty for N lines of the same split article.
-
-    LOCALISATION : laboutik/views.py
-
-    Chaque ligne a un amount_centimes (entier). La qty est proportionnelle
-    au montant. La dernière ligne prend le reste pour que la somme soit exacte.
-    / Each line has an amount_centimes (integer). Qty is proportional
-    to the amount. Last line takes the remainder so the sum is exact.
-
-    Exemple / Example:
-        Article 3€ (300 centimes), qty=1, splitté en 3 :
-        - Ligne 1 : 100 centimes → qty = 0.333333
-        - Ligne 2 : 100 centimes → qty = 0.333333
-        - Ligne 3 : 100 centimes → qty = 0.333334 (reste)
-        Somme qty = 1.000000 exactement.
-
-    :param lignes_avec_amounts: list de dicts avec clé "amount_centimes"
-    :param prix_unitaire_centimes: int (prix unitaire en centimes pour qty=1)
-    :param qty_totale: Decimal (quantité totale de l'article)
-    :return: list de dicts enrichis avec clé "qty" ajoutée
-    """
-    nombre_de_lignes = len(lignes_avec_amounts)
-
-    # Cas trivial : 1 seule ligne = qty complète
-    # / Trivial case: 1 line = full qty
-    if nombre_de_lignes == 1:
-        lignes_avec_amounts[0]["qty"] = qty_totale
-        return lignes_avec_amounts
-
-    # Cas article gratuit : prix=0 → toute la qty sur la 1ère ligne, 0 sur les autres
-    # / Free article case: price=0 → all qty on first line, 0 on others
-    if prix_unitaire_centimes == 0:
-        for i, ligne in enumerate(lignes_avec_amounts):
-            ligne["qty"] = qty_totale if i == 0 else Decimal("0")
-        return lignes_avec_amounts
-
-    # Cas général : N lignes, calcul proportionnel
-    # / General case: N lines, proportional calculation
-    somme_qty_precedentes = Decimal("0")
-
-    for i, ligne in enumerate(lignes_avec_amounts):
-        est_derniere_ligne = i == nombre_de_lignes - 1
-
-        if est_derniere_ligne:
-            # Dernière ligne : prend le reste exact
-            # / Last line: takes the exact remainder
-            ligne["qty"] = qty_totale - somme_qty_precedentes
-        else:
-            # Lignes intermédiaires : qty = montant_ligne / prix_unitaire.
-            # NE PAS multiplier par qty_totale : amount_centimes est DÉJÀ le montant
-            # monétaire de la part (pas une fraction), et le prix unitaire seul donne
-            # le nombre d'articles que cette part représente. Multiplier par qty_totale
-            # gonflait la qty d'un facteur qty_totale (ex: 3 vins, part 6 € → 3,6 au lieu
-            # de 1,2), rendant la dernière ligne NÉGATIVE.
-            # / qty = part_amount / unit_price. Do NOT multiply by qty_totale: the part
-            # amount already is the monetary share; the unit price alone yields the
-            # number of articles it represents. Multiplying by qty_totale inflated qty
-            # (e.g. 3 wines, 6 € part → 3.6 instead of 1.2), making the last line NEGATIVE.
-            qty_proportionnelle = (
-                Decimal(ligne["amount_centimes"])
-                / Decimal(prix_unitaire_centimes)
-            ).quantize(SIX_DECIMALES)
-            ligne["qty"] = qty_proportionnelle
-            somme_qty_precedentes += qty_proportionnelle
-
-    return lignes_avec_amounts
-
 
 def _lire_cle_idempotence_paiement(donnees_post):
     """
@@ -5741,20 +5692,114 @@ def _montant_poids_mesure_en_centimes(produit, prix_obj, quantite_saisie):
     / The price is per kg (stock in grams) or per litre (stock in cl).
     Same rule as the tile and tarif.js: divide by 1000 (g) or 100 (cl).
 
-    Exemple : 350 g de comte a 20 €/kg → 350 / 1000 x 2000 = 700 centimes.
+    Exemple : 350 g de comte a 20 €/kg → 0,350 kg x 2000 = 700 centimes.
+
+    Le montant est calcule par la seule formule d'argent du projet
+    (`calculer_montants_article`), sur la quantite et le prix que la ligne de vente
+    portera (`_quantite_reelle_d_une_pesee`, `_prix_de_reference_en_centimes`) : ce que
+    la caisse fait encaisser vaut donc exactement le total catalogue de la ligne.
+    / Computed by the only money formula, on the line's own quantity and price: what
+    the register collects equals the line's catalogue total.
 
     :param produit: Product vendu au poids/mesure
     :param prix_obj: Price avec poids_mesure=True (prix de reference en euros)
     :param quantite_saisie: int, quantite en g ou en cl (> 0)
-    :return: int, montant en centimes (arrondi au centime le plus proche)
+    :return: int, montant en centimes (arrondi demi-haut)
+    """
+    montants_de_la_pesee = calculer_montants_article(
+        prix_unitaire=_prix_de_reference_en_centimes(prix_obj),
+        quantite=_quantite_reelle_d_une_pesee(produit, quantite_saisie),
+        taux_tva=Decimal("0"),
+    )
+    return montants_de_la_pesee["total_catalogue"]
+
+
+def _quantite_reelle_d_une_pesee(produit, quantite_saisie):
+    """
+    La quantite reelle d'une pesee, dans l'unite du prix : des kg (stock en grammes,
+    ou sans stock) ou des litres (stock en centilitres) (D15).
+    / The real quantity of a weighing, in the price unit: kg or litres (D15).
+
+    LOCALISATION : laboutik/views.py
+
+    La quantite est arrondie D'ABORD : kg a 3 decimales, litres a 2 decimales. Le
+    montant est calcule ensuite, une seule fois, sur cette quantite arrondie. La saisie
+    est un nombre entier de grammes ou de centilitres : l'arrondi est exact.
+    Exemple : 350 g → Decimal("0.350") ; 33 cl → Decimal("0.33").
+    / Rounded FIRST (kg: 3 decimals, litres: 2), then the amount is computed once.
+
+    :param produit: Product vendu au poids/mesure
+    :param quantite_saisie: int, quantite en g ou en cl (> 0)
+    :return: Decimal
     """
     diviseur = _diviseur_de_la_quantite_saisie(produit)
+    if diviseur == Decimal(100):
+        pas_d_arrondi = Decimal("0.01")
+    else:
+        pas_d_arrondi = Decimal("0.001")
+    quantite_exacte = Decimal(quantite_saisie) / diviseur
+    return quantite_exacte.quantize(pas_d_arrondi, rounding=ROUND_HALF_UP)
 
-    prix_de_reference_en_centimes = Decimal(prix_obj.prix) * 100
-    montant_en_centimes = (
-        Decimal(quantite_saisie) / diviseur * prix_de_reference_en_centimes
-    )
-    return int(montant_en_centimes.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+def _prix_de_reference_en_centimes(prix_obj):
+    """
+    Le prix de reference d'un tarif au poids ou au volume (prix au kg ou au litre), en
+    centimes entiers.
+    / The reference price of a weight/volume price (per kg or litre), in whole cents.
+
+    LOCALISATION : laboutik/views.py
+
+    :param prix_obj: Price avec poids_mesure=True (prix en euros)
+    :return: int
+    """
+    prix_exact_en_centimes = Decimal(prix_obj.prix) * 100
+    prix_arrondi = prix_exact_en_centimes.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    # Ce `int()` ne tronque rien : le Decimal est deja arrondi au centime entier.
+    # / This int() truncates nothing: already rounded to a whole cent.
+    return int(prix_arrondi)
+
+
+def _quantite_et_prix_unitaire_de_la_ligne(article):
+    """
+    La quantite et le prix unitaire (centimes) de la ligne de vente d'un article du
+    panier : UNE ligne par article, quelle que soit la facon de payer.
+    / The quantity and unit price of a cart item's sale line: ONE line per item.
+
+    LOCALISATION : laboutik/views.py
+
+    Trois cas :
+    - vente au poids ou au volume (D15) : la quantite reelle en kg ou en litres
+      (`_quantite_reelle_d_une_pesee`), au prix du kg ou du litre. Une pesee est un
+      article : sa quantite de panier vaut 1 (`_extraire_articles_du_panier` refuse le
+      reste) ;
+    - retour de consigne (D13) : quantite NEGATIVE, prix POSITIF (le prix du gobelet
+      rendu). Le panier porte le prix negatif du retour (`prix_centimes`) : la ligne
+      en prend l'oppose ;
+    - sinon : la quantite du panier, au prix du panier.
+    / Weight/volume: real kg or litres at the price per kg/litre. Deposit return:
+    negative quantity, positive price. Otherwise: cart quantity and price.
+
+    APPELEE PAR : `_creer_lignes_articles` et `_creer_lignes_articles_cascade`.
+
+    :param article: dict de `_extraire_articles_du_panier()`
+    :return: tuple (quantite : int ou Decimal, prix unitaire : int)
+    """
+    produit = article["product"]
+    prix_obj = article["price"]
+    weight_amount = article.get("weight_amount")
+
+    vente_au_poids = bool(weight_amount) and prix_obj.poids_mesure
+    if vente_au_poids:
+        quantite_de_la_ligne = _quantite_reelle_d_une_pesee(produit, weight_amount)
+        prix_unitaire_de_la_ligne = _prix_de_reference_en_centimes(prix_obj)
+        return (quantite_de_la_ligne, prix_unitaire_de_la_ligne)
+
+    if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+        quantite_de_la_ligne = -int(article["quantite"])
+        prix_unitaire_de_la_ligne = -int(article["prix_centimes"])
+        return (quantite_de_la_ligne, prix_unitaire_de_la_ligne)
+
+    return (int(article["quantite"]), int(article["prix_centimes"]))
 
 
 def _extraire_articles_du_panier(donnees_post, point_de_vente):
@@ -5929,6 +5974,21 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
                     f"pour {prix_obj.name} : article ignore"
                 )
                 continue
+
+            # Une pesee est UN article : sa ligne porte la quantite reelle (kg, L).
+            # L'ecran envoie chaque pesee sur sa propre ligne de panier (suffixe --N,
+            # tests/PIEGES.md 66), toujours en quantite 1. Une autre quantite vient d'un
+            # envoi forge : refus, avant toute ecriture.
+            # / A weighing is ONE item, always sent with quantity 1. Anything else is a
+            # forged post: refused before writing anything.
+            if quantite != 1:
+                raise ValueError(
+                    _(
+                        "Une pesée se vend une seule fois par ligne : quantité "
+                        "%(quantite)s refusée pour « %(nom)s »."
+                    )
+                    % {"quantite": quantite, "nom": produit.name}
+                )
 
             montant_recalcule_centimes = _montant_poids_mesure_en_centimes(
                 produit, prix_obj, weight_amount
@@ -6396,8 +6456,9 @@ def _taux_tva_de_la_ligne_de_caisse(produit, methode_db):
     le calcule ici, avec la même règle que la TVA par défaut d'une ligne
     (`LigneArticle._compute_default_vat`), plus deux règles (points 2 et 3) :
     1. ligne offerte (FREE) ou en points / temps (NON_MONETAIRE) : 0, ce n'est pas une
-       vente en argent ; ligne payée en jetons cadeau (LOCAL_GIFT) : 0, c'est une vente
-       ordinaire, hors TVA (D8 bis : le jeton dépensé solde la dette du lieu) ;
+       vente en argent. Une part payée en jetons cadeau (LOCAL_GIFT) garde le taux du
+       produit : elle est hors TVA par sa `part_en_jetons` (= son argent), que la
+       formule du service sort de la TVA (D8 bis) ;
     2. recharge (RE, RC) : 0. Une recharge est une dette envers le porteur de la carte,
        pas une vente taxée (D10) ;
     3. retour de consigne : le taux du produit consigne qu'il rembourse (le gobelet,
@@ -6405,8 +6466,9 @@ def _taux_tva_de_la_ligne_de_caisse(produit, methode_db):
        comprise (D11) ;
     4. sinon : le taux du produit, ou à défaut le taux par défaut du lieu
        (`Configuration.vat_taxe`), jamais celui de la catégorie.
-    / 0 for offered, points, gift tokens, top-ups; the cup's rate for a deposit return;
-    otherwise the product's rate, else the venue default.
+    / 0 for offered, points, top-ups; the cup's rate for a deposit return; otherwise
+    the product's rate, else the venue default. A gift-token part keeps the product's
+    rate: its token part takes it out of VAT.
 
     Sert aussi la tireuse (controlvanne/billing.py), le paiement QR, l'API v2.
     / Also used by the tap, the QR payment and API v2.
@@ -6418,7 +6480,6 @@ def _taux_tva_de_la_ligne_de_caisse(produit, methode_db):
     ligne_hors_tva_par_son_moyen = methode_db in (
         PaymentMethod.FREE,
         PaymentMethod.NON_MONETAIRE,
-        PaymentMethod.LOCAL_GIFT,
     )
     if ligne_hors_tva_par_son_moyen:
         return Decimal("0")
@@ -6461,9 +6522,12 @@ def _creer_lignes_articles(
     DEUX FAÇONS D'ÉCRIRE UNE LIGNE :
     - `vente` donnée : c'est le cas de tous les chemins de la caisse. La ligne est un
       article de la vente, écrit par le service de vente (`ajouter_article`) avec ses
-      montants entiers, et avec ses champs historiques (moyen, statut, carte,
-      identifiant de paiement…). Le HT vient du service, la boucle HMAC ne le
-      recalcule pas. L'appelant ajoute les règlements et encaisse la vente.
+      montants entiers, sa vraie quantité et son prix unitaire
+      (`_quantite_et_prix_unitaire_de_la_ligne`). Elle ne porte NI moyen, NI monnaie,
+      NI carte, NI portefeuille (Q-H2) : ce sont les règlements de la vente qui disent
+      comment elle a été payée. Elle garde l'identifiant du paiement (idempotence) et
+      le point de vente. Le HT vient du service, la boucle HMAC ne le recalcule pas.
+      L'appelant ajoute les règlements et encaisse la vente.
     - `vente` absente : plus aucun chemin de la caisse ne l'utilise. Seuls des tests
       existants appellent encore cette fonction sans vente (stock, billetterie,
       offerts). La ligne est alors créée directement (`LigneArticle.objects.create`),
@@ -6476,9 +6540,9 @@ def _creer_lignes_articles(
 
     :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
     :param code_methode_paiement: code du moyen de paiement ("carte_bancaire", "espece", "CH", "nfc", "gift")
-    :param asset_uuid: UUID de l'asset fedow_core (NFC uniquement, None pour espèces/CB)
-    :param carte: CarteCashless (NFC uniquement, None pour espèces/CB)
-    :param wallet: Wallet du client (NFC uniquement, None pour espèces/CB)
+    :param asset_uuid: UUID de l'asset fedow_core ; posé seulement sur une ligne sans vente
+    :param carte: CarteCashless ; posée seulement sur une ligne sans vente
+    :param wallet: Wallet du client ; posé seulement sur une ligne sans vente
     :param uuid_transaction: identifiant du paiement, posé sur chaque ligne
     :param point_de_vente: PointDeVente d'origine (nullable, pour ventilation CA par PV)
     :param vente: la `Vente` EN_ATTENTE qui reçoit les articles, ou None (voir plus haut)
@@ -6543,29 +6607,26 @@ def _creer_lignes_articles(
             defaults={"prix": prix_obj.prix},
         )
 
-        # Les champs historiques de la ligne (moyen, statut, carte, identifiant de
-        # paiement…) : les anciens rapports les lisent jusqu'à la fiche H.
-        # / The line's historical fields: old reports read them until sheet H.
-        champs_historiques_de_la_ligne = {
-            "sale_origin": sale_origin_pour_ligne,
-            "payment_method": methode_db,
-            "status": LigneArticle.VALID,
-            "uuid_transaction": uuid_transaction,
-            "point_de_vente": point_de_vente,
-            # Champs NFC (optionnels, None pour espèces/CB)
-            # NFC fields (optional, None for cash/CC)
-            "asset": asset_uuid,
-            "carte": carte,
-            "wallet": wallet,
-            "weight_quantity": weight_amount,
-        }
-
         if vente is None:
             # Ligne sans vente : seuls des tests existants appellent encore cette
-            # fonction sans vente (stock, billetterie, offerts).
+            # fonction sans vente (stock, billetterie, offerts). Elle garde ses
+            # champs historiques (moyen, carte, monnaie…).
             # TODO : retirer cette branche avec l'ancien modèle (fiche H).
             # / Line without a sale: only existing tests still call this without a
-            # sale. TODO: remove this branch with the old model (sheet H).
+            # sale; it keeps its historical fields. TODO: remove (sheet H).
+            champs_historiques_de_la_ligne = {
+                "sale_origin": sale_origin_pour_ligne,
+                "payment_method": methode_db,
+                "status": LigneArticle.VALID,
+                "uuid_transaction": uuid_transaction,
+                "point_de_vente": point_de_vente,
+                # Champs NFC (optionnels, None pour espèces/CB)
+                # NFC fields (optional, None for cash/CC)
+                "asset": asset_uuid,
+                "carte": carte,
+                "wallet": wallet,
+                "weight_quantity": weight_amount,
+            }
             ligne = LigneArticle.objects.create(
                 pricesold=price_sold,
                 qty=quantite,
@@ -6573,57 +6634,54 @@ def _creer_lignes_articles(
                 **champs_historiques_de_la_ligne,
             )
         else:
-            # Le service de vente accepte des types exacts seulement : des centimes
-            # `int`, une quantité et un taux `int` ou `Decimal`, jamais un `float` ni
-            # un texte (ValueError sinon). Les valeurs du panier sont converties ici,
-            # explicitement.
-            # / The sale service takes exact types only: converted here, explicitly.
-            quantite_vendue = int(quantite)
-            prix_unitaire_en_centimes = int(prix_centimes)
+            # La vraie quantité et le prix unitaire de la ligne : quantité réelle en kg
+            # ou en litres au prix du kg / du litre pour une pesée (D15), quantité
+            # négative au prix positif du gobelet pour un retour de consigne (D13).
+            # Le service de vente reçoit des types exacts (int, Decimal), jamais un
+            # `float` ni un texte.
+            # / The line's real quantity and unit price (D15, D13), exact types.
+            quantite_de_la_ligne, prix_unitaire_en_centimes = (
+                _quantite_et_prix_unitaire_de_la_ligne(article)
+            )
             prix_achat_en_centimes = int(produit.prix_achat)
 
             # Retour de consigne : le coût d'achat est celui du gobelet rendu
-            # (`consigne_remboursee`), jamais celui du produit de retour. Il est passé
-            # en NÉGATIF, comme le prix de la ligne (prix négatif, quantité positive) :
-            # un gobelet rendu retire son coût de la marge (D21). Un gobelet sans prix
-            # d'achat (0) donne 0 : le coût reste inconnu, comme pour tout article.
+            # (`consigne_remboursee`), jamais celui du produit de retour. Le prix
+            # d'achat reste POSITIF : c'est la quantité négative qui rend le coût
+            # négatif (un gobelet rendu retire son coût de la marge, D21). Un gobelet
+            # sans prix d'achat (0) donne un coût inconnu, comme pour tout article.
             # `_extraire_articles_du_panier` a déjà refusé un retour sans consigne reliée.
-            # / Deposit return: the returned cup's purchase cost, passed NEGATIVE like
-            #   the line's price; a returned cup removes its cost from the margin.
+            # / Deposit return: the returned cup's purchase price, POSITIVE; the
+            #   negative quantity makes the cost negative.
             if produit.methode_caisse == Product.RETOUR_CONSIGNE:
                 produit_du_gobelet_rendu = produit.consigne_remboursee
-                prix_achat_en_centimes = -int(produit_du_gobelet_rendu.prix_achat)
-
-            # Vente au poids ou au volume : la ligne garde qty = 1 et le poids dans
-            # `weight_quantity` (anciens lecteurs). Le coût d'achat, lui, porte sur la
-            # quantité réellement servie, dans l'unité du prix d'achat (kg, L) :
-            # 350 g → 0,350 kg.
-            # / Weight/volume sale: qty stays 1; the cost is on the real served quantity.
-            vente_au_poids = bool(weight_amount) and prix_obj.poids_mesure
-            if vente_au_poids:
-                quantite_reellement_servie = (
-                    Decimal(weight_amount)
-                    / _diviseur_de_la_quantite_saisie(produit)
-                    * Decimal(quantite_vendue)
-                )
-            else:
-                quantite_reellement_servie = None
+                prix_achat_en_centimes = int(produit_du_gobelet_rendu.prix_achat)
 
             # OFFRIR (mode gérant) et recharge cadeau : l'article est entièrement
             # offert. Le service pose la part offerte et ajoute le règlement FREE.
             # / GIFT and gift top-up: fully offered; the service adds the FREE payment.
             article_offert_en_totalite = methode_db == PaymentMethod.FREE
 
+            # La ligne d'une vente ne porte ni moyen, ni monnaie, ni carte, ni
+            # portefeuille (Q-H2) : les règlements de la vente les portent.
+            # / A sale's line carries no method, currency, card or wallet (Q-H2).
+            champs_de_la_ligne_de_la_vente = {
+                "sale_origin": sale_origin_pour_ligne,
+                "status": LigneArticle.VALID,
+                "uuid_transaction": uuid_transaction,
+                "point_de_vente": point_de_vente,
+                "weight_quantity": weight_amount,
+            }
+
             ligne = ajouter_article(
                 vente,
                 pricesold=price_sold,
-                quantite=quantite_vendue,
+                quantite=quantite_de_la_ligne,
                 prix_unitaire=prix_unitaire_en_centimes,
                 taux_tva=_taux_tva_de_la_ligne_de_caisse(produit, methode_db),
                 prix_achat=prix_achat_en_centimes,
                 offert_en_totalite=article_offert_en_totalite,
-                quantite_pour_cout=quantite_reellement_servie,
-                **champs_historiques_de_la_ligne,
+                **champs_de_la_ligne_de_la_vente,
             )
         # --- Décrémentation stock inventaire ---
         # Si le produit a un Stock lié, on décrémente automatiquement.
@@ -6781,46 +6839,45 @@ def _creer_lignes_articles(
 def _creer_lignes_articles_cascade(
     lignes_pre_calculees,
     vente,
-    carte=None,
-    carte_complement=None,
-    wallet=None,
     uuid_transaction=None,
     point_de_vente=None,
 ):
     """
-    Crée ProductSold, PriceSold et N LigneArticle par article (1 par asset débité).
-    Creates ProductSold, PriceSold and N LigneArticle per article (1 per debited asset).
+    Crée ProductSold, PriceSold et UNE LigneArticle par article, payé par la cascade.
+    / Creates ProductSold, PriceSold and ONE LigneArticle per item paid by the cascade.
 
     LOCALISATION : laboutik/views.py
 
-    Version « cascade » de _creer_lignes_articles().
-    Un article à 4€ payé 1€ TNF + 3€ TLF produit 2 LigneArticle
-    avec qty partielle proportionnelle au montant.
-    / Cascade version of _creer_lignes_articles().
-    A 4€ article paid 1€ TNF + 3€ TLF produces 2 LigneArticle
-    with partial qty proportional to the amount.
+    Version « cascade » de _creer_lignes_articles(). Un article à 4 € payé 1 € de
+    jetons cadeau + 3 € de monnaie locale produit UNE ligne (part en jetons 100) et
+    deux règlements (écrits par l'appelant).
+    / Cascade version of _creer_lignes_articles(): one line, two payments.
 
-    CHAQUE PART EST UN ARTICLE DE LA VENTE :
-    Elle est écrite par le service de vente (`ajouter_article`) avec ses champs
-    historiques d'aujourd'hui (prix unitaire, quantité partielle, moyen, carte…). Son
-    total catalogue est l'argent RÉEL de la part (3ᵉ élément du tuple), jamais
-    recalculé depuis la quantité partielle. Une part payée en jetons cadeau (LG) est
-    une vente ordinaire, rien d'offert, au taux de TVA 0 (D8 bis : le jeton dépensé
-    solde la dette du lieu envers le porteur). Le HT vient du service, la boucle HMAC
-    ne le recalcule pas. L'appelant écrit les règlements et encaisse la vente.
-    Appelants : paiement NFC seul, complément espèces / CB, 2ᵉ carte.
-    / Each part is an item of the sale, written by the sale service (the part's real
-    money as catalogue total; a token part is an ordinary sale at 0 % VAT). The caller
-    writes the payments and settles the sale.
+    UNE LIGNE PAR ARTICLE, quelle que soit la façon de payer :
+    La cascade débite un article en un ou plusieurs morceaux (jetons cadeau, monnaie
+    locale, monnaie du réseau, espèces ou CB du complément, 2ᵉ carte). Les débits d'un
+    même article sont additionnés : l'article devient UNE ligne, écrite par le service
+    de vente (`ajouter_article`), avec sa vraie quantité et son prix unitaire
+    (`_quantite_et_prix_unitaire_de_la_ligne` : kg / litres au prix du kg / du litre
+    pour une pesée). Son total catalogue vient de la formule du service. La part payée
+    en jetons cadeau (débits LG) est la `part_en_jetons` de la ligne : une vente
+    ordinaire, hors TVA (D8 bis). La ligne ne porte ni moyen, ni monnaie, ni carte, ni
+    portefeuille (Q-H2) : l'appelant écrit un règlement par débit, puis encaisse la
+    vente.
+    GARDE : la somme des débits d'un article vaut son total catalogue. Sinon la caisse
+    a débité autre chose que le prix de l'article : `EgaliteDeVenteRompue`, rien n'est
+    écrit (l'appelant journalise un débit déjà fait sur un serveur distant).
+    Appelants : paiement NFC seul, complément espèces / CB, 2ᵉ carte, table en NFC.
+    / One line per item: the item's debits are summed; real quantity and unit price;
+    catalogue total from the service formula; LG debits make the token part; no
+    method / currency / card / wallet on the line. Guard: the item's debits equal its
+    catalogue total.
 
-    :param lignes_pre_calculees: liste de tuples
+    :param lignes_pre_calculees: liste de tuples, un par débit
         (article_dict, asset_ou_none, amount_centimes, payment_method_code)
-    :param carte: CarteCashless principale (1ère carte NFC)
-    :param carte_complement: CarteCashless de complément (2ème carte, Task 7)
-    :param wallet: Wallet du client (1ère carte)
     :param uuid_transaction: UUID partagé par toutes les lignes du paiement
     :param point_de_vente: PointDeVente d'origine (ventilation CA par PV)
-    :param vente: la `Vente` EN_ATTENTE qui reçoit les parts (obligatoire)
+    :param vente: la `Vente` EN_ATTENTE qui reçoit les lignes (obligatoire)
     :return: liste de toutes les LigneArticle créées
     """
     # --- MODE ECOLE DESACTIVE : toute vente est une vente reelle ---
@@ -6832,31 +6889,36 @@ def _creer_lignes_articles_cascade(
     sale_origin_pour_ligne = SaleOrigin.LABOUTIK
 
     # ------------------------------------------------------------------ #
-    # Étape 1 : Regrouper les lignes par article (clé = id(article_dict))
-    # / Step 1: Group lines by article (key = id(article_dict))
+    # Étape 1 : additionner les débits de chaque article
+    # / Step 1: sum the debits of each item
     # ------------------------------------------------------------------ #
-    # On utilise id() car le même dict Python revient plusieurs fois
-    # dans lignes_pre_calculees quand un article est splitté sur N assets.
-    # / We use id() because the same Python dict appears multiple times
-    # in lignes_pre_calculees when an article is split across N assets.
-    from collections import OrderedDict
-
-    groupes_par_article = OrderedDict()
+    # Un même article du panier (le même dictionnaire Python) revient une fois par
+    # débit. On additionne, dans l'ordre du panier : tout l'argent débité pour lui,
+    # la part débitée en jetons cadeau (LG), et s'il a été payé en points / temps.
+    # / The same cart item (the same Python dict) comes once per debit: sum its money,
+    # its gift-token part, and whether it was paid in points / time.
+    debits_par_article = []
     for tuple_ligne in lignes_pre_calculees:
-        article_dict, asset_ou_none, amount_centimes, payment_method_code = tuple_ligne
-        cle_groupe = id(article_dict)
-        if cle_groupe not in groupes_par_article:
-            groupes_par_article[cle_groupe] = {
+        article_dict, _asset_ou_none, amount_centimes, payment_method_code = tuple_ligne
+
+        debits_de_cet_article = None
+        for debits_deja_vus in debits_par_article:
+            if debits_deja_vus["article_dict"] is article_dict:
+                debits_de_cet_article = debits_deja_vus
+        if debits_de_cet_article is None:
+            debits_de_cet_article = {
                 "article_dict": article_dict,
-                "lignes": [],
+                "argent_debite": 0,
+                "argent_debite_en_jetons": 0,
+                "paye_en_points": False,
             }
-        groupes_par_article[cle_groupe]["lignes"].append(
-            {
-                "asset_ou_none": asset_ou_none,
-                "amount_centimes": amount_centimes,
-                "payment_method_code": payment_method_code,
-            }
-        )
+            debits_par_article.append(debits_de_cet_article)
+
+        debits_de_cet_article["argent_debite"] += int(amount_centimes)
+        if payment_method_code == PaymentMethod.LOCAL_GIFT:
+            debits_de_cet_article["argent_debite_en_jetons"] += int(amount_centimes)
+        if payment_method_code == PaymentMethod.NON_MONETAIRE:
+            debits_de_cet_article["paye_en_points"] = True
 
     toutes_les_lignes_creees = []
 
@@ -6869,17 +6931,15 @@ def _creer_lignes_articles_cascade(
     produits_stock_negatif = []
 
     # ------------------------------------------------------------------ #
-    # Étape 2 : Pour chaque article, créer ProductSold + PriceSold + N LigneArticle
-    # / Step 2: For each article, create ProductSold + PriceSold + N LigneArticle
+    # Étape 2 : pour chaque article, ProductSold + PriceSold + UNE LigneArticle
+    # / Step 2: for each item, ProductSold + PriceSold + ONE LigneArticle
     # ------------------------------------------------------------------ #
-    for cle_groupe, groupe in groupes_par_article.items():
-        article_dict = groupe["article_dict"]
-        lignes_du_groupe = groupe["lignes"]
+    for debits_de_l_article in debits_par_article:
+        article_dict = debits_de_l_article["article_dict"]
 
         produit = article_dict["product"]
         prix_obj = article_dict["price"]
         quantite = article_dict["quantite"]
-        prix_centimes = article_dict["prix_centimes"]
         weight_amount = article_dict.get("weight_amount")
 
         # ProductSold : snapshot du produit au moment de la vente
@@ -6898,137 +6958,69 @@ def _creer_lignes_articles_cascade(
             defaults={"prix": prix_obj.prix},
         )
 
-        # ---------------------------------------------------------- #
-        # Calculer les qty partielles via _calculer_qty_partielles()
-        # / Compute partial qty via _calculer_qty_partielles()
-        # ---------------------------------------------------------- #
-        lignes_pour_calcul = [
-            {"amount_centimes": ligne["amount_centimes"]} for ligne in lignes_du_groupe
-        ]
-        lignes_avec_qty = _calculer_qty_partielles(
-            lignes_pour_calcul, prix_centimes, quantite
+        # La vraie quantité et le prix unitaire de la ligne (kg / litres au prix du
+        # kg / du litre pour une pesée, D15).
+        # / The line's real quantity and unit price (D15 for a weighing).
+        quantite_de_la_ligne, prix_unitaire_en_centimes = (
+            _quantite_et_prix_unitaire_de_la_ligne(article_dict)
         )
+        prix_achat_en_centimes = int(produit.prix_achat)
 
-        # ---------------------------------------------------------- #
-        # Créer N LigneArticle (1 par tuple du groupe)
-        # / Create N LigneArticle (1 per tuple in the group)
-        # ---------------------------------------------------------- #
-        premiere_ligne_du_groupe = None
-
-        for i, ligne_info in enumerate(lignes_du_groupe):
-            asset_ou_none = ligne_info["asset_ou_none"]
-            amount_centimes = ligne_info["amount_centimes"]
-            payment_method_code = ligne_info["payment_method_code"]
-            qty_partielle = lignes_avec_qty[i]["qty"]
-
-            # Déterminer l'UUID de l'asset (None pour espèces/CB)
-            # / Determine asset UUID (None for cash/CC)
-            asset_uuid = None
-            if asset_ou_none is not None:
-                # Asset local = objet fedow_core (`.pk` = uuid). Asset legacy distant (FED / TLF
-                # fédéré débité via Fedow) = uuid déjà résolu (pas d'objet local). On accepte les deux.
-                # / Local asset = fedow_core object (`.pk`). Remote legacy asset = already-resolved uuid.
-                asset_uuid = (
-                    asset_ou_none.pk if hasattr(asset_ou_none, "pk") else asset_ou_none
-                )
-
-            # Toujours associer la carte principale à la LigneArticle.
-            # La carte identifie le client pour le paiement (même pour les
-            # lignes complémentaires espèces/CB, la carte a été scannée).
-            # Pour la 2ème carte NFC, l'appelant passe les lignes des 2 cartes
-            # séparément avec carte=carte1 et carte_complement n'est pas utilisée
-            # ici (elle pourrait servir à un futur enrichissement).
-            # / Always associate the primary card with the LigneArticle.
-            # The card identifies the client for the payment (even for
-            # cash/CC complement lines, the card was scanned).
-            carte_pour_cette_ligne = carte
-
-            # amount = prix UNITAIRE (en centimes), PAS le montant total de la part.
-            # Convention unifiée avec le chemin simple (_creer_lignes_articles) et avec
-            # LigneArticle.total = amount × qty : le total de ligne = prix_unitaire × qty.
-            # La part en argent est portée par qty (= montant_part / prix_unitaire),
-            # calculée par _calculer_qty_partielles. Stocker l'argent ici comptait la
-            # quantité deux fois à l'affichage (bug B : 3 vins → 45 € au lieu de 15 €).
-            # / amount = UNIT price (cents), NOT the part's total money. Unified with the
-            # simple path and LigneArticle.total = amount × qty. Storing money here
-            # double-counted the quantity in the display (bug B: 45 € instead of 15 €).
-            champs_historiques_de_la_part = {
-                "sale_origin": sale_origin_pour_ligne,
-                "payment_method": payment_method_code,
-                "status": LigneArticle.VALID,
-                "uuid_transaction": uuid_transaction,
-                "point_de_vente": point_de_vente,
-                # Champs NFC (optionnels, None pour espèces/CB)
-                # NFC fields (optional, None for cash/CC)
-                "asset": asset_uuid,
-                "carte": carte_pour_cette_ligne,
-                "wallet": wallet,
-                # weight_quantity identique sur toutes les lignes d'un même article
-                # / weight_quantity same on all lines of the same article
-                "weight_quantity": weight_amount,
-            }
-
-            # Le service de vente accepte des types exacts seulement : des centimes
-            # `int`, une quantité et un taux `int` ou `Decimal`, jamais un `float`.
-            # Les valeurs sont converties ici, explicitement.
-            # / The sale service takes exact types only: converted here, explicitly.
-            quantite_de_la_part = Decimal(qty_partielle)
-            prix_unitaire_en_centimes = int(prix_centimes)
-            argent_reel_de_la_part_en_centimes = int(amount_centimes)
-            prix_achat_en_centimes = int(produit.prix_achat)
-
-            # Vente au poids ou au volume : la ligne garde le poids dans
-            # `weight_quantity`. Le coût d'achat porte sur la quantité réellement
-            # servie, dans l'unité du prix d'achat (kg, L), pour la fraction de
-            # l'article que paie CETTE part (sa quantité partielle : l'article au
-            # poids a une quantité de 1). 350 g payés à 60 % → 0,350 × 0,6 kg.
-            # / Weight/volume sale: the cost is on the real served quantity, for
-            #   this part's share of the item (its partial quantity).
-            vente_au_poids = bool(weight_amount) and prix_obj.poids_mesure
-            if vente_au_poids:
-                quantite_reellement_servie_par_la_part = (
-                    Decimal(weight_amount)
-                    / _diviseur_de_la_quantite_saisie(produit)
-                    * quantite_de_la_part
-                )
-            else:
-                quantite_reellement_servie_par_la_part = None
-
-            # Le total catalogue de la part est son argent RÉEL (le débit qui la
-            # paie), jamais prix × quantité partielle : la quantité partielle est
-            # arrondie à 6 décimales et ne doit pas décider d'un centime.
-            # Une part payée en jetons cadeau (LG) n'a rien d'offert : c'est une vente
-            # ordinaire, au taux 0 (`_taux_tva_de_la_ligne_de_caisse`). L'appelant
-            # écrit le règlement « jetons » (LG) de la transaction.
-            # / The part's catalogue total is its REAL money, never price × partial qty.
-            # A token part offers nothing: an ordinary sale at 0 % VAT.
-            ligne = ajouter_article(
-                vente,
-                pricesold=price_sold,
-                quantite=quantite_de_la_part,
-                prix_unitaire=prix_unitaire_en_centimes,
-                taux_tva=_taux_tva_de_la_ligne_de_caisse(
-                    produit, payment_method_code
-                ),
-                prix_achat=prix_achat_en_centimes,
-                total_catalogue_impose=argent_reel_de_la_part_en_centimes,
-                quantite_pour_cout=quantite_reellement_servie_par_la_part,
-                **champs_historiques_de_la_part,
+        # GARDE : l'argent débité pour cet article vaut son total catalogue (la
+        # formule du service). Sinon la caisse n'invente pas de ligne : la vente
+        # n'est pas écrite.
+        # / GUARD: the money debited for this item equals its catalogue total.
+        total_catalogue_de_l_article = calculer_montants_article(
+            prix_unitaire=prix_unitaire_en_centimes,
+            quantite=quantite_de_la_ligne,
+            taux_tva=Decimal("0"),
+        )["total_catalogue"]
+        argent_debite_pour_l_article = debits_de_l_article["argent_debite"]
+        if argent_debite_pour_l_article != total_catalogue_de_l_article:
+            raise EgaliteDeVenteRompue(
+                f"Article « {produit.name} » : {argent_debite_pour_l_article} "
+                f"centimes débités pour un total catalogue de "
+                f"{total_catalogue_de_l_article} centimes."
             )
 
-            toutes_les_lignes_creees.append(ligne)
+        # Le taux de TVA : celui du produit, ou 0 pour un article payé en points /
+        # temps (une vente en points n'est jamais mêlée à de l'argent). Les jetons
+        # cadeau gardent le taux du produit : leur part (`part_en_jetons`) est sortie
+        # de la TVA par la formule du service (D8 bis).
+        # / VAT rate: the product's, or 0 for points / time.
+        if debits_de_l_article["paye_en_points"]:
+            moyen_pour_le_taux_de_tva = PaymentMethod.NON_MONETAIRE
+        else:
+            moyen_pour_le_taux_de_tva = None
+        taux_tva_de_la_ligne = _taux_tva_de_la_ligne_de_caisse(
+            produit, moyen_pour_le_taux_de_tva
+        )
 
-            if premiere_ligne_du_groupe is None:
-                premiere_ligne_du_groupe = ligne
+        # La ligne ne porte ni moyen, ni monnaie, ni carte, ni portefeuille (Q-H2) :
+        # les règlements de la vente les portent. Elle garde l'identifiant du
+        # paiement (idempotence), le point de vente et le poids saisi (le stock).
+        # / No method, currency, card or wallet on the line (Q-H2).
+        ligne = ajouter_article(
+            vente,
+            pricesold=price_sold,
+            quantite=quantite_de_la_ligne,
+            prix_unitaire=prix_unitaire_en_centimes,
+            taux_tva=taux_tva_de_la_ligne,
+            prix_achat=prix_achat_en_centimes,
+            part_en_jetons=debits_de_l_article["argent_debite_en_jetons"],
+            sale_origin=sale_origin_pour_ligne,
+            status=LigneArticle.VALID,
+            uuid_transaction=uuid_transaction,
+            point_de_vente=point_de_vente,
+            weight_quantity=weight_amount,
+        )
+        toutes_les_lignes_creees.append(ligne)
 
         # ---------------------------------------------------------- #
-        # Décrémentation stock : 1 SEULE FOIS sur la qty totale
-        # / Stock decrement: ONCE ONLY on the total qty
+        # Décrémentation stock : une fois par article, sur sa quantité de panier
+        # (le poids saisi pour une pesée). La ligne sert de référence au mouvement.
+        # / Stock decrement: once per item; the line is the movement's reference.
         # ---------------------------------------------------------- #
-        # On passe la première LigneArticle du groupe comme référence
-        # pour le mouvement de stock (traçabilité).
-        # / We pass the first LigneArticle of the group as reference
-        # for the stock movement (traceability).
         try:
             stock_du_produit = produit.stock_inventaire
         except Stock.DoesNotExist:
@@ -7044,7 +7036,7 @@ def _creer_lignes_articles_cascade(
                     stock=stock_du_produit,
                     contenance=weight_amount,
                     qty=1,
-                    ligne_article=premiere_ligne_du_groupe,
+                    ligne_article=ligne,
                 )
             else:
                 # Tarif classique : contenance fixe x quantité totale
@@ -7053,7 +7045,7 @@ def _creer_lignes_articles_cascade(
                     stock=stock_du_produit,
                     contenance=prix_obj.contenance,
                     qty=quantite,
-                    ligne_article=premiere_ligne_du_groupe,
+                    ligne_article=ligne,
                 )
 
             # Relire le stock depuis la DB pour avoir la quantité à jour
@@ -7091,7 +7083,7 @@ def _creer_lignes_articles_cascade(
     previous_hmac_value = obtenir_previous_hmac(sale_origin=sale_origin_pour_chaine)
 
     for ligne_a_chainer in toutes_les_lignes_creees:
-        # Part écrite par le service de vente : son HT est DÉJÀ juste (arrondi demi
+        # Ligne écrite par le service de vente : son HT est DÉJÀ juste (arrondi demi
         # vers le haut, HT + TVA = net). On ne le recalcule PAS : `calculer_total_ht`
         # arrondit au pair (111 c à 20 % donnerait 92 au lieu de 93). L'empreinte est
         # écrite par `.update()`, jamais par un second `save()` (qui relancerait la
@@ -9440,7 +9432,7 @@ class PaiementViewSet(viewsets.ViewSet):
            résolution du portefeuille peut interroger Fedow par le réseau)
         2. Vérifier que la monnaie à créditer est désignée et qu'elle est locale
         3. Dans UNE transaction : créditer le portefeuille, puis écrire la ligne
-           comptable au montant négatif
+           comptable (quantité négative, prix positif, total négatif, D13)
 
         Le crédit et la ligne sont dans la MÊME transaction, et ce n'est pas un détail :
         `TransactionService.creer_recharge` est une écriture en base, pas un appel
@@ -9515,11 +9507,11 @@ class PaiementViewSet(viewsets.ViewSet):
                 tenant=connection.tenant,
                 ip=ip_client,
             )
-            # Le montant de la ligne reste NEGATIF (le prix du gobelet rendu). C'est ce
-            # signe qui fait baisser le chiffre d'affaires cashless dans tous les
-            # anciens rapports, sans une ligne de code de plus.
-            # / The line amount stays NEGATIVE: that sign is what lowers cashless
-            #   revenue in every old report.
+            # La ligne du retour a une quantité négative et le prix POSITIF du gobelet
+            # (D13) : son total est négatif. C'est ce total qui fait baisser le chiffre
+            # d'affaires dans le rapport.
+            # / The return line has a negative quantity and the cup's POSITIVE price
+            #   (D13): its negative total lowers the revenue.
             _creer_lignes_articles(
                 articles_panier,
                 "nfc",
@@ -10277,18 +10269,15 @@ class PaiementViewSet(viewsets.ViewSet):
                     )
 
                 # ----- 7d) Créer toutes les LigneArticle (non-fidu + cascade locale + legacy) -----
-                # Les lignes_legacy (FED/TLF fédérés débités plus haut hors atomic) portent déjà
-                # leur moyen de paiement résolu (LOCAL_EURO / STRIPE_FED) et l'uuid de l'asset distant.
-                # Chaque part est un article de la vente.
-                # / Create all LigneArticle (non-fidu + local cascade + legacy lines), each
-                #   part an item of the sale.
+                # Les lignes_legacy sont les débits FED/TLF fédérés faits plus haut, hors
+                # atomic. Une ligne par article : ses débits sont additionnés.
+                # / Create the LigneArticle (non-fidu + local cascade + legacy debits),
+                #   one line per item: its debits are summed.
                 toutes_les_lignes_pre_calculees = (
                     lignes_non_fidu + lignes_nfc + lignes_legacy
                 )
                 lignes_creees, produits_stock_negatif = _creer_lignes_articles_cascade(
                     lignes_pre_calculees=toutes_les_lignes_pre_calculees,
-                    carte=carte_client,
-                    wallet=wallet_client,
                     uuid_transaction=uuid_transaction,
                     point_de_vente=point_de_vente,
                     vente=vente,
@@ -11589,13 +11578,11 @@ class PaiementViewSet(viewsets.ViewSet):
                     # avec leur moyen résolu (STRIPE_FED / LOCAL_EURO) et l'uuid de l'asset distant.
                     # / + lignes_legacy: FED-covered parts (already debited outside atomic).
                     toutes_les_lignes = lignes_non_fidu + lignes_finales + lignes_legacy
-                    # Chaque part est un article de la vente.
-                    # / Each part is an item of the sale.
+                    # Une ligne par article : ses débits sont additionnés.
+                    # / One line per item: its debits are summed.
                     lignes_creees, produits_stock_negatif = (
                         _creer_lignes_articles_cascade(
                             lignes_pre_calculees=toutes_les_lignes,
-                            carte=carte1,
-                            wallet=wallet_carte1,
                             uuid_transaction=uuid_transaction,
                             point_de_vente=point_de_vente,
                             vente=vente,
@@ -12402,17 +12389,12 @@ class PaiementViewSet(viewsets.ViewSet):
                         + lignes_legacy_c2
                         + lignes_reste_apres_carte2
                     )
-                    # Chaque part est un article de la vente. Les lignes gardent la
-                    # carte 1, même pour les parts payées par la carte 2 : seuls les
-                    # règlements disent quelle carte a payé.
-                    # / Each part is an item of the sale. The lines keep card 1; only
-                    #   the payments say which card paid.
+                    # Une ligne par article : ses débits (carte 1, carte 2, reste)
+                    # sont additionnés. Seuls les règlements disent quelle carte a payé.
+                    # / One line per item; only the payments say which card paid.
                     lignes_creees, produits_stock_negatif = (
                         _creer_lignes_articles_cascade(
                             lignes_pre_calculees=toutes_les_lignes,
-                            carte=carte1,
-                            carte_complement=carte2,
-                            wallet=wallet_carte1,
                             uuid_transaction=uuid_transaction,
                             point_de_vente=point_de_vente,
                             vente=vente,
@@ -13073,7 +13055,6 @@ class PaiementViewSet(viewsets.ViewSet):
         # / Money taken back on the old Fedow. Gift tokens carry no money.
         total_tlf_ancien_fedow = 0
         total_fed_ancien_fedow = 0
-        uuid_fed_ancien_fedow = None
         uuids_des_transactions_de_l_ancien_fedow = []
         for transaction_distante in transactions_de_l_ancien_fedow:
             uuids_des_transactions_de_l_ancien_fedow.append(str(transaction_distante["uuid"]))
@@ -13081,7 +13062,6 @@ class PaiementViewSet(viewsets.ViewSet):
                 total_tlf_ancien_fedow += transaction_distante["montant"]
             elif transaction_distante["categorie"] == "FED":
                 total_fed_ancien_fedow += transaction_distante["montant"]
-                uuid_fed_ancien_fedow = transaction_distante["asset"]
         ancien_fedow_a_repris_des_jetons = len(transactions_de_l_ancien_fedow) > 0
 
         # Le journal d'incident, préparé AVANT le bloc atomic : l'ancien Fedow est déjà
@@ -13115,9 +13095,6 @@ class PaiementViewSet(viewsets.ViewSet):
                     ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
                     vider_carte=vider_carte_flag,
                     primary_card=carte_primaire_obj.carte,
-                    total_tlf_ancien_fedow_centimes=total_tlf_ancien_fedow,
-                    total_fed_ancien_fedow_centimes=total_fed_ancien_fedow,
-                    uuid_fed_ancien_fedow=uuid_fed_ancien_fedow,
                     ancien_fedow_a_repris_des_jetons=ancien_fedow_a_repris_des_jetons,
                     carte_videe_sur_l_ancien_fedow=carte_videe_sur_l_ancien_fedow,
                 )
@@ -13186,7 +13163,6 @@ class PaiementViewSet(viewsets.ViewSet):
             "total_centimes": resultat["total_centimes"] + argent_rendu_ancien_fedow,
             "total_tlf_centimes": resultat["total_tlf_centimes"] + total_tlf_ancien_fedow,
             "total_fed_centimes": resultat["total_fed_centimes"] + total_fed_ancien_fedow,
-            "lignes_articles": resultat["lignes_articles"],
             "transaction_uuids": [str(tx.uuid) for tx in resultat["transactions"]],
             "uuid_pv": uuid_pv,
             "vider_carte": vider_carte_flag,
@@ -13426,13 +13402,28 @@ class PaiementViewSet(viewsets.ViewSet):
     )
     def formulaire_correction(self, request):
         """
-        GET /laboutik/paiement/formulaire_correction/?ligne_uuid=...
-        Affiche le formulaire de correction de moyen de paiement.
-        / Shows the payment method correction form.
+        GET /laboutik/paiement/formulaire_correction/?ligne_uuid=...&ancien_moyen=...
+        Affiche le formulaire de correction d'un moyen de paiement d'une vente.
+        / Shows the correction form of one payment method of a sale.
 
         LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. `ligne_uuid` : une ligne de la vente, qui sert seulement a retrouver la
+           vente. `ancien_moyen` : le moyen a corriger, transmis par le bouton du
+           detail (un bouton par moyen).
+        2. La meme regle que la route (`raison_du_refus_de_correction`) : un moyen
+           que la route refuserait n'ouvre pas de formulaire.
+        3. Le montant affiche est le net de ce moyen dans les reglements de la vente
+           et de ses ventes CORRECTION (`montant_net_du_moyen_dans_la_vente`) : c'est
+           exactement ce que la route deplacera.
+        4. Le formulaire renvoie `ancien_moyen` en champ cache : la route le revérifie
+           sous verrou.
+        / A line of the sale (to find the sale) and the method to correct; same refusal
+          rule as the route; amount = the method's net, which the route moves.
         """
         ligne_uuid = request.GET.get("ligne_uuid")
+        ancien_moyen = request.GET.get("ancien_moyen", "")
         if not ligne_uuid:
             return render(
                 request,
@@ -13447,7 +13438,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # Un uuid illisible leve `ValidationError` (champ UUID de Django) : 404 aussi.
         # / An unreadable uuid raises ValidationError: 404 too.
         try:
-            ligne = LigneArticle.objects.get(uuid=ligne_uuid)
+            ligne = LigneArticle.objects.select_related("vente").get(uuid=ligne_uuid)
         except (LigneArticle.DoesNotExist, ValueError, DjangoValidationError):
             return render(
                 request,
@@ -13458,11 +13449,12 @@ class PaiementViewSet(viewsets.ViewSet):
                 },
                 status=404,
             )
+        vente_d_origine = ligne.vente
 
-        # La meme regle que la route : une ligne que la route refuserait n'ouvre pas
+        # La meme regle que la route : un moyen que la route refuserait n'ouvre pas
         # de formulaire (le message de refus est rendu tel quel).
-        # / Same rule as the route: a line the route would refuse opens no form.
-        raison_du_refus = raison_du_refus_de_correction(ligne)
+        # / Same rule as the route: a method the route would refuse opens no form.
+        raison_du_refus = raison_du_refus_de_correction(vente_d_origine, ancien_moyen)
         if raison_du_refus is not None:
             return render(
                 request,
@@ -13471,12 +13463,12 @@ class PaiementViewSet(viewsets.ViewSet):
                 status=400,
             )
 
-        # Les nouveaux moyens possibles (especes, CB, cheque), sans le moyen actuel,
+        # Les nouveaux moyens possibles (especes, CB, cheque), sans le moyen corrige,
         # par leur nom unique.
-        # / The possible new methods, without the current one, by their single name.
+        # / The possible new methods, without the corrected one, by their single name.
         moyens_corrigeables = []
         for moyen_corrigeable in MOYENS_CORRIGEABLES_A_LA_CAISSE:
-            if moyen_corrigeable != ligne.payment_method:
+            if moyen_corrigeable != ancien_moyen:
                 moyens_corrigeables.append(
                     {
                         "code": moyen_corrigeable,
@@ -13484,19 +13476,19 @@ class PaiementViewSet(viewsets.ViewSet):
                     }
                 )
 
-        # Le montant affiche est celui que la route deplacera : la somme des nets
-        # vendus des lignes que la correction deplace (meme vente, meme moyen
-        # actuel). Une seule definition, `lignes_que_la_correction_deplace`.
-        # / The amount shown is what the route will move: the same lines.
-        montant_que_la_correction_deplace = 0
-        lignes_deplacees = lignes_que_la_correction_deplace(ligne)
-        for ligne_deplacee in lignes_deplacees:
-            montant_que_la_correction_deplace += ligne_deplacee.total_ttc
+        # Le montant affiche est celui que la route deplacera : le net du moyen dans
+        # les reglements de la vente et de ses corrections.
+        # / The amount shown is what the route will move: the method's net.
+        montant_que_la_correction_deplace = montant_net_du_moyen_dans_la_vente(
+            vente_d_origine, ancien_moyen
+        )
 
         context = {
             "ligne": ligne,
+            "vente": vente_d_origine,
+            "ancien_moyen": ancien_moyen,
             "moyens_corrigeables": moyens_corrigeables,
-            "moyen_actuel_label": nom_du_moyen_de_paiement(ligne.payment_method),
+            "moyen_actuel_label": nom_du_moyen_de_paiement(ancien_moyen),
             "montant_du_reglement_a_la_francaise": euros_a_la_francaise(
                 montant_que_la_correction_deplace
             ),
@@ -13514,53 +13506,58 @@ class PaiementViewSet(viewsets.ViewSet):
     def corriger_moyen_paiement(self, request):
         """
         POST /laboutik/paiement/corriger_moyen_paiement/
-        Corrige le moyen de paiement d'une LigneArticle existante.
-        Cree une trace d'audit CorrectionPaiement (conformite LNE exigence 4).
-        Le HMAC chain est casse volontairement — CorrectionPaiement sert de preuve.
-        / Corrects the payment method of an existing LigneArticle.
-        Creates a CorrectionPaiement audit trail (LNE compliance req. 4).
-        The HMAC chain is intentionally broken — CorrectionPaiement serves as proof.
+        Corrige un moyen de paiement d'une vente deja encaissee (D14) : une vente
+        CORRECTION liee deplace l'argent de l'ancien moyen vers le nouveau. Aucune
+        ligne d'article n'est modifiee.
+        / Corrects one payment method of a settled sale (D14): a linked CORRECTION
+        sale moves the money from the old method to the new one. No line is changed.
 
         LOCALISATION : laboutik/views.py
 
+        LES CHAMPS POSTES (`CorrectionPaiementSerializer`) :
+        - `ligne_uuid` : une ligne de la vente, qui sert seulement a retrouver la vente ;
+        - `ancien_moyen` : LE moyen corrige, transmis par le bouton du detail ;
+        - `nouveau_moyen` : especes, CB ou cheque ;
+        - `raison` : le texte libre du caissier (facultatif).
+
         Gardes de securite / Security guards (memes etiquettes que dans le code),
         toutes relues SOUS LE VERROU de la vente d'origine (`select_for_update`) :
-        - Serializer : UUID valide, nouveau moyen dans ESP/CB/CHQ, raison, moyen vu
-          par le caissier (`ancien_moyen`, champ cache du formulaire).
-        - GARDE 1 : la ligne elle-meme (`raison_du_refus_de_correction`) — ancien
-          moyen especes, CB ou cheque ; vente de la caisse ; vente reglee ; vente pas
-          couverte par une cloture journaliere.
-        - GARDE 2 : la ligne a change depuis l'ouverture du formulaire (moyen actuel
-          different de `ancien_moyen`) — deux envois identiques ne font qu'une
-          correction.
-        - GARDE 3 : meme moyen interdit — pas de correction sans changement.
-        - GARDE 4 : montant nul interdit — rien a deplacer.
-        Un refus est rendu dans la zone du formulaire (`HX-Retarget`), pas a la
-        place du detail.
+        - Serializer : UUID valide, nouveau moyen dans ESP/CB/CHQ, raison, moyen
+          corrige present.
+        - GARDE 1 : `raison_du_refus_de_correction` — moyen especes, CB ou cheque ;
+          vente reglee ; vente de la caisse ; vente pas couverte par une cloture
+          journaliere ; et le moyen a encore de l'argent sur la vente (net non nul).
+          Ce dernier point refuse aussi un deuxieme envoi du meme formulaire : apres
+          la premiere correction, le net de l'ancien moyen vaut 0.
+        - GARDE 2 : meme moyen interdit — pas de correction sans changement.
+        Un refus est rendu dans la zone du formulaire de ce moyen (`HX-Retarget`), pas
+        a la place du detail.
 
-        LES LIGNES DEPLACEES : `lignes_que_la_correction_deplace` (meme vente, meme
-        moyen actuel), la meme fonction que l'ecran du formulaire : le montant affiche
-        est le montant deplace. Une vente deja corrigee se corrige encore (CB → cheque
-        apres especes → CB) : ses lignes portent le moyen actuel.
+        LE MONTANT DEPLACE : le net de l'ancien moyen dans les reglements de la vente
+        et de ses ventes CORRECTION (`montant_net_du_moyen_dans_la_vente`), le meme que
+        le formulaire affiche. Une vente deja corrigee se corrige encore (CB → cheque
+        apres especes → CB) : le net de la CB est alors le montant corrige.
         Apres la correction, le detail de la vente d'origine est re-rendu.
-        / The moved lines: the same function as the form screen. A corrected sale can
-          be corrected again. The original sale's detail is re-rendered.
+        / The moved amount: the old method's net, the same as the form shows. A
+          corrected sale can be corrected again. The detail is re-rendered.
 
         VENTE DE CORRECTION (D14, CHANTIER-05-montants-entiers.md) :
-        La vente d'origine est deja encaissee : elle ne change jamais. Dans la meme
-        transaction que la correction des lignes, la caisse ecrit une vente CORRECTION,
-        liee a la vente d'origine, sans article, avec deux reglements qui s'annulent :
-        −montant a l'ancien moyen, +montant au nouveau. Le montant est la somme des
-        `total_ttc` des lignes corrigees. `encaisser_vente` vient en dernier (numero,
-        empreinte chainee).
-        / The settled original sale never changes. In the same transaction, a CORRECTION
-        sale linked to it, without items, with two payments that cancel out.
+        La vente d'origine est deja encaissee : elle ne change jamais. La caisse ecrit
+        une vente CORRECTION, liee a la vente d'origine, sans article, avec deux
+        reglements qui s'annulent : −montant a l'ancien moyen, +montant au nouveau. La
+        raison du caissier est posee sur la vente CORRECTION (`Vente.raison`) avant
+        l'encaissement. `encaisser_vente` vient en dernier (numero, empreinte
+        chainee).
+        TRACE D'AUDIT : une `CorrectionPaiement` par article de la vente (ancien et
+        nouveau moyen, raison, operateur). Elle ne sert a decider de rien.
+        / The settled original sale never changes. A CORRECTION sale, without items,
+        two payments that cancel out, the cashier's reason; one audit trail per item.
         """
         # --- Validation des champs via serializer DRF ---
         # Le serializer valide le format UUID, les choix de moyen, et la raison.
-        # Les gardes metier (GARDE 1 a 4) restent dans la vue : elles dependent de
+        # Les gardes metier (GARDE 1 et 2) restent dans la vue : elles dependent de
         # l'etat en base, relu sous verrou.
-        # / Field validation via DRF serializer. Business guards (1 to 4) depend on
+        # / Field validation via DRF serializer. Business guards (1 and 2) depend on
         # database state, read under lock.
         from laboutik.serializers import CorrectionPaiementSerializer
 
@@ -13580,119 +13577,93 @@ class PaiementViewSet(viewsets.ViewSet):
         ligne_uuid = serializer.validated_data["ligne_uuid"]
         nouveau_moyen = serializer.validated_data["nouveau_moyen"]
         raison = serializer.validated_data["raison"]
-        ancien_moyen_vu_par_le_caissier = serializer.validated_data["ancien_moyen"]
+        ancien_moyen = serializer.validated_data["ancien_moyen"]
 
-        # --- Recuperer la ligne d'article ---
-        # / Get the article line
+        # --- Recuperer la ligne d'article : elle donne la vente ---
+        # / Get the article line: it gives the sale
         ligne_cliquee = LigneArticle.objects.filter(uuid=ligne_uuid).first()
         if ligne_cliquee is None:
             return _refus_de_correction(
-                request, _("Ligne d'article introuvable"), ligne_uuid, status=404
+                request, _("Ligne d'article introuvable"), status=404
             )
 
         operateur = request.user if request.user.is_authenticated else None
-        nombre_lignes_corrigees = 0
 
         # --- Tout se joue sous le verrou de la vente d'origine ---
         # Deux envois du meme formulaire (double clic, deux caisses) passent l'un
-        # apres l'autre : le second relit la ligne APRES la premiere correction, et
-        # ses gardes la refusent. Les gardes, la lecture des lignes et l'ecriture
-        # sont dans la meme transaction.
+        # apres l'autre : le second relit les reglements APRES la premiere
+        # correction, et la garde 1 le refuse (le net de l'ancien moyen vaut 0). Les
+        # gardes, la lecture des reglements et l'ecriture sont dans la meme
+        # transaction.
         # / Everything happens under the original sale's lock: a second submission
-        #   re-reads the line after the first correction and is refused.
+        #   re-reads the payments after the first correction and is refused.
         with db_transaction.atomic():
+            vente_d_origine = None
             if ligne_cliquee.vente_id is not None:
-                Vente.objects.select_for_update().filter(
-                    pk=ligne_cliquee.vente_id
-                ).first()
-            ligne = LigneArticle.objects.select_related("vente").get(
-                pk=ligne_cliquee.pk
+                vente_d_origine = (
+                    Vente.objects.select_for_update()
+                    .filter(pk=ligne_cliquee.vente_id)
+                    .first()
+                )
+
+            # --- GARDE 1 : le moyen corrige et la vente ---
+            # Moyen corrigeable, vente reglee, vente de la caisse, pas couverte par
+            # une cloture journaliere, net du moyen non nul :
+            # `raison_du_refus_de_correction`, partagee avec l'ecran du detail et le
+            # formulaire.
+            # / GUARD 1: shared with the detail screen and the form.
+            raison_du_refus = raison_du_refus_de_correction(
+                vente_d_origine, ancien_moyen
             )
-
-            # --- GARDE 1 : la ligne elle-meme ---
-            # Moyen corrigeable, vente de la caisse, vente reglee, pas couverte par
-            # une cloture journaliere : `raison_du_refus_de_correction`, partagee
-            # avec l'ecran du detail d'une vente et le formulaire.
-            # / GUARD 1: the line itself, shared with the detail screen and the form.
-            raison_du_refus = raison_du_refus_de_correction(ligne)
             if raison_du_refus is not None:
-                return _refus_de_correction(request, raison_du_refus, ligne_uuid)
+                return _refus_de_correction(
+                    request, raison_du_refus, vente_d_origine, ancien_moyen
+                )
 
-            # --- GARDE 2 : la ligne a change depuis l'ouverture du formulaire ---
-            # Le formulaire envoie le moyen qu'il a affiche. Si le moyen actuel n'est
-            # plus celui-la, une autre correction est passee entre-temps : refus.
-            # / GUARD 2: the line changed since the form was opened: refused.
-            ligne_deja_corrigee = ancien_moyen_vu_par_le_caissier != ligne.payment_method
-            if ligne_deja_corrigee:
+            # --- GARDE 2 : meme moyen = pas de correction ---
+            # / GUARD 2: same method = no correction needed
+            if ancien_moyen == nouveau_moyen:
                 return _refus_de_correction(
                     request,
-                    _(
-                        "Ce paiement vient d'être corrigé (moyen actuel : %(moyen)s). "
-                        "Rouvrez la vente pour le corriger à nouveau."
-                    )
-                    % {"moyen": nom_du_moyen_de_paiement(ligne.payment_method)},
-                    ligne_uuid,
+                    _("Le moyen de paiement est deja identique"),
+                    vente_d_origine,
+                    ancien_moyen,
                 )
 
-            # --- GARDE 3 : meme moyen = pas de correction ---
-            # / GUARD 3: same method = no correction needed
-            if ligne.payment_method == nouveau_moyen:
-                return _refus_de_correction(
-                    request, _("Le moyen de paiement est deja identique"), ligne_uuid
-                )
+            # Le montant corrige : le net de l'ancien moyen dans les reglements de la
+            # vente et de ses corrections, relu sous le verrou. La garde 1 a refuse
+            # un net nul.
+            # / The corrected amount: the old method's net, read under the lock.
+            montant_corrige_en_centimes = montant_net_du_moyen_dans_la_vente(
+                vente_d_origine, ancien_moyen
+            )
 
-            # --- Les lignes que la correction deplace ---
-            # Toutes les lignes de la vente qui portent le moyen actuel de la ligne :
-            # la meme fonction que l'ecran du formulaire, qui en a affiche la somme.
-            # La garde 1 a refuse une ligne sans vente reglee : la vente existe ici.
-            # / The lines the correction moves: the same function as the form screen.
-            ancien_moyen = ligne.payment_method
-            lignes_a_corriger = lignes_que_la_correction_deplace(ligne)
-            vente_d_origine = ligne.vente
-
-            # Le montant corrige : la somme des nets vendus des lignes, des entiers
-            # figes a la vente, additionnes (jamais recalcules).
-            # / The corrected amount: the sum of the lines' frozen net totals.
-            montant_corrige_en_centimes = 0
-            for ligne_a_corriger in lignes_a_corriger:
-                montant_corrige_en_centimes += ligne_a_corriger.total_ttc
-
-            # --- GARDE 4 : une vente dont les lignes corrigees valent 0 ---
-            # Il n'y a pas d'argent a deplacer : la vente CORRECTION n'aurait que des
-            # reglements de 0, que le service de vente refuse. Refus propre, rien
-            # n'est ecrit.
-            # / GUARD 4: lines worth 0, nothing to move: clean refusal.
-            if montant_corrige_en_centimes == 0:
-                return _refus_de_correction(
-                    request, _("Rien à corriger : le montant est nul."), ligne_uuid
-                )
-
-            # --- Les traces d'audit, le nouveau moyen et la vente de correction ---
-            # Une CorrectionPaiement par LigneArticle pour la tracabilite.
-            # / Audit trails, new method and the correction sale.
-            for ligne_a_corriger in lignes_a_corriger:
+            # --- Les traces d'audit : une par article de la vente ---
+            # Elles gardent la raison et l'operateur. Aucune ligne n'est modifiee :
+            # la vente d'origine est scellee (D14).
+            # TODO : retirer CorrectionPaiement avec la fiche H-2
+            # / Audit trails: one per item of the sale. No line is changed (D14).
+            articles_de_la_vente = LigneArticle.objects.filter(
+                vente=vente_d_origine
+            ).order_by("datetime", "pk")
+            nombre_de_traces_ecrites = 0
+            for article_de_la_vente in articles_de_la_vente:
                 CorrectionPaiement.objects.create(
-                    ligne_article=ligne_a_corriger,
+                    ligne_article=article_de_la_vente,
                     ancien_moyen=ancien_moyen,
                     nouveau_moyen=nouveau_moyen,
                     raison=raison,
                     operateur=operateur,
                 )
-                # Le moyen de la ligne change : son empreinte par ligne ne correspond
-                # plus, c'est attendu. La preuve de la correction est la trace
-                # CorrectionPaiement et la vente CORRECTION ci-dessous, scellee dans
-                # la chaine des ventes.
-                # / The line's method changes: its per-line fingerprint no longer
-                # matches, as expected. The proof is the trace and the CORRECTION sale.
-                ligne_a_corriger.payment_method = nouveau_moyen
-                ligne_a_corriger.save(update_fields=["payment_method"])
-                nombre_lignes_corrigees += 1
+                nombre_de_traces_ecrites += 1
 
             # La vente CORRECTION : liee a la vente d'origine, sans article, au point de
             # vente de la vente d'origine (le formulaire n'en envoie pas), a l'operateur
-            # de la correction.
+            # de la correction. La raison est posee tant que la vente est en attente :
+            # une vente reglee ne se modifie plus.
             # / The CORRECTION sale: linked, without items, at the original sale's
-            # point of sale, by the correction's operator.
+            # point of sale, by the correction's operator. The reason is set while the
+            # sale is still pending.
             vente_de_correction = ouvrir_vente(
                 origine=SaleOrigin.LABOUTIK,
                 nature=Vente.Nature.CORRECTION,
@@ -13700,6 +13671,8 @@ class PaiementViewSet(viewsets.ViewSet):
                 operateur=operateur,
                 vente_liee=vente_d_origine,
             )
+            vente_de_correction.raison = raison
+            vente_de_correction.save(update_fields=["raison"])
             # Deux reglements qui s'annulent : l'argent quitte l'ancien moyen et
             # arrive sur le nouveau.
             # / Two payments that cancel out: from the old method to the new one.
@@ -13718,19 +13691,22 @@ class PaiementViewSet(viewsets.ViewSet):
             encaisser_vente(vente_de_correction)
 
         logger.info(
-            f"Correction paiement : {nombre_lignes_corrigees} ligne(s) "
-            f"{ancien_moyen} → {nouveau_moyen} "
-            f"par {request.user} — raison : {raison}"
+            f"Correction paiement : vente {vente_d_origine.uuid}, "
+            f"{montant_corrige_en_centimes} centimes {ancien_moyen} → {nouveau_moyen}, "
+            f"{nombre_de_traces_ecrites} trace(s), par {request.user} — "
+            f"raison : {raison}"
         )
 
         # Le detail de la vente d'origine est re-rendu (il remplace l'ancien sous la
-        # ligne de la liste) : le bouton « Corriger » suit le nouveau moyen, la vente
-        # CORRECTION apparait dans les ventes derivees, et un message dit la
+        # ligne de la liste) : les boutons « Corriger » suivent les reglements nets,
+        # la vente CORRECTION apparait dans les ventes derivees, et un message dit la
         # correction faite.
         # / The original sale's detail is re-rendered, with a confirmation message.
         vente_d_origine_relue = (
             Vente.objects.select_related("point_de_vente", "vente_liee")
-            .prefetch_related("ventes_derivees", "reglements")
+            .prefetch_related(
+                "ventes_derivees", "ventes_derivees__reglements", "reglements"
+            )
             .get(pk=vente_d_origine.pk)
         )
         context = _contexte_du_detail_d_une_vente(vente_d_origine_relue)
@@ -13886,6 +13862,25 @@ class CommandeViewSet(viewsets.ViewSet):
                     status=400,
                 )
 
+            # Un tarif au poids, au volume ou à prix libre a besoin d'une saisie (le
+            # poids, le montant) qu'une commande de table ne porte pas : refus.
+            # / A weight / volume / free price needs an input an order does not carry.
+            if prix.poids_mesure or prix.free_price:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Un tarif au poids, au volume ou à prix libre ne passe pas "
+                        "par une commande de table : encaissez-le au comptoir."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
             articles_valides.append(
                 {
                     "product": produit,
@@ -14028,6 +14023,27 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _(
                     "Un tarif en points ou en temps ne passe pas par une "
                     "commande de table : encaissez-le au comptoir."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        # Un tarif au poids, au volume ou à prix libre a besoin d'une saisie (le poids,
+        # le montant) qu'une commande de table ne porte pas : refus AVANT toute
+        # écriture, comme à l'ouverture de la commande.
+        # / A weight / volume / free price needs an input an order does not carry.
+        un_tarif_demande_une_saisie = Price.objects.filter(
+            Q(poids_mesure=True) | Q(free_price=True),
+            uuid__in=uuids_des_tarifs_demandes,
+        ).exists()
+        if un_tarif_demande_une_saisie:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Un tarif au poids, au volume ou à prix libre ne passe pas "
+                    "par une commande de table : encaissez-le au comptoir."
                 ),
                 "selector_bt_retour": "#messages",
             }

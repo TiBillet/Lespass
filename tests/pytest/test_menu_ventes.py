@@ -25,12 +25,13 @@ RÈGLES MÉTIER TESTÉES
 - Le détail d'une vente s'ouvre par l'uuid de la VENTE : ses articles avec leur
   quantité réelle (un article payé avec deux moyens reste UN article), prix unitaire,
   part offerte et total ; ses règlements (moyen, monnaie, montant) ; un lien vers la
-  vente liée (avoir, correction) ; son statut. Un bouton « Corriger » par règlement
-  corrigeable (espèces, CB, chèque) : le refus vient de
-  `raison_du_refus_de_correction`, appelée sur une ligne de ce moyen. Une vente en
-  attente s'affiche aussi, avec son statut, sans bouton « Corriger ».
-- L'écran « corriger le moyen » affiche le montant du RÈGLEMENT à corriger, pas le
-  prix d'une part d'article.
+  vente liée (avoir, correction) ; son statut. Un bouton « Corriger » par moyen
+  corrigeable (espèces, CB, chèque) qui a encore de l'argent dans les règlements
+  nets de la vente : le refus vient de `raison_du_refus_de_correction(vente,
+  moyen)`. Le bouton transmet une ligne de la vente et le moyen corrigé. Une vente
+  en attente s'affiche aussi, avec son statut, sans bouton « Corriger ».
+- L'écran « corriger le moyen » affiche le net du moyen à corriger (règlements de
+  la vente et de ses corrections), pas le prix d'une part d'article.
 - Les historiques du récapitulatif (par moyen, par article) lisent le rapport des
   ventes du service (`RapportDesVentes(...).rapport_x()`, sections règlements et
   détail) : toutes origines, ventes en ligne comprises.
@@ -615,32 +616,34 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
         self.assertEqual(reponse.status_code, 200, contenu[:400])
         return contenu
 
-    def _ouvrir_le_formulaire_de_correction(self, ligne):
+    def _ouvrir_le_formulaire_de_correction(self, ligne, ancien_moyen):
         """
-        Ouvre l'écran « corriger le moyen » d'une ligne. Rend le montant affiché,
-        espaces ramenées à une seule.
-        / Opens a line's correction screen. Returns the amount shown.
+        Ouvre l'écran « corriger le moyen » d'un moyen de la vente de cette ligne,
+        comme le bouton du détail (une ligne de la vente + le moyen corrigé). Rend le
+        montant affiché, espaces ramenées à une seule.
+        / Opens the correction screen of one method of the line's sale, like the
+        detail button. Returns the amount shown.
         """
         reponse = self.client_du_caissier.get(
-            f"{URL_DU_FORMULAIRE_DE_CORRECTION}?ligne_uuid={ligne.uuid}"
+            URL_DU_FORMULAIRE_DE_CORRECTION,
+            {"ligne_uuid": str(ligne.uuid), "ancien_moyen": ancien_moyen},
         )
         contenu = reponse.content.decode()
         self.assertEqual(reponse.status_code, 200, contenu[:400])
         texte_du_montant, _attributs = lire_l_element(contenu, "correction-montant")
         return texte_sans_espaces_en_trop(texte_du_montant)
 
-    def _corriger_la_ligne(self, ligne, nouveau_moyen):
+    def _corriger_la_ligne(self, ligne, ancien_moyen, nouveau_moyen):
         """
-        Corrige le moyen d'une ligne par la vraie route. Rend la réponse.
-        / Corrects a line's method through the real route. Returns the response.
+        Corrige un moyen de la vente de cette ligne par la vraie route : la ligne
+        retrouve la vente, `ancien_moyen` est le moyen corrigé. Rend la réponse.
+        / Corrects one method of the line's sale through the real route.
         """
         return self.client_du_caissier.post(
             URL_DE_LA_CORRECTION_DU_MOYEN,
             {
                 "ligne_uuid": str(ligne.uuid),
-                # Le moyen que le formulaire affiche : celui de la ligne, relu en base.
-                # / The method the form shows: the line's, read back.
-                "ancien_moyen": LigneArticle.objects.get(pk=ligne.pk).payment_method,
+                "ancien_moyen": ancien_moyen,
                 "nouveau_moyen": nouveau_moyen,
                 "raison": "Erreur de moyen au moment du paiement",
             },
@@ -1174,24 +1177,32 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
     def test_detail_vente_un_bouton_corriger_par_reglement_corrigeable(self):
         """
         Le fil rouge : le détail propose UN bouton « Corriger », pour le règlement
-        carte bancaire, qui ouvre la correction de la part payée par carte bancaire.
-        Le règlement en monnaie locale (cashless) n'a pas de bouton.
-        / The running example: ONE "Correct" button, for the card payment, opening the
-        card part's correction. The local currency payment has none.
+        carte bancaire. Il transmet une ligne de la vente (pour retrouver la vente)
+        et le moyen corrigé (`ancien_moyen=CC`) ; son formulaire se charge dans la
+        zone de ce moyen (`correction-zone-<vente>-CC`). Le règlement en monnaie
+        locale (cashless) n'a pas de bouton.
+        / The running example: ONE "Correct" button, for the card payment, carrying a
+        line of the sale and the corrected method. The local currency has none.
         """
         vente = self._vendre_trois_jus_en_monnaie_locale_et_carte_bancaire()
-        part_en_carte_bancaire = vente.articles.get(payment_method=PaymentMethod.CC)
-        part_en_monnaie_locale = vente.articles.get(
-            payment_method=PaymentMethod.LOCAL_EURO
-        )
+        uuids_des_lignes_de_la_vente = []
+        for ligne_de_la_vente in vente.articles.all():
+            uuids_des_lignes_de_la_vente.append(str(ligne_de_la_vente.uuid))
 
         contenu = self._ouvrir_le_detail_de_la_vente(vente)
 
         boutons_corriger = attributs_des_elements(contenu, "btn-corriger")
         self.assertEqual(len(boutons_corriger), 1, boutons_corriger)
         adresse_du_bouton = boutons_corriger[0].get("hx-get", "")
-        self.assertIn(f"ligne_uuid={part_en_carte_bancaire.uuid}", adresse_du_bouton)
-        self.assertNotIn(str(part_en_monnaie_locale.uuid), contenu)
+        self.assertIn(f"ancien_moyen={PaymentMethod.CC}", adresse_du_bouton)
+        ligne_transmise = re.search(r"ligne_uuid=([0-9a-f-]+)", adresse_du_bouton)
+        self.assertIsNotNone(ligne_transmise, adresse_du_bouton)
+        self.assertIn(ligne_transmise.group(1), uuids_des_lignes_de_la_vente)
+        self.assertEqual(
+            boutons_corriger[0].get("hx-target"),
+            f"#correction-zone-{vente.uuid}-{PaymentMethod.CC}",
+        )
+        self.assertNotIn(f"ancien_moyen={PaymentMethod.LOCAL_EURO}", contenu)
 
     def test_detail_vente_montre_la_part_offerte(self):
         """
@@ -1253,9 +1264,11 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
 
     def test_detail_vente_vrac_poids_et_prix_au_kilo(self):
         """
-        350 g de cacahuètes en vrac à 12,00 €/kg (4,20 €) : le détail montre « 350g »
-        en quantité, « 12,00 €/kg » en prix unitaire et 4,20 € de total.
-        / Bulk peanuts: weight, price per kg and total.
+        350 g de cacahuètes en vrac à 12,00 €/kg (4,20 €), sous la forme D15 : la ligne
+        porte 0,350 kg au prix du kilo (1200). Le détail montre « 0,350 kg » en
+        quantité, « 12,00 €/kg » en prix unitaire et 4,20 € de total.
+        / Bulk peanuts (D15 form: 0.350 kg at 1200 per kg): quantity with its unit,
+        price per kg and total.
         """
         produit_en_vrac = Product.objects.create(
             name=f"Cacahuetes en vrac menu ventes {uuid_module.uuid4().hex[:8]}",
@@ -1281,8 +1294,8 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
             articles=[
                 {
                     "pricesold": tarif_vendu_au_kilo,
-                    "quantite": Decimal("1"),
-                    "prix_unitaire": 420,
+                    "quantite": Decimal("0.350"),
+                    "prix_unitaire": 1200,
                     "taux_tva": Decimal("20"),
                     "weight_quantity": 350,
                     "payment_method": PaymentMethod.CASH,
@@ -1296,7 +1309,10 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
 
         contenu = self._ouvrir_le_detail_de_la_vente(vente)
 
-        self.assertEqual(textes_des_elements(contenu, "detail-qty"), ["350g"])
+        self.assertEqual(
+            textes_des_elements(contenu, "detail-qty"),
+            [texte_sans_espaces_en_trop("0,350 kg")],
+        )
         self.assertEqual(
             textes_des_elements(contenu, "detail-prix-unit"),
             [texte_sans_espaces_en_trop("12,00 €/kg")],
@@ -1343,16 +1359,11 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
         vente = self._vendre_trois_jus_en_monnaie_locale_et_carte_bancaire()
         part_en_carte_bancaire = vente.articles.get(payment_method=PaymentMethod.CC)
 
-        reponse = self.client_du_caissier.get(
-            f"{URL_DU_FORMULAIRE_DE_CORRECTION}?ligne_uuid={part_en_carte_bancaire.uuid}"
+        montant_affiche = self._ouvrir_le_formulaire_de_correction(
+            part_en_carte_bancaire, PaymentMethod.CC
         )
 
-        contenu = reponse.content.decode()
-        self.assertEqual(reponse.status_code, 200, contenu[:400])
-        texte_du_montant, _attributs = lire_l_element(contenu, "correction-montant")
-        self.assertEqual(
-            texte_sans_espaces_en_trop(texte_du_montant), montant_attendu("5,50")
-        )
+        self.assertEqual(montant_affiche, montant_attendu("5,50"))
 
     def test_ecran_corriger_moyen_affiche_la_somme_des_lignes_du_moyen(self):
         """
@@ -1366,7 +1377,9 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
         )
         ligne_de_la_pinte = vente.articles.get(pricesold=self.tarif_de_la_pinte)
 
-        montant_affiche = self._ouvrir_le_formulaire_de_correction(ligne_de_la_pinte)
+        montant_affiche = self._ouvrir_le_formulaire_de_correction(
+            ligne_de_la_pinte, PaymentMethod.CASH
+        )
 
         self.assertEqual(montant_affiche, montant_attendu("8,00"))
 
@@ -1381,9 +1394,13 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
             [(self.tarif_de_la_pinte, 500, 1), (self.tarif_du_demi, 300, 1)]
         )
         ligne_de_la_pinte = vente.articles.get(pricesold=self.tarif_de_la_pinte)
-        montant_affiche = self._ouvrir_le_formulaire_de_correction(ligne_de_la_pinte)
+        montant_affiche = self._ouvrir_le_formulaire_de_correction(
+            ligne_de_la_pinte, PaymentMethod.CASH
+        )
 
-        reponse = self._corriger_la_ligne(ligne_de_la_pinte, PaymentMethod.CC)
+        reponse = self._corriger_la_ligne(
+            ligne_de_la_pinte, PaymentMethod.CASH, PaymentMethod.CC
+        )
 
         self.assertEqual(reponse.status_code, 200, reponse.content.decode()[:400])
         vente_de_correction = Vente.objects.get(
@@ -1408,7 +1425,9 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
         )
         ligne_de_la_pinte = vente.articles.get(pricesold=self.tarif_de_la_pinte)
 
-        reponse = self._corriger_la_ligne(ligne_de_la_pinte, PaymentMethod.CC)
+        reponse = self._corriger_la_ligne(
+            ligne_de_la_pinte, PaymentMethod.CASH, PaymentMethod.CC
+        )
 
         self.assertEqual(reponse.status_code, 200, reponse.content.decode()[:400])
         vente_de_correction = Vente.objects.get(
@@ -1420,20 +1439,26 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
     def test_une_correction_erronee_se_corrige_encore(self):
         """
         Une pinte en espèces, corrigée en carte bancaire, puis (c'était une erreur)
-        en chèque. Après la 1ʳᵉ correction, le détail propose un bouton « Corriger »
-        pour la carte bancaire ; la 2ᵉ correction écrit une 2ᵉ vente CORRECTION :
+        en chèque. Après la 1ʳᵉ correction, le détail propose un seul bouton
+        « Corriger », pour la carte bancaire (le moyen des règlements nets) ; la 2ᵉ
+        correction (carte bancaire → chèque) écrit une 2ᵉ vente CORRECTION :
         carte bancaire −500, chèque +500.
         / A cash pint corrected into card, then into cheque: the detail offers a
         Correct button for card, and a second CORRECTION is written.
         """
         vente_de_la_pinte = self._vendre_une_pinte_en_especes()
         ligne_de_la_pinte = vente_de_la_pinte.articles.get()
-        self._corriger_la_ligne(ligne_de_la_pinte, PaymentMethod.CC)
+        self._corriger_la_ligne(ligne_de_la_pinte, PaymentMethod.CASH, PaymentMethod.CC)
         contenu_du_detail = self._ouvrir_le_detail_de_la_vente(vente_de_la_pinte)
         boutons_corriger = attributs_des_elements(contenu_du_detail, "btn-corriger")
         self.assertEqual(len(boutons_corriger), 1, boutons_corriger)
+        self.assertIn(
+            f"ancien_moyen={PaymentMethod.CC}", boutons_corriger[0].get("hx-get", "")
+        )
 
-        reponse = self._corriger_la_ligne(ligne_de_la_pinte, PaymentMethod.CHEQUE)
+        reponse = self._corriger_la_ligne(
+            ligne_de_la_pinte, PaymentMethod.CC, PaymentMethod.CHEQUE
+        )
 
         self.assertEqual(reponse.status_code, 200, reponse.content.decode()[:400])
         corrections_de_la_pinte = list(
@@ -1457,7 +1482,9 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
         vente_de_la_pinte = self._vendre_une_pinte_en_especes()
         ligne_de_la_pinte = vente_de_la_pinte.articles.get()
 
-        reponse = self._corriger_la_ligne(ligne_de_la_pinte, PaymentMethod.CC)
+        reponse = self._corriger_la_ligne(
+            ligne_de_la_pinte, PaymentMethod.CASH, PaymentMethod.CC
+        )
 
         contenu = reponse.content.decode()
         self.assertEqual(reponse.status_code, 200, contenu[:400])
@@ -1479,10 +1506,11 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
         """
         Une pinte en espèces ; le même formulaire (espèces vues → carte bancaire)
         est envoyé deux fois (double clic). Une seule vente CORRECTION ; le second
-        envoi est refusé (400) avec un message clair, rendu dans la zone du
-        formulaire (`HX-Retarget`).
+        envoi est refusé (400) : sous le verrou, le net des espèces vaut déjà 0. Le
+        message clair est rendu dans la zone du formulaire de ce moyen
+        (`HX-Retarget` vers `correction-zone-<vente>-CA`).
         / The same form posted twice: one CORRECTION only; the second post is
-        refused with a clear message, in the form zone.
+        refused (the cash net is already 0), in the method's form zone.
         """
         vente_de_la_pinte = self._vendre_une_pinte_en_especes()
         ligne_de_la_pinte = vente_de_la_pinte.articles.get()
@@ -1507,12 +1535,13 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
         )
         self.assertEqual(
             texte_du_refus,
-            "Ce paiement vient d'être corrigé (moyen actuel : Carte bancaire). "
-            "Rouvrez la vente pour le corriger à nouveau.",
+            "Il ne reste rien à corriger pour le moyen « Espèces » sur cette vente : "
+            "elle vient peut-être d'être corrigée. Rouvrez la vente pour voir ses "
+            "règlements.",
         )
         self.assertEqual(
             seconde_reponse["HX-Retarget"],
-            f"#correction-zone-{ligne_de_la_pinte.uuid}",
+            f"#correction-zone-{vente_de_la_pinte.uuid}-{PaymentMethod.CASH}",
         )
         self.assertEqual(
             Vente.objects.filter(
@@ -1624,10 +1653,10 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
     def test_detail_d_un_tirage_paye_avec_deux_moyens_montre_un_article(self):
         """
         Une pinte de 50 cl tirée à la tireuse (4,00 €), payée 1,00 € en jetons cadeau
-        et 3,00 € en monnaie locale : deux parts (0,25 et 0,75) qui portent chacune
-        le volume du tirage (50). Le détail montre UN article, « 50cl » (le volume
-        une fois), total 4,00 €.
-        / A pour paid with two methods: one item, 50cl shown once, 4.00 €.
+        et 3,00 € en monnaie locale, écrite comme la tireuse l'écrit (D15) : UNE ligne
+        de 0,500 L au prix du litre (8,00 €), dont 1,00 € payé en jetons. Le détail
+        montre UN article, « 0,50 L », total 4,00 €.
+        / A pour paid with two methods, one D15 line: one item, "0,50 L", 4.00 €.
         """
         tarif_de_la_pinte_tiree = creer_tarif_vendu(
             nom="Pinte tiree", prix_en_euros="8.00", taux_tva="20.00"
@@ -1637,32 +1666,20 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
             quantite=10000,
             unite=UniteStock.CL,
         )
-        champs_communs_des_parts = {
+        ligne_du_tirage = {
             "pricesold": tarif_de_la_pinte_tiree,
-            "prix_unitaire": 400,
+            "quantite": Decimal("0.500"),
+            "prix_unitaire": 800,
+            "taux_tva": Decimal("20"),
+            "part_en_jetons": 100,
             "weight_quantity": 50,
             "status": LigneArticle.VALID,
             "point_de_vente": self.point_de_vente_de_la_tireuse,
         }
-        part_en_jetons = dict(champs_communs_des_parts)
-        part_en_jetons.update({
-            "quantite": Decimal("0.25"),
-            "taux_tva": Decimal("0"),
-            "total_catalogue_impose": 100,
-            "payment_method": PaymentMethod.LOCAL_GIFT,
-        })
-        part_en_monnaie_locale = dict(champs_communs_des_parts)
-        part_en_monnaie_locale.update({
-            "quantite": Decimal("0.75"),
-            "taux_tva": Decimal("20"),
-            "total_catalogue_impose": 300,
-            "payment_method": PaymentMethod.LOCAL_EURO,
-            "asset": self.monnaie_locale.uuid,
-        })
         vente = fabriquer_vente_encaissee(
             origine=SaleOrigin.TIREUSE,
             point_de_vente=self.point_de_vente_de_la_tireuse,
-            articles=[part_en_jetons, part_en_monnaie_locale],
+            articles=[ligne_du_tirage],
             reglements=[
                 {"moyen": PaymentMethod.LOCAL_GIFT, "montant": 100},
                 {
@@ -1676,7 +1693,7 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
 
         contenu = self._ouvrir_le_detail_de_la_vente(vente)
 
-        self.assertEqual(textes_des_elements(contenu, "detail-qty"), ["50cl"])
+        self.assertEqual(textes_des_elements(contenu, "detail-qty"), ["0,50 L"])
         self.assertEqual(
             textes_des_elements(contenu, "detail-total-ligne"),
             [montant_attendu("4,00")],

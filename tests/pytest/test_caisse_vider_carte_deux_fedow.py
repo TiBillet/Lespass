@@ -28,8 +28,8 @@ local (`fedow_core`, en base) et sur l'ancien Fedow (serveur distant). Vider la 
    aussi sa vente ;
 5. carte inconnue de l'ancien Fedow, ou lieu non relié à l'ancien Fedow : vidage local
    seul, comme aujourd'hui ;
-6. les lignes « Refund » (anciens lecteurs) comptent les deux Fedow : ligne de monnaie
-   fédérée = FED local + FED distant, ligne espèces = moins le total rendu ;
+6. aucune ligne « Refund » sans vente n'est écrite : la vente `VIDAGE_CARTE` les
+   remplace (D12) ;
 7. l'aperçu, l'écran de succès et le reçu imprimé sont SÉPARÉS par Fedow et détaillés
    (une partie « Fedow local », une partie « ancien Fedow », une ligne par monnaie, les
    jetons cadeau affichés « repris, sans argent »), puis le total rendu en espèces.
@@ -600,12 +600,13 @@ def remboursement_local_de_la_monnaie(carte_du_client, monnaie):
 
 def lignes_refund_de_la_carte(carte_du_client):
     """
-    Les lignes « Refund » (anciens lecteurs) de la carte, relues en base : une liste
-    triée de paires (moyen de paiement, montant en centimes).
-    / The card's "Refund" lines (old readers): sorted (method, amount) pairs.
+    Les lignes de la carte sans vente (les anciennes lignes « Refund »), relues en
+    base : une liste triée de paires (moyen de paiement, montant en centimes). Le
+    vidage n'en écrit plus (D12) : elle doit rester vide.
+    / The card's lines without a sale (old "Refund" lines): must stay empty (D12).
     """
     lignes_lues = []
-    for ligne in LigneArticle.objects.filter(carte=carte_du_client):
+    for ligne in LigneArticle.objects.filter(carte=carte_du_client, vente__isnull=True):
         lignes_lues.append((ligne.payment_method, ligne.amount))
     return sorted(lignes_lues)
 
@@ -727,7 +728,7 @@ def test_vider_carte_jetons_cadeau_locaux_repris_sans_argent_reglement_lg(lieu):
     et 2,00 € de jetons cadeau du lieu, sur le Fedow local. Le caissier la vide.
     Les jetons cadeau disparaissent aussi (décision du mainteneur) : leur solde passe à
     0, par une transaction de remboursement vers le lieu. Le tiroir ne rend que 5,00 €
-    (règlement espèces −500, ligne espèces −500). La dette des jetons perdus est
+    (règlement espèces −500 ; aucune ligne « Refund », D12). La dette des jetons perdus est
     annulée (D8 bis) : un règlement « jetons » (LG) +200, avec l'uuid de sa transaction
     locale, et l'article « Jetons cadeau repris au vidage » de 200.
     / Local 5.00 + gift 2.00. Gift tokens go to 0 through a REFUND transaction; cash
@@ -779,7 +780,7 @@ def test_vider_carte_jetons_cadeau_locaux_repris_sans_argent_reglement_lg(lieu):
         key=str,
     )
     verifier_les_articles_des_jetons_repris(vente, montants_attendus=[200])
-    assert lignes_refund_de_la_carte(carte_du_client) == [(PaymentMethod.CASH, -500)]
+    assert lignes_refund_de_la_carte(carte_du_client) == []
     verifier_egalites(vente)
 
 
@@ -793,10 +794,11 @@ def verifier_les_articles_des_jetons_repris(vente, montants_attendus):
     """
     Vérifie les articles « Jetons cadeau repris au vidage » de la vente : un article
     par transaction de jetons repris, quantité 1, prix = montant de la transaction,
-    hors chiffre d'affaires, TVA 0, rien d'offert (net = total catalogue), moyen
-    historique LG, sans carte ni monnaie.
+    hors chiffre d'affaires, TVA 0, rien d'offert (net = total catalogue), sans moyen
+    (le règlement LG le porte, Q-H2), sans carte ni monnaie.
     / Checks the "gift tokens taken back" items: one per token transaction, qty 1,
-    price = its amount, off revenue, VAT 0, nothing offered, LG, no card, no currency.
+    price = its amount, off revenue, VAT 0, nothing offered, no method, no card, no
+    currency.
 
     Le nom du produit système est une constante du service de vente : le plan
     comptable le reconnaît par ce nom (623400).
@@ -816,7 +818,7 @@ def verifier_les_articles_des_jetons_repris(vente, montants_attendus):
         assert article.total_ttc == article.total_catalogue
         assert article.total_ht == article.total_catalogue
         assert article.total_tva == 0
-        assert article.payment_method == PaymentMethod.LOCAL_GIFT
+        assert article.payment_method is None
         assert article.carte_id is None
         assert article.asset is None
         montants_des_articles.append(article.total_catalogue)
@@ -1542,22 +1544,21 @@ def test_client_card_refund_reponse_en_erreur_leve_une_exception(
 
 
 # --------------------------------------------------------------------------
-# 20h — Les lignes « Refund » comptent les deux Fedow
-# / 20h — The "Refund" lines count both Fedow servers
+# 20h — Les deux Fedow vidés : la vente seulement, aucune ligne « Refund »
+# / 20h — Both Fedow emptied: the sale only, no "Refund" line
 # --------------------------------------------------------------------------
 
 
-def test_vider_carte_lignes_refund_comptent_les_deux_fedow(lieu):
+def test_vider_carte_deux_fedow_aucune_ligne_refund(lieu):
     """
     Le lieu est relié à l'ancien Fedow. Sur le Fedow local, la carte porte 5,00 € de
     monnaie locale et 3,00 € de monnaie fédérée ; sur l'ancien Fedow, 4,00 € de
     monnaie locale du lieu, 1,00 € de monnaie fédérée et 0,50 € de jetons cadeau.
-    Les lignes « Refund » que lisent les anciens rapports (ticket Z) comptent les deux
-    Fedow : une ligne de monnaie fédérée de +400 (300 local + 100 distant) et une ligne
-    espèces de −1300 (tout l'argent rendu : 500 + 300 + 400 + 100). Les jetons cadeau
-    ne comptent pas : ce n'est pas de l'argent.
-    / Local: 5.00 + FED 3.00; old Fedow: 4.00 + FED 1.00 + gift 0.50. Refund lines: FED
-    +400 (local + remote), cash −1300 (all the money given back).
+    La vente `VIDAGE_CARTE` dit tout (D12) : son règlement espèces vaut −1300 (tout
+    l'argent rendu : 500 + 300 + 400 + 100). Aucune ligne « Refund » sans vente n'est
+    écrite sur la carte.
+    / Local: 5.00 + FED 3.00; old Fedow: 4.00 + FED 1.00 + gift 0.50. The sale's cash
+    payment is −1300; no "Refund" line without a sale.
     """
     caisse = preparer_la_caisse(lieu)
     monnaie_locale = monnaie_locale_propre_au_lieu(lieu)
@@ -1574,19 +1575,13 @@ def test_vider_carte_lignes_refund_comptent_les_deux_fedow(lieu):
     )
 
     assert reponse.status_code == 200
-    assert lignes_refund_de_la_carte(carte_du_client) == sorted(
-        [
-            (PaymentMethod.STRIPE_FED, 400),
-            (PaymentMethod.CASH, -1300),
-        ]
-    )
-
-    # Les deux Fedow ont du FED : une seule ligne FED, qui porte la monnaie locale.
-    # / Both Fedow servers hold FED: one FED line, carrying the local currency.
-    ligne_de_monnaie_federee = LigneArticle.objects.get(
-        carte=carte_du_client, payment_method=PaymentMethod.STRIPE_FED
-    )
-    assert str(ligne_de_monnaie_federee.asset) == str(monnaie_federee.uuid)
+    vente = retrouver_la_vente_de_vidage(carte_du_client)
+    reglements_especes = []
+    for reglement in vente.reglements.filter(moyen=PaymentMethod.CASH):
+        reglements_especes.append(reglement.montant)
+    assert reglements_especes == [-1300]
+    assert lignes_refund_de_la_carte(carte_du_client) == []
+    verifier_egalites(vente)
 
 
 # --------------------------------------------------------------------------
@@ -1716,23 +1711,23 @@ def test_vider_carte_seulement_jetons_ecrit_une_vente(lieu):
 
 
 # --------------------------------------------------------------------------
-# 20k — FED seulement sur l'ancien Fedow : la ligne FED porte l'uuid distant
-# / 20k — FED only on the old Fedow: the FED line carries the remote uuid
+# 20k — FED seulement sur l'ancien Fedow : le règlement SF porte la transaction distante
+# / 20k — FED only on the old Fedow: the SF payment carries the remote transaction
 # --------------------------------------------------------------------------
 
 
-def test_vider_carte_fed_seulement_sur_l_ancien_fedow_ligne_fed_avec_uuid_distant(
+def test_vider_carte_fed_seulement_sur_l_ancien_fedow_reglement_sf_distant(
     lieu,
 ):
     """
     Le cas de la production : aucun FED n'existe sur le Fedow local (un FED local est
     interdit). La carte porte 5,00 € de monnaie locale en local, et 1,00 € de monnaie
     fédérée sur l'ancien Fedow. Le caissier la vide.
-    La ligne « Refund » de monnaie fédérée vaut +100 et porte l'uuid de la monnaie
-    fédérée de la transaction distante ; la ligne espèces vaut −600. Pas d'erreur
-    « aucun asset FED ».
-    / Production case: no local FED. The FED Refund line (+100) carries the remote FED
-    uuid; cash line −600. No "no FED asset" error.
+    La vente `VIDAGE_CARTE` a un règlement de monnaie fédérée (SF) de +100, avec l'uuid
+    de la transaction distante dans `reference_externe`, et un règlement espèces de
+    −600. Aucune ligne « Refund » (D12), pas d'erreur « aucun asset FED ».
+    / Production case: no local FED. The sale has an SF +100 payment carrying the
+    remote transaction, cash −600; no "Refund" line, no "no FED asset" error.
     """
     assert not Asset.objects.filter(category=Asset.FED).exists(), (
         "Ce test suppose qu'aucun FED n'existe sur le Fedow local (cas de la production)."
@@ -1751,18 +1746,16 @@ def test_vider_carte_fed_seulement_sur_l_ancien_fedow_ligne_fed_avec_uuid_distan
     )
 
     assert reponse.status_code == 200
-    assert lignes_refund_de_la_carte(carte_du_client) == sorted(
-        [
-            (PaymentMethod.STRIPE_FED, 100),
-            (PaymentMethod.CASH, -600),
-        ]
+    vente = retrouver_la_vente_de_vidage(carte_du_client)
+    reglement_de_monnaie_federee = vente.reglements.get(moyen=PaymentMethod.STRIPE_FED)
+    assert reglement_de_monnaie_federee.montant == 100
+    assert reglement_de_monnaie_federee.reference_externe == str(
+        transaction_distante_monnaie_federee["uuid"]
     )
-    ligne_de_monnaie_federee = LigneArticle.objects.get(
-        carte=carte_du_client, payment_method=PaymentMethod.STRIPE_FED
-    )
-    assert str(ligne_de_monnaie_federee.asset) == str(
-        transaction_distante_monnaie_federee["asset"]
-    )
+    reglement_especes = vente.reglements.get(moyen=PaymentMethod.CASH)
+    assert reglement_especes.montant == -600
+    assert lignes_refund_de_la_carte(carte_du_client) == []
+    verifier_egalites(vente)
 
 
 # --------------------------------------------------------------------------

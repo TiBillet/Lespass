@@ -283,10 +283,35 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
             montants.append(ligne_du_ticket['total'])
         return sorted(montants)
 
+    def _rapport_unique(self):
+        """Le rapport des ventes unique, sur une fenetre qui encadre tout le test.
+        / The single sales report over a window framing the whole test."""
+        maintenant = timezone.now()
+        return RapportDesVentes(
+            maintenant - timedelta(hours=1), maintenant + timedelta(hours=1)
+        )
+
+    def _argent_par_moyen_du_rapport_unique(self):
+        """Les reglements d'argent du rapport unique : {code du moyen: centimes}, et
+        leur total sous la cle « total ». Un moyen absent vaut 0.
+        / The single report's money payments by method code, plus their total."""
+        argent = self._rapport_unique().section_reglements()['argent']
+        montants = {'total': argent['total_en_centimes']}
+        for code_du_moyen in [PaymentMethod.CASH, PaymentMethod.CC]:
+            ligne_du_moyen = argent['par_moyen'].get(code_du_moyen)
+            if ligne_du_moyen is None:
+                montants[code_du_moyen] = 0
+            else:
+                montants[code_du_moyen] = ligne_du_moyen['total_en_centimes']
+        return montants
+
     def _rapport(self):
         """Le rapport de l'ancien moteur, sur une fenetre qui encadre tout le test.
-        Les tests qui le lisent partent avec l'ancien moteur, retire en H.
-        / The old engine report over a window framing the whole test (removed in H)."""
+        Les tests qui le lisent partent avec l'ancien moteur, retire en H. Il ne lit
+        plus les reglements d'une vente de la caisse (moyen de la ligne vide, Q-H2) :
+        les moyens et le tiroir sont lus sur le rapport unique.
+        / The old engine report (removed in H); payments and drawer are read on the
+        single report."""
         maintenant = timezone.now()
         return RapportComptableService(
             point_de_vente=self.point_de_vente,
@@ -303,10 +328,10 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
         / Two pints paid in cash: 11.00 € under the cash heading."""
         self._encaisser('espece', self.biere, self.prix_biere, quantite=2)
 
-        totaux = self._rapport().calculer_totaux_par_moyen()
+        totaux = self._argent_par_moyen_du_rapport_unique()
 
-        assert totaux['especes'] == 2 * PRIX_BIERE_CENTIMES
-        assert totaux['carte_bancaire'] == 0
+        assert totaux[PaymentMethod.CASH] == 2 * PRIX_BIERE_CENTIMES
+        assert totaux[PaymentMethod.CC] == 0
         assert totaux['total'] == 2 * PRIX_BIERE_CENTIMES
 
     def test_une_vente_par_carte_bancaire_pese_sur_le_total_carte(self):
@@ -314,10 +339,10 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
         / One pint paid by card: nothing under the cash heading."""
         self._encaisser('carte_bancaire', self.biere, self.prix_biere)
 
-        totaux = self._rapport().calculer_totaux_par_moyen()
+        totaux = self._argent_par_moyen_du_rapport_unique()
 
-        assert totaux['carte_bancaire'] == PRIX_BIERE_CENTIMES
-        assert totaux['especes'] == 0
+        assert totaux[PaymentMethod.CC] == PRIX_BIERE_CENTIMES
+        assert totaux[PaymentMethod.CASH] == 0
         assert totaux['total'] == PRIX_BIERE_CENTIMES
 
     def test_le_total_general_est_la_somme_des_moyens_encaisses(self):
@@ -332,13 +357,13 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
         self._encaisser('espece', self.biere, self.prix_biere, quantite=2)
         self._encaisser('carte_bancaire', self.cafe, self.prix_cafe, quantite=3)
 
-        totaux = self._rapport().calculer_totaux_par_moyen()
+        totaux = self._argent_par_moyen_du_rapport_unique()
 
         especes_attendues = 2 * PRIX_BIERE_CENTIMES
         carte_attendue = 3 * PRIX_CAFE_CENTIMES
 
-        assert totaux['especes'] == especes_attendues
-        assert totaux['carte_bancaire'] == carte_attendue
+        assert totaux[PaymentMethod.CASH] == especes_attendues
+        assert totaux[PaymentMethod.CC] == carte_attendue
         assert totaux['total'] == especes_attendues + carte_attendue
 
     # ------------------------------------------------------------------
@@ -414,10 +439,13 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
         self._encaisser('espece', self.biere, self.prix_biere, quantite=2)
         self._encaisser('carte_bancaire', self.biere, self.prix_biere)
 
-        solde = self._rapport().calculer_solde_caisse()
+        caisse_especes = self._rapport_unique().section_caisse_especes()
 
-        assert solde['entrees_especes'] == 2 * PRIX_BIERE_CENTIMES
-        assert solde['solde'] == solde['fond_de_caisse'] + 2 * PRIX_BIERE_CENTIMES
+        assert caisse_especes['especes_recues_en_centimes'] == 2 * PRIX_BIERE_CENTIMES
+        assert (
+            caisse_especes['solde_theorique_en_centimes']
+            == caisse_especes['fond_de_caisse_en_centimes'] + 2 * PRIX_BIERE_CENTIMES
+        )
 
     # ------------------------------------------------------------------
     # Le perimetre : ce qui entre, ce qui reste dehors
@@ -515,7 +543,7 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
             point_de_vente=self.point_de_vente,
         )
 
-        totaux = self._rapport().calculer_totaux_par_moyen()
+        totaux = self._argent_par_moyen_du_rapport_unique()
 
         assert totaux['total'] == PRIX_BIERE_CENTIMES
 
@@ -663,60 +691,9 @@ class TestLesVentesRemontentAuTicketZ(FastTenantTestCase):
 
         assert seconde.numero_sequentiel == premiere.numero_sequentiel + 1
 
-    def test_un_moyen_de_paiement_non_ventile_manque_au_total_general(self):
-        """Une vente reglee par un moyen que le rapport n'additionne pas.
-
-        `calculer_totaux_par_moyen` construit son total en additionnant CINQ
-        postes : especes, carte bancaire, cashless, cheque, federe. Toute vente
-        de caisse reglee autrement compte dans le NOMBRE de transactions, dans
-        le detail des ventes et dans la ventilation TVA — mais pas dans le total
-        general. Le ticket ne s'equilibre alors plus avec lui-meme.
-
-        Le cas se produit en vrai : une adhesion reglee depuis un portefeuille
-        federe arrive en caisse avec un moyen de paiement inconnu
-        (`fedow_connect/views.py`), et le paiement retombe sur « inconnu » des
-        que le code de moyen recu ne fait partie d'aucun de ces cinq postes.
-
-        Ce test DECRIT le comportement actuel. Il est la pour que la divergence
-        soit connue et mesurable, et pour echouer le jour ou quelqu'un modifie
-        la composition du total sans s'en rendre compte.
-
-        / The total sums FIVE headings. A register sale paid any other way counts
-        in the transaction count, the sales detail and the VAT breakdown, but not
-        in the general total: the ticket no longer balances with itself. This
-        test DESCRIBES current behaviour so the divergence stays measurable.
-        """
-        self._encaisser('espece', self.biere, self.prix_biere)
-
-        produit_vendu = ProductSold.objects.create(product=self.cafe)
-        tarif_vendu = PriceSold.objects.create(
-            productsold=produit_vendu, price=self.prix_cafe, prix=PRIX_CAFE_EUROS,
-        )
-        LigneArticle.objects.create(
-            pricesold=tarif_vendu,
-            qty=1,
-            amount=PRIX_CAFE_CENTIMES,
-            payment_method=PaymentMethod.UNKNOWN,
-            status=LigneArticle.VALID,
-            sale_origin=SaleOrigin.LABOUTIK,
-            point_de_vente=self.point_de_vente,
-        )
-
-        rapport = self._rapport()
-        totaux = rapport.calculer_totaux_par_moyen()
-        detail = rapport.calculer_detail_ventes()
-
-        # La vente est bien dans le detail : elle existe pour le rapport.
-        # / The sale is in the detail: the report does see it.
-        total_du_detail = sum(
-            donnees['total_ttc'] for donnees in detail.values()
-        )
-        assert total_du_detail == PRIX_BIERE_CENTIMES + PRIX_CAFE_CENTIMES
-
-        # Mais elle manque au total general.
-        # / But it is missing from the general total.
-        assert totaux['total'] == PRIX_BIERE_CENTIMES
-        assert total_du_detail != totaux['total'], (
-            "Le total general couvre desormais tous les moyens de paiement : "
-            "mettre a jour ce test, la divergence a ete corrigee."
-        )
+    # « Un moyen non ventilé manque au total général » décrivait l'ancien moteur, qui
+    # additionne cinq postes lus sur le moyen de la ligne. Ce moyen est vide sur une
+    # vente de la caisse (Q-H2) : le test part avec ce moteur (H-2). Le rapport unique
+    # additionne tous les règlements (tests/pytest/test_rapport_unique.py).
+    # / Described the old engine (five headings read on the line's method), gone with
+    # it; the single report sums every payment.

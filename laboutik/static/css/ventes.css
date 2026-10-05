@@ -360,7 +360,8 @@ a.kpi-action:focus-visible { outline: 2px solid var(--nfc); outline-offset: 2px;
 /*  Correction du moyen de paiement (hx_corriger_moyen_paiement.html)  */
 /*  / Payment method correction                                        */
 /*                                                                     */
-/*  Charge dans le detail d'une vente (#correction-zone-<uuid>).       */
+/*  Charge dans le detail d'une vente, dans la zone du moyen corrige : */
+/*  #correction-zone-<uuid de la vente>-<code du moyen>.               */
 /*  Reutilise les classes de popup d'overlay.css : .payment-title,     */
 /*  .card-confirm-row, .card-confirm-acts, .card-confirm-cancel,       */
 /*  .card-valider. Ces classes sont dimensionnees par --k, defini      */

@@ -223,23 +223,23 @@ class TestTotalHtDeLaLigne(FastTenantTestCase):
         assert ligne.qty == 3
         assert ligne.total_ht == 1250, f"HT stocke {ligne.total_ht}, attendu 1250"
 
-    def test_le_ht_des_parts_d_un_paiement_en_cascade(self):
+    def test_le_ht_d_un_paiement_en_cascade(self):
         """Vin a 10,00 € paye 6,00 € cadeau + 4,00 € monnaie locale, TVA 20 %.
 
-        Deux lignes au prix unitaire 1000, qty 0,6 et 0,4. Le champ `total_ht` porte
-        le HT du NET vendu. La part payee en jetons cadeau est une vente ordinaire a
-        TVA 0 (D8 bis) : net 600, HT 600. La part en monnaie locale : 400 / 1,2 = 333.
-        / Two lines at unit price 1000. `total_ht` is the HT of the NET sold: the
-        gift-token part is a 0 % VAT sale (net 600, HT 600); the local part: 333.
+        UNE ligne au prix unitaire 1000, quantite 1, part payee en jetons 600. Le champ
+        `total_ht` porte le HT du NET vendu. La part payee en jetons cadeau est une
+        vente ordinaire a TVA 0 (D8 bis) : HT = 600 + arrondi(400 / 1,2 = 333,33) = 933.
+        / ONE line at unit price 1000, token part 600: HT = 600 + 333 = 933.
         """
         self._encaisser(
             "nfc", self.vin, prix_centimes=1000, quantite=1, tag_id=self.carte.tag_id
         )
 
         lignes = LigneArticle.objects.filter(pricesold__productsold__product=self.vin)
-        ht_par_part = sorted(ligne.total_ht for ligne in lignes)
-        assert lignes.count() == 2
-        assert ht_par_part == [333, 600], f"HT des parts : {ht_par_part}"
+        assert lignes.count() == 1
+        ligne_du_vin = lignes.first()
+        assert ligne_du_vin.part_en_jetons == 600
+        assert ligne_du_vin.total_ht == 933
 
     def test_l_archive_fiscale_exporte_le_ht_et_la_tva_stockes_de_la_ligne(self):
         """L'archive exporte le HT et la TVA stockés sur l'article : 3 bières à

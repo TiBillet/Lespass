@@ -74,6 +74,34 @@ def _lignes_du_pied_du_ticket_de_vente(pied_ticket):
     return lignes_du_pied
 
 
+def _ajouter_a_la_ligne_de_tva(tva_par_taux, cle_du_taux, ht, tva, ttc):
+    """
+    Ajoute des montants (centimes) a la ligne d'un taux de la « TVA par taux » du
+    ticket, creee a zero si elle n'existe pas encore.
+    / Adds amounts to a rate's row of the receipt's VAT breakdown, created if needed.
+
+    LOCALISATION : laboutik/printing/formatters.py
+    APPELEE PAR : `formatter_ticket_vente` (ce module), pour la part en jetons d'une
+    ligne (au taux 0) et pour son reste (a son taux).
+
+    :param tva_par_taux: dict {cle du taux: {"rate", "ht", "tva", "ttc"}}, modifie ici
+    :param cle_du_taux: le taux en texte a deux decimales (ex. "20.00")
+    :param ht: centimes hors taxes a ajouter
+    :param tva: centimes de TVA a ajouter
+    :param ttc: centimes TTC a ajouter
+    """
+    if cle_du_taux not in tva_par_taux:
+        tva_par_taux[cle_du_taux] = {
+            "rate": cle_du_taux,
+            "ht": 0,
+            "tva": 0,
+            "ttc": 0,
+        }
+    tva_par_taux[cle_du_taux]["ht"] += ht
+    tva_par_taux[cle_du_taux]["tva"] += tva
+    tva_par_taux[cle_du_taux]["ttc"] += ttc
+
+
 def formatter_ticket_vente(vente, operateur):
     """
     Formate le ticket client d'une vente (`Vente`) : vente, re-impression, DUPLICATA.
@@ -194,8 +222,13 @@ def formatter_ticket_vente(vente, operateur):
         # Quantite lisible sur le papier : un entier quand elle est entiere, sinon
         # deux decimales. Jamais un Decimal : le ticket part en JSON (Celery).
         # / Readable quantity: an int when whole, else two decimals. Never a Decimal.
+        # Une vente au poids ou au volume imprime sa quantité avec son unité
+        # (« 0,350 kg ») : un nombre seul serait lu comme un nombre d'articles.
+        # / A weight / volume sale prints its quantity with its unit.
         quantite_totale = article_affiche["quantite"]
-        if quantite_totale == quantite_totale.to_integral_value():
+        if article_affiche["est_vrac"]:
+            quantite_imprimee = article_affiche["quantite_lisible"]
+        elif quantite_totale == quantite_totale.to_integral_value():
             quantite_imprimee = int(quantite_totale)
         else:
             quantite_imprimee = f"{quantite_totale:.2f}"
@@ -233,16 +266,13 @@ def formatter_ticket_vente(vente, operateur):
                 f"  {_('Offert')}: {montant_offert}{suffixe_de_l_unite}"
             )
 
-        # Vente au poids ou au volume : le poids et le prix au kg / L, sous l'article.
-        # / Weight or volume sale: weight and price per kg / L, under the item.
-        unite_du_poids = article_affiche["unite_poids"]
+        # Vente au poids ou au volume : la quantité avec son unité et le prix au kg / L,
+        # sous l'article (« 0,350 kg x 12,90 €/kg » ; tireuse : « 50cl x 8,00 €/L »).
+        # / Weight or volume sale: quantity with its unit and price per kg / L.
         poids_imprimable = (
-            article_affiche["est_vrac"]
-            and article_affiche["prix_par_unite"]
-            and unite_du_poids in ("GR", "CL")
+            article_affiche["est_vrac"] and article_affiche["prix_par_unite"]
         )
         if poids_imprimable:
-            symbole_du_poids = "g" if unite_du_poids == "GR" else "cl"
             # L'ecran ecrit le prix avec une espace insecable ; le papier, avec une
             # espace ordinaire (certaines imprimantes l'impriment mal).
             # / The screen uses a non-breaking space; paper gets a plain one.
@@ -250,7 +280,7 @@ def formatter_ticket_vente(vente, operateur):
                 " ", " "
             )
             article_du_ticket["weight_detail"] = (
-                f"  {article_affiche['poids_total']}{symbole_du_poids}"
+                f"  {article_affiche['quantite_lisible']}"
                 f" x {prix_par_unite_pour_le_papier}"
             )
 
@@ -258,24 +288,36 @@ def formatter_ticket_vente(vente, operateur):
 
     # --- TVA par taux : sommes des montants figes sur les lignes ---
     # Une vente en points ou en temps n'est pas de l'argent : pas de TVA.
-    # / VAT by rate: sums of the frozen line amounts. No VAT on a points sale.
+    # La part payee en jetons cadeau d'une ligne (`part_en_jetons`) est vendue hors
+    # TVA : elle va a la ligne du taux 0 (HT = TTC, TVA 0), le reste a son taux.
+    # / VAT by rate: sums of the frozen line amounts. No VAT on a points sale. A line's
+    # token part goes to the 0 rate row (HT = TTC, VAT 0), the rest to its rate.
     tva_breakdown = []
     total_ht_global = 0
     total_tva_global = 0
     if not ticket_en_points:
+        cle_du_taux_zero = f"{Decimal(0):.2f}"
         tva_par_taux = {}
         for ligne in lignes_de_la_vente:
             cle_du_taux = f"{Decimal(ligne.vat or 0):.2f}"
-            if cle_du_taux not in tva_par_taux:
-                tva_par_taux[cle_du_taux] = {
-                    "rate": cle_du_taux,
-                    "ht": 0,
-                    "tva": 0,
-                    "ttc": 0,
-                }
-            tva_par_taux[cle_du_taux]["ht"] += ligne.total_ht
-            tva_par_taux[cle_du_taux]["tva"] += ligne.total_tva
-            tva_par_taux[cle_du_taux]["ttc"] += ligne.total_ttc
+            part_en_jetons = ligne.part_en_jetons
+            reste_ht = ligne.total_ht - part_en_jetons
+            reste_ttc = ligne.total_ttc - part_en_jetons
+            if part_en_jetons != 0:
+                _ajouter_a_la_ligne_de_tva(
+                    tva_par_taux, cle_du_taux_zero, part_en_jetons, 0, part_en_jetons
+                )
+            ligne_entierement_en_jetons = (
+                part_en_jetons != 0
+                and reste_ht == 0
+                and reste_ttc == 0
+                and ligne.total_tva == 0
+            )
+            if ligne_entierement_en_jetons:
+                continue
+            _ajouter_a_la_ligne_de_tva(
+                tva_par_taux, cle_du_taux, reste_ht, ligne.total_tva, reste_ttc
+            )
         for ligne_de_tva in tva_par_taux.values():
             tva_breakdown.append(ligne_de_tva)
             total_ht_global += ligne_de_tva["ht"]

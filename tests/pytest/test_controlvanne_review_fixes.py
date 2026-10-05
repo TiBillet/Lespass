@@ -194,8 +194,11 @@ class TestC1DoubleFacturationConcurrente:
         with schema_context(tenant.schema_name):
             from BaseBillet.models import LigneArticle
 
+            # La ligne ne porte pas la carte : elle est sur la vente et ses
+            # règlements (Q-H2). On retrouve la ligne par sa vente.
+            # / The line no longer carries the card: found through its sale.
             lignes_avant = LigneArticle.objects.filter(
-                carte=rf_carte_avec_solde
+                vente__carte=rf_carte_avec_solde
             ).count()
 
         # Barrier : les 2 threads envoient leur POST exactement en même temps
@@ -248,7 +251,7 @@ class TestC1DoubleFacturationConcurrente:
             from BaseBillet.models import LigneArticle
 
             lignes_apres = LigneArticle.objects.filter(
-                carte=rf_carte_avec_solde
+                vente__carte=rf_carte_avec_solde
             ).count()
 
         nombre_facturations = lignes_apres - lignes_avant

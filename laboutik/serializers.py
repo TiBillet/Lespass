@@ -8,6 +8,8 @@
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
+from BaseBillet.models import PaymentMethod
+
 
 class CartePrimaireSerializer(serializers.Serializer):
     """
@@ -370,21 +372,28 @@ class CorrectionPaiementSerializer(serializers.Serializer):
         allow_blank=True,
         default="",
     )
-    # Le moyen que le caissier a vu a l'ouverture du formulaire (champ cache). La
-    # route le compare au moyen actuel des lignes, sous verrou : un deuxieme envoi
-    # du meme formulaire (double clic, deux caisses) est refuse au lieu de deplacer
-    # l'argent une deuxieme fois. Obligatoire : le seul formulaire qui poste vers
-    # cette route (hx_corriger_moyen_paiement.html) l'envoie toujours, rempli (il
-    # n'est ouvert que pour une ligne en especes, CB ou cheque).
-    # / The method the cashier saw when opening the form (hidden field); compared
-    #   under lock with the lines' current method. Required: the only form always
-    #   sends it, filled.
-    ancien_moyen = serializers.CharField(
+    # LE moyen corrige (champ cache du formulaire, transmis par le bouton du detail :
+    # un bouton par moyen). La route relit sous verrou le net de ce moyen dans les
+    # reglements de la vente : apres une premiere correction il vaut 0, et un
+    # deuxieme envoi du meme formulaire (double clic, deux caisses) est refuse au
+    # lieu de deplacer l'argent une deuxieme fois. Obligatoire : le seul formulaire
+    # qui poste vers cette route (hx_corriger_moyen_paiement.html) l'envoie
+    # toujours, rempli.
+    # / THE corrected method (hidden field, sent by the detail button). The route
+    #   re-reads its net under lock: a second submission is refused. Required.
+    # Le code doit être un moyen de paiement connu (`PaymentMethod`) : un code
+    # inventé est refusé ici, avant toute règle métier. Les règles de la route
+    # (`raison_du_refus_de_correction`) disent ensuite si ce moyen se corrige.
+    # / The code must be a known PaymentMethod: an invented code is refused here,
+    #   before any business rule.
+    ancien_moyen = serializers.ChoiceField(
+        choices=PaymentMethod.choices,
         required=True,
         allow_blank=False,
         error_messages={
             "required": _("Le moyen affiché par le formulaire manque : rouvrez la vente."),
             "blank": _("Le moyen affiché par le formulaire manque : rouvrez la vente."),
+            "invalid_choice": _("Moyen de paiement à corriger inconnu : rouvrez la vente."),
         },
     )
 

@@ -19,14 +19,16 @@ Composants repris de la maquette (TEMP-tibillet-laboutik-main) :
 ACCES : Ventes → Historique de commande → clic sur une ligne → « Corriger ».
 
 FLUX :
-1. Bouton « Corriger » dans hx_detail_vente.html → hx-get → cette page
+1. Bouton « Corriger » d'un moyen dans hx_detail_vente.html → hx-get → cette page
+   (une ligne de la vente + le moyen corrige)
 2. Utilisateur choisit nouveau moyen + saisit raison (optionnelle)
 3. Clic CORRIGER → hx-post → PaiementViewSet.corriger_moyen_paiement()
 4. Retour : le detail de la vente, re-rendu (hx_detail_vente.html, avec le message
    hx_correction_succes.html), remplace le detail ouvert.
-Le montant affiche est celui que la route deplace : la somme des lignes de la vente
-au moyen actuel (`lignes_que_la_correction_deplace`, laboutik/views.py).
-/ The amount shown is the amount the route moves.
+Le montant affiche est celui que la route deplace : le net du moyen dans les
+reglements de la vente et de ses corrections (`montant_net_du_moyen_dans_la_vente`,
+laboutik/views.py).
+/ The amount shown is the amount the route moves: the method's net.
 -->
 <div class="correction-box" data-testid="correction-form">
 
@@ -45,9 +47,9 @@ au moyen actuel (`lignes_que_la_correction_deplace`, laboutik/views.py).
         aria-label="{% translate 'Correction moyen de paiement' %}">
     {% csrf_token %}
     <input type="hidden" name="ligne_uuid" value="{{ ligne.uuid }}">
-    {# Le moyen vu a l'ouverture : la route refuse si la ligne a change depuis. #}
-    {# / The method seen when opening: the route refuses if the line changed since. #}
-    <input type="hidden" name="ancien_moyen" value="{{ ligne.payment_method }}">
+    {# Le moyen corrige : la route revérifie son net sous verrou (double envoi). #}
+    {# / The corrected method: the route re-checks its net under lock. #}
+    <input type="hidden" name="ancien_moyen" value="{{ ancien_moyen }}">
 
     <!-- Nouveau moyen : controle segmente, un vrai radio par option -->
     <!-- / New method: segmented control, one real radio per option -->
@@ -66,8 +68,8 @@ au moyen actuel (`lignes_que_la_correction_deplace`, laboutik/views.py).
     </fieldset>
 
     <!-- Raison (optionnelle) / Reason (optional) -->
-    <label class="sr-only" for="correction-raison-{{ ligne.uuid }}">{% translate "Raison" %}</label>
-    <textarea id="correction-raison-{{ ligne.uuid }}"
+    <label class="sr-only" for="correction-raison-{{ vente.uuid }}-{{ ancien_moyen }}">{% translate "Raison" %}</label>
+    <textarea id="correction-raison-{{ vente.uuid }}-{{ ancien_moyen }}"
               name="raison"
               rows="2"
               class="note-preview"

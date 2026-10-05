@@ -172,7 +172,7 @@ import uuid  # noqa: E402
 from datetime import datetime, timedelta  # noqa: E402
 from decimal import Decimal  # noqa: E402
 from pathlib import Path  # noqa: E402
-from unittest.mock import patch  # noqa: E402
+from unittest.mock import MagicMock, patch  # noqa: E402
 from zoneinfo import ZoneInfo  # noqa: E402
 
 from django.db import connection  # noqa: E402
@@ -818,8 +818,8 @@ class TestRapportDesVentes(FastTenantTestCase):
         """
         Fiche F §6, test 7 (D11) : un gobelet consigné vendu 1,00 € en espèces, puis
         rapporté : vente AVOIR sans vente liée (le gobelet est anonyme), article de
-        retour au prix et au taux du gobelet (prix −100, quantité 1, comme la caisse),
-        1,00 € rendu en espèces. Chiffre d'affaires 0 ; « retours consigne » 1.
+        retour au prix et au taux du gobelet (prix 100, quantité −1, comme la caisse,
+        D13), 1,00 € rendu en espèces. Chiffre d'affaires 0 ; « retours consigne » 1.
         / A 1.00 € deposit cup sold, then returned (AVOIR, −100, cash −100): revenue 0,
         "deposit returns" 1.
         """
@@ -853,17 +853,17 @@ class TestRapportDesVentes(FastTenantTestCase):
         )
         verifier_egalites(vente_du_gobelet)
 
-        # Le retour, écrit comme la caisse l'écrit (laboutik/views.py) : prix négatif,
-        # quantité positive, taux du gobelet.
-        # / The return, written like the register: negative price, positive quantity.
+        # Le retour, écrit comme la caisse l'écrit (laboutik/views.py) : quantité
+        # négative, prix positif du gobelet, taux du gobelet (D13).
+        # / The return, written like the register: negative quantity, positive price.
         vente_du_retour = fabriquer_vente_encaissee(
             origine=SaleOrigin.LABOUTIK,
             nature=Vente.Nature.AVOIR,
             articles=[
                 {
                     "pricesold": tarif_du_retour,
-                    "quantite": Decimal("1"),
-                    "prix_unitaire": -100,
+                    "quantite": Decimal("-1"),
+                    "prix_unitaire": 100,
                     "taux_tva": Decimal("20"),
                 },
             ],
@@ -1483,6 +1483,60 @@ class TestRapportDesVentes(FastTenantTestCase):
 
         assert section_points[str(points.uuid)]["nom"] == NOM_DES_POINTS
         assert section_points[str(points.uuid)]["total_en_centiemes"] == 500
+
+    def test_adhesion_payee_en_points_ecrite_en_points_jamais_en_euros(self):
+        """
+        Une adhésion payée 300,00 points (30 000 centièmes, D9) : elle est comptée en
+        points, dans la section des points de sa monnaie. Elle n'est jamais écrite en
+        euros : rien dans le chiffre d'affaires (ni par taux, ni par catégorie), rien
+        dans le détail des adhésions (qui ne lit que les ventes en euros).
+        / A membership paid in points: counted in points only, never in euros.
+        """
+        points = self._monnaie(NOM_DES_POINTS, Asset.FID)
+        # Créer un produit adhésion appelle Fedow en HTTP : simulé (tests/PIEGES.md
+        # 13.2). / Creating a membership product calls Fedow: faked.
+        with patch("BaseBillet.signals.AssetFedow") as ancien_fedow_simule:
+            ancien_fedow_simule.return_value.get_or_create_membership_asset.return_value = (
+                MagicMock(),
+                True,
+            )
+            tarif_de_l_adhesion = creer_tarif_vendu(
+                nom="Adhésion en points",
+                prix_en_euros="3.00",
+                taux_tva="0.00",
+                categorie_article=Product.ADHESION,
+            )
+        vente = ouvrir_vente(
+            origine=SaleOrigin.LABOUTIK,
+            nature=Vente.Nature.VENTE,
+            unite=str(points.uuid),
+        )
+        ajouter_article(
+            vente,
+            pricesold=tarif_de_l_adhesion,
+            quantite=Decimal("1"),
+            prix_unitaire=30000,
+            taux_tva=Decimal("0"),
+        )
+        ajouter_reglement(
+            vente,
+            moyen=PaymentMethod.NON_MONETAIRE,
+            montant=30000,
+            asset=points.uuid,
+        )
+        vente = encaisser_vente(vente)
+
+        rapport = self._rapport()
+        chiffre_affaires = rapport.section_chiffre_affaires()
+        section_points = rapport.section_points()
+        detail = rapport.section_detail()
+
+        assert section_points[str(points.uuid)]["total_en_centiemes"] == 30000
+        assert chiffre_affaires["total_ttc_en_centimes"] == 0
+        assert chiffre_affaires["par_taux"] == {}
+        assert chiffre_affaires["par_categorie"] == {}
+        assert detail["adhesions"] == {}
+        verifier_egalites(vente)
 
     # ------------------------------------------------------------------
     # Vidage dans l'argent reçu, recharges à plusieurs moyens, ventes gratuites,
@@ -2245,6 +2299,7 @@ class TestRapportDesVentes(FastTenantTestCase):
                 str(produit_du_jus.uuid): {
                     "nom": produit_du_jus.name,
                     "quantite": "2.000000",
+                    "unite": "",
                     "valeur_catalogue_en_centimes": 700,
                     "cout_achat_en_centimes": 240,
                 },
@@ -3695,19 +3750,19 @@ class TestRapportDesVentes(FastTenantTestCase):
 
         self._vendre_le_gobelet_puis_le_rendre(prix_achat_du_gobelet=30)
 
-        # Vente au poids, comme la caisse l'écrit : quantité 1 sur la ligne, le coût
-        # sur la quantité réellement servie, dans l'unité du prix d'achat (kg).
-        # / Weight sale like the register: quantity 1, cost on the real served kg.
+        # Vente au poids, comme la caisse l'écrit (D15) : 0,350 kg au prix du kilo
+        # (12,90 € → 451,5 → 452), le coût sur ces kg, dans l'unité du prix d'achat.
+        # / Weight sale like the register (D15): 0.350 kg at the price per kg.
         vente_du_fromage = fabriquer_vente_encaissee(
             origine=SaleOrigin.LABOUTIK,
             articles=[
                 {
                     "pricesold": tarif_du_fromage,
-                    "quantite": Decimal("1"),
-                    "prix_unitaire": 452,
+                    "quantite": Decimal("0.350"),
+                    "prix_unitaire": 1290,
                     "taux_tva": Decimal("5.5"),
                     "prix_achat": 800,
-                    "quantite_pour_cout": Decimal("0.350"),
+                    "weight_quantity": 350,
                 },
             ],
             reglements=[{"moyen": PaymentMethod.CASH, "montant": 452}],
@@ -4144,6 +4199,7 @@ class TestRapportDesVentes(FastTenantTestCase):
                 "nom": produit_du_jus.name,
                 "categorie": f"type_{Product.NONE}",
                 "quantite": "3.000000",
+                "unite": "",
                 "total_ttc_en_centimes": 700,
                 "total_ht_en_centimes": 583,
                 "offert_en_centimes": 350,
@@ -4153,6 +4209,7 @@ class TestRapportDesVentes(FastTenantTestCase):
                 "nom": concert.produit.name,
                 "categorie": f"type_{Product.BILLET}",
                 "quantite": "3.000000",
+                "unite": "",
                 "total_ttc_en_centimes": 5000,
                 "total_ht_en_centimes": 4739,
                 "offert_en_centimes": 0,
@@ -4162,6 +4219,7 @@ class TestRapportDesVentes(FastTenantTestCase):
                 "nom": adhesion.produit.name,
                 "categorie": f"type_{Product.ADHESION}",
                 "quantite": "1.000000",
+                "unite": "",
                 "total_ttc_en_centimes": 2000,
                 "total_ht_en_centimes": 2000,
                 "offert_en_centimes": 0,
@@ -5018,15 +5076,20 @@ class TestRapportDesVentes(FastTenantTestCase):
         Le dictionnaire de toutes les sections se sérialise en JSON sans aide
         (`json.dumps` sans `default=`) : ni `Decimal`, ni uuid, ni date non convertis.
         Il est stocké tel quel dans `ClotureCaisse.rapport_json`. Le scénario remplit
-        les sections : le fil rouge (monnaie locale), un billet Stripe avec un écart et
-        son avoir admin, une vente en points, une correction.
-        / The full dictionary serializes to JSON without help.
+        les sections : le fil rouge (monnaie locale), un billet Stripe avec un écart
+        (annexe « Écarts d'encaissement »), un second billet Stripe sans écart et son
+        avoir admin, une vente en points, une correction. L'avoir porte sur le billet
+        sans écart : une vente qui porte un écart d'encaissement ne reçoit aucun avoir
+        (Q-H13).
+        / The full dictionary serializes to JSON without help. The credit note is on
+        the ticket without a gap: a sale with a collection gap gets no credit note.
         """
         monnaie_locale = self._monnaie(NOM_DE_LA_MONNAIE_LOCALE, Asset.TLF)
         points = self._monnaie(NOM_DES_POINTS, Asset.FID)
         self._vente_du_fil_rouge(monnaie_locale)
-        billet = self._billet_vendu_en_ligne_par_stripe(3500, ecart_en_centimes=3)
-        self._avoir_admin_d_une_ligne_stripe(billet)
+        self._billet_vendu_en_ligne_par_stripe(3500, ecart_en_centimes=3)
+        billet_sans_ecart = self._billet_vendu_en_ligne_par_stripe(3500)
+        self._avoir_admin_d_une_ligne_stripe(billet_sans_ecart)
         self._vente_en_points(points, 500)
         vente_d_origine = self._vendre_un_jus_en_especes()
         self._corriger_les_especes_en_cb(vente_d_origine, self._operateur())

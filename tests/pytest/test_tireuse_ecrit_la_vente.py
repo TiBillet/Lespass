@@ -11,20 +11,20 @@ Un tirage facturé au `pour_end` produit UNE vente encaissée (`REGLEE`, numéro
 chaînée), d'origine `TIREUSE`, dans la même transaction que les débits des monnaies.
 - Le total du tirage est arrondi au centime DEMI-HAUT (86,5 c → 87 c), et l'écran de la
   tireuse annonce le même montant que la facture.
-- Les lignes gardent leur forme : `amount` = total du tirage, `qty` = la part de sa
-  monnaie (fraction de 1). Chaque part reçoit en plus l'argent RÉEL débité dans sa
-  monnaie (`total_catalogue`), jamais recalculé depuis la fraction.
-- Une part payée en jetons cadeau (TNF) est une vente ordinaire, hors TVA : un jeton
-  dépensé solde la dette du lieu (D8 bis). Son règlement est « jetons » (LG).
+- UNE ligne par tirage (D15) : `qty` = les litres facturés, `amount`
+  = le prix au litre, total par la formule ; ni moyen, ni monnaie, ni carte, ni
+  portefeuille sur la ligne (Q-H2).
+- La part payée en jetons cadeau (TNF) est vendue hors TVA (`part_en_jetons`) : un
+  jeton dépensé solde la dette du lieu (D8 bis). Son règlement est « jetons » (LG).
 - Un règlement par transaction `fedow_core` créée : montant et uuid copiés de la
   transaction.
-- Le coût d'achat d'une part porte sur les litres qu'elle paie (litres servis ×
-  fraction), au prix d'achat du fût (au litre).
-- Solde insuffisant : on facture ce qui a été réellement débité ; la vente tient.
+- Le coût d'achat porte sur les litres facturés, au prix d'achat du fût (au litre).
+- Solde insuffisant : on facture le volume autorisé au badge (Q-H13), le débordement
+  n'est pas facturé ; le poids pour le stock garde le volume servi ; la vente tient.
 - Temps (TIM) et fidélité (FID) ne paient jamais un tirage.
 / One billed pour writes ONE settled, numbered, chained sale. Half-up total (screen =
-bill). Lines keep their shape; each part gets its real debited money. A gift-token part
-is an ordinary 0 % VAT sale. One payment per local transaction. Cost on the litres of the part. Time and
+bill). One line in litres at the price per litre; the gift-token part is sold
+without VAT. One payment per local transaction. Cost on the litres of the part. Time and
 loyalty never pay a pour.
 
 COMMENT CHAQUE TEST RETROUVE SA VENTE
@@ -393,11 +393,11 @@ def test_tirage_50cl_une_vente_un_reglement(tenant):
       carte et son utilisateur comme client ; total 400, HT 333, TVA 67 (20 %) ;
     - UN règlement « monnaie locale » (LE) de 400, copié de la transaction `fedow_core`
       (même montant, même uuid), avec la monnaie, la carte et le portefeuille ;
-    - UNE ligne, de la même forme qu'avant : `amount` 400, `qty` 1, 50 cl, origine
-      TIREUSE, moyen LE, monnaie, carte, portefeuille, point de vente, identifiant de
-      paiement ; la session de la tireuse pointe sur elle.
+    - UNE ligne : `amount` 800 (prix au litre), `qty` 0,500, 50 cl pour le stock,
+      origine TIREUSE, point de vente, identifiant de paiement ; ni moyen, ni monnaie,
+      ni carte, ni portefeuille (Q-H2) ; la session de la tireuse pointe sur elle.
     / 50 cl at 8 €/L paid in local currency: one settled sale, one payment copied from
-    the transaction, one line of the same shape as before.
+    the transaction, one line of 0.500 L at 800 per litre.
     """
     from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
     from BaseBillet.models_vente import Vente
@@ -456,20 +456,20 @@ def test_tirage_50cl_une_vente_un_reglement(tenant):
         assert reglement.carte_id == carte.pk
         assert reglement.wallet_id == portefeuille.pk
 
-        # La ligne garde sa forme d'avant, et reçoit ses montants entiers.
-        # / The line keeps its former shape, and gets its whole-cent amounts.
+        # La ligne : les litres servis au prix du litre, et ses montants entiers.
+        # / The line: litres served at the price per litre, whole-cent amounts.
         lignes = list(vente.articles.all())
         assert len(lignes) == 1
         ligne = lignes[0]
-        assert ligne.amount == 400
-        assert ligne.qty == Decimal("1")
+        assert ligne.amount == 800
+        assert ligne.qty == Decimal("0.500")
         assert ligne.weight_quantity == 50
         assert ligne.sale_origin == SaleOrigin.TIREUSE
-        assert ligne.payment_method == PaymentMethod.LOCAL_EURO
+        assert ligne.payment_method is None
         assert ligne.status == LigneArticle.VALID
-        assert ligne.asset == monnaie_locale.uuid
-        assert ligne.carte_id == carte.pk
-        assert ligne.wallet_id == portefeuille.pk
+        assert ligne.asset is None
+        assert ligne.carte_id is None
+        assert ligne.wallet_id is None
         assert ligne.point_de_vente_id == tireuse.point_de_vente_id
         assert ligne.uuid_transaction is not None
         assert ligne.vat == Decimal("20.00")
@@ -479,8 +479,8 @@ def test_tirage_50cl_une_vente_un_reglement(tenant):
         assert ligne.total_ht == 333
         assert ligne.total_tva == 67
 
-        # La session de la tireuse pointe toujours sur la première ligne.
-        # / The tap session still points to the first line.
+        # La session de la tireuse pointe sur la ligne du tirage.
+        # / The tap session points to the pour's line.
         session_du_tirage = RfidSession.objects.get(carte=carte)
         assert session_du_tirage.ligne_article_id == ligne.pk
 
@@ -488,19 +488,16 @@ def test_tirage_50cl_une_vente_un_reglement(tenant):
 
 
 @pytest.mark.django_db
-def test_tirage_jetons_et_monnaie_locale_parts_entieres(tenant):
+def test_tirage_jetons_et_monnaie_locale_une_ligne(tenant):
     """
     50 cl à 8 €/L = 400, payés 100 en jetons cadeau (TNF) puis 300 en monnaie locale
     (TLF), par une carte anonyme :
-    - part « jetons » : total catalogue 100, rien d'offert, net 100 (D8 bis) ;
-    - part « monnaie locale » : total catalogue 300, net 300 ;
+    - UNE ligne : `amount` 800, `qty` 0,500, total catalogue 400, rien d'offert, part
+      payée en jetons 100 (D8 bis) ;
     - deux règlements copiés des deux transactions : jetons (LG) 100, monnaie locale
-      (LE) 300 ;
-    - les deux lignes gardent leur forme : `amount` 400, `qty` 0,25 et 0,75, même
-      identifiant de paiement ; la vente n'a pas de client.
-    / 400 paid 100 gift tokens + 300 local currency: whole parts (the token part is an
-    ordinary sale), two payments copied from the two transactions, lines keep their
-    shape.
+      (LE) 300 ; la vente n'a pas de client.
+    / 400 paid 100 gift tokens + 300 local currency: one line (token part 100), two
+    payments copied from the two transactions.
     """
     from BaseBillet.models import PaymentMethod
     from fedow_core.models import Asset
@@ -530,29 +527,16 @@ def test_tirage_jetons_et_monnaie_locale_parts_entieres(tenant):
         assert vente.total_ht == 350
         assert vente.total_tva == 50
 
-        # Part en jetons cadeau : une vente ordinaire, rien d'offert (D8 bis).
-        # / Gift token part: an ordinary sale, nothing offered.
-        part_en_jetons = vente.articles.get(payment_method=PaymentMethod.LOCAL_GIFT)
-        assert part_en_jetons.total_catalogue == 100
-        assert part_en_jetons.part_offerte == 0
-        assert part_en_jetons.source_offert == ""
-        assert part_en_jetons.total_ttc == 100
-        assert part_en_jetons.amount == 400
-        assert part_en_jetons.qty == Decimal("0.25")
-
-        # Part en monnaie locale : l'argent réellement débité.
-        # / Local currency part: the money really debited.
-        part_en_monnaie_locale = vente.articles.get(
-            payment_method=PaymentMethod.LOCAL_EURO
-        )
-        assert part_en_monnaie_locale.total_catalogue == 300
-        assert part_en_monnaie_locale.part_offerte == 0
-        assert part_en_monnaie_locale.total_ttc == 300
-        assert part_en_monnaie_locale.amount == 400
-        assert part_en_monnaie_locale.qty == Decimal("0.75")
-        assert (
-            part_en_monnaie_locale.uuid_transaction == part_en_jetons.uuid_transaction
-        )
+        # UNE ligne : rien d'offert, la part en jetons est une vente (D8 bis).
+        # / ONE line: nothing offered, the token part is a sale.
+        ligne = vente.articles.get()
+        assert ligne.total_catalogue == 400
+        assert ligne.part_offerte == 0
+        assert ligne.source_offert == ""
+        assert ligne.total_ttc == 400
+        assert ligne.part_en_jetons == 100
+        assert ligne.amount == 800
+        assert ligne.qty == Decimal("0.500")
 
         # Deux règlements, chacun copié de sa transaction.
         # / Two payments, each copied from its transaction.
@@ -587,14 +571,14 @@ def test_tireuse_jetons_vente_ordinaire_tva_zero(tenant):
     """
     50 cl à 8 €/L = 400 (fût à TVA 20 %), payés 100 en jetons cadeau (TNF) puis 300 en
     monnaie locale (TLF). Un jeton dépensé solde la dette du lieu (D8 bis) : la part
-    payée en jetons est une VENTE ORDINAIRE, hors TVA.
-    - part « jetons » : catalogue 100, rien d'offert, sans source d'offert, net 100,
-      TVA 0 % (HT 100, TVA 0) ;
-    - part « monnaie locale » : catalogue 300, net 300, TVA 20 % (HT 250, TVA 50) ;
+    payée en jetons est une VENTE ORDINAIRE, hors TVA. UNE ligne :
+    - catalogue 400, rien d'offert, sans source d'offert, net 400, part payée en jetons
+      100, taux du fût (20 %) ; la TVA ne porte que sur le reste (300) :
+      HT 100 + 250 = 350, TVA 50 ;
     - le règlement « jetons » (LG) de 100 compte dans les deux égalités.
     Vente : catalogue 400, offert 0, net 400, HT 350, TVA 50.
-    / 400 paid 100 gift tokens + 300 local currency: the token part is an ordinary sale
-    without VAT (net 100, nothing offered, VAT 0). Sale: net 400, HT 350, VAT 50.
+    / 400 paid 100 gift tokens + 300 local currency: one line, token part 100 without
+    VAT. Sale: net 400, HT 350, VAT 50.
     """
     from BaseBillet.models import PaymentMethod
     from fedow_core.models import Asset
@@ -618,26 +602,18 @@ def test_tireuse_jetons_vente_ordinaire_tva_zero(tenant):
     with tenant_context(tenant):
         vente = _la_vente_du_tirage(carte)
 
-        # Part en jetons : une vente ordinaire, au taux 0.
-        # / Token part: an ordinary sale, at a 0 rate.
-        part_en_jetons = vente.articles.get(payment_method=PaymentMethod.LOCAL_GIFT)
-        assert part_en_jetons.total_catalogue == 100
-        assert part_en_jetons.part_offerte == 0
-        assert part_en_jetons.source_offert == ""
-        assert part_en_jetons.total_ttc == 100
-        assert part_en_jetons.vat == 0
-        assert part_en_jetons.total_ht == 100
-        assert part_en_jetons.total_tva == 0
-
-        # Part en monnaie locale : la TVA du fût.
-        # / Local currency part: the keg's VAT.
-        part_en_monnaie_locale = vente.articles.get(
-            payment_method=PaymentMethod.LOCAL_EURO
-        )
-        assert part_en_monnaie_locale.vat == Decimal("20.00")
-        assert part_en_monnaie_locale.total_ttc == 300
-        assert part_en_monnaie_locale.total_ht == 250
-        assert part_en_monnaie_locale.total_tva == 50
+        # La ligne : hors TVA pour sa part payée en jetons, au taux du fût pour le
+        # reste.
+        # / The line: no VAT on its token part, the keg's rate on the rest.
+        ligne = vente.articles.get()
+        assert ligne.total_catalogue == 400
+        assert ligne.part_offerte == 0
+        assert ligne.source_offert == ""
+        assert ligne.total_ttc == 400
+        assert ligne.part_en_jetons == 100
+        assert ligne.vat == Decimal("20.00")
+        assert ligne.total_ht == 350
+        assert ligne.total_tva == 50
 
         assert vente.reglements.get(moyen=PaymentMethod.LOCAL_GIFT).montant == 100
         assert vente.reglements.get(moyen=PaymentMethod.LOCAL_EURO).montant == 300
@@ -653,10 +629,10 @@ def test_tireuse_jetons_vente_ordinaire_tva_zero(tenant):
 @pytest.mark.django_db
 def test_tirage_88_centimes_30_plus_58(tenant):
     """
-    25 cl à 3,50 €/L = 87,5 c → 88 c, payés 30 en jetons cadeau puis 58 en monnaie
-    locale. Les parts valent EXACTEMENT 30 et 58 : l'argent réel de chaque débit, jamais
-    88 × la fraction (arrondie à 6 décimales).
-    / 88 c paid 30 tokens + 58 local currency: parts are exactly 30 and 58.
+    25 cl à 3,50 €/L = 0,250 × 350 = 87,5 c → 88 c, payés 30 en jetons cadeau puis 58
+    en monnaie locale. UNE ligne de 88, dont EXACTEMENT 30 payés en jetons (l'argent
+    réel du débit) ; deux règlements exacts, 30 et 58.
+    / 88 c paid 30 tokens + 58 local currency: one 88 line, token part exactly 30.
     """
     from BaseBillet.models import PaymentMethod
     from fedow_core.models import Asset
@@ -681,15 +657,11 @@ def test_tirage_88_centimes_30_plus_58(tenant):
         vente = _la_vente_du_tirage(carte)
         assert vente.total_catalogue == 88
 
-        part_en_jetons = vente.articles.get(payment_method=PaymentMethod.LOCAL_GIFT)
-        part_en_monnaie_locale = vente.articles.get(
-            payment_method=PaymentMethod.LOCAL_EURO
-        )
-        assert part_en_jetons.total_catalogue == 30
-        assert part_en_monnaie_locale.total_catalogue == 58
-        assert part_en_jetons.amount == 88
-        assert part_en_monnaie_locale.amount == 88
-        assert part_en_jetons.qty + part_en_monnaie_locale.qty == Decimal("1")
+        ligne = vente.articles.get()
+        assert ligne.total_catalogue == 88
+        assert ligne.part_en_jetons == 30
+        assert ligne.amount == 350
+        assert ligne.qty == Decimal("0.250")
 
         assert vente.reglements.get(moyen=PaymentMethod.LOCAL_GIFT).montant == 30
         assert vente.reglements.get(moyen=PaymentMethod.LOCAL_EURO).montant == 58
@@ -700,8 +672,9 @@ def test_tirage_88_centimes_30_plus_58(tenant):
 @pytest.mark.django_db
 def test_total_tirage_arrondi_demi_haut(tenant):
     """
-    173 ml à 5 €/L = 86,5 c. Arrondi demi-haut : 87 c (l'arrondi au pair donnerait 86).
-    La facture, le débit, le règlement, la ligne et la vente valent 87.
+    173 ml à 5 €/L = 0,173 × 500 = 86,5 c. Arrondi demi-haut : 87 c (l'arrondi au pair
+    donnerait 86). La facture, le débit, le règlement, le total de la ligne et la vente
+    valent 87.
     / 173 ml at 5 €/L = 86.5 c → 87 c (round-half-even would give 86).
     """
     from fedow_core.models import Asset
@@ -727,7 +700,10 @@ def test_total_tirage_arrondi_demi_haut(tenant):
         vente = _la_vente_du_tirage(carte)
         assert vente.total_catalogue == 87
         assert vente.reglements.get().montant == 87
-        assert vente.articles.get().amount == 87
+        ligne = vente.articles.get()
+        assert ligne.total_ttc == 87
+        assert ligne.amount == 500
+        assert ligne.qty == Decimal("0.173")
 
         verifier_egalites(vente)
 
@@ -795,13 +771,15 @@ def test_montant_ecran_egal_montant_facture_demi_haut(tenant):
 
 
 @pytest.mark.django_db
-def test_tirage_solde_insuffisant_total_egal_debit_reel(tenant):
+def test_tirage_solde_insuffisant_facture_le_volume_autorise(tenant):
     """
-    La carte n'a que 300 c en monnaie locale, et le Raspberry Pi annonce 50 cl à 8 €/L
-    (400 c) : il déborde du volume autorisé. La bière est servie : on facture ce qui a
-    été réellement débité (300), et la vente tient ses deux égalités. Le volume servi
-    n'est pas réduit (50 cl sur la ligne).
-    / Balance 300 c for a 400 c pour: bill what was really debited (300); the sale holds.
+    La carte n'a que 300 c en monnaie locale : à 8 €/L, le badge autorise 375 ml. Le
+    Raspberry Pi déborde et annonce 50 cl. On facture le volume autorisé (Q-H13) :
+    0,375 L à 800 = 300, exactement le débit (c'est aussi ce que la réponse annonce) ;
+    le débordement n'est pas facturé, aucun article d'écart. Le poids pour le stock
+    garde le volume servi (50 cl). La vente vaut 300 et tient ses deux égalités.
+    / Balance 300 c, 375 ml authorised, 50 cl poured: the line bills 0.375 L (300), no
+    gap; weight 50 cl; the sale holds.
     """
     from BaseBillet.models import PaymentMethod
     from fedow_core.models import Asset, Token
@@ -830,7 +808,6 @@ def test_tirage_solde_insuffisant_total_egal_debit_reel(tenant):
         assert debits[0].amount == 300
 
         vente = _la_vente_du_tirage(carte)
-        assert vente.total_catalogue == 300
         assert vente.total_ttc == 300
 
         reglement = vente.reglements.get()
@@ -839,8 +816,8 @@ def test_tirage_solde_insuffisant_total_egal_debit_reel(tenant):
         assert reglement.fedow_transaction_uuid == debits[0].uuid
 
         ligne = vente.articles.get()
-        assert ligne.amount == 300
-        assert ligne.qty == Decimal("1")
+        assert ligne.amount == 800
+        assert ligne.qty == Decimal("0.375")
         assert ligne.total_catalogue == 300
         assert ligne.weight_quantity == 50
 
@@ -850,13 +827,12 @@ def test_tirage_solde_insuffisant_total_egal_debit_reel(tenant):
 @pytest.mark.django_db
 def test_tirage_cout_sur_les_litres_reels(tenant):
     """
-    0,50 L servi, fût acheté 300 c le litre, payé en deux parts égales (200 en jetons
-    cadeau, 200 en monnaie locale, à 8 €/L). Chaque part coûte les litres qu'elle paie :
-    0,25 L × 300 = 75. La somme des coûts vaut le coût des litres réellement servis :
-    0,50 L × 300 = 150.
-    / 0.50 L at a 300 c/L purchase price, two equal parts: each part costs 75, total 150.
+    0,50 L servi, fût acheté 300 c le litre, payé 200 en jetons cadeau et 200 en
+    monnaie locale (à 8 €/L). Le coût porte sur les litres réellement servis, quelle
+    que soit la façon de payer : 0,500 L × 300 = 150, sur l'unique ligne.
+    / 0.50 L at a 300 c/L purchase price, paid with two currencies: cost 150 on the
+    single line.
     """
-    from BaseBillet.models import PaymentMethod
     from fedow_core.models import Asset
 
     jetons_cadeau = _monnaie_du_lieu(tenant, Asset.TNF)
@@ -878,17 +854,9 @@ def test_tirage_cout_sur_les_litres_reels(tenant):
 
     with tenant_context(tenant):
         vente = _la_vente_du_tirage(carte)
-        part_en_jetons = vente.articles.get(payment_method=PaymentMethod.LOCAL_GIFT)
-        part_en_monnaie_locale = vente.articles.get(
-            payment_method=PaymentMethod.LOCAL_EURO
-        )
-        assert part_en_jetons.cout_achat == 75
-        assert part_en_monnaie_locale.cout_achat == 75
-
-        somme_des_couts = 0
-        for article in vente.articles.all():
-            somme_des_couts += article.cout_achat
-        assert somme_des_couts == 150
+        ligne = vente.articles.get()
+        assert ligne.qty == Decimal("0.500")
+        assert ligne.cout_achat == 150
 
         verifier_egalites(vente)
 
@@ -1007,7 +975,15 @@ def test_tirage_egalite_rompue_remonte_et_n_ecrit_rien(tenant):
 
     with tenant_context(tenant):
         assert Vente.objects.filter(carte=carte).count() == 0
-        assert LigneArticle.objects.filter(carte=carte).count() == 0
+        # La ligne ne porte pas la carte : elle est sur la vente et ses règlements
+        # (Q-H2). On cherche la ligne par le fût du test.
+        # / The line no longer carries the card: searched by the test's keg.
+        assert (
+            LigneArticle.objects.filter(
+                pricesold__productsold__product=tireuse.fut_actif
+            ).count()
+            == 0
+        )
         assert len(_debits_de_la_carte(carte)) == 0
         solde_de_la_carte = Token.objects.get(
             wallet=portefeuille, asset=monnaie_locale

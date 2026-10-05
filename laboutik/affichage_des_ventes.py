@@ -28,7 +28,7 @@ LES REGLES :
 """
 
 import uuid as uuid_module
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 
 from django.utils.translation import gettext as _
 
@@ -38,9 +38,14 @@ from comptabilite.presentation import (
     codes_des_moyens_dans_l_ordre,
     euros_a_la_francaise,
     montant_a_la_francaise_dans_l_unite,
+    quantite_au_poids_a_la_francaise,
     quantite_lisible,
 )
-from comptabilite.rapport import MOYENS_CASHLESS, nom_du_moyen_de_paiement
+from comptabilite.rapport import (
+    MOYENS_CASHLESS,
+    nom_du_moyen_de_paiement,
+    unite_d_une_vente_au_poids,
+)
 from laboutik.plan_comptable import noms_des_monnaies
 
 
@@ -236,6 +241,53 @@ def moyens_en_clair(reglements_affiches):
     return " + ".join(morceaux_de_la_phrase)
 
 
+def reglements_nets_de_la_vente(vente, nom_par_uuid_de_monnaie):
+    """
+    Les règlements NETS d'une vente : ceux de la vente ET de ses ventes dérivées
+    CORRECTION, additionnés par moyen (et par monnaie).
+    / A sale's NET payments: those of the sale AND of its CORRECTION sales, added up by
+    method (and currency).
+
+    LOCALISATION : laboutik/affichage_des_ventes.py
+
+    Une vente payée en espèces puis corrigée en CB vaut 0 en espèces et le montant en
+    CB. C'est la seule règle « comment cette vente est payée » : seuls les règlements
+    le savent (une ligne d'article peut porter plusieurs moyens, ou aucun). Les nets
+    nuls et l'offert sont rendus tels quels : chaque lecteur décide ce qu'il garde.
+    Libellés et ordre : ceux de `reglements_pour_l_affichage`.
+    / The single "how this sale is paid" rule. Zero nets and offered are returned as
+    they are: each reader decides what it keeps.
+
+    Aucune requête si l'appelant précharge `reglements` et `ventes_derivees__reglements`
+    (les noms des monnaies sont reçus, jamais lus ici).
+    / No query when the caller prefetches the payments and the derived sales' payments.
+
+    LU PAR : `noms_des_moyens_nets_de_la_vente` (ce module) ; laboutik/views.py (la
+    correction de moyen : moyens corrigeables, montant déplacé, garde anti double
+    envoi) ; BaseBillet/services_vente.py (`moyen_d_argent_unique_de_la_vente` :
+    le champ « Remboursé par » pré-rempli).
+    / Read by the method names, the payment method correction and the "Refunded by"
+    pre-fill.
+
+    :param vente: la `Vente`
+    :param nom_par_uuid_de_monnaie: dict de `noms_des_monnaies_des_ventes`, ou {} :
+        un règlement cashless s'écrit alors par le nom de son moyen
+    :return: liste de dict de `reglements_pour_l_affichage` (moyen, libelle, monnaie,
+        montant, montant_a_la_francaise)
+    """
+    reglements_de_la_vente_et_de_ses_corrections = list(vente.reglements.all())
+    for vente_derivee in vente.ventes_derivees.all():
+        if vente_derivee.nature == Vente.Nature.CORRECTION:
+            for reglement_de_la_correction in vente_derivee.reglements.all():
+                reglements_de_la_vente_et_de_ses_corrections.append(
+                    reglement_de_la_correction
+                )
+
+    return reglements_pour_l_affichage(
+        reglements_de_la_vente_et_de_ses_corrections, nom_par_uuid_de_monnaie, ""
+    )
+
+
 def noms_des_moyens_nets_de_la_vente(vente, nom_par_uuid_de_monnaie):
     """
     « Payé comment » : les noms des moyens d'une vente, après ses corrections.
@@ -243,18 +295,10 @@ def noms_des_moyens_nets_de_la_vente(vente, nom_par_uuid_de_monnaie):
 
     LOCALISATION : laboutik/affichage_des_ventes.py
 
-    On additionne, par moyen (et par monnaie), les règlements de la vente ET ceux de
-    ses ventes dérivées CORRECTION : une vente payée en espèces puis corrigée en CB
-    vaut 0 en espèces et le montant en CB. On garde les moyens dont le net n'est pas
-    nul, sans l'offert (FREE : la trace d'un cadeau, pas un moyen de paiement).
-    Libellés et ordre : ceux de `reglements_pour_l_affichage`.
-    / Payments of the sale AND of its CORRECTION sales are added up by method; methods
-    with a non-zero net are kept, offered left out. Labels and order of
-    `reglements_pour_l_affichage`.
-
-    Aucune requête si l'appelant précharge `reglements` et `ventes_derivees__reglements`
-    (les noms des monnaies sont reçus, jamais lus ici).
-    / No query when the caller prefetches the payments and the derived sales' payments.
+    Les règlements nets de la vente (`reglements_nets_de_la_vente` : la vente et ses
+    ventes CORRECTION). On garde les moyens dont le net n'est pas nul, sans l'offert
+    (FREE : la trace d'un cadeau, pas un moyen de paiement).
+    / The sale's net payments; methods with a non-zero net are kept, offered left out.
 
     LU PAR : Administration/admin_tenant.py (fiche utilisateur, liste des ventes,
     onglet des ventes d'une adhésion), Administration/importers/lignearticle_exporter.py
@@ -267,17 +311,7 @@ def noms_des_moyens_nets_de_la_vente(vente, nom_par_uuid_de_monnaie):
         un règlement cashless s'écrit alors par le nom de son moyen
     :return: liste de libellés, sans doublon, dans l'ordre des moyens
     """
-    reglements_de_la_vente_et_de_ses_corrections = list(vente.reglements.all())
-    for vente_derivee in vente.ventes_derivees.all():
-        if vente_derivee.nature == Vente.Nature.CORRECTION:
-            for reglement_de_la_correction in vente_derivee.reglements.all():
-                reglements_de_la_vente_et_de_ses_corrections.append(
-                    reglement_de_la_correction
-                )
-
-    reglements_affiches = reglements_pour_l_affichage(
-        reglements_de_la_vente_et_de_ses_corrections, nom_par_uuid_de_monnaie, ""
-    )
+    reglements_affiches = reglements_nets_de_la_vente(vente, nom_par_uuid_de_monnaie)
     noms_des_moyens = []
     for reglement_affiche in reglements_affiches:
         if reglement_affiche["moyen"] == PaymentMethod.FREE:
@@ -297,8 +331,8 @@ def lignes_de_la_liste_des_ventes(ventes):
     / One list row per sale.
 
     Aucune requete par vente : les reglements et le point de vente sont precharges,
-    le nombre d'articles est annote (`quantite_d_articles`, somme des quantites),
-    les noms des monnaies sont lus par lot.
+    le nombre d'articles est annote (`quantite_d_articles`, somme des quantites, une
+    pesee comptant pour un article), les noms des monnaies sont lus par lot.
     / No query per sale: prefetched payments and point of sale, annotated quantity,
     currency names in one batch.
 
@@ -346,18 +380,23 @@ def articles_de_la_vente_pour_l_affichage(lignes_de_la_vente, nom_de_l_unite):
 
     UN ARTICLE = un tarif du catalogue (`Price`), pour un evenement (un billet de
     deux evenements fait deux articles), a un prix unitaire, et a un poids (vrac,
-    tireuse). Les « parts » d'un article paye avec plusieurs moyens partagent tout
-    cela : elles forment UN article, dont la quantite est la somme de leurs
-    quantites (1,428571 + 1,571429 = 3 jus ; 0,25 + 0,75 = 1 tirage).
-    / ONE item = one catalogue price, one event, one unit price, one weight. Parts
-    share all of them and form one item.
+    tireuse). Les lignes qui partagent tout cela forment UN article, dont la quantite
+    est la somme de leurs quantites (les « parts » d'une vente de l'historique,
+    1,428571 + 1,571429 = 3 jus).
+    / ONE item = one catalogue price, one event, one unit price, one weight.
 
-    LE POIDS (vrac, tireuse) : chaque part porte le poids de l'article entier (le
-    tirage de 50 cl a 50 sur chaque part). Le poids affiche est donc le poids d'une
-    part multiplie par la quantite totale : 50 × (0,25 + 0,75) = 50 cl, une fois ;
-    deux sachets de 350 g font 700 g.
-    / Weight: each part carries the whole item's weight; shown weight = part weight ×
-    total quantity, so a split pour shows its volume once.
+    VENTE AU POIDS OU AU VOLUME A LA CAISSE (D15, Q-H4) : la quantite de la ligne
+    est deja en kg ou en litres, et son prix unitaire est le prix du kg ou du litre.
+    L'ecran montre « 0,350 kg » et « 12,90 €/kg » (`quantite_au_poids_a_la_francaise`).
+    Une pesee est UN article : deux pesees de 0,350 kg restent deux articles de
+    4,52 €, jamais un article de 0,700 kg (la ligne entre dans la cle).
+    / Register weight / volume sale: the quantity is in kg or litres, the unit price
+    per kg or litre. One weighing is ONE item: two weighings stay two items.
+
+    TIRAGE DE LA TIREUSE : meme forme D15, une ligne en litres au prix du litre. Un
+    fut s'affiche toujours en litres (« 0,50 L »), qu'il ait un stock ou non
+    (`unite_d_une_vente_au_poids`). Un tirage est UN article, comme une pesee.
+    / Tap pour: same D15 form, litres at the price per litre; a keg always shows litres.
 
     Les montants sont des sommes des montants figes sur les lignes (`total_ttc`,
     `part_offerte`), jamais un prix multiplie par une quantite.
@@ -367,9 +406,8 @@ def articles_de_la_vente_pour_l_affichage(lignes_de_la_vente, nom_de_l_unite):
         evenement lus par `select_related`)
     :param nom_de_l_unite: "" (euros) ou le nom de la monnaie de points
     :return: liste de dict (nom, tarif, evenement, date_de_l_evenement, quantite,
-        est_vrac, poids_total,
-        unite_poids, prix_unitaire, prix_par_unite, part_offerte, total, et leurs
-        textes a la francaise)
+        est_vrac, prix_unitaire, prix_par_unite, part_offerte, total, et leurs textes
+        a la francaise ; `quantite_lisible` porte l'unite d'une vente au poids)
     """
     articles_par_cle = {}
     for ligne in lignes_de_la_vente:
@@ -379,39 +417,42 @@ def articles_de_la_vente_pour_l_affichage(lignes_de_la_vente, nom_de_l_unite):
         evenement = produit_vendu.event
 
         est_vrac = bool(ligne.weight_quantity and ligne.weight_quantity > 0)
-        poids_d_une_part = None
+
+        # Une pesee de la caisse ou un tirage de la tireuse (D15) est UN article : la
+        # ligne elle-meme entre dans la cle, deux pesees ne se fusionnent jamais.
+        # / A weighing or a pour is ONE item: the line itself enters the key.
+        ligne_d_une_pesee = None
         if est_vrac:
-            poids_d_une_part = ligne.weight_quantity
+            ligne_d_une_pesee = ligne.pk
 
         cle_de_l_article = (
             tarif_vendu.price_id,
             produit_vendu.event_id,
             ligne.amount,
-            poids_d_une_part,
+            est_vrac,
+            ligne_d_une_pesee,
         )
 
         if cle_de_l_article not in articles_par_cle:
-            # Une ligne au poids : le caissier veut voir « 350g » et « 12,00 €/kg »,
-            # pas « 1 » et le prix de la ligne. L'unite (GR, CL) est celle du stock.
-            # / A bulk line: weight and price per kg / L; unit from the stock.
-            unite_poids = None
+            # Une ligne au poids ou au volume : le caissier veut voir « 0,350 kg » et
+            # « 12,90 €/kg ». L'unite vient du type du produit (fut → L) ou du stock
+            # (CL → L, sinon kg). Le prix unitaire de la ligne EST le prix du kg ou du
+            # litre (D15).
+            # / A bulk line: quantity and price per kg / L; unit from the keg type or
+            # the stock; the line's unit price IS the price per kg / litre.
+            unite_du_stock = None
+            unite_de_la_quantite = ""
             prix_par_unite = None
             if est_vrac:
                 stock_lie = getattr(produit_lie, "stock_inventaire", None)
                 if stock_lie is not None:
-                    unite_poids = stock_lie.unite
-                # Price.prix est en €/kg pour GR, en €/L pour CL.
-                # / Price.prix is in €/kg for GR, €/L for CL.
-                if unite_poids in ("GR", "CL"):
-                    suffixe_unite = "kg" if unite_poids == "GR" else "L"
-                    prix_en_centimes = int(
-                        (tarif_vendu.price.prix * 100).quantize(
-                            Decimal("1"), rounding=ROUND_HALF_UP
-                        )
-                    )
-                    prix_par_unite = (
-                        f"{euros_a_la_francaise(prix_en_centimes)}/{suffixe_unite}"
-                    )
+                    unite_du_stock = stock_lie.unite
+                unite_de_la_quantite = unite_d_une_vente_au_poids(
+                    unite_du_stock, produit_lie.categorie_article
+                )
+                prix_par_unite = (
+                    f"{euros_a_la_francaise(ligne.amount)}/{unite_de_la_quantite}"
+                )
 
             nom_de_l_evenement = ""
             date_de_l_evenement = None
@@ -426,8 +467,8 @@ def articles_de_la_vente_pour_l_affichage(lignes_de_la_vente, nom_de_l_unite):
                 "date_de_l_evenement": date_de_l_evenement,
                 "quantite": Decimal("0"),
                 "est_vrac": est_vrac,
-                "poids_d_une_part": poids_d_une_part,
-                "unite_poids": unite_poids,
+                "unite_du_stock": unite_du_stock,
+                "unite_de_la_quantite": unite_de_la_quantite,
                 "prix_unitaire": ligne.amount or 0,
                 "prix_par_unite": prix_par_unite,
                 "part_offerte": 0,
@@ -440,16 +481,16 @@ def articles_de_la_vente_pour_l_affichage(lignes_de_la_vente, nom_de_l_unite):
 
     articles_affiches = []
     for article in articles_par_cle.values():
-        # Le poids affiche : le poids d'une part × la quantite totale (filtre
-        # `afficher_poids`, qui lit « poids_total » et « unite_poids »).
-        # / Shown weight: one part's weight × total quantity.
-        article["poids_total"] = None
+        # La quantite lisible : « 0,350 kg » ou « 0,50 L » pour une vente au poids ou
+        # au volume (D15, tireuse comprise), sinon le nombre d'articles.
+        # / Readable quantity: "0,350 kg" or "0,50 L" (D15, tap included), or the
+        # number of items.
         if article["est_vrac"]:
-            poids_exact = Decimal(article["poids_d_une_part"]) * article["quantite"]
-            article["poids_total"] = int(
-                poids_exact.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            article["quantite_lisible"] = quantite_au_poids_a_la_francaise(
+                article["quantite"], article["unite_de_la_quantite"]
             )
-        article["quantite_lisible"] = quantite_lisible(str(article["quantite"]))
+        else:
+            article["quantite_lisible"] = quantite_lisible(str(article["quantite"]))
         article["prix_unitaire_a_la_francaise"] = montant_a_la_francaise_dans_l_unite(
             article["prix_unitaire"], nom_de_l_unite
         )

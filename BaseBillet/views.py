@@ -66,6 +66,7 @@ from BaseBillet.services_vente import (
     encaisser_vente,
     ligne_payee_en_points,
     ligne_sans_argent_a_rendre,
+    moyen_d_origine_de_la_ligne,
     ouvrir_vente,
 )
 from Administration.utils import clean_html as admin_clean_html
@@ -1812,9 +1813,11 @@ class QrCodeScanPay(viewsets.ViewSet):
     3. Les autres appels réseau, AVANT la base : la catégorie de chaque monnaie débitée
        (`_moyens_des_monnaies_debitees`). Erreur → demande FAILED, aucune vente.
     4. Une seule transaction de base (`_ecrire_la_vente_payee`) : la demande est
-       remplacée par une vente encaissée, une part et un règlement par transaction.
+       remplacée par une vente encaissée : un article au montant demandé, un règlement
+       par transaction, et un article d'écart si Fedow a débité un autre montant.
        Erreur → demande FAILED (le débit est fait : on ne le rejoue jamais).
-    5. Après la validation en base : les deux mails (lieu, payeur).
+    5. Après la validation en base : les deux mails (lieu, payeur), avec l'argent
+       réellement débité.
     / Reserve, debit, every other network call, one database transaction, then mails.
     """
     authentication_classes = [SessionAuthentication, ]
@@ -1867,13 +1870,10 @@ class QrCodeScanPay(viewsets.ViewSet):
             demande,
             transactions,
             moyens_par_monnaie,
-            total_paye,
-            parts_avec_qty,
             metadata,
             origine,
             client,
             carte,
-            wallet,
     ):
         """
         Remplace la demande payée par une vente encaissée, en une seule transaction de
@@ -1887,34 +1887,36 @@ class QrCodeScanPay(viewsets.ViewSet):
         2. `ouvrir_vente` : une vente de nature VENTE, au nom du payeur, avec sa carte
            si elle est connue. Ni point de vente (le QR code naît sur une page web), ni
            opérateur.
-        3. Pour chaque transaction de l'ancien Fedow :
-           - une part (`ajouter_article`) : `amount` = total payé, `qty` = la part de sa
-             monnaie, `total_catalogue_impose` = l'argent réellement débité dans cette
-             monnaie. La PREMIÈRE part garde l'uuid de la demande : l'écran de
-             l'encaisseur (`check_payment`) interroge cet uuid ;
-           - un règlement (`ajouter_reglement`) : moyen, montant et monnaie copiés, la
-             carte, et l'uuid de la transaction distante dans `reference_externe`
-             (`fedow_transaction_uuid` est réservé aux transactions `fedow_core`
-             locales). Pas de portefeuille : comme les règlements de l'ancien Fedow à
-             la caisse.
-        4. `encaisser_vente` EN DERNIER : il pose le verrou du lieu jusqu'au commit.
+        3. UN article (`ajouter_article`), quel que soit le nombre de monnaies
+           débitées : `qty` 1, `amount` = le montant DEMANDÉ (celui de la demande), le
+           tarif vendu de la demande, les métadonnées recopiées, et l'uuid de la
+           demande : l'écran de l'encaisseur (`check_payment`) interroge cet uuid. La
+           ligne ne porte ni moyen, ni monnaie, ni carte, ni portefeuille (Q-H2) : les
+           règlements les portent.
+        4. Un règlement par transaction de l'ancien Fedow (`ajouter_reglement`) :
+           moyen, montant et monnaie copiés, la carte, et l'uuid de la transaction
+           distante dans `reference_externe` (`fedow_transaction_uuid` est réservé aux
+           transactions `fedow_core` locales). Pas de portefeuille : comme les
+           règlements de l'ancien Fedow à la caisse.
+        5. Fedow a débité un autre montant que la demande : la différence devient un
+           article « Écart d'encaissement » (reçu en moins ou reçu en plus, D26). Le
+           débit ne s'annule pas : l'article garde son prix, l'écart fait tenir les
+           deux égalités.
+        6. `encaisser_vente` EN DERNIER : il pose le verrou du lieu jusqu'au commit.
         Aucun appel réseau ici : ils sont tous faits avant.
-        / Delete the request, open the sale, one part and one payment per remote
-        transaction (the first part keeps the request uuid), settle LAST. No network.
+        / Delete the request, open the sale, ONE item at the requested amount with the
+        request uuid, one payment per remote transaction, a gap item if Fedow debited
+        another amount, settle LAST. No network.
 
         APPELÉ PAR : process_with_nfc, valid_payment
 
         :param demande: la `LigneArticle` de la demande, réservée (UNPAID)
         :param transactions: les transactions rendues par le débit
         :param moyens_par_monnaie: sortie de `_moyens_des_monnaies_debitees`
-        :param total_paye: le total réellement débité, en centimes (int)
-        :param parts_avec_qty: sortie de `_calculer_qty_partielles`, dans l'ordre des
-            transactions
-        :param metadata: les métadonnées de la demande (dict), recopiées sur chaque part
+        :param metadata: les métadonnées de la demande (dict), recopiées sur l'article
         :param origine: `SaleOrigin.QRCODE_MA` ou `SaleOrigin.NFC_MA`
         :param client: le payeur (`TibilletUser`)
         :param carte: la `CarteCashless` locale du tag lu, ou None
-        :param wallet: le portefeuille du payeur, posé sur chaque part
         :return: la vente encaissée
         """
         # Imports faits à l'appel, INDISPENSABLES : les tests du paiement QR
@@ -1928,6 +1930,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         from BaseBillet.models_vente import Vente
         from BaseBillet.services_vente import (
             ajouter_article,
+            ajouter_l_article_d_ecart_d_encaissement,
             ajouter_reglement,
             encaisser_vente,
             ouvrir_vente,
@@ -1937,7 +1940,21 @@ class QrCodeScanPay(viewsets.ViewSet):
         pricesold_de_la_demande = demande.pricesold
         produit_vendu = pricesold_de_la_demande.productsold.product
         uuid_de_la_demande = demande.uuid
-        metadata_en_texte = json.dumps(metadata, cls=DjangoJSONEncoder)
+        montant_demande = demande.amount
+        # Les métadonnées vont dans un `JSONField` sous forme de DICTIONNAIRE (jamais
+        # un texte JSON : l'avoir les recopie avec `dict.update`). L'aller-retour par
+        # `DjangoJSONEncoder` rend les uuid et les dates des transactions en texte, que
+        # le `JSONField` sait écrire.
+        # / Metadata goes into a JSONField as a DICT (never JSON text: the credit note
+        # copies it with dict.update). The DjangoJSONEncoder round trip turns the
+        # transactions' uuids and dates into text.
+        metadonnees_de_la_ligne = json.loads(json.dumps(metadata, cls=DjangoJSONEncoder))
+
+        # Taux de TVA : celui du produit, sinon le taux par défaut du lieu. Aucun moyen
+        # n'est passé : la ligne n'en porte pas, et le QR ne débite que de la monnaie
+        # fédérée (SF) ou locale (LE), jamais de jetons ni de points.
+        # / VAT rate: the product's, otherwise the venue default; no method on the line.
+        taux_tva_de_l_article = _taux_tva_de_la_ligne_de_caisse(produit_vendu, None)
 
         with db_transaction.atomic():
             demande.delete()
@@ -1949,36 +1966,22 @@ class QrCodeScanPay(viewsets.ViewSet):
                 carte=carte,
             )
 
-            for index_transaction, transaction_fedow in enumerate(transactions):
+            ajouter_article(
+                vente,
+                pricesold=pricesold_de_la_demande,
+                quantite=Decimal("1"),
+                prix_unitaire=montant_demande,
+                taux_tva=taux_tva_de_l_article,
+                uuid=uuid_de_la_demande,
+                status=LigneArticle.VALID,
+                metadata=metadonnees_de_la_ligne,
+            )
+
+            argent_debite = 0
+            for transaction_fedow in transactions:
                 moyen_de_paiement = moyens_par_monnaie[str(transaction_fedow['asset'])]
                 montant_debite_dans_cette_monnaie = transaction_fedow['amount']
-
-                premiere_part = index_transaction == 0
-                if premiere_part:
-                    uuid_de_la_part = uuid_de_la_demande
-                else:
-                    uuid_de_la_part = uuid.uuid4()
-
-                # Taux de TVA : celui du produit, sinon le taux par défaut du lieu.
-                # / VAT rate: the product's, otherwise the venue default.
-                taux_tva_de_la_part = _taux_tva_de_la_ligne_de_caisse(
-                    produit_vendu, moyen_de_paiement
-                )
-
-                ajouter_article(
-                    vente,
-                    pricesold=pricesold_de_la_demande,
-                    quantite=parts_avec_qty[index_transaction]["qty"],
-                    prix_unitaire=total_paye,
-                    taux_tva=taux_tva_de_la_part,
-                    total_catalogue_impose=montant_debite_dans_cette_monnaie,
-                    uuid=uuid_de_la_part,
-                    payment_method=moyen_de_paiement,
-                    status=LigneArticle.VALID,
-                    metadata=metadata_en_texte,
-                    asset=transaction_fedow['asset'],
-                    wallet=wallet,
-                )
+                argent_debite += montant_debite_dans_cette_monnaie
 
                 ajouter_reglement(
                     vente,
@@ -1988,6 +1991,12 @@ class QrCodeScanPay(viewsets.ViewSet):
                     carte=carte,
                     reference_externe=str(transaction_fedow['uuid']),
                 )
+
+            # Écart = argent débité − montant demandé : négatif (reçu en moins) ou
+            # positif (reçu en plus). Rien si Fedow a débité exactement la demande.
+            # / Gap = money debited − requested amount; nothing when equal.
+            ecart_en_centimes = argent_debite - montant_demande
+            ajouter_l_article_d_ecart_d_encaissement(vente, ecart_en_centimes)
 
             vente_encaissee = encaisser_vente(vente)
 
@@ -2215,38 +2224,25 @@ class QrCodeScanPay(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        total_amount = ligne_article.amount
         ex_ligne_article_uuid = ligne_article.uuid
         try:
             metadata['transactions'] = transactions
 
-            # Une part par monnaie debitee. Chaque part porte le prix UNITAIRE du
-            # paiement (le montant total) et sa part dans qty : total = amount x qty.
-            # qty a 6 decimales, la derniere part prend le reste pour que la somme
-            # des qty vaille exactement 1.
-            # Import local, comme controlvanne/billing.py.
-            # / One part per debited currency: unit price in amount, share in qty.
-            from laboutik.views import _calculer_qty_partielles
-
-            parts_par_transaction = [
-                {"amount_centimes": transaction['amount']} for transaction in transactions
-            ]
-            somme_des_parts = sum(part["amount_centimes"] for part in parts_par_transaction)
-            if somme_des_parts != total_amount:
+            # L'argent réellement débité, toutes monnaies : les mails et la réponse
+            # l'annoncent. La vente garde le montant demandé, et une différence devient
+            # un article d'écart (`_ecrire_la_vente_payee`).
+            # / The money really debited: announced by the mails and the response.
+            total_amount = 0
+            for transaction_fedow in transactions:
+                total_amount += transaction_fedow['amount']
+            if total_amount != ligne_article.amount:
                 # Fedow repartit le montant entier sur les monnaies. Une somme
-                # differente signale un debit partiel : on le trace.
+                # differente signale un debit partiel (ou en trop) : on le trace.
                 # / Fedow allocates the full amount; a different sum means a partial debit.
                 logger.error(
-                    f"Paiement QR/NFC : parts debitees {somme_des_parts} "
-                    f"!= montant demande {total_amount} (ligne {ex_ligne_article_uuid})"
+                    f"Paiement QR/NFC : argent debite {total_amount} "
+                    f"!= montant demande {ligne_article.amount} (ligne {ex_ligne_article_uuid})"
                 )
-                # La vente enregistre ce que Fedow a reellement debite, comme la
-                # tireuse : jamais un montant qui n'a pas ete paye.
-                # / The sale records what Fedow actually debited, like the tap.
-                total_amount = somme_des_parts
-            parts_avec_qty = _calculer_qty_partielles(
-                parts_par_transaction, total_amount, Decimal("1")
-            )
 
             # La carte locale du tag lu, si le lieu la connait. / The local card, if known.
             from QrcodeCashless.models import CarteCashless
@@ -2256,13 +2252,10 @@ class QrCodeScanPay(viewsets.ViewSet):
                 demande=ligne_article,
                 transactions=transactions,
                 moyens_par_monnaie=moyens_par_monnaie,
-                total_paye=total_amount,
-                parts_avec_qty=parts_avec_qty,
                 metadata=metadata,
                 origine=SaleOrigin.NFC_MA,
                 client=wallet.user,
                 carte=carte_du_tag_lu,
-                wallet=wallet,
             )
 
         except Exception as e:
@@ -2422,8 +2415,15 @@ class QrCodeScanPay(viewsets.ViewSet):
         amount = ligne_article.amount
         asset_type = "EURO"  # Default to EURO
 
-        # Get admin information from metadata
-        metadata = json.loads(ligne_article.metadata) if ligne_article.metadata else {}
+        # Les métadonnées de la ligne : un texte JSON pour une demande en attente, un
+        # dictionnaire pour une ligne déjà payée (un rejeu, refusé plus bas par la
+        # réservation). Les deux formes se lisent.
+        # / The line's metadata: JSON text for a pending request, a dict for an already
+        #   paid line (a replay, refused below by the reservation). Both are read.
+        if isinstance(ligne_article.metadata, dict):
+            metadata = dict(ligne_article.metadata)
+        else:
+            metadata = json.loads(ligne_article.metadata) if ligne_article.metadata else {}
         # Check the wallet on fedow
         user = request.user
         from fedow_connect.fedow_api import FedowAPI
@@ -2503,38 +2503,25 @@ class QrCodeScanPay(viewsets.ViewSet):
             )
             return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
 
-        total_amount = ligne_article.amount
         ex_ligne_article_uuid = ligne_article.uuid
         try:
             metadata['transactions'] = transactions
 
-            # Une part par monnaie debitee. Chaque part porte le prix UNITAIRE du
-            # paiement (le montant total) et sa part dans qty : total = amount x qty.
-            # qty a 6 decimales, la derniere part prend le reste pour que la somme
-            # des qty vaille exactement 1.
-            # Import local, comme controlvanne/billing.py.
-            # / One part per debited currency: unit price in amount, share in qty.
-            from laboutik.views import _calculer_qty_partielles
-
-            parts_par_transaction = [
-                {"amount_centimes": transaction['amount']} for transaction in transactions
-            ]
-            somme_des_parts = sum(part["amount_centimes"] for part in parts_par_transaction)
-            if somme_des_parts != total_amount:
+            # L'argent réellement débité, toutes monnaies : les mails et le solde
+            # affiché l'utilisent. La vente garde le montant demandé, et une
+            # différence devient un article d'écart (`_ecrire_la_vente_payee`).
+            # / The money really debited: used by the mails and the shown balance.
+            total_amount = 0
+            for transaction_fedow in transactions:
+                total_amount += transaction_fedow['amount']
+            if total_amount != ligne_article.amount:
                 # Fedow repartit le montant entier sur les monnaies. Une somme
-                # differente signale un debit partiel : on le trace.
+                # differente signale un debit partiel (ou en trop) : on le trace.
                 # / Fedow allocates the full amount; a different sum means a partial debit.
                 logger.error(
-                    f"Paiement QR/NFC : parts debitees {somme_des_parts} "
-                    f"!= montant demande {total_amount} (ligne {ex_ligne_article_uuid})"
+                    f"Paiement QR/NFC : argent debite {total_amount} "
+                    f"!= montant demande {ligne_article.amount} (ligne {ex_ligne_article_uuid})"
                 )
-                # La vente enregistre ce que Fedow a reellement debite, comme la
-                # tireuse : jamais un montant qui n'a pas ete paye.
-                # / The sale records what Fedow actually debited, like the tap.
-                total_amount = somme_des_parts
-            parts_avec_qty = _calculer_qty_partielles(
-                parts_par_transaction, total_amount, Decimal("1")
-            )
 
             # Pas de carte ici : l'adherent paie depuis son telephone.
             # / No card here: the member pays from their phone.
@@ -2542,13 +2529,10 @@ class QrCodeScanPay(viewsets.ViewSet):
                 demande=ligne_article,
                 transactions=transactions,
                 moyens_par_monnaie=moyens_par_monnaie,
-                total_paye=total_amount,
-                parts_avec_qty=parts_avec_qty,
                 metadata=metadata,
                 origine=SaleOrigin.QRCODE_MA,
                 client=user,
                 carte=None,
-                wallet=wallet,
             )
 
         except Exception as e:
@@ -2565,27 +2549,29 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context['error_message'] = _("Error validating payment")
             return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
 
-        # Le solde affiche apres le paiement est calcule (solde lu avant le debit,
-        # moins ce qui a ete debite) : aucun appel reseau apres l'ecriture de la vente.
-        # / The balance shown is computed (balance read before the debit minus what
-        #   was debited): no network call after the sale is written.
+        # La page du payeur affiche l'argent reellement debite, comme les mails et les
+        # reponses de la lecture de carte. Le solde affiche apres le paiement est
+        # calcule (solde lu avant le debit, moins ce qui a ete debite) : aucun appel
+        # reseau apres l'ecriture de la vente.
+        # / The payer page shows the money really debited, like the mails. The balance
+        #   shown is computed: no network call after the sale is written.
         tenant = connection.tenant
         template_context['payment_location'] = tenant.name
-        template_context['amount'] = amount
+        template_context['amount'] = total_amount
         template_context['payment_time'] = timezone.now().strftime("%d/%m/%Y %H:%M")
         template_context['user_balance'] = user_balance - total_amount
 
         # Les mails partent APRES la validation en base : jamais un mail pour une
-        # vente qui n'existe pas.
-        # / Mails are sent AFTER the commit: never a mail for a sale that does not exist.
+        # vente qui n'existe pas. Ils portent l'argent réellement débité (D26).
+        # / Mails are sent AFTER the commit, with the money really debited.
         payment_time_str = template_context['payment_time']
         nom_du_lieu = tenant.name
         email_du_payeur = user.email
 
         def envoyer_les_mails_de_confirmation():
             try:
-                send_payment_success_admin.delay(amount, payment_time_str, nom_du_lieu, email_du_payeur)
-                send_payment_success_user.delay(email_du_payeur, amount, payment_time_str, nom_du_lieu)
+                send_payment_success_admin.delay(total_amount, payment_time_str, nom_du_lieu, email_du_payeur)
+                send_payment_success_user.delay(email_du_payeur, total_amount, payment_time_str, nom_du_lieu)
             except Exception as e_mail:
                 logger.error(f"Error sending payment confirmation emails: {e_mail}")
 
@@ -4911,7 +4897,8 @@ class MembershipMVT(viewsets.ViewSet):
           phrase le dit : les points ne sont pas rendus sur la carte ;
         - sinon : le dernier paiement est listé, avec l'option « avec avoir ». Le champ
           « Remboursé par » n'est affiché que s'il y a de l'argent à rendre hors Stripe.
-          Il est pré-rempli avec le moyen d'origine s'il est dans la liste. Une ligne
+          Il est pré-rempli avec le moyen d'origine (le seul moyen d'argent des
+          règlements nets de la vente de la ligne) s'il est dans la liste. Une ligne
           payée par Stripe affiche à la place « Remboursez cette somme depuis votre
           tableau de bord Stripe. ».
         / Only the latest payment is shown and credited (D30): no payment, already
@@ -4956,13 +4943,16 @@ class MembershipMVT(viewsets.ViewSet):
             )
 
         # Le moyen affiché : celui du POST refusé, sinon le moyen d'origine s'il est
-        # dans la liste.
-        # / The shown method: the refused POST's one, else the original one if listed.
+        # dans la liste. Le moyen d'origine est le seul moyen d'argent des règlements
+        # nets de la vente de la ligne (`moyen_d_origine_de_la_ligne`, la même règle
+        # que les écrans d'avoir de l'admin).
+        # / The shown method: the refused POST's one, else the original one (read
+        # from the sale's payments) if listed.
         moyen_affiche = ""
         if valeurs_postees is not None:
             moyen_affiche = valeurs_postees.get("moyen_rembourse", "")
         elif champ_rembourse_par_affiche:
-            moyen_d_origine = ligne_du_dernier_paiement.payment_method
+            moyen_d_origine = moyen_d_origine_de_la_ligne(ligne_du_dernier_paiement)
             if moyen_d_origine in MOYENS_DU_CHAMP_REMBOURSE_PAR:
                 moyen_affiche = moyen_d_origine
 

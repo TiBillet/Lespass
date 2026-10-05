@@ -12,17 +12,19 @@ LOCALISATION : tests/pytest/test_caisse_ecrit_la_vente.py
 
 RÈGLE MÉTIER TESTÉE
 Un clic sur un moyen de paiement qui réussit produit UNE vente encaissée (`REGLEE`,
-numérotée), dans la même transaction que les lignes de vente. Les lignes restent écrites
-comme aujourd'hui (même `amount`, même `qty`, mêmes champs historiques), et reçoivent en
-plus leur vente et leurs montants entiers. Les règlements sont copiés de l'argent
-réellement encaissé, jamais recalculés depuis les lignes.
+numérotée), dans la même transaction que les lignes de vente. Chaque article est UNE
+ligne (vraie quantité, prix unitaire, montants entiers), sans moyen, monnaie, carte ni
+portefeuille (Q-H2) ; une pesée est en kg ou en litres au prix du kg / du litre (D15).
+Les règlements sont copiés de l'argent réellement encaissé, jamais recalculés depuis
+les lignes.
 Cas particuliers :
 - OFFRIR (mode gérant) et recharge cadeau : article entièrement offert, règlement FREE ;
 - recharge en euros : article hors chiffre d'affaires, TVA 0, dans la même vente que le
   reste du panier ;
 - retour de consigne : vente `AVOIR`, règlement négatif, au prix et au taux de TVA du
   produit consigne relié (`Product.consigne_remboursee`) ; sans consigne reliée, refus.
-  Son coût d'achat est celui du gobelet, en négatif. Quand la caisse ne sait pas
+  La ligne a une quantité négative et le prix positif du gobelet (D13). Son coût
+  d'achat est celui du gobelet, en négatif. Quand la caisse ne sait pas
   calculer son prix (pas de consigne reliée, ou gobelet sans tarif en euros), le
   retour n'a pas de tuile.
 / One successful click on a payment method writes ONE settled sale, in the same
@@ -38,11 +40,8 @@ par la clé d'idempotence qu'il a lui-même envoyée (`Vente.idempotency_key` re
 du paiement), ou, pour la recharge cadeau (sans clé), par la ligne de son propre tarif.
 Chaque test finit par `verifier_egalites(vente)` (tests/pytest/fabriques_vente.py) et
 compare des entiers exacts.
-Pendant la transition, un article payé avec plusieurs moyens est coupé en parts, une
-par monnaie : aucun test de ce fichier n'asserte le HT d'une part (tronc §5), seulement
-les totaux de la vente.
 / Each test finds ITS sale through the idempotency key it sent, and ends with
-verifier_egalites(vente). No test asserts the HT of a part, only the sale totals.
+verifier_egalites(vente).
 
 PAIEMENT PAR CARTE NFC : LES RÈGLEMENTS VIENNENT DES DÉBITS
 Les règlements sont copiés des débits réellement faits, jamais des lignes : un règlement
@@ -454,13 +453,14 @@ def test_vente_especes_trois_jus_une_vente_un_reglement(lieu):
     assert article.total_tva == 175
     assert article.hors_chiffre_affaires is False
 
-    # La ligne garde ses champs historiques : les anciens rapports les lisent
-    # jusqu'à la fiche H.
-    # / The line keeps its historical fields: old reports read them until sheet H.
+    # La ligne porte le prix unitaire, la vraie quantité, le taux, le statut et
+    # l'identifiant du paiement. Son moyen reste vide : le règlement le porte (Q-H2).
+    # / The line carries unit price, real quantity, rate, status and payment id; its
+    # method stays empty: the payment carries it (Q-H2).
     assert article.amount == 350
     assert article.qty == 3
     assert article.vat == Decimal("20")
-    assert article.payment_method == PaymentMethod.CASH
+    assert article.payment_method is None
     assert article.status == LigneArticle.VALID
     assert str(article.uuid_transaction) == cle_d_idempotence
 
@@ -976,7 +976,7 @@ def test_retour_consigne_reprend_prix_et_tva_du_gobelet(lieu):
     La vente est un AVOIR, sans vente liée (le gobelet est anonyme). L'article reprend
     le taux du GOBELET (20 %), pas celui du produit de retour (5,5 %) : il annule
     exactement la vente du gobelet, TVA comprise (D11). Montants : −100 / HT −83 /
-    TVA −17. La ligne garde un prix négatif et une quantité positive jusqu'à la fiche H.
+    TVA −17. La ligne a une quantité négative (−1) et le prix positif du gobelet (D13).
     Un règlement négatif en monnaie locale, de −1,00 €, sur la carte : c'est la
     transaction de recrédit de la carte.
     / A cup returned, 1.00 € refunded on the card. The CUP's price is used everywhere
@@ -1030,8 +1030,8 @@ def test_retour_consigne_reprend_prix_et_tva_du_gobelet(lieu):
     article = seul_article_de_la_vente(vente)
     assert article.pricesold.price_id == consigne.retour.tarif.pk
     assert article.vat == Decimal("20")
-    assert article.amount == -100
-    assert article.qty == 1
+    assert article.amount == 100
+    assert article.qty == -1
     assert article.total_catalogue == -100
     assert article.total_ttc == -100
     assert article.total_ht == -83
@@ -1077,10 +1077,13 @@ def test_retour_consigne_especes_vente_avoir(lieu):
     # / The success screen shows the amount to give back, in euros.
     assert reponse.context["total"] == 1
 
-    # La ligne garde le tarif vendu du produit de retour, au prix du gobelet.
-    # / The line keeps the return product's sold price, at the cup's price.
+    # La ligne garde le tarif vendu du produit de retour, au prix (positif) du
+    # gobelet, en quantité négative (D13).
+    # / The line keeps the return product's sold price, at the cup's (positive)
+    # price, in negative quantity (D13).
     ligne_du_retour = LigneArticle.objects.get(pricesold__price=consigne.retour.tarif)
-    assert ligne_du_retour.amount == -100
+    assert ligne_du_retour.amount == 100
+    assert ligne_du_retour.qty == -1
 
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
     assert vente.nature == Vente.Nature.AVOIR
@@ -1181,7 +1184,8 @@ def test_retour_consigne_cout_d_achat_du_gobelet_en_negatif(lieu):
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
     assert vente.nature == Vente.Nature.AVOIR
     article = seul_article_de_la_vente(vente)
-    assert article.qty == 2
+    assert article.qty == -2
+    assert article.amount == 100
     assert article.total_catalogue == -200
     assert article.cout_achat == -60
     assert reglements_de_la_vente(vente) == [(PaymentMethod.CASH, -200)]
@@ -1396,11 +1400,11 @@ def test_ht_de_la_part_111_centimes_vaut_93(lieu):
 def test_vente_au_poids_cout_sur_le_poids_reel(lieu):
     """
     350 g de fromage à 20,00 €/kg (prix d'achat 8,00 €/kg), payés en espèces.
-    La ligne garde `qty = 1` et le poids (350 g) dans `weight_quantity`, comme
-    aujourd'hui. Prix : 7,00 €. Le coût d'achat porte sur le poids réel :
-    0,350 kg × 800 = 280 centimes (et non 800, le coût d'un kilo).
-    / 350 g of cheese at 20.00 €/kg (bought 8.00 €/kg), in cash. qty stays 1, the
-    weight is in weight_quantity. Price 700; purchase cost on the real weight: 280.
+    La ligne porte la quantité réelle en kg (`qty` = 0,350) au prix du kilo (2000),
+    et le poids saisi (350 g) dans `weight_quantity` (D15). Total : 7,00 €. Le coût
+    d'achat porte sur le poids réel : 0,350 kg × 800 = 280 centimes.
+    / 350 g of cheese at 20.00 €/kg (bought 8.00 €/kg), in cash: qty 0.350 kg at the
+    price per kg, weight in weight_quantity (D15). Total 700; purchase cost 280.
     """
     fromage = creer_un_article_de_caisse(
         "fromage au poids",
@@ -1430,8 +1434,8 @@ def test_vente_au_poids_cout_sur_le_poids_reel(lieu):
     assert reponse.status_code == 200
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
     article = seul_article_de_la_vente(vente)
-    assert article.amount == 700
-    assert article.qty == 1
+    assert article.amount == 2000
+    assert article.qty == Decimal("0.350")
     assert article.weight_quantity == 350
     assert article.total_catalogue == 700
     assert article.cout_achat == 280
@@ -1578,20 +1582,6 @@ def payer_par_la_carte_du_client(
     )
 
 
-def articles_de_la_vente_par_moyen(vente):
-    """
-    Les articles (parts) de la vente, rangés par moyen de paiement de la ligne :
-    {moyen: [article, …]}.
-    / The sale's items (parts), grouped by the line's payment method.
-    """
-    articles_par_moyen = {}
-    for article in vente.articles.all():
-        if article.payment_method not in articles_par_moyen:
-            articles_par_moyen[article.payment_method] = []
-        articles_par_moyen[article.payment_method].append(article)
-    return articles_par_moyen
-
-
 # --------------------------------------------------------------------------
 # 10 — Un règlement par transaction fedow_core, de son montant
 # / 10 — One payment per fedow_core transaction, of its amount
@@ -1712,21 +1702,20 @@ def test_deux_articles_meme_monnaie_un_seul_reglement_par_monnaie(lieu):
 
 
 # --------------------------------------------------------------------------
-# 12a — Jetons et monnaie locale sur UN article : parts entières
-# / 12a — Tokens and local currency on ONE item: whole parts
+# 12a — Jetons et monnaie locale sur UN article : UNE ligne
+# / 12a — Tokens and local currency on ONE item: ONE line
 # --------------------------------------------------------------------------
 
 
-def test_jetons_et_monnaie_locale_sur_un_article_parts_entieres(lieu):
+def test_jetons_et_monnaie_locale_sur_un_article_une_ligne(lieu):
     """
     Une bière à 5,00 € (TVA 20 %) payée par la carte du client : 3,00 € de jetons
-    cadeau, puis 2,00 € de monnaie locale. L'article est coupé en deux parts entières.
-    - part jetons : catalogue 300, rien d'offert, net 300 (vente ordinaire, D8 bis) ;
-    - part monnaie locale : catalogue 200, rien d'offert, net 200.
+    cadeau, puis 2,00 € de monnaie locale. UNE ligne : quantité 1, prix 500,
+    catalogue 500, rien d'offert, part payée en jetons 300 (vente ordinaire, D8 bis).
     Un règlement « jetons » (LG) de 300 et un règlement monnaie locale (LE) de 200.
     Vente : catalogue 500, offert 0, net 500, HT 467 (300 à TVA 0 + 167), TVA 33.
-    / A 5.00 € beer paid 3.00 € in gift tokens + 2.00 € in local currency: two whole
-    parts, nothing offered, payments LG 300 + LE 200; sale totals.
+    / A 5.00 € beer paid 3.00 € in gift tokens + 2.00 € in local currency: ONE line
+    (token part 300), payments LG 300 + LE 200; sale totals.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit])
@@ -1745,32 +1734,15 @@ def test_jetons_et_monnaie_locale_sur_un_article_parts_entieres(lieu):
 
     assert reponse.status_code == 200
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
-    articles_par_moyen = articles_de_la_vente_par_moyen(vente)
-    assert sorted(articles_par_moyen.keys()) == [
-        PaymentMethod.LOCAL_EURO,
-        PaymentMethod.LOCAL_GIFT,
-    ]
-    assert len(articles_par_moyen[PaymentMethod.LOCAL_GIFT]) == 1
-    assert len(articles_par_moyen[PaymentMethod.LOCAL_EURO]) == 1
-
-    part_en_jetons = articles_par_moyen[PaymentMethod.LOCAL_GIFT][0]
-    assert part_en_jetons.total_catalogue == 300
-    assert part_en_jetons.part_offerte == 0
-    assert part_en_jetons.source_offert == ""
-    assert part_en_jetons.total_ttc == 300
-
-    part_en_monnaie_locale = articles_par_moyen[PaymentMethod.LOCAL_EURO][0]
-    assert part_en_monnaie_locale.total_catalogue == 200
-    assert part_en_monnaie_locale.part_offerte == 0
-    assert part_en_monnaie_locale.total_ttc == 200
-
-    # Les deux parts gardent leurs champs historiques : même prix unitaire, une
-    # quantité partielle chacune, la carte du client.
-    # / Both parts keep their historical fields: unit price, partial quantity, card.
-    for part in (part_en_jetons, part_en_monnaie_locale):
-        assert part.amount == 500
-        assert part.carte_id == carte_du_client.pk
-        assert str(part.uuid_transaction) == cle_d_idempotence
+    article = seul_article_de_la_vente(vente)
+    assert article.qty == 1
+    assert article.amount == 500
+    assert article.total_catalogue == 500
+    assert article.part_offerte == 0
+    assert article.source_offert == ""
+    assert article.part_en_jetons == 300
+    assert article.total_ttc == 500
+    assert str(article.uuid_transaction) == cle_d_idempotence
 
     assert reglements_de_la_vente(vente) == [
         (PaymentMethod.LOCAL_EURO, 200),
@@ -1793,17 +1765,16 @@ def test_jetons_et_monnaie_locale_sur_un_article_parts_entieres(lieu):
 def test_jetons_vente_ordinaire_tva_zero(lieu):
     """
     Une bière à 5,00 € (TVA 20 %) payée par la carte du client : 3,00 € de jetons
-    cadeau, puis 2,00 € de monnaie locale. L'article est coupé en deux parts.
+    cadeau, puis 2,00 € de monnaie locale. UNE ligne.
     Un jeton dépensé solde la dette du lieu envers le porteur (D8 bis) : la part payée
-    en jetons est une VENTE ORDINAIRE, hors TVA.
-    - part jetons : catalogue 300, rien d'offert, sans source d'offert, net 300, TVA 0 %
-      (HT 300, TVA 0) ;
-    - part monnaie locale : catalogue 200, net 200, TVA 20 % (HT 167, TVA 33).
+    en jetons est une VENTE ORDINAIRE, hors TVA. La ligne : catalogue 500, rien
+    d'offert, sans source d'offert, net 500, part payée en jetons 300, taux du produit
+    (20 %) ; HT = 300 + arrondi(200 / 1,2) = 467, TVA 33 (sur les 200 en argent).
     Le règlement « jetons » (LG) de 300 est un vrai règlement : il compte dans les deux
     égalités. Vente : catalogue 500, offert 0, net 500, HT 467, TVA 33.
-    / A 5.00 € beer paid 3.00 € in gift tokens + 2.00 € in local currency. The token
-    part is an ordinary sale without VAT (net 300, nothing offered, VAT 0); the LG
-    payment counts in both equalities. Sale: net 500, HT 467, VAT 33.
+    / A 5.00 € beer paid 3.00 € in gift tokens + 2.00 € in local currency: ONE line,
+    token part 300 out of VAT, VAT only on the 200 of money; the LG payment counts in
+    both equalities.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit])
@@ -1822,28 +1793,18 @@ def test_jetons_vente_ordinaire_tva_zero(lieu):
 
     assert reponse.status_code == 200
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
-    articles_par_moyen = articles_de_la_vente_par_moyen(vente)
-    assert len(articles_par_moyen[PaymentMethod.LOCAL_GIFT]) == 1
-    assert len(articles_par_moyen[PaymentMethod.LOCAL_EURO]) == 1
 
-    # La part en jetons : une vente ordinaire, au taux 0.
-    # / The token part: an ordinary sale, at a 0 rate.
-    part_en_jetons = articles_par_moyen[PaymentMethod.LOCAL_GIFT][0]
-    assert part_en_jetons.total_catalogue == 300
-    assert part_en_jetons.part_offerte == 0
-    assert part_en_jetons.source_offert == ""
-    assert part_en_jetons.total_ttc == 300
-    assert part_en_jetons.vat == 0
-    assert part_en_jetons.total_ht == 300
-    assert part_en_jetons.total_tva == 0
-
-    # La part en monnaie locale garde la TVA du produit.
-    # / The local currency part keeps the product's VAT.
-    part_en_monnaie_locale = articles_par_moyen[PaymentMethod.LOCAL_EURO][0]
-    assert part_en_monnaie_locale.vat == Decimal("20.00")
-    assert part_en_monnaie_locale.total_ttc == 200
-    assert part_en_monnaie_locale.total_ht == 167
-    assert part_en_monnaie_locale.total_tva == 33
+    # Une vente ordinaire, hors TVA pour sa part payée en jetons, au taux du produit.
+    # / An ordinary sale, out of VAT for its token part, at the product's rate.
+    article = seul_article_de_la_vente(vente)
+    assert article.total_catalogue == 500
+    assert article.part_offerte == 0
+    assert article.source_offert == ""
+    assert article.total_ttc == 500
+    assert article.part_en_jetons == 300
+    assert article.vat == Decimal("20.00")
+    assert article.total_ht == 467
+    assert article.total_tva == 33
 
     assert reglements_de_la_vente(vente) == [
         (PaymentMethod.LOCAL_EURO, 200),
@@ -2294,9 +2255,9 @@ def test_ht_111_centimes_vaut_93_par_la_cascade(lieu):
 def test_vente_au_poids_par_la_cascade_cout_sur_le_poids_reel(lieu):
     """
     350 g de fromage à 20,00 €/kg (prix d'achat 8,00 €/kg), payés par la carte du
-    client en monnaie locale seulement. La ligne garde `qty = 1` et le poids (350 g)
-    dans `weight_quantity`. Prix : 7,00 €. Le coût d'achat porte sur le poids réel :
-    0,350 kg × 800 = 280 centimes (et non 800, le coût d'un kilo).
+    client en monnaie locale seulement. La ligne porte 0,350 kg au prix du kilo
+    (2000), le poids saisi (350 g) dans `weight_quantity` (D15). Total : 7,00 €. Le
+    coût d'achat porte sur le poids réel : 0,350 kg × 800 = 280 centimes.
     / 350 g of cheese at 20.00 €/kg (bought 8.00 €/kg), paid by card: purchase cost on
     the real weight, 280.
     """
@@ -2329,8 +2290,8 @@ def test_vente_au_poids_par_la_cascade_cout_sur_le_poids_reel(lieu):
     assert reponse.status_code == 200
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
     article = seul_article_de_la_vente(vente)
-    assert article.amount == 700
-    assert article.qty == 1
+    assert article.amount == 2000
+    assert article.qty == Decimal("0.350")
     assert article.weight_quantity == 350
     assert article.total_catalogue == 700
     assert article.cout_achat == 280
@@ -2341,13 +2302,11 @@ def test_vente_au_poids_par_la_cascade_cout_sur_le_poids_reel(lieu):
 def test_vente_au_poids_payee_avec_deux_monnaies_cout_sur_le_poids_reel(lieu):
     """
     350 g de fromage à 20,00 €/kg (prix d'achat 8,00 €/kg), soit 7,00 €, payés par la
-    carte du client : 4,20 € de jetons cadeau (60 %) puis 2,80 € de monnaie locale
-    (40 %). L'article est coupé en deux parts. Chaque part porte le coût de SA fraction
-    du poids réel : 0,350 kg × 60 % × 800 = 168 et 0,350 kg × 40 % × 800 = 112. La
-    somme des coûts des parts vaut le coût réel du fromage vendu : 280 (et non 800 par
-    part, ni 480 pour la part à 60 %).
-    / 350 g of cheese (7.00 €) paid 60 % in gift tokens and 40 % in local currency: two
-    parts, each costing its share of the real weight; the parts' costs add up to 280.
+    carte du client : 4,20 € de jetons cadeau puis 2,80 € de monnaie locale. UNE
+    ligne de 0,350 kg (part payée en jetons 420), dont le coût porte sur le poids réel
+    une seule fois : 0,350 kg × 800 = 280.
+    / 350 g of cheese (7.00 €) paid 4.20 € in gift tokens and 2.80 € in local currency:
+    ONE line (token part 420), cost on the real weight once: 280.
     """
     fromage = creer_un_article_de_caisse(
         "fromage au poids",
@@ -2378,14 +2337,11 @@ def test_vente_au_poids_payee_avec_deux_monnaies_cout_sur_le_poids_reel(lieu):
 
     assert reponse.status_code == 200
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
-    parts_du_fromage = list(vente.articles.all())
-    assert len(parts_du_fromage) == 2
-    somme_des_couts_des_parts = 0
-    for part in parts_du_fromage:
-        assert part.weight_quantity == 350
-        assert part.cout_achat is not None
-        somme_des_couts_des_parts += part.cout_achat
-    assert somme_des_couts_des_parts == 280
+    article = seul_article_de_la_vente(vente)
+    assert article.weight_quantity == 350
+    assert article.qty == Decimal("0.350")
+    assert article.part_en_jetons == 420
+    assert article.cout_achat == 280
     assert vente.total_catalogue == 700
     assert reglements_de_la_vente(vente) == [
         (PaymentMethod.LOCAL_EURO, 280),
@@ -2581,18 +2537,17 @@ def reglements_complets_de_la_vente(vente):
 # --------------------------------------------------------------------------
 
 
-def test_nfc_trois_jus_500_le_550_cb_parts_entieres(lieu):
+def test_nfc_trois_jus_500_le_550_cb_une_ligne(lieu):
     """
     Trois jus à 3,50 € (TVA 20 %, 10,50 €). La carte du client porte 5,00 € de monnaie
     locale : elle paie 5,00 €, le reste (5,50 €) est réglé en CB.
-    L'article est coupé en deux parts, une par moyen, qui gardent leurs champs
-    d'aujourd'hui (prix unitaire 350, quantité partielle, la carte, l'identifiant du
-    paiement) et portent chacune l'argent réel de la part : catalogue 500 et 550.
+    UNE ligne : prix unitaire 350, quantité 3, catalogue 1050, l'identifiant du
+    paiement ; ni moyen, ni carte (les règlements les portent).
     Une vente de la caisse, réglée, numérotée : catalogue 1050, net 1050, HT 875,
     TVA 175. Deux règlements : monnaie locale 500, copié de la transaction de la carte
     (son uuid, la monnaie, la carte, le portefeuille), et CB 550.
     / Three 3.50 € juices: 5.00 € in local currency on the card, 5.50 € by bank card.
-    Two whole parts (500 / 550); one settled sale 1050 / 875 / 175; payments LE 500
+    ONE line (3 × 350 = 1050); one settled sale 1050 / 875 / 175; payments LE 500
     (copied from the card transaction) and CB 550.
     """
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
@@ -2629,30 +2584,16 @@ def test_nfc_trois_jus_500_le_550_cb_parts_entieres(lieu):
     assert vente.total_ht == 875
     assert vente.total_tva == 175
 
-    # Deux parts, une par moyen, avec l'argent réel de chaque part.
-    # / Two parts, one per method, each with its real money.
-    articles_par_moyen = articles_de_la_vente_par_moyen(vente)
-    assert sorted(articles_par_moyen.keys()) == [
-        PaymentMethod.CC,
-        PaymentMethod.LOCAL_EURO,
-    ]
-    assert len(articles_par_moyen[PaymentMethod.LOCAL_EURO]) == 1
-    assert len(articles_par_moyen[PaymentMethod.CC]) == 1
-    part_en_monnaie_locale = articles_par_moyen[PaymentMethod.LOCAL_EURO][0]
-    part_en_cb = articles_par_moyen[PaymentMethod.CC][0]
-    assert part_en_monnaie_locale.total_catalogue == 500
-    assert part_en_monnaie_locale.total_ttc == 500
-    assert part_en_cb.total_catalogue == 550
-    assert part_en_cb.total_ttc == 550
-
-    # Les deux parts gardent leurs champs historiques (tronc §5).
-    # / Both parts keep their historical fields.
-    assert part_en_monnaie_locale.qty == Decimal("1.428571")
-    assert part_en_cb.qty == Decimal("1.571429")
-    for part in (part_en_monnaie_locale, part_en_cb):
-        assert part.amount == 350
-        assert part.carte_id == carte_du_client.pk
-        assert str(part.uuid_transaction) == cle_d_idempotence
+    # UNE ligne : la vraie quantité, le prix unitaire, ni moyen ni carte.
+    # / ONE line: real quantity, unit price, no method nor card.
+    article = seul_article_de_la_vente(vente)
+    assert article.qty == 3
+    assert article.amount == 350
+    assert article.total_catalogue == 1050
+    assert article.total_ttc == 1050
+    assert article.payment_method is None
+    assert article.carte_id is None
+    assert str(article.uuid_transaction) == cle_d_idempotence
 
     # Le règlement en monnaie locale est COPIÉ de la transaction de la carte.
     # / The local-currency payment is COPIED from the card transaction.
@@ -2690,14 +2631,12 @@ def test_jetons_benevoles_puis_cb_part_en_jetons_vendue_hors_tva(lieu):
     Une bière à 5,00 € (TVA 20 %). La carte du client porte 3,00 € de jetons cadeau
     (bénévoles) et rien d'autre : les jetons paient 3,00 €, le reste (2,00 €) est réglé
     en CB.
-    Un jeton dépensé solde la dette du lieu (D8 bis) :
-    - part jetons : catalogue 300, rien d'offert, net 300, TVA 0 ;
-    - part CB : net 200, TVA 20 %.
+    Un jeton dépensé solde la dette du lieu (D8 bis) : UNE ligne, catalogue 500, rien
+    d'offert, part payée en jetons 300 (hors TVA), le reste (200) à 20 %.
     Vente : offert 0, net 500, HT 467 (300 + 167), TVA 33 (la TVA ne porte que sur la
     part en argent). Deux règlements : « jetons » (LG) 300 et CB 200.
-    / A 5.00 € beer: 3.00 € of gift tokens + 2.00 € by bank card. The token part is an
-    ordinary sale at 0 % VAT (net 300); the card part net 200. Sale: net 500, HT 467,
-    VAT 33. Payments LG 300 + CB 200.
+    / A 5.00 € beer: 3.00 € of gift tokens + 2.00 € by bank card. ONE line, token part
+    300 out of VAT. Sale: net 500, HT 467, VAT 33. Payments LG 300 + CB 200.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit])
@@ -2718,23 +2657,12 @@ def test_jetons_benevoles_puis_cb_part_en_jetons_vendue_hors_tva(lieu):
 
     assert reponse.status_code == 200
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
-    articles_par_moyen = articles_de_la_vente_par_moyen(vente)
-    assert sorted(articles_par_moyen.keys()) == [
-        PaymentMethod.CC,
-        PaymentMethod.LOCAL_GIFT,
-    ]
-    assert len(articles_par_moyen[PaymentMethod.LOCAL_GIFT]) == 1
-    assert len(articles_par_moyen[PaymentMethod.CC]) == 1
-
-    part_en_jetons = articles_par_moyen[PaymentMethod.LOCAL_GIFT][0]
-    assert part_en_jetons.total_catalogue == 300
-    assert part_en_jetons.part_offerte == 0
-    assert part_en_jetons.source_offert == ""
-    assert part_en_jetons.total_ttc == 300
-
-    part_en_cb = articles_par_moyen[PaymentMethod.CC][0]
-    assert part_en_cb.part_offerte == 0
-    assert part_en_cb.total_ttc == 200
+    article = seul_article_de_la_vente(vente)
+    assert article.total_catalogue == 500
+    assert article.part_offerte == 0
+    assert article.source_offert == ""
+    assert article.part_en_jetons == 300
+    assert article.total_ttc == 500
 
     assert vente.total_catalogue == 500
     assert vente.total_offert == 0
@@ -2801,8 +2729,8 @@ def test_complement_legacy_partiel_un_reglement_par_transaction_legacy(lieu):
     n'a rien dans les monnaies du lieu. Le réseau ne peut payer que 7,00 € : le serveur
     Fedow débite 2,00 € de monnaie locale d'un autre lieu (TLF) et 5,00 € de monnaie
     fédérée (FED), deux transactions distantes. Le reste, 1,50 €, est réglé en espèces.
-    La transaction FED couvre DEUX parts d'articles (3,00 € de la bière, 2,00 € du jus).
-    La vente a UN règlement par transaction distante (pas un par part d'article) :
+    La transaction FED paie une partie de DEUX articles (3,00 € de la bière, 2,00 € du
+    jus). La vente a UN règlement par transaction distante (pas un par article) :
     monnaie locale (LE) 200 et monnaie fédérée (SF) 500, chacun avec l'uuid de SA
     transaction dans `reference_externe`, sa monnaie, la carte, et pas de
     `fedow_transaction_uuid` (réservé aux transactions locales). Plus UN règlement
@@ -2851,12 +2779,11 @@ def test_complement_legacy_partiel_un_reglement_par_transaction_legacy(lieu):
     assert vente.carte_id == carte_du_membre.pk
     assert vente.total_ttc == 850
 
-    # La transaction FED couvre deux parts : un règlement par part en ferait deux.
-    # / The FED transaction covers two parts: one payment per part would make two.
-    parts_payees_en_monnaie_federee = vente.articles.filter(
-        payment_method=PaymentMethod.STRIPE_FED
-    )
-    assert parts_payees_en_monnaie_federee.count() == 2
+    # La transaction FED paie une partie de DEUX articles : un règlement par article
+    # en ferait deux. Les articles restent une ligne chacun.
+    # / The FED transaction pays part of TWO items: one payment per item would make
+    # two. Each item stays one line.
+    assert vente.articles.count() == 2
 
     reglements_lus = []
     for reglement in vente.reglements.all():
@@ -3290,10 +3217,10 @@ def test_deuxieme_carte_chaque_reglement_porte_sa_carte(lieu):
     Deux règlements en monnaie locale, chacun COPIÉ de SA transaction : 500 avec la
     carte 1, son portefeuille et l'uuid de sa transaction ; 550 avec la carte 2, son
     portefeuille et l'uuid de sa transaction.
-    Les lignes de vente gardent toutes la carte 1, comme aujourd'hui.
+    UNE ligne de vente (quantité 3), sans carte.
     / Card 1 pays 5.00 €, card 2 pays 5.50 €. One settled sale 1050 / 875 / 175 (card
     1). Two local-currency payments, each copied from its own card's transaction (card,
-    wallet, transaction uuid). The lines all keep card 1.
+    wallet, transaction uuid). ONE line (qty 3), without card.
     """
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([jus.produit])
@@ -3360,11 +3287,13 @@ def test_deuxieme_carte_chaque_reglement_porte_sa_carte(lieu):
         key=str,
     )
 
-    # Les lignes gardent la carte 1 et l'identifiant du paiement.
-    # / The lines keep card 1 and the payment id.
-    for article in vente.articles.all():
-        assert article.carte_id == carte_1.pk
-        assert str(article.uuid_transaction) == cle_d_idempotence
+    # UNE ligne, sans carte : seuls les règlements disent quelle carte a payé. Elle
+    # garde l'identifiant du paiement.
+    # / ONE line, without card: only the payments say which card paid.
+    article = seul_article_de_la_vente(vente)
+    assert article.qty == 3
+    assert article.carte_id is None
+    assert str(article.uuid_transaction) == cle_d_idempotence
     verifier_egalites(vente)
 
 
@@ -3379,13 +3308,13 @@ def test_deuxieme_carte_legacy_un_reglement_par_transaction_avec_sa_carte(lieu):
     Une bière à 5,00 €, un jus à 3,50 € et un café à 2,00 € (10,50 €). Les deux cartes
     sont celles de membres, sans rien dans les monnaies du lieu.
     - Carte 1 : le réseau ne peut payer que 6,00 €. Le serveur Fedow débite 6,00 € de
-      monnaie fédérée (FED) : une transaction distante, qui couvre DEUX parts (la
-      bière, et 1,00 € du jus).
+      monnaie fédérée (FED) : une transaction distante, qui paie la bière et 1,00 €
+      du jus.
     - Carte 2 : le réseau peut payer tout le reste (4,50 €). Le serveur Fedow débite
       1,50 € de monnaie locale d'un autre lieu (TLF) et 3,00 € de monnaie fédérée
-      (FED) : deux transactions distantes ; la FED couvre DEUX parts (1,00 € du jus,
-      et le café).
-    La vente a UN règlement par transaction distante (pas un par part d'article),
+      (FED) : deux transactions distantes ; la FED paie 1,00 € du jus et le café.
+    Trois lignes, une par article, sans carte.
+    La vente a UN règlement par transaction distante (pas un par article),
     chacun avec l'uuid de SA transaction dans `reference_externe`, sa monnaie, pas de
     `fedow_transaction_uuid` (réservé aux transactions locales), et la carte qui a été
     débitée : SF 600 pour la carte 1 ; LE 150 et SF 300 pour la carte 2.
@@ -3453,12 +3382,11 @@ def test_deuxieme_carte_legacy_un_reglement_par_transaction_avec_sa_carte(lieu):
     assert vente.total_catalogue == 1050
     assert vente.total_ttc == 1050
 
-    # Chaque transaction FED couvre deux parts : un règlement par part en ferait deux.
-    # / Each FED transaction covers two parts: one payment per part would make two.
-    parts_payees_en_monnaie_federee = vente.articles.filter(
-        payment_method=PaymentMethod.STRIPE_FED
-    )
-    assert parts_payees_en_monnaie_federee.count() == 4
+    # Chaque transaction FED paie une partie de deux articles : un règlement par
+    # article en ferait deux. Les trois articles restent une ligne chacun.
+    # / Each FED transaction pays part of two items: one payment per item would make
+    # two. The three items stay one line each.
+    assert vente.articles.count() == 3
 
     reglements_lus = []
     for reglement in vente.reglements.all():
@@ -3505,10 +3433,10 @@ def test_deuxieme_carte_legacy_un_reglement_par_transaction_avec_sa_carte(lieu):
         key=str,
     )
 
-    # Les lignes gardent la carte 1, même les parts payées par le réseau de la carte 2.
-    # / The lines keep card 1, even the parts paid by card 2's network money.
+    # Les lignes ne portent aucune carte : seuls les règlements disent qui a payé.
+    # / The lines carry no card: only the payments say who paid.
     for article in vente.articles.all():
-        assert article.carte_id == carte_1.pk
+        assert article.carte_id is None
     verifier_egalites(vente)
 
 
@@ -4047,12 +3975,11 @@ def test_archive_lne_ligne_offerte_exporte_ses_montants_stockes(lieu):
 def test_archive_lne_part_en_jetons_tva_zero(lieu):
     """
     Un vin à 10,00 € (TVA 20 %) payé par la carte du client : 6,00 € de jetons cadeau
-    et 4,00 € de monnaie locale. Deux parts, au prix unitaire 1000, quantités 0,6 et
-    0,4. La part en jetons est une vente ordinaire à TVA 0 (D8 bis) : l'archive exporte
-    HT 600, TVA 0. La part en monnaie locale : HT = arrondi(400 / 1,2 = 333,33) = 333,
-    TVA 67.
-    / A 10.00 € wine paid 6.00 € in tokens + 4.00 € in local currency: the archive
-    exports token part HT 600 VAT 0 (0 % VAT, D8 bis), local part HT 333 VAT 67.
+    et 4,00 € de monnaie locale. UNE ligne, part payée en jetons 600. La part en jetons
+    est une vente ordinaire à TVA 0 (D8 bis) : l'archive exporte la part en jetons 600,
+    HT = 600 + arrondi(400 / 1,2 = 333,33) = 933, TVA 67 (sur les 400 en argent).
+    / A 10.00 € wine paid 6.00 € in tokens + 4.00 € in local currency: ONE line; the
+    archive exports token part 600, HT 933, VAT 67.
     """
     vin = creer_un_article_de_caisse("vin", prix_en_euros="10.00", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([vin.produit])
@@ -4069,18 +3996,12 @@ def test_archive_lne_part_en_jetons_tva_zero(lieu):
     )
 
     assert reponse.status_code == 200
-    part_en_jetons = LigneArticle.objects.get(
-        pricesold__price=vin.tarif, payment_method=PaymentMethod.LOCAL_GIFT
-    )
-    part_en_monnaie_locale = LigneArticle.objects.get(
-        pricesold__price=vin.tarif, payment_method=PaymentMethod.LOCAL_EURO
-    )
-    part_en_jetons_exportee = article_dans_l_archive_lne(part_en_jetons)
-    assert part_en_jetons_exportee["total_ht"] == "600"
-    assert part_en_jetons_exportee["total_tva"] == "0"
-    part_en_monnaie_locale_exportee = article_dans_l_archive_lne(part_en_monnaie_locale)
-    assert part_en_monnaie_locale_exportee["total_ht"] == "333"
-    assert part_en_monnaie_locale_exportee["total_tva"] == "67"
+    ligne_du_vin = LigneArticle.objects.get(pricesold__price=vin.tarif)
+    ligne_exportee = article_dans_l_archive_lne(ligne_du_vin)
+    assert ligne_exportee["part_en_jetons"] == "600"
+    assert ligne_exportee["total_ttc"] == "1000"
+    assert ligne_exportee["total_ht"] == "933"
+    assert ligne_exportee["total_tva"] == "67"
 
 
 def test_archive_lne_ligne_ordinaire_inchangee(lieu):
@@ -4107,54 +4028,6 @@ def test_archive_lne_ligne_ordinaire_inchangee(lieu):
     article_exporte = article_dans_l_archive_lne(ligne_de_la_biere)
     assert article_exporte["total_ht"] == "417"
     assert article_exporte["total_tva"] == "83"
-
-
-# L'archive exporte les articles des VENTES (tests/pytest/test_archive_lne_ventes.py) :
-# une ligne écrite sans vente n'en fait pas partie.
-# / The archive exports the SALES' items: a line without a sale is not part of it.
-
-
-def test_archive_lne_part_au_centime_tva_stockee(lieu):
-    """
-    Trois jus à 3,50 € (TVA 20 %, 10,50 €) payés par la carte du client : 5,50 € de
-    jetons cadeau, puis 5,00 € de monnaie locale. La part en monnaie locale garde le
-    prix unitaire 350 et une quantité partielle de 1,428571 : `amount × qty` vaut
-    499,99985, entre deux centimes.
-    L'archive exporte l'argent réel stocké sur la part : TTC 500,
-    HT = arrondi(500 / 1,2 = 416,67) = 417, TVA = 500 − 417 = 83. Une TVA recalculée
-    par `int(amount × qty) − HT` donnerait 499 − 417 = 82.
-    / Three 3.50 € juices paid 5.50 € in tokens + 5.00 € in local currency: the local
-    part exports its stored TTC 500, HT 417, VAT 83 (a recomputed one: 82).
-    """
-    jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
-    point_de_vente = creer_un_point_de_vente([jus.produit])
-    carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=500)
-    ajouter_un_solde_sur_la_carte(carte_du_client, monnaie_cadeau_du_lieu(lieu), 550)
-    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
-
-    reponse = payer_par_la_carte_du_client(
-        client_du_caissier,
-        point_de_vente,
-        {f"repid-{cle_de_panier(jus)}": "3"},
-        carte_du_client,
-        nouvelle_cle_d_idempotence(),
-    )
-
-    assert reponse.status_code == 200
-    # La cascade débite les jetons d'abord (550), puis la monnaie locale (500) : la
-    # part en monnaie locale est la dernière, sa quantité est le reste (3 − 1,571429).
-    # / The cascade debits tokens first, then local currency: the local part is last.
-    part_en_monnaie_locale = LigneArticle.objects.get(
-        pricesold__price=jus.tarif, payment_method=PaymentMethod.LOCAL_EURO
-    )
-    assert part_en_monnaie_locale.amount == 350
-    assert part_en_monnaie_locale.qty == Decimal("1.428571")
-
-    part_exportee = article_dans_l_archive_lne(part_en_monnaie_locale)
-
-    assert part_exportee["total_ttc"] == "500"
-    assert part_exportee["total_ht"] == "417"
-    assert part_exportee["total_tva"] == "83"
 
 
 # ==========================================================================
@@ -4323,7 +4196,7 @@ def test_paiement_table_especes_vente_liee_a_la_commande(lieu):
     article = seul_article_de_la_vente(vente)
     assert article.uuid_transaction is not None
     assert vente.idempotency_key == str(article.uuid_transaction)
-    assert article.payment_method == PaymentMethod.CASH
+    assert article.payment_method is None
     assert article.amount == 500
     assert article.qty == 2
 
@@ -4380,8 +4253,10 @@ def test_paiement_table_cb_vente_liee_a_la_commande(
     assert vente.total_ttc == 1000
     assert vente.total_ht == 833
     assert vente.total_tva == 167
+    # Le moyen est sur le règlement, jamais sur la ligne (Q-H2).
+    # / The method is on the payment, never on the line (Q-H2).
     article = seul_article_de_la_vente(vente)
-    assert article.payment_method == moyen_attendu_en_base
+    assert article.payment_method is None
     assert vente.idempotency_key == str(article.uuid_transaction)
     assert reglements_de_la_vente(vente) == [(moyen_attendu_en_base, 1000)]
     verifier_egalites(vente)
@@ -4503,17 +4378,17 @@ def test_paiement_table_nfc_refuse_aucune_vente_commande_ouverte(lieu):
 #
 # Le caissier s'est trompé de moyen (espèces au lieu de CB). Il corrige après coup,
 # depuis l'historique des ventes. Deux choses sont écrites, dans la même transaction :
-# - la correction des lignes, comme aujourd'hui : une trace `CorrectionPaiement` par
-#   ligne, et le nouveau `payment_method` sur les lignes (les anciens rapports le
-#   lisent jusqu'à la fiche H) ;
 # - une vente `CORRECTION`, liée à la vente d'origine, sans article, avec deux
 #   règlements qui s'annulent : −montant à l'ancien moyen, +montant au nouveau. Le
-#   montant est la somme des `total_ttc` des lignes corrigées.
-# La vente d'origine est déjà encaissée : elle ne change jamais (D14). Mêmes règlements,
-# même empreinte, et la vérification de la chaîne ne signale rien pour elle.
-# / The line correction stays as today (audit trail + new payment_method). On top of it,
-# a CORRECTION sale linked to the original one, without items, with two payments that
-# cancel out. The original sale never changes.
+#   montant est le net de l'ancien moyen dans les règlements de la vente et de ses
+#   corrections ;
+# - une trace `CorrectionPaiement` par article de la vente (ancien et nouveau moyen,
+#   raison).
+# Aucune ligne n'est modifiée : son `payment_method` reste vide (D14, Q-H2). La vente d'origine est déjà encaissée : elle ne change jamais. Mêmes
+# règlements, même empreinte, et la vérification de la chaîne ne signale rien pour elle.
+# / A CORRECTION sale linked to the original one, without items, two payments that
+# cancel out; one audit trail per item. No line is changed; the original sale never
+# changes.
 #
 # BASE PARTAGÉE, ET NON SCHÉMA DÉDIÉ
 # La vérification de la chaîne parcourt toutes les ventes du lieu. Ces tests ne lisent
@@ -4529,21 +4404,21 @@ def test_paiement_table_nfc_refuse_aucune_vente_commande_ouverte(lieu):
 URL_DE_LA_CORRECTION_DU_MOYEN = "/laboutik/paiement/corriger_moyen_paiement/"
 
 
-def corriger_le_moyen_de_paiement(client_du_caissier, ligne, nouveau_moyen):
+def corriger_le_moyen_de_paiement(
+    client_du_caissier, ligne, ancien_moyen, nouveau_moyen
+):
     """
-    Le caissier corrige le moyen de paiement d'une ligne, par la vraie route, comme le
+    Le caissier corrige un moyen de paiement d'une vente, par la vraie route, comme le
     formulaire de l'historique des ventes l'envoie (`hx_corriger_moyen_paiement.html`).
-    / The cashier corrects a line's payment method, through the real route.
+    / The cashier corrects one payment method of a sale, through the real route.
 
-    :param ligne: la `LigneArticle` cliquée dans l'historique
+    :param ligne: une `LigneArticle` de la vente (elle sert à retrouver la vente)
+    :param ancien_moyen: le moyen corrigé, que le bouton du détail transmet
     :param nouveau_moyen: `PaymentMethod.CASH`, `CC` ou `CHEQUE`
     """
-    # Le moyen que le formulaire affiche : celui de la ligne, relu en base (le
-    # formulaire est rouvert à chaque correction).
-    # / The method the form shows: the line's, read back.
     donnees_du_formulaire = {
         "ligne_uuid": str(ligne.uuid),
-        "ancien_moyen": LigneArticle.objects.get(pk=ligne.pk).payment_method,
+        "ancien_moyen": ancien_moyen,
         "nouveau_moyen": nouveau_moyen,
         "raison": "Erreur de moyen au moment du paiement",
     }
@@ -4575,17 +4450,17 @@ def nombre_de_ventes_de_correction():
 def photographie_de_la_vente(vente):
     """
     Ce qui ne change jamais sur une vente encaissée, relu en base : statut, numéro,
-    empreinte, empreinte précédente, totaux, articles (leurs uuid) et règlements
-    complets. Deux photographies égales = la vente n'a pas bougé.
-    Le `payment_method` des lignes n'y est pas : la correction le change encore,
-    pour les anciens rapports.
-    / What never changes on a settled sale, read back. The lines' payment_method is
-    not in it: the correction still changes it, for the old reports.
+    empreinte, empreinte précédente, totaux, articles (leur uuid et leur moyen
+    historique `payment_method`) et règlements complets. Deux photographies égales =
+    la vente n'a pas bougé. Une correction ne modifie aucune ligne (D14) : le moyen
+    des articles en fait partie.
+    / What never changes on a settled sale, read back, the items' payment_method
+    included: a correction changes no line.
     """
     vente_relue = Vente.objects.get(pk=vente.pk)
     uuids_des_articles = []
     for article in vente_relue.articles.all():
-        uuids_des_articles.append(str(article.uuid))
+        uuids_des_articles.append((str(article.uuid), article.payment_method))
     return {
         "statut": vente_relue.statut,
         "numero": vente_relue.numero,
@@ -4647,15 +4522,16 @@ def test_correction_moyen_nouvelle_vente_correction(lieu):
     """
     Trois jus à 3,50 € (TVA 20 %) payés en espèces : une vente réglée de 10,50 €,
     un règlement espèces de 1050. Le caissier corrige : c'était une CB.
-    Ceinture : la ligne passe en CB, avec sa trace `CorrectionPaiement` (espèces → CB).
+    Ceinture : la ligne garde son moyen (espèces, D14), et reçoit sa trace
+    `CorrectionPaiement` (espèces → CB).
     Bretelles : une vente `CORRECTION`, réglée, liée à la vente d'origine, au point de
     vente et à l'opérateur de la correction, sans article, avec deux règlements :
     espèces −1050 et CB +1050 (somme 0).
     La vente d'origine ne change pas : mêmes règlements, même empreinte, et la
     vérification de la chaîne ne signale rien pour elle.
-    / Three juices paid in cash (1050), corrected into bank card. The line becomes CB
-    with its audit trail; a CORRECTION sale linked to the original, without items,
-    payments CASH −1050 / CB +1050. The original sale is unchanged.
+    / Three juices paid in cash (1050), corrected into bank card. The line keeps its
+    method, with its audit trail; a CORRECTION sale linked to the original, without
+    items, payments CASH −1050 / CB +1050. The original sale is unchanged.
     """
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([jus.produit])
@@ -4681,15 +4557,15 @@ def test_correction_moyen_nouvelle_vente_correction(lieu):
     vente_d_origine_avant_la_correction = photographie_de_la_vente(vente_d_origine)
 
     reponse = corriger_le_moyen_de_paiement(
-        client_du_caissier, ligne_des_jus, PaymentMethod.CC
+        client_du_caissier, ligne_des_jus, PaymentMethod.CASH, PaymentMethod.CC
     )
 
     assert reponse.status_code == 200
 
-    # Ceinture : la correction des lignes, comme aujourd'hui.
-    # / Belt: the line correction, as today.
+    # Ceinture : la ligne ne change pas, la trace de la correction est écrite.
+    # / Belt: the line does not change, the correction's trail is written.
     ligne_des_jus.refresh_from_db()
-    assert ligne_des_jus.payment_method == PaymentMethod.CC
+    assert ligne_des_jus.payment_method is None
     assert (
         CorrectionPaiement.objects.filter(
             ligne_article=ligne_des_jus,
@@ -4738,15 +4614,16 @@ def test_correction_moyen_nouvelle_vente_correction(lieu):
 def test_correction_du_complement_especes_en_cb(lieu):
     """
     Trois jus à 3,50 € (10,50 €). La carte du client porte 5,00 € de monnaie locale :
-    elle paie 5,00 €, le reste (5,50 €) est réglé en espèces. Le caissier corrige la
-    part espèces : c'était une CB.
-    Seule la part espèces passe en CB ; la part en monnaie locale ne bouge pas. La vente
-    `CORRECTION` porte le montant de la part corrigée : espèces −550 et CB +550.
+    elle paie 5,00 €, le reste (5,50 €) est réglé en espèces. UNE ligne (quantité 3).
+    Le caissier corrige les espèces : c'était une CB.
+    Seul l'argent en espèces est déplacé : la vente `CORRECTION` porte le net des
+    espèces, espèces −550 et CB +550 ; la monnaie locale ne bouge pas. La ligne ne
+    change pas (D14) et reçoit sa trace (espèces → CB).
     La vente d'origine ne change pas : règlements espèces 550 et monnaie locale 500,
     même empreinte.
-    / Three juices: 5.00 € on the card, 5.50 € in cash. The cash part is corrected into
-    CB: only that part changes; the CORRECTION sale carries its amount (CASH −550 /
-    CB +550). The original sale is unchanged.
+    / Three juices: 5.00 € on the card, 5.50 € in cash, ONE line. Only the cash money
+    moves: the CORRECTION sale carries the cash net (CASH −550 / CB +550). The line
+    does not change and gets its trail. The original sale is unchanged.
     """
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([jus.produit])
@@ -4772,35 +4649,27 @@ def test_correction_du_complement_especes_en_cb(lieu):
         (PaymentMethod.CASH, 550),
         (PaymentMethod.LOCAL_EURO, 500),
     ]
-    articles_par_moyen = articles_de_la_vente_par_moyen(vente_d_origine)
-    assert len(articles_par_moyen[PaymentMethod.CASH]) == 1
-    assert len(articles_par_moyen[PaymentMethod.LOCAL_EURO]) == 1
-    part_en_especes = articles_par_moyen[PaymentMethod.CASH][0]
-    part_en_monnaie_locale = articles_par_moyen[PaymentMethod.LOCAL_EURO][0]
-    assert part_en_especes.total_ttc == 550
+    ligne_des_jus = seul_article_de_la_vente(vente_d_origine)
+    assert ligne_des_jus.total_ttc == 1050
     vente_d_origine_avant_la_correction = photographie_de_la_vente(vente_d_origine)
 
     reponse = corriger_le_moyen_de_paiement(
-        client_du_caissier, part_en_especes, PaymentMethod.CC
+        client_du_caissier, ligne_des_jus, PaymentMethod.CASH, PaymentMethod.CC
     )
 
     assert reponse.status_code == 200
 
-    # Ceinture : seule la part espèces est corrigée.
-    # / Belt: only the cash part is corrected.
-    part_en_especes.refresh_from_db()
-    part_en_monnaie_locale.refresh_from_db()
-    assert part_en_especes.payment_method == PaymentMethod.CC
-    assert part_en_monnaie_locale.payment_method == PaymentMethod.LOCAL_EURO
-    assert (
-        CorrectionPaiement.objects.filter(ligne_article=part_en_especes).count() == 1
-    )
-    assert not CorrectionPaiement.objects.filter(
-        ligne_article=part_en_monnaie_locale
-    ).exists()
+    # Ceinture : la ligne ne change pas de moyen (il reste vide) ; une trace.
+    # / Belt: the line keeps its (empty) method; one trail.
+    ligne_des_jus.refresh_from_db()
+    assert ligne_des_jus.payment_method is None
+    traces_de_la_ligne = []
+    for trace in CorrectionPaiement.objects.filter(ligne_article=ligne_des_jus):
+        traces_de_la_ligne.append((trace.ancien_moyen, trace.nouveau_moyen))
+    assert traces_de_la_ligne == [(PaymentMethod.CASH, PaymentMethod.CC)]
 
-    # Bretelles : la vente CORRECTION porte le montant de la part corrigée.
-    # / Braces: the CORRECTION sale carries the corrected part's amount.
+    # Bretelles : la vente CORRECTION porte le net des espèces de la vente.
+    # / Braces: the CORRECTION sale carries the sale's cash net.
     ventes_de_correction = ventes_de_correction_liees_a(vente_d_origine)
     assert len(ventes_de_correction) == 1, (
         f"Attendu : une vente CORRECTION liée, trouvé : {len(ventes_de_correction)}."
@@ -4864,7 +4733,7 @@ def test_correction_d_une_ligne_sans_vente_refusee(lieu):
     nombre_de_corrections_avant = nombre_de_ventes_de_correction()
 
     reponse = corriger_le_moyen_de_paiement(
-        client_du_caissier, ligne_sans_vente, PaymentMethod.CC
+        client_du_caissier, ligne_sans_vente, PaymentMethod.CASH, PaymentMethod.CC
     )
 
     assert reponse.status_code == 400
@@ -4895,11 +4764,13 @@ def test_deux_corrections_successives_deux_ventes_correction(lieu):
     liée à la vente d'origine (jamais à la correction d'avant) :
     - la 1ʳᵉ : espèces −1050, CB +1050 ;
     - la 2ᵉ : CB −1050, chèque +1050.
-    La ligne finit en chèque, avec deux traces de correction. La vente d'origine ne
-    change pas.
-    / Three juices paid in cash (1050), corrected into CB, then into cheque. Two
-    CORRECTION sales, both linked to the original: CASH −1050 / CB +1050, then
-    CB −1050 / CHEQUE +1050. The original sale is unchanged.
+    La 2ᵉ correction corrige la CB : c'est le moyen que les règlements nets portent
+    après la 1ʳᵉ. La ligne garde son moyen (espèces, D14), avec deux traces de
+    correction. La vente d'origine ne change pas.
+    / Three juices paid in cash (1050), corrected into CB, then the CB into cheque.
+    Two CORRECTION sales, both linked to the original: CASH −1050 / CB +1050, then
+    CB −1050 / CHEQUE +1050. The line keeps its method; the original sale is
+    unchanged.
     """
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([jus.produit])
@@ -4924,19 +4795,19 @@ def test_deux_corrections_successives_deux_ventes_correction(lieu):
     vente_d_origine_avant_les_corrections = photographie_de_la_vente(vente_d_origine)
 
     reponse_de_la_premiere_correction = corriger_le_moyen_de_paiement(
-        client_du_caissier, ligne_des_jus, PaymentMethod.CC
+        client_du_caissier, ligne_des_jus, PaymentMethod.CASH, PaymentMethod.CC
     )
     reponse_de_la_seconde_correction = corriger_le_moyen_de_paiement(
-        client_du_caissier, ligne_des_jus, PaymentMethod.CHEQUE
+        client_du_caissier, ligne_des_jus, PaymentMethod.CC, PaymentMethod.CHEQUE
     )
 
     assert reponse_de_la_premiere_correction.status_code == 200
     assert reponse_de_la_seconde_correction.status_code == 200
 
-    # Ceinture : la ligne finit en chèque, avec une trace par correction.
-    # / Belt: the line ends as cheque, with one trail per correction.
+    # Ceinture : la ligne garde son moyen, avec une trace par correction.
+    # / Belt: the line keeps its method, with one trail per correction.
     ligne_des_jus.refresh_from_db()
-    assert ligne_des_jus.payment_method == PaymentMethod.CHEQUE
+    assert ligne_des_jus.payment_method is None
     traces_de_la_ligne = []
     for trace in CorrectionPaiement.objects.filter(ligne_article=ligne_des_jus):
         traces_de_la_ligne.append((trace.ancien_moyen, trace.nouveau_moyen))
@@ -4990,13 +4861,13 @@ def test_deux_corrections_successives_deux_ventes_correction(lieu):
 
 def test_correction_de_lignes_de_deux_ventes_ne_touche_que_la_vente_cliquee(lieu):
     """
-    Une correction porte sur les lignes de la MÊME VENTE qui ont le même moyen
-    (`lignes_que_la_correction_deplace`), jamais sur un identifiant de paiement. Ce
-    test fabrique deux bières payées en espèces dans deux ventes, puis la ligne de la
-    2ᵉ vente reçoit l'identifiant de paiement de la 1ʳᵉ (par `.update()`, qui ne passe
-    pas par la garde). Corriger la 1ʳᵉ ligne en CB ne touche que la 1ʳᵉ vente : sa
-    ligne passe en CB, une vente CORRECTION de 500 lui est liée ; la ligne de la 2ᵉ
-    vente reste en espèces, sans trace de correction.
+    Une correction porte sur la VENTE de la ligne cliquée (ses règlements nets),
+    jamais sur un identifiant de paiement. Ce test fabrique deux bières payées en
+    espèces dans deux ventes, puis la ligne de la 2ᵉ vente reçoit l'identifiant de
+    paiement de la 1ʳᵉ (par `.update()`, qui ne passe pas par la garde). Corriger la
+    1ʳᵉ ligne en CB ne touche que la 1ʳᵉ vente : une vente CORRECTION de 500 lui est
+    liée, et sa ligne reçoit la trace ; la ligne de la 2ᵉ vente n'a ni trace ni
+    correction. Aucune ligne ne change de moyen (D14).
     / Two cash sales whose lines share one payment id: the correction only moves
     the clicked line's sale.
     """
@@ -5023,14 +4894,20 @@ def test_correction_de_lignes_de_deux_ventes_ne_touche_que_la_vente_cliquee(lieu
         uuid_transaction=ligne_de_la_premiere_vente.uuid_transaction
     )
     reponse = corriger_le_moyen_de_paiement(
-        client_du_caissier, ligne_de_la_premiere_vente, PaymentMethod.CC
+        client_du_caissier,
+        ligne_de_la_premiere_vente,
+        PaymentMethod.CASH,
+        PaymentMethod.CC,
     )
 
     assert reponse.status_code == 200
     ligne_de_la_premiere_vente.refresh_from_db()
     ligne_de_la_seconde_vente.refresh_from_db()
-    assert ligne_de_la_premiere_vente.payment_method == PaymentMethod.CC
-    assert ligne_de_la_seconde_vente.payment_method == PaymentMethod.CASH
+    assert ligne_de_la_premiere_vente.payment_method is None
+    assert ligne_de_la_seconde_vente.payment_method is None
+    assert CorrectionPaiement.objects.filter(
+        ligne_article=ligne_de_la_premiere_vente
+    ).exists()
     assert not CorrectionPaiement.objects.filter(
         ligne_article=ligne_de_la_seconde_vente
     ).exists()
@@ -5056,12 +4933,13 @@ def test_correction_de_lignes_de_deux_ventes_ne_touche_que_la_vente_cliquee(lieu
 def test_correction_de_deux_lignes_montant_egal_a_leur_somme(lieu):
     """
     Une bière à 5,00 € et un jus à 3,50 €, payés ensemble en espèces : deux lignes du
-    même paiement, 8,50 €. Le caissier corrige la ligne du jus en CB : la correction
-    porte sur les deux lignes (même paiement, même moyen), comme aujourd'hui. La vente
+    même paiement, 8,50 €. Le caissier corrige les espèces en CB depuis la ligne du
+    jus : la correction déplace tout l'argent en espèces de la vente. La vente
     `CORRECTION` porte la somme des deux lignes : espèces −850 et CB +850, jamais le
-    montant d'une seule ligne.
-    / A beer and a juice paid together in cash (850). Correcting one line corrects
-    both; the CORRECTION sale carries their sum: CASH −850 / CB +850.
+    montant d'une seule ligne. Les deux lignes gardent leur moyen (D14) et reçoivent
+    chacune leur trace.
+    / A beer and a juice paid together in cash (850). Correcting the cash from one line
+    moves all the sale's cash: CASH −850 / CB +850; both lines keep their method.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
@@ -5086,13 +4964,14 @@ def test_correction_de_deux_lignes_montant_egal_a_leur_somme(lieu):
     ligne_de_la_biere = LigneArticle.objects.get(pricesold__price=biere.tarif)
 
     reponse = corriger_le_moyen_de_paiement(
-        client_du_caissier, ligne_du_jus, PaymentMethod.CC
+        client_du_caissier, ligne_du_jus, PaymentMethod.CASH, PaymentMethod.CC
     )
 
     assert reponse.status_code == 200
     for ligne in (ligne_du_jus, ligne_de_la_biere):
         ligne.refresh_from_db()
-        assert ligne.payment_method == PaymentMethod.CC
+        assert ligne.payment_method is None
+        assert CorrectionPaiement.objects.filter(ligne_article=ligne).count() == 1
     ventes_de_correction = ventes_de_correction_liees_a(vente_d_origine)
     assert len(ventes_de_correction) == 1, (
         f"Attendu : une vente CORRECTION liée, trouvé : {len(ventes_de_correction)}."
@@ -5107,8 +4986,8 @@ def test_correction_de_deux_lignes_montant_egal_a_leur_somme(lieu):
 
 
 # --------------------------------------------------------------------------
-# 21h — La vente de correction échoue : la correction des lignes est annulée aussi
-# / 21h — The correction sale fails: the line correction is rolled back too
+# 21h — La vente de correction échoue : les traces de correction sont annulées aussi
+# / 21h — The correction sale fails: the audit trails are rolled back too
 # --------------------------------------------------------------------------
 
 
@@ -5116,11 +4995,11 @@ def test_correction_vente_de_correction_en_echec_rien_n_est_ecrit(lieu):
     """
     Trois jus payés en espèces, corrigés en CB. L'encaissement de la vente
     `CORRECTION` échoue (simulé : `encaisser_vente` lève `EgaliteDeVenteRompue`).
-    La vente de correction et la correction des lignes sont dans la même transaction :
-    tout est annulé. La ligne reste en espèces, sans trace de correction, et aucune
-    vente `CORRECTION` n'existe.
-    / The CORRECTION sale fails to settle (simulated): the line correction is in the
-    same transaction and is rolled back too.
+    La vente de correction et les traces de correction sont dans la même
+    transaction : tout est annulé. La ligne reste en espèces, sans trace de
+    correction, et aucune vente `CORRECTION` n'existe.
+    / The CORRECTION sale fails to settle (simulated): the audit trails are in the
+    same transaction and are rolled back too.
     """
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([jus.produit])
@@ -5148,11 +5027,11 @@ def test_correction_vente_de_correction_en_echec_rien_n_est_ecrit(lieu):
     ):
         with pytest.raises(EgaliteDeVenteRompue):
             corriger_le_moyen_de_paiement(
-                client_du_caissier, ligne_des_jus, PaymentMethod.CC
+                client_du_caissier, ligne_des_jus, PaymentMethod.CASH, PaymentMethod.CC
             )
 
     ligne_des_jus.refresh_from_db()
-    assert ligne_des_jus.payment_method == PaymentMethod.CASH
+    assert ligne_des_jus.payment_method is None
     assert not CorrectionPaiement.objects.filter(ligne_article=ligne_des_jus).exists()
     assert nombre_de_ventes_de_correction() == nombre_de_corrections_avant
 
@@ -5169,8 +5048,9 @@ def test_correction_de_lignes_au_montant_nul_refusee_rien_n_est_ecrit(lieu):
     réglée sans règlement, une ligne en espèces dont le net vendu (`total_ttc`) vaut 0.
     L'écran ne propose que « Valider » (offert) pour un panier gratuit, mais `payer()`
     ne confronte jamais le moyen reçu à la liste proposée : un POST « espece » passe.
-    Le caissier corrige cette ligne en CB : il n'y a rien à corriger. Refus propre
-    (400, message clair en français), jamais une erreur 500. Rien n'est écrit : la
+    Le caissier corrige les espèces de cette vente en CB : leur net vaut 0, il n'y a
+    rien à corriger. Refus propre (400, message clair en français), jamais une
+    erreur 500. Rien n'est écrit : la
     ligne reste en espèces, sans trace `CorrectionPaiement`, aucune vente `CORRECTION`.
     / A 0.00 € item paid in cash through the real route: a money line whose net total
     is 0. Correcting it into bank card is cleanly refused (400, clear French message),
@@ -5197,24 +5077,30 @@ def test_correction_de_lignes_au_montant_nul_refusee_rien_n_est_ecrit(lieu):
     assert reponse_du_paiement.status_code == 200
     vente_d_origine = retrouver_la_vente_de_la_cle(cle_d_idempotence)
     ligne_gratuite = seul_article_de_la_vente(vente_d_origine)
-    # L'état de départ : une ligne d'ARGENT (espèces) au net vendu nul.
-    # / Starting state: a MONEY line (cash) with a zero net total.
-    assert ligne_gratuite.payment_method == PaymentMethod.CASH
+    # L'état de départ : une ligne vendue en espèces au net vendu nul (son moyen
+    # reste vide, Q-H2 ; une vente à 0 n'a aucun règlement).
+    # / Starting state: a line sold in cash with a zero net total.
+    assert ligne_gratuite.payment_method is None
     assert ligne_gratuite.total_ttc == 0
     nombre_de_corrections_avant = nombre_de_ventes_de_correction()
 
     reponse = corriger_le_moyen_de_paiement(
-        client_du_caissier, ligne_gratuite, PaymentMethod.CC
+        client_du_caissier, ligne_gratuite, PaymentMethod.CASH, PaymentMethod.CC
     )
 
+    # Le refus vient du net des espèces dans les règlements (0 : la vente n'a aucun
+    # règlement), pas du montant de la ligne.
+    # / The refusal comes from the cash net in the payments (0), not from the line.
     assert reponse.status_code == 400
     texte_de_la_reponse = html.unescape(reponse.content.decode()).lower()
-    assert "rien à corriger : le montant est nul" in texte_de_la_reponse
+    assert (
+        "il ne reste rien à corriger pour le moyen « espèces »" in texte_de_la_reponse
+    )
 
     # Rien n'est écrit.
     # / Nothing is written.
     ligne_gratuite.refresh_from_db()
-    assert ligne_gratuite.payment_method == PaymentMethod.CASH
+    assert ligne_gratuite.payment_method is None
     assert not CorrectionPaiement.objects.filter(ligne_article=ligne_gratuite).exists()
     assert nombre_de_ventes_de_correction() == nombre_de_corrections_avant
     assert ventes_de_correction_liees_a(vente_d_origine) == []

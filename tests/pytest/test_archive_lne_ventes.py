@@ -166,8 +166,9 @@ COLONNES_ATTENDUES_PAR_FICHIER = {
     "articles.csv": [
         "uuid", "vente_uuid", "vente_numero", "datetime", "article", "categorie",
         "pricesold_uuid", "uuid_transaction", "quantite", "prix_unitaire",
-        "taux_tva", "total_catalogue", "part_offerte", "source_offert", "total_ttc",
-        "total_ht", "total_tva", "hors_chiffre_affaires",
+        "taux_tva", "total_catalogue", "part_offerte", "source_offert",
+        "part_en_jetons", "total_ttc", "total_ht", "total_tva",
+        "hors_chiffre_affaires",
     ],
     "reglements.csv": [
         "uuid", "vente_uuid", "vente_numero", "moyen", "montant", "asset", "carte",
@@ -402,6 +403,7 @@ def empreinte_recalculee_depuis_l_archive(
             int(article["total_catalogue"]),
             int(article["part_offerte"]),
             article["source_offert"],
+            int(article["part_en_jetons"]),
             int(article["total_ttc"]),
             int(article["total_ht"]),
             int(article["total_tva"]),

@@ -46,7 +46,8 @@ COLONNES_VENTES = [
 COLONNES_ARTICLES = [
     'uuid', 'vente_uuid', 'vente_numero', 'datetime', 'article', 'categorie',
     'pricesold_uuid', 'uuid_transaction', 'quantite', 'prix_unitaire', 'taux_tva',
-    'total_catalogue', 'part_offerte', 'source_offert', 'total_ttc', 'total_ht',
+    'total_catalogue', 'part_offerte', 'source_offert', 'part_en_jetons',
+    'total_ttc', 'total_ht',
     'total_tva', 'hors_chiffre_affaires',
 ]
 
@@ -265,6 +266,7 @@ def _extraire_articles(identifiants_des_ventes):
             'total_catalogue': str(article.total_catalogue),
             'part_offerte': str(article.part_offerte),
             'source_offert': article.source_offert or '',
+            'part_en_jetons': str(article.part_en_jetons),
             'total_ttc': str(article.total_ttc),
             'total_ht': str(article.total_ht),
             'total_tva': str(article.total_tva),
@@ -904,8 +906,8 @@ sans espace, accents gardes) de l'objet
   articles = liste, triee par uuid, de
     [uuid, pricesold_uuid, quantite avec 6 decimales, prix_unitaire,
      taux_tva avec 2 decimales, total_catalogue, part_offerte,
-     source_offert, total_ttc, total_ht, total_tva, hors_chiffre_affaires
-     (vrai/faux JSON)]
+     source_offert, part_en_jetons, total_ttc, total_ht, total_tva,
+     hors_chiffre_affaires (vrai/faux JSON)]
   reglements = liste, triee par uuid, de
     [uuid, moyen, montant, asset, carte, fedow_transaction_uuid,
      reference_externe] (un champ vide s'ecrit "")

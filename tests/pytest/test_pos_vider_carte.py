@@ -259,7 +259,8 @@ def test_vider_carte_preview_tag_identique_cm_rejette(carte_caissier_vc):
     assert "carte primaire" in contenu.lower() or "primary card" in contenu.lower()
 
 
-from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+from BaseBillet.models import LigneArticle, PaymentMethod
+from BaseBillet.models_vente import Vente
 
 
 @pytest.fixture
@@ -301,7 +302,8 @@ def test_vider_carte_execute_remboursement_complet(
 ):
     """
     POST /laboutik/paiement/vider_carte/ avec vider_carte=false :
-    1 Transaction REFUND TLF + 1 LigneArticle CASH (-1000).
+    1 Transaction REFUND TLF ; la vente VIDAGE_CARTE porte un règlement espèces de
+    −1000, et aucune LigneArticle « Refund » n'est écrite (D12).
     primary_card de la Transaction == carte_caissier.
     """
     client, user = _login_as_admin()
@@ -326,13 +328,14 @@ def test_vider_carte_execute_remboursement_complet(
     assert tx_refund.count() == 1
     assert tx_refund.first().primary_card_id == carte_caissier_vc.pk
 
-    lignes_cash = LigneArticle.objects.filter(
-        carte=carte_client_vc_avec_tlf,
-        payment_method=PaymentMethod.CASH,
-        sale_origin=SaleOrigin.LABOUTIK,
+    vente_du_vidage = Vente.objects.get(
+        nature=Vente.Nature.VIDAGE_CARTE, carte=carte_client_vc_avec_tlf
     )
-    assert lignes_cash.count() == 1
-    assert lignes_cash.first().amount == -1000
+    reglement_especes = vente_du_vidage.reglements.get(moyen=PaymentMethod.CASH)
+    assert reglement_especes.montant == -1000
+    assert not LigneArticle.objects.filter(
+        carte=carte_client_vc_avec_tlf, vente__isnull=True
+    ).exists()
 
 
 @pytest.mark.django_db

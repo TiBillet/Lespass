@@ -1,24 +1,22 @@
 """
-Le menu « Ventes & comptabilité » range les deux rapports, l'un sous l'autre.
-/ The "Sales & accounting" menu holds both reports, one under the other.
+Le menu « Ventes & comptabilité » montre le rapport des ventes, et plus
+l'ancienne clôture de la caisse.
+/ The "Sales & accounting" menu shows the sales report, no longer the old POS
+closure.
 
 LOCALISATION : tests/pytest/test_menu_rapports.py
 
 CE QUE CE TEST PROTEGE
 ----------------------
-Chantier 05-0 (décision D25). Un usager ne trouvait pas ses ventes de caisse
-dans « Rapports » : la clôture caisse (`laboutik`) était rangée dans la section
-de la caisse, loin de la clôture en ligne (`comptabilite`).
-
-Désormais, la section « Ventes & comptabilité » montre, dans cet ordre :
-  1. « Rapport des ventes »    -> clôtures `comptabilite` (la clôture unique,
-     toutes origines) ;
-  2. « Ancien rapport caisse » -> clôtures `laboutik`, seulement si le
-     module caisse est actif.
-L'entrée caisse quitte la section de la caisse : elle n'est pas dupliquée.
-/ Chantier 05-0 (D25): both closure reports live in "Sales & accounting",
-  online first, POS second (only when the POS module is on), and the POS
-  entry leaves the POS section.
+Chantier 05-0 (décision D25) : les ventes de caisse se trouvent dans la section
+« Ventes & comptabilité », par « Rapport des ventes » (clôtures `comptabilite`,
+la clôture unique, toutes origines).
+Chantier 05, fiche H-1a (Q-H2) : l'ancienne clôture de la caisse (`laboutik`,
+« Ancien rapport caisse ») lit le moyen des lignes, qui ne dit plus comment une
+vente est payée. Elle n'est plus dans aucune section du menu, module caisse actif
+ou non. Ses adresses restent (support) jusqu'à son retrait.
+/ D25: register sales are reached through "Sales report". H-1a: the old POS
+  closure reads the lines' method; it is in no menu section any more.
 
 Ce test lit seulement la navigation construite pour une requête admin. La
 configuration du lieu est forcée EN MÉMOIRE et servie par un patch de
@@ -86,20 +84,26 @@ def _liens_de_la_section(section):
 
 
 @pytest.mark.django_db
-def test_menu_ventes_comptabilite_range_les_deux_rapports(lieu_lespass):
+def test_menu_ventes_comptabilite_montre_le_rapport_des_ventes_sans_l_ancien(
+    lieu_lespass,
+):
     """
     Trois choses :
-      1. « Ventes & comptabilité » montre le rapport en ligne PUIS le rapport caisse ;
-      2. aucune autre section ne pointe vers les clôtures caisse (pas de doublon) ;
-      3. module caisse inactif -> le rapport caisse n'apparaît nulle part.
-    / 1. online report then POS report, in order; 2. no other section links to
-      the POS closures; 3. POS module off -> the POS report is nowhere.
+      1. « Ventes & comptabilité » montre « Rapport des ventes » ;
+      2. module caisse actif : aucune section ne pointe vers l'ancienne clôture de
+         la caisse ;
+      3. module caisse inactif : elle n'apparaît nulle part non plus.
+    / 1. the sales report is there; 2. POS module on: no section links to the old
+      POS closures; 3. POS module off: nowhere either.
     """
     with tenant_context(lieu_lespass):
         lien_rapport_en_ligne = reverse(
             "staff_admin:comptabilite_cloturecaisse_changelist"
         )
-        lien_rapport_caisse = reverse("staff_admin:laboutik_cloturecaisse_changelist")
+    # L'ancienne clôture de la caisse n'est plus enregistrée dans l'admin : son adresse
+    # est écrite en clair, `reverse()` ne la trouverait plus.
+    # / The old POS closure is no longer registered: its address is written out.
+    lien_rapport_caisse = "/admin/laboutik/cloturecaisse/"
     titre_de_la_section = _("Sales & accounting")
 
     # --- Module caisse actif ---
@@ -118,21 +122,12 @@ def test_menu_ventes_comptabilite_range_les_deux_rapports(lieu_lespass):
     section_ventes = sections_ventes[0]
     liens_ventes = _liens_de_la_section(section_ventes)
 
-    # 1. Les deux rapports sont là, en ligne d'abord, caisse ensuite.
-    # / 1. Both reports are there, online first, POS second.
-    assert (
-        lien_rapport_en_ligne in liens_ventes
-        and lien_rapport_caisse in liens_ventes
-        and liens_ventes.index(lien_rapport_en_ligne)
-        < liens_ventes.index(lien_rapport_caisse)
-    ), (
-        "La section Ventes & comptabilité doit lister le rapport en ligne "
-        f"puis le rapport caisse. Liens trouvés : {liens_ventes}"
+    # 1. Le rapport des ventes est là, avec son libellé.
+    # / 1. The sales report is there, with its label.
+    assert lien_rapport_en_ligne in liens_ventes, (
+        "La section Ventes & comptabilité doit lister le rapport des ventes. "
+        f"Liens trouvés : {liens_ventes}"
     )
-
-    # 1 bis. Les libellés : « Rapport des ventes » (la clôture unique, toutes
-    # origines) et « Ancien rapport caisse » (l'ancienne clôture de la caisse).
-    # / 1a. The labels: the single closure report, and the old POS report.
     titres_par_lien = {}
     for item in section_ventes.get("items", []):
         titres_par_lien[str(item.get("link"))] = str(item.get("title"))
@@ -140,22 +135,16 @@ def test_menu_ventes_comptabilite_range_les_deux_rapports(lieu_lespass):
         f"Libellé attendu « Rapport des ventes », trouvé : "
         f"{titres_par_lien[lien_rapport_en_ligne]}"
     )
-    assert titres_par_lien[lien_rapport_caisse] == _("Ancien rapport caisse"), (
-        f"Libellé attendu « Ancien rapport caisse », trouvé : "
-        f"{titres_par_lien[lien_rapport_caisse]}"
-    )
 
-    # 2. Aucune autre section ne pointe vers les clôtures caisse.
-    # / 2. No other section links to the POS closures.
-    autres_sections_avec_caisse = [
-        str(section.get("title", ""))
-        for section in sections
-        if section is not section_ventes
-        and lien_rapport_caisse in _liens_de_la_section(section)
-    ]
-    assert autres_sections_avec_caisse == [], (
-        "Le rapport caisse est encore rangé ailleurs : "
-        f"{autres_sections_avec_caisse}"
+    # 2. Module caisse actif : aucune section ne pointe vers l'ancienne clôture.
+    # / 2. POS module on: no section links to the old POS closures.
+    sections_avec_l_ancien_rapport = []
+    for section in sections:
+        if lien_rapport_caisse in _liens_de_la_section(section):
+            sections_avec_l_ancien_rapport.append(str(section.get("title", "")))
+    assert sections_avec_l_ancien_rapport == [], (
+        "L'ancien rapport caisse est encore dans le menu : "
+        f"{sections_avec_l_ancien_rapport}"
     )
 
     # --- Module caisse inactif ---

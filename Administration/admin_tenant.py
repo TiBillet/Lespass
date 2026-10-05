@@ -75,7 +75,7 @@ from django.db import OperationalError
 from django.forms import ModelForm, Form
 from django.http import HttpResponse
 from django.shortcuts import redirect, get_object_or_404, render
-from django.template.defaultfilters import slugify
+from django.template.defaultfilters import floatformat, slugify
 from django.template.loader import render_to_string
 from django.urls import re_path
 from django.utils import timezone
@@ -145,15 +145,18 @@ from BaseBillet.services_vente import (
     ajouter_article,
     ajouter_reglement,
     apercu_des_montants_d_un_avoir,
+    article_vendu_au_poids_ou_a_la_tireuse,
     choix_du_champ_rembourse_par,
     ecrire_la_vente_d_avoir_d_une_ligne,
     ecrire_la_vente_d_avoir_d_une_vente,
     encaisser_vente,
     encaisser_vente_stripe,
     ligne_entierement_offerte,
-    ligne_payee_en_jetons,
     ligne_payee_en_points,
     ligne_sans_argent_a_rendre,
+    monnaie_et_carte_des_jetons_de_la_vente,
+    moyen_d_argent_unique_de_la_vente,
+    moyen_d_origine_de_la_ligne,
     ouvrir_vente,
     vente_contient_une_recharge,
     vente_porte_un_ecart_d_encaissement,
@@ -172,8 +175,12 @@ from laboutik.affichage_des_ventes import (
 )
 from laboutik.integrity import calculer_hmac_vente
 from laboutik.models import LaboutikConfiguration
-from comptabilite.presentation import montant_a_la_francaise_dans_l_unite
-from comptabilite.rapport import nom_du_moyen_de_paiement
+from comptabilite.presentation import (
+    euros_a_la_francaise,
+    montant_a_la_francaise_dans_l_unite,
+    quantite_au_poids_a_la_francaise,
+)
+from comptabilite.rapport import nom_du_moyen_de_paiement, unite_d_une_vente_au_poids
 
 # from simple_history.admin import SimpleHistoryAdmin
 
@@ -1668,11 +1675,15 @@ class LigneArticleInline(TabularInline):
 
     @display(description=_("Value"))
     def amount_decimal(self, obj):
+        # Une pesée affiche le prix du kg ou du litre (« 12,90 €/kg », Q-H4).
+        # / A weighing shows the price per kg or litre.
+        if _unite_d_une_pesee(obj) is not None:
+            return _prix_unitaire_d_une_ligne(obj, euros_a_la_francaise(obj.amount))
         return obj.amount_decimal()
 
     @display(description=_("Quantité"))
     def qty_decimal(self, obj):
-        return dround(obj.qty)
+        return _quantite_d_une_ligne(obj)
 
     @display(description=_("TVA"))
     def vat(self, obj):
@@ -2093,6 +2104,57 @@ class EmettreAvoirSansMoyenForm(forms.Form):
     """
 
 
+class AvoirSurUnArticleForm(forms.Form):
+    """
+    Formulaire de l'écran « Avoir sur un article » de la fiche « Vente » : la quantité
+    rendue, et « Remboursé par » quand de l'argent est rendu à la main.
+    / "Credit note on one item" form: the quantity given back, and "Refunded by" when
+    money is given back by hand.
+
+    LOCALISATION : Administration/admin_tenant.py (utilisé par VenteAdmin.avoir_sur_un_article)
+
+    - `champ_rembourse_par_demande=False` : le champ « Remboursé par » est retiré
+      (article payé par Stripe, entièrement offert, ou entièrement en jetons) ;
+    - `quantite_figee=True` : la quantité est en lecture seule (pesée ou tirage, Q-H5).
+      Ce n'est qu'un affichage : une quantité forgée est refusée par le service
+      (`ecrire_la_vente_d_avoir_d_une_ligne`), jamais remplacée en silence.
+    / Without the "Refunded by" field when no money is given back by hand; read-only
+    quantity for a weighing or a pour (display only: the service refuses a forged one).
+    """
+
+    quantite = forms.DecimalField(
+        label=_("Quantité rendue"),
+        max_digits=12,
+        decimal_places=6,
+        help_text=_("Au plus la quantité qui reste à rendre."),
+        widget=forms.NumberInput(
+            attrs={
+                "data-testid": "avoir-quantite",
+                "style": "width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;",
+            }
+        ),
+    )
+    moyen_rembourse = forms.ChoiceField(
+        label=_("Remboursé par"),
+        choices=choix_du_champ_rembourse_par,
+        required=True,
+        help_text=_("Le moyen par lequel l'argent est rendu au client."),
+        widget=forms.Select(
+            attrs={
+                "data-testid": "avoir-moyen-rembourse",
+                "style": "width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;",
+            }
+        ),
+    )
+
+    def __init__(self, *args, champ_rembourse_par_demande=True, quantite_figee=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not champ_rembourse_par_demande:
+            del self.fields["moyen_rembourse"]
+        if quantite_figee:
+            self.fields["quantite"].widget.attrs["readonly"] = True
+
+
 @admin.register(LigneArticle, site=staff_admin_site)
 class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
     compressed_fields = True  # Default: False
@@ -2117,8 +2179,13 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
         'sale_origin',
         # 'sended_to_laboutik',
     ]
-    # fields = "__all__"
-    # readonly_fields = fields
+    # La fiche (en lecture seule) ne montre pas les champs de paiement de la ligne :
+    # une ligne peut être payée par plusieurs moyens, ou par aucun moyen écrit sur
+    # elle. Seuls les règlements de la vente disent comment elle a été payée
+    # (colonne « Moyen de paiement » ci-dessus, lue sur la vente).
+    # / The read-only page hides the line's payment fields: only the sale's payments
+    # tell how it was paid.
+    exclude = ('payment_method', 'asset', 'carte', 'wallet')
     search_fields = ('datetime', 'pricesold__productsold__product__name', 'pricesold__price__name',
                      'paiement_stripe__user__email', 'membership__user__email')
     ordering = ('-datetime',)
@@ -2209,8 +2276,9 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
 
         TROIS ÉCRANS :
         - ligne hors Stripe, pas entièrement offerte : champ « Remboursé par » (espèces,
-          CB, chèque, virement), pré-rempli avec le moyen d'origine s'il est dans cette
-          liste, sinon vide et obligatoire ;
+          CB, chèque, virement), pré-rempli avec le seul moyen d'argent des règlements
+          nets de la vente (`moyen_d_origine_de_la_ligne`) s'il est dans cette liste,
+          sinon vide et obligatoire ;
         - ligne entièrement offerte (part offerte = total catalogue, non nul, ou moyen
           historique « offert ») : pas de champ, aucun argent à rendre ;
         - ligne payée par Stripe : pas de champ ; l'écran prévient de rembourser depuis
@@ -2273,11 +2341,12 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
             return redirect(url_de_la_liste_des_ventes)
 
         # Quel écran ? / Which screen?
-        # Pas d'argent à rendre : ligne entièrement offerte, ou payée en jetons cadeau
-        # (l'avoir rend la dette, pas de l'argent). Le message « offert » de l'écran
-        # ne vaut, lui, que pour une ligne offerte.
-        # / No money to give back: fully offered, or paid in gift tokens. The screen's
-        # "offered" message is for an offered line only.
+        # Pas d'argent à rendre : ligne entièrement offerte, ou entièrement payée en
+        # jetons cadeau (l'avoir rend la dette, pas de l'argent). Une ligne mixte a de
+        # l'argent à rendre : le champ « Remboursé par » est demandé. Le message
+        # « offert » de l'écran ne vaut, lui, que pour une ligne offerte.
+        # / No money to give back: fully offered, or fully paid in gift tokens. A mixed
+        # line has money to give back. The "offered" message is for an offered line.
         ligne_payee_par_stripe = ligne_originale.paiement_stripe_id is not None
         la_ligne_n_a_pas_d_argent_a_rendre = ligne_sans_argent_a_rendre(ligne_originale)
         la_ligne_est_entierement_offerte = ligne_entierement_offerte(ligne_originale)
@@ -2291,10 +2360,12 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
             else:
                 formulaire = EmettreAvoirSansMoyenForm(request.POST)
         else:
-            # Le champ est pré-rempli avec le moyen d'origine s'il est dans la liste.
+            # Le champ est pré-rempli avec le moyen d'origine s'il est dans la liste :
+            # le seul moyen d'argent des règlements de la vente
+            # (`moyen_d_origine_de_la_ligne`).
             # / The field is pre-filled with the original method if it is in the list.
             valeurs_initiales = {}
-            moyen_d_origine = ligne_originale.payment_method
+            moyen_d_origine = moyen_d_origine_de_la_ligne(ligne_originale)
             if moyen_d_origine in MOYENS_DU_CHAMP_REMBOURSE_PAR:
                 valeurs_initiales["moyen_rembourse"] = moyen_d_origine
             if champ_rembourse_par_demande:
@@ -2309,8 +2380,8 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
                 "title": _("Émettre un avoir"),
                 "form": formulaire,
                 "ligne": ligne_originale,
-                # Le net vendu de la ligne : l'argent que l'avoir rend.
-                # / The line's net sold: the money the credit note gives back.
+                # Le montant de la ligne : son net vendu (argent et jetons compris).
+                # / The line's amount: its net sold (money and tokens included).
                 "montant_de_la_ligne": dround(ligne_originale.total_ttc),
                 "ligne_payee_par_stripe": ligne_payee_par_stripe,
                 "ligne_entierement_offerte": la_ligne_est_entierement_offerte,
@@ -2415,6 +2486,53 @@ def _montant_d_une_vente(montant_en_centimes, vente):
     return montant_a_la_francaise_dans_l_unite(montant_en_centimes, _unite_d_une_vente(vente))
 
 
+def _unite_d_une_pesee(ligne):
+    """
+    L'unité de la quantité d'une vente au poids ou au volume (D15), de la caisse ou de
+    la tireuse : « kg » ou « L » (`unite_d_une_vente_au_poids`, qui lit le stock et le
+    type du produit : un fût est toujours en litres), ou None pour un article à la
+    pièce. Le produit n'est lu que pour une ligne qui porte un poids : aucune requête
+    de plus pour un article à la pièce.
+    / The quantity unit of a weight / volume line, register or tap ("kg" or "L"; a keg
+    is always in litres), or None.
+    """
+    ligne_au_poids_ou_au_volume = bool(ligne.weight_quantity)
+    if not ligne_au_poids_ou_au_volume:
+        return None
+    produit = ligne.pricesold.productsold.product
+    stock_du_produit = getattr(produit, "stock_inventaire", None)
+    unite_du_stock = None
+    if stock_du_produit is not None:
+        unite_du_stock = stock_du_produit.unite
+    return unite_d_une_vente_au_poids(unite_du_stock, produit.categorie_article)
+
+
+def _quantite_d_une_ligne(ligne):
+    """
+    La quantité d'une ligne, pour l'admin : « 0,355 kg » pour une pesée (Q-H4), le
+    nombre arrondi sinon.
+    / A line's quantity for the admin: "0,355 kg" for a weighing, the number otherwise.
+    """
+    unite_de_la_pesee = _unite_d_une_pesee(ligne)
+    if unite_de_la_pesee is None:
+        return dround(ligne.qty)
+    return quantite_au_poids_a_la_francaise(ligne.qty, unite_de_la_pesee)
+
+
+def _prix_unitaire_d_une_ligne(ligne, montant_a_la_francaise):
+    """
+    Le prix unitaire d'une ligne, pour l'admin : « 12,90 €/kg » pour une pesée (le prix
+    du kg ou du litre), le montant tel quel sinon.
+    / A line's unit price for the admin: "12,90 €/kg" for a weighing.
+
+    :param montant_a_la_francaise: le prix unitaire déjà écrit à la française
+    """
+    unite_de_la_pesee = _unite_d_une_pesee(ligne)
+    if unite_de_la_pesee is None:
+        return montant_a_la_francaise
+    return f"{montant_a_la_francaise}/{unite_de_la_pesee}"
+
+
 def _lien_vers_la_fiche_d_une_vente(vente):
     """
     Un lien vers la fiche d'une vente : « Vente n° 12 », ou « Vente en attente » sans
@@ -2454,11 +2572,11 @@ def _adresse_stripe_d_un_reglement(reglement):
 def _lignes_de_la_vente_avec_un_reste_a_rendre(vente):
     """
     Les lignes vendues de la vente (quantité positive) dont une quantité reste à rendre :
-    la quantité vendue, moins celle de leurs avoirs et remboursements. Lecture simple,
-    pour l'écran : le service relit sous verrou au moment d'écrire
-    (`quantite_restante_de_la_ligne_sous_verrou`).
-    / The sale's sold lines with a quantity left to give back (plain read, for the
-    screen; the service reads again under lock).
+    la quantité vendue, moins celle de leurs avoirs et remboursements. Chaque ligne rendue
+    porte ce reste dans `quantite_restante`. Lecture simple, pour l'écran : le service
+    relit sous verrou au moment d'écrire (`quantite_restante_de_la_ligne_sous_verrou`).
+    / The sale's sold lines with a quantity left to give back, each carrying it in
+    `quantite_restante` (plain read, for the screen; the service reads again under lock).
     """
     lignes_avec_un_reste = []
     lignes_vendues = (
@@ -2471,6 +2589,9 @@ def _lignes_de_la_vente_avec_un_reste_a_rendre(vente):
         for ligne_qui_rend_une_partie in ligne_vendue.credit_notes.all():
             quantite_restante += ligne_qui_rend_une_partie.qty
         if quantite_restante > 0:
+            # Le reste est gardé sur l'objet, pour l'écran « Avoir sur un article ».
+            # / The remainder is kept on the object, for the item credit note screen.
+            ligne_vendue.quantite_restante = quantite_restante
             lignes_avec_un_reste.append(ligne_vendue)
     return lignes_avec_un_reste
 
@@ -2521,7 +2642,10 @@ def _sommes_rendues_par_l_avoir_total(vente):
     `rembourse_par` (l'argent rendu au moyen choisi), `jetons` (dette en jetons cadeau
     rendue), `offert` (part offerte annulée). Plus `ligne_entierement_offerte` : vrai
     quand tout ce qui reste est entièrement offert (même règle que l'avoir d'une ligne).
-    / Categories in cents: stripe, chosen method, gift tokens, offered.
+    Lève ValueError, comme l'écriture, si les jetons de la vente sont de plusieurs
+    monnaies (`monnaie_et_carte_des_jetons_de_la_vente`).
+    / Categories in cents: stripe, chosen method, gift tokens, offered. Raises
+    ValueError like the writing when the tokens have several currencies.
     """
     sommes = {
         "stripe": 0,
@@ -2541,35 +2665,80 @@ def _sommes_rendues_par_l_avoir_total(vente):
         sommes["offert"] += -montants_de_l_avoir["part_offerte"]
         if not ligne_entierement_offerte(ligne_avec_un_reste):
             tout_ce_qui_reste_est_offert = False
-        if net_rendu == 0:
+        # La part en jetons rendue (dette du lieu), puis le reste en argent.
+        # / The token part given back (venue debt), then the rest in money.
+        jetons_rendus = -montants_de_l_avoir["part_en_jetons"]
+        sommes["jetons"] += jetons_rendus
+        argent_rendu = net_rendu - jetons_rendus
+        if argent_rendu == 0:
             continue
-        if ligne_payee_en_jetons(ligne_avec_un_reste):
-            sommes["jetons"] += net_rendu
-        elif ligne_avec_un_reste.paiement_stripe_id is not None:
-            sommes["stripe"] += net_rendu
+        if ligne_avec_un_reste.paiement_stripe_id is not None:
+            sommes["stripe"] += argent_rendu
         else:
-            sommes["rembourse_par"] += net_rendu
+            sommes["rembourse_par"] += argent_rendu
+
+    # Des jetons à rendre : la même lecture de leur monnaie que l'écriture. Des jetons
+    # de plusieurs monnaies lèvent ici le refus (ValueError) que l'écriture lèverait :
+    # l'écran l'annonce au lieu de proposer un avoir qui échouerait.
+    # / Tokens to give back: same currency read as the writing; several currencies
+    # raise here the refusal the writing would raise.
+    if sommes["jetons"] != 0:
+        monnaie_et_carte_des_jetons_de_la_vente(vente)
+
     sommes["ligne_entierement_offerte"] = tout_ce_qui_reste_est_offert
     return sommes
 
 
 def _moyen_pre_rempli_de_l_avoir_total(vente):
     """
-    Le moyen « Remboursé par » proposé d'avance : le seul moyen d'argent de la vente,
-    s'il est dans la liste du champ (espèces, CB, chèque, virement), comme l'avoir d'une
-    ligne. Plusieurs moyens, ou un moyen hors de la liste : rien (l'admin choisit).
-    / The pre-filled method: the sale's only money method, if it is in the list.
+    Le moyen « Remboursé par » proposé d'avance : le seul moyen d'argent net de la
+    vente, corrections comprises (`moyen_d_argent_unique_de_la_vente`), s'il est dans
+    la liste du champ (espèces, CB, chèque, virement), comme l'avoir d'une ligne.
+    Plusieurs moyens, ou un moyen hors de la liste : rien (l'admin choisit).
+    / The pre-filled method: the sale's single net money method, if it is in the list.
     """
-    moyens_d_argent = set()
-    for reglement in vente.reglements.all():
-        if reglement.moyen != PaymentMethod.FREE:
-            moyens_d_argent.add(reglement.moyen)
-    if len(moyens_d_argent) != 1:
-        return None
-    seul_moyen = moyens_d_argent.pop()
+    seul_moyen = moyen_d_argent_unique_de_la_vente(vente)
     if seul_moyen in MOYENS_DU_CHAMP_REMBOURSE_PAR:
         return seul_moyen
     return None
+
+
+def _raison_du_refus_de_l_avoir_sur_un_article(vente):
+    """
+    Pourquoi « Avoir sur un article » est refusé sur cette vente, ou None s'il est
+    permis : nature autre que VENTE, vente pas réglée, vente qui n'est pas en euros,
+    aucun article avec un reste à rendre. Cette lecture sert à refuser AVANT d'afficher
+    l'écran et à cacher le bouton. Les autres refus (écart d'encaissement, recharge,
+    quantité) viennent du service au moment d'écrire
+    (`ecrire_la_vente_d_avoir_d_une_ligne`), et l'écran affiche son message.
+    / Why the item credit note is refused on this sale, or None. Other refusals come
+    from the service when writing.
+    """
+    if vente.nature != Vente.Nature.VENTE:
+        return _("Seule une vente de nature « Vente » reçoit un avoir sur un article.")
+    if vente.statut != Vente.Statut.REGLEE:
+        return _("La vente n'est pas réglée : l'avoir est impossible.")
+    if vente.unite != "EUR":
+        return _(
+            "Cette vente n'est pas en euros (points ou temps) : l'avoir n'est pas "
+            "possible."
+        )
+    if not _lignes_de_la_vente_avec_un_reste_a_rendre(vente):
+        return _("La vente est déjà remboursée en totalité : rien n'est à rendre.")
+    return None
+
+
+def _quantite_restante_affichee(ligne):
+    """
+    Le reste à rendre d'une ligne, pour l'écran : « 0,350 kg » pour une pesée (Q-H4),
+    le nombre à la française sinon (« 2 », « 1,429 »). La ligne porte son reste dans
+    `quantite_restante` (`_lignes_de_la_vente_avec_un_reste_a_rendre`).
+    / A line's remainder for the screen: "0,350 kg" for a weighing, the number otherwise.
+    """
+    unite_de_la_pesee = _unite_d_une_pesee(ligne)
+    if unite_de_la_pesee is None:
+        return floatformat(ligne.quantite_restante, "-3")
+    return quantite_au_poids_a_la_francaise(ligne.quantite_restante, unite_de_la_pesee)
 
 
 def _paiement_paye_de_la_vente(vente):
@@ -2722,7 +2891,7 @@ class ArticlesDeLaVenteInline(TabularInline):
         return queryset.select_related(
             "vente",
             "pricesold__price",
-            "pricesold__productsold__product",
+            "pricesold__productsold__product__stock_inventaire",
         )
 
     @display(description=_("Produit"))
@@ -2735,11 +2904,17 @@ class ArticlesDeLaVenteInline(TabularInline):
 
     @display(description=_("Quantité"))
     def quantite(self, ligne):
-        return dround(ligne.qty)
+        # « 0,355 kg » pour une pesée (Q-H4), le nombre sinon.
+        # / "0,355 kg" for a weighing, the number otherwise.
+        return _quantite_d_une_ligne(ligne)
 
     @display(description=_("Prix unitaire"))
     def prix_unitaire(self, ligne):
-        return _montant_d_une_vente(ligne.amount, ligne.vente)
+        # « 12,90 €/kg » pour une pesée, le prix de l'article sinon.
+        # / "12,90 €/kg" for a weighing, the item price otherwise.
+        return _prix_unitaire_d_une_ligne(
+            ligne, _montant_d_une_vente(ligne.amount, ligne.vente)
+        )
 
     @display(description=_("Offert"))
     def offert(self, ligne):
@@ -2849,10 +3024,12 @@ class VenteAdmin(ModelAdmin):
     ACTIONS DE LA FICHE (montrées seulement quand elles ont un sens,
     `get_actions_detail`) :
     - « Avoir total » (`avoir_total`) : l'avoir de tout ce qui reste à rendre ;
+    - « Avoir sur un article » (`avoir_sur_un_article`) : l'avoir d'une quantité d'un
+      seul article ;
     - « Rejouer l'encaissement » (`rejouer_encaissement`) : une vente en ligne restée
       en attente alors que le client a payé.
     / List with filters and search; detail with items, payments, links and integrity;
-    two detail actions, shown only when they make sense.
+    three detail actions, shown only when they make sense.
     """
 
     compressed_fields = True
@@ -2928,7 +3105,31 @@ class VenteAdmin(ModelAdmin):
         "vente_liee_affichee",
         "ventes_derivees_affichees",
         "integrite",
+        "raison",
     )
+
+    def get_fieldsets(self, request, obj=None):
+        """
+        Les blocs de champs de la fiche : ceux de `fieldsets`, plus la raison d'une
+        correction (écrite par le caissier, `Vente.raison`) quand elle n'est pas
+        vide. La plupart des ventes n'en ont pas : le champ n'apparaît pas.
+        / The page's fieldsets, plus the correction reason when it is not empty.
+
+        LOCALISATION : Administration/admin_tenant.py
+        """
+        fieldsets_de_la_fiche = super().get_fieldsets(request, obj)
+        la_vente_a_une_raison = obj is not None and obj.raison != ""
+        if not la_vente_a_une_raison:
+            return fieldsets_de_la_fiche
+        titre_du_bloc, options_du_bloc = fieldsets_de_la_fiche[0]
+        # Une copie du dictionnaire : `fieldsets` est un attribut de la classe, il
+        # ne doit pas grandir à chaque affichage.
+        # / A copy: `fieldsets` is a class attribute, it must not grow on each page.
+        options_du_bloc_avec_la_raison = dict(options_du_bloc)
+        champs_avec_la_raison = list(options_du_bloc["fields"]) + ["raison"]
+        options_du_bloc_avec_la_raison["fields"] = champs_avec_la_raison
+        bloc_avec_la_raison = (titre_du_bloc, options_du_bloc_avec_la_raison)
+        return (bloc_avec_la_raison,) + tuple(fieldsets_de_la_fiche[1:])
 
     def get_queryset(self, request):
         # Les objets lus par chaque ligne de la liste sont préchargés : le nombre de
@@ -2968,7 +3169,7 @@ class VenteAdmin(ModelAdmin):
 
     def get_actions_detail(self, request, object_id):
         # Les boutons de la fiche ne sont montrés que quand l'action a un sens :
-        # « Avoir total » si la vente l'accepte, « Rejouer l'encaissement » pour une
+        # « Avoir total » et « Avoir sur un article » si la vente les accepte, « Rejouer l'encaissement » pour une
         # vente en attente qui a un paiement Stripe payé. Les actions gardent leurs
         # propres refus (message d'erreur) pour un appel direct à leur adresse.
         # / Detail buttons are shown only when the action makes sense; the actions
@@ -2981,6 +3182,9 @@ class VenteAdmin(ModelAdmin):
         for action_de_la_fiche in actions_permises:
             if action_de_la_fiche.path == "avoir_total":
                 if _raison_du_refus_de_l_avoir_total(vente) is not None:
+                    continue
+            if action_de_la_fiche.path == "avoir_sur_un_article":
+                if _raison_du_refus_de_l_avoir_sur_un_article(vente) is not None:
                     continue
             if action_de_la_fiche.path == "rejouer_encaissement":
                 if _raison_du_refus_du_rejeu(vente) is not None:
@@ -3156,7 +3360,7 @@ class VenteAdmin(ModelAdmin):
         )
 
     # --- Actions de la fiche / Detail page actions ---
-    actions_detail = ["avoir_total", "rejouer_encaissement"]
+    actions_detail = ["avoir_total", "avoir_sur_un_article", "rejouer_encaissement"]
 
     @action(
         description=_("Avoir total"),
@@ -3303,6 +3507,193 @@ class VenteAdmin(ModelAdmin):
             )
         return redirect(
             reverse("staff_admin:BaseBillet_vente_change", args=[vente_d_avoir.pk])
+        )
+
+    @action(
+        description=_("Avoir sur un article"),
+        url_path="avoir_sur_un_article",
+        permissions=["action_sur_une_vente"],
+    )
+    def avoir_sur_un_article(self, request, object_id):
+        """
+        « Avoir sur un article » : l'avoir d'une quantité d'un seul article de la vente
+        (par exemple 1 jus sur 3). Même prix unitaire, quantité négative (D13).
+        / "Credit note on one item": a quantity of one item, same unit price, negative
+        quantity.
+
+        LOCALISATION : Administration/admin_tenant.py
+        Gabarit : Administration/templates/admin/vente/avoir_sur_un_article.html
+
+        DEUX ÉCRANS, à la même adresse :
+        - sans paramètre : la liste des articles qui ont encore un reste à rendre
+          (`_lignes_de_la_vente_avec_un_reste_a_rendre`), chacun avec un lien ;
+        - `?ligne=<pk>` : l'article choisi. Champ « Quantité rendue », pré-rempli avec
+          le reste ; en lecture seule pour une pesée ou un tirage (Q-H5). Champ
+          « Remboursé par » seulement pour de l'argent rendu à la main (D27 : pas pour
+          un article payé par Stripe, entièrement offert ou entièrement en jetons),
+          pré-rempli par le moyen d'origine (`moyen_d_origine_de_la_ligne`).
+
+        REFUS AVANT L'ÉCRAN (message d'erreur, retour à la fiche) : nature autre que
+        VENTE, vente pas réglée, vente pas en euros, rien à rendre ; article absent de
+        la vente ou déjà rendu en totalité (retour à la liste).
+
+        FLUX DU POST (`?ligne=<pk>`) : `ecrire_la_vente_d_avoir_d_une_ligne`
+        (BaseBillet/services_vente.py), origine ADMIN. Le service relit le reste sous
+        verrou et porte les refus (quantité, part offerte ou en jetons, pesée, écart
+        d'encaissement, recharge) : un refus devient un message d'erreur, rien n'est
+        écrit. Une égalité rompue ou une erreur de la base aussi, jamais une page 500.
+        / Two screens (list, chosen item); POST through the sale service, whose refusals
+        become error messages.
+        """
+        vente = get_object_or_404(Vente, pk=object_id)
+        adresse_de_la_fiche = reverse("staff_admin:BaseBillet_vente_change", args=[vente.pk])
+        adresse_de_la_liste_des_articles = reverse(
+            "staff_admin:BaseBillet_vente_avoir_sur_un_article", args=[vente.pk]
+        )
+
+        raison_du_refus = _raison_du_refus_de_l_avoir_sur_un_article(vente)
+        if raison_du_refus is not None:
+            messages.error(request, raison_du_refus)
+            return redirect(adresse_de_la_fiche)
+
+        lignes_avec_un_reste = _lignes_de_la_vente_avec_un_reste_a_rendre(vente)
+        if vente.numero is None:
+            titre_de_l_ecran = _("Avoir sur un article")
+        else:
+            titre_de_l_ecran = _("Avoir sur un article de la vente n° %(numero)s") % {
+                "numero": vente.numero
+            }
+
+        # Premier écran : la liste des articles qui ont un reste à rendre.
+        # / First screen: the items with something left to give back.
+        cle_de_la_ligne_choisie = request.GET.get("ligne", "")
+        if cle_de_la_ligne_choisie == "":
+            articles_proposes = []
+            for ligne_avec_un_reste in lignes_avec_un_reste:
+                articles_proposes.append(
+                    {
+                        "ligne": ligne_avec_un_reste,
+                        "quantite_restante": _quantite_restante_affichee(ligne_avec_un_reste),
+                        "prix_unitaire": _montant_d_une_vente(ligne_avec_un_reste.amount, vente),
+                        "adresse": f"{adresse_de_la_liste_des_articles}?ligne={ligne_avec_un_reste.pk}",
+                    }
+                )
+            contexte_de_la_liste = {
+                **self.admin_site.each_context(request),
+                "title": titre_de_l_ecran,
+                "vente": vente,
+                "ligne": None,
+                "articles_proposes": articles_proposes,
+                "url_de_la_fiche_de_la_vente": adresse_de_la_fiche,
+            }
+            return render(
+                request, "admin/vente/avoir_sur_un_article.html", contexte_de_la_liste
+            )
+
+        # Second écran : l'article choisi, s'il est dans la vente et a un reste.
+        # / Second screen: the chosen item, if it is in the sale and has a remainder.
+        ligne_choisie = None
+        for ligne_avec_un_reste in lignes_avec_un_reste:
+            if str(ligne_avec_un_reste.pk) == cle_de_la_ligne_choisie:
+                ligne_choisie = ligne_avec_un_reste
+        if ligne_choisie is None:
+            messages.error(
+                request,
+                _("Cet article n'est pas dans cette vente, ou il est déjà rendu en totalité."),
+            )
+            return redirect(adresse_de_la_liste_des_articles)
+
+        ligne_payee_par_stripe = ligne_choisie.paiement_stripe_id is not None
+        champ_rembourse_par_demande = (
+            not ligne_payee_par_stripe and not ligne_sans_argent_a_rendre(ligne_choisie)
+        )
+        quantite_figee = article_vendu_au_poids_ou_a_la_tireuse(ligne_choisie)
+
+        if request.method == "POST":
+            formulaire = AvoirSurUnArticleForm(
+                request.POST,
+                champ_rembourse_par_demande=champ_rembourse_par_demande,
+                quantite_figee=quantite_figee,
+            )
+        else:
+            valeurs_initiales = {"quantite": ligne_choisie.quantite_restante}
+            moyen_d_origine = moyen_d_origine_de_la_ligne(ligne_choisie)
+            if moyen_d_origine in MOYENS_DU_CHAMP_REMBOURSE_PAR:
+                valeurs_initiales["moyen_rembourse"] = moyen_d_origine
+            formulaire = AvoirSurUnArticleForm(
+                initial=valeurs_initiales,
+                champ_rembourse_par_demande=champ_rembourse_par_demande,
+                quantite_figee=quantite_figee,
+            )
+
+        formulaire_a_afficher = request.method != "POST" or not formulaire.is_valid()
+        if formulaire_a_afficher:
+            contexte_de_l_ecran = {
+                **self.admin_site.each_context(request),
+                "title": titre_de_l_ecran,
+                "vente": vente,
+                "ligne": ligne_choisie,
+                "form": formulaire,
+                "quantite_restante": _quantite_restante_affichee(ligne_choisie),
+                "prix_unitaire": _montant_d_une_vente(ligne_choisie.amount, vente),
+                "quantite_figee": quantite_figee,
+                "ligne_payee_par_stripe": ligne_payee_par_stripe,
+                "ligne_entierement_offerte": ligne_entierement_offerte(ligne_choisie),
+                "champ_rembourse_par_demande": champ_rembourse_par_demande,
+                "url_de_la_liste_des_articles": adresse_de_la_liste_des_articles,
+            }
+            return render(
+                request, "admin/vente/avoir_sur_un_article.html", contexte_de_l_ecran
+            )
+
+        quantite_rendue = formulaire.cleaned_data["quantite"]
+        if champ_rembourse_par_demande:
+            moyen_choisi = formulaire.cleaned_data["moyen_rembourse"]
+        else:
+            moyen_choisi = None
+
+        try:
+            article_d_avoir = ecrire_la_vente_d_avoir_d_une_ligne(
+                ligne_choisie,
+                quantite=quantite_rendue,
+                moyen_rembourse=moyen_choisi,
+                origine=SaleOrigin.ADMIN,
+            )
+        except ValueError as refus_du_service:
+            # Une règle du service refuse l'avoir : rien n'est écrit (transaction).
+            # Un refus métier est attendu : un avertissement au journal, pas une erreur.
+            # / A service rule refuses: nothing written; logged as a warning.
+            logger.warning(
+                f"Avoir sur un article refusé pour la ligne {ligne_choisie.uuid} : {refus_du_service}"
+            )
+            messages.error(
+                request,
+                _("L'avoir n'a pas pu être émis : %(raison)s") % {"raison": refus_du_service},
+            )
+            return redirect(adresse_de_la_fiche)
+        except (EgaliteDeVenteRompue, OperationalError, IntegrityError) as erreur_d_ecriture:
+            # Une égalité rompue ou une erreur de la base (verrou, contrainte) : rien
+            # n'est écrit (transaction). L'admin reçoit un message, pas une page 500.
+            # / A broken equality or a database error: nothing written, a message.
+            logger.error(
+                f"Avoir sur un article en échec pour la ligne {ligne_choisie.uuid} : {erreur_d_ecriture!r}"
+            )
+            messages.error(
+                request,
+                _("L'avoir n'a pas pu être émis : %(raison)s") % {"raison": erreur_d_ecriture},
+            )
+            return redirect(adresse_de_la_fiche)
+
+        messages.success(request, _("Avoir émis."))
+        if ligne_payee_par_stripe:
+            # Aucun appel à Stripe ici : l'argent n'est pas encore rendu.
+            # / No Stripe call here: the money is not given back yet.
+            messages.warning(
+                request,
+                _("Remboursez cette somme depuis votre tableau de bord Stripe."),
+            )
+        return redirect(
+            reverse("staff_admin:BaseBillet_vente_change", args=[article_d_avoir.vente_id])
         )
 
     @action(
@@ -4520,9 +4911,12 @@ def preparer_le_champ_rembourse_par(lignes_hors_stripe):
     - champ affiché seulement si au moins une ligne hors Stripe a de l'argent à rendre
       (ni entièrement offerte, ni payée en jetons cadeau : `ligne_sans_argent_a_rendre`) ;
     - pré-rempli si TOUTES ces lignes ont le même moyen d'origine, et qu'il est dans
-      la liste du champ (espèces, CB, chèque, virement) ; sinon vide.
+      la liste du champ (espèces, CB, chèque, virement) ; sinon vide. Le moyen
+      d'origine d'une ligne est le seul moyen d'argent des règlements nets de sa vente
+      (`moyen_d_origine_de_la_ligne`).
     / Field shown only when a non-Stripe line has money to give back; pre-filled when
-    all those lines share the same original method from the field's list.
+    all those lines share the same original method (read from their sale's payments)
+    from the field's list.
 
     :param lignes_hors_stripe: les `LigneArticle` hors Stripe de la sélection
     :return: (champ_demande, moyen_pre_rempli) ; moyen_pre_rempli vaut None si vide
@@ -4531,7 +4925,7 @@ def preparer_le_champ_rembourse_par(lignes_hors_stripe):
     for ligne in lignes_hors_stripe:
         if ligne_sans_argent_a_rendre(ligne):
             continue
-        moyens_d_origine_de_l_argent_a_rendre.append(ligne.payment_method)
+        moyens_d_origine_de_l_argent_a_rendre.append(moyen_d_origine_de_la_ligne(ligne))
 
     champ_demande = len(moyens_d_origine_de_l_argent_a_rendre) > 0
     if not champ_demande:

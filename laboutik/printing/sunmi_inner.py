@@ -135,16 +135,21 @@ def ticket_data_to_json_commands(ticket_data):
         article_qty = article.get("qty", 1)
         article_price = article.get("price", 0)
         article_total = article.get("total", 0)
+        weight_detail = article.get("weight_detail")
 
         # Meme logique que escpos_builder : un prix non nul (negatif compris) =
-        # format vente, sinon cuisine.
+        # format vente, sinon cuisine. Une vente au poids ou au volume n'imprime pas
+        # sa quantite sur la ligne : le detail du poids la porte, en dessous.
         # / Same logic as escpos_builder: a non-zero price (negative included) =
-        #   sale format, otherwise kitchen.
+        #   sale format, otherwise kitchen. A weight sale prints its weight detail below.
         article_a_un_prix = article_price is not None and article_price != 0
 
         if article_a_un_prix:
             total_euros = f"{article_total / 100:.2f}"
-            line = f"{article_name} x{article_qty}  {total_euros}{suffixe_de_l_unite}"
+            if weight_detail:
+                line = f"{article_name}  {total_euros}{suffixe_de_l_unite}"
+            else:
+                line = f"{article_name} x{article_qty}  {total_euros}{suffixe_de_l_unite}"
         else:
             line = f"{article_qty} x {article_name}"
 
@@ -153,6 +158,16 @@ def ticket_data_to_json_commands(ticket_data):
             "value": line,
             "align": "left",
         })
+
+        # Vente au poids ou au volume : le detail du poids et du prix au kg / litre,
+        # sous l'article (« 0,350 kg x 12,90 €/kg »). Meme regle que escpos_builder.
+        # / Weight / volume sale: the weight and price per kg / litre, under the item.
+        if weight_detail:
+            commands.append({
+                "type": "text",
+                "value": weight_detail,
+                "align": "left",
+            })
 
         # La part offerte d'un article, sous l'article. Meme regle que escpos_builder.
         # / An item's offered part, under the item. Same rule as escpos_builder.
