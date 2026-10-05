@@ -4,6 +4,25 @@
 **Statut :** implémentée et validée (pytest + Chromium Playwright) — spec relue par Fable + Opus, corrections intégrées (cf. §9)
 **Mise en prod visée :** aujourd'hui → priorité absolue : **ne rien casser**, garder le comportement actuel.
 
+> **Architecture actuelle (lire avant le reste) / Current architecture (read first)**
+>
+> Cette spec décrit 4 cartes qui posaient chacune leurs tuiles et leur repli. Ce
+> n'est plus le cas. Toutes les cartes Leaflet appellent maintenant UNE fonction
+> commune, `tbPoserFondDeCarte(carte, cleMaptiler)`, dans
+> `static/cartes/tb_fond_de_carte.js`. Le choix MapTiler / OSM France HOT et le
+> repli dynamique (seuil, bascule unique, retrait différé P.WIDGET.5) vivent
+> uniquement dans ce fichier. La liste des appelants est dans son en-tête.
+>
+> Chemins qui n'existent plus : `BaseBillet/templates/reunion/views/event/partial/geoloc.html`
+> (remplacé par `pages/templates/pages/<skin>/partials/evenement_geoloc.html`),
+> `BaseBillet/templates/faire_festival/views/infos_pratiques.html` (la carte du lieu
+> passe par `pages/templates/pages/<skin>/partials/bloc_lieu.html`), et `CHANGELOG.md`
+> (remplacé par `CHANGELOG/2026-09-26-fonds-de-carte-repli-osm-quota-maptiler.md`).
+>
+> / All Leaflet maps now call the shared `tbPoserFondDeCarte()` in
+> `static/cartes/tb_fond_de_carte.js`, which alone holds the MapTiler / OSM HOT choice
+> and the dynamic fallback. The per-map paths below no longer exist.
+
 ---
 
 ## 1. Contexte et historique (pourquoi on en est là)

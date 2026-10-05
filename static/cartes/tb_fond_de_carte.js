@@ -1,8 +1,32 @@
 /**
- * Pose le fond de carte commun a TOUTES les cartes du projet.
- * / Sets the basemap shared by ALL the project's maps.
+ * Fond de carte commun a TOUTES les cartes Leaflet du projet.
+ * / Basemap shared by ALL the project's Leaflet maps.
  *
  * LOCALISATION : static/cartes/tb_fond_de_carte.js
+ *
+ * Fonction publique : tbPoserFondDeCarte(carte, cleMaptiler).
+ * / Public function: tbPoserFondDeCarte(carte, cleMaptiler).
+ */
+
+/**
+ * Cree la couche OSM France "Humanitarian" (HOT), sans cle.
+ * / Creates the keyless OSM France "Humanitarian" (HOT) layer.
+ *
+ * @returns {L.TileLayer} la couche, pas encore posee sur la carte.
+ */
+function tbCreerCoucheOsmHot() {
+    return L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            + ' contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a>'
+            + ' &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>',
+        maxZoom: 20,
+        subdomains: 'abc',
+    });
+}
+
+/**
+ * Pose le fond de carte commun a TOUTES les cartes du projet.
+ * / Sets the basemap shared by ALL the project's maps.
  *
  * UN SEUL endroit decide du style des cartes. Changer de fond de carte pour tout
  * le projet = changer cette fonction, rien d'autre.
@@ -18,6 +42,8 @@
  *   - pages/templates/pages/classic/partials/evenement_geoloc.html     (geoloc evenement)
  *   - pages/templates/pages/V2/partials/evenement_geoloc.html
  *   - seo/static/seo/explorer.js                                       (explorer du reseau)
+ *     charge par seo/templates/seo/explorer.html,
+ *     pages/templates/pages/classic/vues/reseau.html et pages/templates/pages/V2/vues/reseau.html
  *   - static/widgets/widget_carte_adresse.js                           (saisie d'adresse)
  *
  * La cle vient de settings.MAPTILER_KEY, exposee a tous les gabarits par le
@@ -52,22 +78,6 @@
  * @param {string} cleMaptiler - la cle MapTiler ; chaine vide ou absente = repli.
  * @returns {L.TileLayer} la couche de tuiles posee sur la carte.
  */
-/**
- * Cree la couche OSM France "Humanitarian" (HOT), sans cle.
- * / Creates the keyless OSM France "Humanitarian" (HOT) layer.
- *
- * @returns {L.TileLayer} la couche, pas encore posee sur la carte.
- */
-function tbCreerCoucheOsmHot() {
-    return L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            + ' contributors, style <a href="https://www.hotosm.org/">Humanitarian OSM Team</a>'
-            + ' &middot; <a href="https://openstreetmap.fr/">OpenStreetMap France</a>',
-        maxZoom: 20,
-        subdomains: 'abc',
-    });
-}
-
 function tbPoserFondDeCarte(carte, cleMaptiler) {
     // Sans cle : OSM France HOT directement.
     // / No key: OSM France HOT right away.

@@ -44,7 +44,7 @@ d'erreur et revient à la page précédente.
 | Fichier / File | Changement / Change |
 |---|---|
 | `Administration/admin_tenant.py` | `ReservationAdmin` : statut en lecture seule, 2 boutons conditionnels. `TicketAdmin.get_pdf` : message + redirect |
-| `tests/pytest/test_reservation_admin_envoi_mail.py` | 5 tests (nouveau fichier) |
+| `tests/pytest/test_reservation_admin_envoi_mail.py` | 8 tests (nouveau fichier) |
 
 **i18n :** 3 nouvelles chaînes (`Valider et envoyer par mail`, `Billet non valide…`,
 `Réservation validée…`) : workflow i18n à lancer.

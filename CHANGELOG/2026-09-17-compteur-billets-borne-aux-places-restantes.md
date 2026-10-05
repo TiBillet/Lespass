@@ -51,9 +51,10 @@ ces refus reste légitime : `under_purchase` compte les paniers ouverts depuis m
 
 | Fichier / File | Changement / Change |
 |---|---|
-| `BaseBillet/views.py` | `EventMVT.retrieve` : `places_restantes`, plafond `max_billets` par tarif, `event.remaining_seats`. `action_reservation` et `reservation` : `logger.error` → `logger.warning` |
+| `BaseBillet/views.py` | `EventMVT.retrieve` : `places_restantes` (via `Event.places_restantes()`, calculé une seule fois), plafond `max_billets` par tarif, `event.remaining_seats`. `action_reservation` et `reservation` : `logger.error` → `logger.warning` |
 | `BaseBillet/templates/commun/formulaires/reservation.html` | Les **trois** `bs-counter` (tarif normal, adhésion obligatoire, adhésion dans le panier) écrivent `{% if price.max_billets is not None %}max="…"{% endif %}`. Message des places restantes sous le total |
 | `tests/pytest/test_booking_counter_max.py` | Nouveau — 11 tests de rendu : plafond par tarif, plusieurs tarifs, branches « adhésion obligatoire » et « adhésion dans le panier », zéro non avalé, aucun `None` ni `NaN`, seuil d'affichage, jauge visible, évènement fédéré, accord singulier / pluriel |
+| `tests/pytest/test_event_retrieve_plafond_billets.py` | Nouveau — 4 tests de bout en bout via `GET /event/<slug>/` : plafond par les places restantes, par le quota du tarif, jamais `max="None"`, message des places restantes |
 
 **i18n :** 1 nouveau `blocktrans` (singulier / pluriel des places restantes) : workflow
 i18n à lancer.
@@ -79,5 +80,7 @@ i18n à lancer.
 
 ### Tests automatisés
 ```bash
-docker exec lespass_django poetry run pytest tests/pytest/test_booking_counter_max.py -q
+docker exec lespass_django poetry run pytest \
+  tests/pytest/test_booking_counter_max.py \
+  tests/pytest/test_event_retrieve_plafond_billets.py -q
 ```

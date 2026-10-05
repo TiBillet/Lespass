@@ -3450,15 +3450,14 @@ class EventMVT(viewsets.ViewSet):
 
                 event_max_per_user_reached = event.max_per_user_reached_on_this_event(request.user)
 
-            # Places encore disponibles : la jauge, moins les billets valides, moins
-            # les paniers ouverts depuis moins de 15 minutes. C'est exactement la
-            # quantite maximale que le validator acceptera (BaseBillet.validators,
-            # verification de la jauge). On le calcule UNE seule fois ici : chaque
-            # appel declenche deux COUNT SQL, il ne doit jamais tomber dans une boucle.
-            # / Seats still available: capacity minus valid tickets minus carts opened
-            # less than 15 minutes ago. This is exactly the maximum quantity the
-            # validator will accept. Computed ONCE: each call costs two COUNT queries.
-            places_restantes = max(0, event.jauge_max - event.valid_tickets_count() - event.under_purchase())
+            # Places encore disponibles (Event.places_restantes : jauge, moins les
+            # billets valides, moins les paniers ouverts depuis moins de 15 minutes).
+            # C'est la quantite maximale que le validator acceptera. Calcule UNE seule
+            # fois ici : chaque appel declenche deux COUNT SQL, il ne doit jamais
+            # tomber dans la boucle des tarifs.
+            # / Seats still available (Event.places_restantes). Computed ONCE: each
+            # call costs two COUNT queries, it must never run inside the price loop.
+            places_restantes = event.places_restantes()
 
             tarifs = [price.prix for price in prices]
             # Calcul des prix min et max
@@ -3497,10 +3496,8 @@ class EventMVT(viewsets.ViewSet):
         template_context['event_in_this_tenant'] = event_in_this_tenant
         template_context['event_max_per_user_reached'] = event_max_per_user_reached
         template_context['places_restantes'] = places_restantes
-        # Le gabarit du skin faire_festival lit `event.remaining_seats`, qui n'etait
-        # defini nulle part : il affichait donc un blanc. On le renseigne ici.
-        # / The faire_festival skin reads `event.remaining_seats`, which was defined
-        # nowhere and rendered as a blank. Filled in here.
+        # Lu par le gabarit du skin faire_festival (vues/evenement.html).
+        # / Read by the faire_festival skin template (vues/evenement.html).
         event.remaining_seats = places_restantes
 
         # On prépare les prix publiés pour le template (utilisé par le sélecteur de billet)
@@ -3525,15 +3522,13 @@ class EventMVT(viewsets.ViewSet):
             # Les deux `max_per_user` sont facultatifs en base (null=True) et
             # `places_restantes` est None pour un evenement federe : on n'ajoute donc
             # que les plafonds reellement definis. Si aucun ne l'est, on laisse None,
-            # et le gabarit n'ecrit alors aucun attribut `max`. Sans cette precaution,
-            # le gabarit rendait la chaine "None", que le composant bs-counter
-            # interprete comme un plafond illimite (Number("None") vaut NaN).
+            # et le gabarit n'ecrit alors aucun attribut `max`. Ne jamais laisser le
+            # gabarit ecrire la chaine "None" : le composant bs-counter la lit comme
+            # un plafond illimite (Number("None") vaut NaN).
             # / Ceiling for the ticket counter, rendered in the `max` attribute: the
-            # smallest of the caps that actually apply. Both `max_per_user` fields are
-            # optional and `places_restantes` is None for a federated event, so only
-            # defined caps are collected. None means the template writes no `max` at
-            # all — previously it rendered the string "None", which bs-counter reads
-            # as unlimited (Number("None") is NaN).
+            # smallest of the caps that actually apply. Only defined caps are
+            # collected; None means no `max` attribute at all. The string "None"
+            # must never be rendered: bs-counter reads it as unlimited (NaN).
             plafonds = []
             if places_restantes is not None:
                 plafonds.append(places_restantes)

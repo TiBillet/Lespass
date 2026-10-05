@@ -40,10 +40,7 @@ fait un `repr()` de chaque setting : les `reverse_lazy("staff_admin:…")` de
 | Fichier / File | Changement / Change |
 |---|---|
 | `ApiBillet/views.py` | `Webhook_stripe.post`, branche `invoice.paid` : garde `if not metadata.get('tenant')` → `logger.error` + `204 NO_CONTENT` |
-
-**Pas de test automatisé :** `/api/webhook_stripe/` n'est jamais appelé directement dans
-la suite (cf. `TECH_DOC/SESSIONS/TESTS/TESTS_RESTANTS.md`). Il n'existe pas encore
-d'infrastructure de payload + signature Stripe simulés.
+| `tests/pytest/test_webhook_invoice_paid_sans_metadata.py` | Nouveau — 2 tests : réponse 204, log ERROR qui cite l'abonnement |
 
 ---
 
@@ -62,3 +59,8 @@ d'infrastructure de payload + signature Stripe simulés.
 1. Prendre une adhésion récurrente via Lespass, puis déclencher un cycle de
    renouvellement.
 2. **Attendu :** l'adhésion est renouvelée comme avant.
+
+### Tests automatisés
+```bash
+docker exec lespass_django poetry run pytest tests/pytest/test_webhook_invoice_paid_sans_metadata.py -q
+```

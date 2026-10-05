@@ -8,7 +8,8 @@
  * 1. Scanne le DOM au DOMContentLoaded pour trouver les containers
  *    `[data-widget-initialized="false"][data-identifiant]` non encore initialisés.
  * 2. Pour chaque container :
- *    - Crée la map Leaflet (CartoDB Voyager tiles).
+ *    - Crée la map Leaflet. Le fond de carte vient de tbPoserFondDeCarte()
+ *      (static/cartes/tb_fond_de_carte.js) : MapTiler, ou OSM France HOT en repli.
  *    - Ajoute le GeoSearchControl (recherche live Nominatim côté navigateur).
  *    - Si lat/lng initiales, place un marqueur draggable centré dessus.
  *    - Bind les events : suggestion click + dragend.
@@ -159,15 +160,15 @@
         // / Draggable marker (created only when valid coords are available).
         let marqueur = null;
 
-        // `ne_pas_ecraser_par_du_vide` : passe a true UNIQUEMENT par le chemin
+        // `ne_pas_ecraser_par_du_vide` : vaut true UNIQUEMENT sur le chemin
         // reverse (drag, clic carte, repli apres recherche). Un reverse partiel
         // (point sans rue, hameau) ne vide alors pas la rue / ville deja saisies.
-        // Les autres appelants ne le passent pas -> comportement historique :
-        // une recherche vers un lieu sans rue VIDE la rue, et la validation
-        // serveur (onboard : rue obligatoire) force l'utilisateur a corriger.
-        // / `ne_pas_ecraser_par_du_vide`: true ONLY from the reverse path. A
-        // partial reverse then does not blank the street / city. Other callers
-        // keep the historical behaviour (a forward search blanks the street).
+        // Les autres appelants ne le passent pas : une recherche vers un lieu
+        // sans rue VIDE la rue, et la validation serveur (onboard : rue
+        // obligatoire) force l'utilisateur a la corriger.
+        // / `ne_pas_ecraser_par_du_vide`: true ONLY on the reverse path, so a
+        // partial reverse does not blank street / city. A forward search still
+        // blanks the street.
         function placer_marqueur_et_remplir_champs(latitude, longitude, adresse_complete, parties_adresse, ne_pas_ecraser_par_du_vide) {
             const lat_lng = L.latLng(latitude, longitude);
 

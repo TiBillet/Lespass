@@ -53,9 +53,11 @@ de l'onboard (rue obligatoire) force l'utilisateur à la corriger.
 **Quoi / What :** le widget lit la clé via le tag `{% maptiler_key %}` (`tibitags`).
 / The widget reads the key through the `{% maptiler_key %}` template tag.
 
-**Pourquoi / Why :** le widget est rendu par un widget de formulaire, sans contexte de
-requête : le context processor `maptiler_context` n'y est pas appliqué.
-/ The widget renders without a request context, so the context processor does not run.
+**Pourquoi / Why :** le tag lit `settings.MAPTILER_KEY` directement, sans dépendre du
+context processor `maptiler_context`. Le widget a donc sa clé même quand il est rendu
+sans requête (`render_to_string` dans les tests).
+/ The tag reads the setting directly, so the widget gets its key even when rendered
+without a request (tests).
 
 ### Fichiers modifies / Modified files
 
@@ -66,7 +68,6 @@ requête : le context processor `maptiler_context` n'y est pas appliqué.
 | `templates/widgets/widget_carte_adresse.html` | `{% load tibitags %}` + `data-maptiler-key="{% maptiler_key %}"` |
 | `static/widgets/widget_carte_adresse.js` | Garde « non vide » rue / ville sur le chemin reverse |
 | `tests/pytest/test_widget_carte_adresse_tiles.py` | Nouveau — clé passée au widget, repli présent dans le fond commun, chaque carte appelle `tbPoserFondDeCarte`, plus de `cartocdn`, garde-fous P.WIDGET |
-| `tests/pytest/test_event_map_tiles.py` | La page évènement transmet la clé au fond commun |
 | `tests/PIEGES.md` | + P.WIDGET.5 (retrait de couche dans `load`) |
 | `TECH_DOC/SESSIONS/WIDGET_GEO/04-fonds-de-carte-maptiler-repli-osm.md` | Spec |
 
