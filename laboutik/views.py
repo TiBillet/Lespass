@@ -7332,6 +7332,24 @@ class PaiementViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
+        # --- Un panier vide ne se paie pas ---
+        # Le bouton VALIDER est desactive quand le panier est vide (addition.js).
+        # Ce n'est qu'un confort d'affichage : un POST force, ou un panier vide
+        # pendant la lecture de la carte NFC, arrive quand meme ici.
+        # Aucun flux de paiement ne sait traiter un panier vide : on refuse
+        # avant tout routage et toute ecriture.
+        # / An empty cart is never paid: refused before any routing or write.
+        if not articles_panier:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": _("Panier vide."),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         # --- Calculer le total en centimes ---
         # --- Calculate total in centimes ---
         consigne_dans_panier = _panier_contient_retour_consigne(articles_panier)
@@ -11623,6 +11641,26 @@ class CommandeViewSet(viewsets.ViewSet):
                     status=400,
                 )
 
+            # Un retour de consigne rend de l'argent au client : il se regle seul,
+            # au comptoir. Une commande de table ne sait pas le payer
+            # (payer_commande le refuse) : il ne doit donc jamais y entrer, sinon
+            # il part en preparation et la commande reste impayable.
+            # / A deposit return is settled at the counter, never via an order.
+            if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Un retour de consigne se règle au comptoir, pas depuis une commande."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
             articles_valides.append(
                 {
                     "product": produit,
@@ -11765,6 +11803,29 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _(
                     "Un tarif en points ou en temps ne passe pas par une "
                     "commande de table : encaissez-le au comptoir."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        # Un retour de consigne se regle seul, au comptoir : une commande de table
+        # ne sait pas le payer (payer_commande le refuse). Refus AVANT toute ecriture,
+        # sinon il part en preparation et la commande reste impayable.
+        # / A deposit return never enters an order: refused before any write.
+        uuids_des_produits_demandes = []
+        for article_data in articles_data:
+            uuids_des_produits_demandes.append(article_data["product_uuid"])
+        un_produit_est_un_retour_de_consigne = Product.objects.filter(
+            uuid__in=uuids_des_produits_demandes,
+            methode_caisse=Product.RETOUR_CONSIGNE,
+        ).exists()
+        if un_produit_est_un_retour_de_consigne:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Un retour de consigne se règle au comptoir, pas depuis une commande."
                 ),
                 "selector_bt_retour": "#messages",
             }
