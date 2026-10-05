@@ -406,7 +406,7 @@ def test_admin_reservation_add_moyen_paiement_obligatoire(tenant):
 
         # Form invalide -> rien de créé à nettoyer (pas de réservation/ligne).
         # / Invalid form -> nothing created to clean up.
-        price.delete()
+        price.hard_delete()
 
 
 def test_admin_reservation_add_champs_email_et_tarif():

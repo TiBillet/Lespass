@@ -201,8 +201,8 @@ class TestPaiementEspecesCB(FastTenantTestCase):
         ).exists()
 
     def test_panier_vide_pas_de_ligne(self):
-        """POST sans articles → pas de LigneArticle creee, reponse 200 (succes vide).
-        / POST without articles → no LigneArticle created, 200 response (empty success)."""
+        """POST sans articles → refus 400 « Panier vide. », pas de LigneArticle creee.
+        / POST without articles → 400 "Panier vide." refusal, no LigneArticle created."""
         data = {
             'uuid_pv': str(self.pv.uuid),
             'moyen_paiement': 'espece',
@@ -211,7 +211,8 @@ class TestPaiementEspecesCB(FastTenantTestCase):
             # Pas de repid-* → panier vide / No repid-* → empty cart
         }
         response = self.c.post('/laboutik/paiement/payer/', data=data)
-        assert response.status_code == 200
+        assert response.status_code == 400
+        assert "Panier vide" in response.content.decode()
 
         assert LigneArticle.objects.filter(
             sale_origin=SaleOrigin.LABOUTIK,
@@ -226,8 +227,9 @@ class TestPaiementEspecesCB(FastTenantTestCase):
         assert "Carte inconnue" in contenu
 
     def test_product_uuid_inexistant_pas_de_ligne(self):
-        """UUID produit inexistant dans le PV → ignore, pas de ligne creee.
-        / Non-existent product UUID in PV → ignored, no line created."""
+        """UUID produit inexistant dans le PV → article ignore, le panier est vide :
+        refus 400 « Panier vide. », pas de ligne creee.
+        / Non-existent product UUID in PV → ignored, cart is empty: 400, no line."""
         data = {
             'uuid_pv': str(self.pv.uuid),
             'moyen_paiement': 'espece',
@@ -236,7 +238,8 @@ class TestPaiementEspecesCB(FastTenantTestCase):
             'repid-00000000-0000-0000-0000-000000000000': '1',
         }
         response = self.c.post('/laboutik/paiement/payer/', data=data)
-        assert response.status_code == 200
+        assert response.status_code == 400
+        assert "Panier vide" in response.content.decode()
 
         assert LigneArticle.objects.filter(
             sale_origin=SaleOrigin.LABOUTIK,

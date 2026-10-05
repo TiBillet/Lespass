@@ -7,6 +7,48 @@ from Administration.admin.base import ModelAdmin
 
 logger = logging.getLogger(__name__)
 
+
+# Formats texte qui recoivent un BOM a l'export.
+# / Text formats that get a BOM on export.
+EXTENSIONS_EXPORTEES_AVEC_BOM = ("csv", "tsv")
+
+
+class ExportCsvLisibleParExcelMixin:
+    """
+    Ajoute un BOM au debut des exports CSV et TSV.
+    / Adds a BOM at the start of CSV and TSV exports.
+
+    LOCALISATION : Administration/admin/mixins.py
+
+    Le BOM est un petit caractere invisible (U+FEFF) en tete de fichier.
+    Il dit au tableur : « ce fichier est en UTF-8 ».
+    Sans lui, Excel lit le fichier en Windows-1252.
+    Les accents sont alors casses : « é » devient « Ã© ».
+    LibreOffice et Google Sheets lisent le fichier correctement, avec ou sans BOM.
+
+    Pourquoi pas l'attribut `to_encoding = "utf-8-sig"` de django-import-export :
+    il s'applique a TOUS les formats texte, y compris JSON et YAML.
+    Or un JSON ne doit pas commencer par un BOM : JSON.parse() refuse le fichier.
+    Les formats binaires (XLSX, XLS, ODS) ne sont pas concernes.
+
+    UTILISATION : placer ce mixin AVANT ImportExportModelAdmin / ExportActionModelAdmin
+    dans l'heritage, sinon sa methode get_export_data n'est jamais appelee.
+
+    FLUX : clic « Exporter » -> ExportMixin._do_file_export (django-import-export)
+    -> CETTE METHODE -> ExportMixin.get_export_data -> encode le texte en bytes.
+    """
+
+    def get_export_data(self, file_format, request, queryset, **kwargs):
+        # Un CSV ou un TSV est encode en UTF-8 avec BOM.
+        # Les autres formats gardent l'encodage choisi par django-import-export.
+        # / CSV and TSV are encoded as UTF-8 with BOM, other formats are unchanged.
+        extension_du_format = file_format.get_extension()
+        if extension_du_format in EXTENSIONS_EXPORTEES_AVEC_BOM:
+            kwargs["encoding"] = "utf-8-sig"
+
+        return super().get_export_data(file_format, request, queryset, **kwargs)
+
+
 class HelpDisplayMixin:
     """
     Display help before the templates.

@@ -20,6 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from Administration.admin.base import ModelAdmin
 from unfold.admin import StackedInline, TabularInline
 from unfold.components import register_component, BaseComponent
+from unfold.contrib.filters.admin import ChoicesDropdownFilter, RelatedDropdownFilter
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import action, display
 from unfold.forms import PaginationInlineFormSet
@@ -114,6 +115,172 @@ PALETTE_POS = [
 PALETTE_POS_MAP = {
     key: (text_hex, bg_hex) for key, _label, text_hex, bg_hex in PALETTE_POS
 }
+
+
+def _valider_couleur_hexadecimale(valeur):
+    """
+    Nettoie et valide une couleur saisie dans l'admin.
+    La couleur est écrite dans du CSS (caisse, kiosk) : on n'accepte
+    qu'un code hexadécimal #rrggbb, en minuscules. Vide est autorisé.
+    / Cleans and validates an admin color: only #rrggbb (lowercase) or empty,
+    because the value is written into CSS.
+    LOCALISATION : Administration/admin/products.py
+    """
+    couleur = (valeur or "").strip().lower()
+    if not couleur:
+        return couleur
+    if not re.fullmatch(r"#[0-9a-f]{6}", couleur):
+        raise forms.ValidationError(
+            _("Couleur invalide : utilisez le format #rrggbb.")
+        )
+    return couleur
+
+
+# ---------------------------------------------------------------------------
+# Palette pastel des boutons de caisse (articles et catégories)
+# / Pastel palette for POS buttons (items and categories)
+# ---------------------------------------------------------------------------
+
+# Couleurs de fond proposées pour les boutons de la caisse.
+# 11 teintes, 3 niveaux chacune : clair (100), moyen (200), soutenu (300).
+# Design tokens : --color-{teinte}-{100|200|300}.
+# On n'utilise QUE ces couleurs. On n'invente pas de nuance intermédiaire.
+# Toutes ces couleurs sont claires : le texte posé dessus est foncé (#1a1a1a),
+# jamais blanc. Le formulaire écrit lui-même cette couleur de texte.
+# Les codes sont en minuscules : le widget compare la couleur en minuscules.
+# / Pastel POS background colors: 11 hues x 3 levels. Use only these.
+# All are light: text on them is dark (#1a1a1a), never white.
+PALETTE_PASTEL_CAISSE = [
+    (_("Bleu"), [
+        ("#a1d9fe", _("Bleu clair")),
+        ("#6bc4fe", _("Bleu")),
+        ("#3dabf3", _("Bleu soutenu")),
+    ]),
+    (_("Cyan"), [
+        ("#b7f7ff", _("Cyan clair")),
+        ("#8df2ff", _("Cyan")),
+        ("#42e9ff", _("Cyan soutenu")),
+    ]),
+    (_("Violet"), [
+        ("#d2bcff", _("Violet clair")),
+        ("#b996fe", _("Violet")),
+        ("#b18aff", _("Violet soutenu")),
+    ]),
+    (_("Menthe"), [
+        ("#b5ffd7", _("Menthe claire")),
+        ("#8effc2", _("Menthe")),
+        ("#63ffab", _("Menthe soutenue")),
+    ]),
+    (_("Rose"), [
+        ("#f9aece", _("Rose clair")),
+        ("#ff88bb", _("Rose")),
+        ("#ff589f", _("Rose soutenu")),
+    ]),
+    (_("Jaune"), [
+        ("#fff7b8", _("Jaune clair")),
+        ("#feef78", _("Jaune")),
+        ("#ffe833", _("Jaune soutenu")),
+    ]),
+    (_("Ambre"), [
+        ("#fbd99c", _("Ambre clair")),
+        ("#fbc86f", _("Ambre")),
+        ("#feb940", _("Ambre soutenu")),
+    ]),
+    (_("Orange"), [
+        ("#ffcaa9", _("Orange clair")),
+        ("#ffb181", _("Orange")),
+        ("#ff9655", _("Orange soutenu")),
+    ]),
+    (_("Corail"), [
+        ("#feb1b2", _("Corail clair")),
+        ("#fe8c8e", _("Corail")),
+        ("#fd686b", _("Corail soutenu")),
+    ]),
+    (_("Citron vert"), [
+        ("#c4fbb0", _("Citron vert clair")),
+        ("#a9fe8a", _("Citron vert")),
+        ("#8fff67", _("Citron vert soutenu")),
+    ]),
+    (_("Indigo"), [
+        ("#adadf9", _("Indigo clair")),
+        ("#9292fb", _("Indigo")),
+        ("#7676ff", _("Indigo soutenu")),
+    ]),
+]
+
+# Couleur du texte posé sur une couleur de la palette pastel.
+# / Text color on a pastel palette color.
+COULEUR_TEXTE_SUR_PASTEL = "#1a1a1a"
+
+
+def codes_de_la_palette_pastel_caisse():
+    """
+    Liste à plat des 33 codes de la palette pastel, dans l'ordre.
+    / Flat list of the 33 pastel palette codes, in order.
+    LOCALISATION : Administration/admin/products.py
+    """
+    codes_des_couleurs = []
+    for _nom_teinte, couleurs_de_la_teinte in PALETTE_PASTEL_CAISSE:
+        for code_couleur, _nom_couleur in couleurs_de_la_teinte:
+            codes_des_couleurs.append(code_couleur)
+    return codes_des_couleurs
+
+
+def couleur_de_texte_pour_un_fond_pastel(couleur_de_fond, couleur_de_texte_actuelle):
+    """
+    Choisit la couleur de texte d'un bouton de caisse selon son fond.
+    - Fond de la palette pastel : texte foncé (#1a1a1a).
+    - Pas de fond : pas de texte non plus (la caisse prend la valeur par défaut).
+    - Ancien fond hors palette, conservé : le texte ne change pas.
+    / Picks the POS button text color from its background: dark on pastel,
+    None when no background, unchanged for a kept out-of-palette background.
+    LOCALISATION : Administration/admin/products.py
+    """
+    if not couleur_de_fond:
+        return None
+    if couleur_de_fond in codes_de_la_palette_pastel_caisse():
+        return COULEUR_TEXTE_SUR_PASTEL
+    return couleur_de_texte_actuelle
+
+
+class CouleurFondPastelWidget(forms.Widget):
+    """Choix de la couleur de fond d'un bouton de caisse, en pastilles.
+    Une colonne par teinte, côte à côte (de haut en bas : clair, moyen, soutenu).
+    Chaque pastille est un bouton radio : pas de JS, et la pastille choisie
+    est mise en évidence en CSS (:checked). Pas de sélecteur libre.
+    Si l'objet a déjà une couleur hors de la palette, elle est gardée et
+    proposée en premier (« Couleur actuelle »), pour ne rien perdre.
+    / POS button background as radio swatches, one column per hue. No JS.
+    A current color outside the palette is kept and offered first.
+    LOCALISATION : Administration/admin/products.py
+    Template : Administration/templates/admin/product/widget_couleur_fond_pastel.html
+
+    :param libelle_aucune: texte de la pastille « Aucune » (ce qui s'affiche sans couleur)
+    """
+
+    template_name = "admin/product/widget_couleur_fond_pastel.html"
+
+    def __init__(self, *args, libelle_aucune="", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.libelle_aucune = libelle_aucune
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+
+        # Couleur actuelle, en minuscules pour la comparer à la palette
+        # / Current color, lowercased to compare with the palette
+        couleur_actuelle = (value or "").strip().lower()
+
+        couleur_actuelle_hors_liste = ""
+        if couleur_actuelle and couleur_actuelle not in codes_de_la_palette_pastel_caisse():
+            couleur_actuelle_hors_liste = couleur_actuelle
+
+        context["couleur_actuelle"] = couleur_actuelle
+        context["couleur_actuelle_hors_liste"] = couleur_actuelle_hors_liste
+        context["groupes_de_couleurs"] = PALETTE_PASTEL_CAISSE
+        context["libelle_aucune"] = self.libelle_aucune or _("Aucune")
+        return context
+
 
 # ---------------------------------------------------------------------------
 # Icones Material Symbols (Outlined) pour les articles et points de vente POS
@@ -445,8 +612,47 @@ class BasePriceInline(StackedInline):
             )
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
+    def get_queryset(self, request):
+        # Un tarif archivé (« supprimé ») n'est plus jamais affiché dans le produit.
+        # / An archived ("deleted") price is never shown in the product again.
+        return super().get_queryset(request).filter(archived=False)
+
+    def get_formset(self, request, obj=None, **kwargs):
+        """
+        Autorise la case « Supprimer » sur un tarif déjà vendu.
+        / Allows the "Delete" checkbox on a price that was already sold.
+
+        LOCALISATION : Administration/admin/products.py
+
+        Par défaut, l'admin Django refuse de supprimer un objet si d'autres objets
+        protégés pointent vers lui (ici : PriceSold, Membership, en PROTECT).
+        Ce contrôle est fait par la méthode hand_clean_DELETE du formulaire.
+
+        Pour un tarif, ce contrôle est inutile : Price.delete() n'efface rien.
+        Il archive le tarif (voir BaseBillet/models.py). Les ventes passées restent intactes.
+        On remplace donc ce contrôle par une méthode qui ne fait rien.
+
+        FLUX :
+        1. L'admin coche « Supprimer » sur un tarif et enregistre le produit
+        2. Le formset appelle tarif.delete()
+        3. Price.delete() passe archived=True et publish=False
+        4. get_queryset() ci-dessus ne renvoie plus ce tarif : il disparaît de la page
+        """
+        classe_du_formset = super().get_formset(request, obj, **kwargs)
+
+        class FormulaireDeTarifQuiArchive(classe_du_formset.form):
+            def hand_clean_DELETE(self):
+                # Rien à vérifier : la suppression d'un tarif est un archivage.
+                # / Nothing to check: deleting a price is an archiving.
+                return
+
+        classe_du_formset.form = FormulaireDeTarifQuiArchive
+        return classe_du_formset
+
     def has_delete_permission(self, request, obj=None):
-        return False
+        # « Supprimer » un tarif l'archive. Voir Price.delete() dans BaseBillet/models.py.
+        # / "Deleting" a price archives it. See Price.delete().
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -962,6 +1168,8 @@ class ProductAdminCustomForm(ModelForm):
             (Product.BILLET, _("Ticket booking")),
             (Product.FREERES, _("Free booking")),
             (Product.ADHESION, _("Subscription or membership")),
+            (Product.RESOURCE, _("Ressource")),
+            (Product.FUT, _("Un fut")),
         ],
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
         label=_("Product type"),
@@ -1081,6 +1289,26 @@ class TvaAdmin(ModelAdmin):
 
     def has_view_permission(self, request, obj=None):
         return False
+
+
+def un_autre_produit_non_archive_porte_ce_nom(produit):
+    """
+    Vrai si un AUTRE produit non archivé a le même nom et la même catégorie.
+    / True when ANOTHER non-archived product has the same name and category.
+
+    LOCALISATION : Administration/admin/products.py
+
+    Sert avant de désarchiver un produit : deux produits non archivés ne peuvent pas
+    avoir le même nom dans la même catégorie (contrainte de Product, BaseBillet/models.py).
+    Fonction au niveau module, pas dans le ModelAdmin : Unfold enveloppe les méthodes
+    des ModelAdmin.
+    """
+    autres_produits_non_archives_du_meme_nom = Product.objects.filter(
+        name=produit.name,
+        categorie_article=produit.categorie_article,
+        archive=False,
+    ).exclude(pk=produit.pk)
+    return autres_produits_non_archives_du_meme_nom.exists()
 
 
 class ProductArchiveFilter(admin.SimpleListFilter):
@@ -1281,9 +1509,26 @@ class ProductAdmin(ModelAdmin):
         # 3. DUPLICATION DES TARIFS (Price)
         # 3. DUPLICATION OF PRICES (Price)
 
+        # Un tarif archivé (« supprimé ») n'est pas copié.
+        # / An archived ("deleted") price is not copied.
+        tarifs_a_copier = list(produit_source.prices.filter(archived=False))
+
+        # Pour un produit « réservation gratuite », l'enregistrement du nouveau produit
+        # (étape 1) a déjà créé un tarif gratuit automatique : c'est le signal
+        # post_save_Product de BaseBillet/models.py.
+        # Si on copie ensuite les tarifs du produit source, ce tarif automatique est en trop.
+        # On l'efface vraiment (hard_delete) : il vient d'être créé, il n'a jamais été vendu.
+        # Voir l'issue GitHub #459.
+        # / For a "free booking" product, saving the new product already auto-created a
+        #   free price (post_save_Product signal). It would be one price too many: really
+        #   delete it before copying the source prices (GitHub issue #459).
+        if tarifs_a_copier:
+            for tarif_cree_automatiquement in nouveau_produit.prices.all():
+                tarif_cree_automatiquement.hard_delete()
+
         # On parcourt tous les tarifs associés au produit source
         # Loop through all prices associated with the source product
-        for tarif_original in produit_source.prices.all():
+        for tarif_original in tarifs_a_copier:
             # Création d'une copie du tarif
             # Creating a copy of the price
             nouveau_tarif = Price.objects.get(pk=tarif_original.pk)
@@ -1342,6 +1587,24 @@ class ProductAdmin(ModelAdmin):
     )
     def desarchive(self, request, object_id):
         obj = get_object_or_404(Product, pk=object_id)
+
+        # Un produit archivé ne bloque pas son nom : un autre produit du même nom a pu
+        # être créé depuis. Deux produits non archivés ne peuvent pas avoir le même nom
+        # dans la même catégorie (contrainte de Product). On refuse donc avec un message.
+        # / An archived product does not reserve its name: refuse to unarchive it when a
+        #   non-archived product with the same name and category exists.
+        un_produit_actif_porte_deja_ce_nom = un_autre_produit_non_archive_porte_ce_nom(obj)
+        if un_produit_actif_porte_deja_ce_nom:
+            messages.error(
+                request,
+                _(
+                    "A product named « %(name)s » already exists. "
+                    "Rename one of them before unarchiving."
+                )
+                % {"name": obj.name},
+            )
+            return redirect(request.META["HTTP_REFERER"])
+
         obj.archive = False
         obj.save()
         messages.success(request, _("%(name)s unarchived") % {"name": obj.name})
@@ -1382,44 +1645,40 @@ class ProductAdmin(ModelAdmin):
 
     def get_search_results(self, request, queryset, search_term):
         """
-        Pour la recherche de produit dans la page Event.
-        On est sur un Many2Many, il faut bidouiller la réponde de ce coté
-        Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
+        Recherche de produit pour les champs autocomplete de l'admin.
+        / Product search for admin autocomplete fields.
+
+        La categorie ne se filtre PLUS ici. Django le fait tout seul avant cette
+        methode (AutocompleteJsonView applique le limit_choices_to du champ) :
+        - Event.products -> limit_choices_to BILLET / FREERES ;
+        - Price.adhesions_obligatoires -> limit_choices_to ADHESION ;
+        - booking.Resource.product -> FK vers le proxy ResourceProduct
+          (autocomplete servi par ResourceProductAdmin, deja filtre).
+        / Category is no longer filtered here: Django applies the field's
+        limit_choices_to (or the proxy admin) before this method.
+
+        Il reste ici :
+        - les produits archives ne sont jamais proposes ;
+        - Stock : uniquement les articles de vente (VT). Pas de limit_choices_to
+          sur Stock.product, car les futs (categorie U) ont aussi un stock.
+        / Remaining: archived products are never offered; Stock autocomplete
+        offers sale articles only (no limit_choices_to: kegs have stock too).
         """
         queryset, use_distinct = super().get_search_results(
             request, queryset, search_term
         )
-        if request.headers.get("Referer") and "admin/autocomplete" in request.path:
-            referer = request.headers["Referer"]
-            logger.info(referer)
-            if "event" in referer:
-                # Autocomplete depuis EventAdmin : uniquement billets
-                queryset = queryset.filter(
-                    categorie_article__in=[
-                        Product.BILLET,
-                        Product.FREERES,
-                    ]
-                ).exclude(archive=True)
-            elif "price" in referer:
-                # Autocomplete depuis PriceAdmin (adhesions_obligatoires) : uniquement adhesions
-                queryset = queryset.filter(
-                    categorie_article=Product.ADHESION,
-                    archive=False,
-                )
-            elif "inventaire/stock" in referer:
-                # Autocomplete depuis StockAdmin : uniquement articles de vente (VT)
-                # Pas les recharges, adhésions, consignes, etc.
-                # / Autocomplete from StockAdmin: only sale articles (VT)
-                queryset = queryset.filter(
-                    methode_caisse=Product.VENTE,
-                    archive=False,
-                )
-            elif "resource/" in referer:
-                # Autocomplete depuis ResourceAdmin : uniquement produit ressource
-                queryset = queryset.filter(
-                    categorie_article=Product.RESOURCE,
-                    archive=False,
-                )
+        requete_autocomplete = "admin/autocomplete" in request.path
+        if not requete_autocomplete:
+            return queryset, use_distinct
+
+        queryset = queryset.exclude(archive=True)
+
+        referer = request.headers.get("Referer", "")
+        if "inventaire/stock" in referer:
+            # Autocomplete depuis StockAdmin : uniquement articles de vente (VT)
+            # Pas les recharges, adhésions, consignes, etc.
+            # / Autocomplete from StockAdmin: only sale articles (VT)
+            queryset = queryset.filter(methode_caisse=Product.VENTE)
 
         return queryset, use_distinct
 
@@ -1623,39 +1882,21 @@ class POSProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
 
     # --- Champs d'affichage POS / POS display fields ---
 
-    # Palette de couleurs prédéfinie (champ formulaire uniquement, non sauvegardé directement)
-    # Pre-defined color palette (form-only field, not saved directly to the model)
-    palette_pos = forms.ChoiceField(
-        choices=[("", _("— Aucune palette —"))]
-        + [(key, label) for key, label, _t, _b in PALETTE_POS],
-        required=False,
-        label=_("Color palette"),
-        help_text=_(
-            "Choisissez une combinaison de couleurs prête à l'emploi. "
-            "Elle remplacera les champs couleur ci-dessous. "
-            "/ Choose a ready-to-use color combination. It will override the color fields below."
-        ),
-        widget=PalettePickerWidget(),
-    )
-
-    # Couleur du texte avec sélecteur natif (override palette si renseigné manuellement)
-    # Text color with native picker (overrides palette if filled manually)
-    couleur_texte_pos = forms.CharField(
-        max_length=7,
-        required=False,
-        label=_("POS text color"),
-        help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
-        widget=UnfoldAdminColorInputWidget(),
-    )
-
-    # Couleur du fond avec sélecteur natif
-    # Background color with native picker
+    # Couleur du fond : pastilles de la palette pastel uniquement.
+    # La couleur du texte n'est pas un champ : clean() l'écrit (foncé sur pastel).
+    # / Background: pastel palette swatches only. Text color is not a field:
+    # clean() writes it (dark on pastel).
     couleur_fond_pos = forms.CharField(
         max_length=7,
         required=False,
         label=_("POS background color"),
-        help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
-        widget=UnfoldAdminColorInputWidget(),
+        help_text=_(
+            "Couleur du bouton en caisse. Le texte s'affiche en foncé. "
+            "Aucune : le bouton prend la couleur de sa catégorie."
+        ),
+        widget=CouleurFondPastelWidget(
+            libelle_aucune=_("Aucune (couleur de la catégorie)")
+        ),
     )
 
     # Icône avec sélecteur visuel Material Symbols
@@ -1672,20 +1913,6 @@ class POSProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        instance = kwargs.get("instance")
-
-        # Pré-sélection de la palette si les couleurs actuelles correspondent à un preset
-        # Pre-select the palette if the current colors match a preset
-        if instance and instance.couleur_texte_pos and instance.couleur_fond_pos:
-            for key, _label, text_hex, bg_hex in PALETTE_POS:
-                couleurs_correspondent = (
-                    instance.couleur_texte_pos.upper() == text_hex.upper()
-                    and instance.couleur_fond_pos.upper() == bg_hex.upper()
-                )
-                if couleurs_correspondent:
-                    self.fields["palette_pos"].initial = key
-                    break
 
         # Aide du champ TVA : la vente prend la TVA de l'ARTICLE, sinon celle du
         # lieu ; jamais celle de la categorie (LigneArticle._compute_default_vat).
@@ -1714,21 +1941,26 @@ class POSProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
         No category validation for POS products."""
         return self.cleaned_data.get("categorie_article", Product.NONE)
 
+    def clean_couleur_fond_pos(self):
+        """Le fond est écrit dans le CSS de la caisse : #rrggbb ou vide.
+        / The background is written into the POS CSS: #rrggbb or empty."""
+        return _valider_couleur_hexadecimale(self.cleaned_data.get("couleur_fond_pos"))
+
     def clean(self):
-        """Applique la palette sélectionnée sur les champs couleur, puis valide.
-        Applies the selected palette to the color fields, then validates."""
+        """Valide, puis écrit la couleur du texte d'après le fond choisi.
+        / Validates, then writes the text color from the chosen background."""
 
         # On saute la validation de ProductAdminCustomForm (pas de tarif obligatoire en caisse)
         # Skip ProductAdminCustomForm validation (no mandatory price at POS)
         cleaned = super(ProductAdminCustomForm, self).clean()
 
-        # Décodage de la palette : si une palette est choisie, elle écrase les couleurs
-        # Decode palette: if a palette is chosen, it overrides the color fields
-        palette_key = cleaned.get("palette_pos")
-        if palette_key and palette_key in PALETTE_POS_MAP:
-            text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
-            cleaned["couleur_texte_pos"] = text_hex
-            cleaned["couleur_fond_pos"] = bg_hex
+        # couleur_texte_pos n'est pas un champ du formulaire : on l'écrit
+        # directement sur l'instance, qui sera enregistrée avec le reste.
+        # / couleur_texte_pos is not a form field: write it on the instance.
+        self.instance.couleur_texte_pos = couleur_de_texte_pour_un_fond_pastel(
+            cleaned.get("couleur_fond_pos"),
+            self.instance.couleur_texte_pos,
+        )
 
         # Un « Retour de consigne » rend le prix du gobelet qu'il rembourse. Sans
         # gobelet relié, ou avec un gobelet qui n'a aucun tarif en euros vendable en
@@ -1885,8 +2117,6 @@ class POSProductAdmin(ProductAdmin):
             _("POS display"),
             {
                 "fields": (
-                    "palette_pos",
-                    "couleur_texte_pos",
                     "couleur_fond_pos",
                     "icon_pos",
                     "img",
@@ -1923,7 +2153,15 @@ class POSProductAdmin(ProductAdmin):
         "poids",
     )
 
-    list_filter = ["publish", "methode_caisse", "categorie_pos", EtatStockFilter]
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = [
+        "publish",
+        ("methode_caisse", ChoicesDropdownFilter),
+        ("categorie_pos", RelatedDropdownFilter),
+        EtatStockFilter,
+    ]
     search_fields = ["name"]
 
     def get_fieldsets(self, request, obj=None):
@@ -1963,32 +2201,29 @@ class POSProductAdmin(ProductAdmin):
 
 
 # Couleurs proposées pour l'accent de l'écran de la tireuse.
-# Le texte de l'écran est TOUJOURS blanc (comme la maquette). L'accent sert :
-# - de FOND sous du texte blanc (fond de page, mention légale, pastille,
-#   case « Solde ») → contraste avec le blanc ≥ 4,5:1 (WCAG AA, texte normal) ;
-# - de TEXTE sur la carte sombre #2a2d2f (« Présentez votre carte », volume,
-#   bilan, tous en gros caractères) → contraste ≥ 3:1 (WCAG, gros texte).
-# Ces deux seuils ne laissent qu'une plage de luminosité très étroite : chaque
-# couleur ci-dessous a été calculée dans cette plage (≈ 4,55:1 et ≈ 3,05:1).
-# Les couleurs de la maquette (cyan, ambre, corail) ont été retirées : le texte
-# blanc était illisible dessus (2,4:1, 1,7:1, 2,9:1).
-# / Screen text is ALWAYS white. Each accent: ≥ 4.5:1 with white (background)
-# AND ≥ 3:1 on the dark card #2a2d2f (large text). Mockup colors removed.
+# C'est la palette « Létireuz » : 11 couleurs vives, un seul niveau chacune.
+# On n'utilise QUE ces couleurs. On n'invente pas de variante.
+# Le nom du design token est noté à droite de chaque couleur.
+# Cette palette n'a aucun lien avec la palette pastel (--color-{teinte}-{100|200|300}).
+# Les codes sont en minuscules : le widget compare la couleur du fût en minuscules.
+#
+# Contraste du texte blanc sur ces couleurs : entre 2,9:1 et 5:1.
+# Le blanc n'est bien lisible qu'en gros caractères gras (≥ 18,66 px gras ou ≥ 24 px).
+# Seuls violet, brown et indigo dépassent 4,5:1 avec le blanc.
+# / "Létireuz" palette: 11 vivid colors, use only these. Token name on the right.
+# White text contrast is 2.9–5:1: white is only readable as large bold text.
 COULEURS_ACCENT = [
-    ("#1f75d8", _("Bleu")),
-    ("#127fa6", _("Pétrole")),
-    ("#138383", _("Sarcelle")),
-    ("#228747", _("Vert")),
-    ("#777b16", _("Olive")),
-    ("#a16b0d", _("Ocre")),
-    ("#b95c15", _("Rouille")),
-    ("#d0471e", _("Brique")),
-    ("#de323d", _("Rouge")),
-    ("#da3068", _("Framboise")),
-    ("#d22ca0", _("Magenta")),
-    ("#b345c9", _("Prune")),
-    ("#8b59e2", _("Violet")),
-    ("#6368e4", _("Indigo")),
+    ("#0f96f0", _("Bleu")),
+    ("#009eb3", _("Sarcelle")),
+    ("#884dff", _("Violet")),
+    ("#00a84c", _("Vert")),
+    ("#ff589f", _("Rose")),
+    ("#a89500", _("Olive")),
+    ("#9d6401", _("Brun")),
+    ("#fa6000", _("Orange")),
+    ("#fd2629", _("Rouge")),
+    ("#2ca300", _("Citron vert")),
+    ("#5757ff", _("Indigo")),
 ]
 
 
@@ -2175,14 +2410,7 @@ class FutProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
         / The accent color is written into the kiosk CSS: only #rrggbb
         (or empty = default cyan) is accepted.
         """
-        couleur = (self.cleaned_data.get("couleur_fond_pos") or "").strip().lower()
-        if not couleur:
-            return couleur
-        if not re.fullmatch(r"#[0-9a-f]{6}", couleur):
-            raise forms.ValidationError(
-                _("Couleur invalide : utilisez le format #rrggbb.")
-            )
-        return couleur
+        return _valider_couleur_hexadecimale(self.cleaned_data.get("couleur_fond_pos"))
 
     def clean(self):
         """Applique la palette selectionnee sur les champs couleur, puis valide.
@@ -2417,17 +2645,16 @@ class FutProductAdmin(ProductAdmin):
 
 class CategorieProductForm(forms.ModelForm):
     """Formulaire pour les catégories de produits POS.
-    Ajoute un sélecteur de palette et un sélecteur d'icône visuels,
+    Couleur de fond en pastilles pastel et sélecteur d'icône visuel,
     identiques à ceux du formulaire POSProduct.
     / Form for POS product categories.
-    Adds visual palette and icon pickers, identical to POSProductForm.
+    Pastel background swatches and visual icon picker, identical to POSProductForm.
     LOCALISATION : Administration/admin/products.py"""
 
     class Meta:
         model = CategorieProduct
         fields = (
             "name",
-            "couleur_texte",
             "couleur_fond",
             "icon",
             "poid_liste",
@@ -2435,43 +2662,21 @@ class CategorieProductForm(forms.ModelForm):
             "cashless",
         )
 
-    # Palette de couleurs prédéfinie (form-only — pilote couleur_texte + couleur_fond)
-    # Pre-defined color palette (form-only — drives couleur_texte + couleur_fond)
-    palette = forms.ChoiceField(
-        choices=[("", _("— Aucune palette —"))]
-        + [(key, label) for key, label, _t, _b in PALETTE_POS],
-        required=False,
-        label=_("Color palette"),
-        help_text=_(
-            "Choisissez une combinaison prête à l'emploi. "
-            "Elle remplacera les champs couleur ci-dessous. "
-            "/ Choose a ready-to-use color combination. It will override the color fields below."
-        ),
-        # texte_field / fond_field correspondent aux noms de champs du modèle CategorieProduct
-        # texte_field / fond_field match the CategorieProduct model field names
-        widget=PalettePickerWidget(
-            texte_field="couleur_texte", fond_field="couleur_fond"
-        ),
-    )
-
-    # Couleur du texte avec sélecteur natif
-    # Text color with native color picker
-    couleur_texte = forms.CharField(
-        max_length=7,
-        required=False,
-        label=_("Text color"),
-        help_text=_("Hexadecimal color for the button text (e.g. #FFFFFF)."),
-        widget=UnfoldAdminColorInputWidget(),
-    )
-
-    # Couleur du fond avec sélecteur natif
-    # Background color with native color picker
+    # Couleur du fond : pastilles de la palette pastel uniquement.
+    # La couleur du texte n'est pas un champ : clean() l'écrit (foncé sur pastel).
+    # / Background: pastel palette swatches only. Text color is not a field:
+    # clean() writes it (dark on pastel).
     couleur_fond = forms.CharField(
         max_length=7,
         required=False,
         label=_("Background color"),
-        help_text=_("Hexadecimal color for the button background (e.g. #1E40AF)."),
-        widget=UnfoldAdminColorInputWidget(),
+        help_text=_(
+            "Couleur du bouton de la catégorie, et des articles qui n'ont pas "
+            "leur propre couleur. Le texte s'affiche en foncé."
+        ),
+        widget=CouleurFondPastelWidget(
+            libelle_aucune=_("Aucune (couleur par défaut)")
+        ),
     )
 
     # Icône avec sélecteur visuel Material Symbols
@@ -2486,34 +2691,23 @@ class CategorieProductForm(forms.ModelForm):
         widget=IconPickerWidget(),
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        instance = kwargs.get("instance")
-
-        # Pré-sélection de la palette si les couleurs actuelles correspondent à un preset
-        # Pre-select palette if the current colors match a preset
-        if instance and instance.couleur_texte and instance.couleur_fond:
-            for key, _label, text_hex, bg_hex in PALETTE_POS:
-                couleurs_correspondent = (
-                    instance.couleur_texte.upper() == text_hex.upper()
-                    and instance.couleur_fond.upper() == bg_hex.upper()
-                )
-                if couleurs_correspondent:
-                    self.fields["palette"].initial = key
-                    break
+    def clean_couleur_fond(self):
+        """Le fond est écrit dans le CSS de la caisse : #rrggbb ou vide.
+        / The background is written into the POS CSS: #rrggbb or empty."""
+        return _valider_couleur_hexadecimale(self.cleaned_data.get("couleur_fond"))
 
     def clean(self):
-        """Applique la palette sélectionnée sur les champs couleur.
-        Applies the selected palette to the color fields."""
+        """Valide, puis écrit la couleur du texte d'après le fond choisi.
+        / Validates, then writes the text color from the chosen background."""
         cleaned = super().clean()
 
-        # Si une palette est choisie, elle écrase les couleurs saisies manuellement
-        # If a palette is chosen, it overrides manually entered colors
-        palette_key = cleaned.get("palette")
-        if palette_key and palette_key in PALETTE_POS_MAP:
-            text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
-            cleaned["couleur_texte"] = text_hex
-            cleaned["couleur_fond"] = bg_hex
+        # couleur_texte n'est pas un champ du formulaire : on l'écrit
+        # directement sur l'instance, qui sera enregistrée avec le reste.
+        # / couleur_texte is not a form field: write it on the instance.
+        self.instance.couleur_texte = couleur_de_texte_pour_un_fond_pastel(
+            cleaned.get("couleur_fond"),
+            self.instance.couleur_texte,
+        )
 
         return cleaned
 
@@ -2575,8 +2769,6 @@ class CategorieProductAdmin(ModelAdmin):
             _("Apparence / Appearance"),
             {
                 "fields": (
-                    "palette",
-                    "couleur_texte",
                     "couleur_fond",
                     "icon",
                 ),

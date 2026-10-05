@@ -628,7 +628,9 @@ class ReservationValidator(serializers.Serializer):
         self.custom_amounts = {} # Stockage des montants personnalisés par prix
 
         for product in event.products.all():
-            for price in product.prices.all():
+            # Un tarif archivé (« supprimé ») ne peut plus être réservé.
+            # / An archived ("deleted") price can no longer be booked.
+            for price in product.prices.filter(archived=False):
                 # Un input possède l'uuid du prix ?
                 price_key = str(price.uuid)
                 if hasattr(self.initial_data, 'getlist'):
@@ -1007,6 +1009,7 @@ class MembershipValidator(serializers.Serializer):
             product__categorie_article=Product.ADHESION,
             asset__isnull=True,
             non_fiduciaire=False,
+            archived=False,
         )
     )
     custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, min_value=Decimal('0.00'))

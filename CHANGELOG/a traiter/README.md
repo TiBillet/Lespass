@@ -13,6 +13,7 @@ La différence avec le reste de `CHANGELOG/` : ici, rien n'est fait.
 | `v2-style-suites-relecture.md` | Skin V2 : suites de la relecture du style — version lourde des modules, couches CSS Bootstrap, libellés longs, restes (2026-09-13) |
 | `pages-apercu-admin-suites.md` | Pages (admin) : suites de l'aperçu en direct — en-tête périmé après une action dans l'iframe, plan B, vidéo dans l'aperçu (2026-09-23) |
 | `controlvanne-audit-securite-facturation.md` | Tireuses : restes non instruits de l'audit (code mort, fonctions privées de laboutik importées, IP derrière Traefik). Lots sécurité et facturation traités le 2026-09-28 (2026-09-26) |
+| `fk-product-vers-proxys.md` | `PromotionalCode.product` → proxy `TicketProduct` + `limit_choices_to` BILLET. Le reste de l'inventaire des FK vers `Product` est traité (2026-09-29) |
 
 **Convention :** quand un point est traité, il sort d'ici et devient une entrée
 normale dans `CHANGELOG/`. Un point qui n'est plus pertinent est supprimé avec

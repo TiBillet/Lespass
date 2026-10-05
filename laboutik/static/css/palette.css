@@ -94,7 +94,7 @@
 	--valid-deep: oklch(0.600 0.160 148);
 	--valid-ink:  oklch(0.200 0.060 148);
 	--danger:     oklch(0.630 0.190 25);
-	--danger-ink: oklch(0.980 0.020 25);
+	--danger-ink: var(--warn-ink);
 	--warn:       oklch(0.700 0.160 60);
 	--warn-ink:   oklch(0.220 0.060 60);
 	--nfc:        oklch(0.700 0.135 245);

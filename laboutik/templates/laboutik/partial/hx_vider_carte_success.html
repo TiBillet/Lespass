@@ -7,15 +7,173 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_vider_carte_success.html
 RENDU PAR : PaiementViewSet.vider_carte()
 
 Meme popup que « Paiement réussi » : pastille verte, titre, le montant rendu
-en gros, le detail par Fedow et par monnaie (hx_vider_carte_parties.html), puis
-Imprimer le reçu + Terminé. Le formulaire du reçu ne poste que des uuid : le reçu
-relit chaque transaction (en base pour le Fedow local, sur l'ancien Fedow sinon).
-/ Same popup as "Payment successful".
+en gros (les deux Fedow). Deux affichages :
+
+A. action_carte fourni (choix fait dans la popup retour carte) :
+   - « cloturer » : carte n° … clôturée, montant a rembourser, donnees
+     supprimees, consigne « rangez la carte avec les cartes vierges ».
+   - « vider » : carte n° … vidée, montant rembourse, nouveau solde reel :
+     un tableau Monnaie · Solde par Fedow (Fedow local, puis ancien Fedow relu
+     apres le vidage), une ligne par monnaie, jamais d'addition de deux
+     monnaies ; « Carte vide » si rien ne reste ; si l'ancien Fedow ne repond
+     pas, sa partie le dit, sans chiffre. Consigne « rendez sa carte au client ».
+   Un seul bouton : « Retour à la caisse ».
+B. Sans action_carte (tuile « Vider carte ») : le detail par Fedow et par
+   monnaie (hx_vider_carte_parties.html), puis Imprimer le reçu + Terminé.
+   Le formulaire du reçu ne poste que des uuid : le reçu relit chaque
+   transaction (en base pour le Fedow local, sur l'ancien Fedow sinon).
+/ Same popup as "Payment successful". A: per-choice summary + back to POS.
+/ B: detail split by Fedow, print receipt + done.
 {% endcomment %}
 <div id="messages">
   <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="vider-succes-titre" data-testid="vider-carte-success">
     <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages')"></div>
 
+    {% if action_carte %}
+    <div class="card-modal-box succes-box">
+      {# ================================================================== #}
+      {# --- A. RESUME APRES CLOTURE / VIDAGE ---                           #}
+      {# / A. SUMMARY AFTER CLOSING / EMPTYING                              #}
+      {# ================================================================== #}
+      <div class="succes-entete">
+        <span class="succes-pastille" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24" focusable="false"><path d="M20.6 5.4 9.1 16.9l-5.7-5.7 2.3-2.3 3.4 3.4 9.2-9.2z"/></svg>
+        </span>
+        <h2 class="succes-titre" id="vider-succes-titre" data-testid="vider-carte-success-titre">
+          {% if action_carte == "cloturer" %}
+            {% blocktranslate with numero=numero_carte %}Carte n° {{ numero }} clôturée avec succès{% endblocktranslate %}
+          {% else %}
+            {% blocktranslate with numero=numero_carte %}Carte n° {{ numero }} vidée avec succès{% endblocktranslate %}
+          {% endif %}
+        </h2>
+      </div>
+
+      <p class="vider-message">
+        {% if action_carte == "cloturer" %}
+          {% translate "La carte a bien été effacée et remise à zéro." %}
+        {% else %}
+          {% translate "Le solde a bien été remboursé. La carte reste active et appartient toujours au client." %}
+        {% endif %}
+      </p>
+
+      <div class="succes-rendre" data-testid="vider-carte-success-amount">
+        <span class="payment-total-lbl">
+          {% if action_carte == "cloturer" %}
+            {% translate "Montant à rembourser au client" %}
+          {% else %}
+            {% translate "Montant remboursé au client" %}
+          {% endif %}
+        </span>
+        <span class="succes-rendre-val">{{ total_centimes|cents_to_euros }}</span>
+      </div>
+
+      <div class="succes-lignes">
+        {% if action_carte == "cloturer" %}
+          <div class="card-confirm-row" data-testid="vider-carte-success-donnees">
+            <span>{% translate "Données supprimées" %}</span>
+            <b>{% translate "solde, nom, historique" %}</b>
+          </div>
+        {% else %}
+          <div class="card-confirm-row" data-testid="vider-carte-success-nouveau-solde">
+            <span>{% translate "Nouveau solde" %}</span>
+            {% if nouveau_solde_carte_vide %}
+              <b data-testid="vider-carte-success-carte-vide">{% translate "Carte vide" %}</b>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      {% if action_carte == "vider" and not nouveau_solde_carte_vide %}
+        {# Ce qui reste sur la carte, une ligne par monnaie, séparé par Fedow.          #}
+        {# Deux monnaies ne sont jamais additionnées. Même forme que                     #}
+        {# hx_vider_carte_parties.html : l'argent (monnaie locale, monnaie fédérée) en   #}
+        {# euros, les autres monnaies dans leur unité.                                    #}
+        {# / What remains on the card, one line per currency, split by Fedow.            #}
+        <div class="succes-cartes" data-testid="vider-carte-nouveau-solde-detail">
+          {% if lignes_du_nouveau_solde_fedow_local %}
+            <section class="succes-carte" aria-labelledby="vider-nouveau-solde-fedow-local-titre" data-testid="vider-carte-nouveau-solde-fedow-local">
+              <h3 class="succes-carte-ref" id="vider-nouveau-solde-fedow-local-titre">{% translate "Fedow local" %}</h3>
+              <table class="succes-assets">
+                <thead>
+                  <tr>
+                    <th scope="col">{% translate "Monnaie" %}</th>
+                    <th scope="col" class="num">{% translate "Solde" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for ligne in lignes_du_nouveau_solde_fedow_local %}
+                    <tr data-testid="vider-carte-nouveau-solde-ligne">
+                      <td>{{ ligne.nom }}</td>
+                      <td class="num">
+                        {% if ligne.est_de_l_argent_rendu %}
+                          {{ ligne.montant_centimes|cents_to_euros }}
+                        {% else %}
+                          {{ ligne.montant_centimes|cents_to_asset:ligne }}
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </section>
+          {% endif %}
+
+          {% if lignes_du_nouveau_solde_ancien_fedow or nouveau_solde_ancien_fedow_injoignable %}
+            <section class="succes-carte" aria-labelledby="vider-nouveau-solde-ancien-fedow-titre" data-testid="vider-carte-nouveau-solde-ancien-fedow">
+              <h3 class="succes-carte-ref" id="vider-nouveau-solde-ancien-fedow-titre">{% translate "Ancien Fedow" %}</h3>
+              {% if nouveau_solde_ancien_fedow_injoignable %}
+                {# L'ancien Fedow ne répond pas : aucun chiffre, l'écran le dit #}
+                {# / The old Fedow does not answer: no figure, the screen says so #}
+                <p class="vider-note" role="status" data-testid="vider-carte-nouveau-solde-ancien-fedow-injoignable">
+                  {% translate "L'ancien Fedow ne répond pas : son solde n'est pas affiché." %}
+                </p>
+              {% else %}
+                <table class="succes-assets">
+                  <thead>
+                    <tr>
+                      <th scope="col">{% translate "Monnaie" %}</th>
+                      <th scope="col" class="num">{% translate "Solde" %}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for ligne in lignes_du_nouveau_solde_ancien_fedow %}
+                      <tr data-testid="vider-carte-nouveau-solde-ligne">
+                        <td>{{ ligne.nom }}</td>
+                        <td class="num">
+                          {% if ligne.est_de_l_argent_rendu %}
+                            {{ ligne.montant_centimes|cents_to_euros }}
+                          {% else %}
+                            {{ ligne.montant_centimes|cents_to_asset:ligne }}
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% endif %}
+            </section>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <p class="vider-consigne" role="status">
+        {% if action_carte == "cloturer" %}
+          {% translate "Rangez la carte avec les cartes vierges. Elle peut être utilisée par un nouveau client." %}
+        {% else %}
+          {% translate "Rendez sa carte au client : il pourra la recharger lors d'un prochain événement." %}
+        {% endif %}
+      </p>
+
+      <button type="button"
+              id="bt-retour-layer1"
+              class="card-valider"
+              onclick="hideAndEmptyElement('#messages')"
+              data-testid="vider-carte-btn-retour-caisse">
+        {% translate "Retour à la caisse" %}
+      </button>
+    </div>
+
+    {% else %}
     <div class="card-modal-box succes-box">
       <div class="succes-entete">
         <span class="succes-pastille" aria-hidden="true">
@@ -64,5 +222,6 @@ relit chaque transaction (en base pour le Fedow local, sur l'ancien Fedow sinon)
       </div>
       <div id="print-feedback" aria-live="polite"></div>
     </div>
+    {% endif %}
   </div>
 </div>

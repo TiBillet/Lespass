@@ -329,13 +329,14 @@ def test_adhesion_creee_dans_l_admin_passe_par_trigger_a(
     P16 : l'admin ajoute une adhésion de 20 €, payée en espèces.
     L'adhésion reste « créée dans l'admin » (`D`) et reçoit une échéance. Une ligne de
     vente est créée, puis passe « payée » : `trigger_A` la valide (`V`).
-    Tâches : la facture par mail tout de suite ; puis, après la validation en base, le
-    mail de connexion de l'adhérente (son adresse n'est pas encore confirmée), la
-    récompense monnaie, l'envoi à l'ancien LaBoutik, et DEUX webhooks d'adhésion.
+    Tâches : toutes partent après la validation en base (issue #117), dans l'ordre où
+    elles sont enregistrées : le mail de connexion de l'adhérente (son adresse n'est pas
+    encore confirmée), un webhook d'adhésion, la facture par mail, la récompense
+    monnaie, l'envoi à l'ancien LaBoutik, puis le second webhook d'adhésion.
     L'ancien LaBoutik reçoit la vente en espèces (`CA`), 2000 centimes.
     / P16: the admin adds a 20 € cash membership. It stays ADMIN with a deadline; its sale
-    line goes PAID then VALID through trigger_A. Invoice mail at once; then login mail,
-    reward, LaBoutik sale and TWO membership webhooks on commit.
+    line goes PAID then VALID through trigger_A. Every task goes on commit (#117), in
+    registration order: login mail, webhook, invoice mail, reward, LaBoutik sale, webhook.
     """
     adhesion = creer_adhesion(prix="20.00")
     adherente = creer_utilisateur()
@@ -365,12 +366,16 @@ def test_adhesion_creee_dans_l_admin_passe_par_trigger_a(
         # l'adhésion (premier webhook), puis la création de l'adhésion finit, avec son
         # échéance (second webhook). Chaque enregistrement d'une adhésion avec échéance
         # en demande un.
+        # Toutes les tâches partent après la validation en base (issue #117), dans
+        # l'ordre où elles sont enregistrées : le premier webhook (demandé par
+        # l'enregistrement de l'échéance) passe donc avant la facture.
         # / Two membership webhooks: trigger_A saves the membership with its deadline,
-        # then the creation save finishes with the deadline set.
+        # then the creation save finishes with the deadline set. Every task goes on
+        # commit (#117), in registration order: the first webhook precedes the invoice.
         "taches": [
-            "send_membership_invoice_to_email",
             "connexion_celery_mailer",
             "webhook_membership",
+            "send_membership_invoice_to_email",
             "refill_from_lespass_to_user_wallet_from_price_solded",
             "send_sale_to_laboutik",
             "webhook_membership",

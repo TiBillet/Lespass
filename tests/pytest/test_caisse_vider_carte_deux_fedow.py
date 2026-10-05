@@ -3038,3 +3038,178 @@ def test_recu_titres_et_lignes_sans_argent_imprimes_sans_quantite(lieu):
         assert commandes_trouvees[0].startswith(debut_attendu), (
             f"Sunmi : « {debut_attendu} » n'est pas imprimé seul : {commandes_trouvees[0]!r}"
         )
+
+
+# --------------------------------------------------------------------------
+# 21 — Popup « retour carte » → « Vider » : le nouveau solde est le RÉEL
+# / 21 — Card popup → "Vider": the new balance is the REAL one
+# --------------------------------------------------------------------------
+
+
+def vider_la_carte_depuis_la_popup_retour_carte(caisse, carte_du_client, faux_ancien_fedow):
+    """
+    Le caissier choisit « Vider » dans la popup retour carte (`action_carte=vider`) :
+    la carte reste au client. Le lieu est relié à l'ancien Fedow (simulé).
+    / The cashier picks "Vider" in the card popup: the card stays with the customer.
+    """
+    donnees_du_formulaire = {
+        "tag_id": carte_du_client.tag_id,
+        "tag_id_cm": caisse.carte_du_caissier.tag_id,
+        "uuid_pv": str(caisse.point_de_vente.uuid),
+        "vider_carte": "false",
+        "action_carte": "vider",
+    }
+    with patch.object(FedowConfig, "can_fedow", return_value=True):
+        with patch("laboutik.views.FedowAPI", return_value=faux_ancien_fedow):
+            return caisse.client_du_caissier.post(
+                URL_DU_VIDAGE_DE_CARTE, donnees_du_formulaire
+            )
+
+
+def lignes_du_nouveau_solde(elements_lus, testid_de_la_partie):
+    """Les textes des lignes du nouveau solde (`vider-carte-nouveau-solde-ligne`)
+    rangées DANS cette partie.
+    / Texts of the new-balance lines inside this part."""
+    textes_des_lignes = []
+    for element in elements_lus:
+        est_une_ligne = element.testid == "vider-carte-nouveau-solde-ligne"
+        if est_une_ligne and testid_de_la_partie in element.testids_des_parents:
+            textes_des_lignes.append(element.texte)
+    return textes_des_lignes
+
+
+def test_popup_vider_nouveau_solde_par_monnaie_relu_sur_l_ancien_fedow(lieu):
+    """
+    Fedow local : 5,00 € de monnaie locale du lieu (reprise). Ancien Fedow : 4,00 € de
+    monnaie locale du lieu (reprise). APRÈS le vidage, la carte garde sur l'ancien
+    Fedow 3,00 € d'une monnaie d'un autre lieu et 1,50 h de monnaie temps (relues sur
+    le serveur), que le vidage ne reprend pas.
+    L'écran final « vider » montre : rendu 9,00 € (les deux Fedow) ; un tableau
+    Monnaie · Solde avec une partie « Ancien Fedow » de deux lignes (3,00 € et la
+    monnaie temps dans son unité), jamais additionnées ; aucune partie « Fedow local »
+    (tout y a été repris) ; pas de « Carte vide ».
+    CE QUE LE TEST LAISSE : rien (`django_db`, rollback).
+    / Final "vider" screen: 9.00 given back; one "Ancien Fedow" part, one line per
+    currency (3.00 € and the time currency), never added together.
+    """
+    caisse = preparer_la_caisse(lieu)
+    demander_les_ecrans_en_francais(caisse)
+    monnaie_locale = monnaie_locale_propre_au_lieu(lieu)
+    carte_du_client = creer_une_carte_client_sans_solde(lieu)
+    poser_un_solde_sur_la_carte(carte_du_client, monnaie_locale, 500)
+    faux_ancien_fedow, _transactions_distantes = ancien_fedow_simule(
+        carte_du_client, [("TLF", 400)]
+    )
+
+    # Première lecture (avant le vidage) : la fiche simulée. Seconde lecture (après le
+    # vidage) : la carte garde deux monnaies non reprises.
+    # / First read (before): the faked card. Second read (after): two currencies remain.
+    fiche_avant_le_vidage = faux_ancien_fedow.NFCcard.retrieve.return_value
+    fiche_apres_le_vidage = dict(fiche_avant_le_vidage)
+    fiche_apres_le_vidage["wallet"] = dict(fiche_avant_le_vidage["wallet"])
+    fiche_apres_le_vidage["wallet"]["tokens"] = [
+        {
+            "uuid": uuid.uuid4(),
+            "name": "Jeton d'un autre lieu",
+            "value": 300,
+            "asset_uuid": uuid.uuid4(),
+            "asset_name": "Monnaie d'un autre lieu",
+            "asset_category": "TLF",
+            "asset": {"currency_code": "EUR"},
+            "is_primary_stripe_token": False,
+        },
+        {
+            "uuid": uuid.uuid4(),
+            "name": "Jeton temps",
+            "value": 150,
+            "asset_uuid": uuid.uuid4(),
+            "asset_name": "Monnaie temps du test",
+            "asset_category": "TIM",
+            "asset": {"currency_code": "TMP"},
+            "is_primary_stripe_token": False,
+        },
+    ]
+    faux_ancien_fedow.NFCcard.retrieve.side_effect = [
+        fiche_avant_le_vidage,
+        fiche_apres_le_vidage,
+    ]
+
+    reponse = vider_la_carte_depuis_la_popup_retour_carte(
+        caisse, carte_du_client, faux_ancien_fedow
+    )
+
+    assert reponse.status_code == 200
+    assert faux_ancien_fedow.NFCcard.refund.call_count == 1
+    assert faux_ancien_fedow.NFCcard.retrieve.call_count == 2
+    elements_lus = lire_l_ecran(reponse)
+    assert montant_affiche(900) in texte_de_l_element(
+        elements_lus, "vider-carte-success-amount"
+    )
+    assert texte_de_l_element(elements_lus, "vider-carte-success-carte-vide") is None
+    assert texte_de_l_element(elements_lus, "vider-carte-nouveau-solde-fedow-local") is None
+
+    lignes_distantes = lignes_du_nouveau_solde(
+        elements_lus, "vider-carte-nouveau-solde-ancien-fedow"
+    )
+    assert len(lignes_distantes) == 2, lignes_distantes
+    assert montant_affiche(300) in la_ligne_qui_nomme(
+        lignes_distantes, "Monnaie d'un autre lieu"
+    )
+    ligne_de_la_monnaie_temps = la_ligne_qui_nomme(lignes_distantes, "Monnaie temps du test")
+    assert "TMP" in ligne_de_la_monnaie_temps, ligne_de_la_monnaie_temps
+    assert "€" not in ligne_de_la_monnaie_temps, ligne_de_la_monnaie_temps
+    # Jamais d'addition de deux monnaies : 3,00 + 1,50 n'apparaît nulle part.
+    # / Two currencies are never added: 4.50 appears nowhere.
+    assert montant_affiche(450) not in texte_normalise(reponse.content.decode())
+
+    vente = retrouver_la_vente_de_vidage(carte_du_client)
+    assert vente.statut == Vente.Statut.REGLEE
+    verifier_egalites(vente)
+
+
+def test_popup_vider_ancien_fedow_muet_apres_le_vidage_aucun_chiffre_invente(lieu):
+    """
+    Le vidage réussit sur les deux Fedow, puis l'ancien Fedow ne répond plus quand la
+    caisse relit la carte. L'écran final « vider » : la partie « Ancien Fedow » du
+    nouveau solde dit qu'il ne répond pas, sans aucun chiffre ni ligne ; pas de
+    « Carte vide » (on ne le sait pas). La vente du vidage est bien écrite.
+    CE QUE LE TEST LAISSE : rien (`django_db`, rollback).
+    / Old Fedow silent after the emptying: its part says so, no figure, no "empty card".
+    """
+    caisse = preparer_la_caisse(lieu)
+    demander_les_ecrans_en_francais(caisse)
+    monnaie_locale = monnaie_locale_propre_au_lieu(lieu)
+    carte_du_client = creer_une_carte_client_sans_solde(lieu)
+    poser_un_solde_sur_la_carte(carte_du_client, monnaie_locale, 500)
+    faux_ancien_fedow, _transactions_distantes = ancien_fedow_simule(
+        carte_du_client, [("TLF", 400)]
+    )
+    fiche_avant_le_vidage = faux_ancien_fedow.NFCcard.retrieve.return_value
+    faux_ancien_fedow.NFCcard.retrieve.side_effect = [
+        fiche_avant_le_vidage,
+        requests.ConnectionError("Ancien Fedow injoignable (simulé par le test)."),
+    ]
+
+    reponse = vider_la_carte_depuis_la_popup_retour_carte(
+        caisse, carte_du_client, faux_ancien_fedow
+    )
+
+    assert reponse.status_code == 200
+    elements_lus = lire_l_ecran(reponse)
+    assert montant_affiche(900) in texte_de_l_element(
+        elements_lus, "vider-carte-success-amount"
+    )
+    texte_de_la_partie_distante = texte_de_l_element(
+        elements_lus, "vider-carte-nouveau-solde-ancien-fedow"
+    )
+    assert texte_de_la_partie_distante is not None
+    assert "ne répond pas" in texte_de_la_partie_distante
+    assert "€" not in texte_de_la_partie_distante, texte_de_la_partie_distante
+    assert lignes_du_nouveau_solde(
+        elements_lus, "vider-carte-nouveau-solde-ancien-fedow"
+    ) == []
+    assert texte_de_l_element(elements_lus, "vider-carte-success-carte-vide") is None
+
+    vente = retrouver_la_vente_de_vidage(carte_du_client)
+    assert vente.statut == Vente.Statut.REGLEE
+    verifier_egalites(vente)

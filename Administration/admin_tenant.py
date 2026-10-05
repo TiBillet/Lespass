@@ -13,7 +13,7 @@ from Administration.admin import (
     prices
 )
 from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
-from Administration.admin.mixins import HelpDisplayMixin
+from Administration.admin.mixins import ExportCsvLisibleParExcelMixin, HelpDisplayMixin
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 
@@ -90,8 +90,6 @@ from django_tenants.utils import tenant_context
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 from import_export import resources, fields
 from import_export.widgets import ForeignKeyWidget
-from rest_framework import status
-from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
 from django.core.cache import cache
@@ -103,6 +101,9 @@ from Administration.admin.base import ModelAdmin
 from unfold.admin import TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.filters.admin import (
+    ChoicesDropdownFilter,
+    DropdownFilter,
+    RelatedDropdownFilter,
     # AutocompleteSelectMultipleFilter,
     # ChoicesDropdownFilter,
     # MultipleRelatedDropdownFilter,
@@ -1380,7 +1381,7 @@ class MembershipAddForm(ModelForm):
     # / Only membership prices
     price = forms.ModelChoiceField(
         queryset=Price.objects.filter(
-            product__categorie_article=Product.ADHESION, product__archive=False
+            product__categorie_article=Product.ADHESION, product__archive=False, archived=False
         ).select_related('product', 'fedow_reward_asset').order_by("-free_price","name"),
         # Remplis le champ select avec les objets Price
         # / Fills the select with Price objects
@@ -1719,9 +1720,20 @@ class LigneArticleInline(TabularInline):
         return False
 
 
-class MembershipPublishedFilter(admin.SimpleListFilter):
+class MembershipPublishedFilter(DropdownFilter):
     """
-    Filter for filtering Membership by MembershipProduct that are not archived
+    Filtre les adhésions par produit d'adhésion non archivé.
+    / Filter for filtering Membership by MembershipProduct that are not archived
+
+    LOCALISATION : Administration/admin_tenant.py
+
+    DropdownFilter (Unfold) affiche une liste déroulante avec un champ de recherche.
+    Un SimpleListFilter classique affiche tous les produits les uns sous les autres :
+    illisible dès qu'il y a beaucoup de produits.
+    Le filtre est un champ de formulaire, envoyé par le bouton « Filtrer »
+    (list_filter_submit = True, posé sur le ModelAdmin de base du projet).
+    / Unfold DropdownFilter: searchable dropdown instead of a long list of links.
+    Sent by the "Filter" button (list_filter_submit, set on the project base ModelAdmin).
     """
     title = _('Product')
     parameter_name = 'price' # Get the product from the price
@@ -1730,7 +1742,7 @@ class MembershipPublishedFilter(admin.SimpleListFilter):
         # Return only product that are not archived to display in the filter
         return [
             (product.pk, product.name)
-            for product in MembershipProduct.objects.filter(archive=False)
+            for product in MembershipProduct.objects.filter(archive=False).order_by("name")
         ]
 
     def queryset(self, request, queryset):
@@ -1742,7 +1754,7 @@ class MembershipPublishedFilter(admin.SimpleListFilter):
 
 
 @admin.register(Membership, site=staff_admin_site)
-class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
+class MembershipAdmin(ExportCsvLisibleParExcelMixin, HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
 
     inlines = [LigneArticleInline]
     # Expandable section to display custom form answers in changelist
@@ -2009,9 +2021,16 @@ class MembershipAdmin(HelpDisplayMixin, ModelAdmin, ImportExportModelAdmin):
 
 ### VENTES ###
 
-class LigneArticlePublishedFilter(admin.SimpleListFilter):
+class LigneArticlePublishedFilter(DropdownFilter):
     """
-    Filter for filtering LigneArticle by Product that are not archived
+    Filtre les ventes par produit non archivé.
+    / Filter for filtering LigneArticle by Product that are not archived
+
+    LOCALISATION : Administration/admin_tenant.py
+
+    Liste déroulante avec recherche (Unfold DropdownFilter), comme
+    MembershipPublishedFilter.
+    / Searchable dropdown, like MembershipPublishedFilter.
     """
     title = _('Product')
     parameter_name = 'product'
@@ -2020,7 +2039,7 @@ class LigneArticlePublishedFilter(admin.SimpleListFilter):
         # Return only product that are not archived to display in the filter
         return [
             (product.pk, product.name)
-            for product in Product.objects.filter(archive=False)
+            for product in Product.objects.filter(archive=False).order_by("name")
         ]
 
     def queryset(self, request, queryset):
@@ -2157,12 +2176,14 @@ class AvoirSurUnArticleForm(forms.Form):
 
 
 @admin.register(LigneArticle, site=staff_admin_site)
-class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
+class LigneArticleAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     list_filter_submit = True
 
-    list_filter = ('status',
+    # Filtres en liste déroulante (Unfold), envoyés par le bouton « Filtrer ».
+    # / Dropdown filters (Unfold), sent by the "Filter" button.
+    list_filter = (('status', ChoicesDropdownFilter),
                    LigneArticlePublishedFilter,
                    ('datetime', RangeDateTimeFilterWithTimeZone),
                    )
@@ -4092,7 +4113,7 @@ class IsProposalFilter(admin.SimpleListFilter):
 
 
 @admin.register(Event, site=staff_admin_site)
-class EventAdmin(ModelAdmin, ImportExportModelAdmin):
+class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdmin):
     form = EventForm
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
@@ -4268,7 +4289,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         # Doit être dans save_related (pas save_model) car les M2M products
         # ne sont disponibles qu'après que Django les a sauvées.
         for product in obj.products.all():
-            for price in product.prices.all():
+            for price in product.prices.filter(archived=False):
                 get_or_create_price_sold(price=price, event=obj)
 
     def has_view_permission(self, request, obj=None):
@@ -4592,7 +4613,7 @@ def _build_event_price_options():
     for evenement in evenements:
         date_affichee = evenement.datetime.strftime("%d/%m")
         for produit in evenement.products.all():
-            for tarif in produit.prices.all():
+            for tarif in produit.prices.filter(archived=False):
                 valeur = f"{evenement.uuid}:{tarif.uuid}"
                 libelle = f"{date_affichee} - {evenement.name} - {tarif.name} - {tarif.prix}€"
                 choix.append((valeur, libelle))
@@ -4710,7 +4731,7 @@ class ReservationAddAdmin(ModelForm):
         event_uuid, price_uuid = valeur.split(":", 1)
         try:
             evenement = Event.objects.get(uuid=event_uuid)
-            tarif = Price.objects.get(uuid=price_uuid)
+            tarif = Price.objects.get(uuid=price_uuid, archived=False)
         except (Event.DoesNotExist, Price.DoesNotExist, ValueError):
             return None, None
         return evenement, tarif
@@ -4873,7 +4894,10 @@ class ReservationCustomFormSection(TemplateSection):
     verbose_name = _("Custom form answers")
 
 
-class EventArchivedFilter(admin.SimpleListFilter):
+class EventArchivedFilter(DropdownFilter):
+    # Liste déroulante avec recherche (Unfold) : la liste des événements est trop longue
+    # pour être affichée en liens. Envoyée par le bouton « Filtrer ».
+    # / Searchable dropdown (Unfold): the event list is too long for links.
     title = _("Archived Event")
     parameter_name = 'event_archived'
 
@@ -4890,7 +4914,10 @@ class EventArchivedFilter(admin.SimpleListFilter):
         return queryset
 
 
-class EventFutureFilter(admin.SimpleListFilter):
+class EventFutureFilter(DropdownFilter):
+    # Liste déroulante avec recherche (Unfold) : la liste des événements est trop longue
+    # pour être affichée en liens. Envoyée par le bouton « Filtrer ».
+    # / Searchable dropdown (Unfold): the event list is too long for links.
     title = _("-> Future event")
     parameter_name = 'event_future'
 
@@ -4908,7 +4935,10 @@ class EventFutureFilter(admin.SimpleListFilter):
         return queryset
 
 
-class EventPastFilter(admin.SimpleListFilter):
+class EventPastFilter(DropdownFilter):
+    # Liste déroulante avec recherche (Unfold) : la liste des événements est trop longue
+    # pour être affichée en liens. Envoyée par le bouton « Filtrer ».
+    # / Searchable dropdown (Unfold): the event list is too long for links.
     title = _("<- Past event")
     parameter_name = 'event_past'
 
@@ -5057,7 +5087,12 @@ class ReservationAdmin(ModelAdmin):
     add_form = ReservationAddAdmin
     autocomplete_fields = ["event",]
 
-    exclude = ["commande"]
+    # custom_form (les réponses au formulaire personnalisé) n'est plus affiché en JSON brut
+    # dans le formulaire. Il est affiché en tableau, en lecture seule, sous le formulaire :
+    # voir change_form_after_template. Même affichage que la fiche adhésion.
+    # / custom_form is no longer shown as raw JSON: read-only table below the form.
+    exclude = ["commande", "custom_form"]
+    change_form_after_template = "admin/reservation/custom_form.html"
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie le formulaire"""
@@ -5066,6 +5101,17 @@ class ReservationAdmin(ModelAdmin):
             defaults['form'] = self.add_form
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
+
+    def get_readonly_fields(self, request, obj=None):
+        # Le statut est en lecture seule sur la page de modification.
+        # Il est piloté par la machine à états (BaseBillet/signals.py).
+        # Un statut changé à la main ne déclenche pas les bonnes transitions :
+        # les billets peuvent rester inactifs.
+        # La page d'ajout n'est pas concernée : ReservationAddAdmin n'affiche pas le statut.
+        # / Status is read-only on the change page: the state machine drives it.
+        if obj:
+            return ("status",)
+        return ()
 
     list_display = (
         'datetime',
@@ -5081,10 +5127,10 @@ class ReservationAdmin(ModelAdmin):
     search_fields = ['event__name', 'user_commande__email', 'datetime', 'custom_form']
     list_filter = [
         EventFutureFilter,
+        EventPastFilter,
         ReservationValidFilter,
         'datetime',
         # 'options',
-        EventPastFilter,
         EventArchivedFilter,
     ]
 
@@ -5174,12 +5220,16 @@ class ReservationAdmin(ModelAdmin):
     # def options_str(self, instance: Reservation):
     #     return " - ".join([option.name for option in instance.options.all()])
 
-    actions_detail = ["send_ticket_to_mail", ]
+    # Deux boutons d'envoi, jamais affichés en même temps :
+    # - « renvoyer les billets » : la réservation a au moins un billet valide ;
+    # - « valider et envoyer » : la réservation attend la validation du mail (FREERES).
+    # / Two sending buttons, never shown together.
+    actions_detail = ["send_ticket_to_mail", "validate_and_send_ticket_to_mail", ]
 
     @action(
         description=_("Send tickets through email again"),
         url_path="send_ticket_to_mail",
-        permissions=["custom_actions_detail"],
+        permissions=["send_ticket_to_mail"],
     )
     def send_ticket_to_mail(self, request, object_id):
         reservation = Reservation.objects.get(pk=object_id)
@@ -5188,10 +5238,76 @@ class ReservationAdmin(ModelAdmin):
             request,
             _(f"Tickets sent to {reservation.user_commande.email}"),
         )
-        return redirect(request.META["HTTP_REFERER"])
+        page_precedente = request.META.get(
+            "HTTP_REFERER",
+            reverse("staff_admin:BaseBillet_reservation_change", args=[object_id]),
+        )
+        return redirect(page_precedente)
 
-    def has_custom_actions_detail_permission(self, request, object_id):
-        return TenantAdminPermissionWithRequest(request)
+    @action(
+        description=_("Valider et envoyer par mail"),
+        url_path="validate_and_send_ticket_to_mail",
+        permissions=["validate_and_send_ticket_to_mail"],
+    )
+    def validate_and_send_ticket_to_mail(self, request, object_id):
+        """
+        Valide une réservation gratuite en attente du mail, puis envoie les billets.
+        / Validates a free booking waiting for email validation, then sends the tickets.
+
+        LOCALISATION : Administration/admin_tenant.py
+
+        Le bouton n'apparaît que si la réservation est en FREERES (F).
+        Voir has_validate_and_send_ticket_to_mail_permission.
+
+        Pas de contrôle de jauge ici : l'admin valide en connaissance de cause.
+        Le compte de l'utilisateur reste non activé : seule la réservation est validée.
+        / No capacity check: the admin validates on purpose. The user account stays inactive.
+
+        FLUX :
+        1. Le statut passe de FREERES (F) à FREERES_USERACTIV (FA), puis save().
+        2. Le signal pre_save_signal_status (BaseBillet/signals.py) appelle reservation_paid.
+        3. reservation_paid passe les billets NOT_ACTIV en NOT_SCANNED.
+        4. Si mail_send vaut False et que l'utilisateur a un email,
+           reservation_paid lance ticket_celery_mailer (Celery, asynchrone), qui envoie les PDF.
+        5. Si le mail part, ticket_celery_mailer passe la réservation en VALID.
+        """
+        reservation = Reservation.objects.get(pk=object_id)
+        reservation.status = Reservation.FREERES_USERACTIV
+        reservation.save()
+        messages.success(
+            request,
+            _("Réservation validée. Envoi des billets demandé à %(email)s") % {"email": reservation.user_commande.email},
+        )
+        page_precedente = request.META.get(
+            "HTTP_REFERER",
+            reverse("staff_admin:BaseBillet_reservation_change", args=[object_id]),
+        )
+        return redirect(page_precedente)
+
+    def has_send_ticket_to_mail_permission(self, request, object_id):
+        # Bouton « renvoyer les billets » : affiché seulement s'il y a au moins un billet valide.
+        # Sans billet valide (attente du mail, annulée, non payée), le mail partirait sans PDF,
+        # et ticket_celery_mailer forcerait quand même la réservation en VALID.
+        # Unfold appelle cette méthode pour afficher le bouton ET à l'appel de l'URL.
+        # / "Resend tickets" button: shown only if the booking has at least one valid ticket.
+        if not TenantAdminPermissionWithRequest(request):
+            return False
+        reservation_a_au_moins_un_billet_valide = Ticket.objects.filter(
+            reservation_id=object_id,
+            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+        ).exists()
+        return reservation_a_au_moins_un_billet_valide
+
+    def has_validate_and_send_ticket_to_mail_permission(self, request, object_id):
+        # Bouton « valider et envoyer » : affiché seulement si la réservation attend
+        # la validation du mail (FREERES).
+        # / "Validate and send" button: shown only for bookings waiting for email validation.
+        if not TenantAdminPermissionWithRequest(request):
+            return False
+        reservation_attend_la_validation_du_mail = Reservation.objects.filter(
+            pk=object_id, status=Reservation.FREERES,
+        ).exists()
+        return reservation_attend_la_validation_du_mail
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -5257,7 +5373,7 @@ class TicketCustomFormSection(TemplateSection):
 
 
 @admin.register(Ticket, site=staff_admin_site)
-class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
+class TicketAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAdmin):
     ordering = ('-reservation__datetime',)
     list_filter = [
         EventFutureFilter,
@@ -5522,9 +5638,21 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
     def get_pdf(self, request, object_id):
         ticket = get_object_or_404(Ticket, uuid=object_id)
 
+        # Pas de PDF pour un billet non valide (inactif, créé, annulé).
+        # On affiche un message d'erreur et on revient sur la page précédente.
+        # C'est une vue admin Django : un Response DRF n'a pas de renderer ici et plante.
+        # / No PDF for an invalid ticket: error message, then back to the previous page.
         VALID_TICKET_FOR_PDF = [Ticket.NOT_SCANNED, Ticket.SCANNED]
         if ticket.status not in VALID_TICKET_FOR_PDF:
-            return Response('Invalid ticket', status=status.HTTP_403_FORBIDDEN)
+            messages.error(
+                request,
+                _("Billet non valide (%(statut)s) : pas de PDF disponible.") % {"statut": ticket.get_status_display()},
+            )
+            page_precedente = request.META.get(
+                "HTTP_REFERER",
+                reverse("staff_admin:BaseBillet_ticket_changelist"),
+            )
+            return redirect(page_precedente)
 
         pdf_binary = create_ticket_pdf(ticket)
         response = HttpResponse(pdf_binary, content_type='application/pdf')
@@ -6780,7 +6908,10 @@ class InitiativeAdmin(ModelAdmin):
 
     )
 
-    list_filter = ("created_at", "tags")
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = ("created_at", ("tags", RelatedDropdownFilter))
     search_fields = ("name", "description", "tags__name")
     date_hierarchy = "created_at"
     inlines = [VoteInline, BudgetItemInline, ContributionInline, ParticipationInline]

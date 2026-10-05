@@ -100,7 +100,7 @@ CONTEXTE (_payer_par_nfc) :
             {% endif %}
             " />
           {% endif %}
-          <c-V2.bt.paiement name='{% translate "CASHLESS" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" data-loading-disable data-testid="paiement-insuffisant-btn-cashless" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')
+          <c-V2.bt.paiement name='{% translate "CASHLESS" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}?total={{ payment.missing|unlocalize }}&devise={{ currency_data.symbol|urlencode }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" data-loading-disable data-testid="paiement-insuffisant-btn-cashless" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')
           {% if uuid_transaction != '' %}
             ; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}')
           {% endif %}

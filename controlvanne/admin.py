@@ -30,6 +30,7 @@ from django.utils.translation import gettext_lazy as _
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
 from Administration.admin.base import ModelAdmin
+from unfold.contrib.filters.admin import RelatedDropdownFilter
 from unfold.decorators import display
 from solo.admin import SingletonModelAdmin
 
@@ -466,7 +467,10 @@ class RfidSessionAdmin(ModelAdmin):
         "ended_at",
         "volume_servi_cl",
     )
-    list_filter = ("authorized", "tireuse_bec")
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = ("authorized", ("tireuse_bec", RelatedDropdownFilter))
     search_fields = ("uid", "label_snapshot")
     date_hierarchy = "started_at"
 
@@ -606,7 +610,10 @@ class HistoriqueTireuseAdmin(ModelAdmin):
         "authorized",
         "volume_servi_cl",
     )
-    list_filter = (DateRangeFilter, "tireuse_bec", "authorized")
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = (DateRangeFilter, ("tireuse_bec", RelatedDropdownFilter), "authorized")
     search_fields = ("uid", "label_snapshot", "liquid_label_snapshot")
     date_hierarchy = "started_at"
     actions = [_export_tireuse_csv]
@@ -666,7 +673,10 @@ class HistoriqueCarteAdmin(ModelAdmin):
         "authorized",
         "volume_servi_cl",
     )
-    list_filter = (DateRangeFilter, "tireuse_bec", "authorized")
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = (DateRangeFilter, ("tireuse_bec", RelatedDropdownFilter), "authorized")
     search_fields = ("uid", "label_snapshot")
     date_hierarchy = "started_at"
     actions = [_export_cartes_csv]
@@ -758,7 +768,10 @@ class HistoriqueMaintenanceAdmin(ModelAdmin):
         "volume_servi_cl",
         "duree_s",
     )
-    list_filter = (DateRangeFilter, "tireuse_bec")
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = (DateRangeFilter, ("tireuse_bec", RelatedDropdownFilter))
     search_fields = ("uid", "produit_maintenance_snapshot")
     date_hierarchy = "started_at"
     actions = [_export_maintenance_csv]
@@ -820,7 +833,10 @@ class SessionCalibrationAdmin(ModelAdmin):
         "ecart_pct",
         "duree_s",
     )
-    list_filter = (DateRangeFilter, "tireuse_bec")
+    # Filtre en liste déroulante avec recherche (Unfold), envoyé par le bouton « Filtrer ».
+    # Une liste de liens devient illisible dès qu'il y a beaucoup de choix.
+    # / Searchable dropdown filter (Unfold), sent by the "Filter" button.
+    list_filter = (DateRangeFilter, ("tireuse_bec", RelatedDropdownFilter))
     search_fields = ("uid",)
     date_hierarchy = "started_at"
 

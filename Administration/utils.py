@@ -8,7 +8,7 @@ ALLOWED_TAGS = [
     "ul", "ol", "li",
     "blockquote", "code", "pre",
     "h1", "h2", "h3", "h4", "h5", "h6",
-    "a", "img", "span"
+    "a", "img", "span", "del"
 ]
 ALLOWED_ATTRIBUTES = {
     "a": ["href", "title", "rel"],

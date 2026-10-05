@@ -14,7 +14,9 @@ client is identified. Each tile is the cotton/V2/bt/paiement.html component.
 
 PARAMETRES (variables du contexte ou « with » de l'include) :
 - moyens_paiement    : liste des codes (nfc, espece, carte_bancaire, CH).
-- total              : total en euros (sert a la popup de confirmation).
+- total              : total en euros (sert a la popup de confirmation
+                       et a l'attente de carte CASHLESS).
+- currency_data      : unite du total (currency_data.symbol).
 - mode_gerant        : True = ajoute la tuile OFFRIR.
 - carte_deja_scannee : True = la carte du client est deja dans #addition-form
                        (champ tag_id). CASHLESS paie tout de suite, sans
@@ -27,6 +29,8 @@ FLUX :
 - Especes / CB / cheque : confirmer() ouvre la popup de confirmation
   (hx_confirm_payment.html). Valider soumet #addition-form vers payer().
 - CASHLESS sans carte : lire_nfc() ouvre l'attente de carte (hx_read_nfc.html).
+  La tuile lui envoie le total et son unite (affichage seul : payer()
+  recalcule toujours le montant depuis le panier).
 - CASHLESS avec carte deja scannee, et VALIDER (gratuit) :
   #addition-form est soumis tout de suite vers payer().
 
@@ -43,9 +47,9 @@ Les data-testid sont lus par les tests : ne pas les renommer.
       {% if carte_deja_scannee %}
         {# La carte scannee pour l'identification sert aussi a payer #}
         {# / The card scanned for identification is also used to pay #}
-        <c-V2.bt.paiement name='{% translate "CASHLESS" %}' icon="wallet" onclick="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc'); askAdditionManageForm('postUrl',null,'{% url 'laboutik-paiement-payer' %}'); askAdditionManageForm('submit')" data-loading-disable data-testid="paiement-btn-cashless" />
+        <c-V2.bt.paiement name='{% translate "Carte Tibillet" %}' icon="wallet" onclick="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc'); askAdditionManageForm('postUrl',null,'{% url 'laboutik-paiement-payer' %}'); askAdditionManageForm('submit')" data-loading-disable data-testid="paiement-btn-cashless" />
       {% else %}
-        <c-V2.bt.paiement name='{% translate "CASHLESS" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" data-loading-disable data-testid="paiement-btn-cashless" />
+        <c-V2.bt.paiement name='{% translate "Carte Tibillet" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}?total={{ total|unlocalize }}&devise={{ currency_data.symbol|urlencode }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" data-loading-disable data-testid="paiement-btn-cashless" />
       {% endif %}
     {% endif %}
     {% if 'espece' in moyens_paiement %}

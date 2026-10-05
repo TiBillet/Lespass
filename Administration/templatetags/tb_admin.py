@@ -13,6 +13,7 @@ l'intelligence est ici, en Python, testable sans rendre un gabarit.
 """
 
 from django import template
+from django.urls import Resolver404, resolve
 
 from Administration.admin.dashboard import (
     _construire_sections_modules,
@@ -48,12 +49,16 @@ def fil_ariane_par_module(context, parts):
 
     / The breadcrumb opened on the Django app; we name the module instead.
 
-    CE QUE CETTE BALISE NE FAIT JAMAIS. Elle ne retire aucune entree et n'en
-    ajoute aucune : elle en remplace AU PLUS une. Un fil d'Ariane casse
-    serait plus genant que le defaut qu'on corrige — donc au moindre doute,
-    on rend « parts » tel quel.
-    / Never removes nor adds an entry: replaces at most one, and returns
-      parts untouched at the slightest doubt.
+    SANS MODULE. Si la page n'appartient a aucun module, il n'y a rien pour
+    remplacer l'entree de l'application Django. On la retire alors : sa page
+    (/admin/BaseBillet/...) n'est jamais affichee, StaffAdminSite.app_index
+    renvoie vers le tableau de bord. Les autres entrees ne bougent pas.
+    / No module: the Django app entry is removed (its page is never shown).
+
+    CE QUE CETTE BALISE NE FAIT JAMAIS. Elle n'ajoute aucune entree, et ne
+    retire que celle de l'application Django, reconnue par la route de son
+    lien. Au moindre doute, on rend « parts » tel quel.
+    / Never adds an entry; only ever removes the Django app one.
 
     :param context: contexte de gabarit (doit contenir « request »)
     :param parts: la liste d'entrees construite par header_title
@@ -85,12 +90,13 @@ def fil_ariane_par_module(context, parts):
         inclure_page_du_module=False,
     )
 
-    # Aucun module : les 31 changelists qui n'appartiennent a aucun module
-    # gardent exactement le fil d'Ariane d'Unfold. C'est aussi ce qui protege
-    # tout modele ajoute demain sans etre range.
-    # / No module: the breadcrumb is left exactly as Unfold built it.
+    # Aucun module : la premiere entree est celle de l'application Django,
+    # dont la page n'est jamais affichee (StaffAdminSite.app_index renvoie
+    # vers le tableau de bord). On la retire, sans toucher aux autres.
+    # Voir _sans_l_entree_de_l_application ci-dessous.
+    # / No module: drop the Django app entry, whose page is never shown.
     if module is None or not module.get("_slug"):
-        return parts
+        return _sans_l_entree_de_l_application(parts)
 
     remplacees = list(parts)
     remplacees[0] = {
@@ -98,3 +104,33 @@ def fil_ariane_par_module(context, parts):
         "title": module["title"],
     }
     return remplacees
+
+
+def _sans_l_entree_de_l_application(parts):
+    """
+    Retire du fil d'Ariane l'entree qui pointe vers la page d'une application
+    Django (/admin/BaseBillet/, /admin/laboutik/...).
+    / Removes the breadcrumb entry pointing to a Django app page.
+
+    LOCALISATION : Administration/templatetags/tb_admin.py
+
+    On reconnait l'entree par la route de son lien (« app_list »), pas par sa
+    position ni par son titre : on ne retire donc jamais autre chose.
+    Si le lien ne correspond a aucune route, on garde l'entree.
+    / The entry is recognised by its link's route name, never by position.
+
+    :param parts: la liste d'entrees construite par header_title
+    :return: une nouvelle liste, sans l'entree de l'application
+    """
+    entrees_gardees = []
+    for entree in parts:
+        lien = entree.get("link")
+        lien_vers_une_application = False
+        if lien:
+            try:
+                lien_vers_une_application = resolve(str(lien)).url_name == "app_list"
+            except Resolver404:
+                lien_vers_une_application = False
+        if not lien_vers_une_application:
+            entrees_gardees.append(entree)
+    return entrees_gardees

@@ -135,8 +135,9 @@ body {
   margin: 0;
   font-family: var(--font-text);
   /* Texte toujours blanc, comme la maquette. Les couleurs de fût proposées
-     dans l'admin sont choisies pour que le blanc reste lisible dessus.
-     / Text always white, like the mockup. */
+     dans l'admin (palette « Létireuz ») donnent 2,9:1 à 5:1 avec le blanc :
+     le blanc n'y est bien lisible qu'en gros caractères gras.
+     / Text always white, like the mockup. Keg colors give 2.9–5:1 with white. */
   color: var(--tireuse-fg);
   background: var(--tireuse-accent);
   line-height: 1.6;

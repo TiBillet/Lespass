@@ -640,7 +640,7 @@ def facturer_tirage(
         # La tireuse facture en euros : un tarif « au litre » en points ou en
         # temps (asset non vide) n'est jamais pris.
         # / The tap bills in euros: a per-litre points/time price is never used.
-        prix_obj = produit.prices.filter(poids_mesure=True, asset__isnull=True).first()
+        prix_obj = produit.prices.filter(poids_mesure=True, asset__isnull=True, archived=False).first()
 
         # _created et pas _ : « _ » masquerait gettext si on l'importe un jour
         # / _created, not _: "_" would shadow gettext if imported later

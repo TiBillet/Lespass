@@ -198,14 +198,22 @@ def demander_les_taches_d_une_adhesion_payee(adhesion: Membership, ligne_article
 
     LOCALISATION : BaseBillet/triggers.py
 
-    L'ordre des demandes est un contrat : les tests de caractérisation en ligne
-    (tests/pytest/test_caracterisation_en_ligne.py) assertent la liste ordonnée des tâches.
-    / The request order is a contract: online characterization tests assert it.
+    Toutes les tâches partent APRÈS la validation en base (on_commit) : le worker Celery
+    relit l'adhésion et la ligne avec sa propre connexion. Une tâche demandée avant la
+    validation ne les trouve pas encore et plante sur « DoesNotExist » (cas d'une
+    adhésion créée dans l'admin, dont les vues sont dans une transaction : issue #117).
+    Hors transaction, on_commit lance la fonction tout de suite.
+    / Every task goes AFTER the commit: the worker has its own connection and would not
+    find the membership yet (issue #117). Outside a transaction, it runs at once.
 
-    La récompense part toujours APRÈS la validation en base (on_commit) : le worker
-    Celery relit la ligne avec sa propre connexion. Hors transaction, on_commit lance la
-    tâche tout de suite.
-    / The reward always goes AFTER the commit. Outside a transaction, it runs at once.
+    L'ordre des demandes est un contrat : les tests de caractérisation en ligne
+    (tests/pytest/test_caracterisation_en_ligne.py) assertent la liste ordonnée des
+    tâches. Au COMMIT, les fonctions partent dans l'ordre où elles ont été enregistrées :
+    le webhook d'adhésion, enregistré plus tôt par l'enregistrement de l'échéance
+    (`appliquer_les_effets_d_une_adhesion_payee`, signal post_save), part donc AVANT la
+    facture, la newsletter et la récompense.
+    / The request order is a contract. At COMMIT, callbacks run in registration order:
+    the membership webhook, registered earlier by the deadline save, goes first.
 
     FLUX :
     - en ligne : `trigger_A` l'appelle juste après `appliquer_les_effets_d_une_adhesion_payee` ;
@@ -217,15 +225,28 @@ def demander_les_taches_d_une_adhesion_payee(adhesion: Membership, ligne_article
     :param adhesion: Membership payée
     :param ligne_article: LigneArticle qui porte l'adhésion (lue par la tâche de récompense)
     """
-    # La facture par mail : le mail porte le lien vers la facture de l'adhésion.
-    # / The invoice mail: it carries the link to the membership's invoice.
-    send_membership_invoice_to_email.delay(str(adhesion.uuid))
+    # Les valeurs sont lues MAINTENANT : la fonction lancée au COMMIT ne relit pas
+    # l'objet adhésion.
+    # / Values are read NOW: the function run at COMMIT does not read the object again.
+    uuid_de_l_adhesion = str(adhesion.uuid)
+    pk_de_l_adhesion = adhesion.pk
+    adhesion_inscrite_a_la_newsletter = adhesion.newsletter
 
-    # Si l'adhérent accepte la newsletter.
-    # / If the member accepts the newsletter.
-    if adhesion.newsletter:
-        send_to_ghost.delay(adhesion.pk)
-        send_to_brevo.delay(adhesion.pk)
+    def demander_la_facture_et_la_newsletter_apres_le_commit():
+        # La facture par mail : le mail porte le lien vers la facture de l'adhésion.
+        # / The invoice mail: it carries the link to the membership's invoice.
+        send_membership_invoice_to_email.delay(uuid_de_l_adhesion)
+
+        # Si l'adhérent accepte la newsletter.
+        # / If the member accepts the newsletter.
+        if adhesion_inscrite_a_la_newsletter:
+            send_to_ghost.delay(pk_de_l_adhesion)
+            send_to_brevo.delay(pk_de_l_adhesion)
+
+    # Enregistrée AVANT la récompense : au COMMIT, les fonctions partent dans l'ordre
+    # où elles ont été enregistrées (facture, newsletter, puis récompense).
+    # / Registered BEFORE the reward: at COMMIT, callbacks run in registration order.
+    transaction.on_commit(demander_la_facture_et_la_newsletter_apres_le_commit)
 
     # La récompense en monnaie (réglage du tarif), après la validation en base.
     # / The currency reward (price setting), after the commit.

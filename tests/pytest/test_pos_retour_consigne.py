@@ -593,6 +593,105 @@ class TestPosRetourConsigne(FastTenantTestCase):
         self.assertEqual(LigneArticle.objects.count(), 0)
         self.assertEqual(self._solde_de_la_carte(), 0)
 
+    def test_ouvrir_une_commande_avec_un_retour_de_consigne_est_refuse(self):
+        """
+        Un retour de consigne n'entre jamais dans une commande de table.
+        Sinon il part en preparation, et la commande reste impayable :
+        `payer_commande` refuse les retours de consigne.
+        / A deposit return never enters a table order: refused, nothing created.
+        """
+        from laboutik.models import ArticleCommandeSauvegarde, CommandeSauvegarde
+
+        reponse = self.client_http.post(
+            "/laboutik/commande/ouvrir/",
+            data={
+                "uuid_pv": str(self.point_de_vente.uuid),
+                "articles": [
+                    {
+                        "product_uuid": str(self.produit_retour_consigne.uuid),
+                        "price_uuid": str(self.prix_retour_consigne.uuid),
+                        "qty": 1,
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(reponse.status_code, 400)
+        self.assertContains(reponse, "au comptoir", status_code=400)
+        self.assertFalse(CommandeSauvegarde.objects.exists())
+        self.assertFalse(ArticleCommandeSauvegarde.objects.exists())
+
+    def test_ajouter_un_retour_de_consigne_a_une_commande_est_refuse(self):
+        """
+        Meme regle quand on complete une commande deja ouverte : refus avant
+        toute ecriture, la commande garde ses articles d'origine.
+        / Adding a deposit return to an open order: refused before any write.
+        """
+        from laboutik.models import ArticleCommandeSauvegarde, CommandeSauvegarde
+
+        commande = CommandeSauvegarde.objects.create(
+            statut=CommandeSauvegarde.OPEN,
+            responsable=self.caissier,
+        )
+
+        reponse = self.client_http.post(
+            f"/laboutik/commande/ajouter/{commande.uuid}/",
+            data=[
+                {
+                    "product_uuid": str(self.produit_biere.uuid),
+                    "price_uuid": str(self.prix_biere.uuid),
+                    "qty": 1,
+                },
+                {
+                    "product_uuid": str(self.produit_retour_consigne.uuid),
+                    "price_uuid": str(self.prix_retour_consigne.uuid),
+                    "qty": 1,
+                },
+            ],
+            content_type="application/json",
+        )
+
+        self.assertEqual(reponse.status_code, 400)
+        self.assertContains(reponse, "au comptoir", status_code=400)
+        self.assertFalse(ArticleCommandeSauvegarde.objects.exists())
+
+    # ------------------------------------------------------------------ #
+    #  Panier vide
+    # ------------------------------------------------------------------ #
+
+    def test_un_paiement_nfc_avec_un_panier_vide_est_refuse(self):
+        """
+        Un paiement sans aucun article est refuse par le serveur, meme avec une
+        carte valide. Le bouton VALIDER est desactive sur un panier vide, mais
+        un POST force (ou un panier vide pendant la lecture NFC) arrive quand meme.
+        / An empty-cart payment is refused server-side, even with a valid card.
+        """
+        donnees = self._donnees_de_base("nfc")
+        donnees["total"] = "0"
+        donnees["tag_id"] = self.carte_client.tag_id
+
+        reponse = self.client_http.post("/laboutik/paiement/payer/", data=donnees)
+
+        self.assertEqual(reponse.status_code, 400)
+        self.assertContains(reponse, "Panier vide", status_code=400)
+        self.assertEqual(LigneArticle.objects.count(), 0)
+
+    def test_un_paiement_nfc_sans_tag_et_sans_article_est_refuse(self):
+        """
+        Le cas exact remonte par Sentry : NFC, aucun tag, aucun article.
+        Le serveur repond par un message, sans exception ni ecriture.
+        / The Sentry case: NFC, no tag, no article. Clean refusal, no write.
+        """
+        donnees = self._donnees_de_base("nfc")
+        donnees["total"] = "0"
+
+        reponse = self.client_http.post("/laboutik/paiement/payer/", data=donnees)
+
+        self.assertEqual(reponse.status_code, 400)
+        self.assertContains(reponse, "Panier vide", status_code=400)
+        self.assertEqual(LigneArticle.objects.count(), 0)
+
     # ------------------------------------------------------------------ #
     #  T3 — Les especes
     # ------------------------------------------------------------------ #

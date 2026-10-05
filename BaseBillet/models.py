@@ -1326,6 +1326,16 @@ class Product(models.Model):
         help_text=_("Limit the quantity per user. Leave this field blank if the number is unlimited.")
     )
 
+    def tarifs_non_archives(self):
+        """
+        Les tarifs du produit qui ne sont pas archivés (« supprimés »).
+        Pratique dans un template : {% for price in product.tarifs_non_archives %}
+        / The product prices that are not archived ("deleted").
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        return self.prices.filter(archived=False)
+
     def max_per_user_reached(self, user, event=None, adhesions_deja_au_panier=0) -> bool:
         if not self.max_per_user:
             return False  # Aucune limite
@@ -1367,7 +1377,7 @@ class Product(models.Model):
     validate_button_text = models.CharField(
         blank=True,
         null=True,
-        max_length=20,
+        max_length=30,
         verbose_name=_("Validate button text for membership"),
         help_text=_("'Subscribe' If empty. Only useful for membership or subscription products.")
     )
@@ -1528,7 +1538,21 @@ class Product(models.Model):
         ordering = ('poids',)
         verbose_name = _('Product')
         verbose_name_plural = _('Products')
-        unique_together = ('categorie_article', 'name')
+        # Deux produits NON archivés ne peuvent pas avoir le même nom dans la même catégorie.
+        # Un produit archivé ne bloque pas le nom : on peut créer un nouveau produit du même nom.
+        # Plusieurs produits archivés peuvent porter le même nom.
+        # / Two NON-archived products cannot share a name within a category.
+        #   An archived product does not reserve its name.
+        constraints = [
+            models.UniqueConstraint(
+                fields=['categorie_article', 'name'],
+                condition=Q(archive=False),
+                name='unique_product_non_archive_par_categorie_et_nom',
+                violation_error_message=_(
+                    "Un produit avec ce nom existe déjà. Choisissez un autre nom, ou archivez le produit existant."
+                )
+            ),
+        ]
 
 
 class TicketProductManager(models.Manager):
@@ -1842,7 +1866,7 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
 
     if instance.categorie_article == Product.FREERES:
         # On est sur un produit a réservation gratuite, on fabrique le price s'il n'existe pas ou s'il n'a pas été archivé
-        if not instance.prices.filter(prix=0).exists():
+        if not instance.prices.filter(prix=0, archived=False).exists():
             config = Configuration.get_solo()
             activate(config.language)
             Price.objects.create(product=instance, name=_("Free rate"), prix=0, publish=True)
@@ -1891,6 +1915,11 @@ class Price(models.Model):
                                      help_text=_("The amount will be asked on the Stripe checkout page."))
 
     publish = models.BooleanField(default=True, verbose_name=_("Publish"))
+
+    # Un tarif archivé est un tarif « supprimé » : il reste en base pour l'historique
+    # des ventes, mais il n'est plus jamais affiché ni vendu. Voir Price.delete().
+    # / An archived price is a "deleted" price: kept for sales history, never shown again.
+    archived = models.BooleanField(default=False, verbose_name=_("Archived"))
 
     TNA, DIX, VINGT, HUITCINQ, DEUXDEUX = 'NA', 'DX', 'VG', 'HC', 'DD'
     TVA_CHOICES = [
@@ -2051,8 +2080,14 @@ class Price(models.Model):
     #                                                 verbose_name=_("Maximum all user"),
     #                                                 help_text=_("Limit the maximum number of memberships for all users. Leave blank for unlimited."))
 
+    # Reste vers Product, pas vers le proxy MembershipProduct : pour un M2M, le proxy
+    # renommerait la colonne product_id de la table de liaison dans chaque tenant.
+    # limit_choices_to fait le filtre (formulaires, autocomplete admin, full_clean).
+    # / Stays on Product: a proxy target would rename the M2M column in every tenant.
+    # limit_choices_to does the filtering (forms, admin autocomplete, full_clean).
     adhesions_obligatoires = models.ManyToManyField(
         Product,
+        limit_choices_to={"categorie_article": Product.ADHESION},
         related_name="adhesions_obligatoires",
         verbose_name=_("Subscriptions required"),
         help_text=_(
@@ -2154,7 +2189,52 @@ class Price(models.Model):
     def save(self, *args, **kwargs):
         if self.recurring_payment:
             self.max_per_user = 1
+
+        # Un tarif archivé n'est plus jamais en vente.
+        # On le dépublie donc toujours. Même règle que pour un produit archivé.
+        # / An archived price is never for sale: always unpublish it.
+        if self.archived:
+            self.publish = False
+
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """
+        « Supprime » un tarif : en réalité, on l'archive.
+        / "Deletes" a price: it is actually archived.
+
+        LOCALISATION : BaseBillet/models.py
+
+        Un tarif déjà vendu ne peut pas être effacé de la base.
+        Les ventes passées (PriceSold), les adhésions (Membership) et les commandes
+        de caisse sauvegardées pointent vers lui, en PROTECT.
+        Si on l'efface, on perd le nom et les réglages du tarif dans l'historique.
+
+        Donc on garde la ligne en base, et on la cache :
+        - archived = True : le tarif n'est plus affiché ni proposé nulle part.
+        - publish = False : le tarif n'est plus en vente.
+
+        ATTENTION : Price.objects.filter(...).delete() ne passe PAS par cette méthode.
+        Django efface alors vraiment les lignes (ou lève ProtectedError si le tarif a été vendu).
+        Pour effacer vraiment un seul tarif (tests, nettoyage), utiliser hard_delete().
+        / WARNING: queryset.delete() bypasses this method and really deletes rows.
+
+        :return: même forme que Model.delete() : (0, {}) car rien n'est effacé.
+        """
+        self.archived = True
+        self.publish = False
+        self.save(update_fields=["archived", "publish"])
+        return 0, {}
+
+    def hard_delete(self, *args, **kwargs):
+        """
+        Efface vraiment le tarif de la base. Réservé aux tests et aux nettoyages.
+        Lève ProtectedError si le tarif a déjà été vendu.
+        / Really deletes the price. For tests and cleanups only.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        return super().delete(*args, **kwargs)
 
 
 class Event(models.Model):
@@ -2200,7 +2280,16 @@ class Event(models.Model):
     private = models.BooleanField(default=False, verbose_name=_("Non-federable event"),
                                   help_text=_("Will not be displayed on shared calendars."))
 
-    products = models.ManyToManyField(Product, blank=True, verbose_name=_("Products"))
+    # Reste vers Product, pas vers le proxy TicketProduct : pour un M2M, le proxy
+    # renommerait la colonne product_id de la table de liaison dans chaque tenant.
+    # limit_choices_to fait le filtre (formulaires, autocomplete admin, full_clean).
+    # / Stays on Product: a proxy target would rename the M2M column in every tenant.
+    products = models.ManyToManyField(
+        Product,
+        blank=True,
+        verbose_name=_("Products"),
+        limit_choices_to={"categorie_article__in": [Product.BILLET, Product.FREERES]},
+    )
 
     tag = models.ManyToManyField(Tag, blank=True, related_name="events", verbose_name=_("Tags"))
 
@@ -2434,7 +2523,7 @@ class Event(models.Model):
     def reservation_solo(self):
         if self.max_per_user == 1:
             if self.products.all().count() == 1:
-                if self.products.first().prices.all().count() == 1:
+                if self.products.first().prices.filter(archived=False).count() == 1:
                     return True
         return False
 
@@ -2499,6 +2588,32 @@ class Event(models.Model):
             return True
         else:
             return False
+
+    def places_restantes(self):
+        """
+        Nombre de places encore réservables, affiché dans le talon de la page
+        événement (partials/reservation_declencheur.html).
+        Même calcul que complet() : les billets en cours de paiement sont déjà
+        retirés, sinon le chiffre surestime pendant un rush. Jamais négatif.
+        / Seats still bookable. Same count as complet(): tickets being paid are
+        already taken out. Never negative.
+        """
+        places_prises = self.valid_tickets_count() + self.under_purchase()
+        places_restantes = self.jauge_max - places_prises
+        if places_restantes < 0:
+            return 0
+        return places_restantes
+
+    def jauge_presque_pleine(self):
+        """
+        Vrai quand il reste 15 % de la jauge ou moins : le talon ajoute alors
+        une pastille d'alerte (zanana) devant « Places restantes ».
+        / True when 15% of the capacity or less is left.
+        """
+        if not self.jauge_max:
+            return False
+        part_restante = self.places_restantes() / self.jauge_max
+        return part_restante <= 0.15
 
     def a_des_codes_promo(self):
         """
@@ -2630,6 +2745,35 @@ class Event(models.Model):
             .order_by('pricesold__price_id')
             .distinct('pricesold__price_id')
         )
+
+    def clean(self):
+        """
+        Verifie que la fin de l'evenement n'est pas avant son debut.
+        / Checks that the event end is not before its start.
+
+        LOCALISATION : BaseBillet/models.py
+
+        Appelee automatiquement par les ModelForm (admin Unfold : EventForm).
+        Les serializers DRF ne l'appellent PAS. Les API ont donc leur propre
+        verification, avec le meme message :
+        - api_v2/serializers.py : EventCreateSerializer.validate
+        - ApiBillet/serializers.py : EventWriteSerializer.validate
+        Une fin egale au debut est acceptee.
+        """
+        super().clean()
+
+        # La fin est facultative : sans fin, rien a verifier.
+        # / End is optional: nothing to check without it.
+        le_debut_est_renseigne = self.datetime is not None
+        la_fin_est_renseignee = self.end_datetime is not None
+        if not le_debut_est_renseigne or not la_fin_est_renseignee:
+            return
+
+        la_fin_est_avant_le_debut = self.end_datetime < self.datetime
+        if la_fin_est_avant_le_debut:
+            raise ValidationError({
+                "end_datetime": _("La fin de l'évènement doit être après son début."),
+            })
 
     def save(self, *args, **kwargs):
         """
@@ -3020,6 +3164,10 @@ class Reservation(models.Model):
 
     def valid_tickets(self):
         return self.tickets.filter(status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED])
+
+    def canceled_tickets(self):
+        return self.tickets.filter(status__in=[Ticket.CANCELED])
+
 
     def total_paid(self):
         """

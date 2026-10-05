@@ -986,6 +986,59 @@ def send_membership_payment_link_user(membership_uuid: str):
 
 #### SEND INFO TO LABOUTIK"}
 
+def lire_les_metadonnees_en_dictionnaire(metadonnees):
+    """
+    Rend les métadonnées d'une ligne de vente sous forme de dictionnaire.
+    / Returns the metadata of a sale line as a dict.
+
+    LOCALISATION : BaseBillet/tasks.py
+
+    Le champ `metadata` est un JSONField. Une ligne historique (reprise des anciennes
+    ventes, QR) peut y porter un TEXTE JSON au lieu d'un dictionnaire : le texte est
+    relu en dictionnaire. Un texte vide ou blanc vaut « aucune métadonnée »
+    (`json.loads` le refuserait). Même règle que `ajouter_l_article_d_avoir`
+    (BaseBillet/services_vente.py).
+    / Older lines may store a JSON TEXT: it is read back as a dict; blank text means {}.
+
+    :param metadonnees: dict, texte JSON, ou None
+    :return: un nouveau dictionnaire (le contenu de la ligne n'est jamais modifié)
+    """
+    if isinstance(metadonnees, str):
+        texte_des_metadonnees = metadonnees.strip()
+        if texte_des_metadonnees == "":
+            return {}
+        return dict(json.loads(texte_des_metadonnees))
+    if not metadonnees:
+        return {}
+    return dict(metadonnees)
+
+
+def trouver_ligne_de_vente_originale(ligne_de_remboursement):
+    """
+    Retrouve la vente d'origine d'une ligne de remboursement ou d'avoir.
+    / Finds the original sale line of a refund or credit note line.
+
+    LOCALISATION : BaseBillet/tasks.py
+
+    Un remboursement est une NOUVELLE ligne (qty negative).
+    LaBoutik a besoin de l'uuid de la vente d'origine pour l'enregistrer.
+    On cherche d'abord la cle etrangere credit_note_for (avoirs).
+    Sinon, on lit metadata['original_lignearticle_uuid'] (remboursements Stripe).
+
+    :param ligne_de_remboursement: LigneArticle REFUNDED ou CREDIT_NOTE
+    :return: la LigneArticle d'origine, ou None si introuvable
+    """
+    if ligne_de_remboursement.credit_note_for_id:
+        return ligne_de_remboursement.credit_note_for
+
+    metadata_de_la_ligne = lire_les_metadonnees_en_dictionnaire(ligne_de_remboursement.metadata)
+    uuid_de_la_vente_originale = metadata_de_la_ligne.get('original_lignearticle_uuid')
+    if not uuid_de_la_vente_originale:
+        return None
+
+    return LigneArticle.objects.filter(uuid=uuid_de_la_vente_originale).first()
+
+
 @shared_task(bind=True, max_retries=20)
 def send_stripe_bank_deposit_to_laboutik(self, payload):
     # Plafond du delai entre deux retries.
@@ -1007,7 +1060,13 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
         logger.error(f"send_stripe_bank_deposit_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
         return False
     except Exception as exc:
-        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        # On donne le detail de l'erreur et le tenant : "Serveur down ?" seul ne permettait
+        # pas de savoir quel serveur LaBoutik ne repondait pas, ni pourquoi.
+        # / Log the error detail and tenant, so we know which LaBoutik server failed and why.
+        logger.error(
+            f"{self.name} : serveur LaBoutik {config.server_cashless} injoignable "
+            f"(tenant {connection.schema_name}, tentative {self.request.retries + 1}) : {exc}"
+        )
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
 
@@ -1080,11 +1139,67 @@ def send_refund_to_laboutik(self, ligne_article_pk):
         logger.error(f"send_refund_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
         return False
     except Exception as exc:
-        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        # On donne le detail de l'erreur et le tenant : "Serveur down ?" seul ne permettait
+        # pas de savoir quel serveur LaBoutik ne repondait pas, ni pourquoi.
+        # / Log the error detail and tenant, so we know which LaBoutik server failed and why.
+        logger.error(
+            f"{self.name} : serveur LaBoutik {config.server_cashless} injoignable "
+            f"(tenant {connection.schema_name}, tentative {self.request.retries + 1}) : {exc}"
+        )
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
 
     logger.info(f"send_refund_to_laboutik -> ligne_article status : {ligne_article.get_status_display()}")
+
+    # LaBoutik enregistre un remboursement en le rattachant a la vente d'origine.
+    # Si LaBoutik ne connait pas cette vente, il repond 404 (issue #319).
+    # Donc on verifie d'abord que la vente d'origine existe et a ete envoyee.
+    # / LaBoutik links a refund to its original sale and answers 404 if it does
+    # not know that sale (issue #319). Check the original sale first.
+    ligne_de_vente_originale = trouver_ligne_de_vente_originale(ligne_article)
+    if ligne_de_vente_originale is None:
+        logger.error(
+            f"send_refund_to_laboutik : ligne {ligne_article_pk} sans vente d'origine "
+            f"(ni credit_note_for, ni metadata original_lignearticle_uuid). "
+            f"LaBoutik ne peut pas l'enregistrer — abandon"
+        )
+        return False
+
+    vente_originale_pas_encore_envoyee = not ligne_de_vente_originale.sended_to_laboutik
+    if vente_originale_pas_encore_envoyee:
+        # La vente d'origine n'est jamais arrivee dans LaBoutik.
+        # Si elle est payee, on relance son envoi, puis on reessaie le remboursement plus tard.
+        # On ne relance l'envoi qu'au premier passage, pour ne pas creer une tache par retry.
+        # / The original sale never reached LaBoutik. If it is paid, send it again
+        # (first pass only), then retry the refund later.
+        vente_originale_est_payee = ligne_de_vente_originale.status in [LigneArticle.VALID, LigneArticle.PAID]
+        if not vente_originale_est_payee:
+            logger.error(
+                f"send_refund_to_laboutik : la vente d'origine {ligne_de_vente_originale.uuid} "
+                f"n'est pas payee ({ligne_de_vente_originale.get_status_display()}), "
+                f"elle ne sera jamais dans LaBoutik — abandon du remboursement {ligne_article_pk}"
+            )
+            return False
+
+        premier_passage_de_la_tache = self.request.retries == 0
+        if premier_passage_de_la_tache:
+            logger.warning(
+                f"send_refund_to_laboutik : vente d'origine {ligne_de_vente_originale.uuid} "
+                f"pas encore envoyee a LaBoutik -> on relance send_sale_to_laboutik"
+            )
+            send_sale_to_laboutik.delay(ligne_de_vente_originale.pk)
+
+        # Au moins 30s : la vente doit avoir le temps d'arriver dans LaBoutik.
+        # / At least 30s so the sale has time to reach LaBoutik.
+        retry_delay = max(30, min(3 ** self.request.retries, MAX_RETRY_TIME))
+        try:
+            raise self.retry(countdown=retry_delay)
+        except MaxRetriesExceededError:
+            logger.error(
+                f"send_refund_to_laboutik : la vente d'origine {ligne_de_vente_originale.uuid} "
+                f"n'est jamais arrivee dans LaBoutik — abandon du remboursement {ligne_article_pk}"
+            )
+            return False
 
     # Même charge utile que la vente : le moyen, la monnaie et le portefeuille se lisent
     # dans le règlement de la vente d'avoir (`LigneArticleSerializer`). Une ligne de
@@ -1093,6 +1208,15 @@ def send_refund_to_laboutik(self, ligne_article_pk):
     # / Same payload as a sale, read from the credit note sale's payment; a refund line
     # turns REFUNDED only after its sale is settled, so the payment always exists.
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
+
+    # Certains avoirs anciens n'ont pas l'uuid d'origine dans leurs metadata.
+    # Sans lui, LaBoutik repond 400. On l'ajoute dans ce qu'on envoie.
+    # / Some older credit notes lack the original uuid in metadata (LaBoutik answers 400).
+    metadata_envoyee = lire_les_metadonnees_en_dictionnaire(serialized_ligne_article.get('metadata'))
+    if not metadata_envoyee.get('original_lignearticle_uuid'):
+        metadata_envoyee['original_lignearticle_uuid'] = str(ligne_de_vente_originale.uuid)
+        serialized_ligne_article['metadata'] = metadata_envoyee
+
     json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 
     url = f"{config.server_cashless}/api/refundfromlespass"
@@ -1121,12 +1245,21 @@ def send_refund_to_laboutik(self, ligne_article_pk):
             retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
             raise self.retry(countdown=retry_delay)
         elif response.status_code == 404:
-            logger.error(f"LaBoutik 404 pour {url} — endpoint introuvable")
+            # Sur cet endpoint, LaBoutik repond 404 quand il ne trouve pas la vente d'origine
+            # (get_object_or_404 sur original_lignearticle_uuid), pas quand l'URL n'existe pas.
+            # / On this endpoint, 404 means LaBoutik does not know the original sale.
+            logger.error(
+                f"LaBoutik 404 pour {url} : vente d'origine {ligne_de_vente_originale.uuid} "
+                f"inconnue de LaBoutik (remboursement {ligne_article_pk}) — abandon"
+            )
             return False
         else:
             # Erreur client inattendue (400, 403, etc.) : ne pas retry, c’est une erreur permanente
             # / Unexpected client error (400, 403, etc.): don’t retry, it’s a permanent error
-            logger.error(f"LaBoutik a répondu {response.status_code} pour {url} — abandon (pas de retry)")
+            logger.error(
+                f"LaBoutik a répondu {response.status_code} pour {url} "
+                f"(remboursement {ligne_article_pk}) : {response.text[:500]} — abandon (pas de retry)"
+            )
             return False
 
     except MaxRetriesExceededError:
@@ -1178,7 +1311,13 @@ def send_sale_to_laboutik(self, ligne_article_pk):
         logger.error(f"send_sale_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
         return False
     except Exception as exc:
-        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        # On donne le detail de l'erreur et le tenant : "Serveur down ?" seul ne permettait
+        # pas de savoir quel serveur LaBoutik ne repondait pas, ni pourquoi.
+        # / Log the error detail and tenant, so we know which LaBoutik server failed and why.
+        logger.error(
+            f"{self.name} : serveur LaBoutik {config.server_cashless} injoignable "
+            f"(tenant {connection.schema_name}, tentative {self.request.retries + 1}) : {exc}"
+        )
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
 

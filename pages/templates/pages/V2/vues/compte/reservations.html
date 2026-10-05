@@ -85,7 +85,10 @@ A CONSERVER : la classe .reservation-card (cible HTMX), #ticketPanel,
                     </h2>
 
                     <div class="reservation-card__meta">
-                        <span>{{ resa.tickets.all|length }} {% translate 'seats' %}</span>
+                        <span>
+                            {{ resa.valid_tickets|length }} {% translate 'seats' %}
+                            {% if resa.canceled_tickets|length > 0 %} (+ {{ resa.canceled_tickets|length }} {% translate 'places annulées' %}) {% endif %}
+                        </span>
                         <span class="event-card__price">{{ resa.total_paid }} €</span>
                         <span class="badge badge--neutral">{{ resa.get_status_display }}</span>
                         <button

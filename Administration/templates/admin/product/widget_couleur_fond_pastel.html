@@ -1,0 +1,114 @@
+{% load i18n %}
+{% comment %}
+COULEUR DE FOND D'UN BOUTON DE CAISSE — pastilles de la palette pastel
+/ POS button background color — pastel palette swatches
+
+LOCALISATION : Administration/templates/admin/product/widget_couleur_fond_pastel.html
+
+Widget des champs « couleur_fond_pos » (article de caisse) et « couleur_fond »
+(catégorie de caisse). Classe : CouleurFondPastelWidget,
+Administration/admin/products.py. Liste des couleurs : PALETTE_PASTEL_CAISSE.
+
+Une colonne par teinte, côte à côte. Dans chaque colonne, de haut en bas :
+clair (100), moyen (200), soutenu (300). Les colonnes passent à la ligne
+si l'écran est trop étroit.
+Chaque pastille est un bouton radio caché + un label coloré.
+- Le formulaire envoie la couleur du radio coché : aucun JS.
+- La pastille choisie est entourée et cochée (CSS :checked).
+- La coche est foncée : toutes les couleurs de la palette sont claires.
+- Clavier : Tab pour entrer dans le groupe, flèches pour changer.
+- « Aucune » : pas de couleur. Son texte vient de libelle_aucune.
+- Si l'objet a une couleur hors de la palette, elle est proposée en premier.
+/ One column per hue, side by side (light to strong, top to bottom). Hidden radio + colored label, no JS.
+Dark check mark (all colors are light). Out-of-palette color offered first.
+
+Variables : widget.name, widget.attrs.id, couleur_actuelle,
+couleur_actuelle_hors_liste, groupes_de_couleurs, libelle_aucune.
+
+Styles : bloc <style> avec des classes préfixées, car Unfold n'embarque
+pas les classes Tailwind personnalisées.
+/ Prefixed <style> block: Unfold does not ship custom Tailwind classes.
+{% endcomment %}
+<style>
+  /* Colonnes côte à côte, qui passent à la ligne si besoin
+     / Side-by-side columns, wrapping when needed */
+  .pastilles-pastel { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
+  .pastilles-pastel__colonne { display: flex; flex-direction: column; gap: 6px; }
+  /* Radio caché mais toujours atteignable au clavier
+     / Radio hidden but still keyboard-reachable */
+  .pastilles-pastel__radio { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .pastilles-pastel__pastille {
+    position: relative; display: grid; place-items: center;
+    width: 32px; height: 32px; cursor: pointer;
+    border: 2px solid rgba(0, 0, 0, .15); border-radius: 8px;
+    color: #1a1a1a; font-size: 16px; font-weight: 700;
+    transition: transform .1s ease-out;
+  }
+  .pastilles-pastel__pastille:hover { transform: scale(1.1); }
+  /* Pastille choisie : anneau + coche foncée / Selected swatch: ring + dark check */
+  .pastilles-pastel__radio:checked + .pastilles-pastel__pastille {
+    outline: 3px solid var(--color-primary-600, #1d9e75); outline-offset: 2px;
+  }
+  .pastilles-pastel__radio:checked + .pastilles-pastel__pastille::after { content: "✓"; }
+  .pastilles-pastel__radio:focus-visible + .pastilles-pastel__pastille {
+    box-shadow: 0 0 0 5px rgba(0, 0, 0, .25);
+  }
+  /* « Aucune » : pastille barrée / "None": crossed swatch */
+  .pastilles-pastel__pastille--aucune {
+    background: linear-gradient(135deg, #fff 45%, #d33 45%, #d33 55%, #fff 55%);
+  }
+  /* Couleur actuelle hors palette : souvent foncée, coche blanche
+     / Current out-of-palette color: often dark, white check */
+  .pastilles-pastel__pastille--hors-liste { color: #fff; text-shadow: 0 0 3px rgba(0, 0, 0, .6); }
+  /* Texte lu par les lecteurs d'écran seulement / Screen-reader-only text */
+  .pastilles-pastel__texte-cache {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  @media (prefers-reduced-motion: reduce) { .pastilles-pastel__pastille { transition: none; } }
+</style>
+
+<div class="pastilles-pastel" role="radiogroup" aria-label="{% translate 'Couleur de fond' %}" data-testid="caisse-pastilles-fond">
+
+  <div class="pastilles-pastel__colonne">
+    {# Aucune couleur / No color #}
+    <input type="radio" class="pastilles-pastel__radio" name="{{ widget.name }}" value=""
+           id="{{ widget.attrs.id }}_aucune" {% if not couleur_actuelle %}checked{% endif %}>
+    <label for="{{ widget.attrs.id }}_aucune" class="pastilles-pastel__pastille pastilles-pastel__pastille--aucune"
+           title="{{ libelle_aucune }}"
+           data-testid="caisse-pastille-aucune">
+      <span class="pastilles-pastel__texte-cache">{{ libelle_aucune }}</span>
+    </label>
+
+    {# Couleur actuelle hors palette : gardée pour ne rien perdre / Kept current color #}
+    {% if couleur_actuelle_hors_liste %}
+      <input type="radio" class="pastilles-pastel__radio" name="{{ widget.name }}" value="{{ couleur_actuelle_hors_liste }}"
+             id="{{ widget.attrs.id }}_actuelle" checked>
+      <label for="{{ widget.attrs.id }}_actuelle" class="pastilles-pastel__pastille pastilles-pastel__pastille--hors-liste"
+             style="background-color: {{ couleur_actuelle_hors_liste }};"
+             title="{% translate 'Couleur actuelle' %} ({{ couleur_actuelle_hors_liste }})"
+             data-testid="caisse-pastille-actuelle">
+        <span class="pastilles-pastel__texte-cache">{% translate "Couleur actuelle" %} {{ couleur_actuelle_hors_liste }}</span>
+      </label>
+    {% endif %}
+  </div>
+
+  {# Palette pastel : une colonne par teinte (voir PALETTE_PASTEL_CAISSE) #}
+  {# / Pastel palette: one column per hue (see PALETTE_PASTEL_CAISSE) #}
+  {% for nom_teinte, couleurs_de_la_teinte in groupes_de_couleurs %}
+    {% with numero_teinte=forloop.counter %}
+      <div class="pastilles-pastel__colonne">
+        <span class="pastilles-pastel__texte-cache">{{ nom_teinte }}</span>
+        {% for code_couleur, nom_couleur in couleurs_de_la_teinte %}
+          <input type="radio" class="pastilles-pastel__radio" name="{{ widget.name }}" value="{{ code_couleur }}"
+                 id="{{ widget.attrs.id }}_{{ numero_teinte }}_{{ forloop.counter }}" {% if couleur_actuelle == code_couleur %}checked{% endif %}>
+          <label for="{{ widget.attrs.id }}_{{ numero_teinte }}_{{ forloop.counter }}" class="pastilles-pastel__pastille"
+                 style="background-color: {{ code_couleur }};" title="{{ nom_couleur }}"
+                 data-testid="caisse-pastille-{{ code_couleur|slice:'1:' }}">
+            <span class="pastilles-pastel__texte-cache">{{ nom_couleur }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    {% endwith %}
+  {% endfor %}
+</div>

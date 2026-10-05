@@ -34,7 +34,7 @@
 	--r-tile: 15px;
 
 	--article-per-col: 2;
-	--article-height: 117px;
+	--article-height: 130px;
 	--article-visual-size: 30px;
 	--article-name-size: 13.5px;
 	--article-gap: 8px;
@@ -44,7 +44,6 @@
 @media only screen and (min-width: 600px) {
 	:root {
 		--article-per-col: 3;
-		--article-height: 128px;
 		--article-visual-size: 34px;
 		--article-name-size: 15px;
 		--article-gap: 10px;
@@ -55,7 +54,6 @@
 @media only screen and (min-width: 1023px) {
 	:root {
 		--article-per-col: 4;
-		--article-height: 136px;
 		--article-visual-size: 40px;
 		--article-name-size: 16px;
 	}

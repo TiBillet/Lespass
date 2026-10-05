@@ -2225,6 +2225,62 @@ def _lire_la_carte_sur_l_ancien_fedow(carte_client):
     return SimpleNamespace(statut="connue", jetons=jetons_repris)
 
 
+def _lire_les_soldes_restants_sur_l_ancien_fedow(carte_client):
+    """
+    Lit, APRÈS un vidage, ce qui reste réellement sur la carte dans l'ancien Fedow :
+    une ligne par monnaie.
+    / Reads, AFTER an emptying, what really remains on the card in the old Fedow: one
+    line per currency.
+
+    LOCALISATION : laboutik/views.py
+
+    Lecture seule : `NFCcard.retrieve(tag_id)` (GET `card/{tag_id}/`). On garde TOUS les
+    jetons positifs du portefeuille de la carte : ceux que le vidage ne reprend pas
+    (monnaie d'un autre lieu, par exemple) restent sur la carte. Deux monnaies
+    différentes ne sont jamais additionnées : une ligne par jeton.
+    / Read only. Keeps ALL positive tokens; two currencies are never added together.
+
+    APPELÉ PAR : PaiementViewSet.vider_carte (écran final A « vider »)
+
+    :param carte_client: CarteCashless vidée
+    :return: SimpleNamespace(
+        statut : "absente" (lieu non relié, ou carte inconnue là-bas : rien n'y reste),
+                 "injoignable" (toute autre erreur : le solde est inconnu) ou "connue",
+        lignes : liste de `_ligne_de_vidage` (vide sauf "connue"))
+    """
+    # On teste `can_fedow()` AVANT de créer `FedowAPI` : sur un lieu sans place Fedow,
+    # sa création lancerait une création de place sur le serveur.
+    # / Check can_fedow() BEFORE building FedowAPI.
+    if not FedowConfig.get_solo().can_fedow():
+        return SimpleNamespace(statut="absente", lignes=[])
+
+    try:
+        fiche_de_la_carte = FedowAPI().NFCcard.retrieve(carte_client.tag_id)
+        lignes_restantes = []
+        for jeton in fiche_de_la_carte["wallet"]["tokens"]:
+            if jeton["value"] <= 0:
+                continue
+            fiche_de_la_monnaie = jeton.get("asset") or {}
+            lignes_restantes.append(
+                _ligne_de_vidage(
+                    jeton["asset_name"],
+                    jeton["value"],
+                    jeton["asset_category"],
+                    fiche_de_la_monnaie.get("currency_code") or "",
+                )
+            )
+    except CarteInconnueDeFedow:
+        return SimpleNamespace(statut="absente", lignes=[])
+    except Exception as erreur_de_lecture:
+        logger.warning(
+            f"Nouveau solde après vidage : ancien Fedow injoignable pour la carte "
+            f"{carte_client.tag_id} : {erreur_de_lecture}"
+        )
+        return SimpleNamespace(statut="injoignable", lignes=[])
+
+    return SimpleNamespace(statut="connue", lignes=lignes_restantes)
+
+
 def _relire_les_transactions_de_l_ancien_fedow(uuids_postes):
     """
     Relit sur l'ancien Fedow les transactions d'un vidage, pour le reçu.
@@ -2962,6 +3018,76 @@ def _panier_contient_uniquement_recharges_gratuites(articles_panier):
         if article["product"].methode_caisse not in METHODES_RECHARGE_GRATUITES:
             return False
     return True
+
+def _adhesions_actives_de_la_carte(carte):
+    """
+    Renvoie les adhesions actives du titulaire d'une carte cashless.
+    / Returns the active memberships of a cashless card holder.
+
+    LOCALISATION : laboutik/views.py
+
+    Une carte anonyme (sans utilisateur) n'a aucune adhesion : liste vide.
+    Le tri final (adhesion valide ou non) est fait par Membership.is_valid().
+
+    APPELEE PAR :
+    - PaiementViewSet.retour_carte() : popup « Verifier une carte »
+    - _adhesions_a_afficher_apres_paiement() : ecran de succes d'un paiement cashless
+
+    :param carte: CarteCashless (seul carte.user est lu)
+    :return: liste de Membership valides (price__product deja charge)
+    """
+    adhesions_actives = []
+
+    carte_sans_titulaire = carte.user is None
+    if carte_sans_titulaire:
+        return adhesions_actives
+
+    # CANCELED n'est PAS exclu ici : une adhesion resiliee court
+    # jusqu'a sa deadline (l'adherent a paye sa periode), et c'est
+    # is_valid() qui tranche. L'exclure au niveau SQL priverait
+    # l'adherent de son adhesion des la resiliation.
+    # ADMIN_CANCELED reste exclu : annulation administrative, effet
+    # immediat, avoir possible.
+    # / CANCELED is NOT excluded here: a cancelled membership runs
+    # until its deadline and is_valid() decides. ADMIN_CANCELED stays
+    # excluded: admin cancellation is immediate.
+    adhesions_du_titulaire = (
+        Membership.objects.filter(
+            user=carte.user,
+        )
+        .exclude(
+            status=Membership.ADMIN_CANCELED,
+        )
+        .select_related("price__product")
+    )
+    for adhesion in adhesions_du_titulaire:
+        if adhesion.is_valid():
+            adhesions_actives.append(adhesion)
+    return adhesions_actives
+
+
+def _adhesions_a_afficher_apres_paiement(carte):
+    """
+    Renvoie les adhesions a montrer sur l'ecran de succes d'un paiement cashless.
+    / Returns the memberships to show on the cashless payment success screen.
+
+    LOCALISATION : laboutik/views.py
+
+    L'affichage depend du reglage « Afficher les adhesions au retour d'un paiement »
+    (LaboutikConfiguration.show_membership_after_payment, admin laboutik).
+    Reglage desactive : liste vide, et aucune requete sur les adhesions.
+
+    FLUX : PaiementViewSet._payer_par_nfc() -> CETTE FONCTION
+    -> context["adhesions_actives"] -> hx_return_payment_success.html
+
+    :param carte: CarteCashless qui vient de payer
+    :return: liste de Membership valides, ou liste vide
+    """
+    configuration_laboutik = LaboutikConfiguration.get_solo()
+    affichage_des_adhesions_active = configuration_laboutik.show_membership_after_payment
+    if not affichage_des_adhesions_active:
+        return []
+    return _adhesions_actives_de_la_carte(carte)
 
 
 def _somme_encaissee_du_panier_en_centimes(articles_panier):
@@ -8165,6 +8291,15 @@ class ViderCarteSerializer(serializers.Serializer):
     tag_id_cm = serializers.CharField(max_length=8)
     uuid_pv = serializers.UUIDField()
     vider_carte = serializers.BooleanField(required=False, default=False)
+    # Choix fait dans la popup retour carte (hx_card_feedback.html).
+    # Vide quand on vient de la tuile « Vider carte ».
+    # / Choice made in the card feedback popup. Blank from the POS tile.
+    action_carte = serializers.ChoiceField(
+        choices=["cloturer", "vider"],
+        required=False,
+        allow_blank=True,
+        default="",
+    )
 
     def validate_tag_id(self, value):
         return value.strip().upper()
@@ -8638,6 +8773,24 @@ class PaiementViewSet(viewsets.ViewSet):
                 "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": str(e),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        # --- Un panier vide ne se paie pas ---
+        # Le bouton VALIDER est desactive quand le panier est vide (addition.js).
+        # Ce n'est qu'un confort d'affichage : un POST force, ou un panier vide
+        # pendant la lecture de la carte NFC, arrive quand meme ici.
+        # Aucun flux de paiement ne sait traiter un panier vide : on refuse
+        # avant tout routage et toute ecriture.
+        # / An empty cart is never paid: refused before any routing or write.
+        if not articles_panier:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": _("Panier vide."),
                 "selector_bt_retour": "#messages",
             }
             return render(
@@ -10538,7 +10691,12 @@ class PaiementViewSet(viewsets.ViewSet):
             # qu'une carte n'a pas ete rattachee, meme si la vente a abouti.
             # / Card-linking warnings: the cashier must know a card was not attached.
             "avertissements_adhesion": adherent["avertissements"] if adherent else [],
+            # Adhesions actives du titulaire, seulement si le reglage laboutik
+            # l'autorise (liste vide sinon).
+            # / Holder's active memberships, only if the laboutik setting allows it.
+            "adhesions_actives": _adhesions_a_afficher_apres_paiement(carte_client),
         }
+
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context
         )
@@ -10977,11 +11135,42 @@ class PaiementViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="lire_nfc", url_name="lire_nfc")
     def lire_nfc(self, request):
         """
-        GET /laboutik/paiement/lire_nfc/
-        Affiche le partial d'attente de lecture NFC (pour paiement cashless).
-        Displays the NFC read waiting partial (for cashless payment).
+        GET /laboutik/paiement/lire_nfc/?total=12.5&devise=€
+        Affiche la popup « Approchez la carte » d'un paiement cashless, avec le total.
+        / Displays the "Tap the card" popup of a cashless payment, with the total.
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. Clic sur une tuile CASHLESS (_tuiles_paiement.html,
+           hx_display_type_payment.html, hx_funds_insufficient.html).
+        2. La tuile envoie le total et son unite dans l'URL.
+        3. Cette vue rend hx_read_nfc.html, qui affiche le total.
+        4. La lecture de la carte soumet #addition-form vers payer().
+
+        Le total sert seulement a l'affichage. payer() recalcule toujours le
+        montant depuis le panier : on ne fait jamais confiance a ce parametre.
+        Sans total (ou total illisible), la popup s'affiche sans montant.
+        / Display only: payer() always recomputes the amount from the cart.
         """
-        return render(request, "laboutik/partial/hx_read_nfc.html", {})
+        # Le parametre GET peut contenir une virgule (locale francaise).
+        # / The GET param may contain a comma (French locale).
+        total_brut = request.GET.get("total", "")
+        total_brut = total_brut.replace(",", ".")
+        try:
+            total_a_payer = float(total_brut)
+        except (ValueError, TypeError):
+            total_a_payer = None
+
+        # Unite du total : l'euro, ou le nom d'une monnaie de points.
+        # / Unit of the total: euro, or a points currency name.
+        symbole_de_la_devise = request.GET.get("devise") or CURRENCY_DATA["symbol"]
+
+        context = {
+            "total": total_a_payer,
+            "currency_data": {"symbol": symbole_de_la_devise},
+        }
+        return render(request, "laboutik/partial/hx_read_nfc.html", context)
 
     # ----------------------------------------------------------------------- #
     #  Paiement complémentaire NFC (espèces, CB, ou 2ème carte)                #
@@ -12656,27 +12845,7 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # 4. Adhésions actives (si user connu)
         # 4. Active memberships (if user known)
-        adhesions = []
-        if carte.user:
-            # CANCELED n'est PAS exclu ici : une adhesion resiliee court
-            # jusqu'a sa deadline (l'adherent a paye sa periode), et c'est
-            # is_valid() qui tranche. L'exclure au niveau SQL priverait
-            # l'adherent de son adhesion des la resiliation.
-            # ADMIN_CANCELED reste exclu : annulation administrative, effet
-            # immediat, avoir possible.
-            # / CANCELED is NOT excluded here: a cancelled membership runs
-            # until its deadline and is_valid() decides. ADMIN_CANCELED stays
-            # excluded: admin cancellation is immediate.
-            toutes_adhesions = list(
-                Membership.objects.filter(
-                    user=carte.user,
-                )
-                .exclude(
-                    status=Membership.ADMIN_CANCELED,
-                )
-                .select_related("price__product")
-            )
-            adhesions = [m for m in toutes_adhesions if m.is_valid()]
+        adhesions = _adhesions_actives_de_la_carte(carte)
 
         # 5. Couleur de fond selon le type de carte
         # 5. Background color based on card type
@@ -12859,6 +13028,14 @@ class PaiementViewSet(viewsets.ViewSet):
         tag_id_cm = request.POST.get("tag_id_cm", "").strip().upper()
         uuid_pv = request.POST.get("uuid_pv", "")
 
+        # Choix deja fait dans la popup retour carte (hx_card_feedback.html) :
+        # « cloturer » (carte reinitialisee) ou « vider » (le client garde sa carte).
+        # Toute autre valeur, ou rien (tuile « Vider carte ») : on propose les deux choix.
+        # / Choice made in the card feedback popup, otherwise both choices are offered.
+        action_carte = request.POST.get("action_carte", "").strip()
+        if action_carte not in ("cloturer", "vider"):
+            action_carte = ""
+
         # Protection self-refund.
         if tag_id and tag_id == tag_id_cm:
             return _render_erreur_toast(
@@ -12952,6 +13129,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "tag_id": tag_id,
             "tag_id_cm": tag_id_cm,
             "uuid_pv": uuid_pv,
+            "action_carte": action_carte,
         }
         return render(
             request,
@@ -12996,6 +13174,15 @@ class PaiementViewSet(viewsets.ViewSet):
         tag_id_cm = serializer.validated_data["tag_id_cm"]
         uuid_pv = serializer.validated_data["uuid_pv"]
         vider_carte_flag = serializer.validated_data["vider_carte"]
+        action_carte = serializer.validated_data["action_carte"]
+
+        # Quand le choix vient de la popup retour carte, c'est lui qui decide :
+        # « cloturer » reinitialise la carte, « vider » la laisse au client.
+        # / A choice from the card popup decides: "cloturer" resets, "vider" keeps.
+        if action_carte == "cloturer":
+            vider_carte_flag = True
+        elif action_carte == "vider":
+            vider_carte_flag = False
 
         # Protection self-refund (meme check qu'en preview).
         # / Self-refund protection (same check as preview).
@@ -13175,6 +13362,62 @@ class PaiementViewSet(viewsets.ViewSet):
                 )
             )
 
+        # Numero imprime sur la carte, en deux blocs de 4 : « 1234 ABCD ».
+        # / Number printed on the card, in two blocks of 4.
+        numero_carte = f"{carte_client.number[:4]} {carte_client.number[4:]}"
+
+        # Nouveau solde (écran final A « vider », la carte reste au client) : ce qui
+        # reste RÉELLEMENT sur la carte après le vidage, une ligne par monnaie et par
+        # Fedow. Deux monnaies différentes ne sont jamais additionnées.
+        # - Fedow local : les jetons positifs du portefeuille de la carte, relus en base.
+        #   On ne crée pas de portefeuille : une carte sans portefeuille n'a aucun jeton.
+        # - Ancien Fedow : la carte est relue sur le serveur, APRÈS le vidage. S'il ne
+        #   répond pas, aucun chiffre n'est affiché : l'écran dit qu'il ne répond pas.
+        # Inutile après une clôture (la carte n'a plus de portefeuille) et sur l'écran
+        # B (tuile « Vider carte ») : il n'affiche pas de nouveau solde.
+        # / New balance (final screen A "vider"): what REALLY remains on the card, one
+        # line per currency and per Fedow. Old Fedow unreachable: no figure shown.
+        lignes_du_nouveau_solde_fedow_local = []
+        lignes_du_nouveau_solde_ancien_fedow = []
+        nouveau_solde_ancien_fedow_injoignable = False
+        if action_carte == "vider":
+            portefeuille_apres_le_vidage = None
+            if carte_client.user is not None and carte_client.user.wallet is not None:
+                portefeuille_apres_le_vidage = carte_client.user.wallet
+            elif carte_client.wallet_ephemere is not None:
+                portefeuille_apres_le_vidage = carte_client.wallet_ephemere
+            if portefeuille_apres_le_vidage is not None:
+                jetons_restants = (
+                    WalletService.obtenir_tous_les_soldes(portefeuille_apres_le_vidage)
+                    .filter(value__gt=0)
+                    .order_by("asset__category", "asset__name")
+                )
+                for jeton_restant in jetons_restants:
+                    lignes_du_nouveau_solde_fedow_local.append(
+                        _ligne_de_vidage(
+                            jeton_restant.asset.name,
+                            jeton_restant.value,
+                            jeton_restant.asset.category,
+                            jeton_restant.asset.currency_code,
+                        )
+                    )
+
+            soldes_restants_sur_l_ancien_fedow = (
+                _lire_les_soldes_restants_sur_l_ancien_fedow(carte_client)
+            )
+            if soldes_restants_sur_l_ancien_fedow.statut == "injoignable":
+                nouveau_solde_ancien_fedow_injoignable = True
+            lignes_du_nouveau_solde_ancien_fedow = soldes_restants_sur_l_ancien_fedow.lignes
+
+        # « Carte vide » : rien sur le Fedow local ET rien sur l'ancien Fedow, qui a
+        # répondu. Un ancien Fedow muet ne permet pas de le dire.
+        # / "Empty card": nothing on either Fedow, and the old Fedow answered.
+        nouveau_solde_carte_vide = (
+            not lignes_du_nouveau_solde_fedow_local
+            and not lignes_du_nouveau_solde_ancien_fedow
+            and not nouveau_solde_ancien_fedow_injoignable
+        )
+
         contexte = {
             # Argent à rendre au client : les deux Fedow.
             # / Money to hand back: both Fedow servers.
@@ -13192,6 +13435,17 @@ class PaiementViewSet(viewsets.ViewSet):
             "lignes_fedow_local": lignes_fedow_local,
             "lignes_ancien_fedow": lignes_ancien_fedow,
             "transaction_uuids_ancien_fedow": uuids_des_transactions_de_l_ancien_fedow,
+            # L'écran final A (choix fait dans la popup retour carte) : le choix, le
+            # numéro imprimé sur la carte, le nouveau solde réel par monnaie et par
+            # Fedow (hx_vider_carte_success.html, partie A « vider »).
+            # / Final screen A: the choice, the printed number, the real new balance
+            # per currency and per Fedow.
+            "action_carte": action_carte,
+            "numero_carte": numero_carte,
+            "lignes_du_nouveau_solde_fedow_local": lignes_du_nouveau_solde_fedow_local,
+            "lignes_du_nouveau_solde_ancien_fedow": lignes_du_nouveau_solde_ancien_fedow,
+            "nouveau_solde_ancien_fedow_injoignable": nouveau_solde_ancien_fedow_injoignable,
+            "nouveau_solde_carte_vide": nouveau_solde_carte_vide,
         }
         return render(
             request,
@@ -13853,7 +14107,7 @@ class CommandeViewSet(viewsets.ViewSet):
 
             try:
                 prix = Price.objects.get(
-                    uuid=article_data["price_uuid"], product=produit
+                    uuid=article_data["price_uuid"], product=produit, archived=False
                 )
             except Price.DoesNotExist:
                 logger.warning(
@@ -13870,6 +14124,26 @@ class CommandeViewSet(viewsets.ViewSet):
                     "msg_content": _(
                         "Un tarif en points ou en temps ne passe pas par une "
                         "commande de table : encaissez-le au comptoir."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
+            # Un retour de consigne rend de l'argent au client : il se regle seul,
+            # au comptoir. Une commande de table ne sait pas le payer
+            # (payer_commande le refuse) : il ne doit donc jamais y entrer, sinon
+            # il part en preparation et la commande reste impayable.
+            # / A deposit return is settled at the counter, never via an order.
+            if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Un retour de consigne se règle au comptoir, pas depuis une commande."
                     ),
                     "selector_bt_retour": "#messages",
                 }
@@ -14048,6 +14322,29 @@ class CommandeViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
+        # Un retour de consigne se regle seul, au comptoir : une commande de table
+        # ne sait pas le payer (payer_commande le refuse). Refus AVANT toute ecriture,
+        # sinon il part en preparation et la commande reste impayable.
+        # / A deposit return never enters an order: refused before any write.
+        uuids_des_produits_demandes = []
+        for article_data in articles_data:
+            uuids_des_produits_demandes.append(article_data["product_uuid"])
+        un_produit_est_un_retour_de_consigne = Product.objects.filter(
+            uuid__in=uuids_des_produits_demandes,
+            methode_caisse=Product.RETOUR_CONSIGNE,
+        ).exists()
+        if un_produit_est_un_retour_de_consigne:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Un retour de consigne se règle au comptoir, pas depuis une commande."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         # Un tarif au poids, au volume ou à prix libre a besoin d'une saisie (le poids,
         # le montant) qu'une commande de table ne porte pas : refus AVANT toute
         # écriture, comme à l'ouverture de la commande.
@@ -14076,7 +14373,7 @@ class CommandeViewSet(viewsets.ViewSet):
                 try:
                     produit = Product.objects.get(uuid=article_data["product_uuid"])
                     prix = Price.objects.get(
-                        uuid=article_data["price_uuid"], product=produit
+                        uuid=article_data["price_uuid"], product=produit, archived=False
                     )
                 except (Product.DoesNotExist, Price.DoesNotExist):
                     continue

@@ -684,10 +684,11 @@ def test_adhesion_en_ligne_payee(lieu, django_capture_on_commit_callbacks):
     P2, adhésion seule : adhésion à 15 € prise sans panier, puis payée.
     Après le retour de Stripe : paiement et ligne validés, adhésion `ONCE` avec échéance,
     montant de la cotisation = prix du tarif vendu (15,00 €).
-    Tâches : la facture par mail tout de suite ; puis, après la validation en base, le
-    webhook d'adhésion, la récompense monnaie et l'envoi à l'ancien LaBoutik.
+    Tâches : toutes après la validation en base (issue #117), dans l'ordre où elles
+    sont enregistrées : le webhook d'adhésion, la facture par mail, la récompense
+    monnaie et l'envoi à l'ancien LaBoutik.
     / P2 membership alone: paid, ONCE with a deadline, contribution = sold price.
-    Invoice mail at once; then membership webhook, reward and LaBoutik sale on commit.
+    All tasks on commit (#117): membership webhook, invoice mail, reward, LaBoutik sale.
     """
     acheteur = creer_utilisateur()
     client = client_connecte(acheteur)
@@ -709,9 +710,14 @@ def test_adhesion_en_ligne_payee(lieu, django_capture_on_commit_callbacks):
         "lignes": [LigneArticle.VALID],
         "adhesion": Membership.ONCE,
         "adhesion_a_une_echeance": True,
+        # Toutes les tâches partent après la validation en base (issue #117), dans
+        # l'ordre où elles sont enregistrées : le webhook d'adhésion (demandé par
+        # l'enregistrement de l'échéance) passe donc avant la facture.
+        # / Every task goes on commit (#117), in registration order: the webhook
+        # (requested by the deadline save) comes before the invoice.
         "taches": [
-            "send_membership_invoice_to_email",
             "webhook_membership",
+            "send_membership_invoice_to_email",
             "refill_from_lespass_to_user_wallet_from_price_solded",
             "send_sale_to_laboutik",
         ],
@@ -983,7 +989,7 @@ def test_renouvellement_abonnement_iteration_et_statut_auto(
     Un nouveau paiement (source « facture ») et une nouvelle ligne sont créés, puis validés
     (`V`). L'adhésion reste « abonnement automatique » (`AUTO`), avec une échéance ; son
     compteur d'échéances passe de 1 à 2 ; la dernière facture connue devient la nouvelle.
-    Tâches : comme une adhésion en ligne (facture, webhook, récompense, LaBoutik), mais
+    Tâches : comme une adhésion en ligne (webhook, facture, récompense, LaBoutik), mais
     avec DEUX webhooks d'adhésion.
     / P15: renewal invoice paid. New payment and line VALID, membership AUTO, iteration
     1 -> 2, last invoice updated; online-membership tasks, with TWO membership webhooks.
@@ -1060,11 +1066,14 @@ def test_renouvellement_abonnement_iteration_et_statut_auto(
         # Deux webhooks d'adhésion : l'adhésion a déjà une échéance, et elle est
         # enregistrée deux fois (mise à jour après paiement, puis nouvelle échéance).
         # Chaque enregistrement d'une adhésion avec échéance en demande un.
+        # Toutes les tâches partent après la validation en base (issue #117), dans
+        # l'ordre où elles sont enregistrées : les deux webhooks passent avant la facture.
         # / Two membership webhooks: saved twice while it already has a deadline.
+        # Every task goes on commit (#117), in registration order: webhooks first.
         "taches": [
+            "webhook_membership",
+            "webhook_membership",
             "send_membership_invoice_to_email",
-            "webhook_membership",
-            "webhook_membership",
             "refill_from_lespass_to_user_wallet_from_price_solded",
             "send_sale_to_laboutik",
         ],

@@ -563,7 +563,7 @@ def validate_new_booking(resource,
 
     # Un tarif dépublié ou un produit archivé n'est plus en vente.
     # / An unpublished price or an archived product is no longer for sale.
-    if not price.publish:
+    if not price.publish or price.archived:
         return False, str(_("This rate is not available.")), None
     if price.product.archive:
         return False, str(_("This product is archived.")), None

@@ -115,6 +115,23 @@ deux pastilles reliées par une flèche. Le titre prend toute la largeur dessous
                 {% endif %}
             {% endif %}
         </div>
+        <div class="event-card__footer">
+            {# Affiche un lien admin rapide vers la fiche de l'événement, pour les admins du lieu et les super_users #}
+            {# Icône crayon en SVG, même trait que les icônes de la barre de navigation. #}
+            {# Le texte « Modifier l'événement » est donné par aria-label (lecteur d'écran) et title (survol). #}
+            {# / Quick admin link to the event form: pencil SVG icon, labelled by aria-label and title. #}
+            {% if profile.admin_this_tenant or request.user.is_superuser %}
+                <div class="event-admin-buttons">
+                    <a class="icon-btn"
+                       href="{% url 'staff_admin:BaseBillet_event_change' object_id=event.pk %}"
+                       title="{% translate "Modifier l'événement" %}"
+                       aria-label="{% translate "Modifier l'événement" %}"
+                       data-testid="evenement-admin-modifier">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/><path d="M14.5 5.5l3 3"/></svg>
+                    </a>
+                </div>
+            {% endif %}
+        </div>
     </div>
 </article>
 {% endwith %}

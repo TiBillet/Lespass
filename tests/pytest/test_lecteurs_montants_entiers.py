@@ -2640,6 +2640,27 @@ def envoyer_a_l_ancien_laboutik(tache, pk_de_la_ligne):
     return messages_postes
 
 
+def envoyer_d_abord_la_vente_d_origine(ligne_du_remboursement):
+    """
+    Envoie à l'ancien LaBoutik la vente d'origine d'un remboursement, comme en vrai
+    (`send_sale_to_laboutik`, réseau simulé) : elle est alors marquée envoyée.
+    / Sends the refund's original sale to the old LaBoutik first, as in real life.
+
+    `send_refund_to_laboutik` n'envoie un remboursement que si sa vente d'origine est
+    déjà connue de LaBoutik (`sended_to_laboutik`) ; sinon il relance la vente et se
+    replanifie (celery `Retry`).
+    / The refund task only sends once the original sale was sent; otherwise it retries.
+    """
+    ligne_de_la_vente_d_origine = ligne_du_remboursement.credit_note_for
+    assert ligne_de_la_vente_d_origine is not None
+    messages_de_la_vente = envoyer_a_l_ancien_laboutik(
+        send_sale_to_laboutik, ligne_de_la_vente_d_origine.pk
+    )
+    assert len(messages_de_la_vente) == 1
+    ligne_de_la_vente_d_origine.refresh_from_db()
+    assert ligne_de_la_vente_d_origine.sended_to_laboutik is True
+
+
 def date_telle_que_l_api_l_ecrit(moment):
     """
     Une date comme l'API l'écrit : ISO 8601 dans le fuseau courant, « Z » pour UTC.
@@ -2859,6 +2880,9 @@ def test_envoi_remboursement_ancien_laboutik_charge_utile_inchangee(
     )
     assert len(lignes_a_envoyer) == 1
     ligne_du_remboursement = lignes_a_envoyer[0]
+    # La vente d'origine est déjà dans l'ancien LaBoutik, comme en vrai.
+    # / The original sale already reached the old LaBoutik, as in real life.
+    envoyer_d_abord_la_vente_d_origine(ligne_du_remboursement)
 
     messages_postes = envoyer_a_l_ancien_laboutik(
         send_refund_to_laboutik, ligne_du_remboursement.pk
@@ -3329,6 +3353,9 @@ def test_envoi_remboursement_ancien_laboutik_ne_part_qu_une_fois(
     ligne_du_remboursement = lignes_envoyees_par_la_tache(
         lieu.taches_demandees, "send_refund_to_laboutik"
     )[0]
+    # La vente d'origine est déjà dans l'ancien LaBoutik, comme en vrai.
+    # / The original sale already reached the old LaBoutik, as in real life.
+    envoyer_d_abord_la_vente_d_origine(ligne_du_remboursement)
 
     premiers_messages = envoyer_a_l_ancien_laboutik(
         send_refund_to_laboutik, ligne_du_remboursement.pk

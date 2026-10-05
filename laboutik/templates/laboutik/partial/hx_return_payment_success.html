@@ -15,6 +15,7 @@ ORDRE DE LECTURE, de haut en bas :
 2. Montant a rendre ou a rembourser, en tres gros — seulement s'il y en a un
 3. Total et moyen de paiement (lignes .card-confirm-row)
 4. Carte(s) cashless : avant / montant paye / apres, un cadre par carte
+   puis les adhesions actives du titulaire (si le reglage laboutik l'active)
 5. Alertes (stock negatif, carte non rattachee), teinte warn
 6. Imprimer (secondaire) + Nouvelle vente (principal)
 
@@ -116,6 +117,31 @@ cliquent '[data-testid="paiement-succes"] #bt-retour-layer1'.
               {% endfor %}
             </div>
           {% endif %}
+
+          {% comment %}
+          ADHESIONS ACTIVES du titulaire de la carte qui a paye.
+          adhesions_actives vient de views.py:_adhesions_a_afficher_apres_paiement().
+          La liste est vide si le reglage « Afficher les adhesions au retour d'un
+          paiement » est desactive (admin laboutik) : rien ne s'affiche alors.
+          Meme rendu que la popup « Verifier une carte » (hx_card_feedback.html).
+          / Card holder's active memberships, empty when the laboutik setting is off.
+          {% endcomment %}
+          {% if adhesions_actives %}
+            <div class="card-adhesions" data-testid="paiement-succes-adhesions">
+              <span class="card-section-lbl">{% translate "Adhesions actives" %}</span>
+              <ul>
+                {% for adhesion in adhesions_actives %}
+                  <li data-testid="paiement-succes-adhesion-{{ forloop.counter }}">
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.6 5.4 9.1 16.9l-5.7-5.7 2.3-2.3 3.4 3.4 9.2-9.2z"/></svg>
+                    <span>{{ adhesion.price.product.name }}</span>
+                    {% if adhesion.deadline %}
+                      <small>{% translate "Expire" %} {{ adhesion.deadline|date:"d/m/Y" }}</small>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
         {% endif %}
 
         {% comment %}
@@ -176,7 +202,7 @@ cliquent '[data-testid="paiement-succes"] #bt-retour-layer1'.
                   class="card-valider"
                   onclick="hideAndEmptyElement('#messages');manageReset()"
                   data-testid="paiement-nouvelle-vente">
-            {% translate "Nouvelle vente" %}
+            {% translate "OK" %}
           </button>
         </div>
         <div id="print-feedback" aria-live="polite"></div>

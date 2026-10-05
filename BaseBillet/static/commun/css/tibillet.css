@@ -180,3 +180,66 @@ figure[data-trix-attachment] img {
         --bs-offcanvas-width: 800px;
     }
 }
+
+/* ==========================================================================
+   LIBELLÉS FLOTTANTS LONGS — .form-floating
+   / Long floating labels.
+
+   Le problème : Bootstrap garde un libellé flottant sur UNE seule ligne
+   (white-space: nowrap) et en position absolue. Un libellé long (ex : une
+   question d'un champ de formulaire personnalisé) sort du champ et est coupé.
+
+   La correction, en CSS seulement :
+   1. Le conteneur devient une grille. Le champ et son libellé sont posés dans
+      la MÊME case, l'un sur l'autre.
+   2. Le libellé n'est plus en position absolue : il prend de la place, et il
+      peut passer à la ligne. La case grandit donc avec lui, et le champ avec.
+   3. Quand le champ a le focus ou une valeur, Bootstrap réduit le libellé et
+      le remonte. On ne montre alors que sa première ligne (clip-path), pour
+      qu'il ne passe pas sur le texte saisi. clip-path ne change pas la taille
+      de la case : le champ ne saute pas.
+
+   Un libellé court garde l'aspect d'avant. Le champ peut gagner 1 ou 2 pixels
+   de haut : sa hauteur suit maintenant la hauteur de ligne du libellé.
+   / Grid with the field and its label in the same cell: the label wraps and
+   the field grows with it. Once shrunk (focus or value), only the first line
+   of the label shows, without changing the field height.
+   ========================================================================== */
+.form-floating {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.form-floating > .form-control,
+.form-floating > .form-control-plaintext,
+.form-floating > .form-select,
+.form-floating > label {
+    grid-area: 1 / 1;
+}
+
+/* Le champ remplit la case. 3.5rem + bordures = la hauteur d'origine Bootstrap.
+   / The field fills the cell. 3.5rem + borders = Bootstrap's original height. */
+.form-floating > .form-control,
+.form-floating > .form-control-plaintext,
+.form-floating > .form-select {
+    height: auto;
+    min-height: calc(3.5rem + calc(var(--bs-border-width) * 2));
+}
+
+.form-floating > label {
+    position: relative;
+    height: auto;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+/* Libellé réduit : seule la première ligne reste visible.
+   1rem = la marge haute du libellé, 1.5em = une ligne de texte.
+   / Shrunk label: only the first line stays visible. */
+.form-floating > .form-control:focus ~ label,
+.form-floating > .form-control:not(:placeholder-shown) ~ label,
+.form-floating > .form-control-plaintext ~ label,
+.form-floating > .form-select ~ label {
+    clip-path: inset(0 0 calc(100% - 1rem - 1.5em) 0);
+}
