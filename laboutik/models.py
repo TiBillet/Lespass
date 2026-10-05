@@ -43,7 +43,7 @@ class LaboutikConfiguration(SingletonModel):
     ]
     taille_police_articles = models.SmallIntegerField(
         choices=TAILLE_POLICE_CHOICES,
-        default=22,
+        default=18,
         verbose_name=_("Article font size"),
         help_text=_(
             "Taille de la police des noms d'articles sur l'interface caisse. "

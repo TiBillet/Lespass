@@ -245,6 +245,80 @@ def test_vider_carte_preview_tag_identique_cm_rejette(carte_caissier_vc):
     assert "carte primaire" in contenu.lower() or "primary card" in contenu.lower()
 
 
+def _poster_preview(carte_client, carte_caissier, action_carte=None):
+    """
+    POST vers vider_carte_preview, avec ou sans choix deja fait.
+    / POST to vider_carte_preview, with or without a choice already made.
+    """
+    client, user = _login_as_admin()
+    donnees = {
+        "tag_id": carte_client.tag_id,
+        "tag_id_cm": carte_caissier.tag_id,
+        "uuid_pv": str(uuid_module.uuid4()),
+    }
+    if action_carte is not None:
+        donnees["action_carte"] = action_carte
+    response = client.post("/laboutik/paiement/vider_carte/preview/", data=donnees)
+    assert response.status_code == 200
+    return response.content.decode()
+
+
+def test_vider_carte_preview_action_cloturer_affiche_un_seul_bouton_reinitialiser(
+    carte_client_vc_avec_tlf, carte_caissier_vc
+):
+    """
+    action_carte=cloturer (popup retour carte) : un seul bouton, vider_carte=true.
+    / action_carte=cloturer: a single button posting vider_carte=true.
+    """
+    contenu = _poster_preview(carte_client_vc_avec_tlf, carte_caissier_vc, "cloturer")
+
+    assert "Vous vous apprêtez à clôturer cette carte." in contenu
+    assert "Cette action est irréversible" in contenu
+    assert 'data-testid="vider-carte-btn-annuler"' in contenu
+    # Annuler revient a la popup retour carte / Cancel goes back to the card popup
+    assert 'hx-post="/laboutik/paiement/retour_carte/"' in contenu
+    assert 'data-testid="vider-carte-btn-cloturer"' in contenu
+    assert 'name="vider_carte" value="true"' in contenu
+    assert 'name="action_carte" value="cloturer"' in contenu
+    assert 'value="false"' not in contenu
+    assert 'data-testid="vider-carte-btn-vider"' not in contenu
+
+
+def test_vider_carte_preview_action_vider_affiche_un_seul_bouton_garder_la_carte(
+    carte_client_vc_avec_tlf, carte_caissier_vc
+):
+    """
+    action_carte=vider (popup retour carte) : un seul bouton, vider_carte=false.
+    / action_carte=vider: a single button posting vider_carte=false.
+    """
+    contenu = _poster_preview(carte_client_vc_avec_tlf, carte_caissier_vc, "vider")
+
+    assert "Vous vous apprêtez à vider cette carte." in contenu
+    assert 'data-testid="vider-carte-btn-annuler"' in contenu
+    assert 'data-testid="vider-carte-btn-vider"' in contenu
+    assert 'name="vider_carte" value="false"' in contenu
+    assert 'name="action_carte" value="vider"' in contenu
+    assert 'value="true"' not in contenu
+    assert 'data-testid="vider-carte-btn-cloturer"' not in contenu
+
+
+def test_vider_carte_preview_action_inconnue_garde_le_choix_habituel(
+    carte_client_vc_avec_tlf, carte_caissier_vc
+):
+    """
+    Sans action_carte, ou avec une valeur inconnue (tuile « Vider carte ») :
+    le bouton habituel « Rembourser et réinitialiser » s'affiche.
+    / Without (or with an unknown) action_carte: the usual button is shown.
+    """
+    for action_carte in (None, "nimportequoi"):
+        contenu = _poster_preview(
+            carte_client_vc_avec_tlf, carte_caissier_vc, action_carte
+        )
+        assert 'data-testid="vider-carte-btn-confirm"' in contenu
+        assert 'data-testid="vider-carte-btn-cloturer"' not in contenu
+        assert 'data-testid="vider-carte-btn-vider"' not in contenu
+
+
 from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
 
 
@@ -332,6 +406,106 @@ def test_vider_carte_execute_avec_vv(
     carte_client_vc_avec_tlf.refresh_from_db()
     assert carte_client_vc_avec_tlf.user is None
     assert carte_client_vc_avec_tlf.wallet_ephemere is None
+
+
+def test_vider_carte_action_cloturer_reinitialise_et_affiche_l_ecran_cloture(
+    carte_client_vc_avec_tlf,
+    carte_caissier_vc,
+    pv_cashless_vc,
+):
+    """
+    action_carte=cloturer : la carte est reinitialisee, meme si le POST porte
+    vider_carte=false. L'ecran final annonce la cloture.
+    / action_carte=cloturer resets the card, whatever vider_carte says.
+    """
+    client, user = _login_as_admin()
+    response = client.post(
+        "/laboutik/paiement/vider_carte/",
+        data={
+            "tag_id": carte_client_vc_avec_tlf.tag_id,
+            "tag_id_cm": carte_caissier_vc.tag_id,
+            "uuid_pv": str(pv_cashless_vc.uuid),
+            "vider_carte": "false",
+            "action_carte": "cloturer",
+        },
+    )
+    assert response.status_code == 200
+    contenu = response.content.decode()
+
+    carte_client_vc_avec_tlf.refresh_from_db()
+    assert carte_client_vc_avec_tlf.wallet_ephemere is None
+
+    assert "Carte n° VCT0 0002 clôturée avec succès" in contenu
+    assert "Montant à rembourser au client" in contenu
+    assert "10,00" in contenu
+    assert 'data-testid="vider-carte-success-donnees"' in contenu
+    assert "Rangez la carte avec les cartes vierges." in contenu
+    assert 'data-testid="vider-carte-btn-retour-caisse"' in contenu
+    assert 'data-testid="vider-carte-btn-imprimer"' not in contenu
+
+
+def test_vider_carte_action_vider_garde_la_carte_et_affiche_le_nouveau_solde(
+    carte_client_vc_avec_tlf,
+    carte_caissier_vc,
+    pv_cashless_vc,
+):
+    """
+    action_carte=vider : la carte garde son wallet, meme si le POST porte
+    vider_carte=true. L'ecran final affiche le nouveau solde (0,00 €).
+    / action_carte=vider keeps the card wallet; final screen shows new balance.
+    """
+    wallet_avant = carte_client_vc_avec_tlf.wallet_ephemere
+    client, user = _login_as_admin()
+    response = client.post(
+        "/laboutik/paiement/vider_carte/",
+        data={
+            "tag_id": carte_client_vc_avec_tlf.tag_id,
+            "tag_id_cm": carte_caissier_vc.tag_id,
+            "uuid_pv": str(pv_cashless_vc.uuid),
+            "vider_carte": "true",
+            "action_carte": "vider",
+        },
+    )
+    assert response.status_code == 200
+    contenu = response.content.decode()
+
+    carte_client_vc_avec_tlf.refresh_from_db()
+    assert carte_client_vc_avec_tlf.wallet_ephemere == wallet_avant
+
+    assert "Carte n° VCT0 0002 vidée avec succès" in contenu
+    assert "Montant remboursé au client" in contenu
+    assert "10,00" in contenu
+    assert 'data-testid="vider-carte-success-nouveau-solde"' in contenu
+    assert "0,00" in contenu
+    assert "Rendez sa carte au client" in contenu
+    assert 'data-testid="vider-carte-btn-retour-caisse"' in contenu
+
+
+def test_vider_carte_sans_action_garde_l_ecran_habituel(
+    carte_client_vc_avec_tlf,
+    carte_caissier_vc,
+    pv_cashless_vc,
+):
+    """
+    Sans action_carte (tuile « Vider carte ») : ecran habituel avec Imprimer + Terminé.
+    / Without action_carte: the usual screen with Print + Done.
+    """
+    client, user = _login_as_admin()
+    response = client.post(
+        "/laboutik/paiement/vider_carte/",
+        data={
+            "tag_id": carte_client_vc_avec_tlf.tag_id,
+            "tag_id_cm": carte_caissier_vc.tag_id,
+            "uuid_pv": str(pv_cashless_vc.uuid),
+            "vider_carte": "false",
+        },
+    )
+    assert response.status_code == 200
+    contenu = response.content.decode()
+
+    assert 'data-testid="vider-carte-btn-imprimer"' in contenu
+    assert 'data-testid="vider-carte-btn-termine"' in contenu
+    assert 'data-testid="vider-carte-btn-retour-caisse"' not in contenu
 
 
 def test_vider_carte_carte_primaire_pas_liee_pv_rejette(

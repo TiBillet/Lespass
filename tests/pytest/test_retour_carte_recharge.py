@@ -401,6 +401,39 @@ def test_retour_carte_inconnue_propose_de_scanner_une_autre_carte(tenant_lespass
     assert 'data-testid="retour-carte-recharge"' not in contenu
 
 
+def test_retour_carte_connue_affiche_les_boutons_cloturer_et_vider(
+    tenant_lespass, carte_client
+):
+    """
+    Carte connue : « Autres actions sur la carte » contient deux boutons.
+    Chacun poste la carte scannee vers vider_carte_preview, avec son choix.
+    / Known card: "Other card actions" holds two buttons posting to
+    vider_carte_preview, each with its choice.
+    """
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.post(URL_RETOUR_CARTE, {"tag_id": carte_client.tag_id})
+    contenu = reponse.content.decode()
+
+    assert reponse.status_code == 200
+    assert 'data-testid="retour-carte-autres-actions"' in contenu
+    assert 'data-testid="retour-carte-btn-cloturer"' in contenu
+    assert 'data-testid="retour-carte-btn-vider"' in contenu
+    assert 'hx-post="/laboutik/paiement/vider_carte/preview/"' in contenu
+    assert (
+        f'"tag_id": "{carte_client.tag_id}", "action_carte": "cloturer"' in contenu
+    )
+    assert f'"tag_id": "{carte_client.tag_id}", "action_carte": "vider"' in contenu
+
+
+def test_retour_carte_inconnue_masque_les_autres_actions(tenant_lespass):
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.post(URL_RETOUR_CARTE, {"tag_id": "RCTXXXXX"})
+    contenu = reponse.content.decode()
+
+    assert 'data-testid="retour-carte-erreur"' in contenu
+    assert 'data-testid="retour-carte-autres-actions"' not in contenu
+
+
 # ---------------------------------------------------------------------------
 # 2. recharge_carte : les etapes
 # ---------------------------------------------------------------------------
