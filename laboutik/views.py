@@ -9372,11 +9372,42 @@ class PaiementViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="lire_nfc", url_name="lire_nfc")
     def lire_nfc(self, request):
         """
-        GET /laboutik/paiement/lire_nfc/
-        Affiche le partial d'attente de lecture NFC (pour paiement cashless).
-        Displays the NFC read waiting partial (for cashless payment).
+        GET /laboutik/paiement/lire_nfc/?total=12.5&devise=€
+        Affiche la popup « Approchez la carte » d'un paiement cashless, avec le total.
+        / Displays the "Tap the card" popup of a cashless payment, with the total.
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. Clic sur une tuile CASHLESS (_tuiles_paiement.html,
+           hx_display_type_payment.html, hx_funds_insufficient.html).
+        2. La tuile envoie le total et son unite dans l'URL.
+        3. Cette vue rend hx_read_nfc.html, qui affiche le total.
+        4. La lecture de la carte soumet #addition-form vers payer().
+
+        Le total sert seulement a l'affichage. payer() recalcule toujours le
+        montant depuis le panier : on ne fait jamais confiance a ce parametre.
+        Sans total (ou total illisible), la popup s'affiche sans montant.
+        / Display only: payer() always recomputes the amount from the cart.
         """
-        return render(request, "laboutik/partial/hx_read_nfc.html", {})
+        # Le parametre GET peut contenir une virgule (locale francaise).
+        # / The GET param may contain a comma (French locale).
+        total_brut = request.GET.get("total", "")
+        total_brut = total_brut.replace(",", ".")
+        try:
+            total_a_payer = float(total_brut)
+        except (ValueError, TypeError):
+            total_a_payer = None
+
+        # Unite du total : l'euro, ou le nom d'une monnaie de points.
+        # / Unit of the total: euro, or a points currency name.
+        symbole_de_la_devise = request.GET.get("devise") or CURRENCY_DATA["symbol"]
+
+        context = {
+            "total": total_a_payer,
+            "currency_data": {"symbol": symbole_de_la_devise},
+        }
+        return render(request, "laboutik/partial/hx_read_nfc.html", context)
 
     # ----------------------------------------------------------------------- #
     #  Paiement complémentaire NFC (espèces, CB, ou 2ème carte)                #

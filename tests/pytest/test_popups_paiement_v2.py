@@ -415,3 +415,54 @@ def test_attente_deuxieme_carte_utilise_la_popup_v2(tenant_lespass):
     assert 'data-testid="lire-nfc-complement"' in contenu
     assert 'class="card-modal"' in contenu
     assert 'data-testid="nfc-attente"' in contenu
+
+
+# ---------------------------------------------------------------------------
+# Attente de carte CASHLESS : le total est affiche
+# / CASHLESS card wait: the total is shown
+# ---------------------------------------------------------------------------
+
+URL_LIRE_NFC = "/laboutik/paiement/lire_nfc/"
+
+
+def test_attente_carte_cashless_affiche_le_total(tenant_lespass):
+    with tenant_context(tenant_lespass):
+        contenu = render_to_string(
+            "laboutik/partial/hx_read_nfc.html",
+            {"total": 12.5, "currency_data": {"symbol": "€"}},
+        )
+
+    assert 'data-testid="nfc-attente"' in contenu
+    assert 'data-testid="nfc-attente-total"' in contenu
+    assert "12,50 €" in contenu or "12.50 €" in contenu
+
+
+def test_attente_carte_cashless_sans_total_n_affiche_pas_de_montant(tenant_lespass):
+    with tenant_context(tenant_lespass):
+        contenu = render_to_string("laboutik/partial/hx_read_nfc.html", {"total": None})
+
+    assert 'data-testid="nfc-attente"' in contenu
+    assert 'data-testid="nfc-attente-total"' not in contenu
+
+
+def test_lire_nfc_lit_le_total_avec_virgule_et_la_devise(tenant_lespass):
+    # La tuile envoie le total avec une virgule (locale francaise)
+    # et l'unite d'un panier en points.
+    # / The tile sends a comma total and a points cart's unit.
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.get(URL_LIRE_NFC, {"total": "7,5", "devise": "Points fidélité"})
+    contenu = reponse.content.decode()
+
+    assert reponse.status_code == 200
+    assert 'data-testid="nfc-attente-total"' in contenu
+    assert "7,50 Points fidélité" in contenu
+
+
+def test_lire_nfc_sans_total_garde_la_popup_sans_montant(tenant_lespass):
+    client_http = _client_connecte_admin(tenant_lespass)
+    reponse = client_http.get(URL_LIRE_NFC)
+    contenu = reponse.content.decode()
+
+    assert reponse.status_code == 200
+    assert 'data-testid="nfc-attente"' in contenu
+    assert 'data-testid="nfc-attente-total"' not in contenu
