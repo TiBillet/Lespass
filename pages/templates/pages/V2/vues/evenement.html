@@ -143,9 +143,9 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
             <div class="event-date-and-admin">
                 <div class="eyebrow">
                     {% if event.end_datetime and event.end_datetime.date != event.datetime.date %}
-                        {% blocktrans with debut=event.datetime|date:"l j F" fin=event.end_datetime|date:"l j F" %}Du {{ debut }} au {{ fin }}{% endblocktrans %}
+                        {% blocktrans with debut=event.datetime|date:"l j F Y" fin=event.end_datetime|date:"l j F Y" %}Du {{ debut }} au {{ fin }}{% endblocktrans %}
                     {% else %}
-                        {{ event.datetime|date:'l j F'|capfirst }}
+                        {{ event.datetime|date:'l j F Y'|capfirst }}
                     {% endif %}
                 </div>
                 {# Affiche un lien admin rapide vers la fiche de l'événement, pour les admins du lieu et les super_users #}
@@ -207,6 +207,10 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
                 {% elif event_max_per_user_reached %}
                     <span class="badge badge--dark event-hero__etat" role="status">
                         {% translate "You have reached the maximum number of tickets for this event." %}
+                    </span>
+                {% elif event.est_termine %}
+                    <span class="badge badge--dark event-hero__etat" role="status">
+                        {% translate "Cette évènement est passé." %}
                     </span>
                 {% elif event.products.count %}
                     {% include 'pages/V2/partials/reservation_declencheur.html' %}

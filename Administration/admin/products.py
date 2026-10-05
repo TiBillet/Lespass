@@ -1002,6 +1002,8 @@ class ProductAdminCustomForm(ModelForm):
             (Product.BILLET, _("Ticket booking")),
             (Product.FREERES, _("Free booking")),
             (Product.ADHESION, _("Subscription or membership")),
+            (Product.RESOURCE, _("Ressource")),
+            (Product.FUT, _("Un fut")),
         ],
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
         label=_("Product type"),
