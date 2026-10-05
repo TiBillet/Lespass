@@ -87,16 +87,24 @@ def test_enregistrer_sans_cocher_ne_touche_pas_les_autres(tenant):
     with tenant_context(tenant):
         PostalAddress.objects.filter(name__startswith="TEST is_main").delete()
 
-        principale = PostalAddress.objects.create(
+        admin = PostalAddressAdmin(PostalAddress, staff_admin_site)
+
+        # La principale est enregistree par l'admin, comme en vrai : save_model
+        # decoche les autres adresses principales deja en base (ex : celle des
+        # donnees de demo). objects.create() ne le ferait pas : la regle
+        # « une seule principale » n'existe que dans l'admin.
+        # / The main address goes through the admin, which unticks any existing main one.
+        principale = PostalAddress(
             name="TEST is_main principale", street_address="1",
             address_locality="Ville", is_main=True,
         )
+        admin.save_model(_FakeRequest(), principale, form=None, change=False)
+
         secondaire = PostalAddress.objects.create(
             name="TEST is_main secondaire", street_address="2",
             address_locality="Ville", is_main=False,
         )
 
-        admin = PostalAddressAdmin(PostalAddress, staff_admin_site)
         admin.save_model(_FakeRequest(), secondaire, form=None, change=True)
 
         principale.refresh_from_db()

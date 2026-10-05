@@ -1186,8 +1186,9 @@ html.dark .tb-beta-texte {
   border-radius: 8px;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--color-base-600);
   white-space: nowrap;
+  color: #fff;
+  background-color: color-mix(in oklab, var(--color-primary-600) 80%, transparent);
 }
 
 .tb-carte-ouvrir:hover {

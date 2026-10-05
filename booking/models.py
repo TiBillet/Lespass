@@ -57,11 +57,18 @@ class Resource(models.Model):
         verbose_name=_('Group'),
     )
 
+    # FK vers le proxy ResourceProduct : les formulaires ne proposent que des
+    # produits ressource (manager ResourceProductManager). Meme table, meme colonne.
+    # limit_choices_to : full_clean() controle aussi la categorie, car
+    # ForeignKey.validate() passe par le manager de base, qui ne filtre pas.
+    # / FK to the ResourceProduct proxy: forms only offer resource products.
+    # limit_choices_to makes full_clean() check the category too.
     product = models.ForeignKey(
-        Product,
+        ResourceProduct,
         on_delete=models.PROTECT,
         related_name='resources',
         verbose_name=_('Produit'),
+        limit_choices_to={'categorie_article': Product.RESOURCE},
     )
 
     calendar = models.ForeignKey(
@@ -116,7 +123,7 @@ class Resource(models.Model):
         verbose_name_plural = _('Resources')
 
     def published_prices(self):
-        return self.product.prices.filter(publish=True)
+        return self.product.prices.filter(publish=True, archived=False)
 
     def __str__(self):
         return self.product.name

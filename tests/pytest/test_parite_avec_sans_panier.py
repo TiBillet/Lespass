@@ -866,7 +866,7 @@ def adhesion_de(acheteur, adhesion):
 
 
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
-def test_p8_adhesion_payante(lieu, parcours):
+def test_p8_adhesion_payante(lieu, parcours, django_capture_on_commit_callbacks):
     """Adhésion payante : après le retour de Stripe, adhésion active avec échéance, ligne
     validée, paiement validé, mail demandé, adhérent rattaché au lieu.
     / Paid membership: active with a deadline, line and payment valid, mail requested."""
@@ -879,7 +879,10 @@ def test_p8_adhesion_payante(lieu, parcours):
     adherer(parcours, client, acheteur, adhesion.tarif)
     adhesion_creee = adhesion_de(acheteur, adhesion)
     paiement = paiement_des_lignes(membership=adhesion_creee)
-    revenir_de_stripe(client, paiement, adhesion_directe=(parcours == SANS_PANIER))
+    # Les tâches Celery de l'adhésion partent après le COMMIT (issue #117) : on joue ce COMMIT.
+    # / Membership Celery tasks are dispatched after COMMIT (issue #117): run it.
+    with django_capture_on_commit_callbacks(execute=True):
+        revenir_de_stripe(client, paiement, adhesion_directe=(parcours == SANS_PANIER))
 
     adhesion_creee.refresh_from_db()
     paiement.refresh_from_db()
@@ -895,7 +898,7 @@ def test_p8_adhesion_payante(lieu, parcours):
 
 
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
-def test_p9_adhesion_gratuite(lieu, parcours):
+def test_p9_adhesion_gratuite(lieu, parcours, django_capture_on_commit_callbacks):
     """Adhésion à 0 € : active tout de suite, sans Stripe, mail demandé, adhérent rattaché.
     / Free membership: active at once, no Stripe, mail requested, member linked to the venue."""
     from BaseBillet.models import LigneArticle, Membership, PaymentMethod
@@ -904,7 +907,10 @@ def test_p9_adhesion_gratuite(lieu, parcours):
     client = client_connecte(acheteur)
     adhesion = creer_adhesion(prix="0.00")
 
-    adherer(parcours, client, acheteur, adhesion.tarif)
+    # Les tâches Celery de l'adhésion partent après le COMMIT (issue #117) : on joue ce COMMIT.
+    # / Membership Celery tasks are dispatched after COMMIT (issue #117): run it.
+    with django_capture_on_commit_callbacks(execute=True):
+        adherer(parcours, client, acheteur, adhesion.tarif)
 
     adhesion_creee = adhesion_de(acheteur, adhesion)
     assert not lieu.stripe.mock_create.called

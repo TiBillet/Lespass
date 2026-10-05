@@ -695,8 +695,11 @@
                         data-testid="membership-submit"
                         aria-label="{% translate 'Pay this membership now' %}">
                     <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
-                    {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
-                        {% translate 'Pay now' %}{% endif %}
+                    {% if product.validate_button_text %}
+                        {{ product.validate_button_text }} ({% translate 'Payer maintenant' %})
+                    {% else %}
+                        {% translate 'Pay now' %}
+                    {% endif %}
                 </button>
             {% endif %}
         {% else %}

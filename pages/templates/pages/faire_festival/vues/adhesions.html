@@ -116,9 +116,9 @@
                          PRIX DU PRODUIT
                          Affiche tous les tarifs disponibles pour ce produit
                          ================================================ -->
-                    {% if product.prices.exists %}
+                    {% if product.tarifs_non_archives.exists %}
                         <div class="mb-4">
-                            {% for price in product.prices.all %}
+                            {% for price in product.tarifs_non_archives %}
                                 <div class="texte-bleu police-mono fw-bold mb-2">
                                     <!-- Nom du tarif (ex: "Tarif normal", "Tarif réduit") -->
                                     {% if price.name %}

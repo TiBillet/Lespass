@@ -142,7 +142,7 @@ Chaque affichage des moyens de paiement donne une nouvelle cle. Un double appui 
           <p class="payment-title">{% translate "Rembourser la consigne par :" %}</p>
           <div class="payment-methods">
             {% if 'nfc' in moyens_paiement %}
-              <c-V2.bt.paiement name='{% translate "CASHLESS" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" data-loading-disable data-testid="deposit-btn-cashless" />
+              <c-V2.bt.paiement name='{% translate "CASHLESS" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}?total={{ total|unlocalize }}&devise={{ currency_data.symbol|urlencode }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" data-loading-disable data-testid="deposit-btn-cashless" />
             {% endif %}
             {# Le bouton suit les moyens reellement disponibles, comme CASHLESS ci-dessus : #}
             {# un comptoir qui refuse les especes ne doit pas proposer un paiement que le   #}

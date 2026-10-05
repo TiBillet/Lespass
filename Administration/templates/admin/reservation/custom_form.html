@@ -1,0 +1,34 @@
+{% load i18n unfold tibitags %}
+{% comment %}
+REPONSES DU FORMULAIRE PERSONNALISE — fiche d'une réservation
+/ Custom form answers — reservation change view
+
+LOCALISATION : Administration/templates/admin/reservation/custom_form.html
+
+Affiché sous le formulaire de la fiche réservation (ReservationAdmin.change_form_after_template).
+Même tableau que la fiche adhésion (admin/membership/custom_form.html) : une ligne par
+question, avec le libellé du champ et la réponse. Le filtre custom_form_table
+(BaseBillet/templatetags/tibitags.py) retrouve les libellés depuis les produits des billets.
+
+Le champ JSON brut custom_form est retiré du formulaire (ReservationAdmin.exclude).
+Ici, l'affichage est en lecture seule : pas de boutons de modification, contrairement à
+l'adhésion (ses vues d'édition HTMX sont propres aux adhésions).
+
+`original` est la réservation affichée : Django le met dans le contexte de la fiche.
+Sur la page d'ajout, `original` est vide : rien n'est affiché.
+/ Same table as the membership change view, read-only. `original` is the reservation.
+{% endcomment %}
+
+{% if original %}
+<div class="p-4" data-testid="reservation-custom-form-answers">
+    {% if original.custom_form %}
+        {% component "unfold/components/card.html" with title=_("Custom form answers") %}
+            {% with table_data=original.custom_form|custom_form_table:original %}
+                {% component "unfold/components/table.html" with table=table_data card_included=1 striped=1 %}{% endcomponent %}
+            {% endwith %}
+        {% endcomponent %}
+    {% else %}
+        <em class="text-sm text-gray-500 dark:text-gray-400">{% translate "No custom form answers for this booking." %}</em>
+    {% endif %}
+</div>
+{% endif %}

@@ -436,7 +436,9 @@ def preparer_une_commande_mixte(lieu):
     return acheteur, commande
 
 
-def test_le_retour_de_paiement_valide_toute_la_commande_mixte(lieu):
+def test_le_retour_de_paiement_valide_toute_la_commande_mixte(
+    lieu, django_capture_on_commit_callbacks
+):
     """
     Après le retour de Stripe (payé) : paiement validé, toutes les lignes validées, billets
     actifs, réservations payées, adhésion active avec échéance, booking payé, Commande payée.
@@ -453,7 +455,10 @@ def test_le_retour_de_paiement_valide_toute_la_commande_mixte(lieu):
     acheteur, commande = preparer_une_commande_mixte(lieu)
     paiement = commande.paiement_stripe
 
-    revenir_de_stripe(acheteur, paiement)
+    # Les tâches Celery de l'adhésion partent après le COMMIT (issue #117) : on joue ce COMMIT.
+    # / Membership Celery tasks are dispatched after COMMIT (issue #117): run it.
+    with django_capture_on_commit_callbacks(execute=True):
+        revenir_de_stripe(acheteur, paiement)
 
     paiement.refresh_from_db()
     commande.refresh_from_db()

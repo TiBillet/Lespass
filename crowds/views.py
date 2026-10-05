@@ -195,7 +195,7 @@ def _get_or_create_crowdfunding_price() -> Price:
             publish=False,
             nominative=False,
         )
-    price = product.prices.order_by("pk").first()
+    price = product.prices.filter(archived=False).order_by("pk").first()
     if not price:
         price = Price.objects.create(
             product=product,

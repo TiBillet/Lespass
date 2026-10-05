@@ -918,6 +918,14 @@ Les templates inline (`stacked.html`, `tabular.html`) n'ont pas de support `x-sh
 Pour des champs conditionnels dans un inline, utiliser le mecanisme custom
 `inline_conditional_fields` + `inline_conditional_fields.js` (cree en session 26).
 
+Pour reagir a une ligne ajoutee par « Ajouter un autre », ecouter l'evenement
+`formset:added` (emis par `inlines.js` de Django, `bubbles: true`, prefixe dans
+`detail.formsetName`). Un `MutationObserver` en `subtree: false` sur `#<prefixe>-group`
+ne voit RIEN : Unfold insere la ligne plusieurs niveaux plus bas
+(`#<prefixe>-group > fieldset > ... > #<prefixe>-data`). Symptome : regles appliquees
+aux tarifs existants, mais pas aux tarifs ajoutes — donc jamais sur une page de
+creation (issue #408). Test : `tests/e2e/test_admin_tarif_champs_conditionnels_creation.py`.
+
 Decouvert en session 26 (avril 2026) — refactoring PriceInline.
 
 ### Piege 66 : lignes panier a montant variable — suffixe `--N` obligatoire
@@ -2717,6 +2725,26 @@ sur le bouton search).
 
 Decouverts session widget onboard, 2026-05-16. Cf. `static/widgets/widget_carte_adresse.js`
 + `static/widgets/widget_carte_adresse.css`.
+
+**P.WIDGET.5 — `map.removeLayer(couche)` dans le handler `load` de cette couche → `TypeError`.**
+
+Dans Leaflet 1.9.4, `GridLayer._tileReady` fait `this.fire("load")` puis lit
+IMMEDIATEMENT `this._map._fadeAnimated`. Si un handler `load` a retire la couche
+(`removeLayer` met `this._map = null`), on obtient un `TypeError` non capture.
+Cas reel : le repli MapTiler → OSM HOT, qui veut changer de fond a la fin du premier
+affichage. Retirer la couche dans `tileerror` ne pose pas de probleme (l'evenement est
+emis en tete de `_tileReady`).
+
+Autres faits utiles : une tuile en erreur est aussi marquee `loaded`, donc `load` part
+meme si TOUTES les tuiles ont echoue. Et `loading` n'est emis qu'au debut d'un lot :
+apres le premier ecran, un petit deplacement peut former un lot d'UNE seule tuile.
+
+**Fix** : lever le flag de bascule tout de suite, puis differer le swap :
+`setTimeout(function () { map.removeLayer(couche); nouvelle.addTo(map); }, 0)`.
+Verification : Playwright avec `page.on("pageerror")`. Une assertion « une seule
+couche dans le DOM » passe meme quand le `TypeError` est leve.
+
+Decouvert 2026-09-26 (relecture Fable de la spec `WIDGET_GEO/04`).
 
 ---
 

@@ -136,7 +136,7 @@ def get_permission_Api_ALL_Admin(self: ViewSet):
 class TarifBilletViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
 
     def list(self, request):
-        queryset = Price.objects.all().order_by('prix')
+        queryset = Price.objects.filter(archived=False).order_by('prix')
         serializer = PriceSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -235,7 +235,7 @@ class HereViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
         dict_return.update(place_serialized.data)
 
         products_adhesion = MembershipProduct.objects.filter(
-            prices__isnull=False,
+            prices__archived=False,
             publish=True,
         ).distinct()
 
@@ -1436,6 +1436,32 @@ class Webhook_stripe(APIView):
                             stripe_id_subscription = payload_object['parent']['subscription_details']['subscription']
 
                         logger.info(f"Webhook_stripe metadata --> {metadata}")
+
+                        # Abonnement sans metadata TiBillet : il n'a pas été créé par
+                        # Lespass. Avec Stripe Connect, la plateforme reçoit les webhook
+                        # de TOUS les comptes connectés, y compris pour les abonnements
+                        # que le lieu a créés lui-même dans son dashboard Stripe.
+                        # C'est la même garde que checkout.session.completed plus haut.
+                        # Niveau ERROR volontaire : Sentry en fait une alerte (un warning
+                        # ne créerait qu'un breadcrumb, event_level=ERROR par défaut) et
+                        # un gestionnaire va vérifier l'abonnement. Mais on répond 204,
+                        # sinon Stripe réessaie pendant 3 jours et chaque essai lève une 500.
+                        # / Subscription with no TiBillet metadata: not created by Lespass.
+                        # / Connect forwards every connected account's webhooks, including
+                        # / subscriptions the venue created itself in its Stripe dashboard.
+                        # / ERROR on purpose: Sentry alerts (a warning would only be a
+                        # / breadcrumb). 204 so Stripe stops retrying.
+                        if not metadata.get('tenant'):
+                            logger.error(
+                                f"    Webhook_stripe invoice.paid : abonnement sans metadata "
+                                f"TiBillet, ignoré. subscription={stripe_id_subscription} "
+                                f"invoice={payload_object['id']} "
+                                f"compte_stripe={payload_object.get('account_name')}"
+                            )
+                            return Response(
+                                "Abonnement sans metadata TiBillet, ignoré.",
+                                status=status.HTTP_204_NO_CONTENT,
+                            )
 
                         tenant_uuid = metadata['tenant']
                         membership_uuid = metadata['membership_uuid']

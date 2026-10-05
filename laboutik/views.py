@@ -2235,6 +2235,76 @@ def _panier_contient_uniquement_recharges_gratuites(articles_panier):
             return False
     return True
 
+def _adhesions_actives_de_la_carte(carte):
+    """
+    Renvoie les adhesions actives du titulaire d'une carte cashless.
+    / Returns the active memberships of a cashless card holder.
+
+    LOCALISATION : laboutik/views.py
+
+    Une carte anonyme (sans utilisateur) n'a aucune adhesion : liste vide.
+    Le tri final (adhesion valide ou non) est fait par Membership.is_valid().
+
+    APPELEE PAR :
+    - PaiementViewSet.retour_carte() : popup « Verifier une carte »
+    - _adhesions_a_afficher_apres_paiement() : ecran de succes d'un paiement cashless
+
+    :param carte: CarteCashless (seul carte.user est lu)
+    :return: liste de Membership valides (price__product deja charge)
+    """
+    adhesions_actives = []
+
+    carte_sans_titulaire = carte.user is None
+    if carte_sans_titulaire:
+        return adhesions_actives
+
+    # CANCELED n'est PAS exclu ici : une adhesion resiliee court
+    # jusqu'a sa deadline (l'adherent a paye sa periode), et c'est
+    # is_valid() qui tranche. L'exclure au niveau SQL priverait
+    # l'adherent de son adhesion des la resiliation.
+    # ADMIN_CANCELED reste exclu : annulation administrative, effet
+    # immediat, avoir possible.
+    # / CANCELED is NOT excluded here: a cancelled membership runs
+    # until its deadline and is_valid() decides. ADMIN_CANCELED stays
+    # excluded: admin cancellation is immediate.
+    adhesions_du_titulaire = (
+        Membership.objects.filter(
+            user=carte.user,
+        )
+        .exclude(
+            status=Membership.ADMIN_CANCELED,
+        )
+        .select_related("price__product")
+    )
+    for adhesion in adhesions_du_titulaire:
+        if adhesion.is_valid():
+            adhesions_actives.append(adhesion)
+    return adhesions_actives
+
+
+def _adhesions_a_afficher_apres_paiement(carte):
+    """
+    Renvoie les adhesions a montrer sur l'ecran de succes d'un paiement cashless.
+    / Returns the memberships to show on the cashless payment success screen.
+
+    LOCALISATION : laboutik/views.py
+
+    L'affichage depend du reglage « Afficher les adhesions au retour d'un paiement »
+    (LaboutikConfiguration.show_membership_after_payment, admin laboutik).
+    Reglage desactive : liste vide, et aucune requete sur les adhesions.
+
+    FLUX : PaiementViewSet._payer_par_nfc() -> CETTE FONCTION
+    -> context["adhesions_actives"] -> hx_return_payment_success.html
+
+    :param carte: CarteCashless qui vient de payer
+    :return: liste de Membership valides, ou liste vide
+    """
+    configuration_laboutik = LaboutikConfiguration.get_solo()
+    affichage_des_adhesions_active = configuration_laboutik.show_membership_after_payment
+    if not affichage_des_adhesions_active:
+        return []
+    return _adhesions_actives_de_la_carte(carte)
+
 
 # --------------------------------------------------------------------------- #
 #  CaisseViewSet — pages principales                                          #
@@ -7262,6 +7332,24 @@ class PaiementViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
+        # --- Un panier vide ne se paie pas ---
+        # Le bouton VALIDER est desactive quand le panier est vide (addition.js).
+        # Ce n'est qu'un confort d'affichage : un POST force, ou un panier vide
+        # pendant la lecture de la carte NFC, arrive quand meme ici.
+        # Aucun flux de paiement ne sait traiter un panier vide : on refuse
+        # avant tout routage et toute ecriture.
+        # / An empty cart is never paid: refused before any routing or write.
+        if not articles_panier:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": _("Panier vide."),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         # --- Calculer le total en centimes ---
         # --- Calculate total in centimes ---
         consigne_dans_panier = _panier_contient_retour_consigne(articles_panier)
@@ -8876,7 +8964,12 @@ class PaiementViewSet(viewsets.ViewSet):
             # qu'une carte n'a pas ete rattachee, meme si la vente a abouti.
             # / Card-linking warnings: the cashier must know a card was not attached.
             "avertissements_adhesion": adherent["avertissements"] if adherent else [],
+            # Adhesions actives du titulaire, seulement si le reglage laboutik
+            # l'autorise (liste vide sinon).
+            # / Holder's active memberships, only if the laboutik setting allows it.
+            "adhesions_actives": _adhesions_a_afficher_apres_paiement(carte_client),
         }
+
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context
         )
@@ -9297,11 +9390,42 @@ class PaiementViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="lire_nfc", url_name="lire_nfc")
     def lire_nfc(self, request):
         """
-        GET /laboutik/paiement/lire_nfc/
-        Affiche le partial d'attente de lecture NFC (pour paiement cashless).
-        Displays the NFC read waiting partial (for cashless payment).
+        GET /laboutik/paiement/lire_nfc/?total=12.5&devise=€
+        Affiche la popup « Approchez la carte » d'un paiement cashless, avec le total.
+        / Displays the "Tap the card" popup of a cashless payment, with the total.
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. Clic sur une tuile CASHLESS (_tuiles_paiement.html,
+           hx_display_type_payment.html, hx_funds_insufficient.html).
+        2. La tuile envoie le total et son unite dans l'URL.
+        3. Cette vue rend hx_read_nfc.html, qui affiche le total.
+        4. La lecture de la carte soumet #addition-form vers payer().
+
+        Le total sert seulement a l'affichage. payer() recalcule toujours le
+        montant depuis le panier : on ne fait jamais confiance a ce parametre.
+        Sans total (ou total illisible), la popup s'affiche sans montant.
+        / Display only: payer() always recomputes the amount from the cart.
         """
-        return render(request, "laboutik/partial/hx_read_nfc.html", {})
+        # Le parametre GET peut contenir une virgule (locale francaise).
+        # / The GET param may contain a comma (French locale).
+        total_brut = request.GET.get("total", "")
+        total_brut = total_brut.replace(",", ".")
+        try:
+            total_a_payer = float(total_brut)
+        except (ValueError, TypeError):
+            total_a_payer = None
+
+        # Unite du total : l'euro, ou le nom d'une monnaie de points.
+        # / Unit of the total: euro, or a points currency name.
+        symbole_de_la_devise = request.GET.get("devise") or CURRENCY_DATA["symbol"]
+
+        context = {
+            "total": total_a_payer,
+            "currency_data": {"symbol": symbole_de_la_devise},
+        }
+        return render(request, "laboutik/partial/hx_read_nfc.html", context)
 
     # ----------------------------------------------------------------------- #
     #  Paiement complémentaire NFC (espèces, CB, ou 2ème carte)                #
@@ -10578,27 +10702,7 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # 4. Adhésions actives (si user connu)
         # 4. Active memberships (if user known)
-        adhesions = []
-        if carte.user:
-            # CANCELED n'est PAS exclu ici : une adhesion resiliee court
-            # jusqu'a sa deadline (l'adherent a paye sa periode), et c'est
-            # is_valid() qui tranche. L'exclure au niveau SQL priverait
-            # l'adherent de son adhesion des la resiliation.
-            # ADMIN_CANCELED reste exclu : annulation administrative, effet
-            # immediat, avoir possible.
-            # / CANCELED is NOT excluded here: a cancelled membership runs
-            # until its deadline and is_valid() decides. ADMIN_CANCELED stays
-            # excluded: admin cancellation is immediate.
-            toutes_adhesions = list(
-                Membership.objects.filter(
-                    user=carte.user,
-                )
-                .exclude(
-                    status=Membership.ADMIN_CANCELED,
-                )
-                .select_related("price__product")
-            )
-            adhesions = [m for m in toutes_adhesions if m.is_valid()]
+        adhesions = _adhesions_actives_de_la_carte(carte)
 
         # 5. Couleur de fond selon le type de carte
         # 5. Background color based on card type
@@ -11510,7 +11614,7 @@ class CommandeViewSet(viewsets.ViewSet):
 
             try:
                 prix = Price.objects.get(
-                    uuid=article_data["price_uuid"], product=produit
+                    uuid=article_data["price_uuid"], product=produit, archived=False
                 )
             except Price.DoesNotExist:
                 logger.warning(
@@ -11527,6 +11631,26 @@ class CommandeViewSet(viewsets.ViewSet):
                     "msg_content": _(
                         "Un tarif en points ou en temps ne passe pas par une "
                         "commande de table : encaissez-le au comptoir."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
+            # Un retour de consigne rend de l'argent au client : il se regle seul,
+            # au comptoir. Une commande de table ne sait pas le payer
+            # (payer_commande le refuse) : il ne doit donc jamais y entrer, sinon
+            # il part en preparation et la commande reste impayable.
+            # / A deposit return is settled at the counter, never via an order.
+            if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Un retour de consigne se règle au comptoir, pas depuis une commande."
                     ),
                     "selector_bt_retour": "#messages",
                 }
@@ -11686,6 +11810,29 @@ class CommandeViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
+        # Un retour de consigne se regle seul, au comptoir : une commande de table
+        # ne sait pas le payer (payer_commande le refuse). Refus AVANT toute ecriture,
+        # sinon il part en preparation et la commande reste impayable.
+        # / A deposit return never enters an order: refused before any write.
+        uuids_des_produits_demandes = []
+        for article_data in articles_data:
+            uuids_des_produits_demandes.append(article_data["product_uuid"])
+        un_produit_est_un_retour_de_consigne = Product.objects.filter(
+            uuid__in=uuids_des_produits_demandes,
+            methode_caisse=Product.RETOUR_CONSIGNE,
+        ).exists()
+        if un_produit_est_un_retour_de_consigne:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Un retour de consigne se règle au comptoir, pas depuis une commande."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
         # Créer les articles dans un bloc atomique
         # Create articles in an atomic block
         with db_transaction.atomic():
@@ -11693,7 +11840,7 @@ class CommandeViewSet(viewsets.ViewSet):
                 try:
                     produit = Product.objects.get(uuid=article_data["product_uuid"])
                     prix = Price.objects.get(
-                        uuid=article_data["price_uuid"], product=produit
+                        uuid=article_data["price_uuid"], product=produit, archived=False
                     )
                 except (Product.DoesNotExist, Price.DoesNotExist):
                     continue

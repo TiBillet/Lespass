@@ -486,7 +486,7 @@ class PanierSession:
             price = Price.objects.get(uuid=price_uuid)
         except Price.DoesNotExist:
             raise InvalidItemError(_("Price not found."))
-        if not price.publish:
+        if not price.publish or price.archived:
             raise InvalidItemError(_("This rate is not available."))
         if price.product.archive:
             raise InvalidItemError(_("This product is archived."))
@@ -697,7 +697,7 @@ class PanierSession:
             price = Price.objects.get(uuid=price_uuid)
         except Price.DoesNotExist:
             raise InvalidItemError(_("Price not found."))
-        if not price.publish:
+        if not price.publish or price.archived:
             raise InvalidItemError(_("This rate is not available."))
         if price.product.archive:
             raise InvalidItemError(_("This product is archived."))
@@ -865,7 +865,7 @@ class PanierSession:
             price = Price.objects.get(uuid=price_uuid)
         except Price.DoesNotExist:
             raise InvalidItemError(_("Price not found."))
-        if not price.publish:
+        if not price.publish or price.archived:
             raise InvalidItemError(_("This rate is not available."))
         if price.product.archive:
             raise InvalidItemError(_("This product is archived."))

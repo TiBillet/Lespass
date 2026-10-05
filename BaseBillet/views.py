@@ -27,7 +27,7 @@ from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.translation import gettext_lazy as _, ngettext
+from django.utils.translation import gettext_lazy as _, ngettext, get_language
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET, require_http_methods
 from django_htmx.http import HttpResponseClientRedirect
@@ -1398,7 +1398,13 @@ class MyAccount(viewsets.ViewSet):
             'highlighted_booking_pk': highlighted_booking_pk,
         })
 
-        return render(request, "booking/views/my_bookings.html", context=context)
+        # Résolution du gabarit par le resolver unifié.
+        # / Unified skin resolver.
+        from pages.services import gabarit_skin
+        template_path = gabarit_skin("vues/compte/bookings.html")
+
+
+        return render(request, template_path, context=context)
 
 
     @action(detail=True, methods=['POST'])
@@ -2485,7 +2491,9 @@ def index(request):
     for event in events_a_afficher:
         event_products = event.products.all()
         products = list(event_products)
-        prices = [price for product in products for price in product.prices.all()]
+        # Un tarif archivé (« supprimé ») n'est jamais affiché.
+        # / An archived ("deleted") price is never shown.
+        prices = [price for product in products for price in product.prices.filter(archived=False)]
         tarifs = [price.prix for price in prices]
         free_price = any(price.free_price for price in prices)
         # Calcul des prix min et max
@@ -2844,6 +2852,67 @@ class EventMVT(viewsets.ViewSet):
         # / EventMVT now only exposes public views. Admin create actions live in EventWizardAdmin.
         return [permissions.AllowAny()]
 
+    def _calculer_prix_min_max_event(self, event):
+        """
+        Pose sur l'event les prix min et max, et le drapeau prix libre.
+        / Sets min/max prices and the free-price flag on the event.
+
+        LOCALISATION : BaseBillet/views.py — EventMVT
+
+        Ces attributs ne sont pas des champs du modele : ils vivent en memoire.
+        Ils sont lus par partials/reservation_declencheur.html.
+        Utilise par federated_events_get() et federated_events_get_hex8().
+
+        A appeler DANS le tenant_context de l'event : les tarifs vivent
+        dans le schema du tenant.
+        / Must be called INSIDE the event's tenant_context.
+        """
+        # Un tarif archive (« supprime ») n'est jamais pris en compte.
+        # / An archived ("deleted") price is never counted.
+        prices = []
+        for product in event.products.all():
+            for price in product.prices.all():
+                if not price.archived:
+                    prices.append(price)
+
+        tarifs = [price.prix for price in prices]
+        event.price_min = min(tarifs) if tarifs else None
+        event.price_max = max(tarifs) if tarifs else None
+        event.free_price = any(price.free_price for price in prices)
+
+    def _libelle_prix_agenda(self, event):
+        """
+        Renvoie le texte du prix affiche sur la carte d'un event dans l'agenda.
+        / Returns the price label shown on an event card in the agenda.
+
+        LOCALISATION : BaseBillet/views.py — EventMVT
+
+        Meme format que index() : « A partir de X € », « Prix libre » ou « Entré libre ».
+        Le resultat va dans event.price_min, lu par cotton/V2/event_card.html.
+
+        A appeler DANS le tenant_context de l'event : les tarifs vivent
+        dans le schema du tenant.
+        / Must be called INSIDE the event's tenant_context.
+        """
+        # Un tarif archive (« supprime ») n'est jamais pris en compte.
+        # On lit products.all() et prices.all() : ils sont deja precharges
+        # par le prefetch_related de federated_events_filter (pas de requete en plus).
+        # / Archived prices are skipped. Reads the prefetched relations (no extra query).
+        prices = []
+        for product in event.products.all():
+            for price in product.prices.all():
+                if not price.archived:
+                    prices.append(price)
+
+        tarifs = [price.prix for price in prices]
+        il_y_a_un_prix_libre = any(price.free_price for price in prices)
+
+        if tarifs:
+            return _("A partir de %(price)s €") % {"price": min(tarifs)}
+        if il_y_a_un_prix_libre:
+            return _("Prix libre")
+        return _("Entré libre")
+
     def federated_events_get(self, slug):
         for place in FederatedPlace.objects.all().select_related('tenant'):
             tenant = place.tenant
@@ -2856,6 +2925,7 @@ class EventMVT(viewsets.ViewSet):
                     ).get(slug=slug)
                     event.img = event.get_img()
                     event.sticker_img = event.get_sticker_img()
+                    self._calculer_prix_min_max_event(event)
                     return event
                 except Event.DoesNotExist:
                     continue
@@ -2874,6 +2944,7 @@ class EventMVT(viewsets.ViewSet):
                     ).get(uuid__startswith=hex8)
                     event.img = event.get_img()
                     event.sticker_img = event.get_sticker_img()
+                    self._calculer_prix_min_max_event(event)
                     return event
                 except Event.DoesNotExist:
                     continue
@@ -2898,10 +2969,15 @@ class EventMVT(viewsets.ViewSet):
             # Jeton de version du cache liste pour ce tenant (défaut 'v0' si jamais écrit)
             # / List-cache version token for this tenant (default 'v0' if never written)
             version = cache.get(f'event_list_version_{connection.tenant.uuid}', 'v0')
+            # La langue fait partie de la cle : le resultat contient le prix
+            # deja traduit (event.price_min, ex : « A partir de 12 € »).
+            # Sans elle, tous les visiteurs verraient la langue du premier.
+            # / Language is part of the key: the result holds translated price labels.
+            langue = get_language()
             if date_seule:
-                cache_key = f'event_list_{connection.tenant.uuid}_{version}_date_{date_filter.isoformat()}'
+                cache_key = f'event_list_{connection.tenant.uuid}_{version}_{langue}_date_{date_filter.isoformat()}'
             else:
-                cache_key = f'event_list_{connection.tenant.uuid}_{version}'
+                cache_key = f'event_list_{connection.tenant.uuid}_{version}_{langue}'
             cached = cache.get(cache_key)
             if cached:
                 return cached
@@ -3076,6 +3152,10 @@ class EventMVT(viewsets.ViewSet):
                     # On va chercher les urls d'images :
                     event.img = event.get_img()
                     event.sticker_img = event.get_sticker_img()
+
+                    # Texte du prix affiche sur la carte de l'agenda
+                    # / Price label shown on the agenda card
+                    event.price_min = self._libelle_prix_agenda(event)
 
                     date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
@@ -3317,6 +3397,11 @@ class EventMVT(viewsets.ViewSet):
         product_max_per_user_reached = []
         price_max_per_user_reached = []
         event_max_per_user_reached = False
+        # Reste a None pour un evenement venu de la federation : il n'existe pas dans
+        # le schema courant, ses compteurs de jauge n'ont donc aucun sens ici.
+        # / Stays None for a federated event: it does not live in the current schema,
+        # so its capacity counters are meaningless here.
+        places_restantes = None
 
         try:
             if hex8:
@@ -3342,8 +3427,9 @@ class EventMVT(viewsets.ViewSet):
             event_products = event.products.prefetch_related("prices")
             products = list(event_products)
 
-            # Récupération des prix
-            prices = [price for product in products for price in product.prices.all()]
+            # Récupération des prix. Un tarif archivé (« supprimé ») n'est jamais affiché.
+            # / Get prices. An archived ("deleted") price is never shown.
+            prices = [price for product in products for price in product.prices.all() if not price.archived]
 
             # Si l'user est connecté, on vérifie qu'il n'a pas déja reservé
             product_max_per_user_reached = []
@@ -3364,6 +3450,15 @@ class EventMVT(viewsets.ViewSet):
 
                 event_max_per_user_reached = event.max_per_user_reached_on_this_event(request.user)
 
+            # Places encore disponibles (Event.places_restantes : jauge, moins les
+            # billets valides, moins les paniers ouverts depuis moins de 15 minutes).
+            # C'est la quantite maximale que le validator acceptera. Calcule UNE seule
+            # fois ici : chaque appel declenche deux COUNT SQL, il ne doit jamais
+            # tomber dans la boucle des tarifs.
+            # / Seats still available (Event.places_restantes). Computed ONCE: each
+            # call costs two COUNT queries, it must never run inside the price loop.
+            places_restantes = event.places_restantes()
+
             tarifs = [price.prix for price in prices]
             # Calcul des prix min et max
             event.price_min = min(tarifs) if tarifs else None
@@ -3371,7 +3466,7 @@ class EventMVT(viewsets.ViewSet):
 
             # Vérification de l'existence d'un prix libre (sans requêtes supplémentaires)
             event.free_price = any(
-                price.free_price for product in products for price in product.prices.all()
+                price.free_price for price in prices
             )
 
             event_in_this_tenant = True
@@ -3400,6 +3495,10 @@ class EventMVT(viewsets.ViewSet):
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
         template_context['event_max_per_user_reached'] = event_max_per_user_reached
+        template_context['places_restantes'] = places_restantes
+        # Lu par le gabarit du skin faire_festival (vues/evenement.html).
+        # / Read by the faire_festival skin template (vues/evenement.html).
+        event.remaining_seats = places_restantes
 
         # On prépare les prix publiés pour le template (utilisé par le sélecteur de billet)
         # On s'assure que price.name n'est jamais None pour éviter les "undefined" en JS
@@ -3409,10 +3508,35 @@ class EventMVT(viewsets.ViewSet):
             product__event=event,
             product__categorie_article__in=[Product.BILLET, Product.FREERES],
             publish=True,
+            archived=False,
         ).order_by('product__poids', 'order', 'prix')
         for p in event.published_prices:
             if p.name is None:
                 p.name = ""
+
+            # Plafond du compteur de billets, affiche dans l'attribut `max`.
+            # On prend le plus petit des plafonds qui s'appliquent vraiment :
+            #   - les places encore disponibles sur l'evenement,
+            #   - le maximum par personne du tarif,
+            #   - le maximum par personne de l'evenement.
+            # Les deux `max_per_user` sont facultatifs en base (null=True) et
+            # `places_restantes` est None pour un evenement federe : on n'ajoute donc
+            # que les plafonds reellement definis. Si aucun ne l'est, on laisse None,
+            # et le gabarit n'ecrit alors aucun attribut `max`. Ne jamais laisser le
+            # gabarit ecrire la chaine "None" : le composant bs-counter la lit comme
+            # un plafond illimite (Number("None") vaut NaN).
+            # / Ceiling for the ticket counter, rendered in the `max` attribute: the
+            # smallest of the caps that actually apply. Only defined caps are
+            # collected; None means no `max` attribute at all. The string "None"
+            # must never be rendered: bs-counter reads it as unlimited (NaN).
+            plafonds = []
+            if places_restantes is not None:
+                plafonds.append(places_restantes)
+            if p.max_per_user:
+                plafonds.append(p.max_per_user)
+            if event.max_per_user:
+                plafonds.append(event.max_per_user)
+            p.max_billets = min(plafonds) if plafonds else None
 
         # L'evènement possède des sous évènement.
         # Pour l'instant : uniquement des ACTIONS
@@ -3450,7 +3574,14 @@ class EventMVT(viewsets.ViewSet):
         }, context={'request': request})
 
         if not validator.is_valid():
-            logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
+            # Refus metier (jauge atteinte, quota par personne depasse, adhesion
+            # manquante...) : ce n'est PAS une erreur applicative. En warning, la
+            # LoggingIntegration de Sentry n'en fait qu'un breadcrumb au lieu d'une
+            # alerte (event_level=ERROR par defaut). La personne est deja prevenue
+            # par les messages ci-dessous. Meme arbitrage que pour l'API v1.
+            # / Business refusal, not an app error. At warning level Sentry only
+            # records a breadcrumb instead of raising an alert. Same call as API v1.
+            logger.warning(f"ReservationViewset CREATE : validation refusee : {validator.errors}")
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
@@ -3466,7 +3597,11 @@ class EventMVT(viewsets.ViewSet):
         validator = ReservationValidator(data=request.data, context={'request': request})
 
         if not validator.is_valid():
-            logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
+            # Meme arbitrage que dans action_reservation ci-dessus : un refus metier
+            # n'est pas une erreur applicative, donc warning et pas d'alerte Sentry.
+            # / Same call as in action_reservation above: a business refusal is not an
+            # app error, so warning level and no Sentry alert.
+            logger.warning(f"ReservationViewset CREATE : validation refusee : {validator.errors}")
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
@@ -3668,7 +3803,7 @@ class MembershipMVT(viewsets.ViewSet):
             # Les tarifs en points ou en temps se vendent a la caisse seulement :
             # ils ne comptent pas dans le prix affiche en euros.
             # / Points or time prices are sold at the POS only: not an euro price.
-            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False)
+            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False)
             tarifs = [price.prix for price in prices]
             # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
             # la caisse seulement), la carte n'affiche pas de prix.
@@ -3741,7 +3876,7 @@ class MembershipMVT(viewsets.ViewSet):
             # site ne le propose pas (il serait paye en euros par Stripe).
             # / Published prices. A points or time price is POS-only: never online.
             published_prices = product.prices.filter(
-                publish=True, asset__isnull=True, non_fiduciaire=False
+                publish=True, archived=False, asset__isnull=True, non_fiduciaire=False
             ).order_by('order', 'prix')
             context['published_prices'] = published_prices
             context['published_prices_count'] = published_prices.count()
@@ -4666,6 +4801,11 @@ class MembershipMVT(viewsets.ViewSet):
         if creation_avoirs_demandee:
             nombre_avoirs_crees = 0
             for ligne in lignes_de_vente_payees:
+                # LaBoutik a besoin de l'uuid de la vente d'origine pour enregistrer l'avoir.
+                # Sans lui, il repond 400 et l'avoir n'est jamais synchronise (issue #319).
+                # / LaBoutik needs the original sale uuid to record the credit note.
+                metadata_de_l_avoir = dict(ligne.metadata or {})
+                metadata_de_l_avoir['original_lignearticle_uuid'] = str(ligne.uuid)
                 avoir = LigneArticle.objects.create(
                     pricesold=ligne.pricesold,
                     qty=-ligne.qty,
@@ -4678,6 +4818,7 @@ class MembershipMVT(viewsets.ViewSet):
                     wallet=ligne.wallet,
                     sale_origin=SaleOrigin.ADMIN,
                     credit_note_for=ligne,
+                    metadata=metadata_de_l_avoir,
                     status=LigneArticle.CREATED,
                 )
                 avoir.status = LigneArticle.CREDIT_NOTE
@@ -5760,6 +5901,87 @@ class EventWizard(viewsets.ViewSet):
                       context=context)
 
 
+def quantite_de_billets_demandee(valeur_saisie):
+    """
+    Lit la quantité saisie pour un tarif dans le formulaire de réservation.
+    / Reads the quantity typed for a price in the booking form.
+
+    LOCALISATION : BaseBillet/views.py
+
+    Une quantité non numérique, infinie ou démesurée, positive ou négative
+    (formulaire trafiqué) est ignorée. Le maximum est contrôlé AVANT int() :
+    convertir « 1e999999999 » ou « -1e999999999 » bloquerait le serveur.
+    `Decimal("abc")` lève InvalidOperation, qui n'hérite pas de ValueError.
+    / A non-numeric, infinite or huge quantity is ignored, checked before int().
+
+    :param valeur_saisie: la valeur postée (str ou None)
+    :return: la quantité (int > 0), ou None si rien d'utilisable n'a été saisi
+    """
+    from decimal import Decimal, InvalidOperation
+
+    from BaseBillet.validators import QUANTITE_MAXIMUM_PAR_TARIF
+
+    if not valeur_saisie:
+        return None
+    try:
+        quantite_decimale = Decimal(str(valeur_saisie).replace(',', '.'))
+        if (not quantite_decimale.is_finite()
+                or quantite_decimale > QUANTITE_MAXIMUM_PAR_TARIF
+                or quantite_decimale < -QUANTITE_MAXIMUM_PAR_TARIF):
+            return None
+        quantite = int(quantite_decimale)
+    except (TypeError, ValueError, InvalidOperation):
+        return None
+    if quantite <= 0:
+        return None
+    return quantite
+
+
+def reponses_du_formulaire_personnalise_pour_le_panier(request, produits):
+    """
+    Lit et valide les réponses au formulaire personnalisé, pour un ajout au panier.
+    / Reads and validates the custom form answers, for an add-to-cart.
+
+    LOCALISATION : BaseBillet/views.py
+
+    Même fonction que le parcours sans panier (réservation et adhésion directes) :
+    build_custom_form_from_request (BaseBillet/validators.py). Les réponses sont donc
+    rangées de la même façon partout :
+    - sous le LIBELLÉ de la question (pas sous sa clé technique) ;
+    - case à cocher en oui/non, choix multiple en liste ;
+    - question obligatoire vérifiée, choix hors liste refusé.
+    Avant, le panier recopiait le formulaire tel quel (clé technique, texte brut,
+    dernière valeur seulement pour un choix multiple).
+    / Same builder as the direct flow, so answers are stored the same way everywhere.
+
+    :param request: la requête (request.POST contient les champs « form__<clé> »)
+    :param produits: les produits dont on lit les questions
+    :return: (réponses, message d'erreur). Le message vaut None si tout est valide.
+    """
+    from rest_framework.exceptions import ValidationError as ErreurDeValidation
+
+    from BaseBillet.models import ProductFormField
+    from BaseBillet.validators import build_custom_form_from_request
+
+    try:
+        reponses = build_custom_form_from_request(request.POST, produits, prefix='form__')
+        return reponses, None
+    except ErreurDeValidation as erreur:
+        # L'erreur est rangée sous la clé du champ (« form__<clé> »). On affiche le
+        # libellé de la question, que la personne a sous les yeux.
+        # / The error is keyed by the field key: show the question label instead.
+        details = erreur.detail if isinstance(erreur.detail, dict) else {}
+        for cle_du_champ, messages_d_erreur in details.items():
+            nom_du_champ = str(cle_du_champ).replace('form__', '', 1)
+            question = ProductFormField.objects.filter(
+                product__in=list(produits), name=nom_du_champ,
+            ).first()
+            libelle = question.label if question else nom_du_champ
+            premier_message = messages_d_erreur[0] if messages_d_erreur else ''
+            return {}, f"{libelle} : {premier_message}"
+        return {}, str(erreur)
+
+
 class PanierMVT(viewsets.ViewSet):
     """
     ViewSet du panier d'achat. Toutes les actions manipulent PanierSession
@@ -5890,7 +6112,6 @@ class PanierMVT(viewsets.ViewSet):
         custom_amount = custom_amount or None
 
         options = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
-        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
 
         # Le formulaire d'adhesion collecte les noms (cf. membership/form.html).
         # On les passe a PanierSession pour qu'ils soient stockes sur l'item et
@@ -5922,6 +6143,26 @@ class PanierMVT(viewsets.ViewSet):
                     item_promo = promotional_code_name
             except PriceModel.DoesNotExist:
                 pass  # add_membership levera l'erreur Price not found
+
+        # Réponses au formulaire personnalisé du produit d'adhésion, validées et rangées
+        # comme dans le parcours sans panier. Tarif introuvable : pas de réponse à lire,
+        # add_membership refusera le tarif juste après.
+        # / Custom form answers, validated like the direct flow.
+        from BaseBillet.models import Price as TarifDuPanier
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        tarif_choisi = None
+        if price_uuid:
+            try:
+                tarif_choisi = TarifDuPanier.objects.select_related('product').get(uuid=price_uuid)
+            except (TarifDuPanier.DoesNotExist, ValueError, DjangoValidationError):
+                tarif_choisi = None
+        custom_form = {}
+        if tarif_choisi is not None:
+            custom_form, erreur_du_formulaire = reponses_du_formulaire_personnalise_pour_le_panier(
+                request, [tarif_choisi.product],
+            )
+            if erreur_du_formulaire:
+                return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
 
         panier = PanierSession(request)
         try:
@@ -6139,8 +6380,6 @@ class PanierMVT(viewsets.ViewSet):
         """
         from BaseBillet.models import Event
         from BaseBillet.services_panier import PanierSession, InvalidItemError
-        from BaseBillet.validators import QUANTITE_MAXIMUM_PAR_TARIF
-        from decimal import Decimal, InvalidOperation
 
         # Accepter soit `slug` (legacy htmx/views/event.html), soit `event` (uuid, booking_form.html prod).
         # / Accept either `slug` (legacy template) or `event` (uuid, prod booking_form.html).
@@ -6167,8 +6406,22 @@ class PanierMVT(viewsets.ViewSet):
 
         # Extraire options de l'event / Extract event options
         options_ids = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
-        # Custom form fields (prefix form__) / Custom form fields
-        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+        # Réponses au formulaire personnalisé : on ne lit que les questions des produits
+        # dont au moins un billet est demandé (comme ReservationValidator). Sinon une
+        # question obligatoire d'un produit non choisi bloquerait l'ajout.
+        # / Custom form answers: only questions of products with a requested ticket.
+        produits_demandes = []
+        for produit_de_l_evenement in event.products.all():
+            for tarif_du_produit in produit_de_l_evenement.prices.filter(archived=False):
+                if quantite_de_billets_demandee(request.POST.get(str(tarif_du_produit.uuid))):
+                    produits_demandes.append(produit_de_l_evenement)
+                    break
+        custom_form, erreur_du_formulaire = reponses_du_formulaire_personnalise_pour_le_panier(
+            request, produits_demandes,
+        )
+        if erreur_du_formulaire:
+            return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
+
         # Code promo saisi dans booking_form (champ `promotional_code`).
         # Valide cote serveur dans PanierSession.add_ticket (existence, actif,
         # is_usable, lie au produit). Le front n'envoie que le nom.
@@ -6193,27 +6446,13 @@ class PanierMVT(viewsets.ViewSet):
         code_promo_applique_a_un_billet = False
         try:
             for product in event.products.all():
-                for price in product.prices.all():
-                    price_key = str(price.uuid)
-                    raw_qty = request.POST.get(price_key)
-                    if not raw_qty:
-                        continue
-                    # Une quantité non numérique, infinie ou démesurée, positive ou négative
-                    # (formulaire trafiqué) est ignorée. Le maximum est contrôlé AVANT int() :
-                    # convertir « 1e999999999 » ou « -1e999999999 »
-                    # bloquerait le serveur. `Decimal("abc")` lève InvalidOperation, qui
-                    # n'hérite pas de ValueError.
-                    # / A non-numeric, infinite or huge quantity is ignored, checked before int().
-                    try:
-                        quantite_decimale = Decimal(str(raw_qty).replace(',', '.'))
-                        if (not quantite_decimale.is_finite()
-                                or quantite_decimale > QUANTITE_MAXIMUM_PAR_TARIF
-                                or quantite_decimale < -QUANTITE_MAXIMUM_PAR_TARIF):
-                            raise ValueError(raw_qty)
-                        qty = int(quantite_decimale)
-                    except (TypeError, ValueError, InvalidOperation):
-                        continue
-                    if qty <= 0:
+                # Un tarif archivé (« supprimé ») ne peut plus être mis au panier.
+                # / An archived ("deleted") price can no longer be added to the cart.
+                for price in product.prices.filter(archived=False):
+                    # Quantité illisible, nulle ou démesurée : tarif ignoré.
+                    # / Unreadable, zero or huge quantity: price skipped.
+                    qty = quantite_de_billets_demandee(request.POST.get(str(price.uuid)))
+                    if qty is None:
                         continue
 
                     # Custom amount si free_price / Custom amount if free_price

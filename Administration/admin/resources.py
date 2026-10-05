@@ -12,6 +12,7 @@ from django import forms
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
 from Administration.admin.base import ModelAdmin
 from unfold.admin import TabularInline
+from unfold.contrib.filters.admin import ChoicesDropdownFilter
 from unfold.widgets import UnfoldAdminSelect2Widget, UnfoldAdminDateWidget, UnfoldAdminSplitDateTimeWidget
 from django.utils.translation import gettext_lazy as _
 from unfold.widgets import (
@@ -103,8 +104,10 @@ class BookingAdmin(ModelAdmin):
 
 
     # search_fields = ['event__name', 'user_commande__email', 'datetime', 'custom_form']
+    # Filtre en liste déroulante (Unfold), envoyé par le bouton « Filtrer ».
+    # / Dropdown filter (Unfold), sent by the "Filter" button.
     list_filter = [
-        'status',
+        ('status', ChoicesDropdownFilter),
         'start_datetime'
     ]
 

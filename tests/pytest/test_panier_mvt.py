@@ -611,7 +611,7 @@ def test_le_bouton_retirer_vise_le_bon_item_quand_un_item_a_disparu(lieu):
     ajouter_des_billets(client, concert.evenement, {concert.tarif: 1})
     ajouter_des_billets(client, spectacle.evenement, {spectacle.tarif: 1})
     uuid_du_tarif_supprime = str(concert.tarif.uuid)
-    concert.tarif.delete()
+    concert.tarif.hard_delete()
 
     page_du_panier = client.get("/panier/").content.decode()
     assert page_du_panier.count('data-testid="panier-item-remove"') == 1

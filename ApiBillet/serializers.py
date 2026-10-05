@@ -99,6 +99,18 @@ class ProductCreateSerializer(serializers.ModelSerializer):
             'prices',
         ]
 
+    def to_representation(self, instance):
+        # depth = 1 renvoie tous les tarifs du produit.
+        # On retire les tarifs archivés (« supprimés ») : ils ne sont plus jamais affichés.
+        # / depth = 1 returns every price: remove the archived ("deleted") ones.
+        representation = super().to_representation(instance)
+        tarifs_non_archives = []
+        for tarif in representation.get("prices", []):
+            if not tarif.get("archived"):
+                tarifs_non_archives.append(tarif)
+        representation["prices"] = tarifs_non_archives
+        return representation
+
     def validate_option_generale_radio(self, value):
         self.option_generale_radio = []
         for uuid in value:
@@ -170,6 +182,18 @@ class ProductSerializer(serializers.ModelSerializer):
             'uuid',
             'prices',
         ]
+
+    def to_representation(self, instance):
+        # depth = 1 renvoie tous les tarifs du produit.
+        # On retire les tarifs archivés (« supprimés ») : ils ne sont plus jamais affichés.
+        # / depth = 1 returns every price: remove the archived ("deleted") ones.
+        representation = super().to_representation(instance)
+        tarifs_non_archives = []
+        for tarif in representation.get("prices", []):
+            if not tarif.get("archived"):
+                tarifs_non_archives.append(tarif)
+        representation["prices"] = tarifs_non_archives
+        return representation
 
 
 class PriceSerializer(serializers.ModelSerializer):
@@ -1034,7 +1058,7 @@ class ApiReservationValidator(serializers.Serializer):
         for entry in value:
             logger.info(f"price entry : {entry}")
             try:
-                price = Price.objects.get(pk=entry['uuid'])
+                price = Price.objects.get(pk=entry['uuid'], archived=False)
                 product = price.product
                 price_object = {
                     'price': price,
@@ -1562,6 +1586,25 @@ class EventWriteSerializer(serializers.Serializer):
         # Enforce required on create
         self._require_on_create(attrs, 'name')
         self._require_on_create(attrs, 'startDate')
+
+        # La fin ne peut pas etre avant le debut. Meme regle que Event.clean(),
+        # que DRF n'appelle pas.
+        # En modification partielle, une date absente de la requete est lue
+        # sur l'evenement existant : envoyer seulement endDate doit aussi etre verifie.
+        # / End cannot be before start. On partial update, a missing date is read
+        # from the existing event.
+        date_de_debut = attrs.get('startDate')
+        if 'startDate' not in attrs and self.instance is not None:
+            date_de_debut = self.instance.datetime
+
+        date_de_fin = attrs.get('endDate')
+        if 'endDate' not in attrs and self.instance is not None:
+            date_de_fin = self.instance.end_datetime
+
+        if date_de_debut and date_de_fin and date_de_fin < date_de_debut:
+            raise serializers.ValidationError({
+                'endDate': _("La fin de l'évènement doit être après son début."),
+            })
         return attrs
 
     def create(self, validated_data):

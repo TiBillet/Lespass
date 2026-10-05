@@ -39,7 +39,8 @@
  * COMMUNICATION :
  * Lit : <script id="inline-conditional-rules"> (injecte par le serveur)
  * Ecoute : change/input sur les champs source de chaque regle
- * Observe : MutationObserver sur les conteneurs inline (nouvelles lignes)
+ * Ecoute : "formset:added" sur document (nouvelle ligne inline, emis par
+ *          django/contrib/admin/static/admin/js/inlines.js)
  */
 (function () {
     "use strict";
@@ -353,14 +354,13 @@
         // / Attach listeners to all source fields
         //
         // GUARD : on marque chaque <input> source avec data-conditional-listener-bound="1"
-        // pour eviter d'empiler des listeners en doublon. Le MutationObserver appelle
-        // initialiser_formset() sur chaque mutation DOM (frappe utilisateur incluse) ;
+        // pour eviter d'empiler des listeners en doublon. A chaque ajout de ligne,
+        // initialiser_formset() repasse sur TOUTES les lignes, anciennes comprises ;
         // sans ce guard, les listeners s'accumulent et chaque frappe declenche N
         // recalculs/animations.
         // / GUARD: mark each source <input> with data-conditional-listener-bound="1"
-        // / to prevent stacking duplicate listeners. The MutationObserver re-runs on
-        // / every DOM mutation (including user typing); without this guard, listeners
-        // / accumulate and each keystroke triggers N redundant recalc/animations.
+        // / to prevent stacking duplicate listeners: every row addition re-runs the
+        // / setup on ALL rows, existing ones included.
         for (var nom_source in elements_source_uniques) {
             if (!elements_source_uniques.hasOwnProperty(nom_source)) {
                 continue;
@@ -415,27 +415,28 @@
 
             initialiser_formset(prefixe_formset, regles);
 
-            // Observer les nouvelles lignes ajoutees dynamiquement
-            // / Observe dynamically added new rows
+            // Configurer chaque nouvelle ligne ajoutee par « Ajouter un autre tarif »
+            // / Set up each row added by the "Add another" button
             //
-            // SCOPE : subtree=false suffit car Django admin ajoute les nouvelles
-            // lignes inline en enfants directs de #<prefixe>-group. Mettre subtree=true
-            // ferait re-tourner initialiser_formset a chaque frappe utilisateur dans
-            // un input — boucle inutile (et amplifie le risque d'effets de bord).
-            // / SCOPE: subtree=false is enough — Django admin adds new inline rows as
-            // / direct children of #<prefixe>-group. subtree=true would re-run the
-            // / initialiser on every user keystroke inside an input — wasteful loop.
+            // On ecoute "formset:added" et PAS un MutationObserver sur #<prefixe>-group :
+            // Unfold n'insere pas la ligne en enfant direct du groupe, mais plusieurs
+            // niveaux plus bas (#<prefixe>-group > fieldset > ... > #<prefixe>-data).
+            // L'evenement est emis par inlines.js de Django apres l'insertion de la
+            // ligne et la mise a jour de TOTAL_FORMS. Il remonte jusqu'a document
+            // (bubbles: true) et porte le prefixe dans detail.formsetName.
+            // / Listen to "formset:added", NOT a MutationObserver on #<prefix>-group:
+            // / Unfold nests the new row several levels deep. Django's inlines.js fires
+            // / the event after insertion and TOTAL_FORMS update, with the prefix.
             (function (prefixe, regles_locales) {
-                var conteneur = document.getElementById(prefixe + "-group");
-                if (conteneur) {
-                    var observateur = new MutationObserver(function () {
-                        initialiser_formset(prefixe, regles_locales);
-                    });
-                    observateur.observe(conteneur, {
-                        childList: true,
-                        subtree: false,
-                    });
-                }
+                document.addEventListener("formset:added", function (evenement) {
+                    var prefixe_de_la_ligne_ajoutee = evenement.detail
+                        ? evenement.detail.formsetName
+                        : null;
+                    if (prefixe_de_la_ligne_ajoutee !== prefixe) {
+                        return;
+                    }
+                    initialiser_formset(prefixe, regles_locales);
+                });
             })(prefixe_formset, regles);
         }
     }

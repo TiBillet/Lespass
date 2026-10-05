@@ -12,7 +12,24 @@ La popup de #messages s'efface tant que celle-ci est ouverte (overlay.css,
 regle « Rien ne s'empile »). La croix la fait revenir.
 / Tapping CASHLESS loads this partial into #confirm. The #messages popup
 hides while this one is open; the cross brings it back.
+
+CONTEXTE (fourni par lire_nfc()) :
+- total         : montant a payer (float), ou None si la tuile ne l'a pas envoye.
+                  None = la popup s'affiche sans montant.
+- currency_data : {"symbol": ...} unite du total (euro ou monnaie de points).
+/ total: amount to pay, or None (popup shown without amount).
 -->
 <div id="confirm">
-	<c-V2.read-nfc selector="#confirm" hint='{% translate "Cashless" %}' input-selector="#nfc-tag-id" form-selector="#addition-form" submit-url="{% url 'laboutik-paiement-payer' %}" />
+	<c-V2.read-nfc selector="#confirm" hint='{% translate "Cashless" %}' input-selector="#nfc-tag-id" form-selector="#addition-form" submit-url="{% url 'laboutik-paiement-payer' %}">
+		<c-slot name="entete">
+			{% if total is not None %}
+				{# Meme en-tete que la popup de confirmation (hx_confirm_payment.html) #}
+				{# / Same header as the confirmation popup                            #}
+				<div class="payment-total" data-testid="nfc-attente-total">
+					<span class="payment-total-lbl">{% translate "TOTAL" %}</span>
+					<span class="payment-total-val">{{ total|floatformat:2 }} {{ currency_data.symbol }}</span>
+				</div>
+			{% endif %}
+		</c-slot>
+	</c-V2.read-nfc>
 </div>
