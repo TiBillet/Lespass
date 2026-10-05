@@ -27,9 +27,9 @@ QUI APPELLE / CALLERS
   plan » des écrans du plan (`CompteComptableAdmin.verifier_le_plan`), jamais leur
   ouverture. `monnaies_acceptees_par_le_lieu()` : l'écran des comptes des monnaies.
 
-La migration `laboutik/0010_charger_le_plan_comptable_par_defaut` a sa propre version
+La migration `laboutik/0002_preparer_chaque_lieu` a sa propre version
 de ce chargement (modèles historiques, `apps.get_model`) : elle lit les mêmes données.
-/ The 0010 migration has its own version (historical models): it reads the same data.
+/ The 0002 migration has its own version (historical models): it reads the same data.
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-E-plan-comptable.md §3, §4.
 """

@@ -8,12 +8,9 @@ QUI LIT CE MODULE / WHO READS THIS MODULE
 -----------------------------------------
 - `laboutik/plan_comptable.py` : le chargeur (commande `charger_plan_comptable`, bouton
   de l'admin, filet `s_assurer_que_le_plan_existe`).
-- `laboutik/migrations/0010_charger_le_plan_comptable_par_defaut.py` : la migration
-  qui charge le plan dans tout lieu sans compte, y compris un lieu neuf
-  (`auto_create_schema` rejoue les migrations).
-- `laboutik/migrations/0012_relier_le_fed_au_compte_du_reseau.py` : le FED au 467000.
-- `laboutik/migrations/0013_ranger_les_crowds_dans_le_financement_participatif.py` :
-  la catégorie des crowds au 754000.
+- `laboutik/migrations/0002_preparer_chaque_lieu.py` : la migration qui charge le
+  plan dans tout lieu sans compte, y compris un lieu neuf (`auto_create_schema` rejoue
+  les migrations), relie le FED au 467000 et la catégorie des crowds au 754000.
 - `laboutik/plan_comptable.py` (règles de compte) et `comptabilite/ventilation.py`
   (la ventilation du FEC) ; `crowds/views.py` (catégorie du produit des
   contributions).

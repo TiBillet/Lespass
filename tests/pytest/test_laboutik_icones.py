@@ -6,15 +6,12 @@ LOCALISATION : tests/pytest/test_laboutik_icones.py
 
 La caisse n'utilise plus FontAwesome : elle affiche la police Material Symbols
 LOCALE fournie par django-unfold, avec <span class="material-symbols-outlined">nom</span>.
-Le selecteur d'icones de l'admin (ICON_POS) propose des noms Material, et la
-migration laboutik 0006 a converti les anciens noms FontAwesome stockes.
+Le selecteur d'icones de l'admin (ICON_POS) propose des noms Material.
 Si un nom n'existe pas dans la police, la caisse afficherait le mot en toutes
 lettres (« sports_bar ») au lieu du pictogramme. Ces tests l'empechent :
 - chaque nom de ICON_POS existe dans la police, sans doublon ;
-- chaque icone ecrite dans les gabarits et le JS de la caisse existe ;
-- chaque nom produit par la migration existe, et sa regle de conversion est juste.
-/ Every ICON_POS name, every hard-coded icon and every migration target exists
-  in the local font; the migration conversion rule is correct.
+- chaque icone ecrite dans les gabarits et le JS de la caisse existe.
+/ Every ICON_POS name and every hard-coded icon exists in the local font.
 
 Pas de base de donnees : lecture de la police avec fontTools.
 / No database: the font is read with fontTools.
@@ -23,7 +20,6 @@ LANCEMENT / RUN :
     docker exec lespass_django poetry run pytest tests/pytest/test_laboutik_icones.py -v
 """
 
-import importlib
 import os
 import re
 
@@ -37,13 +33,6 @@ CHEMIN_POLICE_LOCALE = os.path.join(
     os.path.dirname(unfold.__file__),
     "static", "unfold", "fonts", "material-symbols", "Material-Symbols-Outlined.woff2",
 )
-
-# Module de la migration de donnees (nom commencant par un chiffre : import dynamique)
-# / Data migration module (name starts with a digit: dynamic import)
-migration_icones = importlib.import_module(
-    "laboutik.migrations.0006_icones_fontawesome_vers_material"
-)
-
 
 @pytest.fixture(scope="module")
 def icones_de_la_police_locale():
@@ -145,34 +134,6 @@ def test_la_caisse_n_utilise_plus_fontawesome():
     assert fichiers_avec_fontawesome == []
 
 
-# ------------------------------------------------------------------ #
-#  Migration FontAwesome → Material / Migration
-# ------------------------------------------------------------------ #
-
-def test_chaque_icone_de_la_migration_existe_dans_la_police(icones_de_la_police_locale):
-    """Chaque nom produit par la migration existe dans la police.
-    / Every name produced by the migration exists in the font."""
-    noms_produits = set(migration_icones.CORRESPONDANCE.values()) | {migration_icones.ICONE_DE_REPLI}
-    absentes = sorted(nom for nom in noms_produits if nom not in icones_de_la_police_locale)
-    assert absentes == [], f"Icones absentes de la police : {absentes}"
-
-
-def test_chaque_icone_de_la_migration_est_proposee_dans_le_selecteur_de_l_admin():
-    """Chaque nom produit par la migration est dans ICON_POS.
-    Sinon le selecteur ne coche rien et un enregistrement dans l'admin
-    efface l'icone sans prevenir.
-    / Every migration output is in ICON_POS, otherwise saving in the admin
-    would silently wipe the icon."""
-    from Administration.admin.products import ICON_POS
-
-    noms_du_selecteur = set()
-    for nom_icone, _libelle in ICON_POS:
-        noms_du_selecteur.add(nom_icone)
-    noms_produits = set(migration_icones.CORRESPONDANCE.values()) | {migration_icones.ICONE_DE_REPLI}
-    absentes = sorted(noms_produits - noms_du_selecteur)
-    assert absentes == [], f"Icones de la migration absentes de ICON_POS : {absentes}"
-
-
 def test_le_selecteur_coche_une_icone_hors_liste_au_lieu_de_l_effacer():
     """Une icone absente de ICON_POS est rendue comme option cochee.
     / An icon missing from ICON_POS is rendered as a checked option."""
@@ -190,30 +151,3 @@ def test_le_selecteur_n_ajoute_pas_d_option_pour_une_icone_de_la_liste():
     html = IconPickerWidget().render("icon_pos", "sports_bar")
 
     assert 'data-testid="icon-picker-valeur-hors-liste"' not in html
-
-
-def test_la_migration_convertit_un_nom_fontawesome():
-    """« fa-beer » devient « sports_bar », comme dans le selecteur de l'admin.
-    / "fa-beer" becomes "sports_bar", as in the admin picker."""
-    assert migration_icones.nom_material("fa-beer") == "sports_bar"
-
-
-def test_la_migration_ignore_le_prefixe_de_style():
-    """« fas fa-beer » donne aussi « sports_bar ». / Style prefix ignored."""
-    assert migration_icones.nom_material("fas fa-beer") == "sports_bar"
-
-
-def test_la_migration_repli_pour_un_nom_fontawesome_inconnu():
-    """Un nom FontAwesome inconnu donne l'icone de repli. / Unknown FA name → fallback."""
-    assert migration_icones.nom_material("fa-licorne") == migration_icones.ICONE_DE_REPLI
-
-
-def test_la_migration_ne_touche_pas_un_nom_material_ni_un_champ_vide():
-    """Nom Material ou vide : rien a changer (None). / Material or empty: no change."""
-    assert migration_icones.nom_material("local_bar") is None
-    # Noms Material qui commencent par « fa » : ils ne sont pas FontAwesome
-    # / Material names starting with "fa" are not FontAwesome
-    assert migration_icones.nom_material("fastfood") is None
-    assert migration_icones.nom_material("favorite") is None
-    assert migration_icones.nom_material("") is None
-    assert migration_icones.nom_material(None) is None

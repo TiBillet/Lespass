@@ -228,15 +228,13 @@ COMPTE_ATTENDU_PAR_MOYEN = {
 }
 MOYENS_SANS_CORRESPONDANCE = ["NA", "NM", "SF", "QR"]
 
-# Les deux migrations de données de la session, et leur fonction.
-# / The session's two data migrations, and their function.
-MIGRATION_DE_DEDOUBLONNAGE = "0008_dedoublonner_les_numeros_de_compte"
-FONCTION_DE_DEDOUBLONNAGE = "dedoublonner_les_numeros_de_compte"
-MIGRATION_DE_CHARGEMENT = "0010_charger_le_plan_comptable_par_defaut"
+# La migration de données qui prépare chaque lieu, et ses fonctions.
+# / The data migration that prepares each venue, and its functions.
+MIGRATION_DE_CHARGEMENT = "0002_preparer_chaque_lieu"
 FONCTION_DE_CHARGEMENT = "charger_le_plan_si_aucun_compte"
-MIGRATION_DU_FED = "0012_relier_le_fed_au_compte_du_reseau"
+MIGRATION_DU_FED = "0002_preparer_chaque_lieu"
 FONCTION_DE_LA_MIGRATION_DU_FED = "relier_le_fed_au_compte_du_reseau"
-MIGRATION_DES_CROWDS = "0013_ranger_les_crowds_dans_le_financement_participatif"
+MIGRATION_DES_CROWDS = "0002_preparer_chaque_lieu"
 FONCTION_DE_LA_MIGRATION_DES_CROWDS = (
     "ranger_les_crowds_dans_le_financement_participatif"
 )
@@ -318,37 +316,6 @@ def _lancer_la_fonction_de_migration(nom_de_la_migration, nom_de_la_fonction):
     )
     with connection.schema_editor() as editeur_de_schema:
         fonction_de_la_migration(etat_avant_la_migration.apps, editeur_de_schema)
-
-
-def _retirer_l_unicite_du_numero_de_compte_pour_ce_test():
-    """
-    Retire, dans la transaction du test, la contrainte d'unicité du numéro de compte.
-    La transaction est annulée à la fin du test : la contrainte revient.
-    / Drops, inside the test transaction, the account number uniqueness constraint.
-    The transaction is rolled back at the end of the test: the constraint comes back.
-
-    À appeler EN PREMIER dans le test : Postgres refuse un ALTER TABLE sur une table
-    qui a reçu des écritures dans la même transaction (PIEGES 9.113).
-    / Call FIRST in the test: Postgres refuses ALTER TABLE after writes in the same
-    transaction.
-    """
-    nom_de_la_table = CompteComptable._meta.db_table
-    with connection.cursor() as curseur:
-        contraintes_de_la_table = connection.introspection.get_constraints(
-            curseur, nom_de_la_table
-        )
-        for nom_de_la_contrainte, description in contraintes_de_la_table.items():
-            est_l_unicite_du_numero = (
-                description["unique"]
-                and not description["primary_key"]
-                and description["columns"] == ["numero_de_compte"]
-            )
-            if est_l_unicite_du_numero:
-                curseur.execute(
-                    f'ALTER TABLE "{nom_de_la_table}" '
-                    f'DROP CONSTRAINT IF EXISTS "{nom_de_la_contrainte}"'
-                )
-                curseur.execute(f'DROP INDEX IF EXISTS "{nom_de_la_contrainte}"')
 
 
 def _compte(numero_de_compte):
@@ -1088,84 +1055,6 @@ class TestPlanComptableUnique(FastTenantTestCase):
     # ------------------------------------------------------------------ #
     #  Unicité du numéro de compte / Account number uniqueness            #
     # ------------------------------------------------------------------ #
-
-    def test_dedoublonnage_garde_un_compte_et_repointe_les_liens(self):
-        """La migration de dédoublonnage garde un compte par numéro et y repointe
-        les catégories et les correspondances des comptes supprimés.
-        / The deduplication migration keeps one account per number and repoints the
-        categories and mappings of the deleted accounts to it."""
-        _retirer_l_unicite_du_numero_de_compte_pour_ce_test()
-        _vider_le_plan_du_lieu()
-
-        # Trois comptes 706000 : trois doublons.
-        # / Three 706000 accounts: three duplicates.
-        doublons_706000 = []
-        for libelle in ["Prestations A", "Prestations B", "Prestations C"]:
-            doublons_706000.append(
-                CompteComptable.objects.create(
-                    numero_de_compte="706000",
-                    libelle_du_compte=libelle,
-                    nature_du_compte=CompteComptable.VENTE,
-                )
-            )
-        uuids_des_doublons = {compte.uuid for compte in doublons_706000}
-
-        # Chaque doublon porte un lien.
-        # / Each duplicate carries a link.
-        categorie_sur_le_premier = CategorieProduct.objects.create(
-            name="Dédoublonnage A", compte_comptable=doublons_706000[0]
-        )
-        categorie_sur_le_deuxieme = CategorieProduct.objects.create(
-            name="Dédoublonnage B", compte_comptable=doublons_706000[1]
-        )
-        correspondance_sur_le_troisieme = MappingMoyenDePaiement.objects.create(
-            moyen_de_paiement="TR",
-            libelle_moyen="Virement",
-            compte_de_tresorerie=doublons_706000[2],
-        )
-
-        # Un compte sans doublon, relié : il ne bouge pas.
-        # / An account without duplicate, linked: it does not move.
-        compte_especes = CompteComptable.objects.create(
-            numero_de_compte="530000",
-            libelle_du_compte="Espèces",
-            nature_du_compte=CompteComptable.TRESORERIE,
-        )
-        correspondance_especes = MappingMoyenDePaiement.objects.create(
-            moyen_de_paiement="CA",
-            libelle_moyen="Espèces",
-            compte_de_tresorerie=compte_especes,
-        )
-
-        _lancer_la_fonction_de_migration(
-            MIGRATION_DE_DEDOUBLONNAGE, FONCTION_DE_DEDOUBLONNAGE
-        )
-
-        # Un seul 706000 reste, et c'est l'un des trois.
-        # / A single 706000 remains, and it is one of the three.
-        comptes_706000_restants = list(
-            CompteComptable.objects.filter(numero_de_compte="706000")
-        )
-        assert len(comptes_706000_restants) == 1
-        compte_garde = comptes_706000_restants[0]
-        assert compte_garde.uuid in uuids_des_doublons
-
-        # Les liens des comptes supprimés pointent sur le compte gardé.
-        # / The deleted accounts' links point to the kept account.
-        categorie_sur_le_premier.refresh_from_db()
-        categorie_sur_le_deuxieme.refresh_from_db()
-        correspondance_sur_le_troisieme.refresh_from_db()
-        assert categorie_sur_le_premier.compte_comptable_id == compte_garde.uuid
-        assert categorie_sur_le_deuxieme.compte_comptable_id == compte_garde.uuid
-        assert (
-            correspondance_sur_le_troisieme.compte_de_tresorerie_id == compte_garde.uuid
-        )
-
-        # Le compte sans doublon est intact.
-        # / The account without duplicate is intact.
-        correspondance_especes.refresh_from_db()
-        assert correspondance_especes.compte_de_tresorerie_id == compte_especes.uuid
-        assert CompteComptable.objects.count() == 2
 
     def test_numero_de_compte_unique(self):
         """Deux comptes au même numéro dans un lieu : la base refuse.

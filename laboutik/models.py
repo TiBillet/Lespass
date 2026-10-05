@@ -269,10 +269,10 @@ class LaboutikConfiguration(SingletonModel):
         base : deux ventes simultanees ecrivent une seule cle. Jamais de
         `save(update_fields=...)` sur `self` : l'objet peut venir du cache sans ligne
         en base (`DatabaseError` « did not affect any rows »).
-        La migration `laboutik/migrations/0016_cle_d_empreinte_toujours_en_base` cree
+        La migration `laboutik/migrations/0002_preparer_chaque_lieu` cree
         deja la ligne et la cle dans chaque lieu : cette ecriture est un filet.
         / Written under lock on the row read from the database, never by
-        save(update_fields) on self. The 0016 migration already creates them: safety net.
+        save(update_fields) on self. The 0002 migration already creates them: safety net.
         """
         cle_existante = self.get_hmac_key()
         if cle_existante:

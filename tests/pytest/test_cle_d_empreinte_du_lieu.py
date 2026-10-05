@@ -60,7 +60,7 @@ pytestmark = pytest.mark.django_db
 # Le module de la migration de données (son nom commence par un chiffre : on
 # l'importe par son chemin en texte).
 # / The data migration module (its name starts with a digit: imported by its path).
-CHEMIN_DE_LA_MIGRATION = "laboutik.migrations.0016_cle_d_empreinte_toujours_en_base"
+CHEMIN_DE_LA_MIGRATION = "laboutik.migrations.0002_preparer_chaque_lieu"
 
 # Deux clés connues, pour savoir laquelle est rendue.
 # / Two known keys, to tell which one is returned.
