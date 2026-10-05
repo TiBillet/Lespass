@@ -522,6 +522,19 @@ Final Fable review of H-1; maintainer decision on the fingerprint key.
 | `tests/pytest/test_part_en_jetons.py` | Test 7 ; paramètre facultatif `taux_tva` des outils de la bière |
 | `tests/pytest/test_une_ligne_par_article_lecteurs.py` | Test 9 : aucune trace `CorrectionPaiement` |
 | `tests/pytest/test_admin_vente.py` | Nouveau texte du refus de l'écart |
+| `tests/e2e/test_recharge_pos_puis_qrcode.py` | Ligne de recharge lue par sa vente (Q-H2) |
+| `tests/e2e/test_parcours_fedow_reel.py` | Moyen lu sur les règlements de la vente (Q-H2) |
+| `tests/e2e/conftest.py` | Fixtures `rapports_comptables` et `rapports_qui_voient_la_ligne` : lisent le rapport unique `RapportDesVentes` (plus les anciens moteurs `laboutik.reports` / `comptabilite.services`) ; « caisse » = ventes réglées avec un point de vente, « en ligne » = sans point de vente |
+| `tests/e2e/test_adhesion_recompense_puis_qrcode.py` | « Aucune écriture hors QR » : lignes comptées par le client de leur vente (plus par le portefeuille, vide sur une ligne de caisse) |
+
+### Tests existants réécrits / Rewritten tests
+| Test | Avant → après | Raison |
+|---|---|---|
+| `test_admin_vente.py::test_avoir_total_refuse_une_vente_avec_un_ecart_d_encaissement` | texte « … l'avoir total n'est pas possible. Faites un avoir ligne par ligne. » → « … aucun avoir n'est possible. » | Q-H13 : aucun avoir sur une vente avec écart |
+| `tests/e2e/test_recharge_pos_puis_qrcode.py::test_une_recharge_au_comptoir_n_est_pas_depensable_par_qrcode` (étape 4) | ligne cherchée par `wallet=user.wallet`, moyen et monnaie lus sur la ligne → ligne cherchée par la carte de la vente et le produit de recharge ; moyen lu sur les règlements de la vente (un seul, espèces) ; monnaie créditée lue sur le produit (`Product.asset`) | Q-H2 : la ligne de caisse n'a ni moyen, ni monnaie, ni carte, ni portefeuille |
+| `tests/e2e/test_parcours_fedow_reel.py::test_vente_en_monnaie_locale_puis_remise_en_banque` (étape 4) | `MOYEN=` lu sur la ligne (None, plantage) → lu sur les règlements de la vente (affiché pour le diagnostic, aucune assertion) | Q-H2 : la ligne QR n'a pas de moyen |
+| `tests/e2e/test_recharge_pos_puis_qrcode.py` (étape 4bis) et les 3 autres tests de `rapports_comptables` | ticket Z lu par l'ancien moteur de caisse (somme par moyen de la LIGNE : 0 depuis Q-H2) → montants exacts lus dans le rapport unique (espèces du tiroir, recharges, adhésions, total en ligne) | Q-H2 ; anciens moteurs retirés en H-2 |
+| `tests/e2e/test_adhesion_recompense_puis_qrcode.py` (« aucune écriture hors QR ») | `filter(wallet=user.wallet)` → `filter(vente__client=user)`, hors ligne de cotisation | Q-H2 : le comptage par portefeuille ne voyait plus une ligne de caisse |
 
 ### Chaînes i18n ajoutées / Added i18n strings
 - « Un poids ne se vend que sur un tarif au poids : poids refusé pour « %(nom)s ». »
@@ -532,6 +545,8 @@ Le workflow i18n est à lancer par le mainteneur.
 ### Tests
 - Rouge avant le code (prouvé par l'orchestrateur) : tests 1 à 9, `8 failed, 121 passed` (1, 3, 4, 5, 6 rouges pour la bonne raison, garde rouge sur la démo ; 7, 8, 9 verts par construction) ; tests 10 à 12, `3 failed`.
 - Vert après le code : les 7 fichiers de la session, `132 passed`. Voisins (`test_caisse_ecrit_la_vente`, `test_admin_vente`, `test_tireuse_ancien_fedow`, `test_tireuse_ecrit_la_vente`, `test_qrcode*`, `test_controlvanne_billing`, `test_avoirs_ecrivent_la_vente`, `test_archive_lne_ventes`, `test_lecteurs_montants_entiers`, `test_cloture_unique`, `test_comptabilite_exports`, `test_integrity_hmac`) : `447 passed`. Caractérisation (`test_caracterisation_*.py`) : `24 passed`, sans modification.
+- Mutations (orchestrateur) : 10 jouées, 10 tuées (poids forgé, écart dans l'écran, recharge proposée, arrondi bancaire, texte vide, clé lue dans le cache, `save(update_fields)` remis, migration sans clé, jetons à 0 % en deux lignes, « Remboursé par » caché) ; fixture E2E : recharges filtrées sans point de vente → l'étape 4bis tombe (0 au lieu de 500).
+- Suites finales (base neuve, orchestrateur) : `make test` **3217 passed** ; `make e2e` **141 passed**.
 - `manage.py check` : aucun problème ; `makemigrations --check` : aucun changement ; `migrate_schemas --executor=multiprocessing` : 0016 appliquée dans chaque lieu de la base de dev, sans erreur. La clé manquait en base dans plusieurs lieux de dev, dont `lespass` (voir piège 9.86).
 
 ---

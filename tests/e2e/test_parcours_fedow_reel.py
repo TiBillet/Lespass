@@ -285,11 +285,18 @@ def test_vente_en_monnaie_locale_puis_remise_en_banque(
     )
 
     # --- 4. La vente est enregistree cote Lespass ---
+    # La ligne payee ne porte pas de moyen (Q-H2) : le moyen se lit sur les
+    # reglements de sa vente. Il est affiche pour le diagnostic.
+    # / The paid line has no method (Q-H2): read it on its sale's payments.
     sortie = django_shell(
         "from BaseBillet.models import LigneArticle\n"
         f"ligne = LigneArticle.objects.filter(uuid='{uuid_de_la_demande}').first()\n"
         "print('STATUT=' + (ligne.status if ligne else 'ABSENTE'))\n"
-        "print('MOYEN=' + (ligne.payment_method if ligne else 'ABSENT'))"
+        "moyens = []\n"
+        "if ligne and ligne.vente_id:\n"
+        "    for reglement in ligne.vente.reglements.all():\n"
+        "        moyens.append(reglement.moyen)\n"
+        "print('MOYEN=' + (','.join(sorted(moyens)) if moyens else 'ABSENT'))"
     )
     assert 'STATUT=V' in sortie, f"La vente n'est pas validee : {sortie[-300:]}"
 

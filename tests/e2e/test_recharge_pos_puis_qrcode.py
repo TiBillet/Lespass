@@ -384,39 +384,50 @@ def test_une_recharge_au_comptoir_n_est_pas_depensable_par_qrcode(
 
     # --- 4. La vente laisse la bonne trace comptable ---
     #
-    # Le tiroir a recu des especes : la ligne doit le dire, et etre rattachee au
-    # point de vente. Sans `point_de_vente`, la recharge sort du ticket Z du
-    # comptoir alors que l'argent y est physiquement.
-    # / The drawer received cash: the line must say so, and be attached to the
-    # point of sale — otherwise the top-up escapes the counter's Z report.
+    # Le tiroir a recu des especes : la vente doit le dire, et sa ligne etre
+    # rattachee au point de vente. Sans `point_de_vente`, la recharge sort du
+    # ticket Z du comptoir alors que l'argent y est physiquement.
+    # La ligne d'une vente de caisse ne porte ni moyen, ni monnaie, ni carte, ni
+    # portefeuille (Q-H2) : la carte est sur la vente, le moyen sur son reglement,
+    # la monnaie creditee sur le produit de recharge.
+    # / The drawer received cash: the sale must say so, and its line be attached to
+    # the point of sale. A register line has no method, currency, card or wallet
+    # (Q-H2): card on the sale, method on its payment, currency on the product.
     sortie = django_shell(
         "import json\n"
-        "from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin\n"
-        "from AuthBillet.models import TibilletUser\n"
-        f"user = TibilletUser.objects.get(email='{email}')\n"
+        "from BaseBillet.models import LigneArticle\n"
         "ligne = LigneArticle.objects.filter(\n"
-        "    wallet=user.wallet).order_by('-datetime').first()\n"
+        f"    vente__carte__tag_id='{TAG_DE_LA_CARTE_CLIENT}',\n"
+        f"    pricesold__productsold__product__uuid='{comptoir['produit_uuid']}',\n"
+        ").select_related('vente', 'pricesold__productsold__product__asset')"
+        ".order_by('-datetime').first()\n"
+        "moyens = []\n"
+        "if ligne:\n"
+        "    for reglement in ligne.vente.reglements.all():\n"
+        "        moyens.append(reglement.moyen)\n"
+        "produit = ligne.pricesold.productsold.product if ligne else None\n"
         "print('LIGNE_JSON=' + json.dumps({\n"
         "    'trouvee': bool(ligne),\n"
         "    'montant': int(ligne.amount) if ligne else None,\n"
-        "    'moyen': ligne.payment_method if ligne else None,\n"
+        "    'moyens': sorted(moyens),\n"
         "    'origine': ligne.sale_origin if ligne else None,\n"
         "    'statut': ligne.status if ligne else None,\n"
-        "    'asset': str(ligne.asset) if (ligne and ligne.asset) else None,\n"
+        "    'asset': str(produit.asset.uuid) if (produit and produit.asset) else None,\n"
         "    'pv': ligne.point_de_vente.name if (ligne and ligne.point_de_vente) else None,\n"
         "}))"
     )
     ligne = _lire_json_marque(sortie, "LIGNE_JSON=")
 
     assert ligne["trouvee"], (
-        "La recharge n'a laisse aucune LigneArticle : le portefeuille a ete "
-        "credite sans contrepartie comptable."
+        "La recharge n'a laisse aucune LigneArticle dans une vente de la carte "
+        "du client : le portefeuille a ete credite sans contrepartie comptable."
     )
     assert ligne["montant"] == MONTANT_DE_LA_RECHARGE_CENTIMES, (
         f"Montant comptabilise faux : {ligne}"
     )
-    assert ligne["moyen"] == "CA", (
-        f"La recharge a ete payee en especes, la ligne doit porter CASH : {ligne}"
+    assert ligne["moyens"] == ["CA"], (
+        f"La recharge a ete payee en especes, la vente doit avoir UN reglement "
+        f"en especes (CA) : {ligne}"
     )
     assert ligne["statut"] == "V", f"La ligne n'est pas validee : {ligne}"
     assert ligne["pv"] == NOM_DU_POINT_DE_VENTE, (
@@ -424,7 +435,7 @@ def test_une_recharge_au_comptoir_n_est_pas_depensable_par_qrcode(
         "Sans ce rattachement, la recharge sort du ticket Z du comptoir."
     )
     assert ligne["asset"] == comptoir["asset_local_uuid"], (
-        f"La ligne ne designe pas la monnaie creditee : {ligne}, "
+        f"Le produit de la ligne ne designe pas la monnaie creditee : {ligne}, "
         f"attendu {comptoir['asset_local_uuid']}."
     )
 

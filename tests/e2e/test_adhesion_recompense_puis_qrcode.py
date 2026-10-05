@@ -532,18 +532,26 @@ def test_l_adhesion_payee_credite_le_portefeuille_puis_se_depense_par_qrcode(
     # emet de la monnaie — une dette envers l'adherent — et rien ne l'enregistre
     # cote Lespass. Seules la metadata de la ligne et la transaction Fedow en
     # gardent trace.
-    # / The transfer itself leaves no entry: the venue issues currency (a debt
-    # towards the member) with nothing recording it on the Lespass side.
+    # On compte les lignes par leur VENTE, dont l'adherent est le client : une
+    # ligne de vente ne porte ni carte ni portefeuille (Q-H2). Les deux ventes du
+    # parcours sont mises de cote : la cotisation (sa ligne) et la depense par QR
+    # code (son origine). Toute autre ligne d'une vente de l'adherent serait une
+    # ecriture du versement.
+    # / The transfer itself leaves no entry. Lines are counted through their sale,
+    # whose client is the member (a line has no card nor wallet, Q-H2); the
+    # contribution line and the QR code spend are set aside.
     sortie = django_shell(
         "from AuthBillet.models import TibilletUser\n"
         "from BaseBillet.models import LigneArticle, SaleOrigin\n"
         f"user = TibilletUser.objects.get(email='{email}')\n"
-        "lignes = LigneArticle.objects.filter(\n"
-        "    wallet=user.wallet).exclude(sale_origin=SaleOrigin.QRCODE_MA)\n"
+        "lignes = LigneArticle.objects.filter(vente__client=user).exclude(\n"
+        "    sale_origin=SaleOrigin.QRCODE_MA).exclude(\n"
+        f"    uuid='{vente['uuid_ligne']}')\n"
         "print('LIGNES_HORS_QRCODE=' + str(lignes.count()))"
     )
     assert "LIGNES_HORS_QRCODE=0" in sortie, (
-        f"Le versement de recompense a laisse une ecriture comptable : "
-        f"{sortie[-200:]}. Ce fichier decrit l'inverse — si une contrepartie a "
-        "ete ajoutee, il faut reecrire ce constat."
+        f"Une vente de l'adherent porte une ligne en plus de la cotisation et de "
+        f"la depense par QR code : {sortie[-200:]}. Le versement de recompense "
+        "n'ecrit aucune ecriture comptable : si une contrepartie existe, ce "
+        "constat est a reecrire."
     )

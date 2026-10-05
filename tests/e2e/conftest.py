@@ -773,28 +773,43 @@ def instant_serveur(django_shell):
 
 @pytest.fixture(scope="session")
 def rapports_comptables(django_shell):
-    """Factory : lit les DEUX rapports comptables depuis un instant donne.
+    """Factory : ce que le rapport unique des ventes voit depuis un instant donne.
 
-    / Factory: reads BOTH accounting reports since a given instant.
+    / Factory: what the single sales report sees since a given instant.
 
-    POURQUOI DEUX RAPPORTS / WHY TWO REPORTS
-    ------------------------------------------
-    Lespass en tient deux, avec des perimetres complementaires, et une vente
-    n'apparait JAMAIS dans les deux :
+    LA SOURCE / THE SOURCE
+    ----------------------
+    Le rapport unique `comptabilite.rapport.RapportDesVentes` (tickets X et Z,
+    cloture du lieu). Il lit les ventes reglees de la periode, toutes origines, et
+    leurs reglements : jamais le moyen d'une ligne (vide sur une ligne de caisse,
+    Q-H2).
+    / The single report reads settled sales and their payments, never a line's
+    method (empty on a register line).
 
-    - **caisse** — `laboutik.reports.RapportComptableService`, ce que le caissier
-      cloture en fin de service (ticket X, ticket Z). Ne lit que les origines de
-      `ORIGINES_ENCAISSEES_PAR_LE_LIEU` : `LABOUTIK` et `TIREUSE`.
-    - **en_ligne** — `comptabilite.services.RapportComptableService`, la cloture
-      comptable des ventes a distance. Prend tout SAUF `LABOUTIK`.
+    LES DEUX PERIMETRES / THE TWO SCOPES
+    ------------------------------------
+    - **caisse** — le tiroir : les ventes faites SUR UN POINT DE VENTE
+      (`Vente.point_de_vente` renseigne), le perimetre de
+      `section_caisse_especes`. Ses montants n'ont aucune source asynchrone : ils
+      s'assertent au centime.
+    - **en_ligne** — tout le reste : les ventes reglees sans point de vente (en
+      ligne, admin, QR code). Une vente n'est jamais dans les deux.
 
-    Une vente correctement enregistree peut donc etre **invisible des deux** si
-    elle porte une origine mal choisie. C'est arrive aux remboursements de carte
-    (`ADMIN` au lieu de `LABOUTIK`) et aux ventes de tireuse. Verifier la seule
-    `LigneArticle` ne suffit pas : elle existe dans tous ces cas.
+    / caisse = sales made at a point of sale (the drawer); en_ligne = settled
+    sales without a point of sale. A sale is never in both.
 
-    / A correctly recorded sale can be invisible to BOTH reports if it carries the
-    wrong origin. Checking the LigneArticle alone never catches this.
+    LES CLES RENDUES / RETURNED KEYS
+    --------------------------------
+    - `caisse.especes` : especes recues + especes rendues du tiroir, hors
+      corrections (`section_caisse_especes`) ;
+    - `caisse.solde_caisse` : le mouvement du tiroir sur la periode, sans le fond
+      de caisse (solde theorique − fond) ;
+    - `caisse.total_recharges` : le net des recharges encaissees dans une vente
+      d'un point de vente ;
+    - `caisse.total_adhesions` : le net des articles d'adhesion d'une vente d'un
+      point de vente ;
+    - `en_ligne.total` : l'argent et le cashless des ventes sans point de vente
+      (reglements des natures vente, avoir, correction ; ni offert ni points).
 
     USAGE — poser la borne AVANT l'action, lire APRES :
 
@@ -805,65 +820,57 @@ def rapports_comptables(django_shell):
 
     POURQUOI UNE BORNE FIXE, ET PAS DEUX MESURES / WHY A FIXED LOWER BOUND
     -----------------------------------------------------------------------
-    La tentation est de mesurer avant, mesurer apres, et soustraire. Sur une
-    fenetre **glissante** (« les 6 dernieres heures »), c'est faux : entre les
-    deux mesures, la borne basse avance elle aussi, et de vieilles lignes sortent
-    de la fenetre par la gauche pendant que la nouvelle vente y entre par la
-    droite. Sur une base de developpement bien remplie, les deux mouvements se
-    compensent — l'ecart mesure vaut alors zero alors que la vente est
-    parfaitement comptabilisee.
-
-    En ancrant la borne basse a un instant fixe, la fenetre ne fait que
-    s'agrandir : elle ne contient QUE ce que le test vient de produire. Les
-    montants deviennent **exacts** au lieu d'etre des ecarts, ce qui est aussi
-    plus severe — un total juste ne peut plus se confondre avec un total qui a
-    seulement augmente.
-    / A sliding window makes deltas wrong: old lines leave on the left while the
-    new sale enters on the right, and on a well-filled dev DB the two cancel out.
-    A fixed lower bound only ever grows, so the window contains ONLY what the test
-    just produced — and the amounts become exact rather than relative.
+    Sur une fenetre glissante, de vieilles ventes sortent par la gauche pendant
+    que la nouvelle entre par la droite : sur une base de developpement remplie,
+    les deux mouvements se compensent et l'ecart mesure vaut zero. Avec une borne
+    basse fixe, la fenetre ne contient QUE ce que le test vient de produire, et
+    les montants sont exacts.
+    / A fixed lower bound: the window holds only what the test produced, and the
+    amounts are exact.
 
     :param depuis: borne basse, chaine ISO 8601 rendue par `instant_serveur()`.
-    :param nom_du_point_de_vente: PV dont on lit le rapport de caisse. `None`
-        (defaut) = tous points de vente confondus. Sans effet sur le perimetre
-        des lignes : la cloture est globale au tenant (PIEGES 9.64).
-    :return: dict {"caisse": {...}, "en_ligne": {...}}
+    :param nom_du_point_de_vente: garde pour les appelants. Le rapport unique est
+        celui du lieu entier (la cloture est globale au lieu, PIEGES 9.64) : ce
+        nom ne change pas le perimetre.
+    :return: dict {"caisse": {...}, "en_ligne": {"total": ...}}
     """
 
     def _lire(depuis, nom_du_point_de_vente=None):
-        filtre_pv = (
-            f"PointDeVente.objects.filter(name='{nom_du_point_de_vente}').first()"
-            if nom_du_point_de_vente
-            else "None"
-        )
         sortie = django_shell(
             "import json\n"
+            "from django.db.models import Sum\n"
             "from django.utils.dateparse import parse_datetime\n"
             "from django.utils import timezone\n"
-            "from laboutik.models import PointDeVente\n"
-            "from laboutik.reports import RapportComptableService as RapportCaisse\n"
-            "from comptabilite.services import RapportComptableService as RapportEnLigne\n"
+            "from BaseBillet.models import PaymentMethod\n"
+            "from BaseBillet.models_vente import Reglement\n"
+            "from comptabilite.rapport import NATURES_DES_REGLEMENTS, RapportDesVentes\n"
             "fin = timezone.localtime()\n"
             f"debut = parse_datetime('{depuis}')\n"
-            f"pv = {filtre_pv}\n"
-            "caisse = RapportCaisse(pv, debut, fin)\n"
-            "moyens = caisse.calculer_totaux_par_moyen()\n"
-            "recharges = caisse.calculer_recharges()\n"
-            "adhesions = caisse.calculer_adhesions()\n"
-            "en_ligne = RapportEnLigne(debut, fin)\n"
-            "moyens_en_ligne = en_ligne.calculer_totaux_par_moyen()\n"
+            "rapport = RapportDesVentes(debut, fin)\n"
+            "tiroir = rapport.section_caisse_especes()\n"
+            "articles_du_tiroir = rapport._articles_des_ventes_en_euros().filter(\n"
+            "    vente__point_de_vente__isnull=False)\n"
+            "recharges_du_tiroir = rapport._articles_de_recharge_encaissees().filter(\n"
+            "    vente__point_de_vente__isnull=False)\n"
+            "ventes_sans_point_de_vente = rapport._ventes_en_euros().filter(\n"
+            "    point_de_vente__isnull=True, nature__in=NATURES_DES_REGLEMENTS)\n"
+            "reglements_sans_point_de_vente = Reglement.objects.filter(\n"
+            "    vente__in=ventes_sans_point_de_vente).exclude(\n"
+            "    moyen__in=[PaymentMethod.FREE, PaymentMethod.NON_MONETAIRE])\n"
+            "def somme(requete, champ):\n"
+            "    return int(requete.aggregate(total=Sum(champ))['total'] or 0)\n"
             "print('RAPPORTS_JSON=' + json.dumps({\n"
             "    'caisse': {\n"
-            "        'especes': int(moyens.get('especes') or 0),\n"
-            "        'carte_bancaire': int(moyens.get('carte_bancaire') or 0),\n"
-            "        'total_recharges': int(recharges.get('total') or 0),\n"
-            "        'total_adhesions': int(adhesions.get('total') or 0),\n"
-            "        'solde_caisse': int(caisse.calculer_solde_caisse().get('solde') or 0),\n"
+            "        'especes': int(tiroir['especes_recues_en_centimes']\n"
+            "                       + tiroir['especes_rendues_en_centimes']),\n"
+            "        'solde_caisse': int(tiroir['solde_theorique_en_centimes']\n"
+            "                            - tiroir['fond_de_caisse_en_centimes']),\n"
+            "        'total_recharges': somme(recharges_du_tiroir, 'total_ttc'),\n"
+            "        'total_adhesions': somme(\n"
+            "            articles_du_tiroir.filter(membership__isnull=False), 'total_ttc'),\n"
             "    },\n"
             "    'en_ligne': {\n"
-            "        cle: int(valeur)\n"
-            "        for cle, valeur in (moyens_en_ligne or {}).items()\n"
-            "        if isinstance(valeur, (int, float))\n"
+            "        'total': somme(reglements_sans_point_de_vente, 'montant'),\n"
             "    },\n"
             "}))"
         )
@@ -871,7 +878,7 @@ def rapports_comptables(django_shell):
             if ligne.startswith("RAPPORTS_JSON="):
                 return json.loads(ligne[len("RAPPORTS_JSON=") :])
         pytest.fail(
-            "Lecture des rapports comptables impossible — le shell Django n'a "
+            "Lecture du rapport des ventes impossible — le shell Django n'a "
             f"rien imprime derriere RAPPORTS_JSON=. Sortie : {sortie[-500:]}"
         )
 
@@ -880,32 +887,25 @@ def rapports_comptables(django_shell):
 
 @pytest.fixture(scope="session")
 def rapports_qui_voient_la_ligne(django_shell):
-    """Factory : dans LEQUEL des deux rapports comptables une ligne precise entre.
+    """Factory : le rapport unique voit-il cette ligne, et dans quel perimetre ?
 
-    / Factory: which of the two accounting reports a given line falls into.
+    / Factory: does the single report see this line, and in which scope?
 
     POURQUOI CE HELPER PLUTOT QU'UN TOTAL / WHY THIS RATHER THAN A TOTAL
     ---------------------------------------------------------------------
-    Asserter un montant exact sur le rapport **en ligne** n'est pas fiable en
-    E2E : ses lignes arrivent par des webhooks Stripe, donc de facon
-    **asynchrone**. Le webhook d'un test precedent peut tomber pendant le test
-    suivant, et gonfler son total sans aucun rapport avec ce qu'il mesure. C'est
-    arrive : un renouvellement attendu a 100 relevait 200.
+    Les ventes sans point de vente arrivent aussi par des webhooks Stripe, donc de
+    facon asynchrone : le webhook d'un test precedent peut tomber pendant le test
+    suivant et gonfler un total (observe : 200 au lieu de 100). La question
+    deterministe est : **cette vente-la est-elle vue par le rapport, et dans quel
+    perimetre ?** Une ligne vue nulle part n'existe pour aucun comptable.
+    / Online totals can be inflated by asynchronous webhooks; ask instead whether
+    THIS line is seen by the report, and in which scope.
 
-    Le rapport de **caisse** n'a pas ce probleme (aucune source asynchrone), et
-    ses montants peuvent, eux, etre asserted au centime.
-
-    Ce helper repond a la seule question qui soit a la fois deterministe et
-    metier : **cette vente-la est-elle vue par un rapport, et lequel ?** Une
-    vente qui n'entre dans aucun des deux n'existe pour aucun comptable ; une
-    vente qui entre dans les deux est comptee deux fois.
-
-    / Asserting exact totals on the ONLINE report is unreliable: its lines arrive
-    via asynchronous Stripe webhooks, so a previous test's webhook can land during
-    the next one (observed: 200 where 100 was expected). The REGISTER report has
-    no async source and can be asserted to the cent. This helper answers the only
-    question that is both deterministic and meaningful: is THIS sale seen by a
-    report, and which one?
+    Les perimetres sont ceux de `rapports_comptables` : `caisse` = une vente
+    reglee de la periode faite sur un point de vente ; `en_ligne` = une vente
+    reglee de la periode sans point de vente. Une ligne est vue par le rapport
+    seulement par sa vente reglee (`RapportDesVentes._ventes_reglees`).
+    / Same scopes as rapports_comptables; a line is seen through its settled sale.
 
     :param uuid_de_la_ligne: uuid de la `LigneArticle` a situer.
     :param depuis: borne basse ISO 8601, rendue par `instant_serveur()`.
@@ -917,23 +917,24 @@ def rapports_qui_voient_la_ligne(django_shell):
             "import json\n"
             "from django.utils.dateparse import parse_datetime\n"
             "from django.utils import timezone\n"
-            "from laboutik.reports import RapportComptableService as RapportCaisse\n"
-            "from comptabilite.services import RapportComptableService as RapportEnLigne\n"
+            "from BaseBillet.models import LigneArticle\n"
+            "from comptabilite.rapport import RapportDesVentes\n"
             "fin = timezone.localtime()\n"
             f"debut = parse_datetime('{depuis}')\n"
             f"uuid_vise = '{uuid_de_la_ligne}'\n"
-            "caisse = RapportCaisse(None, debut, fin)\n"
-            "en_ligne = RapportEnLigne(debut, fin)\n"
+            "rapport = RapportDesVentes(debut, fin)\n"
+            "lignes_vues = LigneArticle.objects.filter(\n"
+            "    uuid=uuid_vise, vente__in=rapport._ventes_reglees())\n"
             "print('SITUATION_JSON=' + json.dumps({\n"
-            "    'caisse': caisse.lignes.filter(uuid=uuid_vise).exists(),\n"
-            "    'en_ligne': en_ligne.queryset.filter(uuid=uuid_vise).exists(),\n"
+            "    'caisse': lignes_vues.filter(vente__point_de_vente__isnull=False).exists(),\n"
+            "    'en_ligne': lignes_vues.filter(vente__point_de_vente__isnull=True).exists(),\n"
             "}))"
         )
         for ligne in sortie.splitlines():
             if ligne.startswith("SITUATION_JSON="):
                 return json.loads(ligne[len("SITUATION_JSON=") :])
         pytest.fail(
-            "Impossible de situer la ligne dans les rapports — le shell Django "
+            "Impossible de situer la ligne dans le rapport — le shell Django "
             f"n'a rien imprime derriere SITUATION_JSON=. Sortie : {sortie[-500:]}"
         )
 
