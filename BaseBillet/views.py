@@ -346,7 +346,7 @@ def get_context(request):
     # menu: agenda, memberships, contact (contact lives in the navbar template,
     # always last).
 
-    # Activation du menu "Réseau local" : pilotee UNIQUEMENT par le flag
+    # Activation du menu "Autour de nous" : pilotee UNIQUEMENT par le flag
     # config.module_federation. Le test d'existence de FederatedPlace est
     # devenu superflu depuis le support des entrantes : un tenant sans
     # FederatedPlace sortante peut quand meme avoir des voisins entrants
@@ -363,17 +363,18 @@ def get_context(request):
         navbar.append({
             'name': 'federation',
             'url': '/federation/',
-            'label': _('Local network'),
+            'label': _('Autour de nous'),
             'icon': 'diagram-2-fill'
         })
 
-    if crowd_config.active and Initiative.objects.exists() and config.module_crowdfunding:
-        navbar.append({
-            'name': 'crowd-list',
-            'url': '/contrib/',
-            'label': f'{crowd_config.title}',
-            'icon': 'people-fill'
-        })
+    # Remove from navbar, it is now a button in the tenant_header
+    # if crowd_config.active and Initiative.objects.exists() and config.module_crowdfunding:
+    #     navbar.append({
+    #         'name': 'crowd-list',
+    #         'url': '/contrib/',
+    #         'label': f'{crowd_config.title}',
+    #         'icon': 'people-fill'
+    #     })
 
     # Module réservation de ressources — visible seulement si activé dans la config.
     # / Resource booking module — visible only when enabled in admin config.
@@ -413,7 +414,7 @@ def get_context(request):
         navbar.append({
             'name': 'memberships_mvt',
             'url': '/memberships/',
-            'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
+            'label': config.membership_menu_name if config.membership_menu_name else _('Adhésions & services'),
             'icon': 'person-badge'
         })
 
@@ -3018,7 +3019,7 @@ class FederationViewset(viewsets.ViewSet):
         # / BreadcrumbList: Home > Local network. For SERP rich snippets.
         breadcrumb_json_ld_dict = build_json_ld_breadcrumb([
             {"name": str(config.organisation), "url": root_url},
-            {"name": str(_("Réseau local")), "url": request.build_absolute_uri()},
+            {"name": str(_("Autour de nous")), "url": request.build_absolute_uri()},
         ])
         breadcrumb_json_ld = json_for_html(breadcrumb_json_ld_dict)
 
@@ -3033,7 +3034,7 @@ class FederationViewset(viewsets.ViewSet):
             'has_other_federated_places': has_other_federated_places,
             'federation_json_ld': federation_json_ld,
             'breadcrumb_json_ld': breadcrumb_json_ld,
-            'page_title': _('Réseau local'),
+            'page_title': _('Autour de nous'),
             'texte_introduction': config_federation.texte_introduction,
         })
 

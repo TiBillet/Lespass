@@ -77,6 +77,9 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
      invisible à l'œil. / Letchi as a FILL under ink text: canonical letchi
      is 4.45:1 (fails AA), lightened 4% it reaches 4.63:1. */
   --letchi-fond: #ea3b69;
+  --letchi-button-fond : #FB4F7C;
+  --letchi-button-hover : #FA99B2;
+
   --zanana:      #e9b322;  /* alerte, accent chaud — fonds/dégradés uniquement */
   --chouchou:      #259d49;  /* succès, validation */
   --chouchou-text: #1e7e3a;  /* chouchou utilisée comme texte (4,8:1 sur papier) */
@@ -585,8 +588,6 @@ img { max-width: 100%; display: block; }
 .btn--grad-calme { background: var(--grad-calme); }   /* Créer un espace */
 .btn--grad-frais { background: var(--grad-frais); }   /* Contribuer au projet */
 
-.btn--grad-calme:hover,
-.btn--grad-frais:hover { filter: none; background: var(--color-hover); color: var(--color-text); }
 
 .site-footer__legal {
   border-top: 1px solid var(--color-border);
@@ -1073,19 +1074,19 @@ img { max-width: 100%; display: block; }
 .btn--primary:focus-visible,
 .btn-primary,
 .btn-primary:focus-visible {
-  background: var(--color-text);
-  color: var(--color-text-inverse);
-  border-color: var(--color-text);
-  box-shadow: inset 0 -3px 0 var(--color-action-signal);
+  background: var(--letchi-button-fond);
+  color: #000;
+  border-color: transparent;
+  transition: 0.2s;
 }
 .btn--primary:hover:not(:disabled),
 .btn-primary:hover:not(:disabled),
 .btn--outline-primary:hover:not(:disabled),
 .btn-outline-primary:hover:not(:disabled) {
-  background: var(--color-action-hover);
-  color: var(--color-text-inverse);
-  border-color: var(--color-action-hover);
-  box-shadow: inset 0 -5px 0 var(--color-action-signal);
+  background: var(--letchi-button-hover);
+  color: #000;
+  border-color: transparent;
+  transition: 0.2s;
 }
 /* Bootstrap met outline: 0 sur .btn:focus-visible : on remet l'anneau du skin. */
 .btn--primary:focus-visible,
@@ -1188,47 +1189,15 @@ img { max-width: 100%; display: block; }
    l'espace, et l'arrondi ne tombe pas toujours au milieu — mesuré à
    1,5px d'écart constant sur « Réserver », « Demander », etc. */
 .btn--sm { padding: 7px 14px; font-size: var(--text-md); line-height: 0.875rem; }
-/* Le dégradé signature, réservé au geste-Tibillet le plus net : recharger
-   son solde. Pas un aplat générique parmi d'autres — un CTA de plus qui
-   passerait en dégradé remettrait de la couleur partout, ce que la DA
-   proscrit justement.
-   grad-chaud, et NON grad-nuit : aucun texte ne passait sur grad-nuit (blanc
-   3,25:1 au point bleu, encre 3,79:1 au point violet). grad-nuit reste la
-   surface décorative du talisman, qui ne porte pas de libellé à lire.
-   / grad-chaud, not grad-nuit: no text colour cleared AA on grad-nuit. */
-/* LISERÉ DÉGRADÉ, et plus aplat. L'encre sur grad-chaud passait WCAG (4,63 →
-   9,5:1) mais pas l'œil : Lc 38 au départ letchi en APCA, Lc 42 à 53 sous le
-   libellé centré de « Recharger ». Même mécanique que .btn--primary : fond
-   encre, libellé blanc (18,2:1), le dégradé en liseré de 4px (6px au survol),
-   qui rentre à l'appui. Plus épais que le liseré letchi simple : la signature
-   se distingue du bouton principal. Le liseré est un élément non textuel :
-   4,6 → 9,5:1 contre l'encre, seuil 3:1.
-   Technique : une couche encre, plus courte que le bouton, posée sur le dégradé.
-   `border-box` sur les deux couches, sinon le dégradé déborde sous la bordure
-   transparente de .btn et dessine un filet autour du bouton.
-   Même règle pour « Faire un don » (.btn--grad-chaud, pied de page).
-   / Gradient EDGE, no longer a fill: ink on grad-chaud scored Lc 38-53. Same
-   mechanics as .btn--primary: ink fill, white label, the gradient as a 4px edge
-   (6px on hover) that retracts on press. An ink layer shorter than the button
-   sits on the gradient; border-box on both layers, else the gradient shows
-   under .btn's transparent border. Also used by the footer donation button. */
+
 .btn--signature,
 .btn--signature:focus-visible,
 .btn--grad-chaud,
 .btn--grad-chaud:focus-visible {
   background:
-    linear-gradient(var(--color-text), var(--color-text)) top / 100% calc(100% - 4px) no-repeat border-box,
     var(--grad-chaud) border-box;
-  color: var(--color-text-inverse);
+  color: var(--color-text);
   border-color: transparent;
-}
-.btn--signature:hover:not(:disabled),
-.btn--grad-chaud:hover:not(:disabled) {
-  background:
-    linear-gradient(var(--color-action-hover), var(--color-action-hover)) top / 100% calc(100% - 6px) no-repeat border-box,
-    var(--grad-chaud) border-box;
-  color: var(--color-text-inverse);
-  filter: none;
 }
 /* Bootstrap met outline: 0 sur .btn:focus-visible : on remet l'anneau du skin. */
 .btn--signature:focus-visible,
@@ -1240,22 +1209,7 @@ img { max-width: 100%; display: block; }
 .btn:active:not(:disabled),
 .icon-btn:active,
 .tag-pill:active { transform: translateY(1px); }
-/* Appui du bouton principal : le liseré letchi rentre et le bouton descend de sa
-   hauteur, il s'enfonce. Enfoncement en 60ms, remontée à la durée normale.
-   Placé APRÈS la règle générique (même spécificité) pour que les 3px gagnent ;
-   le bloc prefers-reduced-motion, plus bas, annule toujours la translation.
-   / Primary press: the letchi edge retracts and the button sinks by its height.
-   After the generic rule so 3px wins; reduced motion still cancels it below. */
-.btn--primary:active:not(:disabled),
-.btn-primary:active:not(:disabled),
-.btn--outline-primary:active:not(:disabled),
-.btn-outline-primary:active:not(:disabled) {
-  background: var(--color-text);
-  color: var(--color-text-inverse);
-  box-shadow: inset 0 0 0 var(--color-action-signal);
-  transform: translateY(3px);
-  transition-duration: 60ms;
-}
+
 /* Signature et don : même enfoncement, le liseré dégradé (4px) rentre : la
    couche encre reprend toute la hauteur. / Same press, the 4px gradient edge
    retracts: the ink layer takes the full height. */
@@ -1374,15 +1328,34 @@ img { max-width: 100%; display: block; }
   gap: var(--space-3);
   box-shadow: var(--shadow-card);
   overflow: hidden;
+  height : 300px;
 }
 
 .offer-card__cover{height: 108px;}
 
 .offer-card__content{
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
   padding: var(--space-5);
 }
-.offer-card__title { font-size: var(--text-lg); font-family: var(--font-text); font-weight: 700; }
-.offer-card__desc { color: var(--color-text-muted); font-size: var(--text-md); line-height: 1.5; flex-grow: 1; }
+.offer-card__title {
+  font-size: var(--text-lg);
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+}
+.offer-card__desc {
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  line-height: 1.6;
+  flex-grow: 1;
+  overflow: hidden;
+  white-space: nowrap; /* Don't forget this one */
+  text-overflow: ellipsis;
+  height: 100%;
+}
 .offer-card__price { font-size: var(--text-ui); font-weight: 700; }
 .offer-card__price .unit { font-weight: 400; color: var(--color-text-muted); font-size: var(--text-sm); }
 .offer-card__footer {
@@ -1394,6 +1367,7 @@ img { max-width: 100%; display: block; }
   flex-wrap: wrap;
   gap: var(--space-2);
   padding-top: var(--space-3);
+  margin-top: var(--space-3);
   border-top: 1px solid var(--color-border);
 }
 /* Loséyan pour les liens (rôle « info · liens » de la DA) — jamais
@@ -1780,13 +1754,10 @@ img { max-width: 100%; display: block; }
 #explorer-root .explorer-card-dist { color: var(--color-text-faint); font-size: var(--text-sm); }
 #explorer-root .explorer-card-dist--sans-lieu { color: var(--color-text-faint); }
 
-/* Lien "Visiter le lieu" : look btn--primary btn--sm (fond encre, liseré letchi,
-   enfoncement à l'appui). / "Visit the venue" link: btn--primary btn--sm look. */
 #explorer-root .explorer-card-link {
-  background: var(--color-text);
-  color: var(--color-text-inverse);
-  border-color: var(--color-text);   /* explorer.css pose une bordure verte */
-  box-shadow: inset 0 -3px 0 var(--color-action-signal);
+  background: var(--letchi-button-fond);
+  color: #000;
+  border-color: transparent;
   font-weight: 700;
   padding: 7px 14px;
   font-size: var(--text-md);
@@ -1795,10 +1766,10 @@ img { max-width: 100%; display: block; }
   transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
 }
 #explorer-root .explorer-card-link:hover {
-  background: var(--color-action-hover);
-  color: var(--color-text-inverse);
-  border-color: var(--color-action-hover);
-  box-shadow: inset 0 -5px 0 var(--color-action-signal);
+  background: var(--letchi-button-hover);
+  color: #000;
+  border-color: transparent;
+  transition: 0.2s;
   transform: none;   /* explorer.css décale de 2px au survol : un seul mouvement, celui de l'appui */
 }
 #explorer-root .explorer-card-link:active {
