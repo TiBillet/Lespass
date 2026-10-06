@@ -353,6 +353,39 @@ invitation ne peut plus être acceptée. » (`fedow_core/admin.py`).
 
 ---
 
+## Menu « Monnaies » : une porte par moteur ; plus de création d'asset legacy / Currencies menu: one door per engine; no more legacy asset creation
+
+**Quoi / What :** la section du menu s'appelle « Monnaies locales, temps, SSA et cashless ».
+- Lieu v2, monnaie locale allumée : « Monnaies et tokens », « Transactions », « Réseaux de
+  monnaie » (`fedow_core`) puis « Cartes NFC ». Plus d'entrée vers l'ancien Fedow, même si le
+  lieu a des assets legacy.
+- Lieu legacy, fédération allumée ou assets legacy : « Actifs » (l'admin des assets de l'ancien
+  Fedow, libellé de `main`) puis « Cartes NFC ».
+- L'admin des assets de l'ancien Fedow ne crée plus d'asset (le bouton « Ajouter » disparaît) :
+  on gère, invite et accepte les assets existants.
+/ v2 venues see the fedow_core pages, legacy venues see the old Fedow "Assets"; both get "NFC
+cards"; no more legacy asset creation from the admin.
+
+**Pourquoi / Why :** décision du mainteneur : la démo montrait deux portes vers les monnaies
+(V2 et legacy). La caisse, la tireuse et le kiosk V2 paient avec les monnaies `fedow_core` :
+un lieu v2 garde leurs pages. Un lieu legacy garde l'ancien Fedow. Plus de nouvel asset legacy
+en attendant H-2 / H-3.
+/ Maintainer decision: one door per engine; fedow_core is needed by the V2 POS.
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin/dashboard.py` | section « Monnaies » : pages et condition d'affichage ; nom de `module_monnaie_locale` dans `MODULE_FIELDS` |
+| `tests/pytest/test_verrou_moteur_legacy.py` | `test_section_monnaies_suit_le_moteur` réécrit sur la nouvelle règle ; `test_une_page_une_section_sur_un_lieu_legacy_avec_assets_legacy` (ex-« v2 ») et `test_assets_legacy_lus_une_fois_par_requete` passés sur un lieu legacy ; docstring du module |
+| `Administration/admin_tenant.py` | `AssetAdmin` (`fedow_public`) : `has_add_permission` = False, plus de création d'asset legacy depuis l'admin (on gère, invite et accepte les existants) |
+| `tests/pytest/test_admin_asset_sans_fedow.py` | nouveau test : page d'ajout 403 (même au superadmin), pas de lien d'ajout dans la liste |
+| `tests/e2e/test_federation_asset_legacy_inter_lieux.py` | B1 : vérifie que la page d'ajout répond 403, puis crée l'asset comme le faisait `save_model` (ligne en base + `get_or_create_token_asset`) |
+
+**Traductions / Translations :** un msgid nouveau : « Monnaies locales, temps, SSA et
+cashless » (`dashboard.py`, l'ancien « Monnaies locales, temps et cashless » disparaît).
+« Assets » est déjà traduit « Actifs ».
+
+---
+
 ## Comment tester (à la main) / Manual test
 
 ### Test 1 — les moteurs des lieux de dev
@@ -403,12 +436,14 @@ kiosque », sans encart BETA (15-bis). Les domaines Laboutik et Lémachines affi
 (v2) : rien ne change, la caisse et les tireuses gardent leur encart BETA.
 
 ### Test 9 (15-3) — le menu « Monnaies »
-- `festival` : domaine Lerézo → « Monnaies locales, temps et cashless » → une seule page,
-  « Assets legacy », un seul onglet « Gérer ». Pas de section Caisse, Terminaux, Inventaire,
+- `festival` : domaine Lerézo → « Monnaies locales, temps, SSA et cashless » → « Actifs »
+  puis « Cartes NFC », un seul onglet « Gérer ». Pas de section Caisse, Terminaux, Inventaire,
   Tireuses, Kiosk. Le module « Fédération et agenda participatif » n'a plus « Assets ».
-- `lespass` : la même section a « Monnaies et tokens », « Cartes NFC », « Assets legacy »
-  (lespass a des assets legacy), « Réseaux de monnaie », « Transactions ». Sur
-  `/admin/fedow_public/assetfedowpublic/`, le rail ne surligne que « Monnaies ».
+- `lespass` (v2, monnaie locale allumée) : la même section a « Monnaies et tokens »,
+  « Transactions », « Réseaux de monnaie », « Cartes NFC » ; pas d'« Actifs » (ancien Fedow),
+  bien que `lespass` ait des assets legacy.
+- Sur `/admin/fedow_public/assetfedowpublic/` (lieu legacy), pas de bouton « Ajouter » ;
+  `/admin/fedow_public/assetfedowpublic/add/` répond 403.
 
 ### Test 10 (15-4) — `compter_avant` sur la copie de production
 Seulement sur la pile à part, après `charger` et avant `neutraliser` :

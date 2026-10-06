@@ -6448,8 +6448,12 @@ class AssetAdmin(ModelAdmin):
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+    # Plus de creation d'asset dans l'ancien Fedow depuis l'admin (decision du
+    # mainteneur, 2026-10-06) : en attendant la migration H-2 / H-3, on gere, invite et
+    # accepte les assets existants, on n'en cree plus.
+    # / No more asset creation on the old Fedow from the admin, until H-2 / H-3.
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

@@ -254,6 +254,18 @@ l'ancien Fedow : … »).
 > **Réécrit le 2026-10-06 (décision Q1 du mainteneur, suivi `CHANTIER-15-10-14-SUIVI.md` §5)** :
 > plus d'entrée directe en tête du menu ; une seule porte, la section « Monnaies ».
 
+> **Amendé le 2026-10-06 (décision du mainteneur, suivi §5) : une porte par moteur.** La section
+> s'appelle « Monnaies locales, temps, SSA et cashless ».
+> - Lieu `v2` : si `module_monnaie_locale` est allumé, « Monnaies et tokens », « Transactions »,
+>   « Réseaux de monnaie » (`fedow_core`, nécessaires à la caisse, la tireuse et le kiosk V2) puis
+>   « Cartes NFC ». **Aucune entrée vers l'ancien Fedow**, même si le lieu a des assets legacy.
+> - Lieu `legacy` : si `module_federation` est allumé ou si le lieu a des assets legacy, « Actifs »
+>   (msgid `Assets`, l'admin des assets legacy, le libellé de `main`) puis « Cartes NFC ».
+> - L'admin des assets legacy ne crée plus d'asset (`has_add_permission` = False).
+>
+> Cet amendement remplace les puces ci-dessous sur le contenu de la section, « Assets legacy »
+> chez un lieu v2 (donc l'invitation CLAF vue par un lieu v2) et « Cartes NFC » absent en legacy.
+
 **Fichier :** `Administration/admin/dashboard.py`.
 
 - Les sections des modules V2 (`module_caisse`, « Terminaux matériels », « Inventaire » —

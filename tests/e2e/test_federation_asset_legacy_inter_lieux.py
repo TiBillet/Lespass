@@ -16,9 +16,10 @@ LES LIEUX / THE VENUES
 
 LE PARCOURS (test B) / THE JOURNEY (test B)
 --------------------------------------------
-B1. L'admin de `lespass` cree un asset TLF dans `/admin/fedow_public/assetfedowpublic/add/`.
-    `save_model` le cree sur le Fedow (`get_or_create_token_asset`) : on le relit sur le
-    Fedow.
+B1. L'admin ne cree plus d'asset legacy (`has_add_permission` = False, decision du
+    2026-10-06) : la page `/admin/fedow_public/assetfedowpublic/add/` est refusee. Le test
+    cree l'asset TLF de `lespass` comme le faisait `save_model` (ligne en base, puis
+    `get_or_create_token_asset` sur le Fedow) : on le relit sur le Fedow.
 B2. Sur la fiche de l'asset, il invite `festival` (`pending_invitations`).
 B3. L'admin de `festival` voit l'invitation au-dessus de sa liste et clique « ACCEPTER »
     (`AssetAdmin.accept_invitation`, qui appelle `create_fed` dans le contexte du lieu
@@ -315,22 +316,44 @@ def test_parcours_monnaie_federee_entre_deux_lieux(
     nom_de_l_asset = nom_de_l_asset_legacy
 
     # ------------------------------------------------------------------
-    # B1. L'admin de `lespass` cree l'asset TLF ; il existe sur le Fedow.
-    #     / The `lespass` admin creates the TLF asset; it exists on the Fedow.
+    # B1. L'admin ne peut plus creer d'asset legacy : la page d'ajout est refusee.
+    #     Le test cree l'asset TLF de `lespass` comme le faisait `save_model` ; il
+    #     existe sur le Fedow.
+    #     / The admin can no longer create a legacy asset; the test creates it like
+    #     `save_model` did; it exists on the Fedow.
     # ------------------------------------------------------------------
     login_as_admin(page)
-    page.goto(f"{URL_DE_LA_LISTE_LEGACY}add/")
-    page.wait_for_load_state("networkidle")
-    page.locator('input[name="name"]').fill(nom_de_l_asset)
-    page.locator('input[name="currency_code"]').fill("EUR")
-    page.locator('select[name="category"]').select_option("TLF")
-    page.locator('button[name="_save"], input[name="_save"]').first.click()
-    page.wait_for_load_state("networkidle")
+    reponse_de_la_page_d_ajout = page.goto(f"{URL_DE_LA_LISTE_LEGACY}add/")
+    assert reponse_de_la_page_d_ajout.status == 403, (
+        "La page d'ajout d'un asset legacy doit etre refusee (has_add_permission = False), "
+        f"elle repond {reponse_de_la_page_d_ajout.status}."
+    )
+
+    creation = _lire_en_base(
+        django_shell,
+        "import json\n"
+        "from django.db import connection\n"
+        "from fedow_connect.fedow_api import FedowAPI\n"
+        "from fedow_connect.models import FedowConfig\n"
+        "from fedow_public.models import AssetFedowPublic\n"
+        "configuration_fedow = FedowConfig.get_solo()\n"
+        "asset = AssetFedowPublic.objects.create(\n"
+        f"    name={nom_de_l_asset!r},\n"
+        "    currency_code='EUR',\n"
+        "    category=AssetFedowPublic.TOKEN_LOCAL_FIAT,\n"
+        "    origin=connection.tenant,\n"
+        "    wallet_origin=configuration_fedow.wallet,\n"
+        ")\n"
+        "_asset, cree = FedowAPI(fedow_config=configuration_fedow).asset.get_or_create_token_asset(asset)\n"
+        "print('RESULTAT_JSON=' + json.dumps({'cree_sur_le_fedow': bool(cree)}))\n",
+    )
+    assert creation["cree_sur_le_fedow"], (
+        f"L'asset legacy « {nom_de_l_asset} » existait deja sur le Fedow."
+    )
 
     etat_apres_creation = _etat_de_l_asset_legacy_en_base(django_shell, nom_de_l_asset)
     assert etat_apres_creation["existe"], (
-        f"L'asset legacy « {nom_de_l_asset} » n'existe pas en base apres l'enregistrement. "
-        "Regarder la capture : erreur Fedow dans save_model ?"
+        f"L'asset legacy « {nom_de_l_asset} » n'existe pas en base apres sa creation."
     )
     assert etat_apres_creation["lieu_d_origine"] == LIEU_EMETTEUR
     uuid_de_l_asset = etat_apres_creation["uuid"]

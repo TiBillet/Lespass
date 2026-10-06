@@ -45,10 +45,12 @@ TECH_DOC/SESSIONS/FEDOW_IMPORT/briefs/15-3.md.
   La carte tireuse n'a pas de lien « Open kiosk ». Les cartes fermées ne comptent pas
   parmi les modules éteints « à découvrir ».
 - Menu latéral : les sections des modules V2 (caisse, terminaux, inventaire, tireuse,
-  kiosk) exigent un lieu v2. La section « Monnaies » (slug `monnaies`) suit le moteur :
-  v2 = les pages `fedow_core`, plus « Assets legacy » si le lieu a des assets legacy ;
-  legacy = seulement « Assets legacy », si `module_federation` est allumé ou si le lieu a
-  des assets legacy. « Assets » sort du module Fédération. Une page = une section.
+  kiosk) exigent un lieu v2. La section « Monnaies » (slug `monnaies`) : une porte par
+  moteur (décision du 2026-10-06). v2 = les pages `fedow_core` puis « Cartes NFC », si la
+  monnaie locale est allumée, sans entrée vers l'ancien Fedow ; legacy = « Actifs »
+  (assets legacy) puis « Cartes NFC », si `module_federation` est allumé ou si le lieu a
+  des assets legacy.
+  « Assets » sort du module Fédération. Une page = une section.
 / Business rules (part 3): the lock on the dashboard cards and in the sidebar.
 
 RÈGLE MÉTIER TESTÉE (4e partie : corrections de la relecture, tests 23 à 29)
@@ -2085,24 +2087,27 @@ class TestAffichageDuVerrou(FastTenantTestCase):
 
     def test_section_monnaies_suit_le_moteur(self):
         """
-        La section « Monnaies » (slug `monnaies`, spec §5.5, décision Q1) :
-        - v2, monnaie locale allumée, sans asset legacy : pages `fedow_core`, pas
-          d'« Assets legacy » ;
-        - v2, monnaie locale allumée, avec un asset legacy (le lieu en est l'origine, ou
-          fédéré, ou invité) : « Assets legacy » en plus, dans l'onglet « Gérer », titre
-          avec « legacy » ;
-        - v2, assets legacy exclus (badge BDG, adhésion SUB, archivé) : pas d'« Assets
-          legacy » ;
-        - v2, monnaie locale éteinte, invité sur un asset legacy : seulement « Assets
-          legacy » ; sans asset legacy : pas de section ;
-        - legacy + fédération (monnaie locale restée allumée en base) : seulement « Assets
-          legacy », titre de la section inchangé ;
-        - legacy sans fédération mais invité sur un asset legacy : seulement « Assets
-          legacy » ;
-        - legacy sans fédération ni asset legacy : pas de section.
-        / The "Currencies" section follows the engine and the venue's legacy assets.
+        La section « Monnaies » (slug `monnaies`, spec §5.5, décision du 2026-10-06 : une
+        porte par moteur).
+        - v2 : si la monnaie locale est allumée, les pages `fedow_core` (« Monnaies et
+          tokens », « Transactions », « Réseaux de monnaie ») puis « Cartes NFC » ; aucune
+          entrée vers l'ancien Fedow, même si le lieu a des assets legacy ; sans monnaie
+          locale, pas de section (même avec la fédération ou un asset legacy) ;
+        - legacy : « Actifs » (assets de l'ancien Fedow, onglet « Gérer ») puis « Cartes
+          NFC », si la fédération est allumée ou si le lieu a un asset legacy (origine,
+          fédéré, invité) ; les badges (BDG), adhésions (SUB) et assets archivés ne
+          comptent pas ; la monnaie locale (module V2 fermé) n'ouvre rien.
+        / The "Currencies" section: one door per engine.
         """
         adresse_assets_legacy = adresse_des_assets_legacy()
+        adresse_cartes_nfc = reverse("staff_admin:QrcodeCashless_cartecashless_changelist")
+        pages_attendues_en_v2 = [
+            reverse("staff_admin:fedow_core_asset_changelist"),
+            reverse("staff_admin:fedow_core_transaction_changelist"),
+            reverse("staff_admin:fedow_core_federation_changelist"),
+            adresse_cartes_nfc,
+        ]
+        pages_attendues_en_legacy = [adresse_assets_legacy, adresse_cartes_nfc]
         carte_des_liens = dashboard._carte_des_liens_vers_modeles()
         constats_faux = []
 
@@ -2110,45 +2115,60 @@ class TestAffichageDuVerrou(FastTenantTestCase):
             sections, _toutes = self.sections_par_slug(configuration)
             return sections.get(SLUG_DE_LA_SECTION_MONNAIES)
 
-        # --- Lieu v2 / v2 venue ---
-        self.poser_le_moteur_du_lieu_dedie(MOTEUR_V2)
-        configuration_v2 = self.configuration_en_memoire(["module_monnaie_locale"])
-
-        section = section_monnaies(configuration_v2)
-        if section is None:
-            constats_faux.append("v2 sans asset legacy : section absente")
-        else:
-            liens = liens_de_la_section(section)
-            if reverse("staff_admin:fedow_core_asset_changelist") not in liens:
-                constats_faux.append("v2 sans asset legacy : « Monnaies et tokens » absent")
-            if adresse_assets_legacy in liens:
-                constats_faux.append("v2 sans asset legacy : « Assets legacy » présent")
-
-        for lien_avec_le_lieu in ["origine", "federe", "invite"]:
-            with self.un_asset_legacy_le_temps_du_bloc(lien_avec_le_lieu):
-                section = section_monnaies(configuration_v2)
-            cas = f"v2, asset legacy ({lien_avec_le_lieu})"
+        def verifier_la_section(cas, section, pages_attendues):
             if section is None:
                 constats_faux.append(f"{cas} : section absente")
-                continue
-            pages_assets_legacy = [
-                page
-                for page in section["items"]
-                if str(page.get("link")) == adresse_assets_legacy
-            ]
-            if len(pages_assets_legacy) != 1:
-                constats_faux.append(f"{cas} : « Assets legacy » absent")
-                continue
-            if "legacy" not in str(pages_assets_legacy[0].get("title")).lower():
-                constats_faux.append(f"{cas} : titre sans « legacy »")
-            if reverse("staff_admin:fedow_core_asset_changelist") not in liens_de_la_section(section):
-                constats_faux.append(f"{cas} : « Monnaies et tokens » absent")
+                return
+            liens = liens_de_la_section(section)
+            if liens != pages_attendues:
+                constats_faux.append(f"{cas} : pages {liens}")
+
+        def verifier_la_section_legacy(cas, section):
+            verifier_la_section(cas, section, pages_attendues_en_legacy)
+            if section is None:
+                return
+            if any("/admin/fedow_core/" in lien for lien in liens_de_la_section(section)):
+                constats_faux.append(f"{cas} : une page fedow_core est visible")
             pages_de_gerer = dashboard._categoriser_les_pages(
                 section["items"], carte_des_liens
             ).get("gerer", [])
-            liens_de_gerer = [str(page.get("link")) for page in pages_de_gerer]
-            if adresse_assets_legacy not in liens_de_gerer:
-                constats_faux.append(f"{cas} : « Assets legacy » hors de « Gérer »")
+            if adresse_assets_legacy not in [str(page.get("link")) for page in pages_de_gerer]:
+                constats_faux.append(f"{cas} : « Actifs » hors de « Gérer »")
+
+        # --- Lieu v2 / v2 venue ---
+        self.poser_le_moteur_du_lieu_dedie(MOTEUR_V2)
+        configuration_v2_monnaie_locale = self.configuration_en_memoire(["module_monnaie_locale"])
+        configuration_v2_federation = self.configuration_en_memoire(["module_federation"])
+        configuration_v2_rien = self.configuration_en_memoire([])
+
+        verifier_la_section(
+            "v2, monnaie locale",
+            section_monnaies(configuration_v2_monnaie_locale),
+            pages_attendues_en_v2,
+        )
+        with self.un_asset_legacy_le_temps_du_bloc("invite"):
+            verifier_la_section(
+                "v2, monnaie locale et asset legacy",
+                section_monnaies(configuration_v2_monnaie_locale),
+                pages_attendues_en_v2,
+            )
+            if section_monnaies(configuration_v2_rien) is not None:
+                constats_faux.append("v2 sans monnaie locale, asset legacy : section présente")
+        if section_monnaies(configuration_v2_federation) is not None:
+            constats_faux.append("v2, fédération seule : section présente")
+        if section_monnaies(configuration_v2_rien) is not None:
+            constats_faux.append("v2 sans module : section présente")
+
+        # --- Lieu legacy / legacy venue ---
+        self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
+
+        configuration_legacy_rien = self.configuration_en_memoire([])
+        for lien_avec_le_lieu in ["origine", "federe", "invite"]:
+            with self.un_asset_legacy_le_temps_du_bloc(lien_avec_le_lieu):
+                section = section_monnaies(configuration_legacy_rien)
+            verifier_la_section_legacy(
+                f"legacy sans module, asset legacy ({lien_avec_le_lieu})", section
+            )
 
         cas_exclus = [
             ("badge BDG", {"categorie": AssetFedowPublic.BADGE}),
@@ -2157,60 +2177,25 @@ class TestAffichageDuVerrou(FastTenantTestCase):
         ]
         for nom_du_cas, parametres in cas_exclus:
             with self.un_asset_legacy_le_temps_du_bloc("origine", **parametres):
-                section = section_monnaies(configuration_v2)
-            if section is not None and adresse_assets_legacy in liens_de_la_section(section):
-                constats_faux.append(f"v2, asset {nom_du_cas} : « Assets legacy » présent")
+                section = section_monnaies(configuration_legacy_rien)
+            if section is not None:
+                constats_faux.append(f"legacy sans module, asset {nom_du_cas} : section présente")
 
-        # v2, monnaie locale éteinte : la section n'existe que pour les assets legacy
-        # (décision Q1 : une seule porte ; l'invitation reste acceptable).
-        # / v2, local currency off: the section exists only for the legacy assets.
-        configuration_v2_sans_monnaie_locale = self.configuration_en_memoire([])
-        with self.un_asset_legacy_le_temps_du_bloc("invite"):
-            section = section_monnaies(configuration_v2_sans_monnaie_locale)
-        if section is None:
-            constats_faux.append("v2 invité, monnaie locale éteinte : section absente")
-        elif liens_de_la_section(section) != [adresse_assets_legacy]:
-            constats_faux.append(
-                f"v2 invité, monnaie locale éteinte : pages {liens_de_la_section(section)}"
-            )
-        if section_monnaies(configuration_v2_sans_monnaie_locale) is not None:
-            constats_faux.append("v2 sans monnaie locale ni asset : section présente")
-
-        # --- Lieu legacy / legacy venue ---
-        self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
-
-        configuration_legacy_federation = self.configuration_en_memoire(
-            ["module_federation", "module_monnaie_locale"]
-        )
-        section = section_monnaies(configuration_legacy_federation)
-        if section is None:
-            constats_faux.append("legacy + fédération : section absente")
-        else:
-            if liens_de_la_section(section) != [adresse_assets_legacy]:
-                constats_faux.append(
-                    f"legacy + fédération : pages {liens_de_la_section(section)}"
-                )
-            titre_attendu = str(dashboard.MODULE_FIELDS["module_monnaie_locale"]["name"])
-            if str(section.get("title")) != titre_attendu:
-                constats_faux.append(
-                    f"legacy + fédération : titre « {section.get('title')} »"
-                )
-
-        configuration_legacy_sans_federation = self.configuration_en_memoire([])
-        with self.un_asset_legacy_le_temps_du_bloc("invite"):
-            section = section_monnaies(configuration_legacy_sans_federation)
-        if section is None:
-            constats_faux.append("legacy invité, sans fédération : section absente")
-        elif liens_de_la_section(section) != [adresse_assets_legacy]:
-            constats_faux.append(
-                f"legacy invité, sans fédération : pages {liens_de_la_section(section)}"
-            )
+        if section_monnaies(configuration_legacy_rien) is not None:
+            constats_faux.append("legacy sans module ni asset : section présente")
 
         section = section_monnaies(
-            self.configuration_en_memoire(["module_monnaie_locale"])
+            self.configuration_en_memoire(["module_federation", "module_monnaie_locale"])
         )
+        verifier_la_section_legacy("legacy + fédération", section)
         if section is not None:
-            constats_faux.append("legacy sans fédération ni asset : section présente")
+            titre_attendu = str(dashboard.MODULE_FIELDS["module_monnaie_locale"]["name"])
+            if str(section.get("title")) != titre_attendu:
+                constats_faux.append(f"legacy + fédération : titre « {section.get('title')} »")
+
+        section = section_monnaies(self.configuration_en_memoire(["module_monnaie_locale"]))
+        if section is not None:
+            constats_faux.append("legacy, monnaie locale seule (module V2 fermé) : section présente")
 
         assert constats_faux == [], "\n".join(constats_faux)
 
@@ -2303,16 +2288,17 @@ class TestAffichageDuVerrou(FastTenantTestCase):
     #  22 — Invariant du rail : une page, une section                     #
     # ------------------------------------------------------------------ #
 
-    def test_une_page_une_section_sur_un_lieu_v2_avec_assets_legacy(self):
+    def test_une_page_une_section_sur_un_lieu_legacy_avec_assets_legacy(self):
         """
-        Lieu v2, tous les modules allumés, un asset legacy fédéré : aucune page d'admin
-        n'est rangée dans deux sections (même règle que
+        Lieu legacy, tous les modules allumés, un asset legacy fédéré : aucune page
+        d'admin n'est rangée dans deux sections (même règle que
         `test_admin_fil_ariane_et_rail.py::test_aucune_page_n_appartient_a_deux_modules`),
         et sur la liste des assets legacy le rail ne surligne qu'une entrée : la section
-        « Monnaies ».
-        / v2 venue with a legacy asset: one page, one section; one highlighted entry.
+        « Monnaies ». (Un lieu v2 n'a plus d'entrée vers les assets legacy : une porte par
+        moteur, décision du 2026-10-06.)
+        / Legacy venue with a legacy asset: one page, one section; one highlighted entry.
         """
-        self.poser_le_moteur_du_lieu_dedie(MOTEUR_V2)
+        self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
         configuration = self.configuration_en_memoire(TOUS_LES_DRAPEAUX_DE_MODULE)
 
         # Deux constructions du menu : le regroupement du rail modifie les sections
@@ -2470,11 +2456,12 @@ class TestAffichageDuVerrou(FastTenantTestCase):
 
     def test_assets_legacy_lus_une_fois_par_requete(self):
         """
-        Le tableau de bord de l'admin d'un lieu v2 (monnaie locale allumée), par le client
-        HTTP du lieu, connecté comme gestionnaire : le menu latéral, les onglets et le
-        rail construisent les sections plusieurs fois par page, mais la requête « le lieu
-        a des assets legacy » (table `fedow_public_assetfedowpublic`) n'est faite qu'une
-        fois. On compte les requêtes SQL de la page qui lisent cette table.
+        Le tableau de bord de l'admin d'un lieu legacy sans fédération (seul cas où la
+        question se pose : un lieu v2 ne la pose plus, une porte par moteur), par le
+        client HTTP du lieu, connecté comme gestionnaire : le menu latéral, les onglets et
+        le rail construisent les sections plusieurs fois par page, mais la requête « le
+        lieu a des assets legacy » (table `fedow_public_assetfedowpublic`) n'est faite
+        qu'une fois. On compte les requêtes SQL de la page qui lisent cette table.
         / One admin page: the "has legacy assets" query runs once, not once per build.
         """
         administrateur_du_lieu = TibilletUser.objects.create(
@@ -2488,8 +2475,8 @@ class TestAffichageDuVerrou(FastTenantTestCase):
         navigateur = TenantClient(self.tenant, HTTP_ACCEPT_LANGUAGE="fr")
         navigateur.force_login(administrateur_du_lieu)
 
-        self.poser_le_moteur_du_lieu_dedie(MOTEUR_V2)
-        configuration = self.configuration_en_memoire(["module_monnaie_locale"])
+        self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
+        configuration = self.configuration_en_memoire([])
 
         with patch.object(Configuration, "get_solo", return_value=configuration):
             with patch.object(Configuration, "save", autospec=True):

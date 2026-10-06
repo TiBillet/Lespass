@@ -621,38 +621,48 @@ def _construire_sections_modules(request):
             }
         )
 
-    # --- Section « Monnaies » : son contenu suit le moteur du lieu ---
-    # --- "Currencies" section: its content follows the venue's engine ---
+    # --- Section « Monnaies » : une seule porte, celle du moteur du lieu ---
+    # --- "Currencies" section: one door, the venue's engine ---
     #
-    # C'est la seule porte vers les monnaies du lieu (spec 15 §5.5, decision Q1).
-    # - Lieu v2 : les pages fedow_core si la monnaie locale est allumee, plus
-    #   « Assets legacy » si le lieu a des assets de l'ancien Fedow.
-    # - Lieu legacy : seulement « Assets legacy », si la federation est allumee ou si le
-    #   lieu a des assets de l'ancien Fedow.
+    # C'est la seule porte vers les monnaies du lieu (spec 15 §5.5, decision du
+    # mainteneur du 2026-10-06 : une porte par moteur).
+    # - Lieu v2 : les pages fedow_core (monnaies et tokens, transactions, reseaux) et
+    #   « Cartes NFC », si la monnaie locale est allumee. La caisse, la tireuse et le
+    #   kiosk V2 paient avec ces monnaies. Pas d'entree vers l'ancien Fedow.
+    # - Lieu legacy : « Actifs » (ancien Fedow) puis « Cartes NFC », si la federation est
+    #   allumee ou si le lieu a des assets de l'ancien Fedow.
     # Sans aucune page, la section n'existe pas.
-    # / The only door to the venue's currencies; its pages follow the engine.
-    #
-    # « A des assets legacy » : un AssetFedowPublic non archive dont le lieu est
-    # l'origine, ou ou il est federe, ou invite. On exclut le FED (accepte partout,
-    # il n'apporte rien a gerer), les badges (BDG) et les adhesions (SUB), comme la liste
-    # de l'admin des assets legacy. Un lieu v2 invite par un reseau legacy (CLAF) voit
-    # ainsi l'invitation et peut l'accepter.
-    # La lecture n'a de sens qu'avec un vrai Client : sous schema_context(),
-    # connection.tenant est un FakeTenant sans ligne en base.
-    # / "Has legacy assets": non-archived, origin/federated/invited, FED, BDG and SUB excluded.
-    lieu_a_des_assets_legacy = _lieu_a_des_assets_legacy(request)
-
-    page_des_assets_legacy = {
-        "title": _("Assets legacy"),
-        "icon": "currency_exchange",
-        "link": _safe_rev("staff_admin:fedow_public_assetfedowpublic_changelist"),
-        "permission": admin_permission,
-    }
-
+    # / One door per engine: fedow_core for v2 venues with local currency on;
+    # / "Assets" (old Fedow) and "NFC cards" for legacy venues.
     pages_de_la_section_monnaies = []
     if moteur_legacy:
+        # « A des assets legacy » : un AssetFedowPublic non archive dont le lieu est
+        # l'origine, ou ou il est federe, ou invite. On exclut le FED (accepte partout,
+        # il n'apporte rien a gerer), les badges (BDG) et les adhesions (SUB), comme la
+        # liste de l'admin des assets legacy.
+        # La lecture n'a de sens qu'avec un vrai Client : sous schema_context(),
+        # connection.tenant est un FakeTenant sans ligne en base.
+        # / "Has legacy assets": non-archived, origin/federated/invited, FED, BDG and SUB excluded.
+        lieu_a_des_assets_legacy = _lieu_a_des_assets_legacy(request)
         if configuration.module_federation or lieu_a_des_assets_legacy:
-            pages_de_la_section_monnaies.append(page_des_assets_legacy)
+            pages_de_la_section_monnaies.append(
+                {
+                    "title": _("Assets"),
+                    "icon": "currency_exchange",
+                    "link": _safe_rev("staff_admin:fedow_public_assetfedowpublic_changelist"),
+                    "permission": admin_permission,
+                }
+            )
+            pages_de_la_section_monnaies.append(
+                {
+                    "title": _("Cartes NFC"),
+                    "icon": "credit_card",
+                    "link": _safe_rev(
+                        "staff_admin:QrcodeCashless_cartecashless_changelist"
+                    ),
+                    "permission": admin_permission,
+                }
+            )
     else:
         if configuration.module_monnaie_locale:
             pages_de_la_section_monnaies.append(
@@ -689,8 +699,6 @@ def _construire_sections_modules(request):
                     "permission": admin_permission,
                 }
             )
-        if lieu_a_des_assets_legacy:
-            pages_de_la_section_monnaies.append(page_des_assets_legacy)
 
     if pages_de_la_section_monnaies:
         navigation.append(
@@ -1421,7 +1429,7 @@ DESCRIPTION_DES_PAGES = {
     "laboutik.terminal": _("Les appareils appairés au lieu."),
     "laboutik.printer": _("Les imprimantes à tickets."),
     "laboutik.tpebancaire": _("Les terminaux de paiement bancaire."),
-    # --- Monnaies locales, temps et cashless ---
+    # --- Monnaies locales, temps, SSA et cashless ---
     "fedow_core.asset": _("Vos monnaies et vos jetons."),
     "fedow_public.assetfedowpublic": _("Les monnaies qui circulent dans le réseau."),
     "QrcodeCashless.cartecashless": _("Les cartes remises au public."),
@@ -1493,7 +1501,7 @@ CATEGORIE_DES_PAGES = {
     "laboutik.terminal": "gerer",
     "laboutik.printer": "gerer",
     "laboutik.tpebancaire": "gerer",
-    # --- Monnaies locales, temps et cashless ---
+    # --- Monnaies locales, temps, SSA et cashless ---
     "fedow_core.asset": "gerer",
     "fedow_public.assetfedowpublic": "gerer",
     "QrcodeCashless.cartecashless": "gerer",
@@ -2352,7 +2360,7 @@ MODULE_FIELDS = {
         "slug": "caisse",  # module correspondant dans la sidebar
     },
     "module_monnaie_locale": {
-        "name": _("Monnaies locales, temps et cashless"),
+        "name": _("Monnaies locales, temps, SSA et cashless"),
         "description": _("Local currency tokens, federated wallet"),
         "testid": "dashboard-card-monnaie-locale",
         "domaine": "lerezo",  # groupe du tableau de bord / dashboard group

@@ -107,7 +107,49 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## PROCHAINE ÉTAPE (mise à jour 2026-10-04, fin de G)
+## PROCHAINE ÉTAPE (mise à jour 2026-10-06) : LE CHANTIER R
+
+**Décision du mainteneur (2026-10-06) : « go pour le chantier R ».** Nouvelle session
+d'orchestration. H-4 (mails de bout en bout) n'est pas faite : elle vient après R, sauf
+avis contraire du mainteneur.
+
+État au démarrage :
+- H-1 commitée (`ecbf8146` et suivants) ; migrations remises sur celles de `main` (= prod,
+  `556e2877`) ; chantier intermédiaire **15 · 10 · 14** (verrou moteur legacy / v2, boutons QR
+  « Mon espace » V2, E2E de fédération avec le vrai Fedow) commité (`ca1135b8`). Suivi :
+  `TECH_DOC/SESSIONS/FEDOW_IMPORT/CHANTIER-15-10-14-SUIVI.md`.
+- Après `ca1135b8`, non commité au moment d'écrire (voir `git status`) : menu « Monnaies »
+  une porte par moteur, plus de création d'asset legacy dans l'admin (CHANGELOG
+  `2026-10-06-verrou-moteur-legacy.md`, dernière section).
+- **Un nouveau dump de production est là, jamais ouvert** :
+  `db-prod/tibillet.re-M0221-2026-10-06-04-52.sql.gz` (79 Mo, gzip). Vérifier d'abord qu'il
+  contient bien des données Lespass (pas un `pg_dumpall` de rôles comme celui du 2026-10-04,
+  fiche copie-prod §6) — `charger` le refuse sinon.
+
+Ce qu'il faut lire, dans cet ordre :
+1. `CHANTIER-05-R-reprise-ventes.md` (fiche R, statut PROJET) : §9 (Q-R1..Q-R19, toutes
+   tranchées, SUIVI §5) et **§11 (conséquences de H-1)** ;
+2. `CHANTIER-05-briefs/05-R-relecture-fable-2026-10-04.md` : 3 bloquants (dont les anciennes
+   clôtures `comptabilite` de la prod, à exporter puis supprimer à la bascule), 12 importants,
+   ordre de la nuit — **à intégrer dans la réécriture de la fiche R** ;
+3. `CHANTIER-05-R-copie-prod.md` : LA procédure de la copie (pile à part
+   `db-prod/copie_prod.sh`, réseau interne, Mailpit capteur, pas de Celery, clé Fernet neuve,
+   neutralisation avant tout `manage.py`) et **§3.5** (cases du moteur de monnaie et du réseau
+   CLAF, avec `compter_avant`) ;
+4. `TECH_DOC/SESSIONS/FEDOW_IMPORT/15-spec-verrou-moteur-legacy.md` §8 (cases R du verrou).
+
+Découpage prévu : **réécriture de la fiche R** (constats Fable + §11 + 15 §8) puis relecture
+Fable, **R-0** (comptages sur la copie : `demarrer`, `charger`, `compter_avant`,
+`neutraliser`, `migrer`, `compter`), R-1 (calcul + passage à blanc), R-2 (écriture), R-3
+(J reprise, rattrapage plafonné sans mail, FEC refusé avant la mise en service), R-4 (procédure
+de la nuit, répétition chronométrée).
+
+**Règle absolue sur la copie : aucune lecture de donnée personnelle, comptages agrégés
+seulement** (en tête de chaque brief qui touche la copie) ; jamais de tests ni de worker sur
+la copie ; Claude n'ouvre jamais l'écran de Mailpit ; `detruire` puis suppression du dump à
+la fin.
+
+## (Ancienne) PROCHAINE ÉTAPE (mise à jour 2026-10-04, fin de G)
 **Relire d'abord, en entier : `CHANTIER-05-SUIVI.md` (§3 tableau, §4 écarts, §5 décisions,
 §6 journal — le plus récent en haut, §8 pièges) et la mémoire
 `project_chantier_montants_entiers`.**
