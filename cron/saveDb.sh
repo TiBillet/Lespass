@@ -1,5 +1,8 @@
 #!/bin/bash
 set -e
+# Sans pipefail, « pg_dumpall | gzip » renvoie le code de gzip (0) même si pg_dumpall échoue :
+# le dump tronqué part dans borg et les anciens dumps sont supprimés.
+set -o pipefail
 
 # pour load une sql :
 # après avoir lancé les 'export'

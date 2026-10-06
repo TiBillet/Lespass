@@ -37,7 +37,7 @@ CODE PARCOURU / CODE EXERCISED
   _lignes_hors_stripe, total_paid ; BaseBillet/services_vente.py —
   ecrire_la_vente_d_avoir_d_une_ligne (avoirs des annulations par l'admin) ;
 - PaiementStripe/utils.py — partial_refund_payment (remboursement Stripe) ;
-- Administration/admin_tenant.py — emettre_avoir (bouton « Avoir » d'une ligne de vente),
+- Administration/admin_tenant.py — VenteAdmin.avoir_sur_un_article (avoir d'une ligne),
   TicketAdmin.action_cancel_refund_selected (« Cancel and refund » des billets) ;
 - laboutik/views.py — PaiementViewSet.payer (un billet vendu à la caisse et offert par
   le gérant).
@@ -337,16 +337,19 @@ def annuler_des_billets_depuis_l_admin(client_de_l_admin, billets, moyen_rembour
 
 def emettre_un_avoir_depuis_l_admin(client_de_l_admin, ligne, moyen_rembourse=None):
     """
-    L'admin clique « Avoir » sur une ligne de vente (liste des ventes) : l'écran
-    « Émettre un avoir » s'ouvre (GET), puis l'admin le valide (POST). Le moyen
-    « Remboursé par » n'est envoyé que s'il est donné : une ligne payée par Stripe n'a
-    pas ce champ. Rend la réponse de la validation.
-    / The admin clicks "Credit note": the screen opens (GET), then is confirmed (POST),
-    with the "Refunded by" method only if given. Returns the confirmation response.
+    L'admin ouvre « Avoir sur un article » depuis la fiche de la vente et choisit la
+    ligne : l'écran s'ouvre (GET), puis l'admin le valide (POST) avec toute la
+    quantité de la ligne. Le moyen « Remboursé par » n'est envoyé que s'il est donné :
+    une ligne payée par Stripe n'a pas ce champ. Rend la réponse de la validation.
+    / The admin opens "Credit note on one item" for the line (GET), then confirms it
+    (POST) with the whole quantity, and the "Refunded by" method only if given.
     """
-    url_de_l_avoir = f"/admin/BaseBillet/lignearticle/{ligne.pk}/emettre_avoir/"
+    url_de_l_avoir = (
+        f"/admin/BaseBillet/vente/{ligne.vente_id}/avoir_sur_un_article/?ligne={ligne.pk}"
+    )
     client_de_l_admin.get(url_de_l_avoir)
-    donnees_du_formulaire = {}
+    quantite_de_la_ligne = LigneArticle.objects.get(pk=ligne.pk).qty
+    donnees_du_formulaire = {"quantite": str(quantite_de_la_ligne)}
     if moyen_rembourse is not None:
         donnees_du_formulaire["moyen_rembourse"] = moyen_rembourse
     return client_de_l_admin.post(url_de_l_avoir, donnees_du_formulaire)

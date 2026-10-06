@@ -24,16 +24,16 @@ les règlements nets de la vente et de ses ventes CORRECTION (somme par moyen) :
   (`HX-Retarget`) que pour un moyen corrigeable ;
 - le champ « Remboursé par » : pré-rempli seulement si la vente n'a qu'UN moyen
   d'argent net non nul, et qu'il est dans la liste du champ (espèces, CB, chèque,
-  virement). Sinon : vide et obligatoire. Écrans : avoir d'une ligne, « Avoir total »,
-  annulation des réservations dans l'admin, annulation d'adhésion ;
-- l'admin des lignes (« Entries ») ne montre plus les champs moyen, monnaie, carte et
-  portefeuille de la ligne (fiche et export). La colonne « Moyen de paiement » de la
-  liste, lue sur la vente, reste ;
+  virement). Sinon : vide et obligatoire. Écrans : « Avoir sur un article », « Avoir
+  total », annulation des réservations dans l'admin, annulation d'adhésion ;
+- les articles d'une vente (inline de la fiche « Vente ») et l'export des articles ne
+  montrent pas les champs moyen, monnaie, carte et portefeuille de la ligne. La
+  colonne « Moyens » de la liste des ventes, lue sur les règlements, reste ;
 - le menu « Ventes & comptabilité » n'a plus l'entrée « Ancien rapport caisse ».
 / Every reader that DECIDES something reads the net payments of the sale and of its
 CORRECTION sales: the correction no longer touches any line; "Refunded by" is
-pre-filled only with the single net money method; the "Entries" admin hides the line's
-payment fields; the old register report leaves the menu.
+pre-filled only with the single net money method; the sale items and their export
+hide the line's payment fields; the old register report leaves the menu.
 
 LA VENTE « À LA FORME DE DEMAIN »
 Trois jus à 3,50 € (TVA 20 %) : UNE ligne, quantité 3, total 1050, moyen de la ligne
@@ -433,6 +433,16 @@ def valeur_pre_remplie_du_moyen(reponse_de_l_ecran):
     return valeur_affichee, champ_obligatoire
 
 
+def adresse_de_l_avoir_sur_un_article(vente):
+    """
+    L'adresse de l'écran « Avoir sur un article » de la fiche d'une vente, pour son
+    seul article.
+    / The "Credit note on one item" screen address, for the sale's only item.
+    """
+    seul_article = seul_article_de_la_vente(vente)
+    return f"/admin/BaseBillet/vente/{vente.uuid}/avoir_sur_un_article/?ligne={seul_article.pk}"
+
+
 def champs_montres_par_la_fiche(reponse_de_la_fiche):
     """
     Les noms des champs qu'une fiche de l'admin montre (tous ses blocs de champs).
@@ -789,7 +799,7 @@ def test_correction_garde_sa_raison_sur_la_vente(lieu):
 
 def test_avoir_d_une_ligne_prerempli_par_le_moyen_unique_de_la_vente(lieu):
     """
-    L'écran « Émettre un avoir » d'une ligne, trois ventes de 1050 :
+    L'écran « Avoir sur un article » d'une ligne, trois ventes de 1050 :
     - ligne au moyen « espèces », réglée en espèces : pré-rempli « espèces » ;
     - forme de demain espèces 550 + monnaie locale 500 (ligne au moyen vide) : deux
       moyens d'argent (le cashless compte), champ vide et obligatoire ;
@@ -819,16 +829,13 @@ def test_avoir_d_une_ligne_prerempli_par_le_moyen_unique_de_la_vente(lieu):
     )
 
     ecran_de_la_vente_en_especes = client_de_l_admin.get(
-        f"/admin/BaseBillet/lignearticle/"
-        f"{seul_article_de_la_vente(vente_en_especes).pk}/emettre_avoir/"
+        adresse_de_l_avoir_sur_un_article(vente_en_especes)
     )
     ecran_de_la_vente_a_deux_moyens = client_de_l_admin.get(
-        f"/admin/BaseBillet/lignearticle/"
-        f"{seul_article_de_la_vente(vente_monnaie_locale_et_especes).pk}/emettre_avoir/"
+        adresse_de_l_avoir_sur_un_article(vente_monnaie_locale_et_especes)
     )
     ecran_de_la_vente_par_cb = client_de_l_admin.get(
-        f"/admin/BaseBillet/lignearticle/"
-        f"{seul_article_de_la_vente(vente_par_cb_ligne_au_moyen_vide).pk}/emettre_avoir/"
+        adresse_de_l_avoir_sur_un_article(vente_par_cb_ligne_au_moyen_vide)
     )
 
     assert valeur_pre_remplie_du_moyen(ecran_de_la_vente_en_especes) == (
@@ -972,24 +979,24 @@ def test_annulation_adhesion_preremplie_par_les_reglements(lieu):
 
 
 # ==========================================================================
-# 3. L'ADMIN DES LIGNES ET LE MENU (Q-H2)
-# / 3. THE LINES ADMIN AND THE MENU
+# 3. LES ARTICLES D'UNE VENTE, LEUR EXPORT ET LE MENU (Q-H2)
+# / 3. A SALE'S ITEMS, THEIR EXPORT AND THE MENU
 # ==========================================================================
 
 
-def test_fiche_d_une_ligne_sans_champs_de_paiement(lieu):
+def test_articles_d_une_vente_sans_champs_de_paiement_de_la_ligne(lieu):
     """
-    « Entries » (l'admin des lignes), une ligne réglée en espèces :
-    - sa fiche ne montre ni le moyen, ni la monnaie, ni la carte, ni le portefeuille
-      de la ligne ;
-    - la liste garde sa colonne « Moyen de paiement », lue sur la vente ;
+    Une vente réglée en espèces, son seul article :
+    - la fiche de la vente (inline « Articles ») ne montre ni le moyen, ni la monnaie,
+      ni la carte, ni le portefeuille de la ligne ;
+    - la liste des ventes garde sa colonne « Moyens », lue sur les règlements ;
     - l'export n'exporte aucun champ de paiement de la ligne (moyen, monnaie, carte,
       portefeuille), quel que soit le titre de la colonne : on lit l'attribut de
       chaque champ exporté, pas seulement son titre ; il garde « Moyens de la vente »
       (lu sur la vente).
-    / "Entries": the line page hides the line's payment fields; the list keeps its
-    "Payment method" column (read on the sale); the export carries no payment field
-    of the line, whatever the column title.
+    / The sale page items hide the line's payment fields; the sales list keeps its
+    "Moyens" column (read on the payments); the export carries no payment field of the
+    line, whatever the column title.
     """
     point_de_vente = creer_un_point_de_vente([])
     client_de_l_admin = client_francais_de_l_admin_du_lieu(lieu)
@@ -1001,9 +1008,9 @@ def test_fiche_d_une_ligne_sans_champs_de_paiement(lieu):
     ligne_des_jus = seul_article_de_la_vente(vente)
 
     reponse_de_la_fiche = client_de_l_admin.get(
-        f"/admin/BaseBillet/lignearticle/{ligne_des_jus.pk}/change/"
+        f"/admin/BaseBillet/vente/{vente.uuid}/change/"
     )
-    reponse_de_la_liste = client_de_l_admin.get("/admin/BaseBillet/lignearticle/")
+    reponse_de_la_liste = client_de_l_admin.get("/admin/BaseBillet/vente/")
     with translation.override("fr"):
         donnees_exportees = LigneArticleExportResource().export(
             LigneArticle.objects.filter(pk=ligne_des_jus.pk)
@@ -1015,19 +1022,24 @@ def test_fiche_d_une_ligne_sans_champs_de_paiement(lieu):
         titre_de_la_colonne_portefeuille = gettext("Wallet from")
         titre_de_la_colonne_des_moyens = gettext("Moyens de la vente")
 
-    # La fiche : aucun champ de paiement de la ligne.
-    # / The page: no payment field of the line.
-    champs_de_la_fiche = champs_montres_par_la_fiche(reponse_de_la_fiche)
+    # La fiche de la vente : aucun champ de paiement de la ligne dans ses inlines.
+    # / The sale page: no payment field of the line in its inlines.
+    assert reponse_de_la_fiche.status_code == 200
+    champs_des_inlines = []
+    for inline_de_la_fiche in reponse_de_la_fiche.context["inline_admin_formsets"]:
+        for champ_de_l_inline in inline_de_la_fiche.fields():
+            champs_des_inlines.append(champ_de_l_inline["name"])
+    assert "produit" in champs_des_inlines
     champs_de_paiement_montres = []
     for nom_du_champ in CHAMPS_DE_PAIEMENT_DE_LA_LIGNE:
-        if nom_du_champ in champs_de_la_fiche:
+        if nom_du_champ in champs_des_inlines:
             champs_de_paiement_montres.append(nom_du_champ)
     assert champs_de_paiement_montres == []
 
-    # La liste : la colonne lue sur la vente reste.
-    # / The list: the column read on the sale stays.
+    # La liste des ventes : la colonne lue sur les règlements reste.
+    # / The sales list: the column read on the payments stays.
     assert reponse_de_la_liste.status_code == 200
-    assert "moyens_de_paiement" in reponse_de_la_liste.context["cl"].list_display
+    assert "moyens_affiches" in reponse_de_la_liste.context["cl"].list_display
 
     # L'export : ni carte, ni portefeuille ; les moyens de la vente restent.
     # / The export: no card, no wallet; the sale's methods stay.

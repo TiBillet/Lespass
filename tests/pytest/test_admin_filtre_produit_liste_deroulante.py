@@ -6,7 +6,6 @@ LOCALISATION : tests/pytest/test_admin_filtre_produit_liste_deroulante.py
 
 Code testé / Tested code : Administration/admin_tenant.py
 - MembershipPublishedFilter (liste des adhésions)
-- LigneArticlePublishedFilter (liste des ventes)
 - EventFutureFilter, EventPastFilter, EventArchivedFilter (réservations et billets)
 
 Avant : tous les produits étaient affichés les uns sous les autres dans le panneau de
@@ -49,19 +48,6 @@ def test_la_liste_des_adhesions_se_filtre_par_produit(admin_client, tenant):
     assert reponse.status_code == 200
     contenu = reponse.content.decode()
     assert f'<option value="{produit.pk}" selected>' in contenu
-
-
-def test_la_liste_des_ventes_affiche_le_filtre_produit_en_liste_deroulante(
-    admin_client, tenant
-):
-    """La page contient un <select name="product">.
-    / The page holds a <select name="product">."""
-    with tenant_context(tenant):
-        reponse = admin_client.get(reverse("staff_admin:BaseBillet_lignearticle_changelist"))
-
-    assert reponse.status_code == 200
-    contenu = reponse.content.decode()
-    assert '<select name="product"' in contenu
 
 
 @pytest.fixture
@@ -200,7 +186,6 @@ def test_la_liste_des_blocs_renvoie_vers_la_liste_des_pages(admin_client, tenant
     "nom_de_la_liste, nom_du_champ",
     [
         ("BaseBillet_posproduct", "methode_caisse__exact"),
-        ("BaseBillet_lignearticle", "status__exact"),
         ("booking_booking", "status__exact"),
         ("fedow_core_transaction", "action__exact"),
     ],
@@ -208,8 +193,8 @@ def test_la_liste_des_blocs_renvoie_vers_la_liste_des_pages(admin_client, tenant
 def test_les_filtres_a_choix_fixes_sont_des_listes_deroulantes(
     admin_client, tenant, nom_de_la_liste, nom_du_champ
 ):
-    """Méthode de caisse, statut d'une vente, statut d'une réservation de ressource,
-    action d'une transaction : chaque filtre est un <select>.
+    """Méthode de caisse, statut d'une réservation de ressource, action d'une
+    transaction : chaque filtre est un <select>.
     / Each fixed-choice filter is a <select>."""
     with tenant_context(tenant):
         reponse = admin_client.get(reverse(f"staff_admin:{nom_de_la_liste}_changelist"))

@@ -80,7 +80,11 @@ services:
     # Un lieu = un schéma. Supprimer un objet partagé (utilisateur, wallet) fait vérifier
     # ses clés étrangères dans TOUS les schémas, dans une seule transaction : un verrou par
     # table. 64 (défaut) ne suffit plus avec des centaines de lieux (« out of shared memory »).
-    command: postgres -c max_locks_per_transaction=512
+    # pg_dump (cron/saveDb.sh) fait pire : un verrou sur CHAQUE table et séquence de la base.
+    # Capacité totale = max_locks_per_transaction × max_connections (50 en prod).
+    # Prod 2026-10 : 59 123 relations / 516 schémas -> 512 × 50 = 25 600 ne suffisait plus.
+    # 4096 × 50 = 204 800 emplacements, ~65 Mo de mémoire partagée réservée.
+    command: postgres -c max_locks_per_transaction=4096
     logging: *default-logging
     volumes:
       - lespass_dev_db:/var/lib/postgresql/data

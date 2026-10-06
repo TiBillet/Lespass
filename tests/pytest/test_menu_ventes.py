@@ -32,9 +32,9 @@ RÈGLES MÉTIER TESTÉES
   en attente s'affiche aussi, avec son statut, sans bouton « Corriger ».
 - L'écran « corriger le moyen » affiche le net du moyen à corriger (règlements de
   la vente et de ses corrections), pas le prix d'une part d'article.
-- Les historiques du récapitulatif (par moyen, par article) lisent le rapport des
-  ventes du service (`RapportDesVentes(...).rapport_x()`, sections règlements et
-  détail) : toutes origines, ventes en ligne comprises.
+- L'écran Ventes (récapitulatif en cours) et ses historiques (par article, synthèse
+  par moyen) lisent le rapport des ventes du service (`RapportDesVentes`) : toutes
+  origines, ventes en ligne comprises. Le rapport complet reste dans l'admin.
 / One row per settled sale made on a point of sale of the venue, with a nature badge;
 payment methods read from the payments; filter on payments; constant query count;
 detail by sale uuid with real quantities and payments; correction screen shows the
@@ -58,8 +58,8 @@ D'OÙ VIENNENT LES VALEURS ATTENDUES (calculées à la main)
   Règlements : monnaie locale 500 (« 5,00 € »), carte bancaire 550 (« 5,50 € »).
 - Pinte 5,00 € ; demi 3,00 € ; 3 pintes + 2 demis = 1500 + 600 = 2100 → 5 articles.
 - Billet en ligne 10,00 €, réglé par Stripe (1000).
-- Règlements d'argent du fil rouge et du billet en ligne : carte bancaire 550 + Stripe
-  1000 = 1550 → « Total argent 15,50 € ».
+- Total du fil rouge et du billet en ligne : 1050 + 1000 = 2050 → « 20,50 € » ; le
+  billet en ligne n'a pas de point de vente (« Sans point de vente », 10,00 €).
 - Vrac : 350 g de cacahuètes à 12,00 €/kg = 350 × 0,012 = 4,20 € (prix de la ligne
   420, poids 350).
 - Les libellés sont ceux de la caisse en français (« Carte bancaire ») ; un règlement
@@ -676,63 +676,90 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
         self.assertEqual(reponse.status_code, 200)
         self.assertIn('data-testid="recap-aucune-vente"', reponse.content.decode())
 
-    def test_recap_montre_les_reglements_du_rapport_du_service(self):
+    def test_recap_par_moyen_et_par_point_de_vente_du_rapport_du_service(self):
         """
         Le fil rouge à la caisse et un billet de 10,00 € vendu en ligne (Stripe).
-        La section « Règlements » du récapitulatif est celle du rapport du service,
-        ventes en ligne comprises : carte bancaire 5,50 € et « Total argent »
-        15,50 € (550 + 1000).
-        / The recap's payments section is the service report's, online sales
-        included: total money 15.50 €.
+        L'écran Ventes lit le rapport du service, ventes en ligne comprises :
+        - Total : 10,50 + 10,00 = « 20,50 € » ;
+        - « Par moyen de paiement » : carte bancaire 5,50 € ;
+        - « Par point de vente » : le billet en ligne sous « Sans point de vente »,
+          10,00 €.
+        / The Sales screen reads the service report, online sales included.
         """
         self._vendre_trois_jus_en_monnaie_locale_et_carte_bancaire()
         self._vendre_un_billet_en_ligne()
 
         contenu = self._lire_le_recap_en_cours()
 
-        texte_des_reglements, _attributs = lire_l_element(contenu, "recap-reglements")
-        texte_des_reglements = texte_sans_espaces_en_trop(texte_des_reglements)
-        self.assertIn(
-            f"{LIBELLE_CARTE_BANCAIRE} {montant_attendu('5,50')}",
-            texte_des_reglements,
-        )
-        self.assertIn(f"Total argent {montant_attendu('15,50')}", texte_des_reglements)
+        texte_du_total, _attributs = lire_l_element(contenu, "recap-total")
+        self.assertEqual(texte_sans_espaces_en_trop(texte_du_total), montant_attendu("20,50"))
 
-    def test_recap_montre_le_detail_des_ventes_du_rapport_du_service(self):
+        texte_par_moyen, _attributs = lire_l_element(contenu, "recap-totaux-moyen")
+        texte_par_moyen = texte_sans_espaces_en_trop(texte_par_moyen)
+        self.assertIn(
+            f"{LIBELLE_CARTE_BANCAIRE} {montant_attendu('5,50')}", texte_par_moyen
+        )
+
+        texte_par_point_de_vente, _attributs = lire_l_element(contenu, "recap-par-pv")
+        texte_par_point_de_vente = texte_sans_espaces_en_trop(texte_par_point_de_vente)
+        self.assertIn(
+            f"Sans point de vente {montant_attendu('10,00')}", texte_par_point_de_vente
+        )
+
+    def test_historique_de_vente_par_article_du_rapport_du_service(self):
         """
-        Le fil rouge à la caisse et un billet vendu en ligne. La section « Détail
-        des ventes » du récapitulatif (repliée) montre les jus (quantité 3,
-        10,50 €) ET le billet vendu en ligne.
-        / The recap's (folded) detail section shows the juices and the online ticket.
+        Le fil rouge à la caisse et un billet vendu en ligne. Le bouton « Historique
+        de vente » ouvre, en bas de l'écran (cible HTMX « detail-contenu »), le
+        tableau par article : les jus (quantité 3, 10,50 €) ET le billet vendu en
+        ligne. Seul ce tableau est rendu : ni les chiffres du haut, ni les
+        mini-tableaux.
+        / The "Sales history" button renders only the by-item table.
         """
         self._vendre_trois_jus_en_monnaie_locale_et_carte_bancaire()
         self._vendre_un_billet_en_ligne()
         nom_du_jus = self.tarif_du_jus.productsold.product.name
         nom_du_billet = self.tarif_du_billet_en_ligne.productsold.product.name
 
-        contenu = self._lire_le_recap_en_cours()
+        reponse = self.client_du_caissier.get(
+            f"{URL_DU_RECAP_EN_COURS}?vue=detail_articles",
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_TARGET="detail-contenu",
+        )
 
-        texte_du_detail, _attributs = lire_l_element(contenu, "recap-detail-repliee")
+        contenu = reponse.content.decode()
+        self.assertEqual(reponse.status_code, 200, contenu[:400])
+        texte_du_detail, _attributs = lire_l_element(contenu, "recap-detail-articles")
         texte_du_detail = texte_sans_espaces_en_trop(texte_du_detail)
         self.assertIn(f"{nom_du_jus} 3 {montant_attendu('10,50')}", texte_du_detail)
         self.assertIn(nom_du_billet, texte_du_detail)
+        self.assertNotIn('data-testid="recap-kpi-total"', contenu)
+        self.assertNotIn('data-testid="recap-totaux-moyen"', contenu)
 
-    def test_recap_n_a_plus_que_le_bouton_historique_de_commande(self):
+    def test_recap_a_les_trois_boutons_d_historique_et_rien_du_rapport_complet(self):
         """
-        Les boutons « Règlements » et « Historique de vente » sont retirés : leurs
-        sections sont déjà sur la page. Le bouton « Historique de commande » reste.
-        L'ancien titre « Lignes de caisse (hors ventes en ligne, recharges
-        comprises) » n'apparaît plus.
-        / The "Payments" and "Sales history" buttons are gone; the order history
-        button stays; the old title is gone.
+        L'écran Ventes garde la forme de la maquette : trois boutons d'historique
+        (vente, commande, synthèse par moyen). Le rapport complet reste dans
+        l'admin : ni règlements, ni réconciliation, ni marge brute, ni opérateurs,
+        ni sections repliées. L'ancien titre « Lignes de caisse (hors ventes en
+        ligne, recharges comprises) » n'apparaît plus.
+        / Three history buttons; the full report stays in the admin.
         """
         self._vendre_une_pinte_en_especes()
 
         contenu = self._lire_le_recap_en_cours()
 
+        self.assertIn('data-testid="btn-historique-ventes"', contenu)
         self.assertIn('data-testid="btn-historique-commandes"', contenu)
-        self.assertNotIn('data-testid="btn-historique-synthese"', contenu)
-        self.assertNotIn('data-testid="btn-historique-ventes"', contenu)
+        self.assertIn('data-testid="btn-historique-synthese"', contenu)
+        for testid_du_rapport_complet in [
+            "recap-reglements",
+            "recap-reconciliation",
+            "recap-marge-brute-repliee",
+            "recap-operateurs-repliee",
+            "recap-annexe-repliee",
+        ]:
+            self.assertNotIn(f'data-testid="{testid_du_rapport_complet}', contenu)
+        self.assertNotIn("<details", contenu)
         self.assertNotIn(ANCIEN_TITRE_DES_LIGNES_DE_CAISSE, contenu)
 
     def test_recap_boutons_fond_et_sortie_de_caisse_gardent_les_params(self):

@@ -857,15 +857,11 @@ def _construire_sections_modules(request):
             "_domaine": None,  # entree autonome / standalone entry
             "separator": True,
             "collapsible": True,
+            # Pas d'entrée « lignes » : les articles se lisent sur la fiche de leur
+            # vente, et s'exportent depuis la liste des ventes.
+            # / No "lines" entry: items are read on their sale page and exported
+            # from the sales list.
             "items": items_ventes_et_comptabilite + [
-                {
-                    "title": _("Entries"),
-                    "icon": "receipt_long",
-                    "link": _safe_rev(
-                        "staff_admin:BaseBillet_lignearticle_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
                 # Les trois ecrans du plan comptable. Toujours presents : le plan sert
                 # aussi a l'export des ventes en ligne, pas seulement a la caisse.
                 # / The three chart of accounts screens. Always shown: the plan also

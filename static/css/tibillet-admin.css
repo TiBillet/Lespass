@@ -702,12 +702,35 @@ html.dark .tb-prow-nom {
    / Unfold leaves the fieldset bare; we turn it into a card.
    ========================================================================== */
 
+/* min-width: 0 : un <fieldset> a par defaut une largeur minimale egale a
+   celle de son contenu le plus large (min-content). Un champ large (deux
+   listes filter_horizontal, un tableau) le pousserait hors de la colonne.
+   / By default a fieldset is at least as wide as its widest content;
+   min-width: 0 keeps it inside the content column. */
 #content-main fieldset.module {
   background-color: #fff;
   border: 1px solid var(--tb-line);
   border-radius: 12px;
   /*padding: 2px 18px;*/
   margin-bottom: 18px;
+  min-width: 0;
+}
+
+/* Les deux listes d'un champ filter_horizontal (« disponibles » et
+   « choisies ») : Unfold leur donne une largeur fixe (288px, puis 384px
+   des 1024px). Cote a cote, elles debordent d'un bloc de champs etroit.
+   Ici, elles se partagent la place restante, et retrecissent si besoin.
+   Seulement quand elles sont cote a cote (48rem et plus) : en dessous,
+   Unfold les empile, chacune en pleine largeur.
+   / The two filter_horizontal lists share the available width instead of
+   a fixed width, only when side by side (48rem and up). */
+@media (min-width: 48rem) {
+  html .selector-available,
+  html .selector-chosen {
+    width: auto;
+    flex: 1 1 0;
+    min-width: 0;
+  }
 }
 
 html.dark #content-main fieldset.module {

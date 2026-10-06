@@ -176,17 +176,18 @@
 
     /**
      * Applique le style "champ conditionnel" sur la rangee parente (.form-row.field-row).
-     * Fond colore subtil + bordure gauche pour lier visuellement au champ source.
+     * Fond colore subtil + trait vertical a gauche pour lier visuellement au champ source.
+     * Le trait est une ombre interieure (box-shadow inset) : elle ne prend aucune place,
+     * la rangee reste alignee sur les autres. Une bordure, une marge ou un retrait la
+     * decaleraient vers la droite.
      * / Applies "conditional field" style on the parent row (.form-row.field-row).
-     * Subtle background + left border to visually link to source field.
+     * Subtle background + inset shadow line on the left: takes no space, no offset.
      */
     function appliquer_style_rangee(rangee) {
         if (!rangee || rangee.dataset.conditionalStyled) {
             return;
         }
-        rangee.style.borderLeft = "3px solid var(--color-primary-600, #6366f1)";
-        rangee.style.paddingLeft = "8px";
-        rangee.style.marginLeft = "4px";
+        rangee.style.boxShadow = "inset 3px 0 0 var(--color-primary-600, #6366f1)";
         rangee.style.borderRadius = "0 6px 6px 0";
         rangee.style.backgroundColor = "rgba(99, 102, 241, 0.04)";
         rangee.dataset.conditionalStyled = "true";

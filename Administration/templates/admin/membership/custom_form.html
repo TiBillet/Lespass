@@ -1,7 +1,7 @@
 {% load i18n unfold tibitags %}
 
 {% with obj=membership %}
-<div class="p-4">
+<div class="mt-6">
     {% if obj and obj.custom_form %}
         {% component "unfold/components/card.html" with title=_("Custom form answers") %}
             <div id="custom-form-edit-container-{{ obj.uuid }}">

@@ -8,22 +8,35 @@ Maquette : TEMP-tibillet-laboutik-main/caisse (#viewVentes)
 Style : static/css/ventes.css
 
 Vue : CaisseViewSet.recap_en_cours (laboutik/views.py), via _rendre_vue_ventes.
+Chaque chiffre est lu dans le rapport des ventes unique (comptabilite/rapport.py)
+et arrive en texte deja ecrit (montants a la francaise) : le gabarit ne calcule rien.
+Le rapport complet (marge, operateurs, annexe...) est dans l'admin.
+/ Every figure is read in the single sales report and arrives as written text.
 
-L'ECRAN (page complete ou #ventes-zone) :
-- Chiffres du haut : chiffre d'affaires TTC, fond de caisse et solde, actions.
-- Les sections du rapport X du service en cours (rapport des ventes unique),
-  ecrites par comptabilite/presentation.py : l'essentiel ouvert, le reste replie
-  (reglements et detail des ventes par article compris).
-- Le bouton « Historique de commande » : la liste des ventes, en bas de l'ecran.
-- Popups : fond de caisse (#ventes-modal), cloture (#cloture-modal).
+DEUX RENDUS SELON LA CIBLE HTMX :
+1. Cible "detail-contenu" : un historique est ouvert en bas de l'ecran.
+   On ne rend que le tableau demande (vue=detail_articles ou vue=par_moyen).
+   Voir laboutik/partial/_ventes_historique_recap.html.
+2. Sinon (page complete ou #ventes-zone) : l'ecran Ventes complet.
+   - Chiffres du haut : total, fond de caisse, actions.
+   - Mini-tableaux : par moyen de paiement, par point de vente, TVA, offerts,
+     non monetaire.
+   - Trois boutons d'historique (un seul ouvert a la fois).
+   - Popups : fond de caisse (#ventes-modal), cloture (#cloture-modal).
+   Si ?vue=detail_articles ou ?vue=par_moyen : l'historique est deja ouvert.
 
 COMMUNICATION :
 - "Modifier" (fond) → hx-get fond_de_caisse → #ventes-modal (hx_fond_de_caisse.html)
 - "Sortie de caisse" → hx-get sortie_de_caisse → #ventes-zone (hx_sortie_de_caisse.html)
-- Historique de commande → basculerHistorique() → htmx.ajax GET liste_ventes → #detail-contenu
+- Historiques → basculerHistorique() → htmx.ajax GET → #detail-contenu
 - "Confirmer la cloture" → hx-post cloturer → #ventes-zone (hx_cloture_rapport.html)
 - Zone retour du header : renvoyee en hx-swap-oob (_hdr_retour_zone.html)
 {% endcomment %}
+
+{% if request.htmx.target == "detail-contenu" %}
+  {# --- 1. Fragment : seulement le tableau d'historique / History table only --- #}
+  {% include "laboutik/partial/_ventes_historique_recap.html" %}
+{% else %}
 
   {# Remet le header sur « Ventes », retour vers la caisse (utile en revenant de Sortie) #}
   {# / Resets the header to "Sales", back to the POS (useful when coming back from Withdrawal) #}
@@ -45,22 +58,33 @@ COMMUNICATION :
         {# ============ CHIFFRES DU HAUT / TOP FIGURES ============ #}
         <div class="kpis">
 
-          {# Chiffre d'affaires du service / Service revenue #}
+          {# Total des ventes du service : le chiffre d'affaires TTC #}
+          {# / Shift sales total: revenue incl. tax #}
           <div class="kpi-block kpi-total" data-testid="recap-kpi-total">
-            <span class="kpi-lbl">{% translate "Chiffre d'affaires TTC" %}</span>
-            <span class="kpi-val">{{ chiffre_affaires_ttc_a_la_francaise }}</span>
+            <span class="kpi-lbl">{% translate "Total" %}</span>
+            <span class="kpi-val" data-testid="recap-total">{{ total_a_la_francaise }}</span>
             <span class="kpi-sub" data-testid="recap-periode">
-              {% blocktrans with nombre=nombre_d_operations debut=datetime_ouverture|date:"d/m/Y H:i" %}Opérations numérotées : {{ nombre }} · depuis {{ debut }}{% endblocktrans %}
+              {{ nombre_de_ventes }} {% translate "ventes" %} · {% translate "depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
             </span>
+            {% if lignes_de_tva %}
+              <span class="kpi-tva" data-testid="recap-kpi-tva">
+                {% for ligne_de_tva in lignes_de_tva %}{% translate "TVA" %} {{ ligne_de_tva.taux }} · {{ ligne_de_tva.tva }}{% if not forloop.last %} — {% endif %}{% endfor %}
+              </span>
+            {% endif %}
           </div>
 
-          {# Fond de caisse + solde du tiroir (le detail est dans la section « Caisse espèces ») #}
-          {# / Cash float + drawer balance (detail in the "Caisse espèces" section) #}
+          {# Fond de caisse, mouvements du tiroir et solde (lignes signees, comme le ticket X) #}
+          {# / Cash float, drawer movements and balance (signed lines, like the X ticket) #}
           <div class="kpi-block kpi-fond" data-testid="recap-solde">
             <span class="kpi-lbl">{% translate "Fond de caisse" %}</span>
-            <span class="kpi-val">{{ fond_de_caisse_a_la_francaise }}</span>
+            <span class="kpi-val" data-testid="recap-fond-de-caisse">{{ fond_de_caisse_a_la_francaise }}</span>
+            {% for mouvement in mouvements_du_tiroir %}
+              <span class="kpi-sub" data-testid="recap-mouvement-du-tiroir">
+                {{ mouvement.libelle }} · {{ mouvement.montant }}
+              </span>
+            {% endfor %}
             <span class="kpi-sub kpi-sub-solde">
-              {% translate "Solde" %} · <b>{{ solde_du_tiroir_a_la_francaise }}</b>
+              {% translate "Solde" %} · <b data-testid="recap-solde-du-tiroir">{{ solde_du_tiroir_a_la_francaise }}</b>
             </span>
             <button type="button" class="kpi-fond-modifier"
                     hx-get="{% url 'laboutik-caisse-fond_de_caisse' %}?{{ params_ventes }}"
@@ -102,58 +126,177 @@ COMMUNICATION :
         {# Retour de l'impression du Ticket X / Ticket X print feedback #}
         <div id="recap-feedback" class="recap-feedback" aria-live="polite"></div>
 
-        {# ============ SECTIONS DU RAPPORT X / X REPORT SECTIONS ============ #}
-        {# Toutes les sections du rapport X du service en cours, mises en forme par #}
-        {# comptabilite/presentation.py : l'essentiel ouvert, le reste replie (comme #}
-        {# dans l'admin). Chaque section : data-testid « recap-<cle> ». #}
-        {# / Every X report section: essentials open, the rest folded, as in the admin. #}
-        <div class="mini-tables" data-testid="recap-sections">
-          {% for section in sections_du_rapport %}
-            {% with testid_de_la_section="recap-"|add:section.testid %}
-              {% if section.repliee %}
-                <details class="recap-section-repliee" data-testid="{{ testid_de_la_section }}-repliee">
-                  {# Le titre est dans le résumé ; la section incluse ne le répète pas. #}
-                  {# / The title is in the summary; the included section does not repeat it. #}
-                  <summary id="{{ testid_de_la_section }}-titre">{{ section.titre }}</summary>
-                  {% if section.phrase %}
-                    <p class="recap-phrase">{{ section.phrase }}</p>
-                  {% endif %}
-                  {% include "laboutik/partial/_section_du_rapport_caisse.html" with section=section testid=testid_de_la_section titre_dans_le_resume=True %}
-                </details>
-              {% else %}
-                {% if section.phrase %}
-                  <p class="recap-phrase" data-testid="{{ testid_de_la_section }}-phrase">{{ section.phrase }}</p>
-                {% endif %}
-                {% include "laboutik/partial/_section_du_rapport_caisse.html" with section=section testid=testid_de_la_section %}
-              {% endif %}
-            {% endwith %}
-          {% endfor %}
+        {# ============ MINI-TABLEAUX / SUMMARY TABLES ============ #}
+        <div class="mini-tables">
+
+          {# Par moyen de paiement : le chiffre d'affaires de chaque moyen #}
+          {# / By payment method: each method's revenue #}
+          <div class="table-wrap mini-table">
+            <h3 class="mini-table-title">{% translate "Par moyen de paiement" %}</h3>
+            <table data-testid="recap-totaux-moyen">
+              <thead>
+                <tr><th>{% translate "Moyen" %}</th><th class="num">{% translate "Montant" %}</th></tr>
+              </thead>
+              <tbody>
+                {% for ligne_du_moyen in lignes_par_moyen %}
+                  <tr>
+                    <td>{{ ligne_du_moyen.libelle }}</td>
+                    <td class="num">{{ ligne_du_moyen.montant }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="2" class="empty">{% translate "Aucune vente" %}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {# Par point de vente / By point of sale #}
+          <div class="table-wrap mini-table">
+            <h3 class="mini-table-title">{% translate "Par point de vente" %}</h3>
+            <table data-testid="recap-par-pv">
+              <thead>
+                <tr><th>{% translate "Point de vente" %}</th><th class="num">{% translate "Montant" %}</th></tr>
+              </thead>
+              <tbody>
+                {% for ligne_pv in lignes_par_point_de_vente %}
+                  <tr data-testid="recap-pv-{{ forloop.counter }}">
+                    <td{% if ligne_pv.sans_point_de_vente %} class="muted"{% endif %}>{{ ligne_pv.nom }}</td>
+                    <td class="num">{{ ligne_pv.montant }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="2" class="empty">{% translate "Aucune vente attribuée à un point de vente" %}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {# TVA par taux / VAT by rate #}
+          {% if lignes_de_tva %}
+            <div class="table-wrap mini-table mini-table-large">
+              <h3 class="mini-table-title">{% translate "TVA" %}</h3>
+              <table data-testid="recap-tva">
+                <thead>
+                  <tr>
+                    <th>{% translate "Taux" %}</th>
+                    <th class="num">{% translate "HT" %}</th>
+                    <th class="num">{% translate "TVA" %}</th>
+                    <th class="num">{% translate "TTC" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for ligne_de_tva in lignes_de_tva %}
+                    <tr>
+                      <td>{{ ligne_de_tva.taux }}</td>
+                      <td class="num">{{ ligne_de_tva.ht }}</td>
+                      <td class="num">{{ ligne_de_tva.tva }}</td>
+                      <td class="num">{{ ligne_de_tva.ttc }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+
+          {# Articles offerts : hors argent, jamais additionnes au total #}
+          {# / Gifted items: not money, never added to the total #}
+          {% if lignes_des_offerts %}
+            <div class="table-wrap mini-table">
+              <h3 class="mini-table-title">{% translate "Offerts (hors argent)" %}</h3>
+              <table data-testid="recap-offerts">
+                <thead>
+                  <tr>
+                    <th>{% translate "Article" %}</th>
+                    <th class="num">{% translate "Quantité" %}</th>
+                    <th class="num">{% translate "Valeur offerte" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for offert in lignes_des_offerts %}
+                    <tr>
+                      <td>{{ offert.nom }}</td>
+                      <td class="num">{{ offert.quantite }}</td>
+                      <td class="num">{{ offert.valeur }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+
+          {# Ventes en points ou en temps : hors argent, jamais additionnees au total #}
+          {# / Points or time sales: not money, never added to the total #}
+          {% if lignes_non_monetaires %}
+            <div class="table-wrap mini-table">
+              <h3 class="mini-table-title">{% translate "Non monétaire (hors argent)" %}</h3>
+              <table data-testid="recap-non-monetaire">
+                <thead>
+                  <tr>
+                    <th>{% translate "Monnaie" %}</th>
+                    <th class="num">{% translate "Total" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for monnaie in lignes_non_monetaires %}
+                    <tr>
+                      <td>{{ monnaie.nom }}</td>
+                      <td class="num">{{ monnaie.total }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
         </div>
 
-        {# ============ HISTORIQUE DE COMMANDE / ORDER HISTORY ============ #}
-        {# La liste des ventes du service s'ouvre en bas de l'ecran ; re-cliquer le #}
-        {# bouton la ferme. Les reglements et le detail des ventes par article sont #}
-        {# deja dans les sections du rapport ci-dessus. #}
-        {# / The service's sales list opens below; payments and detail by item are #}
-        {# already in the report sections above. #}
+        {# ============ HISTORIQUES / HISTORIES ============ #}
+        {# Un seul historique ouvert a la fois. Re-cliquer le bouton actif le ferme. #}
+        {# / Only one history open at a time. Clicking the active button closes it. #}
         <div class="detail-toggle" role="group" aria-label="{% translate 'Historiques' %}">
+          <button type="button" class="voir-detail"
+                  aria-pressed="{% if vue == 'detail_articles' %}true{% else %}false{% endif %}"
+                  aria-controls="detail-section"
+                  data-url="{% url 'laboutik-caisse-recap_en_cours' %}?vue=detail_articles&{{ params_ventes }}"
+                  data-titre="{% translate 'Historique de vente par article' %}"
+                  onclick="basculerHistorique(this)"
+                  data-testid="btn-historique-ventes">
+            <span>{% translate "Historique de vente" %}</span>
+            <span class="voir-detail-chevron" aria-hidden="true"></span>
+          </button>
           <button type="button" class="voir-detail"
                   aria-pressed="false"
                   aria-controls="detail-section"
                   data-url="{% url 'laboutik-caisse-liste_ventes' %}?{{ params_ventes }}"
+                  data-titre="{% translate 'Historique de commande' %}"
                   onclick="basculerHistorique(this)"
                   data-testid="btn-historique-commandes">
             <span>{% translate "Historique de commande" %}</span>
             <span class="voir-detail-chevron" aria-hidden="true"></span>
           </button>
+          <button type="button" class="voir-detail"
+                  aria-pressed="{% if vue == 'par_moyen' %}true{% else %}false{% endif %}"
+                  aria-controls="detail-section"
+                  data-url="{% url 'laboutik-caisse-recap_en_cours' %}?vue=par_moyen&{{ params_ventes }}"
+                  data-titre="{% translate 'Synthèse par moyen de paiement' %}"
+                  onclick="basculerHistorique(this)"
+                  data-testid="btn-historique-synthese">
+            <span>{% translate "Synthèse par moyen" %}</span>
+            <span class="voir-detail-chevron" aria-hidden="true"></span>
+          </button>
         </div>
 
         <section class="detail-section" id="detail-section"
-                 aria-labelledby="detail-titre" hidden>
+                 aria-labelledby="detail-titre"
+                 {% if vue != 'detail_articles' and vue != 'par_moyen' %}hidden{% endif %}>
           <div class="detail-head">
-            <h3 id="detail-titre">{% translate "Historique de commande" %}</h3>
+            <h3 id="detail-titre">
+              {% if vue == 'detail_articles' %}{% translate "Historique de vente par article" %}{% elif vue == 'par_moyen' %}{% translate "Synthèse par moyen de paiement" %}{% endif %}
+            </h3>
           </div>
-          <div id="detail-contenu" class="detail-contenu" aria-live="polite"></div>
+          <div id="detail-contenu" class="detail-contenu" aria-live="polite">
+            {% if vue == 'detail_articles' or vue == 'par_moyen' %}
+              {% include "laboutik/partial/_ventes_historique_recap.html" %}
+            {% endif %}
+          </div>
         </section>
 
         {# ============ POPUP CLOTURE / CLOSURE POPUP ============ #}
@@ -189,29 +332,39 @@ COMMUNICATION :
 
         <script>
           /**
-           * Ouvre ou ferme l'historique de commande en bas de l'ecran Ventes
-           * / Opens or closes the order history at the bottom of the Sales screen
+           * Ouvre ou ferme un historique en bas de l'ecran Ventes
+           * / Opens or closes a history at the bottom of the Sales screen
            *
            * LOCALISATION : laboutik/templates/laboutik/partial/hx_recap_en_cours.html
            *
-           * Le bouton est un interrupteur : ouvert → on ferme la section ; ferme →
-           * on l'ouvre et on charge la liste. La liste vient du serveur (HTMX) :
-           * data-url du bouton → #detail-contenu ; le serveur voit la cible
-           * "detail-contenu" et ne renvoie que la liste.
+           * Les trois boutons .voir-detail marchent comme un seul interrupteur :
+           * - clic sur le bouton deja actif → on ferme la section ;
+           * - clic sur un autre bouton → on l'active et on charge son tableau.
+           * Le tableau vient du serveur (HTMX) : data-url du bouton → #detail-contenu.
+           * Le serveur voit la cible "detail-contenu" et ne renvoie que le tableau.
            *
-           * @param {HTMLButtonElement} boutonClique - le bouton « Historique de commande »
+           * @param {HTMLButtonElement} boutonClique - le bouton .voir-detail clique
            */
           function basculerHistorique(boutonClique) {
             const sectionHistorique = document.getElementById('detail-section')
+            const titreHistorique = document.getElementById('detail-titre')
             const historiqueDejaOuvert = boutonClique.getAttribute('aria-pressed') === 'true'
 
+            // On eteint tous les boutons / Turn every button off
+            const tousLesBoutons = document.querySelectorAll('.voir-detail')
+            for (const bouton of tousLesBoutons) {
+              bouton.setAttribute('aria-pressed', 'false')
+            }
+
+            // Deuxieme clic sur le meme bouton : on ferme / Second click on same button: close
             if (historiqueDejaOuvert) {
-              boutonClique.setAttribute('aria-pressed', 'false')
               sectionHistorique.hidden = true
               return
             }
 
+            // On allume ce bouton et on charge son tableau / Turn this one on and load its table
             boutonClique.setAttribute('aria-pressed', 'true')
+            titreHistorique.textContent = boutonClique.dataset.titre
             sectionHistorique.hidden = false
             htmx.ajax('GET', boutonClique.dataset.url, { target: '#detail-contenu', swap: 'innerHTML' })
           }
@@ -219,3 +372,4 @@ COMMUNICATION :
       {% endif %}
     </div>
   </div>
+{% endif %}

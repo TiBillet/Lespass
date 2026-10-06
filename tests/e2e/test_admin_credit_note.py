@@ -1,18 +1,18 @@
 """
-Tests E2E : avoir comptable (credit note) sur LigneArticle depuis l'admin.
-/ E2E tests: accounting credit note on LigneArticle from the admin.
+Tests E2E : avoir comptable (credit note) sur un article depuis la fiche « Vente ».
+/ E2E tests: accounting credit note on one item from the admin "Sale" page.
 
 Conversion de tests/playwright/tests/32-admin-credit-note.spec.ts
 
 Scenarios :
 1. Emettre un avoir sur une ligne VALID -> succes, ligne negative creee.
-2. Tenter un 2e avoir sur la meme ligne -> erreur "already exists".
+2. Tenter un 2e avoir sur la meme ligne -> refus « deja remboursee en totalite ».
 
-Strategie : on cree une adhesion gratuite (qui genere une LigneArticle VALID),
-puis on emet un avoir dessus par l'ecran « Emettre un avoir » de l'admin (URL
-emettre_avoir : l'ecran s'ouvre, l'admin valide).
-/ Strategy: create a free membership (generates a VALID LigneArticle),
-then issue a credit note through the admin "Issue a credit note" screen.
+Strategie : on cree une adhesion gratuite (qui genere une LigneArticle VALID dans une
+vente), puis on emet un avoir dessus par l'ecran « Avoir sur un article » de la fiche
+de sa vente (l'ecran s'ouvre, l'admin valide toute la quantite).
+/ Strategy: create a free membership (generates a VALID LigneArticle in a sale),
+then issue a credit note through the sale page "Credit note on one item" screen.
 """
 
 import datetime
@@ -160,11 +160,9 @@ class TestAdminCreditNote:
         )
 
         # --- Etape 2 : Recuperer le PK de la LigneArticle VALID en base ---
-        # On force le status a 'V' (VALID) si seule une ligne 'P' existe,
-        # pour s'assurer que l'action emettre_avoir peut s'executer.
-        # / Step 2: Get the PK of the VALID LigneArticle from DB.
-        # We force status to 'V' (VALID) if only a 'P' line exists,
-        # to ensure emettre_avoir can run.
+        # On force le status a 'V' (VALID) si seule une ligne 'P' existe. On lit
+        # aussi sa vente : l'avoir se fait depuis la fiche de la vente.
+        # / Step 2: Get the PK of the VALID LigneArticle and its sale from DB.
         db_result = django_shell(
             "from BaseBillet.models import LigneArticle\n"
             f"ligne = LigneArticle.objects.filter(membership__user__email='{user_email}', status__in=['V', 'P']).first()\n"
@@ -175,6 +173,7 @@ class TestAdminCreditNote:
             "        ligne.save(update_fields=['status'])\n"
             "if ligne:\n"
             "    print(f'pk={ligne.pk}')\n"
+            "    print(f'vente={ligne.vente_id}')\n"
             "    print(f'status={ligne.status}')\n"
             "else:\n"
             "    print('NOT_FOUND')\n"
@@ -191,20 +190,31 @@ class TestAdminCreditNote:
             f"PK de la LigneArticle non trouve dans : {db_result}"
         )
         ligne_pk = pk_match
+        vente_pk = None
+        for line in db_result.splitlines():
+            if line.startswith("vente="):
+                vente_pk = line.split("=", 1)[1].strip()
+        assert vente_pk not in (None, "None"), (
+            f"La LigneArticle n'a pas de vente : {db_result}"
+        )
+        adresse_de_l_avoir = (
+            f"/admin/BaseBillet/vente/{vente_pk}/avoir_sur_un_article/?ligne={ligne_pk}"
+        )
 
         # --- Etape 3 : Se connecter en admin et emettre un avoir ---
-        # L'URL emettre_avoir ouvre l'ecran « Emettre un avoir » (GET). L'adhesion
-        # est gratuite, au moyen « offert » : la ligne est entierement offerte, l'ecran
-        # n'a donc PAS de champ « Rembourse par ». L'admin valide : la vue ecrit
-        # l'avoir et redirige vers la changelist avec un message de succes.
-        # / Step 3: Login as admin, open the credit note screen (GET). Free membership,
-        # "offered" method: no "Refunded by" field. Confirm: the view writes the
-        # credit note and redirects to the changelist with a success message.
+        # L'ecran « Avoir sur un article » de la fiche de la vente, pour cette ligne
+        # (GET). L'adhesion est gratuite, au moyen « offert » : la ligne est
+        # entierement offerte, l'ecran n'a donc PAS de champ « Rembourse par ».
+        # L'admin valide la quantite proposee (toute la ligne) : la vue ecrit l'avoir
+        # et ouvre la fiche de la vente d'avoir, avec un message de succes.
+        # / Step 3: open the sale page "Credit note on one item" screen for the line.
+        # Free membership: no "Refunded by" field. Confirm: the credit note is written
+        # and the credit note sale page opens with a success message.
         login_as_admin(page)
 
-        page.goto(f"/admin/BaseBillet/lignearticle/{ligne_pk}/emettre_avoir/")
+        page.goto(adresse_de_l_avoir)
         page.wait_for_load_state("networkidle")
-        assert page.locator('[data-testid="avoir-ecran"]').is_visible(), (
+        assert page.locator('[data-testid="avoir-article-ecran"]').is_visible(), (
             f"Ecran d'avoir non affiche. Contenu : {page.inner_text('body')[:500]}"
         )
         assert page.locator('[data-testid="avoir-moyen-rembourse"]').count() == 0, (
@@ -217,10 +227,7 @@ class TestAdminCreditNote:
         # Verifier le message de succes (FR ou EN selon la langue active)
         # / Check success message (FR or EN depending on active language)
         page_content = page.inner_text("body")
-        avoir_created = (
-            "credit note created" in page_content.lower()
-            or "avoir cr" in page_content.lower()
-        )
+        avoir_created = "avoir émis" in page_content.lower()
         assert avoir_created, (
             f"Message de succes pour l'avoir non trouve. Contenu : {page_content[:500]}"
         )
@@ -242,71 +249,40 @@ class TestAdminCreditNote:
             f"La quantite de l'avoir devrait etre negative : {cn_result}"
         )
 
-        # --- Etape 4b : Verifier les lignes dans la changelist admin ---
-        # On filtre par nom de produit (unique) pour ne voir que nos lignes.
-        # On attend au moins 2 lignes : ligne originale + avoir.
-        # / Step 4b: Verify lines in the admin changelist.
-        # Filter by product name (unique) to see only our lines.
-        # We expect at least 2 rows: original line + credit note.
-        page.goto("/admin/BaseBillet/lignearticle/")
-        page.wait_for_load_state("networkidle")
-
-        search_input = page.locator('input[name="q"]').first
-        search_input.fill(product_name)
-        search_input.press("Enter")
+        # --- Etape 4b : Verifier les ventes dans la liste des ventes ---
+        # On cherche par l'e-mail de l'adherent (client des deux ventes). On attend
+        # au moins 2 ventes : la vente d'origine et la vente d'avoir, chacune avec
+        # son badge de nature (« Vente » / « Avoir »).
+        # / Step 4b: the sales list, searched by the member e-mail: the original
+        # sale and the credit note sale, with their nature badges.
+        page.goto(f"/admin/BaseBillet/vente/?q={user_email}")
         page.wait_for_load_state("networkidle")
 
         rows = page.locator("#result_list tbody tr")
         row_count = rows.count()
         assert row_count >= 2, (
-            f"Attendu >= 2 lignes (originale + avoir), obtenu : {row_count}"
+            f"Attendu >= 2 ventes (originale + avoir), obtenu : {row_count}"
         )
-
-        # Verifier la presence des statuts CONFIRMED (Confirmé) et CREDIT NOTE (Avoir)
-        # Unfold rend les statuts comme texte de badge via get_status_display().
-        # En FR : 'Confirmé', 'Avoir'. En EN : 'Confirmed', 'Credit note'.
-        # On cherche le texte dans le HTML source (plus fiable que inner_text sur badges).
-        # / Check CONFIRMED (Confirmé) and CREDIT NOTE (Avoir) statuses.
-        # Unfold renders statuses as badge text via get_status_display().
-        # FR: 'Confirmé', 'Avoir'. EN: 'Confirmed', 'Credit note'.
-        # We search the HTML source (more reliable than inner_text for badges).
-        page_html = page.content()
-        has_confirmed = (
-            "CONFIRMED" in page_html
-            or "Confirmed" in page_html
-            or "Confirm" in page_html
-            or "Confirmé" in page_html
-            or "confirm" in page_html.lower()
-        )
-        has_credit_note = (
-            "CREDIT NOTE" in page_html
-            or "Credit note" in page_html
-            or "credit note" in page_html.lower()
-            or "Avoir" in page_html
-            or "avoir" in page_html
-        )
-        assert has_confirmed, (
-            f"Badge CONFIRMED introuvable dans la changelist. HTML extrait : {page_html[2000:3000]}"
-        )
-        assert has_credit_note, (
-            f"Badge CREDIT NOTE introuvable dans la changelist. HTML extrait : {page_html[2000:3000]}"
-        )
+        # Les badges de la colonne « Nature », en FR ou en EN, quelle que soit la casse.
+        # / The "Nature" column badges, FR or EN, any case.
+        natures_affichees = []
+        for cellule in page.locator("td.field-nature_affichee").all():
+            natures_affichees.append(cellule.inner_text().strip().lower())
+        has_sale = "vente" in natures_affichees or "sale" in natures_affichees
+        has_credit_note = "avoir" in natures_affichees or "credit note" in natures_affichees
+        assert has_sale, f"Badge « Vente » introuvable : {natures_affichees}"
+        assert has_credit_note, f"Badge « Avoir » introuvable : {natures_affichees}"
 
         # --- Etape 5 : Tenter un 2e avoir -> doit etre bloque ---
-        # L'action doit detecter que l'avoir existe deja et afficher
-        # "already exists" ou "existe deja" dans le message d'erreur.
-        # / Step 5: Try a 2nd credit note -> must be blocked.
-        # The action must detect the credit note already exists and display
-        # "already exists" or "existe deja" in the error message.
-        page.goto(f"/admin/BaseBillet/lignearticle/{ligne_pk}/emettre_avoir/")
+        # Tout est deja rendu : l'ecran ne s'ouvre pas, la fiche de la vente
+        # s'affiche avec « deja remboursee en totalite ».
+        # / Step 5: Try a 2nd credit note -> must be blocked: everything is already
+        # given back, the sale page shows the refusal.
+        page.goto(adresse_de_l_avoir)
         page.wait_for_load_state("networkidle")
 
         page_content_2 = page.inner_text("body")
-        is_blocked = (
-            "already exists" in page_content_2.lower()
-            or "existe deja" in page_content_2.lower()
-            or "existe déjà" in page_content_2.lower()
-        )
+        is_blocked = "déjà remboursée en totalité" in page_content_2.lower()
         assert is_blocked, (
             f"Le 2e avoir devrait etre bloque. Contenu : {page_content_2[:500]}"
         )

@@ -101,7 +101,9 @@ value. A safety net against double clicks; the real guard is the server-side loc
                     <li>{% translate "Supprime la fiche d'adhésion." %}</li>
                     <li>
                         {% translate "Crée une ligne comptable négative (avoir) visible dans" %}
-                        <a href="{% url 'staff_admin:BaseBillet_lignearticle_changelist' %}?membership={{ membership.pk }}"
+                        {# La liste des ventes, filtrée sur l'e-mail de l'adhérent·e quand il est connu. #}
+                        {# / The sales list, filtered on the member's e-mail when known. #}
+                        <a href="{% url 'staff_admin:BaseBillet_vente_changelist' %}{% if membership.user %}?q={{ membership.user.email|urlencode }}{% endif %}"
                            target="_blank" rel="noopener"
                            style="color:#c2410c;text-decoration:underline">{% translate "l'admin Ventes" %}</a>.
                     </li>

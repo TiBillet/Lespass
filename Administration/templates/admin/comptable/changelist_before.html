@@ -11,7 +11,7 @@
 {% include "admin/comptable/plan_complet.html" %}
 
 {% if charger_plan_url %}
-<div class="p-4 flex flex-col gap-4" data-testid="bandeau-charger-plan">
+<div class="mb-4 flex flex-col gap-4" data-testid="bandeau-charger-plan">
 
     {% component "unfold/components/card.html" with title=_("Load a default chart of accounts") %}
         <div id="zone-charger-plan" aria-live="polite">
@@ -42,7 +42,7 @@
 </div>
 {% endif %}
 
-<div class="px-4 pb-4" data-testid="aides-des-natures">
+<div class="mb-4" data-testid="aides-des-natures">
     {% component "unfold/components/card.html" with title=_("Les natures de compte") %}
         <dl style="display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0;">
             <dt style="font-weight: 600;">{% translate "Ventes" %}</dt>

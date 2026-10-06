@@ -367,6 +367,55 @@ def _connexion_sur_le_schema_public_avant_chaque_classe(request):
     yield
 
 
+@pytest.fixture(autouse=True, scope="class")
+def _schema_de_test_cree_par_clonage(request, _connexion_sur_le_schema_public_avant_chaque_classe):
+    """
+    Crée le schéma dédié d'un `FastTenantTestCase` par COPIE d'un schéma modèle, au lieu
+    de rejouer toutes les migrations.
+    / Creates a FastTenantTestCase's dedicated schema by COPYING a template schema,
+    instead of replaying every migration.
+
+    LOCALISATION : tests/pytest/conftest.py — le mécanisme est dans
+    tests/pytest/schemas_clones.py.
+
+    POURQUOI : sans schéma, `FastTenantTestCase.setUpClass` le crée en rejouant toutes
+    les migrations (~55 s). Après une base neuve, ~40 schémas → ~40 min de plus.
+    Le clone prend quelques secondes.
+    / WHY: a missing schema costs ~55 s of migrations; a clone a few seconds.
+
+    QUAND : seulement si TEST=1, seulement pour un `FastTenantTestCase`, et seulement si
+    son schéma n'existe pas encore. Un schéma déjà là est réutilisé tel quel, comme avant.
+    Elle s'exécute après `_connexion_sur_le_schema_public_avant_chaque_classe` (elle en
+    dépend) et avant le `setUpClass` : celui-ci crée la ligne `Client`, trouve le schéma
+    et ne rejoue aucune migration.
+    / WHEN: TEST=1 only, FastTenantTestCase only, missing schema only. Runs before
+    setUpClass, which then creates the Client row, finds the schema and replays nothing.
+    """
+    from django.conf import settings
+    from django_tenants.test.cases import FastTenantTestCase
+    from django_tenants.utils import schema_exists
+
+    classe_de_test = getattr(request, "cls", None)
+
+    est_un_fast_tenant_test_case = (
+        classe_de_test is not None
+        and isinstance(classe_de_test, type)
+        and issubclass(classe_de_test, FastTenantTestCase)
+    )
+    if not est_un_fast_tenant_test_case or not settings.TEST:
+        yield
+        return
+
+    nom_du_schema = classe_de_test.get_test_schema_name()
+    if not schema_exists(nom_du_schema):
+        import schemas_clones
+
+        schemas_clones.preparer_le_schema_modele()
+        schemas_clones.creer_le_schema_par_clonage(nom_du_schema)
+
+    yield
+
+
 @pytest.fixture
 def mock_stripe():
     """Patche les appels Stripe pour eviter le reseau.

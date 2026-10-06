@@ -152,6 +152,7 @@ CLE_SANS_MONNAIE = "sans_monnaie"
 CLE_DU_JOURNAL_IMPOSSIBLE = "?"
 PREFIXE_DE_LA_CLE_D_UN_TYPE_DE_PRODUIT = "type_"
 CLE_SANS_OPERATEUR = "sans_operateur"
+CLE_SANS_POINT_DE_VENTE = "sans_point_de_vente"
 
 # Le résultat de la section « intégrité » : un code, jamais un texte traduit.
 # / The integrity section result: a code, never a translated text.
@@ -1157,6 +1158,48 @@ class RapportDesVentes:
                 }
             _ajouter_les_trois_totaux(par_journal[code_du_journal], sommes_du_groupe)
         return par_journal
+
+    def chiffre_affaires_par_point_de_vente(self):
+        """
+        Le chiffre d'affaires TTC par point de vente de la vente (caisse, tireuse).
+        Les ventes sans point de vente (en ligne, admin, API) sont réunies sous
+        « sans_point_de_vente ». Mêmes articles que le chiffre d'affaires : la somme
+        des lignes vaut toujours le chiffre d'affaires TTC.
+        / Revenue incl. tax by the sale's point of sale; sales without one are under
+        "sans_point_de_vente". The rows always add up to the revenue.
+
+        LU PAR : l'écran « Ventes » de la caisse (laboutik/views.py `recap_en_cours`,
+        tableau « Par point de vente »). Pas dans le Z : le Z garde le journal
+        (`par_journal`), qui suit le plan comptable.
+        / Read by the register's Sales screen; not in the Z.
+
+        :return: {uuid du point de vente en texte, ou "sans_point_de_vente":
+            {"nom", "total_ttc_en_centimes"}}
+        """
+        sommes_par_point_de_vente = (
+            self._articles_du_chiffre_d_affaires()
+            .values("vente__point_de_vente", "vente__point_de_vente__name")
+            .annotate(total_ttc_en_centimes=Coalesce(Sum("total_ttc"), 0))
+            .order_by("vente__point_de_vente__name", "vente__point_de_vente")
+        )
+        par_point_de_vente = {}
+        for sommes_du_point_de_vente in sommes_par_point_de_vente:
+            uuid_du_point_de_vente = sommes_du_point_de_vente["vente__point_de_vente"]
+            if uuid_du_point_de_vente is None:
+                cle_du_point_de_vente = CLE_SANS_POINT_DE_VENTE
+                nom_du_point_de_vente = gettext("Sans point de vente")
+            else:
+                cle_du_point_de_vente = str(uuid_du_point_de_vente)
+                nom_du_point_de_vente = sommes_du_point_de_vente[
+                    "vente__point_de_vente__name"
+                ]
+            par_point_de_vente[cle_du_point_de_vente] = {
+                "nom": nom_du_point_de_vente,
+                "total_ttc_en_centimes": sommes_du_point_de_vente[
+                    "total_ttc_en_centimes"
+                ],
+            }
+        return par_point_de_vente
 
     # ------------------------------------------------------------------
     # Section 3 — Règlements

@@ -300,44 +300,29 @@ class TestAdminAjouterPaiement:
         success_area = page.locator('[data-testid="membership-paiement-success"]')
         expect(success_area).to_be_visible(timeout=10000)
 
-        # --- Étape 10 : Vérifier la LigneArticle confirmée dans l'admin ---
-        # On recherche par nom de produit pour trouver la ligne créée.
-        # / Step 10: verify the confirmed LigneArticle in the admin.
-        # We search by product name to find the created line.
-        page.goto("/admin/BaseBillet/lignearticle/")
-        page.wait_for_load_state("networkidle")
-
-        search_input2 = page.locator('input[name="q"]').first
-        search_input2.fill(product_name)
-        search_input2.press("Enter")
-        page.wait_for_load_state("networkidle")
-
-        rows = page.locator("#result_list tbody tr")
-        row_count = rows.count()
-        assert row_count >= 1, (
-            f"Aucune LigneArticle trouvée pour le produit '{product_name}'"
+        # --- Étape 10 : Vérifier la vente réglée dans l'admin ---
+        # Le message de succès a un lien vers la fiche de la vente écrite. Sa fiche :
+        # statut « Réglée » (EN « Paid »), et l'article de l'adhésion dans l'inline.
+        # / Step 10: the success message links to the written sale page: settled,
+        # with the membership item in its inline.
+        lien_vers_la_vente = page.locator(
+            '[data-testid="membership-paiement-success-lien-vente"]'
         )
+        expect(lien_vers_la_vente).to_be_visible()
+        adresse_de_la_vente = lien_vers_la_vente.get_attribute("href")
+        assert "/admin/BaseBillet/vente/" in adresse_de_la_vente, adresse_de_la_vente
 
-        # Au moins une ligne doit avoir le statut Confirmed/Confirmé/Payé
-        # On cherche le début du mot "Confirm" (FR/EN) ou "VALID" ou "Payé" selon
-        # le display du badge Unfold. On est tolérant sur la casse et la langue.
-        # / At least one line must have Confirmed/Confirmé/Paid status.
-        # We search for the start of "Confirm" (FR/EN) or "VALID" or "Payé".
-        # Tolerant on case and language.
+        page.goto(adresse_de_la_vente)
+        page.wait_for_load_state("networkidle")
+
         body_text = page.inner_text("body")
-        has_confirmed = (
-            "Confirm" in body_text
-            or "confirm" in body_text
-            or "CONFIRM" in body_text
-            or "Payé" in body_text
-            or "payé" in body_text
-            or "Paid" in body_text
-            or "paid" in body_text
-            or "VALID" in body_text
-            or "valid" in body_text
+        assert product_name in body_text, (
+            f"L'article '{product_name}' est absent de la fiche de la vente. "
+            "Contenu partiel de la page : " + body_text[:500]
         )
-        assert has_confirmed, (
-            "Aucun statut de paiement confirmé/payé trouvé dans LigneArticle après le paiement espèces. "
+        has_settled = "réglée" in body_text.lower() or "paid" in body_text.lower()
+        assert has_settled, (
+            "La vente du paiement espèces n'est pas réglée. "
             "Contenu partiel de la page : " + body_text[:500]
         )
 

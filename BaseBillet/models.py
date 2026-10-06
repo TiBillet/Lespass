@@ -4555,6 +4555,14 @@ class LigneArticle(models.Model):
     def __str__(self):
         return self.uuid_8()
 
+    def get_inline_title(self):
+        """
+        Le titre d'un article dans les inlines de l'admin (Unfold lit
+        `get_inline_title` à la place de `str()`) : le nom du produit vendu.
+        / The item title in admin inlines: the sold product name.
+        """
+        return self.pricesold.productsold.product.name
+
     # -- TVA auto-fill on creation only --
     def _compute_default_vat(self) -> Decimal:
         """

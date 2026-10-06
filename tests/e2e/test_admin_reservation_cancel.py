@@ -256,31 +256,25 @@ class TestAdminReservationCancel:
             f"La reservation n'est pas en status CANCELED. Sortie : {cancel_result}"
         )
 
-        # --- Etape 7 : Verifier les LigneArticle dans l'admin ---
-        # / Step 7: Check LigneArticle rows in admin.
-        page.goto("/admin/BaseBillet/lignearticle/")
+        # --- Etape 7 : Verifier les ventes dans l'admin ---
+        # La liste des ventes, cherchée par l'e-mail du client : la vente d'origine
+        # (et la vente d'avoir s'il y en a une) apparaissent.
+        # / Step 7: the sales list, searched by the customer e-mail.
+        page.goto(f"/admin/BaseBillet/vente/?q={user_email}")
         page.wait_for_load_state("networkidle")
 
-        search_input_la = page.locator('input[name="q"]').first
-        search_input_la.fill(product_name)
-        search_input_la.press("Enter")
-        page.wait_for_load_state("networkidle")
-
-        rows_la = page.locator("#result_list tbody tr")
-        row_count = rows_la.count()
+        rows_ventes = page.locator("#result_list tbody tr")
+        row_count = rows_ventes.count()
         assert row_count >= 1, (
-            f"Aucune LigneArticle dans l'admin apres annulation pour '{product_name}'"
+            f"Aucune vente dans l'admin apres annulation pour {user_email}"
         )
 
-        # Lister les statuts visibles dans la page (a titre informatif).
-        # / List visible statuses in the page (informational).
-        body_text = page.inner_text("body")
-        status_labels = [
-            "CONFIRMED", "CREDIT NOTE", "FREE BOOKING", "CANCELLED", "REFUNDED",
-            "Confirmed", "Credit note",
-        ]
-        found_statuses = [s for s in status_labels if s in body_text]
-        print(f"LigneArticle statuses found: {', '.join(found_statuses)}")
+        # Lister les natures visibles dans la page (a titre informatif).
+        # / List visible natures in the page (informational).
+        natures_affichees = []
+        for cellule in page.locator("td.field-nature_affichee").all():
+            natures_affichees.append(cellule.inner_text().strip())
+        print(f"Natures des ventes : {', '.join(natures_affichees)}")
 
     def test_double_cancel_does_not_create_duplicate(
         self, page, api_key, create_event, create_product, login_as_admin, django_shell

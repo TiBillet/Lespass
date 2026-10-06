@@ -318,10 +318,10 @@ class TestLignesHorsArgent(FastTenantTestCase):
     # report and FEC: the old engine reads the line's method, left empty (Q-H2).
 
     def test_le_ticket_x_affiche_les_offerts(self):
-        """L'ecran Ventes (recapitulatif en cours) montre la section « Offerts » du
-        rapport des ventes : 2 vins offerts par le gerant (bouton OFFRIR), valeur
-        catalogue 2 x 5,00 € = 10,00 €, le vin nomme dans le detail par produit.
-        / The current recap shows the "Offerts" section: 2 gifted wines, 10.00 €."""
+        """L'ecran Ventes (recapitulatif en cours) montre le tableau « Offerts (hors
+        argent) », lu dans la section « Offerts » du rapport des ventes : 2 vins
+        offerts par le gerant (bouton OFFRIR), valeur catalogue 2 x 5,00 € = 10,00 €.
+        / The current recap shows the "Offerts" table: 2 gifted wines, 10.00 €."""
         carte_du_gerant = self._carte_primaire("GER8AAAA", mode_gerant=True)
         reponse_de_l_offre = self._offrir(carte_du_gerant.tag_id, self.vin.uuid, 2, 1000)
         assert reponse_de_l_offre.status_code == 200, (
@@ -335,7 +335,7 @@ class TestLignesHorsArgent(FastTenantTestCase):
         assert reponse.status_code == 200, contenu[:400]
         debut_de_la_section = contenu.index('data-testid="recap-offerts"')
         bloc_des_offerts = contenu[debut_de_la_section:]
-        fin_du_bloc = bloc_des_offerts.index("</section>")
+        fin_du_bloc = bloc_des_offerts.index("</table>")
         bloc_des_offerts = bloc_des_offerts[:fin_du_bloc]
         assert self.vin.name in bloc_des_offerts
         assert euros("10,00") in bloc_des_offerts

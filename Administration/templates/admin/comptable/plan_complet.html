@@ -19,7 +19,7 @@ FLUX :
    les manques avec un lien « Regler », ou le message vert.
 / "Check the plan" sends an HTMX GET; the verdict replaces #plan-complet-verdict.
 {% endcomment %}
-<div class="px-4 pt-4" data-testid="plan-complet">
+<div class="mb-4" data-testid="plan-complet">
     {% component "unfold/components/card.html" with title=_("Plan complet ?") %}
         <div class="flex flex-col gap-3">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

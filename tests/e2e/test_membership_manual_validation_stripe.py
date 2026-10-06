@@ -479,45 +479,29 @@ class TestMembershipManualValidationStripe:
         expect(valid_element).to_be_visible()
 
         # ──────────────────────────────────────────────────────────────────────
-        # Étape 8 : Vérifier dans les Ventes (LigneArticle confirmée)
-        # Step 8: Verify in Sales (confirmed LigneArticle)
+        # Étape 8 : Vérifier dans les Ventes (vente réglée de l'adhérent)
+        # Step 8: Verify in Sales (the member's settled sale)
         # ──────────────────────────────────────────────────────────────────────
-        page.goto("/admin/BaseBillet/lignearticle/")
+        # La liste des ventes, cherchée par l'e-mail du client.
+        # / The sales list, searched by the customer e-mail.
+        page.goto(f"/admin/BaseBillet/vente/?q={user_email}")
         page.wait_for_load_state("networkidle")
 
-        # Chercher les lignes de vente liées à cet utilisateur.
-        # / Search for sales lines linked to this user.
-        search_input = page.locator('input[name="q"]').first
-        search_input.fill(user_email)
-        search_input.press("Enter")
-        page.wait_for_load_state("networkidle")
-
-        # Au moins une ligne de vente doit apparaître.
-        # / At least one sales line must appear.
+        # Au moins une vente doit apparaître.
+        # / At least one sale must appear.
         rows = page.locator("#result_list tbody tr")
         row_count = rows.count()
         assert row_count >= 1, (
-            f"Aucune LigneArticle trouvée pour {user_email} dans les Ventes."
+            f"Aucune vente trouvée pour {user_email} dans les Ventes."
         )
 
-        # La page doit contenir un statut confirmé.
-        # LigneArticle.VALID = 'V' → label FR "Confirmé" / EN "Paid and confirmed".
-        # LigneArticle.PAID = 'P' → label FR "Payé" / EN "Paid".
-        # / The page must contain a confirmed status.
-        # LigneArticle.VALID = 'V' → FR "Confirmé" / EN "Paid and confirmed".
-        # LigneArticle.PAID = 'P' → FR "Payé" / EN "Paid".
-        body_text = page.locator("body").inner_text()
-        has_valid_line = any(
-            kw.lower() in body_text.lower()
-            for kw in [
-                "Confirmé",
-                "confirmed",
-                "Paid and confirmed",
-                "Payé",
-                "Paid",
-            ]
-        )
+        # Colonne « Statut » : au moins une vente « Réglée » (EN « Paid »).
+        # / "Status" column: at least one settled sale.
+        statuts_affiches = []
+        for cellule in page.locator("td.field-statut_affiche").all():
+            statuts_affiches.append(cellule.inner_text().strip().lower())
+        has_valid_line = "réglée" in statuts_affiches or "paid" in statuts_affiches
         assert has_valid_line, (
-            f"Aucune LigneArticle confirmée (Confirmé/Paid) trouvée pour {user_email}. "
-            f"Extrait du body : {body_text[:800]}"
+            f"Aucune vente réglée trouvée pour {user_email}. "
+            f"Statuts : {statuts_affiches}"
         )

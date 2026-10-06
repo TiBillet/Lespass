@@ -42,8 +42,15 @@ fiable par le chargeur de skills. Relancer Claude Code après création du lien.
 
 | Suite | Dossier | Outil | Durée | Rôle |
 |---|---|---|---|---|
-| **Backend DB-only** | `tests/pytest/` **et `booking/tests/`** | pytest | ~5 min | Modèles, vues, API, validations serveur, moteur de réservation, **Stripe mocké** |
+| **Backend DB-only** | `tests/pytest/` **et `booking/tests/`** | pytest | ~10 min à chaud, ~15 min à froid | Modèles, vues, API, validations serveur, moteur de réservation, **Stripe mocké** |
 | **E2E navigateur** | `tests/e2e/` | Playwright **Python** | ~9 à 12 min | Validations JS, HTMX, admin Unfold, parcours complets, **Stripe réel** et **Fedow réel** |
+
+**Durées mesurées le 2026-10-05 (3423 tests) :** à chaud (schémas `test_*` déjà là)
+10 min 22 ; à froid (schémas `test_*` purgés, `test_modele` absent) 15 min 31. Avant le
+clonage des schémas de test, le froid prenait ~50 min : chaque schéma dédié d'un
+`FastTenantTestCase` rejouait toutes les migrations (~55 s). Il est maintenant copié depuis
+le schéma modèle `test_modele` (`tests/pytest/schemas_clones.py`, PIEGES 14.1 à 14.4).
+/ Measured: warm 10m22, cold 15m31 (was ~50 min before test schemas were cloned).
 
 `make test` lance les deux dossiers de la suite backend. `booking/tests/` (moteur de
 créneaux, fuseaux, validation d'une réservation) y a été ajouté le 2026-09-22 : hors de la
@@ -88,7 +95,7 @@ n'est ignoré : ce qui ne peut pas tourner **échoue**. La logique (serveur live
 de test, `stripe listen`) vit dans `scripts/lancer_tests.sh`.
 
 ```bash
-make test          # PYTHON (~11 min), paiements et remboursements Stripe réels compris
+make test          # PYTHON (~10 min à chaud, ~15 min à froid), Stripe réel compris
 make e2e           # E2E (~14 min), parcours à webhook Stripe compris — `stripe listen` dans byobu
 make e2e-visible   # E2E à SUIVRE DES YEUX : Chromium visible sur l'écran, ralenti, journal lisible
 

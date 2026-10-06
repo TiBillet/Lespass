@@ -5009,8 +5009,11 @@ class MembershipMVT(viewsets.ViewSet):
             )
             encaisser_vente(vente_de_l_admin)
 
+        # La vente écrite est passée au partiel : son lien ouvre sa fiche dans l'admin.
+        # / The written sale is passed to the partial: its link opens its admin page.
         return render(request, "admin/membership/partials/ajouter_paiement_success.html", {
             "membership": membership,
+            "vente_de_l_admin": vente_de_l_admin,
         })
 
     def _contexte_du_formulaire_d_annulation(

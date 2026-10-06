@@ -1,0 +1,82 @@
+{% load i18n %}
+{% comment %}
+HISTORIQUES DE L'ECRAN VENTES (vue=detail_articles ou vue=par_moyen)
+/ Sales screen histories (vue=detail_articles or vue=par_moyen)
+
+LOCALISATION : laboutik/templates/laboutik/partial/_ventes_historique_recap.html
+Maquette : TEMP-tibillet-laboutik-main/caisse (#detailSection, table.ventes-table)
+
+Inclus par hx_recap_en_cours.html :
+- seul, quand la cible HTMX est #detail-contenu (bouton d'historique) ;
+- dans #detail-contenu, quand la page arrive deja avec ?vue=... (rechargement).
+
+Contexte (textes deja ecrits, lus dans le rapport des ventes unique) :
+- vue ;
+- categories_du_detail (detail_articles) : [{nom, total, articles: [{nom, quantite, total}]}] ;
+- synthese_par_moyen (par_moyen) : {colonnes, lignes: [{type, montants, total}]}.
+L'historique de commande n'est pas ici : il vient de hx_liste_ventes.html.
+{% endcomment %}
+{% if aucune_vente %}
+  <p class="ventes-vide">{% translate "Aucune vente depuis la dernière clôture" %}</p>
+
+{% elif vue == "detail_articles" %}
+  {# --- Ventes par categorie puis par article / Sales by category then article --- #}
+  {# Une pesee ou un tirage : quantite en kg ou en litres. / Weighing or pour: kg or litres. #}
+  <div class="table-wrap">
+    <table class="ventes-table" data-testid="recap-detail-articles">
+      <thead>
+        <tr>
+          <th>{% translate "Catégorie / Article" %}</th>
+          <th class="num">{% translate "Qté" %}</th>
+          <th class="num">{% translate "Total" %}</th>
+        </tr>
+      </thead>
+      {% for categorie in categories_du_detail %}
+        <tbody data-testid="recap-categorie-{{ forloop.counter }}">
+          <tr class="cat-row">
+            <td colspan="2">{{ categorie.nom }}</td>
+            <td class="num">{{ categorie.total }}</td>
+          </tr>
+          {% for article in categorie.articles %}
+            <tr>
+              <td>{{ article.nom }}</td>
+              <td class="num">{{ article.quantite }}</td>
+              <td class="num">{{ article.total }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      {% empty %}
+        <tbody>
+          <tr><td colspan="3" class="empty">{% translate "Aucune vente" %}</td></tr>
+        </tbody>
+      {% endfor %}
+    </table>
+  </div>
+
+{% elif vue == "par_moyen" %}
+  {# --- Tableau croise type x moyen / Cross table: type x payment method --- #}
+  <div class="table-wrap">
+    <table class="ventes-table" data-testid="recap-synthese-operations">
+      <thead>
+        <tr>
+          <th>{% translate "Type" %}</th>
+          {% for libelle_du_moyen in synthese_par_moyen.colonnes %}
+            <th class="num">{{ libelle_du_moyen }}</th>
+          {% endfor %}
+          <th class="num">{% translate "Total" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ligne in synthese_par_moyen.lignes %}
+          <tr>
+            <td>{{ ligne.type }}</td>
+            {% for montant in ligne.montants %}
+              <td class="num">{{ montant }}</td>
+            {% endfor %}
+            <td class="num num-fort">{{ ligne.total }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}

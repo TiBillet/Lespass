@@ -4,8 +4,8 @@
 
     {# Fieldset : Évènements où la personne est inscrite (tenant courant) #}
     {# Bookings the person is registered to (current tenant) #}
-    <fieldset class="module relative " x-show="activeTab == 'general'">
-        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
+    <fieldset class="module relative min-w-0" x-show="activeTab == 'general'">
+        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm dark:bg-white/[.02] dark:text-font-important-dark ">
             {% translate "Évènements" %}
         </h2>
         <div class="shadow-xs rounded-default aligned border-base-200 border dark:border-base-800 p-4">
@@ -79,8 +79,8 @@
 
     {# Fieldset : Adhésions de la personne (tenant courant) #}
     {# The person's memberships (current tenant) #}
-    <fieldset class="module relative " x-show="activeTab == 'general'">
-        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
+    <fieldset class="module relative min-w-0" x-show="activeTab == 'general'">
+        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm dark:bg-white/[.02] dark:text-font-important-dark ">
             {% translate "Adhésions" %}
         </h2>
         <div class="shadow-xs rounded-default aligned border-base-200 border dark:border-base-800 p-4">
@@ -149,8 +149,8 @@
     </fieldset>
 
     {# Fieldset: Tirelire (wallet info button) #}
-    <fieldset class="module relative " x-show="activeTab == 'general'">
-        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
+    <fieldset class="module relative min-w-0" x-show="activeTab == 'general'">
+        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm dark:bg-white/[.02] dark:text-font-important-dark ">
             {% translate "Tirelire" %}
         </h2>
 
@@ -158,7 +158,7 @@
             <div class="form-row field-row group/row last">
                 <div class="field-line border-b px-3 lg:first:border-l-0 lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">
                     <div class="grow relative">
-                        <button class="border font-medium px-3 py-2 rounded-default text-center whitespace-nowrap bg-primary-600 border-transparent text-white"
+                        <button class="border font-medium px-3 py-2 rounded-default text-center whitespace-normal bg-primary-600 border-transparent text-white"
                                 hx-get="/my_account/{{ object_id }}/admin_my_cards/" hx-swap="outerHTML">
                             {% translate "Get cards and wallet information" %}
                         </button>
@@ -169,8 +169,8 @@
     </fieldset>
 
     {# Fieldset: Right (Unfold layout) #}
-    <fieldset class="module relative ">
-        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
+    <fieldset class="module relative min-w-0">
+        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm dark:bg-white/[.02] dark:text-font-important-dark ">
             {% translate "User rights" %}
         </h2>
 

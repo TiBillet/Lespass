@@ -25,68 +25,90 @@ shown only when non-Stripe money is owed; one method for the whole selection.
 {% block title %}{% translate "Annuler et rembourser" %}{% endblock %}
 
 {% block content %}
-<div style="max-width: 640px; margin: 40px auto; padding: 24px; border: 1px solid #d1d5db; border-radius: 8px;"
-     data-testid="annulation-ecran">
-    <h2 style="margin: 0 0 16px; font-size: 1.25em; font-weight: 600;">{% translate "Annuler et rembourser" %}</h2>
+{% comment %}
+MISE EN PAGE : un bloc de champs Unfold, en pleine largeur de la colonne de contenu
+(mêmes classes qu'un fieldset de fiche : titre gris, carte bordée, lignes en
+pointillés, libellé à gauche). La feuille static/css/tibillet-admin.css habille
+`#content-main fieldset.module`.
+/ Layout: a full-width Unfold fieldset (same classes as a detail page fieldset).
+{% endcomment %}
+<div id="content-main">
+<!--
+onsubmit : le bouton « Confirmer l'annulation » est désactivé une fois l'envoi parti.
+Il n'a pas de `name` : aucune valeur n'est perdue. C'est un filet contre le double
+clic ; la vraie garde est le verrou côté serveur (BaseBillet/services_vente.py,
+quantite_restante_de_la_ligne_sous_verrou).
+/ The submit button is disabled once the form is sent (it has no name: no value is
+lost). A safety net against double clicks; the real guard is the server-side lock.
+-->
+<form method="post" action="{{ url_de_la_liste }}" aria-label="{% translate 'Annuler et rembourser' %}"
+      data-testid="annulation-formulaire"
+      onsubmit="this.querySelector('[data-testid=annulation-valider]').disabled = true;">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="{{ nom_de_l_action }}">
+    {% for cle in cles_des_objets_coches %}
+    <input type="hidden" name="_selected_action" value="{{ cle }}">
+    {% endfor %}
+    <input type="hidden" name="post" value="yes">
 
-    {# La sélection annulée / The cancelled selection #}
-    <ul style="margin: 0 0 16px; padding-left: 20px;" aria-label="{% translate 'Sélection' %}"
-        data-testid="annulation-selection">
-        {% for description in descriptions_des_objets %}
-        <li>{{ description }}</li>
-        {% endfor %}
-    </ul>
+    <fieldset class="module relative min-w-0" aria-labelledby="annulation-ecran-titre" data-testid="annulation-ecran">
+        <h2 id="annulation-ecran-titre"
+            class="bg-base-100 flex flex-row font-semibold h-[38px] gap-1 items-center mb-4 px-3 rounded-default text-important dark:bg-white/[.02]"
+            data-testid="annulation-ecran-titre">
+            {% translate "Annuler et rembourser" %}
+        </h2>
 
-    <p style="margin: 0 0 16px; font-size: 0.9em; color: #6b7280;" data-testid="annulation-rappel-stripe">
-        {% translate "Les achats payés en ligne sont remboursés par Stripe." %}
-    </p>
+        <div class="form-rows aligned border border-base-200 rounded-default shadow-xs dark:border-base-800">
 
-    <!--
-    onsubmit : le bouton « Confirmer l'annulation » est désactivé une fois l'envoi parti.
-    Il n'a pas de `name` : aucune valeur n'est perdue. C'est un filet contre le double
-    clic ; la vraie garde est le verrou côté serveur (BaseBillet/services_vente.py,
-    quantite_restante_de_la_ligne_sous_verrou).
-    / The submit button is disabled once the form is sent (it has no name: no value is
-    lost). A safety net against double clicks; the real guard is the server-side lock.
-    -->
-    <form method="post" action="{{ url_de_la_liste }}" aria-label="{% translate 'Annuler et rembourser' %}"
-          data-testid="annulation-formulaire"
-          onsubmit="this.querySelector('[data-testid=annulation-valider]').disabled = true;">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="{{ nom_de_l_action }}">
-        {% for cle in cles_des_objets_coches %}
-        <input type="hidden" name="_selected_action" value="{{ cle }}">
-        {% endfor %}
-        <input type="hidden" name="post" value="yes">
+            {# La sélection annulée / The cancelled selection #}
+            <div class="field-line flex flex-col gap-3 px-3 py-2.5 border-b border-dashed border-base-200 dark:border-base-800">
+                <ul class="m-0" style="padding-left: 20px; list-style: disc;" aria-label="{% translate 'Sélection' %}"
+                    data-testid="annulation-selection">
+                    {% for description in descriptions_des_objets %}
+                    <li>{{ description }}</li>
+                    {% endfor %}
+                </ul>
+                <p class="m-0 text-sm" style="color: #6b7280;" data-testid="annulation-rappel-stripe">
+                    {% translate "Les achats payés en ligne sont remboursés par Stripe." %}
+                </p>
+            </div>
 
-        {% if champ_rembourse_par_demande %}
-        <div style="margin-bottom: 16px;">
-            <label for="{{ form.moyen_rembourse.id_for_label }}"
-                   style="display: block; font-weight: 500; margin-bottom: 4px;">
-                {{ form.moyen_rembourse.label }}
-            </label>
-            {{ form.moyen_rembourse }}
-            <p style="margin: 4px 0 0; font-size: 0.85em; color: #6b7280;">{{ form.moyen_rembourse.help_text }}</p>
-            {% if form.moyen_rembourse.errors %}
-            <p role="alert" style="margin: 4px 0 0; color: #b91c1c;" data-testid="annulation-moyen-rembourse-erreur">
-                {{ form.moyen_rembourse.errors|join:" " }}
-            </p>
+            {% if champ_rembourse_par_demande %}
+            {# Champ « Remboursé par », en ligne de fiche Unfold / "Refunded by" field, as an Unfold row #}
+            <div class="field-line flex flex-col lg:flex-row lg:items-center px-3 py-2.5 border-b border-dashed border-base-200 dark:border-base-800{% if form.moyen_rembourse.errors %} errors{% endif %}">
+                <div class="lg:min-w-56 lg:w-56 lg:h-[38px] lg:flex lg:items-center lg:self-start mb-2 lg:mb-0">
+                    <label for="{{ form.moyen_rembourse.id_for_label }}"
+                           class="block font-semibold text-font-important-light text-sm dark:text-font-important-dark">
+                        {{ form.moyen_rembourse.label }}
+                    </label>
+                </div>
+                <div class="grow relative min-w-0">
+                    {{ form.moyen_rembourse }}
+                    <div class="leading-relaxed mt-2 text-xs">{{ form.moyen_rembourse.help_text }}</div>
+                    {% if form.moyen_rembourse.errors %}
+                    <p role="alert" class="mt-2 text-sm" style="color: #b91c1c;" data-testid="annulation-moyen-rembourse-erreur">
+                        {{ form.moyen_rembourse.errors|join:" " }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
             {% endif %}
-        </div>
-        {% endif %}
 
-        <div style="display: flex; gap: 12px; align-items: center;">
-            <button type="submit"
-                    style="padding: 10px 20px; background: #d97706; color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer;"
-                    data-testid="annulation-valider">
-                {% translate "Confirmer l'annulation" %}
-            </button>
-            <a href="{{ url_de_la_liste }}"
-               style="color: #6b7280; text-decoration: none;"
-               data-testid="annulation-retour">
-                {% translate "Retour à la liste" %}
-            </a>
+            {# Boutons / Buttons #}
+            <div class="flex flex-wrap gap-3 items-center px-3 py-2.5">
+                <button type="submit"
+                        style="padding: 10px 20px; background: #d97706; color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer;"
+                        data-testid="annulation-valider">
+                    {% translate "Confirmer l'annulation" %}
+                </button>
+                <a href="{{ url_de_la_liste }}"
+                   style="color: #6b7280; text-decoration: none;"
+                   data-testid="annulation-retour">
+                    {% translate "Retour à la liste" %}
+                </a>
+            </div>
         </div>
-    </form>
+    </fieldset>
+</form>
 </div>
 {% endblock %}

@@ -94,7 +94,9 @@ Le POST retourne soit ce formulaire avec erreurs, soit ajouter_paiement_success.
             <p style="margin:0">
                 <strong>{% translate "Information" %} :</strong>
                 {% translate "L'enregistrement du paiement créera automatiquement une ligne comptable dans les" %}
-                <a href="/admin/BaseBillet/lignearticle/"
+                {# La liste des ventes, filtrée sur l'e-mail de l'adhérent·e quand il est connu. #}
+                {# / The sales list, filtered on the member's e-mail when known. #}
+                <a href="{% url 'staff_admin:BaseBillet_vente_changelist' %}{% if membership.user %}?q={{ membership.user.email|urlencode }}{% endif %}"
                    target="_blank" rel="noopener"
                    style="color:#2563eb;text-decoration:underline">{% translate "Ventes" %}</a>.
             </p>

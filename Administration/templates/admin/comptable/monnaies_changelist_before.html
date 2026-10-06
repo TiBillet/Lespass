@@ -18,7 +18,7 @@ LOCALISATION : Administration/templates/admin/comptable/monnaies_changelist_befo
 {% endcomment %}
 {% include "admin/comptable/plan_complet.html" %}
 
-<div class="p-4" data-testid="comptes-des-monnaies">
+<div class="mb-4" data-testid="comptes-des-monnaies">
     {% component "unfold/components/card.html" with title=_("Monnaies acceptées par le lieu") %}
         {% if lignes_des_monnaies %}
             <table style="width: 100%; border-collapse: collapse;" aria-label="{% translate 'Monnaies acceptées par le lieu' %}">

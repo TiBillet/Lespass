@@ -25,7 +25,7 @@ l'infra) et `tests/README.md`. **Lire `tests/PIEGES.md` AVANT d'écrire un nouve
 ## 1. Lancer les tests
 
 ```bash
-# Suite DB-only (~4-8 min selon l'état des schémas)
+# Suite DB-only (durées mesurées : voir tests/README.md ; schémas clonés, §3 bis)
 docker exec lespass_django poetry run pytest tests/pytest/ -q
 
 # Un fichier / un test
@@ -146,6 +146,33 @@ with connection.cursor() as c:
 Le `DELETE` via l'ORM **échoue** (cascade tenant → `relation
 "BaseBillet_configuration_federated_with" does not exist`, piège 12.5). SQL direct
 obligatoire. **C'est destructif : demander l'accord du mainteneur avant de purger.**
+
+### 3 bis. Le froid coûtait 40 min : les schémas `test_*` sont désormais CLONÉS
+
+Sans schéma, `FastTenantTestCase.setUpClass` rejoue **toutes** les migrations : ~55 s
+par schéma, ~40 schémas dédiés → la suite passait de ~10 min (à chaud) à ~50 min après
+une purge ou une base neuve.
+
+**Depuis le 2026-10-05**, la fixture `_schema_de_test_cree_par_clonage`
+(`tests/pytest/conftest.py`, mécanisme dans `tests/pytest/schemas_clones.py`) crée le
+schéma manquant par **copie** d'un schéma modèle `test_modele` : ~2,5 s au lieu de ~55 s
+(5 à 10 s en suite complète : la copie ralentit quand la base compte beaucoup de schémas).
+**Suite complète à froid mesurée : 15 min 30 (3423 passed), contre ~50 min avant.**
+- `test_modele` est créé par `migrate_schemas` (comme un lieu neuf), **une fois**, et
+  **recréé tout seul** quand la liste des migrations du code change. Il n'a **pas** de
+  ligne `Client` : la purge du §3 ne le touche pas, et ce n'est pas grave.
+- Copie `DATA` de django-tenants (`public.clone_schema`, installée dans `public`) :
+  structure, séquences **et** lignes des migrations de données (plan comptable, TVA…).
+- La **clé d'empreinte** n'est jamais copiée : vidée dans le modèle, chaque clone reçoit
+  la sienne (`get_or_create_hmac_key`).
+- Les noms des contraintes UNIQUE et des séquences sont **remis** comme dans un lieu
+  migré (`clone_schema` les renomme, piège 14.2).
+- Seulement sous pytest et `TEST=1`. La création d'un lieu (dev, onboard, prod) rejoue
+  toujours les migrations.
+
+Conséquence : **purger est devenu bon marché**. Après une migration sur une TENANT_APP,
+purger les `test_*` (§3) coûte quelques secondes par schéma recréé, plus ~1 min une seule
+fois pour refaire `test_modele`.
 
 ---
 

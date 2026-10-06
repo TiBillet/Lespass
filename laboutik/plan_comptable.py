@@ -37,6 +37,7 @@ Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-E-plan-comptable.md 
 import logging
 import unicodedata
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.db import IntegrityError, connection, transaction
 from django.db.models import F, Q
@@ -1151,7 +1152,14 @@ def ce_qui_manque_pour_exporter():
     lien_des_monnaies = reverse("staff_admin:laboutik_mappingmonnaie_changelist")
     lien_des_points_de_vente = reverse("staff_admin:laboutik_pointdevente_changelist")
     lien_des_categories = reverse("staff_admin:BaseBillet_categorieproduct_changelist")
-    lien_des_ecritures = reverse("staff_admin:BaseBillet_lignearticle_changelist")
+    # Les ventes qui ont un règlement au compte d'attente (moyen inconnu) : la liste des
+    # ventes, filtrée sur ce moyen (filtre « Moyen de paiement », paramètre `moyen`).
+    # / The sales with a payment to the suspense account: the sales list, filtered.
+    lien_des_ventes_au_moyen_inconnu = (
+        reverse("staff_admin:BaseBillet_vente_changelist")
+        + "?"
+        + urlencode({"moyen": PaymentMethod.UNKNOWN})
+    )
 
     # Les comptes du plan par défaut, lus en UNE requête pour tout l'appel : la règle
     # du compte d'un article les cherche dans ce dict au lieu de relire la base pour
@@ -1435,7 +1443,7 @@ def ce_qui_manque_pour_exporter():
                     nombre_de_reglements_au_compte_d_attente,
                 )
                 % {"nombre": nombre_de_reglements_au_compte_d_attente},
-                "lien": lien_des_ecritures,
+                "lien": lien_des_ventes_au_moyen_inconnu,
             }
         )
 

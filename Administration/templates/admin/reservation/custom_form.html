@@ -20,7 +20,7 @@ Sur la page d'ajout, `original` est vide : rien n'est affiché.
 {% endcomment %}
 
 {% if original %}
-<div class="p-4" data-testid="reservation-custom-form-answers">
+<div class="mt-6" data-testid="reservation-custom-form-answers">
     {% if original.custom_form %}
         {% component "unfold/components/card.html" with title=_("Custom form answers") %}
             {% with table_data=original.custom_form|custom_form_table:original %}

@@ -7,8 +7,9 @@ the sale service, linked to the original sale, and settled.
 LOCALISATION : tests/pytest/test_avoirs_ecrivent_la_vente.py
 
 LA RÈGLE TESTÉE
-L'admin clique « Avoir » sur une ligne de vente (liste des ventes). Un écran s'ouvre
-(GET) ; l'admin le valide (POST). L'avoir est alors :
+L'admin ouvre « Avoir sur un article » depuis la fiche de la vente et choisit une ligne.
+Un écran s'ouvre (GET) ; l'admin le valide (POST) avec toute la quantité de la ligne.
+L'avoir est alors :
 - une vente AVOIR, origine ADMIN, liée à la vente de la ligne (`vente_liee`, vide pour
   une ligne écrite avant le chantier), client = celui de la vente liée ;
 - un article : même tarif vendu, même prix unitaire, quantité NÉGATIVE, même taux de
@@ -35,8 +36,9 @@ linked, one item mirrored with a negative quantity, one money payment at the cho
 "Refunded by" method, one FREE payment for the offered part, settled, then CREDIT_NOTE.
 
 CONTRAT DE L'ÉCRAN (ce que ces tests supposent de l'interface)
-- URL : `/admin/BaseBillet/lignearticle/<pk>/emettre_avoir/`, GET = écran (200),
-  POST = action (302 si l'avoir est émis) ;
+- URL : `/admin/BaseBillet/vente/<uuid de la vente>/avoir_sur_un_article/?ligne=<pk>`,
+  GET = écran (200), POST avec `quantite` = toute la quantité de la ligne = action
+  (302 si l'avoir est émis) ;
 - le contexte de l'écran porte `form`, un formulaire Django ; il a le champ
   `moyen_rembourse` seulement pour une ligne hors Stripe pas entièrement offerte ;
 - formulaire refusé (champ vide) : l'écran est rendu de nouveau (200), rien n'est écrit.
@@ -173,7 +175,7 @@ rendue, arrondi demi-haut ; une ligne sans coût donne un avoir sans coût.
 rounded half up; no cost gives no cost.
 
 CODE PARCOURU / CODE EXERCISED
-- Administration/admin_tenant.py — LigneArticleAdmin.emettre_avoir (écran et action) ;
+- Administration/admin_tenant.py — VenteAdmin.avoir_sur_un_article (écran et action) ;
   ReservationAdmin.action_cancel_refund_reservations, TicketAdmin.action_cancel_refund_selected ;
 - BaseBillet/views.py — MembershipMVT.cancel (annulation d'adhésion, et son gabarit
   Administration/templates/admin/membership/partials/cancel_form.html) ;
@@ -297,7 +299,7 @@ MESSAGE_REMBOURSEMENT_STRIPE_A_LA_MAIN = (
 # Le refus d'un avoir quand la vente d'origine n'est pas réglée (msgid français).
 # / The refusal when the original sale is not settled (French msgid).
 MESSAGE_VENTE_D_ORIGINE_PAS_REGLEE = (
-    "La vente d'origine n'est pas réglée : l'avoir est impossible."
+    "La vente n'est pas réglée : l'avoir est impossible."
 )
 
 # Les messages de l'utilisateur qui annule un achat réglé sur place (D31, msgid
@@ -378,24 +380,27 @@ def lieu(tenant, mock_stripe):
 
 
 def url_de_l_avoir(ligne):
-    """L'adresse du bouton « Avoir » d'une ligne de vente.
-    / The address of the "Credit note" button of a sale line."""
-    return f"/admin/BaseBillet/lignearticle/{ligne.pk}/emettre_avoir/"
+    """L'adresse de l'écran « Avoir sur un article » de la fiche « Vente », pour cette
+    ligne. / The "Credit note on one item" screen address, for this line."""
+    return f"/admin/BaseBillet/vente/{ligne.vente_id}/avoir_sur_un_article/?ligne={ligne.pk}"
 
 
 def ouvrir_l_ecran_de_l_avoir(client_de_l_admin, ligne):
-    """L'admin clique « Avoir » : l'écran « Émettre un avoir » s'ouvre (GET).
-    / The admin clicks "Credit note": the screen opens (GET)."""
+    """L'admin choisit la ligne dans « Avoir sur un article » : l'écran s'ouvre (GET).
+    / The admin picks the line in "Credit note on one item": the screen opens (GET)."""
     return client_de_l_admin.get(url_de_l_avoir(ligne))
 
 
 def valider_l_ecran_de_l_avoir(client_de_l_admin, ligne, moyen_rembourse=None):
     """
-    L'admin valide l'écran (POST), avec le moyen « Remboursé par » choisi s'il y en a
-    un. Sans moyen, le formulaire est envoyé sans ce champ.
-    / The admin confirms the screen (POST), with the chosen "Refunded by" method if any.
+    L'admin valide l'écran (POST) avec TOUTE la quantité de la ligne (relue en base),
+    et le moyen « Remboursé par » choisi s'il y en a un. Sans moyen, le formulaire est
+    envoyé sans ce champ.
+    / The admin confirms the screen (POST) with the whole line quantity, and the
+    chosen "Refunded by" method if any.
     """
-    donnees_du_formulaire = {}
+    quantite_de_la_ligne = LigneArticle.objects.get(pk=ligne.pk).qty
+    donnees_du_formulaire = {"quantite": str(quantite_de_la_ligne)}
     if moyen_rembourse is not None:
         donnees_du_formulaire["moyen_rembourse"] = moyen_rembourse
     return client_de_l_admin.post(url_de_l_avoir(ligne), donnees_du_formulaire)
@@ -1048,7 +1053,8 @@ def test_avoir_ligne_ancienne_offerte_sans_champ_rembourse_par(lieu):
     """
     Une ligne écrite avant le chantier : un billet à 15 € au moyen historique « offert »
     (`FREE`), sans vente, ses montants entiers à 0. Elle est entièrement offerte par son
-    moyen (même règle que le service) : l'écran n'a PAS de champ « Remboursé par ».
+    moyen (`ligne_sans_argent_a_rendre`) : aucun argent n'est à rendre, donc pas de
+    champ « Remboursé par ». L'avoir est écrit par le service (origine ADMIN).
     L'avoir : catalogue −1500, offert −1500, net 0, et UN seul règlement FREE −1500
     (posé par la règle « offert » du service, jamais deux fois). Vente AVOIR sans vente
     liée.
@@ -1056,6 +1062,10 @@ def test_avoir_ligne_ancienne_offerte_sans_champ_rembourse_par(lieu):
     by" field; the credit note has ONE FREE payment of −1500, never two.
     """
     tarif_vendu = creer_tarif_vendu(nom="Ancien billet offert", prix_en_euros="15.00")
+    # Une ligne sans vente n'a plus d'écran dans l'admin (l'avoir se fait depuis la
+    # fiche « Vente ») : on vérifie la règle de l'écran (`ligne_sans_argent_a_rendre`,
+    # pas de champ « Remboursé par ») et l'écriture du service, appelé comme l'écran.
+    # / A line without sale has no admin screen: the screen rule and the service.
     # ÉTAT DE DÉPART : une ligne d'avant le chantier, sans vente. `create()` direct :
     # c'est ainsi qu'elles étaient écrites (tests/PIEGES.md 12.17).
     # / STARTING STATE: a pre-chantier line, without sale, written by create().
@@ -1068,18 +1078,15 @@ def test_avoir_ligne_ancienne_offerte_sans_champ_rembourse_par(lieu):
         sale_origin=SaleOrigin.ADMIN,
         status=LigneArticle.VALID,
     )
-    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
+    assert services_vente.ligne_sans_argent_a_rendre(ligne_offerte_d_avant_le_chantier)
 
-    reponse_de_l_ecran = ouvrir_l_ecran_de_l_avoir(
-        client_de_l_admin, ligne_offerte_d_avant_le_chantier
-    )
-    assert "moyen_rembourse" not in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
-
-    reponse_de_l_action = valider_l_ecran_de_l_avoir(
-        client_de_l_admin, ligne_offerte_d_avant_le_chantier
+    services_vente.ecrire_la_vente_d_avoir_d_une_ligne(
+        ligne_offerte_d_avant_le_chantier,
+        quantite=ligne_offerte_d_avant_le_chantier.qty,
+        moyen_rembourse=None,
+        origine=SaleOrigin.ADMIN,
     )
 
-    assert reponse_de_l_action.status_code == 302
     avoir = l_avoir_de_la_ligne(ligne_offerte_d_avant_le_chantier)
     assert avoir.status == LigneArticle.CREDIT_NOTE
     assert avoir.total_catalogue == -1500
@@ -1219,7 +1226,8 @@ def test_avoir_partiel_d_un_article_offert_refuse(lieu):
 def test_avoir_ligne_sans_vente_ecrit_une_vente_sans_vente_liee(lieu):
     """
     Une ligne écrite avant le chantier : 10 € en espèces, sans vente (`vente` vide), ses
-    montants entiers à 0. L'écran pré-remplit « espèces » ; l'admin valide.
+    montants entiers à 0. Le moyen d'origine est « espèces » ; l'avoir est écrit par
+    le service (origine ADMIN), remboursé en espèces.
     La vente AVOIR est écrite quand même : réglée, SANS vente liée, sans client.
     L'article : prix unitaire 1000, quantité −1, catalogue −1000, net −1000 (calculés
     par la formule, pas recopiés). UN règlement : espèces −1000.
@@ -1240,19 +1248,22 @@ def test_avoir_ligne_sans_vente_ecrit_une_vente_sans_vente_liee(lieu):
         status=LigneArticle.VALID,
     )
     assert ligne_d_avant_le_chantier.vente_id is None
-    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
-
-    reponse_de_l_ecran = ouvrir_l_ecran_de_l_avoir(
-        client_de_l_admin, ligne_d_avant_le_chantier
-    )
-    assert "moyen_rembourse" in champs_du_formulaire_de_l_ecran(reponse_de_l_ecran)
-    assert valeur_pre_remplie_du_moyen(reponse_de_l_ecran) == PaymentMethod.CASH
-
-    reponse_de_l_action = valider_l_ecran_de_l_avoir(
-        client_de_l_admin, ligne_d_avant_le_chantier, moyen_rembourse=PaymentMethod.CASH
+    # Une ligne sans vente n'a plus d'écran dans l'admin : on vérifie les règles de
+    # l'écran (argent à rendre, moyen d'origine pré-rempli) et l'écriture du service.
+    # / A line without sale has no admin screen: the screen rules and the service.
+    assert not services_vente.ligne_sans_argent_a_rendre(ligne_d_avant_le_chantier)
+    assert (
+        services_vente.moyen_d_origine_de_la_ligne(ligne_d_avant_le_chantier)
+        == PaymentMethod.CASH
     )
 
-    assert reponse_de_l_action.status_code == 302
+    services_vente.ecrire_la_vente_d_avoir_d_une_ligne(
+        ligne_d_avant_le_chantier,
+        quantite=ligne_d_avant_le_chantier.qty,
+        moyen_rembourse=PaymentMethod.CASH,
+        origine=SaleOrigin.ADMIN,
+    )
+
     avoir = l_avoir_de_la_ligne(ligne_d_avant_le_chantier)
     assert avoir.status == LigneArticle.CREDIT_NOTE
     assert avoir.amount == 1000
@@ -4474,10 +4485,11 @@ def test_remboursement_apres_ecart_recu_en_moins_demande_au_plus_l_encaisse(lieu
 # / Line paid in points or time: no credit note
 # --------------------------------------------------------------------------
 
-# Le refus du bouton « Avoir » pour une ligne payée en points (msgid français).
-# / The "Credit note" button refusal for a line paid in points (French msgid).
+# Le refus de « Avoir sur un article » pour une vente en points ou en temps (msgid
+# français) : une ligne payée en points est dans une vente qui n'est pas en euros.
+# / The item credit note refusal for a points or time sale (French msgid).
 MESSAGE_LIGNE_PAYEE_EN_POINTS = (
-    "Cette ligne a été payée en points ou en temps : l'avoir est impossible."
+    "Cette vente n'est pas en euros (points ou temps) : l'avoir n'est pas possible."
 )
 
 # Le début du refus du service (ValueError, texte non traduit).
@@ -4590,9 +4602,9 @@ def test_avoir_ligne_payee_en_points_refuse_par_l_article_d_avoir(lieu):
 
 def test_avoir_admin_ligne_payee_en_points_l_ecran_ne_s_ouvre_pas(lieu):
     """
-    L'admin clique « Avoir » sur la ligne en points (GET) : l'écran ne s'ouvre pas, il
-    revient à la liste des ventes avec le message « Cette ligne a été payée en points
-    ou en temps : l'avoir est impossible. ». Rien n'est écrit.
+    L'admin ouvre « Avoir sur un article » pour la ligne en points (GET) : l'écran ne
+    s'ouvre pas, il revient à la fiche de la vente avec le message « Cette vente n'est
+    pas en euros (points ou temps) : l'avoir n'est pas possible. ». Rien n'est écrit.
     / The admin clicks "Credit note" on the points line: the screen does not open, a
     message explains why, nothing is written.
     """

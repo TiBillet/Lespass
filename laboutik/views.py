@@ -106,9 +106,12 @@ from comptabilite.csv_export import generer_csv_cloture
 from comptabilite.models import ClotureCaisse as ClotureCaisseUnique
 from comptabilite.pdf import generer_pdf_cloture
 from comptabilite.presentation import (
+    codes_des_moyens_dans_l_ordre,
     euros_a_la_francaise,
     lignes_du_tiroir,
     montant_a_la_francaise_dans_l_unite,
+    quantite_au_poids_a_la_francaise,
+    quantite_lisible,
     sections_pour_affichage,
 )
 from comptabilite.tasks import (
@@ -129,6 +132,7 @@ from laboutik.models import (
     HistoriqueFondDeCaisse,
 )
 from comptabilite.rapport import (
+    CLE_SANS_POINT_DE_VENTE,
     MOYENS_CASHLESS,
     RapportDesVentes,
     nom_du_moyen_de_paiement,
@@ -4594,43 +4598,82 @@ class CaisseViewSet(viewsets.ViewSet):
     )
     def recap_en_cours(self, request):
         """
-        GET /laboutik/caisse/recap-en-cours/
-        Le recapitulatif du service en cours (lecture seule, rien n'est stocke).
-        / The current service recap (read-only, nothing stored).
+        GET /laboutik/caisse/recap-en-cours/?vue=detail_articles|par_moyen
+        L'ecran « Ventes » du service en cours (lecture seule, rien n'est stocke),
+        dans la forme de la maquette (chiffres du haut, mini-tableaux, historiques).
+        / The current service "Sales" screen (read-only), in the mock-up's layout.
 
         LOCALISATION : laboutik/views.py
 
         FLUX :
         1. Debut du service : `_calculer_datetime_ouverture_service` (fin de la
            derniere J). None : « aucune vente depuis la derniere cloture ».
-        2. Le rapport X du rapport des ventes unique
-           (`RapportDesVentes(debut, maintenant).rapport_x()`), mis en forme par
-           `sections_pour_affichage` : toutes ses sections (reglements et detail
-           des ventes compris), l'essentiel ouvert, le reste replie, comme dans
-           l'admin.
-        3. Rend hx_recap_en_cours.html. L'historique de commande (liste des ventes)
-           s'ouvre en bas de l'ecran par son bouton (`liste_ventes`).
-        / The single report's X sections; the order history opens below.
+        2. Chaque chiffre est lu dans le rapport des ventes unique
+           (`RapportDesVentes(debut, maintenant)`), comme le rapport temps reel de
+           l'admin : meme periode, meme perimetre (toutes origines). Seules les
+           sections dont l'ecran a besoin sont calculees.
+        3. Un historique ouvert en bas de l'ecran (cible HTMX « detail-contenu ») :
+           seul son tableau est rendu (`_ventes_historique_recap.html`).
+           ?vue=detail_articles : historique de vente par article ;
+           ?vue=par_moyen : synthese par moyen de paiement.
+           L'historique de commande vient de `liste_ventes`.
+        4. Rend hx_recap_en_cours.html. Le rapport complet (marge, operateurs,
+           habitus, annexe...) reste dans l'admin.
+        / Every figure is read in the single sales report, same period and scope as
+          the admin's real-time report; a history fragment renders only its table.
         """
         datetime_ouverture = _calculer_datetime_ouverture_service()
+        vue = request.GET.get("vue", "")
 
         # Si aucune vente depuis la derniere cloture, afficher un message
         # / If no sales since last closure, show a message
         if datetime_ouverture is None:
-            context = {"aucune_vente": True}
+            context = {"aucune_vente": True, "vue": vue}
             return _rendre_vue_ventes(
                 request, "laboutik/partial/hx_recap_en_cours.html", context
             )
 
         datetime_fin = dj_timezone.now()
+        rapport_du_service = RapportDesVentes(datetime_ouverture, datetime_fin)
+        section_chiffre_affaires = rapport_du_service.section_chiffre_affaires()
 
         context = {
             "aucune_vente": False,
+            "vue": vue,
             "datetime_ouverture": datetime_ouverture,
             "datetime_fin": datetime_fin,
         }
-        rapport_du_service = RapportDesVentes(datetime_ouverture, datetime_fin).rapport_x()
-        context.update(_contexte_du_recap_du_service(rapport_du_service))
+
+        # L'ecran complet : chiffres du haut et mini-tableaux. Un historique ouvert
+        # en bas de l'ecran (cible « detail-contenu ») n'en a pas besoin.
+        # / The full screen: top figures and summary tables; not for a history fragment.
+        est_un_fragment_historique = (
+            request.htmx and request.htmx.target == "detail-contenu"
+        )
+        if not est_un_fragment_historique:
+            context.update(
+                _contexte_des_chiffres_du_recap(
+                    section_en_tete=rapport_du_service.section_en_tete(),
+                    section_chiffre_affaires=section_chiffre_affaires,
+                    section_caisse_especes=rapport_du_service.section_caisse_especes(),
+                    section_offerts=rapport_du_service.section_offerts(),
+                    section_points=rapport_du_service.section_points(),
+                    chiffre_affaires_par_point_de_vente=(
+                        rapport_du_service.chiffre_affaires_par_point_de_vente()
+                    ),
+                )
+            )
+
+        # Les donnees de l'historique demande.
+        # / The requested history's data.
+        if vue == "detail_articles":
+            context["categories_du_detail"] = _categories_du_detail_des_ventes(
+                section_chiffre_affaires, rapport_du_service.section_detail()
+            )
+        elif vue == "par_moyen":
+            context["synthese_par_moyen"] = _synthese_par_moyen(
+                section_chiffre_affaires, rapport_du_service.section_annexe()
+            )
 
         return _rendre_vue_ventes(
             request, "laboutik/partial/hx_recap_en_cours.html", context
@@ -5362,34 +5405,323 @@ def _contexte_de_l_ecran_du_z(cloture):
     }
 
 
-def _contexte_du_recap_du_service(rapport_du_service):
+def _contexte_des_chiffres_du_recap(
+    section_en_tete,
+    section_chiffre_affaires,
+    section_caisse_especes,
+    section_offerts,
+    section_points,
+    chiffre_affaires_par_point_de_vente,
+):
     """
-    Le contexte de l'ecran complet du recapitulatif en cours
-    (`hx_recap_en_cours.html`) : les chiffres du haut et toutes les sections du
-    rapport X, mises en forme par `comptabilite/presentation.py` (aucune regle
-    d'affichage recopiee ici).
-    / The current recap screen context: top figures and every X report section,
-      formatted by the shared presentation.
+    Le contexte de l'ecran « Ventes » (`hx_recap_en_cours.html`) : les chiffres du
+    haut et les mini-tableaux, en textes prets a afficher. Chaque nombre est LU dans
+    une section du rapport des ventes unique, jamais recalcule ici ; les montants
+    sont ecrits par `euros_a_la_francaise`, les quantites par la presentation
+    partagee (kg / L pour une pesee ou un tirage).
+    / The Sales screen context: every number is READ in a section of the single
+    sales report, never recomputed here; written by the shared formatters.
 
     LOCALISATION : laboutik/views.py
 
-    :param rapport_du_service: dict de `RapportDesVentes(debut, maintenant).rapport_x()`
+    D'OU VIENT CHAQUE CHIFFRE (comptabilite/rapport.py) :
+    - Total : chiffre d'affaires TTC (`section_chiffre_affaires`) ;
+    - nombre de ventes : `section_en_tete` (toutes les operations numerotees) ;
+    - TVA (chiffres du haut et tableau) : `par_taux` du chiffre d'affaires ;
+    - fond de caisse, mouvements et solde : `section_caisse_especes`, ecrite par
+      `lignes_du_tiroir` (comme le ticket X et l'admin) ;
+    - par moyen de paiement : `par_moyen` du chiffre d'affaires, dans l'ordre
+      unique des moyens (`codes_des_moyens_dans_l_ordre`) ; ses lignes
+      recomposent le Total ;
+    - par point de vente : `chiffre_affaires_par_point_de_vente()` ;
+    - offerts : `section_offerts` (bouton OFFRIR, valeur catalogue) ;
+    - non monetaire : `section_points` (en points ou en temps, jamais en euros).
+
     :return: dict de contexte
     """
-    tiroir = rapport_du_service["caisse_especes"]
+    # Les taux de TVA, du plus petit au plus grand (« 5.50 » avant « 20.00 » : tries
+    # comme des nombres, jamais comme des textes).
+    # / VAT rates from smallest to largest, sorted as numbers.
+    par_taux = section_chiffre_affaires["par_taux"]
+    taux_tries = sorted(par_taux.keys(), key=Decimal)
+    lignes_de_tva = []
+    for taux_en_texte in taux_tries:
+        ligne_du_taux = par_taux[taux_en_texte]
+        lignes_de_tva.append(
+            {
+                "taux": f"{taux_en_texte.replace('.', ',')} %",
+                "ht": euros_a_la_francaise(ligne_du_taux["total_ht_en_centimes"]),
+                "tva": euros_a_la_francaise(ligne_du_taux["total_tva_en_centimes"]),
+                "ttc": euros_a_la_francaise(ligne_du_taux["total_ttc_en_centimes"]),
+            }
+        )
+
+    # Le tiroir : le fond en grand, puis les mouvements non nuls, puis le solde.
+    # Les lignes sont signees (l'argent qui sort est negatif) et s'additionnent
+    # en solde, comme sur le ticket X.
+    # / The drawer: the float, then non-zero movements, then the balance (signed).
+    lignes_signees_du_tiroir = lignes_du_tiroir(section_caisse_especes)
+    ligne_du_fond = lignes_signees_du_tiroir[0]
+    ligne_du_solde = lignes_signees_du_tiroir[-1]
+    mouvements_du_tiroir = []
+    for ligne_du_tiroir in lignes_signees_du_tiroir[1:-1]:
+        if ligne_du_tiroir["montant_en_centimes"] != 0:
+            mouvements_du_tiroir.append(
+                {
+                    "libelle": ligne_du_tiroir["libelle"],
+                    "montant": euros_a_la_francaise(
+                        ligne_du_tiroir["montant_en_centimes"]
+                    ),
+                }
+            )
+
+    # Par moyen de paiement : le chiffre d'affaires de chaque moyen.
+    # / By payment method: each method's revenue.
+    par_moyen = section_chiffre_affaires["par_moyen"]
+    lignes_par_moyen = []
+    for code_du_moyen in codes_des_moyens_dans_l_ordre(par_moyen):
+        ligne_du_moyen = par_moyen[code_du_moyen]
+        lignes_par_moyen.append(
+            {
+                "libelle": ligne_du_moyen["libelle"],
+                "montant": euros_a_la_francaise(ligne_du_moyen["total_en_centimes"]),
+            }
+        )
+
+    # Par point de vente : le plus gros d'abord, les ventes sans point de vente
+    # (en ligne, admin) a la fin.
+    # / By point of sale: biggest first, sales without a point of sale last.
+    lignes_par_point_de_vente = []
+    ligne_sans_point_de_vente = None
+    # Tri par (montant decroissant, nom, cle) : un tuple se trie element par element.
+    # / Sort by (decreasing amount, name, key): a tuple sorts item by item.
+    criteres_de_tri_des_points_de_vente = []
+    for cle_du_point_de_vente, ligne_du_point_de_vente in (
+        chiffre_affaires_par_point_de_vente.items()
+    ):
+        criteres_de_tri_des_points_de_vente.append(
+            (
+                -ligne_du_point_de_vente["total_ttc_en_centimes"],
+                str(ligne_du_point_de_vente["nom"] or "").casefold(),
+                cle_du_point_de_vente,
+            )
+        )
+    criteres_de_tri_des_points_de_vente.sort()
+    for _montant, _nom, cle_du_point_de_vente in criteres_de_tri_des_points_de_vente:
+        ligne_du_point_de_vente = chiffre_affaires_par_point_de_vente[cle_du_point_de_vente]
+        ligne_pour_l_ecran = {
+            "nom": ligne_du_point_de_vente["nom"],
+            "montant": euros_a_la_francaise(
+                ligne_du_point_de_vente["total_ttc_en_centimes"]
+            ),
+            "sans_point_de_vente": cle_du_point_de_vente == CLE_SANS_POINT_DE_VENTE,
+        }
+        if ligne_pour_l_ecran["sans_point_de_vente"]:
+            ligne_sans_point_de_vente = ligne_pour_l_ecran
+        else:
+            lignes_par_point_de_vente.append(ligne_pour_l_ecran)
+    if ligne_sans_point_de_vente is not None:
+        lignes_par_point_de_vente.append(ligne_sans_point_de_vente)
+
+    # Offerts (hors argent) : par produit, par nom. Une pesee offerte garde son
+    # unite (« 0,350 kg »).
+    # / Gifted items by product name; a weighing keeps its unit.
+    lignes_des_offerts = []
+    for ligne_du_produit in _valeurs_triees_par_nom(section_offerts["par_produit"]):
+        lignes_des_offerts.append(
+            {
+                "nom": ligne_du_produit["nom"],
+                "quantite": _quantite_a_afficher(
+                    ligne_du_produit["quantite"], ligne_du_produit.get("unite", "")
+                ),
+                "valeur": euros_a_la_francaise(
+                    ligne_du_produit["valeur_catalogue_en_centimes"]
+                ),
+            }
+        )
+
+    # Non monetaire : les ventes en points ou en temps, par monnaie, dans leur unite.
+    # / Points or time sales by currency, in their unit.
+    lignes_non_monetaires = []
+    for ligne_de_la_monnaie in _valeurs_triees_par_nom(section_points):
+        lignes_non_monetaires.append(
+            {
+                "nom": ligne_de_la_monnaie["nom"],
+                "total": montant_a_la_francaise_dans_l_unite(
+                    ligne_de_la_monnaie["total_en_centiemes"], ligne_de_la_monnaie["nom"]
+                ),
+            }
+        )
+
     return {
-        "chiffre_affaires_ttc_a_la_francaise": euros_a_la_francaise(
-            rapport_du_service["chiffre_affaires"]["total_ttc_en_centimes"]
+        "total_a_la_francaise": euros_a_la_francaise(
+            section_chiffre_affaires["total_ttc_en_centimes"]
         ),
-        "nombre_d_operations": rapport_du_service["en_tete"]["nombre_de_ventes"],
+        "nombre_de_ventes": section_en_tete["nombre_de_ventes"],
+        "lignes_de_tva": lignes_de_tva,
         "fond_de_caisse_a_la_francaise": euros_a_la_francaise(
-            tiroir["fond_de_caisse_en_centimes"]
+            ligne_du_fond["montant_en_centimes"]
         ),
+        "mouvements_du_tiroir": mouvements_du_tiroir,
         "solde_du_tiroir_a_la_francaise": euros_a_la_francaise(
-            tiroir["solde_theorique_en_centimes"]
+            ligne_du_solde["montant_en_centimes"]
         ),
-        "sections_du_rapport": sections_pour_affichage(rapport_du_service),
+        "lignes_par_moyen": lignes_par_moyen,
+        "lignes_par_point_de_vente": lignes_par_point_de_vente,
+        "lignes_des_offerts": lignes_des_offerts,
+        "lignes_non_monetaires": lignes_non_monetaires,
     }
+
+
+def _valeurs_triees_par_nom(dictionnaire_du_rapport):
+    """
+    Les valeurs d'un dictionnaire du rapport, triees par leur « nom » (sans tenir
+    compte des majuscules), puis par leur cle : deux lignes de meme nom gardent
+    toujours le meme ordre.
+    / A report dict's values sorted by name, then by key (stable order).
+
+    LOCALISATION : laboutik/views.py
+    """
+    # Un tuple (nom, cle) se trie element par element.
+    # / A (name, key) tuple sorts item by item.
+    criteres_de_tri = []
+    for cle, valeur in dictionnaire_du_rapport.items():
+        criteres_de_tri.append((str(valeur.get("nom") or "").casefold(), cle))
+    criteres_de_tri.sort()
+
+    valeurs_triees = []
+    for _nom, cle in criteres_de_tri:
+        valeurs_triees.append(dictionnaire_du_rapport[cle])
+    return valeurs_triees
+
+
+def _quantite_a_afficher(quantite_en_texte, unite):
+    """
+    Une quantite du rapport, ecrite par la presentation partagee : en kg ou en
+    litres pour une pesee ou un tirage (« 0,350 kg », Q-H4), sinon un nombre sans
+    zeros inutiles (« 3 »).
+    / A report quantity: kg / L for a weighing or a pour, otherwise a plain number.
+
+    LOCALISATION : laboutik/views.py
+    """
+    if unite:
+        return quantite_au_poids_a_la_francaise(quantite_en_texte, unite)
+    return quantite_lisible(quantite_en_texte)
+
+
+def _categories_du_detail_des_ventes(section_chiffre_affaires, section_detail):
+    """
+    L'historique de vente par article : les categories (nom et total TTC, lus dans
+    `par_categorie` du chiffre d'affaires), et sous chacune ses produits (lus dans
+    `ventes_par_produit` du detail). Les lignes d'une categorie additionnent son
+    total : les deux sont lus sur les memes articles du chiffre d'affaires.
+    / Sales history by item: categories (name and total from the revenue) and their
+    products (from the detail); both read on the same revenue items.
+
+    LOCALISATION : laboutik/views.py
+
+    :return: liste de {"nom", "total", "articles": [{"nom", "quantite", "total"}]}
+    """
+    articles_par_categorie = {}
+    for ligne_du_produit in _valeurs_triees_par_nom(section_detail["ventes_par_produit"]):
+        cle_de_la_categorie = ligne_du_produit["categorie"]
+        if cle_de_la_categorie not in articles_par_categorie:
+            articles_par_categorie[cle_de_la_categorie] = []
+        articles_par_categorie[cle_de_la_categorie].append(
+            {
+                "nom": ligne_du_produit["nom"],
+                "quantite": _quantite_a_afficher(
+                    ligne_du_produit["quantite"], ligne_du_produit.get("unite", "")
+                ),
+                "total": euros_a_la_francaise(ligne_du_produit["total_ttc_en_centimes"]),
+            }
+        )
+
+    # Les categories par nom ; la cle d'une categorie relie ses produits.
+    # / Categories by name; a category's key links its products.
+    par_categorie = section_chiffre_affaires["par_categorie"]
+    criteres_de_tri_des_categories = []
+    for cle_de_la_categorie, categorie in par_categorie.items():
+        criteres_de_tri_des_categories.append(
+            (str(categorie.get("nom") or "").casefold(), cle_de_la_categorie)
+        )
+    criteres_de_tri_des_categories.sort()
+
+    categories_du_detail = []
+    for _nom, cle_de_la_categorie in criteres_de_tri_des_categories:
+        categorie = par_categorie[cle_de_la_categorie]
+        categories_du_detail.append(
+            {
+                "nom": categorie["nom"],
+                "total": euros_a_la_francaise(categorie["total_ttc_en_centimes"]),
+                "articles": articles_par_categorie.get(cle_de_la_categorie, []),
+            }
+        )
+    return categories_du_detail
+
+
+def _synthese_par_moyen(section_chiffre_affaires, section_annexe):
+    """
+    La synthese par moyen de paiement : un tableau croise « type x moyen ».
+    Deux types, chacun lu tel quel dans le rapport :
+    - « Chiffre d'affaires » : `par_moyen` du chiffre d'affaires (ventes, billets,
+      adhesions, avoirs deduits), total = chiffre d'affaires TTC ;
+    - « Recharges » : les recharges encaissees par moyen (annexe), total = leur
+      total.
+    Les colonnes : chaque moyen present dans l'un des deux, dans l'ordre unique des
+    moyens. Une case sans montant vaut 0,00 € (rien n'a ete encaisse).
+    / Cross table "type x method": revenue by method and top-ups by method, both
+    read as is in the report; columns in the single method order.
+
+    LOCALISATION : laboutik/views.py
+
+    :return: {"colonnes": [libelles], "lignes": [{"type", "montants", "total"}]}
+    """
+    par_moyen_du_chiffre_d_affaires = section_chiffre_affaires["par_moyen"]
+    recharges_encaissees = section_annexe["recharges_et_cartes"]["recharges_encaissees"]
+    par_moyen_des_recharges = recharges_encaissees["par_moyen"]
+
+    # Les moyens des deux types reunis, avec leur libelle.
+    # / Both types' methods together, with their label.
+    moyens_presents = {}
+    for par_moyen in [par_moyen_du_chiffre_d_affaires, par_moyen_des_recharges]:
+        for code_du_moyen, ligne_du_moyen in par_moyen.items():
+            moyens_presents[code_du_moyen] = ligne_du_moyen
+    codes_dans_l_ordre = codes_des_moyens_dans_l_ordre(moyens_presents)
+
+    colonnes = []
+    for code_du_moyen in codes_dans_l_ordre:
+        colonnes.append(moyens_presents[code_du_moyen]["libelle"])
+
+    types_de_la_synthese = [
+        (
+            _("Chiffre d'affaires"),
+            par_moyen_du_chiffre_d_affaires,
+            section_chiffre_affaires["total_ttc_en_centimes"],
+        ),
+        (
+            _("Recharges"),
+            par_moyen_des_recharges,
+            recharges_encaissees["total_en_centimes"],
+        ),
+    ]
+    lignes = []
+    for nom_du_type, par_moyen_du_type, total_du_type in types_de_la_synthese:
+        montants = []
+        for code_du_moyen in codes_dans_l_ordre:
+            ligne_du_moyen = par_moyen_du_type.get(code_du_moyen)
+            if ligne_du_moyen is None:
+                montants.append(euros_a_la_francaise(0))
+            else:
+                montants.append(euros_a_la_francaise(ligne_du_moyen["total_en_centimes"]))
+        lignes.append(
+            {
+                "type": nom_du_type,
+                "montants": montants,
+                "total": euros_a_la_francaise(total_du_type),
+            }
+        )
+    return {"colonnes": colonnes, "lignes": lignes}
 
 
 def _section_du_tiroir_du_service_en_cours():

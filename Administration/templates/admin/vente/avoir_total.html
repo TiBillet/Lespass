@@ -1,0 +1,132 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+<!--
+ÉCRAN « AVOIR TOTAL »
+/ "Full credit note" screen
+
+LOCALISATION : Administration/templates/admin/vente/avoir_total.html
+
+Rendu en GET par VenteAdmin.avoir_total (Administration/admin_tenant.py), action
+« Avoir total » de la fiche « Vente ». Le formulaire est posté (POST) à la même adresse :
+la vue écrit l'avoir de tout ce qui reste à rendre. Le contexte porte `vente`.
+/ Rendered by VenteAdmin.avoir_total; the context carries `vente`.
+
+TROIS CAS :
+- argent à rendre hors Stripe : champ « Remboursé par » (form.moyen_rembourse) ;
+- tout offert : pas de champ, aucun argent à rendre ;
+- payé par Stripe : pas de champ, rappel de rembourser depuis le tableau de bord
+  Stripe (aucun appel à Stripe n'est fait ici).
+/ Three cases: "Refunded by" field, fully offered (no field), Stripe-paid (reminder).
+-->
+
+{# Le titre vient de la vue : « Avoir total de la vente n° N ». #}
+{# / The title comes from the view. #}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+{% comment %}
+MISE EN PAGE : un bloc de champs Unfold, en pleine largeur de la colonne de contenu
+(mêmes classes qu'un fieldset de fiche : titre gris, carte bordée, lignes en
+pointillés, libellé à gauche). La feuille static/css/tibillet-admin.css habille
+`#content-main fieldset.module`.
+/ Layout: a full-width Unfold fieldset (same classes as a detail page fieldset).
+{% endcomment %}
+<div id="content-main">
+<!--
+onsubmit : le bouton « Émettre l'avoir » est désactivé une fois l'envoi parti. Il n'a
+pas de `name` : aucune valeur n'est perdue. C'est un filet contre le double clic ; la
+vraie garde est le verrou côté serveur (BaseBillet/services_vente.py,
+quantite_restante_de_la_ligne_sous_verrou).
+/ The submit button is disabled once the form is sent (it has no name: no value is
+lost). A safety net against double clicks; the real guard is the server-side lock.
+-->
+<form method="post" aria-label="{% translate 'Émettre un avoir' %}"
+      onsubmit="this.querySelector('[data-testid=avoir-valider]').disabled = true;">
+    {% csrf_token %}
+    <fieldset class="module relative min-w-0" aria-labelledby="avoir-ecran-titre" data-testid="avoir-ecran">
+        <h2 id="avoir-ecran-titre"
+            class="bg-base-100 flex flex-row font-semibold h-[38px] gap-1 items-center mb-4 px-3 rounded-default text-important dark:bg-white/[.02]"
+            data-testid="avoir-ecran-titre">
+            {{ title }}
+        </h2>
+
+        <div class="form-rows aligned border border-base-200 rounded-default shadow-xs dark:border-base-800">
+
+            {# Récapitulatif de la vente / Summary of the sale #}
+            <div class="field-line flex flex-col gap-3 px-3 py-2.5 border-b border-dashed border-base-200 dark:border-base-800">
+                <p class="m-0" data-testid="avoir-recapitulatif">
+                    <strong>{{ vente.get_nature_display }} n° {{ vente.numero }}</strong>
+                    — {% translate "tout ce qui reste à rendre" %} ({% translate "total de la vente" %} {{ total_de_la_vente }})
+                </p>
+
+                {# Ce que l'avoir total rendra, par catégorie (même lecture que le service). #}
+                {# / What the full credit note will give back, by category. #}
+                <ul class="m-0" style="padding-left: 1.25em; list-style: disc;" data-testid="avoir-sommes-rendues"
+                    aria-label="{% translate 'Ce qui sera rendu' %}">
+                    {% if champ_rembourse_par_demande %}
+                    <li data-testid="avoir-somme-rembourse-par">{% translate "Rendu au moyen choisi ci-dessous :" %} {{ somme_rendue_par_le_moyen_choisi }}</li>
+                    {% endif %}
+                    {% if ligne_payee_par_stripe %}
+                    <li data-testid="avoir-somme-stripe">{% translate "À rembourser depuis Stripe :" %} {{ somme_rendue_par_stripe }}</li>
+                    {% endif %}
+                    {% if il_y_a_des_jetons_rendus %}
+                    <li data-testid="avoir-somme-jetons">{% translate "Jetons cadeau rendus (dette, pas d'argent) :" %} {{ somme_rendue_en_jetons }}</li>
+                    {% endif %}
+                    {% if il_y_a_de_l_offert_annule %}
+                    <li data-testid="avoir-somme-offert">{% translate "Offert annulé (aucun argent) :" %} {{ somme_offerte_annulee }}</li>
+                    {% endif %}
+                </ul>
+
+                {% if ligne_payee_par_stripe %}
+                <div role="alert"
+                     style="padding: 12px; border-radius: 6px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;"
+                     data-testid="avoir-rappel-stripe">
+                    {% translate "Remboursez cette somme depuis votre tableau de bord Stripe." %}
+                    <strong>{{ somme_rendue_par_stripe }}</strong>
+                </div>
+                {% elif ligne_entierement_offerte %}
+                <p class="m-0" data-testid="avoir-ligne-offerte">
+                    {% translate "Cet article a été offert : aucun argent n'est à rendre." %}
+                </p>
+                {% endif %}
+            </div>
+
+            {% if champ_rembourse_par_demande %}
+            {# Champ « Remboursé par », en ligne de fiche Unfold / "Refunded by" field, as an Unfold row #}
+            <div class="field-line flex flex-col lg:flex-row lg:items-center px-3 py-2.5 border-b border-dashed border-base-200 dark:border-base-800{% if form.moyen_rembourse.errors %} errors{% endif %}">
+                <div class="lg:min-w-56 lg:w-56 lg:h-[38px] lg:flex lg:items-center lg:self-start mb-2 lg:mb-0">
+                    <label for="{{ form.moyen_rembourse.id_for_label }}"
+                           class="block font-semibold text-font-important-light text-sm dark:text-font-important-dark">
+                        {{ form.moyen_rembourse.label }}
+                    </label>
+                </div>
+                <div class="grow relative min-w-0">
+                    {{ form.moyen_rembourse }}
+                    <div class="leading-relaxed mt-2 text-xs">{{ form.moyen_rembourse.help_text }}</div>
+                    {% if form.moyen_rembourse.errors %}
+                    <p role="alert" class="mt-2 text-sm" style="color: #b91c1c;" data-testid="avoir-moyen-rembourse-erreur">
+                        {{ form.moyen_rembourse.errors|join:" " }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# Boutons / Buttons #}
+            <div class="flex flex-wrap gap-3 items-center px-3 py-2.5">
+                <button type="submit"
+                        style="padding: 10px 20px; background: #d97706; color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer;"
+                        data-testid="avoir-valider">
+                    {% translate "Émettre l'avoir" %}
+                </button>
+                <a href="{{ url_de_la_liste_des_ventes }}"
+                   style="color: #6b7280; text-decoration: none;"
+                   data-testid="avoir-annuler">
+                    {% translate "Annuler" %}
+                </a>
+            </div>
+        </div>
+    </fieldset>
+</form>
+</div>
+{% endblock %}

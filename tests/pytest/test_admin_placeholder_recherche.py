@@ -139,8 +139,8 @@ def test_un_seul_champ_ne_produit_pas_de_points_de_suspension():
 def test_les_lookups_lies_sont_resolus_en_libelle_humain():
     """
     `user__email` doit donner « email », pas « user email ». Et
-    `pricesold__productsold__product__name` — trois niveaux — doit se resoudre
-    aussi.
+    `reservation__user_commande__email` (TicketAdmin) — trois niveaux — doit se
+    resoudre aussi.
     / Related lookups must resolve to the terminal field's label.
     """
     membership = _admin("MembershipAdmin")
@@ -148,8 +148,10 @@ def test_les_lookups_lies_sont_resolus_en_libelle_humain():
     assert "user email" not in texte, texte
     assert "user__email" not in texte, texte
 
-    ligne = _admin("LigneArticleAdmin")
-    assert "pricesold" not in ligne.search_help_text
+    billet = _admin("TicketAdmin")
+    assert "reservation__user_commande__email" in billet.search_fields
+    assert "user_commande" not in billet.search_help_text
+    assert "reservation" not in billet.search_help_text.lower()
 
 
 @pytest.mark.django_db

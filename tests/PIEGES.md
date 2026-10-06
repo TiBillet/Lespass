@@ -3766,6 +3766,43 @@ marquée, une fixture de portée `module` ou `session`, ou une écriture faite p
 processus (serveur live, Fedow). Exemples : `test_balance_soldes_et_recharge.py`,
 `test_demo_wallet_alignment.py`.
 
+### Schémas de test clonés (2026-10-05)
+
+Mécanisme : `tests/pytest/schemas_clones.py`, appelé par la fixture
+`_schema_de_test_cree_par_clonage` de `tests/pytest/conftest.py`.
+
+**14.1 — À froid, chaque schéma `test_*` coûtait ~55 s : les migrations étaient rejouées.**
+Un `FastTenantTestCase` sans schéma le créait par `migrate_schemas` (388 migrations).
+~40 schémas dédiés → ~40 min de plus après une purge ou une base neuve. Le schéma manquant
+est maintenant copié depuis `test_modele` (~2,5 s sur une base peu chargée, 5 à 10 s en
+suite complète : la copie interroge le catalogue PostgreSQL, qui grossit avec les schémas).
+Suite complète à froid : 15 min 30 au lieu de ~50 min. `test_modele` est refait tout seul
+quand la liste des migrations du code change ; il n'a pas de ligne `Client`.
+
+**14.2 — `clone_schema` (django-tenants) ne garde pas tous les noms.**
+Il recrée les contraintes UNIQUE sous le nom par défaut de PostgreSQL
+(`BaseBillet_event_name_datetime_key` au lieu de `BaseBillet_event_name_datetime_0e242bcf_uniq`,
+et même `unique_cloture_periode`, un nom choisi) : 35 contraintes sur 437. Il nomme aussi une
+séquence d'après le nom actuel de sa table (`BaseBillet_externalapikey_id_seq`), alors qu'un
+lieu migré garde l'ancien (`BaseBillet_apikey_id_seq`). `reprendre_les_noms_du_modele()`
+remet les noms du modèle après chaque copie. Comparaison faite sur un schéma migré et un
+schéma cloné : colonnes, contraintes (définition et nom), index, séquences, objets identiques.
+
+**14.3 — Une copie « DATA » copie TOUTES les lignes du modèle, y compris la clé d'empreinte.**
+La migration `laboutik 0002` écrit une clé d'empreinte (HMAC) dans le modèle. Copiée telle
+quelle, tous les lieux de test auraient la même. Elle est vidée dans le modèle, et chaque
+clone reçoit la sienne par `LaboutikConfiguration.get_or_create_hmac_key()`.
+Ce qui reste partagé : les UUID des lignes écrites par les migrations (20 comptes, 6 taux
+de TVA, la catégorie « Financement participatif », les correspondances de moyens et de
+monnaie) sont les MÊMES dans le modèle et dans chaque clone. Un lieu migré tire les siens au
+hasard. Ne pas écrire de test qui compte sur l'unicité de ces UUID d'un lieu de test à
+l'autre.
+
+**14.4 — Le modèle fige l'état du schéma `public` au moment de sa création.**
+`laboutik 0002` relie les uuid du FED (lus dans `public`) au compte 467000. Si le FED de
+`public` change (base refaite, `bootstrap_fed_asset`), le modèle garde les anciens uuid.
+Remède : `DROP SCHEMA test_modele CASCADE` ; il est refait au prochain schéma manquant.
+
 **Mises au point sur des pièges plus anciens :**
 - 9.17 (`Referer` requis par `MembershipMVT.create`) est périmé : la vue fait
   `request.headers.get('Referer', '/')`.

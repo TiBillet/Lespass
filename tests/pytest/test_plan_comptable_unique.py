@@ -2021,14 +2021,14 @@ class TestPlanComptableUnique(FastTenantTestCase):
     # ------------------------------------------------------------------ #
 
     def test_menu_ventes_et_comptabilite_a_les_trois_ecrans(self):
-        """La section « Ventes & comptabilité » montre, sous « Entries », le plan
+        """La section « Ventes & comptabilité » montre, sous « Ventes », le plan
         comptable, les comptes des moyens de paiement et les comptes des monnaies,
         dans cet ordre, que le module caisse soit actif ou non (le plan sert aussi
         aux ventes en ligne).
-        / The "Sales & accounting" section shows, under "Entries", the chart of
+        / The "Sales & accounting" section shows, under "Sales", the chart of
         accounts, the payment method accounts and the currency accounts, in that
         order, whether the POS module is on or off."""
-        lien_des_ecritures = reverse("staff_admin:BaseBillet_lignearticle_changelist")
+        lien_des_ventes = reverse("staff_admin:BaseBillet_vente_changelist")
         titre_attendu_par_lien = {
             reverse("staff_admin:laboutik_comptecomptable_changelist"): gettext(
                 "Plan comptable"
@@ -2075,9 +2075,9 @@ class TestPlanComptableUnique(FastTenantTestCase):
                 )
                 assert titre_par_lien[lien] == titre_attendu, lien
 
-            # Sous « Entries », dans l'ordre : plan, moyens, monnaies.
-            # / Under "Entries", in order: plan, methods, currencies.
-            positions = [liens_de_la_section.index(lien_des_ecritures)]
+            # Sous « Ventes », dans l'ordre : plan, moyens, monnaies.
+            # / Under "Sales", in order: plan, methods, currencies.
+            positions = [liens_de_la_section.index(lien_des_ventes)]
             for lien in liens_dans_l_ordre_attendu:
                 positions.append(liens_de_la_section.index(lien))
             assert positions == sorted(positions), liens_de_la_section
@@ -2807,7 +2807,11 @@ class TestPlanComptableUnique(FastTenantTestCase):
                 manque = un_seul_manque("471000")
             assert "2" in manque["phrase"], manque
             assert "reclasser" in manque["phrase"].lower(), manque
-            assert manque["lien"].startswith("/admin/"), manque
+            # Le lien mène à la liste des ventes, filtrée sur le moyen inconnu.
+            # / The link leads to the sales list, filtered on the unknown method.
+            assert manque["lien"] == (
+                reverse("staff_admin:BaseBillet_vente_changelist") + "?moyen=UK"
+            ), manque
 
         cas_a_verifier = [
             cas_produit_vendu_sans_compte,

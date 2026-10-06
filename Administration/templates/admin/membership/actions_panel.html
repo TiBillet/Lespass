@@ -35,7 +35,7 @@ CONTEXTE REQUIS (injecté par MembershipAdmin.changeform_view) :
 - statuts_attente_paiement : liste des statuts qui affichent le bouton paiement
 -->
 {% if membership %}
-<div class="p-4"
+<div class="mb-6"
      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
     {% component "unfold/components/card.html" with title=_("Actions") %}

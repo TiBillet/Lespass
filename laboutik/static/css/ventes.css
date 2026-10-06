@@ -10,6 +10,7 @@
    Templates :
    - laboutik/views/ventes.html              (#ventes-zone)
    - partial/hx_recap_en_cours.html          (ecran Ventes)
+   - partial/_ventes_historique_recap.html   (historique par article, synthese)
    - partial/hx_liste_ventes.html + _ligne_vente.html (historique de commande)
    - partial/hx_detail_vente.html            (detail sous une ligne)
    - partial/hx_fond_de_caisse.html          (popup fond de caisse)
@@ -216,10 +217,15 @@ table.ventes-table, .mini-table table { width: 100%; border-collapse: collapse; 
 }
 .ventes-table td, .mini-table td { padding: 11px 18px; border-bottom: 1px solid var(--line-soft); color: var(--text-dim); white-space: nowrap; }
 .ventes-table tr:last-child td, .mini-table tr:last-child td { border-bottom: 0; }
+/* Plusieurs <tbody> (une par categorie) : trait entre elles
+   / Several <tbody> (one per category): rule between them */
+.ventes-table tbody + tbody tr:first-child td { border-top: 1px solid var(--line-soft); }
 .ventes-table .num, .mini-table .num { text-align: right; font-weight: 700; color: var(--text); }
 .ventes-table th.num, .mini-table th.num { text-align: right; }
+.ventes-table .num-fort { font-weight: 800; }
 .ventes-table .muted, .mini-table .muted { color: var(--text-faint); font-style: italic; }
 .ventes-table .empty, .mini-table .empty { text-align: center; padding: 30px; color: var(--text-faint); white-space: normal; }
+.ventes-table .cat-row td { background: var(--surface-2); font-weight: 800; color: var(--text); text-transform: uppercase; font-size: 11px; letter-spacing: .05em; }
 .mini-table .sous-ligne td { padding-top: 6px; padding-bottom: 6px; font-size: 12.5px; color: var(--text-faint); }
 .mini-table .sous-ligne td:first-child { padding-left: 32px; }
 

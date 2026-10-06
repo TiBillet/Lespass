@@ -416,9 +416,9 @@ def comptes_de_l_ecriture(ecriture):
 
 
 def url_de_l_avoir_d_une_ligne(ligne):
-    """L'adresse du bouton « Avoir » d'une ligne de vente (admin).
-    / The address of a sale line's "Credit note" button."""
-    return f"/admin/BaseBillet/lignearticle/{ligne.pk}/emettre_avoir/"
+    """L'adresse de l'écran « Avoir sur un article » de la fiche « Vente », pour cette
+    ligne (admin). / The "Credit note on one item" screen address, for this line."""
+    return f"/admin/BaseBillet/vente/{ligne.vente_id}/avoir_sur_un_article/?ligne={ligne.pk}"
 
 
 def url_de_l_avoir_total(vente):

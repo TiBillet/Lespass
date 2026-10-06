@@ -240,6 +240,19 @@ class Vente(models.Model):
             ),
         ]
 
+    def __str__(self):
+        """
+        Le nom d'une vente, lu par l'admin (titre de la fiche, fil d'Ariane) :
+        « Vente n° 12 », ou « Vente sans numéro — En attente » tant qu'elle n'est pas
+        réglée (le numéro n'est posé qu'à l'encaissement).
+        / A sale's name for the admin: "Vente n° 12", or "Vente sans numéro — <status>".
+        """
+        if self.numero is None:
+            return _("Vente sans numéro — %(statut)s") % {
+                "statut": self.get_statut_display()
+            }
+        return _("Vente n° %(numero)s") % {"numero": self.numero}
+
     def save(self, *args, **kwargs):
         """
         Garde d'immutabilité : une vente REGLEE en base refuse toute modification.
@@ -358,6 +371,24 @@ class Reglement(models.Model):
                 name="reglement_montant_non_nul",
             ),
         ]
+
+    def get_inline_title(self):
+        """
+        Le titre d'un règlement dans l'inline « Règlements » de la fiche « Vente »
+        (Unfold lit `get_inline_title` à la place de `str()`) : son moyen et son
+        montant, dans l'unité de la vente (« Carte bancaire — 5,50 € »).
+        / The payment title in the sale page inline: method and amount.
+
+        Imports dans la fonction : `comptabilite` et `laboutik` importent ce module.
+        / Imports inside the function: `comptabilite` and `laboutik` import this module.
+        """
+        from comptabilite.presentation import montant_a_la_francaise_dans_l_unite
+        from comptabilite.rapport import nom_du_moyen_de_paiement
+        from laboutik.affichage_des_ventes import nom_de_l_unite_de_la_vente
+
+        nom_de_l_unite = nom_de_l_unite_de_la_vente(self.vente, {})
+        montant_affiche = montant_a_la_francaise_dans_l_unite(self.montant, nom_de_l_unite)
+        return f"{nom_du_moyen_de_paiement(self.moyen)} — {montant_affiche}"
 
     def save(self, *args, **kwargs):
         """

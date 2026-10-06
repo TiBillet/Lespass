@@ -957,11 +957,9 @@ def ligne_payee_en_points(ligne):
       seul indice d'une ligne écrite sans vente.
     / Its sale is not in euros, or its historical method is NM (with or without sale).
 
-    Lue par `ajouter_l_article_d_avoir` (ce module, le refus commun à tous les avoirs),
-    le bouton « Avoir » (Administration/admin_tenant.py `emettre_avoir`) et le
-    formulaire d'annulation d'adhésion (BaseBillet/views.py, MembershipMVT).
-    / Read by the shared credit note function, the admin button and the membership
-    cancellation form.
+    Lue par `ajouter_l_article_d_avoir` (ce module, le refus commun à tous les avoirs)
+    et le formulaire d'annulation d'adhésion (BaseBillet/views.py, MembershipMVT).
+    / Read by the shared credit note function and the membership cancellation form.
     """
     vente_de_la_ligne_en_points = (
         ligne.vente_id is not None and ligne.vente.unite != "EUR"
@@ -989,7 +987,8 @@ def ligne_sans_argent_a_rendre(ligne):
     money nor tokens. A mixed line has money to give back.
 
     Lue par les écrans qui décident d'afficher le champ « Remboursé par » : l'écran
-    « Émettre un avoir » et l'écran d'annulation des actions admin
+    « Avoir sur un article » de la fiche « Vente », l'écran d'annulation des actions
+    admin
     (Administration/admin_tenant.py), le formulaire d'annulation d'adhésion
     (BaseBillet/views.py), et les messages d'annulation de l'utilisateur
     (BaseBillet/models.py, booking/models.py).
@@ -1088,7 +1087,7 @@ def moyen_d_origine_de_la_ligne(ligne):
 
     LOCALISATION : BaseBillet/services_vente.py
 
-    LU PAR : Administration/admin_tenant.py (`LigneArticleAdmin.emettre_avoir`,
+    LU PAR : Administration/admin_tenant.py (`VenteAdmin.avoir_sur_un_article`,
     `preparer_le_champ_rembourse_par`) et le formulaire d'annulation d'adhésion
     (BaseBillet/views.py, `MembershipMVT._contexte_du_formulaire_d_annulation`).
     / Read by the line credit note, the admin cancel screen and the membership form.
@@ -1183,8 +1182,8 @@ def ecrire_la_vente_d_avoir_d_une_ligne(ligne, quantite, moyen_rembourse, origin
     LOCALISATION : BaseBillet/services_vente.py
 
     APPELÉE PAR :
-    - Administration/admin_tenant.py `LigneArticleAdmin.emettre_avoir` (bouton « Avoir »)
-      et `VenteAdmin.avoir_sur_un_article` (action de la fiche « Vente ») ;
+    - Administration/admin_tenant.py `VenteAdmin.avoir_sur_un_article` (action de la
+      fiche « Vente ») ;
     - BaseBillet/models.py `Reservation.cancel_and_refund_resa` et
       `cancel_and_refund_ticket`, quand l'ADMIN annule des lignes hors Stripe ;
     - BaseBillet/views.py, l'annulation d'une adhésion par l'admin.

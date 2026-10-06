@@ -1049,7 +1049,10 @@ class TestBoutonCloturerEtTicketZSurLaClotureUnique(FastTenantTestCase):
 # Un montant de 15,00 € tel qu'un écran l'écrit, en anglais (« 15.00 € ») ou en
 # français (« 15,00 € ») : la langue de l'écran ne compte pas ici.
 # / 15.00 € as a screen writes it, in English or French.
-MONTANT_DE_15_EUROS_A_L_ECRAN = re.compile(r"15[.,]00 €")
+# `\s` : l'espace avant « € » est une espace insécable dans les montants écrits par
+# `euros_a_la_francaise` (fiche « Vente »), une espace simple ailleurs.
+# / `\s`: a no-break space in amounts written by euros_a_la_francaise.
+MONTANT_DE_15_EUROS_A_L_ECRAN = re.compile(r"15[.,]00\s€")
 
 
 @pytest.fixture
@@ -1469,20 +1472,22 @@ def test_fiche_utilisateur_admin_montant_paye_1050(lieu):
 @pytest.mark.django_db
 def test_admin_colonne_total_des_ventes_sur_le_net_vendu(lieu):
     """
-    La liste des ventes de l'admin (`LigneArticleAdmin`), colonne « Total » : une
+    La liste des ventes de l'admin (`VenteAdmin`), colonne « Total » : une vente d'une
     entrée à 20,00 € dont 5,00 € offerts vaut 15,00 €, pas 20,00 €.
-    / The admin sale list "Total" column: 15.00, not 20.00.
+    / The admin sales list "Total" column: 15.00, not 20.00.
     """
     vente = ouvrir_vente(origine=SaleOrigin.ADMIN, nature=Vente.Nature.VENTE)
-    ligne = ecrire_une_entree_dont_5_euros_offerts(
+    ecrire_une_entree_dont_5_euros_offerts(
         vente,
         creer_tarif_vendu(nom="Entree", prix_en_euros="20.00"),
         PaymentMethod.CASH,
         status=LigneArticle.VALID,
     )
-    admin_des_ventes = staff_admin_site._registry[LigneArticle]
+    admin_des_ventes = staff_admin_site._registry[Vente]
 
-    assert admin_des_ventes.total_decimal(ligne) == Decimal("15.00")
+    total_affiche = admin_des_ventes.total_affiche(Vente.objects.get(pk=vente.pk))
+
+    assert MONTANT_DE_15_EUROS_A_L_ECRAN.search(total_affiche), total_affiche
 
 
 @pytest.mark.django_db
@@ -1514,13 +1519,12 @@ def test_admin_onglet_des_ventes_de_l_adhesion_total_sur_le_net_vendu(lieu):
 @pytest.mark.django_db
 def test_ecran_d_avoir_affiche_le_net_vendu(lieu):
     """
-    L'écran « Émettre un avoir » d'une ligne (bouton « Avoir » de la liste des
-    ventes) rappelle le montant de la ligne : une entrée à 20,00 € dont 5,00 €
-    offerts affiche 15,00 €, pas 20,00 €.
-    / The credit note screen shows 15.00 for the line, not 20.00.
+    L'écran « Avoir total » de la fiche d'une vente rappelle le total de la vente :
+    une entrée à 20,00 € dont 5,00 € offerts affiche 15,00 €, pas 20,00 €.
+    / The full credit note screen shows 15.00 for the sale, not 20.00.
     """
     vente = ouvrir_vente(origine=SaleOrigin.ADMIN, nature=Vente.Nature.VENTE)
-    ligne = ecrire_une_entree_dont_5_euros_offerts(
+    ecrire_une_entree_dont_5_euros_offerts(
         vente,
         creer_tarif_vendu(nom="Entree", prix_en_euros="20.00"),
         PaymentMethod.CASH,
@@ -1528,9 +1532,7 @@ def test_ecran_d_avoir_affiche_le_net_vendu(lieu):
     )
     client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
 
-    reponse = client_de_l_admin.get(
-        f"/admin/BaseBillet/lignearticle/{ligne.pk}/emettre_avoir/"
-    )
+    reponse = client_de_l_admin.get(f"/admin/BaseBillet/vente/{vente.uuid}/avoir_total/")
 
     assert reponse.status_code == 200
     recapitulatif, _attributs = lire_l_element(
@@ -1612,22 +1614,6 @@ def vendre_une_biere_au_moyen_de_ligne_inconnu_reglee_en_especes(**champs_de_la_
 
 
 @pytest.mark.django_db
-def test_admin_colonne_moyen_des_ventes_lue_dans_les_reglements(lieu):
-    """
-    La liste des ventes de l'admin, colonne « Moyen de paiement » : « Cash », le moyen
-    du règlement de la vente, et pas celui de la ligne.
-    / The admin sale list method column shows the payment's method.
-    """
-    ligne = vendre_une_biere_au_moyen_de_ligne_inconnu_reglee_en_especes()
-    admin_des_ventes = staff_admin_site._registry[LigneArticle]
-
-    with translation.override("en"):
-        moyens_affiches = admin_des_ventes.moyens_de_paiement(ligne)
-
-    assert moyens_affiches == "Cash"
-
-
-@pytest.mark.django_db
 def test_admin_onglet_des_ventes_de_l_adhesion_moyen_lu_dans_les_reglements(lieu):
     """
     L'onglet des ventes de la fiche adhésion, colonne « Moyen de paiement » : « Cash »,
@@ -1687,17 +1673,18 @@ def test_fiche_utilisateur_admin_moyen_lu_dans_les_reglements(lieu):
 def test_admin_colonne_moyen_apres_correction_especes_en_cb(lieu):
     """
     Une bière payée 5,00 € en espèces, puis corrigée en CB à la caisse (vente
-    CORRECTION : espèces −500, CB +500). La colonne « Moyen de paiement » de la liste
-    des ventes dit « Bank card » seulement : les espèces valent 0 après correction.
-    / Cash corrected into CB: the admin sale list column says CB only.
+    CORRECTION : espèces −500, CB +500). La colonne « Moyen de paiement » de
+    l'onglet des ventes de la fiche adhésion dit « Bank card » seulement : les
+    espèces valent 0 après correction.
+    / Cash corrected into CB: the membership sales tab column says CB only.
     """
     ligne = vendre_une_biere_au_moyen_de_ligne_inconnu_reglee_en_especes()
     corriger_la_vente_d_especes_en_carte_bancaire(ligne.vente, 500)
     ligne = LigneArticle.objects.get(pk=ligne.pk)
-    admin_des_ventes = staff_admin_site._registry[LigneArticle]
+    onglet_des_ventes = LigneArticleInline(Membership, staff_admin_site)
 
     with translation.override("en"):
-        moyens_affiches = admin_des_ventes.moyens_de_paiement(ligne)
+        moyens_affiches = onglet_des_ventes.moyens_de_paiement(ligne)
 
     assert moyens_affiches == "Bank card"
 
@@ -1721,9 +1708,10 @@ def test_export_lignes_moyen_apres_correction_especes_en_cb(lieu):
 def test_admin_colonne_moyen_sans_l_offert(lieu):
     """
     Une entrée à 20,00 € dont 5,00 € offerts, payée 15,00 € en espèces (règlements :
-    espèces 1500, offert 500). La colonne « Moyen de paiement » de la liste des ventes
-    dit « Cash » seulement : l'offert n'est pas un moyen de paiement.
-    / A partly offered entry: the column shows cash only, never "offered".
+    espèces 1500, offert 500). La colonne « Moyen de paiement » de l'onglet des ventes
+    de la fiche adhésion dit « Cash » seulement : l'offert n'est pas un moyen de
+    paiement.
+    / A partly offered entry: the membership sales tab shows cash only.
     """
     vente = ouvrir_vente(origine=SaleOrigin.ADMIN, nature=Vente.Nature.VENTE)
     ligne = ecrire_une_entree_dont_5_euros_offerts(
@@ -1732,10 +1720,10 @@ def test_admin_colonne_moyen_sans_l_offert(lieu):
         PaymentMethod.CASH,
         status=LigneArticle.VALID,
     )
-    admin_des_ventes = staff_admin_site._registry[LigneArticle]
+    onglet_des_ventes = LigneArticleInline(Membership, staff_admin_site)
 
     with translation.override("en"):
-        moyens_affiches = admin_des_ventes.moyens_de_paiement(ligne)
+        moyens_affiches = onglet_des_ventes.moyens_de_paiement(ligne)
 
     assert moyens_affiches == "Cash"
 
@@ -1773,61 +1761,18 @@ def vendre_des_bieres_d_un_meme_produit(nombre_de_ventes):
     return tarif_vendu.productsold.product.name
 
 
-def requetes_de_la_liste_des_ventes(client_de_l_admin, nom_du_produit):
-    """
-    Ouvre la liste des ventes de l'admin, filtrée par la recherche sur le nom du
-    produit. Rend (nombre de requêtes, nombre de lignes affichées).
-    / Opens the admin sale list searched by product name: (queries, rows).
-    """
-    with CaptureQueriesContext(connection) as requetes:
-        reponse = client_de_l_admin.get(
-            "/admin/BaseBillet/lignearticle/", {"q": nom_du_produit}
-        )
-    assert reponse.status_code == 200
-    return len(requetes), reponse.content.decode().count('class="data-row')
-
-
 @pytest.mark.django_db
-def test_liste_des_ventes_nombre_de_requetes_constant(lieu):
+def test_export_des_articles_par_l_admin_nombre_de_requetes_constant(lieu):
     """
-    La liste des ventes de l'admin coûte le même nombre de requêtes pour 1 ligne et
-    pour 3 lignes : la vente, ses règlements et ceux de ses corrections sont
-    préchargés.
-    / The admin sale list costs the same number of queries for 1 and 3 rows.
-    """
-    client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
-    nom_d_un_produit_vendu_une_fois = vendre_des_bieres_d_un_meme_produit(1)
-    nom_d_un_produit_vendu_trois_fois = vendre_des_bieres_d_un_meme_produit(3)
-    # Un premier passage remplit les caches (configuration, session) : il ne compte pas.
-    # / A first pass fills the caches: it does not count.
-    requetes_de_la_liste_des_ventes(client_de_l_admin, nom_d_un_produit_vendu_une_fois)
-
-    requetes_pour_une_ligne, lignes_affichees_une = requetes_de_la_liste_des_ventes(
-        client_de_l_admin, nom_d_un_produit_vendu_une_fois
-    )
-    requetes_pour_trois_lignes, lignes_affichees_trois = (
-        requetes_de_la_liste_des_ventes(
-            client_de_l_admin, nom_d_un_produit_vendu_trois_fois
-        )
-    )
-
-    assert lignes_affichees_une == 1
-    assert lignes_affichees_trois == 3
-    assert requetes_pour_trois_lignes == requetes_pour_une_ligne
-
-
-@pytest.mark.django_db
-def test_export_des_lignes_par_l_admin_nombre_de_requetes_constant(lieu):
-    """
-    L'export de l'admin passe par le queryset de la liste (`get_export_queryset`,
-    qui appelle `LigneArticleAdmin.get_queryset`) : exporter 3 lignes coûte le même
-    nombre de requêtes qu'en exporter 1.
-    / The admin export goes through the list queryset: 3 lines cost as many queries
-    as 1.
+    L'export des articles de la liste des ventes (`VenteAdmin.get_data_for_export`,
+    qui précharge la vente de chaque article, ses règlements et ceux de ses
+    corrections) : exporter 3 articles coûte le même nombre de requêtes qu'en
+    exporter 1. La première vente de chaque lot est corrigée (espèces en CB).
+    / The sales list item export: 3 items cost as many queries as 1.
     """
     administrateur = creer_utilisateur(prenom="Admin", nom="Lieu")
     administrateur.client_admin.add(lieu.tenant)
-    admin_des_ventes = staff_admin_site._registry[LigneArticle]
+    admin_des_ventes = staff_admin_site._registry[Vente]
     nom_d_un_produit_vendu_une_fois = vendre_des_bieres_d_un_meme_produit(1)
     nom_d_un_produit_vendu_trois_fois = vendre_des_bieres_d_un_meme_produit(3)
 
@@ -1837,14 +1782,16 @@ def test_export_des_lignes_par_l_admin_nombre_de_requetes_constant(lieu):
         nom_d_un_produit_vendu_une_fois,
         nom_d_un_produit_vendu_trois_fois,
     ]:
-        requete = RequestFactory().get(
-            "/admin/BaseBillet/lignearticle/", {"q": nom_du_produit}
-        )
+        requete = RequestFactory().get("/admin/BaseBillet/vente/")
         requete.user = administrateur
-        lignes_a_exporter = admin_des_ventes.get_export_queryset(requete)
+        # Les ventes de ce produit (les ventes CORRECTION n'ont pas d'article).
+        # / The sales of this product (CORRECTION sales have no item).
+        ventes_a_exporter = Vente.objects.filter(
+            articles__pricesold__productsold__product__name=nom_du_produit
+        )
         with CaptureQueriesContext(connection) as requetes:
-            donnees_exportees = LigneArticleExportResource().export(
-                queryset=lignes_a_exporter
+            donnees_exportees = admin_des_ventes.get_data_for_export(
+                requete, ventes_a_exporter
             )
         nombres_de_requetes.append(len(requetes))
         nombres_de_lignes_exportees.append(len(donnees_exportees))
@@ -2496,7 +2443,7 @@ FICHIERS_DES_LECTEURS_DE_LA_FICHE_G = [
     "Administration/admin_tenant.py",
     "Administration/importers/lignearticle_exporter.py",
     "Administration/templates/admin/membership/partials/cancel_form.html",
-    "Administration/templates/admin/lignearticle/emettre_avoir.html",
+    "Administration/templates/admin/vente/avoir_total.html",
     "Administration/templates/admin/human_user/right_and_wallet_info.html",
     "BaseBillet/models.py",
     "BaseBillet/tasks.py",

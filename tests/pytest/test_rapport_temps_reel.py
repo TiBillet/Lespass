@@ -15,9 +15,9 @@ jusqu'à maintenant, jamais stocké :
 - ticket X imprimé (`imprimer_ticket_x`) : une ligne par moyen de paiement, total =
   chiffre d'affaires TTC (comme le ticket Z), pied avec le fond de caisse, les
   espèces reçues et le solde théorique du tiroir (section « caisse espèces ») ;
-- récapitulatif en cours (`recap_en_cours`) : les sections du rapport mises en forme
-  par `comptabilite/presentation.py` (`sections_pour_affichage`), au style de la
-  caisse ;
+- récapitulatif en cours (`recap_en_cours`, écran « Ventes ») : la forme de la
+  maquette (Total, tiroir, par moyen, par point de vente…), chaque chiffre lu dans
+  le rapport ; le rapport complet reste dans l'admin ;
 - sortie de caisse (`sortie_de_caisse`) : le fond et le solde théorique du tiroir.
 Une vente encaissée avant la J n'est jamais dans ces écrans.
 / The current service starts at the end of the last single J. The X ticket, the
@@ -96,10 +96,11 @@ from laboutik.models import (  # noqa: E402
     SortieCaisse,
 )
 from fabriques_ecran import (  # noqa: E402
-    SIGNE_MOINS,
     euros,
     lire_l_element,
     moins_euros,
+    texte_sans_espaces_en_trop,
+    textes_des_elements,
 )
 
 
@@ -444,17 +445,14 @@ class TestServiceEnCours(FastTenantTestCase):
     # / Current recap
     # ------------------------------------------------------------------
 
-    def test_recap_en_cours_chiffre_affaires_reglements_et_tiroir(self):
+    def test_recap_en_cours_total_par_moyen_et_tiroir(self):
         """
-        Le décor du calcul à la main. Le récapitulatif montre les sections du rapport
-        mises en forme par la présentation partagée :
-        - chiffre d'affaires : 12,00 € ;
-        - règlements : espèces 7,00 €, CB 5,00 €, et la ligne « Total argent » de la
-          présentation (12,00 €) ;
-        - caisse espèces, une cellule par ligne, montants signés : fond 50,00 €,
-          espèces reçues 7,00 €, espèces rendues −2,00 €, corrections 0,00 €,
-          sorties de caisse −3,00 €, solde théorique 52,00 €.
-        / The recap shows the report sections formatted by the shared presentation.
+        Le décor du calcul à la main. L'écran Ventes montre, lus dans le rapport :
+        - Total : chiffre d'affaires 12,00 € ;
+        - par moyen de paiement : espèces 7,00 €, carte bancaire 5,00 € ;
+        - le tiroir : fond 50,00 €, les mouvements non nuls (espèces reçues 7,00 €,
+          espèces rendues −2,00 €, sorties de caisse −3,00 €), solde 52,00 €.
+        / The Sales screen: total, by method, and the drawer read in the report.
         """
         self._une_journee_close_puis_le_service_en_cours()
 
@@ -462,95 +460,49 @@ class TestServiceEnCours(FastTenantTestCase):
 
         page = reponse.content.decode()
         assert reponse.status_code == 200, page[:400]
-        texte_du_chiffre_d_affaires, _attributs = lire_l_element(
-            page, 'recap-chiffre-affaires'
-        )
-        assert euros('12,00') in texte_du_chiffre_d_affaires
+        texte_du_total, _attributs = lire_l_element(page, 'recap-total')
+        assert texte_du_total.strip() == euros('12,00')
 
-        texte_des_reglements, _attributs = lire_l_element(page, 'recap-reglements')
-        assert euros('7,00') in texte_des_reglements
-        assert euros('5,00') in texte_des_reglements
-        assert 'Total argent' in texte_des_reglements
-
-        # Les cellules du tiroir, lues une à une : « 2,00 € » est contenu dans
-        # « 52,00 € », chercher un texte dans la section ne prouverait rien.
-        # / The drawer cells, read one by one: "2,00 €" is inside "52,00 €".
-        assert self._lignes_du_tiroir_du_recap(page) == [
-            ('Fond de caisse', euros('50,00')),
-            ('Espèces reçues', euros('7,00')),
-            ('Espèces rendues', moins_euros('2,00')),
-            ('Corrections', euros('0,00')),
-            ('Sorties de caisse', moins_euros('3,00')),
-            ('Solde théorique', euros('52,00')),
+        assert self._lignes_du_tableau(page, 'recap-totaux-moyen') == [
+            ['Espèces', euros('7,00')],
+            ['Carte bancaire', euros('5,00')],
         ]
 
-    def _lignes_du_tiroir_du_recap(self, page):
+        texte_du_fond, _attributs = lire_l_element(page, 'recap-fond-de-caisse')
+        assert texte_du_fond.strip() == euros('50,00')
+        # Les textes lus ont leurs espaces ramenées à une seule (insécables comprises) :
+        # les textes attendus aussi.
+        # / Read texts have their spaces collapsed: expected texts too.
+        assert textes_des_elements(page, 'recap-mouvement-du-tiroir') == [
+            texte_sans_espaces_en_trop(f"Espèces reçues · {euros('7,00')}"),
+            texte_sans_espaces_en_trop(f"Espèces rendues · {moins_euros('2,00')}"),
+            texte_sans_espaces_en_trop(f"Sorties de caisse · {moins_euros('3,00')}"),
+        ]
+        texte_du_solde, _attributs = lire_l_element(page, 'recap-solde-du-tiroir')
+        assert texte_du_solde.strip() == euros('52,00')
+
+    def _lignes_du_tableau(self, page, testid):
         """
-        Les lignes (libellé, montant) du tableau de la section « caisse espèces » du
-        récapitulatif (`data-testid="recap-caisse-especes"`), lues cellule par
-        cellule.
-        / The (label, amount) rows of the recap's cash drawer table, cell by cell.
+        Les rangées du corps d'un tableau de la page (`data-testid`), chaque rangée
+        la liste des textes de ses cellules.
+        / The body rows of a table of the page, as lists of cell texts.
         """
-        section_du_tiroir = re.search(
-            r'data-testid="recap-caisse-especes".*?</section>', page, re.DOTALL
+        tableau = re.search(
+            rf'data-testid="{testid}".*?<tbody>(.*?)</tbody>', page, re.DOTALL
         )
-        assert section_du_tiroir is not None, page[:400]
-        return re.findall(
-            r'<tr>\s*<td>([^<]*)</td>\s*<td class="num">([^<]*)</td>\s*</tr>',
-            section_du_tiroir.group(0),
-        )
-
-    def test_recap_en_cours_section_repliee_titre_lu_une_seule_fois(self):
-        """
-        Une section repliée du récapitulatif (`<details>`) porte son titre dans le
-        `<summary>`, qui nomme la section (id « <testid>-titre ») ; la section incluse
-        ne le répète pas dans un `<h3>` : un lecteur d'écran lit le titre une fois.
-        / A folded section carries its title in the <summary> only.
-        """
-        self._une_journee_close_puis_le_service_en_cours()
-
-        reponse = self.client_http.get(URL_DU_RECAP_EN_COURS)
-
-        page = reponse.content.decode()
-        assert reponse.status_code == 200, page[:400]
-        testids_des_sections_repliees = re.findall(
-            r'data-testid="(recap-[a-z-]+)-repliee"', page
-        )
-        assert testids_des_sections_repliees, "Aucune section repliée dans le récap."
-        for testid_de_la_section in testids_des_sections_repliees:
-            assert f'<summary id="{testid_de_la_section}-titre">' in page
-            assert page.count(f'id="{testid_de_la_section}-titre"') == 1
-
-    def test_recap_en_cours_phrase_de_reconciliation(self):
-        """
-        Le décor du calcul à la main. Le récapitulatif écrit la phrase de
-        réconciliation du rapport : argent reçu 10,00 € = ventes payées en argent
-        12,00 € + recharges 0,00 € − remboursements 0,00 € − cartes vidées 2,00 €
-        + écarts d'encaissement 0,00 €.
-        / The recap writes the report's reconciliation sentence.
-        """
-        self._une_journee_close_puis_le_service_en_cours()
-
-        reponse = self.client_http.get(URL_DU_RECAP_EN_COURS)
-
-        page = reponse.content.decode()
-        assert reponse.status_code == 200, page[:400]
-        texte_de_la_phrase, _attributs = lire_l_element(
-            page, 'recap-reconciliation-phrase'
-        )
-        phrase_attendue = (
-            f"Argent reçu {euros('10,00')} = ventes payées en argent {euros('12,00')} "
-            f"+ recharges {euros('0,00')} {SIGNE_MOINS} remboursements {euros('0,00')} "
-            f"{SIGNE_MOINS} cartes vidées {euros('2,00')} "
-            f"+ écarts d'encaissement {euros('0,00')}"
-        )
-        assert texte_de_la_phrase == phrase_attendue
+        assert tableau is not None, page[:400]
+        rangees = []
+        for rangee in re.findall(r'<tr[^>]*>(.*?)</tr>', tableau.group(1), re.DOTALL):
+            cellules = []
+            for cellule in re.findall(r'<td[^>]*>(.*?)</td>', rangee, re.DOTALL):
+                cellules.append(cellule.strip())
+            rangees.append(cellules)
+        return rangees
 
     def test_recap_en_cours_ne_montre_que_les_ventes_d_apres_la_j(self):
         """
         Trois jus en espèces (10,50 €), la J, puis une bière en CB (5,00 €). Le
-        chiffre d'affaires du récapitulatif vaut 5,00 €, et 10,50 € n'apparaît nulle
-        part sur l'écran.
+        Total de l'écran Ventes vaut 5,00 €, et 10,50 € n'apparaît nulle part.
         / Sale before the J, then one after: the recap shows only the one after.
         """
         self._vendre(self.tarif_du_jus, 3, 350, PaymentMethod.CASH)
@@ -561,18 +513,15 @@ class TestServiceEnCours(FastTenantTestCase):
 
         page = reponse.content.decode()
         assert reponse.status_code == 200, page[:400]
-        texte_du_chiffre_d_affaires, _attributs = lire_l_element(
-            page, 'recap-chiffre-affaires'
-        )
-        assert euros('5,00') in texte_du_chiffre_d_affaires
+        texte_du_total, _attributs = lire_l_element(page, 'recap-total')
+        assert texte_du_total.strip() == euros('5,00')
         assert euros('10,50') not in page
 
     def test_recap_en_cours_nomme_le_point_de_vente_des_ventes(self):
         """
-        Une bière en CB au comptoir du test, sans J : le chiffre d'affaires par
-        journal du récapitulatif nomme le point de vente (« Comptoir service en
-        cours »), avec 5,00 €.
-        / The recap's revenue by journal names the sale's point of sale.
+        Une bière en CB au comptoir du test, sans J : le tableau « Par point de
+        vente » nomme le comptoir (« Comptoir service en cours »), avec 5,00 €.
+        / The "by point of sale" table names the sale's point of sale.
         """
         self._vendre(self.tarif_de_la_biere, 1, 500, PaymentMethod.CC)
 
@@ -580,11 +529,9 @@ class TestServiceEnCours(FastTenantTestCase):
 
         page = reponse.content.decode()
         assert reponse.status_code == 200, page[:400]
-        texte_du_chiffre_d_affaires, _attributs = lire_l_element(
-            page, 'recap-chiffre-affaires'
-        )
-        assert self.point_de_vente.name in texte_du_chiffre_d_affaires
-        assert euros('5,00') in texte_du_chiffre_d_affaires
+        assert self._lignes_du_tableau(page, 'recap-par-pv') == [
+            [self.point_de_vente.name, euros('5,00')],
+        ]
 
     def test_recap_en_cours_aucune_vente_depuis_la_j(self):
         """

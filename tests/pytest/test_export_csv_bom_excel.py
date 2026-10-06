@@ -6,7 +6,7 @@ LOCALISATION : tests/pytest/test_export_csv_bom_excel.py
 
 Code testé / Tested code :
 - Administration/admin/mixins.py (ExportCsvLisibleParExcelMixin)
-- Administration/admin_tenant.py (MembershipAdmin, LigneArticleAdmin, EventAdmin, TicketAdmin)
+- Administration/admin_tenant.py (MembershipAdmin, VenteAdmin, EventAdmin, TicketAdmin)
 
 Issue GitHub #422 :
 - sans BOM, Excel lit le CSV en Windows-1252 : « é » devient « Ã© ».
@@ -105,9 +105,10 @@ def test_les_quatre_admins_d_export_utilisent_le_mixin_avant_django_import_expor
 
     from Administration.admin.mixins import ExportCsvLisibleParExcelMixin
     from Administration.admin.site import staff_admin_site
-    from BaseBillet.models import Event, LigneArticle, Membership, Ticket
+    from BaseBillet.models import Event, Membership, Ticket
+    from BaseBillet.models_vente import Vente
 
-    for modele in [Membership, LigneArticle, Event, Ticket]:
+    for modele in [Membership, Vente, Event, Ticket]:
         classe_admin = type(staff_admin_site._registry[modele])
         ordre_d_heritage = classe_admin.__mro__
 

@@ -29,7 +29,7 @@ CODE PARCOURU / CODE EXERCISED
 - BaseBillet/signals.py — machine à états (PRE_SAVE_TRANSITIONS, set_ligne_article_paid) ;
 - BaseBillet/triggers.py — trigger_A (adhésion), trigger_B (billet), trigger_C (ressource) ;
 - ApiBillet/views.py — Webhook_stripe (SEPA en attente, SEPA refusé, renouvellement) ;
-- Administration/admin_tenant.py — emettre_avoir (avoir émis dans l'admin).
+- Administration/admin_tenant.py — VenteAdmin.avoir_sur_un_article (avoir émis dans l'admin).
 
 SIMULATIONS
 Chaque test est marqué `django_db` : la transaction est annulée à la fin, rien ne reste
@@ -627,17 +627,20 @@ def test_paiement_reste_paye_puis_rejeu_repasse_les_avoirs_en_paye(
         status=Paiement_stripe.PAID, traitement_en_cours=False
     )
 
-    # L'admin émet un avoir sur la ligne du billet, par le bouton de l'admin : l'écran
-    # s'ouvre (GET), puis il le valide (POST). Ligne payée par Stripe : pas de champ
-    # « Remboursé par ».
-    # / The admin issues a credit note on the ticket line: the screen opens (GET), then
-    # is confirmed (POST). Stripe-paid line: no "Refunded by" field.
+    # L'admin émet un avoir sur la ligne du billet, par « Avoir sur un article » de la
+    # fiche de la vente : l'écran s'ouvre (GET), puis il le valide (POST) avec toute la
+    # quantité. Ligne payée par Stripe : pas de champ « Remboursé par ».
+    # / The admin issues a credit note on the ticket line from the sale page: the
+    # screen opens (GET), then is confirmed (POST). Stripe-paid: no "Refunded by".
     client_de_l_admin = creer_un_administrateur_du_lieu(lieu)
     url_de_l_avoir = (
-        f"/admin/BaseBillet/lignearticle/{ligne_du_billet.pk}/emettre_avoir/"
+        f"/admin/BaseBillet/vente/{ligne_du_billet.vente_id}/avoir_sur_un_article/"
+        f"?ligne={ligne_du_billet.pk}"
     )
     client_de_l_admin.get(url_de_l_avoir)
-    reponse_de_l_admin = client_de_l_admin.post(url_de_l_avoir, {})
+    reponse_de_l_admin = client_de_l_admin.post(
+        url_de_l_avoir, {"quantite": str(ligne_du_billet.qty)}
+    )
     assert reponse_de_l_admin.status_code == 302
     avoir = LigneArticle.objects.get(credit_note_for=ligne_du_billet)
     assert avoir.status == LigneArticle.CREDIT_NOTE

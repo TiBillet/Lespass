@@ -1647,23 +1647,24 @@ class TestVenteEnPoints(FastTenantTestCase):
     # ------------------------------------------------------------------
 
     def test_l_ecran_du_ticket_x_montre_les_ventes_en_points(self):
-        """Recapitulatif en cours : la section « Points » du rapport des ventes
-        montre « Points fidélité » 300,00.
-        / Current recap: the "Points" section shows 300.00 loyalty points."""
+        """Recapitulatif en cours : le tableau « Non monétaire (hors argent) », lu dans
+        la section « Points » du rapport des ventes, montre « Points fidélité »
+        300,00 Points fidélité.
+        / Current recap: the "non-monetary" table shows 300.00 loyalty points."""
         self._vendre_un_pins_en_points_et_un_vin_en_especes()
 
         reponse = self.navigateur.get("/laboutik/caisse/recap-en-cours/")
 
         contenu = reponse.content.decode()
         assert reponse.status_code == 200, contenu[:400]
-        debut_de_la_section = contenu.index('data-testid="recap-points"')
+        debut_de_la_section = contenu.index('data-testid="recap-non-monetaire"')
         bloc_des_points = contenu[debut_de_la_section:]
         ligne_des_points = re.search(
             r"<td[^>]*>Points fidélité</td>\s*<td[^>]*>([^<]*)</td>",
             bloc_des_points,
         )
         assert ligne_des_points is not None, bloc_des_points[:800]
-        assert ligne_des_points.group(1).strip() == "300,00"
+        assert ligne_des_points.group(1).strip() == "300,00\u00a0Points fidélité"
 
     def test_le_ticket_x_imprime_mentionne_les_ventes_en_points(self):
         """Ticket X imprime, lu dans le rapport X du rapport des ventes : la ligne des

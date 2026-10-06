@@ -18,8 +18,11 @@ Remplace le formulaire de paiement dans la carte du panneau d'actions.
     </p>
     <p style="margin:.375rem 0 0 0;font-size:.8125rem" data-testid="membership-paiement-success-ligne-comptable">
         {% translate "Une ligne comptable a été créée dans les" %}
-        <a href="/admin/BaseBillet/lignearticle/"
+        {# Le lien ouvre la fiche de la vente écrite (BaseBillet/views.py, ajouter_paiement). #}
+        {# / The link opens the page of the written sale. #}
+        <a href="{% url 'staff_admin:BaseBillet_vente_change' vente_de_l_admin.pk %}"
            target="_blank" rel="noopener"
+           data-testid="membership-paiement-success-lien-vente"
            style="color:#166534;text-decoration:underline">{% translate "Ventes" %}</a>.
     </p>
     {% if membership.price.fedow_reward_enabled and membership.price.fedow_reward_asset and membership.price.fedow_reward_amount %}

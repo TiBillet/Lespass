@@ -101,7 +101,6 @@ from Administration.admin.base import ModelAdmin
 from unfold.admin import TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.filters.admin import (
-    ChoicesDropdownFilter,
     DropdownFilter,
     RelatedDropdownFilter,
     # AutocompleteSelectMultipleFilter,
@@ -122,7 +121,8 @@ from unfold.widgets import (
     UnfoldAdminColorInputWidget,
     UnfoldAdminSelectWidget,
     UnfoldAdminTextInputWidget,
-    UnfoldAdminSelect2Widget
+    UnfoldAdminSelect2Widget,
+    UnfoldAdminDecimalFieldWidget,
 )
 
 from Administration.importers.ticket_exporter import TicketExportResource
@@ -154,7 +154,6 @@ from BaseBillet.services_vente import (
     encaisser_vente,
     encaisser_vente_stripe,
     ligne_entierement_offerte,
-    ligne_payee_en_points,
     ligne_sans_argent_a_rendre,
     monnaie_et_carte_des_jetons_de_la_vente,
     moyen_d_argent_unique_de_la_vente,
@@ -173,6 +172,7 @@ from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from laboutik.affichage_des_ventes import (
     badge_de_la_nature_d_une_vente,
     nom_de_l_unite_de_la_vente,
+    noms_des_monnaies_des_ventes,
     reglements_pour_l_affichage,
 )
 from laboutik.integrity import calculer_hmac_vente
@@ -181,6 +181,7 @@ from comptabilite.presentation import (
     euros_a_la_francaise,
     montant_a_la_francaise_dans_l_unite,
     quantite_au_poids_a_la_francaise,
+    quantite_lisible,
 )
 from comptabilite.rapport import nom_du_moyen_de_paiement, unite_d_une_vente_au_poids
 
@@ -1646,7 +1647,10 @@ class LigneArticleInline(TabularInline):
     model = LigneArticle
     fk_name = "membership"
     extra = 0
-    show_change_link = True
+    # Pas de lien vers une fiche : les lignes n'ont plus de page dans l'admin. Les
+    # avoirs se font depuis la fiche « Vente ».
+    # / No link: lines have no admin page any more; credit notes go through the sale.
+    show_change_link = False
     can_delete = False
     verbose_name = _("Ventes / Ligne comptables")
     verbose_name_plural = _("Ventes / Ligne comptables")
@@ -1670,7 +1674,11 @@ class LigneArticleInline(TabularInline):
         # / Each line's sale, its payments and its corrections' payments are
         # prefetched: no query per line.
         queryset = super().get_queryset(request)
-        return queryset.select_related('vente').prefetch_related(
+        # Le produit est lu par le titre de chaque ligne (`LigneArticle.get_inline_title`).
+        # / The product is read by each row title.
+        return queryset.select_related(
+            'vente', 'pricesold__productsold__product'
+        ).prefetch_related(
             'vente__reglements',
             'vente__ventes_derivees__reglements',
         )
@@ -2021,33 +2029,6 @@ class MembershipAdmin(ExportCsvLisibleParExcelMixin, HelpDisplayMixin, ModelAdmi
 
 ### VENTES ###
 
-class LigneArticlePublishedFilter(DropdownFilter):
-    """
-    Filtre les ventes par produit non archivé.
-    / Filter for filtering LigneArticle by Product that are not archived
-
-    LOCALISATION : Administration/admin_tenant.py
-
-    Liste déroulante avec recherche (Unfold DropdownFilter), comme
-    MembershipPublishedFilter.
-    / Searchable dropdown, like MembershipPublishedFilter.
-    """
-    title = _('Product')
-    parameter_name = 'product'
-
-    def lookups(self, request, model_admin):
-        # Return only product that are not archived to display in the filter
-        return [
-            (product.pk, product.name)
-            for product in Product.objects.filter(archive=False).order_by("name")
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value():
-            # Return only sales where the product correspond to the selected product
-            return queryset.filter(pricesold__productsold__product=self.value())
-        return queryset
-
 class RangeDateTimeFilterWithTimeZone(RangeDateTimeFilter):
     """
     This just override the 'RangeDateTimeFilter' 'queryset' method to take the timezone into account
@@ -2092,11 +2073,12 @@ class RangeDateTimeFilterWithTimeZone(RangeDateTimeFilter):
 
 class EmettreAvoirAvecMoyenForm(forms.Form):
     """
-    Formulaire de l'écran « Émettre un avoir » d'une ligne hors Stripe, pas entièrement
-    offerte : l'admin dit comment l'argent a été rendu. Champ obligatoire.
-    / "Issue a credit note" form for a non-Stripe line: how the money was given back.
+    Formulaire d'un avoir quand de l'argent est rendu hors Stripe : l'admin dit comment
+    l'argent a été rendu. Champ obligatoire.
+    / Credit note form when money is given back outside Stripe: how it was given back.
 
-    LOCALISATION : Administration/admin_tenant.py (utilisé par LigneArticleAdmin.emettre_avoir)
+    LOCALISATION : Administration/admin_tenant.py (utilisé par VenteAdmin.avoir_total
+    et par l'écran « Annuler et rembourser », `afficher_ou_valider_l_ecran_d_annulation`)
     """
 
     moyen_rembourse = forms.ChoiceField(
@@ -2104,23 +2086,19 @@ class EmettreAvoirAvecMoyenForm(forms.Form):
         choices=choix_du_champ_rembourse_par,
         required=True,
         help_text=_("Le moyen par lequel l'argent est rendu au client."),
-        widget=forms.Select(
-            attrs={
-                "data-testid": "avoir-moyen-rembourse",
-                "style": "width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;",
-            }
-        ),
+        widget=UnfoldAdminSelectWidget(attrs={"data-testid": "avoir-moyen-rembourse"}),
     )
 
 
 class EmettreAvoirSansMoyenForm(forms.Form):
     """
-    Formulaire de l'écran « Émettre un avoir » sans champ : simple confirmation. Sert à
-    une ligne payée par Stripe (on rembourse depuis Stripe) et à une ligne entièrement
-    offerte (aucun argent à rendre).
-    / Field-less form: plain confirmation (Stripe-paid or fully offered line).
+    Formulaire d'un avoir sans champ : simple confirmation. Sert quand aucun argent
+    n'est rendu à la main : paiement Stripe (on rembourse depuis Stripe), article offert,
+    ou payé en jetons.
+    / Field-less form: plain confirmation (Stripe, offered or token-paid).
 
-    LOCALISATION : Administration/admin_tenant.py (utilisé par LigneArticleAdmin.emettre_avoir)
+    LOCALISATION : Administration/admin_tenant.py (utilisé par VenteAdmin.avoir_total
+    et par l'écran « Annuler et rembourser », `afficher_ou_valider_l_ecran_d_annulation`)
     """
 
 
@@ -2147,24 +2125,14 @@ class AvoirSurUnArticleForm(forms.Form):
         max_digits=12,
         decimal_places=6,
         help_text=_("Au plus la quantité qui reste à rendre."),
-        widget=forms.NumberInput(
-            attrs={
-                "data-testid": "avoir-quantite",
-                "style": "width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;",
-            }
-        ),
+        widget=UnfoldAdminDecimalFieldWidget(attrs={"data-testid": "avoir-quantite"}),
     )
     moyen_rembourse = forms.ChoiceField(
         label=_("Remboursé par"),
         choices=choix_du_champ_rembourse_par,
         required=True,
         help_text=_("Le moyen par lequel l'argent est rendu au client."),
-        widget=forms.Select(
-            attrs={
-                "data-testid": "avoir-moyen-rembourse",
-                "style": "width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;",
-            }
-        ),
+        widget=UnfoldAdminSelectWidget(attrs={"data-testid": "avoir-moyen-rembourse"}),
     )
 
     def __init__(self, *args, champ_rembourse_par_demande=True, quantite_figee=False, **kwargs):
@@ -2173,301 +2141,6 @@ class AvoirSurUnArticleForm(forms.Form):
             del self.fields["moyen_rembourse"]
         if quantite_figee:
             self.fields["quantite"].widget.attrs["readonly"] = True
-
-
-@admin.register(LigneArticle, site=staff_admin_site)
-class LigneArticleAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAdmin):
-    compressed_fields = True  # Default: False
-    warn_unsaved_form = True  # Default: False
-    list_filter_submit = True
-
-    # Filtres en liste déroulante (Unfold), envoyés par le bouton « Filtrer ».
-    # / Dropdown filters (Unfold), sent by the "Filter" button.
-    list_filter = (('status', ChoicesDropdownFilter),
-                   LigneArticlePublishedFilter,
-                   ('datetime', RangeDateTimeFilterWithTimeZone),
-                   )
-
-    list_display = [
-        'productsold',
-        'user_email',
-        'datetime',
-        'amount_decimal',
-        '_qty',
-        'vat',
-        'total_decimal',
-        'display_status',
-        'moyens_de_paiement',
-        'sale_origin',
-        # 'sended_to_laboutik',
-    ]
-    # La fiche (en lecture seule) ne montre pas les champs de paiement de la ligne :
-    # une ligne peut être payée par plusieurs moyens, ou par aucun moyen écrit sur
-    # elle. Seuls les règlements de la vente disent comment elle a été payée
-    # (colonne « Moyen de paiement » ci-dessus, lue sur la vente).
-    # / The read-only page hides the line's payment fields: only the sale's payments
-    # tell how it was paid.
-    exclude = ('payment_method', 'asset', 'carte', 'wallet')
-    search_fields = ('datetime', 'pricesold__productsold__product__name', 'pricesold__price__name',
-                     'paiement_stripe__user__email', 'membership__user__email')
-    ordering = ('-datetime',)
-
-    resource_classes = [LigneArticleExportResource]
-    export_form_class = ExportForm
-
-    def get_queryset(self, request):
-        # Utiliser select_related pour précharger pricesold et productsold.
-        # La vente de chaque ligne, ses règlements et ceux de ses corrections sont
-        # préchargés : la colonne « Moyen de paiement » et l'export (qui passe par ce
-        # queryset, `get_export_queryset`) ne font pas une requête par ligne.
-        # / Each line's sale, its payments and its corrections' payments are
-        # prefetched (column and export, which goes through this queryset).
-        queryset = super().get_queryset(request)
-        return queryset.select_related('pricesold__productsold',
-                                       'pricesold__productsold__product',
-                                       'pricesold__productsold__event',
-                                       'pricesold__price',
-                                       'reservation__user_commande',
-                                       'paiement_stripe',
-                                       'paiement_stripe__user',
-                                       'membership',
-                                       'membership__user',
-                                       'vente',
-                                       ).prefetch_related(
-                                           'vente__reglements',
-                                           'vente__ventes_derivees__reglements',
-                                       )
-
-    @display(description=_("Value"))
-    def amount_decimal(self, obj):
-        return dround(obj.amount)
-
-    @display(description=_("Quantité"))
-    def _qty(self, obj):
-        return dround(obj.qty)
-
-    @display(description=_("Total"))
-    def total_decimal(self, obj: LigneArticle):
-        # Le net vendu de la ligne (`LigneArticle.total_decimal`), part offerte déduite.
-        # / The line's net sold, offered part deducted.
-        return obj.total_decimal()
-
-    @display(description=_("Moyen de paiement"))
-    def moyens_de_paiement(self, obj: LigneArticle):
-        # Les moyens nets de la vente de la ligne, corrections comprises, sans
-        # l'offert. « — » quand il n'y en a aucun : ligne sans vente, ou vente
-        # entièrement offerte.
-        # / The net methods of the line's sale; "—" when there is none.
-        return ", ".join(obj.moyens_de_paiement_de_sa_vente()) or "—"
-
-    @display(description=_("Product"))
-    def productsold(self, obj):
-        return f"{obj.pricesold.productsold} - {obj.pricesold}"
-
-    # noinspection PyTypeChecker
-    @display(description=_("Status"), label={None: "danger", True: "success", "warning": "warning"})
-    def display_status(self, instance: LigneArticle):
-        status = instance.status
-        if status in [LigneArticle.VALID, LigneArticle.FREERES]:
-            return True, f"{instance.get_status_display()}"
-        if status == LigneArticle.CREDIT_NOTE:
-            return "warning", f"{instance.get_status_display()}"
-        if instance.credit_notes.exists():
-            return "warning", f"{instance.get_status_display()} ⚠"
-        return None, f"{instance.get_status_display()}"
-
-    actions_row = ["emettre_avoir"]
-
-    @action(
-        description=_("Credit note"),  # Avoir
-        url_path="emettre_avoir",
-        permissions=["custom_actions_row"],
-    )
-    def emettre_avoir(self, request, object_id):
-        """
-        Émet un avoir sur une ligne de vente : GET affiche l'écran de confirmation,
-        POST écrit l'avoir.
-        / Issues a credit note on a sale line: GET shows the screen, POST writes it.
-
-        LOCALISATION : Administration/admin_tenant.py
-        Gabarit : Administration/templates/admin/lignearticle/emettre_avoir.html
-
-        GARDES (GET et POST) : la ligne est VALID ou PAID ; elle n'a pas déjà d'avoir ;
-        sa vente d'origine, si elle existe, est réglée ; elle n'est pas payée en points
-        ou en temps (`ligne_payee_en_points`).
-
-        TROIS ÉCRANS :
-        - ligne hors Stripe, pas entièrement offerte : champ « Remboursé par » (espèces,
-          CB, chèque, virement), pré-rempli avec le seul moyen d'argent des règlements
-          nets de la vente (`moyen_d_origine_de_la_ligne`) s'il est dans cette liste,
-          sinon vide et obligatoire ;
-        - ligne entièrement offerte (part offerte = total catalogue, non nul, ou moyen
-          historique « offert ») : pas de champ, aucun argent à rendre ;
-        - ligne payée par Stripe : pas de champ ; l'écran prévient de rembourser depuis
-          le tableau de bord Stripe. Aucun appel à Stripe ici.
-
-        FLUX DU POST : `ecrire_la_vente_d_avoir_d_une_ligne` (BaseBillet/services_vente.py)
-        pour toute la quantité de la ligne, origine ADMIN : vente AVOIR liée, article
-        miroir, un règlement d'argent (moyen Stripe d'origine, ou moyen choisi), un
-        règlement FREE pour la part offerte, encaissement, PUIS CREDIT_NOTE. Tout ou
-        rien. Un refus du service (ValueError) devient un message d'erreur.
-        / GET = screen, POST = the service writes the whole credit note (all or nothing).
-        """
-        ligne_originale = get_object_or_404(
-            LigneArticle.objects.select_related(
-                'pricesold', 'pricesold__productsold', 'paiement_stripe', 'vente'
-            ),
-            pk=object_id,
-        )
-        url_de_la_liste_des_ventes = reverse(
-            f"{self.admin_site.name}:BaseBillet_lignearticle_changelist"
-        )
-
-        # Garde : uniquement sur les lignes VALID ou PAID
-        # / Guard: only VALID or PAID lines
-        if ligne_originale.status not in [LigneArticle.VALID, LigneArticle.PAID]:
-            messages.error(request, _("A credit note can only be issued for a confirmed or paid entry."))
-            return redirect(url_de_la_liste_des_ventes)
-
-        # Garde : pas d'avoir si un avoir existe deja
-        # / Guard: no credit note if one already exists
-        if ligne_originale.credit_notes.exists():
-            messages.error(request, _("A credit note already exists for this entry."))
-            return redirect(url_de_la_liste_des_ventes)
-
-        # Garde : une vente d'origine pas encore réglée ne reçoit pas d'avoir. Une ligne
-        # d'avant le chantier n'a pas de vente : elle passe.
-        # / Guard: an unsettled original sale gets no credit note. No sale: allowed.
-        vente_d_origine = ligne_originale.vente
-        vente_d_origine_pas_reglee = (
-            vente_d_origine is not None
-            and vente_d_origine.statut != Vente.Statut.REGLEE
-        )
-        if vente_d_origine_pas_reglee:
-            messages.error(
-                request,
-                _("La vente d'origine n'est pas réglée : l'avoir est impossible."),
-            )
-            return redirect(url_de_la_liste_des_ventes)
-
-        # Garde : une ligne payée en points ou en temps ne reçoit pas d'avoir. L'avoir
-        # est une vente en euros : il rendrait de l'argent pour des points. L'écran ne
-        # s'ouvre donc pas (le service refuse aussi, `ajouter_l_article_d_avoir`).
-        # / Guard: a line paid in points or time gets no credit note; the screen does
-        # not open (the service refuses it too).
-        if ligne_payee_en_points(ligne_originale):
-            messages.error(
-                request,
-                _("Cette ligne a été payée en points ou en temps : l'avoir est impossible."),
-            )
-            return redirect(url_de_la_liste_des_ventes)
-
-        # Quel écran ? / Which screen?
-        # Pas d'argent à rendre : ligne entièrement offerte, ou entièrement payée en
-        # jetons cadeau (l'avoir rend la dette, pas de l'argent). Une ligne mixte a de
-        # l'argent à rendre : le champ « Remboursé par » est demandé. Le message
-        # « offert » de l'écran ne vaut, lui, que pour une ligne offerte.
-        # / No money to give back: fully offered, or fully paid in gift tokens. A mixed
-        # line has money to give back. The "offered" message is for an offered line.
-        ligne_payee_par_stripe = ligne_originale.paiement_stripe_id is not None
-        la_ligne_n_a_pas_d_argent_a_rendre = ligne_sans_argent_a_rendre(ligne_originale)
-        la_ligne_est_entierement_offerte = ligne_entierement_offerte(ligne_originale)
-        champ_rembourse_par_demande = (
-            not ligne_payee_par_stripe and not la_ligne_n_a_pas_d_argent_a_rendre
-        )
-
-        if request.method == "POST":
-            if champ_rembourse_par_demande:
-                formulaire = EmettreAvoirAvecMoyenForm(request.POST)
-            else:
-                formulaire = EmettreAvoirSansMoyenForm(request.POST)
-        else:
-            # Le champ est pré-rempli avec le moyen d'origine s'il est dans la liste :
-            # le seul moyen d'argent des règlements de la vente
-            # (`moyen_d_origine_de_la_ligne`).
-            # / The field is pre-filled with the original method if it is in the list.
-            valeurs_initiales = {}
-            moyen_d_origine = moyen_d_origine_de_la_ligne(ligne_originale)
-            if moyen_d_origine in MOYENS_DU_CHAMP_REMBOURSE_PAR:
-                valeurs_initiales["moyen_rembourse"] = moyen_d_origine
-            if champ_rembourse_par_demande:
-                formulaire = EmettreAvoirAvecMoyenForm(initial=valeurs_initiales)
-            else:
-                formulaire = EmettreAvoirSansMoyenForm()
-
-        formulaire_a_afficher = request.method != "POST" or not formulaire.is_valid()
-        if formulaire_a_afficher:
-            contexte_de_l_ecran = {
-                **self.admin_site.each_context(request),
-                "title": _("Émettre un avoir"),
-                "form": formulaire,
-                "ligne": ligne_originale,
-                # Le montant de la ligne : son net vendu (argent et jetons compris).
-                # / The line's amount: its net sold (money and tokens included).
-                "montant_de_la_ligne": dround(ligne_originale.total_ttc),
-                "ligne_payee_par_stripe": ligne_payee_par_stripe,
-                "ligne_entierement_offerte": la_ligne_est_entierement_offerte,
-                "champ_rembourse_par_demande": champ_rembourse_par_demande,
-                "url_de_la_liste_des_ventes": url_de_la_liste_des_ventes,
-            }
-            return render(
-                request,
-                "admin/lignearticle/emettre_avoir.html",
-                contexte_de_l_ecran,
-            )
-
-        # Le moyen choisi, s'il y a un champ. Une ligne Stripe ou entièrement offerte
-        # n'en a pas : la fonction du service prend le moyen Stripe d'origine, ou
-        # n'écrit aucun règlement d'argent.
-        # / The chosen method, if there is a field; otherwise the service decides.
-        if champ_rembourse_par_demande:
-            moyen_choisi = formulaire.cleaned_data["moyen_rembourse"]
-        else:
-            moyen_choisi = None
-
-        try:
-            # Toute la quantité de la ligne, en une transaction (tout ou rien).
-            # / The whole quantity of the line, in one transaction (all or nothing).
-            ecrire_la_vente_d_avoir_d_une_ligne(
-                ligne_originale,
-                quantite=ligne_originale.qty,
-                moyen_rembourse=moyen_choisi,
-                origine=SaleOrigin.ADMIN,
-            )
-        except ValueError as erreur:
-            # Une règle du service refuse l'avoir : rien n'est écrit (transaction).
-            # / A service rule refuses the credit note: nothing is written.
-            logger.error(f"Avoir refusé pour la ligne {ligne_originale.uuid} : {erreur}")
-            messages.error(
-                request,
-                _("L'avoir n'a pas pu être émis : %(raison)s") % {"raison": erreur},
-            )
-            return redirect(url_de_la_liste_des_ventes)
-
-        messages.success(request, _("Credit note created."))
-        if ligne_payee_par_stripe:
-            # Le rappel reste affiché après l'action : l'argent n'est pas encore rendu.
-            # / The reminder stays after the action: the money is not given back yet.
-            messages.warning(
-                request,
-                _("Remboursez cette somme depuis votre tableau de bord Stripe."),
-            )
-        return redirect(url_de_la_liste_des_ventes)
-
-    def has_custom_actions_row_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
-    def has_add_permission(self, request, obj=None):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return False
 
 
 # ==========================================================================
@@ -2531,13 +2204,16 @@ def _unite_d_une_pesee(ligne):
 
 def _quantite_d_une_ligne(ligne):
     """
-    La quantité d'une ligne, pour l'admin : « 0,355 kg » pour une pesée (Q-H4), le
-    nombre arrondi sinon.
-    / A line's quantity for the admin: "0,355 kg" for a weighing, the number otherwise.
+    La quantité d'une ligne, pour l'admin, à la française : « 0,355 kg » ou « 0,33 L »
+    pour une pesée (Q-H4) ; sinon 3 décimales au plus, sans zéros inutiles (« 3 »,
+    « 1,571 » pour une part d'historique de 1,571429).
+    / A line's quantity for the admin, French style: "0,355 kg" for a weighing,
+    otherwise at most 3 decimals without useless zeros.
     """
     unite_de_la_pesee = _unite_d_une_pesee(ligne)
     if unite_de_la_pesee is None:
-        return dround(ligne.qty)
+        quantite_a_trois_decimales = Decimal(ligne.qty).quantize(Decimal("0.001"))
+        return quantite_lisible(str(quantite_a_trois_decimales))
     return quantite_au_poids_a_la_francaise(ligne.qty, unite_de_la_pesee)
 
 
@@ -2553,6 +2229,30 @@ def _prix_unitaire_d_une_ligne(ligne, montant_a_la_francaise):
     if unite_de_la_pesee is None:
         return montant_a_la_francaise
     return f"{montant_a_la_francaise}/{unite_de_la_pesee}"
+
+
+def _badge_unfold(couleur_du_badge, texte_du_badge):
+    """
+    Un badge Unfold (« success », « warning », « danger », « info »), rendu par le
+    gabarit des badges d'Unfold (`unfold/helpers/label.html`).
+    / An Unfold badge, rendered by Unfold's label template.
+
+    LOCALISATION : Administration/admin_tenant.py
+
+    Le HTML est rendu ici, et pas par `@display(label=...)` : Unfold ne dessine ce
+    badge que dans la LISTE. Sur la FICHE, un champ en lecture seule afficherait le
+    tuple brut `('VENTE', 'Vente')`. Rendu ici, le même badge vaut pour les deux.
+    / Rendered here: `@display(label=...)` only works in the list; on the detail page
+    a read-only field would show the raw tuple.
+
+    :param couleur_du_badge: « success », « warning », « danger » ou « info »
+    :param texte_du_badge: le texte du badge (déjà traduit)
+    :return: HTML sûr (SafeString)
+    """
+    return render_to_string(
+        "unfold/helpers/label.html",
+        {"type": couleur_du_badge, "text": texte_du_badge},
+    )
 
 
 def _lien_vers_la_fiche_d_une_vente(vente):
@@ -2784,6 +2484,35 @@ def _quantite_restante_affichee(ligne):
     if unite_de_la_pesee is None:
         return floatformat(ligne.quantite_restante, "-3")
     return quantite_au_poids_a_la_francaise(ligne.quantite_restante, unite_de_la_pesee)
+
+
+def _quantite_restante_proposee_dans_le_champ(ligne):
+    """
+    Le reste à rendre d'une ligne, arrondi pour le champ « Quantité rendue » de
+    l'écran « Avoir sur un article » : 3 décimales pour les kg, 2 pour les litres
+    (la précision de la caisse), sinon 3 décimales au plus, sans zéros inutiles
+    (« 2 », « 1.571 »). Une part d'historique (1,571429) reste ainsi lisible.
+    / A line's remainder, rounded for the quantity field: kg 3 decimals, litres 2,
+    otherwise at most 3 decimals without trailing zeros.
+
+    LOCALISATION : Administration/admin_tenant.py
+
+    Ce n'est qu'un affichage : renvoyée telle quelle, cette valeur vaut tout le reste
+    EXACT (`VenteAdmin.avoir_sur_un_article`). La quantité rendue ne change donc pas.
+    / Display only: posted back unchanged, it means the whole EXACT remainder.
+    """
+    unite_de_la_pesee = _unite_d_une_pesee(ligne)
+    if unite_de_la_pesee == "L":
+        pas_d_arrondi = Decimal("0.01")
+    else:
+        pas_d_arrondi = Decimal("0.001")
+    quantite_arrondie = Decimal(ligne.quantite_restante).quantize(pas_d_arrondi)
+    if unite_de_la_pesee is not None:
+        return quantite_arrondie
+    # À la pièce : sans zéros inutiles (« 2 » et pas « 2.000 »). `normalize()` écrit
+    # 10 en « 1E+1 » : on repasse par un texte à virgule fixe.
+    # / By the piece: no trailing zeros; fixed-point text to avoid "1E+1".
+    return Decimal(format(quantite_arrondie.normalize(), "f"))
 
 
 def _paiement_paye_de_la_vente(vente):
@@ -3030,9 +2759,25 @@ class ReglementsDeLaVenteInline(TabularInline):
 
     @display(description=_("Monnaie"))
     def monnaie(self, reglement):
+        # Le nom de la monnaie, lu par la même règle que la liste et le détail des
+        # ventes (`noms_des_monnaies_des_ventes`). Les noms sont lus UNE fois pour la
+        # vente, au premier règlement, puis gardés sur cette instance de l'inline :
+        # Django crée une instance par requête, la mémoire ne dure donc qu'une page.
+        # « — » sans monnaie, ou pour une monnaie introuvable.
+        # / The currency name, same rule as the sales list and detail, read ONCE per
+        # sale for the whole inline (one inline instance per request); "—" otherwise.
         if reglement.asset is None:
             return "—"
-        return str(reglement.asset)
+        noms_des_monnaies_par_vente = getattr(self, "noms_des_monnaies_par_vente", None)
+        if noms_des_monnaies_par_vente is None:
+            noms_des_monnaies_par_vente = {}
+            self.noms_des_monnaies_par_vente = noms_des_monnaies_par_vente
+        if reglement.vente_id not in noms_des_monnaies_par_vente:
+            noms_des_monnaies_par_vente[reglement.vente_id] = noms_des_monnaies_des_ventes(
+                [reglement.vente]
+            )
+        nom_par_uuid_de_monnaie = noms_des_monnaies_par_vente[reglement.vente_id]
+        return nom_par_uuid_de_monnaie.get(str(reglement.asset), "—")
 
     @display(description=_("Montant"))
     def montant_affiche(self, reglement):
@@ -3051,8 +2796,45 @@ class ReglementsDeLaVenteInline(TabularInline):
         return False
 
 
+def _articles_des_ventes_pour_l_export(ventes):
+    """
+    Les articles (`LigneArticle`) des ventes données, pour l'export tableur de la liste
+    des ventes : la liste filtrée, ou la sélection cochée. Les objets lus par chaque
+    colonne de l'export (`LigneArticleExportResource`) sont préchargés : exporter
+    1 000 articles ne fait pas 1 000 requêtes.
+    / The items of the given sales, for the sales list export (filtered list or
+    ticked selection), with everything the export columns read prefetched.
+
+    LOCALISATION : Administration/admin_tenant.py (lu par VenteAdmin.get_data_for_export)
+
+    :param ventes: un queryset de `Vente`
+    :return: un queryset de `LigneArticle`, le plus récent d'abord
+    """
+    cles_des_ventes = ventes.values("pk")
+    return (
+        LigneArticle.objects.filter(vente__in=cles_des_ventes)
+        .select_related(
+            "pricesold__productsold",
+            "pricesold__productsold__product",
+            "pricesold__productsold__event",
+            "pricesold__price",
+            "reservation__user_commande",
+            "paiement_stripe",
+            "paiement_stripe__user",
+            "membership",
+            "membership__user",
+            "vente",
+        )
+        .prefetch_related(
+            "vente__reglements",
+            "vente__ventes_derivees__reglements",
+        )
+        .order_by("-datetime")
+    )
+
+
 @admin.register(Vente, site=staff_admin_site)
-class VenteAdmin(ModelAdmin):
+class VenteAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAdmin):
     """
     La liste et la fiche des ventes du lieu, en lecture seule.
     / The venue's sales list and detail page, read-only.
@@ -3073,13 +2855,35 @@ class VenteAdmin(ModelAdmin):
       seul article ;
     - « Rejouer l'encaissement » (`rejouer_encaissement`) : une vente en ligne restée
       en attente alors que le client a payé.
+    EXPORT TABLEUR (bouton « Exporter » de la liste, ou action sur la sélection) : un
+    fichier des ARTICLES des ventes, une ligne par article, mêmes colonnes que l'ancien
+    export des lignes (`LigneArticleExportResource`). CSV et TSV avec BOM pour Excel
+    (`ExportCsvLisibleParExcelMixin`, placé AVANT `ExportActionModelAdmin`).
     / List with filters and search; detail with items, payments, links and integrity;
-    three detail actions, shown only when they make sense.
+    three detail actions, shown only when they make sense; spreadsheet export of the
+    sales' items.
     """
 
     compressed_fields = True
     warn_unsaved_form = True
     list_filter_submit = True
+
+    # L'export porte sur les articles des ventes, pas sur les ventes : la ressource
+    # est celle des lignes, et `get_data_for_export` change le queryset.
+    # / The export is about the sales' items: the line resource, queryset swapped.
+    resource_classes = [LigneArticleExportResource]
+    export_form_class = ExportForm
+    # Pas de bouton d'export sur la fiche : elle est en lecture seule, et l'export se
+    # fait depuis la liste.
+    # / No export button on the read-only detail page: export from the list.
+    show_change_form_export = False
+
+    def get_data_for_export(self, request, queryset, **kwargs):
+        # La liste (filtrée) ou la sélection donne des VENTES ; le fichier liste leurs
+        # ARTICLES (`_articles_des_ventes_pour_l_export`).
+        # / The list or selection gives SALES; the file lists their ITEMS.
+        articles_des_ventes = _articles_des_ventes_pour_l_export(queryset)
+        return super().get_data_for_export(request, articles_des_ventes, **kwargs)
 
     list_display = [
         "numero_affiche",
@@ -3323,28 +3127,31 @@ class VenteAdmin(ModelAdmin):
             badges_des_moyens,
         )
 
-    @display(
-        description=_("Nature"),
-        label={
+    @display(description=_("Nature"))
+    def nature_affichee(self, vente):
+        # Le badge est rendu en HTML (`_badge_unfold`) : il s'affiche dans la liste
+        # ET sur la fiche (en lecture seule).
+        # / The badge is rendered as HTML: shown in the list AND on the detail page.
+        couleurs_par_nature = {
             Vente.Nature.VENTE: "success",
             Vente.Nature.AVOIR: "warning",
             Vente.Nature.CORRECTION: "info",
             Vente.Nature.VIDAGE_CARTE: "info",
-        },
-    )
-    def nature_affichee(self, vente):
-        return vente.nature, badge_de_la_nature_d_une_vente(vente.nature)
+        }
+        couleur_du_badge = couleurs_par_nature.get(vente.nature, "info")
+        return _badge_unfold(couleur_du_badge, badge_de_la_nature_d_une_vente(vente.nature))
 
-    @display(
-        description=_("Statut"),
-        label={
+    @display(description=_("Statut"))
+    def statut_affiche(self, vente):
+        # Même badge HTML que la nature, dans la liste et sur la fiche.
+        # / Same HTML badge as the nature, in the list and on the detail page.
+        couleurs_par_statut = {
             Vente.Statut.REGLEE: "success",
             Vente.Statut.EN_ATTENTE: "warning",
             Vente.Statut.ANNULEE: "danger",
-        },
-    )
-    def statut_affiche(self, vente):
-        return vente.statut, vente.get_statut_display()
+        }
+        couleur_du_badge = couleurs_par_statut.get(vente.statut, "info")
+        return _badge_unfold(couleur_du_badge, vente.get_statut_display())
 
     @display(description=_("Vente liée"))
     def vente_liee_affichee(self, vente):
@@ -3419,8 +3226,8 @@ class VenteAdmin(ModelAdmin):
         / "Full credit note": everything left to give back. GET = screen, POST = write.
 
         LOCALISATION : Administration/admin_tenant.py
-        Gabarit : Administration/templates/admin/lignearticle/emettre_avoir.html (le
-        même écran que l'avoir d'une ligne, récapitulatif de la vente).
+        Gabarit : Administration/templates/admin/vente/avoir_total.html
+        (récapitulatif de la vente et de ce qui sera rendu).
 
         REFUS (GET et POST, message d'erreur, retour à la fiche) : nature autre que
         VENTE, vente pas réglée, vente qui n'est pas en euros, vente avec un écart
@@ -3508,7 +3315,7 @@ class VenteAdmin(ModelAdmin):
             }
             return render(
                 request,
-                "admin/lignearticle/emettre_avoir.html",
+                "admin/vente/avoir_total.html",
                 contexte_de_l_ecran,
             )
 
@@ -3666,7 +3473,12 @@ class VenteAdmin(ModelAdmin):
                 quantite_figee=quantite_figee,
             )
         else:
-            valeurs_initiales = {"quantite": ligne_choisie.quantite_restante}
+            # Le champ propose le reste arrondi (lisible) ; renvoyé tel quel, il vaut
+            # tout le reste exact (voir plus bas).
+            # / The field offers the rounded remainder; posted back, it means it all.
+            valeurs_initiales = {
+                "quantite": _quantite_restante_proposee_dans_le_champ(ligne_choisie)
+            }
             moyen_d_origine = moyen_d_origine_de_la_ligne(ligne_choisie)
             if moyen_d_origine in MOYENS_DU_CHAMP_REMBOURSE_PAR:
                 valeurs_initiales["moyen_rembourse"] = moyen_d_origine
@@ -3697,6 +3509,17 @@ class VenteAdmin(ModelAdmin):
             )
 
         quantite_rendue = formulaire.cleaned_data["quantite"]
+        # La valeur proposée par le champ est le reste ARRONDI pour la lecture
+        # (`_quantite_restante_proposee_dans_le_champ`). Renvoyée telle quelle, elle
+        # veut dire « tout le reste » : on rend alors le reste exact (1,571429 et pas
+        # 1,571). Sans cette règle, le service refuserait une partie non entière.
+        # / The offered value is the rounded remainder; posted back unchanged, it
+        # means "all of it": the exact remainder is given back.
+        quantite_proposee_dans_le_champ = _quantite_restante_proposee_dans_le_champ(
+            ligne_choisie
+        )
+        if quantite_rendue == quantite_proposee_dans_le_champ:
+            quantite_rendue = ligne_choisie.quantite_restante
         if champ_rembourse_par_demande:
             moyen_choisi = formulaire.cleaned_data["moyen_rembourse"]
         else:
