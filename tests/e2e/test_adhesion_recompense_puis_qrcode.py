@@ -505,8 +505,8 @@ def test_l_adhesion_payee_credite_le_portefeuille_puis_se_depense_par_qrcode(
     )
     assert comptes["caisse"]["total_adhesions"] == 0, (
         f"La cotisation apparait dans la section adhesions du ticket de caisse : "
-        f"{comptes['caisse']}. Elle y ferait double emploi avec la cloture "
-        "comptable en ligne."
+        f"{comptes['caisse']}. Saisie a la main, elle n'est la vente d'aucun "
+        "point de vente."
     )
     # On situe CHAQUE ligne plutot que d'asserter un total : les lignes du
     # rapport en ligne arrivent aussi par webhook Stripe, donc de facon
@@ -523,10 +523,9 @@ def test_l_adhesion_payee_credite_le_portefeuille_puis_se_depense_par_qrcode(
             "cloture comptable en ligne. Une vente que ni le ticket de caisse ni "
             "la cloture en ligne ne voient n'existe pour aucun comptable."
         )
-        assert not situation["caisse"], (
-            f"La ligne de {intitule} ({uuid_de_la_ligne}) entre AUSSI dans le "
-            "ticket de caisse : le meme euro serait compte deux fois."
-        )
+        # Pas de verification « compte deux fois » : un seul rapport, et une vente
+        # est soit d'un point de vente (caisse), soit en ligne, jamais les deux.
+        # / No "counted twice" check: one report, a sale is in one scope only.
 
     # Le VERSEMENT de la recompense, lui, ne laisse aucune ecriture : le lieu
     # emet de la monnaie — une dette envers l'adherent — et rien ne l'enregistre

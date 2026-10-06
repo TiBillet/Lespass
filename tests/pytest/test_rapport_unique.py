@@ -129,6 +129,13 @@ signed raw sums of integer fields.
                     {nom (email, ou « Sans opérateur »), nombre_de_ventes,
                      chiffre_affaires_ttc_en_centimes, argent_en_centimes}}
 
+    Deux lectures hors du Z, par périmètre (lues par les fixtures E2E) :
+    totaux_caisse_et_en_ligne()
+        {"caisse" (ventes d'un point de vente) | "en_ligne" (les autres):
+         {reglements_en_centimes (argent + cashless, ni offert ni points),
+          recharges_encaissees_en_centimes, adhesions_en_centimes}}
+    perimetre_de_l_article(uuid) → "caisse", "en_ligne" ou None (pas vu)
+
 D'OÙ VIENNENT LES VALEURS ATTENDUES
 Les valeurs de la fiche F §6 quand elle en donne ; sinon un calcul à la main, écrit en
 commentaire au-dessus de l'assertion, avec la seule formule d'argent du projet
@@ -4238,6 +4245,162 @@ class TestRapportDesVentes(FastTenantTestCase):
         assert somme_des_ht == chiffre_affaires["total_ht_en_centimes"] == 7322
 
     # ------------------------------------------------------------------
+    # Les deux périmètres : caisse et en ligne (lus par les fixtures E2E)
+    # / The two scopes: register and online (read by the E2E fixtures)
+    # ------------------------------------------------------------------
+
+    def _adhesion_a_vendre(self, prix_en_euros):
+        """
+        Une adhésion active et le tarif vendu de son article.
+        / An active membership and the sold price of its item.
+
+        :return: (adhésion de l'adhérente, tarif vendu)
+        """
+        adhesion = creer_adhesion(prix=prix_en_euros)
+        adhesion_de_l_adherente = creer_une_adhesion_active(
+            creer_utilisateur(), adhesion
+        )
+        adhesion_vendue = ProductSold.objects.create(product=adhesion.produit)
+        tarif_vendu_de_l_adhesion = PriceSold.objects.create(
+            productsold=adhesion_vendue, price=adhesion.tarif, prix=adhesion.tarif.prix
+        )
+        return adhesion_de_l_adherente, tarif_vendu_de_l_adhesion
+
+    def test_totaux_caisse_et_en_ligne_separe_les_ventes_par_point_de_vente(self):
+        """
+        `totaux_caisse_et_en_ligne` range chaque vente dans UN périmètre, par son point
+        de vente :
+        - au bar (point de vente) : une adhésion à 20,00 € et une recharge de 10,00 €,
+          payées 30,00 € en espèces ;
+        - en ligne (sans point de vente) : une adhésion à 15,00 € et une recharge de
+          5,00 €, payées 20,00 € par Stripe ; et une bière offerte en totalité
+          (règlement FREE 500), qui n'est pas de l'argent.
+        Caisse : règlements 3000, recharges 1000, adhésions 2000.
+        En ligne : règlements 2000 (sans l'offert), recharges 500, adhésions 1500.
+        / Each sale lands in ONE scope, by its point of sale; the gift is not money.
+        """
+        bar = self._point_de_vente("Bar perimetres")
+        tarif_de_la_recharge = self._tarif_de_recharge("10.00")
+        tarif_de_la_biere = creer_tarif_vendu(nom="Biere", prix_en_euros="5.00")
+        adhesion_du_bar, tarif_vendu_adhesion_du_bar = self._adhesion_a_vendre("20.00")
+        adhesion_en_ligne, tarif_vendu_adhesion_en_ligne = self._adhesion_a_vendre(
+            "15.00"
+        )
+
+        vente_au_bar = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LABOUTIK,
+            point_de_vente=bar,
+            articles=[
+                {
+                    "pricesold": tarif_vendu_adhesion_du_bar,
+                    "quantite": Decimal("1"),
+                    "prix_unitaire": 2000,
+                    "taux_tva": Decimal("0"),
+                    "membership": adhesion_du_bar,
+                },
+                {
+                    "pricesold": tarif_de_la_recharge,
+                    "quantite": Decimal("1"),
+                    "prix_unitaire": 1000,
+                    "taux_tva": Decimal("0"),
+                },
+            ],
+            reglements=[{"moyen": PaymentMethod.CASH, "montant": 3000}],
+        )
+        verifier_egalites(vente_au_bar)
+
+        vente_en_ligne = fabriquer_vente_encaissee(
+            origine=SaleOrigin.LESPASS,
+            articles=[
+                {
+                    "pricesold": tarif_vendu_adhesion_en_ligne,
+                    "quantite": Decimal("1"),
+                    "prix_unitaire": 1500,
+                    "taux_tva": Decimal("0"),
+                    "membership": adhesion_en_ligne,
+                },
+                {
+                    "pricesold": tarif_de_la_recharge,
+                    "quantite": Decimal("1"),
+                    "prix_unitaire": 500,
+                    "taux_tva": Decimal("0"),
+                },
+            ],
+            reglements=[{"moyen": PaymentMethod.STRIPE_NOFED, "montant": 2000}],
+        )
+        verifier_egalites(vente_en_ligne)
+
+        biere_offerte = fabriquer_vente_encaissee(
+            origine=SaleOrigin.ADMIN,
+            articles=[
+                {
+                    "pricesold": tarif_de_la_biere,
+                    "quantite": Decimal("1"),
+                    "prix_unitaire": 500,
+                    "taux_tva": Decimal("20"),
+                    "offert_en_totalite": True,
+                },
+            ],
+        )
+        verifier_egalites(biere_offerte)
+
+        totaux = self._rapport().totaux_caisse_et_en_ligne()
+
+        assert totaux == {
+            "caisse": {
+                "reglements_en_centimes": 3000,
+                "recharges_encaissees_en_centimes": 1000,
+                "adhesions_en_centimes": 2000,
+            },
+            "en_ligne": {
+                "reglements_en_centimes": 2000,
+                "recharges_encaissees_en_centimes": 500,
+                "adhesions_en_centimes": 1500,
+            },
+        }
+
+    def test_perimetre_de_l_article_caisse_en_ligne_ou_nulle_part(self):
+        """
+        `perimetre_de_l_article` : « caisse » pour l'article d'une vente réglée d'un
+        point de vente, « en_ligne » sans point de vente, None pour un article que le
+        rapport ne voit pas (vente en attente, ou vente réglée hors de la période).
+        / "caisse", "en_ligne", or None for an item the report does not see.
+        """
+        bar = self._point_de_vente("Bar perimetre article")
+        vente_au_bar = self._vendre_un_jus_en_especes(point_de_vente=bar)
+        vente_sans_point_de_vente = self._vendre_un_jus_en_especes()
+        vente_en_attente = ouvrir_vente(
+            origine=SaleOrigin.LABOUTIK, nature=Vente.Nature.VENTE
+        )
+        article_en_attente = ajouter_article(
+            vente_en_attente,
+            pricesold=self.tarif_du_jus,
+            quantite=Decimal("1"),
+            prix_unitaire=350,
+            taux_tva=Decimal("20"),
+        )
+        article_au_bar = LigneArticle.objects.get(vente=vente_au_bar)
+        article_sans_point_de_vente = LigneArticle.objects.get(
+            vente=vente_sans_point_de_vente
+        )
+
+        rapport = self._rapport()
+        assert rapport.perimetre_de_l_article(article_au_bar.uuid) == "caisse"
+        assert (
+            rapport.perimetre_de_l_article(str(article_sans_point_de_vente.uuid))
+            == "en_ligne"
+        )
+        assert rapport.perimetre_de_l_article(article_en_attente.uuid) is None
+
+        rapport_d_avant_les_ventes = self._rapport(
+            debut=self.debut_de_la_periode - timedelta(hours=2),
+            fin=self.debut_de_la_periode,
+        )
+        assert rapport_d_avant_les_ventes.perimetre_de_l_article(
+            article_au_bar.uuid
+        ) is None
+
+    # ------------------------------------------------------------------
     # 11 — Intégrité
     # / 11 — Integrity
     # ------------------------------------------------------------------
@@ -4361,11 +4524,24 @@ class TestRapportDesVentes(FastTenantTestCase):
         """
         Supprime une vente encaissée, ses articles et ses règlements, comme le ferait
         une écriture à la main dans la base (aucun service).
+        Par SQL brut : l'ORM refuse de supprimer l'article d'une vente réglée (garde
+        `pre_delete` de `LigneArticle`), et seule une écriture à la main y échappe.
         / Deletes a settled sale with its items and payments, like a hand-made write.
+        Raw SQL: the ORM refuses to delete an item of a settled sale.
         """
-        LigneArticle.objects.filter(vente=vente).delete()
-        Reglement.objects.filter(vente=vente).delete()
-        Vente.objects.filter(pk=vente.pk).delete()
+        with connection.cursor() as curseur:
+            curseur.execute(
+                'DELETE FROM "BaseBillet_lignearticle" WHERE vente_id = %s',
+                [vente.pk],
+            )
+            curseur.execute(
+                'DELETE FROM "BaseBillet_reglement" WHERE vente_id = %s',
+                [vente.pk],
+            )
+            curseur.execute(
+                'DELETE FROM "BaseBillet_vente" WHERE uuid = %s',
+                [vente.pk],
+            )
 
     def test_verifier_chaine_ventes_vente_supprimee_juste_avant_la_plage(self):
         """
@@ -5143,3 +5319,20 @@ class TestRapportDesVentes(FastTenantTestCase):
                     )
 
         assert textes_interdits_trouves == []
+
+    def test_les_fixtures_e2e_ne_lisent_que_des_methodes_publiques_du_rapport(self):
+        """
+        Les fixtures E2E `rapports_comptables` et `rapports_qui_voient_la_ligne`
+        (tests/e2e/conftest.py) lisent le rapport par ses méthodes PUBLIQUES
+        (`section_caisse_especes`, `totaux_caisse_et_en_ligne`,
+        `perimetre_de_l_article`), jamais par une méthode privée (`rapport._…`) : une
+        méthode privée change sans prévenir, et l'E2E mesurerait autre chose.
+        / The E2E fixtures read the report through PUBLIC methods only, never a
+        private `rapport._…` one.
+        """
+        conftest_e2e = Path(__file__).resolve().parent.parent / "e2e" / "conftest.py"
+        texte_du_conftest = conftest_e2e.read_text(encoding="utf-8")
+
+        assert "rapport.totaux_caisse_et_en_ligne()" in texte_du_conftest
+        assert "rapport.perimetre_de_l_article(" in texte_du_conftest
+        assert "rapport._" not in texte_du_conftest

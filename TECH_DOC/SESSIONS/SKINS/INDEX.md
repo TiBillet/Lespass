@@ -26,6 +26,10 @@ Le comportement (paiement, réservation, filtres, modals) reste dans BaseBillet.
 - **CHANTIER-04-ADHESIONS.md** — spec du chantier 04 (adhésions →
   `pages/<skin>/vues/`, tunnel HTMX → `commun/adhesion/`, embed).
   **Terminé le 2026-07-04.**
+- **CHANTIER-10-V2-BOUTONS-QRCODE-MON-ESPACE.md** — skin V2 : remettre « Initier un
+  paiement » (module « Mes responsabilités ») et « Scanner un QR code » (sous « Ma carte »)
+  dans `/my_account/`, retirés de balance V2 ; corrige 4 défauts voisins (D1-D4).
+  **Spec à valider (2026-10-06).**
 - **CHANTIER-NN-*.md** — (à venir) specs actionables des chantiers suivants.
 
 ## Décisions verrouillées (cf. PLAN §8bis + ETAT-REPRISE P1-P5)

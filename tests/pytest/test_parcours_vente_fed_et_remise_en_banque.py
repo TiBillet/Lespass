@@ -62,6 +62,7 @@ from django_tenants.utils import tenant_context
 
 from AuthBillet.models import TibilletUser, Wallet
 from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+from BaseBillet.models_vente import Vente
 from Customers.models import Client as TenantClient
 from fedow_public.models import AssetFedowPublic
 
@@ -264,10 +265,12 @@ def encaisseur(tenant):
         )
         utilisateur.client_admin.add(tenant)
         utilisateur.initiate_payment.add(tenant)
+    # Aucun nettoyage : le fichier est en `django_db`, la transaction du test est
+    # annulee a la fin, fixtures comprises. Les ventes du parcours sont REGLEES :
+    # la garde `pre_delete` de `LigneArticle` refuse de supprimer leurs articles.
+    # / No cleanup: the django_db transaction is rolled back, fixtures included.
+    # The journey's sales are SETTLED: the pre_delete guard refuses to delete them.
     yield utilisateur
-    with tenant_context(tenant):
-        LigneArticle.objects.filter(metadata__icontains=adresse).delete()
-        utilisateur.delete()
 
 
 @pytest.fixture
@@ -281,27 +284,24 @@ def adherent(tenant):
         )
         utilisateur.wallet = Wallet.objects.create(name=f'{PREFIXE_DE_TEST} {adresse}')
         utilisateur.save()
+    # Aucun nettoyage : transaction annulee (`django_db`), voir `encaisseur`.
+    # / No cleanup: rolled back (django_db), see `encaisseur`.
     yield utilisateur
-    with tenant_context(tenant):
-        portefeuille = utilisateur.wallet
-        LigneArticle.objects.filter(wallet=portefeuille).delete()
-        utilisateur.delete()
-        try:
-            portefeuille.delete()
-        except Exception:
-            pass
 
 
 @pytest.fixture
 def nettoyer_les_ventes(tenant):
-    """Retire les ventes du parcours, avant et apres.
-    / Removes this journey's sales, before and after."""
+    """Retire les demandes QR code / NFC en attente, avant et apres.
+    Jamais l'article d'une vente REGLEE : il ne se supprime pas (garde `pre_delete`
+    de `LigneArticle`). Le test retrouve sa vente par l'uuid de sa demande.
+    / Removes pending QR code / NFC requests, before and after. Never an item of a
+    SETTLED sale (pre_delete guard). The test finds its sale by its request uuid."""
     def _purger():
         with tenant_context(tenant):
             LigneArticle.objects.filter(
                 sale_origin__in=[SaleOrigin.QRCODE_MA, SaleOrigin.NFC_MA],
                 payment_method__in=[PaymentMethod.QRCODE_MA, PaymentMethod.STRIPE_FED],
-            ).delete()
+            ).exclude(vente__statut=Vente.Statut.REGLEE).delete()
 
     _purger()
     yield
@@ -384,7 +384,10 @@ def test_une_vente_federee_puis_sa_remise_en_banque(
         # La vente est enregistree en monnaie federee.
         # / The sale is recorded in federated currency.
         with tenant_context(tenant):
+            # La vente garde l'uuid de la demande (BaseBillet/views.py, valid_payment).
+            # / The sale keeps the request uuid.
             vente = LigneArticle.objects.filter(
+                uuid=ligne_en_attente.uuid,
                 sale_origin=SaleOrigin.QRCODE_MA,
                 status=LigneArticle.VALID,
             ).first()

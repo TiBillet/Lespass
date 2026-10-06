@@ -1202,6 +1202,94 @@ class RapportDesVentes:
         return par_point_de_vente
 
     # ------------------------------------------------------------------
+    # Les deux périmètres : la caisse et le reste (en ligne)
+    # / The two scopes: the register and the rest (online)
+    # ------------------------------------------------------------------
+
+    def totaux_caisse_et_en_ligne(self):
+        """
+        Trois totaux de la période, séparés en deux périmètres :
+        - « caisse » : les ventes faites SUR UN POINT DE VENTE (`Vente.point_de_vente`
+          renseigné), le périmètre du tiroir (`section_caisse_especes`) ;
+        - « en_ligne » : toutes les autres ventes réglées (en ligne, admin, QR code,
+          API). Une vente n'est jamais dans les deux.
+        / Three totals of the period, split into two scopes: sales made at a point of
+        sale ("caisse") and every other settled sale ("en_ligne").
+
+        LES TROIS TOTAUX (en centimes, signés comme tout le rapport) :
+        - `reglements_en_centimes` : l'argent et le cashless des règlements des natures
+          VENTE, AVOIR et CORRECTION, ni offert ni points (les blocs argent et cashless
+          de `section_reglements`) ;
+        - `recharges_encaissees_en_centimes` : le net des recharges encaissées (le
+          total de `section_annexe`, recharges et cartes) ;
+        - `adhesions_en_centimes` : le net des articles d'adhésion du chiffre
+          d'affaires (les adhésions de `section_detail`).
+        / Payments (money + cashless), collected top-ups, membership items.
+
+        LU PAR : les fixtures E2E `rapports_comptables` (tests/e2e/conftest.py), qui
+        vérifient au centime ce qu'un parcours a fait entrer dans chaque périmètre.
+        / Read by the E2E fixtures, which check each scope to the cent.
+
+        :return: {"caisse": {...}, "en_ligne": {...}}, chaque périmètre avec les trois
+            totaux ci-dessus
+        """
+        totaux_par_perimetre = {}
+        perimetres_et_filtre_de_la_vente = [
+            ("caisse", {"vente__point_de_vente__isnull": False}),
+            ("en_ligne", {"vente__point_de_vente__isnull": True}),
+        ]
+        for nom_du_perimetre, filtre_de_la_vente in perimetres_et_filtre_de_la_vente:
+            reglements = (
+                self._reglements_des_ventes_en_euros()
+                .filter(vente__nature__in=NATURES_DES_REGLEMENTS, **filtre_de_la_vente)
+                .exclude(moyen__in=MOYENS_HORS_ARGENT)
+                .aggregate(total=Coalesce(Sum("montant"), 0))["total"]
+            )
+            recharges_encaissees = (
+                self._articles_de_recharge_encaissees()
+                .filter(**filtre_de_la_vente)
+                .aggregate(total=Coalesce(Sum("total_ttc"), 0))["total"]
+            )
+            adhesions = (
+                self._articles_du_chiffre_d_affaires()
+                .filter(membership__isnull=False, **filtre_de_la_vente)
+                .aggregate(total=Coalesce(Sum("total_ttc"), 0))["total"]
+            )
+            totaux_par_perimetre[nom_du_perimetre] = {
+                "reglements_en_centimes": reglements,
+                "recharges_encaissees_en_centimes": recharges_encaissees,
+                "adhesions_en_centimes": adhesions,
+            }
+        return totaux_par_perimetre
+
+    def perimetre_de_l_article(self, uuid_de_l_article):
+        """
+        Le périmètre où le rapport voit un article : « caisse » si sa vente réglée de
+        la période a un point de vente, « en_ligne » sinon, None si le rapport ne le
+        voit pas (vente en attente, annulée, hors période, ou article sans vente).
+        Un article est vu PAR SA VENTE, jamais par sa propre date.
+        / The scope where the report sees an item: "caisse", "en_ligne", or None.
+
+        LU PAR : la fixture E2E `rapports_qui_voient_la_ligne` (tests/e2e/conftest.py).
+        / Read by the E2E fixture rapports_qui_voient_la_ligne.
+
+        :param uuid_de_l_article: uuid de la `LigneArticle` (texte ou UUID)
+        :return: "caisse", "en_ligne" ou None
+        """
+        article_vu = (
+            LigneArticle.objects.filter(
+                uuid=uuid_de_l_article, vente__in=self._ventes_reglees()
+            )
+            .values("vente__point_de_vente")
+            .first()
+        )
+        if article_vu is None:
+            return None
+        if article_vu["vente__point_de_vente"] is None:
+            return "en_ligne"
+        return "caisse"
+
+    # ------------------------------------------------------------------
     # Section 3 — Règlements
     # / Section 3 — Payments
     # ------------------------------------------------------------------

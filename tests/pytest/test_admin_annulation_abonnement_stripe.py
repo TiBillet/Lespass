@@ -69,17 +69,13 @@ def adhesion_en_prelevement(tenant):
             deadline=timezone.localtime() + timedelta(days=30),
         )
 
+        # Aucun nettoyage : le fichier est en `django_db` (pytestmark), la transaction
+        # du test est annulee a la fin, fixture comprise. Supprimer a la main
+        # buterait sur les articles d'une vente reglee (l'avoir d'annulation), que
+        # la garde `pre_delete` de `LigneArticle` refuse de supprimer.
+        # / No cleanup: the test transaction is rolled back, fixture included.
+        # Deleting by hand would hit the settled credit note's items (pre_delete guard).
         yield tenant, adhesion, adherent
-
-        Membership.objects.filter(user=adherent).delete()
-        adherent.delete()
-        tarif.hard_delete()
-        try:
-            produit.delete()
-        except Exception:
-            # django-stdimage plante dans son post_delete sans image
-            # (cf. tests/PIEGES.md 10.1) : sans consequence, nom unique.
-            pass
 
 
 def _patcher_stripe():
@@ -310,44 +306,33 @@ def test_l_avoir_d_annulation_porte_l_uuid_de_la_vente_d_origine(
         )
 
     patch_modify, patch_connect = _patcher_stripe()
-    try:
-        with patch_modify, patch_connect, patch("BaseBillet.signals.send_refund_to_laboutik.delay"):
-            # « Annuler avec avoir » sur un paiement en especes : le formulaire affiche
-            # « Rembourse par », obligatoire pour l'avoir. Sans lui, l'annulation est
-            # refusee et le formulaire revient avec l'erreur.
-            # / Cash payment: "Refunded by" is required for the credit note.
-            reponse = admin_client.post(
-                f"/memberships/{adhesion.pk}/cancel/",
-                {"with_credit_note": "1", "moyen_rembourse": PaymentMethod.CASH},
-            )
+    with patch_modify, patch_connect, patch("BaseBillet.signals.send_refund_to_laboutik.delay"):
+        # « Annuler avec avoir » sur un paiement en especes : le formulaire affiche
+        # « Rembourse par », obligatoire pour l'avoir. Sans lui, l'annulation est
+        # refusee et le formulaire revient avec l'erreur.
+        # / Cash payment: "Refunded by" is required for the credit note.
+        reponse = admin_client.post(
+            f"/memberships/{adhesion.pk}/cancel/",
+            {"with_credit_note": "1", "moyen_rembourse": PaymentMethod.CASH},
+        )
 
-        # 204 + HX-Redirect : l'annulation est faite. Un 200 = formulaire en erreur.
-        # / 204 + HX-Redirect: done. A 200 means the form came back with an error.
-        assert reponse.status_code == 204, reponse.content.decode()[-1500:]
+    # 204 + HX-Redirect : l'annulation est faite. Un 200 = formulaire en erreur.
+    # / 204 + HX-Redirect: done. A 200 means the form came back with an error.
+    assert reponse.status_code == 204, reponse.content.decode()[-1500:]
 
-        with tenant_context(tenant):
-            # L'avoir est un article de quantite negative, dans une vente AVOIR reglee,
-            # qui cite la ligne d'origine (`credit_note_for`).
-            # / The credit note is a negative item of a settled AVOIR sale.
-            avoir = LigneArticle.objects.get(credit_note_for=ligne_de_vente)
-            assert avoir.status == LigneArticle.CREDIT_NOTE
-            assert avoir.qty == -ligne_de_vente.qty
-            assert avoir.vente is not None
-            assert avoir.vente.nature == Vente.Nature.AVOIR
-            assert avoir.vente.statut == Vente.Statut.REGLEE
-            assert avoir.metadata.get("original_lignearticle_uuid") == str(ligne_de_vente.uuid), (
-                f"L'avoir doit porter l'uuid de la vente d'origine (metadata : {avoir.metadata})."
-            )
-    finally:
-        # Les avoirs d'abord : credit_note_for est en PROTECT.
-        # / Credit notes first: credit_note_for is PROTECT.
-        # Puis le PriceSold, sinon la fixture ne peut plus supprimer le tarif.
-        # / Then the PriceSold, otherwise the fixture cannot delete the price.
-        with tenant_context(tenant):
-            LigneArticle.objects.filter(credit_note_for=ligne_de_vente).delete()
-            LigneArticle.objects.filter(pk=ligne_de_vente.pk).delete()
-            prix_vendu = ligne_de_vente.pricesold
-            produit_vendu = prix_vendu.productsold
-            prix_vendu.delete()
-            if not produit_vendu.pricesold_set.exists():
-                produit_vendu.delete()
+    with tenant_context(tenant):
+        # L'avoir est un article de quantite negative, dans une vente AVOIR reglee,
+        # qui cite la ligne d'origine (`credit_note_for`).
+        # / The credit note is a negative item of a settled AVOIR sale.
+        avoir = LigneArticle.objects.get(credit_note_for=ligne_de_vente)
+        assert avoir.status == LigneArticle.CREDIT_NOTE
+        assert avoir.qty == -ligne_de_vente.qty
+        assert avoir.vente is not None
+        assert avoir.vente.nature == Vente.Nature.AVOIR
+        assert avoir.vente.statut == Vente.Statut.REGLEE
+        assert avoir.metadata.get("original_lignearticle_uuid") == str(ligne_de_vente.uuid), (
+            f"L'avoir doit porter l'uuid de la vente d'origine (metadata : {avoir.metadata})."
+        )
+    # Aucun nettoyage : la transaction du test est annulee (`django_db`). L'avoir est
+    # l'article d'une vente reglee : la garde `pre_delete` refuse de le supprimer.
+    # / No cleanup: rolled back. The credit note belongs to a settled sale.

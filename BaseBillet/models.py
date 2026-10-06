@@ -23,7 +23,8 @@ from django.db.models import JSONField, SET_NULL
 # Create your models here.
 from django.db.models import F, Q
 from django.db.models.query import QuerySet
-from django.db.models.signals import post_save
+from django.db.models.deletion import ProtectedError
+from django.db.models.signals import post_save, pre_delete
 from django.db.transaction import atomic
 from django.dispatch import receiver
 from django.urls import reverse
@@ -4555,14 +4556,6 @@ class LigneArticle(models.Model):
     def __str__(self):
         return self.uuid_8()
 
-    def get_inline_title(self):
-        """
-        Le titre d'un article dans les inlines de l'admin (Unfold lit
-        `get_inline_title` à la place de `str()`) : le nom du produit vendu.
-        / The item title in admin inlines: the sold product name.
-        """
-        return self.pricesold.productsold.product.name
-
     # -- TVA auto-fill on creation only --
     def _compute_default_vat(self) -> Decimal:
         """
@@ -4601,8 +4594,11 @@ class LigneArticle(models.Model):
         # (`sended_to_laboutik`, `metadata`, liens `reservation` / `membership` /
         # `booking`) les écrivent encore après la vente.
         # `.update()` ne passe pas par `save()` : l'empreinte de la vente couvre ce cas.
+        # La suppression d'une ligne réglée est refusée par la garde `pre_delete`
+        # juste après cette classe (`refuser_la_suppression_d_un_article_d_une_vente_reglee`).
         # / Immutability guard: a line of a SETTLED sale refuses money changes. Status
         # and task fields stay free. .update() is covered by the sale fingerprint.
+        # Deleting a settled line is refused by the pre_delete guard after this class.
         ligne_deja_en_base = not self._state.adding
         if ligne_deja_en_base:
             # Import local : `models_vente` importe ce fichier à son chargement.
@@ -4772,6 +4768,62 @@ class LigneArticle(models.Model):
         if self.paiement_stripe and self.paiement_stripe.user:
             return self.paiement_stripe.user.email
         return None
+
+
+@receiver(pre_delete, sender=LigneArticle)
+def refuser_la_suppression_d_un_article_d_une_vente_reglee(sender, instance, **kwargs):
+    """
+    Garde de suppression : un article d'une vente RÉGLÉE ne se supprime jamais.
+    / Delete guard: an item of a SETTLED sale is never deleted.
+
+    LOCALISATION : BaseBillet/models.py (à côté de la garde d'immutabilité de
+    `LigneArticle.save()`, qui protège l'argent d'une ligne réglée).
+
+    POURQUOI : une vente réglée est scellée. Son total est égal à la somme de ses
+    articles et à la somme de ses règlements, et son empreinte LNE couvre ses articles.
+    Supprimer un article casse cette égalité, rend l'empreinte fausse et fausse les
+    rapports. Une erreur se corrige par un avoir, jamais en effaçant.
+    / WHY: a settled sale is sealed (totals, LNE fingerprint, reports). A mistake is
+    corrected by a credit note, never by deleting.
+
+    `LigneArticle.objects.filter(...).delete()` passe aussi par ici : dès qu'un
+    receveur `pre_delete` existe, Django n'efface plus en une seule requête, il envoie
+    `pre_delete` pour chaque ligne. La suppression en cascade (un `PriceSold` effacé)
+    aussi. Seul du SQL brut y échappe.
+    / Queryset deletes and cascades also call pre_delete for each row. Only raw SQL
+    escapes it.
+
+    Un article d'une vente EN ATTENTE ou ANNULÉE, ou sans vente, se supprime toujours.
+    On lit le statut EN BASE, pas celui de l'objet en mémoire.
+    / An item of a pending or cancelled sale, or without a sale, can still be deleted.
+    The status is read from the database.
+
+    On lève `ProtectedError`, l'erreur de Django pour une suppression interdite
+    (celle d'un `on_delete=PROTECT`) : le code qui gère déjà une suppression refusée
+    la reconnaît.
+    / Raises ProtectedError, Django's error for a forbidden delete.
+    """
+    article_sans_vente = instance.vente_id is None
+    if article_sans_vente:
+        return
+
+    # Import local : `models_vente` importe ce fichier à son chargement.
+    # / Local import: models_vente imports this file when it loads.
+    from BaseBillet.models_vente import Vente
+
+    vente_reglee = Vente.objects.filter(
+        pk=instance.vente_id, statut=Vente.Statut.REGLEE
+    ).first()
+    if vente_reglee is None:
+        return
+
+    raise ProtectedError(
+        f"L'article {instance.uuid} appartient à la vente réglée "
+        f"{vente_reglee.pk} : il ne peut pas être supprimé. "
+        f"Pour corriger une vente réglée, faire un avoir.",
+        {vente_reglee},
+    )
+
 
 class Membership(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)

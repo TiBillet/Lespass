@@ -1651,6 +1651,10 @@ class LigneArticleInline(TabularInline):
     # avoirs se font depuis la fiche « Vente ».
     # / No link: lines have no admin page any more; credit notes go through the sale.
     show_change_link = False
+    # Pas de titre au-dessus de chaque ligne (option Unfold `hide_title`) : les
+    # colonnes disent déjà tout ce qu'un titre répéterait.
+    # / No title above each row (Unfold `hide_title`): the columns already say it.
+    hide_title = True
     can_delete = False
     verbose_name = _("Ventes / Ligne comptables")
     verbose_name_plural = _("Ventes / Ligne comptables")
@@ -1674,11 +1678,7 @@ class LigneArticleInline(TabularInline):
         # / Each line's sale, its payments and its corrections' payments are
         # prefetched: no query per line.
         queryset = super().get_queryset(request)
-        # Le produit est lu par le titre de chaque ligne (`LigneArticle.get_inline_title`).
-        # / The product is read by each row title.
-        return queryset.select_related(
-            'vente', 'pricesold__productsold__product'
-        ).prefetch_related(
+        return queryset.select_related('vente').prefetch_related(
             'vente__reglements',
             'vente__ventes_derivees__reglements',
         )
@@ -2647,6 +2647,10 @@ class ArticlesDeLaVenteInline(TabularInline):
     extra = 0
     can_delete = False
     show_change_link = False
+    # Pas de titre au-dessus de chaque ligne (option Unfold `hide_title`) : les
+    # colonnes disent déjà tout ce qu'un titre répéterait.
+    # / No title above each row (Unfold `hide_title`): the columns already say it.
+    hide_title = True
     verbose_name = _("Article")
     verbose_name_plural = _("Articles")
     fields = (
@@ -2727,6 +2731,10 @@ class ReglementsDeLaVenteInline(TabularInline):
     extra = 0
     can_delete = False
     show_change_link = False
+    # Pas de titre au-dessus de chaque ligne (option Unfold `hide_title`) : les
+    # colonnes disent déjà tout ce qu'un titre répéterait.
+    # / No title above each row (Unfold `hide_title`): the columns already say it.
+    hide_title = True
     verbose_name = _("Règlement")
     verbose_name_plural = _("Règlements")
     fields = ("moyen_affiche", "monnaie", "montant_affiche", "reference_et_lien_stripe")

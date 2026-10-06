@@ -1493,30 +1493,31 @@ def test_validate_booking_accepts_valid_slot():
     from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
-        try:
-            cal      = _make_calendar('val_accepts_valid')
-            wop      = _make_weekly_opening('val_accepts_valid')
-            resource = _make_resource('val_accepts_valid', cal, wop,
-                                      capacity=1, horizon=28)
-            _add_opening_entry(wop, weekday=0,
-                               start_time=datetime.time(10, 0),
-                               slot_duration_minutes=60, slot_count=1)
+        # Aucun nettoyage : le test est en `django_db`, sa transaction est annulee a la
+        # fin. La reservation acceptee a une vente REGLEE : la garde `pre_delete` de
+        # `LigneArticle` refuse de supprimer ses articles (`_cleanup` echouerait).
+        # / No cleanup: the django_db transaction is rolled back. The accepted booking
+        # has a SETTLED sale whose items the pre_delete guard refuses to delete.
+        cal      = _make_calendar('val_accepts_valid')
+        wop      = _make_weekly_opening('val_accepts_valid')
+        resource = _make_resource('val_accepts_valid', cal, wop,
+                                  capacity=1, horizon=28)
+        _add_opening_entry(wop, weekday=0,
+                           start_time=datetime.time(10, 0),
+                           slot_duration_minutes=60, slot_count=1)
 
-            is_valid, result, _url_stripe = validate_new_booking(
-                resource=resource,
-                price=resource.product.prices.get(),
-                start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
-                slot_duration_minutes=60,
-                slot_count=1,
-                member=_get_test_user(),
-                reference_now=REFERENCE_NOW,
-            )
+        is_valid, result, _url_stripe = validate_new_booking(
+            resource=resource,
+            price=resource.product.prices.get(),
+            start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
+            slot_duration_minutes=60,
+            slot_count=1,
+            member=_get_test_user(),
+            reference_now=REFERENCE_NOW,
+        )
 
-            assert is_valid is True
-            assert result is not None
-
-        finally:
-            _cleanup()
+        assert is_valid is True
+        assert result is not None
 
 
 @pytest.mark.django_db
@@ -1656,30 +1657,31 @@ def test_validate_booking_slot_count_gt_1_all_slots_must_be_available():
     from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
-        try:
-            cal      = _make_calendar('val_multi_all_available')
-            wop      = _make_weekly_opening('val_multi_all_available')
-            resource = _make_resource('val_multi_all_available', cal, wop,
-                                      capacity=1, horizon=28)
-            _add_opening_entry(wop, weekday=0,
-                               start_time=datetime.time(10, 0),
-                               slot_duration_minutes=60, slot_count=3)
+        # Aucun nettoyage : le test est en `django_db`, sa transaction est annulee a la
+        # fin. La reservation acceptee a une vente REGLEE : la garde `pre_delete` de
+        # `LigneArticle` refuse de supprimer ses articles (`_cleanup` echouerait).
+        # / No cleanup: the django_db transaction is rolled back. The accepted booking
+        # has a SETTLED sale whose items the pre_delete guard refuses to delete.
+        cal      = _make_calendar('val_multi_all_available')
+        wop      = _make_weekly_opening('val_multi_all_available')
+        resource = _make_resource('val_multi_all_available', cal, wop,
+                                  capacity=1, horizon=28)
+        _add_opening_entry(wop, weekday=0,
+                           start_time=datetime.time(10, 0),
+                           slot_duration_minutes=60, slot_count=3)
 
-            is_valid, result, _url_stripe = validate_new_booking(
-                resource=resource,
-                price=resource.product.prices.get(),
-                start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
-                slot_duration_minutes=60,
-                slot_count=3,
-                member=_get_test_user(),
-                reference_now=REFERENCE_NOW,
-            )
+        is_valid, result, _url_stripe = validate_new_booking(
+            resource=resource,
+            price=resource.product.prices.get(),
+            start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
+            slot_duration_minutes=60,
+            slot_count=3,
+            member=_get_test_user(),
+            reference_now=REFERENCE_NOW,
+        )
 
-            assert is_valid is True
-            assert result is not None
-
-        finally:
-            _cleanup()
+        assert is_valid is True
+        assert result is not None
 
 
 @pytest.mark.django_db
@@ -1901,30 +1903,31 @@ def test_validate_booking_accepts_slot_bleeding_into_next_open_day():
     from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
-        try:
-            cal      = _make_calendar('val_bleed_open')
-            wop      = _make_weekly_opening('val_bleed_open')
-            resource = _make_resource('val_bleed_open', cal, wop,
-                                      capacity=1, horizon=28)
-            _add_opening_entry(wop, weekday=0,
-                               start_time=datetime.time(23, 0),
-                               slot_duration_minutes=120, slot_count=1)
+        # Aucun nettoyage : le test est en `django_db`, sa transaction est annulee a la
+        # fin. La reservation acceptee a une vente REGLEE : la garde `pre_delete` de
+        # `LigneArticle` refuse de supprimer ses articles (`_cleanup` echouerait).
+        # / No cleanup: the django_db transaction is rolled back. The accepted booking
+        # has a SETTLED sale whose items the pre_delete guard refuses to delete.
+        cal      = _make_calendar('val_bleed_open')
+        wop      = _make_weekly_opening('val_bleed_open')
+        resource = _make_resource('val_bleed_open', cal, wop,
+                                  capacity=1, horizon=28)
+        _add_opening_entry(wop, weekday=0,
+                           start_time=datetime.time(23, 0),
+                           slot_duration_minutes=120, slot_count=1)
 
-            is_valid, result, _url_stripe = validate_new_booking(
-                resource=resource,
-                price=resource.product.prices.get(),
-                start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(23, 0)),
-                slot_duration_minutes=120,
-                slot_count=1,
-                member=_get_test_user(),
-                reference_now=REFERENCE_NOW,
-            )
+        is_valid, result, _url_stripe = validate_new_booking(
+            resource=resource,
+            price=resource.product.prices.get(),
+            start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(23, 0)),
+            slot_duration_minutes=120,
+            slot_count=1,
+            member=_get_test_user(),
+            reference_now=REFERENCE_NOW,
+        )
 
-            assert is_valid is True
-            assert result is not None
-
-        finally:
-            _cleanup()
+        assert is_valid is True
+        assert result is not None
 
 
 @pytest.mark.django_db
@@ -1986,34 +1989,35 @@ def test_validate_booking_accepts_slot_starting_in_a_few_minutes():
     from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
-        try:
-            cal      = _make_calendar('val_near_future')
-            wop      = _make_weekly_opening('val_near_future')
-            resource = _make_resource('val_near_future', cal, wop,
-                                      capacity=1, horizon=28)
-            _add_opening_entry(wop, weekday=0,
-                               start_time=datetime.time(10, 0),
-                               slot_duration_minutes=60, slot_count=1)
+        # Aucun nettoyage : le test est en `django_db`, sa transaction est annulee a la
+        # fin. La reservation acceptee a une vente REGLEE : la garde `pre_delete` de
+        # `LigneArticle` refuse de supprimer ses articles (`_cleanup` echouerait).
+        # / No cleanup: the django_db transaction is rolled back. The accepted booking
+        # has a SETTLED sale whose items the pre_delete guard refuses to delete.
+        cal      = _make_calendar('val_near_future')
+        wop      = _make_weekly_opening('val_near_future')
+        resource = _make_resource('val_near_future', cal, wop,
+                                  capacity=1, horizon=28)
+        _add_opening_entry(wop, weekday=0,
+                           start_time=datetime.time(10, 0),
+                           slot_duration_minutes=60, slot_count=1)
 
-            # « maintenant » est 09:55 → le créneau 10:00 est dans 5 minutes
-            # / « now » is 09:55 → the 10:00 slot starts in 5 minutes
-            reference_now = _make_aware_dt(MONDAY_NEAR, datetime.time(9, 55))
+        # « maintenant » est 09:55 → le créneau 10:00 est dans 5 minutes
+        # / « now » is 09:55 → the 10:00 slot starts in 5 minutes
+        reference_now = _make_aware_dt(MONDAY_NEAR, datetime.time(9, 55))
 
-            is_valid, result, _url_stripe = validate_new_booking(
-                resource=resource,
-                price=resource.product.prices.get(),
-                start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
-                slot_duration_minutes=60,
-                slot_count=1,
-                member=_get_test_user(),
-                reference_now=reference_now,
-            )
+        is_valid, result, _url_stripe = validate_new_booking(
+            resource=resource,
+            price=resource.product.prices.get(),
+            start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
+            slot_duration_minutes=60,
+            slot_count=1,
+            member=_get_test_user(),
+            reference_now=reference_now,
+        )
 
-            assert is_valid is True
-            assert result is not None
-
-        finally:
-            _cleanup()
+        assert is_valid is True
+        assert result is not None
 
 
 @pytest.mark.django_db

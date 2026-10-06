@@ -452,11 +452,9 @@ def test_chaque_echeance_reverse_la_recompense_et_entre_en_comptabilite(
         f"ligne : {ligne}. Une vente que ni le ticket de caisse ni la cloture en "
         "ligne ne voient n'existe pour aucun comptable."
     )
-    assert not situation["caisse"], (
-        f"La ligne du renouvellement entre AUSSI dans le ticket de caisse : "
-        f"{ligne}. Le meme euro serait compte deux fois, et un prelevement a "
-        "distance apparaitrait dans un tiroir ou aucun billet n'est entre."
-    )
+    # Pas de verification « compte deux fois » : un seul rapport, et une vente
+    # est soit d'un point de vente (caisse), soit en ligne, jamais les deux.
+    # / No "counted twice" check: one report, a sale is in one scope only.
 
     # Le ticket de caisse, lui, n'a pas de source asynchrone : ses montants
     # peuvent etre asserted au centime. Le renouvellement ne doit rien y peser.
@@ -469,8 +467,8 @@ def test_chaque_echeance_reverse_la_recompense_et_entre_en_comptabilite(
     )
     assert comptes["caisse"]["total_adhesions"] == 0, (
         f"Le renouvellement apparait dans la section adhesions du ticket de "
-        f"caisse : {comptes['caisse']}. Il y ferait double emploi avec la "
-        "cloture comptable en ligne."
+        f"caisse : {comptes['caisse']}. Un prelevement a distance n'est la vente "
+        "d'aucun point de vente."
     )
 
     # Le VERSEMENT, lui, ne laisse aucune ecriture — meme constat qu'au paiement

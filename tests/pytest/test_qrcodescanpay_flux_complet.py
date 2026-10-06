@@ -723,14 +723,23 @@ class TestPayerParQrCode(FastTenantTestCase):
             ('FED', PaymentMethod.STRIPE_FED),
             ('TLF', PaymentMethod.LOCAL_EURO),
         ]:
-            LigneArticle.objects.filter(sale_origin=SaleOrigin.QRCODE_MA).delete()
+            # Les ventes payées des tours précédents restent (un article d'une vente
+            # réglée ne se supprime pas) : on les met de côté par leur uuid.
+            # / Paid sales of previous rounds stay (a settled item is never
+            # deleted): they are set aside by uuid.
+            uuids_des_lignes_payees_avant = list(
+                LigneArticle.objects.filter(
+                    sale_origin=SaleOrigin.QRCODE_MA,
+                    status=LigneArticle.VALID,
+                ).values_list('uuid', flat=True)
+            )
 
             self._payer_avec_un_asset_de_categorie(categorie)
 
             ligne_payee = LigneArticle.objects.filter(
                 sale_origin=SaleOrigin.QRCODE_MA,
                 status=LigneArticle.VALID,
-            ).first()
+            ).exclude(uuid__in=uuids_des_lignes_payees_avant).first()
             assert ligne_payee is not None, f"Categorie {categorie} : aucune vente creee."
             assert ligne_payee.vente.reglements.get().moyen == moyen_attendu
 

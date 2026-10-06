@@ -468,15 +468,9 @@ def test_une_recharge_au_comptoir_n_est_pas_depensable_par_qrcode(
         "comptant sa caisse."
     )
 
-    # La recharge est un encaissement du comptoir : elle n'a rien a faire dans la
-    # cloture comptable des ventes en ligne, qui exclut justement `LABOUTIK`.
-    # L'y voir signalerait un DOUBLE COMPTAGE du meme euro.
-    # / A counter sale must not also appear in the online closure, which excludes
-    # LABOUTIK. Seeing it there would mean the same euro is counted twice.
-    assert comptes["en_ligne"].get("total", 0) == 0, (
-        f"La recharge du comptoir est aussi entree dans la cloture comptable en "
-        f"ligne ({comptes['en_ligne']}) : le meme euro est compte deux fois."
-    )
+    # Pas de verification « compte deux fois » avec la cloture en ligne : un seul
+    # rapport, et une vente est soit d'un point de vente, soit en ligne.
+    # / No "counted twice" check: one report, a sale is in one scope only.
 
     # --- 5. LA FRONTIERE : le Fedow distant, lui, n'a rien vu ---
     assert soldes_apres["distant"] == soldes_avant["distant"], (

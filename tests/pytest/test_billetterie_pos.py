@@ -11,13 +11,22 @@ Couvre :
   - _creer_billets_depuis_panier : Reservation, Ticket, jauge
   - Panier mixte (biere + billet, adhesion + billet)
   - Ticket.status = NOT_SCANNED ('K')
+  - Le flow HTTP complet : moyens_paiement → identifier_client → payer
+  - Le billet a 0 € (bouton VALIDER, moyen « gift »)
 
-Prerequis / Prerequisites:
-  - Base de donnees avec le tenant 'lespass' existant
-  - demo_data_v2 chargee (pour les events existants)
+SCHEMA DEDIE / DEDICATED SCHEMA
+Ces tests tournent dans un schema a eux (`FastTenantTestCase`), jamais sur le lieu
+`lespass` de la base de dev. Chaque test annule sa transaction a la fin : il ne
+supprime rien lui-meme. Avant, le nettoyage supprimait par queryset les articles de
+ventes REGLEES du lieu `lespass` : la vente et son reglement restaient sans article
+(egalite rompue, empreinte fausse, rapports faux). Un article d'une vente reglee ne se
+supprime jamais (garde `pre_delete` de `LigneArticle`, BaseBillet/models.py).
+/ These tests run in their own schema, never on the dev `lespass` venue. Each test is
+rolled back: it deletes nothing itself. The old cleanup deleted items of SETTLED sales
+of the `lespass` venue, which broke their equalities and fingerprints.
 
 Lancement / Run:
-    docker exec lespass_django poetry run pytest tests/pytest/test_billetterie_pos.py -v
+    make test ARGS="tests/pytest/test_billetterie_pos.py"
 """
 
 import sys
@@ -33,177 +42,223 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+from django.db import connection
+from django.db import transaction as db_transaction
 from django.utils import timezone
-from django_tenants.utils import schema_context, tenant_context
+from django_tenants.test.cases import FastTenantTestCase
+from django_tenants.test.client import TenantClient
 
-from Customers.models import Client
 
-
-# Prefixe pour identifier les donnees de ce module et les nettoyer.
-# / Prefix to identify this module's data and clean it up.
+# Prefixe des noms des donnees de ce module (lisibles dans les messages d'erreur).
+# / Prefix of this module's data names (readable in error messages).
 TEST_PREFIX = "zz_test_billetterie"
 
-TENANT_SCHEMA = "lespass"
-
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Donnees communes a toutes les classes
+# / Data shared by every class
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
-def tenant():
-    """Le tenant 'lespass'. / The 'lespass' tenant."""
-    return Client.objects.get(schema_name=TENANT_SCHEMA)
-
-
-@pytest.fixture(scope="module")
-def donnees_billetterie(tenant):
+class DonneesBilletterieMixin:
     """
-    Cree un Event futur + Product BILLET + Price + PointDeVente BILLETTERIE.
-    Nettoie apres tous les tests du module.
-    / Creates a future Event + BILLET Product + Price + BILLETTERIE PointDeVente.
-    Cleans up after all module tests.
+    Le schema dedie et les donnees de chaque test : un Event futur + un Product
+    BILLET + son Price, un Product biere + son Price, un PointDeVente BILLETTERIE,
+    un client et un admin connecte.
+    / The dedicated schema and each test's data: a future Event + BILLET Product +
+    Price, a beer Product + Price, a BILLETTERIE PointDeVente, a client and a
+    logged-in admin.
+
+    Toutes les classes du fichier partagent le meme schema (`test_billetterie_pos`).
+    `setUp` recree les donnees a chaque test : le rollback du test precedent les a
+    effacees.
+    / Every class shares the same schema. setUp recreates the data for each test:
+    the previous test's rollback erased them.
     """
-    from BaseBillet.models import Event, Product, Price, Ticket, Reservation
-    from BaseBillet.models import ProductSold, PriceSold, LigneArticle
-    from laboutik.models import PointDeVente
 
-    with tenant_context(tenant):
-        # --- Nettoyage des donnees residuelles d'un run precedent ---
-        # / Cleanup residual data from a previous run
-        Ticket.objects.filter(
-            reservation__event__name__startswith=TEST_PREFIX,
-        ).delete()
-        LigneArticle.objects.filter(
-            pricesold__productsold__product__name__startswith=TEST_PREFIX,
-        ).delete()
-        PriceSold.objects.filter(
-            productsold__product__name__startswith=TEST_PREFIX,
-        ).delete()
-        ProductSold.objects.filter(
-            product__name__startswith=TEST_PREFIX,
-        ).delete()
-        Reservation.objects.filter(
-            event__name__startswith=TEST_PREFIX,
-        ).delete()
-        # Les PV de test ne sont pas supprimes (FK PROTECT depuis d'autres tables).
-        # get_or_create les reutilisera au prochain run.
-        # / Test PVs are not deleted (FK PROTECT from other tables).
-        # get_or_create will reuse them on the next run.
+    @classmethod
+    def get_test_schema_name(cls):
+        return "test_billetterie_pos"
 
-        # Creer le Product billet (get_or_create pour eviter les doublons)
-        # / Create the ticket Product (get_or_create to avoid duplicates)
-        product_billet, _ = Product.objects.get_or_create(
+    @classmethod
+    def get_test_tenant_domain(cls):
+        return "test-billetterie-pos.tibillet.localhost"
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        """`Client.name` est unique et obligatoire. / Client.name is unique."""
+        tenant.name = "Test billetterie POS"
+
+    def setUp(self):
+        from AuthBillet.models import TibilletUser
+        from AuthBillet.utils import get_or_create_user
+        from BaseBillet.models import Configuration, Event, Price, Product
+        from laboutik.models import LaboutikConfiguration, PointDeVente
+
+        # Le rollback du test precedent a rendu le `search_path` au public.
+        # / The previous test's rollback returned the search_path to public.
+        connection.set_tenant(self.tenant)
+
+        # Active la caisse V2 (le garde HasLaBoutikTerminalAccess l'exige).
+        # module_caisse exige module_monnaie_locale : on active les deux.
+        # / Enable V2 POS (required by the HasLaBoutikTerminalAccess guard).
+        configuration = Configuration.get_solo()
+        configuration.module_monnaie_locale = True
+        configuration.module_caisse = True
+        configuration.save()
+
+        # Le singleton de la caisse porte la cle de l'empreinte des ventes (PIEGES 9.86).
+        # / The register singleton holds the sales fingerprint key.
+        LaboutikConfiguration.get_solo().save()
+
+        # Le Product billet et son Price
+        # / The ticket Product and its Price
+        self.product_billet = Product.objects.create(
             name=f"{TEST_PREFIX} Concert Rock",
             categorie_article=Product.BILLET,
-            defaults={"publish": True},
+            publish=True,
         )
-
-        # Creer la Price
-        # / Create the Price
-        price_billet, _ = Price.objects.get_or_create(
-            product=product_billet,
+        self.price_billet = Price.objects.create(
+            product=self.product_billet,
             name=f"{TEST_PREFIX} Plein tarif",
-            defaults={"prix": Decimal("15.00"), "publish": True},
+            prix=Decimal("15.00"),
+            publish=True,
         )
 
-        # Creer l'Event futur
-        # / Create a future Event
-        event_futur, _ = Event.objects.get_or_create(
+        # L'Event futur, jauge a 10
+        # / The future Event, gauge at 10
+        self.event = Event.objects.create(
             name=f"{TEST_PREFIX} Festival Rock",
-            defaults={
-                "datetime": timezone.now() + timedelta(days=7),
-                "jauge_max": 10,
-                "published": True,
-            },
+            datetime=timezone.now() + timedelta(days=7),
+            jauge_max=10,
+            published=True,
         )
-        # S'assurer que la date est dans le futur et la jauge est a 10
-        # / Ensure the date is in the future and the gauge is at 10
-        event_futur.datetime = timezone.now() + timedelta(days=7)
-        event_futur.jauge_max = 10
-        event_futur.published = True
-        event_futur.save(update_fields=["datetime", "jauge_max", "published"])
-        event_futur.products.add(product_billet)
+        self.event.products.add(self.product_billet)
 
-        # Creer un Product biere standard (pour les paniers mixtes)
-        # / Create a standard beer Product (for mixed carts)
-        product_biere, _ = Product.objects.get_or_create(
+        # Un Product biere standard (pour les paniers mixtes)
+        # / A standard beer Product (for mixed carts)
+        self.product_biere = Product.objects.create(
             name=f"{TEST_PREFIX} Biere",
-            defaults={
-                "categorie_article": Product.NONE,
-                "methode_caisse": Product.VENTE,
-                "publish": True,
-            },
+            categorie_article=Product.NONE,
+            methode_caisse=Product.VENTE,
+            publish=True,
         )
-        price_biere, _ = Price.objects.get_or_create(
-            product=product_biere,
+        self.price_biere = Price.objects.create(
+            product=self.product_biere,
             name=f"{TEST_PREFIX} Biere prix",
-            defaults={"prix": Decimal("5.00"), "publish": True},
+            prix=Decimal("5.00"),
+            publish=True,
         )
 
-        # Creer le PointDeVente BILLETTERIE
-        # / Create the BILLETTERIE PointDeVente
-        pv_billetterie, _ = PointDeVente.objects.get_or_create(
+        # Le PointDeVente BILLETTERIE
+        # / The BILLETTERIE PointDeVente
+        self.pv = PointDeVente.objects.create(
             name=f"{TEST_PREFIX} Accueil",
+            comportement=PointDeVente.BILLETTERIE,
+            accepte_especes=True,
+            accepte_carte_bancaire=True,
+            poid_liste=9999,
+        )
+        self.pv.products.add(self.product_biere)
+
+        # Le client des billets (schema public, annule lui aussi par le rollback)
+        # / The ticket client (public schema, rolled back too)
+        self.user_client = get_or_create_user(
+            f"{TEST_PREFIX.lower()}@test.local", send_mail=False
+        )
+        if not self.user_client.first_name:
+            self.user_client.first_name = "Test"
+            self.user_client.last_name = "Billet"
+            self.user_client.save(update_fields=["first_name", "last_name"])
+
+        # L'admin du lieu et son client HTTP connecte
+        # / The venue admin and its logged-in HTTP client
+        email_admin = "admin-test-billetterie@tibillet.localhost"
+        self.admin_user, _admin_cree = TibilletUser.objects.get_or_create(
+            email=email_admin,
             defaults={
-                "comportement": PointDeVente.BILLETTERIE,
-                "accepte_especes": True,
-                "accepte_carte_bancaire": True,
-                "poid_liste": 9999,  # En fin de liste pour ne pas perturber premier_pv des autres tests
+                "username": email_admin,
+                "is_staff": True,
+                "is_active": True,
             },
         )
-        pv_billetterie.products.add(product_biere)
+        self.admin_user.client_admin.add(self.tenant)
+        self.client_http = TenantClient(self.tenant)
+        self.client_http.force_login(self.admin_user)
 
-        donnees = {
-            "product_billet": product_billet,
-            "price_billet": price_billet,
-            "event": event_futur,
-            "product_biere": product_biere,
-            "price_biere": price_biere,
-            "pv": pv_billetterie,
+    def carte_du_client(self):
+        """
+        La carte NFC qui identifie le client (`tag_id` BTST0001).
+        / The NFC card identifying the client.
+        """
+        from QrcodeCashless.models import CarteCashless
+
+        carte, _carte_creee = CarteCashless.objects.get_or_create(
+            tag_id="BTST0001",
+            defaults={"number": "BTST0001", "user": self.user_client},
+        )
+        if carte.user != self.user_client:
+            carte.user = self.user_client
+            carte.save(update_fields=["user"])
+        return carte
+
+    def requete_especes_avec_carte(self):
+        """
+        Une requete POST simulee : paiement especes, client identifie par sa carte.
+        / A simulated POST request: cash payment, client identified by card.
+        """
+        request = MagicMock()
+        request.POST = {
+            "tag_id": "BTST0001",
+            "moyen_paiement": "espece",
+        }
+        request.META = {"REMOTE_ADDR": "127.0.0.1"}
+        return request
+
+    def article_billet(self, quantite=1):
+        """
+        L'article « billet plein tarif » d'un panier.
+        / The "full price ticket" cart item.
+        """
+        return {
+            "product": self.product_billet,
+            "price": self.price_billet,
+            "quantite": quantite,
+            "prix_centimes": 1500,
+            "custom_amount_centimes": None,
+            "est_billet": True,
+            "event": self.event,
         }
 
-        yield donnees
+    def remplir_avec_des_tickets(self, nombre_de_tickets):
+        """
+        Cree une Reservation VALID et `nombre_de_tickets` tickets non scannes.
+        / Creates a VALID Reservation and `nombre_de_tickets` unscanned tickets.
+        """
+        from BaseBillet.models import PriceSold, ProductSold, Reservation, Ticket
 
-        # --- Nettoyage (ordre inverse des FK) ---
-        # Les Products/Prices/Events ne sont pas supprimes ici
-        # car stdimage leve TypeError sur post_delete si pas d'image.
-        # Ils seront nettoyes au prochain run par le cleanup initial.
-        # / Products/Prices/Events are not deleted here because stdimage
-        # raises TypeError on post_delete if no image.
-        # They will be cleaned up on the next run by the initial cleanup.
-        Ticket.objects.filter(
-            reservation__event=event_futur,
-        ).delete()
-        LigneArticle.objects.filter(
-            pricesold__productsold__product__name__startswith=TEST_PREFIX,
-        ).delete()
-        Reservation.objects.filter(event=event_futur).delete()
-        PriceSold.objects.filter(
-            productsold__product__name__startswith=TEST_PREFIX,
-        ).delete()
-        ProductSold.objects.filter(
-            product__name__startswith=TEST_PREFIX,
-        ).delete()
-        pv_billetterie.products.clear()
-
-
-@pytest.fixture(scope="module")
-def user_client(tenant):
-    """
-    Utilisateur client pour les tests de billetterie.
-    / Client user for ticketing tests.
-    """
-    from AuthBillet.utils import get_or_create_user
-
-    email = f"{TEST_PREFIX.lower()}@test.local"
-    user = get_or_create_user(email, send_mail=False)
-    if not user.first_name:
-        user.first_name = "Test"
-        user.last_name = "Billet"
-        user.save(update_fields=["first_name", "last_name"])
-    return user
+        reservation = Reservation.objects.create(
+            user_commande=self.user_client,
+            event=self.event,
+            status=Reservation.VALID,
+        )
+        produit_vendu, _produit_vendu_cree = ProductSold.objects.get_or_create(
+            product=self.product_billet,
+            event=self.event,
+            defaults={"categorie_article": self.product_billet.categorie_article},
+        )
+        tarif_vendu, _tarif_vendu_cree = PriceSold.objects.get_or_create(
+            productsold=produit_vendu,
+            price=self.price_billet,
+            defaults={"prix": self.price_billet.prix},
+        )
+        for _numero_du_ticket in range(nombre_de_tickets):
+            Ticket.objects.create(
+                reservation=reservation,
+                pricesold=tarif_vendu,
+                status=Ticket.NOT_SCANNED,
+            )
+        return reservation
 
 
 # ---------------------------------------------------------------------------
@@ -211,10 +266,10 @@ def user_client(tenant):
 # ---------------------------------------------------------------------------
 
 
-class TestExtraireArticlesBilletterie:
+class TestExtraireArticlesBilletterie(DonneesBilletterieMixin, FastTenantTestCase):
     """Tests de _extraire_articles_du_panier pour les articles BILLETTERIE."""
 
-    def test_extraire_article_billet_id_composite(self, tenant, donnees_billetterie):
+    def test_extraire_article_billet_id_composite(self):
         """
         POST avec repid-{event_uuid}__{price_uuid} → article trouve
         avec est_billet=True et event correct.
@@ -223,545 +278,265 @@ class TestExtraireArticlesBilletterie:
         """
         from laboutik.views import _extraire_articles_du_panier
 
-        pv = donnees_billetterie["pv"]
-        event = donnees_billetterie["event"]
-        price = donnees_billetterie["price_billet"]
-
         # Simuler le POST avec l'ID composite
         # / Simulate POST with composite ID
-        id_composite = f"{event.uuid}__{price.uuid}"
+        id_composite = f"{self.event.uuid}__{self.price_billet.uuid}"
         post_data = {
             f"repid-{id_composite}": "2",
         }
 
-        with tenant_context(tenant):
-            articles = _extraire_articles_du_panier(post_data, pv)
+        articles = _extraire_articles_du_panier(post_data, self.pv)
 
         assert len(articles) == 1
         article = articles[0]
         assert article["est_billet"] is True
         assert article["event"] is not None
-        assert str(article["event"].uuid) == str(event.uuid)
-        assert article["product"] == donnees_billetterie["product_billet"]
-        assert article["price"] == price
+        assert str(article["event"].uuid) == str(self.event.uuid)
+        assert article["product"] == self.product_billet
+        assert article["price"] == self.price_billet
         assert article["quantite"] == 2
         assert article["prix_centimes"] == 1500
 
-    def test_extraire_article_standard_dans_pv_billetterie(
-        self, tenant, donnees_billetterie
-    ):
+    def test_extraire_article_standard_dans_pv_billetterie(self):
         """
         Un article standard (biere) dans un PV BILLETTERIE est extrait normalement.
         / A standard article (beer) in a BILLETTERIE PV is extracted normally.
         """
         from laboutik.views import _extraire_articles_du_panier
 
-        pv = donnees_billetterie["pv"]
-        product_biere = donnees_billetterie["product_biere"]
-
         post_data = {
-            f"repid-{product_biere.uuid}": "1",
+            f"repid-{self.product_biere.uuid}": "1",
         }
 
-        with tenant_context(tenant):
-            articles = _extraire_articles_du_panier(post_data, pv)
+        articles = _extraire_articles_du_panier(post_data, self.pv)
 
         assert len(articles) == 1
         article = articles[0]
         assert article["est_billet"] is False
         assert article["event"] is None
-        assert article["product"] == product_biere
+        assert article["product"] == self.product_biere
 
 
-class TestCreerBilletDepuisPanier:
+class TestCreerBilletDepuisPanier(DonneesBilletterieMixin, FastTenantTestCase):
     """Tests de _creer_billets_depuis_panier."""
 
-    def test_creer_billet_espece_sans_email(
-        self, tenant, donnees_billetterie, user_client
-    ):
+    def test_creer_billet_espece_sans_email(self):
         """
         Paiement especes avec tag_id → Reservation VALID + Ticket NOT_SCANNED, to_mail=False.
         / Cash payment with tag_id → Reservation VALID + Ticket NOT_SCANNED, to_mail=False.
         """
-        from BaseBillet.models import Reservation, Ticket, LigneArticle
+        from BaseBillet.models import Reservation, Ticket
         from laboutik.views import _creer_billets_depuis_panier, _creer_lignes_articles
-        from django.db import transaction as db_transaction
-        from QrcodeCashless.models import CarteCashless
 
-        event = donnees_billetterie["event"]
-        price = donnees_billetterie["price_billet"]
-        product = donnees_billetterie["product_billet"]
+        # Creer/recuperer une carte NFC pour l'identification
+        # / Create/get an NFC card for identification
+        self.carte_du_client()
+        articles_panier = [self.article_billet()]
+        request = self.requete_especes_avec_carte()
 
-        with tenant_context(tenant):
-            # Creer/recuperer une carte NFC pour l'identification
-            # / Create/get an NFC card for identification
-            carte, _ = CarteCashless.objects.get_or_create(
-                tag_id="BTST0001",
-                defaults={"number": "BTST0001", "user": user_client},
+        with db_transaction.atomic():
+            lignes, _produits_en_stock_negatif = _creer_lignes_articles(
+                articles_panier, "espece"
             )
-            if carte.user != user_client:
-                carte.user = user_client
-                carte.save(update_fields=["user"])
+            reservations = _creer_billets_depuis_panier(
+                request,
+                articles_panier,
+                lignes_articles=lignes,
+            )
 
-            articles_panier = [
-                {
-                    "product": product,
-                    "price": price,
-                    "quantite": 1,
-                    "prix_centimes": 1500,
-                    "custom_amount_centimes": None,
-                    "est_billet": True,
-                    "event": event,
-                }
-            ]
+        assert len(reservations) == 1
+        reservation = reservations[0]
+        assert reservation.status == Reservation.VALID
+        assert reservation.to_mail is False
+        assert reservation.user_commande == self.user_client
+        assert reservation.event == self.event
 
-            # Simuler le request POST
-            # / Simulate the POST request
-            request = MagicMock()
-            request.POST = {
-                "tag_id": "BTST0001",
-                "moyen_paiement": "espece",
-            }
-            request.META = {"REMOTE_ADDR": "127.0.0.1"}
+        tickets = Ticket.objects.filter(reservation=reservation)
+        assert tickets.count() == 1
+        ticket = tickets.first()
+        assert ticket.status == Ticket.NOT_SCANNED
 
-            with db_transaction.atomic():
-                lignes, _ = _creer_lignes_articles(articles_panier, "espece")
-                reservations = _creer_billets_depuis_panier(
-                    request,
-                    articles_panier,
-                    lignes_articles=lignes,
-                )
-
-            assert len(reservations) == 1
-            reservation = reservations[0]
-            assert reservation.status == Reservation.VALID
-            assert reservation.to_mail is False
-            assert reservation.user_commande == user_client
-            assert reservation.event == event
-
-            tickets = Ticket.objects.filter(reservation=reservation)
-            assert tickets.count() == 1
-            ticket = tickets.first()
-            assert ticket.status == Ticket.NOT_SCANNED
-
-            # Nettoyage (ordre FK : LigneArticle → Ticket → Reservation)
-            # / Cleanup (FK order: LigneArticle → Ticket → Reservation)
-            LigneArticle.objects.filter(reservation=reservation).delete()
-            for ligne in lignes:
-                ligne.delete()
-            tickets.delete()
-            reservation.delete()
-
-    def test_creer_billet_avec_email(self, tenant, donnees_billetterie):
+    def test_creer_billet_avec_email(self):
         """
         Paiement avec email → to_mail=True, user cree.
         / Payment with email → to_mail=True, user created.
         """
-        from BaseBillet.models import Ticket, LigneArticle
         from laboutik.views import _creer_billets_depuis_panier, _creer_lignes_articles
-        from django.db import transaction as db_transaction
 
-        event = donnees_billetterie["event"]
-        price = donnees_billetterie["price_billet"]
-        product = donnees_billetterie["product_billet"]
+        articles_panier = [self.article_billet()]
 
-        with tenant_context(tenant):
-            articles_panier = [
-                {
-                    "product": product,
-                    "price": price,
-                    "quantite": 1,
-                    "prix_centimes": 1500,
-                    "custom_amount_centimes": None,
-                    "est_billet": True,
-                    "event": event,
-                }
-            ]
+        request = MagicMock()
+        request.POST = {
+            "email_adhesion": f"{TEST_PREFIX.lower()}email@test.local",
+            "prenom_adhesion": "Alice",
+            "nom_adhesion": "Dupont",
+            "moyen_paiement": "carte_bancaire",
+        }
+        request.META = {"REMOTE_ADDR": "127.0.0.1"}
 
-            request = MagicMock()
-            request.POST = {
-                "email_adhesion": f"{TEST_PREFIX.lower()}email@test.local",
-                "prenom_adhesion": "Alice",
-                "nom_adhesion": "Dupont",
-                "moyen_paiement": "carte_bancaire",
-            }
-            request.META = {"REMOTE_ADDR": "127.0.0.1"}
+        with db_transaction.atomic():
+            lignes, _produits_en_stock_negatif = _creer_lignes_articles(
+                articles_panier, "carte_bancaire"
+            )
+            reservations = _creer_billets_depuis_panier(
+                request,
+                articles_panier,
+                lignes_articles=lignes,
+            )
 
-            with db_transaction.atomic():
-                lignes, _ = _creer_lignes_articles(articles_panier, "carte_bancaire")
-                reservations = _creer_billets_depuis_panier(
-                    request,
-                    articles_panier,
-                    lignes_articles=lignes,
-                )
+        assert len(reservations) == 1
+        reservation = reservations[0]
+        assert reservation.to_mail is True
 
-            assert len(reservations) == 1
-            reservation = reservations[0]
-            assert reservation.to_mail is True
-
-            # Nettoyage (ordre FK : LigneArticle → Ticket → Reservation)
-            LigneArticle.objects.filter(reservation=reservation).delete()
-            for ligne in lignes:
-                ligne.delete()
-            Ticket.objects.filter(reservation=reservation).delete()
-            reservation.delete()
-
-    def test_jauge_bloque_vente(self, tenant, donnees_billetterie, user_client):
+    def test_jauge_bloque_vente(self):
         """
         Jauge pleine → ValueError levee, aucun Ticket cree (rollback).
         / Full gauge → ValueError raised, no Ticket created (rollback).
         """
-        from BaseBillet.models import Reservation, Ticket
+        from BaseBillet.models import Ticket
         from laboutik.views import _creer_billets_depuis_panier, _creer_lignes_articles
-        from django.db import transaction as db_transaction
-        from QrcodeCashless.models import CarteCashless
 
-        event = donnees_billetterie["event"]
-        price = donnees_billetterie["price_billet"]
-        product = donnees_billetterie["product_billet"]
+        # Remplir la jauge : creer 10 tickets (jauge_max=10)
+        # / Fill the gauge: create 10 tickets (jauge_max=10)
+        self.remplir_avec_des_tickets(10)
 
-        with tenant_context(tenant):
-            # Remplir la jauge : creer 10 tickets (jauge_max=10)
-            # / Fill the gauge: create 10 tickets (jauge_max=10)
-            reservation_remplissage = Reservation.objects.create(
-                user_commande=user_client,
-                event=event,
-                status=Reservation.VALID,
-            )
-            from BaseBillet.models import ProductSold, PriceSold
+        # Tenter d'acheter un billet de plus → ValueError
+        # / Try to buy one more ticket → ValueError
+        articles_panier = [self.article_billet()]
+        self.carte_du_client()
+        request = self.requete_especes_avec_carte()
 
-            ps, _ = ProductSold.objects.get_or_create(
-                product=product,
-                event=event,
-                defaults={"categorie_article": product.categorie_article},
-            )
-            prs, _ = PriceSold.objects.get_or_create(
-                productsold=ps,
-                price=price,
-                defaults={"prix": price.prix},
-            )
-            for _ in range(10):
-                Ticket.objects.create(
-                    reservation=reservation_remplissage,
-                    pricesold=prs,
-                    status=Ticket.NOT_SCANNED,
+        with pytest.raises(ValueError, match="complet"):
+            with db_transaction.atomic():
+                lignes, _produits_en_stock_negatif = _creer_lignes_articles(
+                    articles_panier, "espece"
+                )
+                _creer_billets_depuis_panier(
+                    request,
+                    articles_panier,
+                    lignes_articles=lignes,
                 )
 
-            # Tenter d'acheter un billet de plus → ValueError
-            # / Try to buy one more ticket → ValueError
-            articles_panier = [
-                {
-                    "product": product,
-                    "price": price,
-                    "quantite": 1,
-                    "prix_centimes": 1500,
-                    "custom_amount_centimes": None,
-                    "est_billet": True,
-                    "event": event,
-                }
-            ]
+        # Verifier qu'aucun nouveau ticket n'a ete cree (rollback)
+        # / Verify no new ticket was created (rollback)
+        assert Ticket.objects.filter(reservation__event=self.event).count() == 10
 
-            carte, _ = CarteCashless.objects.get_or_create(
-                tag_id="BTST0001",
-                defaults={"number": "BTST0001", "user": user_client},
-            )
-
-            request = MagicMock()
-            request.POST = {
-                "tag_id": "BTST0001",
-                "moyen_paiement": "espece",
-            }
-            request.META = {"REMOTE_ADDR": "127.0.0.1"}
-
-            with pytest.raises(ValueError, match="complet"):
-                with db_transaction.atomic():
-                    lignes, _ = _creer_lignes_articles(articles_panier, "espece")
-                    _creer_billets_depuis_panier(
-                        request,
-                        articles_panier,
-                        lignes_articles=lignes,
-                    )
-
-            # Verifier qu'aucun nouveau ticket n'a ete cree (rollback)
-            # / Verify no new ticket was created (rollback)
-            assert (
-                Ticket.objects.filter(
-                    reservation__event=event,
-                ).count()
-                == 10
-            )
-
-            # Nettoyage
-            Ticket.objects.filter(reservation=reservation_remplissage).delete()
-            reservation_remplissage.delete()
-
-    def test_ticket_status_not_scanned(self, tenant, donnees_billetterie, user_client):
+    def test_ticket_status_not_scanned(self):
         """
         Le Ticket cree a status='K' (NOT_SCANNED).
         / The created Ticket has status='K' (NOT_SCANNED).
         """
-        from BaseBillet.models import Ticket, LigneArticle
+        from BaseBillet.models import Ticket
         from laboutik.views import _creer_billets_depuis_panier, _creer_lignes_articles
-        from django.db import transaction as db_transaction
-        from QrcodeCashless.models import CarteCashless
 
-        event = donnees_billetterie["event"]
-        price = donnees_billetterie["price_billet"]
-        product = donnees_billetterie["product_billet"]
+        self.carte_du_client()
+        articles_panier = [self.article_billet(quantite=3)]
+        request = self.requete_especes_avec_carte()
 
-        with tenant_context(tenant):
-            carte, _ = CarteCashless.objects.get_or_create(
-                tag_id="BTST0001",
-                defaults={"number": "BTST0001", "user": user_client},
+        with db_transaction.atomic():
+            lignes, _produits_en_stock_negatif = _creer_lignes_articles(
+                articles_panier, "espece"
+            )
+            reservations = _creer_billets_depuis_panier(
+                request,
+                articles_panier,
+                lignes_articles=lignes,
             )
 
-            articles_panier = [
-                {
-                    "product": product,
-                    "price": price,
-                    "quantite": 3,
-                    "prix_centimes": 1500,
-                    "custom_amount_centimes": None,
-                    "est_billet": True,
-                    "event": event,
-                }
-            ]
+        tickets = Ticket.objects.filter(reservation=reservations[0])
+        assert tickets.count() == 3
+        for ticket in tickets:
+            assert ticket.status == "K"
+            assert ticket.status == Ticket.NOT_SCANNED
 
-            request = MagicMock()
-            request.POST = {
-                "tag_id": "BTST0001",
-                "moyen_paiement": "espece",
-            }
-            request.META = {"REMOTE_ADDR": "127.0.0.1"}
-
-            with db_transaction.atomic():
-                lignes, _ = _creer_lignes_articles(articles_panier, "espece")
-                reservations = _creer_billets_depuis_panier(
-                    request,
-                    articles_panier,
-                    lignes_articles=lignes,
-                )
-
-            tickets = Ticket.objects.filter(reservation=reservations[0])
-            assert tickets.count() == 3
-            for ticket in tickets:
-                assert ticket.status == "K"
-                assert ticket.status == Ticket.NOT_SCANNED
-
-            # Nettoyage (ordre FK : LigneArticle → Ticket → Reservation)
-            LigneArticle.objects.filter(reservation=reservations[0]).delete()
-            for ligne in lignes:
-                ligne.delete()
-            tickets.delete()
-            reservations[0].delete()
-
-    def test_panier_mixte_billet_et_vente(
-        self, tenant, donnees_billetterie, user_client
-    ):
+    def test_panier_mixte_billet_et_vente(self):
         """
         Biere + Billet → 2 LigneArticle, 1 Ticket pour le billet.
         / Beer + Ticket → 2 LigneArticle, 1 Ticket for the ticket.
         """
-        from BaseBillet.models import Ticket, LigneArticle
+        from BaseBillet.models import Ticket
         from laboutik.views import _creer_billets_depuis_panier, _creer_lignes_articles
-        from django.db import transaction as db_transaction
-        from QrcodeCashless.models import CarteCashless
 
-        event = donnees_billetterie["event"]
-        price_billet = donnees_billetterie["price_billet"]
-        product_billet = donnees_billetterie["product_billet"]
-        product_biere = donnees_billetterie["product_biere"]
-        price_biere = donnees_billetterie["price_biere"]
+        self.carte_du_client()
+        articles_panier = [
+            {
+                "product": self.product_biere,
+                "price": self.price_biere,
+                "quantite": 1,
+                "prix_centimes": 500,
+                "custom_amount_centimes": None,
+                "est_billet": False,
+                "event": None,
+            },
+            self.article_billet(),
+        ]
+        request = self.requete_especes_avec_carte()
 
-        with tenant_context(tenant):
-            carte, _ = CarteCashless.objects.get_or_create(
-                tag_id="BTST0001",
-                defaults={"number": "BTST0001", "user": user_client},
+        with db_transaction.atomic():
+            lignes, _produits_en_stock_negatif = _creer_lignes_articles(
+                articles_panier, "espece"
+            )
+            reservations = _creer_billets_depuis_panier(
+                request,
+                articles_panier,
+                lignes_articles=lignes,
             )
 
-            articles_panier = [
-                {
-                    "product": product_biere,
-                    "price": price_biere,
-                    "quantite": 1,
-                    "prix_centimes": 500,
-                    "custom_amount_centimes": None,
-                    "est_billet": False,
-                    "event": None,
-                },
-                {
-                    "product": product_billet,
-                    "price": price_billet,
-                    "quantite": 1,
-                    "prix_centimes": 1500,
-                    "custom_amount_centimes": None,
-                    "est_billet": True,
-                    "event": event,
-                },
-            ]
+        # 2 LigneArticle creees (biere + billet)
+        # / 2 LigneArticle created (beer + ticket)
+        assert len(lignes) == 2
 
-            request = MagicMock()
-            request.POST = {
-                "tag_id": "BTST0001",
-                "moyen_paiement": "espece",
-            }
-            request.META = {"REMOTE_ADDR": "127.0.0.1"}
+        # 1 Reservation + 1 Ticket pour le billet
+        # / 1 Reservation + 1 Ticket for the ticket
+        assert len(reservations) == 1
+        tickets = Ticket.objects.filter(reservation=reservations[0])
+        assert tickets.count() == 1
 
-            with db_transaction.atomic():
-                lignes, _ = _creer_lignes_articles(articles_panier, "espece")
-                reservations = _creer_billets_depuis_panier(
-                    request,
-                    articles_panier,
-                    lignes_articles=lignes,
-                )
-
-            # 2 LigneArticle creees (biere + billet)
-            # / 2 LigneArticle created (beer + ticket)
-            assert len(lignes) == 2
-
-            # 1 Reservation + 1 Ticket pour le billet
-            # / 1 Reservation + 1 Ticket for the ticket
-            assert len(reservations) == 1
-            tickets = Ticket.objects.filter(reservation=reservations[0])
-            assert tickets.count() == 1
-
-            # Nettoyage (ordre FK : LigneArticle → Ticket → Reservation)
-            LigneArticle.objects.filter(reservation=reservations[0]).delete()
-            for ligne in lignes:
-                ligne.delete()
-            tickets.delete()
-            reservations[0].delete()
-
-    def test_jauge_price_stock(self, tenant, donnees_billetterie, user_client):
+    def test_jauge_price_stock(self):
         """
         Price.stock=2, 2 tickets existants → ValueError au 3e billet.
         / Price.stock=2, 2 existing tickets → ValueError on 3rd ticket.
         """
-        from BaseBillet.models import Reservation, Ticket, ProductSold, PriceSold
         from laboutik.views import _creer_billets_depuis_panier, _creer_lignes_articles
-        from django.db import transaction as db_transaction
-        from QrcodeCashless.models import CarteCashless
 
-        event = donnees_billetterie["event"]
-        price = donnees_billetterie["price_billet"]
-        product = donnees_billetterie["product_billet"]
+        # Mettre un stock de 2 sur la Price
+        # / Set stock to 2 on the Price
+        self.price_billet.stock = 2
+        self.price_billet.save(update_fields=["stock"])
 
-        with tenant_context(tenant):
-            # Mettre un stock de 2 sur la Price
-            # / Set stock to 2 on the Price
-            old_stock = price.stock
-            price.stock = 2
-            price.save(update_fields=["stock"])
+        # Creer 2 tickets existants
+        # / Create 2 existing tickets
+        self.remplir_avec_des_tickets(2)
 
-            # Creer 2 tickets existants
-            # / Create 2 existing tickets
-            reservation_existante = Reservation.objects.create(
-                user_commande=user_client,
-                event=event,
-                status=Reservation.VALID,
-            )
-            ps, _ = ProductSold.objects.get_or_create(
-                product=product,
-                event=event,
-                defaults={"categorie_article": product.categorie_article},
-            )
-            prs, _ = PriceSold.objects.get_or_create(
-                productsold=ps,
-                price=price,
-                defaults={"prix": price.prix},
-            )
-            for _ in range(2):
-                Ticket.objects.create(
-                    reservation=reservation_existante,
-                    pricesold=prs,
-                    status=Ticket.NOT_SCANNED,
+        self.carte_du_client()
+        articles_panier = [self.article_billet()]
+        request = self.requete_especes_avec_carte()
+
+        with pytest.raises(ValueError, match="tarif"):
+            with db_transaction.atomic():
+                lignes, _produits_en_stock_negatif = _creer_lignes_articles(
+                    articles_panier, "espece"
                 )
-
-            carte, _ = CarteCashless.objects.get_or_create(
-                tag_id="BTST0001",
-                defaults={"number": "BTST0001", "user": user_client},
-            )
-
-            articles_panier = [
-                {
-                    "product": product,
-                    "price": price,
-                    "quantite": 1,
-                    "prix_centimes": 1500,
-                    "custom_amount_centimes": None,
-                    "est_billet": True,
-                    "event": event,
-                }
-            ]
-
-            request = MagicMock()
-            request.POST = {
-                "tag_id": "BTST0001",
-                "moyen_paiement": "espece",
-            }
-            request.META = {"REMOTE_ADDR": "127.0.0.1"}
-
-            with pytest.raises(ValueError, match="tarif"):
-                with db_transaction.atomic():
-                    lignes, _ = _creer_lignes_articles(articles_panier, "espece")
-                    _creer_billets_depuis_panier(
-                        request,
-                        articles_panier,
-                        lignes_articles=lignes,
-                    )
-
-            # Nettoyage : restaurer le stock
-            # / Cleanup: restore stock
-            price.stock = old_stock
-            price.save(update_fields=["stock"])
-            Ticket.objects.filter(reservation=reservation_existante).delete()
-            reservation_existante.delete()
+                _creer_billets_depuis_panier(
+                    request,
+                    articles_panier,
+                    lignes_articles=lignes,
+                )
 
 
 # ===========================================================================
 # PARTIE 3 — Tests HTTP du flow complet billetterie
 # Testent le vrai chemin POST : moyens_paiement → identifier_client → payer.
-# Utilisent APIClient avec schema_context (pas de MagicMock).
+# Utilisent le client HTTP du lieu de test (TenantClient, pas de MagicMock).
 # / PART 3 — HTTP tests for the full ticketing flow.
 # Test the real POST path: moyens_paiement → identifier_client → payer.
-# Use APIClient with schema_context (no MagicMock).
+# Use the test venue's HTTP client (TenantClient, no MagicMock).
 # ===========================================================================
 
 
-def _make_client_billetterie(admin_user, tenant):
-    """Cree un APIClient authentifie pour le tenant.
-    / Creates an authenticated APIClient for the tenant."""
-    from rest_framework.test import APIClient
-
-    client = APIClient()
-    client.force_authenticate(user=admin_user)
-    client.defaults["SERVER_NAME"] = f"{TENANT_SCHEMA}.tibillet.localhost"
-    return client
-
-
-@pytest.fixture(scope="module")
-def admin_user_billetterie(tenant):
-    """Admin pour les tests HTTP billetterie.
-    / Admin for HTTP ticketing tests."""
-    from AuthBillet.models import TibilletUser
-
-    with schema_context(TENANT_SCHEMA):
-        email = "admin-test-billetterie@tibillet.localhost"
-        user, _created = TibilletUser.objects.get_or_create(
-            email=email,
-            defaults={
-                "username": email,
-                "is_staff": True,
-                "is_active": True,
-            },
-        )
-        user.client_admin.add(tenant)
-        return user
-
-
-class TestBilletterieFlowHTTP:
-    """Tests HTTP du flow complet billetterie sur le tenant lespass.
-    / HTTP tests for the full ticketing flow on the lespass tenant.
+class TestBilletterieFlowHTTP(DonneesBilletterieMixin, FastTenantTestCase):
+    """Tests HTTP du flow complet billetterie sur le lieu de test.
+    / HTTP tests for the full ticketing flow on the test venue.
 
     FLUX teste :
     1. POST moyens_paiement avec repid-{event_uuid}__{price_uuid}
@@ -772,137 +547,98 @@ class TestBilletterieFlowHTTP:
        → reponse succes + Reservation + Ticket en DB
     """
 
-    def test_moyens_paiement_billet_declenche_identification(
-        self,
-        admin_user_billetterie,
-        tenant,
-        donnees_billetterie,
-    ):
+    def test_moyens_paiement_billet_declenche_identification(self):
         """
         POST moyens_paiement avec un billet → ecran identification
         avec titre "Billetterie" et boutons NFC + email.
         / POST moyens_paiement with a ticket → identification screen
         with "Billetterie" title and NFC + email buttons.
         """
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client_billetterie(admin_user_billetterie, tenant)
-            pv = donnees_billetterie["pv"]
-            event = donnees_billetterie["event"]
-            price = donnees_billetterie["price_billet"]
+        # POST avec l'ID composite event__price (comme le JS l'envoie)
+        # / POST with composite event__price ID (as the JS sends it)
+        id_composite = f"{self.event.uuid}__{self.price_billet.uuid}"
+        response = self.client_http.post(
+            "/laboutik/paiement/moyens_paiement/",
+            data={
+                "uuid_pv": str(self.pv.uuid),
+                f"repid-{id_composite}": "1",
+            },
+        )
 
-            # POST avec l'ID composite event__price (comme le JS l'envoie)
-            # / POST with composite event__price ID (as the JS sends it)
-            id_composite = f"{event.uuid}__{price.uuid}"
-            response = client.post(
-                "/laboutik/paiement/moyens_paiement/",
-                data={
-                    "uuid_pv": str(pv.uuid),
-                    f"repid-{id_composite}": "1",
-                },
-            )
+        assert response.status_code == 200
+        contenu = response.content.decode()
 
-            assert response.status_code == 200
-            contenu = response.content.decode()
+        # L'ecran d'identification doit apparaitre (pas les boutons de paiement directs)
+        # / The identification screen must appear (not direct payment buttons)
+        assert "client-choose-nfc" in contenu or "client-choose-email" in contenu, (
+            "L'ecran d'identification n'apparait pas pour un billet"
+        )
+        # Le titre doit contenir "Billetterie"
+        # / The title must contain "Billetterie"
+        assert "Billetterie" in contenu or "billetterie" in contenu, (
+            "Le titre 'Billetterie' manque dans la reponse"
+        )
 
-            # L'ecran d'identification doit apparaitre (pas les boutons de paiement directs)
-            # / The identification screen must appear (not direct payment buttons)
-            assert "client-choose-nfc" in contenu or "client-choose-email" in contenu, (
-                "L'ecran d'identification n'apparait pas pour un billet"
-            )
-            # Le titre doit contenir "Billetterie"
-            # / The title must contain "Billetterie"
-            assert "Billetterie" in contenu or "billetterie" in contenu, (
-                "Le titre 'Billetterie' manque dans la reponse"
-            )
-
-    def test_moyens_paiement_billet_plus_biere_declenche_identification(
-        self,
-        admin_user_billetterie,
-        tenant,
-        donnees_billetterie,
-    ):
+    def test_moyens_paiement_billet_plus_biere_declenche_identification(self):
         """
         POST moyens_paiement avec biere + billet → ecran identification aussi.
         / POST moyens_paiement with beer + ticket → identification screen too.
         """
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client_billetterie(admin_user_billetterie, tenant)
-            pv = donnees_billetterie["pv"]
-            event = donnees_billetterie["event"]
-            price_billet = donnees_billetterie["price_billet"]
-            product_biere = donnees_billetterie["product_biere"]
+        id_composite = f"{self.event.uuid}__{self.price_billet.uuid}"
+        response = self.client_http.post(
+            "/laboutik/paiement/moyens_paiement/",
+            data={
+                "uuid_pv": str(self.pv.uuid),
+                f"repid-{id_composite}": "1",
+                f"repid-{self.product_biere.uuid}": "1",
+            },
+        )
 
-            id_composite = f"{event.uuid}__{price_billet.uuid}"
-            response = client.post(
-                "/laboutik/paiement/moyens_paiement/",
-                data={
-                    "uuid_pv": str(pv.uuid),
-                    f"repid-{id_composite}": "1",
-                    f"repid-{product_biere.uuid}": "1",
-                },
-            )
+        assert response.status_code == 200
+        contenu = response.content.decode()
+        assert "client-choose-nfc" in contenu or "client-choose-email" in contenu
 
-            assert response.status_code == 200
-            contenu = response.content.decode()
-            assert "client-choose-nfc" in contenu or "client-choose-email" in contenu
-
-    def test_identifier_client_email_affiche_recap_billet(
-        self,
-        admin_user_billetterie,
-        tenant,
-        donnees_billetterie,
-    ):
+    def test_identifier_client_email_affiche_recap_billet(self):
         """
         POST identifier_client avec email + repid billet → recapitulatif
         avec description "Billet ... — ..." dans les articles.
         / POST identifier_client with email + ticket repid → recap
         with "Billet ... — ..." description in articles.
         """
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client_billetterie(admin_user_billetterie, tenant)
-            pv = donnees_billetterie["pv"]
-            event = donnees_billetterie["event"]
-            price = donnees_billetterie["price_billet"]
+        id_composite = f"{self.event.uuid}__{self.price_billet.uuid}"
+        response = self.client_http.post(
+            "/laboutik/paiement/identifier_client/",
+            data={
+                "uuid_pv": str(self.pv.uuid),
+                "email_adhesion": "billet-http-test@tibillet.localhost",
+                "prenom_adhesion": "Test",
+                "nom_adhesion": "Billet",
+                "panier_a_recharges": "False",
+                "panier_a_adhesions": "False",
+                "panier_a_billets": "True",
+                "moyens_paiement": "espece,carte_bancaire",
+                f"repid-{id_composite}": "1",
+            },
+        )
 
-            id_composite = f"{event.uuid}__{price.uuid}"
-            response = client.post(
-                "/laboutik/paiement/identifier_client/",
-                data={
-                    "uuid_pv": str(pv.uuid),
-                    "email_adhesion": "billet-http-test@tibillet.localhost",
-                    "prenom_adhesion": "Test",
-                    "nom_adhesion": "Billet",
-                    "panier_a_recharges": "False",
-                    "panier_a_adhesions": "False",
-                    "panier_a_billets": "True",
-                    "moyens_paiement": "espece,carte_bancaire",
-                    f"repid-{id_composite}": "1",
-                },
-            )
+        assert response.status_code == 200
+        contenu = response.content.decode()
 
-            assert response.status_code == 200
-            contenu = response.content.decode()
+        # Le recapitulatif doit contenir "Billet" dans la description
+        # / The recap must contain "Billet" in the description
+        assert "Billet" in contenu or "billet" in contenu, (
+            "Le mot 'Billet' manque dans le recapitulatif"
+        )
+        # Le recapitulatif doit contenir le nom de l'event
+        # / The recap must contain the event name
+        assert self.event.name in contenu or "client-recapitulatif" in contenu, (
+            f"Le nom de l'event '{self.event.name}' manque dans le recapitulatif"
+        )
+        # Les boutons de paiement doivent etre presents
+        # / Payment buttons must be present
+        assert "paiement-btn-especes" in contenu or "espece" in contenu.lower()
 
-            # Le recapitulatif doit contenir "Billet" dans la description
-            # / The recap must contain "Billet" in the description
-            assert "Billet" in contenu or "billet" in contenu, (
-                "Le mot 'Billet' manque dans le recapitulatif"
-            )
-            # Le recapitulatif doit contenir le nom de l'event
-            # / The recap must contain the event name
-            assert event.name in contenu or "client-recapitulatif" in contenu, (
-                f"Le nom de l'event '{event.name}' manque dans le recapitulatif"
-            )
-            # Les boutons de paiement doivent etre presents
-            # / Payment buttons must be present
-            assert "paiement-btn-especes" in contenu or "espece" in contenu.lower()
-
-    def test_payer_especes_cree_reservation_et_ticket(
-        self,
-        admin_user_billetterie,
-        tenant,
-        donnees_billetterie,
-    ):
+    def test_payer_especes_cree_reservation_et_ticket(self):
         """
         POST payer en especes avec billet → Reservation(status=V) + Ticket(status=K) en DB.
         / POST pay cash with ticket → Reservation(status=V) + Ticket(status=K) in DB.
@@ -912,104 +648,68 @@ class TestBilletterieFlowHTTP:
         2. Verifier response 200 + "succes" ou "reussi"
         3. Verifier Reservation + Ticket en DB
         """
-        from BaseBillet.models import Reservation, Ticket, LigneArticle
+        from AuthBillet.models import TibilletUser
+        from BaseBillet.models import LigneArticle, Reservation, Ticket
 
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client_billetterie(admin_user_billetterie, tenant)
-            pv = donnees_billetterie["pv"]
-            event = donnees_billetterie["event"]
-            price = donnees_billetterie["price_billet"]
-            prix_centimes = int(round(price.prix * 100))
-
-            id_composite = f"{event.uuid}__{price.uuid}"
-            response = client.post(
-                "/laboutik/paiement/payer/",
-                data={
-                    "uuid_pv": str(pv.uuid),
-                    "moyen_paiement": "espece",
-                    "total": str(prix_centimes),
-                    "given_sum": "0",
-                    "email_adhesion": "billet-payer-test@tibillet.localhost",
-                    "prenom_adhesion": "Payer",
-                    "nom_adhesion": "Test",
-                    f"repid-{id_composite}": "1",
-                },
-            )
-
-            assert response.status_code == 200
-            contenu = response.content.decode()
-            # L'ecran de succes doit apparaitre (pas un message d'erreur)
-            # / The success screen must appear (not an error message)
-            assert "ussi" in contenu.lower() or "success" in contenu.lower(), (
-                f"Le paiement n'a pas reussi. Contenu : {contenu[:300]}"
-            )
-
-            # Verifier en DB : Reservation creee
-            # / Verify in DB: Reservation created
-            from AuthBillet.models import TibilletUser
-
-            user_payer = TibilletUser.objects.filter(
-                email="billet-payer-test@tibillet.localhost",
-            ).first()
-            assert user_payer is not None, "User billet-payer-test non cree"
-
-            reservation = (
-                Reservation.objects.filter(
-                    user_commande=user_payer,
-                    event=event,
-                )
-                .order_by("-datetime")
-                .first()
-            )
-            assert reservation is not None, "Reservation non creee"
-            assert reservation.status == Reservation.VALID
-            assert reservation.to_mail is True
-
-            # Verifier en DB : Ticket cree avec status NOT_SCANNED
-            # / Verify in DB: Ticket created with NOT_SCANNED status
-            tickets = Ticket.objects.filter(reservation=reservation)
-            assert tickets.count() == 1, f"Attendu 1 Ticket, trouve {tickets.count()}"
-            ticket = tickets.first()
-            assert ticket.status == Ticket.NOT_SCANNED
-
-            # Verifier la LigneArticle liee a la reservation
-            # / Verify the LigneArticle linked to the reservation
-            ligne = LigneArticle.objects.filter(reservation=reservation).first()
-            assert ligne is not None, "LigneArticle non liee a la reservation"
-            assert ligne.amount == prix_centimes
-            assert ligne.sale_origin == "LB"
-
-            # Nettoyage (ordre FK : LigneArticle → Ticket → Reservation)
-            # / Cleanup (FK order: LigneArticle → Ticket → Reservation)
-            LigneArticle.objects.filter(reservation=reservation).delete()
-            # Supprimer aussi les LigneArticle sans reservation (biere dans paniers mixtes)
-            # / Also delete LigneArticle without reservation (beer in mixed carts)
-            LigneArticle.objects.filter(
-                pricesold__productsold__product__name__startswith=TEST_PREFIX,
-                reservation__isnull=True,
-            ).delete()
-            tickets.delete()
-            reservation.delete()
-
-
-@pytest.fixture(scope="module")
-def tarif_billet_gratuit(tenant, donnees_billetterie):
-    """
-    Un tarif a 0 € sur le produit billet de test.
-    / A 0 € price on the test ticket product.
-    """
-    from BaseBillet.models import Price
-
-    with tenant_context(tenant):
-        tarif_gratuit, _created = Price.objects.get_or_create(
-            product=donnees_billetterie["product_billet"],
-            name=f"{TEST_PREFIX} Gratuit",
-            defaults={"prix": Decimal("0.00"), "publish": True},
+        prix_centimes = int(round(self.price_billet.prix * 100))
+        id_composite = f"{self.event.uuid}__{self.price_billet.uuid}"
+        response = self.client_http.post(
+            "/laboutik/paiement/payer/",
+            data={
+                "uuid_pv": str(self.pv.uuid),
+                "moyen_paiement": "espece",
+                "total": str(prix_centimes),
+                "given_sum": "0",
+                "email_adhesion": "billet-payer-test@tibillet.localhost",
+                "prenom_adhesion": "Payer",
+                "nom_adhesion": "Test",
+                f"repid-{id_composite}": "1",
+            },
         )
-        return tarif_gratuit
+
+        assert response.status_code == 200
+        contenu = response.content.decode()
+        # L'ecran de succes doit apparaitre (pas un message d'erreur)
+        # / The success screen must appear (not an error message)
+        assert "ussi" in contenu.lower() or "success" in contenu.lower(), (
+            f"Le paiement n'a pas reussi. Contenu : {contenu[:300]}"
+        )
+
+        # Verifier en DB : Reservation creee
+        # / Verify in DB: Reservation created
+        user_payer = TibilletUser.objects.filter(
+            email="billet-payer-test@tibillet.localhost",
+        ).first()
+        assert user_payer is not None, "User billet-payer-test non cree"
+
+        reservation = (
+            Reservation.objects.filter(
+                user_commande=user_payer,
+                event=self.event,
+            )
+            .order_by("-datetime")
+            .first()
+        )
+        assert reservation is not None, "Reservation non creee"
+        assert reservation.status == Reservation.VALID
+        assert reservation.to_mail is True
+
+        # Verifier en DB : Ticket cree avec status NOT_SCANNED
+        # / Verify in DB: Ticket created with NOT_SCANNED status
+        tickets = Ticket.objects.filter(reservation=reservation)
+        assert tickets.count() == 1, f"Attendu 1 Ticket, trouve {tickets.count()}"
+        ticket = tickets.first()
+        assert ticket.status == Ticket.NOT_SCANNED
+
+        # Verifier la LigneArticle liee a la reservation
+        # / Verify the LigneArticle linked to the reservation
+        ligne = LigneArticle.objects.filter(reservation=reservation).first()
+        assert ligne is not None, "LigneArticle non liee a la reservation"
+        assert ligne.amount == prix_centimes
+        assert ligne.sale_origin == "LB"
 
 
-class TestBilletGratuit:
+class TestBilletGratuit(DonneesBilletterieMixin, FastTenantTestCase):
     """
     Billet a 0 € : apres l'identification, pas de choix du moyen de paiement.
     Un seul bouton VALIDER envoie moyen_paiement=gift, enregistre « Offert ».
@@ -1017,162 +717,137 @@ class TestBilletGratuit:
     button sends moyen_paiement=gift, recorded as "Offered".
     """
 
-    def test_identifier_client_panier_gratuit_affiche_seulement_valider(
-        self,
-        admin_user_billetterie,
-        tenant,
-        donnees_billetterie,
-        tarif_billet_gratuit,
-    ):
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client_billetterie(admin_user_billetterie, tenant)
-            pv = donnees_billetterie["pv"]
-            event = donnees_billetterie["event"]
-            id_composite = f"{event.uuid}__{tarif_billet_gratuit.uuid}"
+    def setUp(self):
+        """
+        Les donnees communes, plus un tarif a 0 € sur le produit billet.
+        / The shared data, plus a 0 € price on the ticket product.
+        """
+        from BaseBillet.models import Price
 
-            response = client.post(
-                "/laboutik/paiement/identifier_client/",
-                data={
-                    "uuid_pv": str(pv.uuid),
-                    "email_adhesion": "billet-gratuit-test@tibillet.localhost",
-                    "prenom_adhesion": "Gratuit",
-                    "nom_adhesion": "Test",
-                    "panier_a_billets": "True",
-                    "moyens_paiement": "espece,carte_bancaire",
-                    f"repid-{id_composite}": "1",
-                },
-            )
+        super().setUp()
+        self.tarif_billet_gratuit = Price.objects.create(
+            product=self.product_billet,
+            name=f"{TEST_PREFIX} Gratuit",
+            prix=Decimal("0.00"),
+            publish=True,
+        )
 
-            assert response.status_code == 200
-            contenu = response.content.decode()
-            assert 'data-testid="client-recapitulatif"' in contenu
-            assert 'data-testid="paiement-btn-gratuit"' in contenu
-            assert 'data-testid="paiement-btn-especes"' not in contenu
-            assert 'data-testid="paiement-btn-cb"' not in contenu
+    def test_identifier_client_panier_gratuit_affiche_seulement_valider(self):
+        id_composite = f"{self.event.uuid}__{self.tarif_billet_gratuit.uuid}"
 
-    def test_identifier_client_panier_payant_affiche_les_tuiles_avec_le_total(
-        self,
-        admin_user_billetterie,
-        tenant,
-        donnees_billetterie,
-    ):
+        response = self.client_http.post(
+            "/laboutik/paiement/identifier_client/",
+            data={
+                "uuid_pv": str(self.pv.uuid),
+                "email_adhesion": "billet-gratuit-test@tibillet.localhost",
+                "prenom_adhesion": "Gratuit",
+                "nom_adhesion": "Test",
+                "panier_a_billets": "True",
+                "moyens_paiement": "espece,carte_bancaire",
+                f"repid-{id_composite}": "1",
+            },
+        )
+
+        assert response.status_code == 200
+        contenu = response.content.decode()
+        assert 'data-testid="client-recapitulatif"' in contenu
+        assert 'data-testid="paiement-btn-gratuit"' in contenu
+        assert 'data-testid="paiement-btn-especes"' not in contenu
+        assert 'data-testid="paiement-btn-cb"' not in contenu
+
+    def test_identifier_client_panier_payant_affiche_les_tuiles_avec_le_total(self):
         """
         Panier payant : les tuiles de la vente normale, et la tuile CB
         envoie le total a la popup de confirmation (plus de « 0 € »).
         / Paid cart: normal-sale tiles; the card tile passes the total.
         """
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client_billetterie(admin_user_billetterie, tenant)
-            pv = donnees_billetterie["pv"]
-            event = donnees_billetterie["event"]
-            price = donnees_billetterie["price_billet"]
-            id_composite = f"{event.uuid}__{price.uuid}"
+        id_composite = f"{self.event.uuid}__{self.price_billet.uuid}"
 
-            response = client.post(
-                "/laboutik/paiement/identifier_client/",
-                data={
-                    "uuid_pv": str(pv.uuid),
-                    "email_adhesion": "billet-http-test@tibillet.localhost",
-                    "prenom_adhesion": "Test",
-                    "nom_adhesion": "Billet",
-                    "panier_a_billets": "True",
-                    f"repid-{id_composite}": "1",
-                },
-            )
+        response = self.client_http.post(
+            "/laboutik/paiement/identifier_client/",
+            data={
+                "uuid_pv": str(self.pv.uuid),
+                "email_adhesion": "billet-http-test@tibillet.localhost",
+                "prenom_adhesion": "Test",
+                "nom_adhesion": "Billet",
+                "panier_a_billets": "True",
+                f"repid-{id_composite}": "1",
+            },
+        )
 
-            contenu = response.content.decode()
-            assert 'data-testid="paiement-btn-cb"' in contenu
-            assert "method=carte_bancaire&total=15" in contenu
-            assert 'data-testid="paiement-btn-gratuit"' not in contenu
+        contenu = response.content.decode()
+        assert 'data-testid="paiement-btn-cb"' in contenu
+        assert "method=carte_bancaire&total=15" in contenu
+        assert 'data-testid="paiement-btn-gratuit"' not in contenu
 
-    def test_payer_gift_panier_gratuit_cree_billet_offert(
-        self,
-        admin_user_billetterie,
-        tenant,
-        donnees_billetterie,
-        tarif_billet_gratuit,
-    ):
+    def test_payer_gift_panier_gratuit_cree_billet_offert(self):
         from AuthBillet.models import TibilletUser
         from BaseBillet.models import LigneArticle, PaymentMethod, Reservation, Ticket
 
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client_billetterie(admin_user_billetterie, tenant)
-            pv = donnees_billetterie["pv"]
-            event = donnees_billetterie["event"]
-            id_composite = f"{event.uuid}__{tarif_billet_gratuit.uuid}"
+        id_composite = f"{self.event.uuid}__{self.tarif_billet_gratuit.uuid}"
 
-            response = client.post(
-                "/laboutik/paiement/payer/",
-                data={
-                    "uuid_pv": str(pv.uuid),
-                    "moyen_paiement": "gift",
-                    "total": "0",
-                    "email_adhesion": "billet-gratuit-test@tibillet.localhost",
-                    "prenom_adhesion": "Gratuit",
-                    "nom_adhesion": "Test",
-                    f"repid-{id_composite}": "1",
-                },
-            )
+        response = self.client_http.post(
+            "/laboutik/paiement/payer/",
+            data={
+                "uuid_pv": str(self.pv.uuid),
+                "moyen_paiement": "gift",
+                "total": "0",
+                "email_adhesion": "billet-gratuit-test@tibillet.localhost",
+                "prenom_adhesion": "Gratuit",
+                "nom_adhesion": "Test",
+                f"repid-{id_composite}": "1",
+            },
+        )
 
-            assert response.status_code == 200
-            assert 'data-testid="paiement-succes"' in response.content.decode()
+        assert response.status_code == 200
+        assert 'data-testid="paiement-succes"' in response.content.decode()
 
-            user_gratuit = TibilletUser.objects.get(
-                email="billet-gratuit-test@tibillet.localhost",
-            )
-            reservation = (
-                Reservation.objects.filter(user_commande=user_gratuit, event=event)
-                .order_by("-datetime")
-                .first()
-            )
-            assert reservation is not None
-            tickets = Ticket.objects.filter(reservation=reservation)
-            assert tickets.count() == 1
-            assert tickets.first().payment_method == PaymentMethod.FREE
-            ligne = LigneArticle.objects.get(reservation=reservation)
-            assert ligne.amount == 0
-            # Le moyen est sur la vente (une vente gratuite n'a aucun règlement),
-            # jamais sur la ligne (Q-H2).
-            # / The method lives on the sale, never on the line (Q-H2).
-            assert ligne.payment_method is None
+        user_gratuit = TibilletUser.objects.get(
+            email="billet-gratuit-test@tibillet.localhost",
+        )
+        reservation = (
+            Reservation.objects.filter(user_commande=user_gratuit, event=self.event)
+            .order_by("-datetime")
+            .first()
+        )
+        assert reservation is not None
+        tickets = Ticket.objects.filter(reservation=reservation)
+        assert tickets.count() == 1
+        assert tickets.first().payment_method == PaymentMethod.FREE
+        ligne = LigneArticle.objects.get(reservation=reservation)
+        assert ligne.amount == 0
+        # Le moyen est sur la vente (une vente gratuite n'a aucun règlement),
+        # jamais sur la ligne (Q-H2).
+        # / The method lives on the sale, never on the line (Q-H2).
+        assert ligne.payment_method is None
 
-            # Nettoyage / Cleanup
-            LigneArticle.objects.filter(reservation=reservation).delete()
-            tickets.delete()
-            reservation.delete()
-
-    def test_payer_gift_panier_payant_est_refuse(
-        self,
-        admin_user_billetterie,
-        tenant,
-        donnees_billetterie,
-    ):
+    def test_payer_gift_panier_payant_est_refuse(self):
         """
         Un POST force « gift » sur un panier payant est refuse (400).
         / A forged "gift" POST on a paid cart is refused (400).
         """
         from BaseBillet.models import Reservation
 
-        with schema_context(TENANT_SCHEMA):
-            client = _make_client_billetterie(admin_user_billetterie, tenant)
-            pv = donnees_billetterie["pv"]
-            event = donnees_billetterie["event"]
-            price = donnees_billetterie["price_billet"]
-            id_composite = f"{event.uuid}__{price.uuid}"
-            nombre_de_reservations_avant = Reservation.objects.filter(event=event).count()
+        id_composite = f"{self.event.uuid}__{self.price_billet.uuid}"
+        nombre_de_reservations_avant = Reservation.objects.filter(
+            event=self.event
+        ).count()
 
-            response = client.post(
-                "/laboutik/paiement/payer/",
-                data={
-                    "uuid_pv": str(pv.uuid),
-                    "moyen_paiement": "gift",
-                    "total": "0",
-                    "email_adhesion": "billet-gift-force@tibillet.localhost",
-                    "prenom_adhesion": "Force",
-                    "nom_adhesion": "Test",
-                    f"repid-{id_composite}": "1",
-                },
-            )
+        response = self.client_http.post(
+            "/laboutik/paiement/payer/",
+            data={
+                "uuid_pv": str(self.pv.uuid),
+                "moyen_paiement": "gift",
+                "total": "0",
+                "email_adhesion": "billet-gift-force@tibillet.localhost",
+                "prenom_adhesion": "Force",
+                "nom_adhesion": "Test",
+                f"repid-{id_composite}": "1",
+            },
+        )
 
-            assert response.status_code == 400
-            assert Reservation.objects.filter(event=event).count() == nombre_de_reservations_avant
+        assert response.status_code == 400
+        assert (
+            Reservation.objects.filter(event=self.event).count()
+            == nombre_de_reservations_avant
+        )

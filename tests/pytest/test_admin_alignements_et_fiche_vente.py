@@ -48,7 +48,7 @@ from django.utils import translation
 from django_tenants.utils import tenant_context
 
 from BaseBillet.models import PaymentMethod
-from BaseBillet.models_vente import Reglement, Vente
+from BaseBillet.models_vente import Vente
 from fabriques_panier import (
     catalogue_stripe_simule,
     configuration_modifiee,
@@ -536,18 +536,17 @@ def test_avoir_sur_une_part_d_historique_rend_toute_la_quantite_exacte(lieu):
     assert avoirs[0].nature == Vente.Nature.AVOIR
 
 
-def test_inlines_de_la_fiche_vente_titres_lisibles_et_quantites_a_la_francaise(lieu):
+def test_inlines_de_la_fiche_vente_sans_titre_de_ligne_et_quantites_a_la_francaise(lieu):
     """
     La fiche de la vente fil rouge (3 jus en deux parts, monnaie locale 5,00 € + CB
     5,50 €) :
-    - chaque article de l'inline « Articles » a pour titre le nom du produit (pas un
-      uuid court) ;
-    - chaque règlement de l'inline « Règlements » a pour titre son moyen et son
-      montant (« Carte bancaire — 5,50 € »), jamais « Reglement object (…) » ;
+    - les inlines « Articles » et « Règlements » n'ont plus de titre au-dessus de
+      chaque ligne (option Unfold `hide_title`) : ni uuid court, ni
+      « Reglement object (…) », ni titre qui répète les colonnes ;
+    - les colonnes restent : produit et moyen de paiement, une cellule par ligne ;
     - les quantités s'écrivent à la française, 3 décimales au plus : 1,429 et 1,571,
       jamais 1.43 ni 1.57.
-    / Sale page inlines: product name as item title, "method — amount" as payment
-    title, French quantities.
+    / Sale page inlines: no row title any more, columns kept, French quantities.
     """
     client_de_l_admin = client_de_l_admin_du_lieu(lieu)
     vente = vendre_trois_jus_en_deux_parts(creer_utilisateur())
@@ -557,22 +556,22 @@ def test_inlines_de_la_fiche_vente_titres_lisibles_et_quantites_a_la_francaise(l
 
     assert reponse.status_code == 200
     html_de_la_page = reponse.content.decode()
+    # Le titre d'une ligne d'inline tabulaire Unfold est un paragraphe de classe
+    # « group/title » (unfold/helpers/edit_inline/tabular_title.html).
+    # / The Unfold tabular inline row title is a "group/title" paragraph.
+    assert "group/title" not in html_de_la_page
     assert "Reglement object" not in html_de_la_page
-    titres_des_articles = []
-    titres_des_reglements = []
-    for inline_de_la_fiche in reponse.context["inline_admin_formsets"]:
-        for formulaire_de_la_ligne in inline_de_la_fiche:
-            titre = str(formulaire_de_la_ligne.original.get_inline_title())
-            if inline_de_la_fiche.opts.model is Reglement:
-                titres_des_reglements.append(titre)
-            else:
-                titres_des_articles.append(titre)
-    assert titres_des_articles == [nom_du_produit, nom_du_produit]
-    assert len(titres_des_reglements) == 2
-    for titre_du_reglement in titres_des_reglements:
-        assert titre_du_reglement in html_de_la_page, titre_du_reglement
-        assert re.search(r"^\S.* — 5,[05]0\s€$", titre_du_reglement), titre_du_reglement
-    assert any(titre.startswith("Carte bancaire") for titre in titres_des_reglements)
+    cellules_du_produit = re.findall(
+        r"<td[^>]*field-produit[^>]*>\s*(.*?)\s*</td>", html_de_la_page, re.DOTALL
+    )
+    cellules_du_moyen = re.findall(
+        r"<td[^>]*field-moyen_affiche[^>]*>\s*(.*?)\s*</td>", html_de_la_page, re.DOTALL
+    )
+    textes_du_produit = []
+    for cellule in cellules_du_produit:
+        textes_du_produit.append(re.sub(r"<[^>]+>", "", cellule).strip())
+    assert textes_du_produit == [nom_du_produit, nom_du_produit]
+    assert len(cellules_du_moyen) == 2
     assert "1,429" in html_de_la_page
     assert "1,571" in html_de_la_page
     assert ">1.43<" not in html_de_la_page.replace(" ", "").replace("\n", "")

@@ -805,11 +805,14 @@ def rapports_comptables(django_shell):
     - `caisse.solde_caisse` : le mouvement du tiroir sur la periode, sans le fond
       de caisse (solde theorique − fond) ;
     - `caisse.total_recharges` : le net des recharges encaissees dans une vente
-      d'un point de vente ;
-    - `caisse.total_adhesions` : le net des articles d'adhesion d'une vente d'un
-      point de vente ;
+      d'un point de vente (`totaux_caisse_et_en_ligne`) ;
+    - `caisse.total_adhesions` : le net des articles d'adhesion du chiffre
+      d'affaires d'une vente d'un point de vente (`totaux_caisse_et_en_ligne`) ;
     - `en_ligne.total` : l'argent et le cashless des ventes sans point de vente
-      (reglements des natures vente, avoir, correction ; ni offert ni points).
+      (reglements des natures vente, avoir, correction ; ni offert ni points ;
+      `totaux_caisse_et_en_ligne`).
+    Seules des methodes publiques du rapport sont lues.
+    / Only public report methods are read.
 
     USAGE — poser la borne AVANT l'action, lire APRES :
 
@@ -836,41 +839,32 @@ def rapports_comptables(django_shell):
     """
 
     def _lire(depuis, nom_du_point_de_vente=None):
+        # Seules des methodes PUBLIQUES du rapport sont lues : le tiroir
+        # (`section_caisse_especes`) et les totaux par perimetre
+        # (`totaux_caisse_et_en_ligne`).
+        # / Only PUBLIC report methods are read.
         sortie = django_shell(
             "import json\n"
-            "from django.db.models import Sum\n"
             "from django.utils.dateparse import parse_datetime\n"
             "from django.utils import timezone\n"
-            "from BaseBillet.models import PaymentMethod\n"
-            "from BaseBillet.models_vente import Reglement\n"
-            "from comptabilite.rapport import NATURES_DES_REGLEMENTS, RapportDesVentes\n"
+            "from comptabilite.rapport import RapportDesVentes\n"
             "fin = timezone.localtime()\n"
             f"debut = parse_datetime('{depuis}')\n"
             "rapport = RapportDesVentes(debut, fin)\n"
             "tiroir = rapport.section_caisse_especes()\n"
-            "articles_du_tiroir = rapport._articles_des_ventes_en_euros().filter(\n"
-            "    vente__point_de_vente__isnull=False)\n"
-            "recharges_du_tiroir = rapport._articles_de_recharge_encaissees().filter(\n"
-            "    vente__point_de_vente__isnull=False)\n"
-            "ventes_sans_point_de_vente = rapport._ventes_en_euros().filter(\n"
-            "    point_de_vente__isnull=True, nature__in=NATURES_DES_REGLEMENTS)\n"
-            "reglements_sans_point_de_vente = Reglement.objects.filter(\n"
-            "    vente__in=ventes_sans_point_de_vente).exclude(\n"
-            "    moyen__in=[PaymentMethod.FREE, PaymentMethod.NON_MONETAIRE])\n"
-            "def somme(requete, champ):\n"
-            "    return int(requete.aggregate(total=Sum(champ))['total'] or 0)\n"
+            "totaux = rapport.totaux_caisse_et_en_ligne()\n"
             "print('RAPPORTS_JSON=' + json.dumps({\n"
             "    'caisse': {\n"
             "        'especes': int(tiroir['especes_recues_en_centimes']\n"
             "                       + tiroir['especes_rendues_en_centimes']),\n"
             "        'solde_caisse': int(tiroir['solde_theorique_en_centimes']\n"
             "                            - tiroir['fond_de_caisse_en_centimes']),\n"
-            "        'total_recharges': somme(recharges_du_tiroir, 'total_ttc'),\n"
-            "        'total_adhesions': somme(\n"
-            "            articles_du_tiroir.filter(membership__isnull=False), 'total_ttc'),\n"
+            "        'total_recharges': int(\n"
+            "            totaux['caisse']['recharges_encaissees_en_centimes']),\n"
+            "        'total_adhesions': int(totaux['caisse']['adhesions_en_centimes']),\n"
             "    },\n"
             "    'en_ligne': {\n"
-            "        'total': somme(reglements_sans_point_de_vente, 'montant'),\n"
+            "        'total': int(totaux['en_ligne']['reglements_en_centimes']),\n"
             "    },\n"
             "}))"
         )
@@ -904,7 +898,7 @@ def rapports_qui_voient_la_ligne(django_shell):
     Les perimetres sont ceux de `rapports_comptables` : `caisse` = une vente
     reglee de la periode faite sur un point de vente ; `en_ligne` = une vente
     reglee de la periode sans point de vente. Une ligne est vue par le rapport
-    seulement par sa vente reglee (`RapportDesVentes._ventes_reglees`).
+    seulement par sa vente reglee (`RapportDesVentes.perimetre_de_l_article`).
     / Same scopes as rapports_comptables; a line is seen through its settled sale.
 
     :param uuid_de_la_ligne: uuid de la `LigneArticle` a situer.
@@ -913,21 +907,21 @@ def rapports_qui_voient_la_ligne(django_shell):
     """
 
     def _situer(uuid_de_la_ligne, depuis):
+        # La methode PUBLIQUE `perimetre_de_l_article` dit ou le rapport voit la
+        # ligne : « caisse », « en_ligne », ou nulle part (None).
+        # / The PUBLIC method perimetre_de_l_article says where the report sees it.
         sortie = django_shell(
             "import json\n"
             "from django.utils.dateparse import parse_datetime\n"
             "from django.utils import timezone\n"
-            "from BaseBillet.models import LigneArticle\n"
             "from comptabilite.rapport import RapportDesVentes\n"
             "fin = timezone.localtime()\n"
             f"debut = parse_datetime('{depuis}')\n"
-            f"uuid_vise = '{uuid_de_la_ligne}'\n"
             "rapport = RapportDesVentes(debut, fin)\n"
-            "lignes_vues = LigneArticle.objects.filter(\n"
-            "    uuid=uuid_vise, vente__in=rapport._ventes_reglees())\n"
+            f"perimetre = rapport.perimetre_de_l_article('{uuid_de_la_ligne}')\n"
             "print('SITUATION_JSON=' + json.dumps({\n"
-            "    'caisse': lignes_vues.filter(vente__point_de_vente__isnull=False).exists(),\n"
-            "    'en_ligne': lignes_vues.filter(vente__point_de_vente__isnull=True).exists(),\n"
+            "    'caisse': perimetre == 'caisse',\n"
+            "    'en_ligne': perimetre == 'en_ligne',\n"
             "}))"
         )
         for ligne in sortie.splitlines():

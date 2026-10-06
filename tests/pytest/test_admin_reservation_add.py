@@ -42,7 +42,7 @@ def test_admin_reservation_add_tarif_gratuit_cree_reservation_et_ligne(tenant):
         from Administration.admin_tenant import ReservationAddAdmin
         from AuthBillet.models import TibilletUser
         from BaseBillet.models import (
-            Event, Product, ProductSold, PriceSold,
+            Event, Product, PriceSold,
             Reservation, Ticket, LigneArticle, PaymentMethod, SaleOrigin,
         )
 
@@ -107,10 +107,11 @@ def test_admin_reservation_add_tarif_gratuit_cree_reservation_et_ligne(tenant):
         mock_laboutik.assert_not_called()
         mock_mailer.assert_called_once()
 
-        Ticket.objects.filter(reservation=reservation).delete()
-        ligne.delete()
-        reservation.delete()
-        pricesold.delete()
+        # Aucun nettoyage : le fichier est en `django_db`, la transaction du test est
+        # annulee a la fin. La ligne est l'article d'une vente reglee : la garde
+        # `pre_delete` de `LigneArticle` refuse de la supprimer.
+        # / No cleanup: the test transaction is rolled back (`django_db`). The line
+        # belongs to a settled sale: the pre_delete guard refuses to delete it.
 
 
 def test_admin_reservation_add_tarif_payant_calcule_le_montant_en_centimes(tenant):
@@ -121,10 +122,9 @@ def test_admin_reservation_add_tarif_payant_calcule_le_montant_en_centimes(tenan
     """
     with tenant_context(tenant):
         from Administration.admin_tenant import ReservationAddAdmin
-        from AuthBillet.models import TibilletUser
         from BaseBillet.models import (
-            Event, Product, Price, ProductSold, PriceSold,
-            Reservation, Ticket, LigneArticle, PaymentMethod, SaleOrigin,
+            Event, Product, Price, PriceSold,
+            Ticket, LigneArticle, PaymentMethod, SaleOrigin,
         )
 
         suffix = uuid.uuid4().hex[:8]
@@ -178,11 +178,11 @@ def test_admin_reservation_add_tarif_payant_calcule_le_montant_en_centimes(tenan
         mock_laboutik.assert_not_called()
         mock_mailer.assert_called_once()
 
-        Ticket.objects.filter(reservation=reservation).delete()
-        ligne.delete()
-        reservation.delete()
-        pricesold.delete()
-        TibilletUser.objects.filter(email=email_saisi).delete()
+        # Aucun nettoyage : le fichier est en `django_db`, la transaction du test est
+        # annulee a la fin. La ligne est l'article d'une vente reglee : la garde
+        # `pre_delete` de `LigneArticle` refuse de la supprimer.
+        # / No cleanup: the test transaction is rolled back (`django_db`). The line
+        # belongs to a settled sale: the pre_delete guard refuses to delete it.
 
 
 def test_admin_reservation_add_tarif_partage_entre_deux_events(tenant):
@@ -197,7 +197,7 @@ def test_admin_reservation_add_tarif_partage_entre_deux_events(tenant):
     with tenant_context(tenant):
         from Administration.admin_tenant import ReservationAddAdmin
         from BaseBillet.models import (
-            Event, Product, Reservation, Ticket, LigneArticle, PaymentMethod, PriceSold,
+            Event, Product, PaymentMethod,
         )
 
         suffix = uuid.uuid4().hex[:8]
@@ -243,10 +243,11 @@ def test_admin_reservation_add_tarif_partage_entre_deux_events(tenant):
         # / The reservation is on event_2, NOT event_1.
         assert reservation.event == event_2
 
-        Ticket.objects.filter(reservation=reservation).delete()
-        LigneArticle.objects.filter(reservation=reservation).delete()
-        reservation.delete()
-        PriceSold.objects.filter(price=price).delete()
+        # Aucun nettoyage : le fichier est en `django_db`, la transaction du test est
+        # annulee a la fin. La ligne est l'article d'une vente reglee : la garde
+        # `pre_delete` de `LigneArticle` refuse de la supprimer.
+        # / No cleanup: the test transaction is rolled back (`django_db`). The line
+        # belongs to a settled sale: the pre_delete guard refuses to delete it.
 
 
 def test_admin_reservation_add_montant_par_billet_surcharge_le_prix(tenant):
@@ -257,10 +258,9 @@ def test_admin_reservation_add_montant_par_billet_surcharge_le_prix(tenant):
     """
     with tenant_context(tenant):
         from Administration.admin_tenant import ReservationAddAdmin
-        from AuthBillet.models import TibilletUser
         from BaseBillet.models import (
-            Event, Product, Price, PriceSold,
-            Ticket, LigneArticle, PaymentMethod,
+            Event, Product, Price,
+            LigneArticle, PaymentMethod,
         )
 
         suffix = uuid.uuid4().hex[:8]
@@ -295,11 +295,11 @@ def test_admin_reservation_add_montant_par_billet_surcharge_le_prix(tenant):
         assert int(ligne.qty) == 2
         assert ligne.total() == 1600         # 8 × 2 = 16 €
 
-        Ticket.objects.filter(reservation=reservation).delete()
-        ligne.delete()
-        reservation.delete()
-        PriceSold.objects.filter(price=price).delete()
-        TibilletUser.objects.filter(email=email_saisi).delete()
+        # Aucun nettoyage : le fichier est en `django_db`, la transaction du test est
+        # annulee a la fin. La ligne est l'article d'une vente reglee : la garde
+        # `pre_delete` de `LigneArticle` refuse de la supprimer.
+        # / No cleanup: the test transaction is rolled back (`django_db`). The line
+        # belongs to a settled sale: the pre_delete guard refuses to delete it.
 
 
 def test_admin_reservation_add_prix_libre_montant_obligatoire(tenant):
@@ -310,10 +310,9 @@ def test_admin_reservation_add_prix_libre_montant_obligatoire(tenant):
     """
     with tenant_context(tenant):
         from Administration.admin_tenant import ReservationAddAdmin
-        from AuthBillet.models import TibilletUser
         from BaseBillet.models import (
-            Event, Product, Price, PriceSold,
-            Ticket, LigneArticle, PaymentMethod,
+            Event, Product, Price,
+            LigneArticle, PaymentMethod,
         )
 
         suffix = uuid.uuid4().hex[:8]
@@ -356,11 +355,11 @@ def test_admin_reservation_add_prix_libre_montant_obligatoire(tenant):
         assert int(ligne.qty) == 2
         assert ligne.total() == 3000         # 15 × 2 = 30 €
 
-        Ticket.objects.filter(reservation=reservation).delete()
-        ligne.delete()
-        reservation.delete()
-        PriceSold.objects.filter(price=price).delete()
-        TibilletUser.objects.filter(email=base["email"]).delete()
+        # Aucun nettoyage : le fichier est en `django_db`, la transaction du test est
+        # annulee a la fin. La ligne est l'article d'une vente reglee : la garde
+        # `pre_delete` de `LigneArticle` refuse de la supprimer.
+        # / No cleanup: the test transaction is rolled back (`django_db`). The line
+        # belongs to a settled sale: the pre_delete guard refuses to delete it.
 
 
 def test_admin_reservation_add_moyen_paiement_obligatoire(tenant):

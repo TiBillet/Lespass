@@ -866,47 +866,48 @@ def test_booking_validation_accepts_valid_slot_utc_plus_1():
     from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
-        try:
-            tz = _fuseau_du_lieu(TZ_NAME_LAGOS)
+        # Aucun nettoyage : le test est en `django_db`, sa transaction est annulee a la
+        # fin. La reservation acceptee a une vente REGLEE : la garde `pre_delete` de
+        # `LigneArticle` refuse de supprimer ses articles (`_cleanup` echouerait).
+        # / No cleanup: the django_db transaction is rolled back. The accepted booking
+        # has a SETTLED sale whose items the pre_delete guard refuses to delete.
+        tz = _fuseau_du_lieu(TZ_NAME_LAGOS)
 
-            monday = _next_weekday(weekday=0)
-            calendar = _make_calendar('validation_valid_utc1')
-            weekly_opening = _make_weekly_opening('validation_valid_utc1')
-            resource_for_test = _make_resource('validation_valid_utc1', calendar, weekly_opening)
+        monday = _next_weekday(weekday=0)
+        calendar = _make_calendar('validation_valid_utc1')
+        weekly_opening = _make_weekly_opening('validation_valid_utc1')
+        resource_for_test = _make_resource('validation_valid_utc1', calendar, weekly_opening)
 
-            _add_opening_entry(
-                weekly_opening,
-                weekday=0,
-                start_time=datetime.time(10, 0),
+        _add_opening_entry(
+            weekly_opening,
+            weekday=0,
+            start_time=datetime.time(10, 0),
+            slot_duration_minutes=60,
+            slot_count=1,
+        )
+
+        # start_datetime timezone-aware dans le fuseau du tenant.
+        # / start_datetime timezone-aware in the tenant timezone.
+        start_datetime = _make_aware_in(
+            datetime.datetime.combine(monday, datetime.time(10, 0)),
+            tz,
+        )
+
+        with timezone.override(tz):
+            is_valid, error, _url_stripe = validate_new_booking(
+                resource=resource_for_test,
+                price=resource_for_test.product.prices.get(),
+                start_datetime=start_datetime,
                 slot_duration_minutes=60,
                 slot_count=1,
+                member=_get_test_user(),
             )
 
-            # start_datetime timezone-aware dans le fuseau du tenant.
-            # / start_datetime timezone-aware in the tenant timezone.
-            start_datetime = _make_aware_in(
-                datetime.datetime.combine(monday, datetime.time(10, 0)),
-                tz,
-            )
-
-            with timezone.override(tz):
-                is_valid, error, _url_stripe = validate_new_booking(
-                    resource=resource_for_test,
-                    price=resource_for_test.product.prices.get(),
-                    start_datetime=start_datetime,
-                    slot_duration_minutes=60,
-                    slot_count=1,
-                    member=_get_test_user(),
-                )
-
-            assert is_valid is True, f'Attendu True, erreur obtenue : {error}'
-            # validate_new_booking retourne (True, Booking, url Stripe ou None) en cas de succès.
-            # / validate_new_booking returns (True, Booking, Stripe url or None) on success.
-            from booking.models import Booking
-            assert isinstance(error, Booking)
-
-        finally:
-            _cleanup()
+        assert is_valid is True, f'Attendu True, erreur obtenue : {error}'
+        # validate_new_booking retourne (True, Booking, url Stripe ou None) en cas de succès.
+        # / validate_new_booking returns (True, Booking, Stripe url or None) on success.
+        from booking.models import Booking
+        assert isinstance(error, Booking)
 
 
 @pytest.mark.django_db
@@ -927,45 +928,46 @@ def test_booking_validation_accepts_valid_slot_utc_plus_9():
     from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
-        try:
-            tz = _fuseau_du_lieu(TZ_NAME_TOKYO)
+        # Aucun nettoyage : le test est en `django_db`, sa transaction est annulee a la
+        # fin. La reservation acceptee a une vente REGLEE : la garde `pre_delete` de
+        # `LigneArticle` refuse de supprimer ses articles (`_cleanup` echouerait).
+        # / No cleanup: the django_db transaction is rolled back. The accepted booking
+        # has a SETTLED sale whose items the pre_delete guard refuses to delete.
+        tz = _fuseau_du_lieu(TZ_NAME_TOKYO)
 
-            monday = _next_weekday(weekday=0)
-            calendar = _make_calendar('validation_valid_utc9')
-            weekly_opening = _make_weekly_opening('validation_valid_utc9')
-            resource_for_test = _make_resource('validation_valid_utc9', calendar, weekly_opening)
+        monday = _next_weekday(weekday=0)
+        calendar = _make_calendar('validation_valid_utc9')
+        weekly_opening = _make_weekly_opening('validation_valid_utc9')
+        resource_for_test = _make_resource('validation_valid_utc9', calendar, weekly_opening)
 
-            _add_opening_entry(
-                weekly_opening,
-                weekday=0,
-                start_time=datetime.time(10, 0),
+        _add_opening_entry(
+            weekly_opening,
+            weekday=0,
+            start_time=datetime.time(10, 0),
+            slot_duration_minutes=60,
+            slot_count=1,
+        )
+
+        start_datetime = _make_aware_in(
+            datetime.datetime.combine(monday, datetime.time(10, 0)),
+            tz,
+        )
+
+        with timezone.override(tz):
+            is_valid, error, _url_stripe = validate_new_booking(
+                resource=resource_for_test,
+                price=resource_for_test.product.prices.get(),
+                start_datetime=start_datetime,
                 slot_duration_minutes=60,
                 slot_count=1,
+                member=_get_test_user(),
             )
 
-            start_datetime = _make_aware_in(
-                datetime.datetime.combine(monday, datetime.time(10, 0)),
-                tz,
-            )
-
-            with timezone.override(tz):
-                is_valid, error, _url_stripe = validate_new_booking(
-                    resource=resource_for_test,
-                    price=resource_for_test.product.prices.get(),
-                    start_datetime=start_datetime,
-                    slot_duration_minutes=60,
-                    slot_count=1,
-                    member=_get_test_user(),
-                )
-
-            assert is_valid is True, f'Attendu True, erreur obtenue : {error}'
-            # validate_new_booking retourne (True, Booking, url Stripe ou None) en cas de succès.
-            # / validate_new_booking returns (True, Booking, Stripe url or None) on success.
-            from booking.models import Booking
-            assert isinstance(error, Booking)
-
-        finally:
-            _cleanup()
+        assert is_valid is True, f'Attendu True, erreur obtenue : {error}'
+        # validate_new_booking retourne (True, Booking, url Stripe ou None) en cas de succès.
+        # / validate_new_booking returns (True, Booking, Stripe url or None) on success.
+        from booking.models import Booking
+        assert isinstance(error, Booking)
 
 
 @pytest.mark.django_db
