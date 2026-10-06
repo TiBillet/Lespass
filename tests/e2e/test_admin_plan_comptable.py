@@ -5,9 +5,10 @@ Test E2E : les écrans du plan comptable et « Plan complet ? ».
 LOCALISATION : tests/e2e/test_admin_plan_comptable.py
 
 UN SEUL PARCOURS (chantier 05, fiche E-2) :
-1. le menu « Ventes & comptabilité » mène aux trois écrans du plan (plan comptable,
-   comptes des moyens de paiement, comptes des monnaies), chacun avec « Plan
-   complet ? » en tête ;
+1. l'entrée « Plan comptable » du menu « Ventes & comptabilité » ouvre l'onglet
+   « Gérer » (la balance) ; l'onglet « Configurer » mène aux trois écrans de réglage
+   (comptes, moyens de paiement, monnaies), reliés par leur second niveau, chacun
+   avec « Plan complet ? » en tête ;
 2. le moyen « Stripe » (SN), utilisé par des ventes réglées du lieu, perd son compte :
    le bouton « Vérifier le plan » le signale ;
 3. on lui pose son compte dans son formulaire : le bouton ne le signale plus.
@@ -38,6 +39,7 @@ import pytest
 
 pytestmark = pytest.mark.e2e
 
+LIEN_DE_LA_BALANCE = "/admin/laboutik/comptecomptable/balance/"
 LIEN_DU_PLAN_COMPTABLE = "/admin/laboutik/comptecomptable/"
 LIEN_DES_COMPTES_DES_MOYENS = "/admin/laboutik/mappingmoyendepaiement/"
 LIEN_DES_COMPTES_DES_MONNAIES = "/admin/laboutik/mappingmonnaie/"
@@ -109,31 +111,38 @@ def test_menu_mene_aux_ecrans_du_plan_et_plan_complet_suit_le_compte_pose(
     page, login_as_admin, correspondance_sn_sans_compte
 ):
     """
-    Le menu mène aux trois écrans du plan ; « Plan complet ? » signale le moyen SN
-    sans compte, puis ne le signale plus quand son compte est posé.
-    / The menu leads to the three plan screens; "Complete plan?" reports SN without
-    account, then no longer once its account is set.
+    Le menu ouvre la balance, « Configurer » mène aux trois écrans du plan ;
+    « Plan complet ? » signale le moyen SN sans compte, puis ne le signale plus
+    quand son compte est posé.
+    / The menu opens the trial balance, "Configure" leads to the three plan
+    screens; "Complete plan?" reports SN without account, then no longer.
     """
     login_as_admin(page)
     page.goto("/admin/")
 
-    # --- 1. Le menu mène aux trois écrans / The menu leads to the three screens ---
-    for lien_de_l_ecran in [
-        LIEN_DU_PLAN_COMPTABLE,
-        LIEN_DES_COMPTES_DES_MOYENS,
-        LIEN_DES_COMPTES_DES_MONNAIES,
+    # --- 1. Le menu ouvre la balance, « Configurer » mène aux trois écrans ---
+    # / The menu opens the trial balance, "Configure" leads to the three screens.
+    lien_du_menu = page.locator(f'a[href="{LIEN_DE_LA_BALANCE}"]').first
+    if not lien_du_menu.is_visible():
+        # La section repliée s'ouvre au clic sur son titre (le h2 du bloc Alpine
+        # qui contient le lien).
+        # / The collapsed section opens when its title is clicked.
+        titre_de_la_section = lien_du_menu.locator("xpath=ancestor::div[@x-data][1]/h2")
+        titre_de_la_section.click()
+    lien_du_menu.click()
+    page.wait_for_url(f"**{LIEN_DE_LA_BALANCE}")
+    assert page.locator('[data-testid="aide-balance"]').is_visible()
+
+    page.locator("#tabs-items a", has_text="Configurer").click()
+    page.wait_for_url(f"**{LIEN_DU_PLAN_COMPTABLE}")
+    assert page.locator('[data-testid="plan-complet"]').is_visible()
+
+    for testid_du_sous_onglet, lien_de_l_ecran in [
+        ("sous-onglet-moyens", LIEN_DES_COMPTES_DES_MOYENS),
+        ("sous-onglet-monnaies", LIEN_DES_COMPTES_DES_MONNAIES),
+        ("sous-onglet-comptes", LIEN_DU_PLAN_COMPTABLE),
     ]:
-        lien_du_menu = page.locator(f'a[href="{lien_de_l_ecran}"]').first
-        if not lien_du_menu.is_visible():
-            # La section repliée s'ouvre au clic sur son titre (le h2 du bloc
-            # Alpine qui contient le lien).
-            # / The collapsed section opens when its title (h2 of the Alpine block
-            # holding the link) is clicked.
-            titre_de_la_section = lien_du_menu.locator(
-                "xpath=ancestor::div[@x-data][1]/h2"
-            )
-            titre_de_la_section.click()
-        lien_du_menu.click()
+        page.locator(f'[data-testid="{testid_du_sous_onglet}"]').click()
         page.wait_for_url(f"**{lien_de_l_ecran}")
         assert page.locator('[data-testid="plan-complet"]').is_visible()
 

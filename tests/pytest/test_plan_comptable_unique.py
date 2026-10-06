@@ -28,7 +28,7 @@ Fiche : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-E-plan-comptable.md §2, §3.
 - Le FEC (`comptabilite/fec.py`) lit le plan de la caisse,
   et cherche la TVA par son taux.
 - Les écrans pour un bénévole (fiche §4) : le menu « Ventes & comptabilité » mène au
-  plan, aux comptes des moyens et aux comptes des monnaies ; le plan est regroupé par
+  plan (les comptes des moyens et des monnaies sont ses onglets) ; le plan est regroupé par
   nature, avec une aide par nature ; l'écran des monnaies liste les monnaies acceptées
   par le lieu ; le code journal est dans le formulaire du point de vente.
 - « Plan complet ? » (`ce_qui_manque_pour_exporter`) : ce qui manque pour exporter, et
@@ -2020,27 +2020,22 @@ class TestPlanComptableUnique(FastTenantTestCase):
     #  Les écrans pour un bénévole (fiche §4) / Volunteer screens         #
     # ------------------------------------------------------------------ #
 
-    def test_menu_ventes_et_comptabilite_a_les_trois_ecrans(self):
-        """La section « Ventes & comptabilité » montre, sous « Ventes », le plan
-        comptable, les comptes des moyens de paiement et les comptes des monnaies,
-        dans cet ordre, que le module caisse soit actif ou non (le plan sert aussi
-        aux ventes en ligne).
-        / The "Sales & accounting" section shows, under "Sales", the chart of
-        accounts, the payment method accounts and the currency accounts, in that
-        order, whether the POS module is on or off."""
+    def test_menu_ventes_et_comptabilite_a_le_plan_comptable(self):
+        """La section « Ventes & comptabilité » montre, sous « Ventes », UNE entrée
+        « Plan comptable » (vers son onglet « Gérer », la balance), que le module
+        caisse soit actif ou non (le plan sert aussi aux ventes en ligne). Les trois
+        listes de réglage ne sont plus dans le menu : elles sont sous l'onglet
+        « Configurer » (tests/pytest/test_admin_plan_comptable_aide_et_onglets.py).
+        / The "Sales & accounting" section shows, under "Sales", ONE "Chart of
+        accounts" entry (its "Manage" tab, the trial balance), whether the POS
+        module is on or off. The settings lists are under the "Configure" tab."""
         lien_des_ventes = reverse("staff_admin:BaseBillet_vente_changelist")
-        titre_attendu_par_lien = {
-            reverse("staff_admin:laboutik_comptecomptable_changelist"): gettext(
-                "Plan comptable"
-            ),
-            reverse("staff_admin:laboutik_mappingmoyendepaiement_changelist"): gettext(
-                "Comptes des moyens de paiement"
-            ),
-            reverse("staff_admin:laboutik_mappingmonnaie_changelist"): gettext(
-                "Comptes des monnaies"
-            ),
-        }
-        liens_dans_l_ordre_attendu = list(titre_attendu_par_lien.keys())
+        lien_du_plan = reverse("staff_admin:laboutik_comptecomptable_balance")
+        liens_qui_sont_des_onglets = [
+            reverse("staff_admin:laboutik_comptecomptable_changelist"),
+            reverse("staff_admin:laboutik_mappingmoyendepaiement_changelist"),
+            reverse("staff_admin:laboutik_mappingmonnaie_changelist"),
+        ]
         titre_de_la_section = gettext("Sales & accounting")
 
         for module_caisse_actif in [True, False]:
@@ -2068,19 +2063,18 @@ class TestPlanComptableUnique(FastTenantTestCase):
                 liens_de_la_section.append(lien)
                 titre_par_lien[lien] = str(item.get("title"))
 
-            for lien, titre_attendu in titre_attendu_par_lien.items():
-                assert lien in liens_de_la_section, (
-                    f"Module caisse {module_caisse_actif} : « {titre_attendu} » "
-                    f"({lien}) absent. Liens trouvés : {liens_de_la_section}"
-                )
-                assert titre_par_lien[lien] == titre_attendu, lien
+            assert liens_de_la_section.count(lien_du_plan) == 1, (
+                f"Module caisse {module_caisse_actif} : « Plan comptable » absent ou "
+                f"en double. Liens trouvés : {liens_de_la_section}"
+            )
+            assert titre_par_lien[lien_du_plan] == gettext("Plan comptable")
+            for lien_d_onglet in liens_qui_sont_des_onglets:
+                assert lien_d_onglet not in liens_de_la_section, liens_de_la_section
 
-            # Sous « Ventes », dans l'ordre : plan, moyens, monnaies.
-            # / Under "Sales", in order: plan, methods, currencies.
-            positions = [liens_de_la_section.index(lien_des_ventes)]
-            for lien in liens_dans_l_ordre_attendu:
-                positions.append(liens_de_la_section.index(lien))
-            assert positions == sorted(positions), liens_de_la_section
+            # Sous « Ventes » / Under "Sales".
+            assert liens_de_la_section.index(lien_des_ventes) < (
+                liens_de_la_section.index(lien_du_plan)
+            ), liens_de_la_section
 
     def test_plan_comptable_regroupe_par_nature_avec_une_aide_par_nature(self):
         """La liste des comptes est regroupée par nature (les comptes d'une même

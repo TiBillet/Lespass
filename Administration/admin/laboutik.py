@@ -5,14 +5,16 @@ Administration des modeles LaBoutik (caisse, points de vente, imprimantes, table
 LOCALISATION : Administration/admin/laboutik.py
 """
 import logging
+from datetime import date, timedelta
 
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection
 from django.db.models import Case, IntegerField, Value, When
-from django.shortcuts import get_object_or_404, render
-from django.urls import path
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -28,6 +30,9 @@ from Administration.admin.products import ICON_POS, IconPickerWidget
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from QrcodeCashless.models import CarteCashless
+from BaseBillet.models import Configuration
+from comptabilite.balance import balance_de_la_periode, generer_csv_de_la_balance
+from comptabilite.ventilation import EcritureDesequilibree
 from fedow_connect.fedow_api import CarteInconnueDeFedow
 from laboutik.carte_primaire_ancien_fedow import (
     declarer_la_carte_primaire_a_l_ancien_fedow,
@@ -49,6 +54,7 @@ from laboutik.models import (
     MappingMoyenDePaiement,
 )
 from laboutik.plan_comptable import (
+    CompteComptableManquant,
     ce_qui_manque_pour_exporter,
     monnaies_acceptees_par_le_lieu,
     nom_de_la_monnaie,
@@ -1844,6 +1850,45 @@ RANG_DE_LA_NATURE_COMME_L_AIDE = Case(
 )
 
 
+def _date_du_parametre(texte_de_la_date, date_par_defaut):
+    """
+    Une date lue dans l'adresse (« 2026-10-31 », le format d'un <input type="date">),
+    ou la date par défaut si le texte est vide ou faux.
+    / A date read from the URL, or the default date if empty or wrong.
+    """
+    if not texte_de_la_date:
+        return date_par_defaut
+    try:
+        return date.fromisoformat(texte_de_la_date)
+    except ValueError:
+        return date_par_defaut
+
+
+def _periode_de_la_balance(request):
+    """
+    La période de la balance : les paramètres `debut` et `fin` de l'adresse ; par
+    défaut, le mois en cours, du premier au dernier jour, dans le fuseau du lieu. Une
+    période à l'envers (début après la fin) est remise à l'endroit.
+    / The trial balance period: `debut` and `fin` from the URL; by default the current
+    month, in the venue's time zone. A reversed period is put back in order.
+
+    :return: (premier jour, dernier jour), deux dates incluses
+    """
+    fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+    aujourd_hui = timezone.now().astimezone(fuseau_du_lieu).date()
+    premier_jour_du_mois = aujourd_hui.replace(day=1)
+    premier_jour_du_mois_suivant = (premier_jour_du_mois + timedelta(days=32)).replace(
+        day=1
+    )
+    dernier_jour_du_mois = premier_jour_du_mois_suivant - timedelta(days=1)
+
+    premier_jour = _date_du_parametre(request.GET.get("debut"), premier_jour_du_mois)
+    dernier_jour = _date_du_parametre(request.GET.get("fin"), dernier_jour_du_mois)
+    if premier_jour > dernier_jour:
+        premier_jour, dernier_jour = dernier_jour, premier_jour
+    return premier_jour, dernier_jour
+
+
 @admin.register(CompteComptable, site=staff_admin_site)
 class CompteComptableAdmin(ModelAdmin):
     """Admin CRUD pour les comptes du Plan Comptable General (PCG).
@@ -1880,9 +1925,11 @@ class CompteComptableAdmin(ModelAdmin):
 
     def get_urls(self):
         """
-        Ajoute la route du verdict de « Plan complet ? » AVANT les routes standard :
-        sinon l'admin lirait « verifier-le-plan » comme la cle d'un compte.
-        / Adds the "Complete plan?" verdict route BEFORE the standard routes.
+        Ajoute les routes du verdict de « Plan complet ? » et de la balance (onglet
+        « Gérer ») AVANT les routes standard : sinon l'admin lirait « verifier-le-plan »
+        ou « balance » comme la cle d'un compte.
+        / Adds the "Complete plan?" verdict and trial balance routes BEFORE the
+        standard routes.
         """
         routes_standard = super().get_urls()
         routes_du_plan = [
@@ -1891,8 +1938,84 @@ class CompteComptableAdmin(ModelAdmin):
                 self.admin_site.admin_view(self.verifier_le_plan),
                 name="laboutik_comptecomptable_verifier_le_plan",
             ),
+            path(
+                "balance/",
+                self.admin_site.admin_view(self.balance),
+                name="laboutik_comptecomptable_balance",
+            ),
+            path(
+                "balance/csv/",
+                self.admin_site.admin_view(self.balance_csv),
+                name="laboutik_comptecomptable_balance_csv",
+            ),
         ]
         return routes_du_plan + routes_standard
+
+    def balance(self, request):
+        """
+        La balance, onglet « Gérer » du plan comptable : le total de chaque compte sur
+        une période (par défaut, le mois en cours). Lecture seule. Les chiffres
+        viennent du code du FEC (`comptabilite/balance.py`) ; un refus du FEC (compte
+        manquant, écriture déséquilibrée) s'affiche à la place du tableau, avec le
+        même message.
+        / The trial balance, "Manage" tab of the chart of accounts. Read only. Figures
+        from the FEC code; a FEC refusal is shown instead of the table.
+
+        :return: le gabarit `admin/comptable/balance.html`
+        """
+        if not TenantAdminPermissionWithRequest(request):
+            raise PermissionDenied
+
+        premier_jour, dernier_jour = _periode_de_la_balance(request)
+        balance_calculee = None
+        raison_du_refus = ""
+        try:
+            balance_calculee = balance_de_la_periode(premier_jour, dernier_jour)
+        except (CompteComptableManquant, EcritureDesequilibree) as refus:
+            raison_du_refus = str(refus)
+
+        parametres_de_la_periode = (
+            f"?debut={premier_jour.isoformat()}&fin={dernier_jour.isoformat()}"
+        )
+        contexte = {
+            **self.admin_site.each_context(request),
+            "title": _("Balance des comptes"),
+            "balance": balance_calculee,
+            "raison_du_refus": raison_du_refus,
+            "premier_jour": premier_jour,
+            "dernier_jour": dernier_jour,
+            "adresse_du_csv": (
+                reverse("staff_admin:laboutik_comptecomptable_balance_csv")
+                + parametres_de_la_periode
+            ),
+        }
+        return render(request, "admin/comptable/balance.html", contexte)
+
+    def balance_csv(self, request):
+        """
+        Le bouton « Télécharger la balance (CSV) » : la même balance, même période,
+        au format CSV des autres exports (BOM, « ; »). Un refus du FEC ramène à
+        l'écran de la balance, qui l'affiche.
+        / The CSV download of the same balance; a refusal goes back to the screen.
+        """
+        if not TenantAdminPermissionWithRequest(request):
+            raise PermissionDenied
+
+        premier_jour, dernier_jour = _periode_de_la_balance(request)
+        try:
+            balance_calculee = balance_de_la_periode(premier_jour, dernier_jour)
+        except (CompteComptableManquant, EcritureDesequilibree):
+            return redirect(
+                reverse("staff_admin:laboutik_comptecomptable_balance")
+                + f"?debut={premier_jour.isoformat()}&fin={dernier_jour.isoformat()}"
+            )
+
+        contenu, nom_du_fichier, type_du_contenu = generer_csv_de_la_balance(
+            balance_calculee, premier_jour, dernier_jour
+        )
+        reponse = HttpResponse(contenu, content_type=type_du_contenu)
+        reponse["Content-Disposition"] = f'attachment; filename="{nom_du_fichier}"'
+        return reponse
 
     def verifier_le_plan(self, request):
         """

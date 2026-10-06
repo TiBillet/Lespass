@@ -61,7 +61,9 @@ L'EXPORT D'UNE CLÔTURE (le FEC)
 - un compte manquant est relevé avec le numéro de la J en cause.
 
 APPELÉE PAR : `comptabilite/fec.py` (`generer_fec_cloture`), le seul export comptable
-du lieu.
+du lieu ; `comptabilite/balance.py` (la balance du plan comptable), par
+`ecritures_des_journees` et `journees_datees_entre` : la balance et le FEC lisent les
+mêmes écritures.
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-F-rapport-unique.md (§4).
 Tests : tests/pytest/test_fec_equilibre.py (ventilation et FEC),
@@ -70,7 +72,7 @@ tests/pytest/test_plan_comptable_unique.py (le FEC lit le plan du lieu),
 tests/pytest/test_rapport_unique.py (test 26 : aucun prix × quantité).
 """
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta, timezone as fuseau_utc
 from zoneinfo import ZoneInfo
 
 from django.db.models import Prefetch
@@ -642,6 +644,31 @@ def ecritures_de_l_export(cloture):
         _premier_jour, jour_qui_suit_la_periode = _bornes_locales_de_la_periode(cloture)
         date_du_nom_du_fichier = jour_qui_suit_la_periode - timedelta(days=1)
 
+    return {
+        "ecritures": ecritures_des_journees(journees_de_l_export),
+        "date_du_nom_du_fichier": date_du_nom_du_fichier,
+    }
+
+
+def ecritures_des_journees(journees_de_l_export):
+    """
+    Les écritures d'une liste de J datées, dans l'ordre de la liste. C'est le cœur
+    commun du FEC (`ecritures_de_l_export`) et de la balance du plan comptable
+    (`comptabilite/balance.py`) : les deux lisent donc les MÊMES écritures.
+    Les codes journal refusés et les comptes sont lus une seule fois pour toute la
+    liste, même pour une année.
+    / The entries of a list of dated J. The shared core of the FEC and of the trial
+    balance: both read the SAME entries. Refused codes and accounts are read once.
+
+    LOCALISATION : comptabilite/ventilation.py
+
+    :param journees_de_l_export: liste de (ClotureCaisse J, date de début de service)
+    :return: liste d'écritures de `ventiler_cloture`, chacune avec en plus "date",
+        "numero_d_ecriture", "piece", "libelle"
+    :raises CompteComptableManquant: si un compte ou un journal manque (le message
+        nomme la J en cause)
+    :raises EcritureDesequilibree: si une écriture n'est pas équilibrée
+    """
     # Ce qui est lu une seule fois pour tout l'export, puis partagé entre les J.
     # / What is read once for the whole export, then shared between the J.
     comptes_de_l_export = {
@@ -657,8 +684,49 @@ def ecritures_de_l_export(cloture):
             journee, date_de_la_journee, comptes_de_l_export
         )
         ecritures_de_toutes_les_journees.extend(ecritures_de_la_journee)
+    return ecritures_de_toutes_les_journees
 
-    return {
-        "ecritures": ecritures_de_toutes_les_journees,
-        "date_du_nom_du_fichier": date_du_nom_du_fichier,
-    }
+
+def journees_datees_entre(premier_jour, dernier_jour):
+    """
+    Les J dont la date de début de service est entre deux dates (incluses), dans
+    l'ordre des numéros, chacune avec sa date. Même règle de date que le FEC d'une
+    semaine, d'un mois ou d'une année : une J est datée du jour local de sa première
+    vente, dans le fuseau figé dans son rapport (`date_de_debut_de_service`).
+    / The J whose start-of-service date is between two dates (included), by number,
+    each with its date. Same date rule as the FEC of a period.
+
+    LOCALISATION : comptabilite/ventilation.py
+    APPELÉE PAR : comptabilite/balance.py (`balance_de_la_periode`).
+
+    Les candidates sont prises large, en temps universel : un jour de marge avant,
+    deux après (un fuseau est à moins de 14 h du temps universel). La date de
+    chacune est ensuite comparée aux deux dates : seules les J datées dans la
+    période restent.
+    / Candidates are taken wide (UTC, one day before, two after), then each date is
+    compared to the two dates.
+
+    :param premier_jour: date (incluse)
+    :param dernier_jour: date (incluse)
+    :return: liste de (ClotureCaisse J, date de début de service)
+    """
+    debut_large = datetime.combine(premier_jour, time.min, tzinfo=fuseau_utc.utc) - (
+        timedelta(days=1)
+    )
+    fin_large = datetime.combine(dernier_jour, time.min, tzinfo=fuseau_utc.utc) + (
+        timedelta(days=2)
+    )
+    journees_candidates = ClotureCaisse.objects.filter(
+        niveau=ClotureCaisse.NIVEAU_JOURNALIER,
+        numero_premiere_vente__isnull=False,
+        numero_derniere_vente__isnull=False,
+        datetime_debut__lt=fin_large,
+        datetime_fin__gt=debut_large,
+    ).order_by("numero_sequentiel")
+
+    journees_datees_dans_la_periode = []
+    for journee in journees_candidates:
+        date_de_la_journee = date_de_debut_de_service(journee)
+        if premier_jour <= date_de_la_journee <= dernier_jour:
+            journees_datees_dans_la_periode.append((journee, date_de_la_journee))
+    return journees_datees_dans_la_periode

@@ -834,6 +834,18 @@ def _construire_sections_modules(request):
     # taux, faux pour une part payee en jetons.
     # / "Sales" first, then the sales report. The old POS closure is not in the admin
     # (its engine reads the lines' method and recomputes VAT from the rate).
+    # Les quatre pages du plan comptable (la balance est sous la liste des comptes).
+    # / The four pages of the chart of accounts.
+    adresses_du_plan_comptable = [
+        str(_safe_rev("staff_admin:laboutik_comptecomptable_changelist")),
+        str(_safe_rev("staff_admin:laboutik_mappingmoyendepaiement_changelist")),
+        str(_safe_rev("staff_admin:laboutik_mappingmonnaie_changelist")),
+    ]
+    on_est_sur_le_plan_comptable = False
+    for adresse_du_plan in adresses_du_plan_comptable:
+        if request.path.startswith(adresse_du_plan):
+            on_est_sur_le_plan_comptable = True
+
     items_ventes_et_comptabilite = [
         {
             "title": _("Ventes"),
@@ -862,33 +874,20 @@ def _construire_sections_modules(request):
             # / No "lines" entry: items are read on their sale page and exported
             # from the sales list.
             "items": items_ventes_et_comptabilite + [
-                # Les trois ecrans du plan comptable. Toujours presents : le plan sert
-                # aussi a l'export des ventes en ligne, pas seulement a la caisse.
-                # / The three chart of accounts screens. Always shown: the plan also
-                # serves the online sales export, not only the POS.
+                # UNE seule entree pour le plan comptable : elle ouvre l'onglet
+                # « Gerer », la balance. L'onglet « Configurer » regroupe les trois
+                # listes de reglage (_onglets_du_plan_comptable). Toujours presente :
+                # le plan sert aussi a l'export des ventes en ligne.
+                # L'entree reste marquee active sur les quatre pages : Unfold ne la
+                # marquerait que sur la balance (son adresse) et la liste des comptes.
+                # / ONE entry: it opens the "Manage" tab, the trial balance. Marked
+                # active on the four pages of the plan.
                 {
                     "title": _("Plan comptable"),
                     "icon": "account_balance",
-                    "link": _safe_rev(
-                        "staff_admin:laboutik_comptecomptable_changelist"
-                    ),
+                    "link": _safe_rev("staff_admin:laboutik_comptecomptable_balance"),
                     "permission": admin_permission,
-                },
-                {
-                    "title": _("Comptes des moyens de paiement"),
-                    "icon": "swap_horiz",
-                    "link": _safe_rev(
-                        "staff_admin:laboutik_mappingmoyendepaiement_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
-                {
-                    "title": _("Comptes des monnaies"),
-                    "icon": "toll",
-                    "link": _safe_rev(
-                        "staff_admin:laboutik_mappingmonnaie_changelist"
-                    ),
-                    "permission": admin_permission,
+                    "active": on_est_sur_le_plan_comptable,
                 },
                 # FROM V2 : TO ADD LATER (laboutik viendra plus tard)
                 # {
@@ -1756,6 +1755,73 @@ def _onglets_hors_modules():
     ]
 
 
+# Le nom de page de la balance pour Unfold : son gabarit appelle
+# {% tab_list "plan_comptable_balance" %}, et _get_tabs_list (unfold/templatetags/
+# unfold.py) cherche le groupe d'onglets qui porte cette cle « page ».
+# / The trial balance page name for Unfold's tab_list.
+PAGE_DE_LA_BALANCE = "plan_comptable_balance"
+
+
+def _onglets_du_plan_comptable(chemin_courant):
+    """
+    La barre « Gérer / Configurer » du plan comptable.
+    / The chart of accounts "Manage / Configure" bar.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    - « Gérer » : la balance (vue de CompteComptableAdmin, sans modèle propre) ;
+      c'est la page ouverte par l'entrée « Plan comptable » du menu.
+    - « Configurer » : les trois listes de réglage (comptes, comptes des moyens de
+      paiement, comptes des monnaies). Elle mène à la liste des comptes ; les deux
+      autres se rejoignent par le second niveau, dessiné en tête de chaque liste
+      (Administration/templates/admin/comptable/sous_onglets_configurer.html) :
+      Unfold ne dessine qu'UNE barre d'onglets par page.
+    / "Manage" = the trial balance, opened by the menu entry. "Configure" = the three
+      settings lists; a second level (drawn by our template) moves between them,
+      since Unfold draws a single tab bar per page.
+
+    POURQUOI L'ETAT ACTIF EST CALCULE ICI. Unfold compare l'adresse de l'onglet a
+    celle de la page avec « in » : l'adresse de « Configurer »
+    (/admin/laboutik/comptecomptable/) est CONTENUE dans celle de la balance
+    (/admin/laboutik/comptecomptable/balance/), et absente de celle des moyens ou
+    des monnaies. Sa comparaison se tromperait trois fois sur quatre. Unfold garde
+    notre valeur quand la cle « active » est posee (sites.py, get_tabs_list).
+    / Unfold's "in" comparison would be wrong three times out of four; it keeps our
+      value when "active" is set.
+
+    Les modeles sont ecrits en chaine : la barre s'affiche sur les trois LISTES,
+    jamais sur les fiches (elle y cacherait les onglets des inlines).
+    / String entries: the bar shows on the three lists, never on change forms.
+
+    :param chemin_courant: request.path
+    :return: un groupe d'onglets au format Unfold
+    """
+    adresse_de_la_balance = _safe_rev("staff_admin:laboutik_comptecomptable_balance")
+    adresse_des_comptes = _safe_rev("staff_admin:laboutik_comptecomptable_changelist")
+    on_est_sur_la_balance = chemin_courant.startswith(str(adresse_de_la_balance))
+
+    return {
+        "page": PAGE_DE_LA_BALANCE,
+        "models": [
+            "laboutik.comptecomptable",
+            "laboutik.mappingmoyendepaiement",
+            "laboutik.mappingmonnaie",
+        ],
+        "items": [
+            {
+                "title": _("Gérer"),
+                "link": adresse_de_la_balance,
+                "active": on_est_sur_la_balance,
+            },
+            {
+                "title": _("Configurer"),
+                "link": adresse_des_comptes,
+                "active": not on_est_sur_la_balance,
+            },
+        ],
+    }
+
+
 def _categoriser_les_pages(pages, lien_vers_modele):
     """
     Range les pages d'un module dans les trois categories de la maquette.
@@ -1846,6 +1912,7 @@ def get_tabs(request):
     onglets = _onglets_hors_modules()
     lien_vers_modele = _carte_des_liens_vers_modeles()
     chemin_courant = request.path
+    onglets.append(_onglets_du_plan_comptable(chemin_courant))
 
     for section in _construire_sections_modules(request):
         # Les entrees autonomes gardent tous leurs liens dans la sidebar.

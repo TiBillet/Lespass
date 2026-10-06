@@ -1,0 +1,36 @@
+{% load i18n %}
+{% comment %}
+SECOND NIVEAU DE L'ONGLET « CONFIGURER » DU PLAN COMPTABLE
+/ Second level of the chart of accounts "Configure" tab
+
+LOCALISATION : Administration/templates/admin/comptable/sous_onglets_configurer.html
+
+Unfold ne dessine qu'UNE barre d'onglets par page (unfold/templatetags/unfold.py,
+tab_list) : la barre « Gérer / Configurer » (Administration/admin/dashboard.py,
+_onglets_du_plan_comptable). Ce gabarit dessine, juste en dessous, une rangée de
+liens pour passer d'une liste de réglage à l'autre : comptes, moyens de paiement,
+monnaies. Le lien de la page affichée porte `aria-current="page"`.
+/ Unfold draws a single tab bar per page; this template draws a row of links below it
+to move between the three settings lists. The current page link has aria-current.
+
+Inclus en tête des trois gabarits *_before.html du dossier, avec
+`page_active` = "comptes", "moyens" ou "monnaies".
+/ Included at the top of the three *_before.html templates.
+{% endcomment %}
+<div class="mb-4" data-testid="sous-onglets-configurer">
+    <nav aria-label="{% translate 'Réglages du plan comptable' %}"
+         class="flex flex-wrap gap-4 border-b border-base-200 dark:border-base-800 text-sm font-medium">
+        <a href="{% url 'staff_admin:laboutik_comptecomptable_changelist' %}"
+           data-testid="sous-onglet-comptes"
+           class="pb-2 -mb-px border-b-2 {% if page_active == 'comptes' %}border-primary-600 text-primary-600{% else %}border-transparent hover:text-primary-600{% endif %}"
+           {% if page_active == 'comptes' %}aria-current="page"{% endif %}>{% translate "Comptes" %}</a>
+        <a href="{% url 'staff_admin:laboutik_mappingmoyendepaiement_changelist' %}"
+           data-testid="sous-onglet-moyens"
+           class="pb-2 -mb-px border-b-2 {% if page_active == 'moyens' %}border-primary-600 text-primary-600{% else %}border-transparent hover:text-primary-600{% endif %}"
+           {% if page_active == 'moyens' %}aria-current="page"{% endif %}>{% translate "Moyens de paiement" %}</a>
+        <a href="{% url 'staff_admin:laboutik_mappingmonnaie_changelist' %}"
+           data-testid="sous-onglet-monnaies"
+           class="pb-2 -mb-px border-b-2 {% if page_active == 'monnaies' %}border-primary-600 text-primary-600{% else %}border-transparent hover:text-primary-600{% endif %}"
+           {% if page_active == 'monnaies' %}aria-current="page"{% endif %}>{% translate "Monnaies" %}</a>
+    </nav>
+</div>

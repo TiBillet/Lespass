@@ -8,6 +8,83 @@
 {# de compte (la liste est regroupee par nature, CompteComptableAdmin.ordering).      #}
 {# / On top: "Complete plan?". Below: one help sentence per account nature.           #}
 
+{# Le second niveau de l'onglet « Configurer » : comptes, moyens, monnaies.           #}
+{# / Second level of the "Configure" tab.                                            #}
+{% include "admin/comptable/sous_onglets_configurer.html" with page_active="comptes" %}
+
+{# AIDE REPLIABLE, pour un bénévole qui n'est pas comptable. Fermée par défaut :    #}
+{# un <details> sans « open » ; le <summary> se lit au clavier et au lecteur d'écran, #}
+{# qui annonce l'état ouvert / fermé. Les numéros cités sont ceux du plan par défaut #}
+{# (laboutik/plan_comptable_par_defaut.py) : un test le vérifie.                     #}
+{# / Collapsible help for a non-accountant volunteer. Closed by default; the numbers #}
+{# quoted are the default plan's (checked by a test).                                #}
+<div class="mb-4" data-testid="aide-plan-comptable">
+    <details class="bg-white border border-base-200 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+        <summary class="cursor-pointer px-6 py-4 font-semibold text-important" data-testid="aide-plan-comptable-titre">
+            <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">help</span>
+            {% translate "À quoi sert le plan comptable ?" %}
+        </summary>
+        <div class="px-6 pb-6 flex flex-col gap-3 text-sm leading-relaxed">
+            <p>{% translate "Un compte, c'est un tiroir avec un numéro. Le numéro vient du plan comptable officiel : c'est le même pour toutes les associations." %}</p>
+            <p>{% translate "Le début du numéro dit à quoi sert le tiroir :" %}</p>
+            <ul style="list-style: disc; padding-left: 20px; margin: 0;">
+                <li>{% translate "7 : ce que le lieu gagne (les ventes, les cotisations, les dons) ;" %}</li>
+                <li>{% translate "44 : ce que le lieu doit à l'État (la TVA) ;" %}</li>
+                <li>{% translate "5 : où est l'argent (la caisse, la banque) ;" %}</li>
+                <li>{% translate "4 : ce que le lieu doit à quelqu'un, par exemple l'argent mis sur les cartes cashless ;" %}</li>
+                <li>{% translate "6 : ce que le lieu dépense, par exemple les cadeaux aux clients." %}</li>
+            </ul>
+            <p>{% translate "Cette page liste les tiroirs du lieu. Elle ne montre pas les sommes : elles sont dans l'onglet « Gérer », la balance." %}</p>
+
+            <p class="font-semibold">{% translate "Exemple : une bière à 5 € payée par carte bancaire" %}</p>
+            <table style="width: 100%; max-width: 560px; border-collapse: collapse;"
+                   aria-label="{% translate 'Exemple : une bière à 5 € payée par carte bancaire' %}"
+                   data-testid="aide-plan-comptable-exemple">
+                <thead>
+                    <tr style="text-align: left;">
+                        <th scope="col" style="padding: 4px 6px;">{% translate "Tiroir" %}</th>
+                        <th scope="col" style="padding: 4px 6px; text-align: right;">{% translate "Débit" %}</th>
+                        <th scope="col" style="padding: 4px 6px; text-align: right;">{% translate "Crédit" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-top: 1px solid var(--color-base-200, #e5e7eb);">
+                        <td style="padding: 4px 6px;">512100 {% translate "Carte bancaire" %}</td>
+                        <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">5,00 €</td>
+                        <td style="padding: 4px 6px;"></td>
+                    </tr>
+                    <tr style="border-top: 1px solid var(--color-base-200, #e5e7eb);">
+                        <td style="padding: 4px 6px;">707000 {% translate "Ventes" %}</td>
+                        <td style="padding: 4px 6px;"></td>
+                        <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">4,17 €</td>
+                    </tr>
+                    <tr style="border-top: 1px solid var(--color-base-200, #e5e7eb);">
+                        <td style="padding: 4px 6px;">445711 {% translate "TVA" %}</td>
+                        <td style="padding: 4px 6px;"></td>
+                        <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">0,83 €</td>
+                    </tr>
+                    <tr style="border-top: 2px solid var(--color-base-300, #d1d5db); font-weight: 600;">
+                        <td style="padding: 4px 6px;">{% translate "Total" %}</td>
+                        <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">5,00 €</td>
+                        <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">5,00 €</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>{% translate "La bière rapporte 4,17 €. Les 0,83 € de TVA (20 %) sont pour l'État." %}</p>
+            <p>{% translate "Débit : où l'argent arrive. Crédit : d'où il vient. Les deux totaux sont toujours égaux." %}</p>
+            <p>{% translate "« Plan complet ? » vérifie que chaque chose vendue a son tiroir." %}</p>
+
+            <p class="font-semibold">{% translate "Où voir les sommes ?" %}</p>
+            <p>
+                {% translate "Dans l'onglet « Gérer » : la balance donne le total de chaque tiroir sur une période. Pour le comptable : ouvrez une clôture dans le rapport des ventes, puis cliquez sur « FEC »." %}
+                <a href="{% url 'staff_admin:laboutik_comptecomptable_balance' %}"
+                   style="text-decoration: underline;"
+                   data-testid="aide-plan-comptable-lien-balance">{% translate "Ouvrir la balance" %}</a>
+            </p>
+        </div>
+    </details>
+</div>
+
 {% include "admin/comptable/plan_complet.html" %}
 
 {% if charger_plan_url %}
