@@ -40,9 +40,17 @@ def rf_api_key(tenant, rf_tireuse):
 
 @pytest.fixture(scope="module")
 def rf_asset_tlf(tenant):
-    """Premier asset TLF actif du tenant / First active TLF asset of the tenant."""
+    """
+    L'asset TLF que la cascade de la tireuse débite : il est choisi par la MÊME requête
+    que `controlvanne.billing.obtenir_contexte_cashless` (`obtenir_assets_accessibles`,
+    puis le premier de la catégorie). La carte est créditée sur cet asset-là, quel que
+    soit l'état des monnaies de `tenant` sur la base de dev (monnaies archivées, monnaies
+    laissées par d'autres tests).
+    / The TLF asset the tap cascade debits, picked by the same query as the cascade.
+    """
     with schema_context(tenant.schema_name):
         from fedow_core.models import Asset
+        from fedow_core.services import AssetService
         from AuthBillet.models import Wallet
 
         wallet_lieu, _ = Wallet.objects.get_or_create(
@@ -50,10 +58,8 @@ def rf_asset_tlf(tenant):
             name=f"Wallet du lieu {tenant.schema_name}",
         )
         asset = (
-            Asset.objects.filter(
-                tenant_origin=tenant, category=Asset.TLF, archive=False
-            )
-            .order_by("name")
+            AssetService.obtenir_assets_accessibles(tenant)
+            .filter(category=Asset.TLF)
             .first()
         )
         if asset is None:

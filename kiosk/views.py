@@ -44,6 +44,7 @@ from rest_framework.decorators import action
 
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Configuration
+from Customers.models import lieu_en_moteur_legacy
 from fedow_connect.fedow_api import CarteInconnueDeFedow
 from kiosk.carte import lire_la_carte_pour_la_borne
 from kiosk.models import PaymentsIntent, obtenir_reglages_de_la_borne
@@ -68,6 +69,12 @@ class IsKioskTerminal(permissions.BasePermission):
     message = _("Ce terminal n'a pas le role Kiosque.")
 
     def has_permission(self, request, view):
+        # Verrou de moteur : un lieu legacy n'utilise que l'ancien Fedow. La borne V2
+        # (recharge fedow_core) lui est fermee, terminal appaire ou admin (spec 15 §5.4).
+        # / Engine lock: the V2 kiosk is closed to a legacy venue.
+        if lieu_en_moteur_legacy():
+            return False
+
         user = request.user
         if not user.is_authenticated:
             return False

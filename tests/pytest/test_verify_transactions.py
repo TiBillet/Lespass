@@ -67,7 +67,7 @@ def wallet_bar():
 
 @pytest.fixture(scope="module")
 def asset_local(tenant_a, wallet_bar):
-    from django_tenants.utils import schema_context
+    from django_tenants.utils import get_public_schema_name, schema_context
 
     # Nettoyer le produit signal d'un run precedent.
     # Le signal post_save Asset cree un Product "Recharge <nom_asset>"
@@ -81,13 +81,19 @@ def asset_local(tenant_a, wallet_bar):
         Price.objects.filter(product__name=nom_signal).delete()
         Product.objects.filter(name=nom_signal).delete()
 
-    return AssetService.creer_asset(
-        tenant=tenant_a,
-        name=f'{TEST_PREFIX} Monnaie test',
-        category=Asset.TLF,
-        currency_code='EUR',
-        wallet_origin=wallet_bar,
-    )
+    # Cree dans le schema PUBLIC, pose explicitement : le signal post_save d'Asset
+    # (fedow_core/signals.py) n'y cree aucun produit de recharge. Sans ce contexte, la
+    # fixture herite de la connexion laissee par le test precedent, dont le schema peut
+    # etre faux (tests/PIEGES.md, « schema de connexion perime apres une annulation »).
+    # / Created in the PUBLIC schema, set explicitly: the Asset signal skips public.
+    with schema_context(get_public_schema_name()):
+        return AssetService.creer_asset(
+            tenant=tenant_a,
+            name=f'{TEST_PREFIX} Monnaie test',
+            category=Asset.TLF,
+            currency_code='EUR',
+            wallet_origin=wallet_bar,
+        )
 
 
 # ---------------------------------------------------------------------------

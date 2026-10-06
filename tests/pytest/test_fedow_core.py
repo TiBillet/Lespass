@@ -80,7 +80,10 @@ def tenant_a():
 
 @pytest.fixture(scope="module")
 def tenant_b():
-    return Client.objects.get(schema_name='festival')
+    # Le second lieu est un lieu V2 : `festival` est legacy (ancien Fedow), il
+    # n'entre jamais dans une federation fedow_core.
+    # / The second venue is a V2 venue: `festival` is legacy (old Fedow).
+    return Client.objects.get(schema_name='le-coeur-en-or')
 
 
 @pytest.fixture(scope="module")

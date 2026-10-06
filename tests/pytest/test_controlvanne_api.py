@@ -58,16 +58,17 @@ def test_asset_tlf_api(tenant):
     / Active TLF asset for Phase 2 API tests."""
     with schema_context(tenant.schema_name):
         from fedow_core.models import Asset
+        from fedow_core.services import AssetService
         from AuthBillet.models import Wallet
 
-        # order_by("name") : aligne la selection sur celle utilisee en prod par
-        # AssetService.obtenir_assets_accessibles (ordre deterministe). Voir
-        # meme commentaire dans test_controlvanne_models.py::cv_asset_tlf.
-        asset = Asset.objects.filter(
-            tenant_origin=tenant,
-            category=Asset.TLF,
-            active=True,
-        ).order_by("name").first()
+        # La fixture et la cascade doivent choisir le même asset : même requête
+        # que controlvanne.billing.obtenir_contexte_cashless.
+        # / The fixture and the cascade must pick the same asset.
+        asset = (
+            AssetService.obtenir_assets_accessibles(tenant)
+            .filter(category=Asset.TLF)
+            .first()
+        )
         if not asset:
             wallet_lieu = Wallet.objects.create(
                 origin=tenant, name="Wallet lieu test API"

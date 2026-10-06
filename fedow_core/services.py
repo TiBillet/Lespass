@@ -84,6 +84,16 @@ class AssetService:
         - its own assets (created by it)
         - assets shared via a Federation
 
+        Seulement les monnaies actives ET non archivées. Cette liste sert à choisir
+        la monnaie à DÉBITER (cascade de la caisse et de la tireuse) : une monnaie
+        archivée n'est plus proposée au paiement, ses jetons restants ne se dépensent
+        plus. Ils ne sont pas perdus : le vidage de la carte
+        (`WalletService.rembourser_en_especes`) et la liste des soldes
+        (`WalletService.obtenir_tous_les_soldes`) ont leurs propres requêtes, qui
+        voient encore les monnaies archivées. Ne pas utiliser cette fonction pour eux.
+        / Active AND non-archived only: this list picks the currency to DEBIT.
+        Refunds and balances use their own queries and still see archived currencies.
+
         Exemple / Example:
             assets = AssetService.obtenir_assets_accessibles(tenant=mon_lieu)
             → [ma_monnaie_locale, monnaie_federee_tibillet, ...]
@@ -98,12 +108,13 @@ class AssetService:
             flat=True,
         )
 
-        # Combiner : assets du tenant OU assets federes, actifs uniquement.
-        # Combine: tenant's assets OR federated assets, active only.
+        # Combiner : assets du tenant OU assets federes, actifs et non archives.
+        # Combine: tenant's assets OR federated assets, active and not archived.
         assets_accessibles = (
             Asset.objects.filter(
                 Q(tenant_origin=tenant) | Q(uuid__in=assets_federes_uuids),
                 active=True,
+                archive=False,
             )
             .distinct()
             .order_by("name")

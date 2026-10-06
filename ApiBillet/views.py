@@ -34,7 +34,7 @@ from BaseBillet.models import Event, Price, Product, Reservation, Configuration,
     OptionGenerale, Membership, PaymentMethod, LigneArticle, MembershipProduct
 from BaseBillet.tasks import create_ticket_pdf, send_stripe_bank_deposit_to_laboutik, send_payment_refused_user
 from BaseBillet.tasks import send_membership_sepa_pending_user
-from Customers.models import Client
+from Customers.models import Client, lieu_en_moteur_legacy
 from PaiementStripe.views import new_entry_from_stripe_subscription_invoice
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
@@ -998,6 +998,27 @@ class Get_user_pub_pem(APIView):
 class Onboard_laboutik(APIView):
     def post(self, request):
         config = Configuration.get_solo()
+
+        # VERROU DE MOTEUR : un lieu sur le moteur V2 (fedow_core) n'a jamais de caisse
+        # LaBoutik V1. La V1 tient la monnaie dans l'ancien Fedow : deux moteurs dans un
+        # meme lieu, sans rien pour reconcilier les soldes. Seul un lieu legacy (ancien
+        # Fedow) peut appairer une caisse V1. Ce refus passe AVANT le verrou des modules
+        # ci-dessous : c'est la regle la plus large. Jamais desarme en DEBUG.
+        # / ENGINE LOCK: a V2 venue never pairs a V1 POS (two engines, no reconciliation).
+        #   Only a legacy venue may pair one. Checked before the module lock below.
+        if not lieu_en_moteur_legacy():
+            logger.warning(
+                f"Onboard LaBoutik V1 refuse sur le tenant "
+                f"{connection.tenant.schema_name} : lieu sur le moteur V2."
+            )
+            return Response(
+                {
+                    "detail": _("Ce lieu utilise le moteur de monnaie V2. "
+                                "Une caisse LaBoutik V1 ne peut pas s'y connecter."),
+                    "code": "lieu_en_moteur_v2",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
 
         # VERROU V1/V2 : une caisse LaBoutik V1 (conteneur separe) ne peut PAS
         # s'appairer sur un lieu ou la caisse V2 tourne deja. Les deux tiennent la

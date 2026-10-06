@@ -19,6 +19,8 @@ import pytest
 import requests as http_requests
 from playwright.sync_api import sync_playwright
 
+from tests.outils_moteur_de_monnaie import verifier_les_moteurs_de_depart
+
 
 # --- Configuration URL de base / Base URL configuration ---
 
@@ -739,6 +741,24 @@ def django_shell(django_db_blocker):
         return sortie.getvalue().strip()
 
     return _run
+
+
+@pytest.fixture(scope="session")
+def moteurs_de_depart_verifies(django_db_blocker):
+    """Echoue, avec la consigne, si les lieux de dev n'ont pas les moteurs de monnaie
+    attendus : `lespass` et `le-coeur-en-or` en `v2`, `festival` en `legacy`, aucun
+    `test_*` en `legacy`. A demander par un test qui en depend (spec 14) : elle n'est
+    PAS appliquee a toute la suite.
+    / Fails, with what to do, if the dev venues lack the expected currency engines.
+    Ask for it in a test that relies on them; not applied to the whole suite.
+
+    La verification vit dans `tests/outils_moteur_de_monnaie.py`, partagee avec la suite
+    pytest. Lecture seule de `Customers_client` : `django_db_blocker.unblock()`, sans
+    rollback (les E2E tournent contre le vrai serveur).
+    / Shared check (tests/outils_moteur_de_monnaie.py); read-only DB access, no rollback.
+    """
+    with django_db_blocker.unblock():
+        verifier_les_moteurs_de_depart()
 
 
 # --- Fixture comptable / Accounting fixture ---

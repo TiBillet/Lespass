@@ -6,7 +6,7 @@ LANCEMENT :
 """
 import pytest
 from django.test import override_settings
-from django_tenants.utils import schema_context
+from django_tenants.utils import get_public_schema_name, schema_context
 
 from fedow_core.exceptions import NoEligibleTokens
 from BaseBillet.models import Product
@@ -88,17 +88,23 @@ def wallet_lieu_lespass(tenant_lespass):
 
 @pytest.fixture(scope="module")
 def asset_tlf_lespass(tenant_lespass, wallet_lieu_lespass):
+    # Cree dans le schema PUBLIC, pose explicitement : le signal post_save d'Asset
+    # (fedow_core/signals.py) n'y cree aucun produit de recharge. Sans ce contexte, la
+    # fixture herite de la connexion laissee par le test precedent, dont le schema peut
+    # etre faux (tests/PIEGES.md, « schema de connexion perime apres une annulation »).
+    # / Created in the PUBLIC schema, set explicitly: the Asset signal skips public.
     # get_or_create pour eviter l'IntegrityError si un run precedent n'a pas nettoye
     # / get_or_create to avoid IntegrityError if a previous run did not clean up
-    asset, _created = Asset.objects.get_or_create(
-        name=f'{REFUND_TEST_PREFIX} TLF Lespass',
-        category=Asset.TLF,
-        defaults={
-            'currency_code': 'EUR',
-            'wallet_origin': wallet_lieu_lespass,
-            'tenant_origin': tenant_lespass,
-        },
-    )
+    with schema_context(get_public_schema_name()):
+        asset, _created = Asset.objects.get_or_create(
+            name=f'{REFUND_TEST_PREFIX} TLF Lespass',
+            category=Asset.TLF,
+            defaults={
+                'currency_code': 'EUR',
+                'wallet_origin': wallet_lieu_lespass,
+                'tenant_origin': tenant_lespass,
+            },
+        )
     return asset
 
 

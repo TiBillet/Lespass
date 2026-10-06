@@ -155,14 +155,56 @@ gardent leur découpage : chaque part est un article, arrondi une fois.
 
 1. fenêtre de maintenance, caisses fermées ;
 2. archive légale (§6.1) ;
-3. migrations A à G — **avant**, vérifier dans chaque lieu (passage à blanc) : (a) les tables
-   `comptabilite_comptecomptable` et `comptabilite_mappingmoyendepaiement` sont vides
-   (la migration `comptabilite/0004` les supprime sans recopie) ; (b) aucun lieu n'a
-   l'ancien plan de caisse (comptes à 7 chiffres, `41910000`…) : sinon, après le
-   chargement du plan par défaut, les recharges iraient au 419100 et les moyens `LE` /
-   `LG` resteraient sur l'ancien compte. D'après le mainteneur (2026-10-02), aucun
-   compte comptable n'existe en production : les deux vérifications doivent rendre
-   « rien » ; sinon, STOP et règle à décider (contre-relecture Fable de E, I-1, M-6) ;
+3. migrations de la branche : `manage.py migrate_schemas --executor=multiprocessing`
+   (schéma public d'abord, puis chaque lieu). **Mise à jour 2026-10-06 (session 15-4)** : les
+   noms « A à G + H-1 » et les anciens numéros (`0234_vente_raison`…) sont périmés. Depuis le
+   commit `556e2877`, les migrations de la branche **repartent de `main`**
+   (`CHANGELOG/2026-10-05-migrations-repartent-de-main.md`) : elles s'appliquent à la suite
+   de celles de `main`, déjà passées en production. Liste réelle (28 fichiers, comparaison des
+   dossiers `migrations/` de la branche et de `main`) :
+
+   | Où | App | Migrations |
+   |---|---|---|
+   | schéma public | `Customers` | `0005_libelles_fr_du_lieu`, **`0006_moteur_de_monnaie`** |
+   | schéma public | `AuthBillet` | `0024_role_de_terminal_et_portefeuille` |
+   | schéma public | `MetaBillet` | `0018_libelles_fr_de_la_demande_de_lieu` |
+   | schéma public | `QrcodeCashless` | `0021_portefeuille_ephemere_de_la_carte` |
+   | schéma public | `root_billet` | `0007_domaines_embed_autorises` |
+   | schéma public | `fedow_public` | `0004_libelles_fr_des_monnaies` |
+   | schéma public | `fedow_core` | `0001_initial` |
+   | schéma public | `discovery` | `0003_appairage_cible_et_role_du_terminal` |
+   | schéma public | `seo` | `0005_dedoublonner_seocache` (données), `0006_contraintes_uniques_seocache` |
+   | schéma public | `onboard` | `0002_libelle_fr_de_la_date_d_invitation` |
+   | public et chaque lieu | `pages` | `0001_initial` |
+   | chaque lieu | `BaseBillet` | `0222_ventes_reglements_commandes_et_categories` (dont `Vente.raison`), `0223_ligne_article_reservation_couts_et_jetons` (dont `LigneArticle.part_en_jetons`), `0224_liens_caisse_fedow_et_montants_des_ventes`, `0225_copier_le_skin_et_creer_la_page_d_accueil` (données), `0226_retirer_le_skin_de_la_configuration`, **`0227_moteur_v2_si_un_module_v2_est_actif`** (données) |
+   | chaque lieu | `comptabilite` | `0004_cloture_chainee`, `0005_cloture_unique_et_retrait_de_l_ancien_plan` |
+   | chaque lieu | `laboutik` | `0001_initial`, `0002_preparer_chaque_lieu` (données : plan comptable par défaut, clé d'empreinte du lieu) |
+   | chaque lieu | `booking`, `controlvanne`, `inventaire`, `kiosk` | `0001_initial` |
+   | chaque lieu | `crowds` | `0009_libelle_fr_de_la_description` |
+
+   **Avant** les migrations, vérifier :
+   (a) dans chaque lieu (passage à blanc), les tables `comptabilite_comptecomptable` et
+   `comptabilite_mappingmoyendepaiement` sont vides (`comptabilite 0004` retire le lien
+   `compte`, puis `comptabilite 0005` supprime les deux tables, sans recopie) ;
+   (b) aucun lieu n'a l'ancien plan de caisse (comptes à 7 chiffres, `41910000`…) : sinon,
+   après le chargement du plan par défaut (`laboutik 0002`), les recharges iraient au 419100
+   et les moyens `LE` / `LG` resteraient sur l'ancien compte. D'après le mainteneur
+   (2026-10-02), aucun compte comptable n'existe en production : les deux vérifications
+   doivent rendre « rien » ; sinon, STOP et règle à décider (contre-relecture Fable de E,
+   I-1, M-6) ;
+   (c) **moteur de monnaie** : sur la copie de production, `bash db-prod/copie_prod.sh
+   compter_avant` (juste après `charger`, avant `neutraliser` ;
+   `CHANTIER-05-R-copie-prod.md` §3.5) doit afficher **0 lieu de production avec un drapeau
+   V2** (`module_caisse`, `module_monnaie_locale`, `module_kiosk`, `module_tireuse`). Sinon,
+   STOP : `BaseBillet 0227` passerait ces lieux en moteur `v2` ; décision du mainteneur
+   avant la bascule. Le comptage est à refaire sur un dump récent, le plus près possible de
+   la nuit.
+
+   **Après** les migrations : tous les lieux de production sont en moteur **`legacy`**
+   (`Client.moteur_monnaie`, posé par `Customers 0006`), sauf les emplacements vides du pool
+   (`WAITING_CONFIG`), en `v2`. Le journal de `migrate_schemas` ne doit lister **aucune**
+   ligne `-> [<schéma>] moteur v2 (module V2 actif)` de `0227`. Ce que ça implique pour la
+   reprise : voir §11, dernier point ;
 4. passage à blanc, lecture du rapport, **zéro anomalie** ;
 5. `--executer` ;
 6. `verifier_chaine_ventes` et la migration de vérification de H (aucune ligne sans
@@ -246,8 +288,10 @@ intouché.
 - **Champ `LigneArticle.part_en_jetons`** (Q-H1, H-1b-1) : une ancienne ligne payée en
   jetons cadeau (moyen LG), s'il en existe en production, reçoit `part_en_jetons` = son
   net ; sinon les lecteurs ne la reconnaissent plus comme payée en jetons.
-- **Ordre des migrations** : la nuit de la bascule passe aussi les migrations de H-1
-  (`0234_vente_raison`, champ jetons de H-1b-1…), pas seulement A à G (§7.2).
+- **Ordre des migrations** — **remplacé le 2026-10-06** : les anciens noms (`0234_vente_raison`,
+  champ jetons de H-1b-1…) n'existent plus. Depuis `556e2877`, les migrations de la branche
+  repartent de `main` ; `Vente.raison` est dans `BaseBillet 0222`, `LigneArticle.part_en_jetons`
+  dans `BaseBillet 0223`. La liste réelle, app par app, est au §7.2, étape 3.
 - **Lignes sans vente écrites après la bascule** (demandes QR jamais payées) : à régler
   par la règle « vente obligatoire » de H-2 (H-2 après la production et après le
   chantier kiosque, Q-H7).
@@ -257,3 +301,21 @@ intouché.
   comptent les gobelets rendus par −Σ qty : la reprise convertit ces deux formes (pesée :
   `qty` = poids réel depuis `weight_quantity`, `amount` = prix de référence ; retour :
   `qty` −1, prix positif), montants inchangés.
+- **Moteur de monnaie** (spec `FEDOW_IMPORT/15-spec-verrou-moteur-legacy.md`, 2026-10-06) :
+  après `Customers 0006`, **tous les lieux de production restent `legacy`** (ancien Fedow),
+  sauf le réservoir `WAITING_CONFIG`, en `v2`. Les modules V2 leur sont fermés : caisse V2,
+  monnaie locale V2, kiosk, tireuse, admin `fedow_core`, invitations V2. Restent ouverts,
+  comme sur `main` : l'ancien Fedow (assets legacy, recharges, remboursements, paiement QR /
+  NFC de « Mon compte »), LaBoutik V1, la billetterie et les adhésions.
+  **La reprise des ventes ne dépend pas du moteur** (vérifié le 2026-10-06 en lisant cette
+  fiche et le code) : elle est une commande (§7.1), sans requête HTTP ni permission ; elle lit
+  les anciennes `LigneArticle` et les `Paiement_stripe`, rattache les lignes par `.update()`,
+  crée `Vente` et `Reglement`, encaisse par une variante d'`encaisser_vente`
+  (`BaseBillet/services_vente.py`), chaîne les ventes par
+  `laboutik/integrity.py` avec la clé d'empreinte que `laboutik 0002` crée dans **chaque**
+  lieu. Aucun de ces services ne lit `moteur_monnaie` ni les drapeaux de module ; les clôtures
+  (`comptabilite/tasks.py`) non plus. Dans l'admin, la section « Ventes et comptabilité »
+  (ventes, rapport des ventes, plan comptable) est affichée pour tous les lieux
+  (`Administration/admin/dashboard.py`, « Toujours visible ») : un lieu `legacy` voit ses
+  ventes reprises. Seule condition, déjà au §7.2 : 0 lieu de production avec un drapeau V2
+  avant la bascule.

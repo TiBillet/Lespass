@@ -7,8 +7,10 @@
 {% block account_page %}
 
 
-    {# La partie sur la création d'un paiement qrcode / nfc#}
-    {% if profile.admin_this_tenant or profile.can_initiate_payment %}
+    {# Paiement QR code / NFC pour le compte du collectif. La vue pose #}
+    {# peut_initier_un_paiement avec la règle de la permission des routes. #}
+    {# / QR code / NFC payment; the view computes the route permission rule. #}
+    {% if peut_initier_un_paiement %}
         <div class="alert alert-info d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2 mb-3">
             <div class="mb-2 mb-md-0">
                 {% blocktrans with organisation=config.organisation %}Vous pouvez initier un paiement pour le compte de votre collectif : {{ organisation }}{% endblocktrans %}
@@ -16,19 +18,16 @@
             <div>
                 <a href="{% url 'qrcodescanpay-get-generator' %}"
                    class="btn btn-warning square-btn w-100">
-                    <i class="bi bi-qr-code"></i>
+                    <i class="bi bi-qr-code" aria-hidden="true"></i>
                     {% trans "Initiate a payment" %}
                 </a>
             </div>
         </div>
     {% endif %}
 
-    {# Section "Ma tirelire" extraite dans un partial reutilisable. #}
-    {# Au clic sur "Refill TiBillets", le partial est remplace par le formulaire #}
-    {# V2 (hx-target="#tirelire-section" hx-swap="outerHTML"). Le bouton "Annuler" #}
-    {# du formulaire fait hx-get /my_account/tirelire_section/ pour restaurer. #}
-    {# / Section "My balance" extracted in a reusable partial. On Refill click, #}
-    {# the form V2 replaces it; the Cancel button restores via HTMX. #}
+    {# Boutons du porte-monnaie (recharger, scanner, rembourser) : partiel partagé. #}
+    {# « Refill TiBillets » renvoie vers le paiement Stripe (redirection HTMX). #}
+    {# / Shared wallet buttons; "Refill TiBillets" redirects to Stripe. #}
     {% include "htmx/views/my_account/tirelire_section.html" %}
 
     <div class="row">

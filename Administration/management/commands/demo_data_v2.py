@@ -50,6 +50,27 @@ Règles générales :
 """
 
 
+def moteur_de_monnaie_du_lieu_de_demo(fixture_du_lieu):
+    """
+    Choisit le moteur de monnaie d'un lieu de demo, d'apres sa fixture.
+    / Picks a demo venue's currency engine from its fixture.
+
+    LOCALISATION : Administration/management/commands/demo_data_v2.py
+
+    Un lieu marque `caisse_v1_legacy` accueille une caisse LaBoutik V1 : sa monnaie vit
+    dans l'ancien Fedow, il est donc `legacy`. Il joue le role du reseau CLAF dans les
+    tests (spec 14). Tout autre lieu est `v2`. On lit le drapeau, jamais le nom du lieu.
+    / A venue flagged `caisse_v1_legacy` is legacy; any other is v2. Flag, never name.
+
+    :param fixture_du_lieu: le dictionnaire du lieu dans `fixtures` (dict)
+    :return: Client.MOTEUR_LEGACY ou Client.MOTEUR_V2 (str)
+    """
+    lieu_reserve_a_la_caisse_v1 = bool(fixture_du_lieu.get('caisse_v1_legacy'))
+    if lieu_reserve_a_la_caisse_v1:
+        return Client.MOTEUR_LEGACY
+    return Client.MOTEUR_V2
+
+
 def aligner_wallet_user_sur_fedow(carte):
     """
     Declare le user d'une carte aupres de Fedow, puis fait absorber par son wallet le
@@ -2198,6 +2219,10 @@ class Command(BaseCommand):
                     continue
 
                 schema = slugify(name)
+                # Le moteur de monnaie suit le drapeau `caisse_v1_legacy` de la fixture.
+                # / The currency engine follows the fixture's `caisse_v1_legacy` flag.
+                moteur_du_lieu = moteur_de_monnaie_du_lieu_de_demo(fx)
+
                 # Étape 1: création/maj du tenant sans auto_create_schema
                 tenant = Client.objects.filter(schema_name=schema).first()
                 if not tenant:
@@ -2206,6 +2231,7 @@ class Command(BaseCommand):
                         name=name,
                         on_trial=False,
                         categorie=Client.SALLE_SPECTACLE,
+                        moteur_monnaie=moteur_du_lieu,
                     )
                     tenant.auto_create_schema = False
                     tenant.save()
@@ -2220,6 +2246,9 @@ class Command(BaseCommand):
                         updated = True
                     if tenant.categorie != Client.SALLE_SPECTACLE:
                         tenant.categorie = Client.SALLE_SPECTACLE
+                        updated = True
+                    if tenant.moteur_monnaie != moteur_du_lieu:
+                        tenant.moteur_monnaie = moteur_du_lieu
                         updated = True
                     if updated:
                         tenant.save()

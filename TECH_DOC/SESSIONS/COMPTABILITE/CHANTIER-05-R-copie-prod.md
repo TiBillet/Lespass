@@ -11,6 +11,12 @@
 > Mailpit ») : un **Mailpit capteur** entre dans la pile (`copie_prod_mailpit`). Il est
 > le seul serveur de mail que Django joint ; tout mail tenté y reste, et son total est
 > surveillé (`compter`). Voir §4, ligne « Mails ».
+>
+> **2026-10-06, session 15-4** (spec `FEDOW_IMPORT/15-spec-verrou-moteur-legacy.md` §8) :
+> nouvelle sous-commande **`compter_avant`**, en lecture seule, entre `charger` et
+> `neutraliser`. Elle compte les lieux qui ont un drapeau de module V2 à vrai **avant** que la
+> neutralisation vide `server_cashless`. Voir §3.3 et la nouvelle §3.5 (cases à cocher du
+> moteur de monnaie et du réseau CLAF).
 
 ## 1. Pourquoi des précautions
 
@@ -59,7 +65,7 @@ variante, `db-prod/neutraliser_copie_prod.sh`, reste en place (il vise
 |---|---|
 | `docker-compose.copie-prod.yml` | projet Docker `lespass_copie_prod` : `copie_prod_postgres` (postgres 13, comme la prod — le dump dit 13.23), `copie_prod_redis`, `copie_prod_memcached`, `copie_prod_django` (image du dev déjà construite, `sleep infinity`), `copie_prod_mailpit` (le capteur des mails, image du dev `axllent/mailpit:latest`, aucun relais). Le réseau de travail est `internal: true`. Un second réseau, `lespass_copie_prod_ecran_mailpit`, porte **Mailpit seul**, **sans NAT** (`enable_ip_masquerade: false`) : il publie l'écran web sur **`127.0.0.1:18025`** seulement (Docker ne publie aucun port d'un conteneur branché seulement sur un réseau interne : vérifié le 2026-10-06 sur Docker 29.8.1). Le SMTP de Mailpit n'est pas publié. Aucun autre port, aucun Traefik, **aucun Celery**. `pull_policy: never`, `restart: "no"`. Code monté en **lecture seule** ; `logs/` et `www/media/` en tmpfs (effacés à l'arrêt) |
 | `env.copie-prod` | l'environnement de la copie : `FERNET_KEY`, `DJANGO_SECRET` et mot de passe Postgres **neufs** (générés le 2026-10-05), `DEBUG=1`, `TEST=0`, domaines en `.invalid`, mails vers le capteur (`EMAIL_HOST=copie_prod_mailpit`, port 1025, sans TLS ni authentification, expéditeur factice `copie-prod@expediteur.invalid`), Stripe et Sentry vides. Ni le `.env` du dev ni celui de la prod |
-| `copie_prod.sh` | **le seul point d'entrée** : `demarrer`, `verifier`, `charger`, `neutraliser`, `migrer`, `compter`, `detruire` ; refus net à chaque garde |
+| `copie_prod.sh` | **le seul point d'entrée** : `demarrer`, `verifier`, `charger`, `compter_avant`, `neutraliser`, `migrer`, `compter`, `detruire` ; refus net à chaque garde |
 | `neutraliser_copie_prod.sql` | la neutralisation SQL (inchangée), une transaction, tout ou rien |
 
 ### 3.2 Avant
@@ -78,6 +84,8 @@ variante, `db-prod/neutraliser_copie_prod.sh`, reste en place (il vise
 ```bash
 bash db-prod/copie_prod.sh demarrer        # crée la pile à part, puis toutes les vérifications
 bash db-prod/copie_prod.sh charger db-prod/<dump>   # base VIDE exigée ; chronométré
+bash db-prod/copie_prod.sh compter_avant   # LECTURE SEULE, psql seul : drapeaux V2 et server_cashless
+                                           # par lieu (comptages) ; refuse après la neutralisation
 bash db-prod/copie_prod.sh neutraliser     # AVANT tout manage.py ; pose le témoin « neutralisee »
 bash db-prod/copie_prod.sh migrer          # refuse sans le témoin ; migrate_schemas chronométré ;
                                            # neutralise ce que la branche ajoute ; témoin « migree »
@@ -123,6 +131,128 @@ Ce que contrôle `verifier` (et chaque étape avant d'agir) :
   Ce contrôle est **sauté** tant que la base est chargée mais pas neutralisée (aucun
   `manage.py` avant la neutralisation).
 
+`compter_avant` (lecture seule, **psql seul**, aucun `manage.py`) se lance **juste après
+`charger` et avant `neutraliser`** : la neutralisation vide `server_cashless`, il serait trop
+tard. Gardes : la pile est la bonne (mêmes contrôles que `verifier`, sans Django), un dump est
+chargé, la neutralisation n'est **pas** faite (témoin « neutralisee » absent, et adresse Fedow
+de la configuration racine pas encore en `.invalid`) ; sinon : refus « trop tard,
+`server_cashless` est vidé ». Toutes ses requêtes tournent dans une transaction
+`READ ONLY`. Elle affiche, **sans aucune donnée personnelle** :
+
+- les colonnes de configuration absentes de la production, et dans combien de lieux
+  (`module_kiosk` n'existe pas sur `main` : il est compté « faux ») ;
+- par catégorie de lieu, puis au total : nombre de lieux, lieux avec une configuration,
+  lieux avec `module_caisse`, `module_monnaie_locale`, `module_kiosk`, `module_tireuse` à
+  vrai, lieux avec **au moins un** de ces quatre drapeaux (`un_drapeau_v2`), lieux avec
+  `server_cashless` renseigné (compté, **jamais affiché**), lieux avec `module_federation` ;
+- le chiffre qui décide : **lieux de production (hors pool `W`) avec un drapeau V2**.
+  `OK` s'il vaut 0, `STOP` sinon (voir §3.5).
+
+**Le SQL de `compter_avant`, copié ici** (le script `db-prod/copie_prod.sh` est hors git ;
+copie du 2026-10-06). Tout tourne entre `BEGIN TRANSACTION READ ONLY;` et `COMMIT;`, par
+`psql` seul. Seuls des agrégats sortent (des nombres de lieux) : aucune ligne d'un lieu,
+aucun nom, `server_cashless` réduit à « renseigné ou non ».
+
+1. Les colonnes lues (une colonne absente d'un lieu compte « faux » pour ce lieu) :
+
+```sql
+-- COLONNES_LUES
+(VALUES
+    (1, 'module_caisse',         'module_caisse',             'coalesce(module_caisse, false)'),
+    (2, 'module_monnaie_locale', 'module_monnaie_locale',     'coalesce(module_monnaie_locale, false)'),
+    (3, 'module_kiosk',          'module_kiosk',              'coalesce(module_kiosk, false)'),
+    (4, 'module_tireuse',        'module_tireuse',            'coalesce(module_tireuse, false)'),
+    (5, 'module_federation',     'module_federation',         'coalesce(module_federation, false)'),
+    (6, 'server_cashless',       'server_cashless_renseigne', 'coalesce(server_cashless, '''') <> ''''')
+) AS colonne_lue(rang, colonne_en_base, nom_affiche, expression)
+```
+
+2. La fabrique de la requête « une ligne par lieu » (elle ne lit que le catalogue ; son
+   résultat, un texte `SELECT … UNION ALL …`, est la `REQUETE_PAR_LIEU` des agrégats) :
+
+```sql
+WITH lieux AS (
+    SELECT schema_name,
+           categorie,
+           to_regclass(format('%I."BaseBillet_configuration"', schema_name)) IS NOT NULL AS a_la_table
+    FROM public."Customers_client"
+    WHERE schema_name <> 'public'
+),
+colonnes_par_lieu AS (
+    SELECT lieux.schema_name,
+           lieux.categorie,
+           lieux.a_la_table,
+           (SELECT string_agg(
+                CASE
+                    WHEN lieux.a_la_table AND EXISTS (
+                        SELECT 1 FROM information_schema.columns AS colonne_du_catalogue
+                        WHERE colonne_du_catalogue.table_schema = lieux.schema_name
+                          AND colonne_du_catalogue.table_name = 'BaseBillet_configuration'
+                          AND colonne_du_catalogue.column_name = colonne_lue.colonne_en_base)
+                    THEN format('coalesce(bool_or(%s), false) AS %I',
+                                colonne_lue.expression, colonne_lue.nom_affiche)
+                    ELSE format('false AS %I', colonne_lue.nom_affiche)
+                END,
+                ', ' ORDER BY colonne_lue.rang)
+            FROM COLONNES_LUES) AS colonnes
+    FROM lieux
+)
+SELECT string_agg(
+    CASE
+        WHEN a_la_table THEN format(
+            'SELECT %L::text AS categorie, count(*) > 0 AS a_une_configuration, %s FROM %I."BaseBillet_configuration"',
+            categorie, colonnes, schema_name)
+        ELSE format(
+            'SELECT %L::text AS categorie, false AS a_une_configuration, %s',
+            categorie, colonnes)
+    END,
+    ' UNION ALL ')
+FROM colonnes_par_lieu;
+```
+
+3. Les trois agrégats affichés :
+
+```sql
+-- a) Colonnes absentes de la configuration, et dans combien de lieux
+SELECT colonne_lue.colonne_en_base AS colonne,
+       count(*) FILTER (WHERE NOT EXISTS (
+           SELECT 1 FROM information_schema.columns AS colonne_du_catalogue
+           WHERE colonne_du_catalogue.table_schema = lieu.schema_name
+             AND colonne_du_catalogue.table_name = 'BaseBillet_configuration'
+             AND colonne_du_catalogue.column_name = colonne_lue.colonne_en_base)) AS lieux_sans_cette_colonne
+FROM public."Customers_client" AS lieu
+CROSS JOIN COLONNES_LUES
+WHERE lieu.schema_name <> 'public'
+  AND to_regclass(format('%I."BaseBillet_configuration"', lieu.schema_name)) IS NOT NULL
+GROUP BY colonne_lue.rang, colonne_lue.colonne_en_base
+ORDER BY colonne_lue.rang;
+
+-- b) Lieux par catégorie, puis le total
+SELECT coalesce(categorie, 'TOTAL') AS categorie,
+       count(*) AS lieux,
+       count(*) FILTER (WHERE a_une_configuration) AS avec_configuration,
+       count(*) FILTER (WHERE module_caisse) AS module_caisse,
+       count(*) FILTER (WHERE module_monnaie_locale) AS module_monnaie_locale,
+       count(*) FILTER (WHERE module_kiosk) AS module_kiosk,
+       count(*) FILTER (WHERE module_tireuse) AS module_tireuse,
+       count(*) FILTER (WHERE module_caisse OR module_monnaie_locale
+                           OR module_kiosk OR module_tireuse) AS un_drapeau_v2,
+       count(*) FILTER (WHERE server_cashless_renseigne) AS server_cashless_renseigne,
+       count(*) FILTER (WHERE module_federation) AS module_federation
+FROM (REQUETE_PAR_LIEU) AS par_lieu
+GROUP BY ROLLUP (par_lieu.categorie)
+ORDER BY grouping(par_lieu.categorie), par_lieu.categorie;
+
+-- c) Le chiffre qui décide : lieux de production (hors pool W) avec un drapeau V2
+--    (0 = OK ; sinon STOP, voir §3.5)
+SELECT count(*) FROM (REQUETE_PAR_LIEU) AS par_lieu
+WHERE categorie <> 'W'
+  AND (module_caisse OR module_monnaie_locale OR module_kiosk OR module_tireuse);
+```
+
+`COLONNES_LUES` et `REQUETE_PAR_LIEU` sont remplacés par le script avant l'envoi à `psql`
+(le premier est le bloc 1, le second le texte rendu par le bloc 2).
+
 `compter` affiche d'abord le **nombre** de messages reçus par Mailpit (API
 `/api/v1/messages`, lue depuis `copie_prod_django` par le réseau interne : seulement le
 total, jamais un sujet, un contenu ni un destinataire). Un total non nul dit qu'une
@@ -147,6 +277,42 @@ supprimé par `detruire`).
 - Les commandes Django passent par
   `docker exec -it copie_prod_django poetry run python /DjangoFiles/manage.py ...`
   (code en lecture seule : aucune écriture dans le dépôt).
+
+### 3.5 Vérifications du moteur de monnaie et du réseau CLAF
+
+Spec `TECH_DOC/SESSIONS/FEDOW_IMPORT/15-spec-verrou-moteur-legacy.md` §4.2 et §8. Deux
+migrations de la branche posent le moteur de monnaie de chaque lieu : `Customers
+0006_moteur_de_monnaie` met **tous** les lieux existants en `legacy` (ancien Fedow), sauf les
+emplacements vides du pool (`WAITING_CONFIG`, catégorie `W`), mis en `v2` ; puis `BaseBillet
+0227_moteur_v2_si_un_module_v2_est_actif` passe en `v2` un lieu dont la configuration a un
+drapeau de module V2 à vrai. Décision du mainteneur : **tous les lieux de production restent
+`legacy`**. Ces cases le vérifient. Comptages agrégés seulement, en lecture seule.
+
+- [ ] **Avant `neutraliser`** — `bash db-prod/copie_prod.sh compter_avant`.
+      **Attendu : `OK     0 lieu de production avec un drapeau V2`.**
+      **Si le chiffre n'est pas 0 : STOP.** Ne pas lancer `migrer` pour la bascule. Le
+      signaler au mainteneur, avec le tableau par catégorie : `0227` passerait ces lieux en
+      `v2` (modules V2 et admin `fedow_core` ouverts, alors que tout le reste de la production
+      est `legacy`). **Décision du mainteneur avant la bascule** : éteindre ces drapeaux en
+      production avant la nuit, ou accepter ces lieux en `v2`. La répétition sur la copie peut
+      continuer (la copie n'est pas la production) ; noter le chiffre.
+      Noter aussi `server_cashless_renseigne` (lieux LaBoutik V1) : ce nombre ne se relit plus
+      après la neutralisation.
+- [ ] **Après `migrer`** — le journal de `migrate_schemas` liste chaque lieu passé en `v2` par
+      `0227` (ligne `-> [<schéma>] moteur v2 (module V2 actif)`). **Attendu : aucune ligne**
+      (cf. case précédente). Puis, en lecture seule :
+      `docker exec -i copie_prod_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT moteur_monnaie, categorie, count(*) FROM public.\"Customers_client\" GROUP BY 1, 2 ORDER BY 1, 2"'`.
+      Attendu : tout en `legacy`, sauf la catégorie `W` en `v2`.
+- [ ] **Avant / après `migrer`** : empreinte du miroir `public.fedow_public_assetfedowpublic`
+      et de ses tables M2M `federated_with` et `pending_invitations`
+      (`md5(string_agg(… ORDER BY …))`). Empreintes identiques.
+- [ ] **CLAF** : pour les assets dont le nom commence par « CLAF », même nombre de lieux dans
+      `federated_with` avant et après `migrer`, `archive` faux.
+- [ ] **Après `migrer`** : tables `fedow_core_*` (asset, token, transaction, federation) à 0
+      ligne.
+- [ ] **Hors copie, la nuit de la bascule** : capture de la fiche de l'asset CLAF
+      (ventilation par lieu) et de `/fedow/asset/<uuid>/retrieve_bank_deposits/` avant la
+      bascule, même page après, mêmes chiffres. Aucun POST de remise en banque (irréversible).
 
 ## 4. Chaque sortie : ceinture ET bretelles
 

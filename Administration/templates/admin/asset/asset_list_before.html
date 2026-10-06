@@ -12,7 +12,7 @@
                                 {% trans "Lieu d'origine" %}: {{ asset.origin.name }}
                             </span>
                         </div>
-                        <form method="post" action="{% url 'staff_admin:asset-accept-invitation' asset.pk %}">
+                        <form method="post" action="{% url 'staff_admin:assetfedowpublic-accept-invitation' asset.pk %}">
                             {% csrf_token %}
                             <button type="submit" class="font-medium flex items-center gap-2 px-3 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer border border-base-200 bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900">
                                 {% trans "ACCEPTER" %}

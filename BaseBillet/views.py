@@ -39,7 +39,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission, CanCreateEventPermission
+from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission, CanCreateEventPermission, \
+    CanInitiatePaymentPermissionWithRequest
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
@@ -70,7 +71,7 @@ from BaseBillet.services_vente import (
     ouvrir_vente,
 )
 from Administration.utils import clean_html as admin_clean_html
-from Customers.models import Client, Domain
+from Customers.models import Client, Domain, lieu_en_moteur_legacy
 from TiBillet import settings
 from booking.models import Booking
 # Le settings PARESSEUX de Django, sous alias : `TiBillet.settings` ci-dessus est
@@ -1052,13 +1053,19 @@ def get_distant_fedow_tokens(request, config):
         # / Aggregate local tokens (fedow_core) for V2 tenants. Pure read (no write,
         # GET view, no atomic): wrapped so that if the local DB fails we keep the
         # already-fetched remote tokens instead of breaking the page.
-    try:
-        tokens = _agreger_tokens_locaux(tokens, request.user, config)
-    except Exception as erreur_tokens_locaux:
-        logger.error(
-            f"tokens_table : agregation tokens locaux (fedow_core) indisponible "
-            f"pour {request.user} : {erreur_tokens_locaux}"
-        )
+    # Un lieu legacy n'utilise que l'ancien Fedow : ses tokens viennent tous du Fedow
+    # distant, on n'ajoute aucun token local fedow_core (spec 15 §5.4). La garde est
+    # ici, pas dans _agreger_tokens_locaux : des tests l'appellent hors requete, sur un
+    # FakeTenant dont le moteur ne se lit pas.
+    # / A legacy venue only uses the old Fedow: no local fedow_core tokens added.
+    if not lieu_en_moteur_legacy():
+        try:
+            tokens = _agreger_tokens_locaux(tokens, request.user, config)
+        except Exception as erreur_tokens_locaux:
+            logger.error(
+                f"tokens_table : agregation tokens locaux (fedow_core) indisponible "
+                f"pour {request.user} : {erreur_tokens_locaux}"
+            )
 
     # Tri les tokens pour avoir le Primary asset en premier
     tokens.sort(key=lambda token: token['asset']['is_stripe_primary'], reverse=True)
@@ -1129,6 +1136,12 @@ class MyAccount(viewsets.ViewSet):
             tenants_admin = user.client_admin.prefetch_related('domains').all()
 
         template_context['tenants_admin'] = tenants_admin
+
+        # Le bouton « Initier un paiement » suit EXACTEMENT la regle de la permission
+        # des routes du generateur (CanInitiatePaymentPermission), superuser compris.
+        # Recalculer la regle dans le gabarit la ferait diverger de la permission.
+        # / The "Initiate a payment" button follows EXACTLY the route permission rule.
+        template_context['peut_initier_un_paiement'] = CanInitiatePaymentPermissionWithRequest(request)
 
         if not request.user.email_valid:
             logger.warning("User email not active")
@@ -1241,32 +1254,16 @@ class MyAccount(viewsets.ViewSet):
         template_context['header'] = False
         template_context['account_tab'] = 'balance'
 
+        # Meme regle que la permission des routes du generateur (voir MyAccount.list).
+        # / Same rule as the generator route permission (see MyAccount.list).
+        template_context['peut_initier_un_paiement'] = CanInitiatePaymentPermissionWithRequest(request)
+
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
         template_path = gabarit_skin("vues/compte/balance.html")
 
         return render(request, template_path, context=template_context)
-
-    @action(detail=False, methods=['GET'], url_path='tirelire_section')
-    def tirelire_section(self, request: HttpRequest):
-        """
-        Renvoie le partial de la section "Ma tirelire" a l'etat initial.
-        / Returns the initial "My balance" section partial.
-
-        Appelee par le bouton "Annuler" du formulaire V2 de recharge (HTMX swap
-        outerHTML sur #tirelire-section). Permet de revenir a l'etat initial
-        sans recharger la page complete.
-        / Called by the V2 refill form "Cancel" button. Restores the initial
-        state without full page reload.
-        """
-        template_context = get_context(request)
-        return render(
-            request,
-            "htmx/views/my_account/tirelire_section.html",
-            context=template_context,
-        )
-
 
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
@@ -1308,13 +1305,17 @@ class MyAccount(viewsets.ViewSet):
         # / Aggregate local tokens (fedow_core) for V2 tenants. Pure read (no write,
         # GET view, no atomic): wrapped so that if the local DB fails we keep the
         # already-fetched remote tokens instead of breaking the page.
-        try:
-            tokens = _agreger_tokens_locaux(tokens, user, config)
-        except Exception as erreur_tokens_locaux:
-            logger.error(
-                f"admin_my_cards : agregation tokens locaux (fedow_core) indisponible "
-                f"pour {user} : {erreur_tokens_locaux}"
-            )
+        # Un lieu legacy n'utilise que l'ancien Fedow : aucun token local fedow_core
+        # sur la fiche (spec 15 §5.4).
+        # / A legacy venue only uses the old Fedow: no local fedow_core tokens.
+        if not lieu_en_moteur_legacy():
+            try:
+                tokens = _agreger_tokens_locaux(tokens, user, config)
+            except Exception as erreur_tokens_locaux:
+                logger.error(
+                    f"admin_my_cards : agregation tokens locaux (fedow_core) indisponible "
+                    f"pour {user} : {erreur_tokens_locaux}"
+                )
 
         # Transactions des 72 dernieres heures, via la signature de l'user de la fiche.
         # La signature retrouve tout l'historique du wallet (y compris les transactions
