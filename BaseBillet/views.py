@@ -379,6 +379,8 @@ def get_context(request):
     #     })
 
     # Module réservation de ressources — visible seulement si activé dans la config.
+    # Et si le module_adhesion est désactiver.
+    # Si module_adhesion est activé, les ressources sont sur la page "Ahésions et services"
     # / Resource booking module — visible only when enabled in admin config.
     if config.module_booking and not config.module_adhesion:
         navbar.append(

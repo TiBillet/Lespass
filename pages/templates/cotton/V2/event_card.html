@@ -106,10 +106,10 @@ deux pastilles reliées par une flèche. Le titre prend toute la largeur dessous
                     <a class="link" href="{{ event.full_url }}"
                        hx-get="{{ event.full_url }}" hx-target="body" hx-push-url="true">{% translate 'En savoir plus' %}<span class="visually-hidden"> : {{ event.name }}</span></a>
                 {% endif %}
-                {# V2-HERE : event.price_min n'est pas un champ du modèle : il est calculé #}
-                {# par la vue. index() et EventMVT.retrieve le posent, mais pas #}
-                {# EventMVT.list ni partial_list : pas de prix sur l'agenda (point R1). #}
-                {# / price_min is computed by the view; missing on the agenda lists. #}
+                {# event.price_min n'est pas un champ du modèle : il est calculé #}
+                {# par la vue. index() et EventMVT.retrieve le posent #}
+                {# EventMVT.list et partial_list le calcul aussi #}
+                {# / price_min is computed by the view #}
                 {% if event.price_min %}
                     <span class="event-card__price">{{ event.price_min }}</span>
                 {% endif %}
