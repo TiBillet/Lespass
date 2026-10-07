@@ -123,14 +123,10 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
     ]
 
     function download_ics() {
-        let ICS_FILE = ICS_FILE_LINES.join("\r\n") +"\r\n"
-        console.log(ICS_FILE)
-        download("{{event.name|escapejs}}.ics", ICS_FILE)
-    }
-
-    function download(filename, text) {
+        let ICS_FILE = ICS_FILE_LINES.join("\r\n") +"\r\n";
+        let filename = "{{event.name|escapejs}}.ics";
         var element = document.createElement('a');
-        element.setAttribute('href', 'data:text/calendar;charset=utf-8,' + encodeURIComponent(text));
+        element.setAttribute('href', 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ICS_FILE));
         element.setAttribute('download', filename);
 
         element.style.display = 'none';
@@ -139,7 +135,9 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
         element.click();
 
         document.body.removeChild(element);
+
     }
+
     </script>
 {% endblock %}
 
