@@ -77,12 +77,17 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
      invisible à l'œil. / Letchi as a FILL under ink text: canonical letchi
      is 4.45:1 (fails AA), lightened 4% it reaches 4.63:1. */
   --letchi-fond: #ea3b69;
+  --letchi-button-fond : #FB4F7C;
+  --letchi-button-hover : #FA99B2;
+
   --zanana:      #e9b322;  /* alerte, accent chaud — fonds/dégradés uniquement */
   --chouchou:      #259d49;  /* succès, validation */
   --chouchou-text: #1e7e3a;  /* chouchou utilisée comme texte (4,8:1 sur papier) */
   --loseyan:      #4296cc;  /* info, liens — fonds/dégradés */
   --loseyan-text: #3578a3;  /* couleur des liens (4,5:1 sur papier) */
   --violet:      #8b5fb0;  /* liaison bleu↔rose en dégradé — jamais seule */
+  --sable: #f4ede0;
+  --papier: #faf8f5;
 
   /* --- Rôles fonctionnels --- */
   /* Fond d'action : porte toujours du texte encre, d'où --letchi-fond et non --letchi.
@@ -96,7 +101,7 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
 
   /* --- Neutres --- */
   --color-bg: #faf8f5;            /* papier : jamais de blanc pur en fond de page */
-  --color-surface: #ffffff;       /* blanc réservé aux cartes posées sur le papier */
+  --color-surface: var(--papier);       /* Avec le fond qui est devenue --sable, les surface dessus passe à --papier */
   --color-surface-tint: #f1eee8;
   --color-primary-soft: #fce4eb;  /* tinte très claire de letchi, fonds discrets */
   --color-text: #17141a;          /* encre */
@@ -203,6 +208,10 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+:root{
+  --grad-fete:radial-gradient(120% 130% at 12% 8%, #e93363 0%, #ed4960 5%, #f05a5c 10%, #f26958 15%, #f27553 20%, #f1804e 25%, #ee8a4a 30%, #eb9245 35%, #e69a41 40%, #dfa03d 45%, #d8a53a 50%, #cfa938 55%, #c5ab37 60%, #b9ad37 65%, #acae38 70%, #9dae3a 75%, #8dad3c 80%, #7baa3f 85%, #65a742 90%, #4ca246 95%, #259d49 100%);
+}
+
 /* =================================================================
    PONT BOOTSTRAP ET BLOCS CMS
    / Bootstrap and CMS blocks bridge
@@ -291,12 +300,24 @@ body {
   min-height: 100dvh;
   font-family: var(--font-text);
   color: var(--color-text);
-  background: var(--color-bg);
   line-height: 1.6; /* Luciole veut de l'espacement large — lisibilité, pas esthétique */
   font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
+
+  background-color: var(--sable);
+  background-image: url("../../fond/tibillet-volutes-fond-sable.svg");
+  background-size: 100% auto;
+  background-repeat: repeat-y;
+  background-position: center top;
+
 }
-h1, h2, h3, h4 { font-family: var(--font-text); font-weight: 700; margin: 0; color: var(--color-text); }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-text);
+}
 p { margin: 0; }
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; }
@@ -327,7 +348,7 @@ img { max-width: 100%; display: block; }
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 1000;
 }
 /* Le ruban signature (DA §04) : un filet fin et long, jamais un aplat.
    Sur la barre utilisateur — la seule surface strictement invariante,
@@ -470,6 +491,7 @@ img { max-width: 100%; display: block; }
   justify-content: space-between;
   gap: var(--space-4);
   flex-wrap: wrap;
+  margin-bottom: var(--space-2);
 }
 
 @media (max-width: 62rem) {
@@ -563,30 +585,7 @@ img { max-width: 100%; display: block; }
    white buttons with a gradient dot. Labels may wrap (full-width, long
    translated texts overflowed at 320px). */
 .footer-cta { display: flex; flex-direction: column; gap: var(--space-3); }
-.btn--grad {
-  display: flex;
-  justify-content: flex-start;
-  width: 100%;
-  padding: 15px 20px;
-  font-size: var(--text-base);
-  font-weight: 700;
-  line-height: 1.3;
-  text-align: left;
-  white-space: normal;
-  color: var(--color-text);
-  border-radius: var(--radius-m);
-  border: 1px solid transparent;
-  transition: filter var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
-}
-.btn--grad:hover { filter: brightness(1.06); }
-/* Faire un don — la signature. Fond encre et liseré dégradé : voir .btn--signature.
-   4px de plus en bas pour compenser le liseré et garder le libellé centré. */
-.btn--grad-chaud { padding-bottom: 19px; }
-.btn--grad-calme { background: var(--grad-calme); }   /* Créer un espace */
-.btn--grad-frais { background: var(--grad-frais); }   /* Contribuer au projet */
 
-.btn--grad-calme:hover,
-.btn--grad-frais:hover { filter: none; background: var(--color-hover); color: var(--color-text); }
 
 .site-footer__legal {
   border-top: 1px solid var(--color-border);
@@ -622,11 +621,7 @@ img { max-width: 100%; display: block; }
 @media (max-width: 62rem) {
   .site-footer__inner { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
 }
-/* Les boutons du pied de page portent aussi .btn, déclaré PLUS BAS dans ce
-   fichier avec `white-space: nowrap` : à spécificité égale, .btn gagnait et
-   leurs libellés ne passaient jamais à la ligne. Double classe pour l'emporter.
-   / Footer buttons also carry .btn (declared later, nowrap): double class wins. */
-.btn.btn--grad { white-space: normal; line-height: 1.3; }
+
 
 /* -----------------------------------------------------------------
    EN-TÊTE DE LIEU — fait partie du contenu, défile et disparaît.
@@ -644,7 +639,7 @@ img { max-width: 100%; display: block; }
   margin: var(--space-6) auto;
 }
 .place-header__card {
-  background: var(--place-tint);
+  background: var(--papier);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-l);
   padding: var(--space-6);
@@ -746,7 +741,6 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   gap: var(--space-5);
-  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-m);
   /* marge égale sur les quatre côtés : la carte doit « respirer »
@@ -754,25 +748,18 @@ img { max-width: 100%; display: block; }
   padding: var(--space-5);
   margin: var(--space-2) 0;
 }
-/* Traitement signature des chiffres (DA §typo, point 3) : le solde est
-   le geste-Tibillet par excellence. Chiffre en ENCRE pleine, dégradé chaud
-   en filet dessous.
-   Le dégradé n'est plus DANS le texte (clip-text) : son extrémité zanana
-   tombait à 1,92:1 sur blanc, le chiffre le plus important de l'espace
-   devenait illisible côté droit. Le filet garde la signature sans porter
-   la lecture. width: fit-content cale le filet sur la largeur du chiffre.
-   / Balance in solid ink, warm gradient as an underline: clip-text put the
-   zanana end at 1.92:1 on white. */
+
 .me-card__amount {
   font-family: var(--font-text);
   font-weight: 700;
   font-size: var(--text-2xl);
   line-height: 1;
-  color: var(--color-text);
+  color: transparent;
+  background: var(--grad-chaud) ;
+  background-clip: text;
   width: fit-content;
   margin: var(--space-2) 0 var(--space-3);
   padding-bottom: var(--space-2);
-  background: var(--grad-chaud) no-repeat left bottom / 100% 4px;
 }
 .me-card__links {
   font-size: var(--text-xs);
@@ -803,29 +790,52 @@ img { max-width: 100%; display: block; }
    La carte peut alors faire height:100% et laisser l'aspect-ratio
    calculer sa largeur — impossible directement sur un élément flex,
    dont le flex-basis:auto impose une largeur issue du contenu. */
-.me-card__visual { display: block; flex-shrink: 0; }
-/* double classe : doit l'emporter sur le width/align-self de .talisman.
-   Hauteur explicite plutôt que dérivée : une hauteur en % d'un parent
-   auto, ou étirée par flex, ne permet pas à l'aspect-ratio de calculer
-   la largeur — la carte finissait au format portrait ou en débordement. */
-.talisman.talisman--sm {
-  align-self: auto;
-  height: 138px;
-  width: auto;
-  /* Jamais plus large que son cadre : à 320px il reste ~190px, la carte en
-     demandait ~219px. / Never wider than its frame (≈190px left at 320px). */
-  max-width: 100%;
-  border-radius: var(--radius-m);
-  padding: var(--space-3);
+.tcard {
+  position: relative;
+  height: 150px;
+  min-width: 250px;
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  color: #fff;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--font-display);
+  background: var(--letchi);
 }
-.talisman--sm .talisman__brand { font-size: var(--text-2xs); }
-.talisman--sm .talisman__nfc { width: 14px; height: 14px; }
-.talisman--sm .talisman__number { font-size: var(--text-2xs); letter-spacing: 0.14em; }
-.talisman--sm .talisman__holder { display: none; }
+.tcard__v{
+  position: absolute;
+  inset: 0;
+  background-image: url("../../fond/tibillet-volutes-blanc.svg");
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: .17;
+  pointer-events: none;
+}
+.tcard__top{
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tcard__logo{
+  background-image: url("../../logo/logo-blanc.png");
+  aspect-ratio: 560/247;
+  display: block;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  width: 92px;
+}
+
 /* La carte et les infos passent l'une sous l'autre quand la place manque
    (mobile) : sans retour à la ligne, 200px d'infos + ~220px de carte
    débordaient d'un écran de 375px. / Wraps under the card on narrow screens. */
-.me-card { flex-wrap: wrap; }
+.me-card { flex-wrap: wrap; justify-content: space-around; }
 .me-card__info { flex: 1 1 12.5rem; min-width: 0; }
 
 /* -----------------------------------------------------------------
@@ -973,11 +983,13 @@ img { max-width: 100%; display: block; }
    / Inside a module, the module is the frame: services become open entries with
    a top rule. Event cards keep their frame (their cover image needs an edge). */
 .module__content .service-card {
-  background: transparent;
-  border: none;
-  border-top: 1px solid var(--color-border-strong);
-  border-radius: 0;
-  padding: var(--space-4) 0 0;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .talisman {
@@ -1073,19 +1085,19 @@ img { max-width: 100%; display: block; }
 .btn--primary:focus-visible,
 .btn-primary,
 .btn-primary:focus-visible {
-  background: var(--color-text);
-  color: var(--color-text-inverse);
-  border-color: var(--color-text);
-  box-shadow: inset 0 -3px 0 var(--color-action-signal);
+  background: var(--letchi-button-fond);
+  color: #000;
+  border-color: transparent;
+  transition: 0.2s;
 }
 .btn--primary:hover:not(:disabled),
 .btn-primary:hover:not(:disabled),
 .btn--outline-primary:hover:not(:disabled),
 .btn-outline-primary:hover:not(:disabled) {
-  background: var(--color-action-hover);
-  color: var(--color-text-inverse);
-  border-color: var(--color-action-hover);
-  box-shadow: inset 0 -5px 0 var(--color-action-signal);
+  background: var(--letchi-button-hover);
+  color: #000;
+  border-color: transparent;
+  transition: 0.2s;
 }
 /* Bootstrap met outline: 0 sur .btn:focus-visible : on remet l'anneau du skin. */
 .btn--primary:focus-visible,
@@ -1123,6 +1135,18 @@ img { max-width: 100%; display: block; }
    / Keyboard focus: fill and colour repeated, else Bootstrap empties them. */
 .btn--outline-primary,
 .btn--outline-primary:focus-visible { background: transparent; color: var(--letchi-text); border-color: var(--color-primary); box-shadow: none; }
+
+.btn-secondary{
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.btn-secondary:hover{
+  background: #f2f0ea;
+  color: inherit;
+  border-color: var(--color-border-strong);
+}
 
 /* =================================================================
    BOUTONS BOOTSTRAP DU CHROME PARTAGÉ — remis à la marque
@@ -1188,48 +1212,97 @@ img { max-width: 100%; display: block; }
    l'espace, et l'arrondi ne tombe pas toujours au milieu — mesuré à
    1,5px d'écart constant sur « Réserver », « Demander », etc. */
 .btn--sm { padding: 7px 14px; font-size: var(--text-md); line-height: 0.875rem; }
-/* Le dégradé signature, réservé au geste-Tibillet le plus net : recharger
-   son solde. Pas un aplat générique parmi d'autres — un CTA de plus qui
-   passerait en dégradé remettrait de la couleur partout, ce que la DA
-   proscrit justement.
-   grad-chaud, et NON grad-nuit : aucun texte ne passait sur grad-nuit (blanc
-   3,25:1 au point bleu, encre 3,79:1 au point violet). grad-nuit reste la
-   surface décorative du talisman, qui ne porte pas de libellé à lire.
-   / grad-chaud, not grad-nuit: no text colour cleared AA on grad-nuit. */
-/* LISERÉ DÉGRADÉ, et plus aplat. L'encre sur grad-chaud passait WCAG (4,63 →
-   9,5:1) mais pas l'œil : Lc 38 au départ letchi en APCA, Lc 42 à 53 sous le
-   libellé centré de « Recharger ». Même mécanique que .btn--primary : fond
-   encre, libellé blanc (18,2:1), le dégradé en liseré de 4px (6px au survol),
-   qui rentre à l'appui. Plus épais que le liseré letchi simple : la signature
-   se distingue du bouton principal. Le liseré est un élément non textuel :
-   4,6 → 9,5:1 contre l'encre, seuil 3:1.
-   Technique : une couche encre, plus courte que le bouton, posée sur le dégradé.
-   `border-box` sur les deux couches, sinon le dégradé déborde sous la bordure
-   transparente de .btn et dessine un filet autour du bouton.
-   Même règle pour « Faire un don » (.btn--grad-chaud, pied de page).
-   / Gradient EDGE, no longer a fill: ink on grad-chaud scored Lc 38-53. Same
-   mechanics as .btn--primary: ink fill, white label, the gradient as a 4px edge
-   (6px on hover) that retracts on press. An ink layer shorter than the button
-   sits on the gradient; border-box on both layers, else the gradient shows
-   under .btn's transparent border. Also used by the footer donation button. */
-.btn--signature,
-.btn--signature:focus-visible,
-.btn--grad-chaud,
-.btn--grad-chaud:focus-visible {
-  background:
-    linear-gradient(var(--color-text), var(--color-text)) top / 100% calc(100% - 4px) no-repeat border-box,
-    var(--grad-chaud) border-box;
-  color: var(--color-text-inverse);
-  border-color: transparent;
+
+.btn--grad {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  min-height: 72px;
+  width: 100%;
+  max-width:520px;
+  font-size: 24px;
+  text-transform: uppercase;
+  text-align: center;
+  color: #000000;
+  padding: 12px 28px;
+  background-size: 220% 220% !important;
+  background-position: 0% 0%;
+  transition: background-position .35s ease, transform .08s ease;
 }
-.btn--signature:hover:not(:disabled),
-.btn--grad-chaud:hover:not(:disabled) {
-  background:
-    linear-gradient(var(--color-action-hover), var(--color-action-hover)) top / 100% calc(100% - 6px) no-repeat border-box,
-    var(--grad-chaud) border-box;
-  color: var(--color-text-inverse);
-  filter: none;
+
+.btn-wrap {
+  position: relative;
+  display: flex;
+  z-index: 0;
+  justify-content: space-around;
 }
+/* Halo sur le wrapper */
+.btn-wrap::before {
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:999px;
+  background:var(--halo);
+  filter:blur(8px);
+  opacity:0;
+  z-index:-1;
+  transition:opacity .2s ease,inset .2s ease;
+}
+
+.btn--grad__next_background{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  transition:opacity .35s ease;
+}
+.btn-wrap:hover .btn--grad__next_background,
+.btn-wrap:active .btn--grad__next_background{
+  opacity:1;
+}
+
+.btn-wrap:hover .btn--grad {
+  background-position: 100% 100% !important;
+}
+
+.btn-wrap:active{
+  transform: translateY(1px);
+  background-position: 100% 100%;
+}
+.btn-wrap:hover::before {
+  opacity: .4;
+  inset: -2px;
+}
+
+
+.btn--grad .tcard__v{
+  opacity: 0.2;
+}
+
+
+.btn--grad-content{
+  z-index: 2;
+}
+
+/* Faire un don — la signature. Fond encre et liseré dégradé : voir .btn--signature.
+   4px de plus en bas pour compenser le liseré et garder le libellé centré. */
+.btn--grad-chaud {
+  background: var(--grad-chaud);
+}
+.btn--grad-calme {
+  background: var(--grad-calme);
+
+}   /* Créer un espace */
+.btn--grad-frais {
+  background: var(--grad-frais);
+
+}   /* Contribuer au projet */
+
+
 /* Bootstrap met outline: 0 sur .btn:focus-visible : on remet l'anneau du skin. */
 .btn--signature:focus-visible,
 .btn--grad-chaud:focus-visible { outline: 2px solid var(--color-link); outline-offset: 2px; }
@@ -1240,34 +1313,11 @@ img { max-width: 100%; display: block; }
 .btn:active:not(:disabled),
 .icon-btn:active,
 .tag-pill:active { transform: translateY(1px); }
-/* Appui du bouton principal : le liseré letchi rentre et le bouton descend de sa
-   hauteur, il s'enfonce. Enfoncement en 60ms, remontée à la durée normale.
-   Placé APRÈS la règle générique (même spécificité) pour que les 3px gagnent ;
-   le bloc prefers-reduced-motion, plus bas, annule toujours la translation.
-   / Primary press: the letchi edge retracts and the button sinks by its height.
-   After the generic rule so 3px wins; reduced motion still cancels it below. */
-.btn--primary:active:not(:disabled),
-.btn-primary:active:not(:disabled),
-.btn--outline-primary:active:not(:disabled),
-.btn-outline-primary:active:not(:disabled) {
-  background: var(--color-text);
-  color: var(--color-text-inverse);
-  box-shadow: inset 0 0 0 var(--color-action-signal);
-  transform: translateY(3px);
-  transition-duration: 60ms;
-}
+
 /* Signature et don : même enfoncement, le liseré dégradé (4px) rentre : la
    couche encre reprend toute la hauteur. / Same press, the 4px gradient edge
    retracts: the ink layer takes the full height. */
 .btn--signature:active:not(:disabled),
-.btn--grad-chaud:active:not(:disabled) {
-  background:
-    linear-gradient(var(--color-text), var(--color-text)) top / 100% 100% no-repeat border-box,
-    var(--grad-chaud) border-box;
-  color: var(--color-text-inverse);
-  transform: translateY(4px);
-  transition-duration: 60ms;
-}
 
 .icon-btn {
   width: 38px;
@@ -1330,6 +1380,7 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 .section__title .num {
   font-family: var(--font-text);
@@ -1361,7 +1412,6 @@ img { max-width: 100%; display: block; }
 .grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 /* Grille qui suit un titre de section. Remplace les style="margin-top: …"
    des gabarits. / Grid following a section title; replaces inline styles. */
-.grid--sous-titre { margin-top: var(--space-5); }
 .grid--sous-titre-serre { margin-top: var(--space-4); }
 
 /* Carte offre (Abonnements / Formations / Réservations / Accès / Programmes) */
@@ -1374,15 +1424,50 @@ img { max-width: 100%; display: block; }
   gap: var(--space-3);
   box-shadow: var(--shadow-card);
   overflow: hidden;
+  height : 300px;
 }
 
-.offer-card__cover{height: 108px;}
+.offer-card.offer-card-ressource{
+  height : 400px;
+}
+
+.offer-card.offer-card-ressource .offer-card__cover{
+  height : 200px;
+}
+
+.offer-card__cover{height: 100px;}
 
 .offer-card__content{
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
   padding: var(--space-5);
 }
-.offer-card__title { font-size: var(--text-lg); font-family: var(--font-text); font-weight: 700; }
-.offer-card__desc { color: var(--color-text-muted); font-size: var(--text-md); line-height: 1.5; flex-grow: 1; }
+.offer-card__title {
+  font-size: var(--text-lg);
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+}
+.offer-card__desc {
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  line-height: 1.6;
+  flex-grow: 1;
+  /*overflow: hidden;*/
+  /*white-space: nowrap; !* Don't forget this one *!*/
+  /*text-overflow: ellipsis;*/
+  height: 100%;
+
+  --lignes: 6;
+  max-height: calc(var(--lignes) * 1.6em);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--lignes);
+  line-clamp: var(--lignes);
+  overflow: hidden;
+}
 .offer-card__price { font-size: var(--text-ui); font-weight: 700; }
 .offer-card__price .unit { font-weight: 400; color: var(--color-text-muted); font-size: var(--text-sm); }
 .offer-card__footer {
@@ -1394,6 +1479,7 @@ img { max-width: 100%; display: block; }
   flex-wrap: wrap;
   gap: var(--space-2);
   padding-top: var(--space-3);
+  margin-top: var(--space-3);
   border-top: 1px solid var(--color-border);
 }
 /* Loséyan pour les liens (rôle « info · liens » de la DA) — jamais
@@ -1411,6 +1497,12 @@ img { max-width: 100%; display: block; }
   background: none;
 }
 .link:hover { color: var(--color-text); }
+
+.ressource-group-title{
+  font-size: 1.2rem;
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-3);
+}
 
 /* =================================================================
    BADGES / CHIPS
@@ -1672,7 +1764,7 @@ img { max-width: 100%; display: block; }
   position: relative;
   overflow: hidden;
 }
-.map-panel__toolbar { position: absolute; top: var(--space-4); right: var(--space-4); right: var(--space-4); display: flex; justify-content: space-between; align-items: flex-start; z-index: 1001; }
+.map-panel__toolbar { position: absolute; top: var(--space-4); right: var(--space-4); right: var(--space-4); display: flex; justify-content: space-between; align-items: flex-start; z-index: 100; }
 .map-panel__label { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-muted); background: var(--color-bg); padding: 4px ;  border-radius: var(--radius-pill);}
 /* Carte Leaflet reelle posee dans le panneau (accueil V2). Elle remplit tout
    le panneau ; le fond quadrille de .map-panel sert de fond de chargement
@@ -1780,13 +1872,10 @@ img { max-width: 100%; display: block; }
 #explorer-root .explorer-card-dist { color: var(--color-text-faint); font-size: var(--text-sm); }
 #explorer-root .explorer-card-dist--sans-lieu { color: var(--color-text-faint); }
 
-/* Lien "Visiter le lieu" : look btn--primary btn--sm (fond encre, liseré letchi,
-   enfoncement à l'appui). / "Visit the venue" link: btn--primary btn--sm look. */
 #explorer-root .explorer-card-link {
-  background: var(--color-text);
-  color: var(--color-text-inverse);
-  border-color: var(--color-text);   /* explorer.css pose une bordure verte */
-  box-shadow: inset 0 -3px 0 var(--color-action-signal);
+  background: var(--letchi-button-fond);
+  color: #000;
+  border-color: transparent;
   font-weight: 700;
   padding: 7px 14px;
   font-size: var(--text-md);
@@ -1795,10 +1884,10 @@ img { max-width: 100%; display: block; }
   transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
 }
 #explorer-root .explorer-card-link:hover {
-  background: var(--color-action-hover);
-  color: var(--color-text-inverse);
-  border-color: var(--color-action-hover);
-  box-shadow: inset 0 -5px 0 var(--color-action-signal);
+  background: var(--letchi-button-hover);
+  color: #000;
+  border-color: transparent;
+  transition: 0.2s;
   transform: none;   /* explorer.css décale de 2px au survol : un seul mouvement, celui de l'appui */
 }
 #explorer-root .explorer-card-link:active {
@@ -2728,31 +2817,30 @@ details.module + details.module { margin-top: var(--space-4); }
    (Lc 38). The outline keeps letchi at rest and fills on hover. The base's hover
    lift is cancelled: the press is the only motion. */
 .tb-page .tb-bloc__bouton--plein {
-  background-color: var(--color-text);
-  border-color: var(--color-text);
-  color: var(--color-text-inverse);
-  box-shadow: inset 0 -3px 0 var(--color-action-signal);
+  background: var(--letchi-button-fond);
+  color: #000;
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-ui);
+}
+.tb-page .tb-bloc__bouton--contour{
+  border-radius: var(--radius-pill);
 }
 .tb-page .tb-bloc__bouton--plein:hover,
 .tb-page .tb-bloc__bouton--contour:hover {
-  background-color: var(--color-action-hover);
-  border-color: var(--color-action-hover);
-  color: var(--color-text-inverse);
-  box-shadow: inset 0 -5px 0 var(--color-action-signal);
+  background: var(--letchi-button-hover);
+  color: #000;
+  border-color: transparent;
+  transition: 0.2s;
   transform: none;
+  box-shadow: none;
 }
 .tb-page .tb-bloc__bouton--plein:active,
 .tb-page .tb-bloc__bouton--contour:active {
-  background-color: var(--color-text);
-  border-color: var(--color-text);
-  color: var(--color-text-inverse);
-  box-shadow: inset 0 0 0 var(--color-action-signal);
-  transform: translateY(3px);
-  transition-duration: 60ms;
-}
-@media (prefers-reduced-motion: reduce) {
-  .tb-page .tb-bloc__bouton--plein:active,
-  .tb-page .tb-bloc__bouton--contour:active { transform: none; }
+  background: var(--letchi-button-fond);
+  color: #000;
+  border-color: transparent;
+  transition: 0.2s;
 }
 
 /* SOMMAIRE À GAUCHE. Le socle le place à DROITE (grid-column: 10 / -1), en

@@ -37,7 +37,7 @@
 .tb-page,
 .tb-jetons {
     /* Jetons locaux / Local tokens */
-    --tb-espace-section: clamp(2.5rem, 5.5vw, 4.5rem);
+    --tb-espace-section: clamp(1.25rem, 2.75vw, 2.25rem);
     --tb-largeur-max: 72rem;
 
     /* Hauteur reservee au-dessus des colonnes collantes et des ancres. Un skin
@@ -117,7 +117,6 @@
     /* Pas de scroll horizontal sur mobile / No horizontal scroll on mobile */
     overflow-x: clip;
     color: var(--tb-texte);
-    background-color: var(--tb-surface);
 }
 
 /* GRILLE DE PAGE — 12 colonnes.
@@ -1118,7 +1117,7 @@ h2.tb-bloc__titre::before {
 /* Titre de secours d'une page sans banniere (h1 SEO/a11y).
    / Fallback title of a CMS page without a HERO block. */
 .tb-page__titre {
-    margin: 1.2em auto .4em;
+    margin: 0 auto .4em;
     max-width: var(--tb-largeur-boite);
     padding-inline: var(--tb-gouttiere);
     line-height: 1.2;
@@ -1344,9 +1343,7 @@ h2.tb-bloc__titre::before {
    vertical rule marks the position as much as the colour does. Without
    JavaScript no entry carries this class and the ToC stays a plain list. */
 .tb-page .tb-sommaire__entree.tb-sommaire__entree--active > a {
-    color: var(--tb-accent-texte);
     font-weight: 600;
-    box-shadow: inset 2px 0 0 var(--tb-accent);
 }
 
 /* Le deplacement du marqueur suit la lecture : anime, il attire l'oeil hors du

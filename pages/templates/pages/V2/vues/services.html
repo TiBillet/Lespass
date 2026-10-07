@@ -1,0 +1,126 @@
+{% extends base_template %}
+{% load tibitags static %}
+{% load i18n %}
+
+{% comment %}
+ADHÉSION & SERVICES — skin V2
+
+LOCALISATION : pages/templates/pages/V2/vues/services.html
+Vue : BaseBillet/views.py MembershipMVT.services (/services/)
+
+Contexte : products (adhésions du lieu), federated_tenants (lieux voisins),
+config.membership_menu_name, config.description_membership_page, embed.
+{% endcomment %}
+
+{% block title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Adhésions & services' %}{% endif %}{% endblock %}
+{% block meta_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block og_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Adhésions & services' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block og_image %}{% if products.0.img %}https://{{ request.get_host }}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block og_image_alt %}{% if products.0.name %}{{ products.0.name }} - {% endif %}{% translate 'Memberships' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Adhésions & services' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_image %}{% if products.0.img %}https://{{ request.get_host }}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_image_alt %}{% if products.0.name %}{{ products.0.name }} - {% endif %}{% translate 'Memberships' %} - {{ config.organisation }}{% endblock %}
+
+{% block main %}
+    {% comment %}
+    CONTRAT DE SKIN (blocs FIGÉS, ne jamais renommer — décision 2) :
+    adhesions_entete / adhesions_tunnel (chrome commun, non skinnable) /
+    adhesions_grille / adhesions_federees.
+    / SKIN CONTRACT (FROZEN block names). The membership tunnel is shared
+    chrome; a skin only re-skins the page around it.
+    {% endcomment %}
+
+    {% block adhesions_entete %}
+        <div class="page-header">
+            <div class="eyebrow">{% translate 'À disposition' %}</div>
+            <h1 class="page-title">{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Adhésions & services' %}{% endif %}</h1>
+            {% if config.description_membership_page %}
+                <div class="page-intro">{{ config.description_membership_page | safe }}</div>
+            {% endif %}
+        </div>
+    {% endblock adhesions_entete %}
+
+    {% block adhesions_tunnel %}
+        <!-- Tunnel d'adhésion (chrome partagé, extrait vers commun/ au CHANTIER-02).
+             Définit #subscribePanel et #offcanvas-membership, visés par les boutons
+             « Adhérer » des cartes. La largeur vient de .offcanvas-tunnel (tibillet.css). -->
+        {% include 'commun/offcanvas/adhesion_tunnel.html' %}
+    {% endblock adhesions_tunnel %}
+
+    {% block adhesions_grille %}
+        <section class="section" id="adhesions" data-testid="adhesions-grille">
+            <h2 class="section__title">{% translate 'Adhésions' %}</h2>
+            <p class="section__desc"> {% translate "Une relation d'appartenance, pas seulement un service" %}</p>
+            <hr/>
+            <div class="grid grid--3 grid--sous-titre">
+                {% for product in products %}
+                    {% if product.publish %}
+                        <c-V2.membership_card :product="product" />
+                    {% endif %}
+                {% empty %}
+                    <p class="agenda-vide">{% translate "Aucune adhésion n'est proposée pour le moment." %}</p>
+                {% endfor %}
+            </div>
+        </section>
+    {% endblock adhesions_grille %}
+
+    {% block resources_grille %}
+        <section class="section" id="ressources" data-testid="ressources-grille">
+            <h2 class="section__title">{% translate 'Réservations' %}</h2>
+            <p class="section__desc"> {% translate "Réserver un espace ou une ressource" %}</p>
+            <hr/>
+            {% for group_entry in ressources_grouped %}
+
+                <h4 class="ressource-group-title" data-testid="booking-group-{{ group_entry.pk }}">
+                    {{ group_entry.name }}
+                </h4>
+                {% if group_entry.description %}
+                    <p class="text-muted mb-3">{{ group_entry.description }}</p>
+                {% endif %}
+                <div class="grid grid--3 grid--sous-titre">
+                    {% for ressource in group_entry.resources.all %}
+                        <c-V2.ressource_card :ressource="ressource" />
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </section>
+
+    {% endblock %}
+    {% block adhesions_federees %}
+        {% if federated_tenants %}
+            {# Les lieux voisins : c'est leur contenu, donc des cartes neutres (DA v1). #}
+            {# / Neighbouring venues: their content, so neutral cards (DA v1). #}
+            <section class="section" id="adhesions-federees" data-testid="adhesions-federees">
+                <h2 class="section__title">{% translate 'Chez nos voisins' %}</h2>
+                <p class="section__desc">{% translate "Découvrez les adhésions des espaces fédérés :" %}</p>
+                <div class="grid grid--3 grid--sous-titre">
+                    {% for tenant in federated_tenants %}
+                        <article class="service-card">
+                            <div class="service-card__head">
+                                {% if tenant.img_url %}
+                                    <img class="service-card__logo service-card__logo--image" src="{{ tenant.img_url }}" alt="" loading="lazy">
+                                {% else %}
+                                    <span class="service-card__logo solid-slate" aria-hidden="true"></span>
+                                {% endif %}
+                                <span>
+                                <span class="service-card__title">{{ tenant.name }}</span>
+                                <span class="service-card__place">{{ tenant.domain }}</span>
+                            </span>
+                            </div>
+                            {% if tenant.short_description %}
+                                <p class="service-card__desc">{{ tenant.short_description }}</p>
+                            {% endif %}
+                            <div class="service-card__foot">
+                                <span class="service-card__due"></span>
+                                <a class="link" href="https://{{ tenant.domain }}/memberships/" target="_blank" rel="noopener">{% translate 'Voir les adhésions' %} <span aria-hidden="true">↗</span><span class="visually-hidden">{% translate '(nouvel onglet)' %}</span></a>
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+    {% endblock adhesions_federees %}
+
+{% endblock main %}

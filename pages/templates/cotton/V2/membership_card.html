@@ -34,11 +34,12 @@ A CONSERVER : data-testid="membership-open-<uuid>" (tests E2E adhésions).
             <p class="offer-card__desc">{{ product.short_description }}</p>
         {% endif %}
 
-        {% if product.price_min %}
-            <div class="offer-card__price">{% translate 'A partir de' %} {{ product.price_min }}</div>
-        {% endif %}
+
 
         <div class="offer-card__footer">
+            {% if product.price_min %}
+                <div class="offer-card__price">{% translate 'A partir de' %} {{ product.price_min }}</div>
+            {% endif %}
             {% if embed %}
                 <a class="btn btn--primary btn--sm js-membership-form-btn"
                    href="/memberships/?open={{ product.uuid }}" target="_blank" rel="noopener">

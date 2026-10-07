@@ -3726,6 +3726,8 @@ class PostalAddressAdmin(ModelAdmin):
         "is_main",
     ]
 
+    search_fields = ["name", "street_address", "address_locality","postal_code"]
+
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
@@ -4066,6 +4068,7 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         # "options_radio",
         # "options_checkbox",
         "carrousel",
+        "postal_address",
 
         # Le autocomplete fields + many2many ne permet pas de filtrage facile
         # Pour filter les produits de type billet, regarder le get_search_results dans ProductAdmin
