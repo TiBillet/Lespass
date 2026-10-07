@@ -229,53 +229,42 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
 
     {% block evenement_complements %}
 
-    {% if event.long_description or event.carrousel.all %}
-        <section class="section" id="schedule" data-testid="evenement-description">
-            <h2 class="section__title">{% translate 'À propos' %}</h2>
-            {% if event.long_description %}
-                <div class="event-prose">{{ event.long_description | safe }}</div>
-            {% endif %}
-            {% if event.carrousel.all %}
-                <div class="event-carrousel">
-                    {% include 'pages/V2/partials/carrousel_evenements.html' with carousel=event.carrousel.all max_height='max(25vh, 10rem)' auto=false %}
-                </div>
-            {% endif %}
-        </section>
-    {% endif %}
 
     {% comment %} V2-HERE
     « Le programme » de la maquette (.ledger jour par jour) : aucune donnée de
     sous-événements (Event.children = actions bénévoles). Point R13.
     {% endcomment %}
+    {% comment %} V2-HERE
 
-    {% if event.postal_address %}
-        <section class="section" id="timeAndPlace" data-testid="evenement-infos-pratiques">
-            <h2 class="section__title">{% translate 'Infos pratiques' %}</h2>
-            <div class="grid grid--3 grid--sous-titre-serre">
-                <div class="card info-card">
-                    <div class="info-card__label">{% translate 'Adresse' %}</div>
-                    <address class="info-card__text" itemscope itemtype="https://schema.org/PostalAddress">
-                        {% if event.postal_address.name %}<span itemprop="name">{{ event.postal_address.name }}</span><br/>{% endif %}
-                        <span itemprop="streetAddress">{{ event.postal_address.street_address }}</span><br/>
-                        <span itemprop="postalCode">{{ event.postal_address.postal_code }}</span> <span itemprop="addressLocality">{{ event.postal_address.address_locality }}</span>
-                    </address>
-                </div>
-                {% if event.postal_address.comment %}
+        {% if event.postal_address %}
+            <section class="section" id="timeAndPlace" data-testid="evenement-infos-pratiques">
+                <h2 class="section__title">{% translate 'Infos pratiques' %}</h2>
+                <div class="grid grid--3 grid--sous-titre-serre">
                     <div class="card info-card">
-                        <div class="info-card__label">{% translate "S'y rendre" %}</div>
-                        <p class="info-card__text">{{ event.postal_address.comment }}</p>
+                        <div class="info-card__label">{% translate 'Adresse' %}</div>
+                        <address class="info-card__text" itemscope itemtype="https://schema.org/PostalAddress">
+                            {% if event.postal_address.name %}<span itemprop="name">{{ event.postal_address.name }}</span><br/>{% endif %}
+                            <span itemprop="streetAddress">{{ event.postal_address.street_address }}</span><br/>
+                            <span itemprop="postalCode">{{ event.postal_address.postal_code }}</span> <span itemprop="addressLocality">{{ event.postal_address.address_locality }}</span>
+                        </address>
+                    </div>
+                    {% if event.postal_address.comment %}
+                        <div class="card info-card">
+                            <div class="info-card__label">{% translate "S'y rendre" %}</div>
+                            <p class="info-card__text">{{ event.postal_address.comment }}</p>
+                        </div>
+                    {% endif %}
+                </div>
+                {% if event.postal_address.latitude and event.postal_address.longitude %}
+                    <div class="event-carte">
+                        {% include "pages/V2/partials/evenement_geoloc.html" %}
                     </div>
                 {% endif %}
-            </div>
-            {% if event.postal_address.latitude and event.postal_address.longitude %}
-                <div class="event-carte">
-                    {% include "pages/V2/partials/evenement_geoloc.html" %}
-                </div>
-            {% endif %}
-        </section>
-    {% endif %}
+            </section>
+        {% endif %}
+    {% endcomment %}
 
-    {% if event.children.exists %}
+        {% if event.children.exists %}
         <section class="section" data-testid="evenement-benevoles">
             <h2 class="section__title">{% translate "Looking for volunteers" %}</h2>
             {% if action_total_jauge %}
@@ -317,9 +306,11 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
                     {% endif %}
                 </span>
             </div>
-            <a class="btn btn--primary btn--sm" href="/" hx-get="/" hx-target="body" hx-push-url="true">{% translate 'Découvrir le lieu' %}</a>
+            <a class="btn btn-secondary btn--sm" href="/" hx-get="/" hx-target="body" hx-push-url="true">{% translate 'Voir la page du lieu →' %}</a>
         </div>
     </section>
+
+    <c-V2.agenda_a_venir :events="event_a_venir" :count="False" title="{% translate "D'autres événements à " %} {{ config.organisation }}"/>
 
     {% comment %} V2-HERE
     Partenaires (.place-card) et « D'autres événements » (3 cartes) de la

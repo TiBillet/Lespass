@@ -86,6 +86,8 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
   --loseyan:      #4296cc;  /* info, liens — fonds/dégradés */
   --loseyan-text: #3578a3;  /* couleur des liens (4,5:1 sur papier) */
   --violet:      #8b5fb0;  /* liaison bleu↔rose en dégradé — jamais seule */
+  --sable: #f4ede0;
+  --papier: #faf8f5;
 
   /* --- Rôles fonctionnels --- */
   /* Fond d'action : porte toujours du texte encre, d'où --letchi-fond et non --letchi.
@@ -99,7 +101,7 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
 
   /* --- Neutres --- */
   --color-bg: #faf8f5;            /* papier : jamais de blanc pur en fond de page */
-  --color-surface: #ffffff;       /* blanc réservé aux cartes posées sur le papier */
+  --color-surface: var(--papier);       /* Avec le fond qui est devenue --sable, les surface dessus passe à --papier */
   --color-surface-tint: #f1eee8;
   --color-primary-soft: #fce4eb;  /* tinte très claire de letchi, fonds discrets */
   --color-text: #17141a;          /* encre */
@@ -294,12 +296,24 @@ body {
   min-height: 100dvh;
   font-family: var(--font-text);
   color: var(--color-text);
-  background: var(--color-bg);
   line-height: 1.6; /* Luciole veut de l'espacement large — lisibilité, pas esthétique */
   font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
+
+  background-color: var(--sable);
+  background-image: url("../../fond/tibillet-volutes-fond-sable.svg");
+  background-size: 100% auto;
+  background-repeat: repeat-y;
+  background-position: center top;
+
 }
-h1, h2, h3, h4 { font-family: var(--font-text); font-weight: 700; margin: 0; color: var(--color-text); }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-text);
+}
 p { margin: 0; }
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; }
@@ -330,7 +344,7 @@ img { max-width: 100%; display: block; }
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 1000;
 }
 /* Le ruban signature (DA §04) : un filet fin et long, jamais un aplat.
    Sur la barre utilisateur — la seule surface strictement invariante,
@@ -473,6 +487,7 @@ img { max-width: 100%; display: block; }
   justify-content: space-between;
   gap: var(--space-4);
   flex-wrap: wrap;
+  margin-bottom: var(--space-2);
 }
 
 @media (max-width: 62rem) {
@@ -566,27 +581,6 @@ img { max-width: 100%; display: block; }
    white buttons with a gradient dot. Labels may wrap (full-width, long
    translated texts overflowed at 320px). */
 .footer-cta { display: flex; flex-direction: column; gap: var(--space-3); }
-.btn--grad {
-  display: flex;
-  justify-content: flex-start;
-  width: 100%;
-  padding: 15px 20px;
-  font-size: var(--text-base);
-  font-weight: 700;
-  line-height: 1.3;
-  text-align: left;
-  white-space: normal;
-  color: var(--color-text);
-  border-radius: var(--radius-m);
-  border: 1px solid transparent;
-  transition: filter var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
-}
-.btn--grad:hover { filter: brightness(1.06); }
-/* Faire un don — la signature. Fond encre et liseré dégradé : voir .btn--signature.
-   4px de plus en bas pour compenser le liseré et garder le libellé centré. */
-.btn--grad-chaud { padding-bottom: 19px; }
-.btn--grad-calme { background: var(--grad-calme); }   /* Créer un espace */
-.btn--grad-frais { background: var(--grad-frais); }   /* Contribuer au projet */
 
 
 .site-footer__legal {
@@ -623,11 +617,7 @@ img { max-width: 100%; display: block; }
 @media (max-width: 62rem) {
   .site-footer__inner { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
 }
-/* Les boutons du pied de page portent aussi .btn, déclaré PLUS BAS dans ce
-   fichier avec `white-space: nowrap` : à spécificité égale, .btn gagnait et
-   leurs libellés ne passaient jamais à la ligne. Double classe pour l'emporter.
-   / Footer buttons also carry .btn (declared later, nowrap): double class wins. */
-.btn.btn--grad { white-space: normal; line-height: 1.3; }
+
 
 /* -----------------------------------------------------------------
    EN-TÊTE DE LIEU — fait partie du contenu, défile et disparaît.
@@ -645,7 +635,7 @@ img { max-width: 100%; display: block; }
   margin: var(--space-6) auto;
 }
 .place-header__card {
-  background: var(--place-tint);
+  background: var(--papier);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-l);
   padding: var(--space-6);
@@ -747,7 +737,6 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   gap: var(--space-5);
-  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-m);
   /* marge égale sur les quatre côtés : la carte doit « respirer »
@@ -755,25 +744,18 @@ img { max-width: 100%; display: block; }
   padding: var(--space-5);
   margin: var(--space-2) 0;
 }
-/* Traitement signature des chiffres (DA §typo, point 3) : le solde est
-   le geste-Tibillet par excellence. Chiffre en ENCRE pleine, dégradé chaud
-   en filet dessous.
-   Le dégradé n'est plus DANS le texte (clip-text) : son extrémité zanana
-   tombait à 1,92:1 sur blanc, le chiffre le plus important de l'espace
-   devenait illisible côté droit. Le filet garde la signature sans porter
-   la lecture. width: fit-content cale le filet sur la largeur du chiffre.
-   / Balance in solid ink, warm gradient as an underline: clip-text put the
-   zanana end at 1.92:1 on white. */
+
 .me-card__amount {
   font-family: var(--font-text);
   font-weight: 700;
   font-size: var(--text-2xl);
   line-height: 1;
-  color: var(--color-text);
+  color: transparent;
+  background: var(--grad-chaud) ;
+  background-clip: text;
   width: fit-content;
   margin: var(--space-2) 0 var(--space-3);
   padding-bottom: var(--space-2);
-  background: var(--grad-chaud) no-repeat left bottom / 100% 4px;
 }
 .me-card__links {
   font-size: var(--text-xs);
@@ -804,29 +786,52 @@ img { max-width: 100%; display: block; }
    La carte peut alors faire height:100% et laisser l'aspect-ratio
    calculer sa largeur — impossible directement sur un élément flex,
    dont le flex-basis:auto impose une largeur issue du contenu. */
-.me-card__visual { display: block; flex-shrink: 0; }
-/* double classe : doit l'emporter sur le width/align-self de .talisman.
-   Hauteur explicite plutôt que dérivée : une hauteur en % d'un parent
-   auto, ou étirée par flex, ne permet pas à l'aspect-ratio de calculer
-   la largeur — la carte finissait au format portrait ou en débordement. */
-.talisman.talisman--sm {
-  align-self: auto;
-  height: 138px;
-  width: auto;
-  /* Jamais plus large que son cadre : à 320px il reste ~190px, la carte en
-     demandait ~219px. / Never wider than its frame (≈190px left at 320px). */
-  max-width: 100%;
-  border-radius: var(--radius-m);
-  padding: var(--space-3);
+.tcard {
+  position: relative;
+  height: 150px;
+  min-width: 250px;
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  color: #fff;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--font-display);
+  background: var(--letchi);
 }
-.talisman--sm .talisman__brand { font-size: var(--text-2xs); }
-.talisman--sm .talisman__nfc { width: 14px; height: 14px; }
-.talisman--sm .talisman__number { font-size: var(--text-2xs); letter-spacing: 0.14em; }
-.talisman--sm .talisman__holder { display: none; }
+.tcard__v{
+  position: absolute;
+  inset: 0;
+  background-image: url("../../fond/tibillet-volutes-blanc.svg");
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: .17;
+  pointer-events: none;
+}
+.tcard__top{
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tcard__logo{
+  background-image: url("../../logo/logo-blanc.png");
+  aspect-ratio: 560/247;
+  display: block;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  width: 92px;
+}
+
 /* La carte et les infos passent l'une sous l'autre quand la place manque
    (mobile) : sans retour à la ligne, 200px d'infos + ~220px de carte
    débordaient d'un écran de 375px. / Wraps under the card on narrow screens. */
-.me-card { flex-wrap: wrap; }
+.me-card { flex-wrap: wrap; justify-content: space-around; }
 .me-card__info { flex: 1 1 12.5rem; min-width: 0; }
 
 /* -----------------------------------------------------------------
@@ -974,11 +979,13 @@ img { max-width: 100%; display: block; }
    / Inside a module, the module is the frame: services become open entries with
    a top rule. Event cards keep their frame (their cover image needs an edge). */
 .module__content .service-card {
-  background: transparent;
-  border: none;
-  border-top: 1px solid var(--color-border-strong);
-  border-radius: 0;
-  padding: var(--space-4) 0 0;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .talisman {
@@ -1125,6 +1132,18 @@ img { max-width: 100%; display: block; }
 .btn--outline-primary,
 .btn--outline-primary:focus-visible { background: transparent; color: var(--letchi-text); border-color: var(--color-primary); box-shadow: none; }
 
+.btn-secondary{
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.btn-secondary:hover{
+  background: #f2f0ea;
+  color: inherit;
+  border-color: var(--color-border-strong);
+}
+
 /* =================================================================
    BOUTONS BOOTSTRAP DU CHROME PARTAGÉ — remis à la marque
    / Shared-chrome Bootstrap buttons, brought back to the brand
@@ -1190,15 +1209,85 @@ img { max-width: 100%; display: block; }
    1,5px d'écart constant sur « Réserver », « Demander », etc. */
 .btn--sm { padding: 7px 14px; font-size: var(--text-md); line-height: 0.875rem; }
 
-.btn--signature,
-.btn--signature:focus-visible,
-.btn--grad-chaud,
-.btn--grad-chaud:focus-visible {
-  background:
-    var(--grad-chaud) border-box;
-  color: var(--color-text);
-  border-color: transparent;
+.btn--grad {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background-size: 220% 220% !important;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  min-height: 72px;
+  width: 100%;
+  max-width:520px;
+  font-size: 24px;
+  text-transform: uppercase;
+  text-align: center;
+  color: #000000;
+  padding: 12px 28px;
+  background-position: 0% 0%;
+  transition: background-position .35s ease, transform .08s ease;
 }
+
+.btn-wrap {
+  position: relative;
+  display: flex;
+  z-index: 0;
+  justify-content: space-around;
+}
+/* Halo sur le wrapper */
+.btn-wrap::before {
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:999px;
+  background:var(--halo);
+  filter:blur(8px);
+  opacity:0;
+  z-index:-1;
+  transition:opacity .2s ease,inset .2s ease;
+}
+/*
+.btn-wrap:hover .btn--grad {
+  background-position: 100% 100% !important;
+}
+.btn-wrap:hover::before {
+  opacity: .4;
+  inset: -2px;
+}
+
+*/
+.btn--grad .tcard__v{
+  opacity: 0.2;
+}
+
+
+.btn--grad-content{
+  z-index: 2;
+}
+
+/*.btn--grad::after        { !* volutes blanches, opacité 0,2 *! }*/
+/*.btn--grad-halo          { !* même dégradé, flou 8px : invisible au repos, 0,4 au survol (débord 2px), invisible à l'actif *! }*/
+/*.btn--grad:hover         { background-position: 100% 100%; !* glisse vers la couleur de fin + halo léger *! }*/
+/*.btn--grad:active        { transform: translateY(1px);   !* sans halo *! }*/
+
+/* Faire un don — la signature. Fond encre et liseré dégradé : voir .btn--signature.
+   4px de plus en bas pour compenser le liseré et garder le libellé centré. */
+.btn--grad-chaud {
+  background: var(--grad-chaud);
+}
+.btn--grad-calme {
+  background: var(--grad-calme);
+
+}   /* Créer un espace */
+.btn--grad-frais {
+  background: var(--grad-frais);
+
+}   /* Contribuer au projet */
+
+
 /* Bootstrap met outline: 0 sur .btn:focus-visible : on remet l'anneau du skin. */
 .btn--signature:focus-visible,
 .btn--grad-chaud:focus-visible { outline: 2px solid var(--color-link); outline-offset: 2px; }
@@ -1284,6 +1373,7 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 .section__title .num {
   font-family: var(--font-text);
@@ -1315,7 +1405,6 @@ img { max-width: 100%; display: block; }
 .grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 /* Grille qui suit un titre de section. Remplace les style="margin-top: …"
    des gabarits. / Grid following a section title; replaces inline styles. */
-.grid--sous-titre { margin-top: var(--space-5); }
 .grid--sous-titre-serre { margin-top: var(--space-4); }
 
 /* Carte offre (Abonnements / Formations / Réservations / Accès / Programmes) */
@@ -1331,7 +1420,15 @@ img { max-width: 100%; display: block; }
   height : 300px;
 }
 
-.offer-card__cover{height: 108px;}
+.offer-card.offer-card-ressource{
+  height : 400px;
+}
+
+.offer-card.offer-card-ressource .offer-card__cover{
+  height : 200px;
+}
+
+.offer-card__cover{height: 100px;}
 
 .offer-card__content{
   display: flex;
@@ -1351,10 +1448,18 @@ img { max-width: 100%; display: block; }
   font-size: var(--text-md);
   line-height: 1.6;
   flex-grow: 1;
-  overflow: hidden;
-  white-space: nowrap; /* Don't forget this one */
-  text-overflow: ellipsis;
+  /*overflow: hidden;*/
+  /*white-space: nowrap; !* Don't forget this one *!*/
+  /*text-overflow: ellipsis;*/
   height: 100%;
+
+  --lignes: 6;
+  max-height: calc(var(--lignes) * 1.6em);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--lignes);
+  line-clamp: var(--lignes);
+  overflow: hidden;
 }
 .offer-card__price { font-size: var(--text-ui); font-weight: 700; }
 .offer-card__price .unit { font-weight: 400; color: var(--color-text-muted); font-size: var(--text-sm); }
@@ -1385,6 +1490,12 @@ img { max-width: 100%; display: block; }
   background: none;
 }
 .link:hover { color: var(--color-text); }
+
+.ressource-group-title{
+  font-size: 1.2rem;
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-3);
+}
 
 /* =================================================================
    BADGES / CHIPS
@@ -1646,7 +1757,7 @@ img { max-width: 100%; display: block; }
   position: relative;
   overflow: hidden;
 }
-.map-panel__toolbar { position: absolute; top: var(--space-4); right: var(--space-4); right: var(--space-4); display: flex; justify-content: space-between; align-items: flex-start; z-index: 1001; }
+.map-panel__toolbar { position: absolute; top: var(--space-4); right: var(--space-4); right: var(--space-4); display: flex; justify-content: space-between; align-items: flex-start; z-index: 100; }
 .map-panel__label { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-muted); background: var(--color-bg); padding: 4px ;  border-radius: var(--radius-pill);}
 /* Carte Leaflet reelle posee dans le panneau (accueil V2). Elle remplit tout
    le panneau ; le fond quadrille de .map-panel sert de fond de chargement
@@ -2606,31 +2717,30 @@ details.module + details.module { margin-top: var(--space-4); }
    (Lc 38). The outline keeps letchi at rest and fills on hover. The base's hover
    lift is cancelled: the press is the only motion. */
 .tb-page .tb-bloc__bouton--plein {
-  background-color: var(--color-text);
-  border-color: var(--color-text);
-  color: var(--color-text-inverse);
-  box-shadow: inset 0 -3px 0 var(--color-action-signal);
+  background: var(--letchi-button-fond);
+  color: #000;
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-ui);
+}
+.tb-page .tb-bloc__bouton--contour{
+  border-radius: var(--radius-pill);
 }
 .tb-page .tb-bloc__bouton--plein:hover,
 .tb-page .tb-bloc__bouton--contour:hover {
-  background-color: var(--color-action-hover);
-  border-color: var(--color-action-hover);
-  color: var(--color-text-inverse);
-  box-shadow: inset 0 -5px 0 var(--color-action-signal);
+  background: var(--letchi-button-hover);
+  color: #000;
+  border-color: transparent;
+  transition: 0.2s;
   transform: none;
+  box-shadow: none;
 }
 .tb-page .tb-bloc__bouton--plein:active,
 .tb-page .tb-bloc__bouton--contour:active {
-  background-color: var(--color-text);
-  border-color: var(--color-text);
-  color: var(--color-text-inverse);
-  box-shadow: inset 0 0 0 var(--color-action-signal);
-  transform: translateY(3px);
-  transition-duration: 60ms;
-}
-@media (prefers-reduced-motion: reduce) {
-  .tb-page .tb-bloc__bouton--plein:active,
-  .tb-page .tb-bloc__bouton--contour:active { transform: none; }
+  background: var(--letchi-button-fond);
+  color: #000;
+  border-color: transparent;
+  transition: 0.2s;
 }
 
 /* SOMMAIRE À GAUCHE. Le socle le place à DROITE (grid-column: 10 / -1), en

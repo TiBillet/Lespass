@@ -16,7 +16,8 @@
 	}
 .leaflet-container {
 	overflow: hidden;
-	}
+	z-index: 0;
+}
 .leaflet-tile,
 .leaflet-marker-icon,
 .leaflet-marker-shadow {

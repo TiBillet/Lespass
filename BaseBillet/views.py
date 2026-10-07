@@ -11,6 +11,7 @@ from io import BytesIO
 
 import segno
 import stripe
+from collections import defaultdict
 from django.contrib import messages
 from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
@@ -72,7 +73,7 @@ from BaseBillet.services_vente import (
 from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain
 from TiBillet import settings
-from booking.models import Booking
+from booking.models import Booking, Resource, ResourceGroup
 # Le settings PARESSEUX de Django, sous alias : `TiBillet.settings` ci-dessus est
 # le module brut, fige a l'import, qu'un `override_settings()` de test ne touche
 # pas. Toute lecture qui doit refleter la configuration REELLE au moment de
@@ -378,7 +379,7 @@ def get_context(request):
 
     # Module réservation de ressources — visible seulement si activé dans la config.
     # / Resource booking module — visible only when enabled in admin config.
-    if config.module_booking:
+    if config.module_booking and not config.module_adhesion:
         navbar.append(
             {'name': 'booking-list', 'url': '/booking/',
              'label': _('Ressources'), 'icon': 'building'}
@@ -1131,7 +1132,7 @@ class MyAccount(viewsets.ViewSet):
 
         template_context['tenants_admin'] = tenants_admin
 
-        if not request.user.email_valid:
+        if not user.email_valid:
             logger.warning("User email not active")
             messages.add_message(request, messages.WARNING,
                                  _("Please validate your email to access all the features of your profile area."))
@@ -1141,7 +1142,7 @@ class MyAccount(viewsets.ViewSet):
 
             # Get fedow info
             fedowAPI = FedowAPI()
-            card = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
+            card = fedowAPI.NFCcard.retrieve_card_by_signature(user)
             # If we found a card get it (because `retrieve_card_by_signature` return an array)
             if card:
                 card = card[0]
@@ -1152,7 +1153,7 @@ class MyAccount(viewsets.ViewSet):
 
             # Get reservations info
             reservations = Reservation.objects.filter(
-                user_commande=request.user,
+                user_commande=user,
                 status__in=[
                     Reservation.FREERES,
                     Reservation.FREERES_USERACTIV,
@@ -1213,7 +1214,7 @@ class MyAccount(viewsets.ViewSet):
             # Get booking info (only upcoming, more detail on booking specific page)
             bookings = (
                 Booking.objects
-                .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES,
+                .filter(user=user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES,
                                   Booking.FREERES_USERACTIV], end_datetime__gt=now)
                 .select_related('resource')
                 .order_by('start_datetime')
@@ -2646,75 +2647,12 @@ def index(request):
     from pages.services import gabarit_skin
     template_path = gabarit_skin("vues/accueil.html")
 
-    tenants = [
-        {
-            "tenant": place.tenant,
-            "tag_exclude": [tag.slug for tag in place.tag_exclude.all()],
-            "tag_filter": [tag.slug for tag in place.tag_filter.all()],
-        }
-        for place in FederatedPlace.objects.all().prefetch_related("tag_filter", "tag_exclude")
-    ]
-    # Le tenant actuel
-    this_tenant = connection.tenant
-    tenants.append(
-        {
-            "tenant": this_tenant,
-            "tag_filter": [],
-            "tag_exclude": [],
-        }
-    )
-
     events_a_afficher = []
-    # Récupération de tous les évènements de la fédération
-    for tenant in tenants:
-        with ((tenant_context(tenant['tenant']))):
-            events = Event.objects.select_related(
-                'postal_address',
-            ).prefetch_related(
-                'tag', 'products', 'products__prices', 'artists', 'artists__artist',
-            ).filter(
-                published=True,
-                datetime__gte=timezone.localtime() - timedelta(days=1),  # On prend les évènement a partir d'hier
-                # Un event ARCHIVE est un event retiré de l'agenda. Il ne doit plus
-                # y apparaitre, meme s'il reste publié. Le cache SEO (carte,
-                # explorateur) applique déjà ce filtre partout : sans lui ici,
-                # l'agenda était le SEUL endroit où un event archivé restait visible.
-                # / An ARCHIVED event is one removed from the agenda. The SEO cache
-                # already filters it everywhere; without this, the agenda was the only
-                # place where an archived event stayed visible.
-                archived=False,
-            ).exclude(
-                categorie=Event.ACTION
-            )  # Les Actions sont affichés dans la page de l'evenement parent
 
-            if tenant['tenant'] != this_tenant:  # on est pas sur le tenant d'origine, on filtre le bool private
-                events = events.filter(
-                    private=False
-                )
-
-            # Les deux filtres de tags d'un lieu federe, dans le sens annonce par
-            # les libelles de l'admin (FederatedPlace.tag_filter / tag_exclude).
-            # Le matching se fait par SLUG : les objets Tag appartiennent au schema
-            # de CHAQUE tenant, comparer les pk ne marcherait pas.
-            # Un tag_filter non vide restreint : on ne garde QUE ces tags.
-            # / A tenant's two tag filters, matching the admin labels.
-            # / Slug-based matching: Tag objects live in each tenant's own schema.
-            if len(tenant['tag_filter']) > 0:
-                events = events.filter(
-                    tag__slug__in=tenant['tag_filter'])
-
-            # Un tag_exclude non vide retire : on jette les events portant ces tags.
-            # / A non-empty tag_exclude drops events carrying any of these tags.
-            if len(tenant['tag_exclude']) > 0:
-                events = events.exclude(
-                    tag__slug__in=tenant['tag_exclude'])
-
-
-            events_a_afficher += events
-
-
-
-
+    dated_events, paginated_info, all_dates_list, all_tags_list, all_thematiques_list = EventMVT.federated_events_filter()
+    for date_key, events in dated_events.items():
+        for event in events:
+            events_a_afficher.append(event)
 
     # Tri les évènements par datetime
     events_a_afficher.sort(key=lambda event: event.datetime)
@@ -3111,7 +3049,8 @@ class EventMVT(viewsets.ViewSet):
         event.price_max = max(tarifs) if tarifs else None
         event.free_price = any(price.free_price for price in prices)
 
-    def _libelle_prix_agenda(self, event):
+    @staticmethod
+    def _libelle_prix_agenda(event):
         """
         Renvoie le texte du prix affiche sur la carte d'un event dans l'agenda.
         / Returns the price label shown on an event card in the agenda.
@@ -3182,7 +3121,8 @@ class EventMVT(viewsets.ViewSet):
 
         return None
 
-    def federated_events_filter(self, tags=None, search=None, page=1, thematique=None, date_filter=None):
+    @staticmethod
+    def federated_events_filter( tags=None, search=None, page=1, thematique=None, date_filter=None):
         # Cache : on cache les deux cas les plus fréquents sur un gros agenda (festival) :
         #   1) la page principale (page 1, aucun filtre)
         #   2) une page filtrée par date seule (un jour précis, sans autre filtre)
@@ -3386,7 +3326,7 @@ class EventMVT(viewsets.ViewSet):
 
                     # Texte du prix affiche sur la carte de l'agenda
                     # / Price label shown on the agenda card
-                    event.price_min = self._libelle_prix_agenda(event)
+                    event.price_min = EventMVT._libelle_prix_agenda(event)
 
                     date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
@@ -3776,6 +3716,21 @@ class EventMVT(viewsets.ViewSet):
                                                          'total_value'] or 0
             template_context['inscrits'] = Ticket.objects.filter(reservation__event__parent=event).count()
 
+        events_a_afficher = []
+        dated_events, paginated_info, all_dates_list, all_tags_list, all_thematiques_list = EventMVT.federated_events_filter()
+        for date_key, events in dated_events.items():
+            for _event in events:
+                if len(events_a_afficher)>=3:
+                    break
+                if event.pk == _event.pk:
+                    continue
+                events_a_afficher.append(_event)
+
+
+        # event_a_venir = Event.objects.filter(archived=False, published=True).exclude(pk=event.pk)[:3]
+        template_context["event_a_venir"] = events_a_afficher
+
+
         # Résolution du gabarit par le resolver unifié (CHANTIER-03).
         # / Unified skin resolver (skins migration).
         from pages.services import gabarit_skin
@@ -4091,14 +4046,41 @@ class MembershipMVT(viewsets.ViewSet):
 
         template_context['products'] = products
 
+        # On utilise le template par "défaut" adhésion, sauf si le module booking est activé, dans ce cas là on change de template
+        template_path = "vues/adhesions.html"
+        config = Configuration.get_solo()
 
-    # Résolution du gabarit par le resolver unifié (CHANTIER-04).
+        if config.module_booking:
+            # On récupère les ressources, puis on les met dans un tableau organisé selon leur group
+            ressources = Resource.objects.select_related('group', 'product').order_by('product__name')
+            for ressource in ressources:
+                # Les tarifs en points ou en temps se vendent a la caisse seulement :
+                # ils ne comptent pas dans le prix affiche en euros.
+                # / Points or time prices are sold at the POS only: not an euro price.
+                prices = ressource.product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False)
+                tarifs = [price.prix for price in prices]
+                # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
+                # la caisse seulement), la carte n'affiche pas de prix.
+                # / Min price. Without a euro price, the card shows no price.
+                ressource.product.price_min = None
+                if tarifs:
+                    ressource.product.price_min = f"{min(tarifs)} €"
+
+            ressources_grouped = defaultdict(list)
+            for ressource in ressources:
+                ressources_grouped[ressource.group].append(ressource)
+
+            template_context['ressources_grouped'] = ressources_grouped
+            template_path = "vues/services.html"
+
+        # Résolution du gabarit par le resolver unifié (CHANTIER-04).
         # / Unified skin resolver (skins migration).
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/adhesions.html")
+        template_path_skin = gabarit_skin(template_path)
 
         return render(
-            request, template_path,
+            request,
+            template_path_skin,
             context=template_context,
         )
 
