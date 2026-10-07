@@ -64,7 +64,7 @@ class Command(BaseCommand):
         On passe sur TOUS les emplacements, pas seulement ceux créés ce matin. Un
         emplacement resté à moitié migré (migration interrompue par un interblocage,
         tâche tuée) est ainsi réparé le lendemain. Un emplacement déjà à jour est
-        sauté sans lancer de migration (vérification en quelques centièmes de seconde).
+        sauté sans lancer de migration (vérification en un dixième de seconde environ).
         / Every slot, not only today's: a half-migrated slot gets repaired the next day.
 
         Les migrations se font une par une, dans un sous-processus. Une migration en
@@ -78,33 +78,33 @@ class Command(BaseCommand):
         with schema_context('public'):
             schemas_des_emplacements = list(
                 Client.objects.filter(categorie=Client.WAITING_CONFIG)
-                .order_by('pk')
+                .order_by('created_on', 'pk')
                 .values_list('schema_name', flat=True)
             )
 
         schemas_en_echec = []
         for schema_name in schemas_des_emplacements:
-            if schema_est_entierement_migre(schema_name):
-                continue
-
-            logger.info(f"Migrating schema: {schema_name}")
-
-            # `migrate_schemas --schema` refuse un schéma qui n'existe pas.
-            # / `migrate_schemas --schema` refuses a missing schema.
-            with connection.cursor() as cursor:
-                cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}";')
-
+            # Toute erreur (vérification, création du schéma, migration) est isolée :
+            # les emplacements suivants et le rappel d'adhésion passent quand même.
+            # / Any error is isolated: next slots and the reminder still run.
             try:
+                if schema_est_entierement_migre(schema_name):
+                    continue
+
+                logger.info(f"Migrating schema: {schema_name}")
+
+                # `migrate_schemas --schema` refuse un schéma qui n'existe pas.
+                # / `migrate_schemas --schema` refuses a missing schema.
+                with connection.cursor() as cursor:
+                    cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}";')
+
                 subprocess.run(
                     [sys.executable, "manage.py", "migrate_schemas", "--schema", schema_name],
                     check=True,
                 )
                 logger.info(f"Schema {schema_name} migrated successfully.")
-            except subprocess.CalledProcessError as e:
-                logger.error(
-                    "Migration failed for schema %s (return code: %s).",
-                    schema_name, e.returncode
-                )
+            except Exception:
+                logger.exception(f"Migration failed for schema {schema_name}.")
                 schemas_en_echec.append(schema_name)
 
         return schemas_en_echec

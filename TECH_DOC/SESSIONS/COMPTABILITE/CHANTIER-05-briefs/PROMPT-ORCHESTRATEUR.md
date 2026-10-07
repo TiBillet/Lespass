@@ -129,8 +129,9 @@ sur-ingénierie : une garde n'est ajoutée que pour un cas qui existe vraiment e
   la répétition R-4. Un passage à blanc de la reprise peut s'y faire (lecture seule).
 
 **QO-9 tranchée : option B** pour les 125 paiements `T` (une vente « virement reçu » chacun, fiche
-R §17). **Première action : les remises en banque de la CLAF** : leurs montants sont dans la base de
-l'ancien Fedow (pas dans Lespass) ; voir avec le mainteneur comment les reprendre, puis R-1.
+R §17). **Remises en banque de la CLAF : hors R, après la production** (mainteneur, 2026-10-07 ;
+TODO n°35). Règlement des ventes `VR` : `SN` / 517100 (mainteneur). **R-1 en cours** : brief
+`05-R-1.md`, voir SUIVI §3 et §6 pour l'étape atteinte.
 
 Puis **R-1** (fiche R §13) : brief `CHANTIER-05-briefs/05-R-1.md` (calcul + passage à blanc, sans
 écriture), avec les décisions QO-3 (client = utilisateur de la réservation / adhésion /

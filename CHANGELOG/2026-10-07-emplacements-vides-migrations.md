@@ -20,12 +20,12 @@ En preprod, à 5h00 UTC, `cron_morning` migrait un nouvel emplacement pendant qu
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-| `Customers/etat_des_migrations.py` | **Nouveau** : `schema_est_entierement_migre()` (vérifie que la table `django_migrations` existe DANS le schéma, puis que le plan de migration est vide) |
-| `Administration/management/commands/cron_morning.py` | `migrer_les_emplacements_pas_a_jour()` remplace `run_waiting_migrations()` : tous les emplacements pas à jour, pas d'arrêt au premier échec, rappel envoyé puis erreur levée à la fin |
+| `Customers/etat_des_migrations.py` | **Nouveau** : `schema_est_entierement_migre()` (vérifie que la table `django_migrations` existe dans le schéma du lieu, puis que le plan de migration est vide) |
+| `Administration/management/commands/cron_morning.py` | `migrer_les_emplacements_pas_a_jour()` remplace `run_waiting_migrations()` : tous les emplacements pas à jour, du plus ancien au plus récent ; toute erreur d'un emplacement est isolée ; rappel envoyé puis erreur levée à la fin |
 | `BaseBillet/validators.py` | `create_tenant` : premier emplacement entièrement migré, erreur claire si aucun |
 | `BaseBillet/tasks.py` | `membership_renewal_reminder` : exclut `WAITING_CONFIG`, `try/except` par lieu (diff surtout de réindentation, voir `git diff -w`) |
 | `comptabilite/tasks.py` | `generer_les_clotures_automatiques` : exclut `WAITING_CONFIG` |
-| `tests/pytest/test_emplacements_vides_migrations.py` | **Nouveau** : 10 tests (vérification de migration, cron_morning, rappel, create_tenant) |
+| `tests/pytest/test_emplacements_vides_migrations.py` | **Nouveau** : 12 tests (vérification de migration, cron_morning, rappel, create_tenant) |
 | `tests/pytest/test_comptabilite_celery.py` | Le test des clôtures exclut `WAITING_CONFIG`, plus un test dédié |
 
 ---
@@ -56,4 +56,4 @@ Passer un onboarding complet (`/onboard/`) : le lieu est créé normalement. Si 
 ```bash
 docker exec lespass_django poetry run pytest tests/pytest/test_emplacements_vides_migrations.py tests/pytest/test_comptabilite_celery.py -q
 ```
-Chaque test a été vu en échec sur une mutation volontaire du code qu'il protège.
+Chaque test a été vu en échec sur une mutation volontaire du code qu'il protège. Le fichier est relancé plusieurs fois de suite pour écarter un test instable (ordre des emplacements, interblocage).

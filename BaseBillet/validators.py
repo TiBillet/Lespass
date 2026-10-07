@@ -1344,7 +1344,7 @@ class TenantCreateValidator:
             # half-migrated slot would give the venue a broken schema.
             emplacements_vides = Client.objects.filter(
                 categorie=Client.WAITING_CONFIG,
-            ).order_by('pk')
+            ).order_by('created_on', 'pk')
             if not emplacements_vides.exists():
                 raise Exception("No waiting tenant. ")
 

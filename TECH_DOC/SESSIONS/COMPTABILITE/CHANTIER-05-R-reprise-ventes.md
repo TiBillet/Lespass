@@ -751,3 +751,22 @@ aucune trace lisible. Le doublon avec l'ancien LaBoutik disparaît avec lui. Con
 le compte de la monnaie FED de Lespass est déséquilibré sur l'historique (les ventes FED ont surtout
 eu lieu dans l'ancien LaBoutik). **Remises de la CLAF : à traiter dans la session suivante** (les
 montants sont dans la base de l'ancien Fedow, pas dans celle de Lespass).
+
+**Règlement des ventes `VR` des paiements `T` : `SN` (Stripe en ligne, 517100), relié au paiement
+`T` (mainteneur, 2026-10-07).** L'argent arrive sur le compte Stripe Connect du lieu, comme ses
+ventes en ligne. L'article `VR` porte la monnaie FED (`ligne.asset`), pour son compte (467000,
+fiche E). Rappel : les paiements `T` sont de la **FED** via Stripe (`transfer.created`, Fedow
+`global_asset_bank_stripe_deposit`, jetons `STRIPE_FED_FIAT`), jamais un token local. Date : le
+`created` du transfert, lu dans `metadata_stripe` (texte JSON) ; `order_date` est en `auto_now_add`,
+il porte l'heure de réception du webhook.
+
+**QO-10 — 8 recharges `TNF` offertes à montant non nul (R-0 §14 ligne 16) : règle du §6, sans
+question** (orchestrateur, 2026-10-07) : part offerte = total, règlement FREE, unité EUR (monnaie
+cadeau ni temps ni points), comme le producteur d'aujourd'hui (`api_v2/views.py` ~l.1040,
+`offert_en_totalite=True`).
+
+**Remises en banque de la CLAF : hors du chantier R (mainteneur, 2026-10-07).** Leurs montants ne
+sont que dans l'ancien Fedow (transactions `DEPOSIT`, `../Fedow/fedow_core/views.py` ~l.441) ;
+Lespass n'en garde qu'une `FedowTransaction` sans montant. La reprise ne les traite pas : une
+commande à part, **après la production**, écrira leurs ventes « virement reçu » historiques
+(`TODO/BUGS-constats-chantier-05.md` n°35, avec l'absence de producteur `VR` après la bascule).

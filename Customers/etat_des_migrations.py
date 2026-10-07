@@ -29,11 +29,12 @@ def schema_est_entierement_migre(schema_name):
     / Returns True if every migration known to the code is applied in this schema.
 
     ÉTAPE 1 : la table `django_migrations` doit exister DANS ce schéma.
-    C'est indispensable. Dans un lieu, le `search_path` vaut « <schéma>, public ».
-    Si le schéma n'a pas sa propre table, Django lirait celle de `public` et
-    répondrait « à jour » pour un schéma vide.
-    / The table must exist IN this schema: otherwise the search_path would make
-    Django read public's table and call an empty schema "up to date".
+    Dans un lieu, le `search_path` vaut « <schéma>, public » : une table de `public`
+    reste visible depuis le lieu. Aujourd'hui, django-tenants cherche la table dans
+    le seul schéma du lieu, donc l'étape 2 suffirait. On vérifie quand même ici,
+    pour que la réponse ne dépende pas de ce comportement interne de django-tenants.
+    / The table must exist IN this schema. django-tenants currently looks only in
+    the venue schema, but we check here so the answer does not rely on it.
 
     ÉTAPE 2 : on demande à Django la liste des migrations qui restent à jouer. C'est
     le même calcul que `manage.py migrate --check`.

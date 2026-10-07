@@ -106,14 +106,11 @@ def test_schema_absent_n_est_pas_migre():
 @pytest.mark.django_db
 def test_schema_vide_n_est_pas_migre_meme_si_public_l_est():
     """
-    Un schéma vide (créé, jamais migré) n'est pas migré. Sa propre table
-    `django_migrations` manque : la fonction ne doit pas lire celle de `public` à
-    travers le `search_path`.
+    Un schéma vide (créé, jamais migré) n'est pas migré : sa propre table
+    `django_migrations` manque, et cela suffit pour répondre « non ».
 
-    On simule une base où Django répondrait « plus rien à jouer » (ce qu'il ferait
-    en lisant la table de `public` d'une base à jour). La réponse doit rester
-    « pas migré ». Sans cette simulation, le test dépendrait de l'état de `public`
-    dans la base de dev.
+    On simule un Django qui répondrait « plus rien à jouer ». La réponse doit rester
+    « pas migré » : elle ne dépend pas du calcul de Django pour un schéma sans table.
     / We simulate Django answering "nothing left to apply"; the answer must stay False.
     """
     with connection.cursor() as cursor:
@@ -161,9 +158,11 @@ def test_schema_a_moitie_migre_n_est_pas_migre():
 @pytest.mark.django_db
 def test_cron_morning_un_echec_de_migration_n_arrete_pas_les_emplacements_suivants():
     """
-    Deux emplacements pas à jour. La migration du premier échoue (simulée) : le second
-    est quand même migré, et la commande renvoie le schéma en échec.
-    / The first migration fails: the second slot is still migrated.
+    Deux emplacements pas à jour. La migration de l'un échoue (simulée) : l'autre est
+    quand même migré, et la commande renvoie le schéma en échec. L'ordre des
+    emplacements n'est pas comparé : deux emplacements créés le même jour se
+    départagent par leur UUID.
+    / One migration fails: the other slot is still migrated. Order is not compared.
     """
     _creer_un_emplacement_vide("test_cron_emplacement_en_panne")
     _creer_un_emplacement_vide("test_cron_emplacement_sain")
@@ -189,11 +188,42 @@ def test_cron_morning_un_echec_de_migration_n_arrete_pas_les_emplacements_suivan
     ):
         schemas_en_echec = CronMorning().migrer_les_emplacements_pas_a_jour()
 
-    assert schemas_migres == [
+    assert sorted(schemas_migres) == [
         "test_cron_emplacement_en_panne",
         "test_cron_emplacement_sain",
     ]
     assert schemas_en_echec == ["test_cron_emplacement_en_panne"]
+
+
+@pytest.mark.django_db
+def test_cron_morning_une_erreur_de_verification_n_arrete_pas_les_emplacements_suivants():
+    """
+    La vérification d'un emplacement plante (simulée, ex. connexion perdue) : l'erreur
+    est journalisée, l'autre emplacement est quand même migré.
+    / The check of one slot crashes: the other slot is still migrated.
+    """
+    _creer_un_emplacement_vide("test_cron_verification_en_panne")
+    _creer_un_emplacement_vide("test_cron_verification_saine")
+
+    def verification_simulee(schema_name):
+        if schema_name == "test_cron_verification_en_panne":
+            raise RuntimeError("panne simulée")
+        if schema_name == "test_cron_verification_saine":
+            return False
+        return True
+
+    with (
+        patch(
+            "Administration.management.commands.cron_morning.schema_est_entierement_migre",
+            side_effect=verification_simulee,
+        ),
+        patch("subprocess.run") as migration_simulee,
+    ):
+        schemas_en_echec = CronMorning().migrer_les_emplacements_pas_a_jour()
+
+    schemas_migres = [appel.args[0][-1] for appel in migration_simulee.call_args_list]
+    assert schemas_migres == ["test_cron_verification_saine"]
+    assert schemas_en_echec == ["test_cron_verification_en_panne"]
 
 
 @pytest.mark.django_db
@@ -334,6 +364,14 @@ def test_create_tenant_saute_l_emplacement_a_moitie_migre():
         "test_create_emplacement_a_moitie"
     )
     emplacement_complet = _creer_un_emplacement_vide("test_create_emplacement_complet")
+
+    # INDISPENSABLE : sans schéma PostgreSQL, `tenant.save()` dans create_tenant
+    # (django-tenants, `auto_create_schema`) crée le schéma ET le migre entièrement.
+    # `CREATE SCHEMA` est annulé avec la transaction du test.
+    # / Without a schema, Client.save() would create AND fully migrate it.
+    with connection.cursor() as cursor:
+        cursor.execute('CREATE SCHEMA "test_create_emplacement_a_moitie"')
+        cursor.execute('CREATE SCHEMA "test_create_emplacement_complet"')
 
     with (
         patch(
