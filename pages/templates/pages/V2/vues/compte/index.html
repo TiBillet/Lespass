@@ -89,60 +89,42 @@ modules (R11).
                 <h2 class="me-block__title">{% translate 'Ma carte' %}</h2>
                 {% if card %}
                     <div class="me-card" data-testid="compte-carte">
-                        <div class="me-card__visual">
-                            <div class="talisman talisman--sm">
-                                <svg class="talisman__sky" viewBox="0 0 76 48" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-                                    <g stroke="rgba(255,255,255,.30)" stroke-width="1.1" fill="none">
-                                        <path d="M8 37 L26 27 L45 33 L60 16 L71 25"/>
-                                        <path d="M26 27 L32 11 L45 33"/>
-                                    </g>
-                                    <g fill="rgba(255,255,255,.75)">
-                                        <circle cx="32" cy="11" r="1.9"/><circle cx="45" cy="33" r="1.9"/>
-                                        <circle cx="60" cy="16" r="1.9"/><circle cx="71" cy="25" r="1.9"/>
-                                        <circle cx="8" cy="37" r="1.9"/>
-                                    </g>
-                                    <circle cx="26" cy="27" r="3.6" fill="#fff"/>
-                                </svg>
-                                <div class="talisman__head">
-                                    <span class="talisman__brand">TiBillet</span>
-                                    <svg class="talisman__nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-                                        <path d="M6.5 8.5a5 5 0 0 1 0 7"/>
-                                        <path d="M10 5.5a9.5 9.5 0 0 1 0 13"/>
-                                        <path d="M13.5 2.5a14 14 0 0 1 0 19"/>
-                                    </svg>
-                                </div>
-                                <div class="talisman__foot">
-                                    <div class="talisman__number">
-                                        <span class="visually-hidden">{% translate 'Numéro de carte' %}</span>
-                                        {{ card.number_printed }}
-                                    </div>
-                                </div>
+                        <div class="tcard">
+                            <div class="tcard__v"></div>
+                            <div class="tcard__top">
+                                <span class="logo logo--blanc tcard__logo" role="img" aria-label="TiBillet"></span>
+                                <span>))</span>
+                            </div>
+                            <div class="tcard__num">
+                                <span class="visually-hidden">{% translate 'Numéro de carte' %}</span>
+                                {{ card.number_printed }}
                             </div>
                         </div>
+
 
                         <div class="me-card__info">
                             <div class="balance__label">{% translate 'Solde' %}</div>
                             <div class="me-card__amount" data-testid="compte-solde">{% if tokens %}{{ tokens.0.value|dround }}{% else %}0{% endif %} €</div>
                             {% if config.show_refill_button %}
                                 <a href="#" hx-get="{% url 'my_account-refill-wallet' %}" hx-indicator="#tibillet-spinner"
-                                   class="btn btn--signature btn--sm"
+                                   class="btn btn-primary"
                                    data-testid="compte-recharger">
                                     {% translate "Recharger" %}
                                 </a>
                             {% endif %}
+                            {% if config.show_refill_button %}
+                                <button type="button" class="btn btn-secondary"
+                                        id="button-filters"
+                                        data-bs-toggle="offcanvas"
+                                        data-bs-target="#refundPanel"
+                                        aria-controls="refundPanel">
+                                    {% translate "Se faire rembourser" %}
+                                </button>
+                            {% endif %}
 
                             <p class="me-card__links">
                                 <a class="link" href="/my_account/balance/" hx-get="/my_account/balance/" hx-target="body" hx-push-url="true">{% translate 'Historique' %}</a>
-                                {% if config.show_refill_button %}
-                                    ·
-                                    <button type="button" class="link"
-                                            id="button-filters"
-                                            data-bs-toggle="offcanvas"
-                                            data-bs-target="#refundPanel"
-                                            aria-controls="refundPanel">
-                                        {% translate "Se faire rembourser" %}
-                                    </button>
-                                {% endif %}
+
                                 ·
                                 {% if user.email_valid and user.is_active %}
                                     <button type="button" class="link"
@@ -238,6 +220,7 @@ modules (R11).
                 <div class="place-shortcuts">…</div>
             </div>
             {% endcomment %}
+
         </div>
     </div>
 

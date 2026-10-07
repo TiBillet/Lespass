@@ -431,7 +431,7 @@ class Command(BaseCommand):
             sous_titre="L'adhésion est à prix libre et ouvre les portes de la "
                        "coopérative.",
             bouton_label="Adhérer", bouton_url="/memberships/",
-            bouton2_label="Voir l'agenda", bouton2_url="/event/",
+            # bouton2_label="Voir l'agenda", bouton2_url="/event/",
         )
 
     # ------------------------------------------------------------------

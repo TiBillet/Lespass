@@ -49,13 +49,26 @@ Les trois boutons en dégradé sont les « gestes TiBillet » du pied de page
 
             <div class="footer-cta">
                 {# V2-HERE : URL de la page de don à renseigner. #}
-                <a class="btn btn--grad btn--grad-chaud" href="#">{% translate 'Faire un don à TiBillet' %}</a>
-                <a href="/onboard/" class="btn btn--grad btn--grad-calme">
-                    {% translate "Create a TiBillet space for your collective" %}
-                </a>
-                <a href="https://codecommun.tibillet.coop/crowd/" class="btn btn--grad btn--grad-frais">
-                    {% translate "Venez contribuer à TiBillet" %}
-                </a>
+{#                <span class="btn-wrap" style="--halo:var(--grad-fete)">#}
+{##}
+{#                    <a class="btn--grad btn--grad-chaud" href="#" style="background-image: var(--halo);">#}
+{#                        <span class="tcard__v"></span>#}
+{#                        <span class="btn--grad-content">{% translate 'Faire un don à TiBillet' %}</span>#}
+{#                    </a>#}
+{#                </span>#}
+                <span class="btn-wrap" style="--halo:radial-gradient(130% 120% at 85% 10%, #e93363 0%, #8b5fb0 45%, #4296cc 100%)">
+                    <a href="/onboard/" class="btn--grad btn--grad-calme" style="background-image: radial-gradient(120% 120% at 20% 90%, #259d49 0%, #4296cc 75%);">
+                        <span class="btn--grad__next_background" style="background-image:var(--halo)"></span>
+                        <span class="tcard__v"></span>
+                        <span class="btn--grad-content">{% translate "Créer un espace" %}</span>
+                    </a>
+                </span>
+                <span class="btn-wrap" style="--halo: radial-gradient(120% 120% at 80% 90%, #259d49 0%, #e9b322 80%);">
+                    <a href="https://codecommun.tibillet.coop/crowd/" class="btn--grad btn--grad-frais" style="background-image: var(--halo);">
+                        <span class="tcard__v"></span>
+                        <span class="btn--grad-content">{% translate "Contribuer au projet" %}</span>
+                    </a>
+                </span>
             </div>
         </div>
 

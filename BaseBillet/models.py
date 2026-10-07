@@ -5354,7 +5354,7 @@ class Webhook(models.Model):
 
 class FederationConfiguration(SingletonModel):
     """
-    Options d'affichage de la page Réseau local (/federation/) pour ce tenant.
+    Options d'affichage de la page Autour de nous (/federation/) pour ce tenant.
     Singleton tenant : 1 instance par schema. Lu par FederationViewset.list.
     / Display options for this tenant's Local network page (/federation/).
     Tenant singleton: 1 row per schema. Read by FederationViewset.list.
@@ -5403,7 +5403,7 @@ class FederationConfiguration(SingletonModel):
         blank=True,
         null=True,
         verbose_name=_("Texte d'introduction"),
-        help_text=_("Texte affiché en haut de la page Réseau local."),
+        help_text=_("Texte affiché en haut de la page Autour de nous."),
     )
     tri_des_lieux = models.CharField(
         max_length=10,

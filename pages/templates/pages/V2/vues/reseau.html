@@ -12,16 +12,16 @@
 {# The engine stays the explorer (explorer.js): this shell keeps ALL the ids and #}
 {# data-* it expects. Only the presentation changes (mockup classes). #}
 
-{% block title %}{% translate 'Réseau local' %}{% endblock %}
-{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Réseau local' %}{% endblock %}
+{% block title %}{% translate 'Autour de nous' %}{% endblock %}
+{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Autour de nous' %}{% endblock %}
 
 {# Override des Open Graph + Twitter tags : par defaut le base.html retombe sur #}
 {# "Accueil | <tenant>" qui n'est pas adapte a cette page Reseau local. #}
 {# / Override Open Graph + Twitter tags: base.html defaults to "Home | <tenant>" #}
 {# which is not appropriate for this Local Network page. #}
-{% block og_title %}{% translate 'Réseau local' %} | {{ config.organisation }}{% endblock %}
+{% block og_title %}{% translate 'Autour de nous' %} | {{ config.organisation }}{% endblock %}
 {% block og_description %}{% blocktranslate with tenant=config.organisation %}Découvrez le réseau coopératif de {{ tenant }} : lieux fédérés, événements partagés.{% endblocktranslate %}{% endblock %}
-{% block twitter_title %}{% translate 'Réseau local' %} | {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{% translate 'Autour de nous' %} | {{ config.organisation }}{% endblock %}
 {% block twitter_description %}{% blocktranslate with tenant=config.organisation %}Découvrez le réseau coopératif de {{ tenant }} : lieux fédérés, événements partagés.{% endblocktranslate %}{% endblock %}
 
 {% block extra_meta %}

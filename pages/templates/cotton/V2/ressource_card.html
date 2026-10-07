@@ -1,0 +1,69 @@
+{% load i18n %}
+{% comment %}
+CARTE D'OFFRE (adhésion) — composant Cotton du skin V2 (DA v1)
+/ Offer card (ressource) — V2 skin Cotton component (DA v1)
+
+LOCALISATION : pages/templates/cotton/V2/ressource_card.html
+Utilisé par : pages/V2/vues/adhesions.html
+
+    <c-V2.ressource_card :ressource="ressource" />
+
+Maquette : .offer-card de adhesion-services.html.
+
+FLUX DU CLIC SUR « ADHÉRER » (hors embed) :
+1. Le bouton ouvre le panneau latéral #subscribePanel (Bootstrap).
+2. En même temps, HTMX charge /ressources/<uuid>/ dans #offcanvas-ressource.
+   Ces deux ids sont définis par commun/offcanvas/adhesion_tunnel.html.
+3. .js-ressource-form-btn est lu par le module ressourceForm (shell.html).
+En embed (iframe), c'est un simple lien vers /ressources/?open=<uuid>.
+
+A CONSERVER : data-testid="ressource-open-<uuid>" (tests E2E adhésions).
+/ Keep the ressource-open testid (ressource E2E tests).
+{% endcomment %}
+<article class="offer-card offer-card-ressource" data-testid="ressource-card-{{ ressource.uuid }}">
+    {% if ressource.product.img %}
+        <div class="offer-card__cover">
+            {% include 'commun/partials/picture.html' with img=ressource.product.img alt="" %}
+        </div>
+    {% endif %}
+    <div class="offer-card__content">
+        <h3 class="offer-card__title">{{ ressource.name }}</h3>
+        {% if ressource.product.long_description %}
+            <div class="offer-card__desc">{{ ressource.product.long_description|safe }}</div>
+        {% elif ressource.product.short_description %}
+            <p class="offer-card__desc">{{ ressource.product.short_description }}</p>
+        {% endif %}
+
+
+
+        <div class="offer-card__footer">
+            <div class="offer-card__price">
+                {% if ressource.price_min %}
+                    {% translate 'A partir de' %} {{ ressource.price_min }}
+                {% endif %}
+            </div>
+            <a href="{% url 'booking-resource' pk=ressource.pk %}"
+               class="btn btn-secondary btn--sm js-ressource-form-btn"
+               data-testid="booking-resource-link-{{ ressource.pk }}">
+                {% translate 'Réserver' %}
+            </a>
+{#            {% if embed %}#}
+{#                <a class="btn btn--primary btn--sm"#}
+{#                   href="/ressources/?open={{ ressource.uuid }}" target="_blank" rel="noopener">#}
+{#                    {% if ressource.validate_button_text %}{{ ressource.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}#}
+{#                </a>#}
+{#            {% else %}#}
+{#                <button class="btn btn--primary btn--sm"#}
+{#                        type="button"#}
+{#                        hx-get="/ressources/{{ ressource.uuid }}/" hx-swap="innerHTML"#}
+{#                        hx-target="#offcanvas-membership"#}
+{#                        data-bs-toggle="offcanvas"#}
+{#                        data-bs-target="#subscribePanel"#}
+{#                        aria-controls="subscribePanel"#}
+{#                        data-testid="ressource-open-{{ ressource.uuid }}">#}
+{#                    {% translate 'Réserver' %}#}
+{#                </button>#}
+{#            {% endif %}#}
+        </div>
+    </div>
+</article>

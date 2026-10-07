@@ -50,13 +50,9 @@ pour ne pas être coupés par ce défilement.
                     </span>
                 </span>
             </div>
-            {% comment %} V2-HERE
-            Bouton « Je veux contribuer » de la maquette : la page Contribuer n'existe
-            pas encore en V2 (crowds rend des chemins de gabarit fixes, voir
-            CHANGELOG/a traiter/v2-da-v1-points-laisses-de-cote.md, point R12).
-            / "I want to contribute" button: no V2 Contribute page yet.
-            <a class="btn btn--primary" href="/contrib/">{% translate 'Je veux contribuer' %}</a>
-            {% endcomment %}
+            {% if config.module_crowdfunding %}
+                <a class="btn btn-primary" href="/contrib/">{{ crowd_config.title }}</a>
+            {% endif %}
         </div>
 
         <nav class="place-nav" aria-label="{% translate 'Menu principal' %}"

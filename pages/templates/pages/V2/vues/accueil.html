@@ -185,24 +185,7 @@
         </div>
     </section>
 
-    <!-- LES ÉVÉNEMENTS À VENIR -->
-    {% if events %}
-    <section class="section" data-testid="accueil-evenements">
-        <div class="section-head">
-            <h2 class="section__title">
-                {% translate 'Ce qui arrive' %}
-                <span class="section__meta">· {% blocktrans count compteur=events|length %}{{ compteur }} événement à venir{% plural %}{{ compteur }} événements à venir{% endblocktrans %}</span>
-            </h2>
-            <a class="link" href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">{% translate "Tout l'agenda" %} <span aria-hidden="true">→</span></a>
-        </div>
-
-        <div class="grid grid--3 grid--sous-titre">
-            {% for event in events|slice:":3" %}
-                <c-V2.event_card :event="event" />
-            {% endfor %}
-        </div>
-    </section>
-    {% endif %}
+    <c-V2.agenda_a_venir :events="events" title="{% translate 'Ce qui arrive' %}"/>
 
 {% comment %} V2-HERE
 SECTIONS MASQUÉES EN ATTENDANT LES DONNÉES

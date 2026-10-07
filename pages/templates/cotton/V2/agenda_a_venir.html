@@ -1,0 +1,29 @@
+{% load i18n %}
+
+{% comment %}
+Paramètre :
+--> title : titre affiché en haut de la section
+--> count : flag qui indique si on affiche le compteur d'événements (events)
+{% endcomment %}
+<c-vars title="{% translate 'Ce qui arrive' %}" :count="True"/>
+
+<!-- LES ÉVÉNEMENTS À VENIR -->
+{% if events %}
+    <section class="section" data-testid="accueil-evenements">
+        <div class="section-head">
+            <h2 class="section__title">
+                {{ title }}
+                {% if count %}
+                <span class="section__meta">· {% blocktrans count compteur=events|length %}{{ compteur }} événement à venir{% plural %}{{ compteur }} événements à venir{% endblocktrans %}</span>
+                {% endif %}
+            </h2>
+            <a class="link" href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">{% translate "Tout l'agenda" %} <span aria-hidden="true">→</span></a>
+        </div>
+
+        <div class="grid grid--3 grid--sous-titre">
+            {% for event in events|slice:":3" %}
+                <c-V2.event_card :event="event" />
+            {% endfor %}
+        </div>
+    </section>
+{% endif %}

@@ -3,8 +3,8 @@
 {% load i18n %}
 
 {% comment %}
-ADHÉSION & SERVICES — skin V2 (DA v1)
-/ Membership & services — V2 skin (DA v1)
+ADHÉSION — skin V2 (DA v1)
+/ Membership — V2 skin (DA v1)
 
 LOCALISATION : pages/templates/pages/V2/vues/adhesions.html
 Vue : BaseBillet/views.py MembershipMVT.list (/memberships/) et .embed
@@ -19,13 +19,13 @@ les adhésions : une seule section, donc pas de sommaire pour l'instant.
 / Only memberships are in the context: one section, no table of contents yet.
 {% endcomment %}
 
-{% block title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}{% endblock %}
+{% block title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Adhésions' %}{% endif %}{% endblock %}
 {% block meta_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
-{% block og_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block og_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Adhésions' %}{% endif %} | {{ config.organisation }}{% endblock %}
 {% block og_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
 {% block og_image %}{% if products.0.img %}https://{{ request.get_host }}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
 {% block og_image_alt %}{% if products.0.name %}{{ products.0.name }} - {% endif %}{% translate 'Memberships' %} - {{ config.organisation }}{% endblock %}
-{% block twitter_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Adhésions' %}{% endif %} | {{ config.organisation }}{% endblock %}
 {% block twitter_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
 {% block twitter_image %}{% if products.0.img %}https://{{ request.get_host }}{{ products.0.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
 {% block twitter_image_alt %}{% if products.0.name %}{{ products.0.name }} - {% endif %}{% translate 'Memberships' %} - {{ config.organisation }}{% endblock %}
@@ -41,8 +41,8 @@ les adhésions : une seule section, donc pas de sommaire pour l'instant.
 
     {% block adhesions_entete %}
     <div class="page-header">
-        <div class="eyebrow">{% translate 'Adhésion & services' %}</div>
-        <h1 class="page-title">{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}</h1>
+        <div class="eyebrow">{% translate 'À disposition' %}</div>
+        <h1 class="page-title">{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Adhésions' %}{% endif %}</h1>
         {% if config.description_membership_page %}
             <div class="page-intro">{{ config.description_membership_page | safe }}</div>
         {% endif %}
@@ -59,6 +59,8 @@ les adhésions : une seule section, donc pas de sommaire pour l'instant.
     {% block adhesions_grille %}
     <section class="section" id="adhesions" data-testid="adhesions-grille">
         <h2 class="section__title">{% translate 'Adhésions' %}</h2>
+        <p class="section__desc"> {% translate "Une relation d'appartenance, pas seulement un service" %}</p>
+        <hr/>
         <div class="grid grid--3 grid--sous-titre">
             {% for product in products %}
                 {% if product.publish %}
@@ -71,6 +73,28 @@ les adhésions : une seule section, donc pas de sommaire pour l'instant.
     </section>
     {% endblock adhesions_grille %}
 
+{#    {% block resources_grille %}#}
+{#        <section class="section" id="ressources" data-testid="ressources-grille">#}
+{#            <h2 class="section__title">{% translate 'Réservations' %}</h2>#}
+{#            <p class="section__desc"> {% translate "Réserver un espace ou une ressource" %}</p>#}
+{#            <hr/>#}
+{#            {% for group_entry in ressources_grouped %}#}
+{##}
+{#            <h4 class="ressource-group-title" data-testid="booking-group-{{ group_entry.pk }}">#}
+{#                {{ group_entry.name }}#}
+{#            </h4>#}
+{#            {% if group_entry.description %}#}
+{#                <p class="text-muted mb-3">{{ group_entry.description }}</p>#}
+{#            {% endif %}#}
+{#                <div class="grid grid--3 grid--sous-titre">#}
+{#                    {% for ressource in group_entry.resources.all %}#}
+{#                        <c-V2.ressource_card :ressource="ressource" />#}
+{#                    {% endfor %}#}
+{#                </div>#}
+{#            {% endfor %}w#}
+{#        </section>#}
+{#    	#}
+{#    {% endblock %}#}
     {% block adhesions_federees %}
     {% if federated_tenants %}
         {# Les lieux voisins : c'est leur contenu, donc des cartes neutres (DA v1). #}

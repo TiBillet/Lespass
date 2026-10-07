@@ -1,5 +1,5 @@
 {% extends base_template %}
-{% load tibitags i18n static pages_tags %}
+{% load tibitags i18n static pages_tags tz %}
 
 {% comment %}
 PAGE ÉVÉNEMENT — skin V2 (DA v1)
@@ -94,6 +94,51 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
         / Event JSON-LD built in Python (json.dumps), never hand-written.
     {% endcomment %}
     {% jsonld_event event %}
+
+    <script>
+    const ICS_FILE_LINES = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Tibillet//{{config.organisation}}//{{config.language}}",
+        "BEGIN:VEVENT",
+        "UID:{{event.pk}}",
+        {# Keep here if backup needed #}
+        {#"DTSTAMP;TZID={{ config.fuseau_horaire }}:{{ event.created|date:"Ymd" }}T{{ event.created|date:"His" }}",#}
+        {#"DTSTART;TZID={{ config.fuseau_horaire }}:{{ event.datetime|date:"Ymd" }}T{{ event.datetime|date:"His" }}",#}
+        {#{% if event.end_datetime %}#}
+        {#"DTEND;TZID={{ config.fuseau_horaire }}:{{ event.end_datetime|date:"Ymd" }}T{{ event.end_datetime|date:"His" }}",#}
+        "DTSTAMP:{{ event.created|utc|date:"Ymd\THis\Z" }}",
+        "DTSTART:{{ event.datetime|utc|date:"Ymd\THis\Z" }}",
+        {% if event.end_datetime %}
+        "DTEND:{{ event.end_datetime|utc|date:"Ymd\THis\Z" }}",
+        {# Y=year d=day(with 0) m=month(with 0)  #}
+        {# h=hour(with 0) i=minutes(with 0) s=secondes(with 0)  #}
+        {% endif %}
+        {# DTEND #}
+        "SUMMARY:{{event.name|escapejs}}",
+        "DESCRIPTION:{{event.short_description|default_if_none:event.long_description|escapejs }}",
+        "LOCATION:{{event.postal_address|escapejs}}",
+        "END:VEVENT",
+        "END:VCALENDAR",
+    ]
+
+    function download_ics() {
+        let ICS_FILE = ICS_FILE_LINES.join("\r\n") +"\r\n";
+        let filename = "{{event.name|escapejs}}.ics";
+        var element = document.createElement('a');
+        element.setAttribute('href', 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ICS_FILE));
+        element.setAttribute('download', filename);
+
+        element.style.display = 'none';
+        document.body.appendChild(element);
+
+        element.click();
+
+        document.body.removeChild(element);
+
+    }
+
+    </script>
 {% endblock %}
 
 {% block main %}
@@ -169,6 +214,8 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
             {% block evenement_description %}
             {% if event.short_description %}
                 <p class="page-intro">{{ event.short_description }}</p>
+            {% else %}
+                <p class="page-intro">{{ event.long_description|safe }}</p>
             {% endif %}
             {% endblock evenement_description %}
 
@@ -217,65 +264,50 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
                 {% endif %}
                 {% endblock evenement_reservation %}
 
-                {% comment %} V2-HERE
-                Bouton « Ajouter à mon agenda » de la maquette : pas d'export .ics
-                par événement (point R7).
-                <a class="btn btn--outline" href="…">{% translate 'Ajouter à mon agenda' %}</a>
-                {% endcomment %}
             </div>
+            <a class="btn btn-secondary" onclick="download_ics()">{% translate 'Ajouter à mon agenda' %}</a>
         </div>
     </article>
     {% endblock evenement_entete %}
 
     {% block evenement_complements %}
 
-    {% if event.long_description or event.carrousel.all %}
-        <section class="section" id="schedule" data-testid="evenement-description">
-            <h2 class="section__title">{% translate 'À propos' %}</h2>
-            {% if event.long_description %}
-                <div class="event-prose">{{ event.long_description | safe }}</div>
-            {% endif %}
-            {% if event.carrousel.all %}
-                <div class="event-carrousel">
-                    {% include 'pages/V2/partials/carrousel_evenements.html' with carousel=event.carrousel.all max_height='max(25vh, 10rem)' auto=false %}
-                </div>
-            {% endif %}
-        </section>
-    {% endif %}
 
     {% comment %} V2-HERE
     « Le programme » de la maquette (.ledger jour par jour) : aucune donnée de
     sous-événements (Event.children = actions bénévoles). Point R13.
     {% endcomment %}
+    {% comment %} V2-HERE
 
-    {% if event.postal_address %}
-        <section class="section" id="timeAndPlace" data-testid="evenement-infos-pratiques">
-            <h2 class="section__title">{% translate 'Infos pratiques' %}</h2>
-            <div class="grid grid--3 grid--sous-titre-serre">
-                <div class="card info-card">
-                    <div class="info-card__label">{% translate 'Adresse' %}</div>
-                    <address class="info-card__text" itemscope itemtype="https://schema.org/PostalAddress">
-                        {% if event.postal_address.name %}<span itemprop="name">{{ event.postal_address.name }}</span><br/>{% endif %}
-                        <span itemprop="streetAddress">{{ event.postal_address.street_address }}</span><br/>
-                        <span itemprop="postalCode">{{ event.postal_address.postal_code }}</span> <span itemprop="addressLocality">{{ event.postal_address.address_locality }}</span>
-                    </address>
-                </div>
-                {% if event.postal_address.comment %}
+        {% if event.postal_address %}
+            <section class="section" id="timeAndPlace" data-testid="evenement-infos-pratiques">
+                <h2 class="section__title">{% translate 'Infos pratiques' %}</h2>
+                <div class="grid grid--3 grid--sous-titre-serre">
                     <div class="card info-card">
-                        <div class="info-card__label">{% translate "S'y rendre" %}</div>
-                        <p class="info-card__text">{{ event.postal_address.comment }}</p>
+                        <div class="info-card__label">{% translate 'Adresse' %}</div>
+                        <address class="info-card__text" itemscope itemtype="https://schema.org/PostalAddress">
+                            {% if event.postal_address.name %}<span itemprop="name">{{ event.postal_address.name }}</span><br/>{% endif %}
+                            <span itemprop="streetAddress">{{ event.postal_address.street_address }}</span><br/>
+                            <span itemprop="postalCode">{{ event.postal_address.postal_code }}</span> <span itemprop="addressLocality">{{ event.postal_address.address_locality }}</span>
+                        </address>
+                    </div>
+                    {% if event.postal_address.comment %}
+                        <div class="card info-card">
+                            <div class="info-card__label">{% translate "S'y rendre" %}</div>
+                            <p class="info-card__text">{{ event.postal_address.comment }}</p>
+                        </div>
+                    {% endif %}
+                </div>
+                {% if event.postal_address.latitude and event.postal_address.longitude %}
+                    <div class="event-carte">
+                        {% include "pages/V2/partials/evenement_geoloc.html" %}
                     </div>
                 {% endif %}
-            </div>
-            {% if event.postal_address.latitude and event.postal_address.longitude %}
-                <div class="event-carte">
-                    {% include "pages/V2/partials/evenement_geoloc.html" %}
-                </div>
-            {% endif %}
-        </section>
-    {% endif %}
+            </section>
+        {% endif %}
+    {% endcomment %}
 
-    {% if event.children.exists %}
+        {% if event.children.exists %}
         <section class="section" data-testid="evenement-benevoles">
             <h2 class="section__title">{% translate "Looking for volunteers" %}</h2>
             {% if action_total_jauge %}
@@ -317,9 +349,11 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
                     {% endif %}
                 </span>
             </div>
-            <a class="btn btn--primary btn--sm" href="/" hx-get="/" hx-target="body" hx-push-url="true">{% translate 'Découvrir le lieu' %}</a>
+            <a class="btn btn-secondary btn--sm" href="/" hx-get="/" hx-target="body" hx-push-url="true">{% translate 'Voir la page du lieu →' %}</a>
         </div>
     </section>
+
+    <c-V2.agenda_a_venir :events="event_a_venir" :count="False" title="{% translate "D'autres événements à " %} {{ config.organisation }}"/>
 
     {% comment %} V2-HERE
     Partenaires (.place-card) et « D'autres événements » (3 cartes) de la
