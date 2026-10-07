@@ -128,9 +128,9 @@ sur-ingénierie : une garde n'est ajoutée que pour un cas qui existe vraiment e
   **déjà nettoyée des 148 lieux inactifs** : la recharger (`detruire`, `demarrer`, `charger`) avant
   la répétition R-4. Un passage à blanc de la reprise peut s'y faire (lecture seule).
 
-**Première action : poser au mainteneur la décision QO-9 sur les 125 paiements `T` (retours en
-banque FED), fiche R §17 (options A-D, points comptables).** Il a dit : « ce sont des retours en
-banque, il faut absolument les garder ». Ne pas choisir à sa place.
+**QO-9 tranchée : option B** pour les 125 paiements `T` (une vente « virement reçu » chacun, fiche
+R §17). **Première action : les remises en banque de la CLAF** : leurs montants sont dans la base de
+l'ancien Fedow (pas dans Lespass) ; voir avec le mainteneur comment les reprendre, puis R-1.
 
 Puis **R-1** (fiche R §13) : brief `CHANTIER-05-briefs/05-R-1.md` (calcul + passage à blanc, sans
 écriture), avec les décisions QO-3 (client = utilisateur de la réservation / adhésion /

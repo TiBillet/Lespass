@@ -742,3 +742,12 @@ reprise ne les code pas ; si l'une apparaît, anomalie « forme non prévue » (
   Connect) ; (4) numéroter et chaîner des opérations qui ne sont pas des ventes ; (5) la CLAF :
   Lespass n'a pas le montant de ses remises (il faudrait un appel à Fedow, interdit pendant la
   reprise).
+
+**QO-9, 125 paiements `T` : tranchée (mainteneur, 2026-10-07) → option B.** Une vente « virement
+reçu » par paiement `T` : article `VR` hors chiffre d'affaires, à la date du transfert, numérotée et
+chaînée, montant lu dans `metadata_stripe` (aucun appel à Stripe), `Paiement_stripe.vente` posé.
+Raison du mainteneur : avec A, une fois l'ancien Fedow et les LaBoutik V1 arrêtés, il ne resterait
+aucune trace lisible. Le doublon avec l'ancien LaBoutik disparaît avec lui. Conséquence connue :
+le compte de la monnaie FED de Lespass est déséquilibré sur l'historique (les ventes FED ont surtout
+eu lieu dans l'ancien LaBoutik). **Remises de la CLAF : à traiter dans la session suivante** (les
+montants sont dans la base de l'ancien Fedow, pas dans celle de Lespass).
