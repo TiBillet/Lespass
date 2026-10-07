@@ -162,7 +162,12 @@ from BaseBillet.services_vente import (
     vente_contient_une_recharge,
     vente_porte_un_ecart_d_encaissement,
 )
-from Customers.models import Client
+from Customers.models import (
+    MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY,
+    MODULES_V2_FERMES_AUX_LIEUX_LEGACY,
+    Client,
+    lieu_en_moteur_legacy,
+)
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
@@ -612,6 +617,20 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
         configuration = Configuration.get_solo()
         current_value = getattr(configuration, field_name)
+
+        # Verrou de moteur : un lieu legacy utilise l'ancien Fedow. Il ne peut pas
+        # ALLUMER un module V2 : refus avant toute ecriture. L'interrupteur cache ne
+        # suffit pas, un POST direct arrive ici. ETEINDRE reste permis : un lieu legacy
+        # qui aurait un drapeau V2 a vrai en base doit pouvoir l'eteindre.
+        # / Engine lock: a legacy venue cannot switch ON a V2 module (refused before
+        # / any write). Switching OFF stays allowed.
+        allumage_demande = not current_value
+        if field_name in MODULES_V2_FERMES_AUX_LIEUX_LEGACY and allumage_demande and lieu_en_moteur_legacy():
+            messages.add_message(request, messages.ERROR, MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY)
+            response = HttpResponse("")
+            response["HX-Refresh"] = "true"
+            return response
+
         setattr(configuration, field_name, not current_value)
         new_value = getattr(configuration, field_name)
 
@@ -5543,6 +5562,24 @@ class TenantAdmin(ModelAdmin):
                     and "admin/autocomplete" in request.path):  # Cela vient bien de l'admin event
                 queryset = queryset.exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META]).exclude(
                     pk=connection.tenant.pk)  # on retire le client actuel
+
+        # Invitations V2 (asset ou federation fedow_core) : un lieu legacy n'est jamais
+        # propose. On lit les parametres GET de l'autocompletion Django, qui nomment le
+        # champ source. Ce filtre ne pilote que l'affichage : la validation est faite par
+        # le queryset du champ (AssetAdmin / FederationAdmin.formfield_for_manytomany).
+        # / V2 invitations: a legacy venue is never offered. Display only; the field's
+        # / queryset does the validation.
+        champ_source_de_l_autocompletion = (
+            request.GET.get("app_label"),
+            request.GET.get("model_name"),
+            request.GET.get("field_name"),
+        )
+        champs_d_invitation_v2 = [
+            ("fedow_core", "asset", "pending_invitations"),
+            ("fedow_core", "federation", "pending_tenants"),
+        ]
+        if champ_source_de_l_autocompletion in champs_d_invitation_v2:
+            queryset = queryset.filter(moteur_monnaie=Client.MOTEUR_V2)
         return queryset, use_distinct
 
     actions_row = ["go_admin", ]
@@ -6313,10 +6350,14 @@ class AssetAdmin(ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
+            # Nom propre a l'admin legacy : `asset-accept-invitation` est celui de
+            # l'admin fedow_core. Deux routes du meme nom, et `{% url %}` en choisit une
+            # en silence (garde : tests/pytest/test_noms_de_routes_admin_uniques.py).
+            # / Own name for the legacy admin; `asset-accept-invitation` is fedow_core's.
             re_path(
                 r'^accept_invitation/(?P<asset_pk>.+)/$',
                 self.admin_site.admin_view(csrf_protect(require_POST(self.accept_invitation))),
-                name='asset-accept-invitation',
+                name='assetfedowpublic-accept-invitation',
             ),
             re_path(
                 r'^bank_deposit/(?P<asset_pk>.+)/(?P<wallet_to_deposit>.+)/$',
@@ -6407,8 +6448,12 @@ class AssetAdmin(ModelAdmin):
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+    # Plus de creation d'asset dans l'ancien Fedow depuis l'admin (decision du
+    # mainteneur, 2026-10-06) : en attendant la migration H-2 / H-3, on gere, invite et
+    # accepte les assets existants, on n'en cree plus.
+    # / No more asset creation on the old Fedow from the admin, until H-2 / H-3.
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

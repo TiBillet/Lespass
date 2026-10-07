@@ -18,6 +18,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework_api_key.permissions import BaseHasAPIKey
 
 from controlvanne.models import TireuseAPIKey
+from Customers.models import lieu_en_moteur_legacy
 
 
 class HasTireuseAccess(BaseHasAPIKey):
@@ -40,6 +41,12 @@ class HasTireuseAccess(BaseHasAPIKey):
     model = TireuseAPIKey
 
     def has_permission(self, request: HttpRequest, view: typing.Any) -> bool:
+        # Verrou de moteur : un lieu legacy n'utilise que l'ancien Fedow. La tireuse
+        # (paiement fedow_core) lui est fermée, clé API ou admin (spec 15 §5.4).
+        # / Engine lock: the tap is closed to a legacy venue, API key or admin.
+        if lieu_en_moteur_legacy():
+            return False
+
         # Chemin 1 : admin tenant connecté via session navigateur
         # / Path 1: tenant admin logged in via browser session
         utilisateur = request.user

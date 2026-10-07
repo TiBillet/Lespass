@@ -5,7 +5,35 @@ EN TETE DE L'ECRAN « COMPTES DES MOYENS DE PAIEMENT »
 
 LOCALISATION : Administration/templates/admin/comptable/moyens_changelist_before.html
 
-Affiche le composant « Plan complet ? » (contexte : `manques_du_plan`, pose par
-MappingMoyenDePaiementAdmin.changelist_view, Administration/admin/laboutik.py).
+0. Le second niveau de l'onglet « Configurer » (sous_onglets_configurer.html).
+1. Une aide repliable, fermee par defaut (un <details> sans « open »). Les numeros
+   cites sont ceux du plan par defaut (laboutik/plan_comptable_par_defaut.py) : un
+   test le verifie.
+2. Le composant « Plan complet ? » (verdict charge en HTMX au clic,
+   CompteComptableAdmin.verifier_le_plan, Administration/admin/laboutik.py).
+/ 0. Second level of the "Configure" tab. 1. Collapsible help, closed by default.
+2. The "Complete plan?" component.
 {% endcomment %}
+{% include "admin/comptable/sous_onglets_configurer.html" with page_active="moyens" %}
+
+<div class="mb-4" data-testid="aide-moyens-de-paiement">
+    <details class="bg-white border border-base-200 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+        <summary class="cursor-pointer px-6 py-4 font-semibold text-important" data-testid="aide-moyens-de-paiement-titre">
+            <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">help</span>
+            {% translate "À quoi servent les comptes des moyens de paiement ?" %}
+        </summary>
+        <div class="px-6 pb-6 flex flex-col gap-3 text-sm leading-relaxed">
+            <p>{% translate "Pour chaque façon de payer, cette page dit dans quel tiroir arrive l'argent." %}</p>
+            <p class="font-semibold">{% translate "Exemples :" %}</p>
+            <ul style="list-style: disc; padding-left: 20px; margin: 0;">
+                <li>{% translate "espèces → 530000, la caisse ;" %}</li>
+                <li>{% translate "carte bancaire → 512100, l'argent du terminal de paiement ;" %}</li>
+                <li>{% translate "chèque → 511200, les chèques à déposer à la banque ;" %}</li>
+                <li>{% translate "paiement en ligne → 517100, le compte Stripe : l'argent attend d'être viré à la banque." %}</li>
+            </ul>
+            <p>{% translate "Un cadeau (offert) ou un paiement en points n'a pas de tiroir : aucun argent n'arrive." %}</p>
+        </div>
+    </details>
+</div>
+
 {% include "admin/comptable/plan_complet.html" %}

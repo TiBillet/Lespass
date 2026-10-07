@@ -35,7 +35,7 @@ from unittest.mock import patch
 import pytest
 from django.db import transaction as db_transaction
 from django.test import override_settings
-from django_tenants.utils import schema_context, tenant_context
+from django_tenants.utils import get_public_schema_name, schema_context, tenant_context
 
 from AuthBillet.models import Wallet
 from BaseBillet.models import LigneArticle, PaymentMethod
@@ -87,15 +87,21 @@ def wallet_du_lieu(tenant):
 def asset_monnaie_locale(tenant, wallet_du_lieu):
     """La monnaie locale du lieu, remboursable en especes.
     / The venue's local currency, refundable in cash."""
-    asset, _cree = Asset.objects.get_or_create(
-        name=f'{PREFIXE_DE_TEST} Monnaie locale',
-        category=Asset.TLF,
-        defaults={
-            "currency_code": "EUR",
-            "wallet_origin": wallet_du_lieu,
-            "tenant_origin": tenant,
-        },
-    )
+    # Cree dans le schema PUBLIC, pose explicitement : le signal post_save d'Asset
+    # (fedow_core/signals.py) n'y cree aucun produit de recharge. Sans ce contexte, la
+    # fixture herite de la connexion laissee par le test precedent, dont le schema peut
+    # etre faux (tests/PIEGES.md, « schema de connexion perime apres une annulation »).
+    # / Created in the PUBLIC schema, set explicitly: the Asset signal skips public.
+    with schema_context(get_public_schema_name()):
+        asset, _cree = Asset.objects.get_or_create(
+            name=f'{PREFIXE_DE_TEST} Monnaie locale',
+            category=Asset.TLF,
+            defaults={
+                "currency_code": "EUR",
+                "wallet_origin": wallet_du_lieu,
+                "tenant_origin": tenant,
+            },
+        )
     return asset
 
 

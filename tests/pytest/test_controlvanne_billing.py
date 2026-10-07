@@ -52,6 +52,7 @@ def asset_tlf(tenant):
     / Active TLF asset for lespass tenant."""
     with schema_context(tenant.schema_name):
         from fedow_core.models import Asset
+        from fedow_core.services import AssetService
         from AuthBillet.models import Wallet
 
         # Wallet du lieu (wallet_origin de l'asset)
@@ -60,23 +61,14 @@ def asset_tlf(tenant):
             name="Wallet lieu billing-test",
         )
 
-        # filter().order_by("name").first() plutot que get_or_create(tenant_origin=,
-        # category=, active=) : plusieurs assets TLF actifs peuvent deja exister
-        # pour ce tenant (pollution inter-suites sur la DB dev partagee), et
-        # get_or_create leverait MultipleObjectsReturned sur ce lookup ambigu.
-        # order_by("name") aligne aussi la selection sur celle utilisee en prod
-        # par AssetService.obtenir_assets_accessibles (ordre deterministe).
-        # / filter().order_by("name").first() rather than get_or_create(...):
-        # several active TLF assets may already exist for this tenant
-        # (cross-suite pollution on the shared dev DB), and get_or_create would
-        # raise MultipleObjectsReturned on this ambiguous lookup. order_by("name")
-        # also matches prod's selection via AssetService.obtenir_assets_accessibles
-        # (deterministic order).
-        asset = Asset.objects.filter(
-            tenant_origin=tenant,
-            category=Asset.TLF,
-            active=True,
-        ).order_by("name").first()
+        # La fixture et la cascade doivent choisir le même asset : même requête
+        # que controlvanne.billing.obtenir_contexte_cashless.
+        # / The fixture and the cascade must pick the same asset.
+        asset = (
+            AssetService.obtenir_assets_accessibles(tenant)
+            .filter(category=Asset.TLF)
+            .first()
+        )
         if not asset:
             asset = Asset.objects.create(
                 tenant_origin=tenant,

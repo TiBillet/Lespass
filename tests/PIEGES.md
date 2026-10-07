@@ -158,6 +158,41 @@ Verifier la visibilite avant d'interagir avec des elements qui peuvent ne pas ex
 **9.27 — Verifier l'inventaire complet apres migration.**
 Toujours comparer fichier par fichier, pas seulement par comptage global.
 
+**9.115 — L'autocompletion M2M d'Unfold 0.89 est le select2 de l'admin Django, pas Tom Select (2026-10-06).**
+Un champ `autocomplete_fields` (ex. `pending_invitations` des assets `fedow_core` et
+`fedow_public`) est rendu par le widget de l'admin Django : un `<select multiple>` cache
+(`select2-hidden-accessible`) et un `<span class="select2 ...">`. L'ancien test Playwright
+(et des notes plus anciennes) parlaient de Tom Select : c'est perime. Selecteurs fiables :
+```python
+champ = page.locator(".field-pending_invitations .select2-search__field")
+champ.click()
+with page.expect_response(lambda r: "/admin/autocomplete/" in r.url and "term=Coeur" in r.url):
+    champ.press_sequentially("Coeur", delay=30)
+page.locator(".select2-results__option:not(.loading-results)", has_text="Le Coeur en or").first.click()
+```
+`page.get_by_role("searchbox")` marche aussi (le champ porte `role="searchbox"`), mais la page
+en compte plusieurs : cibler la classe du champ (`.field-<nom>`). Pour verifier qu'un lieu
+n'est PAS propose, lire le JSON de la reponse `/admin/autocomplete/` (`results[].text`) : une
+liste deroulante vide peut aussi vouloir dire « reponse pas encore arrivee ».
+Exemple : `tests/e2e/test_federation_asset_fedow_core.py`, etape 2.
+
+**9.116 — Le Fedow de dev a un cache PAR PROCESSUS : une federation neuve est ignoree jusqu'a 120 s (2026-10-06).**
+Le conteneur `fedow_django` tourne avec `TEST=1` : `fedowallet_django/settings.py` passe alors
+le cache en `LocMemCache`, propre a chacun des 5 processus gunicorn. Or le Fedow garde 120 s
+la liste des monnaies acceptees par un lieu (`Place.cached_federated_with`, cle
+`federated_with_<uuid>`) et 30 s la ventilation d'un asset (`total_by_place_with_uuid`).
+`Federation.save()` fait `cache.clear()`, mais seulement dans le processus qui cree la
+federation. Symptome reel : apres l'acceptation chez `festival`, `get_accepted_assets()`
+renvoie l'asset une fois sur deux, et le paiement par QR code chez `festival` est refuse
+par le Fedow : `{'amount': ['Amount cannot exceed the total amount']}` (log du serveur :
+« debit Fedow incertain ») ; l'adherent voit « Erreur lors du paiement ». Cote Lespass, le
+solde affiche est pourtant bon (il est calcule avec la base de Lespass).
+**Parade dans un E2E** : relire `get_accepted_assets()` jusqu'a 125 s, et ne payer
+qu'apres 125 s depuis l'acceptation ; recharger la fiche d'un asset jusqu'a ~45 s pour lire
+la ventilation. En production (memcached partage), `cache.clear()` vaut pour tous les
+processus : le probleme ne se pose pas. Exemple :
+`tests/e2e/test_federation_asset_legacy_inter_lieux.py` (`DELAI_DU_CACHE_DES_FEDERATIONS_DU_FEDOW`).
+
 ### Flow identification client unifie (session 05)
 
 **9.30 — `CarteCashless` est en SHARED_APPS : pas de FastTenantTestCase.**
@@ -3809,6 +3844,30 @@ Remède : `DROP SCHEMA test_modele CASCADE` ; il est refait au prochain schéma 
 - 9.26 (`pytest.skip` pour éléments UI optionnels) cède devant la règle du projet « zéro
   `pytest.skip` silencieux » : préférer `pytest.fail` avec un message clair.
 - 9.41, 9.98 et 9.99 existent chacun en double (numérotation) : les citer par leur titre.
+
+### Schéma de connexion périmé après une annulation (2026-10-06)
+
+**15.1 — Après l'annulation d'une transaction, Postgres et django-tenants ne sont plus d'accord
+sur le schéma courant.**
+Un test fait une requête HTTP sur `lespass` (client de test) dans sa transaction : le
+middleware pose le `search_path` sur `lespass`, et django-tenants note
+`connection.schema_name = "lespass"`. À la fin du test, la transaction est annulée : Postgres
+remet le `search_path` d'avant (`public`), mais django-tenants croit toujours être sur
+`lespass` (il ne relit pas Postgres). Le fichier suivant crée un asset `fedow_core` TLF, TNF
+ou TIM dans une fixture de portée `module` : le signal `post_save` d'`Asset`
+(`fedow_core/signals.py`) lit `connection.schema_name`, se croit sur un lieu, et cherche
+`BaseBillet_categorieproduct` dans `public` → `ProgrammingError: relation ... does not
+exist`. Chaque fichier passe seul ; la paire casse (cas réel : `test_pos_vider_carte.py`
+après `test_parcours_vente_fed_et_remise_en_banque.py`).
+**Parade : créer l'objet dans un `schema_context(...)` explicite**, jamais dans « le schéma
+où se trouve la connexion ». `schema_context(get_public_schema_name())` pour un asset qui ne
+doit pas créer de produit de recharge (le signal ne fait rien dans `public`), ou
+`tenant_context(lieu)` si le test a besoin de ce produit. Fixtures corrigées ainsi :
+`test_pos_vider_carte.py` (`asset_tlf_vc`), `test_card_refund_service.py`
+(`asset_tlf_lespass`), `test_remboursement_especes_trace_comptable.py`
+(`asset_monnaie_locale`), `test_verify_transactions.py` (`asset_local`).
+`test_fedow_core.py` se protège autrement : une fixture autouse de portée module pose
+`public` avant ses fixtures.
 
 ---
 

@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 from django.db import transaction as db_transaction
 from django.utils import timezone
-from django_tenants.utils import schema_context, tenant_context
+from django_tenants.utils import get_public_schema_name, schema_context, tenant_context
 
 from AuthBillet.models import Wallet
 from Customers.models import Client
@@ -36,17 +36,28 @@ def wallet_lieu_vc(tenant_lespass_vc):
 
 @pytest.fixture(scope="module")
 def asset_tlf_vc(tenant_lespass_vc, wallet_lieu_vc):
+    # L'asset est cree dans le schema PUBLIC, pose explicitement : le signal post_save
+    # d'Asset (fedow_core/signals.py) n'y cree aucun produit de recharge. Sans ce
+    # contexte, la fixture herite de la connexion laissee par le fichier precedent : un
+    # test HTTP sur `lespass` laisse `connection.schema_name = "lespass"` alors que
+    # l'annulation de sa transaction a remis le `search_path` reel sur `public`. Le
+    # signal croit etre dans `lespass` et lit `BaseBillet_categorieproduct` dans
+    # `public` : la table n'existe pas.
+    # / Created in the PUBLIC schema, set explicitly: the Asset signal skips public.
+    # / Without it, the fixture inherits a stale connection (schema_name "lespass",
+    # / real search_path "public") left by an HTTP test.
     # get_or_create pour eviter l'IntegrityError si un run precedent n'a pas nettoye
     # / get_or_create to avoid IntegrityError if a previous run did not clean up
-    asset, _created = Asset.objects.get_or_create(
-        name=f"{VC_TEST_PREFIX} TLF",
-        category=Asset.TLF,
-        defaults={
-            "currency_code": "EUR",
-            "wallet_origin": wallet_lieu_vc,
-            "tenant_origin": tenant_lespass_vc,
-        },
-    )
+    with schema_context(get_public_schema_name()):
+        asset, _created = Asset.objects.get_or_create(
+            name=f"{VC_TEST_PREFIX} TLF",
+            category=Asset.TLF,
+            defaults={
+                "currency_code": "EUR",
+                "wallet_origin": wallet_lieu_vc,
+                "tenant_origin": tenant_lespass_vc,
+            },
+        )
     return asset
 
 

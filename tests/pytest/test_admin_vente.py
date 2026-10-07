@@ -357,7 +357,9 @@ def test_menu_ventes_en_premier_puis_rapport_puis_plan(lieu):
 
     assert liens_du_groupe[0] == ADRESSE_DE_LA_LISTE_DES_VENTES, liens_du_groupe
     rang_du_rapport = liens_du_groupe.index(adresse_des_clotures)
-    rang_du_plan = liens_du_groupe.index("/admin/laboutik/comptecomptable/")
+    # « Plan comptable » ouvre son onglet « Gérer », la balance.
+    # / "Chart of accounts" opens its "Manage" tab, the trial balance.
+    rang_du_plan = liens_du_groupe.index("/admin/laboutik/comptecomptable/balance/")
     assert 0 < rang_du_rapport < rang_du_plan, liens_du_groupe
 
 

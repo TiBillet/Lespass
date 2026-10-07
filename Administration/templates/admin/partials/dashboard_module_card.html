@@ -13,7 +13,10 @@ change la taille, pas ce fichier.
 Recoit `carte`, deja entierement decidee par dashboard.py :
   name, description, testid, icone
   lien_du_module ....... adresse de la page du module, ou vide si elle n'existe pas
-  montre_interrupteur .. faux pour un module a venir, et pour une caisse en V1
+  montre_interrupteur .. faux pour un module a venir, pour une caisse en V1, et pour
+                         un module V2 eteint d'un lieu legacy
+  moteur_legacy ........ vrai pour un module V2 d'un lieu legacy (verrou de moteur)
+  message_moteur_legacy  la phrase du verrou, affichee sous la carte
   allume ............... etat de l'interrupteur
   url_modale ........... la modale de confirmation
   testid_interrupteur .. identifiant de test de l'interrupteur
@@ -95,6 +98,11 @@ FLUX DU CLIC SUR L'INTERRUPTEUR :
                 <span class="tb-interrupteur-bouton" aria-hidden="true"></span>
             </button>
 
+        {% elif carte.moteur_legacy %}
+            {# Module V2 d'un lieu legacy, eteint : ni interrupteur ni pastille V1. #}
+            {# La phrase du verrou est affichee sous la carte.                      #}
+            {# / Legacy venue, V2 module off: no switch, no V1 badge.                #}
+
         {% else %}
             {# Caisse en V1 : pas d'interrupteur, mais on dit enfin si le #}
             {# serveur repond. L'info etait deja calculee, jamais montree. #}
@@ -116,6 +124,15 @@ FLUX DU CLIC SUR L'INTERRUPTEUR :
     {% if carte.state == "v1_active" %}
         <span class="tb-carte-note">
             {% translate "To migrate to LaBoutik V2, please contact the TiBillet team." %}
+        </span>
+    {% endif %}
+
+    {# Lieu legacy : le module V2 n'est pas disponible, on le dit. Si le module   #}
+    {# est reste allume en base, l'interrupteur au-dessus sert a l'eteindre.     #}
+    {# / Legacy venue: the V2 module is unavailable; say so.                      #}
+    {% if carte.moteur_legacy %}
+        <span class="tb-carte-note" data-testid="{{ carte.testid }}-moteur-legacy">
+            {{ carte.message_moteur_legacy }}
         </span>
     {% endif %}
 

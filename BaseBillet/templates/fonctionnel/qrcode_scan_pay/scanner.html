@@ -7,74 +7,56 @@
     <div class="container" id="qrscanpay-container">
         <div class="row justify-content-center">
             <div class="col-md-8">
-                {% if qrcode_processed %}
-                    <!-- Display processed QR code result -->
-                    <div class="card">
-                        <div class="card-header bg-success text-white">
-                            <h3 class="text-center">{% translate 'QR Code Processed' %}</h3>
+                <!-- QR Code Scanner -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="text-center">{% translate 'Scan a QR Code' %}</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <p>{% translate 'Position the QR code in front of your camera' %}</p>
                         </div>
-                        <div class="card-body">
+                        
+                        <!-- Video element for the camera feed -->
+                        <div class="d-flex justify-content-center mb-4">
+                            <video id="qr-video" class="border" style="max-width: 100%; height: auto;"></video>
+                        </div>
+                        
+                        <!-- Controls -->
+                        <div class="d-flex justify-content-center mb-3">
+                            <button id="start-button" class="btn btn-primary me-2">{% translate 'Start Camera' %}</button>
+                            <button id="stop-button" class="btn btn-secondary" disabled>{% translate 'Stop Camera' %}</button>
+                        </div>
+                        
+                        <!-- Result display -->
+                        <!-- aria-live : le résultat du scan est annoncé aux lecteurs d'écran. -->
+                        <!-- / aria-live: the scan result is announced to screen readers. -->
+                        <div id="scan-result-container" class="mt-4 d-none" aria-live="polite">
                             <div class="alert alert-success">
-                                <h5>{% translate 'QR Code Content' %}:</h5>
-                                <p class="mb-3">{{ qrcode_content }}</p>
+                                <h5>{% translate 'QR Code Detected' %}:</h5>
+                                <p id="scan-result" class="mb-0"></p>
                             </div>
-                            
-                            <div class="d-flex justify-content-center">
-                                <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn btn-primary">
-                                    {% translate 'Scan Another QR Code' %}
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                {% else %}
-                    <!-- QR Code Scanner -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="text-center">{% translate 'Scan a QR Code' %}</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="text-center mb-3">
-                                <p>{% translate 'Position the QR code in front of your camera' %}</p>
-                            </div>
-                            
-                            <!-- Video element for the camera feed -->
-                            <div class="d-flex justify-content-center mb-4">
-                                <video id="qr-video" class="border" style="max-width: 100%; height: auto;"></video>
-                            </div>
-                            
-                            <!-- Controls -->
-                            <div class="d-flex justify-content-center mb-3">
-                                <button id="start-button" class="btn btn-primary me-2">{% translate 'Start Camera' %}</button>
-                                <button id="stop-button" class="btn btn-secondary" disabled>{% translate 'Stop Camera' %}</button>
-                            </div>
-                            
-                            <!-- Result display -->
-                            <div id="scan-result-container" class="mt-4 d-none">
-                                <div class="alert alert-success">
-                                    <h5>{% translate 'QR Code Detected' %}:</h5>
-                                    <p id="scan-result" class="mb-0"></p>
-                                </div>
-                                
-                                <!-- Form to submit the result via HTMX -->
-                                <form hx-post="{% url 'qrcodescanpay-get-scanner' %}" hx-swap="outerHTML"
-                                      hx-target="#qrscanpay-container"
-                                      class="mt-3" id="form-qrcode-scan">
-                                    {% csrf_token %}
-                                    <input type="hidden" id="qrcode-content" name="qrcode_content">
-                                    <button type="submit" class="btn btn-success w-100" >
-                                        <span class="htmx-indicator-none">{% translate 'Process QR Code' %}</span>
-                                    </button>
-                                </form>
+                            <!-- Message affiché quand le contenu scanné n'est pas une adresse web. -->
+                            <!-- / Shown when the scanned content is not a web address. -->
+                            <div id="scan-result-not-payment" class="alert alert-warning mt-2 d-none"
+                                 data-testid="scanner-qrcode-pas-un-paiement">
+                                {% translate "Ce QR code n'est pas un QR code de paiement TiBillet." %}
                             </div>
                         </div>
                     </div>
-                {% endif %}
+                </div>
             </div>
         </div>
     </div>
 
-    {% if not qrcode_processed %}
-    <!-- QR Scanner Script - Only load when not in processed mode -->
+    <!-- QR Scanner Script -->
+    <!-- Trois cas après un scan :
+         1. adresse du même domaine : redirection directe ;
+         2. adresse d'un autre domaine : relais de session
+            /login/<b64>/redirect_session_to_another_tenant/ (la vue vérifie que le
+            domaine appartient à un lieu TiBillet : pas de redirection ouverte) ;
+         3. pas une adresse web : message lisible, « Start Camera » relance la caméra.
+         / Three cases: same domain, other TiBillet domain, not a URL. -->
     <script type="module">
         import QrScanner from "{% static 'commun/js/qr-scanner.min.js' %}";
         
@@ -84,7 +66,7 @@
         const stopButton = document.getElementById('stop-button');
         const scanResultContainer = document.getElementById('scan-result-container');
         const scanResult = document.getElementById('scan-result');
-        const qrcodeContentInput = document.getElementById('qrcode-content');
+        const scanResultNotPayment = document.getElementById('scan-result-not-payment');
         
         // Helper to base64url-encode a string (for safe path segment)
         function base64UrlEncode(str) {
@@ -104,7 +86,7 @@
                 // Handle successful scan
                 scanResultContainer.classList.remove('d-none');
                 scanResult.textContent = result.data;
-                qrcodeContentInput.value = result.data;
+                scanResultNotPayment.classList.add('d-none');
                 console.log('QR code detected:', result.data);
                 
                 // Stop scanning after successful detection
@@ -147,21 +129,13 @@
                         return;
                     }
                 } catch (error) {
-                    console.error('Error comparing URLs:', error);
-                    // If there's an error in URL comparison, fall back to form submission
+                    // Le contenu scanné n'est pas une adresse web (new URL() a échoué) :
+                    // ce n'est pas un QR code de paiement. On le dit, et le bouton
+                    // « Start Camera » permet de scanner un autre QR code.
+                    // / Not a web address: not a payment QR code. Say so; "Start Camera" rescans.
+                    console.error('Scanned content is not a URL:', error);
+                    scanResultNotPayment.classList.remove('d-none');
                 }
-                
-                // If domains don't match or there was an error, continue with form submission
-                const autoSubmitMessage = document.createElement('div');
-                autoSubmitMessage.className = 'alert alert-info mt-2';
-                autoSubmitMessage.innerHTML = '{% translate "Automatically submitting QR code..." %}';
-                scanResultContainer.appendChild(autoSubmitMessage);
-
-                // Automatically submit the form after a short delay
-                setTimeout(() => {
-                    const form = document.querySelector('#form-qrcode-scan');
-                    form.requestSubmit();
-                }, 800);
             },
             {
                 returnDetailedScanResult: true,
@@ -200,5 +174,4 @@
             }
         });
     </script>
-    {% endif %}
 {% endblock %}

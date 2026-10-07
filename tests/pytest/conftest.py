@@ -3,6 +3,11 @@ import subprocess
 import sys
 import pytest
 
+from tests.outils_moteur_de_monnaie import (
+    verifier_le_depart_de_la_suite,
+    verifier_les_moteurs_de_depart,
+)
+
 try:
     import urllib3
 except Exception:  # pragma: no cover - optional dependency for warnings
@@ -414,6 +419,46 @@ def _schema_de_test_cree_par_clonage(request, _connexion_sur_le_schema_public_av
         schemas_clones.creer_le_schema_par_clonage(nom_du_schema)
 
     yield
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _moteurs_verifies_au_depart_de_la_suite(django_db_blocker):
+    """
+    Verification legere des moteurs de monnaie, au depart de CHAQUE lancement de pytest :
+    aucun `Client` `test_*` en `legacy`, `lespass` en `v2`. Une seule requete.
+    / Light currency engine check at the start of every pytest run.
+
+    LOCALISATION : tests/pytest/conftest.py — la verification est dans
+    tests/outils_moteur_de_monnaie.py (`verifier_le_depart_de_la_suite`).
+
+    POURQUOI AUTOUSE : un lieu `test_*` reste en `legacy` (cree avant la migration
+    `Customers 0006`) fait tomber les tests de caisse V2, de kiosk et de tireuse sur le
+    verrou de moteur, loin de la cause. Echouer tout de suite, avec la consigne, evite ce
+    diagnostic. Jamais de `skip` (`pytest.fail`).
+    / A legacy `test_*` venue breaks V2 tests far from the cause: fail early, with the fix.
+
+    L'acces a la base est debloque ICI, explicitement : l'ordre des fixtures autouse de
+    portee session n'est pas garanti, `_enable_db_access_for_all` peut passer apres.
+    / DB access unblocked here: autouse session fixtures have no guaranteed order.
+    """
+    with django_db_blocker.unblock():
+        verifier_le_depart_de_la_suite()
+    yield
+
+
+@pytest.fixture
+def moteurs_de_depart_verifies():
+    """
+    Fixture a demander par un test qui depend des moteurs de monnaie de la base de dev
+    (verification COMPLETE, lieux de demo compris : `festival` legacy...).
+    Le test doit etre marque `django_db` (la fonction lit `Customers_client`).
+    / Fixture for a test that relies on the dev database's currency engines (full check).
+
+    La verification vit dans `tests/outils_moteur_de_monnaie.py` : les E2E
+    (`tests/e2e/conftest.py`) l'importent aussi.
+    / The check lives in tests/outils_moteur_de_monnaie.py, shared with the E2E suite.
+    """
+    verifier_les_moteurs_de_depart()
 
 
 @pytest.fixture

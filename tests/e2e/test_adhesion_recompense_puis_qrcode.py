@@ -55,19 +55,37 @@ vente **reste a PAID** au lieu de passer VALID (c'est la derniere chose qu'il
 fait). Une ligne d'adhesion bloquee a PAID est donc le symptome visible d'un
 trigger interrompu. Le test l'assert explicitement.
 
+LA DEPENSE PASSE PAR LES BOUTONS DE « MON ESPACE » / THE SPEND GOES THROUGH THE BUTTONS
+------------------------------------------------------------------------------------------
+L'etape 4 se joue dans le navigateur, avec deux contextes, comme deux telephones :
+- l'encaisseur (la `page` du test) : `/my_account/` → bouton « Initier un paiement »
+  du bandeau → generateur → « Vérifier le paiement » ;
+- l'adherent (un second contexte) : `/my_account/` → bouton « Scanner un QR code de
+  paiement » sous « Ma carte » → scanner → page de validation → « Confirm Payment ».
+Seule la camera est simulee : l'adherent ouvre le lien de paiement, qui est le contenu
+exact du QR code. Pour une adresse du meme domaine, le scanner ne fait rien d'autre
+(`scanner.html` : `window.location.href = scannedUrl`).
+/ Step 4 runs in the browser with two contexts. Only the camera is simulated: the
+member opens the payment link, which is the exact QR code content.
+
 CE QU'IL LAISSE DERRIERE LUI / WHAT IT LEAVES BEHIND
 ------------------------------------------------------
 Une adhesion payee et un versement reel de 100 MonaLocalim depuis le portefeuille
 du lieu, a chaque execution. C'est une EMISSION de monnaie locale par le lieu
 (il en est l'origine), pas un prelevement sur un stock fini — mais elle gonfle
 l'encours du lieu run apres run. A lancer sur un Fedow de developpement.
-/ A real membership and a real 100-unit issuance per run. No rollback.
+L'adherent en depense ensuite 1,50 (vente par QR code au lieu).
+/ A real membership and a real 100-unit issuance per run, then a 1.50 spend.
+No rollback.
 
 PREREQUIS / PREREQUISITES
 --------------------------
 - le serveur de developpement tourne ;
 - Celery tourne : le versement passe par `.delay()` ;
-- le Fedow est joignable.
+- le Fedow est joignable ;
+- le lieu `lespass` est en skin V2 (les boutons de l'etape 4 sont ceux de l'index
+  V2). Sinon : `docker exec lespass_django poetry run python manage.py
+  charger_site_lespass`.
 
 Lancement / Run:
     docker exec lespass_django poetry run pytest \
@@ -78,8 +96,12 @@ import json
 import re
 import time
 import uuid as uuid_module
+from urllib.parse import urlparse
 
 import pytest
+from playwright.sync_api import expect
+
+from tests.e2e.conftest import BASE_URL, _capturer_la_page_en_echec
 
 # Le produit et le tarif du cas d'usage, nommes explicitement. On ne cherche pas
 # « un tarif qui porte une recompense » : plusieurs peuvent en porter, et le test
@@ -183,6 +205,35 @@ def _attendre_le_versement(django_shell, email, solde_de_depart, secondes=60):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def lieu_en_skin_v2(django_shell):
+    """Echoue, avec la consigne, si le lieu n'est pas en skin V2.
+
+    Les boutons que l'etape 4 clique sont ceux de l'index V2 de « Mon espace ».
+    Le skin se LIT en base, par `objects.first()`. Jamais `get_solo()` : il cree la
+    ligne si elle manque, et passe par le cache memcached partage avec le serveur.
+    Le test n'ecrit jamais le skin : c'est un reglage du lieu, pas du test.
+    / Fails with what to do if the venue is not on the V2 skin. Read only, through
+    objects.first(), never get_solo() (it creates the row and uses the shared cache).
+    """
+    sortie = django_shell(
+        "from pages.models import ConfigurationSite\n"
+        "configuration_du_site = ConfigurationSite.objects.first()\n"
+        "print('SKIN=' + (configuration_du_site.skin if configuration_du_site\n"
+        "                 else 'AUCUNE_CONFIGURATION'))"
+    )
+    trouve = re.search(r"SKIN=(\S+)", sortie)
+    skin_du_lieu = trouve.group(1) if trouve else None
+    if skin_du_lieu != "V2":
+        pytest.fail(
+            f"Le lieu 'lespass' n'est pas en skin V2 (lu : {skin_du_lieu}). Les "
+            "boutons de paiement par QR code de ce parcours sont ceux de l'index V2. "
+            "Remettre le skin : docker exec lespass_django poetry run python "
+            "manage.py charger_site_lespass"
+        )
+    return skin_du_lieu
 
 
 @pytest.fixture(scope="module")
@@ -317,6 +368,9 @@ def adherent_en_attente_de_paiement(django_shell, tarif_de_la_caisse_alimentaire
 
 def test_l_adhesion_payee_credite_le_portefeuille_puis_se_depense_par_qrcode(
     page,
+    browser,
+    request,
+    lieu_en_skin_v2,
     login_as,
     login_as_admin,
     django_shell,
@@ -419,47 +473,158 @@ def test_l_adhesion_payee_credite_le_portefeuille_puis_se_depense_par_qrcode(
         f"attendu {tarif_de_la_caisse_alimentaire['asset_uuid']}."
     )
 
-    # --- 4. L'adherent depense sa monnaie par QR code ---
+    # --- 4. L'adherent depense sa monnaie par QR code, par les boutons de « Mon espace » ---
     #
     # C'est ce qui donne son sens au versement : une recompense non depensable ne
     # cree aucun pouvoir d'achat.
-    # / This is what gives the transfer its meaning: an unspendable reward creates
-    # no purchasing power.
-    reponse = _poster(
-        page,
-        "/qrcodescanpay/generate_qrcode/",
-        {"amount": str(DEPENSE_EN_CENTIMES / 100), "asset_type": "EURO"},
-    )
-    assert reponse.ok, (
-        f"Generation du QR code refusee : {reponse.status} {reponse.text()[:300]}"
-    )
+    # Deux contextes de navigateur, comme deux telephones : l'encaisseur est la
+    # `page` du test (deja connectee en admin a l'etape 1, et capturee par le
+    # conftest en cas d'echec) ; l'adherent a son propre contexte.
+    # / This is what gives the transfer its meaning. Two browser contexts, like two
+    # phones: the cashier is the test `page`, the member has its own context.
 
-    sortie = django_shell(
-        "from BaseBillet.models import LigneArticle, SaleOrigin\n"
-        "ligne = LigneArticle.objects.filter(\n"
-        "    sale_origin=SaleOrigin.QRCODE_MA, status=LigneArticle.CREATED\n"
-        ").order_by('-datetime').first()\n"
-        "print('DEMANDE=' + (ligne.uuid.hex if ligne else 'AUCUNE'))"
-    )
-    trouve = re.search(r"DEMANDE=(\S+)", sortie)
-    assert trouve and trouve.group(1) != "AUCUNE", (
-        "Le QR code n'a produit aucune demande de paiement en attente."
+    # 4.a L'encaisseur ouvre le generateur depuis le bandeau de « Mes responsabilites ».
+    # / The cashier opens the generator from the "My responsibilities" banner.
+    page.goto("/my_account/")
+    bouton_initier_un_paiement = page.get_by_test_id("compte-initier-paiement-bouton")
+    expect(bouton_initier_un_paiement).to_be_visible()
+    bouton_initier_un_paiement.click()
+    page.wait_for_url("**/qrcodescanpay/get_generator/")
+
+    champ_du_montant = page.locator("#amount")
+    expect(champ_du_montant).to_be_visible()
+    champ_du_montant.fill(f"{DEPENSE_EN_CENTIMES / 100:.2f}")
+    # Seule la monnaie « EURO » est encaissable par QR code : c'est le choix par defaut.
+    # / Only EURO can be collected by QR code: it is the default choice.
+    expect(page.locator("#asset_type")).to_have_value("EURO")
+    page.locator('form[action$="/generate_qrcode/"] button[type="submit"]').click()
+
+    # 4.b Le QR code et le lien de paiement sont affiches.
+    # / The QR code and the payment link are shown.
+    bouton_copier_le_lien = page.locator("#copy-pay-link-btn")
+    expect(bouton_copier_le_lien).to_be_visible()
+    expect(
+        page.locator("#qrcode-js").locator("canvas, img").filter(visible=True).first
+    ).to_be_visible()
+
+    # Le lien de paiement EST le contenu du QR code. L'uuid de la demande se lit
+    # dedans : une demande creee par un test voisin ne peut pas etre prise a la place.
+    # / The payment link IS the QR code content; the request uuid is read from it.
+    lien_de_paiement = bouton_copier_le_lien.get_attribute("data-link") or ""
+    trouve = re.search(r"/qrcodescanpay/([0-9a-f]{32})/process_qrcode$", lien_de_paiement)
+    assert trouve, (
+        f"Le lien de paiement ne porte pas l'uuid d'une demande : '{lien_de_paiement}'."
     )
     uuid_de_la_demande = trouve.group(1)
 
-    login_as(page, email)
-    page.goto("/my_account/")
-    reponse = _poster(
-        page,
-        "/qrcodescanpay/valid_payment/",
-        {"ligne_article_uuid_hex": uuid_de_la_demande},
+    sortie = django_shell(
+        "import json\n"
+        "from BaseBillet.models import LigneArticle, SaleOrigin\n"
+        f"ligne = LigneArticle.objects.filter(uuid='{uuid_de_la_demande}').first()\n"
+        "print('DEMANDE_JSON=' + json.dumps({\n"
+        "    'trouvee': bool(ligne),\n"
+        "    'en_attente': bool(ligne) and ligne.status == LigneArticle.CREATED,\n"
+        "    'origine_qrcode': bool(ligne) and ligne.sale_origin == SaleOrigin.QRCODE_MA,\n"
+        "    'montant': int(ligne.amount) if ligne else None,\n"
+        "}))"
     )
-    assert reponse.ok, f"Le paiement a echoue : {reponse.status} {reponse.text()[:400]}"
-    assert "Insufficient Funds" not in reponse.text(), (
-        f"Le paiement a ete refuse pour fonds insuffisants alors que la cotisation "
-        f"vient de crediter {recompense} centimes. La monnaie versee par l'adhesion "
-        "n'est donc pas depensable — verifier sa categorie Fedow."
+    demande = _lire_json_marque(sortie, "DEMANDE_JSON=")
+    assert demande == {
+        "trouvee": True,
+        "en_attente": True,
+        "origine_qrcode": True,
+        "montant": DEPENSE_EN_CENTIMES,
+    }, f"Le lien ne designe pas la demande en attente du montant saisi : {demande}"
+
+    # 4.c Avant tout paiement, « Vérifier le paiement » repond « en attente ».
+    # Sans ce controle, un bouton qui repondrait toujours « validé » passerait.
+    # / Before any payment, the check answers "pending".
+    zone_de_verification = page.locator("#check-payment-button")
+    expect(zone_de_verification.locator("button")).to_contain_text("Vérifier le paiement")
+    zone_de_verification.locator("button").click()
+    expect(page.locator("#check-payment-button button")).to_contain_text(
+        "Paiement en attente. Vérifier maintenant"
     )
+
+    # 4.d L'adherent, sur son telephone : « Mon espace » → scanner → validation.
+    # / The member, on their phone: "My space" → scanner → validation.
+    contexte_de_l_adherent = browser.new_context(
+        base_url=BASE_URL,
+        ignore_https_errors=True,
+    )
+    page_de_l_adherent = contexte_de_l_adherent.new_page()
+    parcours_de_l_adherent_termine = False
+    try:
+        login_as(page_de_l_adherent, email)
+        page_de_l_adherent.goto("/my_account/")
+        bouton_scanner = page_de_l_adherent.get_by_test_id("compte-scanner-qrcode")
+        expect(bouton_scanner).to_be_visible()
+        bouton_scanner.click()
+        page_de_l_adherent.wait_for_url("**/qrcodescanpay/get_scanner/")
+        expect(page_de_l_adherent.locator("#start-button")).to_be_visible()
+
+        # Ce qui est simule : la camera. Le lien de paiement est le contenu exact du
+        # QR code ; pour une adresse du MEME domaine, le scanner fait seulement
+        # `window.location.href = adresse` (scanner.html). On verifie donc d'abord
+        # que le lien est bien du domaine du scanner, puis on l'ouvre.
+        # / Simulated: the camera. For a same-domain address the scanner only sets
+        # window.location.href; check the domain, then open the link.
+        domaine_du_lien = urlparse(lien_de_paiement).hostname
+        domaine_du_scanner = urlparse(page_de_l_adherent.url).hostname
+        assert domaine_du_lien == domaine_du_scanner, (
+            f"Le lien de paiement vise '{domaine_du_lien}', le scanner tourne sur "
+            f"'{domaine_du_scanner}' : le scanner passerait par le relais de session "
+            "entre lieux, que ce parcours ne simule pas."
+        )
+        page_de_l_adherent.goto(lien_de_paiement)
+
+        formulaire_de_validation = page_de_l_adherent.locator(
+            'form[hx-post$="/valid_payment/"]'
+        )
+        expect(
+            formulaire_de_validation,
+            "Pas de formulaire de validation : solde juge insuffisant, ou demande "
+            "introuvable. La page de l'adherent est capturee dans tests/e2e/artefacts/.",
+        ).to_be_visible()
+        # Le montant demande, ecrit avec un point ou une virgule selon la langue.
+        # / The requested amount, with a dot or a comma depending on the language.
+        expect(page_de_l_adherent.locator("#qrscanpay-container")).to_contain_text(
+            re.compile(r"1[.,]50\s*€")
+        )
+
+        with page_de_l_adherent.expect_response(
+            lambda reponse_http: "/qrcodescanpay/valid_payment/" in reponse_http.url
+        ) as reponse_attendue:
+            formulaire_de_validation.locator('button[type="submit"]').click()
+        reponse = reponse_attendue.value
+        assert reponse.ok, (
+            f"Le paiement a echoue : {reponse.status} {reponse.text()[:400]}"
+        )
+        assert "Insufficient Funds" not in reponse.text(), (
+            f"Le paiement a ete refuse pour fonds insuffisants alors que la cotisation "
+            f"vient de crediter {recompense} centimes. La monnaie versee par l'adhesion "
+            "n'est donc pas depensable — verifier sa categorie Fedow."
+        )
+        # L'ecran « Paiement confirmé » : seul gabarit du parcours a en-tete vert.
+        # / The "Payment Confirmed" screen: the only green-headed template here.
+        expect(
+            page_de_l_adherent.locator("#qrscanpay-container .card-header.bg-success")
+        ).to_contain_text(re.compile(r"Payment Confirmed|Paiement confirmé"))
+        parcours_de_l_adherent_termine = True
+    finally:
+        # La capture du conftest ne couvre que `page` : celle de l'adherent est
+        # faite ici, seulement si son parcours s'est arrete en chemin.
+        # / The conftest only captures `page`: capture the member's page here.
+        if not parcours_de_l_adherent_termine:
+            _capturer_la_page_en_echec(
+                page_de_l_adherent, f"{request.node.nodeid}-adherent"
+            )
+        contexte_de_l_adherent.close()
+
+    # 4.e L'encaisseur verifie : le paiement est valide.
+    # / The cashier checks: the payment is validated.
+    page.locator("#check-payment-button button").click()
+    expect(page.locator("#check-payment-button")).to_contain_text("Paiement validé")
 
     # --- 5. Le Fedow a debite le montant exact ---
     solde_apres_depense = _solde_depensable(django_shell, email)

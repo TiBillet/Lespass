@@ -5,7 +5,11 @@ EN TETE DE L'ECRAN « COMPTES DES MONNAIES »
 
 LOCALISATION : Administration/templates/admin/comptable/monnaies_changelist_before.html
 
-1. Le composant « Plan complet ? » (contexte : `manques_du_plan`).
+Avant tout : le second niveau de l'onglet « Configurer » (sous_onglets_configurer.html).
+0. Une aide repliable, fermee par defaut (un <details> sans « open »). Les numeros
+   cites sont ceux du plan par defaut (laboutik/plan_comptable_par_defaut.py) : un
+   test le verifie.
+1. Le composant « Plan complet ? » (verdict charge en HTMX au clic).
 2. Une ligne par monnaie acceptee par le lieu (contexte : `lignes_des_monnaies`, rendu
    par laboutik/plan_comptable.py : monnaies_acceptees_par_le_lieu()) : son nom, son
    origine, son compte.
@@ -14,8 +18,30 @@ LOCALISATION : Administration/templates/admin/comptable/monnaies_changelist_befo
      neutre (l'export passe) ;
    - sinon (monnaie d'un autre lieu, ou federee) : en orange, l'export est refuse ;
      lien « Choisir un compte » vers le formulaire, monnaie deja choisie.
-/ One row per accepted currency: name, origin, account; missing account in orange.
+/ 0. Collapsible help, closed by default. 1. "Complete plan?". 2. One row per
+accepted currency: name, origin, account; missing account in orange.
 {% endcomment %}
+{% include "admin/comptable/sous_onglets_configurer.html" with page_active="monnaies" %}
+
+<div class="mb-4" data-testid="aide-monnaies">
+    <details class="bg-white border border-base-200 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+        <summary class="cursor-pointer px-6 py-4 font-semibold text-important" data-testid="aide-monnaies-titre">
+            <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">help</span>
+            {% translate "À quoi servent les comptes des monnaies ?" %}
+        </summary>
+        <div class="px-6 pb-6 flex flex-col gap-3 text-sm leading-relaxed">
+            <p>{% translate "Les monnaies des cartes cashless ne sont pas de l'argent qui rentre : c'est de l'argent déjà payé, que le lieu doit encore. Cette page dit dans quel tiroir les ranger." %}</p>
+            <p class="font-semibold">{% translate "Exemples :" %}</p>
+            <ul style="list-style: disc; padding-left: 20px; margin: 0;">
+                <li>{% translate "monnaie locale → 419100, l'argent dû aux porteurs de carte ;" %}</li>
+                <li>{% translate "monnaie fédérée → 467000, l'argent que le réseau doit au lieu ;" %}</li>
+                <li>{% translate "jetons cadeau → 419100 aussi. Quand un jeton est dépensé, la vente va au tiroir 707900." %}</li>
+            </ul>
+            <p>{% translate "Une monnaie du lieu sans ligne ici prend le tiroir de son moyen de paiement (onglet « Moyens de paiement »)." %}</p>
+        </div>
+    </details>
+</div>
+
 {% include "admin/comptable/plan_complet.html" %}
 
 <div class="mb-4" data-testid="comptes-des-monnaies">

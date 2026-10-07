@@ -5,6 +5,7 @@ from django.apps import apps
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
+from django.db.models import Q
 from django.urls import reverse_lazy, reverse, NoReverseMatch
 from django.utils.functional import lazy as _lazy
 
@@ -24,6 +25,13 @@ from django.utils.translation import gettext_lazy as _
 from solo.models import SingletonModel
 
 from BaseBillet.models import Configuration, Membership
+from Customers.models import (
+    MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY,
+    MODULES_V2_FERMES_AUX_LIEUX_LEGACY,
+    Client,
+    lieu_en_moteur_legacy,
+)
+from fedow_public.models import AssetFedowPublic
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +135,59 @@ DOMAINES = {
 }
 
 
+def _lieu_a_des_assets_legacy(request):
+    """
+    Dit si le lieu courant a des assets de l'ancien Fedow a gerer.
+    / Tells whether the current venue has old-Fedow assets to manage.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    « A des assets legacy » : un AssetFedowPublic non archive dont le lieu est l'origine,
+    ou ou il est federe, ou invite. FED, BDG et SUB sont exclus (voir la section
+    « Monnaies » de `_construire_sections_modules`, seul appelant).
+    Sans vrai `Client` (FakeTenant sous schema_context) : False.
+
+    MEMORISE SUR LA REQUETE, comme `event_proposals_badge_callback` :
+    `_construire_sections_modules()` est executee quatre fois par page d'admin (menu
+    lateral, deux fois les onglets, fil d'Ariane). Sans memoire, la meme requete SQL
+    partirait quatre fois. On memorise ce booleen seulement, jamais les sections entieres.
+    / Memoised on the request: the sections are built four times per admin page.
+
+    :param request: objet Request Django
+    :return: bool
+    """
+    memorise = getattr(request, "_tb_lieu_a_des_assets_legacy", _PAS_ENCORE_CALCULE)
+    if memorise is not _PAS_ENCORE_CALCULE:
+        return memorise
+
+    lieu_courant = connection.tenant
+    lieu_a_des_assets_legacy = False
+    if isinstance(lieu_courant, Client):
+        categories_d_assets_legacy_exclues = [
+            AssetFedowPublic.STRIPE_FED_FIAT,
+            AssetFedowPublic.BADGE,
+            AssetFedowPublic.SUBSCRIPTION,
+        ]
+        lieu_a_des_assets_legacy = (
+            AssetFedowPublic.objects.filter(
+                Q(origin=lieu_courant)
+                | Q(federated_with=lieu_courant)
+                | Q(pending_invitations=lieu_courant)
+            )
+            .filter(archive=False)
+            .exclude(category__in=categories_d_assets_legacy_exclues)
+            .exists()
+        )
+
+    try:
+        request._tb_lieu_a_des_assets_legacy = lieu_a_des_assets_legacy
+    except AttributeError:
+        # Objet request exotique qui refuse les attributs : on recalculera.
+        # / Exotic request object refusing attributes: recompute next time.
+        pass
+    return lieu_a_des_assets_legacy
+
+
 def _construire_sections_modules(request):
     """
     Construit la liste brute des sections, une par MODULE.
@@ -152,6 +213,13 @@ def _construire_sections_modules(request):
     """
 
     configuration = Configuration.get_solo()
+
+    # Un lieu legacy utilise l'ancien Fedow : les sections des modules V2 (caisse,
+    # terminaux, inventaire, tireuse, kiosk) et les pages fedow_core ne sont pas dans son
+    # menu, meme si un drapeau est reste allume en base. Le serveur les refuse aussi
+    # (module_toggle, admin fedow_core, permissions V2).
+    # / A legacy venue uses the old Fedow: no V2 section and no fedow_core page in its menu.
+    moteur_legacy = lieu_en_moteur_legacy()
 
     admin_permission = "ApiBillet.permissions.TenantAdminPermissionWithRequest"
     root_permission = "ApiBillet.permissions.RootPermissionWithRequest"
@@ -401,22 +469,18 @@ def _construire_sections_modules(request):
                         ),
                         "permission": admin_permission,
                     },
-                    {
-                        "title": _("Assets"),
-                        "icon": "currency_exchange",
-                        "link": _safe_rev(
-                            "staff_admin:fedow_public_assetfedowpublic_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
+                    # Les assets legacy ne sont PAS ici : ils vivent dans la section
+                    # « Monnaies ». Une page n'appartient qu'a une section, sinon le rail
+                    # surligne deux modules.
+                    # / Legacy assets live in the "Currencies" section: one page, one section.
                 ],
             }
         )
 
 
-    # --- module_caisse : Caisse LaBoutik ---
-    # --- module_caisse: POS LaBoutik ---
-    if configuration.module_caisse:
+    # --- module_caisse : Caisse LaBoutik (lieu v2 seulement) ---
+    # --- module_caisse: POS LaBoutik (v2 venue only) ---
+    if configuration.module_caisse and not moteur_legacy:
         navigation.append(
             {
                 "title": MODULE_FIELDS["module_caisse"]["name"],
@@ -510,12 +574,15 @@ def _construire_sections_modules(request):
     # n'aurait aucun chemin vers ses propres terminaux.
     # / All the venue's hardware in one place. The PIN has no entry: it is plumbing, shown
     # on the terminal it pairs. module_kiosk belongs in the condition.
-    if (
+    # Les terminaux servent les modules V2 : lieu v2 seulement.
+    # / Terminals serve the V2 modules: v2 venue only.
+    un_module_v2_est_allume = (
         configuration.module_caisse
         or configuration.module_monnaie_locale
         or configuration.module_tireuse
         or configuration.module_kiosk
-    ):
+    )
+    if un_module_v2_est_allume and not moteur_legacy:
         navigation.append(
             {
                 "title": _("Terminaux matériels"),
@@ -554,9 +621,86 @@ def _construire_sections_modules(request):
             }
         )
 
-    # --- module_monnaie_locale : Fedow (monnaies, tokens, transactions) ---
-    # --- module_monnaie_locale: Fedow (currencies, tokens, transactions) ---
-    if configuration.module_monnaie_locale:
+    # --- Section « Monnaies » : une seule porte, celle du moteur du lieu ---
+    # --- "Currencies" section: one door, the venue's engine ---
+    #
+    # C'est la seule porte vers les monnaies du lieu (spec 15 §5.5, decision du
+    # mainteneur du 2026-10-06 : une porte par moteur).
+    # - Lieu v2 : les pages fedow_core (monnaies et tokens, transactions, reseaux) et
+    #   « Cartes NFC », si la monnaie locale est allumee. La caisse, la tireuse et le
+    #   kiosk V2 paient avec ces monnaies. Pas d'entree vers l'ancien Fedow.
+    # - Lieu legacy : « Actifs » (ancien Fedow) puis « Cartes NFC », si la federation est
+    #   allumee ou si le lieu a des assets de l'ancien Fedow.
+    # Sans aucune page, la section n'existe pas.
+    # / One door per engine: fedow_core for v2 venues with local currency on;
+    # / "Assets" (old Fedow) and "NFC cards" for legacy venues.
+    pages_de_la_section_monnaies = []
+    if moteur_legacy:
+        # « A des assets legacy » : un AssetFedowPublic non archive dont le lieu est
+        # l'origine, ou ou il est federe, ou invite. On exclut le FED (accepte partout,
+        # il n'apporte rien a gerer), les badges (BDG) et les adhesions (SUB), comme la
+        # liste de l'admin des assets legacy.
+        # La lecture n'a de sens qu'avec un vrai Client : sous schema_context(),
+        # connection.tenant est un FakeTenant sans ligne en base.
+        # / "Has legacy assets": non-archived, origin/federated/invited, FED, BDG and SUB excluded.
+        lieu_a_des_assets_legacy = _lieu_a_des_assets_legacy(request)
+        if configuration.module_federation or lieu_a_des_assets_legacy:
+            pages_de_la_section_monnaies.append(
+                {
+                    "title": _("Assets"),
+                    "icon": "currency_exchange",
+                    "link": _safe_rev("staff_admin:fedow_public_assetfedowpublic_changelist"),
+                    "permission": admin_permission,
+                }
+            )
+            pages_de_la_section_monnaies.append(
+                {
+                    "title": _("Cartes NFC"),
+                    "icon": "credit_card",
+                    "link": _safe_rev(
+                        "staff_admin:QrcodeCashless_cartecashless_changelist"
+                    ),
+                    "permission": admin_permission,
+                }
+            )
+    else:
+        if configuration.module_monnaie_locale:
+            pages_de_la_section_monnaies.append(
+                {
+                    "title": _("Monnaies et tokens"),
+                    "icon": "toll",
+                    "link": _safe_rev("staff_admin:fedow_core_asset_changelist"),
+                    "permission": admin_permission,
+                }
+            )
+            pages_de_la_section_monnaies.append(
+                {
+                    "title": _("Transactions"),
+                    "icon": "receipt_long",
+                    "link": _safe_rev("staff_admin:fedow_core_transaction_changelist"),
+                    "permission": admin_permission,
+                }
+            )
+            pages_de_la_section_monnaies.append(
+                {
+                    "title": _("Réseaux de monnaie"),
+                    "icon": "hub",
+                    "link": _safe_rev("staff_admin:fedow_core_federation_changelist"),
+                    "permission": admin_permission,
+                }
+            )
+            pages_de_la_section_monnaies.append(
+                {
+                    "title": _("Cartes NFC"),
+                    "icon": "credit_card",
+                    "link": _safe_rev(
+                        "staff_admin:QrcodeCashless_cartecashless_changelist"
+                    ),
+                    "permission": admin_permission,
+                }
+            )
+
+    if pages_de_la_section_monnaies:
         navigation.append(
             {
                 "title": MODULE_FIELDS["module_monnaie_locale"]["name"],
@@ -566,38 +710,7 @@ def _construire_sections_modules(request):
                 "_slug": MODULE_FIELDS["module_monnaie_locale"]["slug"],  # identifiant de la page de module
                 "separator": True,
                 "collapsible": True,
-                "items": [
-                    {
-                        "title": _("Monnaies et tokens"),
-                        "icon": "toll",
-                        "link": _safe_rev("staff_admin:fedow_core_asset_changelist"),
-                        "permission": admin_permission,
-                    },
-                    {
-                        "title": _("Transactions"),
-                        "icon": "receipt_long",
-                        "link": _safe_rev(
-                            "staff_admin:fedow_core_transaction_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
-                    {
-                        "title": _("Réseaux de monnaie"),
-                        "icon": "hub",
-                        "link": _safe_rev(
-                            "staff_admin:fedow_core_federation_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
-                    {
-                        "title": _("Cartes NFC"),
-                        "icon": "credit_card",
-                        "link": _safe_rev(
-                            "staff_admin:QrcodeCashless_cartecashless_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
-                ],
+                "items": pages_de_la_section_monnaies,
             }
         )
 
@@ -605,7 +718,9 @@ def _construire_sections_modules(request):
     # L'inventaire n'est plus un module active a part : il suit la caisse.
     # Des que « Caisse & Restaurant » est active, la section Inventaire apparait.
     # / Inventory is no longer a standalone toggle: it follows the POS module.
-    if configuration.module_caisse:
+    # La caisse V2 est fermee a un lieu legacy : son inventaire aussi.
+    # / The V2 POS is closed to a legacy venue: so is its inventory.
+    if configuration.module_caisse and not moteur_legacy:
         navigation.append(
             {
                 "title": _("Inventaire"),
@@ -635,8 +750,8 @@ def _construire_sections_modules(request):
         )
 
     # --- module_tireuse : Tireuses connectees ---
-    # / --- module_tireuse: Connected beer taps ---
-    if configuration.module_tireuse:
+    # / --- module_tireuse: Connected beer taps (v2 venue only) ---
+    if configuration.module_tireuse and not moteur_legacy:
         navigation.append(
             {
                 "title": MODULE_FIELDS["module_tireuse"]["name"],
@@ -742,7 +857,8 @@ def _construire_sections_modules(request):
     # / The card reader has NO entry here: it is not a separate object, it is a capability
     # of a paired terminal. "Kiosks" is a Terminal proxy: kiosks are created HERE.
     # Kiosk settings are an inline of the kiosk page, no own entry.
-    if configuration.module_kiosk:
+    # Lieu v2 seulement. / v2 venue only.
+    if configuration.module_kiosk and not moteur_legacy:
         navigation.append(
             {
                 "title": MODULE_FIELDS["module_kiosk"]["name"],
@@ -834,6 +950,18 @@ def _construire_sections_modules(request):
     # taux, faux pour une part payee en jetons.
     # / "Sales" first, then the sales report. The old POS closure is not in the admin
     # (its engine reads the lines' method and recomputes VAT from the rate).
+    # Les quatre pages du plan comptable (la balance est sous la liste des comptes).
+    # / The four pages of the chart of accounts.
+    adresses_du_plan_comptable = [
+        str(_safe_rev("staff_admin:laboutik_comptecomptable_changelist")),
+        str(_safe_rev("staff_admin:laboutik_mappingmoyendepaiement_changelist")),
+        str(_safe_rev("staff_admin:laboutik_mappingmonnaie_changelist")),
+    ]
+    on_est_sur_le_plan_comptable = False
+    for adresse_du_plan in adresses_du_plan_comptable:
+        if request.path.startswith(adresse_du_plan):
+            on_est_sur_le_plan_comptable = True
+
     items_ventes_et_comptabilite = [
         {
             "title": _("Ventes"),
@@ -862,33 +990,20 @@ def _construire_sections_modules(request):
             # / No "lines" entry: items are read on their sale page and exported
             # from the sales list.
             "items": items_ventes_et_comptabilite + [
-                # Les trois ecrans du plan comptable. Toujours presents : le plan sert
-                # aussi a l'export des ventes en ligne, pas seulement a la caisse.
-                # / The three chart of accounts screens. Always shown: the plan also
-                # serves the online sales export, not only the POS.
+                # UNE seule entree pour le plan comptable : elle ouvre l'onglet
+                # « Gerer », la balance. L'onglet « Configurer » regroupe les trois
+                # listes de reglage (_onglets_du_plan_comptable). Toujours presente :
+                # le plan sert aussi a l'export des ventes en ligne.
+                # L'entree reste marquee active sur les quatre pages : Unfold ne la
+                # marquerait que sur la balance (son adresse) et la liste des comptes.
+                # / ONE entry: it opens the "Manage" tab, the trial balance. Marked
+                # active on the four pages of the plan.
                 {
                     "title": _("Plan comptable"),
                     "icon": "account_balance",
-                    "link": _safe_rev(
-                        "staff_admin:laboutik_comptecomptable_changelist"
-                    ),
+                    "link": _safe_rev("staff_admin:laboutik_comptecomptable_balance"),
                     "permission": admin_permission,
-                },
-                {
-                    "title": _("Comptes des moyens de paiement"),
-                    "icon": "swap_horiz",
-                    "link": _safe_rev(
-                        "staff_admin:laboutik_mappingmoyendepaiement_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
-                {
-                    "title": _("Comptes des monnaies"),
-                    "icon": "toll",
-                    "link": _safe_rev(
-                        "staff_admin:laboutik_mappingmonnaie_changelist"
-                    ),
-                    "permission": admin_permission,
+                    "active": on_est_sur_le_plan_comptable,
                 },
                 # FROM V2 : TO ADD LATER (laboutik viendra plus tard)
                 # {
@@ -1302,7 +1417,6 @@ DESCRIPTION_DES_PAGES = {
     "BaseBillet.scanapp": _("Le contrôle des billets à l'entrée."),
     # --- Federation et agenda participatif ---
     "BaseBillet.federatedplace": _("Les lieux avec qui vous faites réseau."),
-    "fedow_public.assetfedowpublic": _("Les monnaies qui circulent dans le réseau."),
     "BaseBillet.federationconfiguration": _("Ce que vous partagez, et avec qui."),
     # --- Caisse & Restaurant ---
     "laboutik.pointdevente": _("Vos comptoirs et leurs écrans."),
@@ -1315,8 +1429,9 @@ DESCRIPTION_DES_PAGES = {
     "laboutik.terminal": _("Les appareils appairés au lieu."),
     "laboutik.printer": _("Les imprimantes à tickets."),
     "laboutik.tpebancaire": _("Les terminaux de paiement bancaire."),
-    # --- Monnaies locales, temps et cashless ---
+    # --- Monnaies locales, temps, SSA et cashless ---
     "fedow_core.asset": _("Vos monnaies et vos jetons."),
+    "fedow_public.assetfedowpublic": _("Les monnaies qui circulent dans le réseau."),
     "QrcodeCashless.cartecashless": _("Les cartes remises au public."),
     "fedow_core.federation": _("Les réseaux de monnaie auxquels vous participez."),
     "fedow_core.transaction": _("Tout ce qui a circulé."),
@@ -1374,7 +1489,6 @@ CATEGORIE_DES_PAGES = {
     "BaseBillet.scanapp": "configurer",
     # --- Federation et agenda participatif ---
     "BaseBillet.federatedplace": "gerer",
-    "fedow_public.assetfedowpublic": "gerer",
     "BaseBillet.federationconfiguration": "configurer",
     # --- Caisse & Restaurant ---
     "laboutik.pointdevente": "gerer",
@@ -1387,8 +1501,9 @@ CATEGORIE_DES_PAGES = {
     "laboutik.terminal": "gerer",
     "laboutik.printer": "gerer",
     "laboutik.tpebancaire": "gerer",
-    # --- Monnaies locales, temps et cashless ---
+    # --- Monnaies locales, temps, SSA et cashless ---
     "fedow_core.asset": "gerer",
+    "fedow_public.assetfedowpublic": "gerer",
     "QrcodeCashless.cartecashless": "gerer",
     "fedow_core.federation": "configurer",
     "fedow_core.transaction": "analyser",
@@ -1621,9 +1736,20 @@ def _poser_les_liens_des_modules(request, groupes):
     for groupe in groupes:
         for carte in groupe["cartes"]:
             slug = carte.get("slug")
+            # Deux cas ou la section existe sans que la carte doive y mener :
+            # - la section « Monnaies » existe pour les assets legacy, meme quand le
+            #   module « Monnaie locale » est eteint : une carte eteinte reste eteinte ;
+            # - une carte fermee par le verrou de moteur parle d'un module V2 que le lieu
+            #   n'a pas.
+            # / The section may exist while the card is off or closed by the engine lock.
+            carte_menant_a_son_module = (
+                slug in slugs_existants
+                and carte.get("allume")
+                and not carte.get("moteur_legacy")
+            )
             carte["lien_du_module"] = (
                 _safe_rev("staff_admin:page_de_module", args=[slug])
-                if slug in slugs_existants
+                if carte_menant_a_son_module
                 else None
             )
 
@@ -1756,6 +1882,73 @@ def _onglets_hors_modules():
     ]
 
 
+# Le nom de page de la balance pour Unfold : son gabarit appelle
+# {% tab_list "plan_comptable_balance" %}, et _get_tabs_list (unfold/templatetags/
+# unfold.py) cherche le groupe d'onglets qui porte cette cle « page ».
+# / The trial balance page name for Unfold's tab_list.
+PAGE_DE_LA_BALANCE = "plan_comptable_balance"
+
+
+def _onglets_du_plan_comptable(chemin_courant):
+    """
+    La barre « Gérer / Configurer » du plan comptable.
+    / The chart of accounts "Manage / Configure" bar.
+
+    LOCALISATION : Administration/admin/dashboard.py
+
+    - « Gérer » : la balance (vue de CompteComptableAdmin, sans modèle propre) ;
+      c'est la page ouverte par l'entrée « Plan comptable » du menu.
+    - « Configurer » : les trois listes de réglage (comptes, comptes des moyens de
+      paiement, comptes des monnaies). Elle mène à la liste des comptes ; les deux
+      autres se rejoignent par le second niveau, dessiné en tête de chaque liste
+      (Administration/templates/admin/comptable/sous_onglets_configurer.html) :
+      Unfold ne dessine qu'UNE barre d'onglets par page.
+    / "Manage" = the trial balance, opened by the menu entry. "Configure" = the three
+      settings lists; a second level (drawn by our template) moves between them,
+      since Unfold draws a single tab bar per page.
+
+    POURQUOI L'ETAT ACTIF EST CALCULE ICI. Unfold compare l'adresse de l'onglet a
+    celle de la page avec « in » : l'adresse de « Configurer »
+    (/admin/laboutik/comptecomptable/) est CONTENUE dans celle de la balance
+    (/admin/laboutik/comptecomptable/balance/), et absente de celle des moyens ou
+    des monnaies. Sa comparaison se tromperait trois fois sur quatre. Unfold garde
+    notre valeur quand la cle « active » est posee (sites.py, get_tabs_list).
+    / Unfold's "in" comparison would be wrong three times out of four; it keeps our
+      value when "active" is set.
+
+    Les modeles sont ecrits en chaine : la barre s'affiche sur les trois LISTES,
+    jamais sur les fiches (elle y cacherait les onglets des inlines).
+    / String entries: the bar shows on the three lists, never on change forms.
+
+    :param chemin_courant: request.path
+    :return: un groupe d'onglets au format Unfold
+    """
+    adresse_de_la_balance = _safe_rev("staff_admin:laboutik_comptecomptable_balance")
+    adresse_des_comptes = _safe_rev("staff_admin:laboutik_comptecomptable_changelist")
+    on_est_sur_la_balance = chemin_courant.startswith(str(adresse_de_la_balance))
+
+    return {
+        "page": PAGE_DE_LA_BALANCE,
+        "models": [
+            "laboutik.comptecomptable",
+            "laboutik.mappingmoyendepaiement",
+            "laboutik.mappingmonnaie",
+        ],
+        "items": [
+            {
+                "title": _("Gérer"),
+                "link": adresse_de_la_balance,
+                "active": on_est_sur_la_balance,
+            },
+            {
+                "title": _("Configurer"),
+                "link": adresse_des_comptes,
+                "active": not on_est_sur_la_balance,
+            },
+        ],
+    }
+
+
 def _categoriser_les_pages(pages, lien_vers_modele):
     """
     Range les pages d'un module dans les trois categories de la maquette.
@@ -1846,6 +2039,7 @@ def get_tabs(request):
     onglets = _onglets_hors_modules()
     lien_vers_modele = _carte_des_liens_vers_modeles()
     chemin_courant = request.path
+    onglets.append(_onglets_du_plan_comptable(chemin_courant))
 
     for section in _construire_sections_modules(request):
         # Les entrees autonomes gardent tous leurs liens dans la sidebar.
@@ -2166,7 +2360,7 @@ MODULE_FIELDS = {
         "slug": "caisse",  # module correspondant dans la sidebar
     },
     "module_monnaie_locale": {
-        "name": _("Monnaies locales, temps et cashless"),
+        "name": _("Monnaies locales, temps, SSA et cashless"),
         "description": _("Local currency tokens, federated wallet"),
         "testid": "dashboard-card-monnaie-locale",
         "domaine": "lerezo",  # groupe du tableau de bord / dashboard group
@@ -2315,10 +2509,20 @@ def _compter_les_cartes_reelles(cartes):
     mais n'en sont pas un.
     / Excludes "coming soon" cards, which announce a module rather than being one.
 
+    Les cartes fermees par le verrou de moteur (lieu legacy) COMPTENT : le module existe,
+    le domaine affiche donc 0 / N, pas 0 / 0. Seule la pastille « Decouvrir » les ecarte
+    (`_compter_les_cartes_eteintes`).
+    / Cards closed by the engine lock DO count: the module exists (0 / N, not 0 / 0).
+
     :param cartes: liste de cartes
     :return: nombre de modules reels (int)
     """
-    return sum(1 for carte in cartes if carte.get("type") != "coming_soon")
+    nombre = 0
+    for carte in cartes:
+        if carte.get("type") == "coming_soon":
+            continue
+        nombre += 1
+    return nombre
 
 
 def _compter_les_cartes_actives(cartes):
@@ -2354,12 +2558,26 @@ def _compter_les_cartes_eteintes(groupes):
     de modules restent a decouvrir.
     / Feeds the "discover more modules" pill.
 
+    Une carte fermee par le verrou de moteur (lieu legacy) et eteinte n'est pas « a
+    decouvrir » : le lieu ne peut pas l'allumer, la compter promettrait un interrupteur
+    qui n'existe pas. Une carte fermee mais restee allumee en base n'est pas eteinte :
+    elle n'est deja pas comptee.
+    / A card closed by the engine lock and off is not "to discover": not counted.
+
     :param groupes: liste de groupes de domaine
     :return: nombre de cartes eteintes (int)
     """
-    return sum(
-        groupe["total"] - groupe["actifs"] for groupe in groupes
-    )
+    nombre_de_cartes_eteintes = 0
+    for groupe in groupes:
+        nombre_de_cartes_fermees_et_eteintes = 0
+        for carte in groupe["cartes"]:
+            if carte.get("moteur_legacy") and not carte.get("allume"):
+                nombre_de_cartes_fermees_et_eteintes += 1
+
+        nombre_de_cartes_eteintes += (
+            groupe["total"] - groupe["actifs"] - nombre_de_cartes_fermees_et_eteintes
+        )
+    return nombre_de_cartes_eteintes
 
 
 def _build_modules_context(configuration):
@@ -2382,6 +2600,14 @@ def _build_modules_context(configuration):
     :param configuration: la Configuration du lieu
     :return: liste de cartes (dicts)
     """
+    # Verrou de moteur : un lieu legacy n'allume aucun module V2. Sa carte est fermee
+    # (drapeau `moteur_legacy`, phrase du verrou, pas d'interrupteur), sauf si le module
+    # est reste allume en base : l'interrupteur reste alors, pour l'eteindre (decision
+    # Q2 ; module_toggle accepte l'extinction).
+    # / Engine lock: a legacy venue's V2 cards are closed; a module still on keeps its
+    # switch, to turn it off.
+    moteur_legacy = lieu_en_moteur_legacy()
+
     cartes = []
     for nom_du_champ, info in MODULE_FIELDS.items():
         # La caisse a sa carte a part : trois etats, pas un interrupteur.
@@ -2392,16 +2618,47 @@ def _build_modules_context(configuration):
             carte_pos["domaine"] = info["domaine"]
             carte_pos["icone"] = info["icone"]
             carte_pos["slug"] = info["slug"]
-            # En V1, la caisse ne se desactive pas depuis le tableau de bord :
-            # on montre son etat, pas un interrupteur qui mentirait.
-            # / In V1 the POS cannot be switched off from here.
-            carte_pos["montre_interrupteur"] = carte_pos["state"] != "v1_active"
             carte_pos["allume"] = carte_pos["state"] == "v2_active"
+            # Une caisse LaBoutik V1 n'est pas une caisse V2 : le verrou ne la ferme pas.
+            # / A LaBoutik V1 POS is not a V2 POS: the lock leaves it as is.
+            carte_pos["moteur_legacy"] = (
+                moteur_legacy and carte_pos["state"] != "v1_active"
+            )
+            carte_pos["message_moteur_legacy"] = MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY
+            if carte_pos["moteur_legacy"]:
+                carte_pos["montre_interrupteur"] = carte_pos["allume"]
+                # Pas d'encart BETA sur une carte fermee : il invite a essayer un module
+                # que le lieu ne peut pas allumer.
+                # / No BETA notice on a closed card: the venue cannot try the module.
+                carte_pos["beta"] = False
+            else:
+                # En V1, la caisse ne se desactive pas depuis le tableau de bord :
+                # on montre son etat, pas un interrupteur qui mentirait.
+                # / In V1 the POS cannot be switched off from here.
+                carte_pos["montre_interrupteur"] = carte_pos["state"] != "v1_active"
             carte_pos["url_modale"] = carte_pos["toggle_modal_url"]
             carte_pos["testid_interrupteur"] = "dashboard-card-pos-switch"
             _poser_le_lien_d_ouverture(carte_pos, info)
             cartes.append(carte_pos)
             continue
+
+        module_allume = getattr(configuration, nom_du_champ)
+        carte_fermee_par_le_verrou = (
+            moteur_legacy and nom_du_champ in MODULES_V2_FERMES_AUX_LIEUX_LEGACY
+        )
+        # Une carte fermee n'a aucun lien d'ouverture (« Open kiosk ») : le module V2
+        # refuse un lieu legacy.
+        # / A closed card has no "open" link: the V2 module refuses a legacy venue.
+        if carte_fermee_par_le_verrou:
+            lien_externe = None
+            libelle_externe = None
+            testid_externe = None
+            externe_nouvel_onglet = False
+        else:
+            lien_externe = info.get("lien_externe")
+            libelle_externe = info.get("libelle_externe")
+            testid_externe = info.get("testid_externe")
+            externe_nouvel_onglet = info.get("externe_nouvel_onglet")
 
         cartes.append(
             {
@@ -2413,15 +2670,22 @@ def _build_modules_context(configuration):
                 "domaine": info["domaine"],
                 "icone": info["icone"],
                 "slug": info["slug"],
-                "active": getattr(configuration, nom_du_champ),
-                "beta": info.get("beta", False),
+                "active": module_allume,
+                # Pas d'encart BETA sur une carte fermee par le verrou : il invite a
+                # essayer un module que le lieu ne peut pas allumer.
+                # / No BETA notice on a card closed by the lock.
+                "beta": info.get("beta", False) and not carte_fermee_par_le_verrou,
                 "beta_notice": BETA_NOTICE,
                 # Ce que le gabarit a besoin de savoir, decide ICI plutot que
-                # dans des conditions de template : un module generique a
-                # toujours un interrupteur, et il est allume si le module l'est.
+                # dans des conditions de template : un module generique a un
+                # interrupteur, allume si le module l'est. Une carte fermee par le
+                # verrou n'en garde un que si le module est reste allume (pour
+                # l'eteindre).
                 # / Decided here rather than in template conditions.
-                "montre_interrupteur": True,
-                "allume": getattr(configuration, nom_du_champ),
+                "moteur_legacy": carte_fermee_par_le_verrou,
+                "message_moteur_legacy": MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY,
+                "montre_interrupteur": module_allume or not carte_fermee_par_le_verrou,
+                "allume": module_allume,
                 "url_modale": reverse(
                     "staff_admin:configuration-module-modal",
                     args=[nom_du_champ],
@@ -2431,10 +2695,10 @@ def _build_modules_context(configuration):
                     "staff_admin:configuration-module-modal",
                     args=[nom_du_champ],
                 ),
-                "lien_externe": info.get("lien_externe"),
-                "libelle_externe": info.get("libelle_externe"),
-                "testid_externe": info.get("testid_externe"),
-                "externe_nouvel_onglet": info.get("externe_nouvel_onglet"),
+                "lien_externe": lien_externe,
+                "libelle_externe": libelle_externe,
+                "testid_externe": testid_externe,
+                "externe_nouvel_onglet": externe_nouvel_onglet,
             }
         )
 
@@ -2470,9 +2734,10 @@ def _poser_le_lien_d_ouverture(carte, info):
     :param info: son entree de MODULE_FIELDS
     :return: None
     """
-    if carte["state"] == "v2_active":
-        # Caisse V2 en service : on ouvre l'interface.
-        # / V2 POS running: open the interface.
+    if carte["state"] == "v2_active" and not carte.get("moteur_legacy"):
+        # Caisse V2 en service : on ouvre l'interface. Pas pour un lieu legacy : la
+        # caisse V2 le refuse (HasLaBoutikTerminalAccess), le lien menerait a un refus.
+        # / V2 POS running: open the interface (never for a legacy venue).
         carte["lien_externe"] = info.get("link_url")
         carte["libelle_externe"] = info.get("link_label")
         carte["testid_externe"] = "dashboard-card-pos-open-link"

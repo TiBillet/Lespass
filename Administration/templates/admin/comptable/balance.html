@@ -1,0 +1,194 @@
+{% extends "admin/base_site.html" %}
+{% load i18n unfold %}
+{% comment %}
+LA BALANCE — ONGLET « GÉRER » DU PLAN COMPTABLE
+/ The trial balance — "Manage" tab of the chart of accounts
+
+LOCALISATION : Administration/templates/admin/comptable/balance.html
+
+Rendu par CompteComptableAdmin.balance (Administration/admin/laboutik.py). Contexte :
+- `balance` : le dict de comptabilite/balance.py `balance_de_la_periode`, ou None ;
+- `raison_du_refus` : le message du refus du FEC (compte manquant, écriture
+  déséquilibrée), sinon vide ;
+- `premier_jour`, `dernier_jour` : la période (dates incluses) ;
+- `adresse_du_csv` : le téléchargement CSV de la même période.
+
+En tête, la barre « Gérer / Configurer » (Administration/admin/dashboard.py,
+_onglets_du_plan_comptable) : cette page n'est pas une liste de modèle, la barre est
+demandée par son nom de page (« plan_comptable_balance »).
+Lecture seule : aucun formulaire n'écrit en base (la période passe par l'adresse, GET).
+/ Read only. The tab bar is requested by its page name.
+{% endcomment %}
+
+{% block title %}{% translate "Balance des comptes" %} | {{ site_title|default:_('Administration TiBillet') }}{% endblock %}
+
+{% block content %}
+{% tab_list "plan_comptable_balance" %}
+
+{# AIDE REPLIABLE, pour un bénévole qui n'est pas comptable. Fermée par défaut. #}
+{# / Collapsible help for a non-accountant volunteer. Closed by default.       #}
+<div class="mb-4" data-testid="aide-balance">
+    <details class="bg-white border border-base-200 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+        <summary class="cursor-pointer px-6 py-4 font-semibold text-important" data-testid="aide-balance-titre">
+            <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">help</span>
+            {% translate "À quoi sert la balance ?" %}
+        </summary>
+        <div class="px-6 pb-6 flex flex-col gap-3 text-sm leading-relaxed">
+            <p>{% translate "La balance, c'est le total de chaque tiroir sur une période." %}</p>
+            <p>{% translate "Débit : l'argent arrivé dans le tiroir. Crédit : l'argent sorti, ou dû." %}</p>
+            <p>{% translate "Les deux totaux sont toujours égaux : c'est la preuve que les comptes tiennent." %}</p>
+            <p>{% translate "Ce sont les mêmes chiffres que l'export comptable (FEC) donné au comptable. Seules les journées clôturées comptent : les ventes du service en cours arrivent après la clôture." %}</p>
+
+            <p class="font-semibold">{% translate "Exemple : une bière à 5 € payée par carte bancaire" %}</p>
+            <table style="width: 100%; max-width: 560px; border-collapse: collapse;"
+                   aria-label="{% translate 'Exemple : une bière à 5 € payée par carte bancaire' %}"
+                   data-testid="aide-balance-exemple">
+                <thead>
+                    <tr style="text-align: left;">
+                        <th scope="col" style="padding: 4px 6px;">{% translate "Tiroir" %}</th>
+                        <th scope="col" style="padding: 4px 6px; text-align: right;">{% translate "Débit" %}</th>
+                        <th scope="col" style="padding: 4px 6px; text-align: right;">{% translate "Crédit" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-top: 1px solid var(--color-base-200, #e5e7eb);">
+                        <td style="padding: 4px 6px;">512100 {% translate "Carte bancaire" %}</td>
+                        <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">5,00 €</td>
+                        <td style="padding: 4px 6px;"></td>
+                    </tr>
+                    <tr style="border-top: 1px solid var(--color-base-200, #e5e7eb);">
+                        <td style="padding: 4px 6px;">707000 {% translate "Ventes" %}</td>
+                        <td style="padding: 4px 6px;"></td>
+                        <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">4,17 €</td>
+                    </tr>
+                    <tr style="border-top: 1px solid var(--color-base-200, #e5e7eb);">
+                        <td style="padding: 4px 6px;">445711 {% translate "TVA" %}</td>
+                        <td style="padding: 4px 6px;"></td>
+                        <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">0,83 €</td>
+                    </tr>
+                    <tr style="border-top: 2px solid var(--color-base-300, #d1d5db); font-weight: 600;">
+                        <td style="padding: 4px 6px;">{% translate "Total" %}</td>
+                        <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">5,00 €</td>
+                        <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">5,00 €</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>{% translate "La bière rapporte 4,17 €. Les 0,83 € de TVA (20 %) sont pour l'État." %}</p>
+        </div>
+    </details>
+</div>
+
+{# LA PÉRIODE : deux dates, envoyées dans l'adresse (GET). / The period, sent by GET. #}
+<div class="mb-4" data-testid="balance-periode">
+    {% component "unfold/components/card.html" with title=_("Période") %}
+        <form method="get" action="" class="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+            <div class="flex flex-col">
+                <label for="balance-debut" class="text-sm font-medium mb-1">{% translate "Du" %}</label>
+                <input type="date" id="balance-debut" name="debut"
+                       value="{{ premier_jour|date:'Y-m-d' }}"
+                       data-testid="balance-debut"
+                       class="border border-base-200 dark:border-base-700 rounded-default px-3 py-2 bg-white dark:bg-base-900">
+            </div>
+            <div class="flex flex-col">
+                <label for="balance-fin" class="text-sm font-medium mb-1">{% translate "Au" %}</label>
+                <input type="date" id="balance-fin" name="fin"
+                       value="{{ dernier_jour|date:'Y-m-d' }}"
+                       data-testid="balance-fin"
+                       class="border border-base-200 dark:border-base-700 rounded-default px-3 py-2 bg-white dark:bg-base-900">
+            </div>
+            <button type="submit"
+                    data-testid="balance-afficher"
+                    class="font-medium px-5 py-2.5 rounded-default cursor-pointer bg-primary-600 text-white hover:bg-primary-700">
+                {% translate "Afficher" %}
+            </button>
+            {% if balance and balance.lignes %}
+                <a href="{{ adresse_du_csv }}"
+                   data-testid="balance-telecharger-csv"
+                   class="font-medium flex items-center justify-center gap-2 px-5 py-2.5 rounded-default border border-base-200 dark:border-base-700 hover:text-primary-600">
+                    <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">download</span>
+                    {% translate "Télécharger la balance (CSV)" %}
+                </a>
+            {% endif %}
+        </form>
+    {% endcomponent %}
+</div>
+
+{% if raison_du_refus %}
+    {# Le refus du FEC, avec son message : la balance n'est pas calculée. #}
+    {# / The FEC refusal, with its message: no balance is computed. #}
+    <div class="mb-4" role="alert" data-testid="balance-refus"
+         style="color: #b91c1c; border-left: 4px solid #dc2626; padding: 8px 12px;">
+        <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">error</span>
+        {% blocktranslate with raison=raison_du_refus %}La balance ne peut pas être calculée, pour la même raison que l'export comptable : {{ raison }}{% endblocktranslate %}
+    </div>
+{% elif balance and balance.lignes %}
+    {% if not balance.equilibree %}
+        {# Ne doit jamais arriver : chaque écriture du FEC est déjà vérifiée. #}
+        {# / Must never happen: each FEC entry is already checked. #}
+        <div class="mb-4" role="alert" data-testid="balance-desequilibree"
+             style="color: #b91c1c; border-left: 4px solid #dc2626; padding: 8px 12px; font-weight: 600;">
+            <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">error</span>
+            {% blocktranslate with ecart=balance.ecart_affiche %}Attention : le total au débit et le total au crédit ne sont pas égaux (écart de {{ ecart }}). Les comptes ne tiennent pas : prévenez la personne qui s'occupe de TiBillet.{% endblocktranslate %}
+        </div>
+    {% endif %}
+
+    <div class="mb-4 overflow-x-auto bg-white border border-base-200 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800"
+         data-testid="balance-tableau">
+        <table class="w-full text-sm" style="border-collapse: collapse;"
+               aria-label="{% blocktranslate with debut=premier_jour|date:'d/m/Y' fin=dernier_jour|date:'d/m/Y' %}Balance du {{ debut }} au {{ fin }}{% endblocktranslate %}">
+            <thead class="bg-base-50 dark:bg-white/[.02]">
+                <tr>
+                    <th scope="col" style="padding: 8px 12px; text-align: left;">{% translate "Compte" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: left;">{% translate "Libellé" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Débit" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Crédit" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Solde débiteur" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Solde créditeur" %}</th>
+                </tr>
+            </thead>
+            {% for famille in balance.familles %}
+                <tbody data-testid="balance-famille-{{ famille.classe }}">
+                    <tr class="bg-base-50 dark:bg-white/[.02]">
+                        <th scope="colgroup" colspan="6"
+                            style="padding: 6px 12px; text-align: left; border-top: 1px solid var(--color-base-200, #e5e7eb);">
+                            {{ famille.nom }}
+                        </th>
+                    </tr>
+                    {% for ligne in famille.lignes %}
+                        <tr data-testid="balance-compte-{{ ligne.numero }}" style="border-top: 1px solid var(--color-base-200, #e5e7eb);">
+                            <td style="padding: 6px 12px; white-space: nowrap;">{{ ligne.numero }}</td>
+                            <td style="padding: 6px 12px;">{{ ligne.libelle }}</td>
+                            <td style="padding: 6px 12px; text-align: right; white-space: nowrap;">{{ ligne.debit_affiche }}</td>
+                            <td style="padding: 6px 12px; text-align: right; white-space: nowrap;">{{ ligne.credit_affiche }}</td>
+                            <td style="padding: 6px 12px; text-align: right; white-space: nowrap;">{{ ligne.solde_debiteur_affiche }}</td>
+                            <td style="padding: 6px 12px; text-align: right; white-space: nowrap;">{{ ligne.solde_crediteur_affiche }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            {% endfor %}
+            <tfoot>
+                <tr data-testid="balance-total" style="border-top: 2px solid var(--color-base-300, #d1d5db); font-weight: 600;">
+                    <th scope="row" colspan="2" style="padding: 8px 12px; text-align: left;">{% translate "Total" %}</th>
+                    <td style="padding: 8px 12px; text-align: right; white-space: nowrap;" data-testid="balance-total-debit">{{ balance.total_debit_affiche }}</td>
+                    <td style="padding: 8px 12px; text-align: right; white-space: nowrap;" data-testid="balance-total-credit">{{ balance.total_credit_affiche }}</td>
+                    <td colspan="2" style="padding: 8px 12px; text-align: right;">
+                        {% if balance.equilibree %}
+                            <span data-testid="balance-equilibree" style="color: #15803d;">
+                                <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;" aria-hidden="true">check_circle</span>
+                                {% translate "Débit = crédit" %}
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <p class="mb-4 text-sm text-font-subtle-light dark:text-font-subtle-dark" data-testid="balance-nombre-de-clotures">
+        {% blocktranslate count nombre=balance.nombre_de_clotures %}Calculée sur {{ nombre }} clôture journalière.{% plural %}Calculée sur {{ nombre }} clôtures journalières.{% endblocktranslate %}
+    </p>
+{% else %}
+    <p class="mb-4 text-sm" data-testid="balance-vide">
+        {% translate "Aucune écriture sur cette période : aucune journée clôturée n'y a de vente." %}
+    </p>
+{% endif %}
+{% endblock %}

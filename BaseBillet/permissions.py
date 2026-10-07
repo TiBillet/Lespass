@@ -8,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework_api_key.permissions import BaseHasAPIKey
 
 from BaseBillet.models import ScannerAPIKey, ScanApp, LaBoutikAPIKey
+from Customers.models import lieu_en_moteur_legacy
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,12 @@ class HasLaBoutikAccess(BaseHasAPIKey):
     """
     Permission souple : accepte une clé API LaBoutik OU un admin tenant connecté.
     Flexible permission: accepts a LaBoutik API key OR a logged-in tenant admin.
+
+    Elle ne lit PAS le moteur de monnaie du lieu : elle sert les routes LaBoutik V1
+    (ancien Fedow) et `api/inventaire/` (stock, aucun argent), qui restent ouvertes à
+    un lieu legacy (spec 15 §5.7). Le verrou de la caisse V2 est dans
+    `HasLaBoutikTerminalAccess`.
+    / Does NOT read the engine: serves LaBoutik V1 and api/inventaire/, open to legacy.
 
     Deux chemins d'accès / Two access paths :
     1. Clé API (header Authorization: Api-Key xxx) → terminal de caisse
@@ -101,6 +108,12 @@ class HasLaBoutikTerminalAccess(permissions.BasePermission):
     def has_permission(self, request, view):
         from AuthBillet.models import TibilletUser
         from BaseBillet.models import Configuration
+
+        # Verrou de moteur : un lieu legacy n'utilise que l'ancien Fedow. La caisse V2
+        # lui est fermee, meme si `module_caisse` est reste a vrai en base (spec 15 §5.4).
+        # / Engine lock: the V2 POS is closed to a legacy venue, whatever its flag.
+        if lieu_en_moteur_legacy():
+            return False
 
         # Garde d'activation : sans module caisse actif sur ce tenant, AUCUNE
         # route POS V2 n'est accessible, meme pour un admin. "Verifie toujours

@@ -42,7 +42,11 @@ from unfold.contrib.filters.admin import ChoicesDropdownFilter, RelatedDropdownF
 from Administration.admin_tenant import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from AuthBillet.models import Wallet
-from Customers.models import Client
+from Customers.models import (
+    MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY,
+    Client,
+    lieu_en_moteur_legacy,
+)
 from fedow_core.models import Asset, Federation, Token, Transaction
 
 logger = logging.getLogger(__name__)
@@ -75,6 +79,41 @@ def _value_en_euros(centimes):
     euros = absolu // 100
     cents = absolu % 100
     return f"{signe}{euros},{cents:02d}\u00a0€"
+
+
+def admin_fedow_core_ouvert(request):
+    """
+    Dit si l'admin fedow_core est ouvert pour la requete : gestionnaire du lieu ET lieu
+    sur le moteur V2.
+    / Tells whether the fedow_core admin is open: venue admin AND V2 venue.
+
+    LOCALISATION : fedow_core/admin.py
+
+    Un lieu legacy n'utilise que l'ancien Fedow (fedow_connect) : les pages fedow_core
+    (assets, tokens, transactions, federations) lui sont fermees, URL directe comprise
+    (403). Le moteur est lu par `lieu_en_moteur_legacy()` (spec 15 §5.3).
+    / A legacy venue only uses the old Fedow: fedow_core pages are closed (403).
+    """
+    if lieu_en_moteur_legacy():
+        return False
+    return TenantAdminPermissionWithRequest(request)
+
+
+def lieux_invitables_en_v2():
+    """
+    Les lieux qu'on peut inviter sur un asset ou dans une federation fedow_core.
+    / The venues that can be invited on a fedow_core asset or federation.
+
+    LOCALISATION : fedow_core/admin.py
+
+    Seulement les lieux du moteur V2 : un lieu legacy n'utilise que l'ancien Fedow, il
+    n'est jamais invitable (spec 15 §5.3). Les exclusions habituelles restent :
+    emplacements vides du pool, ROOT, META (comme TenantAdmin.get_queryset).
+    / V2 venues only, minus pool slots, ROOT and META.
+    """
+    return Client.objects.filter(moteur_monnaie=Client.MOTEUR_V2).exclude(
+        categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -153,10 +192,10 @@ class AssetAdmin(ModelAdmin):
     # --- Permissions par role / Role-based permissions ---
 
     def has_add_permission(self, request):
-        return TenantAdminPermissionWithRequest(request)
+        return admin_fedow_core_ouvert(request)
 
     def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return admin_fedow_core_ouvert(request)
 
     def has_change_permission(self, request, obj=None):
         """
@@ -178,6 +217,11 @@ class AssetAdmin(ModelAdmin):
         (federation_fed tenant). Created once by bootstrap_fed_asset.
         Defense in depth against accidental edits.
         """
+        # Lieu legacy : l'admin fedow_core lui est ferme (spec 15 §5.3).
+        # / Legacy venue: the fedow_core admin is closed.
+        if lieu_en_moteur_legacy():
+            return False
+
         if obj is not None and obj.category == Asset.FED:
             return False
 
@@ -356,6 +400,20 @@ class AssetAdmin(ModelAdmin):
 
         super().save_model(request, obj, form, change)
 
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        """
+        `pending_invitations` ne propose et n'accepte que les lieux du moteur V2.
+        / pending_invitations only offers and accepts V2 venues.
+
+        INDISPENSABLE meme avec l'autocompletion filtree (TenantAdmin.get_search_results) :
+        l'autocompletion ne pilote que l'affichage. C'est ce queryset qui VALIDE la valeur
+        postee : sans lui, un pk force vers un lieu legacy serait accepte.
+        / REQUIRED even with the filtered autocomplete: only this queryset validates.
+        """
+        if db_field.name == "pending_invitations":
+            kwargs["queryset"] = lieux_invitables_en_v2()
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
     def save_related(self, request, form, formsets, change):
         """
         Protege pending_invitations : seul le createur peut modifier ce champ.
@@ -393,6 +451,16 @@ class AssetAdmin(ModelAdmin):
                 request,
                 _("Seul le lieu createur peut envoyer des invitations."),
             )
+
+        # Defense en profondeur : un lieu legacy n'est jamais invite, meme arrive ici
+        # par un autre chemin que le formulaire (spec 15 §5.3).
+        # / Defense in depth: a legacy venue is never invited.
+        if obj.pk:
+            invitations_de_lieux_legacy = obj.pending_invitations.filter(
+                moteur_monnaie=Client.MOTEUR_LEGACY
+            )
+            for lieu_legacy in invitations_de_lieux_legacy:
+                obj.pending_invitations.remove(lieu_legacy)
 
     # --- URLs custom / Custom URLs ---
 
@@ -432,7 +500,28 @@ class AssetAdmin(ModelAdmin):
             messages.error(request, _("Permission refusee."))
             return redirect(self._url_changelist())
 
+        # Lieu legacy : cette route ne lit pas les permissions de l'admin (elle passe
+        # par admin_site.admin_view). Elle refuse donc elle-meme : un lieu legacy
+        # n'utilise que l'ancien Fedow. Retour a l'accueil de l'admin, la liste
+        # fedow_core lui etant fermee (spec 15 §5.3).
+        # / Legacy venue: this route does not read the admin permissions, so it
+        # / refuses by itself. Back to the admin index (the list is closed too).
+        if lieu_en_moteur_legacy():
+            messages.error(request, MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY)
+            return redirect(reverse(f"{self.admin_site.name}:index"))
+
         asset = get_object_or_404(Asset, pk=asset_pk)
+
+        # Une monnaie archivee ne se partage plus : le panneau ne la montre pas, et
+        # cette route la refuse aussi (un POST peut arriver sans passer par le panneau).
+        # L'invitation reste en attente, rien ne bouge.
+        # / An archived asset is no longer shared: refused here too (direct POST).
+        if asset.archive:
+            messages.error(
+                request,
+                _("Cette monnaie est archivée : son invitation ne peut plus être acceptée."),
+            )
+            return redirect(self._url_changelist())
 
         # Verifier que ce tenant est bien dans les invitations en attente.
         # Check that this tenant is in pending invitations.
@@ -471,8 +560,12 @@ class AssetAdmin(ModelAdmin):
         extra_context = extra_context or {}
         tenant_actuel = connection.tenant
 
+        # Sans les monnaies archivees : elles ne se partagent plus (la route
+        # d'acceptation les refuse aussi).
+        # / Without archived assets: they are no longer shared.
         invitations_asset_en_attente = Asset.objects.filter(
             pending_invitations=tenant_actuel,
+            archive=False,
         ).select_related("tenant_origin")
 
         extra_context["invitations_asset_en_attente"] = invitations_asset_en_attente
@@ -554,7 +647,7 @@ class TokenAdmin(ModelAdmin):
         return False
 
     def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return admin_fedow_core_ouvert(request)
 
     def has_change_permission(self, request, obj=None):
         return False
@@ -657,7 +750,7 @@ class TransactionAdmin(ModelAdmin):
         return False
 
     def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return admin_fedow_core_ouvert(request)
 
     def has_change_permission(self, request, obj=None):
         return False
@@ -751,10 +844,10 @@ class FederationAdmin(ModelAdmin):
     # --- Permissions par role / Role-based permissions ---
 
     def has_add_permission(self, request):
-        return TenantAdminPermissionWithRequest(request)
+        return admin_fedow_core_ouvert(request)
 
     def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return admin_fedow_core_ouvert(request)
 
     def has_change_permission(self, request, obj=None):
         """
@@ -768,6 +861,11 @@ class FederationAdmin(ModelAdmin):
         return True so all members see the "edit" link
         (which leads to the read-only view).
         """
+        # Lieu legacy : l'admin fedow_core lui est ferme (spec 15 §5.3).
+        # / Legacy venue: the fedow_core admin is closed.
+        if lieu_en_moteur_legacy():
+            return False
+
         if obj is None:
             return True
 
@@ -780,6 +878,11 @@ class FederationAdmin(ModelAdmin):
         Seul le createur peut supprimer la federation.
         Only the creator can delete the federation.
         """
+        # Lieu legacy : l'admin fedow_core lui est ferme (spec 15 §5.3).
+        # / Legacy venue: the fedow_core admin is closed.
+        if lieu_en_moteur_legacy():
+            return False
+
         if obj is None:
             return True
 
@@ -827,6 +930,20 @@ class FederationAdmin(ModelAdmin):
             obj.created_by = connection.tenant
 
         super().save_model(request, obj, form, change)
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        """
+        `pending_tenants` ne propose et n'accepte que les lieux du moteur V2.
+        / pending_tenants only offers and accepts V2 venues.
+
+        INDISPENSABLE meme avec l'autocompletion filtree (TenantAdmin.get_search_results) :
+        l'autocompletion ne pilote que l'affichage. C'est ce queryset qui VALIDE la valeur
+        postee : sans lui, un pk force vers un lieu legacy serait accepte.
+        / REQUIRED even with the filtered autocomplete: only this queryset validates.
+        """
+        if db_field.name == "pending_tenants":
+            kwargs["queryset"] = lieux_invitables_en_v2()
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     def save_related(self, request, form, formsets, change):
         """
@@ -896,6 +1013,16 @@ class FederationAdmin(ModelAdmin):
             messages.error(request, _("Permission refusee."))
             return redirect(self._url_changelist())
 
+        # Lieu legacy : cette route ne lit pas les permissions de l'admin (elle passe
+        # par admin_site.admin_view). Elle refuse donc elle-meme : un lieu legacy
+        # n'utilise que l'ancien Fedow. Retour a l'accueil de l'admin, la liste
+        # fedow_core lui etant fermee (spec 15 §5.3).
+        # / Legacy venue: this route does not read the admin permissions, so it
+        # / refuses by itself. Back to the admin index (the list is closed too).
+        if lieu_en_moteur_legacy():
+            messages.error(request, MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY)
+            return redirect(reverse(f"{self.admin_site.name}:index"))
+
         federation = get_object_or_404(Federation, pk=federation_pk)
 
         # Verifier que ce tenant est bien dans les invitations en attente.
@@ -943,6 +1070,16 @@ class FederationAdmin(ModelAdmin):
         if not tenant_admin_a_la_permission:
             messages.error(request, _("Permission refusee."))
             return redirect(self._url_changelist())
+
+        # Lieu legacy : cette route ne lit pas les permissions de l'admin (elle passe
+        # par admin_site.admin_view). Elle refuse donc elle-meme : un lieu legacy
+        # n'utilise que l'ancien Fedow. Retour a l'accueil de l'admin, la liste
+        # fedow_core lui etant fermee (spec 15 §5.3).
+        # / Legacy venue: this route does not read the admin permissions, so it
+        # / refuses by itself. Back to the admin index (the list is closed too).
+        if lieu_en_moteur_legacy():
+            messages.error(request, MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY)
+            return redirect(reverse(f"{self.admin_site.name}:index"))
 
         federation = get_object_or_404(Federation, pk=federation_pk)
 

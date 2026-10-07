@@ -115,24 +115,17 @@ def cv_asset_tlf(tenant):
     / Active TLF asset — fetches or creates if needed."""
     with schema_context(tenant.schema_name):
         from fedow_core.models import Asset
+        from fedow_core.services import AssetService
         from AuthBillet.models import Wallet
 
-        # order_by("name") : aligne la selection sur celle utilisee en prod par
-        # AssetService.obtenir_assets_accessibles (ordre deterministe). Sans ce
-        # tri, un .first() nu peut retourner un autre asset TLF que celui credite
-        # ici si plusieurs assets TLF actifs existent pour le tenant (pollution
-        # inter-suites sur la DB dev partagee) — le solde credite semblerait alors 0.
-        # / order_by("name"): match the selection used in prod by
-        # AssetService.obtenir_assets_accessibles (deterministic order). Without
-        # this sort, a bare .first() could return a different TLF asset than the
-        # one credited here if several active TLF assets exist for the tenant
-        # (cross-suite pollution on the shared dev DB) — the credited balance
-        # would then appear as 0.
-        asset = Asset.objects.filter(
-            tenant_origin=tenant,
-            category=Asset.TLF,
-            active=True,
-        ).order_by("name").first()
+        # La fixture et la cascade doivent choisir le même asset : même requête
+        # que controlvanne.billing.obtenir_contexte_cashless.
+        # / The fixture and the cascade must pick the same asset.
+        asset = (
+            AssetService.obtenir_assets_accessibles(tenant)
+            .filter(category=Asset.TLF)
+            .first()
+        )
         if not asset:
             wallet_lieu, _ = Wallet.objects.get_or_create(
                 origin=tenant,
@@ -398,12 +391,16 @@ class TestEventsComplementaires:
             from fedow_core.models import Token, Asset
             from Customers.models import Client
 
+            from fedow_core.services import AssetService
+
             tenant = Client.objects.get(schema_name="lespass")
-            asset_tlf = Asset.objects.filter(
-                tenant_origin=tenant,
-                category=Asset.TLF,
-                active=True,
-            ).first()
+            # La carte est créditée sur l'asset que la cascade débitera.
+            # / The card is credited on the asset the cascade will debit.
+            asset_tlf = (
+                AssetService.obtenir_assets_accessibles(tenant)
+                .filter(category=Asset.TLF)
+                .first()
+            )
             if asset_tlf and cv_carte_client.wallet_ephemere:
                 Token.objects.update_or_create(
                     wallet=cv_carte_client.wallet_ephemere,

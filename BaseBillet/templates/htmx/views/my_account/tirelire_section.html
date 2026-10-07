@@ -1,4 +1,15 @@
 {% load i18n %}
+{% comment %}
+TIRELIRE — boutons du porte-monnaie (recharger, scanner, rembourser)
+/ Wallet buttons (refill, scan, refund)
+
+LOCALISATION : BaseBillet/templates/htmx/views/my_account/tirelire_section.html
+Inclus par : pages/classic/vues/compte/balance.html et pages/V2/vues/compte/balance.html.
+
+Variable optionnelle : masquer_le_bouton_scanner. Le skin V2 la pose : il affiche
+le bouton « Scanner un QR code de paiement » sous « Ma carte » (/my_account/).
+/ Optional variable masquer_le_bouton_scanner: V2 shows the scan button on /my_account/.
+{% endcomment %}
 
     {% if config.show_refill_button %}
         <!-- Si pas possible de recharger, alors pas possible de se faire rembourser -->
@@ -68,33 +79,40 @@
                     <div class="col-6 col-md-auto me-md-2">
                         <a href="#" hx-get="/my_account/refill_wallet" hx-indicator="#tibillet-spinner"
                            class="btn btn-primary square-btn w-100">
-                            <i class="bi bi-plus-circle"></i>
+                            <i class="bi bi-plus-circle" aria-hidden="true"></i>
                             {% trans "Refill TiBillets" %}
                         </a>
                     </div>
                 {% endif %}
 
-                {% if user.email_valid %}
-                    <div class="col-6 col-md-auto me-md-2">
-                        <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn btn-primary square-btn w-100">
-                            <i class="bi bi-qr-code-scan"></i>
-                            {% trans "Scan a payment QR Code" %}
-                        </a>
-                    </div>
-                {% else %}
-                    <div class="col-6 col-md-auto me-md-2">
-                        <a href="" class="btn btn-secondary square-btn w-100">
-                            <i class="bi bi-qr-code-scan"></i>
-                            {% trans "Please valid your email to scan a payment QR Code" %}
-                        </a>
-                    </div>
+                {% if not masquer_le_bouton_scanner %}
+                    {% if user.email_valid %}
+                        <div class="col-6 col-md-auto me-md-2">
+                            <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn btn-primary square-btn w-100"
+                               data-testid="tirelire-scanner-qrcode">
+                                <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
+                                {% trans "Scan a payment QR Code" %}
+                            </a>
+                        </div>
+                    {% else %}
+                        {# Email non validé : bouton gris NON cliquable. Le lien pour renvoyer #}
+                        {# l'email de validation est déjà en tête de page (account_base.html). #}
+                        {# / Email not validated: grey, non-clickable button. #}
+                        <div class="col-6 col-md-auto me-md-2">
+                            <button type="button" class="btn btn-secondary square-btn w-100" disabled
+                                    data-testid="tirelire-scanner-qrcode-email-non-valide">
+                                <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
+                                {% trans "Please valid your email to scan a payment QR Code" %}
+                            </button>
+                        </div>
+                    {% endif %}
                 {% endif %}
 
                 {# Initiate payment button moved above the Currencies heading for admins #}
                 <div class="col-6 col-md-auto me-md-2">
                     <a href="#detail-monnaies"
                        class="btn btn-secondary square-btn w-100 d-md-none">
-                        <i class="bi bi-list-ul"></i>
+                        <i class="bi bi-list-ul" aria-hidden="true"></i>
                         {% trans "Show currency list" %}
                     </a>
                 </div>
@@ -107,7 +125,7 @@
                                 data-bs-toggle="offcanvas"
                                 data-bs-target="#refundPanel"
                                 aria-controls="refundPanel">
-                            <i class="bi bi-arrow-return-left"></i>
+                            <i class="bi bi-arrow-return-left" aria-hidden="true"></i>
                             {% trans "Request a refund" %}
                         </button>
                     </div>
@@ -139,4 +157,3 @@
             </div>
             {% endcomment %}
     </div>
-    </section>

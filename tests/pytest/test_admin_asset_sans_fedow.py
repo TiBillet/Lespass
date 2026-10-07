@@ -62,3 +62,31 @@ def test_la_liste_des_assets_repond_sur_un_lieu_sans_fedow():
     reponse = navigateur.get(reverse("staff_admin:fedow_public_assetfedowpublic_changelist"))
 
     assert reponse.status_code == 200
+
+
+@pytest.mark.django_db
+def test_l_admin_ne_cree_plus_d_asset_legacy():
+    """Plus de creation d'asset legacy depuis l'admin (decision du 2026-10-06, en
+    attendant H-2 / H-3) : la page d'ajout repond 403, meme au superadmin, et la liste
+    n'a plus de lien d'ajout. Lecture seule sur `meta`.
+    / No more legacy asset creation from the admin: add page 403, no add link."""
+    lieu_meta = Client.objects.get(schema_name="meta")
+    domaine = lieu_meta.domains.first()
+    if domaine is None:
+        pytest.fail("Le lieu 'meta' n'a aucun domaine : impossible d'ouvrir son admin.")
+    superadmin = TibilletUser.objects.filter(is_superuser=True).first()
+    if superadmin is None:
+        pytest.fail("Aucun superadmin dans la base de dev.")
+
+    navigateur = HttpClient(HTTP_HOST=domaine.domain)
+    navigateur.force_login(superadmin)
+    adresse_d_ajout = reverse("staff_admin:fedow_public_assetfedowpublic_add")
+
+    reponse_ajout = navigateur.get(adresse_d_ajout)
+    assert reponse_ajout.status_code == 403
+
+    reponse_liste = navigateur.get(
+        reverse("staff_admin:fedow_public_assetfedowpublic_changelist")
+    )
+    assert reponse_liste.status_code == 200
+    assert adresse_d_ajout not in reponse_liste.content.decode()

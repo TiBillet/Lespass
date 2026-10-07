@@ -11,14 +11,18 @@ Maquettes : TEMP-tibillet-lespass-main/mon-espace.html (rempli)
             et mon-espace-vide.html (premier jour, états vides)
 
 Contexte (skin V2) : card, tokens, reservations, memberships, bookings,
-tenants_admin, config.show_refill_button.
+tenants_admin, peut_initier_un_paiement, config.show_refill_button.
+peut_initier_un_paiement : calculé par la vue avec la règle de la permission des
+routes du générateur de paiement (lieu courant seulement, superuser compris).
 
 Structure :
 1. En-tête « moi » : bonjour, email, la carte TiBillet et son solde.
    « Recharger » est LE geste TiBillet par excellence : .btn--signature.
+   Sous la carte (avec ou sans carte liée) : « Scanner un QR code de paiement ».
 2. Accès rapides aux sous-pages du compte.
 3. Modules repliables (<details> natifs : sans JS, accessibles au clavier) :
-   Mes responsabilités, Mon agenda, Mes services, Mes ressources.
+   Mes responsabilités (en tête : « Initier un paiement »), Mon agenda,
+   Mes services, Mes ressources.
    Un module sans donnée affiche une invitation (.module__invite), jamais
    un message triste (maquette mon-espace-vide.html).
 
@@ -149,6 +153,26 @@ modules (R11).
 {#                        <a class="btn btn--secondary btn--sm" href="/my_account/card/" hx-get="/my_account/card/" hx-target="body" hx-push-url="true">{% translate 'Lier une carte' %}</a>#}
                     </div>
                 {% endif %}
+
+                {# Payer par QR code débite la tirelire (Fedow), pas la carte : #}
+                {# le bouton s'affiche avec ou sans carte liée. #}
+                {# / Paying by QR code debits the wallet, not the card: shown with or without a card. #}
+                {% if user.email_valid %}
+                    <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn compte__scanner"
+                       data-testid="compte-scanner-qrcode">
+                        <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
+                        {% translate "Scan a payment QR Code" %}
+                    </a>
+                {% else %}
+                    {# Email non validé : même place, gris, non cliquable. Le lien pour #}
+                    {# renvoyer l'email de validation est en tête de page (account_base.html). #}
+                    {# / Email not validated: grey, non-clickable; resend link is at the top. #}
+                    <button type="button" class="btn btn--secondary compte__scanner" disabled
+                            data-testid="compte-scanner-qrcode-email-non-valide">
+                        <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
+                        {% translate "Please valid your email to scan a payment QR Code" %}
+                    </button>
+                {% endif %}
             </div>
 
             {# Accès aux sous-pages du compte. / Links to the account sub-pages. #}
@@ -211,13 +235,35 @@ modules (R11).
 
         {# 1. MES RESPONSABILITÉS — placé en premier : il relève de l'accès, #}
         {# pas de l'activité (maquette). / Roles first: access, not activity. #}
-        {% if tenants_admin %}
+        {# Affiché aussi pour un·e caissier·e qui n'administre aucun lieu : #}
+        {# sinon elle perd le bouton « Initier un paiement ». #}
+        {# / Also shown to a cashier who administers no venue. #}
+        {% if tenants_admin or peut_initier_un_paiement %}
             <details class="module" open data-testid="module-responsabilites">
                 <summary class="module__head">
-                    <span class="module__title">{% translate 'Mes responsabilités' %} <span class="module__count">· {{ tenants_admin|length }}</span></span>
+                    {# Le compteur compte les lieux administrés, pas le bouton. #}
+                    {# / The count is the number of administered venues. #}
+                    <span class="module__title">{% translate 'Mes responsabilités' %}{% if tenants_admin %} <span class="module__count">· {{ tenants_admin|length }}</span>{% endif %}</span>
                     <svg class="module__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
                 </summary>
                 <div class="module__body">
+                    {# Bandeau d'encaissement : premier enfant du module, pleine largeur, #}
+                    {# hors de la grille. Il porte sur le LIEU COURANT seulement. #}
+                    {# / Collect banner: first child, full width, current venue only. #}
+                    {% if peut_initier_un_paiement %}
+                        <div class="compte__encaisser" data-testid="compte-initier-paiement">
+                            <p class="compte__encaisser-texte">
+                                {% blocktrans with organisation=config.organisation %}Vous pouvez initier un paiement pour le compte de votre collectif : {{ organisation }}{% endblocktrans %}
+                            </p>
+                            <a href="{% url 'qrcodescanpay-get-generator' %}" class="btn compte__encaisser-bouton"
+                               data-testid="compte-initier-paiement-bouton">
+                                <i class="bi bi-qr-code" aria-hidden="true"></i>
+                                {% translate "Initiate a payment" %}
+                            </a>
+                        </div>
+                    {% endif %}
+
+                    {% if tenants_admin %}
                     <div class="module__content">
                         <div class="grid grid--3">
                             {% for tenant in tenants_admin %}
@@ -243,6 +289,7 @@ modules (R11).
                             {% endfor %}
                         </div>
                     </div>
+                    {% endif %}
                 </div>
             </details>
         {% endif %}

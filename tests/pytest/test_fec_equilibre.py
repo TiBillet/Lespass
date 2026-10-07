@@ -38,6 +38,11 @@ RÈGLES MÉTIER TESTÉES (fiche F §4 ; fiche E §3 ; tronc D8 bis, D22, D23)
   journal d'origine (CAISSE, TIREUSE, WEB, ADMIN) : refus, et « Plan complet ? » le
   signale.
 - Le nombre de requêtes d'un export ne grandit pas avec le nombre de ventes.
+- La balance du plan comptable (`comptabilite/balance.py`, onglet « Gérer ») : pour
+  une période, la somme par compte des débits et des crédits du FEC des J datées
+  dans la période, au centime près ; total débit = total crédit ; les mêmes refus
+  que le FEC ; un nombre de requêtes qui ne grandit pas avec le nombre de ventes ;
+  une période sans J est vide ; l'écran et son CSV.
 / Business rules tested: one balanced entry per journal and J, euro sales only,
 accounts from the chart rules, VAT by rate, gift top-ups and gift tokens, opposite
 side for negative amounts, refusal when unbalanced or an account is missing, FEC
@@ -120,6 +125,7 @@ from django.test import RequestFactory  # noqa: E402
 from django.test.utils import CaptureQueriesContext  # noqa: E402
 from django.utils import translation  # noqa: E402
 from django_tenants.test.cases import FastTenantTestCase  # noqa: E402
+from django_tenants.test.client import TenantClient  # noqa: E402
 
 import comptabilite.tasks  # noqa: E402
 from Administration.admin.site import staff_admin_site  # noqa: E402
@@ -145,6 +151,7 @@ from BaseBillet.services_vente import (  # noqa: E402
     tarif_vendu_d_un_produit_systeme,
 )
 from comptabilite.admin import ClotureCaisseAdmin  # noqa: E402
+from comptabilite.balance import balance_de_la_periode  # noqa: E402
 from comptabilite.fec import generer_fec_cloture  # noqa: E402
 from comptabilite.models import ClotureCaisse  # noqa: E402
 from comptabilite.ventilation import (  # noqa: E402
@@ -2327,3 +2334,314 @@ class TestFecEquilibre(FastTenantTestCase):
         # Le code dérivé du nom ne change pas. / The name-derived code is unchanged.
         point_de_vente_sans_code = self._point_de_vente("Buvette d'Été 2")
         assert code_journal_du_point_de_vente(point_de_vente_sans_code) == "BUVETTEDET"
+
+
+    # ------------------------------------------------------------------
+    # La balance du plan comptable (onglet « Gérer »)
+    # / The chart of accounts trial balance ("Manage" tab)
+    # ------------------------------------------------------------------
+
+    def _debit_et_credit_par_compte_des_fec(self, clotures):
+        """
+        La somme des débits et des crédits de chaque compte, lue dans le FICHIER FEC
+        des clôtures données (texte tabulé, montants « 12,34 »). Lu par le test,
+        jamais par le code testé.
+        / Each account's debit and credit sums, read from the FEC FILES.
+
+        :return: dict {numéro du compte: (débit, crédit)} en centimes
+        """
+        debit_et_credit_par_compte = {}
+        for cloture in clotures:
+            for ligne in self._lignes_du_fec(cloture):
+                numero_du_compte = ligne["CompteNum"]
+                debit, credit = debit_et_credit_par_compte.get(numero_du_compte, (0, 0))
+                debit += centimes_d_un_montant_du_fec(ligne["Debit"])
+                credit += centimes_d_un_montant_du_fec(ligne["Credit"])
+                debit_et_credit_par_compte[numero_du_compte] = (debit, credit)
+        return debit_et_credit_par_compte
+
+    def _debit_et_credit_par_compte_de_la_balance(self, balance):
+        """
+        Les lignes de la balance, sous la forme {numéro: (débit, crédit)}.
+        / The balance rows as {number: (debit, credit)}.
+        """
+        debit_et_credit_par_compte = {}
+        for ligne in balance["lignes"]:
+            debit_et_credit_par_compte[ligne["numero"]] = (
+                ligne["debit"],
+                ligne["credit"],
+            )
+        return debit_et_credit_par_compte
+
+    def _scenario_varie_sur_deux_journees(self):
+        """
+        Le scénario complet du test 19 le 10 mars (espèces, CB, chèque, Stripe avec
+        écarts, monnaie locale, jetons cadeau, offert, recharge, recharge offerte,
+        avoirs, correction de moyen, consigne, ventes en points, TVA 20 % et 5,5 %),
+        clôturé à 23 h ; puis un jus en CB le 11 mars, clôturé à 23 h.
+        / The full test 19 scenario on 10 March, then a card juice on 11 March.
+
+        :return: (J du 10 mars, J du 11 mars)
+        """
+        self._ventes_du_scenario_compare_au_z()
+        jetons_cadeau = self._monnaie(NOM_DES_JETONS_CADEAU, Asset.TNF)
+        points = self._monnaie(NOM_DES_POINTS, Asset.FID)
+        with self._heure_figee(MOMENT_DES_VENTES):
+            self._recharge_offerte(1000)
+            ligne_de_la_biere = self._biere_payee_en_jetons(jetons_cadeau)
+            self._avoir_par_le_bouton_de_l_admin(
+                ligne_de_la_biere, moyen_rembourse=None
+            )
+            self._vidage_avec_jetons_repris(jetons_cadeau, 200)
+            self._jus_offert_par_le_bouton_offrir()
+            self._vente_en_points(points)
+            self._recharge_offerte_en_points(points)
+            self._gobelet_consigne_vendu_puis_rendu()
+            self._billet_vendu_en_ligne_par_stripe(1000, ecart_en_centimes=-2)
+            self._adhesion_payee_par_cheque()
+        j_du_10_mars = self._cloturer_la_journee_a(MOMENT_DU_Z)
+
+        with self._heure_figee(heure_de_paris(2026, 3, 11, 18, 0)):
+            self._vendre_un_jus(PaymentMethod.CC)
+        j_du_11_mars = self._cloturer_la_journee_a(heure_de_paris(2026, 3, 11, 23, 0))
+        return j_du_10_mars, j_du_11_mars
+
+    def test_balance_egale_au_fec_compte_par_compte(self):
+        """
+        Pour une période, la balance = la somme par compte des débits et des crédits
+        du FEC des J datées dans la période, au centime près :
+        - le 10 mars seul : le FEC de la J du 10 ;
+        - du 10 au 11 mars : les FEC des deux J ;
+        - total débit = total crédit, et la balance le dit (`equilibree`).
+        Le scénario varié vient du test 19 (espèces, CB, Stripe, cashless monnaie
+        locale, jetons, offert, recharge, avoir, correction de moyen, deux taux de
+        TVA). Les valeurs attendues sont lues dans le FICHIER FEC, pas recalculées.
+        / The trial balance equals the FEC files' per-account sums, to the cent.
+        """
+        j_du_10_mars, j_du_11_mars = self._scenario_varie_sur_deux_journees()
+
+        balance_du_10 = balance_de_la_periode(date(2026, 3, 10), date(2026, 3, 10))
+        assert self._debit_et_credit_par_compte_de_la_balance(balance_du_10) == (
+            self._debit_et_credit_par_compte_des_fec([j_du_10_mars])
+        )
+        assert balance_du_10["nombre_de_clotures"] == 1
+
+        balance_du_10_au_11 = balance_de_la_periode(
+            date(2026, 3, 10), date(2026, 3, 11)
+        )
+        debit_et_credit_attendus = self._debit_et_credit_par_compte_des_fec(
+            [j_du_10_mars, j_du_11_mars]
+        )
+        assert self._debit_et_credit_par_compte_de_la_balance(balance_du_10_au_11) == (
+            debit_et_credit_attendus
+        )
+        assert balance_du_10_au_11["nombre_de_clotures"] == 2
+
+        # Deux taux de TVA et les comptes du scénario sont bien là (garde-fou : une
+        # balance vide serait aussi « égale » à un FEC vide).
+        # / Two VAT rates and the scenario accounts are there.
+        for numero_attendu in ["445711", "445713", "517100", "530000", "707900"]:
+            assert numero_attendu in debit_et_credit_attendus, numero_attendu
+
+        total_des_debits_du_fec = 0
+        total_des_credits_du_fec = 0
+        for debit, credit in debit_et_credit_attendus.values():
+            total_des_debits_du_fec += debit
+            total_des_credits_du_fec += credit
+        assert balance_du_10_au_11["total_debit"] == total_des_debits_du_fec
+        assert balance_du_10_au_11["total_credit"] == total_des_credits_du_fec
+        assert balance_du_10_au_11["total_debit"] == balance_du_10_au_11["total_credit"]
+        assert balance_du_10_au_11["equilibree"] is True
+
+        # Chaque solde est du bon côté : débit − crédit.
+        # / Each balance is on the right side.
+        for ligne in balance_du_10_au_11["lignes"]:
+            solde = ligne["debit"] - ligne["credit"]
+            assert ligne["solde_debiteur"] == max(solde, 0), ligne
+            assert ligne["solde_crediteur"] == max(-solde, 0), ligne
+
+    def test_balance_rangee_par_numero_et_par_famille(self):
+        """
+        Les lignes sont triées par numéro de compte, et groupées par famille (le
+        premier chiffre : 4, 5, 6, 7), dans l'ordre.
+        / Rows sorted by account number, grouped by family (first digit).
+        """
+        self._scenario_varie_sur_deux_journees()
+        balance = balance_de_la_periode(date(2026, 3, 1), date(2026, 3, 31))
+
+        numeros = []
+        for ligne in balance["lignes"]:
+            numeros.append(ligne["numero"])
+        assert numeros == sorted(numeros)
+
+        classes_des_familles = []
+        for famille in balance["familles"]:
+            classes_des_familles.append(famille["classe"])
+            for ligne in famille["lignes"]:
+                assert ligne["numero"].startswith(famille["classe"]), ligne
+        assert classes_des_familles == ["4", "5", "6", "7"]
+
+    def test_balance_vide_sans_journee_dans_la_periode(self):
+        """
+        Une période sans J datée dedans : aucune ligne, totaux à zéro, équilibrée.
+        Les ventes du 10 mars ne débordent ni sur le 9, ni sur le 12.
+        / A period without dated J: no row, zero totals.
+        """
+        self._scenario_varie_sur_deux_journees()
+        for premier_jour, dernier_jour in [
+            (date(2026, 3, 9), date(2026, 3, 9)),
+            (date(2026, 3, 12), date(2026, 3, 31)),
+        ]:
+            balance = balance_de_la_periode(premier_jour, dernier_jour)
+            assert balance["lignes"] == [], premier_jour
+            assert balance["total_debit"] == 0
+            assert balance["total_credit"] == 0
+            assert balance["equilibree"] is True
+            assert balance["nombre_de_clotures"] == 0
+
+    def test_balance_refusee_comme_le_fec(self):
+        """
+        Un produit sans compte : le FEC refuse (`CompteComptableManquant`), la balance
+        aussi, avec le MÊME message ; l'écran de la balance l'affiche, sans tableau.
+        / A product without account: the trial balance refuses like the FEC, with the
+        same message, shown on the screen.
+        """
+        tarif_de_la_planche = creer_tarif_vendu(
+            nom="Planche sans categorie",
+            prix_en_euros="8.00",
+            taux_tva="10.00",
+            methode_caisse=Product.VENTE,
+        )
+        with self._heure_figee(MOMENT_DES_VENTES):
+            vente = fabriquer_vente_encaissee(
+                origine=SaleOrigin.LABOUTIK,
+                articles=[
+                    {
+                        "pricesold": tarif_de_la_planche,
+                        "quantite": Decimal("1"),
+                        "prix_unitaire": 800,
+                        "taux_tva": Decimal("10"),
+                    },
+                ],
+                reglements=[{"moyen": PaymentMethod.CASH, "montant": 800}],
+            )
+            verifier_egalites(vente)
+        cloture = self._cloturer_la_journee_a(MOMENT_DU_Z)
+
+        with self.assertRaises(CompteComptableManquant) as refus_du_fec:
+            generer_fec_cloture(cloture)
+        with self.assertRaises(CompteComptableManquant) as refus_de_la_balance:
+            balance_de_la_periode(date(2026, 3, 10), date(2026, 3, 10))
+        assert str(refus_de_la_balance.exception) == str(refus_du_fec.exception)
+
+        navigateur = self._navigateur_d_un_admin_du_lieu_de_test()
+        reponse = navigateur.get(
+            "/admin/laboutik/comptecomptable/balance/?debut=2026-03-10&fin=2026-03-10",
+            HTTP_ACCEPT_LANGUAGE="fr",
+        )
+        assert reponse.status_code == 200
+        contenu = reponse.content.decode()
+        assert 'data-testid="balance-refus"' in contenu
+        assert "Planche sans categorie" in contenu
+        assert 'data-testid="balance-tableau"' not in contenu
+
+    def test_balance_nombre_de_requetes_independant_du_nombre_de_ventes(self):
+        """
+        Une J de 3 ventes et une J de 30 ventes, payées par les mêmes moyens, au même
+        taux : la balance de chaque journée coûte le même nombre de requêtes. Un
+        premier calcul, non compté, remplit les caches de Django.
+        / The trial balance query count does not grow with the number of sales.
+        """
+        monnaie_locale = self._monnaie(NOM_DE_LA_MONNAIE_LOCALE, Asset.TLF)
+        tarif_de_l_entree = creer_tarif_vendu(
+            nom="Entree",
+            prix_en_euros="3.50",
+            taux_tva="20.00",
+            categorie_article=Product.BILLET,
+        )
+        self._ventes_d_une_journee_payees_par_les_memes_moyens(
+            3, 10, tarif_de_l_entree, monnaie_locale
+        )
+        self._ventes_d_une_journee_payees_par_les_memes_moyens(
+            30, 11, tarif_de_l_entree, monnaie_locale
+        )
+        balance_de_la_periode(date(2026, 3, 10), date(2026, 3, 10))
+
+        with CaptureQueriesContext(connection) as requetes_pour_3_ventes:
+            balance_de_3_ventes = balance_de_la_periode(
+                date(2026, 3, 10), date(2026, 3, 10)
+            )
+        with CaptureQueriesContext(connection) as requetes_pour_30_ventes:
+            balance_de_30_ventes = balance_de_la_periode(
+                date(2026, 3, 11), date(2026, 3, 11)
+            )
+
+        assert balance_de_3_ventes["total_debit"] == 3 * 350
+        assert balance_de_30_ventes["total_debit"] == 30 * 350
+        assert len(requetes_pour_30_ventes.captured_queries) == len(
+            requetes_pour_3_ventes.captured_queries
+        )
+
+    def _navigateur_d_un_admin_du_lieu_de_test(self):
+        """
+        Un navigateur connecté avec un superadmin créé dans le lieu de test.
+        / A browser logged in as a superadmin created in the test venue.
+        """
+        email_de_l_administrateur = f"admin-{identifiant_unique()}@tibillet.localhost"
+        administrateur = TibilletUser.objects.create(
+            email=email_de_l_administrateur,
+            username=email_de_l_administrateur,
+            is_staff=True,
+            is_superuser=True,
+        )
+        navigateur = TenantClient(self.tenant)
+        navigateur.force_login(administrateur)
+        return navigateur
+
+    def test_ecran_de_la_balance_et_son_csv(self):
+        """
+        L'écran « Gérer » du plan comptable montre une ligne par compte de la balance,
+        le total débit = total crédit et le bouton du CSV. Le CSV (BOM, « ; ») porte
+        les mêmes montants, écrits à la française.
+        / The "Manage" screen shows one row per account, the totals and the CSV
+        button; the CSV carries the same amounts.
+        """
+        self._scenario_varie_sur_deux_journees()
+        balance = balance_de_la_periode(date(2026, 3, 10), date(2026, 3, 11))
+        navigateur = self._navigateur_d_un_admin_du_lieu_de_test()
+
+        reponse = navigateur.get(
+            "/admin/laboutik/comptecomptable/balance/?debut=2026-03-10&fin=2026-03-11",
+            HTTP_ACCEPT_LANGUAGE="fr",
+        )
+        assert reponse.status_code == 200
+        contenu = reponse.content.decode()
+        for ligne in balance["lignes"]:
+            assert f'data-testid="balance-compte-{ligne["numero"]}"' in contenu
+        assert 'data-testid="balance-equilibree"' in contenu
+        assert 'data-testid="balance-desequilibree"' not in contenu
+        assert balance["total_debit_affiche"] in contenu
+        assert 'data-testid="balance-telecharger-csv"' in contenu
+
+        reponse_du_csv = navigateur.get(
+            "/admin/laboutik/comptecomptable/balance/csv/?debut=2026-03-10&fin=2026-03-11",
+            HTTP_ACCEPT_LANGUAGE="fr",
+        )
+        assert reponse_du_csv.status_code == 200
+        assert reponse_du_csv["Content-Disposition"] == (
+            'attachment; filename="balance-20260310-20260311.csv"'
+        )
+        contenu_du_csv = reponse_du_csv.content
+        assert contenu_du_csv.startswith(b"\xef\xbb\xbf")
+        lignes_du_csv = contenu_du_csv.decode("utf-8-sig").splitlines()
+        lignes_des_comptes = {}
+        for ligne_du_csv in lignes_du_csv:
+            cellules = ligne_du_csv.split(";")
+            if cellules and cellules[0].isdigit():
+                lignes_des_comptes[cellules[0]] = cellules
+        assert set(lignes_des_comptes.keys()) == {
+            ligne["numero"] for ligne in balance["lignes"]
+        }
+        for ligne in balance["lignes"]:
+            assert lignes_des_comptes[ligne["numero"]][2] == ligne["debit_affiche"]
+            assert lignes_des_comptes[ligne["numero"]][3] == ligne["credit_affiche"]
