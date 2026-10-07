@@ -1,5 +1,5 @@
 {% extends base_template %}
-{% load tibitags i18n static pages_tags %}
+{% load tibitags i18n static pages_tags tz %}
 
 {% comment %}
 PAGE ÉVÉNEMENT — skin V2 (DA v1)
@@ -94,6 +94,53 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
         / Event JSON-LD built in Python (json.dumps), never hand-written.
     {% endcomment %}
     {% jsonld_event event %}
+
+    <script>
+    const ICS_FILE_LINES = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Tibillet//{{config.organisation}}//{{config.language}}",
+        "BEGIN:VEVENT",
+        "UID:{{event.pk}}",
+        {# Keep here if backup needed #}
+        {#"DTSTAMP;TZID={{ config.fuseau_horaire }}:{{ event.created|date:"Ymd" }}T{{ event.created|date:"His" }}",#}
+        {#"DTSTART;TZID={{ config.fuseau_horaire }}:{{ event.datetime|date:"Ymd" }}T{{ event.datetime|date:"His" }}",#}
+        {#{% if event.end_datetime %}#}
+        {#"DTEND;TZID={{ config.fuseau_horaire }}:{{ event.end_datetime|date:"Ymd" }}T{{ event.end_datetime|date:"His" }}",#}
+        "DTSTAMP:{{ event.created|utc|date:"Ymd\THis\Z" }}",
+        "DTSTART:{{ event.datetime|utc|date:"Ymd\THis\Z" }}",
+        {% if event.end_datetime %}
+        "DTEND:{{ event.end_datetime|utc|date:"Ymd\THis\Z" }}",
+        {# Y=year d=day(with 0) m=month(with 0)  #}
+        {# h=hour(with 0) i=minutes(with 0) s=secondes(with 0)  #}
+        {% endif %}
+        {# DTEND #}
+        "SUMMARY:{{event.name|escapejs}}",
+        "DESCRIPTION:{{event.short_description|default_if_none:event.long_description|escapejs }}",
+        "LOCATION:{{event.postal_address|escapejs}}",
+        "END:VEVENT",
+        "END:VCALENDAR",
+    ]
+
+    function download_ics() {
+        let ICS_FILE = ICS_FILE_LINES.join("\r\n") +"\r\n"
+        console.log(ICS_FILE)
+        download("{{event.name|escapejs}}.ics", ICS_FILE)
+    }
+
+    function download(filename, text) {
+        var element = document.createElement('a');
+        element.setAttribute('href', 'data:text/calendar;charset=utf-8,' + encodeURIComponent(text));
+        element.setAttribute('download', filename);
+
+        element.style.display = 'none';
+        document.body.appendChild(element);
+
+        element.click();
+
+        document.body.removeChild(element);
+    }
+    </script>
 {% endblock %}
 
 {% block main %}
@@ -169,6 +216,8 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
             {% block evenement_description %}
             {% if event.short_description %}
                 <p class="page-intro">{{ event.short_description }}</p>
+            {% else %}
+                <p class="page-intro">{{ event.long_description|safe }}</p>
             {% endif %}
             {% endblock evenement_description %}
 
@@ -217,12 +266,8 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
                 {% endif %}
                 {% endblock evenement_reservation %}
 
-                {% comment %} V2-HERE
-                Bouton « Ajouter à mon agenda » de la maquette : pas d'export .ics
-                par événement (point R7).
-                <a class="btn btn--outline" href="…">{% translate 'Ajouter à mon agenda' %}</a>
-                {% endcomment %}
             </div>
+            <a class="btn btn-secondary" onclick="download_ics()">{% translate 'Ajouter à mon agenda' %}</a>
         </div>
     </article>
     {% endblock evenement_entete %}

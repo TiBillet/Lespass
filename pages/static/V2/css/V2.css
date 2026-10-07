@@ -208,6 +208,10 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+:root{
+  --grad-fete:radial-gradient(120% 130% at 12% 8%, #e93363 0%, #ed4960 5%, #f05a5c 10%, #f26958 15%, #f27553 20%, #f1804e 25%, #ee8a4a 30%, #eb9245 35%, #e69a41 40%, #dfa03d 45%, #d8a53a 50%, #cfa938 55%, #c5ab37 60%, #b9ad37 65%, #acae38 70%, #9dae3a 75%, #8dad3c 80%, #7baa3f 85%, #65a742 90%, #4ca246 95%, #259d49 100%);
+}
+
 /* =================================================================
    PONT BOOTSTRAP ET BLOCS CMS
    / Bootstrap and CMS blocks bridge
@@ -1215,7 +1219,6 @@ img { max-width: 100%; display: block; }
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background-size: 220% 220% !important;
   border-radius: 999px;
   font-family: var(--font-display);
   font-weight: 900;
@@ -1227,6 +1230,7 @@ img { max-width: 100%; display: block; }
   text-align: center;
   color: #000000;
   padding: 12px 28px;
+  background-size: 220% 220% !important;
   background-position: 0% 0%;
   transition: background-position .35s ease, transform .08s ease;
 }
@@ -1249,16 +1253,32 @@ img { max-width: 100%; display: block; }
   z-index:-1;
   transition:opacity .2s ease,inset .2s ease;
 }
-/*
+
+.btn--grad__next_background{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  transition:opacity .35s ease;
+}
+.btn-wrap:hover .btn--grad__next_background,
+.btn-wrap:active .btn--grad__next_background{
+  opacity:1;
+}
+
 .btn-wrap:hover .btn--grad {
   background-position: 100% 100% !important;
+}
+
+.btn-wrap:active{
+  transform: translateY(1px);
+  background-position: 100% 100%;
 }
 .btn-wrap:hover::before {
   opacity: .4;
   inset: -2px;
 }
 
-*/
+
 .btn--grad .tcard__v{
   opacity: 0.2;
 }
@@ -1267,11 +1287,6 @@ img { max-width: 100%; display: block; }
 .btn--grad-content{
   z-index: 2;
 }
-
-/*.btn--grad::after        { !* volutes blanches, opacité 0,2 *! }*/
-/*.btn--grad-halo          { !* même dégradé, flou 8px : invisible au repos, 0,4 au survol (débord 2px), invisible à l'actif *! }*/
-/*.btn--grad:hover         { background-position: 100% 100%; !* glisse vers la couleur de fin + halo léger *! }*/
-/*.btn--grad:active        { transform: translateY(1px);   !* sans halo *! }*/
 
 /* Faire un don — la signature. Fond encre et liseré dégradé : voir .btn--signature.
    4px de plus en bas pour compenser le liseré et garder le libellé centré. */
@@ -1303,14 +1318,6 @@ img { max-width: 100%; display: block; }
    couche encre reprend toute la hauteur. / Same press, the 4px gradient edge
    retracts: the ink layer takes the full height. */
 .btn--signature:active:not(:disabled),
-.btn--grad-chaud:active:not(:disabled) {
-  background:
-    linear-gradient(var(--color-text), var(--color-text)) top / 100% 100% no-repeat border-box,
-    var(--grad-chaud) border-box;
-  color: var(--color-text-inverse);
-  transform: translateY(4px);
-  transition-duration: 60ms;
-}
 
 .icon-btn {
   width: 38px;
