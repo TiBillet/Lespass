@@ -386,6 +386,81 @@ cashless » (`dashboard.py`, l'ancien « Monnaies locales, temps et cashless » 
 
 ---
 
+## Session 15-5 — Bascule en un clic / One-click switch to V2
+
+**Quoi / What :** un lieu legacy passe **une fois**, de lui-même, au moteur V2 en allumant un
+module V2 (caisse, monnaie locale, kiosk, tireuse), si rien ne le retient sur l'ancien Fedow.
+Sept raisons le retiennent (`Customers/bascule_vers_v2.py`) : agenda partagé (`META`),
+LaBoutik V1, monnaie d'un autre lieu acceptée ou invitation (hors `FED`, `SUB`, `BDG`),
+monnaie propre (hors `SUB`, `BDG`), cartes NFC du lieu, recharge Stripe passée par l'ancien
+Fedow. Avec une raison : refus, le message et la fenêtre de confirmation listent les raisons,
+la carte du tableau de bord reste fermée et les affiche. Sans raison : la fenêtre annonce le
+passage au nouveau moteur, la carte est celle d'un lieu v2, et l'allumage bascule le lieu
+(`Client.moteur_monnaie = v2`) dans la même transaction que l'enregistrement du module.
+Jamais de retour en legacy.
+/ A legacy venue moves once to V2 by switching on a V2 module, unless something keeps it on
+the old Fedow (seven reasons). Reasons are listed in the refusal, the window and the card.
+
+**Pourquoi / Why :** décision 6 du mainteneur (spec 15 §2, §5.8) : livrée avant la bascule
+de production, pour que les lieux qui le peuvent passent au moteur V2 sans intervention. Sur
+la copie de production, la fonction des raisons donne **248 lieux qui peuvent basculer, 92
+qui ne le peuvent pas**.
+/ Maintainer decision 6: shipped before the production switch.
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `Customers/bascule_vers_v2.py` | **nouveau** : `raisons_qui_empechent_le_passage_en_v2(lieu)` (7 raisons, base seulement) et `raisons_qui_retiennent_le_lieu_courant()` (un `FakeTenant` ou le schéma public restent fermés) |
+| `Administration/admin_tenant.py` | `module_toggle` : refus seulement avec des raisons (message « pas encore disponible » + raisons + phrase de fin) ; sinon bascule + enregistrement dans une transaction, `logger.info` ; `module_toggle_modal` : raisons ou texte de bascule |
+| `Administration/templates/admin/dashboard_module_modal.html` | raisons sans bouton de confirmation ; texte de bascule (`data-testid` `module-modal-raisons-moteur-legacy`, `module-modal-passage-moteur-v2`) |
+| `Administration/admin/dashboard.py` | `_build_modules_context` : raisons calculées une fois par affichage ; cartes V2 fermées seulement avec des raisons (`raisons_moteur_legacy` remplace `message_moteur_legacy`) |
+| `Administration/templates/admin/partials/dashboard_module_card.html` | la carte fermée affiche les raisons à la place de la phrase fixe |
+| `tests/pytest/test_bascule_vers_v2.py` | **nouveau** : 16 tests (les 7 raisons, l'ordre, `module_toggle`, la transaction, la fenêtre, la carte) |
+| `tests/pytest/test_verrou_moteur_legacy.py` | tests des cartes fermées et du refus posés sur un lieu retenu (monnaie legacy ou cartes NFC) ; requêtes des assets legacy : 1 + un calcul des raisons |
+
+**Traductions / Translations :** 12 msgid nouveaux (français) à passer au workflow i18n
+(textes définitifs après 15-5-bis) : les 7 raisons (`Customers/bascule_vers_v2.py`, dont
+« Votre lieu a eu des échanges avec l'ancien moteur. »), « Ce module n'est pas encore
+disponible pour votre lieu : » et « Contactez l'équipe TiBillet pour lui indiquer que vous
+souhaitez faire une migration. » (`admin_tenant.py`, la fenêtre, la carte), « Module non
+disponible », « Pour activer ce module, votre lieu passe au nouveau moteur de monnaie de
+TiBillet. », « Vos événements, réservations et adhésions ne changent pas. » (fenêtre).
+
+**À savoir / Note :** sur une base de dev neuve, `festival` (legacy) n'a aucune raison : ses
+cartes V2 s'ouvrent, et allumer un de ses modules V2 le passe en v2 pour de bon (la
+vérification des moteurs de départ des E2E exige `festival` legacy).
+
+### Session 15-5-bis — corrections de la relecture / review fixes
+
+**Quoi / What :**
+- la transaction n'entoure l'enregistrement que pendant une bascule : sans bascule, l'échec
+  du SEPA garde l'enregistrement partiel de la méthode ; après l'échec d'une bascule, le
+  cache du singleton est vidé (`get_solo()` ne rend plus un module que la base n'a pas) ;
+- toute autre erreur pendant une bascule remet `connection.tenant` à legacy, puis remonte ;
+- double clic : la bascule est faite une seule fois (`update` filtré sur `legacy`, journal
+  seulement si une ligne change) et le bouton de confirmation se désactive au clic
+  (`hx-disabled-elt`) ;
+- aucun lien « Open POS / Open kiosk » pour un lieu encore legacy, retenu ou non ;
+- textes du mainteneur : raison 7 « Votre lieu a eu des échanges avec l'ancien moteur. »,
+  phrase de fin « Contactez l'équipe TiBillet pour lui indiquer que vous souhaitez faire une
+  migration. » (message, fenêtre, carte) ; la carte retenue reprend l'introduction ;
+- fenêtre avec raisons : titre « Module non disponible », un seul bouton « Fermer » ; boîte
+  de dialogue accessible (`role="dialog"`, `aria-modal`, `aria-labelledby`), raisons en
+  `role="alert"`.
+/ Review fixes: transaction only while switching, singleton cache cleared on failure,
+single switch on double click, no "Open" link for legacy venues, maintainer's wording,
+accessible dialog.
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `Administration/admin_tenant.py` | `module_toggle` : `atomic` seulement pendant la bascule, `clear_cache()` et remise à legacy sur échec, `update` filtré sur `legacy`, journal si une ligne change ; nouvelle phrase de fin |
+| `Administration/templates/admin/dashboard_module_modal.html` | `role="dialog"`, titre « Module non disponible », bouton « Fermer », `role="alert"`, `hx-disabled-elt` |
+| `Administration/admin/dashboard.py` | aucun lien d'ouverture V2 pour un lieu encore legacy (cartes génériques et caisse) |
+| `Administration/templates/admin/partials/dashboard_module_card.html` | introduction + raisons + phrase de fin |
+| `Customers/bascule_vers_v2.py` | texte de la raison 7 |
+| `tests/pytest/test_bascule_vers_v2.py` | 5 tests neufs (cache après échec, enregistrement partiel, autre erreur, double clic, liens d'ouverture, fenêtre accessible) ; tests 13 et 15 complétés |
+
+---
+
 ## Comment tester (à la main) / Manual test
 
 ### Test 1 — les moteurs des lieux de dev
@@ -479,3 +554,22 @@ Inviter `le-coeur-en-or` sur une monnaie de `lespass`, puis l'archiver. Chez
 archivée… » et l'invitation reste en attente.
 
 `make test ARGS="tests/pytest/test_cascade_sans_monnaie_archivee.py tests/pytest/test_verrou_moteur_legacy.py tests/pytest/test_controlvanne_review_fixes.py"`
+
+### Test 15 (15-5) — la bascule en un clic
+Les tests 4 et 8 valent désormais pour un lieu legacy **retenu** (une raison au moins).
+1. Lieu legacy retenu (ex. `festival` après le test B des E2E, fédéré à une monnaie de
+   `lespass`) : tableau de bord, les 4 cartes V2 sans interrupteur affichent la raison
+   (« Votre lieu accepte une monnaie partagée avec d'autres lieux. »), entre l'introduction et
+   la phrase de fin. Un POST direct sur
+   `/admin/BaseBillet/configuration/module-toggle/module_kiosk/` : toast « Ce module n'est
+   pas encore disponible pour votre lieu : … Contactez l'équipe TiBillet pour lui indiquer
+   que vous souhaitez faire une migration. », module éteint. Un GET direct sur
+   `/admin/BaseBillet/configuration/module-toggle-modal/module_kiosk/` : fenêtre « Module non
+   disponible », un seul bouton « Fermer ».
+2. Lieu legacy sans raison (à faire sur une base jetable : la bascule est définitive) :
+   interrupteur du kiosk → la fenêtre annonce « Pour activer ce module, votre lieu passe au
+   nouveau moteur de monnaie de TiBillet. … » ; confirmer → module allumé, et
+   `Client.objects.get(schema_name=…).moteur_monnaie == "v2"`. Le journal du serveur porte
+   « Bascule en un clic : le lieu … passe au moteur V2 en allumant module_kiosk ».
+
+`make test ARGS="tests/pytest/test_bascule_vers_v2.py tests/pytest/test_verrou_moteur_legacy.py"`

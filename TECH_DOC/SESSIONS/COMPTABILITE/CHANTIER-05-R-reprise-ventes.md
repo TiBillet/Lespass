@@ -362,10 +362,21 @@ soir, on bascule dans la nuit, on rouvre ensuite.
 **Avant la nuit** : copie de la production, R-0, répétition chronométrée de toute la
 nuit (I-12, Q-R15). `compter_avant` refait sur un dump le plus récent possible.
 
+**La veille (J-1), en production, en lecture seule** (relecture Fable du 2026-10-07, I-1) :
+`manage.py supprimer_lieux_inactifs --rapport <chemin hors dépôt>` (passage à blanc : aucune
+écriture, aucun mail). **C'est cette liste que le mainteneur valide** (pas celle de la copie,
+migrée et neutralisée). Elle devient le fichier `--liste` de l'étape 2 bis.
+
+**Le mainteneur est aux commandes toute la nuit** (2026-10-07) : il fait aussi la migration de
+serveur, avec changement d'IP dans le DNS, et décide seul d'un retour arrière (restauration de
+la sauvegarde de l'étape 2 bis et image de `main`).
+
 | # | Étape | Contrôle |
 |---|---|---|
 | 1 | Application entière coupée (ventes en ligne, admin, API) ; **worker ET beat Celery arrêtés** jusqu'à la J reprise du dernier lieu (I-11). Stripe rejoue ses webhooks jusqu'à 3 jours | une vente admin / API écrite avec le nouveau code bloquerait la reprise du lieu (garde §10) |
 | 2 | Postgres relancé avec `max_locks_per_transaction=512` (BUGS n°31) | |
+| 1 bis | **Image de la branche déployée avec `MIGRATE=0`**, site toujours coupé (Gunicorn non exposé) : `start.sh` ne doit lancer aucune migration (mainteneur, 2026-10-07 : il s'en occupe, `start.sh` passe aussi en migration un lieu après l'autre) | aucune ligne `migrate_schemas` dans le journal du conteneur |
+| 2 bis | **Sauvegarde complète** (`pg_dump -Fc`), puis **suppression des lieux inactifs** : `manage.py supprimer_lieux_inactifs --liste <liste de J-1 validée> --executer --rapport … --traces-externes …` (§18) ; rapports gardés hors dépôt ; puis **suppression des 2 schémas sans lieu** déjà présents en production (mainteneur, 2026-10-07 ; comptés le 2026-10-06 sur la copie) | domaines supprimés = liste validée moins les lieux redevenus actifs ; ensuite 0 schéma sans lieu et 0 lieu sans schéma |
 | 3 | **Avant les migrations** : `comptabilite_comptecomptable` et `comptabilite_mappingmoyendepaiement` ne contiennent **que le plan par défaut semé par `main:comptabilite/migrations/0002`** (9 comptes : 411000, 4457100, 4457200, 4457300, 511000, 512000, 530000, 706000, 756000, même jeu dans chaque lieu) ; ce plan est **supprimé et remplacé** par le plan de la branche, sans export (QO-11, mainteneur 2026-10-07) ; un autre compte dans un lieu → STOP. Aucun ancien plan de caisse (`41910000`…). **0 lieu de production avec un drapeau V2** (`compter_avant`, copie-prod §3.5), sinon STOP | `comptabilite 0005` supprime ces tables sans recopie ; `BaseBillet 0227` passerait ces lieux en moteur `v2` |
 | 4 | **Export JSON des anciennes clôtures** `comptabilite_cloturecaisse` hors base (B-1, Q-R16), **avant** les migrations (`comptabilite 0004` retire `hash_lignes`) | nombre exporté = nombre en base |
 | 5 | Capture de la fiche de l'asset CLAF et de `/fedow/asset/<uuid>/retrieve_bank_deposits/` (copie-prod §3.5, dernière case) ; aucun POST de remise en banque | |
@@ -488,7 +499,7 @@ Dump : `tibillet.re-M0221-2026-10-06-04-52.sql.gz` (grappe `pg_dumpall` ; base
 | # | Comptage | Pour la règle | Résultat |
 |---|---|---|---|
 | 1 | lieux (hors `public`), par catégorie ; lieux de production avec un drapeau V2 (`compter_avant`) ; lieux avec `server_cashless` renseigné | §12 étape 3 | **513 lieux** : 491 `S`, 20 `W` (pool), 1 `F`, 1 `M`. **0 lieu avec un drapeau V2 → OK.** `module_kiosk` absent des 513. `server_cashless` renseigné : 42 (41 `S`, 1 `F`). `module_federation` : 495 |
-| 2 | durée de `charger`, de `migrer` | §12 | `charger` : 2 769 s (46 min, dump texte en une transaction, `max_locks_per_transaction` = 4 096 sur la copie ; 512 n'a pas suffi). `migrer` : à remplir |
+| 2 | durée de `charger`, de `migrer` | §12 | `charger` : 2 769 s (46 min, dump texte en une transaction, `max_locks_per_transaction` = 4 096 sur la copie ; 512 n'a pas suffi). `migrer` : **11 637 s (3 h 14) un lieu après l'autre** (~23 s par lieu ; 7 lieux déjà migrés par les deux essais en parallèle, arrêtés sur interblocage) ; schéma public : 17 s. Journal : **0 ligne « moteur v2 (module V2 actif) »** |
 | 3 | lignes par statut × moyen × origine (`compter`) | §3, §5 | voir R-0 détail ci-dessous (tableau A) |
 | 4 | lignes par lieu : total, et les 5 plus gros volumes (nombres seulement) | durée | **23 465 lignes** dans **115 lieux** (2022-05-13 → 2026-10-06). 5 plus gros : 4 164, 2 597, 2 381, 1 304, 1 131 |
 | 5 | `Paiement_stripe` par statut, dont `R` et `N` ; `O` / `W` de moins de 30 jours (`order_date`) | §5.1 | `V` 11 305, `W` 4 698 (dont 167 de moins de 30 j), `R` 90, `E` 52, `P` 25. **Aucun `N`, `O`, `F`, `S`, `C`** |
@@ -507,9 +518,9 @@ Dump : `tibillet.re-M0221-2026-10-06-04-52.sql.gz` (grappe `pg_dumpall` ; base
 | 18 | lignes `O` (créées) hors Stripe, par origine et catégorie | §5.2 | 431, toutes catégorie `Q`, moyen `QR` (QR jamais payé, Q-R7) : origine `QR` 319, `LP` 112 |
 | 19 | anciennes clôtures `comptabilite_cloturecaisse` par niveau, par lieu (avant `migrer`) | B-1, §12 étape 4 | **74 239** : `J` 62 943 (513 lieux, 1 209 non nulles), `H` 9 022 (510 lieux, 532 non nulles), `M` 2 274 (505 lieux, 224 non nulles), aucune `A`. Du 2026-05-20 au 2026-10-06. **B-1 confirmé** (Q-R16 : export JSON puis suppression) |
 | 20 | `comptabilite_comptecomptable` et `comptabilite_mappingmoyendepaiement` non vides ; comptes à 7 chiffres | §12 étape 3 | **NON VIDES → STOP §12 étape 3 (QO-11)** : 4 617 comptes, 6 669 liens, dans les 513 lieux. C'est le **plan par défaut semé par `main:comptabilite/migrations/0002`** (`_seed_comptes_et_mappings`), **identique dans les 513 lieux** (même empreinte, tous actifs) : 411000, 4457100/200/300 (TVA, les seuls à 7 chiffres), 511000, 512000, 530000, 706000, 756000. **Pas d'ancien plan de caisse** (`41910000`) |
-| 21 | après `migrer` : lieux avec une `Vente` ou un `Reglement` (attendu 0) ; lieux sans clé d'empreinte (attendu 0) ; moteur par catégorie | §10 garde, §8 | à remplir |
+| 21 | après `migrer` : lieux avec une `Vente` ou un `Reglement` (attendu 0) ; lieux sans clé d'empreinte (attendu 0) ; moteur par catégorie | §10 garde, §8 | **0 lieu avec une vente ou un règlement ; 0 lieu sans clé d'empreinte.** Moteur : `legacy` pour `S` 491, `F` 1, `M` 1, `R` 1 ; `v2` pour les 20 `W`. Tables `fedow_core_*` à 0. Miroir `fedow_public` (235 monnaies, 44 fédérations, 2 invitations) et réseau CLAF (2 monnaies actives, 40 lieux) : **empreintes identiques avant / après**. Anciennes clôtures toujours là (74 239) : suppression à faire la nuit (étape 7) |
 | 22 | Σ `amount × qty` par statut (en euros, tous lieux) | §10 comparaison | `V` 375 740,43 € (17 834 l.), `U` 155 590,89 € (4 758), `O` 13 527,03 € (582), `P` 1 633,00 € (152), `F` 0 (1), `N` −175,00 € (33), `R` −3 459,00 € (105) |
-| 23 | mails captés par Mailpit (`compter`) | sécurité | à remplir |
+| 23 | mails captés par Mailpit (`compter`) | sécurité | **0** après `charger`, `neutraliser`, `migrer` |
 
 **R-0 détail — tableau A (lignes par statut × moyen × origine).** `F NA AP` 1 · `N` : `CA AD` 3, `CC AD` 1, `NA AD` 26, `SN AD` 2, `TR AD` 1 · `O` : vide `LP` 133, `QR LP` 112, `QR QR` 319, `SN LP` 18 · `P` : vide `LP` 23, `NA LP` 3, `SN LP` 126 · `R` : vide `LP` 8, `SN LP` 97 · `U` : vide `LP` 3 105, `SN AP` 1, `SN LP` 1 613, `SP LP` 39 · `V` : vide `LP` 1 680, `CA AD` 1 863, `CA LP` 93, `CC AD` 627, `CC LP` 36, `CH AD` 37, `CH LP` 2, `LE AD` 1, `LE LP` 221, `LE NF` 1 234, `LE QR` 554, `NA AD` 231, `NA LP` 804, `SF AD` 2, `SF LP` 1, `SF QR` 1, `SN AD` 1, `SN LP` 9 679, `SP LP` 69, `SR LP` 26, `SR WK` 228, `TR AD` 34, `UK LB` 410.
 
@@ -601,3 +612,88 @@ premier. Garder la date de l'avoir (numéro avant la vente) ou le dater comme sa
 **Tranchée (mainteneur, 2026-10-07)** : le plan par défaut de `main` (9 comptes semés par
 `main:comptabilite/migrations/0002`, identiques dans les 513 lieux) est **supprimé et
 remplacé** par le plan de la branche, sans export : « ça n'aurait jamais dû être en prod ».
+
+## 18. Supprimer les lieux sans aucune activité, avant la migration (session R-N)
+
+**Décision du mainteneur (2026-10-07)** : supprimer complètement, la nuit de la bascule, **juste
+avant `migrate_schemas`**, les lieux qui n'ont jamais eu aucune activité : leur schéma et leurs
+domaines. But : place en base et ~57 min de migration en moins (148 lieux sur la copie du
+2026-10-06 au passage réel de l'outil, ~23 s chacun ; la mesure SQL du jour disait 153). On **garde les utilisateurs** ; on ne supprime rien d'autre dans les
+tables partagées que ce qui appartient au lieu.
+
+**L'outil** : `manage.py supprimer_lieux_inactifs`, en **SQL brut** (`connection.cursor()`),
+jamais par les modèles : la nuit, le code est celui de la branche mais la base n'est pas encore
+migrée (`Client.moteur_monnaie` n'existe qu'après `Customers 0006`). `Client.delete()` est
+inutilisable sur ce projet (`tests/PIEGES.md`, piège 12.5).
+
+- **À blanc par défaut** ; `--executer` pour écrire. **Chaque lieu est désigné par son domaine
+  principal** (`Customers_domain.is_primary`), jamais par son nom ni son schéma (souvent un uuid).
+- **Rapport** : deux listes, affichées et écrites en CSV (`--rapport`) :
+  - **lieux supprimés** (à blanc : « à supprimer ») : domaine, date de création, raison ;
+  - **lieux gardés** : domaine, date de création, **toutes** les raisons qui les gardent.
+  Plus un CSV des **traces externes** des lieux supprimés (identifiant Stripe Connect, place Fedow)
+  pour un nettoyage plus tard, hors de cette nuit.
+- **Double vérification** : avec `--executer`, `--liste <fichier de domaines>` est obligatoire ; un
+  lieu n'est supprimé que s'il est **dans la liste validée par le mainteneur ET encore inactif** au
+  moment de l'exécution. Un lieu de la liste redevenu actif est gardé et signalé.
+- **Une transaction par lieu** : `DROP SCHEMA … CASCADE`, nettoyage des liens partagés, domaines,
+  ligne `Client`. Les clés étrangères sont vérifiées au `COMMIT` : une référence oubliée fait
+  échouer la transaction et **le schéma revient**.
+- Toutes les références vers le lieu sont **lues dans le catalogue** (`pg_constraint`, tous les
+  schémas), jamais dans une liste écrite à la main.
+
+**Un lieu est inactif si TOUT est vrai** (sinon il est gardé, avec la raison) :
+
+| # | Critère | Lecture |
+|---|---|---|
+| 1 | catégorie ni `W` (pool), ni `M` (meta), ni `R` (racine) | `Customers_client.categorie` |
+| 2 | créé il y a plus de `--jours-minimum` jours (défaut **60**) | `created_on` |
+| 3 | aucune activité : 0 ligne dans événements, lignes de vente, adhésions, paiements Stripe, réservations, billets, produits / prix vendus, `crowds_*`, transactions Fedow | schéma du lieu |
+| 4 | catalogue de l'onboarding seulement : au plus 1 produit, de catégorie réservation gratuite (`F`), tous ses prix à 0 ; au plus 1 adresse | schéma du lieu |
+| 5 | **aucune autre table non vide** que celles que la création d'un lieu ou les migrations remplissent seules (configurations uniques, TVA, jours, clôtures **à montant nul**, plan comptable par défaut, etc. : liste explicite dans l'outil, établie sur un lieu neuf) ; sur une base migrée, la page d'accueil créée par `BaseBillet 0225` est tolérée (au plus 1 page d'accueil, 3 blocs, 0 image : décision de l'orchestrateur, 2026-10-07) ; une table inconnue non vide → lieu gardé | schéma du lieu |
+| 6 | configuration jamais personnalisée : champs égaux aux **défauts du modèle**, sauf ceux que le formulaire de création remplit (nom, slug, email, descriptions, site, téléphone, Stripe Connect, adresse) ; donc aussi pas de LaBoutik V1, pas d'inscription Stripe terminée, pas de logo ni d'image | schéma du lieu |
+| 7 | rien dans les tables partagées qui montre une activité : monnaie Fedow (créée, fédérée, invitée), cartes NFC (`Detail.origine`), droits donnés (`create_event`, `initiate_payment`, `manage_crowd`), répertoires `MetaBillet`, appareils appairés, `fedow_core` | schéma public |
+| 8 | **cité par aucun autre lieu** (`FederatedPlace`, `configuration_federated_with`, fédérations `fedow_connect`, `artist_on_event`) | tous les schémas |
+
+**Ce que la suppression fait aux tables partagées** (défauts de l'orchestrateur, prudents, à
+confirmer) : utilisateurs **gardés** (`client_source` → vide, liens M2M du lieu retirés) ;
+**portefeuilles gardés** (`AuthBillet_wallet.origin` → vide, au lieu de la cascade) ; **fiche
+d'onboarding supprimée** (`MetaBillet_waitingconfiguration` : elle porte l'email et les
+coordonnées du demandeur, et le mail dit que les données du lieu sont supprimées) ; cache SEO
+et invitations d'onboarding du lieu supprimés.
+
+**Mail aux administrateurs** (mainteneur, 2026-10-07) : après la suppression **réussie** d'un
+lieu (dans `transaction.on_commit`, jamais si la transaction est annulée), chaque
+administrateur du lieu (`client_admin`, adresses lues **avant** la suppression) reçoit **un**
+mail, qui liste tous ses lieux supprimés. Envoi **en file Celery** (`.delay()`) : la nuit, le
+worker est arrêté, les mails partent à la réouverture. Option `--sans-mail` (répétition sur la
+copie, où le capteur Mailpit les compte de toute façon). Texte (à valider par le mainteneur) :
+
+> **Objet** : Votre espace TiBillet a été fermé
+>
+> Bonjour <adresse>, *(imposé par le gabarit générique du projet, accepté par le mainteneur)*
+>
+> Votre espace TiBillet **<domaine>**, ouvert le <date>, n'a jamais été utilisé : aucun
+> événement, aucune adhésion, aucune vente. Dans un souci de mutualisation, nous supprimons
+> les espaces non utilisés : nous l'avons fermé et nous avons supprimé ses données.
+>
+> Si vous souhaitez en ouvrir un nouveau, n'hésitez pas à retourner sur
+> https://tibillet.coop. Une nouvelle version de TiBillet arrive très bientôt.
+>
+> Vos données personnelles : votre compte TiBillet (votre adresse email) reste ouvert, car il
+> peut servir sur d'autres lieux. Pour le supprimer aussi, répondez simplement à ce message.
+> Conformément au RGPD, vous pouvez à tout moment demander l'accès à vos données, leur
+> correction ou leur suppression.
+>
+> Bien à vous,
+> L'équipe de la coopérative TiBillet
+
+*(Mainteneur, 2026-10-07 : gabarit générique `emails/email_generique.html` accepté ; phrase de
+mutualisation et lien https://tibillet.coop ajoutés. Plusieurs lieux : paragraphe au pluriel.)*
+
+**Preuve** : tests pytest, puis passage à blanc **et** exécution sur la copie de production
+(faits le 2026-10-07, sur une copie **déjà migrée et neutralisée** : 148 supprimés, 0 échec ;
+le critère LaBoutik V1 n'y est donc pas éprouvé, la revérification en prod le couvre) ; en R-4,
+l'outil tourne aussi **entre `neutraliser` et `migrer`** (base de `main`, comme la nuit) ;
+contrôles après : aucun schéma sans `Client` ni l'inverse, lieux restants inchangés, nombre
+d'utilisateurs inchangé, durée.

@@ -23,9 +23,11 @@ the demo choice by flag.
 
 RÈGLE MÉTIER TESTÉE (2e partie : le verrou côté serveur, tests 8 à 15)
 Spec §5.1, §5.3, §5.4, §5.6, §5.7, brief TECH_DOC/SESSIONS/FEDOW_IMPORT/briefs/15-2.md.
-- `module_toggle` : un lieu legacy ne peut pas ALLUMER un module V2 (caisse, monnaie
-  locale, kiosk, tireuse). Il peut toujours ÉTEINDRE un module V2 resté allumé en base
-  (décision Q2). Un lieu v2 bascule ses modules comme avant.
+- `module_toggle` : un lieu legacy RETENU sur l'ancien Fedow (spec §5.8) ne peut pas
+  ALLUMER un module V2 (caisse, monnaie locale, kiosk, tireuse). Il peut toujours
+  ÉTEINDRE un module V2 resté allumé en base (décision Q2). Un lieu v2 bascule ses
+  modules comme avant. Un lieu legacy sans raison passe en v2 en allumant un module V2 :
+  tests/pytest/test_bascule_vers_v2.py.
 - L'admin `fedow_core` (assets, tokens, transactions, fédérations) et ses routes
   personnalisées (accepter une invitation, exclure un membre) sont fermés à un lieu legacy.
 - Un lieu legacy n'est jamais proposé ni accepté dans une invitation V2
@@ -38,8 +40,9 @@ Spec §5.1, §5.3, §5.4, §5.6, §5.7, brief TECH_DOC/SESSIONS/FEDOW_IMPORT/bri
 RÈGLE MÉTIER TESTÉE (3e partie : l'affichage du verrou, tests 16 à 22)
 Spec §5.2, §5.5 (réécrite le 2026-10-06, décision Q1), §6, brief
 TECH_DOC/SESSIONS/FEDOW_IMPORT/briefs/15-3.md.
-- Tableau de bord : pour un lieu legacy, les cartes des 4 modules V2 (caisse, monnaie
-  locale, kiosk, tireuse) sont fermées (`carte["moteur_legacy"]`, la phrase du verrou, pas
+- Tableau de bord : pour un lieu legacy retenu sur l'ancien Fedow (spec §5.8), les cartes
+  des 4 modules V2 (caisse, monnaie locale, kiosk, tireuse) sont fermées
+  (`carte["moteur_legacy"]`, les raisons à la place de la phrase fixe du verrou, pas
   d'interrupteur). La carte caisse d'un lieu LaBoutik V1 garde son état `v1_active`.
   Un module V2 resté allumé en base garde un interrupteur, pour l'éteindre (décision Q2).
   La carte tireuse n'a pas de lien « Open kiosk ». Les cartes fermées ne comptent pas
@@ -86,8 +89,11 @@ CONTRAT SUPPOSÉ (ce que ces tests attendent du code)
   `moteur_de_monnaie_du_lieu_de_demo(fixture_du_lieu)`, qui rend `legacy` ou `v2`.
 - (3e partie) `Administration/admin/dashboard.py` : chaque carte fermée par le verrou
   porte `carte["moteur_legacy"] = True` ; le gabarit
-  `admin/partials/dashboard_module_card.html` affiche alors
-  `MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY` (`Customers/models.py`) ; l'élément
+  `admin/partials/dashboard_module_card.html` affiche alors les raisons qui retiennent
+  le lieu (`Customers/bascule_vers_v2.py`), à la place de
+  `MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY` (`Customers/models.py`) ;
+  `_build_modules_context(configuration)` se lit toujours avec la seule configuration ;
+  l'élément
   de menu des assets legacy pointe vers
   `staff_admin:fedow_public_assetfedowpublic_changelist` et son titre contient « legacy ».
 - (4e partie) `Onboard_laboutik` refuse un lieu v2 par une réponse 409
@@ -119,6 +125,7 @@ import contextlib
 import importlib
 import io
 import uuid
+from html import unescape as html_unescape
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -155,6 +162,7 @@ from fedow_core.models import Asset, Federation, Token
 from fedow_public.models import AssetFedowPublic
 from inventaire.views import DebitMetreViewSet, StockViewSet
 from kiosk.views import IsKioskTerminal
+from QrcodeCashless.models import Detail
 
 # Les deux valeurs du moteur, telles que la spec les fixe (§3).
 # Écrites en texte : le test les lit même quand les constantes du modèle n'existent pas.
@@ -866,10 +874,11 @@ class TestVerrouDuMoteurCoteServeur(FastTenantTestCase):
     #  8 — module_toggle : allumer un module V2 est refusé en legacy      #
     # ------------------------------------------------------------------ #
 
-    def test_module_toggle_refuse_d_allumer_un_module_v2_en_legacy(self):
+    def test_module_toggle_refuse_d_allumer_un_module_v2_en_legacy_avec_une_raison(self):
         """
-        Lieu legacy, les quatre modules V2 éteints. Pour chacun : la bascule est refusée
-        AVANT toute écriture (spec §5.1) :
+        Lieu legacy retenu sur l'ancien Fedow (ici par ses cartes NFC, `Detail.origine`),
+        les quatre modules V2 éteints. Pour chacun : l'allumage est refusé AVANT toute
+        écriture (spec §5.1, §5.8) :
         - les quatre drapeaux restent éteints (la caisse n'allume pas non plus la monnaie
           locale) ;
         - `save()` n'est jamais appelé ;
@@ -877,9 +886,20 @@ class TestVerrouDuMoteurCoteServeur(FastTenantTestCase):
           `HX-Refresh`).
         Même refus pour la caisse d'un lieu qui a un serveur LaBoutik V1
         (`server_cashless`) : l'interrupteur caché ne suffit pas, le POST direct est refusé.
-        / Legacy venue: switching ON any V2 module is refused before any write.
+        Un lieu legacy SANS raison bascule en v2 : test_bascule_vers_v2.py.
+        / Legacy venue held by a reason: switching ON any V2 module is refused before
+        any write.
         """
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
+
+        # Une raison qui retient le lieu : une génération de cartes NFC du lieu, créée
+        # dans la transaction du test (schéma public, jamais supprimée à la main).
+        # / A reason that holds the venue: an NFC card batch of the venue.
+        Detail.objects.create(
+            origine=self.tenant,
+            generation=1,
+            base_url=f"TEST-VERROU-{uuid.uuid4().hex[:8]}",
+        )
 
         cas_a_verifier = []
         for nom_du_module in DRAPEAUX_DES_MODULES_V2:
@@ -1696,6 +1716,17 @@ SLUGS_DES_SECTIONS_V2 = ["caisse", "terminaux", "inventaire", "tireuses", "kiosk
 SLUG_DE_LA_SECTION_MONNAIES = "monnaies"
 SLUG_DE_LA_SECTION_FEDERATION = "federation"
 
+# La raison qui retient un lieu legacy quand il a créé une monnaie legacy (spec §5.8,
+# raison 5). Une carte fermée par le verrou l'affiche à la place de la phrase fixe.
+# Écrite ici, jamais importée du code. / Reason 5 of §5.8, written here.
+RAISON_MONNAIE_PROPRE = "Votre lieu a sa propre monnaie sur Fedow."
+
+
+def texte_lisible_du_html(html_brut):
+    """Le HTML sans entités, espaces réduits : une phrase s'y cherche telle qu'elle
+    s'écrit. / HTML without entities and with collapsed whitespace."""
+    return " ".join(html_unescape(html_brut).split())
+
 
 def adresse_des_assets_legacy():
     """La liste de l'admin des assets legacy. / The legacy assets admin list."""
@@ -1724,8 +1755,13 @@ class TestAffichageDuVerrou(FastTenantTestCase):
       sauvegarde annulé à la fin de chaque cas, dans la transaction du test, annulée à
       son tour. Jamais un lieu de démo comme origine : le lieu dédié, ou la ligne `Client`
       du schéma public.
+    - Une carte V2 d'un lieu legacy n'est fermée que si quelque chose retient le lieu
+      sur l'ancien Fedow (spec §5.8, bascule en un clic). Les tests des
+      cartes fermées posent donc une raison : une monnaie legacy dont le lieu dédié est
+      l'origine (`un_asset_legacy_le_temps_du_bloc("origine")`, raison 5). Un lieu
+      legacy sans raison : test_bascule_vers_v2.py.
     / Engine set by update(); in-memory Configuration; legacy assets created in a
-    rolled-back savepoint.
+    rolled-back savepoint; closed-card tests set a reason (own legacy currency).
     """
 
     @classmethod
@@ -1884,57 +1920,67 @@ class TestAffichageDuVerrou(FastTenantTestCase):
 
     def test_cartes_v2_fermees_en_legacy(self):
         """
-        Tous les modules éteints (spec §5.2) :
-        - lieu legacy : les 4 cartes V2, carte caisse comprise, portent
-          `moteur_legacy`, n'ont pas d'interrupteur, et leur HTML montre la phrase du
-          verrou, sans interrupteur ni pastille « V1 active » ;
+        Tous les modules éteints (spec §5.2, §5.8) :
+        - lieu legacy retenu par sa monnaie legacy (raison 5) : les 4 cartes V2, carte
+          caisse comprise, portent `moteur_legacy`, n'ont pas d'interrupteur, et leur
+          HTML montre la raison à la place de la phrase fixe du verrou, sans
+          interrupteur ni pastille « V1 active » ;
         - lieu legacy avec un serveur LaBoutik V1 : la carte caisse reste `v1_active`
           (lien V1, pastille V1, pas la phrase du verrou) ; les 3 autres restent fermées ;
         - lieu v2 (témoin) : aucune carte fermée, 4 interrupteurs, pas de phrase.
-        / Legacy: the 4 V2 cards are closed (POS included, except v1_active); v2 unchanged.
+        / Legacy held by a reason: the 4 V2 cards are closed and show the reason (POS
+        included, except v1_active); v2 unchanged.
         """
         phrase_du_verrou = self.phrase_du_verrou_en_html()
         constats_faux = []
 
-        # Lieu legacy, aucun serveur V1. / Legacy venue, no V1 server.
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
-        cartes = self.cartes_par_module(self.configuration_en_memoire([]))
-        for nom_du_module in DRAPEAUX_DES_MODULES_V2:
-            carte = cartes[nom_du_module]
-            html = self.html_de_la_carte(carte)
-            if carte.get("moteur_legacy") is not True:
-                constats_faux.append(f"legacy, {nom_du_module} : pas de moteur_legacy")
-            if carte.get("montre_interrupteur"):
-                constats_faux.append(f"legacy, {nom_du_module} : interrupteur montré")
-            if phrase_du_verrou not in html:
-                constats_faux.append(f"legacy, {nom_du_module} : phrase absente du HTML")
-            if 'role="switch"' in html:
-                constats_faux.append(f"legacy, {nom_du_module} : interrupteur dans le HTML")
-            if "dashboard-card-pos-v1-badge" in html:
-                constats_faux.append(f"legacy, {nom_du_module} : pastille « V1 active »")
+        with self.un_asset_legacy_le_temps_du_bloc("origine"):
+            # Lieu legacy retenu, aucun serveur V1. / Legacy venue held, no V1 server.
+            cartes = self.cartes_par_module(self.configuration_en_memoire([]))
+            for nom_du_module in DRAPEAUX_DES_MODULES_V2:
+                carte = cartes[nom_du_module]
+                html = self.html_de_la_carte(carte)
+                texte = texte_lisible_du_html(html)
+                if carte.get("moteur_legacy") is not True:
+                    constats_faux.append(f"legacy, {nom_du_module} : pas de moteur_legacy")
+                if carte.get("montre_interrupteur"):
+                    constats_faux.append(f"legacy, {nom_du_module} : interrupteur montré")
+                if RAISON_MONNAIE_PROPRE not in texte:
+                    constats_faux.append(f"legacy, {nom_du_module} : raison absente du HTML")
+                if phrase_du_verrou in html:
+                    constats_faux.append(f"legacy, {nom_du_module} : phrase fixe affichée")
+                if 'role="switch"' in html:
+                    constats_faux.append(
+                        f"legacy, {nom_du_module} : interrupteur dans le HTML"
+                    )
+                if "dashboard-card-pos-v1-badge" in html:
+                    constats_faux.append(
+                        f"legacy, {nom_du_module} : pastille « V1 active »"
+                    )
 
-        # Lieu legacy avec LaBoutik V1. / Legacy venue with LaBoutik V1.
-        adresse_du_serveur_v1 = "https://laboutik-v1.example.org"
-        cartes = self.cartes_par_module(
-            self.configuration_en_memoire([], server_cashless=adresse_du_serveur_v1)
-        )
-        carte_caisse_v1 = cartes["module_caisse"]
-        html_caisse_v1 = self.html_de_la_carte(carte_caisse_v1)
-        if carte_caisse_v1.get("state") != "v1_active":
-            constats_faux.append(f"legacy V1, caisse : état {carte_caisse_v1.get('state')}")
-        if carte_caisse_v1.get("moteur_legacy"):
-            constats_faux.append("legacy V1, caisse : fermée par le verrou")
-        if carte_caisse_v1.get("montre_interrupteur"):
-            constats_faux.append("legacy V1, caisse : interrupteur montré")
-        if carte_caisse_v1.get("lien_externe") != adresse_du_serveur_v1:
-            constats_faux.append("legacy V1, caisse : lien V1 perdu")
-        if "dashboard-card-pos-v1-badge" not in html_caisse_v1:
-            constats_faux.append("legacy V1, caisse : pastille « V1 active » absente")
-        if phrase_du_verrou in html_caisse_v1:
-            constats_faux.append("legacy V1, caisse : phrase du verrou affichée")
-        for nom_du_module in ["module_monnaie_locale", "module_kiosk", "module_tireuse"]:
-            if cartes[nom_du_module].get("moteur_legacy") is not True:
-                constats_faux.append(f"legacy V1, {nom_du_module} : pas fermée")
+            # Lieu legacy avec LaBoutik V1. / Legacy venue with LaBoutik V1.
+            adresse_du_serveur_v1 = "https://laboutik-v1.example.org"
+            cartes = self.cartes_par_module(
+                self.configuration_en_memoire([], server_cashless=adresse_du_serveur_v1)
+            )
+            carte_caisse_v1 = cartes["module_caisse"]
+            html_caisse_v1 = self.html_de_la_carte(carte_caisse_v1)
+            if carte_caisse_v1.get("state") != "v1_active":
+                constats_faux.append(f"legacy V1, caisse : état {carte_caisse_v1.get('state')}")
+            if carte_caisse_v1.get("moteur_legacy"):
+                constats_faux.append("legacy V1, caisse : fermée par le verrou")
+            if carte_caisse_v1.get("montre_interrupteur"):
+                constats_faux.append("legacy V1, caisse : interrupteur montré")
+            if carte_caisse_v1.get("lien_externe") != adresse_du_serveur_v1:
+                constats_faux.append("legacy V1, caisse : lien V1 perdu")
+            if "dashboard-card-pos-v1-badge" not in html_caisse_v1:
+                constats_faux.append("legacy V1, caisse : pastille « V1 active » absente")
+            if phrase_du_verrou in html_caisse_v1:
+                constats_faux.append("legacy V1, caisse : phrase du verrou affichée")
+            for nom_du_module in ["module_monnaie_locale", "module_kiosk", "module_tireuse"]:
+                if cartes[nom_du_module].get("moteur_legacy") is not True:
+                    constats_faux.append(f"legacy V1, {nom_du_module} : pas fermée")
 
         # Lieu v2 (témoin). / v2 venue (control).
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_V2)
@@ -1959,15 +2005,17 @@ class TestAffichageDuVerrou(FastTenantTestCase):
 
     def test_module_v2_allume_en_legacy_garde_un_interrupteur_pour_eteindre(self):
         """
-        Lieu legacy dont les 4 modules V2 sont restés allumés en base (décision Q2 :
-        « interrupteur visible seulement pour éteindre ») : chaque carte montre un
-        interrupteur allumé (le serveur accepte l'extinction, test 9).
-        / Legacy venue with V2 modules still on: each card keeps a switch, set to on.
+        Lieu legacy retenu par sa monnaie legacy (carte fermée), dont les 4 modules V2
+        sont restés allumés en base (décision Q2 : « interrupteur visible seulement pour
+        éteindre ») : chaque carte montre un interrupteur allumé (le serveur accepte
+        l'extinction, test 9).
+        / Legacy venue held by a reason, V2 modules still on: each card keeps a switch.
         """
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
-        cartes = self.cartes_par_module(
-            self.configuration_en_memoire(DRAPEAUX_DES_MODULES_V2)
-        )
+        with self.un_asset_legacy_le_temps_du_bloc("origine"):
+            cartes = self.cartes_par_module(
+                self.configuration_en_memoire(DRAPEAUX_DES_MODULES_V2)
+            )
 
         constats_faux = []
         for nom_du_module in DRAPEAUX_DES_MODULES_V2:
@@ -1988,24 +2036,29 @@ class TestAffichageDuVerrou(FastTenantTestCase):
 
     def test_carte_tireuse_sans_open_kiosk_en_legacy(self):
         """
-        La carte tireuse d'un lieu legacy n'a pas de lien « Open kiosk », module éteint
-        ou resté allumé. Même chose pour « Open POS » sur une caisse V2 restée allumée :
-        la caisse V2 refuse un lieu legacy (test 13), le lien mènerait à un refus.
+        La carte tireuse d'un lieu legacy retenu (carte fermée) n'a pas de lien « Open
+        kiosk », module éteint ou resté allumé. Même chose pour « Open POS » sur une
+        caisse V2 restée allumée : la caisse V2 refuse un lieu legacy (test 13), le lien
+        mènerait à un refus.
         Lieu v2 (témoin) : la tireuse garde « Open kiosk », la caisse allumée « Open POS ».
-        / Legacy: no "Open kiosk" on the tap card, no "Open POS"; v2 keeps both.
+        / Legacy held by a reason: no "Open kiosk" on the tap card, no "Open POS"; v2
+        keeps both.
         """
         constats_faux = []
 
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
-        for modules_allumes in [[], DRAPEAUX_DES_MODULES_V2]:
-            cartes = self.cartes_par_module(
-                self.configuration_en_memoire(modules_allumes)
-            )
-            etat = "allumés" if modules_allumes else "éteints"
-            if cartes["module_tireuse"].get("lien_externe"):
-                constats_faux.append(f"legacy, modules {etat} : « Open kiosk » présent")
-            if cartes["module_caisse"].get("lien_externe"):
-                constats_faux.append(f"legacy, modules {etat} : « Open POS » présent")
+        with self.un_asset_legacy_le_temps_du_bloc("origine"):
+            for modules_allumes in [[], DRAPEAUX_DES_MODULES_V2]:
+                cartes = self.cartes_par_module(
+                    self.configuration_en_memoire(modules_allumes)
+                )
+                etat = "allumés" if modules_allumes else "éteints"
+                if cartes["module_tireuse"].get("lien_externe"):
+                    constats_faux.append(
+                        f"legacy, modules {etat} : « Open kiosk » présent"
+                    )
+                if cartes["module_caisse"].get("lien_externe"):
+                    constats_faux.append(f"legacy, modules {etat} : « Open POS » présent")
 
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_V2)
         cartes = self.cartes_par_module(
@@ -2021,10 +2074,11 @@ class TestAffichageDuVerrou(FastTenantTestCase):
     def test_compteur_des_cartes_eteintes_sans_les_cartes_fermees(self):
         """
         La pastille « Découvrir plus de modules » compte les modules éteints qu'on peut
-        allumer. Tous les modules éteints : en legacy, elle compte 4 de moins qu'en v2
-        (les 4 cartes fermées par le verrou ne s'allument pas). Lu dans le contexte du
-        tableau de bord (`dashboard_callback`).
-        / The "discover more" pill skips the 4 closed cards in legacy.
+        allumer. Tous les modules éteints : en legacy retenu par sa monnaie legacy, elle
+        compte 4 de moins qu'en v2 (les 4 cartes fermées par le verrou ne s'allument
+        pas). Lu dans le contexte du tableau de bord (`dashboard_callback`).
+        / The "discover more" pill skips the 4 closed cards of a legacy venue held by a
+        reason.
         """
         configuration = self.configuration_en_memoire([])
 
@@ -2037,7 +2091,8 @@ class TestAffichageDuVerrou(FastTenantTestCase):
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_V2)
         modules_eteints_en_v2 = modules_eteints_du_tableau_de_bord()
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
-        modules_eteints_en_legacy = modules_eteints_du_tableau_de_bord()
+        with self.un_asset_legacy_le_temps_du_bloc("origine"):
+            modules_eteints_en_legacy = modules_eteints_du_tableau_de_bord()
 
         assert modules_eteints_en_v2 - modules_eteints_en_legacy == 4, (
             f"v2 : {modules_eteints_en_v2}, legacy : {modules_eteints_en_legacy}"
@@ -2350,8 +2405,9 @@ class TestAffichageDuVerrou(FastTenantTestCase):
         """
         Tous les modules éteints. Les modules V2 en accès anticipé (BETA) ont un encart
         BETA sur leur carte : la caisse (carte `pos`) et la tireuse (carte générique).
-        - lieu legacy : leurs cartes sont fermées par le verrou ; aucune des 4 cartes V2
-          n'a d'encart BETA (ni `carte["beta"]`, ni le bloc dans le HTML) ;
+        - lieu legacy retenu par sa monnaie legacy : leurs cartes sont fermées par le
+          verrou ; aucune des 4 cartes V2 n'a d'encart BETA (ni `carte["beta"]`, ni le
+          bloc dans le HTML) ;
         - lieu v2 (témoin) : la caisse et la tireuse gardent leur encart BETA.
         / Legacy: no BETA notice on a closed card; v2: POS and tap keep theirs.
         """
@@ -2363,7 +2419,8 @@ class TestAffichageDuVerrou(FastTenantTestCase):
             return marqueur_de_l_encart in self.html_de_la_carte(carte)
 
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
-        cartes = self.cartes_par_module(self.configuration_en_memoire([]))
+        with self.un_asset_legacy_le_temps_du_bloc("origine"):
+            cartes = self.cartes_par_module(self.configuration_en_memoire([]))
         for nom_du_module in DRAPEAUX_DES_MODULES_V2:
             carte = cartes[nom_du_module]
             if carte.get("moteur_legacy") is not True:
@@ -2389,8 +2446,8 @@ class TestAffichageDuVerrou(FastTenantTestCase):
         """
         Tous les modules éteints, lu dans le contexte du tableau de bord
         (`dashboard_callback`) :
-        - lieu legacy : le domaine Laboutik (la caisse) et le domaine Lémachines (kiosk,
-          tireuse) affichent 0 / N, N = leurs cartes réelles (hors « bientôt
+        - lieu legacy retenu par sa monnaie legacy : le domaine Laboutik (la caisse) et le
+          domaine Lémachines (kiosk, tireuse) affichent 0 / N, N = leurs cartes réelles (hors « bientôt
           disponible »), comme en v2 : ces modules existent, même fermés ;
         - la pastille « Découvrir plus de modules » compte toujours 4 de moins en legacy
           qu'en v2 (les 4 cartes fermées ne s'allument pas).
@@ -2420,7 +2477,8 @@ class TestAffichageDuVerrou(FastTenantTestCase):
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_V2)
         contexte_v2 = contexte_du_tableau_de_bord()
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
-        contexte_legacy = contexte_du_tableau_de_bord()
+        with self.un_asset_legacy_le_temps_du_bloc("origine"):
+            contexte_legacy = contexte_du_tableau_de_bord()
 
         constats_faux = []
         groupes_legacy = groupes_par_cle(contexte_legacy)
@@ -2462,7 +2520,12 @@ class TestAffichageDuVerrou(FastTenantTestCase):
         le rail construisent les sections plusieurs fois par page, mais la requête « le
         lieu a des assets legacy » (table `fedow_public_assetfedowpublic`) n'est faite
         qu'une fois. On compte les requêtes SQL de la page qui lisent cette table.
-        / One admin page: the "has legacy assets" query runs once, not once per build.
+        Le tableau de bord d'un lieu legacy calcule aussi, une fois par affichage, les
+        raisons qui le retiennent sur l'ancien Fedow (spec §5.8), qui lisent la même
+        table : on compte les requêtes d'UN calcul des raisons, et la page doit en faire
+        exactement 1 + ce nombre.
+        / One admin page: the "has legacy assets" query runs once, plus exactly one
+        computation of the reasons.
         """
         administrateur_du_lieu = TibilletUser.objects.create(
             email=f"admin-requetes-{uuid.uuid4().hex[:12]}@tibillet.localhost",
@@ -2478,6 +2541,20 @@ class TestAffichageDuVerrou(FastTenantTestCase):
         self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
         configuration = self.configuration_en_memoire([])
 
+        # Les requêtes d'UN calcul des raisons, sur la même table, dans le même état.
+        # / The queries of ONE computation of the reasons, on the same table.
+        module_de_la_bascule = importlib.import_module("Customers.bascule_vers_v2")
+        lieu_relu_en_base = Client.objects.get(pk=self.tenant.pk)
+        with patch.object(Configuration, "get_solo", return_value=configuration):
+            with CaptureQueriesContext(connection) as requetes_d_un_calcul_des_raisons:
+                module_de_la_bascule.raisons_qui_empechent_le_passage_en_v2(
+                    lieu_relu_en_base
+                )
+        nombre_de_requetes_d_un_calcul_des_raisons = 0
+        for requete in requetes_d_un_calcul_des_raisons.captured_queries:
+            if "fedow_public_assetfedowpublic" in requete["sql"]:
+                nombre_de_requetes_d_un_calcul_des_raisons += 1
+
         with patch.object(Configuration, "get_solo", return_value=configuration):
             with patch.object(Configuration, "save", autospec=True):
                 with CaptureQueriesContext(connection) as requetes_de_la_page:
@@ -2489,7 +2566,9 @@ class TestAffichageDuVerrou(FastTenantTestCase):
             if "fedow_public_assetfedowpublic" in requete["sql"]:
                 requetes_des_assets_legacy.append(requete["sql"])
 
-        assert len(requetes_des_assets_legacy) == 1, (
-            f"{len(requetes_des_assets_legacy)} requêtes sur les assets legacy :\n"
+        nombre_attendu = 1 + nombre_de_requetes_d_un_calcul_des_raisons
+        assert len(requetes_des_assets_legacy) == nombre_attendu, (
+            f"{len(requetes_des_assets_legacy)} requêtes sur les assets legacy "
+            f"(attendu {nombre_attendu}) :\n"
             + "\n".join(requetes_des_assets_legacy)
         )

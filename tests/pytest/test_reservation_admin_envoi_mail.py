@@ -17,6 +17,7 @@ They become valid only through the FREERES -> FREERES_USERACTIV transition.
 
 Couvre :
 - le statut est en lecture seule sur la page de modification ;
+- aucun champ n'est modifiable sur la page de modification (dont user_commande) ;
 - résa FREERES : seul le bouton « Valider et envoyer par mail » est affiché ;
 - ce bouton active les billets et demande l'envoi du mail ;
 - un second clic sur « Valider et envoyer par mail » est refusé (403) ;
@@ -132,6 +133,32 @@ def test_statut_en_lecture_seule_sur_la_page_de_modification(
 
     assert reponse.status_code == 200
     assert 'name="status"' not in reponse.content.decode()
+
+
+def test_aucun_champ_modifiable_sur_la_page_de_modification(
+    admin_client, reservation_en_attente_du_mail
+):
+    # Aucun champ de la réservation n'est modifiable. Surtout pas user_commande :
+    # modifiable, il devient une liste déroulante de TOUS les utilisateurs de l'instance.
+    # / No booking field is editable. Above all user_commande: editable, it renders a
+    # select of every user of the instance.
+    reponse = admin_client.get(_url_page_modification(reservation_en_attente_du_mail))
+    contenu_de_la_page = reponse.content.decode()
+
+    assert reponse.status_code == 200
+    champs_qui_doivent_etre_en_lecture_seule = [
+        "user_commande",
+        "event",
+        "options",
+        "to_mail",
+        "mail_send",
+        "mail_error",
+    ]
+    for nom_du_champ in champs_qui_doivent_etre_en_lecture_seule:
+        assert f'name="{nom_du_champ}"' not in contenu_de_la_page, nom_du_champ
+    # L'email de l'acheteur reste affiché, en texte.
+    # / The buyer's email is still displayed, as text.
+    assert reservation_en_attente_du_mail.user_commande.email in contenu_de_la_page
 
 
 def test_resa_en_attente_du_mail_affiche_seulement_valider_et_envoyer(
