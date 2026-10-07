@@ -837,8 +837,9 @@ def generer_les_clotures_automatiques_du_lieu(schema_name):
 def generer_les_clotures_automatiques():
     """
     La tâche horaire de tous les lieux : une sous-tâche Celery par lieu (tous les
-    schémas sauf `public`).
-    / The hourly task of every venue: one Celery sub-task per venue.
+    schémas sauf `public` et sauf les emplacements vides `WAITING_CONFIG`).
+    / The hourly task of every venue: one Celery sub-task per venue (not `public`,
+    not the empty `WAITING_CONFIG` slots).
 
     LOCALISATION : comptabilite/tasks.py
 
@@ -851,8 +852,15 @@ def generer_les_clotures_automatiques():
     / One sub-task per venue: a slow or failing venue does not hold the others; a failed
     send is logged and the next ones go on.
     """
+    # Les emplacements vides (`WAITING_CONFIG`) n'ont aucune vente à clôturer. Leur
+    # schéma peut être vide ou en cours de migration par `cron_morning` : le lire
+    # pendant la migration provoque un interblocage PostgreSQL.
+    # / Empty slots have nothing to close; reading one while `cron_morning` migrates
+    # it causes a PostgreSQL deadlock.
     schemas_des_lieux = list(
-        Client.objects.exclude(schema_name="public").values_list("schema_name", flat=True)
+        Client.objects.exclude(schema_name="public")
+        .exclude(categorie=Client.WAITING_CONFIG)
+        .values_list("schema_name", flat=True)
     )
     for schema_name in schemas_des_lieux:
         try:

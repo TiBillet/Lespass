@@ -1997,54 +1997,67 @@ def membership_renewal_reminder():
     """
     Envoie d'un mail de renouvellement si l'adhésion arrive a expiration le lendemain
     """
-    for tenant in get_tenant_model().objects.exclude(schema_name='public'):
-        with tenant_context(tenant):
-            memberships = Membership.objects.filter(deadline__gte=timezone.now(),
-                                                    deadline__lte=timezone.now() + timezone.timedelta(days=1),
-                                                    price__recurring_payment=False, # on ne prend pas les adhésions avec paiement récurents
-                                                    )
+    # On saute les emplacements vides (`WAITING_CONFIG`) : ils n'ont aucune adhésion,
+    # et leur schéma peut être vide ou en cours de migration par `cron_morning`.
+    # / Skip the empty WAITING_CONFIG slots: no membership, schema maybe not migrated.
+    lieux_a_relancer = (
+        get_tenant_model().objects.exclude(schema_name='public')
+        .exclude(categorie=Client.WAITING_CONFIG)
+    )
+    for tenant in lieux_a_relancer:
+        # Un lieu en erreur est journalisé et n'empêche pas les rappels des lieux suivants.
+        # / A failing venue is logged and does not stop the next venues' reminders.
+        try:
+            with tenant_context(tenant):
+                memberships = Membership.objects.filter(deadline__gte=timezone.now(),
+                                                        deadline__lte=timezone.now() + timezone.timedelta(days=1),
+                                                        price__recurring_payment=False, # on ne prend pas les adhésions avec paiement récurents
+                                                        )
 
-            if memberships.exists():
-                count = memberships.count()
-                progress = 0
-                logger.info(f"membership_renewal_reminder : {count} memberships to renew - tenant :{tenant.schema_name}")
+                if memberships.exists():
+                    count = memberships.count()
+                    progress = 0
+                    logger.info(f"membership_renewal_reminder : {count} memberships to renew - tenant :{tenant.schema_name}")
 
-                for membership in memberships:
-                    progress += 1
-                    logger.info(f'    progress : {progress}/{count}')
+                    for membership in memberships:
+                        progress += 1
+                        logger.info(f'    progress : {progress}/{count}')
 
-                    config = Configuration.get_solo()
-                    user = membership.user
-                    if not user:
-                        logger.warning(f"membership_renewal_reminder : membership {membership.pk} has no user. Skipping.")
-                        continue
-                    email = user.email
+                        config = Configuration.get_solo()
+                        user = membership.user
+                        if not user:
+                            logger.warning(f"membership_renewal_reminder : membership {membership.pk} has no user. Skipping.")
+                            continue
+                        email = user.email
 
-                    context = {
-                        'title': _(f"Votre adhésion au collectif {config.organisation} arrive à expiration"),
-                        'membership': membership,
-                        'now': timezone.now(),
-                        'objet': _(f"Votre adhésion {config.organisation} arrive à expiration"),
-                        'image_url': "https://tibillet.coop/static/assets/logo-couleur.svg",
-                        'renewal_url': f"https://{tenant.get_primary_domain().domain}/memberships/"
-                    }
+                        context = {
+                            'title': _(f"Votre adhésion au collectif {config.organisation} arrive à expiration"),
+                            'membership': membership,
+                            'now': timezone.now(),
+                            'objet': _(f"Votre adhésion {config.organisation} arrive à expiration"),
+                            'image_url': "https://tibillet.coop/static/assets/logo-couleur.svg",
+                            'renewal_url': f"https://{tenant.get_primary_domain().domain}/memberships/"
+                        }
 
-                    # On ne sort JAMAIS de la boucle ici : chaque adhérent doit recevoir
-                    # sa relance. Une erreur sur un email ne bloque pas les suivants.
-                    # / Never return inside this loop: every member must get their
-                    # reminder. One failed email must not block the others.
-                    try:
-                        mail = CeleryMailerClass(
-                            email,
-                            f"{context.get('title')}",
-                            template="emails/membership_renewal_reminder.html",
-                            context=context,
-                        )
-                        mail.send()
-                        logger.info(f"membership_renewal_reminder : mail.sended : {mail.sended}")
-                    except Exception as e:
-                        logger.error(
-                            f"ERROR {timezone.now()} Erreur lors de l'envoi de membership_renewal_reminder à {email}: {e}")
+                        # On ne sort JAMAIS de la boucle ici : chaque adhérent doit recevoir
+                        # sa relance. Une erreur sur un email ne bloque pas les suivants.
+                        # / Never return inside this loop: every member must get their
+                        # reminder. One failed email must not block the others.
+                        try:
+                            mail = CeleryMailerClass(
+                                email,
+                                f"{context.get('title')}",
+                                template="emails/membership_renewal_reminder.html",
+                                context=context,
+                            )
+                            mail.send()
+                            logger.info(f"membership_renewal_reminder : mail.sended : {mail.sended}")
+                        except Exception as e:
+                            logger.error(
+                                f"ERROR {timezone.now()} Erreur lors de l'envoi de membership_renewal_reminder à {email}: {e}")
+        except Exception:
+            logger.exception(
+                f"membership_renewal_reminder : échec pour le lieu {tenant.schema_name}")
 
 
 @app.task

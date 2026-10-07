@@ -50,11 +50,14 @@ from laboutik.models import LaboutikConfiguration  # noqa: E402
 
 
 def _schemas_des_lieux():
-    """Tous les schémas sauf `public`. / Every schema except public."""
+    """
+    Tous les schémas sauf `public` et sauf les emplacements vides `WAITING_CONFIG`.
+    / Every schema except public and the empty WAITING_CONFIG slots.
+    """
     return set(
-        Client.objects.exclude(schema_name="public").values_list(
-            "schema_name", flat=True
-        )
+        Client.objects.exclude(schema_name="public")
+        .exclude(categorie=Client.WAITING_CONFIG)
+        .values_list("schema_name", flat=True)
     )
 
 
@@ -112,6 +115,38 @@ def test_cron_une_erreur_dans_un_lieu_est_journalisee_et_n_empeche_pas_les_autre
         schemas_tentes.add(appel.args[0])
     assert schemas_tentes == schemas_des_lieux
     assert schema_en_panne in caplog.text
+
+
+@pytest.mark.django_db
+def test_cron_ignore_les_emplacements_vides_waiting_config():
+    """
+    Un emplacement vide (`WAITING_CONFIG`) ne reçoit pas de sous-tâche de clôture :
+    il n'a aucune vente, et son schéma peut être en cours de migration par
+    `cron_morning` (le lire pendant la migration provoque un interblocage).
+    L'emplacement est une simple ligne `Client`, sans schéma PostgreSQL
+    (`auto_create_schema = False`), annulée avec la transaction du test.
+    / An empty WAITING_CONFIG slot gets no closure sub-task.
+    """
+    from TiBillet.celery import cron_clotures_automatiques
+
+    emplacement_vide = Client(
+        schema_name="test_emplacement_vide_cloture",
+        name="Test emplacement vide cloture",
+        categorie=Client.WAITING_CONFIG,
+    )
+    emplacement_vide.auto_create_schema = False
+    emplacement_vide.save()
+
+    with patch(
+        "comptabilite.tasks.generer_les_clotures_automatiques_du_lieu"
+    ) as sous_tache_simulee:
+        cron_clotures_automatiques()
+
+    schemas_envoyes = set()
+    for appel in sous_tache_simulee.delay.call_args_list:
+        schemas_envoyes.add(appel.args[0])
+    assert "test_emplacement_vide_cloture" not in schemas_envoyes
+    assert schemas_envoyes == _schemas_des_lieux()
 
 
 class TestEmailDeCloture(FastTenantTestCase):
