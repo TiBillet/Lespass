@@ -19,6 +19,8 @@ Recoit `carte`, deja entierement decidee par dashboard.py :
                          Fedow (verrou de moteur). Un lieu legacy sans raison n'a pas
                          ce drapeau : sa carte est celle d'un lieu v2 (bascule en un clic)
   raisons_moteur_legacy  les raisons qui retiennent le lieu, affichees sous la carte
+                         en liste, entre `introduction_moteur_legacy` et
+                         `phrase_de_fin_moteur_legacy` (Customers/models.py)
   allume ............... etat de l'interrupteur
   url_modale ........... la modale de confirmation
   testid_interrupteur .. identifiant de test de l'interrupteur
@@ -134,13 +136,16 @@ FLUX DU CLIC SUR L'INTERRUPTEUR :
     {# l'eteindre.                                                              #}
     {# / Legacy venue held by reasons: the V2 module is unavailable; say why.    #}
     {% if carte.moteur_legacy %}
-        <span class="tb-carte-note" data-testid="{{ carte.testid }}-moteur-legacy">
-            <span style="display:block">{% translate "Ce module n'est pas encore disponible pour votre lieu :" %}</span>
-            {% for raison in carte.raisons_moteur_legacy %}
-                <span style="display:block">{{ raison }}</span>
-            {% endfor %}
-            <span style="display:block">{% translate "Contactez l'équipe TiBillet pour lui indiquer que vous souhaitez faire une migration." %}</span>
-        </span>
+        <div class="tb-carte-note" data-testid="{{ carte.testid }}-moteur-legacy">
+            <span style="display:block">{{ carte.introduction_moteur_legacy }}</span>
+            <ul aria-label="{% translate 'Raisons qui retiennent votre lieu' %}"
+                style="list-style:disc;padding-left:1.25rem;margin:.25rem 0">
+                {% for raison in carte.raisons_moteur_legacy %}
+                    <li>{{ raison }}</li>
+                {% endfor %}
+            </ul>
+            <span style="display:block">{{ carte.phrase_de_fin_moteur_legacy }}</span>
+        </div>
     {% endif %}
 
     {% if carte.beta %}

@@ -105,6 +105,8 @@ TABLES_REMPLIES_SEULES = {
     # Migrations de données de BaseBillet (main et branche).
     # / BaseBillet data migrations.
     "BaseBillet_weekday": "jours de la semaine (BaseBillet 0086)",
+    # Les taux semés par main 0187 seulement ; un autre taux garde le lieu (vérifié plus bas).
+    # / Only the rates seeded by main 0187; another rate keeps the venue (checked below).
     "BaseBillet_tva": "taux de TVA par défaut (BaseBillet 0187)",
     "BaseBillet_categorieproduct": "catégorie « Financement participatif » (laboutik 0002)",
     # Singletons : une ligne écrite par l'onboarding, une migration, ou la première
@@ -138,6 +140,12 @@ TABLES_REMPLIES_SEULES = {
     # / Default home page created by BaseBillet 0225: 1 home page, at most 3 blocks.
     "pages_page": "page d'accueil par défaut (BaseBillet 0225)",
     "pages_bloc": "blocs de la page d'accueil par défaut (BaseBillet 0225)",
+    # Groupes de ressources par défaut : la migration booking 0003 crée dans chaque lieu
+    # 2 groupes, « Ressource » et « Espace », sans description ni image. Rien de plus n'est
+    # accepté (vérifié plus bas). Table de la branche seulement (booking n'est pas dans
+    # main).
+    # / Default resource groups seeded by booking 0003; nothing more is accepted.
+    "booking_resourcegroup": "groupes de ressources par défaut (booking 0003)",
 }
 
 # Les 9 comptes du plan par défaut semé par `main:comptabilite/migrations/0002`.
@@ -158,6 +166,16 @@ TABLES_DE_CLOTURES = ["comptabilite_cloturecaisse", "laboutik_cloturecaisse"]
 TABLE_DES_PAGES = "pages_page"
 TABLE_DES_BLOCS = "pages_bloc"
 NOMBRE_DE_BLOCS_DE_L_ACCUEIL_PAR_DEFAUT = 3
+
+# Les 6 taux semés par `main:BaseBillet/migrations/0187` (en texte, pour la requête).
+# / The 6 rates seeded by main's BaseBillet 0187.
+TABLE_DES_TAUX_DE_TVA = "BaseBillet_tva"
+TAUX_DE_TVA_SEMES_PAR_MAIN = ["0.00", "2.10", "5.50", "8.50", "10.00", "20.00"]
+
+# Les 2 groupes semés par `booking/migrations/0003_default_group`.
+# / The 2 groups seeded by booking 0003.
+TABLE_DES_GROUPES_DE_RESSOURCES = "booking_resourcegroup"
+GROUPES_DE_RESSOURCES_SEMES_PAR_BOOKING = ["Ressource", "Espace"]
 
 # --------------------------------------------------------------------------
 # Critère 6 : la configuration
@@ -196,6 +214,11 @@ NOMS_LISIBLES_DES_COLONNES = {
     "key_cashless": "LaBoutik V1",
     "stripe_payouts_enabled": "inscription Stripe terminée",
 }
+
+# L'habillage du site sur `main` : colonne `Configuration.skin`, défaut « reunion ».
+# / The site skin on main: Configuration.skin, default "reunion".
+COLONNE_DE_L_HABILLAGE_DE_MAIN = "skin"
+HABILLAGE_PAR_DEFAUT_DE_MAIN = "reunion"
 
 # Les réglages de newsletter et de formulaires : leur ligne est créée à la première lecture
 # (d'où leur place dans `TABLES_REMPLIES_SEULES`), mais une colonne remplie veut dire que
@@ -495,9 +518,15 @@ def raison_du_critere_1_categorie(lieu):
 
 def raison_du_critere_2_age(lieu, jours_minimum, aujourd_hui):
     """Critère 2 : créé il y a plus de N jours. / Criterion 2: older than N days."""
+    # « Plus de N jours » : un lieu créé il y a exactement N jours est encore gardé.
+    # / "More than N days": a venue created exactly N days ago is still kept.
     date_limite = aujourd_hui - timedelta(days=jours_minimum)
-    if lieu["date_de_creation"] > date_limite:
-        return [f"créé il y a moins de {jours_minimum} jours"]
+    if lieu["date_de_creation"] >= date_limite:
+        age_en_jours = (aujourd_hui - lieu["date_de_creation"]).days
+        return [
+            f"créé il y a moins de {jours_minimum} jours "
+            f"(âge : {age_en_jours} jours ; il en faut plus de {jours_minimum})"
+        ]
     return []
 
 
@@ -618,6 +647,24 @@ def raisons_du_critere_5_tables_non_vides(curseur, nom_du_schema, tables_non_vid
                     f"table non vide : {nom_de_la_table} (comptes ajoutés au plan par défaut)"
                 )
 
+        # Les taux de TVA ne sont acceptés que s'ils sont tous semés par main 0187.
+        # / VAT rates are accepted only if all seeded by main 0187.
+        if nom_de_la_table == TABLE_DES_TAUX_DE_TVA:
+            curseur.execute(
+                f"SELECT count(*) FROM {nom_complet(nom_du_schema, nom_de_la_table)} "
+                f"WHERE NOT (tva_rate = ANY(%s::numeric[]))",
+                [TAUX_DE_TVA_SEMES_PAR_MAIN],
+            )
+            if curseur.fetchone()[0] > 0:
+                raisons.append(f"table non vide : {nom_de_la_table} (taux ajoutés)")
+
+        # Les groupes de ressources ne sont acceptés que s'ils sont ceux de booking 0003 :
+        # au plus 2, avec leur nom, sans description ni image.
+        # / Resource groups are accepted only as seeded by booking 0003.
+        if nom_de_la_table == TABLE_DES_GROUPES_DE_RESSOURCES:
+            if groupes_de_ressources_ajoutes(curseur, nom_du_schema):
+                raisons.append(f"table non vide : {nom_de_la_table} (groupes ajoutés)")
+
         # Les pages ne sont acceptées que si elles se réduisent à UNE page d'accueil.
         # / Pages are accepted only if there is exactly ONE home page.
         if nom_de_la_table == TABLE_DES_PAGES:
@@ -696,6 +743,40 @@ def raisons_du_critere_6_services_branches(curseur, nom_du_schema, tables_non_vi
     return raisons
 
 
+def groupes_de_ressources_ajoutes(curseur, nom_du_schema):
+    """
+    Vrai si les groupes de ressources du lieu ne sont plus exactement ceux semés par
+    `booking 0003` : plus de 2 lignes, un autre nom, ou une description ou une image
+    remplie. Une colonne absente est sautée.
+    / True if the resource groups differ from those seeded by booking 0003.
+    """
+    nombre_de_groupes = compter_les_lignes(
+        curseur, nom_du_schema, TABLE_DES_GROUPES_DE_RESSOURCES
+    )
+    if nombre_de_groupes > len(GROUPES_DE_RESSOURCES_SEMES_PAR_BOOKING):
+        return True
+
+    colonnes = colonnes_de_la_table(
+        curseur, nom_du_schema, TABLE_DES_GROUPES_DE_RESSOURCES
+    )
+    conditions_d_un_groupe_modifie = ["NOT (name = ANY(%s))"]
+    for nom_de_la_colonne in ["description", "image"]:
+        if nom_de_la_colonne in colonnes:
+            conditions_d_un_groupe_modifie.append(
+                f"({nom_sql(nom_de_la_colonne)} IS NOT NULL "
+                f"AND {nom_sql(nom_de_la_colonne)} <> '')"
+            )
+    # Compte les groupes qui ont un autre nom, ou une description ou une image.
+    # / Counts the groups with another name, or a description or an image.
+    curseur.execute(
+        f"SELECT count(*) FROM "
+        f"{nom_complet(nom_du_schema, TABLE_DES_GROUPES_DE_RESSOURCES)} "
+        f"WHERE " + " OR ".join(conditions_d_un_groupe_modifie),
+        [GROUPES_DE_RESSOURCES_SEMES_PAR_BOOKING],
+    )
+    return curseur.fetchone()[0] > 0
+
+
 def valeur_normalisee(valeur):
     """Vide (None ou texte vide) devient None. / Empty becomes None."""
     if valeur is None or valeur == "":
@@ -744,6 +825,16 @@ def raisons_du_critere_6_configuration(curseur, nom_du_schema, tables_non_vides)
         )
         if nom_lisible not in noms_des_champs_personnalises:
             noms_des_champs_personnalises.append(nom_lisible)
+
+    # La colonne `skin` n'existe que sur `main` (la migration 0226 de la branche la retire) :
+    # elle n'est donc pas dans `Configuration._meta`, son défaut est écrit ici.
+    # / The `skin` column only exists on main (removed by the branch's 0226).
+    if COLONNE_DE_L_HABILLAGE_DE_MAIN in valeur_par_colonne:
+        habillage = valeur_normalisee(
+            valeur_par_colonne[COLONNE_DE_L_HABILLAGE_DE_MAIN]
+        )
+        if habillage is not None and habillage != HABILLAGE_PAR_DEFAUT_DE_MAIN:
+            noms_des_champs_personnalises.append("habillage (skin)")
 
     if noms_des_champs_personnalises:
         return [
@@ -797,12 +888,10 @@ def raisons_des_criteres_7_et_8_et_des_references_inconnues(
                 continue
         else:
             if cle in REFERENCES_D_UN_AUTRE_LIEU:
-                domaine_de_l_autre_lieu = domaine_par_schema.get(nom_du_schema)
-                if domaine_de_l_autre_lieu is None:
-                    domaine_de_l_autre_lieu = "lieu sans domaine principal"
-                raisons.append(
-                    f"cité par un autre lieu : {domaine_de_l_autre_lieu} ({nom_de_la_table})"
+                nom_lisible = nom_lisible_d_une_table(
+                    nom_du_schema, nom_de_la_table, domaine_par_schema
                 )
+                raisons.append(f"cité par un autre lieu : {nom_lisible}")
                 continue
 
         nom_lisible = nom_lisible_d_une_table(

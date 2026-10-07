@@ -164,7 +164,9 @@ from BaseBillet.services_vente import (
 )
 from Customers.bascule_vers_v2 import raisons_qui_retiennent_le_lieu_courant
 from Customers.models import (
+    INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY,
     MODULES_V2_FERMES_AUX_LIEUX_LEGACY,
+    PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY,
     Client,
     lieu_en_moteur_legacy,
 )
@@ -622,6 +624,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 "toggle_url": toggle_url,
                 "csrf_token": request.META.get("CSRF_COOKIE", ""),
                 "raisons_qui_retiennent_le_lieu": raisons_qui_retiennent_le_lieu,
+                "introduction_des_raisons": INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY,
+                "phrase_de_fin_des_raisons": PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY,
                 "passage_au_moteur_v2_annonce": passage_au_moteur_v2_annonce,
             },
             request=request,
@@ -666,14 +670,10 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         if bascule_vers_v2_demandee:
             raisons_qui_retiennent_le_lieu = raisons_qui_retiennent_le_lieu_courant()
             if raisons_qui_retiennent_le_lieu:
-                phrases_du_message = [
-                    str(_("Ce module n'est pas encore disponible pour votre lieu :"))
-                ]
+                phrases_du_message = [str(INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY)]
                 for raison in raisons_qui_retiennent_le_lieu:
                     phrases_du_message.append(str(raison))
-                phrases_du_message.append(
-                    str(_("Contactez l'équipe TiBillet pour lui indiquer que vous souhaitez faire une migration."))
-                )
+                phrases_du_message.append(str(PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY))
                 messages.add_message(request, messages.ERROR, " ".join(phrases_du_message))
                 response = HttpResponse("")
                 response["HX-Refresh"] = "true"
@@ -715,19 +715,24 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         # - Le `filter(moteur_monnaie=LEGACY)` rend la bascule unique : un double clic
         #   envoie deux POST ; le second ne trouve plus de ligne legacy, il ne journalise
         #   rien.
+        # - ORDRE dans la transaction : `save()` D'ABORD, puis l'`update` de la ligne du
+        #   lieu. `save()` peut interroger Stripe (capacite SEPA) avant d'ecrire : fait en
+        #   premier, cet appel reseau ne tient aucun verrou. L'`update` verrouille la ligne
+        #   `Customers_client` du lieu jusqu'a la validation : il vient en dernier.
         # / Transaction only while switching; on failure clear the singleton cache and
-        # / reset the tenant; the LEGACY filter makes the switch happen once.
+        # / reset the tenant; the LEGACY filter makes the switch happen once; save()
+        # / (which may call Stripe) runs before the Client row is locked.
         lieu_courant = connection.tenant
         if bascule_vers_v2_demandee:
             nombre_de_lieux_bascules = 0
             try:
                 with db_transaction.atomic():
+                    configuration.save()
                     nombre_de_lieux_bascules = Client.objects.filter(
                         pk=lieu_courant.pk,
                         moteur_monnaie=Client.MOTEUR_LEGACY,
                     ).update(moteur_monnaie=Client.MOTEUR_V2)
                     lieu_courant.moteur_monnaie = Client.MOTEUR_V2
-                    configuration.save()
             except ValidationError as e:
                 lieu_courant.moteur_monnaie = Client.MOTEUR_LEGACY
                 Configuration.clear_cache()

@@ -49,6 +49,7 @@ Le lieu est toujours désigné par son domaine principal, jamais par son schéma
 
 import csv
 import time
+from functools import partial
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
@@ -277,6 +278,7 @@ class Command(BaseCommand):
                 lieu["liste"] = LISTE_GARDE
                 lieu["raisons"] = []
                 lieu["traces_externes"] = None
+                lieu["administrateurs"] = []
                 try:
                     lieu["raisons"] = nettoyage_des_lieux.raisons_qui_gardent_le_lieu(
                         curseur,
@@ -290,6 +292,11 @@ class Command(BaseCommand):
                         lieu["traces_externes"] = (
                             nettoyage_des_lieux.lire_les_traces_externes(
                                 curseur, lieu["nom_du_schema"]
+                            )
+                        )
+                        lieu["administrateurs"] = (
+                            nettoyage_des_lieux.lire_les_adresses_des_administrateurs(
+                                curseur, lieu["uuid"]
                             )
                         )
                 except Exception as erreur:
@@ -322,12 +329,6 @@ class Command(BaseCommand):
             "date_de_creation": lieu["date_de_creation"],
         }
 
-        def noter_la_suppression_apres_le_commit(adresses_des_administrateurs):
-            for adresse in adresses_des_administrateurs:
-                if adresse not in lieux_supprimes_par_adresse:
-                    lieux_supprimes_par_adresse[adresse] = []
-                lieux_supprimes_par_adresse[adresse].append(lieu_supprime)
-
         try:
             with transaction.atomic():
                 with connection.cursor() as curseur:
@@ -341,6 +342,7 @@ class Command(BaseCommand):
                             curseur, uuid_du_lieu
                         )
                     )
+                    lieu["administrateurs"] = adresses_des_administrateurs
 
                     curseur.execute(f"DROP SCHEMA {nom_sql(nom_du_schema)} CASCADE")
                     nettoyer_les_liens_partages(curseur, uuid_du_lieu)
@@ -368,8 +370,11 @@ class Command(BaseCommand):
                         )
 
                 transaction.on_commit(
-                    lambda: noter_la_suppression_apres_le_commit(
-                        adresses_des_administrateurs
+                    partial(
+                        noter_la_suppression_apres_le_commit,
+                        lieux_supprimes_par_adresse,
+                        adresses_des_administrateurs,
+                        lieu_supprime,
                     )
                 )
             lieu["liste"] = LISTE_SUPPRIME
@@ -455,13 +460,22 @@ class Command(BaseCommand):
     def ecrire_les_traces_externes(self, chemin_des_traces, lieux_examines):
         """
         Les traces externes des lieux supprimés (à blanc : à supprimer), pour un nettoyage
-        plus tard chez Stripe et Fedow.
-        / External traces of deleted (or to-delete) venues, for a later cleanup.
+        plus tard chez Stripe et Fedow. La colonne `administrateurs` garde « qui prévenir »
+        si la file des mails est perdue : ce fichier contient des adresses, il reste hors du
+        dépôt.
+        / External traces of deleted (or to-delete) venues, with the admins' addresses
+        (personal data: keep the file out of the repository).
         """
         with open(chemin_des_traces, "w", encoding="utf-8", newline="") as fichier:
             ecrivain = csv.writer(fichier)
             ecrivain.writerow(
-                ["domaine", "stripe_connect", "stripe_connect_test", "place_fedow"]
+                [
+                    "domaine",
+                    "stripe_connect",
+                    "stripe_connect_test",
+                    "place_fedow",
+                    "administrateurs",
+                ]
             )
             for lieu in lieux_examines:
                 if lieu["liste"] not in [LISTE_SUPPRIME, LISTE_A_SUPPRIMER]:
@@ -473,6 +487,7 @@ class Command(BaseCommand):
                         traces["stripe_connect"],
                         traces["stripe_connect_test"],
                         traces["place_fedow"],
+                        " ; ".join(lieu["administrateurs"]),
                     ]
                 )
 
@@ -496,18 +511,35 @@ class Command(BaseCommand):
         for lieu in lieux_examines:
             nombre_par_liste[lieu["liste"]] += 1
 
+        liste_des_lieux_retires = LISTE_A_SUPPRIMER
+        if executer:
+            liste_des_lieux_retires = LISTE_SUPPRIME
+        nombre_de_lieux_retires_sans_administrateur = 0
+        for lieu in lieux_examines:
+            if lieu["liste"] == liste_des_lieux_retires and not lieu["administrateurs"]:
+                nombre_de_lieux_retires_sans_administrateur += 1
+
         if executer:
             ligne_des_suppressions = (
                 f"{nombre_par_liste[LISTE_SUPPRIME]} lieux supprimés"
+            )
+            ligne_des_lieux_sans_administrateur = (
+                f"{nombre_de_lieux_retires_sans_administrateur} lieux supprimés "
+                f"sans administrateur (aucun mail)"
             )
         else:
             ligne_des_suppressions = (
                 f"{nombre_par_liste[LISTE_A_SUPPRIMER]} lieux à supprimer (à blanc)"
             )
+            ligne_des_lieux_sans_administrateur = (
+                f"{nombre_de_lieux_retires_sans_administrateur} lieux à supprimer "
+                f"sans administrateur (aucun mail)"
+            )
 
         self.stdout.write("\nRésumé :")
         self.stdout.write(f"  {len(lieux_examines)} lieux examinés")
         self.stdout.write(f"  {ligne_des_suppressions}")
+        self.stdout.write(f"  {ligne_des_lieux_sans_administrateur}")
         self.stdout.write(f"  {nombre_par_liste[LISTE_GARDE]} lieux gardés")
         self.stdout.write(f"  {nombre_par_liste[LISTE_ECHEC]} lieux en échec")
         self.stdout.write(
@@ -525,6 +557,21 @@ class Command(BaseCommand):
 # Outils de la suppression
 # / Deletion helpers
 # --------------------------------------------------------------------------
+
+
+def noter_la_suppression_apres_le_commit(
+    lieux_supprimes_par_adresse, adresses_des_administrateurs, lieu_supprime
+):
+    """
+    Appelée par `transaction.on_commit`, donc seulement si la suppression du lieu est
+    validée : ajoute le lieu à la liste de chacun de ses administrateurs. Les mails
+    partent une fois tous les lieux traités.
+    / Called on commit only: adds the venue to each of its administrators' list.
+    """
+    for adresse in adresses_des_administrateurs:
+        if adresse not in lieux_supprimes_par_adresse:
+            lieux_supprimes_par_adresse[adresse] = []
+        lieux_supprimes_par_adresse[adresse].append(lieu_supprime)
 
 
 def nettoyer_les_liens_partages(curseur, uuid_du_lieu):

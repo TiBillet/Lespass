@@ -23,13 +23,14 @@
         {# / Engine lock: the reasons replace the question; no confirm button below.   #}
         <div data-testid="module-modal-raisons-moteur-legacy" role="alert"
              style="font-size:.875rem;color:var(--color-base-700,#374151);margin-bottom:1.5rem">
-            <p style="margin-bottom:.5rem">{% translate "Ce module n'est pas encore disponible pour votre lieu :" %}</p>
-            <ul style="list-style:disc;padding-left:1.25rem;margin-bottom:.5rem">
+            <p style="margin-bottom:.5rem">{{ introduction_des_raisons }}</p>
+            <ul aria-label="{% translate 'Raisons qui retiennent votre lieu' %}"
+                style="list-style:disc;padding-left:1.25rem;margin-bottom:.5rem">
                 {% for raison in raisons_qui_retiennent_le_lieu %}
                     <li>{{ raison }}</li>
                 {% endfor %}
             </ul>
-            <p>{% translate "Contactez l'équipe TiBillet pour lui indiquer que vous souhaitez faire une migration." %}</p>
+            <p>{{ phrase_de_fin_des_raisons }}</p>
         </div>
         {% else %}
         <p style="font-size:.875rem;color:var(--color-base-500,#6b7280);margin-bottom:1.5rem">

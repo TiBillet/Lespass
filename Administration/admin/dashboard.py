@@ -27,7 +27,9 @@ from solo.models import SingletonModel
 from BaseBillet.models import Configuration, Membership
 from Customers.bascule_vers_v2 import raisons_qui_retiennent_le_lieu_courant
 from Customers.models import (
+    INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY,
     MODULES_V2_FERMES_AUX_LIEUX_LEGACY,
+    PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY,
     Client,
     lieu_en_moteur_legacy,
 )
@@ -2634,6 +2636,12 @@ def _build_modules_context(configuration):
                 lieu_retenu_sur_l_ancien_fedow and carte_pos["state"] != "v1_active"
             )
             carte_pos["raisons_moteur_legacy"] = raisons_qui_retiennent_le_lieu
+            carte_pos["introduction_moteur_legacy"] = (
+                INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY
+            )
+            carte_pos["phrase_de_fin_moteur_legacy"] = (
+                PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY
+            )
             if carte_pos["moteur_legacy"]:
                 carte_pos["montre_interrupteur"] = carte_pos["allume"]
                 # Pas d'encart BETA sur une carte fermee : il invite a essayer un module
@@ -2697,6 +2705,8 @@ def _build_modules_context(configuration):
                 # / Decided here rather than in template conditions.
                 "moteur_legacy": carte_fermee_par_le_verrou,
                 "raisons_moteur_legacy": raisons_qui_retiennent_le_lieu,
+                "introduction_moteur_legacy": INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY,
+                "phrase_de_fin_moteur_legacy": PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY,
                 "montre_interrupteur": module_allume or not carte_fermee_par_le_verrou,
                 "allume": module_allume,
                 "url_modale": reverse(

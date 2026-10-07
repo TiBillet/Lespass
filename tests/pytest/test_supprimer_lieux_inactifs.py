@@ -13,6 +13,8 @@ brief : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-briefs/05-R-N.md.
   redevenu actif est gardé et signalé (« dans la liste, mais actif maintenant : <raisons> »).
 - Un lieu est inactif si les 8 critères du tableau §18 sont vrais. Sinon il est gardé, avec
   toutes ses raisons.
+- Critère 5 : les 2 groupes de ressources que `booking 0003` sème dans chaque lieu
+  (« Ressource », « Espace ») sont tolérés ; un autre groupe garde le lieu.
 - Critère 5 : la page d'accueil par défaut que la migration `BaseBillet 0225` crée dans
   chaque lieu (1 page d'accueil, au plus 3 blocs, aucune image) est tolérée ; une ligne de
   plus garde le lieu (« table non vide : pages_… »).
@@ -46,7 +48,8 @@ constantes plus bas pour être changées en un seul endroit)
   résumé chiffré dit « N emplacements du pool ignorés ». Un lieu du pool AVEC un domaine
   est « gardé », raison catégorie.
 - `--traces-externes <chemin.csv>` : colonnes `domaine`, `stripe_connect`,
-  `stripe_connect_test`, `place_fedow`.
+  `stripe_connect_test`, `place_fedow`, `administrateurs` (adresses séparées par « ; »).
+  Le résumé compte « N lieux supprimés sans administrateur (aucun mail) ».
 - Chaque suppression réussie est notée après son COMMIT. Une fois tous les lieux traités,
   les mails sont mis en file : une tâche Celery demandée par `.delay()` (donc
   `Task.apply_async`), un mail par administrateur, qui liste ses lieux supprimés. Exécutée
@@ -104,6 +107,7 @@ from django_tenants.utils import get_public_schema_name, schema_exists, tenant_c
 
 import schemas_clones
 from AuthBillet.models import TibilletUser, Wallet
+from booking.models import ResourceGroup
 from BaseBillet.models import (
     BrevoConfig,
     Configuration,
@@ -118,6 +122,7 @@ from BaseBillet.models import (
     Price,
     Product,
     Tag,
+    Tva,
 )
 from Customers.models import Client, Domain
 from fabriques_vente import creer_tarif_vendu
@@ -167,6 +172,7 @@ PHRASE_EMPLACEMENTS_DU_POOL_IGNORES = "emplacements du pool ignorés"
 COLONNE_STRIPE_CONNECT = "stripe_connect"
 COLONNE_STRIPE_CONNECT_TEST = "stripe_connect_test"
 COLONNE_PLACE_FEDOW = "place_fedow"
+COLONNE_ADMINISTRATEURS = "administrateurs"
 
 # Le libellé de chaque critère du tableau §18, tel qu'il doit apparaître (sans tenir compte
 # des majuscules) dans les raisons d'un lieu gardé, avant la précision. Aucun ne contient
@@ -1162,6 +1168,232 @@ def test_plan_comptable_de_main_seulement_ses_comptes_par_defaut(
 
 
 # ==========================================================================
+# 5 sexies — Les groupes de ressources semés par booking 0003
+# ==========================================================================
+
+
+@pytest.mark.parametrize(
+    "changement_des_groupes, liste_attendue",
+    [
+        pytest.param(None, LISTE_A_SUPPRIMER, id="groupes-par-defaut"),
+        pytest.param("troisieme_groupe", LISTE_GARDE, id="un-troisieme-groupe"),
+        pytest.param("groupe_renomme", LISTE_GARDE, id="un-groupe-renomme"),
+        pytest.param("description_remplie", LISTE_GARDE, id="une-description-remplie"),
+    ],
+)
+def test_groupes_de_ressources_seulement_ceux_semes_par_booking(
+    registre, tmp_path, changement_des_groupes, liste_attendue
+):
+    """
+    La migration `booking 0003` crée dans chaque lieu 2 groupes de ressources, « Ressource »
+    et « Espace », sans description ni image : un lieu neuf les a, il reste « à supprimer ».
+    Un 3ᵉ groupe, un groupe renommé ou une description remplie est l'œuvre du lieu : il est
+    « gardé » (« table non vide : booking_resourcegroup (groupes ajoutés) »).
+    / The 2 bare groups seeded by booking 0003 are tolerated; a 3rd group, a renamed group
+    or a filled description keeps the venue.
+    """
+    lieu = creer_un_lieu_jetable(registre, "groupes")
+    with tenant_context(lieu.client):
+        assert ResourceGroup.objects.count() == 2, "Condition : les 2 groupes semés."
+        if changement_des_groupes == "troisieme_groupe":
+            ResourceGroup.objects.bulk_create([ResourceGroup(name="Salle du test")])
+        if changement_des_groupes == "groupe_renomme":
+            ResourceGroup.objects.filter(name="Espace").update(
+                name="Salle de répétition"
+            )
+        if changement_des_groupes == "description_remplie":
+            ResourceGroup.objects.filter(name="Ressource").update(
+                description="Nos salles à réserver."
+            )
+    connection.set_schema_to_public()
+
+    ligne = lancer_a_blanc_et_lire_la_ligne(tmp_path, lieu)
+
+    assert ligne is not None, "Le lieu n'est pas dans le rapport."
+    assert ligne[COLONNE_LISTE] == liste_attendue, ligne[COLONNE_RAISONS]
+    if liste_attendue == LISTE_GARDE:
+        assert "booking_resourcegroup" in ligne[COLONNE_RAISONS]
+
+
+# ==========================================================================
+# 5 quater — Les clôtures de main : seulement à montant nul
+# ==========================================================================
+
+
+def recreer_les_clotures_de_main(lieu, total_general, nombre_transactions):
+    """
+    Remplace dans le schéma du lieu la table `comptabilite_cloturecaisse` par celle de
+    `main` (colonnes de `main:comptabilite/models.py`, `ClotureCaisse`), avec UNE clôture
+    journalière. La nuit de la bascule, la base est celle de `main` : c'est cette table que
+    l'outil lit. Elle part avec le schéma du lieu en fin de test.
+    Les valeurs par défaut sont posées dans la table (Django ne les met pas en base) pour
+    n'écrire que les colonnes qui comptent.
+    / Replaces the venue's comptabilite_cloturecaisse with main's table and ONE daily
+    closure. It goes away with the venue schema.
+    """
+    nom_complet_de_la_table = f'"{lieu.nom_du_schema}"."comptabilite_cloturecaisse"'
+    with connection.cursor() as curseur:
+        curseur.execute(f"DROP TABLE IF EXISTS {nom_complet_de_la_table} CASCADE")
+        curseur.execute(
+            f"CREATE TABLE {nom_complet_de_la_table} ("
+            f"  uuid uuid PRIMARY KEY,"
+            f"  niveau varchar(1) NOT NULL DEFAULT 'J',"
+            f"  numero_sequentiel integer NOT NULL UNIQUE,"
+            f"  datetime_debut timestamp with time zone NOT NULL DEFAULT now(),"
+            f"  datetime_fin timestamp with time zone NOT NULL DEFAULT now(),"
+            f"  responsable_id uuid NULL,"
+            f"  total_general integer NOT NULL DEFAULT 0,"
+            f"  total_ht integer NOT NULL DEFAULT 0,"
+            f"  total_tva integer NOT NULL DEFAULT 0,"
+            f"  nombre_transactions integer NOT NULL DEFAULT 0,"
+            f"  total_perpetuel integer NOT NULL DEFAULT 0,"
+            f"  hash_lignes varchar(64) NOT NULL DEFAULT '',"
+            f"  rapport_json jsonb NOT NULL DEFAULT '{{}}',"
+            f"  created_at timestamp with time zone NOT NULL DEFAULT now()"
+            f")"
+        )
+        curseur.execute(
+            f"INSERT INTO {nom_complet_de_la_table} "
+            f"(uuid, numero_sequentiel, total_general, nombre_transactions) "
+            f"VALUES (%s, 1, %s, %s)",
+            [str(uuid.uuid4()), total_general, nombre_transactions],
+        )
+
+
+@pytest.mark.parametrize(
+    "total_general, nombre_transactions, liste_attendue",
+    [
+        pytest.param(0, 0, LISTE_A_SUPPRIMER, id="cloture-a-zero"),
+        pytest.param(1, 0, LISTE_GARDE, id="cloture-a-un-centime"),
+        pytest.param(0, 1, LISTE_GARDE, id="cloture-a-zero-avec-une-transaction"),
+    ],
+)
+def test_clotures_de_main_seulement_a_montant_nul(
+    registre, tmp_path, total_general, nombre_transactions, liste_attendue
+):
+    """
+    Un lieu neuf avec une clôture journalière de `main` :
+    - à 0 € et sans transaction (clôture automatique d'un lieu vide) : « à supprimer » ;
+    - à 1 centime, ou à 0 € avec une transaction : « gardé », la raison nomme la table.
+    / Main's closures: a zero closure is tolerated, any amount or transaction keeps it.
+    """
+    lieu = creer_un_lieu_jetable(registre, "clotures")
+    recreer_les_clotures_de_main(lieu, total_general, nombre_transactions)
+
+    ligne = lancer_a_blanc_et_lire_la_ligne(tmp_path, lieu)
+
+    assert ligne is not None, "Le lieu n'est pas dans le rapport."
+    assert ligne[COLONNE_LISTE] == liste_attendue, ligne[COLONNE_RAISONS]
+    if liste_attendue == LISTE_GARDE:
+        assert "comptabilite_cloturecaisse" in ligne[COLONNE_RAISONS]
+
+
+# ==========================================================================
+# 5 quinquies — Les taux de TVA : seulement ceux semés par main (BaseBillet 0187)
+# ==========================================================================
+
+
+@pytest.mark.parametrize(
+    "taux_ajoute, liste_attendue",
+    [
+        pytest.param(None, LISTE_A_SUPPRIMER, id="taux-par-defaut"),
+        pytest.param(Decimal("7.00"), LISTE_GARDE, id="un-taux-ajoute"),
+    ],
+)
+def test_taux_de_tva_seulement_ceux_semes_par_main(
+    registre, tmp_path, taux_ajoute, liste_attendue
+):
+    """
+    Un lieu neuf a les 6 taux semés par `main:BaseBillet/migrations/0187` (0 ; 2,10 ; 5,50 ;
+    8,50 ; 10 ; 20) : il reste « à supprimer ». Un autre taux, ajouté par le lieu, le garde :
+    « table non vide : BaseBillet_tva (taux ajoutés) ».
+    / The 6 rates seeded by main's 0187 are tolerated; another rate keeps the venue.
+    """
+    lieu = creer_un_lieu_jetable(registre, "tva")
+    if taux_ajoute is not None:
+        with tenant_context(lieu.client):
+            Tva.objects.bulk_create([Tva(tva_rate=taux_ajoute)])
+        connection.set_schema_to_public()
+
+    ligne = lancer_a_blanc_et_lire_la_ligne(tmp_path, lieu)
+
+    assert ligne is not None, "Le lieu n'est pas dans le rapport."
+    assert ligne[COLONNE_LISTE] == liste_attendue, ligne[COLONNE_RAISONS]
+    if liste_attendue == LISTE_GARDE:
+        assert "BaseBillet_tva" in ligne[COLONNE_RAISONS]
+
+
+# ==========================================================================
+# 6 ter — L'habillage (`skin`) de main : seulement « reunion »
+# ==========================================================================
+
+
+@pytest.mark.parametrize(
+    "habillage, liste_attendue",
+    [
+        pytest.param("reunion", LISTE_A_SUPPRIMER, id="habillage-par-defaut"),
+        pytest.param("faire_festival", LISTE_GARDE, id="habillage-choisi"),
+    ],
+)
+def test_habillage_de_main_seulement_le_defaut(
+    registre, tmp_path, habillage, liste_attendue
+):
+    """
+    La colonne `skin` de la configuration existe sur `main` (défaut « reunion ») ; la
+    migration `0226` de la branche la retire. Elle est recréée ici dans le lieu jetable.
+    Valeur « reunion » : le lieu reste « à supprimer ». Une autre valeur : le lieu a choisi
+    son habillage, il est « gardé » (« configuration personnalisée : … skin … »).
+    / Main's `skin` column, recreated: "reunion" is the default, another value keeps it.
+    """
+    lieu = creer_un_lieu_jetable(registre, "habillage")
+    with connection.cursor() as curseur:
+        curseur.execute(
+            f'ALTER TABLE "{lieu.nom_du_schema}"."BaseBillet_configuration" '
+            f"ADD COLUMN skin varchar(20) NOT NULL DEFAULT 'reunion'"
+        )
+        curseur.execute(
+            f'UPDATE "{lieu.nom_du_schema}"."BaseBillet_configuration" SET skin = %s',
+            [habillage],
+        )
+
+    ligne = lancer_a_blanc_et_lire_la_ligne(tmp_path, lieu)
+
+    assert ligne is not None, "Le lieu n'est pas dans le rapport."
+    assert ligne[COLONNE_LISTE] == liste_attendue, ligne[COLONNE_RAISONS]
+    if liste_attendue == LISTE_GARDE:
+        assert LIBELLE_DU_CRITERE[6] in ligne[COLONNE_RAISONS].lower()
+        assert "skin" in ligne[COLONNE_RAISONS]
+
+
+# ==========================================================================
+# 2 bis — La limite des jours : « plus de 60 jours »
+# ==========================================================================
+
+
+@pytest.mark.parametrize(
+    "age_en_jours, liste_attendue",
+    [
+        pytest.param(60, LISTE_GARDE, id="exactement-60-jours"),
+        pytest.param(61, LISTE_A_SUPPRIMER, id="61-jours"),
+    ],
+)
+def test_limite_des_jours_minimum(registre, tmp_path, age_en_jours, liste_attendue):
+    """
+    Critère 2 : un lieu doit avoir été créé il y a PLUS de `--jours-minimum` jours (60 par
+    défaut). Créé il y a exactement 60 jours : « gardé ». Il y a 61 jours : « à supprimer ».
+    / Criterion 2: exactly 60 days old is kept, 61 days old is to delete.
+    """
+    lieu = creer_un_lieu_jetable(registre, "limite", age_en_jours=age_en_jours)
+
+    ligne = lancer_a_blanc_et_lire_la_ligne(tmp_path, lieu)
+
+    assert ligne is not None, "Le lieu n'est pas dans le rapport."
+    assert ligne[COLONNE_LISTE] == liste_attendue, ligne[COLONNE_RAISONS]
+    if liste_attendue == LISTE_GARDE:
+        assert LIBELLE_DU_CRITERE[2] in ligne[COLONNE_RAISONS].lower()
+
+
+# ==========================================================================
 # 6 bis — Une newsletter branchée garde le lieu (critère 6)
 # ==========================================================================
 
@@ -1398,21 +1630,21 @@ def test_lieu_de_la_liste_redevenu_actif_garde(registre, tmp_path):
 
 
 # ==========================================================================
-# 8 — Une référence inattendue annule la suppression
+# 8 — Une référence apparue après le passage à blanc garde le lieu
 # ==========================================================================
 
 
-def test_reference_inattendue_annule_la_suppression(registre, tmp_path):
+def test_reference_apparue_apres_le_passage_a_blanc_garde_le_lieu(registre, tmp_path):
     """
     Le premier lieu est « à supprimer » au passage à blanc. ENSUITE, avant `--executer`,
     une table publique inconnue de la commande se met à pointer vers lui (comme une ligne
-    écrite entre la validation de la liste et la nuit). Avec `--executer` : il est
-    « gardé » (la référence est vue à la détection) ou en « échec » (la transaction est
-    annulée) ; dans les deux cas, son schéma, sa ligne `Client` et son domaine sont
-    toujours là. Un lieu retenu n'arrête pas les autres : le second lieu de la liste est
-    supprimé.
-    / The reference appears after the dry run: the venue is kept or fails, its schema,
-    Client and domain stay. The second listed venue is still deleted.
+    écrite entre la validation de la liste et la nuit). Avec `--executer`, la détection
+    refaite voit la référence : le lieu est « gardé », son schéma, sa ligne `Client` et son
+    domaine sont toujours là. Un lieu retenu n'arrête pas les autres : le second lieu de la
+    liste est supprimé.
+    L'annulation d'une transaction déjà commencée est prouvée par le test 8 ter.
+    / A reference appearing after the dry run keeps the venue (seen at detection). The
+    rollback of a started transaction is proved by test 8 ter.
     """
     lieu_retenu = creer_un_lieu_jetable(registre, "retenu")
     lieu_libre = creer_un_lieu_jetable(registre, "libre")
@@ -1439,7 +1671,7 @@ def test_reference_inattendue_annule_la_suppression(registre, tmp_path):
     _colonnes, lignes = lire_un_csv(chemin_du_rapport)
     ligne_du_lieu_retenu = ligne_du_lieu(lignes, lieu_retenu)
     assert ligne_du_lieu_retenu is not None
-    assert ligne_du_lieu_retenu[COLONNE_LISTE] in [LISTE_GARDE, LISTE_ECHEC]
+    assert ligne_du_lieu_retenu[COLONNE_LISTE] == LISTE_GARDE
 
     assert not schema_exists(lieu_libre.nom_du_schema)
     assert not le_client_existe(lieu_libre)
@@ -1623,6 +1855,67 @@ def test_traces_externes_ecrites(registre, tmp_path):
     assert ligne[COLONNE_STRIPE_CONNECT] == identifiant_stripe_connect
     assert ligne[COLONNE_STRIPE_CONNECT_TEST] == identifiant_stripe_connect_test
     assert ligne[COLONNE_PLACE_FEDOW] == str(place_fedow)
+
+
+# ==========================================================================
+# 10 bis — Les administrateurs dans les traces, et les lieux sans administrateur
+# ==========================================================================
+
+
+def test_traces_externes_avec_les_administrateurs_et_lieux_sans_administrateur(
+    registre, tmp_path
+):
+    """
+    Deux lieux inactifs supprimés : le premier a deux administrateurs, le second aucun.
+    - Le CSV des traces externes a une colonne `administrateurs` : les adresses des
+      administrateurs du lieu, lues avant la suppression, séparées par « ; ». Elle garde
+      « qui prévenir » si la file des mails est perdue. Vide pour le lieu sans
+      administrateur.
+    - Le résumé compte « 1 lieux supprimés sans administrateur (aucun mail) ».
+    / The external traces CSV lists the admins' addresses; the summary counts the deleted
+    venues without admin.
+    """
+    lieu_avec_administrateurs = creer_un_lieu_jetable(registre, "avecadmin")
+    lieu_sans_administrateur = creer_un_lieu_jetable(registre, "sansadmin")
+    premier_administrateur = creer_un_administrateur_des_lieux(
+        registre, [lieu_avec_administrateurs]
+    )
+    second_administrateur = creer_un_administrateur_des_lieux(
+        registre, [lieu_avec_administrateurs]
+    )
+    chemin_de_la_liste = ecrire_la_liste_des_domaines(
+        tmp_path, [lieu_avec_administrateurs, lieu_sans_administrateur]
+    )
+    chemin_des_traces = str(tmp_path / "traces_externes.csv")
+
+    resultat = lancer_la_commande(
+        "--executer",
+        "--liste",
+        chemin_de_la_liste,
+        "--traces-externes",
+        chemin_des_traces,
+    )
+
+    assert not schema_exists(lieu_avec_administrateurs.nom_du_schema)
+    assert not schema_exists(lieu_sans_administrateur.nom_du_schema)
+    colonnes, lignes = lire_un_csv(chemin_des_traces)
+    assert COLONNE_ADMINISTRATEURS in colonnes
+
+    adresses_lues = []
+    texte_des_adresses = ligne_du_lieu(lignes, lieu_avec_administrateurs)[
+        COLONNE_ADMINISTRATEURS
+    ]
+    for adresse in texte_des_adresses.split(";"):
+        adresses_lues.append(adresse.strip())
+    assert sorted(adresses_lues) == sorted(
+        [premier_administrateur.email, second_administrateur.email]
+    )
+    assert (
+        ligne_du_lieu(lignes, lieu_sans_administrateur)[COLONNE_ADMINISTRATEURS].strip()
+        == ""
+    )
+
+    assert "1 lieux supprimés sans administrateur (aucun mail)" in resultat.sortie
 
 
 # ==========================================================================

@@ -401,8 +401,8 @@ Jamais de retour en legacy.
 / A legacy venue moves once to V2 by switching on a V2 module, unless something keeps it on
 the old Fedow (seven reasons). Reasons are listed in the refusal, the window and the card.
 
-**Pourquoi / Why :** décision 6 du mainteneur (spec 15 §2, §5.8) : livrée avant la bascule
-de production, pour que les lieux qui le peuvent passent au moteur V2 sans intervention. Sur
+**Pourquoi / Why :** décision 6 du mainteneur (spec 15 §2, §5.8) : livrée avec la mise en
+production, pour que les lieux qui le peuvent passent au moteur V2 sans intervention. Sur
 la copie de production, la fonction des raisons donne **248 lieux qui peuvent basculer, 92
 qui ne le peuvent pas**.
 / Maintainer decision 6: shipped before the production switch.
@@ -457,7 +457,34 @@ accessible dialog.
 | `Administration/admin/dashboard.py` | aucun lien d'ouverture V2 pour un lieu encore legacy (cartes génériques et caisse) |
 | `Administration/templates/admin/partials/dashboard_module_card.html` | introduction + raisons + phrase de fin |
 | `Customers/bascule_vers_v2.py` | texte de la raison 7 |
-| `tests/pytest/test_bascule_vers_v2.py` | 5 tests neufs (cache après échec, enregistrement partiel, autre erreur, double clic, liens d'ouverture, fenêtre accessible) ; tests 13 et 15 complétés |
+| `tests/pytest/test_bascule_vers_v2.py` | 6 tests neufs (cache après échec, enregistrement partiel, autre erreur, double clic, liens d'ouverture, fenêtre accessible) ; tests 13 et 15 complétés |
+
+### Session 15-5-ter — mineurs de la relecture Fable / Fable review minor fixes
+
+**Quoi / What :**
+- dans la transaction de la bascule, `Configuration.save()` passe AVANT la mise à jour de la
+  ligne `Customers_client` : l'appel à Stripe (capacité SEPA) ne tient aucun verrou ;
+- la carte d'un lieu retenu liste ses raisons en `<ul>` (avec `aria-label`), comme la fenêtre ;
+- les phrases « Ce module n'est pas encore disponible pour votre lieu : » et « Contactez
+  l'équipe TiBillet… » ont une seule source (`Customers/models.py`), passée au message, à la
+  fenêtre et à la carte.
+/ save() before the Client row update (no lock during the Stripe call); reasons in a
+labelled list on the card; one source for the two framing sentences.
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `Customers/models.py` | `INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY`, `PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY` |
+| `Administration/admin_tenant.py` | ordre `save()` puis `update` dans la bascule (commentaire de contrainte) ; message et fenêtre lisent les constantes |
+| `Administration/admin/dashboard.py` | la carte porte l'introduction et la phrase de fin |
+| `Administration/templates/admin/dashboard_module_modal.html` | phrases par le contexte ; `aria-label` sur la liste des raisons |
+| `Administration/templates/admin/partials/dashboard_module_card.html` | raisons en `<ul aria-label>` |
+| `tests/pytest/test_bascule_vers_v2.py` | 2 tests neufs : Stripe interrogé avant le verrou de la ligne du lieu ; liste des raisons de la carte |
+
+**Traductions / Translations :** un msgid nouveau, « Raisons qui retiennent votre lieu »
+(`aria-label`, fenêtre et carte). Les deux phrases d'encadrement gardent leur msgid.
+
+**Tests :** `test_bascule_vers_v2.py` compte 24 tests (16 de 15-5, 6 de 15-5-bis, 2 de
+15-5-ter) ; `test_verrou_moteur_legacy.py` 37 ; `test_onboard_laboutik_verrou_v1_v2.py` 5.
 
 ---
 
@@ -538,7 +565,8 @@ consigne, puis remettre la ligne en `v2`.
 
 ### Tests automatiques
 `make test ARGS="tests/pytest/test_verrou_moteur_legacy.py tests/pytest/test_onboard_laboutik_verrou_v1_v2.py"`
-(41 tests : 27 de 15-1 à 15-3, 9 de 15-bis, 5 du verrou d'appairage).
+(42 tests : 27 de 15-1 à 15-3, 9 de 15-bis, 1 de « ter », 5 du verrou d'appairage).
+`make test ARGS="tests/pytest/test_bascule_vers_v2.py"` (24 tests, sessions 15-5 à 15-5-ter).
 
 ### Test 13 (ter) — une monnaie archivée ne paie plus, mais se rend
 Sur `lespass` (v2), dans l'admin `fedow_core`, archiver une monnaie TLF de test qui porte

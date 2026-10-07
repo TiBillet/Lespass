@@ -23,7 +23,7 @@ place en base et environ une heure de migration en moins (153 lieux sans trace s
 |---|---|
 | `Administration/management/commands/supprimer_lieux_inactifs.py` | Nouvelle commande : options, suppression lieu par lieu, mails, rapports |
 | `Administration/nettoyage_des_lieux.py` | Nouveau : détection (8 critères, références lues dans le catalogue), en SQL brut |
-| `tests/pytest/test_supprimer_lieux_inactifs.py` | Nouveau : 20 tests (44 cas), lieux jetables `test_nettoyage_*` |
+| `tests/pytest/test_supprimer_lieux_inactifs.py` | Nouveau : 26 tests (58 cas), lieux jetables `test_nettoyage_*` |
 
 ### Newsletter et formulaires branchés / Plugged-in newsletter and forms
 Un lieu qui a branché un service est gardé, avec la raison « configuration personnalisée :
@@ -48,6 +48,29 @@ rien de plus. Une 2ᵉ page, un 4ᵉ bloc, un bloc hors de l'accueil ou une imag
 Il utilise le gabarit générique `emails/email_generique.html` (« Bonjour <adresse>, »,
 « Bien à vous, »), que le mainteneur a accepté tel quel. Le texte est celui de la fiche §18
 (version du 2026-10-07). Avec plusieurs lieux, il est mis au pluriel.
+
+### Session R-N-bis (relecture Fable) / R-N-bis session (review)
+- **Clôtures de `main`** : la tolérance des clôtures à montant nul était déjà codée, elle a
+  maintenant ses tests. Une clôture d'un centime, ou à 0 € avec une transaction, garde le lieu.
+- **Administrateurs** : le CSV `--traces-externes` reçoit une colonne `administrateurs`
+  (adresses lues avant la suppression, séparées par « ; »). Elle garde « qui prévenir » si la
+  file des mails est perdue. **Ce fichier contient des adresses : il reste hors du dépôt.**
+- **Compteur** : le résumé compte « N lieux supprimés sans administrateur (aucun mail) ».
+- **Taux de TVA** : seuls les 6 taux semés par `main` (BaseBillet 0187) sont tolérés. Un autre
+  taux garde le lieu : « table non vide : BaseBillet_tva (taux ajoutés) ».
+- **Habillage** : la colonne `Configuration.skin` (sur `main` seulement, retirée par la
+  migration 0226 de la branche) doit valoir « reunion ». Sinon le lieu est gardé :
+  « configuration personnalisée : habillage (skin) ».
+- **Groupes de ressources** : les 2 groupes semés par `booking 0003` (« Ressource »,
+  « Espace », sans description ni image) sont tolérés. Un 3ᵉ groupe, un nom changé ou une
+  description ou une image remplie garde le lieu.
+- **Limite des 60 jours** : il faut avoir été créé il y a PLUS de `--jours-minimum` jours. Un
+  lieu créé il y a exactement 60 jours est gardé, et la raison donne son âge.
+- **Test 8 renommé** : `test_reference_apparue_apres_le_passage_a_blanc_garde_le_lieu`.
+- **Lisibilité** : `on_commit` reçoit une fonction nommée (`functools.partial`), et le
+  critère 8 réutilise `nom_lisible_d_une_table`.
+- **Fedow** (autre dépôt) : la commande `renommer_places_orphelines` renomme les places des
+  lieux supprimés, à partir de ce même CSV des traces externes.
 
 ### Chaînes à traduire / Strings to translate
 8 nouvelles chaînes (msgid en français), toutes dans le mail
@@ -80,7 +103,7 @@ dev ni sur un lieu de démo.**
 ```bash
 docker exec lespass_django poetry run pytest tests/pytest/test_supprimer_lieux_inactifs.py -q
 ```
-Attendu : 44 passed (environ 4 min 30, une cinquantaine de schémas copiés puis supprimés).
+Attendu : 58 passed (environ 6 min 30, environ 70 schémas copiés puis supprimés).
 
 ### Test 2 — passage à blanc sur une copie de production (orchestrateur)
 ```bash

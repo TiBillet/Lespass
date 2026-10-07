@@ -697,3 +697,48 @@ le critère LaBoutik V1 n'y est donc pas éprouvé, la revérification en prod l
 l'outil tourne aussi **entre `neutraliser` et `migrer`** (base de `main`, comme la nuit) ;
 contrôles après : aucun schéma sans `Client` ni l'inverse, lieux restants inchangés, nombre
 d'utilisateurs inchangé, durée.
+
+**QO-3 — Le client d'une vente reprise. Tranchée (mainteneur, 2026-10-07)** : il y a toujours
+quelqu'un derrière un billet ou une adhésion. Le client est l'utilisateur de la réservation
+(`reservation.user_commande`), sinon de l'adhésion (`membership.user`), sinon du paiement Stripe
+(`Paiement_stripe.user`).
+
+**QO-12 — 4 lignes à quantité non entière hors QR** (`LE` / `SF`, origine « en ligne » ou
+« admin »). **Tranchée (mainteneur, 2026-10-07)** : traitées comme une part QR (argent = `amount`).
+
+**Formes absentes de la production (R-0)** : paiement QR en deux monnaies, jetons cadeau `LG`,
+paiement Stripe `N`, avoir sur une part QR, ligne `R` positive, avoir daté avant sa vente : la
+reprise ne les code pas ; si l'une apparaît, anomalie « forme non prévue » (orchestrateur,
+2026-10-07, pour éviter la sur-ingénierie).
+
+**QO-9 — Les 280 paiements Stripe sans aucune ligne** (R-0, §14 ligne 8). **En partie tranchée.**
+- 154 paiements `F` / `W` (paniers abandonnés, réservation sans ligne, aucun argent reçu) et 1
+  paiement `Q` / `P` de 2022 : aucune vente, comptés dans le rapport.
+- **125 paiements `T` / `V` (« Versement de monnaie globale »)** : le mainteneur (2026-10-07) :
+  **ce sont des retours en banque, à garder absolument**, « le même objet que les retours en
+  banque de la CLAF ». Enquête (lecture seule, 2026-10-07) :
+  - producteur : webhook Stripe `transfer.created` (`ApiBillet/views.py` main ~l.1242-1304,
+    branche ~l.1357-1435) ; la plateforme verse des euros au compte **Stripe Connect** du lieu
+    pour les jetons **FED** qu'il a reçus ; Fedow écrit une `Transaction` `DEPOSIT` (« Remise en
+    banque ») et détruit les jetons FED du lieu ; l'ancien LaBoutik écrit un `ArticleVendu`
+    « Stripe TiBillet transfert » (méthode `TR`) ; dans Lespass : un `Paiement_stripe` source `T`,
+    statut `V`, sans ligne ni utilisateur, montant seulement dans `metadata_stripe` ;
+  - même objet que la remise CLAF **dans Fedow** (`DEPOSIT`, jetons détruits), mais monnaie FED
+    (jamais la CLAF), déclencheur automatique ; une remise CLAF ne laisse dans Lespass qu'une
+    `FedowTransaction` sans montant ;
+  - aujourd'hui (main) : **invisibles en comptabilité** (aucun rapport ne lit `Paiement_stripe`) ;
+  - la branche a déjà une forme prévue : article système « virement reçu » (`Product.VIREMENT_RECU`
+    `VR`, hors CA, compte de la monnaie : 467000 pour le FED, règlement `TR` au 512000 : fiche E),
+    mais **aucun producteur** ne l'écrit (`BankTransferService.enregistrer_virement` non branché).
+  **Décision à prendre par le mainteneur** (options, sans choix de l'orchestrateur) :
+  A. rien (comme sur `main` : gardés, visibles dans l'admin et la page Fedow, absents des rapports) ;
+  B. une vente « virement reçu » par paiement `T` (article `VR` + règlement, à la date du
+  transfert, numérotée et chaînée ; exception au « aucun article créé » du §2) ;
+  C. pas de vente, une rubrique « versements reçus » du rapport qui lit les `Paiement_stripe` `T` ;
+  D. l'avenir seulement : le webhook écrit la vente `VR` après la bascule, l'historique reste en A.
+  Points comptables à trancher avec : (1) déjà écrits dans l'ancien LaBoutik : risque de compter
+  deux fois ; (2) le 467000 de Lespass n'a presque pas de ventes FED en face (4 lignes `SF`) ;
+  (3) compte de trésorerie : `TR` / 512000 ou Stripe / 517100 (l'argent arrive sur Stripe
+  Connect) ; (4) numéroter et chaîner des opérations qui ne sont pas des ventes ; (5) la CLAF :
+  Lespass n'a pas le montant de ses remises (il faudrait un appel à Fedow, interdit pendant la
+  reprise).

@@ -1201,6 +1201,47 @@ class TestBasculeVersV2(FastTenantTestCase):
 
         assert constats_faux == [], "\n".join(constats_faux)
 
+    def test_stripe_interroge_avant_le_verrou_de_la_ligne_du_lieu(self):
+        """
+        Pendant une bascule, `Configuration.save()` interroge Stripe (capacité SEPA)
+        quand le SEPA est demandé. Cet appel réseau part AVANT la mise à jour de la ligne
+        `Customers_client` du lieu : la ligne n'est pas verrouillée pendant l'attente de
+        Stripe. Au moment de l'appel, le moteur lu en base est donc encore legacy.
+        Stripe simulé : la capacité SEPA répond « active », la bascule aboutit (lieu v2,
+        caisse allumée en base, aucun message d'erreur). Vrai `get_solo()`, vrai `save()`.
+        / Stripe is called before the venue's Client row is updated (no lock held).
+        """
+        self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
+        self.preparer_la_configuration_en_base_avec_un_sepa_refuse()
+
+        moteurs_lus_pendant_l_appel_a_stripe = []
+
+        def capacite_sepa_active_qui_note_le_moteur(configuration_appelante):
+            moteur_lu_en_base = self.moteur_du_lieu_lu_en_base()
+            moteurs_lus_pendant_l_appel_a_stripe.append(moteur_lu_en_base)
+            return True
+
+        requete = self.construire_une_requete(
+            "post", "/admin/BaseBillet/configuration/module-toggle/module_caisse/"
+        )
+        with translation.override("fr"):
+            with patch.object(
+                Configuration,
+                "check_stripe_sepa_capability",
+                autospec=True,
+                side_effect=capacite_sepa_active_qui_note_le_moteur,
+            ):
+                self.admin_de_la_configuration.module_toggle(requete, "module_caisse")
+            textes_des_erreurs = []
+            for message in requete._messages:
+                if message.level == messages_django.ERROR:
+                    textes_des_erreurs.append(str(message.message))
+
+        assert moteurs_lus_pendant_l_appel_a_stripe == [MOTEUR_LEGACY]
+        assert self.moteur_du_lieu_lu_en_base() == MOTEUR_V2
+        assert Configuration.objects.first().module_caisse is True
+        assert textes_des_erreurs == []
+
     def test_autre_erreur_pendant_la_bascule_remet_legacy_et_remonte(self):
         """
         Lieu legacy sans raison. `Configuration.save()` lève une erreur qui n'est pas une
@@ -1573,6 +1614,43 @@ class TestBasculeVersV2(FastTenantTestCase):
                     constats_faux.append(
                         f"retenu, {nom_du_module} : phrase fixe affichée"
                     )
+
+        assert constats_faux == [], "\n".join(constats_faux)
+
+    def test_carte_retenue_liste_les_raisons(self):
+        """
+        Lieu legacy retenu par deux raisons (monnaie propre, cartes NFC) : sur chacune des
+        4 cartes V2, les raisons sont une liste `<ul>` qui porte un `aria-label` (texte
+        non vide), avec une entrée `<li>` par raison, dans l'ordre des raisons.
+        / Held venue: each V2 card lists its reasons in a labelled <ul>, one <li> each.
+        """
+        constats_faux = []
+        self.poser_le_moteur_du_lieu_dedie(MOTEUR_LEGACY)
+
+        with self.point_de_sauvegarde_annule():
+            self.creer_un_asset_legacy("origine")
+            self.creer_une_carte_nfc(self.tenant)
+            cartes = self.cartes_du_tableau_de_bord(self.configuration_en_memoire([]))
+
+        for nom_du_module in MODULES_V2:
+            html_brut, _texte = self.html_de_la_carte(cartes[nom_du_module])
+            liste_des_raisons = re.search(
+                r"<ul([^>]*)>(.*?)</ul>", html_brut, re.DOTALL
+            )
+            if liste_des_raisons is None:
+                constats_faux.append(f"{nom_du_module} : pas de liste <ul>")
+                continue
+            etiquette = re.search(r'aria-label="([^"]*)"', liste_des_raisons.group(1))
+            if etiquette is None or not etiquette.group(1).strip():
+                constats_faux.append(f"{nom_du_module} : liste sans aria-label")
+            entrees = re.findall(
+                r"<li[^>]*>(.*?)</li>", liste_des_raisons.group(2), re.DOTALL
+            )
+            textes_des_entrees = []
+            for entree in entrees:
+                textes_des_entrees.append(texte_lisible_du_html(entree))
+            if textes_des_entrees != [RAISON_5_MONNAIE_PROPRE, RAISON_6_CARTES_NFC]:
+                constats_faux.append(f"{nom_du_module} : entrées {textes_des_entrees}")
 
         assert constats_faux == [], "\n".join(constats_faux)
 
