@@ -44,13 +44,22 @@ le même cas.
    côté admin. Pas de règle d'arrêt, pas de décision au cas par cas : c'est le cas de
    pratiquement toute la prod.
 2. **Un lieu créé après le déploiement démarre en V2.**
-3. La bascule d'un lieu existant legacy → V2 n'est **pas** pour tout de suite et **n'est pas
+3. ~~La bascule d'un lieu existant legacy → V2 n'est **pas** pour tout de suite et **n'est pas
    dans ce chantier** (aucun outil de bascule à écrire). Un gestionnaire de lieu ne peut
-   jamais changer son moteur.
+   jamais changer son moteur.~~ **Remplacée le 2026-10-07 par la décision 6.**
 4. **Le lien « Assets » de l'admin legacy revient en accès direct** dans le menu latéral des
    lieux legacy (un clic, comme sur `main`).
 5. Hors périmètre, déjà accepté comme attendu : adhésions plus poussées vers Fedow, ventes
    QR/NFC plus envoyées à LaBoutik V1, historique des ventes masqué avant la reprise R.
+6. **Bascule en un clic (mainteneur, 2026-10-07)** : un lieu legacy passe **une fois** en V2,
+   **de lui-même**, en allumant un module V2 (caisse, monnaie locale, kiosk, tireuse), **si rien
+   ne le retient sur l'ancien Fedow** (§5.8). Jamais de V2 vers legacy. Livré **avec la mise en production** (le code a besoin de `Customers 0006`), utilisable dès
+   la réouverture : les lieux qui le peuvent basculent après la newsletter qui annonce
+   la mise en production. Comptage sur la copie de production du 2026-10-06 (hors pool et hors
+   lieux inactifs supprimés) : **248 lieux peuvent, 92 ne peuvent pas** (chiffre de la vraie fonction, confrontée à la copie le 2026-10-07 ; la mesure SQL du jour donnait 247 / 93, une erreur de catégorie de produit) (fiche
+   `COMPTABILITE/CHANTIER-05-R-reprise-ventes.md` ; liste nominative hors dépôt,
+   `db-prod/lieux_bascule_v2_2026-10-07.csv`). Les adhésions envoyées à l'ancien Fedow ne
+   retiennent pas un lieu : plus rien ne les lit, même pour les lieux LaBoutik V1.
 
 ## 3. Le champ : `Client.moteur_monnaie`
 
@@ -311,6 +320,61 @@ FED, remboursement, paiement QR/NFC de « Mon compte », récompenses d'adhésio
   (`:1521`). Sur une carte de prod (sans `wallet_ephemere`), ils posent seulement
   `CarteCashless.user`, champ qui existe déjà sur `main`.
 
+### 5.8 La bascule en un clic (décision 6, 2026-10-07)
+
+**Une seule fonction dit ce qui retient un lieu** :
+`raisons_qui_empechent_le_passage_en_v2(lieu)`, dans un fichier neuf
+`Customers/bascule_vers_v2.py` (pas dans `Customers/models.py`, qui n'importe que Django :
+imports locaux de `BaseBillet`, `fedow_public`, `QrcodeCashless`). Elle rend une **liste de
+phrases** (vide = le lieu peut passer en V2). Elle ne lit que la base, aucun appel réseau.
+
+| # | Raison | Lecture | Phrase (msgid français) |
+|---|---|---|---|
+| 1 | lieu `META` (l'agenda partagé) | `lieu.categorie == Client.META` | « Ce lieu est l'agenda partagé de TiBillet. » |
+| 2 | LaBoutik V1 | `Configuration.server_cashless` renseigné | « Votre lieu utilise LaBoutik V1. » |
+| 3 | accepte la monnaie d'un autre lieu (CLAF…) | `AssetFedowPublic` dont `federated_with` contient le lieu et dont `origin` n'est pas le lieu, **archivées comprises**, catégories **hors** `FED` (monnaie fédérée de toute la plateforme, acceptée par la caisse V2 hybride), `SUB` et `BDG` | « Votre lieu accepte une monnaie partagée avec d'autres lieux. » |
+| 4 | invitation en attente | `AssetFedowPublic.pending_invitations` contient le lieu, archivées comprises, mêmes catégories exclues qu'en 3 | « Votre lieu est invité à partager une monnaie. » |
+| 5 | a créé une monnaie (partagée ou non) | `AssetFedowPublic.origin` = le lieu, catégorie **autre que** `SUB` (adhésion) et `BDG` (badge), archivées comprises | « Votre lieu a sa propre monnaie sur Fedow. » |
+| 6 | cartes NFC du lieu | `QrcodeCashless.Detail.origine` = le lieu | « Des cartes NFC sont rattachées à votre lieu. » |
+| 7 | paiement Stripe passé par l'ancien Fedow hors adhésion (recharge) | `Paiement_stripe` du lieu relié à au moins une `FedowTransaction`, et qui a **au moins une ligne d'un produit autre qu'une adhésion** (`categorie_article` ≠ `A`) **ou aucune ligne** ; quel que soit son statut | « Votre lieu a eu des échanges avec l'ancien moteur. » (mainteneur, 2026-10-07) |
+
+Ne retiennent **pas** un lieu : les adhésions et badges envoyés à l'ancien Fedow (`SUB`, `BDG`,
+`Membership.fedow_transactions`) ; les `FedowTransaction` sans paiement Stripe ni adhésion (cache
+local de ce que Lespass lit chez Fedow, dont l'historique « Mon compte » d'un visiteur :
+`fedow_connect/validators.py` ~l.155, `fedow_api.py` ~l.985 sur `main`) ; les portefeuilles
+d'utilisateurs créés à la connexion. Raison 7 : défaut de l'orchestrateur suivant la règle du
+mainteneur (« échanges Fedow ») ; 1 seul lieu de production n'est retenu que par elle.
+
+**Dans `module_toggle`** (`Administration/admin_tenant.py` ~l.613) : le refus en bloc du §5.1
+devient, pour un lieu legacy qui **allume** un module V2 :
+- raisons non vides → refus comme aujourd'hui (aucune écriture, `HX-Refresh`), message =
+  « Ce module n'est pas encore disponible pour votre lieu : » + les raisons + « Contactez l'équipe
+  TiBillet pour lui indiquer que vous souhaitez faire une migration. » (mainteneur, 2026-10-07) ;
+- raisons vides → dans **une** transaction : `Client.moteur_monnaie = v2` (par `update()` sur la
+  ligne du lieu, et la valeur posée aussi sur `connection.tenant`), puis la suite actuelle de la
+  méthode (drapeau, monnaie locale automatique pour la caisse, `save`). Une erreur de la suite
+  annule aussi la bascule, et `connection.tenant.moteur_monnaie` est remis à legacy. Journal
+  `logger.info` (lieu, module).
+- Éteindre un module V2 : inchangé (toujours permis). Un lieu déjà v2 : inchangé.
+
+**Fenêtre de confirmation** (`module_toggle_modal`), pour un lieu legacy et un module V2 :
+- sans raison : « Pour activer ce module, votre lieu passe au nouveau moteur de monnaie de
+  TiBillet. Vos événements, réservations et adhésions ne changent pas. » ;
+- avec raisons : « Ce module n'est pas encore disponible pour votre lieu : » + les raisons +
+  la phrase de fin ci-dessus, sans bouton de confirmation ; titre « Module non disponible », bouton « Fermer ». La fenêtre est un `role="dialog"` (`aria-modal`, `aria-labelledby`) ; le bouton de confirmation se désactive au clic (`hx-disabled-elt`).
+
+**Carte du tableau de bord** (§5.2) : une carte V2 d'un lieu legacy **sans** raison s'affiche
+**comme pour un lieu v2** (interrupteur, encart BETA), **sauf les liens « Open POS / Open kiosk »**, retirés tant que le lieu est legacy (module allumé ou éteint : ils mèneraient à un refus ; relecture M-3, orchestrateur 2026-10-07) ; **avec** raisons, elle garde `moteur_legacy = True`, pas
+d'interrupteur, et affiche les raisons à la place de la phrase fixe. Les raisons sont calculées
+**une fois** par affichage du tableau de bord.
+
+La fonction est appelée **dans le contexte du lieu** (requête HTTP de l'admin) : précondition écrite
+dans sa docstring, elle ne change pas de schéma elle-même. La fenêtre pour **éteindre** un module
+est inchangée. `server_cashless` vide (`""`) = non renseigné.
+
+Ce qui ne change pas : le menu latéral, l'admin `fedow_core`, les permissions du §5.4 lisent
+toujours `lieu_en_moteur_legacy()` : après la bascule, le lieu est v2 et tout s'ouvre.
+
 ## 6. Ce qui reste ouvert pour un lieu `v2`
 
 Rien ne change par rapport à aujourd'hui. Un lieu `v2` peut aussi être invité sur un asset
@@ -457,6 +521,8 @@ le workflow i18n est à lancer. Ne jamais lancer `makemessages`.
 
 ## 10. Hors périmètre
 
-- Tout outil de bascule d'un lieu existant vers V2 (plus tard, sur décision du mainteneur).
+- ~~Tout outil de bascule d'un lieu existant vers V2.~~ Fait par §5.8 (décision 6) pour les
+  lieux que rien ne retient. Reste hors périmètre : la bascule des lieux **retenus** (LaBoutik V1,
+  monnaie partagée ou propre, cartes, recharges), au cas par cas, plus tard.
 - Toute migration de données legacy → `fedow_core` (S4, non acté).
 - Les impacts acceptés du §2.5.

@@ -107,7 +107,43 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## PROCHAINE ÉTAPE (mise à jour 2026-10-06) : LE CHANTIER R
+## PROCHAINE ÉTAPE (mise à jour 2026-10-07) : R-1, APRÈS UNE DÉCISION DU MAINTENEUR
+
+**LANGUE : tout message au mainteneur est en FRANÇAIS, sans exception, même juste après un
+rapport d'agent ou une notification en anglais. Raisonne en français.** (La session du
+2026-10-06/07 a rechuté en anglais une dizaine de fois : le mainteneur l'a très mal vécu.)
+
+**Consigne du mainteneur (2026-10-07) : « reste focus sur le chantier R ».** Pas d'à-côté, pas de
+sur-ingénierie : une garde n'est ajoutée que pour un cas qui existe vraiment en production
+(comptages R-0, fiche R §14). Leçons du jour : `~/.claude/lessons.md` (2026-10-07).
+
+État au démarrage (lire le SUIVI §6, journal du 2026-10-07, et le §5) :
+- **Fiche R réécrite** (relue par Fable), **R-0 fait** (fiche R §14 : 23 465 lignes, 115 lieux,
+  aucun QR en deux monnaies, aucune ligne `LG`, 74 239 anciennes clôtures…).
+- Faits en à-côté, **prouvés, prêts à commiter** (le mainteneur commite) : bascule en un clic
+  legacy → v2 (spec 15 §5.8, sessions 15-5, 15-5-bis, 15-5-ter) ; outil
+  `supprimer_lieux_inactifs` (fiche R §18, sessions R-N, R-N-bis) et commande Fedow
+  `renommer_places_orphelines` (dépôt `../Fedow`). La nuit de bascule (fiche R §12) les intègre.
+- **Copie de prod** : pile `lespass_copie_prod` démarrée, migrée (un lieu après l'autre, 3 h 14),
+  **déjà nettoyée des 148 lieux inactifs** : la recharger (`detruire`, `demarrer`, `charger`) avant
+  la répétition R-4. Un passage à blanc de la reprise peut s'y faire (lecture seule).
+
+**QO-9 tranchée : option B** pour les 125 paiements `T` (une vente « virement reçu » chacun, fiche
+R §17). **Remises en banque de la CLAF : hors R, après la production** (mainteneur, 2026-10-07 ;
+TODO n°35). Règlement des ventes `VR` : `SN` / 517100 (mainteneur). **R-1 en cours** : brief
+`05-R-1.md`, voir SUIVI §3 et §6 pour l'étape atteinte.
+
+Puis **R-1** (fiche R §13) : brief `CHANTIER-05-briefs/05-R-1.md` (calcul + passage à blanc, sans
+écriture), avec les décisions QO-3 (client = utilisateur de la réservation / adhésion /
+paiement), QO-9, QO-12 (lignes à quantité non entière hors QR = parts QR) et la règle « formes
+absentes de la prod = anomalie, pas de code ». Ouvrier Opus, tests d'abord, rouge prouvé,
+mutations à la main sur ce qui protège vraiment l'argent. Puis passage à blanc sur la copie,
+comparé à R-0.
+
+À compléter dans la fiche R §12 / §16 : les migrations apportées par la fusion d'`origin`
+(`booking 0002`, `booking 0003` qui sème 2 groupes de ressources, `BaseBillet 0228`).
+
+## (Ancienne) PROCHAINE ÉTAPE (mise à jour 2026-10-06) : LE CHANTIER R
 
 **Décision du mainteneur (2026-10-06) : « go pour le chantier R ».** Nouvelle session
 d'orchestration. H-4 (mails de bout en bout) n'est pas faite : elle vient après R, sauf

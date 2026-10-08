@@ -75,6 +75,17 @@ MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY = _(
     "Votre lieu utilise l'ancien moteur de monnaie (Fedow) : ce module V2 ne le concerne pas."
 )
 
+# Les deux phrases qui encadrent les raisons qui retiennent un lieu legacy sur l'ancien
+# Fedow (spec 15 §5.8). Une seule source pour le message de refus de module_toggle, la
+# fenetre de confirmation et la carte du tableau de bord.
+# / The two sentences around the reasons that keep a legacy venue on the old Fedow.
+INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY = _(
+    "Ce module n'est pas encore disponible pour votre lieu :"
+)
+PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY = _(
+    "Contactez l'équipe TiBillet pour lui indiquer que vous souhaitez faire une migration."
+)
+
 
 def lieu_en_moteur_legacy():
     """

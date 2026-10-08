@@ -111,6 +111,14 @@ class BookingAdmin(ModelAdmin):
         'start_datetime'
     ]
 
+    # INDISPENSABLE : user reste en lecture seule. Les utilisateurs sont partagés entre
+    # tous les lieux (AuthBillet est en SHARED_APPS). Modifiable, ce champ devient une
+    # liste déroulante de TOUS les comptes de l'instance : page très lente, et emails
+    # des autres lieux visibles par l'admin.
+    # / user MUST stay read-only: users are shared across all tenants. Editable, it
+    # renders a select of every account of the instance (slow, leaks other venues' emails).
+    readonly_fields = ["user"]
+
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 

@@ -4,15 +4,35 @@
      style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)"
      onclick="if(event.target===this) document.getElementById('module-modal-container').innerHTML=''">
 
-    <div style="background:var(--color-base-0,#fff);border-radius:.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,.1);padding:1.5rem;max-width:28rem;width:100%;margin:0 1rem;border:1px solid var(--color-base-200,#e5e7eb)">
-        <h3 style="font-size:1.125rem;font-weight:600;margin-bottom:1rem">
-            {% if is_active %}
+    <div role="dialog" aria-modal="true" aria-labelledby="module-modal-titre"
+         data-testid="module-modal"
+         style="background:var(--color-base-0,#fff);border-radius:.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,.1);padding:1.5rem;max-width:28rem;width:100%;margin:0 1rem;border:1px solid var(--color-base-200,#e5e7eb)">
+        <h3 id="module-modal-titre" style="font-size:1.125rem;font-weight:600;margin-bottom:1rem">
+            {% if raisons_qui_retiennent_le_lieu %}
+                {% translate "Module non disponible" %}
+            {% elif is_active %}
                 {% translate "Disable module" %}
             {% else %}
                 {% translate "Enable module" %}
             {% endif %}
         </h3>
 
+        {% if raisons_qui_retiennent_le_lieu %}
+        {# Verrou de moteur (spec 15 §5.8) : un lieu legacy retenu sur l'ancien Fedow.   #}
+        {# Les raisons remplacent la question ; pas de bouton de confirmation plus bas. #}
+        {# / Engine lock: the reasons replace the question; no confirm button below.   #}
+        <div data-testid="module-modal-raisons-moteur-legacy" role="alert"
+             style="font-size:.875rem;color:var(--color-base-700,#374151);margin-bottom:1.5rem">
+            <p style="margin-bottom:.5rem">{{ introduction_des_raisons }}</p>
+            <ul aria-label="{% translate 'Raisons qui retiennent votre lieu' %}"
+                style="list-style:disc;padding-left:1.25rem;margin-bottom:.5rem">
+                {% for raison in raisons_qui_retiennent_le_lieu %}
+                    <li>{{ raison }}</li>
+                {% endfor %}
+            </ul>
+            <p>{{ phrase_de_fin_des_raisons }}</p>
+        </div>
+        {% else %}
         <p style="font-size:.875rem;color:var(--color-base-500,#6b7280);margin-bottom:1.5rem">
             {% if is_active %}
                 {% blocktranslate with name=module_name %}Are you sure you want to disable "{{ name }}"?{% endblocktranslate %}
@@ -21,21 +41,44 @@
             {% endif %}
         </p>
 
+        {# Bascule en un clic (spec 15 §5.8) : un lieu legacy sans raison passe au     #}
+        {# nouveau moteur en allumant ce module.                                       #}
+        {# / One-click switch: a legacy venue without reason moves to the new engine. #}
+        {% if passage_au_moteur_v2_annonce %}
+            <p data-testid="module-modal-passage-moteur-v2" role="note"
+               style="font-size:.875rem;color:var(--color-base-700,#374151);margin-bottom:1.5rem;padding:.75rem;border-radius:.375rem;border:1px solid var(--color-base-200,#e5e7eb);background:var(--color-base-50,#f9fafb)">
+                {% translate "Pour activer ce module, votre lieu passe au nouveau moteur de monnaie de TiBillet." %}
+                {% translate "Vos événements, réservations et adhésions ne changent pas." %}
+            </p>
+        {% endif %}
+
         {# Encart « acces anticipe » (BETA) : affiche seulement a l'ACTIVATION #}
         {# d'un module beta. A la desactivation, inutile de le montrer.        #}
         {# / BETA notice: shown only when ENABLING a beta module.             #}
         {% if is_beta and not is_active %}
             {% include "admin/partials/dashboard_beta_notice.html" with notice=beta_notice testid="module-modal" %}
         {% endif %}
+        {% endif %}
 
         <div style="display:flex;justify-content:flex-end;gap:.75rem">
             <button type="button"
+                    data-testid="module-modal-fermer"
                     onclick="document.getElementById('module-modal-container').innerHTML=''"
                     style="padding:.5rem 1rem;font-size:.875rem;font-weight:500;border-radius:.375rem;border:1px solid var(--color-base-300,#d1d5db);color:var(--color-base-700,#374151);background:transparent;cursor:pointer">
-                {% translate "Cancel" %}
+                {% if raisons_qui_retiennent_le_lieu %}
+                    {% translate "Fermer" %}
+                {% else %}
+                    {% translate "Cancel" %}
+                {% endif %}
             </button>
 
+            {% if not raisons_qui_retiennent_le_lieu %}
+            {# hx-disabled-elt : le bouton se desactive pendant la requete. Un double  #}
+            {# clic n'envoie qu'un POST (le serveur protege aussi la bascule).         #}
+            {# / Disabled during the request: a double click sends a single POST.     #}
             <button type="button"
+                    data-testid="module-modal-confirmer"
+                    hx-disabled-elt="this"
                     {# Pas de hx-target ni de hx-swap, et c'est VOLONTAIRE.     #}
                     {# La vue repond « HX-Refresh: true » avec un corps vide :   #}
                     {# rien n'est jamais echange, la page est simplement         #}
@@ -55,6 +98,7 @@
                     {% translate "Confirm" %}
                 {% endif %}
             </button>
+            {% endif %}
         </div>
     </div>
 </div>

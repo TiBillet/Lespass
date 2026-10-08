@@ -87,6 +87,8 @@ bash db-prod/copie_prod.sh charger db-prod/<dump>   # base VIDE exigée ; chrono
 bash db-prod/copie_prod.sh compter_avant   # LECTURE SEULE, psql seul : drapeaux V2 et server_cashless
                                            # par lieu (comptages) ; refuse après la neutralisation
 bash db-prod/copie_prod.sh neutraliser     # AVANT tout manage.py ; pose le témoin « neutralisee »
+# (R-4) docker exec copie_prod_django poetry run python /DjangoFiles/manage.py supprimer_lieux_inactifs ...
+#                                         # comme la nuit : sur la base de main, avant migrer (fiche R §12 étape 2 bis)
 bash db-prod/copie_prod.sh migrer          # refuse sans le témoin ; migrate_schemas chronométré ;
                                            # neutralise ce que la branche ajoute ; témoin « migree »
 bash db-prod/copie_prod.sh compter         # total des mails captés par Mailpit, puis comptage agrégé

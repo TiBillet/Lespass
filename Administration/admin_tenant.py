@@ -162,9 +162,11 @@ from BaseBillet.services_vente import (
     vente_contient_une_recharge,
     vente_porte_un_ecart_d_encaissement,
 )
+from Customers.bascule_vers_v2 import raisons_qui_retiennent_le_lieu_courant
 from Customers.models import (
-    MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY,
+    INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY,
     MODULES_V2_FERMES_AUX_LIEUX_LEGACY,
+    PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY,
     Client,
     lieu_en_moteur_legacy,
 )
@@ -596,6 +598,22 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             args=[field_name],
         )
 
+        # Verrou de moteur (spec 15 §5.8) : un lieu legacy qui veut ALLUMER un module V2.
+        # - des raisons le retiennent : la fenetre les liste, sans bouton de confirmation ;
+        # - aucune raison : la fenetre annonce le passage au nouveau moteur.
+        # Eteindre un module : fenetre inchangee.
+        # / Engine lock: reasons listed without a confirm button, or the switch announced.
+        raisons_qui_retiennent_le_lieu = []
+        passage_au_moteur_v2_annonce = False
+        allumage_d_un_module_v2_par_un_lieu_legacy = (
+            field_name in MODULES_V2_FERMES_AUX_LIEUX_LEGACY
+            and not is_active
+            and lieu_en_moteur_legacy()
+        )
+        if allumage_d_un_module_v2_par_un_lieu_legacy:
+            raisons_qui_retiennent_le_lieu = raisons_qui_retiennent_le_lieu_courant()
+            passage_au_moteur_v2_annonce = not raisons_qui_retiennent_le_lieu
+
         html = render_to_string(
             'admin/dashboard_module_modal.html',
             {
@@ -605,31 +623,61 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 "beta_notice": BETA_NOTICE,
                 "toggle_url": toggle_url,
                 "csrf_token": request.META.get("CSRF_COOKIE", ""),
+                "raisons_qui_retiennent_le_lieu": raisons_qui_retiennent_le_lieu,
+                "introduction_des_raisons": INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY,
+                "phrase_de_fin_des_raisons": PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY,
+                "passage_au_moteur_v2_annonce": passage_au_moteur_v2_annonce,
             },
             request=request,
         )
         return HttpResponse(html)
 
     def module_toggle(self, request, field_name):
-        """HTMX POST : bascule un module et renvoie les cartes mises a jour."""
+        """
+        HTMX POST : bascule un module et recharge la page (`HX-Refresh`).
+        / HTMX POST: toggles a module and reloads the page.
+
+        LOCALISATION : Administration/admin_tenant.py
+
+        Verrou de moteur (spec 15 §5.1, §5.8). Un lieu legacy (ancien Fedow) qui ALLUME
+        un module V2 (caisse, monnaie locale, kiosk, tireuse) :
+        - si quelque chose le retient sur l'ancien Fedow : refus avant toute ecriture,
+          le message cite les raisons ;
+        - sinon : il passe au moteur V2 (bascule en un clic), puis le module s'allume.
+          La bascule et l'enregistrement du module sont dans UNE transaction : un echec
+          de l'enregistrement annule aussi la bascule.
+        Eteindre un module, ou toucher un module qui n'est pas V2 : jamais de bascule.
+        Un lieu v2 : aucun verrou.
+        / Engine lock: a legacy venue held by a reason is refused; otherwise it moves to
+        V2, then the module switches on, in one transaction.
+        """
         if field_name not in MODULE_FIELDS:
             return HttpResponse("", status=400)
 
         configuration = Configuration.get_solo()
         current_value = getattr(configuration, field_name)
 
-        # Verrou de moteur : un lieu legacy utilise l'ancien Fedow. Il ne peut pas
-        # ALLUMER un module V2 : refus avant toute ecriture. L'interrupteur cache ne
-        # suffit pas, un POST direct arrive ici. ETEINDRE reste permis : un lieu legacy
-        # qui aurait un drapeau V2 a vrai en base doit pouvoir l'eteindre.
-        # / Engine lock: a legacy venue cannot switch ON a V2 module (refused before
-        # / any write). Switching OFF stays allowed.
+        # Verrou de moteur : un lieu legacy qui allume un module V2 doit d'abord passer
+        # au moteur V2. Le refus arrive avant toute ecriture : l'interrupteur cache ne
+        # suffit pas, un POST direct arrive ici.
+        # / Engine lock: a legacy venue switching ON a V2 module must move to V2 first.
         allumage_demande = not current_value
-        if field_name in MODULES_V2_FERMES_AUX_LIEUX_LEGACY and allumage_demande and lieu_en_moteur_legacy():
-            messages.add_message(request, messages.ERROR, MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY)
-            response = HttpResponse("")
-            response["HX-Refresh"] = "true"
-            return response
+        bascule_vers_v2_demandee = (
+            field_name in MODULES_V2_FERMES_AUX_LIEUX_LEGACY
+            and allumage_demande
+            and lieu_en_moteur_legacy()
+        )
+        if bascule_vers_v2_demandee:
+            raisons_qui_retiennent_le_lieu = raisons_qui_retiennent_le_lieu_courant()
+            if raisons_qui_retiennent_le_lieu:
+                phrases_du_message = [str(INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY)]
+                for raison in raisons_qui_retiennent_le_lieu:
+                    phrases_du_message.append(str(raison))
+                phrases_du_message.append(str(PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY))
+                messages.add_message(request, messages.ERROR, " ".join(phrases_du_message))
+                response = HttpResponse("")
+                response["HX-Refresh"] = "true"
+                return response
 
         setattr(configuration, field_name, not current_value)
         new_value = getattr(configuration, field_name)
@@ -652,14 +700,60 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
         # Configuration.save() peut lever ValidationError (ex: SEPA pas actif cote Stripe).
         # Sans ce try/except, l'exception remonte en 500 silencieux cote HTMX.
-        # On capture comme ConfigurationAdmin.save_model() le fait deja plus haut.
+        # On capture comme ConfigurationAdmin.save_model() le fait deja plus bas.
         # / Configuration.save() may raise ValidationError (e.g. SEPA not active on Stripe).
-        # / Without this guard, the exception bubbles up as a silent 500 over HTMX.
-        try:
-            configuration.save()
-        except ValidationError as e:
-            error_message = e.message if hasattr(e, "message") else str(e)
-            messages.error(request, error_message)
+        #
+        # CONTRAINTES (spec 15 §5.8) :
+        # - La transaction n'entoure `save()` QUE pendant une bascule. `save()` enregistre
+        #   la ligne PUIS leve l'erreur du SEPA : sans bascule, cet enregistrement partiel
+        #   est voulu (le module reste allume, le SEPA eteint, un message le dit). Une
+        #   transaction autour de chaque `save()` l'annulerait.
+        # - Pendant une bascule, la transaction annule tout : le moteur ET la ligne.
+        #   Mais `save()` a deja ecrit le cache du singleton (django-solo) : on le vide,
+        #   sinon le prochain `get_solo()` rendrait le module allume que la base n'a pas.
+        # - Toute autre erreur remet le moteur legacy sur `connection.tenant`, puis remonte.
+        # - Le `filter(moteur_monnaie=LEGACY)` rend la bascule unique : un double clic
+        #   envoie deux POST ; le second ne trouve plus de ligne legacy, il ne journalise
+        #   rien.
+        # - ORDRE dans la transaction : `save()` D'ABORD, puis l'`update` de la ligne du
+        #   lieu. `save()` peut interroger Stripe (capacite SEPA) avant d'ecrire : fait en
+        #   premier, cet appel reseau ne tient aucun verrou. L'`update` verrouille la ligne
+        #   `Customers_client` du lieu jusqu'a la validation : il vient en dernier.
+        # / Transaction only while switching; on failure clear the singleton cache and
+        # / reset the tenant; the LEGACY filter makes the switch happen once; save()
+        # / (which may call Stripe) runs before the Client row is locked.
+        lieu_courant = connection.tenant
+        if bascule_vers_v2_demandee:
+            nombre_de_lieux_bascules = 0
+            try:
+                with db_transaction.atomic():
+                    configuration.save()
+                    nombre_de_lieux_bascules = Client.objects.filter(
+                        pk=lieu_courant.pk,
+                        moteur_monnaie=Client.MOTEUR_LEGACY,
+                    ).update(moteur_monnaie=Client.MOTEUR_V2)
+                    lieu_courant.moteur_monnaie = Client.MOTEUR_V2
+            except ValidationError as e:
+                lieu_courant.moteur_monnaie = Client.MOTEUR_LEGACY
+                Configuration.clear_cache()
+                error_message = e.message if hasattr(e, "message") else str(e)
+                messages.error(request, error_message)
+            except Exception:
+                lieu_courant.moteur_monnaie = Client.MOTEUR_LEGACY
+                Configuration.clear_cache()
+                raise
+            else:
+                if nombre_de_lieux_bascules == 1:
+                    logger.info(
+                        f"Bascule en un clic : le lieu {lieu_courant.schema_name} "
+                        f"passe au moteur V2 en allumant {field_name}"
+                    )
+        else:
+            try:
+                configuration.save()
+            except ValidationError as e:
+                error_message = e.message if hasattr(e, "message") else str(e)
+                messages.error(request, error_message)
 
         # HX-Refresh force un reload complet : la sidebar se met a jour
         # et les messages d'erreur eventuels apparaissent en toast.
@@ -4956,14 +5050,29 @@ class ReservationAdmin(ModelAdmin):
         return super().get_form(request, obj, **defaults)
 
     def get_readonly_fields(self, request, obj=None):
-        # Le statut est en lecture seule sur la page de modification.
-        # Il est piloté par la machine à états (BaseBillet/signals.py).
-        # Un statut changé à la main ne déclenche pas les bonnes transitions :
-        # les billets peuvent rester inactifs.
-        # La page d'ajout n'est pas concernée : ReservationAddAdmin n'affiche pas le statut.
-        # / Status is read-only on the change page: the state machine drives it.
+        # Sur la page de modification, tous les champs sont en lecture seule.
+        # La page d'ajout n'est pas concernée : elle utilise ReservationAddAdmin.
+        # / On the change page, every field is read-only. The add page uses ReservationAddAdmin.
+        #
+        # - status : piloté par la machine à états (BaseBillet/signals.py). Un statut changé
+        #   à la main ne déclenche pas les bonnes transitions : les billets peuvent rester inactifs.
+        # - user_commande : INDISPENSABLE en lecture seule. Les utilisateurs sont partagés entre
+        #   tous les lieux (AuthBillet est en SHARED_APPS). Modifiable, ce champ devient une
+        #   liste déroulante de TOUS les comptes de l'instance : la page met très longtemps à s'ouvrir.
+        # - event, options, to_mail, mail_send, mail_error : une réservation existante ne se
+        #   modifie pas à la main. On passe par les boutons d'action (envoi, annulation).
+        # / user_commande MUST stay read-only: users are shared across all tenants, an editable
+        #   field renders a select of every account of the instance (very slow page).
         if obj:
-            return ("status",)
+            return (
+                "status",
+                "user_commande",
+                "event",
+                "options",
+                "to_mail",
+                "mail_send",
+                "mail_error",
+            )
         return ()
 
     list_display = (

@@ -25,9 +25,11 @@ from django.utils.translation import gettext_lazy as _
 from solo.models import SingletonModel
 
 from BaseBillet.models import Configuration, Membership
+from Customers.bascule_vers_v2 import raisons_qui_retiennent_le_lieu_courant
 from Customers.models import (
-    MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY,
+    INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY,
     MODULES_V2_FERMES_AUX_LIEUX_LEGACY,
+    PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY,
     Client,
     lieu_en_moteur_legacy,
 )
@@ -2600,13 +2602,22 @@ def _build_modules_context(configuration):
     :param configuration: la Configuration du lieu
     :return: liste de cartes (dicts)
     """
-    # Verrou de moteur : un lieu legacy n'allume aucun module V2. Sa carte est fermee
-    # (drapeau `moteur_legacy`, phrase du verrou, pas d'interrupteur), sauf si le module
-    # est reste allume en base : l'interrupteur reste alors, pour l'eteindre (decision
-    # Q2 ; module_toggle accepte l'extinction).
-    # / Engine lock: a legacy venue's V2 cards are closed; a module still on keeps its
-    # switch, to turn it off.
-    moteur_legacy = lieu_en_moteur_legacy()
+    # Verrou de moteur (spec 15 §5.2, §5.8) : un lieu legacy RETENU sur l'ancien Fedow
+    # n'allume aucun module V2. Sa carte est fermee (drapeau `moteur_legacy`, les
+    # raisons a la place d'un interrupteur), sauf si le module est reste allume en base :
+    # l'interrupteur reste alors, pour l'eteindre (decision Q2 ; module_toggle accepte
+    # l'extinction). Un lieu legacy SANS raison voit les cartes d'un lieu v2 : allumer
+    # un module V2 le fait passer au moteur V2 (bascule en un clic).
+    # Les raisons sont calculees UNE fois par affichage, ici.
+    # / Engine lock: cards closed only when reasons hold the legacy venue; computed once.
+    # Un lieu encore legacy, retenu ou non, n'a aucun lien d'ouverture vers un module V2
+    # (« Open kiosk ») : le module refuse un lieu legacy tant qu'il n'a pas bascule.
+    # / A venue still legacy gets no "open" link to a V2 module: it would be refused.
+    lieu_encore_legacy = lieu_en_moteur_legacy()
+    raisons_qui_retiennent_le_lieu = []
+    if lieu_encore_legacy:
+        raisons_qui_retiennent_le_lieu = raisons_qui_retiennent_le_lieu_courant()
+    lieu_retenu_sur_l_ancien_fedow = len(raisons_qui_retiennent_le_lieu) > 0
 
     cartes = []
     for nom_du_champ, info in MODULE_FIELDS.items():
@@ -2622,9 +2633,15 @@ def _build_modules_context(configuration):
             # Une caisse LaBoutik V1 n'est pas une caisse V2 : le verrou ne la ferme pas.
             # / A LaBoutik V1 POS is not a V2 POS: the lock leaves it as is.
             carte_pos["moteur_legacy"] = (
-                moteur_legacy and carte_pos["state"] != "v1_active"
+                lieu_retenu_sur_l_ancien_fedow and carte_pos["state"] != "v1_active"
             )
-            carte_pos["message_moteur_legacy"] = MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY
+            carte_pos["raisons_moteur_legacy"] = raisons_qui_retiennent_le_lieu
+            carte_pos["introduction_moteur_legacy"] = (
+                INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY
+            )
+            carte_pos["phrase_de_fin_moteur_legacy"] = (
+                PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY
+            )
             if carte_pos["moteur_legacy"]:
                 carte_pos["montre_interrupteur"] = carte_pos["allume"]
                 # Pas d'encart BETA sur une carte fermee : il invite a essayer un module
@@ -2644,12 +2661,16 @@ def _build_modules_context(configuration):
 
         module_allume = getattr(configuration, nom_du_champ)
         carte_fermee_par_le_verrou = (
-            moteur_legacy and nom_du_champ in MODULES_V2_FERMES_AUX_LIEUX_LEGACY
+            lieu_retenu_sur_l_ancien_fedow
+            and nom_du_champ in MODULES_V2_FERMES_AUX_LIEUX_LEGACY
         )
-        # Une carte fermee n'a aucun lien d'ouverture (« Open kiosk ») : le module V2
-        # refuse un lieu legacy.
-        # / A closed card has no "open" link: the V2 module refuses a legacy venue.
-        if carte_fermee_par_le_verrou:
+        # Un module V2 d'un lieu encore legacy n'a aucun lien d'ouverture
+        # (« Open kiosk ») : le module V2 refuse un lieu legacy.
+        # / A V2 module of a still-legacy venue has no "open" link.
+        lien_d_ouverture_ferme = (
+            lieu_encore_legacy and nom_du_champ in MODULES_V2_FERMES_AUX_LIEUX_LEGACY
+        )
+        if lien_d_ouverture_ferme:
             lien_externe = None
             libelle_externe = None
             testid_externe = None
@@ -2683,7 +2704,9 @@ def _build_modules_context(configuration):
                 # l'eteindre).
                 # / Decided here rather than in template conditions.
                 "moteur_legacy": carte_fermee_par_le_verrou,
-                "message_moteur_legacy": MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY,
+                "raisons_moteur_legacy": raisons_qui_retiennent_le_lieu,
+                "introduction_moteur_legacy": INTRODUCTION_DES_RAISONS_DU_MOTEUR_LEGACY,
+                "phrase_de_fin_moteur_legacy": PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY,
                 "montre_interrupteur": module_allume or not carte_fermee_par_le_verrou,
                 "allume": module_allume,
                 "url_modale": reverse(
@@ -2734,10 +2757,11 @@ def _poser_le_lien_d_ouverture(carte, info):
     :param info: son entree de MODULE_FIELDS
     :return: None
     """
-    if carte["state"] == "v2_active" and not carte.get("moteur_legacy"):
-        # Caisse V2 en service : on ouvre l'interface. Pas pour un lieu legacy : la
-        # caisse V2 le refuse (HasLaBoutikTerminalAccess), le lien menerait a un refus.
-        # / V2 POS running: open the interface (never for a legacy venue).
+    if carte["state"] == "v2_active" and not lieu_en_moteur_legacy():
+        # Caisse V2 en service : on ouvre l'interface. Pas pour un lieu encore legacy,
+        # retenu ou non : la caisse V2 le refuse (HasLaBoutikTerminalAccess) tant qu'il
+        # n'a pas bascule, le lien menerait a un refus.
+        # / V2 POS running: open the interface (never for a still-legacy venue).
         carte["lien_externe"] = info.get("link_url")
         carte["libelle_externe"] = info.get("link_label")
         carte["testid_externe"] = "dashboard-card-pos-open-link"

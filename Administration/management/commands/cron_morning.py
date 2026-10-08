@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db import connection
 from django_tenants.utils import schema_context, tenant_context
 
+from Customers.etat_des_migrations import schema_est_entierement_migre
 from Customers.models import Client, Domain
 from BaseBillet.tasks import membership_renewal_reminder
 logger = logging.getLogger(__name__)
@@ -55,37 +56,58 @@ class Command(BaseCommand):
 
             return new_schema_names
 
-    def run_waiting_migrations(self, new_schema_names):
+    def migrer_les_emplacements_pas_a_jour(self):
         """
-        Migre uniquement les schemas nouvellement créés, un par un, de façon séquentielle.
-        On évite ainsi de migrer les 300+ tenants existants et on réduit la contention
-        de verrous PostgreSQL (max_locks_per_transaction).
-        / Migrates only the newly created schemas, one by one, sequentially.
-        This avoids migrating all 300+ existing tenants and reduces
-        PostgreSQL lock contention (max_locks_per_transaction).
+        Migre chaque emplacement vide (`WAITING_CONFIG`) dont le schéma n'est pas à jour.
+        / Migrates every empty WAITING_CONFIG slot whose schema is not up to date.
+
+        On passe sur TOUS les emplacements, pas seulement ceux créés ce matin. Un
+        emplacement resté à moitié migré (migration interrompue par un interblocage,
+        tâche tuée) est ainsi réparé le lendemain. Un emplacement déjà à jour est
+        sauté sans lancer de migration (vérification en un dixième de seconde environ).
+        / Every slot, not only today's: a half-migrated slot gets repaired the next day.
+
+        Les migrations se font une par une, dans un sous-processus. Une migration en
+        échec est journalisée et n'arrête pas les suivantes.
+        / One by one, in a subprocess. A failure is logged and does not stop the others.
+
+        :return: la liste des schémas dont la migration a échoué (list de str)
         """
         import subprocess, sys
 
-        logger.info(f"Migrating {len(new_schema_names)} new tenant schemas sequentially...")
+        with schema_context('public'):
+            schemas_des_emplacements = list(
+                Client.objects.filter(categorie=Client.WAITING_CONFIG)
+                .order_by('created_on', 'pk')
+                .values_list('schema_name', flat=True)
+            )
 
-        for schema_name in new_schema_names:
-            logger.info(f"Migrating schema: {schema_name}")
+        schemas_en_echec = []
+        for schema_name in schemas_des_emplacements:
+            # Toute erreur (vérification, création du schéma, migration) est isolée :
+            # les emplacements suivants et le rappel d'adhésion passent quand même.
+            # / Any error is isolated: next slots and the reminder still run.
             try:
+                if schema_est_entierement_migre(schema_name):
+                    continue
+
+                logger.info(f"Migrating schema: {schema_name}")
+
+                # `migrate_schemas --schema` refuse un schéma qui n'existe pas.
+                # / `migrate_schemas --schema` refuses a missing schema.
+                with connection.cursor() as cursor:
+                    cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}";')
+
                 subprocess.run(
                     [sys.executable, "manage.py", "migrate_schemas", "--schema", schema_name],
                     check=True,
                 )
                 logger.info(f"Schema {schema_name} migrated successfully.")
-            except subprocess.CalledProcessError as e:
-                logger.error(
-                    "Migration failed for schema %s (return code: %s).",
-                    schema_name, e.returncode
-                )
-                raise e
+            except Exception:
+                logger.exception(f"Migration failed for schema {schema_name}.")
+                schemas_en_echec.append(schema_name)
 
-        logger.info("All new tenant schemas migrated successfully.")
-
-
+        return schemas_en_echec
 
     def send_task_membership_renewal_reminder(self):
         """
@@ -95,8 +117,19 @@ class Command(BaseCommand):
         membership_renewal_reminder.delay()
 
     def handle(self, *args, **options):
-        new_schema_names = self.create_waiting_tenant()
-        if new_schema_names:
-            self.run_waiting_migrations(new_schema_names)
+        self.create_waiting_tenant()
+        schemas_en_echec = self.migrer_les_emplacements_pas_a_jour()
 
+        # Le rappel part même si une migration a échoué : il ignore les emplacements
+        # vides et ne dépend donc pas de leurs migrations.
+        # / The reminder is sent even if a migration failed: it skips empty slots.
         self.send_task_membership_renewal_reminder()
+
+        # On lève l'erreur à la fin, pour que la tâche Celery soit notée en échec.
+        # L'emplacement en échec sera retenté demain matin.
+        # / Raise at the end so the Celery task is marked as failed; retried tomorrow.
+        if schemas_en_echec:
+            raise Exception(
+                f"cron_morning : migration en échec pour {len(schemas_en_echec)} "
+                f"emplacement(s) : {', '.join(schemas_en_echec)}"
+            )

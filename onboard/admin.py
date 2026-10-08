@@ -31,7 +31,7 @@ from Administration.admin.base import ModelAdmin
 from unfold.decorators import action
 
 from Administration.admin.site import staff_admin_site
-from ApiBillet.permissions import RootPermissionWithRequest, TenantAdminPermissionWithRequest
+from ApiBillet.permissions import RootPermissionWithRequest
 from MetaBillet.models import WaitingConfiguration
 from onboard.models import OnboardInvitation
 
@@ -46,10 +46,8 @@ class OnboardInvitationAdmin(ModelAdmin):
     / Unfold admin for OnboardInvitation. Read-only on code and
     auto-generated timestamps (code, created_at, used_at).
 
-    Permissions : reservees aux admins de tenant (convention du projet,
-    cf. TenantAdminPermissionWithRequest dans ApiBillet/permissions.py).
-    / Permissions: restricted to tenant admins (project convention,
-    see TenantAdminPermissionWithRequest in ApiBillet/permissions.py).
+    Permissions : root seulement (RootPermissionWithRequest, ApiBillet/permissions.py).
+    / Permissions: root only (RootPermissionWithRequest, ApiBillet/permissions.py).
     """
 
     # Affichage liste — colonnes lisibles d'un coup d'oeil.
@@ -78,23 +76,23 @@ class OnboardInvitationAdmin(ModelAdmin):
 
     ordering = ("-created_at",)
 
-    # Permissions explicites — convention du projet : chaque ModelAdmin
-    # declare ses 4 permissions via TenantAdminPermissionWithRequest
-    # (cf. CarrouselAdmin, TagAdmin, etc. dans Administration/admin_tenant.py).
-    # / Explicit permissions — project convention: each ModelAdmin
-    # declares its 4 permissions via TenantAdminPermissionWithRequest
-    # (see CarrouselAdmin, TagAdmin, etc. in Administration/admin_tenant.py).
+    # Root seulement. INDISPENSABLE : OnboardInvitation est en SHARED_APPS, la table
+    # est commune à tous les lieux, et cet admin ne filtre pas par lieu. Ouvert aux
+    # admins de lieu, il leur montrerait les invitations de TOUS les lieux, et ses
+    # listes déroulantes tous les utilisateurs et tous les lieux de l'instance.
+    # / Root only. REQUIRED: OnboardInvitation is in SHARED_APPS (one table for all
+    # venues) and this admin has no tenant filter.
     def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return RootPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return RootPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return RootPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return RootPermissionWithRequest(request)
 
 
 @admin.register(WaitingConfiguration, site=staff_admin_site)

@@ -23,6 +23,7 @@ from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paieme
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import ajouter_article, encaisser_vente, ouvrir_vente
 from BaseBillet.tasks import send_membership_pending_admin, send_membership_pending_user
+from Customers.etat_des_migrations import schema_est_entierement_migre
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
@@ -1334,9 +1335,32 @@ class TenantCreateValidator:
             if Client.objects.filter(name=name).exists():
                 raise Exception(f"The name '{name}' is already taken. ")
 
-            tenant = Client.objects.filter(categorie=Client.WAITING_CONFIG).first()
-            if not tenant:
+            # On prend le premier emplacement vide dont le schéma a reçu TOUTES ses
+            # migrations. Un emplacement peut être à moitié migré (migration
+            # interrompue) ou en cours de migration par `cron_morning` : le donner à
+            # un lieu lui livrerait un schéma cassé. `cron_morning` répare les
+            # emplacements en retard chaque matin.
+            # / Take the first empty slot whose schema has ALL its migrations: a
+            # half-migrated slot would give the venue a broken schema.
+            emplacements_vides = Client.objects.filter(
+                categorie=Client.WAITING_CONFIG,
+            ).order_by('created_on', 'pk')
+            if not emplacements_vides.exists():
                 raise Exception("No waiting tenant. ")
+
+            tenant = None
+            for emplacement in emplacements_vides:
+                if schema_est_entierement_migre(emplacement.schema_name):
+                    tenant = emplacement
+                    break
+                logger.warning(
+                    f"create_tenant : emplacement {emplacement.schema_name} pas entièrement migré, ignoré.")
+
+            if tenant is None:
+                raise Exception(
+                    "No fully migrated waiting tenant. "
+                    "/ Aucun emplacement vide entièrement migré : lancer migrate_schemas "
+                    "sur les emplacements WAITING_CONFIG. ")
 
             # Slug du sous-domaine : on respecte le slug saisi à l'étape
             # « Votre lieu » (éditable, cf. onboard STEP_VENUE), avec repli sur
