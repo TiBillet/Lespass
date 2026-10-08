@@ -41,6 +41,7 @@ from Administration.admin import (  # noqa: F401
 # / Same side-effect mechanism for the pages app: the project does not use admin
 # autodiscover, importing the module triggers the @admin.register calls.
 import pages.admin  # noqa: F401
+import datetime
 
 import hmac
 import json
@@ -4030,6 +4031,36 @@ class EventResource(resources.ModelResource):
         # Show a diff of changes before import
         report_skipped = True
 
+class EventDateFilter(admin.SimpleListFilter):
+    """
+    Filter sidebar unfold pour filter les évènement comparé à la date actuelle
+    """
+
+    title = _("Date de l'événement")
+    parameter_name = "event_date"
+
+    def choices(self, changelist):
+        choices = list(super().choices(changelist))
+        choices[0]['display'] = _('Dans le futer')
+        return choices
+
+    def lookups(self, request, model_admin):
+        return [
+            # ("futur", _("Dans le futur")), # Il prend la place de l'élément par défaut (voir choices())
+            ("passe", _("Passé")),
+            ("tous", _("Tous"))
+        ]
+
+    def queryset(self, request, queryset):
+        now = datetime.datetime.now()
+        value = self.value()
+        if value is None: # Le filtre futur est par défaut, donc égale à None
+            return queryset.filter(Q(datetime__gte=now) | Q(end_datetime__gte=now) )
+        if self.value() == "passe":
+            return queryset.filter(Q(datetime__lte=now) & (Q(end_datetime__isnull=True) | Q(end_datetime__lte=now)))
+        if self.value() == "tous":
+            return queryset
+        return queryset
 
 class IsProposalFilter(admin.SimpleListFilter):
     """
@@ -4064,7 +4095,7 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     date_hierarchy = "datetime"
-    ordering = ("-datetime",)
+    ordering = ("datetime",)
     
     # Import/Export configuration
     resource_classes = [EventResource]
@@ -4147,6 +4178,7 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
 
     search_fields = ['name']
     list_filter = [
+        EventDateFilter,
         IsProposalFilter,
         EventArchiveFilter,
         ('datetime', RangeDateTimeFilterWithTimeZone),
@@ -5969,7 +6001,6 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
         return super().get_form(request, obj, **defaults)
 
     def test_api_ghost(self, ghost_url, ghost_key):
-        import datetime
         import jwt
 
         # Split the key into ID and SECRET
