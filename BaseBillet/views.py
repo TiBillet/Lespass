@@ -3861,7 +3861,7 @@ class EventMVT(viewsets.ViewSet):
         # paiement_stripe_refreshed = paiement_stripe_reservation_validator(request, paiement_stripe)
 
         if request.user.is_authenticated:
-            return redirect('/my_account/my_reservations/')
+            return redirect('/my_account/')
         return redirect('/event/')
 
 

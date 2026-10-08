@@ -1,12 +1,10 @@
 {% load i18n %}
 <title hx-swap-oob="true">{% translate 'Login' %} | {{ config.organisation }}</title>
 
-<div class="d-flex min-vh-100 align-items-center justify-content-center py-5 login-fullpage-bg flex-fill">
-  <div class="container px-3">
     <div class="mx-auto" style="max-width: 520px;">
       <div class="card shadow-sm bg-body border-0 rounded-4">
         <div class="card-body p-4 p-md-5">
-          <h1 class="h3 mb-3">{% if config.organisation %}{{ config.organisation }}{% else %}{% trans 'Welcome' %}{% endif %}</h1>
+          <h1 class="h3 mb-3"> Connexion à {% if config.organisation %}{{ config.organisation }}{% else %}{% trans 'Welcome' %}{% endif %}</h1>
           <p class="text-secondary mb-4">{% trans "Enter your email to receive a secure login link. No password needed." %}</p>
 
           <form id="login-fullpage-form"
@@ -45,8 +43,7 @@
         </a>
       </div>
     </div>
-  </div>
-</div>
+
 
 <style>
   /* Light/Dark adaptive background for the full page */
