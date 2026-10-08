@@ -529,6 +529,61 @@ Dump : `tibillet.re-M0221-2026-10-06-04-52.sql.gz` (grappe `pg_dumpall` ; base
 - TVA : `A` 0 % (10 411) ou 20 % (1 245) ; `B` 0 % (7 159), 2,1 % (256), 5,5 % (7), 10 % (40), 20 % (11) ; `F`, `N`, `Q`, `R` à 0 %.
 - Aucune ligne sans tarif vendu (`pricesold`).
 
+### 14 bis. R-1 — passage à blanc sur la copie (2026-10-07)
+
+Copie migrée, **déjà nettoyée des 148 lieux inactifs** (365 lieux). Commande
+`reprendre_les_ventes_existantes` (lecture seule), sortie complète hors dépôt
+(`db-prod/passage_a_blanc_R1_2026-10-07.txt`, mode 600). **Agrégats seulement.**
+
+| Mesure | Résultat | Comparaison avec R-0 |
+|---|---|---|
+| lignes lues | **23 465** | = R-0 (les lieux supprimés n'avaient aucune ligne) |
+| durée | 31,7 s de calcul (42 s en tout) | |
+| ventes | `VENTE REGLEE` 17 575 (dont 125 virements reçus), `VENTE ANNULEE` 4 617, `VENTE EN_ATTENTE` 159, `AVOIR REGLEE` 138 | avoirs 138 = 33 `N` + 105 `R` ; en attente 159 contre 167 `W` de moins de 30 jours au 2026-10-06 (un jour de plus) |
+| règlements | `SN` 8 011 · 644 852,25 € ; `LE` 2 010 · 48 944,08 € ; `SR` 254 · 18 540,00 € ; `CA` 1 957 · 8 989,80 € ; `SP` 69 · 8 010,00 € ; `CC` 664 · 4 036,00 € ; `TR` 35 · 3 078,00 € ; `UK` 401 · 2 600,00 € ; `CH` 39 · 1 105,00 € ; `SF` 4 · 161,00 € ; `NA` 8 · 11,75 € | `SR` 254 = lignes `SR` ; `LE` 2 010 = lignes `LE` ; `TR` 35 = 34 + 1 avoir |
+| hors parts QR : ancien Σ `amount × qty` / nouveau Σ `total_catalogue` | **487 312,48 € / 487 312,48 €** | égaux |
+| Σ net vendu (`total_ttc`) / Σ part offerte | 909 434,05 € / 11,75 € (les 8 recharges `TNF`, QO-10) | |
+| virements reçus (paiements `T`) | **125 ventes, 366 514,85 €, 24 lieux** | = 125 paiements `T` |
+| paiements Stripe sans ligne (aucune vente) | 155 | = 154 `F` / `W` + 1 `Q` / `P` |
+| anomalies | **0 bloquante.** « monnaie de recharge introuvable » : 1 004 lignes, non bloquante | voir ci-dessous |
+| information | 28 paiements QR dont Σ `qty` sort de [0,99 ; 1,01] | |
+
+**Les 1 004 « monnaies de recharge introuvables »** : anciennes lignes de catégorie `R`, **à 0 €**,
+sans `asset`, moyen vide, origine en ligne, validées, sur des paiements Stripe validés, dans 4 lieux,
+de 2022-05 à 2024-07. R-0 ne les voyait pas (il ne comptait que les lignes avec `asset`). Effet :
+reprises en euros, à 0 €, signalées (Q-R19) ; aucun argent en jeu, pas de code (orchestrateur).
+
+### 14 ter. R-2 — écriture sur la copie (2026-10-08)
+
+Lancée par le mainteneur (`--executer`), après un instantané de la copie migrée et nettoyée
+(`db-prod/copie_migree_nettoyee_2026-10-08.dump`, `pg_dump -Fc`, 256 Mo, mode 600 : il permet de
+revenir en arrière sans refaire les migrations : `detruire`, `demarrer`, `charger <instantané>`).
+
+| Mesure | Résultat |
+|---|---|
+| ventes écrites | **22 489** (`VENTE REGLEE` 17 575, `ANNULEE` 4 619, `EN_ATTENTE` 157, `AVOIR` 138) ; mêmes règlements et totaux que le passage à blanc (§14 bis) |
+| chaîne des ventes | **valide dans les 365 lieux** ; 0 erreur, 0 lieu refusé |
+| durée | **12 min** d'écriture (720 s) + 31 s de calcul ; le plus gros lieu : 80 s (2 381 lignes, ~34 ms par vente) |
+| contrôle après (agrégats) | 0 ligne sans vente ; 0 vente hors reprise ; 0 paiement `T` sans vente ; 0 paiement payé sans `montant_encaisse` |
+| signaux | seulement le journal `send_membership_product_to_fedow` à la création du produit `VR` (le signal ne contacte Fedow que pour une adhésion ou un badge) |
+
+### 14 quater. R-3 et R-4a — clôtures sur la copie (2026-10-08)
+
+Lancés par le mainteneur après l'écriture de R-2 (§14 ter). **Agrégats seulement.**
+
+| Étape | Résultat |
+|---|---|
+| `anciennes_clotures --exporter` | 365 lieux, **50 827** clôtures exportées (R-0 : 74 239 avant la suppression des 148 lieux inactifs), **4,8 s** |
+| `anciennes_clotures --supprimer --export … --executer` | 50 827 supprimées, **0 lieu refusé**, **2,5 s** |
+| `creer_la_cloture_de_reprise` | **102 J reprise** (numéro 1, marquées `reprise`), 263 lieux sans vente réglée, 0 refus, 0 erreur |
+| `verify_clotures` | « Audit complet : aucune anomalie détectée » |
+| total perpétuel des J reprise | = Σ `total_ttc` des ventes réglées dans 78 lieux ; dans les 24 autres, = Σ moins le hors chiffre d'affaires (ce sont les 24 lieux à virements reçus) : la J compte le chiffre d'affaires, comme une J ordinaire |
+
+**Les 28 « paiements QR dont Σ `qty` sort de [0,99 ; 1,01] » (§14 bis)** : des demandes QR
+**jamais payées** (statut `O`, origine `QR`) dont le texte `metadata` est identique ; elles sont
+réunies par groupe de 4 à 82 lignes dans **une vente ANNULEE** chacune (sans numéro, sans
+règlement). Aucun argent en jeu ; R-0 ne comptait que les QR payés (0 hors bornes).
+
 ## 15. Décisions appliquées
 
 Q-R1 (une fenêtre), Q-R2 (J reprise, rattrapage plafonné sans mail), Q-R3 (FEC refusé
@@ -566,6 +621,11 @@ en `v2` ; condition : 0 lieu de production avec un drapeau V2 avant la bascule (
 (public et lieux). Chaque lieu — `BaseBillet 0222` à `0227` (dont `0227_moteur_v2_si_un_module_v2_est_actif`) ;
 `comptabilite 0004`, `0005` ; `laboutik 0001`, `0002` (plan par défaut, clé
 d'empreinte) ; `booking`, `controlvanne`, `inventaire`, `kiosk 0001` ; `crowds 0009`.
+Apportées par la fusion d'`origin` (`3dc853fc`, 2026-10-07), vérifiées le 2026-10-08 :
+`BaseBillet 0228` (`AlterField` d'un texte de `FederationConfiguration`) ; `booking 0002`
+(`Resource.group` obligatoire : sans risque, la table `booking_resource` naît vide la même nuit
+par `booking 0001`) et `booking 0003` (sème les groupes « Ressource » et « Espace » dans chaque
+lieu : l'outil `supprimer_lieux_inactifs` les tolère, R-N-bis).
 
 ## 17. Questions ouvertes pour le mainteneur
 
@@ -577,7 +637,8 @@ prend le montant de sa transaction. Exemple : QR de 10,00 € payé 6,00 € en 
 a rien à comparer. Proposé (I-8) : retirer cette anomalie ; signaler seulement, pour
 information, les groupes dont Σ `qty` sort de [0,99 ; 1,01].
 
-**QO-2 — La balance du plan comptable.** Q-R3 refuse le FEC avant la mise en service.
+**QO-2 — La balance du plan comptable. Tranchée (mainteneur, 2026-10-08) : balance acceptée**, pas de refus.
+ Q-R3 refuse le FEC avant la mise en service.
 La **balance** (`comptabilite/balance.py`, onglet « Gérer » du plan comptable) lit les
 mêmes J, datées du jour de leur **première** vente. La J reprise y serait datée du jour
 de la plus vieille vente du lieu. Exemple : balance de janvier 2024 → elle contiendrait
@@ -589,7 +650,8 @@ Proposé : l'utilisateur du paiement Stripe (`Paiement_stripe.user`), sinon celu
 l'adhésion (`membership.user`), sinon vide. Aucun écran ne filtre les ventes par client
 aujourd'hui : c'est une information.
 
-**QO-4 — Le plafond du rattrapage.** Q-R2 dit « ex. 12 par lieu et par heure ». La
+**QO-4 — Le plafond du rattrapage. Tranchée (mainteneur, 2026-10-08) : 12 par lieu et par passage.**
+ Q-R2 dit « ex. 12 par lieu et par heure ». La
 fiche écrit 12. Confirmer ce chiffre.
 
 **QO-5 — Un ancien avoir sur une part QR / NFC** (à poser seulement si R-0 en trouve).
@@ -706,10 +768,11 @@ quelqu'un derrière un billet ou une adhésion. Le client est l'utilisateur de l
 **QO-12 — 4 lignes à quantité non entière hors QR** (`LE` / `SF`, origine « en ligne » ou
 « admin »). **Tranchée (mainteneur, 2026-10-07)** : traitées comme une part QR (argent = `amount`).
 
-**Formes absentes de la production (R-0)** : paiement QR en deux monnaies, jetons cadeau `LG`,
+**Formes absentes de la production (R-0)** : jetons cadeau `LG`,
 paiement Stripe `N`, avoir sur une part QR, ligne `R` positive, avoir daté avant sa vente : la
 reprise ne les code pas ; si l'une apparaît, anomalie « forme non prévue » (orchestrateur,
-2026-10-07, pour éviter la sur-ingénierie).
+2026-10-07, pour éviter la sur-ingénierie). Un paiement QR en deux monnaies, absent lui aussi, donne **une vente et deux
+règlements** : la règle générale (un règlement par moyen) le fait sans code de plus (constat de R-1).
 
 **QO-9 — Les 280 paiements Stripe sans aucune ligne** (R-0, §14 ligne 8). **En partie tranchée.**
 - 154 paiements `F` / `W` (paniers abandonnés, réservation sans ligne, aucun argent reçu) et 1

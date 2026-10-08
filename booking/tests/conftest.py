@@ -109,13 +109,18 @@ def test_resource(tenant, test_calendar, test_weekly_opening):
 
     LOCALISATION : booking/tests/conftest.py
     """
-    from booking.models import Resource
+    from booking.models import Resource, ResourceGroup
     from booking.tests.fabriques import creer_produit_de_ressource
 
     with schema_context(TENANT_SCHEMA):
+        # Le groupe est obligatoire. « Ressource » est semé dans chaque lieu par la
+        # migration booking 0003 ; get_or_create le recrée s'il manque.
+        # / The group is required; "Ressource" is seeded by migration booking 0003.
+        groupe_ressource, _created = ResourceGroup.objects.get_or_create(name='Ressource')
         resource_for_tests, _created = Resource.objects.get_or_create(
             name=f'{TEST_PREFIX} Resource',
             defaults={
+                'group': groupe_ressource,
                 'calendar': test_calendar,
                 'weekly_opening': test_weekly_opening,
                 'product': creer_produit_de_ressource(f'{TEST_PREFIX} Resource'),

@@ -30,9 +30,11 @@ LES RÈGLES (fiche F §3 ; tronc D19, D28)
   Une période n'est clôturée qu'APRÈS LE FILET DU JOUR OÙ ELLE FINIT (le seuil de ce
   jour-là) : la J de la dernière soirée de la période, qui finit à ce seuil, est créée
   avant elle, et la période porte les perpétuels de cette J.
-  La tâche horaire crée TOUTES les périodes finies qui manquent depuis la dernière
-  clôture du niveau (sinon depuis la première vente du lieu), dans l'ordre
-  chronologique : une tâche arrêtée plusieurs semaines rattrape tout au premier passage.
+  La tâche horaire crée les périodes finies qui manquent depuis la dernière clôture du
+  niveau (sinon depuis la première vente du lieu), dans l'ordre chronologique, AU PLUS
+  12 par passage (H, M et A ensemble) : le reste attend les passages suivants. Une
+  tâche arrêtée quelques semaines rattrape tout au premier passage ; un lieu repris
+  (des années d'historique) rattrape son historique petit à petit.
 - Le rapport stocké (`rapport_json`) = `RapportDesVentes(debut, fin)` (toutes les
   sections), plus dans l'en-tête : niveau, numéro de clôture, perpétuels. Les sections
   « caisse espèces » et « intégrité » ne sont stockées que dans une J : un fond de
@@ -40,9 +42,15 @@ LES RÈGLES (fiche F §3 ; tronc D19, D28)
   ventes de sa plage (une année la revérifierait vente par vente).
 - Perpétuels : J = ceux de la J précédente + cette J ; H / M / A = ceux de la dernière J.
 - Une seule chaîne de clôtures, tous niveaux (`comptabilite/integrite.py`).
+- La J « reprise » (fiche R §11) : créée une fois par lieu, la nuit de la bascule, par
+  la commande `creer_la_cloture_de_reprise`. Elle couvre tout l'historique et porte
+  `"reprise": true` dans l'en-tête de son rapport. Sa fin est la MISE EN SERVICE de la
+  comptabilité du lieu (`mise_en_service_du_lieu`) : aucun mail pour une clôture finie
+  avant ou à cette date.
 / Rules: sliding J under the venue lock; hourly net at closing time + 2 h, local
 time; calendar H / M / A computed on sales, none when empty, after the net of their
-last day, every missing one caught up; stored report; perpetual totals; one chain.
+last day, missing ones caught up (12 per run at most); stored report; perpetual
+totals; one chain; the "reprise" J sets the go-live (no e-mail before it).
 
 FLUX :
 - `TiBillet/celery.py` `cron_clotures_automatiques` (chaque heure) →
@@ -92,6 +100,12 @@ NIVEAUX_CALENDAIRES = [
     ClotureCaisse.NIVEAU_MENSUEL,
     ClotureCaisse.NIVEAU_ANNUEL,
 ]
+
+# Au plus 12 clôtures H, M et A AU TOTAL par lieu et par passage de la tâche horaire
+# (fiche R §11.2, QO-4). Un lieu repris a des années d'historique à rattraper : sans
+# plafond, un seul passage créerait des centaines de clôtures d'un coup.
+# / At most 12 H, M and A closures IN TOTAL per venue and per hourly run.
+PLAFOND_DES_CLOTURES_CALENDAIRES_PAR_PASSAGE = 12
 
 
 def _debut_du_jour(jour, fuseau_du_lieu):
@@ -300,7 +314,13 @@ def _ventes_reglees_entre(debut, fin):
 
 
 def _enregistrer_la_cloture(
-    niveau, debut, fin, sections_du_rapport, responsable=None, point_de_vente=None
+    niveau,
+    debut,
+    fin,
+    sections_du_rapport,
+    responsable=None,
+    point_de_vente=None,
+    reprise=False,
 ):
     """
     Numérote, chaîne et enregistre une clôture. À appeler DANS une transaction, sous
@@ -319,6 +339,8 @@ def _enregistrer_la_cloture(
     :param sections_du_rapport: le dictionnaire des sections (`RapportDesVentes`)
     :param responsable: l'utilisateur qui a lancé la clôture, ou None (automatique)
     :param point_de_vente: le `laboutik.PointDeVente` d'où elle est lancée, ou None
+    :param reprise: True pour la J « reprise » du lieu (commande
+        `creer_la_cloture_de_reprise`) : l'en-tête du rapport reçoit `"reprise": true`
     :return: la `ClotureCaisse` enregistrée
     """
     en_tete = sections_du_rapport["en_tete"]
@@ -354,6 +376,12 @@ def _enregistrer_la_cloture(
     en_tete["total_perpetuel_en_centimes"] = total_perpetuel
     en_tete["nombre_de_ventes_perpetuel"] = nombre_ventes_perpetuel
 
+    # La marque de la J « reprise » est posée AVANT l'empreinte : le `rapport_json`
+    # est dans l'empreinte de la clôture. Posée après, la chaîne serait cassée.
+    # / The "reprise" mark is set BEFORE the fingerprint, which covers rapport_json.
+    if reprise:
+        en_tete["reprise"] = True
+
     cloture = ClotureCaisse(
         niveau=niveau,
         numero_sequentiel=numero_de_la_cloture,
@@ -380,7 +408,7 @@ def _enregistrer_la_cloture(
 
 
 def _creer_la_cloture_journaliere(
-    seuil_du_filet=None, responsable=None, point_de_vente=None
+    seuil_du_filet=None, responsable=None, point_de_vente=None, reprise=False
 ):
     """
     Crée la J du lieu courant : [fin de la J précédente, maintenant[.
@@ -417,6 +445,8 @@ def _creer_la_cloture_journaliere(
         seuil. None pour un Z demandé (la J finit maintenant).
     :param responsable: l'utilisateur qui demande le Z (bouton de la caisse), ou None
     :param point_de_vente: le point de vente d'où le Z est demandé, ou None
+    :param reprise: True pour la J « reprise » (commande `creer_la_cloture_de_reprise`) :
+        elle est marquée dans l'en-tête de son rapport, avant l'empreinte
     :return: la `ClotureCaisse` créée, ou None (aucune vente dans la plage, J déjà
         faite depuis le seuil, ou J créée entre-temps par un autre appel)
     """
@@ -490,6 +520,7 @@ def _creer_la_cloture_journaliere(
             sections_du_rapport,
             responsable=responsable,
             point_de_vente=point_de_vente,
+            reprise=reprise,
         )
 
 
@@ -606,15 +637,83 @@ def _creer_la_cloture_d_une_periode(niveau, debut, fin):
         return _enregistrer_la_cloture(niveau, debut, fin, sections_du_rapport)
 
 
+def est_la_j_de_reprise(cloture):
+    """
+    Vrai si la clôture est la J « reprise » du lieu : une J marquée `"reprise": true`
+    dans l'en-tête de son rapport (commande `creer_la_cloture_de_reprise`).
+    / True when the closure is the venue's "reprise" J (marked in its report header).
+    """
+    if cloture.niveau != ClotureCaisse.NIVEAU_JOURNALIER:
+        return False
+    en_tete_du_rapport = cloture.rapport_json.get("en_tete", {})
+    return en_tete_du_rapport.get("reprise") is True
+
+
+def la_j_de_reprise_du_lieu():
+    """
+    La J « reprise » du lieu courant, ou None s'il n'en a pas.
+    / The current venue's "reprise" J, or None.
+
+    LOCALISATION : comptabilite/tasks.py
+
+    La J reprise couvre tout l'historique des ventes du lieu, jusqu'à la nuit de la
+    bascule. Il y en a une au plus par lieu : la commande `creer_la_cloture_de_reprise`
+    ne la crée pas deux fois.
+    / The "reprise" J covers the venue's whole sales history; at most one per venue.
+    """
+    return ClotureCaisse.objects.filter(
+        niveau=ClotureCaisse.NIVEAU_JOURNALIER,
+        rapport_json__en_tete__reprise=True,
+    ).first()
+
+
+def mise_en_service_du_lieu():
+    """
+    La date de mise en service de la comptabilité du lieu courant : la fin de sa J
+    « reprise ». None si le lieu n'a pas de J reprise : il n'a alors aucune mise en
+    service à respecter.
+    / The go-live of the current venue's accounting: the end of its "reprise" J, or
+    None (nothing to respect).
+
+    LOCALISATION : comptabilite/tasks.py
+
+    C'est la SEULE lecture de la mise en service (fiche R §11).
+    APPELÉE PAR : `demander_l_email_automatique_si_configure` (aucun mail pour une
+    clôture finie avant), `comptabilite/admin.py` `ClotureCaisseAdmin.exporter_fec`
+    (FEC refusé avant).
+    / The ONLY reader of the go-live.
+
+    :return: un datetime avec fuseau, ou None
+    """
+    j_de_reprise = la_j_de_reprise_du_lieu()
+    if j_de_reprise is None:
+        return None
+    return j_de_reprise.datetime_fin
+
+
 def demander_l_email_automatique_si_configure(schema_name, cloture):
     """
     Demande l'email de la clôture si le lieu a des destinataires et que la périodicité
     du rapport est le niveau de cette clôture.
     / Requests the closure email when configured for this level.
 
+    Aucun mail pour une clôture dont la fin est avant OU ÉGALE à la mise en service :
+    la période est tout entière dans l'historique repris (fiche R §11.3). La J reprise
+    elle-même finit à la mise en service : elle n'a donc pas de mail non plus.
+    / No e-mail for a closure ending at or before the go-live (history), the
+    "reprise" J included.
+
     APPELÉE PAR : les tâches de clôture de ce module, et `laboutik/views.py`
     `CaisseViewSet.cloturer` (après les effets du bouton, dans un try/except).
     """
+    mise_en_service = mise_en_service_du_lieu()
+    if mise_en_service is not None:
+        cloture_finie_avant_la_mise_en_service = (
+            cloture.datetime_fin <= mise_en_service
+        )
+        if cloture_finie_avant_la_mise_en_service:
+            return
+
     configuration = Configuration.get_solo()
     if configuration.rapport_periodicite == cloture.niveau and configuration.rapport_emails:
         envoyer_email_cloture.delay(schema_name, str(cloture.uuid))
@@ -770,11 +869,11 @@ def _periodes_finies_a_cloturer(niveau, fuseau_du_lieu, heure_de_fermeture):
 @shared_task
 def generer_les_clotures_automatiques_du_lieu(schema_name):
     """
-    La sous-tâche horaire d'un lieu : le filet J, puis toutes les semaines, tous les
-    mois et toutes les années finis qui ne sont pas encore clôturés, dans l'ordre
-    chronologique.
-    / The hourly sub-task of one venue: the J net, then every finished H, M, A not yet
-    closed, in chronological order.
+    La sous-tâche horaire d'un lieu : le filet J, puis les semaines, les mois et les
+    années finis qui ne sont pas encore clôturés, dans l'ordre chronologique, au plus
+    12 créés par passage (`PLAFOND_DES_CLOTURES_CALENDAIRES_PAR_PASSAGE`).
+    / The hourly sub-task of one venue: the J net, then the finished H, M, A not yet
+    closed, in chronological order, at most 12 created per run.
 
     LOCALISATION : comptabilite/tasks.py
 
@@ -811,19 +910,36 @@ def generer_les_clotures_automatiques_du_lieu(schema_name):
                 demander_l_email_automatique_si_configure(schema_name, cloture_j)
 
             # Les semaines, mois, années finis qui manquent, dans l'ordre du
-            # calendrier : chacun une seule fois.
-            # / Every missing finished week, month, year, in calendar order, once each.
+            # calendrier : chacun une seule fois. Au plus 12 clôtures créées au total
+            # par passage (H, M et A ensemble) : les suivantes attendent le passage
+            # d'après. Une période sans vente ou déjà clôturée ne compte pas.
+            # / Every missing finished week, month, year, in calendar order, once each;
+            # at most 12 created in total per run, the others wait for the next run.
             fuseau_du_lieu = configuration.get_tzinfo()
+            nombre_de_clotures_calendaires_creees = 0
             for niveau in NIVEAUX_CALENDAIRES:
+                plafond_atteint = (
+                    nombre_de_clotures_calendaires_creees
+                    >= PLAFOND_DES_CLOTURES_CALENDAIRES_PAR_PASSAGE
+                )
+                if plafond_atteint:
+                    break
                 periodes_finies = _periodes_finies_a_cloturer(
                     niveau, fuseau_du_lieu, configuration.heure_de_fermeture
                 )
                 for debut, fin in periodes_finies:
+                    plafond_atteint = (
+                        nombre_de_clotures_calendaires_creees
+                        >= PLAFOND_DES_CLOTURES_CALENDAIRES_PAR_PASSAGE
+                    )
+                    if plafond_atteint:
+                        break
                     cloture_de_la_periode = _creer_la_cloture_d_une_periode(
                         niveau, debut, fin
                     )
                     if cloture_de_la_periode is None:
                         continue
+                    nombre_de_clotures_calendaires_creees += 1
                     logger.info(
                         f"[{schema_name}] Clôture {niveau} n° "
                         f"{cloture_de_la_periode.numero_sequentiel} créée."

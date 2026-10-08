@@ -26,7 +26,11 @@ if [ "$DEBUG" = "1" ]; then
   echo "Database reset complete."
 
 #  poetry run python manage.py migrate
-  poetry run python manage.py migrate_schemas --executor=multiprocessing
+  # Un lieu après l'autre (exécuteur standard), JAMAIS --executor=multiprocessing : deux
+  # lieux migrés en parallèle s'interbloquent dans PostgreSQL (clés étrangères vers les
+  # tables partagées du schéma public).
+  # / One venue at a time: parallel tenant migrations deadlock in PostgreSQL.
+  poetry run python manage.py migrate_schemas
   poetry run python manage.py install
 
   # Mode light par défaut (1 tenant, 3 events, 2 adhésions).
