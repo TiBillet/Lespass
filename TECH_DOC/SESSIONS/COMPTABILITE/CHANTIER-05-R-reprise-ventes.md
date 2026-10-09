@@ -584,6 +584,18 @@ Lancés par le mainteneur après l'écriture de R-2 (§14 ter). **Agrégats seul
 réunies par groupe de 4 à 82 lignes dans **une vente ANNULEE** chacune (sans numéro, sans
 règlement). Aucun argent en jeu ; R-0 ne comptait que les QR payés (0 hors bornes).
 
+### 14 quinquies. R-4 — répétition de la nuit (2026-10-08/09)
+
+Copie rechargée depuis le dump du 2026-10-06 (513 lieux), puis la nuit dans l'ordre de la
+procédure `CHANTIER-05-R-nuit-procedure.md` (durées et contrôles dans sa dernière section).
+**Toutes les étapes passent** : `anciennes_clotures --exporter` sur la base **non migrée**
+(50 992 clôtures, 4,3 s) ; migrations un lieu après l'autre (366 lieux, 2 h 20, 0 lieu passé en
+v2) ; suppression des anciennes clôtures (0 refus) ; reprise (22 489 ventes, 11 min 25, chaîne
+valide, 0 ligne sans vente) ; 102 J reprise (2 min 33) ; `verify_clotures` sans anomalie ;
+**0 mail**. La suppression des lieux inactifs, éprouvée elle aussi sur la base non migrée
+(147 lieux), a ensuite été **abandonnée** par le mainteneur (§18) : la copie n'avait donc plus
+que 366 lieux pour la suite.
+
 ## 15. Décisions appliquées
 
 Q-R1 (une fenêtre), Q-R2 (J reprise, rattrapage plafonné sans mail), Q-R3 (FEC refusé
@@ -676,6 +688,16 @@ premier. Garder la date de l'avoir (numéro avant la vente) ou le dater comme sa
 remplacé** par le plan de la branche, sans export : « ça n'aurait jamais dû être en prod ».
 
 ## 18. Supprimer les lieux sans aucune activité, avant la migration (session R-N)
+
+> **ABANDONNÉ (mainteneur, 2026-10-09)** : beaucoup de lieux sans activité attendent la V2 pour
+> tester de nouveau ; les supprimer en masse ferait des frictions. **Aucune suppression la nuit**
+> (étape 2 bis du §12 réduite à la sauvegarde). Le tri se fera au cas par cas, plus tard :
+> `TODO/ADMIN-suppression-tenant-superadmin.md` (réutilise `Administration/nettoyage_des_lieux.py`).
+> La commande `supprimer_lieux_inactifs` reste dans le code (commitée), non utilisée la nuit.
+> Constat de la répétition R-4 (base non migrée, 2026-10-08) : 147 lieux à supprimer au lieu de 148
+> sur la base migrée ; `mma-baisieux` gardé pour « habillage (skin) personnalisé » (la valeur de
+> `skin` change avec les migrations) : sens prudent.
+
 
 **Décision du mainteneur (2026-10-07)** : supprimer complètement, la nuit de la bascule, **juste
 avant `migrate_schemas`**, les lieux qui n'ont jamais eu aucune activité : leur schéma et leurs

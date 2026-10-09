@@ -107,7 +107,21 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## PROCHAINE ÉTAPE (mise à jour 2026-10-08) : COMMIT DE R, PUIS RÉPÉTITION R-4
+## PROCHAINE ÉTAPE (mise à jour 2026-10-09) : LA MISE EN PRODUCTION
+
+**LANGUE : tout message au mainteneur est en FRANÇAIS, sans exception.**
+
+**Fiche R terminée** (commitée `97a2b40c`) et **répétition R-4 faite** (2026-10-09) : toutes les
+étapes passent sur la copie, 0 anomalie, 0 mail ; durées et contrôles dans
+`CHANTIER-05-R-nuit-procedure.md` (statut « répétée »). Nuit estimée à ~3 h 35 + la sauvegarde.
+**Suppression des lieux inactifs abandonnée** (mainteneur, 2026-10-09) → TODO
+`ADMIN-suppression-tenant-superadmin.md`. Reste à faire avant la nuit : chronométrer la
+sauvegarde en prod ; commit des docs de la répétition. Le mainteneur fixe la date de la nuit et
+la mène (migration de serveur et DNS compris). Après la production : H-4, H-2, H-3 ; remises CLAF
+et producteur `VR` (TODO n°35) ; outil de suppression d'un lieu (TODO n°12 de l'INDEX).
+Copie : `detruire` puis suppression des dumps quand le mainteneur le décide.
+
+## (Ancienne) PROCHAINE ÉTAPE (mise à jour 2026-10-08) : COMMIT DE R, PUIS RÉPÉTITION R-4
 
 **LANGUE : tout message au mainteneur est en FRANÇAIS, sans exception.**
 
