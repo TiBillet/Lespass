@@ -1,0 +1,30 @@
+{% load i18n %}
+{% if skin_preview %}
+
+    <style>
+
+        .skin_preview_info{
+            position : fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translate(-50%, 0);
+            min-width: 250px;
+            width: 20%;
+            border-radius: 10px 10px 0 0;
+            text-align: center;
+            background : #5ac15a;
+            padding: 5px;
+        }
+        .skin_preview_info p{
+            margin:0;
+        }
+        .skin_preview_info hr{
+            margin : 5px 0;
+        }
+    </style>
+    <div class="skin_preview_info">
+        <p>{% translate 'PREVIEW DU SKIN' %} : <b>{{ skin_preview }}</b></p>
+        <hr>
+        <a href="/admin/pages/configurationsite/">Retour à l'admin</a>
+    </div>
+{% endif %}

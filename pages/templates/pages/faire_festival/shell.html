@@ -256,7 +256,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="bg-white">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-vals='{"skin_preview": "{{ skin_preview }}"}' class="bg-white">
 
     <div class="skin-faire-festival">
         {% if not embed %} <!-- Pas de navbar si le site est embedé dans une iframe -->
@@ -320,6 +320,8 @@
     {# Scripts globaux panier : toast + catch 403. Partage avec faire_festival. #}
     {# / Global cart scripts: toast + 403 catch. Shared with faire_festival. #}
     {% include "htmx/components/panier_scripts.html" %}
+
+    {% include "fonctionnel/skin_preview.html" %}
 
 </body>
 </html>

@@ -88,6 +88,7 @@ from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
 from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+from pages.models import ConfigurationSite
 from root_billet.models import RootConfiguration
 from django.utils.dateparse import parse_datetime
 
@@ -272,6 +273,12 @@ def get_context(request):
     config = Configuration.get_solo()
     crowd_config = CrowdConfig.get_solo()
 
+    # Récupère skin_preview
+    skin_preview = request.GET.get("skin_preview", None)
+    # Vérifie si le skin est valide, si il ne l'est pas on ne charge rien.
+    if not (any(skin_preview in skin for skin in ConfigurationSite.SKIN_CHOICES)):
+        skin_preview = None
+
     # SYSTÈME DE SKIN (CHANTIER-01) : le squelette est résolu par le nouveau
     # resolver unifié pages.services.gabarit_skin(). Si le skin fournit le
     # gabarit (pages/<skin>/shell.html), on l'utilise. Sinon fallback
@@ -280,9 +287,9 @@ def get_context(request):
     # pages.services.gabarit_skin(), with automatic fallback to pages/classic/.
     from pages.services import gabarit_skin
     if request.htmx:
-        base_template = gabarit_skin("headless.html")
+        base_template = gabarit_skin("headless.html", skin_preview)
     else:
-        base_template = gabarit_skin("shell.html")
+        base_template = gabarit_skin("shell.html", skin_preview)
 
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
@@ -328,7 +335,8 @@ def get_context(request):
         # would hide the symptom instead of fixing the response time.
         "loading_delay": 400,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
-        "main_nav": []
+        "main_nav": [],
+        "skin_preview": skin_preview # Valeur du skin, ou None
     }
 
     navbar: list = context["main_nav"]
@@ -1249,7 +1257,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/index.html")
+        template_path = gabarit_skin("vues/compte/index.html", template_context["skin_preview"])
 
         return render(request, template_path, context=template_context)
 
@@ -1267,7 +1275,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/balance.html")
+        template_path = gabarit_skin("vues/compte/balance.html", template_context["skin_preview"])
 
         return render(request, template_path, context=template_context)
 
@@ -1282,7 +1290,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/partials/card_table.html")
+        template_path = gabarit_skin("vues/compte/partials/card_table.html", context["skin_preview"])
 
         return render(request, template_path, context=context)
 
@@ -1378,7 +1386,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/reservations.html")
+        template_path = gabarit_skin("vues/compte/reservations.html", context["skin_preview"])
 
         return render(request, template_path, context=context)
 
@@ -1421,7 +1429,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/bookings.html")
+        template_path = gabarit_skin("vues/compte/bookings.html", context["skin_preview"])
 
 
         return render(request, template_path, context=context)
@@ -1643,7 +1651,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/partials/token_table.html")
+        template_path = gabarit_skin("vues/compte/partials/token_table.html", context["skin_preview"])
 
         return render(request, template_path, context=context)
 
@@ -1671,7 +1679,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/partials/transaction_history.html")
+        template_path = gabarit_skin("vues/compte/partials/transaction_history.html", context["skin_preview"])
 
         return render(request, template_path, context=context)
 
@@ -1728,7 +1736,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/membership/memberships.html")
+        template_path = gabarit_skin("vues/compte/membership/memberships.html", context["skin_preview"])
 
         return render(request, template_path, context=context)
 
@@ -1740,7 +1748,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/card.html")
+        template_path = gabarit_skin("vues/compte/card.html", context["skin_preview"])
 
         return render(request, template_path, context=context)
 
@@ -1753,7 +1761,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/preferences.html")
+        template_path = gabarit_skin("vues/compte/preferences.html", context["skin_preview"])
 
         return render(request, template_path, context=context)
 
@@ -2650,7 +2658,7 @@ def index(request):
     # Résolution du gabarit par le resolver unifié (CHANTIER-05).
     # / Unified skin resolver (skins migration).
     from pages.services import gabarit_skin
-    template_path = gabarit_skin("vues/accueil.html")
+    template_path = gabarit_skin("vues/accueil.html", template_context["skin_preview"])
 
     events_a_afficher = []
 
@@ -3450,9 +3458,9 @@ class EventMVT(viewsets.ViewSet):
         # / Unified skin resolver: pages/<skin>/vues/…, fallback pages/classic/.
         from pages.services import gabarit_skin
         if page > 1:
-            template_path = gabarit_skin("vues/agenda_liste_suite.html")
+            template_path = gabarit_skin("vues/agenda_liste_suite.html", ctx["skin_preview"])
         else:
-            template_path = gabarit_skin("vues/agenda_liste.html")
+            template_path = gabarit_skin("vues/agenda_liste.html", ctx["skin_preview"])
 
         return render(request, template_path, context=ctx)
 
@@ -3521,7 +3529,7 @@ class EventMVT(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié (CHANTIER-03).
         # / Unified skin resolver (skins migration).
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/agenda.html")
+        template_path = gabarit_skin("vues/agenda.html", context["skin_preview"])
 
         # On renvoie la page en entier
         return render(request, template_path, context=context)
@@ -3548,7 +3556,7 @@ class EventMVT(viewsets.ViewSet):
         # reunion path. The shells' embed guards still hide navbar/footer.
         from pages.services import gabarit_skin
         response = render(
-            request, gabarit_skin("vues/agenda.html"),
+            request, gabarit_skin("vues/agenda.html", template_context["skin_preview"]),
             context=template_context,
         )
         # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.
@@ -3739,7 +3747,7 @@ class EventMVT(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié (CHANTIER-03).
         # / Unified skin resolver (skins migration).
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/evenement.html")
+        template_path = gabarit_skin("vues/evenement.html", template_context["skin_preview"])
 
         return render(request, template_path, context=template_context)
 
@@ -3879,7 +3887,7 @@ class Badge(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/punchclock.html")
+        template_path = gabarit_skin("vues/compte/punchclock.html", template_context["skin_preview"])
 
         return render(request, template_path, context=template_context)
 
@@ -4082,7 +4090,7 @@ class MembershipMVT(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié (CHANTIER-04).
         # / Unified skin resolver (skins migration).
         from pages.services import gabarit_skin
-        template_path_skin = gabarit_skin(template_path)
+        template_path_skin = gabarit_skin(template_path, template_context["skin_preview"])
 
         return render(
             request,
@@ -4100,7 +4108,7 @@ class MembershipMVT(viewsets.ViewSet):
         # / The embed iframe now follows the tenant skin instead of a hardcoded path.
         from pages.services import gabarit_skin
         response = render(
-            request, gabarit_skin("vues/adhesions.html"),
+            request, gabarit_skin("vues/adhesions.html", template_context["skin_preview"]),
             context=template_context,
         )
         # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.

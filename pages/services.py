@@ -23,7 +23,7 @@ from django.template import TemplateDoesNotExist
 from django.template.loader import get_template
 
 
-def gabarit_skin(nom_du_gabarit):
+def gabarit_skin(nom_du_gabarit, skin_preview=None):
     """
     Resolveur unifié des gabarits de skin (migration skins, CHANTIER-01).
     / Unified skin template resolver (skins migration, CHANTIER-01).
@@ -47,6 +47,7 @@ def gabarit_skin(nom_du_gabarit):
 
     :param nom_du_gabarit: chemin relatif dans le skin, ex "shell.html"
         ou "vues/agenda.html".
+    :param skinw_preview: nom du skin à prévisualiser
     :return: chemin complet du gabarit (str) — utilisable par render()
         et par {% extends base_template %}.
     """
@@ -56,6 +57,9 @@ def gabarit_skin(nom_du_gabarit):
     from BaseBillet.views import get_skin_courant
 
     skin = get_skin_courant()
+
+    if skin_preview is not None:
+        skin = skin_preview
 
     chemin_dans_le_skin = f"pages/{skin}/{nom_du_gabarit}"
     chemin_dans_le_socle = f"pages/classic/{nom_du_gabarit}"

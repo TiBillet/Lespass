@@ -52,7 +52,7 @@ Discussion et modifications sur le module `booking` en parallèle du module pani
 - Ajout du statut de la réservation (`booking.get_status_display`) dans les détails.
 
 ### 6. Sélecteur de ressource mobile (annulé)
-- Tentative d’ajout du sélecteur de ressource sur `home.html`, puis sur la vue desktop de `resource.html`.
+- Tentative d’ajout du sélecteur de ressource sur `resources_list.html`, puis sur la vue desktop de `resource.html`.
 - Les deux ont été annulés à la demande de l’utilisateur.
 
 ## Problèmes identifiés mais non traités dans cette session

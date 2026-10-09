@@ -1,0 +1,69 @@
+{% load i18n %}
+
+<style>
+    .details-actions > summary .chevron {
+        display: inline-block; /* transform ne marche pas sur un élément inline */
+        transition: transform 0.2s ease;
+    }
+    .details-actions[open] > summary .chevron {
+        transform: rotate(180deg);
+    }
+
+    /* Liste en plusieurs colonnes qui passent à la ligne */
+    .details-actions .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        margin: 0;
+        list-style: none;
+    }
+    .details-actions .links a {
+        display: block;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+        color: #000;
+        background: #fff;
+        border: 1px solid var(--color-primary-600);
+        border-radius: 6px;
+        transition: background-color 0.15s ease;
+    }
+    .details-actions .links a:hover {
+        background: var(--color-primary-50);
+    }
+</style>
+<details class="group w-fit min-w-64 border border-primary-600 rounded-default bg-white dark:bg-base-900 overflow-hidden details-actions">
+    <summary class="flex items-center justify-between gap-4 px-3 py-2 cursor-pointer select-none list-none bg-primary-600 text-white text-sm font-medium [&::-webkit-details-marker]:hidden">
+        {% translate 'Prévisualiser un skin' %}
+        <span class="material-symbols-outlined chevron">
+        expand_more
+        </span>
+    </summary>
+
+    <ul class="links">
+        {% for skin in skins %}
+            <li>
+                <a href="/?skin_preview={{ skin.name }}">
+                    {{ skin.display_name }}
+                </a>
+            </li>
+        {% endfor %}
+
+    </ul>
+</details>
+
+{##}
+{#<details class="border-2 border-dashed border-stone-500 p-4 open:[&_svg]:-rotate-180">#}
+{#    <summary class="flex cursor-pointer list-none items-center gap-4">#}
+{#        {% translate 'Prévisualiser un skin' %}#}
+{#        <svg class="rotate-0 transform text-blue-700 transition-all duration-300" fill="none" height="20" width="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">#}
+{#            <polyline points="6 9 12 15 18 9"></polyline>#}
+{#        </svg>#}
+{#    </summary>#}
+{#    <div class="d-flex">#}
+{#        {% for skin in skins %}#}
+{#            <a class="" href="/?skin_preview={{ skin.name }}"> {{ skin.display_name }}</a>#}
+{#        {% endfor %}#}
+{#    </div>#}
+{#    #}
+{#</details>#}

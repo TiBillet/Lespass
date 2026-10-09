@@ -229,7 +229,7 @@
 
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" class="d-flex flex-column">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" hx-vals='{"skin_preview": "{{ skin_preview }}"}' class="d-flex flex-column">
 
 {% if not embed %} <!-- Pas de navbar si embed -->
     {% include "pages/V2/partials/navbar.html" %}
@@ -287,6 +287,7 @@
 {# / Global cart scripts: toast + 403 catch. Shared with faire_festival. #}
 {% include "htmx/components/panier_scripts.html" %}
 
+{% include "fonctionnel/skin_preview.html" %}
 
 </body>
 </html>

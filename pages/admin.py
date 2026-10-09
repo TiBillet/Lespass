@@ -42,6 +42,7 @@ dans la page afficherait les ~30 champs du catalogue pour tous les types.
 / WHY CONTENT IS TYPED IN THE BLOCK FORM, NOT THE PAGE: Unfold's
 conditional_fields only applies to the main form.
 """
+import logging
 
 from django import forms
 from django.contrib import admin, messages
@@ -50,7 +51,9 @@ from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
+from django.template.loader import render_to_string
 from solo.admin import SingletonModelAdmin
+
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
@@ -62,7 +65,7 @@ from unfold.contrib.filters.admin import (
 )
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.widgets import UnfoldAdminSelectWidget
-from unfold.decorators import display
+from unfold.decorators import display,action
 from unfold.sections import TableSection
 
 from Administration.admin.site import staff_admin_site
@@ -98,6 +101,7 @@ from pages.blocs_catalogue import (
 )
 from pages.services import inserer_bloc_apres
 
+logger = logging.getLogger(__name__)
 
 # Champ de formulaire dedie a la saisie Markdown (editeur EasyMDE) : il double
 # le champ modele `texte` pour le seul type TEXTE, dont la source ne doit pas
@@ -436,14 +440,28 @@ class ConfigurationSiteAdmin(SingletonModelAdmin, ModelAdmin):
     # et que le template d'unfold n'est pas atteint si on ne fais rien. Permet de respecter les settings.py
     change_form_template = None
 
+    readonly_fields = ["custom_buttons"]
+
     fieldsets = (
         (
             _("Apparence"),
             {
-                "fields": ("skin",),
+                "fields": ("custom_buttons","skin",),
             },
         ),
     )
+
+    @admin.display(description="")
+    def custom_buttons(self, obj):
+        if not obj.pk:
+            return "-"
+
+        skins = []
+        for skin in ConfigurationSite.SKIN_CHOICES:
+            skins.append({"display_name":skin[1], "name":skin[0]})
+
+        return render_to_string("admin/pages/configuration-site-admin_custom-buttons.html",context={"skins":skins})
+
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
