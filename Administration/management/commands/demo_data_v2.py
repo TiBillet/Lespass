@@ -1072,7 +1072,13 @@ class Command(BaseCommand):
         """
         import datetime
 
-        from booking.models import Calendar, OpeningEntry, Resource, WeeklyOpening
+        from booking.models import (
+            Calendar,
+            OpeningEntry,
+            Resource,
+            ResourceGroup,
+            WeeklyOpening,
+        )
 
         # 6) Adhésion payante : achetée avec un billet dans un vrai paiement de panier.
         # / Paid membership: bought with a ticket in a real cart payment.
@@ -1168,9 +1174,14 @@ class Command(BaseCommand):
                     'slot_count': 8,
                 },
             )
+        # Le groupe est obligatoire. « Espace » est semé dans chaque lieu par la
+        # migration booking 0003 ; get_or_create le recrée s'il manque.
+        # / The group is required; "Espace" is seeded by migration booking 0003.
+        groupe_espace, _created = ResourceGroup.objects.get_or_create(name="Espace")
         Resource.objects.get_or_create(
             name="E2E Test — Salle",
             defaults={
+                'group': groupe_espace,
                 'product': produit_de_la_salle,
                 'calendar': calendrier,
                 'weekly_opening': ouverture,
@@ -2282,14 +2293,18 @@ class Command(BaseCommand):
                 created_tenants.append(tenant)
 
         # -----------------------------
-        # 1.b) Migrations des tenants via subprocess (multiprocessing)
+        # 1.b) Migrations des tenants via subprocess, un lieu après l'autre
         # -----------------------------
         try:
             import subprocess, sys
-            logger.info("Lancement des migrations des tenants (multiprocessing)...")
-            # Ne pas capturer stdout/stderr pour laisser la sortie s'afficher dans le terminal
+            logger.info("Lancement des migrations des tenants (un lieu après l'autre)...")
+            # Ne pas capturer stdout/stderr pour laisser la sortie s'afficher dans le terminal.
+            # Exécuteur standard, JAMAIS --executor=multiprocessing : deux lieux migrés en
+            # parallèle s'interbloquent dans PostgreSQL (clés étrangères vers les tables
+            # partagées du schéma public).
+            # / Standard executor: parallel tenant migrations deadlock in PostgreSQL.
             subprocess.run(
-                [sys.executable, "manage.py", "migrate_schemas", "--executor=multiprocessing"],
+                [sys.executable, "manage.py", "migrate_schemas"],
                 check=True,
             )
             logger.info("Migrations terminées.")

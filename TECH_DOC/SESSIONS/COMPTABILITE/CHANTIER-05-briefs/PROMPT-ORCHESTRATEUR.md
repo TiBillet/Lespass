@@ -107,7 +107,39 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## PROCHAINE ÉTAPE (mise à jour 2026-10-07) : R-1, APRÈS UNE DÉCISION DU MAINTENEUR
+## PROCHAINE ÉTAPE (mise à jour 2026-10-09) : LA MISE EN PRODUCTION
+
+**LANGUE : tout message au mainteneur est en FRANÇAIS, sans exception.**
+
+**Fiche R terminée** (commitée `97a2b40c`) et **répétition R-4 faite** (2026-10-09) : toutes les
+étapes passent sur la copie, 0 anomalie, 0 mail ; durées et contrôles dans
+`CHANTIER-05-R-nuit-procedure.md` (statut « répétée »). Nuit estimée à ~3 h 35 + la sauvegarde.
+**Suppression des lieux inactifs abandonnée** (mainteneur, 2026-10-09) → TODO
+`ADMIN-suppression-tenant-superadmin.md`. Reste à faire avant la nuit : chronométrer la
+sauvegarde en prod ; commit des docs de la répétition. Le mainteneur fixe la date de la nuit et
+la mène (migration de serveur et DNS compris). Après la production : H-4, H-2, H-3 ; remises CLAF
+et producteur `VR` (TODO n°35) ; outil de suppression d'un lieu (TODO n°12 de l'INDEX).
+Copie : `detruire` puis suppression des dumps quand le mainteneur le décide.
+
+## (Ancienne) PROCHAINE ÉTAPE (mise à jour 2026-10-08) : COMMIT DE R, PUIS RÉPÉTITION R-4
+
+**LANGUE : tout message au mainteneur est en FRANÇAIS, sans exception.**
+
+État : **fiche R codée, prouvée et relue** (R-1 calcul, R-2 écriture, R-3 J reprise / FEC /
+admin, R-4a anciennes clôtures) : `make test` **3663 passed** ; toutes les mutations jouées à la
+main (13 + 12 + 7 + 4) ; relecture Fable : 0 bloquant (constats intégrés à
+`CHANTIER-05-R-nuit-procedure.md`). Essais complets sur la copie (fiche R §14 bis à quater) :
+22 489 ventes, chaînes de ventes et de clôtures valides, 102 J reprise. **Rien n'est commité** :
+attendre le commit du mainteneur (message proposé dans le SUIVI §6, entrée du 2026-10-08).
+
+Ensuite : **R-4, répétition chronométrée de toute la nuit** sur une copie rechargée depuis un dump
+de prod récent (procédure `CHANTIER-05-R-nuit-procedure.md`, prérequis bloquant : étapes 2 bis et
+4 sur la base NON migrée). Écritures sur la copie : le classificateur les refuse à Claude → les
+donner au mainteneur (`! …`). Instantané de la copie migrée : `db-prod/copie_migree_nettoyee_2026-10-08.dump`
+(retour arrière sans migrations). Puis mise en production, puis H-4, H-2, H-3.
+À traiter après la production : remises CLAF historiques et producteur `VR` (TODO n°35).
+
+## (Ancienne) PROCHAINE ÉTAPE (mise à jour 2026-10-07) : R-1, APRÈS UNE DÉCISION DU MAINTENEUR
 
 **LANGUE : tout message au mainteneur est en FRANÇAIS, sans exception, même juste après un
 rapport d'agent ou une notification en anglais. Raisonne en français.** (La session du

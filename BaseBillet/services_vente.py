@@ -1799,7 +1799,7 @@ def ajouter_reglement(
     return reglement
 
 
-def encaisser_vente(vente):
+def encaisser_vente(vente, datetime_encaissement=None):
     """
     Encaisse la vente : vérifie les deux égalités, pose le numéro, l'heure et les
     totaux, et passe la vente à REGLEE. Tout ou rien.
@@ -1829,7 +1829,16 @@ def encaisser_vente(vente):
     attend.
     / The lock is held until the outermost commit: settle LAST, after any network call.
 
+    L'heure d'encaissement est « maintenant », sauf pour la reprise des ventes
+    existantes (`BaseBillet/reprise_des_ventes_ecriture.py`) : elle passe la date
+    d'origine de la vente. Cette heure fait partie de l'empreinte : elle est posée
+    AVANT le calcul de l'empreinte.
+    / The settlement time is "now", except for the takeover of existing sales, which
+    passes the sale's original date. It is part of the fingerprint: set BEFORE it.
+
     :param vente: la `Vente` à encaisser
+    :param datetime_encaissement: datetime avec fuseau, ou None (défaut) pour
+        « maintenant »
     :return: la vente relue en base, REGLEE
     """
     # Le `atomic()` est indispensable même si l'appelant n'a pas de transaction : le
@@ -1929,7 +1938,9 @@ def encaisser_vente(vente):
             numero_de_la_vente = plus_grand_numero_du_lieu + 1
 
         vente_verrouillee.numero = numero_de_la_vente
-        vente_verrouillee.datetime_encaissement = timezone.now()
+        if datetime_encaissement is None:
+            datetime_encaissement = timezone.now()
+        vente_verrouillee.datetime_encaissement = datetime_encaissement
         vente_verrouillee.total_catalogue = somme_des_totaux_catalogue
         vente_verrouillee.total_offert = somme_des_parts_offertes
         vente_verrouillee.total_ttc = somme_des_nets_vendus

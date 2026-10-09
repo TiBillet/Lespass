@@ -274,8 +274,15 @@ class Command(BaseCommand):
         / Specific fields (calendar, schedule, capacity, group) stay on Resource.
         Name and image come from the linked product.
 
-        Ressources sans groupe :
+        Une ressource a toujours un groupe (champ obligatoire). Les groupes « Espace »
+        et « Ressource » sont semés dans chaque lieu par la migration booking 0003.
+        / A resource always has a group (required). "Espace" and "Ressource" are seeded
+        in every venue by migration booking 0003.
+
+        Groupe "Espace" :
         - Coworking (capacité 3) — planning semaine.
+
+        Groupe "Ressource" :
         - Imprimante 3D (capacité 1) — même planning que Coworking.
 
         Groupe "Salle de répét'" :
@@ -284,6 +291,12 @@ class Command(BaseCommand):
         """
         groupe_repet, _created = ResourceGroup.objects.get_or_create(
             name="Salle de répét'",
+        )
+        groupe_espace, _created = ResourceGroup.objects.get_or_create(
+            name="Espace",
+        )
+        groupe_ressource, _created = ResourceGroup.objects.get_or_create(
+            name="Ressource",
         )
 
         resources_data = [
@@ -294,7 +307,7 @@ class Command(BaseCommand):
                 "calendar": calendrier,
                 "weekly_opening": coworking_opening,
                 "capacity": 3,
-                "group": None,
+                "group": groupe_espace,
             },
             {
                 "name": "Imprimante Bambu Lab",
@@ -303,7 +316,7 @@ class Command(BaseCommand):
                 "calendar": calendrier,
                 "weekly_opening": coworking_opening,
                 "capacity": 1,
-                "group": None,
+                "group": groupe_ressource,
             },
             {
                 "name": "Petite salle #1",

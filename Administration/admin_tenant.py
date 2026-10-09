@@ -139,6 +139,7 @@ from BaseBillet.tasks import webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, forge_connexion_url, send_sale_to_laboutik
 from BaseBillet.models_vente import Reglement, Vente
+from BaseBillet.reprise_des_ventes import REFERENCE_D_UN_AVOIR_REPRIS
 from BaseBillet.services_vente import (
     NOM_ECART_RECU_EN_MOINS,
     NOM_ECART_RECU_EN_PLUS,
@@ -2390,12 +2391,19 @@ def _lien_vers_la_fiche_d_une_vente(vente):
 def _adresse_stripe_d_un_reglement(reglement):
     """
     L'adresse d'un règlement dans le tableau de bord Stripe, ou None :
+    - un règlement repris (référence externe « reprise ») : None, même s'il est relié
+      à un paiement Stripe. C'est un ancien avoir repris la nuit de la bascule : il ne
+      correspond à aucune opération propre chez Stripe (fiche R §11.5). L'écran
+      affiche alors sa référence, « reprise », sans lien ;
     - un remboursement Stripe (référence externe `re_…`) : la page du remboursement ;
     - un règlement relié à un paiement Stripe qui a son identifiant de paiement
       (`payment_intent_id`) : la page du paiement.
-    / A payment's address in the Stripe dashboard (refund page or payment page), or None.
+    / A payment's address in the Stripe dashboard (refund page or payment page), or
+    None; never for a payment taken over ("reprise").
     """
     reference_externe = reglement.reference_externe or ""
+    if reference_externe == REFERENCE_D_UN_AVOIR_REPRIS:
+        return None
     if reference_externe.startswith("re_"):
         return f"https://dashboard.stripe.com/refunds/{reference_externe}"
     if reglement.paiement_stripe_id is not None:
