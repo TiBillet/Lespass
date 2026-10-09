@@ -378,11 +378,13 @@ def get_context(request):
     #         'icon': 'people-fill'
     #     })
 
+
+    # V2 -> a déterminer - POUR L'INSTANT ACTIVÉ NORMALEMENT
     # Module réservation de ressources — visible seulement si activé dans la config.
     # Et si le module_adhesion est désactiver.
     # Si module_adhesion est activé, les ressources sont sur la page "Ahésions et services"
     # / Resource booking module — visible only when enabled in admin config.
-    if config.module_booking and not config.module_adhesion:
+    if config.module_booking:
         navbar.append(
             {'name': 'booking-list', 'url': '/booking/',
              'label': _('Ressources'), 'icon': 'building'}
@@ -4053,28 +4055,29 @@ class MembershipMVT(viewsets.ViewSet):
         template_path = "vues/adhesions.html"
         config = Configuration.get_solo()
 
-        if config.module_booking:
-            # On récupère les ressources, puis on les met dans un tableau organisé selon leur group
-            ressources = Resource.objects.select_related('group', 'product').order_by('product__name')
-            for ressource in ressources:
-                # Les tarifs en points ou en temps se vendent a la caisse seulement :
-                # ils ne comptent pas dans le prix affiche en euros.
-                # / Points or time prices are sold at the POS only: not an euro price.
-                prices = ressource.product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False)
-                tarifs = [price.prix for price in prices]
-                # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
-                # la caisse seulement), la carte n'affiche pas de prix.
-                # / Min price. Without a euro price, the card shows no price.
-                ressource.product.price_min = None
-                if tarifs:
-                    ressource.product.price_min = f"{min(tarifs)} €"
-
-            ressources_grouped = defaultdict(list)
-            for ressource in ressources:
-                ressources_grouped[ressource.group].append(ressource)
-
-            template_context['ressources_grouped'] = ressources_grouped
-            template_path = "vues/services.html"
+        # V2 -> a déterminer
+        # if config.module_booking:
+        #     # On récupère les ressources, puis on les met dans un tableau organisé selon leur group
+        #     ressources = Resource.objects.select_related('group', 'product').order_by('product__name')
+        #     for ressource in ressources:
+        #         # Les tarifs en points ou en temps se vendent a la caisse seulement :
+        #         # ils ne comptent pas dans le prix affiche en euros.
+        #         # / Points or time prices are sold at the POS only: not an euro price.
+        #         prices = ressource.product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False)
+        #         tarifs = [price.prix for price in prices]
+        #         # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
+        #         # la caisse seulement), la carte n'affiche pas de prix.
+        #         # / Min price. Without a euro price, the card shows no price.
+        #         ressource.product.price_min = None
+        #         if tarifs:
+        #             ressource.product.price_min = f"{min(tarifs)} €"
+        #
+        #     ressources_grouped = defaultdict(list)
+        #     for ressource in ressources:
+        #         ressources_grouped[ressource.group].append(ressource)
+        #
+        #     template_context['ressources_grouped'] = ressources_grouped
+        #     template_path = "vues/services.html"
 
         # Résolution du gabarit par le resolver unifié (CHANTIER-04).
         # / Unified skin resolver (skins migration).
