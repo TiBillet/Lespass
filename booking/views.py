@@ -339,7 +339,7 @@ class BookingViewSet(viewsets.ViewSet):
             'resources_groups': resources_groups,
             'ungrouped_resources':  ungrouped_resources,
         })
-        return render(request, 'booking/views/home.html', context)
+        return render(request, 'booking/views/resources_list.html', context)
 
     # ── Détail d'une ressource ───────────────────────────────────────────────
 

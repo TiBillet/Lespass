@@ -100,7 +100,7 @@ Reseaux sociaux footer : afficher conditionnellement
 2. Migration
 3. Admin Unfold conditionnel avec widget GrapeJS
 4. Modifier les templates pour lire depuis le modele :
-   - `home.html` : tagline depuis `ff_config.tagline`
+   - `resources_list.html` : tagline depuis `ff_config.tagline`
    - `le_faire_festival.html` : contenu depuis `ff_config.page_presentation`
    - `infos_pratiques.html` : FAQ depuis `ff_config.faq`, acces depuis `ff_config.infos_acces`
 5. Passer le contexte `ff_config` dans les vues (via `get_context()` ou middleware)

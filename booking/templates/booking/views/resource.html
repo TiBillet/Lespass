@@ -35,10 +35,12 @@ DEPENDENCIES :
     Lien retour vers la liste des ressources.
     / Back link to the resource list.
     -->
-    <a href="/memberships#ressources" class="btn btn-secondary btn-sm mb-4" data-testid="booking-back-btn">
+    <button class="btn btn-secondary btn-sm mb-4"
+            data-testid="booking-back-btn"
+            onclick="history.back()">
         <i class="bi bi-arrow-left" aria-hidden="true"></i>
         {% translate "Retour" %}
-    </a>
+    </button>
 
     <!--
     En-tete : nom, image, description de la ressource.

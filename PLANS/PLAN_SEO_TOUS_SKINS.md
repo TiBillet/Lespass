@@ -21,7 +21,7 @@ A terme, il faudrait mutualiser dans un base template commun ou un partial parta
 
 ### 3. Meta descriptions uniques par page
 - Chaque page surcharge `{% block meta_description %}` avec un texte unique
-- Pages corrigees : `home.html`, `le_faire_festival.html`, `infos_pratiques.html`
+- Pages corrigees : `resources_list.html`, `le_faire_festival.html`, `infos_pratiques.html`
 - **reunion** : seul `event/retrieve.html` surcharge ce bloc, les autres ont la description par defaut
 
 ### 4. OG/Twitter title+description uniques par page

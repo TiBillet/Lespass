@@ -89,7 +89,7 @@ return render(request, template_path, context=template_context)
 
 ### Spécifiques aux vues
 
-#### Page d'accueil (`home.html`)
+#### Page d'accueil (`resources_list.html`)
 - Hérite uniquement de `get_context()`
 
 #### Liste des événements (`event/list.html`)

@@ -10,7 +10,7 @@ Utilisé par : pages/V2/vues/adhesions.html
 
 Maquette : .offer-card de adhesion-services.html.
 
-FLUX DU CLIC SUR « ADHÉRER » (hors embed) :
+FLUX DU CLIC SUR « Réserver » (hors embed) :
 1. Le bouton ouvre le panneau latéral #subscribePanel (Bootstrap).
 2. En même temps, HTMX charge /ressources/<uuid>/ dans #offcanvas-ressource.
    Ces deux ids sont définis par commun/offcanvas/adhesion_tunnel.html.
@@ -43,6 +43,8 @@ A CONSERVER : data-testid="ressource-open-<uuid>" (tests E2E adhésions).
                 {% endif %}
             </div>
             <a href="{% url 'booking-resource' pk=ressource.pk %}"
+               hx-get="/memberships/{{ product.uuid }}/" hx-swap="innerHTML"
+               hx-target="body"
                class="btn btn-secondary btn--sm js-ressource-form-btn"
                data-testid="booking-resource-link-{{ ressource.pk }}">
                 {% translate 'Réserver' %}
