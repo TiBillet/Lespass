@@ -123,7 +123,7 @@ A CONSERVER : la classe .reservation-card (cible HTMX), #ticketPanel,
         {% empty %}
             <div class="module__invite">
                 <p>{% translate "Aucune réservation pour l'instant." %}</p>
-                <a class="btn btn--primary btn--sm" href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">{% translate "Parcourir l'agenda" %}</a>
+                <a class="btn btn-primaire btn--sm" href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">{% translate "Parcourir l'agenda" %}</a>
             </div>
         {% endfor %}
     </div>

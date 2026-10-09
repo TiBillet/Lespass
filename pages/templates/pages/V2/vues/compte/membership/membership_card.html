@@ -133,7 +133,7 @@ data-testid="membership-cancel-auto-<uuid>".
                 {% endif %}
             {% else %}
                 <p class="compte-champ__aide">{% translate 'Expired' %} {{ membership.deadline|naturaltime }}</p>
-                <a href="/memberships/" class="btn btn--primary btn--sm" hx-get="/memberships/" hx-target="body" hx-push-url="true">
+                <a href="/memberships/" class="btn btn-primaire btn--sm" hx-get="/memberships/" hx-target="body" hx-push-url="true">
                     {% translate "Renew" %}
                 </a>
             {% endif %}

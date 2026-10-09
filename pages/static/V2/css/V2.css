@@ -68,8 +68,8 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
      un fond clair — mesuré : 3,0 à 3,9:1 selon la teinte, sous le
      seuil d'accessibilité de 4,5:1 (cf. --letchi-text / --loseyan-text
      / --chouchou-text, assombries pour rester lisibles en texte). */
-  --letchi:      #e93363;  /* action principale, dominante */
-  --letchi-text: #d22e59;  /* letchi utilisée comme texte (4,6:1 sur papier) */
+    /* action principale, dominante */
+
   /* Letchi utilisée comme FOND sous un texte encre (boutons, pastilles).
      Le letchi canonique y plafonne à 4,45:1, juste sous le seuil de 4,5 —
      et un bouton de 14,5px gras ne compte pas comme « grand texte » (il
@@ -77,17 +77,6 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
      invisible à l'œil. / Letchi as a FILL under ink text: canonical letchi
      is 4.45:1 (fails AA), lightened 4% it reaches 4.63:1. */
   --letchi-fond: #ea3b69;
-  --letchi-button-fond : #FB4F7C;
-  --letchi-button-hover : #FA99B2;
-
-  --zanana:      #e9b322;  /* alerte, accent chaud — fonds/dégradés uniquement */
-  --chouchou:      #259d49;  /* succès, validation */
-  --chouchou-text: #1e7e3a;  /* chouchou utilisée comme texte (4,8:1 sur papier) */
-  --loseyan:      #4296cc;  /* info, liens — fonds/dégradés */
-  --loseyan-text: #3578a3;  /* couleur des liens (4,5:1 sur papier) */
-  --violet:      #8b5fb0;  /* liaison bleu↔rose en dégradé — jamais seule */
-  --sable: #f4ede0;
-  --papier: #faf8f5;
 
   /* --- Rôles fonctionnels --- */
   /* Fond d'action : porte toujours du texte encre, d'où --letchi-fond et non --letchi.
@@ -100,13 +89,10 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
   --color-link: var(--loseyan-text);
 
   /* --- Neutres --- */
-  --color-bg: #faf8f5;            /* papier : jamais de blanc pur en fond de page */
+  --color-bg: var(--papier);            /* papier : jamais de blanc pur en fond de page */
   --color-surface: var(--papier);       /* Avec le fond qui est devenue --sable, les surface dessus passe à --papier */
   --color-surface-tint: #f1eee8;
   --color-primary-soft: #fce4eb;  /* tinte très claire de letchi, fonds discrets */
-  --color-text: #17141a;          /* encre */
-  --color-text-muted: #63515e;    /* piton */
-  --color-text-faint: #6b6b6b;    /* gris discret — assombri depuis #808080 (3,7:1) : 5,0:1 sur papier, 4,6:1 sur la teinte. Sous 4,5 sur le fond du footer : y employer --color-text-muted */
   --color-border: #ece7e1;        /* brume */
   --color-border-strong: #ded7cd;
   --color-footer-bg: #e2e3e5;     /* fond du footer : plus froid que le papier, signale le territoire plateforme */
@@ -133,7 +119,6 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
   --grad-calme: linear-gradient(135deg, var(--loseyan) 0%, var(--chouchou) 100%);  /* loséyan → chouchou */
   --grad-nuit:  linear-gradient(160deg, var(--loseyan) 0%, var(--violet) 50%, var(--letchi) 100%); /* loséyan → violet → letchi — décoratif seul, jamais sous du texte de bouton (le point violet retombe à 3,8:1) */
   --grad-talisman: linear-gradient(150deg, var(--loseyan) 0%, var(--violet) 55%, var(--letchi) 100%); /* variante de grad-nuit propre à la carte */
-  --grad-ruban: linear-gradient(90deg, var(--letchi) 0%, var(--zanana) 25%, var(--chouchou) 50%, var(--loseyan) 72%, var(--violet) 88%, var(--letchi) 100%);
 
   /* --- Catégories : neutralisées ---
      Le contenu d'un lieu (type d'événement, badge de catégorie, marque
@@ -155,9 +140,6 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
   --cat-olive-from: #9aa187;   --cat-olive-to: #616751;   --cat-olive-tint: #eeefeb;   --cat-olive-solid: #5f6845;
   --cat-indigo-from: #8b899f;  --cat-indigo-to: #545365;  --cat-indigo-tint: #ecebef;  --cat-indigo-solid: #4a4766;
 
-  /* Typo */
-  --font-display: 'Unbounded', system-ui, sans-serif;                                  /* gros titres uniquement */
-  --font-text: 'Luciole', system-ui, sans-serif;              /* tout le reste */
 
   /* Échelle typographique, en rem : elle suit la taille de police choisie
      par l'utilisateur dans son navigateur — la raison d'être de Luciole.
@@ -209,7 +191,61 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
 }
 
 :root{
-  --grad-fete:radial-gradient(120% 130% at 12% 8%, #e93363 0%, #ed4960 5%, #f05a5c 10%, #f26958 15%, #f27553 20%, #f1804e 25%, #ee8a4a 30%, #eb9245 35%, #e69a41 40%, #dfa03d 45%, #d8a53a 50%, #cfa938 55%, #c5ab37 60%, #b9ad37 65%, #acae38 70%, #9dae3a 75%, #8dad3c 80%, #7baa3f 85%, #65a742 90%, #4ca246 95%, #259d49 100%);
+
+  /***********************
+  Variable depuis la DA V2
+  ***********************/
+
+  /* couleur */
+  --letchi: #e93363;
+  --zanana: #e9b322;  /* alerte, accent chaud — fonds/dégradés uniquement */
+  --chouchou: #259d49;  /* succès, validation */
+  --loseyan: #4296cc;  /* info, liens — fonds/dégradés */
+
+  --encre: #17141a;
+  --piton: #63515e;
+  --papier: #faf8f5;
+  --sable: #f4ede0;
+  --violet: #8b5fb0;
+
+  /* Gradients */
+  --grad-fete:radial-gradient(120% 130% at 12% 8%, var(--letchi) 0%, #ed4960 5%, #f05a5c 10%, #f26958 15%, #f27553 20%, #f1804e 25%, #ee8a4a 30%, #eb9245 35%, #e69a41 40%, #dfa03d 45%, #d8a53a 50%, #cfa938 55%, #c5ab37 60%, #b9ad37 65%, #acae38 70%, #9dae3a 75%, #8dad3c 80%, #7baa3f 85%, #65a742 90%, #4ca246 95%, var(--chouchou) 100%);
+  --grad-soiree: radial-gradient(130% 120% at 85% 10%, var(--letchi) 0%, var(--violet) 45%, var(--loseyan) 100%);
+  --grad-lagon: radial-gradient(120% 120% at 20% 90%, var(--chouchou) 0%, var(--loseyan) 75%);
+  --grad-soleil: radial-gradient(110% 100% at 50% 110%, var(--zanana) 0%, var(--letchi) 75%);
+  --grad-jardin: radial-gradient(120% 120% at 80% 90%, var(--chouchou) 0%, var(--zanana) 80%);
+  --grad-aurore: radial-gradient(85% 95% at 0% 0%, rgba(233,51,99,.85) 0%, rgba(233,51,99,0) 100%), radial-gradient(85% 95% at 100% 0%, rgba(233,179,34,.85) 0%, rgba(233,179,34,0) 100%), radial-gradient(85% 95% at 100% 100%, rgba(37,157,73,.8) 0%, rgba(37,157,73,0) 100%), radial-gradient(85% 95% at 0% 100%, rgba(66,150,204,.85) 0%, rgba(66,150,204,0) 100%), radial-gradient(55% 70% at 0% 55%, rgba(139,95,176,.75) 0%, rgba(139,95,176,0) 100%), var(--papier);
+  --grad-nuit: radial-gradient(130% 80% at 50% 115%, rgba(233,51,99,.85) 0%, rgba(139,95,176,.6) 35%, rgba(66,150,204,.25) 62%, rgba(66,150,204,0) 80%), radial-gradient(70% 40% at 50% 0%, rgba(66,150,204,.18) 0%, rgba(66,150,204,0) 100%), var(--encre);
+
+  /* Ruban signature */
+  --grad-ruban: linear-gradient(90deg, var(--letchi) 0%, var(--zanana) 25%, var(--chouchou) 50%, var(--loseyan) 72%, var(--violet) 88%, var(--letchi) 100%);
+
+
+  /* Typo */
+  --font-display: 'Unbounded', system-ui, sans-serif; /* Titre */
+  --font-text: 'Luciole', system-ui, sans-serif; /* Le reste */
+
+  /* Text color */
+  --color-text: var(--encre);
+  --color-text-muted: var(--piton);
+  --color-text-faint: #808080;
+
+  --letchi-text: #d22e59;
+  --chouchou-text: #1e7e3a;
+  --loseyan-text: #3578a3;
+
+  /* Volutes */
+  --volute-fond: url("../../fond/tibillet-volutes-fond-sable.svg");
+  --volute-blanc:url("../../fond/tibillet-volutes-blanc.svg");
+
+  /* Buttons */
+  --letchi-button-fond : #fb4f7c;
+  --letchi-button-hover : #fa99b2;
+  --letchi-button-active : #fa3166;
+
+  --secondary-button-fond : #fff;
+
+
 }
 
 /* =================================================================
@@ -305,7 +341,7 @@ body {
   -webkit-font-smoothing: antialiased;
 
   background-color: var(--sable);
-  background-image: url("../../fond/tibillet-volutes-fond-sable.svg");
+  background-image: var(--volute-fond);
   background-size: 100% auto;
   background-repeat: repeat-y;
   background-position: center top;
@@ -807,7 +843,7 @@ img { max-width: 100%; display: block; }
 .tcard__v{
   position: absolute;
   inset: 0;
-  background-image: url("../../fond/tibillet-volutes-blanc.svg");
+  background-image: var(--volute-blanc);
   background-size: cover;
   background-repeat: no-repeat;
   opacity: .17;
@@ -1062,43 +1098,36 @@ img { max-width: 100%; display: block; }
   white-space: nowrap;
   transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
 }
-/* Bouton principal : fond ENCRE, libellé blanc, letchi en liseré intérieur bas.
-   L'ancien aplat letchi sous texte encre passait le seuil WCAG de justesse
-   (4,63:1) mais ne valait que Lc 38 en APCA (≈ Lc 60 attendu pour 15px gras) :
-   un rose de clarté moyenne, où ni l'encre ni le blanc ne ressortent. Ici :
-   blanc sur encre 18,2:1 (Lc 107). Le letchi reste le signal du geste TiBillet,
-   en liseré de 3px, épaissi à 5px au survol, rentré à l'appui (voir plus bas,
-   après .btn:active, pour passer après sa translation d'un pixel).
-   Fond et couleur sont répétés sur chaque état : les :hover, :focus-visible,
-   :active et :disabled de Bootstrap lisent des --bs-btn-* que .btn--primary ne
-   définit pas, et videraient le fond.
-   / Primary button: ink fill, white label (18.2:1), letchi as a 3px inner edge,
-   5px on hover, retracted on press. The former ink-on-letchi passed WCAG barely
-   (4.63:1) but scored Lc 38 in APCA. Fill and colour repeated on every state,
-   else Bootstrap's state rules empty the background.
-   MÊME DESSIN pour .btn-primary (Bootstrap, chrome partagé, voir plus bas) et
-   pour le SURVOL des deux boutons contour letchi (.btn--outline-primary,
-   .btn-outline-primary) : au survol ils deviennent le bouton principal.
-   / Same look for Bootstrap's .btn-primary, and for the hover of both letchi
-   outline buttons, which turn into the primary button. */
+
 .btn--primary,
 .btn--primary:focus-visible,
 .btn-primary,
-.btn-primary:focus-visible {
+.btn-primary:focus-visible,
+.btn-primaire{
   background: var(--letchi-button-fond);
-  color: #000;
-  border-color: transparent;
+  color: var(--encre);
+  border: none;
   transition: 0.2s;
 }
+
 .btn--primary:hover:not(:disabled),
 .btn-primary:hover:not(:disabled),
 .btn--outline-primary:hover:not(:disabled),
-.btn-outline-primary:hover:not(:disabled) {
+.btn-outline-primary:hover:not(:disabled),
+.btn-primaire:hover{
   background: var(--letchi-button-hover);
-  color: #000;
-  border-color: transparent;
+  color: var(--encre);
+  border: none;
   transition: 0.2s;
 }
+
+.btn.btn-primary:active,
+.btn-primaire:active,
+.btn.btn-primaire:active{
+  background: var(--letchi-button-active);
+  border: none;
+}
+
 /* Bootstrap met outline: 0 sur .btn:focus-visible : on remet l'anneau du skin. */
 .btn--primary:focus-visible,
 .btn-primary:focus-visible,
@@ -1143,10 +1172,14 @@ img { max-width: 100%; display: block; }
 }
 
 .btn-secondary:hover{
-  background: #f2f0ea;
+  background: var(--color-hover);
   color: inherit;
   border-color: var(--color-border-strong);
 }
+
+.btn-secondary:active{
+  background: #e8e4db;
+  transform: translateY(1px);}
 
 /* =================================================================
    BOUTONS BOOTSTRAP DU CHROME PARTAGÉ — remis à la marque
@@ -1186,9 +1219,9 @@ img { max-width: 100%; display: block; }
   --bs-btn-hover-color: var(--color-text-inverse);
   --bs-btn-hover-bg: var(--color-action-hover);
   --bs-btn-hover-border-color: var(--color-action-hover);
-  --bs-btn-active-color: var(--color-text-inverse);
-  --bs-btn-active-bg: var(--color-text);
-  --bs-btn-active-border-color: var(--color-text);
+  --bs-btn-active-color: var(--encre);
+  --bs-btn-active-bg: var(--letchi-button-active);
+  --bs-btn-active-border-color: transparent;
   --bs-btn-disabled-color: var(--color-text-inverse);
   --bs-btn-disabled-bg: var(--color-text);
   --bs-btn-disabled-border-color: var(--color-text);

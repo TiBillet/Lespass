@@ -51,7 +51,7 @@ les id des radios = uuid de l'action, le hx-post.
                     {% endfor %}
                 </fieldset>
                 {% if user.is_authenticated %}
-                    <button class="btn btn--primary" type="submit" hx-post="/event/{{ event.uuid }}/action_reservation/"
+                    <button class="btn btn-primaire" type="submit" hx-post="/event/{{ event.uuid }}/action_reservation/"
                             data-loading-disable>
                         {% translate "Apply" %}
                     </button>

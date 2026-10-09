@@ -20,10 +20,17 @@
                 {# on le garde ici pour les lecteurs d'écran et Google. #}
                 {# / h1 kept for screen readers and search engines. #}
                 <h1 class="visually-hidden">{{ config.organisation }}</h1>
-                <p class="venue-brief__text">
-                    {{ config.short_description }}
-                </p>
-
+                {% if config.short_description %}
+                    <p class="venue-brief__text">
+                        {{ config.short_description }}
+                    </p>
+                    <hr>
+                {% endif %}
+                {% if config.long_description %}
+                    <p class="venue-brief__text">
+                        {{ config.long_description }}
+                    </p>
+                {% endif %}
                 <div class="venue-facts">
                     {% if config.postal_address %}
                         <div class="venue-fact">
@@ -216,7 +223,7 @@ Voir CHANGELOG/a traiter/v2-da-v1-points-laisses-de-cote.md.
                     </div>
                     <div class="initiative-card__foot">
                         <span class="tasks-open">4 tâches ouvertes</span>
-                        <a class="btn btn--primary btn--sm" href="contribuer.html">Ça m'intéresse</a>
+                        <a class="btn btn-primaire btn--sm" href="contribuer.html">Ça m'intéresse</a>
                     </div>
                 </div>
             </article>
@@ -232,7 +239,7 @@ Voir CHANGELOG/a traiter/v2-da-v1-points-laisses-de-cote.md.
                     </div>
                     <div class="initiative-card__foot">
                         <span class="tasks-open">7 tâches ouvertes</span>
-                        <a class="btn btn--primary btn--sm" href="contribuer.html">Ça m'intéresse</a>
+                        <a class="btn btn-primaire btn--sm" href="contribuer.html">Ça m'intéresse</a>
                     </div>
                 </div>
             </article>
@@ -248,7 +255,7 @@ Voir CHANGELOG/a traiter/v2-da-v1-points-laisses-de-cote.md.
                     </div>
                     <div class="initiative-card__foot">
                         <span class="tasks-open">2 tâches ouvertes</span>
-                        <a class="btn btn--primary btn--sm" href="contribuer.html">Ça m'intéresse</a>
+                        <a class="btn btn-primaire btn--sm" href="contribuer.html">Ça m'intéresse</a>
                     </div>
                 </div>
             </article>

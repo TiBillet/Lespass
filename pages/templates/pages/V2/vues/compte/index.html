@@ -64,7 +64,7 @@ modules (R11).
                     </div>
 
                     <p><strong>{% translate "Confirm the refund request?" %}</strong></p>
-                    <button type="button" class="btn btn--primary"
+                    <button type="button" class="btn btn-primaire"
                             data-bs-dismiss="offcanvas"
                             hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">
                         {% translate "Send request" %}</button>
@@ -107,7 +107,7 @@ modules (R11).
                             <div class="me-card__amount" data-testid="compte-solde">{% if tokens %}{{ tokens.0.value|dround }}{% else %}0{% endif %} €</div>
                             {% if config.show_refill_button %}
                                 <a href="#" hx-get="{% url 'my_account-refill-wallet' %}" hx-indicator="#tibillet-spinner"
-                                   class="btn btn-primary"
+                                   class="btn btn-primaire"
                                    data-testid="compte-recharger">
                                     {% translate "Recharger" %}
                                 </a>
@@ -317,7 +317,7 @@ modules (R11).
                 {% else %}
                     <div class="module__invite">
                         <p>{% translate "Rien de prévu pour l'instant. Jetez un œil à ce qui arrive près de chez vous." %}</p>
-                        <a class="btn btn--primary btn--sm" href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">{% translate "Parcourir l'agenda" %}</a>
+                        <a class="btn btn-primaire btn--sm" href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">{% translate "Parcourir l'agenda" %}</a>
                     </div>
                 {% endif %}
             </div>
@@ -372,7 +372,7 @@ modules (R11).
                 {% else %}
                     <div class="module__invite">
                         <p>{% translate "Adhésions, abonnements, accès : tout ce que vous suivez dans un lieu apparaîtra ici." %}</p>
-                        <a class="btn btn--primary btn--sm" href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">{% translate 'Voir les adhésions' %}</a>
+                        <a class="btn btn-primaire btn--sm" href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">{% translate 'Voir les adhésions' %}</a>
                     </div>
                 {% endif %}
             </div>

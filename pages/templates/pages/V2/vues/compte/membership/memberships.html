@@ -29,7 +29,7 @@ Une carte par adhésion : vues/compte/membership/membership_card.html.
         {% empty %}
             <div class="module__invite agenda-vide">
                 <p>{% translate "Aucune adhésion pour l'instant." %}</p>
-                <a class="btn btn--primary btn--sm" href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">{% translate 'Voir les adhésions' %}</a>
+                <a class="btn btn-primaire btn--sm" href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">{% translate 'Voir les adhésions' %}</a>
             </div>
         {% endfor %}
     </div>

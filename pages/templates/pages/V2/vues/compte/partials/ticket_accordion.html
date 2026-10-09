@@ -76,7 +76,7 @@
                     </table>
                     <div class="compte-billet__actions">
                     <button
-                        class="btn btn--primary btn--sm" type="button"
+                        class="btn btn-primaire btn--sm" type="button"
                         hx-get="/ticket/{{ ticket.uuid }}/" hx-swap="innerHTML"
                         hx-target="#ticketPanelBody"
                         data-bs-toggle="offcanvas"
@@ -101,7 +101,7 @@
                     {% comment %}
                     <div class="row">
                         <div class="col-sm">
-                            <a href="/ticket/{{ ticket.uuid }}/" target="_blank" class="btn btn-primary w-100 mt-3">
+                            <a href="/ticket/{{ ticket.uuid }}/" target="_blank" class="btn btn-primaire w-100 mt-3">
                                 {% translate "Voir le billet" %}
                             </a>
                         </div>
