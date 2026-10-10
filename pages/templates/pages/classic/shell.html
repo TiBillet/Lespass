@@ -225,7 +225,7 @@
 
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" hx-vals='{"skin_preview": "{{ skin_preview }}"}' class="min-vh-100 d-flex flex-column">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states"{% if skin_preview %} hx-vals='{"skin_preview": "{{ skin_preview }}"}'{% endif %} class="min-vh-100 d-flex flex-column">
 
 {% if not embed %} <!-- Pas de navbar si embed -->
     {% include "pages/classic/partials/navbar.html" %}

@@ -256,7 +256,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-vals='{"skin_preview": "{{ skin_preview }}"}' class="bg-white">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% if skin_preview %} hx-vals='{"skin_preview": "{{ skin_preview }}"}'{% endif %} class="bg-white">
 
     <div class="skin-faire-festival">
         {% if not embed %} <!-- Pas de navbar si le site est embedé dans une iframe -->

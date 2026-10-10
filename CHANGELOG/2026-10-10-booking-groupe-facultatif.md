@@ -25,6 +25,9 @@
 | `pages/management/commands/charger_site_lespass.py` | Landing de `lespass` en brouillon (`publie=False`) |
 | `Administration/management/commands/demo_data_v2.py` | `module_booking = True` ; la vérification des sites accepte un accueil non publié |
 | `booking/management/commands/create_booking_fixtures.py` | Docstring mise à jour |
+| `pages/templates/pages/{V2,classic,faire_festival}/shell.html` | `hx-vals` « skin_preview » posé seulement pendant un aperçu de skin (sinon chaque requête htmx ajoutait `?skin_preview=None` à l'URL) |
+| `pages/templates/cotton/V2/ressource_card.html` | « Réserver » charge la page de la ressource (`hx-get` pointait vers `/memberships//`) et pousse son URL |
+| `BaseBillet/views.py` | Libellé par défaut du menu adhésion : « Adhésion » (au lieu de « Adhésions & services ») ; `membership_menu_name` le remplace s'il est rempli |
 | `TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-R-reprise-ventes.md`, `CHANTIER-05-briefs/PROMPT-ORCHESTRATEUR.md`, `CHANTIER-05-SUIVI.md` | Migrations de la branche : `booking` = `0001` seule |
 
 ---
@@ -43,3 +46,6 @@
 2. Admin → Pages → « Accueil » est en brouillon ; un admin du lieu la prévisualise sur `/accueil/`.
 3. Chaque lieu de démo : l'entrée « Ressources » est dans la navbar, et le module est actif sur `/admin/module/ressources/`.
 4. Sortie du flush : `Sites web de demonstration : ✓ lespass …`.
+5. Un lieu sans « Nom de la page adhésion » en config (ex. `le-coeur-en-or`) : la navbar affiche « Adhésion ».
+6. Navbar → « Ressources » : l'URL est `/booking/`, sans `?skin_preview=None`. « Réserver » sur une carte → page de la ressource, URL `/booking/<id>/resource/`.
+7. Aperçu de skin depuis l'admin (`/?skin_preview=V2`) : la navigation htmx garde le paramètre et le bandeau d'aperçu.

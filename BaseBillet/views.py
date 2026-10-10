@@ -428,7 +428,7 @@ def get_context(request):
         navbar.append({
             'name': 'memberships_mvt',
             'url': '/memberships/',
-            'label': config.membership_menu_name if config.membership_menu_name else _('Adhésions & services'),
+            'label': config.membership_menu_name if config.membership_menu_name else _('Adhésion'),
             'icon': 'person-badge'
         })
 

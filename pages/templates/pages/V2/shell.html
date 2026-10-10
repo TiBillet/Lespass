@@ -229,7 +229,7 @@
 
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" hx-vals='{"skin_preview": "{{ skin_preview }}"}' class="d-flex flex-column">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states"{% if skin_preview %} hx-vals='{"skin_preview": "{{ skin_preview }}"}'{% endif %} class="d-flex flex-column">
 
 {% if not embed %} <!-- Pas de navbar si embed -->
     {% include "pages/V2/partials/navbar.html" %}
