@@ -140,12 +140,6 @@ TABLES_REMPLIES_SEULES = {
     # / Default home page created by BaseBillet 0225: 1 home page, at most 3 blocks.
     "pages_page": "page d'accueil par défaut (BaseBillet 0225)",
     "pages_bloc": "blocs de la page d'accueil par défaut (BaseBillet 0225)",
-    # Groupes de ressources par défaut : la migration booking 0003 crée dans chaque lieu
-    # 2 groupes, « Ressource » et « Espace », sans description ni image. Rien de plus n'est
-    # accepté (vérifié plus bas). Table de la branche seulement (booking n'est pas dans
-    # main).
-    # / Default resource groups seeded by booking 0003; nothing more is accepted.
-    "booking_resourcegroup": "groupes de ressources par défaut (booking 0003)",
 }
 
 # Les 9 comptes du plan par défaut semé par `main:comptabilite/migrations/0002`.
@@ -171,11 +165,6 @@ NOMBRE_DE_BLOCS_DE_L_ACCUEIL_PAR_DEFAUT = 3
 # / The 6 rates seeded by main's BaseBillet 0187.
 TABLE_DES_TAUX_DE_TVA = "BaseBillet_tva"
 TAUX_DE_TVA_SEMES_PAR_MAIN = ["0.00", "2.10", "5.50", "8.50", "10.00", "20.00"]
-
-# Les 2 groupes semés par `booking/migrations/0003_default_group`.
-# / The 2 groups seeded by booking 0003.
-TABLE_DES_GROUPES_DE_RESSOURCES = "booking_resourcegroup"
-GROUPES_DE_RESSOURCES_SEMES_PAR_BOOKING = ["Ressource", "Espace"]
 
 # --------------------------------------------------------------------------
 # Critère 6 : la configuration
@@ -658,13 +647,6 @@ def raisons_du_critere_5_tables_non_vides(curseur, nom_du_schema, tables_non_vid
             if curseur.fetchone()[0] > 0:
                 raisons.append(f"table non vide : {nom_de_la_table} (taux ajoutés)")
 
-        # Les groupes de ressources ne sont acceptés que s'ils sont ceux de booking 0003 :
-        # au plus 2, avec leur nom, sans description ni image.
-        # / Resource groups are accepted only as seeded by booking 0003.
-        if nom_de_la_table == TABLE_DES_GROUPES_DE_RESSOURCES:
-            if groupes_de_ressources_ajoutes(curseur, nom_du_schema):
-                raisons.append(f"table non vide : {nom_de_la_table} (groupes ajoutés)")
-
         # Les pages ne sont acceptées que si elles se réduisent à UNE page d'accueil.
         # / Pages are accepted only if there is exactly ONE home page.
         if nom_de_la_table == TABLE_DES_PAGES:
@@ -741,40 +723,6 @@ def raisons_du_critere_6_services_branches(curseur, nom_du_schema, tables_non_vi
         if nombre_de_lignes_remplies > 0:
             raisons.append(f"configuration personnalisée : {nom_du_service}")
     return raisons
-
-
-def groupes_de_ressources_ajoutes(curseur, nom_du_schema):
-    """
-    Vrai si les groupes de ressources du lieu ne sont plus exactement ceux semés par
-    `booking 0003` : plus de 2 lignes, un autre nom, ou une description ou une image
-    remplie. Une colonne absente est sautée.
-    / True if the resource groups differ from those seeded by booking 0003.
-    """
-    nombre_de_groupes = compter_les_lignes(
-        curseur, nom_du_schema, TABLE_DES_GROUPES_DE_RESSOURCES
-    )
-    if nombre_de_groupes > len(GROUPES_DE_RESSOURCES_SEMES_PAR_BOOKING):
-        return True
-
-    colonnes = colonnes_de_la_table(
-        curseur, nom_du_schema, TABLE_DES_GROUPES_DE_RESSOURCES
-    )
-    conditions_d_un_groupe_modifie = ["NOT (name = ANY(%s))"]
-    for nom_de_la_colonne in ["description", "image"]:
-        if nom_de_la_colonne in colonnes:
-            conditions_d_un_groupe_modifie.append(
-                f"({nom_sql(nom_de_la_colonne)} IS NOT NULL "
-                f"AND {nom_sql(nom_de_la_colonne)} <> '')"
-            )
-    # Compte les groupes qui ont un autre nom, ou une description ou une image.
-    # / Counts the groups with another name, or a description or an image.
-    curseur.execute(
-        f"SELECT count(*) FROM "
-        f"{nom_complet(nom_du_schema, TABLE_DES_GROUPES_DE_RESSOURCES)} "
-        f"WHERE " + " OR ".join(conditions_d_un_groupe_modifie),
-        [GROUPES_DE_RESSOURCES_SEMES_PAR_BOOKING],
-    )
-    return curseur.fetchone()[0] > 0
 
 
 def valeur_normalisee(valeur):

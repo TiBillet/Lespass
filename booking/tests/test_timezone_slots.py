@@ -137,17 +137,12 @@ def _make_weekly_opening(label):
 
 def _make_resource(name, calendar, weekly_opening, capacity=1, horizon=28):
     """Crée une Resource de test, avec son produit. / Creates a test Resource and its product."""
-    from booking.models import Resource, ResourceGroup
+    from booking.models import Resource
     from booking.tests.fabriques import creer_produit_de_ressource
 
-    # Le groupe est obligatoire. « Ressource » est semé dans chaque lieu par la
-    # migration booking 0003 ; get_or_create le recrée s'il manque.
-    # / The group is required; "Ressource" is seeded by migration booking 0003.
-    groupe_ressource, _created = ResourceGroup.objects.get_or_create(name='Ressource')
     resource, _created = Resource.objects.get_or_create(
         name=f'{TEST_PREFIX} {name}',
         defaults={
-            'group': groupe_ressource,
             'calendar': calendar,
             'weekly_opening': weekly_opening,
             'capacity': capacity,

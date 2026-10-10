@@ -13,8 +13,7 @@ brief : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-briefs/05-R-N.md.
   redevenu actif est gardé et signalé (« dans la liste, mais actif maintenant : <raisons> »).
 - Un lieu est inactif si les 8 critères du tableau §18 sont vrais. Sinon il est gardé, avec
   toutes ses raisons.
-- Critère 5 : les 2 groupes de ressources que `booking 0003` sème dans chaque lieu
-  (« Ressource », « Espace ») sont tolérés ; un autre groupe garde le lieu.
+- Critère 5 : un groupe de ressources garde le lieu (aucune migration n'en sème).
 - Critère 5 : la page d'accueil par défaut que la migration `BaseBillet 0225` crée dans
   chaque lieu (1 page d'accueil, au plus 3 blocs, aucune image) est tolérée ; une ligne de
   plus garde le lieu (« table non vide : pages_… »).
@@ -1168,51 +1167,30 @@ def test_plan_comptable_de_main_seulement_ses_comptes_par_defaut(
 
 
 # ==========================================================================
-# 5 sexies — Les groupes de ressources semés par booking 0003
+# 5 sexies — Un groupe de ressources garde le lieu
 # ==========================================================================
 
 
-@pytest.mark.parametrize(
-    "changement_des_groupes, liste_attendue",
-    [
-        pytest.param(None, LISTE_A_SUPPRIMER, id="groupes-par-defaut"),
-        pytest.param("troisieme_groupe", LISTE_GARDE, id="un-troisieme-groupe"),
-        pytest.param("groupe_renomme", LISTE_GARDE, id="un-groupe-renomme"),
-        pytest.param("description_remplie", LISTE_GARDE, id="une-description-remplie"),
-    ],
-)
-def test_groupes_de_ressources_seulement_ceux_semes_par_booking(
-    registre, tmp_path, changement_des_groupes, liste_attendue
-):
+def test_un_groupe_de_ressources_garde_le_lieu(registre, tmp_path):
     """
-    La migration `booking 0003` crée dans chaque lieu 2 groupes de ressources, « Ressource »
-    et « Espace », sans description ni image : un lieu neuf les a, il reste « à supprimer ».
-    Un 3ᵉ groupe, un groupe renommé ou une description remplie est l'œuvre du lieu : il est
-    « gardé » (« table non vide : booking_resourcegroup (groupes ajoutés) »).
-    / The 2 bare groups seeded by booking 0003 are tolerated; a 3rd group, a renamed group
-    or a filled description keeps the venue.
+    Aucune migration ne sème de groupe de ressources : un lieu neuf n'en a pas.
+    Un groupe est donc l'œuvre du lieu : il est « gardé »
+    (« table non vide : booking_resourcegroup »).
+    Le groupe s'appelle « Ressource », un nom qu'un semis par défaut pourrait porter :
+    le lieu doit être gardé quand même. Aucun nom de groupe n'est toléré.
+    / No migration seeds resource groups: a group keeps the venue, whatever its name.
     """
     lieu = creer_un_lieu_jetable(registre, "groupes")
     with tenant_context(lieu.client):
-        assert ResourceGroup.objects.count() == 2, "Condition : les 2 groupes semés."
-        if changement_des_groupes == "troisieme_groupe":
-            ResourceGroup.objects.bulk_create([ResourceGroup(name="Salle du test")])
-        if changement_des_groupes == "groupe_renomme":
-            ResourceGroup.objects.filter(name="Espace").update(
-                name="Salle de répétition"
-            )
-        if changement_des_groupes == "description_remplie":
-            ResourceGroup.objects.filter(name="Ressource").update(
-                description="Nos salles à réserver."
-            )
+        assert ResourceGroup.objects.count() == 0, "Condition : aucun groupe semé."
+        ResourceGroup.objects.bulk_create([ResourceGroup(name="Ressource")])
     connection.set_schema_to_public()
 
     ligne = lancer_a_blanc_et_lire_la_ligne(tmp_path, lieu)
 
     assert ligne is not None, "Le lieu n'est pas dans le rapport."
-    assert ligne[COLONNE_LISTE] == liste_attendue, ligne[COLONNE_RAISONS]
-    if liste_attendue == LISTE_GARDE:
-        assert "booking_resourcegroup" in ligne[COLONNE_RAISONS]
+    assert ligne[COLONNE_LISTE] == LISTE_GARDE, ligne[COLONNE_RAISONS]
+    assert "booking_resourcegroup" in ligne[COLONNE_RAISONS]
 
 
 # ==========================================================================

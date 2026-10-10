@@ -466,13 +466,16 @@ class Command(BaseCommand):
 
                 nb_pages = Page.objects.count()
                 nb_blocs = Bloc.objects.count()
-                accueil = Page.objects.filter(est_accueil=True, publie=True).first()
+                # Publiee ou non : l'accueil de lespass est un brouillon voulu
+                # (charger_site_lespass), l'accueil du skin V2 reste sur « / ».
+                # / Published or not: lespass's home page is a deliberate draft.
+                accueil = Page.objects.filter(est_accueil=True).first()
 
             if accueil is None or nb_blocs < 5:
                 self.stdout.write(self.style.ERROR(
                     f"  ✗ {schema} : site incomplet "
                     f"({nb_pages} page(s), {nb_blocs} bloc(s), "
-                    f"accueil publie : {'oui' if accueil else 'NON'}). "
+                    f"accueil : {'oui' if accueil else 'NON'}). "
                     f"Relancer : manage.py {commande} --schema={schema}"
                 ))
             else:
@@ -1174,9 +1177,9 @@ class Command(BaseCommand):
                     'slot_count': 8,
                 },
             )
-        # Le groupe est obligatoire. « Espace » est semé dans chaque lieu par la
-        # migration booking 0003 ; get_or_create le recrée s'il manque.
-        # / The group is required; "Espace" is seeded by migration booking 0003.
+        # Le groupe est facultatif. On en pose un pour que la démo montre
+        # l'affichage des ressources rangées par groupe.
+        # / The group is optional; one is set so the demo shows the grouped display.
         groupe_espace, _created = ResourceGroup.objects.get_or_create(name="Espace")
         Resource.objects.get_or_create(
             name="E2E Test — Salle",
@@ -2387,9 +2390,9 @@ class Command(BaseCommand):
 
                     # Démo/dev : on active par défaut les modules du dashboard qui
                     # valent pour tous les lieux (billetterie, adhésion, financement
-                    # participatif, fédération, inventaire), pour que l'admin ET les
-                    # tests disposent de tout. Les modules de la caisse V2 dépendent
-                    # du lieu : ils sont traités juste en dessous.
+                    # participatif, fédération, inventaire, réservation de ressources),
+                    # pour que l'admin ET les tests disposent de tout. Les modules de la
+                    # caisse V2 dépendent du lieu : ils sont traités juste en dessous.
                     # / Demo/dev: enable by default the dashboard modules that apply to
                     #   every venue, so the admin AND the tests get everything. The V2
                     #   cash register modules depend on the venue: handled below.
@@ -2398,6 +2401,7 @@ class Command(BaseCommand):
                     config.module_crowdfunding = True
                     config.module_federation = True
                     config.module_inventaire = True
+                    config.module_booking = True
 
                     # Un lieu marque "caisse_v1_legacy" dans les fixtures accueille une
                     # caisse LaBoutik V1 (conteneur separe). Sa monnaie locale ne vit PAS

@@ -633,11 +633,10 @@ en `v2` ; condition : 0 lieu de production avec un drapeau V2 avant la bascule (
 (public et lieux). Chaque lieu — `BaseBillet 0222` à `0227` (dont `0227_moteur_v2_si_un_module_v2_est_actif`) ;
 `comptabilite 0004`, `0005` ; `laboutik 0001`, `0002` (plan par défaut, clé
 d'empreinte) ; `booking`, `controlvanne`, `inventaire`, `kiosk 0001` ; `crowds 0009`.
-Apportées par la fusion d'`origin` (`3dc853fc`, 2026-10-07), vérifiées le 2026-10-08 :
-`BaseBillet 0228` (`AlterField` d'un texte de `FederationConfiguration`) ; `booking 0002`
-(`Resource.group` obligatoire : sans risque, la table `booking_resource` naît vide la même nuit
-par `booking 0001`) et `booking 0003` (sème les groupes « Ressource » et « Espace » dans chaque
-lieu : l'outil `supprimer_lieux_inactifs` les tolère, R-N-bis).
+Apportée par la fusion d'`origin` (`3dc853fc`, 2026-10-07), vérifiée le 2026-10-08 :
+`BaseBillet 0228` (`AlterField` d'un texte de `FederationConfiguration`). `booking` se réduit
+à `0001_initial` : `Resource.group` y est facultatif, et aucune migration ne sème de groupe de
+ressources (`supprimer_lieux_inactifs` n'en tolère donc aucun).
 
 ## 17. Questions ouvertes pour le mainteneur
 

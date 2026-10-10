@@ -172,8 +172,8 @@ absentes de la prod = anomalie, pas de code ». Ouvrier Opus, tests d'abord, rou
 mutations à la main sur ce qui protège vraiment l'argent. Puis passage à blanc sur la copie,
 comparé à R-0.
 
-À compléter dans la fiche R §12 / §16 : les migrations apportées par la fusion d'`origin`
-(`booking 0002`, `booking 0003` qui sème 2 groupes de ressources, `BaseBillet 0228`).
+Fiche R §16 : la migration apportée par la fusion d'`origin` est `BaseBillet 0228`. `booking`
+se réduit à `0001_initial` (`Resource.group` facultatif, aucun groupe semé).
 
 ## (Ancienne) PROCHAINE ÉTAPE (mise à jour 2026-10-06) : LE CHANTIER R
 

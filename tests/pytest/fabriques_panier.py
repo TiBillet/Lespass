@@ -364,7 +364,6 @@ def creer_ressource_avec_tarif(
         Calendar,
         OpeningEntry,
         Resource,
-        ResourceGroup,
         WeeklyOpening,
     )
 
@@ -395,17 +394,12 @@ def creer_ressource_avec_tarif(
         publish=True,
         free_price=prix_libre,
     )
-    # Le groupe est obligatoire. « Ressource » est semé dans chaque lieu par la
-    # migration booking 0003 ; get_or_create le recrée si un test l'a supprimé.
-    # / The group is required; "Ressource" is seeded by migration booking 0003.
-    groupe_ressource, _created = ResourceGroup.objects.get_or_create(name="Ressource")
     ressource = Resource.objects.create(
         name=f"{PREFIXE_DE_TEST} ressource {identifiant}",
         product=produit,
         calendar=calendrier,
         weekly_opening=ouverture_hebdomadaire,
         capacity=capacite,
-        group=groupe_ressource,
     )
 
     dans_deux_jours = timezone.localtime(timezone.now()) + timedelta(days=2)

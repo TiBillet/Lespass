@@ -274,10 +274,8 @@ class Command(BaseCommand):
         / Specific fields (calendar, schedule, capacity, group) stay on Resource.
         Name and image come from the linked product.
 
-        Une ressource a toujours un groupe (champ obligatoire). Les groupes « Espace »
-        et « Ressource » sont semés dans chaque lieu par la migration booking 0003.
-        / A resource always has a group (required). "Espace" and "Ressource" are seeded
-        in every venue by migration booking 0003.
+        Le groupe est facultatif : il sert seulement à ranger l'affichage.
+        / The group is optional: it only organises the display.
 
         Groupe "Espace" :
         - Coworking (capacité 3) — planning semaine.

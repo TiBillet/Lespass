@@ -2,8 +2,10 @@
 Construit une LANDING PAGE UNIQUE de démonstration pour le tenant `lespass` via le
 moteur pages (skin V2). Une seule page (l'accueil) qui enchaîne les 7 types
 de blocs et leurs affichages dans un flow cohérent — une grande page vitrine.
+Cette page est un BROUILLON (non publiée) : la racine « / » reste l'accueil du skin V2.
 / Builds a SINGLE demo LANDING PAGE for the `lespass` tenant via the pages engine
 (V2 skin). One page (the home) chaining the 7 block types and their displays.
+It is a DRAFT (unpublished): "/" stays the V2 skin home.
 
 LOCALISATION : pages/management/commands/charger_site_lespass.py
 
@@ -589,7 +591,13 @@ class Command(BaseCommand):
         )
         page.titre = "Accueil"
         page.position = 0
-        page.publie = True
+        # Non publiee : une page d'accueil publiee REMPLACE l'accueil du skin V2
+        # sur la racine « / » (cf. BaseBillet.views.index). Un admin du lieu la
+        # previsualise sur /accueil/ ; l'admin n'affiche pas de lien « Voir »
+        # pour un brouillon.
+        # / Unpublished: a published home page REPLACES the V2 skin home on "/".
+        # A venue admin previews it on /accueil/.
+        page.publie = False
         page.est_accueil = True
         page.meta_title = "Lespass — concerts, ateliers et adhésion coopérative"
         page.meta_description = (
