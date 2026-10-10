@@ -22575,7 +22575,7 @@ msgstr "Ticketing, membership and local currency wallets for your audiences."
 
 #: pages/templates/pages/V2/partials/footer.html:49
 msgid ""
-"TiBillet est un bien commun numérique : billetterie en ligne, caisse "
+"TiBillet est un commun numérique : billetterie en ligne, caisse "
 "enregistreuse, adhésions et abonnements, fédération entre collectifs. Libre, "
 "open-source, et gouverné par une coopérative — il appartient aux lieux qui "
 "le font vivre."
