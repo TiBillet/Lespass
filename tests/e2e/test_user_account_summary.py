@@ -25,7 +25,9 @@ import requests as http_requests
 import shutil
 
 
-pytestmark = pytest.mark.e2e
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.e2e, pytest.mark.adhesion, pytest.mark.billetterie, pytest.mark.site]
 
 
 # --- Configuration URL pour les appels API directs ---

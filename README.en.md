@@ -148,6 +148,7 @@ whatever cannot run FAILS.
 ```bash
 make test          # Python (~11 min) — models, views, API, real Stripe payments included
 make e2e           # Browser E2E (~14 min) — Playwright, requires `stripe listen` in byobu
+make e2e-visible adhesion   # one E2E family, in a visible Chromium (list: make help)
 
 make test ARGS="tests/pytest/test_stripe_refund.py -k panier"   # target
 ```

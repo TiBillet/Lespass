@@ -249,6 +249,37 @@ def pytest_runtest_logreport(report):
             )
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config, items):
+    """Chaque test E2E appartient a au moins une famille (marqueur declare dans pytest.ini
+    avec la description « famille E2E — … »). Sinon la collecte s'arrete en erreur :
+    un test sans famille ne sortirait jamais avec `make e2e-visible <famille>`.
+    tryfirst : on voit tous les tests, avant que `-m` n'en retire.
+    / Every E2E test belongs to at least one family; otherwise collection stops.
+      tryfirst: we see every test before `-m` deselects some.
+    """
+    familles = set()
+    for ligne in config.getini("markers"):
+        nom, _separateur, description = ligne.partition(":")
+        if description.strip().startswith("famille E2E"):
+            familles.add(nom.strip())
+
+    tests_sans_famille = []
+    for item in items:
+        if "tests/e2e/" not in str(item.path):
+            continue
+        noms_des_marqueurs = {marqueur.name for marqueur in item.iter_markers()}
+        if not noms_des_marqueurs & familles:
+            tests_sans_famille.append(item.nodeid)
+
+    if tests_sans_famille:
+        raise pytest.UsageError(
+            "Tests E2E sans famille (poser pytestmark = [pytest.mark.<famille>], "
+            f"familles dans pytest.ini : {', '.join(sorted(familles))}) :\n  "
+            + "\n  ".join(tests_sans_famille)
+        )
+
+
 def _nom_de_fichier_sur(nodeid):
     """Transforme un nodeid pytest en nom de fichier utilisable.
     / Turns a pytest nodeid into a usable file name."""

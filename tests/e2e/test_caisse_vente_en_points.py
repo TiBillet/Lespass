@@ -28,6 +28,11 @@ import json
 import pytest
 from playwright.sync_api import expect
 
+
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.caisse]
+
 NOM_DU_POINT_DE_VENTE = "Comptoir points E2E"
 
 # `CarteCashless.tag_id` est limite a 8 caracteres (PIEGES 9.31).

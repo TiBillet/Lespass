@@ -177,6 +177,49 @@ l'agenda. Fait a la place de l'auteur, avec l'accord du mainteneur. Un revert et
 le commit `ff8c20ba` s'appuie dessus.
 / The skin preview commit read a missing context key in 3 partial views (500).
 
+### 3 nonies. Tests E2E de la caisse dans la VRAIE interface (sans issue Sentry)
+
+**Quoi / What :** nouveau `tests/e2e/test_caisse_vraie_interface.py` (7 tests). Quatre
+comportements JavaScript de la caisse n'etaient testes que sur une page fabriquee (sans
+serveur) ; ils sont rejoues de bout en bout dans la vraie caisse :
+- popup des tarifs : telephone portrait (voile du bas du vrai bandeau au haut du vrai panier
+  replie), paysage (plein ecran), pave du prix libre (reste dans le voile et defile), grand
+  ecran (voile = grille, panier visible) ; aucune page ne deborde ;
+- garde de stock : stock bloquant de 2, le 3e clic est refuse avec la vraie popup du serveur ;
+- oubli du client : billet vendu a Alice (carte liee, especes), « Nouvelle vente », billet
+  suivant avec une carte anonyme : la caisse demande le client, sans reprendre Alice ;
+- VALIDER : grise pendant la vraie requete `moyens_paiement`, puis reactive ; aucune erreur
+  « returned no matches » en console.
+Chaque test a ete vu echouer sur une mutation volontaire (7 mutations). Retirer
+`grid-template-rows: minmax(0, 1fr)` (`tarif.css`) n'a aucun effet observable dans la vraie
+caisse : rien a detecter.
+/ Four POS JavaScript behaviours, tested only on a fabricated page, are replayed end to end
+  in the real POS.
+
+Les 3 tests de mise en page de `test_tarif_popup.py` sont retires : ils fixaient eux-memes
+les hauteurs du bandeau et du panier qu'ils verifiaient. Le test du petit ecran echouait en
+`make e2e-visible` (345 au lieu de 360) : sa page fabriquee debordait, et un navigateur
+visible affiche une barre de defilement de 15 px. Les 4 fichiers a page fabriquee renvoient
+vers le nouveau fichier.
+/ The 3 fabricated-page layout tests are removed (they set the values they checked).
+
+### 3 decies. Tests E2E classes par famille : `make e2e-visible adhesion`
+
+**Quoi / What :** 12 familles de fonctionnalites (`adhesion`, `validation-manuelle`,
+`billetterie`, `panier`, `qrcode`, `caisse`, `caisse-composants`, `monnaie`, `admin`,
+`crowds`, `explorer`, `site`), declarees comme marqueurs dans `pytest.ini` (description
+« famille E2E — … »). Les 153 tests E2E en portent au moins une ; un test peut en avoir
+plusieurs.
+- `make e2e-visible adhesion` / `make e2e adhesion qrcode` : seulement ces familles
+  (`-m "adhesion or qrcode"`) ; `make help` les liste, lues dans `pytest.ini`.
+- Un mot inconnu (`make e2e-visible adhesio`) ou une famille sans `e2e` arrete `make`
+  avant tout lancement.
+- Garde-fous : la collecte E2E s'arrete si un test n'a pas de famille
+  (`pytest_collection_modifyitems`, `tests/e2e/conftest.py`) ; `--strict-markers` en E2E.
+  Les deux vus echouer sur une mutation.
+/ 12 feature families as pytest markers; `make e2e-visible <family>`; `make help` lists them;
+  collection fails on a test without family.
+
 ### 4. Pas de correctif de code : saturation PostgreSQL pendant la sauvegarde (BILLETTERIE-COOP-TQ, TK, TN, TS, RQ)
 
 `SystemExit: 1` (worker gunicorn tue par son timeout) et `out of shared memory`, toujours vers
@@ -213,6 +256,15 @@ du 2026-10-06, Postgres redemarre le 06/10 vers 04:37 UTC). Aucune recurrence de
 | `BaseBillet/validators.py` | `WizardEventSerializer.validate_tags` : 50 caracteres max par tag ; `ReservationValidator.validate_options` : `logger.warning` |
 | `BaseBillet/templates/fonctionnel/event_wizard/_events_inner.html` | Champ tags en `is-invalid` en cas d'erreur |
 | `tests/pytest/test_en_ligne_ecrit_la_vente.py` | `test_reservation_a_zero_annulee_garde_sa_vente_reglee` : le compte est active, le message est pose |
+| `tests/e2e/test_caisse_vraie_interface.py` | Nouveau : popup des tarifs (4 tailles d'ecran), garde de stock, oubli du client, VALIDER grise, dans la vraie caisse |
+| `tests/e2e/test_tarif_popup.py` | 3 tests de mise en page retires (remplaces par la vraie caisse) |
+| `tests/e2e/test_garde_stock_au_clic.py`, `test_addition_oubli_du_client.py`, `test_addition_bouton_valider_grise.py`, `test_tarif_popup.py` | Docstring : renvoi vers `test_caisse_vraie_interface.py` |
+| `pytest.ini` | 12 marqueurs de famille E2E |
+| `Makefile` | Familles apres `e2e` / `e2e-visible`, liste dans `make help`, mot inconnu refuse |
+| `scripts/lancer_tests.sh` | `FAMILLES` -> `-m "a or b"` ; `--strict-markers` en E2E |
+| `tests/e2e/conftest.py` | Collecte en erreur si un test E2E n'a pas de famille |
+| `tests/e2e/test_*.py` (58 fichiers) | `pytestmark` de famille ; marqueurs par test dans les fichiers mixtes (`panier_flow`, `stripe_smoke`, `numeric_overflow_validation`, `parcours_fedow_reel`, `caisse_vraie_interface`) |
+| `tests/README.md`, `README.md`, `README.en.md`, `TECH_DOC/SKILLS/tibillet-test/SKILL.md` | Section « Familles E2E » et exemples |
 
 **i18n :** 7 nouvelles chaines FR (« Cette carte n'est pas, ou plus, liée à cette personne. », « Cette carte n'est plus liée à votre compte. », « Rien à remettre en banque », « Rien à remettre en banque pour ce lieu. », « Un tag fait au plus %(max)s caractères. Séparez les tags par des virgules. », « La carte a été détachée du portefeuille de cette personne. Elle peut maintenant en lier une nouvelle. », « Le détachement de la carte a échoué. Réessayez dans un instant. ») — workflow i18n a lancer.
 

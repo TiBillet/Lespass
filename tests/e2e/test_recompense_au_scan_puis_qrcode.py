@@ -67,6 +67,11 @@ import uuid as uuid_module
 
 import pytest
 
+
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.billetterie, pytest.mark.qrcode, pytest.mark.monnaie]
+
 # Montant de la recompense, en unites de la monnaie (pas en centimes) : le champ
 # `Price.fedow_reward_amount` est un montant « affiche », que la tache convertit
 # en centimes (`int(dround(montant) * 100)`).

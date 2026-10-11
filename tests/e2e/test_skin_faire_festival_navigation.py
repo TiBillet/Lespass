@@ -28,7 +28,9 @@ import os
 import pytest
 from playwright.sync_api import expect
 
-pytestmark = pytest.mark.e2e
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.e2e, pytest.mark.site]
 
 DOMAIN = os.environ.get("DOMAIN", "tibillet.localhost")
 URL_FESTIVAL = f"https://festival.{DOMAIN}"

@@ -70,6 +70,7 @@ def _lire_la_vente_en_base(django_shell, extrait_python):
 class TestStripeSmokeCheckout:
     """Smoke tests Stripe : vrai checkout / Real Stripe checkout smoke tests."""
 
+    @pytest.mark.adhesion
     def test_smoke_membership_stripe_checkout(
         self, page, create_product, fill_stripe_card, soumettre_paiement_stripe,
         admin_email, django_shell,
@@ -205,6 +206,7 @@ class TestStripeSmokeCheckout:
             f"Montant en base : {vente['montant']} centimes, attendu 100 (1,00 €)."
         )
 
+    @pytest.mark.billetterie
     def test_smoke_booking_stripe_checkout(
         self, page, create_event, create_product, fill_stripe_card,
         soumettre_paiement_stripe, django_shell,

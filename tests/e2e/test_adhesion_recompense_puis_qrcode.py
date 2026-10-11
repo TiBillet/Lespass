@@ -103,6 +103,11 @@ from playwright.sync_api import expect
 
 from tests.e2e.conftest import BASE_URL, _capturer_la_page_en_echec
 
+
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.adhesion, pytest.mark.qrcode, pytest.mark.monnaie]
+
 # Le produit et le tarif du cas d'usage, nommes explicitement. On ne cherche pas
 # « un tarif qui porte une recompense » : plusieurs peuvent en porter, et le test
 # doit dire lequel il verifie (PIEGES 12.13.bis).

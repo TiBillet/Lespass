@@ -34,7 +34,9 @@ from playwright.sync_api import expect
 from tests.e2e.conftest import API_BASE_URL, API_HOST_HEADER, BASE_URL
 
 
-pytestmark = pytest.mark.e2e
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.e2e, pytest.mark.billetterie]
 
 
 def _random_id():

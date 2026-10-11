@@ -36,6 +36,7 @@ def _random_id():
 class TestNumericOverflowValidation:
     """Rejet des montants hors limite / Oversized amounts rejection."""
 
+    @pytest.mark.adhesion
     def test_membership_rejects_oversized_custom_amount(self, page, create_product):
         """L'adhesion a prix libre rejette un montant trop grand cote client.
         / Free-price membership rejects an oversized amount client-side.
@@ -113,6 +114,7 @@ class TestNumericOverflowValidation:
         is_html_valid = custom_amount_input.evaluate("(el) => el.validity.valid")
         assert is_html_valid, "Un montant valide (15) devrait passer la validation"
 
+    @pytest.mark.billetterie
     def test_booking_rejects_oversized_custom_amount(
         self, page, create_event, create_product
     ):

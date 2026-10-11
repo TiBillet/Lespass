@@ -148,6 +148,7 @@ test n'est ignore, ce qui ne peut pas tourner ECHOUE.
 ```bash
 make test          # Python (~11 min) — modeles, vues, API, paiements Stripe reels compris
 make e2e           # E2E navigateur (~14 min) — Playwright, exige `stripe listen` dans byobu
+make e2e-visible adhesion   # une famille E2E, dans un Chromium visible (liste : make help)
 
 make test ARGS="tests/pytest/test_stripe_refund.py -k panier"   # cibler
 ```

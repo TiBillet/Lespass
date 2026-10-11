@@ -41,6 +41,11 @@ from tests.e2e.test_parcours_fedow_reel import (
 )
 
 
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.monnaie]
+
+
 def _etat_de_la_carte(django_shell, email, numero_carte):
     """
     Ce que les deux registres et la caisse V2 disent de la carte, pour cet adherent.

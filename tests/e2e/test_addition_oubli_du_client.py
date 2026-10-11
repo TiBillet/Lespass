@@ -23,6 +23,10 @@ scripts tibilletUtils.js et addition.js. Les champs du client sont ajoutes exact
 comme le fait hx_display_type_payment.html (message 'additionManageForm', createAndPopInput).
 / No server: real addition component, real scripts, same messages as the templates.
 
+Le meme comportement est rejoue de bout en bout dans la VRAIE caisse :
+tests/e2e/test_caisse_vraie_interface.py.
+/ The same behaviour is replayed end to end in the REAL POS (test_caisse_vraie_interface.py).
+
 LANCEMENT / RUN :
     docker exec lespass_django poetry run pytest tests/e2e/test_addition_oubli_du_client.py -v
 """
@@ -33,6 +37,11 @@ import pytest
 from django.conf import settings
 from django.template import engines
 from django_cotton.compiler_regex import CottonCompiler
+
+
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.caisse_composants]
 
 
 DOSSIER_JS = os.path.join(settings.BASE_DIR, "laboutik", "static", "js")

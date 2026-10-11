@@ -20,7 +20,13 @@ Lancement / Run:
     docker exec lespass_django poetry run pytest tests/e2e/test_pos_cashless_simulateur_nfc.py -v -s
 """
 
+import pytest
 from playwright.sync_api import expect
+
+
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.caisse]
 
 
 def test_recharge_sur_pv_cashless_affiche_le_simulateur_nfc(page, pos_page):

@@ -46,6 +46,11 @@ import uuid as uuid_module
 
 import pytest
 
+
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.monnaie]
+
 # Montant du parcours, en centimes. Volontairement petit : chaque execution
 # consomme de la vraie monnaie sur le Fedow de developpement.
 # / Journey amount in cents. Deliberately small: each run consumes real currency
@@ -940,6 +945,7 @@ def _verifier_la_vente_encaissee_par_l_ancien_fedow(
     )
 
 
+@pytest.mark.caisse
 def test_caisse_encaisse_la_monnaie_locale_de_l_ancien_fedow(
     page, pos_page, django_shell, adherent_credite, comptoir_de_l_ancien_fedow,
 ):
@@ -1002,6 +1008,7 @@ def test_caisse_encaisse_la_monnaie_locale_de_l_ancien_fedow(
     )
 
 
+@pytest.mark.caisse
 @pytest.mark.stripe_listen
 def test_caisse_encaisse_du_fed_de_l_ancien_fedow(
     page, login_as, pos_page, django_shell, fill_stripe_card, soumettre_paiement_stripe,
@@ -1332,6 +1339,7 @@ def _verifier_le_vidage_par_l_ancien_fedow(
     assert transaction_distante['destinataire'] == vente['wallet_du_lieu'], reglement
 
 
+@pytest.mark.caisse
 def test_caisse_vide_une_carte_avec_de_la_monnaie_locale_de_l_ancien_fedow(
     page, pos_page, django_shell, adherent_credite, comptoir_de_l_ancien_fedow,
     carte_primaire_declaree_a_l_ancien_fedow,
@@ -1381,6 +1389,7 @@ def test_caisse_vide_une_carte_avec_de_la_monnaie_locale_de_l_ancien_fedow(
     assert soldes_apres['transactions_locales'] == 0, soldes_apres
 
 
+@pytest.mark.caisse
 @pytest.mark.stripe_listen
 def test_caisse_vide_une_carte_avec_du_fed_de_l_ancien_fedow(
     page, login_as, pos_page, django_shell, fill_stripe_card, soumettre_paiement_stripe,

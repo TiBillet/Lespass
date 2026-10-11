@@ -60,6 +60,11 @@ import uuid as uuid_module
 
 import pytest
 
+
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.qrcode, pytest.mark.caisse, pytest.mark.monnaie]
+
 # Montant de la recharge au comptoir, en centimes. Il correspond au tarif « 5 »
 # du produit « Recharge Monnaie locale » seede par `create_test_pos_data`.
 # / Counter top-up amount in cents, matching the seeded « 5 » rate.

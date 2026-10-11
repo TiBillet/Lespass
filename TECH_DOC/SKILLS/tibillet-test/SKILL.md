@@ -38,7 +38,14 @@ docker exec lespass_django poetry run pytest tests/pytest/ --stepwise   # stop a
 
 # E2E navigateur (~4 min) — EXIGE le serveur live
 docker exec lespass_django poetry run pytest tests/e2e/ -v -s
+
+# E2E d'une famille de fonctionnalites (liste : make help ; marqueurs dans pytest.ini)
+make e2e adhesion                 # headless
+make e2e-visible adhesion qrcode  # Chromium visible sur l'ecran du mainteneur
 ```
+
+**Tout nouveau test E2E porte au moins une famille** (`pytestmark = [pytest.mark.<famille>]`),
+sinon la collecte E2E s'arrete en erreur. Detail : `tests/README.md`, « Familles E2E ».
 
 **Le serveur** : le mainteneur le tient dans **byobu**. Ne PAS lancer `runserver_plus`
 soi-même (port 8002 déjà pris). Si les tests HTTP renvoient 502 → demander au mainteneur

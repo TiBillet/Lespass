@@ -28,7 +28,9 @@ import pytest
 from playwright.sync_api import expect
 
 
-pytestmark = pytest.mark.e2e
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.e2e, pytest.mark.adhesion]
 
 
 def _add_form_field(page, form_index, label, field_type, required=False, options_csv=None):

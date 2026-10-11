@@ -15,6 +15,9 @@
 #   Variable optionnelle FICHIERS="a.py,b.py" : détail ligne à ligne de ces fichiers.
 #   / `couverture` runs the pytest suite while measuring code coverage (pytest-cov).
 #   Optional FICHIERS="a.py,b.py": line-by-line detail for these files.
+#   E2E : variable optionnelle FAMILLES="adhesion qrcode" (posee par make e2e-visible adhesion
+#   qrcode) : seulement les tests de ces familles (marqueurs declares dans pytest.ini).
+#   / E2E: optional FAMILLES: only the tests of these families (markers in pytest.ini).
 #
 # FLUX :
 # 1. Vérifie que le serveur live répond (les tests API et E2E l'appellent).
@@ -139,15 +142,51 @@ if [ "$#" -eq 0 ]; then
     fi
 fi
 
+# 4 bis. Familles E2E (make e2e-visible adhesion qrcode) : FAMILLES contient les noms tapes,
+# avec des tirets. Les marqueurs pytest portent des soulignes (pytest.ini). Plusieurs
+# familles se cumulent : « adhesion or qrcode ». --strict-markers : un marqueur inconnu
+# arrete la collecte au lieu d'etre ignore en silence.
+# / 4 bis. E2E families: FAMILLES holds the typed names (dashes), pytest markers use
+# underscores. Several families add up. --strict-markers: an unknown marker stops collection.
+if [ "$SUITE" = "e2e" ] || [ "$SUITE" = "e2e-visible" ]; then
+    set -- --strict-markers "$@"
+    if [ -n "${FAMILLES:-}" ]; then
+        expression_des_familles=""
+        for famille in $FAMILLES; do
+            marqueur="${famille//-/_}"
+            if [ -z "$expression_des_familles" ]; then
+                expression_des_familles="$marqueur"
+            else
+                expression_des_familles="$expression_des_familles or $marqueur"
+            fi
+        done
+        set -- "$@" -m "$expression_des_familles"
+        echo "Familles : $FAMILLES" >&2
+    fi
+elif [ -n "${FAMILLES:-}" ]; then
+    echo "Les familles ($FAMILLES) ne servent qu'aux E2E : make e2e ou make e2e-visible." >&2
+    exit 2
+fi
+
 # En supervision, -v nomme chaque test et -s laisse passer le journal en direct.
 # / In supervision, -v names each test and -s lets the log through live.
 if [ "$SUITE" = "e2e-visible" ]; then
     set -- -v -s "$@"
 fi
 
+# Ctrl+C doit arreter pytest DANS le conteneur. Sans terminal (-it), `docker exec` ne
+# transmet pas le signal : seul le client docker meurt, et pytest continue en orphelin.
+# Avec -it, Ctrl+C arrive a pytest, qui s'arrete proprement (teardown des fixtures).
+# Hors terminal (CI, redirection), pas de -it : docker le refuserait.
+# / Ctrl+C must stop pytest INSIDE the container: without -it docker exec does not forward it.
+options_du_terminal=()
+if [ -t 0 ] && [ -t 1 ]; then
+    options_du_terminal=(-it)
+fi
+
 if [ "$SUITE" != "couverture" ]; then
     code_de_sortie_pytest=0
-    docker exec "${variables_du_conteneur[@]}" "$CONTENEUR" poetry run pytest "$@" \
+    docker exec "${options_du_terminal[@]}" "${variables_du_conteneur[@]}" "$CONTENEUR" poetry run pytest "$@" \
         || code_de_sortie_pytest=$?
     exit "$code_de_sortie_pytest"
 fi
@@ -159,7 +198,7 @@ fi
 # / 5. Coverage. `.coverage` and `htmlcov/` land at the project root (git-ignored). Config in
 # pyproject.toml. The report is produced even when tests fail; the exit code stays pytest's.
 code_de_sortie_pytest=0
-docker exec "${variables_du_conteneur[@]}" "$CONTENEUR" \
+docker exec "${options_du_terminal[@]}" "${variables_du_conteneur[@]}" "$CONTENEUR" \
     poetry run pytest --cov --cov-report= "$@" || code_de_sortie_pytest=$?
 
 # Les commandes `coverage` échouent quand il n'y a rien à mesurer. Avec `set -e`, elles

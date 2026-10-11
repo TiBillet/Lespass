@@ -97,7 +97,9 @@ from playwright.sync_api import expect
 
 from tests.e2e.conftest import BASE_URL, DOMAIN, _capturer_la_page_en_echec
 
-pytestmark = pytest.mark.e2e
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.e2e, pytest.mark.monnaie]
 
 LIEU_EMETTEUR = "lespass"
 LIEU_FEDERE = "festival"

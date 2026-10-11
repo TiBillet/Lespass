@@ -64,7 +64,9 @@ from playwright.sync_api import expect
 
 from tests.e2e.conftest import DOMAIN
 
-pytestmark = pytest.mark.e2e
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.e2e, pytest.mark.monnaie]
 
 # Les deux lieux du moteur V2, et le lieu legacy qui ne doit jamais etre propose.
 # / The two V2 venues, and the legacy venue that must never be offered.

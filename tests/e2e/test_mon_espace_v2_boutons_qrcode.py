@@ -52,6 +52,11 @@ from playwright.sync_api import expect
 
 from tests.e2e.conftest import DOSSIER_ARTEFACTS
 
+
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.qrcode, pytest.mark.site]
+
 DOSSIER_DES_CAPTURES = os.path.join(DOSSIER_ARTEFACTS, "captures")
 
 # Tolerance des comparaisons de positions, en pixels (arrondis du navigateur).

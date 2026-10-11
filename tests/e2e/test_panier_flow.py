@@ -34,7 +34,9 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
-pytestmark = pytest.mark.e2e
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.e2e, pytest.mark.panier]
 
 SELECTEUR_DU_BADGE = '[data-testid="user-bar"] #panier-badge-nav'
 
@@ -149,6 +151,7 @@ def lire_en_base(django_shell, code_python, marqueur):
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.billetterie
 def test_e1_billet_gratuit_ajoute_au_panier_puis_confirme(
     page, login_as, django_shell, e2e_slugs
 ):
@@ -199,6 +202,7 @@ def test_e1_billet_gratuit_ajoute_au_panier_puis_confirme(
         liberer_ce_que_l_acheteur_a_pris(django_shell, email)
 
 
+@pytest.mark.billetterie
 def test_e2_un_anonyme_qui_veut_ajouter_au_panier_voit_le_panneau_de_connexion(
     page, e2e_slugs
 ):
@@ -216,6 +220,7 @@ def test_e2_un_anonyme_qui_veut_ajouter_au_panier_voit_le_panneau_de_connexion(
     )
 
 
+@pytest.mark.adhesion
 def test_e3_une_adhesion_recurrente_est_refusee_par_le_panier(
     page, login_as, django_shell, e2e_slugs
 ):
@@ -366,6 +371,8 @@ def attendre_la_commande_payee(django_shell, email, secondes=60):
     return statut
 
 
+@pytest.mark.adhesion
+@pytest.mark.billetterie
 @pytest.mark.stripe_listen
 def test_e5_vrai_paiement_d_un_panier_adhesion_plus_billet(
     page, login_as, django_shell, e2e_slugs, fill_stripe_card, soumettre_paiement_stripe
@@ -427,6 +434,8 @@ def solde_fedow_de(django_shell, email):
     )
 
 
+@pytest.mark.adhesion
+@pytest.mark.monnaie
 @pytest.mark.stripe_listen
 def test_e6_une_adhesion_payee_par_le_panier_verse_sa_recompense_monnaie(
     page, login_as, django_shell, e2e_slugs, fill_stripe_card, soumettre_paiement_stripe

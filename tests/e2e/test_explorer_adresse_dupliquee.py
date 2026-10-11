@@ -40,7 +40,9 @@ EXPLORER_URL = f"https://{DOMAIN}/explorer/"
 # / Name of the duplicate address, created then removed by the fixture.
 NOM_ADRESSE_DUPLIQUEE = "E2E — adresse dupliquee"
 
-pytestmark = pytest.mark.e2e
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.e2e, pytest.mark.explorer]
 
 
 def _lancer_dans_django(code_python):

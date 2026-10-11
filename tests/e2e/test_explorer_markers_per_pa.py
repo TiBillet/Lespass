@@ -32,7 +32,9 @@ from playwright.sync_api import expect
 DOMAIN = os.environ.get("DOMAIN", "tibillet.localhost")
 EXPLORER_URL = f"https://{DOMAIN}/explorer/"
 
-pytestmark = pytest.mark.e2e
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.e2e, pytest.mark.explorer]
 
 
 # ============================================================

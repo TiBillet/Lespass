@@ -37,7 +37,9 @@ from types import SimpleNamespace
 
 import pytest
 
-pytestmark = pytest.mark.e2e
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.e2e, pytest.mark.admin]
 
 LIEN_DE_LA_BALANCE = "/admin/laboutik/comptecomptable/balance/"
 LIEN_DU_PLAN_COMPTABLE = "/admin/laboutik/comptecomptable/"

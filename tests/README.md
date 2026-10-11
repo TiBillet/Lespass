@@ -98,6 +98,7 @@ de test, `stripe listen`) vit dans `scripts/lancer_tests.sh`.
 make test          # PYTHON (~10 min à chaud, ~15 min à froid), Stripe réel compris
 make e2e           # E2E (~14 min), parcours à webhook Stripe compris — `stripe listen` dans byobu
 make e2e-visible   # E2E à SUIVRE DES YEUX : Chromium visible sur l'écran, ralenti, journal lisible
+make help          # toutes les commandes, et la liste des familles E2E
 
 # Cibler un fichier, un test, un marqueur (tout ARGS est passé à pytest) :
 make test ARGS="tests/pytest/test_stripe_refund.py -k panier"
@@ -119,6 +120,33 @@ HTTP. Le script le vérifie avant de lancer (un `502` = runserver mort dans byob
 le tenant de développement ; un test pytest qui compte largement peut en être
 pollué. C'est déjà arrivé.
 
+### Familles E2E : `make e2e-visible adhesion`
+
+Chaque test E2E appartient à une ou plusieurs **familles** de fonctionnalités : `adhesion`,
+`validation-manuelle`, `billetterie`, `panier`, `qrcode`, `caisse`, `caisse-composants`,
+`monnaie`, `admin`, `crowds`, `explorer`, `site`. `make help` les liste avec leur description.
+
+```bash
+make e2e-visible adhesion            # toutes les façons d'adhérer, à suivre des yeux
+make e2e-visible adhesion qrcode     # plusieurs familles : leurs tests s'additionnent
+make e2e caisse                      # aussi en headless
+```
+
+- Les familles sont des **marqueurs pytest**, déclarés dans `pytest.ini` avec une
+  description qui commence par « famille E2E — ». Le nom tapé prend des tirets, le
+  marqueur des soulignés (`caisse-composants` → `caisse_composants`).
+- Un test peut appartenir à plusieurs familles : une adhésion payée puis dépensée par QR
+  code sort avec `adhesion` ET avec `qrcode`. `validation-manuelle` est incluse dans `adhesion`.
+- `caisse` = la vraie caisse. `caisse-composants` = le JavaScript de la caisse sur une page
+  fabriquée, sans serveur ni habillage (rapide, beaucoup de cas limites).
+- **Tout nouveau test E2E porte au moins une famille** : `pytestmark = [pytest.mark.<famille>]`
+  en tête du fichier, ou `@pytest.mark.<famille>` sur le test. Sinon la collecte s'arrête
+  en erreur (`tests/e2e/conftest.py`, `pytest_collection_modifyitems`) et nomme les tests
+  sans famille. Une faute de frappe dans un marqueur arrête aussi la collecte (`--strict-markers`).
+- Nouvelle famille : une ligne dans `pytest.ini`. `make help` et `make e2e-visible <famille>`
+  la prennent tout de suite.
+- Un mot inconnu (`make e2e-visible adhesio`) arrête `make` avant de lancer quoi que ce soit.
+
 ### Suivre les E2E des yeux : `make e2e-visible`
 
 Les tests tournent toujours dans le conteneur, mais pilotent une fenêtre Chromium
@@ -127,6 +155,7 @@ pour chaque test, les pages visitées, les envois (POST, HTMX), les réponses en
 et les erreurs JavaScript ; il est aussi écrit dans `tests/e2e/artefacts/supervision.log`.
 
 ```bash
+make e2e-visible adhesion                               # une famille (voir make help)
 make e2e-visible ARGS="tests/e2e/test_panier_flow.py"   # un fichier
 make e2e-visible LENTEUR=1500 ARGS="-k adhesion"        # plus lent (ms par action, 800 par défaut)
 ```

@@ -76,6 +76,11 @@ import uuid as uuid_module
 
 import pytest
 
+
+# Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
+# / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
+pytestmark = [pytest.mark.adhesion]
+
 # Le tarif du cas d'usage : recurrent mensuel ET porteur d'une recompense.
 # / The use case price: monthly recurring AND carrying a reward.
 NOM_DU_PRODUIT = "Caisse de sécurité sociale alimentaire"
