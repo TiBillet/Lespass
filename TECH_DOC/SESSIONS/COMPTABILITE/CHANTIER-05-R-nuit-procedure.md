@@ -57,9 +57,9 @@ cette nuit-là, la base reste dans `./database`, aucun transfert ni restauration
   que la prod : après l'échange des dossiers, l'image construite la veille est retrouvée).
   Contrôle : `git -C ~/main-lespass log -1` = le commit voulu ; `~/Lespass` n'a pas changé.
 - [ ] **`.env` de `~/main-lespass`** (relu le 2026-10-11 contre le `.env` de prod) : **ajouter**
-  `DOMAIN_REGEX='^.+\.tibillet\.re$$'`, `DOMAIN_GANDI='tibillet.coop'`,
-  `DOMAIN_GANDI_REGEX='^.+\.tibillet\.coop$$'` (sans eux, règles Traefik vides : tous les lieux
-  en 404 ; le `$$` est obligatoire) ; **garder une seule ligne** `STRIPE_TEST=0` (elle apparaît
+  `DOMAIN_REGEX='^.+\.tibillet\.re$'`, `DOMAIN_GANDI='tibillet.coop'`,
+  `DOMAIN_GANDI_REGEX='^.+\.tibillet\.coop$'` (sans eux, règles Traefik vides : tous les lieux
+  en 404 ; un seul `$`, entre apostrophes : dans un `.env`, `$$` reste `$$`, et `docker compose config` affiche chaque `$` doublé) ; **garder une seule ligne** `STRIPE_TEST=0` (elle apparaît
   deux fois) ; conseillé : `DEFAULT_FROM_EMAIL` en clair (sinon repli sur `EMAIL_HOST_USER`,
   comme aujourd'hui) ; **ne jamais régénérer** `FERNET_KEY` (champs chiffrés en base) ni
   `DJANGO_SECRET` (sessions). Contrôle : `cd ~/main-lespass && docker compose config | grep -E 'routers\.lespass-(ovh|gandi)\.rule'` : aucun `Host(``)` vide.
