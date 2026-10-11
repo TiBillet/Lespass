@@ -43,31 +43,40 @@ cette nuit-là, la base reste dans `./database`, aucun transfert ni restauration
   tout bon. À relancer après le passage en v3, puis à l'étape 11.
 - [ ] **crowdsec** filtre tout Lespass : vérifier que ses scénarios ne bannissent pas l'IP
   d'un festival (dizaines de caisses derrière une seule IP) ; liste blanche si besoin.
-- [ ] **Compose** : le dossier du serveur (`~/Lespass`) a son `docker-compose.yml` de prod
-  (image `tibillet/lespass:latest`, conteneur `lespass_celery` séparé) ; la branche a un
-  `docker-compose.yml` de **dev** et le compose de prod sous `docker-compose.prod.yml`. Décider
-  comment le code arrive dans `~/Lespass` (git) sans écraser le compose actuel avant la nuit.
-  Le compose de la branche reprend les chemins de la prod : `./database` (base),
-  `./backup:/Backup` et `./ssh:/home/tibillet/.ssh` (sauvegarde `cron/saveDb.sh`), `./www`,
-  `./logs`.
-- [ ] **`.env` de Lespass** (relu le 2026-10-11 contre le `.env` de prod) : **ajouter**
+- [ ] **Le code arrive par un clone À PART** (décision du mainteneur 2026-10-11 : `~/Lespass` n'est
+  aujourd'hui qu'un dossier — compose, `.env`, `nginx/`, `database/`, `www/`, `logs/`,
+  `backup/`, `ssh/` — ; on clone désormais le dépôt). On ne clone PAS dans `~/Lespass` avant la
+  nuit : le dépôt écraserait `docker-compose.yml` (il deviendrait celui du DEV, mêmes noms de
+  conteneurs) et `nginx/`, que le nginx actuel monte (il ne redémarrerait plus). La veille :
+  ```
+  git clone https://github.com/TiBillet/Lespass.git ~/Lespass-nouveau     # branche main
+  cp ~/Lespass/.env ~/Lespass-nouveau/.env
+  ```
+  puis dans `~/Lespass-nouveau/.env` : les corrections ci-dessous, plus
+  `COMPOSE_FILE=docker-compose.prod.yml` et `COMPOSE_PROJECT_NAME=lespass` (même nom de projet
+  que la prod : après l'échange des dossiers, l'image construite la veille est retrouvée).
+  Contrôle : `git -C ~/Lespass-nouveau log -1` = le commit voulu ; `~/Lespass` n'a pas changé.
+- [ ] **`.env` de `~/Lespass-nouveau`** (relu le 2026-10-11 contre le `.env` de prod) : **ajouter**
   `DOMAIN_REGEX='^.+\.tibillet\.re$$'`, `DOMAIN_GANDI='tibillet.coop'`,
   `DOMAIN_GANDI_REGEX='^.+\.tibillet\.coop$$'` (sans eux, règles Traefik vides : tous les lieux
   en 404 ; le `$$` est obligatoire) ; **garder une seule ligne** `STRIPE_TEST=0` (elle apparaît
   deux fois) ; conseillé : `DEFAULT_FROM_EMAIL` en clair (sinon repli sur `EMAIL_HOST_USER`,
   comme aujourd'hui) ; **ne jamais régénérer** `FERNET_KEY` (champs chiffrés en base) ni
-  `DJANGO_SECRET` (sessions). `COMPOSE_FILE` : à l'étape 3 seulement.
+  `DJANGO_SECRET` (sessions). Contrôle : `cd ~/Lespass-nouveau && docker compose config | grep -E 'routers\.lespass-(ovh|gandi)\.rule'` : aucun `Host(``)` vide.
+- [ ] **Compose de `~/Lespass-nouveau`** : `lespass_nginx` sur la **conf 2 (maintenance)** pour la
+  nuit (commenter la ligne 1, décommenter les deux lignes de la conf 2) ; `lespass_django` en
+  `sleep infinity` (déjà le cas). Il reprend les chemins de la prod (`./database`,
+  `./backup:/Backup`, `./ssh:/home/tibillet/.ssh`, `./www`, `./logs`).
+- [ ] **Construire l'image la veille**, dans `~/Lespass-nouveau` : `docker compose build`
+  (apt + `poetry install` ; 10 à 20 min, beaucoup de mémoire). **Seulement `build`, jamais `up`
+  la veille** : même nom de projet que la prod, un `up` remplacerait ses conteneurs. Contrôle :
+  `docker images | grep lespass-lespass_django` ; l'ancienne prod tourne toujours. La nuit : `up -d`
+  **sans** `--build`.
+- [ ] **Copie de secours de la prod actuelle** : `mkdir -p <dossier> && cp ~/Lespass/docker-compose.yml
+  ~/Lespass/.env <dossier>/ && cp -r ~/Lespass/nginx <dossier>/nginx` ; `docker images | grep
+  tibillet/lespass` (l'image `latest` reste présente pour le retour arrière).
 - [ ] `start.sh` : avec `MIGRATE=1`, il migre en `--executor=multiprocessing`
   (interblocage) : laisser `MIGRATE=0` (fichier `VERSION`).
-- [ ] Page de maintenance prête (`nginx_prod/lespass_maintenance.conf`, conf 2 commentée dans
-  le compose, service `lespass_nginx`).
-- [ ] **Mettre de côté la prod actuelle, hors du dépôt** (le code de la branche écrasera le
-      `docker-compose.yml` du serveur, qui deviendra celui du dev) :
-      `mkdir -p <dossier> && cp ~/Lespass/docker-compose.yml ~/Lespass/.env <dossier>/ && cp -r ~/Lespass/nginx <dossier>/nginx` ;
-      `docker images | grep tibillet/lespass` (l'image `latest` doit rester présente pour le retour arrière).
-- [ ] **Construire l'image la veille** : `docker compose -f docker-compose.prod.yml build` (apt +
-      `poetry install` ; 10 à 20 min et beaucoup de mémoire : pas pendant la coupure). La nuit :
-      `up -d` **sans** `--build`.
 - [ ] **Traefik v3 en place des jours avant la nuit, pas la nuit même** (les deux relectures) :
       lire la vraie conf v2 (`docker inspect traefik`, son `acme.json`) ; copier l'`acme.json` v2
       dans `wildcard_conf/letsencrypt/` (sinon 2 wildcards + 5 certificats réémis, limite Let's
@@ -86,9 +95,9 @@ cette nuit-là, la base reste dans `./database`, aucun transfert ni restauration
 | # | Étape | Commande | Contrôle | Durée (répétition) |
 |---|---|---|---|---|
 | 0 | **Avant de couper** : capture de la fiche de l'asset CLAF et de ses remises en banque (elle a besoin du site) | navigateur | — | — |
-| 1 | **Maintenance** : nginx sert la page « peau neuve » ; puis couper l'application **et Celery** (conteneur `lespass_celery` séparé sur la prod actuelle), en laissant finir les tâches en cours | compose mis de côté : remplacer le contenu de `~/Lespass/nginx/` par `nginx_prod/lespass_maintenance.conf`, ajouter `- ./nginx_prod/maintenance:/maintenance:ro` aux volumes de `lespass_nginx`, `docker compose -f <dossier>/docker-compose.yml --project-directory ~/Lespass up -d lespass_nginx` ; puis `docker stop -t 120 lespass_celery lespass_django` | la page de maintenance (503) sur un domaine de lieu et un domaine personnalisé ; `docker ps` : ni `lespass_django` ni `lespass_celery` | 2 min |
+| 1 | **Maintenance** : l'ANCIEN nginx sert la page « peau neuve » ; puis couper l'application **et Celery** (conteneur `lespass_celery` séparé), en laissant finir les tâches en cours | dans `~/Lespass` (ancien dossier) : `mv nginx nginx_prod_actuel && mkdir nginx && cp ~/Lespass-nouveau/nginx_prod/lespass_maintenance.conf nginx/` ; ajouter `- ../Lespass-nouveau/nginx_prod/maintenance:/maintenance:ro` aux volumes de `lespass_nginx` dans `docker-compose.yml` ; `docker compose up -d lespass_nginx` ; puis `docker stop -t 120 lespass_celery lespass_django` | la page de maintenance (503) sur un domaine de lieu et un domaine personnalisé ; `docker ps` : ni `lespass_django` ni `lespass_celery` | 2 min |
 | 2 | **Sauvegarde à froid** (le retour arrière devient un échange de dossiers, instantané) ; le cron de sauvegarde est suspendu | `docker stop lespass_postgres` ; `sudo cp -a ~/Lespass/database ~/Lespass/database_avant_bascule` ; `docker start lespass_postgres` | `sudo du -s database database_avant_bascule` : même taille ; Postgres redémarre (`docker logs lespass_postgres \| tail`) | **à mesurer** (taille de la base) |
-| 3 | **Déployer la branche** avec le compose de prod de la branche (`lespass_django` en `sleep infinity`, nginx sur la conf 2 maintenance) ; l'ancien `lespass_celery` est retiré | code de la branche dans `~/Lespass` ; **maintenant seulement**, `COMPOSE_FILE=docker-compose.prod.yml` dans `~/Lespass/.env` (un `docker compose` sans `-f` ne lancera plus jamais le compose de dev ; posé plus tôt, il viserait la branche pendant que l'ancienne prod tourne) ; `docker compose -f docker-compose.prod.yml up -d --remove-orphans` (image construite la veille) | `docker ps -a` : plus de `lespass_celery` ; `docker exec lespass_django ps aux \| grep -cE "celery\|gunicorn"` = 0 ; `docker exec lespass_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SHOW max_locks_per_transaction;"'` = 4096 ; `docker compose -f docker-compose.prod.yml config \| grep -E 'routers\.lespass-(ovh\|gandi)\.rule'` : aucun `Host(``)` vide ; page de maintenance toujours servie | ~5 min (image construite la veille) |
+| 3 | **Échanger les dossiers et démarrer la branche** (`lespass_django` en `sleep infinity`, nginx sur la conf 2 maintenance). Une minute sans page de maintenance entre `down` et `up` | `cd ~/Lespass && docker compose down` (retire aussi `lespass_celery`) ; `sudo mv ~/Lespass/database ~/Lespass/www ~/Lespass/logs ~/Lespass/backup ~/Lespass/ssh ~/Lespass-nouveau/` (`database_avant_bascule` reste dans l'ancien dossier) ; `mv ~/Lespass ~/Lespass-ancien && mv ~/Lespass-nouveau ~/Lespass` ; `cd ~/Lespass && docker compose up -d --remove-orphans` (image de la veille, `COMPOSE_FILE` déjà dans le `.env`) | `docker ps -a` : plus de `lespass_celery` ; `docker exec lespass_django ps aux \| grep -cE "celery\|gunicorn"` = 0 ; `docker exec lespass_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SHOW max_locks_per_transaction;"'` = 4096 ; `ls ~/Lespass/database \| head` non vide ; page de maintenance servie | ~5 min |
 | 4 | Contrôles d'avant | `SQL controle_avant.sql` | drapeaux V2 : 0 ; comptes hors plan : 0 ; **noter** le nombre d'anciennes clôtures. Sinon **STOP** | < 1 min |
 | 5 | **Export des anciennes clôtures** (base NON migrée) | `time DJ anciennes_clotures --exporter /tmp/anciennes_clotures` puis `docker cp lespass_django:/tmp/anciennes_clotures <dossier>/` | « Clôtures exportées » = le nombre de l'étape 4 | 14 s |
 | 6 | **Migrations, un lieu après l'autre** (jamais `--executor=multiprocessing`) | `time DJ migrate_schemas 2>&1 \| tee <dossier>/migrations.log` | `grep -c "moteur v2 (module V2 actif)" <dossier>/migrations.log` = 0 ; `SQL controle_apres_migration.sql` : `legacy` partout sauf `W` en `v2`, 0 vente, 0 règlement, 0 lieu sans clé | **3 h 14** (513 lieux, R-0) |
@@ -106,7 +115,7 @@ cette nuit-là, la base reste dans `./database`, aucun transfert ni restauration
 
 | Étape | Que faire |
 |---|---|
-| 1 à 5 (avant les migrations) | Rien n'a changé dans les données. Corriger et reprendre, ou abandonner : revenir au compose actuel (`docker compose up -d`, image `tibillet/lespass:latest`, `lespass_celery`) et la conf nginx 1, sans restaurer la base. |
+| 1 à 5 (avant les migrations) | Rien n'a changé dans les données. Corriger et reprendre, ou abandonner : avant l'étape 3, remettre `nginx_prod_actuel` à la place de `nginx` dans `~/Lespass` et `docker compose up -d` (ancien compose) ; après l'étape 3, suivre le « retour arrière complet » ci-dessous (la base n'a pas changé : `database` et `database_avant_bascule` sont identiques). |
 | 5, export | Le dossier n'est jamais écrasé : le vider (`docker exec lespass_django rm -rf /tmp/anciennes_clotures`), relancer. |
 | 6, migrations | Relancer `DJ migrate_schemas` : il reprend où il s'est arrêté. Si un même lieu échoue deux fois : **STOP**, décider (correction ou retour arrière). |
 | 7, suppression des clôtures | Relancer. Un lieu déjà vidé apparaît « refusé » (0 en base, N au résumé) : il est déjà traité. |
@@ -116,11 +125,17 @@ cette nuit-là, la base reste dans `./database`, aucun transfert ni restauration
 | 11, réouverture | Le site ne répond pas : lire `docker logs lespass_django`, remettre la page de maintenance le temps de corriger. Les données sont bonnes. |
 
 **Retour arrière complet** (décision du mainteneur), possible **jusqu'à l'étape 11** :
-`docker compose -f docker-compose.prod.yml down` ; remettre `database_avant_bascule` à la place de
-`database` (`sudo mv`) ; remettre `<dossier>/nginx` ; `docker compose -f <dossier>/docker-compose.yml
---project-directory ~/Lespass up -d` (image `tibillet/lespass:latest`, `lespass_celery`). **Après la réouverture, un retour arrière
-perdrait les nouvelles ventes** : c'est le point de non-retour. Avec la copie à froid, le retour arrière
-prend quelques minutes.
+```
+cd ~/Lespass && docker compose down
+sudo mv ~/Lespass/www ~/Lespass/logs ~/Lespass/backup ~/Lespass/ssh ~/Lespass-ancien/
+sudo mv ~/Lespass/database ~/Lespass-ancien/database_apres_essai        # la base migrée, gardée pour comprendre
+sudo mv ~/Lespass-ancien/database_avant_bascule ~/Lespass-ancien/database
+mv ~/Lespass ~/Lespass-nouveau && mv ~/Lespass-ancien ~/Lespass
+cd ~/Lespass && rm -rf nginx && mv nginx_prod_actuel nginx      # et retirer la ligne /maintenance du compose
+docker compose up -d                                             # ancien compose : image tibillet/lespass:latest, lespass_celery
+```
+**Après la réouverture, un retour arrière perdrait les nouvelles ventes** : c'est le point de
+non-retour. Le retour arrière prend quelques minutes (échange de dossiers, aucune restauration).
 
 ## Répétition chronométrée sur la copie (R-4)
 
