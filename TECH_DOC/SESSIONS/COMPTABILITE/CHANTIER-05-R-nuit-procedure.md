@@ -32,7 +32,7 @@ cette nuit-là, la base reste dans `./database`, aucun transfert ni restauration
 - [ ] **Syntaxe des règles** : Traefik v3 n'accepte plus les règles v2 du compose actuel
   (`HostRegexp({sub:…})`). Soit Traefik v3 démarre la nuit même, avec le compose de la
   branche ; soit, avant, ajouter `traefik.http.routers.<nom>.ruleSyntax=v2` à chaque routeur
-  du compose actuel **et de Fedow** (même serveur, compose à part).
+  du compose actuel. (Fedow tourne sur un autre serveur, `141.94.27.163` : son Traefik n'est pas concerné.)
 - [ ] **`scripts/nuit_de_bascule/verifier_traefik.sh 51.77.151.34`** : « TOUT EST BON »
   (DNS, certificats valides et non expirants, wildcards `*.tibillet.re` / `*.tibillet.coop`,
   redirection 80 → 443, réponse HTTPS ; 9 domaines). Référence sous Traefik v2 le 2026-10-11 :
@@ -51,16 +51,36 @@ cette nuit-là, la base reste dans `./database`, aucun transfert ni restauration
   (interblocage) : laisser `MIGRATE=0` (fichier `VERSION`).
 - [ ] Page de maintenance prête (`nginx_prod/lespass_maintenance.conf`, conf 2 commentée dans
   le compose, service `lespass_nginx`).
-- [ ] Message aux lieux : billetterie, admin et caisses fermées pendant la nuit.
+- [ ] **Mettre de côté la prod actuelle, hors du dépôt** (le code de la branche écrasera le
+      `docker-compose.yml` du serveur, qui deviendra celui du dev) :
+      `mkdir -p <dossier> && cp ~/Lespass/docker-compose.yml ~/Lespass/.env <dossier>/ && cp -r ~/Lespass/nginx <dossier>/nginx` ;
+      `docker images | grep tibillet/lespass` (l'image `latest` doit rester présente pour le retour arrière).
+- [ ] **`COMPOSE_FILE=docker-compose.prod.yml`** dans `~/Lespass/.env` : un `docker compose up -d`
+      sans `-f`, par réflexe, ne lancera jamais le compose de dev (mêmes noms de conteneurs).
+- [ ] **Construire l'image la veille** : `docker compose -f docker-compose.prod.yml build` (apt +
+      `poetry install` ; 10 à 20 min et beaucoup de mémoire : pas pendant la coupure). La nuit :
+      `up -d` **sans** `--build`.
+- [ ] **Traefik v3 en place des jours avant la nuit, pas la nuit même** (les deux relectures) :
+      lire la vraie conf v2 (`docker inspect traefik`, son `acme.json`) ; copier l'`acme.json` v2
+      dans `wildcard_conf/letsencrypt/` (sinon 2 wildcards + 5 certificats réémis, limite Let's
+      Encrypt de 5 doublons par semaine) ; adapter les routeurs du compose actuel
+      (`traefik.enable=true`, règles v3 ou `ruleSyntax=v2`, résolveurs `le-ovh` / `le-gandi` /
+      `myresolver`) ;
+      `verifier_traefik.sh 51.77.151.34` vert sous v3 (Fedow, sur son propre serveur, y est vérifié sans contrôle d'IP).
+- [ ] **Sauvegarde automatique** : `crontab -l` sur l'hôte (qui lance `cron/saveDb.sh` ?) ;
+      **suspendre ce cron pour la nuit** (un `pg_dumpall` pendant les migrations les bloque).
+- [ ] **`tmux`** sur le serveur pour toute la nuit (une coupure SSH tuerait les migrations).
+- [ ] `df -h` : de quoi copier `./database` (étape 2).
+- [ ] `controle_avant.sql` joué la veille (il ne dépend pas du code) : un STOP se découvre avant la nuit.
 
 ## La nuit
 
 | # | Étape | Commande | Contrôle | Durée (répétition) |
 |---|---|---|---|---|
 | 0 | **Avant de couper** : capture de la fiche de l'asset CLAF et de ses remises en banque (elle a besoin du site) | navigateur | — | — |
-| 1 | **Maintenance** : nginx sert la page « peau neuve » ; puis couper l'application **et Celery** (conteneur `lespass_celery` séparé sur la prod actuelle) | compose actuel : monter `nginx_prod/lespass_maintenance.conf` et `nginx_prod/maintenance` dans `lespass_nginx`, `docker compose up -d lespass_nginx` ; puis `docker compose stop lespass_django lespass_celery` | la page de maintenance (503) sur un domaine de lieu et un domaine personnalisé ; `docker ps` : ni `lespass_django` ni `lespass_celery` | 2 min |
-| 2 | **Sauvegarde complète** | `docker exec lespass_postgres sh -c 'pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB"' > <dossier>/avant_bascule.dump` | `docker exec -i lespass_postgres pg_restore -l < <dossier>/avant_bascule.dump \| grep -c "TABLE DATA"` > 0 | **à mesurer** |
-| 3 | **Déployer la branche** avec le compose de prod de la branche (`lespass_django` en `sleep infinity`, nginx sur la conf 2 maintenance) ; l'ancien `lespass_celery` est retiré | code de la branche dans `~/Lespass` ; `docker compose -f docker-compose.prod.yml up -d --build --remove-orphans` | `docker ps -a` : plus de `lespass_celery` ; `docker exec lespass_django ps aux \| grep -cE "celery\|gunicorn"` = 0 ; `SHOW max_locks_per_transaction;` = 4096 ; page de maintenance toujours servie | ~10 min |
+| 1 | **Maintenance** : nginx sert la page « peau neuve » ; puis couper l'application **et Celery** (conteneur `lespass_celery` séparé sur la prod actuelle), en laissant finir les tâches en cours | compose mis de côté : remplacer le contenu de `~/Lespass/nginx/` par `nginx_prod/lespass_maintenance.conf`, ajouter `- ./nginx_prod/maintenance:/maintenance:ro` aux volumes de `lespass_nginx`, `docker compose -f <dossier>/docker-compose.yml --project-directory ~/Lespass up -d lespass_nginx` ; puis `docker stop -t 120 lespass_celery lespass_django` | la page de maintenance (503) sur un domaine de lieu et un domaine personnalisé ; `docker ps` : ni `lespass_django` ni `lespass_celery` | 2 min |
+| 2 | **Sauvegarde à froid** (le retour arrière devient un échange de dossiers, instantané) ; le cron de sauvegarde est suspendu | `docker stop lespass_postgres` ; `sudo cp -a ~/Lespass/database ~/Lespass/database_avant_bascule` ; `docker start lespass_postgres` | `sudo du -s database database_avant_bascule` : même taille ; Postgres redémarre (`docker logs lespass_postgres \| tail`) | **à mesurer** (taille de la base) |
+| 3 | **Déployer la branche** avec le compose de prod de la branche (`lespass_django` en `sleep infinity`, nginx sur la conf 2 maintenance) ; l'ancien `lespass_celery` est retiré | code de la branche dans `~/Lespass` ; `docker compose -f docker-compose.prod.yml up -d --build --remove-orphans` | `docker ps -a` : plus de `lespass_celery` ; `docker exec lespass_django ps aux \| grep -cE "celery\|gunicorn"` = 0 ; `docker exec lespass_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SHOW max_locks_per_transaction;"'` = 4096 ; `docker compose -f docker-compose.prod.yml config \| grep -E 'routers\.lespass-(ovh\|gandi)\.rule'` : aucun `Host(``)` vide ; page de maintenance toujours servie | ~5 min (image construite la veille) |
 | 4 | Contrôles d'avant | `SQL controle_avant.sql` | drapeaux V2 : 0 ; comptes hors plan : 0 ; **noter** le nombre d'anciennes clôtures. Sinon **STOP** | < 1 min |
 | 5 | **Export des anciennes clôtures** (base NON migrée) | `time DJ anciennes_clotures --exporter /tmp/anciennes_clotures` puis `docker cp lespass_django:/tmp/anciennes_clotures <dossier>/` | « Clôtures exportées » = le nombre de l'étape 4 | 14 s |
 | 6 | **Migrations, un lieu après l'autre** (jamais `--executor=multiprocessing`) | `time DJ migrate_schemas 2>&1 \| tee <dossier>/migrations.log` | `grep -c "moteur v2 (module V2 actif)" <dossier>/migrations.log` = 0 ; `SQL controle_apres_migration.sql` : `legacy` partout sauf `W` en `v2`, 0 vente, 0 règlement, 0 lieu sans clé | **3 h 14** (513 lieux, R-0) |
@@ -68,7 +88,8 @@ cette nuit-là, la base reste dans `./database`, aucun transfert ni restauration
 | 8 | Reprise à blanc | `time DJ reprendre_les_ventes_existantes > <dossier>/reprise_blanc.txt 2>&1` | bloc « Total » : aucune anomalie autre que « monnaie de recharge introuvable » (1 004, à 0 €) ; ancien = nouveau hors parts QR ; 125 virements reçus | 40 s |
 | 9 | **Écriture de la reprise** | `time DJ reprendre_les_ventes_existantes --executer > <dossier>/reprise_ecriture.txt 2>&1` | 0 lieu refusé ; « Chaîne des ventes valide : oui » ; `SQL controle_apres_reprise.sql` : 0 ligne sans vente, 0 avoir sans vente liée, 0 vente hors reprise, 0 paiement `T` sans vente, 0 clôture | 11 min 25 |
 | 10 | **J « reprise »** ; juste avant : **revérifier qu'aucun Celery ne tourne** | `docker exec lespass_django ps aux \| grep -c celery` ; `time DJ creer_la_cloture_de_reprise > <dossier>/j_reprise.txt 2>&1` ; `DJ verify_clotures \| tail -1` ; `SQL controle_apres_reprise.sql` | 0 refus ; « Audit complet : aucune anomalie » ; une J reprise par lieu avec des ventes réglées (102 sur la copie) | 2 min 33 + 2 min 12 |
-| 11 | **Réouverture** : compose `lespass_django` en `command: "bash start.sh"` (`MIGRATE=0`) et `lespass_nginx` sur la conf 1 | `docker compose -f docker-compose.prod.yml up -d lespass_django lespass_nginx` ; `docker logs lespass_django \| grep -E "Skip migrate\|Supervisord"` ; `bash scripts/nuit_de_bascule/verifier_traefik.sh 51.77.151.34` | « Skip migrate » ; `verifier_traefik.sh` : TOUT EST BON (HTTPS 200 partout) ; une vente de test ; ventes historiques visibles dans l'admin ; Celery tourne (dans `lespass_django`) | 5 min |
+| 10 bis | **Avant de rouvrir** : file Redis et planning de Celery beat | `docker exec lespass_redis redis-cli LLEN celery` et `docker exec lespass_redis redis-cli HLEN unacked` ; `rm -f ~/Lespass/celerybeat-schedule*` | les deux à 0 ; sinon : regarder ce qui est en file (mails de billets légitimes ? tâches périmées ?) et **décider** de garder ou de vider (`FLUSHALL`) avant de relancer Celery | 1 min |
+| 11 | **Réouverture** : compose `lespass_django` en `command: "bash start.sh"` (`MIGRATE=0`) et `lespass_nginx` sur la conf 1 | `docker compose -f docker-compose.prod.yml up -d lespass_django lespass_nginx` ; `docker logs lespass_django \| grep -E "Skip migrate\|Supervisord"` ; `bash scripts/nuit_de_bascule/verifier_traefik.sh 51.77.151.34` | « Skip migrate » ; `verifier_traefik.sh` : TOUT EST BON (HTTPS 200 partout) ; une vente de test ; ventes historiques visibles dans l'admin ; `docker exec lespass_django poetry run supervisorctl -c /DjangoFiles/supervisor/supervisord.conf status` : 3 RUNNING ; `free -m` : pas de swap qui grimpe ; `docker exec lespass_django bash /DjangoFiles/cron/saveDb.sh` à la main, puis cron de sauvegarde réactivé | 10 min |
 | 12 | Après : capture CLAF refaite ; surveiller la première heure (rattrapage des clôtures H / M / A, 12 par lieu et par heure, sans mail) | navigateur ; `docker logs -f lespass_django` | mêmes chiffres qu'à l'étape 0 ; pas d'erreur en boucle | — |
 
 **Durée** : ~3 h 35 + la sauvegarde.
@@ -87,11 +108,11 @@ cette nuit-là, la base reste dans `./database`, aucun transfert ni restauration
 | 11, réouverture | Le site ne répond pas : lire `docker logs lespass_django`, remettre la page de maintenance le temps de corriger. Les données sont bonnes. |
 
 **Retour arrière complet** (décision du mainteneur), possible **jusqu'à l'étape 11** :
-restaurer `<dossier>/avant_bascule.dump` dans une base vide (`pg_restore -j 4 --no-owner`),
-puis revenir au compose actuel (image `tibillet/lespass:latest`, `lespass_celery`) et à la
-conf nginx 1. **Après la réouverture, un retour arrière
-perdrait les nouvelles ventes** : c'est le point de non-retour. La durée d'une restauration
-n'est pas encore mesurée.
+`docker compose -f docker-compose.prod.yml down` ; remettre `database_avant_bascule` à la place de
+`database` (`sudo mv`) ; remettre `<dossier>/nginx` ; `docker compose -f <dossier>/docker-compose.yml
+--project-directory ~/Lespass up -d` (image `tibillet/lespass:latest`, `lespass_celery`). **Après la réouverture, un retour arrière
+perdrait les nouvelles ventes** : c'est le point de non-retour. Avec la copie à froid, le retour arrière
+prend quelques minutes.
 
 ## Répétition chronométrée sur la copie (R-4)
 

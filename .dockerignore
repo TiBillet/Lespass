@@ -55,3 +55,8 @@ Docker
 # Copie de la base de production (donnees personnelles) : jamais dans une image.
 # / Production database copy (personal data): never in an image.
 db-prod/
+
+# Fichiers du dev qui ne doivent pas entrer dans l'image : environnement Python local,
+# planning de Celery beat (un planning ancien relancerait tout de suite les tâches périodiques).
+.venv/
+celerybeat-schedule*

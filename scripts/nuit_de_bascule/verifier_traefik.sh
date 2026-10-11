@@ -11,7 +11,8 @@
 # / READ ONLY: DNS lookups and HTTPS GET requests only.
 #
 # POUR CHAQUE DOMAINE, il vérifie :
-#   1. le DNS pointe vers l'adresse IP attendue (si elle est donnée) ;
+#   1. le DNS pointe vers l'adresse IP attendue (si elle est donnée ; pas pour Fedow,
+#      qui tourne sur un autre serveur) ;
 #   2. le certificat présenté est valide (chaîne de confiance), couvre bien le nom,
 #      et expire dans plus de 14 jours ;
 #   3. pour les sous-domaines : le certificat est bien le WILDCARD (*.tibillet.re,
@@ -38,6 +39,10 @@ ADRESSE_IP_ATTENDUE="${1:-}"
 DOMAINES_APEX="tibillet.re tibillet.coop"
 SOUS_DOMAINES_WILDCARD="verification-wildcard.tibillet.re verification-wildcard.tibillet.coop"
 DOMAINES_PERSONNALISES="guichet.latendresse.fr guichet.cafeasso.latendresse.fr fairefestival.fr www.fairefestival.fr tibillet.org"
+# Fedow tourne sur un AUTRE serveur (autre adresse IP) : son DNS n'est pas comparé à
+# l'IP attendue, mais son certificat et sa réponse HTTPS sont vérifiés (Lespass l'appelle).
+# / Fedow runs on ANOTHER server: its IP is not compared, its certificate and HTTPS are.
+DOMAINES_SUR_UN_AUTRE_SERVEUR="fedow.tibillet.coop"
 
 JOURS_MINIMUM_AVANT_EXPIRATION=14
 NOMBRE_D_ECHECS=0
@@ -52,6 +57,7 @@ afficher_info()   { echo "  info   $1"; }
 verifier_un_domaine() {
     local domaine="$1"
     local attente_du_certificat="${2:-}"
+    local controler_l_adresse_ip="${3:-oui}"
     echo ""
     echo "=== ${domaine}"
 
@@ -62,7 +68,7 @@ verifier_un_domaine() {
         afficher_echec "DNS : le nom ne se résout pas"
         return
     fi
-    if [ -n "${ADRESSE_IP_ATTENDUE}" ]; then
+    if [ -n "${ADRESSE_IP_ATTENDUE}" ] && [ "${controler_l_adresse_ip}" = "oui" ]; then
         if [ "${adresse_resolue}" = "${ADRESSE_IP_ATTENDUE}" ]; then
             afficher_ok "DNS : ${adresse_resolue}"
         else
@@ -139,6 +145,9 @@ for domaine in ${SOUS_DOMAINES_WILDCARD}; do
 done
 for domaine in ${DOMAINES_PERSONNALISES}; do
     verifier_un_domaine "${domaine}"
+done
+for domaine in ${DOMAINES_SUR_UN_AUTRE_SERVEUR}; do
+    verifier_un_domaine "${domaine}" "" non
 done
 
 echo ""

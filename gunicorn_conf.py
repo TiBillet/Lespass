@@ -23,7 +23,7 @@ Mesure en production (2026-07-21), premier rendu dans un process neuf :
     premiere connexion memcached   6,3 ms
     catalogues gettext             0,1 ms
 
-Le visiteur qui tombe sur un worker encore froid paie ces ~315 ms. Avec 18 workers
+Le visiteur qui tombe sur un worker encore froid paie ces ~315 ms. Avec plusieurs workers
 et un site peu frequente, presque chaque visite tombe sur un worker froid : les
 pages sortaient entre 500 et 650 ms au lieu de 150 ms.
 
@@ -64,7 +64,7 @@ def post_worker_init(worker):
     l'application WSGI, mais avant sa boucle d'acceptation des connexions. Le cout
     est donc paye hors requete, et une connexion ouverte ici appartient a ce worker
     seul — c'est la raison pour laquelle le prechauffage vit ici et non avant le fork
-    (avec `--preload`, les 18 workers heriteraient d'une meme socket PostgreSQL ou
+    (avec `--preload`, tous les workers heriteraient d'une meme socket PostgreSQL ou
     memcached, ce qui produit des corruptions difficiles a diagnostiquer).
 
     FLUX :
@@ -76,7 +76,7 @@ def post_worker_init(worker):
     plus bas. Gunicorn ne marque le worker « demarre » (`self.booted = True`)
     qu'APRES cet appel : une exception qui s'echappe d'ici fait sortir le worker
     en WORKER_BOOT_ERROR, que l'arbitre traduit en HaltServer. Le MASTER s'arrete
-    alors, les 18 workers avec lui, et supervisord boucle jusqu'a FATAL — plus une
+    alors, tous les workers avec lui, et supervisord boucle jusqu'a FATAL — plus une
     seule reponse servie. C'est pour cela que le `except` ci-dessous attrape
     `BaseException` et non `Exception`, et que la journalisation elle-meme est
     protegee : le prechauffage est une optimisation, il ne doit JAMAIS pouvoir

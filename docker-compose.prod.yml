@@ -37,7 +37,6 @@ services:
       # code, sur le disque du serveur (pas dans un volume Docker nommé).
       # / Same path as the current production: the database lives in ./database.
       - ./database:/var/lib/postgresql/data
-#      - lespass_dev_db:/var/lib/postgresql/data
     env_file: .env
     networks:
       - backend
