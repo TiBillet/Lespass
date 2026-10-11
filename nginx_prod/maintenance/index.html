@@ -1,0 +1,744 @@
+<!doctype html>
+<!--
+  PAGE DE MAINTENANCE — servie par nginx seul, Django arrete.
+  / MAINTENANCE PAGE — served by nginx alone, Django stopped.
+
+  LOCALISATION : nginx_prod/maintenance/index.html
+  Activation : voir l'en-tete de nginx_prod/lespass_maintenance.conf
+
+  Autonome : aucune ressource de /static (le dossier peut etre en cours de
+  reecriture par collectstatic pendant la mise a jour), aucun appel externe
+  (pas de Google Fonts, conforme RGPD). Polices, volutes et logos sont dans
+  nginx_prod/maintenance/{fonts,fond,logo}/.
+  Chemins RELATIFS (fonts/…, fond/…, logo/…) : la page s'ouvre aussi en
+  double-cliquant le fichier. Cote nginx, la page est servie sur N'IMPORTE
+  quelle URL (/event/x/ …) : la conf rattrape donc tout chemin finissant par
+  fonts/, fond/ ou logo/ (voir lespass_maintenance.conf).
+  / Self-contained, RELATIVE paths: opens straight from disk too; nginx
+  catches any URL ending in fonts/, fond/ or logo/.
+
+  Charte : document de D.A. « da-tibillet v5 ». Le fond de page
+  (fond/volutes-fond-page.svg) et les logos sont extraits de ce document.
+  Les cartes reprennent la carte de /my_account (.tcard de
+  pages/static/V2/css/V2.css) : meme volute (static/fond/tibillet-volutes-blanc.svg,
+  copiee en fond/volutes-carte-blanc.svg), meme opacite 0,17.
+  / Brand: "da-tibillet v5"; cards copy the /my_account .tcard.
+-->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Recharge toutes les 5 minutes : quand la mise a jour est finie, le
+       visiteur qui a laisse l'onglet ouvert retombe sur le site.
+       / Reloads every 5 min: back on the site once it is up. -->
+  <meta http-equiv="refresh" content="300">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#e93363">
+  <title>TiBillet fait peau neuve</title>
+  <!-- Pas de favicon : evite une requete qui repartirait en 503. -->
+  <link rel="icon" href="data:,">
+  <link rel="preload" href="fonts/Unbounded-Variable-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <style>
+    /* Hallmark · macrostructure: Marquee band + Index carousel (redesign) · tone: festive, warm · anchor hue: letchi
+     * theme: locked system — D.A. « da-tibillet v5 » (Unbounded 900 + Luciole · sable/papier/encre · 5 couleurs de charte)
+     * enrichment: none (DA brand assets only: grad-fete band, ticket, carte Tibillet) · footer: Ft5 statement
+     * pre-emit critique: P5 H5 E4 S5 R4 V5
+     */
+
+    @font-face { font-family: 'Unbounded'; src: url('fonts/Unbounded-Variable-latin.woff2') format('woff2'); font-weight: 300 900; font-style: normal; font-display: swap; }
+    @font-face { font-family: 'Luciole'; src: url('fonts/Luciole-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: 'Luciole'; src: url('fonts/Luciole-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+
+    :root {
+      /* Charte / Brand palette */
+      --letchi: #e93363;
+      --zanana: #e9b322;
+      --chouchou: #259d49;
+      --loseyan: #4296cc;
+      --violet: #8b5fb0;
+      --encre: #17141a;
+      --piton: #63515e;
+      --papier: #faf8f5;
+      --sable: #f4ede0;
+      --blanc: #ffffff;
+      --letchi-text: #d22e59;          /* letchi lisible en texte sur papier */
+      --brume: #ece7e1;                /* bordure */
+      --tirets: #ded7cd;               /* pointilles du ticket */
+      --blanc-doux: rgba(255, 255, 255, 0.72);
+
+      /* Fonds d'ambiance (D.A. §03) / Ambient backgrounds */
+      --grad-fete: radial-gradient(120% 130% at 12% 8%, #e93363 0%, #ed4960 5%, #f05a5c 10%, #f26958 15%, #f27553 20%, #f1804e 25%, #ee8a4a 30%, #eb9245 35%, #e69a41 40%, #dfa03d 45%, #d8a53a 50%, #cfa938 55%, #c5ab37 60%, #b9ad37 65%, #acae38 70%, #9dae3a 75%, #8dad3c 80%, #7baa3f 85%, #65a742 90%, #4ca246 95%, #259d49 100%);
+      --grad-ruban: linear-gradient(90deg, var(--letchi) 0%, var(--zanana) 25%, var(--chouchou) 50%, var(--loseyan) 72%, var(--violet) 88%, var(--letchi) 100%);
+
+      --volute-fond: url('fond/volutes-fond-page.svg');
+      --volute-blanc: url('fond/volutes-carte-blanc.svg');
+      --volute-sombre: url('fond/volutes-fond-sombre.svg');
+      --brume-sombre: rgba(32, 31, 28, 0.08);   /* rail de la barre de progression */
+      --logo-blanc: url('logo/tibillet-blanc.png');
+      --logo-noir: url('logo/tibillet-noir.png');
+
+      --font-display: 'Unbounded', system-ui, sans-serif;
+      --font-text: 'Luciole', system-ui, sans-serif;
+
+      --text-sm: 0.8125rem;
+      --text-ui: 0.9375rem;
+      --text-base: 1rem;
+      --text-lg: 1.125rem;
+      --text-xl: 1.375rem;
+      --text-2xl: clamp(1.75rem, 1.2rem + 2.2vw, 2.5rem);
+      --text-hero: clamp(2.625rem, 1.2rem + 6.2vw, 4.875rem);
+
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 24px;
+      --space-6: 32px;
+      --space-7: 48px;
+      --space-8: 64px;
+      --space-9: 96px;
+
+      --radius-s: 10px;
+      --radius-l: 16px;
+      --radius-pill: 999px;
+
+      --largeur: 1040px;
+      /* Marge laterale : alignee sur la colonne de 1040px, jamais sous 16px.
+         / Side gutter aligned on the 1040px column. */
+      --gouttiere: max(var(--space-4), calc((100vw - var(--largeur)) / 2));
+
+      --ombre-ticket: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
+      --ombre-carte: 0 1px 2px rgba(32, 31, 28, 0.05), 0 6px 20px rgba(32, 31, 28, 0.06);
+
+      --dur-fast: 150ms;
+      --dur-carte: 5s;     /* temps d'affichage d'une carte en defilement auto */
+      --ease-out: cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
+    body {
+      margin: 0;
+      overflow-x: clip;
+      font-family: var(--font-text);
+      font-size: var(--text-base);
+      line-height: 1.6;
+      color: var(--encre);
+      -webkit-font-smoothing: antialiased;
+      /* Fond de page : volutes brun-sable ton sur ton (D.A. §08).
+         / Page background: tone-on-tone volutes. */
+      background-color: var(--sable);
+      background-image: var(--volute-fond);
+      background-size: 100% auto;
+      background-repeat: repeat-y;
+    }
+    h1, h2, h3 { margin: 0; font-family: var(--font-display); font-style: normal; overflow-wrap: anywhere; min-width: 0; }
+    p { margin: 0; }
+
+    .colonne { width: 100%; max-width: var(--largeur); margin-inline: auto; padding-inline: var(--space-4); }
+    @media (min-width: 1072px) { .colonne { padding-inline: 0; } }
+
+    /* ================= EN-TETE : fond d'ambiance « Fete » =================
+       D.A. §03 : « Fete — en-tete, lancement, temps fort ». Un seul par page.
+       / "Fete" ambient background: header, launch. One per page. */
+    .entete {
+      position: relative;
+      overflow: hidden;
+      background: var(--grad-fete);
+      color: var(--blanc);
+      padding: var(--space-6) 0 var(--space-8);
+    }
+    /* Volutes blanches sur le degrade, comme sur la carte Tibillet (D.A. §08 :
+       « en couleur de marque pour habiller une grande zone »).
+       / White volutes over the gradient, as on the Tibillet card. */
+    .entete::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--volute-blanc) center top / 100% auto repeat-y;
+      opacity: 0.14;
+      pointer-events: none;
+    }
+    .entete > * { position: relative; }
+    .entete__logo {
+      display: block;
+      width: 132px;
+      aspect-ratio: 560 / 247;
+      background: var(--logo-blanc) left center / contain no-repeat;
+    }
+    .entete h1 {
+      margin-top: var(--space-8);
+      max-width: 11ch;
+      text-wrap: balance;
+      font-size: var(--text-hero);
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      text-shadow: 0 2px 30px rgba(0, 0, 0, 0.12);
+    }
+    .entete__accroche {
+      margin-top: var(--space-5);
+      font-family: var(--font-display);
+      font-size: var(--text-xl);
+      font-weight: 700;
+      line-height: 1.3;
+      text-shadow: 0 1px 12px rgba(0, 0, 0, 0.14);
+    }
+
+    /* Le ticket (D.A. : tag-ticket) porte le statut. Encre sur papier : AAA.
+       / The ticket carries the status. Ink on paper: AAA. */
+    .ticket {
+      display: inline-flex;
+      align-items: stretch;
+      margin-top: var(--space-6);
+      max-width: 100%;
+      background: var(--papier);
+      color: var(--encre);
+      border-radius: var(--radius-s);
+      filter: var(--ombre-ticket);
+      -webkit-mask: radial-gradient(circle 11px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 11px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
+      mask: radial-gradient(circle 11px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 11px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
+    }
+    .ticket__souche {
+      display: flex;
+      align-items: center;
+      padding: var(--space-3) var(--space-4) var(--space-3) var(--space-5);
+      border-right: 2px dashed var(--tirets);
+    }
+    .ticket__souche img { display: block; height: 46px; width: auto; }
+    .ticket__corps {
+      position: relative;
+      padding: var(--space-3) var(--space-6) var(--space-4) var(--space-5);
+      font-size: var(--text-ui);
+      line-height: 1.4;
+      min-width: 0;
+    }
+    .ticket__corps strong {
+      display: block;
+      font-family: var(--font-display);
+      font-size: var(--text-lg);
+      font-weight: 800;
+    }
+    .ticket__corps::after {
+      content: '';
+      position: absolute;
+      left: var(--space-5);
+      right: var(--space-6);
+      bottom: 7px;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--grad-ruban);
+    }
+
+    /* ================= CE QUI ARRIVE : carrousel ================= */
+    .arrive { padding: var(--space-9) 0 var(--space-8); }
+    .arrive__tete {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--space-5);
+    }
+    .arrive__titres { min-width: 0; }
+    .surtitre {
+      font-family: var(--font-display);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--letchi-text);
+    }
+    .arrive h2 {
+      margin-top: var(--space-1);
+      font-size: var(--text-2xl);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.01em;
+    }
+    .arrive__intro {
+      margin-top: var(--space-4);
+      max-width: 38em;
+      padding-left: var(--space-4);
+      border-left: 3px solid var(--letchi);
+      color: var(--piton);
+    }
+
+    .commandes {
+      display: none;               /* sans JS : on fait defiler a la main */
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .js .commandes { display: flex; }
+    .compteur {
+      min-width: 3.5em;           /* « 03 » sur mobile, « 04–06 » au-dela */
+      text-align: center;
+      font-family: var(--font-display);
+      font-size: var(--text-lg);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .compteur span { color: var(--piton); font-weight: 500; }
+    .fleche {
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      padding: 0;
+      border: 0;
+      border-radius: var(--radius-pill);
+      background: var(--encre);
+      color: var(--blanc);
+      cursor: pointer;
+      /* Liseré letchi, comme le bouton principal de la D.A. */
+      box-shadow: inset 0 -3px 0 var(--letchi);
+      transition: background-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+      touch-action: manipulation;
+    }
+    .fleche svg { width: 20px; height: 20px; }
+    .fleche:hover { background: #2c2630; }
+    .fleche:active { transform: translateY(1px); }
+    .fleche:focus-visible { outline: 3px solid var(--encre); outline-offset: 3px; }
+    .fleche:disabled { opacity: 0.35; cursor: default; transform: none; }
+
+    /* Bouton pause / lecture : contour encre, secondaire par rapport aux fleches.
+       / Pause / play button: ink outline, secondary to the arrows. */
+    .fleche--lecture {
+      background: transparent;
+      color: var(--encre);
+      box-shadow: inset 0 0 0 2px var(--encre);
+    }
+    .fleche--lecture:hover { background: var(--brume-sombre); }
+    .fleche--lecture .icone-lecture { display: none; }
+    .en-pause .fleche--lecture .icone-lecture { display: block; }
+    .en-pause .fleche--lecture .icone-pause { display: none; }
+
+    /* Defilement automatique. La barre-ruban se remplit pendant --dur-carte :
+       c'est elle qui sert de minuterie (animationend fait avancer d'une carte).
+       Elle s'arrete au survol de la piste, au focus clavier et en pause.
+       D.A. §04 : le ruban sert aussi de « barre de progression ».
+       / Autoplay. The ribbon bar fills over --dur-carte and IS the timer
+       (animationend advances one card). Paused on track hover, keyboard
+       focus, or when the user pauses. */
+    .progression {
+      display: none;
+      height: 3px;
+      margin-top: var(--space-2);
+      border-radius: 2px;
+      background: var(--brume-sombre);
+      overflow: hidden;
+    }
+    .js .progression { display: block; }
+    .progression__ruban {
+      height: 100%;
+      background: var(--grad-ruban);
+      transform-origin: left center;
+      transform: scaleX(0);
+      animation: remplir var(--dur-carte) linear forwards;
+    }
+    @keyframes remplir {
+      from { transform: scaleX(0); }
+      to   { transform: scaleX(1); }
+    }
+    .arrive:has(.piste:hover) .progression__ruban,
+    .arrive:has(:focus-visible) .progression__ruban,
+    .arrive.en-pause .progression__ruban {
+      animation-play-state: paused;
+    }
+
+    /* La piste deborde a droite jusqu'au bord de l'ecran : on voit la carte
+       suivante depasser, signe qu'il y en a d'autres.
+       / The track bleeds to the right edge: the next card peeks out. */
+    .piste {
+      display: flex;
+      gap: var(--space-5);
+      margin-top: var(--space-6);
+      padding: var(--space-2) var(--gouttiere) var(--space-5);
+      scroll-padding-inline: var(--gouttiere);
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      list-style: none;
+    }
+    .piste::-webkit-scrollbar { display: none; }
+    .piste:focus-visible { outline: 3px solid var(--encre); outline-offset: -3px; border-radius: var(--radius-l); }
+
+    /* Une nouveaute : bloc Papier (niveau 2, sans volutes) qui contient une
+       carte Tibillet (niveau 3, aplat de couleur + volute blanche).
+       / A feature: Paper block holding a colour Tibillet card. */
+    .nouveaute {
+      flex: 0 0 min(82vw, 340px);
+      scroll-snap-align: start;
+      display: flex;
+      flex-direction: column;
+      background: var(--papier);
+      border: 1px solid var(--brume);
+      border-radius: var(--radius-l);
+      box-shadow: var(--ombre-carte);
+      padding: var(--space-3);
+      margin: 0;
+    }
+    .carte {
+      position: relative;
+      aspect-ratio: 1.586 / 1;
+      border-radius: var(--radius-l);
+      overflow: hidden;
+      padding: var(--space-4);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: var(--fond);
+      color: var(--sur-fond);
+      font-family: var(--font-display);
+    }
+    .carte::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--volute-blanc) center / cover no-repeat;
+      opacity: 0.17;             /* comme .tcard__v de /my_account */
+      pointer-events: none;
+    }
+    .carte > * { position: relative; }
+    .carte__haut { display: flex; justify-content: space-between; align-items: flex-start; font-size: var(--text-sm); font-weight: 700; }
+    .carte__logo {
+      width: 92px;
+      aspect-ratio: 560 / 247;
+      background: var(--logo-blanc) left center / contain no-repeat;
+    }
+    .carte__code { font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.92; }
+
+    /* Cinq couleurs, dans l'ordre du ruban. Zanana : texte encre et logo noir
+       a 55 % (le blanc n'y atteint que 1,9:1 — D.A. §07).
+       / Five colours in ribbon order. Zanana takes ink, not white. */
+    .c-letchi   { --fond: var(--letchi);   --sur-fond: var(--blanc); }
+    .c-zanana   { --fond: var(--zanana);   --sur-fond: var(--encre); }
+    .c-chouchou { --fond: var(--chouchou); --sur-fond: var(--blanc); }
+    .c-loseyan  { --fond: var(--loseyan);  --sur-fond: var(--blanc); }
+    .c-violet   { --fond: var(--violet);   --sur-fond: var(--blanc); }
+    .c-zanana .carte__logo { background-image: var(--logo-noir); opacity: 0.55; }
+
+    .nouveaute h3 {
+      margin: var(--space-5) var(--space-2) 0;
+      font-size: var(--text-lg);
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .nouveaute p {
+      margin: var(--space-3) var(--space-2) var(--space-3);
+      font-size: var(--text-ui);
+      line-height: 1.55;
+      color: var(--piton);
+    }
+
+    /* ================= PIED : signature sur encre ================= */
+    /* Mode sombre de la D.A. : memes volutes brun-sable, a 0,06.
+       / D.A. dark mode: same sand-brown volutes at 0.06. */
+    .pied {
+      background-color: var(--encre);
+      background-image: var(--volute-sombre);
+      background-size: 100% auto;
+      background-repeat: repeat-y;
+      color: var(--blanc);
+      padding: var(--space-8) 0;
+    }
+    .pied__signature {
+      max-width: 20ch;
+      font-family: var(--font-display);
+      font-size: var(--text-2xl);
+      font-weight: 800;
+      line-height: 1.15;
+    }
+    .pied__signature em { font-style: normal; color: var(--zanana); }
+    .pied__contact {
+      margin-top: var(--space-6);
+      padding-top: var(--space-4);
+      border-top: 1px solid rgba(255, 255, 255, 0.16);
+      color: var(--blanc-doux);
+      font-size: var(--text-ui);
+    }
+    .pied__contact a {
+      color: var(--blanc);
+      font-weight: 700;
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+      white-space: nowrap;
+    }
+    .pied__contact a:hover { color: var(--zanana); }
+    .pied__contact a:focus-visible { outline: 2px solid var(--sable); outline-offset: 3px; border-radius: 2px; }
+
+    @media (min-width: 768px) {
+      .entete { padding: var(--space-7) 0 var(--space-9); }
+      .entete__logo { width: 168px; }
+      .nouveaute { flex-basis: 340px; }
+      .compteur { min-width: 6.5em; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .piste { scroll-behavior: auto; }
+      .fleche { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="entete">
+    <div class="colonne">
+      <span class="entete__logo" role="img" aria-label="TiBillet"></span>
+      <h1>TiBillet fait peau neuve.</h1>
+      <p class="entete__accroche">Revenez dans quelques instants&#8239;!</p>
+      <p class="ticket" role="status">
+        <span class="ticket__souche"><img src="logo/tibillet-icone-couleur.png" width="36" height="46" alt=""></span>
+        <span class="ticket__corps">
+          <strong>Mise à jour en cours</strong>
+          Laissez cette page ouverte&#8239;: elle se recharge toute seule.
+        </span>
+      </p>
+    </div>
+  </header>
+
+  <main>
+    <section class="arrive" aria-labelledby="titre-arrive">
+      <div class="colonne arrive__tete">
+        <div class="arrive__titres">
+          <p class="surtitre">Ce qui arrive</p>
+          <h2 id="titre-arrive">Bientôt dans TiBillet</h2>
+          <p class="arrive__intro">
+            Pendant la pause, la billetterie, les adhésions et les paiements
+            en ligne sont arrêtés. Voici sur quoi nous travaillons.
+          </p>
+        </div>
+        <div class="commandes">
+          <button class="fleche fleche--lecture" type="button" data-lecture aria-controls="piste" aria-label="Mettre en pause le défilement">
+            <svg class="icone-pause" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><rect x="5" y="4" width="3.2" height="12" rx="1"/><rect x="11.8" y="4" width="3.2" height="12" rx="1"/></svg>
+            <svg class="icone-lecture" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M6.5 4.2v11.6a.8.8 0 0 0 1.2.7l9-5.8a.8.8 0 0 0 0-1.4l-9-5.8a.8.8 0 0 0-1.2.7Z"/></svg>
+          </button>
+          <button class="fleche" type="button" data-sens="-1" aria-controls="piste" aria-label="Nouveauté précédente">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg>
+          </button>
+          <p class="compteur"><b data-position>01</b>&nbsp;<span>/ 11</span></p>
+          <button class="fleche" type="button" data-sens="1" aria-controls="piste" aria-label="Nouveauté suivante">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <ol class="piste" id="piste" tabindex="0" aria-label="Les nouveautés, défilement horizontal">
+        <li class="nouveaute">
+          <div class="carte c-letchi" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">Admin</span>
+          </div>
+          <h3>Une admin qui s'adapte à votre lieu</h3>
+          <p>Vous allumez seulement les modules qui vous servent&#8239;: billetterie, adhésions, caisse, réservations… Le menu et le site public n'affichent que ceux-là.</p>
+        </li>
+        <li class="nouveaute">
+          <div class="carte c-zanana" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">Site web</span>
+          </div>
+          <h3>Votre site, sans coder</h3>
+          <p>Pages d'information et mini blog&#8239;: on empile des blocs (texte, photos, plan d'accès, FAQ, prochains événements) et on les réordonne en les faisant glisser.</p>
+        </li>
+        <li class="nouveaute">
+          <div class="carte c-chouchou" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">SEO</span>
+          </div>
+          <h3>Vos pages remontent dans les moteurs de recherche</h3>
+          <p>Plan du site, adresses lisibles, événements décrits pour Google, Bing ou Qwant&#8239;: tout est prévu pour que vos pages remontent, sans rien régler.</p>
+        </li>
+        <li class="nouveaute">
+          <div class="carte c-loseyan" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">Réservation</span>
+          </div>
+          <h3>Réserver une salle, un poste, une machine</h3>
+          <p>Salle de répétition, coworking, machine de fablab&#8239;: vous fixez horaires, places et tarif. On réserve dans un calendrier, sans attendre de validation.</p>
+        </li>
+        <li class="nouveaute">
+          <div class="carte c-violet" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">Panier</span>
+          </div>
+          <h3>Un panier, un seul paiement</h3>
+          <p>Avec votre compte, une adhésion, des billets pour plusieurs soirées et une réservation se règlent en une fois. L'adhésion débloque aussitôt les tarifs adhérents.</p>
+        </li>
+        <li class="nouveaute">
+          <div class="carte c-letchi" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">LaBoutik</span>
+          </div>
+          <h3>LaBoutik, la caisse, refaite</h3>
+          <p>Une caisse tactile intégrée à TiBillet&#8239;: espèces, carte bancaire ou cashless, même mélangés. Billets, adhésions et commandes de table se vendent au même endroit.</p>
+        </li>
+        <li class="nouveaute">
+          <div class="carte c-zanana" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">Inventaire</span>
+          </div>
+          <h3>Les stocks suivent les ventes</h3>
+          <p>Boissons, fûts, nourriture, merch&#8239;: chaque vente, livraison, casse ou verre offert est noté. La caisse prévient sous le seuil d'alerte, puis affiche «&#8239;Épuisé&#8239;».</p>
+        </li>
+        <li class="nouveaute">
+          <div class="carte c-chouchou" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">Tireuse</span>
+          </div>
+          <h3>Une tireuse à bière en libre-service</h3>
+          <p>Un Raspberry Pi, une électrovanne, un débitmètre, et voilà une tireuse DIY&#8239;! On pose sa carte cashless, on se sert, et la tireuse s'arrête quand le solde est atteint.</p>
+        </li>
+        <li class="nouveaute">
+          <div class="carte c-loseyan" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">Borne</span>
+          </div>
+          <h3>Une borne pour recharger sa carte</h3>
+          <p>Le public pose sa carte cashless, voit son solde, choisit un montant et paie par carte bancaire. Sans passer par le bar.</p>
+        </li>
+        <li class="nouveaute">
+          <div class="carte c-violet" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">Comptabilité</span>
+          </div>
+          <h3>Une compta prête pour votre comptable</h3>
+          <p>Caisse, tireuse, ventes en ligne et adhésions réunies par jour, mois et année. Export FEC pour Sage, EBP, Pennylane, Paheko, Odoo, Dokos ou Dolibarr, rapports en tableur ou PDF.</p>
+        </li>
+        <li class="nouveaute">
+          <div class="carte c-letchi" aria-hidden="true">
+            <div class="carte__haut"><span class="carte__logo"></span><span>))</span></div>
+            <span class="carte__code">Newsletter</span>
+          </div>
+          <h3>Votre agenda devient une newsletter</h3>
+          <p>Un clic prépare dans Ghost le brouillon des événements à venir, ceux du lieu et de son réseau, avec date, tarif et bouton «&#8239;Réserver&#8239;». Vous relisez, vous envoyez.</p>
+        </li>
+      </ol>
+      <div class="colonne">
+        <div class="progression" aria-hidden="true"><div class="progression__ruban"></div></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pied">
+    <div class="colonne">
+      <p class="pied__signature">Venez construire un <em>commun numérique</em> avec nous&#8239;!</p>
+      <p class="pied__contact">
+        Une question urgente&#8239;? Écrivez-nous à
+        <a href="mailto:contact@tibillet.re">contact@tibillet.re</a>
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // Carrousel : les fleches font defiler la piste d'une carte, le compteur
+    // suit la premiere carte visible. Sans JS, la piste defile au doigt.
+    // / Carousel: arrows scroll one card, the counter follows the first
+    // visible card. Without JS the track still scrolls by hand.
+    (function () {
+      document.documentElement.classList.add('js');
+
+      var piste = document.getElementById('piste');
+      var cartes = piste.querySelectorAll('.nouveaute');
+      var position = document.querySelector('[data-position]');
+      var precedent = document.querySelector('[data-sens="-1"]');
+      var suivant = document.querySelector('[data-sens="1"]');
+      var mouvementReduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function pas() {
+        var ecart = parseFloat(getComputedStyle(piste).columnGap) || 0;
+        return cartes[0].getBoundingClientRect().width + ecart;
+      }
+
+      function deuxChiffres(n) { return String(n).padStart(2, '0'); }
+
+      // Le compteur affiche les cartes ENTIEREMENT visibles : « 03 » sur
+      // mobile, « 04–06 » sur grand ecran.
+      // / The counter shows the fully visible cards.
+      function mettreAJour() {
+        var total = cartes.length;
+        var marge = parseFloat(getComputedStyle(piste).paddingLeft) || 0;
+        var visibles = Math.max(1, Math.floor((piste.clientWidth - marge) / pas()));
+        var fin = auBout();
+        var premiere = fin ? total - visibles + 1 : Math.round(piste.scrollLeft / pas()) + 1;
+        premiere = Math.max(1, Math.min(total, premiere));
+        var derniere = Math.min(total, premiere + visibles - 1);
+        position.textContent = premiere === derniere
+          ? deuxChiffres(premiere)
+          : deuxChiffres(premiere) + '–' + deuxChiffres(derniere);
+        precedent.disabled = piste.scrollLeft <= 2;
+        suivant.disabled = fin;
+      }
+
+      var carrousel = document.querySelector('.arrive');
+      var ruban = document.querySelector('.progression__ruban');
+      var lecture = document.querySelector('[data-lecture]');
+      var comportement = mouvementReduit ? 'auto' : 'smooth';
+
+      // Repart de zero : on retire l'animation, on force le recalcul, on la remet.
+      // / Restart from zero: remove the animation, force reflow, put it back.
+      function relancerRuban() {
+        ruban.style.animation = 'none';
+        void ruban.offsetWidth;
+        ruban.style.animation = '';
+      }
+
+      function auBout() {
+        return piste.scrollLeft + piste.clientWidth >= piste.scrollWidth - 2;
+      }
+
+      // Defilement automatique : une carte de plus, retour au debut a la fin.
+      // / Autoplay: one more card, back to the start at the end.
+      function avancer() {
+        if (auBout()) {
+          piste.scrollTo({ left: 0, behavior: comportement });
+        } else {
+          piste.scrollBy({ left: pas(), behavior: comportement });
+        }
+      }
+
+      function mettreEnPause(pause) {
+        carrousel.classList.toggle('en-pause', pause);
+        lecture.setAttribute('aria-label', pause ? 'Reprendre le défilement' : 'Mettre en pause le défilement');
+      }
+
+      ruban.addEventListener('animationend', function () {
+        avancer();
+        relancerRuban();
+      });
+
+      lecture.addEventListener('click', function () {
+        mettreEnPause(!carrousel.classList.contains('en-pause'));
+      });
+
+      [precedent, suivant].forEach(function (bouton) {
+        bouton.addEventListener('click', function () {
+          piste.scrollBy({ left: pas() * Number(bouton.dataset.sens), behavior: comportement });
+          relancerRuban();
+        });
+      });
+
+      // Un glissement au doigt remet la minuterie a zero.
+      // / A swipe resets the timer.
+      piste.addEventListener('pointerdown', relancerRuban, { passive: true });
+
+      // Mouvement reduit demande par le systeme : pas de defilement automatique.
+      // / Reduced motion requested: no autoplay.
+      if (mouvementReduit) { mettreEnPause(true); }
+
+      var enAttente = false;
+      piste.addEventListener('scroll', function () {
+        if (enAttente) { return; }
+        enAttente = true;
+        requestAnimationFrame(function () { mettreAJour(); enAttente = false; });
+      }, { passive: true });
+      window.addEventListener('resize', mettreAJour);
+
+      // Le total suit le nombre de cartes : ajouter une <li> suffit.
+      // / The total follows the number of cards: adding an <li> is enough.
+      document.querySelector('.compteur span').textContent = '/ ' + deuxChiffres(cartes.length);
+      mettreAJour();
+    })();
+  </script>
+</body>
+</html>

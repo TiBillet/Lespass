@@ -43,6 +43,8 @@ logs/
 Backup/
 backup/
 database/
+# Clé SSH privée de la sauvegarde borg (montée sur /home/tibillet/.ssh) : jamais dans git ni dans l'image.
+ssh/
 
 # --- Divers / Misc ---
 Docker

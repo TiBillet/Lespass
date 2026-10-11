@@ -154,6 +154,8 @@ www/
 logs/
 backup/
 database/
+# Clé SSH privée de la sauvegarde borg (montée sur /home/tibillet/.ssh) : jamais dans git ni dans l'image.
+ssh/
 Backup
 DjangoFiles/logs/gunicorn.logs
 DjangoFiles/logs/Djangologfile

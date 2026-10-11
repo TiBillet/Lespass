@@ -15,59 +15,6 @@ x-logging: &default-logging
     max-file: "5"
 
 services:
-
-  #### FEDOW ####
-  fedow_memcached:
-    image: memcached:1.6
-    container_name: fedow_memcached
-    hostname: fedow_memcached
-    restart: always
-    logging: *default-logging
-    networks:
-      - backend
-
-  fedow_django:
-    image: tibillet/fedow:latest
-    container_name: fedow_django
-    hostname: fedow_django
-    restart: unless-stopped
-    env_file: .env
-    user: fedow
-    logging: *default-logging
-    links:
-      - fedow_memcached:memcached
-    volumes:
-      - fedow_database:/home/fedow/Fedow/database
-    networks:
-      - backend
-    command: "bash start.sh"
-
-  fedow_nginx:
-    image: nginx
-    restart: unless-stopped
-    container_name: fedow_nginx
-    hostname: fedow_nginx
-    logging: *default-logging
-    volumes:
-      - ./nginx/fedow_nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./logs:/logs
-    depends_on:
-      - fedow_django
-    links:
-      - fedow_django:fedow_django
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=frontend
-      - traefik.http.routers.fedow_nginx.entrypoints=websecure
-      - traefik.http.routers.fedow_nginx.tls=true
-      - traefik.http.routers.fedow_nginx.tls.certresolver=le-alpn
-      - traefik.http.routers.fedow_nginx.rule=Host(`fedow.${DOMAIN}`)
-      - traefik.http.routers.fedow_nginx.priority=100
-      - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
-    networks:
-      - frontend
-      - backend
-
   #########
   # LESPASS
   #########
@@ -86,7 +33,11 @@ services:
     command: postgres -c max_locks_per_transaction=4096
     logging: *default-logging
     volumes:
-      - lespass_dev_db:/var/lib/postgresql/data
+      # Même chemin que la prod actuelle : la base vit dans ./database, à côté du
+      # code, sur le disque du serveur (pas dans un volume Docker nommé).
+      # / Same path as the current production: the database lives in ./database.
+      - ./database:/var/lib/postgresql/data
+#      - lespass_dev_db:/var/lib/postgresql/data
     env_file: .env
     networks:
       - backend
@@ -125,6 +76,12 @@ services:
     logging: *default-logging
     volumes:
       - ./:/DjangoFiles
+      # Sauvegarde automatique (cron/saveDb.sh) : dumps dans /Backup/dumps, archives
+      # borg poussées par SSH avec la clé de /home/tibillet/.ssh. Mêmes chemins que la
+      # prod actuelle. Sans ces deux montages, plus AUCUNE sauvegarde.
+      # / Automatic backup: same paths as current production. Without them, NO backup.
+      - ./backup:/Backup
+      - ./ssh:/home/tibillet/.ssh
     env_file: .env
     depends_on:
       - lespass_postgres
@@ -151,13 +108,32 @@ services:
     restart: unless-stopped
     hostname: lespass_nginx
     logging: *default-logging
+    # Commenter `links:` si le conteneur lespass_django est SUPPRIMÉ (pas seulement
+    # arrêté) pendant une maintenance ou une bascule : les deux confs temporaires
+    # ne le nomment jamais. / Comment out `links:` if lespass_django is removed.
     links:
       - lespass_django:lespass_django
     volumes:
-      # Conf PROD : route /ws/ et /wss/ vers daphne (:7999), le reste vers
-      # gunicorn (:8002). / PROD conf: /ws/ and /wss/ → daphne (:7999),
-      # everything else → gunicorn (:8002).
+      # UNE SEULE des trois confs ci-dessous est active à la fois.
+      # / Only ONE of the three confs below is active at a time.
+      #
+      # 1. Conf PROD (normale) : route /ws/ et /wss/ vers daphne (:7999), le reste
+      # vers gunicorn (:8002). / PROD conf: /ws/, /wss/ → daphne, the rest → gunicorn.
       - ./nginx_prod/lespass_prod.conf:/etc/nginx/conf.d/default.conf:ro
+      #
+      # 2. MAINTENANCE : page « TiBillet fait peau neuve » en 503 sur tous les
+      # domaines, Django n'est plus appelé (détail : nginx_prod/lespass_maintenance.conf).
+      # Pour l'activer : commenter la ligne 1, décommenter les DEUX lignes suivantes,
+      # puis `docker compose -f docker-compose.prod.yml up -d lespass_nginx`.
+      # / MAINTENANCE: comment line 1, uncomment the TWO lines below, recreate nginx.
+#      - ./nginx_prod/lespass_maintenance.conf:/etc/nginx/conf.d/default.conf:ro
+#      - ./nginx_prod/maintenance:/maintenance:ro
+      #
+      # 3. BASCULE (ancien serveur seulement) : relaie tout vers le nouveau serveur
+      # pendant la propagation du DNS (détail : nginx_prod/lespass_bascule.conf,
+      # remplacer NOUVELLE_IP avant). / CUTOVER (old server only): relay to the new one.
+#      - ./nginx_prod/lespass_bascule.conf:/etc/nginx/conf.d/default.conf:ro
+      #
       - ./www:/www
       - ./logs:/logs
     labels:
@@ -181,9 +157,15 @@ services:
       - traefik.http.routers.lespass-gandi.tls.domains[0].sans=*.${DOMAIN_GANDI}
       - traefik.http.routers.lespass-gandi.rule=Host(`${DOMAIN_GANDI}`) || HostRegexp(`${DOMAIN_GANDI_REGEX}`)
 
-      # Router C — hôte simple (TLS challenge)
-      # Custom DNS :
+      # Router C — domaines personnalisés des lieux (certificat par hôte, TLS challenge).
+      # La liste vient de la prod (domaines hors tibillet.coop / tibillet.re). Un lieu
+      # qui ajoute un domaine à lui doit être ajouté ICI, sinon Traefik ne le route pas.
+      # Vérifier que le nom du résolveur existe dans la conf Traefik du serveur.
+      # / Router C — venues' custom domains. A new custom domain must be added HERE.
+      - traefik.http.routers.custom_dns.entrypoints=websecure
+      - traefik.http.routers.custom_dns.tls=true
       - traefik.http.routers.custom_dns.tls.certresolver=myresolver
+      - traefik.http.routers.custom_dns.rule=Host(`guichet.latendresse.fr`) || Host(`guichet.cafeasso.latendresse.fr`) || Host(`fairefestival.fr`) || Host(`www.fairefestival.fr`) || Host(`tibillet.org`)
 
 
 #      - traefik.http.routers.lespass-simple.entrypoints=websecure
@@ -247,11 +229,17 @@ networks:
     external: true
   backend:
 
-volumes:
-  lespass_dev_db:
-  fedow_database:
+# Plus de volume nommé : la base est dans ./database (service lespass_postgres), et
+# Fedow a son propre compose. Gardés en commentaire pour mémoire.
+# / No named volume anymore: the database is in ./database; Fedow has its own compose.
+#volumes:
+#  lespass_dev_db:
+#  fedow_database:
 
 
-# Données persistantes dans ./data/ (bind mounts)
-# - ./data/postgres   : base PostgreSQL Lespass
-# - ./data/fedow      : base Fedow
+# Données persistantes (bind mounts, mêmes chemins que la prod actuelle) :
+# - ./database : base PostgreSQL Lespass
+# - ./backup   : dumps et dépôt borg local (cron/saveDb.sh)
+# - ./ssh      : clé SSH de la sauvegarde borg distante
+# - ./www      : fichiers statiques et médias (images déposées par les lieux)
+# - ./logs     : journaux nginx, gunicorn, celery
