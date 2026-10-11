@@ -80,11 +80,18 @@ docker exec lespass_django poetry run pytest tests/pytest/test_crowd_*.py tests/
 **Carte Stripe de test** (E2E) : `4242 4242 4242 4242`, nom `Douglas Adams`, date `12/42`,
 code `424`.
 
-**Playwright** (E2E, si absent du conteneur) :
+**Playwright** (E2E, si absent du conteneur) — symptome : toutes les E2E en ERROR au setup,
+`BrowserType.launch: Executable doesn't exist at /home/tibillet/.cache/ms-playwright/...` :
 ```bash
-docker exec -u root lespass_django /DjangoFiles/.venv/bin/playwright install-deps chromium
+# Le venv Poetry n'est PAS /DjangoFiles/.venv : on demande son chemin a Poetry.
+# / The Poetry venv is NOT /DjangoFiles/.venv: ask Poetry for its path.
+VENV=$(docker exec lespass_django poetry env info -p)
+# 1. Dependances systeme du navigateur, en root.
+docker exec -u root lespass_django "$VENV/bin/playwright" install-deps chromium
+# 2. Le navigateur lui-meme, en utilisateur normal.
 docker exec lespass_django poetry run playwright install chromium
 ```
+Le navigateur s'installe dans le conteneur : a refaire apres une reconstruction de l'image.
 
 ---
 

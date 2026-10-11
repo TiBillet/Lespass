@@ -46,6 +46,23 @@ class CarteInconnueDeFedow(Exception):
     pass
 
 
+class CarteNonLieeAuPorteurChezFedow(Exception):
+    """
+    Fedow ne trouve pas cette carte liee a ce porteur (reponse 404 de
+    `card/lost_my_card_by_signature`).
+    / Fedow does not find this card linked to this holder (404).
+
+    LOCALISATION : fedow_connect/fedow_api.py
+
+    Cote Fedow : `get_object_or_404(Card, user=wallet.user, number_printed=...)`.
+    Un 404 veut dire « cette carte n'est pas, ou plus, a cette personne » : deja
+    detachee (double clic, caisse V1, autre client Fedow) ou numero inconnu.
+    Ce n'est PAS une panne. Levee par NFCcardFedow.lost_my_card_by_signature().
+    / A 404 means "this card is not, or no longer, this person's". Not an outage.
+    """
+    pass
+
+
 ### GENERIC GET AND POST ###
 def _post(fedow_config: FedowConfig = None,
           user: TibilletUser = None,
@@ -742,8 +759,16 @@ class NFCcardFedow():
             data={'number_printed': number_printed}
         )
 
+        # warning et pas error : c'est l'appelant qui decide de la gravite
+        # (voir BaseBillet.views.declarer_la_carte_perdue).
+        # / warning, not error: the caller decides how serious it is.
+        if response_lost_my_card.status_code == 404:
+            logger.warning(f"lost_my_card_by_signature : carte {number_printed} non liee a ce porteur (404)")
+            raise CarteNonLieeAuPorteurChezFedow(
+                f"lost_my_card_by_signature : carte {number_printed} non liee a ce porteur (404)"
+            )
         if not response_lost_my_card.status_code == 200:
-            logger.error(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
+            logger.warning(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
             raise Exception(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
         return True
 
@@ -1075,7 +1100,11 @@ class NFCcardFedow():
         )
 
         if response_link.status_code != 200:
-            logger.error(f"linkwallet_card_number : {response_link.status_code} {response_link.json()}")
+            # warning et pas error : un refus peut etre benin (carte deja liee a ce membre,
+            # double envoi). C'est l'appelant qui decide de la gravite : voir
+            # lier_la_carte_a_l_adherent_chez_fedow (admin) et laboutik/views.py (caisse).
+            # / warning, not error: the caller decides how serious a refusal is.
+            logger.warning(f"linkwallet_card_number : {response_link.status_code} {response_link.json()}")
             raise Exception(f"linkwallet_card_number : {response_link.status_code} {response_link.json()}")
 
         validated_card = CardValidator(data=response_link.json())

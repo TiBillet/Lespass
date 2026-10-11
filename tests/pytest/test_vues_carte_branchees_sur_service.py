@@ -77,15 +77,11 @@ def carte_liee_a_un_user():
             tag_id=tag, uuid=uuid_module.uuid4(), number=tag, detail=detail, user=user
         )
 
-    yield {"tenant": tenant, "carte": carte, "user": user, "wallet": wallet}
-
-    with tenant_context(tenant):
-        CarteCashless.objects.filter(pk=carte.pk).delete()
-        user.refresh_from_db()
-        user.wallet = None
-        user.save(update_fields=["wallet"])
-        user.delete()
-        Wallet.objects.filter(uuid=wallet.uuid).delete()
+    # Pas de nettoyage : `django_db` annule tout. Supprimer a la main des objets partages
+    # (user, wallet, carte) ferait verifier leurs cles etrangeres dans tous les schemas
+    # (piege 13.24 : verrous, « out of shared memory »).
+    # / No teardown: django_db rolls back. Deleting shared objects by hand is pitfall 13.24.
+    return {"tenant": tenant, "carte": carte, "user": user, "wallet": wallet}
 
 
 def test_lost_my_card_detache_la_carte_cote_lespass(carte_liee_a_un_user):
@@ -145,11 +141,23 @@ def test_lost_my_card_ne_detache_rien_si_fedow_refuse(carte_liee_a_un_user):
     navigateur = DjangoClient(HTTP_HOST="lespass.tibillet.localhost")
     navigateur.force_login(user)
 
+    # Un refus de Fedow est une EXCEPTION : `lost_my_card_by_signature` rend True ou leve,
+    # il ne rend jamais False (fedow_connect/fedow_api.py).
+    # / A Fedow refusal is an EXCEPTION: the client returns True or raises, never False.
     api = mock.MagicMock()
-    api.NFCcard.lost_my_card_by_signature.return_value = False  # Fedow refuse
+    # Un 500 : une vraie panne. (Un 404 veut dire « carte deja detachee chez Fedow » et
+    # aligne la base locale : c'est un autre cas, teste dans test_carte_perdue_cycle_complet.)
+    # / A 500: a real outage. A 404 is a different case (already detached on Fedow).
+    api.NFCcard.lost_my_card_by_signature.side_effect = Exception(
+        "lost_my_card_by_signature ERRORS : 500"
+    )
 
     with mock.patch("BaseBillet.views.FedowAPI", return_value=api):
         navigateur.get(f"/my_account/{carte.number}/lost_my_card/")
+
+    assert api.NFCcard.lost_my_card_by_signature.called, (
+        "Fedow n'a pas ete sollicite : la vue a court-circuite la declaration."
+    )
 
     with tenant_context(tenant):
         carte_relue = CarteCashless.objects.get(pk=carte.pk)
@@ -193,16 +201,10 @@ def carte_vierge_et_user_sans_carte():
             tag_id=tag, uuid=qrcode_uuid, number=tag, detail=detail, user=None
         )
 
-    yield {"tenant": tenant, "carte": carte, "user": user,
-           "wallet": wallet, "qrcode_uuid": qrcode_uuid}
-
-    with tenant_context(tenant):
-        CarteCashless.objects.filter(pk=carte.pk).delete()
-        user.refresh_from_db()
-        user.wallet = None
-        user.save(update_fields=["wallet"])
-        user.delete()
-        Wallet.objects.filter(uuid=wallet.uuid).delete()
+    # Pas de nettoyage : `django_db` annule tout (piege 13.24).
+    # / No teardown: django_db rolls back (pitfall 13.24).
+    return {"tenant": tenant, "carte": carte, "user": user,
+            "wallet": wallet, "qrcode_uuid": qrcode_uuid}
 
 
 def test_le_parcours_qr_lie_la_carte_cote_lespass(carte_vierge_et_user_sans_carte):

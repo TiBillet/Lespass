@@ -264,6 +264,25 @@ def get_skin_courant():
 # resolution goes through pages.services.gabarit_skin().
 
 
+def skin_preview_de_la_requete(request):
+    """
+    Le skin a previsualiser, lu dans `?skin_preview=` et verifie ; None sinon.
+    / The skin to preview, read from `?skin_preview=` and checked; None otherwise.
+
+    LOCALISATION : BaseBillet/views.py
+
+    L'apercu d'un skin se lance depuis l'admin (`/?skin_preview=V2`). Le <body> des skins
+    pose alors `hx-vals` : chaque requete htmx GET renvoie le parametre. Les vues qui ne
+    passent pas par get_context (partiels htmx) appellent cette fonction directement.
+    Un skin inconnu est ignore : on ne charge rien.
+    / Skin preview is started from the admin; htmx partials that skip get_context call this.
+    """
+    skin_preview = request.GET.get("skin_preview", None)
+    if not (any(skin_preview in skin for skin in ConfigurationSite.SKIN_CHOICES)):
+        skin_preview = None
+    return skin_preview
+
+
 def get_context(request):
     # context_cached = cache.get(f'get_context_{connection.tenant.uuid}')
     # if context_cached:
@@ -274,10 +293,7 @@ def get_context(request):
     crowd_config = CrowdConfig.get_solo()
 
     # Récupère skin_preview
-    skin_preview = request.GET.get("skin_preview", None)
-    # Vérifie si le skin est valide, si il ne l'est pas on ne charge rien.
-    if not (any(skin_preview in skin for skin in ConfigurationSite.SKIN_CHOICES)):
-        skin_preview = None
+    skin_preview = skin_preview_de_la_requete(request)
 
     # SYSTÈME DE SKIN (CHANTIER-01) : le squelette est résolu par le nouveau
     # resolver unifié pages.services.gabarit_skin(). Si le skin fournit le
@@ -578,7 +594,7 @@ def connexion(request):
 
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
-        logger.error(validator.errors)
+        logger.warning(validator.errors)
     messages.add_message(request, messages.WARNING, "Email validation error")
     return redirect('index')
 
@@ -593,13 +609,6 @@ def emailconfirmation(request, token):
             # l'url est signé par Django
             next_url = signing.loads(next_url)
             return HttpResponseRedirect(next_url)
-        return redirect('index')
-    except ValueError as e:
-        # Message explicite venant du signal (réservation expirée, évènement complet)
-        # L'utilisateur voit le message sur la page d'accueil après la redirection
-        # / Explicit message from signal (expired reservation, full event)
-        # / User sees the message on the homepage after redirect
-        messages.add_message(request, messages.WARNING, str(e))
         return redirect('index')
     except Exception as e:
         logger.error(f"emailconfirmation error: {e}")
@@ -885,7 +894,7 @@ class TiBilletLogin(viewsets.ViewSet):
         # POST: email submitted
         validator = LoginEmailValidator(data=request.POST)
         if not validator.is_valid():
-            logger.error(validator.errors)
+            logger.warning(validator.errors)
             template_context['errors'] = validator.errors
             template_context['email'] = request.POST.get('email', '')
             if request.htmx:
@@ -1085,6 +1094,155 @@ def get_distant_fedow_tokens(request, config):
     tokens.sort(key=lambda token: token['asset']['is_stripe_primary'], reverse=True)
 
     return tokens
+
+
+# Les trois issues possibles d'une declaration de perte.
+# / The three possible outcomes of a loss report.
+CARTE_DETACHEE = "detachee"
+CARTE_DEJA_DETACHEE_CHEZ_FEDOW = "deja_detachee_chez_fedow"
+CARTE_REFUSEE_PAR_FEDOW = "refusee_par_fedow"
+
+
+def declarer_la_carte_perdue(porteur, numero_carte, declarant):
+    """
+    Detache une carte NFC de son porteur : chez Fedow, PUIS dans la base Lespass.
+    / Detaches an NFC card from its holder: on Fedow, THEN in the Lespass database.
+
+    LOCALISATION : BaseBillet/views.py
+
+    Appelee par les deux boutons « carte perdue » :
+    - MyAccount.lost_my_card : l'usager, depuis son espace (porteur = declarant) ;
+    - MyAccount.admin_lost_my_card : un admin du lieu, depuis la fiche de l'usager.
+    Les DROITS se verifient dans chaque vue, pas ici : cette fonction fait seulement
+    l'operation, et la fait de la meme facon pour les deux.
+    / Rights are checked in each view; this function only performs the operation.
+
+    POURQUOI LES DEUX REGISTRES : le lien carte <-> porteur existe chez Fedow (`Card.user`)
+    ET dans Lespass (`CarteCashless.user`). La caisse V2 lit d'abord celui de Lespass
+    (`laboutik.views._obtenir_ou_creer_wallet`) sans demander a Fedow. Si on ne detache que
+    chez Fedow, la caisse V2 ouvre encore le portefeuille de l'ancien porteur : qui trouve
+    la carte depense l'argent de qui l'a perdue. Et le porteur ne peut plus lier de nouvelle
+    carte cote Lespass (`UserADejaCarte`).
+    / Both registries hold the link; the V2 POS reads the Lespass one first.
+
+    FLUX :
+    1. Fedow, qui fait foi.
+       - Accepte : la carte est detachee chez Fedow.
+       - 404 (carte pas, ou plus, a ce porteur : double clic, caisse V1, autre client
+         Fedow) : ce n'est pas une panne. On aligne quand meme Lespass sur Fedow.
+       - Autre refus (panne, 403...) : on ne touche a RIEN en local. La carte reste
+         utilisable partout, comme avant la demande.
+    2. La base Lespass : detache la carte de CE porteur (le filtre porte sur lui :
+       on ne peut pas detacher la carte de quelqu'un d'autre).
+    3. Si la carte a ete detachee en local et qu'elle etait une carte primaire de caissier
+       (laboutik.CartePrimaire), on la retire dans TOUS les lieux. Fedow fait de meme de son
+       cote (`primary_places.clear()`) : une carte de caissier perdue ne doit plus ouvrir
+       aucune caisse.
+    Le detachement local ne bloque jamais : une incoherence locale est journalisee
+    (logger.error = alerte Sentry), pas montree a l'usager.
+    / Fedow first; a 404 still aligns Lespass; any other refusal changes nothing locally.
+
+    :param porteur: TibilletUser a qui la carte appartient
+    :param numero_carte: str, numero imprime de la carte (8 caracteres hexadecimaux)
+    :param declarant: TibilletUser qui declare la perte (le porteur ou un admin)
+    :return: CARTE_DETACHEE, CARTE_DEJA_DETACHEE_CHEZ_FEDOW ou CARTE_REFUSEE_PAR_FEDOW
+    """
+    from fedow_connect.fedow_api import CarteNonLieeAuPorteurChezFedow
+    from fedow_core.services import CarteService
+    from laboutik.models import CartePrimaire
+    from QrcodeCashless.models import CarteCashless
+
+    # Fedow et Lespass stockent les numeros en majuscules et comparent la casse exacte.
+    # / Both store numbers uppercase and compare exact case.
+    numero_carte = numero_carte.strip().upper()
+
+    # --- 1. Fedow / Fedow ---
+    try:
+        FedowAPI().NFCcard.lost_my_card_by_signature(porteur, number_printed=numero_carte)
+        issue_de_la_declaration = CARTE_DETACHEE
+    except CarteNonLieeAuPorteurChezFedow:
+        logger.warning(
+            f"Carte perdue : carte {numero_carte} deja detachee de {porteur.email} chez Fedow "
+            f"(demande par {declarant.email}). On aligne la base Lespass."
+        )
+        issue_de_la_declaration = CARTE_DEJA_DETACHEE_CHEZ_FEDOW
+    except Exception as erreur_fedow:
+        logger.error(
+            f"Carte perdue : Fedow refuse de detacher la carte {numero_carte} de "
+            f"{porteur.email} (demande par {declarant.email}) : {erreur_fedow}"
+        )
+        return CARTE_REFUSEE_PAR_FEDOW
+
+    # --- 2. La base Lespass, lue en premier par la caisse V2 / Lespass database ---
+    carte_detachee_en_local = None
+    try:
+        carte_detachee_en_local = CarteService.declarer_perdue(
+            user=porteur, number_printed=numero_carte,
+        )
+    except CarteIntrouvable:
+        # Deux cas tres differents derriere la meme exception.
+        # / Two very different cases behind the same exception.
+        carte_liee_a_quelqu_un_d_autre = CarteCashless.objects.filter(
+            number=numero_carte, user__isnull=False,
+        ).exclude(user=porteur).exists()
+        if carte_liee_a_quelqu_un_d_autre:
+            # INCOHERENCE : Lespass lie la carte a une autre personne. La caisse V2 ouvrira
+            # le portefeuille de cette autre personne. A traiter a la main.
+            # / INCONSISTENCY: Lespass links the card to someone else. Fix by hand.
+            logger.error(
+                f"Divergence Fedow/Lespass sur la carte {numero_carte} : perte declaree pour "
+                f"{porteur.email}, mais la carte est liee a un AUTRE usager dans Lespass."
+            )
+        else:
+            # ATTENDU : la carte n'est pas dans cette base (lieu V1), ou n'y est deja plus
+            # liee. Rien a reparer.
+            # / EXPECTED: the card is not here (V1 venue) or already unlinked.
+            logger.warning(
+                f"Carte perdue : carte {numero_carte} absente ou deja libre dans la base "
+                f"Lespass pour {porteur.email}."
+            )
+    except Exception as erreur_detachement_local:
+        # INCOHERENCE : Fedow a detache la carte, Lespass n'y arrive pas. La caisse V2
+        # ouvrira encore le portefeuille de l'ancien porteur.
+        # / INCONSISTENCY: Fedow detached it, Lespass could not.
+        logger.error(
+            f"Divergence Fedow/Lespass sur la carte {numero_carte} : detachee chez Fedow "
+            f"pour {porteur.email}, TOUJOURS liee dans Lespass ({erreur_detachement_local}). "
+            f"Carte perdue encore depensable en caisse V2."
+        )
+
+    # --- 3. La carte primaire de caissier, dans tous les lieux / Cashier card, all venues ---
+    # CartePrimaire vit dans le schema de chaque lieu (app laboutik, TENANT_APPS) : on les
+    # parcourt tous. Les emplacements vides du pool (WAITING_CONFIG) n'ont pas forcement
+    # leurs tables : on les saute. Un lieu en erreur n'empeche pas de traiter les autres.
+    # / CartePrimaire lives in each venue's schema: walk them all, skip the empty pool slots.
+    if carte_detachee_en_local is not None:
+        lieux_a_parcourir = Client.objects.exclude(schema_name="public").exclude(
+            categorie=Client.WAITING_CONFIG,
+        )
+        for lieu in lieux_a_parcourir:
+            try:
+                with tenant_context(lieu):
+                    nombre_supprime, _detail_suppression = CartePrimaire.objects.filter(
+                        carte=carte_detachee_en_local,
+                    ).delete()
+                if nombre_supprime:
+                    logger.info(
+                        f"Carte perdue : carte {numero_carte} retiree des cartes primaires "
+                        f"de caissier du lieu {lieu.schema_name}."
+                    )
+            except Exception as erreur_carte_primaire:
+                logger.error(
+                    f"Carte perdue : impossible de retirer la carte primaire {numero_carte} "
+                    f"du lieu {lieu.schema_name} ({erreur_carte_primaire}). Elle ouvre peut-etre "
+                    f"encore la caisse de ce lieu."
+                )
+
+    logger.info(
+        f"Carte perdue : carte {numero_carte} de {porteur.email}, declaree par "
+        f"{declarant.email} : {issue_de_la_declaration}."
+    )
+    return issue_de_la_declaration
 
 
 class MyAccount(viewsets.ViewSet):
@@ -1290,7 +1448,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/partials/card_table.html", context["skin_preview"])
+        template_path = gabarit_skin("vues/compte/partials/card_table.html", skin_preview_de_la_requete(request))
 
         return render(request, template_path, context=context)
 
@@ -1491,78 +1649,73 @@ class MyAccount(viewsets.ViewSet):
                              _("Mail sent, please check spam too!"))
         return HttpResponseClientRedirect('/my_account/')
 
-    @action(detail=True, methods=['GET'])
+    @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
     def admin_lost_my_card(self, request, pk, *args, **kwargs):
-        tenant = request.tenant
-        admin = request.user
-        user_pk, number_printed = pk.split(':')
-        user = get_object_or_404(HumanUser, pk=user_pk)
-        if admin.is_tenant_admin(tenant):
-            try:
-                fedowAPI = FedowAPI()
-                lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(user, number_printed=number_printed)
-                if lost_card_report:
-                    messages.add_message(request, messages.SUCCESS,
-                                         _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-                else:
-                    messages.add_message(request, messages.ERROR,
-                                         _("Error when detaching your card. Contact an administrator."))
-            except Exception as e:
-                logger.error(f"admin_lost_my_card error: {e}")
-                messages.add_message(request, messages.ERROR,
-                                     _("Error when detaching your card. Contact an administrator."))
-            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+        """
+        Bouton « carte perdue » de la fiche d'un usager, dans l'admin.
+        / "Lost card" button on a user's page, in the admin.
+
+        LOCALISATION : BaseBillet/views.py
+        Appelee par : Administration/templates/admin/membership/wallet_info.html (hx-get).
+
+        DROITS : les memes que l'admin (TenantAdminPermission : admin du lieu ou superuser).
+        DRF repond 403 avant d'entrer ici si l'appelant n'a pas ces droits.
+        / Same rights as the admin; DRF answers 403 before reaching here otherwise.
+
+        :param pk: « <uuid du porteur>:<numero de carte> »
+        """
+        # L'identifiant vient de l'URL : on le verifie avant de s'en servir.
+        # / The identifier comes from the URL: check it before using it.
+        uuid_du_porteur, separateur, numero_carte = pk.partition(':')
+        try:
+            uuid.UUID(uuid_du_porteur)
+        except ValueError:
+            return HttpResponse(status=400)
+        if not separateur or not numero_carte:
+            return HttpResponse(status=400)
+
+        porteur = get_object_or_404(HumanUser, pk=uuid_du_porteur)
+
+        issue_de_la_declaration = declarer_la_carte_perdue(
+            porteur=porteur, numero_carte=numero_carte, declarant=request.user,
+        )
+        if issue_de_la_declaration == CARTE_DETACHEE:
+            messages.add_message(request, messages.SUCCESS,
+                                 _("La carte a été détachée du portefeuille de cette personne. "
+                                   "Elle peut maintenant en lier une nouvelle."))
+        elif issue_de_la_declaration == CARTE_DEJA_DETACHEE_CHEZ_FEDOW:
+            messages.add_message(request, messages.INFO,
+                                 _("Cette carte n'est pas, ou plus, liée à cette personne."))
+        else:
+            messages.add_message(request, messages.ERROR,
+                                 _("Le détachement de la carte a échoué. Réessayez dans un instant."))
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     @action(detail=True, methods=['GET'])
     def lost_my_card(self, request, pk):
-        if request.user.email_valid:
-            try:
-                fedowAPI = FedowAPI()
-                lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(request.user, number_printed=pk)
-                if lost_card_report:
-                    # Detacher la carte cote LESPASS aussi, pas seulement cote Fedow.
-                    # Sans cette ligne, `CarteCashless.user` reste pose : le point de vente
-                    # continue de resoudre la carte vers le wallet de son ancien porteur
-                    # (`_obtenir_ou_creer_wallet` rend `carte.user.wallet`) et signe la
-                    # cascade avec sa cle. Qui trouve la carte depense le portefeuille de
-                    # qui l'a perdue.
-                    # Non bloquant : Fedow a deja detache, l'usager ne doit pas voir
-                    # d'erreur si la carte est absente de la base locale.
-                    # / Detach the card on the LESPASS side too, not only on Fedow's.
-                    #   Without this, CarteCashless.user stays set and the POS keeps
-                    #   resolving the card to its former holder's wallet. Non-blocking:
-                    #   Fedow already detached, the user must not see an error.
-                    try:
-                        from fedow_core.services import CarteService
+        """
+        Bouton « carte perdue » de l'espace de l'usager (/my_account/).
+        / "Lost card" button in the user's own space.
 
-                        CarteService.declarer_perdue(user=request.user, number_printed=pk)
-                    except CarteIntrouvable:
-                        # ATTENDU : la carte n'est pas dans cette base (lieu V1), ou elle
-                        # n'y est deja plus liee a cet usager. Rien a reparer.
-                        # / EXPECTED: the card is not in this database (V1 venue), or is
-                        #   already unlinked from this user. Nothing to fix.
-                        logger.warning(
-                            f"lost_my_card : carte {pk} detachee cote Fedow, absente de la "
-                            f"base Lespass pour {request.user.email}."
-                        )
-                    except Exception as erreur_detachement_local:
-                        # INCOHERENCE : Fedow a detache la carte, Lespass n'y arrive pas.
-                        # `CarteCashless.user` reste pose, donc le point de vente ouvrira
-                        # encore le portefeuille de l'ancien porteur. A remonter.
-                        # / INCONSISTENCY: Fedow detached the card, Lespass could not. The
-                        #   POS will keep opening the former holder's wallet.
-                        logger.error(
-                            f"Divergence Fedow/Lespass sur la carte {pk} : detachee cote "
-                            f"Fedow pour {request.user.email}, TOUJOURS liee cote Lespass "
-                            f"({erreur_detachement_local}). Carte perdue encore depensable."
-                        )
-                    messages.add_message(request, messages.SUCCESS,
-                                         _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-                else:
-                    messages.add_message(request, messages.ERROR,
-                                         _("Error when detaching your card. Contact an administrator."))
-            except Exception as e:
-                logger.error(f"lost_my_card error: {e}")
+        LOCALISATION : BaseBillet/views.py
+
+        DROITS : l'usager connecte, avec un email valide, sur SA carte (le porteur est
+        toujours request.user : on ne peut pas viser la carte de quelqu'un d'autre).
+        / The logged-in user, with a valid email, on THEIR card only.
+
+        :param pk: numero imprime de la carte
+        """
+        if request.user.email_valid:
+            issue_de_la_declaration = declarer_la_carte_perdue(
+                porteur=request.user, numero_carte=pk, declarant=request.user,
+            )
+            if issue_de_la_declaration == CARTE_DETACHEE:
+                messages.add_message(request, messages.SUCCESS,
+                                     _("Your wallet has been detached from this card. You can scan a new one to link it again."))
+            elif issue_de_la_declaration == CARTE_DEJA_DETACHEE_CHEZ_FEDOW:
+                messages.add_message(request, messages.INFO,
+                                     _("Cette carte n'est plus liée à votre compte."))
+            else:
                 messages.add_message(request, messages.ERROR,
                                      _("Error when detaching your card. Contact an administrator."))
             return HttpResponseClientRedirect('/my_account/')
@@ -1651,7 +1804,7 @@ class MyAccount(viewsets.ViewSet):
         # Résolution du gabarit par le resolver unifié.
         # / Unified skin resolver.
         from pages.services import gabarit_skin
-        template_path = gabarit_skin("vues/compte/partials/token_table.html", context["skin_preview"])
+        template_path = gabarit_skin("vues/compte/partials/token_table.html", skin_preview_de_la_requete(request))
 
         return render(request, template_path, context=context)
 
@@ -3458,9 +3611,9 @@ class EventMVT(viewsets.ViewSet):
         # / Unified skin resolver: pages/<skin>/vues/…, fallback pages/classic/.
         from pages.services import gabarit_skin
         if page > 1:
-            template_path = gabarit_skin("vues/agenda_liste_suite.html", ctx["skin_preview"])
+            template_path = gabarit_skin("vues/agenda_liste_suite.html", skin_preview_de_la_requete(request))
         else:
-            template_path = gabarit_skin("vues/agenda_liste.html", ctx["skin_preview"])
+            template_path = gabarit_skin("vues/agenda_liste.html", skin_preview_de_la_requete(request))
 
         return render(request, template_path, context=ctx)
 

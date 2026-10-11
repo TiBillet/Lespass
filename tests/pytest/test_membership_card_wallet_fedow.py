@@ -258,3 +258,265 @@ def test_create_cards_cree_une_carte_ephemere_chez_fedow(tenant):
     assert carte.get("is_wallet_ephemere") is True, (
         "Une carte fraichement creee doit etre ephemere (sans utilisateur)."
     )
+
+
+# ---------------------------------------------------------------------------
+# Liaison de la carte : saisie en minuscules, refus de Fedow, double envoi.
+# Le formulaire d'adhesion admin est tres utilise en production. La liaison de
+# la carte chez Fedow tourne APRES l'enregistrement de l'adhesion (on_commit) :
+# elle ne doit jamais faire planter la page (l'admin renverrait le formulaire et
+# creerait une adhesion en double), et un vrai refus doit rester une alerte.
+# / Card link: lowercase input, Fedow refusal, double submit. The link runs
+# AFTER the membership is saved: it must never crash the page, and a real
+# refusal must stay an alert.
+# ---------------------------------------------------------------------------
+
+
+def _fabriquer_carte_ephemere_chez_fedow(tenant):
+    """
+    Cree une carte fraiche chez Fedow et renvoie son numero imprime (majuscules).
+    Le numero commence par "AB" : il contient des lettres, donc sa version en
+    minuscules est bien differente (utile pour tester la casse).
+    / Creates a fresh Fedow card; the number always contains letters.
+    """
+    import secrets
+
+    numero_carte = "AB" + secrets.token_hex(3).upper()
+    with override_settings(DEBUG=True), tenant_context(tenant):
+        from fedow_connect.fedow_api import FedowAPI
+
+        FedowAPI().NFCcard.create_cards([{
+            "first_tag_id": secrets.token_hex(4).upper(),
+            "complete_tag_id_uuid": str(uuid_module.uuid4()),
+            "qrcode_uuid": str(uuid_module.uuid4()),
+            "number_printed": numero_carte,
+            "generation": 1,
+            "is_primary": False,
+        }])
+    return numero_carte
+
+
+def _tarif_adhesion_de_test(tenant, suffixe):
+    """Un produit adhesion + son tarif, pour le formulaire. / A membership price."""
+    with tenant_context(tenant):
+        from BaseBillet.models import Product, Price
+
+        produit_adhesion, _created = Product.objects.get_or_create(
+            name=f"Adhesion CarteWallet {suffixe}",
+            defaults={"categorie_article": Product.ADHESION},
+        )
+        tarif_adhesion, _created = Price.objects.get_or_create(
+            product=produit_adhesion,
+            name=f"Tarif CarteWallet {suffixe}",
+            defaults={"prix": 10},
+        )
+    return tarif_adhesion
+
+
+def _poster_le_formulaire_d_adhesion(admin_client, email, tarif_adhesion, numero_saisi):
+    """POST du formulaire admin d'ajout d'adhesion (gratuite). / Admin add form POST."""
+    from BaseBillet.models import PaymentMethod
+
+    return admin_client.post(
+        "/admin/BaseBillet/membership/add/",
+        data={
+            "email": email,
+            "first_name": "Carte",
+            "last_name": "Wallet",
+            "price": str(tarif_adhesion.pk),
+            "contribution": "",
+            "payment_method": PaymentMethod.FREE,
+            "card_number": numero_saisi,
+            "lignearticles-TOTAL_FORMS": "0",
+            "lignearticles-INITIAL_FORMS": "0",
+            "lignearticles-MIN_NUM_FORMS": "0",
+            "lignearticles-MAX_NUM_FORMS": "1000",
+        },
+    )
+
+
+def _membre_avec_wallet_fedow(tenant, email):
+    """Un utilisateur avec son wallet Fedow, comme apres clean_email. / User + Fedow wallet."""
+    with override_settings(DEBUG=True), tenant_context(tenant):
+        from AuthBillet.utils import get_or_create_user
+        from fedow_connect.fedow_api import FedowAPI
+
+        utilisateur = get_or_create_user(email, send_mail=False)
+        FedowAPI().wallet.get_or_create_wallet(utilisateur)
+        utilisateur.refresh_from_db()
+    return utilisateur
+
+
+@override_settings(DEBUG=True)
+def test_carte_saisie_en_minuscules_est_liee_au_wallet(
+    admin_client, tenant, django_capture_on_commit_callbacks
+):
+    """
+    Le numero de carte saisi en minuscules est lie quand meme. Fedow trouve la
+    carte en majuscules a la verification ; la liaison doit envoyer le meme
+    numero, sinon Fedow repond « l'objet n'existe pas ».
+    / A lowercase card number is still linked (same number for check and link).
+    """
+    suffixe = uuid_module.uuid4().hex[:8]
+    email_adherent = f"jturbeaux+cartemin{suffixe}@pm.me"
+    tarif_adhesion = _tarif_adhesion_de_test(tenant, suffixe)
+    numero_carte = _fabriquer_carte_ephemere_chez_fedow(tenant)
+    numero_saisi_en_minuscules = numero_carte.lower()
+    assert numero_saisi_en_minuscules != numero_carte
+
+    with django_capture_on_commit_callbacks(execute=True):
+        reponse = _poster_le_formulaire_d_adhesion(
+            admin_client, email_adherent, tarif_adhesion, numero_saisi_en_minuscules,
+        )
+    assert reponse.status_code == 302, (
+        f"Le formulaire admin a echoue (HTTP {reponse.status_code}) : "
+        f"{getattr(reponse, 'context_data', {}).get('errors', '')}"
+    )
+
+    with tenant_context(tenant):
+        from AuthBillet.models import TibilletUser
+        from BaseBillet.models import Membership
+        from fedow_connect.fedow_api import FedowAPI
+
+        utilisateur = TibilletUser.objects.get(email=email_adherent)
+        assert Membership.objects.filter(user=utilisateur, price=tarif_adhesion).count() == 1
+
+        # La carte appartient maintenant au wallet de CE membre, chez Fedow.
+        # / The card now belongs to THIS member's wallet, on Fedow.
+        carte_chez_fedow = FedowAPI().NFCcard.card_number_retrieve(numero_carte)
+        assert carte_chez_fedow, f"La carte {numero_carte} a disparu chez Fedow"
+        assert not carte_chez_fedow.get("is_wallet_ephemere"), (
+            f"La carte {numero_carte} saisie en minuscules n'a pas ete liee."
+        )
+        assert f"{carte_chez_fedow.get('wallet_uuid')}" == f"{utilisateur.wallet.uuid}"
+
+
+@override_settings(DEBUG=True)
+def test_refus_de_fedow_apres_enregistrement_ne_plante_pas_et_alerte(
+    admin_client, tenant, django_capture_on_commit_callbacks, caplog
+):
+    """
+    Fedow refuse la liaison APRES l'enregistrement de l'adhesion. La page ne
+    plante pas (sinon l'admin renvoie le formulaire : adhesion en double),
+    l'adhesion existe une seule fois, et une erreur est journalisee (alerte).
+    / Fedow refuses the link after the membership is saved: no crash, one
+    membership, and an error is logged.
+    """
+    import logging
+    from unittest.mock import patch
+    from fedow_connect.fedow_api import NFCcardFedow
+
+    suffixe = uuid_module.uuid4().hex[:8]
+    email_adherent = f"jturbeaux+carterefus{suffixe}@pm.me"
+    tarif_adhesion = _tarif_adhesion_de_test(tenant, suffixe)
+    numero_carte = _fabriquer_carte_ephemere_chez_fedow(tenant)
+
+    refus_simule = Exception("linkwallet_card_number : 400 refus simule par le test")
+    with caplog.at_level(logging.WARNING):
+        with patch.object(NFCcardFedow, "linkwallet_card_number", side_effect=refus_simule):
+            with django_capture_on_commit_callbacks(execute=True):
+                reponse = _poster_le_formulaire_d_adhesion(
+                    admin_client, email_adherent, tarif_adhesion, numero_carte,
+                )
+
+    assert reponse.status_code == 302
+
+    with tenant_context(tenant):
+        from AuthBillet.models import TibilletUser
+        from BaseBillet.models import Membership
+        from fedow_connect.fedow_api import FedowAPI
+
+        utilisateur = TibilletUser.objects.get(email=email_adherent)
+        assert Membership.objects.filter(user=utilisateur, price=tarif_adhesion).count() == 1
+
+        # Le refus etait simule : la carte est toujours libre chez Fedow.
+        # / The refusal was simulated: the card is still free on Fedow.
+        carte_chez_fedow = FedowAPI().NFCcard.card_number_retrieve(numero_carte)
+        assert carte_chez_fedow.get("is_wallet_ephemere") is True
+
+    erreurs_journalisees = [
+        record for record in caplog.records
+        if record.levelno >= logging.ERROR and numero_carte in record.getMessage()
+    ]
+    assert erreurs_journalisees, (
+        "Un vrai refus de Fedow doit rester une alerte (logger.error) : "
+        "l'adhesion est enregistree sans sa carte."
+    )
+
+
+@override_settings(DEBUG=True)
+def test_carte_deja_liee_a_ce_membre_double_envoi_simple_avertissement(tenant, caplog):
+    """
+    Double envoi du formulaire : la premiere requete a deja lie la carte a ce
+    membre, Fedow refuse la seconde liaison. Ce n'est pas une anomalie : pas
+    d'exception, pas d'erreur journalisee (pas d'alerte Sentry), un avertissement.
+    / Double submit: the card is already on this member's wallet. No exception,
+    no error log, only a warning.
+    """
+    import logging
+    from Administration.admin_tenant import lier_la_carte_a_l_adherent_chez_fedow
+
+    suffixe = uuid_module.uuid4().hex[:8]
+    utilisateur = _membre_avec_wallet_fedow(tenant, f"jturbeaux+cartedouble{suffixe}@pm.me")
+    numero_carte = _fabriquer_carte_ephemere_chez_fedow(tenant)
+
+    with override_settings(DEBUG=True), tenant_context(tenant):
+        from fedow_connect.fedow_api import FedowAPI
+
+        # Premiere requete : la liaison reussit.
+        # / First request: the link succeeds.
+        FedowAPI().NFCcard.linkwallet_card_number(user=utilisateur, card_number=numero_carte)
+
+        # Seconde requete : Fedow refuse, la carte n'est plus libre.
+        # / Second request: Fedow refuses, the card is no longer free.
+        with caplog.at_level(logging.WARNING):
+            lier_la_carte_a_l_adherent_chez_fedow(FedowAPI(), utilisateur, numero_carte)
+
+        carte_chez_fedow = FedowAPI().NFCcard.card_number_retrieve(numero_carte)
+        assert f"{carte_chez_fedow.get('wallet_uuid')}" == f"{utilisateur.wallet.uuid}"
+
+    erreurs_journalisees = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert not erreurs_journalisees, (
+        f"Un double envoi ne doit pas lever d'alerte : "
+        f"{[r.getMessage() for r in erreurs_journalisees]}"
+    )
+    avertissements = [
+        r for r in caplog.records
+        if r.levelno == logging.WARNING and numero_carte in r.getMessage()
+    ]
+    assert avertissements, "Le double envoi doit laisser une trace (warning)."
+
+
+@override_settings(DEBUG=True)
+def test_carte_liee_a_un_autre_membre_alerte_sans_planter(tenant, caplog):
+    """
+    La carte appartient deja a un AUTRE membre chez Fedow. La liaison est refusee :
+    pas d'exception (l'adhesion est deja enregistree), mais une erreur journalisee,
+    parce qu'une adhesion se retrouve sans sa carte.
+    / The card belongs to ANOTHER member: no exception, but an error is logged.
+    """
+    import logging
+    from Administration.admin_tenant import lier_la_carte_a_l_adherent_chez_fedow
+
+    suffixe = uuid_module.uuid4().hex[:8]
+    premier_membre = _membre_avec_wallet_fedow(tenant, f"jturbeaux+carteA{suffixe}@pm.me")
+    second_membre = _membre_avec_wallet_fedow(tenant, f"jturbeaux+carteB{suffixe}@pm.me")
+    numero_carte = _fabriquer_carte_ephemere_chez_fedow(tenant)
+
+    with override_settings(DEBUG=True), tenant_context(tenant):
+        from fedow_connect.fedow_api import FedowAPI
+
+        FedowAPI().NFCcard.linkwallet_card_number(user=premier_membre, card_number=numero_carte)
+
+        with caplog.at_level(logging.WARNING):
+            lier_la_carte_a_l_adherent_chez_fedow(FedowAPI(), second_membre, numero_carte)
+
+        # La carte reste au premier membre. / The card stays with the first member.
+        carte_chez_fedow = FedowAPI().NFCcard.card_number_retrieve(numero_carte)
+        assert f"{carte_chez_fedow.get('wallet_uuid')}" == f"{premier_membre.wallet.uuid}"
+
+    erreurs_journalisees = [
+        r for r in caplog.records
+        if r.levelno >= logging.ERROR and numero_carte in r.getMessage()
+    ]
+    assert erreurs_journalisees, "Une carte liee a un autre membre doit rester une alerte."

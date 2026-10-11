@@ -261,9 +261,12 @@ et un dans `[data-testid="paiement-succes"]`. Toujours scoper :
 
 **9.40 — Playwright `install-deps` necessite root dans Docker.**
 `playwright install --with-deps chromium` echoue car `su` n'a pas de mot de passe.
-Utiliser `-u root` avec le chemin complet du virtualenv :
+Utiliser `-u root` avec le chemin complet du virtualenv, demande a Poetry
+(`/DjangoFiles/.venv` n'existe pas : le venv vit dans le cache Poetry du conteneur) :
 ```bash
-docker exec -u root lespass_django /DjangoFiles/.venv/bin/playwright install-deps chromium
+# Le venv Poetry n'est pas /DjangoFiles/.venv : on demande son chemin a Poetry.
+VENV=$(docker exec lespass_django poetry env info -p)
+docker exec -u root lespass_django "$VENV/bin/playwright" install-deps chromium
 docker exec lespass_django poetry run playwright install chromium
 ```
 

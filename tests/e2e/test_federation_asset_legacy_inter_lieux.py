@@ -818,13 +818,25 @@ def test_parcours_monnaie_federee_entre_deux_lieux(
     )
     page.wait_for_load_state("networkidle")
 
+    # Une ligne a 0 n'a plus de bouton de remise (rien a remettre) : on la retrouve par
+    # le nom du lieu, dans la premiere cellule.
+    # / A row at 0 has no deposit button anymore: find it by the venue name.
+    ligne_de_festival_par_son_nom = page.locator("tr").filter(
+        has=page.locator("td:first-child", has_text=re.compile(
+            rf"^\s*{re.escape(nom_de_festival_sur_le_fedow)}\s*$"
+        ))
+    )
     total_apres_remise = _total_de_la_ligne_apres_rechargements(
-        page, url_de_la_fiche, ligne_de_festival, re.compile(r"^0([.,]00)?$")
+        page, url_de_la_fiche, ligne_de_festival_par_son_nom, re.compile(r"^0([.,]00)?$")
     )
     assert re.match(r"^0([.,]00)?$", total_apres_remise or ""), (
         f"Apres la remise en banque, la ventilation de `{LIEU_FEDERE}` vaut "
         f"'{total_apres_remise}', attendu 0 (le Fedow a-t-il refuse la remise ?)."
     )
+    # Plus rien a remettre : le bouton disparait, la ligne le dit.
+    # / Nothing left to deposit: no button, the row says so.
+    expect(bouton_de_remise_de_festival).to_have_count(0)
+    expect(ligne_de_festival_par_son_nom).to_contain_text("Rien à remettre en banque")
 
     remises_de_festival = _lire_en_base(
         django_shell,

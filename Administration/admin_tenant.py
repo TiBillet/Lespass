@@ -1481,6 +1481,54 @@ from Administration.importers.membership_importers import (
 
 
 # from Administration.importers.event_importers import PostalAddressForeignKeyWidget
+def lier_la_carte_a_l_adherent_chez_fedow(fedow_api, utilisateur, numero_carte):
+    """
+    Lie la carte NFC au wallet de l'adherent chez Fedow. Ne leve JAMAIS d'exception.
+    / Links the NFC card to the member's wallet on Fedow. NEVER raises.
+
+    LOCALISATION : Administration/admin_tenant.py
+
+    Appelee par MembershipAddForm.save() dans un transaction.on_commit : l'adhesion
+    est DEJA enregistree. Une exception ici donnerait une erreur 500 sur une adhesion
+    reussie ; l'admin renverrait le formulaire et creerait une adhesion en double.
+
+    Si Fedow refuse, on lui redemande a qui appartient la carte :
+    - au wallet de CET adherent : double envoi du formulaire, la premiere requete
+      l'a deja liee. Simple warning.
+    - a personne ou a un autre : vraie anomalie, l'adhesion reste sans sa carte.
+      logger.error : alerte Sentry, a traiter a la main.
+    / If Fedow refuses, ask who owns the card: this member (double submit) ->
+    warning; anyone else -> error (Sentry alert).
+    """
+    try:
+        fedow_api.NFCcard.linkwallet_card_number(user=utilisateur, card_number=numero_carte)
+        return
+    except Exception as erreur_liaison:
+        carte_chez_fedow = None
+        try:
+            carte_chez_fedow = fedow_api.NFCcard.card_number_retrieve(numero_carte)
+        except Exception as erreur_lecture:
+            logger.warning(f"Adhesion admin : lecture de la carte {numero_carte} impossible : {erreur_lecture}")
+
+        wallet_de_l_adherent = utilisateur.wallet
+        carte_deja_sur_le_wallet_de_l_adherent = (
+            carte_chez_fedow is not None
+            and wallet_de_l_adherent is not None
+            and f"{carte_chez_fedow.get('wallet_uuid')}" == f"{wallet_de_l_adherent.uuid}"
+        )
+        if carte_deja_sur_le_wallet_de_l_adherent:
+            logger.warning(
+                f"Adhesion admin : carte {numero_carte} deja liee a {utilisateur.email} "
+                f"(double envoi du formulaire) : {erreur_liaison}"
+            )
+            return
+
+        logger.error(
+            f"Adhesion admin enregistree, mais carte {numero_carte} NON liee chez Fedow "
+            f"pour {utilisateur.email} : {erreur_liaison}"
+        )
+
+
 class MembershipAddForm(ModelForm):
     '''
     Formulaire d'ajout d'adhésion sur l'interface d'administration.
@@ -1564,6 +1612,11 @@ class MembershipAddForm(ModelForm):
         cleaned_data = self.cleaned_data
         card_number = cleaned_data.get('card_number')
         if card_number:
+            # Fedow stocke les numeros en majuscules. Sa recherche accepte toute casse,
+            # mais sa liaison compare la casse exacte : on envoie le meme numero, en
+            # majuscules, aux deux appels.
+            # / Fedow stores numbers uppercase; its link compares exact case.
+            card_number = card_number.strip().upper()
 
             # Si clean_email a echoue, le wallet n'existe pas encore — on ne peut pas valider la carte
             # If clean_email failed, the wallet doesn't exist yet — we can't validate the card
@@ -1655,9 +1708,8 @@ class MembershipAddForm(ModelForm):
             numero_carte_a_lier = self.card_number
             fedow_api = self.fedowAPI
             db_transaction.on_commit(
-                lambda: fedow_api.NFCcard.linkwallet_card_number(
-                    user=utilisateur_a_lier,
-                    card_number=numero_carte_a_lier,
+                lambda: lier_la_carte_a_l_adherent_chez_fedow(
+                    fedow_api, utilisateur_a_lier, numero_carte_a_lier,
                 )
             )
 
@@ -6581,8 +6633,16 @@ class AssetAdmin(ModelAdmin):
             messages.add_message(request, messages.SUCCESS, _("Remise en banque OK."))
 
         except Exception as e:
-            logger.error(e)
-            messages.add_message(request, messages.ERROR, f"{e}")
+            # Fedow refuse la remise quand le solde du lieu est a zero.
+            # C'est un cas metier attendu, pas une panne : message lisible et simple warning.
+            # / Fedow refuses the deposit when the place balance is zero: expected, not a failure.
+            solde_du_lieu_vide = "Not enough token" in f"{e}"
+            if solde_du_lieu_vide:
+                logger.warning(e)
+                messages.add_message(request, messages.WARNING, _("Rien à remettre en banque pour ce lieu."))
+            else:
+                logger.error(e)
+                messages.add_message(request, messages.ERROR, f"{e}")
 
         return HttpResponseClientRedirect(request.META["HTTP_REFERER"])
 

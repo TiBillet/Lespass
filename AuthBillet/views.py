@@ -146,6 +146,13 @@ def activate(request, token):
         user.email_valid = True
         user.save()
 
+        # Le signal activator_free_reservation (BaseBillet/signals.py) pose ce message
+        # quand une reservation gratuite confirmee trop tard a ete annulee.
+        # / Set by the activator_free_reservation signal when a late free booking was cancelled.
+        message_reservation_annulee = getattr(user, "message_reservation_annulee", None)
+        if message_reservation_annulee:
+            messages.add_message(request, messages.WARNING, message_reservation_annulee)
+
         # user déja loggué, on vérifie que c'est le même, sinon, on déconnecte
         if request.user.is_authenticated:
             if request.user == user:

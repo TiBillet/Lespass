@@ -744,11 +744,15 @@ def test_reservation_a_zero_annulee_garde_sa_vente_reglee(lieu):
     creer_un_billet_deja_vendu(creer_utilisateur(), concert)
 
     # La confirmation de l'adresse mail active le compte : la machine à états annule la
-    # réservation et lève une erreur pour prévenir le visiteur.
-    # / Confirming the email activates the account: the reservation is cancelled.
+    # réservation et pose un message pour prévenir le visiteur. Le compte, lui, est
+    # bien activé (le signal tourne en pre_save : une exception annulerait la sauvegarde).
+    # / Confirming the email activates the account: the reservation is cancelled and a
+    # message is set; the account itself is saved as active.
     visiteur.is_active = True
-    with pytest.raises(ValueError):
-        visiteur.save()
+    visiteur.save()
+    assert visiteur.message_reservation_annulee
+    visiteur.refresh_from_db()
+    assert visiteur.is_active
 
     reservation.refresh_from_db()
     assert reservation.status == Reservation.CANCELED

@@ -2266,7 +2266,7 @@ class Event(models.Model):
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"))
     is_external = models.BooleanField(default=False, verbose_name=_("External event"), help_text=_(
         "The event is handled outside of this platform (ex: Facebook event)."))
-    full_url = models.URLField(blank=True, null=True)
+    full_url = models.URLField(max_length=500, blank=True, null=True)
 
     published = models.BooleanField(default=True, verbose_name=_("Publish"))
     is_proposal = models.BooleanField(

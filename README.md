@@ -160,7 +160,9 @@ tests l'appelle en HTTP.
 pour les WebSockets), et Chromium est installe dans le conteneur :
 
 ```bash
-docker exec -u root lespass_django /DjangoFiles/.venv/bin/playwright install-deps chromium
+# Le venv Poetry n'est pas /DjangoFiles/.venv : on demande son chemin a Poetry.
+VENV=$(docker exec lespass_django poetry env info -p)
+docker exec -u root lespass_django "$VENV/bin/playwright" install-deps chromium
 docker exec lespass_django poetry run playwright install chromium
 ```
 

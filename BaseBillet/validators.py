@@ -769,7 +769,7 @@ class ReservationValidator(serializers.Serializer):
         try:
             event: Event = self.event
         except Exception as e:
-            logger.error(f"validate_options : {e}")
+            logger.warning(f"validate_options : {e}")
             raise serializers.ValidationError(_(f'No event selected. Please retry.'))
         if value:
             for option in value:
@@ -1921,3 +1921,22 @@ class WizardEventSerializer(serializers.Serializer):
     jauge_max = serializers.IntegerField(
         required=False, allow_null=True, min_value=1,
     )
+
+    def validate_tags(self, value):
+        """
+        Verifie la longueur de chaque tag. Un tag fait au plus 50 caracteres
+        (Tag.name, max_length=50). Sans ce controle, la creation de l'evenement
+        plante en base a la finalisation.
+        Le decoupage (virgule ou point-virgule) est le meme que dans
+        _creer_event_depuis_brouillon (BaseBillet/views.py).
+        / Checks each tag length (Tag.name max 50 chars). Same split as the creation.
+        """
+        longueur_max_d_un_tag = Tag._meta.get_field("name").max_length
+        noms_tags = [t.strip() for t in re.split(r"[,;]", value or "") if t.strip()]
+        for nom_tag in noms_tags:
+            if len(nom_tag) > longueur_max_d_un_tag:
+                raise serializers.ValidationError(
+                    _("Un tag fait au plus %(max)s caractères. Séparez les tags par des virgules.")
+                    % {"max": longueur_max_d_un_tag}
+                )
+        return value

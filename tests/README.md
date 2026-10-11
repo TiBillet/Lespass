@@ -166,7 +166,9 @@ contexte navigateur s'affiche à l'écran, mais n'écrit rien dans le journal.
 3. Chromium Playwright installé dans le container. `install-deps` exige **root**
    (cf. `PIEGES.md` 9.40) :
    ```bash
-   docker exec -u root lespass_django /DjangoFiles/.venv/bin/playwright install-deps chromium
+   # Le venv Poetry n'est pas /DjangoFiles/.venv : on demande son chemin a Poetry.
+   VENV=$(docker exec lespass_django poetry env info -p)
+   docker exec -u root lespass_django "$VENV/bin/playwright" install-deps chromium
    docker exec lespass_django poetry run playwright install chromium
    ```
 4. Celery tourne (`lespass_celery`) : les récompenses en monnaie partent par

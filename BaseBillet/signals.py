@@ -345,10 +345,8 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
                 if valid_tickets_count + total_ticket_qty + under_purchase > event.jauge_max:
                     logger.warning(f"    {resa} : {valid_tickets_count} + {total_ticket_qty} + {under_purchase} > {event.jauge_max}")
                     remains = event.jauge_max - valid_tickets_count - under_purchase
-                    # Message d'erreur affiché à l'utilisateur via django.messages
-                    # Le ValueError est intercepté dans emailconfirmation() (BaseBillet/views.py)
-                    # / Error message shown to user via django.messages
-                    # / The ValueError is caught in emailconfirmation() (BaseBillet/views.py)
+                    # Message affiché à l'utilisateur par activate() (AuthBillet/views.py).
+                    # / Message shown to the user by activate() (AuthBillet/views.py).
                     error_message = _("Votre confirmation a pris plus de %(minutes)s minutes. ") % {
                         "minutes": int(DUREE_D_UN_PAIEMENT_EN_COURS.total_seconds() // 60)
                     }
@@ -366,11 +364,13 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
                     resa.save()
 
         if error_message:
-            # Le ValueError remonte jusqu'à emailconfirmation() qui le capte
-            # et affiche le message via django.messages + redirect
-            # / ValueError propagates up to emailconfirmation() which catches it
-            # / and displays the message via django.messages + redirect
-            raise ValueError(error_message)
+            # On pose le message sur l'utilisateur, on ne leve PAS d'exception :
+            # ce signal tourne en pre_save, une exception annulerait la sauvegarde
+            # et le compte ne serait jamais active.
+            # activate() (AuthBillet/views.py) lit cet attribut apres user.save().
+            # / Store the message on the user, do NOT raise: this is a pre_save signal,
+            # an exception would cancel the save and the account would never be activated.
+            new_instance.message_reservation_annulee = error_message
 
 ######################## MOTEUR SIGNAL ########################
 
@@ -747,6 +747,27 @@ def commande_mark_paid_when_paiement_valid(sender, instance: Paiement_stripe, **
 
         
         
+@receiver(post_delete, sender=PostalAddress)
+def vider_cache_configuration_apres_suppression_adresse(sender, instance, **kwargs):
+    """
+    Vide le cache de la Configuration du lieu quand une adresse postale est supprimee.
+    / Clears the venue Configuration cache when a postal address is deleted.
+
+    LOCALISATION : BaseBillet/signals.py
+
+    Configuration.postal_address est en SET_NULL. Django l'applique par un UPDATE SQL,
+    sans passer par Configuration.save() : le cache django-solo (memcached, 300 s)
+    garde l'ancien id. Le prochain get_solo().save() le reecrirait, et la base
+    refuserait (cle etrangere vers une adresse qui n'existe plus).
+    clear_cache() ne supprime qu'UNE cle : celle de la Configuration du schema courant
+    (django_tenants.cache.make_key prefixe la cle par le schema). Les autres lieux
+    ne sont pas touches.
+    / SET_NULL runs as a SQL UPDATE, not save(): the solo cache keeps the old id.
+    clear_cache() deletes a single key, scoped to the current schema.
+    """
+    Configuration.clear_cache()
+
+
 @receiver(post_save, sender=Event)
 @receiver(post_delete, sender=Event)
 @receiver(post_save, sender=PostalAddress)

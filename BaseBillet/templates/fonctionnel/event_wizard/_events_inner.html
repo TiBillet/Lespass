@@ -160,7 +160,7 @@ Contexte attendu :
                     <input id="wizard-event-tags" type="text" name="tags"
                            list="wizard-tags-datalist"
                            value="{{ initial.tags|default:'' }}"
-                           class="form-control"
+                           class="form-control{% if errors.tags %} is-invalid{% endif %}"
                            placeholder="{% translate 'concert, gratuit' %}"
                            data-testid="wizard-event-tags">
                     {% if not show_admin_fields %}

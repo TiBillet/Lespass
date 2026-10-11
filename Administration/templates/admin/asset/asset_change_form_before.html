@@ -66,12 +66,21 @@
                                     </td>
                                     <td class="px-3 py-2 align-middle flex border-t border-base-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:font-semibold before:text-font-important-light dark:before:text-font-important-dark before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:py-3 lg:table-cell dark:border-base-800 lg:first:pl-6 lg:last:pr-6"
                                         data-label="{% trans 'Action' %}">
+                                        {% comment %}
+                                        Fedow refuse la remise si le solde du lieu n'est pas positif ("Not enough token").
+                                        Une ligne a 0 reste listee (le token existe toujours apres une remise) : pas de bouton.
+                                        / Fedow refuses the deposit when the balance is not positive: no button on a 0 row.
+                                        {% endcomment %}
+                                        {% if item.total_value > 0 %}
                                         <button class="font-medium flex items-center gap-2 px-3 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer border border-base-200 bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900"
                                                 hx-post="/admin/fedow_public/assetfedowpublic/bank_deposit/{{ asset_pk }}/{{ item.wallet_uuid }}/"
                                                 hx-swap="none"
                                                 hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
                                             {% trans "Valider le retour en banque" %}
                                         </button>
+                                        {% else %}
+                                        <span>{% trans "Rien à remettre en banque" %}</span>
+                                        {% endif %}
                                     </td>
                                 </tr>
                             {% endfor %}

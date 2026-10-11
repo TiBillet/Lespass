@@ -55,6 +55,7 @@
                             <td>
                                 <button class="border font-medium px-3 py-2 rounded-md text-center whitespace-nowrap bg-primary-600 border-transparent text-white"
                                         hx-get="/my_account/{{ user_pk }}:{{ card.number_printed }}/admin_lost_my_card/"
+                                        hx-disabled-elt="this"
                                         hx-swap="outerHTML">
                                     {% trans 'Card lost' %}
                                 </button>
