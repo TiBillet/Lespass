@@ -42,6 +42,9 @@ class _FauxManager:
     def filter(self, *a, **kw):
         return self
 
+    def exclude(self, *a, **kw):
+        return self
+
     def exists(self):
         return not self._vide
 
@@ -99,21 +102,24 @@ def test_une_section_avec_du_contenu_reste_declaree():
 
 def test_les_lieux_entrants_suffisent_a_declarer_le_reseau_local():
     """
-    Aucun FederatedPlace mais `afficher_lieux_entrants` actif -> declaree.
+    Aucun FederatedPlace, mais un lieu entrant et l'option active -> declaree.
 
-    La page « Reseau local » se nourrit de trois sources ; on ne teste que
-    les deux moins couteuses, et on tranche en faveur de l'inclusion.
-    Sans cette souplesse, un tenant qui n'affiche QUE des lieux entrants
+    Sans cette source, un tenant qui n'affiche QUE des lieux entrants
     verrait sa page disparaitre du sitemap alors qu'elle est pleine.
-    / No FederatedPlace but incoming places enabled -> still declared.
+    / No FederatedPlace but one incoming place, option on -> still declared.
     """
     from BaseBillet import sitemap as module_sitemap
+
+    tenant = Client.objects.get(schema_name="lespass")
+    lieux_entrants = {"by_tenant": {str(tenant.uuid): ["uuid-d-un-voisin"]}}
 
     with patch.object(module_sitemap.Event, "objects", _FauxManager(vide=True)), \
          patch("BaseBillet.models.Product.objects", _FauxManager(vide=True)), \
          patch("BaseBillet.models.FederatedPlace.objects", _FauxManager(vide=True)), \
+         patch("seo.views_common.get_seo_cache", return_value=lieux_entrants), \
          patch("BaseBillet.models.FederationConfiguration.get_solo") as faux_fed:
         faux_fed.return_value.afficher_lieux_entrants = True
+        faux_fed.return_value.tags_federation.all.return_value = []
         items = _items_du_sitemap()
 
     assert "federation-list" in items

@@ -23,7 +23,9 @@ FLUX DE `ecrire_le_plan_de_reprise`
    reprise. Rien n'est écrit.
 2. Pour chaque vente du plan, dans l'ordre du plan (l'ordre du temps ; à date égale,
    l'avoir après sa vente) : sautée si sa clé "reprise-<clé>" existe déjà, sinon écrite
-   dans SA transaction (`_ecrire_une_vente`).
+   dans SA transaction. Un virement reçu (paiement `T`) est écrit par la fabrique
+   commune `ecrire_la_vente_d_un_virement_recu` (BaseBillet/services_vente.py), toute
+   autre vente par `_ecrire_une_vente`.
 3. Vérification de la chaîne des ventes du lieu (`verifier_chaine_ventes`).
 / 1. venue guard; 2. each sale in plan order, one transaction each, skipped if already
 written; 3. chain check.
@@ -43,16 +45,12 @@ from dataclasses import dataclass, field
 from django.db import transaction
 
 from AuthBillet.models import Wallet
-from BaseBillet.models import LigneArticle, Paiement_stripe, Product, SaleOrigin
+from BaseBillet.models import LigneArticle, Paiement_stripe, Product
 from BaseBillet.models_vente import Reglement, Vente
-from BaseBillet.services_refund import (
-    get_or_create_pricesold_refund,
-    get_or_create_product_virement_recu,
-)
 from BaseBillet.services_vente import (
-    ajouter_article,
     ajouter_reglement,
     annuler_vente,
+    ecrire_la_vente_d_un_virement_recu,
     encaisser_vente,
     ouvrir_vente,
 )
@@ -64,11 +62,6 @@ from QrcodeCashless.models import CarteCashless
 # Elle marque la vente comme reprise et rend la reprise rejouable.
 # / The idempotency key prefix of a sale taken over: marks it and makes it replayable.
 PREFIXE_DE_LA_CLE_DE_REPRISE = "reprise-"
-
-# L'origine d'une vente « virement reçu » : le webhook Stripe `transfer.created` l'a
-# produite (décision C1 du SUIVI §4).
-# / The origin of a "transfer received" sale: the Stripe transfer.created webhook.
-ORIGINE_D_UN_VIREMENT_RECU = SaleOrigin.WEBHOOK
 
 
 class RepriseRefusee(Exception):
@@ -128,6 +121,20 @@ def ecrire_le_plan_de_reprise(plan):
             resultat.nombre_de_ventes_sautees += 1
             continue
 
+        # Un virement reçu : la fabrique commune l'écrit, dans sa transaction, à la
+        # date du transfert. Le plan porte son montant (prix de l'article `VR`).
+        # / A received transfer: the shared factory writes it, at the transfer date.
+        article_du_virement_recu = _article_d_un_virement_recu(vente_a_reprendre)
+        if article_du_virement_recu is not None:
+            ecrire_la_vente_d_un_virement_recu(
+                vente_a_reprendre.paiement_stripe,
+                article_du_virement_recu.prix_unitaire,
+                cle_de_la_vente,
+                datetime_encaissement=vente_a_reprendre.datetime_de_la_vente,
+            )
+            resultat.nombre_de_ventes_ecrites += 1
+            continue
+
         with transaction.atomic():
             origines_melangees = _ecrire_une_vente(vente_a_reprendre, cle_de_la_vente)
         resultat.nombre_de_ventes_ecrites += 1
@@ -165,21 +172,22 @@ def _refuser_si_le_lieu_a_deja_vendu():
 
 def _ecrire_une_vente(vente_a_reprendre, cle_de_la_vente):
     """
-    Écrit UNE vente du plan. Appelée dans une transaction.
-    / Writes ONE plan sale. Called inside a transaction.
+    Écrit UNE vente du plan qui reprend d'anciennes lignes. Appelée dans une
+    transaction. Un virement reçu n'arrive jamais ici : la fabrique commune l'écrit.
+    / Writes ONE plan sale made of old lines. Called inside a transaction. A received
+    transfer never comes here: the shared factory writes it.
 
     L'ORDRE COMPTE :
     1. ouvrir la vente (en attente, sans numéro), avec sa clé de reprise ;
     2. rattacher les anciennes lignes et poser leurs montants, en UN `.update()` par
        ligne : les contraintes de base de `LigneArticle` vérifient la ligne entière ;
-    3. créer l'article d'un virement reçu (le seul article créé par la reprise) ;
-    4. ajouter les règlements ;
-    5. encaisser (vente réglée) EN DERNIER : l'empreinte relit articles et règlements
+    3. ajouter les règlements ;
+    4. encaisser (vente réglée) EN DERNIER : l'empreinte relit articles et règlements
        en base, ils doivent être déjà écrits ; ou annuler ; en attente : rien, le
        webhook Stripe l'encaissera ;
-    6. poser les dates d'origine hors empreinte et les champs du paiement Stripe.
-    / Order matters: open, update old lines, create the transfer item, payments, settle
-    LAST (the fingerprint reads items and payments back), then dates and payment.
+    5. poser les dates d'origine hors empreinte et les champs du paiement Stripe.
+    / Order matters: open, update old lines, payments, settle LAST (the fingerprint
+    reads items and payments back), then dates and payment.
 
     :return: vrai si les lignes de la vente n'ont pas toutes la même origine
     """
@@ -200,8 +208,6 @@ def _ecrire_une_vente(vente_a_reprendre, cle_de_la_vente):
     # d'immutabilité).
     # / 2. Old lines, by .update(): never save().
     for article in vente_a_reprendre.articles:
-        if article.ligne is None:
-            continue
         champs_de_la_ligne = {
             "vente": vente,
             "total_catalogue": article.total_catalogue,
@@ -223,14 +229,7 @@ def _ecrire_une_vente(vente_a_reprendre, cle_de_la_vente):
             )
         LigneArticle.objects.filter(pk=article.ligne.pk).update(**champs_de_la_ligne)
 
-    # 3. L'article à créer : seulement celui d'un virement reçu (QO-9).
-    # / 3. The item to create: only a received transfer's.
-    for article in vente_a_reprendre.articles:
-        if article.ligne is not None:
-            continue
-        _creer_l_article_d_un_virement_recu(vente, article, date_de_la_vente)
-
-    # 4. Les règlements, montants du plan. / 4. Payments, plan amounts.
+    # 3. Les règlements, montants du plan. / 3. Payments, plan amounts.
     for reglement in vente_a_reprendre.reglements:
         carte_du_reglement = None
         if reglement.carte_id is not None:
@@ -249,15 +248,15 @@ def _ecrire_une_vente(vente_a_reprendre, cle_de_la_vente):
             reference_externe=reglement.reference_externe,
         )
 
-    # 5. Le statut, en dernier. / 5. The status, last.
+    # 4. Le statut, en dernier. / 4. The status, last.
     if vente_a_reprendre.statut == Vente.Statut.REGLEE:
         encaisser_vente(vente, datetime_encaissement=date_de_la_vente)
     elif vente_a_reprendre.statut == Vente.Statut.ANNULEE:
         annuler_vente(vente)
 
-    # 6. Les dates d'origine : `datetime_creation` et `Reglement.datetime` sont en
+    # 5. Les dates d'origine : `datetime_creation` et `Reglement.datetime` sont en
     # `auto_now_add` et hors de l'empreinte. Puis le paiement Stripe d'origine.
-    # / 6. Original dates (outside the fingerprint), then the original Stripe payment.
+    # / 5. Original dates (outside the fingerprint), then the original Stripe payment.
     Vente.objects.filter(pk=vente.pk).update(datetime_creation=date_de_la_vente)
     Reglement.objects.filter(vente=vente).update(datetime=date_de_la_vente)
 
@@ -279,22 +278,16 @@ def _ecrire_une_vente(vente_a_reprendre, cle_de_la_vente):
 def _origine_de_la_vente(vente_a_reprendre):
     """
     L'origine d'une vente reprise (décision C1) : celle de ses anciennes lignes ; si
-    elles en ont plusieurs, celle de la première ligne du plan. Une vente sans ancienne
-    ligne est un virement reçu : origine webhook Stripe.
-    / The sale origin: its old lines' (the first one's if mixed); a received transfer:
-    the Stripe webhook.
+    elles en ont plusieurs, celle de la première ligne du plan.
+    / The sale origin: its old lines' (the first one's if mixed).
 
     :return: (origine, vrai si les lignes ont des origines différentes)
     """
     origines_des_lignes = []
     for article in vente_a_reprendre.articles:
-        if article.ligne is None:
-            continue
         if article.ligne.sale_origin not in origines_des_lignes:
             origines_des_lignes.append(article.ligne.sale_origin)
 
-    if not origines_des_lignes:
-        return ORIGINE_D_UN_VIREMENT_RECU, False
     origines_melangees = len(origines_des_lignes) > 1
     return origines_des_lignes[0], origines_melangees
 
@@ -319,32 +312,21 @@ def _vente_de_la_ligne_d_origine(vente_a_reprendre):
     return Vente.objects.get(pk=vente_id_de_l_origine)
 
 
-def _creer_l_article_d_un_virement_recu(vente, article, date_de_la_vente):
+def _article_d_un_virement_recu(vente_a_reprendre):
     """
-    Crée l'article « virement reçu » par le service de vente (`ajouter_article`) :
-    produit système `VR`, prix, TVA et monnaie FED du plan, ligne validée, sans moyen
-    (le règlement `SN` le porte). Puis sa date devient celle du transfert.
-    / Creates the "transfer received" item through the sale service, then dates it.
+    L'article « virement reçu » à créer d'une vente du plan (QO-9), ou None. Le calcul
+    ne met un article à créer (sans ancienne ligne) que dans la vente d'un paiement `T`.
+    / The "transfer received" item to create of a plan sale, or None.
+
+    :raises ValueError: un article à créer d'un autre produit (le calcul n'en fait pas)
     """
-    if article.methode_caisse_du_produit_a_creer != Product.VIREMENT_RECU:
-        raise ValueError(
-            f"Article à créer inconnu : {article.methode_caisse_du_produit_a_creer!r}. "
-            f"La reprise ne crée que l'article « virement reçu »."
-        )
-    produit_du_virement = get_or_create_product_virement_recu()
-    tarif_vendu_du_virement = get_or_create_pricesold_refund(produit_du_virement)
-    ligne_du_virement = ajouter_article(
-        vente,
-        pricesold=tarif_vendu_du_virement,
-        quantite=article.quantite,
-        prix_unitaire=article.prix_unitaire,
-        taux_tva=article.taux_tva,
-        hors_chiffre_affaires=article.hors_chiffre_affaires,
-        asset=article.asset,
-        status=LigneArticle.VALID,
-    )
-    # `datetime` est en `auto_now_add` et hors de l'empreinte de la vente.
-    # / datetime is auto_now_add and outside the sale fingerprint.
-    LigneArticle.objects.filter(pk=ligne_du_virement.pk).update(
-        datetime=date_de_la_vente
-    )
+    for article in vente_a_reprendre.articles:
+        if article.ligne is not None:
+            continue
+        if article.methode_caisse_du_produit_a_creer != Product.VIREMENT_RECU:
+            raise ValueError(
+                f"Article à créer inconnu : {article.methode_caisse_du_produit_a_creer!r}. "
+                f"La reprise ne crée que l'article « virement reçu »."
+            )
+        return article
+    return None

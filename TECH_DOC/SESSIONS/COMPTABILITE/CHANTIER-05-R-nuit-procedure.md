@@ -1,7 +1,8 @@
 # Chantier 05-R-4 — La nuit de la bascule, pas à pas
 
-> **Statut** : ✅ **RÉPÉTÉE** sur la copie (2026-10-08/09, dernière section), relue par Fable (constats
-> intégrés). Prête pour la nuit.
+> **Statut** : ✅ **JOUÉE EN PRODUCTION** dans la nuit du 11 au 12 octobre 2026 : site rouvert à
+> 02 h 48 UTC, toutes les étapes conformes (bilan : dernière section, « La nuit en production »).
+> Répétée avant sur la copie (2026-10-08/09), relue par Fable.
 > Source : fiche R §12 (l'ordre et les contrôles), décisions du SUIVI §5 ; contrôles SQL :
 > `scripts/nuit_de_bascule/` ; compose : `docker-compose.prod.yml`.
 > **Le mainteneur est aux commandes toute la nuit** (migration de serveur et DNS compris) et
@@ -170,3 +171,53 @@ clôtures (15 s) + reprise à blanc (40 s) + écriture (11 min 30) + J reprise (
 
 Déjà éprouvé sur la copie migrée (instantané `db-prod/copie_migree_nettoyee_2026-10-08.dump`) :
 étapes 4 (export sur une base déjà migrée), 7, 8, 9, 10 (fiche R §14 bis à §14 quater).
+
+## La nuit en production (2026-10-11/12)
+
+Serveur de prod (même serveur, `51.77.151.34`), mainteneur aux commandes, orchestrateur sur les
+sorties collées, **une étape à la fois**. Sorties gardées sur le serveur dans `~/sauvegardes/`
+(mode 600). Code : `df6fb270`, puis `02a90575` (skin V2 par défaut) déployé le matin.
+
+| # | Mesure en production | Durée |
+|---|---|---|
+| P1 | Dump de sécurité (2 × 77 Mo, 37 374 tables, « cluster dump complete », 4 archives borg) ; images `www/media` archivées (21 525 fichiers, 4,4 Go) | — |
+| 1-2 | Maintenance par l'ancien nginx ; `lespass_django` / `lespass_celery` arrêtés + `--restart=no` ; cron de sauvegarde commenté ; file Redis 0/0 ; copie à froid `database_avant_bascule` (2 881 155 359 octets, identique) | — |
+| P2 | Ubuntu **24.04.5**, Docker 29.9 (dépôts apt Docker et crowdsec désactivés, à réactiver en `noble`) | — |
+| 3 | Données déplacées dans `~/main-lespass` ; Traefik v3 (`traefik-wildcard`) ; `traefik_wild` arrêté ; certificats v3 émis (Let's Encrypt a bloqué `tibillet.coop` 1 h après 5 échecs de l'ancienne clé Gandi, puis OK à 19 h 19 UTC) ; `verifier_traefik.sh` : TOUT EST BON | — |
+| 4 | 0 drapeau V2, 0 compte hors plan, **76 784 anciennes clôtures dans 518 lieux** | < 1 min |
+| 5 | Export : **76 784** (= étape 4) | 8,5 s |
+| 6 | Migrations, un lieu après l'autre : **519 schémas**, 0 erreur, 0 « moteur v2 » ; `legacy` : F 1, M 1, S 497 ; `v2` : W 19 ; 0 vente, 0 règlement, 0 lieu sans clé ; 76 784 clôtures | **3 h 55** (contre 3 h 14 répétées : 518 lieux contre 513) |
+| 7 | À blanc puis `--executer` : **76 784 supprimées**, 518 lieux, 0 refus | 1,2 s + 5,1 s |
+| 8 | Reprise à blanc : 23 875 lignes ; réglées 17 900, annulées 4 663, en attente 166, avoirs 151 ; ancien = nouveau hors QR **492 751,78 €** ; net vendu 916 768,76 € ; part offerte 12,25 € (`NA` 9) ; seule anomalie « monnaie de recharge introuvable » 1 004 (à 0 €) ; 29 paiements QR hors [0,99 ; 1,01] (information) ; 155 paiements sans ligne | 1 min 07 |
+| 9 | Écriture : **22 880 ventes**, 0 sautée, 0 origine mélangée, chaîne valide ; 0 ligne sans vente, 0 avoir sans vente liée, 0 vente hors reprise, 0 paiement `T` sans vente | 13 min 41 |
+| 10 | Celery : 0 ; **106 J « reprise »** (106 lieux à ventes réglées), 0 refus ; `verify_clotures` : aucune anomalie | 3 min 13 + 2 min 42 |
+| 10 bis | Redis `LLEN` 0, `HLEN` 0 ; aucun `celerybeat-schedule` | — |
+| 11 | Réouverture **02 h 48 UTC** : « Skip migrate », 3 RUNNING (gunicorn 5, celery 6), `verifier_traefik.sh` TOUT EST BON, 0 erreur ; sauvegarde manuelle (dump 89 Mo, borg `M0229` 03 h 14) puis cron réactivé ; crowdsec : 8 robots bannis, aucune IP de lieu, 0 décision côté hôte | 3 min 52 (sauvegarde) |
+| 12 | Rattrapage H / M / A sans mail : 922 clôtures à ~05 h, **aucun lieu n'a de destinataire de rapport** (0 mail possible) ; premier vrai paiement (SEPA d'adhésion CLAF, rejoué par Stripe) traité au complet | — |
+
+**Constats de la nuit** (aucun n'a touché aux données) :
+- Pendant l'écriture (étape 9), 48 lignes `INFO send_membership_product_to_fedow` : bruit du signal
+  `post_save` de `Product` (création du produit « Virement pot central » dans 24 lieux) ; 0 appel
+  à Fedow.
+- **Mémoire** : 3,8 Go ; `lespass_django` ~1,8 Go ; swap monté à ~0,9 Go la première heure puis
+  retombé à 0,3 Go après un redémarrage ; `vmstat` : échanges ponctuels seulement. À surveiller.
+- **Skin** (demande du mainteneur au matin) : 513 lieux passés en V2 par un script `manage.py shell`
+  (`ConfigurationSite.save()`, pour le cache de django-solo) ; FaireFestival et 3 autres lieux
+  `faire_festival` gardés, le lieu M déjà en V2. Défaut V2 pour les nouveaux lieux : commit
+  `02a90575`, `pages/0002` (aucun SQL) appliquée en multiprocessing en **14 min 41**.
+- **Incident** : après l'ajout de `CUSTOM_DOMAINS_RULE` au `.env`, `docker compose up -d
+  lespass_nginx` (sans `--no-deps`) a recréé postgres, django et nginx : **~1 min 30 de 502**.
+  Règle : toujours `--no-deps`, et `--dry-run` avant.
+- **Domaine personnalisé** `codecommun.coop` ajouté au lieu « meta » en principal : DEUX lignes du
+  `.env` (`CUSTOM_DOMAINS_RULE` et `ADDITIONAL_DOMAINS`) ; marche complète dans
+  `TECH_DOC/SESSIONS/TODO/DEPLOIEMENT-domaines-personnalises-traefik.md`.
+- **Bug** : un virement FED reçu après la bascule (La Filature, 1 893,00 €, 05 h 17 UTC) n'a pas
+  de vente `VR` (constat n°35, point (2)) → correctif confié à un autre agent :
+  `CHANTIER-05-briefs/PROMPT-05-VR-virements-en-direct.md`.
+
+**Restait au matin du 2026-10-12** : vente de test et ventes historiques dans l'admin ; capture de
+l'asset CLAF comparée à celle de l'étape 0 ; contrôle de `lespass_postgres` après sa recréation
+(arrêt propre, `max_locks_per_transaction` 4096). Après : régénérer le jeton Gandi (collé dans une
+conversation) ; réactiver les dépôts apt Docker et crowdsec ; supprimer
+`~/Lespass/database_avant_bascule` quand la prod est jugée stable ; deux sources de bannissement
+(crowdsec hôte et conteneur) à rationaliser.

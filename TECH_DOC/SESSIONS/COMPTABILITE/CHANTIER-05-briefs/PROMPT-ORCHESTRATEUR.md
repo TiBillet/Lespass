@@ -107,7 +107,34 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
-## ⚠️ NUIT DE BASCULE EN COURS (2026-10-11, à partir de ~19 h UTC) — REPRENDRE ICI
+## PROCHAINE ÉTAPE (mise à jour 2026-10-12) : LE CHANTIER 05 EST EN PRODUCTION
+
+**LANGUE : tout message au mainteneur est en FRANÇAIS, sans exception.**
+
+**La nuit est faite** (11 → 12 octobre 2026, site rouvert à 02 h 48 UTC) : toutes les étapes
+conformes. Bilan chiffré : `CHANTIER-05-R-nuit-procedure.md`, section « La nuit en production » ;
+journal : SUIVI §6 (2026-10-12). Code en prod : `02a90575` (skin V2 par défaut).
+
+**En prod, ce qui a changé de l'organisation** :
+- dépôt cloné et **monté** dans `~/main-lespass` (plus d'image Docker Hub ; `docker_push_update.sh`
+  ne sert plus à cette prod) ; mise à jour = `git pull` + `collectstatic` + `supervisorctl restart`
+  (+ `migrate_schemas` seulement si une migration est en attente) ;
+- **jamais `docker compose up -d <service>` sans `--no-deps`** (incident du 2026-10-12) ;
+- Traefik v3 (`~/TraefikV3/wildcard_conf`, conteneur `traefik-wildcard`) ; domaines personnalisés
+  dans le `.env` (`CUSTOM_DOMAINS_RULE` + `ADDITIONAL_DOMAINS`, marche dans la TODO n°16).
+
+**À faire, dans l'ordre** :
+1. **Correctif « virements reçus »** (FED, Stripe `transfer.created` sans vente `VR`, constat n°35
+   (2), cas réel La Filature 1 893,00 €) : confié à un autre agent avec
+   `CHANTIER-05-briefs/PROMPT-05-VR-virements-en-direct.md` (hors CLAF).
+2. Fin de nuit : vente de test ; asset CLAF comparé à la capture de l'étape 0 ; contrôle de
+   `lespass_postgres` après sa recréation (arrêt propre, 4096 verrous).
+3. Après la nuit : régénérer le jeton Gandi ; dépôts apt Docker / crowdsec en `noble` ; supprimer
+   `~/Lespass/database_avant_bascule` quand la prod est jugée stable ; surveiller la mémoire.
+4. Puis : CLAF (constat n°35 (1) et bouton « Remise en banque »), H-4, H-2, H-3 ; TODO n°15
+   (`make deploy`) et n°16 (domaines lus par Traefik) quand le mainteneur le décide.
+
+## (Ancienne) NUIT DE BASCULE EN COURS (2026-10-11, à partir de ~19 h UTC)
 
 **LANGUE : tout message au mainteneur est en FRANÇAIS, sans exception.**
 Le mainteneur lance les commandes sur le serveur de prod (51.77.151.34) et colle les sorties ;

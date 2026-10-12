@@ -1424,10 +1424,43 @@ class Webhook_stripe(APIView):
                                     source_traitement=Paiement_stripe.WEBHOOK,
                                 )
                                 pstripe.fedow_transactions.add(serializer_transaction.fedow_transaction)
+
+                                # La vente « virement reçu » du paiement, encaissée maintenant.
+                                # Un échec ne fait pas perdre le virement (paiement, Fedow et
+                                # LaBoutik sont déjà passés) : réponse 201 comme avant, ligne
+                                # ERROR au journal, et la commande `rattraper_les_virements_recus`
+                                # écrira la vente plus tard.
+                                # L'import est fait ICI, dans la branche : le nom de la fabrique
+                                # est relu dans `BaseBillet.services_vente` à chaque appel. Le test
+                                # `test_D_un_echec_de_la_vente_ne_fait_pas_perdre_le_virement` la
+                                # remplace dans ce module ; un import en tête de fichier casserait
+                                # ce test.
+                                # / The "transfer received" sale, settled now. A failure does not
+                                # lose the transfer: 201 as before, ERROR log, caught up later.
+                                # Imported here so the name is read in services_vente at each call.
+                                from BaseBillet.services_vente import (
+                                    PREFIXE_DE_LA_CLE_D_UN_VIREMENT_RECU,
+                                    ecrire_la_vente_d_un_virement_recu,
+                                )
+                                try:
+                                    ecrire_la_vente_d_un_virement_recu(
+                                        pstripe,
+                                        payload["data"]["object"]["amount"],
+                                        f"{PREFIXE_DE_LA_CLE_D_UN_VIREMENT_RECU}{pstripe.uuid}",
+                                    )
+                                except Exception as erreur_de_la_vente:
+                                    logger.error(
+                                        f"transfer.created : vente « virement reçu » non écrite "
+                                        f"pour le paiement {pstripe.uuid} "
+                                        f"({type(erreur_de_la_vente).__name__} : {erreur_de_la_vente}). "
+                                        f"À rattraper : rattraper_les_virements_recus.",
+                                        exc_info=True,
+                                    )
+
                                 logger.info(
-                                    f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8} : hash fedow {hash}')
+                                    f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8()} : hash fedow {hash}')
                                 return Response(
-                                    f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8} : hash fedow {hash}',
+                                    f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8()} : hash fedow {hash}',
                                     status=status.HTTP_201_CREATED)
                             except Exception as e:
                                 logger.error(f"Error processing Stripe transfer for tenant {tenant}: {str(e)}")

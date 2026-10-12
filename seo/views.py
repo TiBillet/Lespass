@@ -21,7 +21,6 @@ import random
 
 from django.http import Http404, HttpResponse
 from django.template.response import TemplateResponse
-from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from seo.features import DOC_BASE, FEATURE_DETAILS
@@ -652,11 +651,12 @@ def sitemap_index_view(request):
     # Sitemap ROOT : pages du schema public (landing + hub + fonctionnalites).
     # Liste en premier car c'est le coeur editorial du site vitrine.
     # / ROOT sitemap: public-schema pages (landing + hub + features). Listed first.
+    # Pas de <lastmod> : on ne connait pas la vraie date de modification d'un
+    # lieu. Une date fausse (celle du jour) fait ignorer tous les lastmod par Google.
+    # / No <lastmod>: the real modification date is unknown, a wrong one is worse.
     root_sitemap_url = request.build_absolute_uri("/sitemap-root.xml")
-    root_lastmod = timezone.now().isoformat()[:10]
     xml_parts.append("  <sitemap>")
     xml_parts.append(f"    <loc>{xml_escape(root_sitemap_url)}</loc>")
-    xml_parts.append(f"    <lastmod>{xml_escape(root_lastmod)}</lastmod>")
     xml_parts.append("  </sitemap>")
 
     for tenant in tenants:
@@ -664,10 +664,8 @@ def sitemap_index_view(request):
         sitemap_url = tenant.get(
             "sitemap_url", f"https://{domain}/sitemap.xml" if domain else ""
         )
-        updated = tenant.get("updated_at", timezone.now().isoformat())
         xml_parts.append("  <sitemap>")
         xml_parts.append(f"    <loc>{xml_escape(sitemap_url)}</loc>")
-        xml_parts.append(f"    <lastmod>{xml_escape(updated[:10])}</lastmod>")
         xml_parts.append("  </sitemap>")
     xml_parts.append("</sitemapindex>")
 
@@ -714,7 +712,8 @@ def sitemap_root_view(request):
     urls.append(request.build_absolute_uri("/cgu/"))
     urls.append(request.build_absolute_uri("/confidentialite/"))
 
-    lastmod = timezone.now().isoformat()[:10]
+    # Pas de <lastmod> : ces pages sont dans le code, sans date de modification.
+    # / No <lastmod>: these pages live in the code, without a modification date.
     xml_parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
@@ -722,7 +721,6 @@ def sitemap_root_view(request):
     for url in urls:
         xml_parts.append("  <url>")
         xml_parts.append(f"    <loc>{xml_escape(url)}</loc>")
-        xml_parts.append(f"    <lastmod>{xml_escape(lastmod)}</lastmod>")
         xml_parts.append("  </url>")
     xml_parts.append("</urlset>")
 

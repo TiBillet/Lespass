@@ -32,7 +32,7 @@ from django.utils.translation import gettext_lazy as _, ngettext, get_language
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET, require_http_methods
 from django_htmx.http import HttpResponseClientRedirect
-from django_tenants.utils import tenant_context
+from django_tenants.utils import schema_context, tenant_context
 from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
@@ -1035,6 +1035,71 @@ def _agreger_tokens_locaux(tokens, user, config):
         })
     return tokens
 
+# Cache des lieux Fedow : nom et logo de chaque lieu, par identifiant Fedow.
+# Il sert a la table des jetons du compte (lieu d'origine, lieux federes).
+# La cle est posee dans le schema PUBLIC : sans cela, django-tenants prefixe la cle
+# par le schema du lieu courant, et chacun des ~500 lieux aurait sa propre copie,
+# reconstruite par un visiteur (6 s en prod).
+# La duree depasse la periode du beat (4 h) : le cache ne doit jamais expirer
+# avant d'etre rafraichi.
+# / Instance-wide cache of venue names and logos, keyed by Fedow place uuid.
+# Stored under the PUBLIC schema so all venues share one copy. Outlives the 4 h beat.
+CLE_CACHE_DES_LIEUX_FEDOW = "infos_des_lieux_par_uuid_fedow"
+DUREE_CACHE_DES_LIEUX_FEDOW = 5 * 3600
+
+
+def lire_le_cache_des_lieux_fedow():
+    """
+    Rend le dict {uuid_fedow (str): {"organisation", "logo_url"}}, ou None s'il manque.
+    / Returns the venues dict, or None if missing.
+    """
+    with schema_context("public"):
+        return cache.get(CLE_CACHE_DES_LIEUX_FEDOW)
+
+
+def construire_le_cache_des_lieux_fedow():
+    """
+    Parcourt tous les lieux et met en cache leur nom et l'adresse de leur logo.
+    / Walks all venues and caches their name and logo URL.
+
+    LOCALISATION : BaseBillet/views.py
+
+    Appele par seo.tasks.refresh_seo_cache (beat 4 h), et par
+    MyAccount.get_place_cached_info si le cache manque.
+    Lent : deux lectures de configuration par lieu (~500 lieux en prod).
+    On ne garde que des textes : un objet fichier (config.logo) embarquerait
+    toute la Configuration du lieu dans le cache.
+    / Called by the 4 h beat, and on cache miss. Slow. Stores plain strings only.
+
+    :return: dict {uuid_fedow (str): {"organisation": str, "logo_url": str|None}}
+    """
+    infos_des_lieux = {}
+    for tenant in Client.objects.filter(categorie=Client.SALLE_SPECTACLE):
+        with tenant_context(tenant):
+            uuid_fedow_du_lieu = FedowConfig.get_solo().fedow_place_uuid
+            # Un lieu pas encore relie a Fedow n'a pas d'identifiant : on le saute.
+            # / A venue not yet linked to Fedow has no uuid: skipped.
+            if not uuid_fedow_du_lieu:
+                continue
+
+            config = Configuration.get_solo()
+            adresse_du_logo = None
+            if config.logo:
+                try:
+                    adresse_du_logo = config.logo.thumbnail.url
+                except Exception as erreur_logo:
+                    logger.warning(f"Logo illisible pour {tenant.schema_name} : {erreur_logo}")
+
+            infos_des_lieux[str(uuid_fedow_du_lieu)] = {
+                "organisation": config.organisation,
+                "logo_url": adresse_du_logo,
+            }
+
+    with schema_context("public"):
+        cache.set(CLE_CACHE_DES_LIEUX_FEDOW, infos_des_lieux, DUREE_CACHE_DES_LIEUX_FEDOW)
+    return infos_des_lieux
+
+
 def get_distant_fedow_tokens(request, config):
 
     # Lecture des tokens DISTANTS (Fedow). Encadree : si le Fedow distant est
@@ -1057,8 +1122,8 @@ def get_distant_fedow_tokens(request, config):
         if token['asset']['place_origin']:
             # L'asset fédéré n'a pas d'origin
             place_uuid_origin = token['asset']['place_origin']['uuid']
-            place_info = MyAccount.get_place_cached_info(place_uuid_origin)
-            token['asset']['logo'] = place_info.get('logo')
+            place_info = MyAccount.get_place_cached_info(place_uuid_origin) or {}
+            token['asset']['logo_url'] = place_info.get('logo_url')
             names_of_place_federated.append(place_info.get('organisation'))
         # Recherche des noms des lieux fédérés
 
@@ -1770,27 +1835,25 @@ class MyAccount(viewsets.ViewSet):
 
     @staticmethod
     def get_place_cached_info(place_uuid):
-        # Recherche des infos dans le cache :
-        place_info = cache.get("place_uuid")
-        if place_info:
-            logger.info("place info from cache GET")
-            return place_info.get(place_uuid)
-        else:
-            # Va chercher dans toute les configs de tous les tenants de l'instance
-            place_info = {}
-            for tenant in Client.objects.filter(categorie=Client.SALLE_SPECTACLE):
-                with tenant_context(tenant):
-                    fedow_config = FedowConfig.get_solo()
-                    this_place_uuid = fedow_config.fedow_place_uuid
-                    config = Configuration.get_solo()
-                    place_info[this_place_uuid] = {
-                        'organisation': config.organisation,
-                        'logo': config.logo,
-                    }
+        """
+        Nom et logo du lieu qui porte cet identifiant Fedow.
+        / Name and logo of the venue with this Fedow place uuid.
 
-            logger.info("place info to cache SET")
-            cache.set("place_uuid", place_info, 3600)
-        return place_info.get(place_uuid)
+        LOCALISATION : BaseBillet/views.py
+
+        Lit le cache partage par toute l'instance (rempli toutes les 4 h par
+        seo.tasks.refresh_seo_cache). S'il manque, on le reconstruit ici : c'est
+        lent (tous les lieux sont parcourus), mais cela n'arrive plus qu'une fois
+        pour toute l'instance.
+        / Reads the instance-wide cache (filled every 4 h). Rebuilt here if missing.
+
+        :param place_uuid: UUID ou str (fedow_place_uuid du lieu)
+        :return: dict {"organisation", "logo_url"} ou None
+        """
+        infos_des_lieux = lire_le_cache_des_lieux_fedow()
+        if infos_des_lieux is None:
+            infos_des_lieux = construire_le_cache_des_lieux_fedow()
+        return infos_des_lieux.get(str(place_uuid))
 
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):
@@ -2847,6 +2910,15 @@ def index(request):
         # import ipdb;ipdb.set_trace()
 
     template_context["events"] = events_a_afficher
+
+    # Accueil sans evenement, sans image et sans description du lieu : la page
+    # passe en noindex (lu par vues/accueil.html). Meme regle que le sitemap.
+    # / Empty home (no event, image or description): noindex. Same rule as the sitemap.
+    from TiBillet.seo_indexing import accueil_par_defaut_est_vide
+    template_context["accueil_est_vide"] = accueil_par_defaut_est_vide(
+        Configuration.get_solo(),
+        il_y_a_des_evenements=len(events_a_afficher) > 0,
+    )
 
     return render(request, template_path, context=template_context)
 

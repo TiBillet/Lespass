@@ -427,11 +427,23 @@ def jsonld_event(context, event):
     block. json.dumps guarantees escaping; geo goes through float(); offers is
     computed from published_prices (the old event.price_min never existed).
 
+    COPIE FEDEREE : un evenement d'un lieu federe affiche ici (contexte
+    `event_in_this_tenant` faux) ne recoit PAS de JSON-LD. `config` est celle du
+    lieu qui AFFICHE la page : organizer et location seraient faux. La page est
+    en noindex et son canonical pointe vers l'original, qui porte le JSON-LD.
+    / FEDERATED COPY: no JSON-LD. `config` belongs to the venue DISPLAYING the
+    page, so organizer and location would be wrong; the original carries it.
+
     Utilisation : {% jsonld_event event %}
     """
+    if not context.get("event_in_this_tenant", True):
+        return ""
+
     request = context.get("request")
     config = context.get("config")
-    url = request.build_absolute_uri() if request else ""
+    # Chemin sans les parametres d'URL, comme le canonical (shell.html).
+    # / Path without query parameters, like the canonical (shell.html).
+    url = request.build_absolute_uri(request.path) if request else ""
     racine = request.build_absolute_uri("/") if request else "/"
 
     description = (
@@ -506,6 +518,91 @@ def jsonld_event(context, event):
 
     # Même échappement que jsonld_page (neutralise </script> et commentaires).
     # / Same escaping as jsonld_page (neutralizes </script> and comments).
+    json_str = (
+        json.dumps(donnees, ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+    return mark_safe(f'<script type="application/ld+json">{json_str}</script>')
+
+
+@register.simple_tag(takes_context=True)
+def jsonld_organisation(context):
+    """
+    Rend les données structurées JSON-LD du lieu : Organization + WebSite.
+    / Renders the venue's JSON-LD: Organization + WebSite.
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+
+    Construit en Python (json.dumps), comme jsonld_event : un JSON écrit à la
+    main dans le gabarit garde les entités HTML de l'autoescape (« L&#x27; »,
+    que Google lit telles quelles) et casse sur un saut de ligne.
+    Champs :
+    - logo : le logo du lieu (config.logo), pas la photo de partage ;
+    - image : la photo de partage (config.img), si elle existe ;
+    - sameAs : le site web du lieu et ses réseaux sociaux renseignés ;
+    - address : l'adresse du lieu, sans champ vide.
+    / Built in Python like jsonld_event; hand-written JSON kept HTML entities.
+
+    Utilisé par les shells des skins : {% jsonld_organisation %}
+    """
+    from html import unescape
+
+    request = context.get("request")
+    config = context.get("config")
+    if not request or not config:
+        return ""
+
+    hote = request.get_host()
+    racine = f"https://{hote}/"
+
+    organisation = {
+        "@type": "Organization",
+        "name": config.organisation,
+        "url": racine,
+    }
+    if config.logo:
+        organisation["logo"] = f"https://{hote}{config.logo.med.url}"
+    carte_de_partage = config.get_social_card
+    if carte_de_partage:
+        organisation["image"] = f"https://{hote}{carte_de_partage}"
+
+    description = unescape(strip_tags(config.short_description or "")).strip()
+    if description:
+        organisation["description"] = description
+
+    liens_du_lieu = []
+    for lien in (config.site_web, config.facebook, config.instagram, config.twitter):
+        if lien:
+            liens_du_lieu.append(lien)
+    if liens_du_lieu:
+        organisation["sameAs"] = liens_du_lieu
+
+    adresse = config.postal_address
+    if adresse:
+        champs_de_l_adresse = {
+            "streetAddress": adresse.street_address,
+            "addressLocality": adresse.address_locality,
+            "postalCode": adresse.postal_code,
+            "addressCountry": adresse.address_country,
+        }
+        adresse_json = {"@type": "PostalAddress"}
+        for nom_du_champ, valeur in champs_de_l_adresse.items():
+            if valeur:
+                adresse_json[nom_du_champ] = str(valeur).strip()
+        organisation["address"] = adresse_json
+
+    donnees = {
+        "@context": "https://schema.org",
+        "@graph": [
+            organisation,
+            {"@type": "WebSite", "name": config.organisation, "url": racine},
+        ],
+    }
+
+    # Même échappement que jsonld_event (neutralise </script> et commentaires).
+    # / Same escaping as jsonld_event (neutralizes </script> and comments).
     json_str = (
         json.dumps(donnees, ensure_ascii=False)
         .replace("<", "\\u003c")

@@ -77,3 +77,53 @@ def noindex_context(request):
     (the decision is instance-wide, not per-request).
     """
     return {"noindex_seo": should_noindex()}
+
+
+# Debut du texte de bienvenue ecrit dans Configuration.long_description a la
+# creation d'un lieu (BaseBillet/validators.py, create_tenant). Tant qu'il est
+# la, l'admin du lieu n'a pas ecrit sa propre description.
+# / Start of the welcome text written at venue creation; while present, the
+# venue admin has not written their own description.
+DEBUT_DU_TEXTE_DE_BIENVENUE = "Bienvenue dans votre nouvel espace"
+
+
+def accueil_par_defaut_est_vide(config, il_y_a_des_evenements):
+    """
+    Dit si l'accueil par defaut d'un lieu est trop vide pour etre indexe.
+    / Tells whether a venue's default home is too empty to be indexed.
+
+    LOCALISATION : TiBillet/seo_indexing.py
+
+    Un accueil est vide quand les TROIS manquent :
+    - un evenement a venir ;
+    - l'image du lieu (config.img) ;
+    - une description longue ecrite par le lieu (absente, ou encore le texte
+      de bienvenue de la creation du lieu).
+    Des centaines de pages presque vides, au meme gabarit, font baisser la
+    qualite percue de tout le domaine tibillet.coop. Une page vide est donc en
+    noindex et hors du sitemap, jusqu'a ce que le lieu la remplisse.
+    / Hundreds of near-empty pages with the same template lower the perceived
+    quality of the whole domain: an empty home is noindex and out of the sitemap.
+
+    Utilise par :
+    - BaseBillet/views.py:index — balise robots de l'accueil ;
+    - BaseBillet/sitemap.py:StaticViewSitemap — presence de "/" dans le sitemap.
+
+    :param config: la Configuration du lieu.
+    :param il_y_a_des_evenements: True si l'accueil affiche au moins un evenement.
+    :return: True si l'accueil est vide.
+    """
+    if il_y_a_des_evenements:
+        return False
+    if config.img:
+        return False
+
+    description_longue = config.long_description or ""
+    description_ecrite_par_le_lieu = (
+        description_longue.strip() != ""
+        and DEBUT_DU_TEXTE_DE_BIENVENUE not in description_longue
+    )
+    if description_ecrite_par_le_lieu:
+        return False
+
+    return True

@@ -1,6 +1,15 @@
 {% extends base_template %}{# CHANTIER post-revue 2026-07-05 : comme le skin classic, on étend base_template (shell.html en navigation complète, headless.html en réponse HTMX — fragment léger au lieu du document complet). / Like the classic skin: shell for full navigation, headless (light fragment) for HTMX responses. #}
 {% load static i18n tibitags pages_tags %}
 
+{# Evenement d'un lieu federe, affiche ici : c'est une COPIE. L'adresse #}
+{# officielle est celle du lieu d'origine (event.full_url, enregistree a la #}
+{# sauvegarde de l'evenement). Canonical et og:url y pointent, et la copie est #}
+{# en noindex (le canonical n'est qu'un indice, le noindex est un ordre). #}
+{# / Federated event shown here is a COPY: canonical and og:url point to the #}
+{# origin venue's address (event.full_url), and the copy is noindex. #}
+{% block canonical %}{% if not event_in_this_tenant and event.full_url %}{{ event.full_url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block og_url %}{% if not event_in_this_tenant and event.full_url %}{{ event.full_url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block meta_robots %}{% if not event_in_this_tenant %}noindex, follow{% else %}{{ block.super }}{% endif %}{% endblock %}
 {% block title %}{{ event.name }}{% endblock %}
 
 {% block meta_description %}{% if event.short_description %}{{ event.short_description|striptags }}

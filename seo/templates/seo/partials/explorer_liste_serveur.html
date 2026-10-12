@@ -1,0 +1,23 @@
+{% comment %}
+LISTE DES LIEUX VOISINS, RENDUE PAR LE SERVEUR
+/ Neighbour venues list, rendered by the server
+
+LOCALISATION : seo/templates/seo/partials/explorer_liste_serveur.html
+
+Incluse DANS #explorer-list de la page « Autour de nous » (skins V2 et classic).
+Au chargement, explorer.js remplace ce contenu par ses cartes (renderList).
+Cette liste sert a ceux qui ne lancent pas le JavaScript : robots, lecteurs
+sans JS. Sans elle, les voisins ne sont que dans le JSON de la carte, et aucun
+lien <a href> ne relie les lieux du reseau.
+
+CONTEXTE : explorer_data (FederationViewset.list), current_tenant_uuid.
+/ Inside #explorer-list; explorer.js replaces it with its cards. Gives no-JS
+readers (crawlers) real links to neighbour venues.
+{% endcomment %}
+<ul class="list-unstyled" data-testid="reseau-liste-lieux-html">
+    {% for lieu in explorer_data.tenants %}
+        {% if lieu.domain and lieu.tenant_id != current_tenant_uuid %}
+            <li><a href="https://{{ lieu.domain }}/">{{ lieu.name }}</a>{% if lieu.locality %} — {{ lieu.locality }}{% endif %}</li>
+        {% endif %}
+    {% endfor %}
+</ul>

@@ -85,10 +85,13 @@
 
     {# Split view : liste + carte / Split view: list + map #}
     <div class="explorer-container">
+        {# liste_des_lieux_en_html : pose par la page « Autour de nous » (classic). #}
+        {# Avant le JS, les voisins en liens HTML, pour les robots. #}
+        {# / Set by the classic network page: HTML links before JS runs. #}
         <div class="explorer-list"
              id="explorer-list"
              aria-live="polite"
-             data-testid="explorer-list"></div>
+             data-testid="explorer-list">{% if liste_des_lieux_en_html %}{% include "seo/partials/explorer_liste_serveur.html" %}{% endif %}</div>
 
         <div class="explorer-map" id="explorer-map" data-testid="explorer-map">
             <div class="explorer-map-loading"

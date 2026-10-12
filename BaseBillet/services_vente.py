@@ -35,6 +35,8 @@ et CHANTIER-05-A-vente-reglement.md (§3).
 
 import json
 import logging
+from datetime import datetime
+from datetime import timezone as fuseau_horaire
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import connection, transaction
@@ -44,6 +46,7 @@ from django.utils import timezone
 from BaseBillet.models import (
     CategorieProduct,
     LigneArticle,
+    Paiement_stripe,
     PaymentMethod,
     Price,
     PriceSold,
@@ -52,6 +55,11 @@ from BaseBillet.models import (
     SaleOrigin,
 )
 from BaseBillet.models_vente import Reglement, Vente
+from BaseBillet.services_refund import (
+    get_or_create_pricesold_refund,
+    get_or_create_product_virement_recu,
+)
+from fedow_public.models import AssetFedowPublic
 from laboutik.integrity import calculer_hmac_vente
 from laboutik.models import LaboutikConfiguration
 
@@ -2260,3 +2268,176 @@ def encaisser_vente_stripe(paiement_stripe):
             )
 
     return vente_encaissee
+
+
+# --------------------------------------------------------------------------
+# La vente « virement reçu » : un virement Stripe de monnaie FED reçu par le lieu
+# / The "transfer received" sale: a Stripe FED transfer received by the venue
+# --------------------------------------------------------------------------
+
+# Le début de la clé d'idempotence de la vente d'un virement reçu, écrite par le
+# webhook `transfer.created` ou par la commande `rattraper_les_virements_recus` :
+# "virement-recu-<uuid du paiement>". La reprise utilise sa propre clé "reprise-<…>".
+# / Idempotency key prefix of a transfer sale written by the webhook or the catch-up.
+PREFIXE_DE_LA_CLE_D_UN_VIREMENT_RECU = "virement-recu-"
+
+
+def montant_et_date_du_transfert(metadata_stripe):
+    """
+    Le montant (centimes) et la date d'un transfert Stripe, lus dans le message du
+    webhook `transfer.created` (ApiBillet/views.py). Le champ contient un TEXTE JSON
+    (`json.dumps(payload)`). La date est `data.object.created` (horodatage Unix) :
+    `order_date` porte l'heure de réception du webhook, pas celle du transfert.
+    / Amount and date of a Stripe transfer, read in the webhook message (JSON text).
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    Lue par la reprise (`BaseBillet/reprise_des_ventes.py`) et par la commande
+    `rattraper_les_virements_recus`. / Read by the takeover and the catch-up command.
+
+    :return: (montant en centimes, datetime UTC), ou (None, None) si illisible
+    """
+    message_de_stripe = metadata_stripe
+    if isinstance(message_de_stripe, str):
+        try:
+            message_de_stripe = json.loads(message_de_stripe)
+        except ValueError:
+            return None, None
+    try:
+        objet_du_transfert = message_de_stripe["data"]["object"]
+        montant_du_transfert = objet_du_transfert["amount"]
+        horodatage_du_transfert = objet_du_transfert["created"]
+    except (KeyError, TypeError):
+        return None, None
+
+    montant_lisible = type(montant_du_transfert) is int and montant_du_transfert > 0
+    horodatage_lisible = type(horodatage_du_transfert) is int
+    if not montant_lisible or not horodatage_lisible:
+        return None, None
+    date_du_transfert = datetime.fromtimestamp(
+        horodatage_du_transfert, tz=fuseau_horaire.utc
+    )
+    return montant_du_transfert, date_du_transfert
+
+
+def ecrire_la_vente_d_un_virement_recu(
+    paiement_stripe,
+    montant_en_centimes,
+    cle_d_idempotence,
+    datetime_encaissement=None,
+):
+    """
+    Écrit la vente « virement reçu » d'un paiement Stripe `T` (un virement de monnaie
+    FED reçu par le lieu), et la relie au paiement. La seule fabrique de cette vente.
+    / Writes the "transfer received" sale of a T Stripe payment, linked to it. The
+    single factory of this sale.
+
+    LOCALISATION : BaseBillet/services_vente.py
+
+    APPELÉE PAR / CALLED BY :
+    - le webhook Stripe `transfer.created` (ApiBillet/views.py), sans date ;
+    - la reprise des ventes (BaseBillet/reprise_des_ventes_ecriture.py), date du plan ;
+    - la commande `rattraper_les_virements_recus` (comptabilite/management/commands/).
+
+    FLUX (tout dans une transaction ; un point de sauvegarde si l'appelant en a une) :
+    1. Une vente porte déjà la clé : elle est rendue, rien n'est écrit (rejeu).
+    2. La monnaie FED est lue AVANT d'ouvrir la vente. Introuvable : ValueError,
+       rien n'est écrit.
+    3. `ouvrir_vente` : origine webhook Stripe, nature VENTE, unité EUR.
+    4. L'article `VR` : quantité 1, prix = montant, TVA 0, hors chiffre d'affaires,
+       monnaie FED, ligne validée, sans moyen (le règlement le porte).
+    5. Un règlement Stripe en ligne (`SN`) du montant, relié au paiement.
+    6. `encaisser_vente` EN DERNIER : l'empreinte relit article et règlement en base.
+    7. Une date donnée : la date de création de la vente, la date de l'article et
+       celle du règlement deviennent cette date, par `.update()` (champs hors de
+       l'empreinte).
+    8. Le paiement reçoit sa vente, le moyen `SN` et son montant encaissé, par
+       `.update()` : un `save()` relancerait la machine à statuts (BaseBillet/signals.py).
+    / 1. key known: returned; 2. FED read first; 3. open; 4. VR item; 5. SN payment;
+    6. settle last; 7. dates by update; 8. payment linked by update.
+
+    :param paiement_stripe: le `Paiement_stripe` de source `T`
+    :param montant_en_centimes: le montant du virement (int, centimes)
+    :param cle_d_idempotence: la clé de la vente (ex. "virement-recu-<uuid>")
+    :param datetime_encaissement: la date d'encaissement, ou None pour « maintenant »
+    :return: la `Vente` réglée (écrite, ou déjà écrite avec cette clé)
+    :raises ValueError: monnaie FED introuvable (rien n'est écrit)
+    """
+    with transaction.atomic():
+        # 1. Rejeu : la vente de cette clé existe déjà.
+        # / 1. Replay: the sale of this key already exists.
+        vente_deja_ecrite = Vente.objects.filter(
+            idempotency_key=cle_d_idempotence
+        ).first()
+        if vente_deja_ecrite is not None:
+            return vente_deja_ecrite
+
+        # 2. La monnaie FED, avant toute écriture : une vente à moitié écrite resterait
+        # en attente.
+        # / 2. The FED currency, before any write.
+        monnaie_fed = AssetFedowPublic.objects.filter(
+            category=AssetFedowPublic.STRIPE_FED_FIAT
+        ).first()
+        if monnaie_fed is None:
+            raise ValueError(
+                f"Virement reçu du paiement Stripe {paiement_stripe.uuid} : monnaie FED "
+                f"introuvable (AssetFedowPublic STRIPE_FED_FIAT). Aucune vente écrite."
+            )
+
+        # 3. La vente. / 3. The sale.
+        vente = ouvrir_vente(
+            origine=SaleOrigin.WEBHOOK,
+            nature=Vente.Nature.VENTE,
+            unite="EUR",
+            idempotency_key=cle_d_idempotence,
+        )
+
+        # 4. L'article du produit système « virement reçu ».
+        # / 4. The item of the "transfer received" system product.
+        produit_du_virement = get_or_create_product_virement_recu()
+        tarif_vendu_du_virement = get_or_create_pricesold_refund(produit_du_virement)
+        ajouter_article(
+            vente,
+            pricesold=tarif_vendu_du_virement,
+            quantite=Decimal("1"),
+            prix_unitaire=montant_en_centimes,
+            taux_tva=Decimal("0"),
+            hors_chiffre_affaires=True,
+            asset=monnaie_fed.uuid,
+            status=LigneArticle.VALID,
+        )
+
+        # 5. Le règlement Stripe en ligne, relié au paiement.
+        # / 5. The online Stripe payment, linked to the Stripe payment.
+        ajouter_reglement(
+            vente,
+            moyen=PaymentMethod.STRIPE_NOFED,
+            montant=montant_en_centimes,
+            paiement_stripe=paiement_stripe,
+        )
+
+        # 6. Encaisser en dernier. / 6. Settle last.
+        encaisser_vente(vente, datetime_encaissement=datetime_encaissement)
+
+        # 7. Les dates hors empreinte : `datetime_creation`, `LigneArticle.datetime` et
+        # `Reglement.datetime` sont en `auto_now_add`.
+        # / 7. Dates outside the fingerprint (auto_now_add fields).
+        if datetime_encaissement is not None:
+            Vente.objects.filter(pk=vente.pk).update(
+                datetime_creation=datetime_encaissement
+            )
+            LigneArticle.objects.filter(vente=vente).update(
+                datetime=datetime_encaissement
+            )
+            Reglement.objects.filter(vente=vente).update(
+                datetime=datetime_encaissement
+            )
+
+        # 8. Le paiement Stripe reçoit sa vente. / 8. The Stripe payment gets its sale.
+        Paiement_stripe.objects.filter(pk=paiement_stripe.pk).update(
+            vente=vente,
+            moyen=PaymentMethod.STRIPE_NOFED,
+            montant_encaisse=montant_en_centimes,
+        )
+
+    return Vente.objects.get(pk=vente.pk)

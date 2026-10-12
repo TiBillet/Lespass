@@ -43,7 +43,6 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from datetime import timezone as fuseau_horaire
 from decimal import Decimal
 
 from BaseBillet.models import LigneArticle, Paiement_stripe, PaymentMethod, Product
@@ -51,6 +50,7 @@ from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import (
     METHODES_CAISSE_HORS_CHIFFRE_AFFAIRES,
     calculer_montants_article,
+    montant_et_date_du_transfert,
 )
 from fedow_public.models import AssetFedowPublic
 
@@ -1103,7 +1103,7 @@ def _reprendre_les_virements_recus(plan, categories_des_monnaies):
     ).order_by("order_date", "uuid")
 
     for paiement in paiements_de_transfert:
-        montant_du_virement, date_du_virement = _montant_et_date_du_transfert(
+        montant_du_virement, date_du_virement = montant_et_date_du_transfert(
             paiement.metadata_stripe
         )
         if montant_du_virement is None:
@@ -1164,36 +1164,3 @@ def _reprendre_les_virements_recus(plan, categories_des_monnaies):
                 reglements=[reglement_du_virement],
             )
         )
-
-
-def _montant_et_date_du_transfert(metadata_stripe):
-    """
-    Le montant (centimes) et la date d'un transfert Stripe, lus dans le message du
-    webhook `transfer.created` (ApiBillet/views.py). Le champ contient un TEXTE JSON
-    (`json.dumps(payload)`). La date est `data.object.created` (horodatage Unix) :
-    `order_date` porte l'heure de réception du webhook, pas celle du transfert.
-    / Amount and date of a Stripe transfer, read in the webhook message (JSON text).
-
-    :return: (montant en centimes, datetime UTC), ou (None, None) si illisible
-    """
-    message_de_stripe = metadata_stripe
-    if isinstance(message_de_stripe, str):
-        try:
-            message_de_stripe = json.loads(message_de_stripe)
-        except ValueError:
-            return None, None
-    try:
-        objet_du_transfert = message_de_stripe["data"]["object"]
-        montant_du_transfert = objet_du_transfert["amount"]
-        horodatage_du_transfert = objet_du_transfert["created"]
-    except (KeyError, TypeError):
-        return None, None
-
-    montant_lisible = type(montant_du_transfert) is int and montant_du_transfert > 0
-    horodatage_lisible = type(horodatage_du_transfert) is int
-    if not montant_lisible or not horodatage_lisible:
-        return None, None
-    date_du_transfert = datetime.fromtimestamp(
-        horodatage_du_transfert, tz=fuseau_horaire.utc
-    )
-    return montant_du_transfert, date_du_transfert
