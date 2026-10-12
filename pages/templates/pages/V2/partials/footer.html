@@ -8,9 +8,12 @@ LOCALISATION : pages/templates/pages/V2/partials/footer.html
 Il appartient à la plateforme TiBillet, jamais au lieu.
 Son fond (--color-footer-bg) est plus froid que le papier du site :
 il signale sans un mot qu'on change de territoire.
-Les trois boutons en dégradé sont les « gestes TiBillet » du pied de page
-(chaud = don, calme = créer un espace, frais = contribuer).
-/ Platform footer. The three gradient buttons are TiBillet gestures.
+Trois colonnes : les liens du lieu, le bloc TiBillet (marque, boutons en
+dégradé), puis les liens vers la communauté TiBillet.
+Les boutons en dégradé sont les « gestes TiBillet » du pied de page
+(calme = créer un espace, frais = contribuer).
+/ Platform footer, three columns: venue links, TiBillet block (brand,
+gradient buttons), TiBillet community links.
 {% endcomment %}
 <footer class="site-footer" data-testid="site-footer">
     <div class="site-footer__inner">
@@ -19,14 +22,17 @@ Les trois boutons en dégradé sont les « gestes TiBillet » du pied de page
             <div class="footer-col__title">{{ config.organisation }}</div>
             <nav aria-label="{% translate 'Liens du lieu' %}">
                 <a href="/">{% translate 'Accueil' %}</a>
-                {% comment %} V2-HERE
-                Liens de la maquette sans cible décidée (href="#") :
-                « Le réseau des lieux », « Journal », « À propos ».
-                / Mockup links with no target yet.
-                <a href="#">{% translate 'Le réseau des lieux' %}</a>
-                <a href="#">{% translate 'Journal' %}</a>
-                <a href="#">{% translate 'A propos' %}</a>
-                {% endcomment %}
+                {# Plan du site : le menu du lieu (main_nav, construit dans #}
+                {# BaseBillet/views.py get_context), entrées de premier niveau #}
+                {# seulement. La page d'accueil CMS (url "/") est sautée : #}
+                {# « Accueil » ci-dessus la couvre. / Sitemap: the venue menu, #}
+                {# top-level entries only; the CMS home page is skipped. #}
+                {% for item in main_nav %}
+                    {% if item.url != "/" %}
+                        <a href="{{ item.url }}"
+                           {% if url_name == item.name or request.path == item.url %}aria-current="page"{% endif %}>{% translate item.label %}</a>
+                    {% endif %}
+                {% endfor %}
                 <hr class="footer-col__sep">
                 <a href="/my_account/">{% translate 'Mon espace' %}</a>
                 {# Un <button> : il ouvre un panneau, il ne mène nulle part. #}
@@ -72,10 +78,17 @@ Les trois boutons en dégradé sont les « gestes TiBillet » du pied de page
             </div>
         </div>
 
-        <div class="footer-col">
-            <div class="footer-col__title">{% translate 'Nous trouver' %}</div>
-            <nav class="nav" aria-label="{% translate 'Nous trouver' %}">
-                {% include "seo/partials/tibillet_community_links.html" %}
+        {# Liens de la communauté TiBillet (pas ceux du lieu). Sans « Nous #}
+        {# contacter » : cet email est celui de TiBillet, et le public le #}
+        {# prenait pour le contact du lieu. Le contact du lieu est dans la #}
+        {# colonne de gauche. / TiBillet community links, without the #}
+        {# TiBillet contact email that visitors mistook for the venue's. #}
+        <div class="footer-col" data-testid="footer-liens-tibillet">
+            <div class="footer-col__title">{% translate 'Retrouver TiBillet' %}</div>
+            <nav aria-label="{% translate 'Retrouver TiBillet' %}">
+                <ul class="footer-liens-tibillet__liste">
+                    {% include "seo/partials/tibillet_community_links.html" with sans_contact=True %}
+                </ul>
             </nav>
         </div>
 
@@ -84,7 +97,10 @@ Les trois boutons en dégradé sont les « gestes TiBillet » du pied de page
     <div class="site-footer__legal">
         <div class="site-footer__legal-inner">
             <p class="site-footer__legal-texte">{% translate "Opération soutenue par l'État dans le cadre du dispositif « Solutions de billetteries innovantes » de France 2030, opéré par la Caisse des Dépôts." %}</p>
-            <span class="legal-badge">FRANCE 2030</span>
+            <img class="site-footer__logo-france-2030"
+                 src="{% static 'commun/img/france_2030.png' %}"
+                 alt="{% translate 'Logo France 2030' %}"
+                 width="114" height="64">
         </div>
     </div>
 </footer>

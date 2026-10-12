@@ -5751,8 +5751,10 @@ class TenantAdmin(ModelAdmin):
 
     def get_search_fields(self, request):
         """
-        Ajoute la recherche par email des admins du lieu, pour les superusers seulement.
-        / Adds search by the venue admins' email, for superusers only.
+        Ajoute la recherche par email des admins du lieu, pour les superusers seulement,
+        et seulement quand le texte cherche contient un « @ ».
+        / Adds search by the venue admins' email, for superusers only, and only when
+        the search text contains an "@".
 
         INDISPENSABLE : cette liste et son autocompletion (federation, invitations)
         sont ouvertes a tout admin de lieu (TenantAdminPermissionWithRequest).
@@ -5760,9 +5762,19 @@ class TenantAdmin(ModelAdmin):
         decouvrir quels lieux cette personne administre.
         / This list and its autocomplete are open to any venue admin: a searchable
         email would reveal which venues a given person administers.
+
+        Le « @ » est obligatoire : une meme personne administre souvent des dizaines
+        de lieux. Sans cette condition, taper un mot (« commun ») remonterait tous
+        les lieux de chaque admin dont l'email contient ce mot, et noierait le lieu
+        cherche par son nom ou son domaine.
+        / The "@" is required: one person often administers dozens of venues, so a
+        plain word would flood the results with every venue of matching admins.
         """
         champs_de_recherche = list(super().get_search_fields(request))
-        if request.user.is_superuser:
+        # "q" : la liste de l'admin. "term" : l'autocompletion.
+        # / "q": the admin list. "term": the autocomplete.
+        texte_cherche = request.GET.get('q') or request.GET.get('term') or ''
+        if request.user.is_superuser and '@' in texte_cherche:
             champs_de_recherche.append('user_admin__email')
         return champs_de_recherche
 

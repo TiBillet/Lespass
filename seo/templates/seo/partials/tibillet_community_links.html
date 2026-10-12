@@ -23,6 +23,9 @@ Variable optionnelle / Optional variable :
 - link_class : classe CSS ajoutée à chaque lien.
   Utile pour les fonds sombres (ex: "text-white" sur le skin festival).
   / Extra CSS class per link, e.g. "text-white" on dark backgrounds.
+- sans_contact : True pour ne pas afficher « Nous contacter » (skin V2 : le
+  public le prenait pour le contact du lieu).
+  / True to hide "Contact us" (V2 skin: visitors mistook it for the venue's).
 {% endcomment %}
 {# Ordre : site, doc, puis salons (Matrix avant Discord), réseaux, contact. #}
 {# / Order: site, docs, then chat rooms (Matrix before Discord), socials, contact. #}
@@ -56,8 +59,10 @@ Variable optionnelle / Optional variable :
         <i class="bi bi-github me-2" aria-hidden="true"></i>Github
     </a>
 </li>
+{% if not sans_contact %}
 <li class="nav-item">
     <a class="nav-link {{ link_class }}" href="mailto:contact@tibillet.re">
         <i class="bi bi-envelope me-2" aria-hidden="true"></i>{% translate "Nous contacter" %}
     </a>
 </li>
+{% endif %}
