@@ -918,40 +918,45 @@ def agenda_a_venir_du_bloc(nombre_max=6):
     / Prepares the V2 LISTE / EVENEMENTS block for the agenda_a_venir component,
     the same one as the hardcoded home's "Ce qui arrive" section.
 
+    SOURCE : la meme que l'accueil code en dur (BaseBillet/views.py:index) —
+    EventMVT.federated_events_filter(), c'est-a-dire les evenements publies du
+    lieu ET ceux des lieux federes (FederatedPlace, federation par tags).
+    Les evenements d'un autre lieu s'affichent « via <domaine> » dans la carte.
+    / SOURCE: the same as the hardcoded home — the venue's events AND the
+    federated venues' events.
+
     Renvoie un dictionnaire :
-    - "evenements" : les `nombre_max` prochains evenements (meme requete que
-      evenements_a_venir), avec leur libelle de prix (price_min) ;
-    - "total" : le nombre TOTAL d'evenements a venir, pour l'en-tete
-      « · N événements à venir » (pas seulement ceux affiches) ;
+    - "evenements" : les `nombre_max` prochains evenements, tries par date,
+      avec leur libelle de prix (price_min) ;
+    - "total" : le nombre d'evenements a venir renvoyes par le filtre, pour
+      l'en-tete « · N événements à venir » (meme compteur que l'accueil) ;
     - "nombre_de_cartes" : nombre_max, ou 6 s'il est vide.
-    / Returns the next events with their price label, and the TOTAL upcoming count.
+    / Returns the next events with their price label, and the upcoming count.
 
     Utilisation : {% agenda_a_venir_du_bloc bloc.nombre_max as agenda %}
     """
-    from django.db.models import Q
-    from django.utils import timezone
+    from BaseBillet.views import EventMVT, poser_prix_min_sur_evenements
 
-    from BaseBillet.models import Event
-    from BaseBillet.views import poser_prix_min_sur_evenements
-
-    maintenant = timezone.now()
-    evenements_a_venir_publies = (
-        Event.objects.filter(published=True)
-        .filter(Q(datetime__gte=maintenant) | Q(end_datetime__gte=maintenant))
-        .order_by("datetime")
-    )
-    nombre_total_a_venir = evenements_a_venir_publies.count()
+    # Le filtre renvoie les evenements ranges par jour : on les met a plat,
+    # puis on trie par date, exactement comme index().
+    # / The filter returns events grouped by day: flatten, then sort by date.
+    evenements_par_jour, _pagination, _dates, _tags, _thematiques = EventMVT.federated_events_filter()
+    tous_les_evenements_a_venir = []
+    for evenements_du_jour in evenements_par_jour.values():
+        for evenement in evenements_du_jour:
+            tous_les_evenements_a_venir.append(evenement)
+    tous_les_evenements_a_venir.sort(key=lambda evenement: evenement.datetime)
 
     # nombre_max vide en base -> 6, comme evenements_a_venir. Renvoye au gabarit :
     # le composant compare forloop.counter a cette valeur, un None n'afficherait
     # aucune carte. / Empty nombre_max -> 6; returned so the component never gets None.
     nombre_de_cartes = nombre_max or 6
-    evenements_affiches = list(evenements_a_venir_publies[:nombre_de_cartes])
+    evenements_affiches = tous_les_evenements_a_venir[:nombre_de_cartes]
     poser_prix_min_sur_evenements(evenements_affiches)
 
     return {
         "evenements": evenements_affiches,
-        "total": nombre_total_a_venir,
+        "total": len(tous_les_evenements_a_venir),
         "nombre_de_cartes": nombre_de_cartes,
     }
 
