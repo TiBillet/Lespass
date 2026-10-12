@@ -23,6 +23,14 @@ place (`build: .`) : un `git pull` change le code.
 | + dépendances (`pyproject.toml`, `poetry.lock`) | `docker restart lespass_django` (`start.sh` refait `poetry install` et `collectstatic`, ~1 min de coupure) |
 | + `dockerfile` | `docker compose build lespass_django && docker compose up -d lespass_django` |
 
+**Piège vécu le 2026-10-12 : modifier le `.env` recrée toute la chaîne.** `lespass_postgres` et
+`lespass_django` lisent le `.env` (`env_file`) : une variable ajoutée change leur configuration aux
+yeux de compose. `docker compose up -d lespass_nginx` a alors recréé postgres, puis django (dont
+nginx dépend par `links`), puis nginx : **~1 min 30 de 502 sur tout le site** (le temps de
+`start.sh`). Pour un seul service : **toujours `docker compose up -d --no-deps <service>`**.
+Une variable du `.env` lue par Django ne s'applique qu'au prochain redémarrage voulu de
+`lespass_django`.
+
 ## Idée 1 — `make deploy` (simple)
 Enchaîne : dépôt du serveur sans modification locale (sinon STOP) → `git pull` → liste des
 migrations en attente → `collectstatic` → `migrate_schemas` s'il y en a → rechargement.

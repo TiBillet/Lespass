@@ -39,9 +39,12 @@ TLS_CERT_NAME='dev'
 
 # PROD seulement (docker-compose.prod.yml, routeur Traefik `custom_dns`) : la règle des
 # domaines personnalisés des lieux, un Host(`...`) par domaine, séparés par « || ».
-# Entre apostrophes. Un nouveau domaine : l'ajouter ici, puis `docker compose up -d lespass_nginx`.
-# Sans cette variable, le compose de prod refuse de démarrer.
-# / PROD only: the venues' custom domains rule for Traefik. Single quotes.
+# Entre apostrophes. Sans cette variable, le compose de prod refuse de démarrer.
+# Un nouveau domaine personnalisé demande DEUX lignes : l'ajouter ici (Traefik : route et
+# certificat) ET dans ADDITIONAL_DOMAINS ci-dessous (Django : ALLOWED_HOSTS, sinon 404).
+# Marche complète : TECH_DOC/SESSIONS/TODO/DEPLOIEMENT-domaines-personnalises-traefik.md
+# / PROD only: the venues' custom domains rule for Traefik. Single quotes. A new custom
+# domain goes here AND in ADDITIONAL_DOMAINS (Django ALLOWED_HOSTS).
 CUSTOM_DOMAINS_RULE='Host(`domainbis.localhost`) || Host(`www.domainbis.localhost`)'
 
 ADDITIONAL_DOMAINS='domainbis.localhost' # optional - add addiotional domain for SaaS model, séparated with comma. ex : 'domainbis.localhost,domainter.localhost'

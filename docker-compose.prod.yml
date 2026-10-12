@@ -160,8 +160,9 @@ services:
 
       # Router C — domaines personnalisés des lieux (certificat par hôte, TLS challenge).
       # La règle est dans le .env (CUSTOM_DOMAINS_RULE, voir env_example) : chaque
-      # serveur garde sa liste. Un lieu qui ajoute un domaine à lui doit y être ajouté,
-      # puis `docker compose up -d lespass_nginx`, sinon Traefik ne le route pas.
+      # serveur garde sa liste. Un lieu qui ajoute un domaine à lui doit y être ajouté
+      # ET dans ADDITIONAL_DOMAINS (ALLOWED_HOSTS de Django), puis recréer nginx et
+      # django avec `--no-deps` (marche complète : TODO DEPLOIEMENT-domaines-personnalises-traefik.md).
       # Sans la variable, docker compose refuse de démarrer (`:?`).
       # Vérifier que le nom du résolveur existe dans la conf Traefik du serveur.
       # / Router C — venues' custom domains. The rule lives in .env (CUSTOM_DOMAINS_RULE);
