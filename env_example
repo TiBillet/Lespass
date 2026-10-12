@@ -37,6 +37,13 @@ FEDOW_DOMAIN='fedow.tibillet.localhost' # the same as Fedow
 # / Dev HTTPS certificate base name, generated with mkcert. See docker-compose.yml for the how-to.
 TLS_CERT_NAME='dev'
 
+# PROD seulement (docker-compose.prod.yml, routeur Traefik `custom_dns`) : la règle des
+# domaines personnalisés des lieux, un Host(`...`) par domaine, séparés par « || ».
+# Entre apostrophes. Un nouveau domaine : l'ajouter ici, puis `docker compose up -d lespass_nginx`.
+# Sans cette variable, le compose de prod refuse de démarrer.
+# / PROD only: the venues' custom domains rule for Traefik. Single quotes.
+CUSTOM_DOMAINS_RULE='Host(`domainbis.localhost`) || Host(`www.domainbis.localhost`)'
+
 ADDITIONAL_DOMAINS='domainbis.localhost' # optional - add addiotional domain for SaaS model, séparated with comma. ex : 'domainbis.localhost,domainter.localhost'
 SUB='lespass' # the sub domain of your first place ex : if 'lespass', it will be accessible on https://lespass.tibillet.coop
 META='agenda' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop

@@ -5749,6 +5749,16 @@ class TenantAdmin(ModelAdmin):
 
     list_display = ['name', 'created_on', 'primary_domain', ]
 
+    def get_list_display(self, request):
+        """
+        Ajoute le nom du schema et la categorie, pour les superusers seulement.
+        / Adds the schema name and the category, for superusers only.
+        """
+        colonnes = list(super().get_list_display(request))
+        if request.user.is_superuser:
+            colonnes += ['schema_name', 'categorie']
+        return colonnes
+
     def get_search_fields(self, request):
         """
         Ajoute la recherche par email des admins du lieu, pour les superusers seulement,
@@ -5774,14 +5784,33 @@ class TenantAdmin(ModelAdmin):
         # "q" : la liste de l'admin. "term" : l'autocompletion.
         # / "q": the admin list. "term": the autocomplete.
         texte_cherche = request.GET.get('q') or request.GET.get('term') or ''
-        if request.user.is_superuser and '@' in texte_cherche:
-            champs_de_recherche.append('user_admin__email')
+        if request.user.is_superuser:
+            champs_de_recherche.append('schema_name')
+            if '@' in texte_cherche:
+                champs_de_recherche.append('user_admin__email')
         return champs_de_recherche
 
     def get_queryset(self, request):
-        queryset = super().get_queryset(request)
-        # Uniquement les client qui ont un domaine
-        return queryset.prefetch_related('domains').exclude(
+        """
+        Lieux affiches dans la liste et proposes par l'autocompletion.
+        / Venues shown in the list and offered by the autocomplete.
+
+        Par defaut, on retire les lieux techniques : ROOT (schema public), META
+        (agenda partage de TiBillet) et les emplacements en attente de
+        configuration. Un superuser voit META et les emplacements en attente
+        dans la LISTE, pour retrouver leur schema ; ROOT reste toujours cache.
+        L'autocompletion (federation, invitations) les retire tous : on ne
+        federe pas un lieu technique.
+        / Technical venues are hidden by default. A superuser sees META and
+        waiting slots in the LIST; ROOT is always hidden; the autocomplete hides
+        them all.
+        """
+        queryset = super().get_queryset(request).prefetch_related('domains').exclude(
+            categorie=Client.ROOT)
+        est_une_autocompletion = "autocomplete" in request.path
+        if request.user.is_superuser and not est_une_autocompletion:
+            return queryset
+        return queryset.exclude(
             categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META])
 
     def get_search_results(self, request, queryset, search_term):
@@ -5836,8 +5865,13 @@ class TenantAdmin(ModelAdmin):
 
     @display(description=_("Domaine principal"))
     def primary_domain(self, instance: Client):
-        primary_domain = f"https://{instance.get_primary_domain().domain}"
-        return format_html(f"<a href='{primary_domain}' target='_blank'>{primary_domain}</a>")
+        # Un emplacement en attente de configuration peut ne pas avoir de domaine.
+        # / A slot waiting for configuration may have no domain.
+        domaine_principal = instance.get_primary_domain()
+        if domaine_principal is None:
+            return "-"
+        primary_domain = f"https://{domaine_principal.domain}"
+        return format_html("<a href='{}' target='_blank'>{}</a>", primary_domain, primary_domain)
 
     def has_redirect_admin_action_permission(self, request: HttpRequest, *args, **kwargs):
         return request.user.is_superuser

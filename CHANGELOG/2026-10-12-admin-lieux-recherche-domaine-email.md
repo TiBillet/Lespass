@@ -27,3 +27,10 @@
 
 ### Test 3 — email d'admin (admin de lieu, non superuser)
 1. Même recherche par email → aucun résultat. La recherche par nom et par domaine marche toujours.
+
+### Superusers : tous les lieux, schéma et catégorie
+**Quoi / What :** Un superuser voit dans la liste les lieux META (agenda partagé) et les emplacements en attente de configuration. ROOT (schéma public) reste toujours caché. Deux colonnes en plus pour lui : nom du schéma et catégorie. La recherche porte aussi sur le nom du schéma. L'autocomplétion (fédération, invitations) et les admins de lieu gardent l'exclusion des lieux techniques. La colonne « Domaine principal » affiche « - » pour un lieu sans domaine.
+/ Superusers also see META venues and waiting slots in the list (never ROOT), with schema name and category columns, and can search by schema name. Autocomplete and venue admins keep the exclusion.
+**Pourquoi / Why :** codecommun.tibillet.coop était introuvable : sa catégorie le faisait exclure de la liste, et son nom de schéma n'apparaissait nulle part.
+
+**Test :** en superuser, chercher `codecommun` → le lieu apparaît avec son schéma et sa catégorie. En admin de lieu, il n'apparaît pas.

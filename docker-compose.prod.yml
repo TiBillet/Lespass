@@ -159,14 +159,17 @@ services:
       - traefik.http.routers.lespass-gandi.rule=Host(`${DOMAIN_GANDI}`) || HostRegexp(`${DOMAIN_GANDI_REGEX}`)
 
       # Router C — domaines personnalisés des lieux (certificat par hôte, TLS challenge).
-      # La liste vient de la prod (domaines hors tibillet.coop / tibillet.re). Un lieu
-      # qui ajoute un domaine à lui doit être ajouté ICI, sinon Traefik ne le route pas.
+      # La règle est dans le .env (CUSTOM_DOMAINS_RULE, voir env_example) : chaque
+      # serveur garde sa liste. Un lieu qui ajoute un domaine à lui doit y être ajouté,
+      # puis `docker compose up -d lespass_nginx`, sinon Traefik ne le route pas.
+      # Sans la variable, docker compose refuse de démarrer (`:?`).
       # Vérifier que le nom du résolveur existe dans la conf Traefik du serveur.
-      # / Router C — venues' custom domains. A new custom domain must be added HERE.
+      # / Router C — venues' custom domains. The rule lives in .env (CUSTOM_DOMAINS_RULE);
+      # add a new custom domain there, then recreate lespass_nginx.
       - traefik.http.routers.custom_dns.entrypoints=websecure
       - traefik.http.routers.custom_dns.tls=true
       - traefik.http.routers.custom_dns.tls.certresolver=myresolver
-      - traefik.http.routers.custom_dns.rule=Host(`guichet.latendresse.fr`) || Host(`guichet.cafeasso.latendresse.fr`) || Host(`fairefestival.fr`) || Host(`www.fairefestival.fr`) || Host(`tibillet.org`)
+      - traefik.http.routers.custom_dns.rule=${CUSTOM_DOMAINS_RULE:?CUSTOM_DOMAINS_RULE manque dans le .env (voir env_example)}
 
 
 #      - traefik.http.routers.lespass-simple.entrypoints=websecure
