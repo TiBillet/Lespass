@@ -138,6 +138,23 @@ class ResourceInline(TabularInline):
     extra = 0
     fields = ['name', 'capacity', 'weekly_opening', 'calendar']
 
+    # Un inline a ses propres permissions : sans ces méthodes, Django demande
+    # booking.view_resource…, que l'admin d'un lieu n'a pas, et la fiche du groupe
+    # s'affiche sans ses ressources.
+    # / An inline has its own permissions: without these, a venue admin sees the
+    # group page without its resources.
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
 
 @admin.register(ResourceGroup, site=staff_admin_site)
 class ResourceGroupAdmin(ModelAdmin):

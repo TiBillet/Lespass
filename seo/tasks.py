@@ -412,6 +412,16 @@ def refresh_seo_cache():
     # trailing (filet anti-dérive). / force=True: the beat always recombines.
     aggregats = rebuild_seo_aggregates(force=True)
 
+    # 2bis. Nom et logo des lieux par identifiant Fedow (table des jetons de
+    # /my_account/). Rempli ici pour qu'aucun visiteur n'attende le parcours de
+    # tous les lieux. Une erreur ne doit pas arreter le reste du recalcul SEO.
+    # / Venue names and logos by Fedow uuid, for /my_account/. Must not stop the SEO refresh.
+    try:
+        from BaseBillet.views import construire_le_cache_des_lieux_fedow
+        construire_le_cache_des_lieux_fedow()
+    except Exception as erreur_cache_des_lieux:
+        logger.error("refresh_seo_cache : cache des lieux Fedow : %s", erreur_cache_des_lieux)
+
     # 3. FEDERATION_INCOMING : arretes entrantes (depend des FederatedPlace, cross-schema).
     # Recalcule UNIQUEMENT ici (beat), pas dans rebuild_seo_aggregates.
     # / Incoming federation edges (depend on FederatedPlace, cross-schema). Beat only.
