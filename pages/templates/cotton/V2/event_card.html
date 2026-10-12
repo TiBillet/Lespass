@@ -25,7 +25,16 @@ entre la couverture et le texte. Un événement sur plusieurs jours affiche
 deux pastilles reliées par une flèche. Le titre prend toute la largeur dessous.
 / Date badge overlaps the cover seam; multi-day events show two badges.
 {% endcomment %}
-{% with event_domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" current_domain=request.build_absolute_uri|cut:"https://"|cut:"http://"|cut:"/event/"|cut:"/" %}
+{% comment %}
+Domaine courant = request.get_host, jamais l'URL complète découpée : sur une
+page CMS (/qui-sommes-nous/) ou avec un paramètre (?tag=jazz), le chemin
+restait collé au domaine, et les événements DU LIEU s'affichaient « via » un
+autre lieu, avec un lien sortant.
+/ Current domain = request.get_host, never the cut-down full URL: on a CMS page
+or with a query string, the path stuck to the domain and the venue's own events
+showed as federated.
+{% endcomment %}
+{% with event_domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" current_domain=request.get_host %}
 <article class="event-card event-card--{{ mode }}" data-testid="event-card-{{ mode }}">
 
     {# Couverture : l'image de l'événement, sinon un aplat neutre. #}

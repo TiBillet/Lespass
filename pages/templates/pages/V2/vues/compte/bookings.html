@@ -35,25 +35,6 @@ Flux / Flow:
         {% translate "À venir" %}
     </h2>
 
-    <script>
-        document.addEventListener("htmx:confirm", function(e) {
-            if (!e.detail.question) return;
-            e.preventDefault();
-            Swal.fire({
-                title: "Confirmer ?",
-                text: e.detail.question,
-                icon: "warning",
-                showCancelButton: true,
-                confirmButtonText: "Oui",
-                cancelButtonText: "Non"
-            }).then(function(result) {
-                if (result.isConfirmed) {
-                    e.detail.issueRequest(true);
-                }
-            });
-        });
-    </script>
-
     {% if upcoming_bookings %}
         <div class="list-group mb-5" data-testid="booking-upcoming-list" aria-live="polite">
             {% for booking in upcoming_bookings %}

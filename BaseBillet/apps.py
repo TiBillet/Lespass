@@ -8,3 +8,9 @@ class BasebilletConfig(AppConfig):
 
     def ready(self):
         import BaseBillet.signals
+
+        # Les miniatures stdimage sont redressees selon l'orientation EXIF des
+        # photos de telephone. Voir BaseBillet/images_orientation.py.
+        # / stdimage thumbnails follow the phone photos' EXIF orientation.
+        from BaseBillet.images_orientation import brancher_orientation_exif_sur_stdimage
+        brancher_orientation_exif_sur_stdimage()

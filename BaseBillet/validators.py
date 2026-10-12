@@ -1423,7 +1423,13 @@ class TenantCreateValidator:
                 stripe.api_key = rootConf.get_stripe_api()
                 config.stripe_mode_test = rootConf.stripe_mode_test
                 info_stripe = stripe.Account.retrieve(waiting_config.id_acc_connect)
-                config.site_web = info_stripe.business_profile.url
+                # Un lieu sans site saisit souvent tibillet.org chez Stripe : ce
+                # n'est pas son site, on ne le recopie pas.
+                # / A venue without a website often types tibillet.org at Stripe.
+                from BaseBillet.models import est_un_site_du_projet_tibillet
+                site_web_declare_chez_stripe = info_stripe.business_profile.url
+                if not est_un_site_du_projet_tibillet(site_web_declare_chez_stripe):
+                    config.site_web = site_web_declare_chez_stripe
                 config.phone = info_stripe.business_profile.support_phone
                 if rootConf.stripe_mode_test:
                     config.stripe_connect_account_test = info_stripe.id

@@ -199,6 +199,29 @@ def test_la_table_des_jetons_affiche_le_logo_du_lieu(skin):
     assert 'src="/media/logo-du-lieu.png"' in html
 
 
+@pytest.mark.parametrize("skin", ["V2", "classic"])
+def test_la_table_des_jetons_n_a_plus_de_colonne_derniere_transaction(skin):
+    """
+    Les monnaies locales n'ont pas de date de derniere transaction : la colonne
+    affichait « None ». Elle est retiree.
+    / Local currencies have no last-transaction date: the column is gone.
+    """
+    jeton_local = {
+        "name": "Cadeau",
+        "value": 500,
+        "asset": {"names_of_place_federated": ["Lespass"], "is_stripe_primary": False},
+        "is_local": True,
+        "last_transaction_datetime": None,
+    }
+    html = render_to_string(
+        f"pages/{skin}/vues/compte/partials/token_table.html",
+        {"tokens": [jeton_local], "config": SimpleNamespace(organisation="Lespass")},
+    )
+    assert "Last transaction" not in html
+    assert "Dernière transaction" not in html
+    assert "None" not in html
+
+
 def test_un_cache_vide_n_est_pas_un_cache_absent(tenant, cache_des_lieux):
     """
     Une instance sans lieu relie a Fedow donne un cache vide ({}). Il est valide :

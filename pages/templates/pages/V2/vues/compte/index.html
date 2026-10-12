@@ -127,10 +127,15 @@ modules (R11).
 
                                 ·
                                 {% if user.email_valid and user.is_active %}
+                                    {# hx-confirm : fenetre SweetAlert du shell avant de detacher la carte. #}
+                                    {# / hx-confirm: the shell's SweetAlert dialog before detaching the card. #}
+                                    {% blocktranslate asvar question_carte_perdue with numero=card.number_printed %}Déclarer la carte {{ numero }} perdue ? Elle sera détachée de votre compte : plus personne ne pourra payer avec. Votre solde reste sur votre compte, et vous pourrez lier une nouvelle carte.{% endblocktranslate %}
                                     <button type="button" class="link"
                                             aria-label="{% translate 'I lost my card' %}"
                                             hx-get="/my_account/{{ card.number_printed }}/lost_my_card/"
+                                            hx-confirm="{{ question_carte_perdue }}"
                                             hx-disabled-elt="this"
+                                            data-testid="compte-carte-perdue"
 
 {#                                            hx-get="{% url 'my_account-lost-my-card' pk=card.number_printed %}"#}
                                             hx-indicator="#tibillet-spinner">

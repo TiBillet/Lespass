@@ -15,7 +15,9 @@ brief TECH_DOC/SESSIONS/FEDOW_IMPORT/briefs/10-1.md.
   Administrer un AUTRE lieu ne donne pas le bouton.
 - « Scanner un QR code de paiement » (`compte-scanner-qrcode`) est sous « Ma carte », avec ou
   sans carte liée, quand l'email est validé. Sinon : un bouton gris, désactivé, sans lien (D4).
-- En V2, /my_account/balance/ n'a plus ces deux boutons. Le skin classic les garde.
+- En V2, /my_account/balance/ a aussi le scanner (pas « Initier un paiement »), sans le
+  lien « Voir le détail des monnaies », sans recharge ni remboursement. Le skin classic
+  garde tous ses boutons.
 - D1 : la route /my_account/tirelire_section/ n'existe plus ; le partiel n'a plus de
   `</section>` orphelin.
 - D2 : le scanner n'a plus de formulaire de repli (`#form-qrcode-scan`, `#qrcode-content`) ni
@@ -348,9 +350,11 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
     #  §5.4 — /my_account/balance/ : V2 sans les boutons, classic avec    #
     # ------------------------------------------------------------------ #
 
-    def test_balance_v2_n_a_plus_les_deux_boutons(self):
-        """En V2, les deux gestes sont sur /my_account/ : la balance ne les répète pas.
-        / In V2 the balance page no longer repeats the two buttons."""
+    def test_balance_v2_a_le_scanner_mais_pas_initier_un_paiement(self):
+        """En V2, la tirelire a le scanner (comme /my_account/), pas « Initier un
+        paiement » ; plus de lien « Voir le détail des monnaies ».
+        / In V2 the wallet page has the scanner, not the generator, nor the
+        "show currency list" link."""
         administrateur = self.creer_un_utilisateur("balance-v2")
         administrateur.client_admin.add(self.tenant)
 
@@ -361,6 +365,83 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
         assert code_http == 200
         assert balise_par_testid(html, "account-tokens-table") is not None
         assert URL_DU_GENERATEUR not in html
+        bouton_scanner = balise_par_testid(html, "tirelire-scanner-qrcode")
+        assert bouton_scanner is not None
+        assert bouton_scanner[1]["href"] == URL_DU_SCANNER
+        assert 'href="#detail-monnaies"' not in html
+
+    def test_carte_perdue_demande_une_confirmation(self):
+        """« J'ai perdu ma carte » (index et tableau des cartes) porte un hx-confirm
+        avec le numéro de la carte : la fenêtre du shell s'ouvre avant de la détacher.
+        / The lost-card buttons carry an hx-confirm with the card number."""
+        adherent = self.creer_un_utilisateur("carte-perdue")
+
+        for chemin in ("/my_account/", "/my_account/my_cards/"):
+            with self.subTest(chemin=chemin):
+                code_http, html = self.page_rendue(
+                    adherent, chemin, skin="V2", avec_une_carte=True
+                )
+                assert code_http == 200
+                bouton = balise_par_testid(html, "compte-carte-perdue")
+                assert bouton is not None
+                assert bouton[1]["hx-get"] == "/my_account/TEST0001/lost_my_card/"
+                assert "TEST0001" in bouton[1]["hx-confirm"]
+
+    def test_un_seul_gestionnaire_de_confirmation_par_page(self):
+        """Le gestionnaire htmx:confirm vit dans le shell V2, une seule fois. Une page
+        qui le recopierait l'empilerait à chaque navigation HTMX (plusieurs fenêtres).
+        / The htmx:confirm handler lives once in the V2 shell; pages must not copy it."""
+        adherent = self.creer_un_utilisateur("confirmation-unique")
+
+        for chemin in (
+            "/my_account/",
+            "/my_account/my_reservations/",
+            "/my_account/my_bookings/",
+        ):
+            with self.subTest(chemin=chemin):
+                code_http, html = self.page_rendue(adherent, chemin, skin="V2")
+                assert code_http == 200
+                assert html.count('addEventListener("htmx:confirm"') == 1
+
+    def test_balance_recharge_et_remboursement_sur_classic_seulement(self):
+        """Recharge en ligne active : la tirelire V2 n'a ni « Recharger » ni
+        « Rembourser » ; le skin classic garde les deux, avec la fenêtre #refundPanel.
+        / Online refill on: V2 has neither button; classic keeps both and the panel."""
+        from BaseBillet.models import Configuration
+
+        adherent = self.creer_un_utilisateur("balance-recharge")
+        marqueurs = [
+            'hx-get="/my_account/refill_wallet"',
+            'data-bs-target="#refundPanel"',
+            'id="refundPanel"',
+            'hx-get="/my_account/refund_online/"',
+        ]
+        with patch.object(Configuration, "show_refill_button", lambda config: True):
+            _, html_v2 = self.page_rendue(adherent, "/my_account/balance/", skin="V2")
+            _, html_classic = self.page_rendue(
+                adherent, "/my_account/balance/", skin="reunion"
+            )
+
+        for marqueur in marqueurs:
+            assert marqueur not in html_v2, marqueur
+            assert marqueur in html_classic, marqueur
+
+    def test_balance_v2_email_non_valide_scanner_gris_desactive(self):
+        """D4 sur la tirelire V2 : bouton gris désactivé, sans lien.
+        / D4 on the V2 wallet page: disabled grey button, no link."""
+        adherent = self.creer_un_utilisateur(
+            "balance-v2-email-non-valide", email_valide=False
+        )
+
+        code_http, html = self.page_rendue(adherent, "/my_account/balance/", skin="V2")
+
+        assert code_http == 200
+        bouton_gris = balise_par_testid(
+            html, "tirelire-scanner-qrcode-email-non-valide"
+        )
+        assert bouton_gris is not None
+        assert bouton_gris[0] == "button"
+        assert "disabled" in bouton_gris[1]
         assert URL_DU_SCANNER not in html
 
     def test_balance_classic_garde_les_deux_boutons(self):

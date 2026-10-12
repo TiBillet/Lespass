@@ -508,8 +508,8 @@ class EventSerializer(serializers.ModelSerializer):
         try:
             config = Configuration.get_solo()
             organizer = {"@type": "Organization", "name": config.organisation}
-            if getattr(config, 'site_web', None):
-                organizer["url"] = config.site_web
+            if config.site_web_du_lieu:
+                organizer["url"] = config.site_web_du_lieu
             return organizer
         except Exception:
             return None

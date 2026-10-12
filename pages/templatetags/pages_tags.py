@@ -573,7 +573,7 @@ def jsonld_organisation(context):
         organisation["description"] = description
 
     liens_du_lieu = []
-    for lien in (config.site_web, config.facebook, config.instagram, config.twitter):
+    for lien in (config.site_web_du_lieu, config.facebook, config.instagram, config.twitter):
         if lien:
             liens_du_lieu.append(lien)
     if liens_du_lieu:
@@ -907,6 +907,53 @@ def evenements_a_venir(nombre_max=6):
         .filter(Q(datetime__gte=maintenant) | Q(end_datetime__gte=maintenant))
         .order_by("datetime")[: nombre_max or 6]
     )
+
+
+@register.simple_tag
+def agenda_a_venir_du_bloc(nombre_max=6):
+    """
+    Prepare le bloc LISTE / EVENEMENTS du skin V2 pour le composant
+    cotton/V2/agenda_a_venir.html — le meme que la section « Ce qui arrive »
+    de l'accueil code en dur.
+    / Prepares the V2 LISTE / EVENEMENTS block for the agenda_a_venir component,
+    the same one as the hardcoded home's "Ce qui arrive" section.
+
+    Renvoie un dictionnaire :
+    - "evenements" : les `nombre_max` prochains evenements (meme requete que
+      evenements_a_venir), avec leur libelle de prix (price_min) ;
+    - "total" : le nombre TOTAL d'evenements a venir, pour l'en-tete
+      « · N événements à venir » (pas seulement ceux affiches) ;
+    - "nombre_de_cartes" : nombre_max, ou 6 s'il est vide.
+    / Returns the next events with their price label, and the TOTAL upcoming count.
+
+    Utilisation : {% agenda_a_venir_du_bloc bloc.nombre_max as agenda %}
+    """
+    from django.db.models import Q
+    from django.utils import timezone
+
+    from BaseBillet.models import Event
+    from BaseBillet.views import poser_prix_min_sur_evenements
+
+    maintenant = timezone.now()
+    evenements_a_venir_publies = (
+        Event.objects.filter(published=True)
+        .filter(Q(datetime__gte=maintenant) | Q(end_datetime__gte=maintenant))
+        .order_by("datetime")
+    )
+    nombre_total_a_venir = evenements_a_venir_publies.count()
+
+    # nombre_max vide en base -> 6, comme evenements_a_venir. Renvoye au gabarit :
+    # le composant compare forloop.counter a cette valeur, un None n'afficherait
+    # aucune carte. / Empty nombre_max -> 6; returned so the component never gets None.
+    nombre_de_cartes = nombre_max or 6
+    evenements_affiches = list(evenements_a_venir_publies[:nombre_de_cartes])
+    poser_prix_min_sur_evenements(evenements_affiches)
+
+    return {
+        "evenements": evenements_affiches,
+        "total": nombre_total_a_venir,
+        "nombre_de_cartes": nombre_de_cartes,
+    }
 
 
 @register.simple_tag

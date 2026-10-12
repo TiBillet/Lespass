@@ -4,71 +4,14 @@ TIRELIRE — boutons du porte-monnaie (recharger, scanner, rembourser)
 / Wallet buttons (refill, scan, refund)
 
 LOCALISATION : BaseBillet/templates/htmx/views/my_account/tirelire_section.html
-Inclus par : pages/classic/vues/compte/balance.html et pages/V2/vues/compte/balance.html.
-
-Variable optionnelle : masquer_le_bouton_scanner. Le skin V2 la pose : il affiche
-le bouton « Scanner un QR code de paiement » sous « Ma carte » (/my_account/).
-/ Optional variable masquer_le_bouton_scanner: V2 shows the scan button on /my_account/.
+Inclus par : pages/classic/vues/compte/balance.html (skin classic). Le skin V2 a son
+propre bouton (pages/V2/vues/compte/balance.html).
+/ Classic skin only; V2 has its own button.
 {% endcomment %}
 
     {% if config.show_refill_button %}
-        <!-- Si pas possible de recharger, alors pas possible de se faire rembourser -->
-        <!-- refund panel -->
-        <div class="offcanvas-start offcanvas" tabindex="-1" id="refundPanel" aria-labelledby="refundPanelLabel">
-            <div class="offcanvas-header">
-                <h5 class="offcanvas-title" id="refundPanelLabel">{% trans "Request a refund" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
-                        aria-label="{% trans 'Close' %}"></button>
-            </div>
-            <div class="offcanvas-body">
-                <div class="d-flex flex-column justify-content-between h-100">
-                    <div>
-                        <div class="alert  alert-primary" role="alert">
-                            <h4>{% trans "Don't panic! You've got time left…" %}</h4>
-                            <p>
-                                {% translate 'TiBillet works on a <a href="https://tibillet.github.io/documentation_v3/">melting funds</a> principle.' %}
-                                {% translate "You can get your leftover balance back for 14 months after your last Pass card use." %}
-                                {% translate "We send a reminder a month before expiration." %}
-                            </p>
-                            <p>
-                                {% translate "You will also soon be able to donate the leftover balance to the collective that issued this card." %}
-                            </p>
-                            <p>
-                                {% translate "Your Pass card itself and your account are yours for life and can be used with every TiBillet collective!" %}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="p-3">
-                        <div class="alert  alert-warning" role="alert">
-                            <p>{% translate "You can only obtain online refunds for amounts topped up online or via card payment terminal named ‘TiBillet’. For amounts topped up in cash, please contact the collective or return to their next event!" %}</p>
-                        </div>
-                        <p class="lead">
-                            {# TODO: montant remboursement #}
-                            {% trans "Confirm the refund request?" %}
-                        </p>
-
-                        <button type="button" class="btn btn-primary d-block w-100 mb-3"
-                                data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"
-                                hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">
-                            {% trans "Send request" %}</button>
-
-                        {#                            <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3"#}
-                        {#                                {% trans "Gift my leftover balance to" %} {{ config.organisation }}#}
-                        {#                            </button>#}
-                        {#                            <p class="alert alert-warning">#}
-                        {#                                {% trans "The collective donation feature is being developed, coming soon!" %}#}
-                        {#                            </p>#}
-
-                        <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas"
-                                aria-label="{% trans 'Close' %}">
-                            {% trans "Cancel" %}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
+        {# Si pas possible de recharger, alors pas possible de se faire rembourser #}
+        {% include "htmx/views/my_account/tirelire_remboursement.html" %}
     {% endif %}
 
     <div class="row g-0" id="button_tirelire">
@@ -85,27 +28,25 @@ le bouton « Scanner un QR code de paiement » sous « Ma carte » (/my_account/
                     </div>
                 {% endif %}
 
-                {% if not masquer_le_bouton_scanner %}
-                    {% if user.email_valid %}
-                        <div class="col-6 col-md-auto me-md-2">
-                            <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn btn-primary square-btn w-100"
-                               data-testid="tirelire-scanner-qrcode">
-                                <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
-                                {% trans "Scan a payment QR Code" %}
-                            </a>
-                        </div>
-                    {% else %}
-                        {# Email non validé : bouton gris NON cliquable. Le lien pour renvoyer #}
-                        {# l'email de validation est déjà en tête de page (account_base.html). #}
-                        {# / Email not validated: grey, non-clickable button. #}
-                        <div class="col-6 col-md-auto me-md-2">
-                            <button type="button" class="btn btn-secondary square-btn w-100" disabled
-                                    data-testid="tirelire-scanner-qrcode-email-non-valide">
-                                <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
-                                {% trans "Please valid your email to scan a payment QR Code" %}
-                            </button>
-                        </div>
-                    {% endif %}
+                {% if user.email_valid %}
+                    <div class="col-6 col-md-auto me-md-2">
+                        <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn btn-primary square-btn w-100"
+                           data-testid="tirelire-scanner-qrcode">
+                            <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
+                            {% trans "Scan a payment QR Code" %}
+                        </a>
+                    </div>
+                {% else %}
+                    {# Email non validé : bouton gris NON cliquable. Le lien pour renvoyer #}
+                    {# l'email de validation est déjà en tête de page (account_base.html). #}
+                    {# / Email not validated: grey, non-clickable button. #}
+                    <div class="col-6 col-md-auto me-md-2">
+                        <button type="button" class="btn btn-secondary square-btn w-100" disabled
+                                data-testid="tirelire-scanner-qrcode-email-non-valide">
+                            <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
+                            {% trans "Please valid your email to scan a payment QR Code" %}
+                        </button>
+                    </div>
                 {% endif %}
 
                 {# Initiate payment button moved above the Currencies heading for admins #}
