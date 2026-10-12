@@ -142,6 +142,17 @@ class ResourceInline(TabularInline):
 @admin.register(ResourceGroup, site=staff_admin_site)
 class ResourceGroupAdmin(ModelAdmin):
     inlines = [ResourceInline]
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 
 class ResourceAddAdmin(ModelForm):
