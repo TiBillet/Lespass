@@ -26,6 +26,8 @@ from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_exempt
 from django_htmx.http import HttpResponseClientRedirect
+import segno
+from rest_framework import exceptions as exceptions_drf
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
@@ -3184,6 +3186,13 @@ def _panier_melange_recharge_cadeau_et_autres_articles(articles_panier):
 #  CaisseViewSet — pages principales                                          #
 # --------------------------------------------------------------------------- #
 
+# Liens affichés quand l'accès à la caisse est refusé (voir CaisseViewSet.handle_exception)
+# / Links shown when POS access is denied (see CaisseViewSet.handle_exception)
+URL_DE_TELECHARGEMENT_APPLICATION_ANDROID = "https://nuage.codecommun.coop/s/SdcdkDcWYRPETpf"
+URL_DOCUMENTATION_APPLICATION_ANDROID = (
+    "https://notes.liiib.re/docs/c31d1dd0-f3b5-42ab-a631-55783a1004e8/"
+)
+
 
 class CaisseViewSet(viewsets.ViewSet):
     """
@@ -3196,6 +3205,49 @@ class CaisseViewSet(viewsets.ViewSet):
     """
 
     permission_classes = [HasLaBoutikTerminalAccess]
+
+    def handle_exception(self, exc):
+        """
+        Remplace le refus JSON de la page d'accueil de la caisse par une page HTML.
+        / Replaces the JSON refusal of the POS home page with an HTML page.
+
+        LOCALISATION : laboutik/views.py
+
+        Quand GET /laboutik/caisse/ est refusé (pas de terminal appairé, pas d'admin
+        du lieu, pas de clé API, lieu legacy ou module caisse éteint), DRF renverrait
+        un JSON du type {"detail": "..."}. Un humain qui tombe sur cette page a besoin
+        de l'application. On lui montre donc un QR code pour la télécharger,
+        un lien cliquable et le lien vers la documentation.
+
+        Seule l'action `list` est concernée. Les autres routes de la caisse
+        (HTMX, POST, exports) gardent la réponse DRF habituelle.
+        / Only `list` is affected. Other POS routes keep the usual DRF response.
+        """
+        acces_refuse = isinstance(
+            exc, (exceptions_drf.PermissionDenied, exceptions_drf.NotAuthenticated)
+        )
+        if acces_refuse and self.action == "list":
+            # Le QR code est généré côté serveur, en SVG intégré à la page :
+            # environ 1,5 Ko, et la page marche même sans JavaScript.
+            # / Server-side inline SVG QR code: ~1.5 KB, works without JavaScript.
+            qrcode_du_telechargement = segno.make(
+                URL_DE_TELECHARGEMENT_APPLICATION_ANDROID, micro=False
+            )
+            qrcode_svg = qrcode_du_telechargement.svg_inline(scale=6, light="white")
+
+            contexte = {
+                "qrcode_svg": qrcode_svg,
+                "url_de_telechargement": URL_DE_TELECHARGEMENT_APPLICATION_ANDROID,
+                "url_de_la_documentation": URL_DOCUMENTATION_APPLICATION_ANDROID,
+            }
+            return render(
+                self.request,
+                "laboutik/views/telecharger_application.html",
+                contexte,
+                status=403,
+            )
+
+        return super().handle_exception(exc)
 
     def list(self, request):
         """
