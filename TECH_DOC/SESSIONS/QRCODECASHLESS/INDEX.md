@@ -10,6 +10,7 @@ un miroir local, alimenté à la création via `fedow_connect`.
 | Doc | Contenu | Statut |
 |---|---|---|
 | [SPEC.md](./SPEC.md) | Formulaire d'ajout de carte à l'unité dans l'admin Unfold : `DetailAdmin`, `CarteCashlessAddForm`, dérivation des identifiants, flux Fedow, réconciliation | ✅ Validé 2026-07-09 |
+| [CHANTIER-02-rapatriement-cartes-fedow.md](./CHANTIER-02-rapatriement-cartes-fedow.md) | Rapatriement au scan (façon V1) des cartes connues de Fedow mais absentes du miroir local ; branchement aux 16 points de scan ; commande de rattrapage CSV | ⏳ À valider 2026-10-12 |
 
 ## Points d'attention
 

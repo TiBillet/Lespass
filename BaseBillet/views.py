@@ -2826,41 +2826,6 @@ class QrCodeScanPay(viewsets.ViewSet):
     '''
 
 
-def poser_prix_min_sur_evenements(evenements):
-    """
-    Pose `price_min` (texte affiche sur la carte) sur chaque evenement de la liste.
-    / Sets `price_min` (text shown on the card) on each event of the list.
-
-    LOCALISATION : BaseBillet/views.py
-
-    `price_min` n'est PAS un champ du modele : c'est le libelle de prix que lit
-    le composant pages/templates/cotton/V2/event_card.html.
-    Appelee par :
-    - index() (accueil code en dur, section « Ce qui arrive »),
-    - pages/templatetags/pages_tags.py:agenda_a_venir_du_bloc (bloc LISTE
-      source EVENEMENTS) — les deux affichent donc le meme prix.
-    / Not a model field: the price label read by the event_card component.
-
-    :param evenements: liste d'Event (modifies sur place)
-    """
-    for event in evenements:
-        event_products = event.products.all()
-        products = list(event_products)
-        # Un tarif archivé (« supprimé ») n'est jamais affiché.
-        # / An archived ("deleted") price is never shown.
-        prices = [price for product in products for price in product.prices.filter(archived=False)]
-        tarifs = [price.prix for price in prices]
-        free_price = any(price.free_price for price in prices)
-        # Calcul des prix min et max
-        if tarifs:
-            event.price_min = _("A partir de %(price)s €") % {"price":min(tarifs)}
-        elif free_price:
-            event.price_min = _("Prix libre")
-        else:
-            event.price_min = _("Entré libre")
-        event.price_max = max(tarifs) if tarifs else None
-
-
 # HEAD autorise en plus de GET : moniteurs de disponibilite, valideurs de
 # liens et crawlers l'utilisent, et `require_GET` leur renvoyait un 405.
 # / HEAD allowed too: uptime monitors, link checkers and crawlers use it.
@@ -2914,9 +2879,14 @@ def index(request):
     # Tri les évènements par datetime
     events_a_afficher.sort(key=lambda event: event.datetime)
 
-    # Libelle de prix des cartes (« A partir de … », « Prix libre »…).
-    # / Card price label.
-    poser_prix_min_sur_evenements(events_a_afficher)
+    # Le libelle de prix des cartes (event.price_min) est DEJA pose par
+    # federated_events_filter, dans le tenant_context de chaque evenement
+    # (EventMVT._libelle_prix_agenda). Ne pas le recalculer ici : hors de ce
+    # contexte, les tarifs d'un evenement federe seraient lus dans le schema du
+    # lieu courant, et il s'afficherait toujours « Entré libre ».
+    # / price_min is ALREADY set by federated_events_filter inside each event's
+    # tenant_context. Recomputing it here would read a federated event's prices
+    # from the current schema ("Entré libre" every time).
 
     template_context["events"] = events_a_afficher
 

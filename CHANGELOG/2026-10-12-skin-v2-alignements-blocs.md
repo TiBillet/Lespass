@@ -15,7 +15,8 @@
 |---|---|
 | `pages/templates/pages/V2/partials/bloc_liste.html` | **Passe 3** : la source EVENEMENTS rend le composant de l'accueil (`cotton/V2/agenda_a_venir.html` + `event_card.html`) : en-tête « Titre · N événements à venir » + « Tout l'agenda → », cartes et prix identiques à la section « Ce qui arrive » |
 | `pages/templatetags/pages_tags.py` | **Passe 3** : tag `agenda_a_venir_du_bloc` — même source que l'accueil (`EventMVT.federated_events_filter()` : évènements du lieu ET des lieux fédérés), triés par date, avec prix et nombre total à venir |
-| `BaseBillet/views.py` | **Passe 3** : calcul du libellé de prix des cartes extrait de `index()` dans `poser_prix_min_sur_evenements()`, partagé avec le bloc |
+| `BaseBillet/views.py` | **Passe 3** : `index()` ne recalcule plus le prix des cartes. `federated_events_filter` le pose déjà dans le contexte du lieu de chaque évènement (`EventMVT._libelle_prix_agenda`, comme la page agenda) ; le recalcul, fait dans le schéma du lieu courant, affichait « Entré libre » pour tout évènement fédéré, même payant |
+| `tests/pytest/test_bloc_agenda_prix_federes.py` | **Nouveau.** Le bloc garde le prix posé par le filtre fédéré ; tri par date + compteur total (vérifié par mutation) |
 | `pages/templates/cotton/V2/agenda_a_venir.html` | **Passe 3** : paramètres optionnels `total`, `nombre_max`, `testid` (l'accueil garde son rendu : 3 cartes, compteur = liste reçue) |
 | `pages/templates/cotton/V2/event_card.html` | **Passe 3** : domaine courant = `request.get_host` — sur une page CMS ou avec un paramètre d'URL, les évènements du lieu s'affichaient « via <domaine> » comme des évènements fédérés |
 | `pages/static/V2/css/V2.css` (`.event-card__meta`) | **Passe 3** : `margin-top: auto` — « En savoir plus » et le prix à la même hauteur sur toutes les cartes d'une rangée |
@@ -51,6 +52,7 @@ Tenant local en skin V2 avec du contenu riche : `le-coeur-en-or` (site UPop reco
 1. Comparer `https://le-coeur-en-or.tibillet.localhost/` (bloc LISTE / EVENEMENTS) avec la section « Ce qui arrive » de `https://lespass.tibillet.localhost/` : même en-tête (titre · N événements à venir, « Tout l'agenda → »), mêmes cartes (pastille de date, lieu, tags, « par … », prix).
 2. Les cartes d'une rangée ont « En savoir plus » à la même hauteur, avec ou sans tags.
 3. Ajouter `?x=1` à l'adresse : les cartes disent toujours « par <lieu> », pas « via <domaine> ».
+5. Prix des évènements fédérés : sur `le-coeur-en-or`, « API v2 Reservation Event… » affiche « A partir de 0.00 € », comme sur l'agenda de `lespass` (avant : « Entré libre » pour tout évènement fédéré, sur le bloc ET sur l'accueil codé en dur).
 4. Lieu avec des lieux fédérés (`le-coeur-en-or` fédère `lespass` et `la-maison-des-communs`) : leurs évènements apparaissent dans le bloc, marqués « via <domaine> », et le compteur les inclut (27 en local le 2026-10-12).
 
 ### Test 6 — mobile

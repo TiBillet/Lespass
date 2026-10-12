@@ -50,8 +50,9 @@
     {% comment %}
         MEME RENDU que la section « Ce qui arrive » de l'accueil code en dur
         (pages/V2/vues/accueil.html) : composant cotton/V2/agenda_a_venir.html,
-        cartes cotton/V2/event_card.html, prix calcule par la meme fonction
-        (BaseBillet/views.py:poser_prix_min_sur_evenements).
+        cartes cotton/V2/event_card.html, memes evenements et memes prix
+        (EventMVT.federated_events_filter : lieu + lieux federes, prix calcule
+        dans le contexte du lieu de chaque evenement).
         Sans titre saisi, le composant garde son titre par defaut.
         / SAME rendering as the hardcoded home's "Ce qui arrive" section.
     {% endcomment %}
