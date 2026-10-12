@@ -5743,9 +5743,28 @@ class TenantAdmin(ModelAdmin):
     # Doit être référencé pour le champs autocomplete_fields federated_with de configuration
     # est en CRUD total false
     # Seul le search fields est utile :
-    search_fields = ['name', ]
+    # Recherche par nom du lieu et par nom de domaine (les domaines sont publics).
+    # / Search by venue name and by domain name (domains are public).
+    search_fields = ['name', 'domains__domain', ]
 
     list_display = ['name', 'created_on', 'primary_domain', ]
+
+    def get_search_fields(self, request):
+        """
+        Ajoute la recherche par email des admins du lieu, pour les superusers seulement.
+        / Adds search by the venue admins' email, for superusers only.
+
+        INDISPENSABLE : cette liste et son autocompletion (federation, invitations)
+        sont ouvertes a tout admin de lieu (TenantAdminPermissionWithRequest).
+        Avec l'email cherchable par tous, un admin pourrait taper un email et
+        decouvrir quels lieux cette personne administre.
+        / This list and its autocomplete are open to any venue admin: a searchable
+        email would reveal which venues a given person administers.
+        """
+        champs_de_recherche = list(super().get_search_fields(request))
+        if request.user.is_superuser:
+            champs_de_recherche.append('user_admin__email')
+        return champs_de_recherche
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
