@@ -52,6 +52,7 @@ from laboutik.models import Terminal
 from kiosk.tasks import poll_payment_intent_status
 from kiosk.validators import RecapitulatifSerializer, RefillWisePoseValidator
 from QrcodeCashless.models import CarteCashless
+from QrcodeCashless.services import CarteDUnLieuNonMigre
 
 logger = logging.getLogger(__name__)
 
@@ -443,6 +444,9 @@ class KioskViewSet(viewsets.ViewSet):
             carte_lue = lire_la_carte_pour_la_borne(tag_id)
         except (CarteCashless.DoesNotExist, CarteInconnueDeFedow):
             context = {"error_message": _("Carte inconnue : %(tag_id)s") % {"tag_id": tag_id}}
+            return render(request, "kiosk/partial/etape_poser_carte.html", context)
+        except CarteDUnLieuNonMigre as refus_de_la_carte:
+            context = {"error_message": refus_de_la_carte.message_pour_l_ecran}
             return render(request, "kiosk/partial/etape_poser_carte.html", context)
         except Exception as e:
             logger.error(f"check_request_card : erreur Fedow pour {tag_id} : {e}")

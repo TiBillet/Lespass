@@ -15,9 +15,12 @@ brief TECH_DOC/SESSIONS/FEDOW_IMPORT/briefs/10-1.md.
   Administrer un AUTRE lieu ne donne pas le bouton.
 - « Scanner un QR code de paiement » (`compte-scanner-qrcode`) est sous « Ma carte », avec ou
   sans carte liée, quand l'email est validé. Sinon : un bouton gris, désactivé, sans lien (D4).
-- En V2, /my_account/balance/ a aussi le scanner (pas « Initier un paiement »), sans le
-  lien « Voir le détail des monnaies », sans recharge ni remboursement. Le skin classic
-  garde tous ses boutons.
+- En V2, /my_account/balance/ a aussi le scanner, et le bandeau « Initier un paiement »
+  avec la même règle que /my_account/. Pas de lien « Voir le détail des monnaies », ni
+  recharge ni remboursement. Le skin classic garde tous ses boutons.
+- Le « Solde » de la carte (/my_account/) additionne les euros FED + TLF utilisables dans le
+  lieu courant. La monnaie cadeau (TNF) du lieu s'affiche dessous, à part. Le temps, les
+  points et la monnaie d'un autre lieu ne comptent pas.
 - D1 : la route /my_account/tirelire_section/ n'existe plus ; le partiel n'a plus de
   `</section>` orphelin.
 - D2 : le scanner n'a plus de formulaire de repli (`#form-qrcode-scan`, `#qrcode-content`) ni
@@ -42,6 +45,7 @@ SIMULATIONS
 Lancer / Run : make test ARGS="tests/pytest/test_mon_espace_v2_boutons_qrcode.py"
 """
 
+import re
 import uuid
 from html.parser import HTMLParser
 from unittest.mock import MagicMock, patch
@@ -110,6 +114,39 @@ def faux_fedow(avec_une_carte):
         "tokens": []
     }
     return patch("BaseBillet.views.FedowAPI", return_value=faux_client_fedow)
+
+
+def texte_du_testid(html, testid):
+    """
+    Rend le texte (sans espaces en trop) de l'élément qui porte ce `data-testid`, ou
+    `None`. Suffisant pour un élément sans balise enfant.
+    / Returns the stripped text of the element with this data-testid, or None.
+    """
+    resultat = re.search(rf'data-testid="{testid}"[^>]*>(.*?)<', html, re.DOTALL)
+    if resultat is None:
+        return None
+    return " ".join(resultat.group(1).split())
+
+
+def un_jeton(valeur_en_centimes, categorie, lieux_federes, primaire_stripe=False):
+    """
+    Un jeton au format de get_distant_fedow_tokens (distant ou local fedow_core).
+    / A token in the get_distant_fedow_tokens shape.
+    """
+    return {
+        "value": valeur_en_centimes,
+        "name": f"Monnaie {categorie}",
+        "asset_category": categorie,
+        "asset": {
+            "uuid": str(uuid.uuid4()),
+            "category": categorie,
+            "is_stripe_primary": primaire_stripe,
+            "place_origin": None,
+            "place_uuid_federated_with": [],
+            "names_of_place_federated": lieux_federes,
+            "logo_url": None,
+        },
+    }
 
 
 class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
@@ -347,14 +384,14 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
         assert URL_DU_SCANNER not in html
 
     # ------------------------------------------------------------------ #
-    #  §5.4 — /my_account/balance/ : V2 sans les boutons, classic avec    #
+    #  §5.4 — /my_account/balance/ : boutons de la tirelire V2 et classic #
     # ------------------------------------------------------------------ #
 
-    def test_balance_v2_a_le_scanner_mais_pas_initier_un_paiement(self):
-        """En V2, la tirelire a le scanner (comme /my_account/), pas « Initier un
-        paiement » ; plus de lien « Voir le détail des monnaies ».
-        / In V2 the wallet page has the scanner, not the generator, nor the
-        "show currency list" link."""
+    def test_balance_v2_admin_voit_le_scanner_et_initier_un_paiement(self):
+        """En V2, la tirelire d'un admin du lieu a le scanner et le bandeau « Initier
+        un paiement » (comme /my_account/) ; plus de lien « Voir le détail des monnaies ».
+        / In V2 a venue admin's wallet page has the scanner and the generator banner,
+        but not the "show currency list" link."""
         administrateur = self.creer_un_utilisateur("balance-v2")
         administrateur.client_admin.add(self.tenant)
 
@@ -364,11 +401,25 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
 
         assert code_http == 200
         assert balise_par_testid(html, "account-tokens-table") is not None
-        assert URL_DU_GENERATEUR not in html
+        assert balise_par_testid(html, "compte-initier-paiement") is not None
+        bouton_initier = balise_par_testid(html, "compte-initier-paiement-bouton")
+        assert bouton_initier is not None
+        assert bouton_initier[1]["href"] == URL_DU_GENERATEUR
         bouton_scanner = balise_par_testid(html, "tirelire-scanner-qrcode")
         assert bouton_scanner is not None
         assert bouton_scanner[1]["href"] == URL_DU_SCANNER
         assert 'href="#detail-monnaies"' not in html
+
+    def test_balance_v2_adherent_sans_droit_ne_voit_pas_initier_un_paiement(self):
+        """Sans droit sur le lieu, la tirelire V2 n'a pas le bandeau d'encaissement.
+        / Without rights on the venue, the V2 wallet page has no generator banner."""
+        adherent = self.creer_un_utilisateur("balance-v2-adherent")
+
+        code_http, html = self.page_rendue(adherent, "/my_account/balance/", skin="V2")
+
+        assert code_http == 200
+        assert balise_par_testid(html, "compte-initier-paiement") is None
+        assert URL_DU_GENERATEUR not in html
 
     def test_carte_perdue_demande_une_confirmation(self):
         """« J'ai perdu ma carte » (index et tableau des cartes) porte un hx-confirm
@@ -540,3 +591,51 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
         assert code_http == 200
         assert balise_par_testid(html, "scanner-qrcode-pas-un-paiement") is not None
         assert 'id="form-qrcode-scan"' not in html
+
+    # ------------------------------------------------------------------ #
+    #  Solde de la carte sur /my_account/                                 #
+    # ------------------------------------------------------------------ #
+
+    def test_solde_additionne_fed_et_tlf_du_lieu_et_affiche_le_cadeau_a_part(self):
+        """Solde = FED (10 €) + TLF du lieu (5 €) = 15 €. Cadeau du lieu (3 €) dessous.
+        Exclus : TLF d'un autre lieu (7 €), temps du lieu (2 €).
+        / Balance = FED + local TLF; local gift shown apart; other venue and time excluded."""
+        organisation_du_lieu = Configuration.objects.first().organisation
+        jetons = [
+            un_jeton(1000, "FED", [], primaire_stripe=True),
+            un_jeton(500, "TLF", [organisation_du_lieu]),
+            un_jeton(700, "TLF", ["Un autre lieu"]),
+            un_jeton(300, "TNF", [organisation_du_lieu]),
+            un_jeton(200, "TIM", [organisation_du_lieu]),
+        ]
+        adherent = self.creer_un_utilisateur("solde-total")
+
+        with patch("BaseBillet.views.get_distant_fedow_tokens", return_value=jetons):
+            code_http, html = self.page_rendue(
+                adherent, "/my_account/", skin="V2", avec_une_carte=True
+            )
+
+        assert code_http == 200
+        assert texte_du_testid(html, "compte-solde").replace(",", ".") == "15.00 €"
+        assert texte_du_testid(html, "compte-solde-cadeau").replace(",", ".") == (
+            "+ 3.00 € en cadeau"
+        )
+
+    def test_solde_sans_cadeau_n_affiche_pas_la_ligne_cadeau(self):
+        """Sans monnaie cadeau utilisable ici, pas de ligne cadeau (celle d'un autre
+        lieu ne compte pas).
+        / No usable gift currency here: no gift line."""
+        jetons = [
+            un_jeton(1000, "FED", [], primaire_stripe=True),
+            un_jeton(300, "TNF", ["Un autre lieu"]),
+        ]
+        adherent = self.creer_un_utilisateur("solde-sans-cadeau")
+
+        with patch("BaseBillet.views.get_distant_fedow_tokens", return_value=jetons):
+            code_http, html = self.page_rendue(
+                adherent, "/my_account/", skin="V2", avec_une_carte=True
+            )
+
+        assert code_http == 200
+        assert texte_du_testid(html, "compte-solde").replace(",", ".") == "10.00 €"
+        assert balise_par_testid(html, "compte-solde-cadeau") is None

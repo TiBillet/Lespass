@@ -26,6 +26,7 @@ from fedow_core.models import Asset
 from fedow_core.services import WalletService
 from fedow_public.models import AssetFedowPublic
 from QrcodeCashless.models import CarteCashless
+from QrcodeCashless.services import trouver_ou_rapatrier_la_carte
 
 
 # Les jetons qui valent des euros : la monnaie locale et la monnaie federee.
@@ -114,7 +115,8 @@ def lire_la_carte_pour_la_borne(tag_id):
 
     FLUX :
     1. Fedow connait-il la carte ? (leve CarteInconnueDeFedow sinon)
-    2. La copie locale existe-t-elle ? (leve CarteCashless.DoesNotExist sinon)
+    2. La copie locale, rapatriee depuis Fedow si elle manque
+       (leve CarteCashless.DoesNotExist, CarteDUnLieuNonMigre ou FedowInjoignable)
     3. On calcule le solde en euros (Fedow distant + base locale) et on
        regarde si la carte est enregistree.
 
@@ -125,7 +127,11 @@ def lire_la_carte_pour_la_borne(tag_id):
     tag_id_propre = str(tag_id).strip().upper()
 
     carte_fedow = FedowAPI().NFCcard.retrieve(tag_id_propre)
-    carte_locale = CarteCashless.objects.get(tag_id=tag_id_propre)
+    # Fedow connaît la carte. Si la copie locale manque, elle est rapatriée (une
+    # seconde lecture chez Fedow, acceptée). Peut lever CarteDUnLieuNonMigre ou
+    # FedowInjoignable (QrcodeCashless/services.py).
+    # / Fedow knows the card. A missing local copy is fetched (second read, accepted).
+    carte_locale = trouver_ou_rapatrier_la_carte(tag_id_propre)
 
     # Solde = Fedow distant + base locale (deux stocks separes).
     # / Balance = remote Fedow + local database (two disjoint stores).

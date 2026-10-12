@@ -115,12 +115,13 @@ def carte_provisionnee_dans_fedow(tenant):
             #                          (crédits TNF/FED/TIM/FID). À ÉVITER.
             #   - DEMO_TAGID_CLIENT2 → carte client liée à un user seedé. À ÉVITER.
             #   - DEMO_TAGID_CLIENT3 → carte « jetable » resetée à chaque seed. À ÉVITER.
-            #   - DEMO_TAGID_CLIENT4 → DÉDIÉE : provisionnée côté Fedow mais JAMAIS
-            #                          référencée par create_test_pos_data ni par aucun
-            #                          autre test → pas de CartePrimaire, pas de garnissage,
-            #                          pas de user. C'est la carte sûre pour ce test.
+            #   - DEMO_TAGID_CLIENT4 → la carte « inconnue » des simulateurs : demo_data_v2
+            #                          ne la crée PAS chez Fedow. Elle n'y existe que sur
+            #                          un Fedow provisionné avant cette règle. Si elle y
+            #                          est, c'est la carte sûre pour ce test (pas de
+            #                          CartePrimaire, pas de garnissage, pas de user).
             # On essaie donc CLIENT4 en PREMIER ; les autres ne servent que de filet de
-            # secours si CLIENT4 n'est pas provisionné sur ce Fedow.
+            # secours si l'étape 1 a échoué et que CLIENT4 n'est pas sur ce Fedow.
             # / ISOLATION (anti-flaky): priority order chosen to AVOID collisions with the
             # other tests sharing the dev DB. DEMO_TAGID_CLIENT4 is dedicated (never touched
             # by create_test_pos_data nor any other test) → tried FIRST. The shared cards

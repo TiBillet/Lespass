@@ -641,13 +641,29 @@ class TireuseViewSet(viewsets.ViewSet):
             ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
         )
 
-        # Chercher la carte NFC / Find the NFC card
+        # Chercher la carte NFC. Une carte inconnue en local est demandée à l'ancien
+        # Fedow et rapatriée (hors atomic). / Find the NFC card, fetched from the
+        # old Fedow when unknown locally.
         from QrcodeCashless.models import CarteCashless
+        from QrcodeCashless.services import (
+            CarteDUnLieuNonMigre,
+            FedowInjoignable,
+            trouver_ou_rapatrier_la_carte,
+        )
+
+        try:
+            carte = trouver_ou_rapatrier_la_carte(uid)
+        except CarteCashless.DoesNotExist:
+            carte = None
+        except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+            _push_refus(tireuse, str(refus_de_la_carte.message_pour_l_ecran))
+            return Response({"authorized": False, "message": "Card refused."})
 
         # select_related("user") : le prénom du titulaire est envoyé au kiosk
         # (voir _construire_payload_session), sans requête en plus.
         # / select_related("user"): the holder's first name is sent to the kiosk.
-        carte = CarteCashless.objects.select_related("user").filter(tag_id=uid).first()
+        if carte is not None:
+            carte = CarteCashless.objects.select_related("user").get(pk=carte.pk)
         if not carte:
             _push_refus(tireuse, gettext("Carte non reconnue."))
             return Response({"authorized": False, "message": "Unknown card."})

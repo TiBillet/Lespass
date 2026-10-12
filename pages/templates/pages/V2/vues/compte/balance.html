@@ -10,12 +10,15 @@ LOCALISATION : pages/templates/pages/V2/vues/compte/balance.html
 Vue : BaseBillet/views.py MyAccount.balance (/my_account/balance/)
 
 FLUX :
-1. Un seul bouton : scanner un QR code de paiement (aussi sur /my_account/,
+1. Bandeau « Initier un paiement » (le même que dans « Mes responsabilités »
+   de /my_account/), si peut_initier_un_paiement : la vue le calcule avec la
+   règle de la permission des routes du générateur.
+2. Un seul bouton : scanner un QR code de paiement (aussi sur /my_account/,
    sous « Ma carte »). Pas de recharge ni de remboursement en ligne sur cette
-   page. « Initier un paiement » reste sur /my_account/ seulement.
-2. La liste des monnaies arrive toute seule quand elle devient visible
+   page.
+3. La liste des monnaies arrive toute seule quand elle devient visible
    (hx-trigger="revealed") depuis /my_account/tokens_table/.
-3. L'historique se charge au clic (/my_account/transactions_table/) et
+4. L'historique se charge au clic (/my_account/transactions_table/) et
    remplace la section #transactionHistory.
 
 A CONSERVER : #token-table-loader (spinner local), data-testid="account-tokens-table",
@@ -31,6 +34,22 @@ A CONSERVER : #token-table-loader (spinner local), data-testid="account-tokens-t
     {# Sur mobile, il prend toute la largeur. #}
     {# / Wallet button: scan a payment QR code; full width on mobile. #}
     <section class="compte-tirelire" data-testid="compte-tirelire">
+        {# Bandeau d'encaissement pour le compte du collectif (LIEU COURANT). #}
+        {# Même bandeau que dans « Mes responsabilités » de /my_account/. #}
+        {# / Collect banner for the current venue, same as on /my_account/. #}
+        {% if peut_initier_un_paiement %}
+            <div class="compte__encaisser" data-testid="compte-initier-paiement">
+                <p class="compte__encaisser-texte">
+                    {% blocktrans with organisation=config.organisation %}Vous pouvez initier un paiement pour le compte de votre collectif : {{ organisation }}{% endblocktrans %}
+                </p>
+                <a href="{% url 'qrcodescanpay-get-generator' %}" class="btn compte__encaisser-bouton"
+                   data-testid="compte-initier-paiement-bouton">
+                    <i class="bi bi-qr-code" aria-hidden="true"></i>
+                    {% translate "Initiate a payment" %}
+                </a>
+            </div>
+        {% endif %}
+
         <div class="compte-tirelire__actions">
             {% if user.email_valid %}
                 <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn compte__scanner compte-tirelire__bouton"

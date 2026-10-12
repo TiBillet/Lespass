@@ -716,12 +716,17 @@ class Command(BaseCommand):
         # bloc "4xxx" garde un uuid version 4 valide.
         # / The 5 simulator cards come from .env (MUST differ from V1 LEGACY tags).
         # For DEV: printed number AND qrcode echo the tag_id (qrcode 1st block = tag_id).
+        # DEMO_TAGID_CLIENT4 n'est PAS créée chez Fedow : c'est le bouton « Carte
+        # inconnue » des simulateurs (caisse, borne, tireuse). Une carte que Fedow
+        # connaît est rapatriée au premier scan (QrcodeCashless/services.py) : elle
+        # cesserait d'être inconnue.
+        # / DEMO_TAGID_CLIENT4 is NOT created on Fedow: it is the simulators'
+        # "Unknown card" button. A card known by Fedow is fetched on first scan.
         tags_simulateur = [
             settings.DEMO_TAGID_CM,
             settings.DEMO_TAGID_CLIENT1,
             settings.DEMO_TAGID_CLIENT2,
             settings.DEMO_TAGID_CLIENT3,
-            settings.DEMO_TAGID_CLIENT4,
         ]
         cartes = []
         for tag_id in tags_simulateur:

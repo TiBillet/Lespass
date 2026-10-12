@@ -816,12 +816,21 @@ img { max-width: 100%; display: block; }
   font-weight: 700;
   font-size: var(--text-2xl);
   line-height: 1;
-  color: transparent;
-  background: var(--grad-chaud) ;
-  background-clip: text;
+  /* Encre pleine : un dégradé découpé dans le texte (background-clip: text)
+     rend le montant invisible dès que la variable du dégradé est invalide.
+     / Solid ink: clipped-gradient text goes invisible if the gradient var breaks. */
+  color: var(--color-text);
   width: fit-content;
   margin: var(--space-2) 0 var(--space-3);
   padding-bottom: var(--space-2);
+}
+/* Monnaie cadeau, sous le solde en euros : plus petite, discrète.
+   / Gift currency, under the euro balance: smaller, muted. */
+.me-card__cadeau {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
 }
 .me-card__links {
   font-size: var(--text-xs);
@@ -2656,6 +2665,10 @@ details.module + details.module { margin-top: var(--space-4); }
 /* .compte__scanner pose une marge haute pour /my_account/ : pas ici.
    / .compte__scanner adds a top margin for /my_account/: not here. */
 .compte-tirelire .compte__scanner { margin-top: 0; }
+/* Le bandeau d'encaissement n'est pas dans un module : pas de marge latérale,
+   un espace sous lui avant le bouton scanner.
+   / The collect banner is not in a module: no side margin, space below it. */
+.compte-tirelire .compte__encaisser { margin: 0 0 var(--space-4); }
 /* Historique : un bouton centre, sous la liste des monnaies.
    / History: one centred button, under the currency list. */
 .compte-historique { text-align: center; }
@@ -2745,6 +2758,21 @@ details.module + details.module { margin-top: var(--space-4); }
   font-weight: 500;
   letter-spacing: -0.01em;
   font-size: var(--text-xl);
+}
+/* UNE SEULE VOIX DE TITRE DE SECTION : celle de .section__title, utilisée par
+   les sections codées en dur (« Ce qui arrive », cotton/V2/agenda_a_venir.html)
+   et désormais par le bloc LISTE / EVENEMENTS. Sans ce réalignement, une même
+   page mélangeait deux styles : titres de bloc avec le filet d'accent du socle
+   (tb-blocs.css, `h2.tb-bloc__titre::before`), titres de section sans.
+   On retire donc le filet et on reprend l'espacement de .section__title.
+   Le titre du HERO est un h1 : il n'est pas concerné.
+   / ONE section-title voice, .section__title's: the base's accent rule above
+   h2 block titles is removed and the spacing matched, so a page no longer
+   mixes two title styles. */
+.tb-page h2.tb-bloc__titre::before { content: none; }
+.tb-page h2.tb-bloc__titre {
+  margin: 0 0 var(--space-3);
+  line-height: 1.2;
 }
 /* Fil d'Ariane : petit, gras, discret — en casse normale, plus lisible que des capitales espacées. */
 .tb-page .tb-fil-ariane {
@@ -2858,6 +2886,77 @@ details.module + details.module { margin-top: var(--space-4); }
   line-height: 1.45;
 }
 .tb-page .tb-sous-carte__titre + .tb-sous-carte__texte { margin-top: var(--space-2); }
+
+/* MEDIA_ET_CARTES, forme « liste » (des phrases sans texte, cf. le tag
+   forme_des_sous_cartes) : une liste à puces sur deux colonnes, séparée par
+   des filets, au lieu de cartes qui faisaient un pavé en gras.
+   / "liste" shape: a two-column bullet list with hairlines instead of cards. */
+/* DEUX colonnes fixes, pas `auto-fit` : sur grand écran, auto-fit en ouvrait
+   trois et un 4e élément restait seul sur sa ligne. Une seule colonne sous
+   48rem.
+   / TWO fixed columns: auto-fit opened three and left a 4th item orphaned. */
+.tb-page .tb-liste-points {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-6);
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  list-style: none;
+}
+@media (max-width: 47.99rem) {
+  .tb-page .tb-liste-points { grid-template-columns: minmax(0, 1fr); }
+}
+.tb-page .tb-liste-points__element {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+/* Puce : petit carré d'accent, calé sur la première ligne du texte.
+   / Bullet: small accent square, aligned with the first line. */
+.tb-page .tb-liste-points__element::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--loseyan);
+  transform: translateY(-1px);
+}
+.tb-page .tb-liste-points__texte {
+  font-size: var(--text-base);
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+/* MEDIA_ET_CARTES, forme « pastilles » (un mot par élément, ex : des
+   valeurs) : une rangée de pastilles en police d'affichage, au lieu de cartes
+   presque vides.
+   / "pastilles" shape: a row of display-font pills instead of near-empty cards. */
+.tb-page .tb-pastilles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.tb-page .tb-pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--text-lg);
+  line-height: 1.2;
+  color: var(--color-text);
+}
 .tb-page .tb-bloc__carte-badge {
   font-size: var(--text-2xs);
   font-weight: 700;
@@ -3008,6 +3107,11 @@ details.module + details.module { margin-top: var(--space-4); }
   border-radius: var(--radius-pill);
   font-size: var(--text-ui);
   line-height: 1.25;
+  /* Écran étroit : le socle autorise le retour à la ligne (≤ 30rem), mais un
+     libellé sans espace (une adresse e-mail) n'a aucun point de coupure et
+     débordait du bouton, coupé net. On l'autorise à se couper n'importe où.
+     / A label with no spaces (an e-mail address) overflowed the button. */
+  overflow-wrap: anywhere;
 }
 .tb-page .tb-bloc__bouton--plein {
   background: var(--button-primary-fond);
@@ -3221,6 +3325,62 @@ details.module + details.module { margin-top: var(--space-4); }
    `margin-top: auto`, qui vaut 0 quand la carte n'a pas de texte.
    / Minimum title → button gap (margin-top:auto is 0 without text). */
 .tb-page .tb-bloc--carte > .tb-bloc__carte-titre { margin-bottom: var(--space-4); }
+
+/* CARTE DE SOUS-PAGE (bloc LISTE, source SOUS_PAGES) : même dessin que
+   .event-card — mêmes jetons de surface, filet, rayon, ombre et padding.
+   Gabarit : pages/templates/pages/V2/partials/bloc_liste.html.
+   / Sub-page card: same look and tokens as .event-card. */
+.page-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-card);
+}
+.page-card__cover { height: 108px; overflow: hidden; }
+.page-card__cover img { width: 100%; height: 100%; object-fit: cover; }
+.page-card__body {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+.page-card__title {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: var(--text-base);
+  font-weight: 700;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+.page-card__desc {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+/* MÊME GOUTTIÈRE POUR LES GRILLES DE BLOCS (16 px) : équipe, ressources
+   (.equipe-grille, .ressources-grille), sous-cartes et sous-pages. Avec trois
+   écarts différents (16, 20, 24 px), les bords de colonnes de deux grilles
+   voisines ne tombaient pas l'un sous l'autre.
+   La grille d'agenda (bloc EVENEMENTS) garde l'écart de .grid (24 px) : elle
+   doit rester identique à la section « Ce qui arrive » de l'accueil.
+   / Same 16px gutter for block grids so neighbouring column edges line up;
+   the agenda grid keeps .grid's 24px to match the hardcoded home. */
+.tb-page .tb-sous-cartes,
+.tb-page .grid[data-testid="bloc-liste-sous-pages"] { gap: var(--space-4); }
+
+/* Pied poussé en bas de la carte : « Lire la suite » à la même hauteur sur
+   toute la rangée, que la carte ait un résumé ou non (comme .event-card__meta).
+   / Footer pushed down: links aligned across the row. */
+.page-card__footer {
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
 
 /* APPEL À L'ACTION et NEWSLETTER : encadrés comme des cartes, padding égal
    sur les quatre côtés. Le fond bleuté et la barre de gauche juraient avec le

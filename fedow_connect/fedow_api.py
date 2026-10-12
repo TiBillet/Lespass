@@ -795,7 +795,20 @@ class NFCcardFedow():
         """
         response_card = _get(self.fedow_config, path=f'card/{tag_id.upper()}')
         if response_card.status_code == 404:
-            raise CarteInconnueDeFedow(f"Carte inconnue de Fedow : {tag_id}")
+            # Seul le 404 de Fedow veut dire « carte inconnue ». Fedow le renvoie en
+            # JSON. Un 404 en texte ou en HTML vient du reverse-proxy, quand Fedow est
+            # arrêté : c'est une panne, pas une carte inconnue.
+            # / Only Fedow's own 404 (JSON) means "unknown card". A text/HTML 404
+            # comes from the reverse proxy while Fedow is down: an outage.
+            type_de_la_reponse = response_card.headers.get("Content-Type", "")
+            reponse_json_de_fedow = type_de_la_reponse.startswith("application/json")
+            if reponse_json_de_fedow:
+                raise CarteInconnueDeFedow(f"Carte inconnue de Fedow : {tag_id}")
+            logger.error(
+                f"NFCcardFedow.retrieve : 404 sans JSON ({type_de_la_reponse}), "
+                f"Fedow injoignable derrière le proxy ?"
+            )
+            raise Exception(f"NFCcardFedow.retrieve ERRORS : 404 hors Fedow ({type_de_la_reponse})")
         if not response_card.status_code == 200:
             logger.error(f"NFCcardFedow.retrieve ERRORS : {response_card.status_code}")
             raise Exception(f"NFCcardFedow.retrieve ERRORS : {response_card.status_code}")

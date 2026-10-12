@@ -22,6 +22,7 @@ from rest_framework.exceptions import ValidationError
 from fedow_connect.fedow_api import CarteInconnueDeFedow
 from kiosk.carte import lire_la_carte_pour_la_borne
 from QrcodeCashless.models import CarteCashless
+from QrcodeCashless.services import CarteDUnLieuNonMigre
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,8 @@ class RefillWisePoseValidator(serializers.Serializer):
             return self.card
         except (CarteCashless.DoesNotExist, CarteInconnueDeFedow):
             raise ValidationError(_("Card not found with tag %(tag_id)s") % {"tag_id": value})
+        except CarteDUnLieuNonMigre as refus_de_la_carte:
+            raise ValidationError(refus_de_la_carte.message_pour_l_ecran)
         except Exception as e:
             # Le texte brut (reseau, Fedow) reste dans le journal ; le public lit
             # un message simple et traduit. / Raw error logged, plain message shown.
