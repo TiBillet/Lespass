@@ -29,3 +29,17 @@
 
 ### Test 3 — lieu avec adresse GPS
 1. La carte Leaflet s'affiche toujours à droite, comme avant.
+
+### Commande liée — `depublier_toutes_les_pages`
+**Quoi / What :** Nouvelle commande `pages/management/commands/depublier_toutes_les_pages.py` : met `publie=False` sur toutes les pages de l'app pages, lieu par lieu. Passage à blanc par défaut, écrit seulement avec `--appliquer`. Option `--schema` pour un seul lieu. Rien n'est supprimé.
+/ New command: unpublishes every pages-app page, venue by venue. Dry run by default.
+**Pourquoi / Why :** La migration `0225` a créé une page d'accueil CMS publiée dans chaque lieu ; elle masque l'accueil du skin. En la dépubliant, `/` affiche l'accueil du skin.
+
+**Ordre en prod :** 1) `depublier_toutes_les_pages` (lire le passage à blanc) → 2) `--appliquer` → 3) scripts `charger_site_codecommun` et `charger_site_faire_festival`, qui republient leurs propres pages.
+
+### Onboarding — plus de page d'accueil CMS créée
+**Quoi / What :** `onboard/tasks.py` (`create_tenant_from_draft`) : l'étape « 6ter » qui créait une page d'accueil CMS publiée (bannière, texte, boutons) est retirée. Un nouveau lieu affiche l'accueil de son skin.
+/ Onboarding no longer creates a published CMS home page; a new venue shows its skin's home.
+**Note :** la description longue saisie dans l'assistant arrive toujours dans `Configuration.long_description` (étape 3ter) ; sans saisie, le texte de bienvenue par défaut reste affiché. La migration `0225` ne crée rien à la création d'un lieu (les emplacements sont migrés sans `Configuration`).
+
+**Test :** créer un lieu via l'onboarding → `/` affiche l'accueil du skin (hero V2), l'admin « Pages » est vide.

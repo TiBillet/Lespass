@@ -66,10 +66,10 @@ pour ne pas être coupés par ce défilement.
                {% if request.path == "/" %}class="is-active" aria-current="page"{% endif %}>{% translate 'Accueil' %}</a>
 
             {% for item in main_nav %}
-                {% if item.url == "/" %}
-                    {# Page d'accueil CMS : déjà couverte par « Accueil » ci-dessus. #}
-                    {# / CMS home page: already covered by "Home" above. #}
-                {% elif item.children %}
+                {# Page d'accueil CMS (url "/") sautée : « Accueil » ci-dessus la couvre. #}
+                {# / CMS home page skipped: "Home" above already covers it. #}
+                {% if item.url != "/" %}
+                {% if item.children %}
                     {# Page avec sous-pages : menu déroulant. Le 1er item mène à la #}
                     {# page parente elle-même (atteignable + crawlable). #}
                     {# / Page with sub-pages: dropdown; 1st item links to the parent. #}
@@ -91,6 +91,7 @@ pour ne pas être coupés par ce défilement.
                 {% else %}
                     <a href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="body" hx-push-url="true"
                        {% if url_name == item.name or request.path == item.url %}class="is-active" aria-current="page"{% endif %}>{% translate item.label %}</a>
+                {% endif %}
                 {% endif %}
             {% endfor %}
         </nav>

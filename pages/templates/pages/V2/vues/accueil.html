@@ -46,12 +46,15 @@
         <div class="venue-brief{% if not config.postal_address.latitude or not config.postal_address.longitude %} venue-brief--sans-carte{% endif %}">
             <div>
                 {% if config.long_description %}
-                    <p class="venue-brief__text">
+                    {# <div> et non <p> : le HTML saisi par l'admin peut contenir des #}
+                    {# listes, titres ou paragraphes, interdits dans un <p>. #}
+                    {# / <div>, not <p>: the admin's HTML may hold block elements. #}
+                    <div class="venue-brief__text">
                         {# HTML saisi par l'admin du lieu (liens, retours à la ligne), #}
                         {# comme dans les skins classic et faire_festival. #}
                         {# / HTML written by the venue admin, as in the other skins. #}
                         {{ config.long_description|safe }}
-                    </p>
+                    </div>
                 {% endif %}
                 <div class="venue-facts">
                     {% if config.postal_address %}

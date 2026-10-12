@@ -453,14 +453,14 @@ def create_tenant_from_draft(self, wc_uuid):
         # pathologique, ex: contrainte DB exotique), on NE doit PAS re-lever
         # l'exception. A ce stade le tenant EXISTE deja : re-lever ferait
         # echouer la task apres coup et sauterait tout ce qui suit (events,
-        # page d'accueil, mail « votre espace est pret »), pour une adresse
+        # mail « votre espace est pret »), pour une adresse
         # manquante. Une relance ne rattraperait rien non plus : au passage
         # suivant, `wc.tenant_id is not None` fait early-return.
         # L'admin peut toujours la saisir manuellement dans l'admin Unfold.
         # `logger.error` remonte sur Sentry (alerte ops).
         # / Try/except CRITICAL: a PostalAddress failure must NOT re-raise.
         # The tenant already EXISTS here; re-raising would skip everything
-        # that follows (events, home page, "space ready" email) over a
+        # that follows (events, "space ready" email) over a
         # missing address — and a rerun early-returns on `wc.tenant_id`.
         # Admin can fill it manually. `logger.error` surfaces to Sentry.
         try:
@@ -751,54 +751,6 @@ def create_tenant_from_draft(self, wc_uuid):
         logger.error(
             "create_tenant_from_draft: send_to_ghost_email failed for WC %s: %s",
             wc_uuid, ghost_exc,
-        )
-
-    # === 6ter. Page d'accueil par defaut (app pages) ===
-    # On cree la home ICI, en fin de tache, une fois l'image (config.img) et la
-    # description longue posees (etape 3ter), juste avant l'email "espace pret".
-    # Structure : HERO (identite, fond = config.img) -> PARAGRAPHE (description
-    # longue saisie au wizard, garde meme vide) -> CTA (modules actifs).
-    # Idempotent (construire_page_accueil ne fait rien si une home existe deja).
-    # / Default home page (pages app). Created here, at the end of the task, once
-    # the image (config.img) and long description are set (step 3ter), right
-    # before the "space ready" email. Structure: HERO (identity, background =
-    # config.img) -> PARAGRAPH (wizard long description, kept even empty) -> CTA
-    # (active modules). Idempotent (does nothing if a home already exists).
-    try:
-        with schema_context("meta"):
-            wc.refresh_from_db()
-            description_longue_wizard = wc.long_description or ""
-
-        with tenant_context(new_tenant):
-            from BaseBillet.models import Configuration
-            from pages.models import Bloc, Page
-            from pages.services import construire_page_accueil
-
-            configuration_du_tenant = Configuration.get_solo()
-
-            # Les libelles CTA sont figes en base via gettext() (non lazy).
-            # On active EXPLICITEMENT la langue du tenant : ne pas dependre du
-            # activate() fait plus haut par create_tenant (fragile au refactor).
-            # Meme pattern que onboard_otp_mailer.
-            # / CTA labels are frozen in DB via gettext() (not lazy). Explicitly
-            # activate the tenant's language: do not rely on the activate() done
-            # earlier by create_tenant (fragile). Same pattern as onboard_otp_mailer.
-            from django.utils import translation
-
-            with translation.override(configuration_du_tenant.language or "fr"):
-                construire_page_accueil(
-                    Page, Bloc, configuration_du_tenant,
-                    description_longue=description_longue_wizard,
-                )
-    except Exception as home_exc:
-        # Une home ratee ne doit PAS faire echouer la creation du tenant
-        # (deja faite). L'admin pourra la creer a la main depuis l'admin pages.
-        # / A failed home must not fail tenant creation (already done). The admin
-        # can create it by hand from the pages admin.
-        logger.error(
-            "create_tenant_from_draft: home page creation FAILED for WC %s "
-            "on tenant %s: %s",
-            wc_uuid, new_tenant.schema_name, home_exc, exc_info=True,
         )
 
     # === 7. Envoi de l'email "espace pret" ===

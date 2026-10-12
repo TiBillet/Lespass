@@ -1132,18 +1132,23 @@ def test_menu_v2_ordre_et_accueil_sans_doublon(tenant, api_client, nettoyer_page
     with tenant_context(tenant):
         configuration = Configuration.get_solo()
         valeurs_avant = {nom: getattr(configuration, nom) for nom in modules_du_menu}
-        # update() et pas save() : aucun signal de la Configuration ne se declenche.
-        # / update(), not save(): no Configuration signal fires.
-        Configuration.objects.filter(pk=configuration.pk).update(
-            **{nom: True for nom in modules_du_menu}
-        )
-        Configuration.clear_cache()
-        Page.objects.create(
-            titre="Accueil CMS", slug="pytest-menu-accueil", publie=True, est_accueil=True)
-        Page.objects.create(
-            titre="Page optionnelle", slug="pytest-menu-optionnelle", publie=True)
 
+    # Le try s'ouvre AVANT toute ecriture : si une creation plante, le finally
+    # remet quand meme la Configuration de la base dev dans son etat d'origine.
+    # / The try opens BEFORE any write, so the finally always restores the config.
     try:
+        with tenant_context(tenant):
+            # update() et pas save() : aucun signal de la Configuration ne se declenche.
+            # / update(), not save(): no Configuration signal fires.
+            Configuration.objects.filter(pk=configuration.pk).update(
+                **{nom: True for nom in modules_du_menu}
+            )
+            Configuration.clear_cache()
+            Page.objects.create(
+                titre="Accueil CMS", slug="pytest-menu-accueil", publie=True, est_accueil=True)
+            Page.objects.create(
+                titre="Page optionnelle", slug="pytest-menu-optionnelle", publie=True)
+
         with patch("BaseBillet.views.get_skin_courant", return_value="V2"):
             reponse = api_client.get("/")
         assert reponse.status_code == 200
