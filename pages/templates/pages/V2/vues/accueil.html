@@ -11,24 +11,46 @@
 {% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
 
 {% block main %}
-    <!-- LE CADRE D'IDENTITÉ — ce qu'est le lieu, et où il est.
-         Un seul bloc : le texte et les praticités à gauche, la carte à droite. -->
-    <section class="section">
-        <div class="venue-brief">
-            <div>
-                {# h1 : le nom du lieu. Il est affiché dans l'en-tête du lieu, #}
-                {# on le garde ici pour les lecteurs d'écran et Google. #}
-                {# / h1 kept for screen readers and search engines. #}
-                <h1 class="visually-hidden">{{ config.organisation }}</h1>
+    <!--
+    HERO DE L'ACCUEIL PAR DÉFAUT
+    / Default home hero
+
+    LOCALISATION : pages/templates/pages/V2/vues/accueil.html
+
+    Cette page s'affiche quand le lieu n'a pas de page d'accueil CMS publiée.
+    Le hero reprend le balisage du bloc HERO du CMS
+    (pages/V2/partials/bloc_section_banniere.html) : les deux accueils se
+    ressemblent. Image du lieu (config.img) en fond, nom du lieu en h1,
+    description courte en sous-titre. Sans image : version sobre centrée.
+    .tb-jetons fournit les variables CSS des blocs (tb-blocs.css).
+    / Same markup as the CMS HERO block: venue image, name as h1, short
+    description as subtitle. .tb-jetons provides the block CSS variables.
+    -->
+    <div class="tb-jetons">
+        <section class="tb-bloc tb-bloc--hero{% if config.img %} tb-bloc--hero-image{% endif %}"
+                 data-testid="accueil-hero"
+                 {% if config.img %}style="--tb-hero-image: url('{{ config.img.fhd.url }}');"{% endif %}>
+            <div class="tb-bloc__contenu">
+                <h1 class="tb-bloc__titre">{{ config.organisation }}</h1>
                 {% if config.short_description %}
-                    <p class="venue-brief__text">
-                        {{ config.short_description }}
-                    </p>
-                    <hr>
+                    <p class="tb-bloc__sous-titre">{{ config.short_description }}</p>
                 {% endif %}
+            </div>
+        </section>
+    </div>
+
+    <!-- LE CADRE D'IDENTITÉ — ce qu'est le lieu, et où il est.
+         Le texte et les praticités à gauche, la carte à droite.
+         Sans coordonnées GPS, pas de carte : le texte prend toute la largeur. -->
+    <section class="section">
+        <div class="venue-brief{% if not config.postal_address.latitude or not config.postal_address.longitude %} venue-brief--sans-carte{% endif %}">
+            <div>
                 {% if config.long_description %}
                     <p class="venue-brief__text">
-                        {{ config.long_description }}
+                        {# HTML saisi par l'admin du lieu (liens, retours à la ligne), #}
+                        {# comme dans les skins classic et faire_festival. #}
+                        {# / HTML written by the venue admin, as in the other skins. #}
+                        {{ config.long_description|safe }}
                     </p>
                 {% endif %}
                 <div class="venue-facts">
@@ -65,12 +87,12 @@
                 </div>
             </div>
 
+            {% if config.postal_address.latitude and config.postal_address.longitude %}
             <div class="map-panel">
                 <div class="map-panel__toolbar">
                     <span class="map-panel__label">{% translate "Où l'on est" %}</span>
                 </div>
 
-                {% if config.postal_address.latitude and config.postal_address.longitude %}
                     <!--
                     CARTE LEAFLET DU LIEU
                     / Leaflet map of the venue
@@ -175,20 +197,8 @@
                         charger(initCarteAccueil);
                     })();
                     </script>
-                {% else %}
-                    <!--
-                    PLACEHOLDER SANS COORDONNEES GPS
-                    / Placeholder when no GPS coordinates
-
-                    Le tenant n'a pas renseigne latitude/longitude sur son adresse :
-                    on garde le panneau decoratif d'origine (fond quadrille + pin).
-                    -->
-                    <div class="map-pin map-pin--main" style="left:50%; top:52%;">
-                        <div class="map-pin__icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><circle cx="12" cy="12" r="6"/></svg></div>
-                        <div class="map-pin__label">{{ config.organisation }}</div>
-                    </div>
-                {% endif %}
             </div>
+            {% endif %}
         </div>
     </section>
 

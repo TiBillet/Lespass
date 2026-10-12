@@ -1094,3 +1094,74 @@ def test_les_inlines_ne_dependent_pas_des_permissions_modele():
         for nom in ("has_view_permission", "has_add_permission",
                     "has_change_permission", "has_delete_permission"):
             assert nom in vars(inline), f"{inline.__name__} n'override pas {nom}"
+
+
+def _liens_du_menu_v2(html):
+    """
+    Rend la liste ordonnee des href du menu en ligne du skin V2 (nav.place-nav).
+    / Returns the ordered list of hrefs of the V2 inline menu.
+    """
+    import re
+
+    debut_du_menu = html.index('<nav class="place-nav"')
+    fin_du_menu = html.index("</nav>", debut_du_menu)
+    menu = html[debut_du_menu:fin_du_menu]
+    return re.findall(r'href="([^"]*)"', menu)
+
+
+def test_menu_v2_ordre_et_accueil_sans_doublon(tenant, api_client, nettoyer_pages):
+    """
+    Menu du lieu, skin V2 :
+    - « Accueil » en premier, et UN SEUL lien vers "/" (la page d'accueil CMS
+      n'ajoute pas un deuxieme lien) ;
+    - puis les pages web, agenda, adhesions, les ressources ;
+    - le reseau (« Autour de nous ») toujours en dernier.
+    / V2 venue menu: one single "/" link first, then web pages, agenda,
+    memberships, resources, and the network always last.
+    """
+    from unittest.mock import patch
+
+    from BaseBillet.models import Configuration
+    from pages.models import Page
+
+    modules_du_menu = (
+        "module_billetterie", "module_adhesion", "module_pages",
+        "module_booking", "module_federation",
+    )
+
+    with tenant_context(tenant):
+        configuration = Configuration.get_solo()
+        valeurs_avant = {nom: getattr(configuration, nom) for nom in modules_du_menu}
+        # update() et pas save() : aucun signal de la Configuration ne se declenche.
+        # / update(), not save(): no Configuration signal fires.
+        Configuration.objects.filter(pk=configuration.pk).update(
+            **{nom: True for nom in modules_du_menu}
+        )
+        Configuration.clear_cache()
+        Page.objects.create(
+            titre="Accueil CMS", slug="pytest-menu-accueil", publie=True, est_accueil=True)
+        Page.objects.create(
+            titre="Page optionnelle", slug="pytest-menu-optionnelle", publie=True)
+
+    try:
+        with patch("BaseBillet.views.get_skin_courant", return_value="V2"):
+            reponse = api_client.get("/")
+        assert reponse.status_code == 200
+        liens = _liens_du_menu_v2(reponse.content.decode())
+
+        assert liens[0] == "/"
+        assert liens.count("/") == 1
+        assert (
+            liens.index("/pytest-menu-optionnelle/")
+            < liens.index("/event/")
+            < liens.index("/memberships/")
+            < liens.index("/booking/")
+        )
+        # Agenda et adhesions se suivent : aucun module ne s'intercale.
+        # / Agenda and memberships are adjacent: no module in between.
+        assert liens.index("/memberships/") == liens.index("/event/") + 1
+        assert liens[-1] == "/federation/"
+    finally:
+        with tenant_context(tenant):
+            Configuration.objects.filter(pk=configuration.pk).update(**valeurs_avant)
+            Configuration.clear_cache()

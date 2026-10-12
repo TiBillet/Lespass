@@ -491,6 +491,9 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-l);
   padding: var(--space-6);
 }
+/* Lieu sans coordonnées GPS : pas de carte, le texte prend toute la largeur.
+   / Venue without GPS coordinates: no map, text takes the full width. */
+.venue-brief--sans-carte { grid-template-columns: minmax(0, 1fr); }
 .venue-brief__text {
   font-size: var(--text-ui);
   line-height: 1.65;
@@ -1457,24 +1460,32 @@ img { max-width: 100%; display: block; }
   gap: var(--space-3);
   box-shadow: var(--shadow-card);
   overflow: hidden;
-  height : 300px;
+  /* Hauteur MINIMALE, jamais fixe : l'image de couverture (100px) s'ajoute au
+     contenu. Avec une hauteur fixe et overflow:hidden, le pied (prix + bouton)
+     sort de la carte et devient invisible. Dans une ligne de .grid, les cartes
+     s'etirent toutes a la hauteur de la plus grande.
+     / MIN height, never fixed: the cover adds to the content; a fixed height
+     with overflow:hidden clips the footer (price + button). */
+  min-height: 300px;
 }
 
 .offer-card.offer-card-ressource{
-  height : 400px;
+  min-height: 400px;
 }
 
 .offer-card.offer-card-ressource .offer-card__cover{
   height : 200px;
 }
 
-.offer-card__cover{height: 100px;}
+.offer-card__cover{height: 100px; flex-shrink: 0;}
 
 .offer-card__content{
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 100%;
+  /* Prend la place restante sous la couverture (et non 100% de la carte).
+     / Fills the space left under the cover (not 100% of the card). */
+  flex-grow: 1;
   padding: var(--space-5);
 }
 .offer-card__title {
@@ -2631,8 +2642,12 @@ details.module + details.module { margin-top: var(--space-4); }
   overflow-wrap: break-word;
   hyphens: auto;
 }
-/* Titres des blocs : comme .section__title de la maquette. */
-.tb-page .tb-bloc__titre {
+/* Titres des blocs : comme .section__title de la maquette.
+   .tb-jetons : le hero de l'accueil par défaut (pages/V2/vues/accueil.html),
+   pour qu'il ait le même titre que le bloc HERO d'une page CMS.
+   / .tb-jetons: the default home hero, same title as a CMS HERO block. */
+.tb-page .tb-bloc__titre,
+.tb-jetons .tb-bloc__titre {
   font-family: var(--font-display);
   font-weight: 500;
   letter-spacing: -0.01em;

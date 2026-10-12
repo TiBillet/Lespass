@@ -98,8 +98,10 @@ services:
     # / start.sh runs supervisord which orchestrates gunicorn (HTTP :8002),
     # daphne (WebSockets :7999) and celery (worker + beat) in THIS container.
     # No more separate lespass_celery service: a single production container.
-#    command: "bash start.sh"
-    command: "sleep infinity"
+    # `sleep infinity` : le conteneur démarre sans servir (maintenance, migrations à
+    # la main). / `sleep infinity`: the container starts without serving.
+    command: "bash start.sh"
+#    command: "sleep infinity"
 
   lespass_nginx:
     image: nginx:latest

@@ -107,6 +107,56 @@ fabrique pas plus que ce que la spec demande.
 - une fiche est terminée et relue : présenter le message de commit et **attendre le
   commit** du mainteneur avant la fiche suivante.
 
+## ⚠️ NUIT DE BASCULE EN COURS (2026-10-11, à partir de ~19 h UTC) — REPRENDRE ICI
+
+**LANGUE : tout message au mainteneur est en FRANÇAIS, sans exception.**
+Le mainteneur lance les commandes sur le serveur de prod (51.77.151.34) et colle les sorties ;
+l'orchestrateur vérifie les nombres et donne la commande suivante, **une étape à la fois**
+(consigne du mainteneur). Procédure : `CHANTIER-05-R-nuit-procedure.md` (étapes 0 à 12, contrôles,
+« si une étape plante », retour arrière). Scripts : `scripts/nuit_de_bascule/`.
+
+**FAIT (vérifié) :**
+- P1 dump de sécurité (2 × 77 Mo, 37 374 tables, « cluster dump complete », 4 archives borg) et
+  images (`www_media_2026-10-11.tgz`, 21 525 fichiers) dans `~/sauvegardes/` ;
+- étape 1 : page de maintenance par l'ANCIEN nginx (`~/Lespass/nginx/` = conf maintenance,
+  conf d'origine dans `~/Lespass/nginx_prod_actuel`, ligne `/maintenance` ajoutée au compose) ;
+  `docker stop -t 120` + `docker update --restart=no` sur `lespass_django`/`lespass_celery` ;
+  **crontab `@hourly … saveDb.sh` COMMENTÉE** ; file Redis à 0/0 ;
+- étape 2 : copie à froid `~/Lespass/database_avant_bascule` (2 881 155 359 octets, identique) ;
+- P2 : Ubuntu **24.04.5**, Docker 29.9 ; dépôts apt Docker et crowdsec désactivés
+  (`*.list.distUpgrade`, à réactiver en `noble` plus tard) ; crowdsec + firewall-bouncer actifs
+  SUR L'HÔTE (deuxième source de bannissement) ;
+- P3 : clone `~/main-lespass` (commit `df6fb270`), `.env` (3 variables de domaine, regex avec UN
+  `$` entre apostrophes, `COMPOSE_FILE`, `COMPOSE_PROJECT_NAME=lespass`, un seul `STRIPE_TEST=0`),
+  compose nginx sur la conf 2 maintenance, image `lespass-lespass_django` construite ;
+- P4 : Traefik v3 (`~/TraefikV3/wildcard_conf`, conteneur `traefik-wildcard`, image `ramequin`),
+  crowdsec + bouncer ; **jeton Gandi corrigé** (PAT, à RÉGÉNÉRER demain : il a été collé dans la
+  conversation) ; `traefik_wild` (v2) arrêté + `--restart=no` (conf dans `~/Traefik-reverse-proxy/wildcard`) ;
+- étape 3 : ancien Lespass `down` ; `database`, `www`, `logs`, `backup`, `ssh` déplacés dans
+  `~/main-lespass` (les `www/__init__`, `logs/__init__` du dépôt mis dans `*_du_depot/`) ;
+  nouveau Lespass `up` (`sleep infinity`, 0 celery/gunicorn, `max_locks` 4096, Postgres prêt) ;
+  certificats v3 tous émis (Let's Encrypt a bloqué `tibillet.coop` 1 h après 5 échecs de l'ancienne
+  clé Gandi, puis OK à 19 h 19 UTC) ; `verifier_traefik.sh 51.77.151.34` : **TOUT EST BON** (503) ;
+- étape 4 : `controle_avant.sql` : 0 drapeau V2, 0 compte hors plan, **76 784 anciennes clôtures
+  dans 518 lieux** (499 lieux de production + pool) ;
+- étape 5 : export : **76 784** (= étape 4), 8,5 s ; dans `/tmp/anciennes_clotures` du conteneur
+  ET `~/sauvegardes/anciennes_clotures` (519 fichiers).
+
+**EN COURS : étape 6, migrations** (lancées vers 19 h 25 UTC dans tmux, ~3 h 15) :
+`docker exec lespass_django poetry run python /DjangoFiles/manage.py migrate_schemas 2>&1 | tee ~/sauvegardes/migrations.log`.
+
+**ENSUITE :** contrôles de l'étape 6 (`grep -c "moteur v2 (module V2 actif)"` = 0,
+`controle_apres_migration.sql` : `legacy` sauf `W`, 0 vente, 0 lieu sans clé, 76 784 clôtures) ;
+étape 7 (`anciennes_clotures --supprimer --export /tmp/anciennes_clotures` à blanc puis
+`--executer`, 0 refus) ; 8 (reprise à blanc : 0 anomalie bloquante ; les chiffres seront un peu
+plus grands que ceux de la copie du 06-10 : nouvelles ventes) ; 9 (écriture, contrôles SQL) ;
+10 (J reprise, `verify_clotures`) ; 10 bis (file Redis, `rm celerybeat-schedule*`) ;
+11 (réouverture : compose `lespass_django` → `bash start.sh`, nginx → conf 1, `up -d`,
+`supervisorctl status`, `free -m`, `verifier_traefik.sh`, vente de test, **décommenter le cron**
+après un `saveDb.sh` manuel) ; 12 (surveillance, capture CLAF).
+**Retour arrière jusqu'à l'étape 11** : voir la procédure (échange des dossiers, `database_avant_bascule`,
+`traefik_wild`, ancien compose `~/Lespass` + `~/sauvegardes/compose_avant`).
+
 ## PROCHAINE ÉTAPE (mise à jour 2026-10-09) : LA MISE EN PRODUCTION
 
 **LANGUE : tout message au mainteneur est en FRANÇAIS, sans exception.**

@@ -355,22 +355,22 @@ def get_context(request):
         "skin_preview": skin_preview # Valeur du skin, ou None
     }
 
-    navbar: list = context["main_nav"]
-
     # « Le Faire Festival » et « Infos pratiques » NE sont PLUS codes en dur ici :
     # ce sont desormais des Page de l'app pages (ajoutees plus bas via la boucle
     # des pages publiees). La navbar n'a donc plus de hardcode specifique au skin.
     # / "Le Faire Festival" and "Infos pratiques" are NO LONGER hardcoded here: they
     # are now pages-app Page objects (added below via the published-pages loop).
 
-    # ORDRE DE LA NAVBAR : les pages de l'app pages d'abord (ajoutees plus bas
-    # via navbar_pages, inseres EN TETE), puis reseau/crowdfunding, et EN FIN de
-    # menu : agenda, adhesions, contact (le contact est code dans le gabarit
-    # navbar, toujours dernier).
-    # / NAVBAR ORDER: pages-app pages first (built below in navbar_pages and
-    # inserted at the head), then network/crowdfunding, and at the END of the
-    # menu: agenda, memberships, contact (contact lives in the navbar template,
-    # always last).
+    # ORDRE DE LA NAVBAR, toujours le meme :
+    # 1. les pages web de l'app pages ;
+    # 2. agenda, puis adhesions (les deux entrees principales) ;
+    # 3. les autres modules optionnels (ressources...) ;
+    # 4. le reseau (« Autour de nous »), toujours en dernier.
+    # Le contact est code dans le gabarit navbar, apres tout le reste.
+    # L'assemblage se fait en fin de fonction.
+    # / NAVBAR ORDER, always the same: web pages, agenda, memberships, other
+    # optional modules (resources...), then the network, always last. Contact
+    # lives in the navbar template. Assembled at the end of the function.
 
     # Activation du menu "Autour de nous" : pilotee UNIQUEMENT par le flag
     # config.module_federation. Le test d'existence de FederatedPlace est
@@ -385,8 +385,9 @@ def get_context(request):
     # no outgoing FederatedPlace can still have incoming neighbors, so
     # showing /federation/ makes sense. If the tenant has no neighbor at
     # all, the view shows the "No other federated place" message.
+    entrees_reseau: list = []
     if config.module_federation:
-        navbar.append({
+        entrees_reseau.append({
             'name': 'federation',
             'url': '/federation/',
             'label': _('Autour de nous'),
@@ -408,8 +409,9 @@ def get_context(request):
     # Et si le module_adhesion est désactiver.
     # Si module_adhesion est activé, les ressources sont sur la page "Ahésions et services"
     # / Resource booking module — visible only when enabled in admin config.
+    entrees_optionnelles: list = []
     if config.module_booking:
-        navbar.append(
+        entrees_optionnelles.append(
             {'name': 'booking-list', 'url': '/booking/',
              'label': _('Ressources'), 'icon': 'building'}
         )
@@ -428,12 +430,11 @@ def get_context(request):
 
         navbar_pages = construire_navbar_pages(Page)
 
-    # Fin de menu, toujours dans cet ordre : agenda puis adhesions
-    # (le bouton contact est dans le gabarit navbar, toujours apres eux).
-    # / End of menu, always in this order: agenda then memberships
-    # (the contact button lives in the navbar template, always after them).
+    # Entrees principales, toujours dans cet ordre : agenda puis adhesions.
+    # / Main entries, always in this order: agenda then memberships.
+    entrees_principales: list = []
     if config.module_billetterie:
-        navbar.append({
+        entrees_principales.append({
             'name': 'event-list',
             'url': '/event/',
             'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
@@ -441,16 +442,18 @@ def get_context(request):
         })
 
     if config.module_adhesion:
-        navbar.append({
+        entrees_principales.append({
             'name': 'memberships_mvt',
             'url': '/memberships/',
             'label': config.membership_menu_name if config.membership_menu_name else _('Adhésion'),
             'icon': 'person-badge'
         })
 
-    # Assemblage final : pages en tete, puis le reste (reseau, crowdfunding,
-    # agenda, adhesions). / Final assembly: pages first, then the rest.
-    context["main_nav"] = navbar_pages + navbar
+    # Assemblage final : pages web, principales, autres modules, reseau en dernier.
+    # / Final assembly: web pages, main entries, other modules, network last.
+    context["main_nav"] = (
+        navbar_pages + entrees_principales + entrees_optionnelles + entrees_reseau
+    )
 
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
     return context

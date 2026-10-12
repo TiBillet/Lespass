@@ -196,18 +196,21 @@ class ConfigurationSite(SingletonModel):
     (graphic theme). The field was moved from BaseBillet.Configuration.
     """
 
+    # V2 en premier : c'est le thème par défaut des nouveaux lieux (décision du
+    # mainteneur, nuit de la bascule du 2026-10-12). L'ordre est celui de l'admin.
+    # / V2 first: the default theme of new venues. The order is the admin's.
     SKIN_CHOICES = [
-        ("reunion", "Réunion (thème par défaut)"),
+        ("V2", "Thème V2 (thème par défaut)"),
+        ("reunion", "Réunion"),
         ("faire_festival", "Faire Festival (thème brutaliste)"),
-        ("V2", "Thème V2 (en béta)"),
     ]
     # Choix du theme graphique (skin) pour l'affichage du site.
-    # Par defaut : "reunion" (theme existant). Option : "faire_festival".
+    # Par defaut : "V2". Options : "reunion" (ancien theme), "faire_festival".
     # / Graphic theme (skin) choice for the site display.
-    # Default: "reunion" (existing theme). Option: "faire_festival".
+    # Default: "V2". Options: "reunion" (former theme), "faire_festival".
     skin = models.CharField(
         max_length=50,
-        default="reunion",
+        default="V2",
         choices=SKIN_CHOICES,
         verbose_name=_("Thème graphique du site"),
         help_text=_("Sélectionnez le thème visuel à utiliser pour l'affichage du site web."),

@@ -11,10 +11,13 @@ Il porte l'identité du lieu (logo ou initiale, nom, adresse, site web)
 et le menu du lieu.
 
 Le menu vient de `main_nav`, construit dans BaseBillet/views.py get_context() :
-les Pages CMS publiées (ex : « Qui sommes-nous ? »), puis réseau, ressources,
-agenda, adhésions. « Accueil » est ajouté ici, en premier.
+les Pages CMS publiées (ex : « Qui sommes-nous ? »), puis agenda, adhésions,
+les autres modules (ressources), et le réseau en dernier. « Accueil » est ajouté ici, en
+premier. La page d'accueil CMS (url "/") est donc sautée dans la boucle :
+sinon le menu aurait deux liens vers "/" (« Accueil » et le titre de la page).
 Une Page avec des sous-pages s'affiche en menu déroulant Bootstrap.
-/ The menu comes from `main_nav` (get_context). "Home" is added here, first.
+/ The menu comes from `main_nav` (get_context). "Home" is added here, first;
+the CMS home page (url "/") is skipped in the loop to avoid a duplicate.
 
 Mobile : le menu défile horizontalement (voir V2.css, .place-nav).
 Les menus déroulants passent en position fixe (Popper strategy "fixed")
@@ -63,7 +66,10 @@ pour ne pas être coupés par ce défilement.
                {% if request.path == "/" %}class="is-active" aria-current="page"{% endif %}>{% translate 'Accueil' %}</a>
 
             {% for item in main_nav %}
-                {% if item.children %}
+                {% if item.url == "/" %}
+                    {# Page d'accueil CMS : déjà couverte par « Accueil » ci-dessus. #}
+                    {# / CMS home page: already covered by "Home" above. #}
+                {% elif item.children %}
                     {# Page avec sous-pages : menu déroulant. Le 1er item mène à la #}
                     {# page parente elle-même (atteignable + crawlable). #}
                     {# / Page with sub-pages: dropdown; 1st item links to the parent. #}
@@ -128,6 +134,7 @@ pour ne pas être coupés par ce défilement.
                            {% if request.path == "/" %}class="is-active" aria-current="page"{% endif %}>{% translate 'Accueil' %}</a>
                     </li>
                     {% for item in main_nav %}
+                        {% if item.url != "/" %}
                         <li>
                             <a href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="body" hx-push-url="true"
                                {% if url_name == item.name or request.path == item.url %}class="is-active" aria-current="page"{% endif %}>{% translate item.label %}</a>
@@ -144,6 +151,7 @@ pour ne pas être coupés par ce défilement.
                                 </ul>
                             {% endif %}
                         </li>
+                        {% endif %}
                     {% endfor %}
                 </ul>
             </nav>
