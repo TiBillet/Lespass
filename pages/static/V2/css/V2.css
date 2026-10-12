@@ -219,7 +219,7 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
   /* Ruban signature */
   --grad-ruban: linear-gradient(90deg, var(--letchi) 0%, var(--zanana) 25%, var(--chouchou) 50%, var(--loseyan) 72%, var(--violet) 88%, var(--letchi) 100%);
 
-
+  --letchi-fond: #ea3b69;
   /* Typo */
   --font-display: 'Unbounded', system-ui, sans-serif; /* Titre */
   --font-text: 'Luciole', system-ui, sans-serif; /* Le reste */
@@ -919,6 +919,7 @@ img { max-width: 100%; display: block; }
   gap: var(--space-3);
 }
 .shortcut {
+  text-decoration: none;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -2324,6 +2325,7 @@ img { max-width: 100%; display: block; }
 }
 .place-nav-mobile__liste > li + li { border-top: 1px solid var(--color-border); }
 .place-nav-mobile__liste a {
+  text-decoration: none;
   display: flex;
   align-items: center;
   min-height: 44px;

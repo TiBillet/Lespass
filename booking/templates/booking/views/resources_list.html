@@ -27,7 +27,7 @@ Ressources sans groupe affichées en premier, sous forme de cartes.
 / Ungrouped resources shown first, as cards.
 -->
 {% if ungrouped_resources %}
-<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-5">
+<div class="grid grid--3 grid--sous-titre">
   {% for resource in ungrouped_resources %}
       <c-V2.ressource_card :ressource="resource" />
   {% endfor %}
@@ -46,7 +46,7 @@ Groupes de ressources, triés par nom alphabétique.
   <p class="text-muted mb-3">{{ group_entry.group.description }}</p>
 {% endif %}
 
-<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-5">
+<div class="grid grid--3 grid--sous-titre">
   {% for resource in group_entry.resources %}
       <c-V2.ressource_card :ressource="resource" />
   {% endfor %}
