@@ -76,16 +76,15 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
      faut 18,66px gras). Éclaircie de 4 % vers le blanc : 4,63:1, écart
      invisible à l'œil. / Letchi as a FILL under ink text: canonical letchi
      is 4.45:1 (fails AA), lightened 4% it reaches 4.63:1. */
-  --letchi-fond: #ea3b69;
 
   /* --- Rôles fonctionnels --- */
   /* Fond d'action : porte toujours du texte encre, d'où --letchi-fond et non --letchi.
      / Action fill: always carries ink text, hence --letchi-fond. */
-  --color-primary: var(--letchi-fond);
+  --color-primary: var(--loseyan-button-fond);
   /* Bouton principal : fond encre, libellé blanc, letchi en liseré (voir .btn--primary).
      / Primary button: ink fill, white label, letchi as an inner edge. */
   --color-action-hover: #2c2630;               /* encre éclaircie au survol : blanc dessus 14,7:1 */
-  --color-action-signal: var(--letchi-fond);   /* liseré : élément non textuel, 4,6:1 contre l'encre (seuil 3:1) */
+  --color-action-signal: var(--loseyan-button-fond);   /* liseré : élément non textuel, 4,6:1 contre l'encre (seuil 3:1) */
   --color-link: var(--loseyan-text);
 
   /* --- Neutres --- */
@@ -243,6 +242,14 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
   --letchi-button-hover : #fa99b2;
   --letchi-button-active : #fa3166;
 
+  --loseyan-button-fond : #86ceff;
+  --loseyan-button-hover : #a5d7f9;
+  --loseyan-button-active : #a5d7f9;
+
+  --button-primary-fond : var(--loseyan-button-fond);
+  --button-primary-hover : var(--loseyan-button-hover);
+  --button-primary-active : var(--loseyan-button-active);
+
   --secondary-button-fond : #fff;
 
 
@@ -287,7 +294,7 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
      cannot produce one. Not enough for .btn-primary, whose Sass hardcodes the
      colour — see the --bs-btn-* patch below. */
   --bs-primary: var(--color-primary);
-  --bs-primary-rgb: 234, 59, 105;
+  --bs-primary-rgb: 134, 206, 255;
 
   /* Blocs CMS : titres en Luciole, accent letchi, libellé des boutons
      en blanc sur encre (voir « BOUTONS DES BLOCS »).
@@ -355,7 +362,7 @@ h1, h2, h3, h4 {
   color: var(--color-text);
 }
 p { margin: 0; }
-a { color: inherit; text-decoration: none; }
+a { color: inherit;}
 button { font-family: inherit; }
 ul { margin: 0; padding: 0; list-style: none; }
 img { max-width: 100%; display: block; }
@@ -415,6 +422,7 @@ img { max-width: 100%; display: block; }
   gap: var(--space-5);
 }
 .me-anchor {
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
@@ -753,6 +761,7 @@ img { max-width: 100%; display: block; }
   color: var(--color-text-muted);
   padding-bottom: 2px;
   transition: color var(--dur-fast) var(--ease-out);
+  text-decoration: none;
 }
 .place-nav > a:hover,
 .place-nav__dropdown > .dropdown-toggle:hover { color: var(--color-text); }
@@ -1121,7 +1130,7 @@ img { max-width: 100%; display: block; }
 .btn-primary,
 .btn-primary:focus-visible,
 .btn-primaire{
-  background: var(--letchi-button-fond);
+  background: var(--button-primary-fond);
   color: var(--encre);
   border: none;
   transition: 0.2s;
@@ -1132,7 +1141,7 @@ img { max-width: 100%; display: block; }
 .btn--outline-primary:hover:not(:disabled),
 .btn-outline-primary:hover:not(:disabled),
 .btn-primaire:hover{
-  background: var(--letchi-button-hover);
+  background: var(--button-primary-hover);
   color: var(--encre);
   border: none;
   transition: 0.2s;
@@ -1141,7 +1150,7 @@ img { max-width: 100%; display: block; }
 .btn.btn-primary:active,
 .btn-primaire:active,
 .btn.btn-primaire:active{
-  background: var(--letchi-button-active);
+  background: var(--button-primary-active);
   border: none;
 }
 
@@ -1157,6 +1166,24 @@ img { max-width: 100%; display: block; }
 .btn-primary.disabled { background: var(--color-text); color: var(--color-text-inverse); border-color: var(--color-text); box-shadow: none; }
 .btn--secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border-strong); }
 .btn--secondary:hover { background: var(--color-hover); }
+
+.btn--tertiary {
+  background: #fbd99c;  /* amber-100 /
+  color: #17141a;       / encre */
+}
+.btn--tertiary:hover {
+  background: #fdecce;
+}
+.btn--tertiary:active {
+  background: #fdecce;
+  transform: translateY(1px);
+}
+
+
+
+
+
+
 .btn--outline { background: transparent; color: var(--color-text); border-color: var(--color-border-strong); }
 .btn--outline:hover { background: var(--color-overlay-hover); }
 /* Bordure letchi sur papier. ÉCART ASSUMÉ à la règle centrale en tête de ce
@@ -1237,7 +1264,7 @@ img { max-width: 100%; display: block; }
   --bs-btn-hover-bg: var(--color-action-hover);
   --bs-btn-hover-border-color: var(--color-action-hover);
   --bs-btn-active-color: var(--encre);
-  --bs-btn-active-bg: var(--letchi-button-active);
+  --bs-btn-active-bg: var(--button-primary-active);
   --bs-btn-active-border-color: transparent;
   --bs-btn-disabled-color: var(--color-text-inverse);
   --bs-btn-disabled-bg: var(--color-text);
@@ -1245,7 +1272,7 @@ img { max-width: 100%; display: block; }
   --bs-btn-focus-box-shadow: inset 0 -3px 0 var(--color-action-signal);
 }
 .btn-outline-primary {
-  --bs-btn-color: var(--letchi-text);
+  --bs-btn-color: var(--loseyan-text);
   --bs-btn-border-color: var(--color-primary);
   --bs-btn-hover-color: var(--color-text-inverse);
   --bs-btn-hover-bg: var(--color-action-hover);
@@ -1567,6 +1594,7 @@ img { max-width: 100%; display: block; }
    ================================================================= */
 /* Un badge qui casse en deux lignes est toujours un bug, jamais voulu. */
 .badge {
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
   padding: 4px 12px;
@@ -1613,6 +1641,7 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
   white-space: nowrap;
   transition: background var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
+  text-decoration: none;
 }
 .tag-pill:hover { background: var(--color-hover); }
 /* Neutre, pas letchi : un filtre de catégorie appartient au contenu du
@@ -1755,7 +1784,11 @@ img { max-width: 100%; display: block; }
 .event-card__footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }
 /* Traitement signature des chiffres, en discret : un prix est un geste
    de billetterie même niché dans le contenu d'un lieu. */
-.event-card__price { font-size: var(--text-md); font-weight: 700; color: var(--letchi-text); }
+.event-card__price { font-size: var(--text-md); font-weight: 700; color: var(--encre); }
+.event-hero .page-title{
+  font-size: 34px;
+}
+
 
 /* Gradients par catégorie */
 .bg-green { background: linear-gradient(135deg, var(--cat-green-from), var(--cat-green-to)); }
@@ -1931,7 +1964,7 @@ img { max-width: 100%; display: block; }
 #explorer-root .explorer-card-dist--sans-lieu { color: var(--color-text-faint); }
 
 #explorer-root .explorer-card-link {
-  background: var(--letchi-button-fond);
+  background: var(--button-primary-fond);
   color: #000;
   border-color: transparent;
   font-weight: 700;
@@ -1942,7 +1975,7 @@ img { max-width: 100%; display: block; }
   transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
 }
 #explorer-root .explorer-card-link:hover {
-  background: var(--letchi-button-hover);
+  background: var(--button-primary-hover);
   color: #000;
   border-color: transparent;
   transition: 0.2s;
@@ -2190,7 +2223,7 @@ img { max-width: 100%; display: block; }
    / The only forced !important: the shared picture include always adds
    Bootstrap's !important `.object-fit-cover`, with no variable to set. */
 .place-id__mark--logo img { object-fit: contain !important; }
-.place-id__name--lien { display: block; color: inherit; }
+.place-id__name--lien { display: block; color: inherit; text-decoration: none}
 .place-id__name--lien:hover { text-decoration: underline; text-underline-offset: 3px; }
 .place-nav__dropdown .dropdown-menu { font-size: var(--text-md); }
 
@@ -2317,7 +2350,7 @@ img { max-width: 100%; display: block; }
 .page-header__top {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-4);
   flex-wrap: wrap;
 }
@@ -2345,7 +2378,7 @@ img { max-width: 100%; display: block; }
   justify-content: space-between;
 }
 .event-admin-buttons .icon-btn{
-  border : solid 1px var(--color-primary);
+  border : solid 1px var(--loseyan);
 }
 .event-date-and-admin{
   display: flex;
@@ -2879,7 +2912,7 @@ details.module + details.module { margin-top: var(--space-4); }
    (Lc 38). The outline keeps letchi at rest and fills on hover. The base's hover
    lift is cancelled: the press is the only motion. */
 .tb-page .tb-bloc__bouton--plein {
-  background: var(--letchi-button-fond);
+  background: var(--button-primary-fond);
   color: #000;
   border-color: transparent;
   border-radius: var(--radius-pill);
@@ -2890,7 +2923,7 @@ details.module + details.module { margin-top: var(--space-4); }
 }
 .tb-page .tb-bloc__bouton--plein:hover,
 .tb-page .tb-bloc__bouton--contour:hover {
-  background: var(--letchi-button-hover);
+  background: var(--button-primary-hover);
   color: #000;
   border-color: transparent;
   transition: 0.2s;
@@ -2899,7 +2932,7 @@ details.module + details.module { margin-top: var(--space-4); }
 }
 .tb-page .tb-bloc__bouton--plein:active,
 .tb-page .tb-bloc__bouton--contour:active {
-  background: var(--letchi-button-fond);
+  background: var(--button-primary-fond);
   color: #000;
   border-color: transparent;
   transition: 0.2s;
@@ -3010,6 +3043,14 @@ details.module + details.module { margin-top: var(--space-4); }
   font-size: var(--text-ui);
   padding-bottom: var(--space-4);
   border-bottom: 1px solid var(--color-border);
+}
+
+.tb-bloc--cta{
+  background-color: color-mix(in srgb, var(--loseyan) 7%, var(--tb-surface));
+  border-block: none;
+}
+.tb-bloc--cta .tb-bloc__contenu{
+  border-left: 4px solid var(--loseyan);
 }
 
 /* =================================================================
