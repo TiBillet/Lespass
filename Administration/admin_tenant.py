@@ -5795,23 +5795,20 @@ class TenantAdmin(ModelAdmin):
         Lieux affiches dans la liste et proposes par l'autocompletion.
         / Venues shown in the list and offered by the autocomplete.
 
-        Par defaut, on retire les lieux techniques : ROOT (schema public), META
-        (agenda partage de TiBillet) et les emplacements en attente de
-        configuration. Un superuser voit META et les emplacements en attente
-        dans la LISTE, pour retrouver leur schema ; ROOT reste toujours cache.
-        L'autocompletion (federation, invitations) les retire tous : on ne
+        On retire toujours ROOT (schema public) et les emplacements en attente
+        de configuration. META (agenda partage de TiBillet) est retire aussi,
+        sauf dans la LISTE d'un superuser, pour retrouver son schema.
+        L'autocompletion (federation, invitations) le retire toujours : on ne
         federe pas un lieu technique.
-        / Technical venues are hidden by default. A superuser sees META and
-        waiting slots in the LIST; ROOT is always hidden; the autocomplete hides
-        them all.
+        / ROOT and waiting slots are always hidden. META is hidden too, except in
+        a superuser's LIST; the autocomplete always hides it.
         """
         queryset = super().get_queryset(request).prefetch_related('domains').exclude(
-            categorie=Client.ROOT)
+            categorie__in=[Client.ROOT, Client.WAITING_CONFIG])
         est_une_autocompletion = "autocomplete" in request.path
         if request.user.is_superuser and not est_une_autocompletion:
             return queryset
-        return queryset.exclude(
-            categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META])
+        return queryset.exclude(categorie=Client.META)
 
     def get_search_results(self, request, queryset, search_term):
         """
