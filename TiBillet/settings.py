@@ -935,7 +935,11 @@ UNFOLD = {
         lambda request: static("css/tibillet-admin.css"),
     ],
     "SCRIPTS": [
+        # Autofocus les composants "select2" quand on utilise
         lambda request: static("js/autofocus_select2.js"),
+
+        # Force le theme clair pour le style de l'admin
+        lambda request: static("js/reset_unfold_theme.js"),
     ],
 }
 

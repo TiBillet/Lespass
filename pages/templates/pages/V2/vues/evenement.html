@@ -223,7 +223,8 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
             {% block evenement_description %}
             {% if event.short_description %}
                 <p class="page-intro">{{ event.short_description }}</p>
-            {% else %}
+            {% endif %}
+            {% if event.long_description %}
                 <p class="page-intro">{{ event.long_description|safe }}</p>
             {% endif %}
             {% endblock evenement_description %}
