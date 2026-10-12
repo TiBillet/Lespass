@@ -329,6 +329,16 @@ def rebuild_seo_aggregates(force=False):
             "event_count": config.get("event_count", 0),
             "product_count": config.get("product_count", 0),
         })
+        # Le sitemap racine est plus exigeant que la carte : un produit publie ne
+        # suffit pas si l'accueil est vide (sans evenement, ni image, ni texte).
+        # Ce sont surtout des lieux de test ou pas encore lances, et leur accueil
+        # est deja en noindex (cf. TiBillet/seo_indexing.py).
+        # Cle absente (fragment pas encore recalcule) : on garde le lieu.
+        # / The root sitemap is stricter than the map: a published product is not
+        # enough if the home is empty. Missing key: keep the venue.
+        accueil_vide = config.get("accueil_sans_contenu", False) and not a_des_events
+        if accueil_vide:
+            continue
         sitemap_tenants.append({
             "tenant_id": tenant_uuid,
             "domain": domaine_du_tenant,

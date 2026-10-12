@@ -1,13 +1,23 @@
 {% extends base_template %}
 {% load tibitags i18n %}
 
-{% block title %}{% translate 'Home' %}{% endblock %}
-{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{# Titre « nom du lieu — ville » : ce que l'on tape pour trouver un lieu. #}
+{# « Accueil » n'apporte rien au referencement. Le suffixe du shell est vide : #}
+{# le nom y est deja. / Title "venue — city"; the shell suffix is emptied. #}
+{% block title %}{{ config.organisation }}{% if config.postal_address.address_locality %} — {{ config.postal_address.address_locality }}{% endif %}{% endblock %}
+{% block title_suffixe %}{% endblock %}
+{# Accueil vide (ni evenement, ni image, ni description du lieu) : noindex, #}
+{# follow. Regle dans TiBillet/seo_indexing.py:accueil_par_defaut_est_vide. #}
+{# / Empty home: noindex, follow. #}
+{% block meta_robots %}{% if accueil_est_vide %}noindex, follow{% else %}{{ block.super }}{% endif %}{% endblock %}
+{# default AVANT striptags : striptags(None) rend la chaine « None », que #}
+{# default ne remplace plus. / default BEFORE striptags (None -> "None"). #}
+{% block meta_description %}{{ config.short_description|default:config.organisation|striptags }}{% endblock %}
 {% block og_title %}{{ config.organisation }}{% endblock %}
-{% block og_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block og_description %}{{ config.short_description|default:config.organisation|striptags }}{% endblock %}
 {% block og_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
 {% block twitter_title %}{{ config.organisation }}{% endblock %}
-{% block twitter_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
+{% block twitter_description %}{{ config.short_description|default:config.organisation|striptags }}{% endblock %}
 {% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
 
 {% block main %}

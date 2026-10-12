@@ -398,6 +398,7 @@ def build_tenant_config_data(client):
         "latitude": None,
         "longitude": None,
         "postal_address_id": None,
+        "accueil_sans_contenu": False,
     }
 
     # Domaine principal du tenant / Tenant primary domain
@@ -431,6 +432,24 @@ def build_tenant_config_data(client):
             data["facebook"] = config.facebook or ""
             data["instagram"] = config.instagram or ""
             data["language"] = config.language or "fr"
+
+            # Accueil sans contenu propre : ni image, ni description ecrite par le
+            # lieu, ni page d'accueil CMS publiee. Les evenements sont comptes a
+            # part (event_count). Sert a garder les lieux vides hors du sitemap racine.
+            # / Home without own content (events counted separately in event_count).
+            from TiBillet.seo_indexing import accueil_par_defaut_est_vide
+
+            accueil_cms_publie = False
+            if config.module_pages:
+                from pages.models import Page
+
+                accueil_cms_publie = Page.objects.filter(
+                    est_accueil=True, publie=True
+                ).exists()
+            data["accueil_sans_contenu"] = (
+                not accueil_cms_publie
+                and accueil_par_defaut_est_vide(config, il_y_a_des_evenements=False)
+            )
 
             # Image social card / Social card image
             # config.get_social_card est une @property : pas de parentheses.

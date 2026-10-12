@@ -23,6 +23,7 @@
 {# the home page reached through /accueil/ all point at the SAME canonical #}
 {# URL. The address still comes from Page.get_absolute_url(). #}
 {% block canonical %}https://{{ request.get_host }}{{ page_courante.get_absolute_url }}{% endblock %}
+{% block og_url %}https://{{ request.get_host }}{{ page_courante.get_absolute_url }}{% endblock %}
 {% block title %}{{ page_courante.meta_title|default:page_courante.titre }}{% endblock %}
 {% block meta_description %}{% if page_courante.meta_description %}{{ page_courante.meta_description }}{% elif config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}
 {# noindex si la page le demande (sinon comportement par defaut du base). #}

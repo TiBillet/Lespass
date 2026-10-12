@@ -2848,6 +2848,15 @@ def index(request):
 
     template_context["events"] = events_a_afficher
 
+    # Accueil sans evenement, sans image et sans description du lieu : la page
+    # passe en noindex (lu par vues/accueil.html). Meme regle que le sitemap.
+    # / Empty home (no event, image or description): noindex. Same rule as the sitemap.
+    from TiBillet.seo_indexing import accueil_par_defaut_est_vide
+    template_context["accueil_est_vide"] = accueil_par_defaut_est_vide(
+        Configuration.get_solo(),
+        il_y_a_des_evenements=len(events_a_afficher) > 0,
+    )
+
     return render(request, template_path, context=template_context)
 
 
