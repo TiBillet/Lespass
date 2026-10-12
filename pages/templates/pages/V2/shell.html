@@ -130,7 +130,7 @@
     {# unstyled until the browser revalidates the file (~25 ms, even cached). #}
     {# The <head> is never swapped, so the sheet stays applied across pages. #}
     <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
-    <link rel="stylesheet" href="{% static 'V2/css/V2.css' %}">
+    <link rel="stylesheet" href="{% static 'V2/css/V2.css' %}?v=1">
     <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
 
     {# defer : Bootstrap ne bloque plus le parsing. Ses composants (dropdown, #}

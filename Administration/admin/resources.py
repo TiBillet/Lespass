@@ -41,11 +41,35 @@ from booking.models import (
 class ClosedPeriodInline(TabularInline):
     model = ClosedPeriod
     extra = 0
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
 
 
 class OpeningEntryInline(TabularInline):
     model = OpeningEntry
     extra = 0
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
 
 
 @admin.register(Calendar, site=staff_admin_site)
