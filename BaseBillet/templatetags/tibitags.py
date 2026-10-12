@@ -8,7 +8,6 @@ from django.db import connection
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from Administration.management.commands.demo_data import logger
 from BaseBillet.models import Membership
 from fedow_connect.utils import dround as utils_dround
 
@@ -77,7 +76,6 @@ def price_out_of_stock(value, event):
 
 @register.filter
 def in_list(value:str, liste:list):
-    logger.info(f"in_list {value} in {liste}")
     return value in liste
 
 # @register.filter
@@ -170,7 +168,6 @@ def randCardImg(value):
 
 @register.filter(name='dict_key')
 def dict_key(d, k):
-    logger.info(d, k)
     '''Returns the given key from a dictionary.'''
     try :
         return d[k]

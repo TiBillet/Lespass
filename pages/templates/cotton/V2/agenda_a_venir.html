@@ -1,28 +1,50 @@
 {% load i18n %}
 
 {% comment %}
-Paramètre :
+SECTION « CE QUI ARRIVE » — composant Cotton du skin V2
+/ "Ce qui arrive" section — V2 skin Cotton component
+
+LOCALISATION : pages/templates/cotton/V2/agenda_a_venir.html
+
+Utilisé par :
+- pages/templates/pages/V2/vues/accueil.html (accueil codé en dur) ;
+- pages/templates/pages/V2/partials/bloc_liste.html (bloc LISTE, source
+  EVENEMENTS, du constructeur de pages). Les deux ont donc le même en-tête et
+  les mêmes cartes.
+
+Paramètres :
+--> events : les événements à afficher (cartes c-V2.event_card)
 --> title : titre affiché en haut de la section
---> count : flag qui indique si on affiche le compteur d'événements (events)
+--> count : flag qui indique si on affiche le compteur d'événements
+--> total : nombre d'événements annoncé dans le compteur. Vide = nombre de
+    `events` (cas de l'accueil, qui reçoit déjà toute la liste).
+--> nombre_max : nombre de cartes affichées (3 par défaut, une rangée)
+--> testid : data-testid de la section
 {% endcomment %}
-<c-vars title="{% translate 'Ce qui arrive' %}" :count="True"/>
+<c-vars title="{% translate 'Ce qui arrive' %}" :count="True" total="" :nombre_max="3" testid="accueil-evenements"/>
 
 <!-- LES ÉVÉNEMENTS À VENIR -->
 {% if events %}
-    <section class="section" data-testid="accueil-evenements">
+    <section class="section" data-testid="{{ testid }}">
         <div class="section-head">
             <h2 class="section__title">
                 {{ title }}
                 {% if count %}
-                <span class="section__meta">· {% blocktrans count compteur=events|length %}{{ compteur }} événement à venir{% plural %}{{ compteur }} événements à venir{% endblocktrans %}</span>
+                {% with nombre_d_evenements_recus=events|length %}
+                {% with compteur_affiche=total|default:nombre_d_evenements_recus %}
+                <span class="section__meta">· {% blocktrans count compteur=compteur_affiche %}{{ compteur }} événement à venir{% plural %}{{ compteur }} événements à venir{% endblocktrans %}</span>
+                {% endwith %}
+                {% endwith %}
                 {% endif %}
             </h2>
             <a class="link" href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">{% translate "Tout l'agenda" %} <span aria-hidden="true">→</span></a>
         </div>
 
         <div class="grid grid--3 grid--sous-titre">
-            {% for event in events|slice:":3" %}
-                <c-V2.event_card :event="event" />
+            {% for event in events %}
+                {% if forloop.counter <= nombre_max %}
+                    <c-V2.event_card :event="event" />
+                {% endif %}
             {% endfor %}
         </div>
     </section>

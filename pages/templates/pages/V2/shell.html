@@ -188,6 +188,41 @@
                 evenement.detail.target = document.body;
             }
         });
+
+        /**
+         * Confirmation hx-confirm : une fenetre SweetAlert au lieu de la boite du navigateur.
+         * / hx-confirm: a SweetAlert dialog instead of the browser's confirm box.
+         *
+         * LOCALISATION : pages/templates/pages/V2/shell.html
+         *
+         * Tout element qui porte hx-confirm="<question>" passe par ici : annuler une
+         * reservation, un billet, un booking, declarer une carte perdue...
+         * Ce script est dans le <head> : il ne tourne qu'au chargement complet de la
+         * page, jamais a une navigation HTMX (qui ne remplace que le body). Il ne
+         * faut donc PAS recopier ce gestionnaire dans une page : il s'ajouterait a
+         * chaque visite, et chaque clic ouvrirait plusieurs fenetres.
+         * Si SweetAlert n'est pas encore charge (script defer), htmx garde sa boite
+         * de confirmation native.
+         * / Lives in <head>, so it runs once per full page load. Never copy it into a
+         * page: it would stack up on each HTMX visit. Falls back to the native confirm.
+         */
+        document.addEventListener("htmx:confirm", function (evenement) {
+            if (!evenement.detail.question) return;
+            if (typeof Swal === "undefined") return;
+            evenement.preventDefault();
+            Swal.fire({
+                title: "{{ _('Confirmer ?')|escapejs }}",
+                text: evenement.detail.question,
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonText: "{{ _('Oui')|escapejs }}",
+                cancelButtonText: "{{ _('Non')|escapejs }}"
+            }).then(function (resultat) {
+                if (resultat.isConfirmed) {
+                    evenement.detail.issueRequest(true);
+                }
+            });
+        });
     </script>
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
     {# defer : sweetalert2 n'est appelé que sur interaction (jamais au 1er paint). #}

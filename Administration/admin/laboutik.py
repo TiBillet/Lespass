@@ -965,6 +965,24 @@ class CartePrimaireAdmin(ModelAdmin):
             ).select_related('detail')
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
+    def get_form(self, request, obj=None, **kwargs):
+        """
+        Retire le bouton « + » du champ carte : une carte primaire se choisit parmi
+        les cartes NFC qui existent déjà. On ne crée pas de carte NFC depuis ici.
+        / Removes the "+" button on the card field: a primary card is picked among
+        existing NFC cards, never created from here.
+
+        A faire sur le formulaire final, pas dans formfield_for_foreignkey :
+        autocomplete_fields enveloppe le widget APRES formfield_for_foreignkey.
+        En modification, la carte est en lecture seule : le champ est absent.
+        / Must be done on the final form: autocomplete_fields wraps the widget
+        after formfield_for_foreignkey. On change, the card field is read-only.
+        """
+        form = super().get_form(request, obj, **kwargs)
+        if 'carte' in form.base_fields:
+            form.base_fields['carte'].widget.can_add_related = False
+        return form
+
     def get_readonly_fields(self, request, obj=None):
         """
         La carte NFC d'une carte primaire existante ne se change pas : seule la

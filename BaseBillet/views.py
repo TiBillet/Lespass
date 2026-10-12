@@ -1019,18 +1019,8 @@ def _agreger_tokens_locaux(tokens, user, config):
                 "place_origin": None,
                 "place_uuid_federated_with": [],
                 "names_of_place_federated": [config.organisation],
-                "logo": None,
+                "logo_url": None,
             },
-            # Pas de date de derniere transaction fiable sans requete N+1 : le
-            # modele Token n'a pas de champ date, et la derniere Transaction du
-            # wallet pour cet asset se trouve via un OR (sender|receiver) qu'il
-            # faudrait executer une fois par token dans la boucle d'affichage.
-            # On met None (colonne vide propre) plutot que de sur-ingenierer.
-            # / No reliable last-transaction date without an N+1 query: Token has
-            # no date field, and the wallet's last Transaction for this asset
-            # would need a per-token (sender|receiver) OR query in the render
-            # loop. Use None (cleanly empty column) instead of over-engineering.
-            "last_transaction_datetime": None,
             "is_local": True,
         })
     return tokens
@@ -2889,25 +2879,14 @@ def index(request):
     # Tri les évènements par datetime
     events_a_afficher.sort(key=lambda event: event.datetime)
 
-    for event in events_a_afficher:
-        event_products = event.products.all()
-        products = list(event_products)
-        # Un tarif archivé (« supprimé ») n'est jamais affiché.
-        # / An archived ("deleted") price is never shown.
-        prices = [price for product in products for price in product.prices.filter(archived=False)]
-        tarifs = [price.prix for price in prices]
-        free_price = any(price.free_price for price in prices)
-        # Calcul des prix min et max
-        if tarifs:
-            event.price_min = _("A partir de %(price)s €") % {"price":min(tarifs)}
-        elif free_price:
-            event.price_min = _("Prix libre")
-        else:
-            event.price_min = _("Entré libre")
-
-        # event.price_min = _("Prix libre") if free_price else (min(tarifs) if tarifs else "Entré libre")
-        event.price_max = max(tarifs) if tarifs else None
-        # import ipdb;ipdb.set_trace()
+    # Le libelle de prix des cartes (event.price_min) est DEJA pose par
+    # federated_events_filter, dans le tenant_context de chaque evenement
+    # (EventMVT._libelle_prix_agenda). Ne pas le recalculer ici : hors de ce
+    # contexte, les tarifs d'un evenement federe seraient lus dans le schema du
+    # lieu courant, et il s'afficherait toujours « Entré libre ».
+    # / price_min is ALREADY set by federated_events_filter inside each event's
+    # tenant_context. Recomputing it here would read a federated event's prices
+    # from the current schema ("Entré libre" every time).
 
     template_context["events"] = events_a_afficher
 
@@ -3798,9 +3777,6 @@ class EventMVT(viewsets.ViewSet):
         if match:
             hex8 = match.group(1)
 
-        logger.info(f"slug : {slug}")
-        logger.info(f"hex8 : {hex8}")
-
         # Si False, alors le bouton reserver renvoi vers la page event du tenant.
         event_in_this_tenant = False
         # Defaults to prevent UnboundLocalError when event is retrieved from federation
@@ -3820,12 +3796,10 @@ class EventMVT(viewsets.ViewSet):
                 event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
                                                                                           'products__prices').get(
                     uuid__startswith=hex8)
-                logger.info(f"event avec hex8 trouvé : {event}")
             else:
                 event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
                                                                                           'products__prices').get(
                     slug__startswith=slug)
-                logger.info(f"event avec slug trouvé : {event}")
 
             # selection et mise en cache des images
             event.img = event.get_img()

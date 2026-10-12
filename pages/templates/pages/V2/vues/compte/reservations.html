@@ -14,8 +14,8 @@ Une carte par réservation, avec ses billets en accordéon (ticket_accordion.htm
 
 FLUX D'ANNULATION :
 1. Clic sur « J'annule » : hx-confirm pose une question.
-2. Le script ci-dessous remplace la boîte de confirmation du navigateur par
-   une fenêtre SweetAlert (événement htmx:confirm).
+2. Le gestionnaire htmx:confirm du shell (pages/V2/shell.html) remplace la boîte
+   de confirmation du navigateur par une fenêtre SweetAlert.
 3. Si confirmé : hx-post .../cancel_reservation/, puis la carte entière est
    supprimée de la page (hx-target="closest .reservation-card", hx-swap="delete").
 
@@ -41,28 +41,6 @@ A CONSERVER : la classe .reservation-card (cible HTMX), #ticketPanel,
         </div>
         <div id="ticketPanelBody" class="offcanvas-body"></div>
     </div>
-
-    <script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
-    <script>
-      // Remplace la confirmation native par une fenêtre SweetAlert.
-      // / Replace the native confirm with a SweetAlert dialog.
-      document.addEventListener("htmx:confirm", function(e) {
-        if (!e.detail.question) return;
-        e.preventDefault();
-        Swal.fire({
-          title: "Confirmer ?",
-          text: e.detail.question,
-          icon: "warning",
-          showCancelButton: true,
-          confirmButtonText: "Oui",
-          cancelButtonText: "Non"
-        }).then(function(result) {
-          if (result.isConfirmed) {
-            e.detail.issueRequest(true);
-          }
-        });
-      });
-    </script>
 
     <div class="compte-section__contenu">
         {% for resa in reservations %}

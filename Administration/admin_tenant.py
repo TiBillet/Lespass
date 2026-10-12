@@ -170,6 +170,7 @@ from Customers.models import (
     MODULES_V2_FERMES_AUX_LIEUX_LEGACY,
     PHRASE_DE_FIN_DES_RAISONS_DU_MOTEUR_LEGACY,
     Client,
+    Domain,
     lieu_en_moteur_legacy,
 )
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
@@ -5738,6 +5739,87 @@ class TicketAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAd
     #     return future_events
 
 
+class DomaineDuLieuForm(forms.ModelForm):
+    """
+    Un domaine d'un lieu : le nom seul, sans protocole ni chemin.
+    / A venue domain: the bare host name, no scheme nor path.
+    """
+
+    class Meta:
+        model = Domain
+        fields = ("domain", "is_primary")
+
+    def clean_domain(self):
+        # Le domaine sert a trouver le lieu de chaque requete (django-tenants) :
+        # « https://x.fr/ » ne correspondrait jamais a l'hote « x.fr ».
+        # / The domain routes every request to its venue: it must be a bare host.
+        domaine = self.cleaned_data["domain"].strip().lower()
+        if "/" in domaine or ":" in domaine or " " in domaine:
+            raise ValidationError(
+                _("Saisissez le nom de domaine seul, sans https:// ni chemin. Exemple : monlieu.fr")
+            )
+        return domaine
+
+
+class DomainesDuLieuFormSet(forms.BaseInlineFormSet):
+    """
+    Un lieu garde au moins un domaine, et un seul domaine principal.
+    / A venue keeps at least one domain, and exactly one primary domain.
+    """
+
+    def clean(self):
+        super().clean()
+        nombre_de_domaines = 0
+        nombre_de_domaines_principaux = 0
+        for formulaire in self.forms:
+            donnees = getattr(formulaire, "cleaned_data", None)
+            if not donnees or donnees.get("DELETE"):
+                continue
+            nombre_de_domaines += 1
+            if donnees.get("is_primary"):
+                nombre_de_domaines_principaux += 1
+
+        if nombre_de_domaines == 0:
+            raise ValidationError(_("Un lieu doit garder au moins un domaine."))
+        if nombre_de_domaines_principaux != 1:
+            raise ValidationError(_("Cochez un seul domaine principal."))
+
+
+class DomainesDuLieuInline(TabularInline):
+    """
+    Domaines d'un lieu, modifiables par un superuser seulement.
+    / Venue domains, editable by superusers only.
+
+    LOCALISATION : Administration/admin_tenant.py
+
+    Le domaine principal est l'adresse officielle du lieu : les autres domaines
+    y sont rediriges (CanonicalDomainRedirectMiddleware, Customers/middleware.py).
+    Domain.save() (django-tenants) retire la case des autres domaines quand on en
+    coche un.
+    / The primary domain is the venue's official address; other domains redirect to it.
+    """
+
+    model = Domain
+    form = DomaineDuLieuForm
+    formset = DomainesDuLieuFormSet
+    fields = ("domain", "is_primary")
+    extra = 0
+    verbose_name = _("Domaine")
+    verbose_name_plural = _("Domaines")
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+
 @admin.register(Client, site=staff_admin_site)
 class TenantAdmin(ModelAdmin):
     # Doit être référencé pour le champs autocomplete_fields federated_with de configuration
@@ -5795,23 +5877,20 @@ class TenantAdmin(ModelAdmin):
         Lieux affiches dans la liste et proposes par l'autocompletion.
         / Venues shown in the list and offered by the autocomplete.
 
-        Par defaut, on retire les lieux techniques : ROOT (schema public), META
-        (agenda partage de TiBillet) et les emplacements en attente de
-        configuration. Un superuser voit META et les emplacements en attente
-        dans la LISTE, pour retrouver leur schema ; ROOT reste toujours cache.
-        L'autocompletion (federation, invitations) les retire tous : on ne
+        On retire toujours ROOT (schema public) et les emplacements en attente
+        de configuration. META (agenda partage de TiBillet) est retire aussi,
+        sauf dans la LISTE d'un superuser, pour retrouver son schema.
+        L'autocompletion (federation, invitations) le retire toujours : on ne
         federe pas un lieu technique.
-        / Technical venues are hidden by default. A superuser sees META and
-        waiting slots in the LIST; ROOT is always hidden; the autocomplete hides
-        them all.
+        / ROOT and waiting slots are always hidden. META is hidden too, except in
+        a superuser's LIST; the autocomplete always hides it.
         """
         queryset = super().get_queryset(request).prefetch_related('domains').exclude(
-            categorie=Client.ROOT)
+            categorie__in=[Client.ROOT, Client.WAITING_CONFIG])
         est_une_autocompletion = "autocomplete" in request.path
         if request.user.is_superuser and not est_une_autocompletion:
             return queryset
-        return queryset.exclude(
-            categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META])
+        return queryset.exclude(categorie=Client.META)
 
     def get_search_results(self, request, queryset, search_term):
         """
@@ -5879,14 +5958,51 @@ class TenantAdmin(ModelAdmin):
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+    def get_inlines(self, request, obj):
+        # Les domaines ne s'affichent que pour un superuser, sur un lieu existant.
+        # / Domains are shown to superusers only, on an existing venue.
+        if obj is not None and request.user.is_superuser:
+            return [DomainesDuLieuInline]
+        return []
+
+    def get_readonly_fields(self, request, obj=None):
+        # La fiche du lieu reste en lecture seule, meme pour un superuser : il ne
+        # peut modifier que les domaines (inline).
+        # / The venue itself stays read-only: only its domains are editable.
+        return [champ.name for champ in Client._meta.fields]
+
     def has_change_permission(self, request, obj=None):
-        return False
+        # Vrai pour un superuser : sans cela, Django affiche la fiche sans bouton
+        # d'enregistrement, et l'inline des domaines ne peut pas etre envoye.
+        # / True for superusers: otherwise the form has no save button for the inline.
+        return request.user.is_superuser
 
     def has_add_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def save_model(self, request, obj, form, change):
+        # On n'enregistre PAS le lieu : tous ses champs sont en lecture seule, et
+        # django-tenants refuse d'enregistrer un lieu depuis le schema d'un autre
+        # lieu (l'admin tourne sur le lieu courant). Seuls les domaines (inline,
+        # schema public) sont enregistres, par save_formset.
+        # / The venue is NOT saved: all read-only, and django-tenants refuses to save
+        # a venue from another venue's schema. Only domains are saved.
+        pass
+
+    def save_formset(self, request, form, formset, change):
+        super().save_formset(request, form, formset, change)
+        if formset.model is Domain:
+            # Le middleware de redirection garde le domaine principal en cache 1 h,
+            # sous la cle du lieu (prefixee par son schema). Sans ce vidage, les
+            # visiteurs seraient rediriges vers l'ancien domaine principal.
+            # / The redirect middleware caches the primary domain for 1 h, under the
+            # venue's own schema prefix: clear it, or visitors go to the old domain.
+            lieu = form.instance
+            with tenant_context(lieu):
+                cache.delete(f"canonical_primary_domain:{lieu.schema_name}")
 
 
 @admin.register(RootConfiguration, site=staff_admin_site)

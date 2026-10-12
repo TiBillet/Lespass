@@ -1299,10 +1299,14 @@ img { max-width: 100%; display: block; }
   border-radius: 999px;
   font-family: var(--font-display);
   font-weight: 900;
-  min-height: 72px;
+  min-height: 56px;
   width: 100%;
   max-width:520px;
-  font-size: 24px;
+  /* Libellé capé à 20 px : à 24 px, « Contribuer au projet » passait sur deux
+     lignes à 375 px. / Capped at 20px: at 24px the label wrapped at 375px. */
+  font-size: clamp(1rem, 0.85rem + 0.5vw, 1.25rem);
+  letter-spacing: 0.02em;
+  text-decoration: none;
   text-transform: uppercase;
   text-align: center;
   color: #000000;
@@ -1778,7 +1782,11 @@ img { max-width: 100%; display: block; }
 .event-card__time { font-size: var(--text-md); color: var(--color-text-muted); margin-top: 2px; }
 .event-card__loc { display: flex; align-items: center; gap: 6px; font-size: var(--text-md); color: var(--color-text-muted); }
 .event-card__tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.event-card__meta { font-size: var(--text-sm); color: var(--color-text-faint); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+/* `margin-top: auto` pousse « par … » et le pied de carte EN BAS du corps
+   (colonne flex étirée à la hauteur de la rangée) : « En savoir plus » et le
+   prix tombent à la même hauteur sur toutes les cartes, avec ou sans tags.
+   / Pushes the byline and footer to the bottom: aligned across the row. */
+.event-card__meta { margin-top: auto; font-size: var(--text-sm); color: var(--color-text-faint); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
 .event-card__meta strong { color: var(--color-text); font-weight: 700; }
 .event-card__meta a { color: var(--color-link); font-weight: 700; }
 .event-card__footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }
@@ -2087,8 +2095,13 @@ img { max-width: 100%; display: block; }
 .timeline::before { content: ''; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 2px; background: var(--color-border-strong); }
 .timeline-item { position: relative; padding-bottom: var(--space-5); }
 .timeline-item:last-child { padding-bottom: 0; }
+/* Pastille centrée sur la ligne : la ligne est à 5 px (2 px de large, centre
+   6 px) du bord de .timeline, l'élément commence à --space-6. Pastille de 12 px
+   → left = -(--space-6) pour que son centre tombe sur 6 px.
+   / Dot centred on the line (line centre = 6px, item starts at --space-6). */
 .timeline-item::before {
-  content: ''; position: absolute; left: -25px; top: 5px;
+  box-sizing: border-box;
+  content: ''; position: absolute; left: calc(-1 * var(--space-6)); top: 5px;
   width: 12px; height: 12px; border-radius: 50%;
   background: var(--color-text); border: 2px solid var(--color-bg);
 }
@@ -2624,6 +2637,39 @@ details.module + details.module { margin-top: var(--space-4); }
   .compte__scanner { width: 100%; }
 }
 
+/* --- Tirelire (/my_account/balance/) -------------------------------- */
+/* / Wallet page
+   Le bouton scanner : largeur du texte sur ordinateur, toute la largeur sur mobile.
+   / Scan button: text width on desktop, full width on mobile. */
+.compte-tirelire { margin-top: var(--space-4); }
+.compte-tirelire__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.compte-tirelire__bouton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;           /* cible tactile / touch target */
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
+/* .compte__scanner pose une marge haute pour /my_account/ : pas ici.
+   / .compte__scanner adds a top margin for /my_account/: not here. */
+.compte-tirelire .compte__scanner { margin-top: 0; }
+/* Historique : un bouton centre, sous la liste des monnaies.
+   / History: one centred button, under the currency list. */
+.compte-historique { text-align: center; }
+.compte-historique__bouton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+}
+@media (max-width: 47.99rem) {
+  .compte-tirelire__actions { flex-direction: column; }
+  .compte-tirelire__bouton { width: 100%; }
+}
+
 /* --- Sous-pages du compte ------------------------------------------ */
 /* / Account sub-pages */
 .compte-section { padding-top: var(--space-4); }
@@ -2708,6 +2754,26 @@ details.module + details.module { margin-top: var(--space-4); }
 }
 .tb-page .tb-fil-ariane a { color: var(--color-link); }
 .tb-page .tb-markdown { font-size: var(--text-base); }
+/* Listes du texte libre : le reset global `ul { list-style: none }` (haut de ce
+   fichier) retire les puces partout. Dans un texte rédigé, une liste sans puce
+   se lit comme des lignes décalées sans raison : on les rend ici.
+   / Free-text lists: the global `ul { list-style: none }` reset strips
+   bullets; in written text an unbulleted list reads as stray indents. */
+.tb-page .tb-markdown ul { list-style: disc; }
+.tb-page .tb-markdown ul ul { list-style: circle; }
+.tb-page .tb-markdown ol { list-style: decimal; }
+.tb-page .tb-markdown li::marker { color: var(--color-text-faint); }
+
+/* Citation : en romain, comme tout texte d'affichage (pas d'italique sur un
+   grand corps). Le guillemet décoratif est ramené DANS le cadre : le socle le
+   remontait de 0,55 em, il chevauchait le bord haut du bloc.
+   / Quote: upright like all display text. The decorative mark is pulled back
+   inside the frame; the base raised it 0.55em, over the block's top edge. */
+.tb-page .tb-bloc--temoignage .tb-bloc__citation {
+  font-style: normal;
+  padding-top: var(--space-7);
+}
+.tb-page .tb-bloc--temoignage .tb-bloc__citation::before { top: 0; }
 
 /* Sommaire : même allure que .toc de la maquette (liste de liens,
    entrée active sur fond blanc). Les classes lues par
@@ -2728,16 +2794,22 @@ details.module + details.module { margin-top: var(--space-4); }
   margin-bottom: var(--space-3);
 }
 .tb-page .tb-sommaire__liste { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Numéro et libellé collés à gauche, alignés sur la ligne de base.
+   `space-between` est exclu : il repoussait les libellés courts (« Et
+   maintenant ? ») contre le bord droit, loin de leur numéro.
+   / Number and label packed left, on the baseline. `space-between` pushed
+   short labels to the right edge, away from their number. */
 .tb-page .tb-sommaire__entree a {
-  display: block;
+  display: flex;
+  justify-content: flex-start;
+  align-items: baseline;
+  gap: var(--space-2);
   padding: 7px var(--space-3);
   border-radius: var(--radius-s);
   border: 1px solid transparent;
   font-size: var(--text-ui);
   color: var(--color-text);
   text-decoration: none;
-  justify-content: space-between;
-  display: flex;
 }
 .tb-page .tb-sommaire__entree a:hover { background: var(--color-overlay-hover); }
 .tb-page .tb-sommaire__entree--active a {
@@ -2764,13 +2836,28 @@ details.module + details.module { margin-top: var(--space-4); }
 .tb-page .tb-bloc__infos-transport h3 { font-size: var(--text-ui); font-weight: 700; margin: var(--space-3) 0 var(--space-1); }
 
 /* Sous-cartes (MEDIA_ET_CARTES) : allure de .resource-card. */
+/* Le socle ne pose qu'un padding-left (il dessinait un simple filet à gauche).
+   La carte ayant ici une bordure sur les quatre côtés, il faut un padding sur
+   les quatre côtés : sans lui, le texte touche le haut et le bord droit.
+   / The base only sets padding-left (it drew a left rule). A four-sided card
+   needs four-sided padding, or the text touches the top and right edges. */
 .tb-page .tb-sous-carte {
+  padding: var(--space-4) var(--space-5);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
 }
-.tb-page .tb-sous-carte__titre { font-weight: 700; }
+/* Semi-gras et non gras : ces cartes portent souvent des phrases entières,
+   qui deviennent un pavé noir en 700.
+   / Semi-bold, not bold: these cards often carry full sentences. */
+.tb-page .tb-sous-carte__titre {
+  margin: 0;
+  font-size: var(--text-ui);
+  font-weight: 600;
+  line-height: 1.45;
+}
+.tb-page .tb-sous-carte__titre + .tb-sous-carte__texte { margin-top: var(--space-2); }
 .tb-page .tb-bloc__carte-badge {
   font-size: var(--text-2xs);
   font-weight: 700;
@@ -2911,15 +2998,21 @@ details.module + details.module { margin-top: var(--space-4); }
    / Block buttons: same look as .btn--primary. The base put the label on letchi
    (Lc 38). The outline keeps letchi at rest and fills on hover. The base's hover
    lift is cancelled: the press is the only motion. */
+/* Taille et interligne communs aux DEUX variantes : posés sur une seule, les
+   deux boutons d'un même bloc n'avaient ni la même hauteur ni la même ligne de
+   base (15 px contre 16 px).
+   / Shared size and line-height: set on one variant only, two side-by-side
+   buttons had different heights and baselines. */
+.tb-page .tb-bloc__bouton--plein,
+.tb-page .tb-bloc__bouton--contour {
+  border-radius: var(--radius-pill);
+  font-size: var(--text-ui);
+  line-height: 1.25;
+}
 .tb-page .tb-bloc__bouton--plein {
   background: var(--button-primary-fond);
   color: #000;
   border-color: transparent;
-  border-radius: var(--radius-pill);
-  font-size: var(--text-ui);
-}
-.tb-page .tb-bloc__bouton--contour{
-  border-radius: var(--radius-pill);
 }
 .tb-page .tb-bloc__bouton--plein:hover,
 .tb-page .tb-bloc__bouton--contour:hover {
@@ -2978,14 +3071,23 @@ details.module + details.module { margin-top: var(--space-4); }
    would break that. A counter leaves the DOM untouched. */
 .tb-page .tb-sommaire__liste { counter-reset: tb-sommaire; }
 .tb-page .tb-sommaire__entree--niveau-1 { counter-increment: tb-sommaire; }
+/* Largeur fixe du numéro : les libellés des entrées de niveau 1 démarrent tous
+   au même endroit, et les sous-entrées (sans numéro) se calent dessus.
+   / Fixed number width: level-1 labels all start at the same x, and the
+   unnumbered sub-entries line up with them. */
 .tb-page .tb-sommaire__entree--niveau-1 > a::before {
   content: counter(tb-sommaire, decimal-leading-zero);
-  margin-right: var(--space-2);
+  flex: 0 0 1.25rem;
   font-size: var(--text-xs);
   font-weight: 700;
   color: var(--color-text-faint);
   font-variant-numeric: tabular-nums;
 }
+/* Sous-entrées : décalées de la largeur du numéro + l'écart, pour que leur
+   libellé tombe sous celui de l'entrée parente.
+   / Sub-entries: shifted by number width + gap, under the parent's label. */
+.tb-page .tb-sommaire__entree--niveau-2 { padding-left: calc(1.25rem + var(--space-2)); }
+.tb-page .tb-sommaire__entree--niveau-3 { padding-left: calc(1.25rem + var(--space-2) + var(--space-4)); }
 
 /* TITRES DE SECTION NUMÉROTÉS, comme .section__title de la maquette : le numéro
    en Luciole devant le titre en Unbounded, puis un filet fin.
@@ -3045,12 +3147,129 @@ details.module + details.module { margin-top: var(--space-4); }
   border-bottom: 1px solid var(--color-border);
 }
 
-.tb-bloc--cta{
-  background-color: color-mix(in srgb, var(--loseyan) 7%, var(--tb-surface));
-  border-block: none;
+/* =================================================================
+   PAGES CMS — ÉQUILIBRE OPTIQUE DES BLOCS
+   / CMS pages — optical balance of blocks
+
+   Une seule règle de lecture : tout part du MÊME bord gauche (celui du
+   bandeau du lieu, x = bord de main.container) et chaque encadré a le même
+   air en haut et en bas. Les cadres réutilisent le dessin des cartes
+   (surface papier, filet, rayon M, ombre de carte) au lieu d'inventer un
+   fond par bloc.
+   / One reading rule: everything starts from the SAME left edge, and every
+   framed block has equal air top and bottom. Frames reuse the card look
+   instead of inventing a background per block.
+   ================================================================= */
+
+/* Titre de page, fil d'Ariane et signature sur l'axe gauche du contenu.
+   Le socle leur donne `margin: 0 auto` + une largeur max : dans la grille
+   .tb-flux, un élément à marges automatiques se rétrécit à son texte et se
+   CENTRE. Un titre court (« Vortex ») flottait alors au milieu, au-dessus de
+   blocs alignés à gauche.
+   / The base's `margin: 0 auto` makes a grid item shrink to its text and
+   centre itself: short titles floated mid-page above left-aligned blocks. */
+.tb-page.tb-flux > .tb-page__titre,
+.tb-page.tb-flux > .tb-fil-ariane,
+.tb-page.tb-flux > .tb-page__signature {
+  margin-inline: 0;
+  max-width: none;
+  padding-inline: 0;
 }
-.tb-bloc--cta .tb-bloc__contenu{
-  border-left: 4px solid var(--loseyan);
+
+/* BANNIÈRE AVEC IMAGE : la carte de titre est posée DANS l'image, avec un
+   retrait, au lieu de coller au bord gauche. Le retrait est une MARGE DE LA
+   CARTE, jamais un padding de la section : le socle (tb-blocs.css, « pleine
+   largeur ») pose sur la section une marge négative compensée par un padding
+   calculé — remplacer ce padding décale tout le contenu hors de l'image.
+   Le titre prend la taille d'un vrai titre de page : à la taille d'un titre
+   de section, la bannière pesait moins que les sections qu'elle annonce.
+   / Hero card inset via the CARD's margin, never the section's padding (the
+   base pairs a negative margin with a computed padding on full-bleed blocks).
+   The hero title gets page-title size. */
+/* Retrait des DEUX côtés : sur mobile la carte occupe toute la largeur et
+   doit rester centrée dans l'image ; sur ordinateur sa largeur max (44rem)
+   la laisse à gauche, le retrait droit n'y change rien.
+   / Inset on BOTH sides: centred on mobile, left-placed on desktop. */
+.tb-page .tb-bloc--hero-image .tb-bloc__contenu {
+  margin-inline: clamp(1.25rem, 4vw, 3rem);
+}
+
+/* Frise : les récits sont des paragraphes, ils gardent une longueur de
+   ligne lisible (~72 caractères) au lieu de courir sur toute la page.
+   / Timeline stories keep a readable line length. */
+.tb-page .tb-bloc--frise .timeline-item__text { max-width: 72ch; }
+.tb-page .tb-bloc--hero .tb-bloc__titre {
+  font-size: var(--text-display);
+  font-weight: 800;
+  line-height: 1.1;
+}
+.tb-page .tb-bloc--hero .tb-bloc__sous-titre {
+  margin-top: var(--space-3);
+  margin-bottom: 0;
+  font-size: var(--text-lg);
+  color: var(--color-text-muted);
+}
+
+/* CARTES D'ÉVÈNEMENT : boîte image en 16/9, le format des visuels
+   d'évènement (les variations crop_* d'Event sont en 960×540). En 3/2, une
+   photo 16/9 laissait deux bandes grises dessus/dessous. L'image reste
+   ENTIÈRE (`contain` du socle) : une affiche en portrait garde ses bords.
+   / Event cards: 16/9 image box, the event visual format. The image stays
+   whole (`contain`), so a portrait poster keeps its edges. */
+.tb-page .tb-bloc--carte > .tb-bloc__carte-image { aspect-ratio: 16 / 9; }
+/* Écart minimal titre → bouton : le bouton est poussé en bas par
+   `margin-top: auto`, qui vaut 0 quand la carte n'a pas de texte.
+   / Minimum title → button gap (margin-top:auto is 0 without text). */
+.tb-page .tb-bloc--carte > .tb-bloc__carte-titre { margin-bottom: var(--space-4); }
+
+/* APPEL À L'ACTION et NEWSLETTER : encadrés comme des cartes, padding égal
+   sur les quatre côtés. Le fond bleuté et la barre de gauche juraient avec le
+   papier chaud du site, et le padding du socle (haut ≠ bas) décentrait le
+   contenu dans son cadre.
+   `.tb-page.tb-flux >` : il faut passer devant `.tb-flux > .tb-bloc--cta` du
+   socle, qui le traite en pleine largeur (marge négative + padding calculé).
+   Un cadre de carte reste DANS la colonne : marge à 0.
+   / CTA and NEWSLETTER: framed like cards, equal padding on all four sides.
+   A card frame stays INSIDE the column, so the base's full-bleed margin is reset. */
+.tb-page.tb-flux > .tb-bloc--cta,
+.tb-page.tb-flux > .tb-bloc--newsletter {
+  margin-inline: 0;
+  /* L'air entre blocs venait du padding du socle, remplacé ici par le
+     padding du cadre : sans marge, deux encadrés consécutifs se touchent.
+     Les marges ne fusionnent pas dans la grille : 16 + 16 = 32 px entre
+     deux encadrés voisins.
+     / Inter-block air came from the base padding, replaced here. Grid margins
+     do not collapse: 16 + 16 = 32px between two neighbouring frames. */
+  margin-block: var(--space-4);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-6);
+}
+.tb-page .tb-bloc--cta .tb-bloc__contenu {
+  border-left: none;
+  padding-left: 0;
+  max-width: none;
+}
+.tb-page .tb-bloc--cta .tb-bloc__titre { font-size: var(--text-xl); }
+.tb-page .tb-bloc--cta .tb-bloc__sous-titre,
+.tb-page .tb-bloc--newsletter .tb-bloc__sous-titre {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+}
+.tb-page .tb-bloc--cta .tb-bloc__texte { margin-top: var(--space-2); }
+.tb-page .tb-bloc--cta .tb-bloc__boutons { margin-top: var(--space-5); }
+.tb-page .tb-bloc--cta .tb-bloc__contenu > :last-child,
+.tb-page .tb-bloc--newsletter .tb-bloc__contenu > :last-child { margin-bottom: 0; }
+/* Le formulaire Ghost en variante minimale (champ + bouton) : on retire la
+   hauteur réservée par le socle pour sa version plein cadre (360 px).
+   / Minimal Ghost form: drop the 360px reserved for its full-frame variant. */
+.tb-page .tb-bloc--newsletter .tb-newsletter {
+  min-height: 0;
+  max-width: 30rem;
+  margin-top: var(--space-5);
 }
 
 /* =================================================================

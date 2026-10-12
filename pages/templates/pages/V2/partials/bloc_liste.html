@@ -30,7 +30,14 @@
     followed straight by the cards' <h3>. `visually-hidden` keeps the <h2> for
     screen readers and crawlers without showing the word twice.
 {% endcomment %}
-{% if bloc.titre %}
+{% comment %}
+    Source EVENEMENTS : le titre est porte par le composant agenda_a_venir
+    (en-tete « Titre · N événements à venir » + « Tout l'agenda → »), on ne
+    rend donc PAS la section titre ci-dessous pour cette source — sauf dans
+    l'etat vide, plus bas.
+    / EVENEMENTS source: the agenda_a_venir component carries the title.
+{% endcomment %}
+{% if bloc.titre and bloc.source != "EVENEMENTS" %}
     <section class="tb-bloc tb-bloc--liste-titre" data-testid="bloc-liste-titre">
         <div class="tb-bloc__contenu">
             <h2 class="tb-bloc__titre{% if bloc.titre == page_courante.titre %} visually-hidden{% endif %}">{{ bloc.titre }}</h2>
@@ -40,36 +47,34 @@
 
 {% if bloc.source == "EVENEMENTS" %}
 
-    {% evenements_a_venir bloc.nombre_max as evenements %}
-    {% if evenements %}
-        <div class="tb-grille" data-testid="bloc-liste-evenements">
-            {% for event in evenements %}
-                <article class="tb-bloc tb-bloc--carte">
-                    {% if event.img %}
-                        {# Variation "hdr" et non "crop_hdr" : les variations #}
-                        {# "crop_*" sont recadrees a la generation (960x540 #}
-                        {# force), l'affiche d'un evenement y perdrait ses #}
-                        {# bords. "hdr" redimensionne sans recadrer, et la #}
-                        {# carte affiche l'image entiere (cf. tb-blocs.css). #}
-                        {# / "hdr", not "crop_hdr": "crop_*" variations are #}
-                        {# cropped at generation time, which would cut an #}
-                        {# event poster's edges. "hdr" resizes without #}
-                        {# cropping, and the card shows the whole image. #}
-                        <img class="tb-bloc__carte-image"
-                             {% if event.img.hdr.width and event.img.hdr.height %}width="{{ event.img.hdr.width }}" height="{{ event.img.hdr.height }}"{% endif %} src="{{ event.img.hdr.url }}"
-                             alt="{{ event.name }}" loading="lazy">
-                    {% endif %}
-                    <p class="tb-bloc__carte-surtitre">{{ event.datetime|date:"l j F · H\hi" }}</p>
-                    <h3 class="tb-bloc__carte-titre">{{ event.name }}</h3>
-                    {% if event.short_description %}
-                        <div class="tb-bloc__carte-texte">{{ event.short_description }}</div>
-                    {% endif %}
-                    <a class="tb-bloc__bouton tb-bloc__bouton--plein"
-                       href="/event/{{ event.slug }}/">{% translate "Voir l'évènement" %}</a>
-                </article>
-            {% endfor %}
-        </div>
+    {% comment %}
+        MEME RENDU que la section « Ce qui arrive » de l'accueil code en dur
+        (pages/V2/vues/accueil.html) : composant cotton/V2/agenda_a_venir.html,
+        cartes cotton/V2/event_card.html, memes evenements et memes prix
+        (EventMVT.federated_events_filter : lieu + lieux federes, prix calcule
+        dans le contexte du lieu de chaque evenement).
+        Sans titre saisi, le composant garde son titre par defaut.
+        / SAME rendering as the hardcoded home's "Ce qui arrive" section.
+    {% endcomment %}
+    {% agenda_a_venir_du_bloc bloc.nombre_max as agenda %}
+    {% if agenda.evenements %}
+        {% if bloc.titre %}
+            <c-V2.agenda_a_venir :events="agenda.evenements" :total="agenda.total"
+                                 :nombre_max="agenda.nombre_de_cartes" title="{{ bloc.titre }}"
+                                 testid="bloc-liste-evenements"/>
+        {% else %}
+            <c-V2.agenda_a_venir :events="agenda.evenements" :total="agenda.total"
+                                 :nombre_max="agenda.nombre_de_cartes"
+                                 testid="bloc-liste-evenements"/>
+        {% endif %}
     {% else %}
+        {% if bloc.titre %}
+            <section class="tb-bloc tb-bloc--liste-titre" data-testid="bloc-liste-titre">
+                <div class="tb-bloc__contenu">
+                    <h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>
+                </div>
+            </section>
+        {% endif %}
         {# Etat vide honnete : on n'invente rien (regle Hallmark). #}
         {# / Honest empty state: we invent nothing (Hallmark rule). #}
         <section class="tb-bloc" data-testid="bloc-liste-evenements-vide">

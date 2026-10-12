@@ -415,6 +415,34 @@ class Carrousel(models.Model):
         return self.name
 
 
+# Domaines du projet TiBillet lui-meme. Ce n'est jamais le site web d'un lieu :
+# un lieu sans site a souvent saisi tibillet.org dans le formulaire Stripe, et la
+# creation du lieu recopiait cette adresse (BaseBillet/validators.py).
+# / TiBillet's own domains: never a venue's website.
+DOMAINES_DU_PROJET_TIBILLET = ("tibillet.org", "tibillet.coop", "tibillet.re")
+
+
+def est_un_site_du_projet_tibillet(adresse):
+    """
+    Vrai si l'adresse pointe vers le site du projet TiBillet (tibillet.org, .coop,
+    .re, avec ou sans www). Les sous-domaines des lieux (x.tibillet.coop) ne
+    comptent pas.
+    / True if the address is TiBillet's own site; venue subdomains do not count.
+
+    LOCALISATION : BaseBillet/models.py
+
+    Accepte une adresse sans protocole : Stripe ne l'impose pas.
+    / Accepts an address without scheme.
+    """
+    if not adresse:
+        return False
+    adresse_sans_protocole = adresse.strip().lower().split("://")[-1]
+    hote = adresse_sans_protocole.split("/")[0].split(":")[0]
+    if hote.startswith("www."):
+        hote = hote[len("www."):]
+    return hote in DOMAINES_DU_PROJET_TIBILLET
+
+
 class Configuration(SingletonModel):
     def uuid(self):
         return connection.tenant.pk
@@ -483,6 +511,16 @@ class Configuration(SingletonModel):
                         delete_orphans=True,
                         verbose_name=_('Background image'),
                         )
+
+    @property
+    def site_web_du_lieu(self):
+        """
+        Le site web a afficher en public : None si c'est le site du projet TiBillet.
+        / The website to show publicly: None if it is TiBillet's own site.
+        """
+        if est_un_site_du_projet_tibillet(self.site_web):
+            return None
+        return self.site_web
 
     @property
     def get_med_img(self):

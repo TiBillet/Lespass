@@ -10,16 +10,16 @@ LOCALISATION : pages/templates/pages/V2/vues/compte/balance.html
 Vue : BaseBillet/views.py MyAccount.balance (/my_account/balance/)
 
 FLUX :
-1. Les boutons du porte-monnaie (recharger, rembourser) viennent du partiel
-   partagé htmx/views/my_account/tirelire_section.html. Les boutons de paiement
-   par QR code (initier, scanner) sont sur /my_account/ en V2, pas ici.
+1. Un seul bouton : scanner un QR code de paiement (aussi sur /my_account/,
+   sous « Ma carte »). Pas de recharge ni de remboursement en ligne sur cette
+   page. « Initier un paiement » reste sur /my_account/ seulement.
 2. La liste des monnaies arrive toute seule quand elle devient visible
    (hx-trigger="revealed") depuis /my_account/tokens_table/.
 3. L'historique se charge au clic (/my_account/transactions_table/) et
    remplace la section #transactionHistory.
 
 A CONSERVER : #token-table-loader (spinner local), data-testid="account-tokens-table",
-#transactionHistory, #detail-monnaies.
+#transactionHistory.
 {% endcomment %}
 
 {% block title %}{% translate 'My balance' %}{% endblock %}
@@ -27,10 +27,29 @@ A CONSERVER : #token-table-loader (spinner local), data-testid="account-tokens-t
 
 {% block account_page %}
 
-    {# Boutons du porte-monnaie : partiel partagé entre les skins. #}
-    {# V2 affiche le scanner sous « Ma carte » (index) : pas de doublon ici. #}
-    {# / Shared wallet buttons; V2 shows the scanner on /my_account/, not here. #}
-    {% include "htmx/views/my_account/tirelire_section.html" with masquer_le_bouton_scanner=True %}
+    {# Bouton du porte-monnaie : scanner un QR code de paiement. #}
+    {# Sur mobile, il prend toute la largeur. #}
+    {# / Wallet button: scan a payment QR code; full width on mobile. #}
+    <section class="compte-tirelire" data-testid="compte-tirelire">
+        <div class="compte-tirelire__actions">
+            {% if user.email_valid %}
+                <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn compte__scanner compte-tirelire__bouton"
+                   data-testid="tirelire-scanner-qrcode">
+                    <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
+                    {% translate "Scan a payment QR Code" %}
+                </a>
+            {% else %}
+                {# Email non validé : gris, non cliquable. Le lien pour renvoyer #}
+                {# l'email de validation est en tête de page (account_base.html). #}
+                {# / Email not validated: grey, non-clickable; resend link is at the top. #}
+                <button type="button" class="btn btn--secondary compte__scanner compte-tirelire__bouton" disabled
+                        data-testid="tirelire-scanner-qrcode-email-non-valide">
+                    <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
+                    {% translate "Please valid your email to scan a payment QR Code" %}
+                </button>
+            {% endif %}
+        </div>
+    </section>
 
     <section class="section compte-section">
         <h2 class="section__title" id="detail-monnaies">{% translate "Currency list" %}</h2>
@@ -61,11 +80,13 @@ A CONSERVER : #token-table-loader (spinner local), data-testid="account-tokens-t
         {% endcomment %}
     </section>
 
-    <section id="transactionHistory" class="section compte-section">
-        <button type="button" class="btn btn--outline"
+    <section id="transactionHistory" class="section compte-section compte-historique">
+        <button type="button" class="btn btn--secondary compte-historique__bouton"
                 hx-get="/my_account/transactions_table/" hx-indicator="#tibillet-spinner"
                 hx-target="#transactionHistory"
-                hx-swap="outerHTML">
+                hx-swap="outerHTML"
+                data-testid="compte-historique-transactions">
+            <i class="bi bi-clock-history" aria-hidden="true"></i>
             {% translate "Transaction history" %}
         </button>
     </section>

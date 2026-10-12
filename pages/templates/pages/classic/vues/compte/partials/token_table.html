@@ -5,7 +5,6 @@
     <thead>
     <th>{% trans "Balance" %}</th>
     <th>{% trans "Used in collectives" %}</th>
-    <th>{% trans "Last transaction" %}</th>
     </thead>
     <tbody>
     {% for token in tokens %}
@@ -16,9 +15,6 @@
                 TiBillets
                 {% else %}
                 {{ token.name }}
-                {# Badge "Local" : token gere en interne (fedow_core), pas sur le Fedow distant. #}
-                {# / "Local" badge: token managed internally (fedow_core), not on the remote Fedow. #}
-                {% if token.is_local %}<span class="badge bg-info-subtle text-info-emphasis ms-1" data-testid="token-badge-local">{% translate "Local" %}</span>{% endif %}
                 {% endif %}
             </td>
             <td>
@@ -41,7 +37,6 @@
                 <span>{{ token.asset.names_of_place_federated|join:", " }}</span>
                 {% endif %}
             </td>
-            <td>{{ token.last_transaction_datetime }}</td>
         </tr>
     {% endfor %}
     </tbody>

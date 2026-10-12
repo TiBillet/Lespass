@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 def validate_hex8(value):
-    logger.info(value)
     if value in [None, ""]:
         return None
     if not re.fullmatch(r'^[0-9A-Fa-f]{8}$', str(value)):

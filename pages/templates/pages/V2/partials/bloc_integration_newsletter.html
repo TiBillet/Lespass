@@ -1,29 +1,42 @@
 {% load static i18n %}
 {% comment %}
     BLOC INTEGRATION / affichage NEWSLETTER — skin V2. Formulaire d'inscription Ghost.
+    LOCALISATION : pages/templates/pages/V2/partials/bloc_integration_newsletter.html
+
     Le script est VENDORISÉ (pages/static/pages/vendor/ghost/, zéro CDN, comme Leaflet).
     Il lit ses attributs data-* et injecte lui-même un <iframe> vers l'instance Ghost
     (data-site = bloc.embed_url). Aucune whitelist : le script est local, il ne fait que
-    poster vers l'instance Ghost configurée (périmètre du gestionnaire). Les couleurs par
-    défaut sont l'identité TiBillet (surchargeables plus tard si un tenant le demande).
+    poster vers l'instance Ghost configurée (périmètre du gestionnaire).
     Django échappe automatiquement les data-* (pas d'injection d'attribut).
-    / NEWSLETTER block — Ghost signup form. Vendored script (zero CDN). It reads its
-    data-* attributes and injects an <iframe> to the Ghost instance (data-site).
-    No whitelist: the script is local and only posts to the configured Ghost instance.
+
+    TITRE ET SOUS-TITRE RENDUS ICI, PAS PAR GHOST :
+    le script passe en variante « minimale » quand il ne reçoit PAS de data-title
+    (signup-form 0.3 : `isMinimal = !title`). Il n'affiche alors que le champ e-mail
+    et le bouton, sans son cadre plein écran ni sa propre police (Arial dans
+    l'iframe). Le titre reste donc dans la typographie du site, et le bloc a la
+    même allure que les autres. Ne pas rajouter data-title / data-description :
+    le cadre noir et la police étrangère reviendraient.
+
+    COULEUR DU BOUTON EN DUR : l'iframe ne voit pas les variables CSS du site.
+    #86ceff + texte noir = --loseyan-button-fond (pages/static/V2/css/V2.css),
+    le même aplat que les boutons des blocs.
+
+    / NEWSLETTER block — Ghost signup form. Title and subtitle are rendered HERE:
+    without data-title the script switches to its minimal variant (input + button
+    only, no full-screen frame, no Arial). The button colour is literal because the
+    iframe cannot read the site's CSS variables (= --loseyan-button-fond).
 {% endcomment %}
 {% if bloc.embed_url %}
     <section class="tb-bloc tb-bloc--newsletter" data-testid="bloc-integration-newsletter">
         <div class="tb-bloc__contenu">
+            {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
+            {% if bloc.sous_titre %}<p class="tb-bloc__sous-titre">{{ bloc.sous_titre }}</p>{% endif %}
             <div class="tb-newsletter">
                 <script src="{% static 'pages/vendor/ghost/signup-form.min.js' %}"
                         data-site="{{ bloc.embed_url }}"
-                        data-title="{{ bloc.titre }}"
-                        data-description="{{ bloc.sous_titre }}"
                         data-locale="fr"
-                        data-background-color="#08090c"
-                        data-text-color="#FFFFFF"
-                        data-button-color="#e93363"
-                        data-button-text-color="#FFFFFF"
+                        data-button-color="#86ceff"
+                        data-button-text-color="#000000"
                         async></script>
             </div>
         </div>

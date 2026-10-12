@@ -240,10 +240,10 @@ def test_agregation_avec_un_wallet_vide_ne_change_rien(tenant):
 def test_un_token_local_est_ajoute_et_marque_comme_local(tenant, asset_local_cadeau):
     """Un solde du moteur local apparait, marque `is_local`.
 
-    Le marqueur `is_local` porte le badge « Local » du tableau, et
+    Le marqueur `is_local` porte le badge « Local » de l'admin (wallet_info), et
     `names_of_place_federated` vaut l'organisation courante pour que la ligne ne
     soit pas grisee : cette monnaie est bien utilisable ici.
-    / The is_local flag drives the "Local" badge, and names_of_place_federated
+    / The is_local flag drives the admin "Local" badge, and names_of_place_federated
     holds the current org so the row is not greyed out.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "agreg_local")
@@ -375,8 +375,8 @@ def test_le_tableau_affiche_les_monnaies_des_deux_moteurs(
 
     C'est le scenario de la transition : un adherent porte a la fois du FED, une
     monnaie de caisse sociale alimentaire d'un autre lieu, et deux monnaies du
-    moteur local. Les quatre doivent apparaitre, les deux locales portant le
-    badge dedie.
+    moteur local. Les quatre doivent apparaitre, sans badge « Local » : le
+    visiteur n'a pas a savoir quel moteur porte sa monnaie.
     / The transition scenario: FED, another venue's currency, and two local ones.
     """
     utilisateur = _creer_humain_avec_wallet(tenant, "tableau_panorama")
@@ -410,7 +410,7 @@ def test_le_tableau_affiche_les_monnaies_des_deux_moteurs(
     # Le FED s'affiche sous le libelle « TiBillets » du gabarit, pas sous son
     # nom d'asset. / FED shows as the template's "TiBillets" label.
     assert "TiBillets" in contenu
-    assert contenu.count('data-testid="token-badge-local"') == 2
+    assert 'data-testid="token-badge-local"' not in contenu
 
 
 @pytest.mark.django_db
