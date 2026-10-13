@@ -488,6 +488,18 @@ class Booking(models.Model):
         (USER_CANCELED, _('Canceled by user')),
     ]
 
+    # Les statuts de LigneArticle comptés comme « payé ».
+    # Lus par total_paid() ET par la somme SQL de l'export
+    # (Administration/admin/resources.py : BookingAdmin.get_export_queryset).
+    # Une seule liste : les deux totaux ne peuvent pas diverger.
+    # / LigneArticle statuses counted as paid, shared by total_paid() and the export.
+    STATUTS_DES_LIGNES_PAYEES = [
+        LigneArticle.PAID,
+        LigneArticle.VALID,
+        LigneArticle.REFUNDED,
+        LigneArticle.CREDIT_NOTE,
+    ]
+
     resource = models.ForeignKey(
         Resource,
         on_delete=models.PROTECT,
@@ -583,6 +595,57 @@ class Booking(models.Model):
     def total_time(self):
         return str(self.slot_duration_minutes * self.slot_count) + "min"
 
+    def start_datetime_local(self, fuseau_du_lieu=None):
+        """
+        Le début du créneau, à l'heure du lieu.
+        / Slot start, in venue time.
+
+        En base, les dates sont en UTC. On les convertit dans le fuseau du lieu
+        (Configuration.get_tzinfo). Sinon, une réservation à 14h à La Réunion
+        s'afficherait 10h.
+        / Stored in UTC, converted to the venue timezone.
+
+        :param fuseau_du_lieu: fuseau déjà lu (optionnel). Un export le lit une seule
+            fois et le passe ici, pour éviter une requête par ligne.
+            / Timezone already read (optional), avoids one query per row.
+        """
+        if fuseau_du_lieu is None:
+            fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        return self.start_datetime.astimezone(fuseau_du_lieu)
+
+    def end_datetime_local(self, fuseau_du_lieu=None):
+        """
+        La fin du créneau, à l'heure du lieu.
+        / Slot end, in venue time.
+
+        Même principe que start_datetime_local.
+        / Same as start_datetime_local.
+        """
+        if fuseau_du_lieu is None:
+            fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        return self.end_datetime.astimezone(fuseau_du_lieu)
+
+    def date_display(self, fuseau_du_lieu=None):
+        """
+        La date du début du créneau, lisible : « 13/10/2026 ».
+        / Slot start date, human readable.
+        """
+        return self.start_datetime_local(fuseau_du_lieu).strftime('%d/%m/%Y')
+
+    def start_time_display(self, fuseau_du_lieu=None):
+        """
+        L'heure de début du créneau, lisible : « 14:30 ».
+        / Slot start time, human readable.
+        """
+        return self.start_datetime_local(fuseau_du_lieu).strftime('%H:%M')
+
+    def end_time_display(self, fuseau_du_lieu=None):
+        """
+        L'heure de fin du créneau, lisible : « 16:00 ».
+        / Slot end time, human readable.
+        """
+        return self.end_datetime_local(fuseau_du_lieu).strftime('%H:%M')
+
     def to_pay(self):
         """
         Le reste à payer : la somme des nets vendus (`total_ttc`) des lignes pas encore
@@ -602,13 +665,7 @@ class Booking(models.Model):
         included, like Reservation.total_paid.
         """
         total_paid = 0
-        statuts_des_lignes_payees = [
-            LigneArticle.PAID,
-            LigneArticle.VALID,
-            LigneArticle.REFUNDED,
-            LigneArticle.CREDIT_NOTE,
-        ]
-        for ligne_article in self.lignearticles.filter(status__in=statuts_des_lignes_payees):
+        for ligne_article in self.lignearticles.filter(status__in=Booking.STATUTS_DES_LIGNES_PAYEES):
             total_paid += ligne_article.total_ttc
         return dround(total_paid)
 
