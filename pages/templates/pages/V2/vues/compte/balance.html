@@ -33,7 +33,7 @@ A CONSERVER : #token-table-loader (spinner local), data-testid="account-tokens-t
     <section class="compte-tirelire" data-testid="compte-tirelire">
         <div class="compte-tirelire__actions">
             {% if user.email_valid %}
-                <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn compte__scanner compte-tirelire__bouton"
+                <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn btn-primaire compte-tirelire__bouton"
                    data-testid="tirelire-scanner-qrcode">
                     <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
                     {% translate "Scan a payment QR Code" %}
@@ -42,7 +42,7 @@ A CONSERVER : #token-table-loader (spinner local), data-testid="account-tokens-t
                 {# Email non validé : gris, non cliquable. Le lien pour renvoyer #}
                 {# l'email de validation est en tête de page (account_base.html). #}
                 {# / Email not validated: grey, non-clickable; resend link is at the top. #}
-                <button type="button" class="btn btn--secondary compte__scanner compte-tirelire__bouton" disabled
+                <button type="button" class="btn btn--secondary btn-primaire compte-tirelire__bouton" disabled
                         data-testid="tirelire-scanner-qrcode-email-non-valide">
                     <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
                     {% translate "Please valid your email to scan a payment QR Code" %}

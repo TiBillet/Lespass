@@ -250,7 +250,9 @@ Une solution proposé par claude c'est d'utiliser fontTools pour limiter les ico
   --button-primary-hover : var(--loseyan-button-hover);
   --button-primary-active : var(--loseyan-button-active);
 
-  --secondary-button-fond : #fff;
+  --button-secondary-fond : #ffffff;
+  --button-secondary-hover : var(--color-hover);
+  --button-secondary-active : var(--color-hover);
 
 
 }
@@ -1133,7 +1135,7 @@ img { max-width: 100%; display: block; }
 .btn-primaire{
   background: var(--button-primary-fond);
   color: var(--encre);
-  border: none;
+  border-color: var(--button-primary-fond);
   transition: 0.2s;
 }
 
@@ -1144,7 +1146,6 @@ img { max-width: 100%; display: block; }
 .btn-primaire:hover{
   background: var(--button-primary-hover);
   color: var(--encre);
-  border: none;
   transition: 0.2s;
 }
 
@@ -1152,7 +1153,7 @@ img { max-width: 100%; display: block; }
 .btn-primaire:active,
 .btn.btn-primaire:active{
   background: var(--button-primary-active);
-  border: none;
+  border-color: var(--button-primary-fond);
 }
 
 /* Bootstrap met outline: 0 sur .btn:focus-visible : on remet l'anneau du skin. */
@@ -1165,8 +1166,19 @@ img { max-width: 100%; display: block; }
 .btn--primary:disabled,
 .btn-primary:disabled,
 .btn-primary.disabled { background: var(--color-text); color: var(--color-text-inverse); border-color: var(--color-text); box-shadow: none; }
-.btn--secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border-strong); }
-.btn--secondary:hover { background: var(--color-hover); }
+.btn--secondary {
+  background: var(--button-secondary-fond);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+.btn--secondary:hover {
+  background: var(--button-secondary-hover);
+}
+
+.btn--secondary:active {
+  background: var(--button-secondary-active);
+  transform: translateY(1px);
+}
 
 .btn--tertiary {
   background: #fbd99c;  /* amber-100 /
@@ -2413,7 +2425,6 @@ img { max-width: 100%; display: block; }
   gap: var(--space-3);
   flex-wrap: wrap;
   margin-top: var(--space-5);
-  justify-content: space-around;
 }
 .event-hero__etat { white-space: normal; }
 /* Talon au-dessus du bouton. Le bloc prend la largeur de son bouton (jamais

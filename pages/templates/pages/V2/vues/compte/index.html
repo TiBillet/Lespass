@@ -113,7 +113,7 @@ modules (R11).
                                 </a>
                             {% endif %}
                             {% if config.show_refill_button %}
-                                <button type="button" class="btn btn-secondary"
+                                <button type="button" class="btn btn--secondary"
                                         id="button-filters"
                                         data-bs-toggle="offcanvas"
                                         data-bs-target="#refundPanel"
@@ -164,7 +164,7 @@ modules (R11).
                 {# le bouton s'affiche avec ou sans carte liée. #}
                 {# / Paying by QR code debits the wallet, not the card: shown with or without a card. #}
                 {% if user.email_valid %}
-                    <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn compte__scanner"
+                    <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn btn-primaire"
                        data-testid="compte-scanner-qrcode">
                         <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
                         {% translate "Scan a payment QR Code" %}
@@ -173,7 +173,7 @@ modules (R11).
                     {# Email non validé : même place, gris, non cliquable. Le lien pour #}
                     {# renvoyer l'email de validation est en tête de page (account_base.html). #}
                     {# / Email not validated: grey, non-clickable; resend link is at the top. #}
-                    <button type="button" class="btn btn--secondary compte__scanner" disabled
+                    <button type="button" class="btn btn--secondary btn-primaire" disabled
                             data-testid="compte-scanner-qrcode-email-non-valide">
                         <i class="bi bi-qr-code-scan" aria-hidden="true"></i>
                         {% translate "Please valid your email to scan a payment QR Code" %}
@@ -261,7 +261,7 @@ modules (R11).
                             <p class="compte__encaisser-texte">
                                 {% blocktrans with organisation=config.organisation %}Vous pouvez initier un paiement pour le compte de votre collectif : {{ organisation }}{% endblocktrans %}
                             </p>
-                            <a href="{% url 'qrcodescanpay-get-generator' %}" class="btn compte__encaisser-bouton"
+                            <a href="{% url 'qrcodescanpay-get-generator' %}" class="btn btn--tertiary"
                                data-testid="compte-initier-paiement-bouton">
                                 <i class="bi bi-qr-code" aria-hidden="true"></i>
                                 {% translate "Initiate a payment" %}
