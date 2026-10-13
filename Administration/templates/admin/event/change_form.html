@@ -1,13 +1,22 @@
 {% extends "admin/change_form.html" %}
+{% load i18n %}
 
 {% block field_sets %}
 
     {% if original is not None and original.full_url|length > 0 %}
         <div class="flex flex-col gap-4 w-full lg:flex-row">
-            <a href="{{ original.full_url }}" onclick="copyLinkToClipboard(event)" class="prevent-link bg-primary-600 flex flex-row font-medium gap-2 items-center h-[38px] justify-center px-3 py-2 rounded-default text-white lg:w-auto">
-                <span class="material-symbols-outlined text-white">content_copy</span> {{ _("Copy the public url of the event") }}
+            <a href="{{ original.full_url }}" onclick="copyLinkToClipboard(event)" class="prevent-link border border-primary-600 flex flex-row font-medium gap-2 items-center h-[38px] justify-center px-3 py-2 rounded-default lg:w-auto">
+                <span class="material-symbols-outlined">content_copy</span> {% translate 'Copy the public url of the event' %}
             </a>
-            <div id="tooltip-default" class="transition px-3 py-2 text-white duration-300 bg-dark opacity-0">{{ _("Copied !") }}</div>
+            <div id="tooltip-default" class="transition px-3 py-2 text-white duration-300 bg-dark opacity-0">{% translate 'Copied !' %}</div>
+
+            <a href="{% url 'event-admin-show-event-detail' original.pk %}"
+               class="bg-primary-600 flex flex-row font-medium gap-2 items-center h-[38px] justify-center px-3 py-2 rounded-default"
+               style="color: #ffffff;"
+               data-testid="event-change-form-detail-link">
+                <span class="material-symbols-outlined" aria-hidden="true">confirmation_number</span>
+                {% translate "Voir le détail : billets et réponses aux formulaires" %}
+            </a>
         </div>
     {% endif %}
 

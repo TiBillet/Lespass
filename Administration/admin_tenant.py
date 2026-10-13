@@ -4228,11 +4228,13 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         'datetime',
         'show_time',
         'published',
+        'event_detail_page_button',
     ]
 
     list_editable = ['published', ]
     readonly_fields = (
         'display_valid_tickets_count',
+        'event_detail_page_button',
         # Affiche en lecture seule sur la fiche event (bas du bloc Publier).
         # / Read-only on the event change form (bottom of the Publish block).
         'display_created_by',
@@ -4355,6 +4357,19 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         if count is None:
             count = instance.valid_tickets_count()
         return f"{count} / {instance.jauge_max}"
+
+    @display(description=_("Détail"))
+    def event_detail_page_button(self, instance: Event):
+        # Lien classique (pas de HTMX) : la fiche de détail est une vraie page de l'admin,
+        # le bouton « retour » du navigateur ramène donc à la liste.
+        # / Plain link (no HTMX): the detail is a full admin page, so browser "back" works.
+        event_detail_url = reverse("event-admin-show-event-detail", args=[instance.pk])
+        return format_html(
+            "<a class='font-medium inline-flex group items-center gap-1 relative rounded-default justify-center whitespace-nowrap cursor-pointer px-3 py-2 border border-base-200 bg-primary-600 border-transparent text-white hover:bg-primary-600/80 w-full' href='{}' data-testid='event-list-detail-link'>{}</a>",
+            event_detail_url,
+            _("Voir"),
+        )
+
 
     @display(description=_("Créé par"))
     def display_created_by(self, instance: Event):
