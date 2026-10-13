@@ -3327,10 +3327,10 @@ class EventMVT(viewsets.ViewSet):
         il_y_a_un_prix_libre = any(price.free_price for price in prices)
 
         if tarifs:
-            return _("A partir de %(price)s €") % {"price": min(tarifs)}
+            return _("À partir de %(price)s €") % {"price": min(tarifs)}
         if il_y_a_un_prix_libre:
             return _("Prix libre")
-        return _("Entré libre")
+        return _("Entrée libre")
 
     def federated_events_get(self, slug):
         for place in FederatedPlace.objects.all().select_related('tenant'):

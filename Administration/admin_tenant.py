@@ -506,6 +506,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'img',
                 'logo',
                 'postal_address',
+                'siren',
                 # 'adress',
                 'phone',
                 'email',
