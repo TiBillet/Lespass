@@ -4289,6 +4289,17 @@ class MembershipMVT(viewsets.ViewSet):
         #     template_context['ressources_grouped'] = ressources_grouped
         #     template_path = "vues/services.html"
 
+
+        # Le paramètre GET "open" (optionnel) contient l'uuid d'un produit d'adhésion à ouvrir directement au chargement de la page
+        # On vérifie que le produit adhésion exist, puis c'est le JS qui gère l'ouverture
+        open_membership = request.GET.get('open',None)
+        try:
+            MembershipProduct.objects.get(pk=open_membership)
+        except:
+            open_membership = None
+
+        template_context["open_membership"] = open_membership
+
         # Résolution du gabarit par le resolver unifié (CHANTIER-04).
         # / Unified skin resolver (skins migration).
         from pages.services import gabarit_skin
