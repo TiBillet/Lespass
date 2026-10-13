@@ -90,26 +90,40 @@
     {# / Empty `page_source`: list the current page's sub-pages. #}
     {% sous_pages_publiees bloc.page_source|default:page_courante bloc.nombre_max as sous_pages %}
     {% if sous_pages %}
-        <div class="tb-grille" data-testid="bloc-liste-sous-pages">
+        {% comment %}
+            CARTE DE SOUS-PAGE : même dessin que la carte d'événement
+            (cotton/V2/event_card.html, classes .event-card) — cadre, couverture
+            optionnelle, titre, résumé, puis un pied de carte séparé par un filet
+            avec un lien « Lire la suite » discret. Le pied est poussé en bas
+            (margin-top: auto) : les liens d'une rangée sont alignés.
+            Pas de date : created_at est la date d'IMPORT de la page, pas celle
+            de son contenu — l'afficher induirait en erreur.
+            / Same look as the event card; no date (created_at is the import date).
+        {% endcomment %}
+        <div class="grid grid--3 grid--sous-titre-serre" data-testid="bloc-liste-sous-pages">
             {% for sous_page in sous_pages %}
-                <article class="tb-bloc tb-bloc--carte">
+                <article class="page-card" data-testid="carte-sous-page">
                     {% if sous_page.image %}
-                        {# Variation "med" : Page.image n'a que social_card et med #}
-                        {# (VARIATIONS_PARTAGE). / "med" variation: Page.image only #}
-                        {# has social_card and med. #}
-                        <img class="tb-bloc__carte-image"
-                             {% if sous_page.image.med.width and sous_page.image.med.height %}width="{{ sous_page.image.med.width }}" height="{{ sous_page.image.med.height }}"{% endif %} src="{{ sous_page.image.med.url }}"
-                             alt="{{ sous_page.titre }}" loading="lazy">
+                        {# Page.image n'a que les variations social_card et med : #}
+                        {# picture.html garde chaque <source>, il n'emet que med. #}
+                        {# / Page.image only has social_card and med variations. #}
+                        <div class="page-card__cover">
+                            {% include 'commun/partials/picture.html' with img=sous_page.image alt="" %}
+                        </div>
                     {% endif %}
-                    <h3 class="tb-bloc__carte-titre">{{ sous_page.titre }}</h3>
-                    {% if sous_page.meta_description %}
-                        <p class="tb-bloc__carte-texte">{{ sous_page.meta_description }}</p>
-                    {% endif %}
-                    <a class="tb-bloc__bouton tb-bloc__bouton--plein"
-                       href="{{ sous_page.get_absolute_url }}"
-                       hx-get="{{ sous_page.get_absolute_url }}" hx-target="body" hx-push-url="true">
-                        {% translate "Lire la suite" %}
-                    </a>
+                    <div class="page-card__body">
+                        <h3 class="page-card__title">{{ sous_page.titre }}</h3>
+                        {% if sous_page.meta_description %}
+                            <p class="page-card__desc">{{ sous_page.meta_description }}</p>
+                        {% endif %}
+                        <div class="page-card__footer">
+                            <a class="link" href="{{ sous_page.get_absolute_url }}"
+                               hx-get="{{ sous_page.get_absolute_url }}" hx-target="body" hx-push-url="true">
+                                {% translate "Lire la suite" %}<span class="visually-hidden"> : {{ sous_page.titre }}</span>
+                                <span aria-hidden="true">→</span>
+                            </a>
+                        </div>
+                    </div>
                 </article>
             {% endfor %}
         </div>

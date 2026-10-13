@@ -26,6 +26,8 @@ from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_exempt
 from django_htmx.http import HttpResponseClientRedirect
+import segno
+from rest_framework import exceptions as exceptions_drf
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
@@ -100,6 +102,11 @@ from BaseBillet.services_vente import (
     tarif_vendu_d_un_produit_systeme,
 )
 from QrcodeCashless.models import CarteCashless
+from QrcodeCashless.services import (
+    CarteDUnLieuNonMigre,
+    FedowInjoignable,
+    trouver_ou_rapatrier_la_carte,
+)
 # La cloture unique du lieu (la J) et ses lecteurs : exports, presentation, envoi.
 # / The venue's single closure (J) and its readers.
 from comptabilite.csv_export import generer_csv_cloture
@@ -1330,8 +1337,8 @@ def obtenir_wallet_carte_depuis_fedow(carte):
     an internal (fedow_core) wallet creation.
 
     Retourne le Wallet (uuid Fedow) ou None si Fedow ne connait pas la carte.
-    On ne fabrique PAS la carte au scan (comme V1) : le provisioning des cartes
-    se fait en amont (seed / import).
+    La carte locale existe déjà : les points de scan la rapatrient depuis l'ancien
+    Fedow si besoin (QrcodeCashless/services.py, trouver_ou_rapatrier_la_carte).
     / Returns the Wallet (Fedow uuid) or None if Fedow doesn't know the card.
 
     EFFET DE BORD : si Fedow signale une carte anonyme (wallet ephemere) et que la
@@ -3179,6 +3186,13 @@ def _panier_melange_recharge_cadeau_et_autres_articles(articles_panier):
 #  CaisseViewSet — pages principales                                          #
 # --------------------------------------------------------------------------- #
 
+# Liens affichés quand l'accès à la caisse est refusé (voir CaisseViewSet.handle_exception)
+# / Links shown when POS access is denied (see CaisseViewSet.handle_exception)
+URL_DE_TELECHARGEMENT_APPLICATION_ANDROID = "https://nuage.codecommun.coop/s/SdcdkDcWYRPETpf"
+URL_DOCUMENTATION_APPLICATION_ANDROID = (
+    "https://notes.liiib.re/docs/c31d1dd0-f3b5-42ab-a631-55783a1004e8/"
+)
+
 
 class CaisseViewSet(viewsets.ViewSet):
     """
@@ -3191,6 +3205,49 @@ class CaisseViewSet(viewsets.ViewSet):
     """
 
     permission_classes = [HasLaBoutikTerminalAccess]
+
+    def handle_exception(self, exc):
+        """
+        Remplace le refus JSON de la page d'accueil de la caisse par une page HTML.
+        / Replaces the JSON refusal of the POS home page with an HTML page.
+
+        LOCALISATION : laboutik/views.py
+
+        Quand GET /laboutik/caisse/ est refusé (pas de terminal appairé, pas d'admin
+        du lieu, pas de clé API, lieu legacy ou module caisse éteint), DRF renverrait
+        un JSON du type {"detail": "..."}. Un humain qui tombe sur cette page a besoin
+        de l'application. On lui montre donc un QR code pour la télécharger,
+        un lien cliquable et le lien vers la documentation.
+
+        Seule l'action `list` est concernée. Les autres routes de la caisse
+        (HTMX, POST, exports) gardent la réponse DRF habituelle.
+        / Only `list` is affected. Other POS routes keep the usual DRF response.
+        """
+        acces_refuse = isinstance(
+            exc, (exceptions_drf.PermissionDenied, exceptions_drf.NotAuthenticated)
+        )
+        if acces_refuse and self.action == "list":
+            # Le QR code est généré côté serveur, en SVG intégré à la page :
+            # environ 1,5 Ko, et la page marche même sans JavaScript.
+            # / Server-side inline SVG QR code: ~1.5 KB, works without JavaScript.
+            qrcode_du_telechargement = segno.make(
+                URL_DE_TELECHARGEMENT_APPLICATION_ANDROID, micro=False
+            )
+            qrcode_svg = qrcode_du_telechargement.svg_inline(scale=6, light="white")
+
+            contexte = {
+                "qrcode_svg": qrcode_svg,
+                "url_de_telechargement": URL_DE_TELECHARGEMENT_APPLICATION_ANDROID,
+                "url_de_la_documentation": URL_DOCUMENTATION_APPLICATION_ANDROID,
+            }
+            return render(
+                self.request,
+                "laboutik/views/telecharger_application.html",
+                contexte,
+                status=403,
+            )
+
+        return super().handle_exception(exc)
 
     def list(self, request):
         """
@@ -3253,6 +3310,26 @@ class CaisseViewSet(viewsets.ViewSet):
         # TODO: à faire valider par le "serializer" ?
         # "cordova" / "pi" / "desktop"
         type_app = request.POST.get("type_app", "unknown").strip()
+
+        # Une carte inconnue en local est demandée à l'ancien Fedow, puis rapatriée.
+        # C'est fait ICI, hors de tout bloc atomic : _charger_carte_primaire reste une
+        # lecture locale pure, car d'autres appelants l'utilisent DANS des blocs atomic.
+        # / A card unknown locally is fetched from the old Fedow, outside any atomic
+        # block: _charger_carte_primaire stays a pure local read.
+        try:
+            trouver_ou_rapatrier_la_carte(tag_id_carte_manager)
+        except CarteCashless.DoesNotExist:
+            # _charger_carte_primaire répond « Carte inconnue » juste en dessous.
+            # / _charger_carte_primaire answers "Unknown card" just below.
+            pass
+        except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+            return render(
+                request,
+                "laboutik/partial/hx_primary_card_message.html",
+                {
+                    "msg": refus_de_la_carte.message_pour_l_ecran,
+                },
+            )
 
         # Chercher la carte primaire depuis le tag NFC
         # Look up the primary card from the NFC tag
@@ -7815,11 +7892,16 @@ def _identifier_adherent(request, articles_panier):
     # / A card already carrying a member wins: a typed email cannot hijack it.
     tag_id_client = request.POST.get("tag_id", "").upper().strip()
     if tag_id_client:
+        # Appelée hors de tout bloc atomic : une carte inconnue en local peut être
+        # rapatriée depuis l'ancien Fedow. Si elle ne l'est pas, on passe à l'email.
+        # / Called outside any atomic block: the card may be fetched from the old Fedow.
         try:
-            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+            carte_client = trouver_ou_rapatrier_la_carte(tag_id_client)
             user_adhesion = carte_client.user
-        except CarteCashless.DoesNotExist:
-            logger.warning(f"Carte NFC {tag_id_client} introuvable pour adhesion")
+        except (CarteCashless.DoesNotExist, FedowInjoignable, CarteDUnLieuNonMigre) as carte_non_trouvee:
+            logger.warning(
+                f"Carte NFC {tag_id_client} introuvable pour adhesion : {carte_non_trouvee}"
+            )
 
     # --- Identification 2 : l'email saisi au comptoir ---
     # / The email typed at the counter.
@@ -9471,7 +9553,26 @@ class PaiementViewSet(viewsets.ViewSet):
             if not tag_id_client:
                 raise ValueError(_("Tag NFC client requis pour les recharges"))
 
-            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+            # Une carte inconnue en local est demandée à l'ancien Fedow (hors atomic).
+            # / A card unknown locally is fetched from the old Fedow (outside atomic).
+            try:
+                carte_client = trouver_ou_rapatrier_la_carte(tag_id_client)
+            except CarteCashless.DoesNotExist:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _("Carte inconnue"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+            except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": refus_de_la_carte.message_pour_l_ecran,
+                    "selector_bt_retour": "#messages",
+                }
+                return render(request, "laboutik/partial/hx_messages.html", context_erreur)
             wallet_client = _obtenir_ou_creer_wallet(carte_client)
 
         # Resolution du membre d'une adhesion AVANT le bloc atomic, pour la meme raison de
@@ -9725,7 +9826,26 @@ class PaiementViewSet(viewsets.ViewSet):
                 if not tag_id_client:
                     raise ValueError(_("Tag NFC client requis pour les recharges"))
 
-                carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+                # Une carte inconnue en local est demandée à l'ancien Fedow (hors atomic).
+                # / A card unknown locally is fetched from the old Fedow (outside atomic).
+                try:
+                    carte_client = trouver_ou_rapatrier_la_carte(tag_id_client)
+                except CarteCashless.DoesNotExist:
+                    context_erreur = {
+                        "action": "initUrlAddition();",
+                        "msg_type": "warning",
+                        "msg_content": _("Carte inconnue"),
+                        "selector_bt_retour": "#messages",
+                    }
+                    return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+                except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+                    context_erreur = {
+                        "action": "initUrlAddition();",
+                        "msg_type": "warning",
+                        "msg_content": refus_de_la_carte.message_pour_l_ecran,
+                        "selector_bt_retour": "#messages",
+                    }
+                    return render(request, "laboutik/partial/hx_messages.html", context_erreur)
                 wallet_client = _obtenir_ou_creer_wallet(carte_client)
 
             # Resolution du membre d'une adhesion AVANT le bloc atomic, pour la meme raison
@@ -9958,10 +10078,14 @@ class PaiementViewSet(viewsets.ViewSet):
             )
 
         try:
-            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+            carte_client = trouver_ou_rapatrier_la_carte(tag_id_client)
         except CarteCashless.DoesNotExist:
             return self._refuser_le_retour_de_consigne(
                 request, _("Carte inconnue.")
+            )
+        except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+            return self._refuser_le_retour_de_consigne(
+                request, refus_de_la_carte.message_pour_l_ecran
             )
 
         # Hors transaction : cette résolution peut interroger Fedow par le réseau.
@@ -10167,12 +10291,20 @@ class PaiementViewSet(viewsets.ViewSet):
         # Chercher la carte client par tag_id
         # / Find client card by tag_id
         try:
-            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+            carte_client = trouver_ou_rapatrier_la_carte(tag_id_client)
         except CarteCashless.DoesNotExist:
             context_erreur = {
                 "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": _("Carte inconnue"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+        except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": refus_de_la_carte.message_pour_l_ecran,
                 "selector_bt_retour": "#messages",
             }
             return render(request, "laboutik/partial/hx_messages.html", context_erreur)
@@ -11176,13 +11308,23 @@ class PaiementViewSet(viewsets.ViewSet):
         # / Option 1: NFC scan — find the card and its user
         if tag_id:
             try:
-                carte = CarteCashless.objects.get(tag_id=tag_id)
+                carte = trouver_ou_rapatrier_la_carte(tag_id)
                 user = carte.user
             except CarteCashless.DoesNotExist:
                 context_erreur = {
                     "action": "initUrlAddition();",
                     "msg_type": "warning",
                     "msg_content": _("Carte inconnue"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur
+                )
+            except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": refus_de_la_carte.message_pour_l_ecran,
                     "selector_bt_retour": "#messages",
                 }
                 return render(
@@ -11667,12 +11809,20 @@ class PaiementViewSet(viewsets.ViewSet):
         # / 3. Find card1 and its wallet
         # ---------------------------------------------------------- #
         try:
-            carte1 = CarteCashless.objects.get(tag_id=tag_id_carte1)
+            carte1 = trouver_ou_rapatrier_la_carte(tag_id_carte1)
         except CarteCashless.DoesNotExist:
             context_erreur = {
                 "action": "initUrlAddition();",
                 "msg_type": "warning",
                 "msg_content": _("Carte 1 inconnue"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+        except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+            context_erreur = {
+                "action": "initUrlAddition();",
+                "msg_type": "warning",
+                "msg_content": refus_de_la_carte.message_pour_l_ecran,
                 "selector_bt_retour": "#messages",
             }
             return render(request, "laboutik/partial/hx_messages.html", context_erreur)
@@ -12334,12 +12484,22 @@ class PaiementViewSet(viewsets.ViewSet):
                 )
 
             try:
-                carte2 = CarteCashless.objects.get(tag_id=tag_id_carte2)
+                carte2 = trouver_ou_rapatrier_la_carte(tag_id_carte2)
             except CarteCashless.DoesNotExist:
                 context_erreur = {
                     "action": "initUrlAddition();",
                     "msg_type": "warning",
                     "msg_content": _("Carte 2 inconnue"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur
+                )
+            except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": refus_de_la_carte.message_pour_l_ecran,
                     "selector_bt_retour": "#messages",
                 }
                 return render(
@@ -13154,9 +13314,17 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # 1. Chercher la carte par tag_id
         # 1. Find the card by tag_id
+        # Une carte inconnue en local est demandée à l'ancien Fedow (hors atomic).
+        # / A card unknown locally is fetched from the old Fedow (outside atomic).
+        message_d_erreur = None
         try:
-            carte = CarteCashless.objects.get(tag_id=tag_id_scanne)
+            carte = trouver_ou_rapatrier_la_carte(tag_id_scanne)
         except CarteCashless.DoesNotExist:
+            message_d_erreur = _("Carte inconnue")
+        except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+            message_d_erreur = refus_de_la_carte.message_pour_l_ecran
+
+        if message_d_erreur is not None:
             context = {
                 "card": {"email": None},
                 "total_monnaie": 0,
@@ -13165,7 +13333,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "tag_id": tag_id_scanne,
                 "background": "--error",
                 "state": state,
-                "erreur": _("Carte inconnue"),
+                "erreur": message_d_erreur,
             }
             return render(request, "laboutik/partial/hx_card_feedback.html", context)
 
@@ -13376,9 +13544,11 @@ class PaiementViewSet(viewsets.ViewSet):
             )
 
         try:
-            carte = CarteCashless.objects.get(tag_id=tag_id)
+            carte = trouver_ou_rapatrier_la_carte(tag_id)
         except CarteCashless.DoesNotExist:
             return _render_erreur_toast(request, _("Carte client inconnue."))
+        except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+            return _render_erreur_toast(request, refus_de_la_carte.message_pour_l_ecran)
 
         # 2. Fedow local : même portefeuille et même filtre que le vidage
         # (fedow_core/services.py, `rembourser_en_especes`). On ne crée pas de
@@ -13525,9 +13695,11 @@ class PaiementViewSet(viewsets.ViewSet):
             )
 
         try:
-            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+            carte_client = trouver_ou_rapatrier_la_carte(tag_id_client)
         except CarteCashless.DoesNotExist:
             return _render_erreur_toast(request, _("Carte client inconnue."))
+        except (FedowInjoignable, CarteDUnLieuNonMigre) as refus_de_la_carte:
+            return _render_erreur_toast(request, refus_de_la_carte.message_pour_l_ecran)
 
         carte_primaire_obj, erreur_cp = _charger_carte_primaire(tag_id_cm)
         if erreur_cp:

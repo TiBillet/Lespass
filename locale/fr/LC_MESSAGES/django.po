@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-12 13:02+0000\n"
+"POT-Creation-Date: 2026-10-12 14:09+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -113,7 +113,7 @@ msgstr "Codes promotionnels"
 
 #: Administration/admin/dashboard.py:391 BaseBillet/models.py:251
 #: BaseBillet/models.py:2333 crowds/models.py:116
-#: pages/templates/cotton/V2/event_card.html:75
+#: pages/templates/cotton/V2/event_card.html:84
 #: pages/templates/pages/V2/vues/evenement.html:182
 msgid "Tags"
 msgstr "Tags"
@@ -134,7 +134,7 @@ msgstr "Évènements"
 msgid "Réservations"
 msgstr "Réservations"
 
-#: Administration/admin/dashboard.py:426 Administration/admin/laboutik.py:1263
+#: Administration/admin/dashboard.py:426 Administration/admin/laboutik.py:1281
 #: Administration/templates/admin/cloture/rapport_before.html:461
 #: BaseBillet/models.py:3927 BaseBillet/models.py:5308
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:402
@@ -851,7 +851,7 @@ msgid "Sur cette page vous pouvez créer manuellement des adhésion."
 msgstr ""
 
 #: Administration/admin/inventaire.py:85 Administration/admin/inventaire.py:183
-#: Administration/admin/laboutik.py:1187 Administration/admin_tenant.py:2829
+#: Administration/admin/laboutik.py:1205 Administration/admin_tenant.py:2829
 #: Administration/templates/admin/categorie_product/partials/synchroniser_tva_confirmation.html:33
 #: Administration/templates/admin/cloture/rapport_before.html:196
 #: Administration/templates/admin/vente/avoir_sur_un_article.html:50
@@ -862,8 +862,8 @@ msgstr ""
 msgid "Article"
 msgstr "Article"
 
-#: Administration/admin/inventaire.py:90 Administration/admin/laboutik.py:1187
-#: Administration/admin/laboutik.py:1198 Administration/admin_tenant.py:1862
+#: Administration/admin/inventaire.py:90 Administration/admin/laboutik.py:1205
+#: Administration/admin/laboutik.py:1216 Administration/admin_tenant.py:1862
 #: Administration/admin_tenant.py:2858
 #: Administration/importers/lignearticle_exporter.py:20
 #: Administration/templates/admin/cloture/rapport_before.html:197
@@ -886,7 +886,7 @@ msgstr "Quantité"
 msgid "Unité"
 msgstr ""
 
-#: Administration/admin/inventaire.py:330 Administration/admin/laboutik.py:1264
+#: Administration/admin/inventaire.py:330 Administration/admin/laboutik.py:1282
 #: Administration/admin_tenant.py:3233
 #: Administration/importers/lignearticle_exporter.py:18
 #: Administration/templates/admin/cloture/rapport_before.html:466
@@ -1144,19 +1144,19 @@ msgid ""
 "retirer. Détail : %(detail)s"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1128 laboutik/models.py:1609
+#: Administration/admin/laboutik.py:1146 laboutik/models.py:1609
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:6
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:28
 msgid "Closure report"
 msgstr "Rapport de clôture"
 
-#: Administration/admin/laboutik.py:1129
+#: Administration/admin/laboutik.py:1147
 #: Administration/templates/admin/cloture/rapport_before.html:16
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:31
 msgid "Level"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1130
+#: Administration/admin/laboutik.py:1148
 #: Administration/templates/admin/cloture/rapport_before.html:17
 #: Administration/templates/admin/membership/wallet_info.html:17
 #: ApiBillet/templates/ticket/ticket.html:181
@@ -1167,7 +1167,7 @@ msgstr ""
 msgid "Number"
 msgstr "Numéro"
 
-#: Administration/admin/laboutik.py:1131
+#: Administration/admin/laboutik.py:1149
 #: Administration/templates/admin/cloture/rapport_before.html:24
 #: Administration/templates/admin/cloture/rapport_before.html:559
 #: BaseBillet/models.py:4377 controlvanne/models.py:224 laboutik/models.py:967
@@ -1177,27 +1177,27 @@ msgstr "Numéro"
 msgid "Point of sale"
 msgstr "Point de vente"
 
-#: Administration/admin/laboutik.py:1132
+#: Administration/admin/laboutik.py:1150
 #: Administration/templates/admin/cloture/rapport_before.html:20
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:33
 msgid "Responsible"
 msgstr "Responsable"
 
-#: Administration/admin/laboutik.py:1133
+#: Administration/admin/laboutik.py:1151
 #: Administration/templates/admin/cloture/rapport_before.html:28
 #: controlvanne/admin.py:67
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:37
 msgid "Period"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1139
+#: Administration/admin/laboutik.py:1157
 #: Administration/templates/admin/cloture/rapport_before.html:76
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:44
 msgid "Totals by payment method"
 msgstr "Totaux par moyen de paiement."
 
-#: Administration/admin/laboutik.py:1140 Administration/admin/laboutik.py:1219
-#: Administration/admin/laboutik.py:1229 Administration/admin/laboutik.py:2070
+#: Administration/admin/laboutik.py:1158 Administration/admin/laboutik.py:1237
+#: Administration/admin/laboutik.py:1247 Administration/admin/laboutik.py:2088
 #: Administration/admin_tenant.py:1571 Administration/admin_tenant.py:4724
 #: Administration/templates/admin/cloture/rapport_before.html:80
 #: Administration/templates/admin/cloture/rapport_before.html:316
@@ -1210,8 +1210,8 @@ msgstr "Totaux par moyen de paiement."
 msgid "Payment method"
 msgstr "Mode de paiement"
 
-#: Administration/admin/laboutik.py:1140 Administration/admin/laboutik.py:1219
-#: Administration/admin/laboutik.py:1229 Administration/admin/laboutik.py:1264
+#: Administration/admin/laboutik.py:1158 Administration/admin/laboutik.py:1237
+#: Administration/admin/laboutik.py:1247 Administration/admin/laboutik.py:1282
 #: Administration/templates/admin/cloture/rapport_before.html:81
 #: Administration/templates/admin/cloture/rapport_before.html:317
 #: Administration/templates/admin/cloture/rapport_before.html:361
@@ -1230,7 +1230,7 @@ msgstr "Mode de paiement"
 msgid "Amount"
 msgstr "Montant"
 
-#: Administration/admin/laboutik.py:1141 Administration/admin/laboutik.py:1277
+#: Administration/admin/laboutik.py:1159 Administration/admin/laboutik.py:1295
 #: Administration/templates/admin/cloture/rapport_before.html:86
 #: Administration/templates/admin/cloture/rapport_before.html:502
 #: BaseBillet/models.py:96
@@ -1239,7 +1239,7 @@ msgstr "Montant"
 msgid "Cash"
 msgstr "Espèces"
 
-#: Administration/admin/laboutik.py:1142 Administration/admin/laboutik.py:1277
+#: Administration/admin/laboutik.py:1160 Administration/admin/laboutik.py:1295
 #: Administration/templates/admin/cloture/rapport_before.html:90
 #: Administration/templates/admin/cloture/rapport_before.html:503
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:58
@@ -1247,7 +1247,7 @@ msgstr "Espèces"
 msgid "Credit card"
 msgstr "Carte de crédit"
 
-#: Administration/admin/laboutik.py:1143 Administration/admin/laboutik.py:1277
+#: Administration/admin/laboutik.py:1161 Administration/admin/laboutik.py:1295
 #: Administration/templates/admin/cloture/rapport_before.html:94
 #: Administration/templates/admin/cloture/rapport_before.html:504
 #: BaseBillet/models.py:1180 comptabilite/presentation.py:900
@@ -1260,7 +1260,7 @@ msgstr "Carte de crédit"
 msgid "Cashless"
 msgstr "Cashless"
 
-#: Administration/admin/laboutik.py:1146
+#: Administration/admin/laboutik.py:1164
 #: Administration/templates/admin/cloture/rapport_before.html:107
 #: BaseBillet/models.py:97
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:75
@@ -1268,10 +1268,10 @@ msgstr "Cashless"
 msgid "Check"
 msgstr "Chèque bancaire"
 
-#: Administration/admin/laboutik.py:1147 Administration/admin/laboutik.py:1198
-#: Administration/admin/laboutik.py:1222 Administration/admin/laboutik.py:1238
-#: Administration/admin/laboutik.py:1246 Administration/admin/laboutik.py:1270
-#: Administration/admin/laboutik.py:1277 Administration/admin_tenant.py:1870
+#: Administration/admin/laboutik.py:1165 Administration/admin/laboutik.py:1216
+#: Administration/admin/laboutik.py:1240 Administration/admin/laboutik.py:1256
+#: Administration/admin/laboutik.py:1264 Administration/admin/laboutik.py:1288
+#: Administration/admin/laboutik.py:1295 Administration/admin_tenant.py:1870
 #: Administration/admin_tenant.py:2876 Administration/admin_tenant.py:3261
 #: Administration/templates/admin/asset/asset_change_form_before.html:50
 #: Administration/templates/admin/asset/asset_change_form_before.html:64
@@ -1311,19 +1311,19 @@ msgstr "Chèque bancaire"
 msgid "Total"
 msgstr "Total"
 
-#: Administration/admin/laboutik.py:1153
+#: Administration/admin/laboutik.py:1171
 #: Administration/templates/admin/cloture/rapport_before.html:131
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:97
 msgid "Sales detail"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1155 Customers/models.py:31
+#: Administration/admin/laboutik.py:1173 Customers/models.py:31
 #: MetaBillet/models.py:212 laboutik/models.py:1072
 msgid "Category"
 msgstr "Catégorie"
 
-#: Administration/admin/laboutik.py:1155 Administration/admin/laboutik.py:1219
-#: Administration/admin/laboutik.py:1229 Administration/admin_tenant.py:1914
+#: Administration/admin/laboutik.py:1173 Administration/admin/laboutik.py:1237
+#: Administration/admin/laboutik.py:1247 Administration/admin_tenant.py:1914
 #: Administration/admin_tenant.py:5603
 #: Administration/templates/admin/cloture/rapport_before.html:143
 #: Administration/templates/admin/cloture/rapport_before.html:314
@@ -1338,25 +1338,25 @@ msgstr "Catégorie"
 msgid "Product"
 msgstr "Produit"
 
-#: Administration/admin/laboutik.py:1156
+#: Administration/admin/laboutik.py:1174
 #: Administration/templates/admin/cloture/rapport_before.html:144
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:105
 msgid "Sold"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1156
+#: Administration/admin/laboutik.py:1174
 #: ApiBillet/templates/ticket/ticket.html:208 laboutik/models.py:1086
 #: pages/templates/pages/faire_festival/vues/adhesions.html:133
 msgid "Free"
 msgstr "Libre"
 
-#: Administration/admin/laboutik.py:1156
+#: Administration/admin/laboutik.py:1174
 #: Administration/templates/admin/cloture/rapport_before.html:146
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:107
 msgid "Total qty"
 msgstr "Quantité totale"
 
-#: Administration/admin/laboutik.py:1157 Administration/admin/laboutik.py:1177
+#: Administration/admin/laboutik.py:1175 Administration/admin/laboutik.py:1195
 #: Administration/templates/admin/cloture/rapport_before.html:150
 #: Administration/templates/admin/cloture/rapport_before.html:253
 #: comptabilite/presentation.py:691 comptabilite/presentation.py:1606
@@ -1366,7 +1366,7 @@ msgstr "Quantité totale"
 msgid "HT"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1157 Administration/admin/laboutik.py:1177
+#: Administration/admin/laboutik.py:1175 Administration/admin/laboutik.py:1195
 #: Administration/importers/lignearticle_exporter.py:22
 #: Administration/templates/admin/cloture/rapport_before.html:151
 #: Administration/templates/admin/cloture/rapport_before.html:254
@@ -1376,7 +1376,7 @@ msgstr ""
 msgid "VAT"
 msgstr "TVA"
 
-#: Administration/admin/laboutik.py:1157 Administration/admin/laboutik.py:1177
+#: Administration/admin/laboutik.py:1175 Administration/admin/laboutik.py:1195
 #: Administration/templates/admin/cloture/rapport_before.html:152
 #: Administration/templates/admin/cloture/rapport_before.html:255
 #: comptabilite/presentation.py:691 comptabilite/presentation.py:1547
@@ -1387,39 +1387,39 @@ msgstr "TVA"
 msgid "TTC"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1158
+#: Administration/admin/laboutik.py:1176
 #: Administration/templates/admin/cloture/rapport_before.html:153
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:114
 msgid "Cost"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1158
+#: Administration/admin/laboutik.py:1176
 #: Administration/templates/admin/cloture/rapport_before.html:154
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:115
 msgid "Profit"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1176
+#: Administration/admin/laboutik.py:1194
 #: Administration/templates/admin/cloture/rapport_before.html:248
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:203
 msgid "VAT breakdown"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1177 Administration/admin_tenant.py:4679
+#: Administration/admin/laboutik.py:1195 Administration/admin_tenant.py:4679
 #: Administration/templates/admin/cloture/rapport_before.html:252
 #: BaseBillet/models.py:2225
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:207
 msgid "Rate"
 msgstr "Tarif"
 
-#: Administration/admin/laboutik.py:1186
+#: Administration/admin/laboutik.py:1204
 #: Administration/templates/admin/cloture/rapport_before.html:192
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:204
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:151
 msgid "Offerts (hors argent)"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1187
+#: Administration/admin/laboutik.py:1205
 #: Administration/templates/admin/cloture/rapport_before.html:198
 #: laboutik/printing/formatters.py:659
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:210
@@ -1427,7 +1427,7 @@ msgstr ""
 msgid "Valeur offerte"
 msgstr "Valeur offerte"
 
-#: Administration/admin/laboutik.py:1187
+#: Administration/admin/laboutik.py:1205
 #: Administration/templates/admin/cloture/rapport_before.html:199
 #: comptabilite/presentation.py:1163 comptabilite/presentation.py:1200
 #: comptabilite/presentation.py:1459 comptabilite/presentation.py:1608
@@ -1435,15 +1435,15 @@ msgstr "Valeur offerte"
 msgid "Coût d'achat"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1197
+#: Administration/admin/laboutik.py:1215
 #: Administration/templates/admin/cloture/rapport_before.html:221
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:230
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:178
 msgid "Non monétaire (hors argent)"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1198 Administration/admin/laboutik.py:2145
-#: Administration/admin/laboutik.py:2197 Administration/admin_tenant.py:2943
+#: Administration/admin/laboutik.py:1216 Administration/admin/laboutik.py:2163
+#: Administration/admin/laboutik.py:2215 Administration/admin_tenant.py:2943
 #: Administration/templates/admin/cloture/rapport_before.html:225
 #: Administration/templates/admin/comptable/monnaies_changelist_before.html:53
 #: BaseBillet/models_vente.py:318 comptabilite/presentation.py:902
@@ -1460,25 +1460,25 @@ msgstr ""
 msgid "Monnaie"
 msgstr "Monnaie"
 
-#: Administration/admin/laboutik.py:1209
+#: Administration/admin/laboutik.py:1227
 #: Administration/templates/admin/cloture/rapport_before.html:277
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:230
 msgid "Cash register balance"
 msgstr "Solde de la caisse"
 
-#: Administration/admin/laboutik.py:1210
+#: Administration/admin/laboutik.py:1228
 #: Administration/templates/admin/cloture/rapport_before.html:281
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:234
 msgid "Opening float"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1211
+#: Administration/admin/laboutik.py:1229
 #: Administration/templates/admin/cloture/rapport_before.html:285
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:238
 msgid "Cash income"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1212
+#: Administration/admin/laboutik.py:1230
 #: Administration/templates/admin/cloture/rapport_before.html:297
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:248
 #: pages/templates/pages/V2/vues/compte/partials/token_table.html:8
@@ -1486,20 +1486,20 @@ msgstr ""
 msgid "Balance"
 msgstr "Solde"
 
-#: Administration/admin/laboutik.py:1218
+#: Administration/admin/laboutik.py:1236
 #: Administration/templates/admin/cloture/rapport_before.html:310
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:259
 msgid "Cashless top-ups"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1219
+#: Administration/admin/laboutik.py:1237
 #: Administration/templates/admin/cloture/rapport_before.html:315
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:264
 msgid "Currency"
 msgstr "Devise"
 
-#: Administration/admin/laboutik.py:1219 Administration/admin/laboutik.py:1229
-#: Administration/admin/laboutik.py:1245 Administration/admin/laboutik.py:1264
+#: Administration/admin/laboutik.py:1237 Administration/admin/laboutik.py:1247
+#: Administration/admin/laboutik.py:1263 Administration/admin/laboutik.py:1282
 #: Administration/templates/admin/cloture/rapport_before.html:318
 #: Administration/templates/admin/cloture/rapport_before.html:360
 #: Administration/templates/admin/cloture/rapport_before.html:393
@@ -1512,7 +1512,7 @@ msgstr "Devise"
 msgid "Count"
 msgstr "Quantité"
 
-#: Administration/admin/laboutik.py:1228
+#: Administration/admin/laboutik.py:1246
 #: Administration/templates/admin/cloture/rapport_before.html:353
 #: BaseBillet/models.py:5309
 #: BaseBillet/templates/htmx/components/panier_content.html:63
@@ -1527,56 +1527,56 @@ msgstr "Quantité"
 msgid "Memberships"
 msgstr "Adhésions"
 
-#: Administration/admin/laboutik.py:1229
+#: Administration/admin/laboutik.py:1247
 #: Administration/templates/admin/cloture/rapport_before.html:358
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:305
 msgid "Price tier"
 msgstr "Palier de prix"
 
-#: Administration/admin/laboutik.py:1244
+#: Administration/admin/laboutik.py:1262
 #: Administration/templates/admin/cloture/rapport_before.html:389
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:334
 msgid "Refunds"
 msgstr "Remboursements"
 
-#: Administration/admin/laboutik.py:1252
+#: Administration/admin/laboutik.py:1270
 #: Administration/templates/admin/cloture/rapport_before.html:410
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:353
 msgid "Customer statistics"
 msgstr ""
 
 # DEPRECATED 2.0 old ui
-#: Administration/admin/laboutik.py:1253
+#: Administration/admin/laboutik.py:1271
 #: Administration/templates/admin/cloture/rapport_before.html:420
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:363
 msgid "Cards used"
 msgstr "Cartes utilisées"
 
-#: Administration/admin/laboutik.py:1254
+#: Administration/admin/laboutik.py:1272
 #: Administration/templates/admin/cloture/rapport_before.html:424
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:367
 msgid "Total spent"
 msgstr "Total dépensé"
 
-#: Administration/admin/laboutik.py:1255
+#: Administration/admin/laboutik.py:1273
 #: Administration/templates/admin/cloture/rapport_before.html:428
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:371
 msgid "Average basket"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1256
+#: Administration/admin/laboutik.py:1274
 #: Administration/templates/admin/cloture/rapport_before.html:432
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:375
 msgid "Median spend"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1257
+#: Administration/admin/laboutik.py:1275
 #: Administration/templates/admin/cloture/rapport_before.html:436
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:379
 msgid "Median top-up"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1264
+#: Administration/admin/laboutik.py:1282
 #: Administration/templates/admin/cloture/rapport_before.html:465
 #: BaseBillet/models.py:2867 BaseBillet/models.py:3892
 #: BaseBillet/models.py:5388
@@ -1584,56 +1584,56 @@ msgstr ""
 msgid "Event"
 msgstr "Évènement"
 
-#: Administration/admin/laboutik.py:1264
+#: Administration/admin/laboutik.py:1282
 #: Administration/templates/admin/cloture/rapport_before.html:467
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:408
 msgid "Product / Price tier"
 msgstr "Produit / Palier de prix"
 
-#: Administration/admin/laboutik.py:1276
+#: Administration/admin/laboutik.py:1294
 #: Administration/templates/admin/cloture/rapport_before.html:497
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:436
 msgid "Operations summary"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1277
+#: Administration/admin/laboutik.py:1295
 #: Administration/templates/admin/cloture/rapport_before.html:501
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:440
 msgid "Operation"
 msgstr "Opération"
 
-#: Administration/admin/laboutik.py:1332
+#: Administration/admin/laboutik.py:1350
 #: Administration/templates/admin/cloture/rapport_before.html:560
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:497
 msgid "Revenue incl. tax"
 msgstr ""
 
-#: Administration/admin/laboutik.py:1685
+#: Administration/admin/laboutik.py:1703
 #: Administration/templates/admin/cloture/rapport_before.html:623
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:557
 msgid "Integrity"
 msgstr "Intégrité"
 
-#: Administration/admin/laboutik.py:1784
+#: Administration/admin/laboutik.py:1802
 msgid "Previous amount"
 msgstr "Montant précédent"
 
-#: Administration/admin/laboutik.py:1791
+#: Administration/admin/laboutik.py:1809
 msgid "New amount"
 msgstr "Nouveau montant"
 
-#: Administration/admin/laboutik.py:1982
+#: Administration/admin/laboutik.py:2000
 #: Administration/templates/admin/comptable/balance.html:23
 #: comptabilite/balance.py:222
 msgid "Balance des comptes"
 msgstr "Balance des comptes"
 
-#: Administration/admin/laboutik.py:2166
+#: Administration/admin/laboutik.py:2184
 #: tests/pytest/test_plan_comptable_unique.py:3147
 msgid "Cette monnaie a déjà son compte : modifiez la ligne existante."
 msgstr ""
 
-#: Administration/admin/laboutik.py:2204
+#: Administration/admin/laboutik.py:2222
 #: tests/pytest/test_plan_comptable_unique.py:3124
 msgid "Choisissez une monnaie acceptée par le lieu."
 msgstr ""
@@ -3486,7 +3486,7 @@ msgstr "Avoir total"
 
 #: Administration/admin_tenant.py:3451 Administration/admin_tenant.py:3521
 #: Administration/admin_tenant.py:3531 Administration/admin_tenant.py:3727
-#: Administration/admin_tenant.py:3739 BaseBillet/views.py:5494
+#: Administration/admin_tenant.py:3739 BaseBillet/views.py:5483
 #, python-format
 msgid "L'avoir n'a pas pu être émis : %(raison)s"
 msgstr ""
@@ -3508,7 +3508,7 @@ msgstr "Avoir émis."
 #: Administration/templates/admin/membership/partials/cancel_form.html:120
 #: Administration/templates/admin/vente/avoir_sur_un_article.html:100
 #: Administration/templates/admin/vente/avoir_total.html:84
-#: BaseBillet/views.py:5556 tests/pytest/test_admin_vente.py:905
+#: BaseBillet/views.py:5545 tests/pytest/test_admin_vente.py:905
 msgid "Remboursez cette somme depuis votre tableau de bord Stripe."
 msgstr ""
 
@@ -4124,7 +4124,7 @@ msgstr "Ventilation par lieu"
 
 #: Administration/templates/admin/asset/asset_change_form_before.html:49
 #: Administration/templates/admin/asset/asset_change_form_before.html:60
-#: BaseBillet/models.py:5531 BaseBillet/views.py:6250
+#: BaseBillet/models.py:5531 BaseBillet/views.py:6239
 #: comptabilite/presentation.py:499
 #: fedow_public/templates/fedow_public/retrieve_bank_deposits.html:45
 #: pages/templates/pages/V2/vues/reseau.html:101
@@ -5194,7 +5194,7 @@ msgid "Besoin d'aide ? Cliquer ici !"
 msgstr ""
 
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:9
-#: BaseBillet/views.py:6299
+#: BaseBillet/views.py:6288
 msgid "Évènements"
 msgstr "Évènements"
 
@@ -5665,7 +5665,7 @@ msgstr ""
 "de vérifier que le remboursement a bien été effectué auprès de l'adhérent·e."
 
 #: Administration/templates/admin/membership/partials/cancel_form.html:159
-#: BaseBillet/views.py:5442
+#: BaseBillet/views.py:5431
 msgid ""
 "Adhésion payée en points ou en temps : aucun avoir n'est possible, et les "
 "points ne sont pas rendus sur la carte."
@@ -6381,12 +6381,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: Administration/traductions_unfold.py:154
-#, fuzzy, python-format
-#| msgid ""
-#| "\n"
-#| "                                %(available)s / %(total)s places "
-#| "available\n"
-#| "                                "
+#, python-format
 msgid ""
 "\n"
 "                    Export %(len)s selected item.\n"
@@ -6397,14 +6392,12 @@ msgid_plural ""
 "                "
 msgstr[0] ""
 "\n"
-"                                %(available)s / %(total)s places "
-"disponibles\n"
-"                                "
+"                    Exporter %(len)s élément sélectionné.\n"
+"                "
 msgstr[1] ""
 "\n"
-"                                %(available)s / %(total)s places "
-"disponibles\n"
-"                                "
+"                    Exporter %(len)s éléments sélectionnés.\n"
+"                "
 
 #: ApiBillet/permissions.py:32
 msgid ""
@@ -9327,7 +9320,7 @@ msgstr "Plus assez de places disponibles. Restant : %(n)s"
 msgid "Quantity must be positive."
 msgstr "La quantité doit être positive."
 
-#: BaseBillet/services_panier.py:477 BaseBillet/views.py:7127
+#: BaseBillet/services_panier.py:477 BaseBillet/views.py:7116
 msgid "Event not found."
 msgstr "Événement introuvable."
 
@@ -9420,7 +9413,7 @@ msgstr ""
 #: BaseBillet/services_panier.py:644 BaseBillet/services_panier.py:797
 #: BaseBillet/services_panier.py:1007 BaseBillet/services_panier.py:1132
 #: BaseBillet/services_panier.py:1134 BaseBillet/validators.py:795
-#: BaseBillet/validators.py:803 BaseBillet/views.py:7168
+#: BaseBillet/validators.py:803 BaseBillet/views.py:7157
 msgid "Invalid or inactive promotional code."
 msgstr "Code promotionnel invalide ou inactif."
 
@@ -9745,7 +9738,7 @@ msgstr ""
 msgid "Payer maintenant"
 msgstr "Payer maintenant"
 
-#: BaseBillet/tasks.py:974 BaseBillet/views.py:6623
+#: BaseBillet/tasks.py:974 BaseBillet/views.py:6612
 #: kiosk/templates/kiosk/partial/etat_final.html:95
 msgid "Merci !"
 msgstr "Merci !"
@@ -10364,13 +10357,11 @@ msgid "per buyer"
 msgstr "par personne"
 
 #: BaseBillet/templates/commun/formulaires/reservation.html:543
-#, fuzzy, python-format
-#| msgid "%(n)s place disponible"
-#| msgid_plural "%(n)s places disponibles"
+#, python-format
 msgid "Il reste %(places)s place disponible."
 msgid_plural "Il reste %(places)s places disponibles."
-msgstr[0] "%(n)s place disponible"
-msgstr[1] "%(n)s places disponibles"
+msgstr[0] "Il reste %(places)s place disponible."
+msgstr[1] "Il reste %(places)s places disponibles."
 
 #: BaseBillet/templates/commun/formulaires/reservation.html:563
 msgid "Enter your promotional code"
@@ -11040,7 +11031,7 @@ msgid "Aucun évènement pour l'instant. Ajoutez-en au moins un ci-dessous."
 msgstr "Aucun évènement pour l’instant. Ajoutez-en au moins un ci-dessous."
 
 #: BaseBillet/templates/fonctionnel/event_wizard/_events_inner.html:88
-#: BaseBillet/views.py:6249 BaseBillet/views.py:6270
+#: BaseBillet/views.py:6238 BaseBillet/views.py:6259
 #: pages/templates/pages/V2/vues/agenda.html:55
 #: pages/templates/pages/classic/vues/agenda.html:86
 #: pages/templates/pages/faire_festival/vues/agenda.html:101
@@ -11120,7 +11111,7 @@ msgstr ""
 
 #: BaseBillet/templates/fonctionnel/event_wizard/_form_carte.html:66
 #: BaseBillet/templates/fonctionnel/event_wizard/_form_lieu.html:283
-#: BaseBillet/views.py:6252 BaseBillet/views.py:6273
+#: BaseBillet/views.py:6241 BaseBillet/views.py:6262
 #: kiosk/templates/kiosk/partial/etape_solde_et_montant.html:143
 #: onboard/templates/onboard/steps/01_identity.html:247
 #: onboard/templates/onboard/steps/03_place.html:81
@@ -11860,7 +11851,7 @@ msgstr "Code promo invalide."
 msgid "No products."
 msgstr "Aucun produit."
 
-#: BaseBillet/validators.py:844 BaseBillet/views.py:7227
+#: BaseBillet/validators.py:844 BaseBillet/views.py:7216
 msgid "The promotional code is not valid for the selected products."
 msgstr "Le code promotionnel n'est pas valable pour les produits sélectionnés."
 
@@ -11956,8 +11947,8 @@ msgstr "Le montant doit être positif."
 msgid "Impossible d'utiliser 'Offert' avec un montant positif."
 msgstr "Impossible d'utiliser « Offert » avec un montant positif."
 
-#: BaseBillet/validators.py:1817 BaseBillet/views.py:6336
-#: BaseBillet/views.py:6560
+#: BaseBillet/validators.py:1817 BaseBillet/views.py:6325
+#: BaseBillet/views.py:6549
 msgid "Merci d'indiquer votre adresse e-mail pour proposer un évènement."
 msgstr ""
 
@@ -11979,7 +11970,7 @@ msgid ""
 "Un tag fait au plus %(max)s caractères. Séparez les tags par des virgules."
 msgstr ""
 
-#: BaseBillet/views.py:393 BaseBillet/views.py:3191 BaseBillet/views.py:3206
+#: BaseBillet/views.py:393 BaseBillet/views.py:3180 BaseBillet/views.py:3195
 #: pages/templates/pages/V2/vues/reseau.html:15
 #: pages/templates/pages/V2/vues/reseau.html:16
 #: pages/templates/pages/V2/vues/reseau.html:22
@@ -12010,7 +12001,7 @@ msgstr "Paiement confirmé. Les billets vont être envoyés à votre adresse mai
 msgid "Payment rejected."
 msgstr "Paiement rejeté."
 
-#: BaseBillet/views.py:484 BaseBillet/views.py:529 BaseBillet/views.py:4070
+#: BaseBillet/views.py:484 BaseBillet/views.py:529 BaseBillet/views.py:4059
 msgid ""
 "Payment confirmed. Tickets sent to your email. You can also view your "
 "tickets through \"My account > Bookings\"."
@@ -12254,79 +12245,79 @@ msgstr "Format du Qr Code invalide."
 msgid "Missing QR code content"
 msgstr "Erreur contenu Qr Code"
 
-#: BaseBillet/views.py:2892 BaseBillet/views.py:3312
+#: BaseBillet/views.py:3224
+msgid "Message sent, you have been sent a copy. Thank you!"
+msgstr "Message envoyé, nous vous avons envoyé une copie. Merci !"
+
+#: BaseBillet/views.py:3301
 #, python-format
 msgid "A partir de %(price)s €"
 msgstr ""
 
-#: BaseBillet/views.py:2894 BaseBillet/views.py:3314
+#: BaseBillet/views.py:3303
 #: pages/templates/pages/V2/partials/reservation_declencheur.html:35
 msgid "Prix libre"
 msgstr "Prix libre"
 
-#: BaseBillet/views.py:2896 BaseBillet/views.py:3315
+#: BaseBillet/views.py:3304
 msgid "Entré libre"
 msgstr "Entré libre"
 
-#: BaseBillet/views.py:3235
-msgid "Message sent, you have been sent a copy. Thank you!"
-msgstr "Message envoyé, nous vous avons envoyé une copie. Merci !"
-
-#: BaseBillet/views.py:3976
+#: BaseBillet/views.py:3965
 msgid "You have already checked for an action on this event."
 msgstr "Vous vous êtes déjà proposé·e pour être volontaire sur cet évènement."
 
-#: BaseBillet/views.py:3980
+#: BaseBillet/views.py:3969
 msgid "Please log in first."
 msgstr "Merci de vous connecter d'abord."
 
-#: BaseBillet/views.py:4001
+#: BaseBillet/views.py:3990
 msgid "Thank you! You are going to receive a validation email.."
 msgstr "Merci ! Vous allez recevoir un mail de confirmation."
 
-#: BaseBillet/views.py:4049
+#: BaseBillet/views.py:4038
 msgid ""
 "Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."
 msgstr ""
 
-#: BaseBillet/views.py:4073 BaseBillet/views.py:4677
+#: BaseBillet/views.py:4062 BaseBillet/views.py:4666
 msgid "Your payment is awaiting validation."
 msgstr "Votre paiement est en attente de validation."
 
-#: BaseBillet/views.py:4076 BaseBillet/views.py:4680
+#: BaseBillet/views.py:4065 BaseBillet/views.py:4669
 msgid "An error has occurred, please contact the administrator."
 msgstr "Une erreur s'est produite, merci de contacter un·e administrateur·ice."
 
-#: BaseBillet/views.py:4114
+#: BaseBillet/views.py:4103
 msgid "Check in registered!"
 msgstr "Pointage d'arrivée enregistré !"
 
-#: BaseBillet/views.py:4130
+#: BaseBillet/views.py:4119
 msgid "Check out registered!"
 msgstr "Pointage de départ enregistré !"
 
-#: BaseBillet/views.py:4170
+#: BaseBillet/views.py:4159
 msgid "Moyen de remboursement inconnu."
 msgstr ""
 
-#: BaseBillet/views.py:4180
+#: BaseBillet/views.py:4169
 msgid "Choisissez le moyen par lequel l'argent est rendu."
 msgstr "Choisissez le moyen par lequel l'argent est rendu."
 
-#: BaseBillet/views.py:4634
+#: BaseBillet/views.py:4623
 msgid "Cette adhésion n'est pas en attente de validation."
 msgstr "Cette adhésion n'est pas en attente de validation."
 
-#: BaseBillet/views.py:4647
+#: BaseBillet/views.py:4636
 msgid "L'adhésion a été acceptée. Un email de paiement a été envoyé."
 msgstr "L'adhésion a été acceptée. Un email de paiement a été envoyé."
 
-#: BaseBillet/views.py:4672
+#: BaseBillet/views.py:4661
 msgid ""
 "Your payment has been validated and is being processed. Thank you very much!"
 msgstr "Votre paiement a été validé et est en cours de traitement. Merci !"
 
-#: BaseBillet/views.py:4675
+#: BaseBillet/views.py:4664
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email. "
 "Thank you very much!"
@@ -12334,153 +12325,153 @@ msgstr ""
 "Votre adhésion a été validé. Vous allez recevoir un mail de confirmation. "
 "Merci !"
 
-#: BaseBillet/views.py:4698
+#: BaseBillet/views.py:4687
 msgid "PDF generation error"
 msgstr "Erreur de génération PDF"
 
-#: BaseBillet/views.py:4851 BaseBillet/views.py:4872 BaseBillet/views.py:4889
-#: BaseBillet/views.py:5000 BaseBillet/views.py:5021
+#: BaseBillet/views.py:4840 BaseBillet/views.py:4861 BaseBillet/views.py:4878
+#: BaseBillet/views.py:4989 BaseBillet/views.py:5010
 msgid "Accès refusé"
 msgstr "Accès refusé"
 
-#: BaseBillet/views.py:4895
+#: BaseBillet/views.py:4884
 msgid "Produit non trouvé"
 msgstr "Produit non trouvé"
 
-#: BaseBillet/views.py:5035
+#: BaseBillet/views.py:5024
 msgid "Le nom du champ est obligatoire."
 msgstr "Le nom du champ est obligatoire."
 
-#: BaseBillet/views.py:5133
+#: BaseBillet/views.py:5122
 msgid "Cette adhésion n'est pas en attente de paiement."
 msgstr "Cette adhésion n'est pas en attente de paiement."
 
-#: BaseBillet/views.py:5549
+#: BaseBillet/views.py:5538
 #, python-format
 msgid "Adhésion annulée. %(count)d avoir(s) créé(s)."
 msgstr "Adhésion annulée. %(count)d avoir(s) créé(s)."
 
-#: BaseBillet/views.py:5559
+#: BaseBillet/views.py:5548
 msgid "Adhésion annulée."
 msgstr "Adhésion annulée."
 
-#: BaseBillet/views.py:6200
+#: BaseBillet/views.py:6189
 msgid "Merci de vous connecter d'abord."
 msgstr "Merci de vous connecter d'abord."
 
-#: BaseBillet/views.py:6249 BaseBillet/views.py:6270
+#: BaseBillet/views.py:6238 BaseBillet/views.py:6259
 #: pages/templates/pages/V2/vues/agenda.html:63
 #: pages/templates/pages/classic/vues/agenda.html:94
 msgid "Proposer un évènement"
 msgstr "Proposer un évènement"
 
-#: BaseBillet/views.py:6271
+#: BaseBillet/views.py:6260
 msgid "Localiser le nouveau lieu"
 msgstr "Localiser le nouveau lieu"
 
-#: BaseBillet/views.py:6298
+#: BaseBillet/views.py:6287
 msgid "Ajouter des évènements"
 msgstr "Ajouter des évènements"
 
-#: BaseBillet/views.py:6298
+#: BaseBillet/views.py:6287
 msgid "Proposer des évènements"
 msgstr "Proposer des évènements"
 
-#: BaseBillet/views.py:6301
+#: BaseBillet/views.py:6290
 msgid "Créer les évènements"
 msgstr "Créer les évènements"
 
-#: BaseBillet/views.py:6301
+#: BaseBillet/views.py:6290
 msgid "Envoyer ma proposition"
 msgstr "Envoyer ma proposition"
 
-#: BaseBillet/views.py:6316
+#: BaseBillet/views.py:6305
 msgid "Ajoutez au moins un évènement avant de continuer."
 msgstr "Ajoutez au moins un évènement avant de continuer."
 
-#: BaseBillet/views.py:6343
+#: BaseBillet/views.py:6332
 msgid "Cette adresse e-mail pose un problème. Merci de nous contacter."
 msgstr ""
 
-#: BaseBillet/views.py:6367
+#: BaseBillet/views.py:6356
 msgid ""
 "Un évènement avec le même nom existe déjà à cette date. Modifiez le nom ou "
 "la date avant de valider."
 msgstr ""
 
-#: BaseBillet/views.py:6392
+#: BaseBillet/views.py:6381
 #, python-format
 msgid "%(n)s évènement(s) créé(s)."
 msgstr "%(n)s évènement(s) créé(s)."
 
-#: BaseBillet/views.py:6910
+#: BaseBillet/views.py:6899
 msgid "Unable to add membership."
 msgstr "Impossible d'ajouter l'adhésion."
 
-#: BaseBillet/views.py:6918
+#: BaseBillet/views.py:6907
 msgid "Membership added to cart."
 msgstr "Adhésion ajoutée au panier."
 
-#: BaseBillet/views.py:6930
+#: BaseBillet/views.py:6919
 msgid "Invalid index."
 msgstr "Index invalide."
 
-#: BaseBillet/views.py:6935
+#: BaseBillet/views.py:6924
 msgid "Item removed."
 msgstr "Élément supprimé."
 
-#: BaseBillet/views.py:6952
+#: BaseBillet/views.py:6941
 msgid "Missing code."
 msgstr "Code manquant."
 
-#: BaseBillet/views.py:6962
+#: BaseBillet/views.py:6951
 msgid "Promo code applied."
 msgstr ""
 
-#: BaseBillet/views.py:6973
+#: BaseBillet/views.py:6962
 msgid "Promo code removed."
 msgstr "Code promo supprimé."
 
-#: BaseBillet/views.py:6984
+#: BaseBillet/views.py:6973
 msgid "Cart cleared."
 msgstr "Panier vidé."
 
-#: BaseBillet/views.py:7048
+#: BaseBillet/views.py:7037
 msgid "Checkout failed. Please try again."
 msgstr "Le paiement a échoué. Veuillez réessayer."
 
-#: BaseBillet/views.py:7053
+#: BaseBillet/views.py:7042
 msgid "Checkout failed. Please try again. See errors below."
 msgstr "Le paiement a échoué. Veuillez réessayer. Voir les erreurs ci-dessous."
 
-#: BaseBillet/views.py:7077
+#: BaseBillet/views.py:7066
 msgid "Payment link unavailable. Please contact support."
 msgstr "Lien de paiement indisponible. Veuillez contacter le support."
 
-#: BaseBillet/views.py:7085
+#: BaseBillet/views.py:7074
 msgid "Order confirmed. You will receive an email shortly."
 msgstr "Commande confirmée. Vous allez recevoir un e-mail sous peu."
 
-#: BaseBillet/views.py:7241
+#: BaseBillet/views.py:7230
 msgid "No tickets selected."
 msgstr "Aucun billet sélectionné."
 
-#: BaseBillet/views.py:7245
+#: BaseBillet/views.py:7234
 #, python-format
 msgid "%(count)d ticket added to cart."
 msgid_plural "%(count)d tickets added to cart."
 msgstr[0] "%(count)d billet ajouté au panier."
 msgstr[1] "%(count)d billets ajoutés au panier."
 
-#: BaseBillet/views.py:7297
+#: BaseBillet/views.py:7286
 msgid "Resource not found."
 msgstr "Ressource introuvable."
 
-#: BaseBillet/views.py:7391
+#: BaseBillet/views.py:7380
 msgid "Unable to add resource."
 msgstr "Impossible d'ajouter la ressource."
 
-#: BaseBillet/views.py:7399
+#: BaseBillet/views.py:7388
 msgid "Resource added to cart."
 msgstr "Ressource ajoutée au panier."
 
@@ -14052,13 +14043,11 @@ msgid "Aucune vente sur cette période."
 msgstr "Aucune vente sur cette période."
 
 #: comptabilite/presentation.py:1647
-#, fuzzy, python-format
-#| msgid "%(nombre)s article dans la catégorie."
-#| msgid_plural "%(nombre)s articles dans la catégorie."
+#, python-format
 msgid "%(nombre)s anomalie dans la chaîne des ventes."
 msgid_plural "%(nombre)s anomalies dans la chaîne des ventes."
-msgstr[0] "%(nombre)s article dans la catégorie."
-msgstr[1] "%(nombre)s articles dans la catégorie."
+msgstr[0] "%(nombre)s anomalie dans la chaîne des ventes."
+msgstr[1] "%(nombre)s anomalies dans la chaîne des ventes."
 
 #: comptabilite/presentation.py:1677
 msgid "Nombre de cartes"
@@ -21295,8 +21284,8 @@ msgstr ""
 "mesurer votre impact."
 
 #: onboard/templates/onboard/steps/06_launch.html:144
-#: pages/templates/cotton/V2/event_card.html:104
-#: pages/templates/cotton/V2/event_card.html:107
+#: pages/templates/cotton/V2/event_card.html:113
+#: pages/templates/cotton/V2/event_card.html:116
 #: seo/templates/seo/partials/_features_grid.html:23
 msgid "En savoir plus"
 msgstr "En savoir plus"
@@ -22302,46 +22291,46 @@ msgstr ""
 msgid "Lignes (une par ligne)"
 msgstr "Lignes (une par ligne)"
 
-#: pages/templates/cotton/V2/agenda_a_venir.html:8
+#: pages/templates/cotton/V2/agenda_a_venir.html:24
 #: pages/templates/pages/V2/vues/accueil.html:229
 msgid "Ce qui arrive"
 msgstr ""
 
-#: pages/templates/cotton/V2/agenda_a_venir.html:17
+#: pages/templates/cotton/V2/agenda_a_venir.html:35
 #, python-format
 msgid "%(compteur)s événement à venir"
 msgid_plural "%(compteur)s événements à venir"
 msgstr[0] "%(compteur)s événement à venir"
 msgstr[1] "%(compteur)s événements à venir"
 
-#: pages/templates/cotton/V2/agenda_a_venir.html:20
+#: pages/templates/cotton/V2/agenda_a_venir.html:40
 msgid "Tout l'agenda"
 msgstr "Tout l'agenda"
 
-#: pages/templates/cotton/V2/event_card.html:55
+#: pages/templates/cotton/V2/event_card.html:64
 #: pages/templates/pages/V2/vues/evenement.html:202
 #, python-format
 msgid "Du %(debut)s au %(fin)s"
 msgstr ""
 
-#: pages/templates/cotton/V2/event_card.html:84
+#: pages/templates/cotton/V2/event_card.html:93
 msgid "via"
 msgstr ""
 
-#: pages/templates/cotton/V2/event_card.html:86
+#: pages/templates/cotton/V2/event_card.html:95
 msgid "par"
 msgstr ""
 
-#: pages/templates/cotton/V2/event_card.html:95
+#: pages/templates/cotton/V2/event_card.html:104
 msgid "Voir le billet"
 msgstr "Voir le billet"
 
-#: pages/templates/cotton/V2/event_card.html:97
+#: pages/templates/cotton/V2/event_card.html:106
 msgid "Inscrit·e"
 msgstr ""
 
-#: pages/templates/cotton/V2/event_card.html:128
-#: pages/templates/cotton/V2/event_card.html:129
+#: pages/templates/cotton/V2/event_card.html:137
+#: pages/templates/cotton/V2/event_card.html:138
 #: pages/templates/pages/V2/vues/evenement.html:215
 #: pages/templates/pages/V2/vues/evenement.html:216
 msgid "Modifier l'événement"
@@ -22387,25 +22376,20 @@ msgstr ""
 msgid "Carte interactive"
 msgstr "Carte interactive"
 
-#: pages/templates/pages/V2/partials/bloc_liste.html:68
-#: pages/templates/pages/classic/partials/bloc_liste.html:68
-msgid "Voir l'évènement"
-msgstr "Voir l'évènement"
-
-#: pages/templates/pages/V2/partials/bloc_liste.html:77
+#: pages/templates/pages/V2/partials/bloc_liste.html:83
 #: pages/templates/pages/V2/vues/agenda.html:157
 #: pages/templates/pages/classic/partials/bloc_liste.html:77
 msgid "Aucun évènement à venir pour le moment."
 msgstr "Aucun évènement à venir pour le moment."
 
-#: pages/templates/pages/V2/partials/bloc_liste.html:106
+#: pages/templates/pages/V2/partials/bloc_liste.html:124
 #: pages/templates/pages/classic/partials/bloc_liste.html:106
 #: pages/templates/pages/faire_festival/vues/adhesions.html:64
 #: pages/templates/pages/faire_festival/vues/adhesions.html:330
 msgid "Lire la suite"
 msgstr "Lire la suite"
 
-#: pages/templates/pages/V2/partials/bloc_liste.html:115
+#: pages/templates/pages/V2/partials/bloc_liste.html:136
 #: pages/templates/pages/classic/partials/bloc_liste.html:115
 msgid "Aucune page publiée pour le moment."
 msgstr "Aucune page publiée pour le moment."
@@ -23465,6 +23449,10 @@ msgstr "Adhésions & services"
 #: pages/templates/pages/V2/vues/services.html:73
 msgid "Réserver un espace ou une ressource"
 msgstr "Réserver un espace ou une ressource"
+
+#: pages/templates/pages/classic/partials/bloc_liste.html:68
+msgid "Voir l'évènement"
+msgstr "Voir l'évènement"
 
 #: pages/templates/pages/classic/partials/carte_evenement.html:49
 msgid "Check the event on"

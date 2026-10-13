@@ -3872,6 +3872,29 @@ doit pas créer de produit de recharge (le signal ne fait rien dans `public`), o
 `test_fedow_core.py` se protège autrement : une fixture autouse de portée module pose
 `public` avant ses fixtures.
 
+### Rapatriement des cartes depuis l'ancien Fedow (2026-10-12)
+
+Spec : `TECH_DOC/SESSIONS/QRCODECASHLESS/CHANTIER-02-rapatriement-cartes-fedow.md`.
+
+**Une carte inconnue en local n'est plus « inconnue » sans appel réseau.** Aux points de
+scan (caisse, borne, tireuse), `QrcodeCashless.services.trouver_ou_rapatrier_la_carte`
+demande à l'ancien Fedow un tag **hexadécimal** absent de la base. Un test qui scanne un
+tag hexadécimal inconnu, sur un lieu relié (`can_fedow()` vrai, comme `lespass` en dev),
+fait donc un **vrai appel réseau**… sauf s'il simule
+`patch.object(fedow_connect.fedow_api.NFCcardFedow, "retrieve", ...)`. Simuler
+`laboutik.views.FedowAPI` ou `kiosk.carte.FedowAPI` **ne suffit pas** : le service ne
+passe pas par eux. Ajouter aussi une garde autouse qui interdit `fedow_connect.fedow_api._get`
+et `_post` (modèle : `tests/pytest/test_rapatriement_carte_fedow.py`).
+
+**Des fixtures portent des tags NON hexadécimaux** (`RCTXXXXX`, `XYZINCON`…). Elles
+doivent rester trouvées : le service cherche en local **avant** de contrôler le format.
+Inverser l'ordre a cassé 23 tests existants pendant le chantier.
+
+**Muter `laboutik/views.py` (727 Ko) pendant que runserver tourne** : le rechargement
+automatique peut lire le fichier à moitié écrit et tomber (`ImportError`, 502 pour tous
+les tests suivants). Écrire la mutation par fichier temporaire puis `os.replace`, et
+attendre un 200 du serveur avant de lancer les tests.
+
 ---
 
 *Ce document est un commun numerique. Prenez-en soin !*

@@ -16,7 +16,8 @@ peut_initier_un_paiement : calculé par la vue avec la règle de la permission d
 routes du générateur de paiement (lieu courant seulement, superuser compris).
 
 Structure :
-1. En-tête « moi » : bonjour, email, la carte TiBillet et son solde.
+1. En-tête « moi » : bonjour, email, la carte TiBillet et son solde (euros,
+   puis monnaie cadeau ; calculés par la vue).
    « Recharger » est LE geste TiBillet par excellence : .btn--signature.
    Sous la carte (avec ou sans carte liée) : « Scanner un QR code de paiement ».
 2. Accès rapides aux sous-pages du compte.
@@ -104,7 +105,15 @@ modules (R11).
 
                         <div class="me-card__info">
                             <div class="balance__label">{% translate 'Solde' %}</div>
-                            <div class="me-card__amount" data-testid="compte-solde">{% if tokens %}{{ tokens.0.value|dround }}{% else %}0{% endif %} €</div>
+                            {# Soldes calculés par la vue (MyAccount.list) : euros FED + TLF, #}
+                            {# puis la monnaie cadeau (TNF), seulement les jetons utilisables ici. #}
+                            {# / Balances computed by the view: euros, then gift currency. #}
+                            <div class="me-card__amount" data-testid="compte-solde">{{ solde_euros_en_centimes|dround }} €</div>
+                            {% if solde_cadeau_en_centimes %}
+                                <div class="me-card__cadeau" data-testid="compte-solde-cadeau">
+                                    {% blocktranslate with montant=solde_cadeau_en_centimes|dround %}+ {{ montant }} € en cadeau{% endblocktranslate %}
+                                </div>
+                            {% endif %}
                             {% if config.show_refill_button %}
                                 <a href="#" hx-get="{% url 'my_account-refill-wallet' %}" hx-indicator="#tibillet-spinner"
                                    class="btn btn-primaire"

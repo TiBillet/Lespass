@@ -1,4 +1,4 @@
-{% load static i18n %}
+{% load static i18n pages_tags %}
 {% comment %}
     BLOC SECTION / affichage MEDIA_ET_CARTES — skin V2.
     Le media et le texte, puis les sous-cartes en grille, puis le bouton.
@@ -36,19 +36,51 @@
         {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
 
         {% if bloc.contenu %}
-            <div class="tb-sous-cartes">
-                {% for carte in bloc.contenu %}
-                    <article class="tb-sous-carte">
-                        <p class="tb-sous-carte__titre">
+            {% comment %}
+                La FORME vient du contenu (tag forme_des_sous_cartes) :
+                - "pastilles" : un mot par élément (ex : des valeurs) ;
+                - "liste"     : des phrases sans texte -> liste à puces ;
+                - "cartes"    : titre + texte -> cartes.
+                / The shape comes from the content: one word per item -> pills;
+                title-only sentences -> bullet list; title + text -> cards.
+            {% endcomment %}
+            {% forme_des_sous_cartes bloc.contenu as forme_des_elements %}
+
+            {% if forme_des_elements == "pastilles" %}
+                <ul class="tb-pastilles" data-testid="sous-cartes-pastilles">
+                    {% for carte in bloc.contenu %}
+                        <li class="tb-pastille">
                             {{ carte.titre }}
                             {% if carte.badge %}<span class="tb-bloc__carte-badge">{{ carte.badge }}</span>{% endif %}
-                        </p>
-                        {% if carte.texte %}
-                            <div class="tb-sous-carte__texte">{{ carte.texte|linebreaksbr }}</div>
-                        {% endif %}
-                    </article>
-                {% endfor %}
-            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+
+            {% elif forme_des_elements == "liste" %}
+                <ul class="tb-liste-points" data-testid="sous-cartes-liste">
+                    {% for carte in bloc.contenu %}
+                        <li class="tb-liste-points__element">
+                            <span class="tb-liste-points__texte">{{ carte.titre }}</span>
+                            {% if carte.badge %}<span class="tb-bloc__carte-badge">{{ carte.badge }}</span>{% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+
+            {% else %}
+                <div class="tb-sous-cartes" data-testid="sous-cartes-cartes">
+                    {% for carte in bloc.contenu %}
+                        <article class="tb-sous-carte">
+                            <p class="tb-sous-carte__titre">
+                                {{ carte.titre }}
+                                {% if carte.badge %}<span class="tb-bloc__carte-badge">{{ carte.badge }}</span>{% endif %}
+                            </p>
+                            {% if carte.texte %}
+                                <div class="tb-sous-carte__texte">{{ carte.texte|linebreaksbr }}</div>
+                            {% endif %}
+                        </article>
+                    {% endfor %}
+                </div>
+            {% endif %}
         {% endif %}
 
         {% if bloc.bouton_label %}

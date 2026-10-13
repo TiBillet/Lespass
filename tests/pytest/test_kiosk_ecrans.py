@@ -159,16 +159,27 @@ def test_lecture_carte_anonyme_ouvre_la_modale_non_enregistree(tenant, borne):
 
 @pytest.mark.django_db
 def test_lecture_carte_inconnue_revient_a_l_etape_1_avec_erreur(tenant, borne):
-    """Carte absente de la base locale : retour a « posez votre carte » + message.
-    / Card unknown locally: back to step 1 with a message."""
+    """Carte absente de la base locale, et que le rapatriement ne trouve pas chez
+    l'ancien Fedow : retour a « posez votre carte » + message.
+    Le rapatriement (QrcodeCashless/services.py) passe par NFCcardFedow.retrieve, et
+    non par kiosk.carte.FedowAPI : il est simule a part, sinon il ferait un vrai
+    appel reseau.
+    / Card unknown locally and not found by the fetch: back to step 1 with a message."""
+    from fedow_connect.fedow_api import CarteInconnueDeFedow, NFCcardFedow
+
     utilisateur, _terminal = borne
     with tenant_context(tenant):
         client = _client(utilisateur, tenant)
         with patch("kiosk.carte.FedowAPI") as faux_fedow:
             faux_fedow.return_value.NFCcard.retrieve.return_value = _reponse_fedow()
-            reponse = client.post(
-                "/kiosk/check_request_card/", data={"tag_id": "FFFFFFFF"}
-            )
+            with patch.object(
+                NFCcardFedow,
+                "retrieve",
+                side_effect=CarteInconnueDeFedow("404"),
+            ):
+                reponse = client.post(
+                    "/kiosk/check_request_card/", data={"tag_id": "FFFFFFFF"}
+                )
 
     contenu = reponse.content.decode()
     assert 'data-testid="kiosk-etape-poser-carte"' in contenu

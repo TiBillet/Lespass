@@ -1390,6 +1390,33 @@ class MyAccount(viewsets.ViewSet):
             # card = {"number_printed":"hiii"}
             tokens = get_distant_fedow_tokens(request, template_context["config"])
 
+            # SOLDE DE LA CARTE, en centimes. On ne compte que les jetons UTILISABLES
+            # DANS CE LIEU. C'est la règle du tableau des monnaies (token_table.html) :
+            # une ligne non grisée = le jeton primaire Stripe, ou le lieu courant est
+            # parmi les lieux fédérés de l'asset.
+            # - solde en euros : FED (euros fédérés) + TLF (monnaie locale fiduciaire) ;
+            # - solde cadeau : TNF (monnaie cadeau), affiché à part, en plus petit.
+            # Le temps (TIM) et les points de fidélité (FID) ne sont pas des euros.
+            # / Card balance in cents, only tokens usable in this venue:
+            # FED + TLF for euros, TNF shown apart as gift.
+            organisation_du_lieu_courant = template_context["config"].organisation
+            solde_euros_en_centimes = 0
+            solde_cadeau_en_centimes = 0
+            for token in tokens:
+                lieux_federes_de_l_asset = token["asset"].get("names_of_place_federated") or []
+                jeton_utilisable_ici = (
+                    token["asset"].get("is_stripe_primary")
+                    or organisation_du_lieu_courant in lieux_federes_de_l_asset
+                )
+                if not jeton_utilisable_ici:
+                    continue
+
+                categorie_de_l_asset = token.get("asset_category")
+                if categorie_de_l_asset in ("FED", "TLF"):
+                    solde_euros_en_centimes += token["value"]
+                elif categorie_de_l_asset == "TNF":
+                    solde_cadeau_en_centimes += token["value"]
+
             now = timezone.now()
 
             # Get reservations info
@@ -1464,6 +1491,8 @@ class MyAccount(viewsets.ViewSet):
             template_context.update({
                 "card":card,
                 "tokens":tokens,
+                "solde_euros_en_centimes": solde_euros_en_centimes,
+                "solde_cadeau_en_centimes": solde_cadeau_en_centimes,
                 "memberships": memberships,
                 "reservations": reservations,
                 "bookings" : bookings

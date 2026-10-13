@@ -910,6 +910,49 @@ def evenements_a_venir(nombre_max=6):
 
 
 @register.simple_tag
+def forme_des_sous_cartes(contenu):
+    """
+    Choisit comment afficher les sous-cartes d'un bloc SECTION / MEDIA_ET_CARTES,
+    d'apres ce qu'elles contiennent. Le gestionnaire n'a rien a regler.
+    / Picks how to render a MEDIA_ET_CARTES block's sub-cards from their content.
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+    Lu par : pages/templates/pages/V2/partials/bloc_section_media_et_cartes.html
+
+    Regles, dans l'ordre :
+    - "cartes"    : au moins une sous-carte a un texte -> titre + texte, en cartes ;
+    - "pastilles" : chaque titre est UN seul mot court (ex : des valeurs,
+                    « Horizontalité », « Curiosité ») -> une rangee de pastilles ;
+    - "liste"     : sinon, des titres sans texte, souvent des phrases entieres
+                    (« Un espace sans condition de diplôme… ») -> une liste a puces.
+    Une phrase posee seule dans une carte faisait un pave en gras ; un mot seul
+    dans une carte laissait une boite presque vide.
+    / "cartes" when any item has text; "pastilles" when every title is one short
+    word; "liste" otherwise (title-only sentences).
+
+    :param contenu: liste de dicts {"titre", "texte", "badge"} (champ Bloc.contenu)
+    :return: "cartes", "pastilles" ou "liste"
+    """
+    longueur_max_d_une_pastille = 24
+
+    tous_les_titres_sont_un_mot_court = True
+    for sous_carte in contenu or []:
+        texte_de_la_sous_carte = (sous_carte.get("texte") or "").strip()
+        if texte_de_la_sous_carte:
+            return "cartes"
+
+        titre_de_la_sous_carte = (sous_carte.get("titre") or "").strip()
+        titre_est_un_seul_mot = " " not in titre_de_la_sous_carte
+        titre_est_court = len(titre_de_la_sous_carte) <= longueur_max_d_une_pastille
+        if not (titre_est_un_seul_mot and titre_est_court):
+            tous_les_titres_sont_un_mot_court = False
+
+    if tous_les_titres_sont_un_mot_court:
+        return "pastilles"
+    return "liste"
+
+
+@register.simple_tag
 def agenda_a_venir_du_bloc(nombre_max=6):
     """
     Prepare le bloc LISTE / EVENEMENTS du skin V2 pour le composant

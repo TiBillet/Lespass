@@ -219,10 +219,11 @@ def ouvrir_la_caisse(caisse, tag_id):
 # --------------------------------------------------------------------------
 
 
-def fiche_de_carte_de_l_ancien_fedow(tag_id, est_primaire):
+def fiche_de_carte_de_l_ancien_fedow(tag_id, est_primaire, uuid_de_la_place=None):
     """
     La carte telle que l'ancien Fedow la décrit, données déjà validées par
     `CardValidator` (dont `is_primary`, calculé pour le lieu qui signe la requête).
+    `uuid_de_la_place` : la place Fedow qui a émis la carte (au hasard par défaut).
     / The card as the old Fedow describes it (validated data, with `is_primary`).
     """
     return {
@@ -240,7 +241,7 @@ def fiche_de_carte_de_l_ancien_fedow(tag_id, est_primaire):
         },
         "origin": {
             "place": {
-                "uuid": uuid.uuid4(),
+                "uuid": uuid_de_la_place or uuid.uuid4(),
                 "name": "Lieu",
                 "wallet": uuid.uuid4(),
             },
@@ -250,7 +251,7 @@ def fiche_de_carte_de_l_ancien_fedow(tag_id, est_primaire):
 
 
 @contextmanager
-def ancien_fedow_simule(est_primaire=True, erreur=None):
+def ancien_fedow_simule(est_primaire=True, erreur=None, carte_emise_par_le_lieu=False):
     """
     Le lieu est relié à l'ancien Fedow ; `NFCcardFedow.retrieve` et
     `NFCcardFedow.set_primary` sont simulés.
@@ -258,19 +259,24 @@ def ancien_fedow_simule(est_primaire=True, erreur=None):
 
     - `est_primaire` : la valeur de `is_primary` rendue par l'ancien Fedow ;
     - `erreur` : une exception levée par `retrieve` à la place de la fiche (serveur
-      injoignable, erreur HTTP, réponse illisible, `CarteInconnueDeFedow`).
+      injoignable, erreur HTTP, réponse illisible, `CarteInconnueDeFedow`) ;
+    - `carte_emise_par_le_lieu` : la fiche porte la place Fedow du lieu courant (une
+      carte que le lieu peut rapatrier, QrcodeCashless/services.py).
     Rend `SimpleNamespace(tags_demandes, appels_a_set_primary)` :
     - `tags_demandes` : un tag par appel à `retrieve` ;
     - `appels_a_set_primary` : un `(tag_id, delete)` par appel à `set_primary`.
     """
     tags_demandes = []
     appels_a_set_primary = []
+    uuid_de_la_place = None
+    if carte_emise_par_le_lieu:
+        uuid_de_la_place = FedowConfig.get_solo().fedow_place_uuid
 
     def faux_retrieve(self, tag_id):
         tags_demandes.append(tag_id)
         if erreur is not None:
             raise erreur
-        return fiche_de_carte_de_l_ancien_fedow(tag_id, est_primaire)
+        return fiche_de_carte_de_l_ancien_fedow(tag_id, est_primaire, uuid_de_la_place)
 
     def faux_set_primary(self, tag_id, delete=False):
         appels_a_set_primary.append((tag_id, delete))
@@ -502,26 +508,52 @@ def test_ouverture_carte_inconnue_de_l_ancien_fedow_refuse_sans_rien_supprimer(
 
 
 # --------------------------------------------------------------------------
-# 5 — Carte refusée en local : l'ancien Fedow n'est pas interrogé
-# / 5 — Card refused locally: the old Fedow is not asked
+# 5 — Carte absente de la base : elle est demandée à l'ancien Fedow
+#     (chantier QRCODECASHLESS 02, tests 29 et 30)
+# / 5 — Card missing locally: it is asked to the old Fedow
 # --------------------------------------------------------------------------
 
 
-def test_ouverture_carte_inconnue_en_local_n_interroge_pas_l_ancien_fedow(lieu):
+def test_ouverture_carte_inconnue_ici_et_chez_l_ancien_fedow_dit_carte_inconnue(lieu):
     """
-    Carte absente de la base : message actuel « Carte inconnue », l'ancien Fedow n'est
-    pas interrogé.
-    / Card unknown locally: current message, old Fedow not asked.
+    Carte absente de la base ET de l'ancien Fedow : « Carte inconnue ». L'ancien Fedow
+    est interrogé une seule fois, et rien n'est créé.
+    / Card unknown here AND on the old Fedow: "Unknown card", one read, nothing created.
     """
     caisse = preparer_la_caisse(lieu)
     tag_absent_de_la_base = identifiant_unique().upper()
 
-    with ancien_fedow_simule(est_primaire=True) as faux_ancien_fedow:
+    with ancien_fedow_simule(erreur=CarteInconnueDeFedow("404")) as faux_ancien_fedow:
         reponse = ouvrir_la_caisse(caisse, tag_absent_de_la_base)
 
     assert not la_caisse_s_ouvre(reponse)
     assert message_de_l_ecran(reponse) == "Carte inconnue"
-    assert faux_ancien_fedow.tags_demandes == []
+    assert faux_ancien_fedow.tags_demandes == [tag_absent_de_la_base]
+    assert not CarteCashless.objects.filter(tag_id=tag_absent_de_la_base).exists()
+
+
+def test_ouverture_carte_connue_seulement_de_l_ancien_fedow_la_rapatrie(lieu):
+    """
+    Carte absente de la base mais connue de l'ancien Fedow (chargée par `import_cards`) :
+    elle est rapatriée, rattachée au lieu, et l'écran dit « Carte non primaire ». Elle
+    apparaît alors dans l'admin des cartes primaires (filtre `detail__origine`).
+    / Card known only by the old Fedow: fetched, attached to the venue, "not primary".
+    """
+    caisse = preparer_la_caisse(lieu)
+    tag_charge_dans_l_ancien_fedow = identifiant_unique().upper()
+
+    with ancien_fedow_simule(
+        est_primaire=False, carte_emise_par_le_lieu=True
+    ) as faux_ancien_fedow:
+        reponse = ouvrir_la_caisse(caisse, tag_charge_dans_l_ancien_fedow)
+
+    assert not la_caisse_s_ouvre(reponse)
+    assert message_de_l_ecran(reponse) == "Carte non primaire"
+    assert faux_ancien_fedow.tags_demandes == [tag_charge_dans_l_ancien_fedow]
+    assert CarteCashless.objects.filter(
+        tag_id=tag_charge_dans_l_ancien_fedow,
+        detail__origine=lieu.tenant,
+    ).exists()
 
 
 def test_ouverture_carte_non_primaire_en_local_n_interroge_pas_l_ancien_fedow(lieu):

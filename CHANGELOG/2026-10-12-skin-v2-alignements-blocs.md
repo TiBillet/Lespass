@@ -13,6 +13,12 @@
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
+| `pages/templates/pages/V2/partials/bloc_section_media_et_cartes.html` + `pages/templatetags/pages_tags.py` (`forme_des_sous_cartes`) | **Passe 6 (sous-cartes)** : la forme vient du contenu, sans réglage ni migration — un mot par élément → **pastilles** (ex. « Nos valeurs ») ; phrases sans texte → **liste à puces** sur deux colonnes, séparée par des filets (ex. « L'UPop c'est ») ; titre + texte → les cartes existantes |
+| `pages/static/V2/css/V2.css` (`.tb-liste-points`, `.tb-pastilles`, boutons) | **Passe 6** : styles de la liste (2 colonnes, 1 sous 48rem) et des pastilles (police d'affichage) ; `overflow-wrap: anywhere` sur les boutons de bloc — une adresse e-mail débordait du bouton « Nous contacter » en mobile |
+| `tests/pytest/test_forme_des_sous_cartes.py` | **Nouveau.** 5 tests du choix de forme (vérifiés par mutation) |
+| `pages/templates/pages/V2/partials/bloc_liste.html` | **Passe 5 (cartes de sous-pages)** : source SOUS_PAGES rendue en cartes `.page-card`, même dessin que la carte d'évènement (cadre, couverture optionnelle, titre, résumé, pied « Lire la suite → » sous un filet, aligné en bas). Grille `.grid--3` (3 / 2 / 1 colonnes). Pas de date affichée : `created_at` est la date d'import |
+| `pages/static/V2/css/V2.css` (`.page-card`, gouttières) | **Passe 5** : style `.page-card` sur les jetons de `.event-card` ; gouttière commune de 16 px pour les grilles de blocs (équipe, ressources, sous-cartes, sous-pages) — les bords de colonnes de grilles voisines tombent l'un sous l'autre. L'agenda garde 24 px (identique à l'accueil codé en dur) |
+| `pages/static/V2/css/V2.css` (`.tb-page h2.tb-bloc__titre`) | **Passe 4 (titres de section)** : une seule voix de titre, celle de `.section__title` (sections codées en dur de l'accueil) — le filet d'accent du socle au-dessus des `h2` de bloc est retiré, marge basse alignée (12 px). Le titre du HERO (`h1`) n'est pas concerné |
 | `pages/templates/pages/V2/partials/bloc_liste.html` | **Passe 3** : la source EVENEMENTS rend le composant de l'accueil (`cotton/V2/agenda_a_venir.html` + `event_card.html`) : en-tête « Titre · N événements à venir » + « Tout l'agenda → », cartes et prix identiques à la section « Ce qui arrive » |
 | `pages/templatetags/pages_tags.py` | **Passe 3** : tag `agenda_a_venir_du_bloc` — même source que l'accueil (`EventMVT.federated_events_filter()` : évènements du lieu ET des lieux fédérés), triés par date, avec prix et nombre total à venir |
 | `BaseBillet/views.py` | **Passe 3** : `index()` ne recalcule plus le prix des cartes. `federated_events_filter` le pose déjà dans le contexte du lieu de chaque évènement (`EventMVT._libelle_prix_agenda`, comme la page agenda) ; le recalcul, fait dans le schéma du lieu courant, affichait « Entré libre » pour tout évènement fédéré, même payant |
@@ -55,7 +61,22 @@ Tenant local en skin V2 avec du contenu riche : `le-coeur-en-or` (site UPop reco
 5. Prix des évènements fédérés : sur `le-coeur-en-or`, « API v2 Reservation Event… » affiche « A partir de 0.00 € », comme sur l'agenda de `lespass` (avant : « Entré libre » pour tout évènement fédéré, sur le bloc ET sur l'accueil codé en dur).
 4. Lieu avec des lieux fédérés (`le-coeur-en-or` fédère `lespass` et `la-maison-des-communs`) : leurs évènements apparaissent dans le bloc, marqués « via <domaine> », et le compteur les inclut (27 en local le 2026-10-12).
 
-### Test 6 — mobile
+### Test 6 — titres de section (passe 4)
+1. Accueil de `le-coeur-en-or` : « Comprendre le monde… », « L'UPop de Villeurbanne, c'est : », « Prochains rendez-vous », « Recevoir les nouvelles… », « Nous suivre » ont tous le même style (Unbounded 22 px, graisse 500), sans filet bleu au-dessus.
+2. Le grand titre de la bannière reste inchangé.
+
+### Test 7 — cartes de sous-pages (passe 5)
+1. `/upop-bar/` et `/vortex/` : les comptes rendus sont des cartes papier comme celles de l'agenda, titre en gras, « Lire la suite → » en bas sous un filet, à la même hauteur sur une rangée.
+2. `/upop-bar/` : les colonnes de « Les commissions », « Des liens utiles » et « Comptes rendus » sont exactement alignées.
+3. 375 px : une carte par ligne.
+
+### Test 8 — sous-cartes (passe 6)
+1. Accueil : « L'UPop de Villeurbanne, c'est : » est une liste à puces 2×2 séparée par des filets (avant : 4 cartes en gras).
+2. `/qui-sommes-nous/` : « Ce que nous faisons » et « Notre fonctionnement » en listes ; « Nos valeurs » en pastilles.
+3. Un bloc dont une sous-carte a un texte (ex. faire_festival) garde ses cartes.
+4. 375 px : listes sur une colonne, pastilles qui passent à la ligne, bouton e-mail de « Nous contacter » sur deux lignes sans débordement.
+
+### Test 9 — mobile
 1. Dans l'inspecteur, largeur 375 px : aucun défilement horizontal, aucun bouton coupé.
 
 ### Verifs automatiques

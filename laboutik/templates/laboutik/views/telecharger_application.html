@@ -1,0 +1,109 @@
+{% load static i18n %}<!DOCTYPE html>
+<!--
+PAGE « TELECHARGER L'APPLICATION » — ACCES A LA CAISSE REFUSE
+/ "Download the app" page — POS access denied
+
+LOCALISATION : laboutik/templates/laboutik/views/telecharger_application.html
+
+Rendue par CaisseViewSet.handle_exception() (laboutik/views.py), avec un statut 403,
+quand GET /laboutik/caisse/ est refuse : ni terminal appaire au lieu, ni admin du lieu,
+ni cle API.
+
+Page autonome : elle n'herite PAS de laboutik/base.html, qui exige le `state` de la
+caisse et charge tout le JavaScript du POS. Aucun JavaScript ici.
+
+CONTEXTE :
+- qrcode_svg : QR code en SVG, genere cote serveur par segno
+- url_de_telechargement : lien de telechargement de l'application Android
+- url_de_la_documentation : lien vers la documentation
+-->
+<html lang="{{ LANGUAGE_CODE|default:'fr' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% translate "Télécharger l'application de caisse" %}</title>
+  <link rel="icon" href="{% static 'images/favicon.ico' %}" />
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #1a1a1a;
+      color: #f5f5f5;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .carte-telechargement {
+      max-width: 26rem;
+      margin: 1.5rem;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      background-color: #2a2a2a;
+      border-radius: 12px;
+    }
+    .carte-telechargement h1 {
+      margin: 0 0 1.5rem;
+      font-size: 1.4rem;
+      text-wrap: balance;
+    }
+    .qrcode-telechargement svg {
+      display: block;
+      margin: 0 auto;
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+    }
+    .bouton-telechargement {
+      display: inline-block;
+      margin-top: 1.5rem;
+      padding: 0.8rem 1.4rem;
+      background-color: #339448;
+      color: #ffffff;
+      font-weight: 600;
+      text-decoration: none;
+      border-radius: 8px;
+    }
+    .bouton-telechargement:hover,
+    .bouton-telechargement:focus-visible {
+      background-color: #2a7a3b;
+    }
+    .lien-documentation {
+      margin: 1.5rem 0 0;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    .lien-documentation a {
+      color: #8fd19e;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <main class="carte-telechargement" data-testid="laboutik-telecharger-application">
+    <h1>{% translate "Téléchargez l'application pour Android." %}</h1>
+
+    <!-- QR code vers le telechargement (pour scanner depuis un autre appareil)
+         / QR code to the download (to scan from another device) -->
+    <div class="qrcode-telechargement"
+         role="img"
+         aria-label="{% translate "QR code pour télécharger l'application Android" %}"
+         data-testid="laboutik-telecharger-application-qrcode">
+      {{ qrcode_svg|safe }}
+    </div>
+
+    <!-- Lien cliquable : utile quand la page s'affiche deja sur le telephone
+         / Clickable link: useful when the page is already shown on the phone -->
+    <a class="bouton-telechargement"
+       href="{{ url_de_telechargement }}"
+       data-testid="laboutik-telecharger-application-lien">
+      {% translate "Télécharger l'application" %}
+    </a>
+
+    <p class="lien-documentation" data-testid="laboutik-telecharger-application-documentation">
+      {% translate "Suivez la documentation sur :" %}<br>
+      <a href="{{ url_de_la_documentation }}">{{ url_de_la_documentation }}</a>
+    </p>
+  </main>
+</body>
+</html>
