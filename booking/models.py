@@ -4,13 +4,16 @@ Modèles de l'app booking — réservation de ressources partagées.
 
 LOCALISATION : booking/models.py
 """
+import datetime
 import logging
+from uuid import uuid4
 
 import stripe
 from django.utils import timezone
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 from django.db.transaction import atomic
 from datetime import timedelta
@@ -703,3 +706,472 @@ class Booking(models.Model):
 
     def __str__(self):
         return f'{self.resource} — {self.user} {_("de")} {self.start_datetime} {_("à")} {self.end_datetime}'
+
+
+# ---------------------------------------------------------------------------
+# BÉNÉVOLAT — planning des besoins en bénévoles (façon Framadate)
+# / VOLUNTEERING — volunteer needs planning (Framadate style)
+#
+# Spec : TECH_DOC/SESSIONS/TODO/BENEVOLAT-planning-besoins.md (§4)
+#
+# PlanningBenevole ──< BesoinBenevole >── TacheBenevole
+#                          │
+#                          └──< InscriptionBenevole >── TibilletUser
+#
+# Aucun lien avec la vente : pas de Product vendu, pas de LigneArticle, pas de Stripe.
+# Seuls Calendar et ClosedPeriod (les jours de fermeture) sont repris de booking.
+# / No link with sales. Only Calendar / ClosedPeriod (closing days) are reused.
+#
+# Les quatre modèles ont un uuid comme clé primaire : c'est l'identifiant de l'API v2,
+# et c'est ce que signe le lien de désistement des mails. Un uuid ne désigne rien dans
+# un autre lieu, alors qu'un entier y désignerait la ligne de quelqu'un d'autre.
+# / uuid primary keys: API v2 identifier, and safe to sign across tenants.
+# ---------------------------------------------------------------------------
+
+# Slugs refusés pour un planning : ce sont des segments des routes
+# /booking/benevolat/besoin/… et /booking/benevolat/desistement/… (booking/urls.py).
+# / Slugs refused for a planning: they are segments of the volunteering routes.
+SLUGS_DE_PLANNING_RESERVES = ["besoin", "desistement"]
+
+
+class TacheBenevole(models.Model):
+    """
+    Une tâche que le lieu demande à ses bénévoles : « Tenir le bar », « Faire le ménage ».
+    C'est un catalogue du lieu, réutilisé d'un planning à l'autre.
+    / A volunteer task of the venue, reused from one planning to the next.
+
+    LOCALISATION : booking/models.py
+    """
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid4,
+        editable=False,
+        verbose_name=_("Identifiant"),
+    )
+
+    name = models.CharField(
+        max_length=200,
+        verbose_name=_("Nom de la tâche"),
+        help_text=_("Par exemple : « Tenir le bar », « Faire le ménage »."),
+    )
+
+    description = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Consignes"),
+        help_text=_(
+            "Affichées sous le nom de la tâche sur le planning, et reprises dans le mail "
+            "de confirmation : où aller, quoi apporter, à qui parler."
+        ),
+    )
+
+    class Meta:
+        verbose_name = _("Tâche bénévole")
+        verbose_name_plural = _("Tâches bénévoles")
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class PlanningBenevole(models.Model):
+    """
+    Un tableau de besoins en bénévoles, publié sur le site du lieu.
+    Par exemple : « Bar associatif : octobre ».
+    / A volunteer needs board, published on the venue website.
+
+    LOCALISATION : booking/models.py
+
+    Page publique : /booking/benevolat/<slug>/
+    """
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid4,
+        editable=False,
+        verbose_name=_("Identifiant"),
+    )
+
+    name = models.CharField(
+        max_length=250,
+        verbose_name=_("Nom du planning"),
+        help_text=_("Par exemple : « Bar associatif : octobre »."),
+    )
+
+    slug = models.SlugField(
+        max_length=250,
+        unique=True,
+        verbose_name=_("Adresse de la page"),
+        help_text=_("La fin de l'adresse publique : /booking/benevolat/<adresse>/"),
+    )
+
+    description = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Présentation"),
+        help_text=_("Le texte affiché en haut de la page du planning."),
+    )
+
+    published = models.BooleanField(
+        default=False,
+        verbose_name=_("Publié"),
+        help_text=_("Tant que la case n'est pas cochée, le planning est un brouillon invisible sur le site."),
+    )
+
+    # Vide = ouvert à tout compte connecté.
+    # Non vide = réservé aux adhérent·es d'au moins une de ces adhésions.
+    # Un seul champ : pas de choix « accès » à garder cohérent avec lui.
+    # / Empty = open to any logged-in account. Not empty = members of one of these only.
+    adhesions_requises = models.ManyToManyField(
+        Product,
+        blank=True,
+        limit_choices_to={"categorie_article": Product.ADHESION},
+        related_name="plannings_benevoles",
+        verbose_name=_("Adhésions requises"),
+        help_text=_(
+            "Laisser vide pour ouvrir le planning à toute personne connectée. "
+            "Sinon, seules les personnes qui ont au moins une de ces adhésions peuvent s'inscrire."
+        ),
+    )
+
+    calendrier = models.ForeignKey(
+        Calendar,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="plannings_benevoles",
+        verbose_name=_("Calendrier des fermetures"),
+        help_text=_(
+            "Les jours fermés de ce calendrier sont sautés quand on répète des besoins. "
+            "Laisser vide : aucun jour fermé."
+        ),
+    )
+
+    delai_desinscription_heures = models.PositiveIntegerField(
+        default=24,
+        verbose_name=_("Délai pour se retirer (heures)"),
+        help_text=_(
+            "Moins de ce nombre d'heures avant le créneau, la personne peut encore se retirer, "
+            "mais l'équipe est prévenue par mail."
+        ),
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Créé le"),
+    )
+
+    class Meta:
+        verbose_name = _("Planning bénévole")
+        verbose_name_plural = _("Plannings bénévoles")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        """
+        Refuse les slugs qui sont aussi des segments des routes du bénévolat.
+        / Refuses slugs that are also segments of the volunteering routes.
+
+        LOCALISATION : booking/models.py — classe PlanningBenevole
+
+        Sans ce contrôle, un planning au slug « desistement » enverrait le POST de sa
+        lettre d'information dans la vue de désistement.
+        / Without it, a "desistement" slug would route its newsletter POST to the
+        withdrawal view.
+        """
+        if self.slug in SLUGS_DE_PLANNING_RESERVES:
+            raise ValidationError({
+                "slug": _("Cette adresse est réservée. Choisissez-en une autre."),
+            })
+
+    def date_est_fermee(self, une_date):
+        """
+        Renvoie la période de fermeture qui couvre ce jour, ou None.
+        / Returns the closed period covering this day, or None.
+
+        LOCALISATION : booking/models.py — classe PlanningBenevole
+
+        Un jour est fermé si start_date <= une_date et si end_date est vide
+        (fermeture sans fin) ou >= une_date. Planning sans calendrier : jamais fermé.
+        / A day is closed if start_date <= day and (end_date empty or >= day).
+        """
+        if self.calendrier_id is None:
+            return None
+
+        periode_qui_couvre_ce_jour = self.calendrier.closed_periods.filter(
+            models.Q(start_date__lte=une_date)
+            & (models.Q(end_date__isnull=True) | models.Q(end_date__gte=une_date))
+        ).first()
+        return periode_qui_couvre_ce_jour
+
+    def libelle_de_fermeture(self, une_date):
+        """
+        Le texte à afficher pour un jour fermé, ou None si le jour est ouvert.
+        Le label de la fermeture s'il existe, sinon « fermé du 14 juillet au 15 juillet ».
+        / The text to show for a closed day, or None if the day is open.
+
+        LOCALISATION : booking/models.py — classe PlanningBenevole
+        """
+        periode_fermee = self.date_est_fermee(une_date)
+        if periode_fermee is None:
+            return None
+
+        if periode_fermee.label:
+            return periode_fermee.label
+
+        debut_de_la_fermeture = date_format(periode_fermee.start_date, "j F")
+        if periode_fermee.end_date is None:
+            return _("fermé à partir du %(debut)s") % {"debut": debut_de_la_fermeture}
+        if periode_fermee.end_date == periode_fermee.start_date:
+            return _("fermé le %(debut)s") % {"debut": debut_de_la_fermeture}
+        fin_de_la_fermeture = date_format(periode_fermee.end_date, "j F")
+        return _("fermé du %(debut)s au %(fin)s") % {
+            "debut": debut_de_la_fermeture,
+            "fin": fin_de_la_fermeture,
+        }
+
+
+class BesoinBenevole(models.Model):
+    """
+    Une case du planning : une tâche, un jour, une plage horaire facultative,
+    et le nombre de personnes souhaité.
+    / A cell of the planning: a task, a day, an optional time range, a wanted count.
+
+    LOCALISATION : booking/models.py
+
+    nombre_souhaite est un OBJECTIF, pas un plafond : on peut toujours s'inscrire
+    au-delà (« on peut être 3 sur une tâche prévue pour 2 »).
+    / nombre_souhaite is a goal, not a cap.
+
+    Les heures sont saisies en heure locale, sans fuseau. Les gabarits et les mails
+    affichent date / heure_debut / heure_fin. debut() et fin() ne servent qu'aux
+    comparaisons : TIME_ZONE vaut UTC, un |date sur eux afficherait l'heure UTC.
+    / Hours are local, without timezone. Templates show the raw fields;
+    debut() / fin() are for comparisons only.
+    """
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid4,
+        editable=False,
+        verbose_name=_("Identifiant"),
+    )
+
+    planning = models.ForeignKey(
+        PlanningBenevole,
+        on_delete=models.CASCADE,
+        related_name="besoins",
+        verbose_name=_("Planning"),
+    )
+
+    # PROTECT : on ne supprime pas une tâche qui sert encore à un besoin.
+    # / PROTECT: a task still used by a need cannot be deleted.
+    tache = models.ForeignKey(
+        TacheBenevole,
+        on_delete=models.PROTECT,
+        related_name="besoins",
+        verbose_name=_("Tâche"),
+    )
+
+    date = models.DateField(
+        verbose_name=_("Jour"),
+    )
+
+    heure_debut = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Début"),
+        help_text=_("Laisser les deux heures vides pour toute la journée."),
+    )
+
+    heure_fin = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Fin"),
+        help_text=_("Une fin plus tôt que le début veut dire le lendemain (21:00 → 00:00)."),
+    )
+
+    nombre_souhaite = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name=_("Nombre de personnes souhaité"),
+        help_text=_("Un objectif, pas un plafond : d'autres personnes peuvent venir en renfort."),
+    )
+
+    class Meta:
+        verbose_name = _("Besoin bénévole")
+        verbose_name_plural = _("Besoins bénévoles")
+        ordering = ["date", "heure_debut"]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(nombre_souhaite__gte=1),
+                name="besoin_benevole_nombre_souhaite_au_moins_un",
+            ),
+            # Les deux heures sont vides (journée), ou les deux sont remplies.
+            # / Both hours empty (whole day), or both filled.
+            models.CheckConstraint(
+                check=(
+                    models.Q(heure_debut__isnull=True, heure_fin__isnull=True)
+                    | models.Q(heure_debut__isnull=False, heure_fin__isnull=False)
+                ),
+                name="besoin_benevole_deux_heures_ou_aucune",
+            ),
+        ]
+
+    def __str__(self):
+        if self.heure_debut is None:
+            return f"{self.tache} — {self.date} ({_('journée')})"
+        return f"{self.tache} — {self.date} {self.heure_debut:%H:%M}–{self.heure_fin:%H:%M}"
+
+    def clean(self):
+        """
+        Même règle que la contrainte en base, avec un message lisible dans l'admin.
+        / Same rule as the database constraint, with a readable admin message.
+
+        LOCALISATION : booking/models.py — classe BesoinBenevole
+        """
+        une_seule_heure_remplie = (self.heure_debut is None) != (self.heure_fin is None)
+        if une_seule_heure_remplie:
+            raise ValidationError(
+                _("Remplissez les deux heures, ou aucune pour toute la journée.")
+            )
+
+    def est_une_journee(self):
+        """
+        Vrai si le besoin n'a pas de plage horaire (toute la journée).
+        / True if the need has no time range (whole day).
+        """
+        return self.heure_debut is None
+
+    def debut(self):
+        """
+        Le début du besoin, en datetime avec le fuseau du lieu.
+        Journée entière : le jour à 00:00.
+        / Start of the need, timezone-aware in the venue timezone.
+
+        LOCALISATION : booking/models.py — classe BesoinBenevole
+        """
+        fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        if self.est_une_journee():
+            heure_de_debut = datetime.time(0, 0)
+        else:
+            heure_de_debut = self.heure_debut
+        return datetime.datetime.combine(self.date, heure_de_debut, tzinfo=fuseau_du_lieu)
+
+    def fin(self):
+        """
+        La fin du besoin, en datetime avec le fuseau du lieu.
+        - Journée entière : le lendemain à 00:00.
+        - heure_fin <= heure_debut : la fin tombe le lendemain (21:00 → 00:00).
+        / End of the need, timezone-aware. Whole day: next day 00:00.
+        / heure_fin <= heure_debut: ends the next day.
+
+        LOCALISATION : booking/models.py — classe BesoinBenevole
+        """
+        fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        lendemain = self.date + timedelta(days=1)
+
+        if self.est_une_journee():
+            return datetime.datetime.combine(lendemain, datetime.time(0, 0), tzinfo=fuseau_du_lieu)
+
+        se_termine_le_lendemain = self.heure_fin <= self.heure_debut
+        if se_termine_le_lendemain:
+            jour_de_fin = lendemain
+        else:
+            jour_de_fin = self.date
+        return datetime.datetime.combine(jour_de_fin, self.heure_fin, tzinfo=fuseau_du_lieu)
+
+    def est_passe(self):
+        """
+        Un besoin est passé quand sa FIN est passée : un besoin 18h–21h reste ouvert à 18h30.
+        / A need is past when its END is past.
+        """
+        return self.fin() <= timezone.now()
+
+    def nombre_inscrits(self):
+        return self.inscriptions.count()
+
+    def places_couvertes(self):
+        """Les places remplies, sans compter les renforts. / Filled places, without extras."""
+        return min(self.nombre_inscrits(), self.nombre_souhaite)
+
+    def places_libres(self):
+        return max(0, self.nombre_souhaite - self.nombre_inscrits())
+
+    def nombre_de_renforts(self):
+        """Les inscriptions au-delà du nombre souhaité. / Sign-ups beyond the wanted count."""
+        return max(0, self.nombre_inscrits() - self.nombre_souhaite)
+
+
+class InscriptionBenevole(models.Model):
+    """
+    Une personne s'est positionnée sur un besoin.
+    / A person signed up for a need.
+
+    LOCALISATION : booking/models.py
+
+    Se retirer = supprimer la ligne. Il n'y a pas de statut.
+    / Withdrawing = deleting the row. No status.
+    """
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid4,
+        editable=False,
+        verbose_name=_("Identifiant"),
+    )
+
+    besoin = models.ForeignKey(
+        BesoinBenevole,
+        on_delete=models.CASCADE,
+        related_name="inscriptions",
+        verbose_name=_("Besoin"),
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="inscriptions_benevoles",
+        verbose_name=_("Bénévole"),
+    )
+
+    # Sert aussi à l'ordre d'affichage des prénoms : les premiers inscrits d'abord.
+    # / Also the display order of first names: earliest first.
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Inscrit·e le"),
+    )
+
+    # Rempli quand le mail de rappel de la veille part : empêche un second envoi.
+    # / Set when the day-before reminder is sent: prevents a second send.
+    rappel_envoye_le = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Rappel envoyé le"),
+    )
+
+    # Vide = la personne s'est inscrite elle-même.
+    # Rempli = l'admin qui l'a inscrite, ou le compte de la clé API.
+    # / Empty = self sign-up. Filled = the admin or the API key account who did it.
+    inscrit_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("Inscrit·e par"),
+    )
+
+    class Meta:
+        verbose_name = _("Inscription bénévole")
+        verbose_name_plural = _("Inscriptions bénévoles")
+        ordering = ["created_at"]
+        constraints = [
+            # Une personne ne s'inscrit qu'une fois par besoin. Rattrape aussi le double clic.
+            # / One sign-up per person and need. Also catches double clicks.
+            models.UniqueConstraint(
+                fields=["besoin", "user"],
+                name="inscription_benevole_une_par_personne_et_besoin",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user} — {self.besoin}"

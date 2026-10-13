@@ -8,6 +8,11 @@ from Administration.admin.dashboard import (  # noqa: F401
 from Administration.admin.resources import (  # noqa: F401
     CalendarAdmin, WeeklyOpeningAdmin, BookingAdmin, ResourceGroupAdmin, ResourceAdmin
 )
+# IMPORT A EFFET DE BORD : enregistre les admins du planning des bénévoles.
+# / SIDE-EFFECT IMPORT: registers the volunteer planning admins.
+from Administration.admin.benevolat import (  # noqa: F401
+    TacheBenevoleAdmin, PlanningBenevoleAdmin, InscriptionBenevoleAdmin
+)
 from Administration.admin import (
     products,
     prices
