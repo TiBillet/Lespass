@@ -5,9 +5,14 @@
 > Ses corrections sont intégrées. Les décisions D6 à D19 et P1 à P10 ont eu une **seconde relecture
 > Fable** le 2026-09-24 (exactitude, pièges techniques, contradictions) ; ses corrections sont intégrées.
 > **Pré-requis :** aucun.
-> **Maquette interactive :** https://claude.ai/artifact/U6Ajd7PgEWq2ABrbnNiaqw
-> (page publique, vue mobile, « Mes créneaux », schéma de l'admin, modèle de données).
-> **Décisions :** tranchées par le mainteneur le 2026-09-23 (§2.1). Questions ouvertes : aucune (§10).
+> **Maquette interactive :** [`BENEVOLAT-maquette.html`](BENEVOLAT-maquette.html), à ouvrir
+> dans un navigateur (page publique, vue mobile, bloc d'accueil, « Mes créneaux », schéma de
+> l'admin, modèle de données). **La spec fait foi** : la maquette ne montre ni le rappel et le
+> désistement (§5.9), ni la colonne « Fermé » de l'admin (P8), ni le nom de famille (D18),
+> ni l'inscription par l'équipe (§5.10), ni l'API (§6 bis). Son champ « Publié : visible sur
+> /booking/ » est périmé (D14).
+> **Décisions :** tranchées par le mainteneur le 2026-09-23 (§2.1), complétées le 2026-10-12
+> (D18 revue, D21 à D24). Questions ouvertes : aucune (§10).
 > **Hors périmètre :** la suppression d'`Event.ACTION` et d'`Event.parent`. Chantier à part, plus tard.
 
 ## Lexique
@@ -20,6 +25,7 @@
 | Inscription | une personne s'est positionnée sur un besoin |
 | Place | une unité de `nombre_souhaite`. Un besoin « 3 personnes » a 3 places |
 | Renfort | une inscription au-delà du nombre souhaité. Toujours permise (D7) |
+| Inscription par l'équipe | un·e admin du lieu inscrit une autre personne sur un besoin, à sa place (D23, §5.10) |
 | Fermeture | une `ClosedPeriod` d'un `Calendar` de `booking` : les mêmes jours fermés que les ressources (D9) |
 | Période modèle | les besoins déjà saisis entre deux dates, que l'action « Répéter » recopie (§5.7) |
 | Lettre d'information | la newsletter du lieu, envoyée par son instance Ghost (§5.8) |
@@ -63,15 +69,19 @@ ressources (nombre de places, délai d'annulation, admin, onglet « Mon compte �
 | D9 | Jours de fermeture | **Les mêmes que `booking`** : le planning pointe un `Calendar` existant. « Répéter » saute les jours fermés (§5.7). |
 | D10 | Se tenir informé·e | **Un champ email + un bouton « Je m'inscris à la lettre d'information »** sur la page du planning, pour recevoir les prochains besoins (§5.8). |
 | D11 | Lettre sur `/booking/` | **Non en v1** : le bloc lettre n'est que sur la page du planning (ex-Q12). |
-| D12 | Étiquettes sur les personnes | **Spec à part** (`TODO/USERS-etiquettes.md`, à écrire) : des étiquettes par lieu sur les utilisateurs, bénévoles et adhérent·es, pour écrire à des groupes précis via Ghost ou Brevo (« seulement les bénévoles bar », « seulement les adhérent·es »). Contrainte connue : `TibilletUser` est en schéma `public`, le catalogue d'étiquettes dans le schéma du lieu, donc une table de liaison côté lieu, pas un champ sur l'utilisateur. Catalogue à part, distinct des `Tag` (D4 de cette spec-là). Le bénévolat s'en servira si elle existe (champ facultatif `TacheBenevole.etiquette`, FK `Etiquette` : l'inscription pose l'étiquette de la tâche, voir `TODO/USERS-etiquettes.md` §5) ; sinon il envoie seulement l'étiquette Ghost « Bénévolat » (§5.8). (ex-Q11) |
+| D12 | Étiquettes sur les personnes | **Spec à part** (`TODO/USERS-etiquettes.md`, écrite le 2026-09-24) : des étiquettes par lieu sur les utilisateurs, bénévoles et adhérent·es, pour écrire à des groupes précis via Ghost ou Brevo (« seulement les bénévoles bar », « seulement les adhérent·es »). Contrainte connue : `TibilletUser` est en schéma `public`, le catalogue d'étiquettes dans le schéma du lieu, donc une table de liaison côté lieu, pas un champ sur l'utilisateur. Catalogue à part, distinct des `Tag` (D4 de cette spec-là). Le bénévolat s'en servira si elle existe (champ facultatif `TacheBenevole.etiquette`, FK `Etiquette` : l'inscription pose l'étiquette de la tâche, voir `TODO/USERS-etiquettes.md` §5) ; sinon il envoie seulement l'étiquette Ghost « Bénévolat » (§5.8). (ex-Q11) |
 | D13 | Lettre : consentement | **Comme le reste du site** : inscription directe par `send_to_ghost_email` pour tout le monde, connecté·e ou non, sans double confirmation (même comportement que la case « newsletter » des formulaires). Limite connue et acceptée : n'importe qui peut abonner l'email d'une autre personne. (ex-P10) |
 | D14 | Où on découvre les besoins | **Une page dédiée par planning** (son nom, son adresse `/booking/benevolat/<slug>/`) **+ un bloc sur l'accueil du lieu**, dans la même veine que « les prochains évènements » : une nouvelle **source** du bloc CMS « Liste automatique » (§5.1). Pas de section sur `/booking/` en V1. (ex-Q1) |
 | D15 | Deux créneaux qui se chevauchent | **Aucune vérification**, comme Framadate : chacun fait attention, et voit ses créneaux dans « Mes créneaux ». (ex-Q2) |
 | D16 | Rappel la veille | **En V1, avec un lien « Je ne peux plus venir »** qui marche **même après le délai de retrait**. Dans ce cas, l'équipe est prévenue par mail du désistement (§5.9). (ex-Q3) |
 | D17 | Autres mails | **Aucun en V1** : pas de mail à l'équipe à chaque inscription ou retrait avant le délai, et pas de mail aux inscrit·es quand l'admin supprime un besoin. L'admin prévient à la main : la page de confirmation de suppression de Django liste déjà les inscriptions qui partent avec le besoin (`CASCADE`). (ex-Q5) |
-| D18 | Prénom manquant | **Une fenêtre (modale) demande le prénom** au clic sur « Je viens » si le compte n'en a pas. Elle prévient que le prénom sera **visible par tout le monde** sur le planning. Le prénom est **enregistré dans le compte** (`TibilletUser.first_name`), puis l'inscription est faite dans la foulée (§5.3). La phrase de l'en-tête (« Ton prénom sera visible sur ce planning ») reste, pour celles et ceux qui ont déjà un prénom. (ex-Q8) |
+| D18 | Prénom ou nom manquant | **Une fenêtre (modale) demande le prénom et le nom** au clic sur « Je viens » si le compte n'a pas l'un des deux (seuls les champs vides sont affichés). Elle prévient que le prénom sera **visible par tout le monde** sur le planning, et que le nom ne sera **vu que par l'équipe du lieu** (il sert à retrouver la personne, §5.10). Les deux sont **enregistrés dans le compte** (`TibilletUser.first_name`, `last_name`), puis l'inscription est faite dans la foulée (§5.3). La phrase de l'en-tête (« Ton prénom sera visible sur ce planning ») reste, pour celles et ceux qui ont déjà tout rempli. (ex-Q8, nom ajouté le 2026-10-12) |
 | D19 | Plafond | **Pas en V1.** Aucune limite au nombre d'inscrit·es. Si un vrai cas arrive (covoiturage, postes de formation), on ajoutera un champ `plafond` vide par défaut, et un `select_for_update` pour ces besoins-là seulement. (ex-Q10) |
 | D20 | Carte du bloc d'accueil | **On garde la rangée des 5 prochains jours colorés en V1** (§5.1), malgré l'avis « superflu » de la seconde relecture. |
+| D21 | Compteur de l'en-tête | **Trois chiffres + une jauge**, comme la maquette : « 12 / 34 places couvertes · 2 en renfort · 3 créneaux encore vides », et une barre de remplissage sous le compteur (§5.2). Un créneau vide = un besoin sans aucune inscription. (2026-10-12) |
+| D22 | Anonyme sur un besoin couvert | **Badge « Couvert » + « Me connecter pour venir »**, comme la maquette (§5.2). (2026-10-12) |
+| D23 | Inscrire quelqu'un à sa place | **Un·e admin du lieu peut inscrire une autre personne** sur un besoin, depuis la page du planning : recherche par nom, prénom ou email parmi les personnes connues du lieu, ou création par email si elle n'y est pas (§5.10). Pour celles et ceux qui ne vont pas sur le site (planning noté au tableau, appel téléphonique). (2026-10-12) |
+| D24 | API v2 | **API v2 complète** sur les quatre modèles, plus l'inscription d'une personne et la répétition des besoins (§6 bis). (2026-10-12) |
 
 ### 2.2 Proposées par cette spec, validées par le mainteneur (2026-09-24)
 
@@ -177,10 +187,12 @@ n'active jamais le fuseau du lieu (`timezone.activate`). Un gabarit qui rendrait
 | `user` | FK `AUTH_USER_MODEL`, `PROTECT` | |
 | `created_at` | `DateTimeField(auto_now_add)` | Ordre d'affichage des prénoms : les premiers inscrits d'abord |
 | `rappel_envoye_le` | `DateTimeField(null, blank)` | Rempli quand le rappel de la veille part. Empêche un second envoi (§5.9) |
+| `inscrit_par` | FK `AUTH_USER_MODEL`, `null`, `blank`, `SET_NULL`, `related_name="+"` | Traçabilité. Vide = la personne s'est inscrite elle-même. Rempli = l'admin qui l'a inscrite (§5.10), ou le compte de la clé API (`ExternalApiKey.user`, §6 bis) |
 
 `UniqueConstraint(fields=["besoin", "user"])` (P2).
 
-Migrations : **deux**.
+Migrations : **trois**.
+- `BaseBillet` : le booléen `ExternalApiKey.volunteering` de l'API (§6 bis).
 - `booking/0002_benevolat.py` (il n'existe que `0001_initial`). App en TENANT_APPS.
 - une migration `pages` pour la nouvelle source du bloc (§5.1) : les `choices` font partie
   de l'état des migrations. `pages` est aussi en SHARED_APPS : elle passe sur `public`,
@@ -233,7 +245,10 @@ Migrations : **deux**.
 ### 5.2 La page du planning (maquette : onglet « Page publique »)
 
 - En-tête : titre (Unbounded), chapô, badge d'accès, compteur « 12 / 34 places couvertes ·
-  2 en renfort », et la mention « Ton prénom sera visible sur ce planning. » (D2).
+  2 en renfort · 3 créneaux encore vides » avec une jauge de remplissage dessous (D21), et la
+  mention « Ton prénom sera visible sur ce planning. » (D2). La jauge est décorative
+  (`aria-hidden="true"`) : le compteur écrit déjà la même information. Le compteur porte
+  `aria-live="polite"` et il est rafraîchi en hors bande, comme l'en-tête du jour (§5.3).
 - **Desktop** : tableau. Lignes = tâches, colonnes = jours qui ont au moins un besoin.
   Une case peut empiler plusieurs besoins (plages horaires). Case sans besoin : hachurée,
   « pas besoin ». Première colonne collante, défilement horizontal **dans** le conteneur.
@@ -266,7 +281,8 @@ titres de jours de la vue mobile.
 
 | État de la personne | Action affichée |
 |---|---|
-| Anonyme | « Me connecter pour venir » → ouvre `#loginPanel` |
+| Anonyme, besoin pas encore couvert | « Me connecter pour venir » → ouvre `#loginPanel` |
+| Anonyme, besoin couvert | badge « Couvert » + « Me connecter pour venir » (D22) |
 | Connectée, pas le droit (D3) | badge « Réservé aux adhérent·es » |
 | Connectée, besoin pas encore couvert | bouton principal « Je viens » |
 | Connectée, besoin couvert | badge « Couvert » + bouton secondaire « Je viens aussi » (D7) |
@@ -275,6 +291,9 @@ titres de jours de la vue mobile.
 
 « Je viens aussi » est volontairement **secondaire** : le bouton principal reste réservé aux
 besoins qui manquent de monde, pour que l'œil aille d'abord là.
+
+**Admin du lieu** (`user.is_tenant_admin(connection.tenant)`) : en plus de l'action du tableau,
+chaque besoin à venir porte un lien « Inscrire quelqu'un » (§5.10).
 
 - Bloc « Pas dispo cette fois ? » : inscription à la lettre d'information (§5.8), sous la
   grille.
@@ -289,19 +308,25 @@ besoins qui manquent de monde, pour que l'œil aille d'abord là.
 2. Vérifications (serializer DRF) : connecté·e, planning publié, besoin pas passé,
    droit d'accès (D3, contrôle d'adhésion recopié de `booking_engine.py:553-568`).
    **Pas** de contrôle du nombre d'inscrits (D7).
-3. **Prénom manquant (D18)** : si `user.first_name` est vide, pas d'inscription tout de
-   suite. La réponse ouvre une fenêtre (modale Bootstrap 5 : `bootstrap.bundle` est chargé
-   par les trois shells, `V2`, `classic` et `faire_festival`) :
+3. **Prénom ou nom manquant (D18)** : si `user.first_name` **ou** `user.last_name` est vide
+   (`None` ou blanc), pas d'inscription tout de suite. La réponse ouvre une fenêtre (modale
+   Bootstrap 5 : `bootstrap.bundle` est chargé par les trois shells, `V2`, `classic` et
+   `faire_festival`) :
 
    > **Comment on t'appelle ?**
    > Ton prénom sera **visible par tout le monde** sur ce planning, même par les personnes
-   > sans compte. Il sera aussi enregistré dans ton compte.
-   > `[ Prénom ]` `[ Enregistrer et venir ]` `[ Annuler ]`
+   > sans compte. Ton nom ne sera vu que par l'équipe du lieu. Les deux seront enregistrés
+   > dans ton compte : on ne te les redemandera pas.
+   > `[ Prénom ]` `[ Nom ]` `[ Enregistrer et venir ]` `[ Annuler ]`
 
-   Le formulaire poste sur la **même** URL `inscrire`, avec un champ `prenom`. Serializer :
-   `CharField`, nettoyé (`strip`), 1 à 200 caractères (`first_name` fait 200,
-   `AuthBillet/models.py:134`). Si valide : `user.first_name = prenom` puis
-   `user.save(update_fields=["first_name"])`, puis on continue à l'étape 4.
+   Seuls les champs vides du compte sont affichés (un compte qui a déjà un prénom ne voit que
+   « Nom »). Le formulaire poste sur la **même** URL `inscrire`, avec `prenom` et/ou `nom`.
+   Serializer : deux `CharField` facultatifs, nettoyés (`strip`), 1 à 200 caractères
+   (`first_name` et `last_name` font 200, `AuthBillet/models.py:134-135`). Un champ vide dans
+   le compte **doit** être fourni ; un champ déjà rempli dans le compte est ignoré s'il est
+   envoyé (la modale ne réécrit pas un nom existant). Si valide : on remplit les champs
+   manquants puis `user.save(update_fields=[...les champs remplis...])`, puis on continue à
+   l'étape 4.
 
    **Côté htmx, un seul mécanisme : le hors bande** (`hx-swap-oob`, déjà utilisé dans le
    projet ; `HX-Retarget` ne l'est nulle part). La réponse contient la case **inchangée** +
@@ -309,14 +334,15 @@ besoins qui manquent de monde, pour que l'œil aille d'abord là.
    `HX-Trigger: ouvrirModalePrenom` ; trois lignes de JS appellent
    `bootstrap.Modal.getOrCreateInstance(...).show()`. Après l'envoi du prénom, la réponse
    remplace la case, vide `#benevolat-modale` en hors bande, et la modale se ferme.
-   L'utilisateur est en `SHARED_APPS` : ce prénom est aussi celui des autres lieux. C'est
-   voulu, c'est le même compte.
+   L'utilisateur est en `SHARED_APPS` : ce prénom et ce nom sont aussi ceux des autres lieux.
+   C'est voulu, c'est le même compte.
 4. `get_or_create` de l'`InscriptionBenevole` (§7).
 5. Réponse : le partial **de la case seule** + toast texte (« C'est noté… ») via le
    mécanisme existant `panierToast` (`BaseBillet/views.py:5613-5638` ; l'écouteur est dans
    `BaseBillet/templates/htmx/components/panier_scripts.html:68`, inclus par les trois
    shells), pas un nouvel événement. L'en-tête du jour (couleur,
-   compteur) est rafraîchi par un **swap hors bande** (`hx-swap-oob`) dans la même réponse.
+   compteur) **et** le compteur du planning avec sa jauge (D21) sont rafraîchis par un **swap
+   hors bande** (`hx-swap-oob`) dans la même réponse.
 6. Email de confirmation (Celery) : date, plage, tâche, description, lien « Mes créneaux ».
    Le lien « Je ne peux plus venir » (§5.9) y est ajouté au chantier 5.
 
@@ -353,8 +379,13 @@ Entrées à ajouter : les raccourcis de `V2/vues/compte/index.html:185-189` et d
   en lecture seule** de l'inline, « Fermé : Fête nationale » (le `label`, ou le repli),
   calculée par `date_est_fermee`. Pas de `messages.warning` : il faudrait surcharger
   `save_formset`, ce que rien ne fait dans `Administration/`.
-- `InscriptionBenevoleAdmin` : liste filtrable par planning et par date. L'admin peut
-  ajouter quelqu'un à la main.
+- `InscriptionBenevoleAdmin` : liste filtrable par planning et par date, recherche par
+  prénom, nom et email (`user__first_name`, `user__last_name`, `user__email`), suppression.
+  **Pas de formulaire d'ajout** (`has_add_permission` renvoie `False`) : on inscrit
+  quelqu'un depuis la page du planning (§5.10), qui a la recherche par nom. Raison technique :
+  `TibilletUser` n'a pas d'admin sur `staff_admin_site`, donc `autocomplete_fields = ["user"]`
+  lève `admin.E039`, et une liste déroulante de tous les comptes du lieu est inutilisable.
+  Colonne « Inscrit·e par » (`inscrit_par`, vide = soi-même).
 - Action « Répéter des besoins » sur la fiche planning : voir §5.7.
 - `Administration/admin/dashboard.py` : entrées de menu dans le bloc `module_booking`
   (≈ l.772-818), **plus** les deux dictionnaires par modèle à compléter pour les trois
@@ -503,6 +534,58 @@ téléphone. Le lien porte donc sa preuve :
 un seul mécanisme pour se retirer depuis un mail. La page de confirmation est un
 formulaire HTML classique : `{% csrf_token %}` obligatoire.
 
+### 5.10 Inscrire quelqu'un à sa place (D23)
+
+**Le besoin :** une personne s'engage au comptoir ou au téléphone, mais ne va pas sur le
+site. L'équipe l'inscrit elle-même, pour que la grille reste juste.
+
+**Qui :** un·e admin du lieu (`request.user.is_tenant_admin(connection.tenant)`). Le lien
+n'est affiché qu'à elles et eux, **et** chaque vue revérifie le droit côté serveur (403
+sinon) : cacher un bouton ne protège rien.
+
+**Le parcours** (tout dans la fenêtre `#benevolat-modale` de §5.3) :
+
+1. Lien « Inscrire quelqu'un » sur un besoin à venir → `hx-get` de
+   `/booking/benevolat/besoin/<pk>/inscrire-une-personne/`, qui renvoie la modale en hors
+   bande + `HX-Trigger: ouvrirModalePrenom` (même mécanisme que §5.3, pas un second).
+   Titre : « Inscrire quelqu'un : Tenir le bar, sam. 10 oct., 18h–21h ».
+2. **Recherche** : un champ « Nom, prénom ou email » avec
+   `hx-get="…/chercher-une-personne/"`, `hx-trigger="input changed delay:300ms"`,
+   `hx-target="#benevolat-resultats"` (`aria-live="polite"`). Côté serveur :
+   - le queryset est **`HumanUser.objects`** (`AuthBillet/models.py:416`) : le proxy ne
+     renvoie que les comptes humains rattachés au lieu (`client_achat`). Les comptes des
+     autres lieux ne sortent jamais, même en tapant leur email exact ;
+   - filtre `Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(email__icontains=q)` ;
+   - au moins 2 caractères (sinon : « Tape au moins 2 lettres »), 10 résultats au plus, triés
+     par nom puis prénom ;
+   - chaque résultat affiche « Prénom Nom · email » et un bouton « Inscrire ». Une personne
+     déjà inscrite sur ce besoin affiche « déjà inscrite » sans bouton.
+3. **Inscrire une personne trouvée** : `hx-post` sur
+   `/booking/benevolat/besoin/<pk>/inscrire-une-personne/` avec `user` (son pk).
+   Le serializer **revérifie** que ce pk est dans `HumanUser.objects` : un pk forcé vers le
+   compte d'un autre lieu est refusé (même règle que la carte NFC de
+   `Administration/admin/laboutik.py:952`).
+4. **Personne introuvable** : sous les résultats, « Pas dans la liste ? » ouvre trois
+   champs : email, prénom, nom (les trois obligatoires, D18). `hx-post` sur la même URL.
+   Le serveur appelle `get_or_create_user(email, send_mail=False)` (`AuthBillet/utils.py:96`),
+   qui rattache le compte au lieu (`client_achat`). Prénom et nom ne sont écrits **que s'ils
+   sont vides** dans le compte : si l'email existe déjà, on ne réécrit pas le nom d'une
+   personne qui l'a choisi elle-même (le compte est partagé entre lieux).
+5. **L'inscription** : `get_or_create(besoin=…, user=…, defaults={"inscrit_par": request.user})`
+   (§7). Mêmes vérifications que §5.3 (planning publié, besoin pas passé), **sauf le
+   contrôle d'adhésion (D3)** : l'équipe décide qui elle inscrit. Pas de modale prénom non plus :
+   une personne trouvée sans prénom s'affiche « Bénévole » (P5).
+6. **Réponse** : comme §5.3 (la case, l'en-tête du jour et le compteur en hors bande), la
+   modale vidée en hors bande, toast « Camille Martin est inscrite ».
+7. **Mail à la personne** : le mail de confirmation de §5.3, avec une première phrase
+   différente : « L'équipe de <lieu> t'a inscrit·e. Si ce n'est pas bon, retire-toi depuis
+   Mon compte. » (plus le lien de désistement au chantier 5). La tâche Celery reçoit un
+   paramètre `par_l_equipe=True` : c'est l'appelant qui choisit le texte (cette vue et
+   l'API, §6 bis), pas le champ `inscrit_par`, qui peut être vide (clé API sans compte).
+
+**Retirer quelqu'un** : depuis l'admin Unfold (`InscriptionBenevoleAdmin`, suppression),
+sans mail (D17). Pas de bouton « retirer » pour l'équipe dans la grille en V1.
+
 ## 6. Vues, URLs, gabarits
 
 `booking/views_benevolat.py` — `BenevolatViewSet(viewsets.ViewSet)` :
@@ -514,6 +597,8 @@ formulaire HTML classique : `{% csrf_token %}` obligatoire.
 | `retirer` | `POST /booking/benevolat/besoin/<pk>/retirer/` | §5.4 |
 | `lettre` | `POST /booking/benevolat/<slug>/lettre/` | §5.8 |
 | `desistement` | `GET` / `POST /booking/benevolat/desistement/<jeton>/` | §5.9 |
+| `inscrire_une_personne` | `GET` / `POST /booking/benevolat/besoin/<pk>/inscrire-une-personne/` | §5.10 : GET = la modale, POST = l'inscription. Admin du lieu seulement |
+| `chercher_une_personne` | `GET /booking/benevolat/besoin/<pk>/chercher-une-personne/?q=` | §5.10 : les résultats de la recherche. Admin du lieu seulement |
 
 Branchement par `path()` explicites, **avant** `router.urls` (un `@action` du router
 produirait `benevolat/<pk>/inscrire/`, pas `benevolat/besoin/<pk>/…`). Aucune de ces routes
@@ -524,6 +609,8 @@ rattachée au planning (`<slug>/lettre/`) : un planning peut donc s'appeler « l
 urlpatterns = [
     path("benevolat/besoin/<int:pk>/inscrire/", BenevolatViewSet.as_view({"post": "inscrire"}), name="benevolat-inscrire"),
     path("benevolat/besoin/<int:pk>/retirer/", BenevolatViewSet.as_view({"post": "retirer"}), name="benevolat-retirer"),
+    path("benevolat/besoin/<int:pk>/inscrire-une-personne/", BenevolatViewSet.as_view({"get": "inscrire_une_personne", "post": "inscrire_une_personne"}), name="benevolat-inscrire-une-personne"),
+    path("benevolat/besoin/<int:pk>/chercher-une-personne/", BenevolatViewSet.as_view({"get": "chercher_une_personne"}), name="benevolat-chercher-une-personne"),
     path("benevolat/desistement/<str:jeton>/", BenevolatViewSet.as_view({"get": "desistement", "post": "desistement"}), name="benevolat-desistement"),
     path("benevolat/<slug:slug>/lettre/", BenevolatViewSet.as_view({"post": "lettre"}), name="benevolat-lettre"),
     path("benevolat/<slug:slug>/", BenevolatViewSet.as_view({"get": "retrieve"}), name="benevolat-planning"),
@@ -544,19 +631,176 @@ seulement un style pointillé ; l'état du jour est écrit, pas seulement color�
 Gabarits (`booking/templates/booking/benevolat/`) : `planning.html` (étend
 `booking/booking_base.html`), `partials/besoin.html` (une case, rendue seule par htmx),
 `partials/entete_jour.html` (rendu seul en hors bande), `partials/grille.html`,
-`partials/jours_mobile.html`, `partials/lettre.html`, `desistement.html` (confirmation + « ce lien ne marche plus »), `emails/confirmation.html`, `emails/rappel.html`, `emails/desistement_equipe.html`.
+`partials/jours_mobile.html`, `partials/lettre.html`, `partials/compteur.html` (rendu seul en
+hors bande, D21), `partials/inscrire_une_personne.html` (la modale de §5.10),
+`partials/resultats_personnes.html`, `desistement.html` (confirmation + « ce lien ne marche plus »), `emails/confirmation.html`, `emails/rappel.html`, `emails/desistement_equipe.html`.
 CSS : classes du skin V2 (`.btn--primary`, `.btn--secondary`, `.badge`, `.callout`) et ses
 couleurs de marque (`--letchi`, `--chouchou`). `color-mix` : Chrome 111+, Firefox 113+,
 Safari 16.2+ ; déjà utilisé dans `V2.css`. Styles propres à la grille dans
 un fichier de l'app, jamais dans `www/static/`.
 
-`data-testid` : `benevolat-modale-prenom`, `benevolat-prenom`, `benevolat-grille`, `benevolat-entete-jour-<date>`, `benevolat-lettre-email`,
+`data-testid` : `benevolat-modale-prenom`, `benevolat-prenom`, `benevolat-nom`, `benevolat-grille`,
+`benevolat-compteur`, `benevolat-inscrire-quelquun-<pk>`, `benevolat-recherche-personne`,
+`benevolat-resultat-personne-<user_pk>`, `benevolat-creer-personne`, `benevolat-entete-jour-<date>`, `benevolat-lettre-email`,
 `benevolat-lettre-inscrire`, `benevolat-besoin-<pk>`,
 `benevolat-je-viens-<pk>`, `benevolat-je-viens-aussi-<pk>`, `benevolat-retirer-<pk>`,
 `benevolat-mon-creneau-<pk>`, `benevolat-jour-mobile-<date>`, `benevolat-modale-annuler`,
 `benevolat-desistement-confirmer`, `benevolat-repeter-apercu`, `benevolat-repeter-confirmer`.
 
 Chaînes traduisibles en français (`_()`), à signaler au mainteneur en fin de chantier.
+
+## 6 bis. API v2 (D24)
+
+Une API complète, pour qu'un outil externe (ou un agent, skill `tibillet-api`) puisse monter
+un planning, ses besoins, et inscrire des gens sans passer par l'admin. Mêmes conventions que
+le reste d'`api_v2/` : `viewsets.ViewSet` aux méthodes explicites, `SemanticApiKeyPermission`,
+réponses en vocabulaire schema.org, listes enveloppées dans `{"results": [...]}`, isolation
+par lieu (la clé ne voit que le schéma de son lieu).
+
+### Droit de la clé
+
+Un booléen **`ExternalApiKey.volunteering`** (`verbose_name=_("Bénévolat")`,
+`BaseBillet/models.py` ≈ l.5313, migration `BaseBillet`). Un seul droit pour les quatre
+routes, comme `page` couvre pages et blocs : dans `api_permissions()` (≈ l.5342),
+`"volunteertask"`, `"volunteerplanning"`, `"volunteerneed"` et `"volunteersignup"` valent
+tous `self.volunteering`. L'ajouter aux `fields` de l'admin des clés
+(`Administration/admin_tenant.py` ≈ l.221-233). Sans ce droit : 403.
+
+### Routes (`api_v2/urls.py`)
+
+| Route | Basename | Type schema.org | Actions |
+|---|---|---|---|
+| `/api/v2/volunteer-tasks/` | `volunteertask` | `DefinedTerm` | list, create, retrieve, PATCH, DELETE |
+| `/api/v2/volunteer-plannings/` | `volunteerplanning` | `EventSeries` | list, create, retrieve, PATCH, DELETE, `POST {id}/repeat/` |
+| `/api/v2/volunteer-needs/` | `volunteerneed` | `Event` (`additionalType: "Volunteering"`) | list, create, retrieve, PATCH, DELETE |
+| `/api/v2/volunteer-signups/` | `volunteersignup` | `RsvpAction` | list, create, retrieve, DELETE |
+
+`identifier` = la clé primaire entière. Un planning se cherche aussi par son slug
+(`/api/v2/volunteer-plannings/bar-octobre/`), comme les pages (uuid **ou** slug).
+
+### Tâche → `DefinedTerm`
+
+```
+identifier = pk
+name        = name
+description = description
+```
+
+DELETE d'une tâche utilisée par un besoin : `PROTECT` lève `ProtectedError` → **409** avec le
+message « Cette tâche sert encore à N besoins ».
+
+### Planning → `EventSeries`
+
+```
+identifier  = pk
+name        = name
+description = description
+url         = "/booking/benevolat/<slug>/"
+startDate   = date du premier besoin   (lecture seule, absent si aucun besoin)
+endDate     = date du dernier besoin   (lecture seule)
+subEvent    = [Event besoin, ...]      (retrieve seulement, pas dans la liste)
+additionalProperty = PropertyValue[] :
+  slug, published, delaiDesinscriptionHeures,
+  requiredMembershipPlans  = [uuid de Product adhésion]  (vide = tout compte connecté, D3)
+  closingCalendar          = id du Calendar, ou null    (D9)
+  placesCouvertes, placesSouhaitees, renforts, creneauxVides  (lecture seule, D21)
+```
+
+En entrée : un `requiredMembershipPlans` qui contient un produit qui n'est pas une adhésion
+→ 400. Un `closingCalendar` inconnu → 400. DELETE : supprime besoins et inscriptions
+(`CASCADE`), sans mail (D17).
+
+**Répéter** — `POST /api/v2/volunteer-plannings/{id}/repeat/` : la même fonction pure
+`calculer_repetitions` que l'admin (§5.7), mêmes règles (écart ≥ 1, 1 à 52 fois, jours fermés
+sautés, doublons ignorés, inscriptions jamais copiées).
+
+```json
+{
+  "modelStartDate": "2026-10-02",
+  "modelEndDate": "2026-10-03",
+  "repeatEvery": 1,
+  "unit": "week",
+  "repeatCount": 4,
+  "dryRun": true
+}
+```
+
+`dryRun: true` → **200** avec les trois listes de l'aperçu (`toCreate`, `skippedClosed` avec
+le libellé de la fermeture, `ignoredExisting`), rien n'est écrit. `dryRun: false` (défaut)
+→ **201**, même corps, tout est créé dans une seule transaction.
+
+### Besoin → `Event`
+
+```
+@type          = "Event"
+additionalType = "Volunteering"
+identifier     = pk
+superEvent     = {"@type": "EventSeries", "identifier": <planning>, "name": ...}
+about          = {"@type": "DefinedTerm", "identifier": <tâche>, "name": ...}
+startDate      = date + heure_debut, dans le fuseau du lieu, avec son décalage
+                 ("2026-10-10T18:00:00+02:00") ; journée entière → la date seule ("2026-10-10")
+endDate        = date + heure_fin (lendemain si heure_fin <= heure_debut) ; absent si journée
+remainingAttendeeCapacity = places_libres()
+attendee       = [{"@type": "Person", "givenName": ...}]   (prénoms seulement, P5)
+additionalProperty = PropertyValue[] :
+  nombreSouhaite (entrée/sortie), nombreInscrits, renforts (lecture seule),
+  fermeture = libellé de la ClosedPeriod qui couvre ce jour, ou null (lecture seule, P8)
+```
+
+**Entrée des dates.** `startDate` = une date (`"2026-10-03"` → journée entière) ou une date
+et une heure. Une heure sans décalage est lue dans le fuseau du lieu ; une heure avec
+décalage est convertie dans le fuseau du lieu. Le modèle garde `date`, `heure_debut`,
+`heure_fin` sans fuseau (§4, « Affichage des heures »). `endDate` est obligatoire si
+`startDate` a une heure, interdit sinon ; sa date doit être le jour même ou le lendemain
+(400 sinon). `superEvent` et `about` acceptent l'`identifier` seul.
+
+Liste : filtres `?planning=<id>`, `?task=<id>`, `?dateFrom=`, `?dateTo=`. Les besoins passés
+sont inclus (l'API sert l'équipe, pas le public). Un besoin créé un jour fermé est accepté,
+avec `fermeture` rempli dans la réponse (P8). DELETE : supprime ses inscriptions, sans mail
+(D17).
+
+### Inscription → `RsvpAction`
+
+```
+@type        = "RsvpAction"
+identifier   = pk
+rsvpResponse = "https://schema.org/RsvpResponseYes"
+object       = {"@type": "Event", "identifier": <besoin>}
+agent        = {"@type": "Person", "email": ..., "givenName": ..., "familyName": ...}
+startTime    = created_at
+additionalProperty = PropertyValue[] : inscritPar (email, ou null), rappelEnvoyeLe (lecture seule)
+```
+
+Ici l'email et le nom sont donnés : la clé appartient à l'équipe du lieu, qui voit déjà ces
+informations dans l'admin.
+
+**Création** — c'est l'API de §5.10, mêmes règles :
+
+```json
+{
+  "object": {"identifier": 42},
+  "agent": {"email": "camille@exemple.org", "givenName": "Camille", "familyName": "Martin"}
+}
+```
+
+- `get_or_create_user(email, send_mail=False)` : le compte est créé s'il n'existe pas, et
+  rattaché au lieu. `givenName` et `familyName` ne sont écrits que s'ils sont vides dans le
+  compte. S'ils manquent dans le compte **et** dans la requête → 400 (D18).
+- Planning publié et besoin pas passé, sinon 400. Pas de contrôle d'adhésion (comme §5.10).
+- `get_or_create` avec `inscrit_par = ExternalApiKey.user` : **201** si créée, **200** avec
+  l'inscription existante si la personne y était déjà (rejouer l'appel est sans danger).
+- Mail de confirmation avec `par_l_equipe=True` (§5.10, étape 7), seulement à la création.
+
+Liste : filtres `?need=<id>`, `?planning=<id>`, `?email=`, `?dateFrom=`, `?dateTo=`.
+**DELETE** : retire la personne, à tout moment, **sans mail** (l'équipe agit, comme en admin,
+D17). Pas de PATCH : une inscription n'a rien de modifiable.
+
+### Documentation à tenir à jour (même commit)
+
+- `api_v2/openapi-schema.yaml` : les quatre routes, `repeat`, les schémas.
+- `api_v2/GUIDELINES.md` : une section « Bénévolat » (droit, routes, mappings, exemples).
+- `TECH_DOC/SKILLS/tibillet-api/` : le skill (règle de `api_v2/GUIDELINES.md` : « un skill
+  qui ment est pire que pas de skill »).
 
 ## 7. Double clic
 
@@ -592,7 +836,17 @@ Si `inscription_vient_d_etre_creee` est faux : pas de second email, même répon
 | Aucun `LigneArticle` créé par une inscription | idem |
 | Prénom `None` ou `""` → « Bénévole », jamais d'email dans le HTML | idem |
 | Prénom manquant : 1er POST → modale, aucune inscription ; 2e POST avec `prenom` → `first_name` enregistré + inscription ; `prenom` vide ou blanc → 422 dans la modale | idem |
+| Nom manquant (prénom présent) : la modale n'affiche que « Nom » ; POST avec `nom` → `last_name` enregistré + inscription ; un `prenom` envoyé ne réécrit pas le prénom existant | idem |
+| Compteur de l'en-tête : « places couvertes », « en renfort », « créneaux encore vides » justes, rafraîchis en hors bande après « Je viens » (D21) | idem |
+| Anonyme sur un besoin couvert : badge « Couvert » + « Me connecter pour venir » (D22) | idem |
+| Inscrire quelqu'un : non-admin → 403 sur les trois vues ; recherche par prénom, nom, email ; moins de 2 caractères → aucun résultat ; un compte d'un **autre lieu** ne sort jamais, même par email exact ; pk forcé vers ce compte → refusé ; « déjà inscrite » sans bouton | `tests/pytest/test_benevolat_equipe.py` |
+| Inscrire quelqu'un : personne trouvée → inscription avec `inscrit_par` ; planning réservé aux adhérent·es → acceptée quand même ; email inconnu → compte créé et rattaché au lieu, sans mail de connexion ; email connu → prénom et nom existants **pas** réécrits ; mail de confirmation « L'équipe t'a inscrit·e » | idem |
+| API : clé sans `volunteering` → 403 sur les quatre routes ; CRUD des tâches, plannings (id **et** slug), besoins, inscriptions ; tâche utilisée → 409 | `tests/pytest/test_benevolat_api.py` |
+| API : `startDate` date seule → journée ; heure sans décalage = heure locale ; avec décalage → convertie ; `endDate` à minuit → lendemain ; `endDate` à J+2 → 400 ; besoin un jour fermé → `fermeture` rempli | idem |
+| API : `repeat` en `dryRun` n'écrit rien ; sans `dryRun` crée tout et renvoie les trois listes ; mêmes résultats que l'admin | idem |
+| API : inscription → 201, rejouée → 200 sans second mail ; compte sans nom et `familyName` absent → 400 ; besoin passé → 400 ; DELETE sans mail ; isolation : la clé d'un lieu ne voit pas les plannings d'un autre | idem |
 | Modale : s'ouvre au clic, le focus va sur le champ, « Annuler » ne crée rien | `tests/e2e/test_benevolat_flow.py` |
+| Admin : « Inscrire quelqu'un » → taper 2 lettres → résultats → « Inscrire » → la case montre le prénom, sans recharger | idem |
 | Planning au slug `book` : servi par la vue bénévolat, pas par `BookingViewSet`. Planning au slug `lettre` : sa page s'affiche (GET), et le POST de §5.8 marche | `tests/pytest/test_benevolat_inscription.py` |
 | Balise `plannings_benevoles_a_venir` : plannings publiés avec besoin à venir seulement, tri, `nombre_max`, liste vide en schéma `public` ; rendu de la carte (nom, période, places libres) | `tests/pytest/test_benevolat_bloc_accueil.py` |
 | Lettre : connecté·e → `send_to_ghost_email` appelée avec le nom du compte et l'étiquette « Bénévolat » ; anonyme → même appel, nom vide ; email invalide → 422 ; Ghost non configuré → bloc absent | `tests/pytest/test_benevolat_lettre.py` |
@@ -611,17 +865,19 @@ Chaque test vu **échouer** sur une mutation volontaire avant d'être livré.
 | Chantier | Contenu |
 |---|---|
 | 1 | Modèles + migration + admin (tâches, plannings avec calendrier, besoins inline, inscriptions) |
-| 2 | Page publique (grille, mobile, couleurs des jours), inscription, retrait, toasts, email de confirmation (sans le lien de désistement) |
-| 3 | « Mes créneaux » + bloc CMS « Coups de main » sur l'accueil (§5.1) + bloc lettre d'information (§5.8) |
+| 2 | Page publique (grille, mobile, couleurs des jours, compteur D21), inscription avec modale prénom et nom, retrait, toasts, email de confirmation (sans le lien de désistement) |
+| 3 | « Mes créneaux » + bloc CMS « Coups de main » sur l'accueil (§5.1) + bloc lettre d'information (§5.8) + inscription par l'équipe (§5.10) |
 | 4 | Action admin « Répéter des besoins » (§5.7) |
 | 5 | Rappel de la veille + lien « Je ne peux plus venir », ajouté aux deux mails (§5.9) |
+| 6 | API v2 (§6 bis) + droit de clé + migration `BaseBillet` + OpenAPI, GUIDELINES et skill `tibillet-api`. Après les chantiers 2 (mail de confirmation) et 4 (`calculer_repetitions`) |
 
 Chaque chantier : son fichier `CHANGELOG/YYYY-MM-DD-slug.md`.
 
 ## 10. Questions ouvertes
 
 Aucune. Questions tranchées le 2026-09-23 (D11 à D19), propositions P1 à P10 validées le
-2026-09-24.
+2026-09-24, D18 revue et D21 à D24 ajoutées le 2026-10-12.
 
-Reste avant de coder :
-- **Spec à part** `TODO/USERS-etiquettes.md` (D12), à écrire.
+Spec liée : `TODO/USERS-etiquettes.md` (D12), écrite le 2026-09-24, non commencée.
+
+**Les ajouts du 2026-10-12 (nom, §5.10, §6 bis) n'ont pas encore eu de relecture Fable.**

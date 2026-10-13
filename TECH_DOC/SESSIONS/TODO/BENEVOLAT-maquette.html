@@ -1,0 +1,1030 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Planning bénévoles Lespass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+/* Hallmark · macrostructure: Workbench (app UI) · tone: utilitarian-warm · anchor hue: letchi (TiBillet gesture only)
+ * theme: studied-DNA (source: pages/static/V2/css/V2.css) · paper #faf8f5 · ink #17141a · signal #ea3b69
+ * fonts: Unbounded (display, titles only) + Luciole → Atkinson Hyperlegible here (Luciole is self-hosted, not on Google Fonts)
+ * Hallmark · pre-emit critique: P5 H4 E4 S5 R5 V4
+ */
+:root {
+  color-scheme: light;
+  /* Palette : copie des jetons du skin V2 / Palette: copied from the V2 skin tokens */
+  --color-bg: #faf8f5;
+  --color-surface: #ffffff;
+  --color-surface-tint: #f1eee8;
+  --color-surface-sunken: #eceae3;
+  --color-text: #17141a;
+  --color-text-muted: #63515e;
+  --color-text-faint: #6b6b6b;
+  --color-border: #ece7e1;
+  --color-border-strong: #ded7cd;
+  --color-hover: #f2f0ea;
+  --color-signal: #ea3b69;
+  --color-signal-text: #d22e59;
+  --color-signal-soft: #fce4eb;
+  --color-success-text: #1e7e3a;
+  --color-success-soft: #e6f2e9;
+  --color-warn-soft: #fbf1d6;
+  --color-link: #3578a3;
+  --color-inverse: #ffffff;
+  --color-action-hover: #2c2630;
+  --color-admin-bg: #f4f4f5;
+  --color-admin-line: #e4e4e7;
+  /* Couleurs de marque V2 : fonds et liserés seulement, jamais sous du texte */
+  --letchi: #e93363;
+  --chouchou: #259d49;
+
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-text: 'Atkinson Hyperlegible', 'Luciole', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --text-2xs: 0.6875rem; --text-xs: 0.75rem; --text-sm: 0.8125rem; --text-md: 0.875rem;
+  --text-ui: 0.9375rem; --text-base: 1rem; --text-lg: 1.125rem; --text-xl: 1.375rem;
+  --text-display: clamp(1.5rem, 1.05rem + 2vw, 2.4rem);
+
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px;
+  --radius-s: 8px; --radius-m: 12px; --radius-l: 16px; --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(32,31,28,.04), 0 1px 1px rgba(32,31,28,.03);
+  --shadow-panel: 0 4px 16px rgba(32,31,28,.10);
+  --dur-fast: 150ms; --dur-base: 200ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+}
+html { overflow-x: clip; }
+body {
+  background: var(--color-bg); color: var(--color-text);
+  font-family: var(--font-text); font-size: var(--text-base); line-height: 1.55;
+  overflow-x: clip; padding-inline: 16px; padding-block: 0 var(--space-7);
+}
+h1, h2, h3 { margin: 0; text-wrap: balance; font-weight: 700; }
+p { margin: 0; }
+button { font-family: inherit; }
+:focus-visible { outline: 2px solid var(--color-link); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin-inline: auto; }
+
+/* ---------- Barre de maquette / Mockup control bar ---------- */
+.mock-bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: var(--color-bg); border-bottom: 1px solid var(--color-border);
+  padding-block: var(--space-3); margin-bottom: var(--space-5);
+}
+.mock-bar .wrap { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-5); align-items: center; justify-content: space-between; }
+.mock-name { font-size: var(--text-sm); color: var(--color-text-muted); }
+.mock-name b { color: var(--color-text); }
+.tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); background: var(--color-surface-tint); padding: 3px; border-radius: var(--radius-pill); }
+.tab {
+  border: 0; background: transparent; color: var(--color-text-muted); cursor: pointer;
+  font-size: var(--text-md); font-weight: 700; padding: 6px 14px; border-radius: var(--radius-pill); white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.tab:hover { color: var(--color-text); }
+.tab[aria-selected="true"] { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-card); }
+.sim { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: center; font-size: var(--text-sm); color: var(--color-text-muted); }
+.sim label { display: inline-flex; gap: var(--space-2); align-items: center; }
+.sim select { font: inherit; font-size: var(--text-sm); color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: var(--radius-s); padding: 4px 8px; }
+
+/* ---------- Boutons V2 / V2 buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  padding: 8px 14px; border-radius: var(--radius-pill); font-size: var(--text-md); font-weight: 700; line-height: 1;
+  border: 1px solid transparent; cursor: pointer; white-space: nowrap; text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), transform 100ms var(--ease-out);
+}
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn--primary { background: var(--color-text); color: var(--color-inverse); box-shadow: inset 0 -3px 0 var(--color-signal); }
+.btn--primary:hover { background: var(--color-action-hover); box-shadow: inset 0 -5px 0 var(--color-signal); }
+.btn--secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border-strong); }
+.btn--secondary:hover { background: var(--color-hover); }
+.btn--link { background: none; border: 0; padding: 0; color: var(--color-link); font-weight: 700; font-size: var(--text-sm); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn--full { width: 100%; }
+
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-weight: 700; padding: 3px 10px; border-radius: var(--radius-pill); border: 1px solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text); white-space: nowrap; }
+.badge--success { background: var(--color-success-soft); border-color: transparent; color: var(--color-success-text); }
+.badge--lock { background: var(--color-warn-soft); border-color: transparent; }
+
+/* ---------- En-tête du planning / Planning header ---------- */
+.planning-head { display: grid; gap: var(--space-4); margin-bottom: var(--space-5); }
+.crumb { font-size: var(--text-sm); color: var(--color-text-muted); }
+.crumb a { color: var(--color-link); }
+.page-title { font-family: var(--font-display); font-weight: 700; font-size: var(--text-display); line-height: 1.15; letter-spacing: -0.01em; overflow-wrap: anywhere; min-width: 0; }
+.lede { max-width: 62ch; color: var(--color-text-muted); }
+.head-meta { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.tally { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); font-size: var(--text-md); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.tally b { color: var(--color-text); font-size: var(--text-lg); }
+.gauge { height: 6px; background: var(--color-surface-sunken); border-radius: var(--radius-pill); overflow: hidden; max-width: 420px; }
+.gauge > span { display: block; height: 100%; background: var(--color-text); border-radius: inherit; transition: width var(--dur-base) var(--ease-out); }
+
+/* ---------- Grille desktop / Desktop grid ---------- */
+.grid-scroll { overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-l); background: var(--color-surface); box-shadow: var(--shadow-card); }
+table.grid { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 760px; }
+.grid th, .grid td { border-bottom: 1px solid var(--color-border); border-right: 1px solid var(--color-border); vertical-align: top; text-align: left; }
+.grid tr > *:last-child { border-right: 0; }
+.grid tbody tr:last-child > * { border-bottom: 0; }
+.grid thead th { background: var(--color-surface-tint); padding: var(--space-3); font-size: var(--text-md); }
+.day-head { --couleur-jour: color-mix(in oklch, var(--chouchou) calc(var(--remplissage) * 1%), var(--letchi));
+  background: color-mix(in oklch, var(--couleur-jour) 14%, var(--color-surface)) !important;
+  box-shadow: inset 0 -5px 0 var(--couleur-jour); }
+.day-name { display: block; font-weight: 700; text-transform: capitalize; }
+.day-free { display: block; font-size: var(--text-xs); font-weight: 400; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.grid th.task { position: sticky; left: 0; z-index: 1; background: var(--color-surface); width: 190px; min-width: 170px; padding: var(--space-4) var(--space-3); }
+.grid thead th.task { background: var(--color-surface-tint); }
+.task-name { font-weight: 700; font-size: var(--text-ui); }
+.task-desc { font-size: var(--text-sm); color: var(--color-text-muted); font-weight: 400; margin-top: 2px; }
+.grid td { padding: var(--space-2); min-width: 150px; }
+.cell-stack { display: grid; gap: var(--space-2); }
+.no-need { display: grid; place-items: center; min-height: 64px; color: var(--color-text-faint); font-size: var(--text-sm);
+  background: repeating-linear-gradient(135deg, transparent 0 7px, var(--color-surface-tint) 7px 8px); border-radius: var(--radius-s); }
+
+/* ---------- Un besoin / One need ---------- */
+.need { border: 1px solid var(--color-border-strong); border-radius: var(--radius-m); padding: var(--space-2) var(--space-3) var(--space-3); display: grid; gap: var(--space-2); background: var(--color-surface); }
+.need.is-mine { background: var(--color-signal-soft); border-color: transparent; box-shadow: inset 0 -3px 0 var(--color-signal); }
+.need.is-full:not(.is-mine) { background: var(--color-bg); }
+.need.is-pulse { animation: pulse 600ms var(--ease-out) 1; }
+@keyframes pulse { 0% { transform: scale(.98); opacity: .7; } 100% { transform: scale(1); opacity: 1; } }
+.need__head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); }
+.need__time { font-weight: 700; font-size: var(--text-md); font-variant-numeric: tabular-nums; }
+.need__task { font-weight: 700; font-size: var(--text-ui); }
+.need__count { font-size: var(--text-sm); color: var(--color-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.need__count b { color: var(--color-text); }
+.seats { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.seat { font-size: var(--text-xs); padding: 2px 8px; border-radius: var(--radius-pill); background: var(--color-surface-tint); color: var(--color-text); }
+.seat--me { background: var(--color-text); color: var(--color-inverse); font-weight: 700; }
+.seat--extra { background: var(--color-success-soft); color: var(--color-success-text); font-weight: 700; }
+.seat--free { background: transparent; border: 1px dashed var(--color-border-strong); color: var(--color-text-faint); }
+.need__action { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--text-sm); }
+.note { font-size: var(--text-sm); color: var(--color-text-muted); }
+.ok { color: var(--color-success-text); font-weight: 700; }
+
+/* ---------- Vue mobile / Mobile view ---------- */
+.days { display: none; gap: var(--space-5); }
+.day-block { display: grid; gap: var(--space-3); }
+.day-block h2 { font-size: var(--text-lg); text-transform: capitalize; display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); border-radius: var(--radius-s); }
+.day-block h2 small { font-size: var(--text-xs); font-weight: 400; color: var(--color-text-muted); }
+/* Barre de jours (mobile) : un bouton par jour, coloré comme l'en-tête du jour.
+ * / Day bar (mobile): one button per day, coloured like the day header. */
+.day-nav { display: none; gap: var(--space-2); overflow-x: auto; padding-block: var(--space-1) var(--space-3); margin-bottom: var(--space-2); scrollbar-width: thin; }
+.day-chip { flex: 0 0 auto; display: grid; justify-items: center; gap: 2px; min-width: 64px; padding: 6px 10px 9px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-m); cursor: pointer; font: inherit; color: var(--color-text); }
+.day-chip b { font-size: var(--text-lg); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.day-chip span { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+.day-chip small { font-size: var(--text-2xs); color: var(--color-text-muted); white-space: nowrap; }
+.day-block { scroll-margin-top: var(--space-4); }
+.mobile-hint { display: none; font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-3); }
+
+/* Vue mobile : vraie petite fenêtre, OU aperçu forcé par le bouton « Mobile ».
+ * / Mobile view: real narrow window, OR preview forced by the "Mobile" button. */
+@media (max-width: 760px) {
+  .grid-scroll { display: none; }
+  .days { display: grid; }
+  .day-nav { display: flex; }
+}
+body.force-mobile .grid-scroll { display: none; }
+body.force-mobile .days { display: grid; }
+body.force-mobile .day-nav { display: flex; }
+body.force-mobile .mobile-hint { display: block; }
+body.force-mobile main.wrap { max-width: 375px; outline: 1px dashed var(--color-border-strong); outline-offset: 8px; border-radius: var(--radius-s); }
+body.force-mobile .lettre form { flex-direction: column; }
+body.force-mobile .mine-list li { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 480px) { .mine-list li { grid-template-columns: minmax(0, 1fr); } .lettre form { flex-direction: column; } }
+}
+
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); font-size: var(--text-sm); color: var(--color-text-muted); margin-top: var(--space-4); align-items: center; }
+.legend .seat { font-size: var(--text-2xs); }
+.lettre { margin-top: var(--space-6); display: grid; gap: var(--space-3); padding: var(--space-5); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-l); box-shadow: var(--shadow-card); max-width: 75ch; }
+.lettre h2 { font-size: var(--text-lg); }
+.lettre p { color: var(--color-text-muted); font-size: var(--text-md); }
+.lettre form { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.lettre input { flex: 1 1 220px; min-width: 0; font: inherit; font-size: var(--text-ui); padding: 9px 14px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill); background: var(--color-bg); color: var(--color-text); }
+.lettre input[aria-invalid="true"] { border-color: var(--color-signal-text); }
+.lettre .lettre-erreur { color: var(--color-signal-text); font-size: var(--text-sm); }
+.lettre .lettre-ok { color: var(--color-text); font-weight: 700; }
+.lettre .btn { flex: 1 1 auto; white-space: normal; line-height: 1.25; }  /* libellé long : il passe à la ligne sur 320 px au lieu de déborder */
+.callout { margin-top: var(--space-5); background: var(--color-surface-tint); border-radius: var(--radius-m); padding: var(--space-4); font-size: var(--text-md); max-width: 75ch; }
+
+/* ---------- Bloc accueil / Home block ---------- */
+.home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: var(--space-4); }
+.home-card { display: grid; gap: var(--space-3); padding: var(--space-4); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-l); box-shadow: var(--shadow-card); }
+.home-card h3 { font-size: var(--text-lg); }
+.home-card p { font-size: var(--text-md); color: var(--color-text-muted); }
+.home-card .home-free { color: var(--color-text); font-weight: 700; }
+.home-days { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.home-days .day-chip { cursor: default; min-width: 52px; }
+
+/* ---------- Mes créneaux / My shifts ---------- */
+.panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-l); box-shadow: var(--shadow-card); }
+.mine-list { list-style: none; margin: 0; padding: 0; }
+.mine-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); align-items: center; padding: var(--space-4); border-bottom: 1px solid var(--color-border); }
+.mine-list li:last-child { border-bottom: 0; }
+.mine-when { font-weight: 700; text-transform: capitalize; }
+.mine-what { font-size: var(--text-md); color: var(--color-text-muted); }
+.empty { padding: var(--space-6) var(--space-4); text-align: center; color: var(--color-text-muted); }
+.section-title { font-size: var(--text-xl); font-family: var(--font-display); font-weight: 500; margin-bottom: var(--space-4); }
+
+/* ---------- Admin (schéma Unfold) / Admin (Unfold sketch) ---------- */
+.admin { background: var(--color-admin-bg); border-radius: var(--radius-l); padding: var(--space-5); display: grid; gap: var(--space-5); border: 1px solid var(--color-admin-line); }
+.admin h3 { font-size: var(--text-lg); }
+.admin-note { font-size: var(--text-sm); color: var(--color-text-muted); }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: var(--space-4); }
+.field { display: grid; gap: 4px; font-size: var(--text-sm); }
+.field span { font-weight: 700; }
+.field input, .field select, .field textarea { font: inherit; font-size: var(--text-md); padding: 8px 10px; border: 1px solid var(--color-admin-line); border-radius: var(--radius-s); background: var(--color-surface); color: var(--color-text); }
+.field small { color: var(--color-text-muted); }
+.radio-row { display: flex; flex-wrap: wrap; gap: var(--space-3); font-size: var(--text-md); }
+.inline-scroll { overflow-x: auto; background: var(--color-surface); border: 1px solid var(--color-admin-line); border-radius: var(--radius-m); }
+table.inline { border-collapse: collapse; width: 100%; min-width: 640px; font-size: var(--text-md); }
+.inline th, .inline td { padding: 8px 12px; border-bottom: 1px solid var(--color-admin-line); text-align: left; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.inline th { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+.inline tr:last-child td { border-bottom: 0; }
+.repeat { display: grid; gap: var(--space-3); background: var(--color-surface); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-m); padding: var(--space-4); }
+.r-preview { font-size: var(--text-md); display: grid; gap: var(--space-2); }
+.r-preview ul { margin: 0; padding-left: 1.2em; columns: 2 260px; }
+.r-preview .skip { color: var(--color-text-faint); text-decoration: line-through; }
+.r-preview .closed { color: var(--color-text-muted); }
+.r-preview .closed em { font-style: normal; font-weight: 700; }
+.r-error { background: var(--color-warn-soft); border-radius: var(--radius-s); padding: var(--space-2) var(--space-3); }
+
+/* ---------- Sous le capot / Under the hood ---------- */
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: var(--space-5); align-items: start; }
+.reuse { width: 100%; border-collapse: collapse; font-size: var(--text-md); }
+.reuse th, .reuse td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+.reuse th { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+.reuse code, .flow code { font-family: var(--font-mono); font-size: .86em; background: var(--color-surface-tint); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.flow { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-2); font-size: var(--text-md); }
+.panel-pad { padding: var(--space-5); }
+pre.mermaid { background: var(--color-surface); margin: 0; overflow-x: auto; }
+
+/* ---------- Modale prénom / First-name modal ---------- */
+dialog.modale { border: 0; border-radius: var(--radius-l); padding: var(--space-5); width: min(440px, calc(100vw - 32px)); background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-panel); }
+dialog.modale::backdrop { background: rgba(23, 20, 26, .45); }
+.modale form { display: grid; gap: var(--space-3); }
+.modale h2 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xl); }
+.modale p { color: var(--color-text-muted); font-size: var(--text-md); }
+.modale .public { background: var(--color-warn-soft); border-radius: var(--radius-s); padding: var(--space-2) var(--space-3); color: var(--color-text); }
+.modale input { font: inherit; padding: 10px 14px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill); background: var(--color-bg); color: var(--color-text); }
+.modale input[aria-invalid="true"] { border-color: var(--color-signal-text); }
+.modale .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
+.modale .erreur { color: var(--color-signal-text); font-size: var(--text-sm); }
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  background: var(--color-text); color: var(--color-inverse); border-radius: var(--radius-pill); box-shadow: var(--shadow-panel);
+  padding: 10px 12px 10px 18px; display: flex; gap: var(--space-4); align-items: center; font-size: var(--text-md);
+  max-width: calc(100vw - 32px); z-index: 40;
+}
+.toast button { background: none; border: 0; color: var(--color-inverse); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: var(--text-md); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}
+</style>
+
+<header class="mock-bar">
+  <div class="wrap">
+    <p class="mock-name"><b>Maquette</b> · planning bénévoles, module booking · données d'exemple</p>
+    <div class="tabs" role="tablist" aria-label="Écrans de la maquette">
+      <button class="tab" role="tab" id="tab-public" aria-selected="true" aria-controls="view-public">Page publique</button>
+      <button class="tab" role="tab" id="tab-home" aria-selected="false" aria-controls="view-home">Bloc accueil</button>
+      <button class="tab" role="tab" id="tab-mine" aria-selected="false" aria-controls="view-mine">Mes créneaux</button>
+      <button class="tab" role="tab" id="tab-admin" aria-selected="false" aria-controls="view-admin">Admin</button>
+      <button class="tab" role="tab" id="tab-hood" aria-selected="false" aria-controls="view-hood">Sous le capot</button>
+    </div>
+    <div class="sim" aria-label="Simulation">
+      <label for="sim-viewer">Je suis
+        <select id="sim-viewer">
+          <option value="member">Camille, connectée, adhérente</option>
+          <option value="noname">connecté·e, adhérent·e, sans prénom</option>
+          <option value="nonmember">connecté·e, sans adhésion</option>
+          <option value="anon">anonyme</option>
+        </select>
+      </label>
+      <label for="sim-width">Largeur
+        <select id="sim-width">
+          <option value="desktop">ordinateur</option>
+          <option value="mobile">mobile (375 px)</option>
+        </select>
+      </label>
+      <label for="sim-access">Accès au planning
+        <select id="sim-access">
+          <option value="open">tout compte connecté</option>
+          <option value="members">adhérent·es seulement</option>
+        </select>
+      </label>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============ PAGE PUBLIQUE ============ -->
+  <section id="view-public" role="tabpanel" aria-labelledby="tab-public">
+    <div class="planning-head">
+      <p class="crumb"><a href="#view-public">Réservations</a> › Coups de main</p>
+      <h1 class="page-title">Bar associatif : octobre</h1>
+      <p class="lede">On ouvre le bar deux soirs par semaine. Choisis une case, clique sur « Je viens » : c'est noté. Une case déjà couverte ? Viens quand même, on sera plus nombreux. Tu peux te retirer jusqu'à 24&nbsp;h avant. Ton prénom sera visible sur ce planning.</p>
+      <div class="head-meta" id="access-badge"></div>
+      <div>
+        <div class="tally" id="tally" aria-live="polite"></div>
+        <div class="gauge" aria-hidden="true"><span id="gauge"></span></div>
+      </div>
+    </div>
+
+    <div class="grid-scroll" data-testid="benevolat-grille">
+      <table class="grid" id="grid"></table>
+    </div>
+    <p class="mobile-hint">Aperçu mobile, 375 px. Sur un vrai téléphone, cette vue s'affiche toute seule sous 760 px.</p>
+    <nav class="day-nav" id="day-nav" aria-label="Aller au jour" data-testid="benevolat-barre-jours"></nav>
+    <div class="days" id="days" data-testid="benevolat-jours"></div>
+
+    <div class="legend" aria-label="Légende">
+      <span class="seat">Maëlle</span> déjà positionné·e
+      <span class="seat seat--me">Toi</span> ta place
+      <span class="seat seat--free">libre</span> place à prendre
+      <span class="seat seat--extra">+1 en renfort</span> au-delà du nombre souhaité, bienvenu
+      <span class="no-need" style="min-height:0;padding:2px 10px">pas besoin</span> ce jour-là
+    </div>
+
+    <section class="lettre" id="lettre" aria-labelledby="lettre-titre" aria-live="polite" data-testid="benevolat-lettre"></section>
+
+    <div class="callout" role="note">
+      <strong>Rappel.</strong> Le collectif n'est ni ton patron ni ton ami. Ne viens que pour ce qui te fait envie, et refuse toute condition qui te met mal à l'aise.
+    </div>
+  </section>
+
+  <!-- ============ BLOC ACCUEIL (CMS) ============ -->
+  <section id="view-home" role="tabpanel" aria-labelledby="tab-home" hidden>
+    <p class="crumb" style="margin-bottom:var(--space-3)">Accueil du lieu › bloc « Liste automatique », source « Les prochains coups de main »</p>
+    <p class="note" style="margin-bottom:var(--space-5)">Le lieu pose ce bloc où il veut sur son accueil, comme le bloc « prochains évènements ». Une carte par planning publié qui a encore des besoins à venir. La carte mène à la page du planning.</p>
+    <h2 class="section-title">Coups de main</h2>
+    <div class="home-cards" id="home-cards" data-testid="bloc-liste-coups-de-main"></div>
+  </section>
+
+  <!-- ============ MES CRÉNEAUX ============ -->
+  <section id="view-mine" role="tabpanel" aria-labelledby="tab-mine" hidden>
+    <p class="crumb" style="margin-bottom:var(--space-3)">Mon compte › Mes créneaux bénévoles</p>
+    <h2 class="section-title">Mes créneaux</h2>
+    <p class="note" style="margin-bottom:var(--space-4)">Onglet ajouté à « Mon compte », à côté de « Mes réservations ». La maquette fait comme si on était le <b>jeudi 1er octobre à 20&nbsp;h</b>.</p>
+    <div class="panel"><ul class="mine-list" id="mine-list" aria-live="polite"></ul></div>
+  </section>
+
+  <!-- ============ ADMIN ============ -->
+  <section id="view-admin" role="tabpanel" aria-labelledby="tab-admin" hidden>
+    <div class="admin">
+      <div>
+        <h3>Planning bénévoles › Bar associatif : octobre</h3>
+        <p class="admin-note">Schéma de la fiche admin Unfold, pas la vraie interface. Un planning, et ses besoins en ligne (inline), comme <code>WeeklyOpening</code> et ses <code>OpeningEntry</code>.</p>
+      </div>
+      <div class="fields">
+        <label class="field" for="a-name"><span>Nom</span><input id="a-name" value="Bar associatif : octobre"></label>
+        <label class="field" for="a-slug"><span>Adresse (slug)</span><input id="a-slug" value="bar-octobre"><small>/booking/benevolat/bar-octobre/</small></label>
+        <label class="field" for="a-deadline"><span>Désinscription possible jusqu'à (heures avant)</span><input id="a-deadline" type="number" value="24"></label>
+        <label class="field" for="a-adh"><span>Adhésions requises</span>
+          <select id="a-adh" multiple size="2"><option>Adhésion asso 2026</option><option>Adhésion soutien</option></select>
+          <small>Vide = ouvert à tout compte connecté. Sinon : réservé à ces adhérent·es.</small>
+        </label>
+        <label class="field" for="a-cal"><span>Jours de fermeture</span>
+          <select id="a-cal"><option>Calendrier du lieu (le même que les ressources)</option><option value="">Aucun</option></select>
+          <small>Fermeture d'exemple : « Vacances de l'équipe », 23 → 24 oct.</small>
+        </label>
+        <label class="field" for="a-pub"><span>Publié</span><select id="a-pub"><option>Oui, visible sur /booking/</option><option>Non (brouillon)</option></select></label>
+      </div>
+
+      <div>
+        <h3 style="margin-bottom:var(--space-3)">Besoins</h3>
+        <div class="inline-scroll">
+          <table class="inline" id="admin-inline"></table>
+        </div>
+      </div>
+
+      <div class="repeat" data-testid="benevolat-admin-repeter">
+        <strong>Répéter des besoins</strong>
+        <p class="admin-note">Bouton en haut de la fiche planning. Les besoins de la période modèle sont recopiés tous les N jours ou toutes les N semaines. Aperçu d'abord, puis « Confirmer ». Les inscriptions ne sont jamais copiées ; un besoin identique déjà présent est ignoré.</p>
+        <div class="fields">
+          <label class="field" for="r-from"><span>Modèle : du</span><input type="date" id="r-from" value="2026-10-02"></label>
+          <label class="field" for="r-to"><span>au</span><input type="date" id="r-to" value="2026-10-03"></label>
+          <div class="field"><span>Répéter tous les</span>
+            <div class="radio-row">
+              <input id="r-step" type="number" min="1" value="1" style="width:5em" aria-label="Écart">
+              <select id="r-unit" aria-label="Unité de l'écart"><option value="7">semaine(s)</option><option value="1">jour(s)</option></select>
+            </div>
+          </div>
+          <label class="field" for="r-count"><span>Nombre de fois</span><input id="r-count" type="number" min="1" max="52" value="3"></label>
+        </div>
+        <div id="r-preview" class="r-preview" aria-live="polite"></div>
+        <div><button class="btn btn--primary" type="button" id="r-confirm">Confirmer</button></div>
+      </div>
+
+      <div>
+        <h3 style="margin-bottom:var(--space-3)">Tâches (catalogue réutilisable)</h3>
+        <p class="admin-note">Liste propre au lieu, partagée entre plannings : « Tenir le bar », « Faire le ménage », « Checker la com' »… Un nom et une description, affichée dans la grille et reprise dans l'email.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SOUS LE CAPOT ============ -->
+  <section id="view-hood" role="tabpanel" aria-labelledby="tab-hood" hidden>
+    <h2 class="section-title">Sous le capot</h2>
+    <div class="two">
+      <div class="panel panel-pad">
+        <h3 style="margin-bottom:var(--space-3)">Quatre modèles, zéro vente</h3>
+<pre class="mermaid">
+erDiagram
+  PlanningBenevole ||--o{ BesoinBenevole : "contient"
+  TacheBenevole ||--o{ BesoinBenevole : "decrit"
+  BesoinBenevole ||--o{ InscriptionBenevole : "recoit"
+  TibilletUser ||--o{ InscriptionBenevole : "se positionne"
+  PlanningBenevole }o--o{ Product : "adhesions requises (vide = ouvert)"
+  PlanningBenevole }o--o| Calendar : "jours de fermeture (booking)"
+  PlanningBenevole {
+    string name
+    slug slug
+    bool published
+    int delai_desinscription_heures
+  }
+  TacheBenevole {
+    string name
+    text description
+  }
+  BesoinBenevole {
+    date date
+    time heure_debut "facultatif"
+    time heure_fin "facultatif"
+    int nombre_souhaite
+  }
+  InscriptionBenevole {
+    datetime created_at
+    unique besoin_user
+  }
+</pre>
+      </div>
+      <div class="panel panel-pad">
+        <h3 style="margin-bottom:var(--space-3)">Ce qu'on reprend de booking</h3>
+        <table class="reuse">
+          <thead><tr><th>On reprend</th><th>On laisse</th></tr></thead>
+          <tbody>
+            <tr><td>Capacité par créneau (<code>capacity</code> devient <code>nombre_souhaite</code> (objectif, pas plafond))</td><td><code>Product</code>, <code>Price</code>, <code>LigneArticle</code>, Stripe : rien dans la compta</td></tr>
+            <tr><td>Délai d'annulation (<code>cancellation_deadline_hours</code>)</td><td><code>WeeklyOpening</code> : on liste des dates réelles, « Répéter » fait la récurrence</td></tr>
+            <tr><td><code>Calendar</code> et <code>ClosedPeriod</code> tels quels : « Répéter » saute les jours fermés</td><td>Tout verrou : on peut s'inscrire au-delà du nombre souhaité</td></tr>
+            <tr><td>Admin, module <code>module_booking</code>, onglet « Mon compte »</td><td>Panier : s'inscrire n'est pas un achat</td></tr>
+          </tbody>
+        </table>
+        <h3 style="margin-block:var(--space-5) var(--space-3)">Le clic « Je viens »</h3>
+        <ol class="flow">
+          <li><code>hx-post</code> sur <code>/booking/benevolat/besoin/&lt;pk&gt;/inscrire/</code></li>
+          <li>Serializer : connecté·e ? accès du planning ? pas déjà inscrit·e ? besoin pas passé ?</li>
+          <li><code>get_or_create</code> de l'inscription : pas de plafond, donc pas de verrou ; le double clic est absorbé</li>
+          <li>Réponse : le partial de <b>la case seule</b> (<code>outerHTML</code>) + toast <code>panierToast</code> existant ; 422 swappé par le listener de la page</li>
+          <li>Email de confirmation via Celery, avec la description de la tâche</li>
+        </ol>
+        <h3 style="margin-block:var(--space-5) var(--space-3)">La lettre d'information</h3>
+        <ol class="flow">
+          <li><code>hx-post</code> sur <code>/booking/benevolat/&lt;slug&gt;/lettre/</code> (un <code>EmailField</code>)</li>
+          <li><code>send_to_ghost_email</code> existante, pour tout le monde (comme la case « newsletter » du site), étiquette « Bénévolat » en plus</li>
+          <li>Bloc affiché seulement si le Ghost du lieu est configuré</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog class="modale" id="modale-prenom" aria-labelledby="modale-titre" data-testid="benevolat-modale-prenom">
+  <form method="dialog" id="form-prenom" novalidate>
+    <h2 id="modale-titre">Comment on t'appelle ?</h2>
+    <p class="public"><strong>Ton prénom sera visible par tout le monde</strong> sur ce planning, même par les personnes sans compte.</p>
+    <p>Il sera aussi enregistré dans ton compte : on ne te le redemandera pas.</p>
+    <label for="champ-prenom"><strong>Prénom</strong></label>
+    <input id="champ-prenom" name="prenom" autocomplete="given-name" maxlength="150" data-testid="benevolat-prenom" required>
+    <p class="erreur" id="erreur-prenom" hidden>Écris ton prénom (ou un surnom).</p>
+    <div class="actions">
+      <button class="btn btn--secondary" type="button" id="annuler-prenom">Annuler</button>
+      <button class="btn btn--primary" type="submit">Enregistrer et venir</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden>
+  <span id="toast-text"></span>
+  <button type="button" id="toast-undo">Annuler</button>
+</div>
+
+<script>
+/* Données d'exemple (maquette) / Example data (mockup) */
+let ME = "Camille";
+const NOW = new Date("2026-10-01T20:00:00");
+const DEADLINE_HOURS = 24;
+
+function dayLabel(iso) {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" });
+}
+const days = [
+  { id: "d1", iso: "2026-10-02" },
+  { id: "d2", iso: "2026-10-03" },
+  { id: "d3", iso: "2026-10-09" },
+  { id: "d4", iso: "2026-10-10" },
+  { id: "d5", iso: "2026-10-11" },
+];
+for (const d of days) d.label = dayLabel(d.iso);
+function dayIdFor(iso) {
+  let d = days.find(x => x.iso === iso);
+  if (!d) { d = { id: iso, iso: iso, label: dayLabel(iso) }; days.push(d); days.sort((a, b) => a.iso.localeCompare(b.iso)); }
+  return d.id;
+}
+const tasks = [
+  { id: "bar", name: "Tenir le bar", desc: "Service, caisse, bonne humeur." },
+  { id: "menage", name: "Faire le ménage", desc: "Salle et sanitaires, matériel fourni." },
+  { id: "com", name: "Checker la com'", desc: "Réseaux, affiches, agenda en ligne." },
+];
+const needs = [
+  { id: 1, task: "bar", day: "d1", start: "18:00", end: "21:00", need: 2, people: ["Maëlle"] },
+  { id: 2, task: "bar", day: "d1", start: "21:00", end: "24:00", need: 2, people: [] },
+  { id: 3, task: "bar", day: "d2", start: "18:00", end: "21:00", need: 3, people: ["Karim", "Jo", "Aude", "Maëlle"] },
+  { id: 4, task: "bar", day: "d2", start: "21:00", end: "24:00", need: 3, people: ["Lou"] },
+  { id: 5, task: "bar", day: "d3", start: "18:00", end: "21:00", need: 2, people: [] },
+  { id: 6, task: "bar", day: "d4", start: "18:00", end: "21:00", need: 3, people: ["Sam"] },
+  { id: 7, task: "bar", day: "d4", start: "21:00", end: "24:00", need: 3, people: ["Sam", "Camille"] },
+  { id: 8, task: "menage", day: "d2", start: null, end: null, need: 1, people: [] },
+  { id: 9, task: "menage", day: "d5", start: "10:00", end: "12:00", need: 2, people: ["Nour"] },
+  { id: 10, task: "com", day: "d1", start: null, end: null, need: 1, people: ["Camille"] },
+  { id: 11, task: "com", day: "d3", start: null, end: null, need: 1, people: [] },
+];
+
+let viewer = "member";
+let access = "open";
+
+/* ---------- Petites fonctions / Helpers ---------- */
+function hourLabel(t) {
+  if (t === "24:00") return "minuit";
+  const [h, m] = t.split(":");
+  return m === "00" ? `${+h}h` : `${+h}h${m}`;
+}
+function timeLabel(n) { return n.start ? `${hourLabel(n.start)}–${hourLabel(n.end)}` : "Journée"; }
+function dayOf(n) { return days.find(d => d.id === n.day); }
+function taskOf(n) { return tasks.find(t => t.id === n.task); }
+function startDate(n) { return new Date(`${dayOf(n).iso}T${n.start || "00:00"}:00`); }
+function canUnregister(n) { return (startDate(n) - NOW) / 3600000 >= DEADLINE_HOURS; }
+function canJoin() { return viewer !== "anon" && (access === "open" || viewer === "member" || viewer === "noname"); }
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+/* ---------- Rendu d'un besoin / Render one need ---------- */
+function renderNeed(n, withTask) {
+  const mine = viewer === "member" && n.people.includes(ME);
+  const others = n.people.filter(p => !(viewer === "member" && p === ME));
+  const full = n.people.length >= n.need;
+  const cls = ["need", mine ? "is-mine" : "", full ? "is-full" : ""].join(" ");
+
+  let seats = "";
+  if (mine) seats += `<li class="seat seat--me">Toi</li>`;
+  for (const p of others) seats += `<li class="seat">${esc(p)}</li>`;
+  for (let i = n.people.length; i < n.need; i++) seats += `<li class="seat seat--free">libre</li>`;
+  const extra = n.people.length - n.need;
+  if (extra > 0) seats += `<li class="seat seat--extra">+${extra} en renfort</li>`;
+
+  let action;
+  if (mine) {
+    action = canUnregister(n)
+      ? `<span class="ok">Tu y es</span><button class="btn--link" data-leave="${n.id}" data-testid="benevolat-retirer-${n.id}">Me retirer</button>`
+      : `<span class="ok">Tu y es</span><button class="btn--link" data-leave="${n.id}" data-late="1" data-testid="benevolat-retirer-${n.id}">Je ne peux plus venir</button>`;
+  } else if (viewer === "anon") {
+    action = `${full ? `<span class="badge badge--success">Couvert</span>` : ""}<button class="btn btn--secondary btn--full" data-login data-testid="benevolat-connexion-${n.id}">Me connecter pour venir</button>`;
+  } else if (!canJoin()) {
+    action = `<span class="badge badge--lock">Réservé aux adhérent·es</span>`;
+  } else if (full) {
+    action = `<span class="badge badge--success">Couvert</span><button class="btn btn--secondary" data-join="${n.id}" data-testid="benevolat-je-viens-${n.id}">Je viens aussi</button>`;
+  } else {
+    action = `<button class="btn btn--primary btn--full" data-join="${n.id}" data-testid="benevolat-je-viens-${n.id}">Je viens</button>`;
+  }
+
+  const title = withTask
+    ? `<span class="need__task">${taskOf(n).name}</span>`
+    : `<span class="need__time">${timeLabel(n)}</span>`;
+  const sub = withTask ? `<span class="need__time" style="font-weight:400">${timeLabel(n)}</span>` : "";
+  const missing = n.need - n.people.length;
+
+  return `<div class="${cls}" id="need-${n.id}" data-testid="benevolat-besoin-${n.id}">
+    <div class="need__head">${title}<span class="need__count"><b>${n.people.length}</b>/${n.need}</span></div>
+    ${sub}
+    <ul class="seats" aria-label="${missing > 0 ? `Il manque ${missing} personne${missing > 1 ? "s" : ""}` : "Couvert"}">${seats}</ul>
+    <div class="need__action">${action}</div>
+  </div>`;
+}
+
+function freeSeatsForDay(dayId) {
+  let free = 0;
+  for (const n of needs) if (n.day === dayId) free += Math.max(0, n.need - n.people.length);
+  return free;
+}
+/* Taux de remplissage d'un jour, de 0 à 100. Les renforts ne le font pas dépasser 100.
+ * / Day fill rate, 0 to 100. Surplus never pushes it past 100. */
+function fillRateForDay(dayId) {
+  let wanted = 0, covered = 0;
+  for (const n of needs) if (n.day === dayId) { wanted += n.need; covered += Math.min(n.people.length, n.need); }
+  return wanted ? Math.round(covered / wanted * 100) : 100;
+}
+function extraForDay(dayId) {
+  let extra = 0;
+  for (const n of needs) if (n.day === dayId) extra += Math.max(0, n.people.length - n.need);
+  return extra;
+}
+function dayStateLabel(dayId, short) {
+  const free = freeSeatsForDay(dayId), extra = extraForDay(dayId);
+  let txt = free ? `${free} place${free > 1 ? "s" : ""} libre${free > 1 ? "s" : ""}` : (short ? "couvert" : "tout est couvert");
+  if (extra) txt += ` · +${extra} en renfort`;
+  return txt;
+}
+
+/* ---------- Grille, vue mobile, compteurs / Grid, mobile, counters ---------- */
+function renderPublic() {
+  let head = `<thead><tr><th class="task" scope="col">Tâche</th>`;
+  for (const d of days) {
+    head += `<th scope="col" class="day-head" style="--remplissage: ${fillRateForDay(d.id)}" data-testid="benevolat-entete-jour-${d.iso}"><span class="day-name">${d.label}</span><span class="day-free">${dayStateLabel(d.id, false)}</span></th>`;
+  }
+  head += `</tr></thead>`;
+  let body = "<tbody>";
+  for (const t of tasks) {
+    body += `<tr><th class="task" scope="row"><div class="task-name">${t.name}</div><div class="task-desc">${t.desc}</div></th>`;
+    for (const d of days) {
+      const cell = needs.filter(n => n.task === t.id && n.day === d.id);
+      body += `<td>${cell.length ? `<div class="cell-stack">${cell.map(n => renderNeed(n, false)).join("")}</div>` : `<div class="no-need">pas besoin</div>`}</td>`;
+    }
+    body += "</tr>";
+  }
+  document.getElementById("grid").innerHTML = head + body + "</tbody>";
+
+  let mob = "";
+  for (const d of days) {
+    const list = needs.filter(n => n.day === d.id);
+    if (!list.length) continue;
+    mob += `<section class="day-block" id="jour-${d.iso}"><h2 class="day-head" style="--remplissage: ${fillRateForDay(d.id)}">${d.label}<small>${dayStateLabel(d.id, true)}</small></h2>${list.map(n => renderNeed(n, true)).join("")}</section>`;
+  }
+  document.getElementById("days").innerHTML = mob;
+
+  /* Barre de jours : court, lisible au pouce. / Day bar: short, thumb-friendly. */
+  let nav = "";
+  for (const d of days) {
+    if (!needs.some(n => n.day === d.id)) continue;
+    const date = new Date(`${d.iso}T12:00:00`);
+    const weekday = date.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "");
+    const free = freeSeatsForDay(d.id);
+    nav += `<button type="button" class="day-chip day-head" style="--remplissage: ${fillRateForDay(d.id)}" data-goto="jour-${d.iso}" aria-label="${d.label}, ${dayStateLabel(d.id, false)}">
+      <span>${weekday}</span><b>${date.getDate()}</b><small>${free ? `${free} libre${free > 1 ? "s" : ""}` : "couvert"}</small></button>`;
+  }
+  document.getElementById("day-nav").innerHTML = nav;
+
+  let total = 0, filled = 0, empty = 0, extra = 0;
+  for (const n of needs) { total += n.need; filled += Math.min(n.people.length, n.need); extra += Math.max(0, n.people.length - n.need); if (!n.people.length) empty++; }
+  document.getElementById("tally").innerHTML =
+    `<span><b>${filled}</b> / ${total} places couvertes</span><span><b>${extra}</b> en renfort</span><span><b>${empty}</b> créneaux encore vides</span>`;
+  document.getElementById("gauge").style.width = `${Math.round(filled / total * 100)}%`;
+
+  document.getElementById("access-badge").innerHTML = access === "open"
+    ? `<span class="badge">Ouvert à tout compte connecté</span><span class="badge">Prénoms visibles de toutes et tous</span>`
+    : `<span class="badge badge--lock">Réservé aux adhérent·es : Adhésion asso 2026</span><span class="badge">Prénoms visibles de toutes et tous</span>`;
+}
+
+function renderMine() {
+  const el = document.getElementById("mine-list");
+  if (viewer !== "member") { el.innerHTML = `<li class="empty" style="display:block">Connecte-toi en tant que Camille (menu « Je suis ») pour voir cet écran.</li>`; return; }
+  const mine = needs.filter(n => n.people.includes(ME)).sort((a, b) => startDate(a) - startDate(b));
+  if (!mine.length) { el.innerHTML = `<li class="empty" style="display:block">Aucun créneau pour l'instant. Va jeter un œil au planning.</li>`; return; }
+  el.innerHTML = mine.map(n => `<li data-testid="benevolat-mon-creneau-${n.id}">
+    <div><div class="mine-when">${dayOf(n).label} · ${timeLabel(n)}</div><div class="mine-what">${taskOf(n).name} · Bar associatif : octobre</div></div>
+    ${canUnregister(n)
+      ? `<button class="btn btn--secondary" data-leave="${n.id}">Me retirer</button>`
+      : `<button class="btn btn--secondary" data-leave="${n.id}" data-late="1" title="Moins de ${DEADLINE_HOURS} h avant le début : l'équipe sera prévenue">Je ne peux plus venir</button>`}
+  </li>`).join("");
+}
+
+function renderAdmin() {
+  let rows = `<thead><tr><th>Date</th><th>Tâche</th><th>Début</th><th>Fin</th><th>Nombre souhaité</th><th>Inscrit·es</th></tr></thead><tbody>`;
+  for (const n of needs) {
+    rows += `<tr><td>${dayOf(n).label}</td><td>${taskOf(n).name}</td><td>${n.start || "—"}</td><td>${n.end ? (n.end === "24:00" ? "00:00" : n.end) : "—"}</td><td>${n.need}</td><td>${n.people.join(", ") || "—"}</td></tr>`;
+  }
+  document.getElementById("admin-inline").innerHTML = rows + "</tbody>";
+  renderRepeatPreview();
+}
+
+/* ---------- Répéter des besoins / Repeat needs ---------- */
+function addDays(iso, n) {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function computeRepeat() {
+  const from = document.getElementById("r-from").value;
+  const to = document.getElementById("r-to").value;
+  const gap = (+document.getElementById("r-step").value || 0) * +document.getElementById("r-unit").value;
+  const count = +document.getElementById("r-count").value || 0;
+  if (!from || !to || to < from) return { error: "La fin du modèle doit être après son début." };
+  if (gap < 1) return { error: "L'écart doit valoir au moins 1." };
+  if (count < 1 || count > 52) return { error: "Le nombre de fois doit être entre 1 et 52." };
+  const model = needs.filter(n => dayOf(n).iso >= from && dayOf(n).iso <= to);
+  if (!model.length) return { error: "Aucun besoin dans la période modèle." };
+  const create = [], skip = [], closed = [];
+  const useCalendar = document.getElementById("a-cal").value !== "";
+  for (let k = 1; k <= count; k++) {
+    for (const n of model) {
+      const iso = addDays(dayOf(n).iso, k * gap);
+      const copy = { task: n.task, iso, start: n.start, end: n.end, need: n.need };
+      const closure = useCalendar ? closureFor(iso) : null;
+      if (closure) { copy.closure = closure.label; closed.push(copy); continue; }
+      const exists = needs.some(x => x.task === n.task && dayOf(x).iso === iso && x.start === n.start && x.end === n.end);
+      (exists ? skip : create).push(copy);
+    }
+  }
+  return { create, skip, closed };
+}
+/* Fermetures du calendrier (ClosedPeriod) : end vide = sans fin.
+ * / Calendar closures (ClosedPeriod): empty end = endless. */
+const closedPeriods = [{ start: "2026-10-23", end: "2026-10-24", label: "Vacances de l'équipe" }];
+function closureFor(iso) {
+  return closedPeriods.find(c => c.start <= iso && (!c.end || c.end >= iso)) || null;
+}
+function repeatLine(c) {
+  const t = tasks.find(x => x.id === c.task).name;
+  return `${dayLabel(c.iso)} · ${t} · ${c.start ? `${hourLabel(c.start)}–${hourLabel(c.end)}` : "journée"} · ${c.need} pers.`;
+}
+function renderRepeatPreview() {
+  const box = document.getElementById("r-preview");
+  const r = computeRepeat();
+  const btn = document.getElementById("r-confirm");
+  if (r.error) { box.innerHTML = `<p class="r-error">${r.error}</p>`; btn.disabled = true; return; }
+  btn.disabled = r.create.length === 0;
+  const lines = r.create.slice(0, 14).map(c => `<li>${repeatLine(c)}</li>`).join("")
+    + r.closed.slice(0, 6).map(c => `<li class="closed">${repeatLine(c)} · <em>sauté : ${esc(c.closure)}</em></li>`).join("")
+    + r.skip.slice(0, 4).map(c => `<li class="skip">${repeatLine(c)}</li>`).join("");
+  const more = Math.max(0, r.create.length - 14) + Math.max(0, r.closed.length - 6) + Math.max(0, r.skip.length - 4);
+  box.innerHTML = `<p><b>Aperçu :</b> ${r.create.length} à créer, ${r.closed.length} sauté${r.closed.length > 1 ? "s" : ""} (fermeture), ${r.skip.length} déjà présent${r.skip.length > 1 ? "s" : ""} (barré${r.skip.length > 1 ? "s" : ""}).</p><ul>${lines}</ul>${more ? `<p class="admin-note">… et ${more} autre${more > 1 ? "s" : ""}.</p>` : ""}`;
+}
+for (const id of ["r-from", "r-to", "r-step", "r-unit", "r-count", "a-cal"]) {
+  document.getElementById(id).addEventListener("input", renderRepeatPreview);
+}
+let nextNeedId = 100;
+let besoinEnAttente = null;
+document.getElementById("annuler-prenom").addEventListener("click", () => {
+  besoinEnAttente = null;
+  document.getElementById("modale-prenom").close();
+});
+document.getElementById("form-prenom").addEventListener("submit", e => {
+  e.preventDefault();
+  const input = document.getElementById("champ-prenom");
+  const prenom = input.value.trim();
+  if (!prenom) {
+    input.setAttribute("aria-invalid", "true");
+    document.getElementById("erreur-prenom").hidden = false;
+    input.focus();
+    return;
+  }
+  // Le prénom est enregistré dans le compte, puis l'inscription est faite.
+  // / First name saved on the account, then the sign-up happens.
+  ME = prenom;
+  viewer = "member";
+  const option = document.querySelector('#sim-viewer option[value="member"]');
+  option.textContent = `${prenom}, connecté·e, adhérent·e`;
+  document.getElementById("sim-viewer").value = "member";
+  document.getElementById("modale-prenom").close();
+  const n = needs.find(x => x.id === besoinEnAttente);
+  besoinEnAttente = null;
+  if (n && !n.people.includes(ME)) n.people.push(ME);
+  renderAll(); if (n) pulse(n.id);
+  toast(`Merci ${prenom} ! C'est noté : ${taskOf(n).name.toLowerCase()}, ${dayOf(n).label}.`, null);
+});
+document.getElementById("r-confirm").addEventListener("click", () => {
+  const r = computeRepeat();
+  if (r.error) return;
+  for (const c of r.create) {
+    needs.push({ id: nextNeedId++, task: c.task, day: dayIdFor(c.iso), start: c.start, end: c.end, need: c.need, people: [] });
+  }
+  renderAll(); renderAdmin();
+  toast(`${r.create.length} besoins créés, ${r.closed.length} sautés (fermeture), ${r.skip.length} ignorés (déjà présents). Va voir la page publique.`, null);
+});
+
+/* ---------- Lettre d'information / Newsletter ---------- */
+let lettreEtat = null;  // null = formulaire, sinon le message affiché
+function renderLettre() {
+  const box = document.getElementById("lettre");
+  if (lettreEtat) { box.innerHTML = `<h2 id="lettre-titre">Pas dispo cette fois ?</h2><p class="lettre-ok">${lettreEtat}</p>`; return; }
+  const emailDuCompte = viewer === "anon" ? "" : (viewer === "nonmember" ? "dominique@exemple.org" : "camille@exemple.org");
+  box.innerHTML = `<h2 id="lettre-titre">Pas dispo cette fois ?</h2>
+    <p>Reçois la lettre d'information du lieu : les prochains coups de main y sont annoncés.</p>
+    <form id="lettre-form" novalidate>
+      <label for="lettre-email" class="visually-hidden" style="position:absolute;left:-9999px">Ton email</label>
+      <input type="email" id="lettre-email" name="email" autocomplete="email" placeholder="ton@email.fr" value="${emailDuCompte}" data-testid="benevolat-lettre-email" required>
+      <button class="btn btn--primary" type="submit" data-testid="benevolat-lettre-inscrire">Je m'inscris à la lettre d'information</button>
+    </form>
+    <p class="lettre-erreur" id="lettre-erreur" hidden></p>`;
+  document.getElementById("lettre-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const input = document.getElementById("lettre-email");
+    const email = input.value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      input.setAttribute("aria-invalid", "true");
+      const err = document.getElementById("lettre-erreur");
+      err.textContent = "Cet email n'a pas l'air complet. Exemple : prenom@exemple.fr";
+      err.hidden = false;
+      input.focus();
+      return;
+    }
+    lettreEtat = `C'est noté : ${esc(email)} recevra la lettre d'information.`;
+    renderLettre();
+  });
+}
+
+/* ---------- Bloc accueil : une carte par planning / Home block: one card per planning ---------- */
+function renderHome() {
+  // Carte du planning de la maquette, calculée depuis les données.
+  // / Card of the mockup planning, computed from the data.
+  let free = 0;
+  for (const n of needs) free += Math.max(0, n.need - n.people.length);
+  const daysWithNeeds = days.filter(d => needs.some(n => n.day === d.id));
+  const chips = daysWithNeeds.slice(0, 5).map(d => {
+    const date = new Date(`${d.iso}T12:00:00`);
+    const weekday = date.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "");
+    const f = freeSeatsForDay(d.id);
+    return `<span class="day-chip day-head" style="--remplissage: ${fillRateForDay(d.id)}" aria-label="${d.label}, ${dayStateLabel(d.id, false)}"><span>${weekday}</span><b>${date.getDate()}</b><small>${f ? `${f} libre${f > 1 ? "s" : ""}` : "couvert"}</small></span>`;
+  }).join("");
+  const first = daysWithNeeds[0], last = daysWithNeeds[daysWithNeeds.length - 1];
+  const card1 = `<article class="home-card" data-testid="bloc-carte-planning-bar-octobre">
+    <h3>Bar associatif : octobre</h3>
+    <p>Du ${new Date(first.iso + "T12:00:00").getDate()} au ${dayLabel(last.iso).replace(/^\S+ /, "")} · <span class="home-free">${free} place${free > 1 ? "s" : ""} libre${free > 1 ? "s" : ""}</span></p>
+    <div class="home-days">${chips}</div>
+    <div><button class="btn btn--primary" type="button" data-open-public>Voir le planning</button></div>
+  </article>`;
+  // Seconde carte : exemple statique, pour montrer la grille à deux cartes.
+  // / Second card: static example, to show the two-card grid.
+  const card2 = `<article class="home-card">
+    <h3>Chantier du jardin : novembre</h3>
+    <p>Du 7 au 28 nov. · <span class="home-free">9 places libres</span></p>
+    <div class="home-days">
+      <span class="day-chip day-head" style="--remplissage: 0"><span>sam</span><b>7</b><small>4 libres</small></span>
+      <span class="day-chip day-head" style="--remplissage: 50"><span>sam</span><b>14</b><small>2 libres</small></span>
+      <span class="day-chip day-head" style="--remplissage: 25"><span>sam</span><b>21</b><small>3 libres</small></span>
+      <span class="day-chip day-head" style="--remplissage: 100"><span>sam</span><b>28</b><small>couvert</small></span>
+    </div>
+    <div><button class="btn btn--primary" type="button" disabled title="Exemple statique">Voir le planning</button></div>
+  </article>`;
+  document.getElementById("home-cards").innerHTML = card1 + card2;
+}
+
+function renderAll() { renderPublic(); renderMine(); renderLettre(); renderHome(); }
+
+/* ---------- Toast avec « Annuler » / Toast with undo ---------- */
+let toastTimer = null, undoAction = null;
+function toast(text, undo) {
+  const t = document.getElementById("toast");
+  document.getElementById("toast-text").textContent = text;
+  undoAction = undo;
+  document.getElementById("toast-undo").hidden = !undo;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
+}
+document.getElementById("toast-undo").addEventListener("click", () => {
+  if (undoAction) undoAction();
+  document.getElementById("toast").hidden = true;
+});
+
+function pulse(id) {
+  for (const el of document.querySelectorAll(`#need-${id}`)) el.classList.add("is-pulse");
+}
+
+/* ---------- Clics / Clicks ---------- */
+document.addEventListener("click", e => {
+  const join = e.target.closest("[data-join]");
+  const leave = e.target.closest("[data-leave]");
+  const login = e.target.closest("[data-login]");
+  if (join && viewer === "noname") {
+    besoinEnAttente = +join.dataset.join;
+    document.getElementById("champ-prenom").value = "";
+    document.getElementById("erreur-prenom").hidden = true;
+    document.getElementById("modale-prenom").showModal();
+    document.getElementById("champ-prenom").focus();
+    return;
+  }
+  if (join) {
+    const n = needs.find(x => x.id === +join.dataset.join);
+    if (n.people.includes(ME)) return;
+    n.people.push(ME);
+    renderAll(); pulse(n.id);
+    toast(`C'est noté : ${taskOf(n).name.toLowerCase()}, ${dayOf(n).label} (${timeLabel(n)}).`, null);
+  } else if (leave) {
+    const n = needs.find(x => x.id === +leave.dataset.leave);
+    n.people = n.people.filter(p => p !== ME);
+    renderAll();
+    toast(leave.dataset.late
+      ? `C'est noté, tu ne viens plus : ${taskOf(n).name.toLowerCase()}, ${dayOf(n).label}. L'équipe est prévenue par mail.`
+      : `Retiré·e du créneau ${taskOf(n).name.toLowerCase()}, ${dayOf(n).label}.`, null);
+  } else if (login) {
+    toast("Ouvre le panneau de connexion (#loginPanel) : email, puis code. Retour sur ce planning ensuite.", null);
+  }
+});
+
+/* ---------- Onglets / Tabs ---------- */
+const tabs = [...document.querySelectorAll(".tab")];
+for (const tab of tabs) {
+  tab.addEventListener("click", () => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    }
+  });
+}
+
+document.addEventListener("click", e => {
+  if (e.target.closest("[data-open-public]")) document.getElementById("tab-public").click();
+});
+document.getElementById("sim-width").addEventListener("change", e => {
+  document.body.classList.toggle("force-mobile", e.target.value === "mobile");
+});
+document.addEventListener("click", e => {
+  const chip = e.target.closest("[data-goto]");
+  if (!chip) return;
+  const target = document.getElementById(chip.dataset.goto);
+  if (target) target.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+});
+document.getElementById("sim-viewer").addEventListener("change", e => { viewer = e.target.value; lettreEtat = null; renderAll(); });
+document.getElementById("sim-access").addEventListener("change", e => { access = e.target.value; renderAll(); });
+
+renderAll();
+renderAdmin();
+</script>
+
+<!--claude-mermaid-runtime-begin:3477-->
+<style>.mermaid-diagram{margin-block:4px}.mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}</style>
+<script src="/_runtime/mermaid-11.16.1.min.js"></script>
+<script>(function(){
+var CFG={"palettes":{"light":{"surface":"#f4efe4","text":"#42392e","line":"#8a7f6d","border":"#7a6c52","bg":"#fffdf8"},"dark":{"surface":"#262b34","text":"#f2f3f5","line":"#a8adb8","border":"#9aa4b8","bg":"#1f232b"}}};
+if(typeof mermaid==='undefined')return;
+var pres=Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')).filter(function(p){if(p.hasAttribute('data-claude-mermaid-claimed'))return false;p.setAttribute('data-claude-mermaid-claimed','1');return true;});
+if(!pres.length)return;
+var mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null;
+var root=document.documentElement;
+var items=pres.map(function(pre){
+var mount=document.createElement('div');mount.className='mermaid-diagram';
+return {pre:pre,mount:mount,src:pre.textContent||''};
+});
+var seq=0;
+var renderGen=0;
+var lastKey='';
+function pageBg(fallback){
+var els=[document.body,document.documentElement];
+for(var i=0;i<els.length;i++){
+var c=els[i]&&getComputedStyle(els[i]).backgroundColor;
+if(c&&c!=='transparent'&&c!=='rgba(0, 0, 0, 0)')return c;
+}
+return fallback;
+}
+function render(){
+var theme=root.getAttribute('data-theme');
+var dark=theme==='dark'||(!!(mq&&mq.matches)&&theme!=='light');
+var pal=dark?CFG.palettes.dark:CFG.palettes.light;
+var bg=pageBg(pal.bg);
+var key=(dark?'d':'l')+'|'+bg;
+if(key===lastKey)return;
+lastKey=key;
+var gen=++renderGen;
+var font=getComputedStyle(document.body).fontFamily||'sans-serif';
+var nat={useMaxWidth:false};
+mermaid.initialize({
+startOnLoad:false,securityLevel:'strict',theme:'base',
+flowchart:nat,sequence:nat,er:nat,state:nat,class:nat,pie:nat,
+gantt:nat,journey:nat,timeline:nat,gitGraph:nat,mindmap:nat,xyChart:nat,
+quadrantChart:nat,sankey:nat,c4:nat,requirement:nat,block:nat,
+packet:nat,kanban:nat,architecture:nat,radar:nat,
+themeVariables:{background:bg,mainBkg:pal.surface,primaryColor:pal.surface,
+primaryTextColor:pal.text,lineColor:pal.line,primaryBorderColor:pal.border,
+nodeBorder:pal.border,clusterBorder:pal.border,edgeLabelBackground:bg,
+clusterBkg:'rgba(127,127,127,0.07)',titleColor:pal.text,
+darkMode:dark,rowOdd:bg,rowEven:'rgba(127,127,127,0.07)',
+attributeBackgroundColorOdd:bg,attributeBackgroundColorEven:'rgba(127,127,127,0.07)',
+fontSize:'16px',fontFamily:font},
+themeCSS:'.node rect, .node circle, .node polygon, .node path, .cluster rect { stroke-width: 2px; }'
+});
+items.forEach(function(it){
+var id='claude-mermaid-'+seq++;
+mermaid.render(id,it.src).then(function(r){
+if(gen!==renderGen)return;
+var prev=it.pre.previousElementSibling;
+if(prev&&prev.className==='mermaid-diagram'&&prev!==it.mount)return;
+it.mount.innerHTML=r.svg;
+if(!it.mount.parentNode)it.pre.parentNode.insertBefore(it.mount,it.pre);
+it.pre.style.display='none';
+},function(){
+var scratch=document.getElementById(id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+scratch=document.getElementById('d'+id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+if(gen!==renderGen)return;
+if(it.mount.parentNode)it.mount.parentNode.removeChild(it.mount);
+it.pre.style.display='';
+});
+});
+}
+render();
+if(mq&&mq.addEventListener)mq.addEventListener('change',render);
+if(typeof MutationObserver!=='undefined')new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+})();</script>
+<!--claude-mermaid-runtime-end-->
+
+</body></html>
