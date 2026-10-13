@@ -577,6 +577,16 @@ class Booking(models.Model):
         null=True, blank=True
     )
 
+    # Réponses au formulaire dynamique du produit de la ressource (ProductFormField).
+    # Rangées sous le LIBELLÉ de chaque question par build_custom_form_from_request
+    # (BaseBillet/validators.py), comme Reservation.custom_form et Membership.custom_form.
+    # / Answers to the resource product's dynamic form, keyed by question label.
+    custom_form = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name=_("Réponses au formulaire"),
+    )
+
 
     class Meta:
         verbose_name = _('Booking')

@@ -9,6 +9,9 @@ from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 
 from Administration.importers.reponses_formulaire_export import cles_des_reponses_a_exporter
+# JSONKeyField lit obj.custom_form[clé] : il marche pour un Booking comme pour une adhésion.
+# / JSONKeyField reads obj.custom_form[key]: works for a Booking as for a membership.
+from Administration.importers.membership_importers import JSONKeyField
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Membership, Product, Price, OptionGenerale, Configuration
@@ -45,13 +48,76 @@ class BookingExportResource(resources.ModelResource):
 
     def before_export(self, queryset, *args, **kwargs):
         """
-        Lit le fuseau du lieu une seule fois pour tout l'export.
-        / Reads the venue timezone once for the whole export.
+        Prépare l'export : fuseau du lieu et colonnes des réponses au formulaire.
+        / Prepares the export: venue timezone and form answer columns.
 
-        Sans ça, chaque ligne ferait sa propre requête Configuration.get_solo().
-        / Otherwise each row would run its own get_solo() query.
+        1. Le fuseau est lu une seule fois. Sans ça, chaque ligne ferait sa propre
+           requête Configuration.get_solo().
+        2. Les colonnes de réponses : on lit les clés des custom_form des réservations
+           exportées, et les produits de leurs ressources. cles_des_reponses_a_exporter
+           (reponses_formulaire_export.py) les trie dans l'ordre d'affichage des
+           questions ; les réponses orphelines vont à la fin.
+        / Timezone read once; answer keys sorted by cles_des_reponses_a_exporter.
         """
         self._fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+
+        cles_trouvees = set()
+        for booking in queryset:
+            reponses = getattr(booking, 'custom_form', None)
+            if isinstance(reponses, dict):
+                for cle in reponses.keys():
+                    if cle is not None:
+                        cles_trouvees.add(str(cle))
+
+        # Les produits des ressources, en UNE requête (pas une par réservation).
+        # / The resources' products, in ONE query.
+        uuids_des_produits = set()
+        if hasattr(queryset, 'values_list'):
+            for uuid_du_produit in queryset.values_list('resource__product_id', flat=True).distinct():
+                if uuid_du_produit is not None:
+                    uuids_des_produits.add(uuid_du_produit)
+
+        self._custom_form_keys = cles_des_reponses_a_exporter(cles_trouvees, uuids_des_produits)
+
+    def get_export_fields(self, *args, **kwargs):
+        """
+        Les colonnes fixes, puis une colonne par question du formulaire dynamique.
+        / Fixed columns, then one column per dynamic form question.
+
+        Une question qui porte le même nom qu'une colonne fixe n'est pas ajoutée
+        une deuxième fois.
+        / A question named like a fixed column is not added twice.
+        """
+        colonnes_fixes = super().get_export_fields(*args, **kwargs)
+
+        noms_deja_pris = set()
+        for colonne in colonnes_fixes:
+            nom_de_la_colonne = getattr(colonne, 'column_name', None) or getattr(colonne, 'attribute', None)
+            if nom_de_la_colonne:
+                noms_deja_pris.add(str(nom_de_la_colonne))
+
+        colonnes_des_reponses = []
+        for cle in getattr(self, '_custom_form_keys', []):
+            if cle not in noms_deja_pris:
+                colonnes_des_reponses.append(JSONKeyField(key=cle, column_name=cle))
+
+        return colonnes_fixes + colonnes_des_reponses
+
+    def get_export_headers(self, selected_fields=None, *args, **kwargs):
+        # Les en-têtes viennent des noms de colonnes, y compris les colonnes de réponses.
+        # / Headers from column names, answer columns included.
+        # get_export_fields reçoit les NOMS choisis dans le formulaire d'export (ou None)
+        # et renvoie les objets Field : on ne lit jamais column_name sur un nom.
+        # / get_export_fields maps selected names (or None) to Field objects.
+        colonnes = self.get_export_fields(selected_fields)
+        return [str(colonne.column_name) for colonne in colonnes]
+
+    def get_field_name(self, field):
+        # Une colonne de réponse n'est pas déclarée sur la classe : son nom est sa clé.
+        # / An answer column is not declared on the class: its name is its key.
+        if isinstance(field, JSONKeyField):
+            return field.column_name
+        return super().get_field_name(field)
 
     def _fuseau(self):
         # None si before_export n'a pas tourné : Booking relit alors la Configuration.

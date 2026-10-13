@@ -1,0 +1,249 @@
+{% load i18n tibitags %}
+{% comment %}
+QUESTIONS DU FORMULAIRE DYNAMIQUE D'UN PRODUIT
+/ Dynamic form questions of one product
+
+LOCALISATION : BaseBillet/templates/commun/formulaires/champs_produit.html
+
+Affiche les questions (ProductFormField) d'UN produit, dans un <form> existant.
+Si le produit n'a pas de question, ou s'il n'y a pas de produit, rien n'est affiché.
+
+PARAMETRES (a passer avec la balise include, mot-cle « with ») :
+- product (obligatoire) : le produit dont on affiche product.form_fields.all.
+- prefill (optionnel) : dictionnaire « nom technique de la question -> valeur ».
+  Sert a remettre les reponses deja tapees (apres une erreur 422).
+- testid_prefix (obligatoire) : donne data-testid="<prefix>-form-field-<name>".
+
+Chaque champ s'appelle « form__<name> ». Cote serveur, c'est
+build_custom_form_from_request (BaseBillet/validators.py) qui lit ces champs,
+les valide et range les reponses sous le LIBELLE de la question.
+
+UTILISE PAR :
+- booking/templates/booking/partials/book_form.html (reservation de ressource).
+
+FLUX DE LA VALIDATION COTE NAVIGATEUR :
+1. Clic sur un bouton du formulaire (hx-post du <form>, ou hx-post d'un bouton
+   « Ajouter au panier » avec hx-include="closest form").
+2. htmx emet 'htmx:configRequest', qui remonte jusqu'au <form>.
+3. Le script en bas de ce fichier verifie les choix multiples et les interrupteurs
+   obligatoires. L'attribut HTML « required » ne suffit pas pour eux.
+4. S'il manque une reponse : la requete est bloquee et le message s'affiche.
+
+Bloc de commentaire Django (pas HTML) : ce texte n'est jamais envoye au navigateur.
+{% endcomment %}
+{% if product %}
+    {% with fields=product.form_fields.all %}
+        {% if fields %}
+            <div class="champs-produit" data-testid="{{ testid_prefix }}-form-fields">
+                <hr>
+                <h4 class="h5 mb-3">{% translate "Additional information" %}</h4>
+                {% for field in fields %}
+                    {% if field.field_type == 'ST' %}
+                        <div class="form-floating mb-3">
+                            <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text"
+                                   class="form-control"
+                                   placeholder="{{ field.label }}" {% if field.required %}required{% endif %}
+                                   {% if field.name in prefill %}value="{{ prefill|get_item:field.name }}"{% endif %}
+                                   data-testid="{{ testid_prefix }}-form-field-{{ field.name }}">
+                            <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    {% elif field.field_type == 'LT' %}
+                        <div class="form-floating mb-3">
+                            <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-control"
+                                      style="height: 120px"
+                                      placeholder="{{ field.label }}"
+                                      {% if field.required %}required{% endif %} data-testid="{{ testid_prefix }}-form-field-{{ field.name }}">{% if field.name in prefill %}{{ prefill|get_item:field.name }}{% endif %}</textarea>
+                            <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    {% elif field.field_type == 'SS' %}
+                        <div class="mb-3">
+                            <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+                            <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select"
+                                    {% if field.required %}required{% endif %} data-testid="{{ testid_prefix }}-form-field-{{ field.name }}">
+                                <option value="" {% if field.required and field.name not in prefill %}disabled selected{% endif %}>—</option>
+                                {% for opt in field.options %}
+                                    <option value="{{ opt }}" {% if field.name in prefill and prefill|get_item:field.name == opt %}selected{% endif %}>{{ opt }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    {% elif field.field_type == 'SR' %}
+                        <!-- Un groupe de boutons radio : fieldset + legend pour les lecteurs d'ecran -->
+                        <!-- / Radio group: fieldset + legend for screen readers -->
+                        <fieldset class="mb-3">
+                            <legend class="form-label fs-6">
+                                {{ field.label }}{% if field.required %}
+                                    <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                            </legend>
+                            {% for opt in field.options %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio"
+                                           id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                           name="form__{{ field.name }}" value="{{ opt }}"
+                                           {% if field.name in prefill and prefill|get_item:field.name == opt %}checked{% endif %}
+                                           {% if field.required and forloop.first %}required{% endif %}
+                                           data-testid="{{ testid_prefix }}-form-field-{{ field.name }}">
+                                    <label class="form-check-label"
+                                           for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                </div>
+                            {% endfor %}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                        </fieldset>
+                    {% elif field.field_type == 'BL' %}
+                        <div class="form-check form-switch mb-3" {% if field.required %}data-bl-required="true"
+                             data-input-id="ff-{{ field.uuid }}"
+                             data-error-message="{% translate 'Please check this box.' %}"{% endif %}
+                             data-testid="{{ testid_prefix }}-form-group-{{ field.name }}">
+                            <input class="form-check-input" type="checkbox" role="switch"
+                                   id="ff-{{ field.uuid }}" name="form__{{ field.name }}" value="on"
+                                   {% if field.name in prefill and prefill|get_item:field.name %}checked{% endif %}
+                                   {% if field.required %}required aria-required="true" aria-describedby="ff-{{ field.uuid }}-error"{% endif %}
+                                   data-testid="{{ testid_prefix }}-form-field-{{ field.name }}">
+                            <label class="form-check-label" for="ff-{{ field.uuid }}">
+                                {{ field.label }}{% if field.required %}
+                                    <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                            </label>
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                            {% if field.required %}
+                                <div id="ff-{{ field.uuid }}-error" class="text-danger small mt-1" data-bl-error
+                                     style="display:none;" aria-live="polite"
+                                     data-testid="{{ testid_prefix }}-form-error-{{ field.name }}"></div>
+                            {% endif %}
+                        </div>
+                    {% elif field.field_type == 'MS' %}
+                        <!-- Un groupe de cases a cocher : fieldset + legend pour les lecteurs d'ecran -->
+                        <!-- / Checkbox group: fieldset + legend for screen readers -->
+                        <fieldset class="mb-3" {% if field.required %}data-ms-required="true"
+                                  data-input-name="form__{{ field.name }}"
+                                  data-error-message="{% translate 'Please select at least one option.' %}"
+                                  aria-describedby="ff-{{ field.uuid }}-error"{% endif %}
+                                  data-testid="{{ testid_prefix }}-form-group-{{ field.name }}">
+                            <legend class="form-label fs-6">
+                                {{ field.label }}{% if field.required %}
+                                    <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                            </legend>
+                            {% for opt in field.options %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                           name="form__{{ field.name }}" value="{{ opt }}"
+                                           {% if field.name in prefill and opt in prefill|get_item:field.name %}checked{% endif %}
+                                           {% if field.required %}aria-required="true"{% endif %}
+                                           data-testid="{{ testid_prefix }}-form-field-{{ field.name }}">
+                                    <label class="form-check-label"
+                                           for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                </div>
+                            {% endfor %}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                            {% if field.required %}
+                                <div id="ff-{{ field.uuid }}-error" class="text-danger small mt-1" data-ms-error
+                                     style="display:none;" aria-live="polite"
+                                     data-testid="{{ testid_prefix }}-form-error-{{ field.name }}"></div>
+                            {% endif %}
+                        </fieldset>
+                    {% endif %}
+                {% endfor %}
+
+                <script>
+                    /**
+                     * Bloque l'envoi si un choix multiple ou un interrupteur obligatoire est vide
+                     * / Blocks submission when a required multi-select or switch is empty
+                     *
+                     * LOCALISATION : BaseBillet/templates/commun/formulaires/champs_produit.html
+                     *
+                     * Le script s'accroche au <form> qui contient ce bloc. Il ecoute
+                     * 'htmx:configRequest', qui remonte du bouton clique jusqu'au <form> :
+                     * le bouton « Payer » (hx-post du form) comme les boutons du panier
+                     * (hx-post + hx-include="closest form").
+                     *
+                     * Le serveur revalide de toute facon (build_custom_form_from_request).
+                     * Ce script evite seulement un aller-retour inutile.
+                     */
+                    (function () {
+                        const blocDesQuestions = document.currentScript.closest('.champs-produit');
+                        const formulaire = blocDesQuestions ? blocDesQuestions.closest('form') : null;
+                        if (!formulaire) return;
+
+                        // htmx execute les scripts a chaque injection du partial.
+                        // On ne branche l'ecouteur qu'une fois par formulaire.
+                        // / htmx runs scripts on every swap: bind once per form.
+                        if (formulaire.dataset.champsProduitValidation === 'oui') return;
+                        formulaire.dataset.champsProduitValidation = 'oui';
+
+                        function afficherOuCacherErreur(zoneErreur, message) {
+                            if (!zoneErreur) return;
+                            zoneErreur.textContent = message;
+                            zoneErreur.style.display = message ? 'block' : 'none';
+                        }
+
+                        function choixMultiplesObligatoiresRemplis() {
+                            let toutEstRempli = true;
+                            const groupes = formulaire.querySelectorAll('.champs-produit [data-ms-required="true"]');
+                            groupes.forEach(function (groupe) {
+                                const nomDuChamp = groupe.getAttribute('data-input-name');
+                                const cases = groupe.querySelectorAll('input[type="checkbox"][name="' + nomDuChamp + '"]');
+                                const auMoinsUneCaseCochee = Array.from(cases).some(function (c) { return c.checked; });
+                                const zoneErreur = groupe.querySelector('[data-ms-error]');
+                                if (auMoinsUneCaseCochee) {
+                                    afficherOuCacherErreur(zoneErreur, '');
+                                    cases.forEach(function (c) { c.removeAttribute('aria-invalid'); });
+                                } else {
+                                    toutEstRempli = false;
+                                    afficherOuCacherErreur(zoneErreur, groupe.getAttribute('data-error-message'));
+                                    cases.forEach(function (c) { c.setAttribute('aria-invalid', 'true'); });
+                                }
+                            });
+                            return toutEstRempli;
+                        }
+
+                        function interrupteursObligatoiresCoches() {
+                            let toutEstCoche = true;
+                            const groupes = formulaire.querySelectorAll('.champs-produit [data-bl-required="true"]');
+                            groupes.forEach(function (groupe) {
+                                const interrupteur = groupe.querySelector('input[type="checkbox"]');
+                                const zoneErreur = groupe.querySelector('[data-bl-error]');
+                                if (!interrupteur) return;
+                                if (interrupteur.checked) {
+                                    afficherOuCacherErreur(zoneErreur, '');
+                                    interrupteur.removeAttribute('aria-invalid');
+                                } else {
+                                    toutEstCoche = false;
+                                    afficherOuCacherErreur(zoneErreur, groupe.getAttribute('data-error-message'));
+                                    interrupteur.setAttribute('aria-invalid', 'true');
+                                }
+                            });
+                            return toutEstCoche;
+                        }
+
+                        formulaire.addEventListener('htmx:configRequest', function (event) {
+                            // On lance les deux verifications pour afficher TOUS les messages.
+                            // / Run both checks to show every message.
+                            const choixMultiplesOk = choixMultiplesObligatoiresRemplis();
+                            const interrupteursOk = interrupteursObligatoiresCoches();
+                            if (!choixMultiplesOk || !interrupteursOk) {
+                                event.preventDefault();
+                            }
+                        });
+                    })();
+                </script>
+            </div>
+        {% endif %}
+    {% endwith %}
+{% endif %}

@@ -7395,6 +7395,19 @@ class PanierMVT(viewsets.ViewSet):
             except PriceModel.DoesNotExist:
                 pass  # add_membership levera l'erreur Price not found
 
+        # Réponses au formulaire dynamique du produit de la ressource, validées comme
+        # dans la réservation directe (booking/views.py _book_post). Une question
+        # obligatoire sans réponse bloque l'ajout au panier avec un toast.
+        # / Dynamic form answers, validated like the direct flow; toast on error.
+        produits_avec_questions = []
+        if resource.product is not None:
+            produits_avec_questions = [resource.product]
+        custom_form, erreur_du_formulaire = reponses_du_formulaire_personnalise_pour_le_panier(
+            request, produits_avec_questions,
+        )
+        if erreur_du_formulaire:
+            return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
+
         panier = PanierSession(request)
         try:
             panier.add_resource(
@@ -7407,7 +7420,7 @@ class PanierMVT(viewsets.ViewSet):
                 price_uuid=price_uuid,
                 custom_amount=custom_amount,
                 options=[],
-                custom_form={},
+                custom_form=custom_form,
                 firstname=firstname,
                 lastname=lastname,
                 promotional_code_name=item_promo,

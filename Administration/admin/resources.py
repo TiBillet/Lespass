@@ -120,7 +120,11 @@ class BookingAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelA
 
     ordering = ("-booked_at",)
 
-    exclude = ["commande"]
+    # custom_form est retiré du formulaire : pas d'édition du JSON brut.
+    # Les réponses s'affichent en tableau sous la fiche (change_form_after_template).
+    # / custom_form is not editable as raw JSON; shown as a table below the form.
+    exclude = ["commande", "custom_form"]
+    change_form_after_template = "admin/booking/custom_form.html"
 
     list_display = (
         'booked_at',
