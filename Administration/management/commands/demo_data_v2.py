@@ -2489,8 +2489,8 @@ class Command(BaseCommand):
                                     currency_code=a.get('currency_code'),
                                     category=map_asset_category(a.get('category')),
                                 )
-                                created = fedow_asset.get_or_create_token_asset(payload)
-                                obj = AssetFedowPublic.objects.filter(uuid=created.get('uuid')).first()
+                                asset_data, _created = fedow_asset.get_or_create_token_asset(payload)
+                                obj = AssetFedowPublic.objects.filter(uuid=asset_data.get('uuid')).first()
                                 if obj:
                                     assets_by_name[obj.name] = obj
                             except Exception as e:
