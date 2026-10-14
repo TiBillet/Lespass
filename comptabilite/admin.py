@@ -252,43 +252,19 @@ class ClotureCaisseAdmin(ModelAdmin):
         / Refused before the go-live: the "reprise" J and any H / M / A starting before
         it. A period starting exactly at the go-live is accepted.
         """
-        from django.utils import timezone
-
-        from BaseBillet.models import Configuration
-        from comptabilite.tasks import (
-            NIVEAUX_CALENDAIRES,
-            est_la_j_de_reprise,
-            mise_en_service_du_lieu,
-        )
+        from comptabilite.tasks import refus_du_fec_avant_la_mise_en_service
 
         cloture = get_object_or_404(ClotureCaisse, pk=object_id)
         adresse_de_la_fiche = reverse(
             "staff_admin:comptabilite_cloturecaisse_change", args=[cloture.pk]
         )
 
-        mise_en_service = mise_en_service_du_lieu()
-        if mise_en_service is not None:
-            periode_commencee_avant_la_mise_en_service = (
-                cloture.niveau in NIVEAUX_CALENDAIRES
-                and cloture.datetime_debut < mise_en_service
-            )
-            if est_la_j_de_reprise(cloture) or periode_commencee_avant_la_mise_en_service:
-                # La date est montrée en heure du lieu, comme tous les affichages.
-                # / The date is shown in the venue's time zone.
-                fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
-                date_de_mise_en_service = timezone.localtime(
-                    mise_en_service, fuseau_du_lieu
-                ).strftime("%d/%m/%Y")
-                messages.error(
-                    request,
-                    _(
-                        "Le FEC commence à la date de mise en service de la "
-                        "comptabilité (%(date)s). Pour avant, utilisez les rapports "
-                        "mensuels."
-                    )
-                    % {"date": date_de_mise_en_service},
-                )
-                return redirect(adresse_de_la_fiche)
+        # La règle est partagée avec l'API comptable (spec 06-A, A10).
+        # / The rule is shared with the accounting API.
+        phrase_du_refus = refus_du_fec_avant_la_mise_en_service(cloture)
+        if phrase_du_refus is not None:
+            messages.error(request, phrase_du_refus)
+            return redirect(adresse_de_la_fiche)
 
         try:
             contenu, nom_du_fichier, type_du_contenu = generer_fec_cloture(cloture)

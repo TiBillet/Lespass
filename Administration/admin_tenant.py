@@ -216,6 +216,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
         'wallet',
         'sale',
         'page',
+        'comptabilite',
     ]
 
     fields = [
@@ -231,6 +232,9 @@ class ExternalApiKeyAdmin(ModelAdmin):
         ('membership', 'crowd'),
         # Droit API du site web (app pages) / Website API right (pages app)
         ('page',),
+        # Droit de lecture de la comptabilite (logiciel comptable du lieu)
+        # / Accounting read right (the venue's accounting software)
+        ('comptabilite',),
         # Recharge cadeau : asset TNF que cette cle peut crediter via l'API v2
         # / Gift refill: TNF asset this key may top-up via API v2
         'gift_asset',

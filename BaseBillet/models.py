@@ -5318,6 +5318,13 @@ class ExternalApiKey(models.Model):
     # / Website API right (pages app): opens create/edit of Pages AND Blocs.
     page = models.BooleanField(default=False, verbose_name=_("Pages / Site web"))
 
+    # Droit de lecture de la comptabilite : la liste des clotures, leurs ecritures
+    # (JSON et fichier FEC) et le plan comptable du lieu. C'est la cle d'un logiciel
+    # comptable (Dolibarr, Paheko...) qui vient chercher les clotures chaque nuit.
+    # / Accounting read right: closures, their entries (JSON and FEC file) and the
+    # venue's chart of accounts. The key of an accounting software.
+    comptabilite = models.BooleanField(default=False, verbose_name=_("Comptabilité (lecture)"))
+
     # Asset cadeau (TNF) que cette cle peut recharger via /api/v2/wallet-refills/.
     # La presence de cet asset sert a la fois d'interrupteur du droit "walletrefill"
     # et de restriction : la cle ne peut recharger QUE cet asset.
@@ -5358,6 +5365,10 @@ class ExternalApiKey(models.Model):
             # / Website (pages app): same right for pages and blocs.
             "page": self.page,
             "bloc": self.page,
+            # Comptabilite : meme droit pour les clotures et le plan comptable.
+            # / Accounting: same right for closures and the chart of accounts.
+            "closure": self.comptabilite,
+            "account": self.comptabilite,
             # Recharge cadeau : autorisee seulement si un asset cadeau est defini
             # / Gift refill: allowed only if a gift asset is set
             "walletrefill": bool(self.gift_asset_id),

@@ -1102,6 +1102,151 @@ paths:
           description: Asset category is not refillable (fiat/subscription), or amount above the cap
         '503':
           description: Fedow service unavailable
+  /api/v2/closures/:
+    get:
+      summary: Daily closures to import into an accounting software
+      description: >
+        The venue's daily (J) closures that have sales, without the "reprise" J,
+        by number. Not paginated. Cursor: pass the `number` of the last imported
+        closure in `after_number` (never a date: the automatic J can be created
+        late but dated earlier). Requires the "comptabilite" right on the API key.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: after_number
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+          description: Only closures with a greater number.
+      responses:
+        "200":
+          description: Closures to import
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        uuid: {type: string, format: uuid}
+                        number: {type: integer, example: 12}
+                        startDate: {type: string, format: date-time}
+                        endDate: {type: string, format: date-time}
+                        accountingDate: {type: string, format: date, example: "2026-10-12"}
+                        entries: {type: string, format: uri}
+                        fec: {type: string, format: uri}
+        "400":
+          description: after_number is not a non-negative integer
+        "403":
+          description: Missing, unknown key, or key without the "comptabilite" right
+  /api/v2/closures/{uuid}/entries/:
+    get:
+      summary: Accounting entries of a daily closure (JSON)
+      description: >
+        The same entries as the FEC file, with the FEC column names, amounts in
+        whole cents, ISO dates, and no ValidDate (entries arrive unlocked).
+        Recomputed at each call with the venue's current chart of accounts:
+        import each closure only once.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        "200":
+          description: Entries, one per journal
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  closure: {type: string, format: uuid}
+                  number: {type: integer}
+                  accountingDate: {type: string, format: date}
+                  currency: {type: string, example: EUR}
+                  amountUnit: {type: string, example: cent}
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        JournalCode: {type: string, example: BAR}
+                        JournalLib: {type: string, example: Bar}
+                        EcritureNum: {type: string, example: 12-BAR}
+                        EcritureDate: {type: string, format: date}
+                        PieceRef: {type: string, example: "12"}
+                        PieceDate: {type: string, format: date}
+                        EcritureLib: {type: string}
+                        lines:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              CompteNum: {type: string, example: "707000"}
+                              CompteLib: {type: string}
+                              Debit: {type: integer, example: 0}
+                              Credit: {type: integer, example: 41667}
+        "404":
+          $ref: "#/components/responses/AccountingNotExportable"
+        "409":
+          $ref: "#/components/responses/AccountingConflict"
+  /api/v2/closures/{uuid}/fec/:
+    get:
+      summary: FEC file of a daily closure
+      description: >
+        Byte for byte the file of the admin "FEC" button (UTF-8, tab-separated,
+        CRLF, decimal comma, ValidDate filled).
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        "200":
+          description: The FEC file (attachment)
+          content:
+            text/plain:
+              schema: {type: string}
+        "404":
+          $ref: "#/components/responses/AccountingNotExportable"
+        "409":
+          $ref: "#/components/responses/AccountingConflict"
+  /api/v2/accounts/:
+    get:
+      summary: The venue's chart of accounts
+      description: >
+        Every account of the venue, active or not (inactive accounts are only
+        hidden from menus and still used by exports), by number. Loads the
+        default chart if the venue has none.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        accountNumber: {type: string, example: "707900"}
+                        name: {type: string}
+                        active: {type: boolean}
+        "403":
+          description: Missing, unknown key, or key without the "comptabilite" right
   /api/v2/pages/:
     get:
       operationId: listPages
@@ -1552,6 +1697,30 @@ components:
       bearerFormat: Api-Key
       description: |
         Pass your key as `Authorization: Api-Key <key>`.
+  responses:
+    AccountingNotExportable:
+      description: >
+        This closure is never to be imported (unknown uuid, weekly / monthly /
+        yearly closure, J without sales, "reprise" J). The software forgets it.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail: {type: string}
+              code: {type: string, example: not_exportable}
+    AccountingConflict:
+      description: >
+        Not now: an account or a journal is missing in the venue's chart
+        (missing_account), or an entry is unbalanced (unbalanced_entry). The
+        software retries later.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail: {type: string}
+              code: {type: string, enum: [missing_account, unbalanced_entry]}
   schemas:
     Error:
       type: object
