@@ -4,17 +4,17 @@ LISTE DES MODELES DE BLOC, groupes par type (liens d'ajout pre-remplis)
 
 LOCALISATION : pages/templates/admin/pages/apercu/_menu_modeles_liens.html
 
-APPELE PAR :
-- admin/pages/apercu/_menu_modeles.html, en inclusion directe (menu
-  « + Ajouter un bloc en premier » de l'en-tete, dans l'admin) ;
-- pages/admin_apercu.py:vue_menu_ajout, en reponse au hx-get du + de la barre
-  d'un bloc (dans l'iframe). La reponse remplace le texte « Chargement… ».
+APPELE PAR : pages/admin_apercu.py:vue_menu_ajout. apercu.js charge la
+reponse dans la <dialog> de admin/pages/page/blocs_de_la_page.html, ouverte
+par le bouton « + Ajouter un bloc en premier » ou par le + d'une barre. La
+reponse remplace le texte « Chargement… ».
 
 CONTEXTE RECU : `groupes` (admin_apercu.py:menu_d_ajout : chaque modele a son
-`url`), `cible` (_top dans l'iframe), `testid`.
-Styles en ligne et regle .menu-modeles__lien (dans _menu_modeles.html) : ce
-menu vit aussi dans le document du site.
-/ CALLED BY _menu_modeles.html (inline) and vue_menu_ajout (on-demand hx-get).
+`url`), `cible` (_self par defaut), `testid`.
+Styles en ligne. Le survol vient de la regle .menu-modeles__lien, posee dans
+blocs_de_la_page.html (meme document que la <dialog>).
+/ CALLED BY vue_menu_ajout, loaded into the admin <dialog>. Hover rule
+.menu-modeles__lien lives in blocs_de_la_page.html.
 {% endcomment %}
 {% for groupe in groupes %}
     <section aria-label="{{ groupe.libelle }}">

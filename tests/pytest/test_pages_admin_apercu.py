@@ -367,6 +367,40 @@ def test_fiche_page_sans_bloc_invite_a_en_ajouter(tenant, admin_client, nettoyer
     assert "inserer_apres=0" in contenu
 
 
+def test_fiche_page_avec_blocs_porte_la_dialog_du_menu_ajout(tenant, admin_client, nettoyer_pages_apercu):
+    """
+    La <dialog> du menu « + Ajouter un bloc apres » vit dans l'admin, a cote de
+    l'iframe : un menu ouvert dans l'iframe y serait coupe.
+    / The "add after" <dialog> lives in the admin, next to the iframe.
+    """
+    from pages.models import Bloc
+
+    page = _creer_page(tenant, "dialog-menu")
+    with tenant_context(tenant):
+        Bloc.objects.create(page=page, type_bloc=Bloc.FAQ, titre="Q1", position=1)
+
+    contenu = admin_client.get(reverse("staff_admin:pages_page_change", args=[page.pk])).content.decode()
+
+    assert contenu.count('data-testid="page-dialog-menu-ajout"') == 1
+    assert 'id="dialog-menu-ajout-liste"' in contenu
+
+
+def test_fiche_page_sans_bloc_ouvre_la_dialog_depuis_l_en_tete(tenant, admin_client, nettoyer_pages_apercu):
+    """
+    Sans bloc, pas d'iframe, mais le bouton « + Ajouter un bloc en premier »
+    ouvre la meme <dialog>, avec inserer_apres=0.
+    / No block: no iframe, but the header button opens the same <dialog>.
+    """
+    page = _creer_page(tenant, "vide-avec-dialog")
+
+    contenu = admin_client.get(reverse("staff_admin:pages_page_change", args=[page.pk])).content.decode()
+
+    url_du_menu_en_tete = reverse("staff_admin:pages_page_menu_ajout", args=[page.pk]) + "?inserer_apres=0"
+    assert f'data-ouvrir-menu-ajout="{url_du_menu_en_tete}"' in contenu
+    assert 'data-testid="page-dialog-menu-ajout"' in contenu
+    assert "data-menu-modeles" not in contenu
+
+
 def test_apercu_de_la_page_rend_tous_les_blocs_avec_leur_barre(tenant, admin_client, nettoyer_pages_apercu):
     """
     Le document de l'iframe contient chaque bloc, suivi d'un <template> qui
@@ -387,9 +421,13 @@ def test_apercu_de_la_page_rend_tous_les_blocs_avec_leur_barre(tenant, admin_cli
     assert "Premiere question" in contenu and "Une carte" in contenu
     assert contenu.count("data-apercu-outils=") == 2
     assert 'data-testid="page-bloc-2-modifier"' in contenu
-    # Le menu « + » n'est plus embarque : seule son URL de chargement l'est.
-    # / The "+" menu is no longer embedded: only its loading URL is.
+    # Le menu « + » n'est pas embarque dans l'iframe : le bouton porte seulement
+    # l'URL du menu, que l'admin charge dans sa <dialog>.
+    # / The "+" menu is not embedded: the button only carries the menu URL.
+    assert 'data-ouvrir-menu-ajout="' in contenu
     assert "menu-ajout/?inserer_apres=2" in contenu
+    assert 'data-testid="page-bloc-2-ajouter"' in contenu
+    assert "data-menu-modeles" not in contenu
     assert reverse("staff_admin:pages_bloc_add") not in contenu
     assert "apercu_page_outils.js" in contenu
 
@@ -1098,8 +1136,24 @@ def test_menu_ajout_rend_les_modeles_pour_une_position(tenant, admin_client, net
 
     assert reponse.status_code == 200
     assert "inserer_apres=3" in contenu
-    assert 'target="_top"' in contenu
+    # Les liens s'affichent dans la <dialog> de l'admin, pas dans l'iframe :
+    # ils ouvrent la fiche Bloc dans la meme fenetre.
+    # / Links live in the admin <dialog>, not in the iframe.
+    assert 'target="_self"' in contenu
+    assert 'target="_top"' not in contenu
     assert 'data-testid="page-bloc-3-ajouter-sectioncarte"' in contenu
+
+
+def test_menu_ajout_en_tete_garde_les_testid_de_l_en_tete(tenant, admin_client, nettoyer_pages_apercu):
+    """inserer_apres=0 (bouton de l'en-tete) : liens prefixes page-ajouter-en-tete."""
+    page = _creer_page(tenant, "menu-en-tete")
+    url = reverse("staff_admin:pages_page_menu_ajout", args=[page.pk]) + "?inserer_apres=0"
+
+    contenu = admin_client.get(url).content.decode()
+
+    assert "inserer_apres=0" in contenu
+    assert 'data-testid="page-ajouter-en-tete-sectioncarte"' in contenu
+    assert "page-bloc-0-ajouter" not in contenu
 
 
 def test_menu_ajout_refuse_une_position_ou_une_page_invalide(tenant, admin_client, nettoyer_pages_apercu):

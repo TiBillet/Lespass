@@ -23,10 +23,15 @@
  * htmx.process() sur le calque apres l'avoir rempli.
  * Aucune logique metier ici : uniquement de l'affichage.
  *
+ * COMMUNICATION :
+ * Emet : « apercu:ouvrir-menu-ajout » sur le document de l'admin (parent),
+ * au clic sur le + d'une barre -> apercu.js ouvre la <dialog> du menu.
+ *
  * / Loaded INSIDE the Page form iframe. Blocks are direct children of the
  * .tb-flux grid; wrapping them would change the grid, so the bars live in a
  * separate overlay placed at each block's corner. Elements between two
  * <template> markers form one block. htmx.process() activates the buttons.
+ * Emits "apercu:ouvrir-menu-ajout" on the parent document (apercu.js).
  */
 (function () {
     var conteneur = document.querySelector("[data-apercu-contenu]");
@@ -174,66 +179,31 @@
         }
     }
 
-    // Un menu « + Ajouter apres » qui deborderait en bas s'ouvre vers le haut.
-    // Verifie a l'ouverture, puis de nouveau quand sa liste arrive du serveur
-    // (chargement a la demande, htmx:afterSwap) : elle change sa hauteur.
-    // / A menu that would overflow at the bottom opens upwards. Checked on
-    // open, then again when its list arrives from the server.
-    function orienterLeMenu(details) {
-        if (!details || !details.open) {
+    // Le + d'une barre ouvre le menu d'ajout dans l'ADMIN, pas dans l'iframe :
+    // l'iframe a la hauteur de son contenu, un menu ouvert ici serait coupe.
+    // On previent le document parent (meme origine). apercu.js ouvre alors
+    // sa <dialog> et y charge la liste des modeles.
+    // On passe aussi le bouton : la <dialog> lui rend le focus a la fermeture.
+    // / The "+" opens the add menu in the ADMIN document: inside the iframe it
+    // would be clipped. The button is passed so focus can return to it.
+    conteneur.addEventListener("click", function (evenement) {
+        var bouton_ajout = evenement.target.closest("[data-ouvrir-menu-ajout]");
+        if (!bouton_ajout) {
             return;
         }
-        var menu = details.querySelector("[data-menu-liste]");
-        if (!menu) {
+        // Apercu ouvert seul, hors de l'iframe de la fiche Page : pas de
+        // document parent pour afficher le menu. / Opened alone: no parent.
+        var est_dans_une_iframe = window.parent !== window;
+        if (!est_dans_une_iframe) {
             return;
         }
-        menu.style.top = "calc(100% + 4px)";
-        menu.style.bottom = "auto";
-        // La fenetre de l'iframe a la hauteur du document (apercu.js) :
-        // tout ce qui depasse innerHeight serait coupe.
-        // / The iframe viewport is as tall as the content.
-        var bas_du_menu = menu.getBoundingClientRect().bottom;
-        if (bas_du_menu > window.innerHeight) {
-            menu.style.top = "auto";
-            menu.style.bottom = "calc(100% + 4px)";
-        }
-    }
-    conteneur.addEventListener(
-        "toggle",
-        function (evenement) {
-            orienterLeMenu(evenement.target);
-        },
-        true
-    );
-    // afterSettle et non afterSwap : en outerHTML, la cible d'afterSwap peut
-    // etre l'element remplace, deja sorti du DOM. On reoriente donc tous les
-    // menus ouverts. / afterSettle, not afterSwap: re-orient every open menu.
-    document.body.addEventListener("htmx:afterSettle", function () {
-        var menus_ouverts = document.querySelectorAll("details[data-menu-modeles][open]");
-        for (var n = 0; n < menus_ouverts.length; n++) {
-            orienterLeMenu(menus_ouverts[n]);
-        }
-    });
-
-    // Fermer un menu « + » au clic a cote, ou avec Echap (le focus revient
-    // sur son bouton). / Close a "+" menu on outside click, or with Escape.
-    document.addEventListener("click", function (evenement) {
-        var menus_ouverts = document.querySelectorAll("details[data-menu-modeles][open]");
-        for (var n = 0; n < menus_ouverts.length; n++) {
-            if (!menus_ouverts[n].contains(evenement.target)) {
-                menus_ouverts[n].open = false;
-            }
-        }
-    });
-    document.addEventListener("keydown", function (evenement) {
-        if (evenement.key !== "Escape") {
-            return;
-        }
-        var menus_ouverts = document.querySelectorAll("details[data-menu-modeles][open]");
-        for (var n = 0; n < menus_ouverts.length; n++) {
-            menus_ouverts[n].open = false;
-            menus_ouverts[n].querySelector("summary").focus();
-        }
+        var evenement_ouverture = new CustomEvent("apercu:ouvrir-menu-ajout", {
+            detail: {
+                url_du_menu: bouton_ajout.getAttribute("data-ouvrir-menu-ajout"),
+                bouton_d_origine: bouton_ajout,
+            },
+        });
+        window.parent.document.dispatchEvent(evenement_ouverture);
     });
 
     // Les barres sont dans le conteneur : htmx doit activer leurs boutons.
