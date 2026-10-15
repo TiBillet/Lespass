@@ -522,6 +522,10 @@ def test_liaison_par_qrcode_d_une_carte_absente_en_local_la_cree_avec_sa_proprie
         True,
     )
     client_de_la_liaison.NFCcard.linkwallet_cardqrcode.return_value = carte_fedow.fiche
+    # Apres la liaison, Fedow liste cette carte comme la seule de la personne. Un
+    # MagicMock nu rendrait une liste vide : l'alignement detacherait ses cartes locales.
+    # / After the link, Fedow lists this card as the person's only one.
+    client_de_la_liaison.NFCcard.retrieve_card_by_signature.return_value = [carte_fedow.fiche]
 
     navigateur = ClientHttpDjango(HTTP_HOST=DOMAINE_DU_LIEU)
     with patch.object(FedowConfig, "can_fedow", return_value=True):

@@ -320,6 +320,108 @@ def relier_la_copie_locale_de_la_carte(fiche_fedow, utilisateur, ip="0.0.0.0"):
         return None
 
 
+def retirer_la_carte_des_cartes_primaires(carte):
+    """
+    Retire une carte des cartes primaires de caissier, dans tous les lieux.
+    / Removes a card from the cashier primary cards, in every venue.
+
+    LOCALISATION : QrcodeCashless/services.py
+
+    CartePrimaire vit dans le schéma de chaque lieu (app laboutik, TENANT_APPS) : on les
+    parcourt tous. Les emplacements vides du pool (WAITING_CONFIG) n'ont pas forcément
+    leurs tables : on les saute. Un lieu en erreur n'empêche pas de traiter les autres.
+    / CartePrimaire lives in each venue's schema: walk them all, skip the empty pool slots.
+
+    APPELÉE PAR : `BaseBillet/views.py`, `declarer_la_carte_perdue`, et
+    `aligner_les_cartes_locales_sur_fedow` (carte détachée chez Fedow).
+
+    :param carte: CarteCashless qui ne doit plus ouvrir de caisse
+    """
+    from django_tenants.utils import tenant_context
+    from laboutik.models import CartePrimaire
+
+    lieux_a_parcourir = Client.objects.exclude(schema_name="public").exclude(
+        categorie=Client.WAITING_CONFIG,
+    )
+    for lieu in lieux_a_parcourir:
+        try:
+            with tenant_context(lieu):
+                nombre_supprime, _detail_suppression = CartePrimaire.objects.filter(
+                    carte=carte,
+                ).delete()
+            if nombre_supprime:
+                logger.info(
+                    f"Carte {carte.number} retirée des cartes primaires de caissier du "
+                    f"lieu {lieu.schema_name}."
+                )
+        except Exception as erreur_carte_primaire:
+            logger.error(
+                f"Impossible de retirer la carte primaire {carte.number} du lieu "
+                f"{lieu.schema_name} ({erreur_carte_primaire}). Elle ouvre peut-être encore "
+                f"la caisse de ce lieu."
+            )
+
+
+def aligner_les_cartes_locales_sur_fedow(utilisateur, cartes_chez_fedow, ip="0.0.0.0"):
+    """
+    Met les cartes locales d'une personne d'accord avec ses cartes chez l'ancien Fedow.
+    / Brings a person's local cards in line with their cards on the old Fedow.
+
+    LOCALISATION : QrcodeCashless/services.py
+
+    Fedow fait foi pour le lien carte <-> personne : toute liaison passe d'abord par lui
+    (/qr/link, admin, caisse V2, commande `lier_carte`). Mais Fedow peut détacher une
+    carte sans prévenir Lespass : la caisse V1 le fait quand elle vide une carte en mode
+    VOID (carte perdue). La copie locale garde alors l'ancienne personne, et sa
+    prochaine liaison est refusée en local (`UserADejaCarte`).
+
+    FLUX :
+    1. On note les cartes de la personne chez Fedow (leur `qrcode_uuid`). Ce relevé est
+       fait EN PREMIER : une fiche illisible lève une erreur avant tout détachement.
+    2. Une carte liée à la personne en local, absente chez Fedow : on la détache.
+    3. Une carte de la personne chez Fedow, pas liée à elle en local : on la relie
+       (`relier_la_copie_locale_de_la_carte`).
+    / 1. Read Fedow's card list first. 2. Detach local cards Fedow no longer has.
+      3. Link Fedow cards missing locally.
+
+    APPELÉE PAR : `BaseBillet/views.py`, `ScanQrCode.link` et `MyAccount.list`.
+    L'appelant ne la lance qu'avec une réponse de Fedow réussie : une liste vide veut
+    dire « aucune carte », et détache donc toutes les cartes locales de la personne.
+
+    :param utilisateur: TibilletUser
+    :param cartes_chez_fedow: liste des fiches rendues par `retrieve_card_by_signature`
+    :param ip: str, IP de la requête
+    :raises CarteDejaLiee, UserADejaCarte: la base locale refuse une liaison
+    """
+    from fedow_core.services import CarteService
+
+    qrcode_uuids_chez_fedow = set()
+    for fiche_fedow in cartes_chez_fedow:
+        qrcode_uuids_chez_fedow.add(str(fiche_fedow["qrcode_uuid"]))
+
+    qrcode_uuids_lies_en_local = set()
+    for carte_locale in utilisateur.cartecashless_set.all():
+        carte_toujours_a_lui_chez_fedow = str(carte_locale.uuid) in qrcode_uuids_chez_fedow
+        if carte_toujours_a_lui_chez_fedow:
+            qrcode_uuids_lies_en_local.add(str(carte_locale.uuid))
+            continue
+
+        carte_detachee = CarteService.declarer_perdue(
+            user=utilisateur, number_printed=carte_locale.number,
+        )
+        retirer_la_carte_des_cartes_primaires(carte_detachee)
+        logger.warning(
+            f"Carte {carte_locale.number} détachée chez Fedow mais encore liée en local à "
+            f"{utilisateur.email} : détachée en local."
+        )
+
+    for fiche_fedow in cartes_chez_fedow:
+        deja_liee_en_local = str(fiche_fedow["qrcode_uuid"]) in qrcode_uuids_lies_en_local
+        if deja_liee_en_local:
+            continue
+        relier_la_copie_locale_de_la_carte(fiche_fedow, utilisateur, ip=ip)
+
+
 def _trouver_le_lieu_d_origine(fiche_fedow, fedow_config, tag_id):
     """
     Trouve le lieu (Client) qui a émis la carte, d'après la fiche Fedow.

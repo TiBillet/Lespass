@@ -50,6 +50,7 @@ Lancement / Run :
 import logging
 import secrets
 import uuid as uuid_module
+from unittest import mock
 
 import pytest
 from django.contrib.messages import get_messages
@@ -339,8 +340,9 @@ FACONS_DE_DECLARER_LA_PERTE = {
             raises=AssertionError,
             reason=(
                 "Trou connu : une carte detachee chez Fedow sans passer par Lespass reste "
-                "liee dans CarteCashless.user. Piste de fond a choisir (verification Fedow "
-                "au scan en caisse V2, webhook Fedow, ou reconciliation)."
+                "liee dans CarteCashless.user jusqu'au prochain /qr/link/ ou /my_account/ "
+                "du porteur (aligner_les_cartes_locales_sur_fedow). Entre-temps, la caisse "
+                "V2 lit encore le lien local (verification Fedow au scan a decider)."
             ),
         ),
     ),
@@ -495,6 +497,172 @@ def test_le_bouton_repare_une_carte_deja_detachee_chez_fedow(
 
     carte_b = _carte_connue_de_fedow_et_de_lespass(tenant, detail_des_cartes)
     _lier_la_carte_comme_le_parcours_qr(tenant, utilisateur, carte_b)
+
+
+# ---------------------------------------------------------------------------
+# Carte detachee chez Fedow par la caisse V1 : Lespass se recale sur Fedow
+# / Card detached on Fedow by the V1 register: Lespass realigns on Fedow
+# ---------------------------------------------------------------------------
+# La caisse V1 (LaBoutik) vide une carte en mode VOID : Fedow la detache de son porteur,
+# sans prevenir Lespass. On simule seulement ce detachement, par un appel Fedow direct :
+# le remboursement prealable de la caisse V1 ne change rien au lien carte <-> porteur.
+# / The V1 register VOIDs a card: Fedow detaches it without telling Lespass. Only the
+#   detachment is simulated, by a direct Fedow call.
+
+
+def _carte_detachee_chez_fedow_seulement(tenant, detail, prefixe):
+    """
+    Un porteur et sa carte A, lies des deux cotes, puis A detachee chez Fedow seulement.
+    / A holder and card A, linked both sides, then A detached on Fedow only.
+    """
+    utilisateur, carte_a = _carte_liee_et_son_porteur(tenant, detail, prefixe)
+    _perte_declaree_par_un_autre_client_fedow(tenant, utilisateur, carte_a, admin_user=None)
+    with tenant_context(tenant):
+        carte_a.refresh_from_db()
+        assert carte_a.user_id == utilisateur.pk, "Precondition : A est encore liee en local."
+    return utilisateur, carte_a
+
+
+def test_liaison_par_qrcode_apres_un_void_v1_detache_l_ancienne_carte_et_lie_la_nouvelle(
+    tenant, detail_des_cartes, caplog,
+):
+    """
+    Carte A detachee chez Fedow par la caisse V1, encore liee en local. Le porteur lie une
+    carte B par /qr/link/ : A est detachee en local, B est liee en local, sans alerte de
+    divergence.
+    / Card A detached on Fedow by the V1 register. The holder links card B through
+    /qr/link/: A is detached locally, B is linked locally, no divergence alert.
+    """
+    utilisateur, carte_a = _carte_detachee_chez_fedow_seulement(
+        tenant, detail_des_cartes, "voidlink",
+    )
+    carte_b = _carte_connue_de_fedow_et_de_lespass(tenant, detail_des_cartes)
+
+    navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
+    with caplog.at_level(logging.WARNING), override_settings(DEBUG=True), \
+            mock.patch("BaseBillet.views.get_or_create_user", return_value=utilisateur):
+        reponse = navigateur.post("/qr/link/", {
+            "email": utilisateur.email,
+            "emailConfirmation": utilisateur.email,
+            "cgu": True,
+            "qrcode_uuid": str(carte_b.uuid),
+        })
+    assert reponse.status_code == 200, f"statut inattendu : {reponse.status_code}"
+
+    with tenant_context(tenant):
+        carte_a.refresh_from_db()
+        carte_b.refresh_from_db()
+        assert carte_a.user_id is None, "L'ancienne carte est toujours liee en local."
+        assert carte_b.user_id == utilisateur.pk, "La nouvelle carte n'est pas liee en local."
+    alertes = [r for r in caplog.records if "Divergence" in r.getMessage()]
+    assert not alertes, f"Alerte de divergence inattendue : {[r.getMessage() for r in alertes]}"
+
+
+def test_mon_compte_apres_un_void_v1_detache_l_ancienne_carte_en_local(
+    tenant, detail_des_cartes,
+):
+    """
+    Carte detachee chez Fedow par la caisse V1, encore liee en local. Le porteur ouvre
+    /my_account/ : la carte est detachee en local.
+    / Card detached on Fedow by the V1 register. The holder opens /my_account/: the card
+    is detached locally.
+    """
+    utilisateur, carte_a = _carte_detachee_chez_fedow_seulement(
+        tenant, detail_des_cartes, "voidcompte",
+    )
+
+    navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
+    navigateur.force_login(utilisateur)
+    with override_settings(DEBUG=True):
+        reponse = navigateur.get("/my_account/")
+    assert reponse.status_code == 200, f"statut inattendu : {reponse.status_code}"
+
+    with tenant_context(tenant):
+        carte_a.refresh_from_db()
+        assert carte_a.user_id is None, "Mon compte n'a pas aligne Lespass sur Fedow."
+
+
+def test_mon_compte_apres_un_void_v1_retire_la_carte_des_cartes_primaires(
+    tenant, detail_des_cartes,
+):
+    """
+    Une carte de caissier (laboutik.CartePrimaire) detachee chez Fedow par la caisse V1 :
+    a l'ouverture de /my_account/ par son ancien porteur, elle est retiree des cartes
+    primaires. Une carte perdue ne doit plus ouvrir de caisse.
+    / A cashier card detached on Fedow by the V1 register is removed from the primary
+    cards when its former holder opens /my_account/.
+    """
+    from laboutik.models import CartePrimaire
+
+    utilisateur, carte_a = _carte_liee_et_son_porteur(tenant, detail_des_cartes, "voidcaissier")
+    with tenant_context(tenant):
+        CartePrimaire.objects.create(carte=carte_a)
+    _perte_declaree_par_un_autre_client_fedow(tenant, utilisateur, carte_a, admin_user=None)
+
+    navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
+    navigateur.force_login(utilisateur)
+    with override_settings(DEBUG=True):
+        reponse = navigateur.get("/my_account/")
+    assert reponse.status_code == 200, f"statut inattendu : {reponse.status_code}"
+
+    with tenant_context(tenant):
+        assert not CartePrimaire.objects.filter(carte=carte_a).exists(), (
+            "La carte de caissier detachee chez Fedow ouvre encore la caisse du lieu."
+        )
+
+
+def test_mon_compte_garde_une_carte_liee_des_deux_cotes(tenant, detail_des_cartes, caplog):
+    """
+    Carte liee des deux cotes : /my_account/ ne la detache pas, et ne leve ni
+    detachement ni alerte. C'est le cas de presque toutes les visites : une erreur de
+    comparaison entre Fedow et Lespass detacherait ici toutes les cartes.
+    / Card linked on both sides: /my_account/ keeps it, without any detach or alert.
+    """
+    utilisateur, carte = _carte_liee_et_son_porteur(tenant, detail_des_cartes, "garde")
+
+    navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
+    navigateur.force_login(utilisateur)
+    with caplog.at_level(logging.WARNING), override_settings(DEBUG=True):
+        reponse = navigateur.get("/my_account/")
+    assert reponse.status_code == 200, f"statut inattendu : {reponse.status_code}"
+
+    with tenant_context(tenant):
+        carte.refresh_from_db()
+        assert carte.user_id == utilisateur.pk, "Mon compte a detache une carte valide."
+    messages_inattendus = [
+        r.getMessage() for r in caplog.records
+        if "détachée en local" in r.getMessage() or "Divergence" in r.getMessage()
+    ]
+    assert not messages_inattendus, f"Messages inattendus : {messages_inattendus}"
+
+
+def test_mon_compte_fedow_injoignable_ne_touche_pas_aux_cartes_locales(
+    tenant, detail_des_cartes,
+):
+    """
+    Fedow ne repond pas a l'ouverture de /my_account/ : la page s'affiche, et la carte
+    liee en local le reste. Une panne de Fedow ne doit jamais detacher une carte.
+    / Fedow down when opening /my_account/: the page renders, the local card stays linked.
+    """
+    utilisateur, carte = _carte_liee_et_son_porteur(tenant, detail_des_cartes, "panne")
+
+    faux_client_fedow = mock.MagicMock()
+    erreur_du_fedow = ConnectionError("Fedow injoignable (test)")
+    faux_client_fedow.NFCcard.retrieve_card_by_signature.side_effect = erreur_du_fedow
+    faux_client_fedow.wallet.cached_retrieve_by_signature.side_effect = erreur_du_fedow
+
+    navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
+    navigateur.force_login(utilisateur)
+    with mock.patch("BaseBillet.views.FedowAPI", return_value=faux_client_fedow):
+        reponse = navigateur.get("/my_account/")
+    assert reponse.status_code == 200, f"statut inattendu : {reponse.status_code}"
+    assert faux_client_fedow.NFCcard.retrieve_card_by_signature.called, (
+        "Mon compte n'a pas demande les cartes a Fedow : le test ne prouve rien."
+    )
+
+    with tenant_context(tenant):
+        carte.refresh_from_db()
+        assert carte.user_id == utilisateur.pk, "Une panne de Fedow a detache la carte."
 
 
 def test_carte_liee_localement_a_un_autre_usager_reste_a_lui_et_alerte(

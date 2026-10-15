@@ -154,7 +154,7 @@ def test_une_changelist_surligne_son_module(lieu_avec_agenda):
     assert surlignes == ["Agenda et Billetterie"], (
         "Une changelist doit surligner SON module, et lui seul."
     )
-    assert "Lespass" in deplies, (
+    assert "Espace en ligne" in deplies, (
         "Le domaine du module courant doit etre deplie, sinon le lien "
         "surligne reste invisible."
     )
@@ -192,7 +192,7 @@ def test_la_page_du_module_reste_surlignee(lieu_avec_agenda):
     surlignes, deplies = _rail(tenant, utilisateur, "/admin/module/agenda/")
 
     assert surlignes == ["Agenda et Billetterie"]
-    assert "Lespass" in deplies
+    assert "Espace en ligne" in deplies
 
 
 @pytest.mark.django_db

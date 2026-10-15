@@ -60,6 +60,7 @@ from AuthBillet.models import TibilletUser
 from BaseBillet.models import Configuration, FormbricksConfig
 from Customers.models import Client
 from crowds.models import CrowdConfig
+from QrcodeCashless.models import CarteCashless
 
 URL_DU_GENERATEUR = "/qrcodescanpay/get_generator/"
 URL_DU_SCANNER = "/qrcodescanpay/get_scanner/"
@@ -98,15 +99,21 @@ def balise_par_testid(html, testid):
     return None
 
 
-def faux_fedow(avec_une_carte):
+def faux_fedow(carte_liee=None):
     """
     Un faux client Fedow : aucune monnaie, avec ou sans carte liée.
-    / A fake Fedow client: no currency, with or without a linked card.
+    La carte liée rendue par Fedow est la même que la carte locale de la personne :
+    « Mon compte » aligne les cartes locales sur Fedow, une carte inconnue en local
+    serait reliée, et une carte locale absente chez Fedow serait détachée.
+    / A fake Fedow client: no currency, with or without a linked card. The card
+    Fedow returns is the person's local card, so the account alignment changes nothing.
+
+    :param carte_liee: CarteCashless liée à la personne, ou None
     """
     faux_client_fedow = MagicMock()
-    if avec_une_carte:
+    if carte_liee is not None:
         faux_client_fedow.NFCcard.retrieve_card_by_signature.return_value = [
-            {"number_printed": "TEST0001"}
+            {"qrcode_uuid": carte_liee.uuid, "number_printed": carte_liee.number}
         ]
     else:
         faux_client_fedow.NFCcard.retrieve_card_by_signature.return_value = []
@@ -233,10 +240,24 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
         Rend `(code_http, html)`.
         / Renders the page for this user with mocked skin and Fedow.
         """
+        # La carte locale de la personne : celle qu'elle a déjà, sinon une carte créée
+        # dans la transaction du test.
+        # / The person's local card: the one she already has, else one created here.
+        carte_liee = None
+        if avec_une_carte:
+            carte_liee = CarteCashless.objects.filter(user=utilisateur).first()
+        if avec_une_carte and carte_liee is None:
+            carte_liee = CarteCashless.objects.create(
+                tag_id=uuid.uuid4().hex[:8].upper(),
+                number=uuid.uuid4().hex[:8].upper(),
+                uuid=uuid.uuid4(),
+                user=utilisateur,
+            )
+
         navigateur = TenantClient(self.tenant, HTTP_ACCEPT_LANGUAGE="fr")
         navigateur.force_login(utilisateur)
         with patch("BaseBillet.views.get_skin_courant", return_value=skin):
-            with faux_fedow(avec_une_carte=avec_une_carte):
+            with faux_fedow(carte_liee=carte_liee):
                 reponse = navigateur.get(chemin)
         return reponse.status_code, reponse.content.decode()
 
@@ -512,10 +533,11 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
                     adherent, chemin, skin="V2", avec_une_carte=True
                 )
                 assert code_http == 200
+                numero_de_la_carte = CarteCashless.objects.get(user=adherent).number
                 bouton = balise_par_testid(html, "compte-carte-perdue")
                 assert bouton is not None
-                assert bouton[1]["hx-get"] == "/my_account/TEST0001/lost_my_card/"
-                assert "TEST0001" in bouton[1]["hx-confirm"]
+                assert bouton[1]["hx-get"] == f"/my_account/{numero_de_la_carte}/lost_my_card/"
+                assert numero_de_la_carte in bouton[1]["hx-confirm"]
 
     def test_un_seul_gestionnaire_de_confirmation_par_page(self):
         """Le gestionnaire htmx:confirm vit dans le shell V2, une seule fois. Une page

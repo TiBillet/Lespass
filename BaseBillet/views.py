@@ -761,6 +761,28 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                                  _("Cette carte n'est pas reconnue. Elle n'est peut-être pas encore activée."))
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
+        # D'abord, on recopie l'état de Fedow : une ancienne carte détachée chez Fedow
+        # sans passer par Lespass (VOID de la caisse V1) bloquerait sinon la liaison
+        # locale de la nouvelle (`UserADejaCarte`). Un échec ici (sur une AUTRE carte de
+        # la personne) ne doit pas empêcher la liaison locale de la nouvelle, plus bas.
+        # / First copy Fedow's state: an old card detached on Fedow behind Lespass's back
+        #   (V1 register VOID) would otherwise block the new card's local link. A failure
+        #   here must not prevent the new card's local link below.
+        try:
+            from QrcodeCashless.services import aligner_les_cartes_locales_sur_fedow
+
+            cartes_du_porteur_chez_fedow = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+            aligner_les_cartes_locales_sur_fedow(
+                user,
+                cartes_du_porteur_chez_fedow,
+                ip=get_client_ip(request),
+            )
+        except Exception as erreur_alignement:
+            logger.error(
+                f"Divergence Fedow/Lespass sur les cartes de {user.email} : "
+                f"alignement local impossible ({erreur_alignement})."
+            )
+
         # Mettre la copie LOCALE de la carte d'accord : elle porte la même personne.
         # Sans elle, le point de vente V2 ne sait pas identifier l'adherent au comptoir.
         # La carte existe ici : liaison locale (transactionnelle et idempotente). Elle
@@ -1194,7 +1216,6 @@ def declarer_la_carte_perdue(porteur, numero_carte, declarant):
     """
     from fedow_connect.fedow_api import CarteNonLieeAuPorteurChezFedow
     from fedow_core.services import CarteService
-    from laboutik.models import CartePrimaire
     from QrcodeCashless.models import CarteCashless
 
     # Fedow et Lespass stockent les numeros en majuscules et comparent la casse exacte.
@@ -1257,31 +1278,10 @@ def declarer_la_carte_perdue(porteur, numero_carte, declarant):
         )
 
     # --- 3. La carte primaire de caissier, dans tous les lieux / Cashier card, all venues ---
-    # CartePrimaire vit dans le schema de chaque lieu (app laboutik, TENANT_APPS) : on les
-    # parcourt tous. Les emplacements vides du pool (WAITING_CONFIG) n'ont pas forcement
-    # leurs tables : on les saute. Un lieu en erreur n'empeche pas de traiter les autres.
-    # / CartePrimaire lives in each venue's schema: walk them all, skip the empty pool slots.
     if carte_detachee_en_local is not None:
-        lieux_a_parcourir = Client.objects.exclude(schema_name="public").exclude(
-            categorie=Client.WAITING_CONFIG,
-        )
-        for lieu in lieux_a_parcourir:
-            try:
-                with tenant_context(lieu):
-                    nombre_supprime, _detail_suppression = CartePrimaire.objects.filter(
-                        carte=carte_detachee_en_local,
-                    ).delete()
-                if nombre_supprime:
-                    logger.info(
-                        f"Carte perdue : carte {numero_carte} retiree des cartes primaires "
-                        f"de caissier du lieu {lieu.schema_name}."
-                    )
-            except Exception as erreur_carte_primaire:
-                logger.error(
-                    f"Carte perdue : impossible de retirer la carte primaire {numero_carte} "
-                    f"du lieu {lieu.schema_name} ({erreur_carte_primaire}). Elle ouvre peut-etre "
-                    f"encore la caisse de ce lieu."
-                )
+        from QrcodeCashless.services import retirer_la_carte_des_cartes_primaires
+
+        retirer_la_carte_des_cartes_primaires(carte_detachee_en_local)
 
     logger.info(
         f"Carte perdue : carte {numero_carte} de {porteur.email}, declaree par "
@@ -1366,14 +1366,38 @@ class MyAccount(viewsets.ViewSet):
                                  _("Please validate your email to access all the features of your profile area."))
 
 
+        # Les cartes de la personne chez Fedow, qui fait foi pour le lien carte <-> personne.
+        # On en profite pour réparer la copie locale : la caisse V1 peut détacher une carte
+        # chez Fedow (VOID) sans prévenir Lespass. Fedow injoignable : la page s'affiche
+        # quand même, sans rien toucher en local.
+        # / The person's cards on Fedow, which is authoritative for the card <-> person
+        #   link. Also repairs the local copy. Fedow down: the page still renders.
+        cartes_chez_fedow = None
+        try:
+            cartes_chez_fedow = FedowAPI().NFCcard.retrieve_card_by_signature(user)
+        except Exception as erreur_fedow:
+            logger.warning(f"Mon compte : cartes de {user.email} illisibles chez Fedow : {erreur_fedow}")
+
+        if cartes_chez_fedow is not None:
+            try:
+                from QrcodeCashless.services import aligner_les_cartes_locales_sur_fedow
+
+                aligner_les_cartes_locales_sur_fedow(
+                    user, cartes_chez_fedow, ip=get_client_ip(request),
+                )
+            except Exception as erreur_alignement:
+                logger.error(
+                    f"Divergence Fedow/Lespass sur les cartes de {user.email} : "
+                    f"alignement local impossible ({erreur_alignement})."
+                )
+
         if get_skin_courant() == "V2":
 
-            # Get fedow info
-            fedowAPI = FedowAPI()
-            card = fedowAPI.NFCcard.retrieve_card_by_signature(user)
-            # If we found a card get it (because `retrieve_card_by_signature` return an array)
-            if card:
-                card = card[0]
+            # La première carte de la personne chez Fedow, lue plus haut.
+            # / The person's first card on Fedow, read above.
+            card = None
+            if cartes_chez_fedow:
+                card = cartes_chez_fedow[0]
             # card = {"number_printed":"hiii"}
             tokens = get_distant_fedow_tokens(request, template_context["config"])
 
