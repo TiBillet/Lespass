@@ -98,8 +98,17 @@ class TestMenuAjoutDansUneDialog:
     def test_la_dialog_est_centree_dans_l_ecran(
         self, page, login_as_admin, page_d_un_seul_bloc
     ):
-        """Le centre de la dialog est le centre de l'ecran (a 2 px pres).
-        / The dialog's center is the viewport's center (within 2 px).
+        """Le centre de la dialog est le centre de l'ecran (a 10 px pres).
+        / The dialog's center is the viewport's center (within 10 px).
+
+        10 px et non 2 : l'admin reserve la gouttiere de la barre de defilement
+        (`html { scrollbar-gutter: stable }`, static/css/tibillet-admin.css). La dialog
+        se centre dans la largeur SANS cette gouttiere : 7,5 px a gauche du centre de
+        l'ecran avec une gouttiere de 15 px. Une dialog non centree (reset d'Unfold qui
+        remet margin a 0) est decalee de centaines de pixels : la garde reste utile.
+        / 10 px, not 2: the admin reserves the scrollbar gutter, the dialog centers in
+        the width without it (7.5 px left of center). An uncentered dialog is off by
+        hundreds of pixels.
         """
         login_as_admin(page)
         dialog_du_menu = _ouvrir_le_menu_du_premier_bloc(page, page_d_un_seul_bloc)
@@ -112,7 +121,7 @@ class TestMenuAjoutDansUneDialog:
         centre_vertical_de_la_dialog = (
             boite_de_la_dialog["y"] + boite_de_la_dialog["height"] / 2
         )
-        assert abs(centre_horizontal_de_la_dialog - taille_de_l_ecran["width"] / 2) <= 2
+        assert abs(centre_horizontal_de_la_dialog - taille_de_l_ecran["width"] / 2) <= 10
         assert abs(centre_vertical_de_la_dialog - taille_de_l_ecran["height"] / 2) <= 2
 
     def test_le_bouton_de_l_en_tete_ouvre_la_meme_dialog(

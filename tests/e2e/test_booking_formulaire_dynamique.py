@@ -166,13 +166,17 @@ def test_panier_les_reponses_arrivent_sur_le_booking_et_dans_l_admin(
     formulaire.locator(
         f'[data-testid="resource-booking-form-field-{ressource["materiel"]}"][value="Ampli"]'
     ).check()
-    page.locator('[data-testid="resource-add-to-cart"]').click()
-    page.wait_for_load_state("networkidle")
+    # On attend la REPONSE de chaque requete HTMX : `wait_for_load_state("networkidle")`
+    # rend la main tout de suite sur une page deja chargee, sans attendre la requete
+    # lancee par le clic. Le test irait alors au panier avant que l'ajout soit enregistre.
+    # / Wait for each HTMX RESPONSE: networkidle returns at once on a loaded page.
+    with page.expect_response(lambda reponse: "/panier/add/resource/" in reponse.url):
+        page.locator('[data-testid="resource-add-to-cart"]').click()
 
     page.goto("/panier/")
     page.wait_for_load_state("networkidle")
-    page.locator('[data-testid="panier-checkout"]').click()
-    page.wait_for_load_state("networkidle")
+    with page.expect_response(lambda reponse: "/panier/checkout/" in reponse.url):
+        page.locator('[data-testid="panier-checkout"]').click()
 
     assert reponses_du_booking(django_shell, email, ressource["ressource"]) == {
         "Nom du groupe": "Les Ours",

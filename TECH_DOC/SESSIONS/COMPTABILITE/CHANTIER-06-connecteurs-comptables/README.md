@@ -412,3 +412,41 @@ tout ou rien échoue (2 échecs), empreinte identique après restauration.
   (dev) » reliée au 707000, codes journal `TAPAA`… posés ;
 - les produits du Bar de la démo **n'ont pas de taux de TVA** : 707 sans ligne de TVA.
   Donnée de démo de TiBillet, pas un défaut du module.
+
+## 11. Démo, guides et installation propre (2026-10-14 → 15)
+
+**Démo d'un flush** (`create_test_pos_data`, `demo_data_v2`, `_demo_data_v2_ventes.py`,
+test `tests/pytest/test_demo_ventes_de_la_veille.py`, suite 3905 passed) : TVA des
+produits de caisse (alcool 20 %, reste 10 %, billets 5,5 %), catégories de caisse reliées
+au 707000, et 5 ventes d'**hier** écrites par le vrai moteur (Bar espèces/CB, 2 billets et
+1 adhésion en ligne) puis une **J par le vrai moteur** (105 €, journaux BAR et WEB).
+L'étape ne fait rien si le lieu a déjà une vente ou une J.
+
+**Installation sur un Dolibarr 24.0.1 neuf** (ancienne base gardée dans
+`dolibarr_stack/db.avant-tuto-2026-10-15` et `documents.avant-tuto-2026-10-15`) : import de
+la J n° 1, balance Dolibarr = balance TiBillet au centime (105 €). Trouvé et corrigé dans le
+module (non commité) :
+- le module **« Travaux planifiés » (modCron) n'est pas actif** sur une base neuve →
+  `cron_run_jobs.php` annule la tâche. Le module TiBillet **dépend** maintenant de
+  `modCron` (activé avec lui) ;
+- la constante **`CRON_KEY` est vide** sur une base neuve → « securitykey … does not
+  match ». Ne se règle pas dans le module : écrit dans le guide et le README ;
+- libellé de la tâche `TiBilletImportDesClotures:tibillet@tibillet` (traductions chargées
+  dans la fiche de la tâche) ; l'ancien libellé laisse une tâche en double à supprimer
+  (aucune installation hors dev, donc sans effet) ;
+- icône du module : `img/object_tibillet.png` (logo carré « tiB »).
+
+**Publication** (dépôt `github.com/TiBillet/tibillet-dolibarr`) : `make release` (version lue
+dans le descripteur, zip `module_tibillet-<version>.zip` avec un dossier `tibillet/`, exigé
+par Dolibarr ; tag ; `gh release`). `.gitattributes` exclut du zip `scripts/`, `docs/` et
+l'outillage.
+
+**Guides FALC** : source locale `tibillet-dolibarr/docs/01-un-plan-comptable.md` et
+`02-relier-tibillet-a-dolibarr.md` (+ `docs/images/`, e-mails floutés), poussés sur
+notes.liiib.re (« Un plan comptable », « Dolibarr »). Piège : le MCP Docs n'enregistre que
+si le document est ouvert dans le navigateur du mainteneur ; preuve = `updated_at` qui
+avance ; images converties seulement après un rechargement (voir la mémoire du projet).
+
+**Suite possible** (à choisir) : case « santé » sur la page de réglages (cron actif, clé,
+dernier passage) ; e-mail en cas d'échec de l'import ; points de sécurité de l'API (§13 de
+la fiche 06-A) ; connecteur suivant (Dokos, Paheko, Pennylane).
