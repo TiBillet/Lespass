@@ -69,6 +69,7 @@ from celery import shared_task
 from django.db import connection, transaction
 from django.db.models import Min
 from django.utils import timezone
+from django.utils.translation import gettext
 from django_tenants.utils import tenant_context
 
 from BaseBillet.models import Configuration
@@ -679,8 +680,8 @@ def mise_en_service_du_lieu():
 
     C'est la SEULE lecture de la mise en service (fiche R §11).
     APPELÉE PAR : `demander_l_email_automatique_si_configure` (aucun mail pour une
-    clôture finie avant), `comptabilite/admin.py` `ClotureCaisseAdmin.exporter_fec`
-    (FEC refusé avant).
+    clôture finie avant), `refus_du_fec_avant_la_mise_en_service` (FEC refusé avant,
+    pour le bouton de l'admin et pour l'API comptable).
     / The ONLY reader of the go-live.
 
     :return: un datetime avec fuseau, ou None
@@ -689,6 +690,95 @@ def mise_en_service_du_lieu():
     if j_de_reprise is None:
         return None
     return j_de_reprise.datetime_fin
+
+
+def refus_du_fec_avant_la_mise_en_service(cloture):
+    """
+    La phrase du refus du FEC d'une clôture d'avant la mise en service, ou None si son
+    FEC est permis.
+    / The refusal sentence for the FEC of a closure before the go-live, or None.
+
+    LOCALISATION : comptabilite/tasks.py
+
+    Refusés (fiche R §11.4, Q-R3) : la J « reprise », et toute H / M / A qui commence
+    AVANT la mise en service. L'historique repris tient dans une seule J de plusieurs
+    années : son écriture serait fausse. Une période qui commence exactement à la mise
+    en service est acceptée. Un lieu sans J reprise n'a rien à refuser.
+    C'est la SEULE règle : le bouton FEC de l'admin et l'API comptable l'appellent
+    tous les deux (spec 06-A, A10).
+    / Refused: the "reprise" J, and any H / M / A starting before the go-live. The only
+    rule, shared by the admin FEC button and the accounting API.
+
+    APPELÉE PAR : `comptabilite/admin.py` `ClotureCaisseAdmin.exporter_fec`,
+    `api_v2/views.py` `ClosureViewSet`.
+
+    :param cloture: une `ClotureCaisse`
+    :return: la phrase du refus (texte traduit), ou None
+    """
+    mise_en_service = mise_en_service_du_lieu()
+    if mise_en_service is None:
+        return None
+
+    periode_commencee_avant_la_mise_en_service = (
+        cloture.niveau in NIVEAUX_CALENDAIRES
+        and cloture.datetime_debut < mise_en_service
+    )
+    if not est_la_j_de_reprise(cloture) and not periode_commencee_avant_la_mise_en_service:
+        return None
+
+    # La date est montrée en heure du lieu, comme tous les affichages.
+    # / The date is shown in the venue's time zone.
+    fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+    date_de_mise_en_service = timezone.localtime(mise_en_service, fuseau_du_lieu).strftime(
+        "%d/%m/%Y"
+    )
+    return gettext(
+        "Le FEC commence à la date de mise en service de la "
+        "comptabilité (%(date)s). Pour avant, utilisez les rapports "
+        "mensuels."
+    ) % {"date": date_de_mise_en_service}
+
+
+def journees_a_importer(apres_le_numero=None):
+    """
+    Les clôtures J qu'un logiciel comptable peut importer, dans l'ordre des numéros.
+    / The J closures an accounting software can import, by number.
+
+    LOCALISATION : comptabilite/tasks.py
+
+    Une J à importer (spec 06-A, A4) :
+    - a des ventes (sa plage de ventes est remplie) : une J sans vente n'a pas
+      d'écriture ;
+    - n'est pas la J « reprise » : elle n'a pas de FEC (Q-R3).
+    Les H / M / A ne sont jamais importées : leur FEC n'est que la suite de leurs J.
+    `apres_le_numero` garde les J de numéro PLUS GRAND (le curseur du logiciel, A11) :
+    les numéros ne font que monter, dans l'ordre de création des clôtures. Une J créée
+    en retard par le filet, mais datée d'avant le passage précédent du logiciel, est
+    donc quand même rendue.
+    / J with sales, without the "reprise" J; `apres_le_numero` keeps higher numbers.
+
+    APPELÉE PAR : `api_v2/views.py` `ClosureViewSet.list`.
+
+    :param apres_le_numero: entier ≥ 0, ou None pour toutes les J
+    :return: liste de `ClotureCaisse` J
+    """
+    journees_avec_ventes = ClotureCaisse.objects.filter(
+        niveau=ClotureCaisse.NIVEAU_JOURNALIER,
+        numero_premiere_vente__isnull=False,
+        numero_derniere_vente__isnull=False,
+    ).order_by("numero_sequentiel")
+    if apres_le_numero is not None:
+        journees_avec_ventes = journees_avec_ventes.filter(
+            numero_sequentiel__gt=apres_le_numero
+        )
+
+    # La J reprise est écartée par la même règle que partout (`est_la_j_de_reprise`).
+    # / The "reprise" J is removed by the same rule as everywhere.
+    journees = []
+    for journee in journees_avec_ventes:
+        if not est_la_j_de_reprise(journee):
+            journees.append(journee)
+    return journees
 
 
 def demander_l_email_automatique_si_configure(schema_name, cloture):

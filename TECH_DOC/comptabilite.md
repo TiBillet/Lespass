@@ -173,6 +173,64 @@ message rouge explique pourquoi :
 - **Une écriture n'est pas équilibrée** : c'est le signe d'une donnée
   modifiée à la main dans la base. Prévenez la coopérative.
 
+### Importer le FEC dans Dolibarr, à la main
+
+Essayé avec Dolibarr 24.0.1. Les comptes et les journaux se créent **une
+seule fois** ; l'import se refait à chaque fois.
+
+**Une seule fois :**
+
+1. Activez les modules « Comptabilité (partie double) » et « Imports de
+   données ». Chargez un plan comptable (par exemple FR PCG18-ASSOC pour
+   une association). Définissez un **exercice comptable ouvert** : sans
+   lui, Dolibarr refuse toute écriture.
+2. Créez dans Dolibarr les comptes que TiBillet utilise et qui manquent.
+   Dolibarr écrit les comptes **sans les zéros de droite** : 707900 devient
+   7079, 517100 devient 5171. Avec le plan associatif, il manque en général
+   7079, 445711 à 445714 et 5171.
+3. Créez les journaux de vos points de vente (BAR, WEB, CAISSE…).
+
+**À chaque import :**
+
+1. Dans Dolibarr : Outils → Assistant import → « Écritures comptables -
+   format FEC ». Choisissez le format **CSV** et envoyez le fichier
+   renommé en `.csv`.
+2. Séparateur de champs : tapez `\t` (tabulation), puis « Modifier ».
+3. Associez les colonnes. Toutes vont dans le champ du même nom, **sauf** :
+   - **EcritureNum** → « Pièce » (`doc_ref`) : vous gardez « 12-BAR » ;
+   - **CompAuxNum** (toujours vide) → « Numéro de la pièce » (`piece_num`) :
+     Dolibarr numérote lui-même, sans risque de mélanger deux opérations ;
+   - **PieceRef** et **ValidDate** → rien. Sans date de validation,
+     l'écriture arrive **non verrouillée** : votre comptable la relit puis
+     la valide.
+4. Lancez la simulation, puis l'import.
+
+Attention : Dolibarr ne signale pas un import fait deux fois. Notez les
+journées déjà importées. Les profils d'import de Dolibarr ne se
+réappliquent pas (bug de Dolibarr 24.0.1) : refaites l'association des
+colonnes à chaque fois.
+
+## Relier votre logiciel comptable à TiBillet (API)
+
+Un logiciel comptable peut venir chercher lui-même les journées, chaque
+nuit, par l'API de TiBillet. Il lui faut une **clé d'API** :
+
+1. Dans l'admin : Clés d'API → Ajouter. Donnez-lui un nom (« Dolibarr »).
+2. Cochez **seulement** « Comptabilité (lecture) ». Cette clé ne peut rien
+   lire d'autre, et ne peut rien modifier.
+3. Si votre logiciel a une adresse IP fixe, remplissez « Ip source » : la
+   clé ne marchera que depuis cette adresse.
+4. Enregistrez : la clé s'affiche **une seule fois**. Copiez-la dans votre
+   logiciel comptable.
+5. Si vous changez de logiciel, supprimez la clé. Si une personne qui
+   connaissait la clé quitte le lieu, supprimez-la aussi et recréez-en une :
+   la clé marche tant qu'elle existe, même si son créateur n'est plus admin.
+
+Ce que le logiciel peut lire : la liste des journées, leurs écritures (les
+mêmes que le FEC) et le plan comptable du lieu. La J « reprise » et les
+journées d'avant la mise en service ne sont pas données. Détails
+techniques : `api_v2/GUIDELINES.md`, section « Comptabilité ».
+
 ## Le plan comptable du lieu
 
 Dans la barre de gauche, section **Ventes & comptabilité** :

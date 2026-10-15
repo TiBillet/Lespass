@@ -21,6 +21,7 @@ from BaseBillet.services_vente import (
     encaisser_vente,
     ouvrir_vente,
 )
+from comptabilite.ventilation import _fuseau_de_la_cloture, date_de_debut_de_service
 from crowds.models import Initiative, BudgetItem, Participation
 from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from fedow_connect.utils import dround
@@ -2432,3 +2433,97 @@ class PageCreateSerializer(serializers.Serializer):
             for bloc_ser, fichiers in blocs_prepares:
                 bloc_ser._persister(bloc_ser.validated_data, fichiers, page)
         return page
+
+
+# --------------------------------------------------------------------------- #
+#  Comptabilite : clotures, ecritures, plan comptable (spec 06-A)             #
+#  / Accounting: closures, entries, chart of accounts                         #
+# --------------------------------------------------------------------------- #
+#
+# Lecture seule : ces serializers ne valident rien, ils mettent en forme.
+# Les ecritures gardent les NOMS DES COLONNES DU FEC (JournalCode, CompteNum,
+# Debit...) : schema.org n'a aucun type pour une ecriture comptable, et le FEC est
+# la norme que tous les logiciels comptables francais connaissent (spec 06-A, A5).
+# Les montants sont des centimes entiers (A6). Pas de ValidDate : l'ecriture arrive
+# non verrouillee dans le logiciel du lieu (A7).
+# / Read-only. Entries keep the FEC column names; amounts in whole cents; no ValidDate.
+
+
+class LigneDEcritureComptableSerializer(serializers.Serializer):
+    """
+    Une ligne d'ecriture : un compte, son libelle, debit et credit en centimes.
+    Lit un dict de `ventiler_cloture` : {"compte", "libelle", "debit", "credit"}.
+    / One entry line: account, label, debit and credit in cents.
+    """
+
+    CompteNum = serializers.CharField(source="compte")
+    CompteLib = serializers.CharField(source="libelle")
+    Debit = serializers.IntegerField(source="debit")
+    Credit = serializers.IntegerField(source="credit")
+
+
+class EcritureComptableSerializer(serializers.Serializer):
+    """
+    Une ecriture (un journal d'une cloture J), aux noms du FEC, dates ISO.
+    Lit un dict de `ecritures_de_l_export` : {"journal", "libelle_du_journal",
+    "numero_d_ecriture", "date", "piece", "libelle", "lignes"}.
+    / One entry (one journal of a J closure), FEC names, ISO dates.
+    """
+
+    JournalCode = serializers.CharField(source="journal")
+    JournalLib = serializers.CharField(source="libelle_du_journal")
+    EcritureNum = serializers.CharField(source="numero_d_ecriture")
+    EcritureDate = serializers.DateField(source="date")
+    PieceRef = serializers.CharField(source="piece")
+    PieceDate = serializers.DateField(source="date")
+    EcritureLib = serializers.CharField(source="libelle")
+    lines = LigneDEcritureComptableSerializer(source="lignes", many=True)
+
+
+class ClotureAImporterSerializer(serializers.Serializer):
+    """
+    Une cloture J de la liste a importer. `startDate` / `endDate` sont ecrites dans
+    le fuseau fige dans le rapport de la J, comme `accountingDate` (la date des
+    ecritures : le jour local de sa premiere vente). `entries` et `fec` sont les
+    adresses des deux routes de la cloture.
+    / A J closure of the list to import, dates in the J's frozen time zone.
+
+    Contexte attendu : {"request": la requete DRF}.
+    """
+
+    uuid = serializers.UUIDField()
+    number = serializers.IntegerField(source="numero_sequentiel")
+    startDate = serializers.SerializerMethodField()
+    endDate = serializers.SerializerMethodField()
+    accountingDate = serializers.SerializerMethodField()
+    entries = serializers.SerializerMethodField()
+    fec = serializers.SerializerMethodField()
+
+    def get_startDate(self, cloture):
+        return cloture.datetime_debut.astimezone(_fuseau_de_la_cloture(cloture)).isoformat()
+
+    def get_endDate(self, cloture):
+        return cloture.datetime_fin.astimezone(_fuseau_de_la_cloture(cloture)).isoformat()
+
+    def get_accountingDate(self, cloture):
+        return date_de_debut_de_service(cloture).isoformat()
+
+    def get_entries(self, cloture):
+        requete = self.context["request"]
+        return requete.build_absolute_uri(f"/api/v2/closures/{cloture.uuid}/entries/")
+
+    def get_fec(self, cloture):
+        requete = self.context["request"]
+        return requete.build_absolute_uri(f"/api/v2/closures/{cloture.uuid}/fec/")
+
+
+class CompteComptableSerializer(serializers.Serializer):
+    """
+    Un compte du plan comptable du lieu : numero, libelle, actif ou non. Un compte
+    inactif est seulement cache des menus : il sert encore aux exports.
+    / One account of the venue's chart: number, label, active or not.
+    """
+
+    accountNumber = serializers.CharField(source="numero_de_compte")
+    name = serializers.CharField(source="libelle_du_compte")
+    active = serializers.BooleanField(source="est_actif")

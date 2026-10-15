@@ -15,7 +15,7 @@ from faker import Faker
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress, \
-    FormbricksConfig, FormbricksForms, ProductFormField, FederatedPlace, Membership
+    FormbricksConfig, FormbricksForms, ProductFormField, FederatedPlace, Membership, Tva
 from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI, AssetFedow
 from fedow_connect.models import FedowConfig
@@ -342,6 +342,13 @@ class Command(BaseCommand):
         # pour presenter le parcours de recharge cashless sans materiel physique.
         # / 2bis. Demo kiosk: a SIMULATED Stripe reader + a KI device.
         self._seed_kiosk_demo(options)
+
+        # 2ter. Ventes d'hier par le vrai moteur + leur clôture J : de quoi tester
+        # l'export comptable (FEC, API, Dolibarr) juste après un flush. Après le seed
+        # POS : il faut le point de vente Bar, ses produits et leur TVA.
+        # / 2ter. Yesterday's sales through the real engine + their J closure.
+        if not no_sales:
+            self._seed_ventes_de_la_veille(options)
 
         # 3. Alignement des wallets clients sur Fedow : fusionne le wallet LOCAL de chaque
         # carte cliente dans son wallet Fedow (meme uuid), supprimant le doublon « wallet
@@ -891,6 +898,39 @@ class Command(BaseCommand):
                 ))
 
         afficher_warning_cas_non_couverts(self.stdout)
+
+    def _seed_ventes_de_la_veille(self, options):
+        """
+        Ventes d'hier sur 'lespass', écrites par le vrai moteur de vente, puis la
+        clôture J créée par le vrai moteur des clôtures : l'API comptable la donne
+        tout de suite (journaux BAR et WEB, TVA 20 %, 10 %, 5,5 %).
+        / Yesterday's sales on 'lespass' through the real sales engine, then the J
+        closure through the real closure engine.
+        """
+        from Customers.models import Client as TenantClient
+        from Administration.management.commands._demo_data_v2_ventes import (
+            seed_ventes_de_la_veille_par_le_moteur,
+        )
+        from comptabilite.tasks import generer_cloture_pour_tenant
+
+        tenant = TenantClient.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            return
+
+        self.stdout.write("\nVentes d'hier par le moteur de vente (lespass)...")
+        with tenant_context(tenant):
+            resultat = seed_ventes_de_la_veille_par_le_moteur()
+        for phrase in resultat["ecrites"]:
+            self.stdout.write(self.style.SUCCESS(f"  + {phrase}"))
+        for phrase in resultat["sautees"]:
+            self.stdout.write(self.style.WARNING(f"  - {phrase}"))
+        if not resultat["ecrites"]:
+            return
+
+        # Hors de tout tenant_context : la tâche pose le sien (verrous courts).
+        # / Outside any tenant_context: the task sets its own.
+        uuid_de_la_j = generer_cloture_pour_tenant(schema_name=tenant.schema_name, niveau="J")
+        self.stdout.write(self.style.SUCCESS(f"  + Clôture J : uuid={uuid_de_la_j}"))
 
     def _seed_e2e_fixtures(self, options):
         """Cree les fixtures dediees a la suite E2E (tests/e2e/).
@@ -2664,6 +2704,11 @@ class Command(BaseCommand):
                                 'long_description': prod_def.get('long_description') or '',
                             }
                         )
+                        # Billet de spectacle : TVA 5,5 %. `update()` : aucun signal,
+                        # aucun appel Stripe. / Show ticket: 5.5 % VAT, no signal.
+                        if p.categorie_article == Product.BILLET:
+                            tva_des_billets, _ = Tva.objects.get_or_create(tva_rate=Decimal("5.50"))
+                            Product.objects.filter(pk=p.pk).update(tva=tva_des_billets)
                         # Tarifs du produit
                         for pr in prod_def.get('prices', []) or []:
                             defaults = {

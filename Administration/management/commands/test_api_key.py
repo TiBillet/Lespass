@@ -54,6 +54,7 @@ class Command(BaseCommand):
                 sale=True,
                 membership=True,
                 crowd=True,
+                comptabilite=True,
                 key=api_key,
             )
 

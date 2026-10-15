@@ -1,3 +1,4 @@
+import json
 import re
 import uuid as uuid_module
 from datetime import timedelta
@@ -11,6 +12,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets, status, serializers
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -26,6 +28,9 @@ from crowds.models import Initiative, BudgetItem, Participation, Vote
 from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from .permissions import SemanticApiKeyPermission
 from .serializers import (
+    ClotureAImporterSerializer,
+    CompteComptableSerializer,
+    EcritureComptableSerializer,
     EventSchemaSerializer,
     EventCreateSerializer,
     PostalAddressAsSchemaSerializer,
@@ -1404,3 +1409,277 @@ class BlocViewSet(viewsets.ViewSet):
         bloc = get_object_or_404(Bloc, uuid=uuid)
         bloc.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# --------------------------------------------------------------------------- #
+#  Comptabilite : l'API lue par les logiciels comptables (spec 06-A)          #
+#  / Accounting: the API read by accounting software                          #
+# --------------------------------------------------------------------------- #
+#
+# Chaque nuit, le logiciel comptable du lieu (Dolibarr, Paheko...) :
+# 1. demande la liste des clotures J apres la derniere qu'il a importee
+#    (GET /api/v2/closures/?after_number=12) ;
+# 2. pour chacune, lit ses ecritures (GET /api/v2/closures/<uuid>/entries/) ;
+# 3. les ecrit dans son grand livre, sans les verrouiller.
+# Il peut aussi lire le fichier FEC (.../fec/) et le plan comptable du lieu
+# (GET /api/v2/accounts/) pour creer les comptes qui lui manquent.
+# L'API ne calcule rien : elle rend ce que calcule la comptabilite
+# (`ecritures_de_l_export`, `generer_fec_cloture`), recalcule a chaque appel avec le
+# plan comptable du moment.
+# Droit : `ExternalApiKey.comptabilite` (basenames "closure" et "account"). La cle
+# seule suffit : le logiciel tourne la nuit, sans humain (A2).
+# Refus : 404 `not_exportable` = cette cloture n'est pas a importer (jamais) ;
+# 409 = pas maintenant, le logiciel reessaie plus tard.
+# / Accounting API: closures list, entries (JSON), FEC file, chart of accounts.
+
+
+CODE_DU_REFUS_CLOTURE_NON_EXPORTABLE = "not_exportable"
+CODE_DU_REFUS_COMPTE_MANQUANT = "missing_account"
+CODE_DU_REFUS_ECRITURE_DESEQUILIBREE = "unbalanced_entry"
+
+
+class RenduTexteDuFec(BaseRenderer):
+    """
+    Permet a un logiciel de demander le fichier FEC en texte (`Accept: text/plain`).
+    Sans lui, DRF repond 406 avant meme d'appeler la vue : seuls le JSON et la page
+    navigable existent. Le fichier lui-meme est une HttpResponse (deja du texte) ; ce
+    rendu ne sert qu'aux refus (dict), ecrits alors en JSON.
+    / Lets a client ask the FEC file as text; refusals (dict) are written as JSON.
+    """
+
+    media_type = "text/plain"
+    format = "txt"
+    charset = "utf-8"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        if isinstance(data, (bytes, str)):
+            return data
+        return json.dumps(data, ensure_ascii=False, default=str).encode("utf-8")
+
+
+def _reponse_de_refus(phrase, code, statut_http):
+    """
+    Une reponse de refus de l'API comptable : la phrase pour un humain, le code pour
+    le logiciel.
+    / A refusal response: the sentence for a human, the code for the software.
+    """
+    return Response({"detail": phrase, "code": code}, status=statut_http)
+
+
+class ClosureViewSet(viewsets.ViewSet):
+    """
+    Les clotures J du lieu, pour un logiciel comptable. Lecture seule.
+    / The venue's J closures, for an accounting software. Read only.
+
+    - GET /api/v2/closures/?after_number=<n> : les J a importer (avec des ventes, sans
+      la J « reprise »), de numero plus grand que n, dans l'ordre des numeros.
+    - GET /api/v2/closures/<uuid>/entries/ : les ecritures de la J en JSON (noms des
+      colonnes du FEC, centimes, sans ValidDate).
+    - GET /api/v2/closures/<uuid>/fec/ : le fichier FEC, le meme que le bouton de
+      l'admin.
+
+    FALC :
+    - La liste n'est pas decoupee en pages : chaque nuit, elle ne contient que
+      quelques J.
+    - Le logiciel retient le numero de la derniere J importee et le repasse dans
+      `after_number` la nuit suivante.
+    """
+
+    permission_classes = [SemanticApiKeyPermission]
+    lookup_field = "uuid"
+
+    def list(self, request):
+        # Import ici, comme le bouton FEC de l'admin : `comptabilite.tasks` est le
+        # module des taches Celery.
+        # / Imported here, like the admin FEC button: the Celery tasks module.
+        from comptabilite.tasks import journees_a_importer
+
+        texte_du_curseur = request.query_params.get("after_number")
+        apres_le_numero = None
+        if texte_du_curseur is not None:
+            # Seulement des chiffres, 18 au plus : refuse « -1 », « 1.5 », « douze »,
+            # et un nombre démesuré (au-delà de 4300 chiffres, int() lève une erreur).
+            # / Digits only, at most 18.
+            if not re.fullmatch(r"[0-9]{1,18}", texte_du_curseur):
+                return Response(
+                    {
+                        "detail": _(
+                            "Le paramètre « after_number » doit être un nombre entier "
+                            "positif : le numéro de la dernière clôture importée."
+                        ),
+                        "exemple": "?after_number=12",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            apres_le_numero = int(texte_du_curseur)
+
+        journees = journees_a_importer(apres_le_numero=apres_le_numero)
+        serializer = ClotureAImporterSerializer(
+            journees, many=True, context={"request": request}
+        )
+        return Response({"results": serializer.data})
+
+    @action(detail=True, methods=["get"])
+    def entries(self, request, uuid=None):
+        from comptabilite.ventilation import EcritureDesequilibree, ecritures_de_l_export
+        from laboutik.plan_comptable import (
+            CompteComptableManquant,
+            s_assurer_que_le_plan_existe,
+        )
+
+        cloture, reponse_de_refus = self._cloture_a_exporter(uuid)
+        if reponse_de_refus is not None:
+            return reponse_de_refus
+
+        # Le filet : un lieu sans aucun compte recoit le plan par defaut, comme avant
+        # le FEC de l'admin.
+        # / The safety net, like before the admin FEC.
+        s_assurer_que_le_plan_existe()
+        try:
+            export = ecritures_de_l_export(cloture)
+        except CompteComptableManquant as compte_manquant:
+            return _reponse_de_refus(
+                str(compte_manquant),
+                CODE_DU_REFUS_COMPTE_MANQUANT,
+                status.HTTP_409_CONFLICT,
+            )
+        except EcritureDesequilibree as ecriture_desequilibree:
+            # Une donnee alteree apres l'encaissement : on alerte (Sentry, par les
+            # logs), le logiciel reessaiera.
+            # / Data altered after settlement: alert, the software will retry.
+            logger.exception(
+                f"API comptable : écriture déséquilibrée, clôture {cloture.uuid}"
+            )
+            return _reponse_de_refus(
+                str(ecriture_desequilibree),
+                CODE_DU_REFUS_ECRITURE_DESEQUILIBREE,
+                status.HTTP_409_CONFLICT,
+            )
+
+        ecritures = EcritureComptableSerializer(export["ecritures"], many=True).data
+        return Response(
+            {
+                "closure": str(cloture.uuid),
+                "number": cloture.numero_sequentiel,
+                "accountingDate": export["date_du_nom_du_fichier"].isoformat(),
+                "currency": "EUR",
+                "amountUnit": "cent",
+                "entries": ecritures,
+            }
+        )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        renderer_classes=[JSONRenderer, RenduTexteDuFec],
+    )
+    def fec(self, request, uuid=None):
+        from django.http import HttpResponse
+
+        from comptabilite.fec import generer_fec_cloture
+        from comptabilite.ventilation import EcritureDesequilibree
+        from laboutik.plan_comptable import CompteComptableManquant
+
+        cloture, reponse_de_refus = self._cloture_a_exporter(uuid)
+        if reponse_de_refus is not None:
+            return reponse_de_refus
+
+        try:
+            contenu, nom_du_fichier, type_du_contenu = generer_fec_cloture(cloture)
+        except CompteComptableManquant as compte_manquant:
+            return _reponse_de_refus(
+                str(compte_manquant),
+                CODE_DU_REFUS_COMPTE_MANQUANT,
+                status.HTTP_409_CONFLICT,
+            )
+        except EcritureDesequilibree as ecriture_desequilibree:
+            logger.exception(
+                f"API comptable : écriture déséquilibrée, clôture {cloture.uuid}"
+            )
+            return _reponse_de_refus(
+                str(ecriture_desequilibree),
+                CODE_DU_REFUS_ECRITURE_DESEQUILIBREE,
+                status.HTTP_409_CONFLICT,
+            )
+
+        # Un fichier, pas du JSON : une HttpResponse Django, comme le bouton de
+        # l'admin (`comptabilite/admin.py` `_telecharger`).
+        # / A file, not JSON: a Django HttpResponse, like the admin button.
+        reponse = HttpResponse(contenu, content_type=type_du_contenu)
+        reponse["Content-Disposition"] = f'attachment; filename="{nom_du_fichier}"'
+        return reponse
+
+    def _cloture_a_exporter(self, uuid_de_la_cloture):
+        """
+        La cloture demandee si elle est a importer, sinon la reponse 404 du refus.
+        Une cloture a importer est une J avec des ventes, que la regle de mise en
+        service ne refuse pas (la J « reprise » est refusee, spec 06-A A10).
+        / The requested closure if importable, else the 404 refusal response.
+
+        :return: (cloture, None) ou (None, reponse de refus)
+        """
+        from comptabilite.models import ClotureCaisse
+        from comptabilite.tasks import refus_du_fec_avant_la_mise_en_service
+
+        phrase_de_la_cloture_absente = _(
+            "Cette clôture n'a pas d'écritures à importer : seules les clôtures "
+            "journalières qui ont des ventes en ont."
+        )
+        refus_cloture_absente = _reponse_de_refus(
+            phrase_de_la_cloture_absente,
+            CODE_DU_REFUS_CLOTURE_NON_EXPORTABLE,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        try:
+            uuid_lu = uuid_module.UUID(str(uuid_de_la_cloture))
+        except ValueError:
+            return None, refus_cloture_absente
+
+        cloture = ClotureCaisse.objects.filter(uuid=uuid_lu).first()
+        if cloture is None:
+            return None, refus_cloture_absente
+
+        la_cloture_est_une_j = cloture.niveau == ClotureCaisse.NIVEAU_JOURNALIER
+        la_j_a_des_ventes = (
+            cloture.numero_premiere_vente is not None
+            and cloture.numero_derniere_vente is not None
+        )
+        if not la_cloture_est_une_j or not la_j_a_des_ventes:
+            return None, refus_cloture_absente
+
+        phrase_du_refus_de_mise_en_service = refus_du_fec_avant_la_mise_en_service(cloture)
+        if phrase_du_refus_de_mise_en_service is not None:
+            return None, _reponse_de_refus(
+                phrase_du_refus_de_mise_en_service,
+                CODE_DU_REFUS_CLOTURE_NON_EXPORTABLE,
+                status.HTTP_404_NOT_FOUND,
+            )
+
+        return cloture, None
+
+
+class AccountViewSet(viewsets.ViewSet):
+    """
+    Le plan comptable du lieu, pour un logiciel comptable. Lecture seule.
+    GET /api/v2/accounts/ : tous les comptes (actifs ou non), tries par numero.
+    / The venue's chart of accounts, for an accounting software. Read only.
+
+    FALC : le logiciel cree chez lui les comptes qui lui manquent, avec ce numero et
+    ce libelle, avant d'ecrire les ecritures. Un compte inactif est seulement cache
+    des menus : il sert encore aux exports, il est donc rendu.
+    """
+
+    permission_classes = [SemanticApiKeyPermission]
+
+    def list(self, request):
+        from laboutik.models import CompteComptable
+        from laboutik.plan_comptable import s_assurer_que_le_plan_existe
+
+        # Le filet : un lieu sans aucun compte recoit le plan par defaut.
+        # / The safety net: a venue without any account gets the default chart.
+        s_assurer_que_le_plan_existe()
+
+        comptes = CompteComptable.objects.order_by("numero_de_compte")
+        serializer = CompteComptableSerializer(comptes, many=True)
+        return Response({"results": serializer.data})

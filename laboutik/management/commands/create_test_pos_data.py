@@ -31,11 +31,18 @@ from django.db import connection
 from django_tenants.utils import schema_context
 
 from AuthBillet.models import Wallet
-from BaseBillet.models import CategorieProduct, Product, Price
+from BaseBillet.models import CategorieProduct, Product, Price, Tva
 from Customers.models import Client
 from fedow_connect.fedow_api import CarteInconnueDeFedow
 from laboutik.carte_primaire_ancien_fedow import declarer_la_carte_primaire_a_l_ancien_fedow
-from laboutik.models import CartePrimaire, PointDeVente, Printer, Terminal
+from laboutik.models import (
+    CartePrimaire,
+    CompteComptable,
+    PointDeVente,
+    Printer,
+    Terminal,
+)
+from laboutik.plan_comptable import s_assurer_que_le_plan_existe
 from QrcodeCashless.models import CarteCashless, Detail
 
 # L'uuid de transaction de toutes les lignes de demo : il les retrouve, pour ne pas
@@ -908,6 +915,72 @@ class Command(BaseCommand):
                     "  Aucun terminal appaire : rien n'imprimera tant qu'un appareil "
                     "n'aura pas ete appaire par code PIN (admin > Appairage de terminal)."
                 )
+
+            # --- TVA des produits de caisse ---
+            # La caisse lit la TVA du PRODUIT (`Product.tva`), jamais celle de la
+            # categorie ; sans elle, c'est le taux par defaut du lieu (0 en demo).
+            # Alcool a 20 %, le reste a 10 %. Les recharges, adhesions, la consigne et
+            # « Vider la carte » restent sans TVA. Mis a jour aussi sur une base
+            # existante. `update()` : aucun signal, aucun appel Stripe.
+            # / POS reads the PRODUCT's VAT. Alcohol 20 %, the rest 10 %. Top-ups,
+            # memberships, deposit and "empty card" keep no VAT.
+            noms_des_produits_d_alcool = [
+                "Biere",
+                "Blonde Pression",
+                "Vin rouge",
+                "Vin blanc",
+                "Vin en vrac",
+                "Pastis",
+            ]
+            noms_des_produits_a_10_pour_cent = [
+                "Coca",
+                "Eau",
+                "Jus d'orange",
+                "Limonade",
+                "Pizza",
+                "Burger",
+                "Sandwich",
+                "Salade",
+                "Cafe",
+                "The",
+                "Cappuccino",
+                "Chips",
+                "Cacahuetes",
+                "Cookies",
+                "Cacahuetes en vrac",
+                "Affiche A4",
+            ]
+            tva_20, _ = Tva.objects.get_or_create(tva_rate=Decimal("20.00"))
+            tva_10, _ = Tva.objects.get_or_create(tva_rate=Decimal("10.00"))
+            Product.objects.filter(
+                name__in=noms_des_produits_d_alcool, methode_caisse=Product.VENTE
+            ).update(tva=tva_20)
+            Product.objects.filter(
+                name__in=noms_des_produits_a_10_pour_cent, methode_caisse=Product.VENTE
+            ).update(tva=tva_10)
+            self.stdout.write("  TVA des produits : alcool 20 %, le reste 10 %")
+
+            # --- Compte comptable des categories de caisse ---
+            # Sans compte, un produit vendu de ces categories bloque le FEC, l'API
+            # comptable et « Plan complet ? » (« le produit … n'a pas de compte »).
+            # Toutes au 707000 (ventes de marchandises). Billetterie et Cashless n'en ont
+            # pas besoin : les regles du plan donnent 706000 et 419100.
+            # / Without an account, a product sold in these categories blocks the FEC,
+            # the accounting API and "Complete plan?". All to 707000.
+            s_assurer_que_le_plan_existe()
+            compte_des_ventes_de_marchandises = CompteComptable.objects.get(
+                numero_de_compte="707000"
+            )
+            CategorieProduct.objects.filter(
+                pk__in=[
+                    categorie_bar.pk,
+                    categorie_restauration.pk,
+                    categorie_boissons_chaudes.pk,
+                    categorie_snacks.pk,
+                    categorie_vins.pk,
+                ]
+            ).update(compte_comptable=compte_des_ventes_de_marchandises)
+            self.stdout.write("  Categories de caisse reliees au compte 707000")
 
             # --- Points de vente ---
             # update_or_create pour mettre a jour l'icone meme si le PDV existait avant.

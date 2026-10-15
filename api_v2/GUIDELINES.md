@@ -3,7 +3,8 @@
 These guidelines define how to build the v2 API with a strong focus on semantic, standards-based open data.
 
 - Django REST Framework using ViewSets
-  - Prefer ModelViewSet or ReadOnlyModelViewSet; expose only necessary actions.
+  - Use plain `viewsets.ViewSet` (NOT ModelViewSet / ReadOnlyModelViewSet: too much hidden magic, see root `GUIDELINES.md`). Write `list()`, `retrieve()`, `create()`… explicitly, and use `@action()` for extra routes. Expose only necessary actions.
+  - Validation: prefer `serializers.Serializer`; `ModelSerializer` is tolerated in `api_v2/` only (root `GUIDELINES.md`).
   - Use routers to build URLs.
 - REST philosophy
   - Resources-centered; nouns for endpoints; HTTP verbs for actions.
@@ -378,3 +379,22 @@ Tests (`tests/pytest/test_pages_api.py`) : CRUD page, catalogue block-types, ajo
 suppression bloc, images par URL, upload multipart, anti-SSRF, neutralisation XSS dans les
 champs lien, isolation tenant, slug réservé, atomicité, et création des blocs IFRAME
 (hauteur_px), NEWSLETTER (embed_url) et PARTENAIRES (logos cliquables `url`).
+
+Comptabilité — closures, entries, chart of accounts (spec `TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-06-connecteurs-comptables/CHANTIER-06-A-api-comptable.md`)
+- Read by an accounting software (Dolibarr, Paheko…) every night. Read-only (`GET` only).
+- Permission: `ExternalApiKey.comptabilite` ("Comptabilité (lecture)"), mapped on basenames `closure` and `account`. The key alone is enough (`SemanticApiKeyPermission`, no "creator is still admin" check): the software runs at night without a human.
+- **Exception to schema.org (deliberate)**: schema.org has no type for an accounting entry. Entries use the **French FEC column names** (`JournalCode`, `EcritureNum`, `CompteNum`, `Debit`, `Credit`…), the standard every French accounting software knows. Envelope fields are simple English camelCase.
+- Amounts are **whole cents** (integers). Dates are ISO. No `ValidDate` in the JSON: entries arrive unlocked in the software (Dolibarr locks an entry whose ValidDate is filled).
+- Entries are recomputed at every call with the venue's current chart of accounts: the software must import each closure **once** (keep its `uuid`).
+
+Endpoints
+- `GET /api/v2/closures/?after_number=<n>` → `{"results": [...]}`: the daily (J) closures to import, with sales, without the "reprise" J, numbered above `n`, by number. Not paginated. Cursor = the `number` of the last imported closure (never a date: the automatic J can be created late but dated earlier). `after_number` not a non-negative integer → 400.
+- `GET /api/v2/closures/{uuid}/entries/` → `{"closure", "number", "accountingDate", "currency": "EUR", "amountUnit": "cent", "entries": [{"JournalCode", "JournalLib", "EcritureNum", "EcritureDate", "PieceRef", "PieceDate", "EcritureLib", "lines": [{"CompteNum", "CompteLib", "Debit", "Credit"}]}]}`.
+- `GET /api/v2/closures/{uuid}/fec/` → the FEC file (`text/plain`, attachment), byte for byte the admin "FEC" button.
+- `GET /api/v2/accounts/` → `{"results": [{"accountNumber", "name", "active"}]}`: every account of the venue (inactive ones too: still used by exports), by number. Loads the default chart if the venue has none.
+
+Refusals: `{"detail": sentence, "code": code}`
+- 404 `not_exportable`: unknown uuid, weekly/monthly/yearly closure, J without sales, "reprise" J (same go-live rule as the admin FEC button, `comptabilite.tasks.refus_du_fec_avant_la_mise_en_service`). The software forgets it.
+- 409 `missing_account` (an account or a journal is missing in the chart) or 409 `unbalanced_entry` (data altered after settlement; logged as an exception). The software retries later.
+
+Tests: `tests/pytest/test_api_v2_comptabilite.py` (dedicated schema).
