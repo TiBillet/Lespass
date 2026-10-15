@@ -204,6 +204,14 @@ vues/templates sont `laboutik` (caisse V2) ; les tenants V1 (LaBoutik externe) n
    toujours, **tout user du réseau a déjà une clé RSA et un wallet en local** → une carte liée
    est toujours signable et débitable. Carte anonyme → pas de FED, « liez votre carte » +
    complément espèces/CB.
+
+   > **Corrigé le 2026-10-14 (QRCODECASHLESS/CHANTIER-03).** Cette garde reposait sur un
+   > postulat faux : une carte anonyme PEUT porter du FED (recharge à la borne avec TPE).
+   > Le message « liez votre carte » n'a jamais été codé, et la garde masquait aussi le FED
+   > d'une carte liée chez Fedow dont la copie locale n'avait pas de `user`. Décision
+   > du mainteneur : le FED se lit ET se débite **par la carte**, pour toute carte liée ou
+   > anonyme (`GET card/{tag}/`, puis `POST transaction/` avec une carte primaire du
+   > lieu, comme LaBoutik V1). Plus de garde sur `carte.user`.
 2. **Pont carte** : carte du réseau inconnue de `CarteCashless` → résolue au scan, **sans wallet
    éphémère miroir** (§6bis).
 3. **Place Fedow du tenant** présente (§7) — nécessaire pour lire ET débiter. Garantie par le
@@ -233,6 +241,8 @@ Flux du pont (au scan, dans `_payer_par_nfc`) :
    la `CarteCashless` **miroir** : `tag_id` = tag scanné, `user` résolu, `detail.origine` =
    réseau. **Aucun `wallet_ephemere`.** (Le `qrcode_uuid` n'est pas requis : POS NFC par `tag_id`.)
 3. `is_wallet_ephemere == True` (**anonyme**) ⇒ « liez votre carte » + complément.
+   **Caduc depuis le 2026-10-14** : la carte anonyme est lue et débitée par la carte (§6,
+   note de correction).
 
 Défense en profondeur : interdire le cas 3 de `_obtenir_ou_creer_wallet` (création éphémère
 locale) quand `carte.detail.origine` désigne un réseau legacy.

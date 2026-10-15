@@ -76,6 +76,13 @@ class IsKioskTerminal(permissions.BasePermission):
         if lieu_en_moteur_legacy():
             return False
 
+        # Module eteint : la borne est fermee, terminal appaire ou admin. Le module ne
+        # peut pas etre allume depuis le tableau de bord tant que la borne V2 est en
+        # attente (MODULES_EN_ATTENTE_D_ACTIVATION, Administration/admin/dashboard.py).
+        # / Module off: the kiosk is closed, paired terminal or admin.
+        if not Configuration.get_solo().module_kiosk:
+            return False
+
         user = request.user
         if not user.is_authenticated:
             return False

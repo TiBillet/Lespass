@@ -88,52 +88,62 @@ modules (R11).
 
             <div class="me-block">
                 <h2 class="me-block__title">{% translate 'Ma carte' %}</h2>
-                {% if card %}
-                    <div class="me-card" data-testid="compte-carte">
-                        <div class="tcard">
-                            <div class="tcard__v"></div>
-                            <div class="tcard__top">
-                                <span class="logo logo--blanc tcard__logo" role="img" aria-label="TiBillet"></span>
-                                <span>))</span>
-                            </div>
+                {# Avec ou sans carte liée, le bloc est le même : solde, cadeau, recharge, #}
+                {# remboursement, historique. Ils portent sur le portefeuille de la personne #}
+                {# chez Fedow, pas sur la carte : une carte liée plus tard ouvre ce même #}
+                {# portefeuille. Sans carte, la carte est grisée et invite à en lier une. #}
+                {# / Same block with or without a card: everything is about the wallet. #}
+                {# Without a card, the card is greyed and invites to link one. #}
+                <div class="me-card" data-testid="{% if card %}compte-carte{% else %}compte-carte-vide{% endif %}">
+                    <div class="tcard{% if not card %} tcard--vide{% endif %}">
+                        <div class="tcard__v"></div>
+                        <div class="tcard__top">
+                            <span class="logo logo--blanc tcard__logo" role="img" aria-label="TiBillet"></span>
+                            <span>))</span>
+                        </div>
+                        {% if card %}
                             <div class="tcard__num">
                                 <span class="visually-hidden">{% translate 'Numéro de carte' %}</span>
                                 {{ card.number_printed }}
                             </div>
-                        </div>
+                        {% else %}
+                            <p class="tcard__invite">{% translate "Scanner le QR code d'une carte pour en lier une." %}</p>
+                        {% endif %}
+                    </div>
 
 
-                        <div class="me-card__info">
-                            <div class="balance__label">{% translate 'Solde' %}</div>
-                            {# Soldes calculés par la vue (MyAccount.list) : euros FED + TLF, #}
-                            {# puis la monnaie cadeau (TNF), seulement les jetons utilisables ici. #}
-                            {# / Balances computed by the view: euros, then gift currency. #}
-                            <div class="me-card__amount" data-testid="compte-solde">{{ solde_euros_en_centimes|dround }} €</div>
-                            {% if solde_cadeau_en_centimes %}
-                                <div class="me-card__cadeau" data-testid="compte-solde-cadeau">
-                                    {% blocktranslate with montant=solde_cadeau_en_centimes|dround %}+ {{ montant }} € en cadeau{% endblocktranslate %}
-                                </div>
-                            {% endif %}
-                            {% if config.show_refill_button %}
-                                <a href="#" hx-get="{% url 'my_account-refill-wallet' %}" hx-indicator="#tibillet-spinner"
-                                   class="btn btn-primaire"
-                                   data-testid="compte-recharger">
-                                    {% translate "Recharger" %}
-                                </a>
-                            {% endif %}
-                            {% if config.show_refill_button %}
-                                <button type="button" class="btn btn--secondary"
-                                        id="button-filters"
-                                        data-bs-toggle="offcanvas"
-                                        data-bs-target="#refundPanel"
-                                        aria-controls="refundPanel">
-                                    {% translate "Se faire rembourser" %}
-                                </button>
-                            {% endif %}
+                    <div class="me-card__info">
+                        <div class="balance__label">{% translate 'Solde' %}</div>
+                        {# Soldes calculés par la vue (MyAccount.list) : euros FED + TLF, #}
+                        {# puis la monnaie cadeau (TNF), seulement les jetons utilisables ici. #}
+                        {# / Balances computed by the view: euros, then gift currency. #}
+                        <div class="me-card__amount" data-testid="compte-solde">{{ solde_euros_en_centimes|dround }} €</div>
+                        {% if solde_cadeau_en_centimes %}
+                            <div class="me-card__cadeau" data-testid="compte-solde-cadeau">
+                                {% blocktranslate with montant=solde_cadeau_en_centimes|dround %}+ {{ montant }} € en cadeau{% endblocktranslate %}
+                            </div>
+                        {% endif %}
+                        {% if config.show_refill_button %}
+                            <a href="#" hx-get="{% url 'my_account-refill-wallet' %}" hx-indicator="#tibillet-spinner"
+                               class="btn btn-primaire"
+                               data-testid="compte-recharger">
+                                {% translate "Recharger" %}
+                            </a>
+                        {% endif %}
+                        {% if config.show_refill_button %}
+                            <button type="button" class="btn btn--secondary"
+                                    id="button-filters"
+                                    data-bs-toggle="offcanvas"
+                                    data-bs-target="#refundPanel"
+                                    aria-controls="refundPanel">
+                                {% translate "Se faire rembourser" %}
+                            </button>
+                        {% endif %}
 
-                            <p class="me-card__links">
-                                <a class="link" href="/my_account/balance/" hx-get="/my_account/balance/" hx-target="body" hx-push-url="true">{% translate 'Historique' %}</a>
+                        <p class="me-card__links">
+                            <a class="link" href="/my_account/balance/" hx-get="/my_account/balance/" hx-target="body" hx-push-url="true">{% translate 'Historique' %}</a>
 
+                            {% if card %}
                                 ·
                                 {% if user.email_valid and user.is_active %}
                                     {# hx-confirm : fenetre SweetAlert du shell avant de detacher la carte. #}
@@ -145,29 +155,19 @@ modules (R11).
                                             hx-confirm="{{ question_carte_perdue }}"
                                             hx-disabled-elt="this"
                                             data-testid="compte-carte-perdue"
-
-{#                                            hx-get="{% url 'my_account-lost-my-card' pk=card.number_printed %}"#}
                                             hx-indicator="#tibillet-spinner">
                                         {% translate "J'ai perdu ma carte" %}
                                     </button>
                                 {% else %}
                                     {% translate "Please confirm your email to declare a lost card." %}
                                 {% endif %}
-                            </p>
-                            {% if card.origin.place.name %}
-                                <p class="me-card__links">{% blocktrans with lieu=card.origin.place.name %}Obtenue à {{ lieu }}{% endblocktrans %}</p>
                             {% endif %}
-                        </div>
+                        </p>
+                        {% if card.origin.place.name %}
+                            <p class="me-card__links">{% blocktrans with lieu=card.origin.place.name %}Obtenue à {{ lieu }}{% endblocktrans %}</p>
+                        {% endif %}
                     </div>
-                {% else %}
-{#                    Add later when a "fast" add card  link will be available  #}
-                    {# Pas encore de carte : une invitation, pas un reproche (maquette vide). #}
-                    {# / No card yet: an invitation, not a complaint. #}
-                    <div class="module__invite" data-testid="compte-carte-vide">
-                        <p>{% translate "Pas encore de carte TiBillet liée à votre compte. Vous pouvez en lier une à tout moment." %}</p>
-{#                        <a class="btn btn--secondary btn--sm" href="/my_account/card/" hx-get="/my_account/card/" hx-target="body" hx-push-url="true">{% translate 'Lier une carte' %}</a>#}
-                    </div>
-                {% endif %}
+                </div>
 
                 {# Payer par QR code débite la tirelire (Fedow), pas la carte : #}
                 {# le bouton s'affiche avec ou sans carte liée. #}

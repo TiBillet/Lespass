@@ -19,7 +19,7 @@ from django.db import IntegrityError, connection, transaction
 from django.utils.translation import gettext_lazy as _
 
 from AuthBillet.models import Wallet
-from Customers.models import Client, Domain
+from Customers.models import Client, Domain, lieu_en_moteur_legacy
 from QrcodeCashless.models import CarteCashless, Detail
 from fedow_connect.fedow_api import CarteInconnueDeFedow, NFCcardFedow
 from fedow_connect.models import FedowConfig
@@ -85,9 +85,9 @@ def trouver_ou_rapatrier_la_carte(tag_id):
        (8 hexadécimaux) avant tout appel réseau.
     3. Lieu non relié à l'ancien Fedow -> DoesNotExist, sans appel réseau.
     4. Lecture de la carte chez Fedow.
-    5. Choix du lieu d'origine (refus si legacy ou introuvable), sans écriture.
-    6. Création du Detail (si besoin) et de la carte, dans un savepoint.
-    7. Origine posée sur le Wallet miroir, s'il n'en a pas.
+    5. à 7. Fabrication du miroir local (`fabriquer_le_miroir_de_la_carte`) : lieu
+       d'origine, Detail, carte avec sa propriétaire si l'ancien Fedow la dit liée,
+       origine du Wallet miroir.
 
     :param tag_id: tag NFC lu (str)
     :return: CarteCashless
@@ -140,16 +140,76 @@ def trouver_ou_rapatrier_la_carte(tag_id):
         )
         raise FedowInjoignable(str(erreur_de_fedow))
 
-    # 5. Lieu d'origine de la carte. Peut refuser : aucune écriture avant ce point.
+    return fabriquer_le_miroir_de_la_carte(fiche_fedow, fedow_config)
+
+
+def proprietaire_d_apres_la_fiche_fedow(fiche_fedow):
+    """
+    La personne à qui l'ancien Fedow dit que la carte appartient, si elle est connue
+    ici. None pour une carte anonyme (portefeuille éphémère), ou si aucune personne de
+    Lespass ne porte ce portefeuille.
+    / The person the old Fedow says owns the card, if known here; None otherwise.
+
+    LOCALISATION : QrcodeCashless/services.py
+
+    Une carte liée chez l'ancien Fedow porte LE portefeuille de la personne
+    (`is_wallet_ephemere: False`). Ici, ce portefeuille a le même uuid
+    (`TibilletUser.wallet`, créé par `get_or_create_wallet`).
+    / A linked card carries the person's own wallet, same uuid here.
+
+    :param fiche_fedow: fiche de la carte (CardValidator)
+    :return: TibilletUser ou None
+    """
+    from AuthBillet.models import TibilletUser
+
+    carte_anonyme = fiche_fedow["is_wallet_ephemere"]
+    if carte_anonyme:
+        return None
+    uuid_du_portefeuille = fiche_fedow["wallet"]["uuid"]
+    return TibilletUser.objects.filter(wallet__uuid=uuid_du_portefeuille).first()
+
+
+def fabriquer_le_miroir_de_la_carte(fiche_fedow, fedow_config):
+    """
+    Fabrique la carte locale (miroir) d'une carte de l'ancien Fedow, d'après sa fiche.
+    / Builds the local (mirror) card of an old Fedow card, from its record.
+
+    LOCALISATION : QrcodeCashless/services.py
+
+    LA CARTE PORTE SA PROPRIÉTAIRE quand l'ancien Fedow la dit liée et que la personne
+    est connue ici (`proprietaire_d_apres_la_fiche_fedow`). Sans elle, la page « mon
+    compte », l'adhésion et le remboursement en caisse la prendraient pour une carte
+    anonyme.
+    / The card carries its owner when the old Fedow says it is linked.
+
+    FLUX :
+    1. Lieu d'origine de la carte. Peut refuser : aucune écriture avant ce point.
+    2. Création du Detail (si besoin) et de la carte, dans un savepoint.
+    3. Origine posée sur le Wallet miroir, s'il n'en a pas.
+
+    APPELÉE PAR : `trouver_ou_rapatrier_la_carte` (premier scan) et
+    `BaseBillet/views.py`, `ScanQrCode.link` (liaison par QR code d'une carte absente
+    ici).
+
+    :param fiche_fedow: fiche de la carte (CardValidator)
+    :param fedow_config: FedowConfig du lieu courant
+    :return: CarteCashless
+    :raises CarteCashless.DoesNotExist: collision d'identifiant
+    :raises CarteDUnLieuNonMigre: carte d'un lieu legacy ou introuvable
+    """
+    tag_id_propre = fiche_fedow["first_tag_id"].upper()
+
+    # 1. Lieu d'origine de la carte. Peut refuser : aucune écriture avant ce point.
     # / Card's venue of origin. May refuse: no write before this point.
     lieu_d_origine = _trouver_le_lieu_d_origine(
         fiche_fedow, fedow_config, tag_id_propre
     )
     generation = fiche_fedow["origin"]["generation"]
 
-    # 6. Création, dans un savepoint. Le except reste HORS du atomic : sinon la
+    # 2. Création, dans un savepoint. Le except reste HORS du atomic : sinon la
     #    transaction englobante est cassée (« current transaction is aborted »).
     # / Creation inside a savepoint. The except stays OUTSIDE the atomic block.
+    proprietaire = proprietaire_d_apres_la_fiche_fedow(fiche_fedow)
     try:
         with transaction.atomic():
             detail = _obtenir_ou_creer_le_detail(lieu_d_origine, generation)
@@ -158,6 +218,7 @@ def trouver_ou_rapatrier_la_carte(tag_id):
                 number=fiche_fedow["number_printed"].upper(),
                 uuid=fiche_fedow["qrcode_uuid"],
                 detail=detail,
+                user=proprietaire,
             )
     except IntegrityError:
         # Deux scans simultanés : l'autre a créé la carte. On la renvoie.
@@ -180,7 +241,7 @@ def trouver_ou_rapatrier_la_carte(tag_id):
             f"Carte {tag_id_propre} : collision d'identifiant en local"
         )
 
-    # 7. Le Wallet miroir, créé sans origine par le CardValidator, reçoit celle du
+    # 3. Le Wallet miroir, créé sans origine par le CardValidator, reçoit celle du
     #    lieu. Une origine existante n'est jamais écrasée. Sinon,
     #    obtenir_wallet_carte_depuis_fedow (laboutik/views.py) trouverait ce Wallet
     #    et ne poserait jamais l'origine.
@@ -203,6 +264,60 @@ def trouver_ou_rapatrier_la_carte(tag_id):
         f"Carte {tag_id_propre} rapatriée depuis Fedow (lieu d'origine : {lieu_d_origine})."
     )
     return carte_rapatriee
+
+
+def relier_la_copie_locale_de_la_carte(fiche_fedow, utilisateur, ip="0.0.0.0"):
+    """
+    Après une liaison chez l'ancien Fedow, met la copie locale de la carte d'accord :
+    elle porte la même personne.
+    / After a link on the old Fedow, brings the local card copy in line: same person.
+
+    LOCALISATION : QrcodeCashless/services.py
+
+    FLUX :
+    1. La carte existe ici : `CarteService.lier_a_user` pose la personne, fusionne le
+       portefeuille éphémère local et rattrape les adhésions anonymes.
+    2. Elle n'existe pas ici, dans un lieu V2 : on fabrique sa copie locale
+       (`fabriquer_le_miroir_de_la_carte`), qui porte la personne d'après la fiche.
+    3. Lieu legacy, ou carte d'un lieu legacy ou inconnu : pas de copie locale, ses
+       cartes vivent dans LaBoutik V1.
+    / 1. Local card: link it. 2. Missing in a V2 venue: build its copy. 3. Legacy: none.
+
+    APPELÉE PAR : `BaseBillet/views.py`, `ScanQrCode.link` (liaison par QR code) et
+    `Administration/admin_tenant.py`, `lier_la_carte_a_l_adherent_chez_fedow` (adhésion
+    saisie dans l'admin).
+
+    :param fiche_fedow: fiche de la carte rendue par la liaison (CardValidator)
+    :param utilisateur: TibilletUser qui vient d'être lié chez l'ancien Fedow
+    :param ip: str, IP de la requête
+    :return: CarteCashless, ou None (pas de copie locale)
+    :raises CarteDejaLiee, UserADejaCarte: la base locale refuse la liaison
+    """
+    from fedow_core.exceptions import CarteIntrouvable
+    from fedow_core.services import CarteService
+
+    try:
+        return CarteService.lier_a_user(
+            qrcode_uuid=fiche_fedow["qrcode_uuid"], user=utilisateur, ip=ip
+        )
+    except CarteIntrouvable:
+        pass
+
+    if lieu_en_moteur_legacy():
+        logger.info(
+            f"Carte {fiche_fedow['first_tag_id']} liée chez Fedow, lieu legacy : "
+            f"pas de copie locale."
+        )
+        return None
+
+    try:
+        return fabriquer_le_miroir_de_la_carte(fiche_fedow, FedowConfig.get_solo())
+    except CarteDUnLieuNonMigre:
+        logger.info(
+            f"Carte {fiche_fedow['first_tag_id']} liée chez Fedow, d'un lieu legacy ou "
+            f"inconnu : pas de copie locale."
+        )
+        return None
 
 
 def _trouver_le_lieu_d_origine(fiche_fedow, fedow_config, tag_id):

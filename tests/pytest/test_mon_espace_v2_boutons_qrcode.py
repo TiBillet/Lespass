@@ -365,6 +365,85 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
         assert balise_par_testid(html, "compte-carte") is not None
         assert balise_par_testid(html, "compte-scanner-qrcode") is not None
 
+    def test_le_bloc_carte_est_le_meme_avec_ou_sans_carte(self):
+        """Avec ou sans carte liée : solde, recharge, remboursement et historique. Sans
+        carte, la carte est grisée et invite à en lier une ; pas de « carte perdue ».
+        / Same block with or without a card; without one, a greyed inviting card."""
+        from BaseBillet.models import Configuration
+
+        for avec_une_carte in (True, False):
+            with self.subTest(avec_une_carte=avec_une_carte):
+                adherent = self.creer_un_utilisateur(f"bloc-carte-{avec_une_carte}")
+                with patch.object(
+                    Configuration, "show_refill_button", lambda config: True
+                ):
+                    code_http, html = self.page_rendue(
+                        adherent, "/my_account/", avec_une_carte=avec_une_carte
+                    )
+
+                assert code_http == 200
+                assert balise_par_testid(html, "compte-solde") is not None
+                bouton_recharger = balise_par_testid(html, "compte-recharger")
+                assert bouton_recharger is not None
+                assert bouton_recharger[1]["hx-get"] == reverse(
+                    "my_account-refill-wallet"
+                )
+                assert 'data-bs-target="#refundPanel"' in html
+                assert 'hx-get="/my_account/balance/"' in html
+                if avec_une_carte:
+                    assert balise_par_testid(html, "compte-carte") is not None
+                    assert balise_par_testid(html, "compte-carte-perdue") is not None
+                    assert "tcard--vide" not in html
+                else:
+                    assert balise_par_testid(html, "compte-carte-vide") is not None
+                    assert balise_par_testid(html, "compte-carte-perdue") is None
+                    assert "tcard--vide" in html
+                    assert "Scanner le QR code d'une carte pour en lier une." in html
+
+    def test_recharge_desactivee_par_le_lieu_cache_recharger_et_rembourser(self):
+        """`show_refill_button` faux (le lieu masque la recharge) : ni « Recharger » ni
+        « Se faire rembourser », avec ou sans carte. Le solde et l'historique restent.
+        / Top-up hidden by the venue: no top-up nor refund buttons; balance stays."""
+        from BaseBillet.models import Configuration
+
+        for avec_une_carte in (True, False):
+            with self.subTest(avec_une_carte=avec_une_carte):
+                adherent = self.creer_un_utilisateur(f"sans-recharge-{avec_une_carte}")
+                with patch.object(
+                    Configuration, "show_refill_button", lambda config: False
+                ):
+                    code_http, html = self.page_rendue(
+                        adherent, "/my_account/", avec_une_carte=avec_une_carte
+                    )
+
+                assert code_http == 200
+                assert balise_par_testid(html, "compte-recharger") is None
+                assert 'data-bs-target="#refundPanel"' not in html
+                assert 'id="refundPanel"' not in html
+                assert balise_par_testid(html, "compte-solde") is not None
+                assert 'hx-get="/my_account/balance/"' in html
+
+    def test_sans_carte_le_solde_affiche_aussi_le_cadeau(self):
+        """Sans carte, le solde est calculé pareil : euros, puis cadeau à part.
+        / Without a card, the balance is the same: euros, then gift apart."""
+        organisation_du_lieu = Configuration.objects.first().organisation
+        jetons = [
+            un_jeton(1000, "FED", [], primaire_stripe=True),
+            un_jeton(300, "TNF", [organisation_du_lieu]),
+        ]
+        adherent = self.creer_un_utilisateur("solde-cadeau-sans-carte")
+
+        with patch("BaseBillet.views.get_distant_fedow_tokens", return_value=jetons):
+            code_http, html = self.page_rendue(
+                adherent, "/my_account/", skin="V2", avec_une_carte=False
+            )
+
+        assert code_http == 200
+        assert texte_du_testid(html, "compte-solde").replace(",", ".") == "10.00 €"
+        assert texte_du_testid(html, "compte-solde-cadeau").replace(",", ".") == (
+            "+ 3.00 € en cadeau"
+        )
+
     def test_email_non_valide_voit_un_bouton_gris_desactive_sans_lien(self):
         """D4 : email non validé = bouton gris, désactivé, sans lien vers le scanner.
         / D4: unvalidated email = grey, disabled button, no link."""

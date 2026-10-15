@@ -218,8 +218,9 @@ def _creer_ou_recuperer_la_carte_chez_fedow(tag_id, numero_imprime, uuid_du_qrco
     FLUX :
     1. On demande la carte a Fedow (GET card/<tag_id>/).
     2. Si Fedow la connait -> RECONCILIATION. On adopte SES valeurs de numero
-       imprime et d'uuid, et on ne cree rien. C'est le chemin de reparation
-       quand le miroir local a diverge.
+       imprime et d'uuid, et sa proprietaire si Fedow la dit liee a une personne
+       connue ici. On ne cree rien. C'est le chemin de reparation quand le miroir
+       local a diverge.
     3. Si Fedow ne la connait pas (CarteInconnueDeFedow) -> CREATION.
        On la cree chez Fedow (POST card/), puis on garde nos valeurs.
     4. Toute autre erreur (reseau, 400, 500) -> on abandonne. Rien n'est ecrit,
@@ -229,8 +230,9 @@ def _creer_ou_recuperer_la_carte_chez_fedow(tag_id, numero_imprime, uuid_du_qrco
     :param numero_imprime: str, 8 caracteres hexa majuscules
     :param uuid_du_qrcode: uuid.UUID
     :param detail: Detail (porte la generation attendue par Fedow)
-    :return: tuple (numero_imprime, uuid_du_qrcode, carte_recuperee_de_fedow)
-        carte_recuperee_de_fedow vaut True si on est passe par la reconciliation.
+    :return: tuple (numero_imprime, uuid_du_qrcode, carte_recuperee_de_fedow,
+        proprietaire_selon_fedow). carte_recuperee_de_fedow vaut True si on est passe
+        par la reconciliation. proprietaire_selon_fedow : TibilletUser ou None.
     :raises forms.ValidationError: Fedow injoignable, ou refus de creation.
     """
     api_fedow = FedowAPI()
@@ -257,10 +259,13 @@ def _creer_ou_recuperer_la_carte_chez_fedow(tag_id, numero_imprime, uuid_du_qrco
         # RECONCILIATION : Fedow est maitre, on adopte ses valeurs.
         # / RECONCILIATION: Fedow is master, adopt its values.
         logger.info(f"Carte {tag_id} deja connue de Fedow : reconciliation locale.")
+        from QrcodeCashless.services import proprietaire_d_apres_la_fiche_fedow
+
         return (
             carte_chez_fedow["number_printed"],
             carte_chez_fedow["qrcode_uuid"],
             True,
+            proprietaire_d_apres_la_fiche_fedow(carte_chez_fedow),
         )
 
     # --- 3 : creation chez Fedow ---
@@ -289,7 +294,7 @@ def _creer_ou_recuperer_la_carte_chez_fedow(tag_id, numero_imprime, uuid_du_qrco
             code="fedow_refuse_la_creation",
         )
 
-    return numero_imprime, uuid_du_qrcode, False
+    return numero_imprime, uuid_du_qrcode, False, None
 
 
 def _obtenir_la_generation_par_defaut_du_lieu():
@@ -624,7 +629,7 @@ class CarteCashlessAddForm(forms.ModelForm):
 
         # 4. Creation chez Fedow, ou reconciliation si Fedow la connait deja.
         # / Creation on Fedow, or reconciliation if Fedow already knows it.
-        numero_imprime, uuid_du_qrcode, carte_recuperee_de_fedow = (
+        numero_imprime, uuid_du_qrcode, carte_recuperee_de_fedow, proprietaire_selon_fedow = (
             _creer_ou_recuperer_la_carte_chez_fedow(
                 tag_id, numero_imprime, uuid_du_qrcode, detail
             )
@@ -645,6 +650,7 @@ class CarteCashlessAddForm(forms.ModelForm):
         # Memorise pour que save_model() puisse prevenir l'utilisateur.
         # / Remembered so save_model() can inform the user.
         self.carte_recuperee_de_fedow = carte_recuperee_de_fedow
+        self.proprietaire_selon_fedow = proprietaire_selon_fedow
 
         return donnees_nettoyees
 
@@ -764,6 +770,10 @@ class CarteCashlessAdmin(ModelAdmin):
             obj.tag_id = form.cleaned_data["tag_id"]
             obj.number = form.cleaned_data["number"]
             obj.uuid = form.cleaned_data["uuid"]
+            # Carte recuperee de Fedow et liee la-bas a une personne connue ici :
+            # la copie locale porte la meme personne.
+            # / Card recovered from Fedow, linked there to a known person: same here.
+            obj.user = getattr(form, "proprietaire_selon_fedow", None)
 
             if getattr(form, "carte_recuperee_de_fedow", False):
                 messages.add_message(

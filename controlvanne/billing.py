@@ -10,10 +10,12 @@ Le ViewSet appelle ces fonctions — séparation ViewSet / logique métier.
 The ViewSet calls these functions — separation of ViewSet / business logic.
 
 Cascade fiduciaire : même ordre que LaBoutik — TNF → TLF → FED (Fedow local), puis le
-reste sur l'ancien Fedow (TLF fédérés puis FED), pour une carte d'utilisateur dans un
-lieu relié. Temps et fidélité ne paient jamais un tirage.
+reste en FED sur l'ancien Fedow, pour toute carte (liée ou anonyme) dans un lieu relié.
+Le débit de l'ancien Fedow passe par la carte et la carte primaire de la tireuse
+(`carte_primaire_de_la_tireuse`). Temps et fidélité ne paient jamais un tirage.
 / Fiduciary cascade: same order as LaBoutik — TNF → TLF → FED (local Fedow), then the
-remainder on the old Fedow (user card, linked venue). Time and loyalty never pay.
+remainder in FED on the old Fedow, for any card, through the card and the tap's
+primary card. Time and loyalty never pay.
 
 Dépendances :
 - fedow_core.services : AssetService, WalletService, TransactionService
@@ -23,7 +25,9 @@ Dépendances :
 - QrcodeCashless.models : CarteCashless
 - laboutik.views : ORDRE_CASCADE_FIDUCIAIRE, MAPPING_ASSET_CATEGORY_PAYMENT_METHOD,
   _obtenir_ou_creer_wallet, _taux_tva_de_la_ligne_de_caisse, lire_depensable_fed_frais,
-  _debiter_legacy (ancien Fedow ; importés au moment de l'appel)
+  _debiter_legacy, _verifier_carte_primaire_aupres_de_l_ancien_fedow (ancien Fedow ;
+  importés au moment de l'appel)
+- laboutik.models : CartePrimaire
 """
 
 import logging
@@ -234,37 +238,75 @@ def calculer_solde_total_cascade(wallet_client, cascade_assets):
     return total
 
 
-def lire_le_solde_de_l_ancien_fedow(carte):
+def carte_primaire_de_la_tireuse():
     """
-    Solde dépensable de la carte sur l'ancien Fedow (TLF fédérés + FED), lu frais.
-    / Card's spendable balance on the old Fedow (federated TLF + FED), read fresh.
+    La carte primaire qui signe les débits de la tireuse sur l'ancien Fedow : la plus
+    ancienne carte primaire du lieu, ou None si le lieu n'en a aucune.
+    / The primary card signing the tap's debits on the old Fedow: the venue's oldest
+    primary card, or None.
 
     LOCALISATION : controlvanne/billing.py
 
-    L'ancien Fedow ne débite que le portefeuille d'un UTILISATEUR : une carte anonyme
-    vaut 0, sans aucun appel. Pour une carte d'utilisateur, la lecture passe par
-    `lire_depensable_fed_frais` (brique de la caisse) : elle rend « indisponible » si le
-    lieu n'est pas relié à l'ancien Fedow ou si le serveur ne répond pas. Indisponible
-    vaut 0 : la tireuse continue avec les monnaies locales, jamais de refus pour ça.
-    / Anonymous card: 0, no call. User card: fresh read through the register's helper;
-    unavailable (venue not linked, server down) counts as 0, never a refusal.
+    L'ancien Fedow refuse un débit par la carte sans carte primaire du lieu
+    (`POST transaction/`, action SALE). La caisse utilise celle du caissier ; la tireuse
+    n'a pas de caissier, elle prend donc la plus ancienne du lieu, toujours la même.
+    / The old Fedow refuses a card debit without a venue primary card; the tap has no
+    cashier, so it takes the venue's oldest one, always the same.
+
+    :return: CartePrimaire ou None
+    """
+    from laboutik.models import CartePrimaire
+
+    return CartePrimaire.objects.select_related("carte").order_by("datetime").first()
+
+
+def lire_le_solde_de_l_ancien_fedow(carte):
+    """
+    FED dépensable de la carte sur l'ancien Fedow, lu frais, en centimes.
+    / Card's spendable FED on the old Fedow, read fresh, in cents.
+
+    LOCALISATION : controlvanne/billing.py
+
+    La lecture passe par la carte, liée ou anonyme (`lire_depensable_fed_frais`, brique
+    de la caisse). Ce FED ne compte QUE si la tireuse pourra le débiter après le service,
+    donc si sa carte primaire est confirmée par l'ancien Fedow
+    (`_verifier_carte_primaire_aupres_de_l_ancien_fedow`, le contrôle de l'ouverture de
+    la caisse : une carte qui n'est plus primaire là-bas est supprimée ici). Sinon, ou si
+    l'ancien Fedow ne répond pas, le FED vaut 0 : la tireuse sert avec les monnaies
+    locales seules. Un débit refusé APRÈS le service serait une bière non payée.
+    / FED counts ONLY if the tap can debit it after pouring, i.e. if its primary card is
+    confirmed by the old Fedow. Otherwise, or if it is unreachable, FED is 0.
 
     L'import se fait au moment de l'appel, comme les autres briques de la caisse.
     / Imported at call time, like the other register building blocks.
 
     :param carte: CarteCashless
-    :return: int — solde en centimes (0 si carte anonyme ou ancien Fedow indisponible)
+    :return: int — FED en centimes (0 si indisponible ou carte primaire non confirmée)
     """
-    from laboutik.views import lire_depensable_fed_frais
+    from laboutik.views import (
+        _verifier_carte_primaire_aupres_de_l_ancien_fedow,
+        lire_depensable_fed_frais,
+    )
 
-    carte_sans_utilisateur = carte.user_id is None
-    if carte_sans_utilisateur:
+    carte_primaire = carte_primaire_de_la_tireuse()
+    if carte_primaire is None:
         return 0
 
     solde_distant_en_centimes, ancien_fedow_disponible = lire_depensable_fed_frais(
-        carte.user
+        carte
     )
-    if not ancien_fedow_disponible:
+    if not ancien_fedow_disponible or solde_distant_en_centimes <= 0:
+        return 0
+
+    erreur_de_la_carte_primaire = _verifier_carte_primaire_aupres_de_l_ancien_fedow(
+        carte_primaire
+    )
+    if erreur_de_la_carte_primaire is not None:
+        logger.error(
+            f"Tireuse : FED de la carte {carte.tag_id} ignoré, la carte primaire "
+            f"{carte_primaire.carte.tag_id} n'est pas confirmée par l'ancien Fedow : "
+            f"{erreur_de_la_carte_primaire}"
+        )
         return 0
     return solde_distant_en_centimes
 
@@ -345,11 +387,13 @@ def facturer_tirage(
     / Called at pour_end, under the session lock (no double billing).
 
     RÉPARTITION (la même que le cashless de la caisse) : monnaies locales d'abord (Fedow
-    local, en cascade : jetons cadeau TNF, puis TLF, puis FED local), puis le reste sur
-    l'ancien Fedow (TLF fédérés puis FED). L'ancien Fedow ne sert qu'à une carte
-    d'utilisateur dans un lieu relié. Temps et fidélité ne paient jamais un tirage.
+    local, en cascade : jetons cadeau TNF, puis TLF, puis FED local), puis le reste en
+    FED sur l'ancien Fedow, pour toute carte, liée ou anonyme, dans un lieu relié. Ce
+    débit passe par la carte et la carte primaire de la tireuse. Temps et fidélité ne
+    paient jamais un tirage.
     / Split (same as the register's cashless): local currencies first, then the
-    remainder on the old Fedow (user card, linked venue only). Never time or loyalty.
+    remainder in FED on the old Fedow, for any card, through the card and the tap's
+    primary card. Never time or loyalty.
 
     ORDRE DES OPÉRATIONS (le même que la caisse) :
     1. LIRE, sans rien débiter : les soldes des monnaies locales de la cascade, puis le
@@ -357,7 +401,7 @@ def facturer_tirage(
     2. RÉPARTIR le montant : monnaies locales dans l'ordre de la cascade, le reste sur
        l'ancien Fedow, plafonné à son solde lu.
     3. DÉBITER L'ANCIEN FEDOW D'ABORD (`_debiter_legacy`, appel réseau ; il débite
-       lui-même les TLF fédérés puis le FED, et rend le moyen de chaque transaction).
+       le FED par la carte et la carte primaire, et rend le moyen de la transaction).
        Ce débit se fait AVANT le bloc atomique local, donc avant tout verrou de jeton :
        pendant l'appel réseau, les autres ventes cashless du lieu n'attendent pas. Il
        reste sous le verrou de la session (l'appelant), pour ne facturer qu'une fois.
@@ -545,8 +589,12 @@ def facturer_tirage(
                 solde_de_l_ancien_fedow, restant_centimes
             )
             try:
+                carte_primaire = carte_primaire_de_la_tireuse()
                 transactions_de_l_ancien_fedow = _debiter_legacy(
-                    carte.user, montant_demande_a_l_ancien_fedow, uuid_transaction
+                    carte,
+                    carte_primaire.carte.tag_id,
+                    montant_demande_a_l_ancien_fedow,
+                    uuid_transaction,
                 )
             except Exception as erreur_de_l_ancien_fedow:
                 # L'échec peut arriver APRÈS un débit fait côté serveur (réponse

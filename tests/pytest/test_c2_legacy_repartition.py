@@ -5,12 +5,16 @@ Tests C2 — répartition du débit legacy sur les articles, distinction fine de
 LOCALISATION : tests/pytest/test_c2_legacy_repartition.py
 
 CE QUI EST TESTÉ / WHAT IS TESTED :
-Quand on paie au POS avec une carte du réseau, le débit legacy (côté Fedow) peut puiser dans
-PLUSIEURS assets : des TLF fédérés (monnaies locales d'autres lieux → `LOCAL_EURO`, gérées par les
-LIEUX) et du FED (monnaie fédérée → `STRIPE_FED`, gérée par la COOPÉRATIVE). Le helper
-`_repartir_legacy_sur_articles` répartit ces transactions sur les articles non couverts par les
-locaux, en gardant chaque moyen de paiement DISTINCT — pour que la compta attribue chaque euro au
-bon responsable.
+Le helper `_repartir_legacy_sur_articles` répartit les transactions du débit legacy (côté
+ancien Fedow) sur les articles non couverts par les locaux, en gardant chaque moyen de paiement
+DISTINCT — pour que la compta attribue chaque euro au bon responsable : une monnaie locale (TLF →
+`LOCAL_EURO`, gérée par un LIEU) et le FED (monnaie fédérée → `STRIPE_FED`, gérée par la
+COOPÉRATIVE) ne se mélangent jamais.
+Dans la caisse V2, `_debiter_legacy` rend UNE transaction, sur le FED. Le helper accepte une
+liste quelconque de transactions : les cas à plusieurs monnaies vérifient qu'il garde chaque
+moyen distinct.
+/ The helper spreads the legacy debit transactions over the uncovered items, keeping each
+payment method distinct. In the V2 register `_debiter_legacy` returns ONE FED transaction.
 
 Helper PUR (pas de DB, pas de réseau) → tests rapides sans fixtures.
 / PURE helper (no DB, no network) → fast tests without fixtures.

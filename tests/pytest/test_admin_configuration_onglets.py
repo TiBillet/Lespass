@@ -49,9 +49,10 @@ from AuthBillet.models import TibilletUser
 from Customers.models import Client
 
 
-# Les 25 champs exposes AVANT le passage en onglets. Ecrits en dur, et c'est
+# Les 26 champs exposes par le formulaire de Configuration. Ecrits en dur, et c'est
 # volontaire : les relire depuis la classe testee ne prouverait rien (le test
-# suivrait la regression). C'est un releve, pas un calcul.
+# suivrait la regression). C'est un releve, pas un calcul. Un champ ajoute au
+# formulaire s'ajoute ici, a sa place.
 # / Hard-coded on purpose: reading them from the class under test would make
 #   the test follow any regression instead of catching it.
 CHAMPS_ATTENDUS = [
@@ -62,6 +63,7 @@ CHAMPS_ATTENDUS = [
     "img",
     "logo",
     "postal_address",
+    "siren",
     "phone",
     "email",
     "site_web",

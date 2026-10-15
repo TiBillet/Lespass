@@ -2284,6 +2284,18 @@ BETA_NOTICE = _(
 )
 
 
+# Modules qu'aucun lieu ne peut allumer pour l'instant. Leur carte est grisee, sans
+# interrupteur, et module_toggle refuse de les allumer (un POST direct arrive aussi).
+# Un module deja allume garde son interrupteur, pour pouvoir l'eteindre.
+# - module_kiosk : la borne V2 envoie encore a Stripe les metadonnees que lit le webhook
+#   de la borne de l'ancien Fedow ; brancher un lecteur crediterait deux fois
+#   (TECH_DOC/SESSIONS/QRCODECASHLESS/CHANTIER-03-fed-invisible-en-caisse.md, §3 bis).
+#   Ses routes refusent aussi tout acces quand le module est eteint (kiosk/views.py).
+# / Modules no venue can switch on for now: greyed card, no switch, refused by
+# module_toggle. An already-on module keeps its switch, to turn it off.
+MODULES_EN_ATTENTE_D_ACTIVATION = ["module_kiosk"]
+
+
 # Ordre des cles = ordre d'affichage des cartes du dashboard.
 # La caisse (module_caisse) est a son rang : elle est rendue par la carte POS
 # unifiee, inseree a cette position par _build_modules_context.
@@ -2660,6 +2672,29 @@ def _build_modules_context(configuration):
             continue
 
         module_allume = getattr(configuration, nom_du_champ)
+
+        # Module en attente : carte grisee, sans interrupteur, tant qu'il est eteint.
+        # / Pending module: greyed card, no switch, while it is off.
+        module_en_attente_et_eteint = (
+            nom_du_champ in MODULES_EN_ATTENTE_D_ACTIVATION and not module_allume
+        )
+        if module_en_attente_et_eteint:
+            cartes.append(
+                {
+                    "type": "coming_soon",
+                    "field": nom_du_champ,
+                    "name": info["name"],
+                    "description": info["description"],
+                    "testid": info["testid"],
+                    "domaine": info["domaine"],
+                    "icone": info["icone"],
+                    "montre_interrupteur": False,
+                    "allume": False,
+                    "coming_soon_label": _("En cours de développement"),
+                }
+            )
+            continue
+
         carte_fermee_par_le_verrou = (
             lieu_retenu_sur_l_ancien_fedow
             and nom_du_champ in MODULES_V2_FERMES_AUX_LIEUX_LEGACY

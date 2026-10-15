@@ -1433,24 +1433,52 @@ def _obtenir_ou_creer_wallet(carte):
     return wallet
 
 
-def lire_depensable_fed_frais(user):
+def _jeton_fed_de_la_fiche(fiche_de_la_carte):
     """
-    Lit le solde FED dépensable d'un user EN TEMPS RÉEL (sans cache) sur le Fedow distant.
-    / Reads a user's spendable FED balance in real time (no cache) from the remote Fedow.
+    Le jeton FED du portefeuille d'une carte, dans sa fiche de l'ancien Fedow, ou None.
+    / The FED token of a card's wallet, in its old Fedow record, or None.
 
     LOCALISATION : laboutik/views.py
 
-    POURQUOI un helper dédié : ce solde sert à DEUX endroits — l'affichage du solde complet
-    (obtenir_solde_complet_carte) ET la cascade de paiement (le FED comme cran transparent).
-    Dans les deux cas on veut le solde FRAIS (le FED peut être débité juste après), donc
-    `use_cache=False`. Dégradé en silence si le Fedow ne répond pas (jamais de blocage).
-    / Dedicated helper because this balance is used in TWO places: full-balance display AND the
-    payment cascade (FED as a transparent tier). Both need a FRESH value (FED may be spent right
-    after), hence use_cache=False. Degraded silently if Fedow is unreachable (never blocks).
+    SEUL LE FED SE DÉPENSE ICI. Un lieu V2 n'a ni monnaie locale propre ni fédération
+    avec la monnaie locale d'un autre lieu sur l'ancien Fedow : la bascule vers V2 l'exige
+    (`Customers/bascule_vers_v2.py`, raisons 3 et 5). Les autres jetons de la fiche
+    (monnaie d'un autre lieu, adhésions…) ne sont donc jamais comptés ni débités.
+    / ONLY FED IS SPENT HERE: a V2 venue has no own or federated legacy local currency.
 
-    :param user: TibilletUser (la carte doit être liée ; ne pas appeler si user is None)
+    :param fiche_de_la_carte: dict rendu par `NFCcard.retrieve` (CardValidator)
+    :return: dict du jeton (TokenValidator) ou None
+    """
+    for jeton in fiche_de_la_carte["wallet"]["tokens"]:
+        if jeton["asset_category"] == "FED":
+            return jeton
+    return None
+
+
+def lire_depensable_fed_frais(carte):
+    """
+    Lit le FED dépensable d'une carte EN TEMPS RÉEL sur l'ancien Fedow, par sa fiche.
+    / Reads a card's spendable FED in real time on the old Fedow, through its record.
+
+    LOCALISATION : laboutik/views.py
+
+    LA LECTURE PART DE LA CARTE, JAMAIS DE LA PERSONNE. L'ancien Fedow rend le portefeuille
+    de la carte (`GET card/{tag_id}/`) : celui de la personne si la carte est liée, le
+    portefeuille éphémère sinon (carte rechargée à une borne avec TPE, par exemple). Le
+    `user` de la copie locale de la carte ne compte donc pas : il peut manquer.
+    / The read starts from the CARD, never from the person: the old Fedow returns the
+    person's wallet for a linked card, the ephemeral wallet otherwise.
+
+    Ce solde sert à l'affichage (obtenir_solde_complet_carte) et à la cascade de paiement
+    (caisse, tireuse). Il est toujours lu frais : il peut être débité juste après.
+    Dégradé en silence si l'ancien Fedow ne répond pas : la vente n'est jamais bloquée.
+    / Used by the display and the payment cascade. Always fresh. Degraded silently.
+
+    :param carte: CarteCashless
     :return: tuple (fed_centimes: int, fed_disponible: bool)
-        fed_disponible=False si pas de place Fedow ou Fedow injoignable.
+        fed_disponible=False si le lieu n'est pas relié à l'ancien Fedow, ou s'il ne
+        répond pas. Une carte inconnue de l'ancien Fedow vaut (0, True) : il a répondu,
+        et cette carte n'y a rien.
     """
     try:
         fedow_config = FedowConfig.get_solo()
@@ -1460,15 +1488,19 @@ def lire_depensable_fed_frais(user):
         if not fedow_config.can_fedow():
             return 0, False
         fedow_api = FedowAPI(fedow_config=fedow_config)
-        fed_centimes = int(
-            fedow_api.wallet.get_total_fiducial_and_all_federated_token(user, use_cache=False)
-        )
-        return fed_centimes, True
+        fiche_de_la_carte = fedow_api.NFCcard.retrieve(carte.tag_id)
+    except CarteInconnueDeFedow:
+        return 0, True
     except Exception as erreur_fedow:
         # Fedow injoignable ou lent : on dégrade en silence.
         # / Fedow unreachable or slow: degrade silently.
         logger.warning(f"lire_depensable_fed_frais : solde FED indisponible — {erreur_fedow}")
         return 0, False
+
+    jeton_fed = _jeton_fed_de_la_fiche(fiche_de_la_carte)
+    if jeton_fed is None:
+        return 0, True
+    return int(jeton_fed["value"]), True
 
 
 def obtenir_solde_complet_carte(carte):
@@ -1496,7 +1528,7 @@ def obtenir_solde_complet_carte(carte):
         - tokens_locaux : liste de dicts (asset_name, asset_category, value_euros, provenance)
         - locaux_centimes : total des monnaies locales (int, centimes)
         - fed_centimes : solde FED dépensable (int, centimes), 0 si indisponible
-        - fed_disponible : bool, False si carte anonyme / pas de place Fedow / Fedow injoignable
+        - fed_disponible : bool, False si pas de place Fedow / Fedow injoignable
         - total_centimes : locaux_centimes + fed_centimes (int, centimes)
     """
     # Wallet local de la carte (crée un éphémère si la carte est anonyme).
@@ -1527,14 +1559,11 @@ def obtenir_solde_complet_carte(carte):
         )
         locaux_centimes += token.value
 
-    # 2. Solde FED du réseau : uniquement si la carte est liée à un user (signature RSA).
+    # 2. Solde FED du réseau, lu par la carte : liée ou anonyme, elle a peut-être du FED.
     #    Délégué à lire_depensable_fed_frais (lecture fraîche, dégradée si Fedow injoignable).
-    # 2. FED network balance: only if the card is linked to a user. Delegated to
+    # 2. FED network balance, read through the card, linked or anonymous. Delegated to
     #    lire_depensable_fed_frais (fresh read, degraded if Fedow is unreachable).
-    fed_centimes = 0
-    fed_disponible = False
-    if carte.user is not None:
-        fed_centimes, fed_disponible = lire_depensable_fed_frais(carte.user)
+    fed_centimes, fed_disponible = lire_depensable_fed_frais(carte)
 
     return {
         "tokens_locaux": tokens_locaux,
@@ -1582,13 +1611,12 @@ def _repartir_legacy_sur_articles(lignes_complement, transactions_legacy):
 
     LOCALISATION : laboutik/views.py
 
-    POURQUOI la distinction fine : les monnaies LOCALES (TLF) sont gérées par les LIEUX, la
-    monnaie FÉDÉRÉE (FED) est gérée par la COOPÉRATIVE. Un débit legacy peut puiser dans les deux
-    (TLF fédérés d'autres lieux → `LOCAL_EURO`, et FED → `STRIPE_FED`). On crée donc une
-    LigneArticle par (article, asset legacy) avec le BON moyen de paiement, pour que la compta
-    attribue chaque euro au bon responsable.
-    / LOCAL currencies (TLF) are managed by the VENUES, the FEDERATED currency (FED) by the
-    COOPERATIVE. A legacy debit can draw from both; we keep them finely distinct for accounting.
+    Le débit legacy de la caisse V2 rend UNE transaction, en FED (`STRIPE_FED`, monnaie gérée
+    par la COOPÉRATIVE) : `_debiter_legacy`. La fonction accepte pourtant une liste de
+    transactions et garde chaque moyen DISTINCT : une LigneArticle par (article, asset legacy),
+    avec le BON moyen de paiement, pour que la compta attribue chaque euro au bon responsable.
+    / The V2 register's legacy debit returns ONE FED transaction; the function still accepts a
+    list and keeps each payment method distinct.
 
     :param lignes_complement: liste de tuples (article_dict, None, montant_centimes, None)
         — les parts d'articles non couvertes par les locaux (asset=None), dans l'ordre.
@@ -1680,25 +1708,6 @@ def _decouper_lignes_complement(lignes_complement, montant_a_couvrir):
     return lignes_couvertes, lignes_reste
 
 
-def _categorie_asset_transaction(transaction, fedow_api):
-    """
-    Catégorie de l'asset d'une transaction legacy ('FED', 'TLF', ...).
-    / Asset category of a legacy transaction.
-
-    LOCALISATION : laboutik/views.py
-
-    Si Fedow a renvoyé l'asset sérialisé dans la transaction, on lit la catégorie dedans (zéro
-    appel). Sinon, on la récupère via un appel Fedow (`asset.retrieve`), comme le flux QR V1.
-    / If Fedow returned the serialized asset inline, read the category from it (no call). Otherwise
-    fetch it via a Fedow call, like the V1 QR flow.
-    """
-    asset_serialise = transaction.get("serialized_asset")
-    if asset_serialise and asset_serialise.get("category"):
-        return asset_serialise["category"]
-    asset_info = fedow_api.asset.retrieve(str(transaction["asset"]))
-    return asset_info["category"]
-
-
 def _calculer_soldes_apres_paiement(wallet, lignes_debitees):
     """
     Construit l'avant / apres de la carte pour l'ecran de succes.
@@ -1774,64 +1783,75 @@ def _calculer_soldes_apres_paiement(wallet, lignes_debitees):
     return soldes_apres_paiement
 
 
-def _debiter_legacy(user, montant_centimes, uuid_transaction):
+def _debiter_legacy(carte, tag_id_carte_primaire, montant_centimes, uuid_transaction):
     """
-    Débite le legacy (FED + TLF fédérés) via Fedow et renvoie les transactions, moyen DÉJÀ résolu.
-    / Debits the legacy (FED + federated TLF) via Fedow; returns transactions with resolved method.
+    Débite le FED d'une carte sur l'ancien Fedow, par la carte et une carte primaire du lieu.
+    Renvoie la transaction, moyen de paiement DÉJÀ résolu.
+    / Debits a card's FED on the old Fedow, through the card and a venue primary card.
 
     LOCALISATION : laboutik/views.py
 
-    `to_place_from_qrcode(asset_type="EURO")` lance la cascade legacy CÔTÉ SERVEUR Fedow (TLF
-    fédérés d'abord, puis FED) et renvoie UNE liste de transactions (1 par asset débité). Pour
-    chaque transaction, on résout le moyen de paiement selon la catégorie de l'asset — distinction
-    FINE car la responsabilité diffère :
-    - FED (monnaie fédérée, gérée par la COOPÉRATIVE) → `STRIPE_FED`
-    - TLF (monnaie locale d'un autre lieu, fédérée, gérée par les LIEUX) → `LOCAL_EURO`
-    / Fedow runs the legacy cascade server-side and returns one transaction per debited asset.
-    We resolve the payment method per asset category (who holds the money differs).
+    UN SEUL CHEMIN POUR TOUTES LES CARTES, liées ou anonymes, comme LaBoutik V1 : aucune
+    signature de personne, la clé API du lieu suffit. L'ancien Fedow vérifie que la carte
+    primaire est bien une carte primaire de ce lieu, et que le portefeuille débité est
+    celui de la carte.
+    / One path for every card, linked or anonymous, like LaBoutik V1: no person signature.
 
-    Lève une Exception si le débit échoue (solde insuffisant côté Fedow, réseau injoignable) :
-    fail-fast, AUCUN débit partiel — l'appelant rebascule alors sur le complément.
-    / Raises on failure: fail-fast, NO partial debit — caller falls back to complement.
+    FLUX :
+    1. Lire la fiche de la carte (`NFCcard.retrieve`) : uuid de son portefeuille et jeton FED.
+    2. Débiter le FED (`transaction.to_place`, `POST transaction/`) : UNE transaction. Le FED
+       est la seule monnaie de l'ancien Fedow dépensable dans un lieu V2
+       (`_jeton_fed_de_la_fiche`). Moyen de paiement : `STRIPE_FED` (monnaie fédérée, gérée
+       par la coopérative).
 
-    :param user: TibilletUser (carte liée, signable)
+    Lève une Exception si le débit échoue (pas de carte primaire, solde insuffisant, refus de
+    l'ancien Fedow, réseau injoignable) : fail-fast, AUCUN débit partiel.
+    / Raises on failure: fail-fast, NO partial debit.
+
+    APPELÉ PAR : la caisse (PaiementViewSet : paiement NFC, complément, 2ᵉ carte) et la
+    tireuse (controlvanne/billing.py, `facturer_tirage`).
+
+    :param carte: CarteCashless du client
+    :param tag_id_carte_primaire: tag NFC de la carte primaire (caissier, ou tireuse)
     :param montant_centimes: int — montant à débiter
-    :param uuid_transaction: UUID de la vente POS (traçabilité POS ↔ Fedow)
-    :return: liste de tuples (asset_uuid, montant_centimes, payment_method,
+    :param uuid_transaction: UUID de la vente (traçabilité Lespass ↔ ancien Fedow)
+    :return: liste d'UN tuple (asset_uuid, montant_centimes, payment_method,
         uuid_de_la_transaction). L'uuid de la transaction distante sert au règlement de la
         vente (`reference_externe`) et au journal d'incident.
     """
+    if not tag_id_carte_primaire:
+        raise Exception("Débit legacy : aucune carte primaire pour signer le débit")
+    # L'ancien Fedow accepte un montant nul : on ne lui envoie jamais.
+    # / The old Fedow accepts a zero amount: never send one.
+    if montant_centimes <= 0:
+        raise Exception(f"Débit legacy : montant invalide ({montant_centimes})")
+
     fedow_api = FedowAPI()
-    transactions = fedow_api.transaction.to_place_from_qrcode(
-        user=user,
+    fiche_de_la_carte = fedow_api.NFCcard.retrieve(carte.tag_id)
+    jeton_fed = _jeton_fed_de_la_fiche(fiche_de_la_carte)
+    if jeton_fed is None or jeton_fed["value"] < montant_centimes:
+        raise Exception(
+            f"Débit legacy : FED insuffisant sur la carte {carte.tag_id} "
+            f"pour {montant_centimes} centimes"
+        )
+
+    transaction = fedow_api.transaction.to_place(
         amount=montant_centimes,
-        asset_type="EURO",
-        comment=f"Vente POS {uuid_transaction}",
+        asset=jeton_fed["asset_uuid"],
+        wallet=fiche_de_la_carte["wallet"]["uuid"],
+        user_card_firstTagId=carte.tag_id,
+        primary_card_fisrtTagId=tag_id_carte_primaire,
+        comment=f"Vente {uuid_transaction}",
         metadata={"uuid_transaction": str(uuid_transaction)},
     )
-    if not transactions:
-        raise Exception("Débit legacy : Fedow n'a renvoyé aucune transaction")
-
-    transactions_legacy = []
-    for transaction in transactions:
-        categorie = _categorie_asset_transaction(transaction, fedow_api)
-        # 'FED' = monnaie fédérée (coopérative) ; 'TLF' = monnaie locale fédérée (lieux).
-        # / 'FED' = federated currency (cooperative); 'TLF' = federated local currency (venues).
-        if categorie == "FED":
-            payment_method = PaymentMethod.STRIPE_FED
-        elif categorie == "TLF":
-            payment_method = PaymentMethod.LOCAL_EURO
-        else:
-            raise Exception(f"Débit legacy : catégorie d'asset inattendue '{categorie}'")
-        transactions_legacy.append(
-            (
-                transaction["asset"],
-                transaction["amount"],
-                payment_method,
-                transaction["uuid"],
-            )
+    return [
+        (
+            transaction["asset"],
+            transaction["amount"],
+            PaymentMethod.STRIPE_FED,
+            transaction["uuid"],
         )
-    return transactions_legacy
+    ]
 
 
 class CarteVideeSurLAncienFedowReponseIllisible(Exception):
@@ -10575,8 +10595,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # remainder → "covered" sale (debit at validation). Otherwise keep the complement.
         legacy_couvre_tout = False
         montant_legacy = 0
-        if total_complementaire > 0 and carte_client.user is not None:
-            depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte_client.user)
+        if total_complementaire > 0:
+            depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte_client)
             if legacy_disponible and depensable_legacy > 0:
                 # Le legacy couvre ce qu'il peut (tout ou une PARTIE) ; le reste ira au complément.
                 # / Legacy covers what it can (all or PART); the rest goes to the complement.
@@ -10679,7 +10699,10 @@ class PaiementViewSet(viewsets.ViewSet):
             lignes_complement = [t for t in lignes_nfc if t[1] is None]
             try:
                 transactions_legacy = _debiter_legacy(
-                    carte_client.user, montant_legacy, uuid_transaction
+                    carte_client,
+                    request.POST.get("tag_id_cm", ""),
+                    montant_legacy,
+                    uuid_transaction,
                 )
             except Exception as erreur_legacy:
                 logger.warning(f"Débit legacy échoué (rescan demandé) : {erreur_legacy}")
@@ -12012,8 +12035,8 @@ class PaiementViewSet(viewsets.ViewSet):
             montant_legacy = 0
             lignes_locales_c1 = [t for t in lignes_nfc_carte1 if t[1] is not None]
             lignes_complement_c1 = [t for t in lignes_nfc_carte1 if t[1] is None]
-            if carte1.user is not None and lignes_complement_c1:
-                depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte1.user)
+            if lignes_complement_c1:
+                depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte1)
                 if legacy_disponible and depensable_legacy > 0:
                     montant_legacy = min(depensable_legacy, total_complementaire)
 
@@ -12050,7 +12073,10 @@ class PaiementViewSet(viewsets.ViewSet):
                 )
                 try:
                     transactions_legacy = _debiter_legacy(
-                        carte1.user, montant_legacy, uuid_transaction
+                        carte1,
+                        request.POST.get("tag_id_cm", ""),
+                        montant_legacy,
+                        uuid_transaction,
                     )
                 except Exception as erreur_legacy:
                     logger.warning(f"Débit legacy (complément) échoué : {erreur_legacy}")
@@ -12526,8 +12552,8 @@ class PaiementViewSet(viewsets.ViewSet):
             total_complement_c1 = sum(
                 amount for _a, _u, amount, _p in lignes_complement_c1
             )
-            if carte1.user is not None and total_complement_c1 > 0:
-                depensable_legacy_c1, dispo_c1 = lire_depensable_fed_frais(carte1.user)
+            if total_complement_c1 > 0:
+                depensable_legacy_c1, dispo_c1 = lire_depensable_fed_frais(carte1)
                 if dispo_c1 and depensable_legacy_c1 > 0:
                     montant_legacy_c1 = min(depensable_legacy_c1, total_complement_c1)
             if montant_legacy_c1 > 0:
@@ -12601,9 +12627,9 @@ class PaiementViewSet(viewsets.ViewSet):
             lignes_legacy_c2 = []
             transactions_legacy_c2 = []
             montant_legacy_c2 = 0
-            if carte2.user is not None and total_reste_apres_carte2 > 0:
+            if total_reste_apres_carte2 > 0:
                 depensable_legacy_c2, legacy_dispo_c2 = lire_depensable_fed_frais(
-                    carte2.user
+                    carte2
                 )
                 if legacy_dispo_c2 and depensable_legacy_c2 >= total_reste_apres_carte2:
                     montant_legacy_c2 = total_reste_apres_carte2
@@ -12619,7 +12645,10 @@ class PaiementViewSet(viewsets.ViewSet):
                 )
                 try:
                     transactions_legacy_c2 = _debiter_legacy(
-                        carte2.user, montant_legacy_c2, uuid_transaction
+                        carte2,
+                        request.POST.get("tag_id_cm", ""),
+                        montant_legacy_c2,
+                        uuid_transaction,
                     )
                 except Exception as erreur_legacy_c2:
                     logger.warning(
@@ -12771,7 +12800,10 @@ class PaiementViewSet(viewsets.ViewSet):
             if montant_legacy_c1 > 0:
                 try:
                     transactions_legacy_c1 = _debiter_legacy(
-                        carte1.user, montant_legacy_c1, uuid_transaction
+                        carte1,
+                        request.POST.get("tag_id_cm", ""),
+                        montant_legacy_c1,
+                        uuid_transaction,
                     )
                 except Exception as erreur_legacy_c1:
                     logger.warning(

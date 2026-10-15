@@ -122,6 +122,9 @@ from fabriques_panier import (
     taches_celery_enregistrees,
 )
 from fabriques_vente import verifier_egalites
+from fabriques_controlvanne import (
+    carte_primaire_du_lieu_confirmee_par_l_ancien_fedow,  # noqa: F401 (fixture)
+)
 from test_caisse_une_ligne_par_article import (
     DEBUT_DE_L_URL_DU_DETAIL_D_UNE_VENTE,
     quantite_et_unite,
@@ -150,7 +153,13 @@ from test_tireuse_ecrit_la_vente import (
     _servir_un_tirage,
 )
 
-pytestmark = pytest.mark.django_db
+# La carte primaire du lieu, confirmée par l'ancien Fedow : la tireuse en a besoin pour
+# servir et débiter le FED (fabriques_controlvanne.py).
+# / The venue's primary card, confirmed by the old Fedow: the tap needs it.
+pytestmark = [
+    pytest.mark.django_db,
+    pytest.mark.usefixtures("carte_primaire_du_lieu_confirmee_par_l_ancien_fedow"),
+]
 
 # Adresses du paiement par QR code (BaseBillet/urls.py).
 # / QR code payment addresses.
@@ -190,6 +199,19 @@ def aucun_envoi_reel_vers_l_ancien_fedow():
     assert envois_reseau_tentes == [], (
         f"Envois réseau réels tentés vers l'ancien Fedow : {envois_reseau_tentes}"
     )
+
+
+@pytest.fixture(autouse=True)
+def ancien_fedow_sans_fed_par_defaut():
+    """
+    Par défaut, l'ancien Fedow répond et la carte n'y a pas de FED : la tireuse lit le
+    FED de TOUTE carte, liée ou anonyme. Un test qui simule un FED
+    (`simuler_l_ancien_fedow`) remplace cette lecture le temps de son bloc `with`.
+    / By default the old Fedow answers and the card has no FED there; a test faking
+    FED overrides this read inside its `with` block.
+    """
+    with mock.patch("laboutik.views.lire_depensable_fed_frais", return_value=(0, True)):
+        yield
 
 
 @pytest.fixture(autouse=True)

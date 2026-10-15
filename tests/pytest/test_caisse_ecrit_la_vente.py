@@ -46,9 +46,11 @@ verifier_egalites(vente).
 PAIEMENT PAR CARTE NFC : LES RÈGLEMENTS VIENNENT DES DÉBITS
 Les règlements sont copiés des débits réellement faits, jamais des lignes : un règlement
 par transaction `fedow_core` créée (son montant, son uuid dans `fedow_transaction_uuid`),
-un règlement par transaction du réseau (monnaie fédérée, serveur Fedow distant : son uuid
-dans `reference_externe`). Un jeton cadeau dépensé solde la dette du lieu (D8 bis) : la
-part payée en jetons est une vente ordinaire, hors TVA, réglée « jetons » (LG).
+un règlement par transaction de l'ancien Fedow (le FED, monnaie fédérée, serveur distant :
+son uuid dans `reference_externe`). Dans un lieu V2, l'ancien Fedow ne débite que le FED,
+par la carte et la carte primaire du caissier (`tag_id_cm`) : une transaction par carte.
+Un jeton cadeau dépensé solde la dette du lieu (D8 bis) : la part payée en jetons est une
+vente ordinaire, hors TVA, réglée « jetons » (LG).
 / Payments are copied from the real debits, never from the lines.
 
 CODE PARCOURU / CODE EXERCISED
@@ -73,11 +75,13 @@ Chaque test est marqué `django_db` : la transaction est annulée à la fin (tes
 13.1), rien ne reste en base de dev. La caisse est activée par `configuration_modifiee()`,
 jamais enregistrée (tests/PIEGES.md 13.22). Celery est simulé (tests/PIEGES.md 13.4).
 Les recharges, le retour de consigne par carte et la cascade des monnaies du lieu
-écrivent dans `fedow_core`, en base locale : aucun appel réseau. La monnaie du réseau
-(serveur Fedow distant) est simulée : son solde (`lire_depensable_fed_frais`) et son
-débit (`FedowAPI`), jamais appelés pour de vrai.
+écrivent dans `fedow_core`, en base locale : aucun appel réseau. Le FED de l'ancien
+Fedow (serveur distant) est simulé PAR LA CARTE (`ancien_fedow_simule_par_carte`) : le
+client `FedowAPI` de la caisse rend la fiche de la carte (`NFCcard.retrieve`, son jeton
+FED) et la transaction du débit par la carte et la carte primaire
+(`transaction.to_place`). Il n'est jamais appelé pour de vrai.
 / Rolled-back transaction per test. Register module on in memory only. Celery faked.
-The remote Fedow network is faked.
+The old Fedow's FED is faked through the card: card record and card debit.
 
 Lancer / Run : make test ARGS="tests/pytest/test_caisse_ecrit_la_vente.py"
 """
@@ -87,6 +91,7 @@ import html
 import logging
 import re
 import uuid
+from contextlib import contextmanager
 from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -119,6 +124,8 @@ from fabriques_panier import (
     taches_celery_enregistrees,
 )
 from fabriques_vente import verifier_egalites
+from fedow_connect.fedow_api import CarteInconnueDeFedow
+from fedow_connect.models import FedowConfig
 from fedow_core.models import Asset, Token, Transaction
 from fedow_core.services import AssetService, WalletService
 from laboutik.archivage import generer_fichiers_archive
@@ -1565,20 +1572,33 @@ def debits_en_detail(transactions):
 
 
 def payer_par_la_carte_du_client(
-    client_du_caissier, point_de_vente, champs_du_panier, carte, cle_d_idempotence
+    client_du_caissier,
+    point_de_vente,
+    champs_du_panier,
+    carte,
+    cle_d_idempotence,
+    tag_id_carte_primaire=None,
 ):
     """
     Le caissier valide un panier et le client pose sa carte NFC : la vraie route de
     paiement de la caisse, moyen « nfc ».
     / The cashier validates a cart and the customer taps the NFC card: the real route.
+
+    `tag_id_carte_primaire` : le tag de la carte primaire du caissier, envoyé dans
+    `tag_id_cm` comme le formulaire de la caisse (#addition-form). Il signe le débit
+    du FED sur l'ancien Fedow. None : champ absent.
+    / The cashier's primary card tag, sent as `tag_id_cm`. None: field left out.
     """
+    autres_champs = {"tag_id": carte.tag_id}
+    if tag_id_carte_primaire is not None:
+        autres_champs["tag_id_cm"] = tag_id_carte_primaire
     return payer_un_panier_compose_a_la_caisse(
         client_du_caissier,
         point_de_vente,
         champs_du_panier,
         moyen_de_paiement="nfc",
         cle_d_idempotence=cle_d_idempotence,
-        autres_champs={"tag_id": carte.tag_id},
+        autres_champs=autres_champs,
     )
 
 
@@ -1928,19 +1948,29 @@ def test_vente_en_points_unite_monnaie_tva_zero(lieu):
 
 
 # --------------------------------------------------------------------------
-# 15, 16 — Monnaie du réseau (serveur Fedow distant, simulé)
-# / 15, 16 — Network currency (remote Fedow server, faked)
+# 15, 16 — FED de l'ancien Fedow (serveur distant, simulé)
+# / 15, 16 — The old Fedow's FED (remote server, faked)
 # --------------------------------------------------------------------------
+
+
+# L'uuid du FED (monnaie fédérée) sur l'ancien Fedow : le même pour toutes les cartes.
+# / The FED (federated currency) uuid on the old Fedow: the same for every card.
+UUID_DU_FED_DE_L_ANCIEN_FEDOW = "fed0fed0-0000-4000-8000-000000000fed"
 
 
 def creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu):
     """
     ÉTAT DE DÉPART : la carte NFC d'un membre (carte liée à un utilisateur), sans
-    aucun solde dans les monnaies du lieu. Seule une carte liée à un utilisateur peut
-    payer avec la monnaie du réseau (`_payer_par_nfc` lit son solde sur Fedow).
-    Le lien est posé par `update()` : aucun signal.
-    / STARTING STATE: a member's card (linked to a user), with no local balance. Only a
-    linked card can pay with the network currency. Linked by update(): no signal.
+    aucun solde dans les monnaies du lieu. Son FED (monnaie fédérée de l'ancien Fedow)
+    se lit et se débite PAR LA CARTE, comme celui d'une carte anonyme
+    (`lire_depensable_fed_frais`, `_debiter_legacy`) : la signature du membre n'est
+    jamais utilisée. Le membre devient le client de la vente.
+    Le lien est posé par `update()` : aucun signal. En production, le lien vient de
+    la liaison par QR code ou du rapatriement : ces parcours sont testés dans
+    test_carte_liee_chez_fedow_fed_en_caisse.py.
+    / STARTING STATE: a member's card (linked to a user), with no local balance. Its
+    FED is read and debited THROUGH THE CARD, never with the member's signature. The
+    member becomes the sale's customer. Linked by update().
     """
     membre = creer_utilisateur(prenom="Membre", nom="Reseau")
     carte = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=0)
@@ -1949,75 +1979,173 @@ def creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu):
     return carte
 
 
-def transaction_du_reseau(categorie, montant_en_centimes):
+def tag_de_la_carte_primaire_du_caissier(point_de_vente):
     """
-    Une transaction telle que le serveur Fedow distant la rend après un débit : son
-    uuid, la monnaie débitée, le montant, et la fiche de la monnaie (catégorie « FED »
-    pour la monnaie fédérée, « TLF » pour la monnaie locale d'un autre lieu).
-    / A transaction as the remote Fedow server returns it after a debit.
+    La carte primaire du caissier, autorisée sur ce point de vente, hors mode gérant.
+    La caisse envoie son tag (`tag_id_cm`) avec chaque paiement : l'ancien Fedow
+    exige une carte primaire du lieu pour débiter le FED d'une carte.
+    / The cashier's primary card, allowed on this point of sale. The register sends
+    its tag (`tag_id_cm`): the old Fedow needs it to debit a card's FED.
+
+    `tag_id` et `number` font 8 caractères au plus (tests/PIEGES.md 9.31).
+
+    :return: str — le tag de la carte primaire
+    """
+    tag_de_la_carte_primaire = identifiant_unique().upper()
+    carte_du_caissier = CarteCashless.objects.create(
+        tag_id=tag_de_la_carte_primaire,
+        number=tag_de_la_carte_primaire,
+        uuid=uuid.uuid4(),
+    )
+    carte_primaire = CartePrimaire.objects.create(
+        carte=carte_du_caissier,
+        edit_mode=False,
+    )
+    carte_primaire.points_de_vente.add(point_de_vente)
+    return tag_de_la_carte_primaire
+
+
+def transaction_fed_du_reseau(montant_en_centimes):
+    """
+    Une transaction FED telle que l'ancien Fedow la rend après un débit par la carte
+    (`POST transaction/`), réduite aux champs que la caisse lit : son uuid, la
+    monnaie débitée (le FED) et le montant.
+    / A FED transaction as the old Fedow returns it after a card debit, reduced to
+    the fields the register reads.
     """
     return {
         "uuid": str(uuid.uuid4()),
-        "asset": str(uuid.uuid4()),
+        "asset": UUID_DU_FED_DE_L_ANCIEN_FEDOW,
         "amount": montant_en_centimes,
-        "serialized_asset": {"category": categorie},
     }
 
 
-def fedow_du_reseau_simule(transactions_rendues):
+@contextmanager
+def ancien_fedow_simule_par_carte(fed_par_carte, debit_par_carte):
     """
-    Le client du serveur Fedow distant (`FedowAPI`), simulé : son débit rend les
-    transactions données. Aucun appel réseau.
-    / The remote Fedow client, faked: its debit returns the given transactions.
+    L'ancien Fedow (serveur distant), simulé PAR LA CARTE, comme la caisse le lit et
+    le débite. Aucun appel réseau.
+    / The old Fedow, faked THROUGH THE CARD, as the register reads and debits it.
+
+    - Le lieu est dit relié (`FedowConfig.can_fedow`).
+    - `NFCcard.retrieve(tag)` rend la fiche de la carte, réduite à ce que la caisse
+      lit : l'uuid de son portefeuille et son jeton FED. Un tag absent de
+      `fed_par_carte` répond `CarteInconnueDeFedow` (le 404 de l'ancien Fedow).
+    - `transaction.to_place(...)` (débit par la carte et la carte primaire) rend la
+      transaction de la carte débitée, ou lève l'exception donnée pour elle.
+    - Un débit par la signature d'une personne (`to_place_from_qrcode`) fait
+      échouer le débit : la caisse ne l'utilise jamais.
+
+    :param fed_par_carte: {tag de la carte: FED de la carte, en centimes}
+    :param debit_par_carte: {tag de la carte: transaction rendue
+        (`transaction_fed_du_reseau`), ou Exception levée}
+    :return: le faux client `FedowAPI()`, pour lire les débits demandés
     """
+    fiche_par_tag = {}
+    for tag_id, fed_en_centimes in fed_par_carte.items():
+        jeton_fed = {
+            "value": fed_en_centimes,
+            "asset_uuid": UUID_DU_FED_DE_L_ANCIEN_FEDOW,
+            "asset_category": "FED",
+        }
+        fiche_par_tag[tag_id] = {
+            "first_tag_id": tag_id,
+            "wallet": {"uuid": str(uuid.uuid4()), "tokens": [jeton_fed]},
+        }
+
+    def lire_la_fiche(tag_id):
+        fiche_connue = fiche_par_tag.get(tag_id)
+        if fiche_connue is None:
+            raise CarteInconnueDeFedow(f"Carte inconnue de Fedow : {tag_id}")
+        return fiche_connue
+
+    def debiter_la_carte(**arguments_du_debit):
+        reponse_du_debit = debit_par_carte[arguments_du_debit["user_card_firstTagId"]]
+        if isinstance(reponse_du_debit, Exception):
+            raise reponse_du_debit
+        return reponse_du_debit
+
+    def debit_par_signature_interdit(*arguments, **arguments_nommes):
+        raise AssertionError("Le FED se débite par la carte, jamais par la signature.")
+
     faux_fedow = MagicMock()
-    faux_fedow.transaction.to_place_from_qrcode.return_value = transactions_rendues
-    return faux_fedow
+    faux_fedow.NFCcard.retrieve.side_effect = lire_la_fiche
+    faux_fedow.transaction.to_place.side_effect = debiter_la_carte
+    faux_fedow.transaction.to_place_from_qrcode.side_effect = (
+        debit_par_signature_interdit
+    )
+
+    with patch.object(FedowConfig, "can_fedow", return_value=True):
+        with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
+            yield faux_fedow
 
 
-def test_legacy_un_reglement_par_transaction_legacy(lieu):
+def debits_demandes_par_carte(faux_fedow):
+    """
+    Les débits demandés à l'ancien Fedow simulé, par carte débitée :
+    {tag de la carte: (montant, tag de la carte primaire)}.
+    / The debits asked from the faked old Fedow, per debited card.
+    """
+    debits_par_carte = {}
+    for appel in faux_fedow.transaction.to_place.call_args_list:
+        tag_de_la_carte = appel.kwargs["user_card_firstTagId"]
+        debits_par_carte[tag_de_la_carte] = (
+            appel.kwargs["amount"],
+            appel.kwargs["primary_card_fisrtTagId"],
+        )
+    return debits_par_carte
+
+
+def test_fed_une_transaction_distante_un_seul_reglement(lieu):
     """
     Une bière à 5,00 € et un jus à 3,50 € (8,50 €), payés par la carte d'un membre qui
-    n'a rien dans les monnaies du lieu : tout est payé avec la monnaie du réseau. Le
-    serveur Fedow débite 3,00 € de monnaie locale d'un autre lieu (TLF) et 5,50 € de
-    monnaie fédérée (FED) : deux transactions distantes.
-    La vente a UN règlement par transaction distante (pas un par part d'article) :
-    monnaie locale (LE) 300 et monnaie fédérée (SF) 550. Chaque règlement porte l'uuid
-    de SA transaction dans `reference_externe` (elle vit sur le serveur distant), la
-    monnaie débitée dans `asset`, et pas de `fedow_transaction_uuid` (réservé aux
-    transactions locales).
-    / 8.50 € paid by the network currency: two remote transactions (TLF 300, FED 550).
-    One payment per remote transaction, with its uuid in `reference_externe`.
+    n'a rien dans les monnaies du lieu et 10,00 € de FED sur l'ancien Fedow : tout est
+    payé en FED. L'ancien Fedow est débité de 8,50 € (et seulement de ce qui est dû),
+    par la carte et la carte primaire du caissier : UNE transaction distante, qui paie
+    les DEUX articles.
+    La vente a UN règlement pour cette transaction (pas un par part d'article) : FED
+    (SF) 850, avec l'uuid de la transaction dans `reference_externe` (elle vit sur le
+    serveur distant), le FED dans `asset`, et pas de `fedow_transaction_uuid` (réservé
+    aux transactions locales).
+    / 8.50 € paid in FED: one remote transaction over two items, debited through the
+    card and the cashier's primary card. One payment, uuid in `reference_externe`.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit, jus.produit])
     carte_du_membre = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
     champs_du_panier = {
         f"repid-{cle_de_panier(biere)}": "1",
         f"repid-{cle_de_panier(jus)}": "1",
     }
-    transaction_en_monnaie_locale = transaction_du_reseau("TLF", 300)
-    transaction_en_monnaie_federee = transaction_du_reseau("FED", 550)
-    faux_fedow = fedow_du_reseau_simule(
-        [transaction_en_monnaie_locale, transaction_en_monnaie_federee]
-    )
+    transaction_en_fed = transaction_fed_du_reseau(850)
 
-    with patch("laboutik.views.lire_depensable_fed_frais", return_value=(850, True)):
-        with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
-            reponse = payer_par_la_carte_du_client(
-                client_du_caissier,
-                point_de_vente,
-                champs_du_panier,
-                carte_du_membre,
-                cle_d_idempotence,
-            )
+    with ancien_fedow_simule_par_carte(
+        fed_par_carte={carte_du_membre.tag_id: 1000},
+        debit_par_carte={carte_du_membre.tag_id: transaction_en_fed},
+    ) as faux_fedow:
+        reponse = payer_par_la_carte_du_client(
+            client_du_caissier,
+            point_de_vente,
+            champs_du_panier,
+            carte_du_membre,
+            cle_d_idempotence,
+            tag_id_carte_primaire=tag_de_la_carte_primaire,
+        )
 
     assert reponse.status_code == 200
-    assert faux_fedow.transaction.to_place_from_qrcode.call_count == 1
+    assert 'data-testid="paiement-succes"' in reponse.content.decode()
+    # Un seul débit, par la carte et la carte primaire du caissier, de ce qui est dû.
+    # / One debit, through the card and the cashier's primary card, of what is due.
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_du_membre.tag_id: (850, tag_de_la_carte_primaire)
+    }
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
+    assert vente.client_id == carte_du_membre.user_id
+    assert vente.articles.count() == 2
 
     reglements_lus = []
     for reglement in vente.reglements.all():
@@ -2030,75 +2158,68 @@ def test_legacy_un_reglement_par_transaction_legacy(lieu):
                 reglement.fedow_transaction_uuid,
             )
         )
-    assert sorted(reglements_lus, key=str) == sorted(
-        [
-            (
-                PaymentMethod.LOCAL_EURO,
-                300,
-                transaction_en_monnaie_locale["uuid"],
-                transaction_en_monnaie_locale["asset"],
-                None,
-            ),
-            (
-                PaymentMethod.STRIPE_FED,
-                550,
-                transaction_en_monnaie_federee["uuid"],
-                transaction_en_monnaie_federee["asset"],
-                None,
-            ),
-        ],
-        key=str,
-    )
+    assert reglements_lus == [
+        (
+            PaymentMethod.STRIPE_FED,
+            850,
+            transaction_en_fed["uuid"],
+            transaction_en_fed["asset"],
+            None,
+        ),
+    ]
     verifier_egalites(vente)
 
 
 def test_egalite_rompue_apres_debit_legacy_journalisee(lieu, caplog):
     """
-    Même panier que le test précédent (8,50 €, tout en monnaie du réseau). Le débit du
-    réseau est fait (hors de la transaction de base : il ne s'annule pas), puis la
+    Même panier que le test précédent (8,50 €, tout en FED). Le débit de l'ancien
+    Fedow est fait (hors de la transaction de base : il ne s'annule pas), puis la
     vente ne peut pas être encaissée : ses égalités sont rompues
     (`EgaliteDeVenteRompue`, simulée à l'encaissement).
-    La caisse journalise un INCIDENT (le montant débité sur le réseau, la carte, l'uuid
-    de chaque transaction du réseau) pour une régularisation à la main, et rend son
+    La caisse journalise un INCIDENT (le montant débité sur l'ancien Fedow, la carte,
+    l'uuid de la transaction distante) pour une régularisation à la main, et rend son
     écran d'erreur (jamais une erreur 500). Rien n'est écrit : ni vente, ni ligne.
-    / Same cart, the network debit is done, then the sale cannot be settled (broken
-    equality, faked). The register logs an INCIDENT (amount, card, network transaction
-    uuids), shows its error screen (never a 500), and writes nothing.
+    / Same cart, the FED debit is done, then the sale cannot be settled (broken
+    equality, faked). The register logs an INCIDENT (amount, card, remote transaction
+    uuid), shows its error screen (never a 500), and writes nothing.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit, jus.produit])
     carte_du_membre = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
     champs_du_panier = {
         f"repid-{cle_de_panier(biere)}": "1",
         f"repid-{cle_de_panier(jus)}": "1",
     }
-    transaction_en_monnaie_locale = transaction_du_reseau("TLF", 300)
-    transaction_en_monnaie_federee = transaction_du_reseau("FED", 550)
-    faux_fedow = fedow_du_reseau_simule(
-        [transaction_en_monnaie_locale, transaction_en_monnaie_federee]
-    )
+    transaction_en_fed = transaction_fed_du_reseau(850)
     egalite_rompue = EgaliteDeVenteRompue(
         "Égalité simulée par le test : règlements 850, articles 851."
     )
 
     with caplog.at_level(logging.ERROR, logger="laboutik.views"):
-        with patch("laboutik.views.lire_depensable_fed_frais", return_value=(850, True)):
-            with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
-                with patch("laboutik.views.encaisser_vente", side_effect=egalite_rompue):
-                    reponse = payer_par_la_carte_du_client(
-                        client_du_caissier,
-                        point_de_vente,
-                        champs_du_panier,
-                        carte_du_membre,
-                        cle_d_idempotence,
-                    )
+        with ancien_fedow_simule_par_carte(
+            fed_par_carte={carte_du_membre.tag_id: 850},
+            debit_par_carte={carte_du_membre.tag_id: transaction_en_fed},
+        ) as faux_fedow:
+            with patch("laboutik.views.encaisser_vente", side_effect=egalite_rompue):
+                reponse = payer_par_la_carte_du_client(
+                    client_du_caissier,
+                    point_de_vente,
+                    champs_du_panier,
+                    carte_du_membre,
+                    cle_d_idempotence,
+                    tag_id_carte_primaire=tag_de_la_carte_primaire,
+                )
 
-    # Le débit du réseau a bien eu lieu : c'est ce qui rend l'incident nécessaire.
-    # / The network debit did happen: that is why the incident is needed.
-    assert faux_fedow.transaction.to_place_from_qrcode.call_count == 1
+    # Le débit de l'ancien Fedow a bien eu lieu : c'est ce qui rend l'incident
+    # nécessaire.
+    # / The old Fedow debit did happen: that is why the incident is needed.
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_du_membre.tag_id: (850, tag_de_la_carte_primaire)
+    }
 
     # L'écran d'erreur de la caisse, pas une erreur du serveur, pas un succès.
     # / The register's error screen: not a server error, not a success.
@@ -2107,83 +2228,11 @@ def test_egalite_rompue_apres_debit_legacy_journalisee(lieu, caplog):
     assert 'data-testid="alerte-messages"' in contenu_de_la_reponse
     assert 'data-testid="paiement-succes"' not in contenu_de_la_reponse
 
-    # L'incident est journalisé, avec le montant débité sur le réseau et la carte.
-    # / The incident is logged with the network amount and the card.
-    messages_d_incident = []
-    for enregistrement in caplog.records:
-        message_journalise = enregistrement.getMessage()
-        est_une_erreur = enregistrement.levelno >= logging.ERROR
-        if est_une_erreur and "INCIDENT" in message_journalise:
-            messages_d_incident.append(message_journalise)
-    assert len(messages_d_incident) == 1, (
-        f"Attendu : un incident journalisé, trouvé : {messages_d_incident}"
-    )
-    assert "850" in messages_d_incident[0]
-    assert carte_du_membre.tag_id in messages_d_incident[0]
-    # Les uuid des transactions du réseau : sans eux, personne ne peut retrouver ni
+    # L'incident est journalisé, avec le montant débité sur l'ancien Fedow, la carte
+    # et l'uuid de la transaction distante : sans lui, personne ne peut retrouver ni
     # régulariser à la main l'argent débité sur le serveur distant.
-    # / The network transaction uuids: needed to find and fix the debited money by hand.
-    assert transaction_en_monnaie_locale["uuid"] in messages_d_incident[0]
-    assert transaction_en_monnaie_federee["uuid"] in messages_d_incident[0]
-
-    # Rien n'est écrit.
-    # / Nothing is written.
-    assert not Vente.objects.filter(idempotency_key=cle_d_idempotence).exists()
-    assert not LigneArticle.objects.filter(pricesold__price=biere.tarif).exists()
-    assert not LigneArticle.objects.filter(pricesold__price=jus.tarif).exists()
-
-
-def test_exception_imprevue_apres_debit_legacy_journalisee(lieu, caplog):
-    """
-    Même panier que le test précédent (8,50 €, tout en monnaie du réseau). Le débit du
-    réseau est fait (hors de la transaction de base : il ne s'annule pas), puis une
-    erreur imprévue survient pendant l'écriture de la vente (simulée à l'encaissement
-    par une `RuntimeError`).
-    La caisse journalise UN INCIDENT (le montant débité sur le réseau, la carte, l'uuid
-    de chaque transaction du réseau) pour une régularisation à la main, puis relaie
-    l'erreur (erreur 500 volontaire). Le client de test Django relaie l'exception de la
-    vue : le test l'attend avec `pytest.raises`. Rien n'est écrit : ni vente, ni ligne.
-    / Same cart, the network debit is done, then an unexpected error happens while
-    writing the sale. One INCIDENT (amount, card, network transaction uuids), then the
-    error is re-raised (the test client re-raises it). Nothing written.
-    """
-    biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
-    jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
-    point_de_vente = creer_un_point_de_vente([biere.produit, jus.produit])
-    carte_du_membre = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
-    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
-    cle_d_idempotence = nouvelle_cle_d_idempotence()
-    champs_du_panier = {
-        f"repid-{cle_de_panier(biere)}": "1",
-        f"repid-{cle_de_panier(jus)}": "1",
-    }
-    transaction_en_monnaie_locale = transaction_du_reseau("TLF", 300)
-    transaction_en_monnaie_federee = transaction_du_reseau("FED", 550)
-    faux_fedow = fedow_du_reseau_simule(
-        [transaction_en_monnaie_locale, transaction_en_monnaie_federee]
-    )
-    erreur_imprevue = RuntimeError("Erreur imprévue simulée par le test.")
-
-    with caplog.at_level(logging.ERROR, logger="laboutik.views"):
-        with patch("laboutik.views.lire_depensable_fed_frais", return_value=(850, True)):
-            with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
-                with patch("laboutik.views.encaisser_vente", side_effect=erreur_imprevue):
-                    with pytest.raises(RuntimeError):
-                        payer_par_la_carte_du_client(
-                            client_du_caissier,
-                            point_de_vente,
-                            champs_du_panier,
-                            carte_du_membre,
-                            cle_d_idempotence,
-                        )
-
-    # Le débit du réseau a bien eu lieu : c'est ce qui rend l'incident nécessaire.
-    # / The network debit did happen: that is why the incident is needed.
-    assert faux_fedow.transaction.to_place_from_qrcode.call_count == 1
-
-    # L'incident est journalisé, avec le montant débité sur le réseau, la carte et
-    # l'uuid de chaque transaction du réseau.
-    # / The incident is logged with the network amount, the card and every uuid.
+    # / The incident is logged with the amount, the card and the remote transaction
+    # uuid, needed to find and fix the debited money by hand.
     messages_d_incident = []
     for enregistrement in caplog.records:
         message_journalise = enregistrement.getMessage()
@@ -2195,8 +2244,81 @@ def test_exception_imprevue_apres_debit_legacy_journalisee(lieu, caplog):
     )
     assert re.search(r"\b850\b", messages_d_incident[0])
     assert carte_du_membre.tag_id in messages_d_incident[0]
-    assert transaction_en_monnaie_locale["uuid"] in messages_d_incident[0]
-    assert transaction_en_monnaie_federee["uuid"] in messages_d_incident[0]
+    assert transaction_en_fed["uuid"] in messages_d_incident[0]
+
+    # Rien n'est écrit.
+    # / Nothing is written.
+    assert not Vente.objects.filter(idempotency_key=cle_d_idempotence).exists()
+    assert not LigneArticle.objects.filter(pricesold__price=biere.tarif).exists()
+    assert not LigneArticle.objects.filter(pricesold__price=jus.tarif).exists()
+
+
+def test_exception_imprevue_apres_debit_legacy_journalisee(lieu, caplog):
+    """
+    Même panier que le test précédent (8,50 €, tout en FED). Le débit de l'ancien
+    Fedow est fait (hors de la transaction de base : il ne s'annule pas), puis une
+    erreur imprévue survient pendant l'écriture de la vente (simulée à l'encaissement
+    par une `RuntimeError`).
+    La caisse journalise UN INCIDENT (le montant débité sur l'ancien Fedow, la carte,
+    l'uuid de la transaction distante) pour une régularisation à la main, puis relaie
+    l'erreur (erreur 500 volontaire). Le client de test Django relaie l'exception de la
+    vue : le test l'attend avec `pytest.raises`. Rien n'est écrit : ni vente, ni ligne.
+    / Same cart, the FED debit is done, then an unexpected error happens while writing
+    the sale. One INCIDENT (amount, card, remote transaction uuid), then the error is
+    re-raised (the test client re-raises it). Nothing written.
+    """
+    biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
+    jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
+    point_de_vente = creer_un_point_de_vente([biere.produit, jus.produit])
+    carte_du_membre = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
+    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
+    cle_d_idempotence = nouvelle_cle_d_idempotence()
+    champs_du_panier = {
+        f"repid-{cle_de_panier(biere)}": "1",
+        f"repid-{cle_de_panier(jus)}": "1",
+    }
+    transaction_en_fed = transaction_fed_du_reseau(850)
+    erreur_imprevue = RuntimeError("Erreur imprévue simulée par le test.")
+
+    with caplog.at_level(logging.ERROR, logger="laboutik.views"):
+        with ancien_fedow_simule_par_carte(
+            fed_par_carte={carte_du_membre.tag_id: 850},
+            debit_par_carte={carte_du_membre.tag_id: transaction_en_fed},
+        ) as faux_fedow:
+            with patch("laboutik.views.encaisser_vente", side_effect=erreur_imprevue):
+                with pytest.raises(RuntimeError):
+                    payer_par_la_carte_du_client(
+                        client_du_caissier,
+                        point_de_vente,
+                        champs_du_panier,
+                        carte_du_membre,
+                        cle_d_idempotence,
+                        tag_id_carte_primaire=tag_de_la_carte_primaire,
+                    )
+
+    # Le débit de l'ancien Fedow a bien eu lieu : c'est ce qui rend l'incident
+    # nécessaire.
+    # / The old Fedow debit did happen: that is why the incident is needed.
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_du_membre.tag_id: (850, tag_de_la_carte_primaire)
+    }
+
+    # L'incident est journalisé, avec le montant débité sur l'ancien Fedow, la carte
+    # et l'uuid de la transaction distante.
+    # / The incident is logged with the amount, the card and the remote uuid.
+    messages_d_incident = []
+    for enregistrement in caplog.records:
+        message_journalise = enregistrement.getMessage()
+        est_une_erreur = enregistrement.levelno >= logging.ERROR
+        if est_une_erreur and "INCIDENT" in message_journalise:
+            messages_d_incident.append(message_journalise)
+    assert len(messages_d_incident) == 1, (
+        f"Attendu : un incident journalisé, trouvé : {messages_d_incident}"
+    )
+    assert re.search(r"\b850\b", messages_d_incident[0])
+    assert carte_du_membre.tag_id in messages_d_incident[0]
+    assert transaction_en_fed["uuid"] in messages_d_incident[0]
 
     # Rien n'est écrit.
     # / Nothing is written.
@@ -2479,6 +2601,7 @@ def payer_le_reste_en_especes_ou_en_cb(
     moyen_du_reste,
     cle_d_idempotence,
     somme_donnee_en_centimes="",
+    tag_id_carte_primaire=None,
 ):
     """
     Le caissier règle le reste du panier que la carte ne couvre pas : la vraie route du
@@ -2488,9 +2611,12 @@ def payer_le_reste_en_especes_ou_en_cb(
     `moyen_du_reste` : "espece" ou "carte_bancaire".
     `somme_donnee_en_centimes` : ce que le client tend en espèces, en centimes, comme
     le pavé des espèces l'envoie ; vide = compte juste.
+    `tag_id_carte_primaire` : le tag de la carte primaire du caissier, envoyé dans
+    `tag_id_cm` (l'écran inclut #addition-form). None : champ absent.
     Le serveur refait lui-même la cascade de la carte : l'écran n'a pas besoin de lui
     renvoyer le détail de la cascade. La clé d'idempotence est celle du paiement.
-    / Empty given sum = exact amount. The server recomputes the card cascade itself.
+    / Empty given sum = exact amount. The primary card tag goes in `tag_id_cm`. The
+    server recomputes the card cascade itself.
     """
     donnees_du_formulaire = {
         "uuid_pv": str(point_de_vente.uuid),
@@ -2499,6 +2625,8 @@ def payer_le_reste_en_especes_ou_en_cb(
         "moyen_complement": moyen_du_reste,
         "given_sum": somme_donnee_en_centimes,
     }
+    if tag_id_carte_primaire is not None:
+        donnees_du_formulaire["tag_id_cm"] = tag_id_carte_primaire
     donnees_du_formulaire.update(champs_du_panier)
     return client_du_caissier.post(
         URL_DU_PAIEMENT_COMPLEMENTAIRE, donnees_du_formulaire
@@ -2723,56 +2851,56 @@ def test_complement_especes_reglement_egal_au_reste_du_pas_a_la_somme_donnee(lie
 # --------------------------------------------------------------------------
 
 
-def test_complement_legacy_partiel_un_reglement_par_transaction_legacy(lieu):
+def test_complement_fed_partiel_un_reglement_fed_et_un_reglement_especes(lieu):
     """
     Une bière à 5,00 € et un jus à 3,50 € (8,50 €), payés avec la carte d'un membre qui
-    n'a rien dans les monnaies du lieu. Le réseau ne peut payer que 7,00 € : le serveur
-    Fedow débite 2,00 € de monnaie locale d'un autre lieu (TLF) et 5,00 € de monnaie
-    fédérée (FED), deux transactions distantes. Le reste, 1,50 €, est réglé en espèces.
-    La transaction FED paie une partie de DEUX articles (3,00 € de la bière, 2,00 € du
-    jus). La vente a UN règlement par transaction distante (pas un par article) :
-    monnaie locale (LE) 200 et monnaie fédérée (SF) 500, chacun avec l'uuid de SA
-    transaction dans `reference_externe`, sa monnaie, la carte, et pas de
-    `fedow_transaction_uuid` (réservé aux transactions locales). Plus UN règlement
-    espèces du reste dû, 150. Le client de la vente est le membre.
-    / 8.50 €: the network pays 7.00 € (TLF 200 + FED 500, two remote transactions; the
-    FED one covers two item parts), cash pays 1.50 €. One payment per remote transaction
-    (uuid in `reference_externe`), plus one cash payment of 150. The sale's customer is
-    the member.
+    n'a rien dans les monnaies du lieu et 7,00 € de FED sur l'ancien Fedow. L'ancien
+    Fedow est débité de ces 7,00 €, par la carte et la carte primaire du caissier : UNE
+    transaction distante. Le reste, 1,50 €, est réglé en espèces.
+    La transaction FED paie une partie de DEUX articles (5,00 € de la bière, 2,00 € du
+    jus). La vente a UN règlement pour cette transaction (pas un par article) : FED
+    (SF) 700, avec l'uuid de la transaction dans `reference_externe`, le FED, la
+    carte, et pas de `fedow_transaction_uuid` (réservé aux transactions locales). Plus
+    UN règlement espèces du reste dû, 150. Le client de la vente est le membre.
+    / 8.50 €: the FED pays 7.00 € (one remote transaction over two item parts), cash
+    pays 1.50 €. One FED payment (uuid in `reference_externe`), plus one cash payment
+    of 150. The sale's customer is the member.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit, jus.produit])
     carte_du_membre = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
     champs_du_panier = {
         f"repid-{cle_de_panier(biere)}": "1",
         f"repid-{cle_de_panier(jus)}": "1",
     }
-    transaction_en_monnaie_locale = transaction_du_reseau("TLF", 200)
-    transaction_en_monnaie_federee = transaction_du_reseau("FED", 500)
-    faux_fedow = fedow_du_reseau_simule(
-        [transaction_en_monnaie_locale, transaction_en_monnaie_federee]
-    )
+    transaction_en_fed = transaction_fed_du_reseau(700)
 
-    with patch("laboutik.views.lire_depensable_fed_frais", return_value=(700, True)):
-        with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
-            reponse = payer_le_reste_en_especes_ou_en_cb(
-                client_du_caissier,
-                point_de_vente,
-                champs_du_panier,
-                carte_du_membre,
-                moyen_du_reste="espece",
-                cle_d_idempotence=cle_d_idempotence,
-            )
+    with ancien_fedow_simule_par_carte(
+        fed_par_carte={carte_du_membre.tag_id: 700},
+        debit_par_carte={carte_du_membre.tag_id: transaction_en_fed},
+    ) as faux_fedow:
+        reponse = payer_le_reste_en_especes_ou_en_cb(
+            client_du_caissier,
+            point_de_vente,
+            champs_du_panier,
+            carte_du_membre,
+            moyen_du_reste="espece",
+            cle_d_idempotence=cle_d_idempotence,
+            tag_id_carte_primaire=tag_de_la_carte_primaire,
+        )
 
     assert reponse.status_code == 200
-    # Un seul débit du réseau, de ce qu'il peut payer.
-    # / One network debit, of what it can pay.
-    assert faux_fedow.transaction.to_place_from_qrcode.call_count == 1
-    arguments_du_debit = faux_fedow.transaction.to_place_from_qrcode.call_args.kwargs
-    assert arguments_du_debit["amount"] == 700
+    # Un seul débit de l'ancien Fedow, de ce que le FED peut payer, par la carte et
+    # la carte primaire du caissier.
+    # / One old Fedow debit, of what the FED can pay, through the card and the
+    # cashier's primary card.
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_du_membre.tag_id: (700, tag_de_la_carte_primaire)
+    }
 
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
     assert vente.client_id == carte_du_membre.user_id
@@ -2802,17 +2930,10 @@ def test_complement_legacy_partiel_un_reglement_par_transaction_legacy(lieu):
     assert sorted(reglements_lus, key=str) == sorted(
         [
             (
-                PaymentMethod.LOCAL_EURO,
-                200,
-                transaction_en_monnaie_locale["uuid"],
-                transaction_en_monnaie_locale["asset"],
-                None,
-            ),
-            (
                 PaymentMethod.STRIPE_FED,
-                500,
-                transaction_en_monnaie_federee["uuid"],
-                transaction_en_monnaie_federee["asset"],
+                700,
+                transaction_en_fed["uuid"],
+                transaction_en_fed["asset"],
                 None,
             ),
             (PaymentMethod.CASH, 150, "", None, None),
@@ -2835,21 +2956,22 @@ def test_complement_reseau_paie_tout_le_reste_aucun_reglement_especes(lieu):
     """
     Une bière à 5,00 € et un jus à 3,50 € (8,50 €), payés avec la carte d'un membre qui
     porte 3,00 € de monnaie locale du lieu. L'écran « reste à payer » a proposé les
-    espèces pour 5,50 €. Mais au moment du complément, le solde du réseau relu à neuf
-    couvre tout ce reste (il a grandi depuis l'écran NFC) : le serveur Fedow débite
-    1,50 € de monnaie locale d'un autre lieu (TLF) et 4,00 € de monnaie fédérée (FED).
+    espèces pour 5,50 €. Mais au moment du complément, le FED de la carte, relu à neuf
+    sur l'ancien Fedow (10,00 €), couvre tout ce reste : l'ancien Fedow est débité de
+    5,50 € de FED, une transaction distante.
     Il ne reste rien à payer en espèces : la vente n'a AUCUN règlement espèces (ni de
     montant 0). Ses règlements : la transaction de la carte (LE 300, son uuid dans
-    `fedow_transaction_uuid`), et une par transaction du réseau (LE 150, SF 400, leur
-    uuid dans `reference_externe`).
-    / 8.50 €: the card pays 3.00 €, the freshly read network balance covers the whole
-    5.50 € rest. No cash payment at all (not even 0): one payment for the card
-    transaction, one per network transaction.
+    `fedow_transaction_uuid`), et la transaction FED (SF 550, son uuid dans
+    `reference_externe`).
+    / 8.50 €: the card pays 3.00 €, the freshly read FED covers the whole 5.50 € rest.
+    No cash payment at all (not even 0): one payment for the card transaction, one for
+    the FED transaction.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit, jus.produit])
     carte_du_membre = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
     # La carte du membre porte 3,00 € de monnaie locale du lieu.
     # / The member's card holds 3.00 € of the venue's local currency.
     monnaie_locale = monnaie_locale_du_lieu(lieu)
@@ -2862,31 +2984,30 @@ def test_complement_reseau_paie_tout_le_reste_aucun_reglement_especes(lieu):
         f"repid-{cle_de_panier(biere)}": "1",
         f"repid-{cle_de_panier(jus)}": "1",
     }
-    transaction_en_monnaie_locale = transaction_du_reseau("TLF", 150)
-    transaction_en_monnaie_federee = transaction_du_reseau("FED", 400)
-    faux_fedow = fedow_du_reseau_simule(
-        [transaction_en_monnaie_locale, transaction_en_monnaie_federee]
-    )
+    transaction_en_fed = transaction_fed_du_reseau(550)
 
-    # Le solde du réseau relu au complément (10,00 €) dépasse le reste dû (5,50 €).
-    # / The network balance read at complement time exceeds the amount due.
-    with patch("laboutik.views.lire_depensable_fed_frais", return_value=(1000, True)):
-        with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
-            reponse = payer_le_reste_en_especes_ou_en_cb(
-                client_du_caissier,
-                point_de_vente,
-                champs_du_panier,
-                carte_du_membre,
-                moyen_du_reste="espece",
-                cle_d_idempotence=cle_d_idempotence,
-            )
+    # Le FED relu au complément (10,00 €) dépasse le reste dû (5,50 €).
+    # / The FED read at complement time exceeds the amount due.
+    with ancien_fedow_simule_par_carte(
+        fed_par_carte={carte_du_membre.tag_id: 1000},
+        debit_par_carte={carte_du_membre.tag_id: transaction_en_fed},
+    ) as faux_fedow:
+        reponse = payer_le_reste_en_especes_ou_en_cb(
+            client_du_caissier,
+            point_de_vente,
+            champs_du_panier,
+            carte_du_membre,
+            moyen_du_reste="espece",
+            cle_d_idempotence=cle_d_idempotence,
+            tag_id_carte_primaire=tag_de_la_carte_primaire,
+        )
 
     assert reponse.status_code == 200
-    # Le réseau débite tout le reste, et seulement le reste.
-    # / The network debits the whole rest, and only the rest.
-    assert faux_fedow.transaction.to_place_from_qrcode.call_count == 1
-    arguments_du_debit = faux_fedow.transaction.to_place_from_qrcode.call_args.kwargs
-    assert arguments_du_debit["amount"] == 550
+    # L'ancien Fedow débite tout le reste, et seulement le reste.
+    # / The old Fedow debits the whole rest, and only the rest.
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_du_membre.tag_id: (550, tag_de_la_carte_primaire)
+    }
 
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
     assert vente.statut == Vente.Statut.REGLEE
@@ -2911,16 +3032,10 @@ def test_complement_reseau_paie_tout_le_reste_aucun_reglement_especes(lieu):
         [
             (PaymentMethod.LOCAL_EURO, 300, transaction_de_la_carte.uuid, ""),
             (
-                PaymentMethod.LOCAL_EURO,
-                150,
-                None,
-                transaction_en_monnaie_locale["uuid"],
-            ),
-            (
                 PaymentMethod.STRIPE_FED,
-                400,
+                550,
                 None,
-                transaction_en_monnaie_federee["uuid"],
+                transaction_en_fed["uuid"],
             ),
         ],
         key=str,
@@ -2942,52 +3057,55 @@ def test_complement_reseau_paie_tout_le_reste_aucun_reglement_especes(lieu):
 
 def test_egalite_rompue_apres_debit_legacy_journalisee_complement(lieu, caplog):
     """
-    Même panier que le test précédent (8,50 €) : le réseau débite 5,00 € (hors de la
-    transaction de base : il ne s'annule pas), le reste est à payer en espèces. Puis la
-    vente ne peut pas être encaissée : ses égalités sont rompues
+    Même panier que le test précédent (8,50 €) : l'ancien Fedow débite 5,00 € de FED
+    (hors de la transaction de base : il ne s'annule pas), le reste est à payer en
+    espèces. Puis la vente ne peut pas être encaissée : ses égalités sont rompues
     (`EgaliteDeVenteRompue`, simulée à l'encaissement).
-    La caisse journalise un INCIDENT (le montant débité sur le réseau, la carte, l'uuid
-    de chaque transaction du réseau) pour une régularisation à la main, et rend son
+    La caisse journalise un INCIDENT (le montant débité sur l'ancien Fedow, la carte,
+    l'uuid de la transaction distante) pour une régularisation à la main, et rend son
     écran d'erreur (jamais une erreur 500). Rien n'est écrit : ni vente, ni ligne.
-    / Same cart: the network debits 5.00 €, then the sale cannot be settled (broken
-    equality, faked). The register logs an INCIDENT (amount, card, network transaction
-    uuids), shows its error screen (never a 500), and writes nothing.
+    / Same cart: the old Fedow debits 5.00 € of FED, then the sale cannot be settled
+    (broken equality, faked). The register logs an INCIDENT (amount, card, remote
+    transaction uuid), shows its error screen (never a 500), and writes nothing.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit, jus.produit])
     carte_du_membre = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
     champs_du_panier = {
         f"repid-{cle_de_panier(biere)}": "1",
         f"repid-{cle_de_panier(jus)}": "1",
     }
-    transaction_en_monnaie_locale = transaction_du_reseau("TLF", 200)
-    transaction_en_monnaie_federee = transaction_du_reseau("FED", 300)
-    faux_fedow = fedow_du_reseau_simule(
-        [transaction_en_monnaie_locale, transaction_en_monnaie_federee]
-    )
+    transaction_en_fed = transaction_fed_du_reseau(500)
     egalite_rompue = EgaliteDeVenteRompue(
         "Égalité simulée par le test : règlements 850, articles 851."
     )
 
     with caplog.at_level(logging.ERROR, logger="laboutik.views"):
-        with patch("laboutik.views.lire_depensable_fed_frais", return_value=(500, True)):
-            with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
-                with patch("laboutik.views.encaisser_vente", side_effect=egalite_rompue):
-                    reponse = payer_le_reste_en_especes_ou_en_cb(
-                        client_du_caissier,
-                        point_de_vente,
-                        champs_du_panier,
-                        carte_du_membre,
-                        moyen_du_reste="espece",
-                        cle_d_idempotence=cle_d_idempotence,
-                    )
+        with ancien_fedow_simule_par_carte(
+            fed_par_carte={carte_du_membre.tag_id: 500},
+            debit_par_carte={carte_du_membre.tag_id: transaction_en_fed},
+        ) as faux_fedow:
+            with patch("laboutik.views.encaisser_vente", side_effect=egalite_rompue):
+                reponse = payer_le_reste_en_especes_ou_en_cb(
+                    client_du_caissier,
+                    point_de_vente,
+                    champs_du_panier,
+                    carte_du_membre,
+                    moyen_du_reste="espece",
+                    cle_d_idempotence=cle_d_idempotence,
+                    tag_id_carte_primaire=tag_de_la_carte_primaire,
+                )
 
-    # Le débit du réseau a bien eu lieu : c'est ce qui rend l'incident nécessaire.
-    # / The network debit did happen: that is why the incident is needed.
-    assert faux_fedow.transaction.to_place_from_qrcode.call_count == 1
+    # Le débit de l'ancien Fedow a bien eu lieu : c'est ce qui rend l'incident
+    # nécessaire.
+    # / The old Fedow debit did happen: that is why the incident is needed.
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_du_membre.tag_id: (500, tag_de_la_carte_primaire)
+    }
 
     # L'écran d'erreur de la caisse, pas une erreur du serveur, pas un succès.
     # / The register's error screen: not a server error, not a success.
@@ -2996,10 +3114,10 @@ def test_egalite_rompue_apres_debit_legacy_journalisee_complement(lieu, caplog):
     assert 'data-testid="alerte-messages"' in contenu_de_la_reponse
     assert 'data-testid="paiement-succes"' not in contenu_de_la_reponse
 
-    # L'incident est journalisé une fois, avec le montant débité sur le réseau (500,
-    # comme nombre entier : pas un morceau d'uuid), la carte et les uuid des
-    # transactions du réseau.
-    # / The incident is logged once, with the network amount, the card and the uuids.
+    # L'incident est journalisé une fois, avec le montant débité sur l'ancien Fedow
+    # (500, comme nombre entier : pas un morceau d'uuid), la carte et l'uuid de la
+    # transaction distante.
+    # / The incident is logged once, with the amount, the card and the remote uuid.
     messages_d_incident = []
     for enregistrement in caplog.records:
         message_journalise = enregistrement.getMessage()
@@ -3011,8 +3129,7 @@ def test_egalite_rompue_apres_debit_legacy_journalisee_complement(lieu, caplog):
     )
     assert re.search(r"\b500\b", messages_d_incident[0])
     assert carte_du_membre.tag_id in messages_d_incident[0]
-    assert transaction_en_monnaie_locale["uuid"] in messages_d_incident[0]
-    assert transaction_en_monnaie_federee["uuid"] in messages_d_incident[0]
+    assert transaction_en_fed["uuid"] in messages_d_incident[0]
 
     # Rien n'est écrit.
     # / Nothing is written.
@@ -3097,6 +3214,7 @@ def payer_le_reste_avec_une_deuxieme_carte(
     carte_1,
     carte_2,
     cle_d_idempotence,
+    tag_id_carte_primaire=None,
 ):
     """
     Le client pose une deuxième carte pour payer le reste du panier : la vraie route
@@ -3104,9 +3222,11 @@ def payer_le_reste_avec_une_deuxieme_carte(
     l'envoie après la lecture de la carte 2 (`tag_id`).
     / The customer taps a second card to pay the rest, through the real route.
 
+    `tag_id_carte_primaire` : le tag de la carte primaire du caissier, envoyé dans
+    `tag_id_cm` (la lecture de la carte 2 soumet #addition-form). None : champ absent.
     Le serveur refait lui-même la cascade des deux cartes : l'écran n'a pas besoin de
     lui renvoyer le détail de la cascade de la carte 1.
-    / The server recomputes both cascades itself.
+    / The primary card tag goes in `tag_id_cm`. The server recomputes both cascades.
     """
     donnees_du_formulaire = {
         "uuid_pv": str(point_de_vente.uuid),
@@ -3115,6 +3235,8 @@ def payer_le_reste_avec_une_deuxieme_carte(
         "moyen_complement": "nfc",
         "tag_id": carte_2.tag_id,
     }
+    if tag_id_carte_primaire is not None:
+        donnees_du_formulaire["tag_id_cm"] = tag_id_carte_primaire
     donnees_du_formulaire.update(champs_du_panier)
     return client_du_caissier.post(
         URL_DU_PAIEMENT_COMPLEMENTAIRE, donnees_du_formulaire
@@ -3152,53 +3274,6 @@ def payer_le_reste_apres_les_deux_cartes(
     return client_du_caissier.post(
         URL_DU_PAIEMENT_COMPLEMENTAIRE, donnees_du_formulaire
     )
-
-
-def solde_du_reseau_simule_par_membre(solde_par_membre):
-    """
-    La lecture du solde du réseau (`lire_depensable_fed_frais`), simulée pour plusieurs
-    membres : rend (solde en centimes, réseau joignable) selon l'utilisateur demandé.
-    Un utilisateur absent du dictionnaire n'a rien sur le réseau.
-    / The network balance read, faked per member.
-
-    :param solde_par_membre: {pk de l'utilisateur: solde en centimes}
-    """
-
-    def lire_le_solde_du_membre(utilisateur):
-        if utilisateur.pk in solde_par_membre:
-            return (solde_par_membre[utilisateur.pk], True)
-        return (0, True)
-
-    return lire_le_solde_du_membre
-
-
-def fedow_du_reseau_simule_par_membre(transactions_par_membre):
-    """
-    Le client du serveur Fedow distant (`FedowAPI`), simulé pour plusieurs membres :
-    le débit d'un membre rend SES transactions. Aucun appel réseau.
-    / The remote Fedow client, faked per member: each member's debit returns its own
-    transactions.
-
-    :param transactions_par_membre: {pk de l'utilisateur: [transaction, …]}
-    """
-
-    def debiter_le_membre(user, **autres_arguments):
-        return transactions_par_membre[user.pk]
-
-    faux_fedow = MagicMock()
-    faux_fedow.transaction.to_place_from_qrcode.side_effect = debiter_le_membre
-    return faux_fedow
-
-
-def montant_debite_par_membre(faux_fedow):
-    """
-    Les débits demandés au serveur Fedow simulé : {pk de l'utilisateur: montant}.
-    / The debits asked from the faked Fedow server, per member.
-    """
-    montants_par_membre = {}
-    for appel in faux_fedow.transaction.to_place_from_qrcode.call_args_list:
-        montants_par_membre[appel.kwargs["user"].pk] = appel.kwargs["amount"]
-    return montants_par_membre
 
 
 # --------------------------------------------------------------------------
@@ -3303,25 +3378,24 @@ def test_deuxieme_carte_chaque_reglement_porte_sa_carte(lieu):
 # --------------------------------------------------------------------------
 
 
-def test_deuxieme_carte_legacy_un_reglement_par_transaction_avec_sa_carte(lieu):
+def test_deuxieme_carte_fed_un_reglement_par_transaction_avec_sa_carte(lieu):
     """
     Une bière à 5,00 €, un jus à 3,50 € et un café à 2,00 € (10,50 €). Les deux cartes
     sont celles de membres, sans rien dans les monnaies du lieu.
-    - Carte 1 : le réseau ne peut payer que 6,00 €. Le serveur Fedow débite 6,00 € de
-      monnaie fédérée (FED) : une transaction distante, qui paie la bière et 1,00 €
-      du jus.
-    - Carte 2 : le réseau peut payer tout le reste (4,50 €). Le serveur Fedow débite
-      1,50 € de monnaie locale d'un autre lieu (TLF) et 3,00 € de monnaie fédérée
-      (FED) : deux transactions distantes ; la FED paie 1,00 € du jus et le café.
+    - Carte 1 : 6,00 € de FED sur l'ancien Fedow. Il est débité de 6,00 € : une
+      transaction distante, qui paie la bière et 1,00 € du jus.
+    - Carte 2 : 10,00 € de FED, qui couvrent tout le reste (4,50 €). Il est débité de
+      4,50 € : une transaction distante, qui paie 2,50 € du jus et le café.
+    Chaque débit part par la carte débitée et la carte primaire du caissier.
     Trois lignes, une par article, sans carte.
-    La vente a UN règlement par transaction distante (pas un par article),
-    chacun avec l'uuid de SA transaction dans `reference_externe`, sa monnaie, pas de
+    La vente a UN règlement par transaction distante (pas un par article), chacun
+    avec l'uuid de SA transaction dans `reference_externe`, le FED, pas de
     `fedow_transaction_uuid` (réservé aux transactions locales), et la carte qui a été
-    débitée : SF 600 pour la carte 1 ; LE 150 et SF 300 pour la carte 2.
+    débitée : SF 600 pour la carte 1, SF 450 pour la carte 2.
     Le client de la vente est le membre de la carte 1.
-    / 10.50 €: the network pays 6.00 € for card 1 (one FED transaction over two parts)
-    and the 4.50 € rest for card 2 (TLF 150 + FED 300, the FED one over two parts). One
-    payment per remote transaction, uuid in `reference_externe`, with the debited card.
+    / 10.50 €: the old Fedow debits 6.00 € of FED for card 1 and the 4.50 € rest for
+    card 2, one transaction each over two item parts. One payment per remote
+    transaction, uuid in `reference_externe`, with the debited card.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
@@ -3331,6 +3405,7 @@ def test_deuxieme_carte_legacy_un_reglement_par_transaction_avec_sa_carte(lieu):
     )
     carte_1 = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
     carte_2 = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
     champs_du_panier = {
@@ -3338,42 +3413,35 @@ def test_deuxieme_carte_legacy_un_reglement_par_transaction_avec_sa_carte(lieu):
         f"repid-{cle_de_panier(jus)}": "1",
         f"repid-{cle_de_panier(cafe)}": "1",
     }
-    transaction_federee_de_la_carte_1 = transaction_du_reseau("FED", 600)
-    transaction_locale_de_la_carte_2 = transaction_du_reseau("TLF", 150)
-    transaction_federee_de_la_carte_2 = transaction_du_reseau("FED", 300)
-    faux_fedow = fedow_du_reseau_simule_par_membre(
-        {
-            carte_1.user_id: [transaction_federee_de_la_carte_1],
-            carte_2.user_id: [
-                transaction_locale_de_la_carte_2,
-                transaction_federee_de_la_carte_2,
-            ],
-        }
-    )
-    lire_le_solde_du_reseau = solde_du_reseau_simule_par_membre(
-        {carte_1.user_id: 600, carte_2.user_id: 1000}
-    )
+    transaction_fed_de_la_carte_1 = transaction_fed_du_reseau(600)
+    transaction_fed_de_la_carte_2 = transaction_fed_du_reseau(450)
 
-    with patch(
-        "laboutik.views.lire_depensable_fed_frais", side_effect=lire_le_solde_du_reseau
-    ):
-        with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
-            reponse = payer_le_reste_avec_une_deuxieme_carte(
-                client_du_caissier,
-                point_de_vente,
-                champs_du_panier,
-                carte_1,
-                carte_2,
-                cle_d_idempotence,
-            )
+    with ancien_fedow_simule_par_carte(
+        fed_par_carte={carte_1.tag_id: 600, carte_2.tag_id: 1000},
+        debit_par_carte={
+            carte_1.tag_id: transaction_fed_de_la_carte_1,
+            carte_2.tag_id: transaction_fed_de_la_carte_2,
+        },
+    ) as faux_fedow:
+        reponse = payer_le_reste_avec_une_deuxieme_carte(
+            client_du_caissier,
+            point_de_vente,
+            champs_du_panier,
+            carte_1,
+            carte_2,
+            cle_d_idempotence,
+            tag_id_carte_primaire=tag_de_la_carte_primaire,
+        )
 
     assert reponse.status_code == 200
-    # Le réseau est débité pour chacune des deux cartes : 6,00 € pour la carte 1,
-    # tout le reste (4,50 €) pour la carte 2.
-    # / The network is debited for both cards.
-    assert montant_debite_par_membre(faux_fedow) == {
-        carte_1.user_id: 600,
-        carte_2.user_id: 450,
+    # L'ancien Fedow est débité pour chacune des deux cartes, par la carte et la
+    # carte primaire du caissier : 6,00 € pour la carte 1, tout le reste (4,50 €)
+    # pour la carte 2.
+    # / The old Fedow is debited for both cards, through each card and the cashier's
+    # primary card.
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_1.tag_id: (600, tag_de_la_carte_primaire),
+        carte_2.tag_id: (450, tag_de_la_carte_primaire),
     }
 
     vente = retrouver_la_vente_de_la_cle(cle_d_idempotence)
@@ -3408,24 +3476,16 @@ def test_deuxieme_carte_legacy_un_reglement_par_transaction_avec_sa_carte(lieu):
             (
                 PaymentMethod.STRIPE_FED,
                 600,
-                transaction_federee_de_la_carte_1["uuid"],
-                transaction_federee_de_la_carte_1["asset"],
+                transaction_fed_de_la_carte_1["uuid"],
+                transaction_fed_de_la_carte_1["asset"],
                 carte_1.pk,
                 None,
             ),
             (
-                PaymentMethod.LOCAL_EURO,
-                150,
-                transaction_locale_de_la_carte_2["uuid"],
-                transaction_locale_de_la_carte_2["asset"],
-                carte_2.pk,
-                None,
-            ),
-            (
                 PaymentMethod.STRIPE_FED,
-                300,
-                transaction_federee_de_la_carte_2["uuid"],
-                transaction_federee_de_la_carte_2["asset"],
+                450,
+                transaction_fed_de_la_carte_2["uuid"],
+                transaction_fed_de_la_carte_2["asset"],
                 carte_2.pk,
                 None,
             ),
@@ -3542,71 +3602,62 @@ def test_deuxieme_carte_puis_especes_reglement_egal_au_reste_du(lieu):
 
 def test_egalite_rompue_apres_debit_legacy_journalisee_deuxieme_carte(lieu, caplog):
     """
-    Même paiement que le test 13b (8,50 €) : le réseau débite 3,00 € pour la carte 1 et
-    5,50 € pour la carte 2 (hors de la transaction de base : ces débits ne s'annulent
-    pas). Puis la vente ne peut pas être encaissée : ses égalités sont rompues
-    (`EgaliteDeVenteRompue`, simulée à l'encaissement).
-    La caisse journalise UN seul INCIDENT qui couvre les débits du réseau des DEUX
-    cartes (les montants, les cartes, l'uuid de chaque transaction du réseau) pour une
+    Une bière à 5,00 € et un jus à 3,50 € (8,50 €), payés par deux cartes de membres
+    sans rien dans les monnaies du lieu : l'ancien Fedow débite 3,00 € de FED pour la
+    carte 1 et 5,50 € pour la carte 2 (hors de la transaction de base : ces débits ne
+    s'annulent pas). Puis la vente ne peut pas être encaissée : ses égalités sont
+    rompues (`EgaliteDeVenteRompue`, simulée à l'encaissement).
+    La caisse journalise UN seul INCIDENT qui couvre les débits des DEUX cartes (les
+    montants, les cartes, l'uuid de chaque transaction distante) pour une
     régularisation à la main, et rend son écran d'erreur (jamais une erreur 500). Rien
     n'est écrit : ni vente, ni ligne.
-    / Same payment as 13b: the network debits both cards, then the sale cannot be
-    settled (broken equality, faked). ONE incident covering both cards' network debits
-    (amounts, cards, every transaction uuid), the error screen (never a 500), nothing
-    written.
+    / Both cards' FED debits are done, then the sale cannot be settled (broken
+    equality, faked). ONE incident covering both cards' debits (amounts, cards, every
+    transaction uuid), the error screen (never a 500), nothing written.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit, jus.produit])
     carte_1 = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
     carte_2 = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
     champs_du_panier = {
         f"repid-{cle_de_panier(biere)}": "1",
         f"repid-{cle_de_panier(jus)}": "1",
     }
-    transaction_federee_de_la_carte_1 = transaction_du_reseau("FED", 300)
-    transaction_locale_de_la_carte_2 = transaction_du_reseau("TLF", 150)
-    transaction_federee_de_la_carte_2 = transaction_du_reseau("FED", 400)
-    faux_fedow = fedow_du_reseau_simule_par_membre(
-        {
-            carte_1.user_id: [transaction_federee_de_la_carte_1],
-            carte_2.user_id: [
-                transaction_locale_de_la_carte_2,
-                transaction_federee_de_la_carte_2,
-            ],
-        }
-    )
-    lire_le_solde_du_reseau = solde_du_reseau_simule_par_membre(
-        {carte_1.user_id: 300, carte_2.user_id: 1000}
-    )
+    transaction_fed_de_la_carte_1 = transaction_fed_du_reseau(300)
+    transaction_fed_de_la_carte_2 = transaction_fed_du_reseau(550)
     egalite_rompue = EgaliteDeVenteRompue(
         "Égalité simulée par le test : règlements 850, articles 851."
     )
 
     with caplog.at_level(logging.ERROR, logger="laboutik.views"):
-        with patch(
-            "laboutik.views.lire_depensable_fed_frais",
-            side_effect=lire_le_solde_du_reseau,
-        ):
-            with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
-                with patch("laboutik.views.encaisser_vente", side_effect=egalite_rompue):
-                    reponse = payer_le_reste_avec_une_deuxieme_carte(
-                        client_du_caissier,
-                        point_de_vente,
-                        champs_du_panier,
-                        carte_1,
-                        carte_2,
-                        cle_d_idempotence,
-                    )
+        with ancien_fedow_simule_par_carte(
+            fed_par_carte={carte_1.tag_id: 300, carte_2.tag_id: 1000},
+            debit_par_carte={
+                carte_1.tag_id: transaction_fed_de_la_carte_1,
+                carte_2.tag_id: transaction_fed_de_la_carte_2,
+            },
+        ) as faux_fedow:
+            with patch("laboutik.views.encaisser_vente", side_effect=egalite_rompue):
+                reponse = payer_le_reste_avec_une_deuxieme_carte(
+                    client_du_caissier,
+                    point_de_vente,
+                    champs_du_panier,
+                    carte_1,
+                    carte_2,
+                    cle_d_idempotence,
+                    tag_id_carte_primaire=tag_de_la_carte_primaire,
+                )
 
-    # Les deux débits du réseau ont bien eu lieu : c'est ce qui rend l'incident
-    # nécessaire.
-    # / Both network debits did happen: that is why the incident is needed.
-    assert montant_debite_par_membre(faux_fedow) == {
-        carte_1.user_id: 300,
-        carte_2.user_id: 550,
+    # Les deux débits de l'ancien Fedow ont bien eu lieu : c'est ce qui rend
+    # l'incident nécessaire.
+    # / Both old Fedow debits did happen: that is why the incident is needed.
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_1.tag_id: (300, tag_de_la_carte_primaire),
+        carte_2.tag_id: (550, tag_de_la_carte_primaire),
     }
 
     # L'écran d'erreur de la caisse, pas une erreur du serveur, pas un succès.
@@ -3616,8 +3667,9 @@ def test_egalite_rompue_apres_debit_legacy_journalisee_deuxieme_carte(lieu, capl
     assert 'data-testid="alerte-messages"' in contenu_de_la_reponse
     assert 'data-testid="paiement-succes"' not in contenu_de_la_reponse
 
-    # Un seul incident, qui couvre les deux cartes : chaque montant débité sur le
-    # réseau (comme nombre entier : pas un morceau d'uuid), chaque carte, chaque uuid.
+    # Un seul incident, qui couvre les deux cartes : chaque montant débité sur
+    # l'ancien Fedow (comme nombre entier : pas un morceau d'uuid), chaque carte,
+    # chaque uuid.
     # / One incident covering both cards: each amount, each card, each uuid.
     messages_d_incident = []
     for enregistrement in caplog.records:
@@ -3633,9 +3685,8 @@ def test_egalite_rompue_apres_debit_legacy_journalisee_deuxieme_carte(lieu, capl
     assert re.search(r"\b550\b", message_d_incident)
     assert carte_1.tag_id in message_d_incident
     assert carte_2.tag_id in message_d_incident
-    assert transaction_federee_de_la_carte_1["uuid"] in message_d_incident
-    assert transaction_locale_de_la_carte_2["uuid"] in message_d_incident
-    assert transaction_federee_de_la_carte_2["uuid"] in message_d_incident
+    assert transaction_fed_de_la_carte_1["uuid"] in message_d_incident
+    assert transaction_fed_de_la_carte_2["uuid"] in message_d_incident
 
     # Rien n'est écrit.
     # / Nothing is written.
@@ -3654,67 +3705,63 @@ def test_deuxieme_carte_debit_reseau_carte1_echoue_incident_carte2_journalise(
     lieu, caplog
 ):
     """
-    Même paiement que le test 13b (8,50 €, deux cartes de membres). Le réseau débite
-    d'abord 5,50 € pour la carte 2 (appel au serveur distant : il ne s'annule pas).
-    Puis le débit du réseau pour la carte 1 échoue (son solde a changé).
+    Même paiement que le test 16c (8,50 €, deux cartes de membres). L'ancien Fedow
+    débite d'abord 5,50 € de FED pour la carte 2 (appel au serveur distant : il ne
+    s'annule pas). Puis le débit de la carte 1 est refusé (son solde a changé).
     La caisse demande de rescanner la carte (statut 409), comme pour tout échec de
-    débit du réseau. Mais l'argent de la carte 2 est déjà prélevé sans vente : la caisse
-    journalise un INCIDENT (le montant, la carte 2, l'uuid de chaque transaction de la
-    carte 2) pour une régularisation à la main. Rien n'est écrit : ni vente, ni ligne.
-    / Card 2's network debit is done, then card 1's fails: 409 "rescan", and ONE
-    incident for card 2's debit (amount, card 2, transaction uuids). Nothing written.
+    débit de l'ancien Fedow. Mais l'argent de la carte 2 est déjà prélevé sans vente :
+    la caisse journalise un INCIDENT (le montant, la carte 2, l'uuid de la transaction
+    de la carte 2) pour une régularisation à la main. Rien n'est écrit : ni vente, ni
+    ligne.
+    / Card 2's FED debit is done, then card 1's is refused: 409 "rescan", and ONE
+    incident for card 2's debit (amount, card 2, transaction uuid). Nothing written.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit, jus.produit])
     carte_1 = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
     carte_2 = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
     champs_du_panier = {
         f"repid-{cle_de_panier(biere)}": "1",
         f"repid-{cle_de_panier(jus)}": "1",
     }
-    transaction_locale_de_la_carte_2 = transaction_du_reseau("TLF", 150)
-    transaction_federee_de_la_carte_2 = transaction_du_reseau("FED", 400)
-    lire_le_solde_du_reseau = solde_du_reseau_simule_par_membre(
-        {carte_1.user_id: 300, carte_2.user_id: 1000}
-    )
+    transaction_fed_de_la_carte_2 = transaction_fed_du_reseau(550)
 
-    # Le serveur Fedow simulé débite la carte 2, puis refuse le débit de la carte 1.
-    # / The faked Fedow server debits card 2, then refuses card 1's debit.
-    def debiter_le_membre(user, **autres_arguments):
-        if user.pk == carte_2.user_id:
-            return [transaction_locale_de_la_carte_2, transaction_federee_de_la_carte_2]
-        raise Exception("Solde du réseau insuffisant (simulé par le test)")
-
-    faux_fedow = MagicMock()
-    faux_fedow.transaction.to_place_from_qrcode.side_effect = debiter_le_membre
-
+    # L'ancien Fedow simulé débite la carte 2, puis refuse le débit de la carte 1.
+    # / The faked old Fedow debits card 2, then refuses card 1's debit.
     with caplog.at_level(logging.ERROR, logger="laboutik.views"):
-        with patch(
-            "laboutik.views.lire_depensable_fed_frais",
-            side_effect=lire_le_solde_du_reseau,
-        ):
-            with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
-                reponse = payer_le_reste_avec_une_deuxieme_carte(
-                    client_du_caissier,
-                    point_de_vente,
-                    champs_du_panier,
-                    carte_1,
-                    carte_2,
-                    cle_d_idempotence,
-                )
+        with ancien_fedow_simule_par_carte(
+            fed_par_carte={carte_1.tag_id: 300, carte_2.tag_id: 1000},
+            debit_par_carte={
+                carte_1.tag_id: Exception(
+                    "Solde de l'ancien Fedow insuffisant (simulé par le test)"
+                ),
+                carte_2.tag_id: transaction_fed_de_la_carte_2,
+            },
+        ) as faux_fedow:
+            reponse = payer_le_reste_avec_une_deuxieme_carte(
+                client_du_caissier,
+                point_de_vente,
+                champs_du_panier,
+                carte_1,
+                carte_2,
+                cle_d_idempotence,
+                tag_id_carte_primaire=tag_de_la_carte_primaire,
+            )
 
-    # Les deux débits ont été demandés : la carte 2 (réussi), puis la carte 1 (échoué).
-    # / Both debits were asked: card 2 (done), then card 1 (failed).
-    assert montant_debite_par_membre(faux_fedow) == {
-        carte_1.user_id: 300,
-        carte_2.user_id: 550,
+    # Les deux débits ont été demandés : la carte 2 (réussi), puis la carte 1 (refusé).
+    # / Both debits were asked: card 2 (done), then card 1 (refused).
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_1.tag_id: (300, tag_de_la_carte_primaire),
+        carte_2.tag_id: (550, tag_de_la_carte_primaire),
     }
 
-    # L'écran « rescannez la carte », en 409, comme tout échec de débit du réseau.
-    # / The "rescan the card" screen, 409, like any network debit failure.
+    # L'écran « rescannez la carte », en 409, comme tout échec de débit de l'ancien
+    # Fedow.
+    # / The "rescan the card" screen, 409, like any old Fedow debit failure.
     assert reponse.status_code == 409
     contenu_de_la_reponse = reponse.content.decode()
     assert 'data-testid="alerte-messages"' in contenu_de_la_reponse
@@ -3734,8 +3781,7 @@ def test_deuxieme_carte_debit_reseau_carte1_echoue_incident_carte2_journalise(
     message_d_incident = messages_d_incident[0]
     assert re.search(r"\b550\b", message_d_incident)
     assert carte_2.tag_id in message_d_incident
-    assert transaction_locale_de_la_carte_2["uuid"] in message_d_incident
-    assert transaction_federee_de_la_carte_2["uuid"] in message_d_incident
+    assert transaction_fed_de_la_carte_2["uuid"] in message_d_incident
 
     # Rien n'est écrit.
     # / Nothing is written.
@@ -3752,73 +3798,64 @@ def test_deuxieme_carte_debit_reseau_carte1_echoue_incident_carte2_journalise(
 
 def test_deuxieme_carte_exception_imprevue_journalise_les_deux_cartes(lieu, caplog):
     """
-    Même paiement que le test 16c (8,50 €) : le réseau débite 3,00 € pour la carte 1 et
-    5,50 € pour la carte 2 (hors de la transaction de base : ces débits ne s'annulent
-    pas). Puis une erreur imprévue survient pendant l'écriture de la vente (simulée à
-    l'encaissement par une `RuntimeError`).
-    La caisse journalise UN INCIDENT qui couvre les débits du réseau des DEUX cartes
-    (les montants, les cartes, l'uuid de chaque transaction du réseau), puis relaie
-    l'erreur (erreur 500 volontaire). Le client de test Django relaie l'exception de la
-    vue : le test l'attend avec `pytest.raises`. Rien n'est écrit : ni vente, ni ligne.
-    / Both cards' network debits are done, then an unexpected error happens while
-    writing the sale. ONE incident covering both cards (amounts, cards, every uuid), then
-    the error is re-raised (the test client re-raises it). Nothing written.
+    Même paiement que le test 16c (8,50 €) : l'ancien Fedow débite 3,00 € de FED pour
+    la carte 1 et 5,50 € pour la carte 2 (hors de la transaction de base : ces débits
+    ne s'annulent pas). Puis une erreur imprévue survient pendant l'écriture de la
+    vente (simulée à l'encaissement par une `RuntimeError`).
+    La caisse journalise UN INCIDENT qui couvre les débits des DEUX cartes (les
+    montants, les cartes, l'uuid de chaque transaction distante), puis relaie l'erreur
+    (erreur 500 volontaire). Le client de test Django relaie l'exception de la vue : le
+    test l'attend avec `pytest.raises`. Rien n'est écrit : ni vente, ni ligne.
+    / Both cards' FED debits are done, then an unexpected error happens while writing
+    the sale. ONE incident covering both cards (amounts, cards, every uuid), then the
+    error is re-raised (the test client re-raises it). Nothing written.
     """
     biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
     jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
     point_de_vente = creer_un_point_de_vente([biere.produit, jus.produit])
     carte_1 = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
     carte_2 = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
     champs_du_panier = {
         f"repid-{cle_de_panier(biere)}": "1",
         f"repid-{cle_de_panier(jus)}": "1",
     }
-    transaction_federee_de_la_carte_1 = transaction_du_reseau("FED", 300)
-    transaction_locale_de_la_carte_2 = transaction_du_reseau("TLF", 150)
-    transaction_federee_de_la_carte_2 = transaction_du_reseau("FED", 400)
-    faux_fedow = fedow_du_reseau_simule_par_membre(
-        {
-            carte_1.user_id: [transaction_federee_de_la_carte_1],
-            carte_2.user_id: [
-                transaction_locale_de_la_carte_2,
-                transaction_federee_de_la_carte_2,
-            ],
-        }
-    )
-    lire_le_solde_du_reseau = solde_du_reseau_simule_par_membre(
-        {carte_1.user_id: 300, carte_2.user_id: 1000}
-    )
+    transaction_fed_de_la_carte_1 = transaction_fed_du_reseau(300)
+    transaction_fed_de_la_carte_2 = transaction_fed_du_reseau(550)
     erreur_imprevue = RuntimeError("Erreur imprévue simulée par le test.")
 
     with caplog.at_level(logging.ERROR, logger="laboutik.views"):
-        with patch(
-            "laboutik.views.lire_depensable_fed_frais",
-            side_effect=lire_le_solde_du_reseau,
-        ):
-            with patch("laboutik.views.FedowAPI", return_value=faux_fedow):
-                with patch("laboutik.views.encaisser_vente", side_effect=erreur_imprevue):
-                    with pytest.raises(RuntimeError):
-                        payer_le_reste_avec_une_deuxieme_carte(
-                            client_du_caissier,
-                            point_de_vente,
-                            champs_du_panier,
-                            carte_1,
-                            carte_2,
-                            cle_d_idempotence,
-                        )
+        with ancien_fedow_simule_par_carte(
+            fed_par_carte={carte_1.tag_id: 300, carte_2.tag_id: 1000},
+            debit_par_carte={
+                carte_1.tag_id: transaction_fed_de_la_carte_1,
+                carte_2.tag_id: transaction_fed_de_la_carte_2,
+            },
+        ) as faux_fedow:
+            with patch("laboutik.views.encaisser_vente", side_effect=erreur_imprevue):
+                with pytest.raises(RuntimeError):
+                    payer_le_reste_avec_une_deuxieme_carte(
+                        client_du_caissier,
+                        point_de_vente,
+                        champs_du_panier,
+                        carte_1,
+                        carte_2,
+                        cle_d_idempotence,
+                        tag_id_carte_primaire=tag_de_la_carte_primaire,
+                    )
 
-    # Les deux débits du réseau ont bien eu lieu : c'est ce qui rend l'incident
-    # nécessaire.
-    # / Both network debits did happen: that is why the incident is needed.
-    assert montant_debite_par_membre(faux_fedow) == {
-        carte_1.user_id: 300,
-        carte_2.user_id: 550,
+    # Les deux débits de l'ancien Fedow ont bien eu lieu : c'est ce qui rend
+    # l'incident nécessaire.
+    # / Both old Fedow debits did happen: that is why the incident is needed.
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_1.tag_id: (300, tag_de_la_carte_primaire),
+        carte_2.tag_id: (550, tag_de_la_carte_primaire),
     }
 
-    # Un seul incident, qui couvre les deux cartes : chaque montant débité sur le
-    # réseau, chaque carte, chaque uuid.
+    # Un seul incident, qui couvre les deux cartes : chaque montant débité sur
+    # l'ancien Fedow, chaque carte, chaque uuid.
     # / One incident covering both cards: each amount, each card, each uuid.
     messages_d_incident = []
     for enregistrement in caplog.records:
@@ -3834,9 +3871,8 @@ def test_deuxieme_carte_exception_imprevue_journalise_les_deux_cartes(lieu, capl
     assert re.search(r"\b550\b", message_d_incident)
     assert carte_1.tag_id in message_d_incident
     assert carte_2.tag_id in message_d_incident
-    assert transaction_federee_de_la_carte_1["uuid"] in message_d_incident
-    assert transaction_locale_de_la_carte_2["uuid"] in message_d_incident
-    assert transaction_federee_de_la_carte_2["uuid"] in message_d_incident
+    assert transaction_fed_de_la_carte_1["uuid"] in message_d_incident
+    assert transaction_fed_de_la_carte_2["uuid"] in message_d_incident
 
     # Rien n'est écrit.
     # / Nothing is written.

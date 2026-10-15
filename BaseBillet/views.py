@@ -761,35 +761,22 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                                  _("Cette carte n'est pas reconnue. Elle n'est peut-être pas encore activée."))
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
-        # Lier la carte au user cote LESPASS aussi. Fedow vient de fusionner les wallets,
-        # mais `CarteCashless.user` reste vide sans cet appel : la carte demeure « anonyme »
-        # pour le point de vente V2, qui masque alors le solde federe
-        # (`if carte.user is not None` dans obtenir_solde_complet_carte) et ne sait pas
-        # identifier l'adherent au comptoir.
-        # `lier_a_user` est transactionnel et idempotent : il pose l'usager, fusionne le
-        # wallet ephemere LOCAL et rattrape les adhesions anonymes.
+        # Mettre la copie LOCALE de la carte d'accord : elle porte la même personne.
+        # Sans elle, le point de vente V2 ne sait pas identifier l'adherent au comptoir.
+        # La carte existe ici : liaison locale (transactionnelle et idempotente). Elle
+        # n'existe pas encore (lieu V2 dont les cartes vivent chez l'ancien Fedow) : sa
+        # copie est fabriquée depuis la fiche que Fedow vient de rendre. Lieu legacy : rien.
         # Non bloquant : la fusion cote Fedow a reussi, une incoherence locale ne doit pas
         # transformer un parcours abouti en message d'erreur.
-        # / Link the card on the LESPASS side too. Fedow just merged the wallets, but
-        #   CarteCashless.user stays empty without this call, leaving the card "anonymous"
-        #   for the V2 POS. Transactional and idempotent. Non-blocking.
+        # / Bring the LOCAL card copy in line (same person): link it, or build it from
+        #   the record Fedow just returned. Non-blocking.
         try:
-            from fedow_core.services import CarteService
+            from QrcodeCashless.services import relier_la_copie_locale_de_la_carte
 
-            CarteService.lier_a_user(
-                qrcode_uuid=qrcode_uuid,
-                user=user,
+            relier_la_copie_locale_de_la_carte(
+                linked_serialized_card,
+                user,
                 ip=get_client_ip(request),
-            )
-        except CarteIntrouvable:
-            # ATTENDU : la carte existe chez Fedow mais pas dans cette base. C'est le cas
-            # d'un lieu V1 (dont les cartes vivent dans LaBoutik) ou d'une carte d'un autre
-            # reseau. Rien a reparer ici.
-            # / EXPECTED: the card exists on Fedow but not in this database (V1 venue, or a
-            #   card from another network). Nothing to fix here.
-            logger.warning(
-                f"Carte {qrcode_uuid} liee cote Fedow, absente de la base Lespass "
-                f"(lieu V1 ou carte hors reseau)."
             )
         except Exception as erreur_liaison_locale:
             # INCOHERENCE : Fedow a accepte la liaison, la base locale la refuse

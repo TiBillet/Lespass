@@ -911,6 +911,18 @@ img { max-width: 100%; display: block; }
 .me-card { flex-wrap: wrap; justify-content: space-around; }
 .me-card__info { flex: 1 1 12.5rem; min-width: 0; }
 
+/* Pas encore de carte liée : la même carte, grisée, avec l'invitation à la place du
+   numéro. / No linked card yet: the same card, greyed, with the invitation. */
+.tcard--vide { filter: grayscale(1); opacity: .6; }
+.tcard__invite {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
 /* -----------------------------------------------------------------
    RACCOURCIS — les lieux où l'on retourne le plus. Dans le bloc de
    l'espace, sous l'identité : c'est par là qu'on entre dans un lieu.

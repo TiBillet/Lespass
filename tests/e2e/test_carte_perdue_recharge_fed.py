@@ -116,11 +116,19 @@ def _lier_une_carte_neuve_comme_le_parcours_qr(django_shell, email):
     return numero_carte
 
 
-def _double_clic_sur_le_bouton_carte_perdue(page, bouton, morceau_d_adresse):
+def _double_clic_sur_le_bouton_carte_perdue(
+    page, bouton, morceau_d_adresse, confirmation_sweetalert=False,
+):
     """
     Double clic sur le bouton « carte perdue » : UNE seule requete doit partir
     (`hx-disabled-elt="this"` desactive le bouton pendant la requete).
-    / Double click: ONE request only must leave.
+
+    Dans « Mon espace » (skin V2), le bouton porte `hx-confirm` : le shell ouvre une
+    fenetre SweetAlert, et la requete ne part qu'apres « Oui ». Le test clique donc
+    sur « Oui », une fois (`confirmation_sweetalert=True`). Le bouton de l'admin n'a
+    pas de confirmation.
+    / Double click: ONE request only must leave. In "My space" (V2) the button opens
+    a SweetAlert confirmation: the request leaves only after "Yes", clicked once.
     """
     requetes_parties = []
     page.on("request", lambda requete: requetes_parties.append(requete.url)
@@ -129,6 +137,10 @@ def _double_clic_sur_le_bouton_carte_perdue(page, bouton, morceau_d_adresse):
     bouton.wait_for(state="visible", timeout=20_000)
     with page.expect_response(lambda reponse: morceau_d_adresse in reponse.url) as reponse_du_clic:
         bouton.dblclick()
+        if confirmation_sweetalert:
+            bouton_oui = page.locator(".swal2-popup .swal2-confirm")
+            bouton_oui.wait_for(state="visible", timeout=10_000)
+            bouton_oui.click()
     assert reponse_du_clic.value.status == 200, (
         f"Le bouton « carte perdue » a repondu {reponse_du_clic.value.status}."
     )
@@ -144,7 +156,9 @@ def _declarer_perdue_depuis_mon_compte(page, login_as, login_as_admin, email, nu
     page.goto('/my_account/card/')
     morceau_d_adresse = f"/my_account/{numero_carte}/lost_my_card/"
     bouton = page.locator(f'[hx-get="{morceau_d_adresse}"]').first
-    _double_clic_sur_le_bouton_carte_perdue(page, bouton, morceau_d_adresse)
+    _double_clic_sur_le_bouton_carte_perdue(
+        page, bouton, morceau_d_adresse, confirmation_sweetalert=True,
+    )
 
 
 def _declarer_perdue_depuis_l_admin(page, login_as, login_as_admin, email, numero_carte, uuid_adherent):

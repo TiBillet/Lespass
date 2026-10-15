@@ -26,6 +26,8 @@ from unittest import mock
 import pytest
 from django_tenants.utils import tenant_context
 
+from test_carte_liee_chez_fedow_fed_en_caisse import jeton_de_l_ancien_fedow
+
 pytestmark = pytest.mark.django_db
 
 
@@ -112,11 +114,28 @@ def carte_anonyme(tenant):
                 pass
 
 
+def fiche_de_la_carte_avec_du_fed(carte, fed_en_centimes):
+    """
+    La fiche d'une carte liée chez l'ancien Fedow (`NFCcard.retrieve`), dont le
+    portefeuille porte `fed_en_centimes` de FED.
+    / A linked card's old Fedow record, whose wallet holds `fed_en_centimes` of FED.
+    """
+    return {
+        "first_tag_id": carte.tag_id,
+        "is_wallet_ephemere": False,
+        "wallet": {
+            "uuid": uuidlib.uuid4(),
+            "tokens": [jeton_de_l_ancien_fedow("FED", fed_en_centimes)],
+        },
+    }
+
+
 def test_carte_liee_fedow_ok_lit_le_fed_frais(carte_liee):
-    """Carte liée + Fedow OK : le helper lit le FED EN TEMPS RÉEL (use_cache=False)
-    et le marque disponible.
-    / Linked card + Fedow OK: the helper reads FED in real time (use_cache=False) and
-    marks it available.
+    """Carte liée + Fedow OK : le helper lit le FED sur la fiche de la CARTE, en
+    temps réel, et le marque disponible. La signature de la personne n'est jamais
+    utilisée.
+    / Linked card + Fedow OK: the helper reads FED on the CARD record, in real time,
+    and marks it available. The person's signature is never used.
     """
     from laboutik.views import obtenir_solde_complet_carte
 
@@ -125,19 +144,19 @@ def test_carte_liee_fedow_ok_lit_le_fed_frais(carte_liee):
         mock.patch("laboutik.views.FedowAPI") as MockAPI,
     ):
         MockConfig.get_solo.return_value.can_fedow.return_value = True
-        lecture_fed = (
-            MockAPI.return_value.wallet.get_total_fiducial_and_all_federated_token
-        )
-        lecture_fed.return_value = 500  # 5,00 € en centimes
+        lecture_de_la_carte = MockAPI.return_value.NFCcard.retrieve
+        lecture_de_la_carte.return_value = fiche_de_la_carte_avec_du_fed(
+            carte_liee["carte"], 500
+        )  # 5,00 € en centimes
 
         with tenant_context(carte_liee["tenant"]):
             solde = obtenir_solde_complet_carte(carte_liee["carte"])
 
     assert solde["fed_disponible"] is True
     assert solde["fed_centimes"] == 500
-    # La lecture FED doit être FRAÎCHE (sans cache) : c'est le cœur de C1.
-    # / The FED read must be FRESH (no cache): this is the core of C1.
-    lecture_fed.assert_called_once_with(carte_liee["user"], use_cache=False)
+    # Lecture fraîche, par la carte. / Fresh read, through the card.
+    lecture_de_la_carte.assert_called_once_with(carte_liee["carte"].tag_id)
+    MockAPI.return_value.wallet.get_total_fiducial_and_all_federated_token.assert_not_called()
 
 
 def test_carte_liee_fedow_down_degrade_sans_bloquer(carte_liee):
@@ -153,9 +172,7 @@ def test_carte_liee_fedow_down_degrade_sans_bloquer(carte_liee):
         mock.patch("laboutik.views.FedowAPI") as MockAPI,
     ):
         MockConfig.get_solo.return_value.can_fedow.return_value = True
-        MockAPI.return_value.wallet.get_total_fiducial_and_all_federated_token.side_effect = Exception(
-            "Fedow timeout"
-        )
+        MockAPI.return_value.NFCcard.retrieve.side_effect = Exception("Fedow timeout")
 
         with tenant_context(carte_liee["tenant"]):
             solde = obtenir_solde_complet_carte(carte_liee["carte"])
@@ -167,13 +184,16 @@ def test_carte_liee_fedow_down_degrade_sans_bloquer(carte_liee):
     assert solde["total_centimes"] == solde["locaux_centimes"]
 
 
-def test_carte_anonyme_pas_de_lecture_fed(carte_anonyme):
-    """Carte anonyme (sans user) : son wallet est résolu DEPUIS Fedow (source de vérité,
-    wallet éphémère), mais comme il n'y a pas de user → pas de signature RSA possible →
-    on ne LIT PAS le solde FED du réseau (get_total_fiducial... n'est jamais appelé).
-    / Anonymous card (no user): its wallet is resolved FROM Fedow (source of truth, ephemeral
-    wallet), but with no user → no RSA signature → the FED network balance is NOT read
-    (get_total_fiducial... is never called).
+def test_carte_anonyme_lit_le_fed_de_sa_carte_sur_l_ancien_fedow(carte_anonyme):
+    """Carte anonyme (sans user) : son wallet est résolu DEPUIS Fedow (wallet éphémère).
+    Sans user, pas de signature RSA : la lecture par la personne
+    (get_total_fiducial...) n'est jamais appelée. Le FED est lu sur la FICHE DE LA
+    CARTE (`NFCcard.retrieve`, clé du lieu seule) : une carte anonyme peut porter du
+    FED, rechargé à l'ancienne borne avec TPE ou par LaBoutik V1. Seul le FED compte :
+    un lieu V2 n'émet ni n'accepte de monnaie locale legacy.
+    / Anonymous card (no user): no RSA signature, so the per-person read is never
+    called. The FED is read on the CARD record (place key only): an anonymous card may
+    hold FED (old kiosk with card terminal, LaBoutik V1). Only FED counts.
     """
     from laboutik.views import obtenir_solde_complet_carte
 
@@ -194,20 +214,39 @@ def test_carte_anonyme_pas_de_lecture_fed(carte_anonyme):
             "is_wallet_ephemere": True,
             "origin": {},
         }
-        # Référence de la LECTURE FED réseau : elle ne doit JAMAIS être appelée ici.
-        # / Reference to the FED network READ: it must NEVER be called here.
-        lecture_fed = (
+        # La fiche de la carte chez l'ancien Fedow : 9,00 € de FED, et 4,00 € de la
+        # monnaie d'un autre lieu, qui ne se dépense pas ici.
+        # / The card record on the old Fedow: 9.00 € of FED, and 4.00 € of another
+        # venue's currency, not spendable here.
+        MockAPI.return_value.NFCcard.retrieve.return_value = {
+            "first_tag_id": carte_anonyme["carte"].tag_id,
+            "is_wallet_ephemere": True,
+            "wallet": {
+                "uuid": wallet_uuid_fedow,
+                # Forme `TokenValidator` (fedow_connect/validators.py), la même que
+                # tests/pytest/test_carte_liee_chez_fedow_fed_en_caisse.py.
+                # / TokenValidator shape, same as the neighbouring test file.
+                "tokens": [
+                    jeton_de_l_ancien_fedow("FED", 900),
+                    jeton_de_l_ancien_fedow("TLF", 400),
+                ],
+            },
+        }
+        # Lecture par la personne : elle ne doit JAMAIS être appelée (pas de user).
+        # / Per-person read: must NEVER be called (no user).
+        lecture_fed_par_signature = (
             MockAPI.return_value.wallet.get_total_fiducial_and_all_federated_token
         )
 
         with tenant_context(carte_anonyme["tenant"]):
             solde = obtenir_solde_complet_carte(carte_anonyme["carte"])
 
-    assert solde["fed_disponible"] is False
-    assert solde["fed_centimes"] == 0
-    # Le solde FED réseau n'est PAS lu (pas de user → pas de signature).
-    # / The FED network balance is NOT read (no user → no signature).
-    lecture_fed.assert_not_called()
+    assert solde["fed_disponible"] is True
+    assert solde["fed_centimes"] == 900
+    lecture_fed_par_signature.assert_not_called()
+    MockAPI.return_value.NFCcard.retrieve.assert_called_with(
+        carte_anonyme["carte"].tag_id
+    )
 
     # Nettoyage du wallet éphémère miroir créé par la résolution Fedow.
     # / Cleanup of the mirror ephemeral wallet created by the Fedow resolution.
@@ -284,7 +323,9 @@ def test_total_additionne_locaux_et_fed(carte_liee):
         mock.patch("laboutik.views.FedowAPI") as MockAPI,
     ):
         MockConfig.get_solo.return_value.can_fedow.return_value = True
-        MockAPI.return_value.wallet.get_total_fiducial_and_all_federated_token.return_value = 500
+        MockAPI.return_value.NFCcard.retrieve.return_value = (
+            fiche_de_la_carte_avec_du_fed(carte_liee["carte"], 500)
+        )
 
         with tenant_context(carte_liee["tenant"]):
             solde = obtenir_solde_complet_carte(carte_liee["carte"])

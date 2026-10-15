@@ -10,7 +10,8 @@ un miroir local, alimenté à la création via `fedow_connect`.
 | Doc | Contenu | Statut |
 |---|---|---|
 | [SPEC.md](./SPEC.md) | Formulaire d'ajout de carte à l'unité dans l'admin Unfold : `DetailAdmin`, `CarteCashlessAddForm`, dérivation des identifiants, flux Fedow, réconciliation | ✅ Validé 2026-07-09 |
-| [CHANTIER-02-rapatriement-cartes-fedow.md](./CHANTIER-02-rapatriement-cartes-fedow.md) | Rapatriement au scan (façon V1) des cartes connues de Fedow mais absentes du miroir local ; branchement aux premiers scans hors `atomic` | ✅ Livré 2026-10-12 (non commité) |
+| [CHANTIER-02-rapatriement-cartes-fedow.md](./CHANTIER-02-rapatriement-cartes-fedow.md) | Rapatriement au scan (façon V1) des cartes connues de Fedow mais absentes du miroir local ; branchement aux premiers scans hors `atomic` | ✅ Livré 2026-10-12 (non commité) — §4.1 étape 6 corrigée par le chantier 03 |
+| [CHANTIER-03-fed-invisible-en-caisse.md](./CHANTIER-03-fed-invisible-en-caisse.md) | Bug de prod : FED invisible en caisse V2 (carte liée par QR avant le premier scan, carte anonyme avec FED legacy) ; diagnostic, tests rouges, correction proposée. Annexe : [audit des tests](./CHANTIER-03-annexe-audit-tests.md) | 🟡 Correction codée le 2026-10-14, non commitée ; E2E à relancer |
 
 ## Points d'attention
 

@@ -553,7 +553,16 @@ def test_19_portefeuille_miroir_qui_a_deja_une_origine_n_est_pas_modifie(
     assert Wallet.objects.get(uuid=uuid_du_portefeuille).origin_id == autre_lieu.pk
 
 
-def test_20_carte_rapatriee_sans_utilisateur_ni_portefeuille_ephemere(lieu):
+def test_20_carte_anonyme_rapatriee_sans_utilisateur_ni_portefeuille_ephemere(lieu):
+    """
+    Carte ANONYME chez l'ancien Fedow (`is_wallet_ephemere: True`) : la carte rapatriée
+    n'a pas de propriétaire. Le portefeuille éphémère est posé plus tard, au premier
+    paiement (`obtenir_wallet_carte_depuis_fedow`).
+    Une carte que l'ancien Fedow dit LIÉE reçoit, elle, sa propriétaire : voir
+    test_carte_liee_chez_fedow_fed_en_caisse.py.
+    / ANONYMOUS card on the old Fedow: fetched without owner. A LINKED card gets its
+    owner: see test_carte_liee_chez_fedow_fed_en_caisse.py.
+    """
     tag_id = tag_neuf()
 
     with ancien_fedow_simule(fiche=fiche_de_l_ancien_fedow(tag_id)):

@@ -461,26 +461,31 @@ def _recharger_en_monnaie_federee_par_carte_bancaire(
     )
 
     login_as(page, adresse)
-    page.goto('/my_account/balance/')
-
-    # Il FAUT cliquer le bouton, et surtout pas viser la route directement :
-    # `refill_wallet` ne renvoie pas une redirection HTTP mais un en-tete
-    # `HX-Redirect`, que seul htmx sait suivre. Un `goto` sur cette route recoit
-    # un 200 vide et n'arrive jamais chez Stripe.
-    # / The button MUST be clicked: refill_wallet returns an HX-Redirect header,
-    # not an HTTP redirect. Only htmx follows it; a direct goto gets an empty 200.
+    page.goto('/my_account/')
     # Solde AVANT : le point de comparaison. Sans lui, un solde positif a la fin
     # ne prouverait pas que c'est cette recharge qui l'a produit.
     # / Balance BEFORE: without it, a positive balance at the end would not prove
     # this refill produced it.
     solde_avant = _solde_federe(django_shell, adresse)
 
-    bouton_de_recharge = page.locator('[hx-get="/my_account/refill_wallet"]')
-    assert bouton_de_recharge.count() > 0, (
-        "Le bouton de recharge est absent de la page solde. "
+    # Le skin V2 n'affiche le bouton « Recharger » (`compte-recharger`) qu'a une
+    # personne qui a une carte ; cet adherent neuf n'en a pas encore. On fait donc
+    # ce que fait htmx au clic : `refill_wallet` repond par un en-tete
+    # `HX-Redirect` (pas une redirection HTTP) vers le checkout fabrique par Fedow,
+    # et le navigateur y va. Un `goto` direct sur la route recevrait un 200 vide.
+    # / The V2 skin shows the top-up button only to a card holder. Do what htmx does
+    # on click: refill_wallet answers with an HX-Redirect header, then go there.
+    reponse_de_la_recharge = page.request.get(
+        '/my_account/refill_wallet',
+        headers={'HX-Request': 'true', 'Referer': page.url},
+    )
+    adresse_du_checkout = reponse_de_la_recharge.headers.get('hx-redirect')
+    assert adresse_du_checkout, (
+        "`refill_wallet` n'a pas renvoye d'en-tete HX-Redirect vers Stripe : "
+        f"{reponse_de_la_recharge.status} {reponse_de_la_recharge.text()[:300]}. "
         "Verifier `Configuration.show_refill_button()` sur ce tenant."
     )
-    bouton_de_recharge.first.click()
+    page.goto(adresse_du_checkout, wait_until='domcontentloaded')
 
     page.wait_for_url(
         lambda url: 'checkout.stripe.com' in url,
@@ -599,22 +604,22 @@ def test_recharge_federee_par_carte_bancaire(
 # La caisse encaisse les monnaies de l'ancien Fedow
 # ---------------------------------------------------------------------------
 #
-# Le systeme est hybride. Une carte peut porter deux sortes de monnaie :
-# - celles du moteur local (`fedow_core`), dans la base du lieu ;
-# - celles de l'ancien Fedow, distant : la monnaie federee (FED) et la monnaie
-#   locale du lieu qui y vit encore (TLF).
-# Quand le moteur local ne couvre pas le panier, la caisse se tourne vers l'ancien
-# Fedow (`lire_depensable_fed_frais`, puis `_debiter_legacy` qui appelle
-# `to_place_from_qrcode`). Chaque transaction distante devient un reglement de la
-# vente : son uuid va dans `reference_externe`, jamais dans `fedow_transaction_uuid`
-# (reserve aux transactions du moteur local).
-# / The system is hybrid. When the local engine does not cover the cart, the POS
-# turns to the old remote Fedow. Each remote transaction becomes a payment of the
-# sale: its uuid goes to reference_externe, never to fedow_transaction_uuid.
+# Le systeme est hybride. Dans un lieu V2, une carte paie a la caisse avec :
+# - les jetons locaux du moteur V2 (`fedow_core`), dans la base du lieu ;
+# - la monnaie federee (FED) de l'ancien Fedow, distant. C'est la SEULE monnaie de
+#   l'ancien Fedow qu'un lieu V2 depense : il n'y a pas de monnaie locale.
+# Quand le moteur local ne couvre pas le panier, la caisse lit le FED PAR LA CARTE
+# (`lire_depensable_fed_frais`, `GET card/<tag>/`), puis le debite par la carte et
+# la carte primaire du caissier (`_debiter_legacy`, `POST transaction/`, action
+# « SAL »). La transaction distante devient un reglement de la vente : son uuid va
+# dans `reference_externe`, jamais dans `fedow_transaction_uuid` (reserve aux
+# transactions du moteur local).
+# / In a V2 venue, a card pays with local V2 tokens and the old Fedow's FED, the
+# only old-Fedow currency a V2 venue spends. The FED is read and debited THROUGH
+# THE CARD and the cashier's primary card (SAL). Its uuid goes to reference_externe.
 
 # Le point de vente et l'article de ces tests. L'article vaut exactement le montant
-# du parcours : la recharge federee (3 €) et le credit en monnaie locale (5 €) le
-# couvrent tous les deux.
+# du parcours : la recharge federee (3 €) le couvre.
 # / The POS and item of these tests. The item costs exactly the journey amount.
 NOM_DU_COMPTOIR_DE_L_ANCIEN_FEDOW = 'Comptoir ancien Fedow E2E'
 NOM_DE_L_ARTICLE_DE_L_ANCIEN_FEDOW = 'Sirop E2E ancien Fedow'
@@ -623,12 +628,6 @@ NOM_DE_L_ARTICLE_DE_L_ANCIEN_FEDOW = 'Sirop E2E ancien Fedow'
 # / The cashier's primary card, seeded by create_test_pos_data.
 TAG_DE_LA_CARTE_PRIMAIRE = 'A49E8E2A'
 
-# Les cartes client, une par test. `CarteCashless.tag_id` est limite a 8
-# caracteres (PIEGES 9.31). Elles sont reutilisees d'un passage a l'autre mais
-# rattachees a un adherent NEUF a chaque fois.
-# / Client cards, one per test (8 chars max), re-attached to a FRESH member.
-TAG_DE_LA_CARTE_EN_MONNAIE_FEDEREE = 'E2EFED01'
-TAG_DE_LA_CARTE_EN_MONNAIE_LOCALE = 'E2ETLF01'
 
 
 def _lire_json_marque(sortie, marqueur):
@@ -695,44 +694,6 @@ def comptoir_de_l_ancien_fedow(django_shell, ensure_pos_data):
             "Quelqu'un l'a modifie dans la base de developpement."
         )
     return comptoir
-
-
-def _rattacher_une_carte_a_l_adherent(django_shell, email, tag_de_la_carte):
-    """Rattache la carte du test a l'adherent, apres l'avoir remise a zero.
-
-    Le portefeuille est demande au Fedow (`get_or_create_wallet`) : c'est lui qui
-    fait foi, et `_obtenir_ou_creer_wallet` rend `carte.user.wallet` des que la
-    carte porte un adherent. La carte peut encore porter l'adherent du passage
-    precedent : `reset_carte` la detache d'abord.
-    / Attaches the test card to the member after resetting it. The wallet comes
-    from the Fedow, the source of truth.
-    """
-    sortie = django_shell(
-        "import json\n"
-        "from AuthBillet.models import TibilletUser\n"
-        "from BaseBillet.models import CarteCashless\n"
-        "from fedow_connect.fedow_api import FedowAPI\n"
-        "from laboutik.utils.test_helpers import reset_carte\n"
-        f"user = TibilletUser.objects.get(email='{email}')\n"
-        "FedowAPI().wallet.get_or_create_wallet(user)\n"
-        "user.refresh_from_db()\n"
-        f"reset_carte('{tag_de_la_carte}')\n"
-        "carte, _cree = CarteCashless.objects.get_or_create(\n"
-        f"    tag_id='{tag_de_la_carte}',\n"
-        f"    defaults={{'number': '{tag_de_la_carte}'}})\n"
-        "carte.user = user\n"
-        "carte.save()\n"
-        "print('CARTE_JSON=' + json.dumps({\n"
-        "    'wallet_uuid': str(user.wallet.uuid) if user.wallet else None,\n"
-        "}))"
-    )
-    carte = _lire_json_marque(sortie, 'CARTE_JSON=')
-    if not carte['wallet_uuid']:
-        pytest.fail(
-            "L'adherent n'a pas de portefeuille : le Fedow n'a pas repondu. "
-            "Verifier `FedowConfig.get_solo().can_fedow()`."
-        )
-    return carte
 
 
 def _soldes_des_deux_moteurs_de_l_adherent(django_shell, email):
@@ -886,11 +847,11 @@ def _verifier_la_vente_encaissee_par_l_ancien_fedow(
     - chaque reglement porte le moyen attendu, une `reference_externe` et aucun
       `fedow_transaction_uuid` ;
     - chaque `reference_externe` designe une transaction qui EXISTE sur l'ancien
-      Fedow, du meme montant, de la bonne monnaie, faite par `to_place_from_qrcode`
-      (action « QRS ») depuis le portefeuille de l'adherent vers celui du lieu,
-      pour ce paiement-ci ;
+      Fedow, du meme montant, de la bonne monnaie, faite par la carte et la carte
+      primaire (`POST transaction/`, action « SAL ») depuis le portefeuille de
+      l'adherent vers celui du lieu, pour ce paiement-ci ;
     - les deux egalites de la vente.
-    / Checks shared by both old-Fedow currencies.
+    / Checks of a sale paid on the old Fedow (SAL, through the card).
     """
     assert vente['trouvee'], f"Aucune vente pour la cle du paiement {cle_du_paiement}."
     assert vente['statut'] == 'REGLEE', f"La vente n'est pas encaissee : {vente}"
@@ -920,9 +881,9 @@ def _verifier_la_vente_encaissee_par_l_ancien_fedow(
         assert transaction_distante['categorie'] == categorie_attendue, (
             f"La transaction n'est pas en {categorie_attendue} : {reglement}"
         )
-        assert transaction_distante['action'] == 'QRS', (
-            "La transaction n'a pas ete faite par `to_place_from_qrcode` "
-            f"(action QRS attendue) : {reglement}"
+        assert transaction_distante['action'] == 'SAL', (
+            "La transaction n'a pas ete faite par la carte et la carte primaire "
+            f"(action SAL attendue) : {reglement}"
         )
         assert transaction_distante['emetteur'] == wallet_de_l_adherent, (
             f"La transaction ne part pas du portefeuille de l'adherent : {reglement}"
@@ -946,80 +907,18 @@ def _verifier_la_vente_encaissee_par_l_ancien_fedow(
 
 
 @pytest.mark.caisse
-def test_caisse_encaisse_la_monnaie_locale_de_l_ancien_fedow(
-    page, pos_page, django_shell, adherent_credite, comptoir_de_l_ancien_fedow,
-):
-    """Une carte qui porte la monnaie locale du lieu sur l'ancien Fedow paie a la caisse.
-
-    L'adherent est credite en monnaie locale (TLF) sur l'ancien Fedow, et n'a rien
-    dans le moteur local. La caisse doit donc passer par l'ancien Fedow : un
-    reglement « LE » par transaction distante.
-
-    COMMENT ON PROUVE QUE LA CASCADE PASSE PAR L'ANCIEN FEDOW :
-    - le solde TLF de l'ancien Fedow baisse du prix, et les jetons locaux restent a 0 ;
-    - le moteur local n'a enregistre aucune transaction depuis ce portefeuille ;
-    - le reglement porte l'uuid d'une transaction de l'ancien Fedow d'action
-      « QRS », que seul `to_place_from_qrcode` produit, et dont les metadonnees
-      portent la cle de ce paiement ; son `fedow_transaction_uuid` est vide.
-    Le moyen seul ne suffit pas : une monnaie locale du moteur local donne aussi
-    « LE ».
-
-    CE QUE LE TEST LAISSE DERRIERE LUI : une vente encaissee, numerotee et
-    chainee sur le lieu ; 2,50 € de monnaie locale passes de l'adherent au lieu
-    sur l'ancien Fedow. Rien n'est annule.
-
-    / A card holding the venue's local currency on the old Fedow pays at the POS.
-    The proof that the cascade goes through the old Fedow: remote TLF drops, no
-    local transaction, a remote QRS transaction carrying this payment's key.
-    """
-    email = adherent_credite['email']
-    carte = _rattacher_une_carte_a_l_adherent(
-        django_shell, email, TAG_DE_LA_CARTE_EN_MONNAIE_LOCALE,
-    )
-
-    # L'adherent n'a QUE de la monnaie locale de l'ancien Fedow.
-    # / The member holds ONLY old-Fedow local currency.
-    soldes_avant = _soldes_des_deux_moteurs_de_l_adherent(django_shell, email)
-    assert soldes_avant['locale_ancien_fedow'] >= MONTANT_DE_LA_VENTE_CENTIMES, soldes_avant
-    assert soldes_avant['federe'] == 0, soldes_avant
-    assert soldes_avant['jetons_locaux'] == 0, soldes_avant
-    assert soldes_avant['transactions_locales'] == 0, soldes_avant
-
-    reponse, cle_du_paiement = _payer_l_article_en_nfc(
-        page, pos_page, comptoir_de_l_ancien_fedow, TAG_DE_LA_CARTE_EN_MONNAIE_LOCALE,
-    )
-    assert reponse.ok, f"La caisse a refuse le paiement : {reponse.status} {reponse.text()[:400]}"
-
-    soldes_apres = _soldes_des_deux_moteurs_de_l_adherent(django_shell, email)
-    assert soldes_apres['locale_ancien_fedow'] == (
-        soldes_avant['locale_ancien_fedow'] - MONTANT_DE_LA_VENTE_CENTIMES
-    ), f"L'ancien Fedow n'a pas debite le prix : {soldes_avant} → {soldes_apres}"
-    assert soldes_apres['jetons_locaux'] == 0, (
-        f"Le moteur local a bouge : {soldes_avant} → {soldes_apres}"
-    )
-    assert soldes_apres['transactions_locales'] == 0, (
-        f"Le moteur local a enregistre une transaction : {soldes_avant} → {soldes_apres}"
-    )
-
-    vente = _lire_la_vente_et_ses_transactions(django_shell, cle_du_paiement)
-    _verifier_la_vente_encaissee_par_l_ancien_fedow(
-        vente, cle_du_paiement, carte['wallet_uuid'],
-        moyen_attendu='LE', categorie_attendue='TLF',
-    )
-
-
-@pytest.mark.caisse
 @pytest.mark.stripe_listen
 def test_caisse_encaisse_du_fed_de_l_ancien_fedow(
     page, login_as, pos_page, django_shell, fill_stripe_card, soumettre_paiement_stripe,
-    comptoir_de_l_ancien_fedow,
+    comptoir_de_l_ancien_fedow, carte_primaire_declaree_a_l_ancien_fedow,
 ):
     """Une carte qui porte de la monnaie federee (FED) sur l'ancien Fedow paie a la caisse.
 
     Le FED s'achete : l'adherent recharge d'abord 3 € par carte bancaire (vrai
-    Stripe, `stripe listen` requis). Il n'a ni monnaie locale sur l'ancien Fedow,
-    ni jeton dans le moteur local. La caisse doit donc prendre le FED : un
-    reglement « SF » par transaction distante.
+    Stripe, `stripe listen` requis). Une carte neuve, connue de l'ancien Fedow et
+    liee a lui, est rattachee. Il n'a aucun jeton dans le moteur local. La caisse
+    prend donc le FED, par la carte et la carte primaire du caissier (declaree a
+    l'ancien Fedow) : un reglement « SF », une transaction « SAL ».
 
     CE QUE LE TEST LAISSE DERRIERE LUI : un paiement Stripe de test de 3 €, une
     vente encaissee, numerotee et chainee sur le lieu, 2,50 € de FED passes de
@@ -1035,9 +934,7 @@ def test_caisse_encaisse_du_fed_de_l_ancien_fedow(
     _verifier_que_la_recharge_federee_est_creditee(recharge)
     email = recharge['email']
 
-    carte = _rattacher_une_carte_a_l_adherent(
-        django_shell, email, TAG_DE_LA_CARTE_EN_MONNAIE_FEDEREE,
-    )
+    carte = _creer_une_carte_neuve_rattachee_des_deux_cotes(django_shell, email)
 
     # L'adherent n'a QUE du FED.
     # / The member holds ONLY FED.
@@ -1048,7 +945,7 @@ def test_caisse_encaisse_du_fed_de_l_ancien_fedow(
     assert soldes_avant['transactions_locales'] == 0, soldes_avant
 
     reponse, cle_du_paiement = _payer_l_article_en_nfc(
-        page, pos_page, comptoir_de_l_ancien_fedow, TAG_DE_LA_CARTE_EN_MONNAIE_FEDEREE,
+        page, pos_page, comptoir_de_l_ancien_fedow, carte['tag_id'],
     )
     assert reponse.ok, f"La caisse a refuse le paiement : {reponse.status} {reponse.text()[:400]}"
 
@@ -1337,56 +1234,6 @@ def _verifier_le_vidage_par_l_ancien_fedow(
     assert transaction_distante['categorie'] == categorie_attendue, reglement
     assert transaction_distante['emetteur'] == wallet_de_l_adherent, reglement
     assert transaction_distante['destinataire'] == vente['wallet_du_lieu'], reglement
-
-
-@pytest.mark.caisse
-def test_caisse_vide_une_carte_avec_de_la_monnaie_locale_de_l_ancien_fedow(
-    page, pos_page, django_shell, adherent_credite, comptoir_de_l_ancien_fedow,
-    carte_primaire_declaree_a_l_ancien_fedow,
-):
-    """Une carte qui porte la monnaie locale du lieu sur l'ancien Fedow est videe a la caisse.
-
-    L'adherent est credite en monnaie locale (TLF) sur l'ancien Fedow ; une carte
-    neuve, connue de l'ancien Fedow, lui est rattachee. Le caissier la scanne puis la
-    vide (« rembourser et reinitialiser »), avec la carte primaire de la caisse V2.
-
-    CE QUE LE TEST PROUVE : l'ancien Fedow accepte la carte primaire de la caisse V2
-    (`card/refund` exige une carte primaire du lieu), le solde distant tombe a 0
-    (relu sans cache), et la vente `VIDAGE_CARTE` copie la vraie transaction de
-    remboursement.
-
-    CE QUE LE TEST LAISSE DERRIERE LUI : un adherent neuf et une carte neuve (sur le
-    lieu et sur l'ancien Fedow), videe et deliee ; une vente de vidage encaissee,
-    numerotee et chainee ; la monnaie locale de l'adherent revenue au lieu sur
-    l'ancien Fedow. Rien n'est annule. La carte primaire du seed retrouve sur
-    l'ancien Fedow l'etat trouve au debut (fixture `carte_primaire_declaree_a_l_ancien_fedow`).
-
-    / A card holding the venue's local currency on the old Fedow is emptied at the
-    POS. Proves the V2 primary card is accepted by the old Fedow.
-    """
-    email = adherent_credite['email']
-    carte = _creer_une_carte_neuve_rattachee_des_deux_cotes(django_shell, email)
-
-    soldes_avant = _soldes_des_deux_moteurs_de_l_adherent(django_shell, email)
-    montant_repris = soldes_avant['locale_ancien_fedow']
-    assert montant_repris > 0, soldes_avant
-    assert soldes_avant['federe'] == 0, soldes_avant
-    assert soldes_avant['jetons_locaux'] == 0, soldes_avant
-
-    reponse_de_l_apercu, reponse_du_vidage = _vider_la_carte_a_la_caisse(
-        page, pos_page, comptoir_de_l_ancien_fedow, carte['tag_id'],
-    )
-    vente = _lire_la_vente_du_vidage(django_shell, carte['tag_id'])
-    _verifier_le_vidage_par_l_ancien_fedow(
-        reponse_de_l_apercu, reponse_du_vidage, vente, carte['wallet_uuid'],
-        montant_repris, moyen_attendu='LE', categorie_attendue='TLF',
-    )
-
-    soldes_apres = _soldes_des_deux_moteurs_de_l_adherent(django_shell, email)
-    assert soldes_apres['locale_ancien_fedow'] == 0, (
-        f"L'ancien Fedow n'a pas vide la monnaie locale : {soldes_avant} → {soldes_apres}"
-    )
-    assert soldes_apres['transactions_locales'] == 0, soldes_apres
 
 
 @pytest.mark.caisse

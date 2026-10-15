@@ -31,7 +31,9 @@ L'ANCIEN FEDOW EST SIMULÉ, JAMAIS APPELÉ
 - La lecture d'une carte par le service est simulée par
   `patch.object(NFCcardFedow, "retrieve")` : c'est la cible unique du service (§ 8.1).
   `FedowAPI().NFCcard` est une instance de `NFCcardFedow` : la borne, qui lit la carte
-  par `kiosk.carte.FedowAPI`, passe par la même simulation.
+  par `kiosk.carte.FedowAPI`, passe par la même simulation. La lecture du FED d'une
+  carte par la caisse et la tireuse (`lire_depensable_fed_frais`, par la fiche de la
+  carte) aussi : `tags_demandes` compte donc le rapatriement ET ces lectures.
 - La lecture du portefeuille de la carte (`NFCcardFedow.card_tag_id_retrieve`, appelée
   par `obtenir_wallet_carte_depuis_fedow` au premier paiement) est simulée de même : elle
   rend le portefeuille « miroir » de la fiche, créé par le test avec son solde.
@@ -71,6 +73,7 @@ from AuthBillet.models import TermUser, TibilletUser, Wallet
 from BaseBillet.models import LigneArticle, Membership, Product
 from BaseBillet.models_vente import Vente
 from Customers.models import Client
+from fabriques_controlvanne import donner_une_carte_primaire_au_lieu
 from fabriques_panier import (
     configuration_modifiee,
     creer_adhesion,
@@ -320,7 +323,8 @@ def ancien_fedow_simule(fiches=(), panne=None):
     - `card_tag_id_retrieve` (lecture du portefeuille au premier paiement) rend le
       portefeuille de la fiche, carte anonyme ; un tag inconnu rend None ;
     - `panne` : une exception levée par les deux lectures, pour tous les tags.
-    Rend `SimpleNamespace(tags_demandes)` : un tag par appel à `retrieve`.
+    Rend `SimpleNamespace(tags_demandes)` : un tag par appel à `retrieve`, qu'il vienne
+    du rapatriement ou de la lecture du FED de la carte (`lire_depensable_fed_frais`).
     """
     fiche_par_tag = {}
     for fiche in fiches:
@@ -824,14 +828,18 @@ def demander_le_recapitulatif_a_la_borne(borne, tag_id):
 
 def preparer_la_tireuse(lieu):
     """
-    Une tireuse neuve à 8 €/L, réservoir illimité, et la clé API de son terminal
-    (test_tireuse_ancien_fedow.py). Les messages poussés à l'écran de la tireuse sont
-    notés dans `messages_a_l_ecran`.
-    / A fresh tap and its terminal API key. Screen messages are recorded.
+    Une tireuse neuve à 8 €/L, réservoir illimité, la clé API de son terminal
+    (test_tireuse_ancien_fedow.py), et une carte primaire dans le lieu. Les messages
+    poussés à l'écran de la tireuse sont notés dans `messages_a_l_ecran`.
+    / A fresh tap, its terminal API key and a venue primary card. Screen messages are
+    recorded.
     """
     tireuse, entetes_http = _creer_une_tireuse(
         lieu.tenant, prix_du_litre_en_euros="8.00"
     )
+    # Sans carte primaire dans le lieu, la tireuse refuse de servir.
+    # / Without a primary card in the venue, the tap refuses to pour.
+    donner_une_carte_primaire_au_lieu(lieu.tenant)
     return SimpleNamespace(
         lieu=lieu,
         tireuse=tireuse,
@@ -1259,7 +1267,10 @@ def test_36_a_seconde_carte_seulement_chez_fedow_rapatriee_et_paie_le_reste(lieu
     La carte 1 (locale) paie 5,00 € ; la seconde carte, connue seulement de l'ancien
     Fedow et chargée de 6,00 €, est rapatriée et paie le reste, 5,50 €. Une seule vente,
     réglée ; il reste 0,50 € sur la seconde carte.
-    / Second card known only by the old Fedow: fetched, pays the 5.50 € left.
+    L'ancien Fedow est interrogé deux fois : le rapatriement de la seconde carte, puis
+    la lecture du FED de la carte 1, qui ne couvre pas tout (inconnue là-bas : 0).
+    / Second card known only by the old Fedow: fetched, pays the 5.50 € left. The old
+    Fedow is asked twice: fetching card 2, then reading card 1's FED.
     """
     deux_cartes = preparer_un_paiement_a_deux_cartes(lieu)
     seconde_carte = carte_connue_seulement_de_fedow(
@@ -1273,7 +1284,7 @@ def test_36_a_seconde_carte_seulement_chez_fedow_rapatriee_et_paie_le_reste(lieu
     assert 'data-testid="paiement-succes"' in reponse.content.decode(), (
         message_de_la_caisse(reponse)
     )
-    assert fedow.tags_demandes == [seconde_carte.tag_id]
+    assert fedow.tags_demandes == [seconde_carte.tag_id, deux_cartes.carte_1.tag_id]
     verifier_la_carte_rapatriee(lieu, seconde_carte)
     vente = retrouver_la_vente_de_la_cle(deux_cartes.cle_d_idempotence)
     assert vente.statut == Vente.Statut.REGLEE
@@ -1328,8 +1339,10 @@ def test_37_a_check_carte_seulement_chez_fedow_affiche_la_fiche_de_la_carte(lieu
     """
     « Check carte » sur une carte connue seulement de l'ancien Fedow, qui porte 7 € de
     monnaie locale : elle est rapatriée, la fiche s'affiche (carte anonyme, solde),
-    sans message d'erreur.
-    / Card check on a card known only by the old Fedow: fetched, its record shown.
+    sans message d'erreur. L'ancien Fedow est interrogé deux fois pour cette carte :
+    le rapatriement, puis la lecture de son FED pour l'affichage.
+    / Card check on a card known only by the old Fedow: fetched, its record shown. The
+    old Fedow is asked twice: fetching, then reading its FED.
     """
     check_carte = preparer_le_check_carte(lieu)
     carte_fedow = carte_connue_seulement_de_fedow(
@@ -1344,7 +1357,7 @@ def test_37_a_check_carte_seulement_chez_fedow_affiche_la_fiche_de_la_carte(lieu
     assert 'data-testid="retour-carte-erreur"' not in contenu
     assert 'data-testid="retour-carte-anonyme"' in contenu
     assert texte_de_l_element(reponse, "retour-carte-soldes").startswith("7")
-    assert fedow.tags_demandes == [carte_fedow.tag_id]
+    assert fedow.tags_demandes == [carte_fedow.tag_id, carte_fedow.tag_id]
     verifier_la_carte_rapatriee(lieu, carte_fedow)
 
 
@@ -1613,8 +1626,11 @@ def test_40_a_tireuse_carte_seulement_chez_fedow_rapatriee_et_service_autorise(l
     """
     Badge d'une carte connue seulement de l'ancien Fedow, qui porte 10 € de monnaie
     locale, sur une tireuse à 8 €/L : la carte est rapatriée, le service est autorisé
-    (1 250 ml), une session est ouverte pour cette carte.
-    / Badge of a card known only by the old Fedow: fetched, pouring authorized.
+    (1 250 ml), une session est ouverte pour cette carte. L'ancien Fedow est interrogé
+    deux fois pour cette carte : le rapatriement, puis la lecture de son FED pour le
+    solde de la tireuse.
+    / Badge of a card known only by the old Fedow: fetched, pouring authorized. The old
+    Fedow is asked twice: fetching, then reading its FED.
     """
     from controlvanne.models import RfidSession
 
@@ -1631,7 +1647,7 @@ def test_40_a_tireuse_carte_seulement_chez_fedow_rapatriee_et_service_autorise(l
     assert reponse_lue["authorized"] is True, reponse_lue
     assert reponse_lue["solde_centimes"] == 1000
     assert reponse_lue["allowed_ml"] == 1250.0
-    assert fedow.tags_demandes == [carte_fedow.tag_id]
+    assert fedow.tags_demandes == [carte_fedow.tag_id, carte_fedow.tag_id]
     carte_locale = verifier_la_carte_rapatriee(lieu, carte_fedow)
     assert RfidSession.objects.filter(
         carte=carte_locale, tireuse_bec=tireuse.tireuse, authorized=True
