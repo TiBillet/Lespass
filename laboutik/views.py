@@ -10638,10 +10638,12 @@ class PaiementViewSet(viewsets.ViewSet):
             # dans le détail pour que le caissier voie ce qui est pris sur le réseau. Le débit réel
             # se fera à la validation (payer_complementaire, re-lecture fraîche du FED).
             # / Partial legacy covers `montant_legacy` of the remainder: show it in the detail.
+            # Le FED s'affiche « TiBillet » partout (caisse, Mon compte) : nom de marque, non
+            # traduit. / FED is shown as "TiBillet" everywhere: a brand name, not translated.
             if montant_legacy > 0:
                 detail_cascade_affichage.append(
                     {
-                        "name": _("Réseau (FED)"),
+                        "name": "TiBillet",
                         "montant_euros": f"{montant_legacy / 100:.2f}",
                     }
                 )

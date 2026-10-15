@@ -13,7 +13,7 @@ brief TECH_DOC/SESSIONS/FEDOW_IMPORT/briefs/10-1.md.
   droit `initiate_payment` sur le lieu, ou superuser — même hors `client_admin` (D3).
   Le module s'affiche aussi pour un·e caissier·e qui n'administre aucun lieu.
   Administrer un AUTRE lieu ne donne pas le bouton.
-- « Scanner un QR code de paiement » (`compte-scanner-qrcode`) est sous « Ma carte », avec ou
+- « Scanner un QR code de paiement » (`compte-scanner-qrcode`) est sous « Ma tirelire », avec ou
   sans carte liée, quand l'email est validé. Sinon : un bouton gris, désactivé, sans lien (D4).
 - En V2, /my_account/balance/ a aussi le scanner, et le bandeau « Initier un paiement »
   avec la même règle que /my_account/. Pas de lien « Voir le détail des monnaies », ni
@@ -331,7 +331,7 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
         assert balise_par_testid(html, "compte-initier-paiement") is not None
 
     # ------------------------------------------------------------------ #
-    #  §7.1 — « Scanner un QR code de paiement » sous « Ma carte »        #
+    #  §7.1 — « Scanner un QR code de paiement » sous « Ma tirelire »     #
     # ------------------------------------------------------------------ #
 
     def test_email_valide_sans_carte_voit_le_bouton_scanner(self):

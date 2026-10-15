@@ -94,16 +94,16 @@ Pas de id="messages" ici : l'element #messages existe dans base.html.
 
           {#  SOLDE RESEAU FEDERE (FED) — lu en temps reel sur l'ancien Fedow, par la carte. #}
           {#  Toute carte, liee ou anonyme : le montant si le reseau repond, sinon           #}
-          {#  « indisponible ».                                                              #}
+          {#  « indisponible ». Le FED s'affiche « TiBillet », comme dans « Mon compte ».    #}
           {#  / Federated balance (FED), any card: amount, or "unavailable".                 #}
           {% if fed_disponible and fed_euros %}
             <li class="card-pastille" data-testid="retour-carte-solde-fed" title="{% translate 'Monnaie fédérée (FED)' %}">
-              <span class="card-pastille-nom">{% translate "Réseau" %}</span>
+              <span class="card-pastille-nom">TiBillet</span>
               <b class="test-return-fed-value">{{ fed_euros|floatformat:2 }} {{ currency_data.symbol }}</b>
             </li>
           {% elif not fed_disponible %}
             <li class="card-pastille card-pastille--vide" data-testid="retour-carte-fed-indisponible">
-              <span class="card-pastille-nom">{% translate "Réseau" %}</span>
+              <span class="card-pastille-nom">TiBillet</span>
               <span>{% translate "Indisponible" %}</span>
             </li>
           {% endif %}

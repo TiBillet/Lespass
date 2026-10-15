@@ -914,7 +914,12 @@ img { max-width: 100%; display: block; }
 /* Pas encore de carte liée : la même carte, grisée, avec l'invitation à la place du
    numéro. / No linked card yet: the same card, greyed, with the invitation. */
 .tcard--vide { filter: grayscale(1); opacity: .6; }
+/* width:0 + min-width:100% : le texte ne compte pas dans la largeur de la carte. Elle
+   garde la taille d'une vraie carte, et le texte passe à la ligne dans cette largeur.
+   / The text does not widen the card: same size as a real one, the text wraps. */
 .tcard__invite {
+  width: 0;
+  min-width: 100%;
   position: relative;
   z-index: 1;
   font-family: var(--font-text);

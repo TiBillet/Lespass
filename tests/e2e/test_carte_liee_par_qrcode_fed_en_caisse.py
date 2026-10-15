@@ -708,7 +708,7 @@ def test_carte_liee_par_qrcode_puis_rechargee_en_fed_paie_un_cafe_a_la_caisse(
         fiche = _check_carte(page, pos_page, tag_de_la_carte)
         assert fiche["erreur"] is None, f"La fiche affiche une erreur : {fiche}"
         assert fiche["pastille_fed"] is not None, (
-            "La fiche n'a pas de pastille « Réseau » (FED) : la caisse ne lit pas le FED "
+            "La fiche n'a pas de pastille « TiBillet » (FED) : la caisse ne lit pas le FED "
             f"de cette carte (carte anonyme pour elle ? {fiche['anonyme']}). Fiche : {fiche}"
         )
         assert _motif_du_montant(fed_avant_le_cafe).search(fiche["pastille_fed"]), (
