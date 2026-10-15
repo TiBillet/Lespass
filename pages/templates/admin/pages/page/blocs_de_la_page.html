@@ -14,11 +14,12 @@ les blocs y sont disposes par la vraie grille du skin, cartes cote a cote
 comme sur le site. Chaque bloc y porte sa barre d'actions (↑ ↓ Modifier
 Supprimer, + Ajouter apres). Les ↑ ↓ et Supprimer rechargent l'iframe seule :
 le formulaire de la page n'est pas touche.
-Ici, hors iframe : l'en-tete, le menu « + Ajouter un bloc en premier » et le lien vers la
-page publique. `menu_ajout_en_tete` vient de PageAdmin.changeform_view.
+Ici, hors iframe : l'en-tete, le bouton « + Ajouter un bloc en premier », le
+lien vers la page publique, et la <dialog> du menu d'ajout, partagee par le
+bouton de l'en-tete et par le + de chaque barre.
 / Placed OUTSIDE the page <form>. A single iframe renders the whole page in
 the real skin grid, each block with its action bar. Outside it: header, "add
-at the top" menu and public page link.
+at the top" button, public page link and the shared add-menu <dialog>.
 {% endcomment %}
 {% if original %}
     <section id="blocs-de-la-page"
@@ -37,8 +38,17 @@ at the top" menu and public page link.
                 </p>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
-                {% translate "Ajouter un bloc en premier" as libelle_ajout %}
-                {% include "admin/pages/apercu/_menu_modeles.html" with groupes=menu_ajout_en_tete libelle=libelle_ajout testid="page-ajouter-en-tete" %}
+                {# Ouvre la <dialog> du menu d'ajout (apercu.js), comme le + des barres. #}
+                {# inserer_apres=0 : le nouveau bloc passe en tete de page. #}
+                {# / Opens the add-menu <dialog> (apercu.js); inserer_apres=0 = top of page. #}
+                <button type="button"
+                        data-ouvrir-menu-ajout="{% url 'staff_admin:pages_page_menu_ajout' original.pk %}?inserer_apres=0"
+                        aria-haspopup="dialog"
+                        data-testid="page-ajouter-en-tete"
+                        style="cursor: pointer; padding: 4px 10px; font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.4;
+                               border-radius: 6px; border: 1px dashed #059669; color: #047857; background: #fff; white-space: nowrap;">
+                    <span aria-hidden="true">+</span> {% translate "Ajouter un bloc en premier" %}
+                </button>
                 <a href="{{ original.get_absolute_url }}" target="_blank" rel="noopener" data-testid="page-voir-entiere"
                    style="font-size: 0.8125rem; color: var(--color-primary-600); white-space: nowrap;">
                     {% translate "Voir la page publique" %} <span aria-hidden="true">↗</span>
@@ -59,6 +69,62 @@ at the top" menu and public page link.
                 {% translate "Cette page n'a pas encore de bloc. Utilisez « + Ajouter un bloc en premier » pour commencer." %}
             </p>
         {% endif %}
+
+        {% comment %}
+        MENU « + AJOUTER UN BLOC » : une seule <dialog> pour tous les boutons +
+        / "+ Add a block" menu: one <dialog> for every "+" button
+
+        OUVERTE PAR (apercu.js) :
+        - le bouton « + Ajouter un bloc en premier » de l'en-tete, ci-dessus ;
+        - le + de la barre d'un bloc (admin/pages/apercu/_outils_bloc.html),
+          dans l'iframe : apercu_page_outils.js emet « apercu:ouvrir-menu-ajout »
+          sur ce document.
+        Elle vit ICI, dans l'admin, et pas dans l'iframe : l'iframe a la hauteur
+        de son contenu (apercu.js), un menu ouvert dedans y serait coupe.
+        apercu.js l'ouvre (showModal) et charge la liste dans
+        #dialog-menu-ajout-liste (pages/admin_apercu.py:vue_menu_ajout).
+        Echap ferme la <dialog> (natif), comme le bouton Fermer et un clic sur
+        le fond.
+
+        CENTRAGE : `position: fixed; inset: 0; margin: auto` sont INDISPENSABLES.
+        Le navigateur centre une <dialog> modale avec margin: auto, mais le reset
+        CSS d'Unfold (Tailwind) remet margin a 0 : sans ces regles, la fenetre
+        se colle en haut a gauche.
+        / Lives in the admin, not in the iframe (it would be clipped there).
+        Centering rules are REQUIRED: Unfold's CSS reset sets margin to 0.
+        {% endcomment %}
+        <style>
+            #dialog-menu-ajout::backdrop { background: rgba(0, 0, 0, .35); }
+            .menu-modeles__lien:hover, .menu-modeles__lien:focus-visible { background: #f4f4f5; outline: 2px solid #059669; outline-offset: -2px; }
+        </style>
+        <dialog id="dialog-menu-ajout"
+                data-testid="page-dialog-menu-ajout"
+                aria-labelledby="titre-dialog-menu-ajout"
+                style="position: fixed; inset: 0; margin: auto; width: 600px; max-width: 92vw; height: fit-content; max-height: 85vh;
+                       padding: 0; border-radius: 10px; border: 1px solid #d4d4d8;
+                       background: #fff; color: #111; box-shadow: 0 10px 30px rgba(0,0,0,.25); font-family: system-ui, sans-serif;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e4e4e7;">
+                <h3 id="titre-dialog-menu-ajout" style="margin: 0; font-size: 1rem; font-weight: 600;">
+                    {% translate "Ajouter un bloc" %}
+                </h3>
+                <button type="button" data-fermer-dialog-menu-ajout
+                        data-testid="page-dialog-menu-ajout-fermer"
+                        aria-label="{% translate 'Fermer' %}" title="{% translate 'Fermer' %}"
+                        style="width: 28px; height: 28px; padding: 0; border-radius: 6px; border: 1px solid #e4e4e7; background: #fff; color: #18181b; cursor: pointer; font-size: 14px; line-height: 1;">
+                    <span aria-hidden="true">✕</span>
+                </button>
+            </div>
+            {# Une liste de LIENS, pas un role="menu" ARIA : ce role promet une #}
+            {# navigation aux fleches que nous n'offrons pas. Tab parcourt les liens. #}
+            {# / A list of LINKS, not an ARIA menu (no arrow-key navigation). #}
+            <div id="dialog-menu-ajout-liste"
+                 data-testid="page-dialog-menu-ajout-liste"
+                 data-texte-chargement="{% translate 'Chargement des modèles…' %}"
+                 data-texte-erreur="{% translate 'Impossible de charger les modèles.' %}"
+                 aria-live="polite"
+                 style="max-height: calc(85vh - 60px); overflow-y: auto; padding: 14px 16px;
+                        display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; text-align: left;"></div>
+        </dialog>
     </section>
     <script src="{% static 'pages/admin/apercu.js' %}"></script>
 {% endif %}

@@ -18,9 +18,20 @@
  * Quand htmx remplace l'iframe de l'apercu en direct, la page ne « saute » pas
  * pendant que le nouveau document se charge.
  *
+ * Fiche Page : ouvre aussi la <dialog> du menu « + Ajouter un bloc »
+ * (#dialog-menu-ajout, dans blocs_de_la_page.html), pour le bouton de
+ * l'en-tete et pour le + de chaque barre. Le menu vit dans l'admin, pas dans
+ * l'iframe, ou il serait coupe.
+ *
+ * COMMUNICATION :
+ * Recoit : clic sur [data-ouvrir-menu-ajout] dans ce document (en-tete) ;
+ * « apercu:ouvrir-menu-ajout » depuis apercu_page_outils.js (iframe), avec
+ * detail.url_du_menu et detail.bouton_d_origine.
+ *
  * Aucune logique metier ici : uniquement de l'affichage.
  * / UI only. Same-origin iframes: read [data-apercu-contenu] height, follow it
  * with a ResizeObserver, keep the container's last height to avoid jumps.
+ * Also opens the Page form's "add a block" <dialog>.
  */
 (function () {
     // Le script peut etre inclus deux fois (deux gabarits) : un seul
@@ -85,28 +96,95 @@
         true
     );
 
-    // Menu « + Ajouter en tete » (fiche Page) : il se ferme au clic a cote,
-    // ou avec Echap (le focus revient sur son bouton). Meme regle que dans
-    // l'iframe (apercu_page_outils.js). / The "+ Add at top" menu closes on
-    // outside click or Escape.
-    document.addEventListener("click", function (evenement) {
-        var menus_ouverts = document.querySelectorAll("details[data-menu-modeles][open]");
-        for (var n = 0; n < menus_ouverts.length; n++) {
-            if (!menus_ouverts[n].contains(evenement.target)) {
-                menus_ouverts[n].open = false;
+    // Menu « + Ajouter un bloc » de la fiche Page : une seule <dialog>.
+    // FLUX : deux boutons [data-ouvrir-menu-ajout] l'ouvrent.
+    // - « + Ajouter un bloc en premier » (en-tete, dans ce document) : son
+    //   clic est vu directement ici.
+    // - le + de la barre d'un bloc (dans l'iframe) : apercu_page_outils.js
+    //   emet « apercu:ouvrir-menu-ajout » sur ce document.
+    // Les deux appellent ouvrirLeMenuDAjout : la <dialog> s'ouvre tout de
+    // suite (texte « Chargement… »), puis htmx y charge la liste
+    // (pages/admin_apercu.py:vue_menu_ajout).
+    // / Two "+" buttons open the same <dialog>: the header one (clicked here)
+    // and each block bar's one (event from the iframe). htmx loads the list.
+    var dialog_menu_ajout = document.getElementById("dialog-menu-ajout");
+    if (dialog_menu_ajout) {
+        var liste_du_menu = document.getElementById("dialog-menu-ajout-liste");
+
+        // Le + qui a ouvert la <dialog> : il recupere le focus a la fermeture.
+        // Il peut vivre dans l'iframe, rechargee entre-temps : on verifie
+        // qu'il est encore dans un document (isConnected).
+        // / The "+" that opened the dialog gets focus back on close.
+        var bouton_qui_a_ouvert_le_menu = null;
+
+        function afficherLeTexte(texte) {
+            var paragraphe = document.createElement("p");
+            paragraphe.setAttribute("role", "status");
+            paragraphe.style.cssText = "margin: 0; font-size: 13px; color: #71717a;";
+            paragraphe.textContent = texte;
+            liste_du_menu.replaceChildren(paragraphe);
+        }
+
+        function ouvrirLeMenuDAjout(url_du_menu, bouton_d_origine) {
+            bouton_qui_a_ouvert_le_menu = bouton_d_origine;
+            afficherLeTexte(liste_du_menu.dataset.texteChargement);
+            if (!dialog_menu_ajout.open) {
+                dialog_menu_ajout.showModal();
             }
+            if (!window.htmx) {
+                afficherLeTexte(liste_du_menu.dataset.texteErreur);
+                return;
+            }
+            window.htmx.ajax("GET", url_du_menu, {
+                target: "#dialog-menu-ajout-liste",
+                swap: "innerHTML",
+            });
         }
-    });
-    document.addEventListener("keydown", function (evenement) {
-        if (evenement.key !== "Escape") {
-            return;
-        }
-        var menus_ouverts = document.querySelectorAll("details[data-menu-modeles][open]");
-        for (var n = 0; n < menus_ouverts.length; n++) {
-            menus_ouverts[n].open = false;
-            menus_ouverts[n].querySelector("summary").focus();
-        }
-    });
+
+        // Bouton + de l'en-tete (dans ce document).
+        // / Header "+" button (in this document).
+        document.addEventListener("click", function (evenement) {
+            var bouton_ajout = evenement.target.closest("[data-ouvrir-menu-ajout]");
+            if (!bouton_ajout) {
+                return;
+            }
+            ouvrirLeMenuDAjout(bouton_ajout.getAttribute("data-ouvrir-menu-ajout"), bouton_ajout);
+        });
+
+        // Bouton + d'une barre (dans l'iframe, via apercu_page_outils.js).
+        // / A bar's "+" button (in the iframe, via apercu_page_outils.js).
+        document.addEventListener("apercu:ouvrir-menu-ajout", function (evenement) {
+            ouvrirLeMenuDAjout(evenement.detail.url_du_menu, evenement.detail.bouton_d_origine);
+        });
+
+        // htmx ne remplace rien sur une reponse en erreur (403, 404, 500) ni
+        // sans reseau : on le dit au lieu de laisser « Chargement… ».
+        // / htmx does not swap on errors: say so instead of "Loading…".
+        liste_du_menu.addEventListener("htmx:responseError", function () {
+            afficherLeTexte(liste_du_menu.dataset.texteErreur);
+        });
+        liste_du_menu.addEventListener("htmx:sendError", function () {
+            afficherLeTexte(liste_du_menu.dataset.texteErreur);
+        });
+
+        // Bouton Fermer, et clic sur le fond. Un clic sur le fond a pour
+        // cible la <dialog> elle-meme. Echap est gere par le navigateur.
+        // / Close button, and backdrop click (its target is the dialog itself).
+        dialog_menu_ajout.addEventListener("click", function (evenement) {
+            var clic_sur_le_fond = evenement.target === dialog_menu_ajout;
+            var clic_sur_fermer = evenement.target.closest("[data-fermer-dialog-menu-ajout]");
+            if (clic_sur_le_fond || clic_sur_fermer) {
+                dialog_menu_ajout.close();
+            }
+        });
+
+        dialog_menu_ajout.addEventListener("close", function () {
+            if (bouton_qui_a_ouvert_le_menu && bouton_qui_a_ouvert_le_menu.isConnected) {
+                bouton_qui_a_ouvert_le_menu.focus();
+            }
+            bouton_qui_a_ouvert_le_menu = null;
+        });
+    }
 
     // Une iframe peut avoir fini de charger AVANT que ce script s'execute
     // (il est pose apres elle dans la page) : son evenement `load` est alors

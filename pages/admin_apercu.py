@@ -993,22 +993,30 @@ def vue_apercu_page(request, object_id):
 @require_GET
 def vue_menu_ajout(request, object_id):
     """
-    Liste des modeles de bloc pour le menu « + » d'UN bloc (charge a la demande).
-    / Block model list for ONE block's "+" menu (loaded on demand).
+    Liste des modeles de bloc pour un menu « + » (charge a la demande).
+    / Block model list for a "+" menu (loaded on demand).
 
     LOCALISATION : pages/admin_apercu.py
 
+    DEUX BOUTONS + appellent cette vue, avec `?inserer_apres=<rang>` :
+    - « + Ajouter un bloc en premier », en-tete de blocs_de_la_page.html
+      (dans l'admin), avec inserer_apres=0 ;
+    - le + de la barre d'un bloc, admin/pages/apercu/_outils_bloc.html (dans
+      l'iframe), avec le rang du bloc.
+
     FLUX :
-    1. admin/pages/apercu/_outils_bloc.html inclut _menu_modeles.html avec
-       `url_chargement` (l'URL de cette vue, ?inserer_apres=<rang>).
-    2. A la premiere ouverture du menu (evenement `toggle` du <details>), htmx
-       fait un hx-get ici, une seule fois.
+    1. Clic sur un bouton [data-ouvrir-menu-ajout]. Dans l'iframe,
+       apercu_page_outils.js previent l'admin par l'evenement
+       « apercu:ouvrir-menu-ajout ». Dans l'admin, apercu.js voit le clic.
+    2. apercu.js ouvre la <dialog> de blocs_de_la_page.html et demande cette
+       vue avec htmx.ajax.
     3. On renvoie _menu_modeles_liens.html : les modeles groupes par type,
        chaque lien pre-rempli pour inserer le bloc a cette place.
-    Avant, la barre de chaque bloc embarquait deja le menu complet (~25 liens) :
-    une page de 50 blocs en portait ~1250.
-    / Returns the model links for one position, on the menu's first opening,
-    instead of embedding the full menu in every block bar.
+    Les liens vivent dans l'admin, pas dans l'iframe : `cible` vaut donc _self.
+    Le menu n'est construit qu'a la demande : une page de 50 blocs n'embarque
+    pas 50 fois les ~25 liens du menu.
+    / Returns the model links for one position, loaded into the admin
+    <dialog> by the header "+" (inserer_apres=0) or a block bar's "+".
     """
     if not TenantAdminPermissionWithRequest(request):
         return HttpResponseForbidden()
@@ -1019,13 +1027,21 @@ def vue_menu_ajout(request, object_id):
         raise Http404()
     inserer_apres = int(valeur)
 
+    # Le prefixe des data-testid suit celui du bouton qui a ouvert le menu.
+    # / The data-testid prefix follows the button that opened the menu.
+    ajout_en_tete_de_page = inserer_apres == 0
+    if ajout_en_tete_de_page:
+        prefixe_des_testid = "page-ajouter-en-tete"
+    else:
+        prefixe_des_testid = f"page-bloc-{inserer_apres}-ajouter"
+
     return render(
         request,
         "admin/pages/apercu/_menu_modeles_liens.html",
         {
             "groupes": menu_d_ajout(page, inserer_apres),
-            "cible": "_top",
-            "testid": f"page-bloc-{inserer_apres}-ajouter",
+            "cible": "_self",
+            "testid": prefixe_des_testid,
         },
     )
 

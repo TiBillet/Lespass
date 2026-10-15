@@ -3284,7 +3284,7 @@ class EventMVT(viewsets.ViewSet):
         prices = []
         for product in event.products.all():
             for price in product.prices.all():
-                if not price.archived:
+                if not price.archived and price.publish:
                     prices.append(price)
 
         tarifs = [price.prix for price in prices]
@@ -3314,7 +3314,7 @@ class EventMVT(viewsets.ViewSet):
         prices = []
         for product in event.products.all():
             for price in product.prices.all():
-                if not price.archived:
+                if not price.archived and price.publish:
                     prices.append(price)
 
         tarifs = [price.prix for price in prices]
@@ -3838,7 +3838,7 @@ class EventMVT(viewsets.ViewSet):
 
             # Récupération des prix. Un tarif archivé (« supprimé ») n'est jamais affiché.
             # / Get prices. An archived ("deleted") price is never shown.
-            prices = [price for product in products for price in product.prices.all() if not price.archived]
+            prices = [price for product in products for price in product.prices.all() if not price.archived and price.publish]
 
             # Si l'user est connecté, on vérifie qu'il n'a pas déja reservé
             product_max_per_user_reached = []
@@ -4691,7 +4691,7 @@ class MembershipMVT(viewsets.ViewSet):
             # Les tarifs en points ou en temps se vendent a la caisse seulement :
             # ils ne comptent pas dans le prix affiche en euros.
             # / Points or time prices are sold at the POS only: not an euro price.
-            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False)
+            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False, publish=True)
             tarifs = [price.prix for price in prices]
             # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
             # la caisse seulement), la carte n'affiche pas de prix.
