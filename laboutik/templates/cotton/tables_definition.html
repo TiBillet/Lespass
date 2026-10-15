@@ -1,48 +1,147 @@
-<c-modal id="main-tables-definition">
-<c-slot name="header">Supprimer l'utilisateur</c-slot>
-<c-slot name="main">
-<div class="s-main-tables-definition">
-  <!-- tables_list ou tester pour le débug -->
-  {% for table in tables_list %}<c-bt.table name="{{ table }}" />{% endfor %}
-  <c-bt.table name="+" title="ajouter une table" onclick="document.querySelector('#add-table').style.display = 'flex';" />
-  <!-- modal ajout table -->
-  <!-- mode="hide" le modal n'est pas enlever du DOM (mode par défaut) mais caché -->
-  <c-modal id="add-table" style="display:none;" height="auto" mode="hide">
-  <c-slot name="header">Ajouter une table</c-slot>
-  <c-slot name="main">
-  <div class="s-add-table">
-    <input id="new_table" placeholder="nom de la nouvelle table">
-  </div>
-  </c-slot>
-  <c-slot name="footer">
-  <button onclick="addTable()">Valider</button>
-  </c-slot>
-  </c-modal>
-  <!-- fin modal ajout table -->
-</div>
-</c-slot>
-<c-slot name="footer"></c-slot>
-</c-modal>
-<style>
-  .s-main-tables-definition {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content:center;
-    align-content: flex-start;
-  }
+<c-vars avec_bouton_continuer="oui" />
+{% load i18n %}
+<!--
+ECRAN DE CHOIX DE TABLE (MODE RESTAURANT)
+/ Table picker screen (restaurant mode)
 
-  .s-add-table {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content:center;
-    align-content: center;
-    padding: 10px;
-  }
-</style>
+LOCALISATION : laboutik/templates/cotton/tables_definition.html
+STYLE : laboutik/static/css/restaurant_interface.css (section « Grille des tables »)
+
+Couche plein ecran posee sous l'en-tete, au-dessus de l'ecran de vente.
+Elle n'est affichee que si aucune table n'est choisie
+(voir views/restaurant_interface.html).
+
+CONTEXTE LU (fourni par CaisseViewSet.point_de_vente, laboutik/views.py) :
+- tables : liste de dicts {id, name, statut}. statut : "L" libre, "O" occupee, "S" servie.
+- pv.id, pv.name, card.tag_id : construisent les liens.
+
+FLUX :
+1. Clic sur une table -> lien ?id_table=<uuid> -> rechargement complet
+   -> views/common_user_interface.html (« Commande table X »).
+2. Clic sur « Nouvelle table » -> affiche la modale #add-table.
+   -> Valider -> addTable() ajoute l'input 'nouvelle_table' au formulaire
+   d'addition, puis retire cette couche du DOM.
+3. « Continuer sans table » -> retire cette couche, l'ecran de vente reste.
+4. « Service direct » -> lien force_service_direct=true -> rechargement complet.
+
+ATTRIBUT COTTON :
+- avec_bouton_continuer ("oui" par defaut) : "non" cache « Continuer sans table »,
+  utile quand il n'y a pas d'ecran de vente dessous (views/tables.html).
+
+ACCROCHES JS A NE PAS RENOMMER :
+#main-tables-definition (retire par addTable et par « Continuer sans table »),
+#add-table (affiche par la tuile « Nouvelle table »), #new_table (lu par addTable).
+-->
+<section id="main-tables-definition"
+         class="tables-screen"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="tables-screen-title"
+         data-testid="resto-tables-screen">
+
+  <header class="tables-screen-head">
+    <div class="tables-screen-titles">
+      <h1 id="tables-screen-title" class="tables-screen-title">{% translate "Choisir une table" %}</h1>
+      {% if pv.name %}
+        <p class="tables-screen-pv">{{ pv.name }}</p>
+      {% endif %}
+    </div>
+
+    <!-- Legende : la couleur n'est jamais seule, chaque tuile ecrit aussi son statut -->
+    <!-- / Legend: colour is never alone, each tile also writes its status -->
+    <ul class="tables-legend" aria-label="{% translate 'Légende des statuts' %}">
+      <li class="tables-legend-item table-statut--libre">
+        <span class="table-statut-dot" aria-hidden="true"></span>{% translate "Libre" %}
+      </li>
+      <li class="tables-legend-item table-statut--occupee">
+        <span class="table-statut-dot" aria-hidden="true"></span>{% translate "Occupée" %}
+      </li>
+      <li class="tables-legend-item table-statut--servie">
+        <span class="table-statut-dot" aria-hidden="true"></span>{% translate "Servie" %}
+      </li>
+    </ul>
+  </header>
+
+  <div class="tables-screen-main">
+    <ul class="tables-grid" aria-label="{% translate 'Tables' %}">
+      {% for table in tables %}
+        <li>
+          <a class="table-tile{% if table.statut == 'L' %} table-statut--libre{% elif table.statut == 'O' %} table-statut--occupee{% elif table.statut == 'S' %} table-statut--servie{% endif %}"
+             href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&id_table={{ table.id }}"
+             data-nav-spinner
+             data-testid="resto-table-tile-{{ table.id }}">
+            <span class="table-tile-name">{{ table.name }}</span>
+            <span class="table-tile-statut">
+              <span class="table-statut-dot" aria-hidden="true"></span>
+              {% if table.statut == 'L' %}{% translate "Libre" %}{% elif table.statut == 'O' %}{% translate "Occupée" %}{% elif table.statut == 'S' %}{% translate "Servie" %}{% endif %}
+            </span>
+          </a>
+        </li>
+      {% endfor %}
+
+      <!-- Tuile d'ajout : toujours la derniere de la grille -->
+      <!-- / Add tile: always the last one in the grid -->
+      <li>
+        <button type="button"
+                class="table-tile table-tile--ajout"
+                onclick="document.querySelector('#add-table').style.display = 'flex'; document.querySelector('#new_table').focus();"
+                data-testid="resto-table-add">
+          <span class="material-symbols-outlined table-tile-ajout-icon" aria-hidden="true">add</span>
+          <span class="table-tile-name">{% translate "Nouvelle table" %}</span>
+        </button>
+      </li>
+    </ul>
+
+    {% if not tables %}
+      <p class="tables-empty" data-testid="resto-tables-empty">
+        {% translate "Aucune table enregistrée. Créez-en une avec « Nouvelle table », ou ajoutez-les depuis l'administration." %}
+      </p>
+    {% endif %}
+  </div>
+
+  <footer class="tables-screen-foot">
+    {% if avec_bouton_continuer == "oui" %}
+    <button type="button"
+            class="tables-foot-bt tables-foot-bt--secondaire"
+            onclick="document.querySelector('#main-tables-definition').remove()"
+            data-testid="resto-table-skip">
+      <span class="material-symbols-outlined" aria-hidden="true">shopping_cart</span>
+      {% translate "Continuer sans table" %}
+    </button>
+    {% endif %}
+    <a class="tables-foot-bt tables-foot-bt--primaire"
+       href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&force_service_direct=true"
+       data-nav-spinner
+       data-testid="resto-table-service-direct">
+      <span class="material-symbols-outlined" aria-hidden="true">point_of_sale</span>
+      {% translate "Service direct" %}
+    </a>
+  </footer>
+
+  <!-- MODALE AJOUT DE TABLE — mode="hide" : cachee, jamais retiree du DOM -->
+  <!-- / Add-table modal — mode="hide": hidden, never removed from the DOM -->
+  <c-modal id="add-table" style="display:none;" width="420px" height="auto" mode="hide">
+    <c-slot name="header">{% translate "Nouvelle table" %}</c-slot>
+    <c-slot name="main">
+      <div class="s-add-table">
+        <label class="s-add-table-label" for="new_table">{% translate "Nom de la table" %}</label>
+        <input id="new_table"
+               class="s-add-table-input"
+               type="text"
+               autocomplete="off"
+               placeholder="{% translate 'Ex. Terrasse 4' %}"
+               data-testid="resto-add-table-input">
+      </div>
+    </c-slot>
+    <c-slot name="footer">
+      <button type="button"
+              class="s-add-table-valider"
+              onclick="addTable()"
+              data-testid="resto-add-table-submit">{% translate "Valider" %}</button>
+    </c-slot>
+  </c-modal>
+</section>
+
 <script>
 function addTable(){
   const newTable = document.querySelector('#new_table').value
@@ -55,7 +154,7 @@ function addTable(){
 		data: { actionType: 'createAndPopInput', name: 'nouvelle_table', value: newTable }
 	})
 
-  // remove modal 
+  // remove modal
   document.querySelector('#main-tables-definition').remove()
 }
 </script>

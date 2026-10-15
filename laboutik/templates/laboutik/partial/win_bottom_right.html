@@ -1,52 +1,53 @@
-{% load static %}
+{% load static i18n %}
 <link rel="stylesheet" href="{% static 'css/win_bottom_right.css' %}" />
-<nav id="win-bottom-right">
-  <div class="key-touch key-size1 win-bottom-right-g1">ESPECES</div>
-  <div class="key-touch key-size1 win-bottom-right-g1">CB</div>
-  <div class="key-touch key-size1 win-bottom-right-g1">CHEQUE</div>
-  <div class="key-touch key-size1 win-bottom-right-g1">CASHLESS</div>
-  <div class="key-touch key-size1 win-bottom-right-g1">MIXTE</div>
-  <div class="key-touch key-size1 win-bottom-right-g1">OFFIR</div>
-  <div class="key-touch key-size1 c-white bc-info">TICKET</div>
-  <div class="key-touch key-size1 c-white bc-purple">SEND PREPA</div>
-  <div class="key-touch key-size3 c-white bc-success win-bottom-right-valider">VALIDER</div>
-   <div class="key-touch key-size1 win-bottom-right-status">
-      <div class="line-status">
-        <div class="led-status bc-green-led"></div>
-        <div>VENTES</div>
-      </div>
-      <div class="line-status">
-        <div class="led-status bc-red-led"></div>
-        <div>NOTE</div>
-      </div>
+<!--
+ZONE BAS-DROITE DU MODE RESTAURANT : clavier des moyens de paiement et actions
+/ Restaurant mode bottom-right area: payment keys and actions
+
+LOCALISATION : laboutik/templates/laboutik/partial/win_bottom_right.html
+STYLE : laboutik/static/css/win_bottom_right.css
+Inclus seulement par views/restaurant_interface.html.
+
+TODO : maquette. Aucune touche n'est encore branchee (ni hx-*, ni JS).
+Le paiement passe aujourd'hui par le bouton VALIDER du panneau addition.
+/ Mock-up: no key is wired yet. Payment goes through the cart's VALIDER button.
+-->
+<nav id="win-bottom-right" aria-label="{% translate 'Paiement' %}">
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-especes">
+    <span class="material-symbols-outlined" aria-hidden="true">payments</span>{% translate "Espèces" %}
+  </button>
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-cb">
+    <span class="material-symbols-outlined" aria-hidden="true">credit_card</span>{% translate "CB" %}
+  </button>
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-cheque">
+    <span class="material-symbols-outlined" aria-hidden="true">receipt</span>{% translate "Chèque" %}
+  </button>
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-cashless">
+    <span class="material-symbols-outlined" aria-hidden="true">contactless</span>{% translate "Cashless" %}
+  </button>
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-mixte">
+    <span class="material-symbols-outlined" aria-hidden="true">call_split</span>{% translate "Mixte" %}
+  </button>
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-offrir">
+    <span class="material-symbols-outlined" aria-hidden="true">redeem</span>{% translate "Offrir" %}
+  </button>
+  <button type="button" class="key-touch key-size1 c-white bc-info" data-testid="resto-touche-ticket">
+    <span class="material-symbols-outlined" aria-hidden="true">print</span>{% translate "Ticket de caisse" %}
+  </button>
+  <button type="button" class="key-touch key-size1 c-white bc-purple" data-testid="resto-touche-envoyer-prepa">
+    <span class="material-symbols-outlined" aria-hidden="true">soup_kitchen</span>{% translate "Envoi prépa" %}
+  </button>
+  <button type="button" class="key-touch key-size3 c-white bc-success win-bottom-right-valider" data-testid="resto-touche-valider">
+    <span class="material-symbols-outlined" aria-hidden="true">check</span>{% translate "Valider" %}
+  </button>
+  <div class="key-size1 win-bottom-right-status" data-testid="resto-statuts">
+    <div class="line-status">
+      <span class="led-status bc-green-led" aria-hidden="true"></span>
+      <span>{% translate "Ventes" %}</span>
     </div>
+    <div class="line-status">
+      <span class="led-status bc-red-led" aria-hidden="true"></span>
+      <span>{% translate "Note" %}</span>
+    </div>
+  </div>
 </nav>
-<!-- 
-<nav id="win-bottom-right">
-  <div class="payment-modes-content">
-    <div class="key-touch bc-place">ESPECES</div>
-    <div class="key-touch bc-place">CB</div>
-    <div class="key-touch bc-place">CHEQUE</div>
-    <div class="key-touch bc-place">CASHLESS</div>
-    <div class="key-touch bc-place">MIXTE</div>
-    <div class="key-touch bc-place">OFFIR</div>
-  </div>
-  <div class="payment-actions-container">
-    <div class="payment-actions-content">
-      //-- TODO: afficher en mode table 
-      <div class="key-touch bc-purple c-white">SEND PREPA</div> --//
-      <div class="key-touch key-size2 bc-success c-white">VALIER</div>
-    </div>
-    <div class="payment-actions-status">
-      <div class="line-status">
-        <div class="led-status bc-green-led"></div>
-        <div>VENTES</div>
-      </div>
-      <div class="line-status">
-        <div class="led-status bc-red-led"></div>
-        <div>NOTE</div>
-      </div>
-    </div>
-  </div>
-  </div>
-  -->

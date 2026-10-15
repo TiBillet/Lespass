@@ -1,6 +1,20 @@
 {% extends "laboutik/base.html" %}
-{% load static %}
 {% load static i18n %}
+<!--
+INTERFACE MODE RESTAURANT — AUCUNE TABLE CHOISIE
+/ Restaurant mode interface — no table chosen
+
+LOCALISATION : laboutik/templates/laboutik/views/restaurant_interface.html
+STYLE : laboutik/static/css/restaurant_interface.css
+
+Rendu par CaisseViewSet.point_de_vente (laboutik/views.py) quand le point de vente
+n'est pas en service direct et que l'URL ne porte pas d'id_table.
+
+FLUX :
+1. L'ecran de vente (en-tete, articles, addition, zones du bas) est construit.
+2. Par-dessus, sous l'en-tete, la grille des tables (cotton/tables_definition.html).
+3. Clic sur une table -> rechargement avec id_table -> views/common_user_interface.html.
+-->
 {% block content %}
   <c-header :title="title" />
   <c-articles />
@@ -8,9 +22,8 @@
   {% include "laboutik/partial/win_bottom_left.html" %}
   {% include "laboutik/partial/win_bottom_right.html" %}
   <div id="win-under"></div>
-  <!-- modal tables / pas de table définie -->
   {% if not id_table %}
-  <c-tables-definition />
+    <c-tables-definition />
   {% endif %}
 {% endblock content %}
 {% block css %}

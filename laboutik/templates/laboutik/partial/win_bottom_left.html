@@ -1,25 +1,57 @@
-{% load static %}
+{% load static i18n %}
 <link rel="stylesheet" href="{% static 'css/win_bottom_left.css' %}" />
-<nav id="win-bottom-left">
+<!--
+ZONE BAS-GAUCHE DU MODE RESTAURANT : categories + actions carte / table
+/ Restaurant mode bottom-left area: categories + card / table actions
+
+LOCALISATION : laboutik/templates/laboutik/partial/win_bottom_left.html
+STYLE : laboutik/static/css/win_bottom_left.css
+Inclus seulement par views/restaurant_interface.html.
+
+TODO : « CB / Espèces » (hx_currency_swap) et « Table » (hx_get_all_tables)
+pointent vers des URLs qui n'existent pas encore.
+/ Currency swap and Table buttons point to URLs that do not exist yet.
+-->
+<nav id="win-bottom-left" aria-label="{% translate 'Catégories et actions' %}">
   <div class="categories-container">
     <c-categories direction="row" />
   </div>
   <div class="win-bottom-left-actions">
-    <div class="wbld-bt bc-place"
-         hx-get="/laboutik/caisse/managed_card/?uuid_pv={{ state.uuid_pv }}"
-         hx-target="#messages"
-         hx-swap="outerHTML">PLACE CARD</div>
-    <div class="wbld-bt bc-info"
-         hx-get="/laboutik/paiement/verifier_carte/"
-         hx-target="#messages"
-         hx-swap="innerHTML">CHECK CARD</div>
-    <div class="wbld-bt bc-purple"
-         hx-get="hx_currency_swap"
-         hx-target="#messages"
-         hx-swap="innerHTML">SWAP CB/MONEY</div>
-    <div class="wbld-bt bc-table-ephemeral"
-         hx-get="hx_get_all_tables"
-         hx-target="#messages"
-         hx-swap="innerHTML">TABLE</div>
+    <button type="button"
+            class="wbld-bt bc-place"
+            hx-get="/laboutik/caisse/managed_card/?uuid_pv={{ state.uuid_pv }}"
+            hx-target="#messages"
+            hx-swap="outerHTML"
+            data-testid="resto-action-poser-carte">
+      <span class="material-symbols-outlined" aria-hidden="true">contactless</span>
+      <span class="wbld-bt-label">{% translate "Poser carte" %}</span>
+    </button>
+    <button type="button"
+            class="wbld-bt bc-info"
+            hx-get="/laboutik/paiement/verifier_carte/"
+            hx-target="#messages"
+            hx-swap="innerHTML"
+            data-testid="resto-action-verifier-carte">
+      <span class="material-symbols-outlined" aria-hidden="true">credit_card</span>
+      <span class="wbld-bt-label">{% translate "Vérifier carte" %}</span>
+    </button>
+    <button type="button"
+            class="wbld-bt bc-purple"
+            hx-get="hx_currency_swap"
+            hx-target="#messages"
+            hx-swap="innerHTML"
+            data-testid="resto-action-echange">
+      <span class="material-symbols-outlined" aria-hidden="true">currency_exchange</span>
+      <span class="wbld-bt-label">{% translate "CB / Espèces" %}</span>
+    </button>
+    <button type="button"
+            class="wbld-bt bc-table-ephemeral"
+            hx-get="hx_get_all_tables"
+            hx-target="#messages"
+            hx-swap="innerHTML"
+            data-testid="resto-action-table">
+      <span class="material-symbols-outlined" aria-hidden="true">table_restaurant</span>
+      <span class="wbld-bt-label">{% translate "Table" %}</span>
+    </button>
   </div>
 </nav>

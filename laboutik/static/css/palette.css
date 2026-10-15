@@ -145,6 +145,16 @@
 	--warn-wash: oklch(0.75 0.15 70 / .16);
 	--warn-edge: oklch(0.75 0.15 70 / .38);
 
+	/* Statuts des tables du mode restaurant (restaurant_interface.css).
+	   Des alias : aucune nouvelle teinte, on reprend les familles semantiques.
+	   / Restaurant table statuses: aliases of the semantic families above. */
+	--table-libre:        var(--valid);
+	--table-libre-wash:   var(--valid-wash);
+	--table-occupee:      var(--danger);
+	--table-occupee-wash: var(--danger-wash);
+	--table-servie:       var(--warn);
+	--table-servie-wash:  var(--warn-wash);
+
 	/* Police d'interface — Luciole est deja appliquee a * par modele00.css.
 	   Le jeton existe pour que les feuilles n'aient plus a la reecrire en dur.
 	   / UI typeface — Luciole is already applied to * by modele00.css. The token

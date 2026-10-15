@@ -1,47 +1,20 @@
 {% extends "laboutik/base.html" %}
-{% load static %}
 {% load static i18n %}
-{% load laboutik_process %}
+<!--
+ECRAN AUTONOME DE CHOIX DE TABLE
+/ Standalone table picker screen
 
+LOCALISATION : laboutik/templates/laboutik/views/tables.html
+
+Aucune vue ne rend ce gabarit aujourd'hui : l'ecran restaurant affiche la meme
+grille par-dessus l'ecran de vente (views/restaurant_interface.html).
+Il reutilise le meme composant pour garder un seul style.
+Pas d'ecran de vente dessous : le bouton « Continuer sans table » est cache.
+-->
 {% block content %}
-<!-- header + nav -->
-<c-header title="{{ title }}" />
-<main>
-	<nav id="categories">
-		cat
-	</nav>
-	<div id="tables-container">
-		{% for table in tables %}
-		<a class="BF-col-haut table-bouton" data-nav-spinner
-			href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&id_table={{table.id}}">
-			<div class="BF-col table-nom">{{table.name}}</div>
-			<div class="BF-ligne table-etat" style="background-color: var({{ table_status_colors|sel:table.statut }});">
-			</div>
-		</a>`
-		{% endfor %}
-	</div>
-</main>
-<footer>
-	<!-- bouton CHECK CARTE -->
-	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte">
-		<span class="material-symbols-outlined md4px" aria-hidden="true">contactless</span>
-		<div class="BF-col-deb footer-bt-text mg4px">
-			<div>{% translate "CHECK" %}</div>
-			<div>{% translate "CARTE" %}</div>
-		</div>
-	</div>
-	<!-- bouton service direct -->
-	<a class="BF-ligne footer-bt fond-coul1 test-service-direct" data-nav-spinner href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&force_service_direct=true">
-		<span class="material-symbols-outlined md4px" aria-hidden="true">point_of_sale</span>
-		<div class="BF-col-deb footer-bt-text mg4px">
-			<div>{% translate "SERVICE DIRECT" %}</div>
-		</div>
-	</a>
-</footer>
+  <c-header title="{{ title }}" />
+  <c-tables-definition avec_bouton_continuer="non" />
 {% endblock content %}
-
-{% block script %}
-<script>
-
-</script>
-{% endblock script %}
+{% block css %}
+  <link rel="stylesheet" href="{% static 'css/restaurant_interface.css' %}" />
+{% endblock css %}

@@ -32,10 +32,6 @@
   --bt-article-width: 120px;
   --bt-article-height: 120px;
 
-  /* tables */
-  --bt-table-width: 90px;
-  --bt-table-height: 90px;
-
   /* addition */
   --addition-legend-heigh: 20px;
   --addition-line-heigh: 29px;
@@ -64,7 +60,9 @@
   width: 100%;
   height: 100vh;
   height: 100dvh;
-  background-color: var(--gris10);
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
   display: grid;
   grid-template-areas:
     "header header"
@@ -113,6 +111,457 @@
 
 #addition {
   grid-area: addition;
-   width: 100%;
-   height: 100%;
+  width: 100%;
+  height: 100%;
+}
+
+/* ============================================================
+   GRILLE DES TABLES — cotton/tables_definition.html
+   / Table picker grid
+
+   Couche plein ecran posee SOUS l'en-tete : le menu burger et le changement
+   de point de vente restent utilisables.
+   z-index 700 : au-dessus de l'ecran de vente, mais sous #messages (800)
+   et #confirm (999) qui doivent pouvoir s'afficher par-dessus.
+   / Full-screen layer laid BELOW the header. z-index sits under #messages
+   and #confirm so they can still show on top.
+
+   Uniquement des jetons de palette.css et sizes.css.
+   / Only tokens from palette.css and sizes.css.
+   ============================================================ */
+
+.tables-screen {
+  position: fixed;
+  inset: var(--header-height) 0 0 0;
+  z-index: 700;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  overflow-x: clip;
+  animation: rise var(--dur-slow) var(--ease-out);
+}
+
+/* --- En-tete : titre + legende / Head: title + legend --- */
+.tables-screen-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tables-screen-titles {
+  min-width: 0;
+}
+
+.tables-screen-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.tables-screen-pv {
+  margin: 4px 0 0;
+  font-size: var(--fs-min);
+  color: var(--text-dim);
+}
+
+.tables-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tables-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  background-color: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  font-size: var(--fs-min);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* --- Statut : une teinte par classe, lue par la pastille, le liseré et le texte
+   / Status: one hue per class, read by the dot, the edge stripe and the label --- */
+.table-statut--libre {
+  --statut: var(--table-libre);
+  --statut-wash: var(--table-libre-wash);
+}
+
+.table-statut--occupee {
+  --statut: var(--table-occupee);
+  --statut-wash: var(--table-occupee-wash);
+}
+
+.table-statut--servie {
+  --statut: var(--table-servie);
+  --statut-wash: var(--table-servie-wash);
+}
+
+.table-statut-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--statut, var(--text-faint));
+  box-shadow: 0 0 0 3px var(--statut-wash, var(--wash-1));
+}
+
+/* --- Zone qui defile / Scrolling area --- */
+.tables-screen-main {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-3) transparent;
+  padding: 20px;
+}
+
+.tables-grid {
+  display: grid;
+  /* min(100%, ...) : jamais plus large que l'ecran, meme a 320 px
+     / min(100%, ...): never wider than the screen, even at 320px */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 148px), 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+}
+
+.tables-grid > li {
+  min-width: 0;
+}
+
+/* --- LA TUILE TABLE : meme relief « touche » que les tuiles articles
+   (articles.css, .article-container) — tranche de 4 px qui descend a l'appui.
+   / Table tile: same "key" relief as the article tiles --- */
+.table-tile {
+  --tile-edge: var(--shade-3);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 112px;
+  margin: 0;
+  padding: 14px 14px 12px 18px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--r-panel);
+  background-color: var(--surface);
+  background-image: linear-gradient(135deg, var(--statut-wash, var(--wash-1)), transparent 70%);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    inset 0 1.5px 0 var(--wash-2),
+    0 4px 0 var(--tile-edge),
+    0 5px 9px var(--shade-2);
+  color: var(--text);
+  font-family: var(--font-ui);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out);
+}
+
+/* Liseré gauche dans la teinte du statut / Left stripe in the status hue */
+.table-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background-color: var(--statut, transparent);
+}
+
+.table-tile-name {
+  max-width: 100%;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.15;
+  /* Un nom long passe a la ligne entre deux mots, deux lignes max
+     / A long name wraps between words, two lines max */
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.table-tile-statut {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-min);
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .table-tile:hover {
+    background-color: var(--surface-2);
+  }
+}
+
+/* La touche descend de 4 px instantanement, remonte avec la transition
+   / The key goes down 4px instantly, comes back with the transition */
+.table-tile:active {
+  transition-duration: 0s;
+  transform: translateY(4px);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 0 0 var(--tile-edge),
+    0 1px 3px var(--shade-2);
+}
+
+/* Anneau de focus clavier, le meme que addition.css — jamais anime
+   / Keyboard focus ring, same as addition.css — never animated */
+.table-tile:focus-visible,
+.tables-foot-bt:focus-visible,
+.s-add-table-input:focus-visible,
+#add-table .c-modal-footer button:focus-visible {
+  outline: 2px solid var(--nfc);
+  outline-offset: 3px;
+}
+
+/* --- Tuile « Nouvelle table » : en creux, pointillés / Dashed "new table" tile --- */
+.table-tile--ajout {
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding-left: 14px;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  outline: 2px dashed var(--line);
+  outline-offset: -2px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.table-tile--ajout .table-tile-name {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.table-tile-ajout-icon {
+  font-size: 2rem;
+}
+
+@media (hover: hover) {
+  .table-tile--ajout:hover {
+    background-color: var(--wash-1);
+    color: var(--text);
+  }
+}
+
+.table-tile--ajout:active {
+  transform: none;
+  box-shadow: none;
+  background-color: var(--wash-2);
+}
+
+.tables-empty {
+  max-width: 48ch;
+  margin: 20px 0 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+/* --- Pied : actions / Foot: actions --- */
+.tables-screen-foot {
+  /* height: auto : views.css donne 90 px fixes a tout <footer>
+     / height: auto: views.css gives every <footer> a fixed 90px */
+  height: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 20px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line-soft);
+  background-color: var(--surface);
+}
+
+.tables-foot-bt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--r-ctrl);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.tables-foot-bt--secondaire {
+  background-color: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+}
+
+.tables-foot-bt--primaire {
+  background-color: var(--valid-deep);
+  color: var(--valid-ink);
+}
+
+@media (hover: hover) {
+  .tables-foot-bt--secondaire:hover { background-color: var(--surface-3); }
+  .tables-foot-bt--primaire:hover { background-color: var(--valid); }
+}
+
+.tables-foot-bt:active {
+  transition-duration: 0s;
+  transform: translateY(2px);
+}
+
+/* --- Modale « Nouvelle table » (cotton/modal.html, id #add-table)
+   / "New table" modal --- */
+#add-table .c-modal-body {
+  background-color: var(--surface);
+}
+
+.s-add-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.s-add-table-label {
+  font-size: var(--fs-min);
+  color: var(--text-dim);
+}
+
+.s-add-table-input {
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: var(--r-ctrl);
+  background-color: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 1.125rem;
+  user-select: text;
+}
+
+.s-add-table-input::placeholder {
+  color: var(--text-faint);
+}
+
+#add-table .c-modal-footer {
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+#add-table .c-modal-footer button {
+  min-height: 56px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--r-ctrl);
+  background-color: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#add-table .c-modal-footer .s-add-table-valider {
+  order: 2;
+  background-color: var(--valid-deep);
+  box-shadow: none;
+  color: var(--valid-ink);
+}
+
+/* --- Petits ecrans / Small screens --- */
+@media only screen and (max-width: 599px) {
+  .tables-screen-head,
+  .tables-screen-main {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .tables-screen-title {
+    font-size: 1.375rem;
+  }
+
+  .tables-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 128px), 1fr));
+    gap: 12px;
+  }
+
+  .table-tile {
+    min-height: 100px;
+    padding: 12px 10px 10px 16px;
+  }
+
+  .table-tile-name {
+    font-size: 1rem;
+  }
+
+  /* Les boutons du pied s'empilent : leur libelle reste sur une ligne
+     / Foot buttons stack: their label stays on one line */
+  .tables-screen-foot {
+    flex-direction: column;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+@media only screen and (max-width: 359px) {
+  .tables-legend-item {
+    min-height: 28px;
+    padding: 0 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tables-screen {
+    animation: none;
+  }
+
+  .table-tile,
+  .tables-foot-bt {
+    transition: background-color 120ms linear;
+  }
+
+  .table-tile:active,
+  .tables-foot-bt:active {
+    transform: none;
+  }
 }

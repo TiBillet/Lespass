@@ -3,14 +3,14 @@
    / Common POS view layouts
 
    LOCALISATION : laboutik/static/css/views.css
-   SOURCES : views/common_user_interface.html, views/tables.html,
+   SOURCES : views/common_user_interface.html,
              views/login_hardware.html, views/ask_primary_card.html
    ============================================================ */
 
 
 /* ============================================================
    Layout principal — main + products-container + products
-   (common_user_interface.html + tables.html)
+   (common_user_interface.html)
    ============================================================ */
 
 /* Coquille de page : en-tete, contenu, footer eventuel — sans debordement.
@@ -86,10 +86,8 @@ footer {
 	font-size: 2rem
 }
 
-/* Boutons du footer — chaque bouton occupe 1/3 de la largeur par defaut
-   (surcharge a 50% pour les tables via #tables-container ~ footer)
-   / Footer buttons — each button takes 1/3 width by default
-   (overridden to 50% for tables via #tables-container ~ footer) */
+/* Boutons du footer — chaque bouton occupe 1/3 de la largeur
+   / Footer buttons — each button takes 1/3 width */
 .footer-bt {
 	width: 33.3333333%;
 	height: 100%;
@@ -173,74 +171,6 @@ footer {
 	:root {
 		--footer-container-height: 120px;
 	}
-}
-
-
-/* ============================================================
-   tables.html — conteneur de tables + styles specifiques
-   / Tables container + specific styles
-   ============================================================ */
-
-#tables-container {
-	width: calc(100% - var(--cat-width));
-	height: 100%;
-	background-color: var(--bleu11);
-	display: flex;
-	justify-content: flex-start;
-	align-content: flex-start;
-	flex-wrap: wrap;
-	overflow-y: auto;
-	scrollbar-width: none
-}
-
-.fond-coul1 {
-	background-color: var(--rouge05);
-}
-
-/* Surcharge footer tables : 2 boutons (50%) au lieu de 3 (33.3%)
-   #tables-container est enfant de <main>, <footer> est frere de <main>
-   → on cible main:has(#tables-container) pour ne matcher que la vue tables
-   / Tables footer override: 2 buttons (50%) instead of 3 (33.3%)
-   #tables-container is a child of <main>, <footer> is a sibling of <main>
-   → we target main:has(#tables-container) to only match the tables view */
-main:has(#tables-container) ~ footer .footer-bt {
-	width: 50%;
-	text-decoration: none;
-}
-main:has(#tables-container) ~ footer .footer-bt i {
-	margin-right: 4px;
-}
-
-.table-bouton {
-	width: var(--bt-table-width);
-	height: var(--bt-table-height);
-	border-radius: 15px;
-	margin: 8px;
-	font-family: 'Source Sans', sans-serif;
-	box-sizing: border-box;
-	background-color: var(--gris04);
-	text-decoration: none;
-}
-
-.table-nom {
-	width: 100%;
-	height: calc(100% - 24px);
-	border-radius: 15px 15px 0 0;
-	font-size: 1rem;
-	font-weight: bold;
-	color: var(--blanc01);
-	overflow: hidden;
-	padding: 2px;
-}
-
-.table-etat {
-	width: 100%;
-	height: 24px;
-	border-radius: 0 0 15px 15px;
-	font-size: 1rem;
-	padding-right: 8px;
-	justify-content: flex-end;
-	overflow: hidden;
 }
 
 

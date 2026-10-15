@@ -1,85 +1,147 @@
+/* ============================================================
+   WIN_BOTTOM_LEFT.CSS — zone bas-gauche du mode restaurant
+   / Restaurant mode bottom-left area
+
+   LOCALISATION : laboutik/static/css/win_bottom_left.css
+   SOURCE : laboutik/partial/win_bottom_left.html (inclus seulement par
+   views/restaurant_interface.html)
+
+   Moitie haute : categories en ligne (styles de categories.css, partages).
+   Moitie basse : 4 actions carte / table, au style des touches de la refonte.
+   Toutes les regles des boutons sont prefixees par #win-bottom-left :
+   les classes .bc-info / .bc-place existent aussi dans hx_managed_card.css.
+   / Every button rule is scoped under #win-bottom-left: .bc-* classes also
+   exist in hx_managed_card.css.
+   ============================================================ */
+
 #win-bottom-left {
   grid-area: win-bottom-left;
   width: 100%;
   height: 100%;
+  min-height: 0;
+  display: grid;
+  /* Categories a leur hauteur (66 px, categories.css), actions dessous
+     / Categories at their own height (66px), actions below */
+  grid-template-rows: auto minmax(56px, 1fr);
+  gap: 8px;
+  padding: 8px;
+  box-sizing: border-box;
+  background-color: var(--surface);
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-ui);
 }
 
 .categories-container {
   width: 100%;
-  height: 50%;
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-start;
-  align-items: center;
-  /* Defilement horizontal : avant, les categories en trop etaient coupees
-     et impossibles a atteindre. / Horizontal scroll: extra categories were unreachable. */
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x proximity;
-  min-height: var(--cat-height);
-  column-gap: 6px;
-  row-gap: 6px;
-  /*padding: 6px;*/
-  background-color: var(--bleu08);
-}
-
-.category-bt-container {
+  min-height: 74px;
+  padding: 0 4px;
   box-sizing: border-box;
   display: flex;
   flex-direction: row;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
-  overflow: hidden;
-  font-family: "Luciole-regular";
-  flex: none;
-  scroll-snap-align: start;
-  width: var(--cat-width);
-  height: var(--cat-height);
-  border-radius: 15px;
-  box-shadow: 1px 1px 1px 1px var(--gris01);
+  /* Defilement horizontal : toutes les categories restent joignables
+     / Horizontal scroll: every category stays reachable */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  border-radius: var(--r-ctrl);
+  background-color: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
 }
 
+/* categories.css fixe 66 px aux categories en ligne : trop juste pour
+   l'icone + le nom. Surcharge limitee a la zone resto.
+   / categories.css sets 66px on row categories: too tight for icon + name.
+   Override scoped to the restaurant area. */
+#win-bottom-left #categories .category-item {
+  height: auto;
+  min-height: 66px;
+}
 
 .win-bottom-left-actions {
   width: 100%;
-  height: 50%;
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-start;
-  align-items: flex-end;
-  overflow: hidden;
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
 
-.wbld-bt {
-  width: calc(100% / 4);
-  height: 100%;
-  min-height: 56px;
-  /* Un libelle long revient a la ligne au lieu d'etre coupe
-     / A long label wraps instead of being clipped */
-  min-width: 0;
-  overflow-wrap: anywhere;
-  text-align: center;
-  padding: 0 4px;
+#win-bottom-left .wbld-bt {
+  --key-bg: var(--surface-2);
+  --key-ink: var(--text);
+
   display: flex;
   flex-direction: row;
   justify-content: center;
   align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 56px;
+  height: 100%;
+  margin: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-ctrl);
+  background-color: var(--key-bg);
+  box-shadow: inset 0 0 0 1px var(--line), 0 3px 0 var(--shade-3);
+  color: var(--key-ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-min);
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+
+#win-bottom-left .wbld-bt .material-symbols-outlined {
+  flex: none;
+  font-size: 1.375rem;
+}
+
+/* Libelle sur une ligne, coupe proprement si la place manque
+   / Label on one line, cleanly truncated when space runs out */
+#win-bottom-left .wbld-bt-label {
+  min-width: 0;
   overflow: hidden;
-  color: var(--blanc01);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.bc-place {
-  background-color: var(--info);
+/* Une teinte d'accent par action, portee par l'icone
+   / One accent hue per action, carried by the icon */
+#win-bottom-left .bc-place .material-symbols-outlined { color: var(--nfc); }
+#win-bottom-left .bc-info .material-symbols-outlined { color: var(--info-ink); }
+#win-bottom-left .bc-purple .material-symbols-outlined { color: var(--warn); }
+#win-bottom-left .bc-table-ephemeral .material-symbols-outlined { color: var(--valid); }
+
+@media (hover: hover) {
+  #win-bottom-left .wbld-bt:hover { --key-bg: var(--surface-3); }
 }
 
-.bc-info {
-  background-color: var(--bleu02);
+#win-bottom-left .wbld-bt:active {
+  transition-duration: 0s;
+  transform: translateY(3px);
+  box-shadow: inset 0 0 0 1px var(--line), 0 0 0 var(--shade-3);
 }
 
-.bc-purple {
-  background-color: var(--bleu10);
+#win-bottom-left .wbld-bt:focus-visible {
+  outline: 2px solid var(--nfc);
+  outline-offset: 2px;
 }
 
-.bc-table-ephemeral {
-  background-color: var(--vert05);
+/* Petits ecrans : icone seule au-dessus du libelle, 2 x 2
+   / Small screens: 2 x 2 grid */
+@media only screen and (max-width: 599px) {
+  .win-bottom-left-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #win-bottom-left .wbld-bt { transition: none; }
+  #win-bottom-left .wbld-bt:active { transform: none; }
 }

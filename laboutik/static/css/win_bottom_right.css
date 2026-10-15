@@ -1,127 +1,172 @@
+/* ============================================================
+   WIN_BOTTOM_RIGHT.CSS — clavier bas-droite du mode restaurant
+   / Restaurant mode bottom-right key pad
+
+   LOCALISATION : laboutik/static/css/win_bottom_right.css
+   SOURCE : laboutik/partial/win_bottom_right.html (inclus seulement par
+   views/restaurant_interface.html)
+
+   Toutes les regles sont prefixees par #win-bottom-right : les classes
+   .key-touch / .bc-info / .bc-success existent aussi ailleurs
+   (hx_managed_card.css).
+   / Every rule is scoped under #win-bottom-right: these classes also exist
+   elsewhere.
+   ============================================================ */
+
 #win-bottom-right {
   grid-area: win-bottom-right;
   width: 100%;
   height: 100%;
+  min-height: 0;
   display: grid;
-  /* auto-fill : autant de touches par rangee que la largeur le permet.
-     Avant : 6 touches de 80 px fixes, soit 512 px minimum, qui debordaient
-     sous environ 1160 px d'ecran.
-     / auto-fill: as many keys per row as fit. It used to be 6 fixed 80px keys. */
+  /* auto-fill : autant de touches par rangee que la largeur le permet
+     / auto-fill: as many keys per row as fit */
   grid-template-columns: repeat(auto-fill, minmax(min(var(--key-width), 100%), 1fr));
-  grid-auto-rows: minmax(56px, auto);
-  gap: 4px;
-  padding: 6px;
-  background-color: var(--gris10);
+  grid-auto-rows: minmax(56px, 1fr);
+  gap: 8px;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background-color: var(--surface);
+  border-top: 1px solid var(--line-soft);
+  border-left: 1px solid var(--line-soft);
+  font-family: var(--font-ui);
 }
 
-/* Mobile : touches un peu plus petites pour en mettre 4 par rangee a 320 px
-   / Mobile: slightly smaller keys to fit 4 per row at 320px */
 @media only screen and (max-width: 599px) {
   #win-bottom-right {
-    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   }
 }
 
-.win-bottom-right-g1 {
-  background-color: var(--bleu12);
-  color: var(--blanc01);
-}
+#win-bottom-right .key-touch {
+  --key-bg: var(--surface-2);
+  --key-ink: var(--text);
+  --key-edge: var(--shade-3);
 
-.win-bottom-right-valider{
-  /* Plus de colonne fixe : VALIDER occupe 2 cases, ou qu'il tombe
-     / No fixed column: VALIDER spans 2 cells wherever it lands */
-  grid-column: span 2;
-}
-
-.win-bottom-right-touch {
-  background-color: var(--bleu02);
-  color: var(--blanc01);
-}
-
-.win-bottom-right-status {
-  color: var(--blanc01);
   display: flex;
   flex-direction: column;
-  align-items: start;
   justify-content: center;
-
-  .line-status {
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-start;
-    align-items: center;
-  }
-
-  .led-status {
-    width: var(--led-size);
-    height: var(--led-size);
-    border-radius: calc(var(--led-size) / 2);
-    margin-right: 6px;
-  }
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 56px;
+  margin: 0;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: var(--r-ctrl);
+  background-color: var(--key-bg);
+  box-shadow: inset 0 0 0 1px var(--line), 0 3px 0 var(--key-edge);
+  color: var(--key-ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-min);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  /* Coupe entre deux mots, jamais au milieu d'un mot court
+     / Breaks between words, never inside a short word */
+  overflow-wrap: break-word;
+  hyphens: auto;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
 }
 
-/*
-#win-bottom-right {
-  grid-area: win-bottom-right;
-  width: 100%;
-  height: 100%;
-  background-color: var(--gris10);
+#win-bottom-right .key-touch .material-symbols-outlined {
+  font-size: 1.375rem;
+  color: var(--text-dim);
 }
 
-.payment-modes-content {
-  width: 100%;
-  height: 50%;
-  display: flex;
+/* Touches d'action : TICKET, ENVOYER EN PREPARATION
+   / Action keys */
+#win-bottom-right .bc-info {
+  --key-bg: var(--info-wash);
+  box-shadow: inset 0 0 0 1px var(--info-edge), 0 3px 0 var(--key-edge);
+}
+
+#win-bottom-right .bc-purple {
+  --key-bg: var(--warn-wash);
+  box-shadow: inset 0 0 0 1px var(--warn-edge), 0 3px 0 var(--key-edge);
+}
+
+#win-bottom-right .bc-info .material-symbols-outlined { color: var(--info-ink); }
+#win-bottom-right .bc-purple .material-symbols-outlined { color: var(--warn); }
+
+/* VALIDER : la seule touche pleine, sur 2 cases
+   / VALIDER: the only solid key, spanning 2 cells */
+#win-bottom-right .win-bottom-right-valider {
+  grid-column: span 2;
+  --key-bg: var(--valid-deep);
+  --key-ink: var(--valid-ink);
   flex-direction: row;
-  justify-content: start;
+  gap: 8px;
+  font-size: 1.125rem;
+  box-shadow: 0 3px 0 var(--shade-3);
+}
+
+#win-bottom-right .win-bottom-right-valider .material-symbols-outlined {
+  color: var(--valid-ink);
+}
+
+@media (hover: hover) {
+  #win-bottom-right .key-touch:hover { filter: brightness(1.12); }
+}
+
+#win-bottom-right .key-touch:active {
+  transition-duration: 0s;
+  transform: translateY(3px);
+  box-shadow: inset 0 0 0 1px var(--line), 0 0 0 var(--key-edge);
+}
+
+#win-bottom-right .key-touch:focus-visible {
+  outline: 2px solid var(--nfc);
+  outline-offset: 2px;
+}
+
+/* --- Voyants VENTES / NOTE / Status lights --- */
+#win-bottom-right .win-bottom-right-status {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
-
-  .key-touch {
-    color: var(--noir01);
-  }
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: var(--r-ctrl);
+  background-color: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--text-dim);
+  font-size: var(--fs-min);
 }
 
-.payment-actions-container {
-  width: 100%;
-  height: 50%;
+#win-bottom-right .line-status {
   display: flex;
   flex-direction: row;
-
-  .payment-actions-content {
-    width: 80%;
-    display: flex;
-    flex-direction: row;
-    justify-content: space-around;
-    align-items: flex-end;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 4px;
-  }
-
-  .payment-actions-status {
-    width: 20%;
-    color: var(--blanc01);
-    display: flex;
-    flex-direction: column;
-    align-items: start;
-    justify-content: center;
-
-    .line-status {
-      display: flex;
-      flex-direction: row;
-      justify-content: flex-start;
-      align-items: center;
-    }
-
-    .led-status {
-      width: var(--led-size);
-      height: var(--led-size);
-      border-radius: calc(var(--led-size) / 2);
-      margin-right: 6px;
-    }
-  }
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
-  */
+
+#win-bottom-right .led-status {
+  flex: none;
+  width: var(--led-size);
+  height: var(--led-size);
+  border-radius: 50%;
+}
+
+#win-bottom-right .bc-green-led {
+  background-color: var(--valid);
+  box-shadow: 0 0 0 3px var(--valid-wash);
+}
+
+#win-bottom-right .bc-red-led {
+  background-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-wash);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #win-bottom-right .key-touch { transition: none; }
+  #win-bottom-right .key-touch:active { transform: none; }
+}
