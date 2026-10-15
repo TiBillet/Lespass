@@ -22,6 +22,9 @@ FLUX :
   {% include "laboutik/partial/win_bottom_left.html" %}
   {% include "laboutik/partial/win_bottom_right.html" %}
   <div id="win-under"></div>
+  {# Message « aucun article » des touches de paiement et de VALIDER #}
+  {# / "No article" message for the payment keys and VALIDER          #}
+  {% include "laboutik/partial/no_articles.html" %}
   {% if not id_table %}
     <c-tables-definition />
   {% endif %}

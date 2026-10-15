@@ -12,15 +12,17 @@ Elle n'est affichee que si aucune table n'est choisie
 (voir views/restaurant_interface.html).
 
 CONTEXTE LU (fourni par CaisseViewSet.point_de_vente, laboutik/views.py) :
-- tables : liste de dicts {id, name, statut}. statut : "L" libre, "O" occupee, "S" servie.
+- tables : liste de dicts {id, name, statut}.
+  statut : "L" libre, "O" occupee, "S" servie.
 - pv.id, pv.name, card.tag_id : construisent les liens.
 
 FLUX :
 1. Clic sur une table -> lien ?id_table=<uuid> -> rechargement complet
    -> views/common_user_interface.html (« Commande table X »).
 2. Clic sur « Nouvelle table » -> affiche la modale #add-table.
-   -> Valider -> addTable() ajoute l'input 'nouvelle_table' au formulaire
-   d'addition, puis retire cette couche du DOM.
+   -> Valider -> POST du formulaire #form-nouvelle-table vers
+   CaisseViewSet.ajouter_table (laboutik/views.py) : la Table est creee en base,
+   puis redirection avec id_table -> la nouvelle table est choisie.
 3. « Continuer sans table » -> retire cette couche, l'ecran de vente reste.
 4. « Service direct » -> lien force_service_direct=true -> rechargement complet.
 
@@ -29,8 +31,8 @@ ATTRIBUT COTTON :
   utile quand il n'y a pas d'ecran de vente dessous (views/tables.html).
 
 ACCROCHES JS A NE PAS RENOMMER :
-#main-tables-definition (retire par addTable et par « Continuer sans table »),
-#add-table (affiche par la tuile « Nouvelle table »), #new_table (lu par addTable).
+#main-tables-definition (retire par « Continuer sans table »),
+#add-table (affiche par la tuile « Nouvelle table »), #new_table (focus a l'ouverture).
 -->
 <section id="main-tables-definition"
          class="tables-screen"
@@ -118,8 +120,21 @@ ACCROCHES JS A NE PAS RENOMMER :
     </a>
   </footer>
 
-  <!-- MODALE AJOUT DE TABLE — mode="hide" : cachee, jamais retiree du DOM -->
-  <!-- / Add-table modal — mode="hide": hidden, never removed from the DOM -->
+  <!-- MODALE AJOUT DE TABLE — mode="hide" : cachee, jamais retiree du DOM.
+  Le champ et le bouton sont dans deux slots differents : ils se rattachent au
+  formulaire par l'attribut form="form-nouvelle-table".
+  Rechargement complet (pas de hx-post) : les ecouteurs JS de l'ecran de vente
+  (articles.js, addition.js) sont rattaches au chargement de la page.
+  / Add-table modal. Field and button live in two slots and join the form through
+  form="form-nouvelle-table". Full reload so the sales screen's JS listeners attach. -->
+  <form id="form-nouvelle-table"
+        method="post"
+        action="{% url 'laboutik-caisse-ajouter_table' %}">
+    {% csrf_token %}
+    <input type="hidden" name="uuid_pv" value="{{ pv.id }}">
+    <input type="hidden" name="tag_id_cm" value="{{ card.tag_id }}">
+    <input type="hidden" name="type_app" value="{{ type_app }}">
+  </form>
   <c-modal id="add-table" style="display:none;" width="420px" height="auto" mode="hide">
     <c-slot name="header">{% translate "Nouvelle table" %}</c-slot>
     <c-slot name="main">
@@ -128,33 +143,22 @@ ACCROCHES JS A NE PAS RENOMMER :
         <input id="new_table"
                class="s-add-table-input"
                type="text"
+               name="nouvelle_table"
+               form="form-nouvelle-table"
+               maxlength="200"
                autocomplete="off"
                placeholder="{% translate 'Ex. Terrasse 4' %}"
+               aria-describedby="new_table_aide"
                data-testid="resto-add-table-input">
+        <p id="new_table_aide" class="s-add-table-aide">{% translate "Laissez vide pour un nom automatique." %}</p>
       </div>
     </c-slot>
     <c-slot name="footer">
-      <button type="button"
+      <button type="submit"
               class="s-add-table-valider"
-              onclick="addTable()"
-              data-testid="resto-add-table-submit">{% translate "Valider" %}</button>
+              form="form-nouvelle-table"
+              data-nav-spinner
+              data-testid="resto-add-table-submit">{% translate "Créer et choisir" %}</button>
     </c-slot>
   </c-modal>
 </section>
-
-<script>
-function addTable(){
-  const newTable = document.querySelector('#new_table').value
-  console.log('-> addTable - newTable =', newTable)
-
-  // Ajoute au formulaire d'addition la variable/input(name) 'nouvelle_table' avec la valeur newTable
-	sendEventOrganizer({
-		src: { file: 'tables_definition.html', method: 'addTable' },
-    msg: 'additionManageForm',
-		data: { actionType: 'createAndPopInput', name: 'nouvelle_table', value: newTable }
-	})
-
-  // remove modal
-  document.querySelector('#main-tables-definition').remove()
-}
-</script>

@@ -8,9 +8,11 @@ LOCALISATION : laboutik/templates/laboutik/partial/win_bottom_left.html
 STYLE : laboutik/static/css/win_bottom_left.css
 Inclus seulement par views/restaurant_interface.html.
 
-TODO : « CB / Espèces » (hx_currency_swap) et « Table » (hx_get_all_tables)
-pointent vers des URLs qui n'existent pas encore.
-/ Currency swap and Table buttons point to URLs that do not exist yet.
+« Table » recharge le point de vente sans id_table : la grille des tables
+s'affiche (cotton/tables_definition.html).
+
+TODO : « CB / Espèces » (hx_currency_swap) pointe vers une URL qui n'existe pas encore.
+/ The currency swap button points to a URL that does not exist yet.
 -->
 <nav id="win-bottom-left" aria-label="{% translate 'Catégories et actions' %}">
   <div class="categories-container">
@@ -44,11 +46,12 @@ pointent vers des URLs qui n'existent pas encore.
       <span class="material-symbols-outlined" aria-hidden="true">currency_exchange</span>
       <span class="wbld-bt-label">{% translate "CB / Espèces" %}</span>
     </button>
+    {# Rechargement complet sans id_table : la vue rend la grille des tables. #}
+    {# / Full reload without id_table: the view renders the table grid.       #}
     <button type="button"
             class="wbld-bt bc-table-ephemeral"
-            hx-get="hx_get_all_tables"
-            hx-target="#messages"
-            hx-swap="innerHTML"
+            onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}'"
+            data-nav-spinner
             data-testid="resto-action-table">
       <span class="material-symbols-outlined" aria-hidden="true">table_restaurant</span>
       <span class="wbld-bt-label">{% translate "Table" %}</span>

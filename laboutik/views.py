@@ -20,7 +20,7 @@ from django.conf import settings
 from django.contrib.auth import login
 from django.db import transaction as db_transaction
 from django.http import Http404, HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
@@ -3527,6 +3527,7 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # Une table spécifique est sélectionnée → interface de commande
         # A specific table is selected → order interface
+        nom_table = ""
         if id_table is not None:
             try:
                 table_obj = Table.objects.get(uuid=id_table)
@@ -3618,6 +3619,9 @@ class CaisseViewSet(viewsets.ViewSet):
             # UUID of the "split payment" article — allows splitting a payment
             "uuidArticlePaiementFractionne": "42ffe511-d880-4964-9b96-0981a9fe4071",
             "id_table": id_table,
+            # Nom de la table choisie, affiche dans le bouton Tables de l'en-tete
+            # / Selected table name, shown in the header Tables button
+            "nom_table": nom_table,
             "laboutik_config": laboutik_config,
             # Mode ecole : active le bandeau SIMULATION dans header.html (LNE exigence 5)
             # / Training mode: enables SIMULATION banner in header.html (LNE req. 5)
@@ -3630,6 +3634,83 @@ class CaisseViewSet(viewsets.ViewSet):
         }
         return render(request, template_name, context)
 
+
+    # ----------------------------------------------------------------------- #
+    # Mode restaurant : creer une table depuis la caisse et la choisir         #
+    # Restaurant mode: create a table from the POS and select it              #
+    # ----------------------------------------------------------------------- #
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="ajouter_table",
+        url_name="ajouter_table",
+    )
+    def ajouter_table(self, request):
+        """
+        POST /laboutik/caisse/ajouter_table/
+        Cree une table et la choisit.
+        / Creates a table and selects it.
+
+        LOCALISATION : laboutik/views.py
+
+        Envoye par la modale « Nouvelle table » (cotton/tables_definition.html),
+        formulaire classique : rechargement complet de la page.
+
+        Corps (POST form) :
+        - uuid_pv, tag_id_cm, type_app : le point de vente et la carte primaire
+        - nouvelle_table : nom de la table (peut etre vide)
+
+        FLUX :
+        1. Verifie le point de vente et l'acces de la carte primaire.
+        2. Cree la Table : statut LIBRE, ephemere.
+           Nom vide -> « Table N ». Nom deja pris -> on reprend cette table
+           (desarchivee si besoin) au lieu d'en creer une seconde.
+        3. Redirige en GET vers point_de_vente avec id_table=<la table> :
+           l'ecran « Commande table X » s'affiche.
+           Le GET apres le POST evite de recreer la table si on recharge la page.
+        """
+        uuid_pv = request.POST.get("uuid_pv")
+        tag_id_carte_manager = request.POST.get("tag_id_cm", "")
+        type_app = request.POST.get("type_app", "unknown")
+
+        try:
+            pv = PointDeVente.objects.get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError):
+            raise Http404(_("Point de vente introuvable"))
+
+        _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
+
+        nom_de_la_nouvelle_table = request.POST.get("nouvelle_table", "").strip()[:200]
+
+        # Nom vide : premier « Table N » libre (les noms sont uniques en base).
+        # / Empty name: first free "Table N" (names are unique in DB).
+        if not nom_de_la_nouvelle_table:
+            numero_de_table = Table.objects.count() + 1
+            while Table.objects.filter(name=f"Table {numero_de_table}").exists():
+                numero_de_table += 1
+            nom_de_la_nouvelle_table = f"Table {numero_de_table}"
+
+        table_choisie, table_creee = Table.objects.get_or_create(
+            name=nom_de_la_nouvelle_table,
+            defaults={"statut": Table.LIBRE, "ephemere": True},
+        )
+
+        # Nom deja pris : on reprend la table existante, avec son statut.
+        # Archivee, elle revient dans la grille.
+        # / Existing name: reuse that table as is; an archived one comes back.
+        if not table_creee and table_choisie.archive:
+            table_choisie.archive = False
+            table_choisie.save(update_fields=["archive"])
+
+        parametres_de_la_table_choisie = urlencode({
+            "uuid_pv": str(pv.uuid),
+            "tag_id_cm": tag_id_carte_manager,
+            "type_app": type_app,
+            "id_table": str(table_choisie.uuid),
+        })
+        return redirect(
+            f"{reverse('laboutik-caisse-point_de_vente')}?{parametres_de_la_table_choisie}"
+        )
 
     # ----------------------------------------------------------------------- #
     # Interface direct pour gèrer le contenu d'une carte cashless             #
@@ -9157,6 +9238,18 @@ class PaiementViewSet(viewsets.ViewSet):
         if consigne_dans_panier:
             total_en_euros = abs(total_en_euros)
 
+        # Moyen choisi d'avance par une touche du clavier du mode restaurant
+        # (partial/win_bottom_right.html). La tuile de ce moyen se declenche
+        # seule a l'affichage (_tuiles_paiement.html). Si ce moyen n'est pas
+        # propose pour ce panier, sa tuile n'existe pas : la liste complete
+        # s'affiche, comme apres VALIDER. Seuls les codes connus passent.
+        # / Method picked ahead by a restaurant keypad key. Its tile fires on
+        # display; if that method is not offered, the full list shows.
+        moyens_preferes_connus = ["espece", "carte_bancaire", "CH", "nfc", "gift", "mix"]
+        moyen_prefere = request.POST.get("moyen_prefere", "")
+        if moyen_prefere not in moyens_preferes_connus:
+            moyen_prefere = ""
+
         context = {
             "state": state,
             "moyens_paiement": moyens_paiement_disponibles,
@@ -9174,6 +9267,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "panier_a_adhesions": panier_a_adhesions,
             "panier_a_billets": panier_a_billets,
             "panier_necessite_client": panier_necessite_client,
+            "moyen_prefere": moyen_prefere,
             # Nouvelle cle a chaque affichage des moyens de paiement : un double
             # envoi de payer() arrive avec la meme cle (_executer_avec_cle_idempotence).
             # / New key each time payment methods are shown.

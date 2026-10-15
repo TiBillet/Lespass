@@ -25,6 +25,10 @@ PARAMETRES (variables du contexte ou « with » de l'include) :
 - carte_deja_scannee : True = la carte du client est deja dans #addition-form
                        (champ tag_id). CASHLESS paie tout de suite, sans
                        nouveau scan ni popup de confirmation.
+- moyen_prefere      : code choisi d'avance par une touche du clavier du mode
+                       restaurant (partial/win_bottom_right.html). La tuile de
+                       ce code se declenche seule a l'affichage (hx-trigger
+                       « load »). Vide = rien ne se declenche.
 - panier_est_gratuit : True = rien a encaisser (ex : billet a 0 €).
                        Une seule tuile VALIDER, qui envoie moyen_paiement=gift.
                        Le serveur (payer) verifie que le total vaut bien 0.
@@ -56,24 +60,24 @@ Les data-testid sont lus par les tests : ne pas les renommer.
         {# / The card scanned for identification is also used to pay #}
         <c-V2.bt.paiement name='{% translate "Carte Tibillet" %}' icon="wallet" onclick="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc'); askAdditionManageForm('postUrl',null,'{% url 'laboutik-paiement-payer' %}'); askAdditionManageForm('submit')" data-loading-disable data-testid="paiement-btn-cashless" />
       {% else %}
-        <c-V2.bt.paiement name='{% translate "Carte Tibillet" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}?total={{ total|unlocalize }}&devise={{ currency_data.symbol|urlencode }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" data-loading-disable data-testid="paiement-btn-cashless" />
+        <c-V2.bt.paiement name='{% translate "Carte Tibillet" %}' icon="wallet" hx-get="{% url 'laboutik-paiement-lire_nfc' %}?total={{ total|unlocalize }}&devise={{ currency_data.symbol|urlencode }}" hx-target="#confirm" hx-trigger="{% if moyen_prefere == 'nfc' %}load, {% endif %}click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" data-loading-disable data-testid="paiement-btn-cashless" />
       {% endif %}
     {% endif %}
     {% if 'espece' in moyens_paiement %}
-      <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')" data-loading-disable data-testid="paiement-btn-especes" />
+      <c-V2.bt.paiement name='{% translate "ESPÈCE" %}' icon="bills" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="{% if moyen_prefere == 'espece' %}load, {% endif %}click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')" data-loading-disable data-testid="paiement-btn-especes" />
     {% endif %}
     {% if 'carte_bancaire' in moyens_paiement %}
-      <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')" data-loading-disable data-testid="paiement-btn-cb" />
+      <c-V2.bt.paiement name='{% translate "CB" %}' icon="card" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="{% if moyen_prefere == 'carte_bancaire' %}load, {% endif %}click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')" data-loading-disable data-testid="paiement-btn-cb" />
     {% endif %}
     {% if 'CH' in moyens_paiement %}
-      <c-V2.bt.paiement name='{% translate "CHÈQUE" %}' icon="cheque" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=CH&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')" data-loading-disable data-testid="paiement-btn-cheque" />
+      <c-V2.bt.paiement name='{% translate "CHÈQUE" %}' icon="cheque" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=CH&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="{% if moyen_prefere == 'CH' %}load, {% endif %}click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')" data-loading-disable data-testid="paiement-btn-cheque" />
     {% endif %}
     {% if mode_gerant %}
-      <c-V2.bt.paiement name='{% translate "OFFRIR" %}' icon="gift" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=gift&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')" data-loading-disable data-testid="paiement-btn-offrir" />
+      <c-V2.bt.paiement name='{% translate "OFFRIR" %}' icon="gift" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=gift&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="{% if moyen_prefere == 'gift' %}load, {% endif %}click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')" data-loading-disable data-testid="paiement-btn-offrir" />
     {% endif %}
     {% if paiement_mixte_possible %}
       {# MIXTE : repartir le total entre plusieurs moyens / MIXED: split the total #}
-      <c-V2.bt.paiement name='{% translate "MIXTE" %}' icon="coins" hx-get="{% url 'laboutik-paiement-repartir' %}?total={{ total|unlocalize }}&moyens={{ moyens_paiement_mixte_csv|urlencode }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','mix')" data-loading-disable data-testid="paiement-btn-mixte" />
+      <c-V2.bt.paiement name='{% translate "MIXTE" %}' icon="coins" hx-get="{% url 'laboutik-paiement-repartir' %}?total={{ total|unlocalize }}&moyens={{ moyens_paiement_mixte_csv|urlencode }}" hx-target="#confirm" hx-trigger="{% if moyen_prefere == 'mix' %}load, {% endif %}click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','mix')" data-loading-disable data-testid="paiement-btn-mixte" />
     {% endif %}
   {% endif %}
 </div>

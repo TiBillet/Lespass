@@ -74,9 +74,24 @@
       <span class="material-symbols-outlined" aria-hidden="true">assignment</span>Préparations
     </button>
     {% if not pv.service_direct %}
-      <button class="hdr-nav-btn{% if not id_table %} is-missing{% endif %}" data-id-table="{{ id_table }}" data-dest="tables">
+      {# Rechargement complet sans id_table : la vue rend la grille des tables #}
+      {# (views/restaurant_interface.html). Meme lien que l'entree TABLES du menu. #}
+      {# / Full reload without id_table: the view renders the table grid.        #}
+      <button type="button"
+              class="hdr-nav-btn{% if not id_table %} is-missing{% endif %}"
+              data-id-table="{{ id_table }}"
+              data-dest="tables"
+              onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}'"
+              data-nav-spinner
+              data-testid="header-tables">
         <span class="material-symbols-outlined" aria-hidden="true">chair</span>
-        Tables
+        {# Table choisie : son nom remplace « Tables ». Un clic ramene a la grille. #}
+        {# / Selected table: its name replaces "Tables". A click goes to the grid. #}
+        {% if nom_table %}
+          <span class="sr-only">{% translate "Table" %} :</span>{{ nom_table }}
+        {% else %}
+          {% translate "Tables" %}
+        {% endif %}
       </button>
     {% endif %}
     <button class="hdr-nav-btn"
@@ -126,10 +141,13 @@
       <div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>
     </div>
     {% if not pv.service_direct %}
-      <div class="menu-burger-item menu-burger-item-content">
+      <a class="menu-burger-item menu-burger-item-content"
+         href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}"
+         data-nav-spinner
+         data-testid="menu-tables">
         <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">chair</span>
         <div class="menu-burger-item-content">{% translate "TABLES" %}</div>
-      </div>
+      </a>
     {% endif %}
     <div class="menu-burger-item menu-burger-item-content"
          hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}"

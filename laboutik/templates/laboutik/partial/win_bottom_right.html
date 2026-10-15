@@ -8,36 +8,61 @@ LOCALISATION : laboutik/templates/laboutik/partial/win_bottom_right.html
 STYLE : laboutik/static/css/win_bottom_right.css
 Inclus seulement par views/restaurant_interface.html.
 
-TODO : maquette. Aucune touche n'est encore branchee (ni hx-*, ni JS).
-Le paiement passe aujourd'hui par le bouton VALIDER du panneau addition.
-/ Mock-up: no key is wired yet. Payment goes through the cart's VALIDER button.
+FLUX D'UNE TOUCHE DE PAIEMENT (Espèces, CB, Chèque, Cashless, Mixte, Offrir) :
+1. restoPayerAvec('<code>') range le code dans #addition-form (champ moyen_prefere).
+2. Il appelle footer.js:displayPaymentTypes(), le meme chemin que VALIDER du ticket.
+   Panier vide -> message « aucun article » (partial/no_articles.html).
+3. #addition-form poste vers PaiementViewSet.moyens_paiement (laboutik/views.py),
+   qui verifie stock, monnaie, client requis... puis rend hx_display_type_payment.html.
+4. Dans _tuiles_paiement.html, la tuile du moyen choisi porte hx-trigger « load » :
+   elle se declenche seule et ouvre l'etape suivante (confirmation, attente carte,
+   repartition) dans #confirm, par-dessus la liste des moyens.
+   Moyen non propose pour ce panier (ou client a identifier) : la liste s'affiche,
+   le caissier choisit lui-meme.
+5. Apres la reponse, le champ moyen_prefere est retire : VALIDER du ticket
+   rouvre toujours la liste complete.
+
+La touche VALIDER fait exactement ce que fait VALIDER du ticket.
 -->
 <nav id="win-bottom-right" aria-label="{% translate 'Paiement' %}">
-  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-especes">
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('espece')" data-testid="resto-touche-especes">
     <span class="material-symbols-outlined" aria-hidden="true">payments</span>{% translate "Espèces" %}
   </button>
-  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-cb">
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('carte_bancaire')" data-testid="resto-touche-cb">
     <span class="material-symbols-outlined" aria-hidden="true">credit_card</span>{% translate "CB" %}
   </button>
-  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-cheque">
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('CH')" data-testid="resto-touche-cheque">
     <span class="material-symbols-outlined" aria-hidden="true">receipt</span>{% translate "Chèque" %}
   </button>
-  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-cashless">
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('nfc')" data-testid="resto-touche-cashless">
     <span class="material-symbols-outlined" aria-hidden="true">contactless</span>{% translate "Cashless" %}
   </button>
-  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-mixte">
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('mix')" data-testid="resto-touche-mixte">
     <span class="material-symbols-outlined" aria-hidden="true">call_split</span>{% translate "Mixte" %}
   </button>
-  <button type="button" class="key-touch key-size1 win-bottom-right-g1" data-testid="resto-touche-offrir">
+  {# Offrir est reserve a la carte primaire en mode gerant, comme la tuile OFFRIR. #}
+  {# Le serveur le verifie aussi (_panier_peut_etre_offert).                       #}
+  {# / Gift is for manager-mode primary cards only; the server checks it too.      #}
+  <button type="button"
+          class="key-touch key-size1 win-bottom-right-g1"
+          onclick="restoPayerAvec('gift')"
+          {% if not card.mode_gerant %}disabled title="{% translate 'Réservé au mode gérant' %}"{% endif %}
+          data-testid="resto-touche-offrir">
     <span class="material-symbols-outlined" aria-hidden="true">redeem</span>{% translate "Offrir" %}
   </button>
-  <button type="button" class="key-touch key-size1 c-white bc-info" data-testid="resto-touche-ticket">
+  {# TODO : « Ticket de caisse » et « Envoi prépa » ne sont pas encore branches.  #}
+  {# Envoi prépa devra appeler CommandeViewSet.ouvrir_commande (JSON d'articles). #}
+  {# / Not wired yet: receipt print and send-to-kitchen.                          #}
+  <button type="button" class="key-touch key-size1 c-white bc-info" disabled data-testid="resto-touche-ticket">
     <span class="material-symbols-outlined" aria-hidden="true">print</span>{% translate "Ticket de caisse" %}
   </button>
-  <button type="button" class="key-touch key-size1 c-white bc-purple" data-testid="resto-touche-envoyer-prepa">
+  <button type="button" class="key-touch key-size1 c-white bc-purple" disabled data-testid="resto-touche-envoyer-prepa">
     <span class="material-symbols-outlined" aria-hidden="true">soup_kitchen</span>{% translate "Envoi prépa" %}
   </button>
-  <button type="button" class="key-touch key-size3 c-white bc-success win-bottom-right-valider" data-testid="resto-touche-valider">
+  <button type="button"
+          class="key-touch key-size3 c-white bc-success win-bottom-right-valider"
+          onclick="displayPaymentTypes()"
+          data-testid="resto-touche-valider">
     <span class="material-symbols-outlined" aria-hidden="true">check</span>{% translate "Valider" %}
   </button>
   <div class="key-size1 win-bottom-right-status" data-testid="resto-statuts">
@@ -51,3 +76,53 @@ Le paiement passe aujourd'hui par le bouton VALIDER du panneau addition.
     </div>
   </div>
 </nav>
+
+<script>
+/**
+ * Paie le panier avec un moyen choisi d'avance (touche du clavier restaurant)
+ * / Pays the cart with a method picked ahead (restaurant keypad key)
+ *
+ * LOCALISATION : laboutik/templates/laboutik/partial/win_bottom_right.html
+ *
+ * FLUX : voir le commentaire en tete de ce fichier.
+ *
+ * COMMUNICATION :
+ * Emet : 'additionManageForm' -> addition.js (createAndPopInput moyen_prefere)
+ * Appelle : footer.js:displayPaymentTypes() -> addition.js:additionDisplayPaymentTypes()
+ *
+ * @param {string} moyenPrefere - code du moyen : espece, carte_bancaire, CH, nfc, mix, gift
+ */
+function restoPayerAvec(moyenPrefere) {
+  const formulaireAddition = document.querySelector('#addition-form')
+
+  // Panier vide : pas de requete, displayPaymentTypes() affiche le message.
+  // On ne range rien dans le formulaire, sinon le prochain VALIDER le reprendrait.
+  // / Empty cart: no request, nothing stored in the form.
+  const panierADesArticles = formulaireAddition.querySelector('input[name^="repid-"]') !== null
+  if (!panierADesArticles) {
+    displayPaymentTypes()
+    return
+  }
+
+  // Range le moyen choisi dans #addition-form (lu par moyens_paiement).
+  // / Stores the picked method in #addition-form.
+  sendEventOrganizer({
+    src: { file: 'win_bottom_right.html', method: 'restoPayerAvec' },
+    msg: 'additionManageForm',
+    data: { actionType: 'createAndPopInput', name: 'moyen_prefere', value: moyenPrefere }
+  })
+
+  // Une fois la reponse recue (succes ou erreur), on retire le champ :
+  // VALIDER du ticket doit toujours rouvrir la liste complete.
+  // / Once answered, remove the field so VALIDER shows the full list again.
+  formulaireAddition.addEventListener('htmx:afterRequest', function () {
+    const champMoyenPrefere = formulaireAddition.querySelector('input[name="moyen_prefere"]')
+    if (champMoyenPrefere) {
+      champMoyenPrefere.remove()
+    }
+  }, { once: true })
+
+  // Meme chemin que VALIDER du ticket / Same path as the ticket's VALIDER
+  displayPaymentTypes()
+}
+</script>

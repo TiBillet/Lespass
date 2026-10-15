@@ -124,6 +124,15 @@
   outline-offset: 2px;
 }
 
+/* Touche indisponible (pas encore branchee, ou reservee au mode gerant)
+   / Unavailable key (not wired yet, or manager mode only) */
+#win-bottom-right .key-touch:disabled {
+  opacity: .45;
+  filter: saturate(.4);
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* --- Voyants VENTES / NOTE / Status lights --- */
 #win-bottom-right .win-bottom-right-status {
   display: flex;
