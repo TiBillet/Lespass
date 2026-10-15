@@ -1,0 +1,65 @@
+/*
+ * POPUP PAIEMENT MIXTE (V2)
+ * / Split payment popup (V2)
+ *
+ * LOCALISATION : laboutik/static/css/paiement_mixte.css
+ * Utilise par : laboutik/templates/laboutik/partial/hx_paiement_mixte.html
+ *
+ * La popup reprend les briques de overlay.css (.card-modal, .card-confirm,
+ * .card-valider). Ce fichier ne style que les lignes de repartition.
+ * / Reuses overlay.css building blocks; only styles the split rows.
+ */
+
+.mixte-lignes {
+	display: grid;
+	gap: calc(6px * var(--k));
+}
+
+/* Une ligne = un moyen de paiement + son montant
+   / One row = a payment method + its amount */
+.mixte-ligne {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(8px * var(--k));
+	min-height: calc(44px * var(--k));
+	padding: 0 calc(12px * var(--k));
+	border: 2px solid var(--line-soft);
+	border-radius: calc(var(--r-ctrl) * var(--k));
+	background: var(--surface-2);
+	color: var(--text-dim);
+	font-size: max(var(--fs-min), calc(13px * var(--k)));
+	font-weight: 700;
+	text-align: left;
+	text-transform: capitalize;
+}
+.mixte-ligne-montant {
+	flex: none;
+	white-space: nowrap;
+	font-size: calc(17px * var(--k));
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+	color: var(--text);
+}
+
+/* Ligne active : celle que le pave remplit (meme vert que dans PLACE CARD)
+   / Active row: the one the keypad fills */
+.mixte-ligne.is-active {
+	border-color: var(--valid);
+	color: var(--text);
+}
+.mixte-ligne:focus-visible {
+	outline: 2px solid var(--nfc);
+	outline-offset: 2px;
+}
+
+/* Reste negatif : les montants depassent le total
+   / Negative remaining: amounts exceed the total */
+.mixte-repartition.is-depasse .mixte-reste,
+.mixte-repartition.is-depasse .mixte-reste b {
+	color: var(--danger);
+}
+
+.mixte-repartition .numpad-content {
+	margin-top: calc(2px * var(--k));
+}

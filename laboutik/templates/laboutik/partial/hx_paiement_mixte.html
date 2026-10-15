@@ -1,0 +1,272 @@
+{% load static i18n l10n %}
+<!--
+POPUP PAIEMENT MIXTE (V2)
+Le caissier repartit le total entre plusieurs moyens de paiement
+(especes, CB, cheque). Exemple : 10 € en especes et 15 € en CB.
+/ Split payment popup (V2): the cashier splits the total between several
+payment methods (cash, card, cheque).
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_paiement_mixte.html
+
+Meme principe que l'ecran PLACE CARD du mode resto (hx_managed_card.html) :
+une case montant par moyen, on touche une case pour la choisir, le pave
+numerique remplit la case choisie.
+Style : overlay.css (popup V2) + static/css/paiement_mixte.css.
+
+FLUX :
+1. Clic sur la tuile MIXTE (_tuiles_paiement.html). La tuile range
+   moyen_paiement=mix dans #addition-form.
+2. repartir() (laboutik/views.py) rend CE partial dans #confirm.
+3. Le pave (cotton/numpad.html) envoie ses touches a #mixte-repartition.
+   Le script met a jour la case choisie, son champ cache repartition_<code>
+   (en centimes) et le « Reste a repartir ».
+4. VALIDER (actif quand le reste vaut 0 et que deux moyens au moins sont
+   utilises) soumet #paiement-mixte-form vers payer(). Le formulaire inclut
+   #addition-form (articles, moyen_paiement=mix, cle d'idempotence).
+5. payer() revalide tout (moyens acceptes, somme = total) et ecrit un
+   reglement par moyen. La reponse remplace #messages, puis #confirm se ferme.
+6. La croix, Annuler ou le fond ferme #confirm : retour au choix du paiement.
+
+PARAMETRES (context de repartir()) :
+- total                 : total en euros (affichage).
+- total_en_centimes     : total en centimes (calcul du reste).
+- lignes_de_repartition : liste de {code, libelle}.
+- currency_data         : unite du total (currency_data.symbol).
+
+Les data-testid sont lus par les tests : ne pas les renommer.
+/ data-testid values are read by the tests: do not rename them.
+-->
+<div id="confirm"
+     data-testid="paiement-mixte"
+     aria-live="polite">
+  <link rel="stylesheet" href="{% static 'css/paiement_mixte.css' %}" />
+  <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="mixte-titre">
+    {# Toucher le fond ferme la popup, comme la croix / Tapping the backdrop closes the popup #}
+    <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#confirm')"></div>
+    <div class="card-modal-box">
+      <c-V2.bt.return selector="#confirm" layer="2" data-testid="paiement-mixte-btn-fermer" />
+
+      {# --- EN-TETE : titre + total / HEADER: title + total --- #}
+      <div class="payment-total">
+        <span class="payment-total-lbl" id="mixte-titre">{% translate "Paiement mixte" %}</span>
+        <span class="payment-total-val">{{ total|floatformat:2 }} {{ currency_data.symbol }}</span>
+      </div>
+
+      <form id="paiement-mixte-form"
+            hx-post="{% url 'laboutik-paiement-payer' %}"
+            hx-include="#addition-form"
+            hx-target="#messages"
+            hx-swap="outerHTML">
+        <div id="mixte-repartition"
+             class="card-confirm mixte-repartition"
+             data-total-en-centimes="{{ total_en_centimes|unlocalize }}">
+
+          {# --- Une ligne par moyen : toucher la ligne pour la remplir --- #}
+          {# --- One row per method: tap the row to fill it ---           #}
+          <div class="mixte-lignes" role="radiogroup" aria-label="{% translate 'Moyen à remplir' %}">
+            {% for ligne in lignes_de_repartition %}
+              <button type="button"
+                      class="mixte-ligne{% if forloop.first %} is-active{% endif %}"
+                      role="radio"
+                      aria-checked="{% if forloop.first %}true{% else %}false{% endif %}"
+                      data-moyen="{{ ligne.code }}"
+                      data-testid="mixte-ligne-{{ ligne.code }}">
+                <span class="mixte-ligne-libelle">{{ ligne.libelle }}</span>
+                <b class="mixte-ligne-montant" data-testid="mixte-montant-{{ ligne.code }}">0,00 {{ currency_data.symbol }}</b>
+              </button>
+              {# Montant en centimes, lu par payer() / Amount in cents, read by payer() #}
+              <input type="hidden"
+                     name="repartition_{{ ligne.code }}"
+                     id="mixte-input-{{ ligne.code }}"
+                     value="0" />
+            {% endfor %}
+          </div>
+
+          {# --- Reste a repartir / Remaining to split --- #}
+          <div class="card-confirm-row card-confirm-total mixte-reste">
+            <span>{% translate "Reste à répartir" %}</span>
+            <b id="mixte-reste-valeur" aria-live="polite" data-testid="mixte-reste">{{ total|floatformat:2 }} {{ currency_data.symbol }}</b>
+          </div>
+
+          <button type="button"
+                  class="card-confirm-cancel mixte-bt-reste"
+                  onclick="mixteMettreLeReste()"
+                  data-testid="mixte-btn-reste">
+            {% translate "Mettre le reste ici" %}
+          </button>
+
+          <c-numpad id="mixte-numpad" ck-target="#mixte-repartition" />
+        </div>
+      </form>
+
+      {# --- ACTIONS --- #}
+      <div class="card-confirm-acts">
+        <button type="button" class="card-confirm-cancel"
+                onclick="hideAndEmptyElement('#confirm')"
+                data-testid="mixte-btn-annuler">{% translate "Annuler" %}</button>
+        <button type="button"
+                id="mixte-bt-valider"
+                class="card-valider"
+                onclick="mixteValider()"
+                disabled
+                data-loading-disable
+                data-testid="mixte-btn-valider">
+          {% translate "Valider" %}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Paiement mixte : saisie des montants par moyen, calcul du reste.
+     * Le script ne fait que de l'affichage : payer() revalide tout.
+     * / Split payment: per-method amount entry and remaining amount.
+     * Display only: payer() revalidates everything.
+     *
+     * LOCALISATION : laboutik/templates/laboutik/partial/hx_paiement_mixte.html
+     *
+     * Recoit : 'keypadSendValue' { key } depuis cotton/numpad.html
+     * Met a jour : la ligne active, son input repartition_<code> (centimes),
+     * #mixte-reste-valeur et l'etat du bouton VALIDER.
+     */
+    (function () {
+      const zoneRepartition = document.querySelector('#mixte-repartition')
+      const totalEnCentimes = parseInt(zoneRepartition.dataset.totalEnCentimes, 10)
+      const symbole = ' {{ currency_data.symbol }}'
+
+      // Saisie en texte (avec virgule) de chaque moyen, ex : { espece: '10,50' }
+      // / Typed text (with a comma) for each method
+      const saisieParMoyen = {}
+      zoneRepartition.querySelectorAll('.mixte-ligne').forEach(function (ligne) {
+        saisieParMoyen[ligne.dataset.moyen] = ''
+      })
+
+      function formaterEuros(montantEnCentimes) {
+        return (montantEnCentimes / 100).toFixed(2).replace('.', ',') + symbole
+      }
+
+      function centimesDeLaSaisie(saisie) {
+        const montantEnEuros = parseFloat(saisie.replace(',', '.')) || 0
+        return Math.round(montantEnEuros * 100)
+      }
+
+      function ligneActive() {
+        return zoneRepartition.querySelector('.mixte-ligne.is-active')
+      }
+
+      // Reste a repartir = total - somme des montants saisis
+      // / Remaining = total - sum of typed amounts
+      function calculerResteEnCentimes() {
+        let sommeEnCentimes = 0
+        for (const code in saisieParMoyen) {
+          sommeEnCentimes += centimesDeLaSaisie(saisieParMoyen[code])
+        }
+        return totalEnCentimes - sommeEnCentimes
+      }
+
+      // Affiche le montant d'un moyen et range les centimes dans son input cache
+      // / Shows a method's amount and stores the cents in its hidden input
+      function afficherLeMoyen(code) {
+        const montantEnCentimes = centimesDeLaSaisie(saisieParMoyen[code])
+        const ligne = zoneRepartition.querySelector('.mixte-ligne[data-moyen="' + code + '"]')
+        ligne.querySelector('.mixte-ligne-montant').textContent =
+          saisieParMoyen[code] === '' ? formaterEuros(0) : saisieParMoyen[code] + symbole
+        document.querySelector('#mixte-input-' + code).value = montantEnCentimes
+      }
+
+      // Reste + bouton VALIDER : actif si reste = 0 et au moins deux moyens utilises
+      // / Remaining + VALIDATE: enabled if remaining is 0 and two methods are used
+      function mettreAJourLeReste() {
+        const resteEnCentimes = calculerResteEnCentimes()
+        const valeurReste = document.querySelector('#mixte-reste-valeur')
+        valeurReste.textContent = formaterEuros(resteEnCentimes)
+        zoneRepartition.classList.toggle('is-depasse', resteEnCentimes < 0)
+
+        let nombreDeMoyensUtilises = 0
+        for (const code in saisieParMoyen) {
+          if (centimesDeLaSaisie(saisieParMoyen[code]) > 0) {
+            nombreDeMoyensUtilises += 1
+          }
+        }
+        const repartitionEstComplete = resteEnCentimes === 0 && nombreDeMoyensUtilises >= 2
+        document.querySelector('#mixte-bt-valider').disabled = !repartitionEstComplete
+      }
+
+      // Toucher une ligne la rend active / Tapping a row makes it active
+      zoneRepartition.querySelector('.mixte-lignes').addEventListener('click', function (event) {
+        const ligneTouchee = event.target.closest('.mixte-ligne')
+        if (!ligneTouchee) {
+          return
+        }
+        zoneRepartition.querySelectorAll('.mixte-ligne').forEach(function (ligne) {
+          ligne.classList.remove('is-active')
+          ligne.setAttribute('aria-checked', 'false')
+        })
+        ligneTouchee.classList.add('is-active')
+        ligneTouchee.setAttribute('aria-checked', 'true')
+      })
+
+      // Touche du pave : regle de saisie commune (tibilletUtils.js)
+      // / Keypad key: shared typing rule (tibilletUtils.js)
+      zoneRepartition.addEventListener('keypadSendValue', function (event) {
+        const code = ligneActive().dataset.moyen
+        const nouvelleSaisie = montantAppliquerTouche(saisieParMoyen[code], event.detail.key)
+        if (nouvelleSaisie === null) {
+          return
+        }
+        saisieParMoyen[code] = nouvelleSaisie
+        afficherLeMoyen(code)
+        mettreAJourLeReste()
+      })
+
+      /**
+       * Met le reste a repartir dans la ligne active (en plus de son montant).
+       * / Puts the remaining amount into the active row (on top of its amount).
+       */
+      window.mixteMettreLeReste = function () {
+        const code = ligneActive().dataset.moyen
+        const nouveauMontantEnCentimes = centimesDeLaSaisie(saisieParMoyen[code]) + calculerResteEnCentimes()
+        if (nouveauMontantEnCentimes <= 0) {
+          saisieParMoyen[code] = ''
+        } else {
+          saisieParMoyen[code] = (nouveauMontantEnCentimes / 100).toFixed(2).replace('.', ',')
+        }
+        afficherLeMoyen(code)
+        mettreAJourLeReste()
+      }
+
+      /**
+       * Soumet la repartition vers payer().
+       * #confirm se ferme quand la reponse arrive dans #messages
+       * (meme ecouteur que le complement dans hx_confirm_payment.html).
+       * / Submits the split to payer(). #confirm closes when the answer arrives.
+       *
+       * COMMUNICATION :
+       * Emet : 'submit' sur #paiement-mixte-form → POST payer() → swap #messages
+       */
+      window.mixteValider = async function () {
+        const zoneMessages = document.querySelector('#messages')
+        zoneMessages.addEventListener('htmx:beforeSwap', function () {
+          hideAndEmptyElement('#confirm')
+        }, { once: true })
+
+        // Tiroir-caisse (Sunmi) : seulement si une part est payee en especes
+        // / Cash drawer (Sunmi): only when part of it is paid in cash
+        const partEnEspeces = document.querySelector('#mixte-input-espece')
+        if (partEnEspeces && Number(partEnEspeces.value) > 0) {
+          try {
+            if (SunmiPrinterPlugin) {
+              await SunmiPrinterPlugin.initSunmiPrinterService()
+              SunmiPrinterPlugin.openDrawer()
+            }
+          } catch (error) {
+            console.log('-> mixteValider openDrawer -', error)
+          }
+        }
+
+        htmx.trigger('#paiement-mixte-form', 'submit')
+      }
+    })()
+  </script>
+</div>

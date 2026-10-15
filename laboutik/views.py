@@ -196,6 +196,7 @@ PAYMENT_METHOD_TRANSLATIONS = {
     "carte_bancaire": _("carte bancaire"),
     "CH": _("chèque"),
     "gift": _("cadeau"),
+    "mix": _("paiement mixte"),
     "": _("inconnu"),
 }
 
@@ -3129,6 +3130,53 @@ def _somme_encaissee_du_panier_en_centimes(articles_panier):
             continue
         somme_encaissee_en_centimes += article["prix_centimes"] * article["quantite"]
     return somme_encaissee_en_centimes
+
+
+# Les moyens qu'un paiement mixte peut combiner, dans l'ordre d'affichage.
+# TODO : ajouter le cashless ("nfc"). Il faut un debit partiel de la carte
+# (cascade de monnaies, fonds insuffisants), qui est un autre flux.
+# / Methods a split payment can combine, in display order. TODO: add cashless.
+MOYENS_DU_PAIEMENT_MIXTE = ("espece", "carte_bancaire", "CH")
+
+
+def _moyens_du_paiement_mixte(moyens_paiement, articles_panier):
+    """
+    Les moyens de paiement qu'on peut combiner dans un paiement mixte pour ce panier.
+    / The payment methods that can be combined in a split payment for this cart.
+
+    LOCALISATION : laboutik/views.py
+
+    On garde les moyens de MOYENS_DU_PAIEMENT_MIXTE que le point de vente propose.
+    La liste est vide quand le paiement mixte n'a pas de sens :
+    - panier gratuit : il n'y a rien a encaisser ;
+    - retour de consigne : on rend de l'argent, en especes ou sur la carte ;
+    - panier en points ou en temps : il se paie uniquement par carte NFC ;
+    - panier avec une recharge : la recharge est payee par UN seul moyen.
+    La tuile MIXTE s'affiche quand la liste contient au moins deux moyens.
+    / Empty for a free cart, a deposit return, a points cart or a cart with a
+    top-up. The MIXED tile shows when at least two methods remain.
+
+    Appelee par / Called by : moyens_paiement(), _rendre_popup_paiement_client_identifie()
+
+    :param moyens_paiement: liste des codes proposes (_determiner_moyens_paiement)
+    :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :return: liste de codes (ex : ["espece", "carte_bancaire"])
+    """
+    panier_est_gratuit = _calculer_total_panier_centimes(articles_panier) == 0
+    if panier_est_gratuit:
+        return []
+    if _panier_contient_retour_consigne(articles_panier):
+        return []
+    if _panier_est_en_points(articles_panier):
+        return []
+    if _panier_contient_recharges(articles_panier):
+        return []
+
+    moyens_combinables = []
+    for code_du_moyen in MOYENS_DU_PAIEMENT_MIXTE:
+        if code_du_moyen in moyens_paiement:
+            moyens_combinables.append(code_du_moyen)
+    return moyens_combinables
 
 
 def _operateur_de_la_caisse(request, tag_id_carte_manager):
@@ -6741,6 +6789,10 @@ def _rendre_popup_paiement_client_identifie(
     # / The cart is free when the total is 0 and it holds at least one item.
     panier_est_gratuit = total_centimes == 0 and len(articles_panier) > 0
 
+    moyens_du_paiement_mixte = _moyens_du_paiement_mixte(
+        moyens_paiement, articles_panier
+    )
+
     articles_pour_recapitulatif = _construire_recapitulatif_articles(
         articles_panier,
         client_prenom,
@@ -6786,6 +6838,10 @@ def _rendre_popup_paiement_client_identifie(
         "mode_gerant": _panier_peut_etre_offert(
             articles_panier, request.POST.get("tag_id_cm", "")
         ),
+        # Tuile MIXTE : au moins deux moyens combinables (voir _moyens_du_paiement_mixte).
+        # / MIXED tile: at least two methods can be combined.
+        "paiement_mixte_possible": len(moyens_du_paiement_mixte) >= 2,
+        "moyens_paiement_mixte_csv": ",".join(moyens_du_paiement_mixte),
         "deposit_is_present": False,
         "comportement": "",
         "panier_a_recharges": panier_a_recharges,
@@ -8648,16 +8704,21 @@ def _ouvrir_la_vente_de_caisse(
     )
 
 
-def _regler_et_encaisser_la_vente_de_caisse(vente, articles_panier, moyen_paiement_code):
+def _regler_et_encaisser_la_vente_de_caisse(
+    vente, articles_panier, moyen_paiement_code, repartition_en_centimes=None
+):
     """
-    Écrit le règlement d'un encaissement à UN moyen de paiement, puis encaisse la vente.
+    Écrit le ou les règlements d'un encaissement, puis encaisse la vente.
     Dernière étape du `transaction.atomic()` du paiement.
-    / Writes the payment of a one-method collection, then settles the sale. Last step.
+    / Writes the payment(s) of a collection, then settles the sale. Last step.
 
     LOCALISATION : laboutik/views.py
 
     - espèces, CB, chèque : UN règlement, du montant encaissé (la somme demandée au
       client, sans les recharges cadeau ; négatif pour un retour de consigne) ;
+    - paiement mixte (`repartition_en_centimes` donnée) : UN règlement PAR moyen, du
+      montant saisi par le caissier. `payer()` a déjà vérifié que la somme des montants
+      vaut la somme encaissée ;
     - OFFRIR (code « gift ») : aucun règlement ici. Le service de vente a déjà écrit un
       règlement « offert » (FREE) par article offert à montant non nul ;
     - aucun règlement de 0 : une vente gratuite n'en a pas.
@@ -8669,9 +8730,21 @@ def _regler_et_encaisser_la_vente_de_caisse(vente, articles_panier, moyen_paieme
 
     :param vente: la `Vente` EN_ATTENTE ouverte par `_ouvrir_la_vente_de_caisse`
     :param articles_panier: liste de dicts de _extraire_articles_du_panier()
-    :param moyen_paiement_code: code d'interface ("espece", "carte_bancaire", "CH", "gift")
+    :param moyen_paiement_code: code d'interface ("espece", "carte_bancaire", "CH", "gift", "mix")
+    :param repartition_en_centimes: paiement mixte seulement, dict {code: montant en centimes}
     :return: la `Vente` encaissée
     """
+    if repartition_en_centimes:
+        for code_du_moyen, montant_en_centimes in repartition_en_centimes.items():
+            if montant_en_centimes == 0:
+                continue
+            ajouter_reglement(
+                vente,
+                moyen=MAPPING_CODES_PAIEMENT[code_du_moyen],
+                montant=montant_en_centimes,
+            )
+        return encaisser_vente(vente)
+
     moyen_en_base = MAPPING_CODES_PAIEMENT[moyen_paiement_code]
     paiement_offert_par_le_lieu = moyen_en_base == PaymentMethod.FREE
 
@@ -8687,6 +8760,69 @@ def _regler_et_encaisser_la_vente_de_caisse(vente, articles_panier, moyen_paieme
             )
 
     return encaisser_vente(vente)
+
+
+# -------------------------------------------------------------------------- #
+#  RepartitionPaiementMixteSerializer — les montants d'un paiement mixte      #
+#  / RepartitionPaiementMixteSerializer — the amounts of a split payment      #
+# -------------------------------------------------------------------------- #
+
+
+class RepartitionPaiementMixteSerializer(serializers.Serializer):
+    """
+    Valide la repartition d'un paiement mixte postee a payer().
+    / Validates the split payment amounts posted to payer().
+
+    LOCALISATION : laboutik/views.py
+
+    Les champs viennent de #paiement-mixte-form (partial/hx_paiement_mixte.html).
+    Un montant par moyen, en centimes. Un moyen non utilise vaut 0.
+    / One amount per method, in cents. An unused method is 0.
+
+    Contexte attendu : "moyens_acceptes" = liste des codes que le point de vente
+    accepte. Un POST force avec un moyen refuse par le point de vente est rejete.
+    / Expected context: "moyens_acceptes", the codes accepted by the POS.
+
+    La somme des montants est comparee au panier par payer(), pas ici :
+    le serializer ne connait pas le panier.
+    / The sum is checked against the cart by payer(), not here.
+    """
+
+    repartition_espece = serializers.IntegerField(
+        min_value=0, required=False, default=0
+    )
+    repartition_carte_bancaire = serializers.IntegerField(
+        min_value=0, required=False, default=0
+    )
+    repartition_CH = serializers.IntegerField(min_value=0, required=False, default=0)
+
+    def validate(self, attrs):
+        moyens_acceptes = self.context.get("moyens_acceptes", [])
+
+        # Les montants non nuls, par code de moyen, dans l'ordre d'affichage.
+        # / Non-zero amounts, by method code, in display order.
+        repartition_en_centimes = {}
+        for code_du_moyen in MOYENS_DU_PAIEMENT_MIXTE:
+            montant_en_centimes = attrs.get(f"repartition_{code_du_moyen}", 0)
+            if montant_en_centimes == 0:
+                continue
+            if code_du_moyen not in moyens_acceptes:
+                raise serializers.ValidationError(
+                    _("Ce moyen de paiement n'est pas accepté ici : %(moyen)s")
+                    % {"moyen": PAYMENT_METHOD_TRANSLATIONS[code_du_moyen]}
+                )
+            repartition_en_centimes[code_du_moyen] = montant_en_centimes
+
+        # Un paiement mixte combine au moins deux moyens.
+        # Avec un seul moyen, le caissier utilise la tuile de ce moyen.
+        # / A split payment combines at least two methods.
+        if len(repartition_en_centimes) < 2:
+            raise serializers.ValidationError(
+                _("Un paiement mixte utilise au moins deux moyens de paiement.")
+            )
+
+        attrs["repartition_en_centimes"] = repartition_en_centimes
+        return attrs
 
 
 # -------------------------------------------------------------------------- #
@@ -9004,6 +9140,12 @@ class PaiementViewSet(viewsets.ViewSet):
         # / GIFT tile: manager-mode primary card and giftable cart.
         est_mode_gerant = _panier_peut_etre_offert(articles_panier, tag_id_carte_manager)
 
+        # Tuile MIXTE : au moins deux moyens combinables (especes, CB, cheque).
+        # / MIXED tile: at least two methods can be combined (cash, card, cheque).
+        moyens_du_paiement_mixte = _moyens_du_paiement_mixte(
+            moyens_paiement_disponibles, articles_panier
+        )
+
         # Le flux de remboursement ne s'affiche que si le panier est ENTIEREMENT
         # composé de retours. Sur un panier mélangé, le total passé en valeur absolue
         # annoncerait « à rembourser » un montant que le client doit : le caissier
@@ -9024,6 +9166,8 @@ class PaiementViewSet(viewsets.ViewSet):
             "currency_data": _currency_data_du_panier(articles_panier),
             "total": total_en_euros,
             "mode_gerant": est_mode_gerant,
+            "paiement_mixte_possible": len(moyens_du_paiement_mixte) >= 2,
+            "moyens_paiement_mixte_csv": ",".join(moyens_du_paiement_mixte),
             "deposit_is_present": consigne_dans_panier,
             "comportement": point_de_vente.comportement,
             "panier_a_recharges": panier_a_recharges,
@@ -9090,6 +9234,64 @@ class PaiementViewSet(viewsets.ViewSet):
             "est_recharge": est_recharge,
         }
         return render(request, "laboutik/partial/hx_confirm_payment.html", context)
+
+    # ----------------------------------------------------------------------- #
+    #  Étape 2 bis : répartir un paiement mixte entre plusieurs moyens          #
+    #  Step 2b: split a payment between several methods                         #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["get"], url_path="repartir", url_name="repartir")
+    def repartir(self, request):
+        """
+        GET /laboutik/paiement/repartir/?total=25.0&moyens=espece,carte_bancaire
+        Affiche l'ecran du paiement mixte : le caissier repartit le total
+        entre plusieurs moyens de paiement (especes, CB, cheque).
+        / Shows the split payment screen: the cashier splits the total
+        between several payment methods (cash, card, cheque).
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. Clic sur la tuile MIXTE (partial/_tuiles_paiement.html)
+        2. CETTE VUE rend partial/hx_paiement_mixte.html dans #confirm
+        3. Le caissier saisit un montant par moyen au pave numerique
+        4. VALIDER soumet #paiement-mixte-form (+ #addition-form) vers payer()
+
+        La liste des moyens vient de la tuile (calculee par le serveur dans
+        moyens_paiement). Elle ne sert qu'a l'affichage : payer() verifie a
+        nouveau chaque moyen contre le point de vente, et la somme contre le panier.
+        / The method list comes from the tile and is display only: payer()
+        checks every method against the POS, and the sum against the cart.
+        """
+        # Le total peut contenir une virgule (locale francaise), comme dans confirmer().
+        # / The total may contain a comma (French locale), as in confirmer().
+        total_brut = request.GET.get("total", "0").replace(",", ".")
+        try:
+            total_a_payer = float(total_brut)
+        except (ValueError, TypeError):
+            total_a_payer = 0
+        total_a_payer_en_centimes = int(round(total_a_payer * 100))
+
+        # On ne garde que les moyens qu'un paiement mixte sait combiner.
+        # / Keep only the methods a split payment can combine.
+        codes_recus = request.GET.get("moyens", "").split(",")
+        lignes_de_repartition = []
+        for code_du_moyen in MOYENS_DU_PAIEMENT_MIXTE:
+            if code_du_moyen in codes_recus:
+                lignes_de_repartition.append(
+                    {
+                        "code": code_du_moyen,
+                        "libelle": PAYMENT_METHOD_TRANSLATIONS[code_du_moyen],
+                    }
+                )
+
+        context = {
+            "total": total_a_payer,
+            "total_en_centimes": total_a_payer_en_centimes,
+            "lignes_de_repartition": lignes_de_repartition,
+            "currency_data": CURRENCY_DATA,
+        }
+        return render(request, "laboutik/partial/hx_paiement_mixte.html", context)
 
     # ----------------------------------------------------------------------- #
     #  Étape 3 : exécuter le paiement                                          #
@@ -9363,6 +9565,87 @@ class PaiementViewSet(viewsets.ViewSet):
             f"payer: moyen={moyen_paiement_code}, total={total_centimes}cts, articles={len(articles_panier)}"
         )
 
+        # --- Paiement mixte : plusieurs moyens pour un meme panier ---
+        # La repartition vient de #paiement-mixte-form (hx_paiement_mixte.html).
+        # Le serveur revalide tout : les moyens, et la somme contre le panier.
+        # Les gardes tombent AVANT toute ecriture en base.
+        # / Split payment: several methods for one cart. The server revalidates
+        #   the methods and the sum against the cart, before any DB write.
+        if moyen_paiement_code == "mix":
+            moyens_du_paiement_mixte = _moyens_du_paiement_mixte(
+                _determiner_moyens_paiement(point_de_vente, articles_panier),
+                articles_panier,
+            )
+            if not moyens_du_paiement_mixte:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Ce panier ne peut pas être payé en paiement mixte."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+                )
+
+            serializer_de_repartition = RepartitionPaiementMixteSerializer(
+                data=request.POST,
+                context={"moyens_acceptes": moyens_du_paiement_mixte},
+            )
+            if not serializer_de_repartition.is_valid():
+                premiere_erreur = list(serializer_de_repartition.errors.values())[0][0]
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": premiere_erreur,
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+                )
+            repartition_en_centimes = serializer_de_repartition.validated_data[
+                "repartition_en_centimes"
+            ]
+
+            # La somme des montants doit valoir exactement la somme a encaisser.
+            # Sinon la vente serait refusee a l'encaissement (EgaliteDeVenteRompue) :
+            # on previent le caissier avec un message clair.
+            # / The amounts must add up exactly to the sum to collect.
+            somme_de_la_repartition = sum(repartition_en_centimes.values())
+            somme_a_encaisser = _somme_encaissee_du_panier_en_centimes(articles_panier)
+            if somme_de_la_repartition != somme_a_encaisser:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "La répartition (%(repartition)s €) ne correspond pas au "
+                        "total à payer (%(total)s €)."
+                    )
+                    % {
+                        "repartition": f"{somme_de_la_repartition / 100:.2f}",
+                        "total": f"{somme_a_encaisser / 100:.2f}",
+                    },
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+                )
+
+            return self._payer_par_carte_ou_cheque(
+                request,
+                state,
+                donnees_paiement,
+                articles_panier,
+                total_en_euros,
+                total_centimes,
+                consigne_dans_panier,
+                transaction_precedente,
+                moyen_paiement_code,
+                uuid_transaction_impose=uuid_transaction_impose,
+                repartition_en_centimes=repartition_en_centimes,
+            )
+
         if moyen_paiement_code in ("carte_bancaire", "CH"):
             return self._payer_par_carte_ou_cheque(
                 request,
@@ -9477,10 +9760,12 @@ class PaiementViewSet(viewsets.ViewSet):
         transaction_precedente,
         moyen_paiement_code,
         uuid_transaction_impose=None,
+        repartition_en_centimes=None,
     ):
         """
-        Paiement par carte bancaire ("carte_bancaire") ou chèque ("CH").
-        Credit card or check payment.
+        Paiement par carte bancaire ("carte_bancaire") ou chèque ("CH"),
+        ou paiement mixte ("mix") en especes / CB / cheque.
+        Credit card or check payment, or split payment ("mix").
 
         LOCALISATION : laboutik/views.py
 
@@ -9490,6 +9775,11 @@ class PaiementViewSet(viewsets.ViewSet):
         No server-side verification (the card terminal or check is handled externally).
         We create LigneArticle records in DB then display success.
         If the cart contains top-ups (RE/RC/TM), we credit the client wallet.
+
+        Paiement mixte : `repartition_en_centimes` = {code: montant}. Aucun moyen
+        n'est verifie par le serveur (meme regle que CB et cheque). La vente recoit
+        un reglement par moyen. payer() a deja verifie les moyens et la somme.
+        / Split payment: one settlement per method. payer() already checked them.
         """
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
 
@@ -9621,11 +9911,21 @@ class PaiementViewSet(viewsets.ViewSet):
 
             # Articles normaux (ventes, adhesions) → LigneArticle
             # Normal articles (sales, memberships) → LigneArticle
+            # Paiement mixte : la ligne recoit le code du premier moyen.
+            # Avec une `vente`, la ligne ne porte pas de moyen (ce sont les reglements
+            # qui le disent) : le code ne sert qu'a la regle de TVA, qui ne distingue
+            # que l'offert (FREE). "mix" n'est pas dans MAPPING_CODES_PAIEMENT.
+            # / Split payment: the line takes the first method's code. With a sale the
+            #   line carries no method; the code only drives the VAT rule (FREE only).
+            code_methode_des_lignes = moyen_paiement_code
+            if repartition_en_centimes:
+                code_methode_des_lignes = next(iter(repartition_en_centimes))
+
             lignes_normales = []
             if articles_normaux:
                 lignes_normales, produits_stock_negatif = _creer_lignes_articles(
                     articles_normaux,
-                    moyen_paiement_code,
+                    code_methode_des_lignes,
                     uuid_transaction=uuid_transaction,
                     point_de_vente=point_de_vente,
                     vente=vente,
@@ -9673,7 +9973,10 @@ class PaiementViewSet(viewsets.ViewSet):
             # / LAST: memberships and tickets are linked, the sale is paid and settled.
             if vente is not None:
                 _regler_et_encaisser_la_vente_de_caisse(
-                    vente, articles_panier, moyen_paiement_code
+                    vente,
+                    articles_panier,
+                    moyen_paiement_code,
+                    repartition_en_centimes=repartition_en_centimes,
                 )
 
         # Apres le bloc atomic : envoyer les billets par email via Celery.
@@ -9703,11 +10006,28 @@ class PaiementViewSet(viewsets.ViewSet):
                         printer_de_ce_terminal,
                     )
 
+        # Libelle du moyen pour l'ecran de succes.
+        # Paiement mixte : « paiement mixte (espèce 10.00 € · CB 15.00 €) ».
+        # / Method label for the success screen, with the split detail.
+        libelle_du_moyen_paiement = PAYMENT_METHOD_TRANSLATIONS.get(
+            moyen_paiement_code, ""
+        )
+        if repartition_en_centimes:
+            parts_de_la_repartition = []
+            for code_du_moyen, montant_en_centimes in repartition_en_centimes.items():
+                parts_de_la_repartition.append(
+                    f"{PAYMENT_METHOD_TRANSLATIONS[code_du_moyen]} "
+                    f"{montant_en_centimes / 100:.2f} {CURRENCY_DATA['symbol']}"
+                )
+            libelle_du_moyen_paiement = (
+                f"{libelle_du_moyen_paiement} ({' · '.join(parts_de_la_repartition)})"
+            )
+
         context = {
             "currency_data": CURRENCY_DATA,
             "payment": donnees_paiement,
             "monnaie_name": state["place"]["monnaie_name"],
-            "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_code, ""),
+            "moyen_paiement": libelle_du_moyen_paiement,
             "deposit_is_present": consigne_dans_panier,
             "total": total_en_euros,
             "state": state,

@@ -18,6 +18,10 @@ PARAMETRES (variables du contexte ou « with » de l'include) :
                        et a l'attente de carte CASHLESS).
 - currency_data      : unite du total (currency_data.symbol).
 - mode_gerant        : True = ajoute la tuile OFFRIR.
+- paiement_mixte_possible : True = ajoute la tuile MIXTE (au moins deux
+                       moyens combinables, voir _moyens_du_paiement_mixte).
+- moyens_paiement_mixte_csv : codes combinables (ex : "espece,carte_bancaire"),
+                       transmis a l'ecran de repartition.
 - carte_deja_scannee : True = la carte du client est deja dans #addition-form
                        (champ tag_id). CASHLESS paie tout de suite, sans
                        nouveau scan ni popup de confirmation.
@@ -31,6 +35,9 @@ FLUX :
 - CASHLESS sans carte : lire_nfc() ouvre l'attente de carte (hx_read_nfc.html).
   La tuile lui envoie le total et son unite (affichage seul : payer()
   recalcule toujours le montant depuis le panier).
+- MIXTE : repartir() ouvre l'ecran de repartition (hx_paiement_mixte.html).
+  Le caissier saisit un montant par moyen, puis VALIDER soumet
+  #paiement-mixte-form (avec #addition-form) vers payer().
 - CASHLESS avec carte deja scannee, et VALIDER (gratuit) :
   #addition-form est soumis tout de suite vers payer().
 
@@ -63,6 +70,10 @@ Les data-testid sont lus par les tests : ne pas les renommer.
     {% endif %}
     {% if mode_gerant %}
       <c-V2.bt.paiement name='{% translate "OFFRIR" %}' icon="gift" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=gift&total={{ total|unlocalize }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')" data-loading-disable data-testid="paiement-btn-offrir" />
+    {% endif %}
+    {% if paiement_mixte_possible %}
+      {# MIXTE : repartir le total entre plusieurs moyens / MIXED: split the total #}
+      <c-V2.bt.paiement name='{% translate "MIXTE" %}' icon="coins" hx-get="{% url 'laboutik-paiement-repartir' %}?total={{ total|unlocalize }}&moyens={{ moyens_paiement_mixte_csv|urlencode }}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','mix')" data-loading-disable data-testid="paiement-btn-mixte" />
     {% endif %}
   {% endif %}
 </div>
