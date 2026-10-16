@@ -46,6 +46,7 @@ from django.utils.translation import gettext, ngettext
 
 from BaseBillet.models import (
     CategorieProduct,
+    Configuration,
     LigneArticle,
     PaymentMethod,
     Product,
@@ -688,6 +689,24 @@ TYPES_DE_PRODUIT_DES_RECHARGES = [
     Product.RECHARGE_CASHLESS_FED,
 ]
 
+
+def est_une_recharge(produit):
+    """
+    Vrai pour un produit de recharge cashless : par son mode de caisse (recharge en
+    euros, recharge cadeau) ou par son type (recharge, recharge fédérée).
+    / True for a cashless top-up product, by POS method or by product type.
+
+    LOCALISATION : laboutik/plan_comptable.py
+
+    LU PAR : comptabilite/ventilation.py (la recharge offerte du FEC) et
+    comptabilite/ventes_a_facturer.py (une recharge devient un virement interne).
+    """
+    if produit.methode_caisse in METHODES_CAISSE_DES_RECHARGES:
+        return True
+    if produit.categorie_article in TYPES_DE_PRODUIT_DES_RECHARGES:
+        return True
+    return False
+
 # Les modes de caisse sans compte : TM (désactivé à la caisse) et FD (inutilisé).
 # / POS methods without account: TM (disabled) and FD (unused).
 METHODES_CAISSE_SANS_COMPTE = [Product.RECHARGE_TEMPS, Product.FIDELITE]
@@ -714,10 +733,34 @@ COMPTE_PAR_TYPE_DE_PRODUIT = {
 
 def compte_pour_article(ligne, comptes_du_plan_par_defaut=None):
     """
-    Le compte (de vente, de tiers…) d'un article vendu.
-    / The account of a sold item.
+    Le compte (de vente, de tiers…) d'un article vendu : la règle de
+    `compte_pour_produit`, appliquée au produit de la ligne et à sa monnaie.
+    / The account of a sold item: `compte_pour_produit` on the line's product and
+    currency.
 
     LOCALISATION : laboutik/plan_comptable.py (fiche E §3.3)
+
+    :param ligne: la `LigneArticle` (lue seulement : son produit, sa monnaie)
+    :param comptes_du_plan_par_defaut: voir `compte_pour_produit`
+    :return: le `CompteComptable`
+    :raises CompteComptableManquant: voir `compte_pour_produit`
+    """
+    produit_de_la_ligne = ligne.pricesold.productsold.product
+    return compte_pour_produit(
+        produit_de_la_ligne,
+        comptes_du_plan_par_defaut,
+        monnaie_de_la_ligne=ligne.asset,
+    )
+
+
+def compte_pour_produit(produit, comptes_du_plan_par_defaut=None, monnaie_de_la_ligne=None):
+    """
+    Le compte (de vente, de tiers…) d'un produit. C'est LA règle « article → compte »
+    du lieu : la ventilation d'une vente (par `compte_pour_article`) et le catalogue de
+    l'API (`?accounting=true`) la lisent ici, jamais dans une copie.
+    / The account of a product: the venue's single "item → account" rule.
+
+    LOCALISATION : laboutik/plan_comptable.py (fiche E §3.3, fiche 06-C §5.1)
 
     RÈGLE, dans l'ordre (le premier qui répond gagne) :
     0. Une liste explicite d'articles hors chiffre d'affaires. Leur catégorie de caisse
@@ -746,7 +789,7 @@ def compte_pour_article(ligne, comptes_du_plan_par_defaut=None):
     / This account is the one of the item's REMAINDER; the token part goes to 707900,
     written by the ventilation.
 
-    :param ligne: la `LigneArticle` (lue seulement : son produit, sa monnaie)
+    :param produit: le `Product` (lu seulement)
     :param comptes_du_plan_par_defaut: dict {numéro: CompteComptable} des comptes du
         plan par défaut, déjà lus par l'appelant en UNE requête. Il sert à
         `ce_qui_manque_pour_exporter`, qui appelle cette règle pour chaque produit
@@ -754,13 +797,15 @@ def compte_pour_article(ligne, comptes_du_plan_par_defaut=None):
         appelants n'en ont pas besoin : sans lui (None), le compte est lu en base.
         / Default plan accounts already read by the caller in ONE query; only
         "Complete plan?" needs it, other callers leave it None.
+    :param monnaie_de_la_ligne: la monnaie de la ligne vendue (`LigneArticle.asset`),
+        lue seulement pour un virement reçu `VR`. Sans ligne (le catalogue) : None, et
+        un `VR` lève `CompteComptableManquant`.
+        / The sold line's currency, read only for a received transfer.
     :return: le `CompteComptable`
     :raises CompteComptableManquant: si aucune règle ne donne de compte
         (`CompteDuPlanParDefautManquant` si c'est un compte du plan par défaut qui
         manque)
     """
-    produit = ligne.pricesold.productsold.product
-
     # --- 0. Hors chiffre d'affaires, liste explicite / Off revenue, explicit list ---
     # Les écarts sont reconnus par le nom de leur produit système
     # (`tarif_vendu_d_ecart_d_encaissement`, BaseBillet/services_vente.py).
@@ -793,12 +838,12 @@ def compte_pour_article(ligne, comptes_du_plan_par_defaut=None):
 
     if produit.methode_caisse == Product.VIREMENT_RECU:
         compte_de_la_monnaie = None
-        if ligne.asset is not None:
-            compte_de_la_monnaie = _compte_de_la_monnaie(ligne.asset)
+        if monnaie_de_la_ligne is not None:
+            compte_de_la_monnaie = _compte_de_la_monnaie(monnaie_de_la_ligne)
         if compte_de_la_monnaie is None:
             raise CompteComptableManquant(
                 f"Le virement « {produit.name} » va au compte de sa monnaie, et la "
-                f"monnaie « {ligne.asset} » n'a pas de compte."
+                f"monnaie « {monnaie_de_la_ligne} » n'a pas de compte."
             )
         return compte_de_la_monnaie
 
@@ -851,6 +896,116 @@ def compte_pour_article(ligne, comptes_du_plan_par_defaut=None):
         f"Le produit « {produit.name} » n'a pas de compte : posez-lui une catégorie "
         f"de caisse reliée à un compte."
     )
+
+
+class ConsigneRembourseeManquante(Exception):
+    """
+    Un retour de consigne (`CR`) n'est relié à aucun gobelet
+    (`Product.consigne_remboursee` vide) : on ne connaît ni son prix ni sa TVA.
+    / A deposit return is linked to no cup: neither its price nor its VAT is known.
+
+    LOCALISATION : laboutik/plan_comptable.py
+    """
+
+
+def taux_de_tva_du_produit(produit, taux_du_lieu=None):
+    """
+    Le taux de TVA d'un produit vendu en argent, en pour cent (Decimal). C'est LA règle
+    de TVA d'un article : la caisse (par `_taux_tva_de_la_ligne_de_caisse`) et le
+    catalogue de l'API (`?accounting=true`) la lisent ici.
+    / The VAT rate of a product sold for money: the single VAT rule of an item.
+
+    LOCALISATION : laboutik/plan_comptable.py (fiche 06-C §5.1)
+
+    RÈGLE, dans l'ordre :
+    1. recharge (`RE`, `RC`) : 0. Une recharge est une dette envers le porteur de la
+       carte, pas une vente taxée (D10) ;
+    2. retour de consigne : le taux du gobelet qu'il rembourse
+       (`Product.consigne_remboursee`) : le retour annule la vente du gobelet, TVA
+       comprise (D11) ;
+    3. sinon : le taux du produit, ou à défaut le taux par défaut du lieu
+       (`Configuration.vat_taxe`), JAMAIS celui de la catégorie de caisse.
+    / 0 for top-ups; the cup's rate for a deposit return; otherwise the product's rate,
+    else the venue default, never the POS category's.
+
+    :param produit: le `Product`
+    :param taux_du_lieu: le taux par défaut du lieu, déjà lu par l'appelant (le
+        catalogue le lit une fois pour tous les produits). None : lu ici, seulement si
+        le produit n'a pas de TVA.
+    :return: Decimal
+    :raises ConsigneRembourseeManquante: retour de consigne sans gobelet relié
+    """
+    if produit.methode_caisse in METHODES_CAISSE_DES_RECHARGES:
+        return Decimal("0")
+
+    produit_qui_porte_la_tva = produit
+    if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+        produit_qui_porte_la_tva = produit.consigne_remboursee
+        if produit_qui_porte_la_tva is None:
+            raise ConsigneRembourseeManquante(
+                f"Le retour de consigne « {produit.name} » n'est relié à aucun "
+                f"gobelet : sa TVA est inconnue."
+            )
+
+    if produit_qui_porte_la_tva.tva is not None:
+        return Decimal(produit_qui_porte_la_tva.tva.tva_rate)
+    if taux_du_lieu is None:
+        taux_du_lieu = Configuration.get_solo().vat_taxe
+    return Decimal(taux_du_lieu)
+
+
+# Les produits système qui ne sont pas des ventes : les mêmes noms que la règle 0 de
+# `compte_pour_produit`.
+# / System products that are not sales: the same names as rule 0 above.
+NOMS_DES_PRODUITS_SYSTEME_HORS_VENTE = [
+    NOM_ECART_RECU_EN_PLUS,
+    NOM_ECART_RECU_EN_MOINS,
+    NOM_JETONS_CADEAU_REPRIS_AU_VIDAGE,
+]
+
+# Les modes de caisse qui ne sont pas des ventes : virement reçu, vider carte, retour
+# de consigne (il vaut MOINS le prix du gobelet, D11), recharge en temps, fidélité.
+# Les recharges en euros et cadeau sont dans METHODES_CAISSE_DES_RECHARGES.
+# / POS methods that are not sales.
+METHODES_CAISSE_HORS_VENTE = [
+    Product.VIREMENT_RECU,
+    Product.VIDER_CARTE,
+    Product.RETOUR_CONSIGNE,
+] + METHODES_CAISSE_SANS_COMPTE
+
+
+def est_une_vente_pour_la_comptabilite(produit):
+    """
+    Vrai si le produit est une vente, à recopier dans un logiciel qui tient la
+    comptabilité avec ses propres factures (Dolibarr en mode « articles et ventes »).
+    TiBillet n'y est qu'un « front » de vente : ce qui n'est pas une vente n'y va pas.
+    / True if the product is a sale, to copy into an accounting software that keeps
+    the books from its own invoices.
+
+    LOCALISATION : laboutik/plan_comptable.py (fiche 06-C, C6)
+
+    NE SONT PAS DES VENTES : les produits système (écarts d'encaissement, jetons cadeau
+    repris), les recharges (caisse et en ligne), le virement reçu, vider carte, le
+    retour de consigne, la recharge en temps, la fidélité.
+    Le FÛT EST une vente : la tireuse vend le fût lui-même, au litre
+    (controlvanne/billing.py, `produit = tireuse.fut_actif`).
+    Un TARIF en jetons (`Price.asset`) n'est pas une vente en euros non plus : c'est le
+    tarif qui le dit (`priceCurrency` de l'API), pas le produit.
+    / Not sales: system products, top-ups, received transfer, card emptying, deposit
+    return, time top-up, loyalty. A keg IS a sale (sold per litre at the tap).
+
+    :param produit: le `Product`
+    :return: bool
+    """
+    if produit.name in NOMS_DES_PRODUITS_SYSTEME_HORS_VENTE:
+        return False
+    if produit.methode_caisse in METHODES_CAISSE_DES_RECHARGES:
+        return False
+    if produit.categorie_article in TYPES_DE_PRODUIT_DES_RECHARGES:
+        return False
+    if produit.methode_caisse in METHODES_CAISSE_HORS_VENTE:
+        return False
+    return True
 
 
 def compte_de_tva_pour_taux(taux_de_tva):

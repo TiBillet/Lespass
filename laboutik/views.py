@@ -157,6 +157,7 @@ from laboutik.affichage_des_ventes import (
     reglements_pour_l_affichage,
 )
 from laboutik.printing.formatters import formatter_ticket_cloture, formatter_ticket_x
+from laboutik.plan_comptable import taux_de_tva_du_produit
 from laboutik.printing.tasks import imprimer_async
 from laboutik.serializers import (
     ClientIdentificationSerializer,
@@ -7026,8 +7027,8 @@ def _taux_tva_de_la_ligne_de_caisse(produit, methode_db):
     LOCALISATION : laboutik/views.py
 
     Le service de vente écrit le taux qu'on lui passe (`ajouter_article`) : la caisse
-    le calcule ici, avec la même règle que la TVA par défaut d'une ligne
-    (`LigneArticle._compute_default_vat`), plus deux règles (points 2 et 3) :
+    le calcule ici. Le point 1 est propre à la ligne ; les points 2 à 4 sont la règle
+    du produit, `taux_de_tva_du_produit` (laboutik/plan_comptable.py) :
     1. ligne offerte (FREE) ou en points / temps (NON_MONETAIRE) : 0, ce n'est pas une
        vente en argent. Une part payée en jetons cadeau (LOCAL_GIFT) garde le taux du
        produit : elle est hors TVA par sa `part_en_jetons` (= son argent), que la
@@ -7057,18 +7058,10 @@ def _taux_tva_de_la_ligne_de_caisse(produit, methode_db):
     if ligne_hors_tva_par_son_moyen:
         return Decimal("0")
 
-    if produit.methode_caisse in METHODES_RECHARGE:
-        return Decimal("0")
-
-    produit_qui_porte_la_tva = produit
-    if produit.methode_caisse == Product.RETOUR_CONSIGNE:
-        # `_extraire_articles_du_panier` a déjà refusé un retour sans consigne reliée.
-        # / A return without a linked deposit was already refused upstream.
-        produit_qui_porte_la_tva = produit.consigne_remboursee
-
-    if produit_qui_porte_la_tva.tva is not None:
-        return Decimal(produit_qui_porte_la_tva.tva.tva_rate)
-    return Decimal(Configuration.get_solo().vat_taxe)
+    # Points 2 à 4 : la règle de TVA du produit, partagée avec le catalogue de l'API.
+    # `_extraire_articles_du_panier` a déjà refusé un retour sans consigne reliée.
+    # / Points 2-4: the product's VAT rule, shared with the API catalogue.
+    return taux_de_tva_du_produit(produit)
 
 
 def _creer_lignes_articles(

@@ -640,6 +640,7 @@ class TestApiComptable(FastTenantTestCase):
             prix_en_euros="8.00",
             taux_tva="20.00",
             methode_caisse=Product.VENTE,
+            avec_compte=False,
         )
         self._vendre_une_entree_a(
             heure_de_paris(2026, 3, 10, 20, 0),

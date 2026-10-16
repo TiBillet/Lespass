@@ -82,8 +82,6 @@ from BaseBillet.models_vente import Vente
 from comptabilite.models import ClotureCaisse
 from laboutik.plan_comptable import (
     LIBELLE_DU_JOURNAL_SANS_POINT_DE_VENTE,
-    METHODES_CAISSE_DES_RECHARGES,
-    TYPES_DE_PRODUIT_DES_RECHARGES,
     CompteComptableManquant,
     collisions_de_codes_journal,
     compte_des_cadeaux_a_la_clientele,
@@ -92,6 +90,7 @@ from laboutik.plan_comptable import (
     compte_pour_article,
     compte_pour_reglement,
     comptes_du_plan_par_defaut_du_lieu,
+    est_une_recharge,
     journal_pour,
     points_de_vente_au_code_journal_reserve,
 )
@@ -259,11 +258,7 @@ def _ecrire_la_recharge_offerte(soldes_par_numero, ligne, comptes_du_plan_par_de
     if ligne.part_offerte == 0:
         return
     produit = ligne.pricesold.productsold.product
-    est_une_recharge = (
-        produit.methode_caisse in METHODES_CAISSE_DES_RECHARGES
-        or produit.categorie_article in TYPES_DE_PRODUIT_DES_RECHARGES
-    )
-    if not est_une_recharge:
+    if not est_une_recharge(produit):
         return
 
     compte_des_cadeaux = compte_des_cadeaux_a_la_clientele(comptes_du_plan_par_defaut)

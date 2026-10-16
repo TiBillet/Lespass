@@ -450,3 +450,21 @@ avance ; images converties seulement après un rechargement (voir la mémoire du
 **Suite possible** (à choisir) : case « santé » sur la page de réglages (cron actif, clé,
 dernier passage) ; e-mail en cas d'échec de l'import ; points de sécurité de l'API (§13 de
 la fiche 06-A) ; connecteur suivant (Dokos, Paheko, Pennylane).
+
+## 12. Mode « articles et ventes » (2026-10-15)
+
+Le mainteneur ouvre une **alternative au FEC** : TiBillet n'est qu'un « front » de vente,
+Dolibarr tient la comptabilité à partir de ses factures. **Un seul mode à la fois**
+(R1, R7 tiennent : jamais FEC **et** factures en comptabilité).
+- **Fait** dans le module (non commité) : choix du mode (`TIBILLET_MODE`), garde de
+  l'import et du réimport, alerte au changement ; essai n° 7, 3 mutations tuées.
+- **Catalogue codé** (2026-10-15, non commité) : [`CHANTIER-06-C-catalogue.md`](CHANTIER-06-C-catalogue.md)
+  — `GET /api/v2/products/?accounting=true` (ETag, 304) côté Lespass ; synchro des
+  articles, catégories, TVA et comptes côté module ; une seule tâche de nuit
+  (`passageDeLaNuit`) à heure réglable. Les ventes viendront dans une fiche 06-D.
+- **Ventes : codées** (2026-10-16, non commitées ; import réel = FEC compte par compte) : [`CHANTIER-06-D-ventes.md`](CHANTIER-06-D-ventes.md)
+  — une facture par vente, J par J (`/api/v2/closures/<uuid>/sales/`), tiers par acheteur
+  ou « client de passage », recharges en virements internes ; relue par Fable ; 11 questions tranchées (§9).
+- **R7 relue** : « les factures TiBillet ne vont jamais en comptabilité » vaut pour le
+  mode « écritures ». La règle générale devient : **un seul mode à la fois** (FEC **ou**
+  factures).

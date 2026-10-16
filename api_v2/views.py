@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import uuid as uuid_module
@@ -6,10 +7,11 @@ from datetime import timedelta
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connection, transaction
 from django.db import connection, IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils import translation
 from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets, status, serializers
 from rest_framework.renderers import BaseRenderer, JSONRenderer
@@ -21,12 +23,13 @@ from django.core.cache import cache
 from ApiBillet.permissions import TenantAdminApiPermission
 from ApiBillet.views import get_permission_Api_ALL_Admin
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership, logger
+from BaseBillet.models import Configuration, Event, PostalAddress, LigneArticle, Price, Product, Reservation, Membership, logger
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import ajouter_article, ouvrir_vente
 from crowds.models import Initiative, BudgetItem, Participation, Vote
 from laboutik.views import _taux_tva_de_la_ligne_de_caisse
-from .permissions import SemanticApiKeyPermission
+from laboutik.plan_comptable import comptes_du_plan_par_defaut_du_lieu
+from .permissions import CleAvecLeDroitDesVentes, SemanticApiKeyPermission
 from .serializers import (
     ClotureAImporterSerializer,
     CompteComptableSerializer,
@@ -38,6 +41,7 @@ from .serializers import (
     ProductCreateSerializer,
     ProductSchemaSerializer,
     ReservationCreateSerializer,
+    VenteAFacturerSerializer,
     ReservationSchemaSerializer,
     MembershipCreateSerializer,
     MembershipSchemaSerializer,
@@ -594,9 +598,85 @@ class ProductViewSet(viewsets.ViewSet):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def list(self, request):
+        # `?accounting=true` : le catalogue d'un logiciel comptable (fiche 06-C §5.2).
+        # / `?accounting=true`: the catalogue of an accounting software.
+        if request.query_params.get("accounting") == "true":
+            return self._catalogue_pour_la_comptabilite(request)
+
         queryset = Product.objects.filter(archive=False, publish=True)
         serializer = ProductSchemaSerializer(queryset, many=True)
         return Response({"results": serializer.data})
+
+    def _catalogue_pour_la_comptabilite(self, request):
+        """
+        Tout le catalogue du lieu, pour un logiciel comptable qui le recopie chaque nuit
+        (Dolibarr en mode « articles et ventes ») : tous les produits, publiés ou non,
+        archivés ou non, tous leurs tarifs, et leurs propriétés comptables.
+        / The venue's whole catalogue, for an accounting software copying it nightly.
+
+        LOCALISATION : api_v2/views.py
+
+        L'ETAG : l'empreinte (sha256) du JSON rendu, clés triées. Le logiciel renvoie
+        celle de son dernier passage dans `If-None-Match` : si rien n'a changé, la
+        réponse est un 304 sans corps, et il ne touche à rien.
+        - Le catalogue est rendu EN FRANÇAIS, quelle que soit la langue du client : il
+          contient des libellés traduits, et l'empreinte doit rester la même.
+        - Un proxy qui compresse rend l'ETag « faible » (`W/"…"`) : le préfixe `W/` est
+          ignoré dans la comparaison.
+        / The ETag is the sha256 of the rendered JSON; 304 when unchanged. Rendered in
+        French whatever the client language; the weak `W/` prefix is ignored.
+
+        Les produits sont triés par nom puis uuid : le même catalogue donne toujours le
+        même JSON.
+        / Sorted by name then uuid: the same catalogue always gives the same JSON.
+        """
+        tous_les_produits = (
+            Product.objects.all()
+            .select_related(
+                "tva",
+                "categorie_pos__compte_comptable",
+                "consigne_remboursee__tva",
+                "consigne_remboursee__categorie_pos__compte_comptable",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "prices",
+                    queryset=Price.objects.select_related("asset")
+                    .prefetch_related("adhesions_obligatoires")
+                    .order_by("order", "uuid"),
+                    to_attr="tous_les_tarifs",
+                )
+            )
+            .order_by("name", "uuid")
+        )
+        contexte_du_catalogue = {
+            "pour_la_comptabilite": True,
+            "taux_de_tva_du_lieu": Configuration.get_solo().vat_taxe,
+            "comptes_du_plan_par_defaut": comptes_du_plan_par_defaut_du_lieu(),
+        }
+        with translation.override("fr"):
+            serializer = ProductSchemaSerializer(
+                tous_les_produits, many=True, context=contexte_du_catalogue
+            )
+            donnees_du_catalogue = {"results": serializer.data}
+            texte_du_catalogue = json.dumps(
+                donnees_du_catalogue, sort_keys=True, ensure_ascii=False, default=str
+            )
+
+        empreinte = hashlib.sha256(texte_du_catalogue.encode("utf-8")).hexdigest()
+        etag_du_catalogue = f'"{empreinte}"'
+
+        etags_du_client = request.headers.get("If-None-Match", "")
+        for etag_du_client in etags_du_client.split(","):
+            etag_du_client_sans_prefixe = etag_du_client.strip().removeprefix("W/")
+            if etag_du_client_sans_prefixe == etag_du_catalogue:
+                reponse_inchangee = Response(status=status.HTTP_304_NOT_MODIFIED)
+                reponse_inchangee["ETag"] = etag_du_catalogue
+                return reponse_inchangee
+
+        reponse = Response(donnees_du_catalogue)
+        reponse["ETag"] = etag_du_catalogue
+        return reponse
 
     def retrieve(self, request, uuid=None):
         product = get_object_or_404(Product, uuid=uuid, archive=False)
@@ -1477,6 +1557,9 @@ class ClosureViewSet(viewsets.ViewSet):
       colonnes du FEC, centimes, sans ValidDate).
     - GET /api/v2/closures/<uuid>/fec/ : le fichier FEC, le meme que le bouton de
       l'admin.
+    - GET /api/v2/closures/<uuid>/sales/?after_number=<n>&limit=<m> : les ventes de la
+      J decoupees pour un logiciel de facturation (fiche 06-D), page par page ; la cle
+      doit aussi avoir le droit « ventes ».
 
     FALC :
     - La liste n'est pas decoupee en pages : chaque nuit, elle ne contient que
@@ -1565,6 +1648,127 @@ class ClosureViewSet(viewsets.ViewSet):
                 "currency": "EUR",
                 "amountUnit": "cent",
                 "entries": ecritures,
+            }
+        )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        permission_classes=[SemanticApiKeyPermission, CleAvecLeDroitDesVentes],
+    )
+    def sales(self, request, uuid=None):
+        """
+        Les ventes de la J, decoupees pour un logiciel de facturation : lignes de
+        facture, paiements, virements internes, paiements divers (fiche 06-D).
+        / The J's sales, split for an invoicing software.
+
+        FLUX :
+        1. Memes refus que `entries` (`_cloture_a_exporter`).
+        2. `after_number` (numero de vente) et `limit` (1 a 1000, 500 par defaut) lus.
+        3. Les ventes lues par `ventes_a_facturer_de_la_cloture`, au plus `limit`.
+           `nextAfterNumber` = numero de la derniere vente LUE si la page est pleine,
+           sinon null : le logiciel repasse ce numero pour la page suivante.
+        4. Un compte manquant ou des reglements qui ne couvrent pas les articles :
+           409, la phrase nomme la vente.
+        """
+        from comptabilite.ventes_a_facturer import (
+            RepartitionImpossible,
+            ventes_a_facturer_de_la_cloture,
+        )
+        from comptabilite.ventilation import date_de_debut_de_service
+        from laboutik.plan_comptable import (
+            CompteComptableManquant,
+            s_assurer_que_le_plan_existe,
+        )
+
+        cloture, reponse_de_refus = self._cloture_a_exporter(uuid)
+        if reponse_de_refus is not None:
+            return reponse_de_refus
+
+        texte_du_curseur = request.query_params.get("after_number")
+        apres_le_numero = None
+        if texte_du_curseur is not None:
+            if not re.fullmatch(r"[0-9]{1,18}", texte_du_curseur):
+                return Response(
+                    {
+                        "detail": _(
+                            "Le paramètre « after_number » doit être un nombre entier "
+                            "positif : le numéro de la dernière vente importée."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            apres_le_numero = int(texte_du_curseur)
+
+        texte_de_la_limite = request.query_params.get("limit", "500")
+        limite_valide = re.fullmatch(r"[0-9]{1,4}", texte_de_la_limite) is not None
+        if limite_valide:
+            limite = int(texte_de_la_limite)
+            limite_valide = 1 <= limite <= 1000
+        if not limite_valide:
+            return Response(
+                {
+                    "detail": _(
+                        "Le paramètre « limit » doit être un nombre entier de 1 à 1000."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Le filet : un lieu sans aucun compte recoit le plan par defaut, comme
+        # `entries`.
+        # / The safety net, like entries.
+        s_assurer_que_le_plan_existe()
+        try:
+            with translation.override("fr"):
+                ventes_decoupees, numero_de_la_derniere_vente_lue = (
+                    ventes_a_facturer_de_la_cloture(
+                        cloture, apres_le_numero=apres_le_numero, nombre_au_plus=limite
+                    )
+                )
+                ventes_publiees = VenteAFacturerSerializer(
+                    ventes_decoupees, many=True
+                ).data
+        except CompteComptableManquant as compte_manquant:
+            return _reponse_de_refus(
+                str(compte_manquant),
+                CODE_DU_REFUS_COMPTE_MANQUANT,
+                status.HTTP_409_CONFLICT,
+            )
+        except RepartitionImpossible as repartition_impossible:
+            # Une vente dont les reglements ne couvrent pas les articles : une donnee
+            # alteree apres l'encaissement. On alerte (Sentry, par les logs).
+            # / A sale whose payments do not cover its items: alert.
+            logger.exception(
+                f"API comptable : répartition impossible, clôture {cloture.uuid}"
+            )
+            return _reponse_de_refus(
+                str(repartition_impossible),
+                CODE_DU_REFUS_ECRITURE_DESEQUILIBREE,
+                status.HTTP_409_CONFLICT,
+            )
+
+        # Il reste des ventes dans la J si la derniere vente lue n'est pas la derniere
+        # de sa plage. Une page suivante peut alors etre vide (ventes de la fin de la
+        # plage sans montant, en points ou de correction) : elle rend null.
+        # / More sales remain if the last read sale is not the last of the J's range.
+        prochain_numero = None
+        il_reste_des_ventes = (
+            numero_de_la_derniere_vente_lue is not None
+            and numero_de_la_derniere_vente_lue < cloture.numero_derniere_vente
+        )
+        if il_reste_des_ventes:
+            prochain_numero = numero_de_la_derniere_vente_lue
+
+        return Response(
+            {
+                "closure": str(cloture.uuid),
+                "number": cloture.numero_sequentiel,
+                "accountingDate": date_de_debut_de_service(cloture).isoformat(),
+                "currency": "EUR",
+                "amountUnit": "cent",
+                "results": ventes_publiees,
+                "nextAfterNumber": prochain_numero,
             }
         )
 

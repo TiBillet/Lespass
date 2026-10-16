@@ -86,6 +86,13 @@ def comptoir_en_points(django_shell, ensure_pos_data):
         "points = tarif_pins.asset or points\n"
         "biere, _c = Product.objects.get_or_create(name='Biere E2E',"
         " defaults={'methode_caisse': Product.VENTE})\n"
+        # Vendu pour de vrai (sans annulation) : le produit a un compte, sinon la
+        # vraie journée du lieu ne s'exporte plus (FEC, Dolibarr).
+        # / Really sold: the product needs an account.
+        "import sys\n"
+        "sys.path.insert(0, '/DjangoFiles/tests/pytest')\n"
+        "from fabriques_vente import donner_un_compte_au_produit\n"
+        "donner_un_compte_au_produit(biere)\n"
         "pinte, _c = Price.objects.get_or_create(product=biere, name='Pinte',"
         " defaults={'prix': Decimal('5.00'), 'order': 100})\n"
         "benevole, _c = Price.objects.get_or_create(product=biere, name='Benevole',"

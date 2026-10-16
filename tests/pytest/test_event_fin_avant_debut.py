@@ -107,6 +107,39 @@ def test_formulaire_admin_affiche_une_erreur_sur_la_date_de_fin(tenant):
     assert "end_datetime" in formulaire.errors
 
 
+def test_formulaire_de_la_liste_admin_refuse_sans_planter_un_evenement_incoherent(
+    tenant,
+):
+    """
+    La liste admin des evenements rend la case « publie » modifiable (list_editable).
+    Son formulaire ne contient QUE le champ `published`. Un evenement deja en base avec
+    une fin avant le debut doit etre refuse avec une erreur generale, sans planter.
+    / The admin changelist form only holds `published`. An existing event ending before
+    it starts must be refused with a non-field error, without crashing.
+    """
+    from django.forms import modelform_factory
+
+    from BaseBillet.models import Event
+
+    with tenant_context(tenant):
+        evenement_incoherent = Event(
+            name="Test liste admin fin avant debut",
+            datetime=DEBUT_DE_L_EVENEMENT,
+            end_datetime=FIN_AVANT_LE_DEBUT,
+            published=False,
+        )
+        FormulaireDeLaListe = modelform_factory(Event, fields=["published"])
+        formulaire = FormulaireDeLaListe(
+            data={"published": "on"}, instance=evenement_incoherent
+        )
+        formulaire_valide = formulaire.is_valid()
+
+    assert not formulaire_valide
+    assert "La fin de l'évènement doit être après son début." in (
+        formulaire.non_field_errors()
+    )
+
+
 # --- API v2 : EventCreateSerializer ---
 
 

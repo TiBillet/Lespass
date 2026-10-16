@@ -102,6 +102,13 @@ def vente_monnaie_locale_et_carte_bancaire(django_shell, ensure_pos_data):
         " active=True, archive=False).first()\n"
         "jus, _c = Product.objects.get_or_create(name='Jus liste ventes E2E',"
         " defaults={'methode_caisse': Product.VENTE})\n"
+        # Vendu pour de vrai (sans annulation) : le produit a un compte, sinon la
+        # vraie journée du lieu ne s'exporte plus (FEC, Dolibarr).
+        # / Really sold: the product needs an account.
+        "import sys\n"
+        "sys.path.insert(0, '/DjangoFiles/tests/pytest')\n"
+        "from fabriques_vente import donner_un_compte_au_produit\n"
+        "donner_un_compte_au_produit(jus)\n"
         "tarif, _c = Price.objects.get_or_create(product=jus, name='Verre',"
         " defaults={'prix': Decimal('3.50')})\n"
         "tarif_vendu = PriceSold.objects.create(productsold=ProductSold.objects.create("

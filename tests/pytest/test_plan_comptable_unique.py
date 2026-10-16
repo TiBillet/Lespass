@@ -1772,21 +1772,21 @@ class TestPlanComptableUnique(FastTenantTestCase):
         / An item no rule covers raises an error naming the product."""
         # TM et FD rangés dans une catégorie reliée à un compte : erreur quand même.
         # / TM and FD in a category linked to an account: error anyway.
-        temps_dans_une_categorie = creer_tarif_vendu(
+        temps_dans_une_categorie = creer_tarif_vendu(avec_compte=False, 
             nom="Temps rangé", methode_caisse=Product.RECHARGE_TEMPS
         )
         _ranger_dans_une_categorie(temps_dans_une_categorie, _compte("707000"))
-        fidelite_dans_une_categorie = creer_tarif_vendu(
+        fidelite_dans_une_categorie = creer_tarif_vendu(avec_compte=False, 
             nom="Fidélité rangée", methode_caisse=Product.FIDELITE
         )
         _ranger_dans_une_categorie(fidelite_dans_une_categorie, _compte("707000"))
 
         articles_sans_regle = [
-            (creer_tarif_vendu(nom="Sans type"), False),
-            (creer_tarif_vendu(nom="Fût", categorie_article=Product.FUT), False),
-            (creer_tarif_vendu(nom="Vente", methode_caisse=Product.VENTE), False),
+            (creer_tarif_vendu(avec_compte=False, nom="Sans type"), False),
+            (creer_tarif_vendu(avec_compte=False, nom="Fût", categorie_article=Product.FUT), False),
+            (creer_tarif_vendu(avec_compte=False, nom="Vente", methode_caisse=Product.VENTE), False),
             (
-                creer_tarif_vendu(
+                creer_tarif_vendu(avec_compte=False, 
                     nom="Fractionné", methode_caisse=Product.FRACTIONNE_POS
                 ),
                 False,
@@ -1794,10 +1794,10 @@ class TestPlanComptableUnique(FastTenantTestCase):
             # TM et FD sont hors chiffre d'affaires pour le service de vente.
             # / TM and FD are off revenue for the sale service.
             (
-                creer_tarif_vendu(nom="Temps", methode_caisse=Product.RECHARGE_TEMPS),
+                creer_tarif_vendu(avec_compte=False, nom="Temps", methode_caisse=Product.RECHARGE_TEMPS),
                 True,
             ),
-            (creer_tarif_vendu(nom="Fidélité", methode_caisse=Product.FIDELITE), True),
+            (creer_tarif_vendu(avec_compte=False, nom="Fidélité", methode_caisse=Product.FIDELITE), True),
             (temps_dans_une_categorie, True),
             (fidelite_dans_une_categorie, True),
         ]
@@ -1817,7 +1817,7 @@ class TestPlanComptableUnique(FastTenantTestCase):
         / A deposit return takes its deposit's category account: no category on the
         deposit, or no deposit at all, raises — even if the return has a category."""
         gobelet_sans_categorie = creer_tarif_vendu(
-            nom="Gobelet sans catégorie", methode_caisse=Product.VENTE
+            nom="Gobelet sans catégorie", methode_caisse=Product.VENTE, avec_compte=False
         )
         retour_d_un_gobelet_sans_categorie = creer_tarif_vendu(
             nom="Retour gobelet sans catégorie", methode_caisse=Product.RETOUR_CONSIGNE
@@ -2638,7 +2638,7 @@ class TestPlanComptableUnique(FastTenantTestCase):
         / A product without account sold in euros AND in the venue currency: a single
         missing item, not one per currency."""
         _preparer_la_caisse()
-        planche = creer_tarif_vendu(nom="Planche deux monnaies", methode_caisse=Product.VENTE)
+        planche = creer_tarif_vendu(avec_compte=False, nom="Planche deux monnaies", methode_caisse=Product.VENTE)
         monnaie_du_lieu = _monnaie_fedow_core(self.tenant)
 
         _vendre(planche, moyen="CA")
@@ -2695,12 +2695,12 @@ class TestPlanComptableUnique(FastTenantTestCase):
         # ATTENTE ne compte pas.
         # / Sold twice: one missing item. A pending sale does not count.
         def cas_produit_vendu_sans_compte():
-            planche = creer_tarif_vendu(
+            planche = creer_tarif_vendu(avec_compte=False, 
                 nom="Planche apéro", methode_caisse=Product.VENTE
             )
             _vendre(planche)
             _vendre(planche)
-            tapas_en_attente = creer_tarif_vendu(
+            tapas_en_attente = creer_tarif_vendu(avec_compte=False, 
                 nom="Tapas en attente", methode_caisse=Product.VENTE
             )
             vente_en_attente = ouvrir_vente(
@@ -2886,7 +2886,7 @@ class TestPlanComptableUnique(FastTenantTestCase):
         / A points sale writes no accounting entry: a product without account sold
         ONLY for points is not missing. Sold in euros, it is."""
         _preparer_la_caisse()
-        planche = creer_tarif_vendu(
+        planche = creer_tarif_vendu(avec_compte=False, 
             nom="Planche vendue en points", methode_caisse=Product.VENTE
         )
         points_de_fidelite = _monnaie_fedow_core(self.tenant, categorie=Asset.FID)
@@ -3206,7 +3206,7 @@ class TestPlanComptableUnique(FastTenantTestCase):
         / The central pot transfer (VR) goes to its currency's account: a currency
         without account, or no currency, raises naming the transfer."""
         virement_recu = creer_tarif_vendu(
-            nom="Virement sans compte", methode_caisse=Product.VIREMENT_RECU
+            nom="Virement sans compte", methode_caisse=Product.VIREMENT_RECU, avec_compte=False
         )
         monnaie_sans_compte = _monnaie_ancien_fedow(_un_autre_lieu())
         nom_du_virement = virement_recu.productsold.product.name

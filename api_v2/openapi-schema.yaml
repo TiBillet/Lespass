@@ -644,12 +644,46 @@ paths:
     get:
       operationId: listProducts
       summary: List Products
+      description: >
+        Published, non-archived products. With `accounting=true`: the venue's whole
+        catalogue for an accounting software that copies it every night (Dolibarr
+        "items and sales" mode): every product (published or not, archived or not),
+        every price (archived included), sorted by name then uuid, rendered in French,
+        with accounting properties in `additionalProperty`. Product: `productType`
+        ({code, label}), `posCategory` ({identifier, name, order}, absent without POS
+        category), `vatRate` (effective rate, e.g. "20.00"; or `vatRateError`),
+        `accountingAccount` ({number, label}; or `accountingAccountError`, the sentence
+        of the rule), `forAccountingSync` (false for top-ups, received transfers, card
+        emptying, deposit returns, kegs, time top-ups, loyalty, system products),
+        `archived`. Each offer: `archived`, `soldByWeightOrVolume`; an offer whose
+        `priceCurrency` is not EUR is priced in tokens. The accounting answer carries an
+        `ETag` (sha256 of the JSON); send it back in `If-None-Match` to get a 304 when
+        nothing changed (a weak `W/` prefix is accepted). Requires the "product" right.
       tags: [Product]
       security:
         - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: accounting
+          required: false
+          schema:
+            type: string
+            enum: ["true"]
+          description: The accounting catalogue (see description).
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+          description: The ETag of the last accounting catalogue read (accounting=true only).
       responses:
         '200':
           description: OK
+          headers:
+            ETag:
+              description: With accounting=true only. sha256 of the rendered JSON.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -659,6 +693,10 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Product'
+        '304':
+          description: With accounting=true and If-None-Match equal to the current ETag. No body.
+        '403':
+          description: Missing, unknown key, or key without the "product" right
     post:
       operationId: createProduct
       summary: Create Product with offers and optional form fields
@@ -1193,6 +1231,126 @@ paths:
                               CompteLib: {type: string}
                               Debit: {type: integer, example: 0}
                               Credit: {type: integer, example: 41667}
+        "404":
+          $ref: "#/components/responses/AccountingNotExportable"
+        "409":
+          $ref: "#/components/responses/AccountingConflict"
+  /api/v2/closures/{uuid}/sales/:
+    get:
+      operationId: listClosureSales
+      summary: Sales of a daily closure, split for an invoicing software
+      description: >
+        The settled euro sales of the closure (CORRECTION sales excluded: their
+        payments are added to the corrected sale), by number, split by TiBillet
+        into invoice lines, invoice payments, internal transfers (cashless
+        top-ups and card emptyings) and various payments (offered top-ups, gift
+        tokens taken back, payment gaps). Per account, the result equals the FEC
+        of the closure. Sales with nothing to write are not returned. The key
+        needs the "comptabilite" AND "sale" rights (buyers' e-mails are
+        published). Amounts in whole cents; accounts by their TiBillet number.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema: {type: string, format: uuid}
+        - in: query
+          name: after_number
+          required: false
+          description: Only sales with a greater number (the `nextAfterNumber` of the previous page).
+          schema: {type: integer, minimum: 0}
+        - in: query
+          name: limit
+          required: false
+          description: At most this many sales read (1 to 1000, default 500).
+          schema: {type: integer, minimum: 1, maximum: 1000, default: 500}
+      responses:
+        "200":
+          description: One page of sales
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  closure: {type: string, format: uuid}
+                  number: {type: integer}
+                  accountingDate: {type: string, format: date}
+                  currency: {type: string, example: EUR}
+                  amountUnit: {type: string, example: cent}
+                  nextAfterNumber:
+                    type: integer
+                    nullable: true
+                    description: Pass it as `after_number` for the next page; null on the last page.
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        identifier: {type: string, format: uuid}
+                        orderNumber: {type: integer, example: 1016}
+                        nature: {type: string, enum: [sale, refund, card_emptying]}
+                        relatedSale:
+                          type: object
+                          nullable: true
+                          properties:
+                            identifier: {type: string, format: uuid}
+                            orderNumber: {type: integer}
+                        customer:
+                          type: object
+                          nullable: true
+                          description: null for an anonymous buyer (walk-in customer).
+                          properties:
+                            identifier: {type: string, format: uuid}
+                            email: {type: string, format: email}
+                        orderedItem:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              priceIdentifier: {type: string, format: uuid, nullable: true, description: "uuid of the TiBillet price (ref_ext of the Dolibarr product); null for the gift-token part"}
+                              name: {type: string, example: "Bière — Pinte"}
+                              quantity: {type: string, example: "1.000000"}
+                              unitPrice: {type: integer, example: 500}
+                              totalTTC: {type: integer, example: 500}
+                              totalHT: {type: integer, example: 417}
+                              totalVAT: {type: integer, example: 83}
+                              vatRate: {type: string, example: "20.00"}
+                              accountingAccount: {type: string, example: "707000"}
+                              vatAccountingAccount: {type: string, nullable: true, example: "445711"}
+                        invoicePayments:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              treasuryAccount: {type: string, example: "530000"}
+                              method: {type: string, nullable: true, example: CA}
+                              amount: {type: integer, example: 500}
+                        transfers:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              fromAccount: {type: string, example: "419100"}
+                              fromMethod: {type: string, nullable: true}
+                              toAccount: {type: string, example: "512100"}
+                              toMethod: {type: string, nullable: true, example: CC}
+                              amount: {type: integer, example: 1000}
+                              label: {type: string, example: Recharge cashless}
+                        variousPayments:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              treasuryAccount: {type: string, example: "419100"}
+                              method: {type: string, nullable: true}
+                              amount: {type: integer, example: -1000, description: "positive: money in; negative: money out"}
+                              counterpartAccount: {type: string, example: "623400"}
+                              label: {type: string, example: Recharge offerte}
+        "400":
+          description: after_number or limit invalid
+        "403":
+          description: The key lacks the comptabilite or the sale right
         "404":
           $ref: "#/components/responses/AccountingNotExportable"
         "409":

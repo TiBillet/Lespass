@@ -315,11 +315,15 @@ class TestRapportDesVentes(FastTenantTestCase):
         self.debut_de_la_periode = timezone.now() - timedelta(hours=1)
         self.fin_de_la_periode = timezone.now() + timedelta(hours=1)
 
+        # Le jus reste SANS catégorie de caisse : le rapport le range « Sans catégorie »,
+        # ce que plusieurs tests vérifient (schéma dédié, rien ne reste en base).
+        # / The juice stays without POS category: the report files it "Sans catégorie".
         self.tarif_du_jus = creer_tarif_vendu(
             nom="Jus",
             prix_en_euros="3.50",
             taux_tva="20.00",
             methode_caisse=Product.VENTE,
+            avec_compte=False,
         )
 
     # ------------------------------------------------------------------

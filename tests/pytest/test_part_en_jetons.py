@@ -1115,6 +1115,7 @@ def test_plan_complet_sans_moyen_de_ligne_pour_les_jetons(lieu):
         prix_en_euros="5.00",
         taux_tva="20.00",
         methode_caisse=Product.VENTE,
+        avec_compte=False,
     )
     vente_entierement_en_jetons = fabriquer_vente_encaissee(
         origine=SaleOrigin.LABOUTIK,

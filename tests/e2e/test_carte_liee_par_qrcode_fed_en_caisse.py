@@ -197,6 +197,13 @@ def comptoir_du_cafe(django_shell, ensure_pos_data):
         "article, _cree = Product.objects.get_or_create(\n"
         f"    name='{NOM_DU_CAFE}',\n"
         "    defaults={'methode_caisse': Product.VENTE})\n"
+        # Vendu pour de vrai (sans annulation) : le produit a un compte, sinon la
+        # vraie journée du lieu ne s'exporte plus (FEC, Dolibarr).
+        # / Really sold: the product needs an account.
+        "import sys\n"
+        "sys.path.insert(0, '/DjangoFiles/tests/pytest')\n"
+        "from fabriques_vente import donner_un_compte_au_produit\n"
+        "donner_un_compte_au_produit(article)\n"
         "tarif, _cree = Price.objects.get_or_create(\n"
         "    product=article, name='Tasse',\n"
         f"    defaults={{'prix': Decimal('{prix_en_euros}')}})\n"

@@ -28,8 +28,8 @@ C: no overflowing fieldsets. D: inset shadow on conditional rows. E: sale page b
 title and readable quantity.
 
 SIMULATIONS
-Chaque test qui touche la base est marqué `django_db` : la transaction est annulée
-à la fin (tests/PIEGES.md 13.1). Les ventes sont écrites par le service de vente.
+Tout le fichier est marqué `django_db` : la transaction de chaque test est annulée à
+la fin (tests/PIEGES.md 13.1). Les ventes sont écrites par le service de vente.
 Stripe et Celery sont simulés, la `Configuration` est modifiée en mémoire seulement
 (13.5). Le client de l'admin est créé dans chaque test (13.10).
 / Rolled back per test; sales through the service; Stripe and Celery faked.
@@ -72,6 +72,12 @@ from test_avoirs_ecrivent_la_vente import (
     URL_DE_LA_LISTE_DES_RESERVATIONS,
     lancer_l_action_d_annulation,
 )
+
+# Chaque test est annulé à la fin. Sans cette marque, les ventes écrites par les
+# fabriques de test_admin_vente.py restent dans le lieu `lespass` et bloquent
+# l'export de la vraie journée.
+# / Every test is rolled back; without it, its sales stay in `lespass`.
+pytestmark = pytest.mark.django_db
 
 # Le dossier racine du projet (les gabarits et le CSS sont lus sur le disque).
 # / The project root (templates and CSS are read from disk).
