@@ -5,7 +5,6 @@ import uuid as uuid_module
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import connection, transaction
 from django.db import connection, IntegrityError, transaction
 from django.db.models import Prefetch, Q
 from django.http import Http404
@@ -62,7 +61,6 @@ from .serializers import (
     CHAMPS_TEXTE_RICHE,
     CHAMPS_FICHIER,
     CHAMPS_URL_A_NEUTRALISER,
-    _validate_uploaded_image,
 )
 from pages.models import Page, Bloc, valider_slug_non_reserve
 from Administration.utils import clean_html, url_a_schema_dangereux
