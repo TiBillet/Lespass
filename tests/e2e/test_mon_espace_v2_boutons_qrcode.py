@@ -168,7 +168,7 @@ def test_les_boutons_qrcode_de_mon_espace_v2_tiennent_dans_l_ecran(
     expect(
         bouton_scanner,
         f"Pas de bouton '{testid_du_bouton_scanner_de_l_admin}' : le bouton du "
-        "scanner a quitte « Ma carte », ou ne suit plus l'email de l'admin.",
+        "scanner a quitte « Ma tirelire », ou ne suit plus l'email de l'admin.",
     ).to_be_visible()
 
     # Les messages flottants (ex. « Merci de valider votre adresse mail… ») se

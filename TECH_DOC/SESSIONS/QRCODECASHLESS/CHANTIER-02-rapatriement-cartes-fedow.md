@@ -143,11 +143,13 @@ Flux :
 6. Fabrication du miroir :
    - `tag_id` = `first_tag_id`, `number` = `number_printed`,
      `uuid` = `qrcode_uuid`, `detail` choisi à l'étape 5.
-   - **Ni `user` ni `wallet_ephemere`.** Le chemin
-     `obtenir_wallet_carte_depuis_fedow` les répare au premier paiement. Effet
-     connu, identique à une carte créée dans l'admin : une carte que Fedow lie à
-     un utilisateur apparaît « anonyme » en caisse (`carte.user` vide) tant
-     qu'elle n'est pas liée en local.
+   - ~~**Ni `user` ni `wallet_ephemere`.** Le chemin
+     `obtenir_wallet_carte_depuis_fedow` les répare au premier paiement.~~
+     **Faux, corrigé le 2026-10-14 (CHANTIER-03)** : rien ne réparait le `user`, et
+     la caisse masquait le FED de la carte. Le miroir porte désormais sa
+     propriétaire quand la fiche dit `is_wallet_ephemere: False` et que la personne
+     est connue ici (`fabriquer_le_miroir_de_la_carte`,
+     `proprietaire_d_apres_la_fiche_fedow`). Pas de `wallet_ephemere` posé ici.
    - Le `Wallet` miroir créé par `WalletValidator` n'a pas d'`origin`. On la pose,
      sans écraser une origine existante :
      `Wallet.objects.filter(uuid=..., origin__isnull=True).update(origin=connection.tenant)`.
@@ -450,7 +452,7 @@ déjà le site (`test_carte_primaire_ancien_fedow.py`, `test_retour_carte_rechar
 |---|---|---|
 | 29 | `CaisseViewSet.carte_primaire` | scan d'une carte non primaire → rapatriée, réponse « Carte non primaire » ; elle apparaît ensuite dans l'autocomplétion de l'admin des cartes primaires. Dans `test_caisse_ouverture_ancien_fedow.py` (§ 8.7) |
 | 30 | `CaisseViewSet.carte_primaire` | carte inconnue de Fedow → « Carte inconnue », un seul appel à `retrieve` |
-| 30 bis | `_identifier_adherent` | adhésion payée en espèces, sans recharge, avec une carte connue seulement de Fedow → la carte rapatriée est portée jusqu'à l'adhésion et liée à l'adhérent·e (chez Fedow et en local). Une carte rapatriée n'a jamais de `user` (§ 4.1, étape 6) : l'adhérent·e vient de l'email saisi |
+| 30 bis | `_identifier_adherent` | adhésion payée en espèces, sans recharge, avec une carte connue seulement de Fedow → la carte rapatriée est portée jusqu'à l'adhésion et liée à l'adhérent·e (chez Fedow et en local). Une carte rapatriée anonyme chez Fedow n'a pas de `user` (§ 4.1, étape 6, corrigée le 2026-10-14) : l'adhérent·e vient de l'email saisi |
 | 31 | `identifier_client` | client identifié (carte anonyme) |
 | 32 | `_payer_par_nfc` | paiement NFC abouti |
 | 33 | `_payer_en_especes` (recharge) | recharge aboutie |

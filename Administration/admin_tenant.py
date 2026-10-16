@@ -2,6 +2,7 @@ from Administration.admin.dashboard import (  # noqa: F401
     dashboard_callback, environment_callback, get_sidebar_navigation,
     get_tabs, nom_du_lieu,
     MODULE_FIELDS, BETA_NOTICE, _build_modules_context, adhesion_badge_callback,
+    MODULES_EN_ATTENTE_D_ACTIVATION,
 )
 
 
@@ -221,6 +222,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
         'wallet',
         'sale',
         'page',
+        'comptabilite',
     ]
 
     fields = [
@@ -236,6 +238,9 @@ class ExternalApiKeyAdmin(ModelAdmin):
         ('membership', 'crowd'),
         # Droit API du site web (app pages) / Website API right (pages app)
         ('page',),
+        # Droit de lecture de la comptabilite (logiciel comptable du lieu)
+        # / Accounting read right (the venue's accounting software)
+        ('comptabilite',),
         # Recharge cadeau : asset TNF que cette cle peut crediter via l'API v2
         # / Gift refill: TNF asset this key may top-up via API v2
         'gift_asset',
@@ -511,6 +516,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'img',
                 'logo',
                 'postal_address',
+                'siren',
                 # 'adress',
                 'phone',
                 'email',
@@ -664,6 +670,23 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
         configuration = Configuration.get_solo()
         current_value = getattr(configuration, field_name)
+
+        # Module en attente (MODULES_EN_ATTENTE_D_ACTIVATION) : aucun lieu ne l'allume.
+        # La carte n'a pas d'interrupteur, mais un POST direct arrive ici. L'eteindre
+        # reste permis. Le refus passe avant la bascule V2 d'un lieu legacy.
+        # / Pending module: nobody switches it on; switching it off stays allowed.
+        allumage_d_un_module_en_attente = (
+            field_name in MODULES_EN_ATTENTE_D_ACTIVATION and not current_value
+        )
+        if allumage_d_un_module_en_attente:
+            messages.add_message(
+                request,
+                messages.ERROR,
+                _("Ce module est en cours de développement : il ne peut pas encore être activé."),
+            )
+            response = HttpResponse("")
+            response["HX-Refresh"] = "true"
+            return response
 
         # Verrou de moteur : un lieu legacy qui allume un module V2 doit d'abord passer
         # au moteur V2. Le refus arrive avant toute ecriture : l'interrupteur cache ne
@@ -1498,6 +1521,11 @@ def lier_la_carte_a_l_adherent_chez_fedow(fedow_api, utilisateur, numero_carte):
     est DEJA enregistree. Une exception ici donnerait une erreur 500 sur une adhesion
     reussie ; l'admin renverrait le formulaire et creerait une adhesion en double.
 
+    Si Fedow accepte, la copie LOCALE de la carte est mise d'accord : elle porte
+    l'adherent (`relier_la_copie_locale_de_la_carte`, fabriquee si elle manque).
+    Sans elle, la caisse V2 ne reconnait pas l'adherent au comptoir.
+    / If Fedow accepts, the LOCAL card copy is brought in line (built if missing).
+
     Si Fedow refuse, on lui redemande a qui appartient la carte :
     - au wallet de CET adherent : double envoi du formulaire, la premiere requete
       l'a deja liee. Simple warning.
@@ -1507,8 +1535,9 @@ def lier_la_carte_a_l_adherent_chez_fedow(fedow_api, utilisateur, numero_carte):
     warning; anyone else -> error (Sentry alert).
     """
     try:
-        fedow_api.NFCcard.linkwallet_card_number(user=utilisateur, card_number=numero_carte)
-        return
+        fiche_de_la_carte = fedow_api.NFCcard.linkwallet_card_number(
+            user=utilisateur, card_number=numero_carte
+        )
     except Exception as erreur_liaison:
         carte_chez_fedow = None
         try:
@@ -1532,6 +1561,20 @@ def lier_la_carte_a_l_adherent_chez_fedow(fedow_api, utilisateur, numero_carte):
         logger.error(
             f"Adhesion admin enregistree, mais carte {numero_carte} NON liee chez Fedow "
             f"pour {utilisateur.email} : {erreur_liaison}"
+        )
+        return
+
+    try:
+        from QrcodeCashless.services import relier_la_copie_locale_de_la_carte
+
+        relier_la_copie_locale_de_la_carte(fiche_de_la_carte, utilisateur)
+    except Exception as erreur_liaison_locale:
+        # Fedow a lie la carte, la base locale refuse : les deux divergent sur le
+        # proprietaire, et la caisse lit la version LOCALE. A traiter a la main.
+        # / Fedow linked the card, the local base refuses: they diverge. Manual fix.
+        logger.error(
+            f"Adhesion admin : carte {numero_carte} liee chez Fedow pour "
+            f"{utilisateur.email}, copie locale non mise d'accord : {erreur_liaison_locale}"
         )
 
 
@@ -4232,11 +4275,13 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         'datetime',
         'show_time',
         'published',
+        'event_detail_page_button',
     ]
 
     list_editable = ['published', ]
     readonly_fields = (
         'display_valid_tickets_count',
+        'event_detail_page_button',
         # Affiche en lecture seule sur la fiche event (bas du bloc Publier).
         # / Read-only on the event change form (bottom of the Publish block).
         'display_created_by',
@@ -4359,6 +4404,19 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         if count is None:
             count = instance.valid_tickets_count()
         return f"{count} / {instance.jauge_max}"
+
+    @display(description=_("Détail"))
+    def event_detail_page_button(self, instance: Event):
+        # Lien classique (pas de HTMX) : la fiche de détail est une vraie page de l'admin,
+        # le bouton « retour » du navigateur ramène donc à la liste.
+        # / Plain link (no HTMX): the detail is a full admin page, so browser "back" works.
+        event_detail_url = reverse("event-admin-show-event-detail", args=[instance.pk])
+        return format_html(
+            "<a class='font-medium inline-flex group items-center gap-1 relative rounded-default justify-center whitespace-nowrap cursor-pointer px-3 py-2 border border-base-200 bg-primary-600 border-transparent text-white hover:bg-primary-600/80 w-full' href='{}' data-testid='event-list-detail-link'>{}</a>",
+            event_detail_url,
+            _("Voir"),
+        )
+
 
     @display(description=_("Créé par"))
     def display_created_by(self, instance: Event):

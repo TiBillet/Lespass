@@ -1,0 +1,27 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% comment %}
+PAGE COMPLÈTE DE LA FICHE DE DÉTAIL D'UN ÉVÈNEMENT
+/ Full page of the event detail
+
+LOCALISATION : Administration/templates/admin/reservation/event_detail_page.html
+
+Habille la fiche (admin/reservation/event_detail.html) avec le gabarit de l'admin Unfold :
+barre latérale, en-tête, thème. C'est une vraie page avec sa propre adresse :
+le bouton « retour » du navigateur, le rafraîchissement et l'ouverture dans un nouvel
+onglet fonctionnent.
+
+On y arrive par un lien classique :
+- le bouton « Voir » de la liste des évènements (EventAdmin.event_detail_page_button)
+- le bouton en haut de la fiche d'un évènement (admin/event/change_form_before.html)
+
+Rendue par EventMVT.admin_show_event_detail (BaseBillet/views.py), qui ajoute au contexte
+admin_site.each_context(request) : sans lui, la barre latérale de l'admin serait vide.
+/ Wraps the detail fragment in the Unfold admin layout. Real URL: back/refresh work.
+{% endcomment %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Admin panel') }}{% endblock %}
+
+{% block content %}
+    {% include "admin/reservation/event_detail.html" %}
+{% endblock %}

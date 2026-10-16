@@ -386,6 +386,17 @@ DEPENDENCIES :
         {% endwith %}
 
         <!--
+        Questions du formulaire dynamique du produit de la ressource.
+        / Dynamic form questions of the resource product.
+        Dans ce <form> : le bouton « Payer » et les boutons du panier
+        (hx-include="closest form") envoient tous les deux les champs « form__* ».
+        Les reponses sont validees par booking/views.py _book_post et
+        BaseBillet/views.py PanierMVT.add_resource.
+        reponses_saisies remet les reponses deja tapees apres une erreur 422.
+        -->
+        {% include "commun/formulaires/champs_produit.html" with product=resource.product prefill=reponses_saisies testid_prefix="resource-booking" %}
+
+        <!--
         Champs caches : start_datetime, group_end et resource.
         / Hidden fields: start_datetime, group_end and resource.
         -->

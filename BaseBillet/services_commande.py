@@ -408,6 +408,9 @@ class CommandeService:
                     first_name=resolved_firstname,
                     custom_amount=custom_amount,
                     vente=vente,
+                    # Réponses déjà validées à l'ajout au panier (PanierMVT.add_resource).
+                    # / Answers already validated when added to the cart.
+                    custom_form=item.get('custom_form') or None,
                 )
 
                 if not is_valid:

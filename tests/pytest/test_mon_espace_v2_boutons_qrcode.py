@@ -13,7 +13,7 @@ brief TECH_DOC/SESSIONS/FEDOW_IMPORT/briefs/10-1.md.
   droit `initiate_payment` sur le lieu, ou superuser — même hors `client_admin` (D3).
   Le module s'affiche aussi pour un·e caissier·e qui n'administre aucun lieu.
   Administrer un AUTRE lieu ne donne pas le bouton.
-- « Scanner un QR code de paiement » (`compte-scanner-qrcode`) est sous « Ma carte », avec ou
+- « Scanner un QR code de paiement » (`compte-scanner-qrcode`) est sous « Ma tirelire », avec ou
   sans carte liée, quand l'email est validé. Sinon : un bouton gris, désactivé, sans lien (D4).
 - En V2, /my_account/balance/ a aussi le scanner, et le bandeau « Initier un paiement »
   avec la même règle que /my_account/. Pas de lien « Voir le détail des monnaies », ni
@@ -60,6 +60,7 @@ from AuthBillet.models import TibilletUser
 from BaseBillet.models import Configuration, FormbricksConfig
 from Customers.models import Client
 from crowds.models import CrowdConfig
+from QrcodeCashless.models import CarteCashless
 
 URL_DU_GENERATEUR = "/qrcodescanpay/get_generator/"
 URL_DU_SCANNER = "/qrcodescanpay/get_scanner/"
@@ -98,15 +99,21 @@ def balise_par_testid(html, testid):
     return None
 
 
-def faux_fedow(avec_une_carte):
+def faux_fedow(carte_liee=None):
     """
     Un faux client Fedow : aucune monnaie, avec ou sans carte liée.
-    / A fake Fedow client: no currency, with or without a linked card.
+    La carte liée rendue par Fedow est la même que la carte locale de la personne :
+    « Mon compte » aligne les cartes locales sur Fedow, une carte inconnue en local
+    serait reliée, et une carte locale absente chez Fedow serait détachée.
+    / A fake Fedow client: no currency, with or without a linked card. The card
+    Fedow returns is the person's local card, so the account alignment changes nothing.
+
+    :param carte_liee: CarteCashless liée à la personne, ou None
     """
     faux_client_fedow = MagicMock()
-    if avec_une_carte:
+    if carte_liee is not None:
         faux_client_fedow.NFCcard.retrieve_card_by_signature.return_value = [
-            {"number_printed": "TEST0001"}
+            {"qrcode_uuid": carte_liee.uuid, "number_printed": carte_liee.number}
         ]
     else:
         faux_client_fedow.NFCcard.retrieve_card_by_signature.return_value = []
@@ -233,10 +240,24 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
         Rend `(code_http, html)`.
         / Renders the page for this user with mocked skin and Fedow.
         """
+        # La carte locale de la personne : celle qu'elle a déjà, sinon une carte créée
+        # dans la transaction du test.
+        # / The person's local card: the one she already has, else one created here.
+        carte_liee = None
+        if avec_une_carte:
+            carte_liee = CarteCashless.objects.filter(user=utilisateur).first()
+        if avec_une_carte and carte_liee is None:
+            carte_liee = CarteCashless.objects.create(
+                tag_id=uuid.uuid4().hex[:8].upper(),
+                number=uuid.uuid4().hex[:8].upper(),
+                uuid=uuid.uuid4(),
+                user=utilisateur,
+            )
+
         navigateur = TenantClient(self.tenant, HTTP_ACCEPT_LANGUAGE="fr")
         navigateur.force_login(utilisateur)
         with patch("BaseBillet.views.get_skin_courant", return_value=skin):
-            with faux_fedow(avec_une_carte=avec_une_carte):
+            with faux_fedow(carte_liee=carte_liee):
                 reponse = navigateur.get(chemin)
         return reponse.status_code, reponse.content.decode()
 
@@ -331,7 +352,7 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
         assert balise_par_testid(html, "compte-initier-paiement") is not None
 
     # ------------------------------------------------------------------ #
-    #  §7.1 — « Scanner un QR code de paiement » sous « Ma carte »        #
+    #  §7.1 — « Scanner un QR code de paiement » sous « Ma tirelire »     #
     # ------------------------------------------------------------------ #
 
     def test_email_valide_sans_carte_voit_le_bouton_scanner(self):
@@ -364,6 +385,85 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
         assert code_http == 200
         assert balise_par_testid(html, "compte-carte") is not None
         assert balise_par_testid(html, "compte-scanner-qrcode") is not None
+
+    def test_le_bloc_carte_est_le_meme_avec_ou_sans_carte(self):
+        """Avec ou sans carte liée : solde, recharge, remboursement et historique. Sans
+        carte, la carte est grisée et invite à en lier une ; pas de « carte perdue ».
+        / Same block with or without a card; without one, a greyed inviting card."""
+        from BaseBillet.models import Configuration
+
+        for avec_une_carte in (True, False):
+            with self.subTest(avec_une_carte=avec_une_carte):
+                adherent = self.creer_un_utilisateur(f"bloc-carte-{avec_une_carte}")
+                with patch.object(
+                    Configuration, "show_refill_button", lambda config: True
+                ):
+                    code_http, html = self.page_rendue(
+                        adherent, "/my_account/", avec_une_carte=avec_une_carte
+                    )
+
+                assert code_http == 200
+                assert balise_par_testid(html, "compte-solde") is not None
+                bouton_recharger = balise_par_testid(html, "compte-recharger")
+                assert bouton_recharger is not None
+                assert bouton_recharger[1]["hx-get"] == reverse(
+                    "my_account-refill-wallet"
+                )
+                assert 'data-bs-target="#refundPanel"' in html
+                assert 'hx-get="/my_account/balance/"' in html
+                if avec_une_carte:
+                    assert balise_par_testid(html, "compte-carte") is not None
+                    assert balise_par_testid(html, "compte-carte-perdue") is not None
+                    assert "tcard--vide" not in html
+                else:
+                    assert balise_par_testid(html, "compte-carte-vide") is not None
+                    assert balise_par_testid(html, "compte-carte-perdue") is None
+                    assert "tcard--vide" in html
+                    assert "Scanner le QR code d'une carte pour en lier une." in html
+
+    def test_recharge_desactivee_par_le_lieu_cache_recharger_et_rembourser(self):
+        """`show_refill_button` faux (le lieu masque la recharge) : ni « Recharger » ni
+        « Se faire rembourser », avec ou sans carte. Le solde et l'historique restent.
+        / Top-up hidden by the venue: no top-up nor refund buttons; balance stays."""
+        from BaseBillet.models import Configuration
+
+        for avec_une_carte in (True, False):
+            with self.subTest(avec_une_carte=avec_une_carte):
+                adherent = self.creer_un_utilisateur(f"sans-recharge-{avec_une_carte}")
+                with patch.object(
+                    Configuration, "show_refill_button", lambda config: False
+                ):
+                    code_http, html = self.page_rendue(
+                        adherent, "/my_account/", avec_une_carte=avec_une_carte
+                    )
+
+                assert code_http == 200
+                assert balise_par_testid(html, "compte-recharger") is None
+                assert 'data-bs-target="#refundPanel"' not in html
+                assert 'id="refundPanel"' not in html
+                assert balise_par_testid(html, "compte-solde") is not None
+                assert 'hx-get="/my_account/balance/"' in html
+
+    def test_sans_carte_le_solde_affiche_aussi_le_cadeau(self):
+        """Sans carte, le solde est calculé pareil : euros, puis cadeau à part.
+        / Without a card, the balance is the same: euros, then gift apart."""
+        organisation_du_lieu = Configuration.objects.first().organisation
+        jetons = [
+            un_jeton(1000, "FED", [], primaire_stripe=True),
+            un_jeton(300, "TNF", [organisation_du_lieu]),
+        ]
+        adherent = self.creer_un_utilisateur("solde-cadeau-sans-carte")
+
+        with patch("BaseBillet.views.get_distant_fedow_tokens", return_value=jetons):
+            code_http, html = self.page_rendue(
+                adherent, "/my_account/", skin="V2", avec_une_carte=False
+            )
+
+        assert code_http == 200
+        assert texte_du_testid(html, "compte-solde").replace(",", ".") == "10.00 €"
+        assert texte_du_testid(html, "compte-solde-cadeau").replace(",", ".") == (
+            "+ 3.00 € en cadeau"
+        )
 
     def test_email_non_valide_voit_un_bouton_gris_desactive_sans_lien(self):
         """D4 : email non validé = bouton gris, désactivé, sans lien vers le scanner.
@@ -433,10 +533,11 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
                     adherent, chemin, skin="V2", avec_une_carte=True
                 )
                 assert code_http == 200
+                numero_de_la_carte = CarteCashless.objects.get(user=adherent).number
                 bouton = balise_par_testid(html, "compte-carte-perdue")
                 assert bouton is not None
-                assert bouton[1]["hx-get"] == "/my_account/TEST0001/lost_my_card/"
-                assert "TEST0001" in bouton[1]["hx-confirm"]
+                assert bouton[1]["hx-get"] == f"/my_account/{numero_de_la_carte}/lost_my_card/"
+                assert numero_de_la_carte in bouton[1]["hx-confirm"]
 
     def test_un_seul_gestionnaire_de_confirmation_par_page(self):
         """Le gestionnaire htmx:confirm vit dans le shell V2, une seule fois. Une page

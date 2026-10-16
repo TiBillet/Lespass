@@ -12,6 +12,8 @@ from .views import (
     CrowdInitiativeViewSet,
     PageViewSet,
     BlocViewSet,
+    ClosureViewSet,
+    AccountViewSet,
 )
 
 router = DefaultRouter()
@@ -33,6 +35,11 @@ router.register(r"initiatives", CrowdInitiativeViewSet, basename="crowd")
 # basename = cle de api_permissions() (page / bloc)
 router.register(r"pages", PageViewSet, basename="page")
 router.register(r"blocs", BlocViewSet, basename="bloc")
+# Comptabilite (logiciels comptables) : basenames "closure" et "account", tous deux
+# ouverts par ExternalApiKey.comptabilite.
+# / Accounting (accounting software): both opened by ExternalApiKey.comptabilite.
+router.register(r"closures", ClosureViewSet, basename="closure")
+router.register(r"accounts", AccountViewSet, basename="account")
 urlpatterns = [
     path("", include(router.urls)),
 ]

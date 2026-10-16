@@ -41,9 +41,13 @@ FLUX D'UN CLIC (requete au serveur, ecrit en base TOUT DE SUITE) :
   serveur verrouille les blocs de la page (pages/services.py:deplacer_bloc).
   ✕ demande une confirmation (hx-confirm). Le serveur repond HX-Refresh :
   l'iframe se recharge, avec le nouvel ordre.
-- ✎ Modifier et le menu + : liens target="_top", qui quittent l'iframe pour
-  ouvrir la fiche Bloc dans l'admin. La liste du menu + est chargee a sa
-  premiere ouverture (hx-get vers pages/admin_apercu.py:vue_menu_ajout).
+- ✎ Modifier : lien target="_top", qui quitte l'iframe pour ouvrir la fiche
+  Bloc dans l'admin.
+- + Ajouter apres : un simple bouton. Le menu ne s'ouvre PAS dans l'iframe
+  (il y serait coupe : l'iframe a la hauteur de son contenu). Au clic,
+  apercu_page_outils.js envoie l'evenement « apercu:ouvrir-menu-ajout » au
+  document de l'admin. apercu.js y ouvre la <dialog> de
+  blocs_de_la_page.html et y charge la liste (pages/admin_apercu.py:vue_menu_ajout).
 Barre compacte, sur une ligne : rang, modele (libelle court), puis des
 boutons-icones, chacun avec aria-label et title. Styles en ligne, police
 systeme : la barre ne doit pas prendre le look du site.
@@ -82,6 +86,14 @@ but they move a LINE inside a block, with no request until "Save".
             aria-label="{% translate 'Supprimer le bloc' %}" title="{% translate 'Supprimer' %}"
             data-testid="page-bloc-{{ element.rang }}-supprimer"
             style="width: 24px; height: 22px; padding: 0; border-radius: 5px; border: 1px solid #fca5a5; background: #fff; color: #dc2626; cursor: pointer; font: inherit;">✕</button>
-    {% translate "Ajouter un bloc après" as libelle_ajout %}
-    {% include "admin/pages/apercu/_menu_modeles.html" with url_chargement=element.url_menu_ajout cible="_top" libelle="" libelle_accessible=libelle_ajout testid=element.testid_menu position_menu="left: 0;" %}
+    {# Ouvre le menu d'ajout dans une <dialog> de l'admin, hors de l'iframe #}
+    {# (apercu_page_outils.js -> evenement -> apercu.js). #}
+    {# / Opens the add menu in an admin <dialog>, outside the iframe. #}
+    <button type="button" data-ouvrir-menu-ajout="{{ element.url_menu_ajout }}"
+            aria-haspopup="dialog"
+            aria-label="{% translate 'Ajouter un bloc après' %}" title="{% translate 'Ajouter un bloc après' %}"
+            data-testid="{{ element.testid_menu }}"
+            style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px; padding: 0;
+                   border-radius: 6px; border: 1px dashed #059669; color: #047857; background: #fff; cursor: pointer;
+                   font-family: system-ui, sans-serif; font-size: 15px; line-height: 1;"><span aria-hidden="true">+</span></button>
 </div>

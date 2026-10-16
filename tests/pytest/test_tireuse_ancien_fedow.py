@@ -8,10 +8,12 @@ LOCALISATION : tests/pytest/test_tireuse_ancien_fedow.py
 
 RÈGLE MÉTIER TESTÉE
 1. Ordre : les monnaies locales d'abord (jetons cadeau TNF, puis monnaie locale TLF),
-   puis le reste sur l'ancien Fedow (`_debiter_legacy` : il débite lui-même les TLF
-   fédérés puis le FED, et rend le moyen : FED → `SF`, TLF → `LE`).
-2. L'ancien Fedow n'est appelé que si la carte a un utilisateur ET que le lieu est
-   relié. Carte anonyme ou lieu non relié : monnaies locales seules, aucun appel.
+   puis le reste en FED sur l'ancien Fedow (`_debiter_legacy` : il débite le FED par
+   la carte et la carte primaire de la tireuse, et rend le moyen `SF`).
+2. L'ancien Fedow est lu et débité PAR LA CARTE, liée ou anonyme, si le lieu est relié
+   et que la carte primaire de la tireuse est confirmée par l'ancien Fedow. Lieu non
+   relié : monnaies locales seules, aucun appel. Lieu sans carte primaire : la tireuse
+   ne sert pas.
 3. Au badge (`authorize`) : solde = monnaies locales + solde de l'ancien Fedow lu frais.
    Ancien Fedow injoignable : on continue avec les monnaies locales, sans refus.
    L'écran (`_lire_le_solde_de_la_carte`) dit le même solde que l'autorisation.
@@ -50,6 +52,9 @@ dev, un vrai appel débiterait de vraies cartes.
 - La lecture du solde (`lire_depensable_fed_frais`) et le débit (`_debiter_legacy`) sont
   simulés dans `laboutik.views`, leur module d'origine : la tireuse les importe au
   moment de l'appel, comme le reste des briques de la caisse.
+- Carte primaire (fixture automatique) : le lieu en a une, et l'ancien Fedow la confirme
+  (`_verifier_carte_primaire_aupres_de_l_ancien_fedow` simulée). Les tests qui veulent
+  l'inverse le disent.
 - Garde réseau (fixture automatique) : les envois HTTP du client de l'ancien Fedow
   (`_get`, `_post`) échouent, et la liste des envois tentés doit être vide à la fin.
 / Real tap routes, rolled back. The old Fedow is ALWAYS faked (balance read and debit
@@ -77,7 +82,10 @@ import pytest
 from django.test import Client as ClientHttpDjango
 from django_tenants.utils import tenant_context
 
-from fabriques_controlvanne import cle_api_de_la_tireuse
+from fabriques_controlvanne import (
+    carte_primaire_du_lieu_confirmee_par_l_ancien_fedow,  # noqa: F401 (fixture)
+    cle_api_de_la_tireuse,
+)
 from fabriques_vente import verifier_egalites
 
 # Nom de domaine du lieu de test partagé (le lieu « lespass » de la base de dev).
@@ -126,6 +134,13 @@ def aucun_envoi_reel_vers_l_ancien_fedow():
     )
 
 
+@pytest.fixture(autouse=True)
+def _carte_primaire_confirmee(carte_primaire_du_lieu_confirmee_par_l_ancien_fedow):
+    """Chaque test a une carte primaire confirmée par l'ancien Fedow.
+    / Every test has a primary card confirmed by the old Fedow."""
+    yield
+
+
 # ---------------------------------------------------------------------------
 # L'ancien Fedow simulé
 # / The faked old Fedow
@@ -158,9 +173,10 @@ class AncienFedowSimule:
     L'ancien Fedow, simulé : un solde dépensable, et le débit qu'il fait.
     / The old Fedow, faked: a spendable balance, and the debit it makes.
 
-    - `lire_depensable_fed_frais(user)` rend `(solde, True)` : le lieu est relié et le
-      serveur répond. Chaque lecture est notée dans `lectures`.
-    - `debiter_legacy(user, montant, uuid_transaction)` : noté dans `debits`, puis
+    - `lire_depensable_fed_frais(carte)` rend `(solde, True)` : le lieu est relié et le
+      serveur répond. Chaque lecture est notée dans `lectures` (la carte lue).
+    - `debiter_legacy(carte, tag_id_carte_primaire, montant, uuid_transaction)` : noté
+      dans `debits` (carte, montant, uuid) et `cartes_primaires` (le tag), puis
       - `erreur_au_debit` donnée : cette erreur est levée (réseau coupé) ;
       - montant demandé > solde : refus, comme le vrai serveur (aucun débit partiel) ;
       - sinon : le solde baisse, et les `transactions_rendues` sont rendues.
@@ -183,13 +199,17 @@ class AncienFedowSimule:
         self.journal_des_appels = journal_des_appels
         self.lectures = []
         self.debits = []
+        self.cartes_primaires = []
 
-    def lire_depensable_fed_frais(self, user):
-        self.lectures.append(user)
+    def lire_depensable_fed_frais(self, carte):
+        self.lectures.append(carte)
         return self.solde_en_centimes, True
 
-    def debiter_legacy(self, user, montant_centimes, uuid_transaction):
-        self.debits.append((user, montant_centimes, uuid_transaction))
+    def debiter_legacy(
+        self, carte, tag_id_carte_primaire, montant_centimes, uuid_transaction
+    ):
+        self.debits.append((carte, montant_centimes, uuid_transaction))
+        self.cartes_primaires.append(tag_id_carte_primaire)
         if self.journal_des_appels is not None:
             self.journal_des_appels.append("débit ancien Fedow")
         if self.erreur_au_debit is not None:
@@ -554,8 +574,15 @@ def test_tirage_locales_puis_ancien_fedow_une_vente(tenant):
         # paiement du tirage (le même que sur la ligne).
         # / Then ONE old Fedow debit: the remainder, 200, with the pour's payment id.
         assert len(ancien_fedow.debits) == 1
-        utilisateur_debite, montant_demande, uuid_de_paiement = ancien_fedow.debits[0]
-        assert utilisateur_debite == carte.user
+        from controlvanne.billing import carte_primaire_de_la_tireuse
+
+        carte_debitee, montant_demande, uuid_de_paiement = ancien_fedow.debits[0]
+        assert carte_debitee == carte
+        # Signé par la carte primaire de la tireuse.
+        # / Signed by the tap's primary card.
+        assert ancien_fedow.cartes_primaires == [
+            carte_primaire_de_la_tireuse().carte.tag_id
+        ]
         assert montant_demande == 200
         assert vente.articles.get().uuid_transaction == uuid_de_paiement
 
@@ -713,15 +740,17 @@ def test_tirage_paye_entierement_par_l_ancien_fedow(tenant):
 
 
 @pytest.mark.django_db
-def test_carte_anonyme_n_appelle_jamais_l_ancien_fedow(tenant):
+def test_carte_anonyme_paie_le_reste_avec_le_fed_de_sa_carte(tenant):
     """
-    Témoin. Carte ANONYME (sans utilisateur), 300 en monnaie locale, et le Raspberry Pi
-    annonce 50 cl à 8 €/L (400) : il reste 100 à payer. L'ancien Fedow ne débite que le
-    portefeuille d'un utilisateur : ni lecture ni débit distants, ni au badge ni à la
-    fin. On facture les monnaies locales seules (300).
-    / Witness. Anonymous card: no remote read nor debit; locals only (300).
+    Carte ANONYME (sans utilisateur, portefeuille éphémère), 300 en monnaie locale, et
+    1000 de FED sur l'ancien Fedow (rechargée à l'ancienne borne avec TPE). Le Raspberry
+    Pi annonce 50 cl à 8 €/L (400) : les 300 locaux d'abord, puis 100 en FED, lus et
+    débités PAR LA CARTE et la carte primaire de la tireuse. Deux règlements.
+    / ANONYMOUS card, 300 local + 1000 FED: locals first, then 100 FED read and debited
+    through the card and the tap's primary card.
     """
     from BaseBillet.models import PaymentMethod
+    from controlvanne.billing import carte_primaire_de_la_tireuse
     from fedow_core.models import Asset
 
     monnaie_locale = _monnaie_du_lieu(tenant, Asset.TLF)
@@ -730,9 +759,9 @@ def test_carte_anonyme_n_appelle_jamais_l_ancien_fedow(tenant):
         tenant, [(monnaie_locale, 300)], avec_un_utilisateur=False
     )
 
+    transaction_en_fed = transaction_distante(PaymentMethod.STRIPE_FED, 100)
     ancien_fedow = AncienFedowSimule(
-        solde_en_centimes=1000,
-        transactions_rendues=[transaction_distante(PaymentMethod.STRIPE_FED, 100)],
+        solde_en_centimes=1000, transactions_rendues=[transaction_en_fed]
     )
     lecture_simulee, debit_simule = simuler_l_ancien_fedow(ancien_fedow)
     with lecture_simulee, debit_simule:
@@ -743,20 +772,101 @@ def test_carte_anonyme_n_appelle_jamais_l_ancien_fedow(tenant):
             carte,
             "500.00",
         )
-    assert reponse.json()["montant_centimes"] == 300
+    assert reponse.json()["montant_centimes"] == 400
 
-    assert ancien_fedow.lectures == []
-    assert ancien_fedow.debits == []
+    assert carte in ancien_fedow.lectures
+    assert len(ancien_fedow.debits) == 1
+    carte_debitee, montant_demande, _uuid_de_paiement = ancien_fedow.debits[0]
+    assert carte_debitee == carte
+    assert montant_demande == 100
 
     with tenant_context(tenant):
+        assert ancien_fedow.cartes_primaires == [
+            carte_primaire_de_la_tireuse().carte.tag_id
+        ]
         vente = _la_vente_du_tirage(carte)
-        assert vente.total_catalogue == 300
-        reglement = vente.reglements.get()
-        assert reglement.moyen == PaymentMethod.LOCAL_EURO
-        assert reglement.montant == 300
-        assert not reglement.reference_externe
+        assert vente.total_catalogue == 400
+        reglements = sorted(
+            [(r.moyen, r.montant) for r in vente.reglements.all()], key=str
+        )
+        assert reglements == sorted(
+            [(PaymentMethod.LOCAL_EURO, 300), (PaymentMethod.STRIPE_FED, 100)], key=str
+        )
 
         verifier_egalites(vente)
+
+
+@pytest.mark.django_db
+def test_lieu_sans_carte_primaire_la_tireuse_ne_sert_pas(tenant):
+    """
+    Le lieu n'a aucune carte primaire : la tireuse refuse le badge, même pour une carte
+    qui n'a que des monnaies locales. C'est la carte primaire qui signe les débits de
+    l'ancien Fedow.
+    / No primary card in the venue: the tap refuses the badge.
+    """
+    from fedow_core.models import Asset
+    from laboutik.models import CartePrimaire
+
+    monnaie_locale = _monnaie_du_lieu(tenant, Asset.TLF)
+    tireuse, entetes_http = _creer_une_tireuse(tenant, prix_du_litre_en_euros="8.00")
+    carte, _portefeuille = _creer_une_carte(
+        tenant, [(monnaie_locale, 300)], avec_un_utilisateur=True
+    )
+    with tenant_context(tenant):
+        CartePrimaire.objects.all().delete()
+
+    ancien_fedow = AncienFedowSimule(solde_en_centimes=1000)
+    lecture_simulee, debit_simule = simuler_l_ancien_fedow(ancien_fedow)
+    with lecture_simulee, debit_simule:
+        reponse_du_badge = _badger(
+            ClientHttpDjango(HTTP_HOST=DOMAINE_DU_LIEU_PARTAGE),
+            entetes_http,
+            tireuse,
+            carte,
+        )
+
+    reponse_lue = reponse_du_badge.json()
+    assert reponse_lue["authorized"] is False
+    assert reponse_lue["message"] == "No primary card for this venue."
+    assert ancien_fedow.debits == []
+
+
+@pytest.mark.django_db
+def test_carte_primaire_non_confirmee_le_fed_ne_compte_pas(tenant):
+    """
+    L'ancien Fedow ne confirme pas la carte primaire de la tireuse (retirée là-bas, ou
+    serveur injoignable). Au badge, le FED de la carte compte pour 0 : la tireuse sert
+    sur les monnaies locales seules (300, 375 ml à 8 €/L). Un FED compté puis refusé
+    après le service serait une bière non payée.
+    / Primary card not confirmed: FED counts 0, locals only (300, 375 ml).
+    """
+    from fedow_core.models import Asset
+
+    monnaie_locale = _monnaie_du_lieu(tenant, Asset.TLF)
+    tireuse, entetes_http = _creer_une_tireuse(tenant, prix_du_litre_en_euros="8.00")
+    carte, _portefeuille = _creer_une_carte(
+        tenant, [(monnaie_locale, 300)], avec_un_utilisateur=False
+    )
+
+    ancien_fedow = AncienFedowSimule(solde_en_centimes=1000)
+    lecture_simulee, debit_simule = simuler_l_ancien_fedow(ancien_fedow)
+    with lecture_simulee, debit_simule:
+        with mock.patch(
+            "laboutik.views._verifier_carte_primaire_aupres_de_l_ancien_fedow",
+            return_value="Cette carte n'est plus une carte primaire pour ce lieu.",
+        ):
+            reponse_du_badge = _badger(
+                ClientHttpDjango(HTTP_HOST=DOMAINE_DU_LIEU_PARTAGE),
+                entetes_http,
+                tireuse,
+                carte,
+            )
+
+    reponse_lue = reponse_du_badge.json()
+    assert reponse_lue["authorized"] is True, reponse_lue
+    assert reponse_lue["solde_centimes"] == 300
+    assert reponse_lue["allowed_ml"] == 375.0
+    assert ancien_fedow.debits == []
 
 
 @pytest.mark.django_db
@@ -815,7 +925,7 @@ def test_authorize_compte_le_solde_de_l_ancien_fedow(tenant):
     Carte reliée à un utilisateur : 100 en monnaie locale, 300 sur l'ancien Fedow. Au
     badge, le solde est 400 (les deux) ; le volume autorisé à 8 €/L est 500 ml ; l'écran
     de la tireuse affiche 4,00 € (2 verres de 25 cl). Le solde de l'ancien Fedow est lu
-    pour l'utilisateur de la carte.
+    par la carte.
     / Badge: balance = 100 local + 300 old Fedow = 400; 500 ml allowed; screen 4.00.
     """
     from fedow_core.models import Asset
@@ -854,7 +964,7 @@ def test_authorize_compte_le_solde_de_l_ancien_fedow(tenant):
     assert message_du_badge["nombre_verres"] == 2
 
     with tenant_context(tenant):
-        assert carte.user in ancien_fedow.lectures
+        assert carte in ancien_fedow.lectures
     assert ancien_fedow.debits == []
 
 
@@ -904,17 +1014,16 @@ def test_authorize_ancien_fedow_injoignable_continue_avec_les_locales(tenant):
     assert reponse_lue["solde_centimes"] == 300
     assert reponse_lue["allowed_ml"] == 375.0
 
-    # La lecture de l'ancien Fedow a bien été tentée, pour l'utilisateur de la carte.
-    # / The old Fedow read was attempted, for the card's user.
+    # La lecture de l'ancien Fedow a bien été tentée, pour la carte.
+    # / The old Fedow read was attempted, for the card.
     assert lecture_espionnee.called is True
-    with tenant_context(tenant):
-        utilisateurs_lus = []
-        for appel in lecture_espionnee.call_args_list:
-            if appel.args:
-                utilisateurs_lus.append(appel.args[0])
-            else:
-                utilisateurs_lus.append(appel.kwargs.get("user"))
-        assert carte.user in utilisateurs_lus
+    cartes_lues = []
+    for appel in lecture_espionnee.call_args_list:
+        if appel.args:
+            cartes_lues.append(appel.args[0])
+        else:
+            cartes_lues.append(appel.kwargs.get("carte"))
+    assert carte in cartes_lues
     assert debit_interdit.called is False
 
 

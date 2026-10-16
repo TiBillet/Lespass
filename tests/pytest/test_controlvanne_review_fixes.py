@@ -118,6 +118,7 @@ def rf_tireuse(tenant):
         from BaseBillet.models import Product, Price
         from django.utils import timezone
         from laboutik.models import PointDeVente
+        from fabriques_vente import categorie_de_caisse_de_test
 
         # On ne supprime JAMAIS la tireuse, son point de vente ni son terminal : une vente
         # enregistrée (le test C1 facture un vrai tirage, sans rollback) protège le point
@@ -131,6 +132,12 @@ def rf_tireuse(tenant):
             categorie_article="U",
             defaults={"publish": True},
         )
+        # Le fût est vendu pour de vrai (test C1, sans rollback) : il a un compte, sinon
+        # la vraie journée du lieu ne s'exporte plus (FEC, Dolibarr).
+        # / The keg is really sold (no rollback): it needs an account.
+        if produit_fut.categorie_pos_id is None:
+            produit_fut.categorie_pos = categorie_de_caisse_de_test()
+            produit_fut.save(update_fields=["categorie_pos"])
         if not produit_fut.prices.filter(poids_mesure=True).exists():
             Price.objects.create(
                 product=produit_fut,

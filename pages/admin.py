@@ -80,7 +80,6 @@ from pages.admin_apercu import (
     CHAMP_MODELE,
     decouper_modele,
     uuid_ou_none,
-    menu_d_ajout,
     modeles_de_bloc,
     valeur_du_modele,
     vue_apercu_bloc_en_direct,
@@ -510,11 +509,11 @@ class PageAdmin(ModelAdmin):
         LOCALISATION : pages/admin.py — PageAdmin.changeform_view
 
         - `nombre_de_blocs` : sans bloc, la section invite a en ajouter un au
-          lieu d'afficher une iframe vide ;
-        - `menu_ajout_en_tete` : les modeles de bloc, avec leur lien d'ajout
-          en tete de page (inserer_apres=0).
+          lieu d'afficher une iframe vide.
+        Les menus « + » n'ont rien a calculer ici : ils chargent leur liste a
+        la demande (pages/admin_apercu.py:vue_menu_ajout).
         / nombre_de_blocs: an empty page shows an invitation instead of an
-        empty iframe. menu_ajout_en_tete: models with their add-at-top link.
+        empty iframe. The "+" menus load their list on demand.
         """
         extra_context = extra_context or {}
         # uuid_ou_none : un identifiant invalide (« abc ») ferait lever une
@@ -526,7 +525,6 @@ class PageAdmin(ModelAdmin):
             page = Page.objects.filter(pk=uuid_de_la_page).first()
             if page is not None:
                 extra_context["nombre_de_blocs"] = page.blocs.count()
-                extra_context["menu_ajout_en_tete"] = menu_d_ajout(page, 0)
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def get_urls(self):
@@ -1005,8 +1003,8 @@ def _position_d_insertion_demandee(request):
     Le parametre vient des menus « + » de la fiche Page : « + Ajouter en
     tete » (inserer_apres=0) et le + de la barre de chaque bloc
     (inserer_apres=<rang du bloc>). Les liens sont construits par
-    pages/admin_apercu.py:url_d_ajout_d_un_bloc, et affiches par
-    admin/pages/apercu/_menu_modeles.html. Le formulaire d'ajout poste vers sa
+    pages/admin_apercu.py:url_d_ajout_d_un_bloc, et affiches dans la <dialog>
+    de admin/pages/page/blocs_de_la_page.html. Le formulaire d'ajout poste vers sa
     propre URL : le parametre est donc toujours la au POST.
     Helper de module (pas une methode : Unfold enveloppe celles du ModelAdmin).
     / Comes from the "+" menus of the Page form (built by url_d_ajout_d_un_bloc).

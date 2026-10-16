@@ -3897,6 +3897,33 @@ attendre un 200 du serveur avant de lancer les tests.
 
 ---
 
+### Une vente de test restée dans `lespass` bloque la vraie journée (2026-10-16)
+
+Spec : `TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-06-connecteurs-comptables/CHANTIER-06-D-ventes.md`.
+
+**Symptôme** : le FEC de la vraie J du lieu `lespass`, l'API `entries`/`sales` et
+l'import Dolibarr sont refusés : « Le produit « TEST_vente Jus … » n'a pas de compte ».
+« Plan complet ? » liste des dizaines de produits `TEST_vente`.
+
+**Cause 1 — un fichier qui annonce `django_db` sans la marque.**
+`test_admin_alignements_et_fiche_vente.py` disait « chaque test est marqué `django_db` »
+dans sa docstring, sans aucune marque. Il réutilise les fabriques de
+`test_admin_vente.py` : ses ventes étaient validées pour de vrai. Lancé seul,
+`test_admin_vente.py` ne laisse rien ; c'est le fichier VOISIN qui fuit, d'où une
+dichotomie (« fichiers 1 à 14 + le suspect », etc.) pour le trouver.
+**Vérifier une fuite** : compter les ventes `TEST_vente` du lieu avant et après le
+lancement d'un fichier.
+
+**Cause 2 — des produits de test sans compte.** `creer_tarif_vendu()` créait un article
+sans catégorie de caisse, donc sans compte. Elle donne maintenant, par défaut, la
+catégorie « TEST_vente Caisse 707000 » à un produit qui n'a pas de compte
+(`donner_un_compte_au_produit`) ; `avec_compte=False` pour un test qui veut le refus.
+Les tests qui vendent pour de vrai sans annulation (E2E, tireuse C1) appellent la même
+fonction depuis leur code shell (`sys.path.insert(0, '/DjangoFiles/tests/pytest')`).
+
+**Débloquer une J déjà polluée** : relier les produits en cause à une catégorie de caisse
+qui a un compte (« Plan complet ? » → « Régler »).
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*
 

@@ -179,6 +179,19 @@ DRAPEAUX_DES_MODULES_V2 = [
     "module_tireuse",
 ]
 
+
+@pytest.fixture(autouse=True)
+def aucun_module_en_attente_d_activation():
+    """
+    Le verrou de moteur se teste sans la mise en attente du kiosk : ces tests prennent
+    `module_kiosk` comme un module V2 ordinaire, qu'un lieu peut allumer. La mise en
+    attente a ses propres tests (test_module_kiosk_en_attente.py).
+    / The engine lock is tested without the kiosk being on hold (own tests elsewhere).
+    """
+    with patch("Administration.admin.dashboard.MODULES_EN_ATTENTE_D_ACTIVATION", []):
+        with patch("Administration.admin_tenant.MODULES_EN_ATTENTE_D_ACTIVATION", []):
+            yield
+
 # Des modules qui ne sont PAS des modules V2 : allumés seuls, le lieu reste legacy.
 # `module_inventaire` (stock des articles) n'est pas monétaire (spec §5.1).
 # / Modules that are NOT V2 modules: alone, the venue stays legacy.
@@ -1275,7 +1288,7 @@ class TestVerrouDuMoteurCoteServeur(FastTenantTestCase):
         appelant qu'elle accepte aujourd'hui :
         - `HasLaBoutikTerminalAccess` : un terminal LaBoutik du lieu, `module_caisse`
           allumé (configuration en mémoire) ;
-        - `IsKioskTerminal` : un terminal Kiosque du lieu ;
+        - `IsKioskTerminal` : un terminal Kiosque du lieu, `module_kiosk` allumé ;
         - `HasTireuseAccess` : un gestionnaire du lieu connecté.
         Lieu v2 : accès (témoin). Lieu legacy : refus, même drapeau allumé.
         Les terminaux sont des objets en mémoire (le contrôle ne lit que leurs champs).
@@ -1306,7 +1319,7 @@ class TestVerrouDuMoteurCoteServeur(FastTenantTestCase):
             ("HasTireuseAccess", HasTireuseAccess(), self.administrateur_du_lieu),
         ]
         configuration_caisse_allumee = self.configuration_en_memoire(
-            ["module_caisse", "module_monnaie_locale"]
+            ["module_caisse", "module_monnaie_locale", "module_kiosk"]
         )
 
         constats_faux = []

@@ -768,10 +768,28 @@ class TireuseViewSet(viewsets.ViewSet):
         # --- Service normal : vérifier le solde wallet ---
         # / Normal service: check wallet balance
         from controlvanne.billing import (
+            carte_primaire_de_la_tireuse,
             obtenir_contexte_cashless,
             calculer_solde_de_la_carte,
             calculer_volume_autorise_ml,
         )
+
+        # Pas de carte primaire dans le lieu → la tireuse ne sert pas. C'est elle qui
+        # signe les débits de l'ancien Fedow (controlvanne/billing.py) : sans elle, le
+        # FED d'une carte ne se débite pas.
+        # / No primary card in the venue → the tap does not pour: it signs the old
+        #   Fedow debits.
+        if carte_primaire_de_la_tireuse() is None:
+            _push_refus(
+                tireuse,
+                gettext("Aucune carte primaire dans ce lieu : la tireuse ne peut pas servir."),
+            )
+            return Response(
+                {
+                    "authorized": False,
+                    "message": "No primary card for this venue.",
+                }
+            )
 
         contexte = obtenir_contexte_cashless(carte)
         if not contexte:

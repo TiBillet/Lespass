@@ -426,10 +426,11 @@ def test_adhesion_caisse_complement_demande_facture_et_recompense(
     carte_de_l_adherente = creer_la_carte_de_l_adherente_avec_10_euros(lieu, adherente)
     lieu.taches_demandees.clear()
 
-    # Le lieu est dit « hors réseau Fedow » : la caisse ne lit pas le solde du réseau
-    # (`lire_depensable_fed_frais`), aucun appel réseau. Le complément ne déclare pas
-    # l'adhérente au réseau : elle est identifiée par sa carte.
-    # / The venue is said to be off the Fedow network: no network balance read.
+    # Le lieu est dit « hors réseau Fedow » : la lecture du FED de la carte
+    # (`lire_depensable_fed_frais`) rend « indisponible » sans appel réseau. Le
+    # complément ne déclare pas l'adhérente au réseau : elle est identifiée par sa carte.
+    # / The venue is said to be off the Fedow network: the card's FED read returns
+    # "unavailable" without any network call.
     with patch.object(FedowConfig, "can_fedow", return_value=False):
         with django_capture_on_commit_callbacks(execute=True):
             reponse_de_la_carte = payer_a_la_caisse(

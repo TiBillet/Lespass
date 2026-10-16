@@ -78,7 +78,7 @@ from django_tenants.test.cases import FastTenantTestCase
 from django_tenants.test.client import TenantClient
 from django_tenants.utils import tenant_context
 
-from fabriques_controlvanne import cle_api_de_la_tireuse
+from fabriques_controlvanne import cle_api_de_la_tireuse, donner_une_carte_primaire_au_lieu
 from fabriques_vente import (
     creer_tarif_vendu,
     fabriquer_vente_encaissee,
@@ -209,6 +209,9 @@ def _creer_une_tireuse(lieu, prix_du_litre_en_euros, prix_achat_du_litre_en_cent
     from laboutik.models import PointDeVente
 
     identifiant = uuid.uuid4().hex[:8]
+    # Sans carte primaire dans le lieu, la tireuse refuse de servir.
+    # / Without a primary card in the venue, the tap refuses to pour.
+    donner_une_carte_primaire_au_lieu(lieu)
     with tenant_context(lieu):
         # Le taux est unique en base : on réutilise celui qui existe déjà.
         # / The rate is unique in the database: reuse the existing one.

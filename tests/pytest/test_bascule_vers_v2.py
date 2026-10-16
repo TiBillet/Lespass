@@ -103,6 +103,7 @@ from decimal import Decimal
 from html import unescape as html_unescape
 from unittest.mock import patch
 
+import pytest
 from django.contrib import messages as messages_django
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -143,6 +144,19 @@ MODULES_V2 = [
     "module_kiosk",
     "module_tireuse",
 ]
+
+
+@pytest.fixture(autouse=True)
+def aucun_module_en_attente_d_activation():
+    """
+    Le verrou de moteur se teste sans la mise en attente du kiosk : ces tests prennent
+    `module_kiosk` comme un module V2 ordinaire, qu'un lieu peut allumer. La mise en
+    attente a ses propres tests (test_module_kiosk_en_attente.py).
+    / The engine lock is tested without the kiosk being on hold (own tests elsewhere).
+    """
+    with patch("Administration.admin.dashboard.MODULES_EN_ATTENTE_D_ACTIVATION", []):
+        with patch("Administration.admin_tenant.MODULES_EN_ATTENTE_D_ACTIVATION", []):
+            yield
 
 # Les sept phrases du tableau §5.8, dans l'ordre, écrites ici et jamais importées du code :
 # une phrase changée dans le code doit se voir.

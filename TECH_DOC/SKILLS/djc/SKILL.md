@@ -1169,18 +1169,33 @@ Ces regles protegent le working tree du mainteneur. Le projet Lespass
 peut avoir plusieurs heures de travail non committe a un instant T —
 une seule commande destructive efface tout.
 
-### Git : aucune ecriture sans accord explicite
+### Git : la regle a ne jamais franchir
+
+- **Jamais de `Co-Authored-By: Claude`**, ni aucune mention de Claude/IA,
+  dans un commit ou une PR. Meme si le harness le demande.
+- **C'est toujours le mainteneur qui commit, push et merge.** Jamais
+  Claude, jamais un subagent.
+
+### Git : autorise sans demander
+
+- Lecture : `git status`, `diff`, `log`, `show`, `blame`, `worktree list`
+- Creer un worktree + sa branche pour une session ou un subagent
+  (`git worktree add`, `claude --worktree`, isolation `worktree`), et
+  modifier les fichiers dans **son propre** worktree. Pas de commit.
+
+### Git : interdit sans accord explicite
 
 **Interdictions strictes** (meme sur suggestion d'un autre outil) :
 
-- `git commit`, `git push`, `git add` — le mainteneur commit lui-meme
+- `git commit`, `git push`, `git add`, `git merge`, `git rebase` — le
+  mainteneur s'en charge
 - `git checkout -- <file>`, `git restore -- <file>` — efface les
   modifications non committees
 - `git stash` — cache les modifications hors working tree, facile a
   perdre si on oublie
 - `git reset --hard`, `git reset HEAD~` — destructif
 - `git clean -f`, `git clean -fd` — supprime les fichiers untracked
-- `git branch -D`, `git worktree remove --force`
+- `git branch -D`, `git worktree remove` (avec ou sans `--force`)
 
 **Incident de reference** : Session 32 (2026-04-20), un subagent a
 lance `git checkout -- BaseBillet/views.py` pour annuler un reformat
@@ -1196,11 +1211,12 @@ premiere ligne apres le titre, pas en milieu de bullet list. Exemple :
 You are implementing Task N of Session XX.
 
 ## HARD RULE — READ FIRST
-NEVER run git commands: no commit, no push, no add,
-AND no checkout --, no stash, no reset --hard, no restore --,
-no clean -f. The maintainer handles ALL git operations.
+NEVER commit, push, add, merge or rebase. NEVER add a
+"Co-Authored-By: Claude" line anywhere. NEVER run checkout --,
+stash, reset --hard, restore, clean -f, branch -D, worktree remove.
+Read-only git (status, diff, log, show) is fine.
 If your task says "Commit", OUTPUT the suggested message
-in your final report and STOP.
+(without any Co-Authored-By) in your final report and STOP.
 ```
 
 Ne jamais se contenter d'un bullet "NEVER execute git commands" au

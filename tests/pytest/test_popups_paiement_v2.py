@@ -291,7 +291,7 @@ def _contexte_complement(**changements):
         "tag_id_carte1": "A49E4F2A",
         "detail_cascade": [
             {"name": "Monnaie locale", "montant_euros": "4.00"},
-            {"name": "Réseau (FED)", "montant_euros": "2.00"},
+            {"name": "TiBillet", "montant_euros": "2.00"},
         ],
         "cascade_carte1_json": '[["uuid-asset", 400]]',
         "total_nfc_carte1": 600,

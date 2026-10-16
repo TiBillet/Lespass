@@ -21,8 +21,16 @@ from BaseBillet.services_vente import (
     encaisser_vente,
     ouvrir_vente,
 )
+from comptabilite.ventilation import _fuseau_de_la_cloture, date_de_debut_de_service
 from crowds.models import Initiative, BudgetItem, Participation
 from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+from laboutik.plan_comptable import (
+    CompteComptableManquant,
+    ConsigneRembourseeManquante,
+    compte_pour_produit,
+    est_une_vente_pour_la_comptabilite,
+    taux_de_tva_du_produit,
+)
 from fedow_connect.utils import dround
 from Administration.utils import clean_html, url_a_schema_dangereux
 from django.db.models.fields.files import FieldFile
@@ -906,14 +914,27 @@ class ProductSchemaSerializer(serializers.Serializer):
     """
     schema.org/Product output serializer for API v2 product resources.
     Sortie schema.org/Product pour les produits API v2.
+
+    MODE COMPTABLE (`context["pour_la_comptabilite"]`, route `?accounting=true`, fiche
+    06-C §5.2) : tous les tarifs, archivés compris, lus dans `tous_les_tarifs` (un
+    `Prefetch` de la vue), et les propriétés comptables du produit et de ses tarifs.
+    La vue met aussi dans le contexte `taux_de_tva_du_lieu` et
+    `comptes_du_plan_par_defaut` : lus une fois pour tout le catalogue.
+    / Accounting mode: every price, and the accounting properties.
     """
 
     def to_representation(self, instance: Product) -> Dict[str, Any]:
         description = instance.long_description or instance.short_description
         category = instance.get_categorie_article_display() if hasattr(instance, "get_categorie_article_display") else None
+        pour_la_comptabilite = self.context.get("pour_la_comptabilite", False)
+
+        if pour_la_comptabilite:
+            tarifs_du_produit = instance.tous_les_tarifs
+        else:
+            tarifs_du_produit = instance.prices.filter(archived=False).select_related("asset").order_by("order")
 
         offers: List[Dict[str, Any]] = []
-        for price in instance.prices.filter(archived=False).select_related("asset").order_by("order"):
+        for price in tarifs_du_produit:
             # Un tarif en points ou en temps porte le code de sa monnaie, pas EUR.
             # / A points or time price carries its currency code, not EUR.
             code_de_la_monnaie = "EUR"
@@ -952,7 +973,9 @@ class ProductSchemaSerializer(serializers.Serializer):
                     "name": "subscriptionType",
                     "value": price.subscription_type,
                 })
-            adhesion_ids = list(price.adhesions_obligatoires.values_list('pk', flat=True))
+            # .all() lit le préchargement du catalogue comptable (values_list l'ignore).
+            # / .all() uses the accounting catalogue's prefetch (values_list ignores it).
+            adhesion_ids = [adhesion.pk for adhesion in price.adhesions_obligatoires.all()]
             if adhesion_ids:
                 additional_property.append({
                     "@type": "PropertyValue",
@@ -965,6 +988,11 @@ class ProductSchemaSerializer(serializers.Serializer):
                     "name": "manualValidation",
                     "value": True,
                 })
+            if pour_la_comptabilite:
+                additional_property.append(_propriete_schema("archived", bool(price.archived)))
+                additional_property.append(
+                    _propriete_schema("soldByWeightOrVolume", bool(price.poids_mesure))
+                )
             if additional_property:
                 offer["additionalProperty"] = additional_property
 
@@ -980,8 +1008,82 @@ class ProductSchemaSerializer(serializers.Serializer):
             "category": category,
             "offers": offers,
         }
+        if pour_la_comptabilite:
+            data["additionalProperty"] = self._proprietes_comptables(instance)
 
         return {k: v for k, v in data.items() if v not in (None, "", [])}
+
+    def _proprietes_comptables(self, produit: Product) -> List[Dict[str, Any]]:
+        """
+        Ce qu'un logiciel comptable doit savoir d'un produit pour le recopier (fiche
+        06-C §5.2) : type, catégorie de caisse, TVA effective, compte de vente, s'il
+        s'agit d'une vente, s'il est archivé. Une règle qui ne répond pas (compte ou
+        TVA inconnus) donne sa phrase à la place de la valeur : le reste du catalogue
+        est rendu quand même.
+        / What an accounting software needs to copy a product. A rule that cannot
+        answer gives its sentence instead of the value.
+
+        LOCALISATION : api_v2/serializers.py
+        """
+        proprietes = []
+
+        # Le libellé du type « N » est la consigne d'un menu (« Sélectionner une
+        # catégorie ») : le logiciel comptable en ferait une catégorie. C'est le type
+        # par défaut de tout article de caisse.
+        # / Type "N"'s label is a menu prompt; it is the default of every POS item.
+        if produit.categorie_article == Product.NONE:
+            libelle_du_type = _("Article de caisse")
+        else:
+            libelle_du_type = produit.get_categorie_article_display()
+        proprietes.append(_propriete_schema("productType", {
+            "code": produit.categorie_article,
+            "label": str(libelle_du_type),
+        }))
+
+        categorie_de_caisse = produit.categorie_pos
+        if categorie_de_caisse is not None:
+            proprietes.append(_propriete_schema("posCategory", {
+                "identifier": str(categorie_de_caisse.uuid),
+                "name": categorie_de_caisse.name,
+                "order": categorie_de_caisse.poid_liste,
+            }))
+
+        try:
+            taux_de_tva = taux_de_tva_du_produit(
+                produit, self.context.get("taux_de_tva_du_lieu")
+            )
+            proprietes.append(
+                _propriete_schema("vatRate", str(taux_de_tva.quantize(Decimal("0.01"))))
+            )
+        except ConsigneRembourseeManquante as erreur:
+            proprietes.append(_propriete_schema("vatRateError", str(erreur)))
+
+        try:
+            compte_de_vente = compte_pour_produit(
+                produit, self.context.get("comptes_du_plan_par_defaut")
+            )
+            proprietes.append(_propriete_schema("accountingAccount", {
+                "number": compte_de_vente.numero_de_compte,
+                "label": compte_de_vente.libelle_du_compte,
+            }))
+        except CompteComptableManquant as erreur:
+            proprietes.append(_propriete_schema("accountingAccountError", str(erreur)))
+
+        proprietes.append(_propriete_schema(
+            "forAccountingSync", est_une_vente_pour_la_comptabilite(produit)
+        ))
+        proprietes.append(_propriete_schema("archived", bool(produit.archive)))
+        return proprietes
+
+
+def _propriete_schema(nom, valeur):
+    """
+    Une propriété schema.org (`PropertyValue`) : `{"@type", "name", "value"}`.
+    / A schema.org PropertyValue.
+
+    LOCALISATION : api_v2/serializers.py
+    """
+    return {"@type": "PropertyValue", "name": nom, "value": valeur}
 
 
 class ProductCreateSerializer(serializers.Serializer):
@@ -2432,3 +2534,199 @@ class PageCreateSerializer(serializers.Serializer):
             for bloc_ser, fichiers in blocs_prepares:
                 bloc_ser._persister(bloc_ser.validated_data, fichiers, page)
         return page
+
+
+# --------------------------------------------------------------------------- #
+#  Comptabilite : clotures, ecritures, plan comptable (spec 06-A)             #
+#  / Accounting: closures, entries, chart of accounts                         #
+# --------------------------------------------------------------------------- #
+#
+# Lecture seule : ces serializers ne valident rien, ils mettent en forme.
+# Les ecritures gardent les NOMS DES COLONNES DU FEC (JournalCode, CompteNum,
+# Debit...) : schema.org n'a aucun type pour une ecriture comptable, et le FEC est
+# la norme que tous les logiciels comptables francais connaissent (spec 06-A, A5).
+# Les montants sont des centimes entiers (A6). Pas de ValidDate : l'ecriture arrive
+# non verrouillee dans le logiciel du lieu (A7).
+# / Read-only. Entries keep the FEC column names; amounts in whole cents; no ValidDate.
+
+
+class LigneDEcritureComptableSerializer(serializers.Serializer):
+    """
+    Une ligne d'ecriture : un compte, son libelle, debit et credit en centimes.
+    Lit un dict de `ventiler_cloture` : {"compte", "libelle", "debit", "credit"}.
+    / One entry line: account, label, debit and credit in cents.
+    """
+
+    CompteNum = serializers.CharField(source="compte")
+    CompteLib = serializers.CharField(source="libelle")
+    Debit = serializers.IntegerField(source="debit")
+    Credit = serializers.IntegerField(source="credit")
+
+
+class EcritureComptableSerializer(serializers.Serializer):
+    """
+    Une ecriture (un journal d'une cloture J), aux noms du FEC, dates ISO.
+    Lit un dict de `ecritures_de_l_export` : {"journal", "libelle_du_journal",
+    "numero_d_ecriture", "date", "piece", "libelle", "lignes"}.
+    / One entry (one journal of a J closure), FEC names, ISO dates.
+    """
+
+    JournalCode = serializers.CharField(source="journal")
+    JournalLib = serializers.CharField(source="libelle_du_journal")
+    EcritureNum = serializers.CharField(source="numero_d_ecriture")
+    EcritureDate = serializers.DateField(source="date")
+    PieceRef = serializers.CharField(source="piece")
+    PieceDate = serializers.DateField(source="date")
+    EcritureLib = serializers.CharField(source="libelle")
+    lines = LigneDEcritureComptableSerializer(source="lignes", many=True)
+
+
+class ClotureAImporterSerializer(serializers.Serializer):
+    """
+    Une cloture J de la liste a importer. `startDate` / `endDate` sont ecrites dans
+    le fuseau fige dans le rapport de la J, comme `accountingDate` (la date des
+    ecritures : le jour local de sa premiere vente). `entries` et `fec` sont les
+    adresses des deux routes de la cloture.
+    / A J closure of the list to import, dates in the J's frozen time zone.
+
+    Contexte attendu : {"request": la requete DRF}.
+    """
+
+    uuid = serializers.UUIDField()
+    number = serializers.IntegerField(source="numero_sequentiel")
+    startDate = serializers.SerializerMethodField()
+    endDate = serializers.SerializerMethodField()
+    accountingDate = serializers.SerializerMethodField()
+    entries = serializers.SerializerMethodField()
+    fec = serializers.SerializerMethodField()
+
+    def get_startDate(self, cloture):
+        return cloture.datetime_debut.astimezone(_fuseau_de_la_cloture(cloture)).isoformat()
+
+    def get_endDate(self, cloture):
+        return cloture.datetime_fin.astimezone(_fuseau_de_la_cloture(cloture)).isoformat()
+
+    def get_accountingDate(self, cloture):
+        return date_de_debut_de_service(cloture).isoformat()
+
+    def get_entries(self, cloture):
+        requete = self.context["request"]
+        return requete.build_absolute_uri(f"/api/v2/closures/{cloture.uuid}/entries/")
+
+    def get_fec(self, cloture):
+        requete = self.context["request"]
+        return requete.build_absolute_uri(f"/api/v2/closures/{cloture.uuid}/fec/")
+
+
+class CompteComptableSerializer(serializers.Serializer):
+    """
+    Un compte du plan comptable du lieu : numero, libelle, actif ou non. Un compte
+    inactif est seulement cache des menus : il sert encore aux exports.
+    / One account of the venue's chart: number, label, active or not.
+    """
+
+    accountNumber = serializers.CharField(source="numero_de_compte")
+    name = serializers.CharField(source="libelle_du_compte")
+    active = serializers.BooleanField(source="est_actif")
+
+
+def _numero_ou_rien(compte):
+    """Le numéro d'un compte, ou None. / An account's number, or None."""
+    if compte is None:
+        return None
+    return compte.numero_de_compte
+
+
+class VenteAFacturerSerializer(serializers.Serializer):
+    """
+    Une vente d'une clôture J, découpée pour un logiciel de facturation (fiche 06-D).
+    Lit un dict de `comptabilite.ventes_a_facturer.vente_a_facturer`. Montants en
+    centimes ; comptes par leur numéro ; l'acheteur par son uuid et son e-mail SEULS
+    (spec Q4).
+    / A J closure's sale split for an invoicing software. Cents, account numbers,
+    buyer by uuid and e-mail only.
+
+    LOCALISATION : api_v2/serializers.py
+    """
+
+    def to_representation(self, decoupe):
+        vente = decoupe["vente"]
+
+        client = decoupe["client"]
+        client_publie = None
+        if client is not None:
+            client_publie = {"identifier": str(client.pk), "email": client.email}
+
+        vente_liee_publiee = None
+        if vente.vente_liee is not None:
+            vente_liee_publiee = {
+                "identifier": str(vente.vente_liee.uuid),
+                "orderNumber": vente.vente_liee.numero,
+            }
+
+        lignes_publiees = []
+        for ligne in decoupe["lignes_de_la_facture"]:
+            identifiant_du_tarif = None
+            if ligne["tarif"] is not None:
+                identifiant_du_tarif = str(ligne["tarif"].uuid)
+            lignes_publiees.append(
+                {
+                    "priceIdentifier": identifiant_du_tarif,
+                    "name": ligne["libelle"],
+                    "quantity": str(Decimal(ligne["quantite"]).quantize(Decimal("0.000001"))),
+                    "unitPrice": ligne["prix_unitaire_ttc"],
+                    "totalTTC": ligne["total_ttc"],
+                    "totalHT": ligne["total_ht"],
+                    "totalVAT": ligne["total_tva"],
+                    "vatRate": str(Decimal(ligne["taux_de_tva"]).quantize(Decimal("0.01"))),
+                    "accountingAccount": ligne["compte"].numero_de_compte,
+                    "vatAccountingAccount": _numero_ou_rien(ligne["compte_de_tva"]),
+                }
+            )
+
+        paiements_publies = []
+        for paiement in decoupe["paiements_de_la_facture"]:
+            paiements_publies.append(
+                {
+                    "treasuryAccount": paiement["compte"].numero_de_compte,
+                    "method": paiement["moyen"],
+                    "amount": paiement["montant"],
+                }
+            )
+
+        virements_publies = []
+        for virement in decoupe["virements"]:
+            virements_publies.append(
+                {
+                    "fromAccount": virement["depuis"].numero_de_compte,
+                    "fromMethod": virement["moyen_depuis"],
+                    "toAccount": virement["vers"].numero_de_compte,
+                    "toMethod": virement["moyen_vers"],
+                    "amount": virement["montant"],
+                    "label": virement["libelle"],
+                }
+            )
+
+        paiements_divers_publies = []
+        for paiement_divers in decoupe["paiements_divers"]:
+            paiements_divers_publies.append(
+                {
+                    "treasuryAccount": paiement_divers["compte_de_tresorerie"].numero_de_compte,
+                    "method": paiement_divers["moyen"],
+                    "amount": paiement_divers["montant"],
+                    "counterpartAccount": paiement_divers["contrepartie"].numero_de_compte,
+                    "label": paiement_divers["libelle"],
+                }
+            )
+
+        return {
+            "identifier": str(vente.uuid),
+            "orderNumber": vente.numero,
+            "nature": decoupe["nature"],
+            "relatedSale": vente_liee_publiee,
+            "customer": client_publie,
+            "orderedItem": lignes_publiees,
+            "invoicePayments": paiements_publies,
+            "transfers": virements_publies,
+            "variousPayments": paiements_divers_publies,
+        }

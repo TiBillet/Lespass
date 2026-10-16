@@ -1,0 +1,193 @@
+{% load i18n unfold %}
+{% comment %}
+FICHE DE DÉTAIL D'UN ÉVÈNEMENT — billets, formulaires dynamiques, filtres
+/ Event detail page — tickets, dynamic form answers, filters
+
+LOCALISATION : Administration/templates/admin/reservation/event_detail.html
+
+Contenu de la fiche. Il n'étend pas le gabarit de l'admin :
+admin/reservation/event_detail_page.html l'inclut dans la page complète.
+
+FLUX :
+1. Lien « Voir » de la liste des évènements (EventAdmin.event_detail_page_button,
+   Administration/admin_tenant.py) ou bouton en haut de la fiche d'un évènement
+   (admin/event/change_form_before.html)
+2. GET /event/<pk>/admin_show_event_detail/ (EventMVT.admin_show_event_detail, BaseBillet/views.py)
+3. La vue rend la page complète. Le bouton « retour » du navigateur fonctionne.
+
+FLUX DES FILTRES :
+1. On tape dans un champ ou on choisit une option (événement « input »)
+2. Après 400 ms, HTMX rappelle la même vue avec les filtres en GET
+3. La vue voit l'en-tête HX-Target = "event-detail-results"
+   et ne renvoie que partials/event_detail_results.html
+4. HTMX remplace #event-detail-results. Le reste de la page ne bouge pas.
+5. hx-replace-url met les filtres dans l'adresse de la page. Après un clic sur un billet,
+   le bouton « retour » ramène à la fiche AVEC les mêmes filtres.
+« Réinitialiser » est un lien classique : il recharge la fiche sans filtre.
+
+Les filtres ne sont PAS les filtres natifs d'Unfold (unfold.contrib.filters) :
+ceux-ci ne marchent que dans la liste d'un ModelAdmin. Ici, c'est un formulaire HTMX
+qui reprend les classes CSS des champs d'Unfold (unfold_input_classes, unfold_select_classes).
+
+CONTEXTE (préparé par la vue) :
+- event, les compteurs number_of_*_tickets, valid_tickets_percent (jauge)
+- email_filter, ticket_status_choices, form_questions : l'état des filtres
+- et tout ce qu'utilise partials/event_detail_results.html
+{% endcomment %}
+
+<div class="flex flex-col gap-6" data-testid="admin-event-detail">
+
+    {# EN-TÊTE : nom, date, actions / Header #}
+    <div class="flex flex-row flex-wrap items-center justify-between gap-4">
+        <div>
+            <h1 class="font-semibold text-xl text-font-important-light dark:text-font-important-dark"
+                data-testid="admin-event-detail-name">
+                {{ event.name }}
+            </h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="admin-event-detail-date">
+                {{ event.datetime|date:"l d F Y, H:i" }}{% if event.end_datetime %} → {{ event.end_datetime|date:"l d F Y, H:i" }}{% endif %}
+            </p>
+        </div>
+        <div class="flex flex-row gap-2" role="group" aria-label="{% translate 'Actions' %}">
+            <a href="{% url 'staff_admin:BaseBillet_event_changelist' %}"
+               class="border border-base-200 dark:border-base-700 rounded-default px-3 py-2 text-sm font-medium"
+               data-testid="admin-event-detail-back">
+                <span class="material-symbols-outlined align-middle" aria-hidden="true">arrow_back</span>
+                {% translate "Retour aux évènements" %}
+            </a>
+            <a href="{% url 'staff_admin:BaseBillet_event_change' event.pk %}"
+               class="bg-primary-600 rounded-default px-3 py-2 text-sm font-medium"
+               style="color: #ffffff;"
+               data-testid="admin-event-detail-edit">
+                <span class="material-symbols-outlined align-middle" aria-hidden="true">edit</span>
+                {% translate "Modifier l'évènement" %}
+            </a>
+        </div>
+    </div>
+
+    {# COMPTEURS : tout l'évènement, sans tenir compte des filtres / Counters: whole event #}
+    <div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));"
+         aria-label="{% translate 'Résumé des billets' %}" data-testid="admin-event-detail-counters">
+        {% component "unfold/components/card.html" %}
+            <div data-testid="admin-event-detail-count-valid">
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% translate "Billets valides / jauge" %}</p>
+                <p class="font-semibold text-2xl mb-2">{{ number_of_valid_tickets }} / {{ event.jauge_max }}</p>
+                {% component "unfold/components/progress.html" with value=valid_tickets_percent %}{% endcomponent %}
+                <p class="sr-only">
+                    {% blocktrans with percent=valid_tickets_percent %}Jauge remplie à {{ percent }} pour cent.{% endblocktrans %}
+                </p>
+            </div>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" %}
+            <div data-testid="admin-event-detail-count-scanned">
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% translate "Billets scannés" %}</p>
+                <p class="font-semibold text-2xl">{{ number_of_scanned_tickets }}</p>
+            </div>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" %}
+            <div data-testid="admin-event-detail-count-pending">
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% translate "Billets en attente" %}</p>
+                <p class="font-semibold text-2xl">{{ number_of_pending_tickets }}</p>
+            </div>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" %}
+            <div data-testid="admin-event-detail-count-canceled">
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% translate "Billets annulés" %}</p>
+                <p class="font-semibold text-2xl">{{ number_of_canceled_tickets }}</p>
+            </div>
+        {% endcomponent %}
+    </div>
+
+    {# FILTRES / Filters #}
+    {% url 'event-admin-show-event-detail' event.pk as event_detail_url %}
+    {% component "unfold/components/card.html" with title=_("Filtres") %}
+        <form role="search"
+              method="get"
+              action="{{ event_detail_url }}"
+              hx-get="{{ event_detail_url }}"
+              hx-target="#event-detail-results"
+              hx-swap="outerHTML"
+              hx-trigger="input delay:400ms, submit"
+              hx-sync="this:replace"
+              hx-replace-url="true"
+              aria-label="{% translate 'Filtrer les billets et les réponses' %}"
+              data-testid="admin-event-detail-filters">
+            <div class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));">
+
+                <div>
+                    <label for="event-detail-filter-email"
+                           class="block font-semibold mb-2 text-font-important-light text-sm dark:text-font-important-dark">
+                        {% translate "Email" %}
+                    </label>
+                    <input type="search" id="event-detail-filter-email" name="email"
+                           value="{{ email_filter }}" autocomplete="off"
+                           placeholder="{% translate 'contient…' %}"
+                           class="{{ unfold_input_classes }}"
+                           data-testid="admin-event-detail-filter-email">
+                </div>
+
+                <div>
+                    <label for="event-detail-filter-status"
+                           class="block font-semibold mb-2 text-font-important-light text-sm dark:text-font-important-dark">
+                        {% translate "Statut du billet" %}
+                    </label>
+                    <select id="event-detail-filter-status" name="ticket_status"
+                            class="{{ unfold_select_classes }}"
+                            data-testid="admin-event-detail-filter-status">
+                        <option value="">{% translate "Tous" %}</option>
+                        {% for status_choice in ticket_status_choices %}
+                            <option value="{{ status_choice.value }}" {% if status_choice.selected %}selected{% endif %}>{{ status_choice.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {# Un filtre par question du formulaire / One filter per form question #}
+                {% for question in form_questions %}
+                    <div>
+                        <label for="event-detail-filter-question-{{ question.index }}"
+                               class="block font-semibold mb-2 text-font-important-light text-sm dark:text-font-important-dark">
+                            {{ question.label }}
+                        </label>
+                        {% if question.filter_kind == "choice" %}
+                            <select id="event-detail-filter-question-{{ question.index }}" name="question_{{ question.index }}"
+                                    class="{{ unfold_select_classes }}"
+                                    data-testid="admin-event-detail-filter-question-{{ question.index }}">
+                                <option value="">{% translate "Toutes les réponses" %}</option>
+                                {% for option in question.options %}
+                                    <option value="{{ option }}" {% if option == question.selected_value %}selected{% endif %}>{{ option }}</option>
+                                {% endfor %}
+                            </select>
+                        {% elif question.filter_kind == "boolean" %}
+                            <select id="event-detail-filter-question-{{ question.index }}" name="question_{{ question.index }}"
+                                    class="{{ unfold_select_classes }}"
+                                    data-testid="admin-event-detail-filter-question-{{ question.index }}">
+                                <option value="">{% translate "Toutes les réponses" %}</option>
+                                <option value="oui" {% if question.selected_value == "oui" %}selected{% endif %}>{% translate "Oui" %}</option>
+                                <option value="non" {% if question.selected_value == "non" %}selected{% endif %}>{% translate "Non" %}</option>
+                            </select>
+                        {% else %}
+                            <input type="search" id="event-detail-filter-question-{{ question.index }}" name="question_{{ question.index }}"
+                                   value="{{ question.selected_value }}" autocomplete="off"
+                                   placeholder="{% translate 'contient…' %}"
+                                   class="{{ unfold_input_classes }}"
+                                   data-testid="admin-event-detail-filter-question-{{ question.index }}">
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="flex flex-row gap-2 mt-4">
+                {# Recharge toute la fiche sans filtre / Reloads the whole page without filters #}
+                <a href="{{ event_detail_url }}"
+                   class="border border-base-200 dark:border-base-700 rounded-default px-3 py-2 text-sm font-medium"
+                   data-testid="admin-event-detail-filters-reset">
+                    <span class="material-symbols-outlined align-middle" aria-hidden="true">filter_alt_off</span>
+                    {% translate "Réinitialiser" %}
+                </a>
+            </div>
+        </form>
+    {% endcomponent %}
+
+    {% include "admin/reservation/partials/event_detail_results.html" %}
+
+</div>

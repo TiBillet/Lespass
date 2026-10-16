@@ -99,7 +99,7 @@ from tests.e2e.conftest import BASE_URL, DOMAIN, _capturer_la_page_en_echec
 
 # Familles de tests : `make e2e-visible <famille>` (liste : make help, ou pytest.ini).
 # / Test families: `make e2e-visible <family>` (list: make help, or pytest.ini).
-pytestmark = [pytest.mark.e2e, pytest.mark.monnaie]
+pytestmark = [pytest.mark.e2e, pytest.mark.monnaie, pytest.mark.qrcode, pytest.mark.admin]
 
 LIEU_EMETTEUR = "lespass"
 LIEU_FEDERE = "festival"
@@ -646,6 +646,14 @@ def test_parcours_monnaie_federee_entre_deux_lieux(
         time.monotonic() - instant_de_la_federation
     )
     if secondes_restantes > 0:
+        # Le message dit au superviseur (make e2e-visible) que la page immobile attend.
+        # / Tells the supervisor (make e2e-visible) the idle page is waiting on purpose.
+        print(
+            f"\n[E2E] Pause de {secondes_restantes:.0f} s avant le paiement chez "
+            f"`{LIEU_FEDERE}` : le Fedow de dev garde 120 s en cache, par processus, "
+            "les monnaies acceptees par un lieu (tests/PIEGES.md 9.116).",
+            flush=True,
+        )
         time.sleep(secondes_restantes)
 
     contexte_de_l_adherent = browser.new_context(

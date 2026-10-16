@@ -123,6 +123,9 @@ Flux / Flow:
                                             <div class="py-2">{% translate "La fenêtre d'annulation est passé." %}</div>
                                         {% endif %}
                                     </div>
+                                    {# Réponses au formulaire dynamique du produit de la ressource #}
+                                    {# / Answers to the resource product's dynamic form #}
+                                    {% include 'pages/classic/vues/compte/partials/custom_form_accordion.html' with resa=booking accordion_prefix="booking" %}
                                 </div>
                             </div>
                         </div>
@@ -187,6 +190,9 @@ Flux / Flow:
                                                 {{ booking.slot_count }} {% translate "créneau(x)" %}
                                             </div>
                                     </div>
+                                    {# Réponses au formulaire dynamique du produit de la ressource #}
+                                    {# / Answers to the resource product's dynamic form #}
+                                    {% include 'pages/classic/vues/compte/partials/custom_form_accordion.html' with resa=booking accordion_prefix="booking" %}
                                 </div>
                             </div>
                         </div>

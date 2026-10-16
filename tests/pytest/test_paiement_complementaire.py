@@ -197,9 +197,13 @@ class TestPaiementComplementaire(FastTenantTestCase):
         return self.client_http.post('/laboutik/paiement/payer/', data=data)
 
     def _post_complementaire_nfc(self, tag_id_carte2, tag_id_carte1,
-                                 cascade_carte1, total_nfc_carte1, quantite):
+                                 cascade_carte1, total_nfc_carte1, quantite,
+                                 tag_id_carte_primaire=None):
         """POST /laboutik/paiement/payer_complementaire/ moyen_complement=nfc (2e carte).
-        / POST payer_complementaire moyen_complement=nfc (2nd card)."""
+        `tag_id_carte_primaire` : envoyé dans `tag_id_cm`, comme #addition-form ;
+        None : champ absent.
+        / POST payer_complementaire moyen_complement=nfc (2nd card). The primary card
+        tag goes in `tag_id_cm`; None: field left out."""
         data = {
             'uuid_pv': str(self.pv.uuid),
             'moyen_complement': 'nfc',
@@ -209,6 +213,8 @@ class TestPaiementComplementaire(FastTenantTestCase):
             'total_nfc_carte1': total_nfc_carte1,
             f'repid-{self.produit.uuid}': str(quantite),
         }
+        if tag_id_carte_primaire is not None:
+            data['tag_id_cm'] = tag_id_carte_primaire
         return self.client_http.post(
             '/laboutik/paiement/payer_complementaire/', data=data
         )
@@ -594,12 +600,13 @@ class TestPaiementComplementaire(FastTenantTestCase):
         # / Card1: 0 local TLF, 6 € FED (mocked below).
         Token.objects.filter(wallet=self.wallet1, asset=self.asset_tlf).update(value=0)
 
-        user1_pk = self.carte1.user_id
+        tag_id_carte1 = self.carte1.tag_id
 
-        def fake_fed(user):
-            # carte1 a 6 € de FED dépensable ; carte2 n'a pas de FED.
-            # / Card1 has 6 € spendable FED; card2 has none.
-            if user.pk == user1_pk:
+        def fake_fed(carte):
+            # Le FED se lit par la carte : carte1 a 6 € de FED dépensable, carte2 n'en
+            # a pas.
+            # / FED is read through the card: card1 has 6 € spendable FED, card2 none.
+            if carte.tag_id == tag_id_carte1:
                 return (600, True)
             return (0, False)
 
@@ -637,21 +644,25 @@ class TestPaiementComplementaire(FastTenantTestCase):
     def test_carte1_fed_plus_carte2_finalise_le_paiement(self):
         """Bug C, chemin succès : carte1 (0 local + 6 € FED) + carte2 (9 € local) couvre tout.
 
-        Le paiement se finalise : FED de carte1 **débité** (différé), carte2 débitée,
-        compta = 15 €, et un règlement en **STRIPE_FED** (le réseau).
-        / Success path: card1 FED (deferred debit) + card2 local cover all → finalize.
+        Le paiement se finalise : FED de carte1 **débité** (différé) par la carte1 et la
+        carte primaire du caissier, carte2 débitée, compta = 15 €, et un règlement en
+        **STRIPE_FED** (le réseau).
+        / Success path: card1 FED (deferred debit, through card1 and the cashier's
+        primary card) + card2 local cover all → finalize.
         """
         FED_UUID = "33333333-3333-3333-3333-333333333333"
+        TAG_DE_LA_CARTE_PRIMAIRE = 'CPLCM001'
         Token.objects.filter(wallet=self.wallet1, asset=self.asset_tlf).update(value=0)
         Token.objects.filter(wallet=self.wallet2, asset=self.asset_tlf).update(value=900)
-        user1_pk = self.carte1.user_id
+        tag_id_carte1 = self.carte1.tag_id
 
-        def fake_fed(user):
-            if user.pk == user1_pk:
+        def fake_fed(carte):
+            # Le FED se lit par la carte. / FED is read through the card.
+            if carte.tag_id == tag_id_carte1:
                 return (600, True)
             return (0, False)
 
-        def fake_debit_legacy(user, montant, uuid_tx):
+        def fake_debit_legacy(carte, tag_id_carte_primaire, montant, uuid_tx):
             # Fedow renverrait une transaction FED du montant débité. Même forme que
             # `_debiter_legacy` : le 4ᵉ élément est l'uuid de la transaction distante,
             # que la caisse copie dans le règlement de la vente et dans le journal
@@ -669,7 +680,9 @@ class TestPaiementComplementaire(FastTenantTestCase):
 
         with (
             mock.patch('laboutik.views.lire_depensable_fed_frais', side_effect=fake_fed),
-            mock.patch('laboutik.views._debiter_legacy', side_effect=fake_debit_legacy),
+            mock.patch(
+                'laboutik.views._debiter_legacy', side_effect=fake_debit_legacy
+            ) as debit_legacy,
             mock.patch('laboutik.views.FedowConfig') as MockConfig,
             mock.patch('laboutik.views.FedowAPI'),
         ):
@@ -686,6 +699,7 @@ class TestPaiementComplementaire(FastTenantTestCase):
                 cascade_carte1=cascade_carte1,
                 total_nfc_carte1=total_nfc_carte1,
                 quantite=3,
+                tag_id_carte_primaire=TAG_DE_LA_CARTE_PRIMAIRE,
             )
             assert reponse2.status_code == 200
             contenu2 = reponse2.content.decode()
@@ -693,6 +707,14 @@ class TestPaiementComplementaire(FastTenantTestCase):
         # Succès : pas de re-render complément.
         # / Success: no complement re-render.
         assert 'data-testid="complement-reste-a-payer"' not in contenu2
+
+        # Un seul débit du FED : carte1, signé par la carte primaire du caissier, 6 €.
+        # / One FED debit: card1, signed by the cashier's primary card, 6 €.
+        assert debit_legacy.call_count == 1
+        carte_debitee, tag_signataire, montant_debite, _uuid = debit_legacy.call_args.args
+        assert carte_debitee.tag_id == self.carte1.tag_id
+        assert tag_signataire == TAG_DE_LA_CARTE_PRIMAIRE
+        assert montant_debite == 600
 
         lignes = LigneArticle.objects.filter(sale_origin=SaleOrigin.LABOUTIK)
         assert sum(ligne.total() for ligne in lignes) == 1500

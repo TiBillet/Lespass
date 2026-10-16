@@ -9,6 +9,7 @@ META n'apparait que dans la liste d'un superuser.
 / ROOT and waiting slots never listed; META only in a superuser's list.
 """
 
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -18,6 +19,34 @@ from Administration.admin.site import staff_admin_site
 from Customers.models import Client
 
 pytestmark = pytest.mark.django_db
+
+
+def _fabriquer_un_lieu_de_chaque_categorie():
+    """
+    Un lieu de chaque categorie utile au test : ROOT, emplacement en attente, META,
+    et un lieu ordinaire. Le test ne depend donc pas des lieux de la base de dev
+    (les emplacements en attente y sont consommes par l'onboarding).
+    `bulk_create` n'appelle pas `save()` : aucun schema n'est cree. Tout est annule
+    par la transaction `django_db`.
+    / One venue per category, so the test does not depend on the dev database.
+    bulk_create skips save(): no schema is created. Rolled back by django_db.
+    """
+    suffixe = uuid.uuid4().hex[:8]
+    lieux_fabriques = []
+    for categorie in (
+        Client.ROOT,
+        Client.WAITING_CONFIG,
+        Client.META,
+        Client.SALLE_SPECTACLE,
+    ):
+        lieux_fabriques.append(
+            Client(
+                schema_name=f"test_liste_{categorie.lower()}_{suffixe}",
+                name=f"Test liste des lieux {categorie} {suffixe}",
+                categorie=categorie,
+            )
+        )
+    Client.objects.bulk_create(lieux_fabriques)
 
 
 def _categories_proposees(chemin, est_superuser):
@@ -38,10 +67,7 @@ def _categories_proposees(chemin, est_superuser):
     ids=["liste-superuser", "autocompletion-superuser", "liste-gestionnaire"],
 )
 def test_les_lieux_techniques_proposes(chemin, est_superuser, meta_attendu):
-    # Precondition : la base dev contient des lieux de chaque categorie.
-    # / Precondition: the dev database has venues of each category.
-    for categorie in (Client.ROOT, Client.WAITING_CONFIG, Client.META):
-        assert Client.objects.filter(categorie=categorie).exists(), categorie
+    _fabriquer_un_lieu_de_chaque_categorie()
 
     categories = _categories_proposees(chemin, est_superuser)
 

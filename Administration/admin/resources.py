@@ -5,6 +5,8 @@ Enregistrements de l'administration Django pour le module booking.
 LOCALISATION : booking/admin.py
 """
 from django.contrib import admin
+from django.db.models import Q, Sum
+from django.db.models.functions import Coalesce
 from django.forms import ModelForm
 from django import forms
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
@@ -21,7 +23,10 @@ from unfold.widgets import (
     UnfoldAdminSelect2Widget,
     UnfoldAdminTextInputWidget,
 )
-
+from import_export.admin import ExportActionModelAdmin
+from unfold.contrib.import_export.forms import ExportForm
+from Administration.admin.mixins import ExportCsvLisibleParExcelMixin
+from Administration.importers.resources_bookings_exporters import BookingExportResource
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from AuthBillet.models import TibilletUser
@@ -109,13 +114,17 @@ class WeeklyOpeningAdmin(ModelAdmin):
 
 
 @admin.register(Booking, site=staff_admin_site)
-class BookingAdmin(ModelAdmin):
+class BookingAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAdmin):
 
     #TODO : Create a calendar view (reuse from lespass maybe) to create bookings
 
     ordering = ("-booked_at",)
 
-    exclude = ["commande"]
+    # custom_form est retiré du formulaire : pas d'édition du JSON brut.
+    # Les réponses s'affichent en tableau sous la fiche (change_form_after_template).
+    # / custom_form is not editable as raw JSON; shown as a table below the form.
+    exclude = ["commande", "custom_form"]
+    change_form_after_template = "admin/booking/custom_form.html"
 
     list_display = (
         'booked_at',
@@ -134,6 +143,32 @@ class BookingAdmin(ModelAdmin):
         ('status', ChoicesDropdownFilter),
         'start_datetime'
     ]
+
+    # Export lisible : date, heure de début et de fin à l'heure du lieu, statut en libellé.
+    # / Readable export: date, start and end time in venue time, status as a label.
+    resource_classes = [BookingExportResource]
+    export_form_class = ExportForm
+
+    def get_export_queryset(self, request):
+        # La ressource et l'utilisateur sont lus à chaque ligne exportée :
+        # on les charge en une seule requête.
+        # / Resource and user are read on every exported row: load them in one query.
+        queryset_de_l_export = super().get_export_queryset(request)
+        queryset_de_l_export = queryset_de_l_export.select_related('resource', 'user')
+
+        # Le total payé est calculé par la base, en une seule requête pour tout l'export.
+        # Même règle que Booking.total_paid() : mêmes statuts (STATUTS_DES_LIGNES_PAYEES).
+        # Coalesce : une réservation sans ligne payée vaut 0, pas None.
+        # Lu par BookingExportResource.dehydrate_total_paye.
+        # / Total paid summed by the database in one query, same rule as total_paid().
+        lignes_payees = Q(lignearticles__status__in=Booking.STATUTS_DES_LIGNES_PAYEES)
+        queryset_de_l_export = queryset_de_l_export.annotate(
+            total_paye_en_centimes=Coalesce(
+                Sum('lignearticles__total_ttc', filter=lignes_payees),
+                0,
+            )
+        )
+        return queryset_de_l_export
 
     # INDISPENSABLE : user reste en lecture seule. Les utilisateurs sont partagés entre
     # tous les lieux (AuthBillet est en SHARED_APPS). Modifiable, ce champ devient une

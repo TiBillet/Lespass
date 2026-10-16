@@ -1,0 +1,70 @@
+{% load i18n unfold %}
+{% comment %}
+RÉSULTATS DE LA FICHE DE DÉTAIL D'UN ÉVÈNEMENT — les deux tableaux
+/ Event detail page results — the two tables
+
+LOCALISATION : Administration/templates/admin/reservation/partials/event_detail_results.html
+
+Inclus par admin/reservation/event_detail.html au premier affichage.
+Renvoyé SEUL par EventMVT.admin_show_event_detail (BaseBillet/views.py) quand un filtre change
+(en-tête HX-Target = "event-detail-results") : HTMX remplace alors tout ce bloc (outerHTML).
+
+Les tableaux utilisent le composant Unfold unfold/components/table.html.
+Le composant échappe chaque cellule. Les liens et les badges arrivent déjà construits
+par la vue (format_html, render_to_string), qui échappe les données des acheteurs.
+
+CONTEXTE :
+- tickets_table : {"headers", "rows"} des billets qui passent les filtres
+- form_answers_table : {"headers", "rows"} des réponses, une colonne par question
+- form_questions : vide si les produits de l'évènement n'ont pas de formulaire
+- filters_are_active, number_of_matching_reservations, number_of_matching_tickets
+{% endcomment %}
+
+<div id="event-detail-results" class="flex flex-col gap-6" aria-live="polite" data-testid="admin-event-detail-results">
+
+    {% if filters_are_active %}
+        <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="admin-event-detail-filters-summary">
+            {% blocktrans with reservations=number_of_matching_reservations tickets=number_of_matching_tickets %}{{ reservations }} réservation(s) et {{ tickets }} billet(s) correspondent aux filtres.{% endblocktrans %}
+        </p>
+    {% endif %}
+
+    {# BILLETS / Tickets #}
+    {% component "unfold/components/card.html" with title=_("Billets") %}
+        {% if tickets_table.rows %}
+            <div data-testid="admin-event-detail-tickets">
+                {% component "unfold/components/table.html" with table=tickets_table card_included=1 striped=1 %}{% endcomponent %}
+            </div>
+        {% elif filters_are_active %}
+            <em class="text-sm text-gray-500 dark:text-gray-400" data-testid="admin-event-detail-no-matching-tickets">
+                {% translate "Aucun billet ne correspond aux filtres." %}
+            </em>
+        {% else %}
+            <em class="text-sm text-gray-500 dark:text-gray-400" data-testid="admin-event-detail-no-tickets">
+                {% translate "Aucun billet pour cet évènement." %}
+            </em>
+        {% endif %}
+    {% endcomponent %}
+
+    {# RÉPONSES AUX FORMULAIRES : une colonne par question, une ligne par réservation #}
+    {# / Form answers: one column per question, one row per reservation #}
+    {% component "unfold/components/card.html" with title=_("Réponses aux formulaires") %}
+        {% if form_answers_table.rows %}
+            <div data-testid="admin-event-detail-form-answers">
+                {% component "unfold/components/table.html" with table=form_answers_table card_included=1 striped=1 %}{% endcomponent %}
+            </div>
+        {% elif not form_questions %}
+            <em class="text-sm text-gray-500 dark:text-gray-400" data-testid="admin-event-detail-no-form">
+                {% translate "Les produits de cet évènement n'ont pas de formulaire." %}
+            </em>
+        {% elif filters_are_active %}
+            <em class="text-sm text-gray-500 dark:text-gray-400" data-testid="admin-event-detail-no-matching-answers">
+                {% translate "Aucune réservation ne correspond aux filtres." %}
+            </em>
+        {% else %}
+            <em class="text-sm text-gray-500 dark:text-gray-400" data-testid="admin-event-detail-no-form-answers">
+                {% translate "Aucune réponse au formulaire pour le moment." %}
+            </em>
+        {% endif %}
+    {% endcomponent %}
+
+</div>

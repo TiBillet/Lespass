@@ -457,6 +457,7 @@ def validate_new_booking(resource,
                          last_name: str = None,
                          custom_amount: Decimal = None,
                          vente=None,
+                         custom_form: dict = None,
                          ):
     """
     Valide B ⊆ E' et crée la réservation dans une transaction SERIALIZABLE.
@@ -543,6 +544,13 @@ def validate_new_booking(resource,
             create_checkout=True; passed by the caller (the cart always passes its
             order's sale). None with create_checkout=False: no production path; kept
             for calls without a sale (tests), removed in sheet H.
+
+    custom_form : les réponses au formulaire dynamique du produit, DÉJÀ construites par
+                  build_custom_form_from_request (BaseBillet/validators.py). Cette
+                  fonction ne les valide pas : l'appelant le fait avant (booking/views.py
+                  _book_post, ou PanierMVT.add_resource pour le panier).
+                  Un dictionnaire vide est enregistré en None.
+                  / Answers already built by the caller; stored as-is, {} saved as None.
 
     :return: (True, Booking) si créé / if created
              (False, str)    message d'erreur / error message
@@ -700,6 +708,7 @@ def validate_new_booking(resource,
                 commande=commande,
                 first_name=first_name,
                 last_name=last_name,
+                custom_form=custom_form or None,
             )
 
 

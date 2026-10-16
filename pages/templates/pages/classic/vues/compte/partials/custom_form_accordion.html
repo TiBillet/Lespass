@@ -1,17 +1,29 @@
 {% load i18n tibitags %}
+{% comment %}
+Réponses au formulaire dynamique, repliées dans un accordéon.
+/ Dynamic form answers, folded in an accordion.
+
+PARAMÈTRES :
+- resa : l'objet qui porte custom_form (Reservation ou Booking).
+- accordion_prefix (optionnel, « resa » par défaut) : début des identifiants HTML.
+Les identifiants doivent être uniques dans la page : on y met resa.uuid, ou resa.pk
+pour un Booking, qui n'a pas d'uuid. Le préfixe évite qu'une réservation d'événement
+et une réservation de ressource aient le même identifiant.
+/ Ids must be unique: uuid, or pk for a Booking; the prefix avoids collisions.
+{% endcomment %}
 
 {% if resa.custom_form %}
-<div class="accordion accordion-flush mt-3" id="resa{{ resa.uuid }}FormAccordion">
+<div class="accordion accordion-flush mt-3" id="{{ accordion_prefix|default:"resa" }}{{ resa.uuid|default:resa.pk }}FormAccordion">
   <div class="accordion-item">
     <h4 class="accordion-header">
       <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-              data-bs-target="#resa{{ resa.uuid }}FormDetails" aria-expanded="false"
-              aria-controls="resa{{ resa.uuid }}FormDetails">
+              data-bs-target="#{{ accordion_prefix|default:"resa" }}{{ resa.uuid|default:resa.pk }}FormDetails" aria-expanded="false"
+              aria-controls="{{ accordion_prefix|default:"resa" }}{{ resa.uuid|default:resa.pk }}FormDetails">
         {% trans 'Answers to the reservation form' %}
       </button>
     </h4>
-    <div id="resa{{ resa.uuid }}FormDetails" class="accordion-collapse collapse"
-         data-bs-parent="#resa{{ resa.uuid }}FormAccordion">
+    <div id="{{ accordion_prefix|default:"resa" }}{{ resa.uuid|default:resa.pk }}FormDetails" class="accordion-collapse collapse"
+         data-bs-parent="#{{ accordion_prefix|default:"resa" }}{{ resa.uuid|default:resa.pk }}FormAccordion">
       <div class="accordion-body">
         <table class="table">
           <tbody>

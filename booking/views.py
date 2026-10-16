@@ -23,8 +23,8 @@ from django.contrib import messages
 from django.utils.translation import gettext_lazy as _
 from rest_framework.decorators import action
 
-from BaseBillet.models import Price, PaymentMethod
-from BaseBillet.views import get_context
+from BaseBillet.models import Price, PaymentMethod, ProductFormField
+from BaseBillet.views import get_context, reponses_du_formulaire_personnalise_pour_le_panier
 from booking.booking_engine import Interval, compute_slots, validate_new_booking
 from booking.booking_engine import annotate_slots_for_display
 from booking.booking_engine import validate_resource_booking_form
@@ -598,6 +598,7 @@ class BookingViewSet(viewsets.ViewSet):
 
         context = get_context(request)
         context.update({
+            'reponses_saisies': self._reponses_saisies_du_formulaire(request, resource),
             'resource': resource,
             'slot': requested_slot,
             'consecutive_slots': consecutive_slots,
@@ -610,6 +611,46 @@ class BookingViewSet(viewsets.ViewSet):
             'error': error,
         })
         return context
+
+    def _produits_avec_questions(self, resource):
+        """
+        Les produits dont on lit les questions du formulaire dynamique.
+        / Products whose dynamic form questions are read.
+
+        Une ressource a au plus un produit (Resource.product). Sans produit,
+        la liste est vide : aucune question n'est posée.
+        / A resource has at most one product; none means no question.
+        """
+        if resource.product is None:
+            return []
+        return [resource.product]
+
+    def _reponses_saisies_du_formulaire(self, request, resource):
+        """
+        Les réponses tapées par la personne, pour les réafficher après une erreur.
+        / Answers typed by the person, to show them again after an error.
+
+        LOCALISATION : booking/views.py
+
+        Lu par le partial commun/formulaires/champs_produit.html (paramètre prefill).
+        Clé : le nom technique de la question (field.name), comme le champ « form__<name> ».
+        Un choix multiple garde toutes ses cases cochées (getlist).
+        Hors POST (premier affichage), le dictionnaire est vide.
+        / Keyed by field.name; multi-select keeps every checked value; empty outside POST.
+        """
+        reponses_saisies = {}
+        if request.method != 'POST':
+            return reponses_saisies
+
+        for produit in self._produits_avec_questions(resource):
+            for question in produit.form_fields.all():
+                nom_du_champ = f"form__{question.name}"
+                question_a_choix_multiple = question.field_type == ProductFormField.FieldType.MULTI_SELECT
+                if question_a_choix_multiple:
+                    reponses_saisies[question.name] = request.POST.getlist(nom_du_champ)
+                else:
+                    reponses_saisies[question.name] = request.POST.get(nom_du_champ, "")
+        return reponses_saisies
 
     def _book_post(self, request, resource):
         """
@@ -669,6 +710,30 @@ class BookingViewSet(viewsets.ViewSet):
 
         custom_amount = request.POST.get(f"custom_amount_{price_uuid}", None)
 
+        # Réponses au formulaire dynamique du produit de la ressource.
+        # Même fonction que le panier (PanierMVT.add_resource) : les réponses sont
+        # rangées pareil, quel que soit le parcours. Une question obligatoire sans
+        # réponse renvoie le formulaire en 422, avec les réponses déjà tapées.
+        # / Dynamic form answers, same builder as the cart; 422 on a missing required answer.
+        reponses_au_formulaire, erreur_du_formulaire = reponses_du_formulaire_personnalise_pour_le_panier(
+            request,
+            self._produits_avec_questions(resource),
+        )
+        if erreur_du_formulaire:
+            context = self._build_resource_form_context(
+                request=request,
+                resource=resource,
+                start_datetime=start_datetime,
+                requested_slot=validation_result.get('requested_slot'),
+                consecutive_slots=validation_result.get('consecutive_slots', []),
+                max_slot_count=validation_result.get('max_slot_count', 0),
+                slot_duration_minutes=slot_duration_minutes,
+                window_end=validation_result.get('window_end'),
+                error=erreur_du_formulaire,
+            )
+            if request.htmx:
+                return render(request, 'booking/partials/book_form.html', context, status=422)
+            return render(request, 'booking/views/book.html', context)
 
         is_valid, result, checkout_url = validate_new_booking(
             resource=resource,
@@ -680,7 +745,8 @@ class BookingViewSet(viewsets.ViewSet):
             first_name=firstname,
             last_name=lastname,
             external_payment_method=PaymentMethod.STRIPE_NOFED,
-            custom_amount=custom_amount
+            custom_amount=custom_amount,
+            custom_form=reponses_au_formulaire,
         )
 
         if is_valid:

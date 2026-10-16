@@ -16,7 +16,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.db import connection
 from django.db import models
 from django.db.models import JSONField, SET_NULL
@@ -2814,6 +2814,45 @@ class Event(models.Model):
                 "end_datetime": _("La fin de l'évènement doit être après son début."),
             })
 
+    def full_clean(self, exclude=None, validate_unique=True, validate_constraints=True):
+        """
+        Valide l'evenement. Deplace l'erreur de date de fin en erreur generale
+        quand le champ de fin n'est pas dans le formulaire.
+        / Validates the event. Moves the end date error to a non-field error
+        when the end field is not in the form.
+
+        LOCALISATION : BaseBillet/models.py
+
+        INDISPENSABLE : un ModelForm leve ValueError (« has no field named
+        'end_datetime' ») si clean() rattache une erreur a un champ absent du
+        formulaire. C'est le cas de la liste admin des evenements : la case
+        « publie » est modifiable (list_editable), et son formulaire ne contient
+        que `published`. Un evenement deja en base avec une fin avant le debut
+        ferait planter la page en 500 au lieu d'afficher l'erreur.
+        Les champs absents du formulaire sont ceux de `exclude`.
+        """
+        try:
+            super().full_clean(
+                exclude=exclude,
+                validate_unique=validate_unique,
+                validate_constraints=validate_constraints,
+            )
+        except ValidationError as erreurs_du_modele:
+            le_champ_de_fin_est_hors_du_formulaire = (
+                exclude is not None and "end_datetime" in exclude
+            )
+            il_y_a_une_erreur_sur_la_fin = "end_datetime" in erreurs_du_modele.error_dict
+            if not le_champ_de_fin_est_hors_du_formulaire or not il_y_a_une_erreur_sur_la_fin:
+                raise
+
+            # L'erreur de fin devient une erreur generale, affichee sur la ligne.
+            # / The end error becomes a non-field error, shown on the row.
+            erreurs_par_champ = dict(erreurs_du_modele.error_dict)
+            erreurs_sur_la_fin = erreurs_par_champ.pop("end_datetime")
+            erreurs_generales = erreurs_par_champ.get(NON_FIELD_ERRORS, [])
+            erreurs_par_champ[NON_FIELD_ERRORS] = erreurs_generales + erreurs_sur_la_fin
+            raise ValidationError(erreurs_par_champ)
+
     def save(self, *args, **kwargs):
         """
         Transforme le titre de l'evenemennt en slug, pour en faire une url lisible
@@ -5318,6 +5357,13 @@ class ExternalApiKey(models.Model):
     # / Website API right (pages app): opens create/edit of Pages AND Blocs.
     page = models.BooleanField(default=False, verbose_name=_("Pages / Site web"))
 
+    # Droit de lecture de la comptabilite : la liste des clotures, leurs ecritures
+    # (JSON et fichier FEC) et le plan comptable du lieu. C'est la cle d'un logiciel
+    # comptable (Dolibarr, Paheko...) qui vient chercher les clotures chaque nuit.
+    # / Accounting read right: closures, their entries (JSON and FEC file) and the
+    # venue's chart of accounts. The key of an accounting software.
+    comptabilite = models.BooleanField(default=False, verbose_name=_("Comptabilité (lecture)"))
+
     # Asset cadeau (TNF) que cette cle peut recharger via /api/v2/wallet-refills/.
     # La presence de cet asset sert a la fois d'interrupteur du droit "walletrefill"
     # et de restriction : la cle ne peut recharger QUE cet asset.
@@ -5358,6 +5404,10 @@ class ExternalApiKey(models.Model):
             # / Website (pages app): same right for pages and blocs.
             "page": self.page,
             "bloc": self.page,
+            # Comptabilite : meme droit pour les clotures et le plan comptable.
+            # / Accounting: same right for closures and the chart of accounts.
+            "closure": self.comptabilite,
+            "account": self.comptabilite,
             # Recharge cadeau : autorisee seulement si un asset cadeau est defini
             # / Gift refill: allowed only if a gift asset is set
             "walletrefill": bool(self.gift_asset_id),

@@ -20,7 +20,7 @@ from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import connection, IntegrityError, transaction as db_transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Q, Sum, Prefetch
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -761,35 +761,44 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                                  _("Cette carte n'est pas reconnue. Elle n'est peut-être pas encore activée."))
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
-        # Lier la carte au user cote LESPASS aussi. Fedow vient de fusionner les wallets,
-        # mais `CarteCashless.user` reste vide sans cet appel : la carte demeure « anonyme »
-        # pour le point de vente V2, qui masque alors le solde federe
-        # (`if carte.user is not None` dans obtenir_solde_complet_carte) et ne sait pas
-        # identifier l'adherent au comptoir.
-        # `lier_a_user` est transactionnel et idempotent : il pose l'usager, fusionne le
-        # wallet ephemere LOCAL et rattrape les adhesions anonymes.
-        # Non bloquant : la fusion cote Fedow a reussi, une incoherence locale ne doit pas
-        # transformer un parcours abouti en message d'erreur.
-        # / Link the card on the LESPASS side too. Fedow just merged the wallets, but
-        #   CarteCashless.user stays empty without this call, leaving the card "anonymous"
-        #   for the V2 POS. Transactional and idempotent. Non-blocking.
+        # D'abord, on recopie l'état de Fedow : une ancienne carte détachée chez Fedow
+        # sans passer par Lespass (VOID de la caisse V1) bloquerait sinon la liaison
+        # locale de la nouvelle (`UserADejaCarte`). Un échec ici (sur une AUTRE carte de
+        # la personne) ne doit pas empêcher la liaison locale de la nouvelle, plus bas.
+        # / First copy Fedow's state: an old card detached on Fedow behind Lespass's back
+        #   (V1 register VOID) would otherwise block the new card's local link. A failure
+        #   here must not prevent the new card's local link below.
         try:
-            from fedow_core.services import CarteService
+            from QrcodeCashless.services import aligner_les_cartes_locales_sur_fedow
 
-            CarteService.lier_a_user(
-                qrcode_uuid=qrcode_uuid,
-                user=user,
+            cartes_du_porteur_chez_fedow = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+            aligner_les_cartes_locales_sur_fedow(
+                user,
+                cartes_du_porteur_chez_fedow,
                 ip=get_client_ip(request),
             )
-        except CarteIntrouvable:
-            # ATTENDU : la carte existe chez Fedow mais pas dans cette base. C'est le cas
-            # d'un lieu V1 (dont les cartes vivent dans LaBoutik) ou d'une carte d'un autre
-            # reseau. Rien a reparer ici.
-            # / EXPECTED: the card exists on Fedow but not in this database (V1 venue, or a
-            #   card from another network). Nothing to fix here.
-            logger.warning(
-                f"Carte {qrcode_uuid} liee cote Fedow, absente de la base Lespass "
-                f"(lieu V1 ou carte hors reseau)."
+        except Exception as erreur_alignement:
+            logger.error(
+                f"Divergence Fedow/Lespass sur les cartes de {user.email} : "
+                f"alignement local impossible ({erreur_alignement})."
+            )
+
+        # Mettre la copie LOCALE de la carte d'accord : elle porte la même personne.
+        # Sans elle, le point de vente V2 ne sait pas identifier l'adherent au comptoir.
+        # La carte existe ici : liaison locale (transactionnelle et idempotente). Elle
+        # n'existe pas encore (lieu V2 dont les cartes vivent chez l'ancien Fedow) : sa
+        # copie est fabriquée depuis la fiche que Fedow vient de rendre. Lieu legacy : rien.
+        # Non bloquant : la fusion cote Fedow a reussi, une incoherence locale ne doit pas
+        # transformer un parcours abouti en message d'erreur.
+        # / Bring the LOCAL card copy in line (same person): link it, or build it from
+        #   the record Fedow just returned. Non-blocking.
+        try:
+            from QrcodeCashless.services import relier_la_copie_locale_de_la_carte
+
+            relier_la_copie_locale_de_la_carte(
+                linked_serialized_card,
+                user,
+                ip=get_client_ip(request),
             )
         except Exception as erreur_liaison_locale:
             # INCOHERENCE : Fedow a accepte la liaison, la base locale la refuse
@@ -1207,7 +1216,6 @@ def declarer_la_carte_perdue(porteur, numero_carte, declarant):
     """
     from fedow_connect.fedow_api import CarteNonLieeAuPorteurChezFedow
     from fedow_core.services import CarteService
-    from laboutik.models import CartePrimaire
     from QrcodeCashless.models import CarteCashless
 
     # Fedow et Lespass stockent les numeros en majuscules et comparent la casse exacte.
@@ -1270,31 +1278,10 @@ def declarer_la_carte_perdue(porteur, numero_carte, declarant):
         )
 
     # --- 3. La carte primaire de caissier, dans tous les lieux / Cashier card, all venues ---
-    # CartePrimaire vit dans le schema de chaque lieu (app laboutik, TENANT_APPS) : on les
-    # parcourt tous. Les emplacements vides du pool (WAITING_CONFIG) n'ont pas forcement
-    # leurs tables : on les saute. Un lieu en erreur n'empeche pas de traiter les autres.
-    # / CartePrimaire lives in each venue's schema: walk them all, skip the empty pool slots.
     if carte_detachee_en_local is not None:
-        lieux_a_parcourir = Client.objects.exclude(schema_name="public").exclude(
-            categorie=Client.WAITING_CONFIG,
-        )
-        for lieu in lieux_a_parcourir:
-            try:
-                with tenant_context(lieu):
-                    nombre_supprime, _detail_suppression = CartePrimaire.objects.filter(
-                        carte=carte_detachee_en_local,
-                    ).delete()
-                if nombre_supprime:
-                    logger.info(
-                        f"Carte perdue : carte {numero_carte} retiree des cartes primaires "
-                        f"de caissier du lieu {lieu.schema_name}."
-                    )
-            except Exception as erreur_carte_primaire:
-                logger.error(
-                    f"Carte perdue : impossible de retirer la carte primaire {numero_carte} "
-                    f"du lieu {lieu.schema_name} ({erreur_carte_primaire}). Elle ouvre peut-etre "
-                    f"encore la caisse de ce lieu."
-                )
+        from QrcodeCashless.services import retirer_la_carte_des_cartes_primaires
+
+        retirer_la_carte_des_cartes_primaires(carte_detachee_en_local)
 
     logger.info(
         f"Carte perdue : carte {numero_carte} de {porteur.email}, declaree par "
@@ -1379,14 +1366,38 @@ class MyAccount(viewsets.ViewSet):
                                  _("Please validate your email to access all the features of your profile area."))
 
 
+        # Les cartes de la personne chez Fedow, qui fait foi pour le lien carte <-> personne.
+        # On en profite pour réparer la copie locale : la caisse V1 peut détacher une carte
+        # chez Fedow (VOID) sans prévenir Lespass. Fedow injoignable : la page s'affiche
+        # quand même, sans rien toucher en local.
+        # / The person's cards on Fedow, which is authoritative for the card <-> person
+        #   link. Also repairs the local copy. Fedow down: the page still renders.
+        cartes_chez_fedow = None
+        try:
+            cartes_chez_fedow = FedowAPI().NFCcard.retrieve_card_by_signature(user)
+        except Exception as erreur_fedow:
+            logger.warning(f"Mon compte : cartes de {user.email} illisibles chez Fedow : {erreur_fedow}")
+
+        if cartes_chez_fedow is not None:
+            try:
+                from QrcodeCashless.services import aligner_les_cartes_locales_sur_fedow
+
+                aligner_les_cartes_locales_sur_fedow(
+                    user, cartes_chez_fedow, ip=get_client_ip(request),
+                )
+            except Exception as erreur_alignement:
+                logger.error(
+                    f"Divergence Fedow/Lespass sur les cartes de {user.email} : "
+                    f"alignement local impossible ({erreur_alignement})."
+                )
+
         if get_skin_courant() == "V2":
 
-            # Get fedow info
-            fedowAPI = FedowAPI()
-            card = fedowAPI.NFCcard.retrieve_card_by_signature(user)
-            # If we found a card get it (because `retrieve_card_by_signature` return an array)
-            if card:
-                card = card[0]
+            # La première carte de la personne chez Fedow, lue plus haut.
+            # / The person's first card on Fedow, read above.
+            card = None
+            if cartes_chez_fedow:
+                card = cartes_chez_fedow[0]
             # card = {"number_printed":"hiii"}
             tokens = get_distant_fedow_tokens(request, template_context["config"])
 
@@ -3265,9 +3276,16 @@ class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def get_permissions(self):
-        # EventMVT n'expose plus que des vues publiques (list/retrieve).
+        # La fiche de détail admin d'un évènement montre les billets et les réponses
+        # des acheteurs (noms, emails) : elle est réservée aux admins du lieu.
+        # Cette méthode écrase le permission_classes de @action : le contrôle se fait ici.
+        # / The admin event detail shows buyers' personal data: tenant admins only.
+        if self.action == 'admin_show_event_detail':
+            return [TenantAdminPermission()]
+
+        # Les autres vues d'EventMVT sont publiques (list/retrieve).
         # Les actions admin de creation d'evenement vivent dans EventWizardAdmin (S3).
-        # / EventMVT now only exposes public views. Admin create actions live in EventWizardAdmin.
+        # / Other EventMVT views are public. Admin create actions live in EventWizardAdmin.
         return [permissions.AllowAny()]
 
     def _calculer_prix_min_max_event(self, event):
@@ -3290,7 +3308,7 @@ class EventMVT(viewsets.ViewSet):
         prices = []
         for product in event.products.all():
             for price in product.prices.all():
-                if not price.archived:
+                if not price.archived and price.publish:
                     prices.append(price)
 
         tarifs = [price.prix for price in prices]
@@ -3320,17 +3338,17 @@ class EventMVT(viewsets.ViewSet):
         prices = []
         for product in event.products.all():
             for price in product.prices.all():
-                if not price.archived:
+                if not price.archived and price.publish:
                     prices.append(price)
 
         tarifs = [price.prix for price in prices]
         il_y_a_un_prix_libre = any(price.free_price for price in prices)
 
         if tarifs:
-            return _("A partir de %(price)s €") % {"price": min(tarifs)}
+            return _("À partir de %(price)s €") % {"price": min(tarifs)}
         if il_y_a_un_prix_libre:
             return _("Prix libre")
-        return _("Entré libre")
+        return _("Entrée libre")
 
     def federated_events_get(self, slug):
         for place in FederatedPlace.objects.all().select_related('tenant'):
@@ -3844,7 +3862,7 @@ class EventMVT(viewsets.ViewSet):
 
             # Récupération des prix. Un tarif archivé (« supprimé ») n'est jamais affiché.
             # / Get prices. An archived ("deleted") price is never shown.
-            prices = [price for product in products for price in product.prices.all() if not price.archived]
+            prices = [price for product in products for price in product.prices.all() if not price.archived and price.publish]
 
             # Si l'user est connecté, on vérifie qu'il n'a pas déja reservé
             product_max_per_user_reached = []
@@ -4105,6 +4123,424 @@ class EventMVT(viewsets.ViewSet):
             return redirect('/my_account/')
         return redirect('/event/')
 
+    @action(detail=True, methods=['GET'])
+    def admin_show_event_detail(self, request, pk=None):
+        """
+        Fiche de détail d'un évènement dans l'admin : billets, formulaires dynamiques, filtres
+        / Admin event detail: tickets, dynamic form answers, filters
+
+        LOCALISATION : BaseBillet/views.py
+
+        FLUX :
+        1. Clic sur « Voir » dans la liste des évènements de l'admin
+           (EventAdmin.event_detail_page_button, Administration/admin_tenant.py)
+           ou sur le bouton en haut de la fiche d'un évènement (admin/event/change_form_before.html)
+        2. Lien classique vers GET /event/<pk>/admin_show_event_detail/ : la vue rend la page
+           complète admin/reservation/event_detail_page.html (gabarit de l'admin Unfold).
+           Le bouton « retour » du navigateur ramène à la page précédente.
+        3. Quand on change un filtre, le formulaire de filtres rappelle CETTE vue
+           avec les filtres en paramètres GET, et l'en-tête HX-Target = "event-detail-results".
+           On ne rend alors que le partial des résultats (les deux tableaux).
+
+        FILTRES (tous facultatifs) :
+        - email : « contient », sur l'email de la personne qui réserve
+        - ticket_status : statut du billet (Ticket.SCAN_CHOICES)
+        - question_<index> : réponse à une question du formulaire (voir _event_detail_form_questions)
+        Les filtres email et questions choisissent des RÉSERVATIONS.
+        Le filtre statut choisit des BILLETS. Les compteurs restent ceux de tout l'évènement.
+
+        Les tableaux utilisent le composant Unfold unfold/components/table.html.
+        Ce composant échappe chaque cellule : le HTML (liens, badges) est construit ici
+        avec format_html ou render_to_string, qui échappent les données des acheteurs.
+
+        DROITS : admin du lieu uniquement (voir get_permissions).
+        """
+        from unfold.widgets import INPUT_CLASSES, SELECT_CLASSES
+
+        event = get_object_or_404(Event, pk=pk)
+
+        # Toutes les réservations, avec leurs billets et leurs tarifs.
+        # Prefetch évite une requête par ligne de tableau.
+        # / All reservations with tickets and prices, without N+1 queries.
+        tickets_with_price = Ticket.objects.select_related('pricesold__price__product')
+        all_reservations_of_the_event = list(
+            event.reservation.select_related('user_commande').prefetch_related(
+                Prefetch('tickets', queryset=tickets_with_price),
+            ).order_by('-datetime')
+        )
+
+        # Compteurs de tout l'évènement (ils ne dépendent pas des filtres).
+        # / Counters for the whole event (they do not depend on filters).
+        number_of_valid_tickets = 0
+        number_of_scanned_tickets = 0
+        number_of_canceled_tickets = 0
+        number_of_pending_tickets = 0
+        for reservation in all_reservations_of_the_event:
+            for ticket in reservation.tickets.all():
+                if ticket.status in [Ticket.NOT_SCANNED, Ticket.SCANNED]:
+                    number_of_valid_tickets += 1
+                if ticket.status == Ticket.SCANNED:
+                    number_of_scanned_tickets += 1
+                if ticket.status == Ticket.CANCELED:
+                    number_of_canceled_tickets += 1
+                if ticket.status in [Ticket.CREATED, Ticket.NOT_ACTIV]:
+                    number_of_pending_tickets += 1
+
+        valid_tickets_percent = 0
+        if event.jauge_max:
+            valid_tickets_percent = min(100, round(number_of_valid_tickets * 100 / event.jauge_max))
+
+        # Les questions du formulaire : une colonne et un filtre chacune.
+        # / Form questions: one column and one filter each.
+        form_questions = _event_detail_form_questions(event, all_reservations_of_the_event)
+
+        # Lecture des filtres. Un filtre invalide est ignoré, la page s'affiche quand même.
+        # / Read filters. An invalid filter is ignored, the page still renders.
+        email_filter = ""
+        ticket_status_filter = ""
+        filters_serializer = EventDetailFiltersSerializer(data=request.GET)
+        if filters_serializer.is_valid():
+            email_filter = filters_serializer.validated_data.get('email', '').strip().lower()
+            ticket_status_filter = filters_serializer.validated_data.get('ticket_status', '')
+        question_filters = _read_question_filters(request, form_questions)
+
+        filters_are_active = bool(email_filter or ticket_status_filter or question_filters)
+
+        # Les réservations qui passent les filtres email et questions.
+        # / Reservations matching the email and question filters.
+        matching_reservations = []
+        for reservation in all_reservations_of_the_event:
+            if _reservation_matches_filters(reservation, email_filter, question_filters):
+                matching_reservations.append(reservation)
+
+        # Les billets de ces réservations, filtrés par statut si demandé.
+        # / Tickets of these reservations, filtered by status if asked.
+        matching_tickets = []
+        for reservation in matching_reservations:
+            for ticket in reservation.tickets.all():
+                if ticket_status_filter and ticket.status != ticket_status_filter:
+                    continue
+                matching_tickets.append(ticket)
+
+        # Seules les réservations qui ont répondu vont dans le tableau des réponses.
+        # / Only reservations with answers go in the answers table.
+        matching_reservations_with_answers = []
+        for reservation in matching_reservations:
+            answers_are_a_dict = isinstance(reservation.custom_form, dict)
+            if answers_are_a_dict and reservation.custom_form:
+                matching_reservations_with_answers.append(reservation)
+
+        ticket_status_choices = []
+        for status_code, status_label in Ticket.SCAN_CHOICES:
+            ticket_status_choices.append({
+                "value": status_code,
+                "label": status_label,
+                "selected": status_code == ticket_status_filter,
+            })
+
+        context = {
+            "event": event,
+            "number_of_valid_tickets": number_of_valid_tickets,
+            "number_of_scanned_tickets": number_of_scanned_tickets,
+            "number_of_canceled_tickets": number_of_canceled_tickets,
+            "number_of_pending_tickets": number_of_pending_tickets,
+            "valid_tickets_percent": valid_tickets_percent,
+            "form_questions": form_questions,
+            "email_filter": filters_serializer.initial_data.get('email', ''),
+            "ticket_status_choices": ticket_status_choices,
+            "filters_are_active": filters_are_active,
+            "number_of_matching_reservations": len(matching_reservations),
+            "number_of_matching_tickets": len(matching_tickets),
+            "tickets_table": _build_tickets_table(matching_tickets),
+            "form_answers_table": _build_form_answers_table(form_questions, matching_reservations_with_answers),
+            # Classes CSS des champs de formulaire d'Unfold : les filtres ont l'allure native.
+            # / Unfold form field CSS classes: filters look native.
+            "unfold_input_classes": " ".join(INPUT_CLASSES),
+            "unfold_select_classes": " ".join(SELECT_CLASSES),
+        }
+
+        # Requête d'un filtre : on ne renvoie que la zone des résultats.
+        # / Filter request: only the results area is returned.
+        request_comes_from_filters = request.headers.get('HX-Target') == 'event-detail-results'
+        if request_comes_from_filters:
+            return render(request, "admin/reservation/partials/event_detail_results.html", context=context)
+
+        # Navigation classique : la page complète, dans le gabarit de l'admin Unfold.
+        # each_context remplit la barre latérale et l'en-tête de l'admin.
+        # / Normal navigation: the full page, in the Unfold admin layout.
+        from Administration.admin.site import staff_admin_site
+        full_page_context = {
+            **staff_admin_site.each_context(request),
+            "title": event.name,
+            **context,
+        }
+        return render(request, "admin/reservation/event_detail_page.html", context=full_page_context)
+
+
+# ---------------------------------------------------------------------------
+# Fiche de détail admin d'un évènement : fonctions d'aide de admin_show_event_detail
+# / Admin event detail page: helpers of admin_show_event_detail
+# ---------------------------------------------------------------------------
+
+class EventDetailFiltersSerializer(serializers.Serializer):
+    """
+    Valide les filtres fixes de la fiche de détail admin d'un évènement.
+    Les filtres de questions (question_<index>) dépendent de l'évènement :
+    ils sont validés par _read_question_filters.
+    / Validates the fixed filters. Question filters are validated by _read_question_filters.
+    """
+    email = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    ticket_status = serializers.ChoiceField(choices=Ticket.SCAN_CHOICES, required=False, allow_blank=True)
+
+
+# Types de questions filtrées par une liste de choix.
+# / Question types filtered with a choice list.
+FORM_FIELD_TYPES_WITH_CHOICES = ['SS', 'SR', 'MS']
+FORM_FIELD_TYPE_BOOLEAN = 'BL'
+
+
+def _event_detail_form_questions(event, reservations):
+    """
+    Liste les questions du formulaire des produits de l'évènement, dans l'ordre d'affichage.
+    / Lists the form questions of the event's products, in display order.
+
+    Chaque question est un dict :
+    - index : sa position (sert au nom du filtre « question_<index> »)
+    - label : le libellé affiché
+    - keys : les clés possibles dans le JSON des réponses (libellé ET slug)
+    - filter_kind : "choice" (liste d'options), "boolean" (oui/non) ou "text" (contient)
+    - options : les options pour un filtre "choice"
+
+    Les réponses sont rangées sous le LIBELLÉ de la question
+    (build_custom_form_from_request, BaseBillet/validators.py), ou sous sa clé (slug)
+    pour les anciennes réponses : on accepte les deux.
+    Une réponse à une question supprimée depuis garde sa question, à la fin, en filtre texte.
+    """
+    form_questions = []
+    known_answer_keys = set()
+
+    products_of_the_event = event.products.prefetch_related('form_fields')
+    for product in products_of_the_event:
+        for form_field in product.form_fields.all().order_by('order'):
+            question_label = (form_field.label or '').strip() or form_field.name
+            if question_label in known_answer_keys:
+                continue
+
+            filter_kind = "text"
+            options = []
+            if form_field.field_type in FORM_FIELD_TYPES_WITH_CHOICES and form_field.options:
+                filter_kind = "choice"
+                for option in form_field.options:
+                    options.append(str(option))
+            if form_field.field_type == FORM_FIELD_TYPE_BOOLEAN:
+                filter_kind = "boolean"
+
+            form_questions.append({
+                "index": len(form_questions),
+                "label": question_label,
+                "keys": [question_label, form_field.name],
+                "filter_kind": filter_kind,
+                "options": options,
+                "selected_value": "",
+            })
+            known_answer_keys.add(question_label)
+            known_answer_keys.add(form_field.name)
+
+    # Questions supprimées depuis : leurs clés existent encore dans les réponses.
+    # / Deleted questions: their keys still exist in the answers.
+    for reservation in reservations:
+        if not isinstance(reservation.custom_form, dict):
+            continue
+        for answer_key in reservation.custom_form.keys():
+            if answer_key in known_answer_keys:
+                continue
+            form_questions.append({
+                "index": len(form_questions),
+                "label": answer_key,
+                "keys": [answer_key],
+                "filter_kind": "text",
+                "options": [],
+                "selected_value": "",
+            })
+            known_answer_keys.add(answer_key)
+
+    return form_questions
+
+
+def _read_question_filters(request, form_questions):
+    """
+    Lit les filtres « question_<index> » envoyés en GET.
+    / Reads the "question_<index>" GET filters.
+
+    Une valeur qui n'est pas une option de la question est ignorée.
+    Le paramètre d'une question inconnue n'est jamais lu.
+    La valeur gardée est aussi posée dans question["selected_value"] pour réafficher le filtre.
+
+    :return: liste de (question, valeur_du_filtre)
+    """
+    question_filters = []
+    for question in form_questions:
+        parameter_name = f"question_{question['index']}"
+        filter_value = request.GET.get(parameter_name, '').strip()[:200]
+        if not filter_value:
+            continue
+
+        if question["filter_kind"] == "choice" and filter_value not in question["options"]:
+            continue
+        if question["filter_kind"] == "boolean" and filter_value not in ["oui", "non"]:
+            continue
+
+        question["selected_value"] = filter_value
+        question_filters.append((question, filter_value))
+    return question_filters
+
+
+def _reservation_matches_filters(reservation, email_filter, question_filters):
+    """
+    Vrai si la réservation passe le filtre email ET tous les filtres de questions.
+    / True if the reservation matches the email filter AND every question filter.
+    """
+    from BaseBillet.templatetags.tibitags import format_answer
+
+    if email_filter:
+        buyer_email = (reservation.user_commande.email or '').lower()
+        if email_filter not in buyer_email:
+            return False
+
+    answers = reservation.custom_form
+    if not isinstance(answers, dict):
+        answers = {}
+
+    for question, filter_value in question_filters:
+        # Cherche la réponse sous le libellé, puis sous le slug.
+        # / Looks for the answer under the label, then under the slug.
+        answer = None
+        for answer_key in question["keys"]:
+            if answer_key in answers:
+                answer = answers[answer_key]
+                break
+        if answer is None:
+            return False
+
+        if question["filter_kind"] == "choice":
+            # Choix multiple : la réponse est une liste, l'option doit en faire partie.
+            # / Multiple choice: the answer is a list, the option must be in it.
+            if isinstance(answer, list):
+                answers_as_text = []
+                for one_answer in answer:
+                    answers_as_text.append(str(one_answer))
+                if filter_value not in answers_as_text:
+                    return False
+            elif str(answer) != filter_value:
+                return False
+
+        elif question["filter_kind"] == "boolean":
+            wanted_answer = filter_value == "oui"
+            if bool(answer) != wanted_answer:
+                return False
+
+        else:
+            answer_as_text = str(format_answer(answer)).lower()
+            if filter_value.lower() not in answer_as_text:
+                return False
+
+    return True
+
+
+# Couleur du badge Unfold (unfold/helpers/label.html) pour chaque statut de billet.
+# / Unfold badge color for each ticket status.
+TICKET_STATUS_TO_UNFOLD_LABEL_TYPE = {
+    Ticket.SCANNED: "success",
+    Ticket.NOT_SCANNED: "info",
+    Ticket.CANCELED: "danger",
+    Ticket.CREATED: "warning",
+    Ticket.NOT_ACTIV: "warning",
+}
+
+
+def _build_tickets_table(tickets):
+    """
+    Données du tableau des billets, au format du composant unfold/components/table.html.
+    / Tickets table data, in the unfold/components/table.html format.
+
+    Pas de colonne « nom » : si un lieu a besoin du nom des personnes,
+    c'est une question de son formulaire personnalisé.
+    """
+    from django.template.loader import render_to_string
+    from django.utils.formats import date_format
+
+    headers = [_("Email"), _("Tarif"), _("Statut"), _("Moyen de paiement"), _("Montant"), _("Réservé le")]
+    rows = []
+    for ticket in tickets:
+        ticket_admin_url = reverse("staff_admin:BaseBillet_ticket_change", args=[ticket.pk])
+        email_cell = format_html(
+            '<a href="{}" class="text-primary-600 dark:text-primary-500" data-testid="admin-event-detail-ticket-link">{}</a>',
+            ticket_admin_url,
+            ticket.reservation.user_commande.email,
+        )
+
+        price_cell = "—"
+        if ticket.pricesold:
+            price_cell = f"{ticket.pricesold.price.product.name} — {ticket.pricesold.price.name}"
+
+        status_cell = render_to_string("unfold/helpers/label.html", {
+            "text": ticket.get_status_display(),
+            "type": TICKET_STATUS_TO_UNFOLD_LABEL_TYPE.get(ticket.status, ""),
+        })
+
+        payment_method_cell = ticket.get_payment_method_display() or "—"
+        booking_date_cell = date_format(timezone.localtime(ticket.reservation.datetime), "d/m/Y H:i")
+
+        rows.append({
+            "cols": [email_cell, price_cell, status_cell, payment_method_cell, ticket.paid(), booking_date_cell],
+            "attrs": {"data-testid": "admin-event-detail-ticket-row"},
+        })
+    return {"headers": headers, "rows": rows}
+
+
+def _build_form_answers_table(form_questions, reservations_with_answers):
+    """
+    Données du tableau des réponses : une colonne par question, une ligne par réservation.
+    / Answers table data: one column per question, one row per reservation.
+    """
+    from BaseBillet.templatetags.tibitags import format_answer
+
+    headers = [_("Réservation"), _("Billets")]
+    for question in form_questions:
+        headers.append(question["label"])
+
+    rows = []
+    for reservation in reservations_with_answers:
+        reservation_admin_url = reverse("staff_admin:BaseBillet_reservation_change", args=[reservation.pk])
+        reservation_cell = format_html(
+            '<a href="{}" class="text-primary-600 dark:text-primary-500" data-testid="admin-event-detail-reservation-link">{}</a>',
+            reservation_admin_url,
+            reservation.user_commande.email,
+        )
+        cells = [reservation_cell, len(reservation.tickets.all())]
+
+        for question in form_questions:
+            answer = None
+            for answer_key in question["keys"]:
+                if answer_key in reservation.custom_form:
+                    answer = reservation.custom_form[answer_key]
+                    break
+
+            if answer is True:
+                cells.append(_("Oui"))
+            elif answer is False:
+                cells.append(_("Non"))
+            elif answer is None or answer == "" or answer == []:
+                cells.append("—")
+            else:
+                cells.append(format_answer(answer))
+
+        rows.append({
+            "cols": cells,
+            "attrs": {"data-testid": "admin-event-detail-form-answer-row"},
+        })
+    return {"headers": headers, "rows": rows}
+
 
 class Badge(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
@@ -4279,7 +4715,7 @@ class MembershipMVT(viewsets.ViewSet):
             # Les tarifs en points ou en temps se vendent a la caisse seulement :
             # ils ne comptent pas dans le prix affiche en euros.
             # / Points or time prices are sold at the POS only: not an euro price.
-            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False)
+            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False, publish=True)
             tarifs = [price.prix for price in prices]
             # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
             # la caisse seulement), la carte n'affiche pas de prix.
@@ -4317,6 +4753,17 @@ class MembershipMVT(viewsets.ViewSet):
         #
         #     template_context['ressources_grouped'] = ressources_grouped
         #     template_path = "vues/services.html"
+
+
+        # Le paramètre GET "open" (optionnel) contient l'uuid d'un produit d'adhésion à ouvrir directement au chargement de la page
+        # On vérifie que le produit adhésion exist, puis c'est le JS qui gère l'ouverture
+        open_membership = request.GET.get('open',None)
+        try:
+            MembershipProduct.objects.get(pk=open_membership)
+        except:
+            open_membership = None
+
+        template_context["open_membership"] = open_membership
 
         # Résolution du gabarit par le resolver unifié (CHANTIER-04).
         # / Unified skin resolver (skins migration).
@@ -7384,6 +7831,19 @@ class PanierMVT(viewsets.ViewSet):
             except PriceModel.DoesNotExist:
                 pass  # add_membership levera l'erreur Price not found
 
+        # Réponses au formulaire dynamique du produit de la ressource, validées comme
+        # dans la réservation directe (booking/views.py _book_post). Une question
+        # obligatoire sans réponse bloque l'ajout au panier avec un toast.
+        # / Dynamic form answers, validated like the direct flow; toast on error.
+        produits_avec_questions = []
+        if resource.product is not None:
+            produits_avec_questions = [resource.product]
+        custom_form, erreur_du_formulaire = reponses_du_formulaire_personnalise_pour_le_panier(
+            request, produits_avec_questions,
+        )
+        if erreur_du_formulaire:
+            return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
+
         panier = PanierSession(request)
         try:
             panier.add_resource(
@@ -7396,7 +7856,7 @@ class PanierMVT(viewsets.ViewSet):
                 price_uuid=price_uuid,
                 custom_amount=custom_amount,
                 options=[],
-                custom_form={},
+                custom_form=custom_form,
                 firstname=firstname,
                 lastname=lastname,
                 promotional_code_name=item_promo,

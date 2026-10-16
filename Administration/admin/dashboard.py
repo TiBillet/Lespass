@@ -110,29 +110,29 @@ def event_proposals_badge_callback(request):
 # / The five domains from the mockup. Dict order = sidebar order.
 DOMAINES = {
     "lespass": {
-        "titre": _("Lespass"),
+        "titre": _("Espace en ligne"),
         "icone": "calendar_month",  # maquette : ti-calendar-star
-        "sous_titre": _("La vitrine du lieu et tout ce qui parle à votre public."),
+        "sous_titre": _("Ce que votre public retrouve sur votre site : billetterie, adhésions, réservations, newsletter."),
     },
     "laboutik": {
         "titre": _("Laboutik"),
         "icone": "storefront",  # maquette : ti-basket
-        "sous_titre": _("Le nerf de la guerre : vendre, encaisser, suivre."),
+        "sous_titre": _("Prendre les commandes et encaisser au bar comme en cuisine."),
     },
     "lerezo": {
-        "titre": _("Lerézo"),
+        "titre": _("Réseau"),
         "icone": "hub",  # maquette : ti-affiliate
-        "sous_titre": _("Vous n'êtes pas seuls : tissez le réseau."),
+        "sous_titre": _("Relier votre lieu au réseau et faire circuler les monnaies."),
     },
     "lekontrib": {
-        "titre": _("Lékontrib"),
+        "titre": _("Contributions"),
         "icone": "volunteer_activism",  # maquette : ti-heart-handshake
-        "sous_titre": _("Faites financer et décider par celles et ceux qui suivent."),
+        "sous_titre": _("Financer et décider ensemble des initiatives du lieu."),
     },
     "lemachines": {
-        "titre": _("Lémachines"),
+        "titre": _("Matériel"),
         "icone": "devices",  # maquette : ti-device-desktop
-        "sous_titre": _("Le materiel qui fait tourner le lieu."),
+        "sous_titre": _("Le matériel du lieu : bornes et tireuses."),
     },
 }
 
@@ -2302,10 +2302,20 @@ def environment_callback(request):
 # / Notice for early-access (BETA) modules. Written once, reused on the dashboard
 # / card and the activation confirmation modal. Mark a module BETA with "beta": True.
 BETA_NOTICE = _(
-    "BETA ! Attention, en accès anticipé, nous avons besoin de vos retours "
-    "d'usage et vos remontées de bug. Merci de participer à la construction "
-    "de ce commun numérique !"
+    "BETA ! Vos retours nous aident à l'améliorer. Merci pour votre contribution !"
 )
+
+
+# Modules qu'aucun lieu ne peut allumer pour l'instant. Leur carte est grisee, sans
+# interrupteur, et module_toggle refuse de les allumer (un POST direct arrive aussi).
+# Un module deja allume garde son interrupteur, pour pouvoir l'eteindre.
+# - module_kiosk : la borne V2 envoie encore a Stripe les metadonnees que lit le webhook
+#   de la borne de l'ancien Fedow ; brancher un lecteur crediterait deux fois
+#   (TECH_DOC/SESSIONS/QRCODECASHLESS/CHANTIER-03-fed-invisible-en-caisse.md, §3 bis).
+#   Ses routes refusent aussi tout acces quand le module est eteint (kiosk/views.py).
+# / Modules no venue can switch on for now: greyed card, no switch, refused by
+# module_toggle. An already-on module keeps its switch, to turn it off.
+MODULES_EN_ATTENTE_D_ACTIVATION = ["module_kiosk"]
 
 
 # Ordre des cles = ordre d'affichage des cartes du dashboard.
@@ -2318,7 +2328,7 @@ BETA_NOTICE = _(
 MODULE_FIELDS = {
     "module_billetterie": {
         "name": _("Agenda et Billetterie"),
-        "description": _("Events, reservations, and ticket sales"),
+        "description": _("Publier vos événements et vendre les billets."),
         "testid": "dashboard-card-billetterie",
         "domaine": "lespass",  # groupe du tableau de bord / dashboard group
         "icone": "event",
@@ -2326,11 +2336,7 @@ MODULE_FIELDS = {
     },
     "module_pages": {
         "name": _("Site web personnalisé"),
-        "description": _(
-            "Composez des pages publiques en empilant des blocs (hero, texte, "
-            "image, appel à l'action, témoignage). Une page peut devenir la page "
-            "d'accueil du site."
-        ),
+        "description": _("Composer les pages publiques du lieu à partir de blocs prêts à l'emploi"),
         "testid": "dashboard-card-pages",
         "domaine": "lespass",  # groupe du tableau de bord / dashboard group
         "icone": "web",
@@ -2339,7 +2345,7 @@ MODULE_FIELDS = {
     },
     "module_adhesion": {
         "name": _("Adhésion, abonnement et pass"),
-        "description": _("Memberships and subscriptions"),
+        "description": _("Proposer des adhésions, abonnements et pass, et suivre qui en fait partie"),
         "testid": "dashboard-card-adhesion",
         "domaine": "lespass",  # groupe du tableau de bord / dashboard group
         "icone": "card_membership",
@@ -2348,9 +2354,7 @@ MODULE_FIELDS = {
     "module_federation": {
         "name": _("Fédération et agenda participatif"),
         "description": _(
-            "Reliez votre lieu au réseau TiBillet pour partager vos évènements. "
-            "Vous pouvez aussi laisser le public proposer des évènements : "
-            "c'est l'agenda participatif. Tout se règle dans « Options de fédération »."
+            "Partager vos événements avec le réseau TiBillet et laisser le public en proposer."
         ),
         "testid": "dashboard-card-federation",
         "domaine": "lerezo",  # groupe du tableau de bord / dashboard group
@@ -2359,7 +2363,7 @@ MODULE_FIELDS = {
     },
     "module_crowdfunding": {
         "name": _("Financement participatif & budgets contributifs"),
-        "description": _("Participatory funding and adaptive contributions"),
+        "description": _("Collecter des fonds et organiser des contributions pour un projet précis."),
         "testid": "dashboard-card-crowdfunding",
         "domaine": "lekontrib",  # groupe du tableau de bord / dashboard group
         "icone": "volunteer_activism",
@@ -2367,7 +2371,7 @@ MODULE_FIELDS = {
     },
     "module_booking": {
         "name": _("Réservation de ressources"),
-        "description": _("Réservation de salles, machines ou autres."),
+        "description": _("Ouvrir vos salles, machines et équipements à la réservation par créneaux."),
         "testid": "dashboard-card-booking",
         "domaine": "lespass",  # groupe du tableau de bord / dashboard group
         "icone": "meeting_room",
@@ -2375,11 +2379,11 @@ MODULE_FIELDS = {
     },
     "module_caisse": {
         "name": _("Caisse & Restaurant"),
-        "description": _("Point of sale, orders, and cash register"),
+        "description": _("Prendre les commandes et encaisser au bar comme en cuisine."),
         "testid": "dashboard-card-caisse",
         "beta": True,
         "link_url": "/laboutik/caisse/",
-        "link_label": _("Open POS"),
+        "link_label": _("Ouvrir la caisse"),
         "link_icon": "fa-cash-register",
         "domaine": "laboutik",  # groupe du tableau de bord / dashboard group
         "icone": "point_of_sale",
@@ -2387,17 +2391,15 @@ MODULE_FIELDS = {
     },
     "module_monnaie_locale": {
         "name": _("Monnaies locales, temps, SSA et cashless"),
-        "description": _("Local currency tokens, federated wallet"),
+        "description": _("Faire circuler monnaies locales, monnaie temps et SSA sur une même carte"),
         "testid": "dashboard-card-monnaie-locale",
         "domaine": "lerezo",  # groupe du tableau de bord / dashboard group
         "icone": "toll",
         "slug": "monnaies",  # module correspondant dans la sidebar
     },
     "module_kiosk": {
-        "name": _("Kiosk : borne libre-service"),
-        "description": _(
-            "Bornes de paiement en autonomie : recharge cashless, Stripe Terminal."
-        ),
+        "name": _("Kiosque : borne libre-service"),
+        "description": _("Laisser le public recharger sa carte seul, par carte bancaire."),
         "testid": "dashboard-card-kiosk",
         "domaine": "lemachines",  # groupe du tableau de bord / dashboard group
         "icone": "smart_display",
@@ -2405,9 +2407,7 @@ MODULE_FIELDS = {
     },
     "module_tireuse": {
         "name": _("Tireuses connectées"),
-        "description": _(
-            "Connected beer tap management: RFID authorization, flow metering, kiosk display."
-        ),
+        "description": _("Servir à la tireuse avec la carte : accès par badge, volumes comptés, écran d'affichage."),
         "testid": "dashboard-card-tireuse",
         "lien_externe": "/controlvanne/kiosk/",
         "libelle_externe": _("Open kiosk"),
@@ -2424,11 +2424,7 @@ MODULE_FIELDS = {
     # / Newsletter: outside the main grid, shown in the "External tools" section.
     "module_newsletter": {
         "name": _("Newsletter"),
-        "description": _(
-            "Evènements, rappels d'adhésions, résumé de vos activités : pilotez "
-            "votre newsletter avec TiBillet, à partir des évènements de votre agenda ! "
-            "Propulsée par un serveur Ghost ou par Brevo."
-        ),
+        "description": _("Envoyer à votre public les événements de l'agenda et les rappels d'adhésion"),
         "testid": "dashboard-card-newsletter",
         "beta": True,
         "domaine": "lespass",  # groupe du tableau de bord / dashboard group
@@ -2684,6 +2680,29 @@ def _build_modules_context(configuration):
             continue
 
         module_allume = getattr(configuration, nom_du_champ)
+
+        # Module en attente : carte grisee, sans interrupteur, tant qu'il est eteint.
+        # / Pending module: greyed card, no switch, while it is off.
+        module_en_attente_et_eteint = (
+            nom_du_champ in MODULES_EN_ATTENTE_D_ACTIVATION and not module_allume
+        )
+        if module_en_attente_et_eteint:
+            cartes.append(
+                {
+                    "type": "coming_soon",
+                    "field": nom_du_champ,
+                    "name": info["name"],
+                    "description": info["description"],
+                    "testid": info["testid"],
+                    "domaine": info["domaine"],
+                    "icone": info["icone"],
+                    "montre_interrupteur": False,
+                    "allume": False,
+                    "coming_soon_label": _("En cours de développement"),
+                }
+            )
+            continue
+
         carte_fermee_par_le_verrou = (
             lieu_retenu_sur_l_ancien_fedow
             and nom_du_champ in MODULES_V2_FERMES_AUX_LIEUX_LEGACY

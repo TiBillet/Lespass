@@ -1,0 +1,35 @@
+{% load i18n unfold tibitags %}
+{% comment %}
+REPONSES DU FORMULAIRE PERSONNALISE — fiche d'une réservation de ressource
+/ Custom form answers — resource booking change view
+
+LOCALISATION : Administration/templates/admin/booking/custom_form.html
+
+Affiché sous le formulaire de la fiche (BookingAdmin.change_form_after_template,
+Administration/admin/resources.py). Même tableau que la fiche d'une réservation
+d'événement (admin/reservation/custom_form.html) : une ligne par question, avec
+le libellé et la réponse, via le filtre custom_form_table (BaseBillet/templatetags/tibitags.py).
+
+Les réponses sont déjà rangées sous le LIBELLÉ de la question
+(build_custom_form_from_request) : le tableau les affiche telles quelles.
+
+Le champ JSON brut custom_form est retiré du formulaire (BookingAdmin.exclude).
+Lecture seule : pas de bouton de modification.
+
+`original` est la réservation affichée. Sur la page d'ajout, il est vide : rien n'est affiché.
+/ Same read-only table as the event reservation. `original` is the booking.
+{% endcomment %}
+
+{% if original %}
+<div class="mt-6" data-testid="booking-custom-form-answers">
+    {% if original.custom_form %}
+        {% component "unfold/components/card.html" with title=_("Custom form answers") %}
+            {% with table_data=original.custom_form|custom_form_table:original %}
+                {% component "unfold/components/table.html" with table=table_data card_included=1 striped=1 %}{% endcomponent %}
+            {% endwith %}
+        {% endcomponent %}
+    {% else %}
+        <em class="text-sm text-gray-500 dark:text-gray-400">{% translate "No custom form answers for this booking." %}</em>
+    {% endif %}
+</div>
+{% endif %}

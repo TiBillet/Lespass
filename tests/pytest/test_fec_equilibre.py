@@ -154,6 +154,7 @@ from comptabilite.admin import ClotureCaisseAdmin  # noqa: E402
 from comptabilite.balance import balance_de_la_periode  # noqa: E402
 from comptabilite.fec import generer_fec_cloture  # noqa: E402
 from comptabilite.models import ClotureCaisse  # noqa: E402
+from comptabilite.ventes_a_facturer import ventes_a_facturer_de_la_cloture  # noqa: E402
 from comptabilite.ventilation import (  # noqa: E402
     EcritureDesequilibree,
     ventiler_cloture,
@@ -1081,6 +1082,90 @@ class TestFecEquilibre(FastTenantTestCase):
             assert ligne["CompteNum"] in libelle_par_numero_du_plan, ligne
             assert ligne["CompteLib"] == libelle_par_numero_du_plan[ligne["CompteNum"]]
 
+    def test_ventes_a_facturer_egales_au_fec_compte_par_compte(self):
+        """
+        Fiche 06-D : le scénario complet du test précédent, découpé pour un logiciel de
+        facturation (lignes de facture, paiements, virements internes, paiements
+        divers), donne compte par compte les mêmes sommes que le FEC de la J. Le compte
+        client n'apparaît pas : la facture le débite, son paiement le crédite.
+        / The full scenario, split for invoicing, gives the FEC's per-account sums.
+        """
+        self._ventes_du_scenario_compare_au_z()
+        jetons_cadeau = self._monnaie(NOM_DES_JETONS_CADEAU, Asset.TNF)
+        points = self._monnaie(NOM_DES_POINTS, Asset.FID)
+        with self._heure_figee(MOMENT_DES_VENTES):
+            self._recharge_offerte(1000)
+            ligne_de_la_biere = self._biere_payee_en_jetons(jetons_cadeau)
+            self._avoir_par_le_bouton_de_l_admin(
+                ligne_de_la_biere, moyen_rembourse=None
+            )
+            self._vidage_avec_jetons_repris(jetons_cadeau, 200)
+            self._jus_offert_par_le_bouton_offrir()
+            self._vente_en_points(points)
+            self._recharge_offerte_en_points(points)
+            self._gobelet_consigne_vendu_puis_rendu()
+            self._billet_vendu_en_ligne_par_stripe(1000, ecart_en_centimes=-2)
+            self._adhesion_payee_par_cheque()
+        cloture = self._cloturer_la_journee_a(MOMENT_DU_Z)
+
+        # Le solde de chaque compte dans le FEC, compté au débit.
+        # / Each account's balance in the FEC, counted on the debit side.
+        soldes_du_fec = {}
+        for ecriture in ventiler_cloture(cloture):
+            for ligne in ecriture["lignes"]:
+                numero = ligne["compte"]
+                solde = ligne["debit"] - ligne["credit"]
+                soldes_du_fec[numero] = soldes_du_fec.get(numero, 0) + solde
+
+        # Le même solde, reconstitué depuis la découpe : une ligne de facture crédite
+        # son compte (HT) et son compte de TVA ; un paiement débite la trésorerie ; un
+        # virement débite « vers » et crédite « depuis » ; un paiement divers débite la
+        # trésorerie et crédite la contrepartie (en négatif : l'inverse).
+        # / The same balance, rebuilt from the split.
+        soldes_des_factures = {}
+
+        def ajouter(compte, montant_au_debit):
+            numero = compte.numero_de_compte
+            soldes_des_factures[numero] = (
+                soldes_des_factures.get(numero, 0) + montant_au_debit
+            )
+
+        ventes_decoupees, _numero_de_la_derniere = ventes_a_facturer_de_la_cloture(
+            cloture
+        )
+        for decoupe in ventes_decoupees:
+            for ligne in decoupe["lignes_de_la_facture"]:
+                ajouter(ligne["compte"], -ligne["total_ht"])
+                if ligne["compte_de_tva"] is not None:
+                    ajouter(ligne["compte_de_tva"], -ligne["total_tva"])
+            for paiement in decoupe["paiements_de_la_facture"]:
+                ajouter(paiement["compte"], paiement["montant"])
+            for virement in decoupe["virements"]:
+                ajouter(virement["vers"], virement["montant"])
+                ajouter(virement["depuis"], -virement["montant"])
+            for paiement_divers in decoupe["paiements_divers"]:
+                ajouter(paiement_divers["compte_de_tresorerie"], paiement_divers["montant"])
+                ajouter(paiement_divers["contrepartie"], -paiement_divers["montant"])
+
+        soldes_non_nuls_du_fec = {}
+        for numero, solde in soldes_du_fec.items():
+            if solde != 0:
+                soldes_non_nuls_du_fec[numero] = solde
+        soldes_non_nuls_des_factures = {}
+        for numero, solde in soldes_des_factures.items():
+            if solde != 0:
+                soldes_non_nuls_des_factures[numero] = solde
+        assert soldes_non_nuls_des_factures == soldes_non_nuls_du_fec
+        # Le scénario passe bien par les virements et les paiements divers.
+        # / The scenario does go through transfers and various payments.
+        nombre_de_virements = 0
+        nombre_de_paiements_divers = 0
+        for decoupe in ventes_decoupees:
+            nombre_de_virements += len(decoupe["virements"])
+            nombre_de_paiements_divers += len(decoupe["paiements_divers"])
+        assert nombre_de_virements > 0
+        assert nombre_de_paiements_divers > 0
+
     def test_fec_egal_au_z(self):
         """
         Fiche F §6, test 20 : pour chaque compte de règlement, le solde du FEC
@@ -1222,6 +1307,7 @@ class TestFecEquilibre(FastTenantTestCase):
             prix_en_euros="8.00",
             taux_tva="10.00",
             methode_caisse=Product.VENTE,
+            avec_compte=False,
         )
         with self._heure_figee(MOMENT_DES_VENTES):
             vente = fabriquer_vente_encaissee(
@@ -1993,6 +2079,7 @@ class TestFecEquilibre(FastTenantTestCase):
             prix_en_euros="8.00",
             taux_tva="10.00",
             methode_caisse=Product.VENTE,
+            avec_compte=False,
         )
         with self._heure_figee(heure_de_paris(2026, 2, 10, 20, 0)):
             vente = fabriquer_vente_encaissee(
@@ -2511,6 +2598,7 @@ class TestFecEquilibre(FastTenantTestCase):
             prix_en_euros="8.00",
             taux_tva="10.00",
             methode_caisse=Product.VENTE,
+            avec_compte=False,
         )
         with self._heure_figee(MOMENT_DES_VENTES):
             vente = fabriquer_vente_encaissee(

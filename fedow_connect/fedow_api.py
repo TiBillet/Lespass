@@ -1279,6 +1279,80 @@ class TransactionFedow():
             logger.error(response_w2w.json())
             raise Exception(response_w2w.json())
 
+    def to_place(self,
+                 amount: int = None,
+                 asset: uuid4 = None,
+                 wallet: uuid4 = None,
+                 user_card_firstTagId: str = None,
+                 primary_card_fisrtTagId: str = None,
+                 comment: str = None,
+                 metadata: dict = None,
+                 ):
+        """
+        Débite une carte au profit du lieu, par la carte du client et une carte primaire
+        du lieu (route `POST transaction/`, action SALE de l'ancien Fedow).
+        / Debits a card in favour of the venue, through the customer card and a venue
+        primary card (`POST transaction/`, SALE action).
+
+        LOCALISATION : fedow_connect/fedow_api.py
+
+        Aucune signature de personne : la clé API du lieu suffit (place Lespass de
+        confiance). La carte peut donc être liée à une personne ou anonyme (portefeuille
+        éphémère). L'ancien Fedow contrôle lui-même :
+        - que la carte primaire est une carte primaire de ce lieu ;
+        - que la monnaie est acceptée par le lieu ;
+        - que le portefeuille débité est celui de la carte, et qu'il a assez de jetons.
+        Une transaction pour UNE monnaie : pas de cascade côté serveur.
+        / No person signature: the venue API key is enough. One transaction for ONE
+        currency, no server-side cascade. The old Fedow checks the primary card, the
+        accepted currency, the card's wallet and its balance.
+
+        Repris du client de LaBoutik V1 (`TransactionFedow.to_place`).
+        / Taken from the LaBoutik V1 client.
+
+        APPELÉ PAR : laboutik/views.py, `_debiter_legacy`.
+
+        :param amount: montant en centimes (int)
+        :param asset: uuid de la monnaie débitée (le FED)
+        :param wallet: uuid du portefeuille de la carte, lu dans sa fiche
+        :param user_card_firstTagId: tag NFC de la carte du client
+        :param primary_card_fisrtTagId: tag NFC de la carte primaire du lieu
+        :param comment: texte libre
+        :param metadata: dict (traçabilité, ex. uuid de la vente)
+        :return: la transaction, validée par `TransactionValidator`
+        :raises Exception: réponse autre que 201, ou transaction invalide
+        """
+        transaction_w2w = {
+            "amount": amount,
+            "sender": f"{wallet}",
+            "receiver": f"{self.fedow_config.fedow_place_wallet_uuid}",
+            "asset": f"{asset}",
+            "comment": comment,
+            "metadata": metadata,
+            "user_card_firstTagId": f"{user_card_firstTagId}".upper(),
+            "primary_card_fisrtTagId": f"{primary_card_fisrtTagId}".upper(),
+        }
+        reponse_du_debit = _post(
+            fedow_config=self.fedow_config,
+            data=transaction_w2w,
+            path='transaction',
+        )
+
+        if reponse_du_debit.status_code != 201:
+            logger.error(
+                f"TransactionFedow.to_place ERRORS : {reponse_du_debit.status_code} "
+                f"{reponse_du_debit.content}"
+            )
+            raise Exception(
+                f"transaction refusée par l'ancien Fedow : {reponse_du_debit.status_code} "
+                f"{reponse_du_debit.content}"
+            )
+
+        transaction_validee = TransactionValidator(data=reponse_du_debit.json())
+        if not transaction_validee.is_valid():
+            logger.error(f"TransactionFedow.to_place : {transaction_validee.errors}")
+            raise Exception(f"transaction invalide : {transaction_validee.errors}")
+        return transaction_validee.validated_data
 
     def list_by_asset(self,
                             asset: AssetFedowPublic = None,

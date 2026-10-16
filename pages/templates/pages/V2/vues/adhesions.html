@@ -129,5 +129,12 @@ les adhésions : une seule section, donc pas de sommaire pour l'instant.
         </section>
     {% endif %}
     {% endblock adhesions_federees %}
-
+    {% if open_membership %}
+        <script>
+            window.onload = function (){
+                let btn = document.querySelector("button[hx-get='/memberships/{{ open_membership }}/']");
+                btn.click()
+            }
+        </script>
+    {% endif %}
 {% endblock main %}

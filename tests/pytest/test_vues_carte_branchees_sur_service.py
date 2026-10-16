@@ -240,6 +240,12 @@ def test_le_parcours_qr_lie_la_carte_cote_lespass(carte_vierge_et_user_sans_cart
         "qrcode_uuid": str(qrcode_uuid),
         "number_printed": carte.number,
     }
+    # Apres la liaison, Fedow liste cette carte comme la seule de la personne. Un
+    # MagicMock nu rendrait une liste vide : l'alignement detacherait ses cartes locales.
+    # / After the link, Fedow lists this card as the person's only one.
+    api.NFCcard.retrieve_card_by_signature.return_value = [
+        api.NFCcard.linkwallet_cardqrcode.return_value,
+    ]
 
     navigateur = DjangoClient(HTTP_HOST="lespass.tibillet.localhost")
 

@@ -669,6 +669,218 @@ def seed_ventes_demo(*, reset=False):
 
 
 # ============================================================================
+# Ventes d'hier, écrites par le VRAI moteur de vente.
+# / Yesterday's sales, written by the REAL sales engine.
+# ============================================================================
+
+
+def _tarif_vendu_par_le_moteur(produit, tarif, evenement=None):
+    """
+    Le tarif vendu (ProductSold + PriceSold) d'un produit, comme la caisse le crée,
+    sans appel Stripe (`id_price_stripe` reste vide).
+    / The sold price of a product, as the POS creates it, without any Stripe call.
+    """
+    from BaseBillet.models import ProductSold, PriceSold
+
+    produit_vendu, _ = ProductSold.objects.get_or_create(
+        product=produit,
+        event=evenement,
+        defaults={"categorie_article": produit.categorie_article},
+    )
+    tarif_vendu, _ = PriceSold.objects.get_or_create(
+        productsold=produit_vendu,
+        price=tarif,
+        defaults={"prix": tarif.prix},
+    )
+    return tarif_vendu
+
+
+def _une_vente_reglee(articles, moyen, origine, heure, point_de_vente=None, client=None):
+    """
+    Une vente complète par le moteur : ouverte, ses articles, UN règlement du total,
+    puis encaissée à l'heure donnée (heure scellée dans l'empreinte, comme la reprise).
+    / One full sale through the engine, settled at the given time.
+
+    :param articles: liste de dict {"tarif_vendu", "quantite", "produit",
+        "champs" (champs de la ligne : reservation, membership…)}
+    :param moyen: `PaymentMethod` du règlement
+    :param heure: datetime avec fuseau
+    :return: la `Vente` réglée
+    """
+    from BaseBillet.models import LigneArticle
+    from BaseBillet.models_vente import Vente
+    from BaseBillet.services_vente import (
+        ouvrir_vente, ajouter_article, ajouter_reglement, encaisser_vente,
+    )
+    from laboutik.views import _taux_tva_de_la_ligne_de_caisse
+
+    vente = ouvrir_vente(
+        origine=origine,
+        nature=Vente.Nature.VENTE,
+        point_de_vente=point_de_vente,
+        client=client,
+    )
+    total_de_la_vente = 0
+    for article in articles:
+        tarif_vendu = article["tarif_vendu"]
+        ligne = ajouter_article(
+            vente,
+            pricesold=tarif_vendu,
+            quantite=Decimal(article["quantite"]),
+            prix_unitaire=int(round(tarif_vendu.prix * 100)),
+            taux_tva=_taux_tva_de_la_ligne_de_caisse(article["produit"], moyen),
+            sale_origin=origine,
+            status=LigneArticle.VALID,
+            point_de_vente=point_de_vente,
+            **article.get("champs", {}),
+        )
+        total_de_la_vente += ligne.total_ttc
+    ajouter_reglement(vente, moyen=moyen, montant=total_de_la_vente)
+    return encaisser_vente(vente, datetime_encaissement=heure)
+
+
+def seed_ventes_de_la_veille_par_le_moteur():
+    """
+    Quelques ventes d'HIER soir, écrites par le vrai moteur (`services_vente`) : la
+    caisse du Bar (espèces, CB), un billet de concert et une adhésion en ligne
+    (Stripe). La clôture J qui les reprend est créée ensuite par l'appelant, hors de
+    tout `tenant_context` (`generer_cloture_pour_tenant`).
+    / A few sales from YESTERDAY evening, through the real engine. The J closure is
+    created afterwards by the caller.
+
+    Doit être appelé DANS tenant_context(lieu), APRÈS `create_test_pos_data` (point de
+    vente « Bar », ses produits et leur TVA) et les fixtures du mode complet (concert
+    « What the Funk ? », « Adhésion associative Tiers Lustre »).
+
+    RIEN n'est écrit si le lieu a déjà une vente réglée ou une clôture J : une vente
+    datée d'hier, encaissée après une J, n'entrerait jamais dans une clôture (la J
+    suivante commence à la fin de la précédente). Relancer la commande sans flush ne
+    double donc rien.
+    / Nothing is written if the venue already has a settled sale or a J closure.
+
+    :return: dict {"ecrites": [phrases], "sautees": [phrases]} ; "ecrites" vide si
+        rien n'est écrit
+    """
+    from BaseBillet.models import Configuration, Event, PaymentMethod, Price, Product, SaleOrigin
+    from BaseBillet.models_vente import Vente
+    from comptabilite.models import ClotureCaisse
+    from laboutik.models import PointDeVente
+
+    resultat = {"ecrites": [], "sautees": []}
+
+    le_lieu_a_deja_des_ventes = Vente.objects.filter(statut=Vente.Statut.REGLEE).exists()
+    le_lieu_a_deja_une_j = ClotureCaisse.objects.filter(
+        niveau=ClotureCaisse.NIVEAU_JOURNALIER,
+    ).exists()
+    if le_lieu_a_deja_des_ventes or le_lieu_a_deja_une_j:
+        resultat["sautees"].append(
+            "Le lieu a déjà des ventes réglées ou une clôture J : rien d'ajouté."
+        )
+        return resultat
+
+    # Hier, en heure du lieu. / Yesterday, in the venue's time zone.
+    fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+    hier = timezone.localtime(timezone.now(), fuseau_du_lieu) - timedelta(days=1)
+
+    def a_l_heure(heure, minute):
+        return hier.replace(hour=heure, minute=minute, second=0, microsecond=0)
+
+    def produit_de_caisse(nom):
+        # Le tarif en euros « Tarif <nom> » (la Bière a aussi un tarif en temps).
+        # / The euro price (the beer also has a time-currency price).
+        produit = Product.objects.filter(name=nom, methode_caisse=Product.VENTE).first()
+        tarif = Price.objects.filter(product=produit, name=f"Tarif {nom}").first()
+        return produit, _tarif_vendu_par_le_moteur(produit, tarif)
+
+    client = _user_demo()
+
+    with transaction.atomic():
+        # --- En ligne : 2 billets du concert (TVA 5,5 %), Stripe ---
+        # / Online: 2 concert tickets, Stripe.
+        concert = Event.objects.filter(name="What the Funk ? — Spectacle payant").first()
+        billet = Product.objects.filter(name="Billet", categorie_article=Product.BILLET).first()
+        tarif_du_billet = Price.objects.filter(product=billet, name="Plein tarif").first()
+        if concert is None or tarif_du_billet is None:
+            resultat["sautees"].append(
+                "Billets en ligne : concert « What the Funk ? » introuvable (mode --quick ?)."
+            )
+        else:
+            reservation = _reservation_demo(client, concert)
+            _une_vente_reglee(
+                articles=[{
+                    "produit": billet,
+                    "tarif_vendu": _tarif_vendu_par_le_moteur(billet, tarif_du_billet, concert),
+                    "quantite": 2,
+                    "champs": {"reservation": reservation, "payment_method": PaymentMethod.STRIPE_NOFED},
+                }],
+                moyen=PaymentMethod.STRIPE_NOFED,
+                origine=SaleOrigin.LESPASS,
+                heure=a_l_heure(15, 30),
+                client=client,
+            )
+            resultat["ecrites"].append("15:30 en ligne : 2 billets « What the Funk ? », Stripe")
+
+        # --- En ligne : 1 adhésion (sans TVA), Stripe ---
+        # / Online: 1 membership, Stripe.
+        adhesion = Product.objects.filter(
+            name="Adhésion associative Tiers Lustre", categorie_article=Product.ADHESION,
+        ).first()
+        tarif_de_l_adhesion = Price.objects.filter(product=adhesion, name="Plein tarif").first()
+        if tarif_de_l_adhesion is None:
+            resultat["sautees"].append(
+                "Adhésion en ligne : « Adhésion associative Tiers Lustre » introuvable."
+            )
+        else:
+            membership = _membership_demo(client, tarif_de_l_adhesion, PaymentMethod.STRIPE_NOFED)
+            _une_vente_reglee(
+                articles=[{
+                    "produit": adhesion,
+                    "tarif_vendu": _tarif_vendu_par_le_moteur(adhesion, tarif_de_l_adhesion),
+                    "quantite": 1,
+                    "champs": {"membership": membership, "payment_method": PaymentMethod.STRIPE_NOFED},
+                }],
+                moyen=PaymentMethod.STRIPE_NOFED,
+                origine=SaleOrigin.LESPASS,
+                heure=a_l_heure(16, 10),
+                client=client,
+            )
+            resultat["ecrites"].append("16:10 en ligne : 1 adhésion Tiers Lustre, Stripe")
+
+        # --- Caisse du Bar : alcool à 20 %, le reste à 10 % ---
+        # / Bar POS: alcohol at 20 %, the rest at 10 %.
+        bar = PointDeVente.objects.filter(name="Bar").first()
+        if bar is None:
+            resultat["sautees"].append("Caisse : point de vente « Bar » introuvable.")
+        else:
+            biere, biere_vendue = produit_de_caisse("Biere")
+            coca, coca_vendu = produit_de_caisse("Coca")
+            vin, vin_vendu = produit_de_caisse("Vin rouge")
+            chips, chips_vendues = produit_de_caisse("Chips")
+            ventes_du_bar = [
+                (19, 5, PaymentMethod.CASH, [(biere, biere_vendue, 2), (coca, coca_vendu, 1)],
+                 "2 bières + 1 coca, espèces"),
+                (20, 30, PaymentMethod.CC, [(vin, vin_vendu, 1), (chips, chips_vendues, 1)],
+                 "1 vin rouge + 1 chips, CB"),
+                (22, 15, PaymentMethod.CC, [(biere, biere_vendue, 3)],
+                 "3 bières, CB"),
+            ]
+            for heure, minute, moyen, articles, phrase in ventes_du_bar:
+                _une_vente_reglee(
+                    articles=[
+                        {"produit": produit, "tarif_vendu": tarif_vendu, "quantite": quantite}
+                        for produit, tarif_vendu, quantite in articles
+                    ],
+                    moyen=moyen,
+                    origine=SaleOrigin.LABOUTIK,
+                    heure=a_l_heure(heure, minute),
+                    point_de_vente=bar,
+                )
+                resultat["ecrites"].append(f"{heure:02d}:{minute:02d} caisse Bar : {phrase}")
+
+    return resultat
+
+
+# ============================================================================
 # Cas NON couverts dans la compta TiBillet actuelle.
 # A documenter en sortie de commande.
 # / Cases NOT covered in current TiBillet accounting. To print at command end.

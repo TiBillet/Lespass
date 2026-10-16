@@ -141,7 +141,9 @@ def test_humain_non_bloque_par_le_garde_terminal(tenant):
     try:
         client = _client()
         client.force_login(human)
-        with patch("BaseBillet.views.FedowAPI"):
+        with patch("BaseBillet.views.FedowAPI") as faux_fedow:
+            # Cet humain n'a aucune carte chez Fedow. / This human has no card on Fedow.
+            faux_fedow.return_value.NFCcard.retrieve_card_by_signature.return_value = []
             response = client.get("/my_account/")
         assert not (response.status_code == 302 and response.get("Location") == "/kiosk/")
     finally:

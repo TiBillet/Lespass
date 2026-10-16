@@ -109,6 +109,14 @@ def caisse_de_test(django_shell, ensure_pos_data):
         " defaults={'methode_caisse': Product.VENTE})\n"
         "Price.objects.get_or_create(product=cidre, name='Bouteille',"
         " defaults={'prix': Decimal('4.00')})\n"
+        # Vendu pour de vrai (sans annulation) : le produit a un compte, sinon la
+        # vraie journée du lieu ne s'exporte plus (FEC, Dolibarr).
+        # / Really sold: the product needs an account.
+        "import sys\n"
+        "sys.path.insert(0, '/DjangoFiles/tests/pytest')\n"
+        "from fabriques_vente import donner_un_compte_au_produit\n"
+        "for produit_vendu_en_euros in [pression, sirop, cidre]:\n"
+        "    donner_un_compte_au_produit(produit_vendu_en_euros)\n"
         "pv.products.add(pression, sirop, cidre)\n"
         # Billet : un evenement futur (la caisse billetterie liste les evenements futurs)
         # / Ticket: a future event (the ticketing POS lists future events)

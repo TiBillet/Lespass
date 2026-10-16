@@ -10,7 +10,12 @@ Les fichiers de tests l'importent : `from fabriques_vente import ...`.
 
 CE QUE PORTE CE MODULE
 - `creer_tarif_vendu(...)` : un produit, son tarif et le tarif vendu qu'une ligne d'article
-  référence (`LigneArticle.pricesold`).
+  référence (`LigneArticle.pricesold`). Le produit a TOUJOURS un compte de vente, sauf si
+  le test demande le contraire (`avec_compte=False`) : sinon toute clôture qui contient sa
+  vente serait refusée (FEC, API comptable, Dolibarr).
+- `categorie_de_caisse_de_test()` : la catégorie de caisse des produits de test, reliée
+  au compte 707000 ; `donner_un_compte_au_produit(produit)` y range un produit qui n'a
+  pas de compte (aussi appelée par le code shell des tests E2E, qui vendent pour de vrai).
 - `fabriquer_vente_encaissee(...)` : une vente complète, écrite PAR LE SERVICE DE VENTE
   (`BaseBillet/services_vente.py`). Une fabrique qui écrirait les tables à la main rendrait
   les tests aveugles aux deux égalités : le service est le seul à les vérifier.
@@ -42,7 +47,15 @@ et CHANTIER-05-montants-entiers.md (§2, §5, §8).
 
 from decimal import Decimal
 
-from BaseBillet.models import PaymentMethod, Price, PriceSold, Product, ProductSold, Tva
+from BaseBillet.models import (
+    CategorieProduct,
+    PaymentMethod,
+    Price,
+    PriceSold,
+    Product,
+    ProductSold,
+    Tva,
+)
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import (
     ajouter_article,
@@ -51,8 +64,51 @@ from BaseBillet.services_vente import (
     ouvrir_vente,
 )
 from fabriques_panier import identifiant_unique
+from laboutik.models import CompteComptable
+from laboutik.plan_comptable import CompteComptableManquant, compte_pour_produit
 
 PREFIXE_DE_TEST_VENTE = "TEST_vente"
+
+# La catégorie de caisse des produits de test : le préfixe la range avec eux (un
+# nettoyage par préfixe la trouve).
+# / The test products' POS category, named with their prefix.
+NOM_DE_LA_CATEGORIE_DE_CAISSE_DE_TEST = f"{PREFIXE_DE_TEST_VENTE} Caisse 707000"
+
+
+def categorie_de_caisse_de_test():
+    """
+    La catégorie de caisse des produits de test, reliée au compte des ventes de
+    marchandises (707000) du plan du lieu. Créée si elle manque, réutilisée sinon.
+    / The test products' POS category, linked to 707000; created if missing.
+
+    :return: la `CategorieProduct`, ou None si le plan du lieu n'a pas de 707000
+    """
+    compte_des_ventes = CompteComptable.objects.filter(numero_de_compte="707000").first()
+    if compte_des_ventes is None:
+        return None
+    categorie, _categorie_creee = CategorieProduct.objects.get_or_create(
+        name=NOM_DE_LA_CATEGORIE_DE_CAISSE_DE_TEST,
+        defaults={"compte_comptable": compte_des_ventes},
+    )
+    return categorie
+
+
+def donner_un_compte_au_produit(produit):
+    """
+    Range le produit dans la catégorie de caisse de test s'il n'a pas de compte de vente
+    (la règle du FEC, `compte_pour_produit`, lève `CompteComptableManquant`). Un produit
+    qui a déjà un compte (par son type, son mode de caisse, une recharge…) n'est pas
+    touché.
+    / Files the product in the test POS category when it has no sales account.
+    """
+    try:
+        compte_pour_produit(produit)
+    except CompteComptableManquant:
+        categorie = categorie_de_caisse_de_test()
+        if categorie is None:
+            return
+        produit.categorie_pos = categorie
+        produit.save(update_fields=["categorie_pos"])
 
 # Les moyens « offerts » de l'oracle, écrits à la main (pas importés du service).
 # / The oracle's "offered" methods, written by hand (not imported from the service).
@@ -65,10 +121,18 @@ def creer_tarif_vendu(
     taux_tva="20.00",
     methode_caisse=None,
     categorie_article=Product.NONE,
+    avec_compte=True,
 ):
     """
     Crée un produit, son tarif, et le tarif vendu qu'une ligne d'article référence.
     / Creates a product, its price, and the sold price that a sale line points to.
+
+    Le produit a un compte de vente : s'il n'en a pas par ses règles (type, mode de
+    caisse…), il est rangé dans la catégorie de caisse de test (707000). Une vente
+    encaissée par un test peut rester dans la base de dev (le lieu `lespass`) : sans
+    compte, elle bloquerait l'export de la vraie journée.
+    / The product has a sales account (test POS category when needed): a sale left in
+    the dev database would otherwise block the real day's export.
 
     LOCALISATION : tests/pytest/fabriques_vente.py
 
@@ -81,6 +145,8 @@ def creer_tarif_vendu(
     :param taux_tva: taux de TVA du produit, en pour cent (texte, ex. "20.00")
     :param methode_caisse: `Product.methode_caisse` (ex. `Product.RECHARGE_EUROS`), ou None
     :param categorie_article: `Product.categorie_article` (ex. `Product.RECHARGE_CASHLESS`)
+    :param avec_compte: False pour un test qui veut un produit SANS compte (refus du FEC,
+        « Plan complet ? »…)
     :return: le `PriceSold` créé
     """
     # Le taux est unique en base : on réutilise celui qui existe déjà.
@@ -92,6 +158,8 @@ def creer_tarif_vendu(
         methode_caisse=methode_caisse,
         tva=tva_du_produit,
     )
+    if avec_compte:
+        donner_un_compte_au_produit(produit)
     tarif = Price.objects.create(
         product=produit,
         name="Tarif unique",
@@ -115,6 +183,7 @@ def fabriquer_vente_encaissee(
     point_de_vente=None,
     operateur=None,
     carte=None,
+    client=None,
 ):
     """
     Écrit une vente complète par le service de vente, puis l'encaisse.
@@ -123,7 +192,7 @@ def fabriquer_vente_encaissee(
     LOCALISATION : tests/pytest/fabriques_vente.py
 
     FLUX :
-    1. `ouvrir_vente(origine, nature, point_de_vente, operateur, carte)` : la vente
+    1. `ouvrir_vente(origine, nature, point_de_vente, operateur, client, carte)` : la vente
        naît « en attente » ;
     2. `ajouter_article(vente, **article)` pour chaque article ;
     3. `ajouter_reglement(vente, **reglement)` pour chaque règlement ;
@@ -142,6 +211,7 @@ def fabriquer_vente_encaissee(
     :param point_de_vente: `laboutik.PointDeVente` de la vente, ou None (défaut)
     :param operateur: l'utilisateur qui fait la vente, ou None (défaut)
     :param carte: la `CarteCashless` du client de la vente, ou None (défaut)
+    :param client: le `TibilletUser` acheteur de la vente, ou None (défaut)
     :return: la vente encaissée
     """
     # None plutôt qu'une liste vide en valeur par défaut : une liste par défaut serait
@@ -157,6 +227,7 @@ def fabriquer_vente_encaissee(
         nature=nature,
         point_de_vente=point_de_vente,
         operateur=operateur,
+        client=client,
         carte=carte,
     )
 
