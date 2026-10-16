@@ -860,7 +860,7 @@ Les règles de la facture :
 1. Garde du mode (`ventes`) et de la configuration ; `ReglagesTiBillet::preparer()`. Si `manques` n'est pas vide : `-1`, et la page liste ce qui manque.
 2. `/api/v2/closures/?after_number=<plusGrandNumeroImporte()>` : le curseur est commun aux deux modes (D17).
 3. Pour chaque J, dans l'ordre : `/closures/<uuid>/sales/?after_number=<dernière vente importée de cette J>&limit=500`, page après page, puis `importerUneVente` sur chaque vente.
-4. Première vente refusée : **arrêt de tout le passage** (D16). Limite `TIBILLET_VENTES_PAR_PASSAGE` (2000 par défaut) atteinte : arrêt, et le résumé dit « reste à faire ».
+4. Première vente refusée : **arrêt de tout le passage** (D16). Pas de limite par défaut : le passage suit la pagination jusqu'au bout. Limite facultative `TIBILLET_VENTES_PAR_PASSAGE` atteinte : arrêt, et le résumé dit « reste à faire » (D18, révisée le 2026-10-16).
 5. J terminée : `noterLaCloture(..., mode='ventes', pieces='')`.
 6. Résumé : J importées, factures, avoirs, tiers créés, virements, paiements divers, ventes refusées (la phrase), reste à faire. Passé à `dol_string_nohtmltag` (point 6 de la relecture de 06-C). Gardé dans `TIBILLET_VENTES_RESUME` et `TIBILLET_VENTES_DATE`.
 
