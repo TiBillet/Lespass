@@ -1,7 +1,7 @@
 # Bénévolat, chantier 1 : modèles et admin du planning des bénévoles / Volunteering, step 1: volunteer planning models and admin
 
 **Date :** 2026-10-13
-**Migration :** Oui — `booking/0002_benevolat.py` (TENANT_APPS : passe sur chaque lieu)
+**Migration :** Oui — `booking/0003_benevolat.py` (recréée le 2026-10-16 après le merge de main) (TENANT_APPS : passe sur chaque lieu)
 
 ## Resume / Summary
 **Quoi / What :** quatre modèles dans l'app `booking` : `TacheBenevole` (le catalogue des tâches du lieu), `PlanningBenevole` (un tableau de besoins, avec ses adhésions requises et son calendrier de fermetures), `BesoinBenevole` (une tâche, un jour, une plage facultative, un nombre souhaité) et `InscriptionBenevole` (une personne sur un besoin). Leur admin Unfold, rangé dans le menu « Réservation de ressources ».
@@ -22,7 +22,7 @@ Points notables :
 | Fichier / File | Changement / Change |
 |---|---|
 | `booking/models.py` | Les quatre modèles et leurs méthodes |
-| `booking/migrations/0002_benevolat.py` | Nouvelle migration |
+| `booking/migrations/0003_benevolat.py` | Nouvelle migration |
 | `Administration/admin/benevolat.py` | Nouveau : `TacheBenevoleAdmin`, `PlanningBenevoleAdmin` (+ `BesoinBenevoleInline`), `InscriptionBenevoleAdmin` |
 | `Administration/admin_tenant.py` | Import à effet de bord du nouveau module (`# noqa: F401`) |
 | `Administration/admin/dashboard.py` | Trois entrées de menu dans `module_booking`, leurs textes d'aide et leurs verbes |

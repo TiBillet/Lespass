@@ -1,0 +1,67 @@
+{% extends "booking/booking_base.html" %}
+{% load i18n static %}
+
+<!--
+PAGE « JE NE PEUX PLUS VENIR » : le lien signé des mails (§5.9)
+/ "I can't come anymore" page: the signed email link
+
+LOCALISATION : booking/templates/booking/benevolat/desistement.html
+
+Vue : BenevolatViewSet.desistement (booking/views_benevolat.py).
+- lien_valide faux : « Ce lien ne marche plus » (jeton faux, d'un autre lieu, inscription
+  déjà supprimée, besoin passé) ;
+- GET : la confirmation, avec un formulaire POST classique (jeton CSRF) ;
+- après le POST (retrait_fait) : le message, et si l'équipe a été prévenue, on le dit.
+Le GET ne supprime jamais rien : antivirus et messageries ouvrent les liens tout seuls.
+/ GET never deletes: mail scanners open links on their own.
+-->
+
+{% block title %}{% translate "Je ne peux plus venir" %}{% endblock %}
+
+{% block extra_meta %}
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="stylesheet" href="{% static 'booking/css/benevolat.css' %}">
+{% endblock %}
+
+{% block booking_content %}
+<div class="benevolat">
+    <section class="bv-desistement" data-testid="benevolat-desistement">
+        {% if not lien_valide %}
+            <h1>{% translate "Ce lien ne marche plus" %}</h1>
+            <p data-testid="benevolat-desistement-lien-mort">
+                {% translate "Le créneau est passé, ou tu n'y es déjà plus inscrit·e. Tes créneaux sont dans Mon compte." %}
+            </p>
+            <p><a class="bv-btn bv-btn--secondaire" href="/my_account/my_volunteering/">{% translate "Mes créneaux" %}</a></p>
+
+        {% elif retrait_fait %}
+            <h1>{% translate "C'est noté, merci de l'avoir dit" %}</h1>
+            <p data-testid="benevolat-desistement-fait">
+                {% if equipe_prevenue %}
+                    {% translate "Tu n'es plus inscrit·e à ce créneau. L'équipe est prévenue : elle cherchera quelqu'un d'autre." %}
+                {% else %}
+                    {% translate "Tu n'es plus inscrit·e à ce créneau." %}
+                {% endif %}
+            </p>
+            <p><a class="bv-btn bv-btn--secondaire" href="{% url 'benevolat-planning' slug=besoin.planning.slug %}">{% translate "Voir le planning" %}</a></p>
+
+        {% else %}
+            <h1>{% translate "Tu ne peux plus venir ?" %}</h1>
+            {% if page_perimee %}
+                <p class="bv-erreur" role="alert" data-testid="benevolat-desistement-page-perimee">
+                    {% translate "Cette page a expiré. Clique de nouveau sur le bouton ci-dessous." %}
+                </p>
+            {% endif %}
+            <p>
+                <strong>{{ besoin.tache.name }}</strong> · {{ besoin.date|date:"l j F" }} · {{ plage }}<br>
+                {{ besoin.planning.name }}
+            </p>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="bv-btn bv-btn--principal" data-testid="benevolat-desistement-confirmer">
+                    {% translate "Oui, je ne peux plus venir" %}
+                </button>
+            </form>
+        {% endif %}
+    </section>
+</div>
+{% endblock booking_content %}

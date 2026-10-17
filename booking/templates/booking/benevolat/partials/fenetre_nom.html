@@ -1,0 +1,53 @@
+{% load i18n %}
+<!--
+FENÊTRE « COMMENT ON T'APPELLE ? » (D18) — contenu du <dialog> #benevolat-modale
+/ "What's your name?" dialog content
+
+LOCALISATION : booking/templates/booking/benevolat/partials/fenetre_nom.html
+
+Rendue par views_benevolat.py (_reponse_fenetre_du_nom) quand le compte n'a pas de
+prénom ou pas de nom. Seuls les champs vides du compte sont affichés.
+Le formulaire poste sur la MÊME URL « inscrire », avec fenetre_nom=1. Succès : la
+réponse remplace la zone du planning et ferme la fenêtre (fermerModaleBenevolat).
+Erreur : 422, cette fenêtre revient avec ses messages.
+/ Posts to the same "inscrire" URL. Success replaces the zone and closes the dialog.
+-->
+<form class="bv-fenetre__formulaire" novalidate
+      hx-post="{% url 'benevolat-inscrire' pk=besoin.pk %}"
+      hx-target="#benevolat-planning" hx-swap="outerHTML">
+    <input type="hidden" name="fenetre_nom" value="1">
+
+    <h2 id="benevolat-modale-titre">{% translate "Comment on t'appelle ?" %}</h2>
+    <p class="bv-fenetre__public">
+        <strong>{% translate "Ton prénom sera visible par tout le monde" %}</strong>
+        {% translate "sur ce planning, même par les personnes sans compte." %}
+        {% translate "Ton nom ne sera vu que par l'équipe du lieu." %}
+    </p>
+    <p>{% translate "Les deux seront enregistrés dans ton compte : on ne te les redemandera pas." %}</p>
+
+    {% if demander_le_prenom %}
+        <label for="benevolat-champ-prenom"><strong>{% translate "Prénom" %}</strong></label>
+        <input id="benevolat-champ-prenom" name="prenom" autocomplete="given-name" maxlength="200" required
+               value="{{ valeurs.prenom|default:'' }}"
+               {% if erreurs.prenom %}aria-invalid="true" aria-describedby="benevolat-erreur-prenom"{% endif %}
+               data-testid="benevolat-prenom">
+        {% if erreurs.prenom %}<p class="bv-erreur" id="benevolat-erreur-prenom">{{ erreurs.prenom }}</p>{% endif %}
+    {% endif %}
+
+    {% if demander_le_nom %}
+        <label for="benevolat-champ-nom"><strong>{% translate "Nom" %}</strong></label>
+        <input id="benevolat-champ-nom" name="nom" autocomplete="family-name" maxlength="200" required
+               value="{{ valeurs.nom|default:'' }}"
+               {% if erreurs.nom %}aria-invalid="true" aria-describedby="benevolat-erreur-nom"{% endif %}
+               data-testid="benevolat-nom">
+        {% if erreurs.nom %}<p class="bv-erreur" id="benevolat-erreur-nom">{{ erreurs.nom }}</p>{% endif %}
+    {% endif %}
+
+    <div class="bv-fenetre__actions">
+        <button type="button" class="bv-btn bv-btn--secondaire"
+                onclick="this.closest('dialog').close()"
+                data-testid="benevolat-modale-annuler">{% translate "Annuler" %}</button>
+        <button type="submit" class="bv-btn bv-btn--principal" data-loading-disable
+                data-testid="benevolat-modale-enregistrer">{% translate "Enregistrer et venir" %}</button>
+    </div>
+</form>

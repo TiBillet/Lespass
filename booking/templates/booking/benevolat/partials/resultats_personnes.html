@@ -1,0 +1,40 @@
+{% load i18n %}
+<!--
+RÉSULTATS DE LA RECHERCHE « INSCRIRE QUELQU'UN » (§5.10)
+/ "Sign someone up" search results
+
+LOCALISATION : booking/templates/booking/benevolat/partials/resultats_personnes.html
+
+Rendu par BenevolatViewSet.chercher_une_personne, dans #benevolat-resultats.
+Chaque personne : « Prénom Nom · email » et un bouton « Inscrire », qui poste son pk sur
+inscrire_une_personne (la vue le revérifie dans HumanUser.objects), après une
+confirmation (hx-confirm) : le clic envoie un mail à une autre personne, et la liste
+qui grandit sous le curseur favorise le clic raté. Une personne déjà inscrite sur ce
+besoin n'a pas de bouton.
+/ Each person: name, email and an "Inscrire" button; already signed-up people have none.
+-->
+{% if texte_trop_court %}
+    <p>{% translate "Tape au moins 2 lettres." %}</p>
+{% elif not resultats %}
+    <p data-testid="benevolat-aucun-resultat">{% translate "Personne trouvée. Utilise « Pas dans la liste ? »." %}</p>
+{% else %}
+    <ul class="bv-resultats">
+        {% for resultat in resultats %}
+            <li data-testid="benevolat-resultat-personne-{{ resultat.personne.pk }}">
+                <span>{{ resultat.nom_affiche }}{% if resultat.nom_affiche != resultat.personne.email %} · {{ resultat.personne.email }}{% endif %}</span>
+                {% if resultat.deja_inscrite %}
+                    <span class="bv-ok">{% translate "déjà inscrite" %}</span>
+                {% else %}
+                    <button type="button" class="bv-btn bv-btn--secondaire"
+                            hx-post="{% url 'benevolat-inscrire-une-personne' pk=besoin.pk %}"
+                            hx-vals='{"user": "{{ resultat.personne.pk }}"}'
+                            hx-confirm="{% blocktranslate with nom=resultat.nom_affiche email=resultat.personne.email %}Inscrire {{ nom }} ({{ email }}) ? Un mail de confirmation lui sera envoyé.{% endblocktranslate %}"
+                            hx-target="#benevolat-planning" hx-swap="outerHTML"
+                            data-testid="benevolat-inscrire-personne-{{ resultat.personne.pk }}">
+                        {% translate "Inscrire" %}
+                    </button>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}

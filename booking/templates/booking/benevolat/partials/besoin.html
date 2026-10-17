@@ -1,0 +1,123 @@
+{% load i18n %}
+<!--
+UN BESOIN (une « case ») : plage, compteur, prénoms, places libres, une action
+/ One need: time range, counter, first names, free places, one action
+
+LOCALISATION : booking/templates/booking/benevolat/partials/besoin.html
+
+Inclus par grille.html (avec_tache=False, suffixe="") et jours_mobile.html
+(avec_tache=True, suffixe="mobile-"). Le suffixe garde les data-testid uniques :
+le même besoin est affiché dans les deux vues.
+Contexte : case = case_du_besoin() (booking/benevolat.py). case.action dit quel bouton
+afficher (tableau des états, spec §5.2).
+
+Les boutons postent en htmx. hx-target / hx-swap sont hérités de la zone
+(partials/zone.html) : la réponse remplace toute la zone.
+/ Buttons post with htmx; target and swap are inherited from the zone.
+
+INDISPENSABLE : le bouton d'action garde le MÊME id quel que soit son état
+(benevolat-action-<suffixe><pk>). htmx remet le focus clavier sur l'élément qui porte
+l'id de l'élément qui l'avait : après « Je viens », le focus passe sur « Me retirer »
+au lieu de retomber en haut de la page. Pour la même raison, pas de data-loading-disable
+sur ces boutons : un bouton désactivé perd le focus avant le remplacement. Le double clic
+est géré côté serveur (get_or_create, retrait déjà fait = rien à faire).
+/ The action button keeps the SAME id in every state: htmx restores focus by id.
+-->
+<div class="bv-besoin{% if case.user_est_inscrit %} bv-besoin--moi{% elif case.est_couvert %} bv-besoin--couvert{% endif %}"
+     data-testid="benevolat-besoin-{{ suffixe }}{{ case.besoin.pk }}">
+
+    <div class="bv-besoin__tete">
+        {% if avec_tache %}
+            <span class="bv-besoin__tache">{{ case.tache.name }}</span>
+        {% else %}
+            <span class="bv-besoin__plage">{{ case.plage }}</span>
+        {% endif %}
+        <span class="bv-besoin__compteur"><b>{{ case.nombre_inscrits }}</b>/{{ case.besoin.nombre_souhaite }}</span>
+    </div>
+    {% if avec_tache %}
+        <span class="bv-besoin__plage bv-besoin__plage--sous">{{ case.plage }}</span>
+    {% endif %}
+
+    <ul class="bv-places" aria-label="{{ case.description_des_places }}">
+        {% for personne in case.personnes %}
+            <li class="bv-place{% if personne.c_est_moi %} bv-place--moi{% endif %}">{{ personne.prenom }}</li>
+        {% endfor %}
+        {% for place_libre in case.places_libres_a_afficher %}
+            <li class="bv-place bv-place--libre">{% translate "libre" %}</li>
+        {% endfor %}
+        {% if case.renforts %}
+            <li class="bv-place bv-place--renfort">{% blocktranslate with nombre=case.renforts %}+{{ nombre }} en renfort{% endblocktranslate %}</li>
+        {% endif %}
+    </ul>
+
+    <div class="bv-besoin__action">
+        {% if case.action == "connexion" %}
+            {% if case.est_couvert %}<span class="bv-badge bv-badge--couvert">{% translate "Couvert" %}</span>{% endif %}
+            <button type="button" class="bv-btn bv-btn--secondaire bv-btn--plein"
+                    id="benevolat-action-{{ suffixe }}{{ case.besoin.pk }}"
+                    data-bs-toggle="offcanvas" data-bs-target="#loginPanel" aria-controls="loginPanel"
+                    aria-label="{% blocktranslate with tache=case.tache.name jour=case.jour|date:'l j F' plage=case.plage %}Me connecter pour venir : {{ tache }}, {{ jour }}, {{ plage }}{% endblocktranslate %}"
+                    data-testid="benevolat-connexion-{{ suffixe }}{{ case.besoin.pk }}">
+                {% translate "Me connecter pour venir" %}
+            </button>
+
+        {% elif case.action == "reserve" %}
+            <span class="bv-badge bv-badge--reserve" data-testid="benevolat-reserve-{{ suffixe }}{{ case.besoin.pk }}">{% translate "Réservé aux adhérent·es" %}</span>
+
+        {% elif case.action == "je_viens" %}
+            <button type="button" class="bv-btn bv-btn--principal bv-btn--plein"
+                    id="benevolat-action-{{ suffixe }}{{ case.besoin.pk }}"
+                    hx-post="{% url 'benevolat-inscrire' pk=case.besoin.pk %}"
+                    aria-label="{% blocktranslate with tache=case.tache.name jour=case.jour|date:'l j F' plage=case.plage %}Je viens : {{ tache }}, {{ jour }}, {{ plage }}{% endblocktranslate %}"
+                    data-testid="benevolat-je-viens-{{ suffixe }}{{ case.besoin.pk }}">
+                {% translate "Je viens" %}
+            </button>
+
+        {% elif case.action == "je_viens_aussi" %}
+            <span class="bv-badge bv-badge--couvert">{% translate "Couvert" %}</span>
+            <button type="button" class="bv-btn bv-btn--secondaire"
+                    id="benevolat-action-{{ suffixe }}{{ case.besoin.pk }}"
+                    hx-post="{% url 'benevolat-inscrire' pk=case.besoin.pk %}"
+                    aria-label="{% blocktranslate with tache=case.tache.name jour=case.jour|date:'l j F' plage=case.plage %}Je viens aussi : {{ tache }}, {{ jour }}, {{ plage }}{% endblocktranslate %}"
+                    data-testid="benevolat-je-viens-aussi-{{ suffixe }}{{ case.besoin.pk }}">
+                {% translate "Je viens aussi" %}
+            </button>
+
+        {% elif case.action == "me_retirer" %}
+            <span class="bv-ok" data-testid="benevolat-tu-y-es-{{ suffixe }}{{ case.besoin.pk }}">{% translate "Tu y es" %}</span>
+            <button type="button" class="bv-btn-lien"
+                    id="benevolat-action-{{ suffixe }}{{ case.besoin.pk }}"
+                    hx-post="{% url 'benevolat-retirer' pk=case.besoin.pk %}"
+                    aria-label="{% blocktranslate with tache=case.tache.name jour=case.jour|date:'l j F' plage=case.plage %}Me retirer : {{ tache }}, {{ jour }}, {{ plage }}{% endblocktranslate %}"
+                    data-testid="benevolat-retirer-{{ suffixe }}{{ case.besoin.pk }}">
+                {% translate "Me retirer" %}
+            </button>
+
+        {% elif case.action == "je_ne_peux_plus" %}
+            <span class="bv-ok" data-testid="benevolat-tu-y-es-{{ suffixe }}{{ case.besoin.pk }}">{% translate "Tu y es" %}</span>
+            <button type="button" class="bv-btn-lien"
+                    id="benevolat-action-{{ suffixe }}{{ case.besoin.pk }}"
+                    hx-post="{% url 'benevolat-retirer' pk=case.besoin.pk %}"
+                    aria-label="{% blocktranslate with tache=case.tache.name jour=case.jour|date:'l j F' plage=case.plage %}Je ne peux plus venir : {{ tache }}, {{ jour }}, {{ plage }}{% endblocktranslate %}"
+                    hx-confirm="{% translate "C'est bientôt : l'équipe sera prévenue. Tu confirmes ?" %}"
+                    data-testid="benevolat-retirer-{{ suffixe }}{{ case.besoin.pk }}">
+                {% translate "Je ne peux plus venir" %}
+            </button>
+            {# L'info en clair, pas seulement au survol : invisible au doigt sinon. #}
+            {# / Plain text, not only on hover. #}
+            <span class="bv-note-equipe">{% translate "L'équipe sera prévenue." %}</span>
+        {% endif %}
+    </div>
+
+    {% if case.peut_inscrire_quelqu_un %}
+        {# Équipe du lieu seulement (§5.10). La vue revérifie le droit : ce lien caché ne protège rien. #}
+        {# / Venue team only. The view re-checks the right. #}
+        <button type="button" class="bv-btn-lien bv-besoin__equipe"
+                hx-get="{% url 'benevolat-inscrire-une-personne' pk=case.besoin.pk %}"
+                hx-target="#benevolat-modale-contenu" hx-swap="innerHTML"
+                aria-label="{% blocktranslate with tache=case.tache.name jour=case.jour|date:'l j F' plage=case.plage %}Inscrire quelqu'un : {{ tache }}, {{ jour }}, {{ plage }}{% endblocktranslate %}"
+                data-testid="benevolat-inscrire-quelquun-{{ suffixe }}{{ case.besoin.pk }}">
+            {% translate "Inscrire quelqu'un" %}
+        </button>
+    {% endif %}
+</div>

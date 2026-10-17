@@ -1,0 +1,320 @@
+/*
+ * Planning des bénévoles : page publique
+ * / Volunteer planning: public page
+ *
+ * LOCALISATION : booking/static/booking/css/benevolat.css
+ * Chargé par booking/templates/booking/benevolat/planning.html (bloc extra_meta).
+ * Dessin : TECH_DOC/SESSIONS/TODO/BENEVOLAT-maquette.html (mise en page), habillé selon
+ * la DA TiBillet v7.1 (boutons bleu ciel, contours brun #988264, cartes papier bordées
+ * de brume, liens encre soulignés de bleu).
+ *
+ * Tout est rangé sous .benevolat et préfixé « bv- » : la page s'affiche dans les trois
+ * skins (V2, classic, faire_festival), qui ont chacun leurs .btn et .badge.
+ * Les valeurs de la DA v7.1 sont écrites ici (le skin V2 du dépôt ne les porte pas
+ * encore) : quand V2.css les portera, ces jetons pourront pointer sur les siens.
+ * / Everything lives under .benevolat with a "bv-" prefix. DA v7.1 values are written
+ *   here (the repo's V2 skin doesn't carry them yet).
+ *
+ * En-têtes de jours (D8) : --remplissage (0 à 100) vient du serveur. 0 = letchi (rouge),
+ * 100 = chouchou (vert). La couleur sert de liseré et de fond très clair, jamais de fond
+ * sous du texte : l'état est toujours écrit aussi.
+ */
+
+.benevolat {
+    /* Palette DA v7.1 / DA v7.1 palette */
+    --bv-papier: #faf8f5;          /* cartes, blocs */
+    --bv-blanc: #ffffff;           /* boutons secondaires, champs */
+    --bv-teinte: #f2f0ea;          /* survol, en-têtes de tableau */
+    --bv-creux: #ece7e1;           /* fond de la jauge */
+    --bv-encre: #17141a;
+    --bv-encre-douce: #584854;     /* textes d'aide (contraste AA sur papier) */
+    --bv-encre-pale: #63515e;
+    --bv-bord: #ece7e1;            /* « brume » : contour des cartes et lignes */
+    --bv-bord-bouton: #ded7cd;     /* contour du bouton secondaire */
+    --bv-bord-champ: #988264;      /* contour des champs et des pastilles, 1,5 px */
+    --bv-action: #86ceff;          /* bouton principal */
+    --bv-action-survol: #a5d7f9;
+    --bv-lien: #006cb5;            /* soulignement et survol des liens */
+    --bv-signal: #e93363;          /* letchi */
+    --bv-signal-doux: #fce4eb;
+    --bv-succes-texte: #155829;
+    --bv-succes-doux: #e6f3ea;
+    --bv-alerte-texte: #61490a;
+    --bv-alerte-douce: #fbf2d9;
+    --bv-erreur: #922220;
+    --bv-letchi: #e93363;
+    --bv-chouchou: #259d49;
+    --bv-rayon-s: 8px;
+    --bv-rayon-m: 12px;
+    --bv-rayon-l: 14px;
+
+    color: var(--bv-encre);
+}
+
+.bv-cache {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* ---------- En-tête / Header ---------- */
+.bv-entete { display: grid; gap: 12px; margin-bottom: 20px; }
+.bv-titre {
+    font-family: var(--font-display, inherit); font-weight: 700;
+    font-size: clamp(1.5rem, 1.05rem + 2vw, 2.4rem); line-height: 1.15; overflow-wrap: anywhere; margin: 0;
+}
+.bv-chapo { max-width: 62ch; color: var(--bv-encre-douce); }
+.bv-chapo p:last-child { margin-bottom: 0; }
+.bv-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.bv-note { font-size: .875rem; color: var(--bv-encre-douce); margin: 0; }
+
+.bv-compteur { display: grid; gap: 8px; margin-bottom: 20px; }
+.bv-compteur__chiffres {
+    display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: .875rem;
+    color: var(--bv-encre-douce); font-variant-numeric: tabular-nums;
+}
+.bv-compteur__chiffres b { color: var(--bv-encre); font-size: 1.125rem; }
+.bv-jauge { height: 6px; background: var(--bv-creux); border-radius: 999px; overflow: hidden; max-width: 420px; }
+.bv-jauge > span { display: block; height: 100%; background: var(--bv-encre); border-radius: inherit; }
+
+/* ---------- Boutons, liens et badges (DA v7.1) / Buttons, links and badges ---------- */
+.bv-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 38px; padding: 0 18px; border-radius: 999px;
+    font-family: inherit; font-size: .9063rem; font-weight: 700; line-height: 1.2;
+    border: 1px solid transparent; cursor: pointer; white-space: nowrap; text-decoration: none;
+    transition: background .15s ease, border-color .15s ease, transform .08s ease;
+}
+.bv-btn:active:not(:disabled) { transform: translateY(1px); }
+.bv-btn:disabled { background: var(--bv-teinte); color: var(--bv-encre-douce); border-color: var(--bv-bord-bouton); cursor: not-allowed; }
+.bv-btn--principal { background: var(--bv-action); color: var(--bv-encre); }
+.bv-btn--principal:hover, .bv-btn--principal:focus-visible { background: var(--bv-action-survol); }
+.bv-btn--secondaire { background: var(--bv-blanc); color: var(--bv-encre); border-color: var(--bv-bord-bouton); }
+.bv-btn--secondaire:hover { background: var(--bv-teinte); }
+.bv-btn--plein { width: 100%; }
+/* Focus des boutons : le contour passe à l'encre (DA). / Button focus: ink border. */
+.benevolat .bv-btn:focus-visible { outline: none; border-color: var(--bv-encre); }
+
+/* Lien (et bouton-lien) : texte encre gras, souligné de bleu ; le texte passe au bleu au survol.
+ * / Link: bold ink text with a blue underline; text turns blue on hover. */
+.bv-btn-lien, .benevolat a:not(.bv-btn):not(.bv-puce-jour) {
+    color: var(--bv-encre); font-weight: 700;
+    text-decoration: underline; text-decoration-color: var(--bv-lien);
+    text-decoration-thickness: 2px; text-underline-offset: 3px;
+}
+.bv-btn-lien { background: none; border: 0; padding: 0; font-size: .8125rem; cursor: pointer; font-family: inherit; }
+.bv-btn-lien:hover, .bv-btn-lien:focus-visible,
+.benevolat a:not(.bv-btn):not(.bv-puce-jour):hover { color: var(--bv-lien); }
+.benevolat :focus-visible { outline: 2px solid var(--bv-encre); outline-offset: 2px; }
+
+.bv-badge {
+    display: inline-flex; align-items: center; gap: 6px; font-size: .7813rem; font-weight: 700; line-height: 14px;
+    padding: 5px 12px; border-radius: 999px; border: 1px solid var(--bv-bord-champ);
+    background: var(--bv-papier); color: var(--bv-encre); white-space: nowrap;
+}
+.bv-badge--couvert { background: var(--bv-succes-doux); border-color: transparent; color: var(--bv-succes-texte); }
+.bv-badge--reserve { background: var(--bv-alerte-douce); border-color: transparent; color: var(--bv-alerte-texte); white-space: normal; }
+
+/* ---------- Grille desktop / Desktop grid ---------- */
+.bv-grille-defile {
+    overflow-x: auto; border: 1px solid var(--bv-bord); border-radius: var(--bv-rayon-l);
+    background: var(--bv-papier);
+}
+.bv-grille { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 760px; margin: 0; }
+.bv-grille th, .bv-grille td {
+    border-bottom: 1px solid var(--bv-bord); border-right: 1px solid var(--bv-bord);
+    vertical-align: top; text-align: left;
+}
+.bv-grille tr > *:last-child { border-right: 0; }
+.bv-grille tbody tr:last-child > * { border-bottom: 0; }
+.bv-grille thead th { background: var(--bv-teinte); padding: 12px; font-size: .875rem; }
+.bv-grille th.bv-tache {
+    position: sticky; left: 0; z-index: 1; background: var(--bv-papier);
+    width: 190px; min-width: 170px; padding: 16px 12px;
+}
+.bv-grille thead th.bv-tache { background: var(--bv-teinte); }
+.bv-tache__nom { font-weight: 700; }
+.bv-tache__consignes { font-size: .8125rem; color: var(--bv-encre-douce); font-weight: 400; margin-top: 2px; }
+.bv-grille td { padding: 8px; min-width: 150px; }
+.bv-pile { display: grid; gap: 8px; }
+.bv-pas-besoin {
+    display: grid; place-items: center; min-height: 64px; color: var(--bv-encre-pale); font-size: .8125rem;
+    background: repeating-linear-gradient(135deg, transparent 0 7px, var(--bv-teinte) 7px 8px);
+    border-radius: var(--bv-rayon-s);
+}
+
+/* La couleur d'un jour, de rouge (0) à vert (100). La valeur par défaut évite une
+ * couleur invalide si --remplissage manque.
+ * / Day colour from red (0) to green (100). */
+.bv-jour {
+    --remplissage: 0;
+    --bv-couleur-jour: color-mix(in oklch, var(--bv-chouchou) calc(var(--remplissage) * 1%), var(--bv-letchi));
+    background: color-mix(in oklch, var(--bv-couleur-jour) 14%, var(--bv-papier)) !important;
+    box-shadow: inset 0 -5px 0 var(--bv-couleur-jour);
+}
+.bv-jour__nom { display: block; font-weight: 700; }
+.bv-jour__etat { display: block; font-size: .75rem; font-weight: 400; color: var(--bv-encre-douce); font-variant-numeric: tabular-nums; }
+
+/* ---------- Un besoin / One need ---------- */
+.bv-besoin {
+    border: 1px solid var(--bv-bord); border-radius: var(--bv-rayon-m);
+    padding: 8px 12px 12px; display: grid; gap: 8px; background: var(--bv-blanc);
+}
+.bv-besoin--moi { background: var(--bv-signal-doux); border-color: transparent; box-shadow: inset 0 -3px 0 var(--bv-signal); }
+.bv-besoin--couvert { background: var(--bv-teinte); }
+.bv-besoin__tete { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.bv-besoin__plage { font-weight: 700; font-size: .875rem; font-variant-numeric: tabular-nums; }
+.bv-besoin__plage--sous { font-weight: 400; }
+.bv-besoin__tache { font-weight: 700; }
+.bv-besoin__compteur { font-size: .8125rem; color: var(--bv-encre-douce); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bv-besoin__compteur b { color: var(--bv-encre); }
+.bv-besoin__action { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: .8125rem; }
+.bv-ok { color: var(--bv-succes-texte); font-weight: 700; }
+
+.bv-places { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.bv-place { font-size: .75rem; padding: 2px 8px; border-radius: 999px; background: var(--bv-teinte); color: var(--bv-encre); }
+.bv-place--moi { background: var(--bv-encre); color: #fff; font-weight: 700; }
+.bv-place--renfort { background: var(--bv-succes-doux); color: var(--bv-succes-texte); font-weight: 700; }
+.bv-place--libre { background: transparent; border: 1px dashed var(--bv-bord-champ); color: var(--bv-encre-pale); }
+
+/* ---------- Vue mobile / Mobile view ---------- */
+.bv-barre-jours { display: none; gap: 8px; overflow-x: auto; padding-block: 4px 12px; margin-bottom: 8px; }
+.bv-puce-jour {
+    flex: 0 0 auto; display: grid; justify-items: center; gap: 2px; min-width: 64px;
+    padding: 6px 10px 9px; border: 1px solid var(--bv-bord); border-radius: var(--bv-rayon-m);
+    color: var(--bv-encre); text-decoration: none;
+}
+.bv-puce-jour b { font-size: 1.125rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.bv-puce-jour span { font-size: .6875rem; text-transform: uppercase; letter-spacing: .06em; color: var(--bv-encre-douce); }
+.bv-puce-jour small { font-size: .6875rem; color: var(--bv-encre-douce); white-space: nowrap; }
+.bv-jours { display: none; gap: 24px; }
+.bv-bloc-jour { display: grid; gap: 12px; scroll-margin-top: 16px; }
+.bv-bloc-jour h3 {
+    font-size: 1.125rem; display: flex; justify-content: space-between;
+    align-items: baseline; gap: 8px; padding: 8px 12px 12px; border-radius: var(--bv-rayon-s); margin: 0;
+}
+.bv-bloc-jour h3 small { font-size: .75rem; font-weight: 400; color: var(--bv-encre-douce); }
+
+/* ---------- Navigation par semaine (§11.1) / Week navigation ---------- */
+/* Trois colonnes : le titre reste centré même quand un des deux liens est absent.
+ * / Three columns: the title stays centred even when one link is missing. */
+.bv-semaines {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    gap: 12px; margin-bottom: 16px;
+}
+.bv-semaines__precedente { grid-column: 1; justify-self: start; }
+.bv-semaines__titre {
+    grid-column: 2; margin: 0; font-size: 1.25rem; font-weight: 700;
+    text-align: center; font-variant-numeric: tabular-nums;
+}
+.bv-semaines__suivante { grid-column: 3; justify-self: end; }
+
+@media (max-width: 760px) {
+    .bv-grille-defile { display: none; }
+    .bv-barre-jours { display: flex; }
+    .bv-jours { display: grid; }
+    /* Mobile : le titre sur sa ligne, les deux liens dessous, côte à côte.
+     * / Mobile: title on its own row, both links below. */
+    /* minmax(0, 1fr) et white-space normal : sur 320 px, les libellés passent à la ligne
+     * au lieu de déborder. / Labels wrap instead of overflowing at 320 px. */
+    .bv-semaines { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+    .bv-semaines__titre { grid-column: 1 / -1; grid-row: 1; font-size: 1.125rem; }
+    .bv-semaines .bv-btn { white-space: normal; text-align: center; padding: 6px 12px; }
+    .bv-semaines__precedente { grid-column: 1; grid-row: 2; }
+    .bv-semaines__suivante { grid-column: 2; grid-row: 2; }
+}
+
+/* ---------- Bas de page / Footer ---------- */
+.bv-vide { padding: 32px 16px; text-align: center; color: var(--bv-encre-douce); }
+.bv-legende {
+    display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: .8125rem;
+    color: var(--bv-encre-douce); margin-top: 16px; align-items: center;
+}
+.bv-legende .bv-place { font-size: .6875rem; }
+.bv-rappel {
+    margin-top: 24px; background: var(--bv-teinte); border-radius: var(--bv-rayon-m);
+    padding: 16px; font-size: .875rem; max-width: 75ch;
+}
+
+/* ---------- Fenêtre du nom / Name dialog ---------- */
+.bv-fenetre {
+    border: 1px solid var(--bv-bord); border-radius: var(--bv-rayon-l); padding: 24px; width: min(440px, calc(100vw - 32px));
+    background: var(--bv-papier); color: var(--bv-encre);
+}
+.bv-fenetre::backdrop { background: rgba(23, 20, 26, .45); }
+.bv-fenetre__formulaire { display: grid; gap: 12px; }
+.bv-fenetre__formulaire h2 { font-family: var(--font-display, inherit); font-weight: 500; font-size: 1.375rem; margin: 0; }
+.bv-fenetre__formulaire p { color: var(--bv-encre-douce); font-size: .875rem; margin: 0; }
+.bv-fenetre__formulaire .bv-fenetre__public { background: var(--bv-alerte-douce); border-radius: var(--bv-rayon-s); padding: 8px 12px; color: var(--bv-encre); }
+/* Champs (DA v7.1) : 44 px, contour 1,5 px brun, coins de 12 px ; la recherche est une pilule.
+ * / Fields: 44 px, 1.5 px brown border, 12 px corners; search is a pill. */
+.bv-fenetre__formulaire input, .bv-lettre input {
+    box-sizing: border-box; min-height: 44px; padding: 0 14px; font: inherit; font-size: 1rem;
+    border: 1.5px solid var(--bv-bord-champ); border-radius: var(--bv-rayon-m);
+    background: var(--bv-blanc); color: var(--bv-encre);
+}
+.bv-fenetre__formulaire input[type="search"] { border-radius: 999px; padding: 0 16px; }
+.bv-fenetre__formulaire input:focus-visible, .bv-lettre input:focus-visible { outline: none; border-color: var(--bv-encre); }
+.bv-fenetre__formulaire input[aria-invalid="true"], .bv-lettre input[aria-invalid="true"] { border: 2px solid var(--bv-erreur); }
+.bv-fenetre__actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.bv-erreur { color: var(--bv-erreur) !important; font-size: .875rem; font-weight: 700; }
+
+/* ---------- Lettre d'information / Newsletter ---------- */
+.bv-lettre {
+    margin-top: 32px; display: grid; gap: 12px; padding: 24px; max-width: 75ch;
+    background: var(--bv-papier); border: 1px solid var(--bv-bord); border-radius: var(--bv-rayon-l);
+   
+}
+.bv-lettre h2 { font-size: 1.125rem; margin: 0; }
+.bv-lettre p { color: var(--bv-encre-douce); font-size: .875rem; margin: 0; }
+.bv-lettre form { display: flex; flex-wrap: wrap; gap: 8px; }
+.bv-lettre input { flex: 1 1 220px; min-width: 0; }
+/* Libellé long : il passe à la ligne sur 320 px au lieu de déborder. */
+.bv-lettre .bv-btn { flex: 1 1 auto; white-space: normal; line-height: 1.25; }
+.bv-lettre .bv-lettre__ok { color: var(--bv-encre); font-weight: 700; }
+
+/* ---------- Bloc d'accueil « Coups de main » / Home block ---------- */
+.bv-cartes {
+    display: grid; gap: 16px; margin-block: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+}
+.bv-carte {
+    display: grid; gap: 12px; align-content: start; padding: 16px;
+    background: var(--bv-papier); border: 1px solid var(--bv-bord);
+    border-radius: var(--bv-rayon-l);
+}
+.bv-carte__titre { font-size: 1.125rem; margin: 0; }
+.bv-carte__periode { font-size: .875rem; color: var(--bv-encre-douce); margin: 0; }
+.bv-carte__libres { color: var(--bv-encre); font-weight: 700; }
+.bv-carte__jours { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+/* Cinq jours sur une seule ligne, même sur 320 px : les puces se partagent la largeur.
+ * / Five days on one row, even at 320 px: chips share the width. */
+.bv-carte__jours .bv-puce-jour { min-width: 0; padding-inline: 4px; }
+.bv-carte .bv-btn { justify-self: start; }
+
+/* ---------- Inscription par l'équipe / Team sign-up ---------- */
+.bv-besoin__equipe { justify-self: start; font-weight: 400; }
+.bv-resultats { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.bv-resultats li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; font-size: .875rem; }
+.bv-fenetre details summary { cursor: pointer; font-weight: 700; font-size: .875rem; }
+.bv-fenetre details[open] summary { margin-bottom: 12px; }
+
+/* ---------- Page « Je ne peux plus venir » / Withdrawal page ---------- */
+.bv-desistement {
+    max-width: 60ch; display: grid; gap: 16px; padding: 24px; margin-block: 24px;
+    background: var(--bv-papier); border: 1px solid var(--bv-bord);
+    border-radius: var(--bv-rayon-l);
+}
+.bv-desistement h1 { font-size: 1.375rem; margin: 0; }
+.bv-desistement p { margin: 0; }
+
+/* ---------- Ajouts de la relecture / Review additions ---------- */
+/* Indice de défilement : un dégradé sur le bord droit de la grille desktop (les barres
+ * de défilement sont cachées sur macOS). / Scroll hint on the grid's right edge. */
+.bv-grille-cadre { position: relative; }
+.bv-grille-cadre::after {
+    content: ""; position: absolute; top: 1px; right: 1px; bottom: 1px; width: 32px;
+    pointer-events: none; border-radius: 0 var(--bv-rayon-l) var(--bv-rayon-l) 0;
+    background: linear-gradient(to right, transparent, var(--bv-papier));
+}
+.bv-legende__entree { display: inline-flex; align-items: center; gap: 6px; }
+.bv-note-equipe { flex-basis: 100%; font-size: .75rem; color: var(--bv-encre-douce); }

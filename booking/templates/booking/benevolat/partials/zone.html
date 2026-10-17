@@ -1,0 +1,70 @@
+{% load i18n %}
+<!--
+ZONE DU PLANNING : compteur, grille (desktop), jours (mobile)
+/ Planning zone: counter, desktop grid, mobile days
+
+LOCALISATION : booking/templates/booking/benevolat/partials/zone.html
+
+Rendue dans planning.html, et seule par chaque action htmx (views_benevolat.py,
+_reponse_zone). hx-target / hx-swap sont posés ici : tous les boutons de la zone
+en héritent, et leur réponse remplace la zone entière.
+/ Rendered in planning.html, and alone by each htmx action. Buttons inherit
+hx-target / hx-swap from here.
+
+La zone montre UNE semaine (§11.1, D28). Les liens « semaine précédente / suivante »
+ont un href (marche sans JS) et un hx-get qui recharge la zone seule (la vue retrieve
+lit l'en-tête HX-Target) ; hx-push-url met ?semaine= dans l'adresse, qu'on peut partager.
+/ ONE week. Week links: plain href, plus hx-get of the zone and hx-push-url.
+
+Contexte : construire_le_planning() (booking/benevolat.py) → planning, jours, lignes,
+compteur, semaine, il_y_a_des_besoins_a_venir.
+-->
+<div id="benevolat-planning" class="bv-zone"
+     hx-target="#benevolat-planning" hx-swap="outerHTML"
+     data-testid="benevolat-zone">
+
+    {% include "booking/benevolat/partials/compteur.html" %}
+
+    {% if il_y_a_des_besoins_a_venir %}
+        {% url 'benevolat-planning' slug=planning.slug as adresse_du_planning %}
+        {# Les liens gardent le même id d'une semaine à l'autre : htmx y remet le focus clavier. #}
+        {# / Links keep their id across weeks: htmx puts keyboard focus back on them. #}
+        <nav class="bv-semaines" aria-label="{% translate 'Changer de semaine' %}" data-testid="benevolat-semaines">
+            {% if semaine.precedente %}
+                <a class="bv-btn bv-btn--secondaire bv-semaines__precedente" id="benevolat-semaine-precedente"
+                   href="{{ adresse_du_planning }}?semaine={{ semaine.precedente|date:'Y-m-d' }}"
+                   hx-get="{{ adresse_du_planning }}?semaine={{ semaine.precedente|date:'Y-m-d' }}"
+                   hx-push-url="true"
+                   data-testid="benevolat-semaine-precedente">
+                    <span aria-hidden="true">←</span> {% translate "Semaine précédente" %}
+                </a>
+            {% endif %}
+            {# tabindex -1 : après un changement de semaine, le focus vient ici (planning.html) et #}
+            {# le lecteur d'écran lit la nouvelle semaine. / Focus lands here after a week change. #}
+            <h2 class="bv-semaines__titre" id="benevolat-semaine-titre" tabindex="-1"
+                data-testid="benevolat-semaine-titre">{{ semaine.titre }}</h2>
+            {% if semaine.suivante %}
+                <a class="bv-btn bv-btn--secondaire bv-semaines__suivante" id="benevolat-semaine-suivante"
+                   href="{{ adresse_du_planning }}?semaine={{ semaine.suivante|date:'Y-m-d' }}"
+                   hx-get="{{ adresse_du_planning }}?semaine={{ semaine.suivante|date:'Y-m-d' }}"
+                   hx-push-url="true"
+                   data-testid="benevolat-semaine-suivante">
+                    {% translate "Semaine suivante" %} <span aria-hidden="true">→</span>
+                </a>
+            {% endif %}
+        </nav>
+
+        {% if jours %}
+            {% include "booking/benevolat/partials/grille.html" %}
+            {% include "booking/benevolat/partials/jours_mobile.html" %}
+        {% else %}
+            <p class="bv-vide" data-testid="benevolat-semaine-vide">
+                {% translate "Aucun besoin cette semaine." %}
+            </p>
+        {% endif %}
+    {% else %}
+        <p class="bv-vide" data-testid="benevolat-aucun-besoin">
+            {% translate "Aucun besoin à venir pour l'instant. Reviens bientôt !" %}
+        </p>
+    {% endif %}
+</div>

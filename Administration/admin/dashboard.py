@@ -938,10 +938,33 @@ def _construire_sections_modules(request):
                         "link": _safe_rev("staff_admin:booking_booking_changelist"),
                         "permission": admin_permission,
                     },
+                ],
+            }
+        )
+
+    # --- module_benevolat : Plannings de bénévoles ---
+    # / --- module_benevolat: Volunteer plannings ---
+    if configuration.module_benevolat:
+        navigation.append(
+            {
+                "title": MODULE_FIELDS["module_benevolat"]["name"],
+                "_order": 3.5,  # rang dans le domaine, juste après les ressources / rank inside domain
+                "_domaine": MODULE_FIELDS["module_benevolat"]["domaine"],
+                "_icone": MODULE_FIELDS["module_benevolat"]["icone"],
+                "_slug": MODULE_FIELDS["module_benevolat"]["slug"],  # identifiant de la page de module
+                "separator": True,
+                "collapsible": True,
+                "items": [
                     {
                         "title": _("Plannings bénévoles"),
                         "icon": "volunteer_activism",
                         "link": _safe_rev("staff_admin:booking_planningbenevole_changelist"),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Besoins bénévoles"),
+                        "icon": "event_note",
+                        "link": _safe_rev("staff_admin:booking_besoinbenevole_changelist"),
                         "permission": admin_permission,
                     },
                     {
@@ -1482,6 +1505,7 @@ DESCRIPTION_DES_PAGES = {
     "booking.calendar": _("Les calendriers de disponibilité."),
     "booking.weeklyopening": _("Les horaires d'ouverture habituels."),
     "booking.planningbenevole": _("Les jours où vous avez besoin de bénévoles."),
+    "booking.besoinbenevole": _("Tous les créneaux, à venir et passés."),
     "booking.tachebenevole": _("Ce que vous demandez à vos bénévoles."),
     "booking.inscriptionbenevole": _("Qui vient, et sur quel créneau."),
     # --- Financement participatif ---
@@ -1557,6 +1581,7 @@ CATEGORIE_DES_PAGES = {
     "booking.calendar": "configurer",
     "booking.weeklyopening": "configurer",
     "booking.planningbenevole": "gerer",
+    "booking.besoinbenevole": "gerer",
     "booking.tachebenevole": "configurer",
     "booking.inscriptionbenevole": "gerer",
     # --- Financement participatif ---
@@ -2376,6 +2401,14 @@ MODULE_FIELDS = {
         "domaine": "lespass",  # groupe du tableau de bord / dashboard group
         "icone": "meeting_room",
         "slug": "ressources",  # module correspondant dans la sidebar
+    },
+    "module_benevolat": {
+        "name": _("Bénévolat"),
+        "description": _("Publier les jours où vous avez besoin de monde : chacun s'inscrit en un clic."),
+        "testid": "dashboard-card-benevolat",
+        "domaine": "lespass",  # groupe du tableau de bord / dashboard group
+        "icone": "diversity_3",
+        "slug": "benevolat",  # module correspondant dans la sidebar
     },
     "module_caisse": {
         "name": _("Caisse & Restaurant"),

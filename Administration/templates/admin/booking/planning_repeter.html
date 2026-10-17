@@ -1,0 +1,120 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% comment %}
+RÉPÉTER DES BESOINS — page de l'admin d'un planning de bénévoles
+/ Repeat needs — admin page of a volunteer planning
+
+LOCALISATION : Administration/templates/admin/booking/planning_repeter.html
+
+Rendu par PlanningBenevoleAdmin.repeter (Administration/admin/benevolat.py).
+Spec : TECH_DOC/SESSIONS/TODO/BENEVOLAT-planning-besoins.md (§5.7)
+
+Contexte :
+- planning : le planning ; adresse_de_la_fiche : retour à sa fiche ;
+- formulaire : RepeterDesBesoinsForm ;
+- apercu : None, ou les trois listes de calculer_repetitions (booking/benevolat.py) :
+  a_creer, sautes (avec « fermeture »), ignores. Chaque élément : modele (le besoin
+  copié), date (la nouvelle date), plage (« 18h–21h » ou « Journée »).
+
+FLUX : premier envoi = aperçu, rien n'est écrit. « Confirmer » renvoie le même formulaire
+avec confirmer=1 : tout est créé dans une seule transaction.
+/ First send = preview, nothing written. "Confirm" re-sends with confirmer=1.
+{% endcomment %}
+
+{% block title %}{% translate "Répéter des besoins" %} | {{ planning.name }} | {{ site_title|default:_('Administration TiBillet') }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-6" style="max-width: 900px;">
+
+    <div>
+        <a href="{{ adresse_de_la_fiche }}" class="text-sm hover:text-primary-600" data-testid="benevolat-repeter-retour">
+            <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;" aria-hidden="true">arrow_back</span>
+            {{ planning.name }}
+        </a>
+        <h2 class="text-xl font-semibold mt-2">{% translate "Répéter des besoins" %}</h2>
+        <p class="text-sm mt-2" style="max-width: 70ch;">
+            {% translate "Choisissez une période modèle (un jour, ou une semaine) : ses besoins sont recopiés à intervalle régulier. Les inscriptions ne sont jamais recopiées. Une copie qui tombe un jour fermé est sautée ; une copie qui existe déjà est ignorée : vous pouvez relancer sans rien doubler." %}
+        </p>
+    </div>
+
+    <form method="post" class="bg-white border border-base-200 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800 p-6 flex flex-col gap-4"
+          data-testid="benevolat-repeter-formulaire">
+        {% csrf_token %}
+
+        {% if formulaire.non_field_errors %}
+            <div class="text-red-600 text-sm" role="alert" data-testid="benevolat-repeter-erreur">
+                {% for erreur in formulaire.non_field_errors %}<p>{{ erreur }}</p>{% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+            {% for champ in formulaire %}
+                <div class="flex flex-col">
+                    <label for="{{ champ.id_for_label }}" class="text-sm font-medium mb-1">{{ champ.label }}</label>
+                    {{ champ }}
+                    {% for erreur in champ.errors %}
+                        <p class="text-red-600 text-xs mt-1">{{ erreur }}</p>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" data-testid="benevolat-repeter-apercu"
+                    class="font-medium px-5 py-2.5 rounded-default cursor-pointer border border-base-200 dark:border-base-700 hover:text-primary-600">
+                {% translate "Voir l'aperçu" %}
+            </button>
+            {% if apercu %}
+                <button type="submit" name="confirmer" value="1" data-testid="benevolat-repeter-confirmer"
+                        {% if not apercu.a_creer %}disabled{% endif %}
+                        class="font-medium px-5 py-2.5 rounded-default cursor-pointer bg-primary-600 text-white hover:bg-primary-700">
+                    {% blocktranslate count nombre=apercu.a_creer|length %}Confirmer : créer {{ nombre }} besoin{% plural %}Confirmer : créer {{ nombre }} besoins{% endblocktranslate %}
+                </button>
+            {% endif %}
+        </div>
+    </form>
+
+    {% if apercu %}
+        <section class="bg-white border border-base-200 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800 p-6 flex flex-col gap-4"
+                 aria-labelledby="benevolat-repeter-apercu-titre" data-testid="benevolat-repeter-resultat">
+            <h3 id="benevolat-repeter-apercu-titre" class="font-semibold">{% translate "Aperçu" %}</h3>
+            <p class="text-sm">
+                {% blocktranslate count nombre=apercu.besoins_modele|length %}{{ nombre }} besoin dans la période modèle.{% plural %}{{ nombre }} besoins dans la période modèle.{% endblocktranslate %}
+            </p>
+
+            <div>
+                <h4 class="font-medium text-sm mb-1">{% translate "À créer" %} ({{ apercu.a_creer|length }})</h4>
+                <ul class="text-sm" style="columns: 2 260px; padding-left: 1.2em; list-style: disc;" data-testid="benevolat-repeter-a-creer">
+                    {% for copie in apercu.a_creer %}
+                        <li>{{ copie.date|date:"D j M Y" }} · {{ copie.modele.tache.name }} · {{ copie.plage }}</li>
+                    {% empty %}
+                        <li style="list-style: none;">{% translate "Rien à créer." %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            {% if apercu.sautes %}
+                <div>
+                    <h4 class="font-medium text-sm mb-1">{% translate "Sautés (jour fermé)" %} ({{ apercu.sautes|length }})</h4>
+                    <ul class="text-sm" style="columns: 2 260px; padding-left: 1.2em; list-style: disc;" data-testid="benevolat-repeter-sautes">
+                        {% for copie in apercu.sautes %}
+                            <li>{{ copie.date|date:"D j M Y" }} · {{ copie.modele.tache.name }} · {% blocktranslate with fermeture=copie.fermeture %}sauté : {{ fermeture }}{% endblocktranslate %}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if apercu.ignores %}
+                <div>
+                    <h4 class="font-medium text-sm mb-1">{% translate "Ignorés (déjà présents)" %} ({{ apercu.ignores|length }})</h4>
+                    <ul class="text-sm" style="columns: 2 260px; padding-left: 1.2em; list-style: disc;" data-testid="benevolat-repeter-ignores">
+                        {% for copie in apercu.ignores %}
+                            <li>{{ copie.date|date:"D j M Y" }} · {{ copie.modele.tache.name }} · {{ copie.plage }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </section>
+    {% endif %}
+</div>
+{% endblock %}

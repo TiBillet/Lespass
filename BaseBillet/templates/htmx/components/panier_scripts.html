@@ -73,7 +73,11 @@
             toast: true,
             position: 'top-end',
             icon: iconByLevel[payload.level] || 'success',
-            title: text,
+            // titleText et JAMAIS title : SweetAlert lit `title` comme du HTML. Le texte
+            // peut contenir un prénom choisi par une personne (« <img onerror=…> ») :
+            // avec title, il serait exécuté dans la page de l'admin (XSS).
+            // / titleText, NEVER title: SweetAlert renders `title` as HTML (XSS).
+            titleText: text,
             showConfirmButton: false,
             showCloseButton: true,
             timer: 3500,
@@ -98,7 +102,11 @@
             toast: true,
             position: 'top-end',
             icon: iconByLevel[payload.level] || 'info',
-            title: text,
+            // titleText et JAMAIS title : SweetAlert lit `title` comme du HTML. Le texte
+            // peut contenir un prénom choisi par une personne (« <img onerror=…> ») :
+            // avec title, il serait exécuté dans la page de l'admin (XSS).
+            // / titleText, NEVER title: SweetAlert renders `title` as HTML (XSS).
+            titleText: text,
             showConfirmButton: false,
             showCloseButton: true,
             timer: 5000,

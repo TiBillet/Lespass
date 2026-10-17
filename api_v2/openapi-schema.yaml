@@ -1846,6 +1846,352 @@ paths:
       responses:
         '204':
           description: Deleted
+  # --- Bénévolat (droit de clé `volunteering`) / Volunteering ---
+  /api/v2/volunteer-tasks/:
+    get:
+      operationId: listVolunteerTasks
+      summary: "Bénévolat — les tâches du lieu (DefinedTerm)"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: {$ref: '#/components/schemas/VolunteerTask'}
+        "403": {description: "Clé sans le droit `volunteering`"}
+    post:
+      operationId: createVolunteerTask
+      summary: "Bénévolat — créer une tâche"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VolunteerTaskInput'}
+            example: {name: "Tenir le bar", description: "Derrière le comptoir, avec un·e habitué·e."}
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerTask'}
+        "400": {description: "Nom manquant"}
+  /api/v2/volunteer-tasks/{uuid}/:
+    parameters:
+      - {in: path, name: uuid, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getVolunteerTask
+      summary: "Bénévolat — lire une tâche"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerTask'}
+        "404": {description: "Introuvable"}
+    patch:
+      operationId: patchVolunteerTask
+      summary: "Bénévolat — modifier une tâche (name, description)"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VolunteerTaskInput'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerTask'}
+    delete:
+      operationId: deleteVolunteerTask
+      summary: "Bénévolat — supprimer une tâche"
+      description: "409 si la tâche sert encore à un besoin (« Cette tâche sert encore à N besoins »)."
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "204": {description: Deleted}
+        "409": {description: "Tâche encore utilisée par des besoins"}
+  /api/v2/volunteer-plannings/:
+    get:
+      operationId: listVolunteerPlannings
+      summary: "Bénévolat — les plannings (EventSeries), sans leurs besoins"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: {$ref: '#/components/schemas/VolunteerPlanning'}
+    post:
+      operationId: createVolunteerPlanning
+      summary: "Bénévolat — créer un planning"
+      description: |
+        FR: `name` obligatoire ; dans `additionalProperty` : `slug` (obligatoire), `published`,
+        `delaiDesinscriptionHeures`. Les adhésions requises et le calendrier de fermetures se
+        règlent dans l'admin (lecture seule ici). Slugs réservés : `besoin`, `desistement`.
+        EN: Memberships and closing calendar are read-only (admin-only).
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VolunteerPlanningInput'}
+            example:
+              name: "Bar associatif : novembre"
+              description: "On ouvre le bar deux soirs par semaine."
+              additionalProperty:
+                - {name: slug, value: bar-novembre}
+                - {name: published, value: true}
+                - {name: delaiDesinscriptionHeures, value: 24}
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerPlanning'}
+        "400": {description: "Slug manquant, déjà pris ou réservé"}
+  /api/v2/volunteer-plannings/{uuid}/:
+    parameters:
+      - in: path
+        name: uuid
+        required: true
+        description: "uuid OU slug du planning"
+        schema: {type: string}
+    get:
+      operationId: getVolunteerPlanning
+      summary: "Bénévolat — lire un planning, avec ses besoins (subEvent)"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerPlanning'}
+        "404": {description: "Introuvable"}
+    patch:
+      operationId: patchVolunteerPlanning
+      summary: "Bénévolat — modifier un planning (name, description, slug, published, delaiDesinscriptionHeures)"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VolunteerPlanningInput'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerPlanning'}
+    delete:
+      operationId: deleteVolunteerPlanning
+      summary: "Bénévolat — supprimer un planning, ses besoins et leurs inscriptions (sans mail)"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "204": {description: Deleted}
+  /api/v2/volunteer-needs/:
+    get:
+      operationId: listVolunteerNeeds
+      summary: "Bénévolat — les besoins (Event « Volunteering »), passés compris"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - {in: query, name: planning, schema: {type: string, format: uuid}}
+        - {in: query, name: task, schema: {type: string, format: uuid}}
+        - {in: query, name: dateFrom, schema: {type: string, format: date}}
+        - {in: query, name: dateTo, schema: {type: string, format: date}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: {$ref: '#/components/schemas/VolunteerNeed'}
+    post:
+      operationId: createVolunteerNeed
+      summary: "Bénévolat — créer un besoin"
+      description: |
+        FR: `startDate` = une date seule (journée entière, pas de `endDate`) ou une date et une
+        heure (`endDate` obligatoire). Une heure sans décalage est lue en heure locale du lieu ;
+        avec un décalage, elle est convertie. La fin tombe le jour même (après le début) ou le
+        lendemain (avant le début, ex. 21:00 → 00:00) ; sinon 400. Un besoin un jour fermé est
+        accepté : sa réponse porte `fermeture`.
+        EN: Date only = whole day. Local time without offset; converted with offset. End on the
+        same day or the next day (under 24 h).
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VolunteerNeedInput'}
+            example:
+              superEvent: {identifier: "8a1f…-uuid-du-planning"}
+              about: {identifier: "3c2e…-uuid-de-la-tache"}
+              startDate: "2026-11-06T21:00:00"
+              endDate: "2026-11-07T00:00:00"
+              additionalProperty:
+                - {name: nombreSouhaite, value: 2}
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerNeed'}
+        "400": {description: "Dates impossibles, planning ou tâche introuvable"}
+  /api/v2/volunteer-needs/{uuid}/:
+    parameters:
+      - {in: path, name: uuid, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getVolunteerNeed
+      summary: "Bénévolat — lire un besoin"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerNeed'}
+    patch:
+      operationId: patchVolunteerNeed
+      summary: "Bénévolat — modifier un besoin (about, startDate/endDate, nombreSouhaite ; pas de changement de planning)"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VolunteerNeedInput'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerNeed'}
+    delete:
+      operationId: deleteVolunteerNeed
+      summary: "Bénévolat — supprimer un besoin et ses inscriptions (sans mail)"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "204": {description: Deleted}
+  /api/v2/volunteer-signups/:
+    get:
+      operationId: listVolunteerSignups
+      summary: "Bénévolat — les inscriptions (RsvpAction)"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - {in: query, name: need, schema: {type: string, format: uuid}}
+        - {in: query, name: planning, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: {$ref: '#/components/schemas/VolunteerSignup'}
+    post:
+      operationId: createVolunteerSignup
+      summary: "Bénévolat — inscrire une personne sur un besoin"
+      description: |
+        FR: Le compte est créé s'il n'existe pas et rattaché au lieu ; son prénom et son nom ne
+        sont écrits que s'ils sont vides. S'ils manquent dans le compte ET dans la requête : 400,
+        rien n'est créé. Planning publié et besoin pas passé, sinon 400. Pas de contrôle
+        d'adhésion. 201 si créée, 200 si la personne était déjà inscrite (rejouer est sans
+        danger). À la création, la personne reçoit « L'équipe t'a inscrit·e » avec le lien
+        « Je ne peux plus venir ». `inscritPar` = le compte de la clé.
+        EN: 201 when created, 200 when already signed up.
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VolunteerSignupInput'}
+            example:
+              object: {identifier: "6f1c…-uuid-du-besoin"}
+              agent: {email: "camille@exemple.org", givenName: "Camille", familyName: "Martin"}
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerSignup'}
+        "200":
+          description: Already signed up
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerSignup'}
+        "400": {description: "Besoin passé, planning non publié, email en erreur, nom manquant"}
+  /api/v2/volunteer-signups/{uuid}/:
+    parameters:
+      - {in: path, name: uuid, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getVolunteerSignup
+      summary: "Bénévolat — lire une inscription"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VolunteerSignup'}
+    delete:
+      operationId: deleteVolunteerSignup
+      summary: "Bénévolat — retirer une personne (à tout moment, sans mail)"
+      tags: [Volunteering]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "204": {description: Deleted}
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -2895,3 +3241,140 @@ components:
             Lien cible du logo (bloc PARTENAIRES uniquement, optionnel) : rend le
             logo cliquable dans un nouvel onglet. Les schémas dangereux
             (javascript:, data:, vbscript:) sont neutralisés côté serveur.
+    # --- Bénévolat / Volunteering ---
+    VolunteerTask:
+      type: object
+      description: "schema.org/DefinedTerm — une tâche du catalogue du lieu"
+      properties:
+        '@context': {type: string, example: "https://schema.org"}
+        '@type': {type: string, example: DefinedTerm}
+        identifier: {type: string, format: uuid}
+        name: {type: string, example: "Tenir le bar"}
+        description: {type: string}
+    VolunteerTaskInput:
+      type: object
+      properties:
+        name: {type: string, maxLength: 200}
+        description: {type: string}
+    VolunteerPlanning:
+      type: object
+      description: |
+        schema.org/EventSeries. additionalProperty : slug, published, delaiDesinscriptionHeures,
+        requiredMembershipPlans (lecture seule), closingCalendar (lecture seule), placesCouvertes,
+        placesSouhaitees, renforts, creneauxVides (compteurs des besoins à venir).
+      properties:
+        '@context': {type: string}
+        '@type': {type: string, example: EventSeries}
+        identifier: {type: string, format: uuid}
+        name: {type: string}
+        description: {type: string}
+        url: {type: string, example: "/booking/benevolat/bar-novembre/"}
+        startDate: {type: string, format: date, description: "Premier jour des besoins (absent sans besoin)"}
+        endDate: {type: string, format: date, description: "Dernier jour des besoins"}
+        additionalProperty:
+          type: array
+          items: {$ref: '#/components/schemas/PropertyValue'}
+        subEvent:
+          type: array
+          description: "Au GET d'un planning seulement"
+          items: {$ref: '#/components/schemas/VolunteerNeed'}
+    VolunteerPlanningInput:
+      type: object
+      properties:
+        name: {type: string, maxLength: 250}
+        description: {type: string}
+        additionalProperty:
+          type: array
+          description: "slug, published, delaiDesinscriptionHeures"
+          items: {$ref: '#/components/schemas/PropertyValue'}
+    VolunteerNeed:
+      type: object
+      description: |
+        schema.org/Event, additionalType « Volunteering ». startDate avec le décalage du lieu
+        (« 2026-11-06T21:00:00+01:00 »), ou la date seule pour une journée (pas d'endDate).
+        additionalProperty : nombreSouhaite, nombreInscrits, renforts, fermeture (libellé ou null).
+      properties:
+        '@context': {type: string}
+        '@type': {type: string, example: Event}
+        additionalType: {type: string, example: Volunteering}
+        identifier: {type: string, format: uuid}
+        superEvent:
+          type: object
+          properties:
+            '@type': {type: string, example: EventSeries}
+            identifier: {type: string, format: uuid}
+            name: {type: string}
+        about:
+          type: object
+          properties:
+            '@type': {type: string, example: DefinedTerm}
+            identifier: {type: string, format: uuid}
+            name: {type: string}
+        startDate: {type: string}
+        endDate: {type: string}
+        remainingAttendeeCapacity: {type: integer}
+        attendee:
+          type: array
+          description: "Prénoms seulement (jamais l'email ni le nom de famille)"
+          items:
+            type: object
+            properties:
+              '@type': {type: string, example: Person}
+              givenName: {type: string}
+        additionalProperty:
+          type: array
+          items: {$ref: '#/components/schemas/PropertyValue'}
+    VolunteerNeedInput:
+      type: object
+      properties:
+        superEvent:
+          description: "uuid du planning, ou {identifier: uuid} (création seulement)"
+        about:
+          description: "uuid de la tâche, ou {identifier: uuid}"
+        startDate: {type: string, example: "2026-11-06T21:00:00"}
+        endDate: {type: string, example: "2026-11-07T00:00:00"}
+        additionalProperty:
+          type: array
+          description: "nombreSouhaite (>= 1)"
+          items: {$ref: '#/components/schemas/PropertyValue'}
+    VolunteerSignup:
+      type: object
+      description: |
+        schema.org/RsvpAction. additionalProperty : inscritPar (email du compte de la clé ou de
+        l'admin, ou null), rappelEnvoyeLe (date d'envoi du rappel de la veille, ou null).
+      properties:
+        '@context': {type: string}
+        '@type': {type: string, example: RsvpAction}
+        identifier: {type: string, format: uuid}
+        rsvpResponse: {type: string, example: "https://schema.org/RsvpResponseYes"}
+        object:
+          type: object
+          properties:
+            '@type': {type: string, example: Event}
+            identifier: {type: string, format: uuid}
+        agent:
+          type: object
+          properties:
+            '@type': {type: string, example: Person}
+            email: {type: string, format: email}
+            givenName: {type: string}
+            familyName: {type: string}
+        startTime: {type: string, format: date-time}
+        additionalProperty:
+          type: array
+          items: {$ref: '#/components/schemas/PropertyValue'}
+    VolunteerSignupInput:
+      type: object
+      required: [object, agent]
+      properties:
+        object:
+          type: object
+          properties:
+            identifier: {type: string, format: uuid}
+        agent:
+          type: object
+          required: [email]
+          properties:
+            email: {type: string, format: email}
+            givenName: {type: string, maxLength: 200}
+            familyName: {type: string, maxLength: 200}

@@ -1,0 +1,25 @@
+{% extends 'fonctionnel/account_base.html' %}
+{% load i18n %}
+
+<!--
+LOCALISATION : pages/templates/pages/classic/vues/compte/benevolat.html
+
+Mes créneaux bénévoles — mes inscriptions à venir sur les plannings de bénévoles du lieu.
+/ My volunteer shifts — my upcoming sign-ups on the venue's volunteer plannings.
+
+Flux / Flow : GET /my_account/my_volunteering/ (MyAccount.my_volunteering, BaseBillet/views.py)
+La liste est dans booking/templates/booking/benevolat/partials/mes_creneaux.html.
+-->
+
+{% block title %}{% translate "Mes créneaux bénévoles" %}{% endblock %}
+
+{% block account_page %}
+    <section class="card pt-3 mb-3">
+        <div class="card-body">
+            <h1 class="card-title">{% translate "Mes créneaux bénévoles" %}</h1>
+            <p class="lead">{% translate "Les coups de main où je me suis engagé·e. Un empêchement ? Je me retire, l'équipe saura qu'il faut quelqu'un d'autre." %}</p>
+        </div>
+    </section>
+
+    {% include "booking/benevolat/partials/mes_creneaux.html" %}
+{% endblock account_page %}

@@ -223,6 +223,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
         'sale',
         'page',
         'comptabilite',
+        'volunteering',
     ]
 
     fields = [
@@ -241,6 +242,9 @@ class ExternalApiKeyAdmin(ModelAdmin):
         # Droit de lecture de la comptabilite (logiciel comptable du lieu)
         # / Accounting read right (the venue's accounting software)
         ('comptabilite',),
+        # Droit API du bénévolat (tâches, plannings, besoins, inscriptions)
+        # / Volunteering API right
+        ('volunteering',),
         # Recharge cadeau : asset TNF que cette cle peut crediter via l'API v2
         # / Gift refill: TNF asset this key may top-up via API v2
         'gift_asset',

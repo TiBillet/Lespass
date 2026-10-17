@@ -327,3 +327,50 @@ def test_la_fiche_planning_signale_un_besoin_un_jour_ferme(admin_client, plannin
         finally:
             BesoinBenevole.objects.filter(planning=planning).delete()
             fermeture.delete()
+
+
+@pytest.mark.django_db
+def test_debut_egal_fin_refuse_par_clean(planning_et_tache):
+    """Début = fin ferait un créneau de 24 h : presque toujours une faute de frappe."""
+    from booking.models import BesoinBenevole
+
+    planning, tache = planning_et_tache
+    besoin = BesoinBenevole(
+        planning=planning, tache=tache, date=datetime.date(2030, 10, 2),
+        heure_debut=datetime.time(18, 0), heure_fin=datetime.time(18, 0),
+    )
+    with pytest.raises(ValidationError):
+        besoin.clean()
+
+
+@pytest.mark.django_db
+def test_la_fiche_planning_ne_fait_pas_une_requete_par_besoin(admin_client, planning_et_tache, test_calendar, test_user):
+    """
+    10 besoins ou 30 : le même nombre de requêtes (préchargement de l'inline).
+    / 10 needs or 30: same query count (inline prefetch).
+    """
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+    from booking.models import BesoinBenevole, InscriptionBenevole
+
+    planning, tache = planning_et_tache
+    with schema_context(TENANT_SCHEMA):
+        planning.calendrier = test_calendar
+        planning.save()
+
+        def requetes_pour(nombre_de_besoins):
+            BesoinBenevole.objects.filter(planning=planning).delete()
+            for jour in range(nombre_de_besoins):
+                besoin = BesoinBenevole.objects.create(
+                    planning=planning, tache=tache, date=datetime.date(2034, 1, 1) + datetime.timedelta(days=jour),
+                )
+                InscriptionBenevole.objects.create(besoin=besoin, user=test_user)
+            with CaptureQueriesContext(connection) as requetes:
+                reponse = admin_client.get(f"/admin/booking/planningbenevole/{planning.pk}/change/")
+            assert reponse.status_code == 200
+            return len(requetes)
+
+        try:
+            assert requetes_pour(30) == requetes_pour(10)
+        finally:
+            BesoinBenevole.objects.filter(planning=planning).delete()

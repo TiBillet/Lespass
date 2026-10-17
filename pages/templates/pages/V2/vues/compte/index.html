@@ -212,6 +212,11 @@ modules (R11).
                             <span class="shortcut__text"><span class="shortcut__name">{% translate 'Mes ressources' %}</span></span>
                         </a>
                     {% endif %}
+                    {% if config.module_benevolat %}
+                        <a class="shortcut" href="/my_account/my_volunteering/" data-testid="btn-mes-creneaux-benevoles">
+                            <span class="shortcut__text"><span class="shortcut__name">{% translate 'Mes créneaux bénévoles' %}</span></span>
+                        </a>
+                    {% endif %}
                     {# Raccourci « Ma carte Pass » retiré de cette liste (décision du #}
                     {# mainteneur : cinq entrées). La page reste atteignable par son #}
                     {# adresse ET par « Lier une carte » quand aucune carte n'est liée. #}

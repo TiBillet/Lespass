@@ -12,6 +12,7 @@ import stripe
 from django.utils import timezone
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
@@ -850,7 +851,22 @@ class PlanningBenevole(models.Model):
     LOCALISATION : booking/models.py
 
     Page publique : /booking/benevolat/<slug>/
+
+    Deux types (spec §11.2, D29) :
+    - PONCTUEL : les besoins sont saisis à la main (ou répétés), datés.
+    - HEBDOMADAIRE : une semaine type (LigneDeSemaineType) crée les besoins réels, de
+      date_de_debut à date_de_fin, horizon_en_semaines à l'avance. Création à
+      l'enregistrement de la fiche et chaque nuit (booking/benevolat.py,
+      creer_les_besoins_de_la_semaine_type).
+    / Two kinds: PONCTUEL (dated needs) or HEBDOMADAIRE (a template week creates real needs).
     """
+    PONCTUEL = "PONCTUEL"
+    HEBDOMADAIRE = "HEBDOMADAIRE"
+    TYPES_DE_PLANNING = [
+        (PONCTUEL, _("Ponctuel")),
+        (HEBDOMADAIRE, _("Chaque semaine")),
+    ]
+
     uuid = models.UUIDField(
         primary_key=True,
         default=uuid4,
@@ -868,7 +884,7 @@ class PlanningBenevole(models.Model):
         max_length=250,
         unique=True,
         verbose_name=_("Adresse de la page"),
-        help_text=_("La fin de l'adresse publique : /booking/benevolat/<adresse>/"),
+        help_text=_("La fin de l'adresse publique : /booking/benevolat/nom-du-planning/"),
     )
 
     description = models.TextField(
@@ -922,6 +938,49 @@ class PlanningBenevole(models.Model):
         ),
     )
 
+    type_de_planning = models.CharField(
+        max_length=20,
+        choices=TYPES_DE_PLANNING,
+        default=PONCTUEL,
+        verbose_name=_("Type de planning"),
+        help_text=_(
+            "Ponctuel : vous saisissez les besoins jour par jour. "
+            "Chaque semaine : enregistrez, puis saisissez la semaine type ; "
+            "les besoins sont créés tout seuls, semaine après semaine."
+        ),
+    )
+
+    date_de_debut = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_("Premier jour"),
+        help_text=_("Chaque semaine : le premier jour où des besoins sont créés."),
+    )
+
+    date_de_fin = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_("Dernier jour"),
+        help_text=_("Chaque semaine : laisser vide pour un planning sans fin."),
+    )
+
+    horizon_en_semaines = models.PositiveSmallIntegerField(
+        default=8,
+        validators=[MinValueValidator(1), MaxValueValidator(26)],
+        verbose_name=_("Semaines ouvertes à l'avance"),
+        help_text=_("Chaque semaine : combien de semaines d'avance sont ouvertes aux inscriptions (1 à 26)."),
+    )
+
+    # Interne : les besoins de la semaine type sont créés jusqu'à ce jour. Ce qui est
+    # avant n'est jamais recréé (un besoin supprimé à la main reste supprimé). Ne recule jamais.
+    # / Internal: needs are created up to this day; nothing before it is ever re-created.
+    besoins_crees_jusqu_au = models.DateField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("Besoins créés jusqu'au"),
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=_("Créé le"),
@@ -952,6 +1011,17 @@ class PlanningBenevole(models.Model):
                 "slug": _("Cette adresse est réservée. Choisissez-en une autre."),
             })
 
+        # Planning hebdomadaire : sans premier jour, on ne sait pas d'où créer les besoins.
+        # / Weekly planning: without a first day, needs cannot be created.
+        if self.type_de_planning == self.HEBDOMADAIRE and self.date_de_debut is None:
+            raise ValidationError({
+                "date_de_debut": _("Indiquez le premier jour du planning."),
+            })
+        if self.date_de_debut and self.date_de_fin and self.date_de_fin < self.date_de_debut:
+            raise ValidationError({
+                "date_de_fin": _("Le dernier jour doit être le premier jour, ou après."),
+            })
+
     def date_est_fermee(self, une_date):
         """
         Renvoie la période de fermeture qui couvre ce jour, ou None.
@@ -966,16 +1036,15 @@ class PlanningBenevole(models.Model):
         if self.calendrier_id is None:
             return None
 
-        periode_qui_couvre_ce_jour = self.calendrier.closed_periods.filter(
-            models.Q(start_date__lte=une_date)
-            & (models.Q(end_date__isnull=True) | models.Q(end_date__gte=une_date))
-        ).first()
-        return periode_qui_couvre_ce_jour
+        # .all() et pas .filter() : l'inline de l'admin précharge les fermetures
+        # (prefetch_related) ; .filter() referait une requête par ligne.
+        # Un calendrier n'a que quelques fermetures.
+        # / .all(): uses the admin inline prefetch, few periods anyway.
+        return periode_fermee_qui_couvre(self.calendrier.closed_periods.all(), une_date)
 
     def libelle_de_fermeture(self, une_date):
         """
         Le texte à afficher pour un jour fermé, ou None si le jour est ouvert.
-        Le label de la fermeture s'il existe, sinon « fermé du 14 juillet au 15 juillet ».
         / The text to show for a closed day, or None if the day is open.
 
         LOCALISATION : booking/models.py — classe PlanningBenevole
@@ -983,20 +1052,171 @@ class PlanningBenevole(models.Model):
         periode_fermee = self.date_est_fermee(une_date)
         if periode_fermee is None:
             return None
+        return libelle_d_une_fermeture(periode_fermee)
 
-        if periode_fermee.label:
-            return periode_fermee.label
 
-        debut_de_la_fermeture = date_format(periode_fermee.start_date, "j F")
-        if periode_fermee.end_date is None:
-            return _("fermé à partir du %(debut)s") % {"debut": debut_de_la_fermeture}
-        if periode_fermee.end_date == periode_fermee.start_date:
-            return _("fermé le %(debut)s") % {"debut": debut_de_la_fermeture}
-        fin_de_la_fermeture = date_format(periode_fermee.end_date, "j F")
-        return _("fermé du %(debut)s au %(fin)s") % {
-            "debut": debut_de_la_fermeture,
-            "fin": fin_de_la_fermeture,
-        }
+# Les deux fonctions suivantes ne touchent pas la base : elles servent aussi au calcul
+# pur de « Répéter des besoins » (booking/benevolat.py, calculer_repetitions).
+# / These two functions don't touch the database: also used by calculer_repetitions.
+
+def periode_fermee_qui_couvre(periodes_fermees, une_date):
+    """
+    Parmi ces périodes de fermeture, celle qui couvre ce jour, ou None.
+    Un jour est fermé si start_date <= une_date et si end_date est vide
+    (fermeture sans fin) ou >= une_date.
+    / Among these closed periods, the one covering this day, or None.
+    """
+    for periode_fermee in periodes_fermees:
+        commence_avant_ou_ce_jour = periode_fermee.start_date <= une_date
+        finit_apres_ou_ce_jour = periode_fermee.end_date is None or periode_fermee.end_date >= une_date
+        if commence_avant_ou_ce_jour and finit_apres_ou_ce_jour:
+            return periode_fermee
+    return None
+
+
+def libelle_d_une_fermeture(periode_fermee):
+    """
+    Le label de la fermeture s'il existe, sinon « fermé du 14 juillet au 15 juillet »
+    (ou « fermé le 14 juillet », « fermé à partir du 14 juillet »).
+    / The closure label, or a fallback built from its dates.
+    """
+    if periode_fermee.label:
+        return periode_fermee.label
+
+    debut_de_la_fermeture = date_format(periode_fermee.start_date, "j F")
+    if periode_fermee.end_date is None:
+        return _("fermé à partir du %(debut)s") % {"debut": debut_de_la_fermeture}
+    if periode_fermee.end_date == periode_fermee.start_date:
+        return _("fermé le %(debut)s") % {"debut": debut_de_la_fermeture}
+    fin_de_la_fermeture = date_format(periode_fermee.end_date, "j F")
+    return _("fermé du %(debut)s au %(fin)s") % {
+        "debut": debut_de_la_fermeture,
+        "fin": fin_de_la_fermeture,
+    }
+
+
+def verifier_les_heures(heure_debut, heure_fin):
+    """
+    Les règles des heures d'un besoin ou d'une ligne de semaine type, avec un message
+    lisible dans l'admin. Lève ValidationError.
+    / Hour rules of a need or a template-week row, with a readable admin message.
+
+    - Les deux heures, ou aucune (toute la journée). Même règle que la contrainte en base.
+    - Début = fin donnerait un créneau de 24 h : c'est presque toujours une faute de
+      frappe. Pour toute la journée, on laisse les deux heures vides.
+    """
+    une_seule_heure_remplie = (heure_debut is None) != (heure_fin is None)
+    if une_seule_heure_remplie:
+        raise ValidationError(
+            _("Remplissez les deux heures, ou aucune pour toute la journée.")
+        )
+    if heure_debut is not None and heure_debut == heure_fin:
+        raise ValidationError(
+            _("Le début et la fin sont à la même heure. Pour toute la journée, laissez les deux heures vides.")
+        )
+
+
+class LigneDeSemaineType(models.Model):
+    """
+    Une ligne de la semaine type d'un planning hebdomadaire : « le vendredi, Tenir le
+    bar, 18h–21h, 2 personnes ». Chaque semaine, elle donne un besoin réel ce jour-là.
+    / A template-week row of a weekly planning; each week it gives a real need that day.
+
+    LOCALISATION : booking/models.py
+    Spec : TECH_DOC/SESSIONS/TODO/BENEVOLAT-planning-besoins.md (§11.2, D29 à D32)
+
+    Les besoins créés gardent le lien (BesoinBenevole.ligne_de_semaine_type) : modifier la
+    ligne met à jour ses besoins futurs sans inscrit (D30, Administration/admin/benevolat.py).
+    / Created needs keep the link: editing the row updates its future needs without sign-up.
+    """
+    LUNDI, MARDI, MERCREDI, JEUDI, VENDREDI, SAMEDI, DIMANCHE = range(7)
+    JOURS_DE_LA_SEMAINE = [
+        (LUNDI, _("Lundi")),
+        (MARDI, _("Mardi")),
+        (MERCREDI, _("Mercredi")),
+        (JEUDI, _("Jeudi")),
+        (VENDREDI, _("Vendredi")),
+        (SAMEDI, _("Samedi")),
+        (DIMANCHE, _("Dimanche")),
+    ]
+
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid4,
+        editable=False,
+        verbose_name=_("Identifiant"),
+    )
+
+    planning = models.ForeignKey(
+        PlanningBenevole,
+        on_delete=models.CASCADE,
+        related_name="semaine_type",
+        verbose_name=_("Planning"),
+    )
+
+    # 0 = lundi … 6 = dimanche : la même numérotation que date.weekday().
+    # / 0 = Monday … 6 = Sunday, like date.weekday().
+    jour_de_la_semaine = models.PositiveSmallIntegerField(
+        choices=JOURS_DE_LA_SEMAINE,
+        verbose_name=_("Jour"),
+    )
+
+    tache = models.ForeignKey(
+        TacheBenevole,
+        on_delete=models.PROTECT,
+        related_name="lignes_de_semaine_type",
+        verbose_name=_("Tâche"),
+    )
+
+    heure_debut = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Début"),
+        help_text=_("Laisser les deux heures vides pour toute la journée."),
+    )
+
+    heure_fin = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Fin"),
+        help_text=_("Une fin plus tôt que le début veut dire le lendemain (21:00 → 00:00)."),
+    )
+
+    nombre_souhaite = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name=_("Nombre de personnes souhaité"),
+    )
+
+    class Meta:
+        verbose_name = _("Ligne de la semaine type")
+        verbose_name_plural = _("Semaine type")
+        ordering = ["jour_de_la_semaine", "heure_debut"]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(nombre_souhaite__gte=1),
+                name="ligne_semaine_type_nombre_souhaite_au_moins_un",
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(heure_debut__isnull=True, heure_fin__isnull=True)
+                    | models.Q(heure_debut__isnull=False, heure_fin__isnull=False)
+                ),
+                name="ligne_semaine_type_deux_heures_ou_aucune",
+            ),
+            models.CheckConstraint(
+                check=models.Q(jour_de_la_semaine__lte=6),
+                name="ligne_semaine_type_jour_de_0_a_6",
+            ),
+        ]
+
+    def __str__(self):
+        if self.heure_debut is None:
+            return f"{self.get_jour_de_la_semaine_display()} — {self.tache} ({_('journée')})"
+        return f"{self.get_jour_de_la_semaine_display()} — {self.tache} {self.heure_debut:%H:%M}–{self.heure_fin:%H:%M}"
+
+    def clean(self):
+        """Mêmes règles d'heures que les besoins. / Same hour rules as the needs."""
+        verifier_les_heures(self.heure_debut, self.heure_fin)
 
 
 class BesoinBenevole(models.Model):
@@ -1064,10 +1284,28 @@ class BesoinBenevole(models.Model):
         help_text=_("Un objectif, pas un plafond : d'autres personnes peuvent venir en renfort."),
     )
 
+    # Rempli : le besoin a été créé par cette ligne de la semaine type, et la suit
+    # (modifier la ligne le met à jour, D30). Vide : un besoin saisi à la main.
+    # / Set: created by this template-week row and follows it. Empty: a manual need.
+    ligne_de_semaine_type = models.ForeignKey(
+        LigneDeSemaineType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="besoins",
+        verbose_name=_("Ligne de la semaine type"),
+    )
+
     class Meta:
         verbose_name = _("Besoin bénévole")
         verbose_name_plural = _("Besoins bénévoles")
         ordering = ["date", "heure_debut"]
+        # Toutes les requêtes du bénévolat filtrent par planning et par date (D33).
+        # / Every volunteering query filters by planning and date.
+        indexes = [
+            models.Index(fields=["planning", "date"], name="besoin_benevole_planning_date"),
+        ]
         constraints = [
             models.CheckConstraint(
                 check=models.Q(nombre_souhaite__gte=1),
@@ -1096,11 +1334,22 @@ class BesoinBenevole(models.Model):
 
         LOCALISATION : booking/models.py — classe BesoinBenevole
         """
-        une_seule_heure_remplie = (self.heure_debut is None) != (self.heure_fin is None)
-        if une_seule_heure_remplie:
-            raise ValidationError(
-                _("Remplissez les deux heures, ou aucune pour toute la journée.")
-            )
+        verifier_les_heures(self.heure_debut, self.heure_fin)
+
+    def correspond_a_sa_ligne(self):
+        """
+        Vrai si le besoin a encore les valeurs de sa ligne de semaine type : même jour de
+        la semaine, même tâche, mêmes heures, même nombre souhaité.
+        / True if the need still has its template-week row's values.
+        """
+        ligne = self.ligne_de_semaine_type
+        return (
+            self.date.weekday() == ligne.jour_de_la_semaine
+            and self.tache_id == ligne.tache_id
+            and self.heure_debut == ligne.heure_debut
+            and self.heure_fin == ligne.heure_fin
+            and self.nombre_souhaite == ligne.nombre_souhaite
+        )
 
     def est_une_journee(self):
         """
@@ -1109,22 +1358,27 @@ class BesoinBenevole(models.Model):
         """
         return self.heure_debut is None
 
-    def debut(self):
+    def debut(self, fuseau_du_lieu=None):
         """
         Le début du besoin, en datetime avec le fuseau du lieu.
         Journée entière : le jour à 00:00.
         / Start of the need, timezone-aware in the venue timezone.
 
         LOCALISATION : booking/models.py — classe BesoinBenevole
+
+        :param fuseau_du_lieu: fuseau déjà lu (facultatif). La page du planning le lit
+            une seule fois et le passe ici : sinon, chaque besoin relit la Configuration.
+            / Timezone already read (optional): avoids one Configuration read per need.
         """
-        fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        if fuseau_du_lieu is None:
+            fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
         if self.est_une_journee():
             heure_de_debut = datetime.time(0, 0)
         else:
             heure_de_debut = self.heure_debut
         return datetime.datetime.combine(self.date, heure_de_debut, tzinfo=fuseau_du_lieu)
 
-    def fin(self):
+    def fin(self, fuseau_du_lieu=None):
         """
         La fin du besoin, en datetime avec le fuseau du lieu.
         - Journée entière : le lendemain à 00:00.
@@ -1133,8 +1387,11 @@ class BesoinBenevole(models.Model):
         / heure_fin <= heure_debut: ends the next day.
 
         LOCALISATION : booking/models.py — classe BesoinBenevole
+
+        :param fuseau_du_lieu: fuseau déjà lu (facultatif), comme pour debut().
         """
-        fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        if fuseau_du_lieu is None:
+            fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
         lendemain = self.date + timedelta(days=1)
 
         if self.est_une_journee():
@@ -1147,21 +1404,63 @@ class BesoinBenevole(models.Model):
             jour_de_fin = self.date
         return datetime.datetime.combine(jour_de_fin, self.heure_fin, tzinfo=fuseau_du_lieu)
 
-    def est_passe(self):
+    def limite_pour_se_retirer_sans_prevenir(self, fuseau_du_lieu=None):
+        """
+        Avant ce moment, on se retire en silence. Après, le retrait marche aussi, mais
+        l'équipe est prévenue (P10) : debut() - delai_desinscription_heures du planning.
+        / Before this moment, silent withdrawal; after it, the team is warned.
+        """
+        return self.debut(fuseau_du_lieu) - timedelta(hours=self.planning.delai_desinscription_heures)
+
+    def save(self, *args, **kwargs):
+        """
+        Un besoin qui change de jour ou d'heures doit avoir son rappel de la veille pour
+        sa NOUVELLE date : on vide rappel_envoye_le de ses inscriptions.
+        / A need moved to another day or time gets its reminder again.
+
+        Un besoin enregistré un par un (admin, API) qui ne correspond plus à sa ligne de
+        semaine type en est détaché : c'est une exception manuelle, que la ligne n'écrase
+        jamais (D30). Les mises à jour faites PAR la ligne passent par queryset.update(),
+        qui n'appelle pas save().
+        / A need saved one by one that no longer matches its row is detached (manual
+        exception). Updates made BY the row use queryset.update(), which skips save().
+        """
+        if self.ligne_de_semaine_type_id is not None and not self.correspond_a_sa_ligne():
+            self.ligne_de_semaine_type = None
+
+        a_change_de_moment = False
+        if not self._state.adding:
+            ancien = BesoinBenevole.objects.filter(pk=self.pk).values("date", "heure_debut", "heure_fin").first()
+            if ancien is not None:
+                a_change_de_moment = (
+                    ancien["date"] != self.date
+                    or ancien["heure_debut"] != self.heure_debut
+                    or ancien["heure_fin"] != self.heure_fin
+                )
+        super().save(*args, **kwargs)
+        if a_change_de_moment:
+            self.inscriptions.update(rappel_envoye_le=None)
+
+    def est_passe(self, fuseau_du_lieu=None):
         """
         Un besoin est passé quand sa FIN est passée : un besoin 18h–21h reste ouvert à 18h30.
         / A need is past when its END is past.
         """
-        return self.fin() <= timezone.now()
+        return self.fin(fuseau_du_lieu) <= timezone.now()
 
     def nombre_inscrits(self):
-        return self.inscriptions.count()
+        """Le nombre d'inscriptions. / Number of sign-ups."""
+        # len(...all()) et pas count() : la page du planning précharge les inscriptions
+        # (prefetch_related). all() lit ce cache, count() ferait une requête par besoin.
+        # / len(all()) not count(): reads the prefetch cache instead of one query per need.
+        return len(self.inscriptions.all())
 
     def places_couvertes(self):
         """Les places remplies, sans compter les renforts. / Filled places, without extras."""
         return min(self.nombre_inscrits(), self.nombre_souhaite)
 
     def places_libres(self):
+        """Les places encore à prendre. / Places still to take."""
         return max(0, self.nombre_souhaite - self.nombre_inscrits())
 
     def nombre_de_renforts(self):

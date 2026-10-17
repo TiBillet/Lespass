@@ -25,6 +25,7 @@ K='Api-Key xxxx.yyyy'; H='lespass.tibillet.localhost'
 | Wallet | `POST /api/v2/wallet-refills/` | `walletrefill` (gift_asset) |
 | **Pages** | `GET/POST /api/v2/pages/`, `GET .../{uuid}/`, `POST .../{uuid}/blocs/`, `PATCH/DELETE /api/v2/blocs/{uuid}/` | `page` |
 | **Catalogue blocs** | `GET /api/v2/pages/block-types/` | `page` |
+| Bénévolat | `GET/POST /api/v2/volunteer-tasks/`, `…/volunteer-plannings/` (uuid ou slug), `…/volunteer-needs/`, `…/volunteer-signups/` ; `GET/PATCH/DELETE …/{uuid}/` (pas de PATCH d'inscription) | `volunteering` |
 
 ---
 
@@ -117,6 +118,8 @@ champs). Repères :
   votes / participations (l.268+).
 - **Wallet-refills** : `POST /api/v2/wallet-refills/` (l.985) — nécessite une clé avec
   `gift_asset` défini ; recharge UNIQUEMENT cet asset.
+- **Bénévolat** : section « Bénévolat » de `api_v2/GUIDELINES.md` et chemins
+  `/api/v2/volunteer-*` de l'OpenAPI. Ordre : tâche → planning → besoins → inscriptions.
 
 ---
 

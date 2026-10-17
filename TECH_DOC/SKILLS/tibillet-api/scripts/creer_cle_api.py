@@ -29,7 +29,7 @@ import sys
 # les pages ET les blocs. / Granular ExternalApiKey permissions; `page` opens pages AND blocs.
 PERMISSIONS_VALIDES = {
     "event", "product", "page", "membership",
-    "reservation", "ticket", "wallet", "sale", "crowd",
+    "reservation", "ticket", "wallet", "sale", "crowd", "volunteering",
 }
 
 # Gabarit du code Django execute dans le conteneur. Les placeholders {..} sont

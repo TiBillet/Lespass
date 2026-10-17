@@ -635,7 +635,7 @@ class Bloc(models.Model):
         (INTEGRATION, _("Contenu intégré (vidéo en ligne, formulaire, newsletter)")),
         (LIEU, _("Lieu (carte des points GPS + infos pratiques)")),
         (FAQ, _("Question / réponse")),
-        (LISTE, _("Liste automatique (sous-pages ou prochains évènements)")),
+        (LISTE, _("Liste automatique (sous-pages, prochains évènements ou coups de main)")),
     ]
 
     # --- Affichages : la variation VISUELLE a l'interieur d'un type ---
@@ -711,10 +711,14 @@ class Bloc(models.Model):
     # / `source` is NOT an affichage: it picks a QUERY, not a rendering.
     SOUS_PAGES = "SOUS_PAGES"
     EVENEMENTS = "EVENEMENTS"
+    # Les plannings de bénévoles qui ont des besoins à venir (app booking).
+    # / Volunteer plannings with upcoming needs (booking app).
+    COUPS_DE_MAIN = "COUPS_DE_MAIN"
 
     SOURCE_CHOICES = [
         (SOUS_PAGES, _("Les sous-pages d'une page")),
         (EVENEMENTS, _("Les prochains évènements de l'agenda")),
+        (COUPS_DE_MAIN, _("Les prochains coups de main (bénévolat)")),
     ]
 
 
@@ -780,7 +784,7 @@ class Bloc(models.Model):
         blank=True,
         choices=SOURCE_CHOICES,
         verbose_name=_("Source de la liste"),
-        help_text=_("Bloc Liste : ce qu'on liste (les sous-pages d'une page, ou l'agenda)."),
+        help_text=_("Bloc Liste : ce qu'on liste (les sous-pages d'une page, l'agenda, ou les plannings de bénévoles)."),
     )
 
     # Bloc LISTE + source SOUS_PAGES : de quelle page on liste les enfants.
@@ -923,7 +927,7 @@ class Bloc(models.Model):
     nombre_max = models.PositiveSmallIntegerField(
         default=6,
         verbose_name=_("Nombre d'éléments"),
-        help_text=_("Nombre maximum d'éléments affichés (blocs Prochains évènements et Liste des sous-pages)."),
+        help_text=_("Nombre maximum d'éléments affichés (bloc Liste : évènements, sous-pages ou plannings de bénévoles)."),
     )
 
 

@@ -1,0 +1,22 @@
+{% load i18n %}
+<!--
+COMPTEUR DE L'EN-TÊTE (D21) : places couvertes, renforts, créneaux encore vides
+/ Header counter: covered places, extras, still-empty slots
+
+LOCALISATION : booking/templates/booking/benevolat/partials/compteur.html
+
+La jauge est décorative (aria-hidden) : le compteur écrit déjà la même information.
+Le compteur n'est pas une région vivante (voir plus bas).
+/ The gauge is decorative: the counter already writes the same information.
+-->
+{# Pas d'aria-live ici : la zone est remplacée à chaque clic, une région vivante recréée #}
+{# n'est pas annoncée. C'est le toast (aria-live natif) qui annonce le résultat. #}
+{# / No aria-live: the zone is replaced; the toast announces the result. #}
+<div class="bv-compteur" data-testid="benevolat-compteur">
+    <div class="bv-compteur__chiffres">
+        <span><b>{{ compteur.places_couvertes }}</b> / {{ compteur.places_souhaitees }} {% translate "places couvertes" %}</span>
+        <span><b>{{ compteur.renforts }}</b> {% translate "en renfort" %}</span>
+        <span><b>{{ compteur.creneaux_vides }}</b> {% blocktranslate count nombre=compteur.creneaux_vides %}créneau encore vide{% plural %}créneaux encore vides{% endblocktranslate %}</span>
+    </div>
+    <div class="bv-jauge" aria-hidden="true"><span style="width: {{ compteur.remplissage }}%"></span></div>
+</div>

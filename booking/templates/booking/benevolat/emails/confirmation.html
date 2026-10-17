@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+{% load i18n %}
+{% comment %}
+MAIL DE CONFIRMATION D'UNE INSCRIPTION BÉNÉVOLE
+/ Volunteer sign-up confirmation email
+
+LOCALISATION : booking/templates/booking/benevolat/emails/confirmation.html
+Envoyé par booking/tasks.py, envoyer_confirmation_benevole.
+Les heures affichées sont les champs saisis en heure locale (plage), jamais debut()/fin().
+Le lien « Je ne peux plus venir » est signé (booking/benevolat.py, jeton_de_desistement) :
+il marche sans être connecté·e, utile au compte inactif créé par l'équipe (§5.10).
+/ Shows the local fields, never debut()/fin() (which would render in UTC).
+{% endcomment %}
+{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE }}">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title }}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111; }
+        .container { max-width: 640px; margin: 0 auto; padding: 24px; }
+        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .header img { height: 42px; }
+        .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; }
+        .muted { color: #6b7280; font-size: 14px; }
+        .title { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+        .btn { display: inline-block; background: #111827; color: #fff; padding: 10px 16px; border-radius: 8px; text-decoration: none; }
+        .divider { height: 1px; background: #e5e7eb; margin: 16px 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        {% if image_url_place %}<img src="{{ image_url_place }}" alt="{{ organisation }}" />{% endif %}
+        <div class="title">{{ organisation }}</div>
+    </div>
+
+    <div class="card">
+        {% if par_l_equipe %}
+            <p>{% blocktranslate %}L'équipe de {{ organisation }} t'a inscrit·e.{% endblocktranslate %}</p>
+            <p class="muted">{% translate "Ton prénom est affiché sur le planning public du lieu ; ton nom ne l'est pas." %}</p>
+        {% endif %}
+        <h1 class="title">{% translate "C'est noté, merci !" %}</h1>
+        <p>
+            <strong>{{ besoin.tache.name }}</strong><br>
+            {{ besoin.date|date:"l j F Y" }} · {{ plage }}<br>
+            <span class="muted">{{ besoin.planning.name }}</span>
+        </p>
+
+        {% if besoin.tache.description %}
+            <div class="divider"></div>
+            <p><strong>{% translate "Consignes" %}</strong></p>
+            <p>{{ besoin.tache.description|linebreaksbr }}</p>
+        {% endif %}
+
+        <div class="divider"></div>
+        {% if par_l_equipe %}
+            <p class="muted">{% translate "Si ce n'est pas bon, dis-le en un clic :" %}</p>
+        {% else %}
+            <p class="muted">{% translate "Un empêchement ? Dis-le en un clic : l'équipe saura qu'il faut quelqu'un d'autre." %}</p>
+        {% endif %}
+        <p>
+            <a class="btn" href="{{ url_de_desistement }}">{% translate "Je ne peux plus venir" %}</a>
+            &nbsp;<a href="{{ url_de_mes_creneaux }}">{% translate "Mes créneaux" %}</a>
+            &nbsp;<a href="{{ url_du_planning }}">{% translate "Voir le planning" %}</a>
+        </p>
+    </div>
+</div>
+</body>
+</html>
