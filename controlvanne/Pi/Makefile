@@ -16,10 +16,7 @@ CONFIG     := $(TARGET_DIR)/config
 
 DEFAULT_SERVER := $(CLAIM_SERVER_URL)
 DEFAULT_REPO   := $(or $(GIT_REPO),https://github.com/TiBillet/Lespass.git)
-# NOTE : branche a repointer vers la branche stable quand main-fedow-import
-# sera mergee. / NOTE: re-target to the stable branch once main-fedow-import
-# is merged.
-DEFAULT_BRANCH := $(or $(GIT_BRANCH),main-fedow-import)
+DEFAULT_BRANCH := $(or $(GIT_BRANCH),main)
 DEFAULT_RFID   := $(or $(RFID_TYPE),RC522)
 
 .PHONY: all claim install deploy start update logs status test-rfid test-hardware clean help
