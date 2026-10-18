@@ -1,0 +1,57 @@
+{% load i18n static %}
+<!--
+BLOC D'ACCUEIL « COUPS DE MAIN » : une carte par planning de bénévoles à venir
+/ "Coups de main" home block: one card per upcoming volunteer planning
+
+LOCALISATION : booking/templates/booking/benevolat/partials/cartes_accueil.html
+
+Inclus par pages/{V2,classic}/partials/bloc_liste.html (bloc LISTE, source COUPS_DE_MAIN).
+Contexte : plannings = balise plannings_benevoles_a_venir (pages/templatetags/pages_tags.py).
+Le même gabarit sert aux deux skins : ses styles sont ceux du planning (benevolat.css,
+classes « bv- »), chargés ici, une fois par bloc.
+Chaque carte : nom, période, places libres, et les 5 prochains jours colorés comme les
+en-têtes du planning (D20). La carte mène à la page du planning.
+/ Shared by both skins; styles come from benevolat.css, loaded here.
+-->
+<link rel="stylesheet" href="{% static 'booking/css/benevolat.css' %}">
+
+<div class="benevolat bv-cartes" data-testid="bloc-liste-coups-de-main">
+    {% for resume in plannings %}
+        <article class="bv-carte" data-testid="carte-planning-benevole">
+            <h3 class="bv-carte__titre">{{ resume.planning.name }}</h3>
+            <p class="bv-carte__periode">
+                {% if resume.chaque_semaine %}
+                    {% translate "chaque semaine" %}
+                {% elif resume.premier_jour == resume.dernier_jour %}
+                    {{ resume.premier_jour|date:"l j F" }}
+                {% else %}
+                    {% blocktranslate with debut=resume.premier_jour|date:"j F" fin=resume.dernier_jour|date:"j F" %}du {{ debut }} au {{ fin }}{% endblocktranslate %}
+                {% endif %}
+                ·
+                <span class="bv-carte__libres">
+                    {% if resume.places_libres %}
+                        {% blocktranslate count nombre=resume.places_libres %}{{ nombre }} place libre{% plural %}{{ nombre }} places libres{% endblocktranslate %}
+                    {% else %}
+                        {% translate "tout est couvert" %}
+                    {% endif %}
+                </span>
+            </p>
+            <div class="bv-carte__jours" aria-hidden="true">
+                {% for jour in resume.jours %}
+                    <span class="bv-puce-jour bv-jour" style="--remplissage: {{ jour.remplissage }}">
+                        <span>{{ jour.date|date:"D" }}</span>
+                        <b>{{ jour.date|date:"j" }}</b>
+                        <small>{% if jour.places_libres %}{% blocktranslate count nombre=jour.places_libres %}{{ nombre }} libre{% plural %}{{ nombre }} libres{% endblocktranslate %}{% else %}{% translate "couvert" %}{% endif %}</small>
+                    </span>
+                {% endfor %}
+            </div>
+            <a class="bv-btn bv-btn--secondaire" href="{% url 'benevolat-planning' slug=resume.planning.slug %}">
+                {% translate "Voir le planning" %}<span class="bv-cache"> : {{ resume.planning.name }}</span>
+            </a>
+        </article>
+    {% empty %}
+        <p class="bv-vide" data-testid="bloc-liste-coups-de-main-vide">
+            {% translate "Aucun coup de main à prévoir pour le moment." %}
+        </p>
+    {% endfor %}
+</div>

@@ -416,6 +416,14 @@ def get_context(request):
              'label': _('Ressources'), 'icon': 'building'}
         )
 
+    # Module bénévolat : la liste des plannings de bénévoles à venir.
+    # / Volunteering module: the list of upcoming volunteer plannings.
+    if config.module_benevolat:
+        entrees_optionnelles.append(
+            {'name': 'benevolat-liste', 'url': '/booking/benevolat/',
+             'label': _('Bénévolat'), 'icon': 'people'}
+        )
+
     # Entrees de navigation issues des pages du tenant. La construction vit
     # dans l'app `pages` : c'est elle qui connait l'arbre, la regle
     # d'affichage de chaque racine et la forme des URLs.
@@ -1690,6 +1698,26 @@ class MyAccount(viewsets.ViewSet):
 
         return render(request, template_path, context=context)
 
+
+    @action(detail=False, methods=['GET'])
+    def my_volunteering(self, request):
+        """
+        GET /my_account/my_volunteering/ : « Mes créneaux bénévoles ».
+        / "My volunteer shifts".
+
+        Les inscriptions à venir de la personne sur les plannings de bénévoles du lieu,
+        triées par date, avec « Me retirer » (ou « Je ne peux plus venir » après le délai).
+        Le retrait poste sur la vue du planning (booking/views_benevolat.py, retirer) avec
+        depuis=mes_creneaux : la ligne disparaît.
+        Spec : TECH_DOC/SESSIONS/TODO/BENEVOLAT-planning-besoins.md (§5.5)
+        """
+        from booking.benevolat import mes_creneaux_a_venir
+        from pages.services import gabarit_skin
+
+        context = get_context(request)
+        context['creneaux'] = mes_creneaux_a_venir(request.user)
+        template_path = gabarit_skin("vues/compte/benevolat.html", context["skin_preview"])
+        return render(request, template_path, context=context)
 
     @action(detail=True, methods=['POST'])
     def cancel_reservation(self, request, pk):

@@ -1,0 +1,74 @@
+{% load i18n %}
+<!--
+FENÊTRE « INSCRIRE QUELQU'UN » (§5.10) — contenu du <dialog> #benevolat-modale
+/ "Sign someone up" dialog content
+
+LOCALISATION : booking/templates/booking/benevolat/partials/inscrire_une_personne.html
+
+Rendue par BenevolatViewSet.inscrire_une_personne (booking/views_benevolat.py), en GET
+(ouverture) ou en 422 (erreur de saisie). Équipe du lieu seulement.
+1. Recherche : le champ appelle chercher_une_personne (hx-get, 300 ms après la frappe) ;
+   les résultats arrivent dans #benevolat-resultats, chacun avec son bouton « Inscrire ».
+2. « Pas dans la liste ? » : email, prénom, nom (les trois obligatoires) → le compte est
+   créé et rattaché au lieu.
+Les deux postent sur inscrire_une_personne ; le succès remplace la zone du planning et
+ferme la fenêtre.
+/ Search, or create a person; both post to inscrire_une_personne.
+-->
+<div class="bv-fenetre__formulaire" data-testid="benevolat-fenetre-equipe">
+    <h2 id="benevolat-modale-titre">
+        {% blocktranslate with tache=besoin.tache.name jour=besoin.date|date:"l j F" %}Inscrire quelqu'un : {{ tache }}, {{ jour }}{% endblocktranslate %}, {{ plage }}
+    </h2>
+
+    <label for="benevolat-recherche-personne"><strong>{% translate "Nom, prénom ou email" %}</strong></label>
+    <input id="benevolat-recherche-personne" type="search" name="q" autocomplete="off"
+           hx-get="{% url 'benevolat-chercher-une-personne' pk=besoin.pk %}"
+           hx-trigger="input changed delay:300ms, search"
+           hx-target="#benevolat-resultats" hx-swap="innerHTML"
+           data-testid="benevolat-recherche-personne">
+    <div id="benevolat-resultats" aria-live="polite" data-testid="benevolat-resultats">
+        <p>{% translate "Tape au moins 2 lettres." %}</p>
+    </div>
+    {% if erreurs.user %}<p class="bv-erreur">{{ erreurs.user }}</p>{% endif %}
+
+    <details {% if montrer_la_creation %}open{% endif %} data-testid="benevolat-creer-personne-details">
+        <summary>{% translate "Pas dans la liste ?" %}</summary>
+        <form class="bv-fenetre__formulaire" novalidate
+              hx-post="{% url 'benevolat-inscrire-une-personne' pk=besoin.pk %}"
+              hx-target="#benevolat-planning" hx-swap="outerHTML">
+            <label for="benevolat-equipe-email"><strong>{% translate "Email" %}</strong></label>
+            <input id="benevolat-equipe-email" type="email" name="email" autocomplete="off" required
+                   value="{{ valeurs.email|default:'' }}"
+                   {% if erreurs.email %}aria-invalid="true" aria-describedby="benevolat-equipe-erreur-email"{% endif %}
+                   data-testid="benevolat-equipe-email">
+            {% if erreurs.email %}<p class="bv-erreur" id="benevolat-equipe-erreur-email">{{ erreurs.email }}</p>{% endif %}
+
+            <label for="benevolat-equipe-prenom"><strong>{% translate "Prénom" %}</strong></label>
+            <input id="benevolat-equipe-prenom" name="prenom" autocomplete="off" maxlength="200" required
+                   value="{{ valeurs.prenom|default:'' }}"
+                   {% if erreurs.prenom %}aria-invalid="true" aria-describedby="benevolat-equipe-erreur-prenom"{% endif %}
+                   data-testid="benevolat-equipe-prenom">
+            {% if erreurs.prenom %}<p class="bv-erreur" id="benevolat-equipe-erreur-prenom">{{ erreurs.prenom }}</p>{% endif %}
+
+            <label for="benevolat-equipe-nom"><strong>{% translate "Nom" %}</strong></label>
+            <input id="benevolat-equipe-nom" name="nom" autocomplete="off" maxlength="200" required
+                   value="{{ valeurs.nom|default:'' }}"
+                   {% if erreurs.nom %}aria-invalid="true" aria-describedby="benevolat-equipe-erreur-nom"{% endif %}
+                   data-testid="benevolat-equipe-nom">
+            {% if erreurs.nom %}<p class="bv-erreur" id="benevolat-equipe-erreur-nom">{{ erreurs.nom }}</p>{% endif %}
+
+            <p>{% translate "Le compte est créé s'il n'existe pas. Un prénom ou un nom déjà dans le compte n'est jamais remplacé. La personne reçoit un mail de confirmation." %}</p>
+            <div class="bv-fenetre__actions">
+                <button type="submit" class="bv-btn bv-btn--principal" data-testid="benevolat-creer-personne">
+                    {% translate "Créer et inscrire" %}
+                </button>
+            </div>
+        </form>
+    </details>
+
+    <div class="bv-fenetre__actions">
+        <button type="button" class="bv-btn bv-btn--secondaire"
+                onclick="this.closest('dialog').close()"
+                data-testid="benevolat-modale-annuler">{% translate "Fermer" %}</button>
+    </div>
+</div>

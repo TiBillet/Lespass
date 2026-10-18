@@ -3,7 +3,8 @@ name: tibillet-api
 description: >
   Créer, éditer et peupler des ressources TiBillet/Lespass via l'API v2 REST
   sémantique (schema.org/JSON-LD) : pages & blocs (sites web), events, products,
-  memberships, reservations, crowds, wallet-refills, adresses postales. Utilise ce
+  memberships, reservations, crowds, wallet-refills, adresses postales, plannings de
+  bénévoles (tâches, besoins, inscriptions). Utilise ce
   skill dès qu'il faut fabriquer un site par blocs, créer un événement/produit/adhésion,
   peupler ou seeder un tenant, importer du contenu, scripter des créations, ou obtenir
   une clé API de test. Déclenche aussi quand l'utilisateur mentionne « l'API v2 »,
@@ -18,7 +19,8 @@ description: >
 L'API v2 est une API REST **sémantique** (vocabulaire schema.org, corps JSON-LD),
 authentifiée par clé, multi-tenant. Elle couvre : **pages & blocs** (constructeur de
 site), **events**, **products/prices**, **memberships**, **reservations**, **sales**,
-**crowds/initiatives**, **wallet-refills**, **postal-addresses**.
+**crowds/initiatives**, **wallet-refills**, **postal-addresses**, **bénévolat**
+(tâches, plannings, besoins, inscriptions).
 
 Ce skill donne l'**auth, le modèle mental, les réflexes et les pièges**. Il ne recopie
 PAS la liste des champs : celle-ci vit dans les sources de vérité ci-dessous, qui
@@ -47,7 +49,8 @@ l'API — ne devine pas.**
   tenant. **L'hôte détermine le tenant** ; une clé n'est valable que sur son tenant.
 - **Permissions granulaires** : une `ExternalApiKey` ouvre des domaines précis —
   `event` (+ `postaladdress`), `product` (+ `price`), `page` (= pages **ET** blocs),
-  `membership`, `reservation`, `ticket`, `wallet`, `sale`, `crowd`, et `walletrefill`
+  `membership`, `reservation`, `ticket`, `wallet`, `sale`, `crowd`, `volunteering`
+  (= tâches, plannings, besoins **ET** inscriptions de bénévoles), et `walletrefill`
   (si un `gift_asset` est défini). Une requête hors permission renvoie **403**.
 - **Obtenir une clé de test** : `scripts/creer_cle_api.py` (voir la fin de ce fichier).
 
@@ -100,6 +103,12 @@ markdown sont **importées** et servies depuis le tenant, via `galerie:N`).
 - **Images** : par **URL** (le serveur télécharge, valide Pillow, ≤ 10 Mo, refuse le
   SSRF interne/loopback) — pratique pour scripter. Ou par **upload multipart** sur les
   endpoints `blocs`. La **vidéo** n'est pas settable par l'API (utiliser un bloc EMBED).
+- **Bénévolat** : (1) `POST /api/v2/volunteer-tasks/` (la tâche) ; (2) `POST
+  /api/v2/volunteer-plannings/` (slug dans `additionalProperty`) ; (3) un `POST
+  /api/v2/volunteer-needs/` par case (`superEvent` = planning, `about` = tâche) ;
+  (4) `POST /api/v2/volunteer-signups/` pour inscrire quelqu'un (rejouer renvoie 200, sans
+  doublon). Pas de répétition par l'API : un besoin = un POST. Adhésions requises et
+  calendrier de fermetures : dans l'admin seulement (lecture seule ici).
 - **Autres domaines** (events, products, memberships, crowds, wallet-refills) : consulter
   la section correspondante de l'OpenAPI. Les recettes curl canoniques sont dans
   `references/recettes.md`.
@@ -162,6 +171,12 @@ depuis l'environnement (`os.environ["TIBILLET_API_KEY"]`).
   absente. Vérifie les droits de la clé.
 - **Isolation tenant** : tester avec le bon hôte. Une clé d'un tenant ne voit pas les
   ressources d'un autre.
+- **Heures des besoins de bénévolat** : une heure SANS décalage est lue en heure locale du
+  lieu (le cas le plus simple : `"2026-11-06T21:00:00"`). La fin doit tomber le jour même
+  ou le lendemain (`21:00` → `00:00` le lendemain) ; plus de 24 h → 400. Une date seule =
+  toute la journée, sans `endDate`.
+- **Inscrire un·e bénévole envoie un vrai mail** (« L'équipe t'a inscrit·e ») à la
+  création : en dev, utilise des emails `@mock.test`.
 - **Tout n'est pas settable par l'API** : la **vidéo** d'un bloc, et l'**image de la page**
   (og:image) ne le sont pas. Si le besoin est là, c'est un manque à combler dans
   `api_v2/serializers.py`, pas un champ à deviner.
@@ -189,7 +204,7 @@ python TECH_DOC/SKILLS/tibillet-api/scripts/creer_cle_api.py \
 Le script crée une `ExternalApiKey` sur le tenant et imprime la clé en clair (elle
 n'est visible qu'à la création). Options : `--tenant`, `--perms` (liste séparée par
 virgules parmi event, product, page, membership, reservation, ticket, wallet, sale,
-crowd), `--name`, `--container` (défaut `lespass_django`). Voir `--help`.
+crowd, volunteering), `--name`, `--container` (défaut `lespass_django`). Voir `--help`.
 
 ⚠️ **Helper de DEV uniquement** : il passe par `docker exec` et **supprime d'abord toute
 clé existante portant le même nom**. Ne le lance pas contre une base de production.

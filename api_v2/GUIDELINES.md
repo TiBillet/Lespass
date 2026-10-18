@@ -407,3 +407,18 @@ Catalogue for an accounting software — `GET /api/v2/products/?accounting=true`
 - `ETag` = sha256 of the rendered JSON; `If-None-Match` equal (weak `W/` accepted) → 304 without body.
 
 Tests: `tests/pytest/test_api_v2_catalogue_comptable.py` (dedicated schema).
+
+Bénévolat — tasks, plannings, needs, sign-ups (spec `TECH_DOC/SESSIONS/TODO/BENEVOLAT-planning-besoins.md` §6 bis, light version)
+- Permission: `ExternalApiKey.volunteering` ("Bénévolat"), mapped on the four basenames `volunteertask`, `volunteerplanning`, `volunteerneed`, `volunteersignup`. Without it: 403. Code: `api_v2/views_benevolat.py`, `api_v2/serializers_benevolat.py`.
+- `identifier` = the uuid, everywhere. A planning is also found by its slug (`/api/v2/volunteer-plannings/bar-novembre/`), like pages.
+- Mapping:
+  - `TacheBenevole` → `DefinedTerm` (`name`, `description`). DELETE of a task still used by a need → 409.
+  - `PlanningBenevole` → `EventSeries`. Writable: `name`, `description`, and in `additionalProperty`: `slug`, `published`, `delaiDesinscriptionHeures`. **Read-only** (set in the admin): `requiredMembershipPlans` (uuids of membership products), `closingCalendar` (Calendar id). Counters `placesCouvertes`, `placesSouhaitees`, `renforts`, `creneauxVides` (upcoming needs). `subEvent` (its needs) on retrieve only. Reserved slugs: `besoin`, `desistement`.
+  - `BesoinBenevole` → `Event` with `additionalType: "Volunteering"`, `superEvent` (planning), `about` (task), `remainingAttendeeCapacity`, `attendee` (first names only), `additionalProperty`: `nombreSouhaite`, `nombreInscrits`, `renforts`, `fermeture` (closure label or null).
+  - `InscriptionBenevole` → `RsvpAction` with `object` (the need), `agent` (`email`, `givenName`, `familyName`: the key belongs to the venue team), `startTime`, `additionalProperty`: `inscritPar`, `rappelEnvoyeLe`.
+- Dates of a need: the model stores day + local hours without timezone. `startDate` = a date only (whole day, no `endDate`) or a datetime (`endDate` required). No offset = venue local time; with an offset = converted to the venue timezone. The end is the same day (after the start) or the next day (before the start, e.g. 21:00 → 00:00); otherwise 400. Output carries the venue offset (`2026-11-06T21:00:00+01:00`). A need on a closed day is accepted, with `fermeture` filled.
+- Sign-up creation = the team sign-up rules: account created if missing (inactive, attached to the venue, no login mail), first/last name written only if empty; missing in the account AND in the request → 400 and nothing is created; planning published and need not past, else 400; no membership check; `inscritPar` = the key's user. **201** when created, **200** with the existing sign-up when replayed. On creation the person gets "L'équipe t'a inscrit·e" with the signed "Je ne peux plus venir" link. DELETE: anytime, no mail. No PATCH.
+- Lists are wrapped in `{"results": [...]}`, not paginated. Needs: `?planning=`, `?task=`, `?dateFrom=`, `?dateTo=` (past needs included). Sign-ups: `?need=`, `?planning=`.
+- Not in the API (light version, D24): repeating needs (admin only), sign-up filters by email or date, writing memberships or closing calendar.
+
+Tests: `tests/pytest/test_benevolat_api.py`.

@@ -1,0 +1,42 @@
+{% load i18n %}
+<!--
+BLOC « PAS DISPO CETTE FOIS ? » : inscription à la lettre d'information du lieu (§5.8)
+/ "Not available this time?" block: venue newsletter sign-up
+
+LOCALISATION : booking/templates/booking/benevolat/partials/lettre.html
+
+Inclus par planning.html si le Ghost du lieu est configuré (lettre_active), et rendu seul
+par BenevolatViewSet.lettre (booking/views_benevolat.py) : la réponse remplace ce bloc.
+- email_inscrit : l'inscription est faite, on affiche le message à la place du formulaire ;
+- erreur / email_saisi : la saisie est refusée (réponse 422, swappée par planning.html).
+Connecté·e : le champ est pré-rempli avec l'email du compte (modifiable).
+/ Rendered alone by the "lettre" action; the response replaces this block.
+-->
+<section class="bv-lettre" id="benevolat-lettre" aria-labelledby="benevolat-lettre-titre" aria-live="polite"
+         data-testid="benevolat-lettre">
+    <h2 id="benevolat-lettre-titre">{% translate "Pas dispo cette fois ?" %}</h2>
+
+    {% if email_inscrit %}
+        <p class="bv-lettre__ok" data-testid="benevolat-lettre-ok">
+            {% blocktranslate with email=email_inscrit %}C'est noté : {{ email }} recevra la lettre d'information.{% endblocktranslate %}
+        </p>
+    {% else %}
+        <p>{% translate "Reçois la lettre d'information du lieu : les prochains coups de main y sont annoncés." %}</p>
+        <form hx-post="{% url 'benevolat-lettre' slug=planning.slug %}"
+              hx-target="#benevolat-lettre" hx-swap="outerHTML" novalidate>
+            <label class="bv-cache" for="benevolat-lettre-email">{% translate "Ton adresse email" %}</label>
+            <input id="benevolat-lettre-email" type="email" name="email" autocomplete="email" required
+                   placeholder="{% translate 'ton@email.fr' %}"
+                   value="{% if email_saisi %}{{ email_saisi }}{% elif user.is_authenticated %}{{ user.email }}{% endif %}"
+                   {% if erreur %}aria-invalid="true" aria-describedby="benevolat-lettre-erreur"{% endif %}
+                   data-testid="benevolat-lettre-email">
+            <button type="submit" class="bv-btn bv-btn--principal" data-loading-disable
+                    data-testid="benevolat-lettre-inscrire">
+                {% translate "Je m'inscris à la lettre d'information" %}
+            </button>
+        </form>
+        {% if erreur %}
+            <p class="bv-erreur" id="benevolat-lettre-erreur">{{ erreur }}</p>
+        {% endif %}
+    {% endif %}
+</section>

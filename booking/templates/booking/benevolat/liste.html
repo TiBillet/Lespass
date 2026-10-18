@@ -1,0 +1,27 @@
+{% extends "booking/booking_base.html" %}
+{% load i18n %}
+
+<!--
+LISTE DES PLANNINGS DE BÉNÉVOLES À VENIR
+/ Upcoming volunteer plannings list
+
+LOCALISATION : booking/templates/booking/benevolat/liste.html
+
+Vue : BenevolatViewSet.list (booking/views_benevolat.py), GET /booking/benevolat/.
+C'est la page de l'entrée « Bénévolat » du menu du site, quand le module est activé.
+Les cartes sont celles du bloc d'accueil « Coups de main » (partials/cartes_accueil.html,
+qui charge benevolat.css et affiche l'état vide).
+/ Target of the site menu entry; reuses the home block cards.
+-->
+
+{% block title %}{% translate "Bénévolat" %}{% endblock %}
+
+{% block booking_content %}
+<div class="benevolat" data-testid="benevolat-liste">
+    <header class="bv-entete">
+        <h1 class="bv-titre">{% translate "Bénévolat" %}</h1>
+        <p class="bv-chapo">{% translate "Les coups de main dont le lieu a besoin. Choisis un planning, puis une case : c'est noté." %}</p>
+    </header>
+    {% include "booking/benevolat/partials/cartes_accueil.html" with plannings=plannings %}
+</div>
+{% endblock booking_content %}

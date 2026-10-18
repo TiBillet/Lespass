@@ -15,6 +15,12 @@ from .views import (
     ClosureViewSet,
     AccountViewSet,
 )
+from .views_benevolat import (
+    VolunteerNeedViewSet,
+    VolunteerPlanningViewSet,
+    VolunteerSignupViewSet,
+    VolunteerTaskViewSet,
+)
 
 router = DefaultRouter()
 # basename must be 'event' to align with ExternalApiKey.api_permissions()
@@ -40,6 +46,12 @@ router.register(r"blocs", BlocViewSet, basename="bloc")
 # / Accounting (accounting software): both opened by ExternalApiKey.comptabilite.
 router.register(r"closures", ClosureViewSet, basename="closure")
 router.register(r"accounts", AccountViewSet, basename="account")
+# Bénévolat : quatre basenames, tous ouverts par ExternalApiKey.volunteering.
+# / Volunteering: four basenames, all opened by ExternalApiKey.volunteering.
+router.register(r"volunteer-tasks", VolunteerTaskViewSet, basename="volunteertask")
+router.register(r"volunteer-plannings", VolunteerPlanningViewSet, basename="volunteerplanning")
+router.register(r"volunteer-needs", VolunteerNeedViewSet, basename="volunteerneed")
+router.register(r"volunteer-signups", VolunteerSignupViewSet, basename="volunteersignup")
 urlpatterns = [
     path("", include(router.urls)),
 ]

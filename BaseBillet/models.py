@@ -789,6 +789,15 @@ class Configuration(SingletonModel):
         verbose_name=_("Booking module"),
         help_text=_("Enable resource booking (rooms, equipment, coworking desks)."),
     )
+    # Module bénévolat : plannings de besoins en bénévoles (app booking, spec BENEVOLAT).
+    # Il ne règle que les menus (admin, « Mon compte ») : comme /booking/, les pages
+    # publiques ne vérifient pas le module.
+    # / Volunteering module: volunteer needs plannings. Menus only, like /booking/.
+    module_benevolat = models.BooleanField(
+        default=False,
+        verbose_name=_("Module bénévolat"),
+        help_text=_("Active les plannings de bénévoles : besoins, inscriptions, rappels."),
+    )
     # Module kiosk / borne libre-service — bornes de paiement en autonomie (Stripe Terminal)
     # / Kiosk / self-service module — unattended payment terminals (Stripe Terminal)
     module_kiosk = models.BooleanField(
@@ -5364,6 +5373,11 @@ class ExternalApiKey(models.Model):
     # venue's chart of accounts. The key of an accounting software.
     comptabilite = models.BooleanField(default=False, verbose_name=_("Comptabilité (lecture)"))
 
+    # Bénévolat : tâches, plannings, besoins et inscriptions (/api/v2/volunteer-*).
+    # Un seul droit pour les quatre routes, comme « page » pour pages et blocs.
+    # / Volunteering: one right for the four /api/v2/volunteer-* routes.
+    volunteering = models.BooleanField(default=False, verbose_name=_("Bénévolat"))
+
     # Asset cadeau (TNF) que cette cle peut recharger via /api/v2/wallet-refills/.
     # La presence de cet asset sert a la fois d'interrupteur du droit "walletrefill"
     # et de restriction : la cle ne peut recharger QUE cet asset.
@@ -5408,6 +5422,12 @@ class ExternalApiKey(models.Model):
             # / Accounting: same right for closures and the chart of accounts.
             "closure": self.comptabilite,
             "account": self.comptabilite,
+            # Bénévolat : meme droit pour les quatre routes.
+            # / Volunteering: same right for the four routes.
+            "volunteertask": self.volunteering,
+            "volunteerplanning": self.volunteering,
+            "volunteerneed": self.volunteering,
+            "volunteersignup": self.volunteering,
             # Recharge cadeau : autorisee seulement si un asset cadeau est defini
             # / Gift refill: allowed only if a gift asset is set
             "walletrefill": bool(self.gift_asset_id),

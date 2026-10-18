@@ -910,6 +910,33 @@ def evenements_a_venir(nombre_max=6):
 
 
 @register.simple_tag
+def plannings_benevoles_a_venir(nombre_max=6):
+    """
+    Les cartes du bloc LISTE, source COUPS_DE_MAIN : les plannings de bénévoles publiés
+    qui ont au moins un besoin à venir, le plus proche d'abord, limités à `nombre_max`.
+    / LISTE block, COUPS_DE_MAIN source: published volunteer plannings with upcoming needs.
+
+    Utilisation : {% plannings_benevoles_a_venir bloc.nombre_max as plannings %}
+    Rendu : booking/templates/booking/benevolat/partials/cartes_accueil.html
+
+    INDISPENSABLE : l'app `pages` est aussi dans SHARED_APPS (schéma public), mais les
+    tables du bénévolat n'existent que dans les schémas des lieux. Sur public, la requête
+    planterait : on rend une liste vide.
+    / pages is also a SHARED app; the volunteering tables only exist in tenant schemas.
+    """
+    from django.db import connection
+
+    if connection.schema_name == "public":
+        return []
+
+    # Import dans la fonction, comme evenements_a_venir : pas d'import circulaire.
+    # / Import inside the function: no circular import.
+    from booking.benevolat import resumes_des_plannings_a_venir
+
+    return resumes_des_plannings_a_venir(nombre_max or 6)
+
+
+@register.simple_tag
 def forme_des_sous_cartes(contenu):
     """
     Choisit comment afficher les sous-cartes d'un bloc SECTION / MEDIA_ET_CARTES,

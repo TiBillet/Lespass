@@ -1,0 +1,39 @@
+{% load i18n %}
+<!--
+VUE MOBILE : une barre de jours, puis la liste des besoins jour par jour
+/ Mobile view: a day bar, then the needs day by day
+
+LOCALISATION : booking/templates/booking/benevolat/partials/jours_mobile.html
+
+Affichée sous 760 px seulement (benevolat.css). La barre de jours est faite de simples
+ancres #jour-<date> : pas de JavaScript, ça marche aussi sans.
+Les besoins y portent le suffixe « mobile » dans leurs data-testid : la grille desktop
+affiche les mêmes besoins.
+/ Shown under 760 px only. Plain #jour-<date> anchors, no JS.
+-->
+<nav class="bv-barre-jours" aria-label="{% translate 'Aller au jour' %}" data-testid="benevolat-barre-jours">
+    {% for jour in jours %}
+        <a class="bv-puce-jour bv-jour" href="#jour-{{ jour.date|date:'Y-m-d' }}"
+           style="--remplissage: {{ jour.remplissage }}"
+           aria-label="{{ jour.date|date:'l j F' }}, {{ jour.etat }}">
+            <span>{{ jour.date|date:"D" }}</span>
+            <b>{{ jour.date|date:"j" }}</b>
+            <small>{% if jour.places_libres %}{% blocktranslate count nombre=jour.places_libres %}{{ nombre }} libre{% plural %}{{ nombre }} libres{% endblocktranslate %}{% else %}{% translate "couvert" %}{% endif %}</small>
+        </a>
+    {% endfor %}
+</nav>
+
+<div class="bv-jours" data-testid="benevolat-jours">
+    {% for jour in jours %}
+        <section class="bv-bloc-jour" id="jour-{{ jour.date|date:'Y-m-d' }}"
+                 data-testid="benevolat-jour-mobile-{{ jour.date|date:'Y-m-d' }}">
+            <h3 class="bv-jour" style="--remplissage: {{ jour.remplissage }}">
+                {{ jour.date|date:"l j F"|capfirst }}
+                <small>{{ jour.etat }}</small>
+            </h3>
+            {% for case in jour.cases %}
+                {% include "booking/benevolat/partials/besoin.html" with case=case avec_tache=True suffixe="mobile-" %}
+            {% endfor %}
+        </section>
+    {% endfor %}
+</div>

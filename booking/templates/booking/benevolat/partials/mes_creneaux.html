@@ -1,0 +1,50 @@
+{% load i18n static %}
+<!--
+« MES CRÉNEAUX BÉNÉVOLES » : la liste, commune aux skins V2 et classic
+/ "My volunteer shifts": the list, shared by the V2 and classic skins
+
+LOCALISATION : booking/templates/booking/benevolat/partials/mes_creneaux.html
+
+Inclus par pages/{V2,classic}/vues/compte/benevolat.html.
+Vue : MyAccount.my_volunteering (BaseBillet/views.py). Contexte : creneaux =
+mes_creneaux_a_venir() (booking/benevolat.py).
+
+Le bouton de retrait poste sur la vue du planning avec depuis=mes_creneaux : la réponse
+est vide et remplace la ligne, qui disparaît ; un toast confirme (appToast).
+/ The withdraw button posts with depuis=mes_creneaux: the empty response replaces the row.
+-->
+{# Les boutons « bv- » viennent de benevolat.css, comme sur la page du planning. #}
+{# / The "bv-" buttons come from benevolat.css, like on the planning page. #}
+<link rel="stylesheet" href="{% static 'booking/css/benevolat.css' %}">
+<div class="benevolat">
+{% if creneaux %}
+    <ul class="list-group mb-4" data-testid="benevolat-mes-creneaux">
+        {% for creneau in creneaux %}
+            <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-3"
+                data-testid="benevolat-mon-creneau-{{ creneau.besoin.pk }}">
+                <div>
+                    {% if creneau.apres_le_delai %}<div class="bv-note-equipe">{% translate "C'est bientôt : si tu te retires, l'équipe sera prévenue." %}</div>{% endif %}
+                    <div class="fw-bold">{{ creneau.besoin.date|date:"l j F"|capfirst }} · {{ creneau.plage }}</div>
+                    <div class="text-muted">
+                        {{ creneau.besoin.tache.name }} ·
+                        <a href="{% url 'benevolat-planning' slug=creneau.besoin.planning.slug %}">{{ creneau.besoin.planning.name }}</a>
+                    </div>
+                </div>
+                <button type="button" class="bv-btn bv-btn--secondaire"
+                        hx-post="{% url 'benevolat-retirer' pk=creneau.besoin.pk %}"
+                        hx-vals='{"depuis": "mes_creneaux"}'
+                        hx-target="closest li" hx-swap="outerHTML"
+                        data-loading-disable
+                        {% if creneau.apres_le_delai %}hx-confirm="{% translate "C'est bientôt : l'équipe sera prévenue. Tu confirmes ?" %}"{% endif %}
+                        data-testid="benevolat-mon-creneau-retirer-{{ creneau.besoin.pk }}">
+                    {% if creneau.apres_le_delai %}{% translate "Je ne peux plus venir" %}{% else %}{% translate "Me retirer" %}{% endif %}
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p class="text-muted" data-testid="benevolat-mes-creneaux-vide">
+        {% translate "Aucun créneau à venir pour l'instant." %}
+    </p>
+{% endif %}
+</div>

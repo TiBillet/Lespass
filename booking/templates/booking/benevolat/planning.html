@@ -1,0 +1,186 @@
+{% extends "booking/booking_base.html" %}
+{% load i18n static %}
+
+<!--
+PAGE PUBLIQUE D'UN PLANNING DE BÉNÉVOLES
+/ Public page of a volunteer planning
+
+LOCALISATION : booking/templates/booking/benevolat/planning.html
+
+Vue : booking/views_benevolat.py, BenevolatViewSet.retrieve (GET /booking/benevolat/<slug>/).
+Spec : TECH_DOC/SESSIONS/TODO/BENEVOLAT-planning-besoins.md (§5.2)
+
+STRUCTURE :
+- l'en-tête (titre, présentation, badges) ne change pas pendant la visite ;
+- partials/zone.html (#benevolat-planning) : compteur, semaine affichée, grille, jours
+  mobiles. C'est elle que chaque bouton « Je viens » / « Me retirer » et chaque lien de
+  semaine remplacent (htmx, outerHTML) ;
+- #benevolat-modale : la fenêtre « Comment on t'appelle ? » (<dialog> natif).
+
+COMMUNICATION :
+Reçoit du serveur (en-têtes HX-Trigger*) :
+- appToast              → toast (écouteur dans htmx/components/panier_scripts.html)
+- ouvrirModaleBenevolat → ouvre #benevolat-modale (script en bas de page)
+- fermerModaleBenevolat → ferme #benevolat-modale
+- ouvrirLaConnexion     → ouvre le panneau de connexion (#loginPanel), session expirée
+-->
+
+{% block title %}{{ planning.name }}{% endblock %}
+
+{% block extra_meta %}
+    <link rel="stylesheet" href="{% static 'booking/css/benevolat.css' %}">
+{% endblock %}
+
+{% block booking_content %}
+<div class="benevolat" data-testid="benevolat-page">
+
+    <header class="bv-entete">
+        <h1 class="bv-titre">{{ planning.name }}</h1>
+        {% if planning.description %}
+            <div class="bv-chapo">{{ planning.description|linebreaks }}</div>
+        {% endif %}
+
+        <div class="bv-badges">
+            {% if adhesions_requises %}
+                <span class="bv-badge bv-badge--reserve" data-testid="benevolat-acces">
+                    {% translate "Réservé aux adhérent·es :" %}
+                    {% for adhesion in adhesions_requises %}{{ adhesion.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                </span>
+            {% else %}
+                <span class="bv-badge" data-testid="benevolat-acces">{% translate "Ouvert à tout compte connecté" %}</span>
+            {% endif %}
+        </div>
+
+        <p class="bv-note">
+            {% blocktranslate count heures=planning.delai_desinscription_heures %}Tu peux te retirer jusqu'à {{ heures }} heure avant.{% plural %}Tu peux te retirer jusqu'à {{ heures }} heures avant.{% endblocktranslate %}
+            {% translate "Ton prénom sera visible sur ce planning." %}
+        </p>
+    </header>
+
+    {% include "booking/benevolat/partials/zone.html" %}
+
+    {% if il_y_a_des_besoins_a_venir %}
+        <div class="bv-legende" aria-label="{% translate 'Légende' %}" data-testid="benevolat-legende">
+            <span class="bv-legende__entree"><span class="bv-place">{% translate "Camille" %}</span> {% translate "déjà positionné·e" %}</span>
+            <span class="bv-legende__entree"><span class="bv-place bv-place--moi">{% translate "Toi" %}</span> {% translate "ta place" %}</span>
+            <span class="bv-legende__entree"><span class="bv-place bv-place--libre">{% translate "libre" %}</span> {% translate "place à prendre" %}</span>
+            <span class="bv-legende__entree"><span class="bv-place bv-place--renfort">{% translate "+1 en renfort" %}</span> {% translate "au-delà du nombre souhaité, bienvenu" %}</span>
+        </div>
+    {% endif %}
+
+    {% if lettre_active %}
+        {% include "booking/benevolat/partials/lettre.html" %}
+    {% endif %}
+
+    <div class="bv-rappel" role="note" data-testid="benevolat-rappel">
+        <strong>{% translate "Reminder" %}</strong> —
+        {% translate "The collective isn't your boss or your friend! For the comfort of everyone involved, only apply to help with things you find rewarding, and refuse any condition that makes you uneasy." %}
+        {% translate "If you feel mistaken for an employee, speak to your friends and your collective federation: it should never happen." %}
+    </div>
+
+    {# Fenêtre « Comment on t'appelle ? ». Son contenu arrive par HX-Retarget (views_benevolat.py). #}
+    {# / Name dialog. Its content comes through HX-Retarget. #}
+    <dialog class="bv-fenetre" id="benevolat-modale" aria-labelledby="benevolat-modale-titre"
+            data-testid="benevolat-modale-prenom">
+        <div id="benevolat-modale-contenu"></div>
+    </dialog>
+</div>
+{% endblock booking_content %}
+
+{% block scripts %}
+<script>
+    /**
+     * Planning des bénévoles : erreurs 422, fenêtre du nom, défilement de la grille.
+     * / Volunteer planning: 422 errors, name dialog, grid scroll.
+     *
+     * LOCALISATION : booking/templates/booking/benevolat/planning.html
+     */
+
+    // Les shells n'affichent pas les réponses 422. Ici, une 422 porte la zone recalculée
+    // (ou la fenêtre avec ses erreurs) : on la laisse s'afficher.
+    // Seulement pour les requêtes parties du planning : l'écouteur survit à une
+    // navigation htmx vers une autre page, qui ne doit pas en hériter.
+    // / Shells don't swap 422; only for requests sent from the planning page.
+    document.addEventListener("htmx:beforeOnLoad", function (event) {
+        const requete_partie_du_planning = event.detail.elt.closest(".benevolat") !== null;
+        const status_code_de_la_reponse = event.detail.xhr.status;
+        if (requete_partie_du_planning && status_code_de_la_reponse === 422) {
+            event.detail.shouldSwap = true;
+            event.detail.isError = false;
+        }
+    });
+
+    // Ouvre la fenêtre. showModal() met lui-même le curseur dans le premier champ.
+    // / Opens the dialog. showModal() focuses the first field by itself.
+    document.body.addEventListener("ouvrirModaleBenevolat", function () {
+        const fenetre = document.getElementById("benevolat-modale");
+        if (!fenetre.open) {
+            fenetre.showModal();
+        }
+    });
+
+    // Session expirée : la vue répond 403 avec ouvrirLaConnexion. On ouvre le panneau de
+    // connexion des shells (#loginPanel, offcanvas Bootstrap).
+    // / Expired session: open the shells' login panel.
+    document.body.addEventListener("ouvrirLaConnexion", function () {
+        const panneau_de_connexion = document.getElementById("loginPanel");
+        if (panneau_de_connexion && typeof bootstrap !== "undefined") {
+            bootstrap.Offcanvas.getOrCreateInstance(panneau_de_connexion).show();
+        }
+    });
+
+    // INDISPENSABLE : dans la fenêtre (<dialog>, affichée dans la « top layer » du
+    // navigateur), la confirmation SweetAlert du shell V2 (écouteur htmx:confirm de
+    // pages/V2/shell.html) se dessinerait DESSOUS : invisible et impossible à cliquer.
+    // On arrête l'événement ici : htmx utilise alors la boîte native, toujours au-dessus.
+    // / Inside the <dialog> (top layer), the shell's SweetAlert confirm would render
+    // underneath; stop the event so htmx falls back to the native confirm.
+    document.getElementById("benevolat-modale").addEventListener("htmx:confirm", function (evenement) {
+        evenement.stopPropagation();
+    });
+
+    document.body.addEventListener("fermerModaleBenevolat", function () {
+        const fenetre = document.getElementById("benevolat-modale");
+        if (fenetre.open) {
+            fenetre.close();
+        }
+    });
+
+    // La zone est remplacée à chaque clic : on garde la position du défilement
+    // horizontal de la grille, sinon elle revient au premier jour.
+    // Sauf après un lien de semaine : la nouvelle semaine part de son premier jour.
+    // / The zone is replaced on each click: keep the grid horizontal scroll,
+    // except after a week link (the new week starts at its first day).
+    let position_du_defilement_de_la_grille = 0;
+    let la_zone_vient_d_un_lien_de_semaine = false;
+    document.body.addEventListener("htmx:beforeSwap", function (evenement) {
+        const element_qui_a_lance_la_requete = evenement.detail.requestConfig ? evenement.detail.requestConfig.elt : null;
+        const vient_d_un_lien_de_semaine = element_qui_a_lance_la_requete !== null
+            && element_qui_a_lance_la_requete.closest(".bv-semaines") !== null;
+        const grille = document.querySelector("#benevolat-planning .bv-grille-defile");
+        la_zone_vient_d_un_lien_de_semaine = vient_d_un_lien_de_semaine;
+        if (vient_d_un_lien_de_semaine) {
+            position_du_defilement_de_la_grille = 0;
+        } else if (grille) {
+            position_du_defilement_de_la_grille = grille.scrollLeft;
+        }
+    });
+    document.body.addEventListener("htmx:afterSettle", function () {
+        const grille = document.querySelector("#benevolat-planning .bv-grille-defile");
+        if (grille) {
+            grille.scrollLeft = position_du_defilement_de_la_grille;
+        }
+        // Après un lien de semaine : le focus va sur le titre de la nouvelle semaine, que
+        // le lecteur d'écran lit. Sinon, sur la dernière semaine, le lien « suivante »
+        // a disparu et le focus retomberait en haut de la page.
+        // / After a week link: focus the new week's title (read by screen readers).
+        if (la_zone_vient_d_un_lien_de_semaine) {
+            la_zone_vient_d_un_lien_de_semaine = false;
+            const titre_de_la_semaine = document.getElementById("benevolat-semaine-titre");
+            if (titre_de_la_semaine) {
+                titre_de_la_semaine.focus();
+            }
+        }
+    });
+</script>
+{% endblock scripts %}

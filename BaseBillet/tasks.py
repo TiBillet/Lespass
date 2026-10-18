@@ -1864,7 +1864,18 @@ def send_to_brevo(membership_pk):
 
 
 @app.task
-def send_to_ghost_email(email, name=None):
+def send_to_ghost_email(email, name=None, etiquettes_en_plus=None):
+    """
+    Inscrit un email à la lettre d'information Ghost du lieu.
+    / Subscribes an email to the venue's Ghost newsletter.
+
+    etiquettes_en_plus : étiquettes Ghost ajoutées à celles par défaut (« TiBillet »,
+    « import <date> »). Exemple : ["Bénévolat"] depuis le planning des bénévoles
+    (booking/views_benevolat.py). Un membre qui existe déjà reçoit les étiquettes
+    qui lui manquent ; sans etiquettes_en_plus, un membre existant n'est pas touché.
+    / Extra Ghost labels. An existing member gets the missing ones.
+    """
+    etiquettes_en_plus = etiquettes_en_plus or []
     ghost_config = GhostConfig.get_solo()
     ghost_url = ghost_config.ghost_url
     ghost_key = ghost_config.get_api_key()
@@ -1919,7 +1930,7 @@ def send_to_ghost_email(email, name=None):
                         {
                             "email": email,
                             "name": name if name else "",
-                            "labels": ["TiBillet", f"import {timezone.now().strftime('%d/%m/%Y')}"]
+                            "labels": ["TiBillet", f"import {timezone.now().strftime('%d/%m/%Y')}"] + etiquettes_en_plus
                         }
                     ]
                 }
@@ -1946,6 +1957,26 @@ def send_to_ghost_email(email, name=None):
             else:
                 # Afficher la liste des membres
                 logger.info(f"Le membre {email} existe déja dans : {members}")
+
+                # Membre existant : on lui ajoute les étiquettes demandées qu'il n'a pas.
+                # Ghost remplace la liste entière : on renvoie ses étiquettes + les manquantes.
+                # / Existing member: add the missing requested labels (Ghost replaces the list).
+                membre_existant = members[0]
+                etiquettes_du_membre = [etiquette["name"] for etiquette in membre_existant.get("labels", [])]
+                etiquettes_manquantes = [
+                    etiquette for etiquette in etiquettes_en_plus if etiquette not in etiquettes_du_membre
+                ]
+                if etiquettes_manquantes:
+                    member_data = {"members": [{"labels": etiquettes_du_membre + etiquettes_manquantes}]}
+                    response = requests.put(
+                        ghost_url + f"/ghost/api/admin/members/{membre_existant['id']}/",
+                        json=member_data, headers=headers, timeout=10,
+                    )
+                    if not response.ok:
+                        logger.warning(
+                            f"Ghost : ajout des étiquettes {etiquettes_manquantes} refusé pour {email} : "
+                            f"status={response.status_code}"
+                        )
         else:
             logger.error(
                 f"Erreur lors de la récupération des membres Ghost : "

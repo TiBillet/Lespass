@@ -5,14 +5,16 @@
 
     LOCALISATION : pages/templates/pages/classic/partials/bloc_liste.html
 
-    Le champ `source` choisit la REQUETE, pas le rendu — les deux sources
-    produisent les memes cartes :
+    Le champ `source` choisit la REQUETE, pas le rendu — les trois sources
+    produisent des cartes :
       - SOUS_PAGES : les sous-pages publiees d'une page (index de rubrique).
         `page_source` dit de quelle page ; vide = la page qui porte le bloc.
       - EVENEMENTS : les prochains evenements publies de l'agenda.
+      - COUPS_DE_MAIN : les plannings de benevoles qui ont des besoins a venir
+        (gabarit commun booking/benevolat/partials/cartes_accueil.html).
     C'est pour ca que `source` n'est PAS un affichage : un affichage change la
     forme, une source change la donnee.
-    / The `source` field picks the QUERY, not the rendering — both sources
+    / The `source` field picks the QUERY, not the rendering — all three sources
     produce the same cards. That is why `source` is not an `affichage`.
 
     Champs : titre (optionnel), source, page_source, nombre_max (defaut 6).
@@ -78,6 +80,16 @@
             </div>
         </section>
     {% endif %}
+
+{% elif bloc.source == "COUPS_DE_MAIN" %}
+
+    {% comment %}
+        Les plannings de bénévoles qui ont des besoins à venir (app booking).
+        Gabarit commun aux skins, avec ses propres styles (classes « bv- »).
+        / Volunteer plannings with upcoming needs; shared template, own styles.
+    {% endcomment %}
+    {% plannings_benevoles_a_venir bloc.nombre_max as plannings %}
+    {% include "booking/benevolat/partials/cartes_accueil.html" with plannings=plannings %}
 
 {% else %}
 

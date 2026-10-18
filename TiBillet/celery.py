@@ -116,6 +116,26 @@ def setup_periodic_tasks(sender, **kwargs):
         name="cron_clotures_automatiques",
     )
 
+    # Bénévolat : rappel la veille d'un créneau, chaque matin à 8h UTC (le matin, pas en
+    # pleine nuit). Chaque lieu calcule « demain » dans son fuseau (booking/tasks.py).
+    # / Volunteering: day-before reminder, every morning at 8am UTC.
+    logger.info("setup_periodic_tasks cron_rappel_des_benevoles at 8AM UTC")
+    sender.add_periodic_task(
+        crontab(hour=8, minute=0),
+        cron_rappel_des_benevoles.s(),
+        name="cron_rappel_des_benevoles",
+    )
+
+    # Bénévolat : chaque nuit à 3h UTC, les plannings hebdomadaires ouvrent leurs semaines
+    # à venir (booking/tasks.py). Chaque lieu calcule « aujourd'hui » dans son fuseau.
+    # / Volunteering: every night at 3am UTC, weekly plannings open their coming weeks.
+    logger.info("setup_periodic_tasks cron_besoins_des_semaines_types at 3AM UTC")
+    sender.add_periodic_task(
+        crontab(hour=3, minute=0),
+        cron_besoins_des_semaines_types.s(),
+        name="cron_besoins_des_semaines_types",
+    )
+
     logger.info(f'setup_periodic_tasks DONE')
 
 
@@ -190,3 +210,39 @@ def cron_clotures_automatiques():
     logger.info("generer_les_clotures_automatiques START")
     generer_les_clotures_automatiques()
     logger.info("generer_les_clotures_automatiques END")
+
+
+@app.task
+def cron_rappel_des_benevoles():
+    """
+    Les rappels de la veille des bénévoles, dans tous les lieux. Wrapper @app.task local,
+    comme cron_purge_stale_onboard_drafts.
+    / Day-before volunteer reminders of every venue. Local wrapper.
+
+    FLUX : celery beat (crontab 8h UTC) -> CETTE TACHE ->
+    booking/tasks.py rappeler_les_benevoles_du_lendemain -> un passage par lieu.
+    """
+    # Import local : ce module se charge très tôt dans le démarrage de Django.
+    # / Local import: this module loads very early in Django's boot.
+    from booking.tasks import rappeler_les_benevoles_du_lendemain
+    logger.info("rappeler_les_benevoles_du_lendemain START")
+    rappeler_les_benevoles_du_lendemain()
+    logger.info("rappeler_les_benevoles_du_lendemain END")
+
+
+@app.task
+def cron_besoins_des_semaines_types():
+    """
+    Les besoins des semaines types des plannings hebdomadaires, dans tous les lieux.
+    Wrapper @app.task local, comme cron_rappel_des_benevoles.
+    / Template-week needs of weekly plannings, in every venue. Local wrapper.
+
+    FLUX : celery beat (crontab 3h UTC) -> CETTE TACHE ->
+    booking/tasks.py creer_les_besoins_des_semaines_types -> un passage par lieu.
+    """
+    # Import local : ce module se charge très tôt dans le démarrage de Django.
+    # / Local import: this module loads very early in Django's boot.
+    from booking.tasks import creer_les_besoins_des_semaines_types
+    logger.info("creer_les_besoins_des_semaines_types START")
+    creer_les_besoins_des_semaines_types()
+    logger.info("creer_les_besoins_des_semaines_types END")

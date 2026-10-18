@@ -1,0 +1,58 @@
+{% load i18n %}
+<!--
+GRILLE DESKTOP : lignes = tâches, colonnes = jours qui ont au moins un besoin
+/ Desktop grid: rows = tasks, columns = days with at least one need
+
+LOCALISATION : booking/templates/booking/benevolat/partials/grille.html
+
+Masquée sous 760 px (benevolat.css) : jours_mobile.html prend le relais.
+La couleur de l'en-tête vient de --remplissage (0 à 100), calculée côté serveur
+(booking/benevolat.py, taux_de_remplissage). L'état est aussi écrit en toutes lettres.
+/ Hidden under 760 px. Header colour from --remplissage; the state is also written.
+-->
+<div class="bv-grille-cadre">
+<div class="bv-grille-defile" tabindex="0" role="region"
+     aria-label="{% blocktranslate with nom=planning.name %}Planning {{ nom }}, défile à l'horizontale{% endblocktranslate %}"
+     data-testid="benevolat-grille">
+    <table class="bv-grille">
+        <caption class="bv-cache">{% blocktranslate with nom=planning.name %}Besoins en bénévoles : {{ nom }}{% endblocktranslate %}</caption>
+        <thead>
+            <tr>
+                <th class="bv-tache" scope="col">{% translate "Tâche" %}</th>
+                {% for jour in jours %}
+                    <th scope="col" class="bv-jour" style="--remplissage: {{ jour.remplissage }}"
+                        data-testid="benevolat-entete-jour-{{ jour.date|date:'Y-m-d' }}">
+                        <span class="bv-jour__nom">{{ jour.date|date:"l j F"|capfirst }}</span>
+                        <span class="bv-jour__etat">{{ jour.etat }}</span>
+                    </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for ligne in lignes %}
+                <tr>
+                    <th class="bv-tache" scope="row">
+                        <div class="bv-tache__nom">{{ ligne.tache.name }}</div>
+                        {% if ligne.tache.description %}
+                            <div class="bv-tache__consignes">{{ ligne.tache.description }}</div>
+                        {% endif %}
+                    </th>
+                    {% for cases in ligne.cellules %}
+                        <td>
+                            {% if cases %}
+                                <div class="bv-pile">
+                                    {% for case in cases %}
+                                        {% include "booking/benevolat/partials/besoin.html" with case=case avec_tache=False suffixe="" %}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="bv-pas-besoin">{% translate "pas besoin" %}</div>
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+</div>
