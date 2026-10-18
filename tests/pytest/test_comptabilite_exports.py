@@ -821,17 +821,18 @@ class TestComptabiliteExports(FastTenantTestCase):
     def test_email_de_cloture_montre_le_chiffre_d_affaires_ttc(self):
         """
         L'email de clôture montre le chiffre d'affaires TTC (17,50 €) sous son vrai
-        libellé, et le nombre de ventes.
-        / The closure email shows the revenue incl. tax under its true label.
+        libellé, et le nombre de ventes. Envoi demandé (bouton « Envoyer par e-mail »
+        de la caisse) : une J n'a pas d'envoi automatique.
+        / The closure email shows the revenue incl. tax under its true label
+        (requested sending: a J has no automatic one).
         """
         configuration = Configuration.get_solo()
         configuration.rapport_emails = "tresorerie@example.com"
-        configuration.rapport_periodicite = ClotureCaisse.NIVEAU_JOURNALIER
         configuration.save()
 
         with patch("comptabilite.tasks.CeleryMailerClass") as faux_envoi_de_mail:
             faux_envoi_de_mail.return_value = MagicMock()
-            comptabilite.tasks.envoyer_email_cloture(
+            comptabilite.tasks.envoyer_email_cloture_demande(
                 self.tenant.schema_name, str(self.cloture.uuid)
             )
         arguments_du_mail = faux_envoi_de_mail.call_args.kwargs
@@ -1106,19 +1107,18 @@ class TestComptabiliteExports(FastTenantTestCase):
     def test_email_de_cloture_en_heure_du_lieu(self):
         """
         Les heures de la période dans l'email sont en heure du lieu (Martinique,
-        UTC−4), pas en heure du serveur.
-        / The email's period hours are in the venue's time zone.
+        UTC−4), pas en heure du serveur. Envoi demandé (bouton de la caisse).
+        / The email's period hours are in the venue's time zone (requested sending).
         """
         fuseau_de_la_martinique = ZoneInfo("America/Martinique")
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "America/Martinique"
         configuration.rapport_emails = "tresorerie@example.com"
-        configuration.rapport_periodicite = ClotureCaisse.NIVEAU_JOURNALIER
         configuration.save()
 
         with patch("comptabilite.tasks.CeleryMailerClass") as faux_envoi_de_mail:
             faux_envoi_de_mail.return_value = MagicMock()
-            comptabilite.tasks.envoyer_email_cloture(
+            comptabilite.tasks.envoyer_email_cloture_demande(
                 self.tenant.schema_name, str(self.cloture.uuid)
             )
         arguments_du_mail = faux_envoi_de_mail.call_args.kwargs

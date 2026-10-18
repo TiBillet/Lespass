@@ -3693,7 +3693,8 @@ class CaisseViewSet(viewsets.ViewSet):
         3. Les deux effets du bouton : commandes ouvertes annulees, tables libres.
         4. Les demandes au broker, chacune protegee (un echec est journalise) : le
            ticket Z, sur l'imprimante du terminal, trace (type CLOT, lien vers la J) ;
-           l'e-mail automatique de la J, si le lieu l'a regle.
+           la demande d'e-mail automatique (aucun pour une J : son Z part dans le
+           recap du matin des admins).
         5. L'ecran du Z : l'essentiel du rapport stocke dans la J.
         """
         # --- 1. Valider les donnees (uuid_pv uniquement) ---
@@ -3811,8 +3812,9 @@ class CaisseViewSet(viewsets.ViewSet):
                     f"du Z n° {cloture.numero_sequentiel}."
                 )
 
-        # L'e-mail automatique de la J, si le lieu l'a regle pour les J.
-        # / The J's automatic e-mail, when the venue set it for J.
+        # La demande d'e-mail automatique : rien pour une J, son ticket Z part dans
+        # le recap du matin des admins (`Administration/recap_quotidien.py`).
+        # / Automatic e-mail request: nothing for a J, its Z goes in the morning recap.
         try:
             demander_l_email_automatique_si_configure(connection.schema_name, cloture)
         except Exception:

@@ -937,13 +937,15 @@ class TestClotureCaisse(FastTenantTestCase):
 
     def test_broker_en_panne_effets_faits_avant_et_ecran_du_z_affiche(self):
         """
-        Le lieu veut ses rapports journaliers par e-mail, le terminal a une
-        imprimante, mais le broker est en panne : chaque demande de tâche lève une
-        erreur. Une table occupée, une commande ouverte, une vente. Le clic répond
-        200 avec l'écran du Z : la J existe, la table est libérée et la commande
-        annulée, et ces deux effets sont déjà faits au premier appel au broker.
+        Le lieu a un destinataire de rapport en périodicité journalière, le
+        terminal a une imprimante, mais le broker est en panne : chaque demande de
+        tâche lève une erreur. Une table occupée, une commande ouverte, une vente.
+        Le clic répond 200 avec l'écran du Z : la J existe, la table est libérée et
+        la commande annulée, et ces deux effets sont déjà faits à l'appel au broker.
+        Seule l'impression du ticket Z demande le broker : une J ne demande pas
+        d'e-mail (son Z part dans le récap du matin).
         / Broker down: the J exists, the Z screen shows, and the table/order effects
-        were already done at the first broker call.
+        were already done at the broker call (the print only: a J requests no e-mail).
         """
         configuration = Configuration.get_solo()
         configuration.rapport_emails = 'compta@lieu-de-test.org'
@@ -976,20 +978,21 @@ class TestClotureCaisse(FastTenantTestCase):
         commande_ouverte.refresh_from_db()
         assert table_occupee.statut == Table.LIBRE
         assert commande_ouverte.statut == CommandeSauvegarde.CANCEL
-        # Les deux demandes ont été tentées (impression, e-mail), après les effets.
-        # / Both requests were attempted (print, e-mail), after the effects.
+        # Une seule demande au broker, l'impression, tentée après les effets. Une J
+        # ne demande pas d'e-mail : son Z part dans le récap du matin.
+        # / One broker request only, the print, after the effects. A J requests no
+        # e-mail: its Z goes in the morning recap.
         assert broker_en_panne.etats_vus_a_chaque_appel == [
-            (Table.LIBRE, CommandeSauvegarde.CANCEL),
             (Table.LIBRE, CommandeSauvegarde.CANCEL),
         ]
 
-    def test_bouton_lieu_en_periodicite_j_un_seul_email_pour_cette_j(self):
+    def test_bouton_lieu_en_periodicite_j_aucun_email_separe(self):
         """
         Le lieu veut ses rapports journaliers, avec un destinataire. Un clic sur
-        « Clôturer » demande exactement un envoi automatique de l'e-mail, pour la J
-        créée.
-        / Daily reports venue: one click requests exactly one automatic e-mail for the
-        new J.
+        « Clôturer » crée la J et ne demande aucun e-mail : le Z de cette J part dans
+        le récap du matin des admins.
+        / Daily reports venue: one click creates the J and requests no e-mail; its Z
+        goes in the admins' morning recap.
         """
         configuration = Configuration.get_solo()
         configuration.rapport_emails = 'compta@lieu-de-test.org'
@@ -1001,14 +1004,12 @@ class TestClotureCaisse(FastTenantTestCase):
             reponse = self._cliquer_sur_cloturer()
 
         assert reponse.status_code == 200, reponse.content.decode()[:400]
-        j_du_bouton = self._la_seule_j_du_lieu()
+        self._la_seule_j_du_lieu()
         demandes_d_email = []
         for nom_de_la_tache, arguments in taches_demandees:
             if nom_de_la_tache.startswith('envoyer_email_cloture'):
                 demandes_d_email.append((nom_de_la_tache, arguments))
-        assert demandes_d_email == [
-            ('envoyer_email_cloture', (self.tenant.schema_name, str(j_du_bouton.uuid))),
-        ]
+        assert demandes_d_email == []
 
     # ------------------------------------------------------------------
     # Le début du service en cours

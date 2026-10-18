@@ -1,0 +1,100 @@
+{% extends 'emails/base.html' %}
+{% load i18n %}
+{% comment %}
+LOCALISATION : BaseBillet/templates/emails/recap_quotidien.html
+
+Le récap du matin des admins : une section par rubrique, un bloc par ticket Z.
+Rendu par Administration/recap_quotidien.py (envoyer_le_recap).
+Contexte : config, date_de_la_veille, rubriques, clotures, lien_admin.
+Styles inline (clients mail). Textes en français, traduits par {% translate %}.
+/ Admins' morning recap: one section per heading, one block per Z ticket.
+{% endcomment %}
+
+{% block content %}
+    <tr>
+        <td class="pt-28 td_content"
+            style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
+            <table align="center" cellpadding="0" cellspacing="0" class="w-100p"
+                   style="max-width:472px; margin:0 auto;" width="472">
+                <tr>
+                    <td>
+                        <h1 style="font-weight:400;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 0 0 12px;">
+                            {% blocktrans %}Le récap du {{ date_de_la_veille }}{% endblocktrans %}</h1>
+                        <p style="color:#70706d;font:14px/24px Arial, Helvetica, sans-serif;margin: 0 0 24px 0;">
+                            {% blocktrans with lieu=config.organisation %}Voici ce qui s'est passé hier chez {{ lieu }}.{% endblocktrans %}
+                        </p>
+                    </td>
+                </tr>
+
+                {% for rubrique in rubriques %}
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <h2 style="color:#1d1d1b;font:bold 16px/24px Arial, Helvetica, sans-serif;margin: 0 0 4px;">
+                                {{ rubrique.titre }} ({{ rubrique.nombre }})</h2>
+                            {% if rubrique.est_un_stock and rubrique.nombre_de_nouveaux > 0 %}
+                                <p style="color:#70706d;font:13px/20px Arial, Helvetica, sans-serif;margin: 0 0 8px;">
+                                    {% blocktrans count nombre=rubrique.nombre_de_nouveaux %}dont {{ nombre }} nouvelle hier{% plural %}dont {{ nombre }} nouvelles hier{% endblocktrans %}
+                                </p>
+                            {% endif %}
+                            {% for ligne in rubrique.lignes %}
+                                <p style="color:#70706d;font:14px/22px Arial, Helvetica, sans-serif;margin: 0;">
+                                    {{ ligne }}</p>
+                            {% endfor %}
+                            {% if rubrique.nombre_de_lignes_cachees > 0 %}
+                                <p style="color:#70706d;font:italic 14px/22px Arial, Helvetica, sans-serif;margin: 4px 0 0;">
+                                    {% blocktrans count nombre=rubrique.nombre_de_lignes_cachees %}et {{ nombre }} autre{% plural %}et {{ nombre }} autres{% endblocktrans %}
+                                </p>
+                            {% endif %}
+                            <p style="margin: 10px 0 0;">
+                                <a href="{{ rubrique.lien }}" target="_blank"
+                                   style="background:#2d76a6;color:#ffffff;text-decoration:none;display:inline-block;padding:8px 16px;border-radius:3px;font:13px/16px Arial, Helvetica, sans-serif;">
+                                    {% translate "Ouvrir l’administration" %}</a>
+                            </p>
+                        </td>
+                    </tr>
+                {% endfor %}
+
+                {% for cloture in clotures %}
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <table width="100%" cellpadding="0" cellspacing="0"
+                                   style="border:1px solid #dcdcd9;border-radius:6px;">
+                                <tr>
+                                    <td style="padding:12px 16px;">
+                                        <h2 style="color:#1d1d1b;font:bold 16px/24px Arial, Helvetica, sans-serif;margin: 0 0 4px;">
+                                            {% blocktrans with numero=cloture.numero_sequentiel %}Ticket Z n° {{ numero }}{% endblocktrans %}</h2>
+                                        <p style="color:#70706d;font:14px/22px Arial, Helvetica, sans-serif;margin: 0;">
+                                            {% translate "Chiffre d'affaires TTC" %} :
+                                            <span style="color:#1d1d1b">{{ cloture.chiffre_affaires_ttc_en_euros }}</span></p>
+                                        <p style="color:#70706d;font:14px/22px Arial, Helvetica, sans-serif;margin: 0;">
+                                            {% translate "Nombre de ventes" %} :
+                                            <span style="color:#1d1d1b">{{ cloture.nombre_transactions }}</span></p>
+                                        <p style="color:#70706d;font:14px/22px Arial, Helvetica, sans-serif;margin: 0;">
+                                            {% translate "Fin de la période" %} :
+                                            <span style="color:#1d1d1b">{{ cloture.fin_en_heure_du_lieu }}</span></p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% if clotures %}
+                    <tr>
+                        <td>
+                            <p style="color:#70706d;font:13px/20px Arial, Helvetica, sans-serif;margin: 0 0 24px;">
+                                {% translate "Les tickets Z sont en pièce jointe (PDF)." %}</p>
+                        </td>
+                    </tr>
+                {% endif %}
+
+                <tr>
+                    <td style="padding: 0 0 24px 0;">
+                        <a href="{{ lien_admin }}" target="_blank"
+                           style="color:#2d76a6;font:14px/24px Arial, Helvetica, sans-serif;">
+                            {% translate "Ouvrir l’administration" %}</a>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+{% endblock %}

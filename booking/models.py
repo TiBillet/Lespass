@@ -765,6 +765,9 @@ class Booking(models.Model):
             if not ligne_sans_argent_a_rendre(ligne):
                 reglee_hors_stripe_en_argent = True
 
+        # La date d'annulation sert au récap du matin.
+        # / The cancellation date feeds the morning recap.
+        self.annulee_le = timezone.now()
         self.status = Booking.USER_CANCELED
 
         self.save()

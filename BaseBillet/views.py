@@ -5956,6 +5956,9 @@ class MembershipMVT(viewsets.ViewSet):
         try:
             with db_transaction.atomic():
                 membership.archiver = True
+                # La date d'annulation sert au récap du matin.
+                # / The cancellation date feeds the morning recap.
+                membership.annulee_le = timezone.now()
                 membership.status = Membership.ADMIN_CANCELED
                 membership.save()
 

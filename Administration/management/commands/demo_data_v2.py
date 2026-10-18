@@ -397,6 +397,48 @@ class Command(BaseCommand):
         # leave an EMPTY site with the flush reporting success. So we check.
         self._verifier_les_sites_de_demo()
 
+        # En dernier : le récap du matin de lespass, envoyé à son admin, avec la J
+        # créée plus haut. Sans les ventes (--no-sales), rien à résumer.
+        # / Last: lespass's morning recap, sent to its admin, with the J created above.
+        if not no_sales:
+            self._envoyer_le_recap_de_demo(options)
+
+    def _envoyer_le_recap_de_demo(self, options):
+        """
+        Envoie tout de suite le récap du matin de 'lespass' à ses admins : l'activité
+        d'hier et le PDF de la J du flush. Le marqueur du récap horaire n'est pas posé.
+        Une erreur d'envoi remonte et arrête le flush, comme
+        `_verifier_caisse_ouvrable_ou_planter`.
+        / Sends lespass's morning recap right away. The hourly marker is not set. A
+        sending error propagates and stops the flush.
+        """
+        from Customers.models import Client as TenantClient
+        from Administration.management.commands._demo_data_v2_recap import (
+            envoyer_le_recap_de_demo,
+        )
+
+        tenant = TenantClient.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            return
+
+        with tenant_context(tenant):
+            resultat = envoyer_le_recap_de_demo()
+
+        recap = resultat["recap"]
+        if recap is None:
+            self.stdout.write(self.style.WARNING("Récap du matin (lespass) : rien à envoyer."))
+            return
+        if not resultat["mail_envoye"]:
+            self.stdout.write(self.style.WARNING(
+                f"Récap du matin (lespass) : non envoyé "
+                f"(destinataires : {', '.join(recap['destinataires']) or 'aucun'})."
+            ))
+            return
+        self.stdout.write(self.style.SUCCESS(
+            f"Récap envoyé à {', '.join(recap['destinataires'])} : "
+            f"{len(recap['rubriques'])} rubrique(s), {len(recap['clotures'])} Z joint(s)."
+        ))
+
     def _seed_site_pages_lespass(self):
         """
         Construit le site web complet du tenant lespass via la commande
@@ -911,6 +953,9 @@ class Command(BaseCommand):
         from Administration.management.commands._demo_data_v2_ventes import (
             seed_ventes_de_la_veille_par_le_moteur,
         )
+        from Administration.management.commands._demo_data_v2_recap import (
+            seed_activite_de_la_veille_pour_le_recap,
+        )
         from comptabilite.tasks import generer_cloture_pour_tenant
 
         tenant = TenantClient.objects.filter(schema_name='lespass').first()
@@ -920,11 +965,16 @@ class Command(BaseCommand):
         self.stdout.write("\nVentes d'hier par le moteur de vente (lespass)...")
         with tenant_context(tenant):
             resultat = seed_ventes_de_la_veille_par_le_moteur()
-        for phrase in resultat["ecrites"]:
+            # L'activité d'hier de quatre personnes, pour le récap du matin : avant
+            # la J, qui reprend ainsi leurs ventes.
+            # / Yesterday's activity of four people, for the morning recap: before
+            # the J, which then takes up their sales.
+            resultat_du_recap = seed_activite_de_la_veille_pour_le_recap()
+        for phrase in resultat["ecrites"] + resultat_du_recap["ecrites"]:
             self.stdout.write(self.style.SUCCESS(f"  + {phrase}"))
-        for phrase in resultat["sautees"]:
+        for phrase in resultat["sautees"] + resultat_du_recap["sautees"]:
             self.stdout.write(self.style.WARNING(f"  - {phrase}"))
-        if not resultat["ecrites"]:
+        if not resultat["ecrites"] and not resultat_du_recap["ecrites"]:
             return
 
         # Hors de tout tenant_context : la tâche pose le sien (verrous courts).

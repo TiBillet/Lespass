@@ -517,14 +517,17 @@ class TestRepriseClotures(FastTenantTestCase):
 
     def test_j_reprise_n_envoie_aucun_mail(self):
         """
-        Le lieu demande le rapport de chaque J par mail. La J reprise n'en demande
-        aucun : ni tâche de mail, ni mailer appelé. Avec la même configuration, le Z
-        de fin de service suivant demande son mail : la configuration est bien celle
-        qui envoie.
-        / The venue mails every J. The "reprise" J requests none; the next end-of-service
-        Z, with the same configuration, does.
+        Le lieu demande le rapport de chaque semaine par mail. La J reprise (mardi
+        10 mars, 3 h) n'en demande aucun : ni tâche de mail, ni mailer appelé. Avec la
+        même configuration, la tâche horaire du lundi suivant à 4 h 10 clôture la
+        semaine du 9 mars, finie après la mise en service, et demande son mail : la
+        configuration est bien celle qui envoie. (Les J ne demandent pas de mail
+        séparé : la règle de la mise en service pour les J est testée dans
+        test_recap_quotidien.py, `test_une_cloture_finie_a_la_mise_en_service_n_est_pas_jointe`.)
+        / Weekly e-mails. The "reprise" J requests none; the next Monday's 4:10 hourly
+        run closes the week of March 9 (ended after the go-live) and requests its mail.
         """
-        self._configurer_les_mails(Configuration.PERIODICITE_JOURNALIER)
+        self._configurer_les_mails(Configuration.PERIODICITE_HEBDOMADAIRE)
         self._vendre_des_entrees_a(heure_de_paris(2026, 1, 14, 12, 0))
 
         with (
@@ -540,17 +543,32 @@ class TestRepriseClotures(FastTenantTestCase):
         assert mails_de_cloture_demandes(taches_demandees) == []
         faux_mailer.assert_not_called()
 
-        # La preuve par la J suivante : une vente le soir, puis le Z de 23 h.
-        # / The proof by the next J: a sale in the evening, then the 11 pm Z.
+        # La preuve par la semaine suivante : une vente le soir de la reprise, puis la
+        # tâche horaire du lundi 16 mars à 4 h 10. La semaine du 12 janvier (finie
+        # avant la mise en service) est clôturée aussi, sans mail.
+        # / The proof by the next week: a sale that evening, then Monday's 4:10 hourly
+        # run. The January 12 week (ended before the go-live) is closed too, no mail.
         self._vendre_des_entrees_a(heure_de_paris(2026, 3, 10, 18, 0))
-        with taches_celery_enregistrees() as taches_du_z_suivant:
-            with self._heure_figee(heure_de_paris(2026, 3, 10, 23, 0)):
-                uuid_du_z_suivant = comptabilite.tasks.generer_cloture_pour_tenant(
-                    schema_name=self.tenant.schema_name,
-                    niveau=ClotureCaisse.NIVEAU_JOURNALIER,
-                )
-        assert mails_de_cloture_demandes(taches_du_z_suivant) == [
-            (TACHE_DU_MAIL_DE_CLOTURE, (self.tenant.schema_name, uuid_du_z_suivant)),
+        with taches_celery_enregistrees() as taches_du_lundi_suivant:
+            self._lancer_la_tache_horaire_a(heure_de_paris(2026, 3, 16, 4, 10))
+
+        # La semaine du 12 janvier existe : elle est clôturée, et ne demande aucun mail.
+        # / The January 12 week exists: closed, with no mail requested.
+        self._la_cloture_d_une_periode(
+            ClotureCaisse.NIVEAU_HEBDOMADAIRE,
+            heure_de_paris(2026, 1, 12, 0, 0),
+            heure_de_paris(2026, 1, 19, 0, 0),
+        )
+        semaine_du_9_mars = self._la_cloture_d_une_periode(
+            ClotureCaisse.NIVEAU_HEBDOMADAIRE,
+            heure_de_paris(2026, 3, 9, 0, 0),
+            heure_de_paris(2026, 3, 16, 0, 0),
+        )
+        assert mails_de_cloture_demandes(taches_du_lundi_suivant) == [
+            (
+                TACHE_DU_MAIL_DE_CLOTURE,
+                (self.tenant.schema_name, str(semaine_du_9_mars.uuid)),
+            ),
         ]
 
     # ------------------------------------------------------------------

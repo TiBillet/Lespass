@@ -10,8 +10,13 @@ l'admin, dans le même ordre, toutes dépliées (un papier ne se replie pas). Ga
 autonome, styles inline (WeasyPrint ne charge pas de CSS externe fiable). A4 paysage.
 / The PDF prints the stored report's sections (same as the admin page), all unfolded.
 
-FLUX : comptabilite/admin.py `exporter_pdf` et comptabilite/tasks.py
-`envoyer_email_cloture` (pièce jointe) → `generer_pdf_cloture`.
+FLUX : → `generer_pdf_cloture`, depuis :
+- comptabilite/admin.py `exporter_pdf` (téléchargement) ;
+- comptabilite/tasks.py `_envoyer_l_email_de_la_cloture` (pièce jointe de l'email
+  d'une H, M ou A, et du bouton « Envoyer par e-mail » de la caisse) ;
+- Administration/recap_quotidien.py `envoyer_le_recap` (le ticket Z de chaque J, en
+  pièce jointe du récap du matin des admins).
+/ Called by the admin download, the closure e-mail and the morning recap.
 """
 import io
 

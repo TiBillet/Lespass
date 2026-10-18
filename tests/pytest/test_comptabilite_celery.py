@@ -34,16 +34,21 @@ import django  # noqa: E402
 
 django.setup()
 
+from datetime import datetime, time, timedelta  # noqa: E402
 from decimal import Decimal  # noqa: E402
 from unittest.mock import MagicMock, patch  # noqa: E402
 
 import pytest  # noqa: E402
 from django.db import connection  # noqa: E402
+from django.utils import timezone  # noqa: E402
 from django_tenants.test.cases import FastTenantTestCase  # noqa: E402
 
 from BaseBillet.models import Configuration, PaymentMethod, Product, SaleOrigin  # noqa: E402
 from comptabilite.models import ClotureCaisse  # noqa: E402
-from comptabilite.tasks import envoyer_email_cloture, generer_cloture_pour_tenant  # noqa: E402
+from comptabilite.tasks import (  # noqa: E402
+    envoyer_email_cloture,
+    generer_cloture_pour_tenant,
+)
 from Customers.models import Client  # noqa: E402
 from fabriques_vente import creer_tarif_vendu, fabriquer_vente_encaissee  # noqa: E402
 from laboutik.models import LaboutikConfiguration  # noqa: E402
@@ -151,7 +156,9 @@ def test_cron_ignore_les_emplacements_vides_waiting_config():
 
 class TestEmailDeCloture(FastTenantTestCase):
     """
-    L'email automatique de la clôture. / The automatic closure email.
+    L'email automatique d'une clôture H, M ou A (`envoyer_email_cloture`). Une J n'a
+    pas d'email automatique : son Z part dans le récap du matin.
+    / The automatic e-mail of an H, M or A closure; a J has none (morning recap).
     """
 
     @classmethod
@@ -215,13 +222,36 @@ class TestEmailDeCloture(FastTenantTestCase):
 
     def test_envoyer_email_cloture_envoie_si_config_ok(self):
         """
-        Si rapport_emails est configure ET rapport_periodicite matche le niveau,
-        CeleryMailerClass est instancie avec le PDF en attachement.
-        / If config matches, CeleryMailerClass is called with the PDF attachment.
+        Si rapport_emails est configure ET la periodicite du rapport est
+        hebdomadaire, l'envoi automatique de la cloture de la semaine instancie
+        CeleryMailerClass avec le PDF en attachement.
+        / If rapport_emails is set and the periodicity is weekly, the automatic
+        sending of the week closure calls CeleryMailerClass with the PDF attachment.
         """
+        # La semaine de la vente du setUp, clôturée le lundi suivant à 5 h 10, heure du
+        # lieu (fermeture à 2 h : le filet de ce lundi est passé à 4 h). Créée avant de
+        # régler les destinataires : sa création ne demande aucun envoi.
+        # / The week of the setUp sale, closed the next Monday at 5:10 local time;
+        # created before the recipients are set, so no sending is requested.
+        configuration = Configuration.get_solo()
+        configuration.heure_de_fermeture = time(2, 0)
+        configuration.save()
+        fuseau_du_lieu = configuration.get_tzinfo()
+        aujourd_hui = timezone.localtime(timezone.now(), fuseau_du_lieu).date()
+        lundi_suivant = aujourd_hui + timedelta(days=7 - aujourd_hui.weekday())
+        lundi_suivant_a_5h10 = datetime.combine(
+            lundi_suivant, time(5, 10), tzinfo=fuseau_du_lieu
+        )
+        with patch("django.utils.timezone.now", return_value=lundi_suivant_a_5h10):
+            uuid_de_la_semaine = generer_cloture_pour_tenant(
+                schema_name=self.tenant.schema_name,
+                niveau=ClotureCaisse.NIVEAU_HEBDOMADAIRE,
+            )
+        assert uuid_de_la_semaine is not None
+
         configuration = Configuration.get_solo()
         configuration.rapport_emails = "compta@example.com, tresorerie@example.com"
-        configuration.rapport_periodicite = ClotureCaisse.NIVEAU_JOURNALIER
+        configuration.rapport_periodicite = Configuration.PERIODICITE_HEBDOMADAIRE
         configuration.save()
 
         # L'envoi de l'email est remplacé : on lit les arguments qu'il reçoit. Son
@@ -232,8 +262,11 @@ class TestEmailDeCloture(FastTenantTestCase):
             mock_instance.send.return_value = 1
             MockMailer.return_value = mock_instance
 
-            envoyer_email_cloture(self.tenant.schema_name, self.uuid_de_la_j)
+            email_envoye = envoyer_email_cloture(
+                self.tenant.schema_name, uuid_de_la_semaine
+            )
 
+            assert email_envoye is True
             assert MockMailer.called, "CeleryMailerClass should be instantiated"
             kwargs = MockMailer.call_args.kwargs
             # Deux destinataires, séparés par une virgule dans la configuration.

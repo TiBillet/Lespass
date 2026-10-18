@@ -8,6 +8,7 @@ from django.contrib import admin
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 from django.forms import ModelForm
+from django.utils import timezone
 from django import forms
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
 # d'Unfold plus le placeholder de recherche tire de search_fields.
@@ -177,6 +178,20 @@ class BookingAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelA
     # / user MUST stay read-only: users are shared across all tenants. Editable, it
     # renders a select of every account of the instance (slow, leaks other venues' emails).
     readonly_fields = ["user"]
+
+    def save_model(self, request, obj, form, change):
+        """
+        Pose la date d'annulation quand l'admin passe le statut à annulé.
+        La date d'annulation sert au récap du matin.
+        / Sets the cancellation date when the admin switches the status to cancelled.
+
+        LOCALISATION : Administration/admin/resources.py
+        """
+        statut_change = "status" in form.changed_data
+        statut_annule = obj.status in (Booking.ADMIN_CANCELED, Booking.USER_CANCELED)
+        if change and statut_change and statut_annule and obj.annulee_le is None:
+            obj.annulee_le = timezone.now()
+        super().save_model(request, obj, form, change)
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

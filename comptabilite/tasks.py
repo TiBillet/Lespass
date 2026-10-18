@@ -4,6 +4,19 @@ semaine, mois et année, et l'email de clôture.
 / The venue's closures: the sliding day (J), the automatic safety net, the week, month
 and year closures, and the closure email.
 
+LES EMAILS DE CLÔTURE
+- J : aucun email séparé. Le ticket Z de chaque J part en pièce jointe du récap du
+  matin des admins (`Administration/recap_quotidien.py`), appelé à la fin de la
+  sous-tâche horaire du lieu, après le filet. En périodicité journalière, les adresses
+  de `rapport_emails` reçoivent aussi ce récap.
+- H, M, A : un email par clôture aux adresses de `rapport_emails`, si la périodicité
+  du rapport est le niveau de la clôture (`envoyer_email_cloture`).
+- Bouton « Envoyer par e-mail » de la caisse : l'email d'une clôture, tout de suite,
+  quelle que soit la périodicité (`envoyer_email_cloture_demande`).
+/ Closure e-mails: no separate e-mail for a J (its Z goes in the admins' morning
+recap); one e-mail per H, M, A matching the periodicity; the register button sends
+any closure at once.
+
 LOCALISATION : comptabilite/tasks.py
 
 LES RÈGLES (fiche F §3 ; tronc D19, D28)
@@ -45,8 +58,9 @@ LES RÈGLES (fiche F §3 ; tronc D19, D28)
 - La J « reprise » (fiche R §11) : créée une fois par lieu, la nuit de la bascule, par
   la commande `creer_la_cloture_de_reprise`. Elle couvre tout l'historique et porte
   `"reprise": true` dans l'en-tête de son rapport. Sa fin est la MISE EN SERVICE de la
-  comptabilité du lieu (`mise_en_service_du_lieu`) : aucun mail pour une clôture finie
-  avant ou à cette date.
+  comptabilité du lieu (`mise_en_service_du_lieu`) : aucun mail pour une H, M ou A
+  finie avant ou à cette date, et aucune J finie avant ou à cette date n'est jointe
+  au récap du matin.
 / Rules: sliding J under the venue lock; hourly net at closing time + 2 h, local
 time; calendar H / M / A computed on sales, none when empty, after the net of their
 last day, missing ones caught up (12 per run at most); stored report; perpetual
@@ -55,7 +69,9 @@ totals; one chain; the "reprise" J sets the go-live (no e-mail before it).
 FLUX :
 - `TiBillet/celery.py` `cron_clotures_automatiques` (chaque heure) →
   `generer_les_clotures_automatiques` → une sous-tâche Celery par lieu
-  `generer_les_clotures_automatiques_du_lieu.delay(schema)` ;
+  `generer_les_clotures_automatiques_du_lieu.delay(schema)` : filet J, H / M / A,
+  puis `Administration/recap_quotidien.py`
+  `envoyer_le_recap_du_lieu_si_c_est_l_heure` ;
 - la commande `generer_cloture` → `generer_cloture_pour_tenant`.
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-F-rapport-unique.md (§3).
@@ -529,10 +545,11 @@ def creer_la_cloture_journaliere_de_la_caisse(responsable, point_de_vente):
     """
     Le « Z de fin de service » demandé au bouton « Clôturer » de la caisse : crée la
     J du lieu courant, maintenant, avec l'opérateur et le point de vente. Ne parle
-    pas au broker : c'est la vue qui demande ensuite l'e-mail
-    (`demander_l_email_automatique_si_configure`), après les effets du bouton.
+    pas au broker. Aucun e-mail n'est demandé pour cette J : son ticket Z part dans
+    le récap du matin des admins (`Administration/recap_quotidien.py`).
     / The end-of-service Z requested by the register button: creates the current
-    venue's J now, with operator and point of sale. No broker call here.
+    venue's J now, with operator and point of sale. No broker call here; no e-mail
+    for this J, its Z goes in the admins' morning recap.
 
     LOCALISATION : comptabilite/tasks.py
 
@@ -680,8 +697,10 @@ def mise_en_service_du_lieu():
 
     C'est la SEULE lecture de la mise en service (fiche R §11).
     APPELÉE PAR : `demander_l_email_automatique_si_configure` (aucun mail pour une
-    clôture finie avant), `refus_du_fec_avant_la_mise_en_service` (FEC refusé avant,
-    pour le bouton de l'admin et pour l'API comptable).
+    H, M ou A finie avant), `Administration/recap_quotidien.py`
+    `clotures_j_a_joindre` (aucune J finie avant n'est jointe au récap du matin),
+    `refus_du_fec_avant_la_mise_en_service` (FEC refusé avant, pour le bouton de
+    l'admin et pour l'API comptable).
     / The ONLY reader of the go-live.
 
     :return: un datetime avec fuseau, ou None
@@ -783,19 +802,29 @@ def journees_a_importer(apres_le_numero=None):
 
 def demander_l_email_automatique_si_configure(schema_name, cloture):
     """
-    Demande l'email de la clôture si le lieu a des destinataires et que la périodicité
-    du rapport est le niveau de cette clôture.
-    / Requests the closure email when configured for this level.
+    Demande l'email d'une clôture H, M ou A si le lieu a des destinataires et que la
+    périodicité du rapport est le niveau de cette clôture.
+    / Requests the email of an H, M or A closure when configured for this level.
 
-    Aucun mail pour une clôture dont la fin est avant OU ÉGALE à la mise en service :
-    la période est tout entière dans l'historique repris (fiche R §11.3). La J reprise
-    elle-même finit à la mise en service : elle n'a donc pas de mail non plus.
-    / No e-mail for a closure ending at or before the go-live (history), the
-    "reprise" J included.
+    Une J ne demande jamais d'email séparé : son ticket Z part en pièce jointe du récap
+    du matin des admins (`Administration/recap_quotidien.py`), envoyé aussi aux
+    adresses de `rapport_emails` en périodicité journalière.
+    / A J never requests its own email: its Z goes in the admins' morning recap.
+
+    Aucun mail pour une H, M ou A dont la fin est avant OU ÉGALE à la mise en
+    service : la période est tout entière dans l'historique repris (fiche R §11.3).
+    Le récap du matin applique la même règle aux J qu'il joint.
+    / No e-mail for an H, M or A ending at or before the go-live (history); the
+    morning recap applies the same rule to the J it attaches.
 
     APPELÉE PAR : les tâches de clôture de ce module, et `laboutik/views.py`
     `CaisseViewSet.cloturer` (après les effets du bouton, dans un try/except).
     """
+    # Le Z journalier part dans le récap du matin : pas de mail séparé.
+    # / The daily Z goes in the morning recap: no separate mail.
+    if cloture.niveau == ClotureCaisse.NIVEAU_JOURNALIER:
+        return
+
     mise_en_service = mise_en_service_du_lieu()
     if mise_en_service is not None:
         cloture_finie_avant_la_mise_en_service = (
@@ -961,16 +990,18 @@ def generer_les_clotures_automatiques_du_lieu(schema_name):
     """
     La sous-tâche horaire d'un lieu : le filet J, puis les semaines, les mois et les
     années finis qui ne sont pas encore clôturés, dans l'ordre chronologique, au plus
-    12 créés par passage (`PLAFOND_DES_CLOTURES_CALENDAIRES_PAR_PASSAGE`).
+    12 créés par passage (`PLAFOND_DES_CLOTURES_CALENDAIRES_PAR_PASSAGE`), puis le
+    récap du matin des admins (`Administration/recap_quotidien.py`).
     / The hourly sub-task of one venue: the J net, then the finished H, M, A not yet
-    closed, in chronological order, at most 12 created per run.
+    closed, in chronological order, at most 12 created per run, then the admins'
+    morning recap.
 
     LOCALISATION : comptabilite/tasks.py
 
     FLUX : `generer_les_clotures_automatiques` (chaque heure) → une sous-tâche Celery
     par lieu → CETTE FONCTION. La J d'abord : une période n'est clôturée qu'après le
     filet du jour où elle finit, et la J de ce filet porte les perpétuels qu'elle
-    reprend.
+    reprend. Le récap en dernier : la J du filet de ce matin y est jointe.
 
     Une erreur est journalisée avec le schéma du lieu, puis remontée : Celery note la
     sous-tâche en échec, les autres lieux ne sont pas touchés.
@@ -1035,8 +1066,41 @@ def generer_les_clotures_automatiques_du_lieu(schema_name):
                         f"{cloture_de_la_periode.numero_sequentiel} créée."
                     )
                     demander_l_email_automatique_si_configure(schema_name, cloture_de_la_periode)
+
+            # Le récap du matin des admins, en dernier : la J du filet de ce matin est
+            # déjà faite, elle part dans le récap. Il reçoit les seuils du filet de la
+            # veille et d'aujourd'hui (les Z à joindre sont entre les deux). Il vérifie
+            # lui-même l'heure (7 h passées, seuil d'aujourd'hui passé) et s'il a déjà
+            # été traité aujourd'hui. Import local : le récap importe ce module.
+            # / The admins' morning recap, last: this morning's net J is done and goes
+            # in it. It checks the hour and its daily marker itself. Local import: the
+            # recap imports this module.
+            from Administration.recap_quotidien import (
+                envoyer_le_recap_du_lieu_si_c_est_l_heure,
+            )
+
+            aujourd_hui = maintenant_local.date()
+            seuil_d_aujourd_hui = _seuil_du_filet_d_un_jour(
+                aujourd_hui, fuseau_du_lieu, configuration.heure_de_fermeture
+            )
+            seuil_de_la_veille = _seuil_du_filet_d_un_jour(
+                aujourd_hui - timedelta(days=1),
+                fuseau_du_lieu,
+                configuration.heure_de_fermeture,
+            )
+            # Les clôtures sont faites : une erreur du récap est journalisée à part.
+            # / Closures are done: a recap error is logged separately.
+            try:
+                envoyer_le_recap_du_lieu_si_c_est_l_heure(
+                    seuil_de_la_veille, seuil_d_aujourd_hui
+                )
+            except Exception:
+                logger.exception(f"[{schema_name}] Échec du récap du matin.")
+                raise
     except Exception:
-        logger.exception(f"[{schema_name}] Échec des clôtures automatiques du lieu.")
+        logger.exception(
+            f"[{schema_name}] Échec des clôtures automatiques du lieu."
+        )
         raise
 
 
@@ -1080,9 +1144,12 @@ def generer_les_clotures_automatiques():
 @shared_task
 def envoyer_email_cloture(schema_name, cloture_uuid):
     """
-    L'envoi AUTOMATIQUE de l'email d'une clôture (demandé à sa création) : seulement
-    si la périodicité du rapport du lieu est le niveau de la clôture.
-    / AUTOMATIC closure e-mail: only when the report periodicity is the closure level.
+    L'envoi AUTOMATIQUE de l'email d'une clôture H, M ou A (demandé à sa création par
+    `demander_l_email_automatique_si_configure`) : seulement si la périodicité du
+    rapport du lieu est le niveau de la clôture. Une J n'a pas d'email séparé : son
+    ticket Z part dans le récap du matin (`Administration/recap_quotidien.py`).
+    / AUTOMATIC e-mail of an H, M or A closure: only when the report periodicity is
+    the closure level. A J has no separate e-mail: its Z goes in the morning recap.
 
     :return: True si l'email est envoyé, False sinon
     """

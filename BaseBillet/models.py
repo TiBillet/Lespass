@@ -3642,6 +3642,9 @@ class Reservation(models.Model):
             if montant_paye_par_stripe > 0 and not remboursement_stripe_effectue:
                 raise Exception(_("Aucun paiement remboursable n'a été trouvé. Rien n'a été annulé."))
 
+        # La date d'annulation sert au récap du matin.
+        # / The cancellation date feeds the morning recap.
+        self.annulee_le = timezone.now()
         self.status = Reservation.CANCELED
         for ticket in self.tickets.all():
             ticket.status = Ticket.CANCELED
@@ -3816,8 +3819,11 @@ class Reservation(models.Model):
         # / No uncancelled ticket left: the whole reservation is cancelled.
         # update_fields: rewrites neither `datetime` (auto_now) nor `mail_send`, which may have changed.
         if not self.tickets.exclude(status=Ticket.CANCELED).exists():
+            # La date d'annulation sert au récap du matin.
+            # / The cancellation date feeds the morning recap.
+            self.annulee_le = timezone.now()
             self.status = Reservation.CANCELED
-            self.save(update_fields=["status"])
+            self.save(update_fields=["status", "annulee_le"])
 
         # L'utilisateur qui annule un billet réglé sur place en ARGENT ne reçoit rien :
         # le message le lui dit. La vue écrit déjà « … has been cancelled. » devant :
