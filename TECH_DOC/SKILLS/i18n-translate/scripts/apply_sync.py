@@ -17,7 +17,7 @@ from _pohelpers import joinfield, esc
 def apply_file(path, lang, key2i, work, results, flagged_keys, write):
     raw = open(path, encoding="utf-8").read()
     chunks = raw.split("\n\n")
-    applied = skipped_flag = skipped_plural = 0
+    applied = skipped_flag = skipped_plural = identical = 0
     out = []
     for chunk in chunks:
         lines = chunk.split("\n")
@@ -35,6 +35,13 @@ def apply_file(path, lang, key2i, work, results, flagged_keys, write):
                     skipped_flag += 1
                 else:
                     do = True
+                    # Une sortie identique au msgid EST ecrite (msgstr == msgid) :
+                    # l'affichage ne change pas, mais le msgstr n'est plus vide, donc
+                    # extract_sync.py ne renverra plus cet item "ambigu" aux agents.
+                    # / An output identical to the msgid IS written: same display,
+                    # but the item is no longer re-extracted on the next run.
+                    if esc(val) == mid:
+                        identical += 1
         elif i is not None and is_plural:
             it = work[i]
             if (it["nfr"] if lang == "fr" else it["nen"]):
@@ -70,7 +77,7 @@ def apply_file(path, lang, key2i, work, results, flagged_keys, write):
         open(path, "w", encoding="utf-8").write("\n\n".join(out))
     tag = "(ECRIT)" if write else "(dry-run)"
     print(f"[{lang}] appliquees={applied} skip_anomalie={skipped_flag} "
-          f"skip_pluriel={skipped_plural} {tag}")
+          f"skip_pluriel={skipped_plural} dont_identiques_au_msgid={identical} {tag}")
 
 def main():
     locale_dir = sys.argv[1]

@@ -71,6 +71,22 @@ def nom_complet_et_email(user):
     return f"{' '.join(morceaux_du_nom)} · {user.email}"
 
 
+def prenom_ou_debut_de_l_email(user):
+    """
+    Le prénom, court, pour la colonne « Inscrit·es » de la fiche du planning. Sans prénom :
+    les 6 premiers caractères de l'email (assez pour reconnaître la personne).
+    / The first name for the sign-ups column; without one, the email's first 6 characters.
+
+    LOCALISATION : Administration/admin/benevolat.py
+    """
+    if user.first_name and user.first_name.strip():
+        return user.first_name.strip()
+    return user.email[:6]
+
+
+# TacheBenevoleAdmin reste enregistré même sans entrée de menu : c'est lui qui sert la
+# fenêtre « ajouter une tâche » du bouton à côté du champ « Tâche » des inlines.
+# / Kept registered without a menu entry: it serves the inlines' "add a task" popup.
 @admin.register(TacheBenevole, site=staff_admin_site)
 class TacheBenevoleAdmin(ModelAdmin):
     list_display = ["name", "description"]
@@ -97,9 +113,13 @@ class BesoinBenevoleInline(TabularInline):
     LOCALISATION : Administration/admin/benevolat.py
 
     Un besoin saisi un jour fermé est enregistré quand même : un lieu fermé au public
-    peut avoir besoin de bénévoles ce jour-là (inventaire, ménage de fond).
-    La colonne « Fermeture » le signale, sans bloquer.
-    / A need on a closed day is saved anyway; the "Closure" column only warns.
+    peut avoir besoin de bénévoles ce jour-là (inventaire, ménage de fond). La colonne
+    « Fermeture » de la page « Besoins » le signale.
+    / A need on a closed day is saved anyway; the "Needs" page shows the closure.
+
+    Une nouvelle tâche se crée sans quitter la fiche : bouton à côté du champ « Tâche »
+    (fenêtre d'ajout de TacheBenevoleAdmin, qui reste enregistré pour ça).
+    / A new task is created from the button next to the "Tâche" field.
 
     Seulement les besoins À VENIR (d'aujourd'hui, au fuseau du lieu) : le passé reste
     en base (D33) et se consulte sur la page « Besoins ».
@@ -107,23 +127,22 @@ class BesoinBenevoleInline(TabularInline):
     """
     model = BesoinBenevole
     extra = 0
-    fields = ["date", "tache", "heure_debut", "heure_fin", "nombre_souhaite", "inscrits", "fermeture"]
-    readonly_fields = ["inscrits", "fermeture"]
+    fields = ["date", "tache", "heure_debut", "heure_fin", "nombre_souhaite", "inscrits"]
+    readonly_fields = ["inscrits"]
 
     def get_queryset(self, request):
-        # Précharge ce que lisent les colonnes « Inscrit·es » et « Fermeture » : sans ça,
-        # chaque ligne fait 3 à 4 requêtes, et « Répéter » crée des centaines de lignes.
-        # / Prefetch what the two read-only columns read: no per-row queries.
+        # Précharge ce que lit la colonne « Inscrit·es » : sans ça, chaque ligne fait
+        # plusieurs requêtes, et « Répéter » crée des centaines de lignes.
         # « tache » : lue par BesoinBenevole.__str__, le titre de chaque ligne.
+        # / Prefetch what the sign-ups column reads: no per-row queries.
         from booking.benevolat import aujourd_hui_au_lieu
 
         return super().get_queryset(request).filter(
             date__gte=aujourd_hui_au_lieu(),
         ).select_related(
-            "planning__calendrier", "tache",
+            "tache",
         ).prefetch_related(
             "inscriptions__user",
-            "planning__calendrier__closed_periods",
         )
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
@@ -145,24 +164,14 @@ class BesoinBenevoleInline(TabularInline):
         if besoin._state.adding:
             return "—"
 
-        noms_des_inscrits = []
+        prenoms_des_inscrits = []
         for inscription in besoin.inscriptions.all():
-            noms_des_inscrits.append(nom_complet_et_email(inscription.user))
+            prenoms_des_inscrits.append(prenom_ou_debut_de_l_email(inscription.user))
 
-        compteur = f"{len(noms_des_inscrits)}/{besoin.nombre_souhaite}"
-        if not noms_des_inscrits:
+        compteur = f"{len(prenoms_des_inscrits)}/{besoin.nombre_souhaite}"
+        if not prenoms_des_inscrits:
             return compteur
-        return f"{compteur} : {', '.join(noms_des_inscrits)}"
-
-    @admin.display(description=_("Fermeture"))
-    def fermeture(self, besoin):
-        if besoin._state.adding:
-            return "—"
-
-        libelle_de_fermeture = besoin.planning.libelle_de_fermeture(besoin.date)
-        if libelle_de_fermeture is None:
-            return "—"
-        return _("Fermé : %(libelle)s") % {"libelle": libelle_de_fermeture}
+        return f"{compteur} : {', '.join(prenoms_des_inscrits)}"
 
     # Un inline a ses propres permissions : sans ces méthodes, Django demande
     # booking.view_besoinbenevole…, que l'admin d'un lieu n'a pas, et la fiche du
@@ -197,6 +206,15 @@ class LigneDeSemaineTypeInline(TabularInline):
     model = LigneDeSemaineType
     extra = 0
     fields = ["jour_de_la_semaine", "tache", "heure_debut", "heure_fin", "nombre_souhaite"]
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        # La colonne est étroite : sans largeur minimale, on lit « Ven… » au lieu de
+        # « Vendredi ». Style en ligne : Unfold n'a pas les classes Tailwind sur mesure.
+        # / Narrow column: a minimum width keeps the full day name readable.
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if db_field.name == "jour_de_la_semaine" and formfield is not None:
+            formfield.widget.attrs["style"] = "min-width: 9rem;"
+        return formfield
 
     def get_queryset(self, request):
         # « tache » : lue par LigneDeSemaineType.__str__, le titre de chaque ligne.
@@ -384,16 +402,16 @@ class PlanningBenevoleAdmin(ModelAdmin):
         "slug",
         "page_publique",
         "description",
-        "published",
         "adhesions_requises",
         "calendrier",
         "delai_desinscription_heures",
         "type_de_planning",
-        "date_de_debut",
-        "date_de_fin",
         "horizon_en_semaines",
         "besoins_crees_jusqu_au",
         "tous_les_besoins",
+        # En dernier : on règle le planning, puis on l'active.
+        # / Last: set up the planning, then switch it on.
+        "published",
     ]
     prepopulated_fields = {"slug": ("name",)}
     readonly_fields = ["page_publique", "besoins_crees_jusqu_au", "tous_les_besoins"]
@@ -401,8 +419,6 @@ class PlanningBenevoleAdmin(ModelAdmin):
     # Les champs de la semaine type n'apparaissent qu'en mode « Chaque semaine ».
     # / Template-week fields only show in "every week" mode.
     conditional_fields = {
-        "date_de_debut": "type_de_planning == 'HEBDOMADAIRE'",
-        "date_de_fin": "type_de_planning == 'HEBDOMADAIRE'",
         "horizon_en_semaines": "type_de_planning == 'HEBDOMADAIRE'",
         "besoins_crees_jusqu_au": "type_de_planning == 'HEBDOMADAIRE'",
     }
@@ -484,14 +500,20 @@ class PlanningBenevoleAdmin(ModelAdmin):
                     lignes_qui_changent_de_jour.append(ligne)
             lignes_ajoutees = list(formset_des_lignes.new_objects)
 
-        ancienne_date_de_debut = None
-        if "date_de_debut" in form.changed_data:
-            ancienne_date_de_debut = form.initial.get("date_de_debut")
+        # Planning réactivé : des lignes ajoutées ou changées de jour pendant la pause
+        # n'ont pas leurs créneaux dans les semaines déjà ouvertes (jusqu'à
+        # besoins_crees_jusqu_au), et la création normale ne repasse jamais avant cette
+        # date. On traite donc toutes les lignes comme nouvelles : les créneaux qui
+        # existent déjà sont ignorés (doublons). Conséquence assumée (D35) : un créneau
+        # supprimé à la main dans ces semaines revient à la réactivation.
+        # / Reactivated planning: every row is treated as new to fill the open weeks.
+        planning_vient_d_etre_reactive = "published" in form.changed_data and planning.published
+        if planning_vient_d_etre_reactive:
+            lignes_ajoutees = list(planning.semaine_type.all())
 
         bilan = appliquer_la_semaine_type_modifiee(
             planning, besoins_des_lignes_supprimees, lignes_modifiees,
             lignes_qui_changent_de_jour, lignes_ajoutees,
-            ancienne_date_de_debut=ancienne_date_de_debut,
         )
         message = message_de_la_semaine_type(bilan, planning)
         if message is not None:

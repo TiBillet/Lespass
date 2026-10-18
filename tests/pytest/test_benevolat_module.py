@@ -26,7 +26,6 @@ from BaseBillet.models import Configuration
 PAGES_DU_BENEVOLAT = [
     "/admin/booking/planningbenevole/",
     "/admin/booking/besoinbenevole/",
-    "/admin/booking/tachebenevole/",
     "/admin/booking/inscriptionbenevole/",
 ]
 
@@ -69,7 +68,7 @@ def test_le_module_a_sa_carte_dans_le_tableau_de_bord():
 
 
 @pytest.mark.django_db
-def test_module_allume_le_bloc_benevolat_porte_ses_quatre_pages(tenant):
+def test_module_allume_le_bloc_benevolat_porte_ses_trois_pages(tenant):
     with tenant_context(tenant):
         sections = sections_de_la_barre_laterale(module_benevolat=True)
 

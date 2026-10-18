@@ -5,6 +5,7 @@ Trouve les chaines a corriger dans locale/fr et locale/en apres un makemessages 
   - fuzzy (traduction perimee, AFFICHEE -> a corriger)
   - fuites de langue (msgstr vide alors que la source est de l'autre langue)
   - msgstr NON fuzzy ecrit dans la mauvaise langue (ex: francais dans locale/en)
+  - msgstr vide sur un msgid de langue AMBIGUE ("Pay now") : l'agent tranche
 
 Les entrees deja correctes (source == langue du fichier, msgstr vide = fallback
 gettext OK) sont IGNOREES : c'est ce qui evite des milliers de faux positifs.
@@ -58,8 +59,15 @@ def main():
         if wrong_en:
             nb_wrong["en"] += 1
 
-        need_fr = fr["fuzzy"] or wrong_fr or (fr["msgstr"] == "" and lang == "en")
-        need_en = en["fuzzy"] or wrong_en or (en["msgstr"] == "" and lang == "fr")
+        # Langue AMBIGUE (msgid court, sans mot-outil : "Pay now", "Download CSV",
+        # "Cost") : on ne peut pas savoir si le fallback gettext est dans la bonne
+        # langue. On envoie donc l'item aux agents pour chaque fichier ou le msgstr
+        # est vide. L'agent decide la langue. Sa sortie est toujours ecrite, meme
+        # identique au msgid : le msgstr n'est plus vide, l'item ne revient plus.
+        # / AMBIGUOUS language: send to agents for each empty msgstr; the agent
+        # decides; the output is always written so the item is not re-extracted.
+        need_fr = fr["fuzzy"] or wrong_fr or (fr["msgstr"] == "" and lang in ("en", "amb"))
+        need_en = en["fuzzy"] or wrong_en or (en["msgstr"] == "" and lang in ("fr", "amb"))
         if not (need_fr or need_en):
             continue
 

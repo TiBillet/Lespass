@@ -42,10 +42,20 @@ Chaque item :
 ## Ce que tu produis, par item -> { "i":<index>, "fr":<...|null>, "en":<...|null> }
 Champ "fr" (si nfr==true, sinon null) :
 - src=="fr"  : le msgid est DEJA francais -> "fr" = le msgid VERBATIM.
-- src=="en"/"amb" : traduis le msgid en FRANCAIS clair et naturel (UI logiciel, FALC).
+- src=="en"  : traduis le msgid en FRANCAIS clair et naturel (UI logiciel, FALC).
 Champ "en" (si nen==true, sinon null) :
 - src=="en"  : le msgid est DEJA anglais -> "en" = le msgid VERBATIM.
-- src=="fr"/"amb" : traduis le msgid en ANGLAIS clair et naturel (software UI).
+- src=="fr"  : traduis le msgid en ANGLAIS clair et naturel (software UI).
+
+## Cas src=="amb" (langue du msgid inconnue : "Pay now", "Brasserie", "Export FEC")
+Decide d'abord la langue du msgid d'apres le sens, puis :
+- msgid francais -> "fr" = msgid VERBATIM ; "en" = traduction anglaise.
+- msgid anglais  -> "fr" = traduction francaise ; "en" = msgid VERBATIM.
+- libelle bilingue "FR / EN", nom propre, sigle, URL, code (Sunmi Cloud, SIREN,
+  HMAC, Postiz, OK...) ou mot identique dans les deux langues (Type, Pages,
+  Newsletter) -> msgid VERBATIM dans les deux champs.
+Une sortie VERBATIM affiche exactement ce que le site affiche deja :
+dans le doute, VERBATIM est le choix sans risque.
 
 ## REGLES ABSOLUES (sinon le logiciel casse)
 1. PRESERVE EXACTEMENT placeholders et balises, sans les traduire ni les renommer :
@@ -54,7 +64,6 @@ Champ "en" (si nen==true, sinon null) :
 2. Garde les espaces de bord et la ponctuation de bord identiques au msgid.
 3. Calque la forme (pas de point/guillemet ajoute ou retire abusivement).
 4. Ignore totalement bad_fr/bad_en (fuzzy errones ou mauvaise langue).
-5. Si src=="amb", choisis la langue la plus plausible d'apres le sens.
 
 ## Sortie
 Ecris ${workdir}/out_${start}.json : un tableau JSON STRICT (UTF-8, pas de BOM,

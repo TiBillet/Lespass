@@ -352,8 +352,12 @@ def creer_les_besoins_des_semaines_types_du_lieu():
     from booking.models import PlanningBenevole
 
     nombre_de_besoins_crees = 0
-    plannings_hebdomadaires = PlanningBenevole.objects.filter(type_de_planning=PlanningBenevole.HEBDOMADAIRE)
-    for planning in plannings_hebdomadaires:
+    # Seulement les plannings actifs : un planning désactivé ne crée plus de créneaux.
+    # / Active plannings only: a deactivated planning creates nothing.
+    plannings_hebdomadaires_actifs = PlanningBenevole.objects.filter(
+        type_de_planning=PlanningBenevole.HEBDOMADAIRE, published=True,
+    )
+    for planning in plannings_hebdomadaires_actifs:
         nombre_de_besoins_crees += creer_les_besoins_de_la_semaine_type(planning)
 
     logger.info(f"creer_les_besoins_des_semaines_types : {nombre_de_besoins_crees} besoins créés")

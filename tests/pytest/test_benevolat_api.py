@@ -484,7 +484,6 @@ def test_un_besoin_cree_ou_modifie_par_l_api_sur_un_planning_hebdomadaire_est_ma
     uuid_tache, uuid_planning, _slug = creer_planning_et_tache(lieu)
     planning = PlanningBenevole.objects.get(pk=uuid_planning)
     planning.type_de_planning = PlanningBenevole.HEBDOMADAIRE
-    planning.date_de_debut = lieu.aujourd_hui
     planning.horizon_en_semaines = 1
     planning.save()
     LigneDeSemaineType.objects.create(

@@ -7,15 +7,17 @@ LOCALISATION : booking/booking_engine.py
 Implémente les quatre ensembles de §3.2 :
   O — complémentaire des ClosedPeriods fusionnées dans la fenêtre
   W — WeeklyOpening déroulé sur O  (w ∈ W ⟺ ∃ o ∈ O, w ⊆ o)
-  E — W annoté de la capacité restante par créneau
+  E — W annoté de la capacité restante par créneau (0 si un événement
+      bloque la ressource sur ce créneau : Event.ressource_bloquee)
   B — réservation membre dans E' ; validation + création atomique
 
 Aucun ensemble n'est persisté — calculé à la volée à chaque requête.
 
 Fonctions pures (sans DB) : merge_intervals, compute_open_intervals,
-  generate_theoretical_slots, compute_remaining_capacity
+  generate_theoretical_slots, compute_remaining_capacity,
+  slot_overlaps_a_blocked_interval
 Accès DB : get_opening_entries_for_resource, get_closed_periods_for_resource,
-  get_existing_bookings_for_resource
+  get_existing_bookings_for_resource, get_event_intervals_blocking_resource
 Orchestrateurs : compute_slots → E,  validate_new_booking → B
 
 DÉPENDANCE MOTEUR DE BASE DE DONNÉES :
@@ -355,6 +357,51 @@ def get_existing_bookings_for_resource(resource, window: Interval = None):
     )
 
 
+def get_event_intervals_blocking_resource(resource, window: Interval):
+    """
+    Retourne les intervalles des événements qui bloquent la ressource
+    (Event.ressource_bloquee) et chevauchent la fenêtre.
+    / Returns the intervals of events blocking the resource that overlap the window.
+
+    LOCALISATION : booking/booking_engine.py
+
+    Un événement archivé ne bloque plus rien. Un événement non publié bloque
+    déjà : la salle est prise même si l'événement n'est pas encore annoncé.
+    Un événement sans date de fin est ignoré : l'admin l'interdit quand une
+    ressource est bloquée (EventForm.clean).
+    / Archived events block nothing; unpublished ones already block.
+    """
+    from BaseBillet.models import Event
+
+    evenements_qui_bloquent = Event.objects.filter(
+        ressource_bloquee=resource,
+        archived=False,
+        end_datetime__isnull=False,
+        datetime__lt=window.end,
+        end_datetime__gt=window.start,
+    ).only("datetime", "end_datetime")
+
+    intervalles_bloques = []
+    for evenement in evenements_qui_bloquent:
+        intervalles_bloques.append(
+            Interval(start=evenement.datetime, end=evenement.end_datetime)
+        )
+    return intervalles_bloques
+
+
+def slot_overlaps_a_blocked_interval(slot, blocked_intervals):
+    """
+    Vrai si le créneau chevauche au moins un intervalle bloqué (pure).
+    / True if the slot overlaps at least one blocked interval (pure).
+
+    LOCALISATION : booking/booking_engine.py
+    """
+    for intervalle_bloque in blocked_intervals:
+        if slot.interval.overlaps(intervalle_bloque):
+            return True
+    return False
+
+
 # ─── Orchestrateurs / Orchestrators ──────────────────────────────────────────
 
 def compute_slots(resource, window: Interval = None, reference_now=None):
@@ -416,6 +463,7 @@ def compute_slots(resource, window: Interval = None, reference_now=None):
     opening_entries   = get_opening_entries_for_resource(resource)
     closed_periods    = get_closed_periods_for_resource(resource)
     existing_bookings = get_existing_bookings_for_resource(resource, window=effective_window)
+    blocked_intervals = get_event_intervals_blocking_resource(resource, window=effective_window)
 
     open_intervals = compute_open_intervals(
         closed_periods=closed_periods,
@@ -435,6 +483,11 @@ def compute_slots(resource, window: Interval = None, reference_now=None):
             capacity=resource.capacity,
             existing_bookings=existing_bookings,
         )
+        # Un événement occupe la ressource sur ce créneau : il est complet.
+        # validate_new_booking passe aussi par ici, la réservation est donc refusée.
+        # / An event occupies the resource: the slot is full, booking is refused too.
+        if slot_overlaps_a_blocked_interval(bookable, blocked_intervals):
+            bookable.remaining_capacity = 0
         result.append(bookable)
 
     return result

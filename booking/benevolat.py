@@ -16,7 +16,6 @@ import datetime
 from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
@@ -735,23 +734,26 @@ def creer_des_besoins_pour_ces_lignes(planning, lignes, du, au):
 
 def creer_les_besoins_de_la_semaine_type(planning):
     """
-    Ouvre les semaines à venir d'un planning hebdomadaire : crée les besoins de sa semaine
-    type qui manquent dans la fenêtre.
-    / Opens the coming weeks of a weekly planning: creates the missing template-week needs.
+    Ouvre les semaines à venir d'un planning hebdomadaire ACTIF : crée les besoins de sa
+    semaine type qui manquent dans la fenêtre.
+    / Opens the coming weeks of an ACTIVE weekly planning: creates the missing needs.
 
     LOCALISATION : booking/benevolat.py
     Appelée à l'enregistrement de la fiche (Administration/admin/benevolat.py,
     PlanningBenevoleAdmin.save_related) et chaque nuit (booking/tasks.py,
     creer_les_besoins_des_semaines_types).
 
+    Planning ponctuel ou inactif (published faux) : rien. Réactivé, il reprend à partir
+    du jour même : les jours où il était inactif ne sont pas rattrapés.
+    / One-off or inactive planning: nothing. Reactivated: resumes from today.
+
     Fenêtre :
-    - du = le plus tard entre date_de_debut, aujourd'hui (au lieu) et le lendemain de
-      besoins_crees_jusqu_au ;
-    - au = le plus tôt entre date_de_fin et aujourd'hui + horizon_en_semaines.
+    - du = le plus tard entre aujourd'hui (au lieu) et le lendemain de besoins_crees_jusqu_au ;
+    - au = aujourd'hui + horizon_en_semaines.
     Fenêtre vide (du > au) : rien à faire. Sinon besoins_crees_jusqu_au passe à au, qui
     est forcément après l'ancienne valeur (du > ancienne valeur et au >= du) : il ne
     recule jamais. Ce qui est avant n'est jamais recréé : un besoin supprimé à la main
-    reste supprimé.
+    reste supprimé. Les jours fermés du calendrier du planning sont sautés.
     / Window [du, au]; besoins_crees_jusqu_au moves to au and never goes back.
 
     INDISPENSABLE : le verrou (select_for_update) sur le planning. L'enregistrement de la
@@ -765,16 +767,14 @@ def creer_les_besoins_de_la_semaine_type(planning):
     """
     with transaction.atomic():
         planning = PlanningBenevole.objects.select_for_update().get(pk=planning.pk)
-        if planning.type_de_planning != PlanningBenevole.HEBDOMADAIRE or planning.date_de_debut is None:
+        if planning.type_de_planning != PlanningBenevole.HEBDOMADAIRE or not planning.published:
             return 0
 
         aujourd_hui = aujourd_hui_au_lieu()
-        du = max(planning.date_de_debut, aujourd_hui)
+        du = aujourd_hui
         if planning.besoins_crees_jusqu_au is not None:
             du = max(du, planning.besoins_crees_jusqu_au + datetime.timedelta(days=1))
         au = aujourd_hui + datetime.timedelta(weeks=planning.horizon_en_semaines)
-        if planning.date_de_fin is not None:
-            au = min(au, planning.date_de_fin)
         if du > au:
             return 0
 
@@ -787,8 +787,7 @@ def creer_les_besoins_de_la_semaine_type(planning):
 
 
 def appliquer_la_semaine_type_modifiee(planning, besoins_des_lignes_supprimees, lignes_modifiees,
-                                       lignes_qui_changent_de_jour, lignes_ajoutees,
-                                       ancienne_date_de_debut=None):
+                                       lignes_qui_changent_de_jour, lignes_ajoutees):
     """
     Répercute une semaine type modifiée sur les besoins FUTURS (D30), puis ouvre les
     semaines manquantes. Appelée par l'admin APRÈS l'enregistrement des lignes.
@@ -803,13 +802,8 @@ def appliquer_la_semaine_type_modifiee(planning, besoins_des_lignes_supprimees, 
       ceux qui ne tombent plus le bon jour de la semaine (la ligne a changé de jour) sont
       supprimés.
     - Ligne ajoutée, ou qui change de jour : ses besoins sont créés d'aujourd'hui à
-      besoins_crees_jusqu_au (doublons ignorés). La suite vient de
-      creer_les_besoins_de_la_semaine_type.
-    - Période raccourcie (date_de_debut plus tard, date_de_fin plus tôt) : les besoins
-      futurs sans inscrit qui suivent une ligne et sortent de la période sont supprimés.
-    - Période étendue vers l'avant (date_de_debut plus tôt) : les jours entre le nouveau
-      et l'ancien premier jour sont créés. Sans cette étape, ils seraient perdus :
-      besoins_crees_jusqu_au est déjà plus loin, la création normale ne repasse pas avant.
+      besoins_crees_jusqu_au (doublons ignorés), si le planning est actif. La suite vient
+      de creer_les_besoins_de_la_semaine_type.
     Les besoins manuels (sans ligne) ne sont jamais touchés.
     / Needs with sign-ups never move. Manual needs are never touched.
 
@@ -818,7 +812,6 @@ def appliquer_la_semaine_type_modifiee(planning, besoins_des_lignes_supprimees, 
     :param lignes_modifiees: les LigneDeSemaineType modifiées (déjà enregistrées)
     :param lignes_qui_changent_de_jour: parmi elles, celles dont le jour a changé
     :param lignes_ajoutees: les LigneDeSemaineType nouvelles (déjà enregistrées)
-    :param ancienne_date_de_debut: le premier jour avant l'enregistrement, s'il a changé
     :return: dict {"crees", "mis_a_jour", "supprimes", "avec_inscrits"}
     """
     bilan = {"crees": 0, "mis_a_jour": 0, "supprimes": 0, "avec_inscrits": 0}
@@ -861,17 +854,6 @@ def appliquer_la_semaine_type_modifiee(planning, besoins_des_lignes_supprimees, 
                 nombre_souhaite=ligne.nombre_souhaite,
             )
 
-        # 3. Période raccourcie / Shortened period
-        if planning.type_de_planning == PlanningBenevole.HEBDOMADAIRE:
-            hors_de_la_periode = Q(date__lt=planning.date_de_debut)
-            if planning.date_de_fin is not None:
-                hors_de_la_periode = hors_de_la_periode | Q(date__gt=planning.date_de_fin)
-            besoins_hors_de_la_periode = planning.besoins.filter(
-                hors_de_la_periode, date__gte=aujourd_hui, ligne_de_semaine_type__isnull=False,
-            )
-            bilan["avec_inscrits"] += besoins_hors_de_la_periode.filter(inscriptions__isnull=False).distinct().count()
-            uuids_a_supprimer += list(besoins_hors_de_la_periode.values_list("pk", flat=True))
-
         # INDISPENSABLE : le filtre « sans inscrit » est posé ICI, au moment de supprimer.
         # Un besoin qui a des inscrits n'est jamais supprimé (ses inscriptions partiraient
         # en cascade), même si une inscription arrive pendant l'enregistrement.
@@ -880,34 +862,18 @@ def appliquer_la_semaine_type_modifiee(planning, besoins_des_lignes_supprimees, 
             pk__in=uuids_a_supprimer, inscriptions__isnull=True,
         ).delete()
 
-        # 4. Lignes ajoutées ou changées de jour : jusqu'à la fenêtre déjà ouverte.
-        # / New rows or rows on a new day: up to the already open window.
+        # 3. Lignes ajoutées ou changées de jour : jusqu'à la fenêtre déjà ouverte.
+        # Un planning inactif ne crée rien.
+        # / New rows or rows on a new day: up to the already open window. Inactive: nothing.
         lignes_a_creer = list(lignes_ajoutees) + list(lignes_qui_changent_de_jour)
         ouvert_jusqu_au = planning.besoins_crees_jusqu_au
-        if (planning.type_de_planning == PlanningBenevole.HEBDOMADAIRE
-                and ouvert_jusqu_au is not None and lignes_a_creer):
-            du = max(aujourd_hui, planning.date_de_debut)
-            au = ouvert_jusqu_au
-            if planning.date_de_fin is not None:
-                au = min(au, planning.date_de_fin)
-            bilan["crees"] += creer_des_besoins_pour_ces_lignes(planning, lignes_a_creer, du, au)
-
-        # 4 bis. Premier jour avancé : les jours d'avant l'ancien premier jour.
-        # / First day moved earlier: the days before the old first day.
-        premier_jour_avance = (
-            ancienne_date_de_debut is not None
-            and planning.date_de_debut is not None
-            and planning.date_de_debut < ancienne_date_de_debut
+        planning_actif_et_hebdomadaire = (
+            planning.type_de_planning == PlanningBenevole.HEBDOMADAIRE and planning.published
         )
-        if (planning.type_de_planning == PlanningBenevole.HEBDOMADAIRE
-                and ouvert_jusqu_au is not None and premier_jour_avance):
-            du = max(aujourd_hui, planning.date_de_debut)
-            au = min(ancienne_date_de_debut - datetime.timedelta(days=1), ouvert_jusqu_au)
-            if planning.date_de_fin is not None:
-                au = min(au, planning.date_de_fin)
-            bilan["crees"] += creer_des_besoins_pour_ces_lignes(planning, list(planning.semaine_type.all()), du, au)
+        if planning_actif_et_hebdomadaire and ouvert_jusqu_au is not None and lignes_a_creer:
+            bilan["crees"] += creer_des_besoins_pour_ces_lignes(planning, lignes_a_creer, aujourd_hui, ouvert_jusqu_au)
 
-        # 5. Les semaines pas encore ouvertes. / Weeks not yet open.
+        # 4. Les semaines pas encore ouvertes. / Weeks not yet open.
         bilan["crees"] += creer_les_besoins_de_la_semaine_type(planning)
 
     return bilan

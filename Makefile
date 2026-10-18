@@ -9,7 +9,7 @@
 # goals, so they are declared as no-op targets and passed to the script.
 FAMILLES_E2E := $(shell sed -n 's/^ *\([a-z_]*\): famille E2E.*/\1/p' pytest.ini | tr '_' '-')
 FAMILLES_DEMANDEES := $(filter $(FAMILLES_E2E),$(MAKECMDGOALS))
-CIBLES := help test e2e e2e-visible coverage
+CIBLES := help test e2e e2e-visible coverage update
 
 # Un mot inconnu arrete tout AVANT de lancer quoi que ce soit : sinon une faute de frappe
 # (make e2e-visible adhesio) lancerait d'abord toute la suite.

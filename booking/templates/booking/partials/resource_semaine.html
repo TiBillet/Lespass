@@ -1,0 +1,257 @@
+{% load i18n l10n tibitags %}
+<!--
+ZONE D'UNE SEMAINE DU CALENDRIER D'UNE RESSOURCE
+/ One week zone of a resource calendar
+
+LOCALISATION : booking/templates/booking/partials/resource_semaine.html
+
+Inclus par booking/views/resource.html (page entière), et rendu seul par
+booking/views.py:resource_page() quand un lien de semaine le demande
+(en-tête HX-Target: booking-calendrier-semaine).
+
+FLUX D'UN LIEN DE SEMAINE :
+1. Clic sur « Semaine suivante » : href pour le repli sans JS, hx-get pour htmx.
+2. hx-target / hx-swap sont posés sur la zone : les liens en héritent.
+3. La vue rend ce partial seul ; il remplace la zone (outerHTML).
+4. hx-push-url met ?semaine= dans l'adresse (partageable, survit au rechargement).
+5. resource.html pose le focus sur le titre de la semaine (lecteur d'écran).
+
+Aucun <script> ici : il s'exécuterait à chaque changement de semaine. Le JS
+(clic sur un créneau, navigation mobile par jour) est dans resource.html.
+/ No <script> here: it would run on every week change.
+
+Contexte attendu / Expected context : resource, semaine (lundi, titre, precedente,
+suivante), calendar_weeks, time_rows, mobile_days, mobile_time_rows, mobile_day_bar.
+-->
+<div id="booking-calendrier-semaine"
+     data-semaine="{{ semaine.lundi|date:'Y-m-d' }}"
+     hx-target="#booking-calendrier-semaine"
+     hx-swap="outerHTML"
+     data-testid="booking-calendrier-semaine">
+
+    <!--
+    Navigation par semaine (desktop et mobile).
+    Après un changement de semaine, resource.html pose le focus clavier sur le titre.
+    Un lien absent laisse une case vide, pour garder le titre au milieu.
+    / Week navigation. After a week change, resource.html focuses the title.
+    -->
+    <nav class="calendar-nav" aria-label="{% translate 'Changer de semaine' %}"
+         data-testid="booking-calendar-nav">
+        {% if semaine.precedente %}
+            <a id="calendar-prev-week"
+               class="btn btn-primary btn-sm"
+               href="{% url 'booking-resource' pk=resource.pk %}?semaine={{ semaine.precedente|date:'Y-m-d' }}"
+               hx-get="{% url 'booking-resource' pk=resource.pk %}?semaine={{ semaine.precedente|date:'Y-m-d' }}"
+               hx-push-url="true"
+               aria-label="{% translate 'Semaine précédente' %}"
+               data-testid="booking-calendar-prev-week">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+            </a>
+        {% else %}
+            <span class="calendar-nav-vide" aria-hidden="true"></span>
+        {% endif %}
+
+        {# tabindex -1 : après un changement de semaine, resource.html pose le focus ici. #}
+        {# / Focus lands here after a week change. #}
+        <h2 id="calendar-week-label" class="calendar-week-label" tabindex="-1"
+            data-testid="booking-calendar-week-label">{{ semaine.titre }}</h2>
+
+        {% if semaine.suivante %}
+            <a id="calendar-next-week"
+               class="btn btn-primary btn-sm"
+               href="{% url 'booking-resource' pk=resource.pk %}?semaine={{ semaine.suivante|date:'Y-m-d' }}"
+               hx-get="{% url 'booking-resource' pk=resource.pk %}?semaine={{ semaine.suivante|date:'Y-m-d' }}"
+               hx-push-url="true"
+               aria-label="{% translate 'Semaine suivante' %}"
+               data-testid="booking-calendar-next-week">
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </a>
+        {% else %}
+            <span class="calendar-nav-vide" aria-hidden="true"></span>
+        {% endif %}
+    </nav>
+
+    {% if calendar_weeks %}
+        <!--
+        ===========================
+        VERSION DESKTOP : la grille heures / jours de la semaine
+        / DESKTOP: the week's hours / days grid
+        ===========================
+        -->
+        <div class="booking-calendar-desktop d-none d-md-block" data-testid="booking-calendar-desktop">
+            <div class="calendar-weeks" data-testid="booking-calendar-weeks">
+                {% for week in calendar_weeks %}
+                    <div class="calendar-week"
+                         data-week="{{ week.week }}"
+                         data-year="{{ week.year }}"
+                         data-testid="booking-calendar-week">
+
+                        <div class="calendar-grid"
+                             style="grid-template-columns: 60px repeat({{ week.days|length }}, 1fr);
+                                    grid-template-rows: auto repeat({{ time_rows|length }}, 1fr);"
+                             data-testid="booking-calendar-grid">
+
+                            <div class="calendar-header-cell calendar-corner"></div>
+
+                            {% for day in week.days %}
+                                <div class="calendar-header-cell calendar-day-header"
+                                     data-testid="booking-calendar-day-header">
+                                    {{ day.date|date:"l d F" }}
+                                </div>
+                            {% endfor %}
+
+                            {% for row in time_rows %}
+                                <div class="calendar-hour-label"
+                                     style="grid-row: {{ row.row_index }};"
+                                     data-testid="booking-calendar-hour-label">
+                                    {{ row.label }}
+                                </div>
+                                {% for day in week.days %}
+                                    <div class="calendar-cell {% if row.minute == 0 %}calendar-cell-hour{% endif %}"
+                                         style="grid-row: {{ row.row_index }}; grid-column: {{ forloop.counter|add:1 }};"
+                                         data-testid="booking-calendar-cell"
+                                    ></div>
+                                {% endfor %}
+                            {% endfor %}
+
+                            {% for day in week.days %}
+                                {% for group in day.groups %}
+                                    {% for slot in group.slots %}
+                                        <div class="calendar-slot {% if slot.in_cart %}calendar-slot-cart{% elif slot.remaining_capacity > 0 %}calendar-slot-free{% else %}calendar-slot-busy{% endif %}"
+                                             style="grid-row: {{ slot.row_start }} / {{ slot.row_end }}; grid-column: {{ slot.column_index }};"
+                                             data-start-datetime="{{ slot.start|date:'Y-m-d\TH:i:s' }}"
+                                             data-group-end="{{ group.end|date:'Y-m-d\TH:i:s' }}"
+                                             data-remaining-capacity="{{ slot.remaining_capacity }}"
+                                             data-testid="{% if slot.in_cart %}booking-calendar-slot-cart{% elif slot.remaining_capacity > 0 %}booking-calendar-slot-free{% else %}booking-calendar-slot-busy{% endif %}"
+                                             role="{% if slot.in_cart or slot.remaining_capacity <= 0 %}none{% else %}button{% endif %}"
+                                             tabindex="{% if slot.in_cart or slot.remaining_capacity <= 0 %}-1{% else %}0{% endif %}"
+                                             aria-label="{% if slot.in_cart %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, dans le panier{% endblocktrans %}{% elif slot.remaining_capacity > 0 %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, libre{% endblocktrans %}{% else %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, complet{% endblocktrans %}{% endif %}"
+                                        >
+                                            <span class="calendar-slot-time">{{ slot.start|date:"H\hi" }} - {{ slot.end|date:"H\hi" }}</span>
+                                            {% if resource.capacity > 1 and not slot.in_cart and slot.remaining_capacity > 0 %}
+                                                <span class="calendar-slot-capacity">
+                                                    {% blocktrans count n=slot.remaining_capacity %}{{ n }} place{% plural %}{{ n }} places{% endblocktrans %}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                {% endfor %}
+                            {% endfor %}
+
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!--
+        ===========================
+        VERSION MOBILE : un jour de la semaine à la fois
+        Le premier jour est affiché, sa pastille est active et « jour précédent » est
+        désactivé : l'état initial vient du serveur. Les clics sont gérés dans resource.html.
+        / MOBILE: one day of the week at a time. Initial state comes from the server.
+        ===========================
+        -->
+        <div class="booking-calendar-mobile d-md-none" data-testid="booking-calendar-mobile">
+            <div class="mobile-day-nav" role="group" aria-label="{% translate 'Navigation par jour' %}"
+                 data-testid="booking-mobile-day-nav">
+                <button type="button" id="mobile-prev-day"
+                        class="mobile-day-arrow"
+                        aria-label="{% translate 'Jour précédent' %}"
+                        data-testid="booking-mobile-prev-day"
+                        disabled>
+                    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                </button>
+
+                <div class="mobile-day-bar" id="mobile-day-bar" data-testid="booking-mobile-day-bar">
+                    {% for day_bar in mobile_day_bar %}
+                        <div class="mobile-day-bar-item{% if forloop.first %} active{% endif %}"
+                             data-day-index="{{ day_bar.day_index }}"
+                             data-testid="booking-mobile-day-bar-item"
+                             role="button"
+                             tabindex="0"
+                             aria-label="{% blocktrans with weekday=day_bar.day_number %}Jour {{ weekday }}{% endblocktrans %}">
+                            {{ day_bar.weekday_letter }}
+                            <b>{{ day_bar.day_number }}</b>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <button type="button" id="mobile-next-day"
+                        class="mobile-day-arrow"
+                        aria-label="{% translate 'Jour suivant' %}"
+                        data-testid="booking-mobile-next-day"
+                        {% if mobile_days|length <= 1 %}disabled{% endif %}>
+                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="mobile-days" aria-live="polite" data-testid="booking-mobile-days">
+                {% for mobile_day in mobile_days %}
+                    {% with day=mobile_day.day %}
+                    <div class="mobile-day"
+                         data-day-index="{{ mobile_day.index }}"
+                         data-testid="booking-mobile-day"
+                         {% if not forloop.first %}style="display: none;"{% endif %}>
+
+                        <div class="mobile-grid-wrap"
+                             data-testid="booking-mobile-grid-wrap">
+                            <div class="mobile-grid-head"
+                                 style="grid-template-columns: 44px 1fr;"
+                                 data-testid="booking-mobile-grid-head">
+                                <div></div>
+                                <div class="mobile-day-header"
+                                     data-testid="booking-mobile-day-header">
+                                    {{ day.date|date:"D d" }}
+                                </div>
+                            </div>
+
+                            <div class="mobile-grid-scroll">
+                                <div class="mobile-grid"
+                                     style="grid-template-columns: 44px 1fr;
+                                            grid-template-rows: auto repeat({{ mobile_time_rows|length }}, 1fr);"
+                                     data-testid="booking-mobile-grid">
+
+                                    {% for row in mobile_time_rows %}
+                                        <div class="mobile-hour-label {% if row.minute == 0 %}mobile-cell-hour{% endif %}"
+                                             style="grid-row: {{ row.row_index }};"
+                                             data-testid="booking-mobile-hour-label">
+                                            {{ row.label }}
+                                        </div>
+                                        <div class="mobile-cell"
+                                             style="grid-row: {{ row.row_index }}; grid-column: 2;"
+                                             data-testid="booking-mobile-cell"
+                                        ></div>
+                                    {% endfor %}
+
+                                    {% for group in day.groups %}
+                                    {% for slot in group.slots %}
+                                        <div class="mobile-slot {% if slot.in_cart %}mobile-slot-cart{% elif slot.remaining_capacity > 0 %}mobile-slot-free{% else %}mobile-slot-busy{% endif %}"
+                                             style="grid-row: {{ slot.row_start }} / {{ slot.row_end }}; grid-column: 2;"
+                                             data-start-datetime="{{ slot.start|date:'Y-m-d\TH:i:s' }}"
+                                             data-group-end="{{ group.end|date:'Y-m-d\TH:i:s' }}"
+                                             data-remaining-capacity="{{ slot.remaining_capacity }}"
+                                             data-testid="{% if slot.in_cart %}booking-mobile-slot-cart{% elif slot.remaining_capacity > 0 %}booking-mobile-slot-free{% else %}booking-mobile-slot-busy{% endif %}"
+                                             role="{% if slot.in_cart or slot.remaining_capacity <= 0 %}none{% else %}button{% endif %}"
+                                             tabindex="{% if slot.in_cart or slot.remaining_capacity <= 0 %}-1{% else %}0{% endif %}"
+                                             aria-label="{% if slot.in_cart %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, dans le panier{% endblocktrans %}{% elif slot.remaining_capacity > 0 %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, libre{% endblocktrans %}{% else %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, complet{% endblocktrans %}{% endif %}"
+                                        >
+                                            <span class="mobile-slot-time">{{ slot.start|date:"H\hi" }}</span>
+                                        </div>
+                                    {% endfor %}
+                                    {% endfor %}
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endwith %}
+                {% endfor %}
+            </div>
+        </div>
+    {% else %}
+        <p class="text-muted" data-testid="booking-calendar-empty-week">
+            {% translate "Aucun créneau cette semaine." %}
+        </p>
+    {% endif %}
+</div>

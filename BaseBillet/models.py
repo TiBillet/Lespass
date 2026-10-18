@@ -2328,6 +2328,41 @@ class Event(models.Model):
     private = models.BooleanField(default=False, verbose_name=_("Non-federable event"),
                                   help_text=_("Will not be displayed on shared calendars."))
 
+    # Champs INTERNES : affichés seulement dans l'admin, jamais publiés.
+    # Les serializers d'API et l'export CSV listent leurs champs un par un :
+    # ne pas ajouter ces deux champs à ces listes.
+    # / INTERNAL fields: admin only, never published. API serializers and the
+    # CSV export list their fields explicitly: do not add these two there.
+    commentaire_interne = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Commentaire interne"),
+        help_text=_("Notes pour l'équipe. Jamais publiées : visibles seulement dans l'administration."),
+    )
+    communication_envoyee = models.BooleanField(
+        default=False,
+        verbose_name=_("Comm' envoyée"),
+        help_text=_("Cocher quand la communication de l'événement est partie."),
+    )
+
+    # Ressource du module réservation occupée par l'événement (ex : la salle de
+    # répétition pendant un concert). Ses créneaux qui chevauchent l'événement
+    # deviennent complets : voir booking/booking_engine.py, compute_slots().
+    # La date de fin est alors obligatoire (EventForm.clean, admin).
+    # / Booking resource occupied by the event: overlapping slots become full.
+    ressource_bloquee = models.ForeignKey(
+        "booking.Resource",
+        on_delete=SET_NULL,
+        blank=True,
+        null=True,
+        related_name="evenements_qui_bloquent",
+        verbose_name=_("Ressource bloquée"),
+        help_text=_(
+            "Les créneaux de cette ressource qui chevauchent l'événement ne sont plus réservables. "
+            "La date de fin devient obligatoire."
+        ),
+    )
+
     # Reste vers Product, pas vers le proxy TicketProduct : pour un M2M, le proxy
     # renommerait la colonne product_id de la table de liaison dans chaque tenant.
     # limit_choices_to fait le filtre (formulaires, autocomplete admin, full_clean).

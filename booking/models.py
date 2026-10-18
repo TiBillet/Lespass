@@ -854,11 +854,13 @@ class PlanningBenevole(models.Model):
 
     Deux types (spec §11.2, D29) :
     - PONCTUEL : les besoins sont saisis à la main (ou répétés), datés.
-    - HEBDOMADAIRE : une semaine type (LigneDeSemaineType) crée les besoins réels, de
-      date_de_debut à date_de_fin, horizon_en_semaines à l'avance. Création à
-      l'enregistrement de la fiche et chaque nuit (booking/benevolat.py,
-      creer_les_besoins_de_la_semaine_type).
-    / Two kinds: PONCTUEL (dated needs) or HEBDOMADAIRE (a template week creates real needs).
+    - HEBDOMADAIRE : une semaine type (LigneDeSemaineType) crée les besoins réels, à partir
+      d'aujourd'hui, horizon_en_semaines à l'avance. Création à l'enregistrement de la fiche
+      et chaque nuit (booking/benevolat.py, creer_les_besoins_de_la_semaine_type).
+      Seulement tant que le planning est actif (published). Les pauses (vacances, fermeture
+      d'été) viennent du calendrier des fermetures : ces jours-là, aucun besoin.
+    / Two kinds: PONCTUEL (dated needs) or HEBDOMADAIRE (a template week creates real needs,
+      from today on, while the planning is active).
     """
     PONCTUEL = "PONCTUEL"
     HEBDOMADAIRE = "HEBDOMADAIRE"
@@ -894,10 +896,16 @@ class PlanningBenevole(models.Model):
         help_text=_("Le texte affiché en haut de la page du planning."),
     )
 
+    # Le bouton « activer / désactiver » du planning : il pilote la page publique ET, pour
+    # un planning hebdomadaire, la création automatique des besoins.
+    # / The planning's on/off switch: public page AND automatic needs creation.
     published = models.BooleanField(
         default=False,
-        verbose_name=_("Publié"),
-        help_text=_("Tant que la case n'est pas cochée, le planning est un brouillon invisible sur le site."),
+        verbose_name=_("Actif"),
+        help_text=_(
+            "Actif : le planning est visible sur le site et, s'il est « Chaque semaine », "
+            "il crée ses créneaux tout seul. Inactif : il est invisible et ne crée plus rien."
+        ),
     )
 
     # Vide = ouvert à tout compte connecté.
@@ -924,8 +932,8 @@ class PlanningBenevole(models.Model):
         related_name="plannings_benevoles",
         verbose_name=_("Calendrier des fermetures"),
         help_text=_(
-            "Les jours fermés de ce calendrier sont sautés quand on répète des besoins. "
-            "Laisser vide : aucun jour fermé."
+            "Les jours fermés de ce calendrier ne reçoivent aucun créneau (vacances, "
+            "fermeture d'été). Laisser vide : aucun jour fermé."
         ),
     )
 
@@ -950,22 +958,8 @@ class PlanningBenevole(models.Model):
         ),
     )
 
-    date_de_debut = models.DateField(
-        null=True,
-        blank=True,
-        verbose_name=_("Premier jour"),
-        help_text=_("Chaque semaine : le premier jour où des besoins sont créés."),
-    )
-
-    date_de_fin = models.DateField(
-        null=True,
-        blank=True,
-        verbose_name=_("Dernier jour"),
-        help_text=_("Chaque semaine : laisser vide pour un planning sans fin."),
-    )
-
     horizon_en_semaines = models.PositiveSmallIntegerField(
-        default=8,
+        default=4,
         validators=[MinValueValidator(1), MaxValueValidator(26)],
         verbose_name=_("Semaines ouvertes à l'avance"),
         help_text=_("Chaque semaine : combien de semaines d'avance sont ouvertes aux inscriptions (1 à 26)."),
@@ -1009,17 +1003,6 @@ class PlanningBenevole(models.Model):
         if self.slug in SLUGS_DE_PLANNING_RESERVES:
             raise ValidationError({
                 "slug": _("Cette adresse est réservée. Choisissez-en une autre."),
-            })
-
-        # Planning hebdomadaire : sans premier jour, on ne sait pas d'où créer les besoins.
-        # / Weekly planning: without a first day, needs cannot be created.
-        if self.type_de_planning == self.HEBDOMADAIRE and self.date_de_debut is None:
-            raise ValidationError({
-                "date_de_debut": _("Indiquez le premier jour du planning."),
-            })
-        if self.date_de_debut and self.date_de_fin and self.date_de_fin < self.date_de_debut:
-            raise ValidationError({
-                "date_de_fin": _("Le dernier jour doit être le premier jour, ou après."),
             })
 
     def date_est_fermee(self, une_date):
@@ -1158,7 +1141,7 @@ class LigneDeSemaineType(models.Model):
     # / 0 = Monday … 6 = Sunday, like date.weekday().
     jour_de_la_semaine = models.PositiveSmallIntegerField(
         choices=JOURS_DE_LA_SEMAINE,
-        verbose_name=_("Jour"),
+        verbose_name=_("Jour de la semaine"),
     )
 
     tache = models.ForeignKey(
@@ -1184,7 +1167,7 @@ class LigneDeSemaineType(models.Model):
 
     nombre_souhaite = models.PositiveSmallIntegerField(
         default=1,
-        verbose_name=_("Nombre de personnes souhaité"),
+        verbose_name=_("Nbr postes"),
     )
 
     class Meta:
@@ -1280,7 +1263,7 @@ class BesoinBenevole(models.Model):
 
     nombre_souhaite = models.PositiveSmallIntegerField(
         default=1,
-        verbose_name=_("Nombre de personnes souhaité"),
+        verbose_name=_("Nbr postes"),
         help_text=_("Un objectif, pas un plafond : d'autres personnes peuvent venir en renfort."),
     )
 

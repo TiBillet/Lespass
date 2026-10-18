@@ -3986,6 +3986,25 @@ class EventForm(ModelForm):
             logger.error(f"set gauge max error : {e}")
             pass
 
+    def clean(self):
+        """
+        Une ressource bloquée exige une date de fin : sans elle, on ne sait pas
+        jusqu'à quand bloquer les créneaux de la ressource.
+        / A blocked resource requires an end date: otherwise we cannot know until
+        when to block the resource's slots.
+
+        LOCALISATION : Administration/admin_tenant.py
+        """
+        donnees_nettoyees = super().clean()
+        ressource_bloquee = donnees_nettoyees.get("ressource_bloquee")
+        date_de_fin = donnees_nettoyees.get("end_datetime")
+        if ressource_bloquee and not date_de_fin:
+            self.add_error(
+                "end_datetime",
+                _("Une date de fin est obligatoire pour bloquer une ressource."),
+            )
+        return donnees_nettoyees
+
 
 class EventPricesSummaryTable(TableSection):
     verbose_name = _("Résumé par tarif")
@@ -4271,6 +4290,17 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
                 'display_created_by',
             ),
         }),
+        # Champs internes : jamais publiés. ressource_bloquee est retiré par
+        # get_fieldsets() quand le module réservation est éteint.
+        # / Internal fields, never published. ressource_bloquee is removed by
+        # get_fieldsets() when the booking module is off.
+        (_('Interne (non publié)'), {
+            'fields': (
+                'commentaire_interne',
+                'communication_envoyee',
+                'ressource_bloquee',
+            ),
+        }),
     )
 
     list_display = [
@@ -4280,10 +4310,11 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         'display_datetime_with_weekday',
         'show_time',
         'published',
+        'communication_envoyee',
         'event_detail_page_button',
     ]
 
-    list_editable = ['published', ]
+    list_editable = ['published', 'communication_envoyee', ]
     readonly_fields = (
         'display_valid_tickets_count',
         'event_detail_page_button',
@@ -4409,6 +4440,33 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         if count is None:
             count = instance.valid_tickets_count()
         return f"{count} / {instance.jauge_max}"
+
+    def get_fieldsets(self, request, obj=None):
+        """
+        Les blocs de la fiche événement. Sans le module réservation, le champ
+        « Ressource bloquée » n'a pas de sens : on le retire du bloc « Interne ».
+        / Without the booking module, the "Blocked resource" field is removed.
+
+        LOCALISATION : Administration/admin_tenant.py
+        """
+        fieldsets_de_la_fiche = super().get_fieldsets(request, obj)
+        module_reservation_actif = Configuration.get_solo().module_booking
+        if module_reservation_actif:
+            return fieldsets_de_la_fiche
+
+        # On reconstruit la liste : `fieldsets` est un attribut de la classe, il ne
+        # doit pas être modifié en place.
+        # / Rebuild the list: `fieldsets` is a class attribute, never mutate it.
+        fieldsets_sans_ressource = []
+        for titre_du_bloc, options_du_bloc in fieldsets_de_la_fiche:
+            champs_du_bloc = []
+            for nom_du_champ in options_du_bloc["fields"]:
+                if nom_du_champ != "ressource_bloquee":
+                    champs_du_bloc.append(nom_du_champ)
+            options_sans_ressource = dict(options_du_bloc)
+            options_sans_ressource["fields"] = tuple(champs_du_bloc)
+            fieldsets_sans_ressource.append((titre_du_bloc, options_sans_ressource))
+        return fieldsets_sans_ressource
 
     @display(description=_("Event start"), ordering="datetime")
     def display_datetime_with_weekday(self, instance: Event):

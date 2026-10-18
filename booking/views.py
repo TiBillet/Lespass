@@ -25,6 +25,7 @@ from rest_framework.decorators import action
 
 from BaseBillet.models import Price, PaymentMethod, ProductFormField
 from BaseBillet.views import get_context, reponses_du_formulaire_personnalise_pour_le_panier
+from booking.benevolat import lire_la_semaine_demandee, lundi_de_la_semaine, titre_de_la_semaine
 from booking.booking_engine import Interval, compute_slots, validate_new_booking
 from booking.booking_engine import annotate_slots_for_display
 from booking.booking_engine import validate_resource_booking_form
@@ -117,6 +118,11 @@ class BookingViewSet(viewsets.ViewSet):
                 end_hour = slot.end.hour
                 if slot.end.minute > 0:
                     end_hour += 1
+                # Un créneau qui finit à minuit finit le lendemain à 0 h : il compte
+                # pour 24 h. Aucun créneau ne finit APRÈS minuit (OpeningEntry.clean).
+                # / A slot ending at midnight ends at 0:00 the next day: it counts as 24.
+                if slot.end.date() > slot.start.date():
+                    end_hour = 24
                 if global_max_hour is None or end_hour > global_max_hour:
                     global_max_hour = end_hour
 
@@ -225,6 +231,10 @@ class BookingViewSet(viewsets.ViewSet):
                 end_hour = slot.end.hour
                 if slot.end.minute > 0:
                     end_hour += 1
+                # Un créneau qui finit à minuit compte pour 24 h (voir _build_calendar_weeks).
+                # / A slot ending at midnight counts as 24.
+                if slot.end.date() > slot.start.date():
+                    end_hour = 24
                 if global_max_hour is None or end_hour > global_max_hour:
                     global_max_hour = end_hour
 
@@ -341,15 +351,94 @@ class BookingViewSet(viewsets.ViewSet):
         })
         return render(request, 'booking/views/resources_list.html', context)
 
+    def _semaine_affichee(self, request, resource):
+        """
+        Choisit la semaine du calendrier à afficher, et la fenêtre de calcul de ses créneaux.
+        / Picks the calendar week to display, and the slot computation window.
+
+        LOCALISATION : booking/views.py
+
+        - Paramètre ?semaine=AAAA-MM-JJ (n'importe quel jour, ramené à son lundi).
+        - Absent, illisible ou passé : la semaine en cours, même vide.
+        - Après la dernière semaine réservable : la dernière semaine réservable.
+
+        La fenêtre est construite au FUSEAU DU LIEU. INDISPENSABLE : le moteur
+        (generate_theoretical_slots) lit le fuseau dans window.start. Avec
+        timezone.now() brut (UTC), les créneaux de la semaine en cours seraient décalés.
+        Aucune marge n'est utile en fin de fenêtre : OpeningEntry.clean() interdit
+        qu'un créneau finisse après minuit.
+        / The window is built in the VENUE TIMEZONE: the engine reads the timezone
+        from window.start. No end margin: no slot ends after midnight.
+
+        :return: dict avec lundi, titre, precedente, suivante (lundi ou None), fenetre (Interval)
+        """
+        fuseau_du_lieu = timezone.get_current_timezone()
+        maintenant = timezone.localtime(timezone.now(), fuseau_du_lieu)
+        aujourd_hui = maintenant.date()
+        lundi_de_cette_semaine = lundi_de_la_semaine(aujourd_hui)
+        dernier_jour_reservable = aujourd_hui + datetime.timedelta(days=resource.booking_horizon_days)
+        lundi_de_la_derniere_semaine = lundi_de_la_semaine(dernier_jour_reservable)
+
+        lundi_affiche = lundi_de_cette_semaine
+        semaine_demandee = lire_la_semaine_demandee(request.GET.get("semaine"))
+        if semaine_demandee is not None:
+            lundi_demande = lundi_de_la_semaine(semaine_demandee)
+            if lundi_demande > lundi_de_cette_semaine:
+                lundi_affiche = min(lundi_demande, lundi_de_la_derniere_semaine)
+
+        lundi_precedent = lundi_affiche - datetime.timedelta(days=7)
+        lundi_suivant = lundi_affiche + datetime.timedelta(days=7)
+
+        # Le passé n'est jamais affiché : pas de semaine avant la semaine en cours.
+        # / The past is never shown.
+        semaine_precedente = None
+        if lundi_precedent >= lundi_de_cette_semaine:
+            semaine_precedente = lundi_precedent
+
+        semaine_suivante = None
+        if lundi_suivant <= lundi_de_la_derniere_semaine:
+            semaine_suivante = lundi_suivant
+
+        # Début : lundi 0 h, ou maintenant pour la semaine en cours (créneaux commencés
+        # exclus). Les deux valeurs sont au fuseau du lieu.
+        # / Start: Monday 0:00, or now for the current week. Both in venue timezone.
+        debut_du_lundi = timezone.make_aware(
+            datetime.datetime.combine(lundi_affiche, datetime.time.min), fuseau_du_lieu,
+        )
+        debut_du_lundi_suivant = timezone.make_aware(
+            datetime.datetime.combine(lundi_suivant, datetime.time.min), fuseau_du_lieu,
+        )
+        fenetre_de_la_semaine = Interval(
+            start=max(debut_du_lundi, maintenant),
+            end=debut_du_lundi_suivant,
+        )
+
+        return {
+            'lundi': lundi_affiche,
+            'titre': titre_de_la_semaine(lundi_affiche),
+            'precedente': semaine_precedente,
+            'suivante': semaine_suivante,
+            'fenetre': fenetre_de_la_semaine,
+        }
+
     # ── Détail d'une ressource ───────────────────────────────────────────────
 
     @action(detail=True, methods=['get'], url_path="resource", url_name="resource")
     def resource_page(self, request, pk=None):
         """
-        Affiche le detail d'une ressource et la liste complete de ses creneaux.
-        / Displays a resource's detail and the full list of its slots.
+        Affiche le detail d'une ressource et son calendrier, UNE SEMAINE à la fois.
+        / Displays a resource's detail and its calendar, ONE WEEK at a time.
 
         LOCALISATION : booking/views.py
+
+        GET /booking/<pk>/resource/?semaine=AAAA-MM-JJ
+        - Requête normale : la page entière (booking/views/resource.html).
+        - Lien « semaine précédente / suivante » (htmx, en-tête HX-Target :
+          booking-calendrier-semaine) : la zone de la semaine seule
+          (booking/partials/resource_semaine.html).
+        Le retour arrière du navigateur recharge la page entière (les skins règlent
+        htmx avec historyCacheSize: 0) : il passe par la requête normale.
+        / Normal request: full page. Week link (HX-Target): the week zone only.
 
         Acces : public.
         / Access: public.
@@ -359,7 +448,8 @@ class BookingViewSet(viewsets.ViewSet):
             pk=pk,
         )
 
-        slot_groups = annotate_slots_for_display(compute_slots(resource))
+        semaine = self._semaine_affichee(request, resource)
+        slot_groups = annotate_slots_for_display(compute_slots(resource, semaine['fenetre']))
 
         # Marque les créneaux déjà présents dans le panier.
         # / Mark slots already present in the cart.
@@ -382,7 +472,6 @@ class BookingViewSet(viewsets.ViewSet):
 
         calendar_weeks, min_hour, max_hour = self._build_calendar_weeks(slot_groups)
         mobile_days, mobile_time_rows, mobile_min_hour, mobile_max_hour = self._build_mobile_days(slot_groups)
-        resource_choices = self._get_resource_choices(resource)
 
         # Barre de jours pour la navigation mobile (chaque jour pointe vers sa page).
         # / Day bar for mobile navigation (each day points to its own page).
@@ -412,9 +501,9 @@ class BookingViewSet(viewsets.ViewSet):
                     'row_index': ((hour - min_hour) * 2 + (minute // 30)) + 2,
                 })
 
-        context = get_context(request)
-        context.update({
+        contexte_de_la_semaine = {
             'resource':          resource,
+            'semaine':           semaine,
             'slot_groups':       slot_groups,
             'calendar_weeks':    calendar_weeks,
             'min_hour':          min_hour,
@@ -425,8 +514,18 @@ class BookingViewSet(viewsets.ViewSet):
             'mobile_min_hour':   mobile_min_hour,
             'mobile_max_hour':   mobile_max_hour,
             'mobile_day_bar':    mobile_day_bar,
-            'resource_choices':  resource_choices,
-        })
+        }
+
+        # Lien de semaine (htmx) : la zone de la semaine seule.
+        # htmx envoie l'id de la cible sans le « # ».
+        # / Week link (htmx): the week zone only. htmx sends the target id without "#".
+        demande_la_zone_de_la_semaine = request.headers.get("HX-Target") == "booking-calendrier-semaine"
+        if demande_la_zone_de_la_semaine:
+            return render(request, 'booking/partials/resource_semaine.html', contexte_de_la_semaine)
+
+        context = get_context(request)
+        context.update(contexte_de_la_semaine)
+        context['resource_choices'] = self._get_resource_choices(resource)
         return render(request, 'booking/views/resource.html', context)
 
     # ── Formulaire et création de réservation ────────────────────────────────

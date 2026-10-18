@@ -35,13 +35,17 @@ reimplementer.
 
 ## Prerequis et chemins
 
-- **`<skill_dir>`** = le dossier de base de ce skill (donne a l'invocation).
-- **`<locale_dir>`** = dossier `locale/` du repo. Par defaut `./locale` depuis la
-  racine du projet (ex: `/home/jonas/TiBillet/dev/Lespass/locale`). Si ambigu,
-  demande a l'utilisateur.
-- **`<workdir>`** = dossier de travail temporaire, ex: `/tmp/i18n_translate`.
-  Le **vider au debut** de chaque run : `rm -rf <workdir> && mkdir -p <workdir>`.
-- `msgfmt` (gettext) doit etre dispo sur l'hote pour la validation syntaxe.
+**TOUTES les commandes tournent dans le conteneur** (`docker exec lespass_django ...`),
+jamais sur l'hote : le projet y est monte sur `/DjangoFiles`, et `python3` comme
+`msgfmt` y sont installes. Les chemins ci-dessous sont donc ceux du CONTENEUR.
+
+- **`<skill_dir>`** = `/DjangoFiles/TECH_DOC/SKILLS/i18n-translate`.
+- **`<locale_dir>`** = `/DjangoFiles/locale`.
+- **`<workdir>`** = `/DjangoFiles/var/i18n_translate` (`var/` est ignore par git).
+  Le **vider au debut** de chaque run.
+- **`<workdir_hote>`** = le MEME dossier vu depuis l'hote
+  (`/home/jonas/TiBillet/dev/Lespass/var/i18n_translate`). C'est lui qu'on passe
+  au Workflow : ses agents lisent et ecrivent leurs fichiers depuis l'hote.
 
 ---
 
@@ -52,6 +56,16 @@ A utiliser juste apres un `makemessages` du mainteneur. Corrige les `fuzzy`
 francaise qui s'affiche en anglais, ou l'inverse). Les entrees deja correctes
 (source == langue du fichier, `msgstr` vide = fallback gettext) sont laissees
 intactes : c'est ce qui evite des milliers de faux positifs.
+
+**Msgid de langue ambigue.** La langue source se devine par des mots-outils
+(the / you / le / vous...). Un msgid court n'en a souvent aucun (`"Pay now"`,
+`"Download CSV"`, `"Cost"`) : sa langue est `amb`. Si son `msgstr` FR est vide,
+le site francais affiche l'anglais. Ces items partent donc aux agents des que
+le `msgstr` d'un des deux fichiers est vide ; l'agent decide la langue. Quand
+sa sortie est identique au msgid (texte deja dans la bonne langue, nom propre,
+libelle bilingue), `apply_sync.py` l'ecrit quand meme (`msgstr` == `msgid`,
+compte dans `dont_identiques_au_msgid`) : l'affichage ne change pas, mais
+l'item n'est plus renvoye aux agents au run suivant.
 
 Une fuite peut aussi venir d'un `msgstr` **rempli, non fuzzy, mais ecrit dans
 la mauvaise langue** (ex : `locale/en`, msgid `"Please login to access this page."`,
@@ -66,8 +80,8 @@ tolere : quelques `msgstr` recopies du msgid (titre propre, libelle bilingue
 
 1. **Extraire** (deterministe) :
    ```bash
-   rm -rf <workdir> && mkdir -p <workdir>
-   python3 <skill_dir>/scripts/extract_sync.py <locale_dir> <workdir>
+   docker exec lespass_django sh -c 'rm -rf <workdir> && mkdir -p <workdir>'
+   docker exec lespass_django python3 <skill_dir>/scripts/extract_sync.py <locale_dir> <workdir> --batch 90
    ```
    Lis `<workdir>/meta.json` -> `total`, `starts` (debuts de lots). Si `total`
    vaut 0, il n'y a rien a faire : previens et arrete-toi.
@@ -76,14 +90,14 @@ tolere : quelques `msgstr` recopies du msgid (titre propre, libelle bilingue
    ```
    Workflow({
      scriptPath: "<skill_dir>/references/workflow_sync.js",
-     args: { workdir: "<workdir>", starts: <starts de meta.json> }
+     args: { workdir: "<workdir_hote>", starts: <starts de meta.json> }
    })
    ```
    C'est une invocation de skill -> l'opt-in Workflow est satisfait.
 
 3. **Fusionner + verifier les placeholders** (deterministe) :
    ```bash
-   python3 <skill_dir>/scripts/merge_check.py <workdir>
+   docker exec lespass_django python3 <skill_dir>/scripts/merge_check.py <workdir>
    ```
    Doit afficher `manquants=0`. Les `anomalies` (placeholders qui ne correspondent
    pas, ou vides) sont mises de cote et **ne seront pas appliquees**. Si des
@@ -93,16 +107,16 @@ tolere : quelques `msgstr` recopies du msgid (titre propre, libelle bilingue
 
 4. **Appliquer** — dry-run d'abord, puis ecriture :
    ```bash
-   python3 <skill_dir>/scripts/apply_sync.py <locale_dir> <workdir>            # dry-run
-   python3 <skill_dir>/scripts/apply_sync.py <locale_dir> <workdir> --write    # ecrit
+   docker exec lespass_django python3 <skill_dir>/scripts/apply_sync.py <locale_dir> <workdir>            # dry-run
+   docker exec lespass_django python3 <skill_dir>/scripts/apply_sync.py <locale_dir> <workdir> --write    # ecrit
    ```
 
 5. **Controle d'integrite + validation gettext** :
    ```bash
-   for f in fr en; do
-     echo -n "$f blocs="; grep -c '^msgid' <locale_dir>/$f/LC_MESSAGES/django.po
+   docker exec lespass_django sh -c 'for f in fr en; do
+     echo -n "$f blocs="; grep -c "^msgid" <locale_dir>/$f/LC_MESSAGES/django.po
      msgfmt -c -o /dev/null <locale_dir>/$f/LC_MESSAGES/django.po && echo "  msgfmt OK"
-   done
+   done'
    ```
    Le **nombre de blocs doit etre identique avant/apres** (aucune entree perdue).
    `msgfmt -c` valide la syntaxe ET la coherence des placeholders `python-format`.
@@ -135,8 +149,8 @@ lance `makemessages -l <code>` (sinon le fichier cible n'existe pas — rappelle
 
 2. **Extraire** (double reference FR+EN par chaine) :
    ```bash
-   rm -rf <workdir> && mkdir -p <workdir>
-   python3 <skill_dir>/scripts/extract_newlang.py <locale_dir> <code> <workdir>
+   docker exec lespass_django sh -c 'rm -rf <workdir> && mkdir -p <workdir>'
+   docker exec lespass_django python3 <skill_dir>/scripts/extract_newlang.py <locale_dir> <code> <workdir>
    ```
    Lis `<workdir>/meta.json` -> `total`, `starts`.
 
@@ -145,7 +159,7 @@ lance `makemessages -l <code>` (sinon le fichier cible n'existe pas — rappelle
    Workflow({
      scriptPath: "<skill_dir>/references/workflow_newlang.js",
      args: {
-       workdir: "<workdir>", starts: <starts>,
+       workdir: "<workdir_hote>", starts: <starts>,
        langName: "<nom complet, ex: Espagnol>", langCode: "<code>",
        glossary: "<contenu de glossary/<code>.txt>"
      }
@@ -154,18 +168,18 @@ lance `makemessages -l <code>` (sinon le fichier cible n'existe pas — rappelle
 
 4. **Fusionner + verifier** :
    ```bash
-   python3 <skill_dir>/scripts/merge_check.py <workdir>
+   docker exec lespass_django python3 <skill_dir>/scripts/merge_check.py <workdir>
    ```
 
 5. **Appliquer** (dry-run puis ecriture) :
    ```bash
-   python3 <skill_dir>/scripts/apply_newlang.py <locale_dir> <code> <workdir>
-   python3 <skill_dir>/scripts/apply_newlang.py <locale_dir> <code> <workdir> --write
+   docker exec lespass_django python3 <skill_dir>/scripts/apply_newlang.py <locale_dir> <code> <workdir>
+   docker exec lespass_django python3 <skill_dir>/scripts/apply_newlang.py <locale_dir> <code> <workdir> --write
    ```
 
 6. **Valider + rendre la main** :
    ```bash
-   msgfmt -c -o /dev/null <locale_dir>/<code>/LC_MESSAGES/django.po && echo "msgfmt OK"
+   docker exec lespass_django msgfmt -c -o /dev/null <locale_dir>/<code>/LC_MESSAGES/django.po && echo "msgfmt OK"
    ```
    Puis rappeler au mainteneur de lancer `compilemessages`.
 

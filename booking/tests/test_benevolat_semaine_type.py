@@ -164,7 +164,7 @@ def aujourd_hui():
 @pytest.fixture
 def hebdo():
     """
-    Un planning hebdomadaire publié (début aujourd'hui, horizon 2 semaines), une tâche, et
+    Un planning hebdomadaire actif (horizon 2 semaines), une tâche, et
     une ligne pour CHAQUE jour de la semaine, 18h–21h, 1 personne.
     `hebdo.creer()` lance creer_les_besoins_de_la_semaine_type et rend le nombre créé.
     / A weekly planning with one row per weekday.
@@ -176,7 +176,7 @@ def hebdo():
         suffixe = uuid.uuid4().hex[:8]
         planning = PlanningBenevole.objects.create(
             name=f"{TEST_PREFIX} hebdo {suffixe}", slug=f"test-hebdo-{suffixe}", published=True,
-            type_de_planning=PlanningBenevole.HEBDOMADAIRE, date_de_debut=aujourd_hui(), horizon_en_semaines=2,
+            type_de_planning=PlanningBenevole.HEBDOMADAIRE, horizon_en_semaines=2,
         )
         tache = TacheBenevole.objects.create(name=f"{TEST_PREFIX} bar {suffixe}")
         for jour in range(7):
@@ -215,18 +215,30 @@ def test_creer_ouvre_l_horizon_et_relancer_ne_cree_rien(hebdo):
             assert besoin.ligne_de_semaine_type.jour_de_la_semaine == besoin.date.weekday()
 
 
-def test_une_date_de_debut_future_et_une_date_de_fin(hebdo):
+def test_un_planning_inactif_ne_cree_rien_puis_reprend_aujourd_hui(hebdo):
+    """Inactif (published faux) : rien. Réactivé : création à partir d'aujourd'hui."""
+    from booking.models import PlanningBenevole
+
     with schema_context(TENANT_SCHEMA):
-        debut = aujourd_hui() + datetime.timedelta(days=3)
-        fin = aujourd_hui() + datetime.timedelta(days=5)
-        hebdo.planning.date_de_debut = debut
-        hebdo.planning.date_de_fin = fin
-        hebdo.planning.save()
+        PlanningBenevole.objects.filter(pk=hebdo.planning.pk).update(published=False)
+        assert hebdo.creer() == 0
+        assert hebdo.planning.besoins.count() == 0
 
-        hebdo.creer()
+        PlanningBenevole.objects.filter(pk=hebdo.planning.pk).update(published=True)
+        assert hebdo.creer() == 15
+        assert dates_des_besoins(hebdo.planning)[0] == aujourd_hui()
 
-        assert dates_des_besoins(hebdo.planning) == [debut, debut + datetime.timedelta(days=1), fin]
-        assert hebdo.relire().besoins_crees_jusqu_au == fin
+
+def test_apres_une_longue_pause_la_creation_reprend_aujourd_hui_sans_rattrapage(hebdo):
+    from booking.models import PlanningBenevole
+
+    with schema_context(TENANT_SCHEMA):
+        PlanningBenevole.objects.filter(pk=hebdo.planning.pk).update(
+            besoins_crees_jusqu_au=aujourd_hui() - datetime.timedelta(days=10),
+        )
+
+        assert hebdo.creer() == 15
+        assert dates_des_besoins(hebdo.planning)[0] == aujourd_hui()
 
 
 def test_un_besoin_supprime_a_la_main_n_est_jamais_recree(hebdo):
@@ -248,12 +260,12 @@ def test_un_besoin_supprime_a_la_main_n_est_jamais_recree(hebdo):
 
 
 def test_besoins_crees_jusqu_au_ne_recule_jamais(hebdo):
-    """Date de fin avancée puis reculée : les jours entre les deux ne sont pas recréés."""
+    """Horizon réduit : rien n'est créé ni supprimé, besoins_crees_jusqu_au reste en place."""
     with schema_context(TENANT_SCHEMA):
         hebdo.creer()
         planning = hebdo.relire()
         jusqu_au_avant = planning.besoins_crees_jusqu_au
-        planning.date_de_fin = aujourd_hui() + datetime.timedelta(days=2)
+        planning.horizon_en_semaines = 1
         planning.save()
 
         assert hebdo.creer() == 0
@@ -295,8 +307,6 @@ def test_un_lieu_en_utc_plus_4_a_22h_utc_est_deja_au_lendemain(hebdo):
     jour_utc = datetime.date(2031, 3, 10)
     a_22h_utc = datetime.datetime(2031, 3, 10, 22, 0, tzinfo=datetime.timezone.utc)
     with schema_context(TENANT_SCHEMA):
-        hebdo.planning.date_de_debut = jour_utc - datetime.timedelta(days=30)
-        hebdo.planning.save()
         with mock.patch("django.utils.timezone.now", return_value=a_22h_utc), \
                 mock.patch.object(Configuration, "get_tzinfo", return_value=zoneinfo.ZoneInfo("Indian/Reunion")):
             hebdo.creer()
@@ -367,44 +377,31 @@ def test_la_tache_de_nuit_parcourt_les_lieux_sauf_public_et_emplacements_vides()
     assert not emplacements_vides & set(schemas_parcourus)
 
 
-def test_la_tache_du_lieu_ne_traite_que_les_plannings_hebdomadaires(hebdo, planning_ponctuel):
+def test_la_tache_du_lieu_ne_traite_que_les_plannings_hebdomadaires_actifs(hebdo, planning_ponctuel):
+    from booking.models import PlanningBenevole
     from booking.tasks import creer_les_besoins_des_semaines_types_du_lieu
 
     plannings_traites = []
     with schema_context(TENANT_SCHEMA):
+        hebdo_inactif = PlanningBenevole.objects.create(
+            name=f"{TEST_PREFIX} inactif {uuid.uuid4().hex[:8]}", slug=f"test-inactif-{uuid.uuid4().hex[:8]}",
+            type_de_planning=PlanningBenevole.HEBDOMADAIRE, published=False,
+        )
         with mock.patch(
             "booking.benevolat.creer_les_besoins_de_la_semaine_type",
-            side_effect=lambda planning: plannings_traites.append(planning.type_de_planning) or 0,
+            side_effect=lambda planning: plannings_traites.append(planning) or 0,
         ):
             creer_les_besoins_des_semaines_types_du_lieu()
 
-    assert plannings_traites
-    assert set(plannings_traites) == {"HEBDOMADAIRE"}
+    assert hebdo.planning.pk in [planning.pk for planning in plannings_traites]
+    assert hebdo_inactif.pk not in [planning.pk for planning in plannings_traites]
+    for planning in plannings_traites:
+        assert planning.type_de_planning == "HEBDOMADAIRE" and planning.published
 
 
 # ---------------------------------------------------------------------------
 # Règles du modèle / Model rules
 # ---------------------------------------------------------------------------
-
-def test_clean_du_planning_hebdomadaire(hebdo):
-    from booking.models import PlanningBenevole
-
-    with schema_context(TENANT_SCHEMA):
-        sans_debut = PlanningBenevole(name="x", slug="x", type_de_planning=PlanningBenevole.HEBDOMADAIRE)
-        with pytest.raises(ValidationError) as erreur:
-            sans_debut.clean()
-        assert "date_de_debut" in erreur.value.message_dict
-
-        fin_avant_debut = PlanningBenevole(
-            name="x", slug="x", type_de_planning=PlanningBenevole.HEBDOMADAIRE,
-            date_de_debut=LUNDI, date_de_fin=LUNDI - datetime.timedelta(days=1),
-        )
-        with pytest.raises(ValidationError) as erreur:
-            fin_avant_debut.clean()
-        assert "date_de_fin" in erreur.value.message_dict
-
-        PlanningBenevole(name="x", slug="x").clean()  # ponctuel sans dates : accepté
-
 
 @pytest.mark.parametrize("horizon", [0, 27])
 def test_horizon_hors_de_1_a_26_refuse(hebdo, horizon):
@@ -450,7 +447,7 @@ def test_un_besoin_modifie_un_par_un_est_detache_de_sa_ligne(hebdo):
 @pytest.fixture
 def hebdo_du_lendemain():
     """
-    Un planning hebdomadaire (début aujourd'hui, horizon 2 semaines) avec UNE ligne : le
+    Un planning hebdomadaire actif (horizon 2 semaines) avec UNE ligne : le
     jour de la semaine de demain, 18h–21h, 1 personne. Après création : deux besoins
     (demain et dans 8 jours), le premier avec une inscription.
     / A weekly planning with one row (tomorrow's weekday); two needs, the first signed up.
@@ -462,8 +459,8 @@ def hebdo_du_lendemain():
         suffixe = uuid.uuid4().hex[:8]
         demain = aujourd_hui() + datetime.timedelta(days=1)
         planning = PlanningBenevole.objects.create(
-            name=f"{TEST_PREFIX} lendemain {suffixe}", slug=f"test-lendemain-{suffixe}",
-            type_de_planning=PlanningBenevole.HEBDOMADAIRE, date_de_debut=aujourd_hui(), horizon_en_semaines=2,
+            name=f"{TEST_PREFIX} lendemain {suffixe}", slug=f"test-lendemain-{suffixe}", published=True,
+            type_de_planning=PlanningBenevole.HEBDOMADAIRE, horizon_en_semaines=2,
         )
         bar = TacheBenevole.objects.create(name=f"{TEST_PREFIX} bar {suffixe}")
         menage = TacheBenevole.objects.create(name=f"{TEST_PREFIX} menage {suffixe}")
@@ -505,8 +502,6 @@ def donnees_de_la_fiche(planning, lignes, **champs_du_planning):
         "calendrier": planning.calendrier_id or "",
         "delai_desinscription_heures": planning.delai_desinscription_heures,
         "type_de_planning": planning.type_de_planning,
-        "date_de_debut": planning.date_de_debut.isoformat() if planning.date_de_debut else "",
-        "date_de_fin": planning.date_de_fin.isoformat() if planning.date_de_fin else "",
         "horizon_en_semaines": planning.horizon_en_semaines,
         "semaine_type-TOTAL_FORMS": str(len(lignes)),
         "semaine_type-INITIAL_FORMS": str(len([ligne for ligne in lignes if ligne.get("uuid")])),
@@ -640,68 +635,64 @@ def test_nouvelle_ligne_cree_ses_besoins(admin_client, hebdo_du_lendemain):
         ]
 
 
-def test_date_de_fin_avancee_supprime_les_besoins_hors_periode_sans_inscrit(admin_client, hebdo_du_lendemain):
-    """Hors de la nouvelle période : le besoin de la ligne sans inscrit part ; celui avec
-    inscrit et le besoin saisi à la main restent."""
-    from booking.models import BesoinBenevole
-
+def test_desactiver_par_la_fiche_bloque_la_creation_d_une_nouvelle_ligne(admin_client, hebdo_du_lendemain):
+    """Case « Actif » décochée : une ligne ajoutée ne crée aucun besoin."""
     contexte = hebdo_du_lendemain
     with schema_context(TENANT_SCHEMA):
-        besoin_manuel = BesoinBenevole.objects.create(
-            planning=contexte.planning, tache=contexte.menage, date=aujourd_hui() + datetime.timedelta(days=5),
-        )
+        contexte.planning.published = False
         poster_la_fiche(admin_client, contexte.planning, donnees_de_la_fiche(
-            contexte.planning, [la_ligne(contexte)], date_de_fin=aujourd_hui().isoformat(),
+            contexte.planning, [la_ligne(contexte), {"jour": aujourd_hui().weekday(), "tache": contexte.menage}],
         ))
 
-        assert not BesoinBenevole.objects.filter(pk=contexte.besoin_sans_inscrit.pk).exists()
-        assert BesoinBenevole.objects.filter(pk=contexte.besoin_avec_inscrit.pk).exists()
-        assert BesoinBenevole.objects.filter(pk=besoin_manuel.pk).exists()
-
-
-def test_premier_jour_avance_cree_les_jours_ajoutes(admin_client, hebdo_du_lendemain):
-    """
-    Le planning commençait dans 3 jours (rien avant). Le premier jour est avancé à
-    aujourd'hui : le besoin de demain est créé, alors que besoins_crees_jusqu_au est
-    déjà plus loin.
-    / First day moved earlier: the added days are created.
-    """
-    from booking.models import PlanningBenevole
-
-    contexte = hebdo_du_lendemain
-    with schema_context(TENANT_SCHEMA):
-        ancien_debut = aujourd_hui() + datetime.timedelta(days=3)
-        PlanningBenevole.objects.filter(pk=contexte.planning.pk).update(date_de_debut=ancien_debut)
-        contexte.planning.besoins.filter(date__lt=ancien_debut).delete()
-        # Supprimé à la main après l'ancien premier jour : il ne doit pas revenir.
-        # / Deleted by hand after the old first day: must not come back.
-        contexte.planning.besoins.filter(pk=contexte.besoin_sans_inscrit.pk).delete()
         contexte.planning.refresh_from_db()
+        assert contexte.planning.published is False
+        assert contexte.planning.semaine_type.count() == 2
+        assert not contexte.planning.besoins.filter(tache=contexte.menage).exists()
 
+
+def test_reactiver_par_la_fiche_cree_les_creneaux_d_une_ligne_ajoutee_pendant_la_pause(admin_client, hebdo_du_lendemain):
+    """
+    Pause : on ajoute une ligne (rien n'est créé). Réactivation : la ligne reçoit ses
+    créneaux dans les semaines déjà ouvertes, d'aujourd'hui à besoins_crees_jusqu_au.
+    / Row added during the pause gets its slots in the open weeks on reactivation.
+    """
+    contexte = hebdo_du_lendemain
+    aujourdhui = aujourd_hui()
+    with schema_context(TENANT_SCHEMA):
+        contexte.planning.published = False
+        poster_la_fiche(admin_client, contexte.planning, donnees_de_la_fiche(
+            contexte.planning, [la_ligne(contexte), {"jour": aujourdhui.weekday(), "tache": contexte.menage}],
+        ))
+        ligne_du_menage = contexte.planning.semaine_type.get(tache=contexte.menage)
+
+        contexte.planning.published = True
         html = poster_la_fiche(admin_client, contexte.planning, donnees_de_la_fiche(
-            contexte.planning, [la_ligne(contexte)], date_de_debut=aujourd_hui().isoformat(),
+            contexte.planning, [
+                la_ligne(contexte),
+                {"uuid": ligne_du_menage.pk, "jour": aujourdhui.weekday(), "tache": contexte.menage},
+            ],
         ))
 
-        besoin_de_demain = contexte.planning.besoins.get(date=contexte.demain)
-        assert besoin_de_demain.ligne_de_semaine_type_id == contexte.ligne.pk
-        assert not contexte.planning.besoins.filter(date=contexte.besoin_sans_inscrit.date).exists()
-        assert "1 besoins créés, 0 mis à jour, 0 supprimés." in html
+        besoins_du_menage = contexte.planning.besoins.filter(tache=contexte.menage)
+        assert sorted(besoins_du_menage.values_list("date", flat=True)) == [
+            aujourdhui, aujourdhui + datetime.timedelta(days=7), aujourdhui + datetime.timedelta(days=14),
+        ]
+        # Les créneaux du bar existaient déjà : aucun doublon.
+        # / The bar slots already existed: no duplicate.
+        assert contexte.planning.besoins.filter(tache=contexte.bar).count() == 2
+        assert "3 besoins créés" in html
 
 
-def test_premier_jour_recule_supprime_les_besoins_d_avant_sans_inscrit(admin_client, hebdo_du_lendemain):
-    from booking.models import BesoinBenevole, InscriptionBenevole
-
+def test_ligne_modifiee_pendant_la_pause_s_applique_aux_creneaux_existants(admin_client, hebdo_du_lendemain):
     contexte = hebdo_du_lendemain
     with schema_context(TENANT_SCHEMA):
-        InscriptionBenevole.objects.filter(besoin=contexte.besoin_avec_inscrit).delete()
-
+        contexte.planning.published = False
         poster_la_fiche(admin_client, contexte.planning, donnees_de_la_fiche(
-            contexte.planning, [la_ligne(contexte)],
-            date_de_debut=(contexte.demain + datetime.timedelta(days=1)).isoformat(),
+            contexte.planning, [la_ligne(contexte, nombre=3)],
         ))
 
-        assert not BesoinBenevole.objects.filter(pk=contexte.besoin_avec_inscrit.pk).exists()
-        assert BesoinBenevole.objects.filter(pk=contexte.besoin_sans_inscrit.pk).exists()
+        contexte.besoin_sans_inscrit.refresh_from_db()
+        assert contexte.besoin_sans_inscrit.nombre_souhaite == 3
 
 
 def test_repasser_en_ponctuel_par_la_fiche_garde_les_besoins_et_ne_cree_rien(admin_client, hebdo_du_lendemain):
@@ -783,7 +774,7 @@ def test_passer_un_planning_ponctuel_en_hebdomadaire_s_enregistre(admin_client, 
         donnees = {
             "name": planning.name, "slug": planning.slug, "description": "", "calendrier": "",
             "delai_desinscription_heures": "24", "type_de_planning": PlanningBenevole.HEBDOMADAIRE,
-            "date_de_debut": aujourd_hui().isoformat(), "date_de_fin": "", "horizon_en_semaines": "4",
+            "horizon_en_semaines": "4",
             "besoins-TOTAL_FORMS": "0", "besoins-INITIAL_FORMS": "0",
             "besoins-MIN_NUM_FORMS": "0", "besoins-MAX_NUM_FORMS": "1000",
         }

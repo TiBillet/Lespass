@@ -2447,6 +2447,7 @@ class Command(BaseCommand):
                     config.module_federation = True
                     config.module_inventaire = True
                     config.module_booking = True
+                    config.module_benevolat = True
 
                     # Un lieu marque "caisse_v1_legacy" dans les fixtures accueille une
                     # caisse LaBoutik V1 (conteneur separe). Sa monnaie locale ne vit PAS
@@ -2632,16 +2633,21 @@ class Command(BaseCommand):
 
                 # Évènements
                 for ev in fx.get('events', []) or []:
-                    # FALC: Date aléatoire dans le futur (entre +6 et +18 mois)
+                    # FALC: Date aléatoire dans les semaines qui viennent (entre +7 et +90 jours).
+                    # La Salle de résidence et concert a un horizon de 90 jours
+                    # (booking/management/commands/create_booking_fixtures.py) : ses
+                    # créneaux bloqués par ces événements doivent être visibles.
+                    # / Random date in the coming weeks: within the concert room's
+                    # 90-day booking horizon, so its blocked slots are visible.
                     try:
                         when = fake.date_time_between(
-                            start_date="+180d",
-                            end_date="+540d",
+                            start_date="+7d",
+                            end_date="+90d",
                             tzinfo=timezone.get_current_timezone(),
                         )
                     except Exception:
-                        # Secours: +200 jours
-                        when = timezone.now() + timedelta(days=200)
+                        # Secours: +30 jours
+                        when = timezone.now() + timedelta(days=30)
                     # L'heure aussi est tirée au hasard par faker : sans cette
                     # remise à l'heure, la démo affiche « Journée apprenante,
                     # 03H47 » ou « Concert, 06H12 ». On garde la date tirée et
@@ -2655,10 +2661,15 @@ class Command(BaseCommand):
                         second=0,
                         microsecond=0,
                     )
+                    # Fin = début + 3 h. Indispensable pour la démo du blocage de
+                    # salle : un événement sans fin ne bloque aucun créneau
+                    # (booking_engine.get_event_intervals_blocking_resource).
+                    # / End = start + 3 h: an event without an end blocks no slot.
                     event_obj, created_event = Event.objects.get_or_create(
                         name=ev['name'],
                         defaults={
                             'datetime': when,
+                            'end_datetime': when + timedelta(hours=3),
                             'categorie': map_event_categorie(ev.get('categorie') or 'CONCERT'),
                             'postal_address': addr_obj,
                             'jauge_max': ev.get('jauge_max') or 50,
@@ -2763,6 +2774,7 @@ class Command(BaseCommand):
                             name=child['name'],
                             defaults={
                                 'datetime': child_when,
+                                'end_datetime': child_when + timedelta(hours=3),
                                 'categorie': map_event_categorie(child.get('categorie') or 'ACTION'),
                                 'postal_address': addr_obj,
                                 'jauge_max': child.get('jauge_max') or 10,

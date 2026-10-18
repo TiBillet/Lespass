@@ -16,6 +16,7 @@ Lancement / Run:
     docker exec lespass_django poetry run pytest booking/tests/test_benevolat_models.py -v
 """
 import datetime
+import uuid
 from unittest import mock
 
 import pytest
@@ -304,29 +305,39 @@ def test_l_admin_n_ajoute_pas_d_inscription(admin_client):
 
 
 @pytest.mark.django_db
-def test_la_fiche_planning_signale_un_besoin_un_jour_ferme(admin_client, planning_et_tache, test_calendar):
+def test_la_fiche_planning_montre_les_prenoms_et_le_bouton_d_ajout_de_tache(admin_client, planning_et_tache):
     """
-    Un besoin saisi un jour fermé est enregistré, et sa ligne affiche « Fermé : <label> ».
-    / A need on a closed day is saved, and its row shows "Fermé : <label>".
+    Colonne « Inscrit·es » de l'inline : le prénom, ou les 6 premiers caractères de l'email
+    sans prénom. Pas de colonne « Fermeture ». Le champ « Tâche » a son bouton d'ajout
+    (la fenêtre de TacheBenevoleAdmin) : le menu « Tâches » n'est plus nécessaire.
+    / Sign-ups column: first name, or the email's first 6 characters. Add-task button.
     """
-    from booking.models import BesoinBenevole, ClosedPeriod
+    from AuthBillet.models import TibilletUser
+    from booking.models import BesoinBenevole, InscriptionBenevole
 
     planning, tache = planning_et_tache
     with schema_context(TENANT_SCHEMA):
-        planning.calendrier = test_calendar
-        planning.save()
-        fermeture = ClosedPeriod.objects.create(
-            calendar=test_calendar, label="Inventaire annuel",
-            start_date=datetime.date(2033, 3, 1), end_date=datetime.date(2033, 3, 1),
+        besoin = BesoinBenevole.objects.create(planning=planning, tache=tache, date=datetime.date(2033, 3, 1))
+        suffixe = uuid.uuid4().hex[:8]
+        avec_prenom = TibilletUser.objects.create(
+            email=f"camille{suffixe}@mock.test", username=f"camille{suffixe}@mock.test",
+            first_name="Camille", last_name="Dupont",
         )
-        BesoinBenevole.objects.create(planning=planning, tache=tache, date=datetime.date(2033, 3, 1))
-        try:
-            reponse = admin_client.get(f"/admin/booking/planningbenevole/{planning.pk}/change/")
-            assert reponse.status_code == 200
-            assert "Inventaire annuel" in reponse.content.decode()
-        finally:
-            BesoinBenevole.objects.filter(planning=planning).delete()
-            fermeture.delete()
+        sans_prenom = TibilletUser.objects.create(
+            email=f"zz{suffixe}@mock.test", username=f"zz{suffixe}@mock.test",
+        )
+        InscriptionBenevole.objects.create(besoin=besoin, user=avec_prenom)
+        InscriptionBenevole.objects.create(besoin=besoin, user=sans_prenom)
+
+        html = admin_client.get(f"/admin/booking/planningbenevole/{planning.pk}/change/").content.decode()
+
+        assert f"2/1 : Camille, {sans_prenom.email[:6]}" in html
+        assert "Dupont" not in html
+        assert sans_prenom.email[:7] not in html
+        assert "Fermeture" not in html
+        assert "/admin/booking/tachebenevole/add/" in html
+        fenetre_d_ajout = admin_client.get("/admin/booking/tachebenevole/add/?_to_field=uuid&_popup=1")
+        assert fenetre_d_ajout.status_code == 200
 
 
 @pytest.mark.django_db

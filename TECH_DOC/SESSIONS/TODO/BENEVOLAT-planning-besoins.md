@@ -14,6 +14,9 @@
 > **Chantier 7 fait le 2026-10-17** (une semaine à la fois :
 > `CHANGELOG/2026-10-17-benevolat-chantier-7-pagination-semaine.md`). **Chantier 8 fait le 2026-10-17**
 > (semaine type, page « Besoins », index : `CHANGELOG/2026-10-17-benevolat-chantier-8-semaine-type.md`).
+> **Retours du test du mainteneur appliqués le 2026-10-18 (D35)** : plus de premier ni de dernier
+> jour, « Actif » pilote la page et la création, horizon 4 semaines par défaut, admin allégé
+> (`CHANGELOG/2026-10-18-benevolat-retours-du-test.md`).
 > Relue le même jour par un agent Fable (exactitude face au code, inventaire, sur-ingénierie).
 > Ses corrections sont intégrées. Les décisions D6 à D19 et P1 à P10 ont eu une **seconde relecture
 > Fable** le 2026-09-24 (exactitude, pièges techniques, contradictions) ; ses corrections sont intégrées.
@@ -107,6 +110,7 @@ ressources (nombre de places, délai d'annulation, admin, onglet « Mon compte �
 | D32 | Nom | **« Semaine type »** (`LigneDeSemaineType`), pas « calendrier » : dans `booking`, `Calendar` désigne les fermetures, déjà reliées au planning. (2026-10-17) |
 | D33 | Volumes et archivage | **Rien n'est supprimé** : le passé est caché par les filtres (« À venir » par défaut), un index `(planning, date)` sert toutes les requêtes. Ordre de grandeur : ~500 besoins par an et par planning hebdomadaire, dans le schéma du lieu (§11.3). (2026-10-17) |
 | D34 | « Répéter » | **Gardé pour les plannings ponctuels**, masqué pour les plannings hebdomadaires (la semaine type le remplace). (2026-10-17) |
+| D35 | Ni premier ni dernier jour | **`date_de_debut` et `date_de_fin` sont supprimés** (migration `booking/0005`). Un planning hebdomadaire crée ses besoins **à partir d'aujourd'hui**. La case **« Actif »** (le champ `published`, renommé) pilote à la fois la page publique ET la création automatique : inactif, il ne crée plus rien ; réactivé, il reprend le jour même (les jours inactifs ne sont pas rattrapés). À la réactivation par la fiche, toutes les lignes remplissent aussi les semaines déjà ouvertes : une ligne ajoutée pendant la pause reçoit ses créneaux, et un créneau supprimé à la main dans ces semaines revient (relecture Fable, 2026-10-18). Les pauses et la fin d'une saison passent par le **calendrier des fermetures** du planning, qui existe déjà. Horizon par défaut : 4 semaines. Admin : menu « Tâches » retiré (bouton d'ajout à côté du champ « Tâche » des inlines), « Nbr postes », prénoms seulement (ou 6 premiers caractères de l'email) dans l'inline des besoins, colonne « Fermeture » retirée de l'inline (restée sur la page « Besoins »). (mainteneur, 2026-10-18) |
 
 ### 2.2 Proposées par cette spec, validées par le mainteneur (2026-09-24)
 
@@ -165,7 +169,7 @@ défaut, `self.pk` est rempli avant la première sauvegarde ; tester `self._stat
 | `name` | `CharField(250)` | « Bar associatif : octobre » |
 | `slug` | `SlugField(unique)` | URL publique. `clean()` refuse `besoin` et `desistement` : ce sont des segments des routes de §6 |
 | `description` | `TextField(blank)` | Chapô de la page |
-| `published` | `BooleanField(default=False)` | Brouillon tant que faux |
+| `published` | `BooleanField(default=False)` | Libellé « Actif » (D35) : pilote la page publique ET la création automatique des besoins d'un planning hebdomadaire. Faux = invisible, rien n'est créé |
 | `adhesions_requises` | `ManyToManyField(Product, blank, limit_choices_to={"categorie_article": Product.ADHESION})` | **Vide = ouvert à tout compte connecté. Non vide = réservé aux adhérent·es d'une de ces adhésions (D3).** Un seul champ : pas de choix `acces` ni de `clean()`, donc pas d'état incohérent. Même motif que `Price.adhesions_obligatoires` (`BaseBillet/models.py:1947`) |
 | `calendrier` | FK `Calendar`, `null`, `blank`, `PROTECT`, `related_name="plannings_benevoles"` | Jours de fermeture (D9). Vide = aucun jour fermé. `PROTECT`, comme `Resource.calendar` |
 | `delai_desinscription_heures` | `PositiveIntegerField(default=24)` | Au-delà, « Me retirer » devient « Je ne peux plus venir » et l'équipe est prévenue (P10) |
@@ -418,14 +422,15 @@ Entrées à ajouter : les raccourcis de `V2/vues/compte/index.html:185-189` et d
 
 ### 5.6 Admin (Unfold)
 
-- `TacheBenevoleAdmin` : liste simple.
+- `TacheBenevoleAdmin` : liste simple, **sans entrée de menu depuis D35** : il sert la fenêtre
+  d'ajout du bouton à côté du champ « Tâche » des inlines.
 - `PlanningBenevoleAdmin` : fiche (dont le champ `calendrier`) + `TabularInline` des
   besoins (date, tâche, début, fin, nombre souhaité, inscrit·es en lecture seule). Même
   motif que `WeeklyOpening` + ses `OpeningEntry` (`Administration/admin/resources.py`).
-  Un besoin saisi un jour fermé est **enregistré** (P8). L'avertissement est une **colonne
-  en lecture seule** de l'inline, « Fermé : Fête nationale » (le `label`, ou le repli),
-  calculée par `date_est_fermee`. Pas de `messages.warning` : il faudrait surcharger
-  `save_formset`, ce que rien ne fait dans `Administration/`.
+  Un besoin saisi un jour fermé est **enregistré** (P8). L'avertissement « Fermé : Fête
+  nationale » (le `label`, ou le repli, calculé par `date_est_fermee`) est une colonne de la
+  page « Besoins » (§11.2) ; **l'inline ne l'affiche plus depuis D35**. Dans l'inline, la
+  colonne « Inscrit·es » ne montre que les prénoms (ou les 6 premiers caractères de l'email).
 - `InscriptionBenevoleAdmin` : liste filtrable par planning et par date, recherche par
   prénom, nom et email (`user__first_name`, `user__last_name`, `user__email`), suppression.
   **Pas de formulaire d'ajout** (`has_add_permission` renvoie `False`) : on inscrit
@@ -1005,9 +1010,8 @@ Spec liée : `TODO/USERS-etiquettes.md` (D12), écrite le 2026-09-24, non commen
 | Champ | Type | Note |
 |---|---|---|
 | `type_de_planning` | `CharField` choix `PONCTUEL` (défaut) / `HEBDOMADAIRE` | Les plannings existants restent ponctuels : aucune migration de données |
-| `date_de_debut` | `DateField(null, blank)` | Hebdomadaire : premier jour où des besoins sont créés. Obligatoire dans ce mode (`clean`) |
-| `date_de_fin` | `DateField(null, blank)` | Vide = sans fin |
-| `horizon_en_semaines` | `PositiveSmallIntegerField(default=8)` | 1 à 26 : combien de semaines d'avance sont ouvertes aux inscriptions |
+| ~~`date_de_debut`~~, ~~`date_de_fin`~~ | — | **Supprimés (D35)** : le planning crée à partir d'aujourd'hui, tant qu'il est actif ; les pauses viennent du calendrier des fermetures |
+| `horizon_en_semaines` | `PositiveSmallIntegerField(default=4)` | 1 à 26 : combien de semaines d'avance sont ouvertes aux inscriptions |
 | `besoins_crees_jusqu_au` | `DateField(null, blank)` | Interne, lecture seule. Ce qui est avant cette date n'est jamais recréé |
 
 `LigneDeSemaineType` (nouveau) : `uuid` (pk), `planning` (FK, `CASCADE`, `related_name="semaine_type"`),
@@ -1024,9 +1028,9 @@ ligne à ses besoins (D30).
   dans `booking/benevolat.py`, sur le modèle de `calculer_repetitions` (§5.7) : une copie par
   ligne et par jour correspondant entre `du` et `au` ; jours fermés sautés ; doublons
   (`cle_d_un_besoin`) ignorés.
-- `creer_les_besoins_de_la_semaine_type(planning)` : fenêtre `du` = le plus tard entre
-  `date_de_debut`, aujourd'hui (fuseau du lieu) et le lendemain de `besoins_crees_jusqu_au` ;
-  `au` = le plus tôt entre `date_de_fin` et aujourd'hui + `horizon_en_semaines`. Création dans
+- `creer_les_besoins_de_la_semaine_type(planning)` : rien si le planning est ponctuel ou
+  inactif (D35). Fenêtre `du` = le plus tard entre aujourd'hui (fuseau du lieu) et le lendemain
+  de `besoins_crees_jusqu_au` ; `au` = aujourd'hui + `horizon_en_semaines`. Création dans
   une transaction (`bulk_create`), puis `besoins_crees_jusqu_au = au`.
 - Appelée **à l'enregistrement de la fiche** (après les lignes : `save_related` de l'admin) et
   **chaque nuit** par une tâche Celery (tous les lieux, hors `public` et `WAITING_CONFIG`,
@@ -1062,12 +1066,9 @@ modifiée et changée de jour.
 - **Nouvelle ligne, ou ligne qui change de jour** : ses besoins sont créés d'aujourd'hui à
   `besoins_crees_jusqu_au` (doublons ignorés) ; pour un changement de jour, les anciens futurs
   sans inscrit sont supprimés.
-- **`date_de_fin` avancée / `date_de_debut` reculée** : les besoins futurs sans inscrit hors
-  de la nouvelle période sont supprimés.
-- **`date_de_debut` avancée** (mise plus tôt) : les jours entre le nouveau et l'ancien premier
-  jour sont créés (jusqu'à `besoins_crees_jusqu_au`). Sans cette étape, ils seraient perdus :
-  la création normale ne repasse jamais avant `besoins_crees_jusqu_au` (relecture Fable du code,
-  2026-10-17).
+- ~~Période modifiée (`date_de_debut`, `date_de_fin`)~~ : sans objet depuis D35.
+- Planning inactif : les lignes modifiées ou supprimées s'appliquent toujours aux besoins
+  existants, mais aucun besoin n'est créé.
 - Message de l'admin : « N besoins créés, M mis à jour, P supprimés. K besoins avec des
   inscrits n'ont pas été modifiés : voir la page Besoins. » (lien filtré).
 - Passage hebdomadaire → ponctuel : plus aucune création ; les besoins restent. Ponctuel →
@@ -1084,7 +1085,7 @@ modifiée et changée de jour.
 **Admin.**
 
 - **Fiche planning** : `type_de_planning` ; en mode hebdomadaire (`conditional_fields`
-  Unfold) `date_de_debut`, `date_de_fin`, `horizon_en_semaines` et la ligne en lecture seule
+  Unfold) `horizon_en_semaines` et la ligne en lecture seule
   « Besoins créés jusqu'au … ». Inlines selon le mode (`get_inlines`) : **hebdomadaire** → les
   lignes de la semaine type ; **ponctuel** → les besoins **à venir** seulement (l'inline actuelle,
   queryset filtré). Dans les deux cas, un lien « Voir tous les besoins de ce planning ». Les
@@ -1126,7 +1127,7 @@ l'API (allégée, D24) : à ajouter seulement si un outil en a besoin.
 | Quoi | Où |
 |---|---|
 | `besoins_de_la_semaine_type` : un mois de semaines, jours fermés sautés, doublons ignorés, ligne de nuit (21:00 → 00:00), passage d'année | `booking/tests/test_benevolat_semaine_type.py` (fonction pure) |
-| Fenêtre de création : `date_de_debut` future, `date_de_fin` atteinte, horizon, `besoins_crees_jusqu_au` avancé ; relancer ne crée rien | idem |
+| Fenêtre de création : horizon, `besoins_crees_jusqu_au` avancé, planning inactif (D35) ; relancer ne crée rien | idem |
 | Besoin supprimé à la main jamais recréé ; tâche de nuit sur plusieurs lieux (pas `public` ni `WAITING_CONFIG`) | idem |
 | Modifier / supprimer une ligne : futurs sans inscrit modifiés / supprimés, avec inscrits intacts, message de l'admin | idem + test admin |
 | Page « Besoins » : filtre « À venir » par défaut, filtres, nombre de requêtes constant (10 ou 300 besoins) | test admin |
@@ -1134,7 +1135,7 @@ l'API (allégée, D24) : à ajouter seulement si un outil en a besoin.
 | Deux créations simultanées sur la même fenêtre (verrou) → aucun doublon ; `besoins_crees_jusqu_au` ne recule pas | `booking/tests/test_benevolat_semaine_type.py` |
 | Ligne supprimée : sans inscrit supprimés, avec inscrits gardés et détachés ; ligne modifiée **et** changée de jour en un seul enregistrement | idem + test admin |
 | Exception manuelle détachée, puis la ligne change : l'exception reste | test admin |
-| `clean()` : `date_de_debut` obligatoire en hebdo, `date_de_fin >= date_de_debut`, horizon 1 à 26, mêmes règles d'heures que les besoins | idem |
+| Horizon 1 à 26, mêmes règles d'heures que les besoins | idem |
 | Lieu en UTC+4 à 22 h UTC : la fenêtre part du lendemain | idem |
 | API : `POST volunteer-needs` sur un planning hebdo → besoin manuel | `tests/pytest/test_benevolat_api.py` |
 
