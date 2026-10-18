@@ -67,8 +67,12 @@ services:
       - backend
 
   lespass_django:
-    build: .
-#    image: tibillet/lespass:latest
+    # L'image vient de Docker Hub (docker_push_update.sh) et make update la tire.
+    # Elle n'apporte que le venv et le systeme : le code servi est le depot monte
+    # ci-dessous. Revenir en arriere : TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md.
+    # / The image comes from Docker Hub; it only brings the venv and the system,
+    # the served code is the mounted repository below.
+    image: tibillet/lespass:latest
     restart: unless-stopped
     container_name: lespass_django
     hostname: lespass_django
@@ -102,6 +106,29 @@ services:
     # la main). / `sleep infinity`: the container starts without serving.
     command: "bash start.sh"
 #    command: "sleep infinity"
+
+  # Conteneur JETABLE de make update (scripts/mise_a_jour_prod.sh) : il controle le
+  # code de la nouvelle image puis lance migrate_schemas, pendant que lespass_django
+  # sert encore l'ancien code, et il s'arrete. AUCUN volume : le code est celui de
+  # l'image, donc celui du commit cible. Le profil `maj` le garde hors de `up -d` ;
+  # `docker compose run` le lance quand meme. Le nom fixe empeche d'en lancer deux.
+  # / THROWAWAY container for make update: checks and migrates the new image's code
+  # while lespass_django still serves the old one, then stops. NO volumes.
+  lespass_maj:
+    image: tibillet/lespass:latest
+    container_name: lespass_maj
+    profiles: ["maj"]
+    logging: *default-logging
+    env_file: .env
+    # DATABASES vise l'hote « postgres » : memes alias que lespass_django.
+    # / DATABASES targets the "postgres" host: same aliases as lespass_django.
+    links:
+      - lespass_postgres:postgres
+      - lespass_redis:redis
+      - lespass_memcached:memcached
+    networks:
+      - backend
+    command: "true"
 
   lespass_nginx:
     image: nginx:latest

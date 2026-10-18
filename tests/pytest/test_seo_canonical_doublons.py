@@ -126,7 +126,6 @@ def test_une_fiche_evenement_federee_pointe_vers_le_lieu_d_origine(
     adresse_d_origine = "https://lieu-voisin.tibillet.localhost/event/concert-voisin/"
     evenement_publie.full_url = adresse_d_origine
     evenement_publie.img = evenement_publie.get_img()
-    evenement_publie.sticker_img = evenement_publie.get_sticker_img()
 
     # Le slug demande n'existe pas ici : la vue cherche chez les lieux federes.
     # / The requested slug does not exist here: the view looks in federated venues.

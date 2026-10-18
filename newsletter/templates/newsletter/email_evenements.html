@@ -48,8 +48,32 @@ un `<div id="evt-N">` vide, juste avant chaque carte. L'`id` est ainsi controle 
 (`evt-1`, `evt-2`…), sans avoir a reproduire l'algorithme de slug des titres de Ghost.
 / A native product card carries NO anchor `id`. The only reliable target is a raw HTML card,
 which Ghost preserves verbatim; we drop an empty `<div id="evt-N">` before each card.
-{% endcomment %}<p>{% blocktranslate %}Voici les événements du réseau, du {{ date_debut_affichee }} au {{ date_fin_affichee }}.{% endblocktranslate %}</p>
-{% if fiches %}<h3>{% translate "Au programme" %}</h3>
+{% endcomment %}{% if fiches_benevolat %}{% comment %}
+BLOC « ON A BESOIN DE VOUS » — EN TETE, AVANT LES EVENEMENTS
+/ "We need you" block — first, before the events
+
+Une carte PRODUCT par planning de benevoles qui a des creneaux a remplir (fiches de
+newsletter.collecte.collecter_besoins_benevoles). Memes regles que les cartes d'evenement :
+UNE INFO = UN <p> (les <br> sont avales), aucun style=. Pas d'image : un planning n'en a pas.
+Chaque semaine : la phrase porte le total des 10 prochains jours. Ponctuel : la periode.
+/ One product card per planning with slots to fill. Same rules as the event cards.
+{% endcomment %}<h3>{% translate "On a besoin de vous" %}</h3>
+<p>{% translate "Ces coups de main font vivre le lieu. Un seul créneau, ça aide déjà beaucoup : inscrivez-vous !" %}</p>
+{% for fiche_benevolat in fiches_benevolat %}{% if not forloop.first %}
+<hr>{% endif %}
+<div class="kg-card kg-product-card">
+  <div class="kg-product-card-container">
+    <div class="kg-product-card-title-container">
+      <h4 class="kg-product-card-title">{{ fiche_benevolat.nom }}</h4>
+    </div>
+    <div class="kg-product-card-description"><p>{% if fiche_benevolat.chaque_semaine %}{% blocktranslate count nombre=fiche_benevolat.places_libres %}Ces prochains jours, on a besoin de remplir {{ nombre }} créneau.{% plural %}Ces prochains jours, on a besoin de remplir {{ nombre }} créneaux.{% endblocktranslate %}{% elif fiche_benevolat.premier_jour == fiche_benevolat.dernier_jour %}{{ fiche_benevolat.premier_jour|date:"l j F" }} · {% blocktranslate count nombre=fiche_benevolat.places_libres %}{{ nombre }} créneau libre{% plural %}{{ nombre }} créneaux libres{% endblocktranslate %}{% else %}{% blocktranslate with debut=fiche_benevolat.premier_jour|date:"j F" fin=fiche_benevolat.dernier_jour|date:"j F" %}du {{ debut }} au {{ fin }}{% endblocktranslate %} · {% blocktranslate count nombre=fiche_benevolat.places_libres %}{{ nombre }} créneau libre{% plural %}{{ nombre }} créneaux libres{% endblocktranslate %}{% endif %}</p>{% for jour in fiche_benevolat.jours_a_remplir %}<p>{{ jour.date|date:"l j F" }} : {% blocktranslate count nombre=jour.places_libres %}{{ nombre }} créneau libre{% plural %}{{ nombre }} créneaux libres{% endblocktranslate %}</p>{% endfor %}</div>
+    <a href="{{ fiche_benevolat.url_inscription }}" class="kg-product-card-button kg-product-card-btn-accent" target="_blank" rel="noopener noreferrer"><span>{{ fiche_benevolat.libelle_bouton }}</span></a>
+  </div>
+</div>
+{% endfor %}{% if fiches %}
+<hr>{% endif %}
+{% endif %}{% if fiches %}<p>{% blocktranslate %}Voici les événements du réseau, du {{ date_debut_affichee }} au {{ date_fin_affichee }}.{% endblocktranslate %}</p>
+<h3>{% translate "Au programme" %}</h3>
 <ul>{% for fiche in fiches %}
   <li><a href="#evt-{{ forloop.counter }}">{{ fiche.nom }}{% if fiche.date_debut %} — {{ fiche.date_debut|date:"j F" }}{% endif %}</a></li>{% endfor %}
 </ul>{% endif %}

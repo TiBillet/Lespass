@@ -394,9 +394,14 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
 
 
 class Carrousel(models.Model):
-    name = models.CharField(max_length=50, verbose_name=_("Slide name"))
+    # Le nom sert de texte alternatif (alt) de l'image dans les carrousels.
+    # / The name is used as the image alt text in carousels.
+    name = models.CharField(max_length=50, blank=True, default="", verbose_name=_("Slide name"),
+                            help_text=_("Texte alternatif de l'image, lu par les lecteurs d'écran. Facultatif."))
+    # Pas de taille minimale : la galerie V2 affiche une petite image à sa taille
+    # naturelle, sur un fond flouté (pages/V2/partials/evenement_galerie.html).
+    # / No minimum size: the V2 gallery shows a small image at natural size on a blurred background.
     img = StdImageField(upload_to='images/',
-                        validators=[MinSizeValidator(720, 135)],
                         variations={
                             'fhd': (1920, 1920),
                             'hdr': (720, 720),
@@ -407,12 +412,16 @@ class Carrousel(models.Model):
                         )
 
     # publish = models.BooleanField(default=True, verbose_name=_("Publier"))
-    on_event_list_page = models.BooleanField(default=True, verbose_name=_("Add to event list carousel"))
+    on_event_list_page = models.BooleanField(default=False, verbose_name=_("Add to event list carousel"))
     link = models.URLField(blank=True, null=True, verbose_name=_("Link URL"))
     order = models.PositiveSmallIntegerField(verbose_name=_("Weight"), default=1000, )
 
     def __str__(self):
-        return self.name
+        # Sans nom, on affiche le nom du fichier image (le champ img est obligatoire).
+        # / Without a name, show the image file name (img is required).
+        if self.name:
+            return self.name
+        return self.img.name.split("/")[-1]
 
 
 # Domaines du projet TiBillet lui-meme. Ce n'est jamais le site web d'un lieu :

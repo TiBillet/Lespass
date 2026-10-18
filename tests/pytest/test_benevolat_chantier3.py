@@ -208,6 +208,47 @@ def test_le_bloc_respecte_nombre_max(lieu):
     assert len(plannings_benevoles_a_venir(2)) == 2
 
 
+def rendre_hebdomadaire(planning):
+    """Passe le planning en « chaque semaine ». / Makes the planning weekly."""
+    from booking.models import PlanningBenevole
+
+    planning.type_de_planning = PlanningBenevole.HEBDOMADAIRE
+    planning.save()
+
+
+def resume_du_planning(planning):
+    """Le résumé de ce planning dans le bloc, ou None. / This planning's card data, or None."""
+    from pages.templatetags.pages_tags import plannings_benevoles_a_venir
+
+    for resume in plannings_benevoles_a_venir(50):
+        if resume["planning"] == planning:
+            return resume
+    return None
+
+
+def test_le_bloc_compte_les_places_d_un_planning_chaque_semaine_sur_10_jours(lieu):
+    """Chaque semaine, besoins à J+2 et J+12 (2 places chacun) : seul J+2 compte."""
+    planning, _besoins = creer_un_planning(2, jours=[2, 12])
+    rendre_hebdomadaire(planning)
+
+    assert resume_du_planning(planning)["places_libres"] == 2
+
+
+def test_le_bloc_cache_un_planning_chaque_semaine_sans_besoin_dans_10_jours(lieu):
+    """Chaque semaine, premier besoin à J+12 : pas de carte (pas de « tout est couvert » faux)."""
+    planning, _besoins = creer_un_planning(12)
+    rendre_hebdomadaire(planning)
+
+    assert resume_du_planning(planning) is None
+
+
+def test_le_bloc_compte_toutes_les_places_d_un_planning_ponctuel(lieu):
+    """Ponctuel, besoins à J+2 et J+40 : toutes les places comptent, même loin."""
+    planning, _besoins = creer_un_planning(2, jours=[2, 40])
+
+    assert resume_du_planning(planning)["places_libres"] == 4
+
+
 def test_le_bloc_est_vide_sur_le_schema_public():
     """`pages` est aussi en SHARED_APPS : sur public, les tables du bénévolat n'existent pas."""
     from django_tenants.utils import schema_context
@@ -231,8 +272,61 @@ def test_la_carte_du_bloc_affiche_nom_periode_et_places(lieu):
     )
 
     assert planning.name in html
-    assert "6 places libres" in html
+    assert "6 créneaux libres" in html
     assert f"/booking/benevolat/{planning.slug}/" in html
+
+
+def test_la_carte_d_un_planning_chaque_semaine_annonce_les_creneaux_a_remplir(lieu):
+    """Chaque semaine, 2 places à J+2 : « Ces prochains jours, on a besoin de remplir … 2 créneaux »."""
+    from django.template.loader import render_to_string
+
+    planning, _besoins = creer_un_planning(2)
+    rendre_hebdomadaire(planning)
+
+    html = render_to_string(
+        "booking/benevolat/partials/cartes_accueil.html",
+        {"plannings": [resume_du_planning(planning)]},
+    )
+
+    assert "Ces prochains jours, on a besoin de remplir" in html
+    assert '<span class="bv-carte__libres">2 créneaux</span>' in html
+    assert "2 créneaux libres" not in html
+
+
+def accueil_v2(configuration=None):
+    """
+    GET / sur `lespass`, skin V2 forcé (accueil codé en dur, pages/V2/vues/accueil.html).
+    `configuration` : une copie modifiée de Configuration, pour simuler un module éteint.
+    / GET / on `lespass` with the V2 skin forced; optional patched configuration.
+    """
+    with patch("BaseBillet.views.get_skin_courant", return_value="V2"):
+        if configuration is None:
+            return navigateur().get("/").content.decode()
+        with patch("BaseBillet.models.Configuration.get_solo", return_value=configuration):
+            return navigateur().get("/").content.decode()
+
+
+def test_l_accueil_v2_montre_les_coups_de_main_a_venir(lieu):
+    """Un planning publié avec un besoin dans 1 jour : sa carte est sur l'accueil."""
+    planning, _besoins = creer_un_planning(1)
+
+    html = accueil_v2()
+
+    assert 'data-testid="accueil-benevolat"' in html
+    assert f"/booking/benevolat/{planning.slug}/" in html
+
+
+def test_l_accueil_v2_cache_les_coups_de_main_module_eteint(lieu):
+    """Module bénévolat éteint : pas de section, même avec un planning à venir."""
+    from BaseBillet.models import Configuration
+
+    creer_un_planning(1)
+    configuration_eteinte = copy.copy(Configuration.get_solo())
+    configuration_eteinte.module_benevolat = False
+
+    html = accueil_v2(configuration_eteinte)
+
+    assert 'data-testid="accueil-benevolat"' not in html
 
 
 def test_la_source_coups_de_main_est_un_choix_du_bloc():

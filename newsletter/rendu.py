@@ -1,6 +1,6 @@
 """
-Fabrique le HTML de la newsletter a partir des fiches d'evenements.
-/ Build the newsletter HTML from event fiches.
+Fabrique le HTML de la newsletter a partir des fiches d'evenements et de benevolat.
+/ Build the newsletter HTML from event and volunteer fiches.
 
 LOCALISATION : newsletter/rendu.py
 
@@ -44,24 +44,29 @@ def titre_de_la_newsletter(date_debut, date_fin):
     }
 
 
-def rendre_newsletter_html(fiches, date_debut, date_fin):
+def rendre_newsletter_html(fiches, date_debut, date_fin, fiches_benevolat=()):
     """
     Rend le corps HTML de la newsletter. / Render the newsletter's HTML body.
 
     LOCALISATION : newsletter/rendu.py
 
-    Chaque evenement devient une CARTE PRODUCT de Ghost (image + titre + infos + bouton),
-    suivie de sa description longue en paragraphes normaux. Les evenements sont separes
-    par un <hr>, que Ghost transforme en carte divider.
-    / Each event becomes a Ghost PRODUCT CARD, followed by its long description.
+    En tete, le bloc « On a besoin de vous » : une CARTE PRODUCT par planning de
+    benevoles qui a des creneaux a remplir (bouton « Je m'inscris »).
+    Puis chaque evenement devient une CARTE PRODUCT de Ghost (image + titre + infos +
+    bouton), suivie de sa description longue en paragraphes normaux. Les evenements sont
+    separes par un <hr>, que Ghost transforme en carte divider.
+    / First the volunteer block (one product card per planning), then each event as a
+    Ghost PRODUCT CARD, followed by its long description.
 
-    :param fiches: la liste des fiches (cf. newsletter.collecte)
+    :param fiches: la liste des fiches d'evenements (cf. newsletter.collecte)
     :param date_debut: datetime du debut de la fenetre
     :param date_fin: datetime de la fin de la fenetre
+    :param fiches_benevolat: les fiches de collecter_besoins_benevoles() (vide = pas de bloc)
     :return: le HTML (str), sans aucun attribut style=
     """
     contexte = {
         "fiches": fiches,
+        "fiches_benevolat": fiches_benevolat,
         "date_debut_affichee": date_format(date_debut, "DATE_FORMAT"),
         "date_fin_affichee": date_format(date_fin, "DATE_FORMAT"),
         # Ghost lit width/height sur l'image de la carte pour eviter le "layout shift".

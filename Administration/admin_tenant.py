@@ -846,8 +846,12 @@ class CarrouselAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     ordering = ('order', 'name')
-    list_display = ('name', 'on_event_list_page', 'order', 'link', 'events_names')
-    list_editable = ('on_event_list_page', 'order')
+    # Le formulaire ne montre que l'image (obligatoire), le nom (texte alternatif,
+    # facultatif) et le poids. on_event_list_page et link restent en base, masques.
+    # / The form shows only the image, the name (alt text) and the weight.
+    fields = ('img', 'name', 'order')
+    list_display = ('__str__', 'order', 'events_names')
+    list_editable = ('order',)
 
     search_fields = ('name',)
 
@@ -3966,7 +3970,70 @@ class PostalAddressAdmin(ModelAdmin):
 ##### EVENT ADMIN
 
 
+class GalerieCarrouselWidget(forms.CheckboxSelectMultiple):
+    """
+    Miniatures des images de la galerie d'un évènement, chacune avec une case à cocher.
+    / Thumbnails of an event's gallery images, each with a checkbox.
+
+    LOCALISATION : Administration/admin_tenant.py
+    Gabarit : Administration/templates/admin/event/widget_galerie_carrousel.html
+
+    Utilisé par EventForm sur le champ « carrousel ». Le champ ne liste que les
+    images déjà liées à l'évènement. Décocher une image la retire de l'évènement :
+    la diapositive reste en base, dans l'admin Carrousel.
+    / Used by EventForm on the "carrousel" field. Unchecking removes the image from
+    the event; the slide stays in the Carrousel admin.
+    """
+    template_name = "admin/event/widget_galerie_carrousel.html"
+
+
+class PlusieursImagesInput(forms.FileInput):
+    """
+    Champ fichier natif qui accepte plusieurs fichiers d'un coup.
+    / Native file input accepting several files at once.
+
+    LOCALISATION : Administration/admin_tenant.py
+    """
+    allow_multiple_selected = True
+
+
+class PlusieursImagesField(forms.ImageField):
+    """
+    Champ de formulaire qui valide une LISTE d'images (Pillow vérifie chaque fichier).
+    Renvoie une liste vide si aucun fichier n'est envoyé.
+    / Form field validating a LIST of images. Returns an empty list when no file is sent.
+
+    LOCALISATION : Administration/admin_tenant.py
+    Utilisé par EventForm (« Ajouter des images »). Enregistrement : EventAdmin.save_related.
+    """
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", PlusieursImagesInput(attrs={"accept": "image/*"}))
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        images_validees = []
+        if not data:
+            return images_validees
+
+        # Le widget multiple renvoie une liste ; on valide chaque fichier un par un.
+        # / The multiple widget returns a list; each file is validated one by one.
+        fichiers_envoyes = data if isinstance(data, (list, tuple)) else [data]
+        for fichier_envoye in fichiers_envoyes:
+            images_validees.append(super().clean(fichier_envoye, initial))
+        return images_validees
+
+
 class EventForm(ModelForm):
+    # Envoi de nouvelles images pour la galerie (Event.carrousel).
+    # Chaque fichier devient une diapositive dans EventAdmin.save_related.
+    # / Upload of new gallery images; each file becomes a slide in EventAdmin.save_related.
+    galerie_nouvelles_images = PlusieursImagesField(
+        required=False,
+        label=_("Ajouter des images"),
+        help_text=_("Plusieurs fichiers possibles. Les images sont ajoutées à la galerie à l'enregistrement."),
+    )
+
     class Meta:
         model = Event
         fields = '__all__'
@@ -3977,6 +4044,20 @@ class EventForm(ModelForm):
         self.fields['products'].widget.can_add_related = False
         self.fields['products'].help_text = _("Leave empty to avoid reservations.")
         self.fields['short_description'].help_text = _("Used for social network descriptions.")
+
+        # Galerie : seulement les images déjà liées à cet évènement, en miniatures.
+        # Le widget est posé AVANT le queryset : c'est le setter du queryset qui
+        # transmet les choix au widget. Dans l'autre ordre, le widget reste vide.
+        # / Gallery: only this event's images. Widget BEFORE queryset: the queryset
+        # setter passes the choices to the widget.
+        if self.instance.pk:
+            images_de_l_evenement = self.instance.carrousel.all()
+        else:
+            images_de_l_evenement = Carrousel.objects.none()
+        self.fields['carrousel'].widget = GalerieCarrouselWidget()
+        self.fields['carrousel'].queryset = images_de_l_evenement
+        self.fields['carrousel'].label = _("Galerie d'images")
+        self.fields['carrousel'].help_text = _("Décochez une image pour la retirer de l'évènement.")
 
         try:
             # On mets la valeur de la jauge réglée dans la config par default
@@ -4259,8 +4340,8 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
                 'end_datetime',
                 'show_time',
                 'img',
-                'sticker_img',
                 'carrousel',
+                'galerie_nouvelles_images',
                 'short_description',
                 'long_description',
                 'jauge_max',
@@ -4340,7 +4421,6 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         "thematique",
         # "options_radio",
         # "options_checkbox",
-        "carrousel",
         "postal_address",
 
         # Le autocomplete fields + many2many ne permet pas de filtrage facile
@@ -4411,6 +4491,17 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)
         obj = form.instance
+
+        # Les images envoyées par « Ajouter des images » deviennent des diapositives
+        # rattachées à l'évènement. Forcément APRÈS super() : save_m2m y enregistre
+        # les cases cochées de la galerie et écraserait un add() fait avant.
+        # / Uploaded images become slides linked to the event. AFTER super(): save_m2m
+        # stores the checked boxes there and would overwrite an earlier add().
+        nouvelles_images_envoyees = form.cleaned_data.get("galerie_nouvelles_images", [])
+        for image_envoyee in nouvelles_images_envoyees:
+            nouvelle_diapositive = Carrousel.objects.create(img=image_envoyee)
+            obj.carrousel.add(nouvelle_diapositive)
+
         # Fabrication des pricesold event/prix pour pouvoir être selectionné sur le + billet
         # Doit être dans save_related (pas save_model) car les M2M products
         # ne sont disponibles qu'après que Django les a sauvées.

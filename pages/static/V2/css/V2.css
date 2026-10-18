@@ -2512,7 +2512,10 @@ img { max-width: 100%; display: block; }
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  /* scale-down : une grande image est réduite pour tenir dans la scène, une petite
+     garde sa taille naturelle (jamais agrandie, donc jamais pixelisée).
+     / scale-down: large images shrink to fit, small ones keep their natural size. */
+  object-fit: scale-down;
   outline: 1px solid rgba(0, 0, 0, 0.08);
   outline-offset: -1px;
 }

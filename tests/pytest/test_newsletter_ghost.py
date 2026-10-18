@@ -32,7 +32,11 @@ from newsletter.client_ghost import (
     creer_brouillon,
     forger_token_ghost,
 )
-from newsletter.collecte import calculer_tarif, collecter_evenements_du_reseau
+from newsletter.collecte import (
+    calculer_tarif,
+    collecter_besoins_benevoles,
+    collecter_evenements_du_reseau,
+)
 from newsletter.rendu import rendre_newsletter_html, titre_de_la_newsletter
 from newsletter.services import (
     AucunEvenement,
@@ -837,7 +841,7 @@ def _fiche_de_test(**surcharges):
         "image_url": "https://demo-tibillet.ovh/media/images/concert.crop_hdr.jpg",
         "tarif": "Prix libre, à partir de 5 €",
         "url_event": "https://demo-tibillet.ovh/event/concert-de-soutien/",
-        "libelle_bouton": "Réserver",
+        "libelle_bouton": "En savoir plus",
     }
     fiche.update(surcharges)
     return fiche
@@ -871,7 +875,7 @@ class TestRendu:
     def test_le_bouton_porte_le_lien_et_le_libelle(self):
         html = rendre_newsletter_html([_fiche_de_test()], timezone.now(), timezone.now())
         assert 'href="https://demo-tibillet.ovh/event/concert-de-soutien/"' in html
-        assert "Réserver" in html
+        assert "En savoir plus" in html
 
     def test_limage_est_une_url_distante_jamais_un_upload(self):
         """On REFERENCE l'image TiBillet, on ne l'uploade pas dans Ghost."""
@@ -1039,7 +1043,8 @@ class TestServices:
 
     def test_aucun_evenement_ne_cree_pas_de_brouillon_vide(self, tenant_lespass):
         """
-        Zero event sur la periode -> on leve AucunEvenement et on NE POSTE RIEN.
+        Zero event sur la periode ET zero besoin de benevoles -> on leve AucunEvenement
+        et on NE POSTE RIEN.
         Un brouillon vide dans Ghost serait du bruit pour le gestionnaire.
         """
         config = _fausse_ghost_config()
@@ -1049,6 +1054,8 @@ class TestServices:
                 "newsletter.services.GhostConfig.get_solo", return_value=config
             ), patch(
                 "newsletter.services.collecter_evenements_du_reseau", return_value=[]
+            ), patch(
+                "newsletter.services.collecter_besoins_benevoles", return_value=[]
             ), patch("newsletter.services.creer_brouillon") as faux_creer:
                 with pytest.raises(AucunEvenement):
                     creer_brouillon_newsletter(nombre_de_jours=7)
@@ -1132,3 +1139,206 @@ class TestServices:
 
         assert config.save.called
         assert "abc" in config.ghost_last_log
+
+
+# ---------------------------------------------------------------------------
+# Le bouton des evenements et le bloc « On a besoin de vous » (benevolat)
+# / The events' button and the "We need you" volunteer block
+# ---------------------------------------------------------------------------
+
+def _fiche_benevolat_de_test(**surcharges):
+    fiche_benevolat = {
+        "nom": "Bar associatif",
+        "chaque_semaine": True,
+        "premier_jour": timezone.localdate() + timedelta(days=2),
+        "dernier_jour": timezone.localdate() + timedelta(days=30),
+        "places_libres": 4,
+        "jours_a_remplir": [
+            {"date": timezone.localdate() + timedelta(days=2), "remplissage": 50, "places_libres": 3},
+            {"date": timezone.localdate() + timedelta(days=3), "remplissage": 75, "places_libres": 1},
+        ],
+        "url_inscription": "https://demo-tibillet.ovh/booking/benevolat/bar-associatif/",
+        "libelle_bouton": "Je m'inscris",
+    }
+    fiche_benevolat.update(surcharges)
+    return fiche_benevolat
+
+
+def _creer_planning_benevole(dans_combien_de_jours, nombre_souhaite=2):
+    """
+    Un planning publie, une tache, un besoin (18h-21h). Rend (planning, besoin).
+    A appeler dans un tenant_context, sous django_db (annule a la fin).
+    / A published planning with one need. Call inside a tenant_context, under django_db.
+    """
+    import datetime as module_datetime
+
+    from booking.models import BesoinBenevole, PlanningBenevole, TacheBenevole
+    from fabriques_panier import identifiant_unique
+
+    identifiant = identifiant_unique()
+    planning = PlanningBenevole.objects.create(
+        name=f"TEST_newsletter planning {identifiant}",
+        slug=f"test-newsletter-{identifiant}",
+        published=True,
+    )
+    tache = TacheBenevole.objects.create(name=f"TEST_newsletter bar {identifiant}")
+    besoin = BesoinBenevole.objects.create(
+        planning=planning,
+        tache=tache,
+        date=timezone.localdate() + timedelta(days=dans_combien_de_jours),
+        heure_debut=module_datetime.time(18, 0),
+        heure_fin=module_datetime.time(21, 0),
+        nombre_souhaite=nombre_souhaite,
+    )
+    return planning, besoin
+
+
+class TestRenduBenevolat:
+
+    def test_le_bloc_benevolat_vient_avant_les_evenements(self):
+        html = rendre_newsletter_html(
+            [_fiche_de_test(nom="Concert")],
+            timezone.now(),
+            timezone.now(),
+            fiches_benevolat=[_fiche_benevolat_de_test()],
+        )
+        assert html.index("On a besoin de vous") < html.index("Au programme")
+        assert html.index("Bar associatif") < html.index("Concert")
+
+    def test_chaque_planning_est_une_carte_product_avec_le_bouton_d_inscription(self):
+        html = rendre_newsletter_html(
+            [], timezone.now(), timezone.now(), fiches_benevolat=[_fiche_benevolat_de_test()]
+        )
+        assert 'class="kg-card kg-product-card"' in html
+        assert 'href="https://demo-tibillet.ovh/booking/benevolat/bar-associatif/"' in html
+        assert "Je m&#x27;inscris" in html  # apostrophe échappée par Django
+        assert "style=" not in html
+
+    def test_un_planning_chaque_semaine_annonce_les_creneaux_a_remplir(self):
+        html = rendre_newsletter_html(
+            [], timezone.now(), timezone.now(), fiches_benevolat=[_fiche_benevolat_de_test()]
+        )
+        assert "Ces prochains jours, on a besoin de remplir 4 créneaux." in html
+        assert "3 créneaux libres" in html
+        assert "1 créneau libre" in html
+
+    def test_un_planning_ponctuel_annonce_sa_periode_et_ses_creneaux_libres(self):
+        html = rendre_newsletter_html(
+            [],
+            timezone.now(),
+            timezone.now(),
+            fiches_benevolat=[_fiche_benevolat_de_test(chaque_semaine=False)],
+        )
+        assert "4 créneaux libres" in html
+        assert "Ces prochains jours" not in html
+
+    def test_aucun_br_dans_la_description_de_la_carte_benevolat(self):
+        """Meme piege que les evenements : les <br> sont avales par Ghost."""
+        html = rendre_newsletter_html(
+            [], timezone.now(), timezone.now(), fiches_benevolat=[_fiche_benevolat_de_test()]
+        )
+        debut = html.index('class="kg-product-card-description"')
+        fin = html.index("</div>", debut)
+        assert "<br" not in html[debut:fin]
+
+    def test_sans_planning_pas_de_bloc_benevolat(self):
+        html = rendre_newsletter_html([_fiche_de_test()], timezone.now(), timezone.now())
+        assert "On a besoin de vous" not in html
+
+    def test_benevolat_seul_pas_d_intro_ni_de_sommaire_d_evenements(self):
+        html = rendre_newsletter_html(
+            [], timezone.now(), timezone.now(), fiches_benevolat=[_fiche_benevolat_de_test()]
+        )
+        assert "Voici les événements" not in html
+        assert "<ul>" not in html
+
+
+@pytest.mark.django_db
+class TestCollecteBenevolat:
+
+    def test_le_bouton_des_evenements_dit_toujours_en_savoir_plus(self, tenant_lespass):
+        """Meme avec un nom de bouton de reservation personnalise sur l'evenement."""
+        with tenant_context(tenant_lespass):
+            evenement = Event.objects.create(
+                name="TEST newsletter — bouton personnalise",
+                datetime=timezone.now() + timedelta(days=3),
+                published=True,
+                reservation_button_name="Je prends ma place",
+                img="",
+                sticker_img="",
+            )
+            try:
+                fiches = collecter_evenements_du_reseau(FENETRE_LARGE_EN_JOURS)
+            finally:
+                evenement.delete()
+
+        fiches_de_l_evenement = [f for f in fiches if f["nom"] == evenement.name]
+        assert len(fiches_de_l_evenement) == 1
+        assert fiches_de_l_evenement[0]["libelle_bouton"] == "En savoir plus"
+
+    def test_un_planning_avec_des_creneaux_libres_remonte_avec_une_url_absolue(
+        self, tenant_lespass
+    ):
+        with tenant_context(tenant_lespass):
+            planning, _besoin = _creer_planning_benevole(2, nombre_souhaite=3)
+            fiches_benevolat = collecter_besoins_benevoles()
+
+        fiches_du_planning = [f for f in fiches_benevolat if f["nom"] == planning.name]
+        assert len(fiches_du_planning) == 1
+        fiche_benevolat = fiches_du_planning[0]
+        assert fiche_benevolat["places_libres"] == 3
+        assert fiche_benevolat["url_inscription"].startswith("https://")
+        assert fiche_benevolat["url_inscription"].endswith(f"/booking/benevolat/{planning.slug}/")
+
+    def test_un_planning_entierement_couvert_ne_remonte_pas(self, tenant_lespass):
+        from booking.models import InscriptionBenevole
+        from fabriques_panier import creer_utilisateur
+
+        with tenant_context(tenant_lespass):
+            planning, besoin = _creer_planning_benevole(2, nombre_souhaite=1)
+            InscriptionBenevole.objects.create(besoin=besoin, user=creer_utilisateur())
+            fiches_benevolat = collecter_besoins_benevoles()
+
+        assert planning.name not in [f["nom"] for f in fiches_benevolat]
+
+    def test_module_benevolat_eteint_pas_de_bloc(self, tenant_lespass):
+        import copy
+
+        from BaseBillet.models import Configuration
+
+        with tenant_context(tenant_lespass):
+            _creer_planning_benevole(2)
+            configuration_eteinte = copy.copy(Configuration.get_solo())
+            configuration_eteinte.module_benevolat = False
+            with patch(
+                "newsletter.collecte.Configuration.get_solo",
+                return_value=configuration_eteinte,
+            ):
+                fiches_benevolat = collecter_besoins_benevoles()
+
+        assert fiches_benevolat == []
+
+
+@pytest.mark.django_db
+class TestServicesBenevolat:
+
+    def test_des_besoins_sans_evenement_suffisent_a_creer_le_brouillon(self, tenant_lespass):
+        config = _fausse_ghost_config()
+
+        with tenant_context(tenant_lespass):
+            with patch(
+                "newsletter.services.GhostConfig.get_solo", return_value=config
+            ), patch(
+                "newsletter.services.collecter_evenements_du_reseau", return_value=[]
+            ), patch(
+                "newsletter.services.collecter_besoins_benevoles",
+                return_value=[_fiche_benevolat_de_test()],
+            ), patch(
+                "newsletter.services.creer_brouillon",
+                return_value="https://x/ghost/#/editor/post/1",
+            ) as faux_creer:
+                resultat = creer_brouillon_newsletter(nombre_de_jours=7)
+
+        assert resultat["nombre_evenements"] == 0
+        assert resultat["nombre_plannings_benevoles"] == 1
+        assert "On a besoin de vous" in faux_creer.call_args.kwargs["contenu_html"]

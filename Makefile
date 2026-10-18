@@ -9,7 +9,7 @@
 # goals, so they are declared as no-op targets and passed to the script.
 FAMILLES_E2E := $(shell sed -n 's/^ *\([a-z_]*\): famille E2E.*/\1/p' pytest.ini | tr '_' '-')
 FAMILLES_DEMANDEES := $(filter $(FAMILLES_E2E),$(MAKECMDGOALS))
-CIBLES := help test e2e e2e-visible coverage update
+CIBLES := help test e2e e2e-visible coverage update update_midnight
 
 # Un mot inconnu arrete tout AVANT de lancer quoi que ce soit : sinon une faute de frappe
 # (make e2e-visible adhesio) lancerait d'abord toute la suite.
@@ -35,6 +35,8 @@ help:
 	@echo "  make e2e           E2E navigateur, parcours Stripe compris (stripe listen dans byobu)"
 	@echo "  make e2e-visible   E2E dans un Chromium visible sur l'ecran, ralenti, avec journal"
 	@echo "  make coverage      pytest + couverture du code (total + htmlcov/)"
+	@echo "  make update        PROD : mise a jour sans coupure (release poussee avant, depart de :05 a :20 ou de :35 a :50)"
+	@echo "  make update_midnight  PROD : programme make update a 00:05 avec at (MIGRER=1 ou EXECUTEUR=standard transmis)"
 	@echo ""
 	@echo "  Familles E2E (avec make e2e ou make e2e-visible, cumulables) :"
 	@sed -n 's/^ *\([a-z_]*\): famille E2E — \(.*\)/\1|\2/p' pytest.ini \
@@ -62,6 +64,22 @@ e2e-visible:
 
 coverage:
 	@FICHIERS="$(FICHIERS)" $(LANCER) couverture $(ARGS)
+
+# Production uniquement : la procedure vit dans le script (TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md).
+# / Production only: the procedure lives in the script.
+update:
+	@bash scripts/mise_a_jour_prod.sh
+
+# Programme `make update` a 00:05 avec at : 00:05 tombe dans les deux fenetres du script
+# (code seul de :05 a :20, migration de :05 a :10). at garde le dossier et l'environnement
+# de la personne qui programme ; le resultat se lit dans logs/mise_a_jour_*.log.
+# MIGRER et EXECUTEUR sont transmis : vides, le script choisit seul.
+# Voir la tache : atq — l'annuler : atrm <numero>.
+# / Schedules `make update` at 00:05 with at; MIGRER and EXECUTEUR are passed through.
+update_midnight:
+	@command -v at >/dev/null || { echo "at n'est pas installe : apt install at" >&2; exit 1; }
+	@echo "cd $(CURDIR) && MIGRER=$(MIGRER) EXECUTEUR=$(EXECUTEUR) make update" | at 00:05
+	@atq
 
 # Les familles n'ont pas d'action propre : elles precisent make e2e / make e2e-visible.
 # / Families have no action of their own: they narrow make e2e / make e2e-visible.

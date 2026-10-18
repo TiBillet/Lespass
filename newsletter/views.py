@@ -190,8 +190,8 @@ class NewsletterAdminViewSet(viewsets.ViewSet):
                 request,
                 "info",
                 _(
-                    "Aucun évènement sur les %(jours)s prochains jours : "
-                    "aucun brouillon n'a été créé."
+                    "Aucun évènement sur les %(jours)s prochains jours, et aucun besoin "
+                    "de bénévoles : aucun brouillon n'a été créé."
                 )
                 % {"jours": nombre_de_jours},
             )
@@ -235,8 +235,14 @@ class NewsletterAdminViewSet(viewsets.ViewSet):
         return _reponse(
             request,
             "succes",
-            _("Brouillon créé avec %(nombre)s évènement(s).")
-            % {"nombre": resultat["nombre_evenements"]},
+            _(
+                "Brouillon créé avec %(nombre)s évènement(s) et %(plannings)s "
+                "planning(s) de bénévoles."
+            )
+            % {
+                "nombre": resultat["nombre_evenements"],
+                "plannings": resultat["nombre_plannings_benevoles"],
+            },
             lien=resultat["url_edition"],
             lien_libelle=_("Ouvrir dans Ghost →"),
         )

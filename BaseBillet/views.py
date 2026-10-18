@@ -3389,7 +3389,6 @@ class EventMVT(viewsets.ViewSet):
                         'tag', 'products', 'products__prices',
                     ).get(slug=slug)
                     event.img = event.get_img()
-                    event.sticker_img = event.get_sticker_img()
                     self._calculer_prix_min_max_event(event)
                     return event
                 except Event.DoesNotExist:
@@ -3408,7 +3407,6 @@ class EventMVT(viewsets.ViewSet):
                         'tag', 'products', 'products__prices',
                     ).get(uuid__startswith=hex8)
                     event.img = event.get_img()
-                    event.sticker_img = event.get_sticker_img()
                     self._calculer_prix_min_max_event(event)
                     return event
                 except Event.DoesNotExist:
@@ -3617,7 +3615,6 @@ class EventMVT(viewsets.ViewSet):
                 for event in paginated_events:
                     # On va chercher les urls d'images :
                     event.img = event.get_img()
-                    event.sticker_img = event.get_sticker_img()
 
                     # Texte du prix affiche sur la carte de l'agenda
                     # / Price label shown on the agenda card
@@ -3878,7 +3875,6 @@ class EventMVT(viewsets.ViewSet):
 
             # selection et mise en cache des images
             event.img = event.get_img()
-            event.sticker_img = event.get_sticker_img()
 
             # Récupération des produits et des prix pour :
             # - afficher le min / max

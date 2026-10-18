@@ -18,7 +18,7 @@ from django.utils.translation import gettext as _
 
 from BaseBillet.models import GhostConfig
 from newsletter.client_ghost import ErreurGhost, creer_brouillon
-from newsletter.collecte import collecter_evenements_du_reseau
+from newsletter.collecte import collecter_besoins_benevoles, collecter_evenements_du_reseau
 from newsletter.rendu import rendre_newsletter_html, titre_de_la_newsletter
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,10 @@ class GhostNonConfigure(Exception):
 
 
 class AucunEvenement(Exception):
-    """Aucun evenement sur la periode : on ne cree pas de brouillon vide."""
+    """
+    Aucun evenement sur la periode ET aucun besoin de benevoles : on ne cree pas de
+    brouillon vide. / No event and no volunteer need: no empty draft.
+    """
 
 
 def _journaliser(ghost_config, message):
@@ -113,8 +116,9 @@ def creer_brouillon_newsletter(nombre_de_jours):
 
     FLUX :
     1. Lire la config Ghost du tenant (GhostConfig, singleton, cle chiffree)
-    2. Collecter les evenements du tenant ET de son reseau federe sur la fenetre
-    3. S'il n'y en a aucun : lever AucunEvenement, sans rien poster
+    2. Collecter les evenements du tenant ET de son reseau federe sur la fenetre,
+       et les besoins en benevoles du lieu (bloc en tete du brouillon)
+    3. Ni evenement ni besoin : lever AucunEvenement, sans rien poster
     4. Rendre le HTML semantique (conventions kg-* de Ghost)
     5. Deposer le BROUILLON et renvoyer son URL d'edition
     6. Journaliser, succes comme echec
@@ -124,9 +128,9 @@ def creer_brouillon_newsletter(nombre_de_jours):
     / The post is a DRAFT. Sending stays a human action, inside Ghost.
 
     :param nombre_de_jours: la largeur de la fenetre (7 ou 30)
-    :return: {"url_edition": str, "nombre_evenements": int}
+    :return: {"url_edition": str, "nombre_evenements": int, "nombre_plannings_benevoles": int}
     :raises GhostNonConfigure: ni URL ni cle renseignees
-    :raises AucunEvenement: aucun evenement sur la periode
+    :raises AucunEvenement: aucun evenement sur la periode et aucun besoin de benevoles
     :raises ErreurGhost: Ghost injoignable, cle refusee, reponse inattendue
     """
     url_instance_ghost, cle_admin_ghost = lire_la_configuration_ghost()
@@ -136,17 +140,21 @@ def creer_brouillon_newsletter(nombre_de_jours):
     date_fin = timezone.now() + timedelta(days=nombre_de_jours)
 
     fiches = collecter_evenements_du_reseau(nombre_de_jours)
+    fiches_benevolat = collecter_besoins_benevoles()
 
     # On ne cree JAMAIS un brouillon vide : ce serait du bruit dans le Ghost du
-    # gestionnaire. / We NEVER create an empty draft.
-    if not fiches:
-        message = _("Aucun événement sur les %(jours)s prochains jours.") % {
-            "jours": nombre_de_jours
-        }
+    # gestionnaire. Des besoins en benevoles suffisent a faire un brouillon.
+    # / We NEVER create an empty draft. Volunteer needs alone are enough.
+    if not fiches and not fiches_benevolat:
+        message = _(
+            "Aucun événement sur les %(jours)s prochains jours, et aucun besoin de bénévoles."
+        ) % {"jours": nombre_de_jours}
         _journaliser(ghost_config, message)
         raise AucunEvenement(message)
 
-    contenu_html = rendre_newsletter_html(fiches, date_debut, date_fin)
+    contenu_html = rendre_newsletter_html(
+        fiches, date_debut, date_fin, fiches_benevolat=fiches_benevolat
+    )
     titre = titre_de_la_newsletter(date_debut, date_fin)
 
     try:
@@ -167,10 +175,12 @@ def creer_brouillon_newsletter(nombre_de_jours):
 
     _journaliser(
         ghost_config,
-        f"Brouillon de newsletter cree ({len(fiches)} evenements) : {url_edition}",
+        f"Brouillon de newsletter cree ({len(fiches)} evenements, "
+        f"{len(fiches_benevolat)} plannings de benevoles) : {url_edition}",
     )
 
     return {
         "url_edition": url_edition,
         "nombre_evenements": len(fiches),
+        "nombre_plannings_benevoles": len(fiches_benevolat),
     }

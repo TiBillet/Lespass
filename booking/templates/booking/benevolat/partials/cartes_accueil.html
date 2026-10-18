@@ -5,11 +5,13 @@ BLOC D'ACCUEIL « COUPS DE MAIN » : une carte par planning de bénévoles à ve
 
 LOCALISATION : booking/templates/booking/benevolat/partials/cartes_accueil.html
 
-Inclus par pages/{V2,classic}/partials/bloc_liste.html (bloc LISTE, source COUPS_DE_MAIN).
+Inclus par pages/{V2,classic}/partials/bloc_liste.html (bloc LISTE, source COUPS_DE_MAIN)
+et par pages/V2/vues/accueil.html (section « Coups de main »).
 Contexte : plannings = balise plannings_benevoles_a_venir (pages/templatetags/pages_tags.py).
 Le même gabarit sert aux deux skins : ses styles sont ceux du planning (benevolat.css,
 classes « bv- »), chargés ici, une fois par bloc.
-Chaque carte : nom, période, places libres, et les 5 prochains jours colorés comme les
+Chaque carte : nom, période et créneaux libres (« ces prochains jours… » pour un planning
+chaque semaine), et les 5 prochains jours colorés comme les
 en-têtes du planning (D20). La carte mène à la page du planning.
 / Shared by both skins; styles come from benevolat.css, loaded here.
 -->
@@ -19,22 +21,31 @@ en-têtes du planning (D20). La carte mène à la page du planning.
     {% for resume in plannings %}
         <article class="bv-carte" data-testid="carte-planning-benevole">
             <h3 class="bv-carte__titre">{{ resume.planning.name }}</h3>
+            {# Chaque semaine : une phrase sur les 10 prochains jours (resume.places_libres ne #}
+            {# compte que cet horizon, booking/benevolat.py). Ponctuel : période · créneaux libres. #}
+            {# / Weekly: one sentence about the next 10 days. Fixed dates: period · free slots. #}
             <p class="bv-carte__periode">
                 {% if resume.chaque_semaine %}
-                    {% translate "chaque semaine" %}
-                {% elif resume.premier_jour == resume.dernier_jour %}
-                    {{ resume.premier_jour|date:"l j F" }}
-                {% else %}
-                    {% blocktranslate with debut=resume.premier_jour|date:"j F" fin=resume.dernier_jour|date:"j F" %}du {{ debut }} au {{ fin }}{% endblocktranslate %}
-                {% endif %}
-                ·
-                <span class="bv-carte__libres">
                     {% if resume.places_libres %}
-                        {% blocktranslate count nombre=resume.places_libres %}{{ nombre }} place libre{% plural %}{{ nombre }} places libres{% endblocktranslate %}
+                        {% blocktranslate count nombre=resume.places_libres %}Ces prochains jours, on a besoin de remplir <span class="bv-carte__libres">{{ nombre }} créneau</span>{% plural %}Ces prochains jours, on a besoin de remplir <span class="bv-carte__libres">{{ nombre }} créneaux</span>{% endblocktranslate %}
                     {% else %}
-                        {% translate "tout est couvert" %}
+                        <span class="bv-carte__libres">{% translate "tout est couvert" %}</span>
                     {% endif %}
-                </span>
+                {% else %}
+                    {% if resume.premier_jour == resume.dernier_jour %}
+                        {{ resume.premier_jour|date:"l j F" }}
+                    {% else %}
+                        {% blocktranslate with debut=resume.premier_jour|date:"j F" fin=resume.dernier_jour|date:"j F" %}du {{ debut }} au {{ fin }}{% endblocktranslate %}
+                    {% endif %}
+                    ·
+                    <span class="bv-carte__libres">
+                        {% if resume.places_libres %}
+                            {% blocktranslate count nombre=resume.places_libres %}{{ nombre }} créneau libre{% plural %}{{ nombre }} créneaux libres{% endblocktranslate %}
+                        {% else %}
+                            {% translate "tout est couvert" %}
+                        {% endif %}
+                    </span>
+                {% endif %}
             </p>
             <div class="bv-carte__jours" aria-hidden="true">
                 {% for jour in resume.jours %}

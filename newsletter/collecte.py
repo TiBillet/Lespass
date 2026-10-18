@@ -1,6 +1,8 @@
 """
 Rassemble les evenements du reseau federe et en fait des "fiches".
-/ Gather the federated network's events into "fiches" (plain dicts).
+Rassemble aussi les besoins en benevoles du lieu (bloc « On a besoin de vous »).
+/ Gather the federated network's events into "fiches" (plain dicts), and the venue's
+volunteer needs.
 
 LOCALISATION : newsletter/collecte.py
 
@@ -12,6 +14,7 @@ import logging
 from datetime import timedelta
 
 from django.db import DatabaseError, connection
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django_tenants.utils import tenant_context
@@ -25,6 +28,7 @@ from BaseBillet.models import (
     Product,
 )
 from Customers.models import Client
+from booking.benevolat import resumes_des_plannings_a_venir
 from seo.services import build_stdimage_variation_url, get_tenant_uuids_with_event_tags
 
 logger = logging.getLogger(__name__)
@@ -296,14 +300,18 @@ def _construire_fiche(event, domaine_du_proprietaire, nom_de_lorganisateur):
         if chemin_de_limage:
             image_url = f"https://{domaine_du_proprietaire}{chemin_de_limage}"
 
-    # Le lien "Reserver" : on utilise event.full_url TEL QUEL. Ce champ est calcule a
+    # Le lien du bouton : on utilise event.full_url TEL QUEL. Ce champ est calcule a
     # chaque save() et gere DEJA le cas is_external (il pointe alors vers le site tiers).
     # Le reconstruire a la main enverrait les abonnes vers une page de reservation qui
     # n'existe pas pour les events externes.
     # / Use event.full_url AS IS: it already handles is_external.
     url_event = event.full_url or ""
 
-    libelle_bouton = event.reservation_button_name or _("Réserver")
+    # Toujours « En savoir plus » : le bouton mène à la PAGE de l'évènement, pas à la
+    # réservation. Le nom de bouton personnalisé (reservation_button_name) ne vaut que
+    # pour le bouton de réservation de cette page.
+    # / Always "En savoir plus": the button opens the event PAGE, not the booking.
+    libelle_bouton = _("En savoir plus")
 
     return {
         "nom": event.name,
@@ -510,3 +518,64 @@ def _collecter_chez_un_tenant(
             )
 
         return fiches_de_ce_tenant
+
+
+def collecter_besoins_benevoles():
+    """
+    Rassemble les plannings de bénévoles du lieu qui ont encore des créneaux à remplir.
+    / Gather the venue's volunteer plannings that still have slots to fill.
+
+    LOCALISATION : newsletter/collecte.py
+
+    Le bloc « On a besoin de vous » de la newsletter, en tête du brouillon. Il reprend
+    les résumés des cartes « Coups de main » du site (booking/benevolat.py,
+    resumes_des_plannings_a_venir) : les chiffres sont les mêmes que sur l'accueil.
+    - Seulement le lieu COURANT : le bénévolat n'est pas fédéré.
+    - Rien si le module bénévolat est éteint (même règle que l'accueil V2).
+    - Un planning dont tout est couvert n'est pas repris : rien à demander.
+    / Only the CURRENT venue; nothing when the module is off; fully covered plannings
+    are skipped.
+
+    :return: list[dict] — nom, chaque_semaine, premier_jour, dernier_jour,
+             places_libres, jours_a_remplir, url_inscription, libelle_bouton
+    """
+    if not Configuration.get_solo().module_benevolat:
+        return []
+
+    domaine_primaire = connection.tenant.get_primary_domain()
+    if not domaine_primaire:
+        logger.warning(
+            f"collecter_besoins_benevoles : le tenant '{connection.tenant.schema_name}' "
+            f"n'a pas de domaine primaire. Le bloc bénévolat est ignoré."
+        )
+        return []
+
+    fiches_benevolat = []
+    for resume in resumes_des_plannings_a_venir(nombre_max=10):
+        if not resume["places_libres"]:
+            continue
+
+        # Seulement les jours qui ont encore des places : la newsletter appelle à
+        # s'inscrire, un jour couvert n'apporte rien.
+        # / Only days with free places left.
+        jours_a_remplir = []
+        for jour in resume["jours"]:
+            if jour["places_libres"]:
+                jours_a_remplir.append(jour)
+
+        planning = resume["planning"]
+        chemin_du_planning = reverse("benevolat-planning", kwargs={"slug": planning.slug})
+        fiches_benevolat.append({
+            "nom": planning.name,
+            "chaque_semaine": resume["chaque_semaine"],
+            "premier_jour": resume["premier_jour"],
+            "dernier_jour": resume["dernier_jour"],
+            "places_libres": resume["places_libres"],
+            "jours_a_remplir": jours_a_remplir,
+            # URL ABSOLUE : un email ne résout pas les URLs relatives.
+            # / ABSOLUTE URL: an email cannot resolve relative URLs.
+            "url_inscription": f"https://{domaine_primaire.domain}{chemin_du_planning}",
+            "libelle_bouton": _("Je m'inscris"),
+        })
+
+    return fiches_benevolat

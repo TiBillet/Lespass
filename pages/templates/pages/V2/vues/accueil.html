@@ -1,5 +1,5 @@
 {% extends base_template %}
-{% load tibitags i18n static l10n %}
+{% load tibitags i18n static l10n pages_tags %}
 
 {# Titre « nom du lieu — ville » : ce que l'on tape pour trouver un lieu. #}
 {# « Accueil » n'apporte rien au referencement. Le suffixe du shell est vide : #}
@@ -226,6 +226,33 @@
     </section>
 
     <c-V2.agenda_a_venir :events="events" title="{% translate 'Ce qui arrive' %}"/>
+
+    {% comment %}
+    COUPS DE MAIN : les plannings de bénévoles qui ont des besoins à venir
+    / Volunteer plannings with upcoming needs
+
+    Mêmes cartes que le bloc CMS LISTE, source COUPS_DE_MAIN
+    (pages/V2/partials/bloc_liste.html) : balise plannings_benevoles_a_venir
+    (pages/templatetags/pages_tags.py) + booking/benevolat/partials/cartes_accueil.html.
+    Section affichée seulement si le module bénévolat est actif ET qu'un planning
+    a des besoins à venir : pas de message « rien à prévoir » sur l'accueil.
+    / Shown only when the volunteering module is on and a planning has upcoming needs.
+    {% endcomment %}
+    {% if config.module_benevolat %}
+        {% plannings_benevoles_a_venir 3 as plannings_a_venir %}
+        {% if plannings_a_venir %}
+            <section class="section" data-testid="accueil-benevolat">
+                <div class="section-head">
+                    <h2 class="section__title">{% translate "Coups de main" %}</h2>
+                    <a class="link" href="{% url 'benevolat-liste' %}"
+                       hx-get="{% url 'benevolat-liste' %}" hx-target="body" hx-push-url="true">
+                        {% translate "Tous les plannings" %} <span aria-hidden="true">→</span>
+                    </a>
+                </div>
+                {% include "booking/benevolat/partials/cartes_accueil.html" with plannings=plannings_a_venir %}
+            </section>
+        {% endif %}
+    {% endif %}
 
 {% comment %} V2-HERE
 SECTIONS MASQUÉES EN ATTENDANT LES DONNÉES

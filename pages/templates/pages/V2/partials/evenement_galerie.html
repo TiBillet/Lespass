@@ -10,7 +10,8 @@ Contexte attendu : slides = event.carrousel.all (modèle BaseBillet.Carrousel).
 Les images ne sont JAMAIS rognées :
 - la scène (.galerie__scene) a une hauteur fixe (ratio 3/2, plafonnée).
   La page ne saute donc pas quand on passe d'une image à l'autre ;
-- chaque image tient entière dans la scène (object-fit: contain) ;
+- chaque image tient entière dans la scène (object-fit: scale-down) : une grande
+  image est réduite, une petite garde sa taille naturelle, jamais agrandie ;
 - les bandes vides autour d'une image portrait ou très large sont remplies
   par la MÊME image, floutée (variable CSS --galerie-fond, lue par ::before).
 On n'utilise PAS commun/partials/picture.html : il impose object-fit-cover,

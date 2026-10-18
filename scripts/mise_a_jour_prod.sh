@@ -4,35 +4,36 @@
 #
 # LOCALISATION : scripts/mise_a_jour_prod.sh — appele par le Makefile (make update).
 # A lancer sur l'HOTE de production, dans le dossier du depot, dans byobu/tmux.
-# / Run on the production HOST, in the repository folder, inside byobu/tmux.
-#
-# Spec : TECH_DOC/SESSIONS/TODO/DEPLOIEMENT-mise-a-jour-sans-coupure.md
+# Spec : TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md (geste 2). La release (image Docker du
+# commit) doit avoir ete poussee avant : docker_push_update.sh.
+# / Run on the production HOST. The release image must have been pushed first.
 #
 # FLUX :
 #  1. Verrou (un seul make update a la fois) et journal dans logs/mise_a_jour_*.log.
 #  2. Fenetre horaire : depart de :05 a :20 ou de :35 a :50 (crons a :00 et :30).
-#  3. Etat de depart : les 3 services en RUNNING, memoire disponible, arbre git propre,
-#     aucune migration deja en cours dans le conteneur.
+#  3. Etat de depart : les 3 services en RUNNING, arbre git propre, venv de prod conforme
+#     a poetry.lock, aucun conteneur lespass_maj en cours.
 #  4. git fetch. Si un fichier qui demande un geste a la main a change (dependances,
 #     dockerfile, supervisor, nginx...) : arret AVANT de toucher au code servi.
-#  5. Migration necessaire ? (fichiers */migrations/*.py changes depuis la derniere
+#  5. docker pull de l'image latest, qui doit porter le commit cible (label).
+#  6. Migration necessaire ? (fichiers */migrations/*.py changes depuis la derniere
 #     migration reussie). Si oui : fenetre plus stricte, et aucune sauvegarde en cours.
-#  6. Copie du code cible dans logs/code_cible (git archive). On CONTROLE ce code
-#     (manage.py check, imports wsgi/asgi, resolveurs d'URLs) et on MIGRE depuis cette
-#     copie. Pendant ce temps, le dossier servi n'a pas bouge : les workers en place
-#     servent l'ancien code ET les anciens gabarits, sans melange.
-#  7. git merge --ff-only, puis collectstatic.
-#  8. Gunicorn : remplacement des workers UN PAR UN (TTIN, attente du prechauffage,
-#     TTOU). Jamais moins de N workers prets, jamais plus de N+1 en memoire.
-#  9. Test : /robots.txt doit repondre 200.
-# 10. Redemarrage de daphne puis de celery, et controle final : tout en RUNNING.
+#  7. Conteneur jetable lespass_maj, lance depuis la NOUVELLE image : il controle le code
+#     (manage.py check, imports wsgi/asgi, resolveurs d'URLs) puis migre. Pendant ce
+#     temps, le dossier servi n'a pas bouge : l'ancien code sert, sans melange.
+#  8. git merge --ff-only, puis collectstatic.
+#  9. Gunicorn : remplacement des workers UN PAR UN (TTIN, attente du prechauffage,
+#     TTOU). Jamais moins de N workers prets.
+# 10. Test : /robots.txt doit repondre 200.
+# 11. Redemarrage de daphne puis de celery, controle final, menage des images.
 #
 # REPRISE APRES UN ECHEC : relancer make update. Deux marqueurs dans logs/ disent ou on
 # en est : dernier_commit_migre (base du calcul des migrations) et dernier_commit_deploye.
-# Variables : MIGRER=1 force la migration, MIGRER=0 la saute (deja faite a la main).
+# Variables : MIGRER=1 force la migration, MIGRER=0 la saute (deja faite a la main) ;
+# EXECUTEUR=standard migre un lieu apres l'autre.
 # / On failure, run make update again. Two marker files in logs/ track progress.
 #
-# CE QUE LE SCRIPT NE FAIT PAS (gestes a la main, voir la spec) : dependances,
+# CE QUE LE SCRIPT NE FAIT PAS (« grosse mise a jour », voir la spec) : dependances,
 # dockerfile, conf supervisor, conf nginx, gunicorn_conf.py, docker-compose.prod.yml.
 
 set -euo pipefail
@@ -40,16 +41,18 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 CONTENEUR="lespass_django"
+CONTENEUR_DE_MAJ="lespass_maj"
 CONTENEUR_POSTGRES="lespass_postgres"
+IMAGE="tibillet/lespass:latest"
+COMPOSE=(docker compose -f docker-compose.prod.yml)
 FICHIER_LOG_GUNICORN="logs/gunicorn.logs"
-DOSSIER_CODE_CIBLE="logs/code_cible"
 MARQUEUR_MIGRE="logs/dernier_commit_migre"
 MARQUEUR_DEPLOYE="logs/dernier_commit_deploye"
-MEMOIRE_DISPONIBLE_MINIMUM_EN_MO=600
 
 # Fichiers dont un changement demande un geste a la main. Le script s'arrete avant le merge.
-# - poetry.lock, pyproject.toml : dependances (docker restart, start.sh refait poetry install).
-# - dockerfile : reconstruction de l'image.
+# - poetry.lock, pyproject.toml : dependances. Les workers remplaces un par un gardent le
+#   venv du conteneur de prod : ils n'auraient pas les nouveaux paquets.
+# - dockerfile : l'image change, le conteneur de prod doit etre recree.
 # - supervisor/, start.sh : relus seulement au demarrage du conteneur.
 # - gunicorn_conf.py : relu seulement par le maitre (HUP ou restart). Les workers ajoutes
 #   par TTIN heritent de l'ANCIEN hook de prechauffage.
@@ -68,6 +71,19 @@ arreter() {
     echo "" >&2
     echo "ARRET : $1" >&2
     exit 1
+}
+
+minute_dans_la_plage() {
+    # $1 = minute actuelle, $2 = fin de la plage apres :05 et apres :35 (20 ou 10)
+    # / $1 = current minute, $2 = end of the range after :05 and after :35
+    local fin_de_plage="$2"
+    if [ "$1" -ge 5 ] && [ "$1" -le "$fin_de_plage" ]; then
+        return 0
+    fi
+    if [ "$1" -ge 35 ] && [ "$1" -le $((30 + fin_de_plage)) ]; then
+        return 0
+    fi
+    return 1
 }
 
 # Vrai si gunicorn, daphne ET celery sont en RUNNING.
@@ -106,9 +122,7 @@ echo "== make update — $(date '+%F %T') — journal : $FICHIER_JOURNAL"
 # « 10# » force la base 10 : sans lui, bash lit « 08 » et « 09 » comme de l'octal invalide.
 # / Time window: stay away from the :00 and :30 crons.
 # ---------------------------------------------------------------------------------------
-minute_actuelle=$((10#$(date +%M)))
-if ! { [ "$minute_actuelle" -ge 5 ] && [ "$minute_actuelle" -le 20 ]; } \
-    && ! { [ "$minute_actuelle" -ge 35 ] && [ "$minute_actuelle" -le 50 ]; }; then
+if ! minute_dans_la_plage "$((10#$(date +%M)))" 20; then
     arreter "il est $(date +%H:%M), trop pres d'un cron. make update se lance de :05 a :20 ou de :35 a :50."
 fi
 
@@ -124,13 +138,6 @@ if ! tous_les_services_tournent; then
     arreter "supervisord ne tourne pas, ou un service n'est pas en RUNNING."
 fi
 
-# Le remplacement des workers en ajoute un avant d'en retirer un : il faut sa place en memoire.
-# / Worker replacement adds one before removing one: it needs room in memory.
-memoire_disponible_en_mo=$(( $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) / 1024 ))
-if [ "$memoire_disponible_en_mo" -lt "$MEMOIRE_DISPONIBLE_MINIMUM_EN_MO" ]; then
-    arreter "seulement $memoire_disponible_en_mo Mo de memoire disponible (minimum $MEMOIRE_DISPONIBLE_MINIMUM_EN_MO)."
-fi
-
 # Une modification locale sur le serveur bloquerait le merge, ou serait ecrasee.
 # Les fichiers non suivis (database/, backup/, logs/...) ne comptent pas.
 # / A local change on the server would block the merge. Untracked files do not count.
@@ -139,11 +146,31 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     arreter "le depot du serveur a des modifications locales."
 fi
 
-# `docker exec` sans terminal : un Ctrl-C ou une coupure SSH tue le script, PAS la
-# migration, qui continue dans le conteneur. On n'en lance pas une seconde par-dessus.
-# / Without a TTY, a lost SSH session kills the script, not the migration.
-if docker exec "$CONTENEUR" pgrep -f migrate_schemas >/dev/null; then
-    arreter "une migration tourne deja dans le conteneur. Attendre qu'elle finisse."
+# Le controle du nouveau code se fait dans l'image, avec SES dependances. Il ne vaut pour
+# les workers de prod que si leur venv est conforme au poetry.lock de HEAD (l'etape 4
+# verifie ensuite que ce poetry.lock est celui de la cible). start.sh le realigne a chaque
+# demarrage du conteneur ; ici, on le verifie.
+# / The new code is checked inside the image; it only holds for the prod workers if
+# their venv matches HEAD's poetry.lock.
+echo "== Venv de prod"
+sortie_du_dry_run=$(docker exec -w /DjangoFiles "$CONTENEUR" poetry install --dry-run 2>&1)
+if ! echo "$sortie_du_dry_run" | grep -qE "Package operations: 0 installs, 0 updates, 0 removals|No dependencies to install or update"; then
+    echo "$sortie_du_dry_run" | grep -v "Skipped for the following reason" | head -20
+    arreter "le venv du conteneur de prod ne correspond pas a poetry.lock : grosse mise a jour."
+fi
+
+# Un lespass_maj qui tourne : une migration est en cours (le script precedent a pu mourir,
+# le conteneur continue seul). Un lespass_maj arrete : reste d'un echec, on garde sa fin
+# dans le journal puis on le supprime.
+# / A running lespass_maj means a migration is in progress. A stopped one is a leftover.
+etat_du_conteneur_de_maj=$(docker inspect -f '{{.State.Status}}' "$CONTENEUR_DE_MAJ" 2>/dev/null || true)
+if [ "$etat_du_conteneur_de_maj" = "running" ]; then
+    arreter "$CONTENEUR_DE_MAJ tourne encore (migration en cours) : suivre docker logs -f $CONTENEUR_DE_MAJ."
+fi
+if [ -n "$etat_du_conteneur_de_maj" ]; then
+    echo "== Reste d'un $CONTENEUR_DE_MAJ precedent ($etat_du_conteneur_de_maj), fin de sa sortie :"
+    docker logs --tail 30 "$CONTENEUR_DE_MAJ"
+    docker rm "$CONTENEUR_DE_MAJ" >/dev/null
 fi
 
 
@@ -161,24 +188,39 @@ commit_cible=$(git rev-parse '@{u}')
 dernier_commit_deploye=$(cat "$MARQUEUR_DEPLOYE" 2>/dev/null || true)
 
 if [ "$commit_actuel" = "$commit_cible" ] && [ "$dernier_commit_deploye" = "$commit_cible" ]; then
-    echo "Deja a jour ($branche_suivie, ${commit_cible:0:8}). Rien a faire."
+    echo "Deja a jour ($branche_suivie, ${commit_cible:0:12}). Rien a faire."
     exit 0
 fi
-echo "Mise a jour vers $branche_suivie : ${commit_actuel:0:8} -> ${commit_cible:0:8}"
+echo "Mise a jour vers $branche_suivie : ${commit_actuel:0:12} -> ${commit_cible:0:12}"
 
 fichiers_a_gerer_qui_changent=$(git diff --name-only "$commit_actuel" "$commit_cible" -- "${FICHIERS_A_GERER_A_LA_MAIN[@]}")
 if [ -n "$fichiers_a_gerer_qui_changent" ]; then
     echo "$fichiers_a_gerer_qui_changent"
-    arreter "ces fichiers demandent un geste a la main (voir la spec DEPLOIEMENT-mise-a-jour-sans-coupure.md). Rien n'a ete modifie."
+    arreter "ces fichiers demandent une grosse mise a jour (TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md). Rien n'a ete modifie."
 fi
 
 
 # ---------------------------------------------------------------------------------------
-# 5. Faut-il migrer ?
+# 5. L'image de la release. Le pull n'a aucun effet sur la prod, mais il peut prendre
+# plusieurs minutes si la couche du venv a change : il passe donc AVANT la fenetre stricte
+# de la migration. Le label pose par docker_push_update.sh dit de quel commit vient l'image.
+# / 5. The release image, pulled BEFORE the strict migration window. Its label tells
+# which commit it was built from.
+# ---------------------------------------------------------------------------------------
+echo "== docker pull $IMAGE"
+docker pull "$IMAGE"
+commit_de_l_image=$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE")
+if [ "$commit_de_l_image" != "$commit_cible" ]; then
+    arreter "$IMAGE vient du commit « $commit_de_l_image », pas de ${commit_cible:0:12} : lancer la release (docker_push_update.sh)."
+fi
+
+
+# ---------------------------------------------------------------------------------------
+# 6. Faut-il migrer ?
 # On compare au dernier commit MIGRE avec succes, pas a HEAD : apres une migration qui a
 # echoue, la relance migre encore. Un migrate_schemas sans rien a faire coute ~15 min.
 # Angle mort : les migrations d'une app tierce (montee de dependance) ne se voient pas
-# ici. Ce cas passe par le geste a la main de poetry.lock, puis MIGRER=1 make update.
+# ici. Ce cas passe par la grosse mise a jour, puis MIGRER=1 make update.
 # / Compare with the last SUCCESSFULLY migrated commit, not HEAD.
 # ---------------------------------------------------------------------------------------
 faut_il_migrer="non"
@@ -197,11 +239,11 @@ fi
 echo "Migration : $faut_il_migrer"
 
 if [ "$faut_il_migrer" = "oui" ]; then
-    # La migration dure jusqu'a 15 min : partie apres :10, elle deborderait sur le cron suivant.
-    # / Migration takes up to 15 min: started after :10, it would overlap the next cron.
-    if ! { [ "$minute_actuelle" -ge 5 ] && [ "$minute_actuelle" -le 10 ]; } \
-        && ! { [ "$minute_actuelle" -ge 35 ] && [ "$minute_actuelle" -le 40 ]; }; then
-        arreter "il y a une migration : elle se lance de :05 a :10 ou de :35 a :40."
+    # La migration dure jusqu'a 15 min : partie apres :10, elle deborderait sur le cron
+    # suivant. L'heure est relue : le pull a pu prendre du temps.
+    # / Migration takes up to 15 min. The time is read again: the pull may have been long.
+    if ! minute_dans_la_plage "$((10#$(date +%M)))" 10; then
+        arreter "il est $(date +%H:%M) et il y a une migration : elle se lance de :05 a :10 ou de :35 a :40. Rien n'a ete modifie."
     fi
 
     # Sauvegarde lancee a la main, ou plus longue que prevu. pg_dumpall s'annonce
@@ -211,77 +253,89 @@ if [ "$faut_il_migrer" = "oui" ]; then
     nombre_de_sauvegardes=$(docker exec -e REQUETE="$requete_sauvegarde_en_cours" "$CONTENEUR_POSTGRES" \
         sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "$REQUETE"')
     if [ "$nombre_de_sauvegardes" != "0" ]; then
-        arreter "une sauvegarde (pg_dump) est en cours."
+        arreter "une sauvegarde (pg_dump) est en cours. Rien n'a ete modifie."
     fi
 fi
 
 
 # ---------------------------------------------------------------------------------------
-# 6. Copie du code cible, controle, migration
-# logs/ est ignore par git et monte dans le conteneur : la copie y est visible en
-# /DjangoFiles/logs/code_cible. settings.py calcule BASE_DIR depuis son propre chemin, et
-# manage.py met son dossier en tete de sys.path : tout le code vient de la copie.
-# On appelle le python du venv DIRECTEMENT : `poetry run` lance depuis la copie y lirait un
-# autre pyproject.toml et chercherait un autre venv.
-# / Copy of the target code, check, migration. Run the venv python directly.
+# 7. Conteneur jetable lespass_maj : controle du nouveau code, puis migration.
+#
+# Il tourne depuis l'image du commit cible, sans volume : son code et ses dependances sont
+# ceux de la nouvelle version, et le dossier servi par lespass_django n'a pas bouge.
+#
+# Le CONTROLE doit passer avant que le code arrive dans le dossier servi : un worker
+# gunicorn qui ne demarre pas (code 3 ou 4) fait s'arreter le maitre ET tous les autres
+# workers, donc tout le site. Il reprend ce que fait un worker : django.setup(),
+# middlewares (TiBillet.wsgi), daphne (TiBillet.asgi), et les deux resolveurs du
+# prechauffage. `check` ajoute les system checks (ex. admin.E039).
+#
+# La MIGRATION :
+# - nice / ionice : priorite CPU et disque minimale pour les process Python. Le travail
+#   fait par PostgreSQL n'est pas concerne.
+# - PGOPTIONS lock_timeout : un ALTER TABLE qui attend un verrou bloque toutes les
+#   requetes du site sur cette table. Au bout de 5 s, il abandonne : la migration EN COURS
+#   de ce schema est annulee (les precedentes restent appliquees), les autres schemas
+#   continuent, et la commande finit en erreur. Relancer make update reprend la ou on en est.
+# - executor multiprocessing : quelques minutes au lieu de plusieurs heures pour 500 lieux.
+#   Si une migration ajoute une cle etrangere vers une table publique : EXECUTEUR=standard
+#   (interblocage vu deux fois dans ce cas).
+#
+# Lance DETACHE (-d) : un `docker compose run` attache relaie tous les signaux au
+# conteneur, un Ctrl-C ou une coupure SSH interromprait la migration au milieu d'un
+# schema. Detache, il finit seul si le script meurt (l'etape 3 le retrouve a la relance).
+# Sans --rm : sa sortie reste lisible jusqu'au `docker rm`.
+# / Throwaway lespass_maj container: checks the new code, then migrates. Detached, so a
+# Ctrl-C or a lost SSH session cannot interrupt the migration.
 # ---------------------------------------------------------------------------------------
-echo "== Copie du code cible dans $DOSSIER_CODE_CIBLE"
-rm -rf "$DOSSIER_CODE_CIBLE"
-mkdir -p "$DOSSIER_CODE_CIBLE"
-git archive "$commit_cible" | tar -x -C "$DOSSIER_CODE_CIBLE"
-# LOGGING ecrit dans BASE_DIR/logs/Djangologfile : le dossier doit exister dans la copie.
-# / LOGGING writes into BASE_DIR/logs: the folder must exist in the copy.
-mkdir -p "$DOSSIER_CODE_CIBLE/logs"
-
-python_du_venv=$(docker exec "$CONTENEUR" bash -c 'cd /DjangoFiles && poetry env info -p')/bin/python
-
-# Un worker gunicorn qui ne demarre pas (code 3 ou 4) fait s'arreter le maitre ET tous les
-# autres workers : tout le site tombe. Ce controle doit donc passer AVANT que le code arrive
-# dans le dossier servi. Il reprend ce que fait un worker : django.setup(), middlewares
-# (TiBillet.wsgi), daphne (TiBillet.asgi), et les deux resolveurs du prechauffage.
-# `check` ajoute les system checks (ex. admin.E039, qui empeche Django de demarrer).
-# / A worker that fails to boot halts the whole gunicorn. This check must pass BEFORE the
-# code reaches the served folder.
+read -r -d '' COMMANDES_DU_CONTENEUR_DE_MAJ <<'FIN_DES_COMMANDES' || true
+set -euo pipefail
+cd /DjangoFiles
 echo "== Controle du code cible"
-docker exec -w "/DjangoFiles/$DOSSIER_CODE_CIBLE" "$CONTENEUR" "$python_du_venv" manage.py check
-docker exec -w "/DjangoFiles/$DOSSIER_CODE_CIBLE" "$CONTENEUR" "$python_du_venv" -c '
+poetry run python manage.py check
+poetry run python -c "
 import TiBillet.wsgi, TiBillet.asgi
 from django.conf import settings
 from django.urls import get_resolver
 get_resolver(settings.ROOT_URLCONF)._populate()
 get_resolver(settings.PUBLIC_SCHEMA_URLCONF)._populate()
-print("Code cible : wsgi, asgi et URLconf OK")
-'
+print('Code cible : wsgi, asgi et URLconf OK')
+"
+if [ "$FAUT_IL_MIGRER" = "oui" ]; then
+    echo "== migrate_schemas (l'ancien code continue de servir)"
+    nice -n 19 ionice -c3 poetry run python manage.py migrate_schemas --executor="$EXECUTEUR"
+fi
+FIN_DES_COMMANDES
 
+echo "== Conteneur $CONTENEUR_DE_MAJ"
+"${COMPOSE[@]}" run -d --no-deps \
+    -e FAUT_IL_MIGRER="$faut_il_migrer" \
+    -e EXECUTEUR="${EXECUTEUR:-multiprocessing}" \
+    -e PGOPTIONS="-c lock_timeout=5s" \
+    "$CONTENEUR_DE_MAJ" bash -c "$COMMANDES_DU_CONTENEUR_DE_MAJ" >/dev/null
+
+# `docker logs -f` rend la main quand le conteneur s'arrete.
+# / `docker logs -f` returns when the container stops.
+docker logs -f "$CONTENEUR_DE_MAJ"
+code_de_sortie_du_conteneur_de_maj=$(docker wait "$CONTENEUR_DE_MAJ")
+docker rm "$CONTENEUR_DE_MAJ" >/dev/null
+
+if [ "$code_de_sortie_du_conteneur_de_maj" != "0" ]; then
+    echo "" >&2
+    echo "Lignes utiles du journal :" >&2
+    grep -inE "lock timeout|deadlock" "$FICHIER_JOURNAL" | tail -20 >&2 || true
+    arreter "$CONTENEUR_DE_MAJ a echoue (code $code_de_sortie_du_conteneur_de_maj). Le code servi n'a pas change. Corriger, puis relancer make update."
+fi
 if [ "$faut_il_migrer" = "oui" ]; then
-    # - nice / ionice : priorite CPU et disque minimale pour les process Python (heritee par
-    #   les sous-process de l'executeur). Le travail fait par PostgreSQL n'est pas concerne.
-    # - PGOPTIONS lock_timeout : un ALTER TABLE qui attend un verrou bloque toutes les
-    #   requetes du site sur cette table. Au bout de 5 s, il abandonne : la migration EN COURS
-    #   de ce schema est annulee (les precedentes restent appliquees), les autres schemas
-    #   continuent, et la commande finit en erreur. Relancer make update reprend la ou on en est.
-    # - executor multiprocessing : quelques minutes au lieu de plusieurs heures pour 500 lieux.
-    #   Si une migration ajoute une cle etrangere vers une table publique, la spec conseille
-    #   un lieu apres l'autre : EXECUTEUR=standard make update.
-    # / Lowest CPU/disk priority, 5 s lock_timeout, multiprocessing executor by default.
-    echo "== migrate_schemas (depuis la copie, l'ancien code continue de servir)"
-    if ! docker exec -w "/DjangoFiles/$DOSSIER_CODE_CIBLE" -e PGOPTIONS="-c lock_timeout=5s" "$CONTENEUR" \
-        nice -n 19 ionice -c3 \
-        "$python_du_venv" manage.py migrate_schemas --executor="${EXECUTEUR:-multiprocessing}"; then
-        echo "" >&2
-        echo "Lignes utiles du journal :" >&2
-        grep -inE "lock timeout|deadlock" "$FICHIER_JOURNAL" | tail -20 >&2 || true
-        arreter "migrate_schemas a echoue. Le code servi n'a pas change. Corriger, puis relancer make update."
-    fi
     echo "$commit_cible" > "$MARQUEUR_MIGRE"
 fi
 
 
 # ---------------------------------------------------------------------------------------
-# 7. Le code arrive dans le dossier servi
+# 8. Le code arrive dans le dossier servi
 # A partir d'ici, les anciens workers lisent les NOUVEAUX gabarits (pas de cached.Loader) :
-# les etapes 7 et 8 s'enchainent sans attendre.
-# / From here on, old workers read the NEW templates: steps 7 and 8 run back to back.
+# les etapes 8 et 9 s'enchainent sans attendre.
+# / From here on, old workers read the NEW templates: steps 8 and 9 run back to back.
 # ---------------------------------------------------------------------------------------
 echo "== git merge --ff-only"
 git merge --ff-only "$commit_cible"
@@ -291,7 +345,7 @@ docker exec -w /DjangoFiles "$CONTENEUR" poetry run python manage.py collectstat
 
 
 # ---------------------------------------------------------------------------------------
-# 8. Gunicorn : remplacement des workers un par un
+# 9. Gunicorn : remplacement des workers un par un
 # Sans --preload, chaque nouveau worker charge le code depuis le disque : le nouveau.
 # TTIN ajoute un worker. TTOU en retire un : toujours le PLUS VIEUX, en douceur (il finit
 # sa requete en cours). On ne retire un ancien qu'une fois le nouveau pret : sa ligne
@@ -384,7 +438,7 @@ trap - EXIT
 
 
 # ---------------------------------------------------------------------------------------
-# 9. Test : le site repond. /robots.txt passe par la resolution du tenant sans rien
+# 10. Test : le site repond. /robots.txt passe par la resolution du tenant sans rien
 # rediriger. Plusieurs appels : chacun tombe sur un worker au hasard.
 # X-Forwarded-Proto : nginx le pose en vrai ; sans lui, Django se croit en HTTP.
 # / Smoke test on /robots.txt, several times since each call hits a random worker.
@@ -401,7 +455,7 @@ echo "/robots.txt : 200"
 
 
 # ---------------------------------------------------------------------------------------
-# 10. daphne et celery, puis controle final
+# 11. daphne et celery, controle final, menage
 # Celery recoit TERM : il finit ses taches en cours avant de s'arreter.
 # Supervisor annonce RUNNING au bout d'une seconde (startsecs) alors que Django met
 # plusieurs secondes a demarrer : on attend avant le controle final.
@@ -419,5 +473,11 @@ if ! tous_les_services_tournent; then
 fi
 
 echo "$commit_cible" > "$MARQUEUR_DEPLOYE"
-rm -rf "$DOSSIER_CODE_CIBLE"
-echo "Mise a jour terminee : ${commit_cible:0:8}."
+
+# Le pull a detague l'ancienne latest. `image prune` retire les images sans tag que plus
+# aucun conteneur n'utilise : celle du conteneur de prod reste, tant qu'il n'est pas recree.
+# / The pull untagged the old latest; prune removes untagged images no container uses.
+echo "== Menage des images sans tag"
+docker image prune -f
+
+echo "Mise a jour terminee : ${commit_cible:0:12}."
