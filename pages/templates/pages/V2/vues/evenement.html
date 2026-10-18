@@ -13,10 +13,10 @@ Structure :
 1. Lien retour vers l'agenda.
 2. Bandeau .event-hero : couverture + tags, date, titre, résumé, fiches
    pratiques (Quand / Où / Organisé par), bouton de réservation.
-3. « À propos » : la description longue + le carrousel d'images.
-4. « Infos pratiques » : adresse, accès, carte.
-5. Bénévoles (si l'événement a des actions enfants).
-6. L'hôte : le lieu qui organise.
+   La galerie d'images (Event.carrousel) se place juste sous le titre.
+3. « Infos pratiques » : adresse, accès, carte.
+4. Bénévoles (si l'événement a des actions enfants).
+5. L'hôte : le lieu qui organise.
 
 Event.children = les ACTIONS BÉNÉVOLES (evenement_benevoles.html), pas un
 programme de sous-événements. Le programme de la maquette (.ledger) n'a donc
@@ -219,6 +219,14 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
                 {% endif %}
             </div>
             <h1 class="page-title">{{ event.name }}</h1>
+
+            {# Galerie d'images de l'événement (Event.carrousel, rempli dans l'admin). #}
+            {# / Event image gallery (Event.carrousel). #}
+            {% if event.carrousel.all %}
+                <section class="event-hero__galerie" aria-label="{% translate "Images de l'évènement" %}">
+                    {% include 'pages/V2/partials/evenement_galerie.html' with slides=event.carrousel.all %}
+                </section>
+            {% endif %}
 
             {% block evenement_description %}
             {% if event.short_description %}

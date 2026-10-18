@@ -1,0 +1,114 @@
+{% load i18n %}
+{% comment %}
+GALERIE D'IMAGES DE LA FICHE ÉVÉNEMENT — skin V2
+/ Event page image gallery — V2 skin
+
+LOCALISATION : pages/templates/pages/V2/partials/evenement_galerie.html
+Inclus par : pages/V2/vues/evenement.html, juste sous le titre.
+Contexte attendu : slides = event.carrousel.all (modèle BaseBillet.Carrousel).
+
+Les images ne sont JAMAIS rognées :
+- la scène (.galerie__scene) a une hauteur fixe (ratio 3/2, plafonnée).
+  La page ne saute donc pas quand on passe d'une image à l'autre ;
+- chaque image tient entière dans la scène (object-fit: contain) ;
+- les bandes vides autour d'une image portrait ou très large sont remplies
+  par la MÊME image, floutée (variable CSS --galerie-fond, lue par ::before).
+On n'utilise PAS commun/partials/picture.html : il impose object-fit-cover,
+qui recadre l'image.
+/ Images are never cropped: fixed-ratio stage, image contained, empty bands
+filled with a blurred copy of the same image. picture.html is not used: it
+forces object-fit-cover.
+
+Carrousel Bootstrap 5, démarré par le script en bas de ce fichier :
+défilement automatique toutes les 5 secondes, glissement au doigt.
+Flèches, pastilles de position et script seulement s'il y a plus d'une image.
+/ Bootstrap 5 carousel started by the script below: 5 s auto-slide, swipe.
+Arrows, dots and script only with 2+ images.
+{% endcomment %}
+<div id="evenementGalerie" class="galerie carousel slide" data-testid="evenement-galerie">
+    <div class="carousel-inner galerie__scene">
+        {% for slide in slides %}
+            {# Variation 720 px si elle existe, sinon l'original (images du cache fédéré). #}
+            {# / 720 px variation if present, else the original (federated cache images). #}
+            {% firstof slide.img.hdr.url slide.img.url as image_moyenne %}
+            <div class="carousel-item galerie__slide{% if forloop.first %} active{% endif %}"
+                 style="--galerie-fond: url('{{ image_moyenne }}');">
+                {% if slide.link %}<a href="{{ slide.link }}" target="_blank" rel="noopener" class="galerie__lien">{% endif %}
+                <img class="galerie__image"
+                     src="{{ image_moyenne }}"
+                     {% if slide.img.fhd.url %}srcset="{{ image_moyenne }} 720w, {{ slide.img.fhd.url }} 1920w" sizes="(min-width: 1000px) 960px, 100vw"{% endif %}
+                     alt="{{ slide.name }}"
+                     {% if not forloop.first %}loading="lazy"{% endif %}>
+                {% if slide.link %}</a>{% endif %}
+            </div>
+        {% endfor %}
+    </div>
+    {% if slides|length > 1 %}
+        {# Pastilles de position, en bas de l'image : une par image, la courante est pleine. #}
+        {# Bootstrap tient à jour la classe .active et aria-current au fil du défilement. #}
+        {# / Position dots at the bottom; Bootstrap updates .active and aria-current. #}
+        <div class="carousel-indicators galerie__pastilles" data-testid="evenement-galerie-pastilles">
+            {% for slide in slides %}
+                <button type="button" data-bs-target="#evenementGalerie" data-bs-slide-to="{{ forloop.counter0 }}"
+                        class="galerie__pastille{% if forloop.first %} active{% endif %}"
+                        {% if forloop.first %}aria-current="true"{% endif %}
+                        aria-label="{% blocktrans with numero=forloop.counter total=slides|length %}Image {{ numero }} sur {{ total }}{% endblocktrans %}"></button>
+            {% endfor %}
+        </div>
+        <button class="carousel-control-prev galerie__fleche" type="button"
+                data-bs-target="#evenementGalerie" data-bs-slide="prev"
+                data-testid="evenement-galerie-precedente">
+            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">{% translate 'Previous' %}</span>
+        </button>
+        <button class="carousel-control-next galerie__fleche" type="button"
+                data-bs-target="#evenementGalerie" data-bs-slide="next"
+                data-testid="evenement-galerie-suivante">
+            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">{% translate 'Next' %}</span>
+        </button>
+    {% endif %}
+</div>
+
+{% if slides|length > 1 %}
+<script>
+    /**
+     * Démarre la galerie : défilement automatique toutes les 5 secondes et
+     * glissement au doigt sur téléphone.
+     * / Starts the gallery: auto-slide every 5 s and touch swipe.
+     *
+     * LOCALISATION : pages/templates/pages/V2/partials/evenement_galerie.html
+     *
+     * INDISPENSABLE même avec Bootstrap : son attribut data-bs-ride n'est lu
+     * qu'au chargement complet de la page. Quand on arrive depuis l'agenda,
+     * HTMX remplace seulement le body, et le carrousel resterait figé, sans
+     * glissement au doigt. htmx exécute ce script à chaque swap.
+     * Au chargement complet, bootstrap.bundle est en defer : il n'est pas
+     * encore là, on attend DOMContentLoaded (les scripts defer sont passés).
+     *
+     * Défilement automatique coupé si le visiteur demande moins de mouvement.
+     * Bootstrap met en pause au survol de la souris.
+     * / Required: data-bs-ride is only read on full page load, not after an
+     * HTMX swap. Auto-slide is off when reduced motion is requested.
+     */
+    (function () {
+        const galerie = document.getElementById("evenementGalerie");
+
+        function demarrer_la_galerie() {
+            const le_visiteur_demande_moins_de_mouvement = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            bootstrap.Carousel.getOrCreateInstance(galerie, {
+                interval: 5000,
+                ride: le_visiteur_demande_moins_de_mouvement ? false : "carousel",
+                touch: true,
+                pause: "hover",
+            });
+        }
+
+        if (window.bootstrap) {
+            demarrer_la_galerie();
+        } else {
+            document.addEventListener("DOMContentLoaded", demarrer_la_galerie, { once: true });
+        }
+    })();
+</script>
+{% endif %}

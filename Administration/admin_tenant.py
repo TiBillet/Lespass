@@ -81,6 +81,7 @@ from django.template.defaultfilters import floatformat, slugify
 from django.template.loader import render_to_string
 from django.urls import re_path
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.html import format_html, format_html_join
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.safestring import mark_safe
@@ -4267,7 +4268,7 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         'name',
         # 'categorie',
         'display_valid_tickets_count',
-        'datetime',
+        'display_datetime_with_weekday',
         'show_time',
         'published',
         'event_detail_page_button',
@@ -4399,6 +4400,18 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         if count is None:
             count = instance.valid_tickets_count()
         return f"{count} / {instance.jauge_max}"
+
+    @display(description=_("Event start"), ordering="datetime")
+    def display_datetime_with_weekday(self, instance: Event):
+        # Affiche la date de debut, precedee du jour de la semaine en abrege (« Lun », « Mar »...).
+        # Le format "D" de Django est traduit selon la langue active : rien a traduire a la main.
+        # On passe par localtime : sinon la date s'afficherait en UTC.
+        # ordering="datetime" garde le tri par clic sur l'en-tete de colonne.
+        # / Start date prefixed with the localised abbreviated weekday; sortable by datetime.
+        date_de_debut_locale = timezone.localtime(instance.datetime)
+        jour_de_la_semaine_abrege = date_format(date_de_debut_locale, "D").capitalize()
+        date_et_heure = date_format(date_de_debut_locale, "DATETIME_FORMAT")
+        return f"{jour_de_la_semaine_abrege} {date_et_heure}"
 
     @display(description=_("Détail"))
     def event_detail_page_button(self, instance: Event):
