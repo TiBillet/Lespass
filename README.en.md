@@ -192,6 +192,9 @@ workers replaced one by one.
 ./docker_push_update.sh                       # builds and pushes tibillet/lespass:latest and :$VERSION
 REFAIRE_LA_BASE=1 ./docker_push_update.sh     # same, rebuilding everything (system, venv)
 
+# New server, once: .env (generated secrets, A_REMPLIR values), folders, checks
+make env                     # can be rerun: never overwrites an existing .env, redoes the checks
+
 # Production server, in byobu, from :05 to :20 or :35 to :50 (:05 to :10 with a migration)
 make update                  # updates production to the last pushed commit
 make update MIGRER=1         # forces the migration (MIGRER=0 skips it; EXECUTEUR=standard: one venue at a time)

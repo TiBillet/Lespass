@@ -1524,10 +1524,19 @@ def obtenir_solde_complet_carte(carte):
     / and the FED network balance (remote Fedow). We read both. The FED balance is read in real
     / time (no cache) as it may be spent right away; degraded silently if Fedow is unreachable.
 
+    LE TOTAL EN EUROS SUIT LA CASCADE DE PAIEMENT : `locaux_centimes` ne compte que ce
+    que la caisse peut dépenser ici (_soldes_de_la_cascade_fiduciaire : cadeau, local,
+    fédéré, monnaies accessibles au lieu). Le temps, la fidélité et la monnaie locale
+    d'un lieu hors fédération restent dans `tokens_locaux` (affichés à part, sous leur
+    nom), jamais dans le total en euros.
+    / THE EURO TOTAL FOLLOWS THE PAYMENT CASCADE: only what the register can spend here.
+    / Time, loyalty and non-federated local currencies stay in tokens_locaux only.
+
     :param carte: CarteCashless
     :return: dict avec / dict with
-        - tokens_locaux : liste de dicts (asset_name, asset_category, value_euros, provenance)
-        - locaux_centimes : total des monnaies locales (int, centimes)
+        - tokens_locaux : liste de dicts (asset_name, asset_category, value_euros, provenance),
+          TOUS les jetons non nuls du wallet / ALL non-zero tokens of the wallet
+        - locaux_centimes : total dépensable ici en euros, hors FED réseau (int, centimes)
         - fed_centimes : solde FED dépensable (int, centimes), 0 si indisponible
         - fed_disponible : bool, False si pas de place Fedow / Fedow injoignable
         - total_centimes : locaux_centimes + fed_centimes (int, centimes)
@@ -1536,10 +1545,10 @@ def obtenir_solde_complet_carte(carte):
     # / Card's local wallet (creates an ephemeral one if the card is anonymous).
     wallet = _obtenir_ou_creer_wallet(carte)
 
-    # 1. Monnaies locales : on lit tous les tokens du wallet dans la base locale (fedow_core).
-    # 1. Local currencies: read all wallet tokens from the local database (fedow_core).
+    # 1. Monnaies locales : on liste tous les tokens du wallet (base locale fedow_core),
+    #    pour l'affichage détaillé.
+    # 1. Local currencies: list all wallet tokens (local fedow_core DB), for display.
     tokens_locaux = []
-    locaux_centimes = 0
     for token in WalletService.obtenir_tous_les_soldes(wallet):
         # Ignore token with 0 value
         if token.value == 0:
@@ -1558,7 +1567,14 @@ def obtenir_solde_complet_carte(carte):
                 "provenance": token.asset.tenant_origin.name,
             }
         )
-        locaux_centimes += token.value
+
+    # Le total en euros : ce que la cascade de paiement dépenserait ici, ni plus ni moins.
+    # / The euro total: what the payment cascade would spend here, no more, no less.
+    assets_accessibles = AssetService.obtenir_assets_accessibles(connection.tenant)
+    soldes_de_la_cascade = _soldes_de_la_cascade_fiduciaire(wallet, assets_accessibles)
+    locaux_centimes = 0
+    for solde_en_centimes in soldes_de_la_cascade.values():
+        locaux_centimes += solde_en_centimes
 
     # 2. Solde FED du réseau, lu par la carte : liée ou anonyme, elle a peut-être du FED.
     #    Délégué à lire_depensable_fed_frais (lecture fraîche, dégradée si Fedow injoignable).
@@ -6081,6 +6097,49 @@ MAPPING_ASSET_CATEGORY_PAYMENT_METHOD = {
 }
 
 
+def _soldes_de_la_cascade_fiduciaire(wallet, assets_accessibles):
+    """
+    Les soldes qu'une carte peut dépenser en euros dans CE lieu, dans l'ordre de la
+    cascade NFC.
+    / The balances a card can spend in euros in THIS venue, in NFC cascade order.
+
+    LOCALISATION : laboutik/views.py
+
+    Pour chaque catégorie de ORDRE_CASCADE_FIDUCIAIRE (cadeau, local, fédéré), on
+    prend la PREMIÈRE monnaie accessible au lieu (les siennes et celles de sa
+    fédération), et on lit le solde du wallet dans cette monnaie. Seuls les soldes
+    positifs sont gardés.
+    Ce qui n'est donc JAMAIS compté : le temps et la fidélité (pas de l'argent), et la
+    monnaie locale d'un lieu hors de la fédération (le lieu ne peut pas la dépenser).
+    / For each category of the cascade, take the FIRST asset accessible to the venue
+    and read the wallet balance. Never counted: time, loyalty, and the local currency
+    of a venue outside the federation.
+
+    Utilisée par / Used by : _payer_par_nfc (phase 1), payer_complementaire (carte 1
+    et 2ᵉ carte), obtenir_solde_complet_carte (check carte, écran d'identification).
+    Le paiement et l'affichage lisent donc le MÊME solde.
+
+    :param wallet: Wallet de la carte
+    :param assets_accessibles: QuerySet de AssetService.obtenir_assets_accessibles()
+    :return: OrderedDict {Asset: solde en centimes (int > 0)}, dans l'ordre de la cascade
+    """
+    from collections import OrderedDict
+
+    soldes_de_la_cascade = OrderedDict()
+    for categorie_fiduciaire in ORDRE_CASCADE_FIDUCIAIRE:
+        asset_pour_categorie = assets_accessibles.filter(
+            category=categorie_fiduciaire,
+        ).first()
+        if asset_pour_categorie is None:
+            continue
+        solde_asset = WalletService.obtenir_solde(
+            wallet=wallet, asset=asset_pour_categorie
+        )
+        if solde_asset > 0:
+            soldes_de_la_cascade[asset_pour_categorie] = solde_asset
+    return soldes_de_la_cascade
+
+
 def _lire_cle_idempotence_paiement(donnees_post):
     """
     Lit la cle d'idempotence du paiement envoyee par le formulaire.
@@ -10393,23 +10452,17 @@ class PaiementViewSet(viewsets.ViewSet):
         assets_accessibles = AssetService.obtenir_assets_accessibles(tenant_courant)
 
         # Construire la cascade : pour chaque catégorie dans l'ordre fixe,
-        # chercher le 1er asset actif et lire son solde.
-        # / Build cascade: for each category in fixed order,
-        # find the first active asset and read its balance.
-        soldes_cascade = OrderedDict()
-        has_any_fiduciary_asset = False
-
-        for categorie_fiduciaire in ORDRE_CASCADE_FIDUCIAIRE:
-            asset_pour_categorie = assets_accessibles.filter(
-                category=categorie_fiduciaire,
-            ).first()
-            if asset_pour_categorie is not None:
-                has_any_fiduciary_asset = True
-                solde_asset = WalletService.obtenir_solde(
-                    wallet=wallet_client, asset=asset_pour_categorie
-                )
-                if solde_asset > 0:
-                    soldes_cascade[asset_pour_categorie] = solde_asset
+        # le 1er asset accessible et son solde (voir _soldes_de_la_cascade_fiduciaire).
+        # has_any_fiduciary_asset : le lieu a-t-il AU MOINS une monnaie de la cascade,
+        # même à solde nul ?
+        # / Build cascade: first accessible asset per category and its balance.
+        #   has_any_fiduciary_asset: does the venue have at least one cascade asset?
+        soldes_cascade = _soldes_de_la_cascade_fiduciaire(
+            wallet_client, assets_accessibles
+        )
+        has_any_fiduciary_asset = assets_accessibles.filter(
+            category__in=ORDRE_CASCADE_FIDUCIAIRE,
+        ).exists()
 
         # ================================================================ #
         #  PHASE 2 : Classifier les articles                                #
@@ -10748,6 +10801,28 @@ class PaiementViewSet(viewsets.ViewSet):
             # / The complement parts are now covered by legacy: drop them from lignes_nfc.
             lignes_nfc = [t for t in lignes_nfc if t[1] is not None]
 
+        # Le journal d'incident du débit legacy, préparé ici, JUSTE APRÈS le débit : le
+        # débit du réseau est déjà fait et ne s'annule pas. Si la suite échoue
+        # (déclaration de l'adhérent au réseau, solde local insuffisant, égalité de la
+        # vente rompue, erreur dans le bloc atomic), l'argent est prélevé sur le réseau
+        # sans vente ni ligne : ce message permet de le régulariser à la main (montant,
+        # carte, uuid de chaque transaction du réseau). Chaque sortie y ajoute sa cause.
+        # / The legacy-debit incident log, prepared RIGHT AFTER the debit: if anything
+        #   after fails, the network money is taken without a sale; this message allows a
+        #   manual fix. Each exit appends its cause.
+        message_d_incident_legacy = ""
+        if legacy_couvre_tout and lignes_legacy:
+            uuids_des_transactions_legacy = []
+            for transaction_legacy in transactions_legacy:
+                uuids_des_transactions_legacy.append(str(transaction_legacy[3]))
+            message_d_incident_legacy = (
+                f"INCIDENT legacy débité sans LigneArticle — "
+                f"uuid_transaction={uuid_transaction} carte={carte_client.tag_id} "
+                f"montant_legacy={montant_legacy} "
+                f"transactions_legacy={', '.join(uuids_des_transactions_legacy)} : "
+                f"régularisation manuelle requise."
+            )
+
         # DECLARATION DU MEMBRE AU RESEAU — le plus tard possible, et hors transaction.
         # Hors transaction : un appel reseau sous verrou DB le tient pendant toute la
         # latence, et un rollback ferait disparaitre le membre local pendant que le reseau
@@ -10755,10 +10830,13 @@ class PaiementViewSet(viewsets.ViewSet):
         # Le plus tard possible : le debit du segment legacy, juste au-dessus, part sur le
         # reseau et NE SE REMBOURSE PAS. Declarer avant lui exposerait a un etat ou la carte
         # est liee sur le reseau alors que la vente s'arrete sur un solde insuffisant.
+        # Si la declaration echoue APRES ce debit, le caissier doit le savoir : la carte
+        # est debitee sans adhesion, et relancer le paiement la debiterait une 2e fois.
         # / DECLARE THE MEMBER TO THE NETWORK — as late as possible, outside the transaction.
         #   Outside: a network call under a DB lock holds it for the whole latency, and a
         #   rollback would drop the local member while the network keeps their RSA key.
         #   As late as possible: the legacy debit just above CANNOT be refunded.
+        #   If it fails AFTER that debit, the cashier is told not to retry.
         adherent = None
         if adherent_identifie is not None:
             user_adhesion, carte_adhesion = adherent_identifie
@@ -10767,39 +10845,43 @@ class PaiementViewSet(viewsets.ViewSet):
                     user_adhesion, carte_adhesion, ip_client
                 )
             except ValueError as erreur_adherent:
+                message_pour_le_caissier = f"{erreur_adherent}"
+                if message_d_incident_legacy:
+                    logger.error(
+                        f"{message_d_incident_legacy} "
+                        f"Déclaration de l'adhérent au réseau refusée : {erreur_adherent}"
+                    )
+                    message_pour_le_caissier = _(
+                        "ATTENTION : la carte a été débitée de %(montant)s € sur le "
+                        "réseau, mais l'adhésion n'a pas été enregistrée. Ne relancez "
+                        "pas le paiement : la carte serait débitée une deuxième fois. "
+                        "Prévenez un responsable du lieu pour régulariser."
+                    ) % {"montant": f"{montant_legacy / 100:.2f}"}
                 context_erreur = {
                     "action": "initUrlAddition();",
                     "msg_type": "warning",
-                    "msg_content": f"{erreur_adherent}",
+                    "msg_content": message_pour_le_caissier,
                     "selector_bt_retour": "#messages",
                 }
+                if message_d_incident_legacy:
+                    context_erreur["msg_type"] = "error"
                 return render(
                     request,
                     "laboutik/partial/hx_messages.html",
                     context_erreur,
                     status=400,
                 )
-
-        # Le journal d'incident du débit legacy, préparé ici, AVANT le bloc atomic :
-        # le débit du réseau est déjà fait et ne s'annule pas. Si le bloc échoue ensuite
-        # (solde local insuffisant, égalité de la vente rompue), l'argent est prélevé
-        # sur le réseau sans vente ni ligne : ce message permet de le régulariser à la
-        # main (montant, carte, uuid de chaque transaction du réseau).
-        # / The legacy-debit incident log, prepared BEFORE the atomic block: if the block
-        #   fails, the network money is taken without a sale; this message allows a
-        #   manual fix (amount, card, uuid of each network transaction).
-        message_d_incident_legacy = ""
-        if legacy_couvre_tout and lignes_legacy:
-            uuids_des_transactions_legacy = []
-            for transaction_legacy in transactions_legacy:
-                uuids_des_transactions_legacy.append(str(transaction_legacy[3]))
-            message_d_incident_legacy = (
-                f"INCIDENT legacy débité sans LigneArticle (atomic local échoué) — "
-                f"uuid_transaction={uuid_transaction} carte={carte_client.tag_id} "
-                f"montant_legacy={montant_legacy} "
-                f"transactions_legacy={', '.join(uuids_des_transactions_legacy)} : "
-                f"régularisation manuelle requise."
-            )
+            except Exception as erreur_imprevue_de_declaration:
+                # Toute AUTRE erreur de la declaration : on journalise l'incident du
+                # debit legacy, puis on relaie l'exception (500 volontaire, visible
+                # dans Sentry).
+                # / Any OTHER declaration error: log the legacy-debit incident, re-raise.
+                if message_d_incident_legacy:
+                    logger.error(
+                        f"{message_d_incident_legacy} Exception imprévue pendant la "
+                        f"déclaration de l'adhérent : {erreur_imprevue_de_declaration}"
+                    )
+                raise
 
         try:
             with db_transaction.atomic():
@@ -11055,7 +11137,9 @@ class PaiementViewSet(viewsets.ViewSet):
             # JOURNALISE pour régularisation manuelle (le legacy n'est pas annulable automatiquement).
             # / Rare INCIDENT: legacy already debited but local atomic failed → log for manual fix.
             if message_d_incident_legacy:
-                logger.error(message_d_incident_legacy)
+                logger.error(
+                    f"{message_d_incident_legacy} Solde local insuffisant dans l'atomic."
+                )
             nom_monnaie_fallback = _("Monnaie locale")
             premier_asset_fallback = assets_accessibles.filter(
                 category__in=[Asset.TLF, Asset.TNF, Asset.FED],
@@ -11101,7 +11185,9 @@ class PaiementViewSet(viewsets.ViewSet):
             # / Broken equality: the atomic block rolled everything back. The legacy
             #   debit stays: same incident log. The register shows its error screen.
             if message_d_incident_legacy:
-                logger.error(message_d_incident_legacy)
+                logger.error(
+                    f"{message_d_incident_legacy} Égalité de la vente rompue dans l'atomic."
+                )
             logger.error(
                 f"Vente NFC refusée (égalité rompue) — uuid_transaction={uuid_transaction} "
                 f"carte={carte_client.tag_id} : {erreur_d_egalite}"
@@ -11469,16 +11555,6 @@ class PaiementViewSet(viewsets.ViewSet):
                 )
                 encaisser_vente(vente_de_la_recharge_cadeau)
 
-            # Calculer le solde apres credit pour l'ecran de succes
-            # / Compute balance after credit for the success screen
-            solde_apres = 0
-            try:
-                solde_apres = (
-                    WalletService.obtenir_total_en_centimes(wallet_client) / 100
-                )
-            except Exception:
-                pass
-
             # Construire le recapitulatif des articles credites
             # / Build the recap of credited items
             carte_label = carte.tag_id
@@ -11511,7 +11587,6 @@ class PaiementViewSet(viewsets.ViewSet):
                 # Infos supplementaires pour l'ecran de succes NFC
                 # / Additional info for NFC success screen
                 "carte_tag_id": carte.tag_id,
-                "solde_apres": solde_apres,
                 "articles_pour_recapitulatif": articles_pour_recapitulatif,
             }
             return render(
@@ -11874,17 +11949,9 @@ class PaiementViewSet(viewsets.ViewSet):
         # ---------------------------------------------------------- #
         assets_accessibles = AssetService.obtenir_assets_accessibles(tenant_courant)
 
-        soldes_cascade_carte1 = OrderedDict()
-        for categorie_fiduciaire in ORDRE_CASCADE_FIDUCIAIRE:
-            asset_pour_categorie = assets_accessibles.filter(
-                category=categorie_fiduciaire,
-            ).first()
-            if asset_pour_categorie is not None:
-                solde_asset = WalletService.obtenir_solde(
-                    wallet=wallet_carte1, asset=asset_pour_categorie
-                )
-                if solde_asset > 0:
-                    soldes_cascade_carte1[asset_pour_categorie] = solde_asset
+        soldes_cascade_carte1 = _soldes_de_la_cascade_fiduciaire(
+            wallet_carte1, assets_accessibles
+        )
 
         # Classifier les articles (même logique que _payer_par_nfc Phase 2)
         # / Classify articles (same logic as _payer_par_nfc Phase 2)
@@ -12582,17 +12649,9 @@ class PaiementViewSet(viewsets.ViewSet):
 
             # Cascade sur la 2ème carte pour le reste
             # / Cascade on 2nd card for the remainder
-            soldes_cascade_carte2 = OrderedDict()
-            for categorie_fiduciaire in ORDRE_CASCADE_FIDUCIAIRE:
-                asset_pour_categorie = assets_accessibles.filter(
-                    category=categorie_fiduciaire,
-                ).first()
-                if asset_pour_categorie is not None:
-                    solde_asset = WalletService.obtenir_solde(
-                        wallet=wallet_carte2, asset=asset_pour_categorie
-                    )
-                    if solde_asset > 0:
-                        soldes_cascade_carte2[asset_pour_categorie] = solde_asset
+            soldes_cascade_carte2 = _soldes_de_la_cascade_fiduciaire(
+                wallet_carte2, assets_accessibles
+            )
 
             # Construire les lignes carte2 à partir des lignes complémentaires carte1
             # / Build card2 lines from card1 complement lines

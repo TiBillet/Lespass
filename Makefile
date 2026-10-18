@@ -9,7 +9,7 @@
 # goals, so they are declared as no-op targets and passed to the script.
 FAMILLES_E2E := $(shell sed -n 's/^ *\([a-z_]*\): famille E2E.*/\1/p' pytest.ini | tr '_' '-')
 FAMILLES_DEMANDEES := $(filter $(FAMILLES_E2E),$(MAKECMDGOALS))
-CIBLES := help test e2e e2e-visible coverage update update_nuit
+CIBLES := help test e2e e2e-visible coverage env update update_nuit
 
 # Un mot inconnu arrete tout AVANT de lancer quoi que ce soit : sinon une faute de frappe
 # (make e2e-visible adhesio) lancerait d'abord toute la suite.
@@ -35,6 +35,7 @@ help:
 	@echo "  make e2e           E2E navigateur, parcours Stripe compris (stripe listen dans byobu)"
 	@echo "  make e2e-visible   E2E dans un Chromium visible sur l'ecran, ralenti, avec journal"
 	@echo "  make coverage      pytest + couverture du code (total + htmlcov/)"
+	@echo "  make env           PROD : cree le .env (secrets generes, A_REMPLIR), les dossiers, et controle le serveur"
 	@echo "  make update        PROD : mise a jour sans coupure (release poussee avant, depart de :05 a :20 ou de :35 a :50)"
 	@echo "  make update_nuit   PROD : programme make update a 02:05 avec at (MIGRER=1 ou EXECUTEUR=standard transmis)"
 	@echo ""
@@ -64,6 +65,12 @@ e2e-visible:
 
 coverage:
 	@FICHIERS="$(FICHIERS)" $(LANCER) couverture $(ARGS)
+
+# Production uniquement : prepare le serveur (.env depuis env_prod_example, dossiers,
+# controles). Ne remplace jamais un .env existant ; relancable a volonte.
+# / Production only: prepares the server. Never overwrites an existing .env.
+env:
+	@bash scripts/fabriquer_env_prod.sh
 
 # Production uniquement : la procedure vit dans le script (TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md).
 # / Production only: the procedure lives in the script.

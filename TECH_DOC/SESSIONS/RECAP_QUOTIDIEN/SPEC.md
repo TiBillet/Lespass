@@ -110,7 +110,7 @@ initiatives.
 `ajouter_l_article_d_avoir`), qui passe `CREDIT_NOTE` (admin, caisse) ou `REFUNDED` (Stripe,
 `PaiementStripe/utils.py`). Ce sont les seules écritures de ces statuts. L'article garde ses FK
 (`reservation`, `membership`, `booking`, `credit_note_for`) : le récap nomme l'objet remboursé.
-Montant rendu : `-qty × amount` (`qty` est négative, `amount` est le prix unitaire d'origine).
+Montant rendu : `-ligne.total_ttc`, l'argent effectivement rendu (c'est ce que lit `cancel_and_refund_resa`). `-qty × amount` donnerait le prix catalogue, sans la part offerte ni la part en jetons.
 
 Les rubriques d'un module désactivé (`module_booking`, `module_crowdfunding`, caisse…)
 n'apparaissent simplement pas : elles sont vides.
@@ -159,8 +159,15 @@ Les endroits qui annulent (relevé du 2026-10-18, à recontrôler au plan par
 | `BaseBillet/signals.py` — `Reservation.CANCELED` à l'expiration d'un paiement en cours | **Non** : ce n'est pas une annulation par une personne |
 | `ApiBillet/views.py` — `Membership.CANCELED` (arrêt du renouvellement) | **Non** : pas une annulation |
 
-À vérifier au plan : un admin peut-il changer le statut à la main dans un formulaire de l'admin
-(`Reservation`, `Booking`, `Membership`) ? Si oui, ce chemin pose aussi `annulee_le`.
+Le statut à la main dans l'admin (vérifié le 2026-10-18) :
+- `ReservationAdmin` : `status` en lecture seule sur la page de modification → rien à faire ;
+- `MembershipAdmin` : `MembershipChangeForm` n'expose pas `status` → rien à faire ;
+- **`BookingAdmin`** (`Administration/admin/resources.py`) : `status` **est modifiable** (seuls
+  `commande` et `custom_form` sont exclus) → `save_model` pose `annulee_le` quand le statut passe
+  à `ADMIN_CANCELED` ou `USER_CANCELED`.
+
+`annulee_le` est en `editable=False` sur les trois modèles : aucun formulaire de l'admin ne
+l'affiche ni ne l'écrit.
 
 ### 3.5 Pas de mail pour rien
 
@@ -288,12 +295,14 @@ Tests existants à adapter :
 | `Administration/recap_quotidien.py` (nouveau) | Le calcul (la fenêtre, les rubriques, les Z à joindre, « y a-t-il du contenu ? ») et l'envoi. Reçoit les deux seuils en paramètres. Fonctions testables sans mail |
 | `comptabilite/tasks.py` | Appel du récap à la fin de `generer_les_clotures_automatiques_du_lieu` (import local) ; plus de mail J dans `demander_l_email_automatique_si_configure` ; docstrings (§5) |
 | `comptabilite/pdf.py`, `laboutik/views.py` | Commentaires devenus faux (§5) |
-| `Administration/templates/emails/recap_quotidien.html` (nouveau) | Le mail, sur la base visuelle de `emails/email_generique.html` |
+| `BaseBillet/templates/emails/recap_quotidien.html` (nouveau) | Le mail : `{% extends 'emails/base.html' %}`, comme `emails/email_generique.html` (même dossier) |
+| `Administration/admin/resources.py` | `BookingAdmin.save_model` pose `annulee_le` (§3.4) |
 | `BaseBillet/models.py` | `Reservation.created_at`, `Event.created_at`, `Configuration.recap_quotidien_traite_le`, `Reservation.annulee_le`, `Membership.annulee_le` ; les méthodes d'annulation de `Reservation` posent `annulee_le` |
 | `BaseBillet/migrations/02xx_…` | Les cinq champs de `BaseBillet` |
 | `booking/models.py` + `booking/migrations/00xx_…` | `Booking.annulee_le`, posé par l'annulation |
 | `BaseBillet/views.py` | L'annulation d'adhésion par un admin pose `annulee_le` |
 | `tests/pytest/test_recap_quotidien.py` (nouveau) | §9 |
+| `Administration/management/commands/_demo_data_v2_recap.py` (nouveau), `demo_data_v2.py` | Démo du flush : l'activité d'hier de 4 personnes (adhésions, ventes, ressources, bénévolat) et le récap envoyé à l'admin à la fin du flush (PLAN tâche 8) |
 | `CHANGELOG/2026-xx-xx-recap-quotidien-admins.md` | Fiche |
 
 Chaînes traduisibles en français (`_()`), workflow i18n **au mainteneur**.

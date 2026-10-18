@@ -26,6 +26,24 @@ opération planifiée, avec une coupure courte assumée.
 | Exécuteur de migration | `multiprocessing` par défaut ; `EXECUTEUR=standard` si une migration ajoute une clé étrangère vers une table publique | Interblocage vu deux fois dans ce cas (TODO, 2026-10-06) |
 | gunicorn 26 + `gunicornc` | Chantier 02 | `show workers` (colonne BOOTED) remplacera la lecture du log |
 
+## Préparer un serveur — `make env`
+
+Une fois, sur un nouveau serveur (`scripts/fabriquer_env_prod.sh`, modèle `env_prod_example`) :
+1. Pas de `.env` : copie de `env_prod_example`, secrets tirés au hasard à la place de `A_GENERER`
+   (`DJANGO_SECRET`, `FERNET_KEY` au format Fernet, `POSTGRES_PASSWORD`), droits 600. Un `.env`
+   existant n'est **jamais** remplacé : une nouvelle `FERNET_KEY` rendrait illisibles les données
+   chiffrées en base.
+2. Création des dossiers montés qui manquent (`database/`, `backup/`, `ssh/` en 700, `logs/`, `www/`).
+3. Contrôles, sans rien modifier : valeurs `A_REMPLIR` restantes, `TEST`/`DEBUG`/`DEMO`/`STRIPE_TEST`
+   à 0, réseau `frontend` (Traefik), `MIGRATE=0`, `docker compose`, `at`, ligne `saveDb.sh` dans la
+   crontab, clé borg dans `ssh/`.
+
+Relançable à volonté : après le premier passage, il ne fait plus que les contrôles.
+`env_prod_example` ne garde que ce que la prod lit : les variables de dev de `env_example`
+(`TLS_CERT_NAME`, `E2E_TEST_TOKEN`, `DEMO_TAGID_*`, Formbricks, Fedow de test, Sunmi) n'y sont pas,
+et `FERNET_KEY` n'y figure qu'une fois (`env_example` la déclare deux fois, Lespass puis Fedow : dans
+un même `.env`, la dernière ligne gagne).
+
 ## Les trois gestes
 
 ### 1. Release (machine du mainteneur) — `docker_push_update.sh` revu
@@ -131,9 +149,10 @@ l'image n'apporte que le venv et le système.
 |---|---|
 | `dockerfile` | `POETRY_VERSION=2.4.3` (le lock est en `lock-version 2.1`, Poetry ≥ 2 obligatoire). Dépendances AVANT le code : `COPY pyproject.toml poetry.lock`, `poetry install`, puis `COPY ./`. Création de `/DjangoFiles/logs` avec `chown tibillet` AVANT `USER tibillet` : `logs/` est exclu de l'image, or `LOGGING` ouvre ses fichiers dans `BASE_DIR/logs/` dès `django.setup()` |
 | `docker-compose.prod.yml` | `lespass_django` : `image: tibillet/lespass:latest` au lieu de `build: .`. Nouveau service `lespass_maj` : même image, `container_name: lespass_maj` (ignoré par `run`, d'où `--name` dans le script), profil `maj`, `.env`, réseau `backend`, liens postgres/redis/memcached (`DATABASES` vise l'hôte `postgres`), **aucun volume** |
+| `env_prod_example`, `scripts/fabriquer_env_prod.sh` | `make env` : préparer un serveur |
 | `docker_push_update.sh` | Release (geste 1), `REFAIRE_LA_BASE=1` pour une grosse mise à jour |
 | `scripts/mise_a_jour_prod.sh` | `make update` (geste 2). La copie `logs/code_cible` disparaît |
-| `Makefile` | Cibles `update` et `update_nuit` (tire l'image tout de suite, puis programme `make update` à 02:05 avec `at`, en transmettant `MIGRER` et `EXECUTEUR`) |
+| `Makefile` | Cibles `env`, `update` et `update_nuit` (tire l'image tout de suite, puis programme `make update` à 02:05 avec `at`, en transmettant `MIGRER` et `EXECUTEUR`) |
 | `CHANGELOG/2026-10-18-make-update-sans-coupure.md` | Mis à jour |
 
 Le premier passage à ce fonctionnement est lui-même une grosse mise à jour (compose et dockerfile changent).

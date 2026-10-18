@@ -1,0 +1,92 @@
+##########################
+# Lespass — .env de PRODUCTION
+# / Lespass — PRODUCTION .env
+#
+# Modele lu par `make env` (scripts/fabriquer_env_prod.sh), qui ecrit le .env :
+# - A_GENERER : remplace par un secret tire au hasard. Ne JAMAIS le changer ensuite :
+#   FERNET_KEY chiffre des donnees en base, POSTGRES_PASSWORD est grave dans la base
+#   a sa creation.
+# - A_REMPLIR : a remplir a la main. `make env` liste ce qu'il en reste.
+# - Une valeur vide ('') : facultatif.
+# Le .env de developpement, lui, part de env_example.
+# / Template read by `make env`. A_GENERER = random secret (never change it later),
+# A_REMPLIR = fill by hand, empty = optional. Dev uses env_example.
+##########################
+
+# --- Secrets ---
+DJANGO_SECRET='A_GENERER'
+FERNET_KEY='A_GENERER'
+
+# --- Base de donnees / Database ---
+POSTGRES_USER='lespass_postgres_user'
+POSTGRES_PASSWORD='A_GENERER'
+POSTGRES_DB='tibillet'
+
+# --- Domaines / Domains ---
+# Le domaine racine, SANS sous-domaine. Ex : 'tibillet.coop', pas 'lespass.tibillet.coop'.
+# / Root domain, without subdomain.
+DOMAIN='A_REMPLIR'
+# Regex Traefik des sous-domaines : echapper . et - avec \, finir par $$ (echappement compose).
+# Ex : ^.+\.tibillet\.coop$$
+# / Traefik subdomain regex: escape . and - with \, end with $$.
+DOMAIN_REGEX=A_REMPLIR
+# Second domaine wildcard (routeur Traefik « gandi » du compose de prod), meme forme.
+# / Second wildcard domain (Traefik "gandi" router), same shape.
+DOMAIN_GANDI='A_REMPLIR'
+DOMAIN_GANDI_REGEX=A_REMPLIR
+# Domaines personnalises des lieux : un Host(`...`) par domaine, separes par « || ».
+# Sans cette variable, le compose de prod refuse de demarrer. Un nouveau domaine va
+# AUSSI dans ADDITIONAL_DOMAINS (Django : ALLOWED_HOSTS, sinon 404).
+# Marche complete : TECH_DOC/SESSIONS/TODO/DEPLOIEMENT-domaines-personnalises-traefik.md
+# / Venues' custom domains for Traefik; also add each one to ADDITIONAL_DOMAINS.
+CUSTOM_DOMAINS_RULE='A_REMPLIR'
+# Facultatif, separes par des virgules. Ex : 'domainebis.fr,domaineter.fr'
+# / Optional, comma separated.
+ADDITIONAL_DOMAINS=''
+# Nom de l'instance racine / Root instance name
+PUBLIC='A_REMPLIR'
+# Sous-domaine du premier lieu. 'lespass' -> https://lespass.<DOMAIN>
+# / First venue's subdomain.
+SUB='A_REMPLIR'
+# Sous-domaine de l'agenda federe. 'agenda' -> https://agenda.<DOMAIN>
+# / Federated agenda subdomain.
+META='A_REMPLIR'
+# Domaine du serveur Fedow (le meme que dans la conf de Fedow).
+# / Fedow server domain.
+FEDOW_DOMAIN='A_REMPLIR'
+ADMIN_EMAIL='A_REMPLIR'
+# Ex : 'Europe/Paris', 'Indian/Reunion'
+TIME_ZONE='A_REMPLIR'
+
+# --- Stripe ---
+STRIPE_KEY='A_REMPLIR'
+STRIPE_TEST=0
+
+# --- E-mails transactionnels / Transactional e-mails ---
+# EMAIL_USE_SSL / EMAIL_USE_TLS : "True" ou "False", un seul des deux a "True".
+# DEFAULT_FROM_EMAIL : adresse d'expedition. Ne pas la laisser VIDE : une valeur vide
+# remplace EMAIL_HOST_USER, et plus aucun e-mail ne part.
+# / Only one of SSL/TLS at "True". Never leave DEFAULT_FROM_EMAIL empty.
+EMAIL_HOST='A_REMPLIR'
+EMAIL_PORT='A_REMPLIR'
+EMAIL_HOST_USER='A_REMPLIR'
+EMAIL_HOST_PASSWORD='A_REMPLIR'
+EMAIL_USE_SSL='True'
+EMAIL_USE_TLS='False'
+DEFAULT_FROM_EMAIL='A_REMPLIR'
+
+# --- Facultatif / Optional ---
+# Remontee des erreurs (vide : pas de Sentry). / Error reporting (empty: no Sentry).
+SENTRY_DNS=''
+# Fonds de carte (vide : pas de carte). / Map tiles (empty: no map).
+MAPTILER_KEY=''
+# Images d'illustration. / Illustration pictures.
+API_PEXELS=''
+
+# --- Production : a laisser a 0 / Production: keep at 0 ---
+# TEST=1 ou DEBUG=1 active l'auto-login admin et les donnees de demonstration, et
+# desactive la verification des certificats.
+# / TEST=1 or DEBUG=1 enables admin auto-login, no cert checks and demo data.
+TEST=0
+DEBUG=0
+DEMO=0

@@ -750,7 +750,7 @@ class Configuration(SingletonModel):
     PERIODICITE_ANNUEL = "A"
     PERIODICITE_CHOICES = [
         (PERIODICITE_NONE, _("No email")),
-        (PERIODICITE_JOURNALIER, _("Daily")),
+        (PERIODICITE_JOURNALIER, _("Chaque jour, dans le récap du matin")),
         (PERIODICITE_HEBDOMADAIRE, _("Weekly")),
         (PERIODICITE_MENSUEL, _("Monthly")),
         (PERIODICITE_ANNUEL, _("Yearly")),
@@ -761,8 +761,17 @@ class Configuration(SingletonModel):
         default="",
         verbose_name=_("Recipient emails for closure reports"),
         help_text=_(
-            "Comma-separated emails. Leave empty to disable automatic sending."
+            "Adresses séparées par des virgules. Elles reçoivent le récap du matin (périodicité « Journalier ») ou le rapport de chaque clôture (hebdomadaire, mensuelle, annuelle). Vide : aucun envoi."
         ),
+    )
+
+    # Le dernier jour (en heure locale du lieu) dont le récap du matin a été traité.
+    # / Last local day whose morning recap was processed.
+    recap_quotidien_traite_le = models.DateField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("Récap du matin traité le"),
     )
 
     rapport_periodicite = models.CharField(
@@ -2305,6 +2314,7 @@ class Event(models.Model):
                                         help_text=_("Second date / time optional"))
 
     created = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, verbose_name=_("Créé le"))
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
                                    verbose_name=_("Created by"))
 
@@ -3198,6 +3208,8 @@ class PriceSold(models.Model):
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     datetime = models.DateTimeField(auto_now=True, verbose_name=_("Date et heure"))
+    created_at = models.DateTimeField(auto_now_add=True, null=True, verbose_name=_("Créée le"))
+    annulee_le = models.DateTimeField(null=True, blank=True, editable=False, verbose_name=_("Annulée le"))
 
     user_commande: AuthBillet.models.TibilletUser = models.ForeignKey(settings.AUTH_USER_MODEL,
                                                                       on_delete=models.PROTECT,
@@ -4959,6 +4971,7 @@ class Membership(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                              related_name='memberships', blank=True, null=True)
+    annulee_le = models.DateTimeField(null=True, blank=True, editable=False, verbose_name=_("Annulée le"))
     price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='membership',
                               verbose_name=_('Product / price'),
                               null=True, blank=True)

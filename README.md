@@ -193,6 +193,9 @@ sert, puis workers gunicorn remplaces un par un.
 ./docker_push_update.sh                       # construit et pousse tibillet/lespass:latest et :$VERSION
 REFAIRE_LA_BASE=1 ./docker_push_update.sh     # idem en reconstruisant tout (systeme, venv)
 
+# Nouveau serveur, une fois : .env (secrets generes, valeurs A_REMPLIR), dossiers, controles
+make env                     # relancable : ne remplace jamais un .env existant, refait les controles
+
 # Serveur de production, dans byobu, de :05 a :20 ou de :35 a :50 (:05 a :10 s'il y a une migration)
 make update                  # met la prod a jour sur le dernier commit pousse
 make update MIGRER=1         # force la migration (MIGRER=0 la saute ; EXECUTEUR=standard : un lieu apres l'autre)

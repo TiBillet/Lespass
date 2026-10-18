@@ -14,9 +14,15 @@ ou une recharge, montre donc la somme des deux, comme le « check carte »
 / A card may hold local currencies and network money; the NFC payment spends both, so
 the identification screen shows both, like the card check.
 
+Le total en euros suit la cascade de paiement (`_soldes_de_la_cascade_fiduciaire`) :
+le temps, la fidélité et la monnaie locale d'un lieu hors fédération n'y entrent pas.
+/ The euro total follows the payment cascade: no time, loyalty or non-federated money.
+
 D'OÙ VIENNENT LES VALEURS ATTENDUES
 - adhérente : 10,00 € de monnaie locale + 15,00 € sur le réseau = 25,00 € ;
-- carte anonyme : 0 € de monnaie locale + 15,00 € sur le réseau = 15,00 €.
+- carte anonyme : 0 € de monnaie locale + 15,00 € sur le réseau = 15,00 € ;
+- même adhérente avec en plus 5 h de temps, 300 points et 20,00 € d'un autre lieu :
+  toujours 25,00 €.
 / Hand-computed values.
 
 SIMULATIONS
@@ -38,13 +44,18 @@ import pytest
 from django.utils import translation
 from django_tenants.utils import tenant_context
 
+from AuthBillet.models import Wallet
 from BaseBillet.models import Product
+from Customers.models import Client
 from fabriques_panier import (
     configuration_modifiee,
     creer_adhesion,
     creer_utilisateur,
+    identifiant_unique,
     taches_celery_enregistrees,
 )
+from fedow_core.models import Asset, Token
+from laboutik.views import obtenir_solde_complet_carte
 from test_caisse_ecrit_la_vente import (
     URL_DE_L_IDENTIFICATION_DU_CLIENT,
     cle_de_panier,
@@ -136,6 +147,77 @@ def test_adhesion_le_solde_affiche_compte_l_argent_du_reseau(lieu):
 
     assert reponse.status_code == 200
     assert reponse.context["user_solde"] == 25.0
+
+
+def creer_une_monnaie(nom, categorie, code_devise, lieu_d_origine):
+    """
+    Une monnaie (`Asset`) créée par `lieu_d_origine`, dans aucune fédération.
+    / A currency created by `lieu_d_origine`, in no federation.
+    """
+    portefeuille_du_lieu = Wallet.objects.create(
+        origin=lieu_d_origine,
+        name=f"TEST_identification monnaie {identifiant_unique()}",
+    )
+    return Asset.objects.create(
+        name=f"TEST_identification {nom} {identifiant_unique()}",
+        currency_code=code_devise,
+        category=categorie,
+        wallet_origin=portefeuille_du_lieu,
+        tenant_origin=lieu_d_origine,
+    )
+
+
+def test_le_total_en_euros_ne_compte_que_ce_que_la_cascade_depense(lieu):
+    """
+    La carte de l'adhérente porte 10,00 € de monnaie locale du lieu, 5 h de temps,
+    300 points de fidélité et 20,00 € de la monnaie locale d'un AUTRE lieu, hors de
+    toute fédération. Le réseau porte 15,00 €.
+    Le total en euros vaut 10,00 € + 15,00 € = 25,00 € : ce que la cascade de
+    paiement dépenserait ici. Le temps, les points et la monnaie de l'autre lieu
+    restent dans la liste détaillée (`tokens_locaux`).
+    / 10.00 € local + 5 h time + 300 points + 20.00 € of a non-federated venue's
+    currency, and 15.00 € on the network. Euro total = 25.00 €; the others stay in
+    the detailed list.
+    """
+    adherente = creer_utilisateur(prenom="Ada", nom="Lovelace")
+    carte_de_l_adherente = creer_la_carte_de_l_adherente_avec_10_euros(lieu, adherente)
+    portefeuille_de_l_adherente = adherente.wallet
+
+    monnaie_temps = creer_une_monnaie("temps", Asset.TIM, "TMP", lieu.tenant)
+    monnaie_fidelite = creer_une_monnaie("fidelite", Asset.FID, "PTS", lieu.tenant)
+    autre_lieu = Client.objects.exclude(
+        schema_name__in=["public", lieu.tenant.schema_name]
+    ).first()
+    assert autre_lieu is not None, "Il faut un deuxième lieu dans la base de dev."
+    monnaie_d_un_lieu_hors_federation = creer_une_monnaie(
+        "locale autre lieu", Asset.TLF, "EUR", autre_lieu
+    )
+    Token.objects.create(
+        wallet=portefeuille_de_l_adherente, asset=monnaie_temps, value=500
+    )
+    Token.objects.create(
+        wallet=portefeuille_de_l_adherente, asset=monnaie_fidelite, value=30000
+    )
+    Token.objects.create(
+        wallet=portefeuille_de_l_adherente,
+        asset=monnaie_d_un_lieu_hors_federation,
+        value=2000,
+    )
+
+    with patch(
+        "laboutik.views.lire_depensable_fed_frais",
+        return_value=(ARGENT_DU_RESEAU_EN_CENTIMES, True),
+    ):
+        solde = obtenir_solde_complet_carte(carte_de_l_adherente)
+
+    assert solde["locaux_centimes"] == 1000
+    assert solde["total_centimes"] == 2500
+    categories_de_la_liste_detaillee = []
+    for jeton in solde["tokens_locaux"]:
+        categories_de_la_liste_detaillee.append(jeton["asset_category"])
+    assert sorted(categories_de_la_liste_detaillee) == sorted(
+        [Asset.TLF, Asset.TIM, Asset.FID, Asset.TLF]
+    )
 
 
 def test_recharge_carte_anonyme_le_solde_affiche_compte_l_argent_du_reseau(lieu):

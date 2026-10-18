@@ -299,13 +299,15 @@ def test_total_additionne_locaux_et_fed(carte_liee):
     """
     from laboutik.views import obtenir_solde_complet_carte
     from fedow_core.models import Asset, Token
+    from fedow_core.services import AssetService
 
     with tenant_context(carte_liee["tenant"]):
+        # La monnaie locale que la cascade de paiement dépense : la PREMIÈRE accessible
+        # au lieu (tests/PIEGES.md 9.97). Le total en euros ne compte qu'elle.
+        # / The local currency the payment cascade spends: the FIRST accessible one.
         asset_tlf = (
-            Asset.objects.filter(
-                tenant_origin=carte_liee["tenant"], category=Asset.TLF, active=True
-            )
-            .order_by("name")
+            AssetService.obtenir_assets_accessibles(carte_liee["tenant"])
+            .filter(category=Asset.TLF)
             .first()
         )
         if asset_tlf is None:

@@ -23,11 +23,12 @@ served folder untouched during the migration.
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
+| `env_prod_example`, `scripts/fabriquer_env_prod.sh` | `make env` : `.env` de prod depuis un modèle (secrets générés, `A_REMPLIR`), dossiers montés, contrôles du serveur ; ne remplace jamais un `.env` existant |
 | `docker_push_update.sh` | Release : refuse un arbre sale ou un commit non poussé, build depuis `git archive` extrait, label `org.opencontainers.image.revision`, tags `latest` + `$VERSION` |
 | `dockerfile` | Dépendances avant le code (cache de la couche venv), Poetry épinglé 2.4.3, dossier `logs/` créé |
 | `docker-compose.prod.yml` | `lespass_django` en `image: tibillet/lespass:latest` ; nouveau service `lespass_maj` (profil `maj`, aucun volume) |
 | `scripts/mise_a_jour_prod.sh` | Nouveau : `make update` |
-| `Makefile` | Cibles `update` et `update_nuit` (programme `make update` à 02:05 avec `at`) |
+| `Makefile` | Cibles `env`, `update` et `update_nuit` (programme `make update` à 02:05 avec `at`) |
 | `README.md`, `README.en.md` | Section « Mettre a jour la production » ; `make coverage`, `make help`, `LENTEUR` ajoutés aux tests |
 | `TECH_DOC/SESSIONS/DEPLOIEMENT/` | Nouveau hub : `INDEX.md`, `SPEC.md` (chantier 01) |
 

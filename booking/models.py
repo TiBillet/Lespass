@@ -555,6 +555,9 @@ class Booking(models.Model):
         auto_now_add=True,
         verbose_name=_('Booked at'),
     )
+    annulee_le = models.DateTimeField(
+        null=True, blank=True, editable=False, verbose_name=_("Annulée le")
+    )
 
     commande = models.ForeignKey(
         Commande,

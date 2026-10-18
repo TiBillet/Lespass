@@ -119,6 +119,7 @@ from BaseBillet.services_vente import EgaliteDeVenteRompue
 from fabriques_panier import (
     client_connecte,
     configuration_modifiee,
+    creer_adhesion,
     creer_utilisateur,
     identifiant_unique,
     taches_celery_enregistrees,
@@ -2325,6 +2326,85 @@ def test_exception_imprevue_apres_debit_legacy_journalisee(lieu, caplog):
     assert not Vente.objects.filter(idempotency_key=cle_d_idempotence).exists()
     assert not LigneArticle.objects.filter(pricesold__price=biere.tarif).exists()
     assert not LigneArticle.objects.filter(pricesold__price=jus.tarif).exists()
+
+
+def test_declaration_adherent_refusee_apres_debit_legacy_journalisee(lieu, caplog):
+    """
+    Une adhésion à 5,00 €, payée par la carte d'un membre qui n'a que du FED sur
+    l'ancien Fedow. Le débit de l'ancien Fedow est fait (il ne s'annule pas), puis la
+    déclaration de l'adhérent au réseau est refusée (`_declarer_adherent_au_reseau`
+    simulée : `ValueError`, le réseau ne répond pas).
+    La caisse journalise UN INCIDENT (montant, carte, uuid de la transaction distante)
+    et dit au caissier que la carte est débitée et qu'il ne faut PAS relancer le
+    paiement. Rien n'est écrit : ni vente, ni ligne.
+    / A 5.00 € membership paid in FED. The FED debit is done, then the member
+    declaration is refused. One INCIDENT is logged, the cashier is told the card was
+    debited and not to retry. Nothing written.
+    """
+    adhesion = creer_adhesion(prix="5.00")
+    point_de_vente = creer_un_point_de_vente([adhesion.produit])
+    carte_du_membre = creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu)
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(point_de_vente)
+    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
+    cle_d_idempotence = nouvelle_cle_d_idempotence()
+    champs_du_panier = {f"repid-{cle_de_panier(adhesion)}": "1"}
+    transaction_en_fed = transaction_fed_du_reseau(500)
+    declaration_refusee = ValueError("Réseau injoignable, simulé par le test.")
+
+    with caplog.at_level(logging.ERROR, logger="laboutik.views"):
+        with ancien_fedow_simule_par_carte(
+            fed_par_carte={carte_du_membre.tag_id: 500},
+            debit_par_carte={carte_du_membre.tag_id: transaction_en_fed},
+        ) as faux_fedow:
+            with patch(
+                "laboutik.views._declarer_adherent_au_reseau",
+                side_effect=declaration_refusee,
+            ):
+                reponse = payer_par_la_carte_du_client(
+                    client_du_caissier,
+                    point_de_vente,
+                    champs_du_panier,
+                    carte_du_membre,
+                    cle_d_idempotence,
+                    tag_id_carte_primaire=tag_de_la_carte_primaire,
+                )
+
+    # Le débit de l'ancien Fedow a bien eu lieu : c'est ce qui rend l'incident
+    # nécessaire.
+    # / The old Fedow debit did happen: that is why the incident is needed.
+    assert debits_demandes_par_carte(faux_fedow) == {
+        carte_du_membre.tag_id: (500, tag_de_la_carte_primaire)
+    }
+
+    # L'écran d'erreur (rouge, « error ») donne au caissier le montant débité sur la
+    # carte. On ne lit pas la phrase : elle change avec la langue de la caisse.
+    # / The red error screen gives the cashier the debited amount. The sentence is
+    # not read: it changes with the register's language.
+    assert reponse.status_code == 400
+    contenu_de_la_reponse = html.unescape(reponse.content.decode())
+    assert 'data-testid="alerte-messages"' in contenu_de_la_reponse
+    assert "alerte-box--error" in contenu_de_la_reponse
+    assert "5.00 €" in contenu_de_la_reponse
+
+    # L'incident est journalisé, avec le montant, la carte et l'uuid distant.
+    # / The incident is logged with the amount, the card and the remote uuid.
+    messages_d_incident = []
+    for enregistrement in caplog.records:
+        message_journalise = enregistrement.getMessage()
+        est_une_erreur = enregistrement.levelno >= logging.ERROR
+        if est_une_erreur and "INCIDENT" in message_journalise:
+            messages_d_incident.append(message_journalise)
+    assert len(messages_d_incident) == 1, (
+        f"Attendu : un incident journalisé, trouvé : {messages_d_incident}"
+    )
+    assert re.search(r"\b500\b", messages_d_incident[0])
+    assert carte_du_membre.tag_id in messages_d_incident[0]
+    assert transaction_en_fed["uuid"] in messages_d_incident[0]
+
+    # Rien n'est écrit.
+    # / Nothing is written.
+    assert not Vente.objects.filter(idempotency_key=cle_d_idempotence).exists()
+    assert not LigneArticle.objects.filter(pricesold__price=adhesion.tarif).exists()
 
 
 # --------------------------------------------------------------------------
