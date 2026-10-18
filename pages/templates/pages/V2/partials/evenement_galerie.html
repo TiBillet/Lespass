@@ -34,13 +34,11 @@ Arrows, dots and script only with 2+ images.
             {% firstof slide.img.hdr.url slide.img.url as image_moyenne %}
             <div class="carousel-item galerie__slide{% if forloop.first %} active{% endif %}"
                  style="--galerie-fond: url('{{ image_moyenne }}');">
-                {% if slide.link %}<a href="{{ slide.link }}" target="_blank" rel="noopener" class="galerie__lien">{% endif %}
                 <img class="galerie__image"
                      src="{{ image_moyenne }}"
                      {% if slide.img.fhd.url %}srcset="{{ image_moyenne }} 720w, {{ slide.img.fhd.url }} 1920w" sizes="(min-width: 1000px) 960px, 100vw"{% endif %}
-                     alt="{{ slide.name }}"
+                     alt="{{ slide.name|default:event.name }}"
                      {% if not forloop.first %}loading="lazy"{% endif %}>
-                {% if slide.link %}</a>{% endif %}
             </div>
         {% endfor %}
     </div>

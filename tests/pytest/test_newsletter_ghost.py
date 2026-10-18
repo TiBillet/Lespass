@@ -1152,7 +1152,7 @@ def _fiche_benevolat_de_test(**surcharges):
         "chaque_semaine": True,
         "premier_jour": timezone.localdate() + timedelta(days=2),
         "dernier_jour": timezone.localdate() + timedelta(days=30),
-        "places_libres": 4,
+        "creneaux_a_remplir": 4,
         "jours_a_remplir": [
             {"date": timezone.localdate() + timedelta(days=2), "remplissage": 50, "places_libres": 3},
             {"date": timezone.localdate() + timedelta(days=3), "remplissage": 75, "places_libres": 1},
@@ -1219,8 +1219,10 @@ class TestRenduBenevolat:
             [], timezone.now(), timezone.now(), fiches_benevolat=[_fiche_benevolat_de_test()]
         )
         assert "Ces prochains jours, on a besoin de remplir 4 créneaux." in html
-        assert "3 créneaux libres" in html
-        assert "1 créneau libre" in html
+        # Les jours affichent des PLACES (personnes), la phrase des CRENEAUX (besoins).
+        # / Days show PLACES (people), the sentence shows SLOTS (needs).
+        assert "3 places libres" in html
+        assert "1 place libre" in html
 
     def test_un_planning_ponctuel_annonce_sa_periode_et_ses_creneaux_libres(self):
         html = rendre_newsletter_html(
@@ -1286,7 +1288,7 @@ class TestCollecteBenevolat:
         fiches_du_planning = [f for f in fiches_benevolat if f["nom"] == planning.name]
         assert len(fiches_du_planning) == 1
         fiche_benevolat = fiches_du_planning[0]
-        assert fiche_benevolat["places_libres"] == 3
+        assert fiche_benevolat["creneaux_a_remplir"] == 1
         assert fiche_benevolat["url_inscription"].startswith("https://")
         assert fiche_benevolat["url_inscription"].endswith(f"/booking/benevolat/{planning.slug}/")
 
@@ -1295,11 +1297,16 @@ class TestCollecteBenevolat:
         from fabriques_panier import creer_utilisateur
 
         with tenant_context(tenant_lespass):
-            planning, besoin = _creer_planning_benevole(2, nombre_souhaite=1)
+            planning_ouvert, _besoin = _creer_planning_benevole(2, nombre_souhaite=1)
+            planning_couvert, besoin = _creer_planning_benevole(3, nombre_souhaite=1)
             InscriptionBenevole.objects.create(besoin=besoin, user=creer_utilisateur())
             fiches_benevolat = collecter_besoins_benevoles()
 
-        assert planning.name not in [f["nom"] for f in fiches_benevolat]
+        noms_collectes = [f["nom"] for f in fiches_benevolat]
+        # Cas positif d'abord : sans lui, le test passerait à vide (module éteint, pas
+        # de domaine...). / Positive case first, or the test could pass vacuously.
+        assert planning_ouvert.name in noms_collectes
+        assert planning_couvert.name not in noms_collectes
 
     def test_module_benevolat_eteint_pas_de_bloc(self, tenant_lespass):
         import copy
@@ -1307,7 +1314,11 @@ class TestCollecteBenevolat:
         from BaseBillet.models import Configuration
 
         with tenant_context(tenant_lespass):
-            _creer_planning_benevole(2)
+            planning, _besoin = _creer_planning_benevole(2)
+            # Cas positif d'abord : module actif, le planning remonte.
+            # / Positive case first: module on, the planning is collected.
+            assert planning.name in [f["nom"] for f in collecter_besoins_benevoles()]
+
             configuration_eteinte = copy.copy(Configuration.get_solo())
             configuration_eteinte.module_benevolat = False
             with patch(

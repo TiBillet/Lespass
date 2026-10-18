@@ -177,14 +177,9 @@ TiBillet. Les pastilles de tags et le bouton de filtres restent donc neutres.
         / SKIN CONTRACT (FROZEN block names): a skin overrides a block to change
         the look; filter logic and pagination stay in BaseBillet.
         {% endcomment %}
-        {% block agenda_carrousel %}
-            <!-- slideshow -->
-            {% if carrousel_event_list|length > 0 %}
-                <header class="container-lg">
-                    {% include "pages/V2/partials/carrousel_evenements.html" with carousel=carrousel_event_list %}
-                </header>
-            {% endif %}
-        {% endblock agenda_carrousel %}
+        {# Bloc vide : l'agenda n'a plus de carrousel. Le nom reste, c'est le contrat de skin. #}
+        {# / Empty block: no agenda carousel anymore. The name stays (skin contract). #}
+        {% block agenda_carrousel %}{% endblock agenda_carrousel %}
 
         {% block agenda_filtres %}
             <!-- search bar and filtering -->

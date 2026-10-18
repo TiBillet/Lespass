@@ -537,7 +537,7 @@ def collecter_besoins_benevoles():
     are skipped.
 
     :return: list[dict] — nom, chaque_semaine, premier_jour, dernier_jour,
-             places_libres, jours_a_remplir, url_inscription, libelle_bouton
+             creneaux_a_remplir, jours_a_remplir, url_inscription, libelle_bouton
     """
     if not Configuration.get_solo().module_benevolat:
         return []
@@ -551,8 +551,8 @@ def collecter_besoins_benevoles():
         return []
 
     fiches_benevolat = []
-    for resume in resumes_des_plannings_a_venir(nombre_max=10):
-        if not resume["places_libres"]:
+    for resume in resumes_des_plannings_a_venir(nombre_max=10, horizon_en_jours=10):
+        if not resume["creneaux_a_remplir"]:
             continue
 
         # Seulement les jours qui ont encore des places : la newsletter appelle à
@@ -570,7 +570,7 @@ def collecter_besoins_benevoles():
             "chaque_semaine": resume["chaque_semaine"],
             "premier_jour": resume["premier_jour"],
             "dernier_jour": resume["dernier_jour"],
-            "places_libres": resume["places_libres"],
+            "creneaux_a_remplir": resume["creneaux_a_remplir"],
             "jours_a_remplir": jours_a_remplir,
             # URL ABSOLUE : un email ne résout pas les URLs relatives.
             # / ABSOLUTE URL: an email cannot resolve relative URLs.

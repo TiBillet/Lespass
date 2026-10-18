@@ -5,7 +5,7 @@
 
 ## Resume / Summary
 **Quoi / What :**
-- Le brouillon Ghost commence par un bloc « On a besoin de vous » : une carte product par planning de bénévoles du lieu qui a encore des créneaux à remplir. Phrase « Ces prochains jours, on a besoin de remplir X créneaux » (chaque semaine, 10 prochains jours) ou « du … au … · X créneaux libres » (ponctuel), les prochains jours qui ont des places, et un bouton « Je m'inscris » vers la page du planning. Seulement si le module bénévolat est actif ; un planning entièrement couvert n'apparaît pas ; seulement le lieu courant (le bénévolat n'est pas fédéré).
+- Le brouillon Ghost commence par un bloc « On a besoin de vous » : une carte product par planning de bénévoles du lieu qui a encore des créneaux à remplir. Phrase « Ces prochains jours, on a besoin de remplir X créneaux » (chaque semaine, 10 prochains jours) ou « du … au … · X créneaux libres » (ponctuel) — un créneau = un besoin qui a encore une place —, les prochains jours avec leurs places libres, et un bouton « Je m'inscris » vers la page du planning. Seulement si le module bénévolat est actif ; un planning entièrement couvert n'apparaît pas ; seulement le lieu courant (le bénévolat n'est pas fédéré).
 - Des besoins en bénévoles suffisent à créer le brouillon, même sans évènement. Pas de brouillon seulement s'il n'y a ni évènement ni besoin.
 - Le bouton des cartes d'évènement dit toujours « En savoir plus » (il mène à la page de l'évènement) ; le nom de bouton de réservation personnalisé de l'évènement n'est plus repris.
 - Cartes « Coups de main » (site et newsletter) : pour un planning chaque semaine, les 5 jours colorés viennent maintenant des mêmes 10 jours que le compteur (un jour hors horizon montrait des places absentes du total).
@@ -25,7 +25,7 @@
 | `newsletter/views.py` | Messages du panneau (succès avec le nombre de plannings, « aucun brouillon ») |
 | `Administration/templates/admin/ghost/panneau_newsletter.html` | Texte d'aide : bloc bénévolat + « En savoir plus » |
 | `booking/benevolat.py` | `resumes_des_plannings_a_venir` : 5 jours pris dans les besoins comptés |
-| `tests/pytest/test_newsletter_ghost.py` | 12 tests ajoutés (rendu, collecte, service), 3 adaptés ; vérifiés par mutation |
+| `tests/pytest/test_newsletter_ghost.py` | 12 tests ajoutés (rendu, collecte, service ; cas positif vérifié avant chaque cas négatif), 3 adaptés ; vérifiés par mutation |
 
 Nouvelles chaînes traduisibles (msgid FR) : « On a besoin de vous », la phrase d'invitation, « Ces prochains jours, on a besoin de remplir … créneau(x). », « Je m'inscris », « En savoir plus », les messages du service et du panneau → workflow i18n à lancer.
 

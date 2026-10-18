@@ -27,7 +27,8 @@ served folder untouched during the migration.
 | `dockerfile` | Dépendances avant le code (cache de la couche venv), Poetry épinglé 2.4.3, dossier `logs/` créé |
 | `docker-compose.prod.yml` | `lespass_django` en `image: tibillet/lespass:latest` ; nouveau service `lespass_maj` (profil `maj`, aucun volume) |
 | `scripts/mise_a_jour_prod.sh` | Nouveau : `make update` |
-| `Makefile` | Cibles `update` et `update_midnight` (programme `make update` à 00:05 avec `at`) |
+| `Makefile` | Cibles `update` et `update_nuit` (programme `make update` à 02:05 avec `at`) |
+| `README.md`, `README.en.md` | Section « Mettre a jour la production » ; `make coverage`, `make help`, `LENTEUR` ajoutés aux tests |
 | `TECH_DOC/SESSIONS/DEPLOIEMENT/` | Nouveau hub : `INDEX.md`, `SPEC.md` (chantier 01) |
 
 Le premier passage est une « grosse mise à jour » (le compose et le dockerfile changent) :

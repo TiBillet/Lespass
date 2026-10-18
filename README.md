@@ -141,22 +141,25 @@ Pour les détails d'installation, de configuration et de déploiement en product
 
 ## Tests
 
-Deux facons de lancer la suite, via `make` (logique : `scripts/lancer_tests.sh`).
-Les tests qui appellent le vrai Stripe (mode test) tournent a chaque fois : aucun
-test n'est ignore, ce qui ne peut pas tourner ECHOUE.
+La suite se lance via `make` (logique : `scripts/lancer_tests.sh`) ; `make help` liste
+toutes les commandes et les familles E2E. Les tests qui appellent le vrai Stripe (mode
+test) tournent a chaque fois : aucun test n'est ignore, ce qui ne peut pas tourner ECHOUE.
 
 ```bash
 make test          # Python (~11 min) — modeles, vues, API, paiements Stripe reels compris
 make e2e           # E2E navigateur (~14 min) — Playwright, exige `stripe listen` dans byobu
 make e2e-visible adhesion   # une famille E2E, dans un Chromium visible (liste : make help)
+make coverage      # pytest + couverture du code (total + rapport HTML dans htmlcov/)
 
 make test ARGS="tests/pytest/test_stripe_refund.py -k panier"   # cibler
+make e2e-visible LENTEUR=1500 ARGS="tests/e2e/test_panier_flow.py"   # suivre pas a pas (ms entre deux actions)
+make coverage FICHIERS="BaseBillet/services_panier.py"   # detail ligne a ligne de ces fichiers
 ```
 
 Les deux suites exigent le serveur live (le script le verifie) : une partie des
 tests l'appelle en HTTP.
 
-**Prerequis des modes E2E (3 et 4)** : le serveur Django tourne derriere Traefik
+**Prerequis de `make e2e` et `make e2e-visible`** : le serveur Django tourne derriere Traefik
 (alias `rsp` dans le pane byobu — `manage.py runserver` en mode daphne, requis
 pour les WebSockets), et Chromium est installe dans le conteneur :
 
@@ -175,6 +178,32 @@ Voir `tests/README.md` pour la documentation complete (architecture, pieges,
 variables d'environnement) et `tests/PIEGES.md` pour les pieges deja rencontres.
 
 Carte Stripe de test : `4242 4242 4242 4242`, exp `12/42`, CVC `424`.
+
+---
+
+## Mettre a jour la production
+
+Le code arrive en production en deux temps : une **release** (l'image Docker du commit,
+construite sur la machine du mainteneur et poussee sur Docker Hub), puis la **mise a jour**
+du serveur, sans coupure : migration dans un conteneur jetable pendant que l'ancien code
+sert, puis workers gunicorn remplaces un par un.
+
+```bash
+# Machine du mainteneur : tout commite et pousse, VERSION incremente
+./docker_push_update.sh                       # construit et pousse tibillet/lespass:latest et :$VERSION
+REFAIRE_LA_BASE=1 ./docker_push_update.sh     # idem en reconstruisant tout (systeme, venv)
+
+# Serveur de production, dans byobu, de :05 a :20 ou de :35 a :50 (:05 a :10 s'il y a une migration)
+make update                  # met la prod a jour sur le dernier commit pousse
+make update MIGRER=1         # force la migration (MIGRER=0 la saute ; EXECUTEUR=standard : un lieu apres l'autre)
+make update_nuit             # programme make update a 02:05 avec at (memes variables)
+```
+
+`make update` s'arrete avant de toucher a quoi que ce soit si les dependances, le
+`dockerfile`, le compose, supervisor ou nginx ont change : c'est alors une « grosse mise
+a jour », avec une coupure planifiee. Le journal de chaque passage est dans
+`logs/mise_a_jour_*.log`. Detail (fenetres horaires, grosse mise a jour, retour en
+arriere) : `TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md`.
 
 ---
 

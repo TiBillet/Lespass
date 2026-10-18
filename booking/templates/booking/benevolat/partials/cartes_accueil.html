@@ -21,13 +21,14 @@ en-têtes du planning (D20). La carte mène à la page du planning.
     {% for resume in plannings %}
         <article class="bv-carte" data-testid="carte-planning-benevole">
             <h3 class="bv-carte__titre">{{ resume.planning.name }}</h3>
-            {# Chaque semaine : une phrase sur les 10 prochains jours (resume.places_libres ne #}
-            {# compte que cet horizon, booking/benevolat.py). Ponctuel : période · créneaux libres. #}
-            {# / Weekly: one sentence about the next 10 days. Fixed dates: period · free slots. #}
+            {# Chaque semaine : une phrase sur les prochains jours. Ponctuel : période · créneaux #}
+            {# libres. Un créneau = un besoin qui a encore une place (resume.creneaux_a_remplir, #}
+            {# booking/benevolat.py). La phrase est la même chaîne que dans la newsletter. #}
+            {# / Weekly: one sentence. Fixed dates: period · free slots. A slot = a need with a free place. #}
             <p class="bv-carte__periode">
                 {% if resume.chaque_semaine %}
-                    {% if resume.places_libres %}
-                        {% blocktranslate count nombre=resume.places_libres %}Ces prochains jours, on a besoin de remplir <span class="bv-carte__libres">{{ nombre }} créneau</span>{% plural %}Ces prochains jours, on a besoin de remplir <span class="bv-carte__libres">{{ nombre }} créneaux</span>{% endblocktranslate %}
+                    {% if resume.creneaux_a_remplir %}
+                        <span class="bv-carte__libres">{% blocktranslate count nombre=resume.creneaux_a_remplir %}Ces prochains jours, on a besoin de remplir {{ nombre }} créneau{% plural %}Ces prochains jours, on a besoin de remplir {{ nombre }} créneaux{% endblocktranslate %}</span>
                     {% else %}
                         <span class="bv-carte__libres">{% translate "tout est couvert" %}</span>
                     {% endif %}
@@ -39,8 +40,8 @@ en-têtes du planning (D20). La carte mène à la page du planning.
                     {% endif %}
                     ·
                     <span class="bv-carte__libres">
-                        {% if resume.places_libres %}
-                            {% blocktranslate count nombre=resume.places_libres %}{{ nombre }} créneau libre{% plural %}{{ nombre }} créneaux libres{% endblocktranslate %}
+                        {% if resume.creneaux_a_remplir %}
+                            {% blocktranslate count nombre=resume.creneaux_a_remplir %}{{ nombre }} créneau libre{% plural %}{{ nombre }} créneaux libres{% endblocktranslate %}
                         {% else %}
                             {% translate "tout est couvert" %}
                         {% endif %}

@@ -459,32 +459,44 @@ def construire_le_planning(planning, user, user_est_admin=False, semaine=None):
     }
 
 
-def resumes_des_plannings_a_venir(nombre_max, horizon_en_jours=10):
+def resumes_des_plannings_a_venir(nombre_max, horizon_en_jours=None):
     """
-    Les cartes du bloc d'accueil « Coups de main » (bloc CMS LISTE, source COUPS_DE_MAIN,
-    et section de l'accueil V2 codé en dur).
-    Un planning publié qui a au moins un besoin à venir donne une carte : son nom,
-    sa période, ses places libres, et ses 5 prochains jours colorés.
-    Planning « chaque semaine » : ses besoins se répètent, ses places libres ne comptent
-    que les `horizon_en_jours` prochains jours (aujourd'hui compris). S'il n'a aucun
-    besoin dans cet horizon, il n'a pas de carte : un compteur à 0 afficherait
-    « tout est couvert », ce qui serait faux.
-    Planning à dates fixes : toutes ses places libres à venir.
-    Tri : le planning dont le prochain besoin est le plus proche d'abord.
-    / Home block cards: one per published planning with an upcoming need. Weekly
-    plannings count free places over the horizon only (no card if none there).
+    Les cartes « Coups de main » : une par planning publié qui a au moins un besoin à
+    venir. Chaque carte porte son nom, sa période, ses créneaux à remplir, ses places
+    libres, et ses 5 prochains jours colorés.
+    / "Coups de main" cards: one per published planning with an upcoming need.
 
     LOCALISATION : booking/benevolat.py
-    Appelée par la balise plannings_benevoles_a_venir (pages/templatetags/pages_tags.py).
+    Appelée par :
+    - la balise plannings_benevoles_a_venir (pages/templatetags/pages_tags.py) : accueil V2
+      et bloc CMS LISTE, avec horizon_en_jours=10 ;
+    - newsletter/collecte.py (bloc « On a besoin de vous »), avec horizon_en_jours=10 ;
+    - BenevolatViewSet.list (booking/views_benevolat.py), SANS horizon : la page liste du
+      menu montre tous les plannings qui ont des besoins à venir.
+
+    `horizon_en_jours` ne s'applique qu'aux plannings « chaque semaine », dont les besoins
+    se répètent : on ne compte que les N prochains jours (aujourd'hui compris), et un
+    planning sans besoin dans cet horizon n'a pas de carte (un compteur à 0 afficherait
+    « tout est couvert », ce qui serait faux). None = pas d'horizon, on compte tout.
+    Un planning à dates fixes compte toujours tous ses besoins à venir.
+    / horizon_en_jours only applies to weekly plannings; None = no horizon.
+
+    Un « créneau à remplir » est un besoin (une plage horaire d'une tâche) qui a encore
+    au moins une place libre. Les places libres comptent les personnes manquantes.
+    / A "slot to fill" is a need with at least one free place.
+
+    Tri : le planning dont le prochain besoin est le plus proche d'abord.
 
     :return: liste de dicts, au plus nombre_max
     """
     fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
     aujourd_hui_au_lieu = timezone.now().astimezone(fuseau_du_lieu).date()
     hier_au_lieu = aujourd_hui_au_lieu - datetime.timedelta(days=1)
-    # Dernier jour compté : 10 jours = aujourd'hui + 9.
-    # / Last counted day: 10 days = today + 9.
-    dernier_jour_de_l_horizon = aujourd_hui_au_lieu + datetime.timedelta(days=horizon_en_jours - 1)
+    # Dernier jour compté : un horizon de 10 jours va d'aujourd'hui à aujourd'hui + 9.
+    # / Last counted day: a 10-day horizon runs from today to today + 9.
+    dernier_jour_de_l_horizon = None
+    if horizon_en_jours is not None:
+        dernier_jour_de_l_horizon = aujourd_hui_au_lieu + datetime.timedelta(days=horizon_en_jours - 1)
     # Seulement les plannings qui ont un besoin depuis hier : les plannings terminés
     # depuis longtemps ne coûtent rien à la page d'accueil.
     # / Only plannings with a need since yesterday: old plannings cost nothing.
@@ -498,11 +510,11 @@ def resumes_des_plannings_a_venir(nombre_max, horizon_en_jours=10):
         if not besoins:
             continue
 
-        # Planning hebdomadaire : ses besoins se répètent sans fin, on ne compte que
-        # l'horizon. Planning à dates fixes : on compte tous ses besoins à venir.
-        # / Weekly planning: count the horizon only. Fixed-date planning: count all.
+        # Planning hebdomadaire avec un horizon : ses besoins se répètent sans fin, on ne
+        # compte que l'horizon. Sinon : on compte tous ses besoins à venir.
+        # / Weekly planning with a horizon: count the horizon only. Otherwise: count all.
         planning_chaque_semaine = planning.type_de_planning == PlanningBenevole.HEBDOMADAIRE
-        if planning_chaque_semaine:
+        if planning_chaque_semaine and dernier_jour_de_l_horizon is not None:
             besoins_comptes = []
             for besoin in besoins:
                 if besoin.date <= dernier_jour_de_l_horizon:
@@ -513,8 +525,12 @@ def resumes_des_plannings_a_venir(nombre_max, horizon_en_jours=10):
             besoins_comptes = besoins
 
         places_libres = 0
+        creneaux_a_remplir = 0
         for besoin in besoins_comptes:
-            places_libres += besoin.places_libres()
+            places_libres_du_besoin = besoin.places_libres()
+            places_libres += places_libres_du_besoin
+            if places_libres_du_besoin > 0:
+                creneaux_a_remplir += 1
 
         # Les 5 jours colorés viennent des MÊMES besoins que le compteur : un jour
         # hors horizon afficherait des places absentes du total.
@@ -536,6 +552,7 @@ def resumes_des_plannings_a_venir(nombre_max, horizon_en_jours=10):
             "premier_jour": besoins[0].date,
             "dernier_jour": besoins[-1].date,
             "places_libres": places_libres,
+            "creneaux_a_remplir": creneaux_a_remplir,
             "jours": cinq_prochains_jours,
             "prochain_debut": besoins[0].debut(fuseau_du_lieu),
             # Hebdomadaire : « chaque semaine » au lieu de « du … au … », qui glisserait

@@ -356,6 +356,52 @@ class TestCreerBilletDepuisPanier(DonneesBilletterieMixin, FastTenantTestCase):
         ticket = tickets.first()
         assert ticket.status == Ticket.NOT_SCANNED
 
+    def test_creer_billet_quand_le_tarif_a_plusieurs_photos(self):
+        """
+        Le tarif du billet a deja deux photos (PriceSold) pour cet evenement : une au
+        prix catalogue (15,00 €), une a 12,00 € laissee par un code promo en ligne.
+        La caisse ne plante pas et rattache le billet a la photo au prix catalogue.
+        / The ticket price already has two snapshots for this event (15.00 € and a
+        12.00 € online promo one). No crash: the ticket uses the catalogue snapshot.
+        """
+        from BaseBillet.models import PriceSold, ProductSold, Ticket
+        from laboutik.views import _creer_billets_depuis_panier, _creer_lignes_articles
+
+        produit_vendu = ProductSold.objects.create(
+            product=self.product_billet,
+            event=self.event,
+            categorie_article=self.product_billet.categorie_article,
+        )
+        photo_au_prix_catalogue = PriceSold.objects.create(
+            productsold=produit_vendu,
+            price=self.price_billet,
+            prix=Decimal("15.00"),
+        )
+        PriceSold.objects.create(
+            productsold=produit_vendu,
+            price=self.price_billet,
+            prix=Decimal("12.00"),
+        )
+        self.carte_du_client()
+        articles_panier = [self.article_billet()]
+        request = self.requete_especes_avec_carte()
+
+        with db_transaction.atomic():
+            lignes, _produits_en_stock_negatif = _creer_lignes_articles(
+                articles_panier, "espece"
+            )
+            reservations = _creer_billets_depuis_panier(
+                request,
+                articles_panier,
+                lignes_articles=lignes,
+            )
+
+        # La photo existante est reutilisee : aucune troisieme photo n'est creee.
+        # / The existing snapshot is reused: no third snapshot is created.
+        ticket = Ticket.objects.get(reservation=reservations[0])
+        assert ticket.pricesold == photo_au_prix_catalogue
+        assert PriceSold.objects.filter(productsold=produit_vendu).count() == 2
+
     def test_creer_billet_avec_email(self):
         """
         Paiement avec email → to_mail=True, user cree.

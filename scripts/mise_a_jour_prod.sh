@@ -285,6 +285,11 @@ fi
 # conteneur, un Ctrl-C ou une coupure SSH interromprait la migration au milieu d'un
 # schema. Detache, il finit seul si le script meurt (l'etape 3 le retrouve a la relance).
 # Sans --rm : sa sortie reste lisible jusqu'au `docker rm`.
+# --name est OBLIGATOIRE : `docker compose run` ignore le container_name du compose et
+# invente un nom aleatoire. Le nom fixe sert a le suivre, a le retrouver a la relance, et
+# empeche d'en lancer deux (« name already in use »).
+# PYTHONUNBUFFERED : sans terminal, Python garde sa sortie en memoire par paquets ; la
+# migration paraitrait muette pendant 15 min.
 # / Throwaway lespass_maj container: checks the new code, then migrates. Detached, so a
 # Ctrl-C or a lost SSH session cannot interrupt the migration.
 # ---------------------------------------------------------------------------------------
@@ -308,7 +313,8 @@ fi
 FIN_DES_COMMANDES
 
 echo "== Conteneur $CONTENEUR_DE_MAJ"
-"${COMPOSE[@]}" run -d --no-deps \
+"${COMPOSE[@]}" run -d --no-deps --name "$CONTENEUR_DE_MAJ" \
+    -e PYTHONUNBUFFERED=1 \
     -e FAUT_IL_MIGRER="$faut_il_migrer" \
     -e EXECUTEUR="${EXECUTEUR:-multiprocessing}" \
     -e PGOPTIONS="-c lock_timeout=5s" \
@@ -326,7 +332,11 @@ if [ "$code_de_sortie_du_conteneur_de_maj" != "0" ]; then
     grep -inE "lock timeout|deadlock" "$FICHIER_JOURNAL" | tail -20 >&2 || true
     arreter "$CONTENEUR_DE_MAJ a echoue (code $code_de_sortie_du_conteneur_de_maj). Le code servi n'a pas change. Corriger, puis relancer make update."
 fi
-if [ "$faut_il_migrer" = "oui" ]; then
+# MIGRER=0 veut dire « la base est deja au niveau de la cible » (migration faite a la
+# main, ou rien a migrer) : le marqueur est pose aussi, sinon la prochaine mise a jour
+# croirait a un premier lancement et migrerait pour rien.
+# / MIGRER=0 means the database is already at the target level: set the marker too.
+if [ "$faut_il_migrer" = "oui" ] || [ "${MIGRER:-}" = "0" ]; then
     echo "$commit_cible" > "$MARQUEUR_MIGRE"
 fi
 
@@ -360,6 +370,12 @@ pid_du_maitre=$(supervisorctl pid gunicorn)
 pid_des_anciens_workers=$(docker exec "$CONTENEUR" pgrep -P "$pid_du_maitre" || true)
 nombre_d_anciens_workers=$(echo "$pid_des_anciens_workers" | wc -w)
 echo "Maitre $pid_du_maitre, $nombre_d_anciens_workers workers a remplacer"
+# Sans ce garde-fou, la boucle serait sautee et les anciens workers serviraient l'ancien
+# code, avec un « Mise a jour terminee » a la fin.
+# / Without this guard, the loop would be skipped and old workers would keep serving.
+if [ "$nombre_d_anciens_workers" -eq 0 ]; then
+    arreter "aucun worker gunicorn trouve sous le PID $pid_du_maitre."
+fi
 
 # Si le script s'arrete entre un TTIN et son TTOU, gunicorn garderait un worker de trop.
 # / If the script stops between a TTIN and its TTOU, give the extra worker back.
@@ -408,7 +424,11 @@ while [ "$anciens_encore_vivants" -gt 0 ]; do
         # / The warmup failure line also starts with "warmup worker": test it first.
         if echo "$lignes_ecrites_depuis" | grep -qE "warmup worker [0-9]+ echoue|Worker failed to boot|App failed to load|Shutting down: Master"; then
             echo "$lignes_ecrites_depuis" | tail -20
-            arreter "le nouveau worker gunicorn ne demarre pas correctement."
+            # Pas de TTOU de rattrapage ici : il retirerait le PLUS VIEUX worker, donc un
+            # ancien qui marche, et garderait le nouveau qui echoue.
+            # / No catch-up TTOU: it would remove a healthy old worker, not the broken one.
+            un_ttin_attend_son_ttou="non"
+            arreter "le nouveau worker gunicorn ne demarre pas correctement. Les anciens workers servent toujours, avec un worker neuf en trop. Ancien commit : $commit_actuel (spec, « Revenir en arriere »)."
         fi
         if echo "$lignes_ecrites_depuis" | grep -qE "warmup worker [0-9]+ : "; then
             nouveau_worker_pret="oui"
@@ -417,6 +437,7 @@ while [ "$anciens_encore_vivants" -gt 0 ]; do
         sleep 1
     done
     if [ "$nouveau_worker_pret" != "oui" ]; then
+        un_ttin_attend_son_ttou="non"
         arreter "pas de ligne « warmup worker » en 90 s dans $FICHIER_LOG_GUNICORN (--log-level doit rester info)."
     fi
 
@@ -476,8 +497,10 @@ echo "$commit_cible" > "$MARQUEUR_DEPLOYE"
 
 # Le pull a detague l'ancienne latest. `image prune` retire les images sans tag que plus
 # aucun conteneur n'utilise : celle du conteneur de prod reste, tant qu'il n'est pas recree.
-# / The pull untagged the old latest; prune removes untagged images no container uses.
-echo "== Menage des images sans tag"
-docker image prune -f
+# Le filtre limite le menage aux images de release (label pose par docker_push_update.sh) :
+# les autres piles de l'hote ne sont pas touchees.
+# / Prune untagged release images only; the prod container's image stays.
+echo "== Menage des anciennes images de release"
+docker image prune -f --filter "label=org.opencontainers.image.revision"
 
 echo "Mise a jour terminee : ${commit_cible:0:12}."

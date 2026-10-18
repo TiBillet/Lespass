@@ -847,13 +847,16 @@ class CarrouselAdmin(ModelAdmin):
     warn_unsaved_form = True  # Default: False
     ordering = ('order', 'name')
     # Le formulaire ne montre que l'image (obligatoire), le nom (texte alternatif,
-    # facultatif) et le poids. on_event_list_page et link restent en base, masques.
+    # facultatif) et le poids. on_event_list_page et link ne servent plus : aucun
+    # gabarit ne les lit, ils restent en base.
     # / The form shows only the image, the name (alt text) and the weight.
     fields = ('img', 'name', 'order')
     list_display = ('__str__', 'order', 'events_names')
     list_editable = ('order',)
 
-    search_fields = ('name',)
+    # 'img' : une diapositive sans nom se retrouve par son nom de fichier.
+    # / 'img': an unnamed slide is found by its file name.
+    search_fields = ('name', 'img')
 
     @display(description=_("Included in events"))
     def events_names(self, instance: Carrousel):
@@ -4005,7 +4008,13 @@ class PlusieursImagesField(forms.ImageField):
 
     LOCALISATION : Administration/admin_tenant.py
     Utilisé par EventForm (« Ajouter des images »). Enregistrement : EventAdmin.save_related.
+
+    Plafond de NOMBRE_MAX_D_IMAGES fichiers par envoi : chaque image est validée puis
+    déclinée en variations PENDANT la requête. Trop de fichiers d'un coup dépasserait
+    le délai du serveur.
+    / At most NOMBRE_MAX_D_IMAGES files per upload: each one is processed in the request.
     """
+    NOMBRE_MAX_D_IMAGES = 20
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("widget", PlusieursImagesInput(attrs={"accept": "image/*"}))
@@ -4019,8 +4028,23 @@ class PlusieursImagesField(forms.ImageField):
         # Le widget multiple renvoie une liste ; on valide chaque fichier un par un.
         # / The multiple widget returns a list; each file is validated one by one.
         fichiers_envoyes = data if isinstance(data, (list, tuple)) else [data]
+        if len(fichiers_envoyes) > self.NOMBRE_MAX_D_IMAGES:
+            raise forms.ValidationError(
+                _("Au plus %(nombre)s images par envoi.") % {"nombre": self.NOMBRE_MAX_D_IMAGES}
+            )
+
         for fichier_envoye in fichiers_envoyes:
-            images_validees.append(super().clean(fichier_envoye, initial))
+            try:
+                images_validees.append(super().clean(fichier_envoye, initial))
+            except forms.ValidationError as erreur_de_validation:
+                # Le nom du fichier fautif : sur dix images, il faut savoir laquelle.
+                # / The faulty file's name: among ten images, say which one.
+                raise forms.ValidationError(
+                    _("%(fichier)s : %(erreur)s") % {
+                        "fichier": fichier_envoye.name,
+                        "erreur": " ".join(erreur_de_validation.messages),
+                    }
+                )
         return images_validees
 
 
@@ -4050,10 +4074,13 @@ class EventForm(ModelForm):
         # transmet les choix au widget. Dans l'autre ordre, le widget reste vide.
         # / Gallery: only this event's images. Widget BEFORE queryset: the queryset
         # setter passes the choices to the widget.
-        if self.instance.pk:
-            images_de_l_evenement = self.instance.carrousel.all()
-        else:
+        # _state.adding et NON instance.pk : la clé UUID est remplie dès la création de
+        # l'objet, un évènement pas encore enregistré a donc déjà un pk.
+        # / _state.adding, NOT instance.pk: the UUID key is set at instantiation.
+        if self.instance._state.adding:
             images_de_l_evenement = Carrousel.objects.none()
+        else:
+            images_de_l_evenement = self.instance.carrousel.all()
         self.fields['carrousel'].widget = GalerieCarrouselWidget()
         self.fields['carrousel'].queryset = images_de_l_evenement
         self.fields['carrousel'].label = _("Galerie d'images")

@@ -1448,7 +1448,7 @@ DESCRIPTION_DES_PAGES = {
     "BaseBillet.ticket": _("Les billets émis."),
     "BaseBillet.ticketproduct": _("Les types de billets proposés."),
     "BaseBillet.promotionalcode": _("Les réductions ponctuelles."),
-    "BaseBillet.carrousel": _("Les visuels mis en avant sur l'agenda."),
+    "BaseBillet.carrousel": _("Les images des galeries d'évènements."),
     "BaseBillet.tag": _("Les étiquettes de classement."),
     "BaseBillet.postaladdress": _("Les lieux où se passent vos évènements."),
     "BaseBillet.scanapp": _("Le contrôle des billets à l'entrée."),

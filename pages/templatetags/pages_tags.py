@@ -933,7 +933,9 @@ def plannings_benevoles_a_venir(nombre_max=6):
     # / Import inside the function: no circular import.
     from booking.benevolat import resumes_des_plannings_a_venir
 
-    return resumes_des_plannings_a_venir(nombre_max or 6)
+    # Horizon de 10 jours pour les plannings « chaque semaine » (accueil, bloc CMS).
+    # / 10-day horizon for weekly plannings (home, CMS block).
+    return resumes_des_plannings_a_venir(nombre_max or 6, horizon_en_jours=10)
 
 
 @register.simple_tag

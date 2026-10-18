@@ -2506,7 +2506,6 @@ img { max-width: 100%; display: block; }
   filter: blur(28px) saturate(1.1) brightness(0.85);
   transform: scale(1.15);
 }
-.galerie__lien { display: block; height: 100%; }
 .galerie__image {
   position: relative;
   display: block;

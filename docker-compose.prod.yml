@@ -111,7 +111,8 @@ services:
   # code de la nouvelle image puis lance migrate_schemas, pendant que lespass_django
   # sert encore l'ancien code, et il s'arrete. AUCUN volume : le code est celui de
   # l'image, donc celui du commit cible. Le profil `maj` le garde hors de `up -d` ;
-  # `docker compose run` le lance quand meme. Le nom fixe empeche d'en lancer deux.
+  # `docker compose run` le lance quand meme. `run` IGNORE container_name : le script
+  # passe --name lespass_maj, ce nom fixe empeche d'en lancer deux.
   # / THROWAWAY container for make update: checks and migrates the new image's code
   # while lespass_django still serves the old one, then stops. NO volumes.
   lespass_maj:

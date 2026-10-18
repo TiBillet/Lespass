@@ -258,3 +258,72 @@ def test_une_petite_image_est_acceptee_comme_diapositive(tenant):
             img=_fichier_image("petite.png", largeur=100, hauteur=50)
         )
         petite_diapositive.full_clean()
+
+
+@pytest.mark.django_db
+def test_un_evenement_neuf_a_une_galerie_vide(tenant):
+    """
+    Un évènement pas encore enregistré a déjà un pk (UUID) : la galerie doit quand même
+    être vide, sans requête sur ses images.
+    / A not-yet-saved event already has a UUID pk: the gallery must still be empty.
+    """
+    from Administration.admin_tenant import EventForm
+    from BaseBillet.models import Event
+
+    with tenant_context(tenant):
+        formulaire = EventForm(instance=Event())
+        assert list(formulaire.fields["carrousel"].queryset) == []
+
+
+@pytest.mark.django_db
+def test_plus_de_20_images_d_un_coup_sont_refusees(tenant):
+    """Au-delà du plafond, erreur explicite sur le champ. / Over the cap: explicit error."""
+    with tenant_context(tenant):
+        evenement = _creer_evenement("Galerie admin — plafond")
+        try:
+            fichiers_envoyes = MultiValueDict(
+                {
+                    "galerie_nouvelles_images": [
+                        _fichier_image(f"image_{numero}.png") for numero in range(21)
+                    ],
+                }
+            )
+            formulaire = _formulaire_de_l_admin(
+                evenement, _donnees_du_formulaire(evenement, []), fichiers_envoyes
+            )
+            assert not formulaire.is_valid()
+            assert (
+                "Au plus 20 images par envoi."
+                in formulaire.errors["galerie_nouvelles_images"]
+            )
+        finally:
+            evenement.delete()
+
+
+@pytest.mark.django_db
+def test_l_erreur_d_un_fichier_invalide_donne_son_nom(tenant):
+    """Sur plusieurs fichiers, l'erreur dit lequel est fautif. / The error names the file."""
+    with tenant_context(tenant):
+        evenement = _creer_evenement("Galerie admin — nom du fichier")
+        try:
+            fichiers_envoyes = MultiValueDict(
+                {
+                    "galerie_nouvelles_images": [
+                        _fichier_image("bonne.png"),
+                        SimpleUploadedFile(
+                            "affiche_cassee.png",
+                            b"pas une image",
+                            content_type="image/png",
+                        ),
+                    ],
+                }
+            )
+            formulaire = _formulaire_de_l_admin(
+                evenement, _donnees_du_formulaire(evenement, []), fichiers_envoyes
+            )
+            assert not formulaire.is_valid()
+            assert "affiche_cassee.png" in str(
+                formulaire.errors["galerie_nouvelles_images"]
+            )
+        finally:
+            evenement.delete()

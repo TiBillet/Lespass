@@ -141,22 +141,25 @@ For installation, configuration and production deployment details: [→ Full doc
 
 ## Tests
 
-Two ways to run the suite, through `make` (logic: `scripts/lancer_tests.sh`).
-Tests calling the real Stripe (test mode) run every time: no test is skipped,
-whatever cannot run FAILS.
+The suite runs through `make` (logic: `scripts/lancer_tests.sh`); `make help` lists
+every command and the E2E families. Tests calling the real Stripe (test mode) run every
+time: no test is skipped, whatever cannot run FAILS.
 
 ```bash
 make test          # Python (~11 min) — models, views, API, real Stripe payments included
 make e2e           # Browser E2E (~14 min) — Playwright, requires `stripe listen` in byobu
 make e2e-visible adhesion   # one E2E family, in a visible Chromium (list: make help)
+make coverage      # pytest + code coverage (total + HTML report in htmlcov/)
 
 make test ARGS="tests/pytest/test_stripe_refund.py -k panier"   # target
+make e2e-visible LENTEUR=1500 ARGS="tests/e2e/test_panier_flow.py"   # follow step by step (ms between actions)
+make coverage FICHIERS="BaseBillet/services_panier.py"   # line-by-line detail for these files
 ```
 
 Both suites need the live server (the script checks it): part of the tests call
 it over HTTP.
 
-**Prerequisites for the E2E modes (3 and 4)**: the Django server runs behind Traefik
+**Prerequisites for `make e2e` and `make e2e-visible`**: the Django server runs behind Traefik
 (alias `rsp` in the byobu pane — `manage.py runserver` in daphne mode, required
 for WebSockets), and Chromium is installed in the container:
 
@@ -174,6 +177,31 @@ See `tests/README.md` for the full documentation (architecture, pitfalls,
 environment variables) and `tests/PIEGES.md` for known traps.
 
 Test Stripe card: `4242 4242 4242 4242`, exp `12/42`, CVC `424`.
+
+---
+
+## Updating production
+
+Code reaches production in two steps: a **release** (the commit's Docker image, built on
+the maintainer's machine and pushed to Docker Hub), then the server **update**, with no
+downtime: migration in a throwaway container while the old code serves, then gunicorn
+workers replaced one by one.
+
+```bash
+# Maintainer's machine: everything committed and pushed, VERSION bumped
+./docker_push_update.sh                       # builds and pushes tibillet/lespass:latest and :$VERSION
+REFAIRE_LA_BASE=1 ./docker_push_update.sh     # same, rebuilding everything (system, venv)
+
+# Production server, in byobu, from :05 to :20 or :35 to :50 (:05 to :10 with a migration)
+make update                  # updates production to the last pushed commit
+make update MIGRER=1         # forces the migration (MIGRER=0 skips it; EXECUTEUR=standard: one venue at a time)
+make update_nuit             # schedules make update at 02:05 with at (same variables)
+```
+
+`make update` stops before touching anything if dependencies, the `dockerfile`, the
+compose file, supervisor or nginx changed: that is a "big update", with a planned
+outage. Each run is logged in `logs/mise_a_jour_*.log`. Details (time windows, big
+update, rollback): `TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md`.
 
 ---
 

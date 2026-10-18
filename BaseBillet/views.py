@@ -350,7 +350,6 @@ def get_context(request):
         # showing up flags real slowness. Raising it to "see the spinner less"
         # would hide the symptom instead of fixing the response time.
         "loading_delay": 400,
-        "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [],
         "skin_preview": skin_preview # Valeur du skin, ou None
     }

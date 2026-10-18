@@ -7165,13 +7165,24 @@ def _creer_lignes_articles(
             defaults={"categorie_article": produit.categorie_article},
         )
 
-        # PriceSold : snapshot du prix au moment de la vente
-        # PriceSold: price snapshot at the time of sale
-        price_sold, _ = PriceSold.objects.get_or_create(
+        # PriceSold : photo du prix catalogue au moment de la vente.
+        # On la cherche par (produit vendu, tarif, prix) : la billetterie en ligne cree une
+        # photo PAR MONTANT (prix libre, code promo, prix modifie). Un meme tarif peut
+        # donc avoir plusieurs photos, et le modele n'interdit pas les doublons :
+        # chercher sans le prix, ou avec get(), leve MultipleObjectsReturned.
+        # / PriceSold: catalogue price snapshot, looked up by (productsold, price, prix);
+        # online sales create one per amount and duplicates are allowed.
+        price_sold = PriceSold.objects.filter(
             productsold=product_sold,
             price=prix_obj,
-            defaults={"prix": prix_obj.prix},
-        )
+            prix=prix_obj.prix,
+        ).first()
+        if price_sold is None:
+            price_sold = PriceSold.objects.create(
+                productsold=product_sold,
+                price=prix_obj,
+                prix=prix_obj.prix,
+            )
 
         if vente is None:
             # Ligne sans vente : seuls des tests existants appellent encore cette
@@ -7516,13 +7527,24 @@ def _creer_lignes_articles_cascade(
             defaults={"categorie_article": produit.categorie_article},
         )
 
-        # PriceSold : snapshot du prix au moment de la vente
-        # PriceSold: price snapshot at the time of sale
-        price_sold, _ = PriceSold.objects.get_or_create(
+        # PriceSold : photo du prix catalogue au moment de la vente.
+        # On la cherche par (produit vendu, tarif, prix) : la billetterie en ligne cree une
+        # photo PAR MONTANT (prix libre, code promo, prix modifie). Un meme tarif peut
+        # donc avoir plusieurs photos, et le modele n'interdit pas les doublons :
+        # chercher sans le prix, ou avec get(), leve MultipleObjectsReturned.
+        # / PriceSold: catalogue price snapshot, looked up by (productsold, price, prix);
+        # online sales create one per amount and duplicates are allowed.
+        price_sold = PriceSold.objects.filter(
             productsold=product_sold,
             price=prix_obj,
-            defaults={"prix": prix_obj.prix},
-        )
+            prix=prix_obj.prix,
+        ).first()
+        if price_sold is None:
+            price_sold = PriceSold.objects.create(
+                productsold=product_sold,
+                price=prix_obj,
+                prix=prix_obj.prix,
+            )
 
         # La vraie quantité et le prix unitaire de la ligne (kg / litres au prix du
         # kg / du litre pour une pesée, D15).
@@ -8447,12 +8469,20 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
                 defaults={"categorie_article": product.categorie_article},
             )
 
-            # PriceSold
-            price_sold, _created = PriceSold.objects.get_or_create(
+            # PriceSold : photo du prix catalogue, cherchee par (produit vendu, tarif, prix),
+            # doublons possibles (une photo par montant vendu en ligne, code promo).
+            # / PriceSold: catalogue price snapshot; duplicates are allowed.
+            price_sold = PriceSold.objects.filter(
                 productsold=product_sold,
                 price=price,
-                defaults={"prix": price.prix},
-            )
+                prix=price.prix,
+            ).first()
+            if price_sold is None:
+                price_sold = PriceSold.objects.create(
+                    productsold=product_sold,
+                    price=price,
+                    prix=price.prix,
+                )
 
             for _i in range(quantite):
                 ticket = Ticket.objects.create(
@@ -11491,12 +11521,16 @@ class PaiementViewSet(viewsets.ViewSet):
         # User identifie → ecran recapitulatif avec articles et boutons de paiement
         # / User identified → recap screen with articles and payment buttons
         if user:
+            # Le solde affiche est celui de la CARTE scannee : monnaies locales + argent
+            # du reseau (ancien Fedow), comme le « check carte ». Le paiement NFC depense
+            # les deux : n'afficher que le local montrerait 0 € a une carte qui peut payer.
+            # Sans carte (client identifie par e-mail), l'ecran n'affiche pas de solde.
+            # / The shown balance is the scanned CARD's: local + network money, like the
+            #   card check. Without a card, the screen shows no balance.
             solde = 0
-            if hasattr(user, "wallet") and user.wallet:
-                try:
-                    solde = WalletService.obtenir_total_en_centimes(user.wallet) / 100
-                except Exception:
-                    solde = 0
+            if carte is not None:
+                solde_complet_de_la_carte = obtenir_solde_complet_carte(carte)
+                solde = solde_complet_de_la_carte["total_centimes"] / 100
 
             user_prenom = user.first_name or prenom
             user_nom = user.last_name or nom
@@ -11564,28 +11598,14 @@ class PaiementViewSet(viewsets.ViewSet):
 
             # Recharge seule sur carte anonyme → pas besoin de user.
             # On affiche le recapitulatif directement avec le tag_id de la carte.
-            # Le wallet_ephemere sera cree automatiquement par _payer_par_recharge()
-            # si la carte n'en a pas encore.
+            # Le solde affiche est complet : monnaies locales + argent du reseau
+            # (ancien Fedow), comme le « check carte ». La lecture cree le wallet
+            # ephemere de la carte s'il n'existe pas encore.
             # / Top-up only on anonymous card → no user needed.
-            # Show recap directly with the card's tag_id.
-            # wallet_ephemere will be auto-created by _payer_par_recharge()
-            # if the card doesn't have one yet.
-            solde_carte = 0
-            if carte.wallet_ephemere:
-                try:
-                    solde_carte = (
-                        WalletService.obtenir_total_en_centimes(carte.wallet_ephemere)
-                        / 100
-                    )
-                except Exception:
-                    solde_carte = 0
-            elif carte.user and hasattr(carte.user, "wallet") and carte.user.wallet:
-                try:
-                    solde_carte = (
-                        WalletService.obtenir_total_en_centimes(carte.user.wallet) / 100
-                    )
-                except Exception:
-                    solde_carte = 0
+            # Show recap directly with the card's tag_id, with the full balance
+            # (local + network money); the read creates the ephemeral wallet if needed.
+            solde_complet_de_la_carte = obtenir_solde_complet_carte(carte)
+            solde_carte = solde_complet_de_la_carte["total_centimes"] / 100
 
             # Le recapitulatif nomme la carte par son tag_id (pas de nom de client).
             # / The recap names the card by its tag_id (no client name).

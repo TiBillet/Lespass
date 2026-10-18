@@ -249,6 +249,38 @@ def test_le_bloc_compte_toutes_les_places_d_un_planning_ponctuel(lieu):
     assert resume_du_planning(planning)["places_libres"] == 4
 
 
+def test_un_creneau_a_remplir_est_un_besoin_qui_a_encore_une_place(lieu):
+    """
+    3 besoins de 2 places, dont un complet : 2 créneaux à remplir, 4 places libres.
+    / 3 needs of 2 places, one full: 2 slots to fill, 4 free places.
+    """
+    from booking.models import InscriptionBenevole
+
+    planning, besoins = creer_un_planning(2, jours=[2, 3, 4])
+    besoin_complet = besoins[0]
+    InscriptionBenevole.objects.create(besoin=besoin_complet, user=creer_utilisateur())
+    InscriptionBenevole.objects.create(besoin=besoin_complet, user=creer_utilisateur())
+
+    resume = resume_du_planning(planning)
+
+    assert resume["creneaux_a_remplir"] == 2
+    assert resume["places_libres"] == 4
+
+
+def test_la_page_liste_montre_un_planning_chaque_semaine_meme_au_dela_de_10_jours(lieu):
+    """
+    La page /booking/benevolat/ n'a pas d'horizon : un planning chaque semaine dont le
+    premier besoin est à J+14 (lieu fermé deux semaines) y reste.
+    / The list page has no horizon: a weekly planning starting at D+14 stays listed.
+    """
+    planning, _besoins = creer_un_planning(14)
+    rendre_hebdomadaire(planning)
+
+    html = navigateur().get("/booking/benevolat/").content.decode()
+
+    assert f"/booking/benevolat/{planning.slug}/" in html
+
+
 def test_le_bloc_est_vide_sur_le_schema_public():
     """`pages` est aussi en SHARED_APPS : sur public, les tables du bénévolat n'existent pas."""
     from django_tenants.utils import schema_context
@@ -272,12 +304,14 @@ def test_la_carte_du_bloc_affiche_nom_periode_et_places(lieu):
     )
 
     assert planning.name in html
-    assert "6 créneaux libres" in html
+    # 2 besoins de 3 places : 2 créneaux (pas 6, qui serait le nombre de places).
+    # / 2 needs of 3 places: 2 slots (not 6, the number of places).
+    assert "2 créneaux libres" in html
     assert f"/booking/benevolat/{planning.slug}/" in html
 
 
 def test_la_carte_d_un_planning_chaque_semaine_annonce_les_creneaux_a_remplir(lieu):
-    """Chaque semaine, 2 places à J+2 : « Ces prochains jours, on a besoin de remplir … 2 créneaux »."""
+    """Chaque semaine, un besoin à J+2 : « Ces prochains jours, on a besoin de remplir 1 créneau »."""
     from django.template.loader import render_to_string
 
     planning, _besoins = creer_un_planning(2)
@@ -288,9 +322,8 @@ def test_la_carte_d_un_planning_chaque_semaine_annonce_les_creneaux_a_remplir(li
         {"plannings": [resume_du_planning(planning)]},
     )
 
-    assert "Ces prochains jours, on a besoin de remplir" in html
-    assert '<span class="bv-carte__libres">2 créneaux</span>' in html
-    assert "2 créneaux libres" not in html
+    assert "Ces prochains jours, on a besoin de remplir 1 créneau" in html
+    assert "créneau libre" not in html
 
 
 def accueil_v2(configuration=None):
@@ -298,7 +331,14 @@ def accueil_v2(configuration=None):
     GET / sur `lespass`, skin V2 forcé (accueil codé en dur, pages/V2/vues/accueil.html).
     `configuration` : une copie modifiée de Configuration, pour simuler un module éteint.
     / GET / on `lespass` with the V2 skin forced; optional patched configuration.
+
+    Une page d'accueil CMS publiée remplacerait l'accueil codé en dur (BaseBillet/views.py,
+    index) : on les dépublie, la transaction du test annule le changement.
+    / A published CMS home page would replace the hardcoded home: unpublished here.
     """
+    from pages.models import Page
+
+    Page.objects.filter(est_accueil=True, publie=True).update(publie=False)
     with patch("BaseBillet.views.get_skin_courant", return_value="V2"):
         if configuration is None:
             return navigateur().get("/").content.decode()
@@ -321,6 +361,10 @@ def test_l_accueil_v2_cache_les_coups_de_main_module_eteint(lieu):
     from BaseBillet.models import Configuration
 
     creer_un_planning(1)
+    # Cas positif d'abord : sans lui, le test passerait à vide si le module était déjà
+    # éteint en base. / Positive case first, or the test could pass vacuously.
+    assert 'data-testid="accueil-benevolat"' in accueil_v2()
+
     configuration_eteinte = copy.copy(Configuration.get_solo())
     configuration_eteinte.module_benevolat = False
 

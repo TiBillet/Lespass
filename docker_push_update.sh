@@ -13,6 +13,12 @@
 #    seuls les fichiers suivis par git, puis le .dockerignore.
 # 4. Pousse les tags latest et $VERSION (fichier VERSION).
 #
+# Chaque release doit avoir son numero : le script refuse un $VERSION deja publie (le tag
+# de version sert a revenir en arriere, il ne doit jamais etre ecrase).
+# REFAIRE_LA_BASE=1 ./docker_push_update.sh : retelecharge python:3.11 et reconstruit tout
+# (systeme a jour, venv repousse). A faire lors d'une grosse mise a jour, pas a chaque
+# release : sinon chaque release repousse et fait retelecharger tout le venv.
+#
 # L'image porte le label org.opencontainers.image.revision = SHA du commit.
 # make update (scripts/mise_a_jour_prod.sh) le lit pour verifier que latest est bien
 # l'image du commit qu'il deploie.
@@ -67,14 +73,27 @@ fi
 commit_de_la_release=$(git rev-parse HEAD)
 echo "Release $VERSION — commit ${commit_de_la_release:0:12}"
 
-# 3. Construction depuis le commit extrait. PAS de `git archive | docker build -` :
-# avec un contexte tar sur l'entree standard, BuildKit n'applique pas le .dockerignore.
-# / 3. Build from the extracted commit. Not from stdin: BuildKit would skip .dockerignore.
+# Un tag de version deja publie ne s'ecrase pas : incrementer VERSION.
+# / A published version tag is never overwritten: bump VERSION.
+if docker manifest inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+  echo "$IMAGE:$VERSION existe deja sur Docker Hub : incrementer VERSION dans le fichier VERSION." >&2
+  exit 1
+fi
+
+options_de_construction=()
+if [[ "${REFAIRE_LA_BASE:-0}" = "1" ]]; then
+  options_de_construction=(--pull --no-cache)
+fi
+
+# 3. Construction depuis le commit extrait, et non depuis un `git archive | docker build -` :
+# le .dockerignore n'est garanti que pour un contexte qui est un dossier (doc Docker,
+# « build context »).
+# / 3. Build from the extracted commit: .dockerignore is guaranteed for a directory context.
 dossier_de_construction=$(mktemp -d)
 trap 'rm -rf "$dossier_de_construction"' EXIT
 git archive "$commit_de_la_release" | tar -x -C "$dossier_de_construction"
 
-docker build \
+docker build "${options_de_construction[@]}" \
   -f "$dossier_de_construction/dockerfile" \
   --label "org.opencontainers.image.revision=$commit_de_la_release" \
   --label "org.opencontainers.image.version=$VERSION" \
