@@ -5,27 +5,29 @@
 # LOCALISATION : scripts/mise_a_jour_prod.sh — appele par le Makefile (make update).
 # A lancer sur l'HOTE de production, dans le dossier du depot, dans byobu/tmux.
 # Spec : TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md (geste 2). La release (image Docker du
-# commit) doit avoir ete poussee avant : docker_push_update.sh.
+# commit) doit avoir ete poussee avant : make release.
 # / Run on the production HOST. The release image must have been pushed first.
 #
 # FLUX :
-#  1. Verrou (un seul make update a la fois) et journal dans logs/mise_a_jour_*.log.
-#  2. Fenetre horaire : depart de :05 a :20 ou de :35 a :50 (crons a :00 et :30).
+#  1. Verrou partage avec la sauvegarde (cron/saveDb.sh) : un seul make update a la fois,
+#     et jamais pendant un pg_dumpall. Journal dans logs/mise_a_jour_*.log.
+#  2. Pas de fenetre horaire : le verrou remplace l'ancienne fenetre de :05 a :20.
 #  3. Etat de depart : les 3 services en RUNNING, arbre git propre, venv de prod conforme
 #     a poetry.lock, aucun conteneur lespass_maj en cours.
 #  4. git fetch. Si un fichier qui demande un geste a la main a change (dependances,
 #     dockerfile, supervisor, nginx...) : arret AVANT de toucher au code servi.
 #  5. docker pull de l'image latest, qui doit porter le commit cible (label).
 #  6. Migration necessaire ? (fichiers */migrations/*.py changes depuis la derniere
-#     migration reussie). Si oui : fenetre plus stricte, et aucune sauvegarde en cours.
+#     migration reussie). Si oui : aucun pg_dump lance a la main en cours.
 #  7. Conteneur jetable lespass_maj, lance depuis la NOUVELLE image : il controle le code
 #     (manage.py check, imports wsgi/asgi, resolveurs d'URLs) puis migre. Pendant ce
 #     temps, le dossier servi n'a pas bouge : l'ancien code sert, sans melange.
 #  8. git merge --ff-only, puis collectstatic.
 #  9. Gunicorn : remplacement des workers UN PAR UN (TTIN, attente du prechauffage,
 #     TTOU). Jamais moins de N workers prets.
-# 10. Test : /robots.txt doit repondre 200.
-# 11. Redemarrage de daphne puis de celery, controle final, menage des images.
+# 10. Test : /robots.txt doit repondre 200, ou 301/302 (redirection vers le domaine principal).
+# 11. Redemarrage de daphne puis de celery (hors de :58 a :04, quand tournent les taches
+#     Celery beat), controle final, menage des images.
 #
 # REPRISE APRES UN ECHEC : relancer make update. Deux marqueurs dans logs/ disent ou on
 # en est : dernier_commit_migre (base du calcul des migrations) et dernier_commit_deploye.
@@ -73,19 +75,6 @@ arreter() {
     exit 1
 }
 
-minute_dans_la_plage() {
-    # $1 = minute actuelle, $2 = fin de la plage apres :05 et apres :35 (20 ou 10)
-    # / $1 = current minute, $2 = end of the range after :05 and after :35
-    local fin_de_plage="$2"
-    if [ "$1" -ge 5 ] && [ "$1" -le "$fin_de_plage" ]; then
-        return 0
-    fi
-    if [ "$1" -ge 35 ] && [ "$1" -le $((30 + fin_de_plage)) ]; then
-        return 0
-    fi
-    return 1
-}
-
 # Vrai si gunicorn, daphne ET celery sont en RUNNING.
 # On lit la sortie : le code retour de `status` vaut 0 meme en STARTING ou en BACKOFF.
 # / True if the three programs are RUNNING. The exit code of `status` is 0 even in BACKOFF.
@@ -103,28 +92,25 @@ tous_les_services_tournent() {
 
 # ---------------------------------------------------------------------------------------
 # 1. Verrou et journal
-# / Lock and log
+# Le meme fichier que cron/saveDb.sh (/DjangoFiles/logs/mise_a_jour.lock dans le
+# conteneur, le dossier est monte) : la sauvegarde attend la fin de make update, et
+# make update attend la fin du pg_dumpall. Une sauvegarde pose un verrou sur toutes les
+# tables : une migration lancee en meme temps echouerait sur son lock_timeout.
+# flock marche entre l'hote et le conteneur : c'est le meme fichier, sur le meme noyau.
+# Le verrou est tenu jusqu'a la fin du script (descripteur 9, ferme a la sortie).
+# / Lock shared with cron/saveDb.sh: the backup waits for make update and vice versa.
 # ---------------------------------------------------------------------------------------
 exec 9>logs/mise_a_jour.lock
 if ! flock -n 9; then
-    arreter "un autre make update tourne deja."
+    echo "Verrou pris : sauvegarde (pg_dumpall) ou autre make update en cours. Attente, 30 min au plus..."
+    if ! flock -w 1800 9; then
+        arreter "verrou toujours pris apres 30 min (logs/mise_a_jour.lock). Rien n'a ete modifie."
+    fi
 fi
 
 FICHIER_JOURNAL="logs/mise_a_jour_$(date +%F_%Hh%M).log"
 exec > >(tee -a "$FICHIER_JOURNAL") 2>&1
 echo "== make update — $(date '+%F %T') — journal : $FICHIER_JOURNAL"
-
-
-# ---------------------------------------------------------------------------------------
-# 2. Fenetre horaire. Les crons tournent a :00 et :30 (sauvegarde pg_dumpall, taches
-# Celery beat). La sauvegarde pose un verrou sur toutes les tables : une migration lancee en
-# meme temps echouerait sur son lock_timeout.
-# « 10# » force la base 10 : sans lui, bash lit « 08 » et « 09 » comme de l'octal invalide.
-# / Time window: stay away from the :00 and :30 crons.
-# ---------------------------------------------------------------------------------------
-if ! minute_dans_la_plage "$((10#$(date +%M)))" 20; then
-    arreter "il est $(date +%H:%M), trop pres d'un cron. make update se lance de :05 a :20 ou de :35 a :50."
-fi
 
 
 # ---------------------------------------------------------------------------------------
@@ -201,17 +187,16 @@ fi
 
 
 # ---------------------------------------------------------------------------------------
-# 5. L'image de la release. Le pull n'a aucun effet sur la prod, mais il peut prendre
-# plusieurs minutes si la couche du venv a change : il passe donc AVANT la fenetre stricte
-# de la migration. Le label pose par docker_push_update.sh dit de quel commit vient l'image.
-# / 5. The release image, pulled BEFORE the strict migration window. Its label tells
-# which commit it was built from.
+# 5. L'image de la release. Le pull n'a aucun effet sur la prod ; il peut prendre
+# plusieurs minutes si la couche du venv a change. Le label pose par make release dit de
+# quel commit vient l'image.
+# / 5. The release image. Its label tells which commit it was built from.
 # ---------------------------------------------------------------------------------------
 echo "== docker pull $IMAGE"
 docker pull "$IMAGE"
 commit_de_l_image=$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE")
 if [ "$commit_de_l_image" != "$commit_cible" ]; then
-    arreter "$IMAGE vient du commit « $commit_de_l_image », pas de ${commit_cible:0:12} : lancer la release (docker_push_update.sh)."
+    arreter "$IMAGE vient du commit « $commit_de_l_image », pas de ${commit_cible:0:12} : lancer make release sur la machine du mainteneur."
 fi
 
 
@@ -239,14 +224,8 @@ fi
 echo "Migration : $faut_il_migrer"
 
 if [ "$faut_il_migrer" = "oui" ]; then
-    # La migration dure jusqu'a 15 min : partie apres :10, elle deborderait sur le cron
-    # suivant. L'heure est relue : le pull a pu prendre du temps.
-    # / Migration takes up to 15 min. The time is read again: the pull may have been long.
-    if ! minute_dans_la_plage "$((10#$(date +%M)))" 10; then
-        arreter "il est $(date +%H:%M) et il y a une migration : elle se lance de :05 a :10 ou de :35 a :40. Rien n'a ete modifie."
-    fi
-
-    # Sauvegarde lancee a la main, ou plus longue que prevu. pg_dumpall s'annonce
+    # La sauvegarde du cron est tenue a l'ecart par le verrou. Reste un pg_dump lance a la
+    # main, hors de saveDb.sh. pg_dumpall s'annonce
     # « pg_dumpall », et chacun de ses pg_dump « pg_dump » : d'ou le LIKE.
     # / A running backup: pg_dumpall and its pg_dump children, hence LIKE.
     requete_sauvegarde_en_cours="SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'pg_dump%'"
@@ -307,13 +286,26 @@ get_resolver(settings.PUBLIC_SCHEMA_URLCONF)._populate()
 print('Code cible : wsgi, asgi et URLconf OK')
 "
 if [ "$FAUT_IL_MIGRER" = "oui" ]; then
-    echo "== migrate_schemas (l'ancien code continue de servir)"
+    echo "== migrate_schemas --executor=$EXECUTEUR (l'ancien code continue de servir)"
     nice -n 19 ionice -c3 poetry run python manage.py migrate_schemas --executor="$EXECUTEUR"
 fi
 FIN_DES_COMMANDES
 
+# Un pseudo-terminal dans le conteneur, seulement si on en a un (byobu) : sans lui,
+# Django retire les couleurs ET le prefixe de django-tenants
+# « [12/500 (2%) multiprocessing:<lieu>] » (OutputWrapper.style_func, isatty()).
+# Sous `at` (make update_nuit), --tty ferait echouer le run : « cannot attach stdin to a
+# TTY-enabled container because stdin is not a terminal ». Le journal garde alors les codes
+# de couleur : le lire avec less -R.
+# / A pseudo-TTY only when we have one: without it Django drops colours and the
+# django-tenants prefix. Under `at`, --tty would make the run fail.
+option_terminal=()
+if [ -t 0 ]; then
+    option_terminal=(--tty)
+fi
+
 echo "== Conteneur $CONTENEUR_DE_MAJ"
-"${COMPOSE[@]}" run -d --no-deps --name "$CONTENEUR_DE_MAJ" \
+"${COMPOSE[@]}" run -d "${option_terminal[@]}" --no-deps --name "$CONTENEUR_DE_MAJ" \
     -e PYTHONUNBUFFERED=1 \
     -e FAUT_IL_MIGRER="$faut_il_migrer" \
     -e EXECUTEUR="${EXECUTEUR:-multiprocessing}" \
@@ -459,20 +451,25 @@ trap - EXIT
 
 
 # ---------------------------------------------------------------------------------------
-# 10. Test : le site repond. /robots.txt passe par la resolution du tenant sans rien
-# rediriger. Plusieurs appels : chacun tombe sur un worker au hasard.
+# 10. Test : le site repond. Plusieurs appels : chacun tombe sur un worker au hasard.
 # X-Forwarded-Proto : nginx le pose en vrai ; sans lui, Django se croit en HTTP.
-# / Smoke test on /robots.txt, several times since each call hits a random worker.
+# 200 ou 301/302 : sur $DOMAIN (le tenant public), CanonicalDomainRedirectMiddleware
+# redirige vers le domaine principal du tenant quand ce n'est pas $DOMAIN. Une
+# redirection prouve aussi que le worker a demarre et repond (Django, tenant, middlewares).
+# Un worker en panne donne 500, 502 ou 000 (pas de reponse).
+# / Smoke test: 200 or a canonical-domain redirect; a broken worker gives 5xx or 000.
 # ---------------------------------------------------------------------------------------
 echo "== Test de /robots.txt"
 for essai in 1 2 3 4 5; do
-    code_http=$(docker exec "$CONTENEUR" bash -c \
-        'curl -s -o /dev/null -w "%{http_code}" -H "Host: $DOMAIN" -H "X-Forwarded-Proto: https" http://127.0.0.1:8002/robots.txt')
-    if [ "$code_http" != "200" ]; then
-        arreter "/robots.txt repond $code_http au lieu de 200. Les workers servent le nouveau code : regarder $FICHIER_LOG_GUNICORN."
-    fi
+    reponse=$(docker exec "$CONTENEUR" bash -c \
+        'curl -s -o /dev/null -w "%{http_code} %{redirect_url}" -H "Host: $DOMAIN" -H "X-Forwarded-Proto: https" http://127.0.0.1:8002/robots.txt')
+    code_http=${reponse%% *}
+    case "$code_http" in
+        200|301|302) ;;
+        *) arreter "/robots.txt repond $code_http. Les workers servent le nouveau code : regarder $FICHIER_LOG_GUNICORN." ;;
+    esac
 done
-echo "/robots.txt : 200"
+echo "/robots.txt : $reponse"
 
 
 # ---------------------------------------------------------------------------------------
@@ -484,6 +481,19 @@ echo "/robots.txt : 200"
 # ---------------------------------------------------------------------------------------
 echo "== Redemarrage de daphne"
 supervisorctl restart daphne
+# Les taches Celery beat partent toutes a :00 (clotures comptables chaque heure, et
+# d'autres a 03:00, 05:00, 08:00, toutes les 4 h) : un restart a ce moment couperait une
+# tache en cours au bout de stopwaitsecs (10 s). On attend :05.
+# « 10# » force la base 10 : sans lui, bash lit « 08 » et « 09 » comme de l'octal invalide.
+# / Celery beat tasks all start at :00: wait until :05 before restarting celery.
+minute_actuelle=$((10#$(date +%M)))
+if [ "$minute_actuelle" -ge 58 ] || [ "$minute_actuelle" -le 4 ]; then
+    echo "Il est $(date +%H:%M) : taches Celery beat de :00. Attente de :05 avant de redemarrer celery..."
+    while [ "$minute_actuelle" -ge 58 ] || [ "$minute_actuelle" -le 4 ]; do
+        sleep 20
+        minute_actuelle=$((10#$(date +%M)))
+    done
+fi
 echo "== Redemarrage de celery"
 supervisorctl restart celery
 
@@ -497,7 +507,7 @@ echo "$commit_cible" > "$MARQUEUR_DEPLOYE"
 
 # Le pull a detague l'ancienne latest. `image prune` retire les images sans tag que plus
 # aucun conteneur n'utilise : celle du conteneur de prod reste, tant qu'il n'est pas recree.
-# Le filtre limite le menage aux images de release (label pose par docker_push_update.sh) :
+# Le filtre limite le menage aux images de release (label pose par make release) :
 # les autres piles de l'hote ne sont pas touchees.
 # / Prune untagged release images only; the prod container's image stays.
 echo "== Menage des anciennes images de release"

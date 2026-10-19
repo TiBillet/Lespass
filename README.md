@@ -189,14 +189,14 @@ du serveur, sans coupure : migration dans un conteneur jetable pendant que l'anc
 sert, puis workers gunicorn remplaces un par un.
 
 ```bash
-# Machine du mainteneur : tout commite et pousse, VERSION incremente
-./docker_push_update.sh                       # construit et pousse tibillet/lespass:latest et :$VERSION
-REFAIRE_LA_BASE=1 ./docker_push_update.sh     # idem en reconstruisant tout (systeme, venv)
+# Machine du mainteneur : main pousse, VERSION incremente sur main (docker login fait)
+make release                 # construit origin/main, quelle que soit la branche courante, et pousse :latest et :$VERSION
+REFAIRE_LA_BASE=1 make release   # idem en reconstruisant tout (systeme, venv)
 
 # Nouveau serveur, une fois : .env (secrets generes, valeurs A_REMPLIR), dossiers, controles
 make env                     # relancable : ne remplace jamais un .env existant, refait les controles
 
-# Serveur de production, dans byobu, de :05 a :20 ou de :35 a :50 (:05 a :10 s'il y a une migration)
+# Serveur de production, dans byobu, a toute heure (attend la fin d'une sauvegarde en cours)
 make update                  # met la prod a jour sur le dernier commit pousse
 make update MIGRER=1         # force la migration (MIGRER=0 la saute ; EXECUTEUR=standard : un lieu apres l'autre)
 make update_nuit             # programme make update a 02:05 avec at (memes variables)
@@ -205,7 +205,7 @@ make update_nuit             # programme make update a 02:05 avec at (memes vari
 `make update` s'arrete avant de toucher a quoi que ce soit si les dependances, le
 `dockerfile`, le compose, supervisor ou nginx ont change : c'est alors une « grosse mise
 a jour », avec une coupure planifiee. Le journal de chaque passage est dans
-`logs/mise_a_jour_*.log`. Detail (fenetres horaires, grosse mise a jour, retour en
+`logs/mise_a_jour_*.log`. Detail (verrou avec la sauvegarde, grosse mise a jour, retour en
 arriere) : `TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md`.
 
 ---

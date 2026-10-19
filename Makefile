@@ -9,7 +9,7 @@
 # goals, so they are declared as no-op targets and passed to the script.
 FAMILLES_E2E := $(shell sed -n 's/^ *\([a-z_]*\): famille E2E.*/\1/p' pytest.ini | tr '_' '-')
 FAMILLES_DEMANDEES := $(filter $(FAMILLES_E2E),$(MAKECMDGOALS))
-CIBLES := help test e2e e2e-visible coverage env update update_nuit
+CIBLES := help test e2e e2e-visible coverage release env update update_nuit
 
 # Un mot inconnu arrete tout AVANT de lancer quoi que ce soit : sinon une faute de frappe
 # (make e2e-visible adhesio) lancerait d'abord toute la suite.
@@ -35,8 +35,9 @@ help:
 	@echo "  make e2e           E2E navigateur, parcours Stripe compris (stripe listen dans byobu)"
 	@echo "  make e2e-visible   E2E dans un Chromium visible sur l'ecran, ralenti, avec journal"
 	@echo "  make coverage      pytest + couverture du code (total + htmlcov/)"
+	@echo "  make release       MAINTENEUR : construit l'image d'origin/main et la pousse (REFAIRE_LA_BASE=1 : tout reconstruire)"
 	@echo "  make env           PROD : cree le .env (secrets generes, A_REMPLIR), les dossiers, et controle le serveur"
-	@echo "  make update        PROD : mise a jour sans coupure (release poussee avant, depart de :05 a :20 ou de :35 a :50)"
+	@echo "  make update        PROD : mise a jour sans coupure (release poussee avant, a toute heure : attend la fin d'une sauvegarde en cours)"
 	@echo "  make update_nuit   PROD : programme make update a 02:05 avec at (MIGRER=1 ou EXECUTEUR=standard transmis)"
 	@echo ""
 	@echo "  Familles E2E (avec make e2e ou make e2e-visible, cumulables) :"
@@ -66,6 +67,12 @@ e2e-visible:
 coverage:
 	@FICHIERS="$(FICHIERS)" $(LANCER) couverture $(ARGS)
 
+# Machine du mainteneur : construit l'image d'origin/main (quelle que soit la branche
+# courante) et la pousse sur Docker Hub, tags latest et $VERSION. REFAIRE_LA_BASE=1
+# reconstruit tout (systeme, venv). / Maintainer's machine: builds and pushes origin/main.
+release:
+	@bash scripts/release.sh
+
 # Production uniquement : prepare le serveur (.env depuis env_prod_example, dossiers,
 # controles). Ne remplace jamais un .env existant ; relancable a volonte.
 # / Production only: prepares the server. Never overwrites an existing .env.
@@ -77,13 +84,12 @@ env:
 update:
 	@bash scripts/mise_a_jour_prod.sh
 
-# Programme `make update` a 02:05 avec at : 02:05 tombe dans les deux fenetres du script
-# (code seul de :05 a :20, migration de :05 a :10). 02h plutot que minuit : a 00:00, en plus
-# de la sauvegarde, tournent deux taches beat (clotures automatiques, cache SEO). at garde le dossier et l'environnement
-# de la personne qui programme ; le resultat se lit dans logs/mise_a_jour_*.log.
+# Programme `make update` a 02:05 avec at, une heure creuse. Plus de fenetre horaire : le
+# verrou partage avec la sauvegarde les tient a l'ecart l'une de l'autre. at garde le
+# dossier et l'environnement de la personne qui programme ; le resultat se lit dans
+# logs/mise_a_jour_*.log.
 # MIGRER et EXECUTEUR sont transmis : vides, le script choisit seul.
-# L'image est tiree tout de suite (sans effet sur la prod) : a 02:05 le pull est instantane,
-# et une migration ne rate pas sa fenetre (:05 a :10) a cause d'un telechargement long.
+# L'image est tiree tout de suite (sans effet sur la prod) : a 02:05 le pull est instantane.
 # Voir la tache : atq — l'annuler : atrm <numero>.
 # / Schedules `make update` at 02:05 with at; pre-pulls the image now.
 update_nuit:

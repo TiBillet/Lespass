@@ -12,7 +12,8 @@
 # 1. Pas de .env : copie de env_prod_example, secrets tires au hasard a la place de
 #    A_GENERER, droits 600. Un .env existe deja : on n'y touche pas (regenerer
 #    FERNET_KEY rendrait illisibles les donnees chiffrees en base).
-# 2. Creation des dossiers montes par docker-compose.prod.yml qui manquent.
+# 2. Creation des dossiers montes par docker-compose.prod.yml qui manquent, et des
+#    fichiers vides logs/__init__ et www/__init__ (suivis par git).
 # 3. Controles, sans rien modifier : valeurs A_REMPLIR restantes, drapeaux de prod,
 #    reseau Docker « frontend », docker compose >= 2, `at`,
 #    crontab de sauvegarde.
@@ -89,6 +90,15 @@ for dossier in database backup ssh logs www; do
     if [ ! -d "$dossier" ]; then
         mkdir -p "$dossier"
         echo "  $dossier/ cree."
+    fi
+done
+# logs/__init__ et www/__init__ : fichiers vides suivis par git pour garder ces dossiers.
+# Effaces, ils rendent l'arbre « modifie » et make update refuse de partir.
+# / Empty files tracked by git to keep these folders; if deleted, make update refuses to run.
+for fichier_vide in logs/__init__ www/__init__; do
+    if [ ! -e "$fichier_vide" ]; then
+        touch "$fichier_vide"
+        echo "  $fichier_vide recree."
     fi
 done
 chmod 700 ssh

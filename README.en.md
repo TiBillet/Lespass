@@ -188,14 +188,14 @@ downtime: migration in a throwaway container while the old code serves, then gun
 workers replaced one by one.
 
 ```bash
-# Maintainer's machine: everything committed and pushed, VERSION bumped
-./docker_push_update.sh                       # builds and pushes tibillet/lespass:latest and :$VERSION
-REFAIRE_LA_BASE=1 ./docker_push_update.sh     # same, rebuilding everything (system, venv)
+# Maintainer's machine: main pushed, VERSION bumped on main (docker login done)
+make release                 # builds origin/main, whatever the current branch, pushes :latest and :$VERSION
+REFAIRE_LA_BASE=1 make release   # same, rebuilding everything (system, venv)
 
 # New server, once: .env (generated secrets, A_REMPLIR values), folders, checks
 make env                     # can be rerun: never overwrites an existing .env, redoes the checks
 
-# Production server, in byobu, from :05 to :20 or :35 to :50 (:05 to :10 with a migration)
+# Production server, in byobu, at any time (waits for a running backup to finish)
 make update                  # updates production to the last pushed commit
 make update MIGRER=1         # forces the migration (MIGRER=0 skips it; EXECUTEUR=standard: one venue at a time)
 make update_nuit             # schedules make update at 02:05 with at (same variables)
@@ -203,7 +203,7 @@ make update_nuit             # schedules make update at 02:05 with at (same vari
 
 `make update` stops before touching anything if dependencies, the `dockerfile`, the
 compose file, supervisor or nginx changed: that is a "big update", with a planned
-outage. Each run is logged in `logs/mise_a_jour_*.log`. Details (time windows, big
+outage. Each run is logged in `logs/mise_a_jour_*.log`. Details (lock shared with the backup, big
 update, rollback): `TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md`.
 
 ---

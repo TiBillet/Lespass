@@ -46,17 +46,18 @@ un même `.env`, la dernière ligne gagne).
 
 ## Les trois gestes
 
-### 1. Release (machine du mainteneur) — `docker_push_update.sh` revu
+### 1. Release (machine du mainteneur) — `make release` (`scripts/release.sh`)
 
-1. Refuse des modifications non commitées (`git status --porcelain --untracked-files=no`) :
-   l'image doit être EXACTEMENT un commit. Les fichiers non suivis n'entrent pas dans l'image.
-2. Refuse un commit absent du dépôt distant : `git fetch` puis
-   `git merge-base --is-ancestor HEAD @{u}` (la prod doit pouvoir le récupérer).
+1. `git fetch origin main`. L'image est **toujours celle d'`origin/main`**, quelle que soit la
+   branche courante et l'état du dossier local (modifications non commitées comprises) : c'est
+   exactement le commit que la prod tirera. Si HEAD n'est pas `origin/main`, le script le dit,
+   pour information.
+2. `VERSION` est lu dans ce commit (`git show origin/main:VERSION`), pas dans le dossier local.
 3. Construit depuis le commit, dans un dossier temporaire, pour garder les DEUX barrières
    (seuls les fichiers suivis, PUIS le `.dockerignore`) :
    ```bash
    dossier=$(mktemp -d)
-   git archive HEAD | tar -x -C "$dossier"
+   git archive origin/main | tar -x -C "$dossier"
    docker build -f "$dossier/dockerfile" \
        --label org.opencontainers.image.revision=<sha complet> \
        -t tibillet/lespass:$VERSION -t tibillet/lespass:latest "$dossier"
@@ -65,14 +66,13 @@ un même `.env`, la dernière ligne gagne).
    qui est un dossier. Le label dit de quel commit vient l'image (`docker inspect`) :
    `make update` s'en sert pour vérifier qu'il tire la bonne.
 4. Refuse un `$VERSION` déjà publié (`docker manifest inspect`) : un tag de version sert à revenir
-   en arrière, il ne s'écrase jamais. Incrémenter `VERSION` à chaque release.
-5. Pousse les deux tags.
+   en arrière, il ne s'écrase jamais. Incrémenter `VERSION` sur `main` à chaque release.
+5. Pousse les deux tags (connecté à Docker Hub : `docker login`).
 
-`REFAIRE_LA_BASE=1 ./docker_push_update.sh` ajoute `--pull --no-cache` : `python:3.11` retéléchargé,
+`REFAIRE_LA_BASE=1 make release` ajoute `--pull --no-cache` : `python:3.11` retéléchargé,
 système et venv reconstruits. Réservé aux grosses mises à jour : sinon chaque release repousse et
 fait retélécharger tout le venv (~690 Mo).
 
-Le script ne fait plus `git checkout main && git pull` : il construit HEAD, tel quel.
 `start.sh` ne migre jamais : une migration au démarrage empêcherait supervisord de partir,
 donc le site de répondre, jusqu'à sa fin. Le fichier `VERSION` ne porte que le numéro de version.
 
@@ -80,18 +80,28 @@ donc le site de répondre, jusqu'à sa fin. Le fichier `VERSION` ne porte que le
 
 | # | Étape | Arrêt si… |
 |---|---|---|
-| 1 | Verrou `flock` + journal `logs/mise_a_jour_*.log` | un autre `make update` tourne |
-| 2 | Fenêtre horaire : :05–:20 / :35–:50 | hors fenêtre |
+| 1 | Verrou `flock` sur `logs/mise_a_jour.lock`, partagé avec `cron/saveDb.sh` (voir ci-dessous) ; s'il est pris, attente de 30 min au plus. Puis journal `logs/mise_a_jour_*.log` | verrou toujours pris après 30 min |
+| 2 | Plus de fenêtre horaire : le verrou la remplace | — |
 | 3 | État de départ : gunicorn, daphne, celery en RUNNING (lecture de la sortie de `status`) ; arbre propre ; venv de prod conforme au `poetry.lock` de HEAD (`poetry install --dry-run` doit annoncer `0 installs, 0 updates, 0 removals`) ; aucun conteneur `lespass_maj` qui tourne (un `lespass_maj` arrêté, reste d'un échec : on journalise ses logs puis `docker rm`) | un seul point faux |
 | 4 | `git fetch`, cible = `@{u}`. HEAD = cible et `logs/dernier_commit_deploye` = cible → « rien à faire » | pas d'upstream |
 | 5 | Fichiers à geste manuel changés entre HEAD et la cible : `poetry.lock`, `pyproject.toml`, `dockerfile`, `start.sh`, `supervisor/`, `gunicorn_conf.py`, `nginx_prod/`, `docker-compose.prod.yml` | → « grosse mise à jour », rien n'est touché |
-| 6 | `docker pull tibillet/lespass:latest` (aucun effet sur la prod ; peut prendre plusieurs minutes si la couche du venv a changé : c'est pourquoi il passe AVANT la fenêtre stricte). Son label `org.opencontainers.image.revision` doit être le commit cible | label différent → « la release de ce commit n'est pas faite » |
-| 7 | Migration nécessaire ? `*/migrations/*.py` changés depuis `logs/dernier_commit_migre` (absent → oui ; `MIGRER=1` / `MIGRER=0` pour forcer). Si oui : l'heure est relue, fenêtre :05–:10 / :35–:40, et aucun `pg_dump%` dans `pg_stat_activity` | hors fenêtre stricte, sauvegarde en cours |
+| 6 | `docker pull tibillet/lespass:latest` (aucun effet sur la prod ; peut prendre plusieurs minutes si la couche du venv a changé : rien n'est encore touché). Son label `org.opencontainers.image.revision` doit être le commit cible | label différent → « la release de ce commit n'est pas faite » |
+| 7 | Migration nécessaire ? `*/migrations/*.py` changés depuis `logs/dernier_commit_migre` (absent → oui ; `MIGRER=1` / `MIGRER=0` pour forcer). Si oui : aucun `pg_dump%` dans `pg_stat_activity` (un dump lancé à la main, hors du cron) | dump en cours |
 | 8 | Conteneur `lespass_maj`, lancé **détaché** (`docker compose run -d --no-deps --name lespass_maj`, sans `--rm`, avec `PYTHONUNBUFFERED=1`), suivi par `docker logs -f` dans le journal, code retour par `docker wait`, puis `docker rm`. Il fait : `manage.py check`, import de `TiBillet.wsgi` et `TiBillet.asgi`, peuplement des deux résolveurs d'URLs, puis `migrate_schemas` si nécessaire (`nice -n 19 ionice -c3`, `PGOPTIONS="-c lock_timeout=5s"`, `--executor=${EXECUTEUR:-multiprocessing}`). Succès de la migration, ou `MIGRER=0` → `logs/dernier_commit_migre` | contrôle ou migration en échec : le code servi n'a pas bougé |
 | 9 | `git merge --ff-only <sha>`, puis `collectstatic` dans `lespass_django` | — |
 | 10 | Gunicorn un par un : boucle tant qu'un PID d'ancien worker vit ; TTIN (`supervisorctl signal`) → attendre `warmup worker <pid> : ` dans `logs/gunicorn.logs` (90 s) → TTOU → attendre le départ d'un ancien (40 s). `trap` qui rend le worker en trop. PID du maître relu à chaque tour. Arrêt si aucun worker trouvé au départ | ligne d'échec du préchauffage (pas de TTOU de rattrapage : il retirerait un ancien worker sain), « Worker failed to boot », « Shutting down: Master », maître changé |
-| 11 | `/robots.txt` → 200, cinq fois (Host = `$DOMAIN`, `X-Forwarded-Proto: https`) | autre code |
-| 12 | `restart daphne`, `restart celery`, 15 s, tout en RUNNING. Puis `logs/dernier_commit_deploye`, et `docker image prune -f --filter label=org.opencontainers.image.revision` : l'ancienne `latest`, détaguée par le pull, part, sauf si un conteneur l'utilise encore (celui de prod) ; les images des autres piles ne sont pas touchées | un service pas en RUNNING |
+| 11 | `/robots.txt` → 200, ou 301/302, cinq fois (Host = `$DOMAIN`, `X-Forwarded-Proto: https`). La redirection vient de `CanonicalDomainRedirectMiddleware` quand le domaine principal du tenant public n'est pas `$DOMAIN` (cas de la prod au 2026-10-19) : elle prouve aussi que le worker répond | 5xx, 000 (pas de réponse) |
+| 12 | `restart daphne`, puis `restart celery` hors de :58–:04 (attente de :05 sinon : les tâches Celery beat partent toutes à :00, un restart couperait une tâche en cours au bout de `stopwaitsecs`), 15 s, tout en RUNNING. Puis `logs/dernier_commit_deploye`, et `docker image prune -f --filter label=org.opencontainers.image.revision` : l'ancienne `latest`, détaguée par le pull, part, sauf si un conteneur l'utilise encore (celui de prod) ; les images des autres piles ne sont pas touchées | un service pas en RUNNING |
+
+**Le verrou partagé avec la sauvegarde (étape 1).** `make update` et `cron/saveDb.sh` prennent
+le même `flock`, `logs/mise_a_jour.lock` (`/DjangoFiles/logs/mise_a_jour.lock` dans le conteneur,
+le dossier est monté ; vérifié : le verrou passe entre l'hôte et le conteneur). La sauvegarde ne
+le tient que pendant `pg_dumpall` : c'est lui qui verrouille toutes les tables, une migration
+lancée en même temps échouerait sur son `lock_timeout`. Pendant un `make update`, la sauvegarde
+attend ; après 25 min elle est sautée (avant le cron suivant, pour ne pas les empiler), et la
+suivante passera. Le fichier est créé par `make update` ; la sauvegarde l'ouvre en lecture seule
+(`flock` n'a pas besoin du droit d'écriture), et sans fichier elle part sans verrou. Il remplace
+les fenêtres horaires de :05–:20 et :05–:10.
 
 **Pourquoi détaché (étape 8).** Un `docker compose run` attaché relaie TOUS les signaux au
 conteneur (`ForwardAllSignals`) : un Ctrl-C, ou la coupure d'une session SSH hors byobu,
@@ -150,9 +160,9 @@ l'image n'apporte que le venv et le système.
 | `dockerfile` | `POETRY_VERSION=2.4.3` (le lock est en `lock-version 2.1`, Poetry ≥ 2 obligatoire). Dépendances AVANT le code : `COPY pyproject.toml poetry.lock`, `poetry install`, puis `COPY ./`. Création de `/DjangoFiles/logs` avec `chown tibillet` AVANT `USER tibillet` : `logs/` est exclu de l'image, or `LOGGING` ouvre ses fichiers dans `BASE_DIR/logs/` dès `django.setup()` |
 | `docker-compose.prod.yml` | `lespass_django` : `image: tibillet/lespass:latest` au lieu de `build: .`. Nouveau service `lespass_maj` : même image, `container_name: lespass_maj` (ignoré par `run`, d'où `--name` dans le script), profil `maj`, `.env`, réseau `backend`, liens postgres/redis/memcached (`DATABASES` vise l'hôte `postgres`), **aucun volume** |
 | `env_prod_example`, `scripts/fabriquer_env_prod.sh` | `make env` : préparer un serveur |
-| `docker_push_update.sh` | Release (geste 1), `REFAIRE_LA_BASE=1` pour une grosse mise à jour |
+| `scripts/release.sh` (ex `docker_push_update.sh`) | `make release` (geste 1) : image d'`origin/main`, `REFAIRE_LA_BASE=1` pour une grosse mise à jour |
 | `scripts/mise_a_jour_prod.sh` | `make update` (geste 2). La copie `logs/code_cible` disparaît |
-| `Makefile` | Cibles `env`, `update` et `update_nuit` (tire l'image tout de suite, puis programme `make update` à 02:05 avec `at`, en transmettant `MIGRER` et `EXECUTEUR`) |
+| `Makefile` | Cibles `release`, `env`, `update` et `update_nuit` (tire l'image tout de suite, puis programme `make update` à 02:05 avec `at`, en transmettant `MIGRER` et `EXECUTEUR`) |
 | `CHANGELOG/2026-10-18-make-update-sans-coupure.md` | Mis à jour |
 
 Le premier passage à ce fonctionnement est lui-même une grosse mise à jour (compose et dockerfile changent).

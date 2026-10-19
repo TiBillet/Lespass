@@ -67,7 +67,7 @@ services:
       - backend
 
   lespass_django:
-    # L'image vient de Docker Hub (docker_push_update.sh) et make update la tire.
+    # L'image vient de Docker Hub (make release) et make update la tire.
     # Elle n'apporte que le venv et le systeme : le code servi est le depot monte
     # ci-dessous. Revenir en arriere : TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md.
     # / The image comes from Docker Hub; it only brings the venv and the system,

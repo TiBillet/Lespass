@@ -5,7 +5,7 @@
 
 ## Resume / Summary
 **Quoi / What :** une image Docker par release, construite depuis le commit et poussée sur Docker
-Hub (`docker_push_update.sh`) ; nouvelle commande `make update` (`scripts/mise_a_jour_prod.sh`) :
+Hub (`make release`, `scripts/release.sh`) ; nouvelle commande `make update` (`scripts/mise_a_jour_prod.sh`) :
 `docker pull` de l'image, contrôle du nouveau code et migration dans un conteneur jetable
 `lespass_maj` pendant que l'ancien code sert, `git merge --ff-only`, `collectstatic`, workers
 gunicorn remplacés un par un (TTIN/TTOU), redémarrage de daphne et de celery.
@@ -24,12 +24,13 @@ served folder untouched during the migration.
 | Fichier / File | Changement / Change |
 |---|---|
 | `env_prod_example`, `scripts/fabriquer_env_prod.sh` | `make env` : `.env` de prod depuis un modèle (secrets générés, `A_REMPLIR`), dossiers montés, contrôles du serveur ; ne remplace jamais un `.env` existant |
-| `docker_push_update.sh` | Release : refuse un arbre sale ou un commit non poussé, build depuis `git archive` extrait, label `org.opencontainers.image.revision`, tags `latest` + `$VERSION` |
+| `scripts/release.sh` (ex `docker_push_update.sh`), `make release` | Release : construit toujours `origin/main` (quelle que soit la branche courante), `VERSION` lu dans ce commit, build depuis `git archive` extrait, label `org.opencontainers.image.revision`, tags `latest` + `$VERSION` |
 | `start.sh`, `VERSION` | Plus de migration au démarrage du conteneur : la variable `MIGRATE` disparaît, les migrations passent par `make update` |
 | `dockerfile` | Dépendances avant le code (cache de la couche venv), Poetry épinglé 2.4.3, dossier `logs/` créé |
 | `docker-compose.prod.yml` | `lespass_django` en `image: tibillet/lespass:latest` ; nouveau service `lespass_maj` (profil `maj`, aucun volume) |
-| `scripts/mise_a_jour_prod.sh` | Nouveau : `make update` |
-| `Makefile` | Cibles `env`, `update` et `update_nuit` (programme `make update` à 02:05 avec `at`) |
+| `scripts/mise_a_jour_prod.sh` | Nouveau : `make update`. Pas de fenêtre horaire : verrou partagé avec la sauvegarde, et `restart celery` hors de :58–:04 |
+| `cron/saveDb.sh` | Prend le verrou de `make update` le temps du `pg_dumpall` (attente de 25 min au plus, puis sauvegarde sautée) |
+| `Makefile` | Cibles `release`, `env`, `update` et `update_nuit` (programme `make update` à 02:05 avec `at`) |
 | `README.md`, `README.en.md` | Section « Mettre a jour la production » ; `make coverage`, `make help`, `LENTEUR` ajoutés aux tests |
 | `TECH_DOC/SESSIONS/DEPLOIEMENT/` | Nouveau hub : `INDEX.md`, `SPEC.md` (chantier 01) |
 
@@ -47,19 +48,19 @@ Un gunicorn jetable sur 127.0.0.1:8099 dans `lespass_django`, 3 workers, une req
 - HUP : 119 requêtes, 0 erreur, une requête bloquée 3,9 s.
 
 ### Test 1 — garde-fous en dev
-1. `make update` en dev : arrêt sur la fenêtre horaire ou sur « supervisord ne tourne pas ».
+1. `make update` en dev : arrêt sur « supervisord ne tourne pas ».
 2. Rien n'a bougé : `git status` identique, pas de fetch.
 
 ### Test 2 — première release et grosse mise à jour
-1. Machine du mainteneur, tout commité et poussé, `VERSION` incrémenté : `./docker_push_update.sh`.
+1. Machine du mainteneur, `main` poussé, `VERSION` incrémenté sur `main` : `make release`.
 2. `docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' tibillet/lespass:latest`
-   = `git rev-parse HEAD`.
+   = `git rev-parse origin/main`.
 3. Prod : geste 3 de `SPEC.md` (merge, pull, `up -d --no-deps lespass_django`), puis
    `MIGRER=0 make update` (ou `MIGRER=1` s'il y a des migrations) pour poser les marqueurs.
 
 ### Test 3 — mise à jour de code ordinaire
-1. Un commit sans dépendance ni dockerfile, poussé, puis `./docker_push_update.sh`.
-2. Prod, dans byobu, de :05 à :20 : `make update`.
+1. Un commit sans dépendance ni dockerfile, poussé sur `main`, puis `make release`.
+2. Prod, dans byobu : `make update`.
 3. Dans un autre panneau : `tail -f logs/gunicorn.logs` (une ligne « warmup worker » puis le départ
    d'un ancien worker, par tour) et le log nginx (`urt=` normal, aucun 502).
 4. Fin : « Mise a jour terminee », `logs/dernier_commit_deploye` = `git rev-parse HEAD`.
@@ -67,6 +68,6 @@ Un gunicorn jetable sur 127.0.0.1:8099 dans `lespass_django`, 3 workers, une req
 
 ### Test 4 — refus
 1. Commit poussé sans release : arrêt « lancer la release », rien de modifié.
-2. Migration à :12 : arrêt « elle se lance de :05 a :10 ».
+2. Verrou : dans un autre panneau, `flock logs/mise_a_jour.lock sleep 120`, puis `make update` : « Verrou pris… Attente », il part à la fin du `sleep`. Et l'inverse : pendant un `make update`, `docker exec lespass_django /DjangoFiles/cron/saveDb.sh` attend sa fin.
 3. Couper la session SSH pendant la migration, relancer : arrêt « lespass_maj tourne encore ».
 4. Un commit qui modifie `poetry.lock` : arrêt « grosse mise a jour ».

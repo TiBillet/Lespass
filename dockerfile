@@ -57,6 +57,6 @@ COPY --chown=tibillet:tibillet ./bashrc /home/tibillet/.bashrc
 
 CMD ["bash", "/DjangoFiles/start.sh"]
 
-# Construction et publication d'une release : docker_push_update.sh
+# Construction et publication d'une release : make release (scripts/release.sh)
 # (voir TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md).
-# / Building and publishing a release: docker_push_update.sh
+# / Building and publishing a release: make release (scripts/release.sh)

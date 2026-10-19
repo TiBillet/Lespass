@@ -27,8 +27,28 @@ PREFIX=$DOMAIN-M$MIGRATION
 DUMPS_DIRECTORY="/Backup/dumps"
 mkdir -p $DUMPS_DIRECTORY
 
+# Verrou partage avec make update (scripts/mise_a_jour_prod.sh), seulement le temps du
+# pg_dumpall : il pose un verrou sur toutes les tables, une migration lancee en meme temps
+# echouerait. Pendant un make update, la sauvegarde attend ; apres 25 min (avant le cron
+# suivant, pour ne pas les empiler), elle est sautee : la suivante passera.
+# Le fichier est cree par make update (hote, dossier monte) ; ouvert en lecture seule,
+# flock n'a pas besoin du droit d'ecriture. Absent : aucun make update n'a jamais tourne.
+# / Lock shared with make update, held only during pg_dumpall.
+VERROU_MISE_A_JOUR="/DjangoFiles/logs/mise_a_jour.lock"
+if [ -e "$VERROU_MISE_A_JOUR" ]; then
+  exec 9<"$VERROU_MISE_A_JOUR"
+  if ! /usr/bin/flock -w 1500 9; then
+    echo $DATE_NOW" make update tourne depuis plus de 25 min : sauvegarde sautee" >&2
+    exit 1
+  fi
+fi
+
 echo $DATE_NOW" on dump la db en sql "
 /usr/bin/pg_dumpall | gzip >$DUMPS_DIRECTORY/$PREFIX-$DATE_NOW.sql.gz
+
+# Le dump est fini : make update peut partir pendant l'envoi borg.
+# / Dump done: make update may start during the borg upload.
+exec 9<&-
 
 echo $DATE_NOW" on supprime les vieux dumps sql de plus de 30min"
 /usr/bin/find $DUMPS_DIRECTORY -mmin +30 -type f -delete
