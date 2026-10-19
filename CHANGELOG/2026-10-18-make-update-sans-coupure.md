@@ -8,10 +8,13 @@
 Hub (`make release`, `scripts/release.sh`) ; nouvelle commande `make update` (`scripts/mise_a_jour_prod.sh`) :
 `docker pull` de l'image, contrôle du nouveau code et migration dans un conteneur jetable
 `lespass_maj` pendant que l'ancien code sert, `git merge --ff-only`, `collectstatic`, workers
-gunicorn remplacés un par un (TTIN/TTOU), redémarrage de daphne et de celery.
+gunicorn remplacés un par un (TTIN/TTOU), redémarrage de daphne et de celery. Sans migration,
+voie courte : ni release ni pull, le contrôle tourne dans `lespass_django` après le merge
+(retour à l'ancien commit s'il échoue).
 / One Docker image per release, built from the commit; new `make update`: pull, check and migrate
 in a throwaway `lespass_maj` container while the old code serves, fast-forward merge,
-one-by-one gunicorn worker replacement, daphne and celery restart.
+one-by-one gunicorn worker replacement, daphne and celery restart. Without a migration, short
+path: no release, no pull, the check runs in `lespass_django` after the merge.
 
 **Pourquoi / Why :** `supervisorctl restart` ferme le port de gunicorn (502), et HUP arrête les
 anciens workers avant que les nouveaux aient chargé Django (gel mesuré : 3,9 s en dev). Migrer
@@ -28,9 +31,9 @@ served folder untouched during the migration.
 | `start.sh`, `VERSION` | Plus de migration au démarrage du conteneur : la variable `MIGRATE` disparaît, les migrations passent par `make update` |
 | `dockerfile` | Dépendances avant le code (cache de la couche venv), Poetry épinglé 2.4.3, dossier `logs/` créé |
 | `docker-compose.prod.yml` | `lespass_django` en `image: tibillet/lespass:latest` ; nouveau service `lespass_maj` (profil `maj`, aucun volume) |
-| `scripts/mise_a_jour_prod.sh` | Nouveau : `make update`. Pas de fenêtre horaire : verrou partagé avec la sauvegarde, et `restart celery` hors de :58–:04 |
+| `scripts/mise_a_jour_prod.sh` | Nouveau : `make update`. Pas de fenêtre horaire : verrou partagé avec la sauvegarde, et `restart celery` hors de :58–:04. Voie courte sans migration (`COMPLET=1` pour la voie avec image). Commits listés dans le journal, confirmation devant un terminal, `CIBLE=<sha>` |
 | `cron/saveDb.sh` | Prend le verrou de `make update` le temps du `pg_dumpall` (attente de 25 min au plus, puis sauvegarde sautée) |
-| `Makefile` | Cibles `release`, `env`, `update` et `update_nuit` (programme `make update` à 02:05 avec `at`) |
+| `Makefile` | Cibles `release`, `env`, `update` et `update_nuit` (fige la cible, `CIBLE=<sha>`, puis programme `make update` à 02:05 avec `at`) |
 | `README.md`, `README.en.md` | Section « Mettre a jour la production » ; `make coverage`, `make help`, `LENTEUR` ajoutés aux tests |
 | `TECH_DOC/SESSIONS/DEPLOIEMENT/` | Nouveau hub : `INDEX.md`, `SPEC.md` (chantier 01) |
 
@@ -60,14 +63,22 @@ Un gunicorn jetable sur 127.0.0.1:8099 dans `lespass_django`, 3 workers, une req
 
 ### Test 3 — mise à jour de code ordinaire
 1. Un commit sans dépendance ni dockerfile, poussé sur `main`, puis `make release`.
-2. Prod, dans byobu : `make update`.
+2. Prod, dans byobu : `make update` ; les commits s'affichent, répondre « o ».
 3. Dans un autre panneau : `tail -f logs/gunicorn.logs` (une ligne « warmup worker » puis le départ
    d'un ancien worker, par tour) et le log nginx (`urt=` normal, aucun 502).
 4. Fin : « Mise a jour terminee », `logs/dernier_commit_deploye` = `git rev-parse HEAD`.
 5. Relancer `make update` : « Deja a jour. Rien a faire. »
 
+### Test 3 bis — voie courte (sans migration)
+1. Un commit sans migration (ex. un gabarit), poussé sur `main`, **sans** `make release`.
+2. Prod : `make update` → « Migration : non », « Voie : courte », pas de `docker pull`, puis
+   « Controle dans lespass_django », workers remplacés, « Mise a jour terminee ».
+3. Déjà joué en dev le 2026-10-19 : le contrôle dans `lespass_django` (`docker exec`, 13 s, OK),
+   et `git reset --keep` après un `merge --ff-only` dans un dépôt jetable (fichiers modifiés et
+   ajoutés revenus, fichiers non suivis gardés).
+
 ### Test 4 — refus
-1. Commit poussé sans release : arrêt « lancer la release », rien de modifié.
+1. Commit avec migration poussé sans release : arrêt « lancer make release », rien de modifié.
 2. Verrou : dans un autre panneau, `flock logs/mise_a_jour.lock sleep 120`, puis `make update` : « Verrou pris… Attente », il part à la fin du `sleep`. Et l'inverse : pendant un `make update`, `docker exec lespass_django /DjangoFiles/cron/saveDb.sh` attend sa fin.
 3. Couper la session SSH pendant la migration, relancer : arrêt « lespass_maj tourne encore ».
 4. Un commit qui modifie `poetry.lock` : arrêt « grosse mise a jour ».

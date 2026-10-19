@@ -37,8 +37,8 @@ help:
 	@echo "  make coverage      pytest + couverture du code (total + htmlcov/)"
 	@echo "  make release       MAINTENEUR : construit l'image d'origin/main et la pousse (REFAIRE_LA_BASE=1 : tout reconstruire)"
 	@echo "  make env           PROD : cree le .env (secrets generes, A_REMPLIR), les dossiers, et controle le serveur"
-	@echo "  make update        PROD : mise a jour sans coupure (release poussee avant, a toute heure : attend la fin d'une sauvegarde en cours)"
-	@echo "  make update_nuit   PROD : programme make update a 02:05 avec at (MIGRER=1 ou EXECUTEUR=standard transmis)"
+	@echo "  make update        PROD : mise a jour sans coupure, a toute heure (release poussee avant s'il y a une migration ; COMPLET=1 : voie avec image)"
+	@echo "  make update_nuit   PROD : programme make update a 02:05 avec at, cible figee maintenant (MIGRER, EXECUTEUR, COMPLET transmis)"
 	@echo ""
 	@echo "  Familles E2E (avec make e2e ou make e2e-visible, cumulables) :"
 	@sed -n 's/^ *\([a-z_]*\): famille E2E — \(.*\)/\1|\2/p' pytest.ini \
@@ -87,15 +87,21 @@ update:
 # Programme `make update` a 02:05 avec at, une heure creuse. Plus de fenetre horaire : le
 # verrou partage avec la sauvegarde les tient a l'ecart l'une de l'autre. at garde le
 # dossier et l'environnement de la personne qui programme ; le resultat se lit dans
-# logs/mise_a_jour_*.log.
-# MIGRER et EXECUTEUR sont transmis : vides, le script choisit seul.
+# logs/mise_a_jour_*.journal.
+# La cible est FIGEE maintenant (CIBLE=<sha>), et ses commits affiches : a 02:05, un commit
+# pousse entre-temps ne part pas en prod sans avoir ete vu.
+# MIGRER, EXECUTEUR et COMPLET sont transmis : vides, le script choisit seul.
 # L'image est tiree tout de suite (sans effet sur la prod) : a 02:05 le pull est instantane.
 # Voir la tache : atq — l'annuler : atrm <numero>.
-# / Schedules `make update` at 02:05 with at; pre-pulls the image now.
+# / Schedules `make update` at 02:05 with at; pins the target commit and pre-pulls the image now.
 update_nuit:
 	@command -v at >/dev/null || { echo "at n'est pas installe : apt install at" >&2; exit 1; }
+	@git fetch --quiet
 	@docker pull tibillet/lespass:latest
-	@echo "cd $(CURDIR) && MIGRER=$(MIGRER) EXECUTEUR=$(EXECUTEUR) make update" | at 02:05
+	@cible=$$(git rev-parse '@{u}') && \
+		echo "Cible figee : $$cible. Commits qui partiront a 02:05 :" && \
+		git log --oneline --no-decorate HEAD..$$cible && \
+		echo "cd $(CURDIR) && CIBLE=$$cible MIGRER=$(MIGRER) EXECUTEUR=$(EXECUTEUR) COMPLET=$(COMPLET) make update" | at 02:05
 	@atq
 
 # Les familles n'ont pas d'action propre : elles precisent make e2e / make e2e-visible.

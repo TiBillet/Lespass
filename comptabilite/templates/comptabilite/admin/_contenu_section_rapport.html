@@ -8,9 +8,11 @@ LOCALISATION : comptabilite/templates/comptabilite/admin/_contenu_section_rappor
 
 Inclus par _sections_rapport.html pour chaque `section` (comptabilite/presentation.py).
 Une phrase « en alerte » (marge incomplète, anomalies) et un tableau « en alerte »
-(écarts d'encaissement) sont écrits en rouge. Les nombres sont alignés à droite.
+(écarts d'encaissement) sont écrits en rouge.
+Alignement : le titre d'une colonne et ses cases suivent `a_droite`, calculé par
+presentation.py `_tableau` (colonne de nombres à droite, sinon à gauche).
 Styles inline seulement (admin Unfold).
-/ Included for each section. Alerts are written in red. Numbers right-aligned.
+/ Included for each section. Alerts in red. Header and cells follow `a_droite`.
 {% endcomment %}
 
 {% if section.phrase %}
@@ -39,8 +41,8 @@ Styles inline seulement (admin Unfold).
                style="width: 100%; border-collapse: collapse; font-size: 14px;{% if tableau.alerte %} color: #b91c1c;{% endif %}">
             <thead>
                 <tr style="border-bottom: 1px solid var(--color-base-200, #e5e7eb);">
-                    {% for colonne in tableau.colonnes %}
-                        <th scope="col" style="text-align: left; padding: 6px 8px; font-weight: 600;">{{ colonne }}</th>
+                    {% for entete in tableau.entetes %}
+                        <th scope="col" style="text-align: {% if entete.a_droite %}right{% else %}left{% endif %}; padding: 6px 8px; font-weight: 600;">{{ entete.texte }}</th>
                     {% endfor %}
                 </tr>
             </thead>
@@ -48,11 +50,7 @@ Styles inline seulement (admin Unfold).
                 {% for ligne in tableau.lignes %}
                     <tr style="border-bottom: 1px solid var(--color-base-100, #f3f4f6);">
                         {% for cellule in ligne %}
-                            {% if cellule.valeur is not None %}
-                                <td style="text-align: right; padding: 6px 8px; font-family: monospace; white-space: nowrap;">{{ cellule.texte }}</td>
-                            {% else %}
-                                <td style="text-align: left; padding: 6px 8px;">{{ cellule.texte }}</td>
-                            {% endif %}
+                            <td style="text-align: {% if cellule.a_droite %}right{% else %}left{% endif %}; padding: 6px 8px;{% if cellule.valeur is not None %} font-family: monospace; white-space: nowrap;{% endif %}">{{ cellule.texte }}</td>
                         {% endfor %}
                     </tr>
                 {% endfor %}

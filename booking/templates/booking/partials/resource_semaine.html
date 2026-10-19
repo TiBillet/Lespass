@@ -133,7 +133,30 @@ suivante), calendar_weeks, time_rows, mobile_days, mobile_time_rows, mobile_day_
                                                     {% blocktrans count n=slot.remaining_capacity %}{{ n }} place{% plural %}{{ n }} places{% endblocktrans %}
                                                 </span>
                                             {% endif %}
+                                            {% if slot.infos_admin %}
+                                                <span class="calendar-slot-occupant" data-testid="booking-calendar-slot-occupant">{{ slot.infos_admin.libelle_court }}</span>
+                                            {% endif %}
                                         </div>
+                                        {% comment %}
+                                        Admin seulement : bouton posé sur la même case de grille que le
+                                        créneau, à côté et non dedans (pas de bouton dans un role="button").
+                                        - Créneau non réservable (complet ou au panier) : le bouton couvre
+                                          tout le bloc, tout le bloc ouvre le détail.
+                                        - Créneau encore réservable : le clic sur le bloc ouvre le formulaire
+                                          de réservation, le détail passe par le petit bouton (i) du coin.
+                                        / Admin only. Unbookable slot: the button covers the whole block.
+                                        Bookable slot: the block opens the booking form, details via the (i).
+                                        {% endcomment %}
+                                        {% if slot.infos_admin %}
+                                            <button type="button" class="calendar-slot-infos-admin{% if slot.in_cart or slot.remaining_capacity <= 0 %} calendar-slot-infos-admin-bloc{% endif %}"
+                                                    popovertarget="infos-creneau-d-{{ slot.start|date:'YmdHi' }}"
+                                                    style="grid-row: {% if slot.in_cart or slot.remaining_capacity <= 0 %}{{ slot.row_start }} / {{ slot.row_end }}{% else %}{{ slot.row_start }}{% endif %}; grid-column: {{ slot.column_index }};"
+                                                    aria-label="{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Qui occupe le créneau {{ start }} - {{ end }}{% endblocktrans %}"
+                                                    data-testid="booking-calendar-slot-infos-admin">
+                                                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                                            </button>
+                                            {% include "booking/partials/infos_creneau_admin.html" with prefixe="d" %}
+                                        {% endif %}
                                     {% endfor %}
                                 {% endfor %}
                             {% endfor %}
@@ -237,7 +260,21 @@ suivante), calendar_weeks, time_rows, mobile_days, mobile_time_rows, mobile_day_
                                              aria-label="{% if slot.in_cart %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, dans le panier{% endblocktrans %}{% elif slot.remaining_capacity > 0 %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, libre{% endblocktrans %}{% else %}{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}, complet{% endblocktrans %}{% endif %}"
                                         >
                                             <span class="mobile-slot-time">{{ slot.start|date:"H\hi" }}</span>
+                                            {% if slot.infos_admin %}
+                                                <span class="calendar-slot-occupant" data-testid="booking-mobile-slot-occupant">{{ slot.infos_admin.libelle_court }}</span>
+                                            {% endif %}
                                         </div>
+                                        {# Admin seulement : même bouton que la grille desktop. / Admin only. #}
+                                        {% if slot.infos_admin %}
+                                            <button type="button" class="calendar-slot-infos-admin{% if slot.in_cart or slot.remaining_capacity <= 0 %} calendar-slot-infos-admin-bloc{% endif %}"
+                                                    popovertarget="infos-creneau-m-{{ slot.start|date:'YmdHi' }}"
+                                                    style="grid-row: {% if slot.in_cart or slot.remaining_capacity <= 0 %}{{ slot.row_start }} / {{ slot.row_end }}{% else %}{{ slot.row_start }}{% endif %}; grid-column: 2;"
+                                                    aria-label="{% blocktrans with start=slot.start|date:'H\hi' end=slot.end|date:'H\hi' %}Qui occupe le créneau {{ start }} - {{ end }}{% endblocktrans %}"
+                                                    data-testid="booking-mobile-slot-infos-admin">
+                                                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                                            </button>
+                                            {% include "booking/partials/infos_creneau_admin.html" with prefixe="m" %}
+                                        {% endif %}
                                     {% endfor %}
                                     {% endfor %}
 

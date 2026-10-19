@@ -1,6 +1,8 @@
 ## SANITIZER
+import posixpath
+import re
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 import nh3
 
 ALLOWED_TAGS = [
@@ -32,8 +34,32 @@ def _attribute_filter(tag: str, attr: str, value: str) -> Optional[str]:
     """
     try:
         if tag == "img" and attr == "src" and isinstance(value, str):
-            parsed = urlparse(value)
-            path = (parsed.path or "").lower()
+            # On lit le chemin comme le NAVIGATEUR le lira, sinon le filtre se contourne :
+            # - le navigateur retire tabulations et retours à la ligne, et lit « \ » comme « / » ;
+            # - Django décode les « %xx » : « /%61dmin » arrive sur « /admin » ;
+            # - « /./admin » et « /.//admin » sont normalisés en « /admin » ;
+            # - un « .. » peut remonter jusqu'à la racine (« ../admin ») : refusé d'office.
+            # / Read the path as the BROWSER will: strip tabs/newlines, "\" as "/",
+            # percent-decode, normalize; any ".." segment is rejected.
+            valeur_lue_par_le_navigateur = value
+            for caractere_ignore in ("\t", "\n", "\r"):
+                valeur_lue_par_le_navigateur = valeur_lue_par_le_navigateur.replace(caractere_ignore, "")
+            valeur_lue_par_le_navigateur = valeur_lue_par_le_navigateur.strip().replace("\\", "/")
+
+            parsed = urlparse(valeur_lue_par_le_navigateur)
+            chemin_decode = unquote(parsed.path or "")
+
+            segments_du_chemin = chemin_decode.split("/")
+            if ".." in segments_du_chemin:
+                return None  # drop src attribute
+
+            chemin_sans_doubles_barres = re.sub(r"/{2,}", "/", chemin_decode)
+            if chemin_sans_doubles_barres:
+                chemin_normalise = posixpath.normpath(chemin_sans_doubles_barres)
+            else:
+                chemin_normalise = ""
+            path = chemin_normalise.lower()
+
             # Only consider regular http/https/relative URLs; schemes are filtered elsewhere
             for prefix in DISALLOWED_IMAGE_PATH_PREFIXES:
                 if path.startswith(prefix):

@@ -67,7 +67,7 @@ BaseBillet/
 
 Administration/
 ├── admin/dashboard.py                          # +event_proposals_badge_callback
-└── admin_tenant.py                             # +badge sur item Events + filtre is_proposal + action bulk
+└── admin_tenant.py                             # +badge sur item Events + filtre is_proposal + action de ligne
 ```
 
 ### URLs nommées Django (référence)
@@ -249,17 +249,33 @@ Nouveau `SimpleListFilter` `IsProposalFilter` avec 3 choix :
 - "Regular events" → `is_proposal=False`
 - "Approved proposals" → `is_proposal=True, published=True`
 
-### 8.3 Action bulk `approuver_propositions`
+### 8.3 Action de ligne `approuver_proposition`
+
+Action de ligne Unfold (`actions_row`, menu « ... » à droite de la ligne) : une
+proposition à la fois. La liste des événements n'a pas d'action groupée, donc pas de
+cases à cocher.
 
 ```python
-@admin.action(description=_("Approve and publish selected proposals"))
-def approuver_propositions(self, request, queryset):
-    nb_approuvees = queryset.filter(is_proposal=True, published=False).update(
-        is_proposal=False,
-        published=True,
-    )
-    self.message_user(request, _("%(n)s proposal(s) approved.") % {"n": nb_approuvees})
+@action(
+    description=_("Approuver et publier la proposition"),
+    permissions=["custom_actions_row"],
+)
+def approuver_proposition(self, request, object_id):
+    evenement = get_object_or_404(Event, pk=object_id)
+    est_une_proposition_en_attente = evenement.is_proposal and not evenement.published
+    if not est_une_proposition_en_attente:
+        messages.info(request, _("Cet événement n'est pas une proposition en attente."))
+        return redirect(request.META.get("HTTP_REFERER", "../.."))
+    evenement.is_proposal = False
+    evenement.published = True
+    evenement.save(update_fields=["is_proposal", "published"])
+    messages.success(request, _("Proposition approuvée et publiée."))
+    return redirect(request.META.get("HTTP_REFERER", "../.."))
 ```
+
+Publication par `save()`, jamais par `queryset.update()` : seul `save()` déclenche le
+signal `post_save` qui rafraîchit le cache SEO (l'événement apparaît sur la carte réseau
+en ~15 s au lieu du beat 4 h).
 
 ## 9. Sécurité
 
@@ -313,7 +329,7 @@ Fichiers :
 - `tests/pytest/test_otp_session.py` — helper session (~12 tests)
 - `tests/pytest/test_event_wizard_admin.py` — wizard admin 2 steps (~14 tests)
 - `tests/pytest/test_event_wizard_public.py` — wizard public OTP + 2 steps (~16 tests)
-- `tests/pytest/test_event_proposal_admin_badge.py` — badge + filtre + action bulk (~5 tests)
+- `tests/pytest/test_event_proposal_admin.py` — badge + action de ligne approuver_proposition
 
 Couverture cible :
 - `AuthBillet/otp_service.py` : 100%
@@ -353,7 +369,7 @@ Entrée à ajouter dans `CHANGELOG.md` du repo après implémentation :
 | `BaseBillet/templates/reunion/views/event/partial/simple_add_event.html` | supprimé |
 | `BaseBillet/templates/reunion/views/event/partial/address_simple_add.html` | supprimé |
 | `Administration/admin/dashboard.py` | +event_proposals_badge_callback |
-| `Administration/admin_tenant.py` | +badge Events + filtre IsProposalFilter + action approuver_propositions |
+| `Administration/admin_tenant.py` | +badge Events + filtre IsProposalFilter + action de ligne approuver_proposition |
 
 ### Migration
 - **Migration nécessaire / Migration required:** Oui
@@ -366,7 +382,7 @@ Créer `A TESTER et DOCUMENTER/event-wizards.md` avec scénarios manuels :
 1. Wizard admin : créer un event avec adresse existante.
 2. Wizard admin : créer un event avec nouvelle adresse (carte).
 3. Wizard public : flow OTP complet jusqu'à la page "Merci".
-4. Modération : badge sidebar + filtre admin + action bulk "Approuver".
+4. Modération : badge sidebar + filtre admin + action de ligne « Approuver et publier la proposition ».
 5. Anti-spam : honeypot + throttle DRF (3 emails consécutifs en < 1h → 429).
 6. Sécurité : tentative de bypass (POST direct step 2 sans OTP) → redirect step 0.
 
@@ -375,5 +391,5 @@ Créer `A TESTER et DOCUMENTER/event-wizards.md` avec scénarios manuels :
 - Migration onboard vers le service OTP DRY (chantier futur, optionnel).
 - Notification email à l'admin lors d'une nouvelle proposition (le mainteneur préfère le badge Unfold seul).
 - Stockage de l'email du proposant dans Event (pas de traçabilité demandée).
-- Page admin dédiée aux propositions (le filtre + l'action bulk dans `EventAdmin` suffisent).
+- Page admin dédiée aux propositions (le filtre + l'action de ligne dans `EventAdmin` suffisent).
 - Tests E2E Playwright (chantier futur).

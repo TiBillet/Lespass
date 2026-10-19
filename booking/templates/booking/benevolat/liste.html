@@ -14,13 +14,20 @@ qui charge benevolat.css et affiche l'état vide).
 / Target of the site menu entry; reuses the home block cards.
 -->
 
-{% block title %}{% translate "Bénévolat" %}{% endblock %}
+{% block title %}{% if config.benevolat_menu_name %}{{ config.benevolat_menu_name }}{% else %}{% translate "Bénévolat" %}{% endif %}{% endblock %}
 
 {% block booking_content %}
 <div class="benevolat" data-testid="benevolat-liste">
     <header class="bv-entete">
-        <h1 class="bv-titre">{% translate "Bénévolat" %}</h1>
-        <p class="bv-chapo">{% translate "Les coups de main dont le lieu a besoin. Choisis un planning, puis une case : c'est noté." %}</p>
+        <h1 class="bv-titre">{% if config.benevolat_menu_name %}{{ config.benevolat_menu_name }}{% else %}{% translate "Bénévolat" %}{% endif %}</h1>
+        {# Texte d'introduction (Configuration.description_benevolat_page), sinon le texte par défaut. #}
+        {# |safe : nettoyé (clean_html) à l'enregistrement dans l'admin Configuration. #}
+        {# / Intro text or default; |safe because sanitized on admin save. #}
+        {% if config.description_benevolat_page %}
+            <div class="bv-chapo" data-testid="benevolat-description-page">{{ config.description_benevolat_page|safe }}</div>
+        {% else %}
+            <p class="bv-chapo">{% translate "Les coups de main dont le lieu a besoin. Choisis un planning, puis une case : c'est noté." %}</p>
+        {% endif %}
     </header>
     {% include "booking/benevolat/partials/cartes_accueil.html" with plannings=plannings %}
 </div>

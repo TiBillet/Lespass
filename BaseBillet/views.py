@@ -389,7 +389,7 @@ def get_context(request):
         entrees_reseau.append({
             'name': 'federation',
             'url': '/federation/',
-            'label': _('Autour de nous'),
+            'label': config.federation_menu_name if config.federation_menu_name else _('Autour de nous'),
             'icon': 'diagram-2-fill'
         })
 
@@ -412,7 +412,8 @@ def get_context(request):
     if config.module_booking:
         entrees_optionnelles.append(
             {'name': 'booking-list', 'url': '/booking/',
-             'label': _('Ressources'), 'icon': 'building'}
+             'label': config.booking_menu_name if config.booking_menu_name else _('Ressources'),
+             'icon': 'building'}
         )
 
     # Module bénévolat : la liste des plannings de bénévoles à venir.
@@ -420,7 +421,8 @@ def get_context(request):
     if config.module_benevolat:
         entrees_optionnelles.append(
             {'name': 'benevolat-liste', 'url': '/booking/benevolat/',
-             'label': _('Bénévolat'), 'icon': 'people'}
+             'label': config.benevolat_menu_name if config.benevolat_menu_name else _('Bénévolat'),
+             'icon': 'people'}
         )
 
     # Entrees de navigation issues des pages du tenant. La construction vit
@@ -3240,11 +3242,19 @@ class FederationViewset(viewsets.ViewSet):
         )
         federation_json_ld = json_for_html(federation_json_ld_dict)
 
+        # Nom de la page : celui choisi dans Configuration, sinon « Autour de nous ».
+        # Sert au titre, aux balises Open Graph et au fil d'Ariane.
+        # / Page name: the one set in Configuration, else "Autour de nous".
+        if config.federation_menu_name:
+            nom_de_la_page_reseau = config.federation_menu_name
+        else:
+            nom_de_la_page_reseau = _('Autour de nous')
+
         # BreadcrumbList : Accueil > Reseau local. Pour les rich snippets SERP.
         # / BreadcrumbList: Home > Local network. For SERP rich snippets.
         breadcrumb_json_ld_dict = build_json_ld_breadcrumb([
             {"name": str(config.organisation), "url": root_url},
-            {"name": str(_("Autour de nous")), "url": request.build_absolute_uri()},
+            {"name": str(nom_de_la_page_reseau), "url": request.build_absolute_uri()},
         ])
         breadcrumb_json_ld = json_for_html(breadcrumb_json_ld_dict)
 
@@ -3259,7 +3269,8 @@ class FederationViewset(viewsets.ViewSet):
             'has_other_federated_places': has_other_federated_places,
             'federation_json_ld': federation_json_ld,
             'breadcrumb_json_ld': breadcrumb_json_ld,
-            'page_title': _('Autour de nous'),
+            'page_title': nom_de_la_page_reseau,
+            'nom_de_la_page_reseau': nom_de_la_page_reseau,
             'texte_introduction': config_federation.texte_introduction,
         })
 

@@ -33,14 +33,20 @@ mkdir -p $DUMPS_DIRECTORY
 # suivant, pour ne pas les empiler), elle est sautee : la suivante passera.
 # Le fichier est cree par make update (hote, dossier monte) ; ouvert en lecture seule,
 # flock n'a pas besoin du droit d'ecriture. Absent : aucun make update n'a jamais tourne.
-# / Lock shared with make update, held only during pg_dumpall.
+# Present mais illisible (droits poses par un autre utilisateur) : la sauvegarde part sans
+# verrou. Sans ce cas, `exec 9<` echouerait et set -e arreterait tout avant pg_dumpall :
+# plus aucune sauvegarde.
+# / Lock shared with make update, held only during pg_dumpall. Unreadable lock file: the
+# backup runs without the lock rather than not at all.
 VERROU_MISE_A_JOUR="/DjangoFiles/logs/mise_a_jour.lock"
-if [ -e "$VERROU_MISE_A_JOUR" ]; then
+if [ -r "$VERROU_MISE_A_JOUR" ]; then
   exec 9<"$VERROU_MISE_A_JOUR"
   if ! /usr/bin/flock -w 1500 9; then
     echo $DATE_NOW" make update tourne depuis plus de 25 min : sauvegarde sautee" >&2
     exit 1
   fi
+elif [ -e "$VERROU_MISE_A_JOUR" ]; then
+  echo $DATE_NOW" $VERROU_MISE_A_JOUR illisible : sauvegarde SANS verrou (chmod a+r du fichier sur l'hote)" >&2
 fi
 
 echo $DATE_NOW" on dump la db en sql "

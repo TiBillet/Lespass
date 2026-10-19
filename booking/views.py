@@ -9,25 +9,31 @@ Flux v0.1 : GET/POST simples, réservation directement en statut 'confirmed'.
 """
 import calendar
 import datetime
+import html
 import logging
 from collections import defaultdict
 from urllib.parse import urlencode
 from django_htmx.http import HttpResponseClientRedirect
+from django.db import connection
+from django.db.models import Count, Q
 from django.http import HttpResponseBadRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.utils.html import strip_tags
+from django.utils.text import Truncator
 from rest_framework import permissions, viewsets
 from django.contrib import messages
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ngettext
 from rest_framework.decorators import action
 
-from BaseBillet.models import Price, PaymentMethod, ProductFormField
+from BaseBillet.models import Event, Price, PaymentMethod, ProductFormField, Ticket
 from BaseBillet.views import get_context, reponses_du_formulaire_personnalise_pour_le_panier
 from booking.benevolat import lire_la_semaine_demandee, lundi_de_la_semaine, titre_de_la_semaine
 from booking.booking_engine import Interval, compute_slots, validate_new_booking
-from booking.booking_engine import annotate_slots_for_display
+from booking.booking_engine import annotate_slots_for_display, get_existing_bookings_for_resource
 from booking.booking_engine import validate_resource_booking_form
 from booking.models import Booking, Resource
 from booking.tasks import send_booking_cancellation_user
@@ -65,7 +71,7 @@ class BookingViewSet(viewsets.ViewSet):
 
         """
         all_resources = list(
-            Resource.objects.select_related('group', 'product').order_by('product__name')
+            Resource.objects.select_related('group', 'product').order_by('name')
         )
 
         items_by_group  = defaultdict(list)
@@ -86,6 +92,109 @@ class BookingViewSet(viewsets.ViewSet):
         )
 
         return resources_groups, ungrouped_resources
+
+    def _ajouter_les_infos_admin_aux_creneaux(self, resource, fenetre, slot_groups):
+        """
+        Pour un admin du lieu : dit QUI occupe chaque créneau de la semaine.
+        / For a venue admin: tells WHO occupies each slot of the week.
+
+        LOCALISATION : booking/views.py
+
+        Pose sur chaque créneau occupé (DisplaySlot) un dict `infos_admin` :
+        - evenements : les événements qui bloquent la ressource (titre, horaires, jauge)
+        - reservations : les réservations qui occupent le créneau (personne, statut, horaires)
+        - libelle_court : le texte écrit dans la case (titre, nom, ou « N réservations »)
+        Un créneau que personne n'occupe garde infos_admin à None.
+        Lu par booking/partials/resource_semaine.html et infos_creneau_admin.html.
+
+        Deux requêtes pour toute la semaine, quel que soit le nombre de créneaux.
+        Les filtres sont ceux du moteur (booking_engine.py) : réservations par
+        get_existing_bookings_for_resource(), événements comme
+        get_event_intervals_blocking_resource(). Si ces filtres changent là-bas,
+        ils doivent changer ici, sinon l'admin verrait d'autres occupants que
+        ceux qui bloquent vraiment le créneau.
+        / Two queries per week. Same filters as the booking engine: keep them in sync.
+        """
+        reservations_de_la_semaine = list(
+            get_existing_bookings_for_resource(resource, window=fenetre)
+            .select_related('user')
+            .order_by('start_datetime')
+        )
+        evenements_de_la_semaine = list(
+            Event.objects.filter(
+                ressource_bloquee=resource,
+                archived=False,
+                end_datetime__isnull=False,
+                datetime__lt=fenetre.end,
+                end_datetime__gt=fenetre.start,
+            )
+            .annotate(
+                nombre_de_billets_valides=Count(
+                    'reservation__tickets',
+                    filter=Q(reservation__tickets__status__in=[Ticket.SCANNED, Ticket.NOT_SCANNED]),
+                    distinct=True,
+                ),
+            )
+            .order_by('datetime')
+        )
+
+        for group in slot_groups:
+            for slot in group.slots:
+                # Un occupant chevauche le créneau s'il commence avant sa fin
+                # et finit après son début.
+                # / An occupant overlaps the slot if it starts before its end and ends after its start.
+                evenements_du_creneau = []
+                for evenement in evenements_de_la_semaine:
+                    if evenement.datetime < slot.end and evenement.end_datetime > slot.start:
+                        evenements_du_creneau.append({
+                            'titre': evenement.name,
+                            'debut': evenement.datetime,
+                            'fin': evenement.end_datetime,
+                            'billets_valides': evenement.nombre_de_billets_valides,
+                            'jauge_max': evenement.jauge_max,
+                        })
+
+                reservations_du_creneau = []
+                for reservation in reservations_de_la_semaine:
+                    if reservation.start_datetime < slot.end and reservation.end_datetime > slot.start:
+                        # Le nom saisi à la réservation d'abord, sinon celui du compte.
+                        # / The name typed when booking first, else the account's.
+                        prenom = reservation.first_name or reservation.user.first_name or ""
+                        nom = reservation.last_name or reservation.user.last_name or ""
+                        prenom_et_nom = f"{prenom} {nom}".strip()
+                        reservations_du_creneau.append({
+                            'prenom_et_nom': prenom_et_nom,
+                            'email': reservation.user.email,
+                            'statut': reservation.get_status_display(),
+                            'debut': reservation.start_datetime,
+                            'fin': reservation.end_datetime,
+                        })
+
+                creneau_occupe = evenements_du_creneau or reservations_du_creneau
+                if not creneau_occupe:
+                    continue
+
+                # Le texte de la case : l'événement d'abord, sinon la personne,
+                # sinon le nombre de réservations.
+                # / Cell text: the event first, else the person, else the booking count.
+                if evenements_du_creneau:
+                    libelle_court = evenements_du_creneau[0]['titre']
+                elif len(reservations_du_creneau) == 1:
+                    premiere_reservation = reservations_du_creneau[0]
+                    libelle_court = premiere_reservation['prenom_et_nom'] or premiere_reservation['email']
+                else:
+                    nombre_de_reservations = len(reservations_du_creneau)
+                    libelle_court = ngettext(
+                        "%(nombre)s réservation",
+                        "%(nombre)s réservations",
+                        nombre_de_reservations,
+                    ) % {'nombre': nombre_de_reservations}
+
+                slot.infos_admin = {
+                    'libelle_court': libelle_court,
+                    'evenements': evenements_du_creneau,
+                    'reservations': reservations_du_creneau,
+                }
 
     def _build_calendar_weeks(self, slot_groups):
         """
@@ -160,6 +269,7 @@ class BookingViewSet(viewsets.ViewSet):
                     'slot_duration_minutes': slot.slot_duration_minutes,
                     'remaining_capacity': slot.remaining_capacity,
                     'in_cart': slot.in_cart,
+                    'infos_admin': slot.infos_admin,
                     'row_start': row_start,
                     'row_end': row_end,
                 })
@@ -345,6 +455,24 @@ class BookingViewSet(viewsets.ViewSet):
         """
         context = get_context(request)
         resources_groups, ungrouped_resources = self._group_resources()
+
+        # Prix « à partir de » de chaque carte (cotton/V2/ressource_card.html).
+        # Les tarifs en points ou en temps se vendent à la caisse seulement :
+        # ils ne comptent pas dans le prix affiché en euros. Sans tarif en euros,
+        # la carte n'affiche pas de prix.
+        # / "From" price of each card; points/time prices are POS-only.
+        toutes_les_ressources = list(ungrouped_resources)
+        for group_entry in resources_groups:
+            toutes_les_ressources.extend(group_entry['resources'])
+        for resource in toutes_les_ressources:
+            tarifs_en_euros = resource.published_prices().filter(
+                asset__isnull=True,
+                non_fiduciaire=False,
+            ).values_list('prix', flat=True)
+            resource.price_min = None
+            if tarifs_en_euros:
+                resource.price_min = f"{min(tarifs_en_euros)} €"
+
         context.update({
             'resources_groups': resources_groups,
             'ungrouped_resources':  ungrouped_resources,
@@ -470,6 +598,15 @@ class BookingViewSet(viewsets.ViewSet):
                         slot.in_cart = True
                         break
 
+        # Un admin du lieu voit qui occupe chaque créneau (événement, réservations).
+        # / A venue admin sees who occupies each slot (event, bookings).
+        utilisateur_est_admin_du_lieu = (
+            request.user.is_authenticated
+            and request.user.is_tenant_admin(connection.tenant)
+        )
+        if utilisateur_est_admin_du_lieu:
+            self._ajouter_les_infos_admin_aux_creneaux(resource, semaine['fenetre'], slot_groups)
+
         calendar_weeks, min_hour, max_hour = self._build_calendar_weeks(slot_groups)
         mobile_days, mobile_time_rows, mobile_min_hour, mobile_max_hour = self._build_mobile_days(slot_groups)
 
@@ -536,6 +673,13 @@ class BookingViewSet(viewsets.ViewSet):
 
         context['resource_choices'] = resource_choices
         context['plusieurs_ressources'] = nombre_de_ressources > 1
+
+        # Meta description : la description sans balises ni entités HTML (« &amp; »
+        # redevient « & »). Le gabarit l'échappe ensuite UNE seule fois.
+        # Avec |striptags dans le gabarit, « & » sortirait « &amp;amp; ».
+        # / Meta description: tags stripped and entities decoded; escaped once by the template.
+        description_en_texte_brut = html.unescape(strip_tags(resource.description or ""))
+        context['meta_description_de_la_ressource'] = Truncator(description_en_texte_brut).words(20)
         return render(request, 'booking/views/resource.html', context)
 
     # ── Formulaire et création de réservation ────────────────────────────────

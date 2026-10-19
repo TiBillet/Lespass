@@ -409,14 +409,14 @@ def test_l1_aggregat_global_est_partage_entre_tous_les_schemas():
 # / Publishing a proposal must trigger the SEO rebuild
 # ---------------------------------------------------------------------------
 #
-# Bug : l'action admin "approuver_propositions" publiait via queryset.update(),
-# qui NE déclenche PAS le signal post_save -> le rebuild SEO ne partait pas et
-# l'event publié n'apparaissait sur la carte qu'au beat 4h. Cas critique pour
-# l'agenda participatif (les propositions publiques passent par cette action).
+# L'action admin "approuver_proposition" doit publier via save() : queryset.update()
+# NE déclenche PAS le signal post_save, le rebuild SEO ne partirait pas et l'event
+# publié n'apparaîtrait sur la carte qu'au beat 4h. Cas critique pour l'agenda
+# participatif (les propositions publiques passent par cette action).
 
 
 @pytest.mark.django_db
-def test_approuver_propositions_declenche_le_rebuild_seo(monkeypatch):
+def test_approuver_proposition_declenche_le_rebuild_seo(monkeypatch):
     """
     L'approbation d'une proposition (publish) DOIT déclencher le rebuild SEO,
     sinon l'event publié n'apparaît pas sur la carte avant le beat 4h.
@@ -467,13 +467,15 @@ def test_approuver_propositions_declenche_le_rebuild_seo(monkeypatch):
                     cache.delete(cle)
 
             admin_obj = EventAdmin(Event, AdminSite())
-            requete = RequestFactory().post("/admin/")
+            requete = RequestFactory().get("/admin/")
             requete.session = {}
             setattr(requete, "_messages", FallbackStorage(requete))
+            # L'action de ligne verifie la permission admin : superuser requis.
+            # / The row action checks the admin permission: superuser required.
+            from AuthBillet.models import TibilletUser
+            requete.user = TibilletUser.objects.filter(is_superuser=True).first()
 
-            admin_obj.approuver_propositions(
-                requete, Event.objects.filter(pk=proposition.pk)
-            )
+            admin_obj.approuver_proposition(requete, proposition.pk)
 
             proposition.refresh_from_db()
             assert proposition.published is True

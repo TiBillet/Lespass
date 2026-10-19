@@ -50,8 +50,9 @@ class Resource(models.Model):
     description = models.TextField(
         blank=True,
         null=True,
-        verbose_name=_("Long description"),
-        help_text=_("Displayed only for membership/subscription products.")
+        verbose_name=_("Description"),
+        help_text=_("Texte riche affiché sur la carte de la ressource (page Ressources) "
+                    "et en haut de sa page de réservation."),
     )
 
     # Image de la ressource : carte de /booking/ et en-tête de sa page.
@@ -152,7 +153,11 @@ class Resource(models.Model):
         return self.product.prices.filter(publish=True, archived=False)
 
     def __str__(self):
-        return self.product.name
+        # Le nom de la RESSOURCE, pas celui de son produit : plusieurs ressources
+        # peuvent partager un produit (mêmes tarifs). Tous les menus déroulants
+        # (ex : Event.ressource_bloquee) et les listes admin lisent ce texte.
+        # / The RESOURCE's name, not its product's: several resources may share one.
+        return self.name
 
 
 class ResourceGroup(models.Model):

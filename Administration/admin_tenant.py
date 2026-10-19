@@ -548,6 +548,11 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'membership_menu_name',
                 'description_membership_page',
                 'description_event_page',
+                'booking_menu_name',
+                'description_booking_page',
+                'benevolat_menu_name',
+                'description_benevolat_page',
+                'federation_menu_name',
                 'first_input_label_membership',
                 'second_input_label_membership',
                 'additional_text_in_membership_mail',
@@ -4355,8 +4360,8 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
     export_form_class = ExportForm
     import_form_class = ImportForm
 
-    actions_row = ["duplicate_day_plus_one", "duplicate_week_plus_one", "duplicate_week_plus_two",
-                   "duplicate_month_plus_one", "archive"]
+    actions_row = ["approuver_proposition", "duplicate_day_plus_one", "duplicate_week_plus_one",
+                   "duplicate_week_plus_two", "duplicate_month_plus_one", "archive"]
 
     fieldsets = (
         (None, {
@@ -4416,9 +4421,9 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         # 'categorie',
         'display_valid_tickets_count',
         'display_datetime_with_weekday',
-        'show_time',
         'published',
         'communication_envoyee',
+        'display_ressource_utilisee',
         'event_detail_page_button',
     ]
 
@@ -4440,8 +4445,6 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         'published',
     ]
     list_filter_submit = True
-
-    actions = ["approuver_propositions"]
 
     autocomplete_fields = [
         "tag",
@@ -4558,6 +4561,32 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         if count is None:
             count = instance.valid_tickets_count()
         return f"{count} / {instance.jauge_max}"
+
+    @display(description=_("Ressource utilisée"), boolean=True, ordering="ressource_bloquee")
+    def display_ressource_utilisee(self, instance: Event):
+        # Vrai si l'événement bloque une ressource du module réservation.
+        # On lit l'identifiant de la clé étrangère : aucune requête en plus par ligne.
+        # / True if the event blocks a booking resource. Reads the FK id: no extra query.
+        return instance.ressource_bloquee_id is not None
+
+    def get_list_display(self, request):
+        """
+        Les colonnes de la liste des événements. Sans le module réservation,
+        la colonne « Ressource utilisée » n'a pas de sens : on la retire.
+        / Without the booking module, the "Resource used" column is removed.
+
+        LOCALISATION : Administration/admin_tenant.py
+        """
+        colonnes_de_la_liste = super().get_list_display(request)
+        module_reservation_actif = Configuration.get_solo().module_booking
+        if module_reservation_actif:
+            return colonnes_de_la_liste
+
+        colonnes_sans_ressource = []
+        for nom_de_la_colonne in colonnes_de_la_liste:
+            if nom_de_la_colonne != "display_ressource_utilisee":
+                colonnes_sans_ressource.append(nom_de_la_colonne)
+        return colonnes_sans_ressource
 
     def get_fieldsets(self, request, obj=None):
         """
@@ -4800,35 +4829,38 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
 
         return duplicate
 
-    @admin.action(description=_("Approve and publish selected proposals"))
-    def approuver_propositions(self, request, queryset):
+    @action(
+        description=_("Approuver et publier la proposition"),
+        permissions=["custom_actions_row"],
+    )
+    def approuver_proposition(self, request, object_id):
         """
-        Action bulk : pour chaque event selectionne qui est une proposition
-        en attente, set is_proposal=False + published=True.
-        / Bulk action: approve and publish selected pending proposals.
+        Action de ligne (menu « ... ») : approuve et publie UNE proposition en attente.
+        / Row action ("..." menu): approves and publishes ONE pending proposal.
 
-        IMPORTANT (cf. CHANTIER-08) : on publie via save() par instance, et NON
-        via queryset.update() en masse. .update() ne declenche PAS le signal
-        post_save declencher_refresh_seo_cache -> sans lui, l'event approuve
-        n'apparait sur la carte reseau qu'au prochain beat 4h. save() declenche
-        le signal -> rebuild SEO debounce -> l'event apparait en ~15s.
-        / We publish with per-instance save(), NOT bulk queryset.update():
-        .update() does not fire the post_save signal that refreshes the SEO
-        cache, so the approved event would only appear on the network map at the
-        next 4h beat. save() fires the signal -> debounced SEO rebuild.
+        Seule une proposition en attente (is_proposal=True, non publiée) est modifiée.
+        Sur un événement ordinaire, l'action ne change rien et le dit.
+        / Only a pending proposal is changed; a regular event is left untouched.
+
+        IMPORTANT (cf. CHANTIER-08) : on publie via save(), et NON via
+        queryset.update(). .update() ne declenche PAS le signal post_save
+        declencher_refresh_seo_cache -> sans lui, l'event approuve n'apparait
+        sur la carte reseau qu'au prochain beat 4h.
+        / We publish with save(), NOT queryset.update(): only save() fires the
+        post_save signal that refreshes the SEO cache.
         """
-        propositions_en_attente = queryset.filter(is_proposal=True, published=False)
-        nb_approuvees = 0
-        for proposition in propositions_en_attente:
-            proposition.is_proposal = False
-            proposition.published = True
-            proposition.save(update_fields=["is_proposal", "published"])
-            nb_approuvees += 1
-        self.message_user(
-            request,
-            _("%(n)s proposal(s) approved.") % {"n": nb_approuvees},
-            messages.SUCCESS,
-        )
+        evenement = get_object_or_404(Event, pk=object_id)
+
+        est_une_proposition_en_attente = evenement.is_proposal and not evenement.published
+        if not est_une_proposition_en_attente:
+            messages.info(request, _("Cet événement n'est pas une proposition en attente."))
+            return redirect(request.META.get("HTTP_REFERER", "../.."))
+
+        evenement.is_proposal = False
+        evenement.published = True
+        evenement.save(update_fields=["is_proposal", "published"])
+        messages.success(request, _("Proposition approuvée et publiée."))
+        return redirect(request.META.get("HTTP_REFERER", "../.."))
 
 
 class ReservationValidFilter(admin.SimpleListFilter):

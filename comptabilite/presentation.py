@@ -51,10 +51,12 @@ LA FORME D'UNE SECTION (un dictionnaire) :
         "phrase_en_alerte": False,           # True : la phrase est écrite en rouge
         "tableaux": [ tableau, ... ],
     }
-Un tableau : {"titre", "testid", "alerte", "colonnes": [textes], "lignes": [[cellule]]}.
+Un tableau : {"titre", "testid", "alerte", "colonnes": [textes], "entetes": [entête],
+"lignes": [[cellule]]}. Un entête : {"texte", "a_droite"}.
 Une cellule : {"texte": ce qui est écrit, "valeur": le nombre (Decimal, en euros pour un
-montant) ou None pour un texte, "est_un_montant": True pour des euros}. Le tableur écrit
-la valeur (un nombre qu'on peut additionner), les autres lecteurs écrivent le texte.
+montant) ou None pour un texte, "est_un_montant": True pour des euros, "a_droite": True
+si sa colonne est alignée à droite}. Le tableur écrit la valeur (un nombre qu'on peut
+additionner), les autres lecteurs écrivent le texte.
 / Shape of a section, a table and a cell.
 
 Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-05-F-rapport-unique.md (§2).
@@ -356,13 +358,41 @@ def _tableau(titre, testid, colonnes, lignes, alerte=False, message_d_alerte="")
     d'alerte dit la même chose en mots (une couleur seule ne se lit pas avec un
     lecteur d'écran).
     / A table of a section; an alert table also carries a text message.
+
+    ALIGNEMENT : le titre d'une colonne et ses cases sont TOUJOURS alignés pareil.
+    Une colonne qui ne contient que des nombres (ou des cases vides, « — ») est alignée
+    à droite. Une colonne de texte, ou mélangée (la colonne « Valeur » de l'en-tête),
+    est alignée à gauche, nombres compris. Les gabarits (admin, PDF) lisent
+    `entetes[i].a_droite` et `cellule.a_droite` ; ils ne décident rien eux-mêmes.
+    / ALIGNMENT: a column header and its cells always share the same alignment.
+    Numbers-only columns go right; text or mixed columns go left.
     """
+    entetes = []
+    for numero_de_colonne, titre_de_la_colonne in enumerate(colonnes):
+        la_colonne_a_un_nombre = False
+        la_colonne_a_un_texte = False
+        for ligne in lignes:
+            if numero_de_colonne >= len(ligne):
+                continue
+            cellule = ligne[numero_de_colonne]
+            if cellule["valeur"] is not None:
+                la_colonne_a_un_nombre = True
+            elif cellule["texte"] not in ("", MENTION_VIDE):
+                la_colonne_a_un_texte = True
+        colonne_a_droite = la_colonne_a_un_nombre and not la_colonne_a_un_texte
+
+        entetes.append({"texte": titre_de_la_colonne, "a_droite": colonne_a_droite})
+        for ligne in lignes:
+            if numero_de_colonne < len(ligne):
+                ligne[numero_de_colonne]["a_droite"] = colonne_a_droite
+
     return {
         "titre": titre,
         "testid": testid,
         "alerte": alerte,
         "message_d_alerte": message_d_alerte,
         "colonnes": colonnes,
+        "entetes": entetes,
         "lignes": lignes,
     }
 

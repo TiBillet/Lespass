@@ -14,6 +14,8 @@
   / WYSIWYG editor in the admin; sanitized on save, rendered with `|safe`.
 - Page ressource : le sélecteur de ressource est masqué quand le lieu n'en a qu'une.
   / Resource selector hidden when there is a single resource.
+- `Resource.__str__` renvoie le nom de la ressource, plus celui de son produit. Les menus déroulants (« Ressource bloquée » sur l'événement, réservations dans l'admin) montrent enfin la ressource choisie.
+  / `Resource.__str__` returns the resource name, not its product's.
 - En-tête du lieu (skin V2) : le lien du site web passe sur sa propre ligne, sous l'adresse.
   / Venue header: the website link sits on its own line.
 
@@ -48,6 +50,10 @@
 ### Test 3 — sélecteur de ressource
 1. Lieu avec plusieurs ressources : `/booking/<pk>/resource/` affiche le menu « Ressource » (desktop et mobile).
 2. Lieu avec une seule ressource : le menu n'apparaît pas.
+
+### Test 3 bis — nom de la ressource dans les menus
+1. Admin → un événement → onglet « Interne » → « Ressource bloquée » : la liste montre les noms des ressources (« Petite salle #1 »…), pas ceux des produits.
+2. Admin → Réservations : la colonne « Ressource » montre aussi le nom de la ressource.
 
 ### Test 4 — en-tête du lieu
 1. Configuration avec adresse + site web : le site web s'affiche sous l'adresse, sans « · ».

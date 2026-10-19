@@ -10,12 +10,12 @@ et le tenant "lespass".
 
 Couvre :
 - TestEventProposalsBadge : 3 tests du callback sidebar Unfold.
-- TestActionBulkApprouver : 2 tests de l'action bulk approuver_propositions
-  sur EventAdmin (changelist staff_admin).
+- TestActionLigneApprouver : 2 tests de l'action de ligne approuver_proposition
+  sur EventAdmin (menu « ... » de la liste staff_admin).
 / Covers:
 - TestEventProposalsBadge: 3 tests of the Unfold sidebar callback.
-- TestActionBulkApprouver: 2 tests of the bulk action approuver_propositions
-  on EventAdmin (staff_admin changelist).
+- TestActionLigneApprouver: 2 tests of the row action approuver_proposition
+  on EventAdmin ("..." menu of the staff_admin changelist).
 """
 
 import uuid
@@ -149,12 +149,12 @@ class TestEventProposalsBadge:
 
 
 # ----------------------------------------------------------------------------
-# Tests : action bulk "approuver_propositions" via le changelist staff_admin
-# / Tests: bulk action "approuver_propositions" via the staff_admin changelist
+# Tests : action de ligne "approuver_proposition" (menu « ... » de la liste)
+# / Tests: row action "approuver_proposition" ("..." menu of the changelist)
 # ----------------------------------------------------------------------------
 
 @pytest.mark.django_db
-class TestActionBulkApprouver:
+class TestActionLigneApprouver:
     def test_action_approuver_set_published_true_et_is_proposal_false(
         self, http_client, admin_user, tenant, cleanup_proposals,
     ):
@@ -167,15 +167,11 @@ class TestActionBulkApprouver:
                 published=False,
             )
         http_client.force_login(admin_user)
-        url = reverse("staff_admin:BaseBillet_event_changelist")
+        url = reverse("staff_admin:BaseBillet_event_approuver_proposition", args=[ev.pk])
         with tenant_context(tenant):
-            resp = http_client.post(url, {
-                "action": "approuver_propositions",
-                "_selected_action": [str(ev.pk)],
-            })
-            # Django admin redirige (302) ou ressert la liste (200) selon le contexte.
-            # / Django admin either redirects (302) or re-renders the list (200).
-            assert resp.status_code in (200, 302), resp.content[:500]
+            resp = http_client.get(url)
+            # L'action redirige vers la liste. / The action redirects to the list.
+            assert resp.status_code == 302, resp.content[:500]
             ev.refresh_from_db()
             assert ev.is_proposal is False
             assert ev.published is True
@@ -183,8 +179,8 @@ class TestActionBulkApprouver:
     def test_action_approuver_ignore_events_deja_publies(
         self, http_client, admin_user, tenant, cleanup_proposals,
     ):
-        """Un event regulier (is_proposal=False) selectionne ne doit PAS etre touche.
-        / A regular event (is_proposal=False) in the selection must NOT be flipped."""
+        """Un event regulier (is_proposal=False) ne doit PAS etre touche.
+        / A regular event (is_proposal=False) must NOT be flipped."""
         from BaseBillet.models import Event
         with tenant_context(tenant):
             ev_regulier = Event.objects.create(
@@ -194,15 +190,12 @@ class TestActionBulkApprouver:
                 published=False,
             )
         http_client.force_login(admin_user)
-        url = reverse("staff_admin:BaseBillet_event_changelist")
+        url = reverse("staff_admin:BaseBillet_event_approuver_proposition", args=[ev_regulier.pk])
         with tenant_context(tenant):
-            resp = http_client.post(url, {
-                "action": "approuver_propositions",
-                "_selected_action": [str(ev_regulier.pk)],
-            })
-            assert resp.status_code in (200, 302), resp.content[:500]
+            resp = http_client.get(url)
+            assert resp.status_code == 302, resp.content[:500]
             ev_regulier.refresh_from_db()
-            # L'action filtre is_proposal=True : un event regulier reste intact.
-            # / Action filters is_proposal=True: a regular event stays untouched.
+            # L'action ne modifie qu'une proposition en attente : un event regulier reste intact.
+            # / The action only changes a pending proposal: a regular event stays untouched.
             assert ev_regulier.is_proposal is False
             assert ev_regulier.published is False

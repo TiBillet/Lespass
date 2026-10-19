@@ -1,26 +1,24 @@
 {% load i18n %}
 {% comment %}
-CARTE D'OFFRE (adhésion) — composant Cotton du skin V2 (DA v1)
-/ Offer card (ressource) — V2 skin Cotton component (DA v1)
+CARTE D'UNE RESSOURCE RÉSERVABLE — composant Cotton du skin V2 (DA v1)
+/ Bookable resource card — V2 skin Cotton component (DA v1)
 
 LOCALISATION : pages/templates/cotton/V2/ressource_card.html
-Utilisé par : pages/V2/vues/adhesions.html
+Utilisé par : booking/templates/booking/views/resources_list.html (/booking/)
+et pages/V2/vues/services.html.
 
-    <c-V2.ressource_card :ressource="ressource" />
+    <c-V2.ressource_card :ressource="resource" />
 
-Maquette : .offer-card de adhesion-services.html.
+Reçoit un booking.Resource. Affiche son image (Resource.img), son nom, sa
+description (Resource.description, texte riche) et son prix « à partir de »
+(ressource.price_min, posé par booking/views.py BookingViewSet.list ; absent,
+la carte n'affiche pas de prix).
 
-FLUX DU CLIC SUR « Réserver » (hors embed) :
-1. Le bouton ouvre le panneau latéral #subscribePanel (Bootstrap).
-2. En même temps, HTMX charge /ressources/<uuid>/ dans #offcanvas-ressource.
-   Ces deux ids sont définis par commun/offcanvas/adhesion_tunnel.html.
-3. .js-ressource-form-btn est lu par le module ressourceForm (shell.html).
-En embed (iframe), c'est un simple lien vers /ressources/?open=<uuid>.
-
-A CONSERVER : data-testid="ressource-open-<uuid>" (tests E2E adhésions).
-/ Keep the ressource-open testid (ressource E2E tests).
+FLUX DU CLIC SUR « Réserver » : lien HTMX vers /booking/<pk>/resource/
+(hx-target="body"), le calendrier de la ressource.
+/ "Book" is an HTMX link to the resource calendar page.
 {% endcomment %}
-<article class="offer-card offer-card-ressource" data-testid="ressource-card-{{ ressource.uuid }}">
+<article class="offer-card offer-card-ressource" data-testid="ressource-card-{{ ressource.pk }}">
     {% if ressource.img %}
         <div class="offer-card__cover">
             {% include 'commun/partials/picture.html' with img=ressource.img alt="" %}
@@ -47,7 +45,7 @@ A CONSERVER : data-testid="ressource-open-<uuid>" (tests E2E adhésions).
                hx-target="body"
                hx-swap="innerHTML"
                hx-push-url="true"
-               class="btn btn--secondary btn--sm js-ressource-form-btn"
+               class="btn btn--secondary btn--sm"
                data-testid="booking-resource-link-{{ ressource.pk }}">
                 {% translate 'Réserver' %}
             </a>

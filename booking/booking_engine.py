@@ -927,6 +927,10 @@ class DisplaySlot:
     slot_duration_minutes: int
     is_new_week:           bool = False
     in_cart:               bool = False
+    # Qui occupe le créneau. Rempli pour un admin du lieu seulement
+    # (booking/views.py : _ajouter_les_infos_admin_aux_creneaux). None sinon.
+    # / Who occupies the slot. Filled for venue admins only, None otherwise.
+    infos_admin:           dict = None
 
 
 @dataclass

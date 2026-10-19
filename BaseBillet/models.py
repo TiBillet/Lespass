@@ -868,6 +868,33 @@ class Configuration(SingletonModel):
     description_event_page = models.TextField(blank=True, verbose_name=_("Description on the event page"),
                                               help_text=_("Displayed above the search field."))
 
+    # Nom dans le menu et texte d'introduction des pages Ressources, Bénévolat et Réseau.
+    # Vide : le libellé par défaut s'affiche (BaseBillet/views.py, get_context).
+    # / Menu name and intro text of the Resources, Volunteering and Network pages.
+    booking_menu_name = models.CharField(max_length=200,
+                                         blank=True, null=True,
+                                         verbose_name=_("Nom de la page Ressources"),
+                                         help_text=_("« Ressources » si vide."))
+
+    benevolat_menu_name = models.CharField(max_length=200,
+                                           blank=True, null=True,
+                                           verbose_name=_("Nom de la page Bénévolat"),
+                                           help_text=_("« Bénévolat » si vide."))
+
+    federation_menu_name = models.CharField(max_length=200,
+                                            blank=True, null=True,
+                                            verbose_name=_("Nom de la page Réseau"),
+                                            help_text=_(
+                                                "« Autour de nous » si vide. Le texte d'introduction de cette "
+                                                "page se règle dans Fédération › Options, section « Présentation »."))
+
+    description_booking_page = models.TextField(blank=True, verbose_name=_("Description de la page Ressources"),
+                                                help_text=_("Affichée au-dessus des ressources."))
+
+    description_benevolat_page = models.TextField(blank=True, verbose_name=_("Description de la page Bénévolat"),
+                                                  help_text=_("Affichée au-dessus des plannings. "
+                                                              "Remplace le texte par défaut."))
+
     """
     ######### CASHLESS #########
     """

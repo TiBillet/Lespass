@@ -366,3 +366,80 @@ def test_un_creneau_bloque_par_un_evenement_est_complet(salle):
 
     assert page.count('data-testid="booking-calendar-slot-busy"') == 1
     assert len(dates_des_creneaux_libres(page)) == 7 * 8 - 1
+
+
+# ---------------------------------------------------------------------------
+# Infos admin : qui occupe le créneau / Admin info: who occupies the slot
+# Code testé : booking/views.py, _ajouter_les_infos_admin_aux_creneaux()
+#              booking/templates/booking/partials/infos_creneau_admin.html
+# ---------------------------------------------------------------------------
+
+def admin_du_lieu(tenant):
+    """Un utilisateur admin du lieu `lespass`. / A venue admin user."""
+    administrateur = creer_utilisateur(prenom="Admin", nom="DuLieu")
+    administrateur.client_admin.add(tenant)
+    return administrateur
+
+
+def occuper_le_lundi_a_10h(salle):
+    """
+    Lundi prochain : un événement bloque 10 h - 11 h, une réservation occupe 11 h - 12 h.
+    Rend (evenement, reservation).
+    / Next Monday: an event blocks 10-11, a booking occupies 11-12.
+    """
+    from BaseBillet.models import Event
+    from booking.models import Booking
+
+    lundi = salle.semaine(1)
+    dix_heures = timezone.make_aware(datetime.datetime.combine(lundi, datetime.time(10, 0)), salle.fuseau_du_lieu)
+    onze_heures = timezone.make_aware(datetime.datetime.combine(lundi, datetime.time(11, 0)), salle.fuseau_du_lieu)
+
+    evenement = Event.objects.create(
+        name="TEST concert infos admin",
+        datetime=dix_heures,
+        end_datetime=onze_heures,
+        jauge_max=80,
+        ressource_bloquee=salle.ressource,
+    )
+    personne_qui_reserve = creer_utilisateur(prenom="Ada", nom="Lovelace")
+    reservation = Booking.objects.create(
+        resource=salle.ressource,
+        user=personne_qui_reserve,
+        start_datetime=onze_heures,
+        slot_duration_minutes=60,
+        slot_count=1,
+        status=Booking.FREERES_USERACTIV,
+    )
+    return evenement, reservation
+
+
+def test_un_admin_voit_l_evenement_et_la_reservation_qui_occupent_les_creneaux(salle, tenant):
+    evenement, reservation = occuper_le_lundi_a_10h(salle)
+    client = client_connecte(admin_du_lieu(tenant))
+
+    page = client.get(adresse_de_la_salle(salle, salle.semaine(1))).content.decode()
+
+    # Desktop et mobile : deux fenêtres de détail par créneau occupé.
+    # / Desktop and mobile: two detail popovers per occupied slot.
+    assert page.count('data-testid="booking-infos-creneau-admin"') == 4
+    assert page.count('data-testid="booking-calendar-slot-infos-admin"') == 2
+    # Créneaux complets : le bouton couvre tout le bloc (desktop et mobile).
+    # / Full slots: the button covers the whole block (desktop and mobile).
+    assert page.count("calendar-slot-infos-admin calendar-slot-infos-admin-bloc") == 4
+    assert "TEST concert infos admin" in page
+    assert "0 / 80" in page
+    assert "Ada Lovelace" in page
+    assert reservation.user.email in page
+
+
+@pytest.mark.parametrize("connecte", [False, True])
+def test_un_visiteur_ou_un_membre_non_admin_ne_voit_pas_qui_occupe_les_creneaux(salle, connecte):
+    evenement, reservation = occuper_le_lundi_a_10h(salle)
+    client = client_connecte(creer_utilisateur()) if connecte else navigateur()
+
+    page = client.get(adresse_de_la_salle(salle, salle.semaine(1))).content.decode()
+
+    assert page.count('data-testid="booking-calendar-slot-busy"') == 2
+    assert 'data-testid="booking-infos-creneau-admin"' not in page
+    assert "TEST concert infos admin" not in page
+    assert reservation.user.email not in page

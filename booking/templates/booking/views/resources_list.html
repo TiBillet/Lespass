@@ -15,12 +15,21 @@ Affiche les ressources sous forme de cartes, groupées par ResourceGroup.
 / Shows resources as cards, grouped by ResourceGroup.
 -->
 
-{% block title %}{% translate "Réservations" %}{% endblock %}
+{% block title %}{% if config.booking_menu_name %}{{ config.booking_menu_name }}{% else %}{% translate "Ressources" %}{% endif %}{% endblock %}
 {% block meta_description %}{% translate "Réservez une ressource en ligne." %}{% endblock %}
 
 {% block booking_content %}
 
-<h1 class="mb-4">{% translate "Réservations" %}</h1>
+{# Titre masqué à l'écran : lu par les lecteurs d'écran et les moteurs de recherche. #}
+{# / Visually hidden title: read by screen readers and search engines. #}
+<h1 class="visually-hidden">{% if config.booking_menu_name %}{{ config.booking_menu_name }}{% else %}{% translate "Réservations" %}{% endif %}</h1>
+
+{# Texte d'introduction (Configuration.description_booking_page). #}
+{# |safe : nettoyé (clean_html) à l'enregistrement dans l'admin Configuration. #}
+{# / Intro text, |safe because sanitized on admin save. #}
+{% if config.description_booking_page %}
+  <div class="mb-4" data-testid="booking-description-page">{{ config.description_booking_page|safe }}</div>
+{% endif %}
 
 <!--
 Ressources sans groupe affichées en premier, sous forme de cartes.

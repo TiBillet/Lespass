@@ -1,0 +1,63 @@
+{% load i18n %}
+{% comment %}
+INFOS ADMIN D'UN CRÉNEAU — qui occupe le créneau
+/ Slot admin info — who occupies the slot
+
+LOCALISATION : booking/templates/booking/partials/infos_creneau_admin.html
+
+Inclus par booking/partials/resource_semaine.html, pour un admin du lieu seulement.
+Contexte :
+- slot : le créneau, avec slot.infos_admin rempli par
+  booking/views.py : _ajouter_les_infos_admin_aux_creneaux()
+- prefixe : "d" (grille desktop) ou "m" (grille mobile). Les deux grilles sont dans
+  la page en même temps : le préfixe rend l'id unique.
+
+FLUX :
+1. Clic sur le bouton (i) de la case (popovertarget = id de ce bloc).
+2. Le navigateur ouvre ce bloc par-dessus la page (attribut HTML `popover`, sans JS).
+3. Clic à côté, touche Échap ou bouton Fermer : le bloc se referme.
+
+Commentaire de gabarit (pas <!-- -->) : ce bloc est répété pour chaque créneau occupé.
+/ Template comment: this block is repeated for every occupied slot.
+{% endcomment %}
+<div id="infos-creneau-{{ prefixe }}-{{ slot.start|date:'YmdHi' }}"
+     popover
+     class="booking-infos-creneau"
+     data-testid="booking-infos-creneau-admin">
+    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+        <h3 class="h6 mb-0">
+            {% blocktrans with start=slot.start|date:'D d/m H\hi' end=slot.end|date:'H\hi' %}Créneau {{ start }} - {{ end }}{% endblocktrans %}
+        </h3>
+        <button type="button" class="btn-close"
+                popovertarget="infos-creneau-{{ prefixe }}-{{ slot.start|date:'YmdHi' }}"
+                popovertargetaction="hide"
+                aria-label="{% translate 'Fermer' %}"
+                data-testid="booking-infos-creneau-fermer"></button>
+    </div>
+
+    {% if slot.infos_admin.evenements %}
+        <h4 class="h6 mt-3 mb-1">{% translate "Événement qui bloque la ressource" %}</h4>
+        <ul class="list-unstyled mb-0">
+            {% for evenement in slot.infos_admin.evenements %}
+                <li class="mb-2" data-testid="booking-infos-creneau-evenement">
+                    <strong>{{ evenement.titre }}</strong><br>
+                    {{ evenement.debut|date:"D d/m H\hi" }} → {{ evenement.fin|date:"D d/m H\hi" }}<br>
+                    {% translate "Jauge" %} : {{ evenement.billets_valides }} / {{ evenement.jauge_max }}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    {% if slot.infos_admin.reservations %}
+        <h4 class="h6 mt-3 mb-1">{% translate "Réservations" %}</h4>
+        <ul class="list-unstyled mb-0">
+            {% for reservation in slot.infos_admin.reservations %}
+                <li class="mb-2" data-testid="booking-infos-creneau-reservation">
+                    {% if reservation.prenom_et_nom %}<strong>{{ reservation.prenom_et_nom }}</strong><br>{% endif %}
+                    {{ reservation.email }}<br>
+                    {{ reservation.debut|date:"H\hi" }} - {{ reservation.fin|date:"H\hi" }} · {{ reservation.statut }}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>

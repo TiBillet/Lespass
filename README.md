@@ -186,7 +186,8 @@ Carte Stripe de test : `4242 4242 4242 4242`, exp `12/42`, CVC `424`.
 Le code arrive en production en deux temps : une **release** (l'image Docker du commit,
 construite sur la machine du mainteneur et poussee sur Docker Hub), puis la **mise a jour**
 du serveur, sans coupure : migration dans un conteneur jetable pendant que l'ancien code
-sert, puis workers gunicorn remplaces un par un.
+sert, puis workers gunicorn remplaces un par un. Sans migration a faire, `make update` prend
+la voie courte : pas besoin de release, une a deux minutes.
 
 ```bash
 # Machine du mainteneur : main pousse, VERSION incremente sur main (docker login fait)
@@ -199,13 +200,14 @@ make env                     # relancable : ne remplace jamais un .env existant,
 # Serveur de production, dans byobu, a toute heure (attend la fin d'une sauvegarde en cours)
 make update                  # met la prod a jour sur le dernier commit pousse
 make update MIGRER=1         # force la migration (MIGRER=0 la saute ; EXECUTEUR=standard : un lieu apres l'autre)
-make update_nuit             # programme make update a 02:05 avec at (memes variables)
+make update COMPLET=1        # sans migration, passe quand meme par l'image de la release
+make update_nuit             # programme make update a 02:05 avec at, cible figee maintenant (memes variables)
 ```
 
 `make update` s'arrete avant de toucher a quoi que ce soit si les dependances, le
 `dockerfile`, le compose, supervisor ou nginx ont change : c'est alors une « grosse mise
 a jour », avec une coupure planifiee. Le journal de chaque passage est dans
-`logs/mise_a_jour_*.log`. Detail (verrou avec la sauvegarde, grosse mise a jour, retour en
+`logs/mise_a_jour_*.journal`. Detail (verrou avec la sauvegarde, grosse mise a jour, retour en
 arriere) : `TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md`.
 
 ---

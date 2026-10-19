@@ -27,7 +27,9 @@ lecture d'écran).
         table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
         th { background: #f0f0f0; padding: 5px 8px; text-align: left; border: 1px solid #ddd; }
         td { padding: 4px 8px; border: 1px solid #eee; }
-        td.nombre { text-align: right; font-family: "Courier New", monospace; white-space: nowrap; }
+        /* Alignement : titre et cases d'une colonne suivent `a_droite` (presentation.py _tableau). */
+        th.a-droite, td.a-droite { text-align: right; }
+        td.nombre { font-family: "Courier New", monospace; white-space: nowrap; }
         .footer { margin-top: 24px; font-size: 8pt; color: #888; border-top: 1px solid #ccc; padding-top: 8px; }
         .footer code { font-family: "Courier New", monospace; font-size: 7pt; word-break: break-all; }
     </style>
@@ -50,18 +52,14 @@ lecture d'écran).
             <table{% if tableau.alerte %} class="alerte"{% endif %}>
                 <thead>
                     <tr>
-                        {% for colonne in tableau.colonnes %}<th>{{ colonne }}</th>{% endfor %}
+                        {% for entete in tableau.entetes %}<th{% if entete.a_droite %} class="a-droite"{% endif %}>{{ entete.texte }}</th>{% endfor %}
                     </tr>
                 </thead>
                 <tbody>
                     {% for ligne in tableau.lignes %}
                         <tr>
                             {% for cellule in ligne %}
-                                {% if cellule.valeur is not None %}
-                                    <td class="nombre">{{ cellule.texte }}</td>
-                                {% else %}
-                                    <td>{{ cellule.texte }}</td>
-                                {% endif %}
+                                <td class="{% if cellule.valeur is not None %}nombre{% endif %}{% if cellule.a_droite %} a-droite{% endif %}">{{ cellule.texte }}</td>
                             {% endfor %}
                         </tr>
                     {% endfor %}

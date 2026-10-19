@@ -185,7 +185,8 @@ Test Stripe card: `4242 4242 4242 4242`, exp `12/42`, CVC `424`.
 Code reaches production in two steps: a **release** (the commit's Docker image, built on
 the maintainer's machine and pushed to Docker Hub), then the server **update**, with no
 downtime: migration in a throwaway container while the old code serves, then gunicorn
-workers replaced one by one.
+workers replaced one by one. With no migration to run, `make update` takes the short path:
+no release needed, one to two minutes.
 
 ```bash
 # Maintainer's machine: main pushed, VERSION bumped on main (docker login done)
@@ -198,12 +199,13 @@ make env                     # can be rerun: never overwrites an existing .env, 
 # Production server, in byobu, at any time (waits for a running backup to finish)
 make update                  # updates production to the last pushed commit
 make update MIGRER=1         # forces the migration (MIGRER=0 skips it; EXECUTEUR=standard: one venue at a time)
-make update_nuit             # schedules make update at 02:05 with at (same variables)
+make update COMPLET=1        # no migration, but still goes through the release image
+make update_nuit             # schedules make update at 02:05 with at, target pinned now (same variables)
 ```
 
 `make update` stops before touching anything if dependencies, the `dockerfile`, the
 compose file, supervisor or nginx changed: that is a "big update", with a planned
-outage. Each run is logged in `logs/mise_a_jour_*.log`. Details (lock shared with the backup, big
+outage. Each run is logged in `logs/mise_a_jour_*.journal`. Details (lock shared with the backup, big
 update, rollback): `TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md`.
 
 ---
