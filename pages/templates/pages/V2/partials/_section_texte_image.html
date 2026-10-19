@@ -14,13 +14,26 @@
 
     Parametre attendu / Expected parameter :
       cote = "gauche" | "droite"
+
+    IMAGE : le navigateur choisit entre med (480 px) et hdr (1280 px), selon la
+    largeur de la colonne (`sizes`) et la densite de l'ecran. Le `srcset` n'est
+    pose que si med est plus etroite que hdr : une petite image d'origine donne
+    deux variantes de meme largeur. Les descripteurs `w` sont les vraies
+    largeurs des fichiers : une image en hauteur fait moins de 480 px de large.
+    `sizes` suit la grille de tb-blocs.css : une colonne sous 48rem, deux
+    colonnes ensuite, conteneur plafonne a 72rem.
+    / IMAGE: the browser picks med or hdr from the column width and screen
+    density. srcset only when med is narrower than hdr; `w` = real file widths.
 {% endcomment %}
 <section class="tb-bloc tb-bloc--image-texte tb-bloc--image-{{ cote }}{% if not bloc.image %} tb-bloc--sans-image{% endif %}"
          data-testid="bloc-section-texte-image-{{ cote }}">
     {% if bloc.image %}
         <div class="tb-bloc__media">
             <img class="tb-bloc__image"
+                 {% if bloc.image.hdr.width and bloc.image.hdr.height %}width="{{ bloc.image.hdr.width }}" height="{{ bloc.image.hdr.height }}"{% endif %}
                  src="{{ bloc.image.hdr.url }}"
+                 {% if bloc.image.med.width < bloc.image.hdr.width %}srcset="{{ bloc.image.med.url }} {{ bloc.image.med.width }}w, {{ bloc.image.hdr.url }} {{ bloc.image.hdr.width }}w"
+                 sizes="(max-width: 48rem) 100vw, (max-width: 72rem) 50vw, 36rem"{% endif %}
                  alt="{{ bloc.titre }}"
                  loading="lazy">
         </div>

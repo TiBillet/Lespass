@@ -470,7 +470,11 @@ h2.tb-bloc__titre::before {
    (config.img): photo background + content in a left-aligned card (legibility
    from the card, no scrim). */
 .tb-bloc--hero-image {
-    background-image: var(--tb-hero-image);
+    /* Petit écran : l'image hdr (1280 px), si le gabarit la fournit. Sinon, la
+       grande. Le preload de pages/V2/page.html suit le même seuil de 64rem.
+       / Small screen: the hdr image (1280 px) when the template provides it,
+       otherwise the large one. Same 64rem threshold as the V2 preload. */
+    background-image: var(--tb-hero-image-petit, var(--tb-hero-image));
     background-size: cover;
     /* Image centrée horizontalement ET verticalement (sinon, sur écran large et
        court, seul le haut de l'image reste visible).
@@ -485,6 +489,10 @@ h2.tb-bloc__titre::before {
     min-height: clamp(360px, 44vh, 600px);
     display: flex;
     align-items: center;
+}
+/* Grand écran : l'image fhd (1920 px). / Large screen: the fhd image. */
+@media (min-width: 64rem) {
+    .tb-bloc--hero-image { background-image: var(--tb-hero-image); }
 }
 .tb-bloc--hero-image .tb-bloc__contenu {
     background-color: var(--tb-surface);

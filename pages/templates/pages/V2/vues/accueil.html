@@ -26,7 +26,8 @@
     {# le CSS. Meme regle que pages/V2/page.html. Bloc absent en navigation HTMX. #}
     {# / Preload the hero background image (LCP); same as pages/V2/page.html. #}
     {% if config.img %}
-        <link rel="preload" as="image" href="{{ config.img.fhd.url }}" fetchpriority="high">
+        <link rel="preload" as="image" href="{{ config.img.hdr.url }}" media="(max-width: 63.99rem)" fetchpriority="high">
+        <link rel="preload" as="image" href="{{ config.img.fhd.url }}" media="(min-width: 64rem)" fetchpriority="high">
     {% endif %}
 {% endblock %}
 
@@ -49,7 +50,7 @@
     <div class="tb-jetons">
         <section class="tb-bloc tb-bloc--hero{% if config.img %} tb-bloc--hero-image{% endif %}"
                  data-testid="accueil-hero"
-                 {% if config.img %}style="--tb-hero-image: url('{{ config.img.fhd.url }}');"{% endif %}>
+                 {% if config.img %}style="--tb-hero-image: url('{{ config.img.fhd.url }}'); --tb-hero-image-petit: url('{{ config.img.hdr.url }}');"{% endif %}>
             <div class="tb-bloc__contenu">
                 <h1 class="tb-bloc__titre">{{ config.organisation }}</h1>
                 {% if config.short_description %}

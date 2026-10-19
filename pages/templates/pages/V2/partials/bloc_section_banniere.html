@@ -7,14 +7,20 @@
     Champs du bloc : titre, sous_titre.
     Image de fond : image generique du lieu (config.img), lue au rendu. Si absente,
     le hero passe en « recentre sobre » (fond teinte, contenu centre).
+    Deux tailles : --tb-hero-image-petit (hdr, 1280 px) sous 64rem, et
+    --tb-hero-image (fhd, 1920 px) au-dessus. Le choix est fait par tb-blocs.css.
+    Le preload de pages/V2/page.html utilise le meme seuil : sinon, le
+    navigateur telecharge les deux images.
     Les actions (boutons) vivent dans une section en appel a l'action.
     / Block fields: title, subtitle. Background: the venue's generic image
     (config.img), read at render time. If absent, the hero falls back to the
     centered sober layout. Actions live in a separate SECTION block / BANNIERE display.
+    Two sizes: hdr below 64rem, fhd above (picked by tb-blocs.css, same threshold
+    as the preload in pages/V2/page.html).
 {% endcomment %}
 <section class="tb-bloc tb-bloc--hero{% if config.img %} tb-bloc--hero-image{% endif %}"
          data-testid="bloc-section-banniere"
-         {% if config.img %}style="--tb-hero-image: url('{{ config.img.fhd.url }}');"{% endif %}>
+         {% if config.img %}style="--tb-hero-image: url('{{ config.img.fhd.url }}'); --tb-hero-image-petit: url('{{ config.img.hdr.url }}');"{% endif %}>
     <div class="tb-bloc__contenu">
         {% if bloc.titre %}
             <h1 class="tb-bloc__titre">{{ bloc.titre }}</h1>

@@ -64,11 +64,17 @@
     `fetchpriority="high"` la fait passer devant les autres telechargements.
     Seulement au 1er chargement (extra_meta absent en navigation HTMX), ce qui
     est justement ce que mesure Lighthouse.
+    DEUX TAILLES : hdr (1280 px) sous 64rem, fhd (1920 px) au-dessus. Les
+    attributs `media` reprennent le seuil de .tb-bloc--hero-image dans
+    tb-blocs.css : si les deux ne choisissent pas la meme image, le navigateur
+    telecharge les deux.
     / Preload the HERO background image (LCP candidate): set as a CSS background,
     the browser discovers it late, so we anticipate it. First load only.
+    Two sizes, same 64rem threshold as tb-blocs.css.
     {% endcomment %}
     {% if page_a_un_bloc_hero and config.img %}
-        <link rel="preload" as="image" href="{{ config.img.fhd.url }}" fetchpriority="high">
+        <link rel="preload" as="image" href="{{ config.img.hdr.url }}" media="(max-width: 63.99rem)" fetchpriority="high">
+        <link rel="preload" as="image" href="{{ config.img.fhd.url }}" media="(min-width: 64rem)" fetchpriority="high">
     {% endif %}
 {% endblock %}
 
