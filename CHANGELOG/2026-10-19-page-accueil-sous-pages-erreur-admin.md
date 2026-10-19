@@ -15,7 +15,8 @@
 |---|---|
 | `pages/models.py` | `Page.clean()` : refuse un `parent` qui est la page d'accueil (erreur sur `parent`) |
 | `pages/admin.py` | `PageAdminForm` : une erreur sur un champ absent devient une erreur générale. Branchée sur la fiche (`form`) et sur la liste (`get_changelist_form`) |
-| `tests/pytest/test_pages.py` | 3 tests : règle côté enfant, liste admin sans 500, fiche admin sans 500 |
+| `pages/admin.py` | `formfield_for_foreignkey` : la page d'accueil n'est plus proposée dans la liste déroulante « Page parente » |
+| `tests/pytest/test_pages.py` | 4 tests : règle côté enfant, accueil absent du choix de parent, liste admin sans 500, fiche admin sans 500 |
 
 Nouvelle chaîne traduisible : « La page d'accueil ne peut pas avoir de sous-pages : choisissez une autre page parente. »
 
@@ -27,8 +28,8 @@ Fixes BILLETTERIE-COOP-V7
 
 ### Test 1 — l'accueil ne peut pas devenir parent
 1. Admin → Pages → ouvrir une page qui n'est pas l'accueil.
-2. Choisir la page d'accueil comme « Page parente », puis enregistrer.
-3. Attendu : refus, avec le message sous le champ « Page parente ».
+2. Ouvrir la liste déroulante « Page parente ».
+3. Attendu : la page d'accueil n'y figure pas. (Par l'API v2, `isPartOf` vers l'accueil est refusé par `Page.clean()`.)
 
 ### Test 2 — un accueil déjà incohérent ne plante plus la liste
 1. Rendre l'accueil incohérent depuis le shell (contourne `clean()`) :

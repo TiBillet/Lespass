@@ -6,6 +6,13 @@
 
     Champs : titre, sous_titre, texte (optionnel), bouton(s).
     / Fields: title, subtitle, text (optional), button(s).
+
+    BOUTONS SUPPLEMENTAIRES : `bloc.contenu` = [{"titre": libelle, "url": lien}, …].
+    Ils suivent les deux boutons du bloc, avec le style « contour ».
+    SÉCURITÉ : un bouton n'est posé que si son lien commence par « http » ou
+    « / ». `contenu` arrive aussi par l'API, qui ne nettoie pas ses liens.
+    / EXTRA BUTTONS: `bloc.contenu` = [{"titre", "url"}, …], outline style, after
+    the two block buttons. Only rendered for an http(s) or / link.
 {% endcomment %}
 <section class="tb-bloc tb-bloc--cta" data-testid="bloc-section-appel-action">
     <div class="tb-bloc__contenu">
@@ -18,7 +25,7 @@
         {% if bloc.texte %}
             <div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>
         {% endif %}
-        {% if bloc.bouton_label or bloc.bouton2_label %}
+        {% if bloc.bouton_label or bloc.bouton2_label or bloc.contenu %}
             <div class="tb-bloc__boutons">
                 {% if bloc.bouton_label %}
                     <a class="tb-bloc__bouton tb-bloc__bouton--plein"
@@ -30,6 +37,15 @@
                        href="{{ bloc.bouton2_url|default:'#' }}"
                        data-testid="bloc-section-appel-action-bouton2">{{ bloc.bouton2_label }}</a>
                 {% endif %}
+                {% for bouton_supplementaire in bloc.contenu %}
+                    {% if bouton_supplementaire.titre %}
+                        {% if bouton_supplementaire.url|slice:":4" == "http" or bouton_supplementaire.url|slice:":1" == "/" %}
+                            <a class="tb-bloc__bouton tb-bloc__bouton--contour"
+                               href="{{ bouton_supplementaire.url }}"
+                               data-testid="bloc-section-appel-action-bouton-supplementaire">{{ bouton_supplementaire.titre }}</a>
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
             </div>
         {% endif %}
     </div>

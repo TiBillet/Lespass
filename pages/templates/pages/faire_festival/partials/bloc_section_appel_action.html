@@ -2,6 +2,11 @@
 {% comment %}
     BLOC SECTION / affichage APPEL_ACTION — skin faire_festival. Titre stencil + sous-titre/texte mono + boutons action.
     / SECTION block / APPEL_ACTION display — faire_festival skin. Stencil title + mono subtitle/text + action buttons.
+
+    BOUTONS SUPPLEMENTAIRES : `bloc.contenu` = [{"titre": libelle, "url": lien}, …],
+    rendus apres les deux boutons du bloc. Un bouton n'est pose que si son lien
+    commence par « http » ou « / » (`contenu` arrive aussi par l'API).
+    / EXTRA BUTTONS from `bloc.contenu`, only rendered for an http(s) or / link.
 {% endcomment %}
 <section class="container py-4 text-center" data-testid="bloc-section-appel-action">
     {% if bloc.titre %}
@@ -13,7 +18,7 @@
     {% if bloc.texte %}
         <div class="texte-bleu police-mono mb-3">{{ bloc.texte|safe }}</div>
     {% endif %}
-    {% if bloc.bouton_label or bloc.bouton2_label %}
+    {% if bloc.bouton_label or bloc.bouton2_label or bloc.contenu %}
         <div class="d-flex gap-3 justify-content-center flex-wrap mt-3">
             {% if bloc.bouton_label %}
                 <a href="{{ bloc.bouton_url|default:'#' }}" class="btn bouton-action police-titre" style="max-width: min(90vw, 300px); width: 100%;">{{ bloc.bouton_label }}</a>
@@ -21,6 +26,13 @@
             {% if bloc.bouton2_label %}
                 <a href="{{ bloc.bouton2_url|default:'#' }}" class="btn bouton-action police-titre" style="max-width: min(90vw, 300px); width: 100%;">{{ bloc.bouton2_label }}</a>
             {% endif %}
+            {% for bouton_supplementaire in bloc.contenu %}
+                {% if bouton_supplementaire.titre %}
+                    {% if bouton_supplementaire.url|slice:":4" == "http" or bouton_supplementaire.url|slice:":1" == "/" %}
+                        <a href="{{ bouton_supplementaire.url }}" class="btn bouton-action police-titre" style="max-width: min(90vw, 300px); width: 100%;" data-testid="bloc-section-appel-action-bouton-supplementaire">{{ bouton_supplementaire.titre }}</a>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
         </div>
     {% endif %}
 </section>

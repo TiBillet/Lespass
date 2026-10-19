@@ -1011,6 +1011,24 @@ def test_une_page_ne_peut_pas_etre_rangee_sous_l_accueil(tenant, nettoyer_pages)
         assert "parent" in erreur.value.message_dict
 
 
+def test_fiche_admin_n_offre_pas_l_accueil_comme_parent(
+        tenant, admin_user, nettoyer_pages):
+    """La liste deroulante « Page parente » ne propose pas la page d'accueil."""
+    from Administration.admin.site import staff_admin_site
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        accueil = Page.objects.create(
+            titre="Home", slug="pytest-home-menu", est_accueil=True)
+        rubrique = Page.objects.create(titre="Rubrique", slug="pytest-rubrique-menu")
+        page_admin = staff_admin_site._registry[Page]
+        Formulaire = page_admin.get_form(_requete_admin(admin_user), rubrique)
+
+        choix_de_parent = Formulaire.base_fields["parent"].queryset
+        assert not choix_de_parent.filter(pk=accueil.pk).exists()
+        assert choix_de_parent.filter(pk=rubrique.pk).exists()
+
+
 def _accueil_avec_une_sous_page():
     """
     Fabrique un accueil INCOHERENT : il porte une sous-page.

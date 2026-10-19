@@ -544,6 +544,15 @@ class PageAdmin(ModelAdmin):
         kwargs.setdefault("form", PageAdminForm)
         return super().get_changelist_form(request, **kwargs)
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # La page d'accueil n'a pas de sous-pages (Page.clean) : on ne la
+        # propose donc pas comme page parente.
+        # / The home page has no sub-pages (Page.clean): it is not offered as
+        # a parent page.
+        if db_field.name == "parent":
+            kwargs["queryset"] = Page.objects.exclude(est_accueil=True)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
     # La page RENDUE comme sur le site, sous le formulaire, dans une seule
     # iframe : chaque bloc a sa barre (↑ ↓ Modifier ✕ +). Gabarit pose HORS
     # du <form> (outer) : rien de ce qu'il contient ne soumet la page.

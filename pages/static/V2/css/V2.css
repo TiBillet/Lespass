@@ -2928,6 +2928,32 @@ details.module + details.module { margin-top: var(--space-4); }
 }
 .tb-page .tb-fil-ariane a { color: var(--color-link); }
 .tb-page .tb-markdown { font-size: var(--text-base); }
+/* BLOC TEXTE : la colonne de lecture (72 caractères, posée par le socle) est
+   centrée dans la page, avec son titre. Sans ça, elle restait collée à gauche
+   et laissait le tiers droit de la page vide.
+   Les paragraphes sont justifiés, avec césure : `hyphens: auto` coupe les mots
+   selon la langue de <html lang>, ce qui évite les grands blancs entre les mots.
+   Un texte fait d'UN SEUL paragraphe (une phrase d'introduction sous un titre)
+   finit sa dernière ligne au centre, comme le titre au-dessus.
+   Écran étroit : pas de justification, les blancs entre les mots y seraient
+   trop grands.
+   / TEXT block: the 72ch reading column is centered with its title. Justified,
+   hyphenated paragraphs; a single-paragraph text ends its last line centered.
+   Narrow screens: no justification. */
+.tb-page .tb-bloc--markdown .tb-bloc__contenu {
+  max-width: 72ch;
+  margin-inline: auto;
+}
+.tb-page .tb-bloc--markdown .tb-bloc__titre { text-align: center; }
+.tb-page .tb-markdown p {
+  text-align: justify;
+  hyphens: auto;
+}
+.tb-page .tb-markdown > p:only-child { text-align-last: center; }
+@media (max-width: 36rem) {
+  .tb-page .tb-markdown p { text-align: start; }
+  .tb-page .tb-markdown > p:only-child { text-align-last: auto; }
+}
 /* Listes du texte libre : le reset global `ul { list-style: none }` (haut de ce
    fichier) retire les puces partout. Dans un texte rédigé, une liste sans puce
    se lit comme des lignes décalées sans raison : on les rend ici.
@@ -3567,6 +3593,24 @@ details.module + details.module { margin-top: var(--space-4); }
 }
 .tb-page .tb-bloc--cta .tb-bloc__texte { margin-top: var(--space-2); }
 .tb-page .tb-bloc--cta .tb-bloc__boutons { margin-top: var(--space-5); }
+/* APPEL À L'ACTION centré : titre, texte et boutons au milieu du cadre. Les
+   boutons ont une largeur minimale commune, pour que deux libellés de
+   longueurs différentes donnent deux boutons de même taille. Une liste du
+   texte reste alignée à gauche (des puces centrées se lisent mal), mais le
+   bloc de la liste est centré.
+   / Centered CTA: shared minimum button width so two buttons match. A text
+   list stays left-aligned inside a centered box. */
+.tb-page .tb-bloc--cta .tb-bloc__contenu { text-align: center; }
+.tb-page .tb-bloc--cta .tb-bloc__boutons { justify-content: center; }
+.tb-page .tb-bloc--cta .tb-bloc__bouton { min-width: 14rem; }
+/* Un appel à l'action sans titre ni texte : les boutons sont seuls dans le
+   cadre, leur marge du haut le décentrerait. / Buttons alone in the frame. */
+.tb-page .tb-bloc--cta .tb-bloc__boutons:first-child { margin-top: 0; }
+.tb-page .tb-bloc--cta .tb-bloc__texte ul,
+.tb-page .tb-bloc--cta .tb-bloc__texte ol {
+  display: inline-block;
+  text-align: start;
+}
 .tb-page .tb-bloc--cta .tb-bloc__contenu > :last-child,
 .tb-page .tb-bloc--newsletter .tb-bloc__contenu > :last-child { margin-bottom: 0; }
 /* Le formulaire Ghost en variante minimale (champ + bouton) : on retire la

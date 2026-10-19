@@ -128,7 +128,7 @@ Le type le plus polyvalent. Huit affichages :
 | **Texte avec vidéo** | Idem avec une vidéo déposée | Titre, texte, vidéo |
 | **Média + texte + sous-cartes** | Une section composée, riche | Titre, texte, image, vidéo, sous-cartes |
 | **Carte** | Se range automatiquement en grille avec les cartes voisines | Titre, sous-titre (affiché au-dessus du titre), badge, texte, image, un bouton |
-| **Appel à l'action** | Inviter à adhérer, réserver, contacter | Titre, sous-titre, texte, deux boutons |
+| **Appel à l'action** | Inviter à adhérer, réserver, contacter | Titre, sous-titre, texte, deux boutons ; d'autres boutons dans « Éléments de la section » (un libellé et un lien par ligne) |
 | **Citation** | Un témoignage signé | Texte, nom, rôle, photo de l'auteur |
 
 > **L'image de fond de la bannière** n'est pas réglable dans le bloc : c'est

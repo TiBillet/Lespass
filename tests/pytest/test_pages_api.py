@@ -1167,3 +1167,59 @@ def test_chaque_champ_du_catalogue_est_visible_quelque_part():
     ]
 
     assert invisibles == [], f"champs jamais affichables : {invisibles}"
+
+
+@pytest.mark.django_db
+def test_http_patch_bloc_change_sa_position(cle_pages):
+    """PATCH {"position": n} deplace le bloc : la page relue le range a sa nouvelle place.
+    / PATCH {"position": n} moves the block: the page lists it at its new place."""
+    from rest_framework.test import APIClient
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    body = {"@type": "WebPage", "name": "Ordre",
+            "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "patch-position"}],
+            "hasPart": [
+                {"additionalType": "TEXTE", "headline": "Premier", "position": 1},
+                {"additionalType": "TEXTE", "headline": "Deuxieme", "position": 2},
+                {"additionalType": "TEXTE", "headline": "Dernier", "position": 3},
+            ]}
+    r = client.post("/api/v2/pages/", body, format="json", **auth)
+    assert r.status_code == 201, r.content
+    page_uuid = r.json()["identifier"]
+    bloc_dernier = next(b for b in r.json()["hasPart"] if b["headline"] == "Dernier")
+
+    # Le dernier bloc passe en tete de page.
+    # / The last block moves to the top of the page.
+    r2 = client.patch(f"/api/v2/blocs/{bloc_dernier['identifier']}/",
+                      {"position": 0}, format="json", **auth)
+    assert r2.status_code == 200, r2.content
+    assert r2.json()["position"] == 0
+
+    r3 = client.get(f"/api/v2/pages/{page_uuid}/", **auth)
+    blocs_ranges = sorted(r3.json()["hasPart"], key=lambda b: b["position"])
+    assert [b["headline"] for b in blocs_ranges] == ["Dernier", "Premier", "Deuxieme"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("position_invalide", ["pas-un-nombre", -1])
+def test_http_patch_bloc_position_invalide_400(cle_pages, position_invalide):
+    """PATCH avec une position qui n'est pas un entier positif -> 400, bloc inchange.
+    / PATCH with a position that is not a non-negative integer -> 400, block unchanged."""
+    from rest_framework.test import APIClient
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    body = {"@type": "WebPage", "name": "Position invalide",
+            "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "patch-position-ko"}],
+            "hasPart": [{"additionalType": "TEXTE", "headline": "Seul", "position": 4}]}
+    r = client.post("/api/v2/pages/", body, format="json", **auth)
+    assert r.status_code == 201, r.content
+    bloc_uuid = r.json()["hasPart"][0]["identifier"]
+
+    r2 = client.patch(f"/api/v2/blocs/{bloc_uuid}/",
+                      {"position": position_invalide}, format="json", **auth)
+    assert r2.status_code == 400, r2.content
+
+    r3 = client.get(f"/api/v2/blocs/{bloc_uuid}/", **auth)
+    assert r3.json()["position"] == 4

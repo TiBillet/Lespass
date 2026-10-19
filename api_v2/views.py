@@ -1441,6 +1441,21 @@ class BlocViewSet(viewsets.ViewSet):
                 bloc.texte = request.data["text"] or ""
             else:
                 bloc.texte = clean_html(request.data["text"] or "")
+        # Position du bloc dans sa page. Cle de premier niveau, comme a la creation :
+        # `position` n'est PAS dans additionalProperty (CHAMPS_BLOC_AUTORISES l'ignore).
+        # En multipart, la valeur arrive en texte ("3") : int() la convertit.
+        # / Block position in its page. Top-level key, as on creation. In multipart
+        # the value arrives as a string: int() converts it.
+        if "position" in request.data:
+            try:
+                position_demandee = int(request.data["position"])
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(
+                    {"position": _("La position doit être un nombre entier.")})
+            if position_demandee < 0:
+                raise serializers.ValidationError(
+                    {"position": _("La position doit être positive ou nulle.")})
+            bloc.position = position_demandee
         # En multipart, additionalProperty est absent ou une string brute (pas une liste).
         # On protege la boucle pour n'iterer que sur de vraies listes.
         # / In multipart, additionalProperty is absent or a raw string (not a list).

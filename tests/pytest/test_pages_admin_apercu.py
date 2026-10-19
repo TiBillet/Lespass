@@ -701,11 +701,12 @@ def test_cles_des_sous_cartes_couvrent_les_affichages_qui_lisent_contenu():
 
 
 def test_la_frise_ne_propose_pas_de_badge():
-    """L'expression du badge n'inclut pas FRISE ; celle du lien seulement RESSOURCES."""
+    """L'expression du badge n'inclut pas FRISE ; celle du lien seulement
+    RESSOURCES et APPEL_ACTION (les boutons en plus d'un appel a l'action)."""
     from pages.admin_widgets import EXPRESSIONS_DES_CLES_DE_CARTES
 
     assert "FRISE" not in EXPRESSIONS_DES_CLES_DE_CARTES["badge"]
-    assert "['RESSOURCES']" in EXPRESSIONS_DES_CLES_DE_CARTES["url"]
+    assert "['RESSOURCES','APPEL_ACTION']" in EXPRESSIONS_DES_CLES_DE_CARTES["url"]
 
 
 # ---------------------------------------------------------------------------

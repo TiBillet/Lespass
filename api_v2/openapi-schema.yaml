@@ -1777,10 +1777,18 @@ paths:
         Protection anti-SSRF identique. Les schémas dangereux dans les champs lien
         (bouton_url, bouton2_url, embed_url) sont neutralisés automatiquement
         (champ vidé, pas d'erreur retournée).
+        `position` (clé de premier niveau, entier ≥ 0) déplace le bloc dans sa page ;
+        une valeur invalide renvoie 400.
+        Appel à l'action (affichage APPEL_ACTION) : au-delà des deux boutons,
+        `contenu` = [{"titre": libellé, "url": lien}, …] ajoute des boutons. Un
+        bouton n'est affiché que si son lien commence par « http » ou « / ».
 
         EN: Updates a bloc by its uuid. Same formats as POST (JSON or multipart).
         Same anti-SSRF protection. Dangerous URL schemes in link fields
         (bouton_url, bouton2_url, embed_url) are silently neutralized (field cleared).
+        Top-level `position` (integer ≥ 0) moves the block in its page; invalid -> 400.
+        APPEL_ACTION: `contenu` = [{"titre", "url"}, …] adds buttons beyond the
+        first two; only http(s) or / links are rendered.
       tags: [Page]
       security:
         - ApiKeyAuth: []

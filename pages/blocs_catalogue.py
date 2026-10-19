@@ -53,13 +53,14 @@ CHAMPS_PAR_TYPE = {
         "titre", "sous_titre", "badge", "texte", "image", "video",
         "bouton_label", "bouton_url", "bouton2_label", "bouton2_url",
         "auteur_nom", "auteur_role", "auteur_photo",
-        # `contenu` ne sert qu'a l'affichage MEDIA_ET_CARTES : il porte les
-        # sous-cartes de la section, en DONNEES TEXTE. Une sous-carte n'est pas
-        # un bloc : elle vit a l'interieur de la colonne de sa section, la ou
-        # une liste de blocs ne saurait la placer.
-        # / `contenu` only serves the MEDIA_ET_CARTES display: it carries the
-        # section's sub-cards as TEXT DATA. A sub-card is not a block: it lives
-        # inside its section's column, where a flat block list cannot put it.
+        # `contenu` porte les elements de la section, en DONNEES TEXTE : les
+        # sous-cartes, les personnes, les dates, les ressources, ou les boutons
+        # d'un appel a l'action. Un element n'est pas un bloc : il vit a
+        # l'interieur de sa section, la ou une liste de blocs ne saurait le
+        # placer. Les cles de chaque affichage : CLES_ELEMENT_PAR_AFFICHAGE.
+        # / `contenu` carries the section's items as TEXT DATA (sub-cards,
+        # people, dates, resources, call-to-action buttons). Keys per display:
+        # CLES_ELEMENT_PAR_AFFICHAGE.
         "contenu",
     ],
 
@@ -192,9 +193,12 @@ CHAMPS_PAR_AFFICHAGE = {
             "titre", "sous_titre", "badge", "texte", "image",
             "bouton_label", "bouton_url",
         ],
+        # contenu = [{"titre": libellé, "url": lien}, …] : les boutons au-delà
+        # des deux premiers. / Buttons beyond the first two.
         "APPEL_ACTION": [
             "titre", "sous_titre", "texte",
             "bouton_label", "bouton_url", "bouton2_label", "bouton2_url",
+            "contenu",
         ],
         "CITATION": ["texte", "auteur_nom", "auteur_role", "auteur_photo"],
         # contenu = [{"titre": nom, "texte": rôle, "badge": …}, …]
@@ -237,6 +241,9 @@ CLES_ELEMENT_PAR_AFFICHAGE = {
     "EQUIPE": ("titre", "texte", "badge"),
     "FRISE": ("titre", "texte"),
     "RESSOURCES": ("titre", "texte", "badge", "url"),
+    # Un élément = un bouton de plus : son libellé et son lien.
+    # / One item = one more button: its label and its link.
+    "APPEL_ACTION": ("titre", "url"),
 }
 
 # Champs que seuls CERTAINS skins rendent, pour un type donne. Hors de ces
